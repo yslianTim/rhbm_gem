@@ -9,7 +9,6 @@
 #include "data/detail/ModelObjectParts.hpp"
 #include "data/detail/GroupPotentialEntry.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
-#include "data/detail/LocalPotentialFitState.hpp"
 
 namespace rhbm_gem {
 
@@ -239,11 +238,6 @@ ModelObject::ModelObject(const ModelObject & other) :
                 *atom,
                 std::make_unique<LocalPotentialEntry>(*local_entry));
         }
-        if (const auto * fit_state{ source_analysis_data.FindAtomFitState(*atom) };
-            fit_state != nullptr)
-        {
-            m_analysis_data->EnsureAtomFitState(*atom) = *fit_state;
-        }
     }
     for (const auto & bond : m_parts->bond_list)
     {
@@ -253,11 +247,6 @@ ModelObject::ModelObject(const ModelObject & other) :
             m_analysis_data->SetBondLocalEntry(
                 *bond,
                 std::make_unique<LocalPotentialEntry>(*local_entry));
-        }
-        if (const auto * fit_state{ source_analysis_data.FindBondFitState(*bond) };
-            fit_state != nullptr)
-        {
-            m_analysis_data->EnsureBondFitState(*bond) = *fit_state;
         }
     }
 

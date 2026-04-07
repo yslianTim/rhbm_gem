@@ -3,7 +3,6 @@
 #include "command/MapSampling.hpp"
 #include "command/PotentialAnalysisCommand.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
-#include "data/detail/LocalPotentialFitState.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include "data/detail/GroupPotentialEntry.hpp"
@@ -67,12 +66,12 @@ void RunBondSampling(
     const auto & bond_list{ model_object.GetSelectedBonds() };
     const auto bond_size{ bond_list.size() };
     size_t bond_count{ 0 };
-    std::vector<LocalPotentialFitState *> fit_state_list;
-    fit_state_list.reserve(bond_size);
+    std::vector<LocalPotentialEntry *> local_entry_list;
+    local_entry_list.reserve(bond_size);
     for (auto * bond : bond_list)
     {
-        fit_state_list.emplace_back(
-            &ModelAnalysisData::Of(model_object).EnsureBondFitState(*bond));
+        local_entry_list.emplace_back(
+            &ModelAnalysisData::Of(model_object).EnsureBondLocalEntry(*bond));
     }
 
 #ifdef USE_OPENMP
@@ -82,8 +81,7 @@ void RunBondSampling(
         for (size_t i = 0; i < bond_size; i++)
         {
             auto bond{ bond_list[i] };
-            auto * fit_state{ fit_state_list[i] };
-            auto * entry{ ModelAnalysisData::Of(model_object).FindBondLocalEntry(*bond) };
+            auto * entry{ local_entry_list[i] };
             auto bond_vector{ bond->GetBondVector() };
             auto bond_position{ bond->GetPosition() };
             constexpr float adjusted_rate{ 0.0f };
@@ -98,7 +96,7 @@ void RunBondSampling(
                     *sampler,
                     adjusted_position,
                     bond_vector));
-            fit_state->SetDataset(
+            entry->SetDataset(
                 GausLinearTransformHelper::MapValueTransform(
                     entry->GetDistanceAndMapValueList(),
                     options.fit_range_min,
@@ -115,15 +113,14 @@ void RunBondSampling(
     for (size_t i = 0; i < bond_size; i++)
     {
         auto bond{ bond_list[i] };
-        auto * fit_state{ fit_state_list[i] };
-        auto * entry{ ModelAnalysisData::Of(model_object).FindBondLocalEntry(*bond) };
+        auto * entry{ local_entry_list[i] };
         entry->SetDistanceAndMapValueList(
             SampleMapValues(
                 map_object,
                 *sampler,
                 bond->GetPosition(),
                 bond->GetBondVector()));
-        fit_state->SetDataset(
+        entry->SetDataset(
             GausLinearTransformHelper::MapValueTransform(
                 entry->GetDistanceAndMapValueList(),
                 options.fit_range_min,
@@ -174,12 +171,12 @@ void RunLocalBondFitting(
     std::atomic<size_t> bond_count{ 0 };
     const auto & selected_bond_list{ context.model_object.GetSelectedBonds() };
     const auto selected_bond_size{ selected_bond_list.size() };
-    std::vector<LocalPotentialFitState *> fit_state_list;
-    fit_state_list.reserve(selected_bond_size);
+    std::vector<LocalPotentialEntry *> local_entry_list;
+    local_entry_list.reserve(selected_bond_size);
     for (auto * bond : selected_bond_list)
     {
-        fit_state_list.emplace_back(
-            &ModelAnalysisData::Of(context.model_object).EnsureBondFitState(*bond));
+        local_entry_list.emplace_back(
+            &ModelAnalysisData::Of(context.model_object).EnsureBondLocalEntry(*bond));
     }
     Logger::Log(
         LogLevel::Info,
@@ -189,10 +186,8 @@ void RunLocalBondFitting(
 #endif
     for (size_t i = 0; i < selected_bond_size; i++)
     {
-        auto * local_entry{
-            ModelAnalysisData::Of(context.model_object).FindBondLocalEntry(*selected_bond_list[i]) };
-        auto * fit_state{ fit_state_list[i] };
-        const auto & data_entry_list{ fit_state->GetDataset().basis_and_response_entry_list };
+        auto * local_entry{ local_entry_list[i] };
+        const auto & data_entry_list{ local_entry->GetDataset().basis_and_response_entry_list };
         const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
         const auto result{
             HRLModelAlgorithms::EstimateBetaMDPDE(
@@ -202,7 +197,7 @@ void RunLocalBondFitting(
                 MakePotentialAnalysisExecutionOptions(context.thread_size, true))
         };
 
-        fit_state->SetFitResult(LocalPotentialFitState::FitResult{
+        local_entry->SetFitResult(LocalPotentialEntry::FitResult{
             result.beta_ols,
             result.beta_mdpde,
             result.sigma_square,
@@ -268,13 +263,13 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
             data_covariance_list.reserve(group_size);
             for (const auto & bond : bond_list)
             {
-                auto * fit_state{ analysis_state.FindBondFitState(*bond) };
-                if (fit_state == nullptr)
+                auto * local_entry{ analysis_state.FindBondLocalEntry(*bond) };
+                if (local_entry == nullptr)
                 {
-                    throw std::runtime_error("Bond fit state is not available.");
+                    throw std::runtime_error("Bond local entry is not available.");
                 }
-                const auto & dataset{ fit_state->GetDataset() };
-                const auto & fit_result{ fit_state->GetFitResult() };
+                const auto & dataset{ local_entry->GetDataset() };
+                const auto & fit_result{ local_entry->GetFitResult() };
                 data_entry_list.emplace_back(dataset.basis_and_response_entry_list);
                 beta_mdpde_list.emplace_back(fit_result.beta_mdpde);
                 sigma_square_list.emplace_back(fit_result.sigma_square);

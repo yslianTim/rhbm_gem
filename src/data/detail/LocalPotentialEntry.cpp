@@ -4,6 +4,7 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <cmath>
+#include <stdexcept>
 #include <utility>
 
 namespace rhbm_gem {
@@ -24,11 +25,28 @@ void LocalPotentialEntry::SetDistanceAndMapValueList(std::vector<std::tuple<floa
     m_distance_and_map_value_list = std::move(value);
 }
 
+void LocalPotentialEntry::SetDataset(
+    std::vector<Eigen::VectorXd> basis_and_response_entry_list)
+{
+    m_dataset = Dataset{ std::move(basis_and_response_entry_list) };
+}
+
+void LocalPotentialEntry::SetFitResult(FitResult value)
+{
+    m_fit_result = std::move(value);
+}
+
 void LocalPotentialEntry::SetAnnotation(
     const std::string & key,
     LocalPotentialAnnotation annotation)
 {
     m_annotation_map[key] = std::move(annotation);
+}
+
+void LocalPotentialEntry::ClearTransientFitState()
+{
+    m_dataset.reset();
+    m_fit_result.reset();
 }
 
 LocalPotentialAnnotation * LocalPotentialEntry::FindAnnotation(const std::string & key)
@@ -52,6 +70,24 @@ const std::unordered_map<std::string, LocalPotentialAnnotation> &
 LocalPotentialEntry::Annotations() const
 {
     return m_annotation_map;
+}
+
+const LocalPotentialEntry::Dataset & LocalPotentialEntry::GetDataset() const
+{
+    if (!m_dataset.has_value())
+    {
+        throw std::runtime_error("LocalPotentialEntry dataset is not available");
+    }
+    return *m_dataset;
+}
+
+const LocalPotentialEntry::FitResult & LocalPotentialEntry::GetFitResult() const
+{
+    if (!m_fit_result.has_value())
+    {
+        throw std::runtime_error("LocalPotentialEntry fit result is not available");
+    }
+    return *m_fit_result;
 }
 
 const std::vector<std::tuple<float, float>> & LocalPotentialEntry::GetDistanceAndMapValueList() const

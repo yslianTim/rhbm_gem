@@ -154,28 +154,36 @@ TEST(DataObjectRuntimeBehaviorTest, ModelAnalysisDataCanClearTransientFitStatesW
     auto * bond{ model->GetBondList().at(0).get() };
     auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
 
-    analysis_data.EnsureAtomLocalEntry(*atom);
-    analysis_data.EnsureBondLocalEntry(*bond);
+    auto & atom_entry{ analysis_data.EnsureAtomLocalEntry(*atom) };
+    auto & bond_entry{ analysis_data.EnsureBondLocalEntry(*bond) };
     analysis_data.EnsureAtomGroupEntry("atom_class");
     analysis_data.EnsureBondGroupEntry("bond_class");
-    analysis_data.EnsureAtomFitState(*atom);
-    analysis_data.EnsureBondFitState(*bond);
+    atom_entry.SetDataset({});
+    atom_entry.SetFitResult({});
+    bond_entry.SetDataset({});
+    bond_entry.SetFitResult({});
 
     ASSERT_NE(analysis_data.FindAtomLocalEntry(*atom), nullptr);
     ASSERT_NE(analysis_data.FindBondLocalEntry(*bond), nullptr);
     ASSERT_NE(analysis_data.FindAtomGroupEntry("atom_class"), nullptr);
     ASSERT_NE(analysis_data.FindBondGroupEntry("bond_class"), nullptr);
-    ASSERT_NE(analysis_data.FindAtomFitState(*atom), nullptr);
-    ASSERT_NE(analysis_data.FindBondFitState(*bond), nullptr);
+    ASSERT_TRUE(atom_entry.HasDataset());
+    ASSERT_TRUE(atom_entry.HasFitResult());
+    ASSERT_TRUE(bond_entry.HasDataset());
+    ASSERT_TRUE(bond_entry.HasFitResult());
 
     analysis_data.ClearTransientFitStates();
 
-    EXPECT_NE(analysis_data.FindAtomLocalEntry(*atom), nullptr);
-    EXPECT_NE(analysis_data.FindBondLocalEntry(*bond), nullptr);
+    const auto * cleared_atom_entry{ analysis_data.FindAtomLocalEntry(*atom) };
+    const auto * cleared_bond_entry{ analysis_data.FindBondLocalEntry(*bond) };
+    ASSERT_NE(cleared_atom_entry, nullptr);
+    ASSERT_NE(cleared_bond_entry, nullptr);
     EXPECT_NE(analysis_data.FindAtomGroupEntry("atom_class"), nullptr);
     EXPECT_NE(analysis_data.FindBondGroupEntry("bond_class"), nullptr);
-    EXPECT_EQ(analysis_data.FindAtomFitState(*atom), nullptr);
-    EXPECT_EQ(analysis_data.FindBondFitState(*bond), nullptr);
+    EXPECT_FALSE(cleared_atom_entry->HasDataset());
+    EXPECT_FALSE(cleared_atom_entry->HasFitResult());
+    EXPECT_FALSE(cleared_bond_entry->HasDataset());
+    EXPECT_FALSE(cleared_bond_entry->HasFitResult());
 }
 
 TEST(DataObjectRuntimeBehaviorTest, ModelAnalysisDataClearDropsEntriesAndFitStates)
@@ -185,12 +193,14 @@ TEST(DataObjectRuntimeBehaviorTest, ModelAnalysisDataClearDropsEntriesAndFitStat
     auto * bond{ model->GetBondList().at(0).get() };
     auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
 
-    analysis_data.EnsureAtomLocalEntry(*atom);
-    analysis_data.EnsureBondLocalEntry(*bond);
+    auto & atom_entry{ analysis_data.EnsureAtomLocalEntry(*atom) };
+    auto & bond_entry{ analysis_data.EnsureBondLocalEntry(*bond) };
     analysis_data.EnsureAtomGroupEntry("atom_class");
     analysis_data.EnsureBondGroupEntry("bond_class");
-    analysis_data.EnsureAtomFitState(*atom);
-    analysis_data.EnsureBondFitState(*bond);
+    atom_entry.SetDataset({});
+    atom_entry.SetFitResult({});
+    bond_entry.SetDataset({});
+    bond_entry.SetFitResult({});
 
     analysis_data.Clear();
 
@@ -198,8 +208,21 @@ TEST(DataObjectRuntimeBehaviorTest, ModelAnalysisDataClearDropsEntriesAndFitStat
     EXPECT_EQ(analysis_data.FindBondLocalEntry(*bond), nullptr);
     EXPECT_EQ(analysis_data.FindAtomGroupEntry("atom_class"), nullptr);
     EXPECT_EQ(analysis_data.FindBondGroupEntry("bond_class"), nullptr);
-    EXPECT_EQ(analysis_data.FindAtomFitState(*atom), nullptr);
-    EXPECT_EQ(analysis_data.FindBondFitState(*bond), nullptr);
+}
+
+TEST(DataObjectRuntimeBehaviorTest, LocalPotentialEntryCanClearTransientFitPayload)
+{
+    rg::LocalPotentialEntry entry;
+    entry.SetDataset({});
+    entry.SetFitResult({});
+
+    ASSERT_TRUE(entry.HasDataset());
+    ASSERT_TRUE(entry.HasFitResult());
+
+    entry.ClearTransientFitState();
+
+    EXPECT_FALSE(entry.HasDataset());
+    EXPECT_FALSE(entry.HasFitResult());
 }
 
 TEST(DataObjectRuntimeBehaviorTest, RebuildAtomGroupEntriesFromSelectionTracksOnlySelectedAtoms)

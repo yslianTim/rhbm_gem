@@ -15,7 +15,6 @@ class AtomObject;
 class BondObject;
 class GroupPotentialEntry;
 class LocalPotentialEntry;
-class LocalPotentialFitState;
 class ModelObject;
 
 class ModelAnalysisData
@@ -23,19 +22,15 @@ class ModelAnalysisData
 public:
     using AtomGroupEntryMap = std::unordered_map<std::string, GroupPotentialEntry>;
     using AtomLocalEntryMap = std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>>;
-    using AtomFitStateMap = std::unordered_map<int, LocalPotentialFitState>;
     using BondGroupEntryMap = std::unordered_map<std::string, GroupPotentialEntry>;
     using BondFitStateKey = std::pair<int, int>;
     using BondLocalEntryMap = std::map<BondFitStateKey, std::unique_ptr<LocalPotentialEntry>>;
-    using BondFitStateMap = std::map<BondFitStateKey, LocalPotentialFitState>;
 
 private:
     AtomGroupEntryMap m_atom_group_entry_map;
     AtomLocalEntryMap m_atom_local_entry_map;
-    AtomFitStateMap m_atom_fit_state_map;
     BondGroupEntryMap m_bond_group_entry_map;
     BondLocalEntryMap m_bond_local_entry_map;
-    BondFitStateMap m_bond_fit_state_map;
 
 public:
     ModelAnalysisData();
@@ -72,10 +67,6 @@ public:
     LocalPotentialEntry * FindAtomLocalEntry(const AtomObject & atom_object);
     const LocalPotentialEntry * FindAtomLocalEntry(const AtomObject & atom_object) const;
 
-    LocalPotentialFitState & EnsureAtomFitState(const AtomObject & atom_object);
-    LocalPotentialFitState * FindAtomFitState(const AtomObject & atom_object);
-    const LocalPotentialFitState * FindAtomFitState(const AtomObject & atom_object) const;
-
     GroupPotentialEntry & EnsureBondGroupEntry(const std::string & class_key);
     GroupPotentialEntry * FindBondGroupEntry(const std::string & class_key);
     const GroupPotentialEntry * FindBondGroupEntry(const std::string & class_key) const;
@@ -85,10 +76,6 @@ public:
     void SetBondLocalEntry(const BondObject & bond_object, std::unique_ptr<LocalPotentialEntry> entry);
     LocalPotentialEntry * FindBondLocalEntry(const BondObject & bond_object);
     const LocalPotentialEntry * FindBondLocalEntry(const BondObject & bond_object) const;
-
-    LocalPotentialFitState & EnsureBondFitState(const BondObject & bond_object);
-    LocalPotentialFitState * FindBondFitState(const BondObject & bond_object);
-    const LocalPotentialFitState * FindBondFitState(const BondObject & bond_object) const;
 
 private:
     static int BuildAtomFitStateKey(const AtomObject & atom_object);

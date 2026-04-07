@@ -3,7 +3,6 @@
 #include "MapSampling.hpp"
 #include "experimental/PotentialAnalysisBondWorkflow.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
-#include "data/detail/LocalPotentialFitState.hpp"
 #include "data/detail/GroupPotentialEntry.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
 
@@ -72,12 +71,10 @@ void PrepareModelForPotentialAnalysis(
     for (auto * atom : model_object.GetSelectedAtoms())
     {
         rhbm_gem::ModelAnalysisData::Of(model_object).EnsureAtomLocalEntry(*atom);
-        analysis_data.EnsureAtomFitState(*atom);
     }
     for (auto * bond : model_object.GetSelectedBonds())
     {
         rhbm_gem::ModelAnalysisData::Of(model_object).EnsureBondLocalEntry(*bond);
-        analysis_data.EnsureBondFitState(*bond);
     }
 }
 
@@ -89,20 +86,6 @@ HRLExecutionOptions MakePotentialAnalysisExecutionOptions(
     execution_options.quiet_mode = quiet_mode;
     execution_options.thread_size = thread_size;
     return execution_options;
-}
-
-rhbm_gem::LocalPotentialFitState & RequireAtomFitState(
-    rhbm_gem::ModelObject & model_object,
-    const rhbm_gem::AtomObject & atom_object)
-{
-    const auto * fit_state{
-        rhbm_gem::ModelAnalysisData::Of(std::as_const(model_object)).FindAtomFitState(atom_object)
-    };
-    if (fit_state == nullptr)
-    {
-        throw std::runtime_error("Atom fit state is not available.");
-    }
-    return const_cast<rhbm_gem::LocalPotentialFitState &>(*fit_state);
 }
 
 }
@@ -452,9 +435,9 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
             data_covariance_list.reserve(group_size);
             for (const auto & atom : atom_list)
             {
-                const auto & fit_state{ RequireAtomFitState(*m_model_object, *atom) };
-                const auto & dataset{ fit_state.GetDataset() };
-                const auto & fit_result{ fit_state.GetFitResult() };
+                const auto & local_entry{ ModelAnalysisData::RequireLocalEntry(*atom) };
+                const auto & dataset{ local_entry.GetDataset() };
+                const auto & fit_result{ local_entry.GetFitResult() };
                 data_entry_list.emplace_back(dataset.basis_and_response_entry_list);
                 beta_mdpde_list.emplace_back(fit_result.beta_mdpde);
                 sigma_square_list.emplace_back(fit_result.sigma_square);
@@ -575,8 +558,8 @@ void PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR(
 #endif
     for (size_t i = 0; i < atom_size; i++)
     {
-        const auto & fit_state{ RequireAtomFitState(*m_model_object, *atom_list[i]) };
-        const auto & data_entry_list{ fit_state.GetDataset().basis_and_response_entry_list };
+        const auto & local_entry{ ModelAnalysisData::RequireLocalEntry(*atom_list[i]) };
+        const auto & data_entry_list{ local_entry.GetDataset().basis_and_response_entry_list };
         const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
         const auto algorithm_options{
             MakePotentialAnalysisExecutionOptions(ThreadSize(), true)
@@ -665,7 +648,7 @@ void PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG(
         for (auto atom : group_atom_list)
         {
             data_entry_list.emplace_back(
-                RequireAtomFitState(*m_model_object, *atom).GetFitResult().beta_mdpde
+                ModelAnalysisData::RequireLocalEntry(*atom).GetFitResult().beta_mdpde
             );
         }
         const auto beta_matrix{ HRLDataTransform::BuildBetaMatrix(data_entry_list, true) };
@@ -751,12 +734,12 @@ void RunAtomSamplingWorkflow(
     const auto & atom_list{ model_object.GetSelectedAtoms() };
     const auto atom_size{ atom_list.size() };
     size_t atom_count{ 0 };
-    std::vector<LocalPotentialFitState *> fit_state_list;
-    fit_state_list.reserve(atom_size);
+    std::vector<LocalPotentialEntry *> local_entry_list;
+    local_entry_list.reserve(atom_size);
     for (auto * atom : atom_list)
     {
-            fit_state_list.emplace_back(
-            &ModelAnalysisData::Of(model_object).EnsureAtomFitState(*atom));
+        local_entry_list.emplace_back(
+            &ModelAnalysisData::Of(model_object).EnsureAtomLocalEntry(*atom));
     }
 
 #ifdef USE_OPENMP
@@ -766,11 +749,10 @@ void RunAtomSamplingWorkflow(
         for (size_t i = 0; i < atom_size; i++)
         {
             auto atom{ atom_list[i] };
-            auto * fit_state{ fit_state_list[i] };
-            auto * entry{ ModelAnalysisData::Of(model_object).FindAtomLocalEntry(*atom) };
+            auto * entry{ local_entry_list[i] };
             entry->SetDistanceAndMapValueList(
                 SampleMapValues(map_object, *sampler, atom->GetPosition()));
-            fit_state->SetDataset(
+            entry->SetDataset(
                 GausLinearTransformHelper::MapValueTransform(
                     entry->GetDistanceAndMapValueList(),
                     options.fit_range_min,
@@ -790,11 +772,10 @@ void RunAtomSamplingWorkflow(
     for (size_t i = 0; i < atom_size; i++)
     {
         auto atom{ atom_list[i] };
-        auto * fit_state{ fit_state_list[i] };
-        auto * entry{ ModelAnalysisData::Of(model_object).FindAtomLocalEntry(*atom) };
+        auto * entry{ local_entry_list[i] };
         entry->SetDistanceAndMapValueList(
             SampleMapValues(map_object, *sampler, atom->GetPosition()));
-        fit_state->SetDataset(
+        entry->SetDataset(
             GausLinearTransformHelper::MapValueTransform(
                 entry->GetDistanceAndMapValueList(),
                 options.fit_range_min,
@@ -838,12 +819,12 @@ void RunLocalAtomFittingWorkflow(
     std::atomic<size_t> atom_count{ 0 };
     const auto & selected_atom_list{ model_object.GetSelectedAtoms() };
     const auto selected_atom_size{ selected_atom_list.size() };
-    std::vector<LocalPotentialFitState *> fit_state_list;
-    fit_state_list.reserve(selected_atom_size);
+    std::vector<LocalPotentialEntry *> local_entry_list;
+    local_entry_list.reserve(selected_atom_size);
     for (auto * atom : selected_atom_list)
     {
-        fit_state_list.emplace_back(
-            &ModelAnalysisData::Of(model_object).EnsureAtomFitState(*atom));
+        local_entry_list.emplace_back(
+            &ModelAnalysisData::Of(model_object).EnsureAtomLocalEntry(*atom));
     }
     Logger::Log(
         LogLevel::Info,
@@ -853,9 +834,8 @@ void RunLocalAtomFittingWorkflow(
 #endif
     for (size_t i = 0; i < selected_atom_size; i++)
     {
-        auto * local_entry{ ModelAnalysisData::Of(model_object).FindAtomLocalEntry(*selected_atom_list[i]) };
-        auto * fit_state{ fit_state_list[i] };
-        const auto & data_entry_list{ fit_state->GetDataset().basis_and_response_entry_list };
+        auto * local_entry{ local_entry_list[i] };
+        const auto & data_entry_list{ local_entry->GetDataset().basis_and_response_entry_list };
         const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
         const auto result{
             HRLModelAlgorithms::EstimateBetaMDPDE(
@@ -865,7 +845,7 @@ void RunLocalAtomFittingWorkflow(
                 MakePotentialAnalysisExecutionOptions(thread_size, true))
         };
 
-        fit_state->SetFitResult(LocalPotentialFitState::FitResult{
+        local_entry->SetFitResult(LocalPotentialEntry::FitResult{
             result.beta_ols,
             result.beta_mdpde,
             result.sigma_square,
@@ -923,10 +903,10 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining()
     for (auto & atom : atom_list)
     {
         if (atom->IsMainChainAtom() == false) continue;
-        const auto * fit_state{
-            ModelAnalysisData::Of(*m_model_object).FindAtomFitState(*atom) };
-        if (fit_state == nullptr || !fit_state->HasDataset() ||
-            fit_state->GetDataset().basis_and_response_entry_list.size() < 500) continue;
+        const auto * local_entry{
+            ModelAnalysisData::Of(*m_model_object).FindAtomLocalEntry(*atom) };
+        if (local_entry == nullptr || !local_entry->HasDataset() ||
+            local_entry->GetDataset().basis_and_response_entry_list.size() < 500) continue;
         selected_atom_list.emplace_back(atom);
     }
     selected_atom_list.shrink_to_fit();
@@ -1002,8 +982,8 @@ double PotentialAnalysisCommand::TrainUniversalAlphaR(
 #endif
     for (size_t i = 0; i < atom_size; i++)
     {
-        const auto & fit_state{ RequireAtomFitState(*m_model_object, *atom_list[i]) };
-        const auto & data_entry_list{ fit_state.GetDataset().basis_and_response_entry_list };
+        const auto & local_entry{ ModelAnalysisData::RequireLocalEntry(*atom_list[i]) };
+        const auto & data_entry_list{ local_entry.GetDataset().basis_and_response_entry_list };
         auto error_array{
             HRLAlphaTrainer::EvaluateAlphaR(
                 data_entry_list,
@@ -1056,7 +1036,7 @@ double PotentialAnalysisCommand::TrainUniversalAlphaG(
         for (auto atom : group_atom_list)
         {
             data_entry_list.emplace_back(
-                RequireAtomFitState(*m_model_object, *atom).GetFitResult().beta_mdpde
+                ModelAnalysisData::RequireLocalEntry(*atom).GetFitResult().beta_mdpde
             );
         }
 

@@ -4,7 +4,6 @@
 #include "data/detail/BondClassifier.hpp"
 #include "data/detail/GroupPotentialEntry.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
-#include "data/detail/LocalPotentialFitState.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -96,17 +95,31 @@ const LocalPotentialEntry & ModelAnalysisData::RequireLocalEntry(const BondObjec
 
 void ModelAnalysisData::Clear()
 {
+    ClearTransientFitStates();
     m_atom_group_entry_map.clear();
     m_atom_local_entry_map.clear();
     m_bond_group_entry_map.clear();
     m_bond_local_entry_map.clear();
-    ClearTransientFitStates();
 }
 
 void ModelAnalysisData::ClearTransientFitStates()
 {
-    m_atom_fit_state_map.clear();
-    m_bond_fit_state_map.clear();
+    for (auto & [serial_id, entry] : m_atom_local_entry_map)
+    {
+        (void)serial_id;
+        if (entry != nullptr)
+        {
+            entry->ClearTransientFitState();
+        }
+    }
+    for (auto & [key, entry] : m_bond_local_entry_map)
+    {
+        (void)key;
+        if (entry != nullptr)
+        {
+            entry->ClearTransientFitState();
+        }
+    }
 }
 
 void ModelAnalysisData::RebuildAtomGroupEntriesFromSelection(const ModelObject & model_object)
@@ -200,23 +213,6 @@ const LocalPotentialEntry * ModelAnalysisData::FindAtomLocalEntry(const AtomObje
     return iter == m_atom_local_entry_map.end() || iter->second == nullptr ? nullptr : iter->second.get();
 }
 
-LocalPotentialFitState & ModelAnalysisData::EnsureAtomFitState(const AtomObject & atom_object)
-{
-    return m_atom_fit_state_map[BuildAtomFitStateKey(atom_object)];
-}
-
-LocalPotentialFitState * ModelAnalysisData::FindAtomFitState(const AtomObject & atom_object)
-{
-    const auto iter{ m_atom_fit_state_map.find(BuildAtomFitStateKey(atom_object)) };
-    return iter == m_atom_fit_state_map.end() ? nullptr : &iter->second;
-}
-
-const LocalPotentialFitState * ModelAnalysisData::FindAtomFitState(const AtomObject & atom_object) const
-{
-    const auto iter{ m_atom_fit_state_map.find(BuildAtomFitStateKey(atom_object)) };
-    return iter == m_atom_fit_state_map.end() ? nullptr : &iter->second;
-}
-
 GroupPotentialEntry & ModelAnalysisData::EnsureBondGroupEntry(const std::string & class_key)
 {
     return m_bond_group_entry_map[class_key];
@@ -266,23 +262,6 @@ const LocalPotentialEntry * ModelAnalysisData::FindBondLocalEntry(const BondObje
 {
     const auto iter{ m_bond_local_entry_map.find(BuildBondFitStateKey(bond_object)) };
     return iter == m_bond_local_entry_map.end() || iter->second == nullptr ? nullptr : iter->second.get();
-}
-
-LocalPotentialFitState & ModelAnalysisData::EnsureBondFitState(const BondObject & bond_object)
-{
-    return m_bond_fit_state_map[BuildBondFitStateKey(bond_object)];
-}
-
-LocalPotentialFitState * ModelAnalysisData::FindBondFitState(const BondObject & bond_object)
-{
-    const auto iter{ m_bond_fit_state_map.find(BuildBondFitStateKey(bond_object)) };
-    return iter == m_bond_fit_state_map.end() ? nullptr : &iter->second;
-}
-
-const LocalPotentialFitState * ModelAnalysisData::FindBondFitState(const BondObject & bond_object) const
-{
-    const auto iter{ m_bond_fit_state_map.find(BuildBondFitStateKey(bond_object)) };
-    return iter == m_bond_fit_state_map.end() ? nullptr : &iter->second;
 }
 
 int ModelAnalysisData::BuildAtomFitStateKey(const AtomObject & atom_object)

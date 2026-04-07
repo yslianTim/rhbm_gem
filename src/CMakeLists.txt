@@ -42,7 +42,6 @@ target_sources(rhbm_gem PRIVATE
     data/object/ChemicalComponentEntry.cpp
     data/detail/GroupPotentialEntry.cpp
     data/detail/LocalPotentialEntry.cpp
-    data/detail/LocalPotentialFitState.cpp
     data/detail/ModelDerivedState.cpp
     data/detail/ModelObjectParts.cpp
     data/object/MapObject.cpp
