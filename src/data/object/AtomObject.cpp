@@ -41,11 +41,6 @@ AtomObject::AtomObject(const AtomObject & other) :
 {
 }
 
-void AtomObject::SetResidue(Residue value) { m_residue = value; }
-void AtomObject::SetElement(Element value) { m_element = value; }
-void AtomObject::SetSpot(Spot value) { m_spot = value; }
-void AtomObject::SetStructure(Structure value) { m_structure = value; }
-
 void AtomObject::SetComponentID(const std::string & value)
 {
     m_component_id = value;
@@ -99,11 +94,6 @@ void AtomObject::AddAlternateTemperature(
 {
     m_alternate_temperature_map[indicator] = value;
 }
-
-Element AtomObject::GetElement() const { return m_element; }
-Residue AtomObject::GetResidue() const { return m_residue; }
-Spot AtomObject::GetSpot() const { return m_spot; }
-Structure AtomObject::GetStructure() const { return m_structure; }
 
 const std::unordered_map<std::string, std::array<float, 3>> &
 AtomObject::GetAlternatePositions() const

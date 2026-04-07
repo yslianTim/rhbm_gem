@@ -49,10 +49,10 @@ public:
     void SetIndicator(const std::string & value) { m_indicator = value; }
     void SetOccupancy(float value) { m_occupancy = value; }
     void SetTemperature(float value) { m_temperature = value; }
-    void SetResidue(Residue value);
-    void SetElement(Element value);
-    void SetSpot(Spot value);
-    void SetStructure(Structure value);
+    void SetResidue(Residue value) { m_residue = value; }
+    void SetElement(Element value) { m_element = value; }
+    void SetSpot(Spot value) { m_spot = value; }
+    void SetStructure(Structure value) { m_structure = value; }
     void SetPosition(float x, float y, float z);
     void SetPosition(const std::array<float, 3> & value) { m_position = value; }
     void AddAlternatePosition(const std::string & indicator, const std::array<float, 3> & value);
@@ -61,10 +61,10 @@ public:
     std::string GetInfo() const;
     ComponentKey GetComponentKey() const { return m_component_key; }
     AtomKey GetAtomKey() const { return m_atom_key; }
-    Element GetElement() const;
-    Residue GetResidue() const;
-    Spot GetSpot() const;
-    Structure GetStructure() const;
+    Element GetElement() const { return m_element; }
+    Residue GetResidue() const { return m_residue; }
+    Spot GetSpot() const { return m_spot; }
+    Structure GetStructure() const { return m_structure; }
     bool IsUnknownAtom() const;
     bool IsMainChainAtom() const;
     bool GetSpecialAtomFlag() const { return m_is_special_atom; }
