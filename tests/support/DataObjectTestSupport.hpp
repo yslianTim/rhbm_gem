@@ -14,7 +14,7 @@
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include "data/detail/ModelObjectAssembly.hpp"
+#include "data/detail/ModelObjectParts.hpp"
 #include "io/sqlite/SQLiteWrapper.hpp"
 #include "support/CommandTestHelpers.hpp"
 
@@ -33,8 +33,8 @@ inline std::shared_ptr<rg::ModelObject> LoadFixtureModel(
 
 inline std::unique_ptr<rg::ModelObject> MakeModelWithBond()
 {
-    rg::ModelObjectAssembly assembly;
-    assembly.atom_list.reserve(2);
+    rg::ModelObjectParts parts;
+    parts.atom_list.reserve(2);
 
     auto atom_1{ std::make_unique<rg::AtomObject>() };
     atom_1->SetSerialID(1);
@@ -46,13 +46,13 @@ inline std::unique_ptr<rg::ModelObject> MakeModelWithBond()
 
     auto * atom_1_ptr{ atom_1.get() };
     auto * atom_2_ptr{ atom_2.get() };
-    assembly.atom_list.emplace_back(std::move(atom_1));
-    assembly.atom_list.emplace_back(std::move(atom_2));
+    parts.atom_list.emplace_back(std::move(atom_1));
+    parts.atom_list.emplace_back(std::move(atom_2));
 
-    assembly.bond_list.emplace_back(std::make_unique<rg::BondObject>(
+    parts.bond_list.emplace_back(std::make_unique<rg::BondObject>(
         atom_1_ptr,
         atom_2_ptr));
-    return std::make_unique<rg::ModelObject>(rg::AssembleModelObject(std::move(assembly)));
+    return std::make_unique<rg::ModelObject>(rg::AssembleModelObject(std::move(parts)));
 }
 
 inline rg::MapObject MakeMapObject()

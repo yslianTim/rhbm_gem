@@ -2,12 +2,13 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
+
 #include "data/detail/ModelDerivedState.hpp"
+#include "data/detail/ModelAnalysisData.hpp"
 #include "data/detail/GroupPotentialEntry.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/LocalPotentialFitState.hpp"
-#include "data/detail/ModelAnalysisData.hpp"
-#include <rhbm_gem/utils/domain/Logger.hpp>
 
 namespace rhbm_gem {
 

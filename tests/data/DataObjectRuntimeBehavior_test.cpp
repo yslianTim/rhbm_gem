@@ -5,13 +5,14 @@
 #include <limits>
 #include <memory>
 #include <tuple>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
 #include "data/detail/ModelDerivedState.hpp"
-#include "data/detail/ModelObjectAssembly.hpp"
+#include "data/detail/ModelObjectParts.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include "data/detail/MapSpatialIndex.hpp"
@@ -211,13 +212,19 @@ TEST(DataObjectRuntimeBehaviorTest, SelectedAtomsAndBondsRemainQueryableForConte
 
 TEST(DataObjectRuntimeBehaviorTest, AssemblyBuildsSerialIndexWithoutUsingMovedFromPointer)
 {
-    rg::ModelObjectAssembly assembly;
+    static_assert(std::is_default_constructible_v<rg::ModelObjectParts>);
+    static_assert(!std::is_copy_constructible_v<rg::ModelObjectParts>);
+    static_assert(!std::is_copy_assignable_v<rg::ModelObjectParts>);
+    static_assert(std::is_move_constructible_v<rg::ModelObjectParts>);
+    static_assert(std::is_move_assignable_v<rg::ModelObjectParts>);
+
+    rg::ModelObjectParts parts;
     auto atom{ std::make_unique<rg::AtomObject>() };
     atom->SetSerialID(42);
     atom->SetPosition(3.0f, 4.0f, 5.0f);
 
-    assembly.atom_list.emplace_back(std::move(atom));
-    auto model{ rg::AssembleModelObject(std::move(assembly)) };
+    parts.atom_list.emplace_back(std::move(atom));
+    auto model{ rg::AssembleModelObject(std::move(parts)) };
     EXPECT_EQ(model.GetNumberOfAtom(), 1);
     ASSERT_NE(model.FindAtomPtr(42), nullptr);
     EXPECT_FLOAT_EQ(model.GetCenterOfMassPosition().at(0), 3.0f);
@@ -225,19 +232,19 @@ TEST(DataObjectRuntimeBehaviorTest, AssemblyBuildsSerialIndexWithoutUsingMovedFr
 
 TEST(DataObjectRuntimeBehaviorTest, AssemblyBuildsModelWithFreshIndicesAndDerivedCaches)
 {
-    rg::ModelObjectAssembly assembly;
-    assembly.atom_list.reserve(2);
+    rg::ModelObjectParts parts;
+    parts.atom_list.reserve(2);
     auto atom_1{ std::make_unique<rg::AtomObject>() };
     atom_1->SetSerialID(11);
     atom_1->SetPosition(5.0f, 0.0f, 0.0f);
     auto atom_2{ std::make_unique<rg::AtomObject>() };
     atom_2->SetSerialID(12);
     atom_2->SetPosition(9.0f, 0.0f, 0.0f);
-    assembly.atom_list.emplace_back(std::move(atom_1));
-    assembly.atom_list.emplace_back(std::move(atom_2));
+    parts.atom_list.emplace_back(std::move(atom_1));
+    parts.atom_list.emplace_back(std::move(atom_2));
 
     auto model{
-        std::make_unique<rg::ModelObject>(rg::AssembleModelObject(std::move(assembly))) };
+        std::make_unique<rg::ModelObject>(rg::AssembleModelObject(std::move(parts))) };
     model->SetAtomSelected(11, true);
     model->SetAtomSelected(12, false);
 
@@ -253,8 +260,8 @@ TEST(DataObjectRuntimeBehaviorTest, AssemblyBuildsModelWithFreshIndicesAndDerive
 
 TEST(DataObjectRuntimeBehaviorTest, AssemblyInitializesOwnersSelectionAndDerivedState)
 {
-    rg::ModelObjectAssembly assembly;
-    assembly.atom_list.reserve(2);
+    rg::ModelObjectParts parts;
+    parts.atom_list.reserve(2);
 
     auto atom_1{ std::make_unique<rg::AtomObject>() };
     atom_1->SetSerialID(1);
@@ -265,11 +272,11 @@ TEST(DataObjectRuntimeBehaviorTest, AssemblyInitializesOwnersSelectionAndDerived
 
     auto * atom_1_ptr{ atom_1.get() };
     auto * atom_2_ptr{ atom_2.get() };
-    assembly.atom_list.emplace_back(std::move(atom_1));
-    assembly.atom_list.emplace_back(std::move(atom_2));
-    assembly.bond_list.emplace_back(std::make_unique<rg::BondObject>(atom_1_ptr, atom_2_ptr));
+    parts.atom_list.emplace_back(std::move(atom_1));
+    parts.atom_list.emplace_back(std::move(atom_2));
+    parts.bond_list.emplace_back(std::make_unique<rg::BondObject>(atom_1_ptr, atom_2_ptr));
 
-    auto model{ rg::AssembleModelObject(std::move(assembly)) };
+    auto model{ rg::AssembleModelObject(std::move(parts)) };
 
     ASSERT_EQ(model.GetSelectedAtomCount(), 0);
     ASSERT_EQ(model.GetSelectedBondCount(), 0);
@@ -327,18 +334,18 @@ TEST(DataObjectRuntimeBehaviorTest, DerivedStateCachesGeometryQueriesAcrossRepea
 
 TEST(DataObjectRuntimeBehaviorTest, DerivedStateSpatialQueriesRemainAvailableAfterAssemblyCopyAndMove)
 {
-    rg::ModelObjectAssembly assembly;
-    assembly.atom_list.reserve(2);
+    rg::ModelObjectParts parts;
+    parts.atom_list.reserve(2);
     auto atom_1{ std::make_unique<rg::AtomObject>() };
     atom_1->SetSerialID(41);
     atom_1->SetPosition(0.0f, 0.0f, 0.0f);
     auto atom_2{ std::make_unique<rg::AtomObject>() };
     atom_2->SetSerialID(42);
     atom_2->SetPosition(1.0f, 0.0f, 0.0f);
-    assembly.atom_list.emplace_back(std::move(atom_1));
-    assembly.atom_list.emplace_back(std::move(atom_2));
+    parts.atom_list.emplace_back(std::move(atom_1));
+    parts.atom_list.emplace_back(std::move(atom_2));
 
-    auto assembled_model{ rg::AssembleModelObject(std::move(assembly)) };
+    auto assembled_model{ rg::AssembleModelObject(std::move(parts)) };
     const auto assembled_hits{
         rg::ModelDerivedState::Of(assembled_model).FindAtomsInRange(
             assembled_model,

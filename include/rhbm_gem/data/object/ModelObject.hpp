@@ -24,10 +24,10 @@ class BondObject;
 class ChemicalComponentEntry;
 class ModelDerivedState;
 class ModelAnalysisData;
-struct ModelObjectAssembly;
+struct ModelObjectParts;
 class ModelObjectStorage;
 
-ModelObject AssembleModelObject(ModelObjectAssembly assembly);
+ModelObject AssembleModelObject(ModelObjectParts parts);
 
 class ModelObject
 {
@@ -101,7 +101,7 @@ private:
     friend class ModelDerivedState;
     friend class ModelAnalysisData;
     friend class ModelObjectStorage;
-    friend ModelObject AssembleModelObject(ModelObjectAssembly assembly);
+    friend ModelObject AssembleModelObject(ModelObjectParts parts);
 
     // Object graph and derived-state maintenance.
     void RebuildObjectIndex();

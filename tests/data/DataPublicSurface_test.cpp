@@ -264,6 +264,7 @@ TEST(DataPublicSurfaceTest, InternalTransitionWrappersAreNotAvailableOrIncluded)
     EXPECT_FALSE(std::filesystem::exists(project_root / "src/data/detail/ModelSpatialCache.hpp"));
     EXPECT_FALSE(std::filesystem::exists(project_root / "src/data/detail/ModelSpatialAccess.hpp"));
     EXPECT_FALSE(std::filesystem::exists(project_root / "src/data/detail/ModelObjectBuilder.hpp"));
+    EXPECT_FALSE(std::filesystem::exists(project_root / "src/data/detail/ModelObjectAssembly.hpp"));
     EXPECT_FALSE(std::filesystem::exists(project_root / "src/data/detail/ModelSelectionAccess.hpp"));
     EXPECT_FALSE(SourceTreeContains(project_root / "src", "LocalPotentialAccess.hpp"));
     EXPECT_FALSE(SourceTreeContains(project_root / "src", "GroupPotentialAccess.hpp"));
@@ -272,16 +273,19 @@ TEST(DataPublicSurfaceTest, InternalTransitionWrappersAreNotAvailableOrIncluded)
     EXPECT_FALSE(SourceTreeContains(project_root / "src", "ModelSpatialCache"));
     EXPECT_FALSE(SourceTreeContains(project_root / "src", "ModelSpatialAccess"));
     EXPECT_FALSE(SourceTreeContains(project_root / "src", "ModelObjectBuilder"));
+    EXPECT_FALSE(SourceTreeContains(project_root / "src", "ModelObjectAssembly"));
     EXPECT_FALSE(SourceTreeContains(project_root / "src", "ModelSelectionAccess.hpp"));
     EXPECT_FALSE(SourceTreeContains(project_root / "tests", "ModelAnalysisAccess", ignored_test_files));
     EXPECT_FALSE(SourceTreeContains(project_root / "tests", "ModelSpatialData", ignored_test_files));
     EXPECT_FALSE(SourceTreeContains(project_root / "tests", "ModelSpatialCache", ignored_test_files));
     EXPECT_FALSE(SourceTreeContains(project_root / "tests", "ModelSpatialAccess", ignored_test_files));
     EXPECT_FALSE(SourceTreeContains(project_root / "tests", "ModelObjectBuilder", ignored_test_files));
+    EXPECT_FALSE(SourceTreeContains(project_root / "tests", "ModelObjectAssembly", ignored_test_files));
     EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelAnalysisAccess"));
     EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelSpatialData"));
     EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelSpatialCache"));
     EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelSpatialAccess"));
     EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelObjectBuilder"));
+    EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelObjectAssembly"));
     EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelSelectionAccess"));
 }

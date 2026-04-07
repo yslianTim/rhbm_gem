@@ -1,5 +1,5 @@
 #include "ModelImportState.hpp"
-#include "data/detail/ModelObjectAssembly.hpp"
+#include "data/detail/ModelObjectParts.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -175,15 +175,15 @@ std::unique_ptr<ModelObject> ModelImportState::TakeModelObject(int preferred_mod
         filtered_bond_list.emplace_back(std::move(bond));
     }
 
-    ModelObjectAssembly assembly;
-    assembly.atom_list = std::move(atom_list);
-    assembly.bond_list = std::move(filtered_bond_list);
-    assembly.chain_id_list_map = GetChainIDListMap();
-    assembly.chemical_component_entry_map = std::move(GetChemicalComponentEntryMap());
-    assembly.component_key_system = MoveComponentKeySystem();
-    assembly.atom_key_system = MoveAtomKeySystem();
-    assembly.bond_key_system = MoveBondKeySystem();
-    auto model_object{ std::make_unique<ModelObject>(AssembleModelObject(std::move(assembly))) };
+    ModelObjectParts parts;
+    parts.atom_list = std::move(atom_list);
+    parts.bond_list = std::move(filtered_bond_list);
+    parts.chain_id_list_map = GetChainIDListMap();
+    parts.chemical_component_entry_map = std::move(GetChemicalComponentEntryMap());
+    parts.component_key_system = MoveComponentKeySystem();
+    parts.atom_key_system = MoveAtomKeySystem();
+    parts.bond_key_system = MoveBondKeySystem();
+    auto model_object{ std::make_unique<ModelObject>(AssembleModelObject(std::move(parts))) };
     model_object->SetPdbID(GetPdbID());
     model_object->SetEmdID(GetEmdID());
     model_object->SetResolution(GetResolution());
