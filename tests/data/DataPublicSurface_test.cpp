@@ -266,6 +266,10 @@ TEST(DataPublicSurfaceTest, InternalTransitionWrappersAreNotAvailableOrIncluded)
     EXPECT_FALSE(std::filesystem::exists(project_root / "src/data/detail/ModelObjectBuilder.hpp"));
     EXPECT_FALSE(std::filesystem::exists(project_root / "src/data/detail/ModelObjectAssembly.hpp"));
     EXPECT_FALSE(std::filesystem::exists(project_root / "src/data/detail/ModelSelectionAccess.hpp"));
+    EXPECT_FALSE(SourceTreeContains(project_root / "src", "AtomAnalysisStore"));
+    EXPECT_FALSE(SourceTreeContains(project_root / "src", "BondAnalysisStore"));
+    EXPECT_FALSE(SourceTreeContains(project_root / "src", ".Atoms()"));
+    EXPECT_FALSE(SourceTreeContains(project_root / "src", ".Bonds()"));
     EXPECT_FALSE(SourceTreeContains(project_root / "src", "LocalPotentialAccess.hpp"));
     EXPECT_FALSE(SourceTreeContains(project_root / "src", "GroupPotentialAccess.hpp"));
     EXPECT_FALSE(SourceTreeContains(project_root / "src", "ModelAnalysisAccess"));
@@ -276,6 +280,10 @@ TEST(DataPublicSurfaceTest, InternalTransitionWrappersAreNotAvailableOrIncluded)
     EXPECT_FALSE(SourceTreeContains(project_root / "src", "ModelObjectAssembly"));
     EXPECT_FALSE(SourceTreeContains(project_root / "src", "ModelAnalysisData::ClearFitStates("));
     EXPECT_FALSE(SourceTreeContains(project_root / "src", "ModelSelectionAccess.hpp"));
+    EXPECT_FALSE(SourceTreeContains(project_root / "tests", "AtomAnalysisStore", ignored_test_files));
+    EXPECT_FALSE(SourceTreeContains(project_root / "tests", "BondAnalysisStore", ignored_test_files));
+    EXPECT_FALSE(SourceTreeContains(project_root / "tests", ".Atoms()", ignored_test_files));
+    EXPECT_FALSE(SourceTreeContains(project_root / "tests", ".Bonds()", ignored_test_files));
     EXPECT_FALSE(SourceTreeContains(project_root / "tests", "ModelAnalysisAccess", ignored_test_files));
     EXPECT_FALSE(SourceTreeContains(project_root / "tests", "ModelSpatialData", ignored_test_files));
     EXPECT_FALSE(SourceTreeContains(project_root / "tests", "ModelSpatialCache", ignored_test_files));
@@ -291,5 +299,9 @@ TEST(DataPublicSurfaceTest, InternalTransitionWrappersAreNotAvailableOrIncluded)
     EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelObjectAssembly"));
     EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelObjectParts.hpp"));
     EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelAnalysisData::ClearFitStates("));
+    EXPECT_FALSE(SourceTreeContains(project_root / "include", "AtomAnalysisStore"));
+    EXPECT_FALSE(SourceTreeContains(project_root / "include", "BondAnalysisStore"));
+    EXPECT_FALSE(SourceTreeContains(project_root / "include", ".Atoms()"));
+    EXPECT_FALSE(SourceTreeContains(project_root / "include", ".Bonds()"));
     EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelSelectionAccess"));
 }

@@ -270,12 +270,12 @@ private:
 
     const GroupPotentialEntry * FindAtomGroupEntry(const std::string & class_key) const
     {
-        return ModelAnalysisData::Of(m_model_object).Atoms().FindGroupEntry(class_key);
+        return ModelAnalysisData::Of(m_model_object).FindAtomGroupEntry(class_key);
     }
 
     const GroupPotentialEntry * FindBondGroupEntry(const std::string & class_key) const
     {
-        return ModelAnalysisData::Of(m_model_object).Bonds().FindGroupEntry(class_key);
+        return ModelAnalysisData::Of(m_model_object).FindBondGroupEntry(class_key);
     }
 
     static void LogMissingAtomGroup(GroupKey group_key, const std::string & class_key)

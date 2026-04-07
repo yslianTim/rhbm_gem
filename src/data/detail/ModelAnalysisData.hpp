@@ -15,85 +15,24 @@ class LocalPotentialEntry;
 class LocalPotentialFitState;
 class ModelObject;
 
-class AtomAnalysisStore
-{
-public:
-    using GroupEntryMap = std::unordered_map<std::string, GroupPotentialEntry>;
-    using LocalEntryMap = std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>>;
-    using FitStateMap = std::unordered_map<int, LocalPotentialFitState>;
-
-private:
-    GroupEntryMap m_group_entry_map;
-    LocalEntryMap m_local_entry_map;
-    FitStateMap m_fit_state_map;
-
-public:
-    GroupPotentialEntry & EnsureGroupEntry(const std::string & class_key);
-    GroupPotentialEntry * FindGroupEntry(const std::string & class_key);
-    const GroupPotentialEntry * FindGroupEntry(const std::string & class_key) const;
-    const GroupEntryMap & Entries() const;
-
-    LocalPotentialEntry & EnsureLocalEntry(const AtomObject & atom_object);
-    void SetLocalEntry(const AtomObject & atom_object, std::unique_ptr<LocalPotentialEntry> entry);
-    LocalPotentialEntry * FindLocalEntry(const AtomObject & atom_object);
-    const LocalPotentialEntry * FindLocalEntry(const AtomObject & atom_object) const;
-    const LocalEntryMap & LocalEntries() const;
-
-    LocalPotentialFitState & EnsureFitState(const AtomObject & atom_object);
-    LocalPotentialFitState * FindFitState(const AtomObject & atom_object);
-    const LocalPotentialFitState * FindFitState(const AtomObject & atom_object) const;
-
-private:
-    friend class ModelAnalysisData;
-
-    void ClearTransientFitStates();
-    void Clear();
-
-    static int BuildFitStateKey(const AtomObject & atom_object);
-};
-
-class BondAnalysisStore
-{
-public:
-    using GroupEntryMap = std::unordered_map<std::string, GroupPotentialEntry>;
-    using FitStateKey = std::pair<int, int>;
-    using LocalEntryMap = std::map<FitStateKey, std::unique_ptr<LocalPotentialEntry>>;
-    using FitStateMap = std::map<FitStateKey, LocalPotentialFitState>;
-
-private:
-    GroupEntryMap m_group_entry_map;
-    LocalEntryMap m_local_entry_map;
-    FitStateMap m_fit_state_map;
-
-public:
-    GroupPotentialEntry & EnsureGroupEntry(const std::string & class_key);
-    GroupPotentialEntry * FindGroupEntry(const std::string & class_key);
-    const GroupPotentialEntry * FindGroupEntry(const std::string & class_key) const;
-    const GroupEntryMap & Entries() const;
-
-    LocalPotentialEntry & EnsureLocalEntry(const BondObject & bond_object);
-    void SetLocalEntry(const BondObject & bond_object, std::unique_ptr<LocalPotentialEntry> entry);
-    LocalPotentialEntry * FindLocalEntry(const BondObject & bond_object);
-    const LocalPotentialEntry * FindLocalEntry(const BondObject & bond_object) const;
-    const LocalEntryMap & LocalEntries() const;
-
-    LocalPotentialFitState & EnsureFitState(const BondObject & bond_object);
-    LocalPotentialFitState * FindFitState(const BondObject & bond_object);
-    const LocalPotentialFitState * FindFitState(const BondObject & bond_object) const;
-
-private:
-    friend class ModelAnalysisData;
-
-    void ClearTransientFitStates();
-    void Clear();
-
-    static FitStateKey BuildFitStateKey(const BondObject & bond_object);
-};
-
 class ModelAnalysisData
 {
-    AtomAnalysisStore m_atoms;
-    BondAnalysisStore m_bonds;
+public:
+    using AtomGroupEntryMap = std::unordered_map<std::string, GroupPotentialEntry>;
+    using AtomLocalEntryMap = std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>>;
+    using AtomFitStateMap = std::unordered_map<int, LocalPotentialFitState>;
+    using BondGroupEntryMap = std::unordered_map<std::string, GroupPotentialEntry>;
+    using BondFitStateKey = std::pair<int, int>;
+    using BondLocalEntryMap = std::map<BondFitStateKey, std::unique_ptr<LocalPotentialEntry>>;
+    using BondFitStateMap = std::map<BondFitStateKey, LocalPotentialFitState>;
+
+private:
+    AtomGroupEntryMap m_atom_group_entry_map;
+    AtomLocalEntryMap m_atom_local_entry_map;
+    AtomFitStateMap m_atom_fit_state_map;
+    BondGroupEntryMap m_bond_group_entry_map;
+    BondLocalEntryMap m_bond_local_entry_map;
+    BondFitStateMap m_bond_fit_state_map;
 
 public:
     ModelAnalysisData();
@@ -116,10 +55,37 @@ public:
     void Clear();
     void ClearTransientFitStates();
 
-    AtomAnalysisStore & Atoms() { return m_atoms; }
-    const AtomAnalysisStore & Atoms() const { return m_atoms; }
-    BondAnalysisStore & Bonds() { return m_bonds; }
-    const BondAnalysisStore & Bonds() const { return m_bonds; }
+    GroupPotentialEntry & EnsureAtomGroupEntry(const std::string & class_key);
+    GroupPotentialEntry * FindAtomGroupEntry(const std::string & class_key);
+    const GroupPotentialEntry * FindAtomGroupEntry(const std::string & class_key) const;
+    const AtomGroupEntryMap & AtomGroupEntries() const;
+
+    LocalPotentialEntry & EnsureAtomLocalEntry(const AtomObject & atom_object);
+    void SetAtomLocalEntry(const AtomObject & atom_object, std::unique_ptr<LocalPotentialEntry> entry);
+    LocalPotentialEntry * FindAtomLocalEntry(const AtomObject & atom_object);
+    const LocalPotentialEntry * FindAtomLocalEntry(const AtomObject & atom_object) const;
+
+    LocalPotentialFitState & EnsureAtomFitState(const AtomObject & atom_object);
+    LocalPotentialFitState * FindAtomFitState(const AtomObject & atom_object);
+    const LocalPotentialFitState * FindAtomFitState(const AtomObject & atom_object) const;
+
+    GroupPotentialEntry & EnsureBondGroupEntry(const std::string & class_key);
+    GroupPotentialEntry * FindBondGroupEntry(const std::string & class_key);
+    const GroupPotentialEntry * FindBondGroupEntry(const std::string & class_key) const;
+    const BondGroupEntryMap & BondGroupEntries() const;
+
+    LocalPotentialEntry & EnsureBondLocalEntry(const BondObject & bond_object);
+    void SetBondLocalEntry(const BondObject & bond_object, std::unique_ptr<LocalPotentialEntry> entry);
+    LocalPotentialEntry * FindBondLocalEntry(const BondObject & bond_object);
+    const LocalPotentialEntry * FindBondLocalEntry(const BondObject & bond_object) const;
+
+    LocalPotentialFitState & EnsureBondFitState(const BondObject & bond_object);
+    LocalPotentialFitState * FindBondFitState(const BondObject & bond_object);
+    const LocalPotentialFitState * FindBondFitState(const BondObject & bond_object) const;
+
+private:
+    static int BuildAtomFitStateKey(const AtomObject & atom_object);
+    static BondFitStateKey BuildBondFitStateKey(const BondObject & bond_object);
 };
 
 } // namespace rhbm_gem

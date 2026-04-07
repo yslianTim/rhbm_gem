@@ -33,14 +33,14 @@ void EnsureLocalPotentialEntries(rg::ModelObject & model)
     {
         if (rg::ModelAnalysisData::FindLocalEntry(*atom) == nullptr)
         {
-            rg::ModelAnalysisData::Of(model).Atoms().EnsureLocalEntry(*atom);
+            rg::ModelAnalysisData::Of(model).EnsureAtomLocalEntry(*atom);
         }
     }
     for (auto & bond : model.GetBondList())
     {
         if (rg::ModelAnalysisData::FindLocalEntry(*bond) == nullptr)
         {
-            rg::ModelAnalysisData::Of(model).Bonds().EnsureLocalEntry(*bond);
+            rg::ModelAnalysisData::Of(model).EnsureBondLocalEntry(*bond);
         }
     }
 }

@@ -73,13 +73,13 @@ void PrepareModelForPotentialAnalysis(
 
     for (auto * atom : model_object.GetSelectedAtoms())
     {
-        rhbm_gem::ModelAnalysisData::Of(model_object).Atoms().EnsureLocalEntry(*atom);
-        analysis_data.Atoms().EnsureFitState(*atom);
+        rhbm_gem::ModelAnalysisData::Of(model_object).EnsureAtomLocalEntry(*atom);
+        analysis_data.EnsureAtomFitState(*atom);
     }
     for (auto * bond : model_object.GetSelectedBonds())
     {
-        rhbm_gem::ModelAnalysisData::Of(model_object).Bonds().EnsureLocalEntry(*bond);
-        analysis_data.Bonds().EnsureFitState(*bond);
+        rhbm_gem::ModelAnalysisData::Of(model_object).EnsureBondLocalEntry(*bond);
+        analysis_data.EnsureBondFitState(*bond);
     }
 }
 
@@ -110,7 +110,7 @@ rhbm_gem::LocalPotentialFitState & RequireAtomFitState(
     const rhbm_gem::AtomObject & atom_object)
 {
     const auto * fit_state{
-        rhbm_gem::ModelAnalysisData::Of(std::as_const(model_object)).Atoms().FindFitState(atom_object)
+        rhbm_gem::ModelAnalysisData::Of(std::as_const(model_object)).FindAtomFitState(atom_object)
     };
     if (fit_state == nullptr)
     {
@@ -441,7 +441,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
 
         // Group Atom Potential Fitting
         auto group_potential_entry{
-            ModelAnalysisData::Of(*m_model_object).Atoms().FindGroupEntry(class_key) };
+            ModelAnalysisData::Of(*m_model_object).FindAtomGroupEntry(class_key) };
         auto group_keys{ CollectGroupKeys(*group_potential_entry) };
         auto group_key_size{ group_keys.size() };
         std::atomic<size_t> key_count{ 0 };
@@ -508,7 +508,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
             auto count{ 0 };
             for (const auto & atom : atom_list)
             {
-                auto * atom_entry{ ModelAnalysisData::Of(*m_model_object).Atoms().FindLocalEntry(*atom) };
+                auto * atom_entry{ ModelAnalysisData::Of(*m_model_object).FindAtomLocalEntry(*atom) };
                 const auto beta_vector_posterior{
                     result.beta_posterior_array.col(static_cast<Eigen::Index>(count))
                 };
@@ -769,8 +769,8 @@ void RunAtomSamplingWorkflow(
     fit_state_list.reserve(atom_size);
     for (auto * atom : atom_list)
     {
-        fit_state_list.emplace_back(
-            &ModelAnalysisData::Of(model_object).Atoms().EnsureFitState(*atom));
+            fit_state_list.emplace_back(
+            &ModelAnalysisData::Of(model_object).EnsureAtomFitState(*atom));
     }
 
 #ifdef USE_OPENMP
@@ -781,7 +781,7 @@ void RunAtomSamplingWorkflow(
         {
             auto atom{ atom_list[i] };
             auto * fit_state{ fit_state_list[i] };
-            auto * entry{ ModelAnalysisData::Of(model_object).Atoms().FindLocalEntry(*atom) };
+            auto * entry{ ModelAnalysisData::Of(model_object).FindAtomLocalEntry(*atom) };
             entry->SetDistanceAndMapValueList(
                 SampleMapValues(map_object, *sampler, atom->GetPosition()));
             fit_state->SetDataset(
@@ -805,7 +805,7 @@ void RunAtomSamplingWorkflow(
     {
         auto atom{ atom_list[i] };
         auto * fit_state{ fit_state_list[i] };
-        auto * entry{ ModelAnalysisData::Of(model_object).Atoms().FindLocalEntry(*atom) };
+        auto * entry{ ModelAnalysisData::Of(model_object).FindAtomLocalEntry(*atom) };
         entry->SetDistanceAndMapValueList(
             SampleMapValues(map_object, *sampler, atom->GetPosition()));
         fit_state->SetDataset(
@@ -837,7 +837,7 @@ void RunAtomGroupingWorkflow(ModelObject & model_object)
             group_potential_entry->EnsureGroup(group_key).atom_members.emplace_back(atom);
         }
         const auto group_size{ group_potential_entry->Entries().size() };
-        ModelAnalysisData::Of(model_object).Atoms().EnsureGroupEntry(class_key) =
+        ModelAnalysisData::Of(model_object).EnsureAtomGroupEntry(class_key) =
             std::move(*group_potential_entry);
         Logger::Log(
             LogLevel::Info,
@@ -860,7 +860,7 @@ void RunLocalAtomFittingWorkflow(
     for (auto * atom : selected_atom_list)
     {
         fit_state_list.emplace_back(
-            &ModelAnalysisData::Of(model_object).Atoms().EnsureFitState(*atom));
+            &ModelAnalysisData::Of(model_object).EnsureAtomFitState(*atom));
     }
     Logger::Log(
         LogLevel::Info,
@@ -870,7 +870,7 @@ void RunLocalAtomFittingWorkflow(
 #endif
     for (size_t i = 0; i < selected_atom_size; i++)
     {
-        auto * local_entry{ ModelAnalysisData::Of(model_object).Atoms().FindLocalEntry(*selected_atom_list[i]) };
+        auto * local_entry{ ModelAnalysisData::Of(model_object).FindAtomLocalEntry(*selected_atom_list[i]) };
         auto * fit_state{ fit_state_list[i] };
         const auto & data_entry_list{ fit_state->GetDataset().basis_and_response_entry_list };
         const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
@@ -941,7 +941,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining()
     {
         if (atom->IsMainChainAtom() == false) continue;
         const auto * fit_state{
-            ModelAnalysisData::Of(*m_model_object).Atoms().FindFitState(*atom) };
+            ModelAnalysisData::Of(*m_model_object).FindAtomFitState(*atom) };
         if (fit_state == nullptr || !fit_state->HasDataset() ||
             fit_state->GetDataset().basis_and_response_entry_list.size() < 500) continue;
         selected_atom_list.emplace_back(atom);
@@ -957,7 +957,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining()
     
     for (auto & atom : atom_list)
     {
-        ModelAnalysisData::Of(*m_model_object).Atoms().EnsureLocalEntry(*atom).SetAlphaR(alpha_r);
+        ModelAnalysisData::Of(*m_model_object).EnsureAtomLocalEntry(*atom).SetAlphaR(alpha_r);
     }
     
     
@@ -967,7 +967,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining()
     const auto ordered_alpha_g_list{ detail::BuildOrderedAlphaGTrainingList() };
     
     auto component_group_potential_entry{
-        ModelAnalysisData::Of(*m_model_object).Atoms().FindGroupEntry(
+        ModelAnalysisData::Of(*m_model_object).FindAtomGroupEntry(
             ChemicalDataHelper::GetComponentAtomClassKey())
     };
     std::vector<std::vector<AtomObject *>> atom_list_set;
@@ -992,7 +992,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining()
     {
         const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
         auto group_potential_entry{
-            ModelAnalysisData::Of(*m_model_object).Atoms().FindGroupEntry(class_key) };
+            ModelAnalysisData::Of(*m_model_object).FindAtomGroupEntry(class_key) };
         for (const auto & [group_key, bucket] : group_potential_entry->Entries())
         {
             (void)bucket;

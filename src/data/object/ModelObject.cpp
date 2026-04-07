@@ -218,46 +218,46 @@ ModelObject::ModelObject(const ModelObject & other) :
 
     const auto & source_analysis_data{ ModelAnalysisData::Of(other) };
     copy_group_entries(
-        source_analysis_data.Atoms().Entries(),
+        source_analysis_data.AtomGroupEntries(),
         [this](const std::string & class_key, std::unique_ptr<GroupPotentialEntry> entry)
         {
-            m_analysis_data->Atoms().EnsureGroupEntry(class_key) = std::move(*entry);
+            m_analysis_data->EnsureAtomGroupEntry(class_key) = std::move(*entry);
         });
     copy_group_entries(
-        source_analysis_data.Bonds().Entries(),
+        source_analysis_data.BondGroupEntries(),
         [this](const std::string & class_key, std::unique_ptr<GroupPotentialEntry> entry)
         {
-            m_analysis_data->Bonds().EnsureGroupEntry(class_key) = std::move(*entry);
+            m_analysis_data->EnsureBondGroupEntry(class_key) = std::move(*entry);
         });
 
     for (const auto & atom : m_parts->atom_list)
     {
-        if (const auto * local_entry{ source_analysis_data.Atoms().FindLocalEntry(*atom) };
+        if (const auto * local_entry{ source_analysis_data.FindAtomLocalEntry(*atom) };
             local_entry != nullptr)
         {
-            m_analysis_data->Atoms().SetLocalEntry(
+            m_analysis_data->SetAtomLocalEntry(
                 *atom,
                 std::make_unique<LocalPotentialEntry>(*local_entry));
         }
-        if (const auto * fit_state{ source_analysis_data.Atoms().FindFitState(*atom) };
+        if (const auto * fit_state{ source_analysis_data.FindAtomFitState(*atom) };
             fit_state != nullptr)
         {
-            m_analysis_data->Atoms().EnsureFitState(*atom) = *fit_state;
+            m_analysis_data->EnsureAtomFitState(*atom) = *fit_state;
         }
     }
     for (const auto & bond : m_parts->bond_list)
     {
-        if (const auto * local_entry{ source_analysis_data.Bonds().FindLocalEntry(*bond) };
+        if (const auto * local_entry{ source_analysis_data.FindBondLocalEntry(*bond) };
             local_entry != nullptr)
         {
-            m_analysis_data->Bonds().SetLocalEntry(
+            m_analysis_data->SetBondLocalEntry(
                 *bond,
                 std::make_unique<LocalPotentialEntry>(*local_entry));
         }
-        if (const auto * fit_state{ source_analysis_data.Bonds().FindFitState(*bond) };
+        if (const auto * fit_state{ source_analysis_data.FindBondFitState(*bond) };
             fit_state != nullptr)
         {
-            m_analysis_data->Bonds().EnsureFitState(*bond) = *fit_state;
+            m_analysis_data->EnsureBondFitState(*bond) = *fit_state;
         }
     }
 

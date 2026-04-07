@@ -135,8 +135,8 @@ TEST(DataObjectPersistenceTest, LoadModelRestoresSelectionFromPersistedLocalEntr
     ASSERT_EQ(atoms.size(), 2);
     ASSERT_EQ(bonds.size(), 1);
 
-    rg::ModelAnalysisData::Of(*model).Atoms().EnsureLocalEntry(*atoms.at(0));
-    rg::ModelAnalysisData::Of(*model).Bonds().EnsureLocalEntry(*bonds.at(0));
+    rg::ModelAnalysisData::Of(*model).EnsureAtomLocalEntry(*atoms.at(0));
+    rg::ModelAnalysisData::Of(*model).EnsureBondLocalEntry(*bonds.at(0));
 
     repository.SaveModel(*model, "model");
 
@@ -149,11 +149,11 @@ TEST(DataObjectPersistenceTest, LoadModelRestoresSelectionFromPersistedLocalEntr
         loaded_model->GetSelectedBonds().front()->GetAtomSerialID1(),
         bonds.at(0)->GetAtomSerialID1());
     EXPECT_NE(
-        rg::ModelAnalysisData::Of(*loaded_model).Atoms().FindLocalEntry(
+        rg::ModelAnalysisData::Of(*loaded_model).FindAtomLocalEntry(
             *loaded_model->GetSelectedAtoms().front()),
         nullptr);
     EXPECT_NE(
-        rg::ModelAnalysisData::Of(*loaded_model).Bonds().FindLocalEntry(
+        rg::ModelAnalysisData::Of(*loaded_model).FindBondLocalEntry(
             *loaded_model->GetSelectedBonds().front()),
         nullptr);
 }

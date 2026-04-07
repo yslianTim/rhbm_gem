@@ -982,7 +982,7 @@ void SaveAtomLocalPotentialEntryList(
     SQLiteStatementBatch batch{ database, std::string(kInsertModelAtomLocalSql) };
     for (const auto & atom_object : model_obj.GetAtomList())
     {
-        auto * entry{ rhbm_gem::ModelAnalysisData::Of(model_obj).Atoms().FindLocalEntry(*atom_object) };
+        auto * entry{ rhbm_gem::ModelAnalysisData::Of(model_obj).FindAtomLocalEntry(*atom_object) };
         if (entry == nullptr) continue;
 
         batch.Execute([&](rhbm_gem::SQLiteWrapper & statement_db)
@@ -1009,7 +1009,7 @@ void SaveBondLocalPotentialEntryList(
     SQLiteStatementBatch batch{ database, std::string(kInsertModelBondLocalSql) };
     for (const auto & bond_object : model_obj.GetBondList())
     {
-        auto * entry{ rhbm_gem::ModelAnalysisData::Of(model_obj).Bonds().FindLocalEntry(*bond_object) };
+        auto * entry{ rhbm_gem::ModelAnalysisData::Of(model_obj).FindBondLocalEntry(*bond_object) };
         if (entry == nullptr) continue;
 
         batch.Execute([&](rhbm_gem::SQLiteWrapper & statement_db)
@@ -1038,7 +1038,7 @@ void SaveAtomLocalPotentialEntrySubList(
     SQLiteStatementBatch batch{ database, std::string(kInsertModelAtomPosteriorSql) };
     for (const auto & atom_object : model_obj.GetAtomList())
     {
-        auto * entry{ rhbm_gem::ModelAnalysisData::Of(model_obj).Atoms().FindLocalEntry(*atom_object) };
+        auto * entry{ rhbm_gem::ModelAnalysisData::Of(model_obj).FindAtomLocalEntry(*atom_object) };
         if (entry == nullptr) continue;
         const auto * annotation{ entry->FindAnnotation(class_key) };
         if (annotation == nullptr) continue;
@@ -1067,7 +1067,7 @@ void SaveBondLocalPotentialEntrySubList(
     SQLiteStatementBatch batch{ database, std::string(kInsertModelBondPosteriorSql) };
     for (const auto & bond_object : model_obj.GetBondList())
     {
-        auto * entry{ rhbm_gem::ModelAnalysisData::Of(model_obj).Bonds().FindLocalEntry(*bond_object) };
+        auto * entry{ rhbm_gem::ModelAnalysisData::Of(model_obj).FindBondLocalEntry(*bond_object) };
         if (entry == nullptr) continue;
         const auto * annotation{ entry->FindAnnotation(class_key) };
         if (annotation == nullptr) continue;
@@ -1322,7 +1322,7 @@ void LoadAtomGroupPotentialEntryList(
     const std::string & class_key)
 {
     auto & group_entry{
-        rhbm_gem::ModelAnalysisData::Of(model_obj).Atoms().EnsureGroupEntry(class_key) };
+        rhbm_gem::ModelAnalysisData::Of(model_obj).EnsureAtomGroupEntry(class_key) };
     database.Prepare(std::string(kSelectModelAtomGroupSql));
     rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
     database.Bind<std::string>(1, key_tag);
@@ -1367,7 +1367,7 @@ void LoadBondGroupPotentialEntryList(
     const std::string & class_key)
 {
     auto & group_entry{
-        rhbm_gem::ModelAnalysisData::Of(model_obj).Bonds().EnsureGroupEntry(class_key) };
+        rhbm_gem::ModelAnalysisData::Of(model_obj).EnsureBondGroupEntry(class_key) };
     database.Prepare(std::string(kSelectModelBondGroupSql));
     rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
     database.Bind<std::string>(1, key_tag);
@@ -1414,7 +1414,7 @@ void SaveAnalysis(
     SaveBondLocalPotentialEntryList(database, model_obj, key_tag);
     const auto & analysis_data{ rhbm_gem::ModelAnalysisData::Of(model_obj) };
 
-    for (const auto & [class_key, group_entry] : analysis_data.Atoms().Entries())
+    for (const auto & [class_key, group_entry] : analysis_data.AtomGroupEntries())
     {
         if (group_entry.Entries().empty())
         {
@@ -1423,7 +1423,7 @@ void SaveAnalysis(
         SaveAtomLocalPotentialEntrySubList(database, model_obj, key_tag, class_key);
         SaveAtomGroupPotentialEntryList(database, group_entry, key_tag, class_key);
     }
-    for (const auto & [class_key, group_entry] : analysis_data.Bonds().Entries())
+    for (const auto & [class_key, group_entry] : analysis_data.BondGroupEntries())
     {
         if (group_entry.Entries().empty())
         {
@@ -1480,7 +1480,7 @@ void ModelObjectStorage::LoadAnalysis(
             continue;
         }
 
-        ModelAnalysisData::Of(model_obj).Atoms().SetLocalEntry(*atom_object, std::move(iter->second));
+        ModelAnalysisData::Of(model_obj).SetAtomLocalEntry(*atom_object, std::move(iter->second));
         selected_serial_ids.insert(serial_id);
     }
     model_obj.RestoreAtomSelectionBulk(selected_serial_ids);
@@ -1497,7 +1497,7 @@ void ModelObjectStorage::LoadAnalysis(
             continue;
         }
 
-        ModelAnalysisData::Of(model_obj).Bonds().SetLocalEntry(*bond_object, std::move(iter->second));
+        ModelAnalysisData::Of(model_obj).SetBondLocalEntry(*bond_object, std::move(iter->second));
         selected_serial_pairs.insert(serial_id_pair);
     }
     model_obj.RestoreBondSelectionBulk(selected_serial_pairs);
@@ -1505,14 +1505,14 @@ void ModelObjectStorage::LoadAnalysis(
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {
         auto class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        ModelAnalysisData::Of(model_obj).Atoms().EnsureGroupEntry(class_key);
+        ModelAnalysisData::Of(model_obj).EnsureAtomGroupEntry(class_key);
         LoadAtomGroupPotentialEntryList(database, model_obj, key_tag, class_key);
     }
 
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupBondClassCount(); i++)
     {
         auto class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
-        ModelAnalysisData::Of(model_obj).Bonds().EnsureGroupEntry(class_key);
+        ModelAnalysisData::Of(model_obj).EnsureBondGroupEntry(class_key);
         LoadBondGroupPotentialEntryList(database, model_obj, key_tag, class_key);
     }
 }

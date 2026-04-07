@@ -85,7 +85,7 @@ void RunBondSampling(
     for (auto * bond : bond_list)
     {
         fit_state_list.emplace_back(
-            &ModelAnalysisData::Of(model_object).Bonds().EnsureFitState(*bond));
+            &ModelAnalysisData::Of(model_object).EnsureBondFitState(*bond));
     }
 
 #ifdef USE_OPENMP
@@ -96,7 +96,7 @@ void RunBondSampling(
         {
             auto bond{ bond_list[i] };
             auto * fit_state{ fit_state_list[i] };
-            auto * entry{ ModelAnalysisData::Of(model_object).Bonds().FindLocalEntry(*bond) };
+            auto * entry{ ModelAnalysisData::Of(model_object).FindBondLocalEntry(*bond) };
             auto bond_vector{ bond->GetBondVector() };
             auto bond_position{ bond->GetPosition() };
             constexpr float adjusted_rate{ 0.0f };
@@ -129,7 +129,7 @@ void RunBondSampling(
     {
         auto bond{ bond_list[i] };
         auto * fit_state{ fit_state_list[i] };
-        auto * entry{ ModelAnalysisData::Of(model_object).Bonds().FindLocalEntry(*bond) };
+        auto * entry{ ModelAnalysisData::Of(model_object).FindBondLocalEntry(*bond) };
         entry->SetDistanceAndMapValueList(
             SampleMapValues(
                 map_object,
@@ -162,7 +162,7 @@ void RunBondGrouping(ModelObject & model_object)
             group_potential_entry->EnsureGroup(group_key).bond_members.emplace_back(bond);
         }
         const auto group_size{ group_potential_entry->Entries().size() };
-        ModelAnalysisData::Of(model_object).Bonds().EnsureGroupEntry(class_key) =
+        ModelAnalysisData::Of(model_object).EnsureBondGroupEntry(class_key) =
             std::move(*group_potential_entry);
         Logger::Log(
             LogLevel::Info,
@@ -195,7 +195,7 @@ void RunLocalBondFitting(
     for (auto * bond : selected_bond_list)
     {
         fit_state_list.emplace_back(
-            &ModelAnalysisData::Of(context.model_object).Bonds().EnsureFitState(*bond));
+            &ModelAnalysisData::Of(context.model_object).EnsureBondFitState(*bond));
     }
     Logger::Log(
         LogLevel::Info,
@@ -206,7 +206,7 @@ void RunLocalBondFitting(
     for (size_t i = 0; i < selected_bond_size; i++)
     {
         auto * local_entry{
-            ModelAnalysisData::Of(context.model_object).Bonds().FindLocalEntry(*selected_bond_list[i]) };
+            ModelAnalysisData::Of(context.model_object).FindBondLocalEntry(*selected_bond_list[i]) };
         auto * fit_state{ fit_state_list[i] };
         const auto & data_entry_list{ fit_state->GetDataset().basis_and_response_entry_list };
         const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
@@ -259,7 +259,7 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
 
         const auto & analysis_state{ ModelAnalysisData::Of(context.model_object) };
         auto group_potential_entry{
-            analysis_state.Bonds().FindGroupEntry(class_key) };
+            analysis_state.FindBondGroupEntry(class_key) };
         auto group_keys{ CollectGroupKeys(*group_potential_entry) };
         const auto group_key_size{ group_keys.size() };
         std::atomic<size_t> key_count{ 0 };
@@ -284,7 +284,7 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
             data_covariance_list.reserve(group_size);
             for (const auto & bond : bond_list)
             {
-                auto * fit_state{ analysis_state.Bonds().FindFitState(*bond) };
+                auto * fit_state{ analysis_state.FindBondFitState(*bond) };
                 if (fit_state == nullptr)
                 {
                     throw std::runtime_error("Bond fit state is not available.");
@@ -327,7 +327,7 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
             auto count{ 0 };
             for (const auto & bond : bond_list)
             {
-                auto * bond_entry{ ModelAnalysisData::Of(context.model_object).Bonds().FindLocalEntry(*bond) };
+                auto * bond_entry{ ModelAnalysisData::Of(context.model_object).FindBondLocalEntry(*bond) };
                 const auto beta_vector_posterior{
                     result.beta_posterior_array.col(static_cast<Eigen::Index>(count))
                 };

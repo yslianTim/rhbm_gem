@@ -76,11 +76,11 @@ TEST(DataObjectRuntimeBehaviorTest, SelectedModelEntriesCanBeInitializedForTyped
     model->ApplySymmetrySelection(false);
     for (auto * atom : model->GetSelectedAtoms())
     {
-        rg::ModelAnalysisData::Of(*model).Atoms().EnsureLocalEntry(*atom);
+        rg::ModelAnalysisData::Of(*model).EnsureAtomLocalEntry(*atom);
     }
     for (auto * bond : model->GetSelectedBonds())
     {
-        rg::ModelAnalysisData::Of(*model).Bonds().EnsureLocalEntry(*bond);
+        rg::ModelAnalysisData::Of(*model).EnsureBondLocalEntry(*bond);
     }
 
     EXPECT_EQ(model->GetSelectedAtomCount(), model->GetNumberOfAtom());
@@ -127,7 +127,7 @@ TEST(DataObjectRuntimeBehaviorTest, ModelSelectionAndLocalEntriesRemainDirectlyQ
     ASSERT_EQ(atoms.size(), 2);
     model->SetAtomSelected(1, true);
     model->SetAtomSelected(2, false);
-    rg::ModelAnalysisData::Of(*model).Atoms().EnsureLocalEntry(*atoms[0]);
+    rg::ModelAnalysisData::Of(*model).EnsureAtomLocalEntry(*atoms[0]);
 
     const auto & selected_only_atoms{ model->GetSelectedAtoms() };
     ASSERT_EQ(selected_only_atoms.size(), 1);
@@ -152,28 +152,28 @@ TEST(DataObjectRuntimeBehaviorTest, ModelAnalysisDataCanClearTransientFitStatesW
     auto * bond{ model->GetBondList().at(0).get() };
     auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
 
-    analysis_data.Atoms().EnsureLocalEntry(*atom);
-    analysis_data.Bonds().EnsureLocalEntry(*bond);
-    analysis_data.Atoms().EnsureGroupEntry("atom_class");
-    analysis_data.Bonds().EnsureGroupEntry("bond_class");
-    analysis_data.Atoms().EnsureFitState(*atom);
-    analysis_data.Bonds().EnsureFitState(*bond);
+    analysis_data.EnsureAtomLocalEntry(*atom);
+    analysis_data.EnsureBondLocalEntry(*bond);
+    analysis_data.EnsureAtomGroupEntry("atom_class");
+    analysis_data.EnsureBondGroupEntry("bond_class");
+    analysis_data.EnsureAtomFitState(*atom);
+    analysis_data.EnsureBondFitState(*bond);
 
-    ASSERT_NE(analysis_data.Atoms().FindLocalEntry(*atom), nullptr);
-    ASSERT_NE(analysis_data.Bonds().FindLocalEntry(*bond), nullptr);
-    ASSERT_NE(analysis_data.Atoms().FindGroupEntry("atom_class"), nullptr);
-    ASSERT_NE(analysis_data.Bonds().FindGroupEntry("bond_class"), nullptr);
-    ASSERT_NE(analysis_data.Atoms().FindFitState(*atom), nullptr);
-    ASSERT_NE(analysis_data.Bonds().FindFitState(*bond), nullptr);
+    ASSERT_NE(analysis_data.FindAtomLocalEntry(*atom), nullptr);
+    ASSERT_NE(analysis_data.FindBondLocalEntry(*bond), nullptr);
+    ASSERT_NE(analysis_data.FindAtomGroupEntry("atom_class"), nullptr);
+    ASSERT_NE(analysis_data.FindBondGroupEntry("bond_class"), nullptr);
+    ASSERT_NE(analysis_data.FindAtomFitState(*atom), nullptr);
+    ASSERT_NE(analysis_data.FindBondFitState(*bond), nullptr);
 
     analysis_data.ClearTransientFitStates();
 
-    EXPECT_NE(analysis_data.Atoms().FindLocalEntry(*atom), nullptr);
-    EXPECT_NE(analysis_data.Bonds().FindLocalEntry(*bond), nullptr);
-    EXPECT_NE(analysis_data.Atoms().FindGroupEntry("atom_class"), nullptr);
-    EXPECT_NE(analysis_data.Bonds().FindGroupEntry("bond_class"), nullptr);
-    EXPECT_EQ(analysis_data.Atoms().FindFitState(*atom), nullptr);
-    EXPECT_EQ(analysis_data.Bonds().FindFitState(*bond), nullptr);
+    EXPECT_NE(analysis_data.FindAtomLocalEntry(*atom), nullptr);
+    EXPECT_NE(analysis_data.FindBondLocalEntry(*bond), nullptr);
+    EXPECT_NE(analysis_data.FindAtomGroupEntry("atom_class"), nullptr);
+    EXPECT_NE(analysis_data.FindBondGroupEntry("bond_class"), nullptr);
+    EXPECT_EQ(analysis_data.FindAtomFitState(*atom), nullptr);
+    EXPECT_EQ(analysis_data.FindBondFitState(*bond), nullptr);
 }
 
 TEST(DataObjectRuntimeBehaviorTest, ModelAnalysisDataClearDropsEntriesAndFitStates)
@@ -183,21 +183,21 @@ TEST(DataObjectRuntimeBehaviorTest, ModelAnalysisDataClearDropsEntriesAndFitStat
     auto * bond{ model->GetBondList().at(0).get() };
     auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
 
-    analysis_data.Atoms().EnsureLocalEntry(*atom);
-    analysis_data.Bonds().EnsureLocalEntry(*bond);
-    analysis_data.Atoms().EnsureGroupEntry("atom_class");
-    analysis_data.Bonds().EnsureGroupEntry("bond_class");
-    analysis_data.Atoms().EnsureFitState(*atom);
-    analysis_data.Bonds().EnsureFitState(*bond);
+    analysis_data.EnsureAtomLocalEntry(*atom);
+    analysis_data.EnsureBondLocalEntry(*bond);
+    analysis_data.EnsureAtomGroupEntry("atom_class");
+    analysis_data.EnsureBondGroupEntry("bond_class");
+    analysis_data.EnsureAtomFitState(*atom);
+    analysis_data.EnsureBondFitState(*bond);
 
     analysis_data.Clear();
 
-    EXPECT_EQ(analysis_data.Atoms().FindLocalEntry(*atom), nullptr);
-    EXPECT_EQ(analysis_data.Bonds().FindLocalEntry(*bond), nullptr);
-    EXPECT_EQ(analysis_data.Atoms().FindGroupEntry("atom_class"), nullptr);
-    EXPECT_EQ(analysis_data.Bonds().FindGroupEntry("bond_class"), nullptr);
-    EXPECT_EQ(analysis_data.Atoms().FindFitState(*atom), nullptr);
-    EXPECT_EQ(analysis_data.Bonds().FindFitState(*bond), nullptr);
+    EXPECT_EQ(analysis_data.FindAtomLocalEntry(*atom), nullptr);
+    EXPECT_EQ(analysis_data.FindBondLocalEntry(*bond), nullptr);
+    EXPECT_EQ(analysis_data.FindAtomGroupEntry("atom_class"), nullptr);
+    EXPECT_EQ(analysis_data.FindBondGroupEntry("bond_class"), nullptr);
+    EXPECT_EQ(analysis_data.FindAtomFitState(*atom), nullptr);
+    EXPECT_EQ(analysis_data.FindBondFitState(*bond), nullptr);
 }
 
 TEST(DataObjectRuntimeBehaviorTest, ModelAtomsExposeStableSerialAndPositionInputsForTypedWorkflows)

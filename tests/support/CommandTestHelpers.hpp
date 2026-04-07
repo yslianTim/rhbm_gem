@@ -77,7 +77,7 @@ inline void SeedSavedModel(
     model->SetPdbID(pdb_id);
     for (auto & atom : model->GetAtomList())
     {
-        rhbm_gem::ModelAnalysisData::Of(*model).Atoms().EnsureLocalEntry(*atom);
+        rhbm_gem::ModelAnalysisData::Of(*model).EnsureAtomLocalEntry(*atom);
     }
     repository.SaveModel(*model, saved_key);
 }

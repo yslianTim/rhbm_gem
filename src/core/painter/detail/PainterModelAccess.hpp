@@ -68,7 +68,7 @@ inline void RequireGroupedAnalysisData(
     std::string_view painter_name)
 {
     const auto & analysis_data{ ModelAnalysisData::Of(model_object) };
-    if (!analysis_data.Atoms().Entries().empty() || !analysis_data.Bonds().Entries().empty())
+    if (!analysis_data.AtomGroupEntries().empty() || !analysis_data.BondGroupEntries().empty())
     {
         return;
     }
