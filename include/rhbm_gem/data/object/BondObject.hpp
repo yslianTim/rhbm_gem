@@ -12,7 +12,7 @@ namespace rhbm_gem {
 
 class AtomObject;
 class BondObject;
-class ModelAnalysisAccess;
+class ModelAnalysisData;
 class ModelObject;
 
 class BondObject
@@ -52,7 +52,7 @@ public:
     AtomObject * GetAtomObject2() const { return m_atom_object_2; }
 
 private:
-    friend class ModelAnalysisAccess;
+    friend class ModelAnalysisData;
     friend class ModelObject;
 
     void SetSelectedFlag(bool value) { m_is_selected = value; }

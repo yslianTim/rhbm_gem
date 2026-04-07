@@ -2,7 +2,6 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
-#include "data/detail/ModelAnalysisAccess.hpp"
 #include "data/detail/ModelSpatialCache.hpp"
 #include "data/detail/GroupPotentialEntry.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
@@ -229,7 +228,7 @@ ModelObject::ModelObject(const ModelObject & other) :
             }
         };
 
-    const auto & source_analysis_data{ ModelAnalysisAccess::Read(other) };
+    const auto & source_analysis_data{ ModelAnalysisData::Of(other) };
     copy_group_entries(
         source_analysis_data.Atoms().Entries(),
         [this](const std::string & class_key, std::unique_ptr<GroupPotentialEntry> entry)

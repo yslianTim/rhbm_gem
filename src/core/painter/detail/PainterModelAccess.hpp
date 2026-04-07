@@ -4,7 +4,6 @@
 #include <string>
 #include <string_view>
 
-#include "data/detail/ModelAnalysisAccess.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
 #include <rhbm_gem/data/object/ModelObject.hpp>
 
@@ -40,7 +39,7 @@ inline void RequireSelectedAtomsHaveLocalEntries(
 
     for (const auto * atom : model_object.GetSelectedAtoms())
     {
-        if (ModelAnalysisAccess::FindLocalEntry(*atom) == nullptr)
+        if (ModelAnalysisData::FindLocalEntry(*atom) == nullptr)
         {
             throw std::runtime_error(
                 std::string(painter_name)
@@ -55,7 +54,7 @@ inline void RequireSelectedBondsHaveLocalEntries(
 {
     for (const auto * bond : model_object.GetSelectedBonds())
     {
-        if (ModelAnalysisAccess::FindLocalEntry(*bond) == nullptr)
+        if (ModelAnalysisData::FindLocalEntry(*bond) == nullptr)
         {
             throw std::runtime_error(
                 std::string(painter_name)
@@ -68,7 +67,7 @@ inline void RequireGroupedAnalysisData(
     const ModelObject & model_object,
     std::string_view painter_name)
 {
-    const auto & analysis_data{ ModelAnalysisAccess::Read(model_object) };
+    const auto & analysis_data{ ModelAnalysisData::Of(model_object) };
     if (!analysis_data.Atoms().Entries().empty() || !analysis_data.Bonds().Entries().empty())
     {
         return;

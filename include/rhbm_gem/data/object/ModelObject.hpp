@@ -22,10 +22,10 @@ class ModelObject;
 class AtomObject;
 class BondObject;
 class ChemicalComponentEntry;
-class ModelAnalysisAccess;
 class ModelAnalysisData;
 struct ModelObjectAssembly;
 class ModelObjectStorage;
+class ModelSpatialAccess;
 struct ModelSpatialCache;
 
 ModelObject AssembleModelObject(ModelObjectAssembly assembly);
@@ -101,8 +101,9 @@ public:
     void ApplySymmetrySelection(bool is_asymmetry);
 
 private:
-    friend class ModelAnalysisAccess;
+    friend class ModelAnalysisData;
     friend class ModelObjectStorage;
+    friend class ModelSpatialAccess;
     friend ModelObject AssembleModelObject(ModelObjectAssembly assembly);
 
     // Object graph and derived-state maintenance.

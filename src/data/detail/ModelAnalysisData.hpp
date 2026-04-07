@@ -13,7 +13,6 @@ class BondObject;
 class GroupPotentialEntry;
 class LocalPotentialEntry;
 class LocalPotentialFitState;
-class ModelAnalysisAccess;
 class ModelObject;
 
 class AtomAnalysisStore
@@ -104,6 +103,21 @@ public:
     ModelAnalysisData();
     ~ModelAnalysisData();
 
+    static ModelAnalysisData & Of(ModelObject & model_object);
+    static const ModelAnalysisData & Of(const ModelObject & model_object);
+    static void ClearFitStates(ModelObject & model_object);
+
+    static ModelObject * OwnerOf(const AtomObject & atom_object);
+    static ModelObject * OwnerOf(const BondObject & bond_object);
+
+    static const LocalPotentialEntry * FindLocalEntry(const AtomObject & atom_object);
+    static const LocalPotentialEntry * FindLocalEntry(const BondObject & bond_object);
+    static const LocalPotentialEntry & RequireLocalEntry(
+        const LocalPotentialEntry * entry,
+        const char * context);
+    static const LocalPotentialEntry & RequireLocalEntry(const AtomObject & atom_object);
+    static const LocalPotentialEntry & RequireLocalEntry(const BondObject & bond_object);
+
     void Clear();
 
     AtomAnalysisStore & Atoms() { return m_atoms; }
@@ -112,8 +126,6 @@ public:
     const BondAnalysisStore & Bonds() const { return m_bonds; }
 
 private:
-    friend class ModelAnalysisAccess;
-
     void ClearFitStates();
 };
 

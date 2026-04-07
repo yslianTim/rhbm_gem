@@ -1,7 +1,7 @@
 #include <rhbm_gem/core/painter/AtomPainter.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include "data/detail/ModelAnalysisAccess.hpp"
+#include "data/detail/ModelAnalysisData.hpp"
 #include "PotentialPlotBuilder.hpp"
 #include "detail/PainterModelAccess.hpp"
 #include "detail/PainterSupport.hpp"
@@ -46,7 +46,7 @@ void AtomPainter::AddModel(ModelObject & data_object)
 
 void AtomPainter::AppendAtomObject(AtomObject & data_object)
 {
-    if (ModelAnalysisAccess::FindLocalEntry(data_object) == nullptr) return;
+    if (ModelAnalysisData::FindLocalEntry(data_object) == nullptr) return;
     m_atom_object_list.push_back(&data_object);
 }
 
@@ -78,7 +78,7 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
     auto pad_main{ ROOTHelper::CreatePad("pad","", 0.00, 0.00, 1.00, 1.00) };
     pad_main->Draw();
 
-    const auto & atom_entry{ ModelAnalysisAccess::RequireLocalEntry(*atom_object) };
+    const auto & atom_entry{ ModelAnalysisData::RequireLocalEntry(*atom_object) };
     auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom_object) };
     auto map_value_range{ series_ops::ComputeMapValueRange(atom_entry, 0.3) };
     auto distance_range{ series_ops::ComputeDistanceRange(atom_entry, 0.0) };
@@ -170,7 +170,7 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
     
     for (auto atom_object : m_atom_object_list)
     {
-        const auto & entry_view{ ModelAnalysisAccess::RequireLocalEntry(*atom_object) };
+        const auto & entry_view{ ModelAnalysisData::RequireLocalEntry(*atom_object) };
         auto plot_builder{ std::make_unique<PotentialPlotBuilder>(atom_object) };
         auto data_graph{ plot_builder->CreateDistanceToMapValueGraph() };
         auto data_hist{ plot_builder->CreateDistanceToMapValueHistogram(15) };

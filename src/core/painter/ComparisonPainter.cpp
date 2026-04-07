@@ -1,5 +1,5 @@
 #include <rhbm_gem/core/painter/ComparisonPainter.hpp>
-#include "data/detail/ModelAnalysisAccess.hpp"
+#include "data/detail/ModelAnalysisData.hpp"
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include "core/painter/AtomStyleCatalog.hpp"

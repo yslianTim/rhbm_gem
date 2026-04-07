@@ -3,7 +3,7 @@
 #include "data/detail/LocalPotentialEntry.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
-#include "data/detail/ModelAnalysisAccess.hpp"
+#include "data/detail/ModelAnalysisData.hpp"
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 #include "ModelImportState.hpp"
@@ -130,9 +130,9 @@ void PdbFormat::WriteModel(const ModelObject& model_object, std::ostream& stream
         const auto position{atom->GetPosition()};
         const auto occupancy{atom->GetOccupancy()};
         float b_factor{atom->GetTemperature()};
-        if (ModelAnalysisAccess::FindLocalEntry(*atom) != nullptr) {
+        if (ModelAnalysisData::FindLocalEntry(*atom) != nullptr) {
             b_factor = static_cast<float>(
-                ModelAnalysisAccess::RequireLocalEntry(*atom).GetEstimateMDPDE().GetParameter(par));
+                ModelAnalysisData::RequireLocalEntry(*atom).GetEstimateMDPDE().GetParameter(par));
         }
 
         char line[128];

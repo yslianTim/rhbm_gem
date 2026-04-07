@@ -1,5 +1,5 @@
 #include "PotentialDisplayCommand.hpp"
-#include "data/detail/ModelAnalysisAccess.hpp"
+#include "data/detail/ModelAnalysisData.hpp"
 #include "core/painter/detail/PainterModelAccess.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -34,7 +34,7 @@ void ApplyModelSelection(
                        atom.GetChainID(),
                        atom.GetResidue(),
                        atom.GetElement())
-                && rhbm_gem::ModelAnalysisAccess::FindLocalEntry(atom) != nullptr;
+                && rhbm_gem::ModelAnalysisData::FindLocalEntry(atom) != nullptr;
         });
 }
 }

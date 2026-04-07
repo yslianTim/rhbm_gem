@@ -1,5 +1,5 @@
 #include <rhbm_gem/core/painter/GausPainter.hpp>
-#include "data/detail/ModelAnalysisAccess.hpp"
+#include "data/detail/ModelAnalysisData.hpp"
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
@@ -241,7 +241,7 @@ void GausPainter::PaintAtomLocalGausSummary(
             {
                 auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
                 auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
-                const auto * annotation{ ModelAnalysisAccess::RequireLocalEntry(*atom).FindAnnotation(class_key) };
+                const auto * annotation{ ModelAnalysisData::RequireLocalEntry(*atom).FindAnnotation(class_key) };
                 auto is_outlier{ annotation != nullptr && annotation->is_outlier };
                 auto line_color{ kAzure-7 };
                 if (show_outlier == true && is_outlier == true) line_color = kRed+1;
@@ -892,7 +892,7 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
             {
                 auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
                 auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
-                const auto * annotation{ ModelAnalysisAccess::RequireLocalEntry(*atom).FindAnnotation(class_key) };
+                const auto * annotation{ ModelAnalysisData::RequireLocalEntry(*atom).FindAnnotation(class_key) };
                 auto is_outlier{ annotation != nullptr && annotation->is_outlier };
                 auto line_color{ kAzure-7 };
                 if (show_outlier == true && is_outlier == true) line_color = kRed+1;
@@ -1058,7 +1058,7 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
-#include "data/detail/ModelAnalysisAccess.hpp"
+#include "data/detail/ModelAnalysisData.hpp"
 #include <detail/ModelPotentialView.hpp>
 #include "PotentialPlotBuilder.hpp"
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
@@ -1820,7 +1820,7 @@ std::unique_ptr<TPaveText> GausPainter::CreateResolutionPaveText(
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include "data/detail/ModelAnalysisAccess.hpp"
+#include "data/detail/ModelAnalysisData.hpp"
 #include <detail/ModelPotentialView.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>

@@ -10,8 +10,8 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
-#include "data/detail/ModelAnalysisAccess.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
+#include "data/detail/ModelAnalysisData.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
@@ -77,7 +77,7 @@ inline void SeedSavedModel(
     model->SetPdbID(pdb_id);
     for (auto & atom : model->GetAtomList())
     {
-        rhbm_gem::ModelAnalysisAccess::EnsureLocalEntry(*model, *atom);
+        rhbm_gem::ModelAnalysisData::Of(*model).Atoms().EnsureLocalEntry(*atom);
     }
     repository.SaveModel(*model, saved_key);
 }

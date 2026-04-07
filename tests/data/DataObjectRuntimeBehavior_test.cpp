@@ -8,8 +8,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include "data/detail/ModelAnalysisAccess.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
+#include "data/detail/ModelAnalysisData.hpp"
 #include "data/detail/ModelObjectAssembly.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -74,11 +74,11 @@ TEST(DataObjectRuntimeBehaviorTest, SelectedModelEntriesCanBeInitializedForTyped
     model->ApplySymmetrySelection(false);
     for (auto * atom : model->GetSelectedAtoms())
     {
-        rg::ModelAnalysisAccess::EnsureLocalEntry(*model, *atom);
+        rg::ModelAnalysisData::Of(*model).Atoms().EnsureLocalEntry(*atom);
     }
     for (auto * bond : model->GetSelectedBonds())
     {
-        rg::ModelAnalysisAccess::EnsureLocalEntry(*model, *bond);
+        rg::ModelAnalysisData::Of(*model).Bonds().EnsureLocalEntry(*bond);
     }
 
     EXPECT_EQ(model->GetSelectedAtomCount(), model->GetNumberOfAtom());
@@ -86,12 +86,12 @@ TEST(DataObjectRuntimeBehaviorTest, SelectedModelEntriesCanBeInitializedForTyped
     for (const auto * atom : model->GetSelectedAtoms())
     {
         ASSERT_NE(atom, nullptr);
-        EXPECT_NE(rg::ModelAnalysisAccess::FindLocalEntry(*atom), nullptr);
+        EXPECT_NE(rg::ModelAnalysisData::FindLocalEntry(*atom), nullptr);
     }
     for (const auto * bond : model->GetSelectedBonds())
     {
         ASSERT_NE(bond, nullptr);
-        EXPECT_NE(rg::ModelAnalysisAccess::FindLocalEntry(*bond), nullptr);
+        EXPECT_NE(rg::ModelAnalysisData::FindLocalEntry(*bond), nullptr);
     }
 }
 
@@ -125,7 +125,7 @@ TEST(DataObjectRuntimeBehaviorTest, ModelSelectionAndLocalEntriesRemainDirectlyQ
     ASSERT_EQ(atoms.size(), 2);
     model->SetAtomSelected(1, true);
     model->SetAtomSelected(2, false);
-    rg::ModelAnalysisAccess::EnsureLocalEntry(*model, *atoms[0]);
+    rg::ModelAnalysisData::Of(*model).Atoms().EnsureLocalEntry(*atoms[0]);
 
     const auto & selected_only_atoms{ model->GetSelectedAtoms() };
     ASSERT_EQ(selected_only_atoms.size(), 1);
@@ -134,7 +134,7 @@ TEST(DataObjectRuntimeBehaviorTest, ModelSelectionAndLocalEntriesRemainDirectlyQ
     std::vector<rg::AtomObject *> require_entry_atoms;
     for (auto & atom : model->GetAtomList())
     {
-        if (rg::ModelAnalysisAccess::FindLocalEntry(*atom) != nullptr)
+        if (rg::ModelAnalysisData::FindLocalEntry(*atom) != nullptr)
         {
             require_entry_atoms.emplace_back(atom.get());
         }
@@ -273,8 +273,8 @@ TEST(DataObjectRuntimeBehaviorTest, AssemblyInitializesOwnersSelectionAndDerived
     ASSERT_EQ(model.GetSelectedAtomCount(), 0);
     ASSERT_EQ(model.GetSelectedBondCount(), 0);
     ASSERT_EQ(model.GetNumberOfBond(), 1);
-    EXPECT_EQ(rg::ModelAnalysisAccess::OwnerOf(*model.GetAtomList().at(0)), &model);
-    EXPECT_EQ(rg::ModelAnalysisAccess::OwnerOf(*model.GetBondList().at(0)), &model);
+    EXPECT_EQ(rg::ModelAnalysisData::OwnerOf(*model.GetAtomList().at(0)), &model);
+    EXPECT_EQ(rg::ModelAnalysisData::OwnerOf(*model.GetBondList().at(0)), &model);
     EXPECT_FLOAT_EQ(model.GetCenterOfMassPosition().at(0), 0.5f);
     const auto x_range{ model.GetModelPositionRange(0) };
     EXPECT_DOUBLE_EQ(std::get<0>(x_range), 0.0);

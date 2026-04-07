@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "data/detail/ModelAnalysisAccess.hpp"
+#include "data/detail/ModelAnalysisData.hpp"
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
@@ -137,9 +137,9 @@ inline void BuildMapValueScatterGraph(
         }
         auto * atom_object2{ model2_atom_map.at(atom_id) };
         auto data1_array{ series_ops::BuildBinnedDistanceAndMapValueList(
-            ModelAnalysisAccess::RequireLocalEntry(*atom_object1), bin_size, x_min, x_max) };
+            ModelAnalysisData::RequireLocalEntry(*atom_object1), bin_size, x_min, x_max) };
         auto data2_array{ series_ops::BuildBinnedDistanceAndMapValueList(
-            ModelAnalysisAccess::RequireLocalEntry(*atom_object2), bin_size, x_min, x_max) };
+            ModelAnalysisData::RequireLocalEntry(*atom_object2), bin_size, x_min, x_max) };
         for (size_t i = 0; i < static_cast<size_t>(bin_size); i++)
         {
             graph->SetPoint(count, std::get<1>(data1_array.at(i)), std::get<1>(data2_array.at(i)));

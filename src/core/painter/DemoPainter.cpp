@@ -1,5 +1,5 @@
 #include <rhbm_gem/core/painter/DemoPainter.hpp>
-#include "data/detail/ModelAnalysisAccess.hpp"
+#include "data/detail/ModelAnalysisData.hpp"
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <detail/ModelPotentialView.hpp>
@@ -341,7 +341,7 @@ void DemoPainter::PaintAtomMapValueExample(
         ROOTHelper::SetLineAttribute(graph.get(), 1, 5, static_cast<short>(kAzure-7), 0.3f);
         map_value_graph_list.emplace_back(std::move(graph));
         auto map_value_range{ series_ops::ComputeMapValueRange(
-            ModelAnalysisAccess::RequireLocalEntry(*atom), 0.0) };
+            ModelAnalysisData::RequireLocalEntry(*atom), 0.0) };
         y_array.emplace_back(std::get<0>(map_value_range));
         y_array.emplace_back(std::get<1>(map_value_range));
     }
@@ -731,7 +731,7 @@ void DemoPainter::PaintGroupGausMainChainSingle(
 #include "PotentialPlotBuilder.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include "data/detail/ModelAnalysisAccess.hpp"
+#include "data/detail/ModelAnalysisData.hpp"
 #include <detail/ModelPotentialView.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -1102,7 +1102,7 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
 #include <rhbm_gem/core/painter/DemoPainter.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
-#include "data/detail/ModelAnalysisAccess.hpp"
+#include "data/detail/ModelAnalysisData.hpp"
 #include <detail/ModelPotentialView.hpp>
 #include "PotentialPlotBuilder.hpp"
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>

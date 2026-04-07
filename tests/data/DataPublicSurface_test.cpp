@@ -259,13 +259,17 @@ TEST(DataPublicSurfaceTest, InternalTransitionWrappersAreNotAvailableOrIncluded)
         project_root / "tests/data/DataPublicSurface_test.cpp" };
     EXPECT_FALSE(std::filesystem::exists(project_root / "src/core/detail/LocalPotentialAccess.hpp"));
     EXPECT_FALSE(std::filesystem::exists(project_root / "src/core/detail/GroupPotentialAccess.hpp"));
+    EXPECT_FALSE(std::filesystem::exists(project_root / "src/data/detail/ModelAnalysisAccess.hpp"));
     EXPECT_FALSE(std::filesystem::exists(project_root / "src/data/detail/ModelObjectBuilder.hpp"));
     EXPECT_FALSE(std::filesystem::exists(project_root / "src/data/detail/ModelSelectionAccess.hpp"));
     EXPECT_FALSE(SourceTreeContains(project_root / "src", "LocalPotentialAccess.hpp"));
     EXPECT_FALSE(SourceTreeContains(project_root / "src", "GroupPotentialAccess.hpp"));
+    EXPECT_FALSE(SourceTreeContains(project_root / "src", "ModelAnalysisAccess"));
     EXPECT_FALSE(SourceTreeContains(project_root / "src", "ModelObjectBuilder"));
     EXPECT_FALSE(SourceTreeContains(project_root / "src", "ModelSelectionAccess.hpp"));
+    EXPECT_FALSE(SourceTreeContains(project_root / "tests", "ModelAnalysisAccess", ignored_test_files));
     EXPECT_FALSE(SourceTreeContains(project_root / "tests", "ModelObjectBuilder", ignored_test_files));
+    EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelAnalysisAccess"));
     EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelObjectBuilder"));
     EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelSelectionAccess"));
 }

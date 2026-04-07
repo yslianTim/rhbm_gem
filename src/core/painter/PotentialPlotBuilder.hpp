@@ -8,7 +8,7 @@
 
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 
-#include "data/detail/ModelAnalysisAccess.hpp"
+#include "data/detail/ModelAnalysisData.hpp"
 #include <detail/ModelPotentialView.hpp>
 
 #ifdef HAVE_ROOT

@@ -7,6 +7,9 @@
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 
+#include <stdexcept>
+#include <string>
+
 namespace rhbm_gem {
 
 void AtomAnalysisStore::ClearGroupEntries()
@@ -212,6 +215,64 @@ BondAnalysisStore::FitStateKey BondAnalysisStore::BuildFitStateKey(const BondObj
 ModelAnalysisData::ModelAnalysisData() = default;
 
 ModelAnalysisData::~ModelAnalysisData() = default;
+
+ModelAnalysisData & ModelAnalysisData::Of(ModelObject & model_object)
+{
+    return *model_object.m_analysis_data;
+}
+
+const ModelAnalysisData & ModelAnalysisData::Of(const ModelObject & model_object)
+{
+    return *model_object.m_analysis_data;
+}
+
+void ModelAnalysisData::ClearFitStates(ModelObject & model_object)
+{
+    Of(model_object).ClearFitStates();
+}
+
+ModelObject * ModelAnalysisData::OwnerOf(const AtomObject & atom_object)
+{
+    return atom_object.m_owner_model;
+}
+
+ModelObject * ModelAnalysisData::OwnerOf(const BondObject & bond_object)
+{
+    return bond_object.m_owner_model;
+}
+
+const LocalPotentialEntry * ModelAnalysisData::FindLocalEntry(const AtomObject & atom_object)
+{
+    auto * owner{ OwnerOf(atom_object) };
+    return owner == nullptr ? nullptr : Of(*owner).Atoms().FindLocalEntry(atom_object);
+}
+
+const LocalPotentialEntry * ModelAnalysisData::FindLocalEntry(const BondObject & bond_object)
+{
+    auto * owner{ OwnerOf(bond_object) };
+    return owner == nullptr ? nullptr : Of(*owner).Bonds().FindLocalEntry(bond_object);
+}
+
+const LocalPotentialEntry & ModelAnalysisData::RequireLocalEntry(
+    const LocalPotentialEntry * entry,
+    const char * context)
+{
+    if (entry == nullptr)
+    {
+        throw std::runtime_error(std::string(context) + " is not available.");
+    }
+    return *entry;
+}
+
+const LocalPotentialEntry & ModelAnalysisData::RequireLocalEntry(const AtomObject & atom_object)
+{
+    return RequireLocalEntry(FindLocalEntry(atom_object), "Atom local entry");
+}
+
+const LocalPotentialEntry & ModelAnalysisData::RequireLocalEntry(const BondObject & bond_object)
+{
+    return RequireLocalEntry(FindLocalEntry(bond_object), "Bond local entry");
+}
 
 void ModelAnalysisData::Clear()
 {
