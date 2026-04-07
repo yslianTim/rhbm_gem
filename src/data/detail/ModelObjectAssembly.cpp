@@ -25,7 +25,9 @@ ModelObject AssembleModelObject(ModelObjectAssembly assembly)
             std::make_unique<BondKeySystem>();
 
     model.AttachOwnedObjects();
-    model.SyncDerivedState();
+    model.InvalidateDerivedState();
+    model.RebuildObjectIndex();
+    model.RebuildSelection();
     return model;
 }
 

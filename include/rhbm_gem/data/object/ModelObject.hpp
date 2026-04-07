@@ -22,8 +22,8 @@ class ModelObject;
 class AtomObject;
 class BondObject;
 class ChemicalComponentEntry;
+class ModelDerivedState;
 class ModelAnalysisData;
-class ModelSpatialData;
 struct ModelObjectAssembly;
 class ModelObjectStorage;
 
@@ -41,9 +41,7 @@ class ModelObject
     std::map<int, AtomObject*> m_serial_id_atom_map;
     std::unordered_map<std::string, std::vector<std::string>> m_chain_id_list_map;
     std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> m_chemical_component_entry_map;
-    std::unique_ptr<ModelSpatialData> m_spatial_data;
-    std::unique_ptr<std::array<float, 3>> m_center_of_mass_position;
-    std::unique_ptr<std::tuple<double, double>> m_model_position_range[3];
+    std::unique_ptr<ModelDerivedState> m_derived_state;
     std::unique_ptr<ComponentKeySystem> m_component_key_system;
     std::unique_ptr<AtomKeySystem> m_atom_key_system;
     std::unique_ptr<BondKeySystem> m_bond_key_system;
@@ -100,15 +98,15 @@ public:
     void ApplySymmetrySelection(bool is_asymmetry);
 
 private:
+    friend class ModelDerivedState;
     friend class ModelAnalysisData;
     friend class ModelObjectStorage;
-    friend class ModelSpatialData;
     friend ModelObject AssembleModelObject(ModelObjectAssembly assembly);
 
     // Object graph and derived-state maintenance.
     void RebuildObjectIndex();
     void AttachOwnedObjects();
-    void SyncDerivedState();
+    void InvalidateDerivedState();
 
     // Selection maintenance.
     void BuildSelectedAtomList();

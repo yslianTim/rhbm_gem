@@ -43,8 +43,8 @@ target_sources(rhbm_gem PRIVATE
     data/detail/GroupPotentialEntry.cpp
     data/detail/LocalPotentialEntry.cpp
     data/detail/LocalPotentialFitState.cpp
+    data/detail/ModelDerivedState.cpp
     data/detail/ModelObjectAssembly.cpp
-    data/detail/ModelSpatialData.cpp
     data/object/MapObject.cpp
     data/detail/MapSpatialIndex.cpp
     data/detail/ModelAnalysisData.cpp

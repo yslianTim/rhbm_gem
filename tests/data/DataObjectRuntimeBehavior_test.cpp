@@ -10,8 +10,8 @@
 
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
+#include "data/detail/ModelDerivedState.hpp"
 #include "data/detail/ModelObjectAssembly.hpp"
-#include "data/detail/ModelSpatialData.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include "data/detail/MapSpatialIndex.hpp"
@@ -282,28 +282,50 @@ TEST(DataObjectRuntimeBehaviorTest, AssemblyInitializesOwnersSelectionAndDerived
     EXPECT_DOUBLE_EQ(std::get<1>(x_range), 1.0);
 }
 
-TEST(DataObjectRuntimeBehaviorTest, SpatialQueriesBuildAndReuseRangeSearchCache)
+TEST(DataObjectRuntimeBehaviorTest, DerivedStateCachesGeometryQueriesAcrossRepeatedReads)
 {
     auto model{ data_test::MakeModelWithBond() };
     const auto & atoms{ model->GetAtomList() };
     ASSERT_EQ(atoms.size(), 2);
 
+    const auto center_of_mass_1{ model->GetCenterOfMassPosition() };
+    const auto center_of_mass_2{ model->GetCenterOfMassPosition() };
+    EXPECT_EQ(center_of_mass_1, center_of_mass_2);
+
+    const auto x_range_1{ model->GetModelPositionRange(0) };
+    const auto x_range_2{ model->GetModelPositionRange(0) };
+    EXPECT_EQ(x_range_1, x_range_2);
+
     const auto first_hits{
-        rg::ModelSpatialData::FindAtomsInRange(*model, *atoms.at(0), 0.25) };
+        rg::ModelDerivedState::Of(*model).FindAtomsInRange(*model, *atoms.at(0), 0.25) };
     ASSERT_EQ(first_hits.size(), 1);
     EXPECT_EQ(first_hits.front(), atoms.at(0).get());
 
     const auto repeated_hits{
-        rg::ModelSpatialData::FindAtomsInRange(*model, *atoms.at(0), 1.5) };
+        rg::ModelDerivedState::Of(*model).FindAtomsInRange(*model, *atoms.at(0), 1.5) };
     const auto repeated_hits_again{
-        rg::ModelSpatialData::FindAtomsInRange(*model, *atoms.at(0), 1.5) };
+        rg::ModelDerivedState::Of(*model).FindAtomsInRange(*model, *atoms.at(0), 1.5) };
     ASSERT_EQ(repeated_hits.size(), 2);
     ASSERT_EQ(repeated_hits_again.size(), 2);
-    EXPECT_EQ(repeated_hits.at(0)->GetSerialID(), repeated_hits_again.at(0)->GetSerialID());
-    EXPECT_EQ(repeated_hits.at(1)->GetSerialID(), repeated_hits_again.at(1)->GetSerialID());
+    std::vector<int> repeated_serials;
+    repeated_serials.reserve(repeated_hits.size());
+    for (auto * atom : repeated_hits)
+    {
+        repeated_serials.emplace_back(atom->GetSerialID());
+    }
+    std::sort(repeated_serials.begin(), repeated_serials.end());
+
+    std::vector<int> repeated_serials_again;
+    repeated_serials_again.reserve(repeated_hits_again.size());
+    for (auto * atom : repeated_hits_again)
+    {
+        repeated_serials_again.emplace_back(atom->GetSerialID());
+    }
+    std::sort(repeated_serials_again.begin(), repeated_serials_again.end());
+    EXPECT_EQ(repeated_serials, repeated_serials_again);
 }
 
-TEST(DataObjectRuntimeBehaviorTest, SpatialQueriesRemainAvailableAfterAssemblyCopyAndMove)
+TEST(DataObjectRuntimeBehaviorTest, DerivedStateSpatialQueriesRemainAvailableAfterAssemblyCopyAndMove)
 {
     rg::ModelObjectAssembly assembly;
     assembly.atom_list.reserve(2);
@@ -318,7 +340,7 @@ TEST(DataObjectRuntimeBehaviorTest, SpatialQueriesRemainAvailableAfterAssemblyCo
 
     auto assembled_model{ rg::AssembleModelObject(std::move(assembly)) };
     const auto assembled_hits{
-        rg::ModelSpatialData::FindAtomsInRange(
+        rg::ModelDerivedState::Of(assembled_model).FindAtomsInRange(
             assembled_model,
             *assembled_model.GetAtomList().at(0),
             1.5) };
@@ -326,7 +348,7 @@ TEST(DataObjectRuntimeBehaviorTest, SpatialQueriesRemainAvailableAfterAssemblyCo
 
     auto copied_model{ assembled_model };
     const auto copied_hits{
-        rg::ModelSpatialData::FindAtomsInRange(
+        rg::ModelDerivedState::Of(copied_model).FindAtomsInRange(
             copied_model,
             *copied_model.GetAtomList().at(0),
             1.5) };
@@ -342,7 +364,7 @@ TEST(DataObjectRuntimeBehaviorTest, SpatialQueriesRemainAvailableAfterAssemblyCo
 
     auto moved_model{ std::move(copied_model) };
     const auto moved_hits{
-        rg::ModelSpatialData::FindAtomsInRange(
+        rg::ModelDerivedState::Of(moved_model).FindAtomsInRange(
             moved_model,
             *moved_model.GetAtomList().at(0),
             1.5) };
