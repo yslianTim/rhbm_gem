@@ -293,12 +293,6 @@ void ModelObject::RebuildSelection()
     BuildSelectedBondList();
 }
 
-void ModelObject::RebuildSelectionState()
-{
-    RebuildObjectIndex();
-    RebuildSelection();
-}
-
 void ModelObject::AttachOwnedObjects()
 {
     for (auto & atom : m_atom_list)
@@ -317,7 +311,7 @@ void ModelObject::ApplySymmetrySelection(bool is_asymmetry)
     RebuildSelection();
 }
 
-void ModelObject::InvalidateDerivedCaches()
+void ModelObject::SyncDerivedState()
 {
     m_center_of_mass_position.reset();
     for (auto & axis_range : m_model_position_range)
@@ -325,12 +319,8 @@ void ModelObject::InvalidateDerivedCaches()
         axis_range.reset();
     }
     m_spatial_cache = std::make_unique<ModelSpatialCache>();
-}
-
-void ModelObject::SyncDerivedState()
-{
-    InvalidateDerivedCaches();
-    RebuildSelectionState();
+    RebuildObjectIndex();
+    RebuildSelection();
 }
 
 AtomObject * ModelObject::FindAtomPtr(int serial_id) const

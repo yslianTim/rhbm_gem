@@ -105,10 +105,8 @@ private:
     friend class ModelObjectStorage;
     friend class ModelSelectionAccess;
 
-    void RebuildSelectionState();
     void RebuildObjectIndex();
     void AttachOwnedObjects();
-    void InvalidateDerivedCaches();
     void SyncDerivedState();
     void EnsureKDTreeRoot();
     void SetAtomSelectionBulk(const std::unordered_set<int> & selected_serial_ids);
