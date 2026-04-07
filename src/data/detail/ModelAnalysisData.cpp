@@ -1,11 +1,14 @@
 #include "data/detail/ModelAnalysisData.hpp"
 
+#include "data/detail/AtomClassifier.hpp"
+#include "data/detail/BondClassifier.hpp"
 #include "data/detail/GroupPotentialEntry.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/LocalPotentialFitState.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 
 #include <stdexcept>
 #include <string>
@@ -82,6 +85,36 @@ void ModelAnalysisData::ClearTransientFitStates()
 {
     m_atom_fit_state_map.clear();
     m_bond_fit_state_map.clear();
+}
+
+void ModelAnalysisData::RebuildAtomGroupEntriesFromSelection(const ModelObject & model_object)
+{
+    m_atom_group_entry_map.clear();
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
+    {
+        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
+        auto & group_entry{ EnsureAtomGroupEntry(class_key) };
+        for (auto * atom : model_object.GetSelectedAtoms())
+        {
+            const auto group_key{ AtomClassifier::GetGroupKeyInClass(atom, class_key) };
+            group_entry.EnsureGroup(group_key).atom_members.emplace_back(atom);
+        }
+    }
+}
+
+void ModelAnalysisData::RebuildBondGroupEntriesFromSelection(const ModelObject & model_object)
+{
+    m_bond_group_entry_map.clear();
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupBondClassCount(); i++)
+    {
+        const auto & class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
+        auto & group_entry{ EnsureBondGroupEntry(class_key) };
+        for (auto * bond : model_object.GetSelectedBonds())
+        {
+            const auto group_key{ BondClassifier::GetGroupKeyInClass(bond, class_key) };
+            group_entry.EnsureGroup(group_key).bond_members.emplace_back(bond);
+        }
+    }
 }
 
 GroupPotentialEntry & ModelAnalysisData::EnsureAtomGroupEntry(const std::string & class_key)

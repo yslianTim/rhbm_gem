@@ -54,6 +54,8 @@ public:
 
     void Clear();
     void ClearTransientFitStates();
+    void RebuildAtomGroupEntriesFromSelection(const ModelObject & model_object);
+    void RebuildBondGroupEntriesFromSelection(const ModelObject & model_object);
 
     GroupPotentialEntry & EnsureAtomGroupEntry(const std::string & class_key);
     GroupPotentialEntry * FindAtomGroupEntry(const std::string & class_key);

@@ -50,7 +50,6 @@ public:
 
 private:
     void RecomputeStatistics();
-    void SyncValueArrayState();
     void CheckIndex(int index_x, int index_y, int index_z) const;
     void CheckPosition(const std::array<float, 3> & position) const;
     size_t GetGlobalIndex(int index_x, int index_y, int index_z) const;

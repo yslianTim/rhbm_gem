@@ -9,12 +9,14 @@
 #include <unordered_map>
 #include <vector>
 
+#include "data/detail/GroupPotentialEntry.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
 #include "data/detail/ModelDerivedState.hpp"
 #include "data/detail/ModelObjectParts.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include "data/detail/MapSpatialIndex.hpp"
 #include <rhbm_gem/utils/domain/AtomSelector.hpp>
 #include "support/DataObjectTestSupport.hpp"
@@ -198,6 +200,101 @@ TEST(DataObjectRuntimeBehaviorTest, ModelAnalysisDataClearDropsEntriesAndFitStat
     EXPECT_EQ(analysis_data.FindBondGroupEntry("bond_class"), nullptr);
     EXPECT_EQ(analysis_data.FindAtomFitState(*atom), nullptr);
     EXPECT_EQ(analysis_data.FindBondFitState(*bond), nullptr);
+}
+
+TEST(DataObjectRuntimeBehaviorTest, RebuildAtomGroupEntriesFromSelectionTracksOnlySelectedAtoms)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto * first_atom{ model->GetAtomList().at(0).get() };
+    auto * second_atom{ model->GetAtomList().at(1).get() };
+    auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
+    const auto & simple_class_key{ ChemicalDataHelper::GetSimpleAtomClassKey() };
+
+    model->SelectAllAtoms(false);
+    model->SetAtomSelected(first_atom->GetSerialID(), true);
+    analysis_data.EnsureAtomGroupEntry("stale_atom_class").EnsureGroup(999).atom_members.emplace_back(second_atom);
+
+    analysis_data.RebuildAtomGroupEntriesFromSelection(*model);
+
+    EXPECT_EQ(analysis_data.FindAtomGroupEntry("stale_atom_class"), nullptr);
+    const auto * simple_group_entry{ analysis_data.FindAtomGroupEntry(simple_class_key) };
+    ASSERT_NE(simple_group_entry, nullptr);
+
+    size_t member_count{ 0 };
+    for (const auto & [group_key, bucket] : simple_group_entry->Entries())
+    {
+        (void)group_key;
+        member_count += bucket.atom_members.size();
+        for (const auto * atom : bucket.atom_members)
+        {
+            ASSERT_NE(atom, nullptr);
+            EXPECT_EQ(atom, first_atom);
+        }
+    }
+    EXPECT_EQ(member_count, 1U);
+
+    model->SetAtomSelected(first_atom->GetSerialID(), false);
+    model->SetAtomSelected(second_atom->GetSerialID(), true);
+    analysis_data.RebuildAtomGroupEntriesFromSelection(*model);
+
+    simple_group_entry = analysis_data.FindAtomGroupEntry(simple_class_key);
+    ASSERT_NE(simple_group_entry, nullptr);
+    member_count = 0;
+    for (const auto & [group_key, bucket] : simple_group_entry->Entries())
+    {
+        (void)group_key;
+        member_count += bucket.atom_members.size();
+        for (const auto * atom : bucket.atom_members)
+        {
+            ASSERT_NE(atom, nullptr);
+            EXPECT_EQ(atom, second_atom);
+        }
+    }
+    EXPECT_EQ(member_count, 1U);
+}
+
+TEST(DataObjectRuntimeBehaviorTest, RebuildBondGroupEntriesFromSelectionTracksOnlySelectedBonds)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto * bond{ model->GetBondList().at(0).get() };
+    auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
+    const auto & simple_class_key{ ChemicalDataHelper::GetSimpleBondClassKey() };
+
+    model->SelectAllBonds(false);
+    analysis_data.EnsureBondGroupEntry("stale_bond_class").EnsureGroup(888).bond_members.emplace_back(bond);
+    analysis_data.RebuildBondGroupEntriesFromSelection(*model);
+
+    EXPECT_EQ(analysis_data.FindBondGroupEntry("stale_bond_class"), nullptr);
+    const auto * simple_group_entry{ analysis_data.FindBondGroupEntry(simple_class_key) };
+    ASSERT_NE(simple_group_entry, nullptr);
+    size_t member_count{ 0 };
+    for (const auto & [group_key, bucket] : simple_group_entry->Entries())
+    {
+        (void)group_key;
+        member_count += bucket.bond_members.size();
+    }
+    EXPECT_EQ(member_count, 0U);
+
+    model->SetBondSelected(
+        bond->GetAtomSerialID1(),
+        bond->GetAtomSerialID2(),
+        true);
+    analysis_data.RebuildBondGroupEntriesFromSelection(*model);
+
+    simple_group_entry = analysis_data.FindBondGroupEntry(simple_class_key);
+    ASSERT_NE(simple_group_entry, nullptr);
+    member_count = 0;
+    for (const auto & [group_key, bucket] : simple_group_entry->Entries())
+    {
+        (void)group_key;
+        member_count += bucket.bond_members.size();
+        for (const auto * group_bond : bucket.bond_members)
+        {
+            ASSERT_NE(group_bond, nullptr);
+            EXPECT_EQ(group_bond, bond);
+        }
+    }
+    EXPECT_EQ(member_count, 1U);
 }
 
 TEST(DataObjectRuntimeBehaviorTest, ModelAtomsExposeStableSerialAndPositionInputsForTypedWorkflows)

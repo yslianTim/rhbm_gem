@@ -1,11 +1,11 @@
 #include "PotentialAnalysisCommand.hpp"
+
 #include "MapSampling.hpp"
 #include "experimental/PotentialAnalysisBondWorkflow.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/LocalPotentialFitState.hpp"
 #include "data/detail/GroupPotentialEntry.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
-#include "data/detail/AtomClassifier.hpp"
 
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
@@ -827,18 +827,15 @@ void RunAtomGroupingWorkflow(ModelObject & model_object)
 {
     ScopeTimer timer("RunAtomGroupClassification");
     Logger::Log(LogLevel::Info, "Atom Classification Summary:");
+    auto & analysis_data{ ModelAnalysisData::Of(model_object) };
+    analysis_data.RebuildAtomGroupEntriesFromSelection(model_object);
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {
         const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        auto group_potential_entry{ std::make_unique<GroupPotentialEntry>() };
-        for (auto atom : model_object.GetSelectedAtoms())
-        {
-            auto group_key{ AtomClassifier::GetGroupKeyInClass(atom, class_key) };
-            group_potential_entry->EnsureGroup(group_key).atom_members.emplace_back(atom);
-        }
-        const auto group_size{ group_potential_entry->Entries().size() };
-        ModelAnalysisData::Of(model_object).EnsureAtomGroupEntry(class_key) =
-            std::move(*group_potential_entry);
+        const auto * group_potential_entry{ analysis_data.FindAtomGroupEntry(class_key) };
+        const auto group_size{
+            group_potential_entry == nullptr ? 0U : group_potential_entry->Entries().size()
+        };
         Logger::Log(
             LogLevel::Info,
             " - Class type: " + class_key + " include " + std::to_string(group_size)

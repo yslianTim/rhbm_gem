@@ -63,7 +63,7 @@ MapObject::MapObject(
         m_upper_bound.at(i) = static_cast<float>(m_overflow.at(i) + 0.5 * m_grid_spacing.at(i));
         m_lower_bound.at(i) = static_cast<float>(m_underflow.at(i) - 0.5 * m_grid_spacing.at(i));
     }
-    SyncValueArrayState();
+    RecomputeStatistics();
 }
 
 MapObject::~MapObject()
@@ -82,7 +82,7 @@ MapObject::MapObject(const MapObject & other) :
     m_map_value_array{ std::make_unique<float[]>(other.m_voxel_size) }
 {
     std::memcpy(m_map_value_array.get(), other.m_map_value_array.get(), m_voxel_size * sizeof(float));
-    SyncValueArrayState();
+    RecomputeStatistics();
 }
 
 void MapObject::RecomputeStatistics()
@@ -91,11 +91,6 @@ void MapObject::RecomputeStatistics()
     CalculateMapValueMax();
     CalculateMapValueMean();
     CalculateMapValueSD();
-}
-
-void MapObject::SyncValueArrayState()
-{
-    RecomputeStatistics();
 }
 
 void MapObject::SetMapValueArray(std::unique_ptr<float[]> map_value_array)
@@ -108,7 +103,7 @@ void MapObject::SetMapValueArray(std::unique_ptr<float[]> map_value_array)
                     "The map value array will be replaced by new inserted data.");
     }
     m_map_value_array = std::move(map_value_array);
-    SyncValueArrayState();
+    RecomputeStatistics();
 }
 
 size_t MapObject::GetGlobalIndex(int index_x, int index_y, int index_z) const
@@ -262,7 +257,7 @@ void MapObject::MapValueArrayNormalization()
     {
         m_map_value_array[i] /= m_map_value_sd;
     }
-    SyncValueArrayState();
+    RecomputeStatistics();
 }
 
 } // namespace rhbm_gem

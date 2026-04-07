@@ -5,7 +5,6 @@
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/LocalPotentialFitState.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
-#include "data/detail/BondClassifier.hpp"
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include "data/detail/GroupPotentialEntry.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
@@ -152,18 +151,15 @@ void RunBondGrouping(ModelObject & model_object)
 {
     ScopeTimer timer("PotentialAnalysisBondWorkflow::RunBondGroupClassification");
     Logger::Log(LogLevel::Info, "Bond Classification Summary:");
+    auto & analysis_data{ ModelAnalysisData::Of(model_object) };
+    analysis_data.RebuildBondGroupEntriesFromSelection(model_object);
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupBondClassCount(); i++)
     {
         const auto & class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
-        auto group_potential_entry{ std::make_unique<GroupPotentialEntry>() };
-        for (auto bond : model_object.GetSelectedBonds())
-        {
-            auto group_key{ BondClassifier::GetGroupKeyInClass(bond, class_key) };
-            group_potential_entry->EnsureGroup(group_key).bond_members.emplace_back(bond);
-        }
-        const auto group_size{ group_potential_entry->Entries().size() };
-        ModelAnalysisData::Of(model_object).EnsureBondGroupEntry(class_key) =
-            std::move(*group_potential_entry);
+        const auto * group_potential_entry{ analysis_data.FindBondGroupEntry(class_key) };
+        const auto group_size{
+            group_potential_entry == nullptr ? 0U : group_potential_entry->Entries().size()
+        };
         Logger::Log(
             LogLevel::Info,
             " - Class type: " + class_key + " include "
