@@ -222,10 +222,12 @@ TEST(DataObjectRuntimeBehaviorTest, AssemblyBuildsSerialIndexWithoutUsingMovedFr
     auto atom{ std::make_unique<rg::AtomObject>() };
     atom->SetSerialID(42);
     atom->SetPosition(3.0f, 4.0f, 5.0f);
+    auto * atom_ptr{ atom.get() };
 
     parts.atom_list.emplace_back(std::move(atom));
     auto model{ rg::AssembleModelObject(std::move(parts)) };
     EXPECT_EQ(model.GetNumberOfAtom(), 1);
+    EXPECT_EQ(model.GetAtomList().front().get(), atom_ptr);
     ASSERT_NE(model.FindAtomPtr(42), nullptr);
     EXPECT_FLOAT_EQ(model.GetCenterOfMassPosition().at(0), 3.0f);
 }
@@ -274,13 +276,16 @@ TEST(DataObjectRuntimeBehaviorTest, AssemblyInitializesOwnersSelectionAndDerived
     auto * atom_2_ptr{ atom_2.get() };
     parts.atom_list.emplace_back(std::move(atom_1));
     parts.atom_list.emplace_back(std::move(atom_2));
-    parts.bond_list.emplace_back(std::make_unique<rg::BondObject>(atom_1_ptr, atom_2_ptr));
+    auto bond{ std::make_unique<rg::BondObject>(atom_1_ptr, atom_2_ptr) };
+    auto * bond_ptr{ bond.get() };
+    parts.bond_list.emplace_back(std::move(bond));
 
     auto model{ rg::AssembleModelObject(std::move(parts)) };
 
     ASSERT_EQ(model.GetSelectedAtomCount(), 0);
     ASSERT_EQ(model.GetSelectedBondCount(), 0);
     ASSERT_EQ(model.GetNumberOfBond(), 1);
+    EXPECT_EQ(model.GetBondList().at(0).get(), bond_ptr);
     EXPECT_EQ(rg::ModelAnalysisData::OwnerOf(*model.GetAtomList().at(0)), &model);
     EXPECT_EQ(rg::ModelAnalysisData::OwnerOf(*model.GetBondList().at(0)), &model);
     EXPECT_FLOAT_EQ(model.GetCenterOfMassPosition().at(0), 0.5f);

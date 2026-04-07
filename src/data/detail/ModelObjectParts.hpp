@@ -16,7 +16,6 @@ class BondObject;
 class ChemicalComponentEntry;
 class ModelObject;
 
-// Plain parts payload for internal import and persistence paths.
 struct ModelObjectParts
 {
     ModelObjectParts();

@@ -1,4 +1,5 @@
 #include "data/detail/ModelDerivedState.hpp"
+#include "data/detail/ModelObjectParts.hpp"
 
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -32,10 +33,10 @@ std::array<float, 3> ModelDerivedState::GetCenterOfMassPosition(ModelObject & mo
     }
 
     std::vector<float> pos_x, pos_y, pos_z;
-    pos_x.reserve(model_object.m_atom_list.size());
-    pos_y.reserve(model_object.m_atom_list.size());
-    pos_z.reserve(model_object.m_atom_list.size());
-    for (auto & atom : model_object.m_atom_list)
+    pos_x.reserve(model_object.m_parts->atom_list.size());
+    pos_y.reserve(model_object.m_parts->atom_list.size());
+    pos_z.reserve(model_object.m_parts->atom_list.size());
+    for (auto & atom : model_object.m_parts->atom_list)
     {
         const auto & pos{ atom->GetPositionRef() };
         pos_x.emplace_back(pos.at(0));
@@ -61,8 +62,8 @@ std::tuple<double, double> ModelDerivedState::GetModelPositionRange(
     }
 
     std::vector<double> position_list;
-    position_list.reserve(model_object.m_atom_list.size());
-    for (auto & atom : model_object.m_atom_list)
+    position_list.reserve(model_object.m_parts->atom_list.size());
+    for (auto & atom : model_object.m_parts->atom_list)
     {
         position_list.emplace_back(atom->GetPosition().at(static_cast<size_t>(axis)));
     }
@@ -106,8 +107,8 @@ void ModelDerivedState::EnsureKDTreeRoot(ModelObject & model_object)
     }
 
     std::vector<AtomObject *> atom_ptr_list;
-    atom_ptr_list.reserve(model_object.m_atom_list.size());
-    for (auto & atom : model_object.m_atom_list)
+    atom_ptr_list.reserve(model_object.m_parts->atom_list.size());
+    for (auto & atom : model_object.m_parts->atom_list)
     {
         atom_ptr_list.emplace_back(atom.get());
     }

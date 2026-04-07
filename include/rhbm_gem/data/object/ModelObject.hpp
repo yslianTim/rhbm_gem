@@ -24,27 +24,21 @@ class BondObject;
 class ChemicalComponentEntry;
 class ModelDerivedState;
 class ModelAnalysisData;
-struct ModelObjectParts;
 class ModelObjectStorage;
+struct ModelObjectParts;
 
 ModelObject AssembleModelObject(ModelObjectParts parts);
 
 class ModelObject
 {
-    std::vector<std::unique_ptr<AtomObject>> m_atom_list;
-    std::vector<std::unique_ptr<BondObject>> m_bond_list;
+    std::unique_ptr<ModelObjectParts> m_parts;
     std::vector<AtomObject *> m_selected_atom_list;
     std::vector<BondObject *> m_selected_bond_list;
     std::string m_key_tag, m_pdb_id, m_emd_id;
     std::string m_resolution_method;
     double m_resolution;
     std::map<int, AtomObject*> m_serial_id_atom_map;
-    std::unordered_map<std::string, std::vector<std::string>> m_chain_id_list_map;
-    std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> m_chemical_component_entry_map;
     std::unique_ptr<ModelDerivedState> m_derived_state;
-    std::unique_ptr<ComponentKeySystem> m_component_key_system;
-    std::unique_ptr<AtomKeySystem> m_atom_key_system;
-    std::unique_ptr<BondKeySystem> m_bond_key_system;
     std::unique_ptr<ModelAnalysisData> m_analysis_data;
 
 public:
@@ -63,10 +57,10 @@ public:
 
     bool HasStandardRNAComponent() const;
     bool HasStandardDNAComponent() const;
-    size_t GetNumberOfAtom() const { return m_atom_list.size(); }
-    size_t GetNumberOfBond() const { return m_bond_list.size(); }
-    const std::vector<std::unique_ptr<AtomObject>> & GetAtomList() const { return m_atom_list; }
-    const std::vector<std::unique_ptr<BondObject>> & GetBondList() const { return m_bond_list; }
+    size_t GetNumberOfAtom() const;
+    size_t GetNumberOfBond() const;
+    const std::vector<std::unique_ptr<AtomObject>> & GetAtomList() const;
+    const std::vector<std::unique_ptr<BondObject>> & GetBondList() const;
     const std::vector<AtomObject *> & GetSelectedAtoms() const { return m_selected_atom_list; }
     const std::vector<BondObject *> & GetSelectedBonds() const { return m_selected_bond_list; }
     size_t GetSelectedAtomCount() const { return m_selected_atom_list.size(); }
@@ -75,8 +69,7 @@ public:
     std::string GetEmdID() const { return m_emd_id; }
     double GetResolution() const { return m_resolution; }
     std::string GetResolutionMethod() const { return m_resolution_method; }
-    const std::unordered_map<std::string, std::vector<std::string>> &
-    GetChainIDListMap() const { return m_chain_id_list_map; }
+    const std::unordered_map<std::string, std::vector<std::string>> & GetChainIDListMap() const;
     std::array<float, 3> GetCenterOfMassPosition();
     std::tuple<double, double> GetModelPositionRange(int axis);
     double GetModelPosition(int axis, double normalized_pos);

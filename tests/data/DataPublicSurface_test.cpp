@@ -287,5 +287,6 @@ TEST(DataPublicSurfaceTest, InternalTransitionWrappersAreNotAvailableOrIncluded)
     EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelSpatialAccess"));
     EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelObjectBuilder"));
     EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelObjectAssembly"));
+    EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelObjectParts.hpp"));
     EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelSelectionAccess"));
 }
