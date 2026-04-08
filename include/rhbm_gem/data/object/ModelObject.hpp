@@ -24,6 +24,7 @@ class BondObject;
 class ChemicalComponentEntry;
 class ModelDerivedState;
 class ModelAnalysisData;
+class ModelAnalysisView;
 class ModelObjectStorage;
 struct ModelObjectParts;
 
@@ -89,6 +90,7 @@ public:
     void SetBondSelected(int atom_serial_id_1, int atom_serial_id_2, bool selected);
     void RebuildSelection();
     void ApplySymmetrySelection(bool is_asymmetry);
+    ModelAnalysisView GetAnalysisView() const;
 
 private:
     friend class ModelDerivedState;

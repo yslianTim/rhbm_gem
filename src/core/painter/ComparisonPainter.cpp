@@ -1,9 +1,8 @@
 #include <rhbm_gem/core/painter/ComparisonPainter.hpp>
-#include "data/detail/ModelAnalysisData.hpp"
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include "core/painter/AtomStyleCatalog.hpp"
-#include <detail/ModelPotentialView.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
@@ -768,7 +767,7 @@ void ComparisonPainter::BuildGausRatioToResolutionGraph(
     auto count{ 0 };
     for (auto model_object : model_list)
     {
-        const ModelPotentialView entry_view{ *model_object };
+        const ModelAnalysisView entry_view{ *model_object };
         if (!entry_view.HasAtomGroup(group_key, class_key)) continue;
         if (!entry_view.HasAtomGroup(ref_group_key, class_key)) continue;
         auto x_value{ model_object->GetResolution() };
@@ -808,7 +807,7 @@ void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
     for (auto model_object : model_list)
     {
         model_count++;
-        const ModelPotentialView entry_view{ *model_object };
+        const ModelAnalysisView entry_view{ *model_object };
         if (!entry_view.HasAtomGroup(group_key, class_key)) continue;
         if (!entry_view.HasAtomGroup(ref_group_key, class_key)) continue;
         auto x_value{ entry_view.GetAtomGausEstimatePrior(group_key, class_key, 1) };

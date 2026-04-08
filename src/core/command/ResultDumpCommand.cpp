@@ -1,12 +1,10 @@
 #include "ResultDumpCommand.hpp"
 
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
-#include "data/detail/GroupPotentialEntry.hpp"
-#include "data/detail/ModelAnalysisData.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <detail/ModelPotentialView.hpp>
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/ChimeraXHelper.hpp>
@@ -129,8 +127,9 @@ void ResultDumpCommand::RunAtomOutlierDumping()
             for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
             {
                 const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-                const auto * annotation{ ModelAnalysisData::RequireLocalEntry(*atom).FindAnnotation(class_key) };
-                if (annotation == nullptr || !annotation->is_outlier) continue;
+                const auto annotation{
+                    ModelAnalysisView::RequireLocalPotential(*atom).FindAnnotation(class_key) };
+                if (!annotation.has_value() || !annotation->is_outlier) continue;
                 outfile << atom->GetSerialID() << ',' << class_key << ','
                         << ChemicalDataHelper::GetLabel(atom->GetResidue()) << ','
                         << ChemicalDataHelper::GetLabel(atom->GetElement()) << ','
@@ -292,7 +291,7 @@ void ResultDumpCommand::RunGausEstimatesDumping()
         outfile << "SerialID,Amplitude,Width,X,Y,Z,Residue,Element,Spot\n";
         for (auto & atom : m_selected_atom_list_map.at(key_tag))
         {
-            const auto & entry{ ModelAnalysisData::RequireLocalEntry(*atom) };
+            const auto entry{ ModelAnalysisView::RequireLocalPotential(*atom) };
             const auto & estimate{ entry.GetEstimateMDPDE() };
             outfile << atom->GetSerialID() << ',' << estimate.amplitude << ','
                     << estimate.width << ',' << atom->GetPosition().at(0) << ','
@@ -327,7 +326,7 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping()
 
     for (const auto & model_object : m_model_object_list)
     {
-        const ModelPotentialView entry_view{ *model_object };
+        const ModelAnalysisView entry_view{ *model_object };
 
         const std::string file_name{ "group_gaus_list_" + model_object->GetPdbID() };
         const auto output_path{ BuildOutputPath(file_name, ".csv") };

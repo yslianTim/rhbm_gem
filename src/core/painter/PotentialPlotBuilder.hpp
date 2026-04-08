@@ -8,8 +8,7 @@
 
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 
-#include "data/detail/ModelAnalysisData.hpp"
-#include <detail/ModelPotentialView.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 
 #ifdef HAVE_ROOT
 class TH1D;
@@ -79,8 +78,8 @@ public:
 #endif
 
 private:
-    ModelPotentialView GetModelView() const;
-    const LocalPotentialEntry & GetLocalEntry() const;
+    ModelAnalysisView GetModelView() const;
+    LocalPotentialView GetLocalEntry() const;
     bool IsModelObjectAvailable() const;
     bool IsAtomLocalEntryAvailable() const;
     size_t GetAtomResidueCount(const std::string & class_key, Residue residue, Structure structure=static_cast<Structure>(0)) const;

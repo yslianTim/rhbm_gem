@@ -1,12 +1,12 @@
 #include <rhbm_gem/core/painter/DemoPainter.hpp>
-#include "data/detail/ModelAnalysisData.hpp"
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
-#include <detail/ModelPotentialView.hpp>
 #include "PotentialPlotBuilder.hpp"
 #include "core/painter/AtomStyleCatalog.hpp"
 #include <detail/PotentialSeriesOps.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
+#include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
@@ -37,6 +37,7 @@
 #include <tuple>
 #include <cmath>
 #include <limits>
+#include <map>
 #include <sstream>
 
 #include <boost/math/distributions/students_t.hpp>
@@ -315,7 +316,7 @@ void DemoPainter::PaintAtomMapValueExample(
     Logger::Log(LogLevel::Info, " DemoPainter::PaintAtomMapValueExample");
 
     if (model_object == nullptr) return;
-    auto entry_iter{ std::make_unique<ModelPotentialView>(*model_object) };
+    auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
 
     #ifdef HAVE_ROOT
@@ -341,7 +342,7 @@ void DemoPainter::PaintAtomMapValueExample(
         ROOTHelper::SetLineAttribute(graph.get(), 1, 5, static_cast<short>(kAzure-7), 0.3f);
         map_value_graph_list.emplace_back(std::move(graph));
         auto map_value_range{ series_ops::ComputeMapValueRange(
-            ModelAnalysisData::RequireLocalEntry(*atom), 0.0) };
+            ModelAnalysisView::RequireLocalPotential(*atom), 0.0) };
         y_array.emplace_back(std::get<0>(map_value_range));
         y_array.emplace_back(std::get<1>(map_value_range));
     }
@@ -452,7 +453,7 @@ void DemoPainter::PaintGroupGausMainChainSummary(
         std::vector<double> amplitude_array, width_array;
         info_text[j] = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
         resolution_text[j] = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
-        auto entry_iter{ std::make_unique<ModelPotentialView>(*model_object) };
+        auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
         auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
         for (size_t k = 0; k < main_chain_element_count; k++)
         {
@@ -570,7 +571,7 @@ void DemoPainter::PaintGroupGausMainChainSingle(
     auto residue_class{ ChemicalDataHelper::GetComponentAtomClassKey() };
     Logger::Log(LogLevel::Info, " DemoPainter::PaintGroupGausMainChainSingle");
 
-    auto entry_iter{ std::make_unique<ModelPotentialView>(*model_object) };
+    auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
 
     #ifdef HAVE_ROOT
@@ -727,31 +728,6 @@ void DemoPainter::PaintGroupGausMainChainSingle(
 }
 
 } // namespace rhbm_gem
-#include <rhbm_gem/core/painter/DemoPainter.hpp>
-#include "PotentialPlotBuilder.hpp"
-#include "data/detail/AtomClassifier.hpp"
-#include <rhbm_gem/data/object/ModelObject.hpp>
-#include "data/detail/ModelAnalysisData.hpp"
-#include <detail/ModelPotentialView.hpp>
-#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
-#include <rhbm_gem/utils/domain/Logger.hpp>
-#include <rhbm_gem/utils/math/ArrayStats.hpp>
-
-#ifdef HAVE_ROOT
-#include <rhbm_gem/utils/domain/ROOTHelper.hpp>
-#include <TCanvas.h>
-#include <TEllipse.h>
-#include <TF1.h>
-#include <TGraphErrors.h>
-#include <TH2.h>
-#include <TLatex.h>
-#include <TLegend.h>
-#include <TPad.h>
-#include <TPaveText.h>
-#include <TStyle.h>
-#endif
-
-#include <vector>
 
 namespace rhbm_gem {
 
@@ -793,7 +769,7 @@ void DemoPainter::PaintGroupGausToFSC(
         auto count{ 0 };
         for (auto model : model_list)
         {
-            auto entry_iter{ std::make_unique<ModelPotentialView>(*model) };
+            auto entry_iter{ std::make_unique<ModelAnalysisView>(*model) };
             auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model) };
             auto width_value{ entry_iter->GetAtomGausEstimatePrior(group_key, ChemicalDataHelper::GetSimpleAtomClassKey(), 1) };
             auto width_error{ entry_iter->GetAtomGausVariancePrior(group_key, ChemicalDataHelper::GetSimpleAtomClassKey(), 1) };
@@ -900,7 +876,7 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
     (void)draw_box_plot;
 
     if (model_object == nullptr) return;
-    auto entry_iter{ std::make_unique<ModelPotentialView>(*model_object) };
+    auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
 
     #ifdef HAVE_ROOT
@@ -1099,44 +1075,6 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
 }
 
 } // namespace rhbm_gem
-#include <rhbm_gem/core/painter/DemoPainter.hpp>
-#include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/data/object/AtomObject.hpp>
-#include "data/detail/ModelAnalysisData.hpp"
-#include <detail/ModelPotentialView.hpp>
-#include "PotentialPlotBuilder.hpp"
-#include <rhbm_gem/utils/domain/FilePathHelper.hpp>
-#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
-#include "data/detail/AtomClassifier.hpp"
-#include <rhbm_gem/utils/math/ArrayStats.hpp>
-#include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
-#include <rhbm_gem/core/painter/GausPainter.hpp>
-#include <rhbm_gem/utils/domain/Logger.hpp>
-#ifdef HAVE_ROOT
-#include <rhbm_gem/utils/domain/ROOTHelper.hpp>
-#include <TStyle.h>
-#include <TCanvas.h>
-#include <TPad.h>
-#include <TGraphErrors.h>
-#include <TLegend.h>
-#include <TPaveText.h>
-#include <TColor.h>
-#include <TMarker.h>
-#include <TAxis.h>
-#include <TH2.h>
-#include <TF1.h>
-#include <TLine.h>
-#include <TLatex.h>
-#include <TEllipse.h>
-#endif
-
-#include <vector>
-#include <tuple>
-#include <cmath>
-#include <limits>
-#include <sstream>
-
-#include <boost/math/distributions/students_t.hpp>
 
 namespace rhbm_gem {
 void DemoPainter::PaintGroupWidthScatterPlot(
@@ -1172,7 +1110,7 @@ void DemoPainter::PaintGroupWidthScatterPlot(
         for (size_t j = 0; j < row_size; j++)
         {
             auto model_id{ j };
-            auto entry_iter{ std::make_unique<ModelPotentialView>(*model_list.at(model_id)) };
+            auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_list.at(model_id)) };
             auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_list.at(model_id)) };
             for (auto residue : ChemicalDataHelper::GetStandardAminoAcidList())
             {
@@ -1359,9 +1297,9 @@ void DemoPainter::PaintAtomGausMainChainDemo(
     (void)par_id;
     
     if (model_object1 == nullptr || model_object2 == nullptr) return;
-    auto entry_iter1{ std::make_unique<ModelPotentialView>(*model_object1) };
+    auto entry_iter1{ std::make_unique<ModelAnalysisView>(*model_object1) };
     auto plot_builder1{ std::make_unique<PotentialPlotBuilder>(model_object1) };
-    auto entry_iter2{ std::make_unique<ModelPotentialView>(*model_object2) };
+    auto entry_iter2{ std::make_unique<ModelAnalysisView>(*model_object2) };
     auto plot_builder2{ std::make_unique<PotentialPlotBuilder>(model_object2) };
     
     #ifdef HAVE_ROOT
@@ -1465,7 +1403,7 @@ void DemoPainter::PaintAtomGausMainChainDemoSingle(
     (void)par_id;
     
     if (model_object == nullptr) return;
-    auto entry_iter{ std::make_unique<ModelPotentialView>(*model_object) };
+    auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     
     #ifdef HAVE_ROOT
@@ -1594,7 +1532,7 @@ void DemoPainter::PaintGroupWidthAlphaCarbonDemo(
     for (size_t j = 0; j < model_size; j++)
     {
         auto model_object{ model_list.at(j) };
-        auto entry_iter{ std::make_unique<ModelPotentialView>(*model_object) };
+        auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
         auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
 
         auto group_key_list{ AtomClassifier::GetMainChainComponentAtomClassGroupKeyList(member_id) };
@@ -1686,7 +1624,7 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
     for (size_t i = 0; i < model_list.size(); i++)
     {
         auto model_object{ model_list.at(i) };
-        auto entry_iter{ std::make_unique<ModelPotentialView>(*model_object) };
+        auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
         auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
         for (size_t p = 0; p < spot_list.size(); p++)
         {
@@ -1726,7 +1664,7 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
     for (size_t i = 0; i < model_list.size(); i++)
     {
         auto model_object{ model_list.at(i) };
-        auto entry_iter{ std::make_unique<ModelPotentialView>(*model_object) };
+        auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
         auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
         for (auto & [spot, group_key_list] : group_key_list_map[i])
         {

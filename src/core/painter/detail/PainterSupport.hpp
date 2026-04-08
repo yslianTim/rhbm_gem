@@ -4,13 +4,12 @@
 #include <unordered_map>
 #include <vector>
 
-#include "data/detail/ModelAnalysisData.hpp"
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 
-#include <detail/ModelPotentialView.hpp>
 #include <detail/PotentialSeriesOps.hpp>
 
 #ifdef HAVE_ROOT
@@ -102,8 +101,8 @@ inline void BuildMapValueScatterGraph(
     double x_min = 0.0,
     double x_max = 1.5)
 {
-    const ModelPotentialView entry1_view{ *model1 };
-    const ModelPotentialView entry2_view{ *model2 };
+    const ModelAnalysisView entry1_view{ *model1 };
+    const ModelAnalysisView entry2_view{ *model2 };
     const auto & class_key{ ChemicalDataHelper::GetSimpleAtomClassKey() };
     if (!entry1_view.HasAtomGroup(group_key, class_key) ||
         !entry2_view.HasAtomGroup(group_key, class_key))
@@ -135,9 +134,9 @@ inline void BuildMapValueScatterGraph(
         }
         auto * atom_object2{ model2_atom_map.at(atom_id) };
         auto data1_array{ series_ops::BuildBinnedDistanceAndMapValueList(
-            ModelAnalysisData::RequireLocalEntry(*atom_object1), bin_size, x_min, x_max) };
+            ModelAnalysisView::RequireLocalPotential(*atom_object1), bin_size, x_min, x_max) };
         auto data2_array{ series_ops::BuildBinnedDistanceAndMapValueList(
-            ModelAnalysisData::RequireLocalEntry(*atom_object2), bin_size, x_min, x_max) };
+            ModelAnalysisView::RequireLocalPotential(*atom_object2), bin_size, x_min, x_max) };
         for (size_t i = 0; i < static_cast<size_t>(bin_size); i++)
         {
             graph->SetPoint(count, std::get<1>(data1_array.at(i)), std::get<1>(data2_array.at(i)));

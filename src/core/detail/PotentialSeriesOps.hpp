@@ -7,14 +7,15 @@
 
 #include <Eigen/Dense>
 
-#include "data/detail/LocalPotentialEntry.hpp"
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
 
 namespace rhbm_gem::series_ops {
 
+template <typename EntryT>
 inline std::vector<std::tuple<float, float>> BuildLinearModelDistanceAndMapValueList(
-    const LocalPotentialEntry & entry)
+    const EntryT & entry)
 {
     Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
     const auto & data_array{ entry.GetDistanceAndMapValueList() };
@@ -33,8 +34,9 @@ inline std::vector<std::tuple<float, float>> BuildLinearModelDistanceAndMapValue
     return linear_model_distance_and_map_value_list;
 }
 
+template <typename EntryT>
 inline std::vector<std::tuple<float, float>> BuildBinnedDistanceAndMapValueList(
-    const LocalPotentialEntry & entry,
+    const EntryT & entry,
     int bin_size = 15,
     double x_min = 0.0,
     double x_max = 1.5)
@@ -60,8 +62,9 @@ inline std::vector<std::tuple<float, float>> BuildBinnedDistanceAndMapValueList(
     return binned_distance_and_map_value_list;
 }
 
+template <typename EntryT>
 inline std::tuple<float, float> ComputeDistanceRange(
-    const LocalPotentialEntry & entry,
+    const EntryT & entry,
     double margin_rate = 0.0)
 {
     const auto & data_array{ entry.GetDistanceAndMapValueList() };
@@ -76,8 +79,9 @@ inline std::tuple<float, float> ComputeDistanceRange(
         distance_array, static_cast<float>(margin_rate));
 }
 
+template <typename EntryT>
 inline std::tuple<float, float> ComputeMapValueRange(
-    const LocalPotentialEntry & entry,
+    const EntryT & entry,
     double margin_rate = 0.0)
 {
     const auto & data_array{ entry.GetDistanceAndMapValueList() };
@@ -92,8 +96,9 @@ inline std::tuple<float, float> ComputeMapValueRange(
         map_value_array, static_cast<float>(margin_rate));
 }
 
+template <typename EntryT>
 inline std::tuple<float, float> ComputeBinnedMapValueRange(
-    const LocalPotentialEntry & entry,
+    const EntryT & entry,
     int bin_size = 15,
     double x_min = 0.0,
     double x_max = 1.5,
