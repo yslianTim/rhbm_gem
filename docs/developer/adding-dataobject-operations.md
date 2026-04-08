@@ -69,8 +69,8 @@ For shared typed helpers:
 - validate preconditions and throw explicit `std::runtime_error` when violated
 - keep command execution, logging policy, and UI concerns out of shared helpers
 - prefer named workflow helpers when only a few combinations are valid in real commands
-- keep owner lookup, model analysis-store access, fit-state clearing, and spatial lookup behind `/src/data/detail/ModelAnalysisAccess.hpp`
-- use `ModelAnalysisAccess` directly for local/group entry reads and writes; do not add new `Local*Access` or `Group*Access` forwarding helpers
+- keep owner lookup and local/group entry access behind `/src/data/detail/ModelAnalysisData.hpp`, and keep spatial lookup behind `/src/data/detail/ModelDerivedState.hpp`
+- use `ModelAnalysisData` directly for local/group entry reads and writes; do not add new `Local*Access` or `Group*Access` forwarding helpers
 - do not re-expose internal analysis helpers from `/include/rhbm_gem/data/object/**`
 - avoid one-hop shared wrappers that only forward to:
   - `ReadModel(...)`

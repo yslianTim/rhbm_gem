@@ -16,7 +16,7 @@ Related references:
 
 - only `/include/rhbm_gem/data/**` is public data-layer API
 - headers under `/src/data/io/file` and `/src/data/io/sqlite` are internal implementation details
-- `/src/data/detail/ModelAnalysisAccess.hpp` is the internal access layer for model-owned analysis state, owner lookup, and spatial lookup
+- `/src/data/detail/ModelAnalysisData.hpp` and `/src/data/detail/ModelDerivedState.hpp` are internal model-owned analysis and derived-state implementation details
 - headers under `/src/core/command/detail/**` are command-internal orchestration helpers
 - there is no public `DataObjectDispatch` header in the current project surface
 
@@ -164,7 +164,7 @@ Behavior:
 
 There is no shared manager-owned iteration API for loaded objects. Traversal and selection stay in typed command workflows or ordinary container iteration.
 
-Analysis-owned state stays behind the internal `ModelAnalysisAccess` layer. Commands and painters should not expose owner lookup, analysis-store access, fit-state clearing, or spatial-range helpers through public data headers.
+Analysis-owned state stays behind internal `ModelAnalysisData` and `ModelDerivedState` helpers. Commands and painters should not expose owner lookup, analysis access, fit-state cleanup, or spatial-range helpers through public data headers.
 Internal painter orchestration should prepare analysis-ready models through painter detail helpers and should not route new code through compatibility-only `AddModel(...)` / `AddReferenceModel(...)` ingestion paths.
 
 ## 10. Key Files

@@ -1,7 +1,6 @@
 #include "ResultDumpCommand.hpp"
 
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
-#include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include "data/detail/GroupPotentialEntry.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
@@ -13,6 +12,7 @@
 #include <rhbm_gem/utils/domain/ChimeraXHelper.hpp>
 #include <rhbm_gem/utils/domain/ComponentHelper.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
+#include <rhbm_gem/utils/domain/KeyPacker.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
@@ -347,7 +347,8 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping()
                 for (auto & spot : ComponentHelper::GetSpotList(residue))
                 {
                     const auto atom_key{ static_cast<uint16_t>(spot) };
-                    const auto group_key{ AtomClassifier::GetGroupKeyInClass(component_key, atom_key) };
+                    const auto group_key{
+                        KeyPackerComponentAtomClass::Pack(component_key, atom_key) };
                     const auto atom_id{ model_object->FindAtomID(atom_key) };
                     if (!entry_view.HasAtomGroup(group_key, class_key)) continue;
                 outfile << residue_name << ',' << atom_id << ','

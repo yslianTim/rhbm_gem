@@ -58,29 +58,7 @@ constexpr std::string_view kAlphaGOption{ "--alpha-g" };
 constexpr std::string_view kSamplingRangeIssue{ "--sampling-range" };
 constexpr std::string_view kFitRangeIssue{ "--fit-range" };
 
-void PrepareModelForPotentialAnalysis(
-    rhbm_gem::ModelObject & model_object,
-    bool asymmetry_flag)
-{
-    auto & analysis_data{ rhbm_gem::ModelAnalysisData::Of(model_object) };
-    analysis_data.Clear();
-    model_object.SelectAllAtoms();
-    model_object.SelectAllBonds();
-    model_object.ApplySymmetrySelection(asymmetry_flag);
-
-    for (auto * atom : model_object.GetSelectedAtoms())
-    {
-        rhbm_gem::ModelAnalysisData::Of(model_object).EnsureAtomLocalEntry(*atom);
-    }
-    for (auto * bond : model_object.GetSelectedBonds())
-    {
-        rhbm_gem::ModelAnalysisData::Of(model_object).EnsureBondLocalEntry(*bond);
-    }
-}
-
-HRLExecutionOptions MakePotentialAnalysisExecutionOptions(
-    int thread_size,
-    bool quiet_mode)
+HRLExecutionOptions MakePotentialAnalysisExecutionOptions(int thread_size, bool quiet_mode)
 {
     HRLExecutionOptions execution_options;
     execution_options.quiet_mode = quiet_mode;
@@ -88,7 +66,7 @@ HRLExecutionOptions MakePotentialAnalysisExecutionOptions(
     return execution_options;
 }
 
-}
+} // namespace
 
 namespace rhbm_gem {
 
@@ -261,17 +239,6 @@ std::vector<double> BuildOrderedAlphaGTrainingList()
     return alpha_list;
 }
 
-std::filesystem::path ResolveTrainingReportPath(
-    const PotentialAnalysisRequest & options,
-    std::string_view report_file_name)
-{
-    if (options.training_report_dir.empty())
-    {
-        return {};
-    }
-    return options.training_report_dir / std::filesystem::path{ report_file_name };
-}
-
 bool EmitTrainingReportIfRequested(
     const Eigen::MatrixXd & gaus_bias_matrix,
     const std::vector<double> & alpha_list,
@@ -280,7 +247,7 @@ bool EmitTrainingReportIfRequested(
     const PotentialAnalysisRequest & options,
     std::string_view report_file_name)
 {
-    const auto report_path{ ResolveTrainingReportPath(options, report_file_name) };
+    const auto report_path{ options.training_report_dir / std::filesystem::path{ report_file_name } };
     if (report_path.empty())
     {
         return false;
@@ -381,7 +348,21 @@ void PotentialAnalysisCommand::RunMapObjectPreprocessing()
 void PotentialAnalysisCommand::RunModelObjectPreprocessing()
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunModelObjectPreprocessing");
-    PrepareModelForPotentialAnalysis(*m_model_object, RequestOptions().asymmetry_flag);
+    auto & analysis_data{ rhbm_gem::ModelAnalysisData::Of(*m_model_object) };
+    analysis_data.Clear();
+    m_model_object->SelectAllAtoms();
+    m_model_object->SelectAllBonds();
+    m_model_object->ApplySymmetrySelection(RequestOptions().asymmetry_flag);
+
+    for (auto * atom : m_model_object->GetSelectedAtoms())
+    {
+        rhbm_gem::ModelAnalysisData::Of(*m_model_object).EnsureAtomLocalEntry(*atom);
+    }
+    for (auto * bond : m_model_object->GetSelectedBonds())
+    {
+        rhbm_gem::ModelAnalysisData::Of(*m_model_object).EnsureBondLocalEntry(*bond);
+    }
+
     Logger::Log(LogLevel::Info,
         "Number of selected atom = "
             + std::to_string(m_model_object->GetSelectedAtomCount()));

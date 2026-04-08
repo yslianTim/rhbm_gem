@@ -93,7 +93,7 @@ These are rebuildable caches derived from owned structural data.
 
 - `m_analysis_data`
 
-Analysis data is intentionally not exposed on the public `ModelObject` surface. Internal code reaches it through [`/src/data/detail/ModelAnalysisAccess.hpp`](/src/data/detail/ModelAnalysisAccess.hpp).
+Analysis data is intentionally not exposed on the public `ModelObject` surface. Internal code reaches it through [`/src/data/detail/ModelAnalysisData.hpp`](/src/data/detail/ModelAnalysisData.hpp), while derived spatial/cache queries live in [`/src/data/detail/ModelDerivedState.hpp`](/src/data/detail/ModelDerivedState.hpp).
 
 ## 5. Ownership and Invariants
 
@@ -106,10 +106,9 @@ The most important ownership rules are:
 
 That is why structural mutation is private to friend-only helpers such as:
 
-- `ModelObjectBuilder`
+- `ModelObjectParts` assembly
 - `ModelObjectStorage`
-- `ModelAnalysisAccess`
-- `ModelSelectionAccess`
+- `ModelAnalysisData`
 
 The key invariant is:
 
@@ -117,10 +116,10 @@ The key invariant is:
 
 The current build/sync path is:
 
-1. populate owned containers
+1. populate `ModelObjectParts`
 2. `AttachOwnedObjects()`
-3. `SyncDerivedState()`
-4. `SyncDerivedState()` invalidates derived caches and rebuilds indices/selection
+3. `InvalidateDerivedState()`
+4. `RebuildObjectIndex()` and `RebuildSelection()`
 
 This is the reason the public surface keeps direct structural setters private while still exposing selection and query APIs.
 
@@ -129,9 +128,9 @@ This is the reason the public surface keeps direct structural setters private wh
 ```mermaid
 flowchart LR
     A["file parser or SQLite load"] --> B["ModelImportState or ModelObjectStorage"]
-    B --> C["ModelObjectBuilder"]
-    C --> D["AttachOwnedObjects()"]
-    D --> E["SyncDerivedState()"]
+    B --> C["ModelObjectParts"]
+    C --> D["AssembleModelObject(...)"]
+    D --> E["AttachOwnedObjects() / RebuildObjectIndex() / RebuildSelection()"]
     E --> F["ModelObject ready for typed workflows"]
 ```
 
@@ -154,8 +153,8 @@ When import finishes, `TakeModelObject(...)`:
 1. chooses the requested model number or falls back to the first available one
 2. moves that model's atom list out of the staging state
 3. filters bonds so only bonds whose endpoints belong to the chosen atom set survive
-4. transfers chain metadata, chemical component entries, and key systems into `ModelObjectBuilder`
-5. builds a `ModelObject`
+4. transfers chain metadata, chemical component entries, and key systems into `ModelObjectParts`
+5. builds a `ModelObject` via `AssembleModelObject(...)`
 6. applies top-level metadata such as PDB id, EMD id, and resolution
 
 The file formats that feed this workflow are:
@@ -222,11 +221,7 @@ Public mutation entry points are:
 
 ## 8. Analysis Architecture
 
-Analysis state is model-owned, but it is intentionally hidden behind an internal access layer.
-
-Internal entry point:
-
-- [`/src/data/detail/ModelAnalysisAccess.hpp`](/src/data/detail/ModelAnalysisAccess.hpp)
+Analysis state is model-owned, but it is intentionally kept behind internal implementation types rather than exposed on the public `ModelObject` API.
 
 Storage type:
 
@@ -234,31 +229,21 @@ Storage type:
 
 Current split:
 
-- `AtomAnalysisStore`
-- `BondAnalysisStore`
+- atom group entries keyed by `class_key`
+- atom local entries keyed by `serial_id`
+- bond group entries keyed by `class_key`
+- bond local entries keyed by `(atom_serial_id_1, atom_serial_id_2)`
 
-Each store owns:
+The main persisted/runtime analysis objects are:
 
-- group entries keyed by `class_key`
-- local potential entries keyed by object identity
-- fit-state entries keyed by object identity
-
-Keying rules:
-
-- atom analysis keys use atom `serial_id`
-- bond analysis keys use `(atom_serial_id_1, atom_serial_id_2)`
-
-Important analysis objects:
-
-- [`/src/data/detail/LocalPotentialEntry.hpp`](/src/data/detail/LocalPotentialEntry.hpp)
 - [`/src/data/detail/GroupPotentialEntry.hpp`](/src/data/detail/GroupPotentialEntry.hpp)
-- [`/src/data/detail/LocalPotentialFitState.hpp`](/src/data/detail/LocalPotentialFitState.hpp)
+- [`/src/data/detail/LocalPotentialEntry.hpp`](/src/data/detail/LocalPotentialEntry.hpp)
 
 Design rules enforced by the current codebase:
 
 - public data headers do not expose mutable analysis internals
-- owner lookup stays inside `ModelAnalysisAccess`
-- local/group entry reads and writes should use `ModelAnalysisAccess`
+- owner lookup and local/group entry reads go through `ModelAnalysisData`
+- transient dataset / fit-result cleanup goes through `ModelAnalysisData::ClearTransientFitStates()`
 - new public forwarding wrappers for analysis data should not be added
 
 ## 9. Spatial Access
@@ -267,13 +252,13 @@ There are two different spatial mechanisms in the current object system.
 
 ### 9.1 Model spatial cache
 
-`ModelObject` owns a private `ModelSpatialCache` containing a KD-tree over atom pointers.
+`ModelObject` owns private `ModelDerivedState` storage containing a lazily-built KD-tree over atom pointers plus cached center-of-mass and position-range values.
 
 - builder or callers do not manage it directly
 - it is created lazily through `EnsureKDTreeRoot()`
-- it is invalidated by `InvalidateDerivedCaches()`
+- it is invalidated by `InvalidateDerivedState()`
 
-This cache is used through `ModelAnalysisAccess::FindAtomsInRange(...)`.
+This cache is used through `ModelDerivedState::FindAtomsInRange(...)`.
 
 ### 9.2 Map spatial index
 
@@ -311,7 +296,7 @@ flowchart LR
     B --> C["object_catalog"]
     B --> D["ModelObjectStorage (model)"]
     B --> E["inline map save/load helpers (map)"]
-    D --> F["ModelObjectBuilder"]
+    D --> F["ModelObjectParts / AssembleModelObject"]
     F --> G["ModelObject"]
     D --> H["LoadAnalysis()"]
     H --> G
@@ -364,13 +349,13 @@ During load:
 
 1. local entries are loaded into temporary maps
 2. entries are attached to the matching atoms and bonds
-3. `ModelSelectionAccess` bulk-selects exactly those atoms and bonds that received local entries
+3. `RestoreAtomSelectionBulk(...)` and `RestoreBondSelectionBulk(...)` mark exactly those atoms and bonds that received local entries
 
 This means persisted analysis presence currently drives loaded selection state.
 
 ### 11.3 Analysis fit-state rule
 
-`LocalPotentialFitState` lives inside `ModelAnalysisData`, but it is not written to SQLite by `ModelObjectStorage`.
+Transient fitting datasets and fit results live inside [`/src/data/detail/LocalPotentialEntry.hpp`](/src/data/detail/LocalPotentialEntry.hpp), and they are not written to SQLite by `ModelObjectStorage`.
 
 Current implication:
 
@@ -411,8 +396,8 @@ Use this as a quick routing guide when modifying the object system.
   [`/src/data/io/file/ModelMapFileIO.cpp`](/src/data/io/file/ModelMapFileIO.cpp),
   [`/src/data/io/sqlite/SQLitePersistence.cpp`](/src/data/io/sqlite/SQLitePersistence.cpp)
 - Change analysis-owned state:
-  [`/src/data/detail/ModelAnalysisAccess.*`](/src/data/detail/ModelAnalysisAccess.hpp),
-  [`/src/data/detail/ModelAnalysisData.*`](/src/data/detail/ModelAnalysisData.hpp)
+  [`/src/data/detail/ModelAnalysisData.*`](/src/data/detail/ModelAnalysisData.hpp),
+  [`/src/data/detail/ModelDerivedState.*`](/src/data/detail/ModelDerivedState.hpp)
 - Change command-side loading/persistence orchestration:
   [`/src/core/command/detail/CommandBase.hpp`](/src/core/command/detail/CommandBase.hpp),
   [`/src/core/command/detail/CommandObjectCache.hpp`](/src/core/command/detail/CommandObjectCache.hpp)
@@ -424,5 +409,5 @@ Use this as a quick routing guide when modifying the object system.
 - `BondObject` identity and analysis keys depend on the ordered serial-id pair of its endpoint atoms.
 - `GetSelectedAtoms()` and `GetSelectedBonds()` are cached projections, not the fundamental selection flags.
 - loaded analysis data can change selection state because selection is reconstructed from persisted local entries.
-- `ModelAnalysisAccess` is the intended boundary for owner lookup, local/group entry access, fit-state clearing, and atom-range lookup.
+- `ModelAnalysisData` owns analysis entries, while `ModelDerivedState` owns spatial/cache queries.
 - `MapSpatialIndex` is external to `MapObject`; do not add map KD-tree state to the public map object unless the architecture intentionally changes.
