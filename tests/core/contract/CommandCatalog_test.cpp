@@ -46,7 +46,8 @@ bool CommandUsesDatabase(std::string_view cli_name)
 std::string ReadManifestContent()
 {
     const auto manifest_path{
-        command_test::ProjectRootPath() / "src" / "core" / "command" / "CommandManifest.def"
+        command_test::ProjectRootPath() / "include" / "rhbm_gem" / "core" / "command"
+            / "CommandManifest.def"
     };
     std::ifstream manifest_stream{ manifest_path };
     if (!manifest_stream.is_open())

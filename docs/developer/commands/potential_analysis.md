@@ -3,7 +3,7 @@
 ## Registration and Implementation Files
 
 The command membership entry lives in
-[`src/core/command/CommandManifest.def`](/src/core/command/CommandManifest.def).
+[`include/rhbm_gem/core/command/CommandManifest.def`](/include/rhbm_gem/core/command/CommandManifest.def).
 
 Public request and entrypoint:
 

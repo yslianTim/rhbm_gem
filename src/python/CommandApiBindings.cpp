@@ -74,7 +74,7 @@ void BindCommandApi(py::module_ & module)
 
 #define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)                                    \
     BindRequestType<COMMAND_ID##Request>(module, #COMMAND_ID "Request");
-#include "../core/command/CommandManifest.def"
+#include <rhbm_gem/core/command/CommandManifest.def>
 #undef RHBM_GEM_COMMAND
 
     py::class_<CommandResult>(module, "CommandResult")
@@ -84,7 +84,7 @@ void BindCommandApi(py::module_ & module)
 
 #define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)                                    \
     module.def("Run" #COMMAND_ID, &Run##COMMAND_ID);
-#include "../core/command/CommandManifest.def"
+#include <rhbm_gem/core/command/CommandManifest.def>
 #undef RHBM_GEM_COMMAND
 }
 

@@ -48,7 +48,7 @@ const std::vector<CommandInfo> & ListCommands()
     static const std::vector<CommandInfo> commands{
 #define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)                                    \
         CommandInfo{ CLI_NAME, DESCRIPTION },
-#include "CommandManifest.def"
+#include <rhbm_gem/core/command/CommandManifest.def>
 #undef RHBM_GEM_COMMAND
     };
     return commands;
@@ -59,7 +59,7 @@ const std::vector<CommandInfo> & ListCommands()
     {                                                                                          \
         return RunCommand<COMMAND_ID##Command>(request);                                       \
     }
-#include "CommandManifest.def"
+#include <rhbm_gem/core/command/CommandManifest.def>
 #undef RHBM_GEM_COMMAND
 
 } // namespace rhbm_gem

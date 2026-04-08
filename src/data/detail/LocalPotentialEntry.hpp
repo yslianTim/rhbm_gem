@@ -8,7 +8,7 @@
 
 #include <Eigen/Dense>
 
-#include "data/detail/GaussianStatistics.hpp"
+#include <rhbm_gem/data/object/GaussianStatistics.hpp>
 
 namespace rhbm_gem {
 

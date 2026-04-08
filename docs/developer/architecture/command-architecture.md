@@ -3,7 +3,7 @@
 ## Source of Truth
 
 Top-level command membership is defined in
-[`src/core/command/CommandManifest.def`](/src/core/command/CommandManifest.def).
+[`include/rhbm_gem/core/command/CommandManifest.def`](/include/rhbm_gem/core/command/CommandManifest.def).
 
 Each entry uses:
 

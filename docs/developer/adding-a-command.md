@@ -14,7 +14,7 @@ Public API:
 
 Internal wiring:
 
-- [`src/core/command/CommandManifest.def`](/src/core/command/CommandManifest.def)
+- [`include/rhbm_gem/core/command/CommandManifest.def`](/include/rhbm_gem/core/command/CommandManifest.def)
 - [`src/core/command/detail/CommandRequestSchema.hpp`](/src/core/command/detail/CommandRequestSchema.hpp)
 - [`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp) to include the new concrete command header
 
@@ -26,7 +26,7 @@ Concrete implementation:
 ## Manifest
 
 Top-level command membership is defined in
-[`src/core/command/CommandManifest.def`](/src/core/command/CommandManifest.def).
+[`include/rhbm_gem/core/command/CommandManifest.def`](/include/rhbm_gem/core/command/CommandManifest.def).
 
 Each entry uses:
 

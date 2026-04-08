@@ -2,6 +2,7 @@
 
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
+#include <rhbm_gem/data/object/GaussianStatistics.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 
 #include <filesystem>
@@ -221,6 +222,7 @@ TEST(DataPublicSurfaceTest, DataPublicHeadersMatchApprovedSurface)
         "data/object/AtomObject.hpp",
         "data/object/BondObject.hpp",
         "data/object/ChemicalComponentEntry.hpp",
+        "data/object/GaussianStatistics.hpp",
         "data/object/MapObject.hpp",
         "data/object/ModelObject.hpp" };
 

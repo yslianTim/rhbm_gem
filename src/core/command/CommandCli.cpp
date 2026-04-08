@@ -277,7 +277,7 @@ void ConfigureCommandCli(CLI::App & app)
         app,                                                                                   \
         CLI_NAME,                                                                              \
         DESCRIPTION);
-#include "CommandManifest.def"
+#include <rhbm_gem/core/command/CommandManifest.def>
 #undef RHBM_GEM_COMMAND
 }
 

@@ -133,6 +133,7 @@ TEST(PublicHeaderSurfaceTest, CorePublicHeadersMatchApprovedSurface) {
     const std::vector<std::string> expected{
         "core/command/CommandApi.hpp",
         "core/command/CommandEnums.hpp",
+        "core/command/CommandManifest.def",
         "core/painter/AtomPainter.hpp",
         "core/painter/ComparisonPainter.hpp",
         "core/painter/DemoPainter.hpp",

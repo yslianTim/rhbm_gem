@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "data/detail/GaussianStatistics.hpp"
+#include <rhbm_gem/data/object/GaussianStatistics.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 
 namespace rhbm_gem {
