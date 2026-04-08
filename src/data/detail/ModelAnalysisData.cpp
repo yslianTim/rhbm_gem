@@ -17,7 +17,8 @@ namespace rhbm_gem {
 
 namespace {
 
-std::vector<GroupKey> CollectGroupKeys(const GroupPotentialEntry * entry)
+template <typename EntryT>
+std::vector<GroupKey> CollectGroupKeys(const EntryT * entry)
 {
     return entry == nullptr ? std::vector<GroupKey>{} : entry->CollectGroupKeys();
 }
@@ -120,7 +121,7 @@ void ModelAnalysisData::RebuildAtomGroupEntriesFromSelection(const ModelObject &
         for (auto * atom : model_object.GetSelectedAtoms())
         {
             const auto group_key{ AtomClassifier::GetGroupKeyInClass(atom, class_key) };
-            group_entry.AddAtomMember(group_key, *atom);
+            group_entry.AddMember(group_key, *atom);
         }
     }
 }
@@ -135,7 +136,7 @@ void ModelAnalysisData::RebuildBondGroupEntriesFromSelection(const ModelObject &
         for (auto * bond : model_object.GetSelectedBonds())
         {
             const auto group_key{ BondClassifier::GetGroupKeyInClass(bond, class_key) };
-            group_entry.AddBondMember(group_key, *bond);
+            group_entry.AddMember(group_key, *bond);
         }
     }
 }
@@ -150,22 +151,21 @@ std::vector<GroupKey> ModelAnalysisData::CollectBondGroupKeys(const std::string 
     return CollectGroupKeys(FindBondGroupEntry(class_key));
 }
 
-GroupPotentialEntry & ModelAnalysisData::EnsureAtomGroupEntry(const std::string & class_key)
+AtomGroupPotentialEntry & ModelAnalysisData::EnsureAtomGroupEntry(const std::string & class_key)
 {
-    auto [iter, inserted]{
-        m_atom_group_entry_map.try_emplace(class_key) };
+    auto [iter, inserted]{ m_atom_group_entry_map.try_emplace(class_key) };
     (void)inserted;
-    iter->second.MarkAsAtomEntry();
     return iter->second;
 }
 
-GroupPotentialEntry * ModelAnalysisData::FindAtomGroupEntry(const std::string & class_key)
+AtomGroupPotentialEntry * ModelAnalysisData::FindAtomGroupEntry(const std::string & class_key)
 {
     const auto iter{ m_atom_group_entry_map.find(class_key) };
     return iter == m_atom_group_entry_map.end() ? nullptr : &iter->second;
 }
 
-const GroupPotentialEntry * ModelAnalysisData::FindAtomGroupEntry(const std::string & class_key) const
+const AtomGroupPotentialEntry * ModelAnalysisData::FindAtomGroupEntry(
+    const std::string & class_key) const
 {
     const auto iter{ m_atom_group_entry_map.find(class_key) };
     return iter == m_atom_group_entry_map.end() ? nullptr : &iter->second;
@@ -205,22 +205,21 @@ const LocalPotentialEntry * ModelAnalysisData::FindAtomLocalEntry(const AtomObje
     return iter == m_atom_local_entry_map.end() || iter->second == nullptr ? nullptr : iter->second.get();
 }
 
-GroupPotentialEntry & ModelAnalysisData::EnsureBondGroupEntry(const std::string & class_key)
+BondGroupPotentialEntry & ModelAnalysisData::EnsureBondGroupEntry(const std::string & class_key)
 {
-    auto [iter, inserted]{
-        m_bond_group_entry_map.try_emplace(class_key) };
+    auto [iter, inserted]{ m_bond_group_entry_map.try_emplace(class_key) };
     (void)inserted;
-    iter->second.MarkAsBondEntry();
     return iter->second;
 }
 
-GroupPotentialEntry * ModelAnalysisData::FindBondGroupEntry(const std::string & class_key)
+BondGroupPotentialEntry * ModelAnalysisData::FindBondGroupEntry(const std::string & class_key)
 {
     const auto iter{ m_bond_group_entry_map.find(class_key) };
     return iter == m_bond_group_entry_map.end() ? nullptr : &iter->second;
 }
 
-const GroupPotentialEntry * ModelAnalysisData::FindBondGroupEntry(const std::string & class_key) const
+const BondGroupPotentialEntry * ModelAnalysisData::FindBondGroupEntry(
+    const std::string & class_key) const
 {
     const auto iter{ m_bond_group_entry_map.find(class_key) };
     return iter == m_bond_group_entry_map.end() ? nullptr : &iter->second;

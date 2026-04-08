@@ -249,7 +249,7 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
         for (size_t idx = 0; idx < group_key_size; idx++)
         {
             auto group_key{ group_keys[idx] };
-            const auto & bond_list{ group_potential_entry->GetBondMembers(group_key) };
+            const auto & bond_list{ group_potential_entry->GetMembers(group_key) };
             const auto group_size{ bond_list.size() };
             std::vector<std::vector<Eigen::VectorXd>> data_entry_list;
             std::vector<Eigen::VectorXd> beta_mdpde_list;

@@ -10,6 +10,8 @@
 #include "data/detail/GroupPotentialEntry.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
 
+#include <type_traits>
+
 namespace rhbm_gem {
 
 ModelObject::ModelObject() :
@@ -192,7 +194,7 @@ ModelObject::ModelObject(const ModelObject & other) :
         {
             for (const auto & [class_key, entry] : source_map)
             {
-                auto cloned_entry{ std::make_unique<GroupPotentialEntry>() };
+                auto cloned_entry{ std::make_unique<std::decay_t<decltype(entry)>>() };
                 for (const auto group_key : entry.CollectGroupKeys())
                 {
                     cloned_entry->SetGroupStatistics(
@@ -211,29 +213,29 @@ ModelObject::ModelObject(const ModelObject & other) :
     const auto & source_analysis_data{ ModelAnalysisData::Of(other) };
     copy_group_entries(
         source_analysis_data.AtomGroupEntries(),
-        [&atom_ptr_map](const auto & entry, GroupKey group_key, GroupPotentialEntry & cloned_entry)
+        [&atom_ptr_map](const auto & entry, GroupKey group_key, auto & cloned_entry)
         {
-            cloned_entry.ReserveAtomMembers(group_key, entry.GetAtomMemberCount(group_key));
-            for (auto * atom : entry.GetAtomMembers(group_key))
+            cloned_entry.ReserveMembers(group_key, entry.GetMemberCount(group_key));
+            for (auto * atom : entry.GetMembers(group_key))
             {
-                cloned_entry.AddAtomMember(group_key, *atom_ptr_map.at(atom));
+                cloned_entry.AddMember(group_key, *atom_ptr_map.at(atom));
             }
         },
-        [this](const std::string & class_key, std::unique_ptr<GroupPotentialEntry> entry)
+        [this](const std::string & class_key, auto entry)
         {
             m_analysis_data->EnsureAtomGroupEntry(class_key) = std::move(*entry);
         });
     copy_group_entries(
         source_analysis_data.BondGroupEntries(),
-        [&bond_ptr_map](const auto & entry, GroupKey group_key, GroupPotentialEntry & cloned_entry)
+        [&bond_ptr_map](const auto & entry, GroupKey group_key, auto & cloned_entry)
         {
-            cloned_entry.ReserveBondMembers(group_key, entry.GetBondMemberCount(group_key));
-            for (auto * bond : entry.GetBondMembers(group_key))
+            cloned_entry.ReserveMembers(group_key, entry.GetMemberCount(group_key));
+            for (auto * bond : entry.GetMembers(group_key))
             {
-                cloned_entry.AddBondMember(group_key, *bond_ptr_map.at(bond));
+                cloned_entry.AddMember(group_key, *bond_ptr_map.at(bond));
             }
         },
-        [this](const std::string & class_key, std::unique_ptr<GroupPotentialEntry> entry)
+        [this](const std::string & class_key, auto entry)
         {
             m_analysis_data->EnsureBondGroupEntry(class_key) = std::move(*entry);
         });

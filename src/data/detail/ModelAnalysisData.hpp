@@ -7,22 +7,22 @@
 #include <utility>
 #include <vector>
 
+#include "data/detail/GroupPotentialEntry.hpp"
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 
 namespace rhbm_gem {
 
 class AtomObject;
 class BondObject;
-class GroupPotentialEntry;
 class LocalPotentialEntry;
 class ModelObject;
 
 class ModelAnalysisData
 {
 public:
-    using AtomGroupEntryMap = std::unordered_map<std::string, GroupPotentialEntry>;
+    using AtomGroupEntryMap = std::unordered_map<std::string, AtomGroupPotentialEntry>;
     using AtomLocalEntryMap = std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>>;
-    using BondGroupEntryMap = std::unordered_map<std::string, GroupPotentialEntry>;
+    using BondGroupEntryMap = std::unordered_map<std::string, BondGroupPotentialEntry>;
     using BondFitStateKey = std::pair<int, int>;
     using BondLocalEntryMap = std::map<BondFitStateKey, std::unique_ptr<LocalPotentialEntry>>;
 
@@ -57,9 +57,9 @@ public:
     std::vector<GroupKey> CollectAtomGroupKeys(const std::string & class_key) const;
     std::vector<GroupKey> CollectBondGroupKeys(const std::string & class_key) const;
 
-    GroupPotentialEntry & EnsureAtomGroupEntry(const std::string & class_key);
-    GroupPotentialEntry * FindAtomGroupEntry(const std::string & class_key);
-    const GroupPotentialEntry * FindAtomGroupEntry(const std::string & class_key) const;
+    AtomGroupPotentialEntry & EnsureAtomGroupEntry(const std::string & class_key);
+    AtomGroupPotentialEntry * FindAtomGroupEntry(const std::string & class_key);
+    const AtomGroupPotentialEntry * FindAtomGroupEntry(const std::string & class_key) const;
     const AtomGroupEntryMap & AtomGroupEntries() const;
 
     LocalPotentialEntry & EnsureAtomLocalEntry(const AtomObject & atom_object);
@@ -67,9 +67,9 @@ public:
     LocalPotentialEntry * FindAtomLocalEntry(const AtomObject & atom_object);
     const LocalPotentialEntry * FindAtomLocalEntry(const AtomObject & atom_object) const;
 
-    GroupPotentialEntry & EnsureBondGroupEntry(const std::string & class_key);
-    GroupPotentialEntry * FindBondGroupEntry(const std::string & class_key);
-    const GroupPotentialEntry * FindBondGroupEntry(const std::string & class_key) const;
+    BondGroupPotentialEntry & EnsureBondGroupEntry(const std::string & class_key);
+    BondGroupPotentialEntry * FindBondGroupEntry(const std::string & class_key);
+    const BondGroupPotentialEntry * FindBondGroupEntry(const std::string & class_key) const;
     const BondGroupEntryMap & BondGroupEntries() const;
 
     LocalPotentialEntry & EnsureBondLocalEntry(const BondObject & bond_object);

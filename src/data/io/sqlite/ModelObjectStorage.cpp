@@ -1090,7 +1090,7 @@ void SaveBondLocalPotentialEntrySubList(
 
 void SaveAtomGroupPotentialEntryList(
     rhbm_gem::SQLiteWrapper & database,
-    const rhbm_gem::GroupPotentialEntry & group_entry,
+    const rhbm_gem::AtomGroupPotentialEntry & group_entry,
     const std::string & key_tag,
     const std::string & class_key)
 {
@@ -1106,7 +1106,7 @@ void SaveAtomGroupPotentialEntryList(
             statement_db.Bind<std::string>(1, key_tag);
             statement_db.Bind<std::string>(2, class_key);
             statement_db.Bind<GroupKey>(3, group_key);
-            statement_db.Bind<int>(4, static_cast<int>(group_entry.GetAtomMemberCount(group_key)));
+            statement_db.Bind<int>(4, static_cast<int>(group_entry.GetMemberCount(group_key)));
             statement_db.Bind<double>(5, mean.amplitude);
             statement_db.Bind<double>(6, mean.width);
             statement_db.Bind<double>(7, mdpde.amplitude);
@@ -1122,7 +1122,7 @@ void SaveAtomGroupPotentialEntryList(
 
 void SaveBondGroupPotentialEntryList(
     rhbm_gem::SQLiteWrapper & database,
-    const rhbm_gem::GroupPotentialEntry & group_entry,
+    const rhbm_gem::BondGroupPotentialEntry & group_entry,
     const std::string & key_tag,
     const std::string & class_key)
 {
@@ -1138,7 +1138,7 @@ void SaveBondGroupPotentialEntryList(
             statement_db.Bind<std::string>(1, key_tag);
             statement_db.Bind<std::string>(2, class_key);
             statement_db.Bind<GroupKey>(3, group_key);
-            statement_db.Bind<int>(4, static_cast<int>(group_entry.GetBondMemberCount(group_key)));
+            statement_db.Bind<int>(4, static_cast<int>(group_entry.GetMemberCount(group_key)));
             statement_db.Bind<double>(5, mean.amplitude);
             statement_db.Bind<double>(6, mean.width);
             statement_db.Bind<double>(7, mdpde.amplitude);
@@ -1344,7 +1344,7 @@ void LoadAtomGroupPotentialEntryList(
         }
 
         const auto group_key{ database.GetColumn<GroupKey>(0) };
-        group_entry.ReserveAtomMembers(group_key, static_cast<size_t>(database.GetColumn<int>(1)));
+        group_entry.ReserveMembers(group_key, static_cast<size_t>(database.GetColumn<int>(1)));
         group_entry.SetGroupStatistics(
             group_key,
             rhbm_gem::GaussianEstimate{
@@ -1361,7 +1361,7 @@ void LoadAtomGroupPotentialEntryList(
     for (auto & atom : model_obj.GetSelectedAtoms())
     {
         const auto group_key{ rhbm_gem::AtomClassifier::GetGroupKeyInClass(atom, class_key) };
-        group_entry.AddAtomMember(group_key, *atom);
+        group_entry.AddMember(group_key, *atom);
     }
 }
 
@@ -1390,7 +1390,7 @@ void LoadBondGroupPotentialEntryList(
         }
 
         const auto group_key{ database.GetColumn<GroupKey>(0) };
-        group_entry.ReserveBondMembers(group_key, static_cast<size_t>(database.GetColumn<int>(1)));
+        group_entry.ReserveMembers(group_key, static_cast<size_t>(database.GetColumn<int>(1)));
         group_entry.SetGroupStatistics(
             group_key,
             rhbm_gem::GaussianEstimate{
@@ -1407,7 +1407,7 @@ void LoadBondGroupPotentialEntryList(
     for (auto & bond : model_obj.GetSelectedBonds())
     {
         const auto group_key{ rhbm_gem::BondClassifier::GetGroupKeyInClass(bond, class_key) };
-        group_entry.AddBondMember(group_key, *bond);
+        group_entry.AddMember(group_key, *bond);
     }
 }
 

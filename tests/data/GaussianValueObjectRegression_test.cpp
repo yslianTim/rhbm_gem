@@ -1,9 +1,31 @@
 #include <gtest/gtest.h>
 
+#include <type_traits>
+
 #include "data/detail/GroupPotentialEntry.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
 
 namespace rg = rhbm_gem;
+
+namespace {
+
+template <typename EntryT, typename MemberT, typename = void>
+struct HasTypedAddMember : std::false_type {};
+
+template <typename EntryT, typename MemberT>
+struct HasTypedAddMember<
+    EntryT,
+    MemberT,
+    std::void_t<decltype(std::declval<EntryT &>().AddMember(
+        std::declval<GroupKey>(),
+        std::declval<MemberT &>()))>> : std::true_type {};
+
+static_assert(HasTypedAddMember<rg::AtomGroupPotentialEntry, rg::AtomObject>::value);
+static_assert(!HasTypedAddMember<rg::AtomGroupPotentialEntry, rg::BondObject>::value);
+static_assert(HasTypedAddMember<rg::BondGroupPotentialEntry, rg::BondObject>::value);
+static_assert(!HasTypedAddMember<rg::BondGroupPotentialEntry, rg::AtomObject>::value);
+
+} // namespace
 
 TEST(GaussianValueObjectRegressionTest, LocalAndGroupIntensityStayEquivalent)
 {
@@ -16,8 +38,7 @@ TEST(GaussianValueObjectRegressionTest, LocalAndGroupIntensityStayEquivalent)
         "component",
         rg::LocalPotentialAnnotation{ rg::GaussianPosterior{ estimate, variance }, false, 0.0 });
 
-    rg::GroupPotentialEntry group_entry;
-    group_entry.MarkAsAtomEntry();
+    rg::AtomGroupPotentialEntry group_entry;
     group_entry.SetGroupStatistics(42, {}, {}, estimate, variance, 0.0);
     const auto group_posterior{ group_entry.BuildPriorPosterior(42) };
 
@@ -28,15 +49,4 @@ TEST(GaussianValueObjectRegressionTest, LocalAndGroupIntensityStayEquivalent)
     EXPECT_DOUBLE_EQ(
         local_entry.FindAnnotation("component")->posterior.GetVariance(2),
         group_posterior.GetVariance(2));
-}
-
-TEST(GaussianValueObjectRegressionTest, GroupPotentialEntryRejectsMixedMemberKinds)
-{
-    rg::GroupPotentialEntry atom_entry;
-    atom_entry.MarkAsAtomEntry();
-    EXPECT_THROW(atom_entry.ReserveBondMembers(1, 1U), std::runtime_error);
-
-    rg::GroupPotentialEntry bond_entry;
-    bond_entry.MarkAsBondEntry();
-    EXPECT_THROW(bond_entry.ReserveAtomMembers(1, 1U), std::runtime_error);
 }

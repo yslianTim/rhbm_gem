@@ -130,12 +130,12 @@ public:
 
     const std::vector<AtomObject *> & GetAtomObjectList(GroupKey group_key, const std::string & class_key) const
     {
-        return RequireAtomGroupEntry(group_key, class_key).GetAtomMembers(group_key);
+        return RequireAtomGroupEntry(group_key, class_key).GetMembers(group_key);
     }
 
     const std::vector<BondObject *> & GetBondObjectList(GroupKey group_key, const std::string & class_key) const
     {
-        return RequireBondGroupEntry(group_key, class_key).GetBondMembers(group_key);
+        return RequireBondGroupEntry(group_key, class_key).GetMembers(group_key);
     }
 
     std::vector<AtomObject *> GetOutlierAtomObjectList(GroupKey group_key, const std::string & class_key) const
@@ -231,7 +231,7 @@ public:
     }
 
 private:
-    const GroupPotentialEntry * TryGetAtomGroupEntry(
+    const AtomGroupPotentialEntry * TryGetAtomGroupEntry(
         GroupKey group_key,
         const std::string & class_key,
         bool verbose) const
@@ -256,7 +256,7 @@ private:
         return entry;
     }
 
-    const GroupPotentialEntry * TryGetBondGroupEntry(
+    const BondGroupPotentialEntry * TryGetBondGroupEntry(
         GroupKey group_key,
         const std::string & class_key,
         bool verbose) const
@@ -281,7 +281,7 @@ private:
         return entry;
     }
 
-    const GroupPotentialEntry & RequireAtomGroupEntry(
+    const AtomGroupPotentialEntry & RequireAtomGroupEntry(
         GroupKey group_key,
         const std::string & class_key) const
     {
@@ -293,7 +293,7 @@ private:
         return *entry;
     }
 
-    const GroupPotentialEntry & RequireBondGroupEntry(
+    const BondGroupPotentialEntry & RequireBondGroupEntry(
         GroupKey group_key,
         const std::string & class_key) const
     {
@@ -305,12 +305,12 @@ private:
         return *entry;
     }
 
-    const GroupPotentialEntry * FindAtomGroupEntry(const std::string & class_key) const
+    const AtomGroupPotentialEntry * FindAtomGroupEntry(const std::string & class_key) const
     {
         return ModelAnalysisData::Of(m_model_object).FindAtomGroupEntry(class_key);
     }
 
-    const GroupPotentialEntry * FindBondGroupEntry(const std::string & class_key) const
+    const BondGroupPotentialEntry * FindBondGroupEntry(const std::string & class_key) const
     {
         return ModelAnalysisData::Of(m_model_object).FindBondGroupEntry(class_key);
     }
