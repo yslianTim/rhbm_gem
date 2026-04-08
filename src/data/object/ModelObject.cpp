@@ -1,4 +1,5 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
@@ -297,6 +298,11 @@ void ModelObject::ApplySymmetrySelection(bool is_asymmetry)
 {
     FilterSelectionFromSymmetry(is_asymmetry);
     RebuildSelection();
+}
+
+ModelAnalysisEditor ModelObject::EditAnalysis()
+{
+    return ModelAnalysisEditor(*this);
 }
 
 ModelAnalysisView ModelObject::GetAnalysisView() const

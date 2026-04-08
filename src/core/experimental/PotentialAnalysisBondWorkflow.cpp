@@ -2,11 +2,10 @@
 
 #include "command/MapSampling.hpp"
 #include "command/PotentialAnalysisCommand.hpp"
-#include "data/detail/LocalPotentialEntry.hpp"
-#include "data/detail/ModelAnalysisData.hpp"
 #include <rhbm_gem/data/object/BondObject.hpp>
-#include "data/detail/GroupPotentialEntry.hpp"
+#include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -21,6 +20,7 @@
 #include <atomic>
 #include <memory>
 #include <tuple>
+#include <unordered_map>
 #include <vector>
 
 #ifdef USE_OPENMP
@@ -66,12 +66,12 @@ void RunBondSampling(
     const auto & bond_list{ model_object.GetSelectedBonds() };
     const auto bond_size{ bond_list.size() };
     size_t bond_count{ 0 };
-    std::vector<LocalPotentialEntry *> local_entry_list;
+    auto analysis{ model_object.EditAnalysis() };
+    std::vector<MutableLocalPotentialView> local_entry_list;
     local_entry_list.reserve(bond_size);
     for (auto * bond : bond_list)
     {
-        local_entry_list.emplace_back(
-            &ModelAnalysisData::Of(model_object).EnsureBondLocalEntry(*bond));
+        local_entry_list.emplace_back(analysis.EnsureBondLocalPotential(*bond));
     }
 
 #ifdef USE_OPENMP
@@ -81,7 +81,7 @@ void RunBondSampling(
         for (size_t i = 0; i < bond_size; i++)
         {
             auto bond{ bond_list[i] };
-            auto * entry{ local_entry_list[i] };
+            auto entry{ local_entry_list[i] };
             auto bond_vector{ bond->GetBondVector() };
             auto bond_position{ bond->GetPosition() };
             constexpr float adjusted_rate{ 0.0f };
@@ -90,18 +90,21 @@ void RunBondSampling(
                 bond_position[1] + 0.5f * bond_vector[1] * adjusted_rate,
                 bond_position[2] + 0.5f * bond_vector[2] * adjusted_rate
             };
-            entry->SetDistanceAndMapValueList(
+            auto distance_and_map_value_list{
                 SampleMapValues(
                     map_object,
                     *sampler,
                     adjusted_position,
-                    bond_vector));
-            entry->SetDataset(
+                    bond_vector)
+            };
+            entry.SetDistanceAndMapValueList(distance_and_map_value_list);
+            entry.SetDataset(LocalPotentialDataset{
                 GausLinearTransformHelper::MapValueTransform(
-                    entry->GetDistanceAndMapValueList(),
+                    distance_and_map_value_list,
                     options.fit_range_min,
-                    options.fit_range_max));
-            entry->SetAlphaR(options.alpha_r);
+                    options.fit_range_max)
+            });
+            entry.SetAlphaR(options.alpha_r);
             #pragma omp critical
             {
                 bond_count++;
@@ -113,19 +116,22 @@ void RunBondSampling(
     for (size_t i = 0; i < bond_size; i++)
     {
         auto bond{ bond_list[i] };
-        auto * entry{ local_entry_list[i] };
-        entry->SetDistanceAndMapValueList(
+        auto entry{ local_entry_list[i] };
+        auto distance_and_map_value_list{
             SampleMapValues(
                 map_object,
                 *sampler,
                 bond->GetPosition(),
-                bond->GetBondVector()));
-        entry->SetDataset(
+                bond->GetBondVector())
+        };
+        entry.SetDistanceAndMapValueList(distance_and_map_value_list);
+        entry.SetDataset(LocalPotentialDataset{
             GausLinearTransformHelper::MapValueTransform(
-                entry->GetDistanceAndMapValueList(),
+                distance_and_map_value_list,
                 options.fit_range_min,
-                options.fit_range_max));
-        entry->SetAlphaR(options.alpha_r);
+                options.fit_range_max)
+        });
+        entry.SetAlphaR(options.alpha_r);
         bond_count++;
         Logger::ProgressPercent(bond_count, bond_size);
     }
@@ -136,15 +142,12 @@ void RunBondGrouping(ModelObject & model_object)
 {
     ScopeTimer timer("PotentialAnalysisBondWorkflow::RunBondGroupClassification");
     Logger::Log(LogLevel::Info, "Bond Classification Summary:");
-    auto & analysis_data{ ModelAnalysisData::Of(model_object) };
-    analysis_data.RebuildBondGroupEntriesFromSelection(model_object);
+    auto analysis{ model_object.EditAnalysis() };
+    analysis.RebuildBondGroupsFromSelection();
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupBondClassCount(); i++)
     {
         const auto & class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
-        const auto * group_potential_entry{ analysis_data.FindBondGroupEntry(class_key) };
-        const auto group_size{
-            group_potential_entry == nullptr ? 0U : group_potential_entry->GroupCount()
-        };
+        const auto group_size{ analysis.CollectBondGroupKeys(class_key).size() };
         Logger::Log(
             LogLevel::Info,
             " - Class type: " + class_key + " include "
@@ -171,12 +174,12 @@ void RunLocalBondFitting(
     std::atomic<size_t> bond_count{ 0 };
     const auto & selected_bond_list{ context.model_object.GetSelectedBonds() };
     const auto selected_bond_size{ selected_bond_list.size() };
-    std::vector<LocalPotentialEntry *> local_entry_list;
+    auto analysis{ context.model_object.EditAnalysis() };
+    std::vector<MutableLocalPotentialView> local_entry_list;
     local_entry_list.reserve(selected_bond_size);
     for (auto * bond : selected_bond_list)
     {
-        local_entry_list.emplace_back(
-            &ModelAnalysisData::Of(context.model_object).EnsureBondLocalEntry(*bond));
+        local_entry_list.emplace_back(analysis.EnsureBondLocalPotential(*bond));
     }
     Logger::Log(
         LogLevel::Info,
@@ -186,8 +189,8 @@ void RunLocalBondFitting(
 #endif
     for (size_t i = 0; i < selected_bond_size; i++)
     {
-        auto * local_entry{ local_entry_list[i] };
-        const auto & data_entry_list{ local_entry->GetDataset().basis_and_response_entry_list };
+        auto local_entry{ local_entry_list[i] };
+        const auto & data_entry_list{ local_entry.GetDataset().basis_and_response_entry_list };
         const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
         const auto result{
             HRLModelAlgorithms::EstimateBetaMDPDE(
@@ -197,7 +200,7 @@ void RunLocalBondFitting(
                 MakePotentialAnalysisExecutionOptions(context.thread_size, true))
         };
 
-        local_entry->SetFitResult(LocalPotentialEntry::FitResult{
+        local_entry.SetFitResult(LocalPotentialFitResult{
             result.beta_ols,
             result.beta_mdpde,
             result.sigma_square,
@@ -206,16 +209,20 @@ void RunLocalBondFitting(
         });
 
         Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
-        model_par_init(0) = local_entry->GetMomentZeroEstimate();
-        model_par_init(1) = local_entry->GetMomentTwoEstimate();
+        model_par_init(0) =
+            ModelAnalysisView::RequireLocalPotential(*selected_bond_list[i]).GetMomentZeroEstimate();
+        model_par_init(1) =
+            ModelAnalysisView::RequireLocalPotential(*selected_bond_list[i]).GetMomentTwoEstimate();
         auto gaus_ols{
             GausLinearTransformHelper::BuildGaus3DModel(result.beta_ols, model_par_init)
         };
         auto gaus_mdpde{
             GausLinearTransformHelper::BuildGaus3DModel(result.beta_mdpde, model_par_init)
         };
-        local_entry->SetEstimateOLS(GaussianEstimate{ gaus_ols(0), gaus_ols(1) });
-        local_entry->SetEstimateMDPDE(GaussianEstimate{ gaus_mdpde(0), gaus_mdpde(1) });
+        local_entry.SetEstimates(LocalPotentialEstimates{
+            GaussianEstimate{ gaus_ols(0), gaus_ols(1) },
+            GaussianEstimate{ gaus_mdpde(0), gaus_mdpde(1) }
+        });
 
 #ifdef USE_OPENMP
         #pragma omp critical
@@ -231,15 +238,19 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
 {
     ScopeTimer timer("PotentialAnalysisBondWorkflow::RunBondPotentialFitting");
     constexpr int basis_size{ 2 };
+    auto analysis{ context.model_object.EditAnalysis() };
+    std::unordered_map<const BondObject *, MutableLocalPotentialView> local_entry_map;
+    local_entry_map.reserve(context.model_object.GetSelectedBondCount());
+    for (auto * bond : context.model_object.GetSelectedBonds())
+    {
+        local_entry_map.emplace(bond, analysis.EnsureBondLocalPotential(*bond));
+    }
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupBondClassCount(); i++)
     {
         const auto & class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
         Logger::Log(LogLevel::Info, "Class type: " + class_key);
 
-        const auto & analysis_state{ ModelAnalysisData::Of(context.model_object) };
-        auto group_potential_entry{
-            analysis_state.FindBondGroupEntry(class_key) };
-        auto group_keys{ analysis_state.CollectBondGroupKeys(class_key) };
+        auto group_keys{ analysis.CollectBondGroupKeys(class_key) };
         const auto group_key_size{ group_keys.size() };
         std::atomic<size_t> key_count{ 0 };
 
@@ -249,7 +260,7 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
         for (size_t idx = 0; idx < group_key_size; idx++)
         {
             auto group_key{ group_keys[idx] };
-            const auto & bond_list{ group_potential_entry->GetMembers(group_key) };
+            const auto & bond_list{ analysis.GetBondGroupMembers(group_key, class_key) };
             const auto group_size{ bond_list.size() };
             std::vector<std::vector<Eigen::VectorXd>> data_entry_list;
             std::vector<Eigen::VectorXd> beta_mdpde_list;
@@ -263,13 +274,9 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
             data_covariance_list.reserve(group_size);
             for (const auto & bond : bond_list)
             {
-                auto * local_entry{ analysis_state.FindBondLocalEntry(*bond) };
-                if (local_entry == nullptr)
-                {
-                    throw std::runtime_error("Bond local entry is not available.");
-                }
-                const auto & dataset{ local_entry->GetDataset() };
-                const auto & fit_result{ local_entry->GetFitResult() };
+                const auto local_entry{ local_entry_map.at(bond) };
+                const auto & dataset{ local_entry.GetDataset() };
+                const auto & fit_result{ local_entry.GetFitResult() };
                 data_entry_list.emplace_back(dataset.basis_and_response_entry_list);
                 beta_mdpde_list.emplace_back(fit_result.beta_mdpde);
                 sigma_square_list.emplace_back(fit_result.sigma_square);
@@ -306,7 +313,7 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
             auto count{ 0 };
             for (const auto & bond : bond_list)
             {
-                auto * bond_entry{ ModelAnalysisData::Of(context.model_object).FindBondLocalEntry(*bond) };
+                auto bond_entry{ local_entry_map.at(bond) };
                 const auto beta_vector_posterior{
                     result.beta_posterior_array.col(static_cast<Eigen::Index>(count))
                 };
@@ -323,9 +330,9 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
                 GaussianPosterior posterior;
                 posterior.estimate = GaussianEstimate{ posterior_estimate(0), posterior_estimate(1) };
                 posterior.variance = GaussianEstimate{ posterior_variance(0), posterior_variance(1) };
-                bond_entry->SetAnnotation(
+                bond_entry.SetAnnotation(
                     class_key,
-                    LocalPotentialAnnotation{
+                    LocalPotentialAnnotationData{
                         posterior,
                         static_cast<bool>(result.outlier_flag_array(count)),
                         result.statistical_distance_array(count)
@@ -337,13 +344,16 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
             #pragma omp critical
 #endif
             {
-                group_potential_entry->SetGroupStatistics(
+                analysis.SetBondGroupStatistics(
                     group_key,
-                    GaussianEstimate{ gaus_group_mean(0), gaus_group_mean(1) },
-                    GaussianEstimate{ gaus_group_mdpde(0), gaus_group_mdpde(1) },
-                    GaussianEstimate{ prior_estimate(0), prior_estimate(1) },
-                    GaussianEstimate{ prior_variance(0), prior_variance(1) },
-                    context.options.alpha_g);
+                    class_key,
+                    GroupPotentialStatistics{
+                        GaussianEstimate{ gaus_group_mean(0), gaus_group_mean(1) },
+                        GaussianEstimate{ gaus_group_mdpde(0), gaus_group_mdpde(1) },
+                        GaussianEstimate{ prior_estimate(0), prior_estimate(1) },
+                        GaussianEstimate{ prior_variance(0), prior_variance(1) },
+                        context.options.alpha_g
+                    });
                 key_count++;
                 Logger::ProgressBar(key_count, group_key_size);
             }
