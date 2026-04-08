@@ -185,31 +185,24 @@ ModelObject::ModelObject(const ModelObject & other) :
     AttachOwnedObjects();
 
     auto copy_group_entries =
-        [&atom_ptr_map, &bond_ptr_map](
+        [](
             const auto & source_map,
+            auto copy_members,
             auto set_entry)
         {
             for (const auto & [class_key, entry] : source_map)
             {
                 auto cloned_entry{ std::make_unique<GroupPotentialEntry>() };
-                for (const auto & [group_key, bucket] : entry.Entries())
+                for (const auto group_key : entry.CollectGroupKeys())
                 {
-                    auto & cloned_bucket{ cloned_entry->EnsureGroup(group_key) };
-                    cloned_bucket.mean = bucket.mean;
-                    cloned_bucket.mdpde = bucket.mdpde;
-                    cloned_bucket.prior = bucket.prior;
-                    cloned_bucket.prior_variance = bucket.prior_variance;
-                    cloned_bucket.alpha_g = bucket.alpha_g;
-                    cloned_bucket.atom_members.reserve(bucket.atom_members.size());
-                    for (auto * atom : bucket.atom_members)
-                    {
-                        cloned_bucket.atom_members.emplace_back(atom_ptr_map.at(atom));
-                    }
-                    cloned_bucket.bond_members.reserve(bucket.bond_members.size());
-                    for (auto * bond : bucket.bond_members)
-                    {
-                        cloned_bucket.bond_members.emplace_back(bond_ptr_map.at(bond));
-                    }
+                    cloned_entry->SetGroupStatistics(
+                        group_key,
+                        entry.GetMean(group_key),
+                        entry.GetMDPDE(group_key),
+                        entry.GetPrior(group_key),
+                        entry.GetPriorVariance(group_key),
+                        entry.GetAlphaG(group_key));
+                    copy_members(entry, group_key, *cloned_entry);
                 }
                 set_entry(class_key, std::move(cloned_entry));
             }
@@ -218,12 +211,28 @@ ModelObject::ModelObject(const ModelObject & other) :
     const auto & source_analysis_data{ ModelAnalysisData::Of(other) };
     copy_group_entries(
         source_analysis_data.AtomGroupEntries(),
+        [&atom_ptr_map](const auto & entry, GroupKey group_key, GroupPotentialEntry & cloned_entry)
+        {
+            cloned_entry.ReserveAtomMembers(group_key, entry.GetAtomMemberCount(group_key));
+            for (auto * atom : entry.GetAtomMembers(group_key))
+            {
+                cloned_entry.AddAtomMember(group_key, *atom_ptr_map.at(atom));
+            }
+        },
         [this](const std::string & class_key, std::unique_ptr<GroupPotentialEntry> entry)
         {
             m_analysis_data->EnsureAtomGroupEntry(class_key) = std::move(*entry);
         });
     copy_group_entries(
         source_analysis_data.BondGroupEntries(),
+        [&bond_ptr_map](const auto & entry, GroupKey group_key, GroupPotentialEntry & cloned_entry)
+        {
+            cloned_entry.ReserveBondMembers(group_key, entry.GetBondMemberCount(group_key));
+            for (auto * bond : entry.GetBondMembers(group_key))
+            {
+                cloned_entry.AddBondMember(group_key, *bond_ptr_map.at(bond));
+            }
+        },
         [this](const std::string & class_key, std::unique_ptr<GroupPotentialEntry> entry)
         {
             m_analysis_data->EnsureBondGroupEntry(class_key) = std::move(*entry);

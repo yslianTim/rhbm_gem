@@ -402,7 +402,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
         for (size_t idx = 0; idx < group_key_size; idx++)
         {
             auto group_key{ group_keys[idx] };
-            const auto & atom_list{ group_potential_entry->EnsureGroup(group_key).atom_members };
+            const auto & atom_list{ group_potential_entry->GetAtomMembers(group_key) };
             auto group_size{ atom_list.size() };
             std::vector<std::vector<Eigen::VectorXd>> data_entry_list;
             std::vector<Eigen::VectorXd> beta_mdpde_list;
@@ -426,7 +426,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
                 data_covariance_list.emplace_back(fit_result.data_covariance);
             }
             auto alpha_g{ (RequestOptions().training_alpha_flag) ?
-                group_potential_entry->EnsureGroup(group_key).alpha_g : RequestOptions().alpha_g
+                group_potential_entry->GetAlphaG(group_key) : RequestOptions().alpha_g
             };
             const auto input = HRLDataTransform::BuildGroupInput(
                 basis_size,
@@ -488,12 +488,13 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
             #pragma omp critical
 #endif
             {
-                auto & bucket{ group_potential_entry->EnsureGroup(group_key) };
-                bucket.mean = GaussianEstimate{ gaus_group_mean(0), gaus_group_mean(1) };
-                bucket.mdpde = GaussianEstimate{ gaus_group_mdpde(0), gaus_group_mdpde(1) };
-                bucket.prior = GaussianEstimate{ prior_estimate(0), prior_estimate(1) };
-                bucket.prior_variance = GaussianEstimate{ prior_variance(0), prior_variance(1) };
-                bucket.alpha_g = alpha_g;
+                group_potential_entry->SetGroupStatistics(
+                    group_key,
+                    GaussianEstimate{ gaus_group_mean(0), gaus_group_mean(1) },
+                    GaussianEstimate{ gaus_group_mdpde(0), gaus_group_mdpde(1) },
+                    GaussianEstimate{ prior_estimate(0), prior_estimate(1) },
+                    GaussianEstimate{ prior_variance(0), prior_variance(1) },
+                    alpha_g);
                 key_count++;
                 Logger::ProgressBar(key_count, group_key_size);
             }
@@ -782,7 +783,7 @@ void RunAtomGroupingWorkflow(ModelObject & model_object)
         const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
         const auto * group_potential_entry{ analysis_data.FindAtomGroupEntry(class_key) };
         const auto group_size{
-            group_potential_entry == nullptr ? 0U : group_potential_entry->Entries().size()
+            group_potential_entry == nullptr ? 0U : group_potential_entry->GroupCount()
         };
         Logger::Log(
             LogLevel::Info,
@@ -915,11 +916,10 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining()
             ChemicalDataHelper::GetComponentAtomClassKey())
     };
     std::vector<std::vector<AtomObject *>> atom_list_set;
-    atom_list_set.reserve(component_group_potential_entry->Entries().size());
-    for (const auto & [group_key, bucket] : component_group_potential_entry->Entries())
+    atom_list_set.reserve(component_group_potential_entry->GroupCount());
+    for (const auto group_key : component_group_potential_entry->CollectGroupKeys())
     {
-        (void)group_key;
-        const auto & group_atom_list{ bucket.atom_members };
+        const auto & group_atom_list{ component_group_potential_entry->GetAtomMembers(group_key) };
         if (group_atom_list.size() < 10) continue;
         if (group_atom_list.front()->IsMainChainAtom() == false) continue;
         atom_list_set.emplace_back(group_atom_list);
@@ -937,10 +937,9 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining()
         const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
         auto group_potential_entry{
             ModelAnalysisData::Of(*m_model_object).FindAtomGroupEntry(class_key) };
-        for (const auto & [group_key, bucket] : group_potential_entry->Entries())
+        for (const auto group_key : group_potential_entry->CollectGroupKeys())
         {
-            (void)bucket;
-            group_potential_entry->EnsureGroup(group_key).alpha_g = alpha_g;
+            group_potential_entry->SetAlphaG(group_key, alpha_g);
         }
     }
 

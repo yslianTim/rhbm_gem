@@ -104,27 +104,25 @@ inline void BuildMapValueScatterGraph(
 {
     const ModelPotentialView entry1_view{ *model1 };
     const ModelPotentialView entry2_view{ *model2 };
-    const auto * group1{ entry1_view.TryGetAtomGroup(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) };
-    if (group1 == nullptr)
+    const auto & class_key{ ChemicalDataHelper::GetSimpleAtomClassKey() };
+    if (!entry1_view.HasAtomGroup(group_key, class_key) ||
+        !entry2_view.HasAtomGroup(group_key, class_key))
     {
         return;
     }
-    const auto * group2{ entry2_view.TryGetAtomGroup(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) };
-    if (group2 == nullptr)
-    {
-        return;
-    }
+    const auto & group1{ entry1_view.GetAtomObjectList(group_key, class_key) };
+    const auto & group2{ entry2_view.GetAtomObjectList(group_key, class_key) };
 
     std::unordered_map<int, AtomObject *> model1_atom_map;
-    model1_atom_map.reserve(group1->atom_members.size());
-    for (auto * atom_object : group1->atom_members)
+    model1_atom_map.reserve(group1.size());
+    for (auto * atom_object : group1)
     {
         model1_atom_map[atom_object->GetSerialID()] = atom_object;
     }
 
     std::unordered_map<int, AtomObject *> model2_atom_map;
-    model2_atom_map.reserve(group2->atom_members.size());
-    for (auto * atom_object : group2->atom_members)
+    model2_atom_map.reserve(group2.size());
+    for (auto * atom_object : group2)
     {
         model2_atom_map[atom_object->GetSerialID()] = atom_object;
     }

@@ -235,7 +235,7 @@ TEST(DataObjectRuntimeBehaviorTest, RebuildAtomGroupEntriesFromSelectionTracksOn
 
     model->SelectAllAtoms(false);
     model->SetAtomSelected(first_atom->GetSerialID(), true);
-    analysis_data.EnsureAtomGroupEntry("stale_atom_class").EnsureGroup(999).atom_members.emplace_back(second_atom);
+    analysis_data.EnsureAtomGroupEntry("stale_atom_class").AddAtomMember(999, *second_atom);
 
     analysis_data.RebuildAtomGroupEntriesFromSelection(*model);
 
@@ -244,11 +244,10 @@ TEST(DataObjectRuntimeBehaviorTest, RebuildAtomGroupEntriesFromSelectionTracksOn
     ASSERT_NE(simple_group_entry, nullptr);
 
     size_t member_count{ 0 };
-    for (const auto & [group_key, bucket] : simple_group_entry->Entries())
+    for (const auto group_key : simple_group_entry->CollectGroupKeys())
     {
-        (void)group_key;
-        member_count += bucket.atom_members.size();
-        for (const auto * atom : bucket.atom_members)
+        member_count += simple_group_entry->GetAtomMemberCount(group_key);
+        for (const auto * atom : simple_group_entry->GetAtomMembers(group_key))
         {
             ASSERT_NE(atom, nullptr);
             EXPECT_EQ(atom, first_atom);
@@ -263,11 +262,10 @@ TEST(DataObjectRuntimeBehaviorTest, RebuildAtomGroupEntriesFromSelectionTracksOn
     simple_group_entry = analysis_data.FindAtomGroupEntry(simple_class_key);
     ASSERT_NE(simple_group_entry, nullptr);
     member_count = 0;
-    for (const auto & [group_key, bucket] : simple_group_entry->Entries())
+    for (const auto group_key : simple_group_entry->CollectGroupKeys())
     {
-        (void)group_key;
-        member_count += bucket.atom_members.size();
-        for (const auto * atom : bucket.atom_members)
+        member_count += simple_group_entry->GetAtomMemberCount(group_key);
+        for (const auto * atom : simple_group_entry->GetAtomMembers(group_key))
         {
             ASSERT_NE(atom, nullptr);
             EXPECT_EQ(atom, second_atom);
@@ -284,17 +282,16 @@ TEST(DataObjectRuntimeBehaviorTest, RebuildBondGroupEntriesFromSelectionTracksOn
     const auto & simple_class_key{ ChemicalDataHelper::GetSimpleBondClassKey() };
 
     model->SelectAllBonds(false);
-    analysis_data.EnsureBondGroupEntry("stale_bond_class").EnsureGroup(888).bond_members.emplace_back(bond);
+    analysis_data.EnsureBondGroupEntry("stale_bond_class").AddBondMember(888, *bond);
     analysis_data.RebuildBondGroupEntriesFromSelection(*model);
 
     EXPECT_EQ(analysis_data.FindBondGroupEntry("stale_bond_class"), nullptr);
     const auto * simple_group_entry{ analysis_data.FindBondGroupEntry(simple_class_key) };
     ASSERT_NE(simple_group_entry, nullptr);
     size_t member_count{ 0 };
-    for (const auto & [group_key, bucket] : simple_group_entry->Entries())
+    for (const auto group_key : simple_group_entry->CollectGroupKeys())
     {
-        (void)group_key;
-        member_count += bucket.bond_members.size();
+        member_count += simple_group_entry->GetBondMemberCount(group_key);
     }
     EXPECT_EQ(member_count, 0U);
 
@@ -307,11 +304,10 @@ TEST(DataObjectRuntimeBehaviorTest, RebuildBondGroupEntriesFromSelectionTracksOn
     simple_group_entry = analysis_data.FindBondGroupEntry(simple_class_key);
     ASSERT_NE(simple_group_entry, nullptr);
     member_count = 0;
-    for (const auto & [group_key, bucket] : simple_group_entry->Entries())
+    for (const auto group_key : simple_group_entry->CollectGroupKeys())
     {
-        (void)group_key;
-        member_count += bucket.bond_members.size();
-        for (const auto * group_bond : bucket.bond_members)
+        member_count += simple_group_entry->GetBondMemberCount(group_key);
+        for (const auto * group_bond : simple_group_entry->GetBondMembers(group_key))
         {
             ASSERT_NE(group_bond, nullptr);
             EXPECT_EQ(group_bond, bond);
@@ -332,10 +328,10 @@ TEST(DataObjectRuntimeBehaviorTest, CollectAtomGroupKeysReturnsRebuiltGroupKeySe
     const auto group_keys{ analysis_data.CollectAtomGroupKeys(simple_class_key) };
     const auto * group_entry{ analysis_data.FindAtomGroupEntry(simple_class_key) };
     ASSERT_NE(group_entry, nullptr);
-    EXPECT_EQ(group_keys.size(), group_entry->Entries().size());
+    EXPECT_EQ(group_keys.size(), group_entry->GroupCount());
     for (const auto & group_key : group_keys)
     {
-        EXPECT_NE(group_entry->FindGroup(group_key), nullptr);
+        EXPECT_TRUE(group_entry->HasGroup(group_key));
     }
 
     EXPECT_TRUE(analysis_data.CollectAtomGroupKeys("missing_atom_class").empty());
@@ -353,10 +349,10 @@ TEST(DataObjectRuntimeBehaviorTest, CollectBondGroupKeysReturnsRebuiltGroupKeySe
     const auto group_keys{ analysis_data.CollectBondGroupKeys(simple_class_key) };
     const auto * group_entry{ analysis_data.FindBondGroupEntry(simple_class_key) };
     ASSERT_NE(group_entry, nullptr);
-    EXPECT_EQ(group_keys.size(), group_entry->Entries().size());
+    EXPECT_EQ(group_keys.size(), group_entry->GroupCount());
     for (const auto & group_key : group_keys)
     {
-        EXPECT_NE(group_entry->FindGroup(group_key), nullptr);
+        EXPECT_TRUE(group_entry->HasGroup(group_key));
     }
 
     EXPECT_TRUE(analysis_data.CollectBondGroupKeys("missing_bond_class").empty());

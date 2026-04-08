@@ -19,19 +19,7 @@ namespace {
 
 std::vector<GroupKey> CollectGroupKeys(const GroupPotentialEntry * entry)
 {
-    if (entry == nullptr)
-    {
-        return {};
-    }
-
-    std::vector<GroupKey> group_keys;
-    group_keys.reserve(entry->Entries().size());
-    for (const auto & [group_key, bucket] : entry->Entries())
-    {
-        (void)bucket;
-        group_keys.emplace_back(group_key);
-    }
-    return group_keys;
+    return entry == nullptr ? std::vector<GroupKey>{} : entry->CollectGroupKeys();
 }
 
 } // namespace
@@ -132,7 +120,7 @@ void ModelAnalysisData::RebuildAtomGroupEntriesFromSelection(const ModelObject &
         for (auto * atom : model_object.GetSelectedAtoms())
         {
             const auto group_key{ AtomClassifier::GetGroupKeyInClass(atom, class_key) };
-            group_entry.EnsureGroup(group_key).atom_members.emplace_back(atom);
+            group_entry.AddAtomMember(group_key, *atom);
         }
     }
 }
@@ -147,7 +135,7 @@ void ModelAnalysisData::RebuildBondGroupEntriesFromSelection(const ModelObject &
         for (auto * bond : model_object.GetSelectedBonds())
         {
             const auto group_key{ BondClassifier::GetGroupKeyInClass(bond, class_key) };
-            group_entry.EnsureGroup(group_key).bond_members.emplace_back(bond);
+            group_entry.AddBondMember(group_key, *bond);
         }
     }
 }
@@ -164,7 +152,11 @@ std::vector<GroupKey> ModelAnalysisData::CollectBondGroupKeys(const std::string 
 
 GroupPotentialEntry & ModelAnalysisData::EnsureAtomGroupEntry(const std::string & class_key)
 {
-    return m_atom_group_entry_map[class_key];
+    auto [iter, inserted]{
+        m_atom_group_entry_map.try_emplace(class_key) };
+    (void)inserted;
+    iter->second.MarkAsAtomEntry();
+    return iter->second;
 }
 
 GroupPotentialEntry * ModelAnalysisData::FindAtomGroupEntry(const std::string & class_key)
@@ -215,7 +207,11 @@ const LocalPotentialEntry * ModelAnalysisData::FindAtomLocalEntry(const AtomObje
 
 GroupPotentialEntry & ModelAnalysisData::EnsureBondGroupEntry(const std::string & class_key)
 {
-    return m_bond_group_entry_map[class_key];
+    auto [iter, inserted]{
+        m_bond_group_entry_map.try_emplace(class_key) };
+    (void)inserted;
+    iter->second.MarkAsBondEntry();
+    return iter->second;
 }
 
 GroupPotentialEntry * ModelAnalysisData::FindBondGroupEntry(const std::string & class_key)

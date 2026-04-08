@@ -1095,25 +1095,27 @@ void SaveAtomGroupPotentialEntryList(
     const std::string & class_key)
 {
     SQLiteStatementBatch batch{ database, std::string(kInsertModelAtomGroupSql) };
-    for (const auto & group_pair : group_entry.Entries())
+    for (const auto group_key : group_entry.CollectGroupKeys())
     {
         batch.Execute([&](rhbm_gem::SQLiteWrapper & statement_db)
         {
-            const auto group_key{ group_pair.first };
-            const auto & bucket{ group_pair.second };
+            const auto & mean{ group_entry.GetMean(group_key) };
+            const auto & mdpde{ group_entry.GetMDPDE(group_key) };
+            const auto & prior{ group_entry.GetPrior(group_key) };
+            const auto & prior_variance{ group_entry.GetPriorVariance(group_key) };
             statement_db.Bind<std::string>(1, key_tag);
             statement_db.Bind<std::string>(2, class_key);
             statement_db.Bind<GroupKey>(3, group_key);
-            statement_db.Bind<int>(4, static_cast<int>(bucket.atom_members.size()));
-            statement_db.Bind<double>(5, bucket.mean.amplitude);
-            statement_db.Bind<double>(6, bucket.mean.width);
-            statement_db.Bind<double>(7, bucket.mdpde.amplitude);
-            statement_db.Bind<double>(8, bucket.mdpde.width);
-            statement_db.Bind<double>(9, bucket.prior.amplitude);
-            statement_db.Bind<double>(10, bucket.prior.width);
-            statement_db.Bind<double>(11, bucket.prior_variance.amplitude);
-            statement_db.Bind<double>(12, bucket.prior_variance.width);
-            statement_db.Bind<double>(13, bucket.alpha_g);
+            statement_db.Bind<int>(4, static_cast<int>(group_entry.GetAtomMemberCount(group_key)));
+            statement_db.Bind<double>(5, mean.amplitude);
+            statement_db.Bind<double>(6, mean.width);
+            statement_db.Bind<double>(7, mdpde.amplitude);
+            statement_db.Bind<double>(8, mdpde.width);
+            statement_db.Bind<double>(9, prior.amplitude);
+            statement_db.Bind<double>(10, prior.width);
+            statement_db.Bind<double>(11, prior_variance.amplitude);
+            statement_db.Bind<double>(12, prior_variance.width);
+            statement_db.Bind<double>(13, group_entry.GetAlphaG(group_key));
         });
     }
 }
@@ -1125,25 +1127,27 @@ void SaveBondGroupPotentialEntryList(
     const std::string & class_key)
 {
     SQLiteStatementBatch batch{ database, std::string(kInsertModelBondGroupSql) };
-    for (const auto & group_pair : group_entry.Entries())
+    for (const auto group_key : group_entry.CollectGroupKeys())
     {
         batch.Execute([&](rhbm_gem::SQLiteWrapper & statement_db)
         {
-            const auto group_key{ group_pair.first };
-            const auto & bucket{ group_pair.second };
+            const auto & mean{ group_entry.GetMean(group_key) };
+            const auto & mdpde{ group_entry.GetMDPDE(group_key) };
+            const auto & prior{ group_entry.GetPrior(group_key) };
+            const auto & prior_variance{ group_entry.GetPriorVariance(group_key) };
             statement_db.Bind<std::string>(1, key_tag);
             statement_db.Bind<std::string>(2, class_key);
             statement_db.Bind<GroupKey>(3, group_key);
-            statement_db.Bind<int>(4, static_cast<int>(bucket.bond_members.size()));
-            statement_db.Bind<double>(5, bucket.mean.amplitude);
-            statement_db.Bind<double>(6, bucket.mean.width);
-            statement_db.Bind<double>(7, bucket.mdpde.amplitude);
-            statement_db.Bind<double>(8, bucket.mdpde.width);
-            statement_db.Bind<double>(9, bucket.prior.amplitude);
-            statement_db.Bind<double>(10, bucket.prior.width);
-            statement_db.Bind<double>(11, bucket.prior_variance.amplitude);
-            statement_db.Bind<double>(12, bucket.prior_variance.width);
-            statement_db.Bind<double>(13, bucket.alpha_g);
+            statement_db.Bind<int>(4, static_cast<int>(group_entry.GetBondMemberCount(group_key)));
+            statement_db.Bind<double>(5, mean.amplitude);
+            statement_db.Bind<double>(6, mean.width);
+            statement_db.Bind<double>(7, mdpde.amplitude);
+            statement_db.Bind<double>(8, mdpde.width);
+            statement_db.Bind<double>(9, prior.amplitude);
+            statement_db.Bind<double>(10, prior.width);
+            statement_db.Bind<double>(11, prior_variance.amplitude);
+            statement_db.Bind<double>(12, prior_variance.width);
+            statement_db.Bind<double>(13, group_entry.GetAlphaG(group_key));
         });
     }
 }
@@ -1340,23 +1344,24 @@ void LoadAtomGroupPotentialEntryList(
         }
 
         const auto group_key{ database.GetColumn<GroupKey>(0) };
-        auto & bucket{ group_entry.EnsureGroup(group_key) };
-        bucket.atom_members.reserve(static_cast<size_t>(database.GetColumn<int>(1)));
-        bucket.mean = rhbm_gem::GaussianEstimate{
-            database.GetColumn<double>(2), database.GetColumn<double>(3) };
-        bucket.mdpde = rhbm_gem::GaussianEstimate{
-            database.GetColumn<double>(4), database.GetColumn<double>(5) };
-        bucket.prior = rhbm_gem::GaussianEstimate{
-            database.GetColumn<double>(6), database.GetColumn<double>(7) };
-        bucket.prior_variance = rhbm_gem::GaussianEstimate{
-            database.GetColumn<double>(8), database.GetColumn<double>(9) };
-        bucket.alpha_g = database.GetColumn<double>(10);
+        group_entry.ReserveAtomMembers(group_key, static_cast<size_t>(database.GetColumn<int>(1)));
+        group_entry.SetGroupStatistics(
+            group_key,
+            rhbm_gem::GaussianEstimate{
+                database.GetColumn<double>(2), database.GetColumn<double>(3) },
+            rhbm_gem::GaussianEstimate{
+                database.GetColumn<double>(4), database.GetColumn<double>(5) },
+            rhbm_gem::GaussianEstimate{
+                database.GetColumn<double>(6), database.GetColumn<double>(7) },
+            rhbm_gem::GaussianEstimate{
+                database.GetColumn<double>(8), database.GetColumn<double>(9) },
+            database.GetColumn<double>(10));
     }
 
     for (auto & atom : model_obj.GetSelectedAtoms())
     {
         const auto group_key{ rhbm_gem::AtomClassifier::GetGroupKeyInClass(atom, class_key) };
-        group_entry.EnsureGroup(group_key).atom_members.emplace_back(atom);
+        group_entry.AddAtomMember(group_key, *atom);
     }
 }
 
@@ -1385,23 +1390,24 @@ void LoadBondGroupPotentialEntryList(
         }
 
         const auto group_key{ database.GetColumn<GroupKey>(0) };
-        auto & bucket{ group_entry.EnsureGroup(group_key) };
-        bucket.bond_members.reserve(static_cast<size_t>(database.GetColumn<int>(1)));
-        bucket.mean = rhbm_gem::GaussianEstimate{
-            database.GetColumn<double>(2), database.GetColumn<double>(3) };
-        bucket.mdpde = rhbm_gem::GaussianEstimate{
-            database.GetColumn<double>(4), database.GetColumn<double>(5) };
-        bucket.prior = rhbm_gem::GaussianEstimate{
-            database.GetColumn<double>(6), database.GetColumn<double>(7) };
-        bucket.prior_variance = rhbm_gem::GaussianEstimate{
-            database.GetColumn<double>(8), database.GetColumn<double>(9) };
-        bucket.alpha_g = database.GetColumn<double>(10);
+        group_entry.ReserveBondMembers(group_key, static_cast<size_t>(database.GetColumn<int>(1)));
+        group_entry.SetGroupStatistics(
+            group_key,
+            rhbm_gem::GaussianEstimate{
+                database.GetColumn<double>(2), database.GetColumn<double>(3) },
+            rhbm_gem::GaussianEstimate{
+                database.GetColumn<double>(4), database.GetColumn<double>(5) },
+            rhbm_gem::GaussianEstimate{
+                database.GetColumn<double>(6), database.GetColumn<double>(7) },
+            rhbm_gem::GaussianEstimate{
+                database.GetColumn<double>(8), database.GetColumn<double>(9) },
+            database.GetColumn<double>(10));
     }
 
     for (auto & bond : model_obj.GetSelectedBonds())
     {
         const auto group_key{ rhbm_gem::BondClassifier::GetGroupKeyInClass(bond, class_key) };
-        group_entry.EnsureGroup(group_key).bond_members.emplace_back(bond);
+        group_entry.AddBondMember(group_key, *bond);
     }
 }
 
@@ -1416,7 +1422,7 @@ void SaveAnalysis(
 
     for (const auto & [class_key, group_entry] : analysis_data.AtomGroupEntries())
     {
-        if (group_entry.Entries().empty())
+        if (group_entry.GroupCount() == 0)
         {
             continue;
         }
@@ -1425,7 +1431,7 @@ void SaveAnalysis(
     }
     for (const auto & [class_key, group_entry] : analysis_data.BondGroupEntries())
     {
-        if (group_entry.Entries().empty())
+        if (group_entry.GroupCount() == 0)
         {
             continue;
         }

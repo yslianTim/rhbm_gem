@@ -143,7 +143,7 @@ void RunBondGrouping(ModelObject & model_object)
         const auto & class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
         const auto * group_potential_entry{ analysis_data.FindBondGroupEntry(class_key) };
         const auto group_size{
-            group_potential_entry == nullptr ? 0U : group_potential_entry->Entries().size()
+            group_potential_entry == nullptr ? 0U : group_potential_entry->GroupCount()
         };
         Logger::Log(
             LogLevel::Info,
@@ -249,7 +249,7 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
         for (size_t idx = 0; idx < group_key_size; idx++)
         {
             auto group_key{ group_keys[idx] };
-            const auto & bond_list{ group_potential_entry->EnsureGroup(group_key).bond_members };
+            const auto & bond_list{ group_potential_entry->GetBondMembers(group_key) };
             const auto group_size{ bond_list.size() };
             std::vector<std::vector<Eigen::VectorXd>> data_entry_list;
             std::vector<Eigen::VectorXd> beta_mdpde_list;
@@ -337,12 +337,13 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
             #pragma omp critical
 #endif
             {
-                auto & bucket{ group_potential_entry->EnsureGroup(group_key) };
-                bucket.mean = GaussianEstimate{ gaus_group_mean(0), gaus_group_mean(1) };
-                bucket.mdpde = GaussianEstimate{ gaus_group_mdpde(0), gaus_group_mdpde(1) };
-                bucket.prior = GaussianEstimate{ prior_estimate(0), prior_estimate(1) };
-                bucket.prior_variance = GaussianEstimate{ prior_variance(0), prior_variance(1) };
-                bucket.alpha_g = context.options.alpha_g;
+                group_potential_entry->SetGroupStatistics(
+                    group_key,
+                    GaussianEstimate{ gaus_group_mean(0), gaus_group_mean(1) },
+                    GaussianEstimate{ gaus_group_mdpde(0), gaus_group_mdpde(1) },
+                    GaussianEstimate{ prior_estimate(0), prior_estimate(1) },
+                    GaussianEstimate{ prior_variance(0), prior_variance(1) },
+                    context.options.alpha_g);
                 key_count++;
                 Logger::ProgressBar(key_count, group_key_size);
             }

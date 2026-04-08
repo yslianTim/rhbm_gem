@@ -54,110 +54,88 @@ public:
         return ArrayStats<double>::ComputeMin(gaus_estimate_list.data(), gaus_estimate_list.size());
     }
 
-    const GroupPotentialBucket * TryGetAtomGroup(
-        GroupKey group_key,
-        const std::string & class_key,
-        bool verbose = false) const
-    {
-        auto * entry{ FindAtomGroupEntry(class_key) };
-        if (entry == nullptr)
-        {
-            if (verbose)
-            {
-                Logger::Log(LogLevel::Error, "Atom class key not found: " + class_key);
-            }
-            return nullptr;
-        }
-        const auto * group{ entry->FindGroup(group_key) };
-        if (group == nullptr)
-        {
-            if (verbose)
-            {
-                LogMissingAtomGroup(group_key, class_key);
-            }
-            return nullptr;
-        }
-        return group;
-    }
-
-    const GroupPotentialBucket * TryGetBondGroup(
-        GroupKey group_key,
-        const std::string & class_key,
-        bool verbose = false) const
-    {
-        auto * entry{ FindBondGroupEntry(class_key) };
-        if (entry == nullptr)
-        {
-            if (verbose)
-            {
-                Logger::Log(LogLevel::Error, "Bond class key not found: " + class_key);
-            }
-            return nullptr;
-        }
-        const auto * group{ entry->FindGroup(group_key) };
-        if (group == nullptr)
-        {
-            if (verbose)
-            {
-                LogMissingBondGroup(group_key, class_key);
-            }
-            return nullptr;
-        }
-        return group;
-    }
-
     bool HasAtomGroup(GroupKey group_key, const std::string & class_key, bool verbose=false) const
     {
-        return TryGetAtomGroup(group_key, class_key, verbose) != nullptr;
+        return TryGetAtomGroupEntry(group_key, class_key, verbose) != nullptr;
     }
 
     bool HasBondGroup(GroupKey group_key, const std::string & class_key, bool verbose=false) const
     {
-        return TryGetBondGroup(group_key, class_key, verbose) != nullptr;
+        return TryGetBondGroupEntry(group_key, class_key, verbose) != nullptr;
     }
 
-    const GroupPotentialBucket & GetAtomGroup(
+    const GaussianEstimate & GetAtomGroupMean(GroupKey group_key, const std::string & class_key) const
+    {
+        return RequireAtomGroupEntry(group_key, class_key).GetMean(group_key);
+    }
+
+    const GaussianEstimate & GetBondGroupMean(GroupKey group_key, const std::string & class_key) const
+    {
+        return RequireBondGroupEntry(group_key, class_key).GetMean(group_key);
+    }
+
+    const GaussianEstimate & GetAtomGroupMDPDE(GroupKey group_key, const std::string & class_key) const
+    {
+        return RequireAtomGroupEntry(group_key, class_key).GetMDPDE(group_key);
+    }
+
+    const GaussianEstimate & GetBondGroupMDPDE(GroupKey group_key, const std::string & class_key) const
+    {
+        return RequireBondGroupEntry(group_key, class_key).GetMDPDE(group_key);
+    }
+
+    const GaussianEstimate & GetAtomGroupPrior(GroupKey group_key, const std::string & class_key) const
+    {
+        return RequireAtomGroupEntry(group_key, class_key).GetPrior(group_key);
+    }
+
+    const GaussianEstimate & GetBondGroupPrior(GroupKey group_key, const std::string & class_key) const
+    {
+        return RequireBondGroupEntry(group_key, class_key).GetPrior(group_key);
+    }
+
+    GaussianPosterior GetAtomGroupPriorPosterior(
         GroupKey group_key,
         const std::string & class_key) const
     {
-        return *RequireAtomGroup(group_key, class_key);
+        return RequireAtomGroupEntry(group_key, class_key).BuildPriorPosterior(group_key);
     }
 
-    const GroupPotentialBucket & GetBondGroup(
+    GaussianPosterior GetBondGroupPriorPosterior(
         GroupKey group_key,
         const std::string & class_key) const
     {
-        return *RequireBondGroup(group_key, class_key);
+        return RequireBondGroupEntry(group_key, class_key).BuildPriorPosterior(group_key);
     }
 
     double GetAtomGausEstimatePrior(GroupKey group_key, const std::string & class_key, int par_id) const
     {
-        return RequireAtomGroup(group_key, class_key)->prior.GetParameter(par_id);
+        return GetAtomGroupPrior(group_key, class_key).GetParameter(par_id);
     }
 
     double GetBondGausEstimatePrior(GroupKey group_key, const std::string & class_key, int par_id) const
     {
-        return RequireBondGroup(group_key, class_key)->prior.GetParameter(par_id);
+        return GetBondGroupPrior(group_key, class_key).GetParameter(par_id);
     }
 
     double GetAtomGausVariancePrior(GroupKey group_key, const std::string & class_key, int par_id) const
     {
-        return BuildPriorPosterior(*RequireAtomGroup(group_key, class_key)).GetVariance(par_id);
+        return GetAtomGroupPriorPosterior(group_key, class_key).GetVariance(par_id);
     }
 
     double GetBondGausVariancePrior(GroupKey group_key, const std::string & class_key, int par_id) const
     {
-        return BuildPriorPosterior(*RequireBondGroup(group_key, class_key)).GetVariance(par_id);
+        return GetBondGroupPriorPosterior(group_key, class_key).GetVariance(par_id);
     }
 
     const std::vector<AtomObject *> & GetAtomObjectList(GroupKey group_key, const std::string & class_key) const
     {
-        return RequireAtomGroup(group_key, class_key)->atom_members;
+        return RequireAtomGroupEntry(group_key, class_key).GetAtomMembers(group_key);
     }
 
     const std::vector<BondObject *> & GetBondObjectList(GroupKey group_key, const std::string & class_key) const
     {
-        return RequireBondGroup(group_key, class_key)->bond_members;
+        return RequireBondGroupEntry(group_key, class_key).GetBondMembers(group_key);
     }
 
     std::vector<AtomObject *> GetOutlierAtomObjectList(GroupKey group_key, const std::string & class_key) const
@@ -199,7 +177,12 @@ public:
 
     double GetAtomAlphaG(GroupKey group_key, const std::string & class_key) const
     {
-        return RequireAtomGroup(group_key, class_key)->alpha_g;
+        return RequireAtomGroupEntry(group_key, class_key).GetAlphaG(group_key);
+    }
+
+    double GetBondAlphaG(GroupKey group_key, const std::string & class_key) const
+    {
+        return RequireBondGroupEntry(group_key, class_key).GetAlphaG(group_key);
     }
 
     Residue DecodeResidueFromAtomGroupKey(GroupKey group_key, const std::string & class_key) const
@@ -248,24 +231,78 @@ public:
     }
 
 private:
-    const GroupPotentialBucket * RequireAtomGroup(GroupKey group_key, const std::string & class_key) const
+    const GroupPotentialEntry * TryGetAtomGroupEntry(
+        GroupKey group_key,
+        const std::string & class_key,
+        bool verbose) const
     {
-        auto * group{ TryGetAtomGroup(group_key, class_key, true) };
-        if (group == nullptr)
+        auto * entry{ FindAtomGroupEntry(class_key) };
+        if (entry == nullptr)
+        {
+            if (verbose)
+            {
+                Logger::Log(LogLevel::Error, "Atom class key not found: " + class_key);
+            }
+            return nullptr;
+        }
+        if (!entry->HasGroup(group_key))
+        {
+            if (verbose)
+            {
+                LogMissingAtomGroup(group_key, class_key);
+            }
+            return nullptr;
+        }
+        return entry;
+    }
+
+    const GroupPotentialEntry * TryGetBondGroupEntry(
+        GroupKey group_key,
+        const std::string & class_key,
+        bool verbose) const
+    {
+        auto * entry{ FindBondGroupEntry(class_key) };
+        if (entry == nullptr)
+        {
+            if (verbose)
+            {
+                Logger::Log(LogLevel::Error, "Bond class key not found: " + class_key);
+            }
+            return nullptr;
+        }
+        if (!entry->HasGroup(group_key))
+        {
+            if (verbose)
+            {
+                LogMissingBondGroup(group_key, class_key);
+            }
+            return nullptr;
+        }
+        return entry;
+    }
+
+    const GroupPotentialEntry & RequireAtomGroupEntry(
+        GroupKey group_key,
+        const std::string & class_key) const
+    {
+        auto * entry{ TryGetAtomGroupEntry(group_key, class_key, true) };
+        if (entry == nullptr)
         {
             throw std::runtime_error("Atom group key is not available.");
         }
-        return group;
+        return *entry;
     }
 
-    const GroupPotentialBucket * RequireBondGroup(GroupKey group_key, const std::string & class_key) const
+    const GroupPotentialEntry & RequireBondGroupEntry(
+        GroupKey group_key,
+        const std::string & class_key) const
     {
-        auto * group{ TryGetBondGroup(group_key, class_key, true) };
-        if (group == nullptr)
+        auto * entry{ TryGetBondGroupEntry(group_key, class_key, true) };
+        if (entry == nullptr)
         {
             throw std::runtime_error("Bond group key is not available.");
         }
-        return group;
+        return *entry;
     }
 
     const GroupPotentialEntry * FindAtomGroupEntry(const std::string & class_key) const
@@ -318,14 +355,6 @@ private:
                 << " not found.";
         }
         Logger::Log(LogLevel::Error, oss.str());
-    }
-
-    static GaussianPosterior BuildPriorPosterior(const GroupPotentialBucket & group)
-    {
-        GaussianPosterior posterior;
-        posterior.estimate = group.prior;
-        posterior.variance = group.prior_variance;
-        return posterior;
     }
 };
 
