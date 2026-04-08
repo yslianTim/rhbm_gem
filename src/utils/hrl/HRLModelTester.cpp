@@ -113,6 +113,42 @@ std::vector<std::tuple<float, float>> HRLModelTester::BuildRandomGausSamplingEnt
     return sampling_entry_list;
 }
 
+std::vector<std::tuple<float, float>> HRLModelTester::BuildRandomGausSamplingEntryWithNeighborhood(
+    size_t sampling_entry_size, const Eigen::VectorXd & gaus_par, double neighbor_distance)
+{
+    CheckGausParametersDimension(gaus_par);
+    auto amplitude{ gaus_par(0) };
+    auto width{ gaus_par(1) };
+    auto intersect{ 0.0 };
+    Eigen::VectorXd atom_center{ Eigen::VectorXd::Zero(3) };
+    Eigen::VectorXd neighbor1_center{ Eigen::VectorXd::Zero(3) };
+    neighbor1_center(0) += neighbor_distance;
+    std::vector<Eigen::VectorXd> neighbor_center_list;
+    neighbor_center_list.emplace_back(neighbor1_center);
+
+    std::uniform_real_distribution<> dist_distance(m_x_min, m_x_max);
+    std::uniform_real_distribution<> dist_cosTheta(-1.0, 1.0);
+    std::uniform_real_distribution<> dist_phi(0.0, Constants::two_pi);
+    std::vector<std::tuple<float, float>> sampling_entry_list;
+    sampling_entry_list.reserve(sampling_entry_size);
+    for (size_t i = 0; i < sampling_entry_size; i++)
+    {
+        auto r{ dist_distance(m_generator) };
+        auto cosTheta{ dist_cosTheta(m_generator) };
+        auto phi{ dist_phi(m_generator) };
+        Eigen::VectorXd point{ Eigen::VectorXd::Zero(3) };
+        point(0) = r;
+        point(1) = r * std::sqrt(1.0 - std::pow(cosTheta, 2)) * std::cos(phi);
+        point(2) = r * std::sqrt(1.0 - std::pow(cosTheta, 2)) * std::sin(phi);
+        auto y{
+            amplitude * GausLinearTransformHelper::GetGaussianPesponseAtPointWithNeighborhood(
+                point, atom_center, neighbor_center_list, width) + intersect
+        };
+        sampling_entry_list.emplace_back(r, y);
+    }
+    return sampling_entry_list;
+}
+
 std::vector<Eigen::VectorXd> HRLModelTester::BuildRandomLinearDataEntry(
     size_t sampling_entry_size,
     const Eigen::VectorXd & gaus_par,
@@ -121,6 +157,30 @@ std::vector<Eigen::VectorXd> HRLModelTester::BuildRandomLinearDataEntry(
 {
     auto sampling_entries{
         BuildRandomGausSamplingEntry(static_cast<size_t>(sampling_entry_size), gaus_par, outlier_ratio)
+    };
+    auto linear_data_entry_list{
+        GausLinearTransformHelper::MapValueTransform(sampling_entries, m_x_min, m_x_max)
+    };
+    auto max_response{
+        gaus_par(0) * GausLinearTransformHelper::GetGaussianResponseAtDistance(0.0, gaus_par(1))
+    };
+    std::normal_distribution<> dist_error(0.0, error_sigma * max_response);
+    for (auto & data_entry : linear_data_entry_list)
+    {
+        data_entry(m_linear_basis_size) += dist_error(m_generator);
+    }
+    return linear_data_entry_list;
+}
+
+std::vector<Eigen::VectorXd> HRLModelTester::BuildRandomLinearDataEntryWithNeighborhood(
+    size_t sampling_entry_size,
+    const Eigen::VectorXd & gaus_par,
+    double error_sigma,
+    double neighbor_distance)
+{
+    auto sampling_entries{
+        BuildRandomGausSamplingEntryWithNeighborhood(
+            static_cast<size_t>(sampling_entry_size), gaus_par, neighbor_distance)
     };
     auto linear_data_entry_list{
         GausLinearTransformHelper::MapValueTransform(sampling_entries, m_x_min, m_x_max)
@@ -335,6 +395,105 @@ bool HRLModelTester::RunMuMDPDETest(
         residual_mean_mdpde_list.at(j) = residual_matrix_mdpde_list.at(j).rowwise().mean();
         residual_sigma_median_list.at(j) =
             (residual_matrix_median_list.at(j).colwise() - residual_mean_median_list.at(j)).rowwise().norm()
+            / std::sqrt(m_replica_size - 1);
+        residual_sigma_mdpde_list.at(j) =
+            (residual_matrix_mdpde_list.at(j).colwise() - residual_mean_mdpde_list.at(j)).rowwise().norm()
+            / std::sqrt(m_replica_size - 1);
+    }
+
+    return true;
+}
+
+bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
+    const std::vector<double> & alpha_r_list,
+    std::vector<Eigen::VectorXd> & residual_mean_ols_list,
+    std::vector<Eigen::VectorXd> & residual_mean_mdpde_list,
+    std::vector<Eigen::VectorXd> & residual_sigma_ols_list,
+    std::vector<Eigen::VectorXd> & residual_sigma_mdpde_list,
+    const Eigen::VectorXd & gaus_true,
+    int sampling_entry_size,
+    double data_error_sigma,
+    double neighbor_distance,
+    int thread_size)
+{
+#ifndef USE_OPENMP
+    (void)thread_size;
+#endif
+
+    auto local_alpha_r_list{ alpha_r_list };
+    auto alpha_size{ local_alpha_r_list.size() + 1 }; // add one for training alpha_r
+    std::vector<Eigen::MatrixXd> residual_matrix_ols_list(alpha_size);
+    std::vector<Eigen::MatrixXd> residual_matrix_mdpde_list(alpha_size);
+    residual_matrix_ols_list.assign(
+        alpha_size, Eigen::MatrixXd::Zero(m_gaus_par_size, m_replica_size)
+    );
+    residual_matrix_mdpde_list.assign(
+        alpha_size, Eigen::MatrixXd::Zero(m_gaus_par_size, m_replica_size)
+    );
+    residual_mean_ols_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
+    residual_mean_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
+    residual_sigma_ols_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
+    residual_sigma_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
+
+    const size_t subset_size_alpha_r{ 5 };
+    std::vector<double> train_alpha_r_list{ 0.0, 0.1, 0.2, 0.3, 0.4, 0.5 };
+    local_alpha_r_list.emplace_back(0.0);
+
+#ifdef USE_OPENMP
+    #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
+#endif
+    for (int i = 0; i < m_replica_size; i++)
+    {
+        auto data_entry_list{
+            BuildRandomLinearDataEntryWithNeighborhood(
+                static_cast<size_t>(sampling_entry_size), gaus_true, data_error_sigma, neighbor_distance
+            )
+        };
+
+        auto error_array{
+            HRLAlphaTrainer::EvaluateAlphaR(
+                data_entry_list,
+                subset_size_alpha_r,
+                train_alpha_r_list
+            )
+        };
+        int error_min_id;
+        error_array.minCoeff(&error_min_id);
+        auto alpha_r_train{ train_alpha_r_list.at(static_cast<size_t>(error_min_id)) };
+        local_alpha_r_list.back() = alpha_r_train; // update training alpha_r for each replica
+
+        const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
+        HRLExecutionOptions options;
+        options.quiet_mode = true;
+        options.thread_size = thread_size;
+
+        for (size_t j = 0; j < alpha_size; j++)
+        {
+            const auto beta_result = HRLModelAlgorithms::EstimateBetaMDPDE(
+                local_alpha_r_list.at(j),
+                dataset.X,
+                dataset.y,
+                options
+            );
+
+            Eigen::VectorXd gaus_0{ Eigen::VectorXd::Zero(m_gaus_par_size) };
+            auto gaus_ols{
+                GausLinearTransformHelper::BuildGaus3DModel(beta_result.beta_ols, gaus_0)
+            };
+            auto gaus_mdpde{
+                GausLinearTransformHelper::BuildGaus3DModel(beta_result.beta_mdpde, gaus_0)
+            };
+            residual_matrix_ols_list.at(j).col(i) = CalculateNormalizedResidual(gaus_ols, gaus_true);
+            residual_matrix_mdpde_list.at(j).col(i) = CalculateNormalizedResidual(gaus_mdpde, gaus_true);
+        }
+    }
+
+    for (size_t j = 0; j < alpha_size; j++)
+    {
+        residual_mean_ols_list.at(j) = residual_matrix_ols_list.at(j).rowwise().mean();
+        residual_mean_mdpde_list.at(j) = residual_matrix_mdpde_list.at(j).rowwise().mean();
+        residual_sigma_ols_list.at(j) =
+            (residual_matrix_ols_list.at(j).colwise() - residual_mean_ols_list.at(j)).rowwise().norm()
             / std::sqrt(m_replica_size - 1);
         residual_sigma_mdpde_list.at(j) =
             (residual_matrix_mdpde_list.at(j).colwise() - residual_mean_mdpde_list.at(j)).rowwise().norm()

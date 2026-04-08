@@ -17,6 +17,11 @@ public:
     ~GausLinearTransformHelper() = default;
 
     static double GetGaussianResponseAtDistance(double distance, double width, int dimension=3);
+    static double GetGaussianPesponseAtPoint(
+        const Eigen::VectorXd & point, const Eigen::VectorXd & center, double width);
+    static double GetGaussianPesponseAtPointWithNeighborhood(
+        const Eigen::VectorXd & point, const Eigen::VectorXd & center,
+        std::vector<Eigen::VectorXd> & neighbor_center_list, double width);
     static std::vector<Eigen::VectorXd> MapValueTransform(
         const std::vector<std::tuple<float, float>> & distance_and_map_value_list,
         double x_min, double x_max, int basis_size=2

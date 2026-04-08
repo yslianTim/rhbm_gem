@@ -20,6 +20,43 @@ double GausLinearTransformHelper::GetGaussianResponseAtDistance(
     return y;
 }
 
+double GausLinearTransformHelper::GetGaussianPesponseAtPoint(
+    const Eigen::VectorXd & point, const Eigen::VectorXd & center, double width)
+{
+    if (width <= 0.0)
+    {
+        throw std::runtime_error("The gaus width should be positive value.");
+    }
+
+    double y{ 0.0 };
+    double coeff{ 1.0 };
+    double width_square{ width * width };
+    coeff = 1.0 / std::pow(Constants::two_pi * width_square, 1.5);
+    y = coeff * std::exp(-0.5 * (point - center).squaredNorm() / width_square);
+    return y;
+}
+
+double GausLinearTransformHelper::GetGaussianPesponseAtPointWithNeighborhood(
+    const Eigen::VectorXd & point, const Eigen::VectorXd & center,
+    std::vector<Eigen::VectorXd> & neighbor_center_list, double width)
+{
+    if (width <= 0.0)
+    {
+        throw std::runtime_error("The gaus width should be positive value.");
+    }
+
+    double y{ 0.0 };
+    double coeff{ 1.0 };
+    double width_square{ width * width };
+    coeff = 1.0 / std::pow(Constants::two_pi * width_square, 1.5);
+    y = coeff * std::exp(-0.5 * (point - center).squaredNorm() / width_square);
+    for (const auto & neighbor_center : neighbor_center_list)
+    {
+        y += coeff * std::exp(-0.5 * (point - neighbor_center).squaredNorm() / width_square);
+    }
+    return y;
+}
+
 std::vector<Eigen::VectorXd> GausLinearTransformHelper::MapValueTransform(
     const std::vector<std::tuple<float, float>> & distance_and_map_value_list,
     double x_min, double x_max, int basis_size)

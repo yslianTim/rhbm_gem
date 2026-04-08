@@ -529,6 +529,92 @@ void RunSimulationTestOnModelAlphaMember(const HRLModelTestExecutionContext & op
     );
 }
 
+void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & options)
+{
+    ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnNeighborDistance");
+    
+    const int gaus_par_size{ 3 };
+    const int linear_basis_size{ 2 };
+    Eigen::VectorXd model_par_prior{ Eigen::VectorXd::Zero(gaus_par_size) };
+    model_par_prior(0) = 1.0;
+    model_par_prior(1) = 0.5;
+    model_par_prior(2) = 0.1;
+
+    auto replica_size{ 100 };
+    auto sampling_entry_size{ 100 };
+    auto tester{ std::make_unique<HRLModelTester>(gaus_par_size, linear_basis_size, replica_size) };
+    tester->SetFittingRange(options.options.fit_range_min, options.options.fit_range_max);
+
+    std::vector<double> alpha_r_list{ 0.1 };
+    std::vector<double> error_list{ 0.1 };
+    std::vector<Eigen::MatrixXd> mean_matrix_ols_list;
+    std::vector<Eigen::MatrixXd> mean_matrix_mdpde_list;
+    std::vector<Eigen::MatrixXd> mean_matrix_train_list;
+    std::vector<Eigen::MatrixXd> sigma_matrix_ols_list;
+    std::vector<Eigen::MatrixXd> sigma_matrix_mdpde_list;
+    std::vector<Eigen::MatrixXd> sigma_matrix_train_list;
+    
+    auto distance_size{ 15 };
+    auto distance_step_size{ 0.1 };
+    std::vector<double> distance_list(static_cast<size_t>(distance_size));
+    for (size_t i = 0; i < static_cast<size_t>(distance_size); i++)
+    {
+        distance_list[i] = 2.5 - static_cast<double>(i) * distance_step_size;
+    }
+
+    for (auto error_sigma : error_list)
+    {
+        Eigen::MatrixXd mean_matrix_ols{ Eigen::MatrixXd::Zero(gaus_par_size, distance_size) };
+        Eigen::MatrixXd mean_matrix_mdpde{ Eigen::MatrixXd::Zero(gaus_par_size, distance_size) };
+        Eigen::MatrixXd mean_matrix_train{ Eigen::MatrixXd::Zero(gaus_par_size, distance_size) };
+        Eigen::MatrixXd sigma_matrix_ols{ Eigen::MatrixXd::Zero(gaus_par_size, distance_size) };
+        Eigen::MatrixXd sigma_matrix_mdpde{ Eigen::MatrixXd::Zero(gaus_par_size, distance_size) };
+        Eigen::MatrixXd sigma_matrix_train{ Eigen::MatrixXd::Zero(gaus_par_size, distance_size) };
+        for (int i = 0; i < distance_size; i++)
+        {
+            std::vector<Eigen::VectorXd> residual_mean_ols_list;
+            std::vector<Eigen::VectorXd> residual_mean_mdpde_list;
+            std::vector<Eigen::VectorXd> residual_sigma_ols_list;
+            std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
+            tester->RunBetaMDPDEWithNeighborhoodTest(
+                alpha_r_list,
+                residual_mean_ols_list, residual_mean_mdpde_list,
+                residual_sigma_ols_list, residual_sigma_mdpde_list,
+                model_par_prior, sampling_entry_size, error_sigma,
+                distance_list[static_cast<size_t>(i)], options.thread_size
+            );
+
+            mean_matrix_ols.col(i) = residual_mean_ols_list.front();
+            sigma_matrix_ols.col(i) = residual_sigma_ols_list.front();
+            mean_matrix_mdpde.col(i) = residual_mean_mdpde_list.front();
+            sigma_matrix_mdpde.col(i) = residual_sigma_mdpde_list.front();
+            mean_matrix_train.col(i) = residual_mean_mdpde_list.back();
+            sigma_matrix_train.col(i) = residual_sigma_mdpde_list.back();
+
+            Logger::Log(LogLevel::Info,
+                std::string("Distance: ") + std::to_string(distance_list[static_cast<size_t>(i)])
+                + " , OLS: " + std::to_string(mean_matrix_ols.col(i)(0)) + " +- " + std::to_string(sigma_matrix_ols.col(i)(0))
+                + " , MDPDE: " + std::to_string(mean_matrix_mdpde.col(i)(0)) + " +- " + std::to_string(sigma_matrix_mdpde.col(i)(0))
+            );
+
+        }
+        mean_matrix_ols_list.emplace_back(mean_matrix_ols);
+        mean_matrix_mdpde_list.emplace_back(mean_matrix_mdpde);
+        mean_matrix_train_list.emplace_back(mean_matrix_train);
+        sigma_matrix_ols_list.emplace_back(sigma_matrix_ols);
+        sigma_matrix_mdpde_list.emplace_back(sigma_matrix_mdpde);
+        sigma_matrix_train_list.emplace_back(sigma_matrix_train);
+    }
+
+    //PrintDataOutlierResult(
+    //    options,
+    //    "bias_from_neighbor_atom.pdf",
+    //    distance_list,
+    //    mean_matrix_ols_list, mean_matrix_mdpde_list, mean_matrix_train_list,
+    //    sigma_matrix_ols_list, sigma_matrix_mdpde_list, sigma_matrix_train_list
+    //);
+}
+
 void PrintDataOutlierResult(
     const HRLModelTestExecutionContext & options,
     const std::string & name,
@@ -1026,6 +1112,9 @@ bool RunHRLModelTestWorkflow(const HRLModelTestExecutionContext & options)
         return true;
     case TesterType::MODEL_ALPHA_MEMBER:
         RunSimulationTestOnModelAlphaMember(options);
+        return true;
+    case TesterType::NEIGHBOR_DISTANCE:
+        RunSimulationTestOnNeighborDistance(options);
         return true;
     default:
         Logger::Log(
