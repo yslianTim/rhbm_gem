@@ -34,7 +34,7 @@ void ApplyModelSelection(
                        atom.GetChainID(),
                        atom.GetResidue(),
                        atom.GetElement())
-                && rhbm_gem::ModelAnalysisView::HasLocalAnalysis(atom);
+                && rhbm_gem::LocalPotentialView::For(atom).IsAvailable();
         });
 }
 }

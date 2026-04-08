@@ -101,16 +101,6 @@ public:
     void RebuildAtomGroupsFromSelection();
     void RebuildBondGroupsFromSelection();
 
-    std::vector<GroupKey> CollectAtomGroupKeys(const std::string & class_key) const;
-    std::vector<GroupKey> CollectBondGroupKeys(const std::string & class_key) const;
-
-    const std::vector<AtomObject *> & GetAtomGroupMembers(
-        GroupKey group_key,
-        const std::string & class_key) const;
-    const std::vector<BondObject *> & GetBondGroupMembers(
-        GroupKey group_key,
-        const std::string & class_key) const;
-
     void SetAtomGroupStatistics(
         GroupKey group_key,
         const std::string & class_key,

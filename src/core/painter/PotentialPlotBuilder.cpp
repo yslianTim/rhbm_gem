@@ -53,11 +53,11 @@ LocalPotentialView PotentialPlotBuilder::GetLocalEntry() const
 {
     if (m_atom_object != nullptr)
     {
-        return ModelAnalysisView::RequireLocalPotential(*m_atom_object);
+        return LocalPotentialView::RequireFor(*m_atom_object);
     }
     if (m_bond_object != nullptr)
     {
-        return ModelAnalysisView::RequireLocalPotential(*m_bond_object);
+        return LocalPotentialView::RequireFor(*m_bond_object);
     }
     throw std::runtime_error("Local entry is not available.");
 }
@@ -74,7 +74,7 @@ bool PotentialPlotBuilder::IsModelObjectAvailable() const
 
 bool PotentialPlotBuilder::IsAtomLocalEntryAvailable() const
 {
-    return m_atom_object != nullptr && ModelAnalysisView::HasLocalAnalysis(*m_atom_object);
+    return m_atom_object != nullptr && LocalPotentialView::For(*m_atom_object).IsAvailable();
 }
 
 size_t PotentialPlotBuilder::GetAtomResidueCount(
@@ -216,7 +216,7 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateAtomGausEstimateHistogram(
     gaus_estimate_list.reserve(atom_list.size());
     for (auto atom : atom_list)
     {
-        const auto local_entry{ ModelAnalysisView::RequireLocalPotential(*atom) };
+        const auto local_entry{ LocalPotentialView::RequireFor(*atom) };
         gaus_estimate_list.emplace_back(local_entry.GetEstimateMDPDE().GetParameter(par_id));
     }
 
@@ -353,7 +353,7 @@ std::vector<std::unique_ptr<TH1D>> PotentialPlotBuilder::CreateMainChainAtomGaus
         }
         auto sequence_id{ atom->GetSequenceID() };
         auto chain_id{ atom->GetChainID() };
-        const auto entry{ ModelAnalysisView::RequireLocalPotential(*atom) };
+        const auto entry{ LocalPotentialView::RequireFor(*atom) };
         auto gaus_value{ entry.GetEstimateMDPDE().GetParameter(par_id) };
         values_map[chain_id][sequence_id].at(id) = gaus_value;
     }
@@ -507,7 +507,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatte
     auto count{ 0 };
     for (auto atom : atom_list)
     {
-        const auto entry{ ModelAnalysisView::RequireLocalPotential(*atom) };
+        const auto entry{ LocalPotentialView::RequireFor(*atom) };
         const auto annotation{ entry.FindAnnotation(class_key) };
         auto is_outlier{ annotation.has_value() && annotation->is_outlier };
         if (select_outliers == true && is_outlier == false)
@@ -600,7 +600,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatte
         {
             continue;
         }
-        const auto entry{ ModelAnalysisView::RequireLocalPotential(*atom) };
+        const auto entry{ LocalPotentialView::RequireFor(*atom) };
         if (reverse == false)
         {
             graph->SetPoint(count, entry.GetEstimateMDPDE().amplitude, entry.GetEstimateMDPDE().width);
@@ -631,7 +631,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBondGausEstimateScatte
         {
             continue;
         }
-        const auto entry{ ModelAnalysisView::RequireLocalPotential(*bond) };
+        const auto entry{ LocalPotentialView::RequireFor(*bond) };
         if (reverse == false)
         {
             graph->SetPoint(count, entry.GetEstimateMDPDE().amplitude, entry.GetEstimateMDPDE().width);
@@ -666,10 +666,10 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateGausEstimateScatterGra
     auto count{ 0 };
     for (auto atom1 : atom_list1)
     {
-        const auto entry1{ ModelAnalysisView::RequireLocalPotential(*atom1) };
+        const auto entry1{ LocalPotentialView::RequireFor(*atom1) };
         for (auto atom2 : atom_list2)
         {
-            const auto entry2{ ModelAnalysisView::RequireLocalPotential(*atom2) };
+            const auto entry2{ LocalPotentialView::RequireFor(*atom2) };
             if (atom1->GetSequenceID() == atom2->GetSequenceID() &&
                 atom1->GetChainID() == atom2->GetChainID())
             {
@@ -738,7 +738,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateInRangeAtomsToGausEsti
     {
         auto in_range_atom_list{
             ModelDerivedState::Of(*model_object).FindAtomsInRange(*model_object, *atom, range) };
-        const auto atom_entry{ ModelAnalysisView::RequireLocalPotential(*atom) };
+        const auto atom_entry{ LocalPotentialView::RequireFor(*atom) };
         graph->SetPoint(
             count,
             static_cast<double>(in_range_atom_list.size()),
@@ -764,7 +764,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateCOMDistanceToGausEstim
     {
         const auto & atom_pos{ atom->GetPositionRef() };
         auto distance{ ArrayStats<float>::ComputeNorm(atom_pos, center_of_mass_pos) };
-        const auto atom_entry{ ModelAnalysisView::RequireLocalPotential(*atom) };
+        const auto atom_entry{ LocalPotentialView::RequireFor(*atom) };
         graph->SetPoint(
             count,
             static_cast<double>(distance),
@@ -811,7 +811,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalLinearModelFunctionOLS
     {
         return nullptr;
     }
-    const auto atom_local_entry{ ModelAnalysisView::RequireLocalPotential(*m_atom_object) };
+    const auto atom_local_entry{ LocalPotentialView::RequireFor(*m_atom_object) };
     const auto beta{ atom_local_entry.GetEstimateOLS().ToBeta() };
     auto beta_0{ beta(0) };
     auto beta_1{ beta(1) };
@@ -824,7 +824,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalLinearModelFunctionMDP
     {
         return nullptr;
     }
-    const auto atom_local_entry{ ModelAnalysisView::RequireLocalPotential(*m_atom_object) };
+    const auto atom_local_entry{ LocalPotentialView::RequireFor(*m_atom_object) };
     const auto beta{ atom_local_entry.GetEstimateMDPDE().ToBeta() };
     auto beta_0{ beta(0) };
     auto beta_1{ beta(1) };
@@ -837,7 +837,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalGausFunctionOLS() cons
     {
         return nullptr;
     }
-    const auto atom_local_entry{ ModelAnalysisView::RequireLocalPotential(*m_atom_object) };
+    const auto atom_local_entry{ LocalPotentialView::RequireFor(*m_atom_object) };
     auto amplitude{ atom_local_entry.GetEstimateOLS().amplitude };
     auto width{ atom_local_entry.GetEstimateOLS().width };
     return ROOTHelper::CreateGaus3DFunctionIn1D("gaus", amplitude, width);
@@ -849,7 +849,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalGausFunctionMDPDE() co
     {
         return nullptr;
     }
-    const auto atom_local_entry{ ModelAnalysisView::RequireLocalPotential(*m_atom_object) };
+    const auto atom_local_entry{ LocalPotentialView::RequireFor(*m_atom_object) };
     auto amplitude{ atom_local_entry.GetEstimateMDPDE().amplitude };
     auto width{ atom_local_entry.GetEstimateMDPDE().width };
     return ROOTHelper::CreateGaus3DFunctionIn1D("gaus", amplitude, width);
@@ -943,7 +943,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateNormalizedAtomGausEsti
         if (atom->GetSpot() != Spot::O) continue;
         if (atom->GetSpecialAtomFlag() == false)
         {
-            const auto entry{ ModelAnalysisView::RequireLocalPotential(*atom) };
+            const auto entry{ LocalPotentialView::RequireFor(*atom) };
             auto sequence_id{ atom->GetSequenceID() };
             auto amplitude_estimate{ entry.GetEstimateMDPDE().amplitude };
             amplitude_diff_to_carbonyl_oxygen_map[sequence_id] = amplitude_estimate - reference_amplitude;
@@ -954,7 +954,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateNormalizedAtomGausEsti
     {
         if (atom->GetElement() != element) continue;
         auto sequence_id{ atom->GetSequenceID() };
-        const auto entry{ ModelAnalysisView::RequireLocalPotential(*atom) };
+        const auto entry{ LocalPotentialView::RequireFor(*atom) };
         auto normalized_amplitude{ entry.GetEstimateMDPDE().amplitude };
         if (amplitude_diff_to_carbonyl_oxygen_map.find(sequence_id) != amplitude_diff_to_carbonyl_oxygen_map.end())
         {
@@ -987,7 +987,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateNormalizedBondGausEsti
     {
         if (bond->GetSpecialBondFlag() == false)
         {
-            const auto entry{ ModelAnalysisView::RequireLocalPotential(*bond) };
+            const auto entry{ LocalPotentialView::RequireFor(*bond) };
             auto sequence_id{ bond->GetAtomObject1()->GetSequenceID() };
             auto amplitude_estimate{ entry.GetEstimateMDPDE().amplitude };
             amplitude_diff_to_carbonyl_oxygen_map[sequence_id] = amplitude_estimate - reference_amplitude;
@@ -998,7 +998,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateNormalizedBondGausEsti
     {
         if (bond->GetAtomObject1()->GetElement() != element) continue;
         auto sequence_id{ bond->GetAtomObject1()->GetSequenceID() };
-        const auto entry{ ModelAnalysisView::RequireLocalPotential(*bond) };
+        const auto entry{ LocalPotentialView::RequireFor(*bond) };
         auto normalized_amplitude{ entry.GetEstimateMDPDE().amplitude };
         if (amplitude_diff_to_carbonyl_oxygen_map.find(sequence_id) != amplitude_diff_to_carbonyl_oxygen_map.end())
         {
@@ -1035,7 +1035,7 @@ PotentialPlotBuilder::CreateAtomMapValueToSequenceIDGraphMap(
         if (atom->GetElement() != AtomClassifier::GetMainChainElement(main_chain_element_id)) continue;
         if (atom->GetSpot() != AtomClassifier::GetMainChainSpot(main_chain_element_id)) continue;
         if (residue != Residue::UNK && atom->GetResidue() != residue) continue;
-        const auto entry{ ModelAnalysisView::RequireLocalPotential(*atom) };
+        const auto entry{ LocalPotentialView::RequireFor(*atom) };
         auto sequence_id{ atom->GetSequenceID() };
         auto chain_id{ atom->GetChainID() };
         if (sequence_id < 0) continue;
@@ -1068,7 +1068,7 @@ PotentialPlotBuilder::CreateAtomQScoreToSequenceIDGraphMap(
     {
         if (atom->GetElement() != AtomClassifier::GetMainChainElement(main_chain_element_id)) continue;
         if (atom->GetSpot() != AtomClassifier::GetMainChainSpot(main_chain_element_id)) continue;
-        const auto entry{ ModelAnalysisView::FindLocalPotential(*atom) };
+        const auto entry{ LocalPotentialView::For(*atom) };
         if (!entry.IsAvailable()) continue;
         auto sequence_id{ atom->GetSequenceID() };
         auto chain_id{ atom->GetChainID() };
@@ -1113,7 +1113,7 @@ PotentialPlotBuilder::CreateAtomGausEstimateToSequenceIDGraphMap(
         if (atom->GetElement() != AtomClassifier::GetMainChainElement(main_chain_element_id)) continue;
         if (atom->GetSpot() != AtomClassifier::GetMainChainSpot(main_chain_element_id)) continue;
         if (residue != Residue::UNK && atom->GetResidue() != residue) continue;
-        const auto entry{ ModelAnalysisView::RequireLocalPotential(*atom) };
+        const auto entry{ LocalPotentialView::RequireFor(*atom) };
         auto sequence_id{ atom->GetSequenceID() };
         auto chain_id{ atom->GetChainID() };
         if (sequence_id < 0) continue;
@@ -1146,7 +1146,7 @@ PotentialPlotBuilder::CreateBondGausEstimateToSequenceIDGraphMap(
     for (auto & bond : GetModelView().GetBondObjectList(group_key, class_key))
     {
         if (residue != Residue::UNK && bond->GetAtomObject1()->GetResidue() != residue) continue;
-        const auto entry{ ModelAnalysisView::RequireLocalPotential(*bond) };
+        const auto entry{ LocalPotentialView::RequireFor(*bond) };
         auto sequence_id{ bond->GetAtomObject1()->GetSequenceID() };
         auto chain_id{ bond->GetAtomObject1()->GetChainID() };
         if (sequence_id < 0) continue;
@@ -1186,7 +1186,7 @@ PotentialPlotBuilder::CreateAtomGausEstimatePosteriorToSequenceIDGraphMap(
         if (atom->GetElement() != AtomClassifier::GetMainChainElement(main_chain_element_id)) continue;
         if (atom->GetSpot() != AtomClassifier::GetMainChainSpot(main_chain_element_id)) continue;
         if (residue != Residue::UNK && atom->GetResidue() != residue) continue;
-        const auto entry{ ModelAnalysisView::RequireLocalPotential(*atom) };
+        const auto entry{ LocalPotentialView::RequireFor(*atom) };
         auto sequence_id{ atom->GetSequenceID() };
         auto chain_id{ atom->GetChainID() };
         if (sequence_id < 0) continue;

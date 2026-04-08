@@ -39,7 +39,7 @@ inline void RequireSelectedAtomsHaveLocalEntries(
 
     for (const auto * atom : model_object.GetSelectedAtoms())
     {
-        if (!ModelAnalysisView::HasLocalAnalysis(*atom))
+        if (!LocalPotentialView::For(*atom).IsAvailable())
         {
             throw std::runtime_error(
                 std::string(painter_name)
@@ -54,7 +54,7 @@ inline void RequireSelectedBondsHaveLocalEntries(
 {
     for (const auto * bond : model_object.GetSelectedBonds())
     {
-        if (!ModelAnalysisView::HasLocalAnalysis(*bond))
+        if (!LocalPotentialView::For(*bond).IsAvailable())
         {
             throw std::runtime_error(
                 std::string(painter_name)

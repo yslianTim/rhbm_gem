@@ -769,7 +769,7 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
             ROOTHelper::SetLineAttribute(graph.get(), 1, 2, static_cast<short>(kAzure-7), 0.3f);
             map_value_graph_list[k].emplace_back(std::move(graph));
             auto map_value_range{ series_ops::ComputeMapValueRange(
-                ModelAnalysisView::RequireLocalPotential(*atom), 0.0) };
+                LocalPotentialView::RequireFor(*atom), 0.0) };
             y_array.emplace_back(std::get<0>(map_value_range));
             y_array.emplace_back(std::get<1>(map_value_range));
         }
@@ -938,7 +938,7 @@ void ModelPainter::PaintBondMapValueMainChain(ModelObject * model_object, const 
             ROOTHelper::SetLineAttribute(graph.get(), 1, 2, static_cast<short>(kAzure-7), 0.3f);
             map_value_graph_list[k].emplace_back(std::move(graph));
             auto map_value_range{ series_ops::ComputeMapValueRange(
-                ModelAnalysisView::RequireLocalPotential(*bond), 0.0) };
+                LocalPotentialView::RequireFor(*bond), 0.0) };
             y_array.emplace_back(std::get<0>(map_value_range));
             y_array.emplace_back(std::get<1>(map_value_range));
         }

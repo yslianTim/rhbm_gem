@@ -3,12 +3,13 @@
 #include <memory>
 #include <string>
 
-#include "data/detail/ModelAnalysisData.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include "painter/PotentialPlotBuilder.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 
 #ifdef HAVE_ROOT
@@ -29,18 +30,19 @@ std::shared_ptr<rg::ModelObject> LoadModelFixture(const std::string & fixture_na
 
 void EnsureLocalPotentialEntries(rg::ModelObject & model)
 {
+    auto analysis{ model.EditAnalysis() };
     for (auto & atom : model.GetAtomList())
     {
-        if (rg::ModelAnalysisData::FindLocalEntry(*atom) == nullptr)
+        if (!rg::LocalPotentialView::For(*atom).IsAvailable())
         {
-            rg::ModelAnalysisData::Of(model).EnsureAtomLocalEntry(*atom);
+            analysis.EnsureAtomLocalPotential(*atom);
         }
     }
     for (auto & bond : model.GetBondList())
     {
-        if (rg::ModelAnalysisData::FindLocalEntry(*bond) == nullptr)
+        if (!rg::LocalPotentialView::For(*bond).IsAvailable())
         {
-            rg::ModelAnalysisData::Of(model).EnsureBondLocalEntry(*bond);
+            analysis.EnsureBondLocalPotential(*bond);
         }
     }
 }

@@ -128,7 +128,7 @@ void ResultDumpCommand::RunAtomOutlierDumping()
             {
                 const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
                 const auto annotation{
-                    ModelAnalysisView::RequireLocalPotential(*atom).FindAnnotation(class_key) };
+                    LocalPotentialView::RequireFor(*atom).FindAnnotation(class_key) };
                 if (!annotation.has_value() || !annotation->is_outlier) continue;
                 outfile << atom->GetSerialID() << ',' << class_key << ','
                         << ChemicalDataHelper::GetLabel(atom->GetResidue()) << ','
@@ -291,7 +291,7 @@ void ResultDumpCommand::RunGausEstimatesDumping()
         outfile << "SerialID,Amplitude,Width,X,Y,Z,Residue,Element,Spot\n";
         for (auto & atom : m_selected_atom_list_map.at(key_tag))
         {
-            const auto entry{ ModelAnalysisView::RequireLocalPotential(*atom) };
+            const auto entry{ LocalPotentialView::RequireFor(*atom) };
             const auto & estimate{ entry.GetEstimateMDPDE() };
             outfile << atom->GetSerialID() << ',' << estimate.amplitude << ','
                     << estimate.width << ',' << atom->GetPosition().at(0) << ','

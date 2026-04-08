@@ -342,7 +342,7 @@ void DemoPainter::PaintAtomMapValueExample(
         ROOTHelper::SetLineAttribute(graph.get(), 1, 5, static_cast<short>(kAzure-7), 0.3f);
         map_value_graph_list.emplace_back(std::move(graph));
         auto map_value_range{ series_ops::ComputeMapValueRange(
-            ModelAnalysisView::RequireLocalPotential(*atom), 0.0) };
+            LocalPotentialView::RequireFor(*atom), 0.0) };
         y_array.emplace_back(std::get<0>(map_value_range));
         y_array.emplace_back(std::get<1>(map_value_range));
     }

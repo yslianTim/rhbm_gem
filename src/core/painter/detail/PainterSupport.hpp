@@ -134,9 +134,9 @@ inline void BuildMapValueScatterGraph(
         }
         auto * atom_object2{ model2_atom_map.at(atom_id) };
         auto data1_array{ series_ops::BuildBinnedDistanceAndMapValueList(
-            ModelAnalysisView::RequireLocalPotential(*atom_object1), bin_size, x_min, x_max) };
+            LocalPotentialView::RequireFor(*atom_object1), bin_size, x_min, x_max) };
         auto data2_array{ series_ops::BuildBinnedDistanceAndMapValueList(
-            ModelAnalysisView::RequireLocalPotential(*atom_object2), bin_size, x_min, x_max) };
+            LocalPotentialView::RequireFor(*atom_object2), bin_size, x_min, x_max) };
         for (size_t i = 0; i < static_cast<size_t>(bin_size); i++)
         {
             graph->SetPoint(count, std::get<1>(data1_array.at(i)), std::get<1>(data2_array.at(i)));

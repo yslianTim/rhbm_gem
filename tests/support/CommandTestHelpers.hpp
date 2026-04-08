@@ -11,7 +11,7 @@
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include "data/detail/LocalPotentialEntry.hpp"
-#include "data/detail/ModelAnalysisData.hpp"
+#include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
@@ -75,9 +75,10 @@ inline void SeedSavedModel(
     auto model{ rhbm_gem::ReadModel(model_path) };
     model->SetKeyTag("model");
     model->SetPdbID(pdb_id);
+    auto analysis{ model->EditAnalysis() };
     for (auto & atom : model->GetAtomList())
     {
-        rhbm_gem::ModelAnalysisData::Of(*model).EnsureAtomLocalEntry(*atom);
+        analysis.EnsureAtomLocalPotential(*atom);
     }
     repository.SaveModel(*model, saved_key);
 }

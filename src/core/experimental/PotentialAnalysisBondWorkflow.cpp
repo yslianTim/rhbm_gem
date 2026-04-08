@@ -144,10 +144,11 @@ void RunBondGrouping(ModelObject & model_object)
     Logger::Log(LogLevel::Info, "Bond Classification Summary:");
     auto analysis{ model_object.EditAnalysis() };
     analysis.RebuildBondGroupsFromSelection();
+    const auto analysis_view{ model_object.GetAnalysisView() };
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupBondClassCount(); i++)
     {
         const auto & class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
-        const auto group_size{ analysis.CollectBondGroupKeys(class_key).size() };
+        const auto group_size{ analysis_view.CollectBondGroupKeys(class_key).size() };
         Logger::Log(
             LogLevel::Info,
             " - Class type: " + class_key + " include "
@@ -210,9 +211,9 @@ void RunLocalBondFitting(
 
         Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
         model_par_init(0) =
-            ModelAnalysisView::RequireLocalPotential(*selected_bond_list[i]).GetMomentZeroEstimate();
+            LocalPotentialView::RequireFor(*selected_bond_list[i]).GetMomentZeroEstimate();
         model_par_init(1) =
-            ModelAnalysisView::RequireLocalPotential(*selected_bond_list[i]).GetMomentTwoEstimate();
+            LocalPotentialView::RequireFor(*selected_bond_list[i]).GetMomentTwoEstimate();
         auto gaus_ols{
             GausLinearTransformHelper::BuildGaus3DModel(result.beta_ols, model_par_init)
         };
@@ -239,6 +240,7 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
     ScopeTimer timer("PotentialAnalysisBondWorkflow::RunBondPotentialFitting");
     constexpr int basis_size{ 2 };
     auto analysis{ context.model_object.EditAnalysis() };
+    const auto analysis_view{ context.model_object.GetAnalysisView() };
     std::unordered_map<const BondObject *, MutableLocalPotentialView> local_entry_map;
     local_entry_map.reserve(context.model_object.GetSelectedBondCount());
     for (auto * bond : context.model_object.GetSelectedBonds())
@@ -250,7 +252,7 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
         const auto & class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
         Logger::Log(LogLevel::Info, "Class type: " + class_key);
 
-        auto group_keys{ analysis.CollectBondGroupKeys(class_key) };
+        auto group_keys{ analysis_view.CollectBondGroupKeys(class_key) };
         const auto group_key_size{ group_keys.size() };
         std::atomic<size_t> key_count{ 0 };
 
@@ -260,7 +262,7 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
         for (size_t idx = 0; idx < group_key_size; idx++)
         {
             auto group_key{ group_keys[idx] };
-            const auto & bond_list{ analysis.GetBondGroupMembers(group_key, class_key) };
+            const auto & bond_list{ analysis_view.GetBondObjectList(group_key, class_key) };
             const auto group_size{ bond_list.size() };
             std::vector<std::vector<Eigen::VectorXd>> data_entry_list;
             std::vector<Eigen::VectorXd> beta_mdpde_list;

@@ -106,16 +106,6 @@ LocalPotentialAnnotation ToDetailAnnotation(const LocalPotentialAnnotationData &
     };
 }
 
-template <typename EntryT>
-const EntryT & RequireGroupEntry(const EntryT * entry, const char * context)
-{
-    if (entry == nullptr)
-    {
-        throw std::runtime_error(std::string(context) + " is not available.");
-    }
-    return *entry;
-}
-
 } // namespace
 
 MutableLocalPotentialView::MutableLocalPotentialView(AtomObject * atom_object) :
@@ -238,36 +228,6 @@ void ModelAnalysisEditor::RebuildAtomGroupsFromSelection()
 void ModelAnalysisEditor::RebuildBondGroupsFromSelection()
 {
     ModelAnalysisData::Of(m_model_object).RebuildBondGroupEntriesFromSelection(m_model_object);
-}
-
-std::vector<GroupKey> ModelAnalysisEditor::CollectAtomGroupKeys(const std::string & class_key) const
-{
-    return ModelAnalysisData::Of(m_model_object).CollectAtomGroupKeys(class_key);
-}
-
-std::vector<GroupKey> ModelAnalysisEditor::CollectBondGroupKeys(const std::string & class_key) const
-{
-    return ModelAnalysisData::Of(m_model_object).CollectBondGroupKeys(class_key);
-}
-
-const std::vector<AtomObject *> & ModelAnalysisEditor::GetAtomGroupMembers(
-    GroupKey group_key,
-    const std::string & class_key) const
-{
-    const auto & entry{ RequireGroupEntry(
-        ModelAnalysisData::Of(m_model_object).FindAtomGroupEntry(class_key),
-        "Atom group entry") };
-    return entry.GetMembers(group_key);
-}
-
-const std::vector<BondObject *> & ModelAnalysisEditor::GetBondGroupMembers(
-    GroupKey group_key,
-    const std::string & class_key) const
-{
-    const auto & entry{ RequireGroupEntry(
-        ModelAnalysisData::Of(m_model_object).FindBondGroupEntry(class_key),
-        "Bond group entry") };
-    return entry.GetMembers(group_key);
 }
 
 void ModelAnalysisEditor::SetAtomGroupStatistics(

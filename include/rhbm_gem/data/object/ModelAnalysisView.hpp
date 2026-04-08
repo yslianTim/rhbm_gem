@@ -29,6 +29,8 @@ public:
 
     static LocalPotentialView For(const AtomObject & atom_object);
     static LocalPotentialView For(const BondObject & bond_object);
+    static LocalPotentialView RequireFor(const AtomObject & atom_object);
+    static LocalPotentialView RequireFor(const BondObject & bond_object);
 
     bool IsAvailable() const;
     const GaussianEstimate & GetEstimateOLS() const;
@@ -60,12 +62,6 @@ public:
     explicit ModelAnalysisView(const ModelObject & model_object);
 
     static ModelAnalysisView Of(const ModelObject & model_object);
-    static bool HasLocalAnalysis(const AtomObject & atom_object);
-    static bool HasLocalAnalysis(const BondObject & bond_object);
-    static LocalPotentialView FindLocalPotential(const AtomObject & atom_object);
-    static LocalPotentialView FindLocalPotential(const BondObject & bond_object);
-    static LocalPotentialView RequireLocalPotential(const AtomObject & atom_object);
-    static LocalPotentialView RequireLocalPotential(const BondObject & bond_object);
 
     bool HasGroupedAnalysisData() const;
     double GetAtomGausEstimateMinimum(int par_id, Element element) const;

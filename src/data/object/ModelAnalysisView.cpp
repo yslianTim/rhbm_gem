@@ -78,6 +78,20 @@ LocalPotentialView LocalPotentialView::For(const BondObject & bond_object)
     return LocalPotentialView(&bond_object);
 }
 
+LocalPotentialView LocalPotentialView::RequireFor(const AtomObject & atom_object)
+{
+    auto view{ LocalPotentialView::For(atom_object) };
+    (void)RequireResolvedLocalEntry(view, "Atom local analysis");
+    return view;
+}
+
+LocalPotentialView LocalPotentialView::RequireFor(const BondObject & bond_object)
+{
+    auto view{ LocalPotentialView::For(bond_object) };
+    (void)RequireResolvedLocalEntry(view, "Bond local analysis");
+    return view;
+}
+
 bool LocalPotentialView::IsAvailable() const
 {
     return FindResolvedLocalEntry(*this) != nullptr;
@@ -153,40 +167,6 @@ ModelAnalysisView ModelAnalysisView::Of(const ModelObject & model_object)
     return ModelAnalysisView(model_object);
 }
 
-bool ModelAnalysisView::HasLocalAnalysis(const AtomObject & atom_object)
-{
-    return ModelAnalysisData::FindLocalEntry(atom_object) != nullptr;
-}
-
-bool ModelAnalysisView::HasLocalAnalysis(const BondObject & bond_object)
-{
-    return ModelAnalysisData::FindLocalEntry(bond_object) != nullptr;
-}
-
-LocalPotentialView ModelAnalysisView::FindLocalPotential(const AtomObject & atom_object)
-{
-    return LocalPotentialView::For(atom_object);
-}
-
-LocalPotentialView ModelAnalysisView::FindLocalPotential(const BondObject & bond_object)
-{
-    return LocalPotentialView::For(bond_object);
-}
-
-LocalPotentialView ModelAnalysisView::RequireLocalPotential(const AtomObject & atom_object)
-{
-    auto view{ LocalPotentialView::For(atom_object) };
-    (void)RequireResolvedLocalEntry(view, "Atom local analysis");
-    return view;
-}
-
-LocalPotentialView ModelAnalysisView::RequireLocalPotential(const BondObject & bond_object)
-{
-    auto view{ LocalPotentialView::For(bond_object) };
-    (void)RequireResolvedLocalEntry(view, "Bond local analysis");
-    return view;
-}
-
 bool ModelAnalysisView::HasGroupedAnalysisData() const
 {
     const auto & analysis_data{ ModelAnalysisData::Of(m_model_object) };
@@ -200,7 +180,8 @@ double ModelAnalysisView::GetAtomGausEstimateMinimum(int par_id, Element element
     for (const auto * atom : m_model_object.GetSelectedAtoms())
     {
         if (atom->GetElement() != element) continue;
-        gaus_estimate_list.emplace_back(RequireLocalPotential(*atom).GetEstimateMDPDE().GetParameter(par_id));
+        gaus_estimate_list.emplace_back(
+            LocalPotentialView::RequireFor(*atom).GetEstimateMDPDE().GetParameter(par_id));
     }
     return ArrayStats<double>::ComputeMin(gaus_estimate_list.data(), gaus_estimate_list.size());
 }
@@ -211,7 +192,8 @@ double ModelAnalysisView::GetBondGausEstimateMinimum(int par_id) const
     gaus_estimate_list.reserve(m_model_object.GetSelectedBondCount());
     for (const auto * bond : m_model_object.GetSelectedBonds())
     {
-        gaus_estimate_list.emplace_back(RequireLocalPotential(*bond).GetEstimateMDPDE().GetParameter(par_id));
+        gaus_estimate_list.emplace_back(
+            LocalPotentialView::RequireFor(*bond).GetEstimateMDPDE().GetParameter(par_id));
     }
     return ArrayStats<double>::ComputeMin(gaus_estimate_list.data(), gaus_estimate_list.size());
 }
@@ -459,7 +441,7 @@ std::vector<AtomObject *> ModelAnalysisView::GetOutlierAtomObjectList(
     outlier_atom_list.reserve(atom_list.size());
     for (auto * atom : atom_list)
     {
-        const auto annotation{ RequireLocalPotential(*atom).FindAnnotation(class_key) };
+        const auto annotation{ LocalPotentialView::RequireFor(*atom).FindAnnotation(class_key) };
         if (annotation.has_value() && annotation->is_outlier)
         {
             outlier_atom_list.emplace_back(atom);
@@ -489,7 +471,7 @@ double ModelAnalysisView::GetAtomAlphaR(
     {
         throw std::runtime_error("Atom group has no members.");
     }
-    return RequireLocalPotential(*atom_list.front()).GetAlphaR();
+    return LocalPotentialView::RequireFor(*atom_list.front()).GetAlphaR();
 }
 
 double ModelAnalysisView::GetAtomAlphaG(

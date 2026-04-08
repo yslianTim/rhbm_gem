@@ -384,6 +384,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
     if (m_model_object == nullptr) return;
     const int basis_size{ 2 };
     auto analysis{ m_model_object->EditAnalysis() };
+    const auto analysis_view{ m_model_object->GetAnalysisView() };
     std::unordered_map<const AtomObject *, MutableLocalPotentialView> local_entry_map;
     local_entry_map.reserve(m_model_object->GetSelectedAtomCount());
     for (auto * atom : m_model_object->GetSelectedAtoms())
@@ -396,7 +397,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
         Logger::Log(LogLevel::Info, "Class type: " + class_key);
 
         // Group Atom Potential Fitting
-        auto group_keys{ analysis.CollectAtomGroupKeys(class_key) };
+        auto group_keys{ analysis_view.CollectAtomGroupKeys(class_key) };
         auto group_key_size{ group_keys.size() };
         std::atomic<size_t> key_count{ 0 };
 
@@ -406,7 +407,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
         for (size_t idx = 0; idx < group_key_size; idx++)
         {
             auto group_key{ group_keys[idx] };
-            const auto & atom_list{ analysis.GetAtomGroupMembers(group_key, class_key) };
+            const auto & atom_list{ analysis_view.GetAtomObjectList(group_key, class_key) };
             auto group_size{ atom_list.size() };
             std::vector<std::vector<Eigen::VectorXd>> data_entry_list;
             std::vector<Eigen::VectorXd> beta_mdpde_list;
@@ -808,10 +809,11 @@ void RunAtomGroupingWorkflow(ModelObject & model_object)
     Logger::Log(LogLevel::Info, "Atom Classification Summary:");
     auto analysis{ model_object.EditAnalysis() };
     analysis.RebuildAtomGroupsFromSelection();
+    const auto analysis_view{ model_object.GetAnalysisView() };
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {
         const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        const auto group_size{ analysis.CollectAtomGroupKeys(class_key).size() };
+        const auto group_size{ analysis_view.CollectAtomGroupKeys(class_key).size() };
         Logger::Log(
             LogLevel::Info,
             " - Class type: " + class_key + " include " + std::to_string(group_size)
@@ -863,8 +865,8 @@ void RunLocalAtomFittingWorkflow(
         });
 
         Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
-        model_par_init(0) = ModelAnalysisView::RequireLocalPotential(*selected_atom_list[i]).GetMomentZeroEstimate();
-        model_par_init(1) = ModelAnalysisView::RequireLocalPotential(*selected_atom_list[i]).GetMomentTwoEstimate();
+        model_par_init(0) = LocalPotentialView::RequireFor(*selected_atom_list[i]).GetMomentZeroEstimate();
+        model_par_init(1) = LocalPotentialView::RequireFor(*selected_atom_list[i]).GetMomentTwoEstimate();
         auto gaus_ols{
             GausLinearTransformHelper::BuildGaus3DModel(result.beta_ols, model_par_init)
         };
@@ -904,6 +906,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining()
     ScopeTimer timer("PotentialAnalysisCommand::RunAtomAlphaTraining");
     if (m_map_object == nullptr) return;
     auto analysis{ m_model_object->EditAnalysis() };
+    const auto analysis_view{ m_model_object->GetAnalysisView() };
 
     const size_t subset_size_alpha_r{ 5 };
     const auto ordered_alpha_r_list{ detail::BuildOrderedAlphaRTrainingList() };
@@ -942,11 +945,11 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining()
     
     std::vector<std::vector<AtomObject *>> atom_list_set;
     const auto component_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
-    const auto component_group_keys{ analysis.CollectAtomGroupKeys(component_class_key) };
+    const auto component_group_keys{ analysis_view.CollectAtomGroupKeys(component_class_key) };
     atom_list_set.reserve(component_group_keys.size());
     for (const auto group_key : component_group_keys)
     {
-        const auto & group_atom_list{ analysis.GetAtomGroupMembers(group_key, component_class_key) };
+        const auto & group_atom_list{ analysis_view.GetAtomObjectList(group_key, component_class_key) };
         if (group_atom_list.size() < 10) continue;
         if (group_atom_list.front()->IsMainChainAtom() == false) continue;
         atom_list_set.emplace_back(group_atom_list);
@@ -962,7 +965,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining()
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {
         const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        for (const auto group_key : analysis.CollectAtomGroupKeys(class_key))
+        for (const auto group_key : analysis_view.CollectAtomGroupKeys(class_key))
         {
             analysis.SetAtomGroupAlphaG(group_key, class_key, alpha_g);
         }
