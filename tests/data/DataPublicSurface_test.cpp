@@ -224,6 +224,7 @@ TEST(DataPublicSurfaceTest, DataPublicHeadersMatchApprovedSurface)
         "data/object/ChemicalComponentEntry.hpp",
         "data/object/GaussianStatistics.hpp",
         "data/object/MapObject.hpp",
+        "data/object/ModelAnalysisEditor.hpp",
         "data/object/ModelAnalysisView.hpp",
         "data/object/ModelObject.hpp" };
 
