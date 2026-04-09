@@ -681,7 +681,7 @@ void PrintDataOutlierResult(
                 y_array[i][j].emplace_back(mean_ols);
                 y_array[i][j].emplace_back(mean_mdpde);
                 y_array[i][j].emplace_back(mean_train);
-                global_y_array[i].emplace_back(mean_ols);
+                global_y_array[j].emplace_back(mean_ols);
                 global_y_array[j].emplace_back(mean_mdpde);
                 global_y_array[j].emplace_back(mean_train);
             }

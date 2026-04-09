@@ -150,7 +150,7 @@ std::vector<std::tuple<float, float>> HRLModelTester::BuildRandomGausSamplingEnt
         neighbor_center[2] << -0.5, -std::sqrt(3) / 2.0, 0.0;
     }
 
-    // 4 neighbor atoms (TODO: consider tetrahedral arrangement)
+    // 4 neighbor atoms in tetrahedral arrangement
     if (neighbor_count == 4)
     {
         neighbor_center[0] << 0.0, 0.0, 1.0;
@@ -167,21 +167,24 @@ std::vector<std::tuple<float, float>> HRLModelTester::BuildRandomGausSamplingEnt
         neighbor_center_list.emplace_back(neighbor_center[i]);
     }
 
-    std::uniform_real_distribution<> dist_distance(m_x_min, m_x_max);
+    std::uniform_real_distribution<> dist_unit(0.0, 1.0);
     std::uniform_real_distribution<> dist_cosTheta(-1.0, 1.0);
     std::uniform_real_distribution<> dist_phi(0.0, Constants::two_pi);
+    const auto min_radius_cube{ std::pow(m_x_min, 3) };
+    const auto max_radius_cube{ std::pow(m_x_max, 3) };
     std::vector<std::tuple<float, float>> sampling_entry_list;
     sampling_entry_list.reserve(sampling_entry_size);
     for (size_t i = 0; i < sampling_entry_size; i++)
     {
-        auto r{ dist_distance(m_generator) };
+        auto radius_unit{ dist_unit(m_generator) };
+        auto r{ std::cbrt(min_radius_cube + radius_unit * (max_radius_cube - min_radius_cube)) };
         auto cosTheta{ dist_cosTheta(m_generator) };
-        auto theta{ std::acos(cosTheta) };
+        auto sinTheta{ std::sqrt(1.0 - cosTheta * cosTheta) };
         auto phi{ dist_phi(m_generator) };
         Eigen::VectorXd point{ Eigen::VectorXd::Zero(3) };
-        point(0) = r * std::sin(theta) * std::cos(phi);
-        point(1) = r * std::sin(theta) * std::sin(phi);
-        point(2) = r * std::cos(theta);
+        point(0) = r * sinTheta * std::cos(phi);
+        point(1) = r * sinTheta * std::sin(phi);
+        point(2) = r * cosTheta;
         auto y{
             amplitude * GausLinearTransformHelper::GetGaussianPesponseAtPointWithNeighborhood(
                 point, atom_center, neighbor_center_list, width) + intersect
@@ -222,7 +225,7 @@ std::vector<Eigen::VectorXd> HRLModelTester::BuildRandomLinearDataEntryWithNeigh
 {
     auto sampling_entries{
         BuildRandomGausSamplingEntryWithNeighborhood(
-            static_cast<size_t>(sampling_entry_size), gaus_par, neighbor_distance, 1)
+            static_cast<size_t>(sampling_entry_size), gaus_par, neighbor_distance, 3)
     };
     auto linear_data_entry_list{
         GausLinearTransformHelper::MapValueTransform(sampling_entries, m_x_min, m_x_max)
