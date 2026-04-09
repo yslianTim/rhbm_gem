@@ -36,6 +36,13 @@ public:
     const GaussianEstimate & GetEstimateOLS() const;
     const GaussianEstimate & GetEstimateMDPDE() const;
     const std::vector<std::tuple<float, float>> & GetDistanceAndMapValueList() const;
+    std::tuple<float, float> GetDistanceRange(double margin_rate = 0.0) const;
+    std::tuple<float, float> GetMapValueRange(double margin_rate = 0.0) const;
+    std::vector<std::tuple<float, float>> GetBinnedDistanceAndMapValueList(
+        int bin_size = 15,
+        double x_min = 0.0,
+        double x_max = 1.5) const;
+    std::vector<std::tuple<float, float>> GetLinearModelDistanceAndMapValueList() const;
     int GetDistanceAndMapValueListSize() const;
     double GetAlphaR() const;
     std::optional<LocalPotentialAnnotationView> FindAnnotation(const std::string & key) const;

@@ -1,5 +1,6 @@
 #include "data/detail/LocalPotentialEntry.hpp"
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
+#include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
@@ -93,6 +94,87 @@ const LocalPotentialEntry::FitResult & LocalPotentialEntry::GetFitResult() const
 const std::vector<std::tuple<float, float>> & LocalPotentialEntry::GetDistanceAndMapValueList() const
 {
     return m_distance_and_map_value_list;
+}
+
+std::tuple<float, float> LocalPotentialEntry::GetDistanceRange(double margin_rate) const
+{
+    std::vector<float> distance_array;
+    distance_array.reserve(m_distance_and_map_value_list.size());
+    for (const auto & [distance, map_value] : m_distance_and_map_value_list)
+    {
+        (void)map_value;
+        distance_array.emplace_back(distance);
+    }
+    return ArrayStats<float>::ComputeScalingRangeTuple(
+        distance_array, static_cast<float>(margin_rate));
+}
+
+std::tuple<float, float> LocalPotentialEntry::GetMapValueRange(double margin_rate) const
+{
+    std::vector<float> map_value_array;
+    map_value_array.reserve(m_distance_and_map_value_list.size());
+    for (const auto & [distance, map_value] : m_distance_and_map_value_list)
+    {
+        (void)distance;
+        map_value_array.emplace_back(map_value);
+    }
+    return ArrayStats<float>::ComputeScalingRangeTuple(
+        map_value_array, static_cast<float>(margin_rate));
+}
+
+std::vector<std::tuple<float, float>> LocalPotentialEntry::GetBinnedDistanceAndMapValueList(
+    int bin_size,
+    double x_min,
+    double x_max) const
+{
+    const auto bin_spacing{ (x_max - x_min) / static_cast<double>(bin_size) };
+    std::vector<std::vector<float>> bin_map(static_cast<size_t>(bin_size));
+    for (const auto & [distance, map_value] : m_distance_and_map_value_list)
+    {
+        if (distance < x_min || distance >= x_max)
+        {
+            continue;
+        }
+        const auto shifted_distance{ static_cast<double>(distance) - x_min };
+        const auto bin_index{ static_cast<int>(std::floor(shifted_distance / bin_spacing)) };
+        if (bin_index < 0 || bin_index >= bin_size)
+        {
+            continue;
+        }
+        bin_map.at(static_cast<size_t>(bin_index)).emplace_back(map_value);
+    }
+
+    std::vector<std::tuple<float, float>> binned_distance_and_map_value_list;
+    binned_distance_and_map_value_list.reserve(static_cast<size_t>(bin_size));
+    for (int i = 0; i < bin_size; i++)
+    {
+        const auto x_value{ static_cast<float>(x_min + (i + 0.5) * bin_spacing) };
+        const auto & bin_values{ bin_map.at(static_cast<size_t>(i)) };
+        const auto y_value{ bin_values.empty() ? 0.0f : ArrayStats<float>::ComputeMedian(bin_values) };
+        binned_distance_and_map_value_list.emplace_back(std::make_tuple(x_value, y_value));
+    }
+    return binned_distance_and_map_value_list;
+}
+
+std::vector<std::tuple<float, float>> LocalPotentialEntry::GetLinearModelDistanceAndMapValueList() const
+{
+    Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
+    std::vector<std::tuple<float, float>> linear_model_distance_and_map_value_list;
+    linear_model_distance_and_map_value_list.reserve(m_distance_and_map_value_list.size());
+    for (const auto & [distance, map_value] : m_distance_and_map_value_list)
+    {
+        if (map_value <= 0.0f)
+        {
+            continue;
+        }
+        const auto data_vector{
+            GausLinearTransformHelper::BuildLinearModelDataVector(
+                distance, map_value, model_par_init)
+        };
+        linear_model_distance_and_map_value_list.emplace_back(
+            std::make_tuple(data_vector(1), data_vector(2)));
+    }
+    return linear_model_distance_and_map_value_list;
 }
 
 double LocalPotentialEntry::GetMapValueNearCenter() const

@@ -97,7 +97,6 @@ set(CORE_CONTRACT_TEST_SOURCES
     core/contract/CommandCatalog_test.cpp
     core/contract/CommandExecutionContract_test.cpp
     core/contract/DocumentationLayout_test.cpp
-    core/contract/PotentialSeriesOps_test.cpp
     core/contract/PublicHeaderSurface_test.cpp
 )
 
@@ -115,6 +114,7 @@ set(DATA_RUNTIME_TEST_SOURCES
     data/GaussianValueObjectRegression_test.cpp
     data/DataObjectImportRegression_test.cpp
     data/DataObjectRuntimeBehavior_test.cpp
+    data/LocalPotentialSeries_test.cpp
 )
 
 set(DATA_SCHEMA_TEST_SOURCES

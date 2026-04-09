@@ -222,7 +222,7 @@ std::vector<Eigen::VectorXd> HRLModelTester::BuildRandomLinearDataEntryWithNeigh
 {
     auto sampling_entries{
         BuildRandomGausSamplingEntryWithNeighborhood(
-            static_cast<size_t>(sampling_entry_size), gaus_par, neighbor_distance, 3)
+            static_cast<size_t>(sampling_entry_size), gaus_par, neighbor_distance, 1)
     };
     auto linear_data_entry_list{
         GausLinearTransformHelper::MapValueTransform(sampling_entries, m_x_min, m_x_max)

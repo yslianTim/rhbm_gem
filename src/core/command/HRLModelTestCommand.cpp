@@ -547,7 +547,7 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
     tester->SetFittingRange(options.options.fit_range_min, options.options.fit_range_max);
 
     std::vector<double> alpha_r_list{ 0.1 };
-    std::vector<double> error_list{ 0.1, 0.2, 0.3 };
+    std::vector<double> error_list{ 0.0, 0.05, 0.1 };
     std::vector<Eigen::MatrixXd> mean_matrix_ols_list;
     std::vector<Eigen::MatrixXd> mean_matrix_mdpde_list;
     std::vector<Eigen::MatrixXd> mean_matrix_train_list;

@@ -112,6 +112,31 @@ const std::vector<std::tuple<float, float>> & LocalPotentialView::GetDistanceAnd
     return RequireResolvedLocalEntry(*this, "Local distance-map series").GetDistanceAndMapValueList();
 }
 
+std::tuple<float, float> LocalPotentialView::GetDistanceRange(double margin_rate) const
+{
+    return RequireResolvedLocalEntry(*this, "Local distance range").GetDistanceRange(margin_rate);
+}
+
+std::tuple<float, float> LocalPotentialView::GetMapValueRange(double margin_rate) const
+{
+    return RequireResolvedLocalEntry(*this, "Local map-value range").GetMapValueRange(margin_rate);
+}
+
+std::vector<std::tuple<float, float>> LocalPotentialView::GetBinnedDistanceAndMapValueList(
+    int bin_size,
+    double x_min,
+    double x_max) const
+{
+    return RequireResolvedLocalEntry(*this, "Local binned distance-map series")
+        .GetBinnedDistanceAndMapValueList(bin_size, x_min, x_max);
+}
+
+std::vector<std::tuple<float, float>> LocalPotentialView::GetLinearModelDistanceAndMapValueList() const
+{
+    return RequireResolvedLocalEntry(*this, "Local linear-model series")
+        .GetLinearModelDistanceAndMapValueList();
+}
+
 int LocalPotentialView::GetDistanceAndMapValueListSize() const
 {
     return RequireResolvedLocalEntry(*this, "Local distance-map size").GetDistanceAndMapValueListSize();

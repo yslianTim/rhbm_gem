@@ -9,7 +9,6 @@
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
-#include <detail/PotentialSeriesOps.hpp>
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
@@ -264,7 +263,7 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateAtomGausEstimateHistogram(
 
 std::unique_ptr<TH1D> PotentialPlotBuilder::CreateLinearModelDataHistogram(int dimension_id) const
 {
-    auto data_array{ series_ops::BuildLinearModelDistanceAndMapValueList(GetLocalEntry()) };
+    auto data_array{ GetLocalEntry().GetLinearModelDistanceAndMapValueList() };
     std::vector<float> data_list;
     data_list.reserve(data_array.size());
     for (auto & [distance, map_value] : data_array)
@@ -298,8 +297,8 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateLinearModelDataHistogram(int d
 std::unique_ptr<TH2D> PotentialPlotBuilder::CreateDistanceToMapValueHistogram(
     int x_bin_size, int y_bin_size) const
 {
-    auto distance_range{ series_ops::ComputeDistanceRange(GetLocalEntry(), 0.0) };
-    auto map_value_range{ series_ops::ComputeMapValueRange(GetLocalEntry(), 0.1) };
+    auto distance_range{ GetLocalEntry().GetDistanceRange(0.0) };
+    auto map_value_range{ GetLocalEntry().GetMapValueRange(0.1) };
     auto hist{
         ROOTHelper::CreateHist2D(
             "hist_distance_mapvalue", "Distance vs Map Value",
@@ -701,7 +700,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateLinearModelDistanceToM
 {
     auto graph{ ROOTHelper::CreateGraphErrors() };
     auto count{ 0 };
-    for (auto & [x, y] : series_ops::BuildLinearModelDistanceAndMapValueList(GetLocalEntry()))
+    for (auto & [x, y] : GetLocalEntry().GetLinearModelDistanceAndMapValueList())
     {
         graph->SetPoint(count, x, y);
         count++;
@@ -712,7 +711,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateLinearModelDistanceToM
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToMapValueGraph(
     int bin_size, double x_min, double x_max)
 {
-    auto data_array{ series_ops::BuildBinnedDistanceAndMapValueList(GetLocalEntry(), bin_size, x_min, x_max) };
+    auto data_array{ GetLocalEntry().GetBinnedDistanceAndMapValueList(bin_size, x_min, x_max) };
     auto graph{ ROOTHelper::CreateGraphErrors(bin_size) };
     auto count{ 0 };
     for (auto & [distance, map_value] : data_array)

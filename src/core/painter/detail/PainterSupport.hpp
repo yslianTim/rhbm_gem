@@ -10,8 +10,6 @@
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 
-#include <detail/PotentialSeriesOps.hpp>
-
 #ifdef HAVE_ROOT
 #include <TAxis.h>
 #include <TColor.h>
@@ -133,10 +131,14 @@ inline void BuildMapValueScatterGraph(
             continue;
         }
         auto * atom_object2{ model2_atom_map.at(atom_id) };
-        auto data1_array{ series_ops::BuildBinnedDistanceAndMapValueList(
-            LocalPotentialView::RequireFor(*atom_object1), bin_size, x_min, x_max) };
-        auto data2_array{ series_ops::BuildBinnedDistanceAndMapValueList(
-            LocalPotentialView::RequireFor(*atom_object2), bin_size, x_min, x_max) };
+        auto data1_array{
+            LocalPotentialView::RequireFor(*atom_object1)
+                .GetBinnedDistanceAndMapValueList(bin_size, x_min, x_max)
+        };
+        auto data2_array{
+            LocalPotentialView::RequireFor(*atom_object2)
+                .GetBinnedDistanceAndMapValueList(bin_size, x_min, x_max)
+        };
         for (size_t i = 0; i < static_cast<size_t>(bin_size); i++)
         {
             graph->SetPoint(count, std::get<1>(data1_array.at(i)), std::get<1>(data2_array.at(i)));
