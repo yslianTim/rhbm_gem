@@ -31,6 +31,17 @@ std::vector<std::tuple<float, std::array<float, 3>>> SphereSampler::GenerateSamp
     const std::array<float, 3> & axis_vector) const
 {
     (void)axis_vector; // axis_vector is not used in SphereSampler
+
+    std::vector<std::tuple<float, std::array<float, 3>>> out;
+    RunRandomSamplingMethod(reference_position, out);
+
+    return out;
+}
+
+void SphereSampler::RunRandomSamplingMethod(
+    const std::array<float, 3> & reference_position,
+    std::vector<std::tuple<float, std::array<float, 3>>> & out) const
+{
     if (m_distance_min > m_distance_max)
     {
         throw std::invalid_argument("SphereSampler: distance minimum greater than maximum");
@@ -39,9 +50,8 @@ std::vector<std::tuple<float, std::array<float, 3>>> SphereSampler::GenerateSamp
     {
         throw std::invalid_argument("SphereSampler: distance range cannot be negative");
     }
-
-    std::vector<std::tuple<float, std::array<float, 3>>> out;
     out.resize(m_sampling_size);
+    
     static thread_local std::mt19937 engine{ std::random_device{}() };
     std::uniform_real_distribution<float> dist_unit(0.0f, 1.0f);
     std::uniform_real_distribution<float> dist_phi(0.0f, static_cast<float>(Constants::two_pi));
@@ -77,6 +87,4 @@ std::vector<std::tuple<float, std::array<float, 3>>> SphereSampler::GenerateSamp
 
         out[i] = std::make_tuple(radius, sampling_position);
     }
-
-    return out;
 }
