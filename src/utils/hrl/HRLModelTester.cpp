@@ -3,6 +3,7 @@
 #include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
 #include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
+#include <rhbm_gem/utils/math/SphereSampler.hpp>
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
@@ -167,29 +168,26 @@ std::vector<std::tuple<float, float>> HRLModelTester::BuildRandomGausSamplingEnt
         neighbor_center_list.emplace_back(neighbor_center[i]);
     }
 
-    std::uniform_real_distribution<> dist_unit(0.0, 1.0);
-    std::uniform_real_distribution<> dist_cosTheta(-1.0, 1.0);
-    std::uniform_real_distribution<> dist_phi(0.0, Constants::two_pi);
-    const auto min_radius_cube{ std::pow(m_x_min, 3) };
-    const auto max_radius_cube{ std::pow(m_x_max, 3) };
+    SphereSampler sampler;
+    sampler.SetSamplingSize(static_cast<unsigned int>(sampling_entry_size));
+    sampler.SetDistanceRangeMinimum(m_x_min);
+    sampler.SetDistanceRangeMaximum(m_x_max);
+    const auto sampling_points{
+        sampler.GenerateSamplingPoints({ 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f })
+    };
     std::vector<std::tuple<float, float>> sampling_entry_list;
     sampling_entry_list.reserve(sampling_entry_size);
-    for (size_t i = 0; i < sampling_entry_size; i++)
+    for (const auto & [distance, sample_point] : sampling_points)
     {
-        auto radius_unit{ dist_unit(m_generator) };
-        auto r{ std::cbrt(min_radius_cube + radius_unit * (max_radius_cube - min_radius_cube)) };
-        auto cosTheta{ dist_cosTheta(m_generator) };
-        auto sinTheta{ std::sqrt(1.0 - cosTheta * cosTheta) };
-        auto phi{ dist_phi(m_generator) };
         Eigen::VectorXd point{ Eigen::VectorXd::Zero(3) };
-        point(0) = r * sinTheta * std::cos(phi);
-        point(1) = r * sinTheta * std::sin(phi);
-        point(2) = r * cosTheta;
+        point(0) = sample_point[0];
+        point(1) = sample_point[1];
+        point(2) = sample_point[2];
         auto y{
             amplitude * GausLinearTransformHelper::GetGaussianPesponseAtPointWithNeighborhood(
                 point, atom_center, neighbor_center_list, width) + intersect
         };
-        sampling_entry_list.emplace_back(r, y);
+        sampling_entry_list.emplace_back(distance, y);
     }
     return sampling_entry_list;
 }
@@ -225,7 +223,7 @@ std::vector<Eigen::VectorXd> HRLModelTester::BuildRandomLinearDataEntryWithNeigh
 {
     auto sampling_entries{
         BuildRandomGausSamplingEntryWithNeighborhood(
-            static_cast<size_t>(sampling_entry_size), gaus_par, neighbor_distance, 3)
+            static_cast<size_t>(sampling_entry_size), gaus_par, neighbor_distance, 1)
     };
     auto linear_data_entry_list{
         GausLinearTransformHelper::MapValueTransform(sampling_entries, m_x_min, m_x_max)
