@@ -79,7 +79,8 @@ private:
     std::vector<std::tuple<float, float>> BuildRandomGausSamplingEntryWithNeighborhood(
         size_t sampling_entry_size,
         const Eigen::VectorXd & gaus_par,
-        double neighbor_distance = 2.0
+        double neighbor_distance = 2.0,
+        size_t neighbor_count = 1
     );
     std::vector<Eigen::VectorXd> BuildRandomLinearDataEntry(
         size_t sampling_entry_size,

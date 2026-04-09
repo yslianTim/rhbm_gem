@@ -114,17 +114,58 @@ std::vector<std::tuple<float, float>> HRLModelTester::BuildRandomGausSamplingEnt
 }
 
 std::vector<std::tuple<float, float>> HRLModelTester::BuildRandomGausSamplingEntryWithNeighborhood(
-    size_t sampling_entry_size, const Eigen::VectorXd & gaus_par, double neighbor_distance)
+    size_t sampling_entry_size,
+    const Eigen::VectorXd & gaus_par,
+    double neighbor_distance,
+    size_t neighbor_count)
 {
     CheckGausParametersDimension(gaus_par);
+    const size_t max_neighbor_count{ 4 };
+    if (neighbor_count > max_neighbor_count)
+    {
+        throw std::invalid_argument("neighbor_count should be less than or equal to 4");
+    }
     auto amplitude{ gaus_par(0) };
     auto width{ gaus_par(1) };
     auto intersect{ 0.0 };
     Eigen::VectorXd atom_center{ Eigen::VectorXd::Zero(3) };
-    Eigen::VectorXd neighbor1_center{ Eigen::VectorXd::Zero(3) };
-    neighbor1_center(0) += neighbor_distance;
+    Eigen::VectorXd neighbor_center[max_neighbor_count];
+    for (size_t i = 0; i < max_neighbor_count; i++)
+    {
+        neighbor_center[i] = Eigen::VectorXd::Zero(3);
+    }
+
+    // 1 & 2 neighbor atoms
+    if (neighbor_count <= 2)
+    {
+        neighbor_center[0] << 1.0, 0.0, 0.0;
+        neighbor_center[1] << -1.0, 0.0, 0.0;
+    }
+    
+    // 3 neighbor atoms (angle = 120 degree)
+    if (neighbor_count == 3)
+    {
+        neighbor_center[0] << 1.0, 0.0, 0.0;
+        neighbor_center[1] << -0.5, std::sqrt(3) / 2.0, 0.0;
+        neighbor_center[2] << -0.5, -std::sqrt(3) / 2.0, 0.0;
+    }
+
+    // 4 neighbor atoms (TODO: consider tetrahedral arrangement)
+    if (neighbor_count == 4)
+    {
+        neighbor_center[0] << 0.0, 0.0, 1.0;
+        neighbor_center[1] << 0.0, 2.0 * std::sqrt(2) / 3.0, -1.0 / 3.0;
+        neighbor_center[2] << -std::sqrt(6) / 3.0, -std::sqrt(2) / 3.0, -1.0 / 3.0;
+        neighbor_center[3] << std::sqrt(6) / 3.0, -std::sqrt(2) / 3.0, -1.0 / 3.0;
+    }
+
     std::vector<Eigen::VectorXd> neighbor_center_list;
-    neighbor_center_list.emplace_back(neighbor1_center);
+    neighbor_center_list.reserve(neighbor_count);
+    for (size_t i = 0; i < neighbor_count; i++)
+    {
+        neighbor_center[i] *= neighbor_distance;
+        neighbor_center_list.emplace_back(neighbor_center[i]);
+    }
 
     std::uniform_real_distribution<> dist_distance(m_x_min, m_x_max);
     std::uniform_real_distribution<> dist_cosTheta(-1.0, 1.0);
@@ -135,11 +176,12 @@ std::vector<std::tuple<float, float>> HRLModelTester::BuildRandomGausSamplingEnt
     {
         auto r{ dist_distance(m_generator) };
         auto cosTheta{ dist_cosTheta(m_generator) };
+        auto theta{ std::acos(cosTheta) };
         auto phi{ dist_phi(m_generator) };
         Eigen::VectorXd point{ Eigen::VectorXd::Zero(3) };
-        point(0) = r;
-        point(1) = r * std::sqrt(1.0 - std::pow(cosTheta, 2)) * std::cos(phi);
-        point(2) = r * std::sqrt(1.0 - std::pow(cosTheta, 2)) * std::sin(phi);
+        point(0) = r * std::sin(theta) * std::cos(phi);
+        point(1) = r * std::sin(theta) * std::sin(phi);
+        point(2) = r * std::cos(theta);
         auto y{
             amplitude * GausLinearTransformHelper::GetGaussianPesponseAtPointWithNeighborhood(
                 point, atom_center, neighbor_center_list, width) + intersect
@@ -180,7 +222,7 @@ std::vector<Eigen::VectorXd> HRLModelTester::BuildRandomLinearDataEntryWithNeigh
 {
     auto sampling_entries{
         BuildRandomGausSamplingEntryWithNeighborhood(
-            static_cast<size_t>(sampling_entry_size), gaus_par, neighbor_distance)
+            static_cast<size_t>(sampling_entry_size), gaus_par, neighbor_distance, 3)
     };
     auto linear_data_entry_list{
         GausLinearTransformHelper::MapValueTransform(sampling_entries, m_x_min, m_x_max)

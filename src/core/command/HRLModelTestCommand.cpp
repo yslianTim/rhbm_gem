@@ -135,7 +135,8 @@ void PrintDataOutlierResult(
     const std::vector<Eigen::MatrixXd> & mean_matrix_train_list,
     const std::vector<Eigen::MatrixXd> & sigma_matrix_ols_list,
     const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list,
-    const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list);
+    const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list,
+    bool is_neighbor_distance = false);
 
 void PrintMemberOutlierResult(
     const HRLModelTestExecutionContext & options,
@@ -541,12 +542,12 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
     model_par_prior(2) = 0.1;
 
     auto replica_size{ 100 };
-    auto sampling_entry_size{ 100 };
+    auto sampling_entry_size{ 1000 };
     auto tester{ std::make_unique<HRLModelTester>(gaus_par_size, linear_basis_size, replica_size) };
     tester->SetFittingRange(options.options.fit_range_min, options.options.fit_range_max);
 
     std::vector<double> alpha_r_list{ 0.1 };
-    std::vector<double> error_list{ 0.1 };
+    std::vector<double> error_list{ 0.1, 0.2, 0.3 };
     std::vector<Eigen::MatrixXd> mean_matrix_ols_list;
     std::vector<Eigen::MatrixXd> mean_matrix_mdpde_list;
     std::vector<Eigen::MatrixXd> mean_matrix_train_list;
@@ -554,7 +555,7 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
     std::vector<Eigen::MatrixXd> sigma_matrix_mdpde_list;
     std::vector<Eigen::MatrixXd> sigma_matrix_train_list;
     
-    auto distance_size{ 15 };
+    auto distance_size{ 16 };
     auto distance_step_size{ 0.1 };
     std::vector<double> distance_list(static_cast<size_t>(distance_size));
     for (size_t i = 0; i < static_cast<size_t>(distance_size); i++)
@@ -595,6 +596,7 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
                 std::string("Distance: ") + std::to_string(distance_list[static_cast<size_t>(i)])
                 + " , OLS: " + std::to_string(mean_matrix_ols.col(i)(0)) + " +- " + std::to_string(sigma_matrix_ols.col(i)(0))
                 + " , MDPDE: " + std::to_string(mean_matrix_mdpde.col(i)(0)) + " +- " + std::to_string(sigma_matrix_mdpde.col(i)(0))
+                + " , Train: " + std::to_string(mean_matrix_train.col(i)(0)) + " +- " + std::to_string(sigma_matrix_train.col(i)(0))
             );
 
         }
@@ -606,13 +608,13 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
         sigma_matrix_train_list.emplace_back(sigma_matrix_train);
     }
 
-    //PrintDataOutlierResult(
-    //    options,
-    //    "bias_from_neighbor_atom.pdf",
-    //    distance_list,
-    //    mean_matrix_ols_list, mean_matrix_mdpde_list, mean_matrix_train_list,
-    //    sigma_matrix_ols_list, sigma_matrix_mdpde_list, sigma_matrix_train_list
-    //);
+    PrintDataOutlierResult(
+        options,
+        "bias_from_neighbor_atom.pdf",
+        distance_list,
+        mean_matrix_ols_list, mean_matrix_mdpde_list, mean_matrix_train_list,
+        sigma_matrix_ols_list, sigma_matrix_mdpde_list, sigma_matrix_train_list, true
+    );
 }
 
 void PrintDataOutlierResult(
@@ -624,17 +626,11 @@ void PrintDataOutlierResult(
     const std::vector<Eigen::MatrixXd> & mean_matrix_train_list,
     const std::vector<Eigen::MatrixXd> & sigma_matrix_ols_list,
     const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list,
-    const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list)
+    const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list,
+    bool is_neighbor_distance)
 {
     auto file_path{ BuildOutputPath(options, name) };
     Logger::Log(LogLevel::Info, " HRLModelTestCommand::PrintDataOutlierResult");
-    (void)outlier_list;
-    (void)mean_matrix_ols_list;
-    (void)mean_matrix_mdpde_list;
-    (void)mean_matrix_train_list;
-    (void)sigma_matrix_ols_list;
-    (void)sigma_matrix_mdpde_list;
-    (void)sigma_matrix_train_list;
 
     std::vector<std::string> title_y_list{
         "Amplitude #font[2]{A}", "Width #tau"
@@ -666,7 +662,10 @@ void PrintDataOutlierResult(
             auto graph_train{ ROOTHelper::CreateGraphErrors() };
             for (int p = 0; p < static_cast<int>(outlier_list.size()); p++)
             {
-                auto x_value{ outlier_list.at(static_cast<size_t>(p)) * 100.0 };
+                auto x_value{ (is_neighbor_distance) ?
+                    outlier_list.at(static_cast<size_t>(p)) * -1.0:
+                    outlier_list.at(static_cast<size_t>(p)) * 100.0
+                };
                 auto mean_ols{ mean_matrix_ols_list.at(i).col(p)(static_cast<int>(j)) };
                 auto sigma_ols{ sigma_matrix_ols_list.at(i).col(p)(static_cast<int>(j)) };
                 auto mean_mdpde{ mean_matrix_mdpde_list.at(i).col(p)(static_cast<int>(j)) };
@@ -700,6 +699,11 @@ void PrintDataOutlierResult(
     {
         x_min[i] = (options.options.tester_choice == TesterType::MODEL_ALPHA_DATA) ? -2.0 : -0.7;
         x_max[i] = (options.options.tester_choice == TesterType::MODEL_ALPHA_DATA) ? 47.0 : 22.0;
+        if (is_neighbor_distance)
+        {
+            x_min[i] = -2.6;
+            x_max[i] = -0.8;
+        }
     }
     for (size_t j = 0; j < row_size; j++)
     {
@@ -830,7 +834,14 @@ void PrintDataOutlierResult(
     ROOTHelper::SetPaveTextDefaultStyle(bottom_title_text.get());
     ROOTHelper::SetFillAttribute(bottom_title_text.get(), 4000);
     ROOTHelper::SetTextAttribute(bottom_title_text.get(), 45.0f, 133, 22);
-    bottom_title_text->AddText("Data Contamination Ratio (%)");
+    if (is_neighbor_distance)
+    {
+        bottom_title_text->AddText("Distance to Neighbor Atom (Angstrom)");
+    }
+    else
+    {
+        bottom_title_text->AddText("Data Contamination Ratio (%)");
+    }
     bottom_title_text->Draw();
 
     canvas->cd();
