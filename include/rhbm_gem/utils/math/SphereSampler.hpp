@@ -25,7 +25,10 @@ public:
     void SetDistanceRangeMaximum(double value) { m_distance_max = value; }
 
 private:
-    void RunRandomSamplingMethod(
+    void RunVolumeUniformRandomSamplingMethod(
+        const std::array<float, 3> & reference_position,
+        std::vector<std::tuple<float, std::array<float, 3>>> & out) const;
+    void RunRadiusUniformRandomSamplingMethod(
         const std::array<float, 3> & reference_position,
         std::vector<std::tuple<float, std::array<float, 3>>> & out) const;
 
