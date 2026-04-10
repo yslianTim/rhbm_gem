@@ -542,7 +542,7 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
     model_par_prior(2) = 0.1;
 
     auto replica_size{ 100 };
-    auto sampling_entry_size{ 1000 };
+    auto sampling_entry_size{ 10 };
     auto tester{ std::make_unique<HRLModelTester>(gaus_par_size, linear_basis_size, replica_size) };
     tester->SetFittingRange(options.options.fit_range_min, options.options.fit_range_max);
 
