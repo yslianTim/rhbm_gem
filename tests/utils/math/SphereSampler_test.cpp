@@ -8,7 +8,14 @@
 TEST(SphereSamplerTest, DefaultConfiguration)
 {
     SphereSampler sampler;
+    const auto & profile{ sampler.GetSamplingProfile() };
     auto samples{ sampler.GenerateSamplingPoints({0.f, 0.f, 0.f}) };
+
+    EXPECT_EQ(SphereSamplingMethod::RadiusUniformRandom, profile.method);
+    EXPECT_DOUBLE_EQ(0.0, profile.distance_range.min);
+    EXPECT_DOUBLE_EQ(1.0, profile.distance_range.max);
+    EXPECT_EQ(10u, std::get<SphereRandomSamplingConfig>(profile.method_config).sample_count);
+    EXPECT_EQ(10u, sampler.GetExpectedPointCount());
     ASSERT_EQ(10u, samples.size());
     for (const auto & sample : samples)
     {
@@ -26,7 +33,8 @@ TEST(SphereSamplerTest, PrintOutputsDefaultConfiguration)
     sampler.Print();
     std::string output{ testing::internal::GetCapturedStdout() };
 
-    EXPECT_NE(output.find("Sampling size: 10"), std::string::npos);
+    EXPECT_NE(output.find("Sampling method: RadiusUniformRandom"), std::string::npos);
+    EXPECT_NE(output.find("Sample count: 10"), std::string::npos);
     EXPECT_NE(output.find("Distance range: [0.0, 1.0] Angstrom."), std::string::npos);
 }
 
@@ -44,23 +52,30 @@ TEST(SphereSamplerTest, PrintOutputsHeader)
 TEST(SphereSamplerTest, PrintOutputsConfiguration)
 {
     SphereSampler sampler;
-    sampler.SetSampleCount(20);
-    sampler.SetDistanceRange(0.5, 2.0);
+    sampler.SetSamplingProfile(
+        SphereSamplingProfile::VolumeUniformRandom(
+            SphereDistanceRange{ 0.5, 2.0 },
+            20));
 
     testing::internal::CaptureStdout();
     sampler.Print();
     std::string output{ testing::internal::GetCapturedStdout() };
 
-    EXPECT_NE(output.find("Sampling size: 20"), std::string::npos);
+    EXPECT_NE(output.find("Sampling method: VolumeUniformRandom"), std::string::npos);
+    EXPECT_NE(output.find("Sample count: 20"), std::string::npos);
     EXPECT_NE(output.find("Distance range: [0.5, 2.0] Angstrom."), std::string::npos);
 }
 
-TEST(SphereSamplerTest, Setters)
+TEST(SphereSamplerTest, RadiusUniformRandomProfileProducesConfiguredSampleCount)
 {
     SphereSampler sampler;
-    sampler.SetSampleCount(5);
-    sampler.SetDistanceRange(1.0, 1.0);
+    sampler.SetSamplingProfile(
+        SphereSamplingProfile::RadiusUniformRandom(
+            SphereDistanceRange{ 1.0, 1.0 },
+            5));
     auto samples{ sampler.GenerateSamplingPoints({0.f, 0.f, 0.f}) };
+
+    EXPECT_EQ(5u, sampler.GetExpectedPointCount());
     ASSERT_EQ(5u, samples.size());
     for (const auto & sample : samples)
     {
@@ -72,7 +87,10 @@ TEST(SphereSamplerTest, Setters)
 TEST(SphereSamplerTest, RadiusWithinConfiguredRange)
 {
     SphereSampler sampler;
-    sampler.SetDistanceRange(1.0, 2.0);
+    sampler.SetSamplingProfile(
+        SphereSamplingProfile::RadiusUniformRandom(
+            SphereDistanceRange{ 1.0, 2.0 },
+            10));
     const std::array<float, 3> center{ 0.f, 0.f, 0.f };
     auto samples{ sampler.GenerateSamplingPoints(center) };
     for (const auto & sample : samples)
@@ -97,8 +115,10 @@ TEST(SphereSamplerTest, RadiusWithinConfiguredRange)
 TEST(SphereSamplerTest, PositionMath)
 {
     SphereSampler sampler;
-    sampler.SetSampleCount(5);
-    sampler.SetDistanceRange(1.0, 1.0);
+    sampler.SetSamplingProfile(
+        SphereSamplingProfile::RadiusUniformRandom(
+            SphereDistanceRange{ 1.0, 1.0 },
+            5));
     const std::array<float, 3> center{ 1.f, 2.f, 3.f };
     auto samples{ sampler.GenerateSamplingPoints(center) };
     for (const auto & sample : samples)
@@ -113,18 +133,25 @@ TEST(SphereSamplerTest, PositionMath)
     }
 }
 
-TEST(SphereSamplerTest, ZeroSamplingSizeReturnsEmptyVector)
+TEST(SphereSamplerTest, ZeroSampleCountReturnsEmptyVector)
 {
     SphereSampler sampler;
-    sampler.SetSampleCount(0);
+    sampler.SetSamplingProfile(
+        SphereSamplingProfile::RadiusUniformRandom(
+            SphereDistanceRange{ 0.0, 1.0 },
+            0));
     auto samples{ sampler.GenerateSamplingPoints({0.f, 0.f, 0.f}) };
+    EXPECT_EQ(0u, sampler.GetExpectedPointCount());
     EXPECT_TRUE(samples.empty());
 }
 
 TEST(SphereSamplerTest, ZeroDistanceRange)
 {
     SphereSampler sampler;
-    sampler.SetDistanceRange(0.0, 0.0);
+    sampler.SetSamplingProfile(
+        SphereSamplingProfile::RadiusUniformRandom(
+            SphereDistanceRange{ 0.0, 0.0 },
+            10));
     const std::array<float, 3> center{ 1.f, 2.f, 3.f };
     auto samples{ sampler.GenerateSamplingPoints(center) };
     for (const auto & sample : samples)
@@ -138,35 +165,51 @@ TEST(SphereSamplerTest, ZeroDistanceRange)
     }
 }
 
-TEST(SphereSamplerTest, SetDistanceRangeThrowsWhenMinGreaterThanMax)
+TEST(SphereSamplerTest, RadiusUniformRandomProfileThrowsWhenMinGreaterThanMax)
 {
-    SphereSampler sampler;
-    EXPECT_THROW(sampler.SetDistanceRange(2.0, 1.0), std::invalid_argument);
+    EXPECT_THROW(
+        SphereSamplingProfile::RadiusUniformRandom(
+            SphereDistanceRange{ 2.0, 1.0 },
+            10),
+        std::invalid_argument);
 }
 
-TEST(SphereSamplerTest, ZeroSamplingSizeWithInvalidRangeThrowsOnSet)
+TEST(SphereSamplerTest, SetSamplingProfileThrowsWhenRangeIsInvalid)
 {
     SphereSampler sampler;
-    sampler.SetSampleCount(0);
-    EXPECT_THROW(sampler.SetDistanceRange(2.0, 1.0), std::invalid_argument);
+    SphereSamplingProfile invalid_profile;
+    invalid_profile.method = SphereSamplingMethod::RadiusUniformRandom;
+    invalid_profile.distance_range = SphereDistanceRange{ 2.0, 1.0 };
+    invalid_profile.method_config = SphereRandomSamplingConfig{ 0 };
+
+    EXPECT_THROW(sampler.SetSamplingProfile(invalid_profile), std::invalid_argument);
 }
 
-TEST(SphereSamplerTest, SetDistanceRangeThrowsWhenMinNegative)
+TEST(SphereSamplerTest, RadiusUniformRandomProfileThrowsWhenMinNegative)
 {
-    SphereSampler sampler;
-    EXPECT_THROW(sampler.SetDistanceRange(-0.1, 1.0), std::invalid_argument);
+    EXPECT_THROW(
+        SphereSamplingProfile::RadiusUniformRandom(
+            SphereDistanceRange{ -0.1, 1.0 },
+            10),
+        std::invalid_argument);
 }
 
-TEST(SphereSamplerTest, SetDistanceRangeThrowsWhenMaxNegative)
+TEST(SphereSamplerTest, RadiusUniformRandomProfileThrowsWhenMaxNegative)
 {
-    SphereSampler sampler;
-    EXPECT_THROW(sampler.SetDistanceRange(0.0, -1.0), std::invalid_argument);
+    EXPECT_THROW(
+        SphereSamplingProfile::RadiusUniformRandom(
+            SphereDistanceRange{ 0.0, -1.0 },
+            10),
+        std::invalid_argument);
 }
 
-TEST(SphereSamplerTest, ValidRangeProducesSamples)
+TEST(SphereSamplerTest, RadiusUniformRandomProfileProducesSamples)
 {
     SphereSampler sampler;
-    sampler.SetDistanceRange(0.2, 0.4);
+    sampler.SetSamplingProfile(
+        SphereSamplingProfile::RadiusUniformRandom(
+            SphereDistanceRange{ 0.2, 0.4 },
+            10));
     auto samples{ sampler.GenerateSamplingPoints({0.f, 0.f, 0.f}) };
     ASSERT_EQ(10u, samples.size());
     for (const auto & sample : samples)
@@ -177,13 +220,17 @@ TEST(SphereSamplerTest, ValidRangeProducesSamples)
     }
 }
 
-TEST(SphereSamplerTest, PositionMatchesRadiusForVariableRange)
+TEST(SphereSamplerTest, VolumeUniformRandomProfileProducesConfiguredSampleCount)
 {
     SphereSampler sampler;
-    sampler.SetSampleCount(20);
-    sampler.SetDistanceRange(0.5, 1.5);
+    sampler.SetSamplingProfile(
+        SphereSamplingProfile::VolumeUniformRandom(
+            SphereDistanceRange{ 0.5, 1.5 },
+            20));
     const std::array<float, 3> center{ 1.f, 2.f, 3.f };
     auto samples{ sampler.GenerateSamplingPoints(center) };
+
+    EXPECT_EQ(20u, sampler.GetExpectedPointCount());
     ASSERT_EQ(20u, samples.size());
     for (const auto & sample : samples)
     {

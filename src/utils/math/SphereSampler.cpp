@@ -5,69 +5,151 @@
 
 #include <cmath>
 #include <random>
+#include <string_view>
 #include <stdexcept>
 #include <sstream>
 
-SphereSampler::SphereSampler() :
-    m_sampling_size{ 10 }, m_distance_min{ 0.0 }, m_distance_max{ 1.0 }
-{
+namespace {
 
-}
-
-void SphereSampler::Print() const
+SphereSamplingProfile MakeSphereSamplingProfile(
+    SphereSamplingMethod method,
+    SphereDistanceRange range,
+    unsigned int sample_count)
 {
-    std::ostringstream oss;
-    oss << "SphereSampler Configuration:\n"
-        << " - Sampling size: " << m_sampling_size << '\n'
-        << " - Distance range: ["
-        << StringHelper::ToStringWithPrecision<double>(m_distance_min, 1) << ", "
-        << StringHelper::ToStringWithPrecision<double>(m_distance_max, 1)
-        << "] Angstrom.";
-    Logger::Log(LogLevel::Info, oss.str());
-}
-
-void SphereSampler::SetDistanceRange(double min_value, double max_value)
-{
-    if (min_value > max_value)
+    if (range.min > range.max)
     {
         throw std::invalid_argument("SphereSampler: distance minimum greater than maximum");
     }
-    if (min_value < 0.0 || max_value < 0.0)
+    if (range.min < 0.0 || range.max < 0.0)
     {
         throw std::invalid_argument("SphereSampler: distance range cannot be negative");
     }
 
-    m_distance_min = min_value;
-    m_distance_max = max_value;
+    return SphereSamplingProfile{
+        method,
+        range,
+        SphereRandomSamplingConfig{ sample_count }
+    };
+}
+
+void ValidateSphereSamplingProfile(const SphereSamplingProfile & profile)
+{
+    const auto & config{ std::get<SphereRandomSamplingConfig>(profile.method_config) };
+    (void)MakeSphereSamplingProfile(profile.method, profile.distance_range, config.sample_count);
+}
+
+std::string_view GetSphereSamplingMethodName(SphereSamplingMethod method)
+{
+    switch (method)
+    {
+        case SphereSamplingMethod::RadiusUniformRandom:
+            return "RadiusUniformRandom";
+        case SphereSamplingMethod::VolumeUniformRandom:
+            return "VolumeUniformRandom";
+    }
+
+    return "Unknown";
+}
+
+} // namespace
+
+SphereSamplingProfile SphereSamplingProfile::RadiusUniformRandom(
+    SphereDistanceRange range,
+    unsigned int sample_count)
+{
+    return MakeSphereSamplingProfile(
+        SphereSamplingMethod::RadiusUniformRandom,
+        range,
+        sample_count);
+}
+
+SphereSamplingProfile SphereSamplingProfile::VolumeUniformRandom(
+    SphereDistanceRange range,
+    unsigned int sample_count)
+{
+    return MakeSphereSamplingProfile(
+        SphereSamplingMethod::VolumeUniformRandom,
+        range,
+        sample_count);
+}
+
+SphereSampler::SphereSampler() :
+    m_profile{ SphereSamplingProfile::RadiusUniformRandom(SphereDistanceRange{ 0.0, 1.0 }, 10) }
+{
+}
+
+void SphereSampler::Print() const
+{
+    const auto & config{ std::get<SphereRandomSamplingConfig>(m_profile.method_config) };
+
+    std::ostringstream oss;
+    oss << "SphereSampler Configuration:\n"
+        << " - Sampling method: " << GetSphereSamplingMethodName(m_profile.method) << '\n'
+        << " - Sample count: " << config.sample_count << '\n'
+        << " - Distance range: ["
+        << StringHelper::ToStringWithPrecision<double>(m_profile.distance_range.min, 1) << ", "
+        << StringHelper::ToStringWithPrecision<double>(m_profile.distance_range.max, 1)
+        << "] Angstrom.";
+    Logger::Log(LogLevel::Info, oss.str());
+}
+
+void SphereSampler::SetSamplingProfile(const SphereSamplingProfile & profile)
+{
+    ValidateSphereSamplingProfile(profile);
+    m_profile = profile;
+}
+
+std::size_t SphereSampler::GetExpectedPointCount() const
+{
+    return std::get<SphereRandomSamplingConfig>(m_profile.method_config).sample_count;
 }
 
 SamplingPointList SphereSampler::GenerateSamplingPoints(
     const std::array<float, 3> & reference_position) const
 {
     SamplingPointList out;
-    RunRadiusUniformRandomSamplingMethod(reference_position, out);
+    const auto & config{ std::get<SphereRandomSamplingConfig>(m_profile.method_config) };
+    switch (m_profile.method)
+    {
+        case SphereSamplingMethod::RadiusUniformRandom:
+            GenerateRadiusUniformRandom(
+                reference_position,
+                m_profile.distance_range,
+                config,
+                out);
+            break;
+        case SphereSamplingMethod::VolumeUniformRandom:
+            GenerateVolumeUniformRandom(
+                reference_position,
+                m_profile.distance_range,
+                config,
+                out);
+            break;
+    }
 
     return out;
 }
 
-void SphereSampler::RunVolumeUniformRandomSamplingMethod(
+void SphereSampler::GenerateVolumeUniformRandom(
     const std::array<float, 3> & reference_position,
+    const SphereDistanceRange & distance_range,
+    const SphereRandomSamplingConfig & config,
     SamplingPointList & out) const
 {
-    out.resize(m_sampling_size);
+    out.resize(config.sample_count);
     
     static thread_local std::mt19937 engine{ std::random_device{}() };
     std::uniform_real_distribution<float> dist_unit(0.0f, 1.0f);
     std::uniform_real_distribution<float> dist_phi(0.0f, static_cast<float>(Constants::two_pi));
     std::uniform_real_distribution<float> dist_cos_theta(-1.0f, 1.0f);
     const float min_radius_cube{
-        static_cast<float>(m_distance_min * m_distance_min * m_distance_min)
+        static_cast<float>(distance_range.min * distance_range.min * distance_range.min)
     };
     const float max_radius_cube{
-        static_cast<float>(m_distance_max * m_distance_max * m_distance_max)
+        static_cast<float>(distance_range.max * distance_range.max * distance_range.max)
     };
 
-    for (unsigned int i = 0; i < m_sampling_size; i++)
+    for (unsigned int i = 0; i < config.sample_count; i++)
     {
         const float radius_unit{ dist_unit(engine) };
         const float radius{
@@ -93,20 +175,22 @@ void SphereSampler::RunVolumeUniformRandomSamplingMethod(
     }
 }
 
-void SphereSampler::RunRadiusUniformRandomSamplingMethod(
+void SphereSampler::GenerateRadiusUniformRandom(
     const std::array<float, 3> & reference_position,
+    const SphereDistanceRange & distance_range,
+    const SphereRandomSamplingConfig & config,
     SamplingPointList & out) const
 {
-    out.resize(m_sampling_size);
+    out.resize(config.sample_count);
     
     static thread_local std::mt19937 engine{ std::random_device{}() };
     std::uniform_real_distribution<float> dist_radius(
-        static_cast<float>(m_distance_min), static_cast<float>(m_distance_max)
+        static_cast<float>(distance_range.min), static_cast<float>(distance_range.max)
     );
     std::uniform_real_distribution<float> dist_phi(0.0f, static_cast<float>(Constants::two_pi));
     std::uniform_real_distribution<float> dist_cos_theta(-1.0f, 1.0f);
 
-    for (unsigned int i = 0; i < m_sampling_size; i++)
+    for (unsigned int i = 0; i < config.sample_count; i++)
     {
         const float radius{ dist_radius(engine) };
         float phi{ dist_phi(engine) };

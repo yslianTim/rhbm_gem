@@ -1,29 +1,70 @@
 #pragma once
 
+#include <cstddef>
+#include <variant>
+
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
+enum class SphereSamplingMethod
+{
+    RadiusUniformRandom,
+    VolumeUniformRandom
+};
+
+struct SphereDistanceRange
+{
+    double min{ 0.0 };
+    double max{ 1.0 };
+};
+
+struct SphereRandomSamplingConfig
+{
+    unsigned int sample_count{ 10 };
+};
+
+struct SphereSamplingProfile
+{
+    SphereSamplingMethod method{ SphereSamplingMethod::RadiusUniformRandom };
+    SphereDistanceRange distance_range{};
+    std::variant<SphereRandomSamplingConfig> method_config{
+        SphereRandomSamplingConfig{}
+    };
+
+    static SphereSamplingProfile RadiusUniformRandom(
+        SphereDistanceRange range,
+        unsigned int sample_count);
+    static SphereSamplingProfile VolumeUniformRandom(
+        SphereDistanceRange range,
+        unsigned int sample_count);
+};
+
+// SphereSampler keeps GenerateSamplingPoints() as the stable public entry point.
+// Sampling behavior is selected through SphereSamplingProfile
 class SphereSampler
 {
-    unsigned int m_sampling_size;
-    double m_distance_min, m_distance_max;
+    SphereSamplingProfile m_profile;
 
 public:
     SphereSampler();
     ~SphereSampler() = default;
 
     void Print() const;
-    void SetDistanceRange(double min_value, double max_value);
+    void SetSamplingProfile(const SphereSamplingProfile & profile);
+    const SphereSamplingProfile & GetSamplingProfile() const { return m_profile; }
+    std::size_t GetExpectedPointCount() const;
 
     SamplingPointList GenerateSamplingPoints(const std::array<float, 3> & reference_position) const;
-    unsigned int GetSampleCount() const { return m_sampling_size; }
-    void SetSampleCount(unsigned int value) { m_sampling_size = value; }
 
 private:
-    void RunVolumeUniformRandomSamplingMethod(
+    void GenerateVolumeUniformRandom(
         const std::array<float, 3> & reference_position,
+        const SphereDistanceRange & distance_range,
+        const SphereRandomSamplingConfig & config,
         SamplingPointList & out) const;
-    void RunRadiusUniformRandomSamplingMethod(
+    void GenerateRadiusUniformRandom(
         const std::array<float, 3> & reference_position,
+        const SphereDistanceRange & distance_range,
+        const SphereRandomSamplingConfig & config,
         SamplingPointList & out) const;
 
 };

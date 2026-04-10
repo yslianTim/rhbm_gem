@@ -733,8 +733,10 @@ void RunAtomSamplingWorkflow(
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunAtomMapValueSampling");
     SphereSampler sampler;
-    sampler.SetSampleCount(static_cast<unsigned int>(options.sampling_size));
-    sampler.SetDistanceRange(options.sampling_range_min, options.sampling_range_max);
+    sampler.SetSamplingProfile(
+        SphereSamplingProfile::RadiusUniformRandom(
+            SphereDistanceRange{ options.sampling_range_min, options.sampling_range_max },
+            static_cast<unsigned int>(options.sampling_size)));
     sampler.Print();
 
     const auto & atom_list{ model_object.GetSelectedAtoms() };
