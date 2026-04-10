@@ -7,30 +7,36 @@
 
 #include "command/MapSampling.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
-#include <rhbm_gem/utils/math/SamplerBase.hpp>
+#include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace rg = rhbm_gem;
 
 namespace {
 
-class SinglePointSampler : public ::SamplerBase
+class SinglePointSampler
 {
 public:
-    void Print() const override {}
-
-    std::vector<std::tuple<float, std::array<float, 3>>> GenerateSamplingPoints(
-        const std::array<float, 3> & position,
-        const std::array<float, 3> & axis_vector) const override
+    SamplingPointList GenerateSamplingPoints(const std::array<float, 3> & position) const
     {
-        (void)axis_vector;
         return { std::make_tuple(0.0f, position) };
     }
+};
 
-    unsigned int GetSamplingSize() const override { return m_sampling_size; }
-    void SetSamplingSize(unsigned int value) override { m_sampling_size = value; }
-
-private:
-    unsigned int m_sampling_size{ 1 };
+class ShiftedPointSampler
+{
+public:
+    SamplingPointList GenerateSamplingPoints(
+        const std::array<float, 3> & position,
+        const std::array<float, 3> & direction_like_input) const
+    {
+        return { std::make_tuple(
+            1.0f,
+            std::array<float, 3>{
+                position[0] + direction_like_input[0],
+                position[1] + direction_like_input[1],
+                position[2] + direction_like_input[2]
+            }) };
+    }
 };
 
 rg::MapObject MakeMapObject()
@@ -48,16 +54,16 @@ rg::MapObject MakeMapObject()
 
 } // namespace
 
-TEST(MapSamplingTest, SampleMapValuesReturnsExpectedPointValueAndIsDeterministic)
+TEST(MapSamplingTest, PositionOnlySamplerReturnsExpectedPointValueAndIsDeterministic)
 {
     auto map{ MakeMapObject() };
     SinglePointSampler sampler;
     const auto first{
-        rg::SampleMapValues(map, sampler, { 0.0f, 0.0f, 0.0f }, { 1.0f, 0.0f, 0.0f }) };
+        rg::SampleMapValues(map, sampler, { 0.0f, 0.0f, 0.0f }) };
     const auto second{
-        rg::SampleMapValues(map, sampler, { 1.0f, 1.0f, 1.0f }, { 0.0f, 1.0f, 0.0f }) };
+        rg::SampleMapValues(map, sampler, { 1.0f, 1.0f, 1.0f }) };
     const auto first_again{
-        rg::SampleMapValues(map, sampler, { 0.0f, 0.0f, 0.0f }, { 1.0f, 0.0f, 0.0f }) };
+        rg::SampleMapValues(map, sampler, { 0.0f, 0.0f, 0.0f }) };
 
     ASSERT_EQ(first.size(), 1u);
     ASSERT_EQ(second.size(), 1u);
@@ -67,4 +73,22 @@ TEST(MapSamplingTest, SampleMapValuesReturnsExpectedPointValueAndIsDeterministic
     EXPECT_FLOAT_EQ(std::get<1>(first.front()), map.GetMapValue(0, 0, 0));
     EXPECT_FLOAT_EQ(std::get<1>(second.front()), map.GetMapValue(1, 1, 1));
     EXPECT_FLOAT_EQ(std::get<1>(first_again.front()), std::get<1>(first.front()));
+}
+
+TEST(MapSamplingTest, OrientedSamplerUsesDirectionLikeInput)
+{
+    auto map{ MakeMapObject() };
+    ShiftedPointSampler sampler;
+
+    const auto sampling_data{
+        rg::SampleMapValues(
+            map,
+            sampler,
+            { 0.0f, 0.0f, 0.0f },
+            { 1.0f, 1.0f, 1.0f })
+    };
+
+    ASSERT_EQ(1u, sampling_data.size());
+    EXPECT_FLOAT_EQ(1.0f, std::get<0>(sampling_data.front()));
+    EXPECT_FLOAT_EQ(map.GetMapValue(1, 1, 1), std::get<1>(sampling_data.front()));
 }

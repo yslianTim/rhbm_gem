@@ -9,7 +9,7 @@
 #include <sstream>
 
 SphereSampler::SphereSampler() :
-    m_sampling_size{ 10 }, m_distance_min{ 0.0 }, m_distance_max{ 1.0 }, m_distance_step{ 0.1 }
+    m_sampling_size{ 10 }, m_distance_min{ 0.0 }, m_distance_max{ 1.0 }
 {
 
 }
@@ -26,13 +26,10 @@ void SphereSampler::Print() const
     Logger::Log(LogLevel::Info, oss.str());
 }
 
-std::vector<std::tuple<float, std::array<float, 3>>> SphereSampler::GenerateSamplingPoints(
-    const std::array<float, 3> & reference_position,
-    const std::array<float, 3> & axis_vector) const
+SamplingPointList SphereSampler::GenerateSamplingPoints(
+    const std::array<float, 3> & reference_position) const
 {
-    (void)axis_vector; // axis_vector is not used in SphereSampler
-
-    std::vector<std::tuple<float, std::array<float, 3>>> out;
+    SamplingPointList out;
     RunRadiusUniformRandomSamplingMethod(reference_position, out);
 
     return out;
@@ -40,7 +37,7 @@ std::vector<std::tuple<float, std::array<float, 3>>> SphereSampler::GenerateSamp
 
 void SphereSampler::RunVolumeUniformRandomSamplingMethod(
     const std::array<float, 3> & reference_position,
-    std::vector<std::tuple<float, std::array<float, 3>>> & out) const
+    SamplingPointList & out) const
 {
     if (m_distance_min > m_distance_max)
     {
@@ -91,7 +88,7 @@ void SphereSampler::RunVolumeUniformRandomSamplingMethod(
 
 void SphereSampler::RunRadiusUniformRandomSamplingMethod(
     const std::array<float, 3> & reference_position,
-    std::vector<std::tuple<float, std::array<float, 3>>> & out) const
+    SamplingPointList & out) const
 {
     if (m_distance_min > m_distance_max)
     {

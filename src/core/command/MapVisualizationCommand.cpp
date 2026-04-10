@@ -176,10 +176,10 @@ bool MapVisualizationCommand::RunAtomMapValueSampling()
         Logger::Log(LogLevel::Error, "Map or model object is unavailable for visualization.");
         return false;
     }
-    auto sampler{ std::make_unique<GridSampler>() };
-    sampler->SetSamplingSize(static_cast<unsigned int>(request.sampling_size));
-    sampler->SetWindowSize(static_cast<float>(request.window_size));
-    sampler->Print();
+    GridSampler sampler;
+    sampler.SetGridResolution(static_cast<unsigned int>(request.sampling_size));
+    sampler.SetWindowSize(static_cast<float>(request.window_size));
+    sampler.Print();
     
     auto context{ BuildModelAtomBondContext(*m_model_object) };
     const auto & atom_map{ context.atom_map };
@@ -239,12 +239,12 @@ bool MapVisualizationCommand::RunAtomMapValueSampling()
             return false;
         }
     }
-    sampler->SetReferenceUVector({u_vector(0), u_vector(1), u_vector(2)});
+    sampler.SetReferenceUVector({u_vector(0), u_vector(1), u_vector(2)});
 
     auto sampling_data_list{
         SampleMapValues(
             *m_map_object,
-            *sampler,
+            sampler,
             target_atom_position,
             {n_vector(0), n_vector(1), n_vector(2)})
     };

@@ -28,9 +28,9 @@ void GridSampler::Print() const
     Logger::Log(LogLevel::Info, oss.str());
 }
 
-std::vector<std::tuple<float, std::array<float, 3>>> GridSampler::GenerateSamplingPoints(
+SamplingPointList GridSampler::GenerateSamplingPoints(
     const std::array<float, 3> & reference_position,
-    const std::array<float, 3> & axis_vector) const
+    const std::array<float, 3> & plane_normal) const
 {
     if (m_window_size <= 0.0)
     {
@@ -42,15 +42,15 @@ std::vector<std::tuple<float, std::array<float, 3>>> GridSampler::GenerateSampli
     }
 
     const Eigen::Map<const Vector3f> eigen_reference_position(reference_position.data());
-    const Eigen::Map<const Vector3f> eigen_axis_vector(axis_vector.data());
+    const Eigen::Map<const Vector3f> eigen_plane_normal(plane_normal.data());
     const Eigen::Map<const Vector3f> eigen_u_vector(m_reference_u_vector.data());
 
     const auto eps{ Eigen::NumTraits<float>::epsilon() };
-    if (eigen_axis_vector.isZero(eps))
+    if (eigen_plane_normal.isZero(eps))
     {
-        throw std::invalid_argument("GridSampler: axis_vector cannot be zero.");
+        throw std::invalid_argument("GridSampler: plane normal cannot be zero.");
     }
-    Vector3f n_unit{ eigen_axis_vector.normalized() };
+    Vector3f n_unit{ eigen_plane_normal.normalized() };
     Vector3f u_proj{ eigen_u_vector - (eigen_u_vector.dot(n_unit)) * n_unit };
     Vector3f u_unit{ u_proj.normalized() };
     Vector3f v_unit{ n_unit.cross(u_unit) };
@@ -58,7 +58,7 @@ std::vector<std::tuple<float, std::array<float, 3>>> GridSampler::GenerateSampli
     auto step_size{ m_window_size / static_cast<float>(m_sampling_size - 1) };
 
     auto total_grid_size{ m_sampling_size * m_sampling_size };
-    std::vector<std::tuple<float, std::array<float, 3>>> output_list;
+    SamplingPointList output_list;
     output_list.reserve(total_grid_size);
 
     for (unsigned int j = 0; j < m_sampling_size; j++)

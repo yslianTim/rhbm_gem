@@ -12,7 +12,7 @@ Related implementation files:
 - [`src/core/command/MapVisualizationCommand.cpp`](/src/core/command/MapVisualizationCommand.cpp)
 - [`include/rhbm_gem/utils/math/GridSampler.hpp`](/include/rhbm_gem/utils/math/GridSampler.hpp)
 - [`src/utils/math/GridSampler.cpp`](/src/utils/math/GridSampler.cpp)
-- [`src/core/command/MapSampling.cpp`](/src/core/command/MapSampling.cpp)
+- [`src/core/command/MapSampling.hpp`](/src/core/command/MapSampling.hpp)
 
 ## Request Surface
 
@@ -116,12 +116,12 @@ This fallback is implemented in [`MapVisualizationCommand.cpp`](/src/core/comman
 `MapVisualizationCommand` passes:
 
 - `u` through `SetReferenceUVector(...)`
-- `n` through `SampleMapValues(..., axis_vector = n)`
+- `n` through `SampleMapValues(..., plane_normal = n)`
 
 Inside [`GridSampler::GenerateSamplingPoints()`](/src/utils/math/GridSampler.cpp#L31), the sampler then does:
 
 ```text
-n_unit = normalize(axis_vector)
+n_unit = normalize(plane_normal)
 u_proj = reference_u_vector - dot(reference_u_vector, n_unit) * n_unit
 u_unit = normalize(u_proj)
 v_unit = n_unit x u_unit
@@ -300,7 +300,7 @@ The sampler returns:
 - the 3D sample position
 
 `SampleMapValues()` then interpolates the map value at each 3D position in
-[`src/core/command/MapSampling.cpp`](/src/core/command/MapSampling.cpp).
+[`src/core/command/MapSampling.hpp`](/src/core/command/MapSampling.hpp).
 
 ## Important Interpretation Notes
 

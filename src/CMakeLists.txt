@@ -28,7 +28,6 @@ target_sources(rhbm_gem PRIVATE
     core/painter/PotentialPlotBuilder.cpp
     core/painter/detail/PainterModelAccess.cpp
     ${RHBM_GEM_COMMAND_SOURCES}
-    core/command/MapSampling.cpp
 
     # data
     data/object/AtomClassifier.cpp

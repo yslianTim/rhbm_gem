@@ -31,7 +31,7 @@ void CylinderSampler::Print() const
     Logger::Log(LogLevel::Info, oss.str());
 }
 
-std::vector<std::tuple<float, std::array<float, 3>>> CylinderSampler::GenerateSamplingPoints(
+SamplingPointList CylinderSampler::GenerateSamplingPoints(
     const std::array<float, 3> & reference_position,
     const std::array<float, 3> & axis_vector) const
 {
@@ -60,7 +60,7 @@ std::vector<std::tuple<float, std::array<float, 3>>> CylinderSampler::GenerateSa
     u = w.unitOrthogonal();
     v = w.cross(u);
 
-    std::vector<std::tuple<float, std::array<float, 3>>> output_list;
+    SamplingPointList output_list;
     output_list.reserve(m_sampling_size);
 
     static thread_local std::mt19937 engine{ std::random_device{}() };

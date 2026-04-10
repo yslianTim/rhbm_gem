@@ -732,11 +732,11 @@ void RunAtomSamplingWorkflow(
     int thread_size)
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunAtomMapValueSampling");
-    auto sampler{ std::make_unique<SphereSampler>() };
-    sampler->SetSamplingSize(static_cast<unsigned int>(options.sampling_size));
-    sampler->SetDistanceRangeMinimum(options.sampling_range_min);
-    sampler->SetDistanceRangeMaximum(options.sampling_range_max);
-    sampler->Print();
+    SphereSampler sampler;
+    sampler.SetSampleCount(static_cast<unsigned int>(options.sampling_size));
+    sampler.SetDistanceRangeMinimum(options.sampling_range_min);
+    sampler.SetDistanceRangeMaximum(options.sampling_range_max);
+    sampler.Print();
 
     const auto & atom_list{ model_object.GetSelectedAtoms() };
     const auto atom_size{ atom_list.size() };
@@ -758,7 +758,7 @@ void RunAtomSamplingWorkflow(
             auto atom{ atom_list[i] };
             auto entry{ local_entry_list[i] };
             auto distance_and_map_value_list{
-                SampleMapValues(map_object, *sampler, atom->GetPosition())
+                SampleMapValues(map_object, sampler, atom->GetPosition())
             };
             entry.SetDistanceAndMapValueList(distance_and_map_value_list);
             entry.SetDataset(LocalPotentialDataset{
@@ -784,7 +784,7 @@ void RunAtomSamplingWorkflow(
         auto atom{ atom_list[i] };
         auto entry{ local_entry_list[i] };
         auto distance_and_map_value_list{
-            SampleMapValues(map_object, *sampler, atom->GetPosition())
+            SampleMapValues(map_object, sampler, atom->GetPosition())
         };
         entry.SetDistanceAndMapValueList(distance_and_map_value_list);
         entry.SetDataset(LocalPotentialDataset{

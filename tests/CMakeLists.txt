@@ -131,6 +131,8 @@ set(UTILS_MATH_TEST_SOURCES
     utils/math/ElectricPotential_test.cpp
     utils/math/GausLinearTransformHelper_test.cpp
     utils/math/KDTreeAlgorithm_test.cpp
+    utils/math/CylinderSampler_test.cpp
+    utils/math/GridSampler_test.cpp
     utils/math/SphereSampler_test.cpp
 )
 

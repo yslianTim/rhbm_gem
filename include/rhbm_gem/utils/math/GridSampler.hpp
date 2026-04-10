@@ -1,12 +1,9 @@
 #pragma once
 
 #include <array>
-#include <vector>
-#include <tuple>
+#include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
-#include <rhbm_gem/utils/math/SamplerBase.hpp>
-
-class GridSampler : public SamplerBase
+class GridSampler
 {
     unsigned int m_sampling_size;
     float m_window_size;
@@ -16,12 +13,18 @@ public:
     GridSampler();
     ~GridSampler() = default;
 
-    void Print() const override;
-    std::vector<std::tuple<float, std::array<float, 3>>> GenerateSamplingPoints(
+    void Print() const;
+    SamplingPointList GenerateSamplingPoints(
         const std::array<float, 3> & reference_position,
-        const std::array<float, 3> & axis_vector) const override;
-    unsigned int GetSamplingSize() const override { return m_sampling_size * m_sampling_size; }
-    void SetSamplingSize(unsigned int value) override { m_sampling_size = value; }
+        const std::array<float, 3> & plane_normal) const;
+    unsigned int GetGridResolution() const { return m_sampling_size; }
+    unsigned int GetPointCount() const { return m_sampling_size * m_sampling_size; }
+    void SetGridResolution(unsigned int value) { m_sampling_size = value; }
+
+    // Transitional compatibility wrappers. Prefer GetGridResolution()/SetGridResolution().
+    unsigned int GetSamplingSize() const { return GetPointCount(); }
+    void SetSamplingSize(unsigned int value) { SetGridResolution(value); }
+
     void SetWindowSize(float value) { m_window_size = value; }
     void SetReferenceUVector(const std::array<float, 3> & value) { m_reference_u_vector = value; }
 

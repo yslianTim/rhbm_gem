@@ -56,12 +56,12 @@ void RunBondSampling(
     int thread_size)
 {
     ScopeTimer timer("PotentialAnalysisBondWorkflow::RunBondMapValueSampling");
-    auto sampler{ std::make_unique<CylinderSampler>() };
-    sampler->SetSamplingSize(static_cast<unsigned int>(options.sampling_size));
-    sampler->SetDistanceRangeMinimum(options.sampling_range_min);
-    sampler->SetDistanceRangeMaximum(options.sampling_range_max);
-    sampler->SetHeight(options.sampling_height);
-    sampler->Print();
+    CylinderSampler sampler;
+    sampler.SetSampleCount(static_cast<unsigned int>(options.sampling_size));
+    sampler.SetDistanceRangeMinimum(options.sampling_range_min);
+    sampler.SetDistanceRangeMaximum(options.sampling_range_max);
+    sampler.SetHeight(options.sampling_height);
+    sampler.Print();
 
     const auto & bond_list{ model_object.GetSelectedBonds() };
     const auto bond_size{ bond_list.size() };
@@ -93,7 +93,7 @@ void RunBondSampling(
             auto distance_and_map_value_list{
                 SampleMapValues(
                     map_object,
-                    *sampler,
+                    sampler,
                     adjusted_position,
                     bond_vector)
             };
@@ -120,7 +120,7 @@ void RunBondSampling(
         auto distance_and_map_value_list{
             SampleMapValues(
                 map_object,
-                *sampler,
+                sampler,
                 bond->GetPosition(),
                 bond->GetBondVector())
         };
