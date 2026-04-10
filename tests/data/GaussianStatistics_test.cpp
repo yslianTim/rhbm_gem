@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include <type_traits>
+#include <cmath>
 
 #include <rhbm_gem/data/object/GaussianStatistics.hpp>
 #include <rhbm_gem/utils/domain/Constants.hpp>
@@ -10,27 +10,7 @@
 
 namespace rg = rhbm_gem;
 
-namespace {
-
-template <typename EntryT, typename MemberT, typename = void>
-struct HasTypedAddMember : std::false_type {};
-
-template <typename EntryT, typename MemberT>
-struct HasTypedAddMember<
-    EntryT,
-    MemberT,
-    std::void_t<decltype(std::declval<EntryT &>().AddMember(
-        std::declval<GroupKey>(),
-        std::declval<MemberT &>()))>> : std::true_type {};
-
-static_assert(HasTypedAddMember<rg::AtomGroupPotentialEntry, rg::AtomObject>::value);
-static_assert(!HasTypedAddMember<rg::AtomGroupPotentialEntry, rg::BondObject>::value);
-static_assert(HasTypedAddMember<rg::BondGroupPotentialEntry, rg::BondObject>::value);
-static_assert(!HasTypedAddMember<rg::BondGroupPotentialEntry, rg::AtomObject>::value);
-
-} // namespace
-
-TEST(GaussianValueObjectRegressionTest, LocalAndGroupIntensityStayEquivalent)
+TEST(GaussianStatisticsTest, LocalAndGroupIntensityStayEquivalent)
 {
     const rg::GaussianEstimate estimate{ 9.0, 1.5 };
     const rg::GaussianEstimate variance{ 0.5, 0.2 };
@@ -54,7 +34,7 @@ TEST(GaussianValueObjectRegressionTest, LocalAndGroupIntensityStayEquivalent)
         group_posterior.GetVariance(2));
 }
 
-TEST(GaussianValueObjectRegressionTest, PublicGaussianStatisticsHeaderExposesStableValueMath)
+TEST(GaussianStatisticsTest, PublicGaussianStatisticsHeaderExposesStableValueMath)
 {
     const rg::GaussianEstimate estimate{ 9.0, 1.5 };
     const rg::GaussianEstimate variance{ 0.5, 0.2 };

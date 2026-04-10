@@ -105,24 +105,24 @@ set(CORE_PAINTER_TEST_SOURCES
 )
 
 set(DATA_CONTRACT_TEST_SOURCES
-    data/DataPublicSurface_test.cpp
+    data/DataPublicHeaders_test.cpp
 )
 
 set(DATA_RUNTIME_TEST_SOURCES
-    data/DataObjectDispatchAndIngestion_test.cpp
+    data/DataObjectAssemblySpatialQuery_test.cpp
     data/DataObjectFileIO_test.cpp
-    data/GaussianValueObjectRegression_test.cpp
+    data/DataObjectMapBehavior_test.cpp
+    data/DataObjectModelAnalysis_test.cpp
+    data/DataObjectPainterIngestion_test.cpp
     data/DataObjectImportRegression_test.cpp
-    data/DataObjectRuntimeBehavior_test.cpp
+    data/GaussianStatistics_test.cpp
     data/LocalPotentialSeries_test.cpp
 )
 
 set(DATA_SCHEMA_TEST_SOURCES
     data/DataObjectPersistence_test.cpp
-    data/DataObjectSchemaBootstrap_test.cpp
-    data/DataObjectSchemaCompatibility_test.cpp
+    data/DataObjectSchemaLifecycle_test.cpp
     data/DataObjectSchemaValidation_test.cpp
-    data/SQLitePersistenceTypedApi_test.cpp
 )
 
 set(UTILS_MATH_TEST_SOURCES

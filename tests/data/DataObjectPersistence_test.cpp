@@ -2,14 +2,89 @@
 
 #include <filesystem>
 #include <stdexcept>
+#include <string>
 
 #include "data/detail/ModelAnalysisData.hpp"
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
+#include "io/sqlite/SQLitePersistence.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include "support/DataObjectTestSupport.hpp"
 
 namespace rg = rhbm_gem;
+
+namespace {
+
+enum class PersistedObjectType
+{
+    Model,
+    Map,
+};
+
+enum class RequestedLoadType
+{
+    Model,
+    Map,
+};
+
+struct TypedMismatchCase
+{
+    const char * name;
+    PersistedObjectType persisted_type;
+    RequestedLoadType requested_type;
+};
+
+class SQLitePersistenceTypedMismatchTest
+    : public testing::TestWithParam<TypedMismatchCase> {};
+
+TEST_P(SQLitePersistenceTypedMismatchTest, ThrowsWhenCatalogRowTypeDoesNotMatchRequestedLoad)
+{
+    const auto & test_case{ GetParam() };
+    const command_test::ScopedTempDir temp_dir{
+        std::string("sqlite_persistence_typed_mismatch_") + test_case.name };
+    const auto database_path{ temp_dir.path() / "typed_mismatch.sqlite" };
+
+    rg::SQLitePersistence persistence{ database_path };
+    if (test_case.persisted_type == PersistedObjectType::Map)
+    {
+        auto map{ data_test::MakeMapObject() };
+        persistence.SaveMap(map, "shared_key");
+    }
+    else
+    {
+        const auto model_path{ command_test::TestDataPath("test_model.cif") };
+        auto model{ rg::ReadModel(model_path) };
+        persistence.SaveModel(*model, "shared_key");
+    }
+
+    if (test_case.requested_type == RequestedLoadType::Model)
+    {
+        EXPECT_THROW((void)persistence.LoadModel("shared_key"), std::runtime_error);
+    }
+    else
+    {
+        EXPECT_THROW((void)persistence.LoadMap("shared_key"), std::runtime_error);
+    }
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    TypedCatalogMismatch,
+    SQLitePersistenceTypedMismatchTest,
+    testing::Values(
+        TypedMismatchCase{
+            "ModelLoadAgainstMapRow",
+            PersistedObjectType::Map,
+            RequestedLoadType::Model },
+        TypedMismatchCase{
+            "MapLoadAgainstModelRow",
+            PersistedObjectType::Model,
+            RequestedLoadType::Map }),
+    [](const testing::TestParamInfo<TypedMismatchCase> & info)
+    {
+        return std::string(info.param.name);
+    });
+
+} // namespace
 
 TEST(DataObjectPersistenceTest, SaveAndLoadModelWithoutRegistryState)
 {
@@ -27,6 +102,23 @@ TEST(DataObjectPersistenceTest, SaveAndLoadModelWithoutRegistryState)
     ASSERT_NE(loaded_model, nullptr);
     EXPECT_EQ(loaded_model->GetPdbID(), "MODEL_REPOSITORY");
     EXPECT_EQ(loaded_model->GetNumberOfAtom(), model->GetNumberOfAtom());
+}
+
+TEST(DataObjectPersistenceTest, SQLiteTypedSaveAndLoadMapRoundTrip)
+{
+    const command_test::ScopedTempDir temp_dir{ "sqlite_persistence_typed_map" };
+    const auto database_path{ temp_dir.path() / "typed_map.sqlite" };
+
+    rg::SQLitePersistence persistence{ database_path };
+    auto map{ data_test::MakeMapObject() };
+    map.SetKeyTag("map");
+
+    persistence.SaveMap(map, "map");
+
+    auto loaded_map{ persistence.LoadMap("map") };
+    ASSERT_NE(loaded_map, nullptr);
+    EXPECT_EQ(loaded_map->GetGridSize(), map.GetGridSize());
+    EXPECT_FLOAT_EQ(loaded_map->GetMapValue(0), map.GetMapValue(0));
 }
 
 TEST(DataObjectPersistenceTest, FinalV2CatalogDatabaseRemainsLoadable)

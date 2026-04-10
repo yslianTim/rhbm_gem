@@ -11,93 +11,101 @@
 
 namespace rg = rhbm_gem;
 
-TEST(DataObjectSchemaValidationTest, NormalizedV2DatabaseMissingRequiredTableThrows)
+namespace {
+
+template <typename MutateFn>
+void ExpectNormalizedSchemaValidationFailure(
+    const char * temp_dir_name,
+    const char * database_name,
+    MutateFn mutate_database)
 {
-    const command_test::ScopedTempDir temp_dir{ "data_schema_missing_v2_table" };
-    const auto database_path{ temp_dir.path() / "missing_v2.sqlite" };
+    const command_test::ScopedTempDir temp_dir{ temp_dir_name };
+    const auto database_path{ temp_dir.path() / database_name };
 
     {
         rg::SQLitePersistence database_manager{ database_path };
         EXPECT_EQ(data_test::GetUserVersion(database_path), 2);
     }
-    data_test::ExecuteSql(database_path, "DROP TABLE model_bond_group_potential;");
-    data_test::SetUserVersion(database_path, 2);
 
+    mutate_database(database_path);
     EXPECT_THROW((void)rg::SQLitePersistence(database_path), std::runtime_error);
+}
+
+} // namespace
+
+TEST(DataObjectSchemaValidationTest, NormalizedV2DatabaseMissingRequiredTableThrows)
+{
+    ExpectNormalizedSchemaValidationFailure(
+        "data_schema_missing_v2_table",
+        "missing_v2.sqlite",
+        [](const std::filesystem::path & database_path)
+        {
+            data_test::ExecuteSql(database_path, "DROP TABLE model_bond_group_potential;");
+            data_test::SetUserVersion(database_path, 2);
+        });
 }
 
 TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsMissingForeignKeys)
 {
-    const command_test::ScopedTempDir temp_dir{ "data_schema_missing_fk" };
-    const auto database_path{ temp_dir.path() / "missing_fk.sqlite" };
+    ExpectNormalizedSchemaValidationFailure(
+        "data_schema_missing_fk",
+        "missing_fk.sqlite",
+        [](const std::filesystem::path & database_path)
+        {
+            data_test::ExecuteSql(database_path, "DROP TABLE map_list;");
+            data_test::ExecuteSql(
+                database_path,
+                "CREATE TABLE map_list ("
+                "key_tag TEXT PRIMARY KEY, "
+                "grid_size_x INTEGER, grid_size_y INTEGER, grid_size_z INTEGER, "
+                "grid_spacing_x DOUBLE, grid_spacing_y DOUBLE, grid_spacing_z DOUBLE, "
+                "origin_x DOUBLE, origin_y DOUBLE, origin_z DOUBLE, "
+                "map_value_array BLOB"
+                ");");
+            data_test::SetUserVersion(database_path, 2);
 
-    {
-        rg::SQLitePersistence database_manager{ database_path };
-        EXPECT_EQ(data_test::GetUserVersion(database_path), 2);
-    }
-
-    data_test::ExecuteSql(database_path, "DROP TABLE map_list;");
-    data_test::ExecuteSql(
-        database_path,
-        "CREATE TABLE map_list ("
-        "key_tag TEXT PRIMARY KEY, "
-        "grid_size_x INTEGER, grid_size_y INTEGER, grid_size_z INTEGER, "
-        "grid_spacing_x DOUBLE, grid_spacing_y DOUBLE, grid_spacing_z DOUBLE, "
-        "origin_x DOUBLE, origin_y DOUBLE, origin_z DOUBLE, "
-        "map_value_array BLOB"
-        ");");
-    data_test::SetUserVersion(database_path, 2);
-
-    EXPECT_FALSE(
-        data_test::HasForeignKey(
-            database_path,
-            "map_list",
-            "key_tag",
-            "object_catalog",
-            "key_tag",
-            "CASCADE"));
-    EXPECT_THROW((void)rg::SQLitePersistence(database_path), std::runtime_error);
+            EXPECT_FALSE(
+                data_test::HasForeignKey(
+                    database_path,
+                    "map_list",
+                    "key_tag",
+                    "object_catalog",
+                    "key_tag",
+                    "CASCADE"));
+        });
 }
 
 TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsMissingRequiredCatalogColumns)
 {
-    const command_test::ScopedTempDir temp_dir{ "data_schema_bad_catalog_columns" };
-    const auto database_path{ temp_dir.path() / "bad_catalog_columns.sqlite" };
-
-    {
-        rg::SQLitePersistence database_manager{ database_path };
-        EXPECT_EQ(data_test::GetUserVersion(database_path), 2);
-    }
-
-    data_test::ExecuteSqlWithForeignKeysOff(database_path, "DROP TABLE object_catalog;");
-    data_test::ExecuteSqlWithForeignKeysOff(
-        database_path,
-        "CREATE TABLE object_catalog (key_tag TEXT PRIMARY KEY);");
-    data_test::SetUserVersion(database_path, 2);
-
-    EXPECT_THROW((void)rg::SQLitePersistence(database_path), std::runtime_error);
+    ExpectNormalizedSchemaValidationFailure(
+        "data_schema_bad_catalog_columns",
+        "bad_catalog_columns.sqlite",
+        [](const std::filesystem::path & database_path)
+        {
+            data_test::ExecuteSqlWithForeignKeysOff(database_path, "DROP TABLE object_catalog;");
+            data_test::ExecuteSqlWithForeignKeysOff(
+                database_path,
+                "CREATE TABLE object_catalog (key_tag TEXT PRIMARY KEY);");
+            data_test::SetUserVersion(database_path, 2);
+        });
 }
 
 TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsUnknownObjectTypeValue)
 {
-    const command_test::ScopedTempDir temp_dir{ "data_schema_bad_catalog_type" };
-    const auto database_path{ temp_dir.path() / "bad_catalog_type.sqlite" };
-
-    {
-        rg::SQLitePersistence database_manager{ database_path };
-        EXPECT_EQ(data_test::GetUserVersion(database_path), 2);
-    }
-
-    data_test::ExecuteSqlWithForeignKeysOff(database_path, "DROP TABLE object_catalog;");
-    data_test::ExecuteSqlWithForeignKeysOff(
-        database_path,
-        "CREATE TABLE object_catalog (key_tag TEXT PRIMARY KEY, object_type TEXT NOT NULL);");
-    data_test::ExecuteSqlWithForeignKeysOff(
-        database_path,
-        "INSERT INTO object_catalog(key_tag, object_type) VALUES ('unknown_root', 'unknown');");
-    data_test::SetUserVersion(database_path, 2);
-
-    EXPECT_THROW((void)rg::SQLitePersistence(database_path), std::runtime_error);
+    ExpectNormalizedSchemaValidationFailure(
+        "data_schema_bad_catalog_type",
+        "bad_catalog_type.sqlite",
+        [](const std::filesystem::path & database_path)
+        {
+            data_test::ExecuteSqlWithForeignKeysOff(database_path, "DROP TABLE object_catalog;");
+            data_test::ExecuteSqlWithForeignKeysOff(
+                database_path,
+                "CREATE TABLE object_catalog (key_tag TEXT PRIMARY KEY, object_type TEXT NOT NULL);");
+            data_test::ExecuteSqlWithForeignKeysOff(
+                database_path,
+                "INSERT INTO object_catalog(key_tag, object_type) VALUES ('unknown_root', 'unknown');");
+            data_test::SetUserVersion(database_path, 2);
+        });
 }
 
 TEST(DataObjectSchemaValidationTest, ForeignKeyRejectsOrphanModelChildRows)

@@ -6,6 +6,7 @@
 #include <vector>
 
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
+#include <rhbm_gem/utils/domain/StringHelper.hpp>
 
 namespace {
 
@@ -101,18 +102,23 @@ TEST(SphereSamplerTest, PrintOutputsConfiguration)
 TEST(SphereSamplerTest, PrintOutputsFibonacciConfiguration)
 {
     SphereSampler sampler;
+    constexpr double radius_bin_size{ 0.3 };
     sampler.SetSamplingProfile(
         SphereSamplingProfile::FibonacciDeterministic(
             SphereDistanceRange{ 0.5, 1.0 },
-            0.3,
+            radius_bin_size,
             4));
 
     testing::internal::CaptureStdout();
     sampler.Print();
     std::string output{ testing::internal::GetCapturedStdout() };
+    const auto expected_radius_bin_size{
+        StringHelper::ToStringWithPrecision<double>(radius_bin_size, 2) };
 
     EXPECT_NE(output.find("Sampling method: FibonacciDeterministic"), std::string::npos);
-    EXPECT_NE(output.find("Radius bin size: 0.3 Angstrom."), std::string::npos);
+    EXPECT_NE(
+        output.find("Radius bin size: " + expected_radius_bin_size + " Angstrom."),
+        std::string::npos);
     EXPECT_NE(output.find("Samples per radius: 4"), std::string::npos);
     EXPECT_NE(output.find("Expected point count: 12"), std::string::npos);
 }

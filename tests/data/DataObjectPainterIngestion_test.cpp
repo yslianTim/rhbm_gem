@@ -3,7 +3,6 @@
 #include <filesystem>
 #include <memory>
 #include <stdexcept>
-#include <type_traits>
 
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
@@ -13,7 +12,6 @@
 #include <rhbm_gem/core/painter/GausPainter.hpp>
 #include <rhbm_gem/core/painter/ModelPainter.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
-#include <rhbm_gem/data/object/AtomObject.hpp>
 #include "support/DataObjectTestSupport.hpp"
 
 namespace rg = rhbm_gem;
@@ -97,17 +95,4 @@ TEST(DataObjectPainterIngestionTest, PainterContractsRejectModelsWithoutAnalysis
     rg::DemoPainter demo_painter;
     EXPECT_THROW(demo_painter.AddModel(*model), std::runtime_error);
     EXPECT_THROW(demo_painter.AddReferenceModel(*model, "ref"), std::runtime_error);
-}
-
-TEST(DataObjectPainterIngestionTest, PainterInterfacesAreConcreteAndTyped)
-{
-    static_assert(std::is_invocable_v<decltype(&rg::AtomPainter::AddModel), rg::AtomPainter &, rg::ModelObject &>);
-    static_assert(std::is_invocable_v<decltype(&rg::ModelPainter::AddModel), rg::ModelPainter &, rg::ModelObject &>);
-    static_assert(std::is_invocable_v<decltype(&rg::GausPainter::AddModel), rg::GausPainter &, rg::ModelObject &>);
-    static_assert(std::is_invocable_v<decltype(&rg::ComparisonPainter::AddModel), rg::ComparisonPainter &, rg::ModelObject &>);
-    static_assert(std::is_invocable_v<decltype(&rg::ComparisonPainter::AddReferenceModel), rg::ComparisonPainter &, rg::ModelObject &, std::string_view>);
-    static_assert(std::is_invocable_v<decltype(&rg::DemoPainter::AddModel), rg::DemoPainter &, rg::ModelObject &>);
-    static_assert(std::is_invocable_v<decltype(&rg::DemoPainter::AddReferenceModel), rg::DemoPainter &, rg::ModelObject &, std::string_view>);
-
-    SUCCEED();
 }

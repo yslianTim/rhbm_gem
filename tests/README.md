@@ -83,12 +83,15 @@ cmake --build build --target lint_repo
 - `CommandWorkflowScenarios_test.cpp` for command workflows and output side effects.
 - Only create a new command `*_test.cpp` when you are introducing a new testing responsibility.
 - For `tests/data/`, prefer extending the responsibility-based files:
-- `DataPublicSurface_test.cpp` for public header surface guards.
+- `DataPublicHeaders_test.cpp` for public header surface guards.
 - `DataObjectFileIO_test.cpp` for file I/O and map-axis import behavior.
 - `DataObjectImportRegression_test.cpp` for CIF/MMCIF parser regression matrices.
-- `DataObjectRuntimeBehavior_test.cpp` for `ModelObject` / `MapObject` state behavior.
-- `DataObjectDispatchAndIngestion_test.cpp` for painter ingestion contracts.
-- `DataObjectPersistence_test.cpp`, `DataObjectSchemaBootstrap_test.cpp`, `DataObjectSchemaCompatibility_test.cpp`, and `DataObjectSchemaValidation_test.cpp` for database persistence/schema behavior.
+- `DataObjectMapBehavior_test.cpp` for `MapObject` runtime behavior.
+- `DataObjectModelAnalysis_test.cpp` for selection, local entry, and group rebuild behavior.
+- `DataObjectAssemblySpatialQuery_test.cpp` for model assembly, derived state, and neighbor queries.
+- `DataObjectPainterIngestion_test.cpp` for painter ingestion contracts.
+- `GaussianStatistics_test.cpp` and `LocalPotentialSeries_test.cpp` for analysis value math and local potential series derivations.
+- `DataObjectPersistence_test.cpp`, `DataObjectSchemaLifecycle_test.cpp`, and `DataObjectSchemaValidation_test.cpp` for database persistence/schema behavior.
 - Place new fixture files under `tests/fixtures/`.
 - Use `tests/support/` for shared test-only seams and reusable helpers/assertions.
 - Add the source to the correct grouped target in `tests/CMakeLists.txt`.

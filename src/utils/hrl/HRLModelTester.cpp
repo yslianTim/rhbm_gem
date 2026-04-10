@@ -177,7 +177,6 @@ std::vector<std::tuple<float, float>> HRLModelTester::BuildRandomGausSamplingEnt
             SphereDistanceRange{ m_x_min, m_x_max },
             0.1,
             static_cast<unsigned int>(sampling_entry_size)));
-    sampler.Print();
     const auto sampling_points{ sampler.GenerateSamplingPoints({ 0.0f, 0.0f, 0.0f }) };
     std::vector<std::tuple<float, float>> sampling_entry_list;
     sampling_entry_list.reserve(sampling_entry_size);
