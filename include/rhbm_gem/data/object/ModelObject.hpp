@@ -76,6 +76,10 @@ public:
     std::tuple<double, double> GetModelPositionRange(int axis);
     double GetModelPosition(int axis, double normalized_pos);
     double GetModelLength(int axis);
+    std::vector<AtomObject *> FindNeighborAtoms(
+        const AtomObject & center_atom,
+        double radius,
+        bool include_center = false) const;
     AtomObject * FindAtomPtr(int serial_id) const;
     std::string FindComponentID(ComponentKey component_key) const;
     std::string FindAtomID(AtomKey atom_key) const;
@@ -97,6 +101,7 @@ public:
 private:
     friend class ModelDerivedState;
     friend class ModelAnalysisData;
+    friend class AtomObject;
     friend class ModelObjectStorage;
     friend ModelObject AssembleModelObject(ModelObjectParts parts);
 

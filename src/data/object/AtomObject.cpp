@@ -1,4 +1,5 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
+#include <rhbm_gem/data/object/ModelObject.hpp>
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
@@ -58,6 +59,19 @@ void AtomObject::SetPosition(float x, float y, float z)
     m_position.at(0) = x;
     m_position.at(1) = y;
     m_position.at(2) = z;
+    if (m_owner_model != nullptr)
+    {
+        m_owner_model->InvalidateDerivedState();
+    }
+}
+
+void AtomObject::SetPosition(const std::array<float, 3> & value)
+{
+    m_position = value;
+    if (m_owner_model != nullptr)
+    {
+        m_owner_model->InvalidateDerivedState();
+    }
 }
 
 std::string AtomObject::GetInfo() const
@@ -111,6 +125,15 @@ const std::unordered_map<std::string, float> &
 AtomObject::GetAlternateTemperatures() const
 {
     return m_alternate_temperature_map;
+}
+
+std::vector<AtomObject *> AtomObject::FindNeighborAtoms(double radius, bool include_self) const
+{
+    if (m_owner_model == nullptr)
+    {
+        throw std::runtime_error("AtomObject::FindNeighborAtoms requires an attached owner model.");
+    }
+    return m_owner_model->FindNeighborAtoms(*this, radius, include_self);
 }
 
 bool AtomObject::IsUnknownAtom() const

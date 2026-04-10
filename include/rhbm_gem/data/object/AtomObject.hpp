@@ -3,6 +3,7 @@
 #include <array>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/domain/ComponentKeySystem.hpp>
@@ -54,7 +55,7 @@ public:
     void SetSpot(Spot value) { m_spot = value; }
     void SetStructure(Structure value) { m_structure = value; }
     void SetPosition(float x, float y, float z);
-    void SetPosition(const std::array<float, 3> & value) { m_position = value; }
+    void SetPosition(const std::array<float, 3> & value);
     void AddAlternatePosition(const std::string & indicator, const std::array<float, 3> & value);
     void AddAlternateOccupancy(const std::string & indicator, float value);
     void AddAlternateTemperature(const std::string & indicator, float value);
@@ -81,6 +82,7 @@ public:
     const std::unordered_map<std::string, std::array<float, 3>> & GetAlternatePositions() const;
     const std::unordered_map<std::string, float> & GetAlternateOccupancies() const;
     const std::unordered_map<std::string, float> & GetAlternateTemperatures() const;
+    std::vector<AtomObject *> FindNeighborAtoms(double radius, bool include_self = false) const;
 
 private:
     friend class ModelAnalysisData;

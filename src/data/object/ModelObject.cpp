@@ -12,7 +12,25 @@
 #include "data/detail/GroupPotentialEntry.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
 
+#include <algorithm>
+#include <stdexcept>
 #include <type_traits>
+
+namespace {
+
+double ComputeDistanceSquare(
+    const rhbm_gem::AtomObject & atom_1,
+    const rhbm_gem::AtomObject & atom_2)
+{
+    const auto & position_1{ atom_1.GetPositionRef() };
+    const auto & position_2{ atom_2.GetPositionRef() };
+    const auto dx{ static_cast<double>(position_1.at(0)) - static_cast<double>(position_2.at(0)) };
+    const auto dy{ static_cast<double>(position_1.at(1)) - static_cast<double>(position_2.at(1)) };
+    const auto dz{ static_cast<double>(position_1.at(2)) - static_cast<double>(position_2.at(2)) };
+    return dx * dx + dy * dy + dz * dz;
+}
+
+} // namespace
 
 namespace rhbm_gem {
 
@@ -364,6 +382,49 @@ double ModelObject::GetModelLength(int axis)
 {
     auto range_tuple{ GetModelPositionRange(axis) };
     return std::get<1>(range_tuple) - std::get<0>(range_tuple);
+}
+
+std::vector<AtomObject *> ModelObject::FindNeighborAtoms(
+    const AtomObject & center_atom,
+    double radius,
+    bool include_center) const
+{
+    if (radius < 0.0)
+    {
+        throw std::invalid_argument("ModelObject::FindNeighborAtoms radius cannot be negative.");
+    }
+    if (center_atom.m_owner_model != this)
+    {
+        throw std::invalid_argument(
+            "ModelObject::FindNeighborAtoms center atom does not belong to this model.");
+    }
+
+    auto & mutable_model{ const_cast<ModelObject &>(*this) };
+    auto results{
+        ModelDerivedState::Of(mutable_model).FindAtomsInRange(mutable_model, center_atom, radius) };
+
+    if (!include_center)
+    {
+        results.erase(
+            std::remove(results.begin(), results.end(), const_cast<AtomObject *>(&center_atom)),
+            results.end());
+    }
+
+    std::sort(
+        results.begin(),
+        results.end(),
+        [&center_atom](const AtomObject * lhs, const AtomObject * rhs)
+        {
+            const auto lhs_distance{ ComputeDistanceSquare(center_atom, *lhs) };
+            const auto rhs_distance{ ComputeDistanceSquare(center_atom, *rhs) };
+            if (lhs_distance != rhs_distance)
+            {
+                return lhs_distance < rhs_distance;
+            }
+            return lhs->GetSerialID() < rhs->GetSerialID();
+        });
+
+    return results;
 }
 
 bool ModelObject::HasChemicalComponentEntry(ComponentKey component_key) const

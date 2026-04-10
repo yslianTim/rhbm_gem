@@ -104,6 +104,27 @@ struct HasPublicGetSelectedFlag<
     std::void_t<decltype(std::declval<const T &>().GetSelectedFlag())>> : std::true_type {};
 
 template <typename T, typename = void>
+struct HasPublicFindNeighborAtomsOnModel : std::false_type {};
+
+template <typename T>
+struct HasPublicFindNeighborAtomsOnModel<
+    T,
+    std::void_t<decltype(std::declval<const T &>().FindNeighborAtoms(
+        std::declval<const rhbm_gem::AtomObject &>(),
+        std::declval<double>(),
+        std::declval<bool>()))>> : std::true_type {};
+
+template <typename T, typename = void>
+struct HasPublicFindNeighborAtomsOnAtom : std::false_type {};
+
+template <typename T>
+struct HasPublicFindNeighborAtomsOnAtom<
+    T,
+    std::void_t<decltype(std::declval<const T &>().FindNeighborAtoms(
+        std::declval<double>(),
+        std::declval<bool>()))>> : std::true_type {};
+
+template <typename T, typename = void>
 struct HasStringResidueSetter : std::false_type {};
 
 template <typename T>
@@ -244,6 +265,8 @@ TEST(DataPublicSurfaceTest, ModelObjectExposesSelectionQueriesButKeepsBuildWorkf
     static_assert(!HasPublicPeekKDTreeRoot<rhbm_gem::ModelObject>::value);
     static_assert(!HasPublicGetSelectedFlag<rhbm_gem::AtomObject>::value);
     static_assert(!HasPublicGetSelectedFlag<rhbm_gem::BondObject>::value);
+    static_assert(HasPublicFindNeighborAtomsOnModel<rhbm_gem::ModelObject>::value);
+    static_assert(HasPublicFindNeighborAtomsOnAtom<rhbm_gem::AtomObject>::value);
     static_assert(!HasStringResidueSetter<rhbm_gem::AtomObject>::value);
     static_assert(!HasStringElementSetter<rhbm_gem::AtomObject>::value);
     static_assert(!HasStringSpotSetter<rhbm_gem::AtomObject>::value);
