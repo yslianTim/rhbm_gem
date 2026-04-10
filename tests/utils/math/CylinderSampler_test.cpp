@@ -8,8 +8,7 @@ TEST(CylinderSamplerTest, ProducesConfiguredNumberOfSamples)
 {
     CylinderSampler sampler;
     sampler.SetSampleCount(12);
-    sampler.SetDistanceRangeMinimum(1.0);
-    sampler.SetDistanceRangeMaximum(2.0);
+    sampler.SetDistanceRange(1.0, 2.0);
     sampler.SetHeight(3.0);
 
     const auto samples{
@@ -28,13 +27,14 @@ TEST(CylinderSamplerTest, ThrowsWhenAxisVectorIsZero)
         std::invalid_argument);
 }
 
-TEST(CylinderSamplerTest, ThrowsWhenRadiusRangeIsInvalid)
+TEST(CylinderSamplerTest, SetDistanceRangeThrowsWhenRadiusRangeIsInvalid)
 {
     CylinderSampler sampler;
-    sampler.SetDistanceRangeMinimum(2.0);
-    sampler.SetDistanceRangeMaximum(1.0);
+    EXPECT_THROW(sampler.SetDistanceRange(2.0, 1.0), std::invalid_argument);
+}
 
-    EXPECT_THROW(
-        sampler.GenerateSamplingPoints({ 0.0f, 0.0f, 0.0f }, { 1.0f, 0.0f, 0.0f }),
-        std::invalid_argument);
+TEST(CylinderSamplerTest, SetDistanceRangeThrowsWhenRadiusRangeIsNegative)
+{
+    CylinderSampler sampler;
+    EXPECT_THROW(sampler.SetDistanceRange(-1.0, 1.0), std::invalid_argument);
 }

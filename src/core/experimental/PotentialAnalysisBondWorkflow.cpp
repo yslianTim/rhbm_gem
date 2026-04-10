@@ -58,8 +58,7 @@ void RunBondSampling(
     ScopeTimer timer("PotentialAnalysisBondWorkflow::RunBondMapValueSampling");
     CylinderSampler sampler;
     sampler.SetSampleCount(static_cast<unsigned int>(options.sampling_size));
-    sampler.SetDistanceRangeMinimum(options.sampling_range_min);
-    sampler.SetDistanceRangeMaximum(options.sampling_range_max);
+    sampler.SetDistanceRange(options.sampling_range_min, options.sampling_range_max);
     sampler.SetHeight(options.sampling_height);
     sampler.Print();
 

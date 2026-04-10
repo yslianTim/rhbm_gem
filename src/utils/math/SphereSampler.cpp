@@ -26,6 +26,21 @@ void SphereSampler::Print() const
     Logger::Log(LogLevel::Info, oss.str());
 }
 
+void SphereSampler::SetDistanceRange(double min_value, double max_value)
+{
+    if (min_value > max_value)
+    {
+        throw std::invalid_argument("SphereSampler: distance minimum greater than maximum");
+    }
+    if (min_value < 0.0 || max_value < 0.0)
+    {
+        throw std::invalid_argument("SphereSampler: distance range cannot be negative");
+    }
+
+    m_distance_min = min_value;
+    m_distance_max = max_value;
+}
+
 SamplingPointList SphereSampler::GenerateSamplingPoints(
     const std::array<float, 3> & reference_position) const
 {
@@ -39,14 +54,6 @@ void SphereSampler::RunVolumeUniformRandomSamplingMethod(
     const std::array<float, 3> & reference_position,
     SamplingPointList & out) const
 {
-    if (m_distance_min > m_distance_max)
-    {
-        throw std::invalid_argument("SphereSampler: distance minimum greater than maximum");
-    }
-    if (m_distance_min < 0.0 || m_distance_max < 0.0)
-    {
-        throw std::invalid_argument("SphereSampler: distance range cannot be negative");
-    }
     out.resize(m_sampling_size);
     
     static thread_local std::mt19937 engine{ std::random_device{}() };
@@ -90,14 +97,6 @@ void SphereSampler::RunRadiusUniformRandomSamplingMethod(
     const std::array<float, 3> & reference_position,
     SamplingPointList & out) const
 {
-    if (m_distance_min > m_distance_max)
-    {
-        throw std::invalid_argument("SphereSampler: distance minimum greater than maximum");
-    }
-    if (m_distance_min < 0.0 || m_distance_max < 0.0)
-    {
-        throw std::invalid_argument("SphereSampler: distance range cannot be negative");
-    }
     out.resize(m_sampling_size);
     
     static thread_local std::mt19937 engine{ std::random_device{}() };

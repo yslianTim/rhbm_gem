@@ -45,8 +45,7 @@ TEST(SphereSamplerTest, PrintOutputsConfiguration)
 {
     SphereSampler sampler;
     sampler.SetSampleCount(20);
-    sampler.SetDistanceRangeMinimum(0.5);
-    sampler.SetDistanceRangeMaximum(2.0);
+    sampler.SetDistanceRange(0.5, 2.0);
 
     testing::internal::CaptureStdout();
     sampler.Print();
@@ -60,8 +59,7 @@ TEST(SphereSamplerTest, Setters)
 {
     SphereSampler sampler;
     sampler.SetSampleCount(5);
-    sampler.SetDistanceRangeMinimum(1.0);
-    sampler.SetDistanceRangeMaximum(1.0);
+    sampler.SetDistanceRange(1.0, 1.0);
     auto samples{ sampler.GenerateSamplingPoints({0.f, 0.f, 0.f}) };
     ASSERT_EQ(5u, samples.size());
     for (const auto & sample : samples)
@@ -74,8 +72,7 @@ TEST(SphereSamplerTest, Setters)
 TEST(SphereSamplerTest, RadiusWithinConfiguredRange)
 {
     SphereSampler sampler;
-    sampler.SetDistanceRangeMinimum(1.0);
-    sampler.SetDistanceRangeMaximum(2.0);
+    sampler.SetDistanceRange(1.0, 2.0);
     const std::array<float, 3> center{ 0.f, 0.f, 0.f };
     auto samples{ sampler.GenerateSamplingPoints(center) };
     for (const auto & sample : samples)
@@ -101,8 +98,7 @@ TEST(SphereSamplerTest, PositionMath)
 {
     SphereSampler sampler;
     sampler.SetSampleCount(5);
-    sampler.SetDistanceRangeMinimum(1.0);
-    sampler.SetDistanceRangeMaximum(1.0);
+    sampler.SetDistanceRange(1.0, 1.0);
     const std::array<float, 3> center{ 1.f, 2.f, 3.f };
     auto samples{ sampler.GenerateSamplingPoints(center) };
     for (const auto & sample : samples)
@@ -128,8 +124,7 @@ TEST(SphereSamplerTest, ZeroSamplingSizeReturnsEmptyVector)
 TEST(SphereSamplerTest, ZeroDistanceRange)
 {
     SphereSampler sampler;
-    sampler.SetDistanceRangeMinimum(0.0);
-    sampler.SetDistanceRangeMaximum(0.0);
+    sampler.SetDistanceRange(0.0, 0.0);
     const std::array<float, 3> center{ 1.f, 2.f, 3.f };
     auto samples{ sampler.GenerateSamplingPoints(center) };
     for (const auto & sample : samples)
@@ -143,44 +138,35 @@ TEST(SphereSamplerTest, ZeroDistanceRange)
     }
 }
 
-TEST(SphereSamplerTest, ThrowsWhenMinGreaterThanMax)
+TEST(SphereSamplerTest, SetDistanceRangeThrowsWhenMinGreaterThanMax)
 {
     SphereSampler sampler;
-    sampler.SetDistanceRangeMinimum(2.0);
-    sampler.SetDistanceRangeMaximum(1.0);
-    EXPECT_THROW(sampler.GenerateSamplingPoints({0.f, 0.f, 0.f}), std::invalid_argument);
+    EXPECT_THROW(sampler.SetDistanceRange(2.0, 1.0), std::invalid_argument);
 }
 
-TEST(SphereSamplerTest, ZeroSamplingSizeWithInvalidRangeThrows)
+TEST(SphereSamplerTest, ZeroSamplingSizeWithInvalidRangeThrowsOnSet)
 {
     SphereSampler sampler;
     sampler.SetSampleCount(0);
-    sampler.SetDistanceRangeMinimum(2.0);
-    sampler.SetDistanceRangeMaximum(1.0);
-    EXPECT_THROW(sampler.GenerateSamplingPoints({0.f, 0.f, 0.f}), std::invalid_argument);
+    EXPECT_THROW(sampler.SetDistanceRange(2.0, 1.0), std::invalid_argument);
 }
 
-TEST(SphereSamplerTest, ThrowsWhenMinNegative)
+TEST(SphereSamplerTest, SetDistanceRangeThrowsWhenMinNegative)
 {
     SphereSampler sampler;
-    sampler.SetDistanceRangeMinimum(-0.1);
-    sampler.SetDistanceRangeMaximum(1.0);
-    EXPECT_THROW(sampler.GenerateSamplingPoints({0.f, 0.f, 0.f}), std::invalid_argument);
+    EXPECT_THROW(sampler.SetDistanceRange(-0.1, 1.0), std::invalid_argument);
 }
 
-TEST(SphereSamplerTest, ThrowsWhenMaxNegative)
+TEST(SphereSamplerTest, SetDistanceRangeThrowsWhenMaxNegative)
 {
     SphereSampler sampler;
-    sampler.SetDistanceRangeMinimum(0.0);
-    sampler.SetDistanceRangeMaximum(-1.0);
-    EXPECT_THROW(sampler.GenerateSamplingPoints({0.f, 0.f, 0.f}), std::invalid_argument);
+    EXPECT_THROW(sampler.SetDistanceRange(0.0, -1.0), std::invalid_argument);
 }
 
 TEST(SphereSamplerTest, ValidRangeProducesSamples)
 {
     SphereSampler sampler;
-    sampler.SetDistanceRangeMinimum(0.2);
-    sampler.SetDistanceRangeMaximum(0.4);
+    sampler.SetDistanceRange(0.2, 0.4);
     auto samples{ sampler.GenerateSamplingPoints({0.f, 0.f, 0.f}) };
     ASSERT_EQ(10u, samples.size());
     for (const auto & sample : samples)
@@ -195,8 +181,7 @@ TEST(SphereSamplerTest, PositionMatchesRadiusForVariableRange)
 {
     SphereSampler sampler;
     sampler.SetSampleCount(20);
-    sampler.SetDistanceRangeMinimum(0.5);
-    sampler.SetDistanceRangeMaximum(1.5);
+    sampler.SetDistanceRange(0.5, 1.5);
     const std::array<float, 3> center{ 1.f, 2.f, 3.f };
     auto samples{ sampler.GenerateSamplingPoints(center) };
     ASSERT_EQ(20u, samples.size());
