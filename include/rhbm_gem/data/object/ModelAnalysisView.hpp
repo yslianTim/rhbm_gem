@@ -8,6 +8,7 @@
 
 #include <rhbm_gem/data/object/GaussianStatistics.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
+#include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace rhbm_gem {
 
@@ -35,15 +36,15 @@ public:
     bool IsAvailable() const;
     const GaussianEstimate & GetEstimateOLS() const;
     const GaussianEstimate & GetEstimateMDPDE() const;
-    const std::vector<std::tuple<float, float>> & GetDistanceAndMapValueList() const;
+    const LocalPotentialSampleList & GetSamplingEntries() const;
     std::tuple<float, float> GetDistanceRange(double margin_rate = 0.0) const;
-    std::tuple<float, float> GetMapValueRange(double margin_rate = 0.0) const;
-    std::vector<std::tuple<float, float>> GetBinnedDistanceAndMapValueList(
+    std::tuple<float, float> GetResponseRange(double margin_rate = 0.0) const;
+    SeriesPointList GetBinnedDistanceResponseSeries(
         int bin_size = 15,
         double x_min = 0.0,
         double x_max = 1.5) const;
-    std::vector<std::tuple<float, float>> GetLinearModelDistanceAndMapValueList() const;
-    int GetDistanceAndMapValueListSize() const;
+    SeriesPointList GetLinearModelSeries() const;
+    int GetSamplingEntryCount() const;
     double GetAlphaR() const;
     std::optional<LocalPotentialAnnotationView> FindAnnotation(const std::string & key) const;
     double GetMapValueNearCenter() const;

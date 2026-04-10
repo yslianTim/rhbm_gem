@@ -89,17 +89,17 @@ void RunBondSampling(
                 bond_position[1] + 0.5f * bond_vector[1] * adjusted_rate,
                 bond_position[2] + 0.5f * bond_vector[2] * adjusted_rate
             };
-            auto distance_and_map_value_list{
+            auto sampling_entries{
                 SampleMapValues(
                     map_object,
                     sampler,
                     adjusted_position,
                     bond_vector)
             };
-            entry.SetDistanceAndMapValueList(distance_and_map_value_list);
+            entry.SetSamplingEntries(sampling_entries);
             entry.SetDataset(LocalPotentialDataset{
                 GausLinearTransformHelper::MapValueTransform(
-                    distance_and_map_value_list,
+                    sampling_entries,
                     options.fit_range_min,
                     options.fit_range_max)
             });
@@ -116,17 +116,17 @@ void RunBondSampling(
     {
         auto bond{ bond_list[i] };
         auto entry{ local_entry_list[i] };
-        auto distance_and_map_value_list{
+        auto sampling_entries{
             SampleMapValues(
                 map_object,
                 sampler,
                 bond->GetPosition(),
                 bond->GetBondVector())
         };
-        entry.SetDistanceAndMapValueList(distance_and_map_value_list);
+        entry.SetSamplingEntries(sampling_entries);
         entry.SetDataset(LocalPotentialDataset{
             GausLinearTransformHelper::MapValueTransform(
-                distance_and_map_value_list,
+                sampling_entries,
                 options.fit_range_min,
                 options.fit_range_max)
         });

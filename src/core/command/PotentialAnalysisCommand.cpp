@@ -731,7 +731,6 @@ void RunAtomSamplingWorkflow(
     const PotentialAnalysisRequest & options,
     int thread_size)
 {
-    ScopeTimer timer("PotentialAnalysisCommand::RunAtomMapValueSampling");
     SphereSampler sampler;
     sampler.SetSamplingProfile(
         //SphereSamplingProfile::RadiusUniformRandom(
@@ -763,13 +762,13 @@ void RunAtomSamplingWorkflow(
         {
             auto atom{ atom_list[i] };
             auto entry{ local_entry_list[i] };
-            auto distance_and_map_value_list{
+            auto sampling_entries{
                 SampleMapValues(map_object, sampler, atom->GetPosition())
             };
-            entry.SetDistanceAndMapValueList(distance_and_map_value_list);
+            entry.SetSamplingEntries(sampling_entries);
             entry.SetDataset(LocalPotentialDataset{
                 GausLinearTransformHelper::MapValueTransform(
-                    distance_and_map_value_list,
+                    sampling_entries,
                     options.fit_range_min,
                     options.fit_range_max)
             });
@@ -789,13 +788,13 @@ void RunAtomSamplingWorkflow(
     {
         auto atom{ atom_list[i] };
         auto entry{ local_entry_list[i] };
-        auto distance_and_map_value_list{
+        auto sampling_entries{
             SampleMapValues(map_object, sampler, atom->GetPosition())
         };
-        entry.SetDistanceAndMapValueList(distance_and_map_value_list);
+        entry.SetSamplingEntries(sampling_entries);
         entry.SetDataset(LocalPotentialDataset{
             GausLinearTransformHelper::MapValueTransform(
-                distance_and_map_value_list,
+                sampling_entries,
                 options.fit_range_min,
                 options.fit_range_max)
         });
@@ -897,6 +896,7 @@ void RunLocalAtomFittingWorkflow(
 } // namespace detail
 void PotentialAnalysisCommand::RunAtomMapValueSampling()
 {
+    ScopeTimer timer("PotentialAnalysisCommand::RunAtomMapValueSampling");
     if (m_map_object == nullptr || m_model_object == nullptr) return;
     detail::RunAtomSamplingWorkflow(*m_model_object, *m_map_object, RequestOptions(), ThreadSize());
 }

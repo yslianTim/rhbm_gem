@@ -71,8 +71,10 @@ SamplingPointList GridSampler::GenerateSamplingPoints(
             Vector3f position{ eigen_reference_position + shift };
             float radius{ shift.norm() };
 
-            output_list.emplace_back(
-                radius, std::array<float, 3>{ position.x(), position.y(), position.z() });
+            output_list.emplace_back(SamplingPoint{
+                radius,
+                std::array<float, 3>{ position.x(), position.y(), position.z() }
+            });
         }
     }
 

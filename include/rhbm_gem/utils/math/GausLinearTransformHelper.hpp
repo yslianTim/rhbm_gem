@@ -6,8 +6,9 @@
 #endif
 
 #include <vector>
-#include <tuple>
 #include <Eigen/Dense>
+
+#include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 class GausLinearTransformHelper
 {
@@ -23,7 +24,7 @@ public:
         const Eigen::VectorXd & point, const Eigen::VectorXd & center,
         std::vector<Eigen::VectorXd> & neighbor_center_list, double width);
     static std::vector<Eigen::VectorXd> MapValueTransform(
-        const std::vector<std::tuple<float, float>> & distance_and_map_value_list,
+        const LocalPotentialSampleList & sampling_entries,
         double x_min, double x_max, int basis_size=2
     );
     static Eigen::VectorXd GetTylorSeriesBasisVector(double distance, const Eigen::VectorXd & model_par);

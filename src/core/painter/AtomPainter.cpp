@@ -79,7 +79,7 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
 
     const auto atom_entry{ LocalPotentialView::RequireFor(*atom_object) };
     auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom_object) };
-    auto map_value_range{ atom_entry.GetMapValueRange(0.3) };
+    auto map_value_range{ atom_entry.GetResponseRange(0.3) };
     auto distance_range{ atom_entry.GetDistanceRange(0.0) };
 
     auto map_value_graph{ atom_plot_builder->CreateDistanceToMapValueGraph() };
@@ -237,7 +237,7 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         frame->GetYaxis()->CenterTitle();
         frame->GetXaxis()->SetTitle("Radial Distance #[]{#AA}");
         frame->GetYaxis()->SetTitle("Map Value");
-        auto y_range{ entry_view.GetMapValueRange(0.1) };
+        auto y_range{ entry_view.GetResponseRange(0.1) };
         auto x_min{ 0.01 };
         auto x_max{ 1.49 };
         auto y_min{ std::get<0>(y_range) };

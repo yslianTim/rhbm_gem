@@ -767,7 +767,7 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
             auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
             ROOTHelper::SetLineAttribute(graph.get(), 1, 2, static_cast<short>(kAzure-7), 0.3f);
             map_value_graph_list[k].emplace_back(std::move(graph));
-            auto map_value_range{ LocalPotentialView::RequireFor(*atom).GetMapValueRange(0.0) };
+            auto map_value_range{ LocalPotentialView::RequireFor(*atom).GetResponseRange(0.0) };
             y_array.emplace_back(std::get<0>(map_value_range));
             y_array.emplace_back(std::get<1>(map_value_range));
         }
@@ -935,7 +935,7 @@ void ModelPainter::PaintBondMapValueMainChain(ModelObject * model_object, const 
             auto graph{ bond_plot_builder->CreateBinnedDistanceToMapValueGraph() };
             ROOTHelper::SetLineAttribute(graph.get(), 1, 2, static_cast<short>(kAzure-7), 0.3f);
             map_value_graph_list[k].emplace_back(std::move(graph));
-            auto map_value_range{ LocalPotentialView::RequireFor(*bond).GetMapValueRange(0.0) };
+            auto map_value_range{ LocalPotentialView::RequireFor(*bond).GetResponseRange(0.0) };
             y_array.emplace_back(std::get<0>(map_value_range));
             y_array.emplace_back(std::get<1>(map_value_range));
         }

@@ -92,8 +92,10 @@ SamplingPointList CylinderSampler::GenerateSamplingPoints(
             ((u * radius * std::cos(phi)) + (v * radius * std::sin(phi))))
         };
 
-        output_list.emplace_back(
-            radius, std::array<float, 3>{ position.x(), position.y(), position.z() });
+        output_list.emplace_back(SamplingPoint{
+            radius,
+            std::array<float, 3>{ position.x(), position.y(), position.z() }
+        });
     }
 
     return output_list;

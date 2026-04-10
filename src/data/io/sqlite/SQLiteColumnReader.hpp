@@ -2,11 +2,12 @@
 
 #include <cstddef>
 #include <sqlite3.h>
+#include <rhbm_gem/utils/math/SamplingTypes.hpp>
 #include <stdexcept>
 #include <string>
-#include <vector>
-#include <tuple>
 #include <cstring>
+#include <tuple>
+#include <vector>
 
 namespace rhbm_gem {
 
@@ -145,11 +146,11 @@ struct SQLiteColumnReader<std::vector<double>>
     }
 };
 
-// std::vector<std::tuple<float, float>> specialization
+// LocalPotentialSampleList specialization
 template <>
-struct SQLiteColumnReader<std::vector<std::tuple<float, float>>>
+struct SQLiteColumnReader<LocalPotentialSampleList>
 {
-    static std::vector<std::tuple<float, float>> Get(sqlite3_stmt* stmt, int index)
+    static LocalPotentialSampleList Get(sqlite3_stmt* stmt, int index)
     {
         const void * blob_data = sqlite3_column_blob(stmt, index);
         int blob_size{ sqlite3_column_bytes(stmt, index) };
@@ -158,14 +159,19 @@ struct SQLiteColumnReader<std::vector<std::tuple<float, float>>>
             return {};
         }
         int count{ blob_size / (2 * static_cast<int>(sizeof(float))) };
-        std::vector<std::tuple<float, float>> result;
+        LocalPotentialSampleList result;
         result.reserve(static_cast<size_t>(count));
         const float * blob_floats{ reinterpret_cast<const float *>(blob_data) };
         for (int i = 0; i < count; ++i)
         {
             float first = blob_floats[2 * i];
             float second = blob_floats[2 * i + 1];
-            result.emplace_back(std::make_tuple(first, second));
+            result.emplace_back(LocalPotentialSample{
+                first,
+                second,
+                1.0f,
+                std::nullopt
+            });
         }
         return result;
     }

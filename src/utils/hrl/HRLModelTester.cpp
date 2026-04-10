@@ -86,7 +86,7 @@ Eigen::MatrixXd HRLModelTester::BuildBetaMatrix(const Eigen::MatrixXd & gaus_arr
     return beta_matrix;
 }
 
-std::vector<std::tuple<float, float>> HRLModelTester::BuildRandomGausSamplingEntry(
+LocalPotentialSampleList HRLModelTester::BuildRandomGausSamplingEntry(
     size_t sampling_entry_size, const Eigen::VectorXd & gaus_par, double outlier_ratio)
 {
     CheckGausParametersDimension(gaus_par);
@@ -96,7 +96,7 @@ std::vector<std::tuple<float, float>> HRLModelTester::BuildRandomGausSamplingEnt
     auto intersect{ 0.0 };
     std::uniform_real_distribution<> dist_distance(m_x_min, m_x_max);
     std::uniform_real_distribution<> dist_outlier(0.0, 1.0);
-    std::vector<std::tuple<float, float>> sampling_entry_list;
+    LocalPotentialSampleList sampling_entry_list;
     sampling_entry_list.reserve(sampling_entry_size);
     for (size_t i = 0; i < sampling_entry_size; i++)
     {
@@ -109,12 +109,15 @@ std::vector<std::tuple<float, float>> HRLModelTester::BuildRandomGausSamplingEnt
         {
             y = y_outlier;
         }
-        sampling_entry_list.emplace_back(r, y);
+        sampling_entry_list.emplace_back(LocalPotentialSample{
+            static_cast<float>(r),
+            static_cast<float>(y)
+        });
     }
     return sampling_entry_list;
 }
 
-std::vector<std::tuple<float, float>> HRLModelTester::BuildRandomGausSamplingEntryWithNeighborhood(
+LocalPotentialSampleList HRLModelTester::BuildRandomGausSamplingEntryWithNeighborhood(
     size_t sampling_entry_size,
     const Eigen::VectorXd & gaus_par,
     double neighbor_distance,
@@ -179,19 +182,24 @@ std::vector<std::tuple<float, float>> HRLModelTester::BuildRandomGausSamplingEnt
             static_cast<unsigned int>(sampling_entry_size))
     );
     const auto sampling_points{ sampler.GenerateSamplingPoints({ 0.0f, 0.0f, 0.0f }) };
-    std::vector<std::tuple<float, float>> sampling_entry_list;
+    LocalPotentialSampleList sampling_entry_list;
     sampling_entry_list.reserve(sampling_entry_size);
-    for (const auto & [distance, sample_point] : sampling_points)
+    for (const auto & sampling_point : sampling_points)
     {
         Eigen::VectorXd point{ Eigen::VectorXd::Zero(3) };
-        point(0) = sample_point[0];
-        point(1) = sample_point[1];
-        point(2) = sample_point[2];
+        point(0) = sampling_point.position[0];
+        point(1) = sampling_point.position[1];
+        point(2) = sampling_point.position[2];
         auto y{
             amplitude * GausLinearTransformHelper::GetGaussianPesponseAtPointWithNeighborhood(
                 point, atom_center, neighbor_center_list, width) + intersect
         };
-        sampling_entry_list.emplace_back(distance, y);
+        sampling_entry_list.emplace_back(LocalPotentialSample{
+            sampling_point.distance,
+            static_cast<float>(y),
+            1.0f,
+            sampling_point.position
+        });
     }
     return sampling_entry_list;
 }

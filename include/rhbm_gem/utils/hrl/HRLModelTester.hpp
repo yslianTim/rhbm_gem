@@ -2,9 +2,10 @@
 
 #include <vector>
 #include <string>
-#include <tuple>
 #include <random>
 #include <Eigen/Dense>
+
+#include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 class HRLModelTester
 {
@@ -71,12 +72,12 @@ private:
         double outlier_ratio = 0.0
     );
     Eigen::MatrixXd BuildBetaMatrix(const Eigen::MatrixXd & gaus_array);
-    std::vector<std::tuple<float, float>> BuildRandomGausSamplingEntry(
+    LocalPotentialSampleList BuildRandomGausSamplingEntry(
         size_t sampling_entry_size,
         const Eigen::VectorXd & gaus_par,
         double outlier_ratio = 0.0
     );
-    std::vector<std::tuple<float, float>> BuildRandomGausSamplingEntryWithNeighborhood(
+    LocalPotentialSampleList BuildRandomGausSamplingEntryWithNeighborhood(
         size_t sampling_entry_size,
         const Eigen::VectorXd & gaus_par,
         double neighbor_distance = 2.0,

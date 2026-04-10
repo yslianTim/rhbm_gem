@@ -2,13 +2,13 @@
 
 #include <optional>
 #include <string>
-#include <tuple>
 #include <vector>
 
 #include <Eigen/Dense>
 
 #include <rhbm_gem/data/object/GaussianStatistics.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
+#include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace rhbm_gem {
 
@@ -57,7 +57,7 @@ class MutableLocalPotentialView
 public:
     MutableLocalPotentialView() = default;
 
-    void SetDistanceAndMapValueList(std::vector<std::tuple<float, float>> value);
+    void SetSamplingEntries(LocalPotentialSampleList value);
     void SetDataset(LocalPotentialDataset value);
     void SetFitResult(LocalPotentialFitResult value);
     void SetEstimates(const LocalPotentialEstimates & value);

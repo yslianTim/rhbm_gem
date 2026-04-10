@@ -298,7 +298,7 @@ void SphereSampler::GenerateVolumeUniformRandom(
             reference_position.at(2) + radius * direction_vector[2]
         };
 
-        out[i] = std::make_tuple(radius, sampling_position);
+        out[i] = SamplingPoint{ radius, sampling_position };
     }
 }
 
@@ -335,7 +335,10 @@ void SphereSampler::GenerateFibonacciDeterministic(
                 reference_position.at(2) + static_cast<float>(radius * z)
             };
 
-            out.emplace_back(radius, sampling_position);
+            out.emplace_back(SamplingPoint{
+                static_cast<float>(radius),
+                sampling_position
+            });
         }
     }
 }
@@ -374,6 +377,6 @@ void SphereSampler::GenerateRadiusUniformRandom(
             reference_position.at(2) + radius * direction_vector[2]
         };
 
-        out[i] = std::make_tuple(radius, sampling_position);
+        out[i] = SamplingPoint{ radius, sampling_position };
     }
 }

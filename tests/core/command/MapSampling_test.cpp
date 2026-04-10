@@ -18,7 +18,7 @@ class SinglePointSampler
 public:
     SamplingPointList GenerateSamplingPoints(const std::array<float, 3> & position) const
     {
-        return { std::make_tuple(0.0f, position) };
+        return { SamplingPoint{ 0.0f, position } };
     }
 };
 
@@ -29,13 +29,14 @@ public:
         const std::array<float, 3> & position,
         const std::array<float, 3> & direction_like_input) const
     {
-        return { std::make_tuple(
+        return { SamplingPoint{
             1.0f,
             std::array<float, 3>{
                 position[0] + direction_like_input[0],
                 position[1] + direction_like_input[1],
                 position[2] + direction_like_input[2]
-            }) };
+            }
+        } };
     }
 };
 
@@ -68,11 +69,13 @@ TEST(MapSamplingTest, PositionOnlySamplerReturnsExpectedPointValueAndIsDetermini
     ASSERT_EQ(first.size(), 1u);
     ASSERT_EQ(second.size(), 1u);
     ASSERT_EQ(first_again.size(), 1u);
-    EXPECT_FLOAT_EQ(std::get<0>(first.front()), 0.0f);
-    EXPECT_FLOAT_EQ(std::get<0>(second.front()), 0.0f);
-    EXPECT_FLOAT_EQ(std::get<1>(first.front()), map.GetMapValue(0, 0, 0));
-    EXPECT_FLOAT_EQ(std::get<1>(second.front()), map.GetMapValue(1, 1, 1));
-    EXPECT_FLOAT_EQ(std::get<1>(first_again.front()), std::get<1>(first.front()));
+    EXPECT_FLOAT_EQ(first.front().distance, 0.0f);
+    EXPECT_FLOAT_EQ(second.front().distance, 0.0f);
+    EXPECT_FLOAT_EQ(first.front().response, map.GetMapValue(0, 0, 0));
+    EXPECT_FLOAT_EQ(second.front().response, map.GetMapValue(1, 1, 1));
+    EXPECT_TRUE(first.front().HasPosition());
+    EXPECT_FLOAT_EQ(first.front().position->at(0), 0.0f);
+    EXPECT_FLOAT_EQ(first_again.front().response, first.front().response);
 }
 
 TEST(MapSamplingTest, OrientedSamplerUsesDirectionLikeInput)
@@ -89,6 +92,8 @@ TEST(MapSamplingTest, OrientedSamplerUsesDirectionLikeInput)
     };
 
     ASSERT_EQ(1u, sampling_data.size());
-    EXPECT_FLOAT_EQ(1.0f, std::get<0>(sampling_data.front()));
-    EXPECT_FLOAT_EQ(map.GetMapValue(1, 1, 1), std::get<1>(sampling_data.front()));
+    EXPECT_FLOAT_EQ(1.0f, sampling_data.front().distance);
+    EXPECT_FLOAT_EQ(map.GetMapValue(1, 1, 1), sampling_data.front().response);
+    ASSERT_TRUE(sampling_data.front().HasPosition());
+    EXPECT_FLOAT_EQ(1.0f, sampling_data.front().position->at(0));
 }

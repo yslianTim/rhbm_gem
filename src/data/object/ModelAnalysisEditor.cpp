@@ -118,9 +118,9 @@ MutableLocalPotentialView::MutableLocalPotentialView(BondObject * bond_object) :
 {
 }
 
-void MutableLocalPotentialView::SetDistanceAndMapValueList(std::vector<std::tuple<float, float>> value)
+void MutableLocalPotentialView::SetSamplingEntries(LocalPotentialSampleList value)
 {
-    EnsureResolvedLocalEntry(*this).SetDistanceAndMapValueList(std::move(value));
+    EnsureResolvedLocalEntry(*this).SetSamplingEntries(std::move(value));
 }
 
 void MutableLocalPotentialView::SetDataset(LocalPotentialDataset value)

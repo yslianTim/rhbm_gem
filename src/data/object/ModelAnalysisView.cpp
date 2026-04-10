@@ -107,9 +107,9 @@ const GaussianEstimate & LocalPotentialView::GetEstimateMDPDE() const
     return RequireResolvedLocalEntry(*this, "Local estimate MDPDE").GetEstimateMDPDE();
 }
 
-const std::vector<std::tuple<float, float>> & LocalPotentialView::GetDistanceAndMapValueList() const
+const LocalPotentialSampleList & LocalPotentialView::GetSamplingEntries() const
 {
-    return RequireResolvedLocalEntry(*this, "Local distance-map series").GetDistanceAndMapValueList();
+    return RequireResolvedLocalEntry(*this, "Local sampling entries").GetSamplingEntries();
 }
 
 std::tuple<float, float> LocalPotentialView::GetDistanceRange(double margin_rate) const
@@ -117,29 +117,29 @@ std::tuple<float, float> LocalPotentialView::GetDistanceRange(double margin_rate
     return RequireResolvedLocalEntry(*this, "Local distance range").GetDistanceRange(margin_rate);
 }
 
-std::tuple<float, float> LocalPotentialView::GetMapValueRange(double margin_rate) const
+std::tuple<float, float> LocalPotentialView::GetResponseRange(double margin_rate) const
 {
-    return RequireResolvedLocalEntry(*this, "Local map-value range").GetMapValueRange(margin_rate);
+    return RequireResolvedLocalEntry(*this, "Local response range").GetResponseRange(margin_rate);
 }
 
-std::vector<std::tuple<float, float>> LocalPotentialView::GetBinnedDistanceAndMapValueList(
+SeriesPointList LocalPotentialView::GetBinnedDistanceResponseSeries(
     int bin_size,
     double x_min,
     double x_max) const
 {
-    return RequireResolvedLocalEntry(*this, "Local binned distance-map series")
-        .GetBinnedDistanceAndMapValueList(bin_size, x_min, x_max);
+    return RequireResolvedLocalEntry(*this, "Local binned distance-response series")
+        .GetBinnedDistanceResponseSeries(bin_size, x_min, x_max);
 }
 
-std::vector<std::tuple<float, float>> LocalPotentialView::GetLinearModelDistanceAndMapValueList() const
+SeriesPointList LocalPotentialView::GetLinearModelSeries() const
 {
     return RequireResolvedLocalEntry(*this, "Local linear-model series")
-        .GetLinearModelDistanceAndMapValueList();
+        .GetLinearModelSeries();
 }
 
-int LocalPotentialView::GetDistanceAndMapValueListSize() const
+int LocalPotentialView::GetSamplingEntryCount() const
 {
-    return RequireResolvedLocalEntry(*this, "Local distance-map size").GetDistanceAndMapValueListSize();
+    return RequireResolvedLocalEntry(*this, "Local sampling-entry count").GetSamplingEntryCount();
 }
 
 double LocalPotentialView::GetAlphaR() const

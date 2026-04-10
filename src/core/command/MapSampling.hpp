@@ -2,10 +2,10 @@
 
 #include <algorithm>
 #include <array>
-#include <tuple>
 #include <vector>
 
 #include <rhbm_gem/data/object/MapObject.hpp>
+#include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace rhbm_gem {
 namespace detail {
@@ -79,24 +79,31 @@ inline float MakeInterpolationInMapObject(
 // accept the same parameter list. Add new overloads here only when a sampler introduces a new
 // input shape that SampleMapValues needs to support.
 template <typename Sampler>
-std::vector<std::tuple<float, float>> SampleMapValues(
+LocalPotentialSampleList SampleMapValues(
     const MapObject & map_object,
     const Sampler & sampler,
     const std::array<float, 3> & position)
 {
     const auto sampling_points{ sampler.GenerateSamplingPoints(position) };
-    std::vector<std::tuple<float, float>> sampling_data_list;
+    LocalPotentialSampleList sampling_data_list;
     sampling_data_list.reserve(sampling_points.size());
-    for (const auto & [distance, point] : sampling_points)
+    for (const auto & sampling_point : sampling_points)
     {
-        auto map_value{ detail::MakeInterpolationInMapObject(map_object, point) };
-        sampling_data_list.emplace_back(std::make_tuple(distance, map_value));
+        auto map_value{
+            detail::MakeInterpolationInMapObject(map_object, sampling_point.position)
+        };
+        sampling_data_list.emplace_back(LocalPotentialSample{
+            sampling_point.distance,
+            map_value,
+            1.0f,
+            sampling_point.position
+        });
     }
     return sampling_data_list;
 }
 
 template <typename Sampler>
-std::vector<std::tuple<float, float>> SampleMapValues(
+LocalPotentialSampleList SampleMapValues(
     const MapObject & map_object,
     const Sampler & sampler,
     const std::array<float, 3> & position,
@@ -105,12 +112,19 @@ std::vector<std::tuple<float, float>> SampleMapValues(
     const auto sampling_points{
         sampler.GenerateSamplingPoints(position, direction_like_input)
     };
-    std::vector<std::tuple<float, float>> sampling_data_list;
+    LocalPotentialSampleList sampling_data_list;
     sampling_data_list.reserve(sampling_points.size());
-    for (const auto & [distance, point] : sampling_points)
+    for (const auto & sampling_point : sampling_points)
     {
-        auto map_value{ detail::MakeInterpolationInMapObject(map_object, point) };
-        sampling_data_list.emplace_back(std::make_tuple(distance, map_value));
+        auto map_value{
+            detail::MakeInterpolationInMapObject(map_object, sampling_point.position)
+        };
+        sampling_data_list.emplace_back(LocalPotentialSample{
+            sampling_point.distance,
+            map_value,
+            1.0f,
+            sampling_point.position
+        });
     }
     return sampling_data_list;
 }

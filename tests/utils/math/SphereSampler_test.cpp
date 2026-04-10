@@ -27,9 +27,9 @@ void ExpectSamplesEqual(
     ASSERT_EQ(lhs.size(), rhs.size());
     for (std::size_t i = 0; i < lhs.size(); ++i)
     {
-        EXPECT_FLOAT_EQ(std::get<0>(lhs[i]), std::get<0>(rhs[i]));
-        const auto & lhs_position{ std::get<1>(lhs[i]) };
-        const auto & rhs_position{ std::get<1>(rhs[i]) };
+        EXPECT_FLOAT_EQ(lhs[i].distance, rhs[i].distance);
+        const auto & lhs_position{ lhs[i].position };
+        const auto & rhs_position{ rhs[i].position };
         EXPECT_FLOAT_EQ(lhs_position[0], rhs_position[0]);
         EXPECT_FLOAT_EQ(lhs_position[1], rhs_position[1]);
         EXPECT_FLOAT_EQ(lhs_position[2], rhs_position[2]);
@@ -52,7 +52,7 @@ TEST(SphereSamplerTest, DefaultConfiguration)
     ASSERT_EQ(10u, samples.size());
     for (const auto & sample : samples)
     {
-        float radius{ std::get<0>(sample) };
+        float radius{ sample.distance };
         EXPECT_GE(radius, 0.0f);
         EXPECT_LE(radius, 1.0f);
     }
@@ -136,7 +136,7 @@ TEST(SphereSamplerTest, RadiusUniformRandomProfileProducesConfiguredSampleCount)
     ASSERT_EQ(5u, samples.size());
     for (const auto & sample : samples)
     {
-        float radius{ std::get<0>(sample) };
+        float radius{ sample.distance };
         EXPECT_NEAR(1.0f, radius, 1e-5f);
     }
 }
@@ -152,8 +152,8 @@ TEST(SphereSamplerTest, RadiusWithinConfiguredRange)
     auto samples{ sampler.GenerateSamplingPoints(center) };
     for (const auto & sample : samples)
     {
-        float radius{ std::get<0>(sample) };
-        const auto & pos{ std::get<1>(sample) };
+        float radius{ sample.distance };
+        const auto & pos{ sample.position };
         EXPECT_GE(radius, 1.0f);
         EXPECT_LE(radius, 2.0f);
         if (radius > 0.0f)
@@ -180,8 +180,8 @@ TEST(SphereSamplerTest, PositionMath)
     auto samples{ sampler.GenerateSamplingPoints(center) };
     for (const auto & sample : samples)
     {
-        float radius{std::get<0>(sample)};
-        const auto & pos{ std::get<1>(sample) };
+        float radius{ sample.distance };
+        const auto & pos{ sample.position };
         float dx{pos[0] - center[0]};
         float dy{pos[1] - center[1]};
         float dz{pos[2] - center[2]};
@@ -213,8 +213,8 @@ TEST(SphereSamplerTest, ZeroDistanceRange)
     auto samples{ sampler.GenerateSamplingPoints(center) };
     for (const auto & sample : samples)
     {
-        float radius{ std::get<0>(sample) };
-        const auto & pos{ std::get<1>(sample) };
+        float radius{ sample.distance };
+        const auto & pos{ sample.position };
         EXPECT_FLOAT_EQ(0.0f, radius);
         EXPECT_FLOAT_EQ(center[0], pos[0]);
         EXPECT_FLOAT_EQ(center[1], pos[1]);
@@ -299,7 +299,7 @@ TEST(SphereSamplerTest, RadiusUniformRandomProfileProducesSamples)
     ASSERT_EQ(10u, samples.size());
     for (const auto & sample : samples)
     {
-        float radius{ std::get<0>(sample) };
+        float radius{ sample.distance };
         EXPECT_GE(radius, 0.2f);
         EXPECT_LE(radius, 0.4f);
     }
@@ -336,8 +336,8 @@ TEST(SphereSamplerTest, FibonacciDeterministicSingleShellProducesConfiguredPoint
     ASSERT_EQ(6u, samples.size());
     for (const auto & sample : samples)
     {
-        EXPECT_FLOAT_EQ(1.25f, std::get<0>(sample));
-        EXPECT_NEAR(1.25f, ComputeDistance(center, std::get<1>(sample)), 1e-5f);
+        EXPECT_FLOAT_EQ(1.25f, sample.distance);
+        EXPECT_NEAR(1.25f, ComputeDistance(center, sample.position), 1e-5f);
     }
 }
 
@@ -360,9 +360,9 @@ TEST(SphereSamplerTest, FibonacciDeterministicProducesExpectedShellPointCount)
         for (std::size_t point_index = 0; point_index < 4; ++point_index)
         {
             const auto & sample{ samples[shell_index * 4 + point_index] };
-            const float radius{ std::get<0>(sample) };
+            const float radius{ sample.distance };
             EXPECT_NEAR(expected_shells[shell_index], radius, 1e-5f);
-            EXPECT_NEAR(radius, ComputeDistance(center, std::get<1>(sample)), 1e-5f);
+            EXPECT_NEAR(radius, ComputeDistance(center, sample.position), 1e-5f);
         }
     }
 }
@@ -382,8 +382,8 @@ TEST(SphereSamplerTest, FibonacciDeterministicZeroRadiusShellReturnsCenterPoints
     ASSERT_EQ(5u, samples.size());
     for (const auto & sample : samples)
     {
-        EXPECT_FLOAT_EQ(0.0f, std::get<0>(sample));
-        const auto & position{ std::get<1>(sample) };
+        EXPECT_FLOAT_EQ(0.0f, sample.distance);
+        const auto & position{ sample.position };
         EXPECT_FLOAT_EQ(center[0], position[0]);
         EXPECT_FLOAT_EQ(center[1], position[1]);
         EXPECT_FLOAT_EQ(center[2], position[2]);
@@ -444,8 +444,8 @@ TEST(SphereSamplerTest, VolumeUniformRandomProfileProducesConfiguredSampleCount)
     ASSERT_EQ(20u, samples.size());
     for (const auto & sample : samples)
     {
-        float radius{ std::get<0>(sample) };
-        const auto & pos{ std::get<1>(sample) };
+        float radius{ sample.distance };
+        const auto & pos{ sample.position };
         float dx{ pos[0] - center[0] };
         float dy{ pos[1] - center[1] };
         float dz{ pos[2] - center[2] };

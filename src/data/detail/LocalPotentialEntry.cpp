@@ -21,9 +21,9 @@ LocalPotentialEntry::~LocalPotentialEntry()
 
 }
 
-void LocalPotentialEntry::SetDistanceAndMapValueList(std::vector<std::tuple<float, float>> value)
+void LocalPotentialEntry::SetSamplingEntries(LocalPotentialSampleList value)
 {
-    m_distance_and_map_value_list = std::move(value);
+    m_sampling_entries = std::move(value);
 }
 
 void LocalPotentialEntry::SetDataset(
@@ -62,9 +62,9 @@ const LocalPotentialAnnotation * LocalPotentialEntry::FindAnnotation(const std::
     return (iter == m_annotation_map.end()) ? nullptr : &iter->second;
 }
 
-int LocalPotentialEntry::GetDistanceAndMapValueListSize() const
+int LocalPotentialEntry::GetSamplingEntryCount() const
 {
-    return static_cast<int>(m_distance_and_map_value_list.size());
+    return static_cast<int>(m_sampling_entries.size());
 }
 
 const std::unordered_map<std::string, LocalPotentialAnnotation> &
@@ -91,46 +91,45 @@ const LocalPotentialEntry::FitResult & LocalPotentialEntry::GetFitResult() const
     return *m_fit_result;
 }
 
-const std::vector<std::tuple<float, float>> & LocalPotentialEntry::GetDistanceAndMapValueList() const
+const LocalPotentialSampleList & LocalPotentialEntry::GetSamplingEntries() const
 {
-    return m_distance_and_map_value_list;
+    return m_sampling_entries;
 }
 
 std::tuple<float, float> LocalPotentialEntry::GetDistanceRange(double margin_rate) const
 {
     std::vector<float> distance_array;
-    distance_array.reserve(m_distance_and_map_value_list.size());
-    for (const auto & [distance, map_value] : m_distance_and_map_value_list)
+    distance_array.reserve(m_sampling_entries.size());
+    for (const auto & sample : m_sampling_entries)
     {
-        (void)map_value;
-        distance_array.emplace_back(distance);
+        distance_array.emplace_back(sample.distance);
     }
     return ArrayStats<float>::ComputeScalingRangeTuple(
         distance_array, static_cast<float>(margin_rate));
 }
 
-std::tuple<float, float> LocalPotentialEntry::GetMapValueRange(double margin_rate) const
+std::tuple<float, float> LocalPotentialEntry::GetResponseRange(double margin_rate) const
 {
     std::vector<float> map_value_array;
-    map_value_array.reserve(m_distance_and_map_value_list.size());
-    for (const auto & [distance, map_value] : m_distance_and_map_value_list)
+    map_value_array.reserve(m_sampling_entries.size());
+    for (const auto & sample : m_sampling_entries)
     {
-        (void)distance;
-        map_value_array.emplace_back(map_value);
+        map_value_array.emplace_back(sample.response);
     }
     return ArrayStats<float>::ComputeScalingRangeTuple(
         map_value_array, static_cast<float>(margin_rate));
 }
 
-std::vector<std::tuple<float, float>> LocalPotentialEntry::GetBinnedDistanceAndMapValueList(
+SeriesPointList LocalPotentialEntry::GetBinnedDistanceResponseSeries(
     int bin_size,
     double x_min,
     double x_max) const
 {
     const auto bin_spacing{ (x_max - x_min) / static_cast<double>(bin_size) };
     std::vector<std::vector<float>> bin_map(static_cast<size_t>(bin_size));
-    for (const auto & [distance, map_value] : m_distance_and_map_value_list)
+    for (const auto & sample : m_sampling_entries)
     {
+        const auto distance{ sample.distance };
         if (distance < x_min || distance >= x_max)
         {
             continue;
@@ -141,52 +140,54 @@ std::vector<std::tuple<float, float>> LocalPotentialEntry::GetBinnedDistanceAndM
         {
             continue;
         }
-        bin_map.at(static_cast<size_t>(bin_index)).emplace_back(map_value);
+        bin_map.at(static_cast<size_t>(bin_index)).emplace_back(sample.response);
     }
 
-    std::vector<std::tuple<float, float>> binned_distance_and_map_value_list;
-    binned_distance_and_map_value_list.reserve(static_cast<size_t>(bin_size));
+    SeriesPointList binned_distance_response_series;
+    binned_distance_response_series.reserve(static_cast<size_t>(bin_size));
     for (int i = 0; i < bin_size; i++)
     {
         const auto x_value{ static_cast<float>(x_min + (i + 0.5) * bin_spacing) };
         const auto & bin_values{ bin_map.at(static_cast<size_t>(i)) };
         const auto y_value{ bin_values.empty() ? 0.0f : ArrayStats<float>::ComputeMedian(bin_values) };
-        binned_distance_and_map_value_list.emplace_back(std::make_tuple(x_value, y_value));
+        binned_distance_response_series.emplace_back(SeriesPoint{ x_value, y_value });
     }
-    return binned_distance_and_map_value_list;
+    return binned_distance_response_series;
 }
 
-std::vector<std::tuple<float, float>> LocalPotentialEntry::GetLinearModelDistanceAndMapValueList() const
+SeriesPointList LocalPotentialEntry::GetLinearModelSeries() const
 {
     Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
-    std::vector<std::tuple<float, float>> linear_model_distance_and_map_value_list;
-    linear_model_distance_and_map_value_list.reserve(m_distance_and_map_value_list.size());
-    for (const auto & [distance, map_value] : m_distance_and_map_value_list)
+    SeriesPointList linear_model_series;
+    linear_model_series.reserve(m_sampling_entries.size());
+    for (const auto & sample : m_sampling_entries)
     {
-        if (map_value <= 0.0f)
+        if (sample.response <= 0.0f)
         {
             continue;
         }
         const auto data_vector{
             GausLinearTransformHelper::BuildLinearModelDataVector(
-                distance, map_value, model_par_init)
+                sample.distance, sample.response, model_par_init)
         };
-        linear_model_distance_and_map_value_list.emplace_back(
-            std::make_tuple(data_vector(1), data_vector(2)));
+        linear_model_series.emplace_back(SeriesPoint{
+            static_cast<float>(data_vector(1)),
+            static_cast<float>(data_vector(2))
+        });
     }
-    return linear_model_distance_and_map_value_list;
+    return linear_model_series;
 }
 
 double LocalPotentialEntry::GetMapValueNearCenter() const
 {
-    const auto & data_list{ GetDistanceAndMapValueList() };
+    const auto & data_list{ GetSamplingEntries() };
     if (data_list.empty()) return 0.0;
     int count{ 0 };
     double sum{ 0.0 };
-    for (const auto & [distance, map_value] : data_list)
+    for (const auto & sample : data_list)
     {
-        if (distance > 0.05f) continue;
-        sum += map_value;
+        if (sample.distance > 0.05f) continue;
+        sum += sample.response;
         count++;
     }
     if (count == 0) return 0.0;
@@ -195,15 +196,15 @@ double LocalPotentialEntry::GetMapValueNearCenter() const
 
 double LocalPotentialEntry::GetMomentZeroEstimate() const
 {
-    auto data_size{ GetDistanceAndMapValueListSize() };
+    auto data_size{ GetSamplingEntryCount() };
     if (data_size == 0) return 0.0;
     auto y_sum{ 0.0 };
     auto count{ 0 };
-    for (const auto & [distance, map_value] : m_distance_and_map_value_list)
+    for (const auto & sample : m_sampling_entries)
     {
-        auto y_value{ static_cast<double>(map_value) };
+        auto y_value{ static_cast<double>(sample.response) };
         if (y_value <= 0.0) continue;
-        if (distance > 1.0f) continue;
+        if (sample.distance > 1.0f) continue;
         y_sum += y_value;
         count++;
     }
@@ -212,17 +213,17 @@ double LocalPotentialEntry::GetMomentZeroEstimate() const
 
 double LocalPotentialEntry::GetMomentTwoEstimate() const
 {
-    auto data_size{ GetDistanceAndMapValueListSize() };
+    auto data_size{ GetSamplingEntryCount() };
     if (data_size == 0) return 0.0;
     auto m_0{ GetMomentZeroEstimate() };
     auto y_sum{ 0.0 };
     auto count{ 0 };
-    for (const auto & [distance, map_value] : m_distance_and_map_value_list)
+    for (const auto & sample : m_sampling_entries)
     {
-        auto y_value{ static_cast<double>(map_value) };
+        auto y_value{ static_cast<double>(sample.response) };
         if (y_value <= 0.0) continue;
-        if (distance > 1.0f) continue;
-        y_sum += y_value * distance * distance;
+        if (sample.distance > 1.0f) continue;
+        y_sum += y_value * sample.distance * sample.distance;
         count++;
     }
     y_sum /= static_cast<double>(count);
@@ -231,7 +232,7 @@ double LocalPotentialEntry::GetMomentTwoEstimate() const
 
 double LocalPotentialEntry::CalculateQScore(int par_choice) const
 {
-    if (m_distance_and_map_value_list.empty())
+    if (m_sampling_entries.empty())
     {
         return 0.0;
     }
@@ -263,14 +264,15 @@ double LocalPotentialEntry::CalculateQScore(int par_choice) const
     std::vector<float> distance_list;
     std::vector<float> map_value_list;
     std::vector<float> reference_value_list;
-    distance_list.reserve(m_distance_and_map_value_list.size());
-    map_value_list.reserve(m_distance_and_map_value_list.size());
-    reference_value_list.reserve(m_distance_and_map_value_list.size());
-    for (auto & [distance, map_value] : m_distance_and_map_value_list)
+    distance_list.reserve(m_sampling_entries.size());
+    map_value_list.reserve(m_sampling_entries.size());
+    reference_value_list.reserve(m_sampling_entries.size());
+    for (const auto & sample : m_sampling_entries)
     {
-        distance_list.emplace_back(distance);
-        map_value_list.emplace_back(map_value);
-        reference_value_list.emplace_back(amplitude * std::exp(-0.5 * std::pow(distance/width, 2)) + intersect);
+        distance_list.emplace_back(sample.distance);
+        map_value_list.emplace_back(sample.response);
+        reference_value_list.emplace_back(
+            amplitude * std::exp(-0.5 * std::pow(sample.distance / width, 2)) + intersect);
     }
 
     float map_value_mean{ ArrayStats<float>::ComputeMean(map_value_list.data(), map_value_list.size()) };

@@ -263,18 +263,18 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateAtomGausEstimateHistogram(
 
 std::unique_ptr<TH1D> PotentialPlotBuilder::CreateLinearModelDataHistogram(int dimension_id) const
 {
-    auto data_array{ GetLocalEntry().GetLinearModelDistanceAndMapValueList() };
+    auto data_array{ GetLocalEntry().GetLinearModelSeries() };
     std::vector<float> data_list;
     data_list.reserve(data_array.size());
-    for (auto & [distance, map_value] : data_array)
+    for (const auto & point : data_array)
     {
         switch (dimension_id)
         {
             case 0:
-                data_list.emplace_back(distance);
+                data_list.emplace_back(point.x);
                 break;
             case 1:
-                data_list.emplace_back(map_value);
+                data_list.emplace_back(point.y);
                 break;
             default:
                 throw std::runtime_error("Dimension id is invalid.");
@@ -298,16 +298,16 @@ std::unique_ptr<TH2D> PotentialPlotBuilder::CreateDistanceToMapValueHistogram(
     int x_bin_size, int y_bin_size) const
 {
     auto distance_range{ GetLocalEntry().GetDistanceRange(0.0) };
-    auto map_value_range{ GetLocalEntry().GetMapValueRange(0.1) };
+    auto map_value_range{ GetLocalEntry().GetResponseRange(0.1) };
     auto hist{
         ROOTHelper::CreateHist2D(
             "hist_distance_mapvalue", "Distance vs Map Value",
             x_bin_size, std::get<0>(distance_range), std::get<1>(distance_range),
             y_bin_size, std::get<0>(map_value_range), std::get<1>(map_value_range))
     };
-    for (auto & [distance, map_value] : GetLocalEntry().GetDistanceAndMapValueList())
+    for (const auto & sample : GetLocalEntry().GetSamplingEntries())
     {
-        hist->Fill(distance, map_value);
+        hist->Fill(sample.distance, sample.response);
     }
     return hist;
 }
@@ -688,9 +688,9 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateDistanceToMapValueGrap
 {
     auto graph{ ROOTHelper::CreateGraphErrors() };
     auto count{ 0 };
-    for (auto & [distance, map_value] : GetLocalEntry().GetDistanceAndMapValueList())
+    for (const auto & sample : GetLocalEntry().GetSamplingEntries())
     {
-        graph->SetPoint(count, distance, map_value);
+        graph->SetPoint(count, sample.distance, sample.response);
         count++;
     }
     return graph;
@@ -700,9 +700,9 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateLinearModelDistanceToM
 {
     auto graph{ ROOTHelper::CreateGraphErrors() };
     auto count{ 0 };
-    for (auto & [x, y] : GetLocalEntry().GetLinearModelDistanceAndMapValueList())
+    for (const auto & point : GetLocalEntry().GetLinearModelSeries())
     {
-        graph->SetPoint(count, x, y);
+        graph->SetPoint(count, point.x, point.y);
         count++;
     }
     return graph;
@@ -711,12 +711,12 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateLinearModelDistanceToM
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToMapValueGraph(
     int bin_size, double x_min, double x_max)
 {
-    auto data_array{ GetLocalEntry().GetBinnedDistanceAndMapValueList(bin_size, x_min, x_max) };
+    auto data_array{ GetLocalEntry().GetBinnedDistanceResponseSeries(bin_size, x_min, x_max) };
     auto graph{ ROOTHelper::CreateGraphErrors(bin_size) };
     auto count{ 0 };
-    for (auto & [distance, map_value] : data_array)
+    for (const auto & point : data_array)
     {
-        graph->SetPoint(count, distance, map_value);
+        graph->SetPoint(count, point.x, point.y);
         count++;
     }
     return graph;

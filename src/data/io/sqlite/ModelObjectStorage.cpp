@@ -989,9 +989,9 @@ void SaveAtomLocalPotentialEntryList(
         {
             statement_db.Bind<std::string>(1, key_tag);
             statement_db.Bind<int>(2, atom_object->GetSerialID());
-            statement_db.Bind<int>(3, entry->GetDistanceAndMapValueListSize());
-            statement_db.Bind<std::vector<std::tuple<float, float>>>(
-                4, entry->GetDistanceAndMapValueList());
+            statement_db.Bind<int>(3, entry->GetSamplingEntryCount());
+            statement_db.Bind<LocalPotentialSampleList>(
+                4, entry->GetSamplingEntries());
             statement_db.Bind<double>(5, entry->GetEstimateOLS().amplitude);
             statement_db.Bind<double>(6, entry->GetEstimateOLS().width);
             statement_db.Bind<double>(7, entry->GetEstimateMDPDE().amplitude);
@@ -1017,9 +1017,9 @@ void SaveBondLocalPotentialEntryList(
             statement_db.Bind<std::string>(1, key_tag);
             statement_db.Bind<int>(2, bond_object->GetAtomSerialID1());
             statement_db.Bind<int>(3, bond_object->GetAtomSerialID2());
-            statement_db.Bind<int>(4, entry->GetDistanceAndMapValueListSize());
-            statement_db.Bind<std::vector<std::tuple<float, float>>>(
-                5, entry->GetDistanceAndMapValueList());
+            statement_db.Bind<int>(4, entry->GetSamplingEntryCount());
+            statement_db.Bind<LocalPotentialSampleList>(
+                5, entry->GetSamplingEntries());
             statement_db.Bind<double>(6, entry->GetEstimateOLS().amplitude);
             statement_db.Bind<double>(7, entry->GetEstimateOLS().width);
             statement_db.Bind<double>(8, entry->GetEstimateMDPDE().amplitude);
@@ -1257,8 +1257,8 @@ std::unordered_map<int, std::unique_ptr<rhbm_gem::LocalPotentialEntry>> LoadAtom
 
         auto entry{ std::make_unique<rhbm_gem::LocalPotentialEntry>() };
         const auto serial_id{ database.GetColumn<int>(0) };
-        entry->SetDistanceAndMapValueList(
-            database.GetColumn<std::vector<std::tuple<float, float>>>(2));
+        entry->SetSamplingEntries(
+            database.GetColumn<LocalPotentialSampleList>(2));
         entry->SetEstimateOLS(
             rhbm_gem::GaussianEstimate{
                 database.GetColumn<double>(3), database.GetColumn<double>(4) });
@@ -1299,8 +1299,8 @@ std::map<std::pair<int, int>, std::unique_ptr<rhbm_gem::LocalPotentialEntry>> Lo
 
         auto entry{ std::make_unique<rhbm_gem::LocalPotentialEntry>() };
         const auto key{ std::make_pair(database.GetColumn<int>(0), database.GetColumn<int>(1)) };
-        entry->SetDistanceAndMapValueList(
-            database.GetColumn<std::vector<std::tuple<float, float>>>(3));
+        entry->SetSamplingEntries(
+            database.GetColumn<LocalPotentialSampleList>(3));
         entry->SetEstimateOLS(
             rhbm_gem::GaussianEstimate{
                 database.GetColumn<double>(4), database.GetColumn<double>(5) });

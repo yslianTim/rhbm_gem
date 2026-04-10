@@ -1,10 +1,11 @@
 #pragma once
 
 #include <sqlite3.h>
+#include <rhbm_gem/utils/math/SamplingTypes.hpp>
 #include <string>
 #include <string_view>
-#include <vector>
 #include <tuple>
+#include <vector>
 
 namespace rhbm_gem {
 
@@ -135,11 +136,11 @@ struct SQLiteBinder<std::vector<double>>
     }
 };
 
-// std::vector<std::tuple<float, float>> specialization
+// LocalPotentialSampleList specialization
 template<>
-struct SQLiteBinder<std::vector<std::tuple<float, float>>>
+struct SQLiteBinder<LocalPotentialSampleList>
 {
-    static int Bind(sqlite3_stmt * stmt, int index, const std::vector<std::tuple<float, float>> & value)
+    static int Bind(sqlite3_stmt * stmt, int index, const LocalPotentialSampleList & value)
     {
         if(value.empty())
         {
@@ -148,10 +149,10 @@ struct SQLiteBinder<std::vector<std::tuple<float, float>>>
         
         std::vector<float> contiguous;
         contiguous.reserve(value.size() * 2);
-        for(const auto & tup : value)
+        for(const auto & sample : value)
         {
-            contiguous.push_back(std::get<0>(tup));
-            contiguous.push_back(std::get<1>(tup));
+            contiguous.push_back(sample.distance);
+            contiguous.push_back(sample.response);
         }
         
         return sqlite3_bind_blob(
