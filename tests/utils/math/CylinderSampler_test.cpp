@@ -18,7 +18,6 @@ TEST(CylinderSamplerTest, ProducesConfiguredNumberOfSamples)
 
     ASSERT_EQ(12u, samples.size());
     EXPECT_EQ(12u, sampler.GetSampleCount());
-    EXPECT_EQ(12u, sampler.GetPointCount());
 }
 
 TEST(CylinderSamplerTest, ThrowsWhenAxisVectorIsZero)

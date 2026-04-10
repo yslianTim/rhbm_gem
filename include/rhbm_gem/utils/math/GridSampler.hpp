@@ -20,11 +20,6 @@ public:
     unsigned int GetGridResolution() const { return m_sampling_size; }
     unsigned int GetPointCount() const { return m_sampling_size * m_sampling_size; }
     void SetGridResolution(unsigned int value) { m_sampling_size = value; }
-
-    // Transitional compatibility wrappers. Prefer GetGridResolution()/SetGridResolution().
-    unsigned int GetSamplingSize() const { return GetPointCount(); }
-    void SetSamplingSize(unsigned int value) { SetGridResolution(value); }
-
     void SetWindowSize(float value) { m_window_size = value; }
     void SetReferenceUVector(const std::array<float, 3> & value) { m_reference_u_vector = value; }
 
