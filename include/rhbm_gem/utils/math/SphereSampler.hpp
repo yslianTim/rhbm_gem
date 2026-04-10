@@ -9,7 +9,7 @@
 class SphereSampler : public SamplerBase
 {
     unsigned int m_sampling_size;
-    double m_distance_min, m_distance_max;
+    double m_distance_min, m_distance_max, m_distance_step;
 
 public:
     SphereSampler();
