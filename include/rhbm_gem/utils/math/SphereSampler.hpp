@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 class SphereSampler
@@ -14,8 +13,7 @@ public:
 
     void Print() const;
 
-    SamplingPointList GenerateSamplingPoints(
-        const std::array<float, 3> & reference_position) const;
+    SamplingPointList GenerateSamplingPoints(const std::array<float, 3> & reference_position) const;
     unsigned int GetSampleCount() const { return m_sampling_size; }
     void SetSampleCount(unsigned int value) { m_sampling_size = value; }
     void SetDistanceRangeMinimum(double value) { m_distance_min = value; }

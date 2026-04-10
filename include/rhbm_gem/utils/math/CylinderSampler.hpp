@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 class CylinderSampler
