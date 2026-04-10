@@ -11,10 +11,10 @@ TEST(SphereSamplerTest, DefaultConfiguration)
     const auto & profile{ sampler.GetSamplingProfile() };
     auto samples{ sampler.GenerateSamplingPoints({0.f, 0.f, 0.f}) };
 
-    EXPECT_EQ(SphereSamplingMethod::RadiusUniformRandom, profile.method);
-    EXPECT_DOUBLE_EQ(0.0, profile.distance_range.min);
-    EXPECT_DOUBLE_EQ(1.0, profile.distance_range.max);
-    EXPECT_EQ(10u, std::get<SphereRandomSamplingConfig>(profile.method_config).sample_count);
+    EXPECT_EQ(SphereSamplingMethod::RadiusUniformRandom, profile.GetMethod());
+    EXPECT_DOUBLE_EQ(0.0, profile.GetDistanceRange().min);
+    EXPECT_DOUBLE_EQ(1.0, profile.GetDistanceRange().max);
+    EXPECT_EQ(10u, profile.GetRandomConfig().sample_count);
     EXPECT_EQ(10u, sampler.GetExpectedPointCount());
     ASSERT_EQ(10u, samples.size());
     for (const auto & sample : samples)
@@ -174,15 +174,21 @@ TEST(SphereSamplerTest, RadiusUniformRandomProfileThrowsWhenMinGreaterThanMax)
         std::invalid_argument);
 }
 
-TEST(SphereSamplerTest, SetSamplingProfileThrowsWhenRangeIsInvalid)
+TEST(SphereSamplerTest, SetSamplingProfileAcceptsFactoryCreatedProfile)
 {
     SphereSampler sampler;
-    SphereSamplingProfile invalid_profile;
-    invalid_profile.method = SphereSamplingMethod::RadiusUniformRandom;
-    invalid_profile.distance_range = SphereDistanceRange{ 2.0, 1.0 };
-    invalid_profile.method_config = SphereRandomSamplingConfig{ 0 };
+    const auto profile{
+        SphereSamplingProfile::VolumeUniformRandom(
+            SphereDistanceRange{ 0.5, 2.0 },
+            12)
+    };
 
-    EXPECT_THROW(sampler.SetSamplingProfile(invalid_profile), std::invalid_argument);
+    sampler.SetSamplingProfile(profile);
+
+    EXPECT_EQ(SphereSamplingMethod::VolumeUniformRandom, sampler.GetSamplingProfile().GetMethod());
+    EXPECT_DOUBLE_EQ(0.5, sampler.GetSamplingProfile().GetDistanceRange().min);
+    EXPECT_DOUBLE_EQ(2.0, sampler.GetSamplingProfile().GetDistanceRange().max);
+    EXPECT_EQ(12u, sampler.GetExpectedPointCount());
 }
 
 TEST(SphereSamplerTest, RadiusUniformRandomProfileThrowsWhenMinNegative)

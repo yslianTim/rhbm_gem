@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstddef>
-#include <variant>
 
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
@@ -22,20 +21,34 @@ struct SphereRandomSamplingConfig
     unsigned int sample_count{ 10 };
 };
 
-struct SphereSamplingProfile
+class SphereSamplingProfile
 {
-    SphereSamplingMethod method{ SphereSamplingMethod::RadiusUniformRandom };
-    SphereDistanceRange distance_range{};
-    std::variant<SphereRandomSamplingConfig> method_config{
-        SphereRandomSamplingConfig{}
-    };
-
+public:
     static SphereSamplingProfile RadiusUniformRandom(
         SphereDistanceRange range,
         unsigned int sample_count);
     static SphereSamplingProfile VolumeUniformRandom(
         SphereDistanceRange range,
         unsigned int sample_count);
+
+    SphereSamplingProfile(const SphereSamplingProfile &) = default;
+    SphereSamplingProfile(SphereSamplingProfile &&) noexcept = default;
+    SphereSamplingProfile & operator=(const SphereSamplingProfile &) = default;
+    SphereSamplingProfile & operator=(SphereSamplingProfile &&) noexcept = default;
+
+    SphereSamplingMethod GetMethod() const { return m_method; }
+    const SphereDistanceRange & GetDistanceRange() const { return m_distance_range; }
+    const SphereRandomSamplingConfig & GetRandomConfig() const { return m_random_config; }
+
+private:
+    SphereSamplingProfile(
+        SphereSamplingMethod method,
+        SphereDistanceRange range,
+        SphereRandomSamplingConfig random_config);
+
+    SphereSamplingMethod m_method;
+    SphereDistanceRange m_distance_range;
+    SphereRandomSamplingConfig m_random_config;
 };
 
 // SphereSampler keeps GenerateSamplingPoints() as the stable public entry point.

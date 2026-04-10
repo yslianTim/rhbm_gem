@@ -11,10 +11,9 @@
 
 namespace {
 
-SphereSamplingProfile MakeSphereSamplingProfile(
-    SphereSamplingMethod method,
+void ValidateSphereSamplingInputs(
     SphereDistanceRange range,
-    unsigned int sample_count)
+    SphereRandomSamplingConfig random_config)
 {
     if (range.min > range.max)
     {
@@ -24,18 +23,7 @@ SphereSamplingProfile MakeSphereSamplingProfile(
     {
         throw std::invalid_argument("SphereSampler: distance range cannot be negative");
     }
-
-    return SphereSamplingProfile{
-        method,
-        range,
-        SphereRandomSamplingConfig{ sample_count }
-    };
-}
-
-void ValidateSphereSamplingProfile(const SphereSamplingProfile & profile)
-{
-    const auto & config{ std::get<SphereRandomSamplingConfig>(profile.method_config) };
-    (void)MakeSphereSamplingProfile(profile.method, profile.distance_range, config.sample_count);
+    (void)random_config;
 }
 
 std::string_view GetSphereSamplingMethodName(SphereSamplingMethod method)
@@ -53,24 +41,35 @@ std::string_view GetSphereSamplingMethodName(SphereSamplingMethod method)
 
 } // namespace
 
+SphereSamplingProfile::SphereSamplingProfile(
+    SphereSamplingMethod method,
+    SphereDistanceRange range,
+    SphereRandomSamplingConfig random_config) :
+    m_method{ method },
+    m_distance_range{ range },
+    m_random_config{ random_config }
+{
+    ValidateSphereSamplingInputs(range, random_config);
+}
+
 SphereSamplingProfile SphereSamplingProfile::RadiusUniformRandom(
     SphereDistanceRange range,
     unsigned int sample_count)
 {
-    return MakeSphereSamplingProfile(
+    return SphereSamplingProfile(
         SphereSamplingMethod::RadiusUniformRandom,
         range,
-        sample_count);
+        SphereRandomSamplingConfig{ sample_count });
 }
 
 SphereSamplingProfile SphereSamplingProfile::VolumeUniformRandom(
     SphereDistanceRange range,
     unsigned int sample_count)
 {
-    return MakeSphereSamplingProfile(
+    return SphereSamplingProfile(
         SphereSamplingMethod::VolumeUniformRandom,
         range,
-        sample_count);
+        SphereRandomSamplingConfig{ sample_count });
 }
 
 SphereSampler::SphereSampler() :
@@ -80,48 +79,49 @@ SphereSampler::SphereSampler() :
 
 void SphereSampler::Print() const
 {
-    const auto & config{ std::get<SphereRandomSamplingConfig>(m_profile.method_config) };
+    const auto & config{ m_profile.GetRandomConfig() };
+    const auto & distance_range{ m_profile.GetDistanceRange() };
 
     std::ostringstream oss;
     oss << "SphereSampler Configuration:\n"
-        << " - Sampling method: " << GetSphereSamplingMethodName(m_profile.method) << '\n'
+        << " - Sampling method: " << GetSphereSamplingMethodName(m_profile.GetMethod()) << '\n'
         << " - Sample count: " << config.sample_count << '\n'
         << " - Distance range: ["
-        << StringHelper::ToStringWithPrecision<double>(m_profile.distance_range.min, 1) << ", "
-        << StringHelper::ToStringWithPrecision<double>(m_profile.distance_range.max, 1)
+        << StringHelper::ToStringWithPrecision<double>(distance_range.min, 1) << ", "
+        << StringHelper::ToStringWithPrecision<double>(distance_range.max, 1)
         << "] Angstrom.";
     Logger::Log(LogLevel::Info, oss.str());
 }
 
 void SphereSampler::SetSamplingProfile(const SphereSamplingProfile & profile)
 {
-    ValidateSphereSamplingProfile(profile);
     m_profile = profile;
 }
 
 std::size_t SphereSampler::GetExpectedPointCount() const
 {
-    return std::get<SphereRandomSamplingConfig>(m_profile.method_config).sample_count;
+    return m_profile.GetRandomConfig().sample_count;
 }
 
 SamplingPointList SphereSampler::GenerateSamplingPoints(
     const std::array<float, 3> & reference_position) const
 {
     SamplingPointList out;
-    const auto & config{ std::get<SphereRandomSamplingConfig>(m_profile.method_config) };
-    switch (m_profile.method)
+    const auto & config{ m_profile.GetRandomConfig() };
+    const auto & distance_range{ m_profile.GetDistanceRange() };
+    switch (m_profile.GetMethod())
     {
         case SphereSamplingMethod::RadiusUniformRandom:
             GenerateRadiusUniformRandom(
                 reference_position,
-                m_profile.distance_range,
+                distance_range,
                 config,
                 out);
             break;
         case SphereSamplingMethod::VolumeUniformRandom:
             GenerateVolumeUniformRandom(
                 reference_position,
-                m_profile.distance_range,
+                distance_range,
                 config,
                 out);
             break;
