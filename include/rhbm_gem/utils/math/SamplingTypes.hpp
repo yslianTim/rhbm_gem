@@ -28,6 +28,7 @@ struct SeriesPoint
 {
     float x{ 0.0f };
     float y{ 0.0f };
+    float weight{ 1.0f };
 };
 
 using SeriesPointList = std::vector<SeriesPoint>;

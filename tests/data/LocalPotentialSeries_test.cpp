@@ -29,10 +29,10 @@ TEST(LocalPotentialSeriesTest, EntryComputesRangeAndBinningForDistanceMapSeries)
 {
     rg::LocalPotentialEntry entry;
     entry.SetSamplingEntries({
-        {0.0f, 2.0f},
-        {0.2f, 4.0f},
-        {0.7f, 8.0f},
-        {1.0f, -1.0f},
+        {0.0f, 2.0f, 1.0f},
+        {0.2f, 4.0f, 3.0f},
+        {0.7f, 8.0f, 2.0f},
+        {1.0f, -1.0f, 9.0f},
     });
 
     const auto distance_range{ entry.GetDistanceRange(0.0) };
@@ -46,15 +46,17 @@ TEST(LocalPotentialSeriesTest, EntryComputesRangeAndBinningForDistanceMapSeries)
     ASSERT_EQ(binned.size(), 2U);
     EXPECT_FLOAT_EQ(binned.at(0).y, 3.0f);
     EXPECT_FLOAT_EQ(binned.at(1).y, 8.0f);
+    EXPECT_FLOAT_EQ(binned.at(0).weight, 2.0f);
+    EXPECT_FLOAT_EQ(binned.at(1).weight, 2.0f);
 }
 
 TEST(LocalPotentialSeriesTest, EntryLinearModelTransformKeepsPositiveSamplesOnly)
 {
     rg::LocalPotentialEntry entry;
     entry.SetSamplingEntries({
-        {0.1f, 4.0f},
-        {0.2f, -2.0f},
-        {0.3f, 8.0f},
+        {0.1f, 4.0f, 0.5f},
+        {0.2f, -2.0f, 7.0f},
+        {0.3f, 8.0f, 2.5f},
     });
 
     const auto transformed{ entry.GetLinearModelSeries() };
@@ -70,16 +72,18 @@ TEST(LocalPotentialSeriesTest, EntryLinearModelTransformKeepsPositiveSamplesOnly
     EXPECT_NEAR(transformed.at(0).y, expected0(2), 1e-6);
     EXPECT_NEAR(transformed.at(1).x, expected1(1), 1e-6);
     EXPECT_NEAR(transformed.at(1).y, expected1(2), 1e-6);
+    EXPECT_FLOAT_EQ(transformed.at(0).weight, 0.5f);
+    EXPECT_FLOAT_EQ(transformed.at(1).weight, 2.5f);
 }
 
 TEST(LocalPotentialSeriesTest, EntryBinningRespectsNonZeroMinimum)
 {
     rg::LocalPotentialEntry entry;
     entry.SetSamplingEntries({
-        {0.20f, 1.0f},
-        {0.60f, 4.0f},
-        {0.90f, 6.0f},
-        {1.20f, 8.0f},
+        {0.20f, 1.0f, 8.0f},
+        {0.60f, 4.0f, 2.0f},
+        {0.90f, 6.0f, 4.0f},
+        {1.20f, 8.0f, 6.0f},
     });
 
     const auto binned{ entry.GetBinnedDistanceResponseSeries(2, 0.5, 1.5) };
@@ -89,6 +93,8 @@ TEST(LocalPotentialSeriesTest, EntryBinningRespectsNonZeroMinimum)
     EXPECT_FLOAT_EQ(binned.at(1).x, 1.25f);
     EXPECT_FLOAT_EQ(binned.at(0).y, 5.0f);
     EXPECT_FLOAT_EQ(binned.at(1).y, 8.0f);
+    EXPECT_FLOAT_EQ(binned.at(0).weight, 3.0f);
+    EXPECT_FLOAT_EQ(binned.at(1).weight, 6.0f);
 }
 
 TEST(LocalPotentialSeriesTest, ViewForwardsSeriesDerivationsFromResolvedEntry)
@@ -101,9 +107,9 @@ TEST(LocalPotentialSeriesTest, ViewForwardsSeriesDerivationsFromResolvedEntry)
     auto analysis{ model->EditAnalysis() };
     auto mutable_view{ analysis.EnsureAtomLocalPotential(*atom) };
     mutable_view.SetSamplingEntries({
-        {0.1f, 2.0f},
-        {0.4f, 4.0f},
-        {0.8f, 6.0f},
+        {0.1f, 2.0f, 1.0f},
+        {0.4f, 4.0f, 2.0f},
+        {0.8f, 6.0f, 5.0f},
     });
 
     const auto view{ rg::LocalPotentialView::RequireFor(*atom) };
@@ -115,4 +121,20 @@ TEST(LocalPotentialSeriesTest, ViewForwardsSeriesDerivationsFromResolvedEntry)
     ASSERT_EQ(binned.size(), 2U);
     EXPECT_FLOAT_EQ(binned.at(0).y, 3.0f);
     EXPECT_FLOAT_EQ(binned.at(1).y, 6.0f);
+    EXPECT_FLOAT_EQ(binned.at(0).weight, 1.5f);
+    EXPECT_FLOAT_EQ(binned.at(1).weight, 5.0f);
+}
+
+TEST(LocalPotentialSeriesTest, EntryBinningReturnsZeroWeightForEmptyBins)
+{
+    rg::LocalPotentialEntry entry;
+    entry.SetSamplingEntries({
+        {0.10f, 2.0f, 4.0f},
+    });
+
+    const auto binned{ entry.GetBinnedDistanceResponseSeries(2, 0.0, 1.0) };
+
+    ASSERT_EQ(binned.size(), 2U);
+    EXPECT_FLOAT_EQ(binned.at(0).weight, 4.0f);
+    EXPECT_FLOAT_EQ(binned.at(1).weight, 0.0f);
 }
