@@ -57,12 +57,80 @@ constexpr std::string_view kAlphaGOption{ "--alpha-g" };
 constexpr std::string_view kSamplingRangeIssue{ "--sampling-range" };
 constexpr std::string_view kFitRangeIssue{ "--fit-range" };
 
+std::vector<double> BuildOrderedAlphaRTrainingList()
+{
+    std::vector<double> alpha_list{ 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 };
+    std::sort(alpha_list.begin(), alpha_list.end());
+    return alpha_list;
+}
+
+std::vector<double> BuildOrderedAlphaGTrainingList()
+{
+    std::vector<double> alpha_list{ 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 };
+    std::sort(alpha_list.begin(), alpha_list.end());
+    return alpha_list;
+}
+
 HRLExecutionOptions MakePotentialAnalysisExecutionOptions(int thread_size, bool quiet_mode)
 {
     HRLExecutionOptions execution_options;
     execution_options.quiet_mode = quiet_mode;
     execution_options.thread_size = thread_size;
     return execution_options;
+}
+
+bool EmitTrainingReportIfRequested(
+    const Eigen::MatrixXd & gaus_bias_matrix,
+    const std::vector<double> & alpha_list,
+    std::string_view x_label,
+    std::string_view y_label,
+    const std::filesystem::path & training_report_dir,
+    std::string_view report_file_name)
+{
+    const auto report_path{ training_report_dir / std::filesystem::path{ report_file_name } };
+    if (report_path.empty())
+    {
+        return false;
+    }
+
+    std::error_code ec;
+    std::filesystem::create_directories(report_path.parent_path(), ec);
+    if (ec)
+    {
+        Logger::Log(
+            LogLevel::Warning,
+            "Failed to create training report directory '" +
+                report_path.parent_path().string() + "': " + ec.message());
+        return false;
+    }
+
+    try
+    {
+        LocalPainter::PaintTemplate1(
+            gaus_bias_matrix,
+            alpha_list,
+            std::string(x_label),
+            std::string(y_label),
+            report_path.string());
+    }
+    catch (const std::exception & ex)
+    {
+        Logger::Log(
+            LogLevel::Warning,
+            "Failed to emit training report '" + report_path.string() + "': " + ex.what());
+        return false;
+    }
+
+    if (!std::filesystem::exists(report_path))
+    {
+        Logger::Log(
+            LogLevel::Warning,
+            "Training report output was requested but no file was produced: " +
+                report_path.string());
+        return false;
+    }
+
+    return true;
 }
 
 } // namespace
@@ -241,81 +309,6 @@ void PotentialAnalysisCommand::ResetRuntimeState()
     m_model_object.reset();
 }
 
-} // namespace rhbm_gem
-
-namespace rhbm_gem::detail {
-
-std::vector<double> BuildOrderedAlphaRTrainingList()
-{
-    std::vector<double> alpha_list{ 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 };
-    std::sort(alpha_list.begin(), alpha_list.end());
-    return alpha_list;
-}
-
-std::vector<double> BuildOrderedAlphaGTrainingList()
-{
-    std::vector<double> alpha_list{ 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 };
-    std::sort(alpha_list.begin(), alpha_list.end());
-    return alpha_list;
-}
-
-bool EmitTrainingReportIfRequested(
-    const Eigen::MatrixXd & gaus_bias_matrix,
-    const std::vector<double> & alpha_list,
-    std::string_view x_label,
-    std::string_view y_label,
-    const std::filesystem::path & training_report_dir,
-    std::string_view report_file_name)
-{
-    const auto report_path{ training_report_dir / std::filesystem::path{ report_file_name } };
-    if (report_path.empty())
-    {
-        return false;
-    }
-
-    std::error_code ec;
-    std::filesystem::create_directories(report_path.parent_path(), ec);
-    if (ec)
-    {
-        Logger::Log(
-            LogLevel::Warning,
-            "Failed to create training report directory '" +
-                report_path.parent_path().string() + "': " + ec.message());
-        return false;
-    }
-
-    try
-    {
-        LocalPainter::PaintTemplate1(
-            gaus_bias_matrix,
-            alpha_list,
-            std::string(x_label),
-            std::string(y_label),
-            report_path.string());
-    }
-    catch (const std::exception & ex)
-    {
-        Logger::Log(
-            LogLevel::Warning,
-            "Failed to emit training report '" + report_path.string() + "': " + ex.what());
-        return false;
-    }
-
-    if (!std::filesystem::exists(report_path))
-    {
-        Logger::Log(
-            LogLevel::Warning,
-            "Training report output was requested but no file was produced: " +
-                report_path.string());
-        return false;
-    }
-
-    return true;
-}
-
-} // namespace rhbm_gem::detail
-
-namespace rhbm_gem {
 bool PotentialAnalysisCommand::BuildDataObject(const PotentialAnalysisRequest & request)
 {
     ScopeTimer timer("PotentialAnalysisCommand::BuildDataObject");
@@ -543,10 +536,6 @@ void PotentialAnalysisCommand::RunExperimentalBondWorkflowIfEnabled(
 #endif
 }
 
-
-} // namespace rhbm_gem
-
-namespace rhbm_gem {
 void PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR(
     const std::vector<AtomObject *> & atom_list,
     const std::vector<double> & alpha_list,
@@ -619,7 +608,7 @@ void PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR(
     gaus_bias_matrix /= static_cast<double>(atom_size);
 
     const bool report_emitted{
-        detail::EmitTrainingReportIfRequested(
+        EmitTrainingReportIfRequested(
             gaus_bias_matrix,
             alpha_list,
             "#alpha_{r}",
@@ -716,7 +705,7 @@ void PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG(
     gaus_bias_matrix /= static_cast<double>(group_size);
 
     const bool report_emitted{
-        detail::EmitTrainingReportIfRequested(
+        EmitTrainingReportIfRequested(
             gaus_bias_matrix,
             alpha_list,
             "#alpha_{g}",
@@ -853,7 +842,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     const auto analysis_view{ m_model_object->GetAnalysisView() };
 
     const size_t subset_size_alpha_r{ 5 };
-    const auto ordered_alpha_r_list{ detail::BuildOrderedAlphaRTrainingList() };
+    const auto ordered_alpha_r_list{ BuildOrderedAlphaRTrainingList() };
     
     // Alpha_R Training
     const auto & atom_list{ m_model_object->GetSelectedAtoms() };
@@ -885,7 +874,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     // Alpha_G Training
     RunLocalAtomFittingWorkflow(alpha_r);
     const size_t subset_size_alpha_g{ 10 };
-    const auto ordered_alpha_g_list{ detail::BuildOrderedAlphaGTrainingList() };
+    const auto ordered_alpha_g_list{ BuildOrderedAlphaGTrainingList() };
     
     std::vector<std::vector<AtomObject *>> atom_list_set;
     const auto component_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
