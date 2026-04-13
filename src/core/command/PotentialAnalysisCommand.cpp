@@ -187,10 +187,10 @@ bool PotentialAnalysisCommand::ExecuteImpl()
     RunMapObjectPreprocessing();
     RunModelObjectPreprocessing();
 
-    RunAtomMapValueSampling();
-    RunAtomGroupClassification();
+    RunAtomSamplingWorkflow();
+    RunAtomGroupingWorkflow();
     if (request.training_alpha_flag) RunAtomAlphaTraining();
-    else RunLocalAtomFitting(request.alpha_r);
+    else RunLocalAtomFittingWorkflow(request.alpha_r);
     RunAtomPotentialFitting();
     RunExperimentalBondWorkflowIfEnabled();
     SavePreparedModel();
@@ -302,12 +302,8 @@ bool PotentialAnalysisCommand::BuildDataObject()
     try
     {
         AttachDataRepository(request.database_path);
-        m_model_object = LoadInputFile<ModelObject>(
-            request.model_file_path,
-            m_model_key_tag);
-        m_map_object = LoadInputFile<MapObject>(
-            request.map_file_path,
-            m_map_key_tag);
+        m_model_object = LoadInputFile<ModelObject>(request.model_file_path, m_model_key_tag);
+        m_map_object = LoadInputFile<MapObject>(request.map_file_path, m_map_key_tag);
         if (request.simulation_flag)
         {
             UpdateModelObjectForSimulation(m_model_object.get());
@@ -719,18 +715,12 @@ void PotentialAnalysisCommand::SavePreparedModel()
     m_model_object->EditAnalysis().ClearTransientFitStates();
 }
 
-
-} // namespace rhbm_gem
-
-namespace rhbm_gem {
-namespace detail {
-
-void RunAtomSamplingWorkflow(
-    ModelObject & model_object,
-    const MapObject & map_object,
-    const PotentialAnalysisRequest & options,
-    int thread_size)
+void PotentialAnalysisCommand::RunAtomSamplingWorkflow()
 {
+    if (m_map_object == nullptr || m_model_object == nullptr) return;
+    ScopeTimer timer("PotentialAnalysisCommand::RunAtomSamplingWorkflow");
+    auto thread_size{ ThreadSize() };
+    const auto & options{ RequestOptions() };
     SphereSampler sampler;
     sampler.SetSamplingProfile(
         //SphereSamplingProfile::RadiusUniformRandom(
@@ -743,10 +733,10 @@ void RunAtomSamplingWorkflow(
     );
     sampler.Print();
 
-    const auto & atom_list{ model_object.GetSelectedAtoms() };
+    const auto & atom_list{ m_model_object->GetSelectedAtoms() };
     const auto atom_size{ atom_list.size() };
     size_t atom_count{ 0 };
-    auto analysis{ model_object.EditAnalysis() };
+    auto analysis{ m_model_object->EditAnalysis() };
     std::vector<MutableLocalPotentialView> local_entry_list;
     local_entry_list.reserve(atom_size);
     for (auto * atom : atom_list)
@@ -763,7 +753,7 @@ void RunAtomSamplingWorkflow(
             auto atom{ atom_list[i] };
             auto entry{ local_entry_list[i] };
             auto sampling_entries{
-                SampleMapValues(map_object, sampler, atom->GetPosition())
+                SampleMapValues(*m_map_object, sampler, atom->GetPosition())
             };
             entry.SetSamplingEntries(sampling_entries);
             entry.SetDataset(LocalPotentialDataset{
@@ -789,7 +779,7 @@ void RunAtomSamplingWorkflow(
         auto atom{ atom_list[i] };
         auto entry{ local_entry_list[i] };
         auto sampling_entries{
-            SampleMapValues(map_object, sampler, atom->GetPosition())
+            SampleMapValues(*m_map_object, sampler, atom->GetPosition())
         };
         entry.SetSamplingEntries(sampling_entries);
         entry.SetDataset(LocalPotentialDataset{
@@ -808,103 +798,22 @@ void RunAtomSamplingWorkflow(
 #endif
 }
 
-void RunAtomGroupingWorkflow(ModelObject & model_object)
+void PotentialAnalysisCommand::RunAtomGroupingWorkflow()
 {
-    ScopeTimer timer("RunAtomGroupClassification");
-    Logger::Log(LogLevel::Info, "Atom Classification Summary:");
-    auto analysis{ model_object.EditAnalysis() };
+    if (m_map_object == nullptr || m_model_object == nullptr) return;
+    ScopeTimer timer("RunAtomGroupingWorkflow");
+    Logger::Log(LogLevel::Info, "Atom Grouping Summary:");
+    auto analysis{ m_model_object->EditAnalysis() };
     analysis.RebuildAtomGroupsFromSelection();
-    const auto analysis_view{ model_object.GetAnalysisView() };
+    const auto analysis_view{ m_model_object->GetAnalysisView() };
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {
         const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
         const auto group_size{ analysis_view.CollectAtomGroupKeys(class_key).size() };
         Logger::Log(
             LogLevel::Info,
-            " - Class type: " + class_key + " include " + std::to_string(group_size)
-                + " groups.");
+            " - Class type: " + class_key + " include " + std::to_string(group_size) + " groups.");
     }
-}
-
-void RunLocalAtomFittingWorkflow(
-    ModelObject & model_object,
-    int thread_size,
-    double universal_alpha_r)
-{
-    ScopeTimer timer("PotentialAnalysisCommand::RunLocalAtomFitting");
-    std::atomic<size_t> atom_count{ 0 };
-    const auto & selected_atom_list{ model_object.GetSelectedAtoms() };
-    const auto selected_atom_size{ selected_atom_list.size() };
-    auto analysis{ model_object.EditAnalysis() };
-    std::vector<MutableLocalPotentialView> local_entry_list;
-    local_entry_list.reserve(selected_atom_size);
-    for (auto * atom : selected_atom_list)
-    {
-        local_entry_list.emplace_back(analysis.EnsureAtomLocalPotential(*atom));
-    }
-    Logger::Log(
-        LogLevel::Info,
-        "Run Local atom fitting for " + std::to_string(selected_atom_size) + " atoms.");
-#ifdef USE_OPENMP
-    #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
-#endif
-    for (size_t i = 0; i < selected_atom_size; i++)
-    {
-        auto local_entry{ local_entry_list[i] };
-        const auto & data_entry_list{ local_entry.GetDataset().basis_and_response_entry_list };
-        const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
-        const auto result{
-            HRLModelAlgorithms::EstimateBetaMDPDE(
-                universal_alpha_r,
-                dataset.X,
-                dataset.y,
-                MakePotentialAnalysisExecutionOptions(thread_size, true))
-        };
-
-        local_entry.SetFitResult(LocalPotentialFitResult{
-            result.beta_ols,
-            result.beta_mdpde,
-            result.sigma_square,
-            result.data_weight,
-            result.data_covariance
-        });
-
-        Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
-        model_par_init(0) = LocalPotentialView::RequireFor(*selected_atom_list[i]).GetMomentZeroEstimate();
-        model_par_init(1) = LocalPotentialView::RequireFor(*selected_atom_list[i]).GetMomentTwoEstimate();
-        auto gaus_ols{
-            GausLinearTransformHelper::BuildGaus3DModel(result.beta_ols, model_par_init)
-        };
-        auto gaus_mdpde{
-            GausLinearTransformHelper::BuildGaus3DModel(result.beta_mdpde, model_par_init)
-        };
-        local_entry.SetEstimates(LocalPotentialEstimates{
-            GaussianEstimate{ gaus_ols(0), gaus_ols(1) },
-            GaussianEstimate{ gaus_mdpde(0), gaus_mdpde(1) }
-        });
-
-#ifdef USE_OPENMP
-        #pragma omp critical
-#endif
-        {
-            atom_count++;
-            Logger::ProgressPercent(atom_count, selected_atom_size);
-        }
-    }
-}
-
-} // namespace detail
-void PotentialAnalysisCommand::RunAtomMapValueSampling()
-{
-    ScopeTimer timer("PotentialAnalysisCommand::RunAtomMapValueSampling");
-    if (m_map_object == nullptr || m_model_object == nullptr) return;
-    detail::RunAtomSamplingWorkflow(*m_model_object, *m_map_object, RequestOptions(), ThreadSize());
-}
-
-void PotentialAnalysisCommand::RunAtomGroupClassification()
-{
-    if (m_map_object == nullptr || m_model_object == nullptr) return;
-    detail::RunAtomGroupingWorkflow(*m_model_object);
 }
 
 void PotentialAnalysisCommand::RunAtomAlphaTraining()
@@ -945,7 +854,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining()
     
     
     // Alpha_G Training
-    RunLocalAtomFitting(alpha_r);
+    RunLocalAtomFittingWorkflow(alpha_r);
     const size_t subset_size_alpha_g{ 10 };
     const auto ordered_alpha_g_list{ detail::BuildOrderedAlphaGTrainingList() };
     
@@ -1101,13 +1010,70 @@ double PotentialAnalysisCommand::TrainUniversalAlphaG(
     return alpha_g_error;
 }
 
-void PotentialAnalysisCommand::RunLocalAtomFitting(double universal_alpha_r)
+void PotentialAnalysisCommand::RunLocalAtomFittingWorkflow(double universal_alpha_r)
 {
     if (m_model_object == nullptr) return;
-    detail::RunLocalAtomFittingWorkflow(
-        *m_model_object,
-        ThreadSize(),
-        universal_alpha_r);
+    ScopeTimer timer("PotentialAnalysisCommand::RunLocalAtomFitting");
+    auto thread_size{ ThreadSize() };
+    std::atomic<size_t> atom_count{ 0 };
+    const auto & selected_atom_list{ m_model_object->GetSelectedAtoms() };
+    const auto selected_atom_size{ selected_atom_list.size() };
+    auto analysis{ m_model_object->EditAnalysis() };
+    std::vector<MutableLocalPotentialView> local_entry_list;
+    local_entry_list.reserve(selected_atom_size);
+    for (auto * atom : selected_atom_list)
+    {
+        local_entry_list.emplace_back(analysis.EnsureAtomLocalPotential(*atom));
+    }
+    Logger::Log(
+        LogLevel::Info,
+        "Run Local atom fitting for " + std::to_string(selected_atom_size) + " atoms.");
+#ifdef USE_OPENMP
+    #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
+#endif
+    for (size_t i = 0; i < selected_atom_size; i++)
+    {
+        auto local_entry{ local_entry_list[i] };
+        const auto & data_entry_list{ local_entry.GetDataset().basis_and_response_entry_list };
+        const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
+        const auto result{
+            HRLModelAlgorithms::EstimateBetaMDPDE(
+                universal_alpha_r,
+                dataset.X,
+                dataset.y,
+                MakePotentialAnalysisExecutionOptions(thread_size, true))
+        };
+
+        local_entry.SetFitResult(LocalPotentialFitResult{
+            result.beta_ols,
+            result.beta_mdpde,
+            result.sigma_square,
+            result.data_weight,
+            result.data_covariance
+        });
+
+        Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
+        model_par_init(0) = LocalPotentialView::RequireFor(*selected_atom_list[i]).GetMomentZeroEstimate();
+        model_par_init(1) = LocalPotentialView::RequireFor(*selected_atom_list[i]).GetMomentTwoEstimate();
+        auto gaus_ols{
+            GausLinearTransformHelper::BuildGaus3DModel(result.beta_ols, model_par_init)
+        };
+        auto gaus_mdpde{
+            GausLinearTransformHelper::BuildGaus3DModel(result.beta_mdpde, model_par_init)
+        };
+        local_entry.SetEstimates(LocalPotentialEstimates{
+            GaussianEstimate{ gaus_ols(0), gaus_ols(1) },
+            GaussianEstimate{ gaus_mdpde(0), gaus_mdpde(1) }
+        });
+
+#ifdef USE_OPENMP
+        #pragma omp critical
+#endif
+        {
+            atom_count++;
+            Logger::ProgressPercent(atom_count, selected_atom_size);
+        }
+    }
 }
 
 

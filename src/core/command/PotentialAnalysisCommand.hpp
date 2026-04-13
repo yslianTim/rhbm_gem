@@ -30,8 +30,8 @@ private:
     void UpdateModelObjectForSimulation(ModelObject * model_object);
     void RunMapObjectPreprocessing();
     void RunModelObjectPreprocessing();
-    void RunAtomMapValueSampling();
-    void RunAtomGroupClassification();
+    void RunAtomSamplingWorkflow();
+    void RunAtomGroupingWorkflow();
     void RunAtomAlphaTraining();
     double TrainUniversalAlphaR(
         const std::vector<AtomObject *> & atom_list,
@@ -43,7 +43,7 @@ private:
         const size_t subset_size,
         const std::vector<double> & alpha_list
     );
-    void RunLocalAtomFitting(double universal_alpha_r);
+    void RunLocalAtomFittingWorkflow(double universal_alpha_r);
     void RunAtomPotentialFitting();
     void RunExperimentalBondWorkflowIfEnabled();
     void SavePreparedModel();
