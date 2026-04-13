@@ -2,9 +2,14 @@
 
 #include <algorithm>
 #include <array>
+#include <stdexcept>
 #include <vector>
 
+#include <Eigen/Dense>
+
+#include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
+#include <rhbm_gem/utils/math/SamplingPointFilter.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace rhbm_gem {
@@ -73,6 +78,85 @@ inline float MakeInterpolationInMapObject(
     return cubic_interpolate(temp_z[0], temp_z[1], temp_z[2], temp_z[3], local.at(2));
 }
 
+inline void ValidateNeighborRadius(double neighbor_radius)
+{
+    if (!std::isfinite(neighbor_radius) || neighbor_radius < 0.0)
+    {
+        throw std::invalid_argument(
+            "SampleMapValues neighbor radius must be finite and non-negative.");
+    }
+}
+
+inline std::vector<Eigen::VectorXd> BuildRejectDirectionList(
+    const AtomObject & atom,
+    const std::vector<AtomObject *> & neighbor_atom_list)
+{
+    std::vector<Eigen::VectorXd> reject_direction_list;
+    reject_direction_list.reserve(neighbor_atom_list.size());
+
+    const auto center_position{ atom.GetPosition() };
+    for (const auto * neighbor_atom : neighbor_atom_list)
+    {
+        const auto neighbor_position{ neighbor_atom->GetPosition() };
+        Eigen::VectorXd direction{ Eigen::VectorXd::Zero(3) };
+        direction(0) = static_cast<double>(neighbor_position[0] - center_position[0]);
+        direction(1) = static_cast<double>(neighbor_position[1] - center_position[1]);
+        direction(2) = static_cast<double>(neighbor_position[2] - center_position[2]);
+        reject_direction_list.emplace_back(direction);
+    }
+
+    return reject_direction_list;
+}
+
+inline SamplingPointList TranslateSamplingPoints(
+    const SamplingPointList & point_list,
+    const std::array<float, 3> & reference_position,
+    float scale)
+{
+    SamplingPointList translated_point_list;
+    translated_point_list.reserve(point_list.size());
+    for (const auto & point : point_list)
+    {
+        translated_point_list.emplace_back(SamplingPoint{
+            point.distance,
+            {
+                point.position[0] + scale * reference_position[0],
+                point.position[1] + scale * reference_position[1],
+                point.position[2] + scale * reference_position[2]
+            }
+        });
+    }
+    return translated_point_list;
+}
+
+template <typename KeepPredicate>
+LocalPotentialSampleList BuildLocalPotentialSampleList(
+    const MapObject & map_object,
+    const SamplingPointList & sampling_points,
+    KeepPredicate && keep_predicate)
+{
+    LocalPotentialSampleList sampling_data_list;
+    sampling_data_list.reserve(sampling_points.size());
+    for (const auto & sampling_point : sampling_points)
+    {
+        if (!keep_predicate(sampling_point))
+        {
+            continue;
+        }
+
+        auto map_value{
+            MakeInterpolationInMapObject(map_object, sampling_point.position)
+        };
+        sampling_data_list.emplace_back(LocalPotentialSample{
+            sampling_point.distance,
+            map_value,
+            1.0f,
+            sampling_point.position
+        });
+    }
+    return sampling_data_list;
+}
+
 } // namespace detail
 
 // Prefer overloads that match the sampler's real inputs instead of forcing every sampler to
@@ -85,21 +169,13 @@ LocalPotentialSampleList SampleMapValues(
     const std::array<float, 3> & position)
 {
     const auto sampling_points{ sampler.GenerateSamplingPoints(position) };
-    LocalPotentialSampleList sampling_data_list;
-    sampling_data_list.reserve(sampling_points.size());
-    for (const auto & sampling_point : sampling_points)
-    {
-        auto map_value{
-            detail::MakeInterpolationInMapObject(map_object, sampling_point.position)
-        };
-        sampling_data_list.emplace_back(LocalPotentialSample{
-            sampling_point.distance,
-            map_value,
-            1.0f,
-            sampling_point.position
+    return detail::BuildLocalPotentialSampleList(
+        map_object,
+        sampling_points,
+        [](const SamplingPoint &)
+        {
+            return true;
         });
-    }
-    return sampling_data_list;
 }
 
 template <typename Sampler>
@@ -112,21 +188,59 @@ LocalPotentialSampleList SampleMapValues(
     const auto sampling_points{
         sampler.GenerateSamplingPoints(position, direction_like_input)
     };
-    LocalPotentialSampleList sampling_data_list;
-    sampling_data_list.reserve(sampling_points.size());
-    for (const auto & sampling_point : sampling_points)
-    {
-        auto map_value{
-            detail::MakeInterpolationInMapObject(map_object, sampling_point.position)
-        };
-        sampling_data_list.emplace_back(LocalPotentialSample{
-            sampling_point.distance,
-            map_value,
-            1.0f,
-            sampling_point.position
+    return detail::BuildLocalPotentialSampleList(
+        map_object,
+        sampling_points,
+        [](const SamplingPoint &)
+        {
+            return true;
         });
+}
+
+template <typename Sampler>
+LocalPotentialSampleList SampleMapValues(
+    const MapObject & map_object,
+    const Sampler & sampler,
+    const AtomObject & atom,
+    double neighbor_radius,
+    double angle = 0.0)
+{
+    detail::ValidateNeighborRadius(neighbor_radius);
+    detail::ValidateSamplingPointFilterAngle(angle);
+
+    const auto position{ atom.GetPosition() };
+    const auto sampling_points{ sampler.GenerateSamplingPoints(position) };
+    if (angle <= 0.0)
+    {
+        return detail::BuildLocalPotentialSampleList(
+            map_object,
+            sampling_points,
+            [](const SamplingPoint &)
+            {
+                return true;
+            });
     }
-    return sampling_data_list;
+
+    const auto neighbor_atom_list{ atom.FindNeighborAtoms(neighbor_radius, false) };
+    const auto reject_direction_list{
+        detail::BuildRejectDirectionList(atom, neighbor_atom_list)
+    };
+    const auto local_sampling_points{
+        detail::TranslateSamplingPoints(sampling_points, position, -1.0f)
+    };
+    const auto filtered_local_sampling_points{
+        SelectSamplingPoint(local_sampling_points, reject_direction_list, angle)
+    };
+    const auto filtered_sampling_points{
+        detail::TranslateSamplingPoints(filtered_local_sampling_points, position, 1.0f)
+    };
+    return detail::BuildLocalPotentialSampleList(
+        map_object,
+        filtered_sampling_points,
+        [](const SamplingPoint &)
+        {
+            return true;
+        });
 }
 
 } // namespace rhbm_gem

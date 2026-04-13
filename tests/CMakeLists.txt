@@ -131,6 +131,7 @@ set(UTILS_MATH_TEST_SOURCES
     utils/math/ElectricPotential_test.cpp
     utils/math/GausLinearTransformHelper_test.cpp
     utils/math/KDTreeAlgorithm_test.cpp
+    utils/math/SamplingPointFilter_test.cpp
     utils/math/CylinderSampler_test.cpp
     utils/math/GridSampler_test.cpp
     utils/math/SphereSampler_test.cpp
@@ -156,6 +157,7 @@ set(UTILS_HRL_TEST_SOURCES
     utils/hrl/HRLDataTransform_test.cpp
     utils/hrl/HRLGroupEstimator_test.cpp
     utils/hrl/HRLModelAlgorithms_test.cpp
+    utils/hrl/HRLModelTester_test.cpp
 )
 
 set(INTEGRATION_COMMAND_TEST_SOURCES

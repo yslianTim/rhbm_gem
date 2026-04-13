@@ -787,7 +787,9 @@ void PotentialAnalysisCommand::RunSamplingWorkflow(
         {
             auto atom{ atom_list[i] };
             auto entry{ local_entry_list[i] };
-            auto sampling_entries{ SampleMapValues(map_object, sampler, atom->GetPosition()) };
+            auto sampling_entries{
+                SampleMapValues(map_object, sampler, *atom, sampling_range_max)
+            };
             entry.SetSamplingEntries(sampling_entries);
             #pragma omp critical
             {
@@ -801,7 +803,9 @@ void PotentialAnalysisCommand::RunSamplingWorkflow(
     {
         auto atom{ atom_list[i] };
         auto entry{ local_entry_list[i] };
-        auto sampling_entries{ SampleMapValues(map_object, sampler, atom->GetPosition()) };
+        auto sampling_entries{
+            SampleMapValues(map_object, sampler, *atom, sampling_range_max)
+        };
         entry.SetSamplingEntries(sampling_entries);
         atom_count++;
         Logger::ProgressPercent(atom_count, atom_size);

@@ -58,10 +58,13 @@ public:
         int sampling_entry_size,
         double data_error_sigma = 1.0,
         double neighbor_distance = 2.0,
-        int thread_size = 1
+        int thread_size = 1,
+        double angle = 0.0
     );
 
 private:
+    friend class HRLModelTesterTestPeer;
+
     bool CheckGausParametersDimension(const Eigen::VectorXd & gaus_par);
     Eigen::MatrixXd BuildRandomGausParameters(
         int member_size,
@@ -81,7 +84,8 @@ private:
         size_t sampling_entry_size,
         const Eigen::VectorXd & gaus_par,
         double neighbor_distance = 2.0,
-        size_t neighbor_count = 1
+        size_t neighbor_count = 1,
+        double angle = 0.0
     );
     std::vector<Eigen::VectorXd> BuildRandomLinearDataEntry(
         size_t sampling_entry_size,
@@ -93,7 +97,8 @@ private:
         size_t sampling_entry_size,
         const Eigen::VectorXd & gaus_par,
         double error_sigma,
-        double neighbor_distance = 2.0
+        double neighbor_distance = 2.0,
+        double angle = 0.0
     );
     Eigen::VectorXd CalculateNormalizedResidual(
         const Eigen::VectorXd & estimate,

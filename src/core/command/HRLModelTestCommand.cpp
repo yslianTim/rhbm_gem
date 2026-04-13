@@ -582,7 +582,8 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
                 residual_mean_ols_list, residual_mean_mdpde_list,
                 residual_sigma_ols_list, residual_sigma_mdpde_list,
                 model_par_prior, sampling_entry_size, error_sigma,
-                distance_list[static_cast<size_t>(i)], options.thread_size
+                distance_list[static_cast<size_t>(i)], options.thread_size,
+                30.0
             );
 
             mean_matrix_ols.col(i) = residual_mean_ols_list.front();
@@ -716,6 +717,7 @@ void PrintDataOutlierResult(
     std::unique_ptr<TPaveText> resolution_text[col_size];
     std::unique_ptr<TPaveText> title_x_text[col_size];
     std::unique_ptr<TPaveText> title_y_text[row_size];
+    double error_value[3]{ 0.0, 2.5, 5.0 };
     for (int i = 0; i < col_size; i++)
     {
         for (int j = 0; j < row_size; j++)
@@ -743,7 +745,8 @@ void PrintDataOutlierResult(
 
             short color_ols{ kAzure };
             short color_mdpde{ kRed };
-            short color_train{ kGreen+1 };
+            //short color_train{ kGreen+1 };
+            short color_train{ kRed };
             for (auto & graph : graph_ols_list[i][par_id])
             {
                 ROOTHelper::SetMarkerAttribute(graph.get(), 24, 1.5f, color_ols);
@@ -756,11 +759,12 @@ void PrintDataOutlierResult(
                 ROOTHelper::SetMarkerAttribute(graph.get(), 20, 1.5f, color_mdpde);
                 ROOTHelper::SetLineAttribute(graph.get(), 1, 2, color_mdpde);
                 ROOTHelper::SetFillAttribute(graph.get(), 1001, color_mdpde, 0.2f);
-                graph->Draw("PL3");
+                //graph->Draw("PL3");
             }
             for (auto & graph : graph_train_list[i][par_id])
             {
-                ROOTHelper::SetMarkerAttribute(graph.get(), 25, 1.5f, color_train);
+                //ROOTHelper::SetMarkerAttribute(graph.get(), 25, 1.5f, color_train);
+                ROOTHelper::SetMarkerAttribute(graph.get(), 20, 1.5f, color_train);
                 ROOTHelper::SetLineAttribute(graph.get(), 3, 2, color_train);
                 ROOTHelper::SetFillAttribute(graph.get(), 1001, color_train, 0.2f);
                 if (options.options.tester_choice != TesterType::MODEL_ALPHA_DATA)
@@ -788,14 +792,15 @@ void PrintDataOutlierResult(
                 ROOTHelper::SetPaveAttribute(title_x_text[i].get(), 0, 0.2);
                 ROOTHelper::SetTextAttribute(title_x_text[i].get(), 45.0f, 133, 22);
                 ROOTHelper::SetFillAttribute(title_x_text[i].get(), 1001, kRed+1, 0.5f);
-                title_x_text[i]->AddText(Form("#sigma_{#epsilon} = %.2f D_{max}", (i+1) * 0.1));
+                title_x_text[i]->AddText(Form("#sigma_{#epsilon} = %.1f%% D_{max}", error_value[i]));
                 title_x_text[i]->Draw();
             }
         }
     }
 
     canvas->cd();
-    auto pad_extra0{ ROOTHelper::CreatePad("pad_extra0","", 0.02, 0.92, 0.98, 1.00) };
+    //auto pad_extra0{ ROOTHelper::CreatePad("pad_extra0","", 0.02, 0.92, 0.98, 1.00) };
+    auto pad_extra0{ ROOTHelper::CreatePad("pad_extra0","", 0.20, 0.92, 0.98, 1.00) };
     pad_extra0->Draw();
     pad_extra0->cd();
     ROOTHelper::SetPadDefaultStyle(pad_extra0.get());
@@ -817,8 +822,8 @@ void PrintDataOutlierResult(
     {
         legend->AddEntry(graph_train_list[0][0].front().get(),
             "MDPDE (#alpha_{r} from Alg.4)", "plf");
-        legend->AddEntry(graph_mdpde_list[0][0].front().get(),
-            "MDPDE (#alpha_{r} = 0.1)", "plf");
+        //legend->AddEntry(graph_mdpde_list[0][0].front().get(),
+        //    "MDPDE (#alpha_{r} = 0.1)", "plf");
         legend->AddEntry(graph_ols_list[0][0].front().get(),
             "Ordinary Least Squares", "plf");
     }

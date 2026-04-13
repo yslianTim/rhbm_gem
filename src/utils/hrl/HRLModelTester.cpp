@@ -3,6 +3,7 @@
 #include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
 #include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
+#include <rhbm_gem/utils/math/SamplingPointFilter.hpp>
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -121,7 +122,8 @@ LocalPotentialSampleList HRLModelTester::BuildRandomGausSamplingEntryWithNeighbo
     size_t sampling_entry_size,
     const Eigen::VectorXd & gaus_par,
     double neighbor_distance,
-    size_t neighbor_count)
+    size_t neighbor_count,
+    double angle)
 {
     CheckGausParametersDimension(gaus_par);
     const size_t max_neighbor_count{ 4 };
@@ -182,9 +184,12 @@ LocalPotentialSampleList HRLModelTester::BuildRandomGausSamplingEntryWithNeighbo
             static_cast<unsigned int>(sampling_entry_size))
     );
     const auto sampling_points{ sampler.GenerateSamplingPoints({ 0.0f, 0.0f, 0.0f }) };
+    const auto filtered_sampling_points{
+        rhbm_gem::SelectSamplingPoint(sampling_points, neighbor_center_list, angle)
+    };
     LocalPotentialSampleList sampling_entry_list;
-    sampling_entry_list.reserve(sampling_entry_size);
-    for (const auto & sampling_point : sampling_points)
+    sampling_entry_list.reserve(filtered_sampling_points.size());
+    for (const auto & sampling_point : filtered_sampling_points)
     {
         Eigen::VectorXd point{ Eigen::VectorXd::Zero(3) };
         point(0) = sampling_point.position[0];
@@ -231,11 +236,12 @@ std::vector<Eigen::VectorXd> HRLModelTester::BuildRandomLinearDataEntryWithNeigh
     size_t sampling_entry_size,
     const Eigen::VectorXd & gaus_par,
     double error_sigma,
-    double neighbor_distance)
+    double neighbor_distance,
+    double angle)
 {
     auto sampling_entries{
         BuildRandomGausSamplingEntryWithNeighborhood(
-            static_cast<size_t>(sampling_entry_size), gaus_par, neighbor_distance, 1)
+            static_cast<size_t>(sampling_entry_size), gaus_par, neighbor_distance, 2, angle)
     };
     auto linear_data_entry_list{
         GausLinearTransformHelper::MapValueTransform(sampling_entries, m_x_min, m_x_max)
@@ -469,7 +475,8 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
     int sampling_entry_size,
     double data_error_sigma,
     double neighbor_distance,
-    int thread_size)
+    int thread_size,
+    double angle)
 {
 #ifndef USE_OPENMP
     (void)thread_size;
@@ -501,7 +508,11 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
     {
         auto data_entry_list{
             BuildRandomLinearDataEntryWithNeighborhood(
-                static_cast<size_t>(sampling_entry_size), gaus_true, data_error_sigma, neighbor_distance
+                static_cast<size_t>(sampling_entry_size),
+                gaus_true,
+                data_error_sigma,
+                neighbor_distance,
+                angle
             )
         };
 
