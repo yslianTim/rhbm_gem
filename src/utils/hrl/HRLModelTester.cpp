@@ -199,10 +199,11 @@ LocalPotentialSampleList HRLModelTester::BuildRandomGausSamplingEntryWithNeighbo
             amplitude * GausLinearTransformHelper::GetGaussianPesponseAtPointWithNeighborhood(
                 point, atom_center, neighbor_center_list, width) + intersect
         };
+        auto weight{ 1.0f };
         sampling_entry_list.emplace_back(LocalPotentialSample{
             sampling_point.distance,
             static_cast<float>(y),
-            1.0f,
+            weight,
             sampling_point.position
         });
     }
@@ -241,7 +242,7 @@ std::vector<Eigen::VectorXd> HRLModelTester::BuildRandomLinearDataEntryWithNeigh
 {
     auto sampling_entries{
         BuildRandomGausSamplingEntryWithNeighborhood(
-            static_cast<size_t>(sampling_entry_size), gaus_par, neighbor_distance, 2, angle)
+            static_cast<size_t>(sampling_entry_size), gaus_par, neighbor_distance, 1, angle)
     };
     auto linear_data_entry_list{
         GausLinearTransformHelper::MapValueTransform(sampling_entries, m_x_min, m_x_max)
