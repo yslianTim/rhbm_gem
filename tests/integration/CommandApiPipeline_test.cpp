@@ -90,3 +90,46 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     ASSERT_TRUE(dump_result.succeeded);
     EXPECT_GT(CountRegularFiles(dump_output_dir), 0u);
 }
+
+TEST(CommandApiPipelineTest, PotentialAnalysisTrainingEmitsRequestedAlphaRReport)
+{
+    command_test::ScopedTempDir temp_dir{ "command_executor_training_reports" };
+    const auto maps_dir{ temp_dir.path() / "maps" };
+    const auto analysis_output_dir{ temp_dir.path() / "analysis_output" };
+    const auto training_report_dir{ temp_dir.path() / "training_reports" };
+    const auto database_path{ temp_dir.path() / "training.sqlite" };
+
+    std::filesystem::create_directories(maps_dir);
+    std::filesystem::create_directories(analysis_output_dir);
+
+    rg::MapSimulationRequest simulation_request;
+    simulation_request.output_dir = maps_dir;
+    simulation_request.model_file_path = command_test::TestDataPath("test_model.cif");
+    simulation_request.map_file_name = "sim_map";
+    simulation_request.blurring_width_list = { 1.50 };
+
+    const auto simulation_result{
+        rg::RunMapSimulation(simulation_request)
+    };
+    ASSERT_TRUE(simulation_result.succeeded);
+
+    const auto generated_map_file{ FindGeneratedMap(maps_dir) };
+    ASSERT_FALSE(generated_map_file.empty());
+    ASSERT_TRUE(std::filesystem::exists(generated_map_file));
+
+    rg::PotentialAnalysisRequest analysis_request;
+    analysis_request.database_path = database_path;
+    analysis_request.output_dir = analysis_output_dir;
+    analysis_request.model_file_path = command_test::TestDataPath("test_model.cif");
+    analysis_request.map_file_path = generated_map_file;
+    analysis_request.saved_key_tag = "trained_model";
+    analysis_request.training_alpha_flag = true;
+    analysis_request.training_report_dir = training_report_dir;
+    analysis_request.sampling_size = 600;
+
+    const auto analysis_result{
+        rg::RunPotentialAnalysis(analysis_request)
+    };
+    ASSERT_TRUE(analysis_result.succeeded);
+    EXPECT_TRUE(std::filesystem::exists(training_report_dir / "alpha_r_bias.pdf"));
+}
