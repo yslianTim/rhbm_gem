@@ -144,8 +144,6 @@ struct PotentialAnalysisCommand::AtomSamplingOptions
     double sampling_range_max;
     double fit_range_min;
     double fit_range_max;
-    bool training_alpha_flag;
-    double alpha_r;
 };
 
 PotentialAnalysisCommand::PotentialAnalysisCommand() :
@@ -267,12 +265,10 @@ bool PotentialAnalysisCommand::ExecuteImpl()
         request.sampling_range_min,
         request.sampling_range_max,
         request.fit_range_min,
-        request.fit_range_max,
-        request.training_alpha_flag,
-        request.alpha_r
+        request.fit_range_max
     };
 
-    if (BuildDataObject(request) == false) return false;
+    if (!BuildDataObject(request)) return false;
     if (m_model_object == nullptr || m_map_object == nullptr)
     {
         Logger::Log(
@@ -285,19 +281,9 @@ bool PotentialAnalysisCommand::ExecuteImpl()
     auto & map_object{ *m_map_object };
     RunMapObjectPreprocessing(map_object);
     RunModelObjectPreprocessing(model_object, request.asymmetry_flag);
-
-    RunAtomSamplingWorkflow(map_object, model_object, atom_sampling_options);
-    RunAtomGroupingWorkflow(model_object);
-    if (request.training_alpha_flag)
-    {
-        RunAtomAlphaTraining(model_object, request.training_report_dir);
-    }
-    else
-    {
-        RunLocalAtomFittingWorkflow(model_object, request.alpha_r);
-    }
-    RunAtomPotentialFitting(model_object, request.training_alpha_flag, request.alpha_g);
-    RunExperimentalBondWorkflowIfEnabled(model_object, map_object, request);
+    RunSamplingWorkflow(map_object, model_object, atom_sampling_options);
+    RunGroupingWorkflow(model_object);
+    RunFittingWorkflow(model_object, map_object, request);
     SavePreparedModel(model_object, request.saved_key_tag);
     return true;
 }
@@ -347,6 +333,22 @@ bool PotentialAnalysisCommand::BuildDataObject(const PotentialAnalysisRequest & 
         return false;
     }
     return true;
+}
+
+void PotentialAnalysisCommand::RunFittingWorkflow(
+    ModelObject & model_object,
+    MapObject & map_object,
+    const PotentialAnalysisRequest & request)
+{
+    if (request.training_alpha_flag)
+    {
+        RunAtomAlphaTraining(model_object, request.training_report_dir);
+        return;
+    }
+
+    RunLocalFitting(model_object, request.alpha_r);
+    RunAtomPotentialFitting(model_object, request.training_alpha_flag, request.alpha_g);
+    RunExperimentalBondWorkflowIfEnabled(model_object, map_object, request);
 }
 
 void PotentialAnalysisCommand::UpdateModelObjectForSimulation(
@@ -473,9 +475,8 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(
                 data_weight_list,
                 data_covariance_list
             );
-            HRLGroupEstimator estimator(
-                MakePotentialAnalysisExecutionOptions(ThreadSize(), true));
-            const auto result = estimator.Estimate(input, alpha_g);
+            HRLGroupEstimator estimator(MakePotentialAnalysisExecutionOptions(ThreadSize(), true));
+            const auto result{ estimator.Estimate(input, alpha_g) };
 
             auto gaus_group_mean{
                 GausLinearTransformHelper::BuildGaus3DModel(result.mu_mean)
@@ -547,12 +548,13 @@ void PotentialAnalysisCommand::RunExperimentalBondWorkflowIfEnabled(
     MapObject & map_object,
     const PotentialAnalysisRequest & request)
 {
-    (void)model_object;
-    (void)map_object;
-    (void)request;
 #ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
     experimental::RunPotentialAnalysisBondWorkflow(
         model_object, map_object, request, ThreadSize());
+#else
+    (void)model_object;
+    (void)map_object;
+    (void)request;
 #endif
 }
 
@@ -745,20 +747,19 @@ void PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG(
 }
 
 void PotentialAnalysisCommand::SavePreparedModel(
-    ModelObject & model_object,
-    std::string_view saved_key_tag)
+    ModelObject & model_object, std::string_view saved_key_tag)
 {
     ScopeTimer timer("PotentialAnalysisCommand::SavePreparedModel");
     SaveStoredObject(m_model_key_tag, std::string(saved_key_tag));
     model_object.EditAnalysis().ClearTransientFitStates();
 }
 
-void PotentialAnalysisCommand::RunAtomSamplingWorkflow(
+void PotentialAnalysisCommand::RunSamplingWorkflow(
     MapObject & map_object,
     ModelObject & model_object,
     const AtomSamplingOptions & options)
 {
-    ScopeTimer timer("PotentialAnalysisCommand::RunAtomSamplingWorkflow");
+    ScopeTimer timer("PotentialAnalysisCommand::RunSamplingWorkflow");
     auto thread_size{ ThreadSize() };
     SphereSampler sampler;
     sampler.SetSamplingProfile(
@@ -801,10 +802,6 @@ void PotentialAnalysisCommand::RunAtomSamplingWorkflow(
                     options.fit_range_min,
                     options.fit_range_max)
             });
-            if (!options.training_alpha_flag)
-            {
-                entry.SetAlphaR(options.alpha_r);
-            }
             #pragma omp critical
             {
                 atom_count++;
@@ -827,19 +824,15 @@ void PotentialAnalysisCommand::RunAtomSamplingWorkflow(
                 options.fit_range_min,
                 options.fit_range_max)
         });
-        if (!options.training_alpha_flag)
-        {
-            entry.SetAlphaR(options.alpha_r);
-        }
         atom_count++;
         Logger::ProgressPercent(atom_count, atom_size);
     }
 #endif
 }
 
-void PotentialAnalysisCommand::RunAtomGroupingWorkflow(ModelObject & model_object)
+void PotentialAnalysisCommand::RunGroupingWorkflow(ModelObject & model_object)
 {
-    ScopeTimer timer("RunAtomGroupingWorkflow");
+    ScopeTimer timer("RunGroupingWorkflow");
     Logger::Log(LogLevel::Info, "Atom Grouping Summary:");
     auto analysis{ model_object.EditAnalysis() };
     analysis.RebuildAtomGroupsFromSelection();
@@ -883,18 +876,11 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     Logger::Log(LogLevel::Info,
         "Run Alpha_R Training with "+ std::to_string(selected_atom_size) +" atoms.");
     auto alpha_r{ TrainUniversalAlphaR(
-        model_object,
-        selected_atom_list, subset_size_alpha_r, ordered_alpha_r_list)
+        model_object, selected_atom_list, subset_size_alpha_r, ordered_alpha_r_list)
     };
     
-    for (auto & atom : atom_list)
-    {
-        analysis.EnsureAtomLocalPotential(*atom).SetAlphaR(alpha_r);
-    }
-    
-    
     // Alpha_G Training
-    RunLocalAtomFittingWorkflow(model_object, alpha_r);
+    RunLocalFitting(model_object, alpha_r);
     const size_t subset_size_alpha_g{ 10 };
     const auto ordered_alpha_g_list{ BuildOrderedAlphaGTrainingList() };
     
@@ -1061,7 +1047,7 @@ double PotentialAnalysisCommand::TrainUniversalAlphaG(
     return alpha_g_error;
 }
 
-void PotentialAnalysisCommand::RunLocalAtomFittingWorkflow(
+void PotentialAnalysisCommand::RunLocalFitting(
     ModelObject & model_object,
     double universal_alpha_r)
 {
@@ -1076,6 +1062,7 @@ void PotentialAnalysisCommand::RunLocalAtomFittingWorkflow(
     for (auto * atom : selected_atom_list)
     {
         local_entry_list.emplace_back(analysis.EnsureAtomLocalPotential(*atom));
+        analysis.EnsureAtomLocalPotential(*atom).SetAlphaR(universal_alpha_r);
     }
     Logger::Log(
         LogLevel::Info,

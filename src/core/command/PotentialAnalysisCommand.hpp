@@ -12,9 +12,7 @@ class AtomObject;
 
 class PotentialAnalysisCommand : public CommandWithRequest<PotentialAnalysisRequest>
 {
-private:
     struct AtomSamplingOptions;
-
     std::string m_model_key_tag, m_map_key_tag;
     std::shared_ptr<MapObject> m_map_object;
     std::shared_ptr<ModelObject> m_model_object;
@@ -29,16 +27,20 @@ private:
     void ResetRuntimeState() override;
     bool ExecuteImpl() override;
     bool BuildDataObject(const PotentialAnalysisRequest & request);
+    void RunFittingWorkflow(
+        ModelObject & model_object,
+        MapObject & map_object,
+        const PotentialAnalysisRequest & request);
     void UpdateModelObjectForSimulation(
         ModelObject & model_object,
         double simulated_map_resolution);
     void RunMapObjectPreprocessing(MapObject & map_object);
     void RunModelObjectPreprocessing(ModelObject & model_object, bool asymmetry_flag);
-    void RunAtomSamplingWorkflow(
+    void RunSamplingWorkflow(
         MapObject & map_object,
         ModelObject & model_object,
         const AtomSamplingOptions & options);
-    void RunAtomGroupingWorkflow(ModelObject & model_object);
+    void RunGroupingWorkflow(ModelObject & model_object);
     void RunAtomAlphaTraining(
         ModelObject & model_object,
         const std::filesystem::path & training_report_dir);
@@ -54,7 +56,7 @@ private:
         const size_t subset_size,
         const std::vector<double> & alpha_list
     );
-    void RunLocalAtomFittingWorkflow(ModelObject & model_object, double universal_alpha_r);
+    void RunLocalFitting(ModelObject & model_object, double universal_alpha_r);
     void RunAtomPotentialFitting(
         ModelObject & model_object,
         bool training_alpha_flag,
