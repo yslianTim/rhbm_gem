@@ -9,10 +9,10 @@ namespace rhbm_gem {
 class ModelObject;
 class MapObject;
 class AtomObject;
+class MutableLocalPotentialView;
 
 class PotentialAnalysisCommand : public CommandWithRequest<PotentialAnalysisRequest>
 {
-    struct AtomSamplingOptions;
     std::string m_model_key_tag, m_map_key_tag;
     std::shared_ptr<MapObject> m_map_object;
     std::shared_ptr<ModelObject> m_model_object;
@@ -27,6 +27,7 @@ private:
     void ResetRuntimeState() override;
     bool ExecuteImpl() override;
     bool BuildDataObject(const PotentialAnalysisRequest & request);
+    std::vector<MutableLocalPotentialView> BuildSelectedAtomLocalEntryViews(ModelObject & model_object);
     void RunFittingWorkflow(
         ModelObject & model_object,
         MapObject & map_object,
@@ -39,7 +40,13 @@ private:
     void RunSamplingWorkflow(
         MapObject & map_object,
         ModelObject & model_object,
-        const AtomSamplingOptions & options);
+        int sampling_size,
+        double sampling_range_min,
+        double sampling_range_max);
+    void RunDatasetPreparationWorkflow(
+        ModelObject & model_object,
+        double fit_range_min,
+        double fit_range_max);
     void RunGroupingWorkflow(ModelObject & model_object);
     void RunAtomAlphaTraining(
         ModelObject & model_object,

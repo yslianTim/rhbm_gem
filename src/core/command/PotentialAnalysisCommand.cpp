@@ -137,15 +137,6 @@ bool EmitTrainingReportIfRequested(
 
 namespace rhbm_gem {
 
-struct PotentialAnalysisCommand::AtomSamplingOptions
-{
-    int sampling_size;
-    double sampling_range_min;
-    double sampling_range_max;
-    double fit_range_min;
-    double fit_range_max;
-};
-
 PotentialAnalysisCommand::PotentialAnalysisCommand() :
     CommandWithRequest<PotentialAnalysisRequest>{},
     m_model_key_tag{ kModelKey }, m_map_key_tag{ kMapKey },
@@ -260,28 +251,15 @@ void PotentialAnalysisCommand::NormalizeRequest()
 bool PotentialAnalysisCommand::ExecuteImpl()
 {
     const auto & request{ RequestOptions() };
-    const AtomSamplingOptions atom_sampling_options{
-        request.sampling_size,
-        request.sampling_range_min,
-        request.sampling_range_max,
-        request.fit_range_min,
-        request.fit_range_max
-    };
-
     if (!BuildDataObject(request)) return false;
-    if (m_model_object == nullptr || m_map_object == nullptr)
-    {
-        Logger::Log(
-            LogLevel::Error,
-            "PotentialAnalysisCommand invariant violated: model/map object missing after load.");
-        return false;
-    }
-
     auto & model_object{ *m_model_object };
     auto & map_object{ *m_map_object };
     RunMapObjectPreprocessing(map_object);
     RunModelObjectPreprocessing(model_object, request.asymmetry_flag);
-    RunSamplingWorkflow(map_object, model_object, atom_sampling_options);
+    RunSamplingWorkflow(
+        map_object, model_object,
+        request.sampling_size, request.sampling_range_min, request.sampling_range_max);
+    RunDatasetPreparationWorkflow(model_object, request.fit_range_min, request.fit_range_max);
     RunGroupingWorkflow(model_object);
     RunFittingWorkflow(model_object, map_object, request);
     SavePreparedModel(model_object, request.saved_key_tag);
@@ -319,6 +297,13 @@ bool PotentialAnalysisCommand::BuildDataObject(const PotentialAnalysisRequest & 
         AttachDataRepository(request.database_path);
         m_model_object = LoadInputFile<ModelObject>(request.model_file_path, m_model_key_tag);
         m_map_object = LoadInputFile<MapObject>(request.map_file_path, m_map_key_tag);
+        if (m_model_object == nullptr || m_map_object == nullptr)
+        {
+            Logger::Log(
+                LogLevel::Error,
+                "PotentialAnalysisCommand::BuildDataObject : model/map object missing after load.");
+            return false;
+        }
         if (request.simulation_flag)
         {
             UpdateModelObjectForSimulation(
@@ -333,6 +318,20 @@ bool PotentialAnalysisCommand::BuildDataObject(const PotentialAnalysisRequest & 
         return false;
     }
     return true;
+}
+
+std::vector<MutableLocalPotentialView>
+PotentialAnalysisCommand::BuildSelectedAtomLocalEntryViews(ModelObject & model_object)
+{
+    auto analysis{ model_object.EditAnalysis() };
+    const auto & atom_list{ model_object.GetSelectedAtoms() };
+    std::vector<MutableLocalPotentialView> local_entry_list;
+    local_entry_list.reserve(atom_list.size());
+    for (auto * atom : atom_list)
+    {
+        local_entry_list.emplace_back(analysis.EnsureAtomLocalPotential(*atom));
+    }
+    return local_entry_list;
 }
 
 void PotentialAnalysisCommand::RunFittingWorkflow(
@@ -757,32 +756,28 @@ void PotentialAnalysisCommand::SavePreparedModel(
 void PotentialAnalysisCommand::RunSamplingWorkflow(
     MapObject & map_object,
     ModelObject & model_object,
-    const AtomSamplingOptions & options)
+    int sampling_size,
+    double sampling_range_min,
+    double sampling_range_max)
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunSamplingWorkflow");
     auto thread_size{ ThreadSize() };
     SphereSampler sampler;
     sampler.SetSamplingProfile(
         //SphereSamplingProfile::RadiusUniformRandom(
-        //    SphereDistanceRange{ options.sampling_range_min, options.sampling_range_max },
-        //    static_cast<unsigned int>(options.sampling_size))
+        //    SphereDistanceRange{ sampling_range_min, sampling_range_max },
+        //    static_cast<unsigned int>(sampling_size))
         SphereSamplingProfile::FibonacciDeterministic(
-            SphereDistanceRange{ options.sampling_range_min, options.sampling_range_max },
+            SphereDistanceRange{ sampling_range_min, sampling_range_max },
             0.05,
-            static_cast<unsigned int>(options.sampling_size))
+            static_cast<unsigned int>(sampling_size))
     );
     sampler.Print();
 
     const auto & atom_list{ model_object.GetSelectedAtoms() };
     const auto atom_size{ atom_list.size() };
     size_t atom_count{ 0 };
-    auto analysis{ model_object.EditAnalysis() };
-    std::vector<MutableLocalPotentialView> local_entry_list;
-    local_entry_list.reserve(atom_size);
-    for (auto * atom : atom_list)
-    {
-        local_entry_list.emplace_back(analysis.EnsureAtomLocalPotential(*atom));
-    }
+    auto local_entry_list{ BuildSelectedAtomLocalEntryViews(model_object) };
 
 #ifdef USE_OPENMP
     #pragma omp parallel num_threads(thread_size)
@@ -792,16 +787,8 @@ void PotentialAnalysisCommand::RunSamplingWorkflow(
         {
             auto atom{ atom_list[i] };
             auto entry{ local_entry_list[i] };
-            auto sampling_entries{
-                SampleMapValues(map_object, sampler, atom->GetPosition())
-            };
+            auto sampling_entries{ SampleMapValues(map_object, sampler, atom->GetPosition()) };
             entry.SetSamplingEntries(sampling_entries);
-            entry.SetDataset(LocalPotentialDataset{
-                GausLinearTransformHelper::MapValueTransform(
-                    sampling_entries,
-                    options.fit_range_min,
-                    options.fit_range_max)
-            });
             #pragma omp critical
             {
                 atom_count++;
@@ -814,20 +801,49 @@ void PotentialAnalysisCommand::RunSamplingWorkflow(
     {
         auto atom{ atom_list[i] };
         auto entry{ local_entry_list[i] };
-        auto sampling_entries{
-            SampleMapValues(map_object, sampler, atom->GetPosition())
-        };
+        auto sampling_entries{ SampleMapValues(map_object, sampler, atom->GetPosition()) };
         entry.SetSamplingEntries(sampling_entries);
-        entry.SetDataset(LocalPotentialDataset{
-            GausLinearTransformHelper::MapValueTransform(
-                sampling_entries,
-                options.fit_range_min,
-                options.fit_range_max)
-        });
         atom_count++;
         Logger::ProgressPercent(atom_count, atom_size);
     }
 #endif
+}
+
+void PotentialAnalysisCommand::RunDatasetPreparationWorkflow(
+    ModelObject & model_object,
+    double fit_range_min,
+    double fit_range_max)
+{
+    ScopeTimer timer("PotentialAnalysisCommand::RunDatasetPreparationWorkflow");
+    const auto & atom_list{ model_object.GetSelectedAtoms() };
+    const auto atom_size{ atom_list.size() };
+    size_t atom_count{ 0 };
+    auto local_entry_list{ BuildSelectedAtomLocalEntryViews(model_object) };
+
+#ifdef USE_OPENMP
+    #pragma omp parallel for schedule(dynamic) num_threads(ThreadSize())
+#endif
+    for (size_t i = 0; i < atom_size; i++)
+    {
+        auto entry{ local_entry_list[i] };
+        const auto & sampling_entries{
+            LocalPotentialView::RequireFor(*atom_list[i]).GetSamplingEntries()
+        };
+        entry.SetDataset(LocalPotentialDataset{
+            GausLinearTransformHelper::MapValueTransform(
+                sampling_entries,
+                fit_range_min,
+                fit_range_max)
+        });
+
+#ifdef USE_OPENMP
+        #pragma omp critical
+#endif
+        {
+            atom_count++;
+            Logger::ProgressPercent(atom_count, atom_size);
+        }
+    }
 }
 
 void PotentialAnalysisCommand::RunGroupingWorkflow(ModelObject & model_object)
@@ -1056,13 +1072,10 @@ void PotentialAnalysisCommand::RunLocalFitting(
     std::atomic<size_t> atom_count{ 0 };
     const auto & selected_atom_list{ model_object.GetSelectedAtoms() };
     const auto selected_atom_size{ selected_atom_list.size() };
-    auto analysis{ model_object.EditAnalysis() };
-    std::vector<MutableLocalPotentialView> local_entry_list;
-    local_entry_list.reserve(selected_atom_size);
-    for (auto * atom : selected_atom_list)
+    auto local_entry_list{ BuildSelectedAtomLocalEntryViews(model_object) };
+    for (auto & local_entry : local_entry_list)
     {
-        local_entry_list.emplace_back(analysis.EnsureAtomLocalPotential(*atom));
-        analysis.EnsureAtomLocalPotential(*atom).SetAlphaR(universal_alpha_r);
+        local_entry.SetAlphaR(universal_alpha_r);
     }
     Logger::Log(
         LogLevel::Info,
