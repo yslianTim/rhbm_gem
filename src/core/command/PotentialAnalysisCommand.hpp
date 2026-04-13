@@ -30,34 +30,49 @@ private:
     bool ExecuteImpl() override;
     bool BuildDataObject(const PotentialAnalysisRequest & request);
     void UpdateModelObjectForSimulation(
-        ModelObject * model_object,
+        ModelObject & model_object,
         double simulated_map_resolution);
-    void RunMapObjectPreprocessing();
-    void RunModelObjectPreprocessing(bool asymmetry_flag);
-    void RunAtomSamplingWorkflow(const AtomSamplingOptions & options);
-    void RunAtomGroupingWorkflow();
-    void RunAtomAlphaTraining(const std::filesystem::path & training_report_dir);
+    void RunMapObjectPreprocessing(MapObject & map_object);
+    void RunModelObjectPreprocessing(ModelObject & model_object, bool asymmetry_flag);
+    void RunAtomSamplingWorkflow(
+        MapObject & map_object,
+        ModelObject & model_object,
+        const AtomSamplingOptions & options);
+    void RunAtomGroupingWorkflow(ModelObject & model_object);
+    void RunAtomAlphaTraining(
+        ModelObject & model_object,
+        const std::filesystem::path & training_report_dir);
     double TrainUniversalAlphaR(
+        ModelObject & model_object,
         const std::vector<AtomObject *> & atom_list,
         const size_t subset_size,
         const std::vector<double> & alpha_list
     );
     double TrainUniversalAlphaG(
+        ModelObject & model_object,
         const std::vector<std::vector<AtomObject *>> & atom_list_set,
         const size_t subset_size,
         const std::vector<double> & alpha_list
     );
-    void RunLocalAtomFittingWorkflow(double universal_alpha_r);
-    void RunAtomPotentialFitting(bool training_alpha_flag, double fallback_alpha_g);
-    void RunExperimentalBondWorkflowIfEnabled(const PotentialAnalysisRequest & request);
-    void SavePreparedModel(std::string_view saved_key_tag);
+    void RunLocalAtomFittingWorkflow(ModelObject & model_object, double universal_alpha_r);
+    void RunAtomPotentialFitting(
+        ModelObject & model_object,
+        bool training_alpha_flag,
+        double fallback_alpha_g);
+    void RunExperimentalBondWorkflowIfEnabled(
+        ModelObject & model_object,
+        MapObject & map_object,
+        const PotentialAnalysisRequest & request);
+    void SavePreparedModel(ModelObject & model_object, std::string_view saved_key_tag);
 
     void StudyAtomLocalFittingViaAlphaR(
+        ModelObject & model_object,
         const std::vector<AtomObject *> & atom_list,
         const std::vector<double> & alpha_list,
         const std::filesystem::path & training_report_dir
     );
     void StudyAtomGroupFittingViaAlphaG(
+        ModelObject & model_object,
         const std::vector<std::vector<AtomObject *>> & atom_list_set,
         const std::vector<double> & alpha_list,
         const std::filesystem::path & training_report_dir

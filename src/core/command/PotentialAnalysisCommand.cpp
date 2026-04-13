@@ -273,16 +273,32 @@ bool PotentialAnalysisCommand::ExecuteImpl()
     };
 
     if (BuildDataObject(request) == false) return false;
-    RunMapObjectPreprocessing();
-    RunModelObjectPreprocessing(request.asymmetry_flag);
+    if (m_model_object == nullptr || m_map_object == nullptr)
+    {
+        Logger::Log(
+            LogLevel::Error,
+            "PotentialAnalysisCommand invariant violated: model/map object missing after load.");
+        return false;
+    }
 
-    RunAtomSamplingWorkflow(atom_sampling_options);
-    RunAtomGroupingWorkflow();
-    if (request.training_alpha_flag) RunAtomAlphaTraining(request.training_report_dir);
-    else RunLocalAtomFittingWorkflow(request.alpha_r);
-    RunAtomPotentialFitting(request.training_alpha_flag, request.alpha_g);
-    RunExperimentalBondWorkflowIfEnabled(request);
-    SavePreparedModel(request.saved_key_tag);
+    auto & model_object{ *m_model_object };
+    auto & map_object{ *m_map_object };
+    RunMapObjectPreprocessing(map_object);
+    RunModelObjectPreprocessing(model_object, request.asymmetry_flag);
+
+    RunAtomSamplingWorkflow(map_object, model_object, atom_sampling_options);
+    RunAtomGroupingWorkflow(model_object);
+    if (request.training_alpha_flag)
+    {
+        RunAtomAlphaTraining(model_object, request.training_report_dir);
+    }
+    else
+    {
+        RunLocalAtomFittingWorkflow(model_object, request.alpha_r);
+    }
+    RunAtomPotentialFitting(model_object, request.training_alpha_flag, request.alpha_g);
+    RunExperimentalBondWorkflowIfEnabled(model_object, map_object, request);
+    SavePreparedModel(model_object, request.saved_key_tag);
     return true;
 }
 
@@ -320,7 +336,7 @@ bool PotentialAnalysisCommand::BuildDataObject(const PotentialAnalysisRequest & 
         if (request.simulation_flag)
         {
             UpdateModelObjectForSimulation(
-                m_model_object.get(),
+                *m_model_object,
                 request.simulated_map_resolution);
         }
     }
@@ -334,10 +350,9 @@ bool PotentialAnalysisCommand::BuildDataObject(const PotentialAnalysisRequest & 
 }
 
 void PotentialAnalysisCommand::UpdateModelObjectForSimulation(
-    ModelObject * model_object,
+    ModelObject & model_object,
     double simulated_map_resolution)
 {
-    if (model_object == nullptr) return;
     if (simulated_map_resolution == 0.0)
     {
         Logger::Log(LogLevel::Warning,
@@ -345,43 +360,45 @@ void PotentialAnalysisCommand::UpdateModelObjectForSimulation(
             "          Please give the corresponding resolution value for this map.\n"
             "          (-r, --sim-resolution)");
     }
-    model_object->SetEmdID("Simulation");
-    model_object->SetResolution(simulated_map_resolution);
-    model_object->SetResolutionMethod("Blurring Width");
+    model_object.SetEmdID("Simulation");
+    model_object.SetResolution(simulated_map_resolution);
+    model_object.SetResolutionMethod("Blurring Width");
 }
 
-void PotentialAnalysisCommand::RunMapObjectPreprocessing()
+void PotentialAnalysisCommand::RunMapObjectPreprocessing(MapObject & map_object)
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunMapObjectPreprocessing");
-    m_map_object->MapValueArrayNormalization();
+    map_object.MapValueArrayNormalization();
 }
 
-void PotentialAnalysisCommand::RunModelObjectPreprocessing(bool asymmetry_flag)
+void PotentialAnalysisCommand::RunModelObjectPreprocessing(
+    ModelObject & model_object,
+    bool asymmetry_flag)
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunModelObjectPreprocessing");
-    auto analysis{ m_model_object->EditAnalysis() };
+    auto analysis{ model_object.EditAnalysis() };
     analysis.Clear();
-    m_model_object->SelectAllAtoms();
-    m_model_object->SelectAllBonds();
-    m_model_object->ApplySymmetrySelection(asymmetry_flag);
+    model_object.SelectAllAtoms();
+    model_object.SelectAllBonds();
+    model_object.ApplySymmetrySelection(asymmetry_flag);
 
-    for (auto * atom : m_model_object->GetSelectedAtoms())
+    for (auto * atom : model_object.GetSelectedAtoms())
     {
         analysis.EnsureAtomLocalPotential(*atom);
     }
-    for (auto * bond : m_model_object->GetSelectedBonds())
+    for (auto * bond : model_object.GetSelectedBonds())
     {
         analysis.EnsureBondLocalPotential(*bond);
     }
 
     Logger::Log(LogLevel::Info,
         "Number of selected atom = "
-            + std::to_string(m_model_object->GetSelectedAtomCount()));
+            + std::to_string(model_object.GetSelectedAtomCount()));
     Logger::Log(LogLevel::Info,
         "Number of selected bond = "
-            + std::to_string(m_model_object->GetSelectedBondCount()));
-    if (m_model_object->GetNumberOfAtom() > 0 &&
-        m_model_object->GetSelectedAtomCount() == 0)
+            + std::to_string(model_object.GetSelectedBondCount()));
+    if (model_object.GetNumberOfAtom() > 0 &&
+        model_object.GetSelectedAtomCount() == 0)
     {
         Logger::Log(LogLevel::Warning,
             "No atoms are selected after symmetry filtering. "
@@ -391,17 +408,17 @@ void PotentialAnalysisCommand::RunModelObjectPreprocessing(bool asymmetry_flag)
 }
 
 void PotentialAnalysisCommand::RunAtomPotentialFitting(
+    ModelObject & model_object,
     bool training_alpha_flag,
     double fallback_alpha_g)
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunAtomPotentialFitting");
-    if (m_model_object == nullptr) return;
     const int basis_size{ 2 };
-    auto analysis{ m_model_object->EditAnalysis() };
-    const auto analysis_view{ m_model_object->GetAnalysisView() };
+    auto analysis{ model_object.EditAnalysis() };
+    const auto analysis_view{ model_object.GetAnalysisView() };
     std::unordered_map<const AtomObject *, MutableLocalPotentialView> local_entry_map;
-    local_entry_map.reserve(m_model_object->GetSelectedAtomCount());
-    for (auto * atom : m_model_object->GetSelectedAtoms())
+    local_entry_map.reserve(model_object.GetSelectedAtomCount());
+    for (auto * atom : model_object.GetSelectedAtoms())
     {
         local_entry_map.emplace(atom, analysis.EnsureAtomLocalPotential(*atom));
     }
@@ -445,7 +462,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(
                 data_covariance_list.emplace_back(fit_result.data_covariance);
             }
             auto alpha_g{ training_alpha_flag ?
-                m_model_object->GetAnalysisView().GetAtomAlphaG(group_key, class_key) :
+                model_object.GetAnalysisView().GetAtomAlphaG(group_key, class_key) :
                 fallback_alpha_g
             };
             const auto input = HRLDataTransform::BuildGroupInput(
@@ -526,24 +543,27 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(
 }
 
 void PotentialAnalysisCommand::RunExperimentalBondWorkflowIfEnabled(
+    ModelObject & model_object,
+    MapObject & map_object,
     const PotentialAnalysisRequest & request)
 {
+    (void)model_object;
+    (void)map_object;
     (void)request;
 #ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
-    if (m_model_object == nullptr || m_map_object == nullptr) return;
     experimental::RunPotentialAnalysisBondWorkflow(
-        *m_model_object, *m_map_object, request, ThreadSize());
+        model_object, map_object, request, ThreadSize());
 #endif
 }
 
 void PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR(
+    ModelObject & model_object,
     const std::vector<AtomObject *> & atom_list,
     const std::vector<double> & alpha_list,
     const std::filesystem::path & training_report_dir)
 {
     ScopeTimer timer("PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR");
-    if (m_model_object == nullptr) return;
-    auto analysis{ m_model_object->EditAnalysis() };
+    auto analysis{ model_object.EditAnalysis() };
     std::unordered_map<const AtomObject *, MutableLocalPotentialView> local_entry_map;
     local_entry_map.reserve(atom_list.size());
     for (auto * atom : atom_list)
@@ -629,13 +649,13 @@ void PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR(
 }
 
 void PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG(
+    ModelObject & model_object,
     const std::vector<std::vector<AtomObject *>> & atom_list_set,
     const std::vector<double> & alpha_list,
     const std::filesystem::path & training_report_dir)
 {
     ScopeTimer timer("PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG");
-    if (m_model_object == nullptr) return;
-    auto analysis{ m_model_object->EditAnalysis() };
+    auto analysis{ model_object.EditAnalysis() };
     std::unordered_map<const AtomObject *, MutableLocalPotentialView> local_entry_map;
     for (const auto & group_atom_list : atom_list_set)
     {
@@ -724,18 +744,20 @@ void PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG(
     Logger::Log(LogLevel::Debug, alpha_g_bias_stream.str());
 }
 
-void PotentialAnalysisCommand::SavePreparedModel(std::string_view saved_key_tag)
+void PotentialAnalysisCommand::SavePreparedModel(
+    ModelObject & model_object,
+    std::string_view saved_key_tag)
 {
     ScopeTimer timer("PotentialAnalysisCommand::SavePreparedModel");
-    if (m_model_object == nullptr) return;
-
     SaveStoredObject(m_model_key_tag, std::string(saved_key_tag));
-    m_model_object->EditAnalysis().ClearTransientFitStates();
+    model_object.EditAnalysis().ClearTransientFitStates();
 }
 
-void PotentialAnalysisCommand::RunAtomSamplingWorkflow(const AtomSamplingOptions & options)
+void PotentialAnalysisCommand::RunAtomSamplingWorkflow(
+    MapObject & map_object,
+    ModelObject & model_object,
+    const AtomSamplingOptions & options)
 {
-    if (m_map_object == nullptr || m_model_object == nullptr) return;
     ScopeTimer timer("PotentialAnalysisCommand::RunAtomSamplingWorkflow");
     auto thread_size{ ThreadSize() };
     SphereSampler sampler;
@@ -750,10 +772,10 @@ void PotentialAnalysisCommand::RunAtomSamplingWorkflow(const AtomSamplingOptions
     );
     sampler.Print();
 
-    const auto & atom_list{ m_model_object->GetSelectedAtoms() };
+    const auto & atom_list{ model_object.GetSelectedAtoms() };
     const auto atom_size{ atom_list.size() };
     size_t atom_count{ 0 };
-    auto analysis{ m_model_object->EditAnalysis() };
+    auto analysis{ model_object.EditAnalysis() };
     std::vector<MutableLocalPotentialView> local_entry_list;
     local_entry_list.reserve(atom_size);
     for (auto * atom : atom_list)
@@ -770,7 +792,7 @@ void PotentialAnalysisCommand::RunAtomSamplingWorkflow(const AtomSamplingOptions
             auto atom{ atom_list[i] };
             auto entry{ local_entry_list[i] };
             auto sampling_entries{
-                SampleMapValues(*m_map_object, sampler, atom->GetPosition())
+                SampleMapValues(map_object, sampler, atom->GetPosition())
             };
             entry.SetSamplingEntries(sampling_entries);
             entry.SetDataset(LocalPotentialDataset{
@@ -796,7 +818,7 @@ void PotentialAnalysisCommand::RunAtomSamplingWorkflow(const AtomSamplingOptions
         auto atom{ atom_list[i] };
         auto entry{ local_entry_list[i] };
         auto sampling_entries{
-            SampleMapValues(*m_map_object, sampler, atom->GetPosition())
+            SampleMapValues(map_object, sampler, atom->GetPosition())
         };
         entry.SetSamplingEntries(sampling_entries);
         entry.SetDataset(LocalPotentialDataset{
@@ -815,14 +837,13 @@ void PotentialAnalysisCommand::RunAtomSamplingWorkflow(const AtomSamplingOptions
 #endif
 }
 
-void PotentialAnalysisCommand::RunAtomGroupingWorkflow()
+void PotentialAnalysisCommand::RunAtomGroupingWorkflow(ModelObject & model_object)
 {
-    if (m_map_object == nullptr || m_model_object == nullptr) return;
     ScopeTimer timer("RunAtomGroupingWorkflow");
     Logger::Log(LogLevel::Info, "Atom Grouping Summary:");
-    auto analysis{ m_model_object->EditAnalysis() };
+    auto analysis{ model_object.EditAnalysis() };
     analysis.RebuildAtomGroupsFromSelection();
-    const auto analysis_view{ m_model_object->GetAnalysisView() };
+    const auto analysis_view{ model_object.GetAnalysisView() };
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {
         const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
@@ -834,18 +855,18 @@ void PotentialAnalysisCommand::RunAtomGroupingWorkflow()
 }
 
 void PotentialAnalysisCommand::RunAtomAlphaTraining(
+    ModelObject & model_object,
     const std::filesystem::path & training_report_dir)
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunAtomAlphaTraining");
-    if (m_map_object == nullptr) return;
-    auto analysis{ m_model_object->EditAnalysis() };
-    const auto analysis_view{ m_model_object->GetAnalysisView() };
+    auto analysis{ model_object.EditAnalysis() };
+    const auto analysis_view{ model_object.GetAnalysisView() };
 
     const size_t subset_size_alpha_r{ 5 };
     const auto ordered_alpha_r_list{ BuildOrderedAlphaRTrainingList() };
     
     // Alpha_R Training
-    const auto & atom_list{ m_model_object->GetSelectedAtoms() };
+    const auto & atom_list{ model_object.GetSelectedAtoms() };
     std::vector<AtomObject *> selected_atom_list;
     selected_atom_list.reserve(atom_list.size());
     for (auto & atom : atom_list)
@@ -862,6 +883,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     Logger::Log(LogLevel::Info,
         "Run Alpha_R Training with "+ std::to_string(selected_atom_size) +" atoms.");
     auto alpha_r{ TrainUniversalAlphaR(
+        model_object,
         selected_atom_list, subset_size_alpha_r, ordered_alpha_r_list)
     };
     
@@ -872,7 +894,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     
     
     // Alpha_G Training
-    RunLocalAtomFittingWorkflow(alpha_r);
+    RunLocalAtomFittingWorkflow(model_object, alpha_r);
     const size_t subset_size_alpha_g{ 10 };
     const auto ordered_alpha_g_list{ BuildOrderedAlphaGTrainingList() };
     
@@ -892,6 +914,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     Logger::Log(LogLevel::Info,
         "Run Alpha_G Training with "+ std::to_string(selected_group_size) +" groups.");
     auto alpha_g{ TrainUniversalAlphaG(
+        model_object,
         atom_list_set, subset_size_alpha_g, ordered_alpha_g_list)
     };
 
@@ -905,16 +928,19 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     }
 
     StudyAtomLocalFittingViaAlphaR(
+        model_object,
         selected_atom_list,
         ordered_alpha_r_list,
         training_report_dir);
     StudyAtomGroupFittingViaAlphaG(
+        model_object,
         atom_list_set,
         ordered_alpha_g_list,
         training_report_dir);
 }
 
 double PotentialAnalysisCommand::TrainUniversalAlphaR(
+    ModelObject & model_object,
     const std::vector<AtomObject *> & atom_list,
     const size_t subset_size,
     const std::vector<double> & alpha_list)
@@ -923,7 +949,7 @@ double PotentialAnalysisCommand::TrainUniversalAlphaR(
     auto alpha_size{ static_cast<int>(alpha_list.size()) };
     std::atomic<size_t> atom_count{ 0 };
     Eigen::ArrayXd beta_error_sum_array{ Eigen::ArrayXd::Zero(alpha_size) };
-    auto analysis{ m_model_object->EditAnalysis() };
+    auto analysis{ model_object.EditAnalysis() };
     std::unordered_map<const AtomObject *, MutableLocalPotentialView> local_entry_map;
     local_entry_map.reserve(atom_list.size());
     for (auto * atom : atom_list)
@@ -970,6 +996,7 @@ double PotentialAnalysisCommand::TrainUniversalAlphaR(
 }
 
 double PotentialAnalysisCommand::TrainUniversalAlphaG(
+    ModelObject & model_object,
     const std::vector<std::vector<AtomObject *>> & atom_list_set,
     const size_t subset_size,
     const std::vector<double> & alpha_list)
@@ -978,7 +1005,7 @@ double PotentialAnalysisCommand::TrainUniversalAlphaG(
     auto group_size{ atom_list_set.size() };
     std::atomic<size_t> group_count{ 0 };
     Eigen::ArrayXd mu_error_sum_array{ Eigen::ArrayXd::Zero(alpha_size) };
-    auto analysis{ m_model_object->EditAnalysis() };
+    auto analysis{ model_object.EditAnalysis() };
     std::unordered_map<const AtomObject *, MutableLocalPotentialView> local_entry_map;
     for (const auto & group_atom_list : atom_list_set)
     {
@@ -1034,15 +1061,16 @@ double PotentialAnalysisCommand::TrainUniversalAlphaG(
     return alpha_g_error;
 }
 
-void PotentialAnalysisCommand::RunLocalAtomFittingWorkflow(double universal_alpha_r)
+void PotentialAnalysisCommand::RunLocalAtomFittingWorkflow(
+    ModelObject & model_object,
+    double universal_alpha_r)
 {
-    if (m_model_object == nullptr) return;
     ScopeTimer timer("PotentialAnalysisCommand::RunLocalAtomFitting");
     auto thread_size{ ThreadSize() };
     std::atomic<size_t> atom_count{ 0 };
-    const auto & selected_atom_list{ m_model_object->GetSelectedAtoms() };
+    const auto & selected_atom_list{ model_object.GetSelectedAtoms() };
     const auto selected_atom_size{ selected_atom_list.size() };
-    auto analysis{ m_model_object->EditAnalysis() };
+    auto analysis{ model_object.EditAnalysis() };
     std::vector<MutableLocalPotentialView> local_entry_list;
     local_entry_list.reserve(selected_atom_size);
     for (auto * atom : selected_atom_list)
