@@ -35,7 +35,7 @@ void ValidateSphereRandomSamplingInputs(
 
 void ValidateSphereFibonacciSamplingInputs(
     SphereDistanceRange range,
-    SphereFibonacciSamplingConfig fibonacci_config)
+    SphereDeterministicSamplingConfig fibonacci_config)
 {
     ValidateSphereDistanceRange(range);
     if (fibonacci_config.radius_bin_size <= 0.0)
@@ -107,7 +107,7 @@ SphereSamplingProfile::SphereSamplingProfile(
 SphereSamplingProfile::SphereSamplingProfile(
     SphereSamplingMethod method,
     SphereDistanceRange range,
-    SphereFibonacciSamplingConfig fibonacci_config) :
+    SphereDeterministicSamplingConfig fibonacci_config) :
     m_method{ method },
     m_distance_range{ range },
     m_method_config{ fibonacci_config }
@@ -143,7 +143,7 @@ SphereSamplingProfile SphereSamplingProfile::FibonacciDeterministic(
     return SphereSamplingProfile(
         SphereSamplingMethod::FibonacciDeterministic,
         range,
-        SphereFibonacciSamplingConfig{ radius_bin_size, samples_per_radius });
+        SphereDeterministicSamplingConfig{ radius_bin_size, samples_per_radius });
 }
 
 const SphereRandomSamplingConfig & SphereSamplingProfile::GetRandomConfig() const
@@ -151,9 +151,9 @@ const SphereRandomSamplingConfig & SphereSamplingProfile::GetRandomConfig() cons
     return std::get<SphereRandomSamplingConfig>(m_method_config);
 }
 
-const SphereFibonacciSamplingConfig & SphereSamplingProfile::GetFibonacciConfig() const
+const SphereDeterministicSamplingConfig & SphereSamplingProfile::GetFibonacciConfig() const
 {
-    return std::get<SphereFibonacciSamplingConfig>(m_method_config);
+    return std::get<SphereDeterministicSamplingConfig>(m_method_config);
 }
 
 SphereSampler::SphereSampler() :
@@ -305,7 +305,7 @@ void SphereSampler::GenerateVolumeUniformRandom(
 void SphereSampler::GenerateFibonacciDeterministic(
     const std::array<float, 3> & reference_position,
     const SphereDistanceRange & distance_range,
-    const SphereFibonacciSamplingConfig & config,
+    const SphereDeterministicSamplingConfig & config,
     SamplingPointList & out) const
 {
     const auto shell_radii{ BuildFibonacciShellRadii(distance_range, config.radius_bin_size) };
