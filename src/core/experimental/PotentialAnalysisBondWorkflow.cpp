@@ -97,11 +97,14 @@ void RunBondSampling(
                     bond_vector)
             };
             entry.SetSamplingEntries(sampling_entries);
-            entry.SetDataset(LocalPotentialDataset{
+            const auto basis_and_response_entries{
                 GausLinearTransformHelper::MapValueTransform(
                     sampling_entries,
                     options.fit_range_min,
                     options.fit_range_max)
+            };
+            entry.SetDataset(LocalPotentialDataset{
+                HRLDataTransform::BuildMemberDataset(basis_and_response_entries)
             });
             entry.SetAlphaR(options.alpha_r);
             #pragma omp critical
@@ -124,11 +127,14 @@ void RunBondSampling(
                 bond->GetBondVector())
         };
         entry.SetSamplingEntries(sampling_entries);
-        entry.SetDataset(LocalPotentialDataset{
+        const auto basis_and_response_entries{
             GausLinearTransformHelper::MapValueTransform(
                 sampling_entries,
                 options.fit_range_min,
                 options.fit_range_max)
+        };
+        entry.SetDataset(LocalPotentialDataset{
+            HRLDataTransform::BuildMemberDataset(basis_and_response_entries)
         });
         entry.SetAlphaR(options.alpha_r);
         bond_count++;
@@ -190,13 +196,11 @@ void RunLocalBondFitting(
     for (size_t i = 0; i < selected_bond_size; i++)
     {
         auto local_entry{ local_entry_list[i] };
-        const auto & data_entry_list{ local_entry.GetDataset().basis_and_response_entry_list };
-        const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
+        const auto & dataset{ local_entry.GetDataset().member_dataset };
         const auto result{
             HRLModelAlgorithms::EstimateBetaMDPDE(
                 universal_alpha_r,
-                dataset.X,
-                dataset.y,
+                dataset,
                 MakePotentialAnalysisExecutionOptions(context.thread_size, true))
         };
 
@@ -263,35 +267,28 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
             auto group_key{ group_keys[idx] };
             const auto & bond_list{ analysis_view.GetBondObjectList(group_key, class_key) };
             const auto group_size{ bond_list.size() };
-            std::vector<std::vector<Eigen::VectorXd>> data_entry_list;
-            std::vector<Eigen::VectorXd> beta_mdpde_list;
-            std::vector<double> sigma_square_list;
-            std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> data_weight_list;
-            std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> data_covariance_list;
-            data_entry_list.reserve(group_size);
-            beta_mdpde_list.reserve(group_size);
-            sigma_square_list.reserve(group_size);
-            data_weight_list.reserve(group_size);
-            data_covariance_list.reserve(group_size);
+            std::vector<HRLMemberDataset> member_datasets;
+            std::vector<HRLMemberLocalEstimate> member_estimates;
+            member_datasets.reserve(group_size);
+            member_estimates.reserve(group_size);
             for (const auto & bond : bond_list)
             {
                 const auto local_entry{ local_entry_map.at(bond) };
                 const auto & dataset{ local_entry.GetDataset() };
                 const auto & fit_result{ local_entry.GetFitResult() };
-                data_entry_list.emplace_back(dataset.basis_and_response_entry_list);
-                beta_mdpde_list.emplace_back(fit_result.beta_mdpde);
-                sigma_square_list.emplace_back(fit_result.sigma_square);
-                data_weight_list.emplace_back(fit_result.data_weight);
-                data_covariance_list.emplace_back(fit_result.data_covariance);
+                member_datasets.emplace_back(dataset.member_dataset);
+                member_estimates.emplace_back(HRLMemberLocalEstimate{
+                    fit_result.beta_mdpde,
+                    fit_result.sigma_square,
+                    fit_result.data_weight,
+                    fit_result.data_covariance
+                });
             }
             const auto input{
                 HRLDataTransform::BuildGroupInput(
                     basis_size,
-                    data_entry_list,
-                    beta_mdpde_list,
-                    sigma_square_list,
-                    data_weight_list,
-                    data_covariance_list)
+                    member_datasets,
+                    member_estimates)
             };
             HRLGroupEstimator estimator(
                 MakePotentialAnalysisExecutionOptions(context.thread_size, true));

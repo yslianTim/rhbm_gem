@@ -26,6 +26,25 @@ HRLDiagonalMatrix MakeDiagonal(std::initializer_list<double> values)
     result.diagonal() = MakeVector(values);
     return result;
 }
+
+HRLMemberDataset MakeDataset(std::initializer_list<Eigen::VectorXd> rows)
+{
+    return HRLDataTransform::BuildMemberDataset(std::vector<Eigen::VectorXd>(rows));
+}
+
+HRLMemberLocalEstimate MakeEstimate(
+    std::initializer_list<double> beta_values,
+    double sigma_square,
+    std::initializer_list<double> weight_values,
+    std::initializer_list<double> covariance_values)
+{
+    HRLMemberLocalEstimate estimate;
+    estimate.beta_mdpde = MakeVector(beta_values);
+    estimate.sigma_square = sigma_square;
+    estimate.data_weight = MakeDiagonal(weight_values);
+    estimate.data_covariance = MakeDiagonal(covariance_values);
+    return estimate;
+}
 } // namespace
 
 TEST(HRLDataTransformTest, BuildMemberDatasetSplitsPredictorsAndResponse)
@@ -95,13 +114,13 @@ TEST(HRLDataTransformTest, BuildGroupInputBuildsStructuredRequest)
         HRLDataTransform::BuildGroupInput(
             2,
             {
-                { MakeVector({ 1.0, 0.0, 1.0 }), MakeVector({ 1.0, 1.0, 3.0 }) },
-                { MakeVector({ 1.0, 0.0, 2.0 }), MakeVector({ 1.0, 1.0, 4.0 }) }
+                MakeDataset({ MakeVector({ 1.0, 0.0, 1.0 }), MakeVector({ 1.0, 1.0, 3.0 }) }),
+                MakeDataset({ MakeVector({ 1.0, 0.0, 2.0 }), MakeVector({ 1.0, 1.0, 4.0 }) })
             },
-            { MakeVector({ 1.0, 2.0 }), MakeVector({ 2.0, 2.0 }) },
-            { 0.25, 0.5 },
-            { MakeDiagonal({ 1.0, 1.0 }), MakeDiagonal({ 1.0, 1.0 }) },
-            { MakeDiagonal({ 0.25, 0.25 }), MakeDiagonal({ 0.5, 0.5 }) }
+            {
+                MakeEstimate({ 1.0, 2.0 }, 0.25, { 1.0, 1.0 }, { 0.25, 0.25 }),
+                MakeEstimate({ 2.0, 2.0 }, 0.5, { 1.0, 1.0 }, { 0.5, 0.5 })
+            }
         )
     };
 
@@ -116,11 +135,11 @@ TEST(HRLDataTransformTest, BuildGroupInputRejectsMismatchedMemberCounts)
     EXPECT_THROW(
         HRLDataTransform::BuildGroupInput(
             2,
-            { { MakeVector({ 1.0, 0.0, 1.0 }) } },
-            { MakeVector({ 1.0, 2.0 }), MakeVector({ 3.0, 4.0 }) },
-            { 0.25 },
-            { MakeDiagonal({ 1.0 }) },
-            { MakeDiagonal({ 1.0 }) }
+            { MakeDataset({ MakeVector({ 1.0, 0.0, 1.0 }) }) },
+            {
+                MakeEstimate({ 1.0, 2.0 }, 0.25, { 1.0 }, { 1.0 }),
+                MakeEstimate({ 3.0, 4.0 }, 0.5, { 1.0 }, { 1.0 })
+            }
         ),
         std::invalid_argument
     );
@@ -132,12 +151,11 @@ TEST(HRLDataTransformTest, BuildGroupInputRejectsInconsistentWeightSize)
         HRLDataTransform::BuildGroupInput(
             2,
             {
-                { MakeVector({ 1.0, 0.0, 1.0 }), MakeVector({ 1.0, 1.0, 3.0 }) }
+                MakeDataset({ MakeVector({ 1.0, 0.0, 1.0 }), MakeVector({ 1.0, 1.0, 3.0 }) })
             },
-            { MakeVector({ 1.0, 2.0 }) },
-            { 0.25 },
-            { MakeDiagonal({ 1.0 }) },
-            { MakeDiagonal({ 0.25, 0.25 }) }
+            {
+                MakeEstimate({ 1.0, 2.0 }, 0.25, { 1.0 }, { 0.25, 0.25 })
+            }
         ),
         std::invalid_argument
     );

@@ -2,6 +2,8 @@
 
 #include <rhbm_gem/utils/math/EigenMatrixUtility.hpp>
 
+#include "utils/hrl/detail/ScopedEigenThreadCount.hpp"
+
 #include <cmath>
 #include <limits>
 #include <stdexcept>
@@ -11,34 +13,6 @@
 
 namespace
 {
-class EigenThreadGuard final
-{
-public:
-    explicit EigenThreadGuard(int thread_size) :
-        m_previous_threads{ Eigen::nbThreads() }
-    {
-        if (thread_size <= 0)
-        {
-            thread_size = 1;
-        }
-        if (thread_size != m_previous_threads)
-        {
-            Eigen::setNbThreads(thread_size);
-        }
-    }
-
-    ~EigenThreadGuard()
-    {
-        if (Eigen::nbThreads() != m_previous_threads)
-        {
-            Eigen::setNbThreads(m_previous_threads);
-        }
-    }
-
-private:
-    int m_previous_threads;
-};
-
 void ValidateAlpha(double alpha)
 {
     if (!std::isfinite(alpha) || alpha < 0.0)
@@ -87,6 +61,10 @@ void ValidateMatrixVectorShape(
     {
         throw std::invalid_argument("X must contain at least one basis column.");
     }
+    if (!X.array().allFinite() || !y.array().allFinite())
+    {
+        throw std::invalid_argument("X and y must contain only finite values.");
+    }
 }
 
 void ValidateDiagonalSize(
@@ -105,21 +83,76 @@ double CalculateChiSquareQuantile(int df)
     const boost::math::chi_squared_distribution<double> distribution(static_cast<double>(df));
     return boost::math::quantile(distribution, 0.99);
 }
+
+Eigen::VectorXd CalculateBetaByOLS(
+    const Eigen::MatrixXd & X,
+    const Eigen::VectorXd & y);
+
+Eigen::VectorXd CalculateBetaByMDPDE(
+    const Eigen::MatrixXd & X,
+    const Eigen::VectorXd & y,
+    const HRLDiagonalMatrix & W);
+
+Eigen::VectorXd CalculateMuByMedian(
+    const Eigen::MatrixXd & beta_array);
+
+Eigen::VectorXd CalculateMuByMDPDE(
+    const Eigen::MatrixXd & beta_array,
+    const Eigen::ArrayXd & omega_array,
+    double omega_sum);
+
+HRLDiagonalMatrix CalculateDataWeight(
+    double alpha,
+    const Eigen::MatrixXd & X,
+    const Eigen::VectorXd & y,
+    const Eigen::VectorXd & beta,
+    double sigma_square,
+    double weight_min);
+
+double CalculateDataVarianceSquare(
+    double alpha,
+    const Eigen::MatrixXd & X,
+    const Eigen::VectorXd & y,
+    const HRLDiagonalMatrix & W,
+    const Eigen::VectorXd & beta);
+
+HRLDiagonalMatrix CalculateDataCovariance(
+    double sigma_square,
+    const HRLDiagonalMatrix & W);
+
+Eigen::ArrayXd CalculateMemberWeight(
+    double alpha,
+    const Eigen::MatrixXd & beta_array,
+    const Eigen::VectorXd & mu,
+    const Eigen::MatrixXd & capital_lambda,
+    double weight_min);
+
+Eigen::MatrixXd CalculateMemberCovariance(
+    double alpha,
+    const Eigen::MatrixXd & beta_array,
+    const Eigen::VectorXd & mu,
+    const Eigen::ArrayXd & omega_array,
+    double omega_sum);
+
+std::vector<Eigen::MatrixXd> CalculateWeightedMemberCovariance(
+    const Eigen::MatrixXd & capital_lambda,
+    const Eigen::ArrayXd & omega_array);
 } // namespace
 
 HRLBetaEstimateResult HRLModelAlgorithms::EstimateBetaMDPDE(
     double alpha_r,
-    const Eigen::MatrixXd & X,
-    const Eigen::VectorXd & y,
+    const HRLMemberDataset & dataset,
     const HRLExecutionOptions & options)
 {
     ValidateAlpha(alpha_r);
     ValidateMaximumIteration(options.max_iterations);
     ValidateTolerance(options.tolerance);
     ValidateWeightMinimum(options.data_weight_min, "data_weight_min");
+    const auto & X{ dataset.X };
+    const auto & y{ dataset.y };
     ValidateMatrixVectorShape(X, y);
 
-    EigenThreadGuard thread_guard(options.thread_size);
+    detail::ScopedEigenThreadCount thread_guard(options.thread_size);
     (void)thread_guard;
 
     HRLBetaEstimateResult result;
@@ -197,7 +230,7 @@ HRLMuEstimateResult HRLModelAlgorithms::EstimateMuMDPDE(
         throw std::invalid_argument("beta_array must not be empty.");
     }
 
-    EigenThreadGuard thread_guard(options.thread_size);
+    detail::ScopedEigenThreadCount thread_guard(options.thread_size);
     (void)thread_guard;
 
     HRLMuEstimateResult result;
@@ -285,7 +318,7 @@ HRLWebEstimateResult HRLModelAlgorithms::EstimateWEB(
         throw std::invalid_argument("mu_mdpde must not be empty.");
     }
 
-    EigenThreadGuard thread_guard(options.thread_size);
+    detail::ScopedEigenThreadCount thread_guard(options.thread_size);
     (void)thread_guard;
 
     HRLWebEstimateResult result;
@@ -346,7 +379,9 @@ HRLWebEstimateResult HRLModelAlgorithms::EstimateWEB(
     return result;
 }
 
-Eigen::VectorXd HRLModelAlgorithms::CalculateBetaByOLS(
+namespace
+{
+Eigen::VectorXd CalculateBetaByOLS(
     const Eigen::MatrixXd & X,
     const Eigen::VectorXd & y)
 {
@@ -355,7 +390,7 @@ Eigen::VectorXd HRLModelAlgorithms::CalculateBetaByOLS(
     return inverse_gram_matrix * (X.transpose() * y);
 }
 
-Eigen::VectorXd HRLModelAlgorithms::CalculateBetaByMDPDE(
+Eigen::VectorXd CalculateBetaByMDPDE(
     const Eigen::MatrixXd & X,
     const Eigen::VectorXd & y,
     const HRLDiagonalMatrix & W)
@@ -367,7 +402,7 @@ Eigen::VectorXd HRLModelAlgorithms::CalculateBetaByMDPDE(
     return inverse_gram_matrix * (X.transpose() * W * y);
 }
 
-Eigen::VectorXd HRLModelAlgorithms::CalculateMuByMedian(
+Eigen::VectorXd CalculateMuByMedian(
     const Eigen::MatrixXd & beta_array)
 {
     if (beta_array.rows() <= 0 || beta_array.cols() <= 0)
@@ -383,7 +418,7 @@ Eigen::VectorXd HRLModelAlgorithms::CalculateMuByMedian(
     return mu;
 }
 
-Eigen::VectorXd HRLModelAlgorithms::CalculateMuByMDPDE(
+Eigen::VectorXd CalculateMuByMDPDE(
     const Eigen::MatrixXd & beta_array,
     const Eigen::ArrayXd & omega_array,
     double omega_sum)
@@ -404,7 +439,7 @@ Eigen::VectorXd HRLModelAlgorithms::CalculateMuByMDPDE(
     return numerator.rowwise().sum();
 }
 
-HRLDiagonalMatrix HRLModelAlgorithms::CalculateDataWeight(
+HRLDiagonalMatrix CalculateDataWeight(
     double alpha,
     const Eigen::MatrixXd & X,
     const Eigen::VectorXd & y,
@@ -442,7 +477,7 @@ HRLDiagonalMatrix HRLModelAlgorithms::CalculateDataWeight(
     return W.matrix().asDiagonal();
 }
 
-double HRLModelAlgorithms::CalculateDataVarianceSquare(
+double CalculateDataVarianceSquare(
     double alpha,
     const Eigen::MatrixXd & X,
     const Eigen::VectorXd & y,
@@ -473,7 +508,7 @@ double HRLModelAlgorithms::CalculateDataVarianceSquare(
     return sigma_square;
 }
 
-HRLDiagonalMatrix HRLModelAlgorithms::CalculateDataCovariance(
+HRLDiagonalMatrix CalculateDataCovariance(
     double sigma_square,
     const HRLDiagonalMatrix & W)
 {
@@ -503,7 +538,7 @@ HRLDiagonalMatrix HRLModelAlgorithms::CalculateDataCovariance(
     return capital_sigma.asDiagonal();
 }
 
-Eigen::ArrayXd HRLModelAlgorithms::CalculateMemberWeight(
+Eigen::ArrayXd CalculateMemberWeight(
     double alpha,
     const Eigen::MatrixXd & beta_array,
     const Eigen::VectorXd & mu,
@@ -549,7 +584,7 @@ Eigen::ArrayXd HRLModelAlgorithms::CalculateMemberWeight(
     return omega_array;
 }
 
-Eigen::MatrixXd HRLModelAlgorithms::CalculateMemberCovariance(
+Eigen::MatrixXd CalculateMemberCovariance(
     double alpha,
     const Eigen::MatrixXd & beta_array,
     const Eigen::VectorXd & mu,
@@ -587,7 +622,7 @@ Eigen::MatrixXd HRLModelAlgorithms::CalculateMemberCovariance(
     return capital_lambda;
 }
 
-std::vector<Eigen::MatrixXd> HRLModelAlgorithms::CalculateWeightedMemberCovariance(
+std::vector<Eigen::MatrixXd> CalculateWeightedMemberCovariance(
     const Eigen::MatrixXd & capital_lambda,
     const Eigen::ArrayXd & omega_array)
 {
@@ -623,6 +658,7 @@ std::vector<Eigen::MatrixXd> HRLModelAlgorithms::CalculateWeightedMemberCovarian
     }
     return member_capital_lambda_list;
 }
+} // namespace
 
 Eigen::ArrayXd HRLModelAlgorithms::CalculateMemberStatisticalDistance(
     const Eigen::VectorXd & mu_prior,

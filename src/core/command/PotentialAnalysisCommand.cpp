@@ -441,26 +441,22 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(
             auto group_key{ group_keys[idx] };
             const auto & atom_list{ analysis_view.GetAtomObjectList(group_key, class_key) };
             auto group_size{ atom_list.size() };
-            std::vector<std::vector<Eigen::VectorXd>> data_entry_list;
-            std::vector<Eigen::VectorXd> beta_mdpde_list;
-            std::vector<double> sigma_square_list;
-            std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> data_weight_list;
-            std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> data_covariance_list;
-            data_entry_list.reserve(group_size);
-            beta_mdpde_list.reserve(group_size);
-            sigma_square_list.reserve(group_size);
-            data_weight_list.reserve(group_size);
-            data_covariance_list.reserve(group_size);
+            std::vector<HRLMemberDataset> member_datasets;
+            std::vector<HRLMemberLocalEstimate> member_estimates;
+            member_datasets.reserve(group_size);
+            member_estimates.reserve(group_size);
             for (const auto & atom : atom_list)
             {
                 const auto local_entry{ local_entry_map.at(atom) };
                 const auto & dataset{ local_entry.GetDataset() };
                 const auto & fit_result{ local_entry.GetFitResult() };
-                data_entry_list.emplace_back(dataset.basis_and_response_entry_list);
-                beta_mdpde_list.emplace_back(fit_result.beta_mdpde);
-                sigma_square_list.emplace_back(fit_result.sigma_square);
-                data_weight_list.emplace_back(fit_result.data_weight);
-                data_covariance_list.emplace_back(fit_result.data_covariance);
+                member_datasets.emplace_back(dataset.member_dataset);
+                member_estimates.emplace_back(HRLMemberLocalEstimate{
+                    fit_result.beta_mdpde,
+                    fit_result.sigma_square,
+                    fit_result.data_weight,
+                    fit_result.data_covariance
+                });
             }
             auto alpha_g{ training_alpha_flag ?
                 model_object.GetAnalysisView().GetAtomAlphaG(group_key, class_key) :
@@ -468,11 +464,8 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(
             };
             const auto input = HRLDataTransform::BuildGroupInput(
                 basis_size,
-                data_entry_list,
-                beta_mdpde_list,
-                sigma_square_list,
-                data_weight_list,
-                data_covariance_list
+                member_datasets,
+                member_estimates
             );
             HRLGroupEstimator estimator(MakePotentialAnalysisExecutionOptions(ThreadSize(), true));
             const auto result{ estimator.Estimate(input, alpha_g) };
@@ -591,8 +584,7 @@ void PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR(
     for (size_t i = 0; i < atom_size; i++)
     {
         const auto local_entry{ local_entry_map.at(atom_list[i]) };
-        const auto & data_entry_list{ local_entry.GetDataset().basis_and_response_entry_list };
-        const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
+        const auto & dataset{ local_entry.GetDataset().member_dataset };
         const auto algorithm_options{
             MakePotentialAnalysisExecutionOptions(ThreadSize(), true)
         };
@@ -603,8 +595,7 @@ void PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR(
             auto alpha_r{ alpha_list[static_cast<size_t>(j)] };
             const auto result = HRLModelAlgorithms::EstimateBetaMDPDE(
                 alpha_r,
-                dataset.X,
-                dataset.y,
+                dataset,
                 algorithm_options
             );
             Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
@@ -833,11 +824,14 @@ void PotentialAnalysisCommand::RunDatasetPreparationWorkflow(
         const auto & sampling_entries{
             LocalPotentialView::RequireFor(*atom_list[i]).GetSamplingEntries()
         };
-        entry.SetDataset(LocalPotentialDataset{
+        const auto basis_and_response_entries{
             GausLinearTransformHelper::MapValueTransform(
                 sampling_entries,
                 fit_range_min,
                 fit_range_max)
+        };
+        entry.SetDataset(LocalPotentialDataset{
+            HRLDataTransform::BuildMemberDataset(basis_and_response_entries)
         });
 
 #ifdef USE_OPENMP
@@ -887,7 +881,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
         if (atom->IsMainChainAtom() == false) continue;
         const auto local_entry{ analysis.EnsureAtomLocalPotential(*atom) };
         if (!local_entry.HasDataset() ||
-            local_entry.GetDataset().basis_and_response_entry_list.size() < 500) continue;
+            local_entry.GetDataset().member_dataset.y.size() < 500) continue;
         selected_atom_list.emplace_back(atom);
     }
     selected_atom_list.shrink_to_fit();
@@ -969,10 +963,9 @@ double PotentialAnalysisCommand::TrainUniversalAlphaR(
     for (size_t i = 0; i < atom_size; i++)
     {
         const auto local_entry{ local_entry_map.at(atom_list[i]) };
-        const auto & data_entry_list{ local_entry.GetDataset().basis_and_response_entry_list };
         auto error_array{
             HRLAlphaTrainer::EvaluateAlphaR(
-                data_entry_list,
+                local_entry.GetDataset().member_dataset,
                 subset_size,
                 alpha_list,
                 MakePotentialAnalysisExecutionOptions(ThreadSize(), true)
@@ -1090,13 +1083,11 @@ void PotentialAnalysisCommand::RunLocalFitting(
     for (size_t i = 0; i < selected_atom_size; i++)
     {
         auto local_entry{ local_entry_list[i] };
-        const auto & data_entry_list{ local_entry.GetDataset().basis_and_response_entry_list };
-        const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
+        const auto & dataset{ local_entry.GetDataset().member_dataset };
         const auto result{
             HRLModelAlgorithms::EstimateBetaMDPDE(
                 universal_alpha_r,
-                dataset.X,
-                dataset.y,
+                dataset,
                 MakePotentialAnalysisExecutionOptions(thread_size, true))
         };
 

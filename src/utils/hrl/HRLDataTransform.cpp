@@ -92,22 +92,16 @@ Eigen::MatrixXd HRLDataTransform::BuildBetaMatrix(
 
 HRLGroupEstimationInput HRLDataTransform::BuildGroupInput(
     int basis_size,
-    const std::vector<std::vector<Eigen::VectorXd>> & data_entries,
-    const std::vector<Eigen::VectorXd> & beta_list,
-    const std::vector<double> & sigma_square_list,
-    const std::vector<HRLDiagonalMatrix> & weight_list,
-    const std::vector<HRLDiagonalMatrix> & covariance_list)
+    const std::vector<HRLMemberDataset> & member_datasets,
+    const std::vector<HRLMemberLocalEstimate> & member_estimates)
 {
     ValidateBasisSize(basis_size);
-    const auto member_size{ data_entries.size() };
+    const auto member_size{ member_datasets.size() };
     if (member_size == 0)
     {
         throw std::invalid_argument("member_datasets must not be empty.");
     }
-    if (beta_list.size() != member_size ||
-        sigma_square_list.size() != member_size ||
-        weight_list.size() != member_size ||
-        covariance_list.size() != member_size)
+    if (member_estimates.size() != member_size)
     {
         throw std::invalid_argument("Group estimation inputs must have consistent member counts.");
     }
@@ -119,33 +113,29 @@ HRLGroupEstimationInput HRLDataTransform::BuildGroupInput(
 
     for (std::size_t i = 0; i < member_size; i++)
     {
-        auto dataset{ BuildMemberDataset(data_entries.at(i), true) };
+        const auto & dataset{ member_datasets.at(i) };
         if (dataset.X.cols() != basis_size)
         {
             throw std::invalid_argument("Member dataset basis size is inconsistent.");
         }
+        if (dataset.X.rows() != dataset.y.size())
+        {
+            throw std::invalid_argument("Member dataset shape is inconsistent.");
+        }
 
-        const auto & beta{ beta_list.at(i) };
-        const auto & weight{ weight_list.at(i) };
-        const auto & covariance{ covariance_list.at(i) };
-        if (beta.rows() != basis_size)
+        const auto & estimate{ member_estimates.at(i) };
+        if (estimate.beta_mdpde.rows() != basis_size)
         {
             throw std::invalid_argument("Member beta basis size is inconsistent.");
         }
-        if (weight.diagonal().size() != dataset.y.size() ||
-            covariance.diagonal().size() != dataset.y.size())
+        if (estimate.data_weight.diagonal().size() != dataset.y.size() ||
+            estimate.data_covariance.diagonal().size() != dataset.y.size())
         {
             throw std::invalid_argument("Member covariance or weight size is inconsistent.");
         }
 
-        HRLMemberLocalEstimate estimate;
-        estimate.beta_mdpde = beta;
-        estimate.sigma_square = sigma_square_list.at(i);
-        estimate.data_weight = weight;
-        estimate.data_covariance = covariance;
-
-        input.member_datasets.emplace_back(std::move(dataset));
-        input.member_estimates.emplace_back(std::move(estimate));
+        input.member_datasets.emplace_back(dataset);
+        input.member_estimates.emplace_back(estimate);
     }
 
     return input;

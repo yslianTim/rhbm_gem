@@ -27,9 +27,9 @@ void LocalPotentialEntry::SetSamplingEntries(LocalPotentialSampleList value)
 }
 
 void LocalPotentialEntry::SetDataset(
-    std::vector<Eigen::VectorXd> basis_and_response_entry_list)
+    HRLMemberDataset dataset)
 {
-    m_dataset = Dataset{ std::move(basis_and_response_entry_list) };
+    m_dataset = Dataset{ std::move(dataset) };
 }
 
 void LocalPotentialEntry::SetFitResult(FitResult value)

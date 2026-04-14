@@ -33,6 +33,44 @@ void ValidateTrainingInputs(
     }
 }
 
+void ValidateMemberDataset(const HRLMemberDataset & dataset)
+{
+    if (dataset.X.rows() != dataset.y.size())
+    {
+        throw std::invalid_argument("dataset shape is inconsistent.");
+    }
+    if (dataset.X.rows() == 0 || dataset.X.cols() == 0)
+    {
+        throw std::invalid_argument("dataset must not be empty.");
+    }
+}
+
+HRLMemberDataset BuildDatasetSlice(
+    const HRLMemberDataset & dataset,
+    const std::vector<int> & row_indices)
+{
+    if (row_indices.empty())
+    {
+        throw std::invalid_argument("dataset slice must not be empty.");
+    }
+
+    const auto row_count{ static_cast<Eigen::Index>(row_indices.size()) };
+    HRLMemberDataset slice;
+    slice.X = Eigen::MatrixXd::Zero(row_count, dataset.X.cols());
+    slice.y = Eigen::VectorXd::Zero(row_count);
+    for (Eigen::Index i = 0; i < row_count; i++)
+    {
+        const auto row_index{ static_cast<Eigen::Index>(row_indices.at(static_cast<std::size_t>(i))) };
+        if (row_index < 0 || row_index >= dataset.X.rows())
+        {
+            throw std::out_of_range("dataset slice index is out of range.");
+        }
+        slice.X.row(i) = dataset.X.row(row_index);
+        slice.y(i) = dataset.y(row_index);
+    }
+    return slice;
+}
+
 std::mt19937 BuildGenerator(
     const std::optional<std::uint32_t> & seed,
     std::size_t offset)
@@ -46,53 +84,50 @@ std::mt19937 BuildGenerator(
 } // namespace
 
 Eigen::VectorXd HRLAlphaTrainer::EvaluateAlphaR(
-    const std::vector<Eigen::VectorXd> & data_list,
+    const HRLMemberDataset & dataset,
     std::size_t subset_size,
     const std::vector<double> & alpha_list,
     const HRLExecutionOptions & options)
 {
-    ValidateTrainingInputs(data_list.size(), subset_size, alpha_list);
+    ValidateMemberDataset(dataset);
+    ValidateTrainingInputs(static_cast<std::size_t>(dataset.y.size()), subset_size, alpha_list);
 
-    std::vector<std::vector<Eigen::VectorXd>> data_subset_list(subset_size);
-    const auto total_entry_size{ data_list.size() };
+    std::vector<std::vector<int>> data_subset_rows(subset_size);
+    const auto total_entry_size{ static_cast<std::size_t>(dataset.y.size()) };
     const auto entries_in_subset_size{ total_entry_size / subset_size + 1 };
     for (std::size_t i = 0; i < subset_size; i++)
     {
-        data_subset_list[i].reserve(entries_in_subset_size);
+        data_subset_rows[i].reserve(entries_in_subset_size);
     }
 
-    std::size_t count{ 0 };
-    for (const auto & entry : data_list)
+    for (std::size_t row = 0; row < total_entry_size; row++)
     {
-        data_subset_list[count % subset_size].emplace_back(entry);
-        count++;
+        data_subset_rows[row % subset_size].emplace_back(static_cast<int>(row));
     }
 
-    std::vector<std::vector<Eigen::VectorXd>> data_set_test(subset_size);
-    std::vector<std::vector<Eigen::VectorXd>> data_set_training(subset_size);
+    std::vector<HRLMemberDataset> data_set_test;
+    std::vector<HRLMemberDataset> data_set_training;
+    data_set_test.reserve(subset_size);
+    data_set_training.reserve(subset_size);
     for (std::size_t i = 0; i < subset_size; i++)
     {
-        const auto test_set_size{ data_subset_list[i].size() };
-        const auto training_set_size{ data_list.size() - test_set_size };
-        data_set_test[i].reserve(test_set_size);
-        data_set_training[i].reserve(training_set_size);
-        data_set_test[i].insert(
-            data_set_test[i].end(),
-            data_subset_list[i].begin(),
-            data_subset_list[i].end()
-        );
+        const auto test_set_size{ data_subset_rows[i].size() };
+        std::vector<int> training_rows;
+        training_rows.reserve(total_entry_size - test_set_size);
         for (std::size_t j = 0; j < subset_size; j++)
         {
             if (i == j)
             {
                 continue;
             }
-            data_set_training[i].insert(
-                data_set_training[i].end(),
-                data_subset_list[j].begin(),
-                data_subset_list[j].end()
+            training_rows.insert(
+                training_rows.end(),
+                data_subset_rows[j].begin(),
+                data_subset_rows[j].end()
             );
         }
+        data_set_test.emplace_back(BuildDatasetSlice(dataset, data_subset_rows[i]));
+        data_set_training.emplace_back(BuildDatasetSlice(dataset, training_rows));
     }
 
     Eigen::VectorXd error_sum_list{
@@ -106,26 +141,18 @@ Eigen::VectorXd HRLAlphaTrainer::EvaluateAlphaR(
         auto beta_error_sum{ 0.0 };
         for (std::size_t i = 0; i < subset_size; i++)
         {
-            const auto dataset_test{
-                HRLDataTransform::BuildMemberDataset(data_set_test.at(i), true)
-            };
             const auto beta_result_test{
                 HRLModelAlgorithms::EstimateBetaMDPDE(
                     alpha,
-                    dataset_test.X,
-                    dataset_test.y,
+                    data_set_test.at(i),
                     algorithm_options
                 )
             };
 
-            const auto dataset_training{
-                HRLDataTransform::BuildMemberDataset(data_set_training.at(i), true)
-            };
             const auto beta_result_training{
                 HRLModelAlgorithms::EstimateBetaMDPDE(
                     alpha,
-                    dataset_training.X,
-                    dataset_training.y,
+                    data_set_training.at(i),
                     algorithm_options
                 )
             };

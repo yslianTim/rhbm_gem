@@ -20,10 +20,7 @@ Eigen::MatrixXd BuildBetaMatrix(
 
 HRLGroupEstimationInput BuildGroupInput(
     int basis_size,
-    const std::vector<std::vector<Eigen::VectorXd>> & data_entries,
-    const std::vector<Eigen::VectorXd> & beta_list,
-    const std::vector<double> & sigma_square_list,
-    const std::vector<HRLDiagonalMatrix> & weight_list,
-    const std::vector<HRLDiagonalMatrix> & covariance_list
+    const std::vector<HRLMemberDataset> & member_datasets,
+    const std::vector<HRLMemberLocalEstimate> & member_estimates
 );
 } // namespace HRLDataTransform

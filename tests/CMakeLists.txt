@@ -158,6 +158,7 @@ set(UTILS_HRL_TEST_SOURCES
     utils/hrl/HRLGroupEstimator_test.cpp
     utils/hrl/HRLModelAlgorithms_test.cpp
     utils/hrl/HRLModelTester_test.cpp
+    utils/hrl/ScopedEigenThreadCount_test.cpp
 )
 
 set(INTEGRATION_COMMAND_TEST_SOURCES

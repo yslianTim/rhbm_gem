@@ -10,7 +10,7 @@
 namespace HRLAlphaTrainer
 {
 Eigen::VectorXd EvaluateAlphaR(
-    const std::vector<Eigen::VectorXd> & data_list,
+    const HRLMemberDataset & dataset,
     std::size_t subset_size,
     const std::vector<double> & alpha_list,
     const HRLExecutionOptions & options = {}

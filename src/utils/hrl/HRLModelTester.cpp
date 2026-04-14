@@ -333,10 +333,11 @@ bool HRLModelTester::RunBetaMDPDETest(
                 static_cast<size_t>(sampling_entry_size), gaus_true, data_error_sigma, outlier_ratio
             )
         };
+        const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
 
         auto error_array{
             HRLAlphaTrainer::EvaluateAlphaR(
-                data_entry_list,
+                dataset,
                 subset_size_alpha_r,
                 train_alpha_r_list
             )
@@ -346,7 +347,6 @@ bool HRLModelTester::RunBetaMDPDETest(
         auto alpha_r_train{ train_alpha_r_list.at(static_cast<size_t>(error_min_id)) };
         local_alpha_r_list.back() = alpha_r_train; // update training alpha_r for each replica
 
-        const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
         HRLExecutionOptions options;
         options.quiet_mode = true;
         options.thread_size = thread_size;
@@ -355,8 +355,7 @@ bool HRLModelTester::RunBetaMDPDETest(
         {
             const auto beta_result = HRLModelAlgorithms::EstimateBetaMDPDE(
                 local_alpha_r_list.at(j),
-                dataset.X,
-                dataset.y,
+                dataset,
                 options
             );
 
@@ -554,10 +553,11 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
                 angle
             )
         };
+        const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
 
         auto error_array{
             HRLAlphaTrainer::EvaluateAlphaR(
-                data_entry_list,
+                dataset,
                 subset_size_alpha_r,
                 train_alpha_r_list
             )
@@ -567,7 +567,6 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
         auto alpha_r_train{ train_alpha_r_list.at(static_cast<size_t>(error_min_id)) };
         local_alpha_r_list.back() = alpha_r_train; // update training alpha_r for each replica
 
-        const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
         HRLExecutionOptions options;
         options.quiet_mode = true;
         options.thread_size = thread_size;
@@ -576,8 +575,7 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
         {
             const auto beta_result = HRLModelAlgorithms::EstimateBetaMDPDE(
                 local_alpha_r_list.at(j),
-                dataset.X,
-                dataset.y,
+                dataset,
                 options
             );
 

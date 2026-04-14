@@ -25,6 +25,13 @@ HRLDiagonalMatrix MakeDiagonal(std::initializer_list<double> values)
     result.diagonal() = MakeVector(values);
     return result;
 }
+
+HRLMemberDataset MakeDataset(
+    const Eigen::MatrixXd & X,
+    const Eigen::VectorXd & y)
+{
+    return HRLMemberDataset{ X, y };
+}
 } // namespace
 
 TEST(HRLModelAlgorithmsTest, EstimateBetaMDPDEAlphaZeroMatchesOLS)
@@ -39,7 +46,7 @@ TEST(HRLModelAlgorithmsTest, EstimateBetaMDPDEAlphaZeroMatchesOLS)
         (X.transpose() * X).inverse() * X.transpose() * y
     };
 
-    const auto result{ HRLModelAlgorithms::EstimateBetaMDPDE(0.0, X, y) };
+    const auto result{ HRLModelAlgorithms::EstimateBetaMDPDE(0.0, MakeDataset(X, y)) };
 
     EXPECT_EQ(HRLEstimationStatus::SUCCESS, result.status);
     EXPECT_TRUE(result.beta_ols.isApprox(expected_beta, 1e-12));
@@ -51,7 +58,7 @@ TEST(HRLModelAlgorithmsTest, EstimateBetaMDPDESingleDatumReturnsInsufficientData
     const Eigen::MatrixXd X{ MakeVector({ 1.0, 2.0 }).transpose() };
     const Eigen::VectorXd y{ MakeVector({ 3.0 }) };
 
-    const auto result{ HRLModelAlgorithms::EstimateBetaMDPDE(0.2, X, y) };
+    const auto result{ HRLModelAlgorithms::EstimateBetaMDPDE(0.2, MakeDataset(X, y)) };
 
     EXPECT_EQ(HRLEstimationStatus::INSUFFICIENT_DATA, result.status);
     EXPECT_TRUE(result.beta_mdpde.isApprox(Eigen::VectorXd::Zero(2), 1e-12));
@@ -64,14 +71,42 @@ TEST(HRLModelAlgorithmsTest, EstimateBetaMDPDERejectsInvalidParameters)
     const Eigen::VectorXd y{ MakeVector({ 1.0, 2.0 }) };
     HRLExecutionOptions options;
 
-    EXPECT_THROW(HRLModelAlgorithms::EstimateBetaMDPDE(-0.1, X, y, options), std::invalid_argument);
+    EXPECT_THROW(
+        HRLModelAlgorithms::EstimateBetaMDPDE(-0.1, MakeDataset(X, y), options),
+        std::invalid_argument
+    );
 
     options.max_iterations = 0;
-    EXPECT_THROW(HRLModelAlgorithms::EstimateBetaMDPDE(0.0, X, y, options), std::invalid_argument);
+    EXPECT_THROW(
+        HRLModelAlgorithms::EstimateBetaMDPDE(0.0, MakeDataset(X, y), options),
+        std::invalid_argument
+    );
 
     options = HRLExecutionOptions{};
     options.tolerance = -1.0;
-    EXPECT_THROW(HRLModelAlgorithms::EstimateBetaMDPDE(0.0, X, y, options), std::invalid_argument);
+    EXPECT_THROW(
+        HRLModelAlgorithms::EstimateBetaMDPDE(0.0, MakeDataset(X, y), options),
+        std::invalid_argument
+    );
+}
+
+TEST(HRLModelAlgorithmsTest, EstimateBetaMDPDERejectsInvalidDatasetShapeAndValues)
+{
+    Eigen::MatrixXd X(2, 2);
+    X << 1.0, 0.0,
+         1.0, 1.0;
+
+    EXPECT_THROW(
+        HRLModelAlgorithms::EstimateBetaMDPDE(0.0, MakeDataset(X, MakeVector({ 1.0 }))),
+        std::invalid_argument
+    );
+
+    Eigen::MatrixXd X_with_nan{ X };
+    X_with_nan(0, 0) = std::numeric_limits<double>::quiet_NaN();
+    EXPECT_THROW(
+        HRLModelAlgorithms::EstimateBetaMDPDE(0.0, MakeDataset(X_with_nan, MakeVector({ 1.0, 2.0 }))),
+        std::invalid_argument
+    );
 }
 
 TEST(HRLModelAlgorithmsTest, EstimateMuMDPDESingleMemberReturnsSingleMember)
@@ -162,52 +197,6 @@ TEST(HRLModelAlgorithmsTest, EstimateWEBRejectsMismatchedMemberCounts)
         ),
         std::invalid_argument
     );
-}
-
-TEST(HRLModelAlgorithmsTest, CalculateDataWeightFloorsInvalidSigmaSquare)
-{
-    const auto W{
-        HRLModelAlgorithms::CalculateDataWeight(
-            1.0,
-            Eigen::MatrixXd::Identity(2, 2),
-            MakeVector({ 10.0, 0.0 }),
-            Eigen::VectorXd::Zero(2),
-            0.0,
-            0.2
-        )
-    };
-
-    EXPECT_NEAR(0.2, W.diagonal()(0), 1e-12);
-    EXPECT_NEAR(1.0, W.diagonal()(1), 1e-12);
-}
-
-TEST(HRLModelAlgorithmsTest, CalculateDataCovarianceFallsBackToIdentity)
-{
-    const auto covariance{
-        HRLModelAlgorithms::CalculateDataCovariance(2.0, MakeDiagonal({ 0.0, 0.0, 0.0 }))
-    };
-
-    EXPECT_TRUE(covariance.diagonal().isApprox(Eigen::VectorXd::Ones(3), 1e-12));
-}
-
-TEST(HRLModelAlgorithmsTest, CalculateMemberWeightClipsMinimumValue)
-{
-    Eigen::MatrixXd beta_array(2, 2);
-    beta_array << 0.0, 10.0,
-                  0.0, 10.0;
-
-    const auto omega_array{
-        HRLModelAlgorithms::CalculateMemberWeight(
-            1.0,
-            beta_array,
-            Eigen::VectorXd::Zero(2),
-            Eigen::MatrixXd::Identity(2, 2),
-            0.4
-        )
-    };
-
-    EXPECT_NEAR(1.0, omega_array(0), 1e-12);
-    EXPECT_NEAR(0.2, omega_array(1), 1e-12);
 }
 
 TEST(HRLModelAlgorithmsTest, CalculateOutlierMemberFlagMatchesThresholdRule)

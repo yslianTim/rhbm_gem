@@ -3,6 +3,7 @@
 #include <initializer_list>
 #include <stdexcept>
 
+#include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
 #include <rhbm_gem/utils/hrl/HRLAlphaTrainer.hpp>
 
 namespace
@@ -29,9 +30,10 @@ TEST(HRLAlphaTrainerTest, EvaluateAlphaRWithExactLinearDataReturnsZeroError)
         MakeVector({ 1.0, 4.0, 9.0 }),
         MakeVector({ 1.0, 5.0, 11.0 })
     };
+    const auto dataset{ HRLDataTransform::BuildMemberDataset(data_list) };
 
     const auto error_sum_list{
-        HRLAlphaTrainer::EvaluateAlphaR(data_list, 3, { 0.0, 0.5 })
+        HRLAlphaTrainer::EvaluateAlphaR(dataset, 3, { 0.0, 0.5 })
     };
 
     EXPECT_NEAR(0.0, error_sum_list(0), 1e-12);
@@ -57,9 +59,10 @@ TEST(HRLAlphaTrainerTest, EvaluateAlphaRRejectsInvalidSubsetSize)
         MakeVector({ 1.0, 0.0, 1.0 }),
         MakeVector({ 1.0, 1.0, 3.0 })
     };
+    const auto dataset{ HRLDataTransform::BuildMemberDataset(data_list) };
 
-    EXPECT_THROW(HRLAlphaTrainer::EvaluateAlphaR(data_list, 0, { 0.0 }), std::invalid_argument);
-    EXPECT_THROW(HRLAlphaTrainer::EvaluateAlphaR(data_list, 3, { 0.0 }), std::invalid_argument);
+    EXPECT_THROW(HRLAlphaTrainer::EvaluateAlphaR(dataset, 0, { 0.0 }), std::invalid_argument);
+    EXPECT_THROW(HRLAlphaTrainer::EvaluateAlphaR(dataset, 3, { 0.0 }), std::invalid_argument);
 }
 
 TEST(HRLAlphaTrainerTest, EvaluateAlphaGWithSeedIsDeterministic)

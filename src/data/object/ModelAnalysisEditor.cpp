@@ -125,7 +125,7 @@ void MutableLocalPotentialView::SetSamplingEntries(LocalPotentialSampleList valu
 
 void MutableLocalPotentialView::SetDataset(LocalPotentialDataset value)
 {
-    EnsureResolvedLocalEntry(*this).SetDataset(std::move(value.basis_and_response_entry_list));
+    EnsureResolvedLocalEntry(*this).SetDataset(std::move(value.member_dataset));
 }
 
 void MutableLocalPotentialView::SetFitResult(LocalPotentialFitResult value)
@@ -167,7 +167,7 @@ bool MutableLocalPotentialView::HasFitResult() const
 const LocalPotentialDataset & MutableLocalPotentialView::GetDataset() const
 {
     const auto & dataset{ RequireResolvedLocalEntry(*this, "Local dataset").GetDataset() };
-    m_dataset_cache.basis_and_response_entry_list = dataset.basis_and_response_entry_list;
+    m_dataset_cache.member_dataset = dataset.member_dataset;
     return m_dataset_cache;
 }
 

@@ -8,6 +8,7 @@
 
 #include <rhbm_gem/data/object/GaussianStatistics.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
+#include <rhbm_gem/utils/hrl/HRLModelTypes.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace rhbm_gem {
@@ -18,7 +19,7 @@ class ModelObject;
 
 struct LocalPotentialDataset
 {
-    std::vector<Eigen::VectorXd> basis_and_response_entry_list;
+    HRLMemberDataset member_dataset;
 };
 
 struct LocalPotentialFitResult

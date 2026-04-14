@@ -9,6 +9,7 @@
 #include <Eigen/Dense>
 
 #include <rhbm_gem/data/object/GaussianStatistics.hpp>
+#include <rhbm_gem/utils/hrl/HRLModelTypes.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace rhbm_gem {
@@ -25,7 +26,7 @@ class LocalPotentialEntry
 public:
     struct Dataset
     {
-        std::vector<Eigen::VectorXd> basis_and_response_entry_list;
+        HRLMemberDataset member_dataset;
     };
 
     struct FitResult
@@ -54,7 +55,7 @@ public:
     void SetSamplingEntries(LocalPotentialSampleList value);
     void SetEstimateOLS(const GaussianEstimate & estimate) { m_gaus_estimate_ols = estimate; }
     void SetEstimateMDPDE(const GaussianEstimate & estimate) { m_gaus_estimate_mdpde = estimate; }
-    void SetDataset(std::vector<Eigen::VectorXd> basis_and_response_entry_list);
+    void SetDataset(HRLMemberDataset dataset);
     void SetFitResult(FitResult value);
     void SetAnnotation(const std::string & key, LocalPotentialAnnotation annotation);
     void ClearTransientFitState();
