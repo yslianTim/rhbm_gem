@@ -23,24 +23,13 @@ struct LocalPotentialAnnotation
 
 class LocalPotentialEntry
 {
-public:
-    struct FitResult
-    {
-        Eigen::VectorXd beta_ols;
-        Eigen::VectorXd beta_mdpde;
-        double sigma_square{ 0.0 };
-        Eigen::DiagonalMatrix<double, Eigen::Dynamic> data_weight;
-        Eigen::DiagonalMatrix<double, Eigen::Dynamic> data_covariance;
-    };
-
-private:
     double m_alpha_r;
     LocalPotentialSampleList m_sampling_entries;
     GaussianEstimate m_gaus_estimate_ols;
     GaussianEstimate m_gaus_estimate_mdpde;
     std::unordered_map<std::string, LocalPotentialAnnotation> m_annotation_map;
     std::optional<HRLMemberDataset> m_dataset;
-    std::optional<FitResult> m_fit_result;
+    std::optional<HRLBetaEstimateResult> m_fit_result;
 
 public:
     LocalPotentialEntry();
@@ -51,7 +40,7 @@ public:
     void SetEstimateOLS(const GaussianEstimate & estimate) { m_gaus_estimate_ols = estimate; }
     void SetEstimateMDPDE(const GaussianEstimate & estimate) { m_gaus_estimate_mdpde = estimate; }
     void SetDataset(HRLMemberDataset dataset);
-    void SetFitResult(FitResult value);
+    void SetFitResult(HRLBetaEstimateResult value);
     void SetAnnotation(const std::string & key, LocalPotentialAnnotation annotation);
     void ClearTransientFitState();
 
@@ -62,7 +51,7 @@ public:
     const GaussianEstimate & GetEstimateOLS() const { return m_gaus_estimate_ols; }
     const GaussianEstimate & GetEstimateMDPDE() const { return m_gaus_estimate_mdpde; }
     const HRLMemberDataset & GetDataset() const;
-    const FitResult & GetFitResult() const;
+    const HRLBetaEstimateResult & GetFitResult() const;
     LocalPotentialAnnotation * FindAnnotation(const std::string & key);
     const LocalPotentialAnnotation * FindAnnotation(const std::string & key) const;
     const std::unordered_map<std::string, LocalPotentialAnnotation> & Annotations() const;

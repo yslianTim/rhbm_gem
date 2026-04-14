@@ -86,17 +86,6 @@ const LocalPotentialEntry & RequireResolvedLocalEntry(
     return *entry;
 }
 
-LocalPotentialEntry::FitResult ToDetailFitResult(LocalPotentialFitResult value)
-{
-    return LocalPotentialEntry::FitResult{
-        std::move(value.beta_ols),
-        std::move(value.beta_mdpde),
-        value.sigma_square,
-        std::move(value.data_weight),
-        std::move(value.data_covariance)
-    };
-}
-
 LocalPotentialAnnotation ToDetailAnnotation(const LocalPotentialAnnotationData & value)
 {
     return LocalPotentialAnnotation{
@@ -128,9 +117,9 @@ void MutableLocalPotentialView::SetDataset(HRLMemberDataset value)
     EnsureResolvedLocalEntry(*this).SetDataset(std::move(value));
 }
 
-void MutableLocalPotentialView::SetFitResult(LocalPotentialFitResult value)
+void MutableLocalPotentialView::SetFitResult(HRLBetaEstimateResult value)
 {
-    EnsureResolvedLocalEntry(*this).SetFitResult(ToDetailFitResult(std::move(value)));
+    EnsureResolvedLocalEntry(*this).SetFitResult(std::move(value));
 }
 
 void MutableLocalPotentialView::SetEstimates(const LocalPotentialEstimates & value)
@@ -171,14 +160,10 @@ const HRLMemberDataset & MutableLocalPotentialView::GetDataset() const
     return m_dataset_cache;
 }
 
-const LocalPotentialFitResult & MutableLocalPotentialView::GetFitResult() const
+const HRLBetaEstimateResult & MutableLocalPotentialView::GetFitResult() const
 {
     const auto & fit_result{ RequireResolvedLocalEntry(*this, "Local fit result").GetFitResult() };
-    m_fit_result_cache.beta_ols = fit_result.beta_ols;
-    m_fit_result_cache.beta_mdpde = fit_result.beta_mdpde;
-    m_fit_result_cache.sigma_square = fit_result.sigma_square;
-    m_fit_result_cache.data_weight = fit_result.data_weight;
-    m_fit_result_cache.data_covariance = fit_result.data_covariance;
+    m_fit_result_cache = fit_result;
     return m_fit_result_cache;
 }
 

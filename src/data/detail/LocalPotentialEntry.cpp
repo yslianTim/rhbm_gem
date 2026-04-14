@@ -32,7 +32,7 @@ void LocalPotentialEntry::SetDataset(
     m_dataset = std::move(dataset);
 }
 
-void LocalPotentialEntry::SetFitResult(FitResult value)
+void LocalPotentialEntry::SetFitResult(HRLBetaEstimateResult value)
 {
     m_fit_result = std::move(value);
 }
@@ -82,7 +82,7 @@ const HRLMemberDataset & LocalPotentialEntry::GetDataset() const
     return *m_dataset;
 }
 
-const LocalPotentialEntry::FitResult & LocalPotentialEntry::GetFitResult() const
+const HRLBetaEstimateResult & LocalPotentialEntry::GetFitResult() const
 {
     if (!m_fit_result.has_value())
     {

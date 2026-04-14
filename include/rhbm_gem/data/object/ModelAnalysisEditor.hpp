@@ -17,15 +17,6 @@ class AtomObject;
 class BondObject;
 class ModelObject;
 
-struct LocalPotentialFitResult
-{
-    Eigen::VectorXd beta_ols;
-    Eigen::VectorXd beta_mdpde;
-    double sigma_square{ 0.0 };
-    Eigen::DiagonalMatrix<double, Eigen::Dynamic> data_weight;
-    Eigen::DiagonalMatrix<double, Eigen::Dynamic> data_covariance;
-};
-
 struct LocalPotentialEstimates
 {
     GaussianEstimate ols{};
@@ -55,7 +46,7 @@ public:
 
     void SetSamplingEntries(LocalPotentialSampleList value);
     void SetDataset(HRLMemberDataset value);
-    void SetFitResult(LocalPotentialFitResult value);
+    void SetFitResult(HRLBetaEstimateResult value);
     void SetEstimates(const LocalPotentialEstimates & value);
     void SetAlphaR(double value);
     void SetAnnotation(const std::string & key, const LocalPotentialAnnotationData & value);
@@ -63,7 +54,7 @@ public:
     bool HasDataset() const;
     bool HasFitResult() const;
     const HRLMemberDataset & GetDataset() const;
-    const LocalPotentialFitResult & GetFitResult() const;
+    const HRLBetaEstimateResult & GetFitResult() const;
     const AtomObject * GetAtomObjectPtr() const { return m_atom_object; }
     const BondObject * GetBondObjectPtr() const { return m_bond_object; }
     const void * GetEntryHandle() const { return m_entry_ptr; }
@@ -73,7 +64,7 @@ private:
     BondObject * m_bond_object{ nullptr };
     void * m_entry_ptr{ nullptr };
     mutable HRLMemberDataset m_dataset_cache{};
-    mutable LocalPotentialFitResult m_fit_result_cache{};
+    mutable HRLBetaEstimateResult m_fit_result_cache{};
 
     explicit MutableLocalPotentialView(AtomObject * atom_object);
     explicit MutableLocalPotentialView(BondObject * bond_object);

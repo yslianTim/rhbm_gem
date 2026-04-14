@@ -176,6 +176,18 @@ TEST(DataObjectModelAnalysisTest, LocalPotentialEntryCanClearTransientFitPayload
     EXPECT_FALSE(entry.HasFitResult());
 }
 
+TEST(DataObjectModelAnalysisTest, LocalPotentialEntryPreservesFitResultStatus)
+{
+    rg::LocalPotentialEntry entry;
+    HRLBetaEstimateResult fit_result;
+    fit_result.status = HRLEstimationStatus::NUMERICAL_FALLBACK;
+
+    entry.SetFitResult(fit_result);
+
+    ASSERT_TRUE(entry.HasFitResult());
+    EXPECT_EQ(HRLEstimationStatus::NUMERICAL_FALLBACK, entry.GetFitResult().status);
+}
+
 TEST(DataObjectModelAnalysisTest, RebuildAtomGroupEntriesFromSelectionTracksOnlySelectedAtoms)
 {
     auto model{ data_test::MakeModelWithBond() };

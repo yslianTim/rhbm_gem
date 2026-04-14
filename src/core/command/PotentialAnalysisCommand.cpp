@@ -1083,13 +1083,7 @@ void PotentialAnalysisCommand::RunLocalFitting(
                 MakePotentialAnalysisExecutionOptions(thread_size, true))
         };
 
-        local_entry.SetFitResult(LocalPotentialFitResult{
-            result.beta_ols,
-            result.beta_mdpde,
-            result.sigma_square,
-            result.data_weight,
-            result.data_covariance
-        });
+        local_entry.SetFitResult(result);
 
         Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
         model_par_init(0) = LocalPotentialView::RequireFor(*selected_atom_list[i]).GetMomentZeroEstimate();
