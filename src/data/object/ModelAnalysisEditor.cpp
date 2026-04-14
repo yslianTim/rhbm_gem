@@ -22,6 +22,16 @@ struct LocalPotentialEstimates
     GaussianEstimate mdpde{};
 };
 
+template <typename EntryT>
+const EntryT & RequireGroupEntry(const EntryT * entry, const char * context)
+{
+    if (entry == nullptr)
+    {
+        throw std::runtime_error(std::string(context) + " is not available.");
+    }
+    return *entry;
+}
+
 ModelObject * OwnerOf(const MutableLocalPotentialView & view)
 {
     if (view.GetAtomObjectPtr() != nullptr)
@@ -120,6 +130,138 @@ LocalPotentialEstimates BuildLocalPotentialEstimates(
     return LocalPotentialEstimates{
         GaussianEstimate{ gaus_ols(0), gaus_ols(1) },
         GaussianEstimate{ gaus_mdpde(0), gaus_mdpde(1) }
+    };
+}
+
+void ValidateGroupEstimateResult(
+    const HRLGroupEstimationResult & result,
+    std::size_t member_count,
+    const char * context)
+{
+    const auto expected_member_count{ static_cast<Eigen::Index>(member_count) };
+    if (result.beta_posterior_array.cols() != expected_member_count)
+    {
+        throw std::invalid_argument(
+            std::string(context) + " beta_posterior_array member count is inconsistent.");
+    }
+    if (result.capital_sigma_posterior_list.size() != member_count)
+    {
+        throw std::invalid_argument(
+            std::string(context) + " capital_sigma_posterior_list member count is inconsistent.");
+    }
+    if (result.outlier_flag_array.rows() != expected_member_count)
+    {
+        throw std::invalid_argument(
+            std::string(context) + " outlier_flag_array member count is inconsistent.");
+    }
+    if (result.statistical_distance_array.rows() != expected_member_count)
+    {
+        throw std::invalid_argument(
+            std::string(context) + " statistical_distance_array member count is inconsistent.");
+    }
+}
+
+void ApplyAtomGroupStatistics(
+    ModelAnalysisData & analysis_data,
+    GroupKey group_key,
+    const std::string & class_key,
+    const HRLGroupEstimationResult & result,
+    double alpha_g)
+{
+    const auto gaus_group_mean{ GausLinearTransformHelper::BuildGaus3DModel(result.mu_mean) };
+    const auto gaus_group_mdpde{ GausLinearTransformHelper::BuildGaus3DModel(result.mu_mdpde) };
+    const auto gaus_prior{
+        GausLinearTransformHelper::BuildGaus3DModelWithVariance(
+            result.mu_prior,
+            result.capital_lambda)
+    };
+    const auto & prior_estimate{ std::get<0>(gaus_prior) };
+    const auto & prior_variance{ std::get<1>(gaus_prior) };
+
+    analysis_data.EnsureAtomGroupEntry(class_key).SetGroupStatistics(
+        group_key,
+        GaussianEstimate{ gaus_group_mean(0), gaus_group_mean(1) },
+        GaussianEstimate{ gaus_group_mdpde(0), gaus_group_mdpde(1) },
+        GaussianEstimate{ prior_estimate(0), prior_estimate(1) },
+        GaussianEstimate{ prior_variance(0), prior_variance(1) },
+        alpha_g);
+}
+
+void ApplyBondGroupStatistics(
+    ModelAnalysisData & analysis_data,
+    GroupKey group_key,
+    const std::string & class_key,
+    const HRLGroupEstimationResult & result,
+    double alpha_g)
+{
+    const auto gaus_group_mean{ GausLinearTransformHelper::BuildGaus2DModel(result.mu_mean) };
+    const auto gaus_group_mdpde{ GausLinearTransformHelper::BuildGaus2DModel(result.mu_mdpde) };
+    const auto gaus_prior{
+        GausLinearTransformHelper::BuildGaus2DModelWithVariance(
+            result.mu_prior,
+            result.capital_lambda)
+    };
+    const auto & prior_estimate{ std::get<0>(gaus_prior) };
+    const auto & prior_variance{ std::get<1>(gaus_prior) };
+
+    analysis_data.EnsureBondGroupEntry(class_key).SetGroupStatistics(
+        group_key,
+        GaussianEstimate{ gaus_group_mean(0), gaus_group_mean(1) },
+        GaussianEstimate{ gaus_group_mdpde(0), gaus_group_mdpde(1) },
+        GaussianEstimate{ prior_estimate(0), prior_estimate(1) },
+        GaussianEstimate{ prior_variance(0), prior_variance(1) },
+        alpha_g);
+}
+
+LocalPotentialAnnotationData BuildAtomAnnotationData(
+    const HRLGroupEstimationResult & result,
+    Eigen::Index member_index)
+{
+    const auto beta_vector_posterior{ result.beta_posterior_array.col(member_index) };
+    const auto & sigma_matrix_posterior{
+        result.capital_sigma_posterior_list.at(static_cast<std::size_t>(member_index))
+    };
+    const auto gaus_posterior{
+        GausLinearTransformHelper::BuildGaus3DModelWithVariance(
+            beta_vector_posterior,
+            sigma_matrix_posterior)
+    };
+    const auto & posterior_estimate{ std::get<0>(gaus_posterior) };
+    const auto & posterior_variance{ std::get<1>(gaus_posterior) };
+
+    GaussianPosterior posterior;
+    posterior.estimate = GaussianEstimate{ posterior_estimate(0), posterior_estimate(1) };
+    posterior.variance = GaussianEstimate{ posterior_variance(0), posterior_variance(1) };
+    return LocalPotentialAnnotationData{
+        posterior,
+        static_cast<bool>(result.outlier_flag_array(member_index)),
+        result.statistical_distance_array(member_index)
+    };
+}
+
+LocalPotentialAnnotationData BuildBondAnnotationData(
+    const HRLGroupEstimationResult & result,
+    Eigen::Index member_index)
+{
+    const auto beta_vector_posterior{ result.beta_posterior_array.col(member_index) };
+    const auto & sigma_matrix_posterior{
+        result.capital_sigma_posterior_list.at(static_cast<std::size_t>(member_index))
+    };
+    const auto gaus_posterior{
+        GausLinearTransformHelper::BuildGaus2DModelWithVariance(
+            beta_vector_posterior,
+            sigma_matrix_posterior)
+    };
+    const auto & posterior_estimate{ std::get<0>(gaus_posterior) };
+    const auto & posterior_variance{ std::get<1>(gaus_posterior) };
+
+    GaussianPosterior posterior;
+    posterior.estimate = GaussianEstimate{ posterior_estimate(0), posterior_estimate(1) };
+    posterior.variance = GaussianEstimate{ posterior_variance(0), posterior_variance(1) };
+    return LocalPotentialAnnotationData{
+        posterior,
+        static_cast<bool>(result.outlier_flag_array(member_index)),
+        result.statistical_distance_array(member_index)
     };
 }
 
@@ -241,32 +383,48 @@ void ModelAnalysisEditor::RebuildBondGroupsFromSelection()
     ModelAnalysisData::Of(m_model_object).RebuildBondGroupEntriesFromSelection(m_model_object);
 }
 
-void ModelAnalysisEditor::SetAtomGroupStatistics(
+void ModelAnalysisEditor::ApplyAtomGroupEstimateResult(
     GroupKey group_key,
     const std::string & class_key,
-    const GroupPotentialStatistics & statistics)
+    const HRLGroupEstimationResult & result,
+    double alpha_g)
 {
-    ModelAnalysisData::Of(m_model_object).EnsureAtomGroupEntry(class_key).SetGroupStatistics(
-        group_key,
-        statistics.mean,
-        statistics.mdpde,
-        statistics.prior,
-        statistics.prior_variance,
-        statistics.alpha_g);
+    auto & analysis_data{ ModelAnalysisData::Of(m_model_object) };
+    const auto & group_entry{
+        RequireGroupEntry(analysis_data.FindAtomGroupEntry(class_key), "Atom group entry")
+    };
+    const auto & atom_list{ group_entry.GetMembers(group_key) };
+    ValidateGroupEstimateResult(result, atom_list.size(), "Atom group result");
+
+    for (Eigen::Index i = 0; i < static_cast<Eigen::Index>(atom_list.size()); i++)
+    {
+        auto & atom_entry{ analysis_data.EnsureAtomLocalEntry(*atom_list[static_cast<std::size_t>(i)]) };
+        atom_entry.SetAnnotation(class_key, ToDetailAnnotation(BuildAtomAnnotationData(result, i)));
+    }
+
+    ApplyAtomGroupStatistics(analysis_data, group_key, class_key, result, alpha_g);
 }
 
-void ModelAnalysisEditor::SetBondGroupStatistics(
+void ModelAnalysisEditor::ApplyBondGroupEstimateResult(
     GroupKey group_key,
     const std::string & class_key,
-    const GroupPotentialStatistics & statistics)
+    const HRLGroupEstimationResult & result,
+    double alpha_g)
 {
-    ModelAnalysisData::Of(m_model_object).EnsureBondGroupEntry(class_key).SetGroupStatistics(
-        group_key,
-        statistics.mean,
-        statistics.mdpde,
-        statistics.prior,
-        statistics.prior_variance,
-        statistics.alpha_g);
+    auto & analysis_data{ ModelAnalysisData::Of(m_model_object) };
+    const auto & group_entry{
+        RequireGroupEntry(analysis_data.FindBondGroupEntry(class_key), "Bond group entry")
+    };
+    const auto & bond_list{ group_entry.GetMembers(group_key) };
+    ValidateGroupEstimateResult(result, bond_list.size(), "Bond group result");
+
+    for (Eigen::Index i = 0; i < static_cast<Eigen::Index>(bond_list.size()); i++)
+    {
+        auto & bond_entry{ analysis_data.EnsureBondLocalEntry(*bond_list[static_cast<std::size_t>(i)]) };
+        bond_entry.SetAnnotation(class_key, ToDetailAnnotation(BuildBondAnnotationData(result, i)));
+    }
+
+    ApplyBondGroupStatistics(analysis_data, group_key, class_key, result, alpha_g);
 }
 
 void ModelAnalysisEditor::SetAtomGroupAlphaG(

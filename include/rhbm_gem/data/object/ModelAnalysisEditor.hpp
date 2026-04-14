@@ -24,15 +24,6 @@ struct LocalPotentialAnnotationData
     double statistical_distance{ 0.0 };
 };
 
-struct GroupPotentialStatistics
-{
-    GaussianEstimate mean{};
-    GaussianEstimate mdpde{};
-    GaussianEstimate prior{};
-    GaussianEstimate prior_variance{};
-    double alpha_g{ 0.0 };
-};
-
 class MutableLocalPotentialView
 {
 public:
@@ -81,14 +72,16 @@ public:
     void RebuildAtomGroupsFromSelection();
     void RebuildBondGroupsFromSelection();
 
-    void SetAtomGroupStatistics(
+    void ApplyAtomGroupEstimateResult(
         GroupKey group_key,
         const std::string & class_key,
-        const GroupPotentialStatistics & statistics);
-    void SetBondGroupStatistics(
+        const HRLGroupEstimationResult & result,
+        double alpha_g);
+    void ApplyBondGroupEstimateResult(
         GroupKey group_key,
         const std::string & class_key,
-        const GroupPotentialStatistics & statistics);
+        const HRLGroupEstimationResult & result,
+        double alpha_g);
 
     void SetAtomGroupAlphaG(GroupKey group_key, const std::string & class_key, double alpha_g);
     void SetBondGroupAlphaG(GroupKey group_key, const std::string & class_key, double alpha_g);

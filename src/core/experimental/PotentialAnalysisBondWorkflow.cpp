@@ -268,64 +268,15 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
                 MakePotentialAnalysisExecutionOptions(context.thread_size, true));
             const auto result{ estimator.Estimate(input, context.options.alpha_g) };
 
-            auto gaus_group_mean{
-                GausLinearTransformHelper::BuildGaus2DModel(result.mu_mean)
-            };
-            auto gaus_group_mdpde{
-                GausLinearTransformHelper::BuildGaus2DModel(result.mu_mdpde)
-            };
-            auto gaus_prior{
-                GausLinearTransformHelper::BuildGaus2DModelWithVariance(
-                    result.mu_prior,
-                    result.capital_lambda)
-            };
-            auto prior_estimate{ std::get<0>(gaus_prior) };
-            auto prior_variance{ std::get<1>(gaus_prior) };
-
-            auto count{ 0 };
-            for (const auto & bond : bond_list)
-            {
-                auto bond_entry{ local_entry_map.at(bond) };
-                const auto beta_vector_posterior{
-                    result.beta_posterior_array.col(static_cast<Eigen::Index>(count))
-                };
-                const auto & sigma_matrix_posterior{
-                    result.capital_sigma_posterior_list.at(static_cast<std::size_t>(count))
-                };
-                auto gaus_posterior{
-                    GausLinearTransformHelper::BuildGaus2DModelWithVariance(
-                        beta_vector_posterior,
-                        sigma_matrix_posterior)
-                };
-                auto posterior_estimate{ std::get<0>(gaus_posterior) };
-                auto posterior_variance{ std::get<1>(gaus_posterior) };
-                GaussianPosterior posterior;
-                posterior.estimate = GaussianEstimate{ posterior_estimate(0), posterior_estimate(1) };
-                posterior.variance = GaussianEstimate{ posterior_variance(0), posterior_variance(1) };
-                bond_entry.SetAnnotation(
-                    class_key,
-                    LocalPotentialAnnotationData{
-                        posterior,
-                        static_cast<bool>(result.outlier_flag_array(count)),
-                        result.statistical_distance_array(count)
-                    });
-                count++;
-            }
-
 #ifdef USE_OPENMP
             #pragma omp critical
 #endif
             {
-                analysis.SetBondGroupStatistics(
+                analysis.ApplyBondGroupEstimateResult(
                     group_key,
                     class_key,
-                    GroupPotentialStatistics{
-                        GaussianEstimate{ gaus_group_mean(0), gaus_group_mean(1) },
-                        GaussianEstimate{ gaus_group_mdpde(0), gaus_group_mdpde(1) },
-                        GaussianEstimate{ prior_estimate(0), prior_estimate(1) },
-                        GaussianEstimate{ prior_variance(0), prior_variance(1) },
-                        context.options.alpha_g
-                    });
+                    result,
+                    context.options.alpha_g);
                 key_count++;
                 Logger::ProgressBar(key_count, group_key_size);
             }
