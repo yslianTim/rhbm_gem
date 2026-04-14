@@ -450,7 +450,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(
                 const auto local_entry{ local_entry_map.at(atom) };
                 const auto & dataset{ local_entry.GetDataset() };
                 const auto & fit_result{ local_entry.GetFitResult() };
-                member_datasets.emplace_back(dataset.member_dataset);
+                member_datasets.emplace_back(dataset);
                 member_estimates.emplace_back(HRLMemberLocalEstimate{
                     fit_result.beta_mdpde,
                     fit_result.sigma_square,
@@ -584,7 +584,7 @@ void PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR(
     for (size_t i = 0; i < atom_size; i++)
     {
         const auto local_entry{ local_entry_map.at(atom_list[i]) };
-        const auto & dataset{ local_entry.GetDataset().member_dataset };
+        const auto & dataset{ local_entry.GetDataset() };
         const auto algorithm_options{
             MakePotentialAnalysisExecutionOptions(ThreadSize(), true)
         };
@@ -830,9 +830,7 @@ void PotentialAnalysisCommand::RunDatasetPreparationWorkflow(
                 fit_range_min,
                 fit_range_max)
         };
-        entry.SetDataset(LocalPotentialDataset{
-            HRLDataTransform::BuildMemberDataset(basis_and_response_entries)
-        });
+        entry.SetDataset(HRLDataTransform::BuildMemberDataset(basis_and_response_entries));
 
 #ifdef USE_OPENMP
         #pragma omp critical
@@ -881,7 +879,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
         if (atom->IsMainChainAtom() == false) continue;
         const auto local_entry{ analysis.EnsureAtomLocalPotential(*atom) };
         if (!local_entry.HasDataset() ||
-            local_entry.GetDataset().member_dataset.y.size() < 500) continue;
+            local_entry.GetDataset().y.size() < 500) continue;
         selected_atom_list.emplace_back(atom);
     }
     selected_atom_list.shrink_to_fit();
@@ -965,7 +963,7 @@ double PotentialAnalysisCommand::TrainUniversalAlphaR(
         const auto local_entry{ local_entry_map.at(atom_list[i]) };
         auto error_array{
             HRLAlphaTrainer::EvaluateAlphaR(
-                local_entry.GetDataset().member_dataset,
+                local_entry.GetDataset(),
                 subset_size,
                 alpha_list,
                 MakePotentialAnalysisExecutionOptions(ThreadSize(), true)
@@ -1083,7 +1081,7 @@ void PotentialAnalysisCommand::RunLocalFitting(
     for (size_t i = 0; i < selected_atom_size; i++)
     {
         auto local_entry{ local_entry_list[i] };
-        const auto & dataset{ local_entry.GetDataset().member_dataset };
+        const auto & dataset{ local_entry.GetDataset() };
         const auto result{
             HRLModelAlgorithms::EstimateBetaMDPDE(
                 universal_alpha_r,

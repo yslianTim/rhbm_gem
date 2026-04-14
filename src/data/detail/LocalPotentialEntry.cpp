@@ -29,7 +29,7 @@ void LocalPotentialEntry::SetSamplingEntries(LocalPotentialSampleList value)
 void LocalPotentialEntry::SetDataset(
     HRLMemberDataset dataset)
 {
-    m_dataset = Dataset{ std::move(dataset) };
+    m_dataset = std::move(dataset);
 }
 
 void LocalPotentialEntry::SetFitResult(FitResult value)
@@ -73,7 +73,7 @@ LocalPotentialEntry::Annotations() const
     return m_annotation_map;
 }
 
-const LocalPotentialEntry::Dataset & LocalPotentialEntry::GetDataset() const
+const HRLMemberDataset & LocalPotentialEntry::GetDataset() const
 {
     if (!m_dataset.has_value())
     {

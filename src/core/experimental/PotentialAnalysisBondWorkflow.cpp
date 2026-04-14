@@ -103,9 +103,7 @@ void RunBondSampling(
                     options.fit_range_min,
                     options.fit_range_max)
             };
-            entry.SetDataset(LocalPotentialDataset{
-                HRLDataTransform::BuildMemberDataset(basis_and_response_entries)
-            });
+            entry.SetDataset(HRLDataTransform::BuildMemberDataset(basis_and_response_entries));
             entry.SetAlphaR(options.alpha_r);
             #pragma omp critical
             {
@@ -133,9 +131,7 @@ void RunBondSampling(
                 options.fit_range_min,
                 options.fit_range_max)
         };
-        entry.SetDataset(LocalPotentialDataset{
-            HRLDataTransform::BuildMemberDataset(basis_and_response_entries)
-        });
+        entry.SetDataset(HRLDataTransform::BuildMemberDataset(basis_and_response_entries));
         entry.SetAlphaR(options.alpha_r);
         bond_count++;
         Logger::ProgressPercent(bond_count, bond_size);
@@ -196,7 +192,7 @@ void RunLocalBondFitting(
     for (size_t i = 0; i < selected_bond_size; i++)
     {
         auto local_entry{ local_entry_list[i] };
-        const auto & dataset{ local_entry.GetDataset().member_dataset };
+        const auto & dataset{ local_entry.GetDataset() };
         const auto result{
             HRLModelAlgorithms::EstimateBetaMDPDE(
                 universal_alpha_r,
@@ -276,7 +272,7 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
                 const auto local_entry{ local_entry_map.at(bond) };
                 const auto & dataset{ local_entry.GetDataset() };
                 const auto & fit_result{ local_entry.GetFitResult() };
-                member_datasets.emplace_back(dataset.member_dataset);
+                member_datasets.emplace_back(dataset);
                 member_estimates.emplace_back(HRLMemberLocalEstimate{
                     fit_result.beta_mdpde,
                     fit_result.sigma_square,

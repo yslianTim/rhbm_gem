@@ -17,11 +17,6 @@ class AtomObject;
 class BondObject;
 class ModelObject;
 
-struct LocalPotentialDataset
-{
-    HRLMemberDataset member_dataset;
-};
-
 struct LocalPotentialFitResult
 {
     Eigen::VectorXd beta_ols;
@@ -59,7 +54,7 @@ public:
     MutableLocalPotentialView() = default;
 
     void SetSamplingEntries(LocalPotentialSampleList value);
-    void SetDataset(LocalPotentialDataset value);
+    void SetDataset(HRLMemberDataset value);
     void SetFitResult(LocalPotentialFitResult value);
     void SetEstimates(const LocalPotentialEstimates & value);
     void SetAlphaR(double value);
@@ -67,7 +62,7 @@ public:
 
     bool HasDataset() const;
     bool HasFitResult() const;
-    const LocalPotentialDataset & GetDataset() const;
+    const HRLMemberDataset & GetDataset() const;
     const LocalPotentialFitResult & GetFitResult() const;
     const AtomObject * GetAtomObjectPtr() const { return m_atom_object; }
     const BondObject * GetBondObjectPtr() const { return m_bond_object; }
@@ -77,7 +72,7 @@ private:
     AtomObject * m_atom_object{ nullptr };
     BondObject * m_bond_object{ nullptr };
     void * m_entry_ptr{ nullptr };
-    mutable LocalPotentialDataset m_dataset_cache{};
+    mutable HRLMemberDataset m_dataset_cache{};
     mutable LocalPotentialFitResult m_fit_result_cache{};
 
     explicit MutableLocalPotentialView(AtomObject * atom_object);

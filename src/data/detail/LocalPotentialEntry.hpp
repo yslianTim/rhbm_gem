@@ -24,11 +24,6 @@ struct LocalPotentialAnnotation
 class LocalPotentialEntry
 {
 public:
-    struct Dataset
-    {
-        HRLMemberDataset member_dataset;
-    };
-
     struct FitResult
     {
         Eigen::VectorXd beta_ols;
@@ -44,7 +39,7 @@ private:
     GaussianEstimate m_gaus_estimate_ols;
     GaussianEstimate m_gaus_estimate_mdpde;
     std::unordered_map<std::string, LocalPotentialAnnotation> m_annotation_map;
-    std::optional<Dataset> m_dataset;
+    std::optional<HRLMemberDataset> m_dataset;
     std::optional<FitResult> m_fit_result;
 
 public:
@@ -66,7 +61,7 @@ public:
     bool HasFitResult() const { return m_fit_result.has_value(); }
     const GaussianEstimate & GetEstimateOLS() const { return m_gaus_estimate_ols; }
     const GaussianEstimate & GetEstimateMDPDE() const { return m_gaus_estimate_mdpde; }
-    const Dataset & GetDataset() const;
+    const HRLMemberDataset & GetDataset() const;
     const FitResult & GetFitResult() const;
     LocalPotentialAnnotation * FindAnnotation(const std::string & key);
     const LocalPotentialAnnotation * FindAnnotation(const std::string & key) const;
