@@ -27,6 +27,7 @@ struct SphereDeterministicSamplingConfig
 {
     double radius_bin_size{ 1.0 };
     unsigned int samples_per_radius{ 10 };
+    bool vary_with_radius{ false };
 };
 
 class SphereSamplingProfile
@@ -45,7 +46,8 @@ public:
     static SphereSamplingProfile FibonacciDeterministic(
         SphereDistanceRange range,
         double radius_bin_size,
-        unsigned int samples_per_radius);
+        unsigned int samples_per_radius,
+        bool vary_with_radius = false);
 
     SphereSamplingProfile(const SphereSamplingProfile &) = default;
     SphereSamplingProfile(SphereSamplingProfile &&) noexcept = default;

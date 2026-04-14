@@ -91,6 +91,34 @@ std::vector<double> BuildFibonacciShellRadii(
     return shell_radii;
 }
 
+std::size_t GetFibonacciSampleCountForRadius(
+    double radius,
+    const SphereDistanceRange & distance_range,
+    const SphereDeterministicSamplingConfig & config)
+{
+    constexpr double epsilon{ 1e-9 };
+    //if (std::fabs(radius) <= epsilon)
+    //{
+    //    return 1;
+    //}
+
+    if (!config.vary_with_radius)
+    {
+        return config.samples_per_radius;
+    }
+
+    if (distance_range.max <= epsilon)
+    {
+        return 1;
+    }
+
+    const double normalized_radius{ radius / distance_range.max };
+    const double scaled_sample_count{
+        static_cast<double>(config.samples_per_radius) * normalized_radius * normalized_radius
+    };
+    return std::max<std::size_t>(1, static_cast<std::size_t>(std::llround(scaled_sample_count)));
+}
+
 } // namespace
 
 SphereSamplingProfile::SphereSamplingProfile(
@@ -138,12 +166,17 @@ SphereSamplingProfile SphereSamplingProfile::VolumeUniformRandom(
 SphereSamplingProfile SphereSamplingProfile::FibonacciDeterministic(
     SphereDistanceRange range,
     double radius_bin_size,
-    unsigned int samples_per_radius)
+    unsigned int samples_per_radius,
+    bool vary_with_radius)
 {
     return SphereSamplingProfile(
         SphereSamplingMethod::FibonacciDeterministic,
         range,
-        SphereDeterministicSamplingConfig{ radius_bin_size, samples_per_radius });
+        SphereDeterministicSamplingConfig{
+            radius_bin_size,
+            samples_per_radius,
+            vary_with_radius
+        });
 }
 
 const SphereRandomSamplingConfig & SphereSamplingProfile::GetRandomConfig() const
@@ -189,6 +222,7 @@ void SphereSampler::Print() const
                 << StringHelper::ToStringWithPrecision<double>(config.radius_bin_size, 2)
                 << " Angstrom.\n"
                 << " - Samples per radius: " << config.samples_per_radius << '\n'
+                << " - Vary with radius: " << std::boolalpha << config.vary_with_radius << '\n'
                 << " - Expected point count: " << GetExpectedPointCount();
             break;
         }
@@ -212,12 +246,22 @@ std::size_t SphereSampler::GetExpectedPointCount() const
         case SphereSamplingMethod::FibonacciDeterministic:
         {
             const auto & config{ m_profile.GetFibonacciConfig() };
-            const std::size_t shell_count{
+            const auto shell_radii{
                 BuildFibonacciShellRadii(
                     m_profile.GetDistanceRange(),
-                    config.radius_bin_size).size()
+                    config.radius_bin_size)
             };
-            return shell_count * static_cast<std::size_t>(config.samples_per_radius);
+
+            std::size_t expected_point_count{ 0 };
+            for (const double radius : shell_radii)
+            {
+                expected_point_count += GetFibonacciSampleCountForRadius(
+                    radius,
+                    m_profile.GetDistanceRange(),
+                    config);
+            }
+
+            return expected_point_count;
         }
     }
 
@@ -310,7 +354,13 @@ void SphereSampler::GenerateFibonacciDeterministic(
 {
     const auto shell_radii{ BuildFibonacciShellRadii(distance_range, config.radius_bin_size) };
     out.clear();
-    out.reserve(shell_radii.size() * static_cast<std::size_t>(config.samples_per_radius));
+
+    std::size_t total_point_count{ 0 };
+    for (const double radius : shell_radii)
+    {
+        total_point_count += GetFibonacciSampleCountForRadius(radius, distance_range, config);
+    }
+    out.reserve(total_point_count);
 
     const double golden_angle{ Constants::pi * (3.0 - std::sqrt(5.0)) };
 
@@ -318,11 +368,15 @@ void SphereSampler::GenerateFibonacciDeterministic(
     // Each shell uses the same deterministic Fibonacci sphere pattern and reports its shell radius.
     for (const double radius : shell_radii)
     {
-        for (unsigned int i = 0; i < config.samples_per_radius; i++)
+        const std::size_t shell_sample_count{
+            GetFibonacciSampleCountForRadius(radius, distance_range, config)
+        };
+
+        for (std::size_t i = 0; i < shell_sample_count; i++)
         {
             const double z{
                 1.0 - 2.0 * (static_cast<double>(i) + 0.5)
-                    / static_cast<double>(config.samples_per_radius)
+                    / static_cast<double>(shell_sample_count)
             };
             const double radial_xy{ std::sqrt(std::max(0.0, 1.0 - z * z)) };
             const double theta{ golden_angle * static_cast<double>(i) };

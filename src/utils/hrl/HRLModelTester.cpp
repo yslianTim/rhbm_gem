@@ -183,8 +183,9 @@ LocalPotentialSampleList HRLModelTester::BuildRandomGausSamplingEntryWithNeighbo
         SphereSamplingProfile::FibonacciDeterministic(
             SphereDistanceRange{ radius_min, radius_max },
             0.1,
-            static_cast<unsigned int>(sampling_entry_size))
+            static_cast<unsigned int>(sampling_entry_size), false)
     );
+    //sampler.Print();
     const auto sampling_points{ sampler.GenerateSamplingPoints({ 0.0f, 0.0f, 0.0f }) };
     const auto filtered_sampling_points{
         rhbm_gem::SelectSamplingPoint(sampling_points, neighbor_center_list, angle)
@@ -531,7 +532,8 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
 
     const size_t subset_size_alpha_r{ 5 };
     std::vector<double> train_alpha_r_list{
-        0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0
+        0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
+        1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0
     };
     local_alpha_r_list.emplace_back(0.0);
 
