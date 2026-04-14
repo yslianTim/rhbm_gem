@@ -1057,30 +1057,28 @@ double PotentialAnalysisCommand::TrainUniversalAlphaG(
 
 void PotentialAnalysisCommand::RunLocalFitting(
     ModelObject & model_object,
-    double universal_alpha_r)
+    double alpha_r)
 {
-    ScopeTimer timer("PotentialAnalysisCommand::RunLocalAtomFitting");
+    ScopeTimer timer("PotentialAnalysisCommand::RunLocalFitting");
     auto thread_size{ ThreadSize() };
     std::atomic<size_t> atom_count{ 0 };
     const auto & selected_atom_list{ model_object.GetSelectedAtoms() };
     const auto selected_atom_size{ selected_atom_list.size() };
     auto local_entry_list{ BuildSelectedAtomLocalEntryViews(model_object) };
-    for (auto & local_entry : local_entry_list)
-    {
-        local_entry.SetAlphaR(universal_alpha_r);
-    }
     Logger::Log(
         LogLevel::Info,
         "Run Local atom fitting for " + std::to_string(selected_atom_size) + " atoms.");
+
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
 #endif
     for (size_t i = 0; i < selected_atom_size; i++)
     {
         auto local_entry{ local_entry_list[i] };
+        local_entry.SetAlphaR(alpha_r);
         const auto result{
             HRLModelAlgorithms::EstimateBetaMDPDE(
-                universal_alpha_r,
+                alpha_r,
                 local_entry.GetDataset(),
                 MakePotentialAnalysisExecutionOptions(thread_size, true))
         };
