@@ -17,12 +17,6 @@ class AtomObject;
 class BondObject;
 class ModelObject;
 
-struct LocalPotentialEstimates
-{
-    GaussianEstimate ols{};
-    GaussianEstimate mdpde{};
-};
-
 struct LocalPotentialAnnotationData
 {
     GaussianPosterior posterior{};
@@ -47,7 +41,6 @@ public:
     void SetSamplingEntries(LocalPotentialSampleList value);
     void SetDataset(HRLMemberDataset value);
     void SetFitResult(HRLBetaEstimateResult value);
-    void SetEstimates(const LocalPotentialEstimates & value);
     void SetAlphaR(double value);
     void SetAnnotation(const std::string & key, const LocalPotentialAnnotationData & value);
 

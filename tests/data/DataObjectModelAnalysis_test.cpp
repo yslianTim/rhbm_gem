@@ -9,6 +9,7 @@
 
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/AtomSelector.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
@@ -186,6 +187,35 @@ TEST(DataObjectModelAnalysisTest, LocalPotentialEntryPreservesFitResultStatus)
 
     ASSERT_TRUE(entry.HasFitResult());
     EXPECT_EQ(HRLEstimationStatus::NUMERICAL_FALLBACK, entry.GetFitResult().status);
+}
+
+TEST(DataObjectModelAnalysisTest, MutableLocalPotentialViewSetFitResultUpdatesFitAndEstimates)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto * atom{ model->GetAtomList().at(0).get() };
+    auto analysis{ model->EditAnalysis() };
+    auto entry{ analysis.EnsureAtomLocalPotential(*atom) };
+
+    LocalPotentialSampleList sampling_entries{
+        LocalPotentialSample{ 0.0f, 6.0f, 1.0f },
+        LocalPotentialSample{ 0.5f, 4.0f, 1.0f },
+        LocalPotentialSample{ 0.9f, 2.0f, 1.0f }
+    };
+    entry.SetSamplingEntries(sampling_entries);
+
+    HRLBetaEstimateResult fit_result;
+    fit_result.status = HRLEstimationStatus::SUCCESS;
+    fit_result.beta_ols = Eigen::VectorXd::Zero(3);
+    fit_result.beta_mdpde = Eigen::VectorXd::Zero(3);
+
+    entry.SetFitResult(fit_result);
+
+    ASSERT_TRUE(entry.HasFitResult());
+    EXPECT_EQ(HRLEstimationStatus::SUCCESS, entry.GetFitResult().status);
+    EXPECT_TRUE(entry.GetFitResult().beta_ols.isApprox(Eigen::VectorXd::Zero(3), 1e-12));
+    EXPECT_TRUE(entry.GetFitResult().beta_mdpde.isApprox(Eigen::VectorXd::Zero(3), 1e-12));
+    EXPECT_DOUBLE_EQ(0.0, rg::LocalPotentialView::RequireFor(*atom).GetEstimateOLS().width);
+    EXPECT_DOUBLE_EQ(0.0, rg::LocalPotentialView::RequireFor(*atom).GetEstimateMDPDE().width);
 }
 
 TEST(DataObjectModelAnalysisTest, RebuildAtomGroupEntriesFromSelectionTracksOnlySelectedAtoms)

@@ -7,6 +7,7 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
 
 #include <stdexcept>
 #include <string>
@@ -14,6 +15,12 @@
 namespace rhbm_gem {
 
 namespace {
+
+struct LocalPotentialEstimates
+{
+    GaussianEstimate ols{};
+    GaussianEstimate mdpde{};
+};
 
 ModelObject * OwnerOf(const MutableLocalPotentialView & view)
 {
@@ -95,6 +102,27 @@ LocalPotentialAnnotation ToDetailAnnotation(const LocalPotentialAnnotationData &
     };
 }
 
+LocalPotentialEstimates BuildLocalPotentialEstimates(
+    const LocalPotentialEntry & entry,
+    const HRLBetaEstimateResult & value)
+{
+    Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
+    model_par_init(0) = entry.GetMomentZeroEstimate();
+    model_par_init(1) = entry.GetMomentTwoEstimate();
+
+    const auto gaus_ols{
+        GausLinearTransformHelper::BuildGaus3DModel(value.beta_ols, model_par_init)
+    };
+    const auto gaus_mdpde{
+        GausLinearTransformHelper::BuildGaus3DModel(value.beta_mdpde, model_par_init)
+    };
+
+    return LocalPotentialEstimates{
+        GaussianEstimate{ gaus_ols(0), gaus_ols(1) },
+        GaussianEstimate{ gaus_mdpde(0), gaus_mdpde(1) }
+    };
+}
+
 } // namespace
 
 MutableLocalPotentialView::MutableLocalPotentialView(AtomObject * atom_object) :
@@ -119,14 +147,12 @@ void MutableLocalPotentialView::SetDataset(HRLMemberDataset value)
 
 void MutableLocalPotentialView::SetFitResult(HRLBetaEstimateResult value)
 {
-    EnsureResolvedLocalEntry(*this).SetFitResult(std::move(value));
-}
-
-void MutableLocalPotentialView::SetEstimates(const LocalPotentialEstimates & value)
-{
     auto & entry{ EnsureResolvedLocalEntry(*this) };
-    entry.SetEstimateOLS(value.ols);
-    entry.SetEstimateMDPDE(value.mdpde);
+    const auto estimates{ BuildLocalPotentialEstimates(entry, value) };
+
+    entry.SetFitResult(std::move(value));
+    entry.SetEstimateOLS(estimates.ols);
+    entry.SetEstimateMDPDE(estimates.mdpde);
 }
 
 void MutableLocalPotentialView::SetAlphaR(double value)

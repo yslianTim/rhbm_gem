@@ -202,22 +202,6 @@ void RunLocalBondFitting(
 
         local_entry.SetFitResult(result);
 
-        Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
-        model_par_init(0) =
-            LocalPotentialView::RequireFor(*selected_bond_list[i]).GetMomentZeroEstimate();
-        model_par_init(1) =
-            LocalPotentialView::RequireFor(*selected_bond_list[i]).GetMomentTwoEstimate();
-        auto gaus_ols{
-            GausLinearTransformHelper::BuildGaus3DModel(result.beta_ols, model_par_init)
-        };
-        auto gaus_mdpde{
-            GausLinearTransformHelper::BuildGaus3DModel(result.beta_mdpde, model_par_init)
-        };
-        local_entry.SetEstimates(LocalPotentialEstimates{
-            GaussianEstimate{ gaus_ols(0), gaus_ols(1) },
-            GaussianEstimate{ gaus_mdpde(0), gaus_mdpde(1) }
-        });
-
 #ifdef USE_OPENMP
         #pragma omp critical
 #endif
