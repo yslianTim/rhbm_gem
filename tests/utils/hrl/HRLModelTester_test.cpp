@@ -17,6 +17,7 @@ public:
     {
         return tester.BuildRandomGausSamplingEntryWithNeighborhood(
             sampling_entry_size,
+            0.0, 1.0,
             gaus_par,
             neighbor_distance,
             neighbor_count,
@@ -96,6 +97,7 @@ TEST(HRLModelTesterTest, PublicNeighborhoodWorkflowAcceptsExplicitAngle)
     std::vector<Eigen::VectorXd> residual_mean_mdpde_list;
     std::vector<Eigen::VectorXd> residual_sigma_ols_list;
     std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
+    double training_alpha_r_average{ 0.0 };
 
     const auto success{
         tester.RunBetaMDPDEWithNeighborhoodTest(
@@ -105,6 +107,7 @@ TEST(HRLModelTesterTest, PublicNeighborhoodWorkflowAcceptsExplicitAngle)
             residual_sigma_ols_list,
             residual_sigma_mdpde_list,
             MakeVector({ 1.0, 0.5, 0.0 }),
+            training_alpha_r_average,
             4,
             0.0,
             2.0,

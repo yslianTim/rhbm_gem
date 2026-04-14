@@ -136,7 +136,8 @@ void PrintDataOutlierResult(
     const std::vector<Eigen::MatrixXd> & sigma_matrix_ols_list,
     const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list,
     const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list,
-    bool is_neighbor_distance = false);
+    bool is_neighbor_distance = false
+);
 
 void PrintMemberOutlierResult(
     const HRLModelTestExecutionContext & options,
@@ -147,7 +148,24 @@ void PrintMemberOutlierResult(
     const std::vector<Eigen::MatrixXd> & mean_matrix_train_list,
     const std::vector<Eigen::MatrixXd> & sigma_matrix_median_list,
     const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list,
-    const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list);
+    const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list
+);
+
+void PrintAtomSamplingDataSummary(
+    const HRLModelTestExecutionContext & options,
+    const std::string & name,
+    const std::vector<LocalPotentialSampleList> & sampling_entries_list,
+    const std::vector<double> & distance_list
+);
+
+#ifdef HAVE_ROOT
+std::unique_ptr<TGraphErrors> CreateDistanceToResponseGraph(
+    const LocalPotentialSampleList & sampling_entries);
+
+std::unique_ptr<TH2D> CreateDistanceToResponseHistogram(
+    const LocalPotentialSampleList & sampling_entries,
+    int x_bin_size, int y_bin_size = 500);
+#endif
 
 void RunSimulationTestOnBenchMark(const HRLModelTestExecutionContext & options)
 {
@@ -541,13 +559,14 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
     model_par_prior(1) = 0.5;
     model_par_prior(2) = 0.1;
 
-    auto replica_size{ 100 };
-    auto sampling_entry_size{ 10 };
+    auto replica_size{ 10 };
+    auto sampling_entry_size{ 50 };
     auto tester{ std::make_unique<HRLModelTester>(gaus_par_size, linear_basis_size, replica_size) };
     tester->SetFittingRange(options.options.fit_range_min, options.options.fit_range_max);
 
     std::vector<double> alpha_r_list{ 0.1 };
     std::vector<double> error_list{ 0.0, 0.05, 0.1 };
+    //std::vector<double> error_list{ 0.0 };
     std::vector<Eigen::MatrixXd> mean_matrix_ols_list;
     std::vector<Eigen::MatrixXd> mean_matrix_mdpde_list;
     std::vector<Eigen::MatrixXd> mean_matrix_train_list;
@@ -555,6 +574,8 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
     std::vector<Eigen::MatrixXd> sigma_matrix_mdpde_list;
     std::vector<Eigen::MatrixXd> sigma_matrix_train_list;
     
+    size_t neighbor_count{ 3 };
+    auto rejected_angle{ 45.0 };
     auto distance_size{ 16 };
     auto distance_step_size{ 0.1 };
     std::vector<double> distance_list(static_cast<size_t>(distance_size));
@@ -563,6 +584,7 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
         distance_list[i] = 2.5 - static_cast<double>(i) * distance_step_size;
     }
 
+    bool is_print_sampling_summary{ true };
     for (auto error_sigma : error_list)
     {
         Eigen::MatrixXd mean_matrix_ols{ Eigen::MatrixXd::Zero(gaus_par_size, distance_size) };
@@ -571,6 +593,9 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
         Eigen::MatrixXd sigma_matrix_ols{ Eigen::MatrixXd::Zero(gaus_par_size, distance_size) };
         Eigen::MatrixXd sigma_matrix_mdpde{ Eigen::MatrixXd::Zero(gaus_par_size, distance_size) };
         Eigen::MatrixXd sigma_matrix_train{ Eigen::MatrixXd::Zero(gaus_par_size, distance_size) };
+        std::vector<LocalPotentialSampleList> sampling_entries_list;
+        sampling_entries_list.reserve(static_cast<size_t>(distance_size));
+        double training_alpha_r_average{ 0.0 };
         for (int i = 0; i < distance_size; i++)
         {
             std::vector<Eigen::VectorXd> residual_mean_ols_list;
@@ -581,9 +606,19 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
                 alpha_r_list,
                 residual_mean_ols_list, residual_mean_mdpde_list,
                 residual_sigma_ols_list, residual_sigma_mdpde_list,
-                model_par_prior, sampling_entry_size, error_sigma,
-                distance_list[static_cast<size_t>(i)], options.thread_size,
-                30.0
+                model_par_prior, training_alpha_r_average,
+                sampling_entry_size, error_sigma,
+                distance_list[static_cast<size_t>(i)],
+                neighbor_count,
+                options.thread_size,
+                rejected_angle
+            );
+
+            sampling_entries_list.emplace_back(
+                tester->RunDataEntryWithNeighborhoodTest(
+                    model_par_prior, sampling_entry_size, 0.0, 4.0,
+                    distance_list[static_cast<size_t>(i)],
+                    neighbor_count, rejected_angle)
             );
 
             mean_matrix_ols.col(i) = residual_mean_ols_list.front();
@@ -598,8 +633,8 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
                 + " , OLS: " + std::to_string(mean_matrix_ols.col(i)(0)) + " +- " + std::to_string(sigma_matrix_ols.col(i)(0))
                 + " , MDPDE: " + std::to_string(mean_matrix_mdpde.col(i)(0)) + " +- " + std::to_string(sigma_matrix_mdpde.col(i)(0))
                 + " , Train: " + std::to_string(mean_matrix_train.col(i)(0)) + " +- " + std::to_string(sigma_matrix_train.col(i)(0))
+                + " (Alpha-R = " + std::to_string(training_alpha_r_average) + ")"
             );
-
         }
         mean_matrix_ols_list.emplace_back(mean_matrix_ols);
         mean_matrix_mdpde_list.emplace_back(mean_matrix_mdpde);
@@ -607,6 +642,16 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
         sigma_matrix_ols_list.emplace_back(sigma_matrix_ols);
         sigma_matrix_mdpde_list.emplace_back(sigma_matrix_mdpde);
         sigma_matrix_train_list.emplace_back(sigma_matrix_train);
+
+        if (!is_print_sampling_summary)
+        {
+            detail::PrintAtomSamplingDataSummary(
+                options,
+                "neighbor_atom_sampling_entries.pdf",
+                sampling_entries_list, distance_list
+            );
+            is_print_sampling_summary = true;
+        }
     }
 
     PrintDataOutlierResult(
@@ -1109,6 +1154,124 @@ void PrintMemberOutlierResult(
     Logger::Log(LogLevel::Info, " Output file: " + file_path.string());
     #endif
 }
+
+void PrintAtomSamplingDataSummary(
+    const HRLModelTestExecutionContext & options,
+    const std::string & name,
+    const std::vector<LocalPotentialSampleList> & sampling_entries_list,
+    const std::vector<double> & distance_list
+)
+{
+    auto file_path{ BuildOutputPath(options, name) };
+    Logger::Log(LogLevel::Info, " HRLModelTestCommand::PrintAtomSamplingDataSummary");
+
+    #ifdef HAVE_ROOT
+
+    gStyle->SetLineScalePS(2.0);
+    gStyle->SetGridColor(kGray);
+
+    auto canvas{ ROOTHelper::CreateCanvas("test","", 1000, 750) };
+    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
+    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+    const int pad_size{ 1 };
+
+    std::unique_ptr<TPad> pad[pad_size];
+    pad[0] = ROOTHelper::CreatePad("pad0","", 0.00, 0.00, 1.00, 1.00); // The left pad
+    
+    size_t count{ 0 };
+    for (auto sampling_entries : sampling_entries_list)
+    {
+        auto neighbor_distance{ distance_list.at(count) };
+        auto data_graph{ detail::CreateDistanceToResponseGraph(sampling_entries) };
+        auto data_hist{ detail::CreateDistanceToResponseHistogram(sampling_entries, 41) };
+
+        canvas->cd();
+        for (int i = 0; i < pad_size; i++)
+        {
+            ROOTHelper::SetPadDefaultStyle(pad[i].get());
+            pad[i]->Draw();
+        }
+
+        pad[0]->cd();
+        ROOTHelper::SetPadMarginInCanvas(gPad, 0.16, 0.05, 0.15, 0.05);
+        auto frame{ ROOTHelper::CreateHist2D("hist_0","", 100, 0.0, 1.0, 100, 0.0, 1.0) };
+        ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+        ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+        ROOTHelper::SetAxisTitleAttribute(frame->GetXaxis(), 50.0f, 0.9f);
+        ROOTHelper::SetAxisLabelAttribute(frame->GetXaxis(), 50.0f, 0.005f, 133);
+        ROOTHelper::SetAxisTickAttribute(frame->GetXaxis(), 0.06f, 505);
+        ROOTHelper::SetAxisTitleAttribute(frame->GetYaxis(), 60.0f, 1.25f);
+        ROOTHelper::SetAxisLabelAttribute(frame->GetYaxis(), 50.0f, 0.01f, 133);
+        ROOTHelper::SetAxisTickAttribute(frame->GetYaxis(), 0.03f, 506);
+        ROOTHelper::SetLineAttribute(frame.get(), 1, 0);
+        frame->SetStats(0);
+        frame->GetYaxis()->CenterTitle();
+        frame->GetXaxis()->SetTitle("Radial Distance #[]{#AA}");
+        frame->GetYaxis()->SetTitle("Response");
+        auto x_min{ 0.00 };
+        auto x_max{ 4.00 };
+        auto y_min{ 0.00 };
+        auto y_max{ 1.00 };
+        frame->GetXaxis()->SetLimits(x_min, x_max);
+        frame->GetYaxis()->SetLimits(y_min, y_max);
+        frame->SetStats(0);
+        frame->Draw();
+        ROOTHelper::SetMarkerAttribute(data_graph.get(), 20, 0.8f, kAzure-7, 0.5f);
+        data_graph->Draw("P");
+
+        data_hist->SetStats(0);
+        data_hist->SetBarWidth(1.0);
+        ROOTHelper::SetFillAttribute(data_hist.get(), 1001, kGray, 0.3f);
+        ROOTHelper::SetLineAttribute(data_hist.get(), 1, 2, kGray+2);
+        data_hist->Draw("CANDLE2 SAME");
+
+        auto component_text{ ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
+        ROOTHelper::SetPaveTextMarginInCanvas(gPad, component_text.get(), 0.25, 0.02, 0.85, 0.02);
+        ROOTHelper::SetPaveTextDefaultStyle(component_text.get());
+        ROOTHelper::SetPaveAttribute(component_text.get(), 0, 0.1);
+        ROOTHelper::SetFillAttribute(component_text.get(), 1001, kAzure-7);
+        ROOTHelper::SetTextAttribute(component_text.get(), 75.0f, 103, 22, 0.0, kYellow-10);
+        component_text->AddText(Form("Distance = %.1f #AA", neighbor_distance));
+        component_text->Draw();
+
+        count++;
+        ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
+    }
+
+    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    #endif
+}
+
+#ifdef HAVE_ROOT
+std::unique_ptr<TGraphErrors> CreateDistanceToResponseGraph(
+    const LocalPotentialSampleList & sampling_entries)
+{
+    auto graph{ ROOTHelper::CreateGraphErrors() };
+    auto count{ 0 };
+    for (const auto & sample : sampling_entries)
+    {
+        graph->SetPoint(count, sample.distance, sample.response);
+        count++;
+    }
+    return graph;
+}
+
+std::unique_ptr<TH2D> CreateDistanceToResponseHistogram(
+    const LocalPotentialSampleList & sampling_entries, int x_bin_size, int y_bin_size)
+{
+    auto hist{
+        ROOTHelper::CreateHist2D(
+            "hist_distance_response", "Distance vs Response",
+            x_bin_size, -0.05, 4.05,
+            y_bin_size, 0.0, 1.0)
+    };
+    for (const auto & sample : sampling_entries)
+    {
+        hist->Fill(sample.distance, sample.response);
+    }
+    return hist;
+}
+#endif
 
 bool RunHRLModelTestWorkflow(const HRLModelTestExecutionContext & options)
 {

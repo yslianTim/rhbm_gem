@@ -22,6 +22,15 @@ public:
     ~HRLModelTester() = default;
 
     void SetFittingRange(double x_min, double x_max) { m_x_min = x_min; m_x_max = x_max; }
+    LocalPotentialSampleList RunDataEntryWithNeighborhoodTest(
+        const Eigen::VectorXd & gaus_true,
+        int sampling_entry_size,
+        double radius_min = 0.0,
+        double radius_max = 1.0,
+        double neighbor_distance = 2.0,
+        size_t neighbor_count = 1,
+        double angle = 0.0
+    );
     bool RunBetaMDPDETest(
         const std::vector<double> & alpha_r_list,
         std::vector<Eigen::VectorXd> & residual_mean_ols_list,
@@ -55,9 +64,11 @@ public:
         std::vector<Eigen::VectorXd> & residual_sigma_ols_list,
         std::vector<Eigen::VectorXd> & residual_sigma_mdpde_list,
         const Eigen::VectorXd & gaus_true,
+        double & training_alpha_r_average,
         int sampling_entry_size,
         double data_error_sigma = 1.0,
         double neighbor_distance = 2.0,
+        size_t neighbor_count = 1,
         int thread_size = 1,
         double angle = 0.0
     );
@@ -82,6 +93,8 @@ private:
     );
     LocalPotentialSampleList BuildRandomGausSamplingEntryWithNeighborhood(
         size_t sampling_entry_size,
+        double radius_min,
+        double radius_max,
         const Eigen::VectorXd & gaus_par,
         double neighbor_distance = 2.0,
         size_t neighbor_count = 1,
@@ -98,6 +111,7 @@ private:
         const Eigen::VectorXd & gaus_par,
         double error_sigma,
         double neighbor_distance = 2.0,
+        size_t neighbor_count = 1,
         double angle = 0.0
     );
     Eigen::VectorXd CalculateNormalizedResidual(

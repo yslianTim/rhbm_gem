@@ -120,6 +120,8 @@ LocalPotentialSampleList HRLModelTester::BuildRandomGausSamplingEntry(
 
 LocalPotentialSampleList HRLModelTester::BuildRandomGausSamplingEntryWithNeighborhood(
     size_t sampling_entry_size,
+    double radius_min,
+    double radius_max,
     const Eigen::VectorXd & gaus_par,
     double neighbor_distance,
     size_t neighbor_count,
@@ -176,10 +178,10 @@ LocalPotentialSampleList HRLModelTester::BuildRandomGausSamplingEntryWithNeighbo
     SphereSampler sampler;
     sampler.SetSamplingProfile(
         //SphereSamplingProfile::RadiusUniformRandom(
-        //    SphereDistanceRange{ m_x_min, m_x_max },
+        //    SphereDistanceRange{ radius_min, radius_max },
         //    static_cast<unsigned int>(sampling_entry_size))
         SphereSamplingProfile::FibonacciDeterministic(
-            SphereDistanceRange{ m_x_min, m_x_max },
+            SphereDistanceRange{ radius_min, radius_max },
             0.1,
             static_cast<unsigned int>(sampling_entry_size))
     );
@@ -238,11 +240,15 @@ std::vector<Eigen::VectorXd> HRLModelTester::BuildRandomLinearDataEntryWithNeigh
     const Eigen::VectorXd & gaus_par,
     double error_sigma,
     double neighbor_distance,
+    size_t neighbor_count,
     double angle)
 {
     auto sampling_entries{
         BuildRandomGausSamplingEntryWithNeighborhood(
-            static_cast<size_t>(sampling_entry_size), gaus_par, neighbor_distance, 1, angle)
+            static_cast<size_t>(sampling_entry_size),
+            m_x_min, m_x_max,
+            gaus_par,
+            neighbor_distance, neighbor_count, angle)
     };
     auto linear_data_entry_list{
         GausLinearTransformHelper::MapValueTransform(sampling_entries, m_x_min, m_x_max)
@@ -256,6 +262,26 @@ std::vector<Eigen::VectorXd> HRLModelTester::BuildRandomLinearDataEntryWithNeigh
         data_entry(m_linear_basis_size) += dist_error(m_generator);
     }
     return linear_data_entry_list;
+}
+
+LocalPotentialSampleList HRLModelTester::RunDataEntryWithNeighborhoodTest(
+    const Eigen::VectorXd & gaus_true,
+    int sampling_entry_size,
+    double radius_min,
+    double radius_max,
+    double neighbor_distance,
+    size_t neighbor_count,
+    double angle)
+{
+    auto sampling_entries{
+        BuildRandomGausSamplingEntryWithNeighborhood(
+            static_cast<size_t>(sampling_entry_size),
+            radius_min,
+            radius_max,
+            gaus_true,
+            neighbor_distance, neighbor_count, angle)
+    };
+    return sampling_entries;
 }
 
 bool HRLModelTester::RunBetaMDPDETest(
@@ -290,7 +316,10 @@ bool HRLModelTester::RunBetaMDPDETest(
     residual_sigma_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
 
     const size_t subset_size_alpha_r{ 5 };
-    std::vector<double> train_alpha_r_list{ 0.0, 0.1, 0.2, 0.3, 0.4, 0.5 };
+    std::vector<double> train_alpha_r_list{
+        0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
+        1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0
+    };
     local_alpha_r_list.emplace_back(0.0);
 
 #ifdef USE_OPENMP
@@ -473,9 +502,11 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
     std::vector<Eigen::VectorXd> & residual_sigma_ols_list,
     std::vector<Eigen::VectorXd> & residual_sigma_mdpde_list,
     const Eigen::VectorXd & gaus_true,
+    double & training_alpha_r_average,
     int sampling_entry_size,
     double data_error_sigma,
     double neighbor_distance,
+    size_t neighbor_count,
     int thread_size,
     double angle)
 {
@@ -499,8 +530,12 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
     residual_sigma_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
 
     const size_t subset_size_alpha_r{ 5 };
-    std::vector<double> train_alpha_r_list{ 0.0, 0.1, 0.2, 0.3, 0.4, 0.5 };
+    std::vector<double> train_alpha_r_list{
+        0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0
+    };
     local_alpha_r_list.emplace_back(0.0);
+
+    training_alpha_r_average = 0.0;
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
@@ -513,6 +548,7 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
                 gaus_true,
                 data_error_sigma,
                 neighbor_distance,
+                neighbor_count,
                 angle
             )
         };
@@ -553,7 +589,12 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
             residual_matrix_ols_list.at(j).col(i) = CalculateNormalizedResidual(gaus_ols, gaus_true);
             residual_matrix_mdpde_list.at(j).col(i) = CalculateNormalizedResidual(gaus_mdpde, gaus_true);
         }
+        #pragma omp critical
+        {
+            training_alpha_r_average += alpha_r_train;
+        }
     }
+    training_alpha_r_average /= m_replica_size;
 
     for (size_t j = 0; j < alpha_size; j++)
     {
