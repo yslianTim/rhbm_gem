@@ -365,9 +365,16 @@ bool PotentialAnalysisCommand::BuildDataObject(const PotentialAnalysisRequest & 
         }
         if (request.simulation_flag)
         {
-            UpdateModelObjectForSimulation(
-                *m_model_object,
-                request.simulated_map_resolution);
+            if (request.simulated_map_resolution == 0.0)
+            {
+                Logger::Log(LogLevel::Warning,
+                    "[Warning] The resolution of input simulated map hasn't been set.\n"
+                    "          Please give the corresponding resolution value for this map.\n"
+                    "          (-r, --sim-resolution)");
+            }
+            m_model_object->SetEmdID("Simulation");
+            m_model_object->SetResolution(request.simulated_map_resolution);
+            m_model_object->SetResolutionMethod("Blurring Width");
         }
     }
     catch (const std::exception & e)
@@ -409,22 +416,6 @@ void PotentialAnalysisCommand::RunFittingWorkflow(
     
     RunAtomPotentialFitting(model_object, request.training_alpha_flag, request.alpha_g);
     RunExperimentalBondWorkflowIfEnabled(model_object, map_object, request);
-}
-
-void PotentialAnalysisCommand::UpdateModelObjectForSimulation(
-    ModelObject & model_object,
-    double simulated_map_resolution)
-{
-    if (simulated_map_resolution == 0.0)
-    {
-        Logger::Log(LogLevel::Warning,
-            "[Warning] The resolution of input simulated map hasn't been set.\n"
-            "          Please give the corresponding resolution value for this map.\n"
-            "          (-r, --sim-resolution)");
-    }
-    model_object.SetEmdID("Simulation");
-    model_object.SetResolution(simulated_map_resolution);
-    model_object.SetResolutionMethod("Blurring Width");
 }
 
 void PotentialAnalysisCommand::RunMapObjectPreprocessing(MapObject & map_object)
@@ -603,11 +594,11 @@ void PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR(
         for (int j = 0; j < alpha_size; j++)
         {
             auto alpha_r{ alpha_list[static_cast<size_t>(j)] };
-            const auto result = HRLModelAlgorithms::EstimateBetaMDPDE(
+            const auto result{ HRLModelAlgorithms::EstimateBetaMDPDE(
                 alpha_r,
                 local_entry.GetDataset(),
-                algorithm_options
-            );
+                algorithm_options)
+            };
             Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
             auto gaus_ols{
                 GausLinearTransformHelper::BuildGaus3DModel(result.beta_ols, model_par_init)
@@ -703,8 +694,9 @@ void PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG(
         for (int j = 0; j < alpha_size; j++)
         {
             auto alpha_g{ alpha_list[static_cast<size_t>(j)] };
-            const auto result =
-                HRLModelAlgorithms::EstimateMuMDPDE(alpha_g, beta_matrix, algorithm_options);
+            const auto result{
+                HRLModelAlgorithms::EstimateMuMDPDE(alpha_g, beta_matrix, algorithm_options)
+            };
             Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
             auto gaus_mean{
                 GausLinearTransformHelper::BuildGaus3DModel(result.mu_mean, model_par_init)

@@ -32,9 +32,6 @@ private:
         ModelObject & model_object,
         MapObject & map_object,
         const PotentialAnalysisRequest & request);
-    void UpdateModelObjectForSimulation(
-        ModelObject & model_object,
-        double simulated_map_resolution);
     void RunMapObjectPreprocessing(MapObject & map_object);
     void RunModelObjectPreprocessing(ModelObject & model_object, bool asymmetry_flag);
     void RunSamplingWorkflow(
