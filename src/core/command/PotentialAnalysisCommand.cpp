@@ -316,7 +316,8 @@ bool PotentialAnalysisCommand::ExecuteImpl()
         map_object, model_object,
         request.sampling_size, request.sampling_range_min, request.sampling_range_max);
     RunDatasetPreparationWorkflow(model_object, request.fit_range_min, request.fit_range_max);
-    RunFittingWorkflow(model_object, map_object, request);
+    RunAtomPotentialFittingWorkflow(model_object, request);
+    RunExperimentalBondWorkflowIfEnabled(model_object, map_object, request);
     SavePreparedModel(model_object, request.saved_key_tag);
     return true;
 }
@@ -400,24 +401,6 @@ PotentialAnalysisCommand::BuildSelectedAtomLocalEntryViews(ModelObject & model_o
     return local_entry_list;
 }
 
-void PotentialAnalysisCommand::RunFittingWorkflow(
-    ModelObject & model_object,
-    MapObject & map_object,
-    const PotentialAnalysisRequest & request)
-{
-    if (request.training_alpha_flag)
-    {
-        RunAtomAlphaTraining(model_object, request);
-    }
-    else
-    {
-        RunLocalFitting(model_object, request.alpha_r);
-    }
-    
-    RunAtomPotentialFitting(model_object, request.training_alpha_flag, request.alpha_g);
-    RunExperimentalBondWorkflowIfEnabled(model_object, map_object, request);
-}
-
 void PotentialAnalysisCommand::RunMapObjectPreprocessing(MapObject & map_object)
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunMapObjectPreprocessing");
@@ -465,12 +448,20 @@ void PotentialAnalysisCommand::RunModelObjectPreprocessing(
     }
 }
 
-void PotentialAnalysisCommand::RunAtomPotentialFitting(
+void PotentialAnalysisCommand::RunAtomPotentialFittingWorkflow(
     ModelObject & model_object,
-    bool training_alpha_flag,
-    double fallback_alpha_g)
+    const PotentialAnalysisRequest & request)
 {
-    ScopeTimer timer("PotentialAnalysisCommand::RunAtomPotentialFitting");
+    ScopeTimer timer("PotentialAnalysisCommand::RunAtomPotentialFittingWorkflow");
+    if (request.training_alpha_flag)
+    {
+        RunAtomAlphaTraining(model_object, request);
+    }
+    else
+    {
+        RunLocalFitting(model_object, request.alpha_r);
+    }
+
     const int basis_size{ 2 };
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
@@ -513,8 +504,8 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(
                     local_entry.GetFitResult().data_covariance
                 });
             }
-            auto alpha_g{ training_alpha_flag ?
-                model_object.GetAnalysisView().GetAtomAlphaG(group_key, class_key) : fallback_alpha_g
+            auto alpha_g{ request.training_alpha_flag ?
+                analysis_view.GetAtomAlphaG(group_key, class_key) : request.alpha_g
             };
             const auto input{
                 HRLDataTransform::BuildGroupInput(basis_size, member_datasets, member_estimates)

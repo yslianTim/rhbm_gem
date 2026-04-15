@@ -28,10 +28,6 @@ private:
     bool ExecuteImpl() override;
     bool BuildDataObject(const PotentialAnalysisRequest & request);
     std::vector<MutableLocalPotentialView> BuildSelectedAtomLocalEntryViews(ModelObject & model_object);
-    void RunFittingWorkflow(
-        ModelObject & model_object,
-        MapObject & map_object,
-        const PotentialAnalysisRequest & request);
     void RunMapObjectPreprocessing(MapObject & map_object);
     void RunModelObjectPreprocessing(ModelObject & model_object, bool asymmetry_flag);
     void RunSamplingWorkflow(
@@ -60,10 +56,9 @@ private:
         const std::vector<double> & alpha_list
     );
     void RunLocalFitting(ModelObject & model_object, double universal_alpha_r);
-    void RunAtomPotentialFitting(
+    void RunAtomPotentialFittingWorkflow(
         ModelObject & model_object,
-        bool training_alpha_flag,
-        double fallback_alpha_g);
+        const PotentialAnalysisRequest & request);
     void RunExperimentalBondWorkflowIfEnabled(
         ModelObject & model_object,
         MapObject & map_object,
