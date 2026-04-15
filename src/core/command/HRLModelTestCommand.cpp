@@ -564,9 +564,7 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
     auto tester{ std::make_unique<HRLModelTester>(gaus_par_size, linear_basis_size, replica_size) };
     tester->SetFittingRange(options.options.fit_range_min, options.options.fit_range_max);
 
-    std::vector<double> alpha_r_list{ 0.1 };
-    std::vector<double> error_list{ 0.0, 0.05, 0.1 };
-    //std::vector<double> error_list{ 0.0 };
+    std::vector<double> error_list{ 0.0, 0.025, 0.05 };
     std::vector<Eigen::MatrixXd> mean_matrix_ols_list;
     std::vector<Eigen::MatrixXd> mean_matrix_mdpde_list;
     std::vector<Eigen::MatrixXd> mean_matrix_train_list;
@@ -598,14 +596,10 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
         double training_alpha_r_average{ 0.0 };
         for (int i = 0; i < distance_size; i++)
         {
-            std::vector<Eigen::VectorXd> residual_mean_ols_list;
-            std::vector<Eigen::VectorXd> residual_mean_mdpde_list;
-            std::vector<Eigen::VectorXd> residual_sigma_ols_list;
-            std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
+            std::vector<Eigen::VectorXd> residual_mean_list;
+            std::vector<Eigen::VectorXd> residual_sigma_list;
             tester->RunBetaMDPDEWithNeighborhoodTest(
-                alpha_r_list,
-                residual_mean_ols_list, residual_mean_mdpde_list,
-                residual_sigma_ols_list, residual_sigma_mdpde_list,
+                residual_mean_list, residual_sigma_list,
                 model_par_prior, training_alpha_r_average,
                 sampling_entry_size, error_sigma,
                 distance_list[static_cast<size_t>(i)],
@@ -621,12 +615,12 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
                     neighbor_count, rejected_angle)
             );
 
-            mean_matrix_ols.col(i) = residual_mean_ols_list.front();
-            sigma_matrix_ols.col(i) = residual_sigma_ols_list.front();
-            mean_matrix_mdpde.col(i) = residual_mean_mdpde_list.front();
-            sigma_matrix_mdpde.col(i) = residual_sigma_mdpde_list.front();
-            mean_matrix_train.col(i) = residual_mean_mdpde_list.back();
-            sigma_matrix_train.col(i) = residual_sigma_mdpde_list.back();
+            mean_matrix_ols.col(i) = residual_mean_list.at(0);
+            sigma_matrix_ols.col(i) = residual_sigma_list.at(0);
+            mean_matrix_mdpde.col(i) = residual_mean_list.at(1);
+            sigma_matrix_mdpde.col(i) = residual_sigma_list.at(1);
+            mean_matrix_train.col(i) = residual_mean_list.at(2);
+            sigma_matrix_train.col(i) = residual_sigma_list.at(2);
 
             Logger::Log(LogLevel::Info,
                 std::string("Distance: ") + std::to_string(distance_list[static_cast<size_t>(i)])
@@ -789,8 +783,7 @@ void PrintDataOutlierResult(
             frame[i][j]->Draw("Y+");
 
             short color_ols{ kAzure };
-            short color_mdpde{ kRed };
-            //short color_train{ kGreen+1 };
+            short color_mdpde{ kGreen+2 };
             short color_train{ kRed };
             for (auto & graph : graph_ols_list[i][par_id])
             {
@@ -801,14 +794,13 @@ void PrintDataOutlierResult(
             }
             for (auto & graph : graph_mdpde_list[i][par_id])
             {
-                ROOTHelper::SetMarkerAttribute(graph.get(), 20, 1.5f, color_mdpde);
+                ROOTHelper::SetMarkerAttribute(graph.get(), 25, 1.5f, color_mdpde);
                 ROOTHelper::SetLineAttribute(graph.get(), 1, 2, color_mdpde);
                 ROOTHelper::SetFillAttribute(graph.get(), 1001, color_mdpde, 0.2f);
-                //graph->Draw("PL3");
+                graph->Draw("PL3");
             }
             for (auto & graph : graph_train_list[i][par_id])
             {
-                //ROOTHelper::SetMarkerAttribute(graph.get(), 25, 1.5f, color_train);
                 ROOTHelper::SetMarkerAttribute(graph.get(), 20, 1.5f, color_train);
                 ROOTHelper::SetLineAttribute(graph.get(), 3, 2, color_train);
                 ROOTHelper::SetFillAttribute(graph.get(), 1001, color_train, 0.2f);
@@ -844,8 +836,8 @@ void PrintDataOutlierResult(
     }
 
     canvas->cd();
-    //auto pad_extra0{ ROOTHelper::CreatePad("pad_extra0","", 0.02, 0.92, 0.98, 1.00) };
-    auto pad_extra0{ ROOTHelper::CreatePad("pad_extra0","", 0.20, 0.92, 0.98, 1.00) };
+    auto pad_extra0{ ROOTHelper::CreatePad("pad_extra0","", 0.02, 0.92, 0.98, 1.00) };
+    //auto pad_extra0{ ROOTHelper::CreatePad("pad_extra0","", 0.20, 0.92, 0.98, 1.00) };
     pad_extra0->Draw();
     pad_extra0->cd();
     ROOTHelper::SetPadDefaultStyle(pad_extra0.get());
@@ -866,9 +858,9 @@ void PrintDataOutlierResult(
     else
     {
         legend->AddEntry(graph_train_list[0][0].front().get(),
-            "MDPDE (#alpha_{r} from Alg.4)", "plf");
-        //legend->AddEntry(graph_mdpde_list[0][0].front().get(),
-        //    "MDPDE (#alpha_{r} = 0.1)", "plf");
+            "MDPDE (w/ Sampling Scheme)", "plf");
+        legend->AddEntry(graph_mdpde_list[0][0].front().get(),
+            "MDPDE", "plf");
         legend->AddEntry(graph_ols_list[0][0].front().get(),
             "Ordinary Least Squares", "plf");
     }

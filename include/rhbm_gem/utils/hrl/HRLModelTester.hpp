@@ -58,11 +58,8 @@ public:
         int thread_size = 1
     );
     bool RunBetaMDPDEWithNeighborhoodTest(
-        const std::vector<double> & alpha_r_list,
-        std::vector<Eigen::VectorXd> & residual_mean_ols_list,
-        std::vector<Eigen::VectorXd> & residual_mean_mdpde_list,
-        std::vector<Eigen::VectorXd> & residual_sigma_ols_list,
-        std::vector<Eigen::VectorXd> & residual_sigma_mdpde_list,
+        std::vector<Eigen::VectorXd> & residual_mean_list,
+        std::vector<Eigen::VectorXd> & residual_sigma_list,
         const Eigen::VectorXd & gaus_true,
         double & training_alpha_r_average,
         int sampling_entry_size,

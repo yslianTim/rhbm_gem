@@ -496,11 +496,8 @@ bool HRLModelTester::RunMuMDPDETest(
 }
 
 bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
-    const std::vector<double> & alpha_r_list,
-    std::vector<Eigen::VectorXd> & residual_mean_ols_list,
-    std::vector<Eigen::VectorXd> & residual_mean_mdpde_list,
-    std::vector<Eigen::VectorXd> & residual_sigma_ols_list,
-    std::vector<Eigen::VectorXd> & residual_sigma_mdpde_list,
+    std::vector<Eigen::VectorXd> & residual_mean_list,
+    std::vector<Eigen::VectorXd> & residual_sigma_list,
     const Eigen::VectorXd & gaus_true,
     double & training_alpha_r_average,
     int sampling_entry_size,
@@ -514,27 +511,17 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
     (void)thread_size;
 #endif
 
-    auto local_alpha_r_list{ alpha_r_list };
-    auto alpha_size{ local_alpha_r_list.size() + 1 }; // add one for training alpha_r
-    std::vector<Eigen::MatrixXd> residual_matrix_ols_list(alpha_size);
-    std::vector<Eigen::MatrixXd> residual_matrix_mdpde_list(alpha_size);
-    residual_matrix_ols_list.assign(
-        alpha_size, Eigen::MatrixXd::Zero(m_gaus_par_size, m_replica_size)
-    );
-    residual_matrix_mdpde_list.assign(
-        alpha_size, Eigen::MatrixXd::Zero(m_gaus_par_size, m_replica_size)
-    );
-    residual_mean_ols_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
-    residual_mean_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
-    residual_sigma_ols_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
-    residual_sigma_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
+    const size_t method_size{ 3 }; // OLS (no cut), MDPDE (no cut and cut)
+    std::vector<Eigen::MatrixXd> replica_residual_list(method_size);
+    replica_residual_list.assign(method_size, Eigen::MatrixXd::Zero(m_gaus_par_size, m_replica_size));
+    residual_mean_list.assign(method_size, Eigen::VectorXd::Zero(m_gaus_par_size));
+    residual_sigma_list.assign(method_size, Eigen::VectorXd::Zero(m_gaus_par_size));
 
     const size_t subset_size_alpha_r{ 5 };
     std::vector<double> train_alpha_r_list{
-        0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
+        0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
         1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0
     };
-    local_alpha_r_list.emplace_back(0.0);
 
     training_alpha_r_average = 0.0;
 
@@ -543,68 +530,68 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
 #endif
     for (int i = 0; i < m_replica_size; i++)
     {
-        auto data_entry_list{
+        auto no_cut_data_entry_list{
             BuildRandomLinearDataEntryWithNeighborhood(
                 static_cast<size_t>(sampling_entry_size),
-                gaus_true,
-                data_error_sigma,
-                neighbor_distance,
-                neighbor_count,
-                angle
-            )
+                gaus_true, data_error_sigma, neighbor_distance, neighbor_count, 0.0)
         };
-        const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
+        auto cut_data_entry_list{
+            BuildRandomLinearDataEntryWithNeighborhood(
+                static_cast<size_t>(sampling_entry_size),
+                gaus_true, data_error_sigma, neighbor_distance, neighbor_count, angle)
+        };
+        const auto no_cut_dataset{ HRLDataTransform::BuildMemberDataset(no_cut_data_entry_list) };
+        const auto cut_dataset{ HRLDataTransform::BuildMemberDataset(cut_data_entry_list) };
 
-        auto error_array{
-            HRLAlphaTrainer::EvaluateAlphaR(
-                dataset,
-                subset_size_alpha_r,
-                train_alpha_r_list
-            )
+        auto no_cut_error_array{
+            HRLAlphaTrainer::EvaluateAlphaR(no_cut_dataset, subset_size_alpha_r, train_alpha_r_list)
         };
-        int error_min_id;
-        error_array.minCoeff(&error_min_id);
-        auto alpha_r_train{ train_alpha_r_list.at(static_cast<size_t>(error_min_id)) };
-        local_alpha_r_list.back() = alpha_r_train; // update training alpha_r for each replica
+        auto cut_error_array{
+            HRLAlphaTrainer::EvaluateAlphaR(cut_dataset, subset_size_alpha_r, train_alpha_r_list)
+        };
+        int no_cut_error_min_id, cut_error_min_id;
+        no_cut_error_array.minCoeff(&no_cut_error_min_id);
+        cut_error_array.minCoeff(&cut_error_min_id);
+        auto no_cut_alpha_r_train{ train_alpha_r_list.at(static_cast<size_t>(no_cut_error_min_id)) };
+        auto cut_alpha_r_train{ train_alpha_r_list.at(static_cast<size_t>(cut_error_min_id)) };
 
         HRLExecutionOptions options;
         options.quiet_mode = true;
         options.thread_size = thread_size;
 
-        for (size_t j = 0; j < alpha_size; j++)
-        {
-            const auto beta_result = HRLModelAlgorithms::EstimateBetaMDPDE(
-                local_alpha_r_list.at(j),
-                dataset,
-                options
-            );
+        auto no_cut_result{
+            HRLModelAlgorithms::EstimateBetaMDPDE(no_cut_alpha_r_train, no_cut_dataset, options)
+        };
+        auto cut_result{
+            HRLModelAlgorithms::EstimateBetaMDPDE(cut_alpha_r_train, cut_dataset, options)
+        };
 
-            Eigen::VectorXd gaus_0{ Eigen::VectorXd::Zero(m_gaus_par_size) };
-            auto gaus_ols{
-                GausLinearTransformHelper::BuildGaus3DModel(beta_result.beta_ols, gaus_0)
-            };
-            auto gaus_mdpde{
-                GausLinearTransformHelper::BuildGaus3DModel(beta_result.beta_mdpde, gaus_0)
-            };
-            residual_matrix_ols_list.at(j).col(i) = CalculateNormalizedResidual(gaus_ols, gaus_true);
-            residual_matrix_mdpde_list.at(j).col(i) = CalculateNormalizedResidual(gaus_mdpde, gaus_true);
-        }
+        Eigen::VectorXd gaus_0{ Eigen::VectorXd::Zero(m_gaus_par_size) };
+        auto gaus_ols{
+            GausLinearTransformHelper::BuildGaus3DModel(no_cut_result.beta_ols, gaus_0)
+        };
+        auto gaus_mdpde_no_cut{
+            GausLinearTransformHelper::BuildGaus3DModel(no_cut_result.beta_mdpde, gaus_0)
+        };
+        auto gaus_mdpde_cut{
+            GausLinearTransformHelper::BuildGaus3DModel(cut_result.beta_mdpde, gaus_0)
+        };
+        replica_residual_list.at(0).col(i) = CalculateNormalizedResidual(gaus_ols, gaus_true);
+        replica_residual_list.at(1).col(i) = CalculateNormalizedResidual(gaus_mdpde_no_cut, gaus_true);
+        replica_residual_list.at(2).col(i) = CalculateNormalizedResidual(gaus_mdpde_cut, gaus_true);
+
         #pragma omp critical
         {
-            training_alpha_r_average += alpha_r_train;
+            training_alpha_r_average += cut_alpha_r_train;
         }
     }
     training_alpha_r_average /= m_replica_size;
 
-    for (size_t j = 0; j < alpha_size; j++)
+    for (size_t j = 0; j < method_size; j++)
     {
-        residual_mean_ols_list.at(j) = residual_matrix_ols_list.at(j).rowwise().mean();
-        residual_mean_mdpde_list.at(j) = residual_matrix_mdpde_list.at(j).rowwise().mean();
-        residual_sigma_ols_list.at(j) =
-            (residual_matrix_ols_list.at(j).colwise() - residual_mean_ols_list.at(j)).rowwise().norm()
-            / std::sqrt(m_replica_size - 1);
-        residual_sigma_mdpde_list.at(j) =
-            (residual_matrix_mdpde_list.at(j).colwise() - residual_mean_mdpde_list.at(j)).rowwise().norm()
+        residual_mean_list.at(j) = replica_residual_list.at(j).rowwise().mean();
+        residual_sigma_list.at(j) =
+            (replica_residual_list.at(j).colwise() - residual_mean_list.at(j)).rowwise().norm()
             / std::sqrt(m_replica_size - 1);
     }
 

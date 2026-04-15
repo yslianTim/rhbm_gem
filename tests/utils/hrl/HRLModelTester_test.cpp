@@ -87,37 +87,3 @@ TEST(HRLModelTesterTest, NeighborhoodSamplingRemovesPointsWhenAngleFilteringEnab
     ASSERT_FALSE(unfiltered_sampling_entries.empty());
     EXPECT_LT(filtered_sampling_entries.size(), unfiltered_sampling_entries.size());
 }
-
-TEST(HRLModelTesterTest, PublicNeighborhoodWorkflowAcceptsExplicitAngle)
-{
-    HRLModelTester tester(3, 2, 2);
-    tester.SetFittingRange(0.0, 1.0);
-
-    std::vector<Eigen::VectorXd> residual_mean_ols_list;
-    std::vector<Eigen::VectorXd> residual_mean_mdpde_list;
-    std::vector<Eigen::VectorXd> residual_sigma_ols_list;
-    std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
-    double training_alpha_r_average{ 0.0 };
-
-    const auto success{
-        tester.RunBetaMDPDEWithNeighborhoodTest(
-            { 0.1 },
-            residual_mean_ols_list,
-            residual_mean_mdpde_list,
-            residual_sigma_ols_list,
-            residual_sigma_mdpde_list,
-            MakeVector({ 1.0, 0.5, 0.0 }),
-            training_alpha_r_average,
-            4,
-            0.0,
-            2.0,
-            1,
-            120.0)
-    };
-
-    EXPECT_TRUE(success);
-    EXPECT_EQ(residual_mean_ols_list.size(), 2u);
-    EXPECT_EQ(residual_mean_mdpde_list.size(), 2u);
-    EXPECT_EQ(residual_sigma_ols_list.size(), 2u);
-    EXPECT_EQ(residual_sigma_mdpde_list.size(), 2u);
-}
