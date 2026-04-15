@@ -865,7 +865,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     auto selected_atom_size{ selected_atom_list.size() };
     Logger::Log(LogLevel::Info,
         "Run Alpha_R Training with "+ std::to_string(selected_atom_size) +" atoms.");
-    auto alpha_r{ TrainUniversalAlphaR(
+    auto alpha_r{ TrainAlphaR(
         model_object,
         selected_atom_list,
         subset_size_alpha_r,
@@ -891,7 +891,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     auto selected_group_size{ atom_list_set.size() };
     Logger::Log(LogLevel::Info,
         "Run Alpha_G Training with "+ std::to_string(selected_group_size) +" groups.");
-    auto alpha_g{ TrainUniversalAlphaG(
+    auto alpha_g{ TrainAlphaG(
         model_object,
         atom_list_set,
         subset_size_alpha_g,
@@ -919,7 +919,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
         request.training_report_dir);
 }
 
-double PotentialAnalysisCommand::TrainUniversalAlphaR(
+double PotentialAnalysisCommand::TrainAlphaR(
     ModelObject & model_object,
     const std::vector<AtomObject *> & atom_list,
     const size_t subset_size,
@@ -974,7 +974,7 @@ double PotentialAnalysisCommand::TrainUniversalAlphaR(
     return alpha_r_error;
 }
 
-double PotentialAnalysisCommand::TrainUniversalAlphaG(
+double PotentialAnalysisCommand::TrainAlphaG(
     ModelObject & model_object,
     const std::vector<std::vector<AtomObject *>> & atom_list_set,
     const size_t subset_size,
