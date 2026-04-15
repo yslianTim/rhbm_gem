@@ -19,7 +19,6 @@
 #include <rhbm_gem/utils/hrl/HRLGroupEstimator.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelTypes.hpp>
-#include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
 
 #include <atomic>
@@ -281,7 +280,10 @@ bool PotentialAnalysisCommand::ExecuteImpl()
         request.sampling_size, request.sampling_range_min, request.sampling_range_max);
     RunDatasetPreparationWorkflow(model_object, request.fit_range_min, request.fit_range_max);
     RunAtomPotentialFittingWorkflow(model_object, request);
-    RunExperimentalBondWorkflowIfEnabled(model_object, map_object, request);
+#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
+    experimental::RunPotentialAnalysisBondWorkflow(
+        model_object, map_object, request, ThreadSize());
+#endif
     SavePreparedModel(model_object, request.saved_key_tag);
     return true;
 }
@@ -489,88 +491,12 @@ void PotentialAnalysisCommand::RunAtomPotentialFittingWorkflow(
     }
 }
 
-void PotentialAnalysisCommand::RunExperimentalBondWorkflowIfEnabled(
-    ModelObject & model_object,
-    MapObject & map_object,
-    const PotentialAnalysisRequest & request)
-{
-#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
-    experimental::RunPotentialAnalysisBondWorkflow(
-        model_object, map_object, request, ThreadSize());
-#else
-    (void)model_object;
-    (void)map_object;
-    (void)request;
-#endif
-}
-
-void PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR(
-    ModelObject & model_object,
-    const std::vector<AtomObject *> & atom_list,
+void PotentialAnalysisCommand::EmitAtomLocalAlphaRBiasReport(
+    const Eigen::MatrixXd & gaus_bias_matrix,
     const std::vector<double> & alpha_list,
     const std::filesystem::path & training_report_dir)
 {
-    ScopeTimer timer("PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR");
-    auto analysis{ model_object.EditAnalysis() };
-    std::unordered_map<const AtomObject *, MutableLocalPotentialView> local_entry_map;
-    local_entry_map.reserve(atom_list.size());
-    for (auto * atom : atom_list)
-    {
-        local_entry_map.emplace(atom, analysis.EnsureAtomLocalPotential(*atom));
-    }
-
-    auto atom_size{ atom_list.size() };
-    if (atom_size == 0)
-    {
-        Logger::Log(
-            LogLevel::Warning,
-            "Skip Alpha_R bias study because no eligible atoms were selected.");
-        return;
-    }
-
-    auto alpha_size{ static_cast<int>(alpha_list.size()) };
-    std::atomic<size_t> atom_count{ 0 };
-    Eigen::MatrixXd gaus_bias_matrix{ Eigen::MatrixXd::Zero(3, alpha_size) };
-
-#ifdef USE_OPENMP
-    #pragma omp parallel for schedule(dynamic) num_threads(ThreadSize())
-#endif
-    for (size_t i = 0; i < atom_size; i++)
-    {
-        const auto local_entry{ local_entry_map.at(atom_list[i]) };
-        const auto algorithm_options{
-            MakePotentialAnalysisExecutionOptions(ThreadSize(), true)
-        };
-
-        Eigen::MatrixXd local_bias_array{ Eigen::MatrixXd::Zero(3, alpha_size) };
-        for (int j = 0; j < alpha_size; j++)
-        {
-            auto alpha_r{ alpha_list[static_cast<size_t>(j)] };
-            const auto result{ HRLModelAlgorithms::EstimateBetaMDPDE(
-                alpha_r,
-                local_entry.GetDataset(),
-                algorithm_options)
-            };
-            Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
-            auto gaus_ols{
-                GausLinearTransformHelper::BuildGaus3DModel(result.beta_ols, model_par_init)
-            };
-            auto gaus_mdpde{
-                GausLinearTransformHelper::BuildGaus3DModel(result.beta_mdpde, model_par_init)
-            };
-            local_bias_array.col(j) = (gaus_mdpde - gaus_ols).array().abs();
-        }
-        
-#ifdef USE_OPENMP
-        #pragma omp critical
-#endif
-        {
-            gaus_bias_matrix += local_bias_array;
-            atom_count++;
-            Logger::ProgressPercent(atom_count, atom_size);
-        }
-    }
-    gaus_bias_matrix /= static_cast<double>(atom_size);
+    ScopeTimer timer("PotentialAnalysisCommand::EmitAtomLocalAlphaRBiasReport");
 
     const bool report_emitted{
         EmitTrainingReportIfRequested(
@@ -593,82 +519,12 @@ void PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR(
     Logger::Log(LogLevel::Debug, alpha_r_bias_stream.str());
 }
 
-void PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG(
-    ModelObject & model_object,
-    const std::vector<std::vector<AtomObject *>> & atom_list_set,
+void PotentialAnalysisCommand::EmitAtomGroupAlphaGBiasReport(
+    const Eigen::MatrixXd & gaus_bias_matrix,
     const std::vector<double> & alpha_list,
     const std::filesystem::path & training_report_dir)
 {
-    ScopeTimer timer("PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG");
-    auto analysis{ model_object.EditAnalysis() };
-    std::unordered_map<const AtomObject *, MutableLocalPotentialView> local_entry_map;
-    for (const auto & group_atom_list : atom_list_set)
-    {
-        for (auto * atom : group_atom_list)
-        {
-            local_entry_map.try_emplace(atom, analysis.EnsureAtomLocalPotential(*atom));
-        }
-    }
-
-    auto alpha_size{ static_cast<int>(alpha_list.size()) };
-    auto group_size{ atom_list_set.size() };
-    if (group_size == 0)
-    {
-        Logger::Log(
-            LogLevel::Warning,
-            "Skip Alpha_G bias study because no eligible groups were selected.");
-        return;
-    }
-
-    std::atomic<size_t> group_count{ 0 };
-    Eigen::MatrixXd gaus_bias_matrix{ Eigen::MatrixXd::Zero(3, alpha_size) };
-
-#ifdef USE_OPENMP
-    #pragma omp parallel for schedule(dynamic) num_threads(ThreadSize())
-#endif
-    for (size_t i = 0; i < group_size; i++)
-    {
-        auto & group_atom_list{ atom_list_set[i] };
-        std::vector<Eigen::VectorXd> data_entry_list;
-        data_entry_list.reserve(group_atom_list.size());
-        for (auto atom : group_atom_list)
-        {
-            data_entry_list.emplace_back(
-                local_entry_map.at(atom).GetFitResult().beta_mdpde
-            );
-        }
-        const auto beta_matrix{ HRLDataTransform::BuildBetaMatrix(data_entry_list, true) };
-        const auto algorithm_options{
-            MakePotentialAnalysisExecutionOptions(ThreadSize(), true)
-        };
-
-        Eigen::MatrixXd local_bias_array{ Eigen::MatrixXd::Zero(3, alpha_size) };
-        for (int j = 0; j < alpha_size; j++)
-        {
-            auto alpha_g{ alpha_list[static_cast<size_t>(j)] };
-            const auto result{
-                HRLModelAlgorithms::EstimateMuMDPDE(alpha_g, beta_matrix, algorithm_options)
-            };
-            Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
-            auto gaus_mean{
-                GausLinearTransformHelper::BuildGaus3DModel(result.mu_mean, model_par_init)
-            };
-            auto gaus_mdpde{
-                GausLinearTransformHelper::BuildGaus3DModel(result.mu_mdpde, model_par_init)
-            };
-            local_bias_array.col(j) = (gaus_mdpde - gaus_mean).array().abs();
-        }
-        
-#ifdef USE_OPENMP
-        #pragma omp critical
-#endif
-        {
-            gaus_bias_matrix += local_bias_array;
-            group_count++;
-            Logger::ProgressPercent(group_count, group_size);
-        }
-    }
-    gaus_bias_matrix /= static_cast<double>(group_size);
+    ScopeTimer timer("PotentialAnalysisCommand::EmitAtomGroupAlphaGBiasReport");
 
     const bool report_emitted{
         EmitTrainingReportIfRequested(
@@ -806,23 +662,18 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     Logger::Log(LogLevel::Info, alpha_trainer.GetAlphaGridSummary().str());
 
     // Alpha_R Training
-    const auto & atom_list{ model_object.GetSelectedAtoms() };
-    std::vector<AtomObject *> selected_atom_list;
     std::vector<HRLMemberDataset> selected_atom_dataset_list;
-    selected_atom_list.reserve(atom_list.size());
-    selected_atom_dataset_list.reserve(atom_list.size());
-    for (auto & atom : atom_list)
+    selected_atom_dataset_list.reserve(model_object.GetSelectedAtomCount());
+    for (auto & atom : model_object.GetSelectedAtoms())
     {
         if (atom->IsMainChainAtom() == false) continue;
         const auto local_entry{ analysis.EnsureAtomLocalPotential(*atom) };
         if (!local_entry.HasDataset()) continue;
-        selected_atom_list.emplace_back(atom);
         selected_atom_dataset_list.emplace_back(local_entry.GetDataset());
     }
-    selected_atom_list.shrink_to_fit();
     selected_atom_dataset_list.shrink_to_fit();
     
-    auto selected_atom_size{ selected_atom_list.size() };
+    auto selected_atom_size{ selected_atom_dataset_list.size() };
     Logger::Log(LogLevel::Info,
         "Run Alpha_R Training with "+ std::to_string(selected_atom_size) +" atoms.");
     auto alpha_r{ alpha_training_list.front() };
@@ -837,38 +688,30 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
                 Logger::ProgressPercent(completed, total);
             };
         const auto alpha_r_result{
-            alpha_trainer.TrainAlphaR(
-                selected_atom_dataset_list,
-                alpha_r_options)
+            alpha_trainer.TrainAlphaR(selected_atom_dataset_list, alpha_r_options)
         };
         alpha_r = alpha_r_result.best_alpha;
     }
     else
     {
-        Logger::Log(
-            LogLevel::Warning,
+        Logger::Log(LogLevel::Warning,
             "Skip Alpha_R Training because no eligible atoms were selected.");
     }
-    Logger::Log(
-        LogLevel::Info,
-        "Alpha_R Training Results Summary: minimum beta error sum alpha_r = "
-        + std::to_string(alpha_r));
+    Logger::Log(LogLevel::Info,
+        "Alpha_R Training Results Summary: minimum beta error sum alpha_r = "+ std::to_string(alpha_r));
     
     // Alpha_G Training
     RunLocalFitting(model_object, alpha_r);
     
-    std::vector<std::vector<AtomObject *>> atom_list_set;
     std::vector<std::vector<Eigen::VectorXd>> beta_group_list;
     const auto component_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     const auto component_group_keys{ analysis_view.CollectAtomGroupKeys(component_class_key) };
-    atom_list_set.reserve(component_group_keys.size());
     beta_group_list.reserve(component_group_keys.size());
     for (const auto group_key : component_group_keys)
     {
         const auto & group_atom_list{ analysis_view.GetAtomObjectList(group_key, component_class_key) };
         if (group_atom_list.size() < 10) continue;
         if (group_atom_list.front()->IsMainChainAtom() == false) continue;
-        atom_list_set.emplace_back(group_atom_list);
 
         std::vector<Eigen::VectorXd> beta_list;
         beta_list.reserve(group_atom_list.size());
@@ -881,7 +724,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
         beta_group_list.emplace_back(std::move(beta_list));
     }
 
-    auto selected_group_size{ atom_list_set.size() };
+    auto selected_group_size{ beta_group_list.size() };
     Logger::Log(LogLevel::Info,
         "Run Alpha_G Training with "+ std::to_string(selected_group_size) +" groups.");
     auto alpha_g{ alpha_training_list.front() };
@@ -895,21 +738,15 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
             {
                 Logger::ProgressPercent(completed, total);
             };
-        const auto alpha_g_result{
-            alpha_trainer.TrainAlphaG(
-                beta_group_list,
-                alpha_g_options)
-        };
+        const auto alpha_g_result{ alpha_trainer.TrainAlphaG(beta_group_list, alpha_g_options) };
         alpha_g = alpha_g_result.best_alpha;
     }
     else
     {
-        Logger::Log(
-            LogLevel::Warning,
+        Logger::Log(LogLevel::Warning,
             "Skip Alpha_G Training because no eligible groups were selected.");
     }
-    Logger::Log(
-        LogLevel::Info,
+    Logger::Log(LogLevel::Info,
         "Alpha_G Training Results Summary: minimum mu error sum alpha_g = "
         + std::to_string(alpha_g));
 
@@ -922,16 +759,50 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
         }
     }
 
-    StudyAtomLocalFittingViaAlphaR(
-        model_object,
-        selected_atom_list,
-        alpha_training_list,
-        request.training_report_dir);
-    StudyAtomGroupFittingViaAlphaG(
-        model_object,
-        atom_list_set,
-        alpha_training_list,
-        request.training_report_dir);
+    HRLAlphaTrainer::AlphaBiasStudyOptions alpha_bias_study_options;
+    alpha_bias_study_options.execution_options =
+        MakePotentialAnalysisExecutionOptions(ThreadSize(), true);
+    alpha_bias_study_options.progress_callback =
+        [](std::size_t completed, std::size_t total)
+        {
+            Logger::ProgressPercent(completed, total);
+        };
+
+    if (!selected_atom_dataset_list.empty())
+    {
+        const auto alpha_r_bias_matrix{
+            alpha_trainer.StudyAlphaRBias(
+                selected_atom_dataset_list,
+                alpha_bias_study_options)
+        };
+        EmitAtomLocalAlphaRBiasReport(
+            alpha_r_bias_matrix,
+            alpha_training_list,
+            request.training_report_dir);
+    }
+    else
+    {
+        Logger::Log(LogLevel::Warning,
+            "Skip Alpha_R bias study because no eligible atoms were selected.");
+    }
+
+    if (!beta_group_list.empty())
+    {
+        const auto alpha_g_bias_matrix{
+            alpha_trainer.StudyAlphaGBias(
+                beta_group_list,
+                alpha_bias_study_options)
+        };
+        EmitAtomGroupAlphaGBiasReport(
+            alpha_g_bias_matrix,
+            alpha_training_list,
+            request.training_report_dir);
+    }
+    else
+    {
+        Logger::Log(LogLevel::Warning,
+            "Skip Alpha_G bias study because no eligible groups were selected.");
+    }
 }
 
 void PotentialAnalysisCommand::RunLocalFitting(
@@ -944,8 +815,7 @@ void PotentialAnalysisCommand::RunLocalFitting(
     const auto & selected_atom_list{ model_object.GetSelectedAtoms() };
     const auto selected_atom_size{ selected_atom_list.size() };
     auto local_entry_list{ BuildSelectedAtomLocalEntryViews(model_object) };
-    Logger::Log(
-        LogLevel::Info,
+    Logger::Log(LogLevel::Info,
         "Run Local atom fitting for " + std::to_string(selected_atom_size) + " atoms.");
 
 #ifdef USE_OPENMP

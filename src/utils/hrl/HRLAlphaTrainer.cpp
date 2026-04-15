@@ -2,6 +2,7 @@
 
 #include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
+#include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
 
 #include <algorithm>
 #include <atomic>
@@ -423,4 +424,137 @@ HRLAlphaTrainer::AlphaTrainingResult HRLAlphaTrainer::TrainAlphaG(
     }
 
     return BuildTrainingResult(m_alpha_grid, error_sum_array.matrix());
+}
+
+Eigen::MatrixXd HRLAlphaTrainer::StudyAlphaRBias(
+    const std::vector<HRLMemberDataset> & dataset_list) const
+{
+    return StudyAlphaRBias(dataset_list, AlphaBiasStudyOptions{});
+}
+
+Eigen::MatrixXd HRLAlphaTrainer::StudyAlphaRBias(
+    const std::vector<HRLMemberDataset> & dataset_list,
+    const AlphaBiasStudyOptions & options) const
+{
+    ValidateTrainingBatch(dataset_list.size(), 1, m_alpha_grid);
+    for (const auto & dataset : dataset_list)
+    {
+        ValidateMemberDataset(dataset);
+    }
+
+    const auto dataset_size{ dataset_list.size() };
+    const auto alpha_size{ static_cast<int>(m_alpha_grid.size()) };
+    std::atomic<std::size_t> completed_count{ 0 };
+    Eigen::MatrixXd gaus_bias_matrix{ Eigen::MatrixXd::Zero(3, alpha_size) };
+
+#ifdef USE_OPENMP
+    #pragma omp parallel for schedule(dynamic) num_threads(options.execution_options.thread_size)
+#endif
+    for (std::size_t i = 0; i < dataset_size; i++)
+    {
+        auto algorithm_options{ options.execution_options };
+        algorithm_options.quiet_mode = true;
+
+        Eigen::MatrixXd local_bias_array{ Eigen::MatrixXd::Zero(3, alpha_size) };
+        for (int j = 0; j < alpha_size; j++)
+        {
+            const auto alpha_r{ m_alpha_grid.at(static_cast<std::size_t>(j)) };
+            const auto result{
+                HRLModelAlgorithms::EstimateBetaMDPDE(
+                    alpha_r,
+                    dataset_list.at(i),
+                    algorithm_options)
+            };
+            const Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
+            const auto gaus_ols{
+                GausLinearTransformHelper::BuildGaus3DModel(result.beta_ols, model_par_init)
+            };
+            const auto gaus_mdpde{
+                GausLinearTransformHelper::BuildGaus3DModel(result.beta_mdpde, model_par_init)
+            };
+            local_bias_array.col(j) = (gaus_mdpde - gaus_ols).array().abs();
+        }
+
+#ifdef USE_OPENMP
+        #pragma omp critical
+#endif
+        {
+            gaus_bias_matrix += local_bias_array;
+            const auto completed{ ++completed_count };
+            if (options.progress_callback)
+            {
+                options.progress_callback(completed, dataset_size);
+            }
+        }
+    }
+
+    gaus_bias_matrix /= static_cast<double>(dataset_size);
+    return gaus_bias_matrix;
+}
+
+Eigen::MatrixXd HRLAlphaTrainer::StudyAlphaGBias(
+    const std::vector<std::vector<Eigen::VectorXd>> & beta_group_list) const
+{
+    return StudyAlphaGBias(beta_group_list, AlphaBiasStudyOptions{});
+}
+
+Eigen::MatrixXd HRLAlphaTrainer::StudyAlphaGBias(
+    const std::vector<std::vector<Eigen::VectorXd>> & beta_group_list,
+    const AlphaBiasStudyOptions & options) const
+{
+    ValidateTrainingBatch(beta_group_list.size(), 1, m_alpha_grid);
+    for (const auto & beta_list : beta_group_list)
+    {
+        if (beta_list.empty())
+        {
+            throw std::invalid_argument("training data must not be empty.");
+        }
+    }
+
+    const auto group_size{ beta_group_list.size() };
+    const auto alpha_size{ static_cast<int>(m_alpha_grid.size()) };
+    std::atomic<std::size_t> completed_count{ 0 };
+    Eigen::MatrixXd gaus_bias_matrix{ Eigen::MatrixXd::Zero(3, alpha_size) };
+
+#ifdef USE_OPENMP
+    #pragma omp parallel for schedule(dynamic) num_threads(options.execution_options.thread_size)
+#endif
+    for (std::size_t i = 0; i < group_size; i++)
+    {
+        auto algorithm_options{ options.execution_options };
+        algorithm_options.quiet_mode = true;
+        const auto beta_matrix{ HRLDataTransform::BuildBetaMatrix(beta_group_list.at(i), true) };
+
+        Eigen::MatrixXd local_bias_array{ Eigen::MatrixXd::Zero(3, alpha_size) };
+        for (int j = 0; j < alpha_size; j++)
+        {
+            const auto alpha_g{ m_alpha_grid.at(static_cast<std::size_t>(j)) };
+            const auto result{
+                HRLModelAlgorithms::EstimateMuMDPDE(alpha_g, beta_matrix, algorithm_options)
+            };
+            const Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
+            const auto gaus_mean{
+                GausLinearTransformHelper::BuildGaus3DModel(result.mu_mean, model_par_init)
+            };
+            const auto gaus_mdpde{
+                GausLinearTransformHelper::BuildGaus3DModel(result.mu_mdpde, model_par_init)
+            };
+            local_bias_array.col(j) = (gaus_mdpde - gaus_mean).array().abs();
+        }
+
+#ifdef USE_OPENMP
+        #pragma omp critical
+#endif
+        {
+            gaus_bias_matrix += local_bias_array;
+            const auto completed{ ++completed_count };
+            if (options.progress_callback)
+            {
+                options.progress_callback(completed, group_size);
+            }
+        }
+    }
+
+    gaus_bias_matrix /= static_cast<double>(group_size);
+    return gaus_bias_matrix;
 }

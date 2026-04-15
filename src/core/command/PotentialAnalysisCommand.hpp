@@ -2,13 +2,14 @@
 
 #include <memory>
 
+#include <Eigen/Dense>
+
 #include "detail/CommandBase.hpp"
 
 namespace rhbm_gem {
 
 class ModelObject;
 class MapObject;
-class AtomObject;
 class MutableLocalPotentialView;
 
 class PotentialAnalysisCommand : public CommandWithRequest<PotentialAnalysisRequest>
@@ -47,21 +48,15 @@ private:
     void RunAtomPotentialFittingWorkflow(
         ModelObject & model_object,
         const PotentialAnalysisRequest & request);
-    void RunExperimentalBondWorkflowIfEnabled(
-        ModelObject & model_object,
-        MapObject & map_object,
-        const PotentialAnalysisRequest & request);
     void SavePreparedModel(ModelObject & model_object, std::string_view saved_key_tag);
 
-    void StudyAtomLocalFittingViaAlphaR(
-        ModelObject & model_object,
-        const std::vector<AtomObject *> & atom_list,
+    void EmitAtomLocalAlphaRBiasReport(
+        const Eigen::MatrixXd & gaus_bias_matrix,
         const std::vector<double> & alpha_list,
         const std::filesystem::path & training_report_dir
     );
-    void StudyAtomGroupFittingViaAlphaG(
-        ModelObject & model_object,
-        const std::vector<std::vector<AtomObject *>> & atom_list_set,
+    void EmitAtomGroupAlphaGBiasReport(
+        const Eigen::MatrixXd & gaus_bias_matrix,
         const std::vector<double> & alpha_list,
         const std::filesystem::path & training_report_dir
     );

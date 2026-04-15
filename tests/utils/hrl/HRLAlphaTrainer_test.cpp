@@ -234,3 +234,73 @@ TEST(HRLAlphaTrainerTest, TrainAlphaRejectsInvalidInputs)
         trainer.TrainAlphaG(beta_group_list, alpha_g_options),
         std::invalid_argument);
 }
+
+TEST(HRLAlphaTrainerTest, StudyAlphaRBiasReturnsFiniteMatrixAndReportsProgress)
+{
+    const HRLAlphaTrainer trainer{ 0.0, 1.0, 0.5 };
+    const std::vector<HRLMemberDataset> dataset_list{
+        MakeLinearDataset(2.0),
+        MakeLinearDataset(-0.5)
+    };
+    std::size_t progress_count{ 0 };
+    HRLAlphaTrainer::AlphaBiasStudyOptions options;
+    options.execution_options.thread_size = 1;
+    options.progress_callback =
+        [&progress_count](std::size_t, std::size_t)
+        {
+            progress_count++;
+        };
+
+    const auto bias_matrix{ trainer.StudyAlphaRBias(dataset_list, options) };
+
+    EXPECT_EQ(bias_matrix.rows(), 3);
+    EXPECT_EQ(bias_matrix.cols(), static_cast<Eigen::Index>(trainer.AlphaGrid().size()));
+    EXPECT_TRUE(bias_matrix.array().isFinite().all());
+    EXPECT_EQ(progress_count, dataset_list.size());
+}
+
+TEST(HRLAlphaTrainerTest, StudyAlphaGBiasReturnsFiniteMatrixAndReportsProgress)
+{
+    const HRLAlphaTrainer trainer{ 0.0, 1.0, 0.5 };
+    const std::vector<std::vector<Eigen::VectorXd>> beta_group_list{
+        {
+            MakeVector({ 1.0, 2.0 }),
+            MakeVector({ 1.5, 2.5 }),
+            MakeVector({ 2.0, 3.0 })
+        },
+        {
+            MakeVector({ -1.0, 0.5 }),
+            MakeVector({ -1.5, 1.0 }),
+            MakeVector({ -2.0, 1.5 })
+        }
+    };
+    std::size_t progress_count{ 0 };
+    HRLAlphaTrainer::AlphaBiasStudyOptions options;
+    options.execution_options.thread_size = 1;
+    options.progress_callback =
+        [&progress_count](std::size_t, std::size_t)
+        {
+            progress_count++;
+        };
+
+    const auto bias_matrix{ trainer.StudyAlphaGBias(beta_group_list, options) };
+
+    EXPECT_EQ(bias_matrix.rows(), 3);
+    EXPECT_EQ(bias_matrix.cols(), static_cast<Eigen::Index>(trainer.AlphaGrid().size()));
+    EXPECT_TRUE(bias_matrix.array().isFinite().all());
+    EXPECT_EQ(progress_count, beta_group_list.size());
+}
+
+TEST(HRLAlphaTrainerTest, StudyAlphaBiasRejectsEmptyInputs)
+{
+    const HRLAlphaTrainer trainer{ 0.0, 1.0, 0.5 };
+    const std::vector<HRLMemberDataset> empty_dataset_list;
+    const std::vector<std::vector<Eigen::VectorXd>> empty_beta_group_list;
+    const std::vector<std::vector<Eigen::VectorXd>> beta_group_with_empty_member_list{
+        {}
+    };
+
+    EXPECT_THROW(trainer.StudyAlphaRBias(empty_dataset_list), std::invalid_argument);
+    EXPECT_THROW(trainer.StudyAlphaGBias(empty_beta_group_list), std::invalid_argument);
+    EXPECT_THROW(trainer.StudyAlphaGBias(beta_group_with_empty_member_list), std::invalid_argument);
+}
