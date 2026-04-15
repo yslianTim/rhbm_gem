@@ -3,6 +3,7 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <stdexcept>
+#include <utility>
 
 double GausLinearTransformHelper::GetGaussianResponseAtDistance(
     double r, double width, int dimension)
@@ -57,23 +58,32 @@ double GausLinearTransformHelper::GetGaussianPesponseAtPointWithNeighborhood(
     return y;
 }
 
-std::vector<Eigen::VectorXd> GausLinearTransformHelper::MapValueTransform(
+SeriesPointList GausLinearTransformHelper::MapValueTransform(
     const LocalPotentialSampleList & sampling_entries,
     double x_min, double x_max, int basis_size)
 {
-    std::vector<Eigen::VectorXd> basis_and_response_entry_list;
+    SeriesPointList basis_and_response_entry_list;
     basis_and_response_entry_list.reserve(sampling_entries.size());
     Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
     for (const auto & sample : sampling_entries)
     {
-        auto gaus_x{ static_cast<double>(sample.distance) };
+        const auto distance{ sample.distance };
         auto gaus_y{ static_cast<double>(sample.response) };
-        if (gaus_x < x_min || gaus_x > x_max) continue;
+        if (distance < static_cast<float>(x_min) || distance > static_cast<float>(x_max)) continue;
         if (gaus_y <= 0.0) continue;
-        basis_and_response_entry_list.emplace_back(
+        auto gaus_x{ static_cast<double>(distance) };
+        const auto data_vector{
             GausLinearTransformHelper::BuildLinearModelDataVector(
                 gaus_x, gaus_y, model_par_init, basis_size)
-        );
+        };
+        std::vector<double> basis_values;
+        basis_values.reserve(static_cast<size_t>(basis_size));
+        for (int i = 0; i < basis_size; i++)
+        {
+            basis_values.emplace_back(data_vector(i));
+        }
+        basis_and_response_entry_list.emplace_back(
+            SeriesPoint{ std::move(basis_values), data_vector(basis_size), sample.weight });
     }
     
     if (basis_and_response_entry_list.empty())
@@ -81,7 +91,8 @@ std::vector<Eigen::VectorXd> GausLinearTransformHelper::MapValueTransform(
         Logger::Log(LogLevel::Warning,
             "GausLinearTransformHelper::MapValueTransform : "
             "No valid gaus data entry in the specified range.");
-        basis_and_response_entry_list.emplace_back(Eigen::VectorXd::Zero(basis_size + 1));
+        basis_and_response_entry_list.emplace_back(
+            SeriesPoint{ std::vector<double>(static_cast<size_t>(basis_size), 0.0), 0.0 });
     }
     basis_and_response_entry_list.shrink_to_fit();
 

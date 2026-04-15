@@ -22,13 +22,13 @@ Eigen::VectorXd MakeVector(std::initializer_list<double> values)
 
 TEST(HRLAlphaTrainerTest, EvaluateAlphaRWithExactLinearDataReturnsZeroError)
 {
-    const std::vector<Eigen::VectorXd> data_list{
-        MakeVector({ 1.0, 0.0, 1.0 }),
-        MakeVector({ 1.0, 1.0, 3.0 }),
-        MakeVector({ 1.0, 2.0, 5.0 }),
-        MakeVector({ 1.0, 3.0, 7.0 }),
-        MakeVector({ 1.0, 4.0, 9.0 }),
-        MakeVector({ 1.0, 5.0, 11.0 })
+    const SeriesPointList data_list{
+        SeriesPoint({ 1.0, 0.0 }, 1.0),
+        SeriesPoint({ 1.0, 1.0 }, 3.0),
+        SeriesPoint({ 1.0, 2.0 }, 5.0),
+        SeriesPoint({ 1.0, 3.0 }, 7.0),
+        SeriesPoint({ 1.0, 4.0 }, 9.0),
+        SeriesPoint({ 1.0, 5.0 }, 11.0)
     };
     const auto dataset{ HRLDataTransform::BuildMemberDataset(data_list) };
 
@@ -55,9 +55,9 @@ TEST(HRLAlphaTrainerTest, EvaluateAlphaGWithIdenticalBetasReturnsZeroError)
 
 TEST(HRLAlphaTrainerTest, EvaluateAlphaRRejectsInvalidSubsetSize)
 {
-    const std::vector<Eigen::VectorXd> data_list{
-        MakeVector({ 1.0, 0.0, 1.0 }),
-        MakeVector({ 1.0, 1.0, 3.0 })
+    const SeriesPointList data_list{
+        SeriesPoint({ 1.0, 0.0 }, 1.0),
+        SeriesPoint({ 1.0, 1.0 }, 3.0)
     };
     const auto dataset{ HRLDataTransform::BuildMemberDataset(data_list) };
 

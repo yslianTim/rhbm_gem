@@ -1,5 +1,6 @@
 #include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
 
+#include <cmath>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -25,36 +26,44 @@ void ValidateBasisSize(int basis_size)
 } // namespace
 
 HRLMemberDataset HRLDataTransform::BuildMemberDataset(
-    const std::vector<Eigen::VectorXd> & data_vector,
+    const SeriesPointList & series_point_list,
     bool quiet_mode)
 {
     (void)quiet_mode;
-    if (data_vector.empty())
+    if (series_point_list.empty())
     {
-        throw std::invalid_argument("data_vector must not be empty.");
+        throw std::invalid_argument("series_point_list must not be empty.");
     }
 
-    const auto expected_rows{ static_cast<int>(data_vector.front().rows()) };
-    const auto basis_size{ expected_rows - 1 };
+    const auto expected_basis_size{ series_point_list.front().GetBasisSize() };
+    const auto basis_size{ CheckedCastToInt(expected_basis_size) };
     ValidateBasisSize(basis_size);
-    const auto data_size{ CheckedCastToInt(data_vector.size()) };
+    const auto data_size{ CheckedCastToInt(series_point_list.size()) };
 
     HRLMemberDataset dataset;
     dataset.X = Eigen::MatrixXd::Zero(data_size, basis_size);
     dataset.y = Eigen::VectorXd::Zero(data_size);
     for (int i = 0; i < data_size; i++)
     {
-        const auto & data{ data_vector.at(static_cast<std::size_t>(i)) };
-        if (data.rows() != expected_rows)
+        const auto & point{ series_point_list.at(static_cast<std::size_t>(i)) };
+        if (point.GetBasisSize() != expected_basis_size)
         {
             throw std::invalid_argument("All data entries must share the same basis size.");
         }
-        if (!data.array().allFinite())
+        if (!std::isfinite(point.response) || !std::isfinite(point.weight))
         {
             throw std::invalid_argument("Member dataset contains non-finite value.");
         }
-        dataset.X.row(i) = data.head(basis_size);
-        dataset.y(i) = data(basis_size);
+        for (int j = 0; j < basis_size; j++)
+        {
+            const auto value{ point.GetBasisValue(static_cast<std::size_t>(j)) };
+            if (!std::isfinite(value))
+            {
+                throw std::invalid_argument("Member dataset contains non-finite value.");
+            }
+            dataset.X(i, j) = value;
+        }
+        dataset.y(i) = point.response;
     }
 
     return dataset;

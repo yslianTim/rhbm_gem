@@ -213,7 +213,7 @@ LocalPotentialSampleList HRLModelTester::BuildRandomGausSamplingEntryWithNeighbo
     return sampling_entry_list;
 }
 
-std::vector<Eigen::VectorXd> HRLModelTester::BuildRandomLinearDataEntry(
+SeriesPointList HRLModelTester::BuildRandomLinearDataEntry(
     size_t sampling_entry_size,
     const Eigen::VectorXd & gaus_par,
     double error_sigma,
@@ -231,12 +231,12 @@ std::vector<Eigen::VectorXd> HRLModelTester::BuildRandomLinearDataEntry(
     std::normal_distribution<> dist_error(0.0, error_sigma * max_response);
     for (auto & data_entry : linear_data_entry_list)
     {
-        data_entry(m_linear_basis_size) += dist_error(m_generator);
+        data_entry.response += dist_error(m_generator);
     }
     return linear_data_entry_list;
 }
 
-std::vector<Eigen::VectorXd> HRLModelTester::BuildRandomLinearDataEntryWithNeighborhood(
+SeriesPointList HRLModelTester::BuildRandomLinearDataEntryWithNeighborhood(
     size_t sampling_entry_size,
     const Eigen::VectorXd & gaus_par,
     double error_sigma,
@@ -260,7 +260,7 @@ std::vector<Eigen::VectorXd> HRLModelTester::BuildRandomLinearDataEntryWithNeigh
     std::normal_distribution<> dist_error(0.0, error_sigma * max_response);
     for (auto & data_entry : linear_data_entry_list)
     {
-        data_entry(m_linear_basis_size) += dist_error(m_generator);
+        data_entry.response += dist_error(m_generator);
     }
     return linear_data_entry_list;
 }

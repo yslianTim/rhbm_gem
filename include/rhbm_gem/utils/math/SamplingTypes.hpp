@@ -1,7 +1,10 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
 #include <optional>
+#include <stdexcept>
+#include <utility>
 #include <vector>
 
 struct SamplingPoint
@@ -26,9 +29,39 @@ using LocalPotentialSampleList = std::vector<LocalPotentialSample>;
 
 struct SeriesPoint
 {
-    float x{ 0.0f };
-    float y{ 0.0f };
-    float weight{ 1.0f };
+    std::vector<double> basis_values{};
+    double response{ 0.0 };
+    double weight{ 1.0 };
+
+    SeriesPoint() = default;
+
+    SeriesPoint(double basis_value, double response_value, double weight_value = 1.0) :
+        basis_values{ basis_value },
+        response{ response_value },
+        weight{ weight_value }
+    {
+    }
+
+    SeriesPoint(
+        std::vector<double> basis_values_,
+        double response_value,
+        double weight_value = 1.0) :
+        basis_values{ std::move(basis_values_) },
+        response{ response_value },
+        weight{ weight_value }
+    {
+    }
+
+    size_t GetBasisSize() const noexcept { return basis_values.size(); }
+
+    double GetBasisValue(size_t index) const
+    {
+        if (index >= basis_values.size())
+        {
+            throw std::out_of_range("SeriesPoint basis value index is out of range.");
+        }
+        return basis_values.at(index);
+    }
 };
 
 using SeriesPointList = std::vector<SeriesPoint>;

@@ -823,16 +823,12 @@ void PotentialAnalysisCommand::RunDatasetPreparationWorkflow(
     for (size_t i = 0; i < atom_size; i++)
     {
         auto entry{ local_entry_list[i] };
-        const auto & sampling_entries{
-            LocalPotentialView::RequireFor(*atom_list[i]).GetSamplingEntries()
-        };
-        const auto basis_and_response_entries{
-            GausLinearTransformHelper::MapValueTransform(
-                sampling_entries,
+        const auto series_point_list{
+            LocalPotentialView::RequireFor(*atom_list[i]).GetFitDatasetSeries(
                 fit_range_min,
                 fit_range_max)
         };
-        entry.SetDataset(HRLDataTransform::BuildMemberDataset(basis_and_response_entries));
+        entry.SetDataset(HRLDataTransform::BuildMemberDataset(series_point_list));
 
 #ifdef USE_OPENMP
         #pragma omp critical

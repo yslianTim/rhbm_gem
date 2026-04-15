@@ -97,13 +97,13 @@ private:
         size_t neighbor_count = 1,
         double angle = 0.0
     );
-    std::vector<Eigen::VectorXd> BuildRandomLinearDataEntry(
+    SeriesPointList BuildRandomLinearDataEntry(
         size_t sampling_entry_size,
         const Eigen::VectorXd & gaus_par,
         double error_sigma,
         double outlier_ratio = 0.0
     );
-    std::vector<Eigen::VectorXd> BuildRandomLinearDataEntryWithNeighborhood(
+    SeriesPointList BuildRandomLinearDataEntryWithNeighborhood(
         size_t sampling_entry_size,
         const Eigen::VectorXd & gaus_par,
         double error_sigma,

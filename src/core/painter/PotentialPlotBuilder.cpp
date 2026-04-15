@@ -271,10 +271,10 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateLinearModelDataHistogram(int d
         switch (dimension_id)
         {
             case 0:
-                data_list.emplace_back(point.x);
+                data_list.emplace_back(static_cast<float>(point.GetBasisValue(0)));
                 break;
             case 1:
-                data_list.emplace_back(point.y);
+                data_list.emplace_back(static_cast<float>(point.response));
                 break;
             default:
                 throw std::runtime_error("Dimension id is invalid.");
@@ -702,7 +702,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateLinearModelDistanceToM
     auto count{ 0 };
     for (const auto & point : GetLocalEntry().GetLinearModelSeries())
     {
-        graph->SetPoint(count, point.x, point.y);
+        graph->SetPoint(count, point.GetBasisValue(0), point.response);
         count++;
     }
     return graph;
@@ -716,7 +716,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToMapVal
     auto count{ 0 };
     for (const auto & point : data_array)
     {
-        graph->SetPoint(count, point.x, point.y);
+        graph->SetPoint(count, point.GetBasisValue(0), point.response);
         count++;
     }
     return graph;

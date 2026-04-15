@@ -2,6 +2,8 @@
 
 #include <initializer_list>
 #include <stdexcept>
+#include <utility>
+#include <vector>
 
 #include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
 #include <rhbm_gem/utils/hrl/HRLGroupEstimator.hpp>
@@ -26,9 +28,17 @@ HRLDiagonalMatrix MakeDiagonal(std::initializer_list<double> values)
     return result;
 }
 
-HRLMemberDataset MakeDataset(std::initializer_list<Eigen::VectorXd> rows)
+SeriesPoint MakeSeriesPoint(std::initializer_list<double> values)
 {
-    return HRLDataTransform::BuildMemberDataset(std::vector<Eigen::VectorXd>(rows));
+    std::vector<double> row(values);
+    const auto response{ row.back() };
+    row.pop_back();
+    return SeriesPoint{ std::move(row), response };
+}
+
+HRLMemberDataset MakeDataset(std::initializer_list<SeriesPoint> rows)
+{
+    return HRLDataTransform::BuildMemberDataset(SeriesPointList(rows));
 }
 
 HRLMemberLocalEstimate MakeEstimate(
@@ -52,7 +62,7 @@ TEST(HRLGroupEstimatorTest, EstimateSingleMemberUsesFallbackResult)
         HRLDataTransform::BuildGroupInput(
             2,
             {
-                MakeDataset({ MakeVector({ 1.0, 0.0, 1.0 }), MakeVector({ 1.0, 1.0, 3.0 }) })
+                MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 1.0 }), MakeSeriesPoint({ 1.0, 1.0, 3.0 }) })
             },
             {
                 MakeEstimate({ 1.0, 2.0 }, 0.25, { 1.0, 1.0 }, { 0.25, 0.25 })
@@ -104,8 +114,8 @@ TEST(HRLGroupEstimatorTest, EstimateTwoMembersPinsMuPriorToMuMDPDE)
         HRLDataTransform::BuildGroupInput(
             2,
             {
-                MakeDataset({ MakeVector({ 1.0, 0.0, 1.0 }), MakeVector({ 1.0, 1.0, 3.0 }) }),
-                MakeDataset({ MakeVector({ 1.0, 0.0, 2.0 }), MakeVector({ 1.0, 1.0, 4.0 }) })
+                MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 1.0 }), MakeSeriesPoint({ 1.0, 1.0, 3.0 }) }),
+                MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 2.0 }), MakeSeriesPoint({ 1.0, 1.0, 4.0 }) })
             },
             {
                 MakeEstimate({ 1.0, 2.0 }, 0.25, { 1.0, 1.0 }, { 0.25, 0.25 }),

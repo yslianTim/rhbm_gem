@@ -5,11 +5,12 @@
 #include <Eigen/Dense>
 
 #include <rhbm_gem/utils/hrl/HRLModelTypes.hpp>
+#include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace HRLDataTransform
 {
 HRLMemberDataset BuildMemberDataset(
-    const std::vector<Eigen::VectorXd> & data_vector,
+    const SeriesPointList & series_point_list,
     bool quiet_mode = false
 );
 

@@ -3,6 +3,7 @@
 #include <initializer_list>
 #include <limits>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 #include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
@@ -27,9 +28,17 @@ HRLDiagonalMatrix MakeDiagonal(std::initializer_list<double> values)
     return result;
 }
 
-HRLMemberDataset MakeDataset(std::initializer_list<Eigen::VectorXd> rows)
+SeriesPoint MakeSeriesPoint(std::initializer_list<double> values)
 {
-    return HRLDataTransform::BuildMemberDataset(std::vector<Eigen::VectorXd>(rows));
+    std::vector<double> row(values);
+    const auto response{ row.back() };
+    row.pop_back();
+    return SeriesPoint{ std::move(row), response };
+}
+
+HRLMemberDataset MakeDataset(std::initializer_list<SeriesPoint> rows)
+{
+    return HRLDataTransform::BuildMemberDataset(SeriesPointList(rows));
 }
 
 HRLMemberLocalEstimate MakeEstimate(
@@ -49,12 +58,12 @@ HRLMemberLocalEstimate MakeEstimate(
 
 TEST(HRLDataTransformTest, BuildMemberDatasetSplitsPredictorsAndResponse)
 {
-    const std::vector<Eigen::VectorXd> data_vector{
-        MakeVector({ 1.0, 2.0, 10.0 }),
-        MakeVector({ 3.0, 4.0, 20.0 })
+    const SeriesPointList data_series{
+        SeriesPoint({ 1.0, 2.0 }, 10.0),
+        SeriesPoint({ 3.0, 4.0 }, 20.0)
     };
 
-    const auto dataset{ HRLDataTransform::BuildMemberDataset(data_vector) };
+    const auto dataset{ HRLDataTransform::BuildMemberDataset(data_series) };
 
     Eigen::MatrixXd expected_X(2, 2);
     expected_X << 1.0, 2.0,
@@ -65,25 +74,43 @@ TEST(HRLDataTransformTest, BuildMemberDatasetSplitsPredictorsAndResponse)
 
 TEST(HRLDataTransformTest, BuildMemberDatasetRejectsEmptyInput)
 {
-    const std::vector<Eigen::VectorXd> data_vector;
-    EXPECT_THROW(HRLDataTransform::BuildMemberDataset(data_vector), std::invalid_argument);
+    const SeriesPointList data_series;
+    EXPECT_THROW(HRLDataTransform::BuildMemberDataset(data_series), std::invalid_argument);
 }
 
 TEST(HRLDataTransformTest, BuildMemberDatasetRejectsNonFiniteValues)
 {
-    const std::vector<Eigen::VectorXd> data_vector{
-        MakeVector({ 1.0, std::numeric_limits<double>::quiet_NaN(), 10.0 })
+    const SeriesPointList data_series{
+        SeriesPoint({ 1.0, std::numeric_limits<double>::quiet_NaN() }, 10.0)
     };
-    EXPECT_THROW(HRLDataTransform::BuildMemberDataset(data_vector), std::invalid_argument);
+    EXPECT_THROW(HRLDataTransform::BuildMemberDataset(data_series), std::invalid_argument);
+    EXPECT_THROW(
+        HRLDataTransform::BuildMemberDataset({
+            SeriesPoint({ 1.0, 2.0 }, std::numeric_limits<double>::quiet_NaN())
+        }),
+        std::invalid_argument);
+    EXPECT_THROW(
+        HRLDataTransform::BuildMemberDataset({
+            SeriesPoint({ 1.0, 2.0 }, 10.0, std::numeric_limits<double>::quiet_NaN())
+        }),
+        std::invalid_argument);
 }
 
 TEST(HRLDataTransformTest, BuildMemberDatasetRejectsInconsistentBasis)
 {
-    const std::vector<Eigen::VectorXd> data_vector{
-        MakeVector({ 1.0, 2.0, 10.0 }),
-        MakeVector({ 3.0, 4.0, 5.0, 20.0 })
+    const SeriesPointList data_series{
+        SeriesPoint({ 1.0, 2.0 }, 10.0),
+        SeriesPoint({ 3.0, 4.0, 5.0 }, 20.0)
     };
-    EXPECT_THROW(HRLDataTransform::BuildMemberDataset(data_vector), std::invalid_argument);
+    EXPECT_THROW(HRLDataTransform::BuildMemberDataset(data_series), std::invalid_argument);
+}
+
+TEST(HRLDataTransformTest, BuildMemberDatasetRejectsEmptyBasis)
+{
+    const SeriesPointList data_series{
+        SeriesPoint(std::vector<double>{}, 10.0)
+    };
+    EXPECT_THROW(HRLDataTransform::BuildMemberDataset(data_series), std::invalid_argument);
 }
 
 TEST(HRLDataTransformTest, BuildBetaMatrixMapsVectorsToColumns)
@@ -114,8 +141,8 @@ TEST(HRLDataTransformTest, BuildGroupInputBuildsStructuredRequest)
         HRLDataTransform::BuildGroupInput(
             2,
             {
-                MakeDataset({ MakeVector({ 1.0, 0.0, 1.0 }), MakeVector({ 1.0, 1.0, 3.0 }) }),
-                MakeDataset({ MakeVector({ 1.0, 0.0, 2.0 }), MakeVector({ 1.0, 1.0, 4.0 }) })
+                MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 1.0 }), MakeSeriesPoint({ 1.0, 1.0, 3.0 }) }),
+                MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 2.0 }), MakeSeriesPoint({ 1.0, 1.0, 4.0 }) })
             },
             {
                 MakeEstimate({ 1.0, 2.0 }, 0.25, { 1.0, 1.0 }, { 0.25, 0.25 }),
@@ -135,7 +162,7 @@ TEST(HRLDataTransformTest, BuildGroupInputRejectsMismatchedMemberCounts)
     EXPECT_THROW(
         HRLDataTransform::BuildGroupInput(
             2,
-            { MakeDataset({ MakeVector({ 1.0, 0.0, 1.0 }) }) },
+            { MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 1.0 }) }) },
             {
                 MakeEstimate({ 1.0, 2.0 }, 0.25, { 1.0 }, { 1.0 }),
                 MakeEstimate({ 3.0, 4.0 }, 0.5, { 1.0 }, { 1.0 })
@@ -151,7 +178,7 @@ TEST(HRLDataTransformTest, BuildGroupInputRejectsInconsistentWeightSize)
         HRLDataTransform::BuildGroupInput(
             2,
             {
-                MakeDataset({ MakeVector({ 1.0, 0.0, 1.0 }), MakeVector({ 1.0, 1.0, 3.0 }) })
+                MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 1.0 }), MakeSeriesPoint({ 1.0, 1.0, 3.0 }) })
             },
             {
                 MakeEstimate({ 1.0, 2.0 }, 0.25, { 1.0 }, { 0.25, 0.25 })

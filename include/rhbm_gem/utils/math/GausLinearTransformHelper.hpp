@@ -23,7 +23,7 @@ public:
     static double GetGaussianPesponseAtPointWithNeighborhood(
         const Eigen::VectorXd & point, const Eigen::VectorXd & center,
         std::vector<Eigen::VectorXd> & neighbor_center_list, double width);
-    static std::vector<Eigen::VectorXd> MapValueTransform(
+    static SeriesPointList MapValueTransform(
         const LocalPotentialSampleList & sampling_entries,
         double x_min, double x_max, int basis_size=2
     );

@@ -141,7 +141,7 @@ inline void BuildMapValueScatterGraph(
         };
         for (size_t i = 0; i < static_cast<size_t>(bin_size); i++)
         {
-            graph->SetPoint(count, data1_array.at(i).y, data2_array.at(i).y);
+            graph->SetPoint(count, data1_array.at(i).response, data2_array.at(i).response);
             count++;
         }
     }
