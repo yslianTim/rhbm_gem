@@ -514,14 +514,11 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(
                 });
             }
             auto alpha_g{ training_alpha_flag ?
-                model_object.GetAnalysisView().GetAtomAlphaG(group_key, class_key) :
-                fallback_alpha_g
+                model_object.GetAnalysisView().GetAtomAlphaG(group_key, class_key) : fallback_alpha_g
             };
-            const auto input = HRLDataTransform::BuildGroupInput(
-                basis_size,
-                member_datasets,
-                member_estimates
-            );
+            const auto input{
+                HRLDataTransform::BuildGroupInput(basis_size, member_datasets, member_estimates)
+            };
             HRLGroupEstimator estimator(MakePotentialAnalysisExecutionOptions(ThreadSize(), true));
             const auto result{ estimator.Estimate(input, alpha_g) };
 
@@ -825,8 +822,7 @@ void PotentialAnalysisCommand::RunDatasetPreparationWorkflow(
         auto entry{ local_entry_list[i] };
         const auto series_point_list{
             LocalPotentialView::RequireFor(*atom_list[i]).GetFitDatasetSeries(
-                fit_range_min,
-                fit_range_max)
+                fit_range_min, fit_range_max)
         };
         entry.SetDataset(HRLDataTransform::BuildMemberDataset(series_point_list));
 
