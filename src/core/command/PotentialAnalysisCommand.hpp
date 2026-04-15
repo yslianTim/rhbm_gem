@@ -43,18 +43,6 @@ private:
     void RunAtomAlphaTraining(
         ModelObject & model_object,
         const PotentialAnalysisRequest & request);
-    double TrainAlphaR(
-        ModelObject & model_object,
-        const std::vector<AtomObject *> & atom_list,
-        const size_t subset_size,
-        const std::vector<double> & alpha_list
-    );
-    double TrainAlphaG(
-        ModelObject & model_object,
-        const std::vector<std::vector<AtomObject *>> & atom_list_set,
-        const size_t subset_size,
-        const std::vector<double> & alpha_list
-    );
     void RunLocalFitting(ModelObject & model_object, double alpha_r);
     void RunAtomPotentialFittingWorkflow(
         ModelObject & model_object,

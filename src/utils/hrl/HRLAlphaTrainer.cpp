@@ -4,12 +4,17 @@
 #include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
 
 #include <algorithm>
+#include <atomic>
+#include <cmath>
 #include <random>
+#include <string>
 #include <stdexcept>
 #include <vector>
 
 namespace
 {
+constexpr double kAlphaGridTolerance{ 1.0e-12 };
+
 void ValidateTrainingInputs(
     std::size_t data_size,
     std::size_t subset_size,
@@ -26,6 +31,25 @@ void ValidateTrainingInputs(
     if (subset_size > data_size)
     {
         throw std::invalid_argument("subset_size must not exceed data size.");
+    }
+    if (alpha_list.empty())
+    {
+        throw std::invalid_argument("alpha_list must not be empty.");
+    }
+}
+
+void ValidateTrainingBatch(
+    std::size_t batch_size,
+    std::size_t subset_size,
+    const std::vector<double> & alpha_list)
+{
+    if (batch_size == 0)
+    {
+        throw std::invalid_argument("training data must not be empty.");
+    }
+    if (subset_size == 0)
+    {
+        throw std::invalid_argument("subset_size must be greater than zero.");
     }
     if (alpha_list.empty())
     {
@@ -81,7 +105,78 @@ std::mt19937 BuildGenerator(
     }
     return std::mt19937(std::random_device{}());
 }
+
+HRLAlphaTrainer::AlphaTrainingResult BuildTrainingResult(
+    const std::vector<double> & alpha_list,
+    const Eigen::VectorXd & error_sum_list)
+{
+    int error_min_id{ 0 };
+    error_sum_list.minCoeff(&error_min_id);
+
+    HRLAlphaTrainer::AlphaTrainingResult result;
+    result.best_alpha = alpha_list.at(static_cast<std::size_t>(error_min_id));
+    result.error_sum_list = error_sum_list;
+    return result;
+}
 } // namespace
+
+HRLAlphaTrainer::HRLAlphaTrainer(
+    double alpha_min,
+    double alpha_max,
+    double alpha_step) :
+    m_alpha_min{ alpha_min },
+    m_alpha_max{ alpha_max },
+    m_alpha_step{ alpha_step },
+    m_alpha_grid{ BuildAlphaGrid(alpha_min, alpha_max, alpha_step) }
+{
+}
+
+std::ostringstream HRLAlphaTrainer::GetAlphaGridSummary() const
+{
+    std::ostringstream summary;
+    summary
+        << "Alpha training search grid: min = " << std::to_string(m_alpha_min)
+        << ", max = " << std::to_string(m_alpha_max)
+        << ", step = " << std::to_string(m_alpha_step)
+        << ", count = " << std::to_string(m_alpha_grid.size());
+    return summary;
+}
+
+std::vector<double> HRLAlphaTrainer::BuildAlphaGrid(
+    double alpha_min,
+    double alpha_max,
+    double alpha_step)
+{
+    if (!std::isfinite(alpha_min) || !std::isfinite(alpha_max) ||
+        !std::isfinite(alpha_step) || alpha_min < 0.0 ||
+        alpha_max < 0.0 || alpha_step <= 0.0 || alpha_min > alpha_max)
+    {
+        throw std::invalid_argument("Invalid alpha training range or step.");
+    }
+
+    std::vector<double> alpha_list;
+    for (double alpha{ alpha_min };
+         alpha <= alpha_max + kAlphaGridTolerance;
+         alpha += alpha_step)
+    {
+        auto alpha_value{ alpha };
+        if (std::abs(alpha_value - alpha_max) <= kAlphaGridTolerance)
+        {
+            alpha_value = alpha_max;
+        }
+        if (alpha_value > alpha_max)
+        {
+            break;
+        }
+
+        alpha_list.emplace_back(alpha_value);
+        if (alpha_value == alpha_max)
+        {
+            break;
+        }
+    }
+    return alpha_list;
+}
 
 Eigen::VectorXd HRLAlphaTrainer::EvaluateAlphaR(
     const HRLMemberDataset & dataset,
@@ -222,4 +317,110 @@ Eigen::VectorXd HRLAlphaTrainer::EvaluateAlphaG(
     }
 
     return error_sum_list;
+}
+
+HRLAlphaTrainer::AlphaTrainingResult HRLAlphaTrainer::TrainAlphaR(
+    const std::vector<HRLMemberDataset> & dataset_list) const
+{
+    return TrainAlphaR(dataset_list, AlphaRTrainingOptions{});
+}
+
+HRLAlphaTrainer::AlphaTrainingResult HRLAlphaTrainer::TrainAlphaR(
+    const std::vector<HRLMemberDataset> & dataset_list,
+    const AlphaRTrainingOptions & options) const
+{
+    ValidateTrainingBatch(dataset_list.size(), options.subset_size, m_alpha_grid);
+    for (const auto & dataset : dataset_list)
+    {
+        ValidateMemberDataset(dataset);
+        ValidateTrainingInputs(
+            static_cast<std::size_t>(dataset.y.size()),
+            options.subset_size,
+            m_alpha_grid);
+    }
+
+    const auto dataset_size{ dataset_list.size() };
+    std::atomic<std::size_t> completed_count{ 0 };
+    Eigen::ArrayXd error_sum_array{
+        Eigen::ArrayXd::Zero(static_cast<Eigen::Index>(m_alpha_grid.size()))
+    };
+
+#ifdef USE_OPENMP
+    #pragma omp parallel for schedule(dynamic) num_threads(options.execution_options.thread_size)
+#endif
+    for (std::size_t i = 0; i < dataset_size; i++)
+    {
+        const auto error_array{
+            EvaluateAlphaR(
+                dataset_list.at(i),
+                options.subset_size,
+                m_alpha_grid,
+                options.execution_options)
+        };
+
+#ifdef USE_OPENMP
+        #pragma omp critical
+#endif
+        {
+            error_sum_array += error_array.array();
+            const auto completed{ ++completed_count };
+            if (options.progress_callback)
+            {
+                options.progress_callback(completed, dataset_size);
+            }
+        }
+    }
+
+    return BuildTrainingResult(m_alpha_grid, error_sum_array.matrix());
+}
+
+HRLAlphaTrainer::AlphaTrainingResult HRLAlphaTrainer::TrainAlphaG(
+    const std::vector<std::vector<Eigen::VectorXd>> & beta_group_list) const
+{
+    return TrainAlphaG(beta_group_list, AlphaGTrainingOptions{});
+}
+
+HRLAlphaTrainer::AlphaTrainingResult HRLAlphaTrainer::TrainAlphaG(
+    const std::vector<std::vector<Eigen::VectorXd>> & beta_group_list,
+    const AlphaGTrainingOptions & options) const
+{
+    ValidateTrainingBatch(beta_group_list.size(), options.subset_size, m_alpha_grid);
+    for (const auto & beta_list : beta_group_list)
+    {
+        ValidateTrainingInputs(beta_list.size(), options.subset_size, m_alpha_grid);
+    }
+
+    const auto group_size{ beta_group_list.size() };
+    std::atomic<std::size_t> completed_count{ 0 };
+    Eigen::ArrayXd error_sum_array{
+        Eigen::ArrayXd::Zero(static_cast<Eigen::Index>(m_alpha_grid.size()))
+    };
+
+#ifdef USE_OPENMP
+    #pragma omp parallel for schedule(dynamic) num_threads(options.execution_options.thread_size)
+#endif
+    for (std::size_t i = 0; i < group_size; i++)
+    {
+        const auto error_array{
+            EvaluateAlphaG(
+                beta_group_list.at(i),
+                options.subset_size,
+                m_alpha_grid,
+                options.execution_options)
+        };
+
+#ifdef USE_OPENMP
+        #pragma omp critical
+#endif
+        {
+            error_sum_array += error_array.array();
+            const auto completed{ ++completed_count };
+            if (options.progress_callback)
+            {
+                options.progress_callback(completed, group_size);
+            }
+        }
+    }
+
+    return BuildTrainingResult(m_alpha_grid, error_sum_array.matrix());
 }

@@ -60,42 +60,6 @@ constexpr std::string_view kTrainingAlphaStepOption{ "--training-alpha-step" };
 constexpr std::string_view kSamplingRangeIssue{ "--sampling-range" };
 constexpr std::string_view kFitRangeIssue{ "--fit-range" };
 constexpr std::string_view kTrainingAlphaRangeIssue{ "--training-alpha-range" };
-constexpr double kAlphaGridTolerance{ 1.0e-12 };
-
-std::vector<double> BuildAlphaTrainingList(
-    double alpha_min,
-    double alpha_max,
-    double alpha_step)
-{
-    if (!std::isfinite(alpha_min) || !std::isfinite(alpha_max) || !std::isfinite(alpha_step) ||
-        alpha_min < 0.0 || alpha_max < 0.0 || alpha_step <= 0.0 || alpha_min > alpha_max)
-    {
-        throw std::invalid_argument("Invalid alpha training range or step.");
-    }
-
-    std::vector<double> alpha_list;
-    for (double alpha{ alpha_min };
-         alpha <= alpha_max + kAlphaGridTolerance;
-         alpha += alpha_step)
-    {
-        auto alpha_value{ alpha };
-        if (std::abs(alpha_value - alpha_max) <= kAlphaGridTolerance)
-        {
-            alpha_value = alpha_max;
-        }
-        if (alpha_value > alpha_max)
-        {
-            break;
-        }
-
-        alpha_list.emplace_back(alpha_value);
-        if (alpha_value == alpha_max)
-        {
-            break;
-        }
-    }
-    return alpha_list;
-}
 
 HRLExecutionOptions MakePotentialAnalysisExecutionOptions(int thread_size, bool quiet_mode)
 {
@@ -834,69 +798,120 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     ScopeTimer timer("PotentialAnalysisCommand::RunAtomAlphaTraining");
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
-    const auto alpha_training_list{
-        BuildAlphaTrainingList(
-            request.training_alpha_min,
-            request.training_alpha_max,
-            request.training_alpha_step)
-    };
-    Logger::Log(
-        LogLevel::Info,
-        "Alpha training search grid: min = " + std::to_string(request.training_alpha_min)
-            + ", max = " + std::to_string(request.training_alpha_max)
-            + ", step = " + std::to_string(request.training_alpha_step)
-            + ", count = " + std::to_string(alpha_training_list.size()));
+    HRLAlphaTrainer alpha_trainer(
+        request.training_alpha_min,
+        request.training_alpha_max,
+        request.training_alpha_step);
+    const auto & alpha_training_list{ alpha_trainer.AlphaGrid() };
+    Logger::Log(LogLevel::Info, alpha_trainer.GetAlphaGridSummary().str());
 
-    const size_t subset_size_alpha_r{ 5 };
-    
     // Alpha_R Training
     const auto & atom_list{ model_object.GetSelectedAtoms() };
     std::vector<AtomObject *> selected_atom_list;
+    std::vector<HRLMemberDataset> selected_atom_dataset_list;
     selected_atom_list.reserve(atom_list.size());
+    selected_atom_dataset_list.reserve(atom_list.size());
     for (auto & atom : atom_list)
     {
         if (atom->IsMainChainAtom() == false) continue;
         const auto local_entry{ analysis.EnsureAtomLocalPotential(*atom) };
         if (!local_entry.HasDataset()) continue;
         selected_atom_list.emplace_back(atom);
+        selected_atom_dataset_list.emplace_back(local_entry.GetDataset());
     }
     selected_atom_list.shrink_to_fit();
+    selected_atom_dataset_list.shrink_to_fit();
     
     auto selected_atom_size{ selected_atom_list.size() };
     Logger::Log(LogLevel::Info,
         "Run Alpha_R Training with "+ std::to_string(selected_atom_size) +" atoms.");
-    auto alpha_r{ TrainAlphaR(
-        model_object,
-        selected_atom_list,
-        subset_size_alpha_r,
-        alpha_training_list)
-    };
+    auto alpha_r{ alpha_training_list.front() };
+    if (!selected_atom_dataset_list.empty())
+    {
+        HRLAlphaTrainer::AlphaRTrainingOptions alpha_r_options;
+        alpha_r_options.execution_options =
+            MakePotentialAnalysisExecutionOptions(ThreadSize(), true);
+        alpha_r_options.progress_callback =
+            [](std::size_t completed, std::size_t total)
+            {
+                Logger::ProgressPercent(completed, total);
+            };
+        const auto alpha_r_result{
+            alpha_trainer.TrainAlphaR(
+                selected_atom_dataset_list,
+                alpha_r_options)
+        };
+        alpha_r = alpha_r_result.best_alpha;
+    }
+    else
+    {
+        Logger::Log(
+            LogLevel::Warning,
+            "Skip Alpha_R Training because no eligible atoms were selected.");
+    }
+    Logger::Log(
+        LogLevel::Info,
+        "Alpha_R Training Results Summary: minimum beta error sum alpha_r = "
+        + std::to_string(alpha_r));
     
     // Alpha_G Training
     RunLocalFitting(model_object, alpha_r);
-    const size_t subset_size_alpha_g{ 10 };
     
     std::vector<std::vector<AtomObject *>> atom_list_set;
+    std::vector<std::vector<Eigen::VectorXd>> beta_group_list;
     const auto component_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     const auto component_group_keys{ analysis_view.CollectAtomGroupKeys(component_class_key) };
     atom_list_set.reserve(component_group_keys.size());
+    beta_group_list.reserve(component_group_keys.size());
     for (const auto group_key : component_group_keys)
     {
         const auto & group_atom_list{ analysis_view.GetAtomObjectList(group_key, component_class_key) };
         if (group_atom_list.size() < 10) continue;
         if (group_atom_list.front()->IsMainChainAtom() == false) continue;
         atom_list_set.emplace_back(group_atom_list);
+
+        std::vector<Eigen::VectorXd> beta_list;
+        beta_list.reserve(group_atom_list.size());
+        for (auto * atom : group_atom_list)
+        {
+            beta_list.emplace_back(
+                analysis.EnsureAtomLocalPotential(*atom).GetFitResult().beta_mdpde
+            );
+        }
+        beta_group_list.emplace_back(std::move(beta_list));
     }
 
     auto selected_group_size{ atom_list_set.size() };
     Logger::Log(LogLevel::Info,
         "Run Alpha_G Training with "+ std::to_string(selected_group_size) +" groups.");
-    auto alpha_g{ TrainAlphaG(
-        model_object,
-        atom_list_set,
-        subset_size_alpha_g,
-        alpha_training_list)
-    };
+    auto alpha_g{ alpha_training_list.front() };
+    if (!beta_group_list.empty())
+    {
+        HRLAlphaTrainer::AlphaGTrainingOptions alpha_g_options;
+        alpha_g_options.execution_options =
+            MakePotentialAnalysisExecutionOptions(ThreadSize(), true);
+        alpha_g_options.progress_callback =
+            [](std::size_t completed, std::size_t total)
+            {
+                Logger::ProgressPercent(completed, total);
+            };
+        const auto alpha_g_result{
+            alpha_trainer.TrainAlphaG(
+                beta_group_list,
+                alpha_g_options)
+        };
+        alpha_g = alpha_g_result.best_alpha;
+    }
+    else
+    {
+        Logger::Log(
+            LogLevel::Warning,
+            "Skip Alpha_G Training because no eligible groups were selected.");
+    }
+    Logger::Log(
+        LogLevel::Info,
+        "Alpha_G Training Results Summary: minimum mu error sum alpha_g = "
+        + std::to_string(alpha_g));
 
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {
@@ -917,127 +932,6 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
         atom_list_set,
         alpha_training_list,
         request.training_report_dir);
-}
-
-double PotentialAnalysisCommand::TrainAlphaR(
-    ModelObject & model_object,
-    const std::vector<AtomObject *> & atom_list,
-    const size_t subset_size,
-    const std::vector<double> & alpha_list)
-{
-    auto atom_size{ atom_list.size() };
-    auto alpha_size{ static_cast<int>(alpha_list.size()) };
-    std::atomic<size_t> atom_count{ 0 };
-    Eigen::ArrayXd beta_error_sum_array{ Eigen::ArrayXd::Zero(alpha_size) };
-    auto analysis{ model_object.EditAnalysis() };
-    std::unordered_map<const AtomObject *, MutableLocalPotentialView> local_entry_map;
-    local_entry_map.reserve(atom_list.size());
-    for (auto * atom : atom_list)
-    {
-        local_entry_map.emplace(atom, analysis.EnsureAtomLocalPotential(*atom));
-    }
-
-#ifdef USE_OPENMP
-    #pragma omp parallel for schedule(dynamic) num_threads(ThreadSize())
-#endif
-    for (size_t i = 0; i < atom_size; i++)
-    {
-        const auto local_entry{ local_entry_map.at(atom_list[i]) };
-        auto error_array{
-            HRLAlphaTrainer::EvaluateAlphaR(
-                local_entry.GetDataset(),
-                subset_size,
-                alpha_list,
-                MakePotentialAnalysisExecutionOptions(ThreadSize(), true)
-            )
-        };
-        
-#ifdef USE_OPENMP
-        #pragma omp critical
-#endif
-        {
-            beta_error_sum_array += error_array.array();
-            atom_count++;
-            Logger::ProgressPercent(atom_count, atom_size);
-        }
-    }
-
-    int error_min_id;
-    beta_error_sum_array.minCoeff(&error_min_id);
-    auto alpha_r_error{ alpha_list.at(static_cast<size_t>(error_min_id)) };
-
-    Logger::Log(
-        LogLevel::Info,
-        "Alpha_R Training Results Summary: minimum beta error sum alpha_r = "
-        + std::to_string(alpha_r_error));
-
-    return alpha_r_error;
-}
-
-double PotentialAnalysisCommand::TrainAlphaG(
-    ModelObject & model_object,
-    const std::vector<std::vector<AtomObject *>> & atom_list_set,
-    const size_t subset_size,
-    const std::vector<double> & alpha_list)
-{
-    auto alpha_size{ static_cast<int>(alpha_list.size()) };
-    auto group_size{ atom_list_set.size() };
-    std::atomic<size_t> group_count{ 0 };
-    Eigen::ArrayXd mu_error_sum_array{ Eigen::ArrayXd::Zero(alpha_size) };
-    auto analysis{ model_object.EditAnalysis() };
-    std::unordered_map<const AtomObject *, MutableLocalPotentialView> local_entry_map;
-    for (const auto & group_atom_list : atom_list_set)
-    {
-        for (auto * atom : group_atom_list)
-        {
-            local_entry_map.try_emplace(atom, analysis.EnsureAtomLocalPotential(*atom));
-        }
-    }
-
-#ifdef USE_OPENMP
-    #pragma omp parallel for schedule(dynamic) num_threads(ThreadSize())
-#endif
-    for (size_t i = 0; i < group_size; i++)
-    {
-        auto & group_atom_list{ atom_list_set[i] };
-        std::vector<Eigen::VectorXd> data_entry_list;
-        data_entry_list.reserve(group_atom_list.size());
-        for (auto atom : group_atom_list)
-        {
-            data_entry_list.emplace_back(
-                local_entry_map.at(atom).GetFitResult().beta_mdpde
-            );
-        }
-
-        auto error_array{
-            HRLAlphaTrainer::EvaluateAlphaG(
-                data_entry_list,
-                subset_size,
-                alpha_list,
-                MakePotentialAnalysisExecutionOptions(ThreadSize(), true)
-            )
-        };
-        
-#ifdef USE_OPENMP
-        #pragma omp critical
-#endif
-        {
-            mu_error_sum_array += error_array.array();
-            group_count++;
-            Logger::ProgressPercent(group_count, group_size);
-        }
-    }
-
-    int error_min_id;
-    mu_error_sum_array.minCoeff(&error_min_id);
-    auto alpha_g_error{ alpha_list.at(static_cast<size_t>(error_min_id)) };
-
-    Logger::Log(
-        LogLevel::Info,
-        "Alpha_G Training Results Summary: minimum mu error sum alpha_g = "
-        + std::to_string(alpha_g_error));
-
-    return alpha_g_error;
 }
 
 void PotentialAnalysisCommand::RunLocalFitting(
