@@ -341,10 +341,12 @@ void PotentialAnalysisCommand::RunFittingWorkflow(
     if (request.training_alpha_flag)
     {
         RunAtomAlphaTraining(model_object, request.training_report_dir);
-        return;
     }
-
-    RunLocalFitting(model_object, request.alpha_r);
+    else
+    {
+        RunLocalFitting(model_object, request.alpha_r);
+    }
+    
     RunAtomPotentialFitting(model_object, request.training_alpha_flag, request.alpha_g);
     RunExperimentalBondWorkflowIfEnabled(model_object, map_object, request);
 }
@@ -809,8 +811,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     {
         if (atom->IsMainChainAtom() == false) continue;
         const auto local_entry{ analysis.EnsureAtomLocalPotential(*atom) };
-        if (!local_entry.HasDataset() ||
-            local_entry.GetDataset().y.size() < 500) continue;
+        if (!local_entry.HasDataset()) continue;
         selected_atom_list.emplace_back(atom);
     }
     selected_atom_list.shrink_to_fit();
