@@ -260,7 +260,6 @@ bool PotentialAnalysisCommand::ExecuteImpl()
         map_object, model_object,
         request.sampling_size, request.sampling_range_min, request.sampling_range_max);
     RunDatasetPreparationWorkflow(model_object, request.fit_range_min, request.fit_range_max);
-    RunGroupingWorkflow(model_object);
     RunFittingWorkflow(model_object, map_object, request);
     SavePreparedModel(model_object, request.saved_key_tag);
     return true;
@@ -392,12 +391,17 @@ void PotentialAnalysisCommand::RunModelObjectPreprocessing(
         analysis.EnsureBondLocalPotential(*bond);
     }
 
+    // Establish the model-analysis preprocessing invariant for downstream steps:
+    // selection is finalized, local entries exist, and atom groups are materialized.
+    analysis.RebuildAtomGroupsFromSelection();
+
     Logger::Log(LogLevel::Info,
         "Number of selected atom = "
             + std::to_string(model_object.GetSelectedAtomCount()));
     Logger::Log(LogLevel::Info,
         "Number of selected bond = "
             + std::to_string(model_object.GetSelectedBondCount()));
+    Logger::Log(LogLevel::Info, model_object.GetAnalysisView().DescribeAtomGrouping());
     if (model_object.GetNumberOfAtom() > 0 &&
         model_object.GetSelectedAtomCount() == 0)
     {
@@ -786,23 +790,6 @@ void PotentialAnalysisCommand::RunDatasetPreparationWorkflow(
     }
 }
 
-void PotentialAnalysisCommand::RunGroupingWorkflow(ModelObject & model_object)
-{
-    ScopeTimer timer("RunGroupingWorkflow");
-    Logger::Log(LogLevel::Info, "Atom Grouping Summary:");
-    auto analysis{ model_object.EditAnalysis() };
-    analysis.RebuildAtomGroupsFromSelection();
-    const auto analysis_view{ model_object.GetAnalysisView() };
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
-    {
-        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        const auto group_size{ analysis_view.CollectAtomGroupKeys(class_key).size() };
-        Logger::Log(
-            LogLevel::Info,
-            " - Class type: " + class_key + " include " + std::to_string(group_size) + " groups.");
-    }
-}
-
 void PotentialAnalysisCommand::RunAtomAlphaTraining(
     ModelObject & model_object,
     const std::filesystem::path & training_report_dir)
@@ -1041,6 +1028,5 @@ void PotentialAnalysisCommand::RunLocalFitting(
         }
     }
 }
-
 
 } // namespace rhbm_gem

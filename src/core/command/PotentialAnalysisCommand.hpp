@@ -47,7 +47,6 @@ private:
         ModelObject & model_object,
         double fit_range_min,
         double fit_range_max);
-    void RunGroupingWorkflow(ModelObject & model_object);
     void RunAtomAlphaTraining(
         ModelObject & model_object,
         const std::filesystem::path & training_report_dir);

@@ -97,10 +97,12 @@ TEST(CommandApiPipelineTest, PotentialAnalysisTrainingEmitsRequestedAlphaRReport
     const auto maps_dir{ temp_dir.path() / "maps" };
     const auto analysis_output_dir{ temp_dir.path() / "analysis_output" };
     const auto training_report_dir{ temp_dir.path() / "training_reports" };
+    const auto dump_output_dir{ temp_dir.path() / "dump_output" };
     const auto database_path{ temp_dir.path() / "training.sqlite" };
 
     std::filesystem::create_directories(maps_dir);
     std::filesystem::create_directories(analysis_output_dir);
+    std::filesystem::create_directories(dump_output_dir);
 
     rg::MapSimulationRequest simulation_request;
     simulation_request.output_dir = maps_dir;
@@ -132,4 +134,16 @@ TEST(CommandApiPipelineTest, PotentialAnalysisTrainingEmitsRequestedAlphaRReport
     };
     ASSERT_TRUE(analysis_result.succeeded);
     EXPECT_TRUE(std::filesystem::exists(training_report_dir / "alpha_r_bias.pdf"));
+
+    rg::ResultDumpRequest dump_request;
+    dump_request.database_path = database_path;
+    dump_request.output_dir = dump_output_dir;
+    dump_request.printer_choice = rg::PrinterType::GAUS_ESTIMATES;
+    dump_request.model_key_tag_list = { "trained_model" };
+
+    const auto dump_result{
+        rg::RunResultDump(dump_request)
+    };
+    ASSERT_TRUE(dump_result.succeeded);
+    EXPECT_GT(CountRegularFiles(dump_output_dir), 0u);
 }

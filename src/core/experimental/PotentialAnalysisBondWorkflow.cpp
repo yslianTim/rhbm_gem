@@ -142,19 +142,10 @@ void RunBondSampling(
 void RunBondGrouping(ModelObject & model_object)
 {
     ScopeTimer timer("PotentialAnalysisBondWorkflow::RunBondGroupClassification");
-    Logger::Log(LogLevel::Info, "Bond Classification Summary:");
     auto analysis{ model_object.EditAnalysis() };
     analysis.RebuildBondGroupsFromSelection();
     const auto analysis_view{ model_object.GetAnalysisView() };
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupBondClassCount(); i++)
-    {
-        const auto & class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
-        const auto group_size{ analysis_view.CollectBondGroupKeys(class_key).size() };
-        Logger::Log(
-            LogLevel::Info,
-            " - Class type: " + class_key + " include "
-                + std::to_string(group_size) + " groups.");
-    }
+    Logger::Log(LogLevel::Info, analysis_view.DescribeBondGrouping());
 }
 
 void RunBondMapValueSampling(const PotentialAnalysisBondWorkflowContext & context)

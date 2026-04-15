@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <tuple>
@@ -21,6 +22,18 @@ struct LocalPotentialAnnotationView
     GaussianPosterior posterior{};
     bool is_outlier{ false };
     double statistical_distance{ 0.0 };
+};
+
+struct GroupingSummaryItem
+{
+    std::string class_key{};
+    size_t group_count{ 0 };
+};
+
+struct GroupingSummary
+{
+    std::string title{};
+    std::vector<GroupingSummaryItem> items{};
 };
 
 class LocalPotentialView
@@ -72,6 +85,10 @@ public:
     static ModelAnalysisView Of(const ModelObject & model_object);
 
     bool HasGroupedAnalysisData() const;
+    GroupingSummary CollectAtomGroupingSummary() const;
+    GroupingSummary CollectBondGroupingSummary() const;
+    std::string DescribeAtomGrouping() const;
+    std::string DescribeBondGrouping() const;
     double GetAtomGausEstimateMinimum(int par_id, Element element) const;
     double GetBondGausEstimateMinimum(int par_id) const;
     bool HasAtomGroup(GroupKey group_key, const std::string & class_key, bool verbose=false) const;

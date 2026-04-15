@@ -521,6 +521,105 @@ TEST(DataObjectModelAnalysisTest, CollectBondGroupKeysReturnsRebuiltGroupKeySet)
     EXPECT_TRUE(analysis_data.CollectBondGroupKeys("missing_bond_class").empty());
 }
 
+TEST(DataObjectModelAnalysisTest, AtomGroupingSummaryIncludesAllConfiguredClassesInHelperOrder)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    model->SelectAllAtoms();
+    model->ApplySymmetrySelection(false);
+    auto analysis{ model->EditAnalysis() };
+    analysis.RebuildAtomGroupsFromSelection();
+
+    const auto summary{ model->GetAnalysisView().CollectAtomGroupingSummary() };
+
+    EXPECT_EQ(summary.title, "Atom Grouping Summary:");
+    ASSERT_EQ(summary.items.size(), ChemicalDataHelper::GetGroupAtomClassCount());
+    for (size_t i = 0; i < summary.items.size(); i++)
+    {
+        const auto & expected_class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
+        EXPECT_EQ(summary.items.at(i).class_key, expected_class_key);
+        EXPECT_EQ(
+            summary.items.at(i).group_count,
+            model->GetAnalysisView().CollectAtomGroupKeys(expected_class_key).size());
+    }
+}
+
+TEST(DataObjectModelAnalysisTest, BondGroupingSummaryIncludesAllConfiguredClassesInHelperOrder)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    model->SelectAllBonds();
+    auto analysis{ model->EditAnalysis() };
+    analysis.RebuildBondGroupsFromSelection();
+
+    const auto summary{ model->GetAnalysisView().CollectBondGroupingSummary() };
+
+    EXPECT_EQ(summary.title, "Bond Classification Summary:");
+    ASSERT_EQ(summary.items.size(), ChemicalDataHelper::GetGroupBondClassCount());
+    for (size_t i = 0; i < summary.items.size(); i++)
+    {
+        const auto & expected_class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
+        EXPECT_EQ(summary.items.at(i).class_key, expected_class_key);
+        EXPECT_EQ(
+            summary.items.at(i).group_count,
+            model->GetAnalysisView().CollectBondGroupKeys(expected_class_key).size());
+    }
+}
+
+TEST(DataObjectModelAnalysisTest, GroupingSummariesAreSafeBeforeRebuildAndReportZeroCounts)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    model->SelectAllAtoms(false);
+    model->SelectAllBonds(false);
+
+    const auto analysis_view{ model->GetAnalysisView() };
+    const auto atom_summary{ analysis_view.CollectAtomGroupingSummary() };
+    const auto bond_summary{ analysis_view.CollectBondGroupingSummary() };
+
+    ASSERT_EQ(atom_summary.items.size(), ChemicalDataHelper::GetGroupAtomClassCount());
+    for (const auto & item : atom_summary.items)
+    {
+        EXPECT_EQ(item.group_count, 0U);
+    }
+
+    ASSERT_EQ(bond_summary.items.size(), ChemicalDataHelper::GetGroupBondClassCount());
+    for (const auto & item : bond_summary.items)
+    {
+        EXPECT_EQ(item.group_count, 0U);
+    }
+}
+
+TEST(DataObjectModelAnalysisTest, GroupingDescriptionsMatchExpectedOutputFormat)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    model->SelectAllAtoms();
+    model->SelectAllBonds();
+    model->ApplySymmetrySelection(false);
+    auto analysis{ model->EditAnalysis() };
+    analysis.RebuildAtomGroupsFromSelection();
+    analysis.RebuildBondGroupsFromSelection();
+
+    const auto analysis_view{ model->GetAnalysisView() };
+    std::string expected_atom_description{ "Atom Grouping Summary:" };
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
+    {
+        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
+        expected_atom_description +=
+            "\n - Class type: " + class_key + " include "
+            + std::to_string(analysis_view.CollectAtomGroupKeys(class_key).size()) + " groups.";
+    }
+
+    std::string expected_bond_description{ "Bond Classification Summary:" };
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupBondClassCount(); i++)
+    {
+        const auto & class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
+        expected_bond_description +=
+            "\n - Class type: " + class_key + " include "
+            + std::to_string(analysis_view.CollectBondGroupKeys(class_key).size()) + " groups.";
+    }
+
+    EXPECT_EQ(analysis_view.DescribeAtomGrouping(), expected_atom_description);
+    EXPECT_EQ(analysis_view.DescribeBondGrouping(), expected_bond_description);
+}
+
 TEST(DataObjectModelAnalysisTest, ModelAtomsExposeStableSerialAndPositionInputsForTypedWorkflows)
 {
     auto model{ data_test::MakeModelWithBond() };

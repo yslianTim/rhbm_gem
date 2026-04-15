@@ -56,6 +56,40 @@ const EntryT * RequireGroupEntry(
     return entry;
 }
 
+template <typename ClassKeyFn, typename GroupCountFn>
+GroupingSummary BuildGroupingSummary(
+    std::string title,
+    size_t class_count,
+    ClassKeyFn get_class_key,
+    GroupCountFn get_group_count)
+{
+    GroupingSummary summary;
+    summary.title = std::move(title);
+    summary.items.reserve(class_count);
+    for (size_t i = 0; i < class_count; i++)
+    {
+        const auto & class_key{ get_class_key(i) };
+        summary.items.push_back(GroupingSummaryItem{
+            class_key,
+            get_group_count(class_key)
+        });
+    }
+    return summary;
+}
+
+std::string DescribeGroupingSummary(const GroupingSummary & summary)
+{
+    std::ostringstream oss;
+    oss << summary.title;
+    for (const auto & item : summary.items)
+    {
+        oss << '\n'
+            << " - Class type: " << item.class_key
+            << " include " << item.group_count << " groups.";
+    }
+    return oss.str();
+}
+
 } // namespace
 
 LocalPotentialView::LocalPotentialView(const AtomObject * atom_object) :
@@ -196,6 +230,40 @@ bool ModelAnalysisView::HasGroupedAnalysisData() const
 {
     const auto & analysis_data{ ModelAnalysisData::Of(m_model_object) };
     return !analysis_data.AtomGroupEntries().empty() || !analysis_data.BondGroupEntries().empty();
+}
+
+GroupingSummary ModelAnalysisView::CollectAtomGroupingSummary() const
+{
+    return BuildGroupingSummary(
+        "Atom Grouping Summary:",
+        ChemicalDataHelper::GetGroupAtomClassCount(),
+        ChemicalDataHelper::GetGroupAtomClassKey,
+        [this](const std::string & class_key)
+        {
+            return CollectAtomGroupKeys(class_key).size();
+        });
+}
+
+GroupingSummary ModelAnalysisView::CollectBondGroupingSummary() const
+{
+    return BuildGroupingSummary(
+        "Bond Classification Summary:",
+        ChemicalDataHelper::GetGroupBondClassCount(),
+        ChemicalDataHelper::GetGroupBondClassKey,
+        [this](const std::string & class_key)
+        {
+            return CollectBondGroupKeys(class_key).size();
+        });
+}
+
+std::string ModelAnalysisView::DescribeAtomGrouping() const
+{
+    return DescribeGroupingSummary(CollectAtomGroupingSummary());
+}
+
+std::string ModelAnalysisView::DescribeBondGrouping() const
+{
+    return DescribeGroupingSummary(CollectBondGroupingSummary());
 }
 
 double ModelAnalysisView::GetAtomGausEstimateMinimum(int par_id, Element element) const
