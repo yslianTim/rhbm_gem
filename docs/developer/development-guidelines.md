@@ -119,6 +119,5 @@ Change-integration principles:
 ## 11. Quality Checks and Validation Alignment
 
 - `[Required]` Keep repository guard checks passing through `lint_repo` (structure, hygiene, logging style, fixture tracking, command-manifest sync, and absolute-path checks).
-- `[Recommended]` Run targeted formatter checks with `/resources/tools/developer/run_clang_format_check.sh` when touching covered painter/parser paths.
 - `[Recommended]` Run targeted static analysis with `/resources/tools/developer/run_clang_tidy_check.sh` (baseline mode when appropriate) when touching covered painter/parser paths.
 - `[Recommended]` For broad or risky changes, run `/resources/tools/developer/run_ctest_with_classification.sh` in addition to normal `ctest`.

@@ -109,12 +109,6 @@ contract tests.
 
 ## Static Quality Checks (Targeted)
 
-Format check for painter/parser directories:
-
-```bash
-bash resources/tools/developer/run_clang_format_check.sh
-```
-
 Clang-tidy check for painter/parser directories:
 
 ```bash

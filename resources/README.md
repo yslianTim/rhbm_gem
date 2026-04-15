@@ -28,7 +28,6 @@ Ownership rules:
 - [`resources/tools/developer/command_scaffold.py`](/resources/tools/developer/command_scaffold.py): generate a new command/binding/test/doc scaffold.
   - add `--wire` to also update `CommandManifest.def`.
   - add `--wire --strict` to fail-fast if manifest update fails.
-- [`resources/tools/developer/run_clang_format_check.sh`](/resources/tools/developer/run_clang_format_check.sh): check formatting for painter/parser directories (check-only).
 - [`resources/tools/developer/run_clang_tidy_check.sh`](/resources/tools/developer/run_clang_tidy_check.sh): run clang-tidy for painter/parser source files (check-only),
   and optionally compare warning counts with [`resources/tools/developer/clang_tidy_baseline.json`](/resources/tools/developer/clang_tidy_baseline.json).
 - [`resources/tools/developer/check_clang_tidy_baseline.py`](/resources/tools/developer/check_clang_tidy_baseline.py): compare/update clang-tidy warning baseline.
