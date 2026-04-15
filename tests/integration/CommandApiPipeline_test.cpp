@@ -38,6 +38,21 @@ std::size_t CountRegularFiles(const std::filesystem::path & directory)
 
 } // namespace
 
+TEST(CommandApiPipelineTest, PotentialAnalysisRequestExposesTrainingAlphaGridControls)
+{
+    rg::PotentialAnalysisRequest request;
+    EXPECT_DOUBLE_EQ(request.training_alpha_min, 0.0);
+    EXPECT_DOUBLE_EQ(request.training_alpha_max, 1.0);
+    EXPECT_DOUBLE_EQ(request.training_alpha_step, 0.1);
+
+    request.training_alpha_min = 0.2;
+    request.training_alpha_max = 0.8;
+    request.training_alpha_step = 0.2;
+    EXPECT_DOUBLE_EQ(request.training_alpha_min, 0.2);
+    EXPECT_DOUBLE_EQ(request.training_alpha_max, 0.8);
+    EXPECT_DOUBLE_EQ(request.training_alpha_step, 0.2);
+}
+
 TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
 {
     command_test::ScopedTempDir temp_dir{ "command_executor_pipeline" };

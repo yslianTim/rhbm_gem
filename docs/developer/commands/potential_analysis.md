@@ -41,6 +41,9 @@ Command-specific fields:
 - `saved_key_tag`
 - `training_report_dir`
 - `training_alpha_flag`
+- `training_alpha_min`
+- `training_alpha_max`
+- `training_alpha_step`
 - `asymmetry_flag`
 - `sampling_size`
 - `sampling_range_min`
@@ -67,12 +70,14 @@ Expected result contract:
 
 - validates required model and map paths
 - coerces invalid scalar inputs back to command defaults when the command is designed to recover
+- coerces invalid training alpha grid scalar values back to `0.0..1.0` with step `0.1`
 - resets empty `saved_key_tag` values back to `"model"` and records a parse-phase issue
 
 `PotentialAnalysisCommand::ValidateOptions()` performs prepare-phase semantic checks:
 
 - `--simulation` requires positive simulated resolution
 - sampling and fit ranges must be ordered correctly
+- training alpha ranges must satisfy `--training-alpha-min <= --training-alpha-max`
 
 `PotentialAnalysisCommand::ExecuteImpl()`:
 

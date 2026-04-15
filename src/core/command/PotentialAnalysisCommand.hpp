@@ -49,7 +49,7 @@ private:
         double fit_range_max);
     void RunAtomAlphaTraining(
         ModelObject & model_object,
-        const std::filesystem::path & training_report_dir);
+        const PotentialAnalysisRequest & request);
     double TrainUniversalAlphaR(
         ModelObject & model_object,
         const std::vector<AtomObject *> & atom_list,

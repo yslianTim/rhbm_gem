@@ -74,6 +74,41 @@ TEST(CommandValidationScenariosTest, PotentialAnalysisRejectsInvertedSamplingRan
         nullptr);
 }
 
+TEST(CommandValidationScenariosTest, PotentialAnalysisRejectsInvertedTrainingAlphaRangeAtPrepare)
+{
+    rg::PotentialAnalysisCommand command{};
+    rg::PotentialAnalysisRequest request{};
+    request.training_alpha_min = 1.0;
+    request.training_alpha_max = 0.5;
+
+    EXPECT_FALSE(ApplyAndRun(command, request));
+    EXPECT_FALSE(command.WasPrepared());
+    EXPECT_NE(
+        command_test::FindValidationIssue(
+            command,
+            "--training-alpha-range",
+            rg::ValidationPhase::Prepare,
+            LogLevel::Error),
+        nullptr);
+}
+
+TEST(CommandValidationScenariosTest, PotentialAnalysisCoercesInvalidTrainingAlphaStepAtParse)
+{
+    rg::PotentialAnalysisCommand command{};
+    rg::PotentialAnalysisRequest request{};
+    request.training_alpha_step = 0.0;
+
+    EXPECT_FALSE(ApplyAndRun(command, request));
+    EXPECT_FALSE(command.WasPrepared());
+    EXPECT_NE(
+        command_test::FindValidationIssue(
+            command,
+            "--training-alpha-step",
+            rg::ValidationPhase::Parse,
+            LogLevel::Error),
+        nullptr);
+}
+
 TEST(CommandValidationScenariosTest, PotentialAnalysisRejectsEmptySavedKeyAtParse)
 {
     rg::PotentialAnalysisCommand command{};

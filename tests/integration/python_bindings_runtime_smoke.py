@@ -78,6 +78,20 @@ def assert_request_objects_are_usable() -> None:
     assert Path(simulation.output_dir) == Path("runtime_smoke_output")
     assert simulation.blurring_width_list == [1.50]
 
+    analysis = m.PotentialAnalysisRequest()
+    for field_name in (
+        "training_alpha_min",
+        "training_alpha_max",
+        "training_alpha_step",
+    ):
+        assert hasattr(analysis, field_name), f"PotentialAnalysisRequest missing {field_name}"
+    analysis.training_alpha_min = 0.2
+    analysis.training_alpha_max = 0.8
+    analysis.training_alpha_step = 0.2
+    assert analysis.training_alpha_min == 0.2
+    assert analysis.training_alpha_max == 0.8
+    assert analysis.training_alpha_step == 0.2
+
 
 def has_issue(report, option_name: str) -> bool:
     return any(

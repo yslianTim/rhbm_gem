@@ -22,8 +22,8 @@
 #include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
 
-#include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <iterator>
 #include <limits>
 #include <memory>
@@ -54,20 +54,46 @@ constexpr std::string_view kFitMinOption{ "--fit-min" };
 constexpr std::string_view kFitMaxOption{ "--fit-max" };
 constexpr std::string_view kAlphaROption{ "--alpha-r" };
 constexpr std::string_view kAlphaGOption{ "--alpha-g" };
+constexpr std::string_view kTrainingAlphaMinOption{ "--training-alpha-min" };
+constexpr std::string_view kTrainingAlphaMaxOption{ "--training-alpha-max" };
+constexpr std::string_view kTrainingAlphaStepOption{ "--training-alpha-step" };
 constexpr std::string_view kSamplingRangeIssue{ "--sampling-range" };
 constexpr std::string_view kFitRangeIssue{ "--fit-range" };
+constexpr std::string_view kTrainingAlphaRangeIssue{ "--training-alpha-range" };
+constexpr double kAlphaGridTolerance{ 1.0e-12 };
 
-std::vector<double> BuildOrderedAlphaRTrainingList()
+std::vector<double> BuildAlphaTrainingList(
+    double alpha_min,
+    double alpha_max,
+    double alpha_step)
 {
-    std::vector<double> alpha_list{ 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 };
-    std::sort(alpha_list.begin(), alpha_list.end());
-    return alpha_list;
-}
+    if (!std::isfinite(alpha_min) || !std::isfinite(alpha_max) || !std::isfinite(alpha_step) ||
+        alpha_min < 0.0 || alpha_max < 0.0 || alpha_step <= 0.0 || alpha_min > alpha_max)
+    {
+        throw std::invalid_argument("Invalid alpha training range or step.");
+    }
 
-std::vector<double> BuildOrderedAlphaGTrainingList()
-{
-    std::vector<double> alpha_list{ 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 };
-    std::sort(alpha_list.begin(), alpha_list.end());
+    std::vector<double> alpha_list;
+    for (double alpha{ alpha_min };
+         alpha <= alpha_max + kAlphaGridTolerance;
+         alpha += alpha_step)
+    {
+        auto alpha_value{ alpha };
+        if (std::abs(alpha_value - alpha_max) <= kAlphaGridTolerance)
+        {
+            alpha_value = alpha_max;
+        }
+        if (alpha_value > alpha_max)
+        {
+            break;
+        }
+
+        alpha_list.emplace_back(alpha_value);
+        if (alpha_value == alpha_max)
+        {
+            break;
+        }
+    }
     return alpha_list;
 }
 
@@ -246,6 +272,36 @@ void PotentialAnalysisCommand::NormalizeRequest()
         0.2,
         LogLevel::Error,
         "Alpha-G must be a finite positive value.");
+    CoerceScalar(
+        request.training_alpha_min,
+        kTrainingAlphaMinOption,
+        [](double candidate)
+        {
+            return std::isfinite(candidate) && candidate >= 0.0;
+        },
+        0.0,
+        LogLevel::Error,
+        "Minimum training alpha must be a finite non-negative value.");
+    CoerceScalar(
+        request.training_alpha_max,
+        kTrainingAlphaMaxOption,
+        [](double candidate)
+        {
+            return std::isfinite(candidate) && candidate >= 0.0;
+        },
+        1.0,
+        LogLevel::Error,
+        "Maximum training alpha must be a finite non-negative value.");
+    CoerceScalar(
+        request.training_alpha_step,
+        kTrainingAlphaStepOption,
+        [](double candidate)
+        {
+            return std::isfinite(candidate) && candidate > 0.0;
+        },
+        0.1,
+        LogLevel::Error,
+        "Training alpha step must be a finite positive value.");
 }
 
 bool PotentialAnalysisCommand::ExecuteImpl()
@@ -280,6 +336,10 @@ void PotentialAnalysisCommand::ValidateOptions()
         request.fit_range_min <= request.fit_range_max,
         kFitRangeIssue,
         "Expected --fit-min <= --fit-max.");
+    RequireCondition(
+        request.training_alpha_min <= request.training_alpha_max,
+        kTrainingAlphaRangeIssue,
+        "Expected --training-alpha-min <= --training-alpha-max.");
 }
 
 void PotentialAnalysisCommand::ResetRuntimeState()
@@ -340,7 +400,7 @@ void PotentialAnalysisCommand::RunFittingWorkflow(
 {
     if (request.training_alpha_flag)
     {
-        RunAtomAlphaTraining(model_object, request.training_report_dir);
+        RunAtomAlphaTraining(model_object, request);
     }
     else
     {
@@ -794,14 +854,25 @@ void PotentialAnalysisCommand::RunDatasetPreparationWorkflow(
 
 void PotentialAnalysisCommand::RunAtomAlphaTraining(
     ModelObject & model_object,
-    const std::filesystem::path & training_report_dir)
+    const PotentialAnalysisRequest & request)
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunAtomAlphaTraining");
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
+    const auto alpha_training_list{
+        BuildAlphaTrainingList(
+            request.training_alpha_min,
+            request.training_alpha_max,
+            request.training_alpha_step)
+    };
+    Logger::Log(
+        LogLevel::Info,
+        "Alpha training search grid: min = " + std::to_string(request.training_alpha_min)
+            + ", max = " + std::to_string(request.training_alpha_max)
+            + ", step = " + std::to_string(request.training_alpha_step)
+            + ", count = " + std::to_string(alpha_training_list.size()));
 
     const size_t subset_size_alpha_r{ 5 };
-    const auto ordered_alpha_r_list{ BuildOrderedAlphaRTrainingList() };
     
     // Alpha_R Training
     const auto & atom_list{ model_object.GetSelectedAtoms() };
@@ -820,13 +891,15 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     Logger::Log(LogLevel::Info,
         "Run Alpha_R Training with "+ std::to_string(selected_atom_size) +" atoms.");
     auto alpha_r{ TrainUniversalAlphaR(
-        model_object, selected_atom_list, subset_size_alpha_r, ordered_alpha_r_list)
+        model_object,
+        selected_atom_list,
+        subset_size_alpha_r,
+        alpha_training_list)
     };
     
     // Alpha_G Training
     RunLocalFitting(model_object, alpha_r);
     const size_t subset_size_alpha_g{ 10 };
-    const auto ordered_alpha_g_list{ BuildOrderedAlphaGTrainingList() };
     
     std::vector<std::vector<AtomObject *>> atom_list_set;
     const auto component_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
@@ -845,7 +918,9 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
         "Run Alpha_G Training with "+ std::to_string(selected_group_size) +" groups.");
     auto alpha_g{ TrainUniversalAlphaG(
         model_object,
-        atom_list_set, subset_size_alpha_g, ordered_alpha_g_list)
+        atom_list_set,
+        subset_size_alpha_g,
+        alpha_training_list)
     };
 
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
@@ -860,13 +935,13 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     StudyAtomLocalFittingViaAlphaR(
         model_object,
         selected_atom_list,
-        ordered_alpha_r_list,
-        training_report_dir);
+        alpha_training_list,
+        request.training_report_dir);
     StudyAtomGroupFittingViaAlphaG(
         model_object,
         atom_list_set,
-        ordered_alpha_g_list,
-        training_report_dir);
+        alpha_training_list,
+        request.training_report_dir);
 }
 
 double PotentialAnalysisCommand::TrainUniversalAlphaR(

@@ -71,6 +71,9 @@ struct PotentialAnalysisRequest : public CommandRequestBase
     std::string saved_key_tag{ "model" };
     std::filesystem::path training_report_dir{};
     bool training_alpha_flag{ false };
+    double training_alpha_min{ 0.0 };
+    double training_alpha_max{ 1.0 };
+    double training_alpha_step{ 0.1 };
     bool asymmetry_flag{ false };
     int sampling_size{ 1500 };
     double sampling_range_min{ 0.0 };

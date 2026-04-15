@@ -211,6 +211,21 @@ struct CommandRequestSchema<PotentialAnalysisRequest>
             "Turn On/Off alpha training flag",
             &Self::training_alpha_flag));
         visitor(MakeScalarField<Self>(
+            "training_alpha_min",
+            "--training-alpha-min",
+            "Minimum alpha value for training search",
+            &Self::training_alpha_min));
+        visitor(MakeScalarField<Self>(
+            "training_alpha_max",
+            "--training-alpha-max",
+            "Maximum alpha value for training search",
+            &Self::training_alpha_max));
+        visitor(MakeScalarField<Self>(
+            "training_alpha_step",
+            "--training-alpha-step",
+            "Step size for alpha training search",
+            &Self::training_alpha_step));
+        visitor(MakeScalarField<Self>(
             "asymmetry_flag",
             "--asymmetry",
             "Turn On/Off asymmetry flag",
