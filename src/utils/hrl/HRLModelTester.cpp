@@ -17,6 +17,16 @@
 
 namespace
 {
+constexpr std::size_t kAlphaRSubsetSize{ 5 };
+constexpr double kAlphaRMin{ 0.0 };
+constexpr double kAlphaRMax{ 2.0 };
+constexpr double kAlphaRStep{ 0.1 };
+
+constexpr std::size_t kAlphaGSubsetSize{ 10 };
+constexpr double kAlphaGMin{ 0.0 };
+constexpr double kAlphaGMax{ 1.0 };
+constexpr double kAlphaGStep{ 0.1 };
+
 int ValidatePositive(int value, const char * name)
 {
     if (value <= 0)
@@ -24,6 +34,14 @@ int ValidatePositive(int value, const char * name)
         throw std::invalid_argument(std::string(name) + " must be positive value");
     }
     return value;
+}
+
+HRLExecutionOptions MakeTesterExecutionOptions()
+{
+    HRLExecutionOptions options;
+    options.quiet_mode = true;
+    options.thread_size = 1;
+    return options;
 }
 } // namespace
 
@@ -301,8 +319,8 @@ bool HRLModelTester::RunBetaMDPDETest(
     (void)thread_size;
 #endif
 
-    auto local_alpha_r_list{ alpha_r_list };
-    auto alpha_size{ local_alpha_r_list.size() + 1 }; // add one for training alpha_r
+    const auto local_alpha_r_list{ alpha_r_list };
+    const auto alpha_size{ local_alpha_r_list.size() + 1 }; // add one for training alpha_r
     std::vector<Eigen::MatrixXd> residual_matrix_ols_list(alpha_size);
     std::vector<Eigen::MatrixXd> residual_matrix_mdpde_list(alpha_size);
     residual_matrix_ols_list.assign(
@@ -316,12 +334,10 @@ bool HRLModelTester::RunBetaMDPDETest(
     residual_sigma_ols_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
     residual_sigma_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
 
-    const size_t subset_size_alpha_r{ 5 };
-    std::vector<double> train_alpha_r_list{
-        0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
-        1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0
-    };
-    local_alpha_r_list.emplace_back(0.0);
+    const HRLAlphaTrainer alpha_r_trainer{ kAlphaRMin, kAlphaRMax, kAlphaRStep };
+    HRLAlphaTrainer::AlphaRTrainingOptions alpha_r_training_options;
+    alpha_r_training_options.subset_size = kAlphaRSubsetSize;
+    alpha_r_training_options.execution_options = MakeTesterExecutionOptions();
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
@@ -335,26 +351,24 @@ bool HRLModelTester::RunBetaMDPDETest(
         };
         const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
 
-        auto error_array{
-            HRLAlphaTrainer::EvaluateAlphaR(
-                dataset,
-                subset_size_alpha_r,
-                train_alpha_r_list
+        const auto alpha_r_training_result{
+            alpha_r_trainer.TrainAlphaR(
+                std::vector<HRLMemberDataset>{ dataset },
+                alpha_r_training_options
             )
         };
-        int error_min_id;
-        error_array.minCoeff(&error_min_id);
-        auto alpha_r_train{ train_alpha_r_list.at(static_cast<size_t>(error_min_id)) };
-        local_alpha_r_list.back() = alpha_r_train; // update training alpha_r for each replica
-
-        HRLExecutionOptions options;
-        options.quiet_mode = true;
-        options.thread_size = thread_size;
+        const auto trained_alpha_r{ alpha_r_training_result.best_alpha };
+        const auto options{ MakeTesterExecutionOptions() };
 
         for (size_t j = 0; j < alpha_size; j++)
         {
+            const auto alpha{
+                j < local_alpha_r_list.size()
+                    ? local_alpha_r_list.at(j)
+                    : trained_alpha_r
+            };
             const auto beta_result = HRLModelAlgorithms::EstimateBetaMDPDE(
-                local_alpha_r_list.at(j),
+                alpha,
                 dataset,
                 options
             );
@@ -404,8 +418,8 @@ bool HRLModelTester::RunMuMDPDETest(
     (void)thread_size;
 #endif
 
-    auto local_alpha_g_list{ alpha_g_list };
-    auto alpha_size{ local_alpha_g_list.size() + 1 }; // add one for training alpha_g
+    const auto local_alpha_g_list{ alpha_g_list };
+    const auto alpha_size{ local_alpha_g_list.size() + 1 }; // add one for training alpha_g
     std::vector<Eigen::MatrixXd> residual_matrix_median_list(alpha_size);
     std::vector<Eigen::MatrixXd> residual_matrix_mdpde_list(alpha_size);
     residual_matrix_median_list.assign(
@@ -419,9 +433,10 @@ bool HRLModelTester::RunMuMDPDETest(
     residual_sigma_median_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
     residual_sigma_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
 
-    const size_t subset_size_alpha_g{ 10 };
-    std::vector<double> train_alpha_g_list{ 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 };
-    local_alpha_g_list.emplace_back(0.0);
+    const HRLAlphaTrainer alpha_g_trainer{ kAlphaGMin, kAlphaGMax, kAlphaGStep };
+    HRLAlphaTrainer::AlphaGTrainingOptions alpha_g_training_options;
+    alpha_g_training_options.subset_size = kAlphaGSubsetSize;
+    alpha_g_training_options.execution_options = MakeTesterExecutionOptions();
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
@@ -440,25 +455,24 @@ bool HRLModelTester::RunMuMDPDETest(
         std::vector<Eigen::VectorXd> train_data_entry_list;
         for (int m = 0; m < beta_matrix.cols(); m++) train_data_entry_list.emplace_back(beta_matrix.col(m));
 
-        auto error_array{
-            HRLAlphaTrainer::EvaluateAlphaG(
-                train_data_entry_list,
-                subset_size_alpha_g,
-                train_alpha_g_list
+        const auto alpha_g_training_result{
+            alpha_g_trainer.TrainAlphaG(
+                std::vector<std::vector<Eigen::VectorXd>>{ train_data_entry_list },
+                alpha_g_training_options
             )
         };
-        int error_min_id;
-        error_array.minCoeff(&error_min_id);
-        local_alpha_g_list.back() = train_alpha_g_list.at(static_cast<size_t>(error_min_id));
-        
-        HRLExecutionOptions options;
-        options.quiet_mode = true;
-        options.thread_size = thread_size;
+        const auto trained_alpha_g{ alpha_g_training_result.best_alpha };
+        const auto options{ MakeTesterExecutionOptions() };
 
         for (size_t j = 0; j < alpha_size; j++)
         {
+            const auto alpha{
+                j < local_alpha_g_list.size()
+                    ? local_alpha_g_list.at(j)
+                    : trained_alpha_g
+            };
             const auto mdpde_result = HRLModelAlgorithms::EstimateMuMDPDE(
-                local_alpha_g_list.at(j),
+                alpha,
                 beta_matrix,
                 options
             );
@@ -517,11 +531,10 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
     residual_mean_list.assign(method_size, Eigen::VectorXd::Zero(m_gaus_par_size));
     residual_sigma_list.assign(method_size, Eigen::VectorXd::Zero(m_gaus_par_size));
 
-    const size_t subset_size_alpha_r{ 5 };
-    std::vector<double> train_alpha_r_list{
-        0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
-        1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0
-    };
+    const HRLAlphaTrainer alpha_r_trainer{ kAlphaRMin, kAlphaRMax, kAlphaRStep };
+    HRLAlphaTrainer::AlphaRTrainingOptions alpha_r_training_options;
+    alpha_r_training_options.subset_size = kAlphaRSubsetSize;
+    alpha_r_training_options.execution_options = MakeTesterExecutionOptions();
 
     training_alpha_r_average = 0.0;
 
@@ -543,21 +556,21 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
         const auto no_cut_dataset{ HRLDataTransform::BuildMemberDataset(no_cut_data_entry_list) };
         const auto cut_dataset{ HRLDataTransform::BuildMemberDataset(cut_data_entry_list) };
 
-        auto no_cut_error_array{
-            HRLAlphaTrainer::EvaluateAlphaR(no_cut_dataset, subset_size_alpha_r, train_alpha_r_list)
+        const auto no_cut_training_result{
+            alpha_r_trainer.TrainAlphaR(
+                std::vector<HRLMemberDataset>{ no_cut_dataset },
+                alpha_r_training_options
+            )
         };
-        auto cut_error_array{
-            HRLAlphaTrainer::EvaluateAlphaR(cut_dataset, subset_size_alpha_r, train_alpha_r_list)
+        const auto cut_training_result{
+            alpha_r_trainer.TrainAlphaR(
+                std::vector<HRLMemberDataset>{ cut_dataset },
+                alpha_r_training_options
+            )
         };
-        int no_cut_error_min_id, cut_error_min_id;
-        no_cut_error_array.minCoeff(&no_cut_error_min_id);
-        cut_error_array.minCoeff(&cut_error_min_id);
-        auto no_cut_alpha_r_train{ train_alpha_r_list.at(static_cast<size_t>(no_cut_error_min_id)) };
-        auto cut_alpha_r_train{ train_alpha_r_list.at(static_cast<size_t>(cut_error_min_id)) };
-
-        HRLExecutionOptions options;
-        options.quiet_mode = true;
-        options.thread_size = thread_size;
+        const auto no_cut_alpha_r_train{ no_cut_training_result.best_alpha };
+        const auto cut_alpha_r_train{ cut_training_result.best_alpha };
+        const auto options{ MakeTesterExecutionOptions() };
 
         auto no_cut_result{
             HRLModelAlgorithms::EstimateBetaMDPDE(no_cut_alpha_r_train, no_cut_dataset, options)

@@ -50,20 +50,6 @@ public:
     const std::vector<double> & AlphaGrid() const { return m_alpha_grid; }
     std::ostringstream GetAlphaGridSummary() const;
 
-    static Eigen::VectorXd EvaluateAlphaR(
-        const HRLMemberDataset & dataset,
-        std::size_t subset_size,
-        const std::vector<double> & alpha_list,
-        const HRLExecutionOptions & options = {}
-    );
-
-    static Eigen::VectorXd EvaluateAlphaG(
-        const std::vector<Eigen::VectorXd> & beta_list,
-        std::size_t subset_size,
-        const std::vector<double> & alpha_list,
-        const HRLExecutionOptions & options = {}
-    );
-
     AlphaTrainingResult TrainAlphaR(
         const std::vector<HRLMemberDataset> & dataset_list) const;
 

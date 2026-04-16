@@ -119,67 +119,8 @@ HRLAlphaTrainer::AlphaTrainingResult BuildTrainingResult(
     result.error_sum_list = error_sum_list;
     return result;
 }
-} // namespace
 
-HRLAlphaTrainer::HRLAlphaTrainer(
-    double alpha_min,
-    double alpha_max,
-    double alpha_step) :
-    m_alpha_min{ alpha_min },
-    m_alpha_max{ alpha_max },
-    m_alpha_step{ alpha_step },
-    m_alpha_grid{ BuildAlphaGrid(alpha_min, alpha_max, alpha_step) }
-{
-}
-
-std::ostringstream HRLAlphaTrainer::GetAlphaGridSummary() const
-{
-    std::ostringstream summary;
-    summary
-        << "Alpha training search grid: min = " << std::to_string(m_alpha_min)
-        << ", max = " << std::to_string(m_alpha_max)
-        << ", step = " << std::to_string(m_alpha_step)
-        << ", count = " << std::to_string(m_alpha_grid.size());
-    return summary;
-}
-
-std::vector<double> HRLAlphaTrainer::BuildAlphaGrid(
-    double alpha_min,
-    double alpha_max,
-    double alpha_step)
-{
-    if (!std::isfinite(alpha_min) || !std::isfinite(alpha_max) ||
-        !std::isfinite(alpha_step) || alpha_min < 0.0 ||
-        alpha_max < 0.0 || alpha_step <= 0.0 || alpha_min > alpha_max)
-    {
-        throw std::invalid_argument("Invalid alpha training range or step.");
-    }
-
-    std::vector<double> alpha_list;
-    for (double alpha{ alpha_min };
-         alpha <= alpha_max + kAlphaGridTolerance;
-         alpha += alpha_step)
-    {
-        auto alpha_value{ alpha };
-        if (std::abs(alpha_value - alpha_max) <= kAlphaGridTolerance)
-        {
-            alpha_value = alpha_max;
-        }
-        if (alpha_value > alpha_max)
-        {
-            break;
-        }
-
-        alpha_list.emplace_back(alpha_value);
-        if (alpha_value == alpha_max)
-        {
-            break;
-        }
-    }
-    return alpha_list;
-}
-
-Eigen::VectorXd HRLAlphaTrainer::EvaluateAlphaR(
+Eigen::VectorXd EvaluateAlphaRForDataset(
     const HRLMemberDataset & dataset,
     std::size_t subset_size,
     const std::vector<double> & alpha_list,
@@ -261,7 +202,7 @@ Eigen::VectorXd HRLAlphaTrainer::EvaluateAlphaR(
     return error_sum_list;
 }
 
-Eigen::VectorXd HRLAlphaTrainer::EvaluateAlphaG(
+Eigen::VectorXd EvaluateAlphaGForGroup(
     const std::vector<Eigen::VectorXd> & beta_list,
     std::size_t subset_size,
     const std::vector<double> & alpha_list,
@@ -319,6 +260,65 @@ Eigen::VectorXd HRLAlphaTrainer::EvaluateAlphaG(
 
     return error_sum_list;
 }
+} // namespace
+
+HRLAlphaTrainer::HRLAlphaTrainer(
+    double alpha_min,
+    double alpha_max,
+    double alpha_step) :
+    m_alpha_min{ alpha_min },
+    m_alpha_max{ alpha_max },
+    m_alpha_step{ alpha_step },
+    m_alpha_grid{ BuildAlphaGrid(alpha_min, alpha_max, alpha_step) }
+{
+}
+
+std::ostringstream HRLAlphaTrainer::GetAlphaGridSummary() const
+{
+    std::ostringstream summary;
+    summary
+        << "Alpha training search grid: min = " << std::to_string(m_alpha_min)
+        << ", max = " << std::to_string(m_alpha_max)
+        << ", step = " << std::to_string(m_alpha_step)
+        << ", count = " << std::to_string(m_alpha_grid.size());
+    return summary;
+}
+
+std::vector<double> HRLAlphaTrainer::BuildAlphaGrid(
+    double alpha_min,
+    double alpha_max,
+    double alpha_step)
+{
+    if (!std::isfinite(alpha_min) || !std::isfinite(alpha_max) ||
+        !std::isfinite(alpha_step) || alpha_min < 0.0 ||
+        alpha_max < 0.0 || alpha_step <= 0.0 || alpha_min > alpha_max)
+    {
+        throw std::invalid_argument("Invalid alpha training range or step.");
+    }
+
+    std::vector<double> alpha_list;
+    for (double alpha{ alpha_min };
+         alpha <= alpha_max + kAlphaGridTolerance;
+         alpha += alpha_step)
+    {
+        auto alpha_value{ alpha };
+        if (std::abs(alpha_value - alpha_max) <= kAlphaGridTolerance)
+        {
+            alpha_value = alpha_max;
+        }
+        if (alpha_value > alpha_max)
+        {
+            break;
+        }
+
+        alpha_list.emplace_back(alpha_value);
+        if (alpha_value == alpha_max)
+        {
+            break;
+        }
+    }
+    return alpha_list;
+}
 
 HRLAlphaTrainer::AlphaTrainingResult HRLAlphaTrainer::TrainAlphaR(
     const std::vector<HRLMemberDataset> & dataset_list) const
@@ -352,7 +352,7 @@ HRLAlphaTrainer::AlphaTrainingResult HRLAlphaTrainer::TrainAlphaR(
     for (std::size_t i = 0; i < dataset_size; i++)
     {
         const auto error_array{
-            EvaluateAlphaR(
+            EvaluateAlphaRForDataset(
                 dataset_list.at(i),
                 options.subset_size,
                 m_alpha_grid,
@@ -403,7 +403,7 @@ HRLAlphaTrainer::AlphaTrainingResult HRLAlphaTrainer::TrainAlphaG(
     for (std::size_t i = 0; i < group_size; i++)
     {
         const auto error_array{
-            EvaluateAlphaG(
+            EvaluateAlphaGForGroup(
                 beta_group_list.at(i),
                 options.subset_size,
                 m_alpha_grid,

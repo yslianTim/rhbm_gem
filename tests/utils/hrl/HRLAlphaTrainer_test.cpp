@@ -84,7 +84,7 @@ TEST(HRLAlphaTrainerTest, ConstructorRejectsInvalidAlphaGrid)
     EXPECT_THROW(HRLAlphaTrainer(0.0, 1.0, 0.0), std::invalid_argument);
 }
 
-TEST(HRLAlphaTrainerTest, EvaluateAlphaRWithExactLinearDataReturnsZeroError)
+TEST(HRLAlphaTrainerTest, TrainAlphaRSingleDatasetWithExactLinearDataReturnsZeroError)
 {
     const SeriesPointList data_list{
         SeriesPoint({ 1.0, 0.0 }, 1.0),
@@ -95,60 +95,35 @@ TEST(HRLAlphaTrainerTest, EvaluateAlphaRWithExactLinearDataReturnsZeroError)
         SeriesPoint({ 1.0, 5.0 }, 11.0)
     };
     const auto dataset{ HRLDataTransform::BuildMemberDataset(data_list) };
+    const HRLAlphaTrainer trainer{ 0.0, 0.5, 0.5 };
+    HRLAlphaTrainer::AlphaRTrainingOptions options;
+    options.subset_size = 3;
 
-    const auto error_sum_list{
-        HRLAlphaTrainer::EvaluateAlphaR(dataset, 3, { 0.0, 0.5 })
-    };
+    const auto result{ trainer.TrainAlphaR({ dataset }, options) };
 
-    EXPECT_NEAR(0.0, error_sum_list(0), 1e-12);
-    EXPECT_NEAR(0.0, error_sum_list(1), 1e-12);
+    ASSERT_EQ(result.error_sum_list.size(), 2);
+    EXPECT_NEAR(0.0, result.error_sum_list(0), 1e-12);
+    EXPECT_NEAR(0.0, result.error_sum_list(1), 1e-12);
+    EXPECT_DOUBLE_EQ(result.best_alpha, BestAlphaForErrors(trainer.AlphaGrid(), result.error_sum_list));
 }
 
-TEST(HRLAlphaTrainerTest, EvaluateAlphaGWithIdenticalBetasReturnsZeroError)
+TEST(HRLAlphaTrainerTest, TrainAlphaGSingleGroupWithIdenticalBetasReturnsZeroError)
 {
     const std::vector<Eigen::VectorXd> beta_list(6, MakeVector({ 1.5, -0.5 }));
+    const HRLAlphaTrainer trainer{ 0.0, 1.0, 0.5 };
+    HRLAlphaTrainer::AlphaGTrainingOptions options;
+    options.subset_size = 4;
 
-    const auto error_sum_list{
-        HRLAlphaTrainer::EvaluateAlphaG(beta_list, 4, { 0.0, 0.5, 1.0 })
-    };
+    const auto result{ trainer.TrainAlphaG({ beta_list }, options) };
 
-    EXPECT_NEAR(0.0, error_sum_list(0), 1e-12);
-    EXPECT_NEAR(0.0, error_sum_list(1), 1e-12);
-    EXPECT_NEAR(0.0, error_sum_list(2), 1e-12);
+    ASSERT_EQ(result.error_sum_list.size(), 3);
+    EXPECT_NEAR(0.0, result.error_sum_list(0), 1e-12);
+    EXPECT_NEAR(0.0, result.error_sum_list(1), 1e-12);
+    EXPECT_NEAR(0.0, result.error_sum_list(2), 1e-12);
+    EXPECT_DOUBLE_EQ(result.best_alpha, BestAlphaForErrors(trainer.AlphaGrid(), result.error_sum_list));
 }
 
-TEST(HRLAlphaTrainerTest, EvaluateAlphaRRejectsInvalidSubsetSize)
-{
-    const SeriesPointList data_list{
-        SeriesPoint({ 1.0, 0.0 }, 1.0),
-        SeriesPoint({ 1.0, 1.0 }, 3.0)
-    };
-    const auto dataset{ HRLDataTransform::BuildMemberDataset(data_list) };
-
-    EXPECT_THROW(HRLAlphaTrainer::EvaluateAlphaR(dataset, 0, { 0.0 }), std::invalid_argument);
-    EXPECT_THROW(HRLAlphaTrainer::EvaluateAlphaR(dataset, 3, { 0.0 }), std::invalid_argument);
-}
-
-TEST(HRLAlphaTrainerTest, EvaluateAlphaGWithSeedIsDeterministic)
-{
-    const std::vector<Eigen::VectorXd> beta_list{
-        MakeVector({ 1.0, 2.0 }),
-        MakeVector({ 1.5, 2.5 }),
-        MakeVector({ 2.0, 3.0 }),
-        MakeVector({ 2.5, 3.5 }),
-        MakeVector({ 3.0, 4.0 }),
-        MakeVector({ 3.5, 4.5 })
-    };
-    HRLExecutionOptions options;
-    options.random_seed = 42U;
-
-    const auto first{ HRLAlphaTrainer::EvaluateAlphaG(beta_list, 3, { 0.0, 0.5 }, options) };
-    const auto second{ HRLAlphaTrainer::EvaluateAlphaG(beta_list, 3, { 0.0, 0.5 }, options) };
-
-    EXPECT_TRUE(first.isApprox(second, 1e-12));
-}
-
-TEST(HRLAlphaTrainerTest, TrainAlphaRAggregatesDatasetErrorsAndSelectsMinimum)
+TEST(HRLAlphaTrainerTest, TrainAlphaRAggregatesSingleBatchResultsAndSelectsMinimum)
 {
     const HRLAlphaTrainer trainer{ 0.0, 1.0, 0.5 };
     const auto & alpha_list{ trainer.AlphaGrid() };
@@ -160,12 +135,44 @@ TEST(HRLAlphaTrainerTest, TrainAlphaRAggregatesDatasetErrorsAndSelectsMinimum)
     HRLAlphaTrainer::AlphaRTrainingOptions options;
     options.subset_size = 3;
     const auto result{ trainer.TrainAlphaR(dataset_list, options) };
-    const auto expected_error_sum{
-        (
-            HRLAlphaTrainer::EvaluateAlphaR(dataset_list.at(0), options.subset_size, alpha_list)
-            + HRLAlphaTrainer::EvaluateAlphaR(dataset_list.at(1), options.subset_size, alpha_list)
-        ).eval()
+    const auto first_single{ trainer.TrainAlphaR({ dataset_list.at(0) }, options) };
+    const auto second_single{ trainer.TrainAlphaR({ dataset_list.at(1) }, options) };
+    const auto expected_error_sum{ (first_single.error_sum_list + second_single.error_sum_list).eval() };
+
+    EXPECT_TRUE(result.error_sum_list.isApprox(expected_error_sum, 1e-12));
+    EXPECT_DOUBLE_EQ(result.best_alpha, BestAlphaForErrors(alpha_list, result.error_sum_list));
+}
+
+TEST(HRLAlphaTrainerTest, TrainAlphaGAggregatesSingleBatchResultsAndSelectsMinimum)
+{
+    const HRLAlphaTrainer trainer{ 0.0, 1.0, 0.5 };
+    const auto & alpha_list{ trainer.AlphaGrid() };
+    const std::vector<std::vector<Eigen::VectorXd>> beta_group_list{
+        {
+            MakeVector({ 1.0, 2.0 }),
+            MakeVector({ 1.5, 2.5 }),
+            MakeVector({ 2.0, 3.0 }),
+            MakeVector({ 2.5, 3.5 }),
+            MakeVector({ 3.0, 4.0 }),
+            MakeVector({ 3.5, 4.5 })
+        },
+        {
+            MakeVector({ -1.0, 0.5 }),
+            MakeVector({ -1.5, 1.0 }),
+            MakeVector({ -2.0, 1.5 }),
+            MakeVector({ -2.5, 2.0 }),
+            MakeVector({ -3.0, 2.5 }),
+            MakeVector({ -3.5, 3.0 })
+        }
     };
+    HRLAlphaTrainer::AlphaGTrainingOptions options;
+    options.subset_size = 3;
+    options.execution_options.random_seed = 11U;
+
+    const auto result{ trainer.TrainAlphaG(beta_group_list, options) };
+    const auto first_single{ trainer.TrainAlphaG({ beta_group_list.at(0) }, options) };
+    const auto second_single{ trainer.TrainAlphaG({ beta_group_list.at(1) }, options) };
+    const auto expected_error_sum{ (first_single.error_sum_list + second_single.error_sum_list).eval() };
 
     EXPECT_TRUE(result.error_sum_list.isApprox(expected_error_sum, 1e-12));
     EXPECT_DOUBLE_EQ(result.best_alpha, BestAlphaForErrors(alpha_list, result.error_sum_list));
@@ -199,9 +206,13 @@ TEST(HRLAlphaTrainerTest, TrainAlphaGWithSeedIsDeterministic)
 
     const auto first{ trainer.TrainAlphaG(beta_group_list, options) };
     const auto second{ trainer.TrainAlphaG(beta_group_list, options) };
+    const auto single_first{ trainer.TrainAlphaG({ beta_group_list.at(0) }, options) };
+    const auto single_second{ trainer.TrainAlphaG({ beta_group_list.at(0) }, options) };
 
     EXPECT_TRUE(first.error_sum_list.isApprox(second.error_sum_list, 1e-12));
+    EXPECT_TRUE(single_first.error_sum_list.isApprox(single_second.error_sum_list, 1e-12));
     EXPECT_DOUBLE_EQ(first.best_alpha, second.best_alpha);
+    EXPECT_DOUBLE_EQ(single_first.best_alpha, single_second.best_alpha);
     EXPECT_DOUBLE_EQ(first.best_alpha, BestAlphaForErrors(alpha_list, first.error_sum_list));
 }
 
