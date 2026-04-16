@@ -44,22 +44,11 @@ private:
     void RunAtomAlphaTraining(
         ModelObject & model_object,
         const PotentialAnalysisRequest & request);
-    void RunLocalFitting(ModelObject & model_object, double alpha_r);
+    void RunLocalPotentialFitting(ModelObject & model_object, double alpha_r);
     void RunAtomPotentialFittingWorkflow(
         ModelObject & model_object,
         const PotentialAnalysisRequest & request);
     void SavePreparedModel(ModelObject & model_object, std::string_view saved_key_tag);
-
-    void EmitAtomLocalAlphaRBiasReport(
-        const Eigen::MatrixXd & gaus_bias_matrix,
-        const std::vector<double> & alpha_list,
-        const std::filesystem::path & training_report_dir
-    );
-    void EmitAtomGroupAlphaGBiasReport(
-        const Eigen::MatrixXd & gaus_bias_matrix,
-        const std::vector<double> & alpha_list,
-        const std::filesystem::path & training_report_dir
-    );
 
 };
 

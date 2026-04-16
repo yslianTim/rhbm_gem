@@ -86,8 +86,7 @@ bool EmitTrainingReportIfRequested(
     std::filesystem::create_directories(report_path.parent_path(), ec);
     if (ec)
     {
-        Logger::Log(
-            LogLevel::Warning,
+        Logger::Log(LogLevel::Warning,
             "Failed to create training report directory '" +
                 report_path.parent_path().string() + "': " + ec.message());
         return false;
@@ -104,16 +103,14 @@ bool EmitTrainingReportIfRequested(
     }
     catch (const std::exception & ex)
     {
-        Logger::Log(
-            LogLevel::Warning,
+        Logger::Log(LogLevel::Warning,
             "Failed to emit training report '" + report_path.string() + "': " + ex.what());
         return false;
     }
 
     if (!std::filesystem::exists(report_path))
     {
-        Logger::Log(
-            LogLevel::Warning,
+        Logger::Log(LogLevel::Warning,
             "Training report output was requested but no file was produced: " +
                 report_path.string());
         return false;
@@ -425,7 +422,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFittingWorkflow(
     }
     else
     {
-        RunLocalFitting(model_object, request.alpha_r);
+        RunLocalPotentialFitting(model_object, request.alpha_r);
     }
 
     const int basis_size{ 2 };
@@ -489,61 +486,6 @@ void PotentialAnalysisCommand::RunAtomPotentialFittingWorkflow(
             }
         }
     }
-}
-
-void PotentialAnalysisCommand::EmitAtomLocalAlphaRBiasReport(
-    const Eigen::MatrixXd & gaus_bias_matrix,
-    const std::vector<double> & alpha_list,
-    const std::filesystem::path & training_report_dir)
-{
-    ScopeTimer timer("PotentialAnalysisCommand::EmitAtomLocalAlphaRBiasReport");
-
-    const bool report_emitted{
-        EmitTrainingReportIfRequested(
-            gaus_bias_matrix,
-            alpha_list,
-            "#alpha_{r}",
-            "Deviation with OLS",
-            training_report_dir,
-            "alpha_r_bias.pdf")
-    };
-    if (!report_emitted)
-    {
-        Logger::Log(
-            LogLevel::Debug,
-            "Alpha_R bias report was skipped (set --training-report-dir to emit PDF output).");
-    }
-
-    std::ostringstream alpha_r_bias_stream;
-    alpha_r_bias_stream << "Alpha_R bias matrix:\n" << gaus_bias_matrix;
-    Logger::Log(LogLevel::Debug, alpha_r_bias_stream.str());
-}
-
-void PotentialAnalysisCommand::EmitAtomGroupAlphaGBiasReport(
-    const Eigen::MatrixXd & gaus_bias_matrix,
-    const std::vector<double> & alpha_list,
-    const std::filesystem::path & training_report_dir)
-{
-    ScopeTimer timer("PotentialAnalysisCommand::EmitAtomGroupAlphaGBiasReport");
-
-    const bool report_emitted{
-        EmitTrainingReportIfRequested(
-            gaus_bias_matrix,
-            alpha_list,
-            "#alpha_{g}",
-            "Deviation with Mean",
-            training_report_dir,
-            "alpha_g_bias.pdf")
-    };
-    if (!report_emitted)
-    {
-        Logger::Log(
-            LogLevel::Debug,
-            "Alpha_G bias report was skipped (set --training-report-dir to emit PDF output).");
-    }
-    std::ostringstream alpha_g_bias_stream;
-    alpha_g_bias_stream << "Alpha_G bias matrix:\n" << gaus_bias_matrix;
-    Logger::Log(LogLevel::Debug, alpha_g_bias_stream.str());
 }
 
 void PotentialAnalysisCommand::SavePreparedModel(
@@ -698,10 +640,10 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
             "Skip Alpha_R Training because no eligible atoms were selected.");
     }
     Logger::Log(LogLevel::Info,
-        "Alpha_R Training Results Summary: minimum beta error sum alpha_r = "+ std::to_string(alpha_r));
+        "Alpha_R Training Results Summary: best alpha_r = "+ std::to_string(alpha_r));
     
     // Alpha_G Training
-    RunLocalFitting(model_object, alpha_r);
+    RunLocalPotentialFitting(model_object, alpha_r);
     
     std::vector<std::vector<Eigen::VectorXd>> beta_group_list;
     const auto component_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
@@ -771,14 +713,22 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     if (!selected_atom_dataset_list.empty())
     {
         const auto alpha_r_bias_matrix{
-            alpha_trainer.StudyAlphaRBias(
-                selected_atom_dataset_list,
-                alpha_bias_study_options)
+            alpha_trainer.StudyAlphaRBias(selected_atom_dataset_list, alpha_bias_study_options)
         };
-        EmitAtomLocalAlphaRBiasReport(
-            alpha_r_bias_matrix,
-            alpha_training_list,
-            request.training_report_dir);
+        const bool report_emitted{
+            EmitTrainingReportIfRequested(
+                alpha_r_bias_matrix,
+                alpha_training_list,
+                "#alpha_{r}",
+                "Deviation with OLS",
+                request.training_report_dir,
+                "alpha_r_bias.pdf")
+        };
+        if (!report_emitted)
+        {
+            Logger::Log(LogLevel::Debug,
+                "Alpha_R bias report was skipped (set --training-report-dir to emit PDF output).");
+        }
     }
     else
     {
@@ -789,14 +739,22 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     if (!beta_group_list.empty())
     {
         const auto alpha_g_bias_matrix{
-            alpha_trainer.StudyAlphaGBias(
-                beta_group_list,
-                alpha_bias_study_options)
+            alpha_trainer.StudyAlphaGBias(beta_group_list, alpha_bias_study_options)
         };
-        EmitAtomGroupAlphaGBiasReport(
-            alpha_g_bias_matrix,
-            alpha_training_list,
-            request.training_report_dir);
+        const bool report_emitted{
+            EmitTrainingReportIfRequested(
+                alpha_g_bias_matrix,
+                alpha_training_list,
+                "#alpha_{g}",
+                "Deviation with Mean",
+                request.training_report_dir,
+                "alpha_g_bias.pdf")
+        };
+        if (!report_emitted)
+        {
+            Logger::Log(LogLevel::Debug,
+                "Alpha_G bias report was skipped (set --training-report-dir to emit PDF output).");
+        }
     }
     else
     {
@@ -805,11 +763,11 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     }
 }
 
-void PotentialAnalysisCommand::RunLocalFitting(
+void PotentialAnalysisCommand::RunLocalPotentialFitting(
     ModelObject & model_object,
     double alpha_r)
 {
-    ScopeTimer timer("PotentialAnalysisCommand::RunLocalFitting");
+    ScopeTimer timer("PotentialAnalysisCommand::RunLocalPotentialFitting");
     auto thread_size{ ThreadSize() };
     std::atomic<size_t> atom_count{ 0 };
     const auto & selected_atom_list{ model_object.GetSelectedAtoms() };
