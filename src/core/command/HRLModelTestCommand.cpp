@@ -572,7 +572,7 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
     std::vector<Eigen::MatrixXd> sigma_matrix_mdpde_list;
     std::vector<Eigen::MatrixXd> sigma_matrix_train_list;
     
-    size_t neighbor_count{ 3 };
+    size_t neighbor_count{ 2 };
     auto rejected_angle{ 45.0 };
     auto distance_size{ 16 };
     auto distance_step_size{ 0.1 };

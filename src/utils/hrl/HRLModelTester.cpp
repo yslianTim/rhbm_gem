@@ -398,15 +398,10 @@ bool HRLModelTester::RunBetaMDPDETest(
                 options
             );
 
-            Eigen::VectorXd gaus_0{ Eigen::VectorXd::Zero(m_gaus_par_size) };
-            auto gaus_ols{
-                GausLinearTransformHelper::BuildGaus3DModel(beta_result.beta_ols, gaus_0)
-            };
-            auto gaus_mdpde{
-                GausLinearTransformHelper::BuildGaus3DModel(beta_result.beta_mdpde, gaus_0)
-            };
-            residual_matrix_ols_list.at(j).col(i) = CalculateNormalizedResidual(gaus_ols, gaus_true);
-            residual_matrix_mdpde_list.at(j).col(i) = CalculateNormalizedResidual(gaus_mdpde, gaus_true);
+            residual_matrix_ols_list.at(j).col(i) =
+                CalculateNormalizedResidual(beta_result.beta_ols, gaus_true);
+            residual_matrix_mdpde_list.at(j).col(i) =
+                CalculateNormalizedResidual(beta_result.beta_mdpde, gaus_true);
         }
     }
 
@@ -508,15 +503,10 @@ bool HRLModelTester::RunMuMDPDETest(
                 options
             );
 
-            Eigen::VectorXd gaus_0{ Eigen::VectorXd::Zero(m_gaus_par_size) };
-            auto gaus_ols{
-                GausLinearTransformHelper::BuildGaus3DModel(ols_result.mu_mdpde, gaus_0)
-            };
-            auto gaus_mdpde{
-                GausLinearTransformHelper::BuildGaus3DModel(mdpde_result.mu_mdpde, gaus_0)
-            };
-            residual_matrix_median_list.at(j).col(i) = CalculateNormalizedResidual(gaus_ols, gaus_true);
-            residual_matrix_mdpde_list.at(j).col(i) = CalculateNormalizedResidual(gaus_mdpde, gaus_true);
+            residual_matrix_median_list.at(j).col(i) =
+                CalculateNormalizedResidual(ols_result.mu_mdpde, gaus_true);
+            residual_matrix_mdpde_list.at(j).col(i) =
+                CalculateNormalizedResidual(mdpde_result.mu_mdpde, gaus_true);
         }
     }
 
@@ -606,19 +596,12 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
             HRLModelAlgorithms::EstimateBetaMDPDE(cut_alpha_r_train, cut_dataset, options)
         };
 
-        Eigen::VectorXd gaus_0{ Eigen::VectorXd::Zero(m_gaus_par_size) };
-        auto gaus_ols{
-            GausLinearTransformHelper::BuildGaus3DModel(no_cut_result.beta_ols, gaus_0)
-        };
-        auto gaus_mdpde_no_cut{
-            GausLinearTransformHelper::BuildGaus3DModel(no_cut_result.beta_mdpde, gaus_0)
-        };
-        auto gaus_mdpde_cut{
-            GausLinearTransformHelper::BuildGaus3DModel(cut_result.beta_mdpde, gaus_0)
-        };
-        replica_residual_list.at(0).col(i) = CalculateNormalizedResidual(gaus_ols, gaus_true);
-        replica_residual_list.at(1).col(i) = CalculateNormalizedResidual(gaus_mdpde_no_cut, gaus_true);
-        replica_residual_list.at(2).col(i) = CalculateNormalizedResidual(gaus_mdpde_cut, gaus_true);
+        replica_residual_list.at(0).col(i) =
+            CalculateNormalizedResidual(no_cut_result.beta_ols, gaus_true);
+        replica_residual_list.at(1).col(i) =
+            CalculateNormalizedResidual(no_cut_result.beta_mdpde, gaus_true);
+        replica_residual_list.at(2).col(i) =
+            CalculateNormalizedResidual(cut_result.beta_mdpde, gaus_true);
 
         #pragma omp critical
         {
@@ -651,12 +634,15 @@ bool HRLModelTester::CheckGausParametersDimension(const Eigen::VectorXd & gaus_p
 Eigen::VectorXd HRLModelTester::CalculateNormalizedResidual(
     const Eigen::VectorXd & estimate, const Eigen::VectorXd & truth)
 {
-    if (estimate.rows() != truth.rows())
+    CheckGausParametersDimension(truth);
+    const Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(m_gaus_par_size) };
+    const auto estimate_gaus{ GausLinearTransformHelper::BuildGaus3DModel(estimate, model_par_init) };
+    if (estimate_gaus.rows() != truth.rows())
     {
         Logger::Log(LogLevel::Error,
-            "estimate size " + std::to_string(estimate.rows()) +
+            "estimate size " + std::to_string(estimate_gaus.rows()) +
             " != model size " + std::to_string(truth.rows()));
         throw std::invalid_argument("model parameters size inconsistant.");
     }
-    return ((estimate - truth).array() / truth.array());
+    return ((estimate_gaus - truth).array() / truth.array()).matrix();
 }
