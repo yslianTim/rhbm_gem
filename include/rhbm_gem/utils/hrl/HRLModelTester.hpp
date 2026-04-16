@@ -6,20 +6,23 @@
 #include <Eigen/Dense>
 
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
+#include <rhbm_gem/utils/hrl/SimulationDataGenerator.hpp>
+
+class SimulationDataGenerator;
 
 class HRLModelTester
 {
     int m_gaus_par_size;
     int m_linear_basis_size;
     int m_replica_size;
-    double m_x_min, m_x_max;
+    SimulationDataGenerator m_data_generator;
 
 public:
     HRLModelTester() = delete;
     explicit HRLModelTester(int gaus_par_size, int linear_basis_size, int replica_size);
     ~HRLModelTester() = default;
 
-    void SetFittingRange(double x_min, double x_max) { m_x_min = x_min; m_x_max = x_max; }
+    void SetFittingRange(double x_min, double x_max);
     LocalPotentialSampleList RunDataEntryWithNeighborhoodTest(
         const Eigen::VectorXd & gaus_true,
         int sampling_entry_size,
@@ -69,8 +72,6 @@ public:
     );
 
 private:
-    friend class HRLModelTesterTestPeer;
-
     bool CheckGausParametersDimension(const Eigen::VectorXd & gaus_par);
     Eigen::MatrixXd BuildRandomGausParameters(
         int member_size,
@@ -82,37 +83,6 @@ private:
         std::mt19937 & generator
     );
     Eigen::MatrixXd BuildBetaMatrix(const Eigen::MatrixXd & gaus_array);
-    LocalPotentialSampleList BuildRandomGausSamplingEntry(
-        size_t sampling_entry_size,
-        const Eigen::VectorXd & gaus_par,
-        double outlier_ratio,
-        std::mt19937 & generator
-    );
-    LocalPotentialSampleList BuildRandomGausSamplingEntryWithNeighborhood(
-        size_t sampling_entry_size,
-        double radius_min,
-        double radius_max,
-        const Eigen::VectorXd & gaus_par,
-        double neighbor_distance = 2.0,
-        size_t neighbor_count = 1,
-        double angle = 0.0
-    );
-    SeriesPointList BuildRandomLinearDataEntry(
-        size_t sampling_entry_size,
-        const Eigen::VectorXd & gaus_par,
-        double error_sigma,
-        double outlier_ratio,
-        std::mt19937 & generator
-    );
-    SeriesPointList BuildRandomLinearDataEntryWithNeighborhood(
-        size_t sampling_entry_size,
-        const Eigen::VectorXd & gaus_par,
-        double error_sigma,
-        double neighbor_distance,
-        size_t neighbor_count,
-        double angle,
-        std::mt19937 & generator
-    );
     Eigen::VectorXd CalculateNormalizedResidual(
         const Eigen::VectorXd & estimate,
         const Eigen::VectorXd & true_value

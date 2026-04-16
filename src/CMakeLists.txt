@@ -79,6 +79,7 @@ target_sources(rhbm_gem PRIVATE
     utils/hrl/HRLGroupEstimator.cpp
     utils/hrl/HRLModelAlgorithms.cpp
     utils/hrl/HRLModelTester.cpp
+    utils/hrl/SimulationDataGenerator.cpp
 )
 
 if(RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE)

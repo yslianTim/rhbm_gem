@@ -3,8 +3,6 @@
 #include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
 #include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
-#include <rhbm_gem/utils/math/SamplingPointFilter.hpp>
-#include <rhbm_gem/utils/math/SphereSampler.hpp>
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
@@ -62,8 +60,13 @@ HRLModelTester::HRLModelTester(int gaus_par_size, int linear_basis_size, int rep
     m_gaus_par_size{ ValidatePositive(gaus_par_size, "gaus_par_size") },
     m_linear_basis_size{ ValidatePositive(linear_basis_size, "linear_basis_size") },
     m_replica_size{ replica_size },
-    m_x_min{ 0.0 }, m_x_max{ 1.0 }
+    m_data_generator{ m_gaus_par_size }
 {
+}
+
+void HRLModelTester::SetFittingRange(double x_min, double x_max)
+{
+    m_data_generator.SetFittingRange(x_min, x_max);
 }
 
 Eigen::MatrixXd HRLModelTester::BuildRandomGausParameters(
@@ -119,190 +122,6 @@ Eigen::MatrixXd HRLModelTester::BuildBetaMatrix(const Eigen::MatrixXd & gaus_arr
     return beta_matrix;
 }
 
-LocalPotentialSampleList HRLModelTester::BuildRandomGausSamplingEntry(
-    size_t sampling_entry_size,
-    const Eigen::VectorXd & gaus_par,
-    double outlier_ratio,
-    std::mt19937 & generator)
-{
-    CheckGausParametersDimension(gaus_par);
-    auto amplitude{ gaus_par(0) };
-    auto width{ gaus_par(1) };
-    //auto intersect{ gaus_par(2) };
-    auto intersect{ 0.0 };
-    std::uniform_real_distribution<> dist_distance(m_x_min, m_x_max);
-    std::uniform_real_distribution<> dist_outlier(0.0, 1.0);
-    LocalPotentialSampleList sampling_entry_list;
-    sampling_entry_list.reserve(sampling_entry_size);
-    for (size_t i = 0; i < sampling_entry_size; i++)
-    {
-        auto r{ dist_distance(generator) };
-        auto y{
-            amplitude * GausLinearTransformHelper::GetGaussianResponseAtDistance(r, width) + intersect
-        };
-        auto y_outlier{ 0.5 * amplitude * std::pow(Constants::two_pi * std::pow(width, 2), -1.5) };
-        if (dist_outlier(generator) < outlier_ratio)
-        {
-            y = y_outlier;
-        }
-        sampling_entry_list.emplace_back(LocalPotentialSample{
-            static_cast<float>(r),
-            static_cast<float>(y)
-        });
-    }
-    return sampling_entry_list;
-}
-
-LocalPotentialSampleList HRLModelTester::BuildRandomGausSamplingEntryWithNeighborhood(
-    size_t sampling_entry_size,
-    double radius_min,
-    double radius_max,
-    const Eigen::VectorXd & gaus_par,
-    double neighbor_distance,
-    size_t neighbor_count,
-    double angle)
-{
-    CheckGausParametersDimension(gaus_par);
-    const size_t max_neighbor_count{ 4 };
-    if (neighbor_count > max_neighbor_count)
-    {
-        throw std::invalid_argument("neighbor_count should be less than or equal to 4");
-    }
-    auto amplitude{ gaus_par(0) };
-    auto width{ gaus_par(1) };
-    auto intersect{ 0.0 };
-    Eigen::VectorXd atom_center{ Eigen::VectorXd::Zero(3) };
-    Eigen::VectorXd neighbor_center[max_neighbor_count];
-    for (size_t i = 0; i < max_neighbor_count; i++)
-    {
-        neighbor_center[i] = Eigen::VectorXd::Zero(3);
-    }
-
-    // 1 & 2 neighbor atoms
-    if (neighbor_count <= 2)
-    {
-        neighbor_center[0] << 1.0, 0.0, 0.0;
-        neighbor_center[1] << -1.0, 0.0, 0.0;
-    }
-    
-    // 3 neighbor atoms (angle = 120 degree)
-    if (neighbor_count == 3)
-    {
-        neighbor_center[0] << 1.0, 0.0, 0.0;
-        neighbor_center[1] << -0.5, std::sqrt(3) / 2.0, 0.0;
-        neighbor_center[2] << -0.5, -std::sqrt(3) / 2.0, 0.0;
-    }
-
-    // 4 neighbor atoms in tetrahedral arrangement
-    if (neighbor_count == 4)
-    {
-        neighbor_center[0] << 0.0, 0.0, 1.0;
-        neighbor_center[1] << 0.0, 2.0 * std::sqrt(2) / 3.0, -1.0 / 3.0;
-        neighbor_center[2] << -std::sqrt(6) / 3.0, -std::sqrt(2) / 3.0, -1.0 / 3.0;
-        neighbor_center[3] << std::sqrt(6) / 3.0, -std::sqrt(2) / 3.0, -1.0 / 3.0;
-    }
-
-    std::vector<Eigen::VectorXd> neighbor_center_list;
-    neighbor_center_list.reserve(neighbor_count);
-    for (size_t i = 0; i < neighbor_count; i++)
-    {
-        neighbor_center[i] *= neighbor_distance;
-        neighbor_center_list.emplace_back(neighbor_center[i]);
-    }
-
-    SphereSampler sampler;
-    sampler.SetSamplingProfile(
-        //SphereSamplingProfile::RadiusUniformRandom(
-        //    SphereDistanceRange{ radius_min, radius_max },
-        //    static_cast<unsigned int>(sampling_entry_size))
-        SphereSamplingProfile::FibonacciDeterministic(
-            SphereDistanceRange{ radius_min, radius_max },
-            0.1,
-            static_cast<unsigned int>(sampling_entry_size), false)
-    );
-    //sampler.Print();
-    const auto sampling_points{ sampler.GenerateSamplingPoints({ 0.0f, 0.0f, 0.0f }) };
-    const auto filtered_sampling_points{
-        rhbm_gem::SelectSamplingPoint(sampling_points, neighbor_center_list, angle)
-    };
-    LocalPotentialSampleList sampling_entry_list;
-    sampling_entry_list.reserve(filtered_sampling_points.size());
-    for (const auto & sampling_point : filtered_sampling_points)
-    {
-        Eigen::VectorXd point{ Eigen::VectorXd::Zero(3) };
-        point(0) = sampling_point.position[0];
-        point(1) = sampling_point.position[1];
-        point(2) = sampling_point.position[2];
-        auto y{
-            amplitude * GausLinearTransformHelper::GetGaussianPesponseAtPointWithNeighborhood(
-                point, atom_center, neighbor_center_list, width) + intersect
-        };
-        auto weight{ 1.0f };
-        sampling_entry_list.emplace_back(LocalPotentialSample{
-            sampling_point.distance,
-            static_cast<float>(y),
-            weight,
-            sampling_point.position
-        });
-    }
-    return sampling_entry_list;
-}
-
-SeriesPointList HRLModelTester::BuildRandomLinearDataEntry(
-    size_t sampling_entry_size,
-    const Eigen::VectorXd & gaus_par,
-    double error_sigma,
-    double outlier_ratio,
-    std::mt19937 & generator)
-{
-    auto sampling_entries{
-        BuildRandomGausSamplingEntry(
-            static_cast<size_t>(sampling_entry_size), gaus_par, outlier_ratio, generator)
-    };
-    auto linear_data_entry_list{
-        GausLinearTransformHelper::MapValueTransform(sampling_entries, m_x_min, m_x_max)
-    };
-    auto max_response{
-        gaus_par(0) * GausLinearTransformHelper::GetGaussianResponseAtDistance(0.0, gaus_par(1))
-    };
-    std::normal_distribution<> dist_error(0.0, error_sigma * max_response);
-    for (auto & data_entry : linear_data_entry_list)
-    {
-        data_entry.response += dist_error(generator);
-    }
-    return linear_data_entry_list;
-}
-
-SeriesPointList HRLModelTester::BuildRandomLinearDataEntryWithNeighborhood(
-    size_t sampling_entry_size,
-    const Eigen::VectorXd & gaus_par,
-    double error_sigma,
-    double neighbor_distance,
-    size_t neighbor_count,
-    double angle,
-    std::mt19937 & generator)
-{
-    auto sampling_entries{
-        BuildRandomGausSamplingEntryWithNeighborhood(
-            static_cast<size_t>(sampling_entry_size),
-            m_x_min, m_x_max,
-            gaus_par,
-            neighbor_distance, neighbor_count, angle)
-    };
-    auto linear_data_entry_list{
-        GausLinearTransformHelper::MapValueTransform(sampling_entries, m_x_min, m_x_max)
-    };
-    auto max_response{
-        gaus_par(0) * GausLinearTransformHelper::GetGaussianResponseAtDistance(0.0, gaus_par(1))
-    };
-    std::normal_distribution<> dist_error(0.0, error_sigma * max_response);
-    for (auto & data_entry : linear_data_entry_list)
-    {
-        data_entry.response += dist_error(generator);
-    }
-    return linear_data_entry_list;
-}
-
 LocalPotentialSampleList HRLModelTester::RunDataEntryWithNeighborhoodTest(
     const Eigen::VectorXd & gaus_true,
     int sampling_entry_size,
@@ -312,15 +131,18 @@ LocalPotentialSampleList HRLModelTester::RunDataEntryWithNeighborhoodTest(
     size_t neighbor_count,
     double angle)
 {
-    auto sampling_entries{
-        BuildRandomGausSamplingEntryWithNeighborhood(
-            static_cast<size_t>(sampling_entry_size),
-            radius_min,
-            radius_max,
-            gaus_true,
-            neighbor_distance, neighbor_count, angle)
+    const SimulationDataGenerator::NeighborhoodOptions neighborhood_options{
+        radius_min,
+        radius_max,
+        neighbor_distance,
+        neighbor_count,
+        angle
     };
-    return sampling_entries;
+    return m_data_generator.GenerateGaussianSamplingWithNeighborhood(
+        static_cast<size_t>(sampling_entry_size),
+        gaus_true,
+        neighborhood_options
+    );
 }
 
 bool HRLModelTester::RunBetaMDPDETest(
@@ -366,7 +188,7 @@ bool HRLModelTester::RunBetaMDPDETest(
     {
         auto generator{ BuildReplicaGenerator(i) };
         auto data_entry_list{
-            BuildRandomLinearDataEntry(
+            m_data_generator.GenerateLinearDataset(
                 static_cast<size_t>(sampling_entry_size),
                 gaus_true,
                 data_error_sigma,
@@ -561,14 +383,32 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
     {
         auto generator{ BuildReplicaGenerator(i) };
         auto no_cut_data_entry_list{
-            BuildRandomLinearDataEntryWithNeighborhood(
+            m_data_generator.GenerateLinearDatasetWithNeighborhood(
                 static_cast<size_t>(sampling_entry_size),
-                gaus_true, data_error_sigma, neighbor_distance, neighbor_count, 0.0, generator)
+                gaus_true,
+                data_error_sigma,
+                SimulationDataGenerator::NeighborhoodOptions{
+                    0.0,
+                    1.0,
+                    neighbor_distance,
+                    neighbor_count,
+                    0.0
+                },
+                generator)
         };
         auto cut_data_entry_list{
-            BuildRandomLinearDataEntryWithNeighborhood(
+            m_data_generator.GenerateLinearDatasetWithNeighborhood(
                 static_cast<size_t>(sampling_entry_size),
-                gaus_true, data_error_sigma, neighbor_distance, neighbor_count, angle, generator)
+                gaus_true,
+                data_error_sigma,
+                SimulationDataGenerator::NeighborhoodOptions{
+                    0.0,
+                    1.0,
+                    neighbor_distance,
+                    neighbor_count,
+                    angle
+                },
+                generator)
         };
         const auto no_cut_dataset{ HRLDataTransform::BuildMemberDataset(no_cut_data_entry_list) };
         const auto cut_dataset{ HRLDataTransform::BuildMemberDataset(cut_data_entry_list) };
