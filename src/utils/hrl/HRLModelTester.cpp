@@ -355,7 +355,7 @@ bool HRLModelTester::RunBetaMDPDETest(
     residual_sigma_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
 
     const HRLAlphaTrainer alpha_r_trainer{ kAlphaRMin, kAlphaRMax, kAlphaRStep };
-    HRLAlphaTrainer::AlphaRTrainingOptions alpha_r_training_options;
+    HRLAlphaTrainer::AlphaTrainingOptions alpha_r_training_options;
     alpha_r_training_options.subset_size = kAlphaRSubsetSize;
     alpha_r_training_options.execution_options = MakeTesterExecutionOptions();
 
@@ -459,7 +459,7 @@ bool HRLModelTester::RunMuMDPDETest(
     residual_sigma_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
 
     const HRLAlphaTrainer alpha_g_trainer{ kAlphaGMin, kAlphaGMax, kAlphaGStep };
-    HRLAlphaTrainer::AlphaGTrainingOptions alpha_g_training_options;
+    HRLAlphaTrainer::AlphaTrainingOptions alpha_g_training_options;
     alpha_g_training_options.subset_size = kAlphaGSubsetSize;
     alpha_g_training_options.execution_options = MakeTesterExecutionOptions();
 
@@ -558,7 +558,7 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
     residual_sigma_list.assign(method_size, Eigen::VectorXd::Zero(m_gaus_par_size));
 
     const HRLAlphaTrainer alpha_r_trainer{ kAlphaRMin, kAlphaRMax, kAlphaRStep };
-    HRLAlphaTrainer::AlphaRTrainingOptions alpha_r_training_options;
+    HRLAlphaTrainer::AlphaTrainingOptions alpha_r_training_options;
     alpha_r_training_options.subset_size = kAlphaRSubsetSize;
     alpha_r_training_options.execution_options = MakeTesterExecutionOptions();
 

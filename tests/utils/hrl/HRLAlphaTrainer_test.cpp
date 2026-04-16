@@ -96,7 +96,7 @@ TEST(HRLAlphaTrainerTest, TrainAlphaRSingleDatasetWithExactLinearDataReturnsZero
     };
     const auto dataset{ HRLDataTransform::BuildMemberDataset(data_list) };
     const HRLAlphaTrainer trainer{ 0.0, 0.5, 0.5 };
-    HRLAlphaTrainer::AlphaRTrainingOptions options;
+    HRLAlphaTrainer::AlphaTrainingOptions options;
     options.subset_size = 3;
 
     const auto result{ trainer.TrainAlphaR({ dataset }, options) };
@@ -111,7 +111,7 @@ TEST(HRLAlphaTrainerTest, TrainAlphaGSingleGroupWithIdenticalBetasReturnsZeroErr
 {
     const std::vector<Eigen::VectorXd> beta_list(6, MakeVector({ 1.5, -0.5 }));
     const HRLAlphaTrainer trainer{ 0.0, 1.0, 0.5 };
-    HRLAlphaTrainer::AlphaGTrainingOptions options;
+    HRLAlphaTrainer::AlphaTrainingOptions options;
     options.subset_size = 4;
 
     const auto result{ trainer.TrainAlphaG({ beta_list }, options) };
@@ -132,7 +132,7 @@ TEST(HRLAlphaTrainerTest, TrainAlphaRAggregatesSingleBatchResultsAndSelectsMinim
         MakeLinearDataset(-0.5)
     };
 
-    HRLAlphaTrainer::AlphaRTrainingOptions options;
+    HRLAlphaTrainer::AlphaTrainingOptions options;
     options.subset_size = 3;
     const auto result{ trainer.TrainAlphaR(dataset_list, options) };
     const auto first_single{ trainer.TrainAlphaR({ dataset_list.at(0) }, options) };
@@ -165,7 +165,7 @@ TEST(HRLAlphaTrainerTest, TrainAlphaGAggregatesSingleBatchResultsAndSelectsMinim
             MakeVector({ -3.5, 3.0 })
         }
     };
-    HRLAlphaTrainer::AlphaGTrainingOptions options;
+    HRLAlphaTrainer::AlphaTrainingOptions options;
     options.subset_size = 3;
     options.execution_options.random_seed = 11U;
 
@@ -200,7 +200,7 @@ TEST(HRLAlphaTrainerTest, TrainAlphaGWithSeedIsDeterministic)
         }
     };
     const auto & alpha_list{ trainer.AlphaGrid() };
-    HRLAlphaTrainer::AlphaGTrainingOptions options;
+    HRLAlphaTrainer::AlphaTrainingOptions options;
     options.subset_size = 3;
     options.execution_options.random_seed = 7U;
 
@@ -216,24 +216,32 @@ TEST(HRLAlphaTrainerTest, TrainAlphaGWithSeedIsDeterministic)
     EXPECT_DOUBLE_EQ(first.best_alpha, BestAlphaForErrors(alpha_list, first.error_sum_list));
 }
 
-TEST(HRLAlphaTrainerTest, TrainAlphaRejectsInvalidInputs)
+TEST(HRLAlphaTrainerTest, TrainAlphaRequiresExplicitSubsetSizeAndRejectsInvalidInputs)
 {
     const HRLAlphaTrainer trainer{ 0.0, 1.0, 0.5 };
     const auto dataset{ MakeLinearDataset(1.0) };
     const std::vector<HRLMemberDataset> empty_dataset_list;
     const std::vector<HRLMemberDataset> dataset_list{ dataset };
+    HRLAlphaTrainer::AlphaTrainingOptions default_options;
 
     EXPECT_THROW(
-        trainer.TrainAlphaR(empty_dataset_list),
+        trainer.TrainAlphaR(dataset_list, default_options),
         std::invalid_argument);
 
-    HRLAlphaTrainer::AlphaRTrainingOptions alpha_r_options;
+    HRLAlphaTrainer::AlphaTrainingOptions alpha_r_empty_options;
+    alpha_r_empty_options.subset_size = 3;
+
+    EXPECT_THROW(
+        trainer.TrainAlphaR(empty_dataset_list, alpha_r_empty_options),
+        std::invalid_argument);
+
+    HRLAlphaTrainer::AlphaTrainingOptions alpha_r_options;
     alpha_r_options.subset_size = 7;
     EXPECT_THROW(
         trainer.TrainAlphaR(dataset_list, alpha_r_options),
         std::invalid_argument);
 
-    HRLAlphaTrainer::AlphaGTrainingOptions alpha_g_options;
+    HRLAlphaTrainer::AlphaTrainingOptions alpha_g_options;
     alpha_g_options.subset_size = 3;
     const std::vector<std::vector<Eigen::VectorXd>> beta_group_list{
         {
@@ -246,6 +254,42 @@ TEST(HRLAlphaTrainerTest, TrainAlphaRejectsInvalidInputs)
         std::invalid_argument);
 }
 
+TEST(HRLAlphaTrainerTest, AlphaRunOptionsPropagatesProgressToBiasStudies)
+{
+    const HRLAlphaTrainer trainer{ 0.0, 1.0, 0.5 };
+    const std::vector<HRLMemberDataset> dataset_list{
+        MakeLinearDataset(2.0),
+        MakeLinearDataset(-0.5)
+    };
+    const std::vector<std::vector<Eigen::VectorXd>> beta_group_list{
+        {
+            MakeVector({ 1.0, 2.0 }),
+            MakeVector({ 1.5, 2.5 }),
+            MakeVector({ 2.0, 3.0 })
+        },
+        {
+            MakeVector({ -1.0, 0.5 }),
+            MakeVector({ -1.5, 1.0 }),
+            MakeVector({ -2.0, 1.5 })
+        }
+    };
+    std::size_t progress_count{ 0 };
+    HRLAlphaTrainer::AlphaRunOptions options;
+    options.execution_options.thread_size = 1;
+    options.progress_callback =
+        [&progress_count](std::size_t, std::size_t)
+        {
+            progress_count++;
+        };
+
+    const auto alpha_r_bias_matrix{ trainer.StudyAlphaRBias(dataset_list, options) };
+    const auto alpha_g_bias_matrix{ trainer.StudyAlphaGBias(beta_group_list, options) };
+
+    EXPECT_TRUE(alpha_r_bias_matrix.array().isFinite().all());
+    EXPECT_TRUE(alpha_g_bias_matrix.array().isFinite().all());
+    EXPECT_EQ(progress_count, dataset_list.size() + beta_group_list.size());
+}
+
 TEST(HRLAlphaTrainerTest, StudyAlphaRBiasReturnsFiniteMatrixAndReportsProgress)
 {
     const HRLAlphaTrainer trainer{ 0.0, 1.0, 0.5 };
@@ -254,7 +298,7 @@ TEST(HRLAlphaTrainerTest, StudyAlphaRBiasReturnsFiniteMatrixAndReportsProgress)
         MakeLinearDataset(-0.5)
     };
     std::size_t progress_count{ 0 };
-    HRLAlphaTrainer::AlphaBiasStudyOptions options;
+    HRLAlphaTrainer::AlphaRunOptions options;
     options.execution_options.thread_size = 1;
     options.progress_callback =
         [&progress_count](std::size_t, std::size_t)
@@ -286,7 +330,7 @@ TEST(HRLAlphaTrainerTest, StudyAlphaGBiasReturnsFiniteMatrixAndReportsProgress)
         }
     };
     std::size_t progress_count{ 0 };
-    HRLAlphaTrainer::AlphaBiasStudyOptions options;
+    HRLAlphaTrainer::AlphaRunOptions options;
     options.execution_options.thread_size = 1;
     options.progress_callback =
         [&progress_count](std::size_t, std::size_t)
@@ -310,8 +354,9 @@ TEST(HRLAlphaTrainerTest, StudyAlphaBiasRejectsEmptyInputs)
     const std::vector<std::vector<Eigen::VectorXd>> beta_group_with_empty_member_list{
         {}
     };
+    HRLAlphaTrainer::AlphaRunOptions options;
 
-    EXPECT_THROW(trainer.StudyAlphaRBias(empty_dataset_list), std::invalid_argument);
-    EXPECT_THROW(trainer.StudyAlphaGBias(empty_beta_group_list), std::invalid_argument);
-    EXPECT_THROW(trainer.StudyAlphaGBias(beta_group_with_empty_member_list), std::invalid_argument);
+    EXPECT_THROW(trainer.StudyAlphaRBias(empty_dataset_list, options), std::invalid_argument);
+    EXPECT_THROW(trainer.StudyAlphaGBias(empty_beta_group_list, options), std::invalid_argument);
+    EXPECT_THROW(trainer.StudyAlphaGBias(beta_group_with_empty_member_list, options), std::invalid_argument);
 }

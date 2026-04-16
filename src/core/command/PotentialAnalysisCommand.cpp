@@ -621,7 +621,8 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     auto alpha_r{ alpha_training_list.front() };
     if (!selected_atom_dataset_list.empty())
     {
-        HRLAlphaTrainer::AlphaRTrainingOptions alpha_r_options;
+        HRLAlphaTrainer::AlphaTrainingOptions alpha_r_options;
+        alpha_r_options.subset_size = 5;
         alpha_r_options.execution_options =
             MakePotentialAnalysisExecutionOptions(ThreadSize(), true);
         alpha_r_options.progress_callback =
@@ -672,7 +673,8 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     auto alpha_g{ alpha_training_list.front() };
     if (!beta_group_list.empty())
     {
-        HRLAlphaTrainer::AlphaGTrainingOptions alpha_g_options;
+        HRLAlphaTrainer::AlphaTrainingOptions alpha_g_options;
+        alpha_g_options.subset_size = 10;
         alpha_g_options.execution_options =
             MakePotentialAnalysisExecutionOptions(ThreadSize(), true);
         alpha_g_options.progress_callback =
@@ -701,7 +703,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
         }
     }
 
-    HRLAlphaTrainer::AlphaBiasStudyOptions alpha_bias_study_options;
+    HRLAlphaTrainer::AlphaRunOptions alpha_bias_study_options;
     alpha_bias_study_options.execution_options =
         MakePotentialAnalysisExecutionOptions(ThreadSize(), true);
     alpha_bias_study_options.progress_callback =

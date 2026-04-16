@@ -321,14 +321,8 @@ std::vector<double> HRLAlphaTrainer::BuildAlphaGrid(
 }
 
 HRLAlphaTrainer::AlphaTrainingResult HRLAlphaTrainer::TrainAlphaR(
-    const std::vector<HRLMemberDataset> & dataset_list) const
-{
-    return TrainAlphaR(dataset_list, AlphaRTrainingOptions{});
-}
-
-HRLAlphaTrainer::AlphaTrainingResult HRLAlphaTrainer::TrainAlphaR(
     const std::vector<HRLMemberDataset> & dataset_list,
-    const AlphaRTrainingOptions & options) const
+    const AlphaTrainingOptions & options) const
 {
     ValidateTrainingBatch(dataset_list.size(), options.subset_size, m_alpha_grid);
     for (const auto & dataset : dataset_list)
@@ -376,14 +370,8 @@ HRLAlphaTrainer::AlphaTrainingResult HRLAlphaTrainer::TrainAlphaR(
 }
 
 HRLAlphaTrainer::AlphaTrainingResult HRLAlphaTrainer::TrainAlphaG(
-    const std::vector<std::vector<Eigen::VectorXd>> & beta_group_list) const
-{
-    return TrainAlphaG(beta_group_list, AlphaGTrainingOptions{});
-}
-
-HRLAlphaTrainer::AlphaTrainingResult HRLAlphaTrainer::TrainAlphaG(
     const std::vector<std::vector<Eigen::VectorXd>> & beta_group_list,
-    const AlphaGTrainingOptions & options) const
+    const AlphaTrainingOptions & options) const
 {
     ValidateTrainingBatch(beta_group_list.size(), options.subset_size, m_alpha_grid);
     for (const auto & beta_list : beta_group_list)
@@ -427,14 +415,8 @@ HRLAlphaTrainer::AlphaTrainingResult HRLAlphaTrainer::TrainAlphaG(
 }
 
 Eigen::MatrixXd HRLAlphaTrainer::StudyAlphaRBias(
-    const std::vector<HRLMemberDataset> & dataset_list) const
-{
-    return StudyAlphaRBias(dataset_list, AlphaBiasStudyOptions{});
-}
-
-Eigen::MatrixXd HRLAlphaTrainer::StudyAlphaRBias(
     const std::vector<HRLMemberDataset> & dataset_list,
-    const AlphaBiasStudyOptions & options) const
+    const AlphaRunOptions & options) const
 {
     ValidateTrainingBatch(dataset_list.size(), 1, m_alpha_grid);
     for (const auto & dataset : dataset_list)
@@ -493,14 +475,8 @@ Eigen::MatrixXd HRLAlphaTrainer::StudyAlphaRBias(
 }
 
 Eigen::MatrixXd HRLAlphaTrainer::StudyAlphaGBias(
-    const std::vector<std::vector<Eigen::VectorXd>> & beta_group_list) const
-{
-    return StudyAlphaGBias(beta_group_list, AlphaBiasStudyOptions{});
-}
-
-Eigen::MatrixXd HRLAlphaTrainer::StudyAlphaGBias(
     const std::vector<std::vector<Eigen::VectorXd>> & beta_group_list,
-    const AlphaBiasStudyOptions & options) const
+    const AlphaRunOptions & options) const
 {
     ValidateTrainingBatch(beta_group_list.size(), 1, m_alpha_grid);
     for (const auto & beta_list : beta_group_list)

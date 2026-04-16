@@ -19,18 +19,15 @@ class HRLAlphaTrainer
 public:
     using ProgressCallback = std::function<void(std::size_t completed, std::size_t total)>;
 
-    struct AlphaRTrainingOptions
+    struct AlphaRunOptions
     {
-        std::size_t subset_size{ 5 };
         HRLExecutionOptions execution_options{};
         ProgressCallback progress_callback{};
     };
 
-    struct AlphaGTrainingOptions
+    struct AlphaTrainingOptions : AlphaRunOptions
     {
-        std::size_t subset_size{ 10 };
-        HRLExecutionOptions execution_options{};
-        ProgressCallback progress_callback{};
+        std::size_t subset_size{ 0 };
     };
 
     struct AlphaTrainingResult
@@ -39,47 +36,29 @@ public:
         Eigen::VectorXd error_sum_list;
     };
 
-    struct AlphaBiasStudyOptions
-    {
-        HRLExecutionOptions execution_options{};
-        ProgressCallback progress_callback{};
-    };
-
     HRLAlphaTrainer(double alpha_min, double alpha_max, double alpha_step);
 
     const std::vector<double> & AlphaGrid() const { return m_alpha_grid; }
     std::ostringstream GetAlphaGridSummary() const;
 
     AlphaTrainingResult TrainAlphaR(
-        const std::vector<HRLMemberDataset> & dataset_list) const;
-
-    AlphaTrainingResult TrainAlphaR(
         const std::vector<HRLMemberDataset> & dataset_list,
-        const AlphaRTrainingOptions & options
+        const AlphaTrainingOptions & options
     ) const;
 
     AlphaTrainingResult TrainAlphaG(
-        const std::vector<std::vector<Eigen::VectorXd>> & beta_group_list) const;
-
-    AlphaTrainingResult TrainAlphaG(
         const std::vector<std::vector<Eigen::VectorXd>> & beta_group_list,
-        const AlphaGTrainingOptions & options
+        const AlphaTrainingOptions & options
     ) const;
-
-    Eigen::MatrixXd StudyAlphaRBias(
-        const std::vector<HRLMemberDataset> & dataset_list) const;
 
     Eigen::MatrixXd StudyAlphaRBias(
         const std::vector<HRLMemberDataset> & dataset_list,
-        const AlphaBiasStudyOptions & options
+        const AlphaRunOptions & options
     ) const;
 
     Eigen::MatrixXd StudyAlphaGBias(
-        const std::vector<std::vector<Eigen::VectorXd>> & beta_group_list) const;
-
-    Eigen::MatrixXd StudyAlphaGBias(
         const std::vector<std::vector<Eigen::VectorXd>> & beta_group_list,
-        const AlphaBiasStudyOptions & options
+        const AlphaRunOptions & options
     ) const;
 
 private:
