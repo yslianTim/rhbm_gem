@@ -9,6 +9,7 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <utility>
 #include <memory>
@@ -43,6 +44,18 @@ HRLExecutionOptions MakeTesterExecutionOptions()
     options.thread_size = 1;
     return options;
 }
+
+std::mt19937 BuildReplicaGenerator(int replica_index)
+{
+    std::random_device random_device;
+    std::seed_seq seed_sequence{
+        random_device(),
+        random_device(),
+        random_device(),
+        static_cast<std::uint32_t>(replica_index)
+    };
+    return std::mt19937(seed_sequence);
+}
 } // namespace
 
 HRLModelTester::HRLModelTester(int gaus_par_size, int linear_basis_size, int replica_size) :
@@ -59,7 +72,8 @@ Eigen::MatrixXd HRLModelTester::BuildRandomGausParameters(
     const Eigen::VectorXd & gaus_sigma,
     const Eigen::VectorXd & outlier_prior,
     const Eigen::VectorXd & outlier_sigma,
-    double outlier_ratio)
+    double outlier_ratio,
+    std::mt19937 & generator)
 {
     std::uniform_real_distribution<> dist_outlier(0.0, 1.0);
     std::vector<std::normal_distribution<>> dist_gaus_list;
@@ -78,11 +92,11 @@ Eigen::MatrixXd HRLModelTester::BuildRandomGausParameters(
         Eigen::VectorXd gaus_par{ Eigen::VectorXd::Zero(m_gaus_par_size) };
         Eigen::VectorXd outlier_par{ Eigen::VectorXd::Zero(m_gaus_par_size) };
         bool outlier_flag{ false };
-        if (dist_outlier(m_generator) < outlier_ratio) outlier_flag = true;
+        if (dist_outlier(generator) < outlier_ratio) outlier_flag = true;
         for (int p = 0; p < m_gaus_par_size; p++)
         {
-            gaus_par(p) = dist_gaus_list.at(static_cast<size_t>(p))(m_generator);
-            outlier_par(p) = dist_outlier_list.at(static_cast<size_t>(p))(m_generator);
+            gaus_par(p) = dist_gaus_list.at(static_cast<size_t>(p))(generator);
+            outlier_par(p) = dist_outlier_list.at(static_cast<size_t>(p))(generator);
             if (outlier_flag == true) gaus_par(p) = outlier_par(p);
         }
         gaus_par_matrix.col(i) = gaus_par;
@@ -106,7 +120,10 @@ Eigen::MatrixXd HRLModelTester::BuildBetaMatrix(const Eigen::MatrixXd & gaus_arr
 }
 
 LocalPotentialSampleList HRLModelTester::BuildRandomGausSamplingEntry(
-    size_t sampling_entry_size, const Eigen::VectorXd & gaus_par, double outlier_ratio)
+    size_t sampling_entry_size,
+    const Eigen::VectorXd & gaus_par,
+    double outlier_ratio,
+    std::mt19937 & generator)
 {
     CheckGausParametersDimension(gaus_par);
     auto amplitude{ gaus_par(0) };
@@ -119,12 +136,12 @@ LocalPotentialSampleList HRLModelTester::BuildRandomGausSamplingEntry(
     sampling_entry_list.reserve(sampling_entry_size);
     for (size_t i = 0; i < sampling_entry_size; i++)
     {
-        auto r{ dist_distance(m_generator) };
+        auto r{ dist_distance(generator) };
         auto y{
             amplitude * GausLinearTransformHelper::GetGaussianResponseAtDistance(r, width) + intersect
         };
         auto y_outlier{ 0.5 * amplitude * std::pow(Constants::two_pi * std::pow(width, 2), -1.5) };
-        if (dist_outlier(m_generator) < outlier_ratio)
+        if (dist_outlier(generator) < outlier_ratio)
         {
             y = y_outlier;
         }
@@ -235,10 +252,12 @@ SeriesPointList HRLModelTester::BuildRandomLinearDataEntry(
     size_t sampling_entry_size,
     const Eigen::VectorXd & gaus_par,
     double error_sigma,
-    double outlier_ratio)
+    double outlier_ratio,
+    std::mt19937 & generator)
 {
     auto sampling_entries{
-        BuildRandomGausSamplingEntry(static_cast<size_t>(sampling_entry_size), gaus_par, outlier_ratio)
+        BuildRandomGausSamplingEntry(
+            static_cast<size_t>(sampling_entry_size), gaus_par, outlier_ratio, generator)
     };
     auto linear_data_entry_list{
         GausLinearTransformHelper::MapValueTransform(sampling_entries, m_x_min, m_x_max)
@@ -249,7 +268,7 @@ SeriesPointList HRLModelTester::BuildRandomLinearDataEntry(
     std::normal_distribution<> dist_error(0.0, error_sigma * max_response);
     for (auto & data_entry : linear_data_entry_list)
     {
-        data_entry.response += dist_error(m_generator);
+        data_entry.response += dist_error(generator);
     }
     return linear_data_entry_list;
 }
@@ -260,7 +279,8 @@ SeriesPointList HRLModelTester::BuildRandomLinearDataEntryWithNeighborhood(
     double error_sigma,
     double neighbor_distance,
     size_t neighbor_count,
-    double angle)
+    double angle,
+    std::mt19937 & generator)
 {
     auto sampling_entries{
         BuildRandomGausSamplingEntryWithNeighborhood(
@@ -278,7 +298,7 @@ SeriesPointList HRLModelTester::BuildRandomLinearDataEntryWithNeighborhood(
     std::normal_distribution<> dist_error(0.0, error_sigma * max_response);
     for (auto & data_entry : linear_data_entry_list)
     {
-        data_entry.response += dist_error(m_generator);
+        data_entry.response += dist_error(generator);
     }
     return linear_data_entry_list;
 }
@@ -344,9 +364,14 @@ bool HRLModelTester::RunBetaMDPDETest(
 #endif
     for (int i = 0; i < m_replica_size; i++)
     {
+        auto generator{ BuildReplicaGenerator(i) };
         auto data_entry_list{
             BuildRandomLinearDataEntry(
-                static_cast<size_t>(sampling_entry_size), gaus_true, data_error_sigma, outlier_ratio
+                static_cast<size_t>(sampling_entry_size),
+                gaus_true,
+                data_error_sigma,
+                outlier_ratio,
+                generator
             )
         };
         const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
@@ -443,11 +468,12 @@ bool HRLModelTester::RunMuMDPDETest(
 #endif
     for (int i = 0; i < m_replica_size; i++)
     {
+        auto generator{ BuildReplicaGenerator(i) };
         Eigen::VectorXd gaus_true{ gaus_prior };
         auto random_gaus_array{
             BuildRandomGausParameters(
                 member_size, gaus_prior, gaus_sigma,
-                outlier_prior, outlier_sigma, outlier_ratio
+                outlier_prior, outlier_sigma, outlier_ratio, generator
             )
         };
 
@@ -543,15 +569,16 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
 #endif
     for (int i = 0; i < m_replica_size; i++)
     {
+        auto generator{ BuildReplicaGenerator(i) };
         auto no_cut_data_entry_list{
             BuildRandomLinearDataEntryWithNeighborhood(
                 static_cast<size_t>(sampling_entry_size),
-                gaus_true, data_error_sigma, neighbor_distance, neighbor_count, 0.0)
+                gaus_true, data_error_sigma, neighbor_distance, neighbor_count, 0.0, generator)
         };
         auto cut_data_entry_list{
             BuildRandomLinearDataEntryWithNeighborhood(
                 static_cast<size_t>(sampling_entry_size),
-                gaus_true, data_error_sigma, neighbor_distance, neighbor_count, angle)
+                gaus_true, data_error_sigma, neighbor_distance, neighbor_count, angle, generator)
         };
         const auto no_cut_dataset{ HRLDataTransform::BuildMemberDataset(no_cut_data_entry_list) };
         const auto cut_dataset{ HRLDataTransform::BuildMemberDataset(cut_data_entry_list) };

@@ -9,8 +9,6 @@
 
 class HRLModelTester
 {
-    std::random_device m_random_device;
-    std::mt19937 m_generator{ m_random_device() };
     int m_gaus_par_size;
     int m_linear_basis_size;
     int m_replica_size;
@@ -80,13 +78,15 @@ private:
         const Eigen::VectorXd & gaus_sigma,
         const Eigen::VectorXd & outlier_prior,
         const Eigen::VectorXd & outlier_sigma,
-        double outlier_ratio = 0.0
+        double outlier_ratio,
+        std::mt19937 & generator
     );
     Eigen::MatrixXd BuildBetaMatrix(const Eigen::MatrixXd & gaus_array);
     LocalPotentialSampleList BuildRandomGausSamplingEntry(
         size_t sampling_entry_size,
         const Eigen::VectorXd & gaus_par,
-        double outlier_ratio = 0.0
+        double outlier_ratio,
+        std::mt19937 & generator
     );
     LocalPotentialSampleList BuildRandomGausSamplingEntryWithNeighborhood(
         size_t sampling_entry_size,
@@ -101,15 +101,17 @@ private:
         size_t sampling_entry_size,
         const Eigen::VectorXd & gaus_par,
         double error_sigma,
-        double outlier_ratio = 0.0
+        double outlier_ratio,
+        std::mt19937 & generator
     );
     SeriesPointList BuildRandomLinearDataEntryWithNeighborhood(
         size_t sampling_entry_size,
         const Eigen::VectorXd & gaus_par,
         double error_sigma,
-        double neighbor_distance = 2.0,
-        size_t neighbor_count = 1,
-        double angle = 0.0
+        double neighbor_distance,
+        size_t neighbor_count,
+        double angle,
+        std::mt19937 & generator
     );
     Eigen::VectorXd CalculateNormalizedResidual(
         const Eigen::VectorXd & estimate,
