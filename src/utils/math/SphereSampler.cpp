@@ -97,10 +97,6 @@ std::size_t GetFibonacciSampleCountForRadius(
     const SphereDeterministicSamplingConfig & config)
 {
     constexpr double epsilon{ 1e-9 };
-    //if (std::fabs(radius) <= epsilon)
-    //{
-    //    return 1;
-    //}
 
     if (!config.vary_with_radius)
     {

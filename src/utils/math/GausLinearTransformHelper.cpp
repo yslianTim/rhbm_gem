@@ -69,7 +69,7 @@ SeriesPointList GausLinearTransformHelper::MapValueTransform(
     {
         const auto distance{ sample.distance };
         auto gaus_y{ static_cast<double>(sample.response) };
-        if (sample.weight <= 0.0f) continue;
+        //if (sample.weight <= 0.0f) continue;
         if (distance < static_cast<float>(x_min) || distance > static_cast<float>(x_max)) continue;
         if (gaus_y <= 0.0) continue;
         auto gaus_x{ static_cast<double>(distance) };
