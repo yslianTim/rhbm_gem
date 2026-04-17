@@ -28,9 +28,10 @@ HRLDiagonalMatrix MakeDiagonal(std::initializer_list<double> values)
 
 HRLMemberDataset MakeDataset(
     const Eigen::MatrixXd & X,
-    const Eigen::VectorXd & y)
+    const Eigen::VectorXd & y,
+    const Eigen::VectorXd & w)
 {
-    return HRLMemberDataset{ X, y };
+    return HRLMemberDataset{ X, y, w };
 }
 } // namespace
 
@@ -42,11 +43,13 @@ TEST(HRLModelAlgorithmsTest, EstimateBetaMDPDEAlphaZeroMatchesOLS)
          1.0, 2.0,
          1.0, 3.0;
     const Eigen::VectorXd y{ MakeVector({ 1.0, 2.1, 2.9, 4.2 }) };
+    const Eigen::VectorXd w{ MakeVector({ 1.0, 1.0, 1.0, 1.0 }) };
+
     const Eigen::VectorXd expected_beta{
         (X.transpose() * X).inverse() * X.transpose() * y
     };
 
-    const auto result{ HRLModelAlgorithms::EstimateBetaMDPDE(0.0, MakeDataset(X, y)) };
+    const auto result{ HRLModelAlgorithms::EstimateBetaMDPDE(0.0, MakeDataset(X, y, w)) };
 
     EXPECT_EQ(HRLEstimationStatus::SUCCESS, result.status);
     EXPECT_TRUE(result.beta_ols.isApprox(expected_beta, 1e-12));
@@ -57,8 +60,9 @@ TEST(HRLModelAlgorithmsTest, EstimateBetaMDPDESingleDatumReturnsInsufficientData
 {
     const Eigen::MatrixXd X{ MakeVector({ 1.0, 2.0 }).transpose() };
     const Eigen::VectorXd y{ MakeVector({ 3.0 }) };
+    const Eigen::VectorXd w{ MakeVector({ 1.0 }) };
 
-    const auto result{ HRLModelAlgorithms::EstimateBetaMDPDE(0.2, MakeDataset(X, y)) };
+    const auto result{ HRLModelAlgorithms::EstimateBetaMDPDE(0.2, MakeDataset(X, y, w)) };
 
     EXPECT_EQ(HRLEstimationStatus::INSUFFICIENT_DATA, result.status);
     EXPECT_TRUE(result.beta_mdpde.isApprox(Eigen::VectorXd::Zero(2), 1e-12));
@@ -69,23 +73,24 @@ TEST(HRLModelAlgorithmsTest, EstimateBetaMDPDERejectsInvalidParameters)
 {
     const Eigen::MatrixXd X{ Eigen::MatrixXd::Identity(2, 2) };
     const Eigen::VectorXd y{ MakeVector({ 1.0, 2.0 }) };
+    const Eigen::VectorXd w{ MakeVector({ 1.0, 1.0 }) };
     HRLExecutionOptions options;
 
     EXPECT_THROW(
-        HRLModelAlgorithms::EstimateBetaMDPDE(-0.1, MakeDataset(X, y), options),
+        HRLModelAlgorithms::EstimateBetaMDPDE(-0.1, MakeDataset(X, y, w), options),
         std::invalid_argument
     );
 
     options.max_iterations = 0;
     EXPECT_THROW(
-        HRLModelAlgorithms::EstimateBetaMDPDE(0.0, MakeDataset(X, y), options),
+        HRLModelAlgorithms::EstimateBetaMDPDE(0.0, MakeDataset(X, y, w), options),
         std::invalid_argument
     );
 
     options = HRLExecutionOptions{};
     options.tolerance = -1.0;
     EXPECT_THROW(
-        HRLModelAlgorithms::EstimateBetaMDPDE(0.0, MakeDataset(X, y), options),
+        HRLModelAlgorithms::EstimateBetaMDPDE(0.0, MakeDataset(X, y, w), options),
         std::invalid_argument
     );
 }
@@ -97,14 +102,14 @@ TEST(HRLModelAlgorithmsTest, EstimateBetaMDPDERejectsInvalidDatasetShapeAndValue
          1.0, 1.0;
 
     EXPECT_THROW(
-        HRLModelAlgorithms::EstimateBetaMDPDE(0.0, MakeDataset(X, MakeVector({ 1.0 }))),
+        HRLModelAlgorithms::EstimateBetaMDPDE(0.0, MakeDataset(X, MakeVector({ 1.0 }), MakeVector({ 1.0 }))),
         std::invalid_argument
     );
 
     Eigen::MatrixXd X_with_nan{ X };
     X_with_nan(0, 0) = std::numeric_limits<double>::quiet_NaN();
     EXPECT_THROW(
-        HRLModelAlgorithms::EstimateBetaMDPDE(0.0, MakeDataset(X_with_nan, MakeVector({ 1.0, 2.0 }))),
+        HRLModelAlgorithms::EstimateBetaMDPDE(0.0, MakeDataset(X_with_nan, MakeVector({ 1.0, 2.0 }), MakeVector({ 1.0, 1.0 }))),
         std::invalid_argument
     );
 }
@@ -145,7 +150,7 @@ TEST(HRLModelAlgorithmsTest, EstimateMuMDPDERejectsInvalidParameters)
 TEST(HRLModelAlgorithmsTest, EstimateWEBReturnsSingleMemberStatus)
 {
     const std::vector<HRLMemberDataset> member_datasets{
-        { Eigen::MatrixXd::Identity(2, 2), MakeVector({ 1.0, 2.0 }) }
+        { Eigen::MatrixXd::Identity(2, 2), MakeVector({ 1.0, 2.0 }), MakeVector({ 1.0, 1.0 }) }
     };
 
     const auto result{
@@ -163,8 +168,8 @@ TEST(HRLModelAlgorithmsTest, EstimateWEBReturnsSingleMemberStatus)
 TEST(HRLModelAlgorithmsTest, EstimateWEBForTwoMembersPinsMuPriorToMuMDPDE)
 {
     const std::vector<HRLMemberDataset> member_datasets{
-        { Eigen::MatrixXd::Identity(2, 2), MakeVector({ 1.0, 3.0 }) },
-        { Eigen::MatrixXd::Identity(2, 2), MakeVector({ 5.0, 7.0 }) }
+        { Eigen::MatrixXd::Identity(2, 2), MakeVector({ 1.0, 3.0 }), MakeVector({ 1.0, 1.0 }) },
+        { Eigen::MatrixXd::Identity(2, 2), MakeVector({ 5.0, 7.0 }), MakeVector({ 1.0, 1.0 }) }
     };
     const Eigen::VectorXd mu_mdpde{ MakeVector({ 10.0, 20.0 }) };
 
@@ -184,8 +189,8 @@ TEST(HRLModelAlgorithmsTest, EstimateWEBForTwoMembersPinsMuPriorToMuMDPDE)
 TEST(HRLModelAlgorithmsTest, EstimateWEBRejectsMismatchedMemberCounts)
 {
     const std::vector<HRLMemberDataset> member_datasets{
-        { Eigen::MatrixXd::Identity(2, 2), MakeVector({ 1.0, 2.0 }) },
-        { Eigen::MatrixXd::Identity(2, 2), MakeVector({ 3.0, 4.0 }) }
+        { Eigen::MatrixXd::Identity(2, 2), MakeVector({ 1.0, 2.0 }), MakeVector({ 1.0, 1.0 }) },
+        { Eigen::MatrixXd::Identity(2, 2), MakeVector({ 3.0, 4.0 }), MakeVector({ 1.0, 1.0 }) }
     };
 
     EXPECT_THROW(

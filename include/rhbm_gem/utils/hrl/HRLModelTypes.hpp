@@ -32,6 +32,7 @@ struct HRLMemberDataset
 {
     Eigen::MatrixXd X;
     Eigen::VectorXd y;
+    Eigen::VectorXd w;
 };
 
 struct HRLMemberLocalEstimate

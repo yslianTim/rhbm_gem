@@ -83,7 +83,8 @@ TEST(HRLGroupEstimatorTest, EstimateRejectsMissingMemberEstimates)
 {
     HRLGroupEstimationInput input;
     input.basis_size = 2;
-    input.member_datasets.push_back({ Eigen::MatrixXd::Identity(2, 2), MakeVector({ 1.0, 2.0 }) });
+    input.member_datasets.push_back(
+        { Eigen::MatrixXd::Identity(2, 2), MakeVector({ 1.0, 2.0 }), MakeVector({ 1.0, 1.0 }) });
 
     EXPECT_THROW(HRLGroupEstimator().Estimate(input, 0.0), std::invalid_argument);
 }
@@ -94,13 +95,14 @@ TEST(HRLGroupEstimatorTest, EstimateRejectsMismatchedWeightSize)
     input.basis_size = 2;
     input.member_datasets.push_back({
         Eigen::MatrixXd::Identity(2, 2),
-        MakeVector({ 1.0, 2.0 })
+        MakeVector({ 1.0, 2.0 }),
+        MakeVector({ 1.0, 1.0 })
     });
 
     HRLMemberLocalEstimate estimate;
     estimate.beta_mdpde = MakeVector({ 1.0, 2.0 });
     estimate.sigma_square = 0.25;
-    estimate.data_weight = MakeDiagonal({ 1.0 });
+    estimate.data_weight = MakeDiagonal({ 1.0, 1.0 });
     estimate.data_covariance = MakeDiagonal({ 0.25, 0.25 });
     input.member_estimates.push_back(estimate);
 
