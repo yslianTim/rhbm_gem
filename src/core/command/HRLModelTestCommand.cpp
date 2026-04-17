@@ -1,6 +1,7 @@
 #include "HRLModelTestCommand.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
+#include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelTestDataFactory.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelTester.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
@@ -119,8 +120,6 @@ struct HRLModelTestExecutionContext
 namespace {
 
 constexpr int kGausParSize{ 3 };
-constexpr int kLinearBasisSize{ 2 };
-
 struct BetaScenarioConfig
 {
     int replica_size;
@@ -193,7 +192,9 @@ std::vector<double> BuildDescendingSweep(int count, double start, double step)
 
 HRLModelTestDataFactory BuildDataFactory(const HRLModelTestExecutionContext & options)
 {
-    HRLModelTestDataFactory factory(kGausParSize, kLinearBasisSize);
+    HRLModelTestDataFactory factory(
+        kGausParSize,
+        rhbm_gem::GaussianLinearizationSpec::DefaultDataset());
     factory.SetFittingRange(options.options.fit_range_min, options.options.fit_range_max);
     return factory;
 }

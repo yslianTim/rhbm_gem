@@ -1,12 +1,14 @@
 #include <rhbm_gem/utils/hrl/HRLModelTestDataFactory.hpp>
 
 #include <rhbm_gem/utils/domain/Constants.hpp>
+#include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
 #include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
 
 #include <cmath>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 namespace
 {
@@ -53,15 +55,21 @@ std::mt19937 BuildReplicaGenerator(
 }
 } // namespace
 
-HRLModelTestDataFactory::HRLModelTestDataFactory(int gaus_par_size, int linear_basis_size) :
+HRLModelTestDataFactory::HRLModelTestDataFactory(
+    int gaus_par_size,
+    rhbm_gem::GaussianLinearizationSpec linearization_spec) :
     m_gaus_par_size{
         ValidateGaussianParameterSize(ValidatePositive(gaus_par_size, "gaus_par_size"))
     },
-    m_linear_basis_size{ ValidatePositive(linear_basis_size, "linear_basis_size") },
+    m_linearization_spec{ std::move(linearization_spec) },
     m_fit_range_min{ 0.0 },
     m_fit_range_max{ 1.0 },
     m_potential_sampler{}
 {
+    if (m_linearization_spec.basis_size <= 0)
+    {
+        throw std::invalid_argument("linearization_spec basis_size must be positive value");
+    }
 }
 
 void HRLModelTestDataFactory::SetFittingRange(double x_min, double x_max)
@@ -268,11 +276,17 @@ SeriesPointList HRLModelTestDataFactory::BuildLinearDataset(
     std::mt19937 & generator
 ) const
 {
+    const rhbm_gem::GaussianLinearizationService linearization_service{ m_linearization_spec };
+    Eigen::VectorXd model_parameters{ Eigen::VectorXd::Zero(3) };
+    model_parameters(0) = model.amplitude;
+    model_parameters(1) = model.width;
+    model_parameters(2) = model.intercept;
     auto linear_data_entry_list{
-        GausLinearTransformHelper::MapValueTransform(
+        linearization_service.BuildDatasetSeries(
             sampling_entries,
             m_fit_range_min,
-            m_fit_range_max
+            m_fit_range_max,
+            rhbm_gem::GaussianLinearizationContext::FromModelParameters(model_parameters)
         )
     };
     const auto max_response{
@@ -357,17 +371,13 @@ Eigen::MatrixXd HRLModelTestDataFactory::BuildRandomGausParameters(
 Eigen::MatrixXd HRLModelTestDataFactory::BuildBetaMatrix(const Eigen::MatrixXd & gaus_array) const
 {
     const auto member_size{ static_cast<int>(gaus_array.cols()) };
-    Eigen::MatrixXd beta_matrix{ Eigen::MatrixXd::Zero(m_linear_basis_size, member_size) };
+    const rhbm_gem::GaussianLinearizationService linearization_service{ m_linearization_spec };
+    Eigen::MatrixXd beta_matrix{
+        Eigen::MatrixXd::Zero(m_linearization_spec.basis_size, member_size)
+    };
     for (int i = 0; i < member_size; i++)
     {
-        const Eigen::VectorXd gaus_par{ gaus_array.col(i) };
-        const Eigen::VectorXd beta{
-            GausLinearTransformHelper::BuildLinearModelCoefficentVector(gaus_par(0), gaus_par(1))
-        };
-        for (int j = 0; j < m_linear_basis_size; j++)
-        {
-            beta_matrix.col(i)(j) = beta(j);
-        }
+        beta_matrix.col(i) = linearization_service.EncodeGaussianToBeta(gaus_array.col(i));
     }
     return beta_matrix;
 }

@@ -139,7 +139,6 @@ TEST(HRLDataTransformTest, BuildGroupInputBuildsStructuredRequest)
 {
     const auto input{
         HRLDataTransform::BuildGroupInput(
-            2,
             {
                 MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 1.0 }), MakeSeriesPoint({ 1.0, 1.0, 3.0 }) }),
                 MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 2.0 }), MakeSeriesPoint({ 1.0, 1.0, 4.0 }) })
@@ -161,7 +160,6 @@ TEST(HRLDataTransformTest, BuildGroupInputRejectsMismatchedMemberCounts)
 {
     EXPECT_THROW(
         HRLDataTransform::BuildGroupInput(
-            2,
             { MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 1.0 }) }) },
             {
                 MakeEstimate({ 1.0, 2.0 }, 0.25, { 1.0 }, { 1.0 }),
@@ -176,7 +174,6 @@ TEST(HRLDataTransformTest, BuildGroupInputRejectsInconsistentWeightSize)
 {
     EXPECT_THROW(
         HRLDataTransform::BuildGroupInput(
-            2,
             {
                 MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 1.0 }), MakeSeriesPoint({ 1.0, 1.0, 3.0 }) })
             },

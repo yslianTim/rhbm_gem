@@ -171,14 +171,6 @@ SeriesPointList LocalPotentialView::GetLinearModelSeries() const
         .GetLinearModelSeries();
 }
 
-SeriesPointList LocalPotentialView::GetFitDatasetSeries(
-    double fit_range_min,
-    double fit_range_max) const
-{
-    return RequireResolvedLocalEntry(*this, "Local fit dataset series")
-        .GetFitDatasetSeries(fit_range_min, fit_range_max);
-}
-
 int LocalPotentialView::GetSamplingEntryCount() const
 {
     return RequireResolvedLocalEntry(*this, "Local sampling-entry count").GetSamplingEntryCount();

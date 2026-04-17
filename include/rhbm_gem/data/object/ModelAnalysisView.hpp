@@ -57,7 +57,6 @@ public:
         double x_min = 0.0,
         double x_max = 1.5) const;
     SeriesPointList GetLinearModelSeries() const;
-    SeriesPointList GetFitDatasetSeries(double fit_range_min, double fit_range_max) const;
     int GetSamplingEntryCount() const;
     double GetAlphaR() const;
     std::optional<LocalPotentialAnnotationView> FindAnnotation(const std::string & key) const;

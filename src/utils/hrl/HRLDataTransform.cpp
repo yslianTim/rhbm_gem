@@ -100,11 +100,9 @@ Eigen::MatrixXd HRLDataTransform::BuildBetaMatrix(
 }
 
 HRLGroupEstimationInput HRLDataTransform::BuildGroupInput(
-    int basis_size,
     const std::vector<HRLMemberDataset> & member_datasets,
     const std::vector<HRLMemberLocalEstimate> & member_estimates)
 {
-    ValidateBasisSize(basis_size);
     const auto member_size{ member_datasets.size() };
     if (member_size == 0)
     {
@@ -114,6 +112,9 @@ HRLGroupEstimationInput HRLDataTransform::BuildGroupInput(
     {
         throw std::invalid_argument("Group estimation inputs must have consistent member counts.");
     }
+
+    const auto basis_size{ static_cast<int>(member_datasets.front().X.cols()) };
+    ValidateBasisSize(basis_size);
 
     HRLGroupEstimationInput input;
     input.basis_size = basis_size;

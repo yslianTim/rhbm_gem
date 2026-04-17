@@ -7,7 +7,7 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
+#include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
 
 #include <stdexcept>
 #include <string>
@@ -21,6 +21,38 @@ struct LocalPotentialEstimates
     GaussianEstimate ols{};
     GaussianEstimate mdpde{};
 };
+
+GaussianLinearizationContext BuildLocalDecodeContext(const LocalPotentialEntry & entry)
+{
+    Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
+    model_par_init(0) = entry.GetMomentZeroEstimate();
+    model_par_init(1) = entry.GetMomentTwoEstimate();
+    return GaussianLinearizationContext::FromModelParameters(model_par_init);
+}
+
+const GaussianLinearizationService & LocalDecodeService()
+{
+    static const GaussianLinearizationService service{
+        GaussianLinearizationSpec::AtomLocalDecode()
+    };
+    return service;
+}
+
+const GaussianLinearizationService & AtomGroupDecodeService()
+{
+    static const GaussianLinearizationService service{
+        GaussianLinearizationSpec::AtomGroupDecode()
+    };
+    return service;
+}
+
+const GaussianLinearizationService & BondGroupDecodeService()
+{
+    static const GaussianLinearizationService service{
+        GaussianLinearizationSpec::BondGroupDecode()
+    };
+    return service;
+}
 
 template <typename EntryT>
 const EntryT & RequireGroupEntry(const EntryT * entry, const char * context)
@@ -116,20 +148,13 @@ LocalPotentialEstimates BuildLocalPotentialEstimates(
     const LocalPotentialEntry & entry,
     const HRLBetaEstimateResult & value)
 {
-    Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
-    model_par_init(0) = entry.GetMomentZeroEstimate();
-    model_par_init(1) = entry.GetMomentTwoEstimate();
-
-    const auto gaus_ols{
-        GausLinearTransformHelper::BuildGaus3DModel(value.beta_ols, model_par_init)
-    };
-    const auto gaus_mdpde{
-        GausLinearTransformHelper::BuildGaus3DModel(value.beta_mdpde, model_par_init)
-    };
+    const auto context{ BuildLocalDecodeContext(entry) };
+    const auto gaus_ols{ LocalDecodeService().DecodeLocalEstimate(value.beta_ols, context) };
+    const auto gaus_mdpde{ LocalDecodeService().DecodeLocalEstimate(value.beta_mdpde, context) };
 
     return LocalPotentialEstimates{
-        GaussianEstimate{ gaus_ols(0), gaus_ols(1) },
-        GaussianEstimate{ gaus_mdpde(0), gaus_mdpde(1) }
+        gaus_ols,
+        gaus_mdpde
     };
 }
 
@@ -168,22 +193,20 @@ void ApplyAtomGroupStatistics(
     const HRLGroupEstimationResult & result,
     double alpha_g)
 {
-    const auto gaus_group_mean{ GausLinearTransformHelper::BuildGaus3DModel(result.mu_mean) };
-    const auto gaus_group_mdpde{ GausLinearTransformHelper::BuildGaus3DModel(result.mu_mdpde) };
+    const auto gaus_group_mean{ AtomGroupDecodeService().DecodeGroupEstimate(result.mu_mean) };
+    const auto gaus_group_mdpde{ AtomGroupDecodeService().DecodeGroupEstimate(result.mu_mdpde) };
     const auto gaus_prior{
-        GausLinearTransformHelper::BuildGaus3DModelWithVariance(
+        AtomGroupDecodeService().DecodePosteriorEstimate(
             result.mu_prior,
             result.capital_lambda)
     };
-    const auto & prior_estimate{ std::get<0>(gaus_prior) };
-    const auto & prior_variance{ std::get<1>(gaus_prior) };
 
     analysis_data.EnsureAtomGroupEntry(class_key).SetGroupStatistics(
         group_key,
-        GaussianEstimate{ gaus_group_mean(0), gaus_group_mean(1) },
-        GaussianEstimate{ gaus_group_mdpde(0), gaus_group_mdpde(1) },
-        GaussianEstimate{ prior_estimate(0), prior_estimate(1) },
-        GaussianEstimate{ prior_variance(0), prior_variance(1) },
+        gaus_group_mean,
+        gaus_group_mdpde,
+        gaus_prior.estimate,
+        gaus_prior.variance,
         alpha_g);
 }
 
@@ -194,22 +217,20 @@ void ApplyBondGroupStatistics(
     const HRLGroupEstimationResult & result,
     double alpha_g)
 {
-    const auto gaus_group_mean{ GausLinearTransformHelper::BuildGaus2DModel(result.mu_mean) };
-    const auto gaus_group_mdpde{ GausLinearTransformHelper::BuildGaus2DModel(result.mu_mdpde) };
+    const auto gaus_group_mean{ BondGroupDecodeService().DecodeGroupEstimate(result.mu_mean) };
+    const auto gaus_group_mdpde{ BondGroupDecodeService().DecodeGroupEstimate(result.mu_mdpde) };
     const auto gaus_prior{
-        GausLinearTransformHelper::BuildGaus2DModelWithVariance(
+        BondGroupDecodeService().DecodePosteriorEstimate(
             result.mu_prior,
             result.capital_lambda)
     };
-    const auto & prior_estimate{ std::get<0>(gaus_prior) };
-    const auto & prior_variance{ std::get<1>(gaus_prior) };
 
     analysis_data.EnsureBondGroupEntry(class_key).SetGroupStatistics(
         group_key,
-        GaussianEstimate{ gaus_group_mean(0), gaus_group_mean(1) },
-        GaussianEstimate{ gaus_group_mdpde(0), gaus_group_mdpde(1) },
-        GaussianEstimate{ prior_estimate(0), prior_estimate(1) },
-        GaussianEstimate{ prior_variance(0), prior_variance(1) },
+        gaus_group_mean,
+        gaus_group_mdpde,
+        gaus_prior.estimate,
+        gaus_prior.variance,
         alpha_g);
 }
 
@@ -222,18 +243,12 @@ LocalPotentialAnnotationData BuildAtomAnnotationData(
         result.capital_sigma_posterior_list.at(static_cast<std::size_t>(member_index))
     };
     const auto gaus_posterior{
-        GausLinearTransformHelper::BuildGaus3DModelWithVariance(
+        AtomGroupDecodeService().DecodePosteriorEstimate(
             beta_vector_posterior,
             sigma_matrix_posterior)
     };
-    const auto & posterior_estimate{ std::get<0>(gaus_posterior) };
-    const auto & posterior_variance{ std::get<1>(gaus_posterior) };
-
-    GaussianPosterior posterior;
-    posterior.estimate = GaussianEstimate{ posterior_estimate(0), posterior_estimate(1) };
-    posterior.variance = GaussianEstimate{ posterior_variance(0), posterior_variance(1) };
     return LocalPotentialAnnotationData{
-        posterior,
+        gaus_posterior,
         static_cast<bool>(result.outlier_flag_array(member_index)),
         result.statistical_distance_array(member_index)
     };
@@ -248,18 +263,12 @@ LocalPotentialAnnotationData BuildBondAnnotationData(
         result.capital_sigma_posterior_list.at(static_cast<std::size_t>(member_index))
     };
     const auto gaus_posterior{
-        GausLinearTransformHelper::BuildGaus2DModelWithVariance(
+        BondGroupDecodeService().DecodePosteriorEstimate(
             beta_vector_posterior,
             sigma_matrix_posterior)
     };
-    const auto & posterior_estimate{ std::get<0>(gaus_posterior) };
-    const auto & posterior_variance{ std::get<1>(gaus_posterior) };
-
-    GaussianPosterior posterior;
-    posterior.estimate = GaussianEstimate{ posterior_estimate(0), posterior_estimate(1) };
-    posterior.variance = GaussianEstimate{ posterior_variance(0), posterior_variance(1) };
     return LocalPotentialAnnotationData{
-        posterior,
+        gaus_posterior,
         static_cast<bool>(result.outlier_flag_array(member_index)),
         result.statistical_distance_array(member_index)
     };

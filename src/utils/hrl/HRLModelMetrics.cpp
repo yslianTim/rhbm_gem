@@ -1,7 +1,7 @@
 #include <rhbm_gem/utils/hrl/HRLModelMetrics.hpp>
 
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
+#include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
 
 #include <stdexcept>
 #include <string>
@@ -10,7 +10,10 @@ namespace
 {
 Eigen::VectorXd BuildGausModel(const Eigen::VectorXd & linear_model)
 {
-    return GausLinearTransformHelper::BuildGaus3DModel(linear_model);
+    static const rhbm_gem::GaussianLinearizationService service{
+        rhbm_gem::GaussianLinearizationSpec::DefaultMetricModel()
+    };
+    return service.DecodeGroupBeta(linear_model);
 }
 
 void ValidateMatchingDimensions(

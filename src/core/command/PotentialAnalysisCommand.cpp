@@ -15,6 +15,7 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/hrl/HRLAlphaTrainer.hpp>
+#include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
 #include <rhbm_gem/utils/hrl/HRLGroupEstimator.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
@@ -117,6 +118,22 @@ bool EmitTrainingReportIfRequested(
     }
 
     return true;
+}
+
+rhbm_gem::GaussianLinearizationService MakeGaussianDatasetService()
+{
+    return rhbm_gem::GaussianLinearizationService{
+        rhbm_gem::GaussianLinearizationSpec::DefaultDataset()
+    };
+}
+
+rhbm_gem::GaussianLinearizationContext BuildLocalLinearizationContext(
+    const rhbm_gem::LocalPotentialView & view)
+{
+    Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
+    model_par_init(0) = view.GetMomentZeroEstimate();
+    model_par_init(1) = view.GetMomentTwoEstimate();
+    return rhbm_gem::GaussianLinearizationContext::FromModelParameters(model_par_init);
 }
 
 } // namespace
@@ -425,7 +442,6 @@ void PotentialAnalysisCommand::RunAtomPotentialFittingWorkflow(
         RunLocalPotentialFitting(model_object, request.alpha_r);
     }
 
-    const int basis_size{ 2 };
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
     std::unordered_map<const AtomObject *, MutableLocalPotentialView> local_entry_map;
@@ -471,7 +487,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFittingWorkflow(
                 analysis_view.GetAtomAlphaG(group_key, class_key) : request.alpha_g
             };
             const auto input{
-                HRLDataTransform::BuildGroupInput(basis_size, member_datasets, member_estimates)
+                HRLDataTransform::BuildGroupInput(member_datasets, member_estimates)
             };
             HRLGroupEstimator estimator(MakePotentialAnalysisExecutionOptions(ThreadSize(), true));
             const auto result{ estimator.Estimate(input, alpha_g) };
@@ -566,6 +582,7 @@ void PotentialAnalysisCommand::RunDatasetPreparationWorkflow(
     const auto atom_size{ atom_list.size() };
     size_t atom_count{ 0 };
     auto local_entry_list{ BuildSelectedAtomLocalEntryViews(model_object) };
+    const auto dataset_service{ MakeGaussianDatasetService() };
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(ThreadSize())
@@ -573,11 +590,14 @@ void PotentialAnalysisCommand::RunDatasetPreparationWorkflow(
     for (size_t i = 0; i < atom_size; i++)
     {
         auto entry{ local_entry_list[i] };
-        const auto series_point_list{
-            LocalPotentialView::RequireFor(*atom_list[i]).GetFitDatasetSeries(
-                fit_range_min, fit_range_max)
-        };
-        entry.SetDataset(HRLDataTransform::BuildMemberDataset(series_point_list));
+        const auto local_view{ LocalPotentialView::RequireFor(*atom_list[i]) };
+        entry.SetDataset(
+            dataset_service.BuildDataset(
+                local_view.GetSamplingEntries(),
+                fit_range_min,
+                fit_range_max,
+                BuildLocalLinearizationContext(local_view))
+        );
 
 #ifdef USE_OPENMP
         #pragma omp critical

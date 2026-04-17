@@ -10,6 +10,7 @@
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
 #include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
 
 namespace rg = rhbm_gem;
@@ -21,6 +22,11 @@ std::shared_ptr<rg::ModelObject> LoadModelFixture(const std::string & fixture_na
     auto model{ rg::ReadModel(command_test::TestDataPath(fixture_name)) };
     model->SetKeyTag("model");
     return std::shared_ptr<rg::ModelObject>{ std::move(model) };
+}
+
+rg::GaussianLinearizationService MakeDatasetService()
+{
+    return rg::GaussianLinearizationService{ rg::GaussianLinearizationSpec::DefaultDataset() };
 }
 
 } // namespace
@@ -86,7 +92,9 @@ TEST(LocalPotentialSeriesTest, EntryFitDatasetSeriesKeepsFullBasisWithinFitRange
         {1.1f, 16.0f, 3.0f},
     });
 
-    const auto transformed{ entry.GetFitDatasetSeries(0.1, 0.3) };
+    const auto transformed{
+        MakeDatasetService().BuildDatasetSeries(entry.GetSamplingEntries(), 0.1, 0.3)
+    };
     ASSERT_EQ(transformed.size(), 2U);
 
     Eigen::VectorXd init{ Eigen::VectorXd::Zero(3) };
@@ -155,7 +163,9 @@ TEST(LocalPotentialSeriesTest, ViewForwardsSeriesDerivationsFromResolvedEntry)
     EXPECT_FLOAT_EQ(binned.at(0).weight, 1.5f);
     EXPECT_FLOAT_EQ(binned.at(1).weight, 5.0f);
 
-    const auto fit_dataset_series{ view.GetFitDatasetSeries(0.0, 0.5) };
+    const auto fit_dataset_series{
+        MakeDatasetService().BuildDatasetSeries(view.GetSamplingEntries(), 0.0, 0.5)
+    };
     ASSERT_EQ(fit_dataset_series.size(), 2U);
     EXPECT_EQ(fit_dataset_series.at(0).GetBasisSize(), 2U);
 }

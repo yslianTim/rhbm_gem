@@ -51,7 +51,9 @@ void ExpectMatrixEquals(const Eigen::MatrixXd & lhs, const Eigen::MatrixXd & rhs
 
 TEST(HRLModelTestDataFactoryTest, BuildBetaTestInputIsReproducibleWithFixedSeed)
 {
-    HRLModelTestDataFactory factory(3, 2);
+    HRLModelTestDataFactory factory(
+        3,
+        rhbm_gem::GaussianLinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
 
     const auto scenario{ HRLModelTestDataFactory::BetaScenario{
@@ -78,7 +80,9 @@ TEST(HRLModelTestDataFactoryTest, BuildBetaTestInputIsReproducibleWithFixedSeed)
 
 TEST(HRLModelTestDataFactoryTest, BuildBetaTestInputChangesWhenOutlierPolicyChanges)
 {
-    HRLModelTestDataFactory factory(3, 2);
+    HRLModelTestDataFactory factory(
+        3,
+        rhbm_gem::GaussianLinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
 
     const auto base_scenario{ HRLModelTestDataFactory::BetaScenario{
@@ -106,7 +110,9 @@ TEST(HRLModelTestDataFactoryTest, BuildBetaTestInputChangesWhenOutlierPolicyChan
 
 TEST(HRLModelTestDataFactoryTest, BuildBetaTestInputChangesWhenNoisePolicyChanges)
 {
-    HRLModelTestDataFactory factory(3, 2);
+    HRLModelTestDataFactory factory(
+        3,
+        rhbm_gem::GaussianLinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
 
     const auto noiseless_scenario{ HRLModelTestDataFactory::BetaScenario{
@@ -134,7 +140,9 @@ TEST(HRLModelTestDataFactoryTest, BuildBetaTestInputChangesWhenNoisePolicyChange
 
 TEST(HRLModelTestDataFactoryTest, BuildMuTestInputIsReproducibleWithFixedSeed)
 {
-    HRLModelTestDataFactory factory(3, 2);
+    HRLModelTestDataFactory factory(
+        3,
+        rhbm_gem::GaussianLinearizationSpec::DefaultDataset());
 
     const auto scenario{ HRLModelTestDataFactory::MuScenario{
         4,
@@ -162,7 +170,9 @@ TEST(HRLModelTestDataFactoryTest, BuildMuTestInputIsReproducibleWithFixedSeed)
 
 TEST(HRLModelTestDataFactoryTest, BuildNeighborhoodTestInputProvidesPairedDatasetsAndSamplingSummary)
 {
-    HRLModelTestDataFactory factory(3, 2);
+    HRLModelTestDataFactory factory(
+        3,
+        rhbm_gem::GaussianLinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
 
     const auto input{

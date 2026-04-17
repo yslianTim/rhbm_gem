@@ -20,7 +20,6 @@ Eigen::MatrixXd BuildBetaMatrix(
 );
 
 HRLGroupEstimationInput BuildGroupInput(
-    int basis_size,
     const std::vector<HRLMemberDataset> & member_datasets,
     const std::vector<HRLMemberLocalEstimate> & member_estimates
 );

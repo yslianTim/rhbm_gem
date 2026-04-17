@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstddef>
+#include <initializer_list>
 #include <optional>
 #include <stdexcept>
 #include <utility>
@@ -29,38 +30,41 @@ using LocalPotentialSampleList = std::vector<LocalPotentialSample>;
 
 struct SeriesPoint
 {
-    std::vector<double> basis_values{};
+    std::vector<double> basis_list{};
     double response{ 0.0 };
     double weight{ 1.0 };
 
     SeriesPoint() = default;
 
-    SeriesPoint(double basis_value, double response_value, double weight_value = 1.0) :
-        basis_values{ basis_value },
+    SeriesPoint(
+        std::initializer_list<double> basis_list_value,
+        double response_value,
+        double weight_value = 1.0) :
+        basis_list{ basis_list_value },
         response{ response_value },
         weight{ weight_value }
     {
     }
 
     SeriesPoint(
-        std::vector<double> basis_values_,
+        std::vector<double> basis_list_value,
         double response_value,
         double weight_value = 1.0) :
-        basis_values{ std::move(basis_values_) },
+        basis_list{ std::move(basis_list_value) },
         response{ response_value },
         weight{ weight_value }
     {
     }
 
-    size_t GetBasisSize() const noexcept { return basis_values.size(); }
+    size_t GetBasisSize() const noexcept { return basis_list.size(); }
 
     double GetBasisValue(size_t index) const
     {
-        if (index >= basis_values.size())
+        if (index >= basis_list.size())
         {
             throw std::out_of_range("SeriesPoint basis value index is out of range.");
         }
-        return basis_values.at(index);
+        return basis_list.at(index);
     }
 };
 

@@ -169,7 +169,7 @@ SeriesPointList LocalPotentialEntry::GetBinnedDistanceResponseSeries(
                 ? 0.0f
                 : ArrayStats<float>::ComputeMean(bin_weights.data(), bin_weights.size())
         };
-        binned_distance_response_series.emplace_back(SeriesPoint{ x_value, y_value, weight_value });
+        binned_distance_response_series.emplace_back(SeriesPoint{ { x_value }, y_value, weight_value });
     }
     return binned_distance_response_series;
 }
@@ -187,23 +187,9 @@ SeriesPointList LocalPotentialEntry::GetLinearModelSeries() const
             GausLinearTransformHelper::BuildLinearModelDataVector(
                 sample.distance, sample.response, model_par_init)
         };
-        linear_model_series.emplace_back(SeriesPoint{
-            data_vector(1),
-            data_vector(2),
-            sample.weight
-        });
+        linear_model_series.emplace_back(SeriesPoint{ { data_vector(1) }, data_vector(2), sample.weight });
     }
     return linear_model_series;
-}
-
-SeriesPointList LocalPotentialEntry::GetFitDatasetSeries(
-    double fit_range_min,
-    double fit_range_max) const
-{
-    return GausLinearTransformHelper::MapValueTransform(
-        m_sampling_entries,
-        fit_range_min,
-        fit_range_max);
 }
 
 double LocalPotentialEntry::GetMapValueNearCenter() const

@@ -23,7 +23,9 @@ Eigen::VectorXd MakeVector(std::initializer_list<double> values)
 
 TEST(HRLModelTesterTest, RunBetaMDPDETestPopulatesResidualOutputs)
 {
-    HRLModelTestDataFactory factory(3, 2);
+    HRLModelTestDataFactory factory(
+        3,
+        rhbm_gem::GaussianLinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
     HRLModelTester tester(3);
 
@@ -81,7 +83,9 @@ TEST(HRLModelTesterTest, RunBetaMDPDETestPopulatesResidualOutputs)
 
 TEST(HRLModelTesterTest, RunMuMDPDETestPopulatesResidualOutputs)
 {
-    HRLModelTestDataFactory factory(3, 2);
+    HRLModelTestDataFactory factory(
+        3,
+        rhbm_gem::GaussianLinearizationSpec::DefaultDataset());
     HRLModelTester tester(3);
 
     const auto test_input{
@@ -123,7 +127,9 @@ TEST(HRLModelTesterTest, RunMuMDPDETestPopulatesResidualOutputs)
 
 TEST(HRLModelTesterTest, RunBetaMDPDEWithNeighborhoodTestConsumesPreparedInputs)
 {
-    HRLModelTestDataFactory factory(3, 2);
+    HRLModelTestDataFactory factory(
+        3,
+        rhbm_gem::GaussianLinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
     HRLModelTester tester(3);
 

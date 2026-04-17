@@ -10,11 +10,11 @@
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
+#include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
 #include <rhbm_gem/utils/hrl/HRLGroupEstimator.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
 #include <rhbm_gem/utils/math/CylinderSampler.hpp>
-#include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
 
 #include <array>
 #include <atomic>
@@ -49,6 +49,19 @@ HRLExecutionOptions MakePotentialAnalysisExecutionOptions(
     return execution_options;
 }
 
+GaussianLinearizationService MakeGaussianDatasetService()
+{
+    return GaussianLinearizationService{ GaussianLinearizationSpec::DefaultDataset() };
+}
+
+GaussianLinearizationContext BuildLocalLinearizationContext(const LocalPotentialView & view)
+{
+    Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
+    model_par_init(0) = view.GetMomentZeroEstimate();
+    model_par_init(1) = view.GetMomentTwoEstimate();
+    return GaussianLinearizationContext::FromModelParameters(model_par_init);
+}
+
 void RunBondSampling(
     ModelObject & model_object,
     const MapObject & map_object,
@@ -56,6 +69,7 @@ void RunBondSampling(
     int thread_size)
 {
     ScopeTimer timer("PotentialAnalysisBondWorkflow::RunBondMapValueSampling");
+    const auto dataset_service{ MakeGaussianDatasetService() };
     CylinderSampler sampler;
     sampler.SetSampleCount(static_cast<unsigned int>(options.sampling_size));
     sampler.SetDistanceRange(options.sampling_range_min, options.sampling_range_max);
@@ -97,13 +111,14 @@ void RunBondSampling(
                     bond_vector)
             };
             entry.SetSamplingEntries(sampling_entries);
-            const auto basis_and_response_entries{
-                GausLinearTransformHelper::MapValueTransform(
+            const auto local_view{ LocalPotentialView::RequireFor(*bond) };
+            entry.SetDataset(
+                dataset_service.BuildDataset(
                     sampling_entries,
                     options.fit_range_min,
-                    options.fit_range_max)
-            };
-            entry.SetDataset(HRLDataTransform::BuildMemberDataset(basis_and_response_entries));
+                    options.fit_range_max,
+                    BuildLocalLinearizationContext(local_view))
+            );
             entry.SetAlphaR(options.alpha_r);
             #pragma omp critical
             {
@@ -125,13 +140,14 @@ void RunBondSampling(
                 bond->GetBondVector())
         };
         entry.SetSamplingEntries(sampling_entries);
-        const auto basis_and_response_entries{
-            GausLinearTransformHelper::MapValueTransform(
+        const auto local_view{ LocalPotentialView::RequireFor(*bond) };
+        entry.SetDataset(
+            dataset_service.BuildDataset(
                 sampling_entries,
                 options.fit_range_min,
-                options.fit_range_max)
-        };
-        entry.SetDataset(HRLDataTransform::BuildMemberDataset(basis_and_response_entries));
+                options.fit_range_max,
+                BuildLocalLinearizationContext(local_view))
+        );
         entry.SetAlphaR(options.alpha_r);
         bond_count++;
         Logger::ProgressPercent(bond_count, bond_size);
@@ -206,7 +222,6 @@ void RunLocalBondFitting(
 void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & context)
 {
     ScopeTimer timer("PotentialAnalysisBondWorkflow::RunBondPotentialFitting");
-    constexpr int basis_size{ 2 };
     auto analysis{ context.model_object.EditAnalysis() };
     const auto analysis_view{ context.model_object.GetAnalysisView() };
     std::unordered_map<const BondObject *, MutableLocalPotentialView> local_entry_map;
@@ -250,10 +265,7 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
                 });
             }
             const auto input{
-                HRLDataTransform::BuildGroupInput(
-                    basis_size,
-                    member_datasets,
-                    member_estimates)
+                HRLDataTransform::BuildGroupInput(member_datasets, member_estimates)
             };
             HRLGroupEstimator estimator(
                 MakePotentialAnalysisExecutionOptions(context.thread_size, true));
