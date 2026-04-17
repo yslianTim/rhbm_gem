@@ -112,14 +112,10 @@ bool HRLModelTester::RunBetaMDPDETest(
 
             residual_matrix_ols_list.at(j).col(i) =
                 HRLModelMetrics::CalculateNormalizedResidual(
-                    beta_result.beta_ols,
-                    test_input.gaus_true
-                );
+                    beta_result.beta_ols, test_input.gaus_true);
             residual_matrix_mdpde_list.at(j).col(i) =
                 HRLModelMetrics::CalculateNormalizedResidual(
-                    beta_result.beta_mdpde,
-                    test_input.gaus_true
-                );
+                    beta_result.beta_mdpde,test_input.gaus_true);
         }
     }
 
@@ -128,13 +124,9 @@ bool HRLModelTester::RunBetaMDPDETest(
         residual_mean_ols_list.at(j) = residual_matrix_ols_list.at(j).rowwise().mean();
         residual_mean_mdpde_list.at(j) = residual_matrix_mdpde_list.at(j).rowwise().mean();
         residual_sigma_ols_list.at(j) = CalculateReplicaSigma(
-            residual_matrix_ols_list.at(j),
-            residual_mean_ols_list.at(j)
-        );
+            residual_matrix_ols_list.at(j), residual_mean_ols_list.at(j));
         residual_sigma_mdpde_list.at(j) = CalculateReplicaSigma(
-            residual_matrix_mdpde_list.at(j),
-            residual_mean_mdpde_list.at(j)
-        );
+            residual_matrix_mdpde_list.at(j),residual_mean_mdpde_list.at(j));
     }
 
     return true;
@@ -196,40 +188,29 @@ bool HRLModelTester::RunMuMDPDETest(
         const auto alpha_g_training_result{
             alpha_g_trainer.TrainAlphaG(
                 std::vector<std::vector<Eigen::VectorXd>>{ train_data_entry_list },
-                alpha_g_training_options
-            )
+                alpha_g_training_options)
         };
         const auto trained_alpha_g{ alpha_g_training_result.best_alpha };
         const auto options{ MakeTesterExecutionOptions() };
 
         for (size_t j = 0; j < alpha_size; j++)
         {
-            const auto alpha{
-                j < local_alpha_g_list.size()
-                    ? local_alpha_g_list.at(j)
-                    : trained_alpha_g
+            const auto alpha{ (j < local_alpha_g_list.size()) ?
+                local_alpha_g_list.at(j) : trained_alpha_g
             };
-            const auto mdpde_result = HRLModelAlgorithms::EstimateMuMDPDE(
-                alpha,
-                beta_matrix,
-                options
-            );
-            const auto ols_result = HRLModelAlgorithms::EstimateMuMDPDE(
-                0.0,
-                beta_matrix,
-                options
-            );
+            const auto mdpde_result{
+                HRLModelAlgorithms::EstimateMuMDPDE(alpha, beta_matrix, options)
+            };
+            const auto ols_result{
+                HRLModelAlgorithms::EstimateMuMDPDE(0.0, beta_matrix, options)
+            };
 
             residual_matrix_median_list.at(j).col(i) =
                 HRLModelMetrics::CalculateNormalizedResidual(
-                    ols_result.mu_mdpde,
-                    test_input.gaus_true
-                );
+                    ols_result.mu_mdpde, test_input.gaus_true);
             residual_matrix_mdpde_list.at(j).col(i) =
                 HRLModelMetrics::CalculateNormalizedResidual(
-                    mdpde_result.mu_mdpde,
-                    test_input.gaus_true
-                );
+                    mdpde_result.mu_mdpde,test_input.gaus_true);
         }
     }
 
@@ -238,13 +219,9 @@ bool HRLModelTester::RunMuMDPDETest(
         residual_mean_median_list.at(j) = residual_matrix_median_list.at(j).rowwise().mean();
         residual_mean_mdpde_list.at(j) = residual_matrix_mdpde_list.at(j).rowwise().mean();
         residual_sigma_median_list.at(j) = CalculateReplicaSigma(
-            residual_matrix_median_list.at(j),
-            residual_mean_median_list.at(j)
-        );
+            residual_matrix_median_list.at(j),residual_mean_median_list.at(j));
         residual_sigma_mdpde_list.at(j) = CalculateReplicaSigma(
-            residual_matrix_mdpde_list.at(j),
-            residual_mean_mdpde_list.at(j)
-        );
+            residual_matrix_mdpde_list.at(j),residual_mean_mdpde_list.at(j));
     }
 
     return true;
@@ -316,19 +293,13 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
 
         replica_residual_list.at(0).col(i) =
             HRLModelMetrics::CalculateNormalizedResidual(
-                no_cut_result.beta_ols,
-                test_input.gaus_true
-            );
+                no_cut_result.beta_ols, test_input.gaus_true);
         replica_residual_list.at(1).col(i) =
             HRLModelMetrics::CalculateNormalizedResidual(
-                no_cut_result.beta_mdpde,
-                test_input.gaus_true
-            );
+                no_cut_result.beta_mdpde, test_input.gaus_true);
         replica_residual_list.at(2).col(i) =
             HRLModelMetrics::CalculateNormalizedResidual(
-                cut_result.beta_mdpde,
-                test_input.gaus_true
-            );
+                cut_result.beta_mdpde, test_input.gaus_true);
 
         #pragma omp critical
         {
@@ -340,10 +311,7 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
     for (size_t j = 0; j < method_size; j++)
     {
         residual_mean_list.at(j) = replica_residual_list.at(j).rowwise().mean();
-        residual_sigma_list.at(j) = CalculateReplicaSigma(
-            replica_residual_list.at(j),
-            residual_mean_list.at(j)
-        );
+        residual_sigma_list.at(j) = CalculateReplicaSigma(replica_residual_list.at(j), residual_mean_list.at(j));
     }
 
     return true;
