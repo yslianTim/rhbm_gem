@@ -132,12 +132,12 @@ inline SamplingPointList TranslateSamplingPoints(
 LocalPotentialSampleList BuildLocalPotentialSampleList(
     const MapObject & map_object,
     const SamplingPointList & sampling_points,
-    const std::vector<float> * sampling_weights = nullptr)
+    const std::vector<float> * sampling_scores = nullptr)
 {
-    if (sampling_weights != nullptr && sampling_weights->size() != sampling_points.size())
+    if (sampling_scores != nullptr && sampling_scores->size() != sampling_points.size())
     {
         throw std::invalid_argument(
-            "BuildLocalPotentialSampleList sampling_weights must align with sampling_points.");
+            "BuildLocalPotentialSampleList sampling_scores must align with sampling_points.");
     }
 
     LocalPotentialSampleList sampling_data_list;
@@ -145,8 +145,8 @@ LocalPotentialSampleList BuildLocalPotentialSampleList(
     for (size_t i = 0; i < sampling_points.size(); i++)
     {
         const auto & sampling_point{ sampling_points.at(i) };
-        const auto sampling_weight{
-            (sampling_weights == nullptr) ? 1.0f : sampling_weights->at(i)
+        const auto sampling_score{
+            (sampling_scores == nullptr) ? 1.0f : sampling_scores->at(i)
         };
 
         auto map_value{
@@ -155,7 +155,7 @@ LocalPotentialSampleList BuildLocalPotentialSampleList(
         sampling_data_list.emplace_back(LocalPotentialSample{
             sampling_point.distance,
             map_value,
-            sampling_weight,
+            sampling_score,
             sampling_point.position
         });
     }
@@ -213,10 +213,10 @@ LocalPotentialSampleList SampleMapValues(
     const auto local_sampling_points{
         detail::TranslateSamplingPoints(sampling_points, position, -1.0f)
     };
-    const auto sampling_weights{
-        BuildSamplingPointWeightList(local_sampling_points, reject_direction_list, angle)
+    const auto sampling_scores{
+        BuildSamplingPointScoreList(local_sampling_points, reject_direction_list, angle)
     };
-    return detail::BuildLocalPotentialSampleList(map_object, sampling_points, &sampling_weights);
+    return detail::BuildLocalPotentialSampleList(map_object, sampling_points, &sampling_scores);
 }
 
 } // namespace rhbm_gem

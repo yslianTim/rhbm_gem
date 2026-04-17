@@ -37,74 +37,74 @@ SamplingPointList MakePointList()
 TEST(SamplingPointFilterTest, ZeroAngleKeepsAllSamplingPoints)
 {
     const auto point_list{ MakePointList() };
-    const auto point_weights{
-        rg::BuildSamplingPointWeightList(point_list, { MakeVector({ 1.0, 0.0, 0.0 }) }, 0.0)
+    const auto point_scores{
+        rg::BuildSamplingPointScoreList(point_list, { MakeVector({ 1.0, 0.0, 0.0 }) }, 0.0)
     };
 
-    ASSERT_EQ(point_weights.size(), point_list.size());
-    EXPECT_TRUE(std::all_of(point_weights.begin(), point_weights.end(), [](float weight)
+    ASSERT_EQ(point_scores.size(), point_list.size());
+    EXPECT_TRUE(std::all_of(point_scores.begin(), point_scores.end(), [](float score)
     {
-        return weight == 1.0f;
+        return score == 1.0f;
     }));
 }
 
 TEST(SamplingPointFilterTest, RejectsPointsWithinAngleThresholdOfRejectDirections)
 {
-    const auto point_weights{
-        rg::BuildSamplingPointWeightList(
+    const auto point_scores{
+        rg::BuildSamplingPointScoreList(
             MakePointList(),
             { MakeVector({ 1.0, 0.0, 0.0 }) },
             30.0)
     };
 
-    ASSERT_EQ(point_weights.size(), 4u);
-    EXPECT_FLOAT_EQ(point_weights.at(0), 1.0f);
-    EXPECT_FLOAT_EQ(point_weights.at(1), 0.0f);
-    EXPECT_FLOAT_EQ(point_weights.at(2), 1.0f);
-    EXPECT_FLOAT_EQ(point_weights.at(3), 1.0f);
+    ASSERT_EQ(point_scores.size(), 4u);
+    EXPECT_FLOAT_EQ(point_scores.at(0), 1.0f);
+    EXPECT_FLOAT_EQ(point_scores.at(1), 0.0f);
+    EXPECT_FLOAT_EQ(point_scores.at(2), 1.0f);
+    EXPECT_FLOAT_EQ(point_scores.at(3), 1.0f);
 }
 
 TEST(SamplingPointFilterTest, KeepsPerpendicularAndOppositeDirections)
 {
-    const auto point_weights{
-        rg::BuildSamplingPointWeightList(
+    const auto point_scores{
+        rg::BuildSamplingPointScoreList(
             MakePointList(),
             { MakeVector({ 1.0, 0.0, 0.0 }) },
             89.0)
     };
 
-    ASSERT_EQ(point_weights.size(), 4u);
-    EXPECT_FLOAT_EQ(point_weights.at(0), 1.0f);
-    EXPECT_FLOAT_EQ(point_weights.at(1), 0.0f);
-    EXPECT_FLOAT_EQ(point_weights.at(2), 1.0f);
-    EXPECT_FLOAT_EQ(point_weights.at(3), 1.0f);
+    ASSERT_EQ(point_scores.size(), 4u);
+    EXPECT_FLOAT_EQ(point_scores.at(0), 1.0f);
+    EXPECT_FLOAT_EQ(point_scores.at(1), 0.0f);
+    EXPECT_FLOAT_EQ(point_scores.at(2), 1.0f);
+    EXPECT_FLOAT_EQ(point_scores.at(3), 1.0f);
 }
 
 TEST(SamplingPointFilterTest, IgnoresZeroLengthRejectDirections)
 {
     const auto point_list{ MakePointList() };
-    const auto point_weights{
-        rg::BuildSamplingPointWeightList(point_list, { MakeVector({ 0.0, 0.0, 0.0 }) }, 45.0)
+    const auto point_scores{
+        rg::BuildSamplingPointScoreList(point_list, { MakeVector({ 0.0, 0.0, 0.0 }) }, 45.0)
     };
 
-    ASSERT_EQ(point_weights.size(), point_list.size());
-    EXPECT_TRUE(std::all_of(point_weights.begin(), point_weights.end(), [](float weight)
+    ASSERT_EQ(point_scores.size(), point_list.size());
+    EXPECT_TRUE(std::all_of(point_scores.begin(), point_scores.end(), [](float score)
     {
-        return weight == 1.0f;
+        return score == 1.0f;
     }));
 }
 
 TEST(SamplingPointFilterTest, KeepsOriginSamplingPointEvenWhenFilteringEnabled)
 {
-    const auto point_weights{
-        rg::BuildSamplingPointWeightList(
+    const auto point_scores{
+        rg::BuildSamplingPointScoreList(
             MakePointList(),
             { MakeVector({ 1.0, 0.0, 0.0 }) },
             45.0)
     };
 
-    ASSERT_EQ(point_weights.size(), 4u);
-    EXPECT_FLOAT_EQ(point_weights.front(), 1.0f);
+    ASSERT_EQ(point_scores.size(), 4u);
+    EXPECT_FLOAT_EQ(point_scores.front(), 1.0f);
 }
 
 TEST(SamplingPointFilterTest, RejectsInvalidAngles)
@@ -112,23 +112,23 @@ TEST(SamplingPointFilterTest, RejectsInvalidAngles)
     const auto point_list{ MakePointList() };
 
     EXPECT_THROW(
-        (void)rg::BuildSamplingPointWeightList(point_list, {}, -1.0),
+        (void)rg::BuildSamplingPointScoreList(point_list, {}, -1.0),
         std::invalid_argument);
     EXPECT_THROW(
-        (void)rg::BuildSamplingPointWeightList(
+        (void)rg::BuildSamplingPointScoreList(
             point_list,
             {},
             std::numeric_limits<double>::infinity()),
         std::invalid_argument);
     EXPECT_THROW(
-        (void)rg::BuildSamplingPointWeightList(point_list, {}, 181.0),
+        (void)rg::BuildSamplingPointScoreList(point_list, {}, 181.0),
         std::invalid_argument);
 }
 
 TEST(SamplingPointFilterTest, RejectsRejectDirectionsWithUnexpectedDimension)
 {
     EXPECT_THROW(
-        (void)rg::BuildSamplingPointWeightList(
+        (void)rg::BuildSamplingPointScoreList(
             MakePointList(),
             { MakeVector({ 1.0, 0.0 }) },
             45.0),
@@ -138,7 +138,7 @@ TEST(SamplingPointFilterTest, RejectsRejectDirectionsWithUnexpectedDimension)
 TEST(SamplingPointFilterTest, RejectsRejectDirectionsWithNonFiniteValues)
 {
     EXPECT_THROW(
-        (void)rg::BuildSamplingPointWeightList(
+        (void)rg::BuildSamplingPointScoreList(
             MakePointList(),
             { MakeVector({ 1.0, 0.0, std::numeric_limits<double>::quiet_NaN() }) },
             45.0),

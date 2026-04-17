@@ -160,7 +160,7 @@ HRLNeighborhoodTestInput HRLModelTestDataFactory::BuildNeighborhoodTestInput(
         scenario.neighbor_distance,
         scenario.neighbor_count,
         scenario.rejected_angle,
-        NeighborhoodSamplingRejectPolicy::ZeroWeightRejectedPoints
+        NeighborhoodRejectedPointPolicy::KeepRejectedPointsWithZeroScore
     };
     const NeighborhoodSamplingOptions cut_options{
         scenario.radius_min,
@@ -168,7 +168,7 @@ HRLNeighborhoodTestInput HRLModelTestDataFactory::BuildNeighborhoodTestInput(
         scenario.neighbor_distance,
         scenario.neighbor_count,
         scenario.rejected_angle,
-        NeighborhoodSamplingRejectPolicy::RemoveRejectedPoints
+        NeighborhoodRejectedPointPolicy::RemoveRejectedPoints
     };
 
     HRLNeighborhoodTestInput input;

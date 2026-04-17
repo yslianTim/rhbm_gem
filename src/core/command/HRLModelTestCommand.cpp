@@ -631,7 +631,7 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
     const auto scenario{ NeighborDistanceScenarioConfig{
         10,
         50,
-        1,
+        2,
         45.0,
         std::vector<double>{ 0.0, 0.025, 0.05 },
         BuildDescendingSweep(16, 2.5, 0.1)

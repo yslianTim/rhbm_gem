@@ -91,17 +91,18 @@ inline bool ShouldRejectSamplingPoint(
 
 } // namespace detail
 
-inline std::vector<float> BuildSamplingPointWeightList(
+inline std::vector<float> BuildSamplingPointScoreList(
     const SamplingPointList & point_list,
     const std::vector<Eigen::VectorXd> & reject_direction_list,
     double angle = 0.0)
 {
     detail::ValidateSamplingPointFilterAngle(angle);
 
-    std::vector<float> point_weights(point_list.size(), 1.0f);
+    // This is a 0/1 acceptance score for each point, not a statistical weight.
+    std::vector<float> point_scores(point_list.size(), 1.0f);
     if (angle == 0.0)
     {
-        return point_weights;
+        return point_scores;
     }
 
     const auto normalized_reject_directions{
@@ -109,7 +110,7 @@ inline std::vector<float> BuildSamplingPointWeightList(
     };
     if (normalized_reject_directions.empty())
     {
-        return point_weights;
+        return point_scores;
     }
 
     const auto cos_threshold{ std::cos(angle * Constants::pi / 180.0) };
@@ -120,11 +121,11 @@ inline std::vector<float> BuildSamplingPointWeightList(
                 normalized_reject_directions,
                 cos_threshold))
         {
-            point_weights.at(i) = 0.0f;
+            point_scores.at(i) = 0.0f;
         }
     }
 
-    return point_weights;
+    return point_scores;
 }
 
 } // namespace rhbm_gem

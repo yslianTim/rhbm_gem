@@ -161,8 +161,8 @@ LocalPotentialSampleList GaussianPotentialSampler::GenerateNeighborhoodSamples(
         )
     );
     const auto sampling_points{ sampler.GenerateSamplingPoints({ 0.0f, 0.0f, 0.0f }) };
-    const auto sampling_weights{
-        rhbm_gem::BuildSamplingPointWeightList(
+    const auto sampling_scores{
+        rhbm_gem::BuildSamplingPointScoreList(
             sampling_points,
             neighbor_center_list,
             options.reject_angle_deg
@@ -170,28 +170,30 @@ LocalPotentialSampleList GaussianPotentialSampler::GenerateNeighborhoodSamples(
     };
 
     LocalPotentialSampleList sample_list;
-    if (options.reject_policy == NeighborhoodSamplingRejectPolicy::ZeroWeightRejectedPoints)
+    if (options.rejected_point_policy ==
+        NeighborhoodRejectedPointPolicy::KeepRejectedPointsWithZeroScore)
     {
         sample_list.reserve(sampling_points.size());
     }
     else
     {
         sample_list.reserve(static_cast<size_t>(std::count_if(
-            sampling_weights.begin(),
-            sampling_weights.end(),
-            [](float weight)
+            sampling_scores.begin(),
+            sampling_scores.end(),
+            [](float score)
             {
-                return weight > 0.0f;
+                return score > 0.0f;
             })));
     }
 
     for (size_t i = 0; i < sampling_points.size(); i++)
     {
         const auto & sampling_point{ sampling_points.at(i) };
-        const auto sampling_weight{ sampling_weights.at(i) };
+        const auto sampling_score{ sampling_scores.at(i) };
         if (
-            options.reject_policy == NeighborhoodSamplingRejectPolicy::RemoveRejectedPoints &&
-            sampling_weight <= 0.0f)
+            options.rejected_point_policy ==
+                NeighborhoodRejectedPointPolicy::RemoveRejectedPoints &&
+            sampling_score <= 0.0f)
         {
             continue;
         }
@@ -214,7 +216,7 @@ LocalPotentialSampleList GaussianPotentialSampler::GenerateNeighborhoodSamples(
         sample_list.emplace_back(LocalPotentialSample{
             sampling_point.distance,
             static_cast<float>(response),
-            sampling_weight,
+            sampling_score,
             sampling_point.position
         });
     }

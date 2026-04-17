@@ -10,6 +10,7 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/math/SamplingPointFilter.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace rg = rhbm_gem;
@@ -178,6 +179,30 @@ TEST(MapSamplingTest, AtomSamplerRejectsPointsWithinAngleThresholdOfNeighborDire
     EXPECT_FLOAT_EQ(sampling_data.at(3).position->at(0), -1.0f);
     EXPECT_FLOAT_EQ(sampling_data.at(3).position->at(1), 0.0f);
     EXPECT_FLOAT_EQ(sampling_data.at(3).score, 1.0f);
+}
+
+TEST(MapSamplingTest, AtomSamplerUsesSamplingPointScoresForFilteredEntries)
+{
+    auto map{ MakeMapObject() };
+    FixedPointSampler sampler;
+    auto model{ MakeLinearNeighborModel() };
+    const auto * atom{ model->GetAtomList().at(0).get() };
+
+    const auto sampling_points{ sampler.GenerateSamplingPoints(atom->GetPosition()) };
+    const std::vector<Eigen::VectorXd> reject_direction_list{
+        (Eigen::Vector3d{ 1.0, 0.0, 0.0 })
+    };
+    const auto expected_scores{
+        rg::BuildSamplingPointScoreList(sampling_points, reject_direction_list, 30.0)
+    };
+    const auto sampling_data{
+        rg::SampleMapValues(map, sampler, *atom, 1.1, 30.0) };
+
+    ASSERT_EQ(sampling_data.size(), expected_scores.size());
+    for (size_t i = 0; i < sampling_data.size(); ++i)
+    {
+        EXPECT_FLOAT_EQ(sampling_data.at(i).score, expected_scores.at(i));
+    }
 }
 
 TEST(MapSamplingTest, AtomSamplerKeepsAllPointsWhenNeighborRadiusFindsNoNeighbors)
