@@ -17,7 +17,7 @@ inline void ValidateSamplingPointFilterAngle(double angle)
     if (!std::isfinite(angle) || angle < 0.0 || angle > 180.0)
     {
         throw std::invalid_argument(
-            "SelectSamplingPoint angle must be finite and within [0, 180] degrees.");
+            "SamplingPointFilter angle must be finite and within [0, 180] degrees.");
     }
 }
 
@@ -41,13 +41,13 @@ inline std::vector<Eigen::Vector3d> BuildNormalizedRejectDirections(
         if (reject_direction.size() != 3)
         {
             throw std::invalid_argument(
-                "SelectSamplingPoint reject directions must have dimension 3.");
+                "SamplingPointFilter reject directions must have dimension 3.");
         }
 
         if (!reject_direction.allFinite())
         {
             throw std::invalid_argument(
-                "SelectSamplingPoint reject directions must contain finite values.");
+                "SamplingPointFilter reject directions must contain finite values.");
         }
 
         const Eigen::Vector3d direction{
@@ -125,28 +125,6 @@ inline std::vector<float> BuildSamplingPointWeightList(
     }
 
     return point_weights;
-}
-
-inline SamplingPointList SelectSamplingPoint(
-    const SamplingPointList & point_list,
-    const std::vector<Eigen::VectorXd> & reject_direction_list,
-    double angle = 0.0)
-{
-    const auto point_weights{
-        BuildSamplingPointWeightList(point_list, reject_direction_list, angle)
-    };
-
-    SamplingPointList filtered_point_list;
-    filtered_point_list.reserve(point_list.size());
-    for (size_t i = 0; i < point_list.size(); i++)
-    {
-        if (point_weights.at(i) > 0.0f)
-        {
-            filtered_point_list.emplace_back(point_list.at(i));
-        }
-    }
-
-    return filtered_point_list;
 }
 
 } // namespace rhbm_gem

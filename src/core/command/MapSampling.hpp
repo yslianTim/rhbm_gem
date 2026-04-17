@@ -129,20 +129,25 @@ inline SamplingPointList TranslateSamplingPoints(
     return translated_point_list;
 }
 
-template <typename KeepPredicate>
 LocalPotentialSampleList BuildLocalPotentialSampleList(
     const MapObject & map_object,
     const SamplingPointList & sampling_points,
-    KeepPredicate && keep_predicate)
+    const std::vector<float> * sampling_weights = nullptr)
 {
+    if (sampling_weights != nullptr && sampling_weights->size() != sampling_points.size())
+    {
+        throw std::invalid_argument(
+            "BuildLocalPotentialSampleList sampling_weights must align with sampling_points.");
+    }
+
     LocalPotentialSampleList sampling_data_list;
     sampling_data_list.reserve(sampling_points.size());
-    for (const auto & sampling_point : sampling_points)
+    for (size_t i = 0; i < sampling_points.size(); i++)
     {
-        if (!keep_predicate(sampling_point))
-        {
-            continue;
-        }
+        const auto & sampling_point{ sampling_points.at(i) };
+        const auto sampling_weight{
+            (sampling_weights == nullptr) ? 1.0f : sampling_weights->at(i)
+        };
 
         auto map_value{
             MakeInterpolationInMapObject(map_object, sampling_point.position)
@@ -150,7 +155,7 @@ LocalPotentialSampleList BuildLocalPotentialSampleList(
         sampling_data_list.emplace_back(LocalPotentialSample{
             sampling_point.distance,
             map_value,
-            1.0f,
+            sampling_weight,
             sampling_point.position
         });
     }
@@ -169,13 +174,7 @@ LocalPotentialSampleList SampleMapValues(
     const std::array<float, 3> & position)
 {
     const auto sampling_points{ sampler.GenerateSamplingPoints(position) };
-    return detail::BuildLocalPotentialSampleList(
-        map_object,
-        sampling_points,
-        [](const SamplingPoint &)
-        {
-            return true;
-        });
+    return detail::BuildLocalPotentialSampleList(map_object, sampling_points);
 }
 
 template <typename Sampler>
@@ -185,16 +184,8 @@ LocalPotentialSampleList SampleMapValues(
     const std::array<float, 3> & position,
     const std::array<float, 3> & direction_like_input)
 {
-    const auto sampling_points{
-        sampler.GenerateSamplingPoints(position, direction_like_input)
-    };
-    return detail::BuildLocalPotentialSampleList(
-        map_object,
-        sampling_points,
-        [](const SamplingPoint &)
-        {
-            return true;
-        });
+    const auto sampling_points{ sampler.GenerateSamplingPoints(position, direction_like_input) };
+    return detail::BuildLocalPotentialSampleList(map_object, sampling_points);
 }
 
 template <typename Sampler>
@@ -212,13 +203,7 @@ LocalPotentialSampleList SampleMapValues(
     const auto sampling_points{ sampler.GenerateSamplingPoints(position) };
     if (angle <= 0.0)
     {
-        return detail::BuildLocalPotentialSampleList(
-            map_object,
-            sampling_points,
-            [](const SamplingPoint &)
-            {
-                return true;
-            });
+        return detail::BuildLocalPotentialSampleList(map_object, sampling_points);
     }
 
     const auto neighbor_atom_list{ atom.FindNeighborAtoms(neighbor_radius, false) };
@@ -228,19 +213,10 @@ LocalPotentialSampleList SampleMapValues(
     const auto local_sampling_points{
         detail::TranslateSamplingPoints(sampling_points, position, -1.0f)
     };
-    const auto filtered_local_sampling_points{
-        SelectSamplingPoint(local_sampling_points, reject_direction_list, angle)
+    const auto sampling_weights{
+        BuildSamplingPointWeightList(local_sampling_points, reject_direction_list, angle)
     };
-    const auto filtered_sampling_points{
-        detail::TranslateSamplingPoints(filtered_local_sampling_points, position, 1.0f)
-    };
-    return detail::BuildLocalPotentialSampleList(
-        map_object,
-        filtered_sampling_points,
-        [](const SamplingPoint &)
-        {
-            return true;
-        });
+    return detail::BuildLocalPotentialSampleList(map_object, sampling_points, &sampling_weights);
 }
 
 } // namespace rhbm_gem

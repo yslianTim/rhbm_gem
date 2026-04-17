@@ -307,6 +307,10 @@ std::unique_ptr<TH2D> PotentialPlotBuilder::CreateDistanceToMapValueHistogram(
     };
     for (const auto & sample : GetLocalEntry().GetSamplingEntries())
     {
+        if (sample.weight <= 0.0f)
+        {
+            continue;
+        }
         hist->Fill(sample.distance, sample.response);
     }
     return hist;
@@ -690,6 +694,10 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateDistanceToMapValueGrap
     auto count{ 0 };
     for (const auto & sample : GetLocalEntry().GetSamplingEntries())
     {
+        if (sample.weight <= 0.0f)
+        {
+            continue;
+        }
         graph->SetPoint(count, sample.distance, sample.response);
         count++;
     }

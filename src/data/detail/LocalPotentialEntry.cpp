@@ -9,6 +9,14 @@
 #include <utility>
 
 namespace rhbm_gem {
+namespace {
+
+inline bool IsEffectiveSample(const LocalPotentialSample & sample)
+{
+    return sample.weight > 0.0f;
+}
+
+} // namespace
 
 LocalPotentialEntry::LocalPotentialEntry() :
     m_alpha_r{ 0.0 }
@@ -102,6 +110,7 @@ std::tuple<float, float> LocalPotentialEntry::GetDistanceRange(double margin_rat
     distance_array.reserve(m_sampling_entries.size());
     for (const auto & sample : m_sampling_entries)
     {
+        if (!IsEffectiveSample(sample)) continue;
         distance_array.emplace_back(sample.distance);
     }
     return ArrayStats<float>::ComputeScalingRangeTuple(
@@ -114,6 +123,7 @@ std::tuple<float, float> LocalPotentialEntry::GetResponseRange(double margin_rat
     map_value_array.reserve(m_sampling_entries.size());
     for (const auto & sample : m_sampling_entries)
     {
+        if (!IsEffectiveSample(sample)) continue;
         map_value_array.emplace_back(sample.response);
     }
     return ArrayStats<float>::ComputeScalingRangeTuple(
@@ -130,6 +140,7 @@ SeriesPointList LocalPotentialEntry::GetBinnedDistanceResponseSeries(
     std::vector<std::vector<float>> bin_weight_map(static_cast<size_t>(bin_size));
     for (const auto & sample : m_sampling_entries)
     {
+        if (!IsEffectiveSample(sample)) continue;
         const auto distance{ sample.distance };
         if (distance < x_min || distance >= x_max)
         {
@@ -170,10 +181,8 @@ SeriesPointList LocalPotentialEntry::GetLinearModelSeries() const
     linear_model_series.reserve(m_sampling_entries.size());
     for (const auto & sample : m_sampling_entries)
     {
-        if (sample.response <= 0.0f)
-        {
-            continue;
-        }
+        if (!IsEffectiveSample(sample)) continue;
+        if (sample.response <= 0.0f) continue;
         const auto data_vector{
             GausLinearTransformHelper::BuildLinearModelDataVector(
                 sample.distance, sample.response, model_par_init)
@@ -205,6 +214,7 @@ double LocalPotentialEntry::GetMapValueNearCenter() const
     double sum{ 0.0 };
     for (const auto & sample : data_list)
     {
+        if (!IsEffectiveSample(sample)) continue;
         if (sample.distance > 0.05f) continue;
         sum += sample.response;
         count++;
@@ -221,12 +231,14 @@ double LocalPotentialEntry::GetMomentZeroEstimate() const
     auto count{ 0 };
     for (const auto & sample : m_sampling_entries)
     {
+        if (!IsEffectiveSample(sample)) continue;
         auto y_value{ static_cast<double>(sample.response) };
         if (y_value <= 0.0) continue;
         if (sample.distance > 1.0f) continue;
         y_sum += y_value;
         count++;
     }
+    if (count == 0) return 0.0;
     return y_sum/static_cast<double>(count);
 }
 
@@ -239,12 +251,14 @@ double LocalPotentialEntry::GetMomentTwoEstimate() const
     auto count{ 0 };
     for (const auto & sample : m_sampling_entries)
     {
+        if (!IsEffectiveSample(sample)) continue;
         auto y_value{ static_cast<double>(sample.response) };
         if (y_value <= 0.0) continue;
         if (sample.distance > 1.0f) continue;
         y_sum += y_value * sample.distance * sample.distance;
         count++;
     }
+    if (count == 0 || m_0 == 0.0) return 0.0;
     y_sum /= static_cast<double>(count);
     return std::sqrt(y_sum/m_0/3.0);
 }
@@ -288,10 +302,15 @@ double LocalPotentialEntry::CalculateQScore(int par_choice) const
     reference_value_list.reserve(m_sampling_entries.size());
     for (const auto & sample : m_sampling_entries)
     {
+        if (!IsEffectiveSample(sample)) continue;
         distance_list.emplace_back(sample.distance);
         map_value_list.emplace_back(sample.response);
         reference_value_list.emplace_back(
             amplitude * std::exp(-0.5 * std::pow(sample.distance / width, 2)) + intersect);
+    }
+    if (map_value_list.empty())
+    {
+        return 0.0;
     }
 
     float map_value_mean{ ArrayStats<float>::ComputeMean(map_value_list.data(), map_value_list.size()) };
