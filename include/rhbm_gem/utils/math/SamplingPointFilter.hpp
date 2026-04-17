@@ -65,17 +65,43 @@ inline std::vector<Eigen::Vector3d> BuildNormalizedRejectDirections(
     return normalized_reject_directions;
 }
 
+inline bool ShouldRejectSamplingPoint(
+    const SamplingPoint & point,
+    const std::vector<Eigen::Vector3d> & normalized_reject_directions,
+    double cos_threshold)
+{
+    const Eigen::Vector3d sampling_vector{ ToVector3d(point.position) };
+    const auto sampling_norm{ sampling_vector.norm() };
+    if (sampling_norm <= 0.0)
+    {
+        return false;
+    }
+
+    const Eigen::Vector3d normalized_sampling_direction{ sampling_vector / sampling_norm };
+    for (const auto & reject_direction : normalized_reject_directions)
+    {
+        if (normalized_sampling_direction.dot(reject_direction) > cos_threshold)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 } // namespace detail
 
-inline SamplingPointList SelectSamplingPoint(
+inline std::vector<float> BuildSamplingPointWeightList(
     const SamplingPointList & point_list,
     const std::vector<Eigen::VectorXd> & reject_direction_list,
     double angle = 0.0)
 {
     detail::ValidateSamplingPointFilterAngle(angle);
+
+    std::vector<float> point_weights(point_list.size(), 1.0f);
     if (angle == 0.0)
     {
-        return point_list;
+        return point_weights;
     }
 
     const auto normalized_reject_directions{
@@ -83,37 +109,40 @@ inline SamplingPointList SelectSamplingPoint(
     };
     if (normalized_reject_directions.empty())
     {
-        return point_list;
+        return point_weights;
     }
 
     const auto cos_threshold{ std::cos(angle * Constants::pi / 180.0) };
+    for (size_t i = 0; i < point_list.size(); i++)
+    {
+        if (detail::ShouldRejectSamplingPoint(
+                point_list.at(i),
+                normalized_reject_directions,
+                cos_threshold))
+        {
+            point_weights.at(i) = 0.0f;
+        }
+    }
+
+    return point_weights;
+}
+
+inline SamplingPointList SelectSamplingPoint(
+    const SamplingPointList & point_list,
+    const std::vector<Eigen::VectorXd> & reject_direction_list,
+    double angle = 0.0)
+{
+    const auto point_weights{
+        BuildSamplingPointWeightList(point_list, reject_direction_list, angle)
+    };
 
     SamplingPointList filtered_point_list;
     filtered_point_list.reserve(point_list.size());
-    for (const auto & point : point_list)
+    for (size_t i = 0; i < point_list.size(); i++)
     {
-        const Eigen::Vector3d sampling_vector{ detail::ToVector3d(point.position) };
-        const auto sampling_norm{ sampling_vector.norm() };
-        if (sampling_norm <= 0.0)
+        if (point_weights.at(i) > 0.0f)
         {
-            filtered_point_list.emplace_back(point);
-            continue;
-        }
-
-        const Eigen::Vector3d normalized_sampling_direction{ sampling_vector / sampling_norm };
-        bool should_reject{ false };
-        for (const auto & reject_direction : normalized_reject_directions)
-        {
-            if (normalized_sampling_direction.dot(reject_direction) > cos_threshold)
-            {
-                should_reject = true;
-                break;
-            }
-        }
-
-        if (!should_reject)
-        {
-            filtered_point_list.emplace_back(point);
+            filtered_point_list.emplace_back(point_list.at(i));
         }
     }
 

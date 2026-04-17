@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <random>
 
 #include <rhbm_gem/utils/math/GaussianPotentialSampler.hpp>
@@ -73,6 +74,78 @@ TEST(GaussianPotentialSamplerTest, NeighborhoodSamplingRejectsTooManyNeighbors)
                 0.0
             }),
         std::invalid_argument);
+}
+
+TEST(GaussianPotentialSamplerTest, NeighborhoodSamplingCanKeepRejectedPointsWithZeroWeight)
+{
+    GaussianPotentialSampler sampler;
+
+    const auto unfiltered_sampling_entries{
+        sampler.GenerateNeighborhoodSamples(
+            4,
+            GaussianModel3D{ 1.0, 0.5, 0.0 },
+            NeighborhoodSamplingOptions{
+                0.0,
+                1.0,
+                2.0,
+                1,
+                0.0
+            })
+    };
+    const auto removed_sampling_entries{
+        sampler.GenerateNeighborhoodSamples(
+            4,
+            GaussianModel3D{ 1.0, 0.5, 0.0 },
+            NeighborhoodSamplingOptions{
+                0.0,
+                1.0,
+                2.0,
+                1,
+                120.0,
+                NeighborhoodSamplingRejectPolicy::RemoveRejectedPoints
+            })
+    };
+    const auto zero_weight_sampling_entries{
+        sampler.GenerateNeighborhoodSamples(
+            4,
+            GaussianModel3D{ 1.0, 0.5, 0.0 },
+            NeighborhoodSamplingOptions{
+                0.0,
+                1.0,
+                2.0,
+                1,
+                120.0,
+                NeighborhoodSamplingRejectPolicy::ZeroWeightRejectedPoints
+            })
+    };
+
+    ASSERT_EQ(zero_weight_sampling_entries.size(), unfiltered_sampling_entries.size());
+    EXPECT_FALSE(std::none_of(
+        zero_weight_sampling_entries.begin(),
+        zero_weight_sampling_entries.end(),
+        [](const LocalPotentialSample & sample)
+        {
+            return sample.weight == 0.0f;
+        }));
+    EXPECT_EQ(
+        static_cast<size_t>(std::count_if(
+            zero_weight_sampling_entries.begin(),
+            zero_weight_sampling_entries.end(),
+            [](const LocalPotentialSample & sample)
+            {
+                return sample.weight > 0.0f;
+            })),
+        removed_sampling_entries.size());
+
+    for (size_t i = 0; i < zero_weight_sampling_entries.size(); i++)
+    {
+        const auto & weighted_sample{ zero_weight_sampling_entries.at(i) };
+        const auto & unfiltered_sample{ unfiltered_sampling_entries.at(i) };
+        EXPECT_FLOAT_EQ(weighted_sample.distance, unfiltered_sample.distance);
+        ASSERT_TRUE(weighted_sample.position.has_value());
+        ASSERT_TRUE(unfiltered_sample.position.has_value());
+        EXPECT_EQ(weighted_sample.position.value(), unfiltered_sample.position.value());
+    }
 }
 
 TEST(GaussianPotentialSamplerTest, RadialSamplingIsReproducibleWithFixedSeed)

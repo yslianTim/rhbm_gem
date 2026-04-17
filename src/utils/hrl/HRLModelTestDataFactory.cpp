@@ -228,11 +228,7 @@ void HRLModelTestDataFactory::ValidateGausParametersDimension(const Eigen::Vecto
 GaussianModel3D HRLModelTestDataFactory::BuildGaussianModel(const Eigen::VectorXd & gaus_par) const
 {
     ValidateGausParametersDimension(gaus_par);
-    return GaussianModel3D{
-        gaus_par(0),
-        gaus_par(1),
-        gaus_par(2)
-    };
+    return GaussianModel3D{ gaus_par(0), gaus_par(1), gaus_par(2) };
 }
 
 LocalPotentialSampleList HRLModelTestDataFactory::BuildGaussianSampling(

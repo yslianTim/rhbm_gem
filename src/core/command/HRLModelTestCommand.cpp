@@ -158,7 +158,7 @@ Eigen::VectorXd MakeDefaultModelPrior()
     Eigen::VectorXd model_par_prior{ Eigen::VectorXd::Zero(kGausParSize) };
     model_par_prior(0) = 1.0;
     model_par_prior(1) = 0.5;
-    model_par_prior(2) = 0.1;
+    model_par_prior(2) = 0.0;
     return model_par_prior;
 }
 
@@ -630,7 +630,7 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
     const auto scenario{ NeighborDistanceScenarioConfig{
         10,
         50,
-        2,
+        1,
         45.0,
         std::vector<double>{ 0.0, 0.025, 0.05 },
         BuildDescendingSweep(16, 2.5, 0.1)
@@ -647,7 +647,7 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
     std::vector<Eigen::MatrixXd> sigma_matrix_train_list;
 
     const auto distance_size{ static_cast<int>(scenario.distance_list.size()) };
-    bool is_print_sampling_summary{ true };
+    bool is_print_sampling_summary{ false };
     for (auto error_sigma : scenario.error_list)
     {
         Eigen::MatrixXd mean_matrix_ols{ Eigen::MatrixXd::Zero(kGausParSize, distance_size) };

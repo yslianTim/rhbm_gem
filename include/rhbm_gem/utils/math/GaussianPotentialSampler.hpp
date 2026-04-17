@@ -12,6 +12,12 @@ struct GaussianModel3D
     double intercept{ 0.0 };
 };
 
+enum class NeighborhoodSamplingRejectPolicy
+{
+    RemoveRejectedPoints,
+    ZeroWeightRejectedPoints
+};
+
 struct NeighborhoodSamplingOptions
 {
     double radius_min{ 0.0 };
@@ -19,6 +25,9 @@ struct NeighborhoodSamplingOptions
     double neighbor_distance{ 2.0 };
     size_t neighbor_count{ 1 };
     double reject_angle_deg{ 0.0 };
+    NeighborhoodSamplingRejectPolicy reject_policy{
+        NeighborhoodSamplingRejectPolicy::RemoveRejectedPoints
+    };
 };
 
 class GaussianPotentialSampler

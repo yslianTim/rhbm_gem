@@ -4,6 +4,7 @@
 #include <rhbm_gem/utils/math/SamplingPointFilter.hpp>
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 #include <string>
@@ -157,8 +158,8 @@ LocalPotentialSampleList GaussianPotentialSampler::GenerateNeighborhoodSamples(
         )
     );
     const auto sampling_points{ sampler.GenerateSamplingPoints({ 0.0f, 0.0f, 0.0f }) };
-    const auto filtered_sampling_points{
-        rhbm_gem::SelectSamplingPoint(
+    const auto sampling_weights{
+        rhbm_gem::BuildSamplingPointWeightList(
             sampling_points,
             neighbor_center_list,
             options.reject_angle_deg
@@ -166,9 +167,32 @@ LocalPotentialSampleList GaussianPotentialSampler::GenerateNeighborhoodSamples(
     };
 
     LocalPotentialSampleList sample_list;
-    sample_list.reserve(filtered_sampling_points.size());
-    for (const auto & sampling_point : filtered_sampling_points)
+    if (options.reject_policy == NeighborhoodSamplingRejectPolicy::ZeroWeightRejectedPoints)
     {
+        sample_list.reserve(sampling_points.size());
+    }
+    else
+    {
+        sample_list.reserve(static_cast<size_t>(std::count_if(
+            sampling_weights.begin(),
+            sampling_weights.end(),
+            [](float weight)
+            {
+                return weight > 0.0f;
+            })));
+    }
+
+    for (size_t i = 0; i < sampling_points.size(); i++)
+    {
+        const auto & sampling_point{ sampling_points.at(i) };
+        const auto sampling_weight{ sampling_weights.at(i) };
+        if (
+            options.reject_policy == NeighborhoodSamplingRejectPolicy::RemoveRejectedPoints &&
+            sampling_weight <= 0.0f)
+        {
+            continue;
+        }
+
         Eigen::VectorXd point{ Eigen::VectorXd::Zero(3) };
         point(0) = sampling_point.position[0];
         point(1) = sampling_point.position[1];
@@ -187,7 +211,7 @@ LocalPotentialSampleList GaussianPotentialSampler::GenerateNeighborhoodSamples(
         sample_list.emplace_back(LocalPotentialSample{
             sampling_point.distance,
             static_cast<float>(response),
-            1.0f,
+            sampling_weight,
             sampling_point.position
         });
     }
