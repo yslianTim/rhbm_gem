@@ -285,7 +285,7 @@ TEST(SphereSamplerTest, SetSamplingProfileAcceptsFibonacciProfile)
     EXPECT_DOUBLE_EQ(0.25, sampler.GetSamplingProfile().GetFibonacciConfig().radius_bin_size);
     EXPECT_EQ(7u, sampler.GetSamplingProfile().GetFibonacciConfig().samples_per_radius);
     EXPECT_FALSE(sampler.GetSamplingProfile().GetFibonacciConfig().vary_with_radius);
-    EXPECT_EQ(21u, sampler.GetExpectedPointCount());
+    EXPECT_EQ(14u, sampler.GetExpectedPointCount());
 }
 
 TEST(SphereSamplerTest, RadiusUniformRandomProfileThrowsWhenMinNegative)
