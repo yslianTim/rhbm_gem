@@ -137,7 +137,7 @@ TEST(SphereSamplerTest, PrintOutputsFibonacciConfiguration)
         std::string::npos);
     EXPECT_NE(output.find("Samples per radius: 4"), std::string::npos);
     EXPECT_NE(output.find("Vary with radius: false"), std::string::npos);
-    EXPECT_NE(output.find("Expected point count: 12"), std::string::npos);
+    EXPECT_NE(output.find("Expected point count: 8"), std::string::npos);
 }
 
 TEST(SphereSamplerTest, RadiusUniformRandomProfileProducesConfiguredSampleCount)
@@ -386,10 +386,10 @@ TEST(SphereSamplerTest, FibonacciDeterministicProducesExpectedShellPointCount)
             4));
     const std::array<float, 3> center{ 1.f, 2.f, 3.f };
     const auto samples{ sampler.GenerateSamplingPoints(center) };
-    const std::vector<float> expected_shells{ 0.5f, 0.8f, 1.0f };
+    const std::vector<float> expected_shells{ 0.65f, 0.95f };
 
-    EXPECT_EQ(12u, sampler.GetExpectedPointCount());
-    ASSERT_EQ(12u, samples.size());
+    EXPECT_EQ(8u, sampler.GetExpectedPointCount());
+    ASSERT_EQ(8u, samples.size());
     for (std::size_t shell_index = 0; shell_index < expected_shells.size(); ++shell_index)
     {
         for (std::size_t point_index = 0; point_index < 4; ++point_index)
@@ -414,11 +414,10 @@ TEST(SphereSamplerTest, FibonacciDeterministicFixedSamplingKeepsConfiguredPointC
     const std::array<float, 3> center{ 1.f, 2.f, 3.f };
     const auto samples{ sampler.GenerateSamplingPoints(center) };
 
-    EXPECT_EQ(12u, sampler.GetExpectedPointCount());
-    ASSERT_EQ(12u, samples.size());
-    EXPECT_EQ(4u, CountSamplesAtRadius(samples, 0.5f));
-    EXPECT_EQ(4u, CountSamplesAtRadius(samples, 0.8f));
-    EXPECT_EQ(4u, CountSamplesAtRadius(samples, 1.0f));
+    EXPECT_EQ(8u, sampler.GetExpectedPointCount());
+    ASSERT_EQ(8u, samples.size());
+    EXPECT_EQ(4u, CountSamplesAtRadius(samples, 0.65f));
+    EXPECT_EQ(4u, CountSamplesAtRadius(samples, 0.95f));
 }
 
 TEST(SphereSamplerTest, FibonacciDeterministicZeroRadiusShellReturnsCenterPoints)
@@ -432,8 +431,8 @@ TEST(SphereSamplerTest, FibonacciDeterministicZeroRadiusShellReturnsCenterPoints
     const std::array<float, 3> center{ 1.f, 2.f, 3.f };
     const auto samples{ sampler.GenerateSamplingPoints(center) };
 
-    EXPECT_EQ(1u, sampler.GetExpectedPointCount());
-    ASSERT_EQ(1u, samples.size());
+    EXPECT_EQ(5u, sampler.GetExpectedPointCount());
+    ASSERT_EQ(5u, samples.size());
     for (const auto & sample : samples)
     {
         EXPECT_FLOAT_EQ(0.0f, sample.distance);
@@ -444,7 +443,7 @@ TEST(SphereSamplerTest, FibonacciDeterministicZeroRadiusShellReturnsCenterPoints
     }
 }
 
-TEST(SphereSamplerTest, FibonacciDeterministicZeroRadiusShellUsesSingleCenterPointWhenRangeStartsAtZero)
+TEST(SphereSamplerTest, FibonacciDeterministicRangeStartingAtZeroUsesBinCenters)
 {
     SphereSampler sampler;
     sampler.SetSamplingProfile(
@@ -455,17 +454,38 @@ TEST(SphereSamplerTest, FibonacciDeterministicZeroRadiusShellUsesSingleCenterPoi
     const std::array<float, 3> center{ 1.f, 2.f, 3.f };
     const auto samples{ sampler.GenerateSamplingPoints(center) };
 
-    EXPECT_EQ(9u, sampler.GetExpectedPointCount());
-    ASSERT_EQ(9u, samples.size());
-    EXPECT_EQ(1u, CountSamplesAtRadius(samples, 0.0f));
-    EXPECT_EQ(4u, CountSamplesAtRadius(samples, 0.5f));
-    EXPECT_EQ(4u, CountSamplesAtRadius(samples, 1.0f));
+    EXPECT_EQ(8u, sampler.GetExpectedPointCount());
+    ASSERT_EQ(8u, samples.size());
+    EXPECT_EQ(0u, CountSamplesAtRadius(samples, 0.0f));
+    EXPECT_EQ(4u, CountSamplesAtRadius(samples, 0.25f));
+    EXPECT_EQ(4u, CountSamplesAtRadius(samples, 0.75f));
 
     const auto & sample{ samples.front() };
-    EXPECT_FLOAT_EQ(0.0f, sample.distance);
-    EXPECT_FLOAT_EQ(center[0], sample.position[0]);
-    EXPECT_FLOAT_EQ(center[1], sample.position[1]);
-    EXPECT_FLOAT_EQ(center[2], sample.position[2]);
+    EXPECT_FLOAT_EQ(0.25f, sample.distance);
+    EXPECT_NEAR(0.25f, ComputeDistance(center, sample.position), 1e-5f);
+}
+
+TEST(SphereSamplerTest, FibonacciDeterministicNarrowRangeUsesRangeMidpointShell)
+{
+    SphereSampler sampler;
+    sampler.SetSamplingProfile(
+        SphereSamplingProfile::FibonacciDeterministic(
+            SphereDistanceRange{ 0.0, 0.2 },
+            0.5,
+            4));
+    const std::array<float, 3> center{ 1.f, 2.f, 3.f };
+    const auto samples{ sampler.GenerateSamplingPoints(center) };
+
+    EXPECT_EQ(4u, sampler.GetExpectedPointCount());
+    ASSERT_EQ(4u, samples.size());
+    EXPECT_EQ(4u, CountSamplesAtRadius(samples, 0.1f));
+
+    for (const auto & sample : samples)
+    {
+        EXPECT_GE(sample.distance, 0.0f);
+        EXPECT_LE(sample.distance, 0.2f);
+        EXPECT_NEAR(sample.distance, ComputeDistance(center, sample.position), 1e-5f);
+    }
 }
 
 TEST(SphereSamplerTest, FibonacciDeterministicVaryingRadiusScalesShellPointCountByArea)
@@ -480,11 +500,10 @@ TEST(SphereSamplerTest, FibonacciDeterministicVaryingRadiusScalesShellPointCount
     const std::array<float, 3> center{ 1.f, 2.f, 3.f };
     const auto samples{ sampler.GenerateSamplingPoints(center) };
 
-    EXPECT_EQ(8u, sampler.GetExpectedPointCount());
-    ASSERT_EQ(8u, samples.size());
-    EXPECT_EQ(1u, CountSamplesAtRadius(samples, 0.5f));
-    EXPECT_EQ(3u, CountSamplesAtRadius(samples, 0.8f));
-    EXPECT_EQ(4u, CountSamplesAtRadius(samples, 1.0f));
+    EXPECT_EQ(6u, sampler.GetExpectedPointCount());
+    ASSERT_EQ(6u, samples.size());
+    EXPECT_EQ(2u, CountSamplesAtRadius(samples, 0.65f));
+    EXPECT_EQ(4u, CountSamplesAtRadius(samples, 0.95f));
 
     for (const auto & sample : samples)
     {

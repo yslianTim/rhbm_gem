@@ -1249,7 +1249,7 @@ void PrintAtomSamplingDataSummary(
     {
         auto neighbor_distance{ distance_list.at(count) };
         auto data_graph{ detail::CreateDistanceToResponseGraph(sampling_entries) };
-        auto data_hist{ detail::CreateDistanceToResponseHistogram(sampling_entries, 41) };
+        auto data_hist{ detail::CreateDistanceToResponseHistogram(sampling_entries, 40) };
 
         canvas->cd();
         for (int i = 0; i < pad_size; i++)
@@ -1328,7 +1328,7 @@ std::unique_ptr<TH2D> CreateDistanceToResponseHistogram(
     auto hist{
         ROOTHelper::CreateHist2D(
             "hist_distance_response", "Distance vs Response",
-            x_bin_size, -0.05, 4.05,
+            x_bin_size, 0.0, 4.0,
             y_bin_size, 0.0, 1.0)
     };
     for (const auto & sample : sampling_entries)

@@ -512,7 +512,7 @@ void PotentialAnalysisCommand::RunSamplingWorkflow(
         //    static_cast<unsigned int>(sampling_size))
         SphereSamplingProfile::FibonacciDeterministic(
             SphereDistanceRange{ sampling_range_min, sampling_range_max },
-            0.05,
+            0.1,
             static_cast<unsigned int>(sampling_size))
     );
     sampler.Print();

@@ -22,7 +22,7 @@ TEST(GaussianPotentialSamplerTest, NeighborhoodSamplingKeepsPointCountWhenReject
             })
     };
 
-    EXPECT_EQ(sampling_entries.size(), 44u);
+    EXPECT_EQ(sampling_entries.size(), 40u);
 }
 
 TEST(GaussianPotentialSamplerTest, NeighborhoodSamplingRemovesPointsWhenAngleFilteringEnabled)

@@ -63,32 +63,34 @@ std::string_view GetSphereSamplingMethodName(SphereSamplingMethod method)
     return "Unknown";
 }
 
-std::vector<double> BuildFibonacciShellRadii(
+std::vector<double> BuildFibonacciShellCenters(
     const SphereDistanceRange & distance_range,
     double radius_bin_size)
 {
-    std::vector<double> shell_radii;
-    shell_radii.push_back(distance_range.min);
-
-    if (distance_range.min == distance_range.max)
-    {
-        return shell_radii;
-    }
+    std::vector<double> shell_centers;
 
     constexpr double epsilon{ 1e-9 };
-    double current_radius{ distance_range.min };
-    while (current_radius + radius_bin_size < distance_range.max - epsilon)
+    if (distance_range.min == distance_range.max)
     {
-        current_radius += radius_bin_size;
-        shell_radii.push_back(current_radius);
+        shell_centers.push_back(distance_range.min);
+        return shell_centers;
     }
 
-    if (std::abs(shell_radii.back() - distance_range.max) > epsilon)
+    const double distance_span{ distance_range.max - distance_range.min };
+    if (distance_span + epsilon < radius_bin_size)
     {
-        shell_radii.push_back(distance_range.max);
+        shell_centers.push_back((distance_range.min + distance_range.max) * 0.5);
+        return shell_centers;
     }
 
-    return shell_radii;
+    for (double shell_center{ distance_range.min + radius_bin_size * 0.5 };
+         shell_center <= distance_range.max + epsilon;
+         shell_center += radius_bin_size)
+    {
+        shell_centers.push_back(shell_center);
+    }
+
+    return shell_centers;
 }
 
 std::size_t GetFibonacciSampleCountForRadius(
@@ -243,7 +245,7 @@ std::size_t SphereSampler::GetExpectedPointCount() const
         {
             const auto & config{ m_profile.GetFibonacciConfig() };
             const auto shell_radii{
-                BuildFibonacciShellRadii(
+                BuildFibonacciShellCenters(
                     m_profile.GetDistanceRange(),
                     config.radius_bin_size)
             };
@@ -348,7 +350,7 @@ void SphereSampler::GenerateFibonacciDeterministic(
     const SphereDeterministicSamplingConfig & config,
     SamplingPointList & out) const
 {
-    const auto shell_radii{ BuildFibonacciShellRadii(distance_range, config.radius_bin_size) };
+    const auto shell_radii{ BuildFibonacciShellCenters(distance_range, config.radius_bin_size) };
     out.clear();
 
     std::size_t total_point_count{ 0 };
@@ -360,7 +362,7 @@ void SphereSampler::GenerateFibonacciDeterministic(
 
     const double golden_angle{ Constants::pi * (3.0 - std::sqrt(5.0)) };
 
-    // Shell radii start at range.min, advance by radius_bin_size, and always include range.max.
+    // Shell radii are bin centers within the configured range.
     // Each shell uses the same deterministic Fibonacci sphere pattern and reports its shell radius.
     for (const double radius : shell_radii)
     {
