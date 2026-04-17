@@ -8,7 +8,7 @@
 #include <Eigen/Dense>
 
 #include <rhbm_gem/utils/hrl/HRLModelTypes.hpp>
-#include <rhbm_gem/utils/hrl/SimulationDataGenerator.hpp>
+#include <rhbm_gem/utils/math/GaussianPotentialSampler.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 struct HRLBetaTestInput
@@ -76,7 +76,9 @@ public:
 private:
     int m_gaus_par_size;
     int m_linear_basis_size;
-    SimulationDataGenerator m_data_generator;
+    double m_fit_range_min;
+    double m_fit_range_max;
+    GaussianPotentialSampler m_potential_sampler;
 
 public:
     HRLModelTestDataFactory() = delete;
@@ -92,6 +94,33 @@ public:
 
 private:
     void ValidateGausParametersDimension(const Eigen::VectorXd & gaus_par) const;
+    GaussianModel3D BuildGaussianModel(const Eigen::VectorXd & gaus_par) const;
+    LocalPotentialSampleList BuildGaussianSampling(
+        size_t sampling_entry_size,
+        const GaussianModel3D & model,
+        double outlier_ratio,
+        std::mt19937 & generator
+    ) const;
+    SeriesPointList BuildLinearDataset(
+        const LocalPotentialSampleList & sampling_entries,
+        const GaussianModel3D & model,
+        double error_sigma,
+        std::mt19937 & generator
+    ) const;
+    SeriesPointList BuildLinearDataset(
+        size_t sampling_entry_size,
+        const GaussianModel3D & model,
+        double error_sigma,
+        double outlier_ratio,
+        std::mt19937 & generator
+    ) const;
+    SeriesPointList BuildLinearDatasetWithNeighborhood(
+        size_t samples_per_radius,
+        const GaussianModel3D & model,
+        double error_sigma,
+        const NeighborhoodSamplingOptions & options,
+        std::mt19937 & generator
+    ) const;
     Eigen::MatrixXd BuildRandomGausParameters(
         int member_size,
         const Eigen::VectorXd & gaus_prior,

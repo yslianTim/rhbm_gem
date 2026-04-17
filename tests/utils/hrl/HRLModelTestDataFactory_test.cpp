@@ -76,6 +76,62 @@ TEST(HRLModelTestDataFactoryTest, BuildBetaTestInputIsReproducibleWithFixedSeed)
     }
 }
 
+TEST(HRLModelTestDataFactoryTest, BuildBetaTestInputChangesWhenOutlierPolicyChanges)
+{
+    HRLModelTestDataFactory factory(3, 2);
+    factory.SetFittingRange(0.0, 1.0);
+
+    const auto base_scenario{ HRLModelTestDataFactory::BetaScenario{
+        MakeVector({ 1.0, 0.5, 0.0 }),
+        8,
+        0.0,
+        0.0,
+        1,
+        42
+    } };
+
+    auto outlier_scenario{ base_scenario };
+    outlier_scenario.outlier_ratio = 1.0;
+
+    const auto baseline_input{ factory.BuildBetaTestInput(base_scenario) };
+    const auto outlier_input{ factory.BuildBetaTestInput(outlier_scenario) };
+
+    ASSERT_EQ(baseline_input.replica_datasets.size(), 1u);
+    ASSERT_EQ(outlier_input.replica_datasets.size(), 1u);
+    EXPECT_NE(
+        baseline_input.replica_datasets.front().y(0),
+        outlier_input.replica_datasets.front().y(0)
+    );
+}
+
+TEST(HRLModelTestDataFactoryTest, BuildBetaTestInputChangesWhenNoisePolicyChanges)
+{
+    HRLModelTestDataFactory factory(3, 2);
+    factory.SetFittingRange(0.0, 1.0);
+
+    const auto noiseless_scenario{ HRLModelTestDataFactory::BetaScenario{
+        MakeVector({ 1.0, 0.5, 0.0 }),
+        8,
+        0.0,
+        0.0,
+        1,
+        42
+    } };
+
+    auto noisy_scenario{ noiseless_scenario };
+    noisy_scenario.data_error_sigma = 0.1;
+
+    const auto noiseless_input{ factory.BuildBetaTestInput(noiseless_scenario) };
+    const auto noisy_input{ factory.BuildBetaTestInput(noisy_scenario) };
+
+    ASSERT_EQ(noiseless_input.replica_datasets.size(), 1u);
+    ASSERT_EQ(noisy_input.replica_datasets.size(), 1u);
+    EXPECT_NE(
+        noiseless_input.replica_datasets.front().y(0),
+        noisy_input.replica_datasets.front().y(0)
+    );
+}
+
 TEST(HRLModelTestDataFactoryTest, BuildMuTestInputIsReproducibleWithFixedSeed)
 {
     HRLModelTestDataFactory factory(3, 2);

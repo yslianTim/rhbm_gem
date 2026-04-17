@@ -71,6 +71,7 @@ target_sources(rhbm_gem PRIVATE
     utils/domain/ROOTHelper.cpp
     utils/math/CylinderSampler.cpp
     utils/math/ElectricPotential.cpp
+    utils/math/GaussianPotentialSampler.cpp
     utils/math/GausLinearTransformHelper.cpp
     utils/math/GridSampler.cpp
     utils/math/SphereSampler.cpp
@@ -81,7 +82,6 @@ target_sources(rhbm_gem PRIVATE
     utils/hrl/HRLModelMetrics.cpp
     utils/hrl/HRLModelTestDataFactory.cpp
     utils/hrl/HRLModelTester.cpp
-    utils/hrl/SimulationDataGenerator.cpp
 )
 
 if(RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE)

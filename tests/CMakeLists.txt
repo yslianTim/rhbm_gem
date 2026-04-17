@@ -129,6 +129,7 @@ set(UTILS_MATH_TEST_SOURCES
     utils/math/ArrayStats_test.cpp
     utils/math/EigenMatrixUtility_test.cpp
     utils/math/ElectricPotential_test.cpp
+    utils/math/GaussianPotentialSampler_test.cpp
     utils/math/GausLinearTransformHelper_test.cpp
     utils/math/KDTreeAlgorithm_test.cpp
     utils/math/SamplingPointFilter_test.cpp
@@ -160,7 +161,6 @@ set(UTILS_HRL_TEST_SOURCES
     utils/hrl/HRLModelMetrics_test.cpp
     utils/hrl/HRLModelTestDataFactory_test.cpp
     utils/hrl/HRLModelTester_test.cpp
-    utils/hrl/SimulationDataGenerator_test.cpp
     utils/hrl/ScopedEigenThreadCount_test.cpp
 )
 

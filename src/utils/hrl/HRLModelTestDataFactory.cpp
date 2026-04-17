@@ -1,8 +1,10 @@
 #include <rhbm_gem/utils/hrl/HRLModelTestDataFactory.hpp>
 
+#include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
 #include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
 
+#include <cmath>
 #include <stdexcept>
 #include <string>
 
@@ -13,6 +15,16 @@ int ValidatePositive(int value, const char * name)
     if (value <= 0)
     {
         throw std::invalid_argument(std::string(name) + " must be positive value");
+    }
+    return value;
+}
+
+int ValidateGaussianParameterSize(int value)
+{
+    if (value != 3)
+    {
+        throw std::invalid_argument(
+            "gaus_par_size must be 3 for GaussianPotentialSampler-backed test data");
     }
     return value;
 }
@@ -42,15 +54,24 @@ std::mt19937 BuildReplicaGenerator(
 } // namespace
 
 HRLModelTestDataFactory::HRLModelTestDataFactory(int gaus_par_size, int linear_basis_size) :
-    m_gaus_par_size{ ValidatePositive(gaus_par_size, "gaus_par_size") },
+    m_gaus_par_size{
+        ValidateGaussianParameterSize(ValidatePositive(gaus_par_size, "gaus_par_size"))
+    },
     m_linear_basis_size{ ValidatePositive(linear_basis_size, "linear_basis_size") },
-    m_data_generator{ m_gaus_par_size }
+    m_fit_range_min{ 0.0 },
+    m_fit_range_max{ 1.0 },
+    m_potential_sampler{}
 {
 }
 
 void HRLModelTestDataFactory::SetFittingRange(double x_min, double x_max)
 {
-    m_data_generator.SetFittingRange(x_min, x_max);
+    if (!std::isfinite(x_min) || !std::isfinite(x_max) || x_min < 0.0 || x_max < x_min)
+    {
+        throw std::invalid_argument("fitting range must satisfy 0 <= x_min <= x_max");
+    }
+    m_fit_range_min = x_min;
+    m_fit_range_max = x_max;
 }
 
 HRLBetaTestInput HRLModelTestDataFactory::BuildBetaTestInput(const BetaScenario & scenario) const
@@ -58,6 +79,7 @@ HRLBetaTestInput HRLModelTestDataFactory::BuildBetaTestInput(const BetaScenario 
     ValidatePositive(scenario.sampling_entry_size, "sampling_entry_size");
     ValidatePositive(scenario.replica_size, "replica_size");
     ValidateGausParametersDimension(scenario.gaus_true);
+    const auto gaussian_model{ BuildGaussianModel(scenario.gaus_true) };
 
     HRLBetaTestInput input;
     input.gaus_true = scenario.gaus_true;
@@ -67,9 +89,9 @@ HRLBetaTestInput HRLModelTestDataFactory::BuildBetaTestInput(const BetaScenario 
     {
         auto generator{ BuildReplicaGenerator(i, scenario.random_seed) };
         const auto data_entry_list{
-            m_data_generator.GenerateLinearDataset(
+            BuildLinearDataset(
                 static_cast<size_t>(scenario.sampling_entry_size),
-                scenario.gaus_true,
+                gaussian_model,
                 scenario.data_error_sigma,
                 scenario.outlier_ratio,
                 generator
@@ -122,15 +144,16 @@ HRLNeighborhoodTestInput HRLModelTestDataFactory::BuildNeighborhoodTestInput(
     ValidatePositive(scenario.sampling_entry_size, "sampling_entry_size");
     ValidatePositive(scenario.replica_size, "replica_size");
     ValidateGausParametersDimension(scenario.gaus_true);
+    const auto gaussian_model{ BuildGaussianModel(scenario.gaus_true) };
 
-    const SimulationDataGenerator::NeighborhoodOptions no_cut_options{
+    const NeighborhoodSamplingOptions no_cut_options{
         scenario.radius_min,
         scenario.radius_max,
         scenario.neighbor_distance,
         scenario.neighbor_count,
         0.0
     };
-    const SimulationDataGenerator::NeighborhoodOptions cut_options{
+    const NeighborhoodSamplingOptions cut_options{
         scenario.radius_min,
         scenario.radius_max,
         scenario.neighbor_distance,
@@ -146,10 +169,10 @@ HRLNeighborhoodTestInput HRLModelTestDataFactory::BuildNeighborhoodTestInput(
     {
         input.sampling_summaries.reserve(1);
         input.sampling_summaries.emplace_back(
-            m_data_generator.GenerateGaussianSamplingWithNeighborhood(
+            m_potential_sampler.GenerateNeighborhoodSamples(
                 static_cast<size_t>(scenario.sampling_entry_size),
-                scenario.gaus_true,
-                SimulationDataGenerator::NeighborhoodOptions{
+                gaussian_model,
+                NeighborhoodSamplingOptions{
                     scenario.summary_radius_min,
                     scenario.summary_radius_max,
                     scenario.neighbor_distance,
@@ -164,18 +187,18 @@ HRLNeighborhoodTestInput HRLModelTestDataFactory::BuildNeighborhoodTestInput(
     {
         auto generator{ BuildReplicaGenerator(i, scenario.random_seed) };
         const auto no_cut_data_entry_list{
-            m_data_generator.GenerateLinearDatasetWithNeighborhood(
+            BuildLinearDatasetWithNeighborhood(
                 static_cast<size_t>(scenario.sampling_entry_size),
-                scenario.gaus_true,
+                gaussian_model,
                 scenario.data_error_sigma,
                 no_cut_options,
                 generator
             )
         };
         const auto cut_data_entry_list{
-            m_data_generator.GenerateLinearDatasetWithNeighborhood(
+            BuildLinearDatasetWithNeighborhood(
                 static_cast<size_t>(scenario.sampling_entry_size),
-                scenario.gaus_true,
+                gaussian_model,
                 scenario.data_error_sigma,
                 cut_options,
                 generator
@@ -200,6 +223,99 @@ void HRLModelTestDataFactory::ValidateGausParametersDimension(const Eigen::Vecto
             "model parameters size invalid, must be : " + std::to_string(m_gaus_par_size)
         );
     }
+}
+
+GaussianModel3D HRLModelTestDataFactory::BuildGaussianModel(const Eigen::VectorXd & gaus_par) const
+{
+    ValidateGausParametersDimension(gaus_par);
+    return GaussianModel3D{
+        gaus_par(0),
+        gaus_par(1),
+        gaus_par(2)
+    };
+}
+
+LocalPotentialSampleList HRLModelTestDataFactory::BuildGaussianSampling(
+    size_t sampling_entry_size,
+    const GaussianModel3D & model,
+    double outlier_ratio,
+    std::mt19937 & generator
+) const
+{
+    auto sampling_entries{
+        m_potential_sampler.GenerateRadialSamples(
+            sampling_entry_size,
+            model,
+            m_fit_range_min,
+            m_fit_range_max,
+            generator
+        )
+    };
+    std::uniform_real_distribution<> dist_outlier(0.0, 1.0);
+    const auto outlier_response{
+        0.5 * model.amplitude * std::pow(Constants::two_pi * std::pow(model.width, 2), -1.5)
+    };
+    for (auto & sampling_entry : sampling_entries)
+    {
+        if (dist_outlier(generator) < outlier_ratio)
+        {
+            sampling_entry.response = static_cast<float>(outlier_response);
+        }
+    }
+    return sampling_entries;
+}
+
+SeriesPointList HRLModelTestDataFactory::BuildLinearDataset(
+    const LocalPotentialSampleList & sampling_entries,
+    const GaussianModel3D & model,
+    double error_sigma,
+    std::mt19937 & generator
+) const
+{
+    auto linear_data_entry_list{
+        GausLinearTransformHelper::MapValueTransform(
+            sampling_entries,
+            m_fit_range_min,
+            m_fit_range_max
+        )
+    };
+    const auto max_response{
+        model.amplitude * GausLinearTransformHelper::GetGaussianResponseAtDistance(0.0, model.width)
+    };
+    std::normal_distribution<> dist_error(0.0, error_sigma * max_response);
+    for (auto & data_entry : linear_data_entry_list)
+    {
+        data_entry.response += dist_error(generator);
+    }
+    return linear_data_entry_list;
+}
+
+SeriesPointList HRLModelTestDataFactory::BuildLinearDataset(
+    size_t sampling_entry_size,
+    const GaussianModel3D & model,
+    double error_sigma,
+    double outlier_ratio,
+    std::mt19937 & generator
+) const
+{
+    const auto sampling_entries{
+        BuildGaussianSampling(sampling_entry_size, model, outlier_ratio, generator)
+    };
+    return BuildLinearDataset(sampling_entries, model, error_sigma, generator);
+}
+
+SeriesPointList HRLModelTestDataFactory::BuildLinearDatasetWithNeighborhood(
+    size_t samples_per_radius,
+    const GaussianModel3D & model,
+    double error_sigma,
+    const NeighborhoodSamplingOptions & options,
+    std::mt19937 & generator
+) const
+{
+    const auto sampling_entries{
+        m_potential_sampler.GenerateNeighborhoodSamples(samples_per_radius, model, options)
+    };
+    return BuildLinearDataset(sampling_entries, model, error_sigma, generator);
 }
 
 Eigen::MatrixXd HRLModelTestDataFactory::BuildRandomGausParameters(
