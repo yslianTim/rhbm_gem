@@ -88,6 +88,9 @@ Eigen::VectorXd CalculateBetaByOLS(
     const Eigen::MatrixXd & X,
     const Eigen::VectorXd & y);
 
+Eigen::VectorXd CalculateBetaWithSelectedDataByOLS(
+    const HRLMemberDataset & dataset);
+
 Eigen::VectorXd CalculateBetaByMDPDE(
     const Eigen::MatrixXd & X,
     const Eigen::VectorXd & y,
@@ -171,7 +174,7 @@ HRLBetaEstimateResult HRLModelAlgorithms::EstimateBetaMDPDE(
     }
 
     result.beta_ols = CalculateBetaByOLS(X, y);
-    result.beta_mdpde = result.beta_ols;
+    result.beta_mdpde = CalculateBetaWithSelectedDataByOLS(dataset);
     result.sigma_square =
         (y - (X * result.beta_mdpde)).squaredNorm() / static_cast<double>(data_size - 1);
     result.data_weight = Eigen::VectorXd::Ones(data_size).asDiagonal();
@@ -388,6 +391,43 @@ Eigen::VectorXd CalculateBetaByOLS(
     const Eigen::MatrixXd gram_matrix{ X.transpose() * X };
     const Eigen::MatrixXd inverse_gram_matrix{ EigenMatrixUtility::GetInverseMatrix(gram_matrix) };
     return inverse_gram_matrix * (X.transpose() * y);
+}
+
+Eigen::VectorXd CalculateBetaWithSelectedDataByOLS(
+    const HRLMemberDataset & dataset)
+{
+    ValidateMatrixVectorShape(dataset.X, dataset.y);
+    if (dataset.score.size() != dataset.y.size())
+    {
+        throw std::invalid_argument("dataset score size is inconsistent.");
+    }
+
+    std::vector<Eigen::Index> selected_row_indices;
+    selected_row_indices.reserve(static_cast<std::size_t>(dataset.y.size()));
+    for (Eigen::Index row = 0; row < dataset.score.size(); row++)
+    {
+        if (dataset.score(row) != 0.0)
+        {
+            selected_row_indices.emplace_back(row);
+        }
+    }
+
+    if (selected_row_indices.size() <= 1U)
+    {
+        return CalculateBetaByOLS(dataset.X, dataset.y);
+    }
+
+    const auto selected_row_count{ static_cast<Eigen::Index>(selected_row_indices.size()) };
+    Eigen::MatrixXd X_selected{ Eigen::MatrixXd::Zero(selected_row_count, dataset.X.cols()) };
+    Eigen::VectorXd y_selected{ Eigen::VectorXd::Zero(selected_row_count) };
+    for (Eigen::Index i = 0; i < selected_row_count; i++)
+    {
+        const auto row{ selected_row_indices.at(static_cast<std::size_t>(i)) };
+        X_selected.row(i) = dataset.X.row(row);
+        y_selected(i) = dataset.y(row);
+    }
+
+    return CalculateBetaByOLS(X_selected, y_selected);
 }
 
 Eigen::VectorXd CalculateBetaByMDPDE(

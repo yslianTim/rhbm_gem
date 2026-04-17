@@ -126,7 +126,8 @@ LocalPotentialSampleList GaussianPotentialSampler::GenerateRadialSamples(
         };
         sample_list.emplace_back(LocalPotentialSample{
             static_cast<float>(distance),
-            static_cast<float>(response)
+            static_cast<float>(response),
+            1.0
         });
     }
 
