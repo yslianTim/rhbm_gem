@@ -11,7 +11,6 @@
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
-#include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
 
 namespace rg = rhbm_gem;
 
@@ -27,6 +26,20 @@ std::shared_ptr<rg::ModelObject> LoadModelFixture(const std::string & fixture_na
 rg::GaussianLinearizationService MakeDatasetService()
 {
     return rg::GaussianLinearizationService{ rg::GaussianLinearizationSpec::DefaultDataset() };
+}
+
+SeriesPointList BuildExpectedLinearModelSeries(
+    const LocalPotentialSampleList & sampling_entries)
+{
+    return MakeDatasetService().BuildLinearModelSeries(sampling_entries);
+}
+
+SeriesPointList BuildExpectedDatasetSeries(
+    const LocalPotentialSampleList & sampling_entries,
+    double x_min,
+    double x_max)
+{
+    return MakeDatasetService().BuildDatasetSeries(sampling_entries, x_min, x_max);
 }
 
 } // namespace
@@ -59,25 +72,22 @@ TEST(LocalPotentialSeriesTest, EntryComputesRangeAndBinningForDistanceMapSeries)
 TEST(LocalPotentialSeriesTest, EntryLinearModelTransformKeepsPositiveSamplesOnly)
 {
     rg::LocalPotentialEntry entry;
-    entry.SetSamplingEntries({
+    const LocalPotentialSampleList sampling_entries{
         {0.1f, 4.0f, 0.5f},
         {0.2f, -2.0f, 7.0f},
         {0.3f, 8.0f, 2.5f},
-    });
+    };
+    entry.SetSamplingEntries(sampling_entries);
 
     const auto transformed{ entry.GetLinearModelSeries() };
+    const auto expected{ BuildExpectedLinearModelSeries(sampling_entries) };
     ASSERT_EQ(transformed.size(), 2U);
+    ASSERT_EQ(expected.size(), transformed.size());
 
-    Eigen::VectorXd init{ Eigen::VectorXd::Zero(3) };
-    const auto expected0{
-        GausLinearTransformHelper::BuildLinearModelDataVector(0.1f, 4.0f, init) };
-    const auto expected1{
-        GausLinearTransformHelper::BuildLinearModelDataVector(0.3f, 8.0f, init) };
-
-    EXPECT_NEAR(transformed.at(0).GetBasisValue(0), expected0(1), 1e-6);
-    EXPECT_NEAR(transformed.at(0).response, expected0(2), 1e-6);
-    EXPECT_NEAR(transformed.at(1).GetBasisValue(0), expected1(1), 1e-6);
-    EXPECT_NEAR(transformed.at(1).response, expected1(2), 1e-6);
+    EXPECT_NEAR(transformed.at(0).GetBasisValue(0), expected.at(0).GetBasisValue(0), 1e-6);
+    EXPECT_NEAR(transformed.at(0).response, expected.at(0).response, 1e-6);
+    EXPECT_NEAR(transformed.at(1).GetBasisValue(0), expected.at(1).GetBasisValue(0), 1e-6);
+    EXPECT_NEAR(transformed.at(1).response, expected.at(1).response, 1e-6);
     EXPECT_FLOAT_EQ(transformed.at(0).weight, 0.5f);
     EXPECT_FLOAT_EQ(transformed.at(1).weight, 2.5f);
 }
@@ -85,32 +95,26 @@ TEST(LocalPotentialSeriesTest, EntryLinearModelTransformKeepsPositiveSamplesOnly
 TEST(LocalPotentialSeriesTest, EntryFitDatasetSeriesKeepsFullBasisWithinFitRange)
 {
     rg::LocalPotentialEntry entry;
-    entry.SetSamplingEntries({
+    const LocalPotentialSampleList sampling_entries{
         {0.1f, 4.0f, 0.5f},
         {0.2f, -2.0f, 7.0f},
         {0.3f, 8.0f, 2.5f},
         {1.1f, 16.0f, 3.0f},
-    });
-
-    const auto transformed{
-        MakeDatasetService().BuildDatasetSeries(entry.GetSamplingEntries(), 0.1, 0.3)
     };
-    ASSERT_EQ(transformed.size(), 2U);
+    entry.SetSamplingEntries(sampling_entries);
 
-    Eigen::VectorXd init{ Eigen::VectorXd::Zero(3) };
-    const auto expected0{
-        GausLinearTransformHelper::BuildLinearModelDataVector(0.1f, 4.0f, init) };
-    const auto expected1{
-        GausLinearTransformHelper::BuildLinearModelDataVector(0.3f, 8.0f, init) };
+    const auto transformed{ BuildExpectedDatasetSeries(sampling_entries, 0.1, 0.3) };
+    ASSERT_EQ(transformed.size(), 2U);
+    const auto expected{ BuildExpectedDatasetSeries(sampling_entries, 0.1, 0.3) };
 
     ASSERT_EQ(transformed.at(0).GetBasisSize(), 2U);
     ASSERT_EQ(transformed.at(1).GetBasisSize(), 2U);
-    EXPECT_NEAR(transformed.at(0).GetBasisValue(0), expected0(0), 1e-6);
-    EXPECT_NEAR(transformed.at(0).GetBasisValue(1), expected0(1), 1e-6);
-    EXPECT_NEAR(transformed.at(0).response, expected0(2), 1e-6);
-    EXPECT_NEAR(transformed.at(1).GetBasisValue(0), expected1(0), 1e-6);
-    EXPECT_NEAR(transformed.at(1).GetBasisValue(1), expected1(1), 1e-6);
-    EXPECT_NEAR(transformed.at(1).response, expected1(2), 1e-6);
+    EXPECT_NEAR(transformed.at(0).GetBasisValue(0), expected.at(0).GetBasisValue(0), 1e-6);
+    EXPECT_NEAR(transformed.at(0).GetBasisValue(1), expected.at(0).GetBasisValue(1), 1e-6);
+    EXPECT_NEAR(transformed.at(0).response, expected.at(0).response, 1e-6);
+    EXPECT_NEAR(transformed.at(1).GetBasisValue(0), expected.at(1).GetBasisValue(0), 1e-6);
+    EXPECT_NEAR(transformed.at(1).GetBasisValue(1), expected.at(1).GetBasisValue(1), 1e-6);
+    EXPECT_NEAR(transformed.at(1).response, expected.at(1).response, 1e-6);
     EXPECT_FLOAT_EQ(transformed.at(0).weight, 0.5f);
     EXPECT_FLOAT_EQ(transformed.at(1).weight, 2.5f);
 }

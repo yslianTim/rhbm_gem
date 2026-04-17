@@ -13,10 +13,31 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/AtomSelector.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
-#include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
+#include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
 #include "support/DataObjectTestSupport.hpp"
 
 namespace rg = rhbm_gem;
+
+namespace
+{
+
+const rg::GaussianLinearizationService & AtomGroupDecodeService()
+{
+    static const rg::GaussianLinearizationService service{
+        rg::GaussianLinearizationSpec::AtomGroupDecode()
+    };
+    return service;
+}
+
+const rg::GaussianLinearizationService & BondGroupDecodeService()
+{
+    static const rg::GaussianLinearizationService service{
+        rg::GaussianLinearizationSpec::BondGroupDecode()
+    };
+    return service;
+}
+
+} // namespace
 
 TEST(DataObjectModelAnalysisTest, SelectedModelEntriesCanBeInitializedForTypedWorkflows)
 {
@@ -257,32 +278,32 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupEstimateRes
     constexpr double alpha_g{ 0.25 };
     analysis.ApplyAtomGroupEstimateResult(group_key, class_key, result, alpha_g);
 
-    const auto expected_mean{ GausLinearTransformHelper::BuildGaus3DModel(result.mu_mean) };
-    const auto expected_mdpde{ GausLinearTransformHelper::BuildGaus3DModel(result.mu_mdpde) };
+    const auto expected_mean{ AtomGroupDecodeService().DecodeGroupEstimate(result.mu_mean) };
+    const auto expected_mdpde{ AtomGroupDecodeService().DecodeGroupEstimate(result.mu_mdpde) };
     const auto expected_prior{
-        GausLinearTransformHelper::BuildGaus3DModelWithVariance(result.mu_prior, result.capital_lambda)
+        AtomGroupDecodeService().DecodePosteriorEstimate(result.mu_prior, result.capital_lambda)
     };
-    EXPECT_NEAR(expected_mean(0), analysis_view.GetAtomGroupMean(group_key, class_key).amplitude, 1e-12);
-    EXPECT_NEAR(expected_mean(1), analysis_view.GetAtomGroupMean(group_key, class_key).width, 1e-12);
-    EXPECT_NEAR(expected_mdpde(0), analysis_view.GetAtomGroupMDPDE(group_key, class_key).amplitude, 1e-12);
-    EXPECT_NEAR(expected_mdpde(1), analysis_view.GetAtomGroupMDPDE(group_key, class_key).width, 1e-12);
-    EXPECT_NEAR(std::get<0>(expected_prior)(0), analysis_view.GetAtomGroupPrior(group_key, class_key).amplitude, 1e-12);
-    EXPECT_NEAR(std::get<0>(expected_prior)(1), analysis_view.GetAtomGroupPrior(group_key, class_key).width, 1e-12);
-    EXPECT_NEAR(std::get<1>(expected_prior)(0), analysis_view.GetAtomGroupPriorPosterior(group_key, class_key).variance.amplitude, 1e-12);
-    EXPECT_NEAR(std::get<1>(expected_prior)(1), analysis_view.GetAtomGroupPriorPosterior(group_key, class_key).variance.width, 1e-12);
+    EXPECT_NEAR(expected_mean.amplitude, analysis_view.GetAtomGroupMean(group_key, class_key).amplitude, 1e-12);
+    EXPECT_NEAR(expected_mean.width, analysis_view.GetAtomGroupMean(group_key, class_key).width, 1e-12);
+    EXPECT_NEAR(expected_mdpde.amplitude, analysis_view.GetAtomGroupMDPDE(group_key, class_key).amplitude, 1e-12);
+    EXPECT_NEAR(expected_mdpde.width, analysis_view.GetAtomGroupMDPDE(group_key, class_key).width, 1e-12);
+    EXPECT_NEAR(expected_prior.estimate.amplitude, analysis_view.GetAtomGroupPrior(group_key, class_key).amplitude, 1e-12);
+    EXPECT_NEAR(expected_prior.estimate.width, analysis_view.GetAtomGroupPrior(group_key, class_key).width, 1e-12);
+    EXPECT_NEAR(expected_prior.variance.amplitude, analysis_view.GetAtomGroupPriorPosterior(group_key, class_key).variance.amplitude, 1e-12);
+    EXPECT_NEAR(expected_prior.variance.width, analysis_view.GetAtomGroupPriorPosterior(group_key, class_key).variance.width, 1e-12);
     EXPECT_DOUBLE_EQ(alpha_g, analysis_view.GetAtomAlphaG(group_key, class_key));
 
     const auto annotation{ rg::LocalPotentialView::RequireFor(*atom_list.front()).FindAnnotation(class_key) };
     ASSERT_TRUE(annotation.has_value());
     const auto expected_posterior{
-        GausLinearTransformHelper::BuildGaus3DModelWithVariance(
+        AtomGroupDecodeService().DecodePosteriorEstimate(
             result.beta_posterior_array.col(0),
             result.capital_sigma_posterior_list.front())
     };
-    EXPECT_NEAR(std::get<0>(expected_posterior)(0), annotation->posterior.estimate.amplitude, 1e-12);
-    EXPECT_NEAR(std::get<0>(expected_posterior)(1), annotation->posterior.estimate.width, 1e-12);
-    EXPECT_NEAR(std::get<1>(expected_posterior)(0), annotation->posterior.variance.amplitude, 1e-12);
-    EXPECT_NEAR(std::get<1>(expected_posterior)(1), annotation->posterior.variance.width, 1e-12);
+    EXPECT_NEAR(expected_posterior.estimate.amplitude, annotation->posterior.estimate.amplitude, 1e-12);
+    EXPECT_NEAR(expected_posterior.estimate.width, annotation->posterior.estimate.width, 1e-12);
+    EXPECT_NEAR(expected_posterior.variance.amplitude, annotation->posterior.variance.amplitude, 1e-12);
+    EXPECT_NEAR(expected_posterior.variance.width, annotation->posterior.variance.width, 1e-12);
     EXPECT_TRUE(annotation->is_outlier);
     EXPECT_DOUBLE_EQ(1.5, annotation->statistical_distance);
 }
@@ -345,16 +366,16 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesBondGroupEstimateRes
     constexpr double alpha_g{ 0.5 };
     analysis.ApplyBondGroupEstimateResult(group_key, class_key, result, alpha_g);
 
-    const auto expected_mean{ GausLinearTransformHelper::BuildGaus2DModel(result.mu_mean) };
+    const auto expected_mean{ BondGroupDecodeService().DecodeGroupEstimate(result.mu_mean) };
     const auto expected_prior{
-        GausLinearTransformHelper::BuildGaus2DModelWithVariance(result.mu_prior, result.capital_lambda)
+        BondGroupDecodeService().DecodePosteriorEstimate(result.mu_prior, result.capital_lambda)
     };
-    EXPECT_NEAR(expected_mean(0), analysis_view.GetBondGroupMean(group_key, class_key).amplitude, 1e-12);
-    EXPECT_NEAR(expected_mean(1), analysis_view.GetBondGroupMean(group_key, class_key).width, 1e-12);
-    EXPECT_NEAR(std::get<0>(expected_prior)(0), analysis_view.GetBondGroupPrior(group_key, class_key).amplitude, 1e-12);
-    EXPECT_NEAR(std::get<0>(expected_prior)(1), analysis_view.GetBondGroupPrior(group_key, class_key).width, 1e-12);
-    EXPECT_NEAR(std::get<1>(expected_prior)(0), analysis_view.GetBondGroupPriorPosterior(group_key, class_key).variance.amplitude, 1e-12);
-    EXPECT_NEAR(std::get<1>(expected_prior)(1), analysis_view.GetBondGroupPriorPosterior(group_key, class_key).variance.width, 1e-12);
+    EXPECT_NEAR(expected_mean.amplitude, analysis_view.GetBondGroupMean(group_key, class_key).amplitude, 1e-12);
+    EXPECT_NEAR(expected_mean.width, analysis_view.GetBondGroupMean(group_key, class_key).width, 1e-12);
+    EXPECT_NEAR(expected_prior.estimate.amplitude, analysis_view.GetBondGroupPrior(group_key, class_key).amplitude, 1e-12);
+    EXPECT_NEAR(expected_prior.estimate.width, analysis_view.GetBondGroupPrior(group_key, class_key).width, 1e-12);
+    EXPECT_NEAR(expected_prior.variance.amplitude, analysis_view.GetBondGroupPriorPosterior(group_key, class_key).variance.amplitude, 1e-12);
+    EXPECT_NEAR(expected_prior.variance.width, analysis_view.GetBondGroupPriorPosterior(group_key, class_key).variance.width, 1e-12);
     EXPECT_DOUBLE_EQ(alpha_g, analysis_view.GetBondAlphaG(group_key, class_key));
 
     const auto annotation{ rg::LocalPotentialView::RequireFor(*bond_list.front()).FindAnnotation(class_key) };

@@ -3,7 +3,7 @@
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
-#include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
+#include <rhbm_gem/utils/math/GaussianResponseMath.hpp>
 
 #include <cmath>
 #include <stdexcept>
@@ -290,7 +290,8 @@ SeriesPointList HRLModelTestDataFactory::BuildLinearDataset(
         )
     };
     const auto max_response{
-        model.amplitude * GausLinearTransformHelper::GetGaussianResponseAtDistance(0.0, model.width)
+        model.amplitude *
+        rhbm_gem::GaussianResponseMath::GetGaussianResponseAtDistance(0.0, model.width)
     };
     std::normal_distribution<> dist_error(0.0, error_sigma * max_response);
     for (auto & data_entry : linear_data_entry_list)

@@ -1,6 +1,6 @@
 #include <rhbm_gem/utils/math/GaussianPotentialSampler.hpp>
 
-#include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
+#include <rhbm_gem/utils/math/GaussianResponseMath.hpp>
 #include <rhbm_gem/utils/math/SamplingPointFilter.hpp>
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
 
@@ -119,7 +119,9 @@ LocalPotentialSampleList GaussianPotentialSampler::GenerateRadialSamples(
         const auto distance{ dist_distance(generator) };
         const auto response{
             model.amplitude *
-                GausLinearTransformHelper::GetGaussianResponseAtDistance(distance, model.width) +
+                rhbm_gem::GaussianResponseMath::GetGaussianResponseAtDistance(
+                    distance,
+                    model.width) +
             model.intercept
         };
         sample_list.emplace_back(LocalPotentialSample{
@@ -200,7 +202,7 @@ LocalPotentialSampleList GaussianPotentialSampler::GenerateNeighborhoodSamples(
 
         const auto response{
             model.amplitude *
-                GausLinearTransformHelper::GetGaussianPesponseAtPointWithNeighborhood(
+                rhbm_gem::GaussianResponseMath::GetGaussianResponseAtPointWithNeighborhood(
                     point,
                     atom_center,
                     neighbor_center_list,

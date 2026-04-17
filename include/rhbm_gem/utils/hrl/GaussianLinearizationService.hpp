@@ -47,6 +47,8 @@ struct GaussianLinearizationContext
 
 class GaussianLinearizationService
 {
+    GaussianLinearizationSpec m_spec;
+    
 public:
     explicit GaussianLinearizationService(GaussianLinearizationSpec spec);
 
@@ -56,6 +58,9 @@ public:
         const LocalPotentialSampleList & sampling_entries,
         double x_min,
         double x_max,
+        const GaussianLinearizationContext & context = {}) const;
+    SeriesPointList BuildLinearModelSeries(
+        const LocalPotentialSampleList & sampling_entries,
         const GaussianLinearizationContext & context = {}) const;
     HRLMemberDataset BuildDataset(
         const LocalPotentialSampleList & sampling_entries,
@@ -84,13 +89,12 @@ public:
         const Eigen::MatrixXd & covariance_matrix) const;
 
 private:
-    GaussianLinearizationSpec m_spec;
-
     void ValidateSpec() const;
     void ValidateContextIfRequired(const GaussianLinearizationContext & context) const;
     Eigen::VectorXd BuildGaussianVector(
         const Eigen::VectorXd & linear_model,
         const GaussianLinearizationContext * context) const;
+
 };
 
 } // namespace rhbm_gem

@@ -1,6 +1,6 @@
 #include "data/detail/LocalPotentialEntry.hpp"
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
-#include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
+#include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
@@ -14,6 +14,14 @@ namespace {
 inline bool IsEffectiveSample(const LocalPotentialSample & sample)
 {
     return sample.weight > 0.0f;
+}
+
+const GaussianLinearizationService & LinearizationService()
+{
+    static const GaussianLinearizationService service{
+        GaussianLinearizationSpec::DefaultDataset()
+    };
+    return service;
 }
 
 } // namespace
@@ -176,20 +184,7 @@ SeriesPointList LocalPotentialEntry::GetBinnedDistanceResponseSeries(
 
 SeriesPointList LocalPotentialEntry::GetLinearModelSeries() const
 {
-    Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
-    SeriesPointList linear_model_series;
-    linear_model_series.reserve(m_sampling_entries.size());
-    for (const auto & sample : m_sampling_entries)
-    {
-        if (!IsEffectiveSample(sample)) continue;
-        if (sample.response <= 0.0f) continue;
-        const auto data_vector{
-            GausLinearTransformHelper::BuildLinearModelDataVector(
-                sample.distance, sample.response, model_par_init)
-        };
-        linear_model_series.emplace_back(SeriesPoint{ { data_vector(1) }, data_vector(2), sample.weight });
-    }
-    return linear_model_series;
+    return LinearizationService().BuildLinearModelSeries(m_sampling_entries);
 }
 
 double LocalPotentialEntry::GetMapValueNearCenter() const

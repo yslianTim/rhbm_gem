@@ -72,7 +72,7 @@ target_sources(rhbm_gem PRIVATE
     utils/math/CylinderSampler.cpp
     utils/math/ElectricPotential.cpp
     utils/math/GaussianPotentialSampler.cpp
-    utils/math/GausLinearTransformHelper.cpp
+    utils/math/GaussianResponseMath.cpp
     utils/math/GridSampler.cpp
     utils/math/SphereSampler.cpp
     utils/hrl/HRLAlphaTrainer.cpp
