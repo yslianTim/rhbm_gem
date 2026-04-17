@@ -10,7 +10,7 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/utils/math/SamplingPointFilter.hpp>
+#include <rhbm_gem/utils/math/LocalPotentialSampleScoring.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace rg = rhbm_gem;
@@ -109,9 +109,12 @@ TEST(MapSamplingTest, PositionOnlySamplerReturnsExpectedPointValueAndIsDetermini
     EXPECT_FLOAT_EQ(second.front().distance, 0.0f);
     EXPECT_FLOAT_EQ(first.front().response, map.GetMapValue(0, 0, 0));
     EXPECT_FLOAT_EQ(second.front().response, map.GetMapValue(1, 1, 1));
+    EXPECT_FLOAT_EQ(first.front().score, 1.0f);
+    EXPECT_FLOAT_EQ(second.front().score, 1.0f);
     EXPECT_TRUE(first.front().HasPosition());
     EXPECT_FLOAT_EQ(first.front().position->at(0), 0.0f);
     EXPECT_FLOAT_EQ(first_again.front().response, first.front().response);
+    EXPECT_FLOAT_EQ(first_again.front().score, first.front().score);
 }
 
 TEST(MapSamplingTest, OrientedSamplerUsesDirectionLikeInput)
@@ -130,6 +133,7 @@ TEST(MapSamplingTest, OrientedSamplerUsesDirectionLikeInput)
     ASSERT_EQ(1u, sampling_data.size());
     EXPECT_FLOAT_EQ(1.0f, sampling_data.front().distance);
     EXPECT_FLOAT_EQ(map.GetMapValue(1, 1, 1), sampling_data.front().response);
+    EXPECT_FLOAT_EQ(1.0f, sampling_data.front().score);
     ASSERT_TRUE(sampling_data.front().HasPosition());
     EXPECT_FLOAT_EQ(1.0f, sampling_data.front().position->at(0));
 }
@@ -150,6 +154,8 @@ TEST(MapSamplingTest, AtomSamplerWithZeroAngleMatchesPositionOnlySampling)
     ASSERT_EQ(from_atom.size(), 1u);
     EXPECT_FLOAT_EQ(from_position.front().distance, from_atom.front().distance);
     EXPECT_FLOAT_EQ(from_position.front().response, from_atom.front().response);
+    EXPECT_FLOAT_EQ(from_position.front().score, from_atom.front().score);
+    EXPECT_FLOAT_EQ(from_atom.front().score, 1.0f);
     ASSERT_TRUE(from_atom.front().HasPosition());
     EXPECT_FLOAT_EQ(from_atom.front().position->at(0), 0.0f);
 }
@@ -193,7 +199,7 @@ TEST(MapSamplingTest, AtomSamplerUsesSamplingPointScoresForFilteredEntries)
         (Eigen::Vector3d{ 1.0, 0.0, 0.0 })
     };
     const auto expected_scores{
-        rg::BuildSamplingPointScoreList(sampling_points, reject_direction_list, 30.0)
+        rg::BuildLocalPotentialSampleScoreList(sampling_points, reject_direction_list, 30.0)
     };
     const auto sampling_data{
         rg::SampleMapValues(map, sampler, *atom, 1.1, 30.0) };

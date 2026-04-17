@@ -12,12 +12,12 @@
 namespace rhbm_gem {
 namespace detail {
 
-inline void ValidateSamplingPointFilterAngle(double angle)
+inline void ValidateSamplingPointAcceptanceAngle(double angle)
 {
     if (!std::isfinite(angle) || angle < 0.0 || angle > 180.0)
     {
         throw std::invalid_argument(
-            "SamplingPointFilter angle must be finite and within [0, 180] degrees.");
+            "SamplingPointAcceptanceMask angle must be finite and within [0, 180] degrees.");
     }
 }
 
@@ -41,13 +41,13 @@ inline std::vector<Eigen::Vector3d> BuildNormalizedRejectDirections(
         if (reject_direction.size() != 3)
         {
             throw std::invalid_argument(
-                "SamplingPointFilter reject directions must have dimension 3.");
+                "SamplingPointAcceptanceMask reject directions must have dimension 3.");
         }
 
         if (!reject_direction.allFinite())
         {
             throw std::invalid_argument(
-                "SamplingPointFilter reject directions must contain finite values.");
+                "SamplingPointAcceptanceMask reject directions must contain finite values.");
         }
 
         const Eigen::Vector3d direction{
@@ -91,18 +91,17 @@ inline bool ShouldRejectSamplingPoint(
 
 } // namespace detail
 
-inline std::vector<float> BuildSamplingPointScoreList(
+inline std::vector<float> BuildSamplingPointAcceptanceMask(
     const SamplingPointList & point_list,
     const std::vector<Eigen::VectorXd> & reject_direction_list,
     double angle = 0.0)
 {
-    detail::ValidateSamplingPointFilterAngle(angle);
+    detail::ValidateSamplingPointAcceptanceAngle(angle);
 
-    // This is a 0/1 acceptance score for each point, not a statistical weight.
-    std::vector<float> point_scores(point_list.size(), 1.0f);
+    std::vector<float> acceptance_mask(point_list.size(), 1.0f);
     if (angle == 0.0)
     {
-        return point_scores;
+        return acceptance_mask;
     }
 
     const auto normalized_reject_directions{
@@ -110,7 +109,7 @@ inline std::vector<float> BuildSamplingPointScoreList(
     };
     if (normalized_reject_directions.empty())
     {
-        return point_scores;
+        return acceptance_mask;
     }
 
     const auto cos_threshold{ std::cos(angle * Constants::pi / 180.0) };
@@ -121,11 +120,11 @@ inline std::vector<float> BuildSamplingPointScoreList(
                 normalized_reject_directions,
                 cos_threshold))
         {
-            point_scores.at(i) = 0.0f;
+            acceptance_mask.at(i) = 0.0f;
         }
     }
 
-    return point_scores;
+    return acceptance_mask;
 }
 
 } // namespace rhbm_gem

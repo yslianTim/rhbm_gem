@@ -4,6 +4,7 @@
 #include <random>
 
 #include <rhbm_gem/utils/math/GaussianPotentialSampler.hpp>
+#include <rhbm_gem/utils/math/LocalPotentialSampleScoring.hpp>
 
 TEST(GaussianPotentialSamplerTest, NeighborhoodSamplingKeepsPointCountWhenRejectAngleIsZero)
 {
@@ -23,6 +24,51 @@ TEST(GaussianPotentialSamplerTest, NeighborhoodSamplingKeepsPointCountWhenReject
     };
 
     EXPECT_EQ(sampling_entries.size(), 40u);
+}
+
+TEST(GaussianPotentialSamplerTest, NeighborhoodSamplingUsesLocalPotentialScorePolicy)
+{
+    GaussianPotentialSampler sampler;
+
+    const NeighborhoodSamplingOptions options{
+        0.0,
+        1.0,
+        2.0,
+        1,
+        120.0,
+        NeighborhoodRejectedPointPolicy::KeepRejectedPointsWithZeroScore
+    };
+    const auto sampling_entries{
+        sampler.GenerateNeighborhoodSamples(
+            4,
+            GaussianModel3D{ 1.0, 0.5, 0.0 },
+            options)
+    };
+    SamplingPointList sampling_points;
+    sampling_points.reserve(sampling_entries.size());
+    for (const auto & sample : sampling_entries)
+    {
+        ASSERT_TRUE(sample.position.has_value());
+        sampling_points.emplace_back(SamplingPoint{
+            sample.distance,
+            sample.position.value()
+        });
+    }
+    const std::vector<Eigen::VectorXd> reject_direction_list{
+        (Eigen::Vector3d{ options.neighbor_distance, 0.0, 0.0 })
+    };
+    const auto expected_scores{
+        rhbm_gem::BuildLocalPotentialSampleScoreList(
+            sampling_points,
+            reject_direction_list,
+            options.reject_angle_deg)
+    };
+
+    ASSERT_EQ(sampling_entries.size(), expected_scores.size());
+    for (size_t i = 0; i < sampling_entries.size(); ++i)
+    {
+        EXPECT_FLOAT_EQ(sampling_entries.at(i).score, expected_scores.at(i));
+    }
 }
 
 TEST(GaussianPotentialSamplerTest, NeighborhoodSamplingRemovesPointsWhenAngleFilteringEnabled)
@@ -166,6 +212,7 @@ TEST(GaussianPotentialSamplerTest, RadialSamplingIsReproducibleWithFixedSeed)
     {
         EXPECT_FLOAT_EQ(first_samples.at(i).distance, second_samples.at(i).distance);
         EXPECT_FLOAT_EQ(first_samples.at(i).response, second_samples.at(i).response);
+        EXPECT_FLOAT_EQ(first_samples.at(i).score, second_samples.at(i).score);
     }
 }
 
@@ -190,5 +237,7 @@ TEST(GaussianPotentialSamplerTest, InterceptContributesToRadialResponse)
             0.25,
             1.0e-6
         );
+        EXPECT_FLOAT_EQ(base_samples.at(i).score, 1.0f);
+        EXPECT_FLOAT_EQ(shifted_samples.at(i).score, 1.0f);
     }
 }

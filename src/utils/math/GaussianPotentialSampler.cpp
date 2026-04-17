@@ -1,7 +1,7 @@
 #include <rhbm_gem/utils/math/GaussianPotentialSampler.hpp>
 
 #include <rhbm_gem/utils/math/GaussianResponseMath.hpp>
-#include <rhbm_gem/utils/math/SamplingPointFilter.hpp>
+#include <rhbm_gem/utils/math/LocalPotentialSampleScoring.hpp>
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
 
 #include <algorithm>
@@ -112,6 +112,9 @@ LocalPotentialSampleList GaussianPotentialSampler::GenerateRadialSamples(
     ValidateDistanceRange(distance_min, distance_max, "distance range");
 
     std::uniform_real_distribution<> dist_distance(distance_min, distance_max);
+    const auto sampling_scores{
+        rhbm_gem::BuildLocalPotentialSampleScoreList(sample_count)
+    };
     LocalPotentialSampleList sample_list;
     sample_list.reserve(sample_count);
     for (size_t i = 0; i < sample_count; i++)
@@ -127,7 +130,7 @@ LocalPotentialSampleList GaussianPotentialSampler::GenerateRadialSamples(
         sample_list.emplace_back(LocalPotentialSample{
             static_cast<float>(distance),
             static_cast<float>(response),
-            1.0
+            sampling_scores.at(i)
         });
     }
 
@@ -162,7 +165,7 @@ LocalPotentialSampleList GaussianPotentialSampler::GenerateNeighborhoodSamples(
     );
     const auto sampling_points{ sampler.GenerateSamplingPoints({ 0.0f, 0.0f, 0.0f }) };
     const auto sampling_scores{
-        rhbm_gem::BuildSamplingPointScoreList(
+        rhbm_gem::BuildLocalPotentialSampleScoreList(
             sampling_points,
             neighbor_center_list,
             options.reject_angle_deg

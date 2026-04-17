@@ -146,7 +146,7 @@ struct SQLiteBinder<LocalPotentialSampleList>
         {
             return sqlite3_bind_blob(stmt, index, nullptr, 0, SQLITE_STATIC);
         }
-        
+
         std::vector<float> contiguous;
         contiguous.reserve(value.size() * 2);
         for(const auto & sample : value)
@@ -154,7 +154,7 @@ struct SQLiteBinder<LocalPotentialSampleList>
             contiguous.push_back(sample.distance);
             contiguous.push_back(sample.response);
         }
-        
+
         return sqlite3_bind_blob(
             stmt,
             index,

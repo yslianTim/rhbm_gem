@@ -9,7 +9,8 @@
 
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
-#include <rhbm_gem/utils/math/SamplingPointFilter.hpp>
+#include <rhbm_gem/utils/math/LocalPotentialSampleScoring.hpp>
+#include <rhbm_gem/utils/math/SamplingPointAcceptanceMask.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace rhbm_gem {
@@ -134,7 +135,13 @@ LocalPotentialSampleList BuildLocalPotentialSampleList(
     const SamplingPointList & sampling_points,
     const std::vector<float> * sampling_scores = nullptr)
 {
-    if (sampling_scores != nullptr && sampling_scores->size() != sampling_points.size())
+    const auto resolved_sampling_scores{
+        (sampling_scores == nullptr)
+            ? BuildLocalPotentialSampleScoreList(sampling_points)
+            : *sampling_scores
+    };
+
+    if (resolved_sampling_scores.size() != sampling_points.size())
     {
         throw std::invalid_argument(
             "BuildLocalPotentialSampleList sampling_scores must align with sampling_points.");
@@ -145,9 +152,7 @@ LocalPotentialSampleList BuildLocalPotentialSampleList(
     for (size_t i = 0; i < sampling_points.size(); i++)
     {
         const auto & sampling_point{ sampling_points.at(i) };
-        const auto sampling_score{
-            (sampling_scores == nullptr) ? 1.0f : sampling_scores->at(i)
-        };
+        const auto sampling_score{ resolved_sampling_scores.at(i) };
 
         auto map_value{
             MakeInterpolationInMapObject(map_object, sampling_point.position)
@@ -197,7 +202,7 @@ LocalPotentialSampleList SampleMapValues(
     double angle = 0.0)
 {
     detail::ValidateNeighborRadius(neighbor_radius);
-    detail::ValidateSamplingPointFilterAngle(angle);
+    detail::ValidateSamplingPointAcceptanceAngle(angle);
 
     const auto position{ atom.GetPosition() };
     const auto sampling_points{ sampler.GenerateSamplingPoints(position) };
@@ -214,7 +219,7 @@ LocalPotentialSampleList SampleMapValues(
         detail::TranslateSamplingPoints(sampling_points, position, -1.0f)
     };
     const auto sampling_scores{
-        BuildSamplingPointScoreList(local_sampling_points, reject_direction_list, angle)
+        BuildLocalPotentialSampleScoreList(local_sampling_points, reject_direction_list, angle)
     };
     return detail::BuildLocalPotentialSampleList(map_object, sampling_points, &sampling_scores);
 }
