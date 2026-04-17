@@ -43,7 +43,7 @@ HRLMemberDataset HRLDataTransform::BuildMemberDataset(
     HRLMemberDataset dataset;
     dataset.X = Eigen::MatrixXd::Zero(data_size, basis_size);
     dataset.y = Eigen::VectorXd::Zero(data_size);
-    dataset.w = Eigen::VectorXd::Zero(data_size);
+    dataset.score = Eigen::VectorXd::Zero(data_size);
     for (int i = 0; i < data_size; i++)
     {
         const auto & point{ series_point_list.at(static_cast<std::size_t>(i)) };
@@ -51,7 +51,7 @@ HRLMemberDataset HRLDataTransform::BuildMemberDataset(
         {
             throw std::invalid_argument("All data entries must share the same basis size.");
         }
-        if (!std::isfinite(point.response) || !std::isfinite(point.weight))
+        if (!std::isfinite(point.response) || !std::isfinite(point.score))
         {
             throw std::invalid_argument("Member dataset contains non-finite value.");
         }
@@ -65,7 +65,7 @@ HRLMemberDataset HRLDataTransform::BuildMemberDataset(
             dataset.X(i, j) = value;
         }
         dataset.y(i) = point.response;
-        dataset.w(i) = point.weight;
+        dataset.score(i) = point.score;
     }
 
     return dataset;

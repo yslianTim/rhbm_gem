@@ -165,19 +165,19 @@ TEST(MapSamplingTest, AtomSamplerRejectsPointsWithinAngleThresholdOfNeighborDire
 
     ASSERT_EQ(sampling_data.size(), 4u);
     EXPECT_FLOAT_EQ(sampling_data.at(0).distance, 0.0f);
-    EXPECT_FLOAT_EQ(sampling_data.at(0).weight, 1.0f);
+    EXPECT_FLOAT_EQ(sampling_data.at(0).score, 1.0f);
     ASSERT_TRUE(sampling_data.at(1).HasPosition());
     EXPECT_FLOAT_EQ(sampling_data.at(1).position->at(0), 1.0f);
     EXPECT_FLOAT_EQ(sampling_data.at(1).position->at(1), 0.0f);
-    EXPECT_FLOAT_EQ(sampling_data.at(1).weight, 0.0f);
+    EXPECT_FLOAT_EQ(sampling_data.at(1).score, 0.0f);
     ASSERT_TRUE(sampling_data.at(2).HasPosition());
     EXPECT_FLOAT_EQ(sampling_data.at(2).position->at(0), 0.0f);
     EXPECT_FLOAT_EQ(sampling_data.at(2).position->at(1), 1.0f);
-    EXPECT_FLOAT_EQ(sampling_data.at(2).weight, 1.0f);
+    EXPECT_FLOAT_EQ(sampling_data.at(2).score, 1.0f);
     ASSERT_TRUE(sampling_data.at(3).HasPosition());
     EXPECT_FLOAT_EQ(sampling_data.at(3).position->at(0), -1.0f);
     EXPECT_FLOAT_EQ(sampling_data.at(3).position->at(1), 0.0f);
-    EXPECT_FLOAT_EQ(sampling_data.at(3).weight, 1.0f);
+    EXPECT_FLOAT_EQ(sampling_data.at(3).score, 1.0f);
 }
 
 TEST(MapSamplingTest, AtomSamplerKeepsAllPointsWhenNeighborRadiusFindsNoNeighbors)
@@ -193,7 +193,7 @@ TEST(MapSamplingTest, AtomSamplerKeepsAllPointsWhenNeighborRadiusFindsNoNeighbor
     ASSERT_EQ(sampling_data.size(), 4u);
     for (const auto & sample : sampling_data)
     {
-        EXPECT_FLOAT_EQ(sample.weight, 1.0f);
+        EXPECT_FLOAT_EQ(sample.score, 1.0f);
     }
 }
 

@@ -346,7 +346,7 @@ SeriesPointList GaussianLinearizationService::BuildDatasetSeries(
             SeriesPoint{
                 std::move(basis_values),
                 data_vector(m_spec.basis_size),
-                sample.weight
+                sample.score
             });
     }
 
@@ -379,7 +379,7 @@ SeriesPointList GaussianLinearizationService::BuildLinearModelSeries(
     };
     for (const auto & sample : sampling_entries)
     {
-        if (sample.weight <= 0.0f || sample.response <= 0.0f)
+        if (sample.score <= 0.0f || sample.response <= 0.0f)
         {
             continue;
         }
@@ -392,7 +392,7 @@ SeriesPointList GaussianLinearizationService::BuildLinearModelSeries(
                 m_spec.basis_size)
         };
         linear_model_series.emplace_back(
-            SeriesPoint{ { data_vector(1) }, data_vector(m_spec.basis_size), sample.weight });
+            SeriesPoint{ { data_vector(1) }, data_vector(m_spec.basis_size), sample.score });
     }
     return linear_model_series;
 }

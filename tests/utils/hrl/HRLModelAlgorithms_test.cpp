@@ -29,9 +29,9 @@ HRLDiagonalMatrix MakeDiagonal(std::initializer_list<double> values)
 HRLMemberDataset MakeDataset(
     const Eigen::MatrixXd & X,
     const Eigen::VectorXd & y,
-    const Eigen::VectorXd & w)
+    const Eigen::VectorXd & score)
 {
-    return HRLMemberDataset{ X, y, w };
+    return HRLMemberDataset{ X, y, score };
 }
 } // namespace
 
@@ -43,13 +43,13 @@ TEST(HRLModelAlgorithmsTest, EstimateBetaMDPDEAlphaZeroMatchesOLS)
          1.0, 2.0,
          1.0, 3.0;
     const Eigen::VectorXd y{ MakeVector({ 1.0, 2.1, 2.9, 4.2 }) };
-    const Eigen::VectorXd w{ MakeVector({ 1.0, 1.0, 1.0, 1.0 }) };
+    const Eigen::VectorXd score{ MakeVector({ 1.0, 1.0, 1.0, 1.0 }) };
 
     const Eigen::VectorXd expected_beta{
         (X.transpose() * X).inverse() * X.transpose() * y
     };
 
-    const auto result{ HRLModelAlgorithms::EstimateBetaMDPDE(0.0, MakeDataset(X, y, w)) };
+    const auto result{ HRLModelAlgorithms::EstimateBetaMDPDE(0.0, MakeDataset(X, y, score)) };
 
     EXPECT_EQ(HRLEstimationStatus::SUCCESS, result.status);
     EXPECT_TRUE(result.beta_ols.isApprox(expected_beta, 1e-12));
@@ -60,9 +60,9 @@ TEST(HRLModelAlgorithmsTest, EstimateBetaMDPDESingleDatumReturnsInsufficientData
 {
     const Eigen::MatrixXd X{ MakeVector({ 1.0, 2.0 }).transpose() };
     const Eigen::VectorXd y{ MakeVector({ 3.0 }) };
-    const Eigen::VectorXd w{ MakeVector({ 1.0 }) };
+    const Eigen::VectorXd score{ MakeVector({ 1.0 }) };
 
-    const auto result{ HRLModelAlgorithms::EstimateBetaMDPDE(0.2, MakeDataset(X, y, w)) };
+    const auto result{ HRLModelAlgorithms::EstimateBetaMDPDE(0.2, MakeDataset(X, y, score)) };
 
     EXPECT_EQ(HRLEstimationStatus::INSUFFICIENT_DATA, result.status);
     EXPECT_TRUE(result.beta_mdpde.isApprox(Eigen::VectorXd::Zero(2), 1e-12));
@@ -73,24 +73,24 @@ TEST(HRLModelAlgorithmsTest, EstimateBetaMDPDERejectsInvalidParameters)
 {
     const Eigen::MatrixXd X{ Eigen::MatrixXd::Identity(2, 2) };
     const Eigen::VectorXd y{ MakeVector({ 1.0, 2.0 }) };
-    const Eigen::VectorXd w{ MakeVector({ 1.0, 1.0 }) };
+    const Eigen::VectorXd score{ MakeVector({ 1.0, 1.0 }) };
     HRLExecutionOptions options;
 
     EXPECT_THROW(
-        HRLModelAlgorithms::EstimateBetaMDPDE(-0.1, MakeDataset(X, y, w), options),
+        HRLModelAlgorithms::EstimateBetaMDPDE(-0.1, MakeDataset(X, y, score), options),
         std::invalid_argument
     );
 
     options.max_iterations = 0;
     EXPECT_THROW(
-        HRLModelAlgorithms::EstimateBetaMDPDE(0.0, MakeDataset(X, y, w), options),
+        HRLModelAlgorithms::EstimateBetaMDPDE(0.0, MakeDataset(X, y, score), options),
         std::invalid_argument
     );
 
     options = HRLExecutionOptions{};
     options.tolerance = -1.0;
     EXPECT_THROW(
-        HRLModelAlgorithms::EstimateBetaMDPDE(0.0, MakeDataset(X, y, w), options),
+        HRLModelAlgorithms::EstimateBetaMDPDE(0.0, MakeDataset(X, y, score), options),
         std::invalid_argument
     );
 }

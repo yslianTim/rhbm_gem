@@ -102,7 +102,7 @@ TEST(HRLGroupEstimatorTest, EstimateRejectsMismatchedWeightSize)
     HRLMemberLocalEstimate estimate;
     estimate.beta_mdpde = MakeVector({ 1.0, 2.0 });
     estimate.sigma_square = 0.25;
-    estimate.data_weight = MakeDiagonal({ 1.0, 1.0 });
+    estimate.data_weight = MakeDiagonal({ 1.0 });
     estimate.data_covariance = MakeDiagonal({ 0.25, 0.25 });
     input.member_estimates.push_back(estimate);
 

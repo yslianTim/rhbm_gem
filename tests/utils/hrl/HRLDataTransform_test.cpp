@@ -59,8 +59,8 @@ HRLMemberLocalEstimate MakeEstimate(
 TEST(HRLDataTransformTest, BuildMemberDatasetSplitsPredictorsAndResponse)
 {
     const SeriesPointList data_series{
-        SeriesPoint({ 1.0, 2.0 }, 10.0),
-        SeriesPoint({ 3.0, 4.0 }, 20.0)
+        SeriesPoint({ 1.0, 2.0 }, 10.0, 0.5),
+        SeriesPoint({ 3.0, 4.0 }, 20.0, 2.0)
     };
 
     const auto dataset{ HRLDataTransform::BuildMemberDataset(data_series) };
@@ -70,6 +70,7 @@ TEST(HRLDataTransformTest, BuildMemberDatasetSplitsPredictorsAndResponse)
                   3.0, 4.0;
     EXPECT_TRUE(dataset.X.isApprox(expected_X, 1e-12));
     EXPECT_TRUE(dataset.y.isApprox(MakeVector({ 10.0, 20.0 }), 1e-12));
+    EXPECT_TRUE(dataset.score.isApprox(MakeVector({ 0.5, 2.0 }), 1e-12));
 }
 
 TEST(HRLDataTransformTest, BuildMemberDatasetRejectsEmptyInput)

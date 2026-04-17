@@ -125,7 +125,7 @@ TEST(GaussianPotentialSamplerTest, NeighborhoodSamplingCanKeepRejectedPointsWith
         zero_weight_sampling_entries.end(),
         [](const LocalPotentialSample & sample)
         {
-            return sample.weight == 0.0f;
+            return sample.score == 0.0f;
         }));
     EXPECT_EQ(
         static_cast<size_t>(std::count_if(
@@ -133,7 +133,7 @@ TEST(GaussianPotentialSamplerTest, NeighborhoodSamplingCanKeepRejectedPointsWith
             zero_weight_sampling_entries.end(),
             [](const LocalPotentialSample & sample)
             {
-                return sample.weight > 0.0f;
+                return sample.score > 0.0f;
             })),
         removed_sampling_entries.size());
 

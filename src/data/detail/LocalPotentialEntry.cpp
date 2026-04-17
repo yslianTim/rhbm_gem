@@ -13,7 +13,7 @@ namespace {
 
 inline bool IsEffectiveSample(const LocalPotentialSample & sample)
 {
-    return sample.weight > 0.0f;
+    return sample.score > 0.0f;
 }
 
 const GaussianLinearizationService & LinearizationService()
@@ -145,7 +145,7 @@ SeriesPointList LocalPotentialEntry::GetBinnedDistanceResponseSeries(
 {
     const auto bin_spacing{ (x_max - x_min) / static_cast<double>(bin_size) };
     std::vector<std::vector<float>> bin_map(static_cast<size_t>(bin_size));
-    std::vector<std::vector<float>> bin_weight_map(static_cast<size_t>(bin_size));
+    std::vector<std::vector<float>> bin_score_map(static_cast<size_t>(bin_size));
     for (const auto & sample : m_sampling_entries)
     {
         if (!IsEffectiveSample(sample)) continue;
@@ -161,7 +161,7 @@ SeriesPointList LocalPotentialEntry::GetBinnedDistanceResponseSeries(
             continue;
         }
         bin_map.at(static_cast<size_t>(bin_index)).emplace_back(sample.response);
-        bin_weight_map.at(static_cast<size_t>(bin_index)).emplace_back(sample.weight);
+        bin_score_map.at(static_cast<size_t>(bin_index)).emplace_back(sample.score);
     }
 
     SeriesPointList binned_distance_response_series;
@@ -170,14 +170,14 @@ SeriesPointList LocalPotentialEntry::GetBinnedDistanceResponseSeries(
     {
         const auto x_value{ static_cast<float>(x_min + (i + 0.5) * bin_spacing) };
         const auto & bin_values{ bin_map.at(static_cast<size_t>(i)) };
-        const auto & bin_weights{ bin_weight_map.at(static_cast<size_t>(i)) };
+        const auto & bin_scores{ bin_score_map.at(static_cast<size_t>(i)) };
         const auto y_value{ bin_values.empty() ? 0.0f : ArrayStats<float>::ComputeMedian(bin_values) };
-        const auto weight_value{
-            bin_weights.empty()
+        const auto score_value{
+            bin_scores.empty()
                 ? 0.0f
-                : ArrayStats<float>::ComputeMean(bin_weights.data(), bin_weights.size())
+                : ArrayStats<float>::ComputeMean(bin_scores.data(), bin_scores.size())
         };
-        binned_distance_response_series.emplace_back(SeriesPoint{ { x_value }, y_value, weight_value });
+        binned_distance_response_series.emplace_back(SeriesPoint{ { x_value }, y_value, score_value });
     }
     return binned_distance_response_series;
 }

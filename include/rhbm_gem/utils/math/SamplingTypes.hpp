@@ -20,7 +20,7 @@ struct LocalPotentialSample
 {
     float distance{ 0.0f };
     float response{ 0.0f };
-    float weight{ 1.0f };
+    float score{ 1.0f };
     std::optional<std::array<float, 3>> position{};
 
     bool HasPosition() const noexcept { return position.has_value(); }
@@ -32,27 +32,27 @@ struct SeriesPoint
 {
     std::vector<double> basis_list{};
     double response{ 0.0 };
-    double weight{ 1.0 };
+    double score{ 1.0 };
 
     SeriesPoint() = default;
 
     SeriesPoint(
         std::initializer_list<double> basis_list_value,
         double response_value,
-        double weight_value = 1.0) :
+        double score_value = 1.0) :
         basis_list{ basis_list_value },
         response{ response_value },
-        weight{ weight_value }
+        score{ score_value }
     {
     }
 
     SeriesPoint(
         std::vector<double> basis_list_value,
         double response_value,
-        double weight_value = 1.0) :
+        double score_value = 1.0) :
         basis_list{ std::move(basis_list_value) },
         response{ response_value },
-        weight{ weight_value }
+        score{ score_value }
     {
     }
 

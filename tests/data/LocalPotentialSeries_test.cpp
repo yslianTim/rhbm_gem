@@ -65,8 +65,8 @@ TEST(LocalPotentialSeriesTest, EntryComputesRangeAndBinningForDistanceMapSeries)
     ASSERT_EQ(binned.size(), 2U);
     EXPECT_FLOAT_EQ(binned.at(0).response, 3.0f);
     EXPECT_FLOAT_EQ(binned.at(1).response, 8.0f);
-    EXPECT_FLOAT_EQ(binned.at(0).weight, 2.0f);
-    EXPECT_FLOAT_EQ(binned.at(1).weight, 2.0f);
+    EXPECT_FLOAT_EQ(binned.at(0).score, 2.0f);
+    EXPECT_FLOAT_EQ(binned.at(1).score, 2.0f);
 }
 
 TEST(LocalPotentialSeriesTest, EntryLinearModelTransformKeepsPositiveSamplesOnly)
@@ -88,8 +88,8 @@ TEST(LocalPotentialSeriesTest, EntryLinearModelTransformKeepsPositiveSamplesOnly
     EXPECT_NEAR(transformed.at(0).response, expected.at(0).response, 1e-6);
     EXPECT_NEAR(transformed.at(1).GetBasisValue(0), expected.at(1).GetBasisValue(0), 1e-6);
     EXPECT_NEAR(transformed.at(1).response, expected.at(1).response, 1e-6);
-    EXPECT_FLOAT_EQ(transformed.at(0).weight, 0.5f);
-    EXPECT_FLOAT_EQ(transformed.at(1).weight, 2.5f);
+    EXPECT_FLOAT_EQ(transformed.at(0).score, 0.5f);
+    EXPECT_FLOAT_EQ(transformed.at(1).score, 2.5f);
 }
 
 TEST(LocalPotentialSeriesTest, EntryFitDatasetSeriesKeepsFullBasisWithinFitRange)
@@ -115,8 +115,8 @@ TEST(LocalPotentialSeriesTest, EntryFitDatasetSeriesKeepsFullBasisWithinFitRange
     EXPECT_NEAR(transformed.at(1).GetBasisValue(0), expected.at(1).GetBasisValue(0), 1e-6);
     EXPECT_NEAR(transformed.at(1).GetBasisValue(1), expected.at(1).GetBasisValue(1), 1e-6);
     EXPECT_NEAR(transformed.at(1).response, expected.at(1).response, 1e-6);
-    EXPECT_FLOAT_EQ(transformed.at(0).weight, 0.5f);
-    EXPECT_FLOAT_EQ(transformed.at(1).weight, 2.5f);
+    EXPECT_FLOAT_EQ(transformed.at(0).score, 0.5f);
+    EXPECT_FLOAT_EQ(transformed.at(1).score, 2.5f);
 }
 
 TEST(LocalPotentialSeriesTest, EntryBinningRespectsNonZeroMinimum)
@@ -136,8 +136,8 @@ TEST(LocalPotentialSeriesTest, EntryBinningRespectsNonZeroMinimum)
     EXPECT_FLOAT_EQ(binned.at(1).GetBasisValue(0), 1.25f);
     EXPECT_FLOAT_EQ(binned.at(0).response, 5.0f);
     EXPECT_FLOAT_EQ(binned.at(1).response, 8.0f);
-    EXPECT_FLOAT_EQ(binned.at(0).weight, 3.0f);
-    EXPECT_FLOAT_EQ(binned.at(1).weight, 6.0f);
+    EXPECT_FLOAT_EQ(binned.at(0).score, 3.0f);
+    EXPECT_FLOAT_EQ(binned.at(1).score, 6.0f);
 }
 
 TEST(LocalPotentialSeriesTest, ViewForwardsSeriesDerivationsFromResolvedEntry)
@@ -164,8 +164,8 @@ TEST(LocalPotentialSeriesTest, ViewForwardsSeriesDerivationsFromResolvedEntry)
     ASSERT_EQ(binned.size(), 2U);
     EXPECT_FLOAT_EQ(binned.at(0).response, 3.0f);
     EXPECT_FLOAT_EQ(binned.at(1).response, 6.0f);
-    EXPECT_FLOAT_EQ(binned.at(0).weight, 1.5f);
-    EXPECT_FLOAT_EQ(binned.at(1).weight, 5.0f);
+    EXPECT_FLOAT_EQ(binned.at(0).score, 1.5f);
+    EXPECT_FLOAT_EQ(binned.at(1).score, 5.0f);
 
     const auto fit_dataset_series{
         MakeDatasetService().BuildDatasetSeries(view.GetSamplingEntries(), 0.0, 0.5)
@@ -184,6 +184,6 @@ TEST(LocalPotentialSeriesTest, EntryBinningReturnsZeroWeightForEmptyBins)
     const auto binned{ entry.GetBinnedDistanceResponseSeries(2, 0.0, 1.0) };
 
     ASSERT_EQ(binned.size(), 2U);
-    EXPECT_FLOAT_EQ(binned.at(0).weight, 4.0f);
-    EXPECT_FLOAT_EQ(binned.at(1).weight, 0.0f);
+    EXPECT_FLOAT_EQ(binned.at(0).score, 4.0f);
+    EXPECT_FLOAT_EQ(binned.at(1).score, 0.0f);
 }

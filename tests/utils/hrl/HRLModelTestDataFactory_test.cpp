@@ -24,6 +24,7 @@ void ExpectDatasetEquals(
     ASSERT_EQ(lhs.X.rows(), rhs.X.rows());
     ASSERT_EQ(lhs.X.cols(), rhs.X.cols());
     ASSERT_EQ(lhs.y.rows(), rhs.y.rows());
+    ASSERT_EQ(lhs.score.rows(), rhs.score.rows());
     for (Eigen::Index row = 0; row < lhs.X.rows(); row++)
     {
         for (Eigen::Index col = 0; col < lhs.X.cols(); col++)
@@ -31,6 +32,7 @@ void ExpectDatasetEquals(
             EXPECT_DOUBLE_EQ(lhs.X(row, col), rhs.X(row, col));
         }
         EXPECT_DOUBLE_EQ(lhs.y(row), rhs.y(row));
+        EXPECT_DOUBLE_EQ(lhs.score(row), rhs.score(row));
     }
 }
 
