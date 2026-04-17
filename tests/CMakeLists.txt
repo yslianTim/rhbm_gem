@@ -157,6 +157,8 @@ set(UTILS_HRL_TEST_SOURCES
     utils/hrl/HRLDataTransform_test.cpp
     utils/hrl/HRLGroupEstimator_test.cpp
     utils/hrl/HRLModelAlgorithms_test.cpp
+    utils/hrl/HRLModelMetrics_test.cpp
+    utils/hrl/HRLModelTestDataFactory_test.cpp
     utils/hrl/HRLModelTester_test.cpp
     utils/hrl/SimulationDataGenerator_test.cpp
     utils/hrl/ScopedEigenThreadCount_test.cpp

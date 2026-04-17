@@ -1,13 +1,14 @@
 #include "HRLModelTestCommand.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
+#include <rhbm_gem/utils/hrl/HRLModelTestDataFactory.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelTester.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 
 #include <filesystem>
 #include <memory>
-#include <random>
 #include <sstream>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -117,11 +118,84 @@ struct HRLModelTestExecutionContext
 
 namespace {
 
+constexpr int kGausParSize{ 3 };
+constexpr int kLinearBasisSize{ 2 };
+
+struct BetaScenarioConfig
+{
+    int replica_size;
+    int sampling_entry_size;
+    std::vector<double> alpha_r_list;
+};
+
+struct MuScenarioConfig
+{
+    int replica_size;
+    int member_size;
+    std::vector<double> alpha_g_list;
+    std::vector<Eigen::VectorXd> outlier_prior_list;
+};
+
+struct NeighborDistanceScenarioConfig
+{
+    int replica_size;
+    int sampling_entry_size;
+    size_t neighbor_count;
+    double rejected_angle;
+    std::vector<double> error_list;
+    std::vector<double> distance_list;
+};
+
 std::filesystem::path BuildOutputPath(
     const HRLModelTestExecutionContext & options,
     std::string_view stem)
 {
     return options.output_folder / std::string(stem);
+}
+
+Eigen::VectorXd MakeDefaultModelPrior()
+{
+    Eigen::VectorXd model_par_prior{ Eigen::VectorXd::Zero(kGausParSize) };
+    model_par_prior(0) = 1.0;
+    model_par_prior(1) = 0.5;
+    model_par_prior(2) = 0.1;
+    return model_par_prior;
+}
+
+Eigen::VectorXd MakeDefaultModelSigma()
+{
+    Eigen::VectorXd model_par_sigma{ Eigen::VectorXd::Zero(kGausParSize) };
+    model_par_sigma(0) = 0.050;
+    model_par_sigma(1) = 0.025;
+    model_par_sigma(2) = 0.010;
+    return model_par_sigma;
+}
+
+std::vector<double> BuildLinearSweep(int count, double step, double start = 0.0)
+{
+    std::vector<double> values(static_cast<size_t>(count));
+    for (int i = 0; i < count; i++)
+    {
+        values[static_cast<size_t>(i)] = start + static_cast<double>(i) * step;
+    }
+    return values;
+}
+
+std::vector<double> BuildDescendingSweep(int count, double start, double step)
+{
+    std::vector<double> values(static_cast<size_t>(count));
+    for (int i = 0; i < count; i++)
+    {
+        values[static_cast<size_t>(i)] = start - static_cast<double>(i) * step;
+    }
+    return values;
+}
+
+HRLModelTestDataFactory BuildDataFactory(const HRLModelTestExecutionContext & options)
+{
+    HRLModelTestDataFactory factory(kGausParSize, kLinearBasisSize);
+    factory.SetFittingRange(options.options.fit_range_min, options.options.fit_range_max);
+    return factory;
 }
 
 } // namespace
@@ -171,30 +245,35 @@ void RunSimulationTestOnBenchMark(const HRLModelTestExecutionContext & options)
 {
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnBenchMark");
 
-    const int gaus_par_size{ 3 };
-    const int linear_basis_size{ 2 };
-    Eigen::VectorXd model_par_prior{ Eigen::VectorXd::Zero(gaus_par_size) };
-    model_par_prior(0) = 1.0;
-    model_par_prior(1) = 0.5;
-    model_par_prior(2) = 0.1;
+    const auto scenario{ BetaScenarioConfig{
+        1000,
+        1000,
+        std::vector<double>{ options.options.alpha_r }
+    } };
+    const auto model_par_prior{ MakeDefaultModelPrior() };
+    auto data_factory{ BuildDataFactory(options) };
+    HRLModelTester tester(kGausParSize);
+    const auto test_input{
+        data_factory.BuildBetaTestInput(HRLModelTestDataFactory::BetaScenario{
+            model_par_prior,
+            scenario.sampling_entry_size,
+            1.0,
+            0.0,
+            scenario.replica_size
+        })
+    };
 
     std::vector<Eigen::VectorXd> residual_mean_ols_list;
     std::vector<Eigen::VectorXd> residual_mean_mdpde_list;
     std::vector<Eigen::VectorXd> residual_sigma_ols_list;
     std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
 
-    std::vector<double> alpha_r_list{ 0.1 };
-    auto replica_size{ 1000 };
-    auto sampling_entry_size{ 1000 };
-    auto error_sigma{ 1.0 };
-    auto outlier_ratio{ 0.0 };
-    auto tester{ std::make_unique<HRLModelTester>(gaus_par_size, linear_basis_size, replica_size) };
-    tester->SetFittingRange(options.options.fit_range_min, options.options.fit_range_max);
-    tester->RunBetaMDPDETest(
-        alpha_r_list,
+    tester.RunBetaMDPDETest(
+        scenario.alpha_r_list,
         residual_mean_ols_list, residual_mean_mdpde_list,
         residual_sigma_ols_list, residual_sigma_mdpde_list,
-        model_par_prior, sampling_entry_size, error_sigma, outlier_ratio, options.thread_size
+        test_input,
+        options.thread_size
     );
 
     std::ostringstream ols_stream;
@@ -222,19 +301,14 @@ void RunSimulationTestOnDataOutlier(const HRLModelTestExecutionContext & options
 {
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnDataOutlier");
 
-    const int gaus_par_size{ 3 };
-    const int linear_basis_size{ 2 };
-    Eigen::VectorXd model_par_prior{ Eigen::VectorXd::Zero(gaus_par_size) };
-    model_par_prior(0) = 1.0;
-    model_par_prior(1) = 0.5;
-    model_par_prior(2) = 0.1;
-
-    auto replica_size{ 100 };
-    auto sampling_entry_size{ 1000 };
-    auto tester{ std::make_unique<HRLModelTester>(gaus_par_size, linear_basis_size, replica_size) };
-    tester->SetFittingRange(options.options.fit_range_min, options.options.fit_range_max);
-
-    std::vector<double> alpha_r_list{ 0.1 };
+    const auto scenario{ BetaScenarioConfig{
+        100,
+        1000,
+        std::vector<double>{ options.options.alpha_r }
+    } };
+    const auto model_par_prior{ MakeDefaultModelPrior() };
+    auto data_factory{ BuildDataFactory(options) };
+    HRLModelTester tester(kGausParSize);
     std::vector<double> error_list{ 0.1, 0.2, 0.3 };
     std::vector<Eigen::MatrixXd> mean_matrix_ols_list;
     std::vector<Eigen::MatrixXd> mean_matrix_mdpde_list;
@@ -242,35 +316,39 @@ void RunSimulationTestOnDataOutlier(const HRLModelTestExecutionContext & options
     std::vector<Eigen::MatrixXd> sigma_matrix_ols_list;
     std::vector<Eigen::MatrixXd> sigma_matrix_mdpde_list;
     std::vector<Eigen::MatrixXd> sigma_matrix_train_list;
-    
-    auto outlier_size{ 9 };
-    auto outlier_step_size{ 0.025 };
-    std::vector<double> outlier_list(static_cast<size_t>(outlier_size));
-    for (size_t i = 0; i < static_cast<size_t>(outlier_size); i++)
-    {
-        outlier_list[i] = static_cast<double>(i) * outlier_step_size;
-    }
+
+    const auto outlier_list{ BuildLinearSweep(9, 0.025) };
+    const auto outlier_size{ static_cast<int>(outlier_list.size()) };
 
     for (auto error_sigma : error_list)
     {
-        Eigen::MatrixXd mean_matrix_ols{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
-        Eigen::MatrixXd mean_matrix_mdpde{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
-        Eigen::MatrixXd mean_matrix_train{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
-        Eigen::MatrixXd sigma_matrix_ols{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
-        Eigen::MatrixXd sigma_matrix_mdpde{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
-        Eigen::MatrixXd sigma_matrix_train{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
+        Eigen::MatrixXd mean_matrix_ols{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
+        Eigen::MatrixXd mean_matrix_mdpde{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
+        Eigen::MatrixXd mean_matrix_train{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
+        Eigen::MatrixXd sigma_matrix_ols{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
+        Eigen::MatrixXd sigma_matrix_mdpde{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
+        Eigen::MatrixXd sigma_matrix_train{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
         for (int i = 0; i < outlier_size; i++)
         {
             std::vector<Eigen::VectorXd> residual_mean_ols_list;
             std::vector<Eigen::VectorXd> residual_mean_mdpde_list;
             std::vector<Eigen::VectorXd> residual_sigma_ols_list;
             std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
-            tester->RunBetaMDPDETest(
-                alpha_r_list,
+            const auto test_input{
+                data_factory.BuildBetaTestInput(HRLModelTestDataFactory::BetaScenario{
+                    model_par_prior,
+                    scenario.sampling_entry_size,
+                    error_sigma,
+                    outlier_list[static_cast<size_t>(i)],
+                    scenario.replica_size
+                })
+            };
+            tester.RunBetaMDPDETest(
+                scenario.alpha_r_list,
                 residual_mean_ols_list, residual_mean_mdpde_list,
                 residual_sigma_ols_list, residual_sigma_mdpde_list,
-                model_par_prior, sampling_entry_size, error_sigma,
-                outlier_list[static_cast<size_t>(i)], options.thread_size
+                test_input,
+                options.thread_size
             );
 
             mean_matrix_ols.col(i) = residual_mean_ols_list.front();
@@ -301,27 +379,16 @@ void RunSimulationTestOnMemberOutlier(const HRLModelTestExecutionContext & optio
 {
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnMemberOutlier");
 
-    const int gaus_par_size{ 3 };
-    const int linear_basis_size{ 2 };
-    Eigen::VectorXd model_par_prior{ Eigen::VectorXd::Zero(gaus_par_size) };
-    Eigen::VectorXd model_par_sigma{ Eigen::VectorXd::Zero(gaus_par_size) };
-    model_par_prior(0) = 1.0;
-    model_par_prior(1) = 0.5;
-    model_par_prior(2) = 0.1;
-    model_par_sigma(0) = 0.050;
-    model_par_sigma(1) = 0.025;
-    model_par_sigma(2) = 0.010;
-
-    auto replica_size{ 100 };
-    auto member_size{ 100 };
-    auto tester{ std::make_unique<HRLModelTester>(gaus_par_size, linear_basis_size, replica_size) };
-    tester->SetFittingRange(options.options.fit_range_min, options.options.fit_range_max);
-
-    std::vector<double> alpha_g_list{ 0.2 };
-    std::vector<Eigen::VectorXd> outlier_prior_list{
-        Eigen::VectorXd::Zero(gaus_par_size),
-        Eigen::VectorXd::Zero(gaus_par_size)
-    };
+    const auto scenario{ MuScenarioConfig{
+        100,
+        100,
+        std::vector<double>{ options.options.alpha_g },
+        std::vector<Eigen::VectorXd>{
+            Eigen::VectorXd::Zero(kGausParSize),
+            Eigen::VectorXd::Zero(kGausParSize)
+        }
+    } };
+    auto outlier_prior_list{ scenario.outlier_prior_list };
     outlier_prior_list.at(0)(0) = 1.50;
     outlier_prior_list.at(0)(1) = 0.50;
     outlier_prior_list.at(0)(2) = 0.10;
@@ -329,42 +396,52 @@ void RunSimulationTestOnMemberOutlier(const HRLModelTestExecutionContext & optio
     outlier_prior_list.at(1)(1) = 1.00;
     outlier_prior_list.at(1)(2) = 0.10;
 
+    const auto model_par_prior{ MakeDefaultModelPrior() };
+    const auto model_par_sigma{ MakeDefaultModelSigma() };
+    auto data_factory{ BuildDataFactory(options) };
+    HRLModelTester tester(kGausParSize);
+
     std::vector<Eigen::MatrixXd> mean_matrix_median_list;
     std::vector<Eigen::MatrixXd> mean_matrix_mdpde_list;
     std::vector<Eigen::MatrixXd> mean_matrix_train_list;
     std::vector<Eigen::MatrixXd> sigma_matrix_median_list;
     std::vector<Eigen::MatrixXd> sigma_matrix_mdpde_list;
     std::vector<Eigen::MatrixXd> sigma_matrix_train_list;
-    
-    auto outlier_size{ 9 };
-    auto outlier_step_size{ 0.025 };
-    std::vector<double> outlier_list(static_cast<size_t>(outlier_size));
-    for (size_t i = 0; i < static_cast<size_t>(outlier_size); i++)
-    {
-        outlier_list[i] = static_cast<double>(i) * outlier_step_size;
-    }
+
+    const auto outlier_list{ BuildLinearSweep(9, 0.025) };
+    const auto outlier_size{ static_cast<int>(outlier_list.size()) };
 
     for (auto outlier_prior : outlier_prior_list)
     {
-        Eigen::MatrixXd mean_matrix_median{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
-        Eigen::MatrixXd mean_matrix_mdpde{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
-        Eigen::MatrixXd mean_matrix_train{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
-        Eigen::MatrixXd sigma_matrix_median{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
-        Eigen::MatrixXd sigma_matrix_mdpde{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
-        Eigen::MatrixXd sigma_matrix_train{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
+        Eigen::MatrixXd mean_matrix_median{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
+        Eigen::MatrixXd mean_matrix_mdpde{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
+        Eigen::MatrixXd mean_matrix_train{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
+        Eigen::MatrixXd sigma_matrix_median{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
+        Eigen::MatrixXd sigma_matrix_mdpde{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
+        Eigen::MatrixXd sigma_matrix_train{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
         for (int i = 0; i < outlier_size; i++)
         {
             std::vector<Eigen::VectorXd> residual_mean_median_list;
             std::vector<Eigen::VectorXd> residual_mean_mdpde_list;
             std::vector<Eigen::VectorXd> residual_sigma_median_list;
             std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
-            tester->RunMuMDPDETest(
-                alpha_g_list,
+            const auto test_input{
+                data_factory.BuildMuTestInput(HRLModelTestDataFactory::MuScenario{
+                    scenario.member_size,
+                    model_par_prior,
+                    model_par_sigma,
+                    outlier_prior,
+                    model_par_sigma,
+                    outlier_list[static_cast<size_t>(i)],
+                    scenario.replica_size
+                })
+            };
+            tester.RunMuMDPDETest(
+                scenario.alpha_g_list,
                 residual_mean_median_list, residual_mean_mdpde_list,
                 residual_sigma_median_list, residual_sigma_mdpde_list,
-                member_size, model_par_prior, model_par_sigma,
-                outlier_prior, model_par_sigma,
-                outlier_list[static_cast<size_t>(i)], options.thread_size
+                test_input,
+                options.thread_size
             );
 
             mean_matrix_median.col(i) = residual_mean_median_list.front();
@@ -395,51 +472,50 @@ void RunSimulationTestOnModelAlphaData(const HRLModelTestExecutionContext & opti
 {
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnModelAlphaData");
 
-    const int gaus_par_size{ 3 };
-    const int linear_basis_size{ 2 };
-    Eigen::VectorXd model_par_prior{ Eigen::VectorXd::Zero(gaus_par_size) };
-    model_par_prior(0) = 1.0;
-    model_par_prior(1) = 0.5;
-    model_par_prior(2) = 0.1;
-
-    auto replica_size{ 100 };
-    auto sampling_entry_size{ 1000 };
-    auto tester{ std::make_unique<HRLModelTester>(gaus_par_size, linear_basis_size, replica_size) };
-    tester->SetFittingRange(options.options.fit_range_min, options.options.fit_range_max);
-
-    std::vector<double> alpha_r_list{ 0.1, 0.4 };
+    const auto scenario{ BetaScenarioConfig{
+        100,
+        1000,
+        std::vector<double>{ options.options.alpha_r }
+    } };
+    const auto model_par_prior{ MakeDefaultModelPrior() };
+    auto data_factory{ BuildDataFactory(options) };
+    HRLModelTester tester(kGausParSize);
     std::vector<double> error_list{ 0.1, 0.2, 0.3 };
     std::vector<Eigen::MatrixXd> mean_matrix_alpha1_list;
     std::vector<Eigen::MatrixXd> mean_matrix_alpha2_list;
     std::vector<Eigen::MatrixXd> sigma_matrix_alpha1_list;
     std::vector<Eigen::MatrixXd> sigma_matrix_alpha2_list;
-    
-    auto outlier_size{ 10 };
-    auto outlier_step_size{ 0.05 };
-    std::vector<double> outlier_list(static_cast<size_t>(outlier_size));
-    for (size_t i = 0; i < static_cast<size_t>(outlier_size); i++)
-    {
-        outlier_list[i] = static_cast<double>(i) * outlier_step_size;
-    }
+
+    const auto outlier_list{ BuildLinearSweep(10, 0.05) };
+    const auto outlier_size{ static_cast<int>(outlier_list.size()) };
 
     for (auto error_sigma : error_list)
     {
-        Eigen::MatrixXd mean_matrix_alpha1{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
-        Eigen::MatrixXd mean_matrix_alpha2{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
-        Eigen::MatrixXd sigma_matrix_alpha1{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
-        Eigen::MatrixXd sigma_matrix_alpha2{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
+        Eigen::MatrixXd mean_matrix_alpha1{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
+        Eigen::MatrixXd mean_matrix_alpha2{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
+        Eigen::MatrixXd sigma_matrix_alpha1{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
+        Eigen::MatrixXd sigma_matrix_alpha2{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
         for (int i = 0; i < outlier_size; i++)
         {
             std::vector<Eigen::VectorXd> residual_mean_ols_list;
             std::vector<Eigen::VectorXd> residual_mean_mdpde_list;
             std::vector<Eigen::VectorXd> residual_sigma_ols_list;
             std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
-            tester->RunBetaMDPDETest(
-                alpha_r_list,
+            const auto test_input{
+                data_factory.BuildBetaTestInput(HRLModelTestDataFactory::BetaScenario{
+                    model_par_prior,
+                    scenario.sampling_entry_size,
+                    error_sigma,
+                    outlier_list[static_cast<size_t>(i)],
+                    scenario.replica_size
+                })
+            };
+            tester.RunBetaMDPDETest(
+                scenario.alpha_r_list,
                 residual_mean_ols_list, residual_mean_mdpde_list,
                 residual_sigma_ols_list, residual_sigma_mdpde_list,
-                model_par_prior, sampling_entry_size, error_sigma,
-                outlier_list[static_cast<size_t>(i)], options.thread_size
+                test_input,
+                options.thread_size
             );
 
             mean_matrix_alpha1.col(i) = residual_mean_mdpde_list.front();
@@ -466,27 +542,16 @@ void RunSimulationTestOnModelAlphaMember(const HRLModelTestExecutionContext & op
 {
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnModelAlphaMember");
 
-    const int gaus_par_size{ 3 };
-    const int linear_basis_size{ 2 };
-    Eigen::VectorXd model_par_prior{ Eigen::VectorXd::Zero(gaus_par_size) };
-    Eigen::VectorXd model_par_sigma{ Eigen::VectorXd::Zero(gaus_par_size) };
-    model_par_prior(0) = 1.0;
-    model_par_prior(1) = 0.5;
-    model_par_prior(2) = 0.1;
-    model_par_sigma(0) = 0.050;
-    model_par_sigma(1) = 0.025;
-    model_par_sigma(2) = 0.010;
-
-    auto replica_size{ 100 };
-    auto member_size{ 100 };
-    auto tester{ std::make_unique<HRLModelTester>(gaus_par_size, linear_basis_size, replica_size) };
-    tester->SetFittingRange(options.options.fit_range_min, options.options.fit_range_max);
-
-    std::vector<double> alpha_g_list{ 0.2, 0.5 };
-    std::vector<Eigen::VectorXd> outlier_prior_list{
-        Eigen::VectorXd::Zero(gaus_par_size),
-        Eigen::VectorXd::Zero(gaus_par_size)
-    };
+    const auto scenario{ MuScenarioConfig{
+        100,
+        100,
+        std::vector<double>{ options.options.alpha_g },
+        std::vector<Eigen::VectorXd>{
+            Eigen::VectorXd::Zero(kGausParSize),
+            Eigen::VectorXd::Zero(kGausParSize)
+        }
+    } };
+    auto outlier_prior_list{ scenario.outlier_prior_list };
     outlier_prior_list.at(0)(0) = 1.50;
     outlier_prior_list.at(0)(1) = 0.50;
     outlier_prior_list.at(0)(2) = 0.10;
@@ -494,38 +559,48 @@ void RunSimulationTestOnModelAlphaMember(const HRLModelTestExecutionContext & op
     outlier_prior_list.at(1)(1) = 1.00;
     outlier_prior_list.at(1)(2) = 0.10;
 
+    const auto model_par_prior{ MakeDefaultModelPrior() };
+    const auto model_par_sigma{ MakeDefaultModelSigma() };
+    auto data_factory{ BuildDataFactory(options) };
+    HRLModelTester tester(kGausParSize);
+
     std::vector<Eigen::MatrixXd> mean_matrix_alpha1_list;
     std::vector<Eigen::MatrixXd> mean_matrix_alpha2_list;
     std::vector<Eigen::MatrixXd> sigma_matrix_alpha1_list;
     std::vector<Eigen::MatrixXd> sigma_matrix_alpha2_list;
-    
-    auto outlier_size{ 10 };
-    auto outlier_step_size{ 0.05 };
-    std::vector<double> outlier_list(static_cast<size_t>(outlier_size));
-    for (size_t i = 0; i < static_cast<size_t>(outlier_size); i++)
-    {
-        outlier_list[i] = static_cast<double>(i) * outlier_step_size;
-    }
+
+    const auto outlier_list{ BuildLinearSweep(10, 0.05) };
+    const auto outlier_size{ static_cast<int>(outlier_list.size()) };
 
     for (auto outlier_prior : outlier_prior_list)
     {
-        Eigen::MatrixXd mean_matrix_alpha1{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
-        Eigen::MatrixXd mean_matrix_alpha2{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
-        Eigen::MatrixXd sigma_matrix_alpha1{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
-        Eigen::MatrixXd sigma_matrix_alpha2{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
+        Eigen::MatrixXd mean_matrix_alpha1{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
+        Eigen::MatrixXd mean_matrix_alpha2{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
+        Eigen::MatrixXd sigma_matrix_alpha1{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
+        Eigen::MatrixXd sigma_matrix_alpha2{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
         for (int i = 0; i < outlier_size; i++)
         {
             std::vector<Eigen::VectorXd> residual_mean_median_list;
             std::vector<Eigen::VectorXd> residual_mean_mdpde_list;
             std::vector<Eigen::VectorXd> residual_sigma_median_list;
             std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
-            tester->RunMuMDPDETest(
-                alpha_g_list,
+            const auto test_input{
+                data_factory.BuildMuTestInput(HRLModelTestDataFactory::MuScenario{
+                    scenario.member_size,
+                    model_par_prior,
+                    model_par_sigma,
+                    outlier_prior,
+                    model_par_sigma,
+                    outlier_list[static_cast<size_t>(i)],
+                    scenario.replica_size
+                })
+            };
+            tester.RunMuMDPDETest(
+                scenario.alpha_g_list,
                 residual_mean_median_list, residual_mean_mdpde_list,
                 residual_sigma_median_list, residual_sigma_mdpde_list,
-                member_size, model_par_prior, model_par_sigma,
-                outlier_prior, model_par_sigma,
-                outlier_list[static_cast<size_t>(i)], options.thread_size
+                test_input,
+                options.thread_size
             );
 
             mean_matrix_alpha1.col(i) = residual_mean_mdpde_list.front();
@@ -551,46 +626,36 @@ void RunSimulationTestOnModelAlphaMember(const HRLModelTestExecutionContext & op
 void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & options)
 {
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnNeighborDistance");
-    
-    const int gaus_par_size{ 3 };
-    const int linear_basis_size{ 2 };
-    Eigen::VectorXd model_par_prior{ Eigen::VectorXd::Zero(gaus_par_size) };
-    model_par_prior(0) = 1.0;
-    model_par_prior(1) = 0.5;
-    model_par_prior(2) = 0.1;
 
-    auto replica_size{ 10 };
-    auto sampling_entry_size{ 50 };
-    auto tester{ std::make_unique<HRLModelTester>(gaus_par_size, linear_basis_size, replica_size) };
-    tester->SetFittingRange(options.options.fit_range_min, options.options.fit_range_max);
+    const auto scenario{ NeighborDistanceScenarioConfig{
+        10,
+        50,
+        2,
+        45.0,
+        std::vector<double>{ 0.0, 0.025, 0.05 },
+        BuildDescendingSweep(16, 2.5, 0.1)
+    } };
+    const auto model_par_prior{ MakeDefaultModelPrior() };
+    auto data_factory{ BuildDataFactory(options) };
+    HRLModelTester tester(kGausParSize);
 
-    std::vector<double> error_list{ 0.0, 0.025, 0.05 };
     std::vector<Eigen::MatrixXd> mean_matrix_ols_list;
     std::vector<Eigen::MatrixXd> mean_matrix_mdpde_list;
     std::vector<Eigen::MatrixXd> mean_matrix_train_list;
     std::vector<Eigen::MatrixXd> sigma_matrix_ols_list;
     std::vector<Eigen::MatrixXd> sigma_matrix_mdpde_list;
     std::vector<Eigen::MatrixXd> sigma_matrix_train_list;
-    
-    size_t neighbor_count{ 2 };
-    auto rejected_angle{ 45.0 };
-    auto distance_size{ 16 };
-    auto distance_step_size{ 0.1 };
-    std::vector<double> distance_list(static_cast<size_t>(distance_size));
-    for (size_t i = 0; i < static_cast<size_t>(distance_size); i++)
-    {
-        distance_list[i] = 2.5 - static_cast<double>(i) * distance_step_size;
-    }
 
+    const auto distance_size{ static_cast<int>(scenario.distance_list.size()) };
     bool is_print_sampling_summary{ true };
-    for (auto error_sigma : error_list)
+    for (auto error_sigma : scenario.error_list)
     {
-        Eigen::MatrixXd mean_matrix_ols{ Eigen::MatrixXd::Zero(gaus_par_size, distance_size) };
-        Eigen::MatrixXd mean_matrix_mdpde{ Eigen::MatrixXd::Zero(gaus_par_size, distance_size) };
-        Eigen::MatrixXd mean_matrix_train{ Eigen::MatrixXd::Zero(gaus_par_size, distance_size) };
-        Eigen::MatrixXd sigma_matrix_ols{ Eigen::MatrixXd::Zero(gaus_par_size, distance_size) };
-        Eigen::MatrixXd sigma_matrix_mdpde{ Eigen::MatrixXd::Zero(gaus_par_size, distance_size) };
-        Eigen::MatrixXd sigma_matrix_train{ Eigen::MatrixXd::Zero(gaus_par_size, distance_size) };
+        Eigen::MatrixXd mean_matrix_ols{ Eigen::MatrixXd::Zero(kGausParSize, distance_size) };
+        Eigen::MatrixXd mean_matrix_mdpde{ Eigen::MatrixXd::Zero(kGausParSize, distance_size) };
+        Eigen::MatrixXd mean_matrix_train{ Eigen::MatrixXd::Zero(kGausParSize, distance_size) };
+        Eigen::MatrixXd sigma_matrix_ols{ Eigen::MatrixXd::Zero(kGausParSize, distance_size) };
+        Eigen::MatrixXd sigma_matrix_mdpde{ Eigen::MatrixXd::Zero(kGausParSize, distance_size) };
+        Eigen::MatrixXd sigma_matrix_train{ Eigen::MatrixXd::Zero(kGausParSize, distance_size) };
         std::vector<LocalPotentialSampleList> sampling_entries_list;
         sampling_entries_list.reserve(static_cast<size_t>(distance_size));
         double training_alpha_r_average{ 0.0 };
@@ -598,22 +663,31 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
         {
             std::vector<Eigen::VectorXd> residual_mean_list;
             std::vector<Eigen::VectorXd> residual_sigma_list;
-            tester->RunBetaMDPDEWithNeighborhoodTest(
+            const auto test_input{
+                data_factory.BuildNeighborhoodTestInput(HRLModelTestDataFactory::NeighborhoodScenario{
+                    model_par_prior,
+                    scenario.sampling_entry_size,
+                    error_sigma,
+                    0.0,
+                    1.0,
+                    scenario.distance_list[static_cast<size_t>(i)],
+                    scenario.neighbor_count,
+                    scenario.rejected_angle,
+                    true,
+                    0.0,
+                    4.0,
+                    scenario.replica_size
+                })
+            };
+            tester.RunBetaMDPDEWithNeighborhoodTest(
                 residual_mean_list, residual_sigma_list,
-                model_par_prior, training_alpha_r_average,
-                sampling_entry_size, error_sigma,
-                distance_list[static_cast<size_t>(i)],
-                neighbor_count,
+                test_input,
+                training_alpha_r_average,
                 options.thread_size,
-                rejected_angle
+                scenario.rejected_angle
             );
 
-            sampling_entries_list.emplace_back(
-                tester->RunDataEntryWithNeighborhoodTest(
-                    model_par_prior, sampling_entry_size, 0.0, 4.0,
-                    distance_list[static_cast<size_t>(i)],
-                    neighbor_count, rejected_angle)
-            );
+            sampling_entries_list.emplace_back(test_input.sampling_summaries.front());
 
             mean_matrix_ols.col(i) = residual_mean_list.at(0);
             sigma_matrix_ols.col(i) = residual_sigma_list.at(0);
@@ -623,7 +697,7 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
             sigma_matrix_train.col(i) = residual_sigma_list.at(2);
 
             Logger::Log(LogLevel::Info,
-                std::string("Distance: ") + std::to_string(distance_list[static_cast<size_t>(i)])
+                std::string("Distance: ") + std::to_string(scenario.distance_list[static_cast<size_t>(i)])
                 + " , OLS: " + std::to_string(mean_matrix_ols.col(i)(0)) + " +- " + std::to_string(sigma_matrix_ols.col(i)(0))
                 + " , MDPDE: " + std::to_string(mean_matrix_mdpde.col(i)(0)) + " +- " + std::to_string(sigma_matrix_mdpde.col(i)(0))
                 + " , Train: " + std::to_string(mean_matrix_train.col(i)(0)) + " +- " + std::to_string(sigma_matrix_train.col(i)(0))
@@ -642,7 +716,7 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
             detail::PrintAtomSamplingDataSummary(
                 options,
                 "neighbor_atom_sampling_entries.pdf",
-                sampling_entries_list, distance_list
+                sampling_entries_list, scenario.distance_list
             );
             is_print_sampling_summary = true;
         }
@@ -651,7 +725,7 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
     PrintDataOutlierResult(
         options,
         "bias_from_neighbor_atom.pdf",
-        distance_list,
+        scenario.distance_list,
         mean_matrix_ols_list, mean_matrix_mdpde_list, mean_matrix_train_list,
         sigma_matrix_ols_list, sigma_matrix_mdpde_list, sigma_matrix_train_list, true
     );

@@ -2,7 +2,7 @@
 
 #include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
-#include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
+#include <rhbm_gem/utils/hrl/HRLModelMetrics.hpp>
 
 #include <algorithm>
 #include <atomic>
@@ -447,14 +447,10 @@ Eigen::MatrixXd HRLAlphaTrainer::StudyAlphaRBias(
                     dataset_list.at(i),
                     algorithm_options)
             };
-            const Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
-            const auto gaus_ols{
-                GausLinearTransformHelper::BuildGaus3DModel(result.beta_ols, model_par_init)
-            };
-            const auto gaus_mdpde{
-                GausLinearTransformHelper::BuildGaus3DModel(result.beta_mdpde, model_par_init)
-            };
-            local_bias_array.col(j) = (gaus_mdpde - gaus_ols).array().abs();
+            local_bias_array.col(j) = HRLModelMetrics::CalculateAbsoluteGausDifference(
+                result.beta_mdpde,
+                result.beta_ols
+            );
         }
 
 #ifdef USE_OPENMP
@@ -508,14 +504,10 @@ Eigen::MatrixXd HRLAlphaTrainer::StudyAlphaGBias(
             const auto result{
                 HRLModelAlgorithms::EstimateMuMDPDE(alpha_g, beta_matrix, algorithm_options)
             };
-            const Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
-            const auto gaus_mean{
-                GausLinearTransformHelper::BuildGaus3DModel(result.mu_mean, model_par_init)
-            };
-            const auto gaus_mdpde{
-                GausLinearTransformHelper::BuildGaus3DModel(result.mu_mdpde, model_par_init)
-            };
-            local_bias_array.col(j) = (gaus_mdpde - gaus_mean).array().abs();
+            local_bias_array.col(j) = HRLModelMetrics::CalculateAbsoluteGausDifference(
+                result.mu_mdpde,
+                result.mu_mean
+            );
         }
 
 #ifdef USE_OPENMP
