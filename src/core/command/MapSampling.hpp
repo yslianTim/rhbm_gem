@@ -137,7 +137,7 @@ LocalPotentialSampleList BuildLocalPotentialSampleList(
 {
     const auto resolved_sampling_scores{
         (sampling_scores == nullptr)
-            ? BuildLocalPotentialSampleScoreList(sampling_points)
+            ? BuildLocalPotentialSampleScoreList(sampling_points.size())
             : *sampling_scores
     };
 

@@ -26,13 +26,6 @@ inline std::vector<float> BuildLocalPotentialSampleScoreList(
 
 inline std::vector<float> BuildLocalPotentialSampleScoreList(
     const SamplingPointList & point_list,
-    float default_score = 1.0f)
-{
-    return BuildLocalPotentialSampleScoreList(point_list.size(), default_score);
-}
-
-inline std::vector<float> BuildLocalPotentialSampleScoreList(
-    const SamplingPointList & point_list,
     const std::vector<Eigen::VectorXd> & reject_direction_list,
     double angle = 0.0)
 {
