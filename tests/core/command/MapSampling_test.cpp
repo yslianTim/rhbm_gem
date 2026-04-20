@@ -6,7 +6,7 @@
 #include <tuple>
 #include <vector>
 
-#include "command/MapSampling.hpp"
+#include "command/detail/MapSampling.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>

@@ -1,5 +1,5 @@
 #include "MapVisualizationCommand.hpp"
-#include "MapSampling.hpp"
+#include "detail/MapSampling.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>

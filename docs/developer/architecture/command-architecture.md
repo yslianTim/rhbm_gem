@@ -13,7 +13,7 @@ That manifest is expanded by:
 
 - [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp)
 - [`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp)
-- [`src/core/command/CommandCli.cpp`](/src/core/command/CommandCli.cpp)
+- [`src/core/command/detail/CommandCli.cpp`](/src/core/command/detail/CommandCli.cpp)
 - [`src/python/CommandApiBindings.cpp`](/src/python/CommandApiBindings.cpp)
 
 ## Public Surface
@@ -56,7 +56,7 @@ Public enum types stay small; alias maps and binding tokens are internal-only.
 [`src/main.cpp`](/src/main.cpp) creates `CLI::App` and calls the internal
 [`ConfigureCommandCli(...)`](/src/core/command/detail/CommandCli.hpp).
 
-[`src/core/command/CommandCli.cpp`](/src/core/command/CommandCli.cpp):
+[`src/core/command/detail/CommandCli.cpp`](/src/core/command/detail/CommandCli.cpp):
 
 1. enables `require_subcommand(1)`
 2. expands `CommandManifest.def`

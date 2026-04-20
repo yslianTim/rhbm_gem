@@ -45,7 +45,7 @@ The manifest drives:
 - public `Run*` declarations in `CommandApi.hpp`
 - `ListCommands()`
 - `Run*` definitions in `CommandApi.cpp`
-- CLI registration in `CommandCli.cpp`
+- CLI registration in `detail/CommandCli.cpp`
 - Python request-type and `Run*` binding registration in `CommandApiBindings.cpp`
 
 ## Public Request DTO
@@ -109,7 +109,7 @@ Use this shape:
 [`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp) owns public `Run*`
 definitions and `ListCommands()`.
 
-[`src/core/command/CommandCli.cpp`](/src/core/command/CommandCli.cpp) owns CLI registration
+[`src/core/command/detail/CommandCli.cpp`](/src/core/command/detail/CommandCli.cpp) owns CLI registration
 through the internal `ConfigureCommandCli(...)`.
 
 [`src/python/CommandApiBindings.cpp`](/src/python/CommandApiBindings.cpp) binds:

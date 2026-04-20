@@ -16,6 +16,9 @@
 namespace rhbm_gem {
 namespace detail {
 
+// Internal command-side helper for sampler dispatch, score orchestration, and
+// interpolated map-value assembly.
+
 inline void ValidateNeighborRadius(double neighbor_radius)
 {
     if (!std::isfinite(neighbor_radius) || neighbor_radius < 0.0)

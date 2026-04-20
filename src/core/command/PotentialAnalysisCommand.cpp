@@ -1,6 +1,6 @@
 #include "PotentialAnalysisCommand.hpp"
 
-#include "MapSampling.hpp"
+#include "detail/MapSampling.hpp"
 #include "experimental/PotentialAnalysisBondWorkflow.hpp"
 
 #include <rhbm_gem/data/object/AtomObject.hpp>
