@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <stdexcept>
 #include <vector>
 
@@ -10,11 +11,19 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/utils/math/LocalPotentialSampleScoring.hpp>
-#include <rhbm_gem/utils/math/SamplingPointAcceptanceMask.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace rhbm_gem {
 namespace detail {
+
+inline void ValidateNeighborRadius(double neighbor_radius)
+{
+    if (!std::isfinite(neighbor_radius) || neighbor_radius < 0.0)
+    {
+        throw std::invalid_argument(
+            "SampleMapValues neighbor radius must be finite and non-negative.");
+    }
+}
 
 inline float MakeInterpolationInMapObject(
     const MapObject & data_object, const std::array<float, 3> & position)
@@ -79,16 +88,7 @@ inline float MakeInterpolationInMapObject(
     return cubic_interpolate(temp_z[0], temp_z[1], temp_z[2], temp_z[3], local.at(2));
 }
 
-inline void ValidateNeighborRadius(double neighbor_radius)
-{
-    if (!std::isfinite(neighbor_radius) || neighbor_radius < 0.0)
-    {
-        throw std::invalid_argument(
-            "SampleMapValues neighbor radius must be finite and non-negative.");
-    }
-}
-
-inline std::vector<Eigen::VectorXd> BuildRejectDirectionList(
+inline std::vector<Eigen::VectorXd> BuildAtomRejectDirectionList(
     const AtomObject & atom,
     const std::vector<AtomObject *> & neighbor_atom_list)
 {
@@ -109,28 +109,55 @@ inline std::vector<Eigen::VectorXd> BuildRejectDirectionList(
     return reject_direction_list;
 }
 
-inline SamplingPointList TranslateSamplingPoints(
-    const SamplingPointList & point_list,
-    const std::array<float, 3> & reference_position,
-    float scale)
+inline SamplingPointList BuildAtomCenteredSamplingPointList(
+    const SamplingPointList & sampling_points,
+    const std::array<float, 3> & atom_position)
 {
-    SamplingPointList translated_point_list;
-    translated_point_list.reserve(point_list.size());
-    for (const auto & point : point_list)
+    SamplingPointList local_sampling_points;
+    local_sampling_points.reserve(sampling_points.size());
+
+    for (const auto & point : sampling_points)
     {
-        translated_point_list.emplace_back(SamplingPoint{
+        local_sampling_points.emplace_back(SamplingPoint{
             point.distance,
             {
-                point.position[0] + scale * reference_position[0],
-                point.position[1] + scale * reference_position[1],
-                point.position[2] + scale * reference_position[2]
+                point.position[0] - atom_position[0],
+                point.position[1] - atom_position[1],
+                point.position[2] - atom_position[2]
             }
         });
     }
-    return translated_point_list;
+
+    return local_sampling_points;
 }
 
-LocalPotentialSampleList BuildLocalPotentialSampleList(
+inline std::vector<float> BuildAtomLocalPotentialSampleScoreList(
+    const SamplingPointList & sampling_points,
+    const AtomObject & atom,
+    double neighbor_radius,
+    double angle = 0.0)
+{
+    ValidateNeighborRadius(neighbor_radius);
+
+    if (angle == 0.0)
+    {
+        return BuildDefaultLocalPotentialSampleScoreList(sampling_points.size());
+    }
+
+    const auto neighbor_atom_list{ atom.FindNeighborAtoms(neighbor_radius, false) };
+    const auto reject_direction_list{
+        BuildAtomRejectDirectionList(atom, neighbor_atom_list)
+    };
+    const auto local_sampling_points{
+        BuildAtomCenteredSamplingPointList(sampling_points, atom.GetPosition())
+    };
+    return BuildLocalPotentialSampleScoreList(
+        local_sampling_points,
+        reject_direction_list,
+        angle);
+}
+
+inline LocalPotentialSampleList BuildLocalPotentialSampleList(
     const MapObject & map_object,
     const SamplingPointList & sampling_points,
     const std::vector<float> * sampling_scores = nullptr)
@@ -197,25 +224,14 @@ LocalPotentialSampleList SampleMapValues(
     double neighbor_radius,
     double angle = 0.0)
 {
-    detail::ValidateNeighborRadius(neighbor_radius);
-    detail::ValidateSamplingPointAcceptanceAngle(angle);
-
     const auto position{ atom.GetPosition() };
     const auto sampling_points{ sampler.GenerateSamplingPoints(position) };
-    if (angle <= 0.0)
-    {
-        return detail::BuildLocalPotentialSampleList(map_object, sampling_points);
-    }
-
-    const auto neighbor_atom_list{ atom.FindNeighborAtoms(neighbor_radius, false) };
-    const auto reject_direction_list{
-        detail::BuildRejectDirectionList(atom, neighbor_atom_list)
-    };
-    const auto local_sampling_points{
-        detail::TranslateSamplingPoints(sampling_points, position, -1.0f)
-    };
     const auto sampling_scores{
-        BuildLocalPotentialSampleScoreList(local_sampling_points, reject_direction_list, angle)
+        detail::BuildAtomLocalPotentialSampleScoreList(
+            sampling_points,
+            atom,
+            neighbor_radius,
+            angle)
     };
     return detail::BuildLocalPotentialSampleList(map_object, sampling_points, &sampling_scores);
 }

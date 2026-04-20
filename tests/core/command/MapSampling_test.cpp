@@ -195,11 +195,12 @@ TEST(MapSamplingTest, AtomSamplerUsesSamplingPointScoresForFilteredEntries)
     const auto * atom{ model->GetAtomList().at(0).get() };
 
     const auto sampling_points{ sampler.GenerateSamplingPoints(atom->GetPosition()) };
-    const std::vector<Eigen::VectorXd> reject_direction_list{
-        (Eigen::Vector3d{ 1.0, 0.0, 0.0 })
-    };
     const auto expected_scores{
-        rg::BuildLocalPotentialSampleScoreList(sampling_points, reject_direction_list, 30.0)
+        rg::detail::BuildAtomLocalPotentialSampleScoreList(
+            sampling_points,
+            *atom,
+            1.1,
+            30.0)
     };
     const auto sampling_data{
         rg::SampleMapValues(map, sampler, *atom, 1.1, 30.0) };

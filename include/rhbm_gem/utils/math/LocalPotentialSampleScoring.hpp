@@ -1,8 +1,6 @@
 #pragma once
 
-#include <cmath>
 #include <cstddef>
-#include <stdexcept>
 #include <vector>
 
 #include <Eigen/Dense>
@@ -23,9 +21,8 @@ inline std::vector<float> BuildLocalPotentialSampleScoreList(
     const std::vector<Eigen::VectorXd> & reject_direction_list,
     double angle = 0.0)
 {
-    // This entry point owns the LocalPotentialSample-specific score policy. Today it
-    // delegates to an acceptance mask, but future score strategies can evolve here
-    // without forcing callers to know that implementation detail.
+    // Callers provide score-policy inputs as plain data. This layer stays agnostic
+    // to domain objects such as atoms and only owns the score calculation itself.
     return BuildSamplingPointAcceptanceMask(point_list, reject_direction_list, angle);
 }
 
