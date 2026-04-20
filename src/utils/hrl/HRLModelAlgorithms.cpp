@@ -174,7 +174,8 @@ HRLBetaEstimateResult HRLModelAlgorithms::EstimateBetaMDPDE(
     }
 
     result.beta_ols = CalculateBetaByOLS(X, y);
-    result.beta_mdpde = CalculateBetaWithSelectedDataByOLS(dataset);
+    result.beta_mdpde = result.beta_ols;
+    //result.beta_mdpde = CalculateBetaWithSelectedDataByOLS(dataset); // TEST
     result.sigma_square =
         (y - (X * result.beta_mdpde)).squaredNorm() / static_cast<double>(data_size - 1);
     result.data_weight = Eigen::VectorXd::Ones(data_size).asDiagonal();

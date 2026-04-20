@@ -166,10 +166,9 @@ LocalPotentialSampleList GaussianPotentialSampler::GenerateNeighborhoodSamples(
     const auto sampling_points{ sampler.GenerateSamplingPoints({ 0.0f, 0.0f, 0.0f }) };
     const auto sampling_scores{
         rhbm_gem::BuildLocalPotentialSampleScoreList(
-            sampling_points,
-            neighbor_center_list,
-            options.reject_angle_deg
-        )
+            sampling_points, neighbor_center_list, options.reject_angle_deg)
+        //rhbm_gem::BuildLocalPotentialCleanSampleScoreList(
+        //    sampling_points, neighbor_center_list)
     };
 
     LocalPotentialSampleList sample_list;
