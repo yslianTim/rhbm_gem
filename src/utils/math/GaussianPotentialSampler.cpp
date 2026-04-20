@@ -2,45 +2,21 @@
 
 #include <rhbm_gem/utils/math/GaussianResponseMath.hpp>
 #include <rhbm_gem/utils/math/LocalPotentialSampleScoring.hpp>
+#include <rhbm_gem/utils/math/NumericValidation.hpp>
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
 
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
-#include <string>
 #include <vector>
 
 namespace
 {
-void ValidatePositiveSampleCount(size_t value, const char * name)
-{
-    if (value == 0)
-    {
-        throw std::invalid_argument(std::string(name) + " must be positive value");
-    }
-}
-
-void ValidateDistanceRange(double min_value, double max_value, const char * name)
-{
-    if (!std::isfinite(min_value) || !std::isfinite(max_value) || min_value < 0.0 ||
-        max_value < min_value)
-    {
-        throw std::invalid_argument(
-            std::string(name) + " must be finite and satisfy 0 <= min <= max");
-    }
-}
-
 void ValidateGaussianModel(const GaussianModel3D & model)
 {
-    if (!std::isfinite(model.amplitude) || !std::isfinite(model.width) ||
-        !std::isfinite(model.intercept))
-    {
-        throw std::invalid_argument("GaussianModel3D values must be finite.");
-    }
-    if (model.width <= 0.0)
-    {
-        throw std::invalid_argument("GaussianModel3D width must be positive.");
-    }
+    rhbm_gem::NumericValidation::RequireFinite(model.amplitude, "GaussianModel3D amplitude");
+    rhbm_gem::NumericValidation::RequireFinitePositive(model.width, "GaussianModel3D width");
+    rhbm_gem::NumericValidation::RequireFinite(model.intercept, "GaussianModel3D intercept");
 }
 
 std::vector<Eigen::VectorXd> BuildNeighborCenterList(
@@ -107,9 +83,12 @@ LocalPotentialSampleList GaussianPotentialSampler::GenerateRadialSamples(
     std::mt19937 & generator
 ) const
 {
-    ValidatePositiveSampleCount(sample_count, "sample_count");
+    rhbm_gem::NumericValidation::RequirePositive(sample_count, "sample_count");
     ValidateGaussianModel(model);
-    ValidateDistanceRange(distance_min, distance_max, "distance range");
+    rhbm_gem::NumericValidation::RequireFiniteNonNegativeRange(
+        distance_min,
+        distance_max,
+        "distance range");
 
     std::uniform_real_distribution<> dist_distance(distance_min, distance_max);
     const auto sampling_scores{
@@ -143,13 +122,15 @@ LocalPotentialSampleList GaussianPotentialSampler::GenerateNeighborhoodSamples(
     const NeighborhoodSamplingOptions & options
 ) const
 {
-    ValidatePositiveSampleCount(samples_per_radius, "samples_per_radius");
+    rhbm_gem::NumericValidation::RequirePositive(samples_per_radius, "samples_per_radius");
     ValidateGaussianModel(model);
-    ValidateDistanceRange(options.radius_min, options.radius_max, "radius range");
-    if (!std::isfinite(options.neighbor_distance) || options.neighbor_distance <= 0.0)
-    {
-        throw std::invalid_argument("neighbor_distance must be finite and positive.");
-    }
+    rhbm_gem::NumericValidation::RequireFiniteNonNegativeRange(
+        options.radius_min,
+        options.radius_max,
+        "radius range");
+    rhbm_gem::NumericValidation::RequireFinitePositive(
+        options.neighbor_distance,
+        "neighbor_distance");
 
     auto neighbor_center_list{ BuildNeighborCenterList(options) };
     const Eigen::VectorXd atom_center{ Eigen::VectorXd::Zero(3) };

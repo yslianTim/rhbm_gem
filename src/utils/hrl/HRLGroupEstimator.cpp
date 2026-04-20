@@ -3,6 +3,7 @@
 #include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
+#include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <stdexcept>
 #include <utility>
@@ -91,10 +92,7 @@ HRLGroupEstimationResult HRLGroupEstimator::Estimate(
 
 void HRLGroupEstimator::ValidateInput(const HRLGroupEstimationInput & input)
 {
-    if (input.basis_size <= 0)
-    {
-        throw std::invalid_argument("basis_size must be positive.");
-    }
+    rhbm_gem::NumericValidation::RequirePositive(input.basis_size, "basis_size");
     if (input.member_datasets.empty())
     {
         throw std::invalid_argument("member_datasets must not be empty.");

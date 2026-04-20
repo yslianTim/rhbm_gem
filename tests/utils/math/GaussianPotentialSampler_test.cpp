@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <limits>
 #include <random>
 
 #include <rhbm_gem/utils/math/GaussianPotentialSampler.hpp>
@@ -240,4 +241,45 @@ TEST(GaussianPotentialSamplerTest, InterceptContributesToRadialResponse)
         EXPECT_FLOAT_EQ(base_samples.at(i).score, 1.0f);
         EXPECT_FLOAT_EQ(shifted_samples.at(i).score, 1.0f);
     }
+}
+
+TEST(GaussianPotentialSamplerTest, RadialSamplingRejectsInvalidNumericBoundaries)
+{
+    GaussianPotentialSampler sampler;
+    std::mt19937 generator(7);
+
+    EXPECT_THROW(
+        sampler.GenerateRadialSamples(
+            0,
+            GaussianModel3D{ 1.0, 0.5, 0.0 },
+            0.0,
+            1.0,
+            generator),
+        std::invalid_argument);
+    EXPECT_THROW(
+        sampler.GenerateRadialSamples(
+            4,
+            GaussianModel3D{ 1.0, 0.5, 0.0 },
+            1.0,
+            0.0,
+            generator),
+        std::invalid_argument);
+}
+
+TEST(GaussianPotentialSamplerTest, NeighborhoodSamplingRejectsInvalidNeighborDistance)
+{
+    GaussianPotentialSampler sampler;
+
+    EXPECT_THROW(
+        sampler.GenerateNeighborhoodSamples(
+            4,
+            GaussianModel3D{ 1.0, 0.5, 0.0 },
+            NeighborhoodSamplingOptions{
+                0.0,
+                1.0,
+                std::numeric_limits<double>::infinity(),
+                1,
+                0.0
+            }),
+        std::invalid_argument);
 }

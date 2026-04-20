@@ -1,6 +1,7 @@
 #include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
 
 #include <rhbm_gem/utils/math/EigenMatrixUtility.hpp>
+#include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include "utils/hrl/detail/ScopedEigenThreadCount.hpp"
 
@@ -13,42 +14,6 @@
 
 namespace
 {
-void ValidateAlpha(double alpha)
-{
-    if (!std::isfinite(alpha) || alpha < 0.0)
-    {
-        throw std::invalid_argument("Alpha parameters must be finite and non-negative.");
-    }
-}
-
-void ValidateMaximumIteration(int size)
-{
-    if (size <= 0)
-    {
-        throw std::invalid_argument("size must be greater than 0");
-    }
-}
-
-void ValidateTolerance(double value)
-{
-    if (!std::isfinite(value))
-    {
-        throw std::invalid_argument("tolerance must be finite");
-    }
-    if (value < 0.0)
-    {
-        throw std::invalid_argument("tolerance must be non-negative");
-    }
-}
-
-void ValidateWeightMinimum(double value, const char * name)
-{
-    if (!std::isfinite(value) || value <= 0.0)
-    {
-        throw std::invalid_argument(std::string(name) + " must be finite and positive.");
-    }
-}
-
 void ValidateMatrixVectorShape(
     const Eigen::MatrixXd & X,
     const Eigen::VectorXd & y)
@@ -147,10 +112,10 @@ HRLBetaEstimateResult HRLModelAlgorithms::EstimateBetaMDPDE(
     const HRLMemberDataset & dataset,
     const HRLExecutionOptions & options)
 {
-    ValidateAlpha(alpha_r);
-    ValidateMaximumIteration(options.max_iterations);
-    ValidateTolerance(options.tolerance);
-    ValidateWeightMinimum(options.data_weight_min, "data_weight_min");
+    rhbm_gem::NumericValidation::RequireFiniteNonNegative(alpha_r, "alpha");
+    rhbm_gem::NumericValidation::RequirePositive(options.max_iterations, "max_iterations");
+    rhbm_gem::NumericValidation::RequireFiniteNonNegative(options.tolerance, "tolerance");
+    rhbm_gem::NumericValidation::RequireFinitePositive(options.data_weight_min, "data_weight_min");
     const auto & X{ dataset.X };
     const auto & y{ dataset.y };
     ValidateMatrixVectorShape(X, y);
@@ -225,10 +190,10 @@ HRLMuEstimateResult HRLModelAlgorithms::EstimateMuMDPDE(
     const Eigen::MatrixXd & beta_array,
     const HRLExecutionOptions & options)
 {
-    ValidateAlpha(alpha_g);
-    ValidateMaximumIteration(options.max_iterations);
-    ValidateTolerance(options.tolerance);
-    ValidateWeightMinimum(options.member_weight_min, "member_weight_min");
+    rhbm_gem::NumericValidation::RequireFiniteNonNegative(alpha_g, "alpha");
+    rhbm_gem::NumericValidation::RequirePositive(options.max_iterations, "max_iterations");
+    rhbm_gem::NumericValidation::RequireFiniteNonNegative(options.tolerance, "tolerance");
+    rhbm_gem::NumericValidation::RequireFinitePositive(options.member_weight_min, "member_weight_min");
     if (beta_array.rows() <= 0 || beta_array.cols() <= 0)
     {
         throw std::invalid_argument("beta_array must not be empty.");
@@ -468,10 +433,7 @@ Eigen::VectorXd CalculateMuByMDPDE(
     {
         throw std::invalid_argument("beta_array and omega_array sizes are inconsistent.");
     }
-    if (!std::isfinite(omega_sum) || omega_sum <= 0.0)
-    {
-        throw std::invalid_argument("omega_sum must be finite and positive.");
-    }
+    rhbm_gem::NumericValidation::RequireFinitePositive(omega_sum, "omega_sum");
     Eigen::MatrixXd numerator{ beta_array.array() / omega_sum };
     for (int i = 0; i < numerator.cols(); i++)
     {
@@ -488,8 +450,8 @@ HRLDiagonalMatrix CalculateDataWeight(
     double sigma_square,
     double weight_min)
 {
-    ValidateAlpha(alpha);
-    ValidateWeightMinimum(weight_min, "weight_min");
+    rhbm_gem::NumericValidation::RequireFiniteNonNegative(alpha, "alpha");
+    rhbm_gem::NumericValidation::RequireFinitePositive(weight_min, "weight_min");
     ValidateMatrixVectorShape(X, y);
     if (beta.rows() != X.cols())
     {
@@ -525,7 +487,7 @@ double CalculateDataVarianceSquare(
     const HRLDiagonalMatrix & W,
     const Eigen::VectorXd & beta)
 {
-    ValidateAlpha(alpha);
+    rhbm_gem::NumericValidation::RequireFiniteNonNegative(alpha, "alpha");
     ValidateMatrixVectorShape(X, y);
     ValidateDiagonalSize(W, y.size(), "W");
     if (beta.rows() != X.cols())
@@ -586,8 +548,8 @@ Eigen::ArrayXd CalculateMemberWeight(
     const Eigen::MatrixXd & capital_lambda,
     double weight_min)
 {
-    ValidateAlpha(alpha);
-    ValidateWeightMinimum(weight_min, "weight_min");
+    rhbm_gem::NumericValidation::RequireFiniteNonNegative(alpha, "alpha");
+    rhbm_gem::NumericValidation::RequireFinitePositive(weight_min, "weight_min");
     if (beta_array.rows() != mu.rows())
     {
         throw std::invalid_argument("beta_array and mu sizes are inconsistent.");
@@ -632,7 +594,7 @@ Eigen::MatrixXd CalculateMemberCovariance(
     const Eigen::ArrayXd & omega_array,
     double omega_sum)
 {
-    ValidateAlpha(alpha);
+    rhbm_gem::NumericValidation::RequireFiniteNonNegative(alpha, "alpha");
     if (beta_array.rows() != mu.rows() || beta_array.cols() != omega_array.rows())
     {
         throw std::invalid_argument("Member covariance inputs are inconsistent.");
@@ -732,9 +694,6 @@ Eigen::Array<bool, Eigen::Dynamic, 1> HRLModelAlgorithms::CalculateOutlierMember
     int basis_size,
     const Eigen::ArrayXd & statistical_distance_array)
 {
-    if (basis_size <= 0)
-    {
-        throw std::invalid_argument("basis_size must be positive.");
-    }
+    rhbm_gem::NumericValidation::RequirePositive(basis_size, "basis_size");
     return statistical_distance_array > CalculateChiSquareQuantile(basis_size);
 }

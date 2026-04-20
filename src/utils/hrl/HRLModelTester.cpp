@@ -2,6 +2,7 @@
 #include <rhbm_gem/utils/hrl/HRLAlphaTrainer.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelMetrics.hpp>
+#include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <cmath>
 #include <stdexcept>
@@ -41,12 +42,10 @@ Eigen::VectorXd CalculateReplicaSigma(
 } // namespace
 
 HRLModelTester::HRLModelTester(int gaus_par_size) :
-    m_gaus_par_size{ gaus_par_size }
-{
-    if (m_gaus_par_size <= 0)
-    {
-        throw std::invalid_argument("gaus_par_size must be positive value");
+    m_gaus_par_size{
+        rhbm_gem::NumericValidation::RequirePositive(gaus_par_size, "gaus_par_size")
     }
+{
 }
 
 bool HRLModelTester::RunBetaMDPDETest(

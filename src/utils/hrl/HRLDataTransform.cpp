@@ -1,4 +1,5 @@
 #include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
+#include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <cmath>
 #include <limits>
@@ -15,14 +16,6 @@ int CheckedCastToInt(std::size_t value)
     }
     return static_cast<int>(value);
 }
-
-void ValidateBasisSize(int basis_size)
-{
-    if (basis_size <= 0)
-    {
-        throw std::invalid_argument("basis_size must be positive.");
-    }
-}
 } // namespace
 
 HRLMemberDataset HRLDataTransform::BuildMemberDataset(
@@ -37,7 +30,7 @@ HRLMemberDataset HRLDataTransform::BuildMemberDataset(
 
     const auto expected_basis_size{ series_point_list.front().GetBasisSize() };
     const auto basis_size{ CheckedCastToInt(expected_basis_size) };
-    ValidateBasisSize(basis_size);
+    rhbm_gem::NumericValidation::RequirePositive(basis_size, "basis_size");
     const auto data_size{ CheckedCastToInt(series_point_list.size()) };
 
     HRLMemberDataset dataset;
@@ -82,7 +75,7 @@ Eigen::MatrixXd HRLDataTransform::BuildBetaMatrix(
     }
 
     const auto basis_size{ static_cast<int>(beta_list.front().rows()) };
-    ValidateBasisSize(basis_size);
+    rhbm_gem::NumericValidation::RequirePositive(basis_size, "basis_size");
     const auto member_size{ CheckedCastToInt(beta_list.size()) };
     Eigen::MatrixXd beta_array{ Eigen::MatrixXd::Zero(basis_size, member_size) };
     for (int i = 0; i < member_size; i++)
@@ -116,7 +109,7 @@ HRLGroupEstimationInput HRLDataTransform::BuildGroupInput(
     }
 
     const auto basis_size{ static_cast<int>(member_datasets.front().X.cols()) };
-    ValidateBasisSize(basis_size);
+    rhbm_gem::NumericValidation::RequirePositive(basis_size, "basis_size");
 
     HRLGroupEstimationInput input;
     input.basis_size = basis_size;

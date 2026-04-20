@@ -93,6 +93,13 @@ TEST(HRLModelAlgorithmsTest, EstimateBetaMDPDERejectsInvalidParameters)
         HRLModelAlgorithms::EstimateBetaMDPDE(0.0, MakeDataset(X, y, score), options),
         std::invalid_argument
     );
+
+    options = HRLExecutionOptions{};
+    options.data_weight_min = 0.0;
+    EXPECT_THROW(
+        HRLModelAlgorithms::EstimateBetaMDPDE(0.0, MakeDataset(X, y, score), options),
+        std::invalid_argument
+    );
 }
 
 TEST(HRLModelAlgorithmsTest, EstimateBetaMDPDERejectsInvalidDatasetShapeAndValues)

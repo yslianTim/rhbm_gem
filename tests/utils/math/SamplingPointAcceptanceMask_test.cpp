@@ -129,6 +129,12 @@ TEST(SamplingPointAcceptanceMaskTest, RejectsInvalidAngles)
     EXPECT_THROW(
         (void)rg::BuildSamplingPointAcceptanceMask(point_list, {}, 181.0),
         std::invalid_argument);
+    EXPECT_THROW(
+        (void)rg::BuildSamplingPointAcceptanceMask(
+            point_list,
+            {},
+            std::numeric_limits<double>::quiet_NaN()),
+        std::invalid_argument);
 }
 
 TEST(SamplingPointAcceptanceMaskTest, RejectsRejectDirectionsWithUnexpectedDimension)

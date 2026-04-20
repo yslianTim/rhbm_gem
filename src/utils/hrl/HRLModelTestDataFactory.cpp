@@ -4,6 +4,7 @@
 #include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
 #include <rhbm_gem/utils/math/GaussianResponseMath.hpp>
+#include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <cmath>
 #include <stdexcept>
@@ -12,15 +13,6 @@
 
 namespace
 {
-int ValidatePositive(int value, const char * name)
-{
-    if (value <= 0)
-    {
-        throw std::invalid_argument(std::string(name) + " must be positive value");
-    }
-    return value;
-}
-
 int ValidateGaussianParameterSize(int value)
 {
     if (value != 3)
@@ -59,33 +51,32 @@ HRLModelTestDataFactory::HRLModelTestDataFactory(
     int gaus_par_size,
     rhbm_gem::GaussianLinearizationSpec linearization_spec) :
     m_gaus_par_size{
-        ValidateGaussianParameterSize(ValidatePositive(gaus_par_size, "gaus_par_size"))
+        ValidateGaussianParameterSize(
+            rhbm_gem::NumericValidation::RequirePositive(gaus_par_size, "gaus_par_size"))
     },
     m_linearization_spec{ std::move(linearization_spec) },
     m_fit_range_min{ 0.0 },
     m_fit_range_max{ 1.0 },
     m_potential_sampler{}
 {
-    if (m_linearization_spec.basis_size <= 0)
-    {
-        throw std::invalid_argument("linearization_spec basis_size must be positive value");
-    }
+    rhbm_gem::NumericValidation::RequirePositive(
+        m_linearization_spec.basis_size,
+        "linearization_spec basis_size");
 }
 
 void HRLModelTestDataFactory::SetFittingRange(double x_min, double x_max)
 {
-    if (!std::isfinite(x_min) || !std::isfinite(x_max) || x_min < 0.0 || x_max < x_min)
-    {
-        throw std::invalid_argument("fitting range must satisfy 0 <= x_min <= x_max");
-    }
+    rhbm_gem::NumericValidation::RequireFiniteNonNegativeRange(x_min, x_max, "fitting range");
     m_fit_range_min = x_min;
     m_fit_range_max = x_max;
 }
 
 HRLBetaTestInput HRLModelTestDataFactory::BuildBetaTestInput(const BetaScenario & scenario) const
 {
-    ValidatePositive(scenario.sampling_entry_size, "sampling_entry_size");
-    ValidatePositive(scenario.replica_size, "replica_size");
+    rhbm_gem::NumericValidation::RequirePositive(
+        scenario.sampling_entry_size,
+        "sampling_entry_size");
+    rhbm_gem::NumericValidation::RequirePositive(scenario.replica_size, "replica_size");
     ValidateGausParametersDimension(scenario.gaus_true);
     const auto gaussian_model{ BuildGaussianModel(scenario.gaus_true) };
 
@@ -115,8 +106,8 @@ HRLBetaTestInput HRLModelTestDataFactory::BuildBetaTestInput(const BetaScenario 
 
 HRLMuTestInput HRLModelTestDataFactory::BuildMuTestInput(const MuScenario & scenario) const
 {
-    ValidatePositive(scenario.member_size, "member_size");
-    ValidatePositive(scenario.replica_size, "replica_size");
+    rhbm_gem::NumericValidation::RequirePositive(scenario.member_size, "member_size");
+    rhbm_gem::NumericValidation::RequirePositive(scenario.replica_size, "replica_size");
     ValidateGausParametersDimension(scenario.gaus_prior);
     ValidateGausParametersDimension(scenario.gaus_sigma);
     ValidateGausParametersDimension(scenario.outlier_prior);
@@ -149,8 +140,10 @@ HRLMuTestInput HRLModelTestDataFactory::BuildMuTestInput(const MuScenario & scen
 HRLNeighborhoodTestInput HRLModelTestDataFactory::BuildNeighborhoodTestInput(
     const NeighborhoodScenario & scenario) const
 {
-    ValidatePositive(scenario.sampling_entry_size, "sampling_entry_size");
-    ValidatePositive(scenario.replica_size, "replica_size");
+    rhbm_gem::NumericValidation::RequirePositive(
+        scenario.sampling_entry_size,
+        "sampling_entry_size");
+    rhbm_gem::NumericValidation::RequirePositive(scenario.replica_size, "replica_size");
     ValidateGausParametersDimension(scenario.gaus_true);
     const auto gaussian_model{ BuildGaussianModel(scenario.gaus_true) };
 

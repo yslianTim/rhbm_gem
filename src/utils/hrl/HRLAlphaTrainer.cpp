@@ -3,6 +3,7 @@
 #include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelMetrics.hpp>
+#include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <algorithm>
 #include <atomic>
@@ -25,10 +26,7 @@ void ValidateTrainingInputs(
     {
         throw std::invalid_argument("training data must not be empty.");
     }
-    if (subset_size == 0)
-    {
-        throw std::invalid_argument("subset_size must be greater than zero.");
-    }
+    rhbm_gem::NumericValidation::RequirePositive(subset_size, "subset_size");
     if (subset_size > data_size)
     {
         throw std::invalid_argument("subset_size must not exceed data size.");
@@ -48,10 +46,7 @@ void ValidateTrainingBatch(
     {
         throw std::invalid_argument("training data must not be empty.");
     }
-    if (subset_size == 0)
-    {
-        throw std::invalid_argument("subset_size must be greater than zero.");
-    }
+    rhbm_gem::NumericValidation::RequirePositive(subset_size, "subset_size");
     if (alpha_list.empty())
     {
         throw std::invalid_argument("alpha_list must not be empty.");
@@ -291,12 +286,11 @@ std::vector<double> HRLAlphaTrainer::BuildAlphaGrid(
     double alpha_max,
     double alpha_step)
 {
-    if (!std::isfinite(alpha_min) || !std::isfinite(alpha_max) ||
-        !std::isfinite(alpha_step) || alpha_min < 0.0 ||
-        alpha_max < 0.0 || alpha_step <= 0.0 || alpha_min > alpha_max)
-    {
-        throw std::invalid_argument("Invalid alpha training range or step.");
-    }
+    rhbm_gem::NumericValidation::RequireFiniteNonNegativeRange(
+        alpha_min,
+        alpha_max,
+        "alpha training range");
+    rhbm_gem::NumericValidation::RequireFinitePositive(alpha_step, "alpha training step");
 
     std::vector<double> alpha_list;
     for (double alpha{ alpha_min };

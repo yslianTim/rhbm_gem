@@ -7,19 +7,11 @@
 #include <Eigen/Dense>
 
 #include <rhbm_gem/utils/domain/Constants.hpp>
+#include <rhbm_gem/utils/math/NumericValidation.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace rhbm_gem {
 namespace detail {
-
-inline void ValidateSamplingPointAcceptanceAngle(double angle)
-{
-    if (!std::isfinite(angle) || angle < 0.0 || angle > 180.0)
-    {
-        throw std::invalid_argument(
-            "SamplingPointAcceptanceMask angle must be finite and within [0, 180] degrees.");
-    }
-}
 
 inline Eigen::Vector3d ToVector3d(const std::array<float, 3> & position)
 {
@@ -96,7 +88,7 @@ inline std::vector<float> BuildSamplingPointAcceptanceMask(
     const std::vector<Eigen::VectorXd> & reject_direction_list,
     double angle = 0.0)
 {
-    detail::ValidateSamplingPointAcceptanceAngle(angle);
+    NumericValidation::RequireFiniteInclusiveRange(angle, 0.0, 180.0, "angle");
 
     std::vector<float> acceptance_mask(point_list.size(), 1.0f);
     if (angle == 0.0)

@@ -531,6 +531,16 @@ TEST(SphereSamplerTest, FibonacciDeterministicProfileThrowsWhenSamplesPerRadiusZ
         std::invalid_argument);
 }
 
+TEST(SphereSamplerTest, FibonacciDeterministicProfileThrowsWhenRadiusBinSizeNonFinite)
+{
+    EXPECT_THROW(
+        SphereSamplingProfile::FibonacciDeterministic(
+            SphereDistanceRange{ 0.0, 1.0 },
+            std::numeric_limits<double>::infinity(),
+            4),
+        std::invalid_argument);
+}
+
 TEST(SphereSamplerTest, FibonacciDeterministicProfileThrowsWhenRangeMinNegative)
 {
     EXPECT_THROW(

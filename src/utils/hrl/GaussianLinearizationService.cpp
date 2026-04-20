@@ -3,6 +3,7 @@
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
+#include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <cmath>
 #include <stdexcept>
@@ -300,7 +301,9 @@ GaussianLinearizationContext GaussianLinearizationContext::FromModelParameters(
 GaussianLinearizationService::GaussianLinearizationService(GaussianLinearizationSpec spec) :
     m_spec{ std::move(spec) }
 {
-    ValidateSpec();
+    rhbm_gem::NumericValidation::RequirePositive(
+        m_spec.basis_size,
+        "GaussianLinearizationSpec basis_size");
 }
 
 SeriesPointList GaussianLinearizationService::BuildDatasetSeries(
@@ -488,14 +491,6 @@ GaussianPosterior GaussianLinearizationService::DecodePosteriorEstimate(
         BuildGaussianEstimate(std::get<0>(decoded)),
         BuildGaussianEstimate(std::get<1>(decoded))
     };
-}
-
-void GaussianLinearizationService::ValidateSpec() const
-{
-    if (m_spec.basis_size <= 0)
-    {
-        throw std::invalid_argument("GaussianLinearizationSpec basis_size must be positive.");
-    }
 }
 
 void GaussianLinearizationService::ValidateContextIfRequired(

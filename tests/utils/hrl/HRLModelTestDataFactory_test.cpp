@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <initializer_list>
+#include <limits>
 
 #include <rhbm_gem/utils/hrl/HRLModelTestDataFactory.hpp>
 
@@ -207,4 +208,58 @@ TEST(HRLModelTestDataFactoryTest, BuildNeighborhoodTestInputProvidesPairedDatase
             input.no_cut_datasets.at(i).y.rows()
         );
     }
+}
+
+TEST(HRLModelTestDataFactoryTest, ConstructorRejectsInvalidNumericInputs)
+{
+    EXPECT_THROW(
+        HRLModelTestDataFactory(
+            0,
+            rhbm_gem::GaussianLinearizationSpec::DefaultDataset()),
+        std::invalid_argument);
+
+    auto spec{ rhbm_gem::GaussianLinearizationSpec::DefaultDataset() };
+    spec.basis_size = 0;
+    EXPECT_THROW(HRLModelTestDataFactory(3, spec), std::invalid_argument);
+}
+
+TEST(HRLModelTestDataFactoryTest, SetFittingRangeRejectsInvalidRange)
+{
+    HRLModelTestDataFactory factory(
+        3,
+        rhbm_gem::GaussianLinearizationSpec::DefaultDataset());
+
+    EXPECT_THROW(factory.SetFittingRange(-1.0, 1.0), std::invalid_argument);
+    EXPECT_THROW(factory.SetFittingRange(2.0, 1.0), std::invalid_argument);
+    EXPECT_THROW(
+        factory.SetFittingRange(0.0, std::numeric_limits<double>::infinity()),
+        std::invalid_argument);
+}
+
+TEST(HRLModelTestDataFactoryTest, BuildBetaTestInputRejectsNonPositiveScenarioSizes)
+{
+    HRLModelTestDataFactory factory(
+        3,
+        rhbm_gem::GaussianLinearizationSpec::DefaultDataset());
+
+    EXPECT_THROW(
+        factory.BuildBetaTestInput(HRLModelTestDataFactory::BetaScenario{
+            MakeVector({ 1.0, 0.5, 0.0 }),
+            0,
+            0.05,
+            0.1,
+            3,
+            42
+        }),
+        std::invalid_argument);
+    EXPECT_THROW(
+        factory.BuildBetaTestInput(HRLModelTestDataFactory::BetaScenario{
+            MakeVector({ 1.0, 0.5, 0.0 }),
+            8,
+            0.05,
+            0.1,
+            0,
+            42
+        }),
+        std::invalid_argument);
 }

@@ -136,6 +136,14 @@ TEST(HRLDataTransformTest, BuildBetaMatrixRejectsEmptyInput)
     EXPECT_THROW(HRLDataTransform::BuildBetaMatrix(beta_list), std::invalid_argument);
 }
 
+TEST(HRLDataTransformTest, BuildBetaMatrixRejectsEmptyBasis)
+{
+    const std::vector<Eigen::VectorXd> beta_list{
+        Eigen::VectorXd{}
+    };
+    EXPECT_THROW(HRLDataTransform::BuildBetaMatrix(beta_list), std::invalid_argument);
+}
+
 TEST(HRLDataTransformTest, BuildGroupInputBuildsStructuredRequest)
 {
     const auto input{
