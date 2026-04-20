@@ -13,7 +13,6 @@ TEST(DataPublicHeadersTest, DataPublicHeadersMatchApprovedSurface)
         "data/object/AtomObject.hpp",
         "data/object/BondObject.hpp",
         "data/object/ChemicalComponentEntry.hpp",
-        "data/object/GaussianStatistics.hpp",
         "data/object/MapObject.hpp",
         "data/object/ModelAnalysisEditor.hpp",
         "data/object/ModelAnalysisView.hpp",

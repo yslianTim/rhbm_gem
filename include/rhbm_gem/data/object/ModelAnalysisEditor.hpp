@@ -6,7 +6,7 @@
 
 #include <Eigen/Dense>
 
-#include <rhbm_gem/data/object/GaussianStatistics.hpp>
+#include <rhbm_gem/utils/hrl/GaussianStatistics.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelTypes.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>

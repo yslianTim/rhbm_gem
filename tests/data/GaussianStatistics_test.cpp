@@ -2,7 +2,7 @@
 
 #include <cmath>
 
-#include <rhbm_gem/data/object/GaussianStatistics.hpp>
+#include <rhbm_gem/utils/hrl/GaussianStatistics.hpp>
 #include <rhbm_gem/utils/domain/Constants.hpp>
 
 #include "data/detail/GroupPotentialEntry.hpp"

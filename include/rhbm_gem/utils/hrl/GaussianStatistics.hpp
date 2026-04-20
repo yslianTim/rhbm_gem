@@ -9,6 +9,7 @@
 
 namespace rhbm_gem {
 
+// Shared Gaussian value types used by HRL linearization and downstream consumers.
 struct GaussianEstimate
 {
     double amplitude{ 0.0 };
