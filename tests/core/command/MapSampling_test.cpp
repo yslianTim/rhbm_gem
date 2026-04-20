@@ -10,7 +10,6 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/utils/math/LocalPotentialSampleScoring.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace rg = rhbm_gem;
@@ -195,21 +194,15 @@ TEST(MapSamplingTest, AtomSamplerUsesSamplingPointScoresForFilteredEntries)
     const auto * atom{ model->GetAtomList().at(0).get() };
 
     const auto sampling_points{ sampler.GenerateSamplingPoints(atom->GetPosition()) };
-    const auto expected_scores{
-        rg::detail::BuildAtomLocalPotentialSampleScoreList(
-            sampling_points,
-            *atom,
-            1.1,
-            30.0)
-    };
     const auto sampling_data{
         rg::SampleMapValues(map, sampler, *atom, 1.1, 30.0) };
 
-    ASSERT_EQ(sampling_data.size(), expected_scores.size());
-    for (size_t i = 0; i < sampling_data.size(); ++i)
-    {
-        EXPECT_FLOAT_EQ(sampling_data.at(i).score, expected_scores.at(i));
-    }
+    ASSERT_EQ(sampling_data.size(), sampling_points.size());
+    ASSERT_EQ(sampling_data.size(), 4u);
+    EXPECT_FLOAT_EQ(sampling_data.at(0).score, 1.0f);
+    EXPECT_FLOAT_EQ(sampling_data.at(1).score, 0.0f);
+    EXPECT_FLOAT_EQ(sampling_data.at(2).score, 1.0f);
+    EXPECT_FLOAT_EQ(sampling_data.at(3).score, 1.0f);
 }
 
 TEST(MapSamplingTest, AtomSamplerKeepsAllPointsWhenNeighborRadiusFindsNoNeighbors)
