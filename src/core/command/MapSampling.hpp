@@ -135,10 +135,8 @@ LocalPotentialSampleList BuildLocalPotentialSampleList(
     const SamplingPointList & sampling_points,
     const std::vector<float> * sampling_scores = nullptr)
 {
-    const auto resolved_sampling_scores{
-        (sampling_scores == nullptr)
-            ? BuildLocalPotentialSampleScoreList(sampling_points.size())
-            : *sampling_scores
+    const auto resolved_sampling_scores{ (sampling_scores == nullptr) ?
+        BuildDefaultLocalPotentialSampleScoreList(sampling_points.size()) : *sampling_scores
     };
 
     if (resolved_sampling_scores.size() != sampling_points.size())
@@ -154,9 +152,7 @@ LocalPotentialSampleList BuildLocalPotentialSampleList(
         const auto & sampling_point{ sampling_points.at(i) };
         const auto sampling_score{ resolved_sampling_scores.at(i) };
 
-        auto map_value{
-            MakeInterpolationInMapObject(map_object, sampling_point.position)
-        };
+        auto map_value{ MakeInterpolationInMapObject(map_object, sampling_point.position) };
         sampling_data_list.emplace_back(LocalPotentialSample{
             sampling_point.distance,
             map_value,

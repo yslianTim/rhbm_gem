@@ -113,7 +113,7 @@ LocalPotentialSampleList GaussianPotentialSampler::GenerateRadialSamples(
 
     std::uniform_real_distribution<> dist_distance(distance_min, distance_max);
     const auto sampling_scores{
-        rhbm_gem::BuildLocalPotentialSampleScoreList(sample_count)
+        rhbm_gem::BuildDefaultLocalPotentialSampleScoreList(sample_count)
     };
     LocalPotentialSampleList sample_list;
     sample_list.reserve(sample_count);
