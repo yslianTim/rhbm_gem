@@ -144,6 +144,25 @@ TEST(HRLDataTransformTest, BuildBetaMatrixRejectsEmptyBasis)
     EXPECT_THROW(HRLDataTransform::BuildBetaMatrix(beta_list), std::invalid_argument);
 }
 
+TEST(HRLDataTransformTest, BuildBetaMatrixRejectsNonFiniteValue)
+{
+    const std::vector<Eigen::VectorXd> beta_list{
+        MakeVector({ 1.0, std::numeric_limits<double>::quiet_NaN() })
+    };
+
+    EXPECT_THROW(HRLDataTransform::BuildBetaMatrix(beta_list), std::invalid_argument);
+}
+
+TEST(HRLDataTransformTest, BuildBetaMatrixRejectsInconsistentBasisSize)
+{
+    const std::vector<Eigen::VectorXd> beta_list{
+        MakeVector({ 1.0, 2.0 }),
+        MakeVector({ 3.0, 4.0, 5.0 })
+    };
+
+    EXPECT_THROW(HRLDataTransform::BuildBetaMatrix(beta_list), std::invalid_argument);
+}
+
 TEST(HRLDataTransformTest, BuildGroupInputBuildsStructuredRequest)
 {
     const auto input{
@@ -188,6 +207,45 @@ TEST(HRLDataTransformTest, BuildGroupInputRejectsInconsistentWeightSize)
             },
             {
                 MakeEstimate({ 1.0, 2.0 }, 0.25, { 1.0 }, { 0.25, 0.25 })
+            }
+        ),
+        std::invalid_argument
+    );
+}
+
+TEST(HRLDataTransformTest, BuildGroupInputRejectsInconsistentScoreSize)
+{
+    auto dataset{
+        MakeDataset({
+            MakeSeriesPoint({ 1.0, 0.0, 1.0 }),
+            MakeSeriesPoint({ 1.0, 1.0, 3.0 })
+        })
+    };
+    dataset.score = MakeVector({ 1.0 });
+
+    EXPECT_THROW(
+        HRLDataTransform::BuildGroupInput(
+            { dataset },
+            {
+                MakeEstimate({ 1.0, 2.0 }, 0.25, { 1.0, 1.0 }, { 0.25, 0.25 })
+            }
+        ),
+        std::invalid_argument
+    );
+}
+
+TEST(HRLDataTransformTest, BuildGroupInputRejectsInconsistentMemberBetaBasisSize)
+{
+    EXPECT_THROW(
+        HRLDataTransform::BuildGroupInput(
+            {
+                MakeDataset({
+                    MakeSeriesPoint({ 1.0, 0.0, 1.0 }),
+                    MakeSeriesPoint({ 1.0, 1.0, 3.0 })
+                })
+            },
+            {
+                MakeEstimate({ 1.0 }, 0.25, { 1.0, 1.0 }, { 0.25, 0.25 })
             }
         ),
         std::invalid_argument

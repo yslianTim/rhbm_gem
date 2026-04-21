@@ -2,22 +2,10 @@
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
-#include <cmath>
+#include <Eigen/Core>
+
 #include <limits>
 #include <stdexcept>
-#include <string>
-
-namespace
-{
-int CheckedCastToInt(std::size_t value)
-{
-    if (value > static_cast<std::size_t>(std::numeric_limits<int>::max()))
-    {
-        throw std::overflow_error("data_array size exceeds maximum int");
-    }
-    return static_cast<int>(value);
-}
-} // namespace
 
 HRLMemberDataset HRLDataTransform::BuildMemberDataset(
     const SeriesPointList & series_point_list,
@@ -30,9 +18,17 @@ HRLMemberDataset HRLDataTransform::BuildMemberDataset(
     }
 
     const auto expected_basis_size{ series_point_list.front().GetBasisSize() };
-    const auto basis_size{ CheckedCastToInt(expected_basis_size) };
+    rhbm_gem::NumericValidation::RequireAtMost(
+        expected_basis_size,
+        static_cast<std::size_t>(std::numeric_limits<int>::max()),
+        "basis_size");
+    const auto basis_size{ static_cast<int>(expected_basis_size) };
     rhbm_gem::NumericValidation::RequirePositive(basis_size, "basis_size");
-    const auto data_size{ CheckedCastToInt(series_point_list.size()) };
+    rhbm_gem::NumericValidation::RequireAtMost(
+        series_point_list.size(),
+        static_cast<std::size_t>(std::numeric_limits<int>::max()),
+        "series_point_list size");
+    const auto data_size{ static_cast<int>(series_point_list.size()) };
 
     HRLMemberDataset dataset;
     dataset.X = HRLDesignMatrix::Zero(data_size, basis_size);
@@ -45,19 +41,20 @@ HRLMemberDataset HRLDataTransform::BuildMemberDataset(
         {
             throw std::invalid_argument("All data entries must share the same basis size.");
         }
-        if (!std::isfinite(point.response) || !std::isfinite(point.score))
+        try
+        {
+            rhbm_gem::NumericValidation::RequireFinite(point.response, "response");
+            rhbm_gem::NumericValidation::RequireFinite(point.score, "score");
+            rhbm_gem::NumericValidation::RequireAllFinite(point.basis_list, "basis_list");
+        }
+        catch (const std::invalid_argument &)
         {
             throw std::invalid_argument("Member dataset contains non-finite value.");
         }
-        for (int j = 0; j < basis_size; j++)
-        {
-            const auto value{ point.GetBasisValue(static_cast<std::size_t>(j)) };
-            if (!std::isfinite(value))
-            {
-                throw std::invalid_argument("Member dataset contains non-finite value.");
-            }
-            dataset.X(i, j) = value;
-        }
+
+        dataset.X.row(i) = Eigen::Map<const Eigen::RowVectorXd>(
+            point.basis_list.data(),
+            basis_size);
         dataset.y(i) = point.response;
         dataset.score(i) = point.score;
     }
@@ -77,15 +74,24 @@ HRLBetaMatrix HRLDataTransform::BuildBetaMatrix(
 
     const auto basis_size{ static_cast<int>(beta_list.front().rows()) };
     rhbm_gem::NumericValidation::RequirePositive(basis_size, "basis_size");
-    const auto member_size{ CheckedCastToInt(beta_list.size()) };
+    rhbm_gem::NumericValidation::RequireAtMost(
+        beta_list.size(),
+        static_cast<std::size_t>(std::numeric_limits<int>::max()),
+        "beta_list size");
+    const auto member_size{ static_cast<int>(beta_list.size()) };
     HRLBetaMatrix beta_matrix{ HRLBetaMatrix::Zero(basis_size, member_size) };
     for (int i = 0; i < member_size; i++)
     {
         const auto & beta_vector{ beta_list.at(static_cast<std::size_t>(i)) };
-        if (beta_vector.rows() != basis_size)
+        try
+        {
+            rhbm_gem::EigenValidation::RequireVectorSize(beta_vector, basis_size, "beta");
+        }
+        catch (const std::invalid_argument &)
         {
             throw std::invalid_argument("All beta vectors must share the same basis size.");
         }
+
         try
         {
             rhbm_gem::EigenValidation::RequireFinite(beta_vector, "beta");
@@ -124,29 +130,50 @@ HRLGroupEstimationInput HRLDataTransform::BuildGroupInput(
     for (std::size_t i = 0; i < member_size; i++)
     {
         const auto & dataset{ member_datasets.at(i) };
+        const auto & estimate{ member_estimates.at(i) };
+
         if (dataset.X.cols() != basis_size)
         {
             throw std::invalid_argument("Member dataset basis size is inconsistent.");
         }
-        if (dataset.X.rows() != dataset.y.size())
+
+        try
+        {
+            rhbm_gem::EigenValidation::RequireVectorSize(
+                dataset.y,
+                dataset.X.rows(),
+                "Member dataset response");
+            rhbm_gem::EigenValidation::RequireSameSize(
+                dataset.score,
+                dataset.y,
+                "Member dataset shape");
+        }
+        catch (const std::invalid_argument &)
         {
             throw std::invalid_argument("Member dataset shape is inconsistent.");
         }
 
-        const auto & estimate{ member_estimates.at(i) };
-        if (estimate.beta_mdpde.rows() != basis_size)
-        {
-            throw std::invalid_argument("Member beta basis size is inconsistent.");
-        }
         try
         {
             rhbm_gem::EigenValidation::RequireVectorSize(
+                estimate.beta_mdpde,
+                basis_size,
+                "Member beta");
+        }
+        catch (const std::invalid_argument &)
+        {
+            throw std::invalid_argument("Member beta basis size is inconsistent.");
+        }
+
+        try
+        {
+            rhbm_gem::EigenValidation::RequireSameSize(
                 estimate.data_weight.diagonal(),
-                dataset.y.size(),
+                dataset.y,
                 "Member data weight");
-            rhbm_gem::EigenValidation::RequireVectorSize(
+            rhbm_gem::EigenValidation::RequireSameSize(
                 estimate.data_covariance.diagonal(),
-                dataset.y.size(),
+                dataset.y,
                 "Member data covariance");
         }
         catch (const std::invalid_argument &)

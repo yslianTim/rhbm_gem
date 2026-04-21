@@ -53,6 +53,18 @@ inline void RequireVectorSize(
     }
 }
 
+template <typename LeftDerived, typename RightDerived, typename NameType>
+inline void RequireSameSize(
+    const Eigen::DenseBase<LeftDerived> & lhs,
+    const Eigen::DenseBase<RightDerived> & rhs,
+    const NameType & name)
+{
+    if (lhs.size() != rhs.size())
+    {
+        throw std::invalid_argument(detail::GetName(name) + " must have matching sizes.");
+    }
+}
+
 template <typename Derived, typename NameType>
 inline void RequireShape(
     const Eigen::DenseBase<Derived> & matrix,

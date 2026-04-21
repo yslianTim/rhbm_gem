@@ -156,6 +156,18 @@ inline Type RequireFinite(Type value, const NameType & name)
     return value;
 }
 
+template <typename Range, typename NameType>
+inline const Range & RequireAllFinite(
+    const Range & values,
+    const NameType & name)
+{
+    detail::RequireArrayValues(
+        values,
+        [](const auto value) { return IsFinite(value); },
+        detail::GetName(name) + " must contain only finite values.");
+    return values;
+}
+
 template <typename Type, typename NameType>
 inline Type RequireFinitePositive(Type value, const NameType & name)
 {
