@@ -1,8 +1,9 @@
 #include <rhbm_gem/utils/hrl/HRLAlphaTrainer.hpp>
 
 #include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
+#include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
-#include <rhbm_gem/utils/hrl/HRLModelMetrics.hpp>
+#include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <algorithm>
@@ -16,6 +17,24 @@
 namespace
 {
 constexpr double kAlphaGridTolerance{ 1.0e-12 };
+
+const rhbm_gem::GaussianLinearizationService & MetricDecodeService()
+{
+    static const rhbm_gem::GaussianLinearizationService service{
+        rhbm_gem::GaussianLinearizationSpec::DefaultMetricModel()
+    };
+    return service;
+}
+
+rhbm_gem::GaussianParameterVector CalculateAbsoluteGaussianDifference(
+    const HRLBetaVector & linear_a,
+    const HRLBetaVector & linear_b)
+{
+    const auto gaussian_a{ MetricDecodeService().DecodeGroupBeta(linear_a) };
+    const auto gaussian_b{ MetricDecodeService().DecodeGroupBeta(linear_b) };
+    rhbm_gem::EigenValidation::RequireVectorSize(gaussian_a, gaussian_b.rows(), "gaussian");
+    return (gaussian_a - gaussian_b).array().abs().matrix();
+}
 
 void ValidateTrainingInputs(
     std::size_t data_size,
@@ -443,7 +462,7 @@ Eigen::MatrixXd HRLAlphaTrainer::StudyAlphaRBias(
                     dataset_list.at(i),
                     algorithm_options)
             };
-            local_bias_array.col(j) = HRLModelMetrics::CalculateAbsoluteGausDifference(
+            local_bias_array.col(j) = CalculateAbsoluteGaussianDifference(
                 result.beta_mdpde,
                 result.beta_ols
             );
@@ -500,7 +519,7 @@ Eigen::MatrixXd HRLAlphaTrainer::StudyAlphaGBias(
             const auto result{
                 HRLModelAlgorithms::EstimateMuMDPDE(alpha_g, beta_matrix, algorithm_options)
             };
-            local_bias_array.col(j) = HRLModelMetrics::CalculateAbsoluteGausDifference(
+            local_bias_array.col(j) = CalculateAbsoluteGaussianDifference(
                 result.mu_mdpde,
                 result.mu_mean
             );

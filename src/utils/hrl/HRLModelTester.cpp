@@ -1,7 +1,8 @@
 #include <rhbm_gem/utils/hrl/HRLModelTester.hpp>
 #include <rhbm_gem/utils/hrl/HRLAlphaTrainer.hpp>
+#include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
-#include <rhbm_gem/utils/hrl/HRLModelMetrics.hpp>
+#include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <cmath>
@@ -25,6 +26,27 @@ HRLExecutionOptions MakeTesterExecutionOptions()
     options.quiet_mode = true;
     options.thread_size = 1;
     return options;
+}
+
+const rhbm_gem::GaussianLinearizationService & MetricDecodeService()
+{
+    static const rhbm_gem::GaussianLinearizationService service{
+        rhbm_gem::GaussianLinearizationSpec::DefaultMetricModel()
+    };
+    return service;
+}
+
+rhbm_gem::GaussianParameterVector CalculateNormalizedResidual(
+    const HRLBetaVector & linear_estimate,
+    const rhbm_gem::GaussianParameterVector & gaussian_truth)
+{
+    const auto gaussian_estimate{ MetricDecodeService().DecodeGroupBeta(linear_estimate) };
+    rhbm_gem::EigenValidation::RequireVectorSize(
+        gaussian_estimate,
+        gaussian_truth.rows(),
+        "gaussian"
+    );
+    return ((gaussian_estimate - gaussian_truth).array() / gaussian_truth.array()).matrix();
 }
 
 Eigen::VectorXd CalculateReplicaSigma(
@@ -110,10 +132,10 @@ bool HRLModelTester::RunBetaMDPDETest(
             const auto beta_result{ HRLModelAlgorithms::EstimateBetaMDPDE(alpha, dataset, options) };
 
             residual_matrix_ols_list.at(j).col(i) =
-                HRLModelMetrics::CalculateNormalizedResidual(
+                CalculateNormalizedResidual(
                     beta_result.beta_ols, test_input.gaus_true);
             residual_matrix_mdpde_list.at(j).col(i) =
-                HRLModelMetrics::CalculateNormalizedResidual(
+                CalculateNormalizedResidual(
                     beta_result.beta_mdpde,test_input.gaus_true);
         }
     }
@@ -205,10 +227,10 @@ bool HRLModelTester::RunMuMDPDETest(
             };
 
             residual_matrix_median_list.at(j).col(i) =
-                HRLModelMetrics::CalculateNormalizedResidual(
+                CalculateNormalizedResidual(
                     ols_result.mu_mdpde, test_input.gaus_true);
             residual_matrix_mdpde_list.at(j).col(i) =
-                HRLModelMetrics::CalculateNormalizedResidual(
+                CalculateNormalizedResidual(
                     mdpde_result.mu_mdpde,test_input.gaus_true);
         }
     }
@@ -291,13 +313,13 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
         };
 
         replica_residual_list.at(0).col(i) =
-            HRLModelMetrics::CalculateNormalizedResidual(
+            CalculateNormalizedResidual(
                 no_cut_result.beta_ols, test_input.gaus_true);
         replica_residual_list.at(1).col(i) =
-            HRLModelMetrics::CalculateNormalizedResidual(
+            CalculateNormalizedResidual(
                 no_cut_result.beta_mdpde, test_input.gaus_true);
         replica_residual_list.at(2).col(i) =
-            HRLModelMetrics::CalculateNormalizedResidual(
+            CalculateNormalizedResidual(
                 cut_result.beta_mdpde, test_input.gaus_true);
 
         #pragma omp critical

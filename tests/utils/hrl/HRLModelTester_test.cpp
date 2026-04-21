@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <initializer_list>
+#include <stdexcept>
 #include <vector>
 
 #include <rhbm_gem/utils/hrl/HRLModelTestDataFactory.hpp>
@@ -169,4 +170,42 @@ TEST(HRLModelTesterTest, RunBetaMDPDEWithNeighborhoodTestConsumesPreparedInputs)
     ASSERT_EQ(residual_mean_list.size(), 3u);
     ASSERT_EQ(residual_sigma_list.size(), 3u);
     EXPECT_GT(training_alpha_r_average, 0.0);
+}
+
+TEST(HRLModelTesterTest, RunBetaMDPDETestRejectsWrongSizedTruth)
+{
+    HRLModelTestDataFactory factory(
+        3,
+        rhbm_gem::GaussianLinearizationSpec::DefaultDataset());
+    factory.SetFittingRange(0.0, 1.0);
+    HRLModelTester tester(3);
+
+    auto test_input{
+        factory.BuildBetaTestInput(HRLModelTestDataFactory::BetaScenario{
+            MakeVector({ 1.0, 0.5, 0.0 }),
+            10,
+            0.01,
+            0.0,
+            2,
+            42
+        })
+    };
+    test_input.gaus_true = MakeVector({ 1.0, 0.5 });
+
+    std::vector<Eigen::VectorXd> residual_mean_ols_list;
+    std::vector<Eigen::VectorXd> residual_mean_mdpde_list;
+    std::vector<Eigen::VectorXd> residual_sigma_ols_list;
+    std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
+
+    EXPECT_THROW(
+        tester.RunBetaMDPDETest(
+            std::vector<double>{ 0.0 },
+            residual_mean_ols_list,
+            residual_mean_mdpde_list,
+            residual_sigma_ols_list,
+            residual_sigma_mdpde_list,
+            test_input,
+            1),
+        std::invalid_argument
+    );
 }
