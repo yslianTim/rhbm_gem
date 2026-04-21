@@ -164,10 +164,10 @@ void ValidateGroupEstimateResult(
     const char * context)
 {
     const auto expected_member_count{ static_cast<Eigen::Index>(member_count) };
-    if (result.beta_posterior_array.cols() != expected_member_count)
+    if (result.beta_posterior_matrix.cols() != expected_member_count)
     {
         throw std::invalid_argument(
-            std::string(context) + " beta_posterior_array member count is inconsistent.");
+            std::string(context) + " beta_posterior_matrix member count is inconsistent.");
     }
     if (result.capital_sigma_posterior_list.size() != member_count)
     {
@@ -238,7 +238,7 @@ LocalPotentialAnnotationData BuildAtomAnnotationData(
     const HRLGroupEstimationResult & result,
     Eigen::Index member_index)
 {
-    const auto beta_vector_posterior{ result.beta_posterior_array.col(member_index) };
+    const auto beta_vector_posterior{ result.beta_posterior_matrix.col(member_index) };
     const auto & sigma_matrix_posterior{
         result.capital_sigma_posterior_list.at(static_cast<std::size_t>(member_index))
     };
@@ -258,7 +258,7 @@ LocalPotentialAnnotationData BuildBondAnnotationData(
     const HRLGroupEstimationResult & result,
     Eigen::Index member_index)
 {
-    const auto beta_vector_posterior{ result.beta_posterior_array.col(member_index) };
+    const auto beta_vector_posterior{ result.beta_posterior_matrix.col(member_index) };
     const auto & sigma_matrix_posterior{
         result.capital_sigma_posterior_list.at(static_cast<std::size_t>(member_index))
     };

@@ -71,13 +71,13 @@ HRLGroupEstimationResult HRLGroupEstimator::Estimate(
     result.mu_mdpde = mu_result.mu_mdpde;
     result.mu_prior = web_result.mu_prior;
     result.capital_lambda = mu_result.capital_lambda;
-    result.beta_posterior_array = web_result.beta_posterior_array;
+    result.beta_posterior_matrix = web_result.beta_posterior_matrix;
     result.capital_sigma_posterior_list = std::move(web_result.capital_sigma_posterior_list);
     result.omega_array = mu_result.omega_array;
     result.statistical_distance_array = HRLModelAlgorithms::CalculateMemberStatisticalDistance(
         result.mu_prior,
         result.capital_lambda,
-        result.beta_posterior_array
+        result.beta_posterior_matrix
     );
     result.outlier_flag_array = HRLModelAlgorithms::CalculateOutlierMemberFlag(
         input.basis_size,
@@ -153,7 +153,7 @@ HRLGroupEstimationResult HRLGroupEstimator::BuildFallbackResult(
     result.mu_mdpde = mu_result.mu_mdpde;
     result.mu_prior = mu_result.mu_mdpde;
     result.capital_lambda = mu_result.capital_lambda;
-    result.beta_posterior_array = beta_matrix;
+    result.beta_posterior_matrix = beta_matrix;
     result.omega_array = mu_result.omega_array;
     result.capital_sigma_posterior_list.assign(
         input.member_estimates.size(),
@@ -162,7 +162,7 @@ HRLGroupEstimationResult HRLGroupEstimator::BuildFallbackResult(
     result.statistical_distance_array = HRLModelAlgorithms::CalculateMemberStatisticalDistance(
         result.mu_prior,
         result.capital_lambda,
-        result.beta_posterior_array
+        result.beta_posterior_matrix
     );
     result.outlier_flag_array = HRLModelAlgorithms::CalculateOutlierMemberFlag(
         input.basis_size,

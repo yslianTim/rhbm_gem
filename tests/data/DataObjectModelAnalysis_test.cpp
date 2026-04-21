@@ -261,7 +261,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupEstimateRes
     result.mu_mdpde = (Eigen::Vector2d() << 0.2, 1.1).finished();
     result.mu_prior = (Eigen::Vector2d() << 0.3, 1.0).finished();
     result.capital_lambda = Eigen::Matrix2d::Identity();
-    result.beta_posterior_array = Eigen::MatrixXd::Zero(2, static_cast<Eigen::Index>(atom_list.size()));
+    result.beta_posterior_matrix = Eigen::MatrixXd::Zero(2, static_cast<Eigen::Index>(atom_list.size()));
     result.capital_sigma_posterior_list.assign(atom_list.size(), Eigen::Matrix2d::Identity());
     result.outlier_flag_array =
         Eigen::Array<bool, Eigen::Dynamic, 1>::Constant(static_cast<Eigen::Index>(atom_list.size()), false);
@@ -269,7 +269,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupEstimateRes
         Eigen::ArrayXd::Zero(static_cast<Eigen::Index>(atom_list.size()));
     for (Eigen::Index i = 0; i < static_cast<Eigen::Index>(atom_list.size()); i++)
     {
-        result.beta_posterior_array.col(i) =
+        result.beta_posterior_matrix.col(i) =
             (Eigen::Vector2d() << 0.4 + 0.1 * static_cast<double>(i), 0.9).finished();
         result.outlier_flag_array(i) = (i == 0);
         result.statistical_distance_array(i) = 1.5 + static_cast<double>(i);
@@ -297,7 +297,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupEstimateRes
     ASSERT_TRUE(annotation.has_value());
     const auto expected_posterior{
         AtomGroupDecodeService().DecodePosteriorEstimate(
-            result.beta_posterior_array.col(0),
+            result.beta_posterior_matrix.col(0),
             result.capital_sigma_posterior_list.front())
     };
     EXPECT_NEAR(expected_posterior.estimate.amplitude, annotation->posterior.estimate.amplitude, 1e-12);
@@ -320,7 +320,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorRejectsAtomGroupEstimateRes
     const auto group_key{ analysis_view.CollectAtomGroupKeys(class_key).front() };
 
     HRLGroupEstimationResult result;
-    result.beta_posterior_array = Eigen::MatrixXd::Zero(2, 0);
+    result.beta_posterior_matrix = Eigen::MatrixXd::Zero(2, 0);
     result.outlier_flag_array = Eigen::Array<bool, Eigen::Dynamic, 1>::Zero(0);
     result.statistical_distance_array = Eigen::ArrayXd::Zero(0);
 
@@ -349,7 +349,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesBondGroupEstimateRes
     result.mu_mdpde = (Eigen::Vector2d() << 0.2, 1.1).finished();
     result.mu_prior = (Eigen::Vector2d() << 0.3, 1.0).finished();
     result.capital_lambda = Eigen::Matrix2d::Identity();
-    result.beta_posterior_array = Eigen::MatrixXd::Zero(2, static_cast<Eigen::Index>(bond_list.size()));
+    result.beta_posterior_matrix = Eigen::MatrixXd::Zero(2, static_cast<Eigen::Index>(bond_list.size()));
     result.capital_sigma_posterior_list.assign(bond_list.size(), Eigen::Matrix2d::Identity());
     result.outlier_flag_array =
         Eigen::Array<bool, Eigen::Dynamic, 1>::Constant(static_cast<Eigen::Index>(bond_list.size()), false);
@@ -357,7 +357,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesBondGroupEstimateRes
         Eigen::ArrayXd::Zero(static_cast<Eigen::Index>(bond_list.size()));
     for (Eigen::Index i = 0; i < static_cast<Eigen::Index>(bond_list.size()); i++)
     {
-        result.beta_posterior_array.col(i) =
+        result.beta_posterior_matrix.col(i) =
             (Eigen::Vector2d() << 0.4 + 0.1 * static_cast<double>(i), 0.9).finished();
         result.outlier_flag_array(i) = (i == 0);
         result.statistical_distance_array(i) = 2.5 + static_cast<double>(i);
@@ -396,7 +396,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorRejectsBondGroupEstimateRes
     const auto member_count{ analysis_view.GetBondObjectList(group_key, class_key).size() };
 
     HRLGroupEstimationResult result;
-    result.beta_posterior_array =
+    result.beta_posterior_matrix =
         Eigen::MatrixXd::Zero(2, static_cast<Eigen::Index>(member_count));
     result.capital_sigma_posterior_list.assign(member_count == 0 ? 0 : member_count - 1, Eigen::Matrix2d::Identity());
     result.outlier_flag_array =

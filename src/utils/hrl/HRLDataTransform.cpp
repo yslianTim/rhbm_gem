@@ -78,7 +78,7 @@ HRLBetaMatrix HRLDataTransform::BuildBetaMatrix(
     const auto basis_size{ static_cast<int>(beta_list.front().rows()) };
     rhbm_gem::NumericValidation::RequirePositive(basis_size, "basis_size");
     const auto member_size{ CheckedCastToInt(beta_list.size()) };
-    HRLBetaMatrix beta_array{ HRLBetaMatrix::Zero(basis_size, member_size) };
+    HRLBetaMatrix beta_matrix{ HRLBetaMatrix::Zero(basis_size, member_size) };
     for (int i = 0; i < member_size; i++)
     {
         const auto & beta_vector{ beta_list.at(static_cast<std::size_t>(i)) };
@@ -94,9 +94,9 @@ HRLBetaMatrix HRLDataTransform::BuildBetaMatrix(
         {
             throw std::invalid_argument("beta_list contains non-finite value.");
         }
-        beta_array.col(i) = beta_vector;
+        beta_matrix.col(i) = beta_vector;
     }
-    return beta_array;
+    return beta_matrix;
 }
 
 HRLGroupEstimationInput HRLDataTransform::BuildGroupInput(

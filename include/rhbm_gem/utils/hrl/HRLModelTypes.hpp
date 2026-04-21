@@ -14,6 +14,7 @@ using HRLMuVector = Eigen::VectorXd;
 using HRLBetaMatrix = Eigen::MatrixXd;
 using HRLGroupCovarianceMatrix = Eigen::MatrixXd;
 using HRLMemberCovarianceMatrix = Eigen::MatrixXd;
+using HRLBetaPosteriorMatrix = Eigen::MatrixXd;
 using HRLPosteriorCovarianceMatrix = Eigen::MatrixXd;
 using HRLDiagonalMatrix = Eigen::DiagonalMatrix<double, Eigen::Dynamic>;
 
@@ -88,7 +89,7 @@ struct HRLWebEstimateResult
 {
     HRLEstimationStatus status{ HRLEstimationStatus::SUCCESS };
     HRLMuVector mu_prior;
-    HRLBetaMatrix beta_posterior_array;
+    HRLBetaPosteriorMatrix beta_posterior_matrix;
     std::vector<HRLPosteriorCovarianceMatrix> capital_sigma_posterior_list;
 };
 
@@ -99,7 +100,7 @@ struct HRLGroupEstimationResult
     HRLMuVector mu_mdpde;
     HRLMuVector mu_prior;
     HRLGroupCovarianceMatrix capital_lambda;
-    HRLBetaMatrix beta_posterior_array;
+    HRLBetaPosteriorMatrix beta_posterior_matrix;
     std::vector<HRLPosteriorCovarianceMatrix> capital_sigma_posterior_list;
     Eigen::ArrayXd omega_array;
     Eigen::ArrayXd statistical_distance_array;

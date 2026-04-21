@@ -74,7 +74,7 @@ TEST(HRLGroupEstimatorTest, EstimateSingleMemberUsesFallbackResult)
     EXPECT_EQ(HRLEstimationStatus::SINGLE_MEMBER, result.status);
     EXPECT_TRUE(result.mu_mean.isApprox(MakeVector({ 1.0, 2.0 }), 1e-12));
     EXPECT_TRUE(result.mu_prior.isApprox(MakeVector({ 1.0, 2.0 }), 1e-12));
-    EXPECT_TRUE(result.beta_posterior_array.col(0).isApprox(MakeVector({ 1.0, 2.0 }), 1e-12));
+    EXPECT_TRUE(result.beta_posterior_matrix.col(0).isApprox(MakeVector({ 1.0, 2.0 }), 1e-12));
     ASSERT_EQ(1u, result.capital_sigma_posterior_list.size());
     EXPECT_TRUE(result.capital_sigma_posterior_list[0].isApprox(Eigen::MatrixXd::Zero(2, 2), 1e-12));
 }
@@ -128,7 +128,7 @@ TEST(HRLGroupEstimatorTest, EstimateTwoMembersPinsMuPriorToMuMDPDE)
 
     EXPECT_EQ(HRLEstimationStatus::SUCCESS, result.status);
     EXPECT_TRUE(result.mu_prior.isApprox(result.mu_mdpde, 1e-12));
-    EXPECT_EQ(2, result.beta_posterior_array.cols());
+    EXPECT_EQ(2, result.beta_posterior_matrix.cols());
     ASSERT_EQ(2u, result.capital_sigma_posterior_list.size());
     EXPECT_EQ(2, result.statistical_distance_array.size());
     EXPECT_EQ(2, result.outlier_flag_array.size());
