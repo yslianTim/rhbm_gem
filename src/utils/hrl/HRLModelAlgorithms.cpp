@@ -10,50 +10,56 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 
 #include <boost/math/distributions/chi_squared.hpp>
 
 namespace
 {
-void ValidateMatrixVectorShape(
+void ValidateDatasetShape(
     const HRLDesignMatrix & design_matrix,
-    const HRLResponseVector & response_vector)
+    const HRLResponseVector & response_vector,
+    std::string_view context = {})
 {
-    if (design_matrix.rows() != response_vector.rows())
-    {
-        throw std::invalid_argument("X and y sizes are inconsistent.");
-    }
-    if (design_matrix.cols() <= 0)
-    {
-        throw std::invalid_argument("X must contain at least one basis column.");
-    }
-    try
-    {
-        rhbm_gem::EigenValidation::RequireFinite(design_matrix, "X");
-        rhbm_gem::EigenValidation::RequireFinite(response_vector, "y");
-    }
-    catch (const std::invalid_argument &)
-    {
-        throw std::invalid_argument("X and y must contain only finite values.");
-    }
+    rhbm_gem::EigenValidation::RequireRows(
+        design_matrix,
+        response_vector.rows(),
+        "X",
+        context);
+    rhbm_gem::NumericValidation::RequirePositive(
+        design_matrix.cols(),
+        "X column count",
+        context);
+    rhbm_gem::EigenValidation::RequireFinite(design_matrix, "X", context);
+    rhbm_gem::EigenValidation::RequireFinite(response_vector, "y", context);
 }
 
-void ValidateDiagonalSize(
+void ValidateDiagonalAgainstSize(
     const HRLDiagonalMatrix & matrix,
     Eigen::Index expected_size,
-    const char * name)
+    const char * name,
+    std::string_view context = {})
 {
-    try
-    {
-        rhbm_gem::EigenValidation::RequireVectorSize(
-            matrix.diagonal(),
-            expected_size,
-            name);
-    }
-    catch (const std::invalid_argument &)
-    {
-        throw std::invalid_argument(std::string(name) + " size is inconsistent.");
-    }
+    rhbm_gem::EigenValidation::RequireVectorSize(
+        matrix.diagonal(),
+        expected_size,
+        name,
+        context);
+}
+
+template <typename Derived>
+void ValidateSquareBasisMatrix(
+    const Eigen::DenseBase<Derived> & matrix,
+    Eigen::Index basis_size,
+    const char * name,
+    std::string_view context = {})
+{
+    rhbm_gem::EigenValidation::RequireShape(
+        matrix,
+        basis_size,
+        basis_size,
+        name,
+        context);
 }
 
 double CalculateChiSquareQuantile(int df)
@@ -66,7 +72,7 @@ HRLBetaVector CalculateBetaByOLS(
     const HRLDesignMatrix & design_matrix,
     const HRLResponseVector & response_vector);
 
-HRLBetaVector CalculateBetaWithSelectedDataByOLS(
+[[maybe_unused]] HRLBetaVector CalculateBetaWithSelectedDataByOLS(
     const HRLMemberDataset & dataset);
 
 HRLBetaVector CalculateBetaByMDPDE(
@@ -131,7 +137,10 @@ HRLBetaEstimateResult HRLModelAlgorithms::EstimateBetaMDPDE(
     rhbm_gem::NumericValidation::RequireFinitePositive(options.data_weight_min, "data_weight_min");
     const auto & design_matrix{ dataset.X };
     const auto & response_vector{ dataset.y };
-    ValidateMatrixVectorShape(design_matrix, response_vector);
+    ValidateDatasetShape(
+        design_matrix,
+        response_vector,
+        "EstimateBetaMDPDE dataset is invalid.");
 
     detail::ScopedEigenThreadCount thread_guard(options.thread_size);
     (void)thread_guard;
@@ -327,12 +336,20 @@ HRLWebEstimateResult HRLModelAlgorithms::EstimateWEB(
         const auto & dataset{ member_datasets.at(i) };
         const auto & capital_sigma{ capital_sigma_list.at(i) };
         const auto & member_capital_lambda{ member_capital_lambda_list.at(i) };
-        ValidateMatrixVectorShape(dataset.X, dataset.y);
-        ValidateDiagonalSize(capital_sigma, dataset.y.size(), "capital_sigma");
-        if (member_capital_lambda.rows() != basis_size || member_capital_lambda.cols() != basis_size)
-        {
-            throw std::invalid_argument("member_capital_lambda size is inconsistent.");
-        }
+        ValidateDatasetShape(
+            dataset.X,
+            dataset.y,
+            "EstimateWEB dataset is invalid.");
+        ValidateDiagonalAgainstSize(
+            capital_sigma,
+            dataset.y.size(),
+            "capital_sigma",
+            "EstimateWEB covariance input is invalid.");
+        ValidateSquareBasisMatrix(
+            member_capital_lambda,
+            basis_size,
+            "member_capital_lambda",
+            "EstimateWEB member covariance input is invalid.");
 
         const auto inv_capital_sigma{
             EigenMatrixUtility::GetInverseDiagonalMatrix(capital_sigma)
@@ -355,8 +372,7 @@ HRLWebEstimateResult HRLModelAlgorithms::EstimateWEB(
 
         result.capital_sigma_posterior_list.emplace_back(capital_sigma_posterior);
         result.beta_posterior_matrix.col(static_cast<Eigen::Index>(i)) =
-            capital_sigma_posterior *
-            (moment_matrix + inv_member_capital_lambda * mu_mdpde);
+            capital_sigma_posterior * (moment_matrix + inv_member_capital_lambda * mu_mdpde);
         numerator += inv_member_capital_lambda * capital_sigma_posterior * moment_matrix;
         denominator += inv_member_capital_lambda * capital_sigma_posterior * gram_matrix;
     }
@@ -382,14 +398,18 @@ HRLBetaVector CalculateBetaByOLS(
     return inverse_gram_matrix * (design_matrix.transpose() * response_vector);
 }
 
-HRLBetaVector CalculateBetaWithSelectedDataByOLS(
+[[maybe_unused]] HRLBetaVector CalculateBetaWithSelectedDataByOLS(
     const HRLMemberDataset & dataset)
 {
-    ValidateMatrixVectorShape(dataset.X, dataset.y);
-    if (dataset.score.size() != dataset.y.size())
-    {
-        throw std::invalid_argument("dataset score size is inconsistent.");
-    }
+    ValidateDatasetShape(
+        dataset.X,
+        dataset.y,
+        "Selected-data OLS input is invalid.");
+    rhbm_gem::EigenValidation::RequireSameSize(
+        dataset.score,
+        dataset.y,
+        "dataset score",
+        "Selected-data OLS input is invalid.");
 
     std::vector<Eigen::Index> selected_row_indices;
     selected_row_indices.reserve(static_cast<std::size_t>(dataset.y.size()));
@@ -426,8 +446,15 @@ HRLBetaVector CalculateBetaByMDPDE(
     const HRLResponseVector & response_vector,
     const HRLDiagonalMatrix & W)
 {
-    ValidateMatrixVectorShape(design_matrix, response_vector);
-    ValidateDiagonalSize(W, response_vector.size(), "W");
+    ValidateDatasetShape(
+        design_matrix,
+        response_vector,
+        "MDPDE beta update input is invalid.");
+    ValidateDiagonalAgainstSize(
+        W,
+        response_vector.size(),
+        "W",
+        "MDPDE beta update input is invalid.");
     const HRLGroupCovarianceMatrix gram_matrix{
         design_matrix.transpose() * W * design_matrix
     };
@@ -452,10 +479,11 @@ HRLMuVector CalculateMuByMDPDE(
     const Eigen::ArrayXd & omega_array,
     double omega_sum)
 {
-    if (beta_matrix.cols() != omega_array.rows())
-    {
-        throw std::invalid_argument("beta_matrix and omega_array sizes are inconsistent.");
-    }
+    rhbm_gem::EigenValidation::RequireCols(
+        beta_matrix,
+        omega_array.rows(),
+        "beta_matrix",
+        "Mu estimation input is invalid.");
     rhbm_gem::NumericValidation::RequireFinitePositive(omega_sum, "omega_sum");
     HRLBetaMatrix numerator{ beta_matrix.array() / omega_sum };
     for (int i = 0; i < numerator.cols(); i++)
@@ -475,17 +503,21 @@ HRLDiagonalMatrix CalculateDataWeight(
 {
     rhbm_gem::NumericValidation::RequireFiniteNonNegative(alpha, "alpha");
     rhbm_gem::NumericValidation::RequireFinitePositive(weight_min, "weight_min");
-    ValidateMatrixVectorShape(design_matrix, response_vector);
-    if (beta.rows() != design_matrix.cols())
-    {
-        throw std::invalid_argument("beta size is inconsistent with X.");
-    }
+    ValidateDatasetShape(
+        design_matrix,
+        response_vector,
+        "Data weight input is invalid.");
+    rhbm_gem::EigenValidation::RequireVectorSize(
+        beta,
+        design_matrix.cols(),
+        "beta",
+        "Data weight input is invalid.");
 
     if (alpha == 0.0)
     {
         return HRLResponseVector::Ones(response_vector.size()).asDiagonal();
     }
-    if (!std::isfinite(sigma_square) || sigma_square <= 0.0)
+    if (!rhbm_gem::NumericValidation::IsFinitePositive(sigma_square))
     {
         sigma_square = weight_min;
     }
@@ -497,7 +529,7 @@ HRLDiagonalMatrix CalculateDataWeight(
     exponent = exponent.cwiseMin(max_log);
     Eigen::ArrayXd W{ exponent.exp() };
     W = W.unaryExpr([weight_min](double w) {
-        return std::isfinite(w) ? w : weight_min;
+        return rhbm_gem::NumericValidation::IsFinite(w) ? w : weight_min;
     });
     W = W.cwiseMax(weight_min);
     return W.matrix().asDiagonal();
@@ -511,12 +543,20 @@ double CalculateDataVarianceSquare(
     const HRLBetaVector & beta)
 {
     rhbm_gem::NumericValidation::RequireFiniteNonNegative(alpha, "alpha");
-    ValidateMatrixVectorShape(design_matrix, response_vector);
-    ValidateDiagonalSize(W, response_vector.size(), "W");
-    if (beta.rows() != design_matrix.cols())
-    {
-        throw std::invalid_argument("beta size is inconsistent with X.");
-    }
+    ValidateDatasetShape(
+        design_matrix,
+        response_vector,
+        "Data variance input is invalid.");
+    ValidateDiagonalAgainstSize(
+        W,
+        response_vector.size(),
+        "W",
+        "Data variance input is invalid.");
+    rhbm_gem::EigenValidation::RequireVectorSize(
+        beta,
+        design_matrix.cols(),
+        "beta",
+        "Data variance input is invalid.");
 
     const auto n{ static_cast<double>(response_vector.size()) };
     const HRLResponseVector residual{ response_vector - (design_matrix * beta) };
@@ -527,7 +567,7 @@ double CalculateDataVarianceSquare(
         denominator = std::numeric_limits<double>::min();
     }
     auto sigma_square{ numerator / denominator };
-    if (!std::isfinite(sigma_square) || sigma_square <= 0.0)
+    if (!rhbm_gem::NumericValidation::IsFinitePositive(sigma_square))
     {
         sigma_square = std::numeric_limits<double>::max();
     }
@@ -543,7 +583,7 @@ HRLDiagonalMatrix CalculateDataCovariance(
     const auto W_inverse_trace{
         EigenMatrixUtility::GetInverseDiagonalMatrix(W).diagonal().sum()
     };
-    if (!std::isfinite(W_inverse_trace) || W_inverse_trace <= 0.0)
+    if (!rhbm_gem::NumericValidation::IsFinitePositive(W_inverse_trace))
     {
         return HRLResponseVector::Ones(n).asDiagonal();
     }
@@ -556,7 +596,7 @@ HRLDiagonalMatrix CalculateDataCovariance(
             continue;
         }
         capital_sigma(j) = n * sigma_square / data_weight_array(j) / W_inverse_trace;
-        if (!std::isfinite(capital_sigma(j)) || capital_sigma(j) <= 0.0)
+        if (!rhbm_gem::NumericValidation::IsFinitePositive(capital_sigma(j)))
         {
             capital_sigma(j) = 1.0;
         }
@@ -573,15 +613,16 @@ Eigen::ArrayXd CalculateMemberWeight(
 {
     rhbm_gem::NumericValidation::RequireFiniteNonNegative(alpha, "alpha");
     rhbm_gem::NumericValidation::RequireFinitePositive(weight_min, "weight_min");
-    if (beta_matrix.rows() != mu.rows())
-    {
-        throw std::invalid_argument("beta_matrix and mu sizes are inconsistent.");
-    }
-    if (capital_lambda.rows() != capital_lambda.cols() ||
-        capital_lambda.rows() != beta_matrix.rows())
-    {
-        throw std::invalid_argument("capital_lambda size is inconsistent.");
-    }
+    rhbm_gem::EigenValidation::RequireRows(
+        beta_matrix,
+        mu.rows(),
+        "beta_matrix",
+        "Member weight input is invalid.");
+    ValidateSquareBasisMatrix(
+        capital_lambda,
+        beta_matrix.rows(),
+        "capital_lambda",
+        "Member weight input is invalid.");
 
     const auto member_size{ static_cast<int>(beta_matrix.cols()) };
     const auto weight_member_min{ weight_min / static_cast<double>(member_size) };
@@ -594,7 +635,7 @@ Eigen::ArrayXd CalculateMemberWeight(
         const auto exp_index{
             static_cast<double>(residual.transpose() * inverse_capital_lambda * residual)
         };
-        if (!std::isfinite(exp_index))
+        if (!rhbm_gem::NumericValidation::IsFinite(exp_index))
         {
             omega_array(i) = weight_member_min;
         }
@@ -618,10 +659,16 @@ HRLGroupCovarianceMatrix CalculateMemberCovariance(
     double omega_sum)
 {
     rhbm_gem::NumericValidation::RequireFiniteNonNegative(alpha, "alpha");
-    if (beta_matrix.rows() != mu.rows() || beta_matrix.cols() != omega_array.rows())
-    {
-        throw std::invalid_argument("Member covariance inputs are inconsistent.");
-    }
+    rhbm_gem::EigenValidation::RequireRows(
+        beta_matrix,
+        mu.rows(),
+        "beta_matrix",
+        "Member covariance input is invalid.");
+    rhbm_gem::EigenValidation::RequireCols(
+        beta_matrix,
+        omega_array.rows(),
+        "beta_matrix",
+        "Member covariance input is invalid.");
     const auto basis_size{ static_cast<int>(beta_matrix.rows()) };
     const auto member_size{ static_cast<int>(beta_matrix.cols()) };
     HRLGroupCovarianceMatrix numerator{
@@ -658,19 +705,15 @@ std::vector<HRLMemberCovarianceMatrix> CalculateWeightedMemberCovariance(
     const HRLGroupCovarianceMatrix & capital_lambda,
     const Eigen::ArrayXd & omega_array)
 {
-    try
-    {
-        rhbm_gem::EigenValidation::RequireSquare(capital_lambda, "capital_lambda");
-    }
-    catch (const std::invalid_argument &)
-    {
-        throw std::invalid_argument("capital_lambda must be square.");
-    }
+    rhbm_gem::EigenValidation::RequireSquare(
+        capital_lambda,
+        "capital_lambda",
+        "Weighted member covariance input is invalid.");
+    rhbm_gem::EigenValidation::RequireNonEmpty(
+        omega_array,
+        "omega_array",
+        "Weighted member covariance input is invalid.");
     const auto member_size{ static_cast<int>(omega_array.size()) };
-    if (member_size <= 0)
-    {
-        throw std::invalid_argument("omega_array must not be empty.");
-    }
 
     auto omega_inverse_sum{ 0.0 };
     for (int i = 0; i < member_size; i++)
@@ -702,15 +745,16 @@ Eigen::ArrayXd HRLModelAlgorithms::CalculateMemberStatisticalDistance(
     const HRLGroupCovarianceMatrix & capital_lambda,
     const HRLBetaPosteriorMatrix & beta_posterior_matrix)
 {
-    if (beta_posterior_matrix.rows() != mu_prior.rows())
-    {
-        throw std::invalid_argument("beta_posterior_matrix and mu_prior sizes are inconsistent.");
-    }
-    if (capital_lambda.rows() != capital_lambda.cols() ||
-        capital_lambda.rows() != mu_prior.rows())
-    {
-        throw std::invalid_argument("capital_lambda size is inconsistent.");
-    }
+    rhbm_gem::EigenValidation::RequireRows(
+        beta_posterior_matrix,
+        mu_prior.rows(),
+        "beta_posterior_matrix",
+        "Statistical distance input is invalid.");
+    ValidateSquareBasisMatrix(
+        capital_lambda,
+        mu_prior.rows(),
+        "capital_lambda",
+        "Statistical distance input is invalid.");
 
     const auto member_size{ static_cast<int>(beta_posterior_matrix.cols()) };
     Eigen::ArrayXd statistical_distance_array{ Eigen::ArrayXd::Zero(member_size) };

@@ -66,6 +66,54 @@ TEST(EigenValidationTest, RequireVectorSizeWithContextPrefixesOriginalMessage)
     );
 }
 
+TEST(EigenValidationTest, RequireRowsAcceptsExpectedRowCount)
+{
+    const Eigen::MatrixXd matrix{ Eigen::MatrixXd::Zero(3, 2) };
+
+    EXPECT_NO_THROW(rg::EigenValidation::RequireRows(matrix, 3, "matrix"));
+}
+
+TEST(EigenValidationTest, RequireRowsWithContextPrefixesOriginalMessage)
+{
+    const Eigen::MatrixXd matrix{ Eigen::MatrixXd::Zero(2, 3) };
+
+    ExpectInvalidArgumentMessage(
+        [&]()
+        {
+            rg::EigenValidation::RequireRows(
+                matrix,
+                4,
+                "matrix",
+                "Row validation failed.");
+        },
+        "Row validation failed. Details: matrix must have 4 rows."
+    );
+}
+
+TEST(EigenValidationTest, RequireColsAcceptsExpectedColumnCount)
+{
+    const Eigen::MatrixXd matrix{ Eigen::MatrixXd::Zero(3, 2) };
+
+    EXPECT_NO_THROW(rg::EigenValidation::RequireCols(matrix, 2, "matrix"));
+}
+
+TEST(EigenValidationTest, RequireColsWithContextPrefixesOriginalMessage)
+{
+    const Eigen::MatrixXd matrix{ Eigen::MatrixXd::Zero(2, 3) };
+
+    ExpectInvalidArgumentMessage(
+        [&]()
+        {
+            rg::EigenValidation::RequireCols(
+                matrix,
+                4,
+                "matrix",
+                "Column validation failed.");
+        },
+        "Column validation failed. Details: matrix must have 4 columns."
+    );
+}
+
 TEST(EigenValidationTest, RequireSameSizeWithContextPrefixesOriginalMessage)
 {
     const Eigen::VectorXd lhs{ Eigen::VectorXd::Zero(3) };

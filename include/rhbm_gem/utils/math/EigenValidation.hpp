@@ -72,6 +72,38 @@ inline void RequireVectorSize(
     }
 }
 
+template <typename Derived, typename NameType>
+inline void RequireRows(
+    const Eigen::DenseBase<Derived> & matrix,
+    Eigen::Index expected_rows,
+    const NameType & name,
+    std::string_view context = {})
+{
+    if (matrix.rows() != expected_rows)
+    {
+        throw std::invalid_argument(detail::ApplyContext(
+            detail::GetName(name) + " must have " +
+            std::to_string(static_cast<long long>(expected_rows)) + " rows.",
+            context));
+    }
+}
+
+template <typename Derived, typename NameType>
+inline void RequireCols(
+    const Eigen::DenseBase<Derived> & matrix,
+    Eigen::Index expected_cols,
+    const NameType & name,
+    std::string_view context = {})
+{
+    if (matrix.cols() != expected_cols)
+    {
+        throw std::invalid_argument(detail::ApplyContext(
+            detail::GetName(name) + " must have " +
+            std::to_string(static_cast<long long>(expected_cols)) + " columns.",
+            context));
+    }
+}
+
 template <typename LeftDerived, typename RightDerived, typename NameType>
 inline void RequireSameSize(
     const Eigen::DenseBase<LeftDerived> & lhs,
