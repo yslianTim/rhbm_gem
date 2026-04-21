@@ -248,24 +248,18 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
             const auto & bond_list{ analysis_view.GetBondObjectList(group_key, class_key) };
             const auto group_size{ bond_list.size() };
             std::vector<HRLMemberDataset> member_datasets;
-            std::vector<HRLMemberLocalEstimate> member_estimates;
+            std::vector<HRLBetaEstimateResult> member_fit_results;
             member_datasets.reserve(group_size);
-            member_estimates.reserve(group_size);
+            member_fit_results.reserve(group_size);
             for (const auto & bond : bond_list)
             {
                 const auto local_entry{ local_entry_map.at(bond) };
                 const auto & dataset{ local_entry.GetDataset() };
-                const auto & fit_result{ local_entry.GetFitResult() };
                 member_datasets.emplace_back(dataset);
-                member_estimates.emplace_back(HRLMemberLocalEstimate{
-                    fit_result.beta_mdpde,
-                    fit_result.sigma_square,
-                    fit_result.data_weight,
-                    fit_result.data_covariance
-                });
+                member_fit_results.emplace_back(local_entry.GetFitResult());
             }
             const auto input{
-                HRLDataTransform::BuildGroupInput(member_datasets, member_estimates)
+                HRLDataTransform::BuildGroupInput(member_datasets, member_fit_results)
             };
             HRLGroupEstimator estimator(
                 MakePotentialAnalysisExecutionOptions(context.thread_size, true));

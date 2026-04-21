@@ -15,6 +15,6 @@ HRLBetaMatrix BuildBetaMatrix(const std::vector<HRLBetaVector> & beta_list);
 
 HRLGroupEstimationInput BuildGroupInput(
     const std::vector<HRLMemberDataset> & member_datasets,
-    const std::vector<HRLMemberLocalEstimate> & member_estimates
+    const std::vector<HRLBetaEstimateResult> & member_fit_results
 );
 } // namespace HRLDataTransform

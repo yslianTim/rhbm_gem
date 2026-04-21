@@ -29,7 +29,7 @@ HRLMemberDataset HRLDataTransform::BuildMemberDataset(const SeriesPointList & se
     for (int i = 0; i < data_size; i++)
     {
         const auto & point{ series_point_list.at(static_cast<std::size_t>(i)) };
-        if (point.GetBasisSize() != basis_size)
+        if (static_cast<int>(point.GetBasisSize()) != basis_size)
         {
             throw std::invalid_argument("All data entries must share the same basis size.");
         }
@@ -89,14 +89,14 @@ HRLBetaMatrix HRLDataTransform::BuildBetaMatrix(const std::vector<HRLBetaVector>
 
 HRLGroupEstimationInput HRLDataTransform::BuildGroupInput(
     const std::vector<HRLMemberDataset> & member_datasets,
-    const std::vector<HRLMemberLocalEstimate> & member_estimates)
+    const std::vector<HRLBetaEstimateResult> & member_fit_results)
 {
     const auto member_size{ member_datasets.size() };
     if (member_size == 0)
     {
         throw std::invalid_argument("member_datasets must not be empty.");
     }
-    if (member_estimates.size() != member_size)
+    if (member_fit_results.size() != member_size)
     {
         throw std::invalid_argument("Group estimation inputs must have consistent member counts.");
     }
@@ -107,12 +107,12 @@ HRLGroupEstimationInput HRLDataTransform::BuildGroupInput(
     HRLGroupEstimationInput input;
     input.basis_size = basis_size;
     input.member_datasets.reserve(member_size);
-    input.member_estimates.reserve(member_size);
+    input.member_fit_results.reserve(member_size);
 
     for (std::size_t i = 0; i < member_size; i++)
     {
         const auto & dataset{ member_datasets.at(i) };
-        const auto & estimate{ member_estimates.at(i) };
+        const auto & fit_result{ member_fit_results.at(i) };
 
         if (dataset.X.cols() != basis_size)
         {
@@ -129,23 +129,23 @@ HRLGroupEstimationInput HRLDataTransform::BuildGroupInput(
             "Member dataset shape",
             "Member dataset shape is inconsistent.");
         rhbm_gem::EigenValidation::RequireVectorSize(
-            estimate.beta_mdpde,
+            fit_result.beta_mdpde,
             basis_size,
-            "Member beta",
+            "Member fit beta",
             "Member beta basis size is inconsistent.");
         rhbm_gem::EigenValidation::RequireSameSize(
-            estimate.data_weight.diagonal(),
+            fit_result.data_weight.diagonal(),
             dataset.y,
-            "Member data weight",
+            "Member fit data weight",
             "Member covariance or weight size is inconsistent.");
         rhbm_gem::EigenValidation::RequireSameSize(
-            estimate.data_covariance.diagonal(),
+            fit_result.data_covariance.diagonal(),
             dataset.y,
-            "Member data covariance",
+            "Member fit data covariance",
             "Member covariance or weight size is inconsistent.");
 
         input.member_datasets.emplace_back(dataset);
-        input.member_estimates.emplace_back(estimate);
+        input.member_fit_results.emplace_back(fit_result);
     }
 
     return input;

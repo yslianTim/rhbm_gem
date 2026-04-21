@@ -417,25 +417,20 @@ void PotentialAnalysisCommand::RunAtomPotentialFittingWorkflow(
             const auto & atom_list{ analysis_view.GetAtomObjectList(group_key, class_key) };
             auto group_size{ atom_list.size() };
             std::vector<HRLMemberDataset> member_datasets;
-            std::vector<HRLMemberLocalEstimate> member_estimates;
+            std::vector<HRLBetaEstimateResult> member_fit_results;
             member_datasets.reserve(group_size);
-            member_estimates.reserve(group_size);
+            member_fit_results.reserve(group_size);
             for (const auto & atom : atom_list)
             {
                 const auto local_entry{ local_entry_map.at(atom) };
                 member_datasets.emplace_back(local_entry.GetDataset());
-                member_estimates.emplace_back(HRLMemberLocalEstimate{
-                    local_entry.GetFitResult().beta_mdpde,
-                    local_entry.GetFitResult().sigma_square,
-                    local_entry.GetFitResult().data_weight,
-                    local_entry.GetFitResult().data_covariance
-                });
+                member_fit_results.emplace_back(local_entry.GetFitResult());
             }
             auto alpha_g{ request.training_alpha_flag ?
                 analysis_view.GetAtomAlphaG(group_key, class_key) : request.alpha_g
             };
             const auto input{
-                HRLDataTransform::BuildGroupInput(member_datasets, member_estimates)
+                HRLDataTransform::BuildGroupInput(member_datasets, member_fit_results)
             };
             HRLGroupEstimator estimator(MakePotentialAnalysisExecutionOptions(ThreadSize(), true));
             const auto result{ estimator.Estimate(input, alpha_g) };

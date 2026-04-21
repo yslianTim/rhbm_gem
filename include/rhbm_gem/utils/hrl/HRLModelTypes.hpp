@@ -40,26 +40,9 @@ struct HRLExecutionOptions
 
 struct HRLMemberDataset
 {
-    // X stores the member basis/design matrix and y stores the regression response.
-    HRLDesignMatrix X;
-    HRLResponseVector y;
-    HRLScoreVector score;
-};
-
-struct HRLMemberLocalEstimate
-{
-    // beta_* stores member-level linearized coefficient vectors.
-    HRLBetaVector beta_mdpde;
-    double sigma_square{ 0.0 };
-    HRLDiagonalMatrix data_weight;
-    HRLDiagonalMatrix data_covariance;
-};
-
-struct HRLGroupEstimationInput
-{
-    int basis_size{ 0 };
-    std::vector<HRLMemberDataset> member_datasets;
-    std::vector<HRLMemberLocalEstimate> member_estimates;
+    HRLDesignMatrix X;     // member basis/design matrix
+    HRLResponseVector y;   // regression response vector
+    HRLScoreVector score;  // member score/weight vector
 };
 
 struct HRLBetaEstimateResult
@@ -72,15 +55,20 @@ struct HRLBetaEstimateResult
     HRLDiagonalMatrix data_covariance;
 };
 
+struct HRLGroupEstimationInput
+{
+    int basis_size{ 0 };
+    std::vector<HRLMemberDataset> member_datasets;
+    std::vector<HRLBetaEstimateResult> member_fit_results;
+};
+
 struct HRLMuEstimateResult
 {
     HRLEstimationStatus status{ HRLEstimationStatus::SUCCESS };
-    // mu_* stores group-level location vectors in the same linearized basis as beta.
     HRLMuVector mu_mean;
     HRLMuVector mu_mdpde;
     Eigen::ArrayXd omega_array;
     double omega_sum{ 0.0 };
-    // capital_lambda is the shared group covariance; member_* are member-specific variants.
     HRLGroupCovarianceMatrix capital_lambda;
     std::vector<HRLMemberCovarianceMatrix> member_capital_lambda_list;
 };

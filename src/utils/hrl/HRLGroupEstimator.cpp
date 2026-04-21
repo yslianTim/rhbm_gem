@@ -3,7 +3,6 @@
 #include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <stdexcept>
@@ -19,16 +18,23 @@ HRLGroupEstimationResult HRLGroupEstimator::Estimate(
     const HRLGroupEstimationInput & input,
     double alpha_g) const
 {
-    ValidateInput(input);
+    rhbm_gem::NumericValidation::RequirePositive(input.basis_size, "basis_size");
+    const auto validated_input{
+        HRLDataTransform::BuildGroupInput(input.member_datasets, input.member_fit_results)
+    };
+    if (validated_input.basis_size != input.basis_size)
+    {
+        throw std::invalid_argument("basis_size is inconsistent with member datasets.");
+    }
 
     std::vector<HRLBetaVector> beta_list;
-    beta_list.reserve(input.member_estimates.size());
-    for (const auto & estimate : input.member_estimates)
+    beta_list.reserve(validated_input.member_fit_results.size());
+    for (const auto & fit_result : validated_input.member_fit_results)
     {
-        beta_list.emplace_back(estimate.beta_mdpde);
+        beta_list.emplace_back(fit_result.beta_mdpde);
     }
-    const auto beta_matrix{ HRLDataTransform::BuildBetaMatrix(beta_list) };
 
+    const auto beta_matrix{ HRLDataTransform::BuildBetaMatrix(beta_list) };
     auto mu_result{ HRLModelAlgorithms::EstimateMuMDPDE(alpha_g, beta_matrix, m_options) };
     if (mu_result.status == HRLEstimationStatus::SINGLE_MEMBER)
     {
@@ -37,18 +43,18 @@ HRLGroupEstimationResult HRLGroupEstimator::Estimate(
             Logger::Log(LogLevel::Debug,
                 "HRLGroupEstimator::Estimate : single-member group, using fallback result.");
         }
-        return BuildFallbackResult(input, mu_result);
+        return BuildFallbackResult(validated_input, mu_result);
     }
 
     std::vector<HRLDiagonalMatrix> capital_sigma_list;
-    capital_sigma_list.reserve(input.member_estimates.size());
-    for (const auto & estimate : input.member_estimates)
+    capital_sigma_list.reserve(validated_input.member_fit_results.size());
+    for (const auto & fit_result : validated_input.member_fit_results)
     {
-        capital_sigma_list.emplace_back(estimate.data_covariance);
+        capital_sigma_list.emplace_back(fit_result.data_covariance);
     }
     auto web_result{
         HRLModelAlgorithms::EstimateWEB(
-            input.member_datasets,
+            validated_input.member_datasets,
             capital_sigma_list,
             mu_result.mu_mdpde,
             mu_result.member_capital_lambda_list,
@@ -62,7 +68,7 @@ HRLGroupEstimationResult HRLGroupEstimator::Estimate(
             Logger::Log(LogLevel::Debug,
                 "HRLGroupEstimator::Estimate : WEB estimation skipped, using fallback result.");
         }
-        return BuildFallbackResult(input, mu_result);
+        return BuildFallbackResult(validated_input, mu_result);
     }
 
     HRLGroupEstimationResult result;
@@ -80,7 +86,7 @@ HRLGroupEstimationResult HRLGroupEstimator::Estimate(
         result.beta_posterior_matrix
     );
     result.outlier_flag_array = HRLModelAlgorithms::CalculateOutlierMemberFlag(
-        input.basis_size,
+        validated_input.basis_size,
         result.statistical_distance_array
     );
     if (mu_result.status == HRLEstimationStatus::MAX_ITERATIONS_REACHED ||
@@ -91,57 +97,15 @@ HRLGroupEstimationResult HRLGroupEstimator::Estimate(
     return result;
 }
 
-void HRLGroupEstimator::ValidateInput(const HRLGroupEstimationInput & input)
-{
-    rhbm_gem::NumericValidation::RequirePositive(input.basis_size, "basis_size");
-    if (input.member_datasets.empty())
-    {
-        throw std::invalid_argument("member_datasets must not be empty.");
-    }
-    if (input.member_datasets.size() != input.member_estimates.size())
-    {
-        throw std::invalid_argument("member_datasets and member_estimates sizes are inconsistent.");
-    }
-
-    for (std::size_t i = 0; i < input.member_datasets.size(); i++)
-    {
-        const auto & dataset{ input.member_datasets.at(i) };
-        const auto & estimate{ input.member_estimates.at(i) };
-        if (dataset.X.cols() != input.basis_size || dataset.X.rows() != dataset.y.rows())
-        {
-            throw std::invalid_argument("member dataset shape is inconsistent.");
-        }
-        if (estimate.beta_mdpde.rows() != input.basis_size)
-        {
-            throw std::invalid_argument("member beta basis size is inconsistent.");
-        }
-        try
-        {
-            rhbm_gem::EigenValidation::RequireVectorSize(
-                estimate.data_weight.diagonal(),
-                dataset.y.size(),
-                "member weight");
-            rhbm_gem::EigenValidation::RequireVectorSize(
-                estimate.data_covariance.diagonal(),
-                dataset.y.size(),
-                "member covariance");
-        }
-        catch (const std::invalid_argument &)
-        {
-            throw std::invalid_argument("member weight or covariance size is inconsistent.");
-        }
-    }
-}
-
 HRLGroupEstimationResult HRLGroupEstimator::BuildFallbackResult(
     const HRLGroupEstimationInput & input,
     const HRLMuEstimateResult & mu_result)
 {
     std::vector<HRLBetaVector> beta_list;
-    beta_list.reserve(input.member_estimates.size());
-    for (const auto & estimate : input.member_estimates)
+    beta_list.reserve(input.member_fit_results.size());
+    for (const auto & fit_result : input.member_fit_results)
     {
-        beta_list.emplace_back(estimate.beta_mdpde);
+        beta_list.emplace_back(fit_result.beta_mdpde);
     }
     const auto beta_matrix{ HRLDataTransform::BuildBetaMatrix(beta_list) };
 
@@ -156,7 +120,7 @@ HRLGroupEstimationResult HRLGroupEstimator::BuildFallbackResult(
     result.beta_posterior_matrix = beta_matrix;
     result.omega_array = mu_result.omega_array;
     result.capital_sigma_posterior_list.assign(
-        input.member_estimates.size(),
+        input.member_fit_results.size(),
         HRLPosteriorCovarianceMatrix::Zero(input.basis_size, input.basis_size)
     );
     result.statistical_distance_array = HRLModelAlgorithms::CalculateMemberStatisticalDistance(

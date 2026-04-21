@@ -41,18 +41,20 @@ HRLMemberDataset MakeDataset(std::initializer_list<SeriesPoint> rows)
     return HRLDataTransform::BuildMemberDataset(SeriesPointList(rows));
 }
 
-HRLMemberLocalEstimate MakeEstimate(
+HRLBetaEstimateResult MakeFitResult(
     std::initializer_list<double> beta_values,
     double sigma_square,
     std::initializer_list<double> weight_values,
-    std::initializer_list<double> covariance_values)
+    std::initializer_list<double> covariance_values,
+    HRLEstimationStatus status = HRLEstimationStatus::SUCCESS)
 {
-    HRLMemberLocalEstimate estimate;
-    estimate.beta_mdpde = MakeVector(beta_values);
-    estimate.sigma_square = sigma_square;
-    estimate.data_weight = MakeDiagonal(weight_values);
-    estimate.data_covariance = MakeDiagonal(covariance_values);
-    return estimate;
+    HRLBetaEstimateResult fit_result;
+    fit_result.status = status;
+    fit_result.beta_mdpde = MakeVector(beta_values);
+    fit_result.sigma_square = sigma_square;
+    fit_result.data_weight = MakeDiagonal(weight_values);
+    fit_result.data_covariance = MakeDiagonal(covariance_values);
+    return fit_result;
 }
 } // namespace
 
@@ -172,16 +174,16 @@ TEST(HRLDataTransformTest, BuildGroupInputBuildsStructuredRequest)
                 MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 2.0 }), MakeSeriesPoint({ 1.0, 1.0, 4.0 }) })
             },
             {
-                MakeEstimate({ 1.0, 2.0 }, 0.25, { 1.0, 1.0 }, { 0.25, 0.25 }),
-                MakeEstimate({ 2.0, 2.0 }, 0.5, { 1.0, 1.0 }, { 0.5, 0.5 })
+                MakeFitResult({ 1.0, 2.0 }, 0.25, { 1.0, 1.0 }, { 0.25, 0.25 }),
+                MakeFitResult({ 2.0, 2.0 }, 0.5, { 1.0, 1.0 }, { 0.5, 0.5 })
             }
         )
     };
 
     ASSERT_EQ(2u, input.member_datasets.size());
-    ASSERT_EQ(2u, input.member_estimates.size());
+    ASSERT_EQ(2u, input.member_fit_results.size());
     EXPECT_EQ(2, input.basis_size);
-    EXPECT_TRUE(input.member_estimates[0].beta_mdpde.isApprox(MakeVector({ 1.0, 2.0 }), 1e-12));
+    EXPECT_TRUE(input.member_fit_results[0].beta_mdpde.isApprox(MakeVector({ 1.0, 2.0 }), 1e-12));
 }
 
 TEST(HRLDataTransformTest, BuildGroupInputRejectsMismatchedMemberCounts)
@@ -190,8 +192,8 @@ TEST(HRLDataTransformTest, BuildGroupInputRejectsMismatchedMemberCounts)
         HRLDataTransform::BuildGroupInput(
             { MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 1.0 }) }) },
             {
-                MakeEstimate({ 1.0, 2.0 }, 0.25, { 1.0 }, { 1.0 }),
-                MakeEstimate({ 3.0, 4.0 }, 0.5, { 1.0 }, { 1.0 })
+                MakeFitResult({ 1.0, 2.0 }, 0.25, { 1.0 }, { 1.0 }),
+                MakeFitResult({ 3.0, 4.0 }, 0.5, { 1.0 }, { 1.0 })
             }
         ),
         std::invalid_argument
@@ -206,7 +208,7 @@ TEST(HRLDataTransformTest, BuildGroupInputRejectsInconsistentWeightSize)
                 MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 1.0 }), MakeSeriesPoint({ 1.0, 1.0, 3.0 }) })
             },
             {
-                MakeEstimate({ 1.0, 2.0 }, 0.25, { 1.0 }, { 0.25, 0.25 })
+                MakeFitResult({ 1.0, 2.0 }, 0.25, { 1.0 }, { 0.25, 0.25 })
             }
         ),
         std::invalid_argument
@@ -227,7 +229,7 @@ TEST(HRLDataTransformTest, BuildGroupInputRejectsInconsistentScoreSize)
         HRLDataTransform::BuildGroupInput(
             { dataset },
             {
-                MakeEstimate({ 1.0, 2.0 }, 0.25, { 1.0, 1.0 }, { 0.25, 0.25 })
+                MakeFitResult({ 1.0, 2.0 }, 0.25, { 1.0, 1.0 }, { 0.25, 0.25 })
             }
         ),
         std::invalid_argument
@@ -245,7 +247,7 @@ TEST(HRLDataTransformTest, BuildGroupInputRejectsInconsistentMemberBetaBasisSize
                 })
             },
             {
-                MakeEstimate({ 1.0 }, 0.25, { 1.0, 1.0 }, { 0.25, 0.25 })
+                MakeFitResult({ 1.0 }, 0.25, { 1.0, 1.0 }, { 0.25, 0.25 })
             }
         ),
         std::invalid_argument
