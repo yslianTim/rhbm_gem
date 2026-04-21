@@ -55,46 +55,30 @@ void HRLModelTestCommand::NormalizeRequest()
         kTesterOption,
         TesterType::BENCHMARK,
         "Tester choice");
-    CoerceScalar(
+    CoerceFiniteNonNegativeScalar(
         request.fit_range_min,
         kFitMinOption,
-        [](double candidate)
-        {
-            return std::isfinite(candidate) && candidate >= 0.0;
-        },
         0.0,
         LogLevel::Error,
-        "Minimum fitting range must be a finite non-negative value.");
-    CoerceScalar(
+        "Minimum fitting range");
+    CoerceFiniteNonNegativeScalar(
         request.fit_range_max,
         kFitMaxOption,
-        [](double candidate)
-        {
-            return std::isfinite(candidate) && candidate >= 0.0;
-        },
         1.0,
         LogLevel::Error,
-        "Maximum fitting range must be a finite non-negative value.");
-    CoerceScalar(
+        "Maximum fitting range");
+    CoerceFinitePositiveScalar(
         request.alpha_r,
         kAlphaROption,
-        [](double candidate)
-        {
-            return std::isfinite(candidate) && candidate > 0.0;
-        },
         0.1,
         LogLevel::Error,
-        "Alpha-R must be a finite positive value.");
-    CoerceScalar(
+        "Alpha-R");
+    CoerceFinitePositiveScalar(
         request.alpha_g,
         kAlphaGOption,
-        [](double candidate)
-        {
-            return std::isfinite(candidate) && candidate > 0.0;
-        },
         0.2,
         LogLevel::Error,
-        "Alpha-G must be a finite positive value.");
+        "Alpha-G");
 }
 
 void HRLModelTestCommand::ValidateOptions()

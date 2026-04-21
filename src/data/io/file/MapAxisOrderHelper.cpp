@@ -1,4 +1,5 @@
 #include "MapAxisOrderHelper.hpp"
+#include "MapGridValidation.hpp"
 
 #include <cstddef>
 #include <stdexcept>
@@ -6,15 +7,6 @@
 namespace rhbm_gem::map_io {
 
 namespace {
-
-size_t CountVoxelCount(const std::array<int, 3>& array_size) {
-    if (array_size[0] <= 0 || array_size[1] <= 0 || array_size[2] <= 0) {
-        throw std::runtime_error("Map dimensions must be positive.");
-    }
-    return static_cast<size_t>(array_size[0]) *
-           static_cast<size_t>(array_size[1]) *
-           static_cast<size_t>(array_size[2]);
-}
 
 bool IsCanonicalAxisOrder(const std::array<int, 3>& axis_order) {
     return axis_order[0] == 1 && axis_order[1] == 2 && axis_order[2] == 3;

@@ -5,6 +5,7 @@
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
+#include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include "data/detail/ModelDerivedState.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
@@ -389,10 +390,7 @@ std::vector<AtomObject *> ModelObject::FindNeighborAtoms(
     double radius,
     bool include_center) const
 {
-    if (radius < 0.0)
-    {
-        throw std::invalid_argument("ModelObject::FindNeighborAtoms radius cannot be negative.");
-    }
+    NumericValidation::RequireFiniteNonNegative(radius, "ModelObject::FindNeighborAtoms radius");
     if (center_atom.m_owner_model != this)
     {
         throw std::invalid_argument(

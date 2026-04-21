@@ -70,13 +70,12 @@ void CommandBase::CoerceBaseRequest(CommandRequestBase & request)
 {
     InvalidatePreparedState();
     const auto raw_verbose_level{ request.verbosity };
-    CoerceScalar(
+    CoercePositiveScalar(
         request.job_count,
         kJobsOption,
-        [](int candidate) { return candidate >= 1; },
         1,
         LogLevel::Warning,
-        "Thread size must be positive. Using 1 instead.");
+        "Thread size");
     CoerceScalar(
         request.verbosity,
         kVerboseOption,

@@ -58,27 +58,24 @@ void PositionEstimationCommand::NormalizeRequest()
 {
     auto & request{ MutableRequest() };
     ValidateRequiredPath(request.map_file_path, kMapOption, "Map file");
-    CoerceScalar(
+    CoercePositiveScalar(
         request.iteration_count,
         kIterationOption,
-        [](int candidate) { return candidate > 0; },
         15,
         LogLevel::Warning,
-        "Iteration count must be positive, reset to default 15");
-    CoerceScalar(
+        "Iteration count");
+    CoercePositiveScalar(
         request.knn_size,
         kKnnOption,
-        [](std::size_t candidate) { return candidate > 0; },
         static_cast<std::size_t>(20),
         LogLevel::Warning,
-        "KNN size must be positive, reset to default 20");
-    CoerceScalar(
+        "KNN size");
+    CoerceFinitePositiveScalar(
         request.alpha,
         kAlphaOption,
-        [](double candidate) { return candidate > 0.0; },
         2.0,
         LogLevel::Warning,
-        "Alpha must be positive, reset to default 2.0");
+        "Alpha");
     CoerceScalar(
         request.threshold_ratio,
         kThresholdOption,
@@ -86,13 +83,12 @@ void PositionEstimationCommand::NormalizeRequest()
         0.01,
         LogLevel::Warning,
         "Threshold ratio must be in (0, 1], reset to default 0.01");
-    CoerceScalar(
+    CoerceFinitePositiveScalar(
         request.dedup_tolerance,
         kDedupToleranceOption,
-        [](double candidate) { return candidate > 0.0; },
         1.0e-2,
         LogLevel::Warning,
-        "Dedup tolerance must be positive, reset to default 0.01");
+        "Dedup tolerance");
 }
 
 bool PositionEstimationCommand::ExecuteImpl()

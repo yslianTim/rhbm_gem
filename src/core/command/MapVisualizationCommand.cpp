@@ -87,30 +87,24 @@ void MapVisualizationCommand::NormalizeRequest()
         request.map_file_path,
         kMapOption,
         "Map file");
-    CoerceScalar(
+    CoercePositiveScalar(
         request.atom_serial_id,
         kAtomIdOption,
-        [](int candidate) { return candidate > 0; },
         1,
         LogLevel::Error,
-        "Atom serial ID must be positive.");
-    CoerceScalar(
+        "Atom serial ID");
+    CoercePositiveScalar(
         request.sampling_size,
         kSamplingOption,
-        [](int candidate) { return candidate > 0; },
         100,
         LogLevel::Warning,
-        "Sampling size must be positive, reset to default value = 100");
-    CoerceScalar(
+        "Sampling size");
+    CoerceFinitePositiveScalar(
         request.window_size,
         kWindowSizeOption,
-        [](double candidate)
-        {
-            return std::isfinite(candidate) && candidate > 0.0;
-        },
         5.0,
         LogLevel::Error,
-        "Window size must be a finite positive value.");
+        "Window size");
 }
 
 bool MapVisualizationCommand::ExecuteImpl()

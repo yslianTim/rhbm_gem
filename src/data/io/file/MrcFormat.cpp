@@ -1,6 +1,8 @@
 #include "MrcFormat.hpp"
+#include "MapGridValidation.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
+#include <rhbm_gem/utils/math/NumericValidation.hpp>
 #include "MapAxisOrderHelper.hpp"
 
 #include <sstream>
@@ -10,19 +12,6 @@
 #include <algorithm>
 
 namespace rhbm_gem {
-
-namespace {
-
-size_t CountVoxelCount(const std::array<int, 3>& array_size) {
-    if (array_size[0] <= 0 || array_size[1] <= 0 || array_size[2] <= 0) {
-        throw std::runtime_error("Map dimensions must be positive.");
-    }
-    return static_cast<size_t>(array_size[0]) *
-           static_cast<size_t>(array_size[1]) *
-           static_cast<size_t>(array_size[2]);
-}
-
-} // namespace
 
 MrcFormat::MrcFormat() {
     InitHeader();
@@ -193,7 +182,7 @@ void MrcFormat::LoadDataArray(std::istream& stream) {
         m_header.axis[0],
         m_header.axis[1],
         m_header.axis[2]};
-    const size_t num_voxels{CountVoxelCount(array_size)};
+    const size_t num_voxels{map_io::CountVoxelCount(array_size)};
 
     size_t element_size{GetElementSize()};
     size_t total_bytes{num_voxels * element_size};
@@ -226,7 +215,7 @@ void MrcFormat::SaveDataArray(const float* data, size_t size, std::ostream& stre
         m_header.array_size[0],
         m_header.array_size[1],
         m_header.array_size[2]};
-    size_t expected_voxels{CountVoxelCount(array_size)};
+    size_t expected_voxels{map_io::CountVoxelCount(array_size)};
     if (size != expected_voxels) {
         throw std::runtime_error("SaveDataArray: voxel count does not match header");
     }
@@ -280,12 +269,8 @@ std::array<float, 3> MrcFormat::GetOrigin() const {
 void MrcFormat::SetHeader(const std::array<int, 3>& grid_size,
                           const std::array<float, 3>& grid_spacing,
                           const std::array<float, 3>& origin) {
-    if (grid_size[0] <= 0 || grid_size[1] <= 0 || grid_size[2] <= 0) {
-        throw std::runtime_error("SetHeader: grid_size must be positive");
-    }
-    if (grid_spacing[0] <= 0.0f || grid_spacing[1] <= 0.0f || grid_spacing[2] <= 0.0f) {
-        throw std::runtime_error("SetHeader: grid_spacing must be positive");
-    }
+    NumericValidation::RequireAllPositive(grid_size, "grid_size");
+    NumericValidation::RequireAllFinitePositive(grid_spacing, "grid_spacing");
 
     std::memcpy(m_header.array_size, grid_size.data(), sizeof(m_header.array_size));
     std::memcpy(m_header.grid_size, grid_size.data(), sizeof(m_header.grid_size));

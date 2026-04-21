@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cmath>
 #include <sstream>
 #include <stdexcept>
@@ -34,12 +35,72 @@ inline std::string GetName(const NameType & name)
     return std::string(name);
 }
 
+template <typename Type, typename Predicate>
+inline void RequireArrayValues(
+    const Type & values,
+    Predicate predicate,
+    const std::string & message)
+{
+    for (const auto & value : values)
+    {
+        if (!predicate(value))
+        {
+            throw std::invalid_argument(message);
+        }
+    }
+}
+
 } // namespace detail
+
+template <typename Type>
+inline bool IsPositive(Type value)
+{
+    return value > static_cast<Type>(0);
+}
+
+template <typename Type>
+inline bool IsNonNegative(Type value)
+{
+    return value >= static_cast<Type>(0);
+}
+
+template <typename Type>
+inline bool IsFinite(Type value)
+{
+    return detail::IsFinite(value);
+}
+
+template <typename Type>
+inline bool IsFinitePositive(Type value)
+{
+    return IsFinite(value) && IsPositive(value);
+}
+
+template <typename Type>
+inline bool IsFiniteNonNegative(Type value)
+{
+    return IsFinite(value) && IsNonNegative(value);
+}
+
+template <typename Type, typename LowerType, typename UpperType>
+inline bool IsFiniteInclusiveRange(
+    Type value,
+    LowerType lower,
+    UpperType upper)
+{
+    using CommonType = std::common_type_t<Type, LowerType, UpperType>;
+    const auto lower_bound{ static_cast<CommonType>(lower) };
+    const auto upper_bound{ static_cast<CommonType>(upper) };
+    const auto converted_value{ static_cast<CommonType>(value) };
+
+    return IsFinite(value) && IsFinite(lower) && IsFinite(upper) &&
+           converted_value >= lower_bound && converted_value <= upper_bound;
+}
 
 template <typename Type, typename NameType>
 inline Type RequirePositive(Type value, const NameType & name)
 {
-    if (!detail::IsFinite(value) || value <= static_cast<Type>(0))
+    if (!IsPositive(value))
     {
         throw std::invalid_argument(detail::GetName(name) + " must be positive.");
     }
@@ -49,7 +110,7 @@ inline Type RequirePositive(Type value, const NameType & name)
 template <typename Type, typename NameType>
 inline Type RequireNonNegative(Type value, const NameType & name)
 {
-    if (!detail::IsFinite(value) || value < static_cast<Type>(0))
+    if (!IsNonNegative(value))
     {
         throw std::invalid_argument(detail::GetName(name) + " must be non-negative.");
     }
@@ -59,7 +120,7 @@ inline Type RequireNonNegative(Type value, const NameType & name)
 template <typename Type, typename NameType>
 inline Type RequireFinite(Type value, const NameType & name)
 {
-    if (!detail::IsFinite(value))
+    if (!IsFinite(value))
     {
         throw std::invalid_argument(detail::GetName(name) + " must be finite.");
     }
@@ -69,7 +130,7 @@ inline Type RequireFinite(Type value, const NameType & name)
 template <typename Type, typename NameType>
 inline Type RequireFinitePositive(Type value, const NameType & name)
 {
-    if (!detail::IsFinite(value) || value <= static_cast<Type>(0))
+    if (!IsFinitePositive(value))
     {
         throw std::invalid_argument(detail::GetName(name) + " must be finite and positive.");
     }
@@ -79,7 +140,7 @@ inline Type RequireFinitePositive(Type value, const NameType & name)
 template <typename Type, typename NameType>
 inline Type RequireFiniteNonNegative(Type value, const NameType & name)
 {
-    if (!detail::IsFinite(value) || value < static_cast<Type>(0))
+    if (!IsFiniteNonNegative(value))
     {
         throw std::invalid_argument(detail::GetName(name) + " must be finite and non-negative.");
     }
@@ -92,8 +153,7 @@ inline std::pair<Type, Type> RequireFiniteNonNegativeRange(
     Type max_value,
     const NameType & name)
 {
-    if (!detail::IsFinite(min_value) || !detail::IsFinite(max_value) ||
-        min_value < static_cast<Type>(0) || max_value < static_cast<Type>(0) ||
+    if (!IsFiniteNonNegative(min_value) || !IsFiniteNonNegative(max_value) ||
         max_value < min_value)
     {
         throw std::invalid_argument(
@@ -109,19 +169,37 @@ inline Type RequireFiniteInclusiveRange(
     UpperType upper,
     const NameType & name)
 {
-    using CommonType = std::common_type_t<Type, LowerType, UpperType>;
-    const auto lower_bound{ static_cast<CommonType>(lower) };
-    const auto upper_bound{ static_cast<CommonType>(upper) };
-    const auto converted_value{ static_cast<CommonType>(value) };
-
-    if (!detail::IsFinite(value) || !detail::IsFinite(lower) || !detail::IsFinite(upper) ||
-        converted_value < lower_bound || converted_value > upper_bound)
+    if (!IsFiniteInclusiveRange(value, lower, upper))
     {
         throw std::invalid_argument(
             detail::GetName(name) + " must be finite and within [" +
             detail::ToString(lower) + ", " + detail::ToString(upper) + "].");
     }
     return value;
+}
+
+template <typename Type, std::size_t Size, typename NameType>
+inline const std::array<Type, Size> & RequireAllPositive(
+    const std::array<Type, Size> & values,
+    const NameType & name)
+{
+    detail::RequireArrayValues(
+        values,
+        [](const auto value) { return IsPositive(value); },
+        detail::GetName(name) + " must contain only positive values.");
+    return values;
+}
+
+template <typename Type, std::size_t Size, typename NameType>
+inline const std::array<Type, Size> & RequireAllFinitePositive(
+    const std::array<Type, Size> & values,
+    const NameType & name)
+{
+    detail::RequireArrayValues(
+        values,
+        [](const auto value) { return IsFinitePositive(value); },
+        detail::GetName(name) + " must contain only finite positive values.");
+    return values;
 }
 
 } // namespace rhbm_gem::NumericValidation

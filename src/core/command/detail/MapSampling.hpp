@@ -11,6 +11,7 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/utils/math/LocalPotentialSampleScoring.hpp>
+#include <rhbm_gem/utils/math/NumericValidation.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace rhbm_gem {
@@ -189,11 +190,7 @@ LocalPotentialSampleList SampleMapValues(
     double neighbor_radius,
     double angle = 0.0)
 {
-    if (!std::isfinite(neighbor_radius) || neighbor_radius < 0.0)
-    {
-        throw std::invalid_argument(
-            "SampleMapValues neighbor radius must be finite and non-negative.");
-    }
+    NumericValidation::RequireFiniteNonNegative(neighbor_radius, "SampleMapValues neighbor radius");
 
     const auto position{ atom.GetPosition() };
     const auto sampling_points{ sampler.GenerateSamplingPoints(position) };

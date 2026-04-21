@@ -130,20 +130,18 @@ void MapSimulationCommand::NormalizeRequest()
         kChargeOption,
         PartialCharge::PARTIAL,
         "Partial charge choice");
-    CoerceScalar(
+    CoerceFinitePositiveScalar(
         request.cutoff_distance,
         kCutoffOption,
-        [](double candidate) { return candidate > 0.0; },
         5.0,
         LogLevel::Warning,
-        "Cutoff distance must be positive, reset to default 5.0");
-    CoerceScalar(
+        "Cutoff distance");
+    CoerceFinitePositiveScalar(
         request.grid_spacing,
         kGridSpacingOption,
-        [](double candidate) { return candidate > 0.0; },
         0.5,
         LogLevel::Warning,
-        "Grid spacing must be positive, reset to default 0.5");
+        "Grid spacing");
 
     InvalidatePreparedState();
     ClearParseIssues(kBlurringWidthOption);
@@ -151,11 +149,11 @@ void MapSimulationCommand::NormalizeRequest()
     filtered_widths.reserve(request.blurring_width_list.size());
     for (const auto width : request.blurring_width_list)
     {
-        if (width <= 0.0)
+        if (!NumericValidation::IsFinitePositive(width))
         {
             AddNormalizationWarning(
                 kBlurringWidthOption,
-                "Blurring width must be positive, dropping current setting: "
+                "Blurring width must be a finite positive value, dropping current setting: "
                     + std::to_string(width));
             continue;
         }

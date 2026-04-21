@@ -152,16 +152,12 @@ void PotentialAnalysisCommand::NormalizeRequest()
     auto & request{ MutableRequest() };
     ValidateRequiredPath(request.model_file_path, kModelOption, "Model file");
     ValidateRequiredPath(request.map_file_path, kMapOption, "Map file");
-    CoerceScalar(
+    CoerceFiniteNonNegativeScalar(
         request.simulated_map_resolution,
         kSimResolutionOption,
-        [](double candidate)
-        {
-            return std::isfinite(candidate) && candidate >= 0.0;
-        },
         0.0,
         LogLevel::Error,
-        "Simulated map resolution must be a finite non-negative value.");
+        "Simulated map resolution");
     InvalidatePreparedState();
     ClearParseIssues(kSaveKeyOption);
     if (request.saved_key_tag.empty())
@@ -172,113 +168,72 @@ void PotentialAnalysisCommand::NormalizeRequest()
             "Saved key tag cannot be empty. Using 'model' instead.",
             ValidationPhase::Parse);
     }
-    CoerceScalar(
+    CoercePositiveScalar(
         request.sampling_size,
         kSamplingOption,
-        [](int candidate) { return candidate > 0; },
         1500,
         LogLevel::Warning,
-        "Sampling size must be positive, reset to default value = 1500");
-    CoerceScalar(
+        "Sampling size");
+    CoerceFiniteNonNegativeScalar(
         request.sampling_range_min,
         kSamplingMinOption,
-        [](double candidate)
-        {
-            return std::isfinite(candidate) && candidate >= 0.0;
-        },
         0.0,
         LogLevel::Error,
-        "Minimum sampling range must be a finite non-negative value.");
-    CoerceScalar(
+        "Minimum sampling range");
+    CoerceFiniteNonNegativeScalar(
         request.sampling_range_max,
         kSamplingMaxOption,
-        [](double candidate)
-        {
-            return std::isfinite(candidate) && candidate >= 0.0;
-        },
         1.5,
         LogLevel::Error,
-        "Maximum sampling range must be a finite non-negative value.");
-    CoerceScalar(
+        "Maximum sampling range");
+    CoerceFinitePositiveScalar(
         request.sampling_height,
         kSamplingHeightOption,
-        [](double candidate)
-        {
-            return std::isfinite(candidate) && candidate > 0.0;
-        },
         0.1,
         LogLevel::Error,
-        "Sampling height must be a finite positive value.");
-    CoerceScalar(
+        "Sampling height");
+    CoerceFiniteNonNegativeScalar(
         request.fit_range_min,
         kFitMinOption,
-        [](double candidate)
-        {
-            return std::isfinite(candidate) && candidate >= 0.0;
-        },
         0.0,
         LogLevel::Error,
-        "Minimum fitting range must be a finite non-negative value.");
-    CoerceScalar(
+        "Minimum fitting range");
+    CoerceFiniteNonNegativeScalar(
         request.fit_range_max,
         kFitMaxOption,
-        [](double candidate)
-        {
-            return std::isfinite(candidate) && candidate >= 0.0;
-        },
         1.0,
         LogLevel::Error,
-        "Maximum fitting range must be a finite non-negative value.");
-    CoerceScalar(
+        "Maximum fitting range");
+    CoerceFinitePositiveScalar(
         request.alpha_r,
         kAlphaROption,
-        [](double candidate)
-        {
-            return std::isfinite(candidate) && candidate > 0.0;
-        },
         0.1,
         LogLevel::Error,
-        "Alpha-R must be a finite positive value.");
-    CoerceScalar(
+        "Alpha-R");
+    CoerceFinitePositiveScalar(
         request.alpha_g,
         kAlphaGOption,
-        [](double candidate)
-        {
-            return std::isfinite(candidate) && candidate > 0.0;
-        },
         0.2,
         LogLevel::Error,
-        "Alpha-G must be a finite positive value.");
-    CoerceScalar(
+        "Alpha-G");
+    CoerceFiniteNonNegativeScalar(
         request.training_alpha_min,
         kTrainingAlphaMinOption,
-        [](double candidate)
-        {
-            return std::isfinite(candidate) && candidate >= 0.0;
-        },
         0.0,
         LogLevel::Error,
-        "Minimum training alpha must be a finite non-negative value.");
-    CoerceScalar(
+        "Minimum training alpha");
+    CoerceFiniteNonNegativeScalar(
         request.training_alpha_max,
         kTrainingAlphaMaxOption,
-        [](double candidate)
-        {
-            return std::isfinite(candidate) && candidate >= 0.0;
-        },
         1.0,
         LogLevel::Error,
-        "Maximum training alpha must be a finite non-negative value.");
-    CoerceScalar(
+        "Maximum training alpha");
+    CoerceFinitePositiveScalar(
         request.training_alpha_step,
         kTrainingAlphaStepOption,
-        [](double candidate)
-        {
-            return std::isfinite(candidate) && candidate > 0.0;
-        },
         0.1,
         LogLevel::Error,
-        "Training alpha step must be a finite positive value.");
+        "Training alpha step");
 }
 
 bool PotentialAnalysisCommand::ExecuteImpl()
