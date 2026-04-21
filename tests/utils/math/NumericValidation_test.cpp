@@ -3,6 +3,7 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
@@ -62,6 +63,20 @@ TEST(NumericValidationTest, RequireFiniteRejectsNonFiniteValue)
         "alpha must be finite.");
 }
 
+TEST(NumericValidationTest, RequireFiniteWithContextPrefixesOriginalMessage)
+{
+    ExpectInvalidArgumentMessage(
+        []()
+        {
+            (void)rg::NumericValidation::RequireFinite(
+                std::numeric_limits<double>::infinity(),
+                "alpha",
+                "Invalid alpha input.");
+        },
+        "Invalid alpha input. Details: alpha must be finite."
+    );
+}
+
 TEST(NumericValidationTest, RequireAllFiniteAcceptsFiniteVector)
 {
     const std::vector<double> values{ 0.0, 1.0, 2.0 };
@@ -79,6 +94,22 @@ TEST(NumericValidationTest, RequireAllFiniteRejectsNonFiniteVectorValue)
             (void)rg::NumericValidation::RequireAllFinite(values, "values");
         },
         "values must contain only finite values."
+    );
+}
+
+TEST(NumericValidationTest, RequireAllFiniteWithContextPrefixesOriginalMessage)
+{
+    const std::vector<double> values{ 0.0, std::numeric_limits<double>::infinity() };
+
+    ExpectInvalidArgumentMessage(
+        [&]()
+        {
+            (void)rg::NumericValidation::RequireAllFinite(
+                values,
+                "values",
+                "Invalid value list.");
+        },
+        "Invalid value list. Details: values must contain only finite values."
     );
 }
 

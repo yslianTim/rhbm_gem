@@ -48,3 +48,38 @@ TEST(EigenValidationTest, RequireSameSizeRejectsMismatchedVectors)
         "vector pair must have matching sizes."
     );
 }
+
+TEST(EigenValidationTest, RequireVectorSizeWithContextPrefixesOriginalMessage)
+{
+    const Eigen::VectorXd vector{ Eigen::VectorXd::Zero(2) };
+
+    ExpectInvalidArgumentMessage(
+        [&]()
+        {
+            rg::EigenValidation::RequireVectorSize(
+                vector,
+                3,
+                "vector",
+                "Vector shape is invalid.");
+        },
+        "Vector shape is invalid. Details: vector must have size 3."
+    );
+}
+
+TEST(EigenValidationTest, RequireSameSizeWithContextPrefixesOriginalMessage)
+{
+    const Eigen::VectorXd lhs{ Eigen::VectorXd::Zero(3) };
+    const Eigen::VectorXd rhs{ Eigen::VectorXd::Zero(2) };
+
+    ExpectInvalidArgumentMessage(
+        [&]()
+        {
+            rg::EigenValidation::RequireSameSize(
+                lhs,
+                rhs,
+                "vector pair",
+                "Pair size check failed.");
+        },
+        "Pair size check failed. Details: vector pair must have matching sizes."
+    );
+}

@@ -33,16 +33,18 @@ HRLMemberDataset HRLDataTransform::BuildMemberDataset(const SeriesPointList & se
         {
             throw std::invalid_argument("All data entries must share the same basis size.");
         }
-        try
-        {
-            rhbm_gem::NumericValidation::RequireFinite(point.response, "response");
-            rhbm_gem::NumericValidation::RequireFinite(point.score, "score");
-            rhbm_gem::NumericValidation::RequireAllFinite(point.basis_list, "basis_list");
-        }
-        catch (const std::invalid_argument &)
-        {
-            throw std::invalid_argument("Member dataset contains non-finite value.");
-        }
+        rhbm_gem::NumericValidation::RequireFinite(
+            point.response,
+            "response",
+            "Member dataset contains non-finite value.");
+        rhbm_gem::NumericValidation::RequireFinite(
+            point.score,
+            "score",
+            "Member dataset contains non-finite value.");
+        rhbm_gem::NumericValidation::RequireAllFinite(
+            point.basis_list,
+            "basis_list",
+            "Member dataset contains non-finite value.");
 
         dataset.X.row(i) = Eigen::Map<const Eigen::RowVectorXd>(
             point.basis_list.data(), basis_size);
@@ -71,23 +73,15 @@ HRLBetaMatrix HRLDataTransform::BuildBetaMatrix(const std::vector<HRLBetaVector>
     for (int i = 0; i < member_size; i++)
     {
         const auto & beta_vector{ beta_list.at(static_cast<std::size_t>(i)) };
-        try
-        {
-            rhbm_gem::EigenValidation::RequireVectorSize(beta_vector, basis_size, "beta");
-        }
-        catch (const std::invalid_argument &)
-        {
-            throw std::invalid_argument("All beta vectors must share the same basis size.");
-        }
-
-        try
-        {
-            rhbm_gem::EigenValidation::RequireFinite(beta_vector, "beta");
-        }
-        catch (const std::invalid_argument &)
-        {
-            throw std::invalid_argument("beta_list contains non-finite value.");
-        }
+        rhbm_gem::EigenValidation::RequireVectorSize(
+            beta_vector,
+            basis_size,
+            "beta",
+            "All beta vectors must share the same basis size.");
+        rhbm_gem::EigenValidation::RequireFinite(
+            beta_vector,
+            "beta",
+            "beta_list contains non-finite value.");
         beta_matrix.col(i) = beta_vector;
     }
     return beta_matrix;
@@ -124,50 +118,31 @@ HRLGroupEstimationInput HRLDataTransform::BuildGroupInput(
         {
             throw std::invalid_argument("Member dataset basis size is inconsistent.");
         }
-
-        try
-        {
-            rhbm_gem::EigenValidation::RequireVectorSize(
-                dataset.y,
-                dataset.X.rows(),
-                "Member dataset response");
-            rhbm_gem::EigenValidation::RequireSameSize(
-                dataset.score,
-                dataset.y,
-                "Member dataset shape");
-        }
-        catch (const std::invalid_argument &)
-        {
-            throw std::invalid_argument("Member dataset shape is inconsistent.");
-        }
-
-        try
-        {
-            rhbm_gem::EigenValidation::RequireVectorSize(
-                estimate.beta_mdpde,
-                basis_size,
-                "Member beta");
-        }
-        catch (const std::invalid_argument &)
-        {
-            throw std::invalid_argument("Member beta basis size is inconsistent.");
-        }
-
-        try
-        {
-            rhbm_gem::EigenValidation::RequireSameSize(
-                estimate.data_weight.diagonal(),
-                dataset.y,
-                "Member data weight");
-            rhbm_gem::EigenValidation::RequireSameSize(
-                estimate.data_covariance.diagonal(),
-                dataset.y,
-                "Member data covariance");
-        }
-        catch (const std::invalid_argument &)
-        {
-            throw std::invalid_argument("Member covariance or weight size is inconsistent.");
-        }
+        rhbm_gem::EigenValidation::RequireVectorSize(
+            dataset.y,
+            dataset.X.rows(),
+            "Member dataset response",
+            "Member dataset shape is inconsistent.");
+        rhbm_gem::EigenValidation::RequireSameSize(
+            dataset.score,
+            dataset.y,
+            "Member dataset shape",
+            "Member dataset shape is inconsistent.");
+        rhbm_gem::EigenValidation::RequireVectorSize(
+            estimate.beta_mdpde,
+            basis_size,
+            "Member beta",
+            "Member beta basis size is inconsistent.");
+        rhbm_gem::EigenValidation::RequireSameSize(
+            estimate.data_weight.diagonal(),
+            dataset.y,
+            "Member data weight",
+            "Member covariance or weight size is inconsistent.");
+        rhbm_gem::EigenValidation::RequireSameSize(
+            estimate.data_covariance.diagonal(),
+            dataset.y,
+            "Member data covariance",
+            "Member covariance or weight size is inconsistent.");
 
         input.member_datasets.emplace_back(dataset);
         input.member_estimates.emplace_back(estimate);
