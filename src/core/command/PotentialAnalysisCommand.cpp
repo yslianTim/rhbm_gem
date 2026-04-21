@@ -120,20 +120,13 @@ bool EmitTrainingReportIfRequested(
     return true;
 }
 
-rhbm_gem::GaussianLinearizationService MakeGaussianDatasetService()
-{
-    return rhbm_gem::GaussianLinearizationService{
-        rhbm_gem::GaussianLinearizationSpec::DefaultDataset()
-    };
-}
-
 rhbm_gem::GaussianLinearizationContext BuildLocalLinearizationContext(
     const rhbm_gem::LocalPotentialView & view)
 {
-    Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
-    model_par_init(0) = view.GetMomentZeroEstimate();
-    model_par_init(1) = view.GetMomentTwoEstimate();
-    return rhbm_gem::GaussianLinearizationContext::FromModelParameters(model_par_init);
+    Eigen::VectorXd gaus_par_init{ Eigen::VectorXd::Zero(3) };
+    gaus_par_init(0) = view.GetMomentZeroEstimate();
+    gaus_par_init(1) = view.GetMomentTwoEstimate();
+    return rhbm_gem::GaussianLinearizationContext::FromModelParameters(gaus_par_init);
 }
 
 } // namespace
@@ -537,7 +530,11 @@ void PotentialAnalysisCommand::RunDatasetPreparationWorkflow(
     const auto atom_size{ atom_list.size() };
     size_t atom_count{ 0 };
     auto local_entry_list{ BuildSelectedAtomLocalEntryViews(model_object) };
-    const auto dataset_service{ MakeGaussianDatasetService() };
+    const auto dataset_service{
+        rhbm_gem::GaussianLinearizationService{
+            rhbm_gem::GaussianLinearizationSpec::DefaultDataset()
+        }
+    };
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(ThreadSize())
