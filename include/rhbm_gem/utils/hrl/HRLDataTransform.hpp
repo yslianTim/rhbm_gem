@@ -9,15 +9,9 @@
 
 namespace HRLDataTransform
 {
-HRLMemberDataset BuildMemberDataset(
-    const SeriesPointList & series_point_list,
-    bool quiet_mode = false
-);
+HRLMemberDataset BuildMemberDataset(const SeriesPointList & series_point_list);
 
-HRLBetaMatrix BuildBetaMatrix(
-    const std::vector<HRLBetaVector> & beta_list,
-    bool quiet_mode = false
-);
+HRLBetaMatrix BuildBetaMatrix(const std::vector<HRLBetaVector> & beta_list);
 
 HRLGroupEstimationInput BuildGroupInput(
     const std::vector<HRLMemberDataset> & member_datasets,

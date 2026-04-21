@@ -27,7 +27,7 @@ HRLGroupEstimationResult HRLGroupEstimator::Estimate(
     {
         beta_list.emplace_back(estimate.beta_mdpde);
     }
-    const auto beta_matrix{ HRLDataTransform::BuildBetaMatrix(beta_list, true) };
+    const auto beta_matrix{ HRLDataTransform::BuildBetaMatrix(beta_list) };
 
     auto mu_result{ HRLModelAlgorithms::EstimateMuMDPDE(alpha_g, beta_matrix, m_options) };
     if (mu_result.status == HRLEstimationStatus::SINGLE_MEMBER)
@@ -143,7 +143,7 @@ HRLGroupEstimationResult HRLGroupEstimator::BuildFallbackResult(
     {
         beta_list.emplace_back(estimate.beta_mdpde);
     }
-    const auto beta_matrix{ HRLDataTransform::BuildBetaMatrix(beta_list, true) };
+    const auto beta_matrix{ HRLDataTransform::BuildBetaMatrix(beta_list) };
 
     HRLGroupEstimationResult result;
     result.status = (mu_result.status == HRLEstimationStatus::SUCCESS)

@@ -255,14 +255,14 @@ Eigen::VectorXd EvaluateAlphaGForGroup(
         for (std::size_t i = 0; i < subset_size; i++)
         {
             const auto beta_matrix_test{
-                HRLDataTransform::BuildBetaMatrix(data_set_test.at(i), true)
+                HRLDataTransform::BuildBetaMatrix(data_set_test.at(i))
             };
             const auto mu_result_test{
                 HRLModelAlgorithms::EstimateMuMDPDE(alpha, beta_matrix_test, algorithm_options)
             };
 
             const auto beta_matrix_training{
-                HRLDataTransform::BuildBetaMatrix(data_set_training.at(i), true)
+                HRLDataTransform::BuildBetaMatrix(data_set_training.at(i))
             };
             const auto mu_result_training{
                 HRLModelAlgorithms::EstimateMuMDPDE(alpha, beta_matrix_training, algorithm_options)
@@ -510,7 +510,7 @@ Eigen::MatrixXd HRLAlphaTrainer::StudyAlphaGBias(
     {
         auto algorithm_options{ options.execution_options };
         algorithm_options.quiet_mode = true;
-        const auto beta_matrix{ HRLDataTransform::BuildBetaMatrix(beta_group_list.at(i), true) };
+        const auto beta_matrix{ HRLDataTransform::BuildBetaMatrix(beta_group_list.at(i)) };
 
         Eigen::MatrixXd local_bias_array{ Eigen::MatrixXd::Zero(3, alpha_size) };
         for (int j = 0; j < alpha_size; j++)

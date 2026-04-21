@@ -7,22 +7,14 @@
 #include <limits>
 #include <stdexcept>
 
-HRLMemberDataset HRLDataTransform::BuildMemberDataset(
-    const SeriesPointList & series_point_list,
-    bool quiet_mode)
+HRLMemberDataset HRLDataTransform::BuildMemberDataset(const SeriesPointList & series_point_list)
 {
-    (void)quiet_mode;
     if (series_point_list.empty())
     {
         throw std::invalid_argument("series_point_list must not be empty.");
     }
 
-    const auto expected_basis_size{ series_point_list.front().GetBasisSize() };
-    rhbm_gem::NumericValidation::RequireAtMost(
-        expected_basis_size,
-        static_cast<std::size_t>(std::numeric_limits<int>::max()),
-        "basis_size");
-    const auto basis_size{ static_cast<int>(expected_basis_size) };
+    const auto basis_size{ static_cast<int>(series_point_list.front().GetBasisSize()) };
     rhbm_gem::NumericValidation::RequirePositive(basis_size, "basis_size");
     rhbm_gem::NumericValidation::RequireAtMost(
         series_point_list.size(),
@@ -37,7 +29,7 @@ HRLMemberDataset HRLDataTransform::BuildMemberDataset(
     for (int i = 0; i < data_size; i++)
     {
         const auto & point{ series_point_list.at(static_cast<std::size_t>(i)) };
-        if (point.GetBasisSize() != expected_basis_size)
+        if (point.GetBasisSize() != basis_size)
         {
             throw std::invalid_argument("All data entries must share the same basis size.");
         }
@@ -53,8 +45,7 @@ HRLMemberDataset HRLDataTransform::BuildMemberDataset(
         }
 
         dataset.X.row(i) = Eigen::Map<const Eigen::RowVectorXd>(
-            point.basis_list.data(),
-            basis_size);
+            point.basis_list.data(), basis_size);
         dataset.y(i) = point.response;
         dataset.score(i) = point.score;
     }
@@ -62,11 +53,8 @@ HRLMemberDataset HRLDataTransform::BuildMemberDataset(
     return dataset;
 }
 
-HRLBetaMatrix HRLDataTransform::BuildBetaMatrix(
-    const std::vector<HRLBetaVector> & beta_list,
-    bool quiet_mode)
+HRLBetaMatrix HRLDataTransform::BuildBetaMatrix(const std::vector<HRLBetaVector> & beta_list)
 {
-    (void)quiet_mode;
     if (beta_list.empty())
     {
         throw std::invalid_argument("beta_list must not be empty.");
