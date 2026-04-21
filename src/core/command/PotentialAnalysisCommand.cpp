@@ -618,7 +618,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     // Alpha_G Training
     RunLocalPotentialFitting(model_object, alpha_r);
     
-    std::vector<std::vector<Eigen::VectorXd>> beta_group_list;
+    std::vector<std::vector<HRLBetaVector>> beta_group_list;
     const auto component_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     const auto component_group_keys{ analysis_view.CollectAtomGroupKeys(component_class_key) };
     beta_group_list.reserve(component_group_keys.size());
@@ -628,7 +628,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
         if (group_atom_list.size() < 10) continue;
         if (group_atom_list.front()->IsMainChainAtom() == false) continue;
 
-        std::vector<Eigen::VectorXd> beta_list;
+        std::vector<HRLBetaVector> beta_list;
         beta_list.reserve(group_atom_list.size());
         for (auto * atom : group_atom_list)
         {

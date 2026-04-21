@@ -80,7 +80,6 @@ target_sources(rhbm_gem PRIVATE
     utils/hrl/GaussianLinearizationService.cpp
     utils/hrl/HRLGroupEstimator.cpp
     utils/hrl/HRLModelAlgorithms.cpp
-    utils/hrl/HRLModelMetrics.cpp
     utils/hrl/HRLModelTestDataFactory.cpp
     utils/hrl/HRLModelTester.cpp
 )

@@ -6,6 +6,15 @@
 
 #include <Eigen/Dense>
 
+using HRLDesignMatrix = Eigen::MatrixXd;
+using HRLResponseVector = Eigen::VectorXd;
+using HRLScoreVector = Eigen::VectorXd;
+using HRLBetaVector = Eigen::VectorXd;
+using HRLMuVector = Eigen::VectorXd;
+using HRLBetaMatrix = Eigen::MatrixXd;
+using HRLGroupCovarianceMatrix = Eigen::MatrixXd;
+using HRLMemberCovarianceMatrix = Eigen::MatrixXd;
+using HRLPosteriorCovarianceMatrix = Eigen::MatrixXd;
 using HRLDiagonalMatrix = Eigen::DiagonalMatrix<double, Eigen::Dynamic>;
 
 enum class HRLEstimationStatus
@@ -30,14 +39,16 @@ struct HRLExecutionOptions
 
 struct HRLMemberDataset
 {
-    Eigen::MatrixXd X;
-    Eigen::VectorXd y;
-    Eigen::VectorXd score;
+    // X stores the member basis/design matrix and y stores the regression response.
+    HRLDesignMatrix X;
+    HRLResponseVector y;
+    HRLScoreVector score;
 };
 
 struct HRLMemberLocalEstimate
 {
-    Eigen::VectorXd beta_mdpde;
+    // beta_* stores member-level linearized coefficient vectors.
+    HRLBetaVector beta_mdpde;
     double sigma_square{ 0.0 };
     HRLDiagonalMatrix data_weight;
     HRLDiagonalMatrix data_covariance;
@@ -53,8 +64,8 @@ struct HRLGroupEstimationInput
 struct HRLBetaEstimateResult
 {
     HRLEstimationStatus status{ HRLEstimationStatus::SUCCESS };
-    Eigen::VectorXd beta_ols;
-    Eigen::VectorXd beta_mdpde;
+    HRLBetaVector beta_ols;
+    HRLBetaVector beta_mdpde;
     double sigma_square{ 0.0 };
     HRLDiagonalMatrix data_weight;
     HRLDiagonalMatrix data_covariance;
@@ -63,31 +74,33 @@ struct HRLBetaEstimateResult
 struct HRLMuEstimateResult
 {
     HRLEstimationStatus status{ HRLEstimationStatus::SUCCESS };
-    Eigen::VectorXd mu_mean;
-    Eigen::VectorXd mu_mdpde;
+    // mu_* stores group-level location vectors in the same linearized basis as beta.
+    HRLMuVector mu_mean;
+    HRLMuVector mu_mdpde;
     Eigen::ArrayXd omega_array;
     double omega_sum{ 0.0 };
-    Eigen::MatrixXd capital_lambda;
-    std::vector<Eigen::MatrixXd> member_capital_lambda_list;
+    // capital_lambda is the shared group covariance; member_* are member-specific variants.
+    HRLGroupCovarianceMatrix capital_lambda;
+    std::vector<HRLMemberCovarianceMatrix> member_capital_lambda_list;
 };
 
 struct HRLWebEstimateResult
 {
     HRLEstimationStatus status{ HRLEstimationStatus::SUCCESS };
-    Eigen::VectorXd mu_prior;
-    Eigen::MatrixXd beta_posterior_array;
-    std::vector<Eigen::MatrixXd> capital_sigma_posterior_list;
+    HRLMuVector mu_prior;
+    HRLBetaMatrix beta_posterior_array;
+    std::vector<HRLPosteriorCovarianceMatrix> capital_sigma_posterior_list;
 };
 
 struct HRLGroupEstimationResult
 {
     HRLEstimationStatus status{ HRLEstimationStatus::SUCCESS };
-    Eigen::VectorXd mu_mean;
-    Eigen::VectorXd mu_mdpde;
-    Eigen::VectorXd mu_prior;
-    Eigen::MatrixXd capital_lambda;
-    Eigen::MatrixXd beta_posterior_array;
-    std::vector<Eigen::MatrixXd> capital_sigma_posterior_list;
+    HRLMuVector mu_mean;
+    HRLMuVector mu_mdpde;
+    HRLMuVector mu_prior;
+    HRLGroupCovarianceMatrix capital_lambda;
+    HRLBetaMatrix beta_posterior_array;
+    std::vector<HRLPosteriorCovarianceMatrix> capital_sigma_posterior_list;
     Eigen::ArrayXd omega_array;
     Eigen::ArrayXd statistical_distance_array;
     Eigen::Array<bool, Eigen::Dynamic, 1> outlier_flag_array;

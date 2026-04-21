@@ -14,8 +14,8 @@ HRLMemberDataset BuildMemberDataset(
     bool quiet_mode = false
 );
 
-Eigen::MatrixXd BuildBetaMatrix(
-    const std::vector<Eigen::VectorXd> & beta_list,
+HRLBetaMatrix BuildBetaMatrix(
+    const std::vector<HRLBetaVector> & beta_list,
     bool quiet_mode = false
 );
 

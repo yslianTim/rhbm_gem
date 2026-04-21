@@ -47,7 +47,7 @@ public:
     ) const;
 
     AlphaTrainingResult TrainAlphaG(
-        const std::vector<std::vector<Eigen::VectorXd>> & beta_group_list,
+        const std::vector<std::vector<HRLBetaVector>> & beta_group_list,
         const AlphaTrainingOptions & options
     ) const;
 
@@ -57,7 +57,7 @@ public:
     ) const;
 
     Eigen::MatrixXd StudyAlphaGBias(
-        const std::vector<std::vector<Eigen::VectorXd>> & beta_group_list,
+        const std::vector<std::vector<HRLBetaVector>> & beta_group_list,
         const AlphaRunOptions & options
     ) const;
 

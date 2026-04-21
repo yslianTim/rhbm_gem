@@ -38,11 +38,12 @@ struct GaussianLinearizationSpec
 
 struct GaussianLinearizationContext
 {
-    Eigen::VectorXd model_parameters{};
+    GaussianParameterVector model_parameters{};
 
     bool HasModelParameters() const;
 
-    static GaussianLinearizationContext FromModelParameters(const Eigen::VectorXd & model_parameters);
+    static GaussianLinearizationContext FromModelParameters(
+        const GaussianParameterVector & model_parameters);
 };
 
 class GaussianLinearizationService
@@ -68,31 +69,31 @@ public:
         double x_max,
         const GaussianLinearizationContext & context = {}) const;
 
-    Eigen::VectorXd EncodeGaussianToBeta(const Eigen::VectorXd & gaussian_parameters) const;
-    Eigen::VectorXd EncodeGaussianToBeta(const GaussianEstimate & gaussian_estimate) const;
+    HRLBetaVector EncodeGaussianToBeta(const GaussianParameterVector & gaussian_parameters) const;
+    HRLBetaVector EncodeGaussianToBeta(const GaussianEstimate & gaussian_estimate) const;
 
-    Eigen::VectorXd DecodeLocalBeta(
-        const Eigen::VectorXd & linear_model,
+    GaussianParameterVector DecodeLocalBeta(
+        const HRLBetaVector & linear_model,
         const GaussianLinearizationContext & context = {}) const;
-    Eigen::VectorXd DecodeGroupBeta(const Eigen::VectorXd & linear_model) const;
+    GaussianParameterVector DecodeGroupBeta(const HRLBetaVector & linear_model) const;
 
-    std::tuple<Eigen::VectorXd, Eigen::VectorXd> DecodePosterior(
-        const Eigen::VectorXd & linear_model,
-        const Eigen::MatrixXd & covariance_matrix) const;
+    std::tuple<GaussianParameterVector, GaussianParameterVector> DecodePosterior(
+        const HRLBetaVector & linear_model,
+        const HRLPosteriorCovarianceMatrix & covariance_matrix) const;
 
     GaussianEstimate DecodeLocalEstimate(
-        const Eigen::VectorXd & linear_model,
+        const HRLBetaVector & linear_model,
         const GaussianLinearizationContext & context = {}) const;
-    GaussianEstimate DecodeGroupEstimate(const Eigen::VectorXd & linear_model) const;
+    GaussianEstimate DecodeGroupEstimate(const HRLBetaVector & linear_model) const;
     GaussianPosterior DecodePosteriorEstimate(
-        const Eigen::VectorXd & linear_model,
-        const Eigen::MatrixXd & covariance_matrix) const;
+        const HRLBetaVector & linear_model,
+        const HRLPosteriorCovarianceMatrix & covariance_matrix) const;
 
 private:
     void ValidateSpec() const;
     void ValidateContextIfRequired(const GaussianLinearizationContext & context) const;
-    Eigen::VectorXd BuildGaussianVector(
-        const Eigen::VectorXd & linear_model,
+    GaussianParameterVector BuildGaussianVector(
+        const HRLBetaVector & linear_model,
         const GaussianLinearizationContext * context) const;
 
 };

@@ -16,22 +16,22 @@ HRLBetaEstimateResult EstimateBetaMDPDE(
 
 HRLMuEstimateResult EstimateMuMDPDE(
     double alpha_g,
-    const Eigen::MatrixXd & beta_array,
+    const HRLBetaMatrix & beta_array,
     const HRLExecutionOptions & options = {}
 );
 
 HRLWebEstimateResult EstimateWEB(
     const std::vector<HRLMemberDataset> & member_datasets,
     const std::vector<HRLDiagonalMatrix> & capital_sigma_list,
-    const Eigen::VectorXd & mu_mdpde,
-    const std::vector<Eigen::MatrixXd> & member_capital_lambda_list,
+    const HRLMuVector & mu_mdpde,
+    const std::vector<HRLMemberCovarianceMatrix> & member_capital_lambda_list,
     const HRLExecutionOptions & options = {}
 );
 
 Eigen::ArrayXd CalculateMemberStatisticalDistance(
-    const Eigen::VectorXd & mu_prior,
-    const Eigen::MatrixXd & capital_lambda,
-    const Eigen::MatrixXd & beta_posterior_array
+    const HRLMuVector & mu_prior,
+    const HRLGroupCovarianceMatrix & capital_lambda,
+    const HRLBetaMatrix & beta_posterior_array
 );
 
 Eigen::Array<bool, Eigen::Dynamic, 1> CalculateOutlierMemberFlag(

@@ -35,9 +35,9 @@ HRLMemberDataset HRLDataTransform::BuildMemberDataset(
     const auto data_size{ CheckedCastToInt(series_point_list.size()) };
 
     HRLMemberDataset dataset;
-    dataset.X = Eigen::MatrixXd::Zero(data_size, basis_size);
-    dataset.y = Eigen::VectorXd::Zero(data_size);
-    dataset.score = Eigen::VectorXd::Zero(data_size);
+    dataset.X = HRLDesignMatrix::Zero(data_size, basis_size);
+    dataset.y = HRLResponseVector::Zero(data_size);
+    dataset.score = HRLScoreVector::Zero(data_size);
     for (int i = 0; i < data_size; i++)
     {
         const auto & point{ series_point_list.at(static_cast<std::size_t>(i)) };
@@ -65,8 +65,8 @@ HRLMemberDataset HRLDataTransform::BuildMemberDataset(
     return dataset;
 }
 
-Eigen::MatrixXd HRLDataTransform::BuildBetaMatrix(
-    const std::vector<Eigen::VectorXd> & beta_list,
+HRLBetaMatrix HRLDataTransform::BuildBetaMatrix(
+    const std::vector<HRLBetaVector> & beta_list,
     bool quiet_mode)
 {
     (void)quiet_mode;
@@ -78,23 +78,23 @@ Eigen::MatrixXd HRLDataTransform::BuildBetaMatrix(
     const auto basis_size{ static_cast<int>(beta_list.front().rows()) };
     rhbm_gem::NumericValidation::RequirePositive(basis_size, "basis_size");
     const auto member_size{ CheckedCastToInt(beta_list.size()) };
-    Eigen::MatrixXd beta_array{ Eigen::MatrixXd::Zero(basis_size, member_size) };
+    HRLBetaMatrix beta_array{ HRLBetaMatrix::Zero(basis_size, member_size) };
     for (int i = 0; i < member_size; i++)
     {
-        const auto & beta{ beta_list.at(static_cast<std::size_t>(i)) };
-        if (beta.rows() != basis_size)
+        const auto & beta_vector{ beta_list.at(static_cast<std::size_t>(i)) };
+        if (beta_vector.rows() != basis_size)
         {
             throw std::invalid_argument("All beta vectors must share the same basis size.");
         }
         try
         {
-            rhbm_gem::EigenValidation::RequireFinite(beta, "beta");
+            rhbm_gem::EigenValidation::RequireFinite(beta_vector, "beta");
         }
         catch (const std::invalid_argument &)
         {
             throw std::invalid_argument("beta_list contains non-finite value.");
         }
-        beta_array.col(i) = beta;
+        beta_array.col(i) = beta_vector;
     }
     return beta_array;
 }

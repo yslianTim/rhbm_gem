@@ -21,7 +21,7 @@ HRLGroupEstimationResult HRLGroupEstimator::Estimate(
 {
     ValidateInput(input);
 
-    std::vector<Eigen::VectorXd> beta_list;
+    std::vector<HRLBetaVector> beta_list;
     beta_list.reserve(input.member_estimates.size());
     for (const auto & estimate : input.member_estimates)
     {
@@ -137,7 +137,7 @@ HRLGroupEstimationResult HRLGroupEstimator::BuildFallbackResult(
     const HRLGroupEstimationInput & input,
     const HRLMuEstimateResult & mu_result)
 {
-    std::vector<Eigen::VectorXd> beta_list;
+    std::vector<HRLBetaVector> beta_list;
     beta_list.reserve(input.member_estimates.size());
     for (const auto & estimate : input.member_estimates)
     {
@@ -157,7 +157,7 @@ HRLGroupEstimationResult HRLGroupEstimator::BuildFallbackResult(
     result.omega_array = mu_result.omega_array;
     result.capital_sigma_posterior_list.assign(
         input.member_estimates.size(),
-        Eigen::MatrixXd::Zero(input.basis_size, input.basis_size)
+        HRLPosteriorCovarianceMatrix::Zero(input.basis_size, input.basis_size)
     );
     result.statistical_distance_array = HRLModelAlgorithms::CalculateMemberStatisticalDistance(
         result.mu_prior,

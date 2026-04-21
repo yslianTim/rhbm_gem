@@ -76,9 +76,9 @@ HRLMemberDataset BuildDatasetSlice(
 
     const auto row_count{ static_cast<Eigen::Index>(row_indices.size()) };
     HRLMemberDataset slice;
-    slice.X = Eigen::MatrixXd::Zero(row_count, dataset.X.cols());
-    slice.y = Eigen::VectorXd::Zero(row_count);
-    slice.score = Eigen::VectorXd::Zero(row_count);
+    slice.X = HRLDesignMatrix::Zero(row_count, dataset.X.cols());
+    slice.y = HRLResponseVector::Zero(row_count);
+    slice.score = HRLScoreVector::Zero(row_count);
     for (Eigen::Index i = 0; i < row_count; i++)
     {
         const auto row_index{ static_cast<Eigen::Index>(row_indices.at(static_cast<std::size_t>(i))) };
@@ -200,7 +200,7 @@ Eigen::VectorXd EvaluateAlphaRForDataset(
 }
 
 Eigen::VectorXd EvaluateAlphaGForGroup(
-    const std::vector<Eigen::VectorXd> & beta_list,
+    const std::vector<HRLBetaVector> & beta_list,
     std::size_t subset_size,
     const std::vector<double> & alpha_list,
     const HRLExecutionOptions & options)
@@ -208,17 +208,17 @@ Eigen::VectorXd EvaluateAlphaGForGroup(
     ValidateTrainingInputs(beta_list.size(), subset_size, alpha_list);
 
     const auto data_size_in_half{ beta_list.size() / 2 };
-    std::vector<std::vector<Eigen::VectorXd>> data_set_test(subset_size);
-    std::vector<std::vector<Eigen::VectorXd>> data_set_training(subset_size);
+    std::vector<std::vector<HRLBetaVector>> data_set_test(subset_size);
+    std::vector<std::vector<HRLBetaVector>> data_set_training(subset_size);
     for (std::size_t i = 0; i < subset_size; i++)
     {
         data_set_test[i].reserve(data_size_in_half);
         data_set_training[i].reserve(beta_list.size() - data_size_in_half);
-        std::vector<Eigen::VectorXd> shuffled_data{ beta_list };
+        std::vector<HRLBetaVector> shuffled_data{ beta_list };
         auto generator{ BuildGenerator(options.random_seed, i) };
         std::shuffle(shuffled_data.begin(), shuffled_data.end(), generator);
         const auto diff{
-            static_cast<std::vector<Eigen::VectorXd>::difference_type>(data_size_in_half)
+            static_cast<std::vector<HRLBetaVector>::difference_type>(data_size_in_half)
         };
         data_set_test[i].assign(shuffled_data.begin(), shuffled_data.begin() + diff);
         data_set_training[i].assign(shuffled_data.begin() + diff, shuffled_data.end());
@@ -366,7 +366,7 @@ HRLAlphaTrainer::AlphaTrainingResult HRLAlphaTrainer::TrainAlphaR(
 }
 
 HRLAlphaTrainer::AlphaTrainingResult HRLAlphaTrainer::TrainAlphaG(
-    const std::vector<std::vector<Eigen::VectorXd>> & beta_group_list,
+    const std::vector<std::vector<HRLBetaVector>> & beta_group_list,
     const AlphaTrainingOptions & options) const
 {
     ValidateTrainingBatch(beta_group_list.size(), options.subset_size, m_alpha_grid);
@@ -467,7 +467,7 @@ Eigen::MatrixXd HRLAlphaTrainer::StudyAlphaRBias(
 }
 
 Eigen::MatrixXd HRLAlphaTrainer::StudyAlphaGBias(
-    const std::vector<std::vector<Eigen::VectorXd>> & beta_group_list,
+    const std::vector<std::vector<HRLBetaVector>> & beta_group_list,
     const AlphaRunOptions & options) const
 {
     ValidateTrainingBatch(beta_group_list.size(), 1, m_alpha_grid);
