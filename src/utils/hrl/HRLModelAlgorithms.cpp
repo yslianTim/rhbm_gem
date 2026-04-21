@@ -1,5 +1,6 @@
 #include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
 
+#include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/EigenMatrixUtility.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
@@ -26,7 +27,12 @@ void ValidateMatrixVectorShape(
     {
         throw std::invalid_argument("X must contain at least one basis column.");
     }
-    if (!X.array().allFinite() || !y.array().allFinite())
+    try
+    {
+        rhbm_gem::EigenValidation::RequireFinite(X, "X");
+        rhbm_gem::EigenValidation::RequireFinite(y, "y");
+    }
+    catch (const std::invalid_argument &)
     {
         throw std::invalid_argument("X and y must contain only finite values.");
     }
@@ -37,7 +43,14 @@ void ValidateDiagonalSize(
     Eigen::Index expected_size,
     const char * name)
 {
-    if (matrix.diagonal().size() != expected_size)
+    try
+    {
+        rhbm_gem::EigenValidation::RequireVectorSize(
+            matrix.diagonal(),
+            expected_size,
+            name);
+    }
+    catch (const std::invalid_argument &)
     {
         throw std::invalid_argument(std::string(name) + " size is inconsistent.");
     }
@@ -194,10 +207,7 @@ HRLMuEstimateResult HRLModelAlgorithms::EstimateMuMDPDE(
     rhbm_gem::NumericValidation::RequirePositive(options.max_iterations, "max_iterations");
     rhbm_gem::NumericValidation::RequireFiniteNonNegative(options.tolerance, "tolerance");
     rhbm_gem::NumericValidation::RequireFinitePositive(options.member_weight_min, "member_weight_min");
-    if (beta_array.rows() <= 0 || beta_array.cols() <= 0)
-    {
-        throw std::invalid_argument("beta_array must not be empty.");
-    }
+    rhbm_gem::EigenValidation::RequireNonEmpty(beta_array, "beta_array");
 
     detail::ScopedEigenThreadCount thread_guard(options.thread_size);
     (void)thread_guard;
@@ -259,7 +269,11 @@ HRLMuEstimateResult HRLModelAlgorithms::EstimateMuMDPDE(
     {
         result.status = HRLEstimationStatus::MAX_ITERATIONS_REACHED;
     }
-    if (!result.capital_lambda.array().allFinite())
+    try
+    {
+        rhbm_gem::EigenValidation::RequireFinite(result.capital_lambda, "capital_lambda");
+    }
+    catch (const std::invalid_argument &)
     {
         result.status = HRLEstimationStatus::NUMERICAL_FALLBACK;
     }
@@ -282,10 +296,7 @@ HRLWebEstimateResult HRLModelAlgorithms::EstimateWEB(
     {
         throw std::invalid_argument("WEB inputs must have consistent member counts.");
     }
-    if (mu_mdpde.rows() <= 0)
-    {
-        throw std::invalid_argument("mu_mdpde must not be empty.");
-    }
+    rhbm_gem::EigenValidation::RequireNonEmpty(mu_mdpde, "mu_mdpde");
 
     detail::ScopedEigenThreadCount thread_guard(options.thread_size);
     (void)thread_guard;
@@ -411,10 +422,7 @@ Eigen::VectorXd CalculateBetaByMDPDE(
 Eigen::VectorXd CalculateMuByMedian(
     const Eigen::MatrixXd & beta_array)
 {
-    if (beta_array.rows() <= 0 || beta_array.cols() <= 0)
-    {
-        throw std::invalid_argument("beta_array must not be empty.");
-    }
+    rhbm_gem::EigenValidation::RequireNonEmpty(beta_array, "beta_array");
     const auto basis_size{ static_cast<int>(beta_array.rows()) };
     Eigen::VectorXd mu{ Eigen::VectorXd::Zero(basis_size) };
     for (int b = 0; b < basis_size; b++)
@@ -618,7 +626,11 @@ Eigen::MatrixXd CalculateMemberCovariance(
     }
 
     Eigen::MatrixXd capital_lambda{ numerator / denominator };
-    if (!capital_lambda.array().allFinite())
+    try
+    {
+        rhbm_gem::EigenValidation::RequireFinite(capital_lambda, "capital_lambda");
+    }
+    catch (const std::invalid_argument &)
     {
         capital_lambda = Eigen::MatrixXd::Identity(basis_size, basis_size);
     }
@@ -629,7 +641,11 @@ std::vector<Eigen::MatrixXd> CalculateWeightedMemberCovariance(
     const Eigen::MatrixXd & capital_lambda,
     const Eigen::ArrayXd & omega_array)
 {
-    if (capital_lambda.rows() != capital_lambda.cols())
+    try
+    {
+        rhbm_gem::EigenValidation::RequireSquare(capital_lambda, "capital_lambda");
+    }
+    catch (const std::invalid_argument &)
     {
         throw std::invalid_argument("capital_lambda must be square.");
     }

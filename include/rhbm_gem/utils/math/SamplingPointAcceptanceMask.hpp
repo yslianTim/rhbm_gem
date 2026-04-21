@@ -7,6 +7,7 @@
 #include <Eigen/Dense>
 
 #include <rhbm_gem/utils/domain/Constants.hpp>
+#include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
@@ -30,21 +31,21 @@ inline std::vector<Eigen::Vector3d> BuildNormalizedRejectDirections(
 
     for (const auto & reject_direction : reject_direction_list)
     {
-        if (reject_direction.size() != 3)
+        Eigen::Vector3d direction;
+        try
+        {
+            direction = EigenValidation::RequireVector3d(
+                reject_direction,
+                "SamplingPointAcceptanceMask reject directions");
+        }
+        catch (const std::invalid_argument &)
         {
             throw std::invalid_argument(
-                "SamplingPointAcceptanceMask reject directions must have dimension 3.");
+                reject_direction.size() != 3 ?
+                    "SamplingPointAcceptanceMask reject directions must have dimension 3." :
+                    "SamplingPointAcceptanceMask reject directions must contain finite values.");
         }
 
-        if (!reject_direction.allFinite())
-        {
-            throw std::invalid_argument(
-                "SamplingPointAcceptanceMask reject directions must contain finite values.");
-        }
-
-        const Eigen::Vector3d direction{
-            reject_direction(0), reject_direction(1), reject_direction(2)
-        };
         const auto norm{ direction.norm() };
         if (norm <= 0.0)
         {

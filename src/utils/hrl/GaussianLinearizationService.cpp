@@ -3,6 +3,7 @@
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
+#include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <cmath>
@@ -183,7 +184,11 @@ std::tuple<Eigen::VectorXd, Eigen::VectorXd> BuildGaus2DModelWithVariance(
 
     if (linear_model.rows() == 2)
     {
-        if (covariance_matrix.rows() != 2 || covariance_matrix.cols() != 2)
+        try
+        {
+            EigenValidation::RequireShape(covariance_matrix, 2, 2, "covariance_matrix");
+        }
+        catch (const std::invalid_argument &)
         {
             throw std::invalid_argument("covariance_matrix must be 2x2");
         }
@@ -224,7 +229,11 @@ std::tuple<Eigen::VectorXd, Eigen::VectorXd> BuildGaus3DModelWithVariance(
 
     if (linear_model.rows() == 2)
     {
-        if (covariance_matrix.rows() != 2 || covariance_matrix.cols() != 2)
+        try
+        {
+            EigenValidation::RequireShape(covariance_matrix, 2, 2, "covariance_matrix");
+        }
+        catch (const std::invalid_argument &)
         {
             throw std::invalid_argument("covariance_matrix must be 2x2");
         }

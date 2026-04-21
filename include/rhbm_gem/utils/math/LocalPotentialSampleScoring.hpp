@@ -7,6 +7,7 @@
 
 #include <Eigen/Dense>
 
+#include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/SamplingPointAcceptanceMask.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
@@ -16,23 +17,19 @@ namespace detail {
 inline Eigen::Vector3d ValidateAndConvertLocalPotentialRejectDirection(
     const Eigen::VectorXd & reject_direction)
 {
-    if (reject_direction.size() != 3)
+    try
+    {
+        return EigenValidation::RequireVector3d(
+            reject_direction,
+            "LocalPotentialSampleScoring reject directions");
+    }
+    catch (const std::invalid_argument &)
     {
         throw std::invalid_argument(
-            "LocalPotentialSampleScoring reject directions must have dimension 3.");
+            reject_direction.size() != 3 ?
+                "LocalPotentialSampleScoring reject directions must have dimension 3." :
+                "LocalPotentialSampleScoring reject directions must contain finite values.");
     }
-
-    if (!reject_direction.allFinite())
-    {
-        throw std::invalid_argument(
-            "LocalPotentialSampleScoring reject directions must contain finite values.");
-    }
-
-    return Eigen::Vector3d{
-        reject_direction(0),
-        reject_direction(1),
-        reject_direction(2)
-    };
 }
 
 inline std::vector<Eigen::Vector3d> BuildLocalPotentialRejectPositionList(

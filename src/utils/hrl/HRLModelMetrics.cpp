@@ -2,6 +2,7 @@
 
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
+#include <rhbm_gem/utils/math/EigenValidation.hpp>
 
 #include <stdexcept>
 #include <string>
@@ -20,7 +21,14 @@ void ValidateMatchingDimensions(
     const Eigen::VectorXd & estimate_gaus,
     const Eigen::VectorXd & gaus_truth)
 {
-    if (estimate_gaus.rows() != gaus_truth.rows())
+    try
+    {
+        rhbm_gem::EigenValidation::RequireVectorSize(
+            estimate_gaus,
+            gaus_truth.rows(),
+            "estimate_gaus");
+    }
+    catch (const std::invalid_argument &)
     {
         Logger::Log(
             LogLevel::Error,

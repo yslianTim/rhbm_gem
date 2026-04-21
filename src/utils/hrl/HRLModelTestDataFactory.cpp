@@ -3,6 +3,7 @@
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
+#include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/GaussianResponseMath.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
@@ -220,7 +221,14 @@ HRLNeighborhoodTestInput HRLModelTestDataFactory::BuildNeighborhoodTestInput(
 
 void HRLModelTestDataFactory::ValidateGausParametersDimension(const Eigen::VectorXd & gaus_par) const
 {
-    if (gaus_par.rows() != m_gaus_par_size)
+    try
+    {
+        rhbm_gem::EigenValidation::RequireVectorSize(
+            gaus_par,
+            m_gaus_par_size,
+            "gaus_par");
+    }
+    catch (const std::invalid_argument &)
     {
         throw std::invalid_argument(
             "model parameters size invalid, must be : " + std::to_string(m_gaus_par_size)

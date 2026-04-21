@@ -1,4 +1,5 @@
 #include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
+#include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <cmath>
@@ -85,7 +86,11 @@ Eigen::MatrixXd HRLDataTransform::BuildBetaMatrix(
         {
             throw std::invalid_argument("All beta vectors must share the same basis size.");
         }
-        if (!beta.array().allFinite())
+        try
+        {
+            rhbm_gem::EigenValidation::RequireFinite(beta, "beta");
+        }
+        catch (const std::invalid_argument &)
         {
             throw std::invalid_argument("beta_list contains non-finite value.");
         }
@@ -133,8 +138,18 @@ HRLGroupEstimationInput HRLDataTransform::BuildGroupInput(
         {
             throw std::invalid_argument("Member beta basis size is inconsistent.");
         }
-        if (estimate.data_weight.diagonal().size() != dataset.y.size() ||
-            estimate.data_covariance.diagonal().size() != dataset.y.size())
+        try
+        {
+            rhbm_gem::EigenValidation::RequireVectorSize(
+                estimate.data_weight.diagonal(),
+                dataset.y.size(),
+                "Member data weight");
+            rhbm_gem::EigenValidation::RequireVectorSize(
+                estimate.data_covariance.diagonal(),
+                dataset.y.size(),
+                "Member data covariance");
+        }
+        catch (const std::invalid_argument &)
         {
             throw std::invalid_argument("Member covariance or weight size is inconsistent.");
         }

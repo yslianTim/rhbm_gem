@@ -3,6 +3,7 @@
 #include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
+#include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <stdexcept>
@@ -114,8 +115,18 @@ void HRLGroupEstimator::ValidateInput(const HRLGroupEstimationInput & input)
         {
             throw std::invalid_argument("member beta basis size is inconsistent.");
         }
-        if (estimate.data_weight.diagonal().size() != dataset.y.size() ||
-            estimate.data_covariance.diagonal().size() != dataset.y.size())
+        try
+        {
+            rhbm_gem::EigenValidation::RequireVectorSize(
+                estimate.data_weight.diagonal(),
+                dataset.y.size(),
+                "member weight");
+            rhbm_gem::EigenValidation::RequireVectorSize(
+                estimate.data_covariance.diagonal(),
+                dataset.y.size(),
+                "member covariance");
+        }
+        catch (const std::invalid_argument &)
         {
             throw std::invalid_argument("member weight or covariance size is inconsistent.");
         }
