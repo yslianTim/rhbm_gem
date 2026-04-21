@@ -82,6 +82,20 @@ inline bool IsFiniteNonNegative(Type value)
     return IsFinite(value) && IsNonNegative(value);
 }
 
+template <typename Type, typename LowerType>
+inline bool IsAtLeast(Type value, LowerType lower)
+{
+    using CommonType = std::common_type_t<Type, LowerType>;
+    return static_cast<CommonType>(value) >= static_cast<CommonType>(lower);
+}
+
+template <typename Type, typename UpperType>
+inline bool IsAtMost(Type value, UpperType upper)
+{
+    using CommonType = std::common_type_t<Type, UpperType>;
+    return static_cast<CommonType>(value) <= static_cast<CommonType>(upper);
+}
+
 template <typename Type, typename LowerType, typename UpperType>
 inline bool IsFiniteInclusiveRange(
     Type value,
@@ -95,6 +109,21 @@ inline bool IsFiniteInclusiveRange(
 
     return IsFinite(value) && IsFinite(lower) && IsFinite(upper) &&
            converted_value >= lower_bound && converted_value <= upper_bound;
+}
+
+template <typename Type, typename LowerType, typename UpperType>
+inline bool IsFiniteExclusiveInclusiveRange(
+    Type value,
+    LowerType lower,
+    UpperType upper)
+{
+    using CommonType = std::common_type_t<Type, LowerType, UpperType>;
+    const auto lower_bound{ static_cast<CommonType>(lower) };
+    const auto upper_bound{ static_cast<CommonType>(upper) };
+    const auto converted_value{ static_cast<CommonType>(value) };
+
+    return IsFinite(value) && IsFinite(lower) && IsFinite(upper) &&
+           converted_value > lower_bound && converted_value <= upper_bound;
 }
 
 template <typename Type, typename NameType>
@@ -147,6 +176,28 @@ inline Type RequireFiniteNonNegative(Type value, const NameType & name)
     return value;
 }
 
+template <typename Type, typename LowerType, typename NameType>
+inline Type RequireAtLeast(Type value, LowerType lower, const NameType & name)
+{
+    if (!IsAtLeast(value, lower))
+    {
+        throw std::invalid_argument(
+            detail::GetName(name) + " must be at least " + detail::ToString(lower) + ".");
+    }
+    return value;
+}
+
+template <typename Type, typename UpperType, typename NameType>
+inline Type RequireAtMost(Type value, UpperType upper, const NameType & name)
+{
+    if (!IsAtMost(value, upper))
+    {
+        throw std::invalid_argument(
+            detail::GetName(name) + " must be at most " + detail::ToString(upper) + ".");
+    }
+    return value;
+}
+
 template <typename Type, typename NameType>
 inline std::pair<Type, Type> RequireFiniteNonNegativeRange(
     Type min_value,
@@ -173,6 +224,22 @@ inline Type RequireFiniteInclusiveRange(
     {
         throw std::invalid_argument(
             detail::GetName(name) + " must be finite and within [" +
+            detail::ToString(lower) + ", " + detail::ToString(upper) + "].");
+    }
+    return value;
+}
+
+template <typename Type, typename LowerType, typename UpperType, typename NameType>
+inline Type RequireFiniteExclusiveInclusiveRange(
+    Type value,
+    LowerType lower,
+    UpperType upper,
+    const NameType & name)
+{
+    if (!IsFiniteExclusiveInclusiveRange(value, lower, upper))
+    {
+        throw std::invalid_argument(
+            detail::GetName(name) + " must be finite and within (" +
             detail::ToString(lower) + ", " + detail::ToString(upper) + "].");
     }
     return value;

@@ -79,6 +79,24 @@ std::string BuildInclusiveRangeMessage(
     return message;
 }
 
+template <typename LowerType, typename UpperType>
+std::string BuildExclusiveInclusiveRangeMessage(
+    std::string_view label,
+    LowerType lower,
+    UpperType upper,
+    LogLevel issue_level)
+{
+    std::string message{
+        std::string(label) + " must be a finite value within ("
+            + ToString(lower) + ", " + ToString(upper) + "]"
+    };
+    if (issue_level == LogLevel::Warning)
+    {
+        message += '.';
+    }
+    return message;
+}
+
 template <typename FieldType, typename LowerType, typename UpperType>
 std::string BuildInclusiveRangeMessage(
     std::string_view label,
@@ -88,6 +106,22 @@ std::string BuildInclusiveRangeMessage(
     LogLevel issue_level)
 {
     std::string message{ BuildInclusiveRangeMessage(label, lower, upper, issue_level) };
+    if (issue_level == LogLevel::Warning)
+    {
+        message += " Using " + ToString(fallback_value) + " instead.";
+    }
+    return message;
+}
+
+template <typename FieldType, typename LowerType, typename UpperType>
+std::string BuildExclusiveInclusiveRangeMessage(
+    std::string_view label,
+    LowerType lower,
+    UpperType upper,
+    const FieldType & fallback_value,
+    LogLevel issue_level)
+{
+    std::string message{ BuildExclusiveInclusiveRangeMessage(label, lower, upper, issue_level) };
     if (issue_level == LogLevel::Warning)
     {
         message += " Using " + ToString(fallback_value) + " instead.";
@@ -287,6 +321,32 @@ protected:
             fallback_value,
             issue_level,
             command_validation_detail::BuildInclusiveRangeMessage(
+                label,
+                lower,
+                upper,
+                fallback_value,
+                issue_level));
+    }
+    template <typename FieldType, typename LowerType, typename UpperType>
+    void CoerceFiniteExclusiveInclusiveRangeScalar(
+        FieldType & field,
+        std::string_view option_name,
+        LowerType lower,
+        UpperType upper,
+        FieldType fallback_value,
+        LogLevel issue_level,
+        std::string_view label)
+    {
+        CoerceScalar(
+            field,
+            option_name,
+            [lower, upper](const auto candidate)
+            {
+                return NumericValidation::IsFiniteExclusiveInclusiveRange(candidate, lower, upper);
+            },
+            fallback_value,
+            issue_level,
+            command_validation_detail::BuildExclusiveInclusiveRangeMessage(
                 label,
                 lower,
                 upper,

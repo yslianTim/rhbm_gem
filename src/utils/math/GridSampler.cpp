@@ -1,4 +1,5 @@
 #include <rhbm_gem/utils/math/GridSampler.hpp>
+#include <rhbm_gem/utils/math/NumericValidation.hpp>
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -32,14 +33,13 @@ SamplingPointList GridSampler::GenerateSamplingPoints(
     const std::array<float, 3> & reference_position,
     const std::array<float, 3> & plane_normal) const
 {
-    if (m_window_size <= 0.0)
-    {
-        throw std::invalid_argument("GridSampler: window size should be positive.");
-    }
-    if (m_sampling_size < 2)
-    {
-        throw std::invalid_argument("GridSampler: sampling size should be greater than 1.");
-    }
+    rhbm_gem::NumericValidation::RequireFinitePositive(
+        m_window_size,
+        "GridSampler window size");
+    rhbm_gem::NumericValidation::RequireAtLeast(
+        m_sampling_size,
+        2u,
+        "GridSampler sampling size");
 
     const Eigen::Map<const Vector3f> eigen_reference_position(reference_position.data());
     const Eigen::Map<const Vector3f> eigen_plane_normal(plane_normal.data());

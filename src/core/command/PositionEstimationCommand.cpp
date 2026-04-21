@@ -76,13 +76,14 @@ void PositionEstimationCommand::NormalizeRequest()
         2.0,
         LogLevel::Warning,
         "Alpha");
-    CoerceScalar(
+    CoerceFiniteExclusiveInclusiveRangeScalar(
         request.threshold_ratio,
         kThresholdOption,
-        [](double candidate) { return candidate > 0.0 && candidate <= 1.0; },
+        0.0,
+        1.0,
         0.01,
         LogLevel::Warning,
-        "Threshold ratio must be in (0, 1], reset to default 0.01");
+        "Threshold ratio");
     CoerceFinitePositiveScalar(
         request.dedup_tolerance,
         kDedupToleranceOption,

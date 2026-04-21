@@ -12,21 +12,14 @@
 
 namespace
 {
-void ValidateGaussianModel(const GaussianModel3D & model)
-{
-    rhbm_gem::NumericValidation::RequireFinite(model.amplitude, "GaussianModel3D amplitude");
-    rhbm_gem::NumericValidation::RequireFinitePositive(model.width, "GaussianModel3D width");
-    rhbm_gem::NumericValidation::RequireFinite(model.intercept, "GaussianModel3D intercept");
-}
-
 std::vector<Eigen::VectorXd> BuildNeighborCenterList(
     const NeighborhoodSamplingOptions & options)
 {
     constexpr size_t max_neighbor_count{ 4 };
-    if (options.neighbor_count > max_neighbor_count)
-    {
-        throw std::invalid_argument("neighbor_count should be less than or equal to 4");
-    }
+    rhbm_gem::NumericValidation::RequireAtMost(
+        options.neighbor_count,
+        max_neighbor_count,
+        "neighbor_count");
 
     std::vector<Eigen::VectorXd> neighbor_center_list;
     neighbor_center_list.reserve(options.neighbor_count);
@@ -84,7 +77,9 @@ LocalPotentialSampleList GaussianPotentialSampler::GenerateRadialSamples(
 ) const
 {
     rhbm_gem::NumericValidation::RequirePositive(sample_count, "sample_count");
-    ValidateGaussianModel(model);
+    rhbm_gem::NumericValidation::RequireFinite(model.amplitude, "GaussianModel3D amplitude");
+    rhbm_gem::NumericValidation::RequireFinitePositive(model.width, "GaussianModel3D width");
+    rhbm_gem::NumericValidation::RequireFinite(model.intercept, "GaussianModel3D intercept");
     rhbm_gem::NumericValidation::RequireFiniteNonNegativeRange(
         distance_min,
         distance_max,
@@ -123,7 +118,9 @@ LocalPotentialSampleList GaussianPotentialSampler::GenerateNeighborhoodSamples(
 ) const
 {
     rhbm_gem::NumericValidation::RequirePositive(samples_per_radius, "samples_per_radius");
-    ValidateGaussianModel(model);
+    rhbm_gem::NumericValidation::RequireFinite(model.amplitude, "GaussianModel3D amplitude");
+    rhbm_gem::NumericValidation::RequireFinitePositive(model.width, "GaussianModel3D width");
+    rhbm_gem::NumericValidation::RequireFinite(model.intercept, "GaussianModel3D intercept");
     rhbm_gem::NumericValidation::RequireFiniteNonNegativeRange(
         options.radius_min,
         options.radius_max,

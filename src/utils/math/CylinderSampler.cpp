@@ -1,4 +1,5 @@
 #include <rhbm_gem/utils/math/CylinderSampler.hpp>
+#include <rhbm_gem/utils/math/NumericValidation.hpp>
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -33,14 +34,10 @@ void CylinderSampler::Print() const
 
 void CylinderSampler::SetDistanceRange(double min_value, double max_value)
 {
-    if (min_value < 0.0 || max_value < 0.0)
-    {
-        throw std::invalid_argument("CylinderSampler: radius range cannot be negative.");
-    }
-    if (min_value > max_value)
-    {
-        throw std::invalid_argument("CylinderSampler: radius minimum greater than maximum.");
-    }
+    rhbm_gem::NumericValidation::RequireFiniteNonNegativeRange(
+        min_value,
+        max_value,
+        "CylinderSampler radius range");
 
     m_distance_min = min_value;
     m_distance_max = max_value;
@@ -50,10 +47,9 @@ SamplingPointList CylinderSampler::GenerateSamplingPoints(
     const std::array<float, 3> & reference_position,
     const std::array<float, 3> & axis_vector) const
 {
-    if (m_height < 0.0)
-    {
-        throw std::invalid_argument("CylinderSampler: height is negative.");
-    }
+    rhbm_gem::NumericValidation::RequireFiniteNonNegative(
+        m_height,
+        "CylinderSampler height");
 
     const Eigen::Map<const Vector3f> eigen_reference_position(reference_position.data());
     const Eigen::Map<const Vector3f> eigen_axis_vector(axis_vector.data());

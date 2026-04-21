@@ -14,33 +14,6 @@
 
 namespace {
 
-void ValidateSphereRandomSamplingInputs(
-    SphereDistanceRange range,
-    SphereRandomSamplingConfig random_config)
-{
-    rhbm_gem::NumericValidation::RequireFiniteNonNegativeRange(
-        range.min,
-        range.max,
-        "SphereSampler distance range");
-    (void)random_config;
-}
-
-void ValidateSphereFibonacciSamplingInputs(
-    SphereDistanceRange range,
-    SphereDeterministicSamplingConfig fibonacci_config)
-{
-    rhbm_gem::NumericValidation::RequireFiniteNonNegativeRange(
-        range.min,
-        range.max,
-        "SphereSampler distance range");
-    rhbm_gem::NumericValidation::RequireFinitePositive(
-        fibonacci_config.radius_bin_size,
-        "SphereSampler Fibonacci radius bin size");
-    rhbm_gem::NumericValidation::RequirePositive(
-        fibonacci_config.samples_per_radius,
-        "SphereSampler Fibonacci samples per radius");
-}
-
 std::string_view GetSphereSamplingMethodName(SphereSamplingMethod method)
 {
     switch (method)
@@ -120,7 +93,11 @@ SphereSamplingProfile::SphereSamplingProfile(
     m_distance_range{ range },
     m_method_config{ random_config }
 {
-    ValidateSphereRandomSamplingInputs(range, random_config);
+    rhbm_gem::NumericValidation::RequireFiniteNonNegativeRange(
+        range.min,
+        range.max,
+        "SphereSampler distance range");
+    (void)random_config;
 }
 
 SphereSamplingProfile::SphereSamplingProfile(
@@ -131,7 +108,16 @@ SphereSamplingProfile::SphereSamplingProfile(
     m_distance_range{ range },
     m_method_config{ fibonacci_config }
 {
-    ValidateSphereFibonacciSamplingInputs(range, fibonacci_config);
+    rhbm_gem::NumericValidation::RequireFiniteNonNegativeRange(
+        range.min,
+        range.max,
+        "SphereSampler distance range");
+    rhbm_gem::NumericValidation::RequireFinitePositive(
+        fibonacci_config.radius_bin_size,
+        "SphereSampler Fibonacci radius bin size");
+    rhbm_gem::NumericValidation::RequirePositive(
+        fibonacci_config.samples_per_radius,
+        "SphereSampler Fibonacci samples per radius");
 }
 
 SphereSamplingProfile SphereSamplingProfile::RadiusUniformRandom(

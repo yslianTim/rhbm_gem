@@ -1,6 +1,7 @@
 #include <rhbm_gem/utils/math/GaussianResponseMath.hpp>
 
 #include <rhbm_gem/utils/domain/Constants.hpp>
+#include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <cmath>
 #include <stdexcept>
@@ -8,12 +9,25 @@
 namespace rhbm_gem::GaussianResponseMath
 {
 
-double GetGaussianResponseAtDistance(double distance, double width, int dimension)
+namespace {
+
+void ValidateGaussianWidth(double width)
 {
-    if (width <= 0.0)
+    try
+    {
+        NumericValidation::RequireFinitePositive(width, "Gaussian width");
+    }
+    catch (const std::invalid_argument &)
     {
         throw std::runtime_error("The gaus width should be positive value.");
     }
+}
+
+} // namespace
+
+double GetGaussianResponseAtDistance(double distance, double width, int dimension)
+{
+    ValidateGaussianWidth(width);
 
     const auto width_square{ width * width };
     const auto coefficient{
@@ -27,10 +41,7 @@ double GetGaussianResponseAtPoint(
     const Eigen::VectorXd & center,
     double width)
 {
-    if (width <= 0.0)
-    {
-        throw std::runtime_error("The gaus width should be positive value.");
-    }
+    ValidateGaussianWidth(width);
 
     const auto width_square{ width * width };
     const auto coefficient{ 1.0 / std::pow(Constants::two_pi * width_square, 1.5) };
@@ -43,10 +54,7 @@ double GetGaussianResponseAtPointWithNeighborhood(
     const std::vector<Eigen::VectorXd> & neighbor_center_list,
     double width)
 {
-    if (width <= 0.0)
-    {
-        throw std::runtime_error("The gaus width should be positive value.");
-    }
+    ValidateGaussianWidth(width);
 
     const auto width_square{ width * width };
     const auto coefficient{ 1.0 / std::pow(Constants::two_pi * width_square, 1.5) };
