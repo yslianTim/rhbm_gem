@@ -5,6 +5,7 @@
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
+#include <array>
 #include <cmath>
 #include <stdexcept>
 
@@ -61,6 +62,102 @@ Eigen::VectorXd CalculateReplicaSigma(
     return (residual_matrix.colwise() - residual_mean).rowwise().norm()
         / std::sqrt(static_cast<double>(residual_matrix.cols() - 1));
 }
+
+struct MuReplicaResidual
+{
+    Eigen::VectorXd median_residual;
+    Eigen::VectorXd mdpde_residual;
+};
+
+struct NeighborhoodReplicaResidual
+{
+    std::array<Eigen::VectorXd, 3> residuals;
+    double trained_alpha_r{ 0.0 };
+};
+
+HRLModelTester::BetaReplicaResidual EstimateBetaReplicaResidual(
+    const HRLMemberDataset & dataset,
+    const Eigen::VectorXd & gaus_true,
+    double alpha_r,
+    const HRLExecutionOptions & options)
+{
+    const auto beta_result{ HRLModelAlgorithms::EstimateBetaMDPDE(alpha_r, dataset, options) };
+    return HRLModelTester::BetaReplicaResidual{
+        CalculateNormalizedResidual(beta_result.beta_ols, gaus_true),
+        CalculateNormalizedResidual(beta_result.beta_mdpde, gaus_true)
+    };
+}
+
+MuReplicaResidual EstimateMuReplicaResidual(
+    const HRLBetaMatrix & beta_matrix,
+    const Eigen::VectorXd & gaus_true,
+    double alpha_g,
+    const HRLExecutionOptions & options)
+{
+    const auto mdpde_result{ HRLModelAlgorithms::EstimateMuMDPDE(alpha_g, beta_matrix, options) };
+    const auto ols_result{ HRLModelAlgorithms::EstimateMuMDPDE(0.0, beta_matrix, options) };
+    return MuReplicaResidual{
+        CalculateNormalizedResidual(ols_result.mu_mdpde, gaus_true),
+        CalculateNormalizedResidual(mdpde_result.mu_mdpde, gaus_true)
+    };
+}
+
+NeighborhoodReplicaResidual EstimateNeighborhoodReplicaResidual(
+    const HRLMemberDataset & no_cut_dataset,
+    const HRLMemberDataset & cut_dataset,
+    const Eigen::VectorXd & gaus_true,
+    const HRLAlphaTrainer & alpha_r_trainer,
+    const HRLAlphaTrainer::AlphaTrainingOptions & alpha_r_training_options,
+    const HRLExecutionOptions & options)
+{
+    const auto no_cut_training_result{
+        alpha_r_trainer.TrainAlphaR(
+            std::vector<HRLMemberDataset>{ no_cut_dataset },
+            alpha_r_training_options)
+    };
+    const auto cut_training_result{
+        alpha_r_trainer.TrainAlphaR(
+            std::vector<HRLMemberDataset>{ cut_dataset },
+            alpha_r_training_options)
+    };
+    const auto no_cut_alpha_r_train{ no_cut_training_result.best_alpha };
+    const auto cut_alpha_r_train{ cut_training_result.best_alpha };
+    const auto no_cut_result{
+        EstimateBetaReplicaResidual(
+            no_cut_dataset,
+            gaus_true,
+            no_cut_alpha_r_train,
+            options)
+    };
+    const auto cut_result{
+        EstimateBetaReplicaResidual(
+            cut_dataset,
+            gaus_true,
+            cut_alpha_r_train,
+            options)
+    };
+
+    NeighborhoodReplicaResidual result;
+    result.residuals[0] = no_cut_result.ols_residual;
+    result.residuals[1] = no_cut_result.mdpde_residual;
+    result.residuals[2] = cut_result.mdpde_residual;
+    result.trained_alpha_r = cut_alpha_r_train;
+    return result;
+}
+
+void FinalizeResidualStatistics(
+    const std::vector<Eigen::MatrixXd> & residual_matrix_list,
+    std::vector<Eigen::VectorXd> & residual_mean_list,
+    std::vector<Eigen::VectorXd> & residual_sigma_list)
+{
+    for (size_t i = 0; i < residual_matrix_list.size(); i++)
+    {
+        residual_mean_list.at(i) = residual_matrix_list.at(i).rowwise().mean();
+        residual_sigma_list.at(i) = CalculateReplicaSigma(
+            residual_matrix_list.at(i),
+            residual_mean_list.at(i));
+    }
+}
 } // namespace
 
 HRLModelTester::HRLModelTester(int gaus_par_size) :
@@ -68,6 +165,23 @@ HRLModelTester::HRLModelTester(int gaus_par_size) :
         rhbm_gem::NumericValidation::RequirePositive(gaus_par_size, "gaus_par_size")
     }
 {
+}
+
+bool HRLModelTester::RunSingleBetaMDPDETest(
+    BetaReplicaResidual & result,
+    const HRLMemberDataset & dataset,
+    const Eigen::VectorXd & gaus_true,
+    double alpha_r,
+    int thread_size)
+{
+    rhbm_gem::EigenValidation::RequireVectorSize(
+        gaus_true,
+        m_gaus_par_size,
+        "gaus_true");
+    auto options{ MakeTesterExecutionOptions() };
+    options.thread_size = thread_size;
+    result = EstimateBetaReplicaResidual(dataset, gaus_true, alpha_r, options);
+    return true;
 }
 
 bool HRLModelTester::RunBetaMDPDETest(
@@ -83,7 +197,10 @@ bool HRLModelTester::RunBetaMDPDETest(
     (void)thread_size;
 #endif
 
-    CheckGausParametersDimension(test_input.gaus_true);
+    rhbm_gem::EigenValidation::RequireVectorSize(
+        test_input.gaus_true,
+        m_gaus_par_size,
+        "test_input.gaus_true");
     const auto replica_size{ static_cast<int>(test_input.replica_datasets.size()) };
     if (replica_size <= 0)
     {
@@ -129,26 +246,22 @@ bool HRLModelTester::RunBetaMDPDETest(
             const auto alpha{ (j < local_alpha_r_list.size()) ?
                 local_alpha_r_list.at(j) : trained_alpha_r
             };
-            const auto beta_result{ HRLModelAlgorithms::EstimateBetaMDPDE(alpha, dataset, options) };
-
-            residual_matrix_ols_list.at(j).col(i) =
-                CalculateNormalizedResidual(
-                    beta_result.beta_ols, test_input.gaus_true);
-            residual_matrix_mdpde_list.at(j).col(i) =
-                CalculateNormalizedResidual(
-                    beta_result.beta_mdpde,test_input.gaus_true);
+            const auto replica_result{
+                EstimateBetaReplicaResidual(dataset, test_input.gaus_true, alpha, options)
+            };
+            residual_matrix_ols_list.at(j).col(i) = replica_result.ols_residual;
+            residual_matrix_mdpde_list.at(j).col(i) = replica_result.mdpde_residual;
         }
     }
 
-    for (size_t j = 0; j < alpha_size; j++)
-    {
-        residual_mean_ols_list.at(j) = residual_matrix_ols_list.at(j).rowwise().mean();
-        residual_mean_mdpde_list.at(j) = residual_matrix_mdpde_list.at(j).rowwise().mean();
-        residual_sigma_ols_list.at(j) = CalculateReplicaSigma(
-            residual_matrix_ols_list.at(j), residual_mean_ols_list.at(j));
-        residual_sigma_mdpde_list.at(j) = CalculateReplicaSigma(
-            residual_matrix_mdpde_list.at(j),residual_mean_mdpde_list.at(j));
-    }
+    FinalizeResidualStatistics(
+        residual_matrix_ols_list,
+        residual_mean_ols_list,
+        residual_sigma_ols_list);
+    FinalizeResidualStatistics(
+        residual_matrix_mdpde_list,
+        residual_mean_mdpde_list,
+        residual_sigma_mdpde_list);
 
     return true;
 }
@@ -166,7 +279,10 @@ bool HRLModelTester::RunMuMDPDETest(
     (void)thread_size;
 #endif
 
-    CheckGausParametersDimension(test_input.gaus_true);
+    rhbm_gem::EigenValidation::RequireVectorSize(
+        test_input.gaus_true,
+        m_gaus_par_size,
+        "test_input.gaus_true");
     const auto replica_size{ static_cast<int>(test_input.replica_beta_matrices.size()) };
     if (replica_size <= 0)
     {
@@ -219,31 +335,22 @@ bool HRLModelTester::RunMuMDPDETest(
             const auto alpha{ (j < local_alpha_g_list.size()) ?
                 local_alpha_g_list.at(j) : trained_alpha_g
             };
-            const auto mdpde_result{
-                HRLModelAlgorithms::EstimateMuMDPDE(alpha, beta_matrix, options)
+            const auto replica_result{
+                EstimateMuReplicaResidual(beta_matrix, test_input.gaus_true, alpha, options)
             };
-            const auto ols_result{
-                HRLModelAlgorithms::EstimateMuMDPDE(0.0, beta_matrix, options)
-            };
-
-            residual_matrix_median_list.at(j).col(i) =
-                CalculateNormalizedResidual(
-                    ols_result.mu_mdpde, test_input.gaus_true);
-            residual_matrix_mdpde_list.at(j).col(i) =
-                CalculateNormalizedResidual(
-                    mdpde_result.mu_mdpde,test_input.gaus_true);
+            residual_matrix_median_list.at(j).col(i) = replica_result.median_residual;
+            residual_matrix_mdpde_list.at(j).col(i) = replica_result.mdpde_residual;
         }
     }
 
-    for (size_t j = 0; j < alpha_size; j++)
-    {
-        residual_mean_median_list.at(j) = residual_matrix_median_list.at(j).rowwise().mean();
-        residual_mean_mdpde_list.at(j) = residual_matrix_mdpde_list.at(j).rowwise().mean();
-        residual_sigma_median_list.at(j) = CalculateReplicaSigma(
-            residual_matrix_median_list.at(j),residual_mean_median_list.at(j));
-        residual_sigma_mdpde_list.at(j) = CalculateReplicaSigma(
-            residual_matrix_mdpde_list.at(j),residual_mean_mdpde_list.at(j));
-    }
+    FinalizeResidualStatistics(
+        residual_matrix_median_list,
+        residual_mean_median_list,
+        residual_sigma_median_list);
+    FinalizeResidualStatistics(
+        residual_matrix_mdpde_list,
+        residual_mean_mdpde_list,
+        residual_sigma_mdpde_list);
 
     return true;
 }
@@ -261,7 +368,10 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
 #endif
     (void)angle;
 
-    CheckGausParametersDimension(test_input.gaus_true);
+    rhbm_gem::EigenValidation::RequireVectorSize(
+        test_input.gaus_true,
+        m_gaus_par_size,
+        "test_input.gaus_true");
     const auto replica_size{ static_cast<int>(test_input.no_cut_datasets.size()) };
     if (replica_size <= 0)
     {
@@ -292,58 +402,32 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
     {
         const auto & no_cut_dataset{ test_input.no_cut_datasets.at(static_cast<size_t>(i)) };
         const auto & cut_dataset{ test_input.cut_datasets.at(static_cast<size_t>(i)) };
-
-        const auto no_cut_training_result{
-            alpha_r_trainer.TrainAlphaR(
-                std::vector<HRLMemberDataset>{ no_cut_dataset }, alpha_r_training_options)
-        };
-        const auto cut_training_result{
-            alpha_r_trainer.TrainAlphaR(
-                std::vector<HRLMemberDataset>{ cut_dataset }, alpha_r_training_options)
-        };
-        const auto no_cut_alpha_r_train{ no_cut_training_result.best_alpha };
-        const auto cut_alpha_r_train{ cut_training_result.best_alpha };
         const auto options{ MakeTesterExecutionOptions() };
-
-        auto no_cut_result{
-            HRLModelAlgorithms::EstimateBetaMDPDE(no_cut_alpha_r_train, no_cut_dataset, options)
+        const auto replica_result{
+            EstimateNeighborhoodReplicaResidual(
+                no_cut_dataset,
+                cut_dataset,
+                test_input.gaus_true,
+                alpha_r_trainer,
+                alpha_r_training_options,
+                options)
         };
-        auto cut_result{
-            HRLModelAlgorithms::EstimateBetaMDPDE(cut_alpha_r_train, cut_dataset, options)
-        };
 
-        replica_residual_list.at(0).col(i) =
-            CalculateNormalizedResidual(
-                no_cut_result.beta_ols, test_input.gaus_true);
-        replica_residual_list.at(1).col(i) =
-            CalculateNormalizedResidual(
-                no_cut_result.beta_mdpde, test_input.gaus_true);
-        replica_residual_list.at(2).col(i) =
-            CalculateNormalizedResidual(
-                cut_result.beta_mdpde, test_input.gaus_true);
+        replica_residual_list.at(0).col(i) = replica_result.residuals[0];
+        replica_residual_list.at(1).col(i) = replica_result.residuals[1];
+        replica_residual_list.at(2).col(i) = replica_result.residuals[2];
 
         #pragma omp critical
         {
-            training_alpha_r_average += cut_alpha_r_train;
+            training_alpha_r_average += replica_result.trained_alpha_r;
         }
     }
     training_alpha_r_average /= replica_size;
 
-    for (size_t j = 0; j < method_size; j++)
-    {
-        residual_mean_list.at(j) = replica_residual_list.at(j).rowwise().mean();
-        residual_sigma_list.at(j) = CalculateReplicaSigma(replica_residual_list.at(j), residual_mean_list.at(j));
-    }
+    FinalizeResidualStatistics(
+        replica_residual_list,
+        residual_mean_list,
+        residual_sigma_list);
 
-    return true;
-}
-
-bool HRLModelTester::CheckGausParametersDimension(const Eigen::VectorXd & gaus_par)
-{
-    if (gaus_par.rows() != m_gaus_par_size)
-    {
-        throw std::invalid_argument("model parameters size invalid, must be : " +
-            std::to_string(m_gaus_par_size));
-    }
     return true;
 }

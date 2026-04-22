@@ -183,6 +183,29 @@ HRLModelTestDataFactory BuildDataFactory(const HRLModelTestExecutionContext & op
     return factory;
 }
 
+HRLModelTestDataFactory::NeighborhoodScenario BuildNeighborhoodScenario(
+    const Eigen::VectorXd & model_par_prior,
+    const NeighborDistanceScenarioConfig & scenario,
+    double error_sigma,
+    double neighbor_distance,
+    bool include_sampling_summary = false)
+{
+    return HRLModelTestDataFactory::NeighborhoodScenario{
+        model_par_prior,
+        scenario.sampling_entry_size,
+        error_sigma,
+        0.0,
+        1.0,
+        neighbor_distance,
+        scenario.neighbor_count,
+        scenario.rejected_angle,
+        include_sampling_summary,
+        0.0,
+        4.0,
+        scenario.replica_size
+    };
+}
+
 } // namespace
 
 void PrintDataOutlierResult(
@@ -230,56 +253,52 @@ void RunSimulationTestOnBenchMark(const HRLModelTestExecutionContext & options)
 {
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnBenchMark");
 
-    const auto scenario{ BetaScenarioConfig{
-        1000,
-        1000,
-        std::vector<double>{ options.options.alpha_r }
+    const auto scenario{ NeighborDistanceScenarioConfig{
+        1,
+        50,
+        2,
+        45.0,
+        std::vector<double>{ 1.0 },
+        BuildDescendingSweep(16, 2.5, 0.1)
     } };
     const auto model_par_prior{ MakeDefaultModelPrior() };
     auto data_factory{ BuildDataFactory(options) };
     HRLModelTester tester(kGausParSize);
-    const auto test_input{
-        data_factory.BuildBetaTestInput(HRLModelTestDataFactory::BetaScenario{
-            model_par_prior,
-            scenario.sampling_entry_size,
-            1.0,
-            0.0,
-            scenario.replica_size
-        })
-    };
 
-    std::vector<Eigen::VectorXd> residual_mean_ols_list;
-    std::vector<Eigen::VectorXd> residual_mean_mdpde_list;
-    std::vector<Eigen::VectorXd> residual_sigma_ols_list;
-    std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
+    for (auto error_sigma : scenario.error_list)
+    {
+        for (double distance : scenario.distance_list)
+        {
+            const auto test_input{
+                data_factory.BuildNeighborhoodTestInput(
+                    BuildNeighborhoodScenario(
+                        model_par_prior,
+                        scenario,
+                        error_sigma,
+                        distance))
+            };
+            HRLModelTester::BetaReplicaResidual residual_result;
+            tester.RunSingleBetaMDPDETest(
+                residual_result,
+                test_input.cut_datasets.front(),
+                test_input.gaus_true,
+                options.options.alpha_r,
+                options.thread_size);
 
-    tester.RunBetaMDPDETest(
-        scenario.alpha_r_list,
-        residual_mean_ols_list, residual_mean_mdpde_list,
-        residual_sigma_ols_list, residual_sigma_mdpde_list,
-        test_input,
-        options.thread_size
-    );
-
-    std::ostringstream ols_stream;
-    ols_stream << "OLS: "
-               << residual_mean_ols_list.front()(0) << " +- "
-               << residual_sigma_ols_list.front()(0) << " , "
-               << residual_mean_ols_list.front()(1) << " +- "
-               << residual_sigma_ols_list.front()(1) << " , "
-               << residual_mean_ols_list.front()(2) << " +- "
-               << residual_sigma_ols_list.front()(2);
-    Logger::Log(LogLevel::Info, ols_stream.str());
-
-    std::ostringstream mdpde_stream;
-    mdpde_stream << "MDPDE: "
-                 << residual_mean_mdpde_list.front()(0) << " +- "
-                 << residual_sigma_mdpde_list.front()(0) << " , "
-                 << residual_mean_mdpde_list.front()(1) << " +- "
-                 << residual_sigma_mdpde_list.front()(1) << " , "
-                 << residual_mean_mdpde_list.front()(2) << " +- "
-                 << residual_sigma_mdpde_list.front()(2);
-    Logger::Log(LogLevel::Info, mdpde_stream.str());
+            std::ostringstream stream;
+            stream << "Distance: " << distance
+                   << " , OLS: "
+                   << residual_result.ols_residual(0) << " , "
+                   << residual_result.ols_residual(1) << " , "
+                   << residual_result.ols_residual(2)
+                   << " , MDPDE: "
+                   << residual_result.mdpde_residual(0) << " , "
+                   << residual_result.mdpde_residual(1) << " , "
+                   << residual_result.mdpde_residual(2)
+                   << " (Alpha-R = " << options.options.alpha_r << ")";
+            Logger::Log(LogLevel::Info, stream.str());
+        }
+    }
 }
 
 void RunSimulationTestOnDataOutlier(const HRLModelTestExecutionContext & options)
@@ -649,20 +668,13 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
             std::vector<Eigen::VectorXd> residual_mean_list;
             std::vector<Eigen::VectorXd> residual_sigma_list;
             const auto test_input{
-                data_factory.BuildNeighborhoodTestInput(HRLModelTestDataFactory::NeighborhoodScenario{
-                    model_par_prior,
-                    scenario.sampling_entry_size,
-                    error_sigma,
-                    0.0,
-                    1.0,
-                    scenario.distance_list[static_cast<size_t>(i)],
-                    scenario.neighbor_count,
-                    scenario.rejected_angle,
-                    true,
-                    0.0,
-                    4.0,
-                    scenario.replica_size
-                })
+                data_factory.BuildNeighborhoodTestInput(
+                    BuildNeighborhoodScenario(
+                        model_par_prior,
+                        scenario,
+                        error_sigma,
+                        scenario.distance_list[static_cast<size_t>(i)],
+                        true))
             };
             tester.RunBetaMDPDEWithNeighborhoodTest(
                 residual_mean_list, residual_sigma_list,

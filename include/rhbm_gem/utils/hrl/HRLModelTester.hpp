@@ -11,10 +11,23 @@ class HRLModelTester
     int m_gaus_par_size;
 
 public:
+    struct BetaReplicaResidual
+    {
+        Eigen::VectorXd ols_residual;
+        Eigen::VectorXd mdpde_residual;
+    };
+
     HRLModelTester() = delete;
     explicit HRLModelTester(int gaus_par_size);
     ~HRLModelTester() = default;
 
+    bool RunSingleBetaMDPDETest(
+        BetaReplicaResidual & result,
+        const HRLMemberDataset & dataset,
+        const Eigen::VectorXd & gaus_true,
+        double alpha_r,
+        int thread_size = 1
+    );
     bool RunBetaMDPDETest(
         const std::vector<double> & alpha_r_list,
         std::vector<Eigen::VectorXd> & residual_mean_ols_list,
@@ -41,7 +54,4 @@ public:
         int thread_size = 1,
         double angle = 0.0
     );
-
-private:
-    bool CheckGausParametersDimension(const Eigen::VectorXd & gaus_par);
 };
