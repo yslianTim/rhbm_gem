@@ -190,7 +190,7 @@ LocalPotentialSampleList SampleMapValues(
     double neighbor_radius,
     double angle = 0.0)
 {
-    NumericValidation::RequireFiniteNonNegative(neighbor_radius, "SampleMapValues neighbor radius");
+    numeric_validation::RequireFiniteNonNegative(neighbor_radius, "SampleMapValues neighbor radius");
 
     const auto position{ atom.GetPosition() };
     const auto sampling_points{ sampler.GenerateSamplingPoints(position) };

@@ -93,7 +93,7 @@ SphereSamplingProfile::SphereSamplingProfile(
     m_distance_range{ range },
     m_method_config{ random_config }
 {
-    rhbm_gem::NumericValidation::RequireFiniteNonNegativeRange(
+    rhbm_gem::numeric_validation::RequireFiniteNonNegativeRange(
         range.min,
         range.max,
         "SphereSampler distance range");
@@ -108,14 +108,14 @@ SphereSamplingProfile::SphereSamplingProfile(
     m_distance_range{ range },
     m_method_config{ fibonacci_config }
 {
-    rhbm_gem::NumericValidation::RequireFiniteNonNegativeRange(
+    rhbm_gem::numeric_validation::RequireFiniteNonNegativeRange(
         range.min,
         range.max,
         "SphereSampler distance range");
-    rhbm_gem::NumericValidation::RequireFinitePositive(
+    rhbm_gem::numeric_validation::RequireFinitePositive(
         fibonacci_config.radius_bin_size,
         "SphereSampler Fibonacci radius bin size");
-    rhbm_gem::NumericValidation::RequirePositive(
+    rhbm_gem::numeric_validation::RequirePositive(
         fibonacci_config.samples_per_radius,
         "SphereSampler Fibonacci samples per radius");
 }

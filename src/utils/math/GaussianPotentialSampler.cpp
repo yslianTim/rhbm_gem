@@ -16,7 +16,7 @@ std::vector<Eigen::VectorXd> BuildNeighborCenterList(
     const NeighborhoodSamplingOptions & options)
 {
     constexpr size_t max_neighbor_count{ 4 };
-    rhbm_gem::NumericValidation::RequireAtMost(
+    rhbm_gem::numeric_validation::RequireAtMost(
         options.neighbor_count,
         max_neighbor_count,
         "neighbor_count");
@@ -76,11 +76,11 @@ LocalPotentialSampleList GaussianPotentialSampler::GenerateRadialSamples(
     std::mt19937 & generator
 ) const
 {
-    rhbm_gem::NumericValidation::RequirePositive(sample_count, "sample_count");
-    rhbm_gem::NumericValidation::RequireFinite(model.amplitude, "GaussianModel3D amplitude");
-    rhbm_gem::NumericValidation::RequireFinitePositive(model.width, "GaussianModel3D width");
-    rhbm_gem::NumericValidation::RequireFinite(model.intercept, "GaussianModel3D intercept");
-    rhbm_gem::NumericValidation::RequireFiniteNonNegativeRange(
+    rhbm_gem::numeric_validation::RequirePositive(sample_count, "sample_count");
+    rhbm_gem::numeric_validation::RequireFinite(model.amplitude, "GaussianModel3D amplitude");
+    rhbm_gem::numeric_validation::RequireFinitePositive(model.width, "GaussianModel3D width");
+    rhbm_gem::numeric_validation::RequireFinite(model.intercept, "GaussianModel3D intercept");
+    rhbm_gem::numeric_validation::RequireFiniteNonNegativeRange(
         distance_min,
         distance_max,
         "distance range");
@@ -117,15 +117,15 @@ LocalPotentialSampleList GaussianPotentialSampler::GenerateNeighborhoodSamples(
     const NeighborhoodSamplingOptions & options
 ) const
 {
-    rhbm_gem::NumericValidation::RequirePositive(samples_per_radius, "samples_per_radius");
-    rhbm_gem::NumericValidation::RequireFinite(model.amplitude, "GaussianModel3D amplitude");
-    rhbm_gem::NumericValidation::RequireFinitePositive(model.width, "GaussianModel3D width");
-    rhbm_gem::NumericValidation::RequireFinite(model.intercept, "GaussianModel3D intercept");
-    rhbm_gem::NumericValidation::RequireFiniteNonNegativeRange(
+    rhbm_gem::numeric_validation::RequirePositive(samples_per_radius, "samples_per_radius");
+    rhbm_gem::numeric_validation::RequireFinite(model.amplitude, "GaussianModel3D amplitude");
+    rhbm_gem::numeric_validation::RequireFinitePositive(model.width, "GaussianModel3D width");
+    rhbm_gem::numeric_validation::RequireFinite(model.intercept, "GaussianModel3D intercept");
+    rhbm_gem::numeric_validation::RequireFiniteNonNegativeRange(
         options.radius_min,
         options.radius_max,
         "radius range");
-    rhbm_gem::NumericValidation::RequireFinitePositive(
+    rhbm_gem::numeric_validation::RequireFinitePositive(
         options.neighbor_distance,
         "neighbor_distance");
 

@@ -390,7 +390,7 @@ std::vector<AtomObject *> ModelObject::FindNeighborAtoms(
     double radius,
     bool include_center) const
 {
-    NumericValidation::RequireFiniteNonNegative(radius, "ModelObject::FindNeighborAtoms radius");
+    numeric_validation::RequireFiniteNonNegative(radius, "ModelObject::FindNeighborAtoms radius");
     if (center_atom.m_owner_model != this)
     {
         throw std::invalid_argument(

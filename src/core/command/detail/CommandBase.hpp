@@ -252,7 +252,7 @@ protected:
         CoerceScalar(
             field,
             option_name,
-            [](const auto candidate) { return NumericValidation::IsPositive(candidate); },
+            [](const auto candidate) { return numeric_validation::IsPositive(candidate); },
             fallback_value,
             issue_level,
             command_validation_detail::BuildConstraintMessage(
@@ -272,7 +272,7 @@ protected:
         CoerceScalar(
             field,
             option_name,
-            [](const auto candidate) { return NumericValidation::IsFinitePositive(candidate); },
+            [](const auto candidate) { return numeric_validation::IsFinitePositive(candidate); },
             fallback_value,
             issue_level,
             command_validation_detail::BuildConstraintMessage(
@@ -292,7 +292,7 @@ protected:
         CoerceScalar(
             field,
             option_name,
-            [](const auto candidate) { return NumericValidation::IsFiniteNonNegative(candidate); },
+            [](const auto candidate) { return numeric_validation::IsFiniteNonNegative(candidate); },
             fallback_value,
             issue_level,
             command_validation_detail::BuildConstraintMessage(
@@ -316,7 +316,7 @@ protected:
             option_name,
             [lower, upper](const auto candidate)
             {
-                return NumericValidation::IsFiniteInclusiveRange(candidate, lower, upper);
+                return numeric_validation::IsFiniteInclusiveRange(candidate, lower, upper);
             },
             fallback_value,
             issue_level,
@@ -342,7 +342,7 @@ protected:
             option_name,
             [lower, upper](const auto candidate)
             {
-                return NumericValidation::IsFiniteExclusiveInclusiveRange(candidate, lower, upper);
+                return numeric_validation::IsFiniteExclusiveInclusiveRange(candidate, lower, upper);
             },
             fallback_value,
             issue_level,

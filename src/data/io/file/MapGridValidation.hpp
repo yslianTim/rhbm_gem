@@ -12,7 +12,7 @@ inline size_t CountVoxelCount(const std::array<int, 3> & array_size)
 {
     try
     {
-        NumericValidation::RequireAllPositive(array_size, "map dimensions");
+        numeric_validation::RequireAllPositive(array_size, "map dimensions");
     }
     catch (const std::invalid_argument &)
     {

@@ -6,7 +6,7 @@
 
 #include <Eigen/Dense>
 
-namespace rhbm_gem::EigenValidation {
+namespace rhbm_gem::eigen_validation {
 namespace detail {
 
 template <typename NameType>
@@ -166,4 +166,4 @@ inline Eigen::Vector3d RequireVector3d(
     };
 }
 
-} // namespace rhbm_gem::EigenValidation
+} // namespace rhbm_gem::eigen_validation

@@ -15,7 +15,7 @@ void ValidateGaussianWidth(double width)
 {
     try
     {
-        NumericValidation::RequireFinitePositive(width, "Gaussian width");
+        numeric_validation::RequireFinitePositive(width, "Gaussian width");
     }
     catch (const std::invalid_argument &)
     {

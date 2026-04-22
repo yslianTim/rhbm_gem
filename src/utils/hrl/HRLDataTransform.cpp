@@ -15,8 +15,8 @@ HRLMemberDataset HRLDataTransform::BuildMemberDataset(const SeriesPointList & se
     }
 
     const auto basis_size{ static_cast<int>(series_point_list.front().GetBasisSize()) };
-    rhbm_gem::NumericValidation::RequirePositive(basis_size, "basis_size");
-    rhbm_gem::NumericValidation::RequireAtMost(
+    rhbm_gem::numeric_validation::RequirePositive(basis_size, "basis_size");
+    rhbm_gem::numeric_validation::RequireAtMost(
         series_point_list.size(),
         static_cast<std::size_t>(std::numeric_limits<int>::max()),
         "series_point_list size");
@@ -33,15 +33,15 @@ HRLMemberDataset HRLDataTransform::BuildMemberDataset(const SeriesPointList & se
         {
             throw std::invalid_argument("All data entries must share the same basis size.");
         }
-        rhbm_gem::NumericValidation::RequireFinite(
+        rhbm_gem::numeric_validation::RequireFinite(
             point.response,
             "response",
             "Member dataset contains non-finite value.");
-        rhbm_gem::NumericValidation::RequireFinite(
+        rhbm_gem::numeric_validation::RequireFinite(
             point.score,
             "score",
             "Member dataset contains non-finite value.");
-        rhbm_gem::NumericValidation::RequireAllFinite(
+        rhbm_gem::numeric_validation::RequireAllFinite(
             point.basis_list,
             "basis_list",
             "Member dataset contains non-finite value.");
@@ -63,8 +63,8 @@ HRLBetaMatrix HRLDataTransform::BuildBetaMatrix(const std::vector<HRLBetaVector>
     }
 
     const auto basis_size{ static_cast<int>(beta_list.front().rows()) };
-    rhbm_gem::NumericValidation::RequirePositive(basis_size, "basis_size");
-    rhbm_gem::NumericValidation::RequireAtMost(
+    rhbm_gem::numeric_validation::RequirePositive(basis_size, "basis_size");
+    rhbm_gem::numeric_validation::RequireAtMost(
         beta_list.size(),
         static_cast<std::size_t>(std::numeric_limits<int>::max()),
         "beta_list size");
@@ -73,12 +73,12 @@ HRLBetaMatrix HRLDataTransform::BuildBetaMatrix(const std::vector<HRLBetaVector>
     for (int i = 0; i < member_size; i++)
     {
         const auto & beta_vector{ beta_list.at(static_cast<std::size_t>(i)) };
-        rhbm_gem::EigenValidation::RequireVectorSize(
+        rhbm_gem::eigen_validation::RequireVectorSize(
             beta_vector,
             basis_size,
             "beta",
             "All beta vectors must share the same basis size.");
-        rhbm_gem::EigenValidation::RequireFinite(
+        rhbm_gem::eigen_validation::RequireFinite(
             beta_vector,
             "beta",
             "beta_list contains non-finite value.");
@@ -102,7 +102,7 @@ HRLGroupEstimationInput HRLDataTransform::BuildGroupInput(
     }
 
     const auto basis_size{ static_cast<int>(member_datasets.front().X.cols()) };
-    rhbm_gem::NumericValidation::RequirePositive(basis_size, "basis_size");
+    rhbm_gem::numeric_validation::RequirePositive(basis_size, "basis_size");
 
     HRLGroupEstimationInput input;
     input.basis_size = basis_size;
@@ -118,27 +118,27 @@ HRLGroupEstimationInput HRLDataTransform::BuildGroupInput(
         {
             throw std::invalid_argument("Member dataset basis size is inconsistent.");
         }
-        rhbm_gem::EigenValidation::RequireVectorSize(
+        rhbm_gem::eigen_validation::RequireVectorSize(
             dataset.y,
             dataset.X.rows(),
             "Member dataset response",
             "Member dataset shape is inconsistent.");
-        rhbm_gem::EigenValidation::RequireSameSize(
+        rhbm_gem::eigen_validation::RequireSameSize(
             dataset.score,
             dataset.y,
             "Member dataset shape",
             "Member dataset shape is inconsistent.");
-        rhbm_gem::EigenValidation::RequireVectorSize(
+        rhbm_gem::eigen_validation::RequireVectorSize(
             fit_result.beta_mdpde,
             basis_size,
             "Member fit beta",
             "Member beta basis size is inconsistent.");
-        rhbm_gem::EigenValidation::RequireSameSize(
+        rhbm_gem::eigen_validation::RequireSameSize(
             fit_result.data_weight.diagonal(),
             dataset.y,
             "Member fit data weight",
             "Member covariance or weight size is inconsistent.");
-        rhbm_gem::EigenValidation::RequireSameSize(
+        rhbm_gem::eigen_validation::RequireSameSize(
             fit_result.data_covariance.diagonal(),
             dataset.y,
             "Member fit data covariance",

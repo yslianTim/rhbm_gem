@@ -149,7 +149,7 @@ void MapSimulationCommand::NormalizeRequest()
     filtered_widths.reserve(request.blurring_width_list.size());
     for (const auto width : request.blurring_width_list)
     {
-        if (!NumericValidation::IsFinitePositive(width))
+        if (!numeric_validation::IsFinitePositive(width))
         {
             AddNormalizationWarning(
                 kBlurringWidthOption,

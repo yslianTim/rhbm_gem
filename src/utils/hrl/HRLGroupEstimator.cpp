@@ -18,7 +18,7 @@ HRLGroupEstimationResult HRLGroupEstimator::Estimate(
     const HRLGroupEstimationInput & input,
     double alpha_g) const
 {
-    rhbm_gem::NumericValidation::RequirePositive(input.basis_size, "basis_size");
+    rhbm_gem::numeric_validation::RequirePositive(input.basis_size, "basis_size");
     const auto validated_input{
         HRLDataTransform::BuildGroupInput(input.member_datasets, input.member_fit_results)
     };

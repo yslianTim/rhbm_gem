@@ -269,8 +269,8 @@ std::array<float, 3> CCP4Format::GetOrigin() const {
 void CCP4Format::SetHeader(const std::array<int, 3>& grid_size,
                            const std::array<float, 3>& grid_spacing,
                            const std::array<float, 3>& origin) {
-    NumericValidation::RequireAllPositive(grid_size, "grid_size");
-    NumericValidation::RequireAllFinitePositive(grid_spacing, "grid_spacing");
+    numeric_validation::RequireAllPositive(grid_size, "grid_size");
+    numeric_validation::RequireAllFinitePositive(grid_spacing, "grid_spacing");
 
     std::memcpy(m_header.array_size, grid_size.data(), sizeof(m_header.array_size));
     std::memcpy(m_header.grid_size, grid_size.data(), sizeof(m_header.grid_size));

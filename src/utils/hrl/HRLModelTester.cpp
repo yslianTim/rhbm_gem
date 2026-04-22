@@ -42,7 +42,7 @@ rhbm_gem::GaussianParameterVector CalculateNormalizedResidual(
     const rhbm_gem::GaussianParameterVector & gaussian_truth)
 {
     const auto gaussian_estimate{ MetricDecodeService().DecodeGroupBeta(linear_estimate) };
-    rhbm_gem::EigenValidation::RequireVectorSize(
+    rhbm_gem::eigen_validation::RequireVectorSize(
         gaussian_estimate,
         gaussian_truth.rows(),
         "gaussian"
@@ -162,7 +162,7 @@ void FinalizeResidualStatistics(
 
 HRLModelTester::HRLModelTester(int gaus_par_size) :
     m_gaus_par_size{
-        rhbm_gem::NumericValidation::RequirePositive(gaus_par_size, "gaus_par_size")
+        rhbm_gem::numeric_validation::RequirePositive(gaus_par_size, "gaus_par_size")
     }
 {
 }
@@ -174,7 +174,7 @@ bool HRLModelTester::RunSingleBetaMDPDETest(
     double alpha_r,
     int thread_size)
 {
-    rhbm_gem::EigenValidation::RequireVectorSize(
+    rhbm_gem::eigen_validation::RequireVectorSize(
         gaus_true,
         m_gaus_par_size,
         "gaus_true");
@@ -197,7 +197,7 @@ bool HRLModelTester::RunBetaMDPDETest(
     (void)thread_size;
 #endif
 
-    rhbm_gem::EigenValidation::RequireVectorSize(
+    rhbm_gem::eigen_validation::RequireVectorSize(
         test_input.gaus_true,
         m_gaus_par_size,
         "test_input.gaus_true");
@@ -279,7 +279,7 @@ bool HRLModelTester::RunMuMDPDETest(
     (void)thread_size;
 #endif
 
-    rhbm_gem::EigenValidation::RequireVectorSize(
+    rhbm_gem::eigen_validation::RequireVectorSize(
         test_input.gaus_true,
         m_gaus_par_size,
         "test_input.gaus_true");
@@ -368,7 +368,7 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
 #endif
     (void)angle;
 
-    rhbm_gem::EigenValidation::RequireVectorSize(
+    rhbm_gem::eigen_validation::RequireVectorSize(
         test_input.gaus_true,
         m_gaus_par_size,
         "test_input.gaus_true");

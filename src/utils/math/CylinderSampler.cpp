@@ -34,7 +34,7 @@ void CylinderSampler::Print() const
 
 void CylinderSampler::SetDistanceRange(double min_value, double max_value)
 {
-    rhbm_gem::NumericValidation::RequireFiniteNonNegativeRange(
+    rhbm_gem::numeric_validation::RequireFiniteNonNegativeRange(
         min_value,
         max_value,
         "CylinderSampler radius range");
@@ -47,7 +47,7 @@ SamplingPointList CylinderSampler::GenerateSamplingPoints(
     const std::array<float, 3> & reference_position,
     const std::array<float, 3> & axis_vector) const
 {
-    rhbm_gem::NumericValidation::RequireFiniteNonNegative(
+    rhbm_gem::numeric_validation::RequireFiniteNonNegative(
         m_height,
         "CylinderSampler height");
 

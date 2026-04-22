@@ -9,7 +9,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace rhbm_gem::NumericValidation {
+namespace rhbm_gem::numeric_validation {
 namespace detail {
 
 template <typename Type>
@@ -334,4 +334,4 @@ inline const std::array<Type, Size> & RequireAllFinitePositive(
     return values;
 }
 
-} // namespace rhbm_gem::NumericValidation
+} // namespace rhbm_gem::numeric_validation

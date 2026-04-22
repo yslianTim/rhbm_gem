@@ -34,7 +34,7 @@ inline std::vector<Eigen::Vector3d> BuildNormalizedRejectDirections(
         Eigen::Vector3d direction;
         try
         {
-            direction = EigenValidation::RequireVector3d(
+            direction = eigen_validation::RequireVector3d(
                 reject_direction,
                 "SamplingPointAcceptanceMask reject directions");
         }
@@ -89,7 +89,7 @@ inline std::vector<float> BuildSamplingPointAcceptanceMask(
     const std::vector<Eigen::VectorXd> & reject_direction_list,
     double angle = 0.0)
 {
-    NumericValidation::RequireFiniteInclusiveRange(angle, 0.0, 180.0, "angle");
+    numeric_validation::RequireFiniteInclusiveRange(angle, 0.0, 180.0, "angle");
 
     std::vector<float> acceptance_mask(point_list.size(), 1.0f);
     if (angle == 0.0)

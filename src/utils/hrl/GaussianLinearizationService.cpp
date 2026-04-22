@@ -186,7 +186,7 @@ std::tuple<GaussianParameterVector, GaussianParameterVector> BuildGaus2DModelWit
     {
         try
         {
-            EigenValidation::RequireShape(covariance_matrix, 2, 2, "covariance_matrix");
+            eigen_validation::RequireShape(covariance_matrix, 2, 2, "covariance_matrix");
         }
         catch (const std::invalid_argument &)
         {
@@ -231,7 +231,7 @@ std::tuple<GaussianParameterVector, GaussianParameterVector> BuildGaus3DModelWit
     {
         try
         {
-            EigenValidation::RequireShape(covariance_matrix, 2, 2, "covariance_matrix");
+            eigen_validation::RequireShape(covariance_matrix, 2, 2, "covariance_matrix");
         }
         catch (const std::invalid_argument &)
         {
@@ -310,7 +310,7 @@ GaussianLinearizationContext GaussianLinearizationContext::FromModelParameters(
 GaussianLinearizationService::GaussianLinearizationService(GaussianLinearizationSpec spec) :
     m_spec{ std::move(spec) }
 {
-    rhbm_gem::NumericValidation::RequirePositive(
+    rhbm_gem::numeric_validation::RequirePositive(
         m_spec.basis_size,
         "GaussianLinearizationSpec basis_size");
 }

@@ -33,10 +33,10 @@ SamplingPointList GridSampler::GenerateSamplingPoints(
     const std::array<float, 3> & reference_position,
     const std::array<float, 3> & plane_normal) const
 {
-    rhbm_gem::NumericValidation::RequireFinitePositive(
+    rhbm_gem::numeric_validation::RequireFinitePositive(
         m_window_size,
         "GridSampler window size");
-    rhbm_gem::NumericValidation::RequireAtLeast(
+    rhbm_gem::numeric_validation::RequireAtLeast(
         m_sampling_size,
         2u,
         "GridSampler sampling size");

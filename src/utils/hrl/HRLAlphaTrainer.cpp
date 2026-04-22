@@ -32,7 +32,7 @@ rhbm_gem::GaussianParameterVector CalculateAbsoluteGaussianDifference(
 {
     const auto gaussian_a{ MetricDecodeService().DecodeGroupBeta(linear_a) };
     const auto gaussian_b{ MetricDecodeService().DecodeGroupBeta(linear_b) };
-    rhbm_gem::EigenValidation::RequireVectorSize(gaussian_a, gaussian_b.rows(), "gaussian");
+    rhbm_gem::eigen_validation::RequireVectorSize(gaussian_a, gaussian_b.rows(), "gaussian");
     return (gaussian_a - gaussian_b).array().abs().matrix();
 }
 
@@ -45,7 +45,7 @@ void ValidateTrainingInputs(
     {
         throw std::invalid_argument("training data must not be empty.");
     }
-    rhbm_gem::NumericValidation::RequirePositive(subset_size, "subset_size");
+    rhbm_gem::numeric_validation::RequirePositive(subset_size, "subset_size");
     if (subset_size > data_size)
     {
         throw std::invalid_argument("subset_size must not exceed data size.");
@@ -65,7 +65,7 @@ void ValidateTrainingBatch(
     {
         throw std::invalid_argument("training data must not be empty.");
     }
-    rhbm_gem::NumericValidation::RequirePositive(subset_size, "subset_size");
+    rhbm_gem::numeric_validation::RequirePositive(subset_size, "subset_size");
     if (alpha_list.empty())
     {
         throw std::invalid_argument("alpha_list must not be empty.");
@@ -305,11 +305,11 @@ std::vector<double> HRLAlphaTrainer::BuildAlphaGrid(
     double alpha_max,
     double alpha_step)
 {
-    rhbm_gem::NumericValidation::RequireFiniteNonNegativeRange(
+    rhbm_gem::numeric_validation::RequireFiniteNonNegativeRange(
         alpha_min,
         alpha_max,
         "alpha training range");
-    rhbm_gem::NumericValidation::RequireFinitePositive(alpha_step, "alpha training step");
+    rhbm_gem::numeric_validation::RequireFinitePositive(alpha_step, "alpha training step");
 
     std::vector<double> alpha_list;
     for (double alpha{ alpha_min };

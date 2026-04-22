@@ -19,7 +19,7 @@ inline Eigen::Vector3d ValidateAndConvertLocalPotentialRejectDirection(
 {
     try
     {
-        return EigenValidation::RequireVector3d(
+        return eigen_validation::RequireVector3d(
             reject_direction,
             "LocalPotentialSampleScoring reject directions");
     }

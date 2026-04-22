@@ -32,7 +32,7 @@ TEST(EigenValidationTest, RequireSameSizeAcceptsSameSizedVectors)
     const Eigen::VectorXd lhs{ Eigen::VectorXd::Zero(3) };
     const Eigen::VectorXd rhs{ Eigen::VectorXd::Zero(3) };
 
-    EXPECT_NO_THROW(rg::EigenValidation::RequireSameSize(lhs, rhs, "vector pair"));
+    EXPECT_NO_THROW(rg::eigen_validation::RequireSameSize(lhs, rhs, "vector pair"));
 }
 
 TEST(EigenValidationTest, RequireSameSizeRejectsMismatchedVectors)
@@ -43,7 +43,7 @@ TEST(EigenValidationTest, RequireSameSizeRejectsMismatchedVectors)
     ExpectInvalidArgumentMessage(
         [&]()
         {
-            rg::EigenValidation::RequireSameSize(lhs, rhs, "vector pair");
+            rg::eigen_validation::RequireSameSize(lhs, rhs, "vector pair");
         },
         "vector pair must have matching sizes."
     );
@@ -56,7 +56,7 @@ TEST(EigenValidationTest, RequireVectorSizeWithContextPrefixesOriginalMessage)
     ExpectInvalidArgumentMessage(
         [&]()
         {
-            rg::EigenValidation::RequireVectorSize(
+            rg::eigen_validation::RequireVectorSize(
                 vector,
                 3,
                 "vector",
@@ -70,7 +70,7 @@ TEST(EigenValidationTest, RequireRowsAcceptsExpectedRowCount)
 {
     const Eigen::MatrixXd matrix{ Eigen::MatrixXd::Zero(3, 2) };
 
-    EXPECT_NO_THROW(rg::EigenValidation::RequireRows(matrix, 3, "matrix"));
+    EXPECT_NO_THROW(rg::eigen_validation::RequireRows(matrix, 3, "matrix"));
 }
 
 TEST(EigenValidationTest, RequireRowsWithContextPrefixesOriginalMessage)
@@ -80,7 +80,7 @@ TEST(EigenValidationTest, RequireRowsWithContextPrefixesOriginalMessage)
     ExpectInvalidArgumentMessage(
         [&]()
         {
-            rg::EigenValidation::RequireRows(
+            rg::eigen_validation::RequireRows(
                 matrix,
                 4,
                 "matrix",
@@ -94,7 +94,7 @@ TEST(EigenValidationTest, RequireColsAcceptsExpectedColumnCount)
 {
     const Eigen::MatrixXd matrix{ Eigen::MatrixXd::Zero(3, 2) };
 
-    EXPECT_NO_THROW(rg::EigenValidation::RequireCols(matrix, 2, "matrix"));
+    EXPECT_NO_THROW(rg::eigen_validation::RequireCols(matrix, 2, "matrix"));
 }
 
 TEST(EigenValidationTest, RequireColsWithContextPrefixesOriginalMessage)
@@ -104,7 +104,7 @@ TEST(EigenValidationTest, RequireColsWithContextPrefixesOriginalMessage)
     ExpectInvalidArgumentMessage(
         [&]()
         {
-            rg::EigenValidation::RequireCols(
+            rg::eigen_validation::RequireCols(
                 matrix,
                 4,
                 "matrix",
@@ -122,7 +122,7 @@ TEST(EigenValidationTest, RequireSameSizeWithContextPrefixesOriginalMessage)
     ExpectInvalidArgumentMessage(
         [&]()
         {
-            rg::EigenValidation::RequireSameSize(
+            rg::eigen_validation::RequireSameSize(
                 lhs,
                 rhs,
                 "vector pair",
