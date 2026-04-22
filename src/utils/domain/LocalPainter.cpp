@@ -1,209 +1,565 @@
 #include <rhbm_gem/utils/domain/LocalPainter.hpp>
-#include <rhbm_gem/utils/math/ArrayStats.hpp>
+
 #include <rhbm_gem/utils/domain/Logger.hpp>
+#include <rhbm_gem/utils/math/ArrayStats.hpp>
+
+#include <algorithm>
+#include <cmath>
+#include <filesystem>
+#include <system_error>
+#include <tuple>
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
-#include <TStyle.h>
+
 #include <TCanvas.h>
-#include <TPad.h>
-#include <TGraphErrors.h>
-#include <TLegend.h>
-#include <TPaveText.h>
 #include <TColor.h>
-#include <TMarker.h>
-#include <TAxis.h>
+#include <TGraphErrors.h>
 #include <TH2.h>
-#include <TF1.h>
-#include <TLine.h>
-#include <TLatex.h>
-#include <TEllipse.h>
+#include <TLegend.h>
+#include <TPad.h>
+#include <TPaveText.h>
+#include <TStyle.h>
 #endif
 
-LocalPainter::LocalPainter()
+namespace rhbm_gem {
+namespace {
+
+constexpr double kMinimumAxisSpan{ 1.0 };
+
+PlotResult BuildPlotResult(
+    PlotStatus status,
+    const std::filesystem::path & output_path,
+    const std::string & message)
 {
+    return PlotResult{ status, output_path, message };
 }
 
-LocalPainter::~LocalPainter()
+PlotResult FailPlot(
+    PlotStatus status,
+    const std::filesystem::path & output_path,
+    LogLevel level,
+    const std::string & message)
 {
+    Logger::Log(level, message);
+    return BuildPlotResult(status, output_path, message);
 }
 
-void LocalPainter::PaintTemplate1(
-    const Eigen::MatrixXd & data_matrix,
-    const std::vector<double> & alpha_list,
-    const std::string & x_axis_title,
-    const std::string & y_axis_title,
-    const std::string & file_path)
+bool IsFiniteRange(const std::pair<double, double> & range)
 {
-    (void)data_matrix;
-    (void)alpha_list;
-    (void)x_axis_title;
-    (void)y_axis_title;
-    (void)file_path;
-    std::vector<std::string> title_y_list{
-        "Amplitude #font[2]{A}", "Width #tau"
+    return std::isfinite(range.first) &&
+        std::isfinite(range.second) &&
+        range.first < range.second;
+}
+
+double ExpandSpanWithFallback(double min_value, double max_value, double padding_ratio)
+{
+    const double span{ max_value - min_value };
+    if (span > 0.0)
+    {
+        return span * padding_ratio;
+    }
+    const double anchor{
+        std::max({ std::abs(min_value), std::abs(max_value), kMinimumAxisSpan })
+    };
+    return anchor * std::max(padding_ratio, 0.05);
+}
+
+std::pair<double, double> ExpandDegenerateRange(double min_value, double max_value)
+{
+    if (min_value < max_value)
+    {
+        return { min_value, max_value };
+    }
+    const double padding{ ExpandSpanWithFallback(min_value, max_value, 0.05) };
+    return { min_value - padding, max_value + padding };
+}
+
+std::optional<std::pair<double, double>> ResolveAutoRange(
+    const std::vector<double> & values,
+    double padding_ratio)
+{
+    if (values.empty())
+    {
+        return std::nullopt;
+    }
+
+    const auto range_tuple{ ArrayStats<double>::ComputeRangeTuple(values) };
+    const double min_value{ std::get<0>(range_tuple) };
+    const double max_value{ std::get<1>(range_tuple) };
+    if (!std::isfinite(min_value) || !std::isfinite(max_value))
+    {
+        return std::nullopt;
+    }
+
+    const double padding{ ExpandSpanWithFallback(min_value, max_value, padding_ratio) };
+    return std::make_pair(min_value - padding, max_value + padding);
+}
+
+std::vector<double> CollectPanelYValues(const LinePlotPanel & panel)
+{
+    std::vector<double> values;
+    for (const auto & series : panel.series)
+    {
+        values.insert(values.end(), series.y_values.begin(), series.y_values.end());
+    }
+    return values;
+}
+
+std::vector<double> CollectAllXValues(const LinePlotRequest & request)
+{
+    std::vector<double> values;
+    for (const auto & panel : request.panels)
+    {
+        for (const auto & series : panel.series)
+        {
+            values.insert(values.end(), series.x_values.begin(), series.x_values.end());
+        }
+    }
+    return values;
+}
+
+std::optional<std::pair<double, double>> ResolveLineAxisRange(
+    const AxisSpec & axis,
+    const std::vector<double> & values,
+    double padding_ratio)
+{
+    if (axis.range.has_value())
+    {
+        if (!IsFiniteRange(*axis.range))
+        {
+            return std::nullopt;
+        }
+        return axis.range;
+    }
+    if (!axis.auto_range)
+    {
+        return std::nullopt;
+    }
+    return ResolveAutoRange(values, padding_ratio);
+}
+
+PlotResult EnsureParentDirectory(const std::filesystem::path & output_path)
+{
+    if (output_path.empty())
+    {
+        return FailPlot(
+            PlotStatus::INVALID_INPUT,
+            output_path,
+            LogLevel::Error,
+            "local_painter requires a non-empty output path.");
+    }
+
+    const auto parent_path{ output_path.parent_path() };
+    if (parent_path.empty())
+    {
+        return BuildPlotResult(PlotStatus::SUCCESS, output_path, "");
+    }
+
+    std::error_code ec;
+    std::filesystem::create_directories(parent_path, ec);
+    if (ec)
+    {
+        return FailPlot(
+            PlotStatus::OUTPUT_ERROR,
+            output_path,
+            LogLevel::Error,
+            "local_painter failed to create output directory '" +
+                parent_path.string() + "': " + ec.message());
+    }
+    return BuildPlotResult(PlotStatus::SUCCESS, output_path, "");
+}
+
+PlotResult ValidateLinePlotRequest(const LinePlotRequest & request)
+{
+    const auto directory_result{ EnsureParentDirectory(request.output_path) };
+    if (!directory_result.Succeeded())
+    {
+        return directory_result;
+    }
+
+    if (request.panels.empty())
+    {
+        return FailPlot(
+            PlotStatus::INVALID_INPUT,
+            request.output_path,
+            LogLevel::Error,
+            "local_painter::SaveLinePlot() requires at least one plot panel.");
+    }
+    if (request.canvas_width <= 0 || request.canvas_height_per_panel <= 0)
+    {
+        return FailPlot(
+            PlotStatus::INVALID_INPUT,
+            request.output_path,
+            LogLevel::Error,
+            "local_painter::SaveLinePlot() requires positive canvas dimensions.");
+    }
+
+    if (!request.x_axis.auto_range && !request.x_axis.range.has_value())
+    {
+        return FailPlot(
+            PlotStatus::INVALID_INPUT,
+            request.output_path,
+            LogLevel::Error,
+            "local_painter::SaveLinePlot() requires an explicit x-axis range when auto_range is false.");
+    }
+
+    for (std::size_t panel_index = 0; panel_index < request.panels.size(); ++panel_index)
+    {
+        const auto & panel{ request.panels[panel_index] };
+        if (panel.series.empty())
+        {
+            return FailPlot(
+                PlotStatus::INVALID_INPUT,
+                request.output_path,
+                LogLevel::Error,
+                "local_painter::SaveLinePlot() panel " + std::to_string(panel_index) +
+                    " does not contain any series.");
+        }
+        if (!panel.y_axis.auto_range && !panel.y_axis.range.has_value())
+        {
+            return FailPlot(
+                PlotStatus::INVALID_INPUT,
+                request.output_path,
+                LogLevel::Error,
+                "local_painter::SaveLinePlot() panel " + std::to_string(panel_index) +
+                    " requires an explicit y-axis range when auto_range is false.");
+        }
+
+        for (std::size_t series_index = 0; series_index < panel.series.size(); ++series_index)
+        {
+            const auto & series{ panel.series[series_index] };
+            if (series.x_values.empty() || series.y_values.empty())
+            {
+                return FailPlot(
+                    PlotStatus::INVALID_INPUT,
+                    request.output_path,
+                    LogLevel::Error,
+                    "local_painter::SaveLinePlot() panel " + std::to_string(panel_index) +
+                        " series " + std::to_string(series_index) + " is empty.");
+            }
+            if (series.x_values.size() != series.y_values.size())
+            {
+                return FailPlot(
+                    PlotStatus::INVALID_INPUT,
+                    request.output_path,
+                    LogLevel::Error,
+                    "local_painter::SaveLinePlot() panel " + std::to_string(panel_index) +
+                        " series " + std::to_string(series_index) +
+                        " has mismatched x/y lengths.");
+            }
+        }
+    }
+
+    return BuildPlotResult(PlotStatus::SUCCESS, request.output_path, "");
+}
+
+PlotResult ValidateHeatmapRequest(const HeatmapRequest & request)
+{
+    const auto directory_result{ EnsureParentDirectory(request.output_path) };
+    if (!directory_result.Succeeded())
+    {
+        return directory_result;
+    }
+
+    if (request.values.rows() <= 0 || request.values.cols() <= 0)
+    {
+        return FailPlot(
+            PlotStatus::INVALID_INPUT,
+            request.output_path,
+            LogLevel::Error,
+            "local_painter::SaveHeatmap() requires a non-empty matrix.");
+    }
+    if (request.canvas_width <= 0 || request.canvas_height <= 0)
+    {
+        return FailPlot(
+            PlotStatus::INVALID_INPUT,
+            request.output_path,
+            LogLevel::Error,
+            "local_painter::SaveHeatmap() requires positive canvas dimensions.");
+    }
+
+    for (const auto & item : {
+             std::make_pair(&request.x_axis, std::string("x-axis")),
+             std::make_pair(&request.y_axis, std::string("y-axis")),
+             std::make_pair(&request.z_axis, std::string("z-axis")) })
+    {
+        if (item.first->range.has_value() && !IsFiniteRange(*item.first->range))
+        {
+            return FailPlot(
+                PlotStatus::INVALID_INPUT,
+                request.output_path,
+                LogLevel::Error,
+                "local_painter::SaveHeatmap() received an invalid " + item.second + " range.");
+        }
+    }
+    if (!request.z_axis.auto_range && !request.z_axis.range.has_value())
+    {
+        return FailPlot(
+            PlotStatus::INVALID_INPUT,
+            request.output_path,
+            LogLevel::Error,
+            "local_painter::SaveHeatmap() requires an explicit z-axis range when auto_range is false.");
+    }
+
+    return BuildPlotResult(PlotStatus::SUCCESS, request.output_path, "");
+}
+
+#ifdef HAVE_ROOT
+
+short ResolveSeriesColor(const LineSeries & series, std::size_t series_index)
+{
+    static constexpr short kDefaultColors[]{
+        static_cast<short>(kRed + 1),
+        static_cast<short>(kAzure + 2),
+        static_cast<short>(kGreen + 2),
+        static_cast<short>(kOrange + 7),
+        static_cast<short>(kMagenta + 1),
+        static_cast<short>(kCyan + 2)
     };
 
-    #ifdef HAVE_ROOT
-    gStyle->SetLineScalePS(2);
-    gStyle->SetGridColor(kGray);
-    const int col_size{ 1 };
-    const int row_size{ 2 };
-    auto canvas{ ROOTHelper::CreateCanvas("test","", 1000, 750) };
-    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::SetCanvasPartition(
-        canvas.get(), col_size, row_size, 0.22f, 0.15f, 0.12f, 0.02f, 0.01f, 0.01f
-    );
-    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
-
-    std::unique_ptr<TGraphErrors> graph[col_size][row_size];
-    std::vector<double> y_array[row_size];
-    for (size_t i = 0; i < col_size; i++)
+    if (series.color_index.has_value())
     {
-        for (size_t j = 0; j < row_size; j++)
-        {
-            graph[i][j] = ROOTHelper::CreateGraphErrors();
-            for (int p = 0; p < static_cast<int>(alpha_list.size()); p++)
-            {
-                auto x_value{ alpha_list.at(static_cast<size_t>(p)) };
-                auto y_value{ data_matrix.col(p)(static_cast<int>(j)) };
-                graph[i][j]->SetPoint(p, x_value, y_value);
-                y_array[j].emplace_back(y_value);
-            }
-        }
+        return static_cast<short>(*series.color_index);
     }
-
-    double x_min[col_size]{ 0.0 };
-    double x_max[col_size]{ 0.0 };
-    double y_min[row_size]{ 0.0 };
-    double y_max[row_size]{ 0.0 };
-    for (size_t i = 0; i < col_size; i++)
-    {
-        x_min[i] = -0.1;
-        x_max[i] = 1.1;
-    }
-    for (size_t j = 0; j < row_size; j++)
-    {
-        auto y_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(y_array[j], 0.38, 0.005, 0.995) };
-        y_min[j] = std::get<0>(y_range);
-        y_max[j] = std::get<1>(y_range);
-    }
-
-    std::unique_ptr<TH2> frame[col_size][row_size];
-    std::unique_ptr<TPaveText> resolution_text[col_size];
-    std::unique_ptr<TPaveText> title_y_text[row_size];
-    for (int i = 0; i < col_size; i++)
-    {
-        for (int j = 0; j < row_size; j++)
-        {
-            auto par_id{ row_size - j - 1 };
-            ROOTHelper::FindPadInCanvasPartition(canvas.get(), i, j);
-            ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
-            ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-            auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
-            auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
-            frame[i][j] = ROOTHelper::CreateHist2D(Form("frame_%d_%d", i, j),"", 500, x_min[i], x_max[i], 500, y_min[par_id], y_max[par_id]);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 50.0f, 0.8f, 133);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 40.0f, 0.005f, 133);
-            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.08/x_factor), 505);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 50.0f, 1.2f, 133);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 45.0f, 0.005f, 133);
-            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 505);
-            ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
-            frame[i][j]->GetXaxis()->SetTitle(x_axis_title.data());
-            frame[i][j]->GetYaxis()->SetTitle("");
-            frame[i][j]->GetXaxis()->CenterTitle();
-            frame[i][j]->GetYaxis()->CenterTitle();
-            frame[i][j]->SetStats(0);
-            frame[i][j]->Draw("Y+");
-
-            short color{ kRed };
-            ROOTHelper::SetMarkerAttribute(graph[i][par_id].get(), 20, 1.5f, color);
-            ROOTHelper::SetLineAttribute(graph[i][par_id].get(), 2, 2, color);
-            ROOTHelper::SetFillAttribute(graph[i][par_id].get(), 1001, color, 0.2f);
-            graph[i][par_id]->Draw("PL");
-
-            if (i == 0)
-            {
-                title_y_text[j] = ROOTHelper::CreatePaveText(-0.34, 0.30, 0.00, 0.70, "nbNDC ARC", true);
-                ROOTHelper::SetPaveTextDefaultStyle(title_y_text[j].get());
-                ROOTHelper::SetPaveAttribute(title_y_text[j].get(), 0, 0.1);
-                ROOTHelper::SetLineAttribute(title_y_text[j].get(), 1, 0);
-                ROOTHelper::SetTextAttribute(title_y_text[j].get(), 40.0f, 133, 22);
-                ROOTHelper::SetFillAttribute(title_y_text[j].get(), 1001, kAzure-7, 0.5f);
-                title_y_text[j]->AddText(title_y_list[static_cast<size_t>(par_id)].data());
-                title_y_text[j]->Draw();
-            }
-        }
-    }
-
-    canvas->cd();
-    auto pad_extra2{ ROOTHelper::CreatePad("pad_extra2","", 0.94, 0.10, 1.00, 0.96) };
-    pad_extra2->Draw();
-    pad_extra2->cd();
-    ROOTHelper::SetPadDefaultStyle(pad_extra2.get());
-    ROOTHelper::SetFillAttribute(pad_extra2.get(), 4000);
-    auto right_title_text{ ROOTHelper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
-    ROOTHelper::SetPaveTextDefaultStyle(right_title_text.get());
-    ROOTHelper::SetFillAttribute(right_title_text.get(), 4000);
-    ROOTHelper::SetTextAttribute(right_title_text.get(), 50.0f, 133, 22);
-    right_title_text->AddText(y_axis_title.data());
-    auto text{ right_title_text->GetLineWith(y_axis_title.data()) };
-    text->SetTextAngle(90.0f);
-    right_title_text->Draw();
-
-    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
-    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
-    Logger::Log(LogLevel::Info, " Output file: " + file_path);
-    #endif
+    return kDefaultColors[series_index % (sizeof(kDefaultColors) / sizeof(kDefaultColors[0]))];
 }
 
-void LocalPainter::PaintHistogram2D(
-    const std::vector<double> & data_array,
-    int x_bin_size, double x_min, double x_max,
-    int y_bin_size, double y_min, double y_max,
-    const std::string & x_axis_title,
-    const std::string & y_axis_title,
-    const std::string & z_axis_title,
-    const std::string & file_name)
+PlotResult RenderLinePlotWithRoot(const LinePlotRequest & request)
 {
-    (void)data_array;
-    (void)x_bin_size;
-    (void)x_min;
-    (void)x_max;
-    (void)y_bin_size;
-    (void)y_min;
-    (void)y_max;
-    (void)x_axis_title;
-    (void)y_axis_title;
-    (void)z_axis_title;
-    (void)file_name;
-    #ifdef HAVE_ROOT
+    gStyle->SetLineScalePS(2);
+    gStyle->SetGridColor(kGray);
+
+    const int panel_count{ static_cast<int>(request.panels.size()) };
+    const int canvas_height{ std::max(1, panel_count) * request.canvas_height_per_panel };
+    auto canvas{
+        ROOTHelper::CreateCanvas("local_line_plot", "", request.canvas_width, canvas_height)
+    };
+    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
+    ROOTHelper::SetCanvasPartition(
+        canvas.get(), 1, panel_count, 0.18f, 0.10f, 0.14f, 0.06f, 0.02f, 0.01f);
+    ROOTHelper::PrintCanvasOpen(canvas.get(), request.output_path.string());
+
+    const auto x_range{
+        ResolveLineAxisRange(
+            request.x_axis,
+            CollectAllXValues(request),
+            request.x_auto_padding_ratio)
+    };
+    if (!x_range.has_value())
+    {
+        return FailPlot(
+            PlotStatus::INVALID_INPUT,
+            request.output_path,
+            LogLevel::Error,
+            "local_painter::SaveLinePlot() could not determine a valid x-axis range.");
+    }
+
+    std::vector<std::unique_ptr<TH2>> frames(static_cast<std::size_t>(panel_count));
+    std::vector<std::vector<std::unique_ptr<TGraphErrors>>> panel_graphs(
+        static_cast<std::size_t>(panel_count));
+    std::vector<std::unique_ptr<TLegend>> legends(static_cast<std::size_t>(panel_count));
+    std::vector<std::unique_ptr<TPaveText>> panel_labels(static_cast<std::size_t>(panel_count));
+    std::unique_ptr<TPad> shared_axis_pad;
+    std::unique_ptr<TPaveText> shared_axis_title;
+
+    for (int panel_index = 0; panel_index < panel_count; ++panel_index)
+    {
+        const auto & panel{ request.panels[static_cast<std::size_t>(panel_index)] };
+        const auto y_range{
+            ResolveLineAxisRange(
+                panel.y_axis,
+                CollectPanelYValues(panel),
+                request.y_auto_padding_ratio)
+        };
+        if (!y_range.has_value())
+        {
+            return FailPlot(
+                PlotStatus::INVALID_INPUT,
+                request.output_path,
+                LogLevel::Error,
+                "local_painter::SaveLinePlot() could not determine a valid y-axis range for panel "
+                    + std::to_string(panel_index) + ".");
+        }
+
+        const int canvas_row{ panel_count - panel_index - 1 };
+        ROOTHelper::FindPadInCanvasPartition(canvas.get(), 0, canvas_row);
+        ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+        ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+
+        const std::string frame_name{ "local_line_frame_" + std::to_string(panel_index) };
+        frames[static_cast<std::size_t>(panel_index)] = ROOTHelper::CreateHist2D(
+            frame_name,
+            request.title,
+            500, x_range->first, x_range->second,
+            500, y_range->first, y_range->second);
+
+        auto * frame{ frames[static_cast<std::size_t>(panel_index)].get() };
+        ROOTHelper::SetAxisTitleAttribute(frame->GetXaxis(), 45.0f, 1.0f, 133);
+        ROOTHelper::SetAxisLabelAttribute(frame->GetXaxis(), 38.0f, 0.01f, 133);
+        ROOTHelper::SetAxisTickAttribute(frame->GetXaxis(), 0.03f, 505);
+        ROOTHelper::SetAxisTitleAttribute(frame->GetYaxis(), 45.0f, 1.3f, 133);
+        ROOTHelper::SetAxisLabelAttribute(frame->GetYaxis(), 38.0f, 0.01f, 133);
+        ROOTHelper::SetAxisTickAttribute(frame->GetYaxis(), 0.03f, 505);
+        ROOTHelper::SetLineAttribute(frame, 1, 0);
+        frame->GetXaxis()->SetTitle(
+            panel_index == panel_count - 1 ? request.x_axis.title.c_str() : "");
+        frame->GetYaxis()->SetTitle(panel.y_axis.title.c_str());
+        frame->GetXaxis()->CenterTitle();
+        frame->GetYaxis()->CenterTitle();
+        frame->SetStats(0);
+        frame->Draw();
+
+        auto & graphs{ panel_graphs[static_cast<std::size_t>(panel_index)] };
+        graphs.reserve(panel.series.size());
+        bool draw_legend{ panel.series.size() > 1 };
+        for (std::size_t series_index = 0; series_index < panel.series.size(); ++series_index)
+        {
+            const auto & series{ panel.series[series_index] };
+            auto graph{ ROOTHelper::CreateGraphErrors() };
+            for (int point_index = 0; point_index < static_cast<int>(series.x_values.size()); ++point_index)
+            {
+                graph->SetPoint(
+                    point_index,
+                    series.x_values[static_cast<std::size_t>(point_index)],
+                    series.y_values[static_cast<std::size_t>(point_index)]);
+            }
+            const short color{ ResolveSeriesColor(series, series_index) };
+            ROOTHelper::SetMarkerAttribute(graph.get(), 20, 1.3f, color);
+            ROOTHelper::SetLineAttribute(graph.get(), 1, 2, color);
+            graph->Draw("PL SAME");
+            if (series.name.empty())
+            {
+                draw_legend = false;
+            }
+            graphs.emplace_back(std::move(graph));
+        }
+
+        if (draw_legend)
+        {
+            auto legend{ ROOTHelper::CreateLegend(0.62, 0.72, 0.92, 0.90, false) };
+            ROOTHelper::SetLegendDefaultStyle(legend.get());
+            ROOTHelper::SetFillAttribute(legend.get(), 1001, 0, 0.0f);
+            for (std::size_t series_index = 0; series_index < panel.series.size(); ++series_index)
+            {
+                legend->AddEntry(
+                    graphs[series_index].get(),
+                    panel.series[series_index].name.c_str(),
+                    "lp");
+            }
+            legend->Draw();
+            legends[static_cast<std::size_t>(panel_index)] = std::move(legend);
+        }
+
+        if (!panel.label.empty())
+        {
+            auto label{ ROOTHelper::CreatePaveText(0.02, 0.78, 0.34, 0.94, "nbNDC ARC", false) };
+            ROOTHelper::SetPaveTextDefaultStyle(label.get());
+            ROOTHelper::SetPaveAttribute(label.get(), 0, 0.1);
+            ROOTHelper::SetLineAttribute(label.get(), 1, 0);
+            ROOTHelper::SetTextAttribute(label.get(), 30.0f, 133, 12);
+            ROOTHelper::SetFillAttribute(label.get(), 1001, kAzure - 7, 0.45f);
+            label->AddText(panel.label.c_str());
+            label->Draw();
+            panel_labels[static_cast<std::size_t>(panel_index)] = std::move(label);
+        }
+    }
+
+    if (!request.shared_y_axis_title.empty())
+    {
+        canvas->cd();
+        shared_axis_pad = ROOTHelper::CreatePad(
+            "local_line_plot_axis_title", "", 0.94, 0.10, 1.00, 0.96);
+        shared_axis_pad->Draw();
+        shared_axis_pad->cd();
+        ROOTHelper::SetPadDefaultStyle(shared_axis_pad.get());
+        ROOTHelper::SetFillAttribute(shared_axis_pad.get(), 4000);
+        shared_axis_title = ROOTHelper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false);
+        ROOTHelper::SetPaveTextDefaultStyle(shared_axis_title.get());
+        ROOTHelper::SetFillAttribute(shared_axis_title.get(), 4000);
+        ROOTHelper::SetTextAttribute(shared_axis_title.get(), 42.0f, 133, 22);
+        shared_axis_title->AddText(request.shared_y_axis_title.c_str());
+        if (auto * text{ shared_axis_title->GetLineWith(request.shared_y_axis_title.c_str()) })
+        {
+            text->SetTextAngle(90.0f);
+        }
+        shared_axis_title->Draw();
+    }
+
+    ROOTHelper::PrintCanvasPad(canvas.get(), request.output_path.string());
+    ROOTHelper::PrintCanvasClose(canvas.get(), request.output_path.string());
+
+    if (!std::filesystem::exists(request.output_path))
+    {
+        return FailPlot(
+            PlotStatus::OUTPUT_ERROR,
+            request.output_path,
+            LogLevel::Error,
+            "local_painter::SaveLinePlot() completed without producing '" +
+                request.output_path.string() + "'.");
+    }
+
+    Logger::Log(LogLevel::Info, " Output file: " + request.output_path.string());
+    return BuildPlotResult(PlotStatus::SUCCESS, request.output_path, "");
+}
+
+PlotResult RenderHeatmapWithRoot(const HeatmapRequest & request)
+{
     gStyle->SetLineScalePS(2);
     gStyle->SetGridColor(kGray);
     gStyle->SetPalette(kLightTemperature);
     gStyle->SetNumberContours(50);
-    auto canvas{ ROOTHelper::CreateCanvas("canvas","", 1200, 1000) };
-    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::SetPadMarginInCanvas(gPad, 0.15, 0.20, 0.15, 0.10);
-    ROOTHelper::PrintCanvasOpen(canvas.get(), file_name);
 
-    std::unique_ptr<TH2> hist_data{
-        ROOTHelper::CreateHist2D("data","", x_bin_size, x_min, x_max, y_bin_size, y_min, y_max)
+    auto canvas{
+        ROOTHelper::CreateCanvas("local_heatmap", "", request.canvas_width, request.canvas_height)
+    };
+    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
+    ROOTHelper::PrintCanvasOpen(canvas.get(), request.output_path.string());
+
+    const std::pair<double, double> x_range{
+        request.x_axis.range.value_or(std::make_pair(0.0, static_cast<double>(request.values.cols())))
+    };
+    const std::pair<double, double> y_range{
+        request.y_axis.range.value_or(std::make_pair(0.0, static_cast<double>(request.values.rows())))
     };
 
-    for (int i = 0; i < static_cast<int>(data_array.size()); i++)
+    std::vector<double> flat_values;
+    flat_values.reserve(static_cast<std::size_t>(request.values.size()));
+    for (Eigen::Index row = 0; row < request.values.rows(); ++row)
     {
-        auto x_index{ i % x_bin_size + 1 };
-        auto y_index{ i / x_bin_size + 1 };
-        hist_data->SetBinContent(x_index, y_index, data_array[static_cast<size_t>(i)]);
+        for (Eigen::Index col = 0; col < request.values.cols(); ++col)
+        {
+            flat_values.emplace_back(request.values(row, col));
+        }
     }
-    auto z_min{ ArrayStats<double>::ComputeMin(data_array.data(), data_array.size()) };
-    auto z_max{ ArrayStats<double>::ComputeMax(data_array.data(), data_array.size()) };
+
+    const auto z_range_spec{
+        request.z_axis.range.value_or(
+            ResolveAutoRange(flat_values, 0.0).value_or(std::make_pair(0.0, 1.0)))
+    };
+    const auto z_range{ ExpandDegenerateRange(z_range_spec.first, z_range_spec.second) };
+
+    auto hist_data{ ROOTHelper::CreateHist2D(
+        "local_heatmap_data",
+        request.title,
+        static_cast<int>(request.values.cols()), x_range.first, x_range.second,
+        static_cast<int>(request.values.rows()), y_range.first, y_range.second) };
+
+    for (Eigen::Index row = 0; row < request.values.rows(); ++row)
+    {
+        for (Eigen::Index col = 0; col < request.values.cols(); ++col)
+        {
+            hist_data->SetBinContent(
+                static_cast<int>(col) + 1,
+                static_cast<int>(row) + 1,
+                request.values(row, col));
+        }
+    }
 
     canvas->cd();
     ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
     ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+    ROOTHelper::SetPadMarginInCanvas(gPad, 0.15, 0.20, 0.15, 0.10);
     ROOTHelper::SetAxisTitleAttribute(hist_data->GetXaxis(), 60.0f, 1.0f, 133);
     ROOTHelper::SetAxisLabelAttribute(hist_data->GetXaxis(), 60.0f, 0.01f, 133);
     ROOTHelper::SetAxisTickAttribute(hist_data->GetXaxis(), 0.04f, 505);
@@ -214,18 +570,97 @@ void LocalPainter::PaintHistogram2D(
     ROOTHelper::SetAxisLabelAttribute(hist_data->GetZaxis(), 60.0f, 0.005f, 133);
     ROOTHelper::SetAxisTickAttribute(hist_data->GetZaxis(), 0.02f, 505);
     ROOTHelper::SetLineAttribute(hist_data.get(), 1, 0);
-    hist_data->GetXaxis()->SetTitle(x_axis_title.data());
-    hist_data->GetYaxis()->SetTitle(y_axis_title.data());
-    hist_data->GetZaxis()->SetTitle(z_axis_title.data());
+    hist_data->GetXaxis()->SetTitle(request.x_axis.title.c_str());
+    hist_data->GetYaxis()->SetTitle(request.y_axis.title.c_str());
+    hist_data->GetZaxis()->SetTitle(request.z_axis.title.c_str());
     hist_data->GetXaxis()->CenterTitle();
     hist_data->GetYaxis()->CenterTitle();
     hist_data->GetZaxis()->CenterTitle();
-    hist_data->GetZaxis()->SetRangeUser(z_min, z_max);
+    hist_data->GetZaxis()->SetRangeUser(z_range.first, z_range.second);
     hist_data->SetStats(0);
     hist_data->Draw("COLZ");
 
-    ROOTHelper::PrintCanvasPad(canvas.get(), file_name);
-    ROOTHelper::PrintCanvasClose(canvas.get(), file_name);
-    Logger::Log(LogLevel::Info, " Output file: " + file_name);
-    #endif
+    ROOTHelper::PrintCanvasPad(canvas.get(), request.output_path.string());
+    ROOTHelper::PrintCanvasClose(canvas.get(), request.output_path.string());
+
+    if (!std::filesystem::exists(request.output_path))
+    {
+        return FailPlot(
+            PlotStatus::OUTPUT_ERROR,
+            request.output_path,
+            LogLevel::Error,
+            "local_painter::SaveHeatmap() completed without producing '" +
+                request.output_path.string() + "'.");
+    }
+
+    Logger::Log(LogLevel::Info, " Output file: " + request.output_path.string());
+    return BuildPlotResult(PlotStatus::SUCCESS, request.output_path, "");
 }
+
+#endif
+
+} // namespace
+namespace local_painter {
+
+PlotResult SaveLinePlot(const LinePlotRequest & request)
+{
+    const auto validation_result{ ValidateLinePlotRequest(request) };
+    if (!validation_result.Succeeded())
+    {
+        return validation_result;
+    }
+
+#ifdef HAVE_ROOT
+    try
+    {
+        return RenderLinePlotWithRoot(request);
+    }
+    catch (const std::exception & ex)
+    {
+        return FailPlot(
+            PlotStatus::RENDER_ERROR,
+            request.output_path,
+            LogLevel::Error,
+            "local_painter::SaveLinePlot() failed: " + std::string(ex.what()));
+    }
+#else
+    return FailPlot(
+        PlotStatus::ROOT_UNAVAILABLE,
+        request.output_path,
+        LogLevel::Warning,
+        "local_painter::SaveLinePlot() requires ROOT support, but this build was compiled without HAVE_ROOT.");
+#endif
+}
+
+PlotResult SaveHeatmap(const HeatmapRequest & request)
+{
+    const auto validation_result{ ValidateHeatmapRequest(request) };
+    if (!validation_result.Succeeded())
+    {
+        return validation_result;
+    }
+
+#ifdef HAVE_ROOT
+    try
+    {
+        return RenderHeatmapWithRoot(request);
+    }
+    catch (const std::exception & ex)
+    {
+        return FailPlot(
+            PlotStatus::RENDER_ERROR,
+            request.output_path,
+            LogLevel::Error,
+            "local_painter::SaveHeatmap() failed: " + std::string(ex.what()));
+    }
+#else
+    return FailPlot(
+        PlotStatus::ROOT_UNAVAILABLE,
+        request.output_path,
+        LogLevel::Warning,
+        "local_painter::SaveHeatmap() requires ROOT support, but this build was compiled without HAVE_ROOT.");
+#endif
+}
+
+} // namespace local_painter
+} // namespace rhbm_gem

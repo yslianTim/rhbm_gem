@@ -149,6 +149,7 @@ set(UTILS_DOMAIN_TEST_SOURCES
     utils/domain/LoggerLevelBehavior_test.cpp
     utils/domain/LoggerOutput_test.cpp
     utils/domain/LoggerProgressTimer_test.cpp
+    utils/domain/LocalPainter_test.cpp
     utils/domain/ROOTHelper_test.cpp
     utils/domain/StringHelperFormatting_test.cpp
     utils/domain/StringHelperParsing_test.cpp

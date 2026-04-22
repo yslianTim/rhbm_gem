@@ -77,35 +77,54 @@ bool EmitTrainingReportIfRequested(
     const std::filesystem::path & training_report_dir,
     std::string_view report_file_name)
 {
+    if (training_report_dir.empty())
+    {
+        return false;
+    }
+
     const auto report_path{ training_report_dir / std::filesystem::path{ report_file_name } };
-    if (report_path.empty())
+    if (gaus_bias_matrix.rows() < 2 ||
+        gaus_bias_matrix.cols() != static_cast<Eigen::Index>(alpha_list.size()))
     {
+        Logger::Log(LogLevel::Warning,
+            "Skip training report '" + report_path.string() +
+                "' because the alpha bias matrix shape does not match the alpha grid.");
         return false;
     }
 
-    std::error_code ec;
-    std::filesystem::create_directories(report_path.parent_path(), ec);
-    if (ec)
+    std::vector<double> amplitude_values;
+    std::vector<double> width_values;
+    amplitude_values.reserve(alpha_list.size());
+    width_values.reserve(alpha_list.size());
+    for (Eigen::Index column = 0; column < gaus_bias_matrix.cols(); ++column)
     {
-        Logger::Log(LogLevel::Warning,
-            "Failed to create training report directory '" +
-                report_path.parent_path().string() + "': " + ec.message());
-        return false;
+        amplitude_values.emplace_back(gaus_bias_matrix(0, column));
+        width_values.emplace_back(gaus_bias_matrix(1, column));
     }
 
-    try
-    {
-        LocalPainter::PaintTemplate1(
-            gaus_bias_matrix,
-            alpha_list,
-            std::string(x_label),
-            std::string(y_label),
-            report_path.string());
-    }
-    catch (const std::exception & ex)
+    rhbm_gem::LinePlotRequest report_request;
+    report_request.output_path = report_path;
+    report_request.x_axis.title = std::string(x_label);
+    report_request.shared_y_axis_title = std::string(y_label);
+    report_request.panels = {
+        rhbm_gem::LinePlotPanel{
+            "Amplitude #font[2]{A}",
+            rhbm_gem::AxisSpec{},
+            { rhbm_gem::LineSeries{ "Amplitude", alpha_list, amplitude_values, std::nullopt } }
+        },
+        rhbm_gem::LinePlotPanel{
+            "Width #tau",
+            rhbm_gem::AxisSpec{},
+            { rhbm_gem::LineSeries{ "Width", alpha_list, width_values, std::nullopt } }
+        }
+    };
+
+    const auto plot_result{ rhbm_gem::local_painter::SaveLinePlot(report_request) };
+    if (!plot_result.Succeeded())
     {
         Logger::Log(LogLevel::Warning,
-            "Failed to emit training report '" + report_path.string() + "': " + ex.what());
+            "Failed to emit training report '" + report_path.string() +
+                "': " + plot_result.message);
         return false;
     }
 

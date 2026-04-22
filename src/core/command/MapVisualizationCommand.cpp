@@ -247,11 +247,23 @@ bool MapVisualizationCommand::RunAtomMapValueSampling()
         Logger::Log(LogLevel::Error, "Map sampling produced no data points.");
         return false;
     }
-    std::vector<double> map_value_list;
-    map_value_list.reserve(sampling_data_list.size());
-    for (auto & [distance, value] : sampling_data_list)
+    Eigen::MatrixXd map_value_matrix{
+        Eigen::MatrixXd::Zero(request.sampling_size, request.sampling_size)
+    };
+    for (std::size_t index = 0; index < sampling_data_list.size(); ++index)
     {
-        map_value_list.emplace_back(static_cast<double>(value));
+        const std::size_t row{ index / static_cast<std::size_t>(request.sampling_size) };
+        const std::size_t col{ index % static_cast<std::size_t>(request.sampling_size) };
+        if (row >= static_cast<std::size_t>(request.sampling_size))
+        {
+            Logger::Log(LogLevel::Error,
+                "Map sampling produced more values than the configured heatmap grid can hold.");
+            return false;
+        }
+        map_value_matrix(
+            static_cast<Eigen::Index>(row),
+            static_cast<Eigen::Index>(col)) =
+                static_cast<double>(sampling_data_list[index].response);
     }
 
     auto x_min{ target_atom_position.at(0) - 0.5 * request.window_size };
@@ -259,15 +271,23 @@ bool MapVisualizationCommand::RunAtomMapValueSampling()
     auto y_min{ target_atom_position.at(1) - 0.5 * request.window_size };
     auto y_max{ target_atom_position.at(1) + 0.5 * request.window_size };
 
-    LocalPainter::PaintHistogram2D(
-        map_value_list,
-        request.sampling_size, x_min, x_max,
-        request.sampling_size, y_min, y_max,
-        "#font[2]{u} Position #[]{#AA}",
-        "#font[2]{v} Position #[]{#AA}",
-        "Normalized Map Value",
-        BuildOutputFilePath().string()
-    );
+    HeatmapRequest heatmap_request;
+    heatmap_request.output_path = BuildOutputFilePath();
+    heatmap_request.values = std::move(map_value_matrix);
+    heatmap_request.x_axis.title = "#font[2]{u} Position #[]{#AA}";
+    heatmap_request.x_axis.range = std::make_pair(x_min, x_max);
+    heatmap_request.y_axis.title = "#font[2]{v} Position #[]{#AA}";
+    heatmap_request.y_axis.range = std::make_pair(y_min, y_max);
+    heatmap_request.z_axis.title = "Normalized Map Value";
+
+    const auto plot_result{ rhbm_gem::local_painter::SaveHeatmap(heatmap_request) };
+    if (!plot_result.Succeeded())
+    {
+        Logger::Log(LogLevel::Error,
+            "MapVisualizationCommand failed to render the sampled heatmap: " +
+                plot_result.message);
+        return false;
+    }
 
     return true;
 }
