@@ -427,7 +427,7 @@ PlotResult RenderLinePlotWithRoot(const LinePlotRequest & request)
             const short color{ ResolveSeriesColor(series, series_index) };
             ROOTHelper::SetMarkerAttribute(graph.get(), 20, 1.3f, color);
             ROOTHelper::SetLineAttribute(graph.get(), 1, 2, color);
-            graph->Draw("PL SAME");
+            graph->Draw("P SAME");
             if (series.name.empty())
             {
                 draw_legend = false;

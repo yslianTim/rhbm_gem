@@ -1,4 +1,5 @@
 #include "HRLModelTestCommand.hpp"
+#include <rhbm_gem/utils/domain/LocalPainter.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
@@ -6,11 +7,15 @@
 #include <rhbm_gem/utils/hrl/HRLModelTester.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 
+#include <algorithm>
+#include <cmath>
 #include <filesystem>
+#include <iomanip>
 #include <memory>
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #ifdef HAVE_ROOT
@@ -206,6 +211,152 @@ HRLModelTestDataFactory::NeighborhoodScenario BuildNeighborhoodScenario(
     };
 }
 
+std::string FormatSigmaToken(double value)
+{
+    std::ostringstream stream;
+    stream << std::fixed << std::setprecision(3) << value;
+    auto token{ stream.str() };
+    std::replace(token.begin(), token.end(), '.', '_');
+    std::replace(token.begin(), token.end(), '-', 'm');
+    return token;
+}
+
+std::string FormatDistanceLabel(double distance)
+{
+    std::ostringstream stream;
+    stream << std::fixed << std::setprecision(1)
+           << "Distance = " << distance << " Angstrom";
+    return stream.str();
+}
+
+bool ValidateLinearizedDataset(
+    const HRLMemberDataset & dataset,
+    std::string_view dataset_label)
+{
+    if (dataset.X.rows() != dataset.y.size())
+    {
+        Logger::Log(
+            LogLevel::Warning,
+            std::string("Skip linearized benchmark plot for ") + std::string(dataset_label)
+                + " because X rows do not match y size.");
+        return false;
+    }
+    if (dataset.X.cols() < 2)
+    {
+        Logger::Log(
+            LogLevel::Warning,
+            std::string("Skip linearized benchmark plot for ") + std::string(dataset_label)
+                + " because the dataset has fewer than 2 basis columns.");
+        return false;
+    }
+    return true;
+}
+
+LineSeries BuildLinearizedDatasetSeries(
+    const HRLMemberDataset & dataset,
+    std::string_view dataset_label,
+    std::string series_name)
+{
+    std::vector<std::pair<double, double>> points;
+    points.reserve(static_cast<std::size_t>(dataset.y.size()));
+    for (Eigen::Index row = 0; row < dataset.y.size(); ++row)
+    {
+        const double x_value{ dataset.X(row, 1) };
+        const double y_value{ dataset.y(row) };
+        if (!std::isfinite(x_value) || !std::isfinite(y_value))
+        {
+            Logger::Log(
+                LogLevel::Warning,
+                std::string("Drop non-finite linearized benchmark point for ")
+                    + std::string(dataset_label) + ".");
+            continue;
+        }
+        points.emplace_back(x_value, y_value);
+    }
+    std::sort(points.begin(), points.end());
+
+    LineSeries series;
+    series.name = std::move(series_name);
+    series.x_values.reserve(points.size());
+    series.y_values.reserve(points.size());
+    for (const auto & point : points)
+    {
+        series.x_values.emplace_back(point.first);
+        series.y_values.emplace_back(point.second);
+    }
+    return series;
+}
+
+bool TryAppendBenchmarkLinearizedPanel(
+    std::vector<LinePlotPanel> & panels,
+    double distance,
+    const HRLMemberDataset & no_cut_dataset,
+    const HRLMemberDataset & cut_dataset)
+{
+    const auto label{ FormatDistanceLabel(distance) };
+    if (!ValidateLinearizedDataset(no_cut_dataset, label + " (No Cut)") ||
+        !ValidateLinearizedDataset(cut_dataset, label + " (Cut)"))
+    {
+        return false;
+    }
+
+    auto no_cut_series{
+        BuildLinearizedDatasetSeries(no_cut_dataset, label + " (No Cut)", "No Cut")
+    };
+    auto cut_series{
+        BuildLinearizedDatasetSeries(cut_dataset, label + " (Cut)", "Cut")
+    };
+    if (no_cut_series.x_values.empty() || cut_series.x_values.empty())
+    {
+        Logger::Log(
+            LogLevel::Warning,
+            "Skip linearized benchmark panel for " + label
+                + " because at least one series has no plottable points.");
+        return false;
+    }
+
+    panels.emplace_back(LinePlotPanel{
+        label,
+        AxisSpec{ "Linearized Response" },
+        { std::move(no_cut_series), std::move(cut_series) }
+    });
+    return true;
+}
+
+void SaveBenchmarkLinearizedDatasetReport(
+    const HRLModelTestExecutionContext & options,
+    double error_sigma,
+    const std::vector<LinePlotPanel> & panels)
+{
+    if (panels.empty())
+    {
+        Logger::Log(
+            LogLevel::Warning,
+            "Skip benchmark linearized dataset report because no valid panels were collected.");
+        return;
+    }
+
+    LinePlotRequest request;
+    request.output_path = BuildOutputPath(
+        options,
+        "benchmark_linearized_cut_vs_no_cut_sigma_" + FormatSigmaToken(error_sigma) + ".pdf");
+    request.title = "Benchmark Linearized Dataset Summary";
+    request.x_axis.title = "Linearized Basis";
+    request.shared_y_axis_title = "Linearized Response";
+    request.panels = panels;
+    request.canvas_width = 1200;
+    request.canvas_height_per_panel = 220;
+
+    const auto plot_result{ local_painter::SaveLinePlot(request) };
+    if (!plot_result.Succeeded())
+    {
+        Logger::Log(
+            LogLevel::Warning,
+            "Failed to emit benchmark linearized dataset report '"
+                + request.output_path.string() + "': " + plot_result.message);
+    }
+}
+
 } // namespace
 
 void PrintDataOutlierResult(
@@ -256,9 +407,9 @@ void RunSimulationTestOnBenchMark(const HRLModelTestExecutionContext & options)
     const auto scenario{ NeighborDistanceScenarioConfig{
         1,
         50,
-        2,
-        45.0,
-        std::vector<double>{ 1.0 },
+        1,
+        0.0,
+        std::vector<double>{ 0.0 },
         BuildDescendingSweep(16, 2.5, 0.1)
     } };
     const auto model_par_prior{ MakeDefaultModelPrior() };
@@ -267,6 +418,8 @@ void RunSimulationTestOnBenchMark(const HRLModelTestExecutionContext & options)
 
     for (auto error_sigma : scenario.error_list)
     {
+        std::vector<LinePlotPanel> linearized_panels;
+        linearized_panels.reserve(scenario.distance_list.size());
         for (double distance : scenario.distance_list)
         {
             const auto test_input{
@@ -284,6 +437,11 @@ void RunSimulationTestOnBenchMark(const HRLModelTestExecutionContext & options)
                 test_input.gaus_true,
                 options.options.alpha_r,
                 options.thread_size);
+            TryAppendBenchmarkLinearizedPanel(
+                linearized_panels,
+                distance,
+                test_input.no_cut_datasets.front(),
+                test_input.cut_datasets.front());
 
             std::ostringstream stream;
             stream << "Distance: " << distance
@@ -298,6 +456,7 @@ void RunSimulationTestOnBenchMark(const HRLModelTestExecutionContext & options)
                    << " (Alpha-R = " << options.options.alpha_r << ")";
             Logger::Log(LogLevel::Info, stream.str());
         }
+        SaveBenchmarkLinearizedDatasetReport(options, error_sigma, linearized_panels);
     }
 }
 
