@@ -340,12 +340,12 @@ void SaveBenchmarkLinearizedDatasetReport(
     request.output_path = BuildOutputPath(
         options,
         "benchmark_linearized_cut_vs_no_cut_sigma_" + FormatSigmaToken(error_sigma) + ".pdf");
-    request.title = "Benchmark Linearized Dataset Summary";
+    request.title = "";
     request.x_axis.title = "Linearized Basis";
     request.shared_y_axis_title = "Linearized Response";
     request.panels = panels;
-    request.canvas_width = 1200;
-    request.canvas_height_per_panel = 220;
+    request.canvas_width = 2000;
+    request.canvas_height_per_panel = 200;
 
     const auto plot_result{ local_painter::SaveLinePlot(request) };
     if (!plot_result.Succeeded())
@@ -407,8 +407,8 @@ void RunSimulationTestOnBenchMark(const HRLModelTestExecutionContext & options)
     const auto scenario{ NeighborDistanceScenarioConfig{
         1,
         50,
-        1,
-        0.0,
+        3,
+        45.0,
         std::vector<double>{ 0.0 },
         BuildDescendingSweep(16, 2.5, 0.1)
     } };
