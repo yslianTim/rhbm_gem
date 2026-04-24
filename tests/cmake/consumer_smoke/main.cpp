@@ -38,7 +38,7 @@ int main()
         static_cast<int>(sizeof(rhbm_gem::BondObject)),
         static_cast<int>(sizeof(rhbm_gem::ChemicalComponentEntry)) };
 
-    const std::string extension{ FilePathHelper::GetExtension("sample.cif") };
+    const std::string extension{ rhbm_gem::path_helper::GetExtension("sample.cif") };
     const auto default_database_path{ rhbm_gem::GetDefaultDatabasePath() };
     return extension == ".cif"
             && compile_only_sizes.front() > 0

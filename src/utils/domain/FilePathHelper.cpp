@@ -4,8 +4,23 @@
 
 #include <algorithm>
 #include <cctype>
+#include <string_view>
 
-std::string FilePathHelper::GetExtension(const std::filesystem::path & path)
+namespace rhbm_gem {
+namespace {
+
+constexpr bool IsEndedWithSeparator(std::string_view file_path)
+{
+    if (file_path.empty()) return false;
+    const char c{ file_path.back() };
+    return c == '/' || c == '\\' || c == std::filesystem::path::preferred_separator;
+}
+
+} // namespace
+
+namespace path_helper {
+
+std::string GetExtension(const std::filesystem::path & path)
 {
     const std::string filename{ path.filename().string() };
     std::string extension;
@@ -22,7 +37,7 @@ std::string FilePathHelper::GetExtension(const std::filesystem::path & path)
     return extension;
 }
 
-std::string FilePathHelper::GetDirectory(const std::filesystem::path & path)
+std::string GetDirectory(const std::filesystem::path & path)
 {
     auto parent{ path.parent_path() };
     if (parent.empty()) return {};
@@ -35,7 +50,7 @@ std::string FilePathHelper::GetDirectory(const std::filesystem::path & path)
     return dir;
 }
 
-std::string FilePathHelper::GetFileName(
+std::string GetFileName(
     const std::filesystem::path & path, bool include_extension)
 {
     std::filesystem::path normalized{ path };
@@ -66,7 +81,7 @@ std::string FilePathHelper::GetFileName(
     return stem.string();
 }
 
-std::string FilePathHelper::EnsureTrailingSlash(const std::filesystem::path & path)
+std::string EnsureTrailingSlash(const std::filesystem::path & path)
 {
     std::string result(path.string());
     if (!result.empty() && IsEndedWithSeparator(result) == false)
@@ -76,8 +91,8 @@ std::string FilePathHelper::EnsureTrailingSlash(const std::filesystem::path & pa
     return result;
 }
 
-bool FilePathHelper::EnsureFileExists(const std::filesystem::path & path,
-                                      const std::string & log_prefix)
+bool EnsureFileExists(const std::filesystem::path & path,
+                      const std::string & log_prefix)
 {
     if (std::filesystem::exists(path))
     {
@@ -87,9 +102,5 @@ bool FilePathHelper::EnsureFileExists(const std::filesystem::path & path,
     return false;
 }
 
-constexpr bool FilePathHelper::IsEndedWithSeparator(std::string_view file_path)
-{
-    if (file_path.empty()) return false;
-    const char c{ file_path.back() };
-    return c == '/' || c == '\\' || c == std::filesystem::path::preferred_separator;
-}
+} // namespace path_helper
+} // namespace rhbm_gem

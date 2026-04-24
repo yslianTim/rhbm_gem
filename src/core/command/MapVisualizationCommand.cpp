@@ -302,7 +302,7 @@ std::filesystem::path MapVisualizationCommand::BuildOutputFilePath() const
     }
     else
     {
-        model_name = FilePathHelper::GetFileName(request.model_file_path, false);
+        model_name = path_helper::GetFileName(request.model_file_path, false);
         if (model_name.empty())
         {
             model_name = "model";

@@ -89,7 +89,7 @@ void CommandBase::CoerceBaseRequest(CommandRequestBase & request)
         "Invalid verbose level: " + std::to_string(raw_verbose_level)
             + ", using default level 3 [Info]");
     request.output_dir =
-        std::filesystem::path(FilePathHelper::EnsureTrailingSlash(request.output_dir));
+        std::filesystem::path(path_helper::EnsureTrailingSlash(request.output_dir));
 }
 
 void CommandBase::ReportValidationIssues() const

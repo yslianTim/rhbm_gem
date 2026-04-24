@@ -12,7 +12,7 @@ public:
     virtual ~PainterBase() = default;
     virtual void SetFolder(const std::string & folder_path)
     {
-        m_folder_path = FilePathHelper::EnsureTrailingSlash(folder_path);
+        m_folder_path = path_helper::EnsureTrailingSlash(folder_path);
     }
     virtual void Painting() = 0;
 
