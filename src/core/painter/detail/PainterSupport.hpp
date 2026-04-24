@@ -28,7 +28,7 @@ inline std::string BuildPainterOutputLabel(const ModelObject & model_object)
     if (is_simulation)
     {
         label += "_" + model_object.GetEmdID()
-                 + "_bw" + StringHelper::ToStringWithPrecision(model_object.GetResolution(), 2);
+                 + "_bw" + string_helper::ToStringWithPrecision(model_object.GetResolution(), 2);
     }
     label += ".pdf";
     return label;

@@ -38,7 +38,7 @@ void PdbFormat::LoadAtomSiteData(std::istream& stream) {
     std::string line;
     auto model_number{1};
     while (std::getline(stream, line)) {
-        StringHelper::StripCarriageReturn(line);
+        string_helper::StripCarriageReturn(line);
         char* buffer{line.data()};
         std::string header_str{line.substr(0, static_cast<size_t>(header_string_length))};
         if (header_str == "ENDMDL")
@@ -75,8 +75,8 @@ void PdbFormat::ScanAtomEntry(char* line, bool is_special, int model_number) {
     std::sscanf(&line[static_cast<int>(ATOM::CHARGE)], "%2c", &atom->charge[0]);
 
     auto atom_object{std::make_unique<AtomObject>()};
-    auto atom_name{StringHelper::ConvertCharArrayToString(atom->atom_name)};
-    auto element_name{StringHelper::ConvertCharArrayToString(atom->element)};
+    auto atom_name{string_helper::ConvertCharArrayToString(atom->atom_name)};
+    auto element_name{string_helper::ConvertCharArrayToString(atom->element)};
     if (element_name == "H")
         return; // Skip hydrogen atom
     auto indicator{(atom->indicator == ' ') ? "." : std::string(1, atom->indicator)};
@@ -85,7 +85,7 @@ void PdbFormat::ScanAtomEntry(char* line, bool is_special, int model_number) {
     atom_object->SetAtomID(atom_name);
     atom_object->SetResidue(
         ChemicalDataHelper::GetResidueFromString(
-            StringHelper::ConvertCharArrayToString(atom->residue_name),
+            string_helper::ConvertCharArrayToString(atom->residue_name),
             false));
     atom_object->SetIndicator(indicator);
     atom_object->SetSequenceID(atom->sequence_id);

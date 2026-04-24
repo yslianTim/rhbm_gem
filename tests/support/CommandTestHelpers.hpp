@@ -93,7 +93,7 @@ inline std::filesystem::path GenerateMapFile(
     request.output_dir = output_dir;
     request.model_file_path = model_path;
     request.map_file_name = map_name;
-    request.blurring_width_list = StringHelper::ParseListOption<double>(blurring_widths);
+    request.blurring_width_list = rhbm_gem::string_helper::ParseListOption<double>(blurring_widths);
 
     const auto result{ rhbm_gem::RunMapSimulation(request) };
     if (!result.succeeded)

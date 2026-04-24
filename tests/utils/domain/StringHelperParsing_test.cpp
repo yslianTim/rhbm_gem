@@ -27,7 +27,7 @@ TEST_P(ExtractCharParsingTest, ReturnsExpectedCharacterOrSpace)
     const auto & test_case{ GetParam() };
     EXPECT_EQ(
         test_case.expected,
-        StringHelper::ExtractCharAsString(test_case.input, test_case.index));
+        rhbm_gem::string_helper::ExtractCharAsString(test_case.input, test_case.index));
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -60,7 +60,7 @@ class ConvertCharArrayParsingTest : public ::testing::TestWithParam<ConvertCharA
 TEST_P(ConvertCharArrayParsingTest, ConvertsAsExpected)
 {
     const auto & test_case{ GetParam() };
-    EXPECT_EQ(test_case.expected, StringHelper::ConvertCharArrayToString(test_case.input));
+    EXPECT_EQ(test_case.expected, rhbm_gem::string_helper::ConvertCharArrayToString(test_case.input));
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -79,13 +79,13 @@ INSTANTIATE_TEST_SUITE_P(
 
 TEST(StringHelperParsingTest, ConvertCharArrayToStringNullptrReturnsEmpty)
 {
-    EXPECT_EQ("", StringHelper::ConvertCharArrayToString(nullptr));
+    EXPECT_EQ("", rhbm_gem::string_helper::ConvertCharArrayToString(nullptr));
 }
 
 TEST(StringHelperParsingTest, ConvertCharArrayToStringStopsAtNullChar)
 {
     const char data[]{ "AB\0CD" };
-    EXPECT_EQ("AB", StringHelper::ConvertCharArrayToString(data));
+    EXPECT_EQ("AB", rhbm_gem::string_helper::ConvertCharArrayToString(data));
 }
 
 struct StripCarriageReturnCase
@@ -103,7 +103,7 @@ class StripCarriageReturnParsingTest
 TEST_P(StripCarriageReturnParsingTest, ProducesExpectedString)
 {
     auto line{ GetParam().input };
-    StringHelper::StripCarriageReturn(line);
+    rhbm_gem::string_helper::StripCarriageReturn(line);
     EXPECT_EQ(GetParam().expected, line);
 }
 
@@ -140,7 +140,7 @@ TEST_P(SplitStringParsingTest, SplitsAsExpected)
     const auto & test_case{ GetParam() };
     EXPECT_EQ(
         test_case.expected,
-        StringHelper::SplitStringLineFromDelimiter(test_case.input, test_case.delimiter));
+        rhbm_gem::string_helper::SplitStringLineFromDelimiter(test_case.input, test_case.delimiter));
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -178,7 +178,7 @@ TEST_P(ParseDoubleListOptionTest, ParsesExpectedValues)
     const auto & test_case{ GetParam() };
     EXPECT_EQ(
         test_case.expected,
-        StringHelper::ParseListOption<double>(test_case.input, test_case.delimiter));
+        rhbm_gem::string_helper::ParseListOption<double>(test_case.input, test_case.delimiter));
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -211,7 +211,7 @@ TEST_P(ParseStringListOptionTest, ParsesExpectedValues)
     const auto & test_case{ GetParam() };
     EXPECT_EQ(
         test_case.expected,
-        StringHelper::ParseListOption<std::string>(test_case.input, test_case.delimiter));
+        rhbm_gem::string_helper::ParseListOption<std::string>(test_case.input, test_case.delimiter));
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -228,7 +228,7 @@ INSTANTIATE_TEST_SUITE_P(
 
 TEST(StringHelperParsingTest, ParseListOptionEmptyInputReturnsEmptyVector)
 {
-    const auto values{ StringHelper::ParseListOption<double>("") };
+    const auto values{ rhbm_gem::string_helper::ParseListOption<double>("") };
     EXPECT_TRUE(values.empty());
 }
 
@@ -246,7 +246,7 @@ class ParseInvalidDoubleListOptionTest
 TEST_P(ParseInvalidDoubleListOptionTest, ThrowsInvalidArgument)
 {
     EXPECT_THROW(
-        StringHelper::ParseListOption<double>(GetParam().input),
+        rhbm_gem::string_helper::ParseListOption<double>(GetParam().input),
         std::invalid_argument);
 }
 
@@ -265,7 +265,7 @@ INSTANTIATE_TEST_SUITE_P(
 TEST(StringHelperParsingTest, ParseListOptionOverflowThrowsOutOfRange)
 {
     EXPECT_THROW(
-        StringHelper::ParseListOption<double>("1e308,2e308"),
+        rhbm_gem::string_helper::ParseListOption<double>("1e308,2e308"),
         std::out_of_range);
 }
 

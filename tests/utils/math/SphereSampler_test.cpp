@@ -129,7 +129,7 @@ TEST(SphereSamplerTest, PrintOutputsFibonacciConfiguration)
     sampler.Print();
     std::string output{ testing::internal::GetCapturedStdout() };
     const auto expected_radius_bin_size{
-        StringHelper::ToStringWithPrecision<double>(radius_bin_size, 2) };
+        rhbm_gem::string_helper::ToStringWithPrecision<double>(radius_bin_size, 2) };
 
     EXPECT_NE(output.find("Sampling method: FibonacciDeterministic"), std::string::npos);
     EXPECT_NE(

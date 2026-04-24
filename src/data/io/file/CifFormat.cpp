@@ -363,7 +363,7 @@ void ParseMmCifDocument(std::istream& stream, const std::string& source_name, Ci
     std::vector<std::string> line_list;
     std::string line;
     while (std::getline(stream, line)) {
-        StringHelper::StripCarriageReturn(line);
+        string_helper::StripCarriageReturn(line);
         line_list.emplace_back(std::move(line));
     }
 
@@ -752,7 +752,7 @@ void LoadChemicalComponentAtomBlock(CifFormatState& state) {
             auto pdbx_aromatic_flag{token_list[index_map.at("pdbx_aromatic_flag")]};
             auto pdbx_stereo_config{token_list[index_map.at("pdbx_stereo_config")]};
 
-            StringHelper::EraseCharFromString(atom_id, '\"');
+            string_helper::EraseCharFromString(atom_id, '\"');
 
             ComponentAtomEntry atom_entry;
             atom_entry.atom_id = atom_id;
@@ -782,8 +782,8 @@ void LoadChemicalComponentBondBlock(CifFormatState& state) {
             auto pdbx_aromatic_flag{token_list[index_map.at("pdbx_aromatic_flag")]};
             auto pdbx_stereo_config{token_list[index_map.at("pdbx_stereo_config")]};
 
-            StringHelper::EraseCharFromString(atom_id_1, '\"');
-            StringHelper::EraseCharFromString(atom_id_2, '\"');
+            string_helper::EraseCharFromString(atom_id_1, '\"');
+            string_helper::EraseCharFromString(atom_id_2, '\"');
 
             state.data_block->GetBondKeySystemPtr()->RegisterBond(atom_id_1, atom_id_2);
             auto component_key{state.data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id)};
@@ -1090,8 +1090,8 @@ void LoadStructureConnectionBlock(CifFormatState& state) {
             auto ptnr1_seq_id_value{IsMmCifMissingValue(*ptnr1_seq_id) ? "." : *ptnr1_seq_id};
             auto ptnr2_seq_id_value{IsMmCifMissingValue(*ptnr2_seq_id) ? "." : *ptnr2_seq_id};
 
-            StringHelper::EraseCharFromString(ptnr1_atom_id_value, '\"');
-            StringHelper::EraseCharFromString(ptnr2_atom_id_value, '\"');
+            string_helper::EraseCharFromString(ptnr1_atom_id_value, '\"');
+            string_helper::EraseCharFromString(ptnr2_atom_id_value, '\"');
 
             state.data_block->GetBondKeySystemPtr()->RegisterBond(
                 ptnr1_atom_id_value, ptnr2_atom_id_value);
@@ -1344,7 +1344,7 @@ void LoadAtomSiteBlock(CifFormatState& state) {
                     context)};
 
             auto atom_id{*atom_id_opt};
-            StringHelper::EraseCharFromString(atom_id, '\"');
+            string_helper::EraseCharFromString(atom_id, '\"');
 
             auto element_enum{ChemicalDataHelper::GetElementFromString(element_type)};
             if (element_enum == Element::HYDROGEN)

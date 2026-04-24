@@ -108,7 +108,7 @@ const auto & GetMapCodecs()
 std::string NormalizeExtension(const std::filesystem::path & filename)
 {
     auto extension{ path_helper::GetExtension(filename) };
-    StringHelper::ToLowerCase(extension);
+    string_helper::ToLowerCase(extension);
     return extension;
 }
 

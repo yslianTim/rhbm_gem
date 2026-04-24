@@ -19,7 +19,7 @@ inline void LogModelSummary(const ModelObject & model_object)
         " - PDB ID = " + model_object.GetPdbID() + "\n"
         " - EMD ID = " + model_object.GetEmdID() + "\n"
         " - Map Resolution = "
-            + StringHelper::ToStringWithPrecision(model_object.GetResolution(), 2)
+            + string_helper::ToStringWithPrecision(model_object.GetResolution(), 2)
             + " A (" + model_object.GetResolutionMethod() + ")\n"
         " - #Unique Entities = " + std::to_string(model_object.GetChainIDListMap().size()) + "\n"
         " - #Atoms = " + std::to_string(model_object.GetNumberOfAtom()) + "\n"

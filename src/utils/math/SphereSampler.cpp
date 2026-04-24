@@ -179,8 +179,8 @@ void SphereSampler::Print() const
     oss << "SphereSampler Configuration:\n"
         << " - Sampling method: " << GetSphereSamplingMethodName(m_profile.GetMethod()) << '\n'
         << " - Distance range: ["
-        << StringHelper::ToStringWithPrecision<double>(distance_range.min, 1) << ", "
-        << StringHelper::ToStringWithPrecision<double>(distance_range.max, 1)
+        << rhbm_gem::string_helper::ToStringWithPrecision<double>(distance_range.min, 1) << ", "
+        << rhbm_gem::string_helper::ToStringWithPrecision<double>(distance_range.max, 1)
         << "] Angstrom.\n";
 
     switch (m_profile.GetMethod())
@@ -196,7 +196,7 @@ void SphereSampler::Print() const
         {
             const auto & config{ m_profile.GetFibonacciConfig() };
             oss << " - Radius bin size: "
-                << StringHelper::ToStringWithPrecision<double>(config.radius_bin_size, 2)
+                << rhbm_gem::string_helper::ToStringWithPrecision<double>(config.radius_bin_size, 2)
                 << " Angstrom.\n"
                 << " - Samples per radius: " << config.samples_per_radius << '\n'
                 << " - Vary with radius: " << std::boolalpha << config.vary_with_radius << '\n'

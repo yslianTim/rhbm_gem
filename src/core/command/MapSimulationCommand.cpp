@@ -230,7 +230,7 @@ void MapSimulationCommand::RunMapSimulation()
     {
         auto map_key_tag{
             m_model_object->GetPdbID() + "_bw" +
-            StringHelper::ToStringWithPrecision<double>(blurring_width, 2)
+            string_helper::ToStringWithPrecision<double>(blurring_width, 2)
         };
         PopulateMapValueArray(map_object.get(), blurring_width);
         const auto output_file_name{
@@ -299,7 +299,7 @@ void MapSimulationCommand::PopulateMapValueArray(MapObject * map_object, double 
     ScopeTimer timer("MapSimulationCommand::PopulateMapValueArray");
     Logger::Log(LogLevel::Info,
         " /- Start map value array production with blurring width = "+
-        StringHelper::ToStringWithPrecision<double>(blurring_width, 2)
+        string_helper::ToStringWithPrecision<double>(blurring_width, 2)
     );
 
     auto electric_potential{ std::make_unique<ElectricPotential>() };

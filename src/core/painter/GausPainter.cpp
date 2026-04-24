@@ -596,7 +596,7 @@ void GausPainter::PaintAtomGroupGausSummary(
         root_helper::SetFillAttribute(component_info_text.get(), 4000);
         root_helper::SetTextAttribute(component_info_text.get(), 30.0f, 133);
         auto component_name{ component_entry->GetComponentName() };
-        StringHelper::EraseCharFromString(component_name, '\"');
+        string_helper::EraseCharFromString(component_name, '\"');
         component_info_text->AddText(component_name.data());
         component_info_text->AddText(("Formula: " + component_entry->GetComponentFormula()).data());
         component_info_text->AddText(Form("Number of members: %zu (#alpha-helix: %zu, #beta-sheet: %zu)", component_size, helix_component_size, sheet_component_size));

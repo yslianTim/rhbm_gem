@@ -33,7 +33,7 @@ std::string GetExtension(const std::filesystem::path & path)
         extension = path.extension().string();
     }
 
-    StringHelper::ToLowerCase(extension);
+    string_helper::ToLowerCase(extension);
     return extension;
 }
 

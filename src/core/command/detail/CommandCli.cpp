@@ -84,7 +84,7 @@ std::pair<std::string, std::vector<std::string>> ParseReferenceGroupArgument(
         throw CLI::ValidationError("--ref-group", "Reference group name cannot be empty.");
     }
 
-    const auto members{ StringHelper::ParseListOption<std::string>(member_text, item_delimiter) };
+    const auto members{ string_helper::ParseListOption<std::string>(member_text, item_delimiter) };
     if (members.empty())
     {
         throw CLI::ValidationError("--ref-group", "Reference group members cannot be empty.");
@@ -183,7 +183,7 @@ void BindCliField(
             field.cli_flags,
             [request, member = field.member, delimiter = field.delimiter](const std::string & value)
             {
-                request->*member = StringHelper::ParseListOption<ElementType>(value, delimiter);
+                request->*member = string_helper::ParseListOption<ElementType>(value, delimiter);
             },
             field.help)
     };

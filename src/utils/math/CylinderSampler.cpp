@@ -25,10 +25,10 @@ void CylinderSampler::Print() const
     oss << "CylinderSampler Configuration:\n"
         << " - Sampling size: " << m_sampling_size << '\n'
         << " - Distance range: ["
-        << StringHelper::ToStringWithPrecision<double>(m_distance_min, 1) << ", "
-        << StringHelper::ToStringWithPrecision<double>(m_distance_max, 1) << "] Angstrom\n"
+        << rhbm_gem::string_helper::ToStringWithPrecision<double>(m_distance_min, 1) << ", "
+        << rhbm_gem::string_helper::ToStringWithPrecision<double>(m_distance_max, 1) << "] Angstrom\n"
         << " - Height length = "
-        << StringHelper::ToStringWithPrecision<double>(m_height, 1) << " Angstrom";
+        << rhbm_gem::string_helper::ToStringWithPrecision<double>(m_height, 1) << " Angstrom";
     Logger::Log(LogLevel::Info, oss.str());
 }
 

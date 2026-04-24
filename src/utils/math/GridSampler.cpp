@@ -25,7 +25,7 @@ void GridSampler::Print() const
     oss << "GridSampler Configuration:\n"
         << " - Sampling size: " << m_sampling_size << '\n'
         << " - Window size: "
-        << StringHelper::ToStringWithPrecision<double>(m_window_size, 1) << " Angstrom\n";
+        << rhbm_gem::string_helper::ToStringWithPrecision<double>(m_window_size, 1) << " Angstrom\n";
     Logger::Log(LogLevel::Info, oss.str());
 }
 
