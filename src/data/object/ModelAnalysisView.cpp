@@ -9,7 +9,7 @@
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/KeyPacker.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include <rhbm_gem/utils/math/ArrayStats.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 #include <sstream>
 #include <stdexcept>
@@ -276,7 +276,7 @@ double ModelAnalysisView::GetAtomGausEstimateMinimum(int par_id, Element element
         gaus_estimate_list.emplace_back(
             LocalPotentialView::RequireFor(*atom).GetEstimateMDPDE().GetParameter(par_id));
     }
-    return ArrayStats<double>::ComputeMin(gaus_estimate_list.data(), gaus_estimate_list.size());
+    return array_helper::ComputeMin(gaus_estimate_list.data(), gaus_estimate_list.size());
 }
 
 double ModelAnalysisView::GetBondGausEstimateMinimum(int par_id) const
@@ -288,7 +288,7 @@ double ModelAnalysisView::GetBondGausEstimateMinimum(int par_id) const
         gaus_estimate_list.emplace_back(
             LocalPotentialView::RequireFor(*bond).GetEstimateMDPDE().GetParameter(par_id));
     }
-    return ArrayStats<double>::ComputeMin(gaus_estimate_list.data(), gaus_estimate_list.size());
+    return array_helper::ComputeMin(gaus_estimate_list.data(), gaus_estimate_list.size());
 }
 
 bool ModelAnalysisView::HasAtomGroup(

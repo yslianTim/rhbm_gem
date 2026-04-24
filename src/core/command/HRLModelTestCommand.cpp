@@ -5,7 +5,7 @@
 #include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelTestDataFactory.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelTester.hpp>
-#include <rhbm_gem/utils/math/ArrayStats.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -977,7 +977,7 @@ void PrintDataOutlierResult(
     }
     for (size_t j = 0; j < row_size; j++)
     {
-        auto y_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(global_y_array[j], 0.38, 0.005, 0.995) };
+        auto y_range{ array_helper::ComputeScalingPercentileRangeTuple(global_y_array[j], 0.38, 0.005, 0.995) };
         y_min[j] = std::get<0>(y_range);
         y_max[j] = std::get<1>(y_range);
     }
@@ -1222,7 +1222,7 @@ void PrintMemberOutlierResult(
         x_min[i] = (options.options.tester_choice == TesterType::MODEL_ALPHA_MEMBER) ? -2.0 : -0.7;
         x_max[i] = (options.options.tester_choice == TesterType::MODEL_ALPHA_MEMBER) ? 47.0 : 22.0;
     }
-    auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(global_y_array, 0.3) };
+    auto y_range{ array_helper::ComputeScalingRangeTuple(global_y_array, 0.3) };
     for (size_t j = 0; j < row_size; j++)
     {
         y_min[j] = std::get<0>(y_range);

@@ -12,7 +12,7 @@
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include "data/detail/AtomClassifier.hpp"
 #include "data/detail/BondClassifier.hpp"
-#include <rhbm_gem/utils/math/ArrayStats.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
@@ -269,7 +269,7 @@ void GausPainter::PaintAtomLocalGausSummary(
             frame->GetYaxis()->CenterTitle();
             frame->GetXaxis()->SetTitle("Radial Distance #[]{#AA}");
             frame->GetYaxis()->SetTitle("Map Value");
-            auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(y_array, 0.1) };
+            auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.1) };
             auto x_min_tmp{ 0.01 };
             auto x_max_tmp{ 1.49 };
             auto y_min_tmp{ std::get<0>(y_range) };
@@ -528,8 +528,8 @@ void GausPainter::PaintAtomGroupGausSummary(
         }
 
         auto scaling{ 0.3 };
-        auto amplitude_range{ ArrayStats<double>::ComputeScalingRangeTuple(amplitude_array, scaling) };
-        auto width_range{ ArrayStats<double>::ComputeScalingRangeTuple(width_array, scaling) };
+        auto amplitude_range{ array_helper::ComputeScalingRangeTuple(amplitude_array, scaling) };
+        auto width_range{ array_helper::ComputeScalingRangeTuple(width_array, scaling) };
         auto element_count{ element_list.size() };
         std::vector<std::string> element_label_list;
         element_label_list.reserve(element_count);
@@ -761,11 +761,11 @@ void GausPainter::PaintAtomQScoreAminoAcidMainChainComponent(
             {
                 y_array.emplace_back(gaus_graph_new_map[k].at(chain_id)->GetPointY(p));
             }
-            auto y_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(y_array, 0.4) };
+            auto y_range{ array_helper::ComputeScalingPercentileRangeTuple(y_array, 0.4) };
             y_min = std::get<0>(y_range);
             y_max = std::get<1>(y_range);
 
-            auto x_range{ ArrayStats<double>::ComputeScalingRangeTuple(x_array, 0.05) };
+            auto x_range{ array_helper::ComputeScalingRangeTuple(x_array, 0.05) };
             auto x_min{ std::get<0>(x_range) };
             auto x_max{ std::get<1>(x_range) };
 
@@ -912,7 +912,7 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
 
         double y_min{ 0.0 };
         double y_max{ 0.0 };
-        auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(global_y_array, 0.20) };
+        auto y_range{ array_helper::ComputeScalingRangeTuple(global_y_array, 0.20) };
         y_min = std::get<0>(y_range);
         y_max = std::get<1>(y_range);
 
@@ -1162,8 +1162,8 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponentSimple(
     }
 
     auto scaling{ 0.3 };
-    auto amplitude_range{ ArrayStats<double>::ComputeScalingRangeTuple(amplitude_array, scaling) };
-    auto width_range{ ArrayStats<double>::ComputeScalingRangeTuple(width_array, scaling) };
+    auto amplitude_range{ array_helper::ComputeScalingRangeTuple(amplitude_array, scaling) };
+    auto width_range{ array_helper::ComputeScalingRangeTuple(width_array, scaling) };
 
     auto count_hist{
         plot_builder->CreateComponentCountHistogram(group_key_list_map.at(Spot::CA), class_key)
@@ -1369,8 +1369,8 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainStructure(
         }
 
         auto scaling{ 0.3 };
-        auto amplitude_range{ ArrayStats<double>::ComputeScalingRangeTuple(amplitude_array, scaling) };
-        auto width_range{ ArrayStats<double>::ComputeScalingRangeTuple(width_array, scaling) };
+        auto amplitude_range{ array_helper::ComputeScalingRangeTuple(amplitude_array, scaling) };
+        auto width_range{ array_helper::ComputeScalingRangeTuple(width_array, scaling) };
         auto structure_count{ structure_list.size() };
         std::vector<std::string> structure_label_list;
         structure_label_list.reserve(structure_count);
@@ -1615,11 +1615,11 @@ void GausPainter::PaintAtomLocalGausToSequenceAminoAcidMainChain(
                     y_array[j].emplace_back(gaus_graph_map[j][k].at(chain_id)->GetPointY(p));
                 }
             }
-            auto y_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(y_array[j], 0.4) };
+            auto y_range{ array_helper::ComputeScalingPercentileRangeTuple(y_array[j], 0.4) };
             y_min[j] = std::get<0>(y_range);
             y_max[j] = std::get<1>(y_range);
         }
-        auto x_range{ ArrayStats<double>::ComputeScalingRangeTuple(x_array, 0.05) };
+        auto x_range{ array_helper::ComputeScalingRangeTuple(x_array, 0.05) };
         auto x_min{ std::get<0>(x_range) };
         auto x_max{ std::get<1>(x_range) };
 
@@ -1903,8 +1903,8 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent(
     }
 
     auto scaling{ 0.3 };
-    auto amplitude_range{ ArrayStats<double>::ComputeScalingRangeTuple(amplitude_array, scaling) };
-    auto width_range{ ArrayStats<double>::ComputeScalingRangeTuple(width_array, scaling) };
+    auto amplitude_range{ array_helper::ComputeScalingRangeTuple(amplitude_array, scaling) };
+    auto width_range{ array_helper::ComputeScalingRangeTuple(width_array, scaling) };
     auto spot_count{ spot_list.size() };
     std::vector<std::string> spot_label_list;
     spot_label_list.reserve(spot_count);

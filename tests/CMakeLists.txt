@@ -126,7 +126,7 @@ set(DATA_SCHEMA_TEST_SOURCES
 )
 
 set(UTILS_MATH_TEST_SOURCES
-    utils/math/ArrayStats_test.cpp
+    utils/math/ArrayHelper_test.cpp
     utils/math/EigenValidation_test.cpp
     utils/math/EigenHelper_test.cpp
     utils/math/ElectricPotential_test.cpp

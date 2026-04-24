@@ -3,7 +3,7 @@
 
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/utils/math/ArrayStats.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 namespace rhbm_gem {
 
@@ -45,9 +45,9 @@ std::array<float, 3> ModelDerivedState::GetCenterOfMassPosition(ModelObject & mo
     }
 
     m_center_of_mass_position = std::array<float, 3>{
-        ArrayStats<float>::ComputeMean(pos_x.data(), pos_x.size()),
-        ArrayStats<float>::ComputeMean(pos_y.data(), pos_y.size()),
-        ArrayStats<float>::ComputeMean(pos_z.data(), pos_z.size())
+        array_helper::ComputeMean(pos_x.data(), pos_x.size()),
+        array_helper::ComputeMean(pos_y.data(), pos_y.size()),
+        array_helper::ComputeMean(pos_z.data(), pos_z.size())
     };
     return *m_center_of_mass_position;
 }
@@ -68,7 +68,7 @@ std::tuple<double, double> ModelDerivedState::GetModelPositionRange(
         position_list.emplace_back(atom->GetPosition().at(static_cast<size_t>(axis)));
     }
     m_model_position_range[static_cast<size_t>(axis)] =
-        ArrayStats<double>::ComputeScalingRangeTuple(position_list, 0.0);
+        array_helper::ComputeScalingRangeTuple(position_list, 0.0);
     return *m_model_position_range[static_cast<size_t>(axis)];
 }
 

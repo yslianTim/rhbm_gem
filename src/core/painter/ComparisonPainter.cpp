@@ -3,7 +3,7 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include "core/painter/AtomStyleCatalog.hpp"
-#include <rhbm_gem/utils/math/ArrayStats.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
@@ -146,13 +146,13 @@ void ComparisonPainter::PaintGroupGausEstimateComparison(const std::string & nam
 
     for (size_t i = 0; i < col_size; i++)
     {
-        auto x_range{ ArrayStats<double>::ComputeScalingRangeTuple(x_array[i], 0.16) };
+        auto x_range{ array_helper::ComputeScalingRangeTuple(x_array[i], 0.16) };
         x_min[i] = std::get<0>(x_range);
         x_max[i] = std::get<1>(x_range);
     }
     for (size_t j = 0; j < row_size; j++)
     {
-        auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(y_array[j], 0.24) };
+        auto y_range{ array_helper::ComputeScalingRangeTuple(y_array[j], 0.24) };
         y_min[j] = std::get<0>(y_range);
         y_max[j] = std::get<1>(y_range);
     }
@@ -190,7 +190,7 @@ void ComparisonPainter::PaintGroupGausEstimateComparison(const std::string & nam
         }
     }
 
-    auto x_range_sim{ ArrayStats<double>::ComputeScalingRangeTuple(x_array_sim, 0.1) };
+    auto x_range_sim{ array_helper::ComputeScalingRangeTuple(x_array_sim, 0.1) };
     auto x_min_sim{ std::get<0>(x_range_sim) };
     auto x_max_sim{ std::get<1>(x_range_sim) };
     double y_min_sim[2]{ 0.0 };
@@ -275,7 +275,7 @@ void ComparisonPainter::PaintGroupGausEstimateComparison(const std::string & nam
     std::unique_ptr<TH2> frame_sim[2];
     for (int i = 0; i < 2; i++)
     {
-        auto y_range_sim{ ArrayStats<double>::ComputeScalingRangeTuple(y_array_sim[i], 0.2) };
+        auto y_range_sim{ array_helper::ComputeScalingRangeTuple(y_array_sim[i], 0.2) };
         y_min_sim[i] = std::get<0>(y_range_sim);
         y_max_sim[i] = std::get<1>(y_range_sim);
     }
@@ -472,12 +472,12 @@ void ComparisonPainter::PaintGausEstimateResidueClassDenseComparison(const std::
             sim_additional_graph_map[k][residue] = std::move(sim_additional_graph);
         }
 
-        auto x_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(x_array, 0.30) };
+        auto x_range{ array_helper::ComputeScalingPercentileRangeTuple(x_array, 0.30) };
         auto x_min{ std::get<0>(x_range) };
         auto x_max{ std::get<1>(x_range) };
         x_min = (x_min <= 0.4) ? 0.45 : x_min;
 
-        auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(y_array, 0.45) };
+        auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.45) };
         auto y_min{ std::get<0>(y_range) };
         auto y_max{ std::get<1>(y_range) };
         y_min = (y_min <= 0.0) ? 0.1 : y_min;
@@ -654,11 +654,11 @@ void ComparisonPainter::PainMapValueComparison(
             }
         }
 
-        auto x_range{ ArrayStats<double>::ComputeScalingRangeTuple(x_array, 0.05) };
+        auto x_range{ array_helper::ComputeScalingRangeTuple(x_array, 0.05) };
         double x_min{ std::get<0>(x_range) };
         double x_max{ std::get<1>(x_range) };
 
-        auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(y_array, 0.2) };
+        auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.2) };
         double y_min{ std::get<0>(y_range) };
         double y_max{ std::get<1>(y_range) };
 

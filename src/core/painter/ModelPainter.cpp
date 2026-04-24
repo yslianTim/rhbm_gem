@@ -10,7 +10,7 @@
 #include "core/painter/BondStyleCatalog.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include "data/detail/BondClassifier.hpp"
-#include <rhbm_gem/utils/math/ArrayStats.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
@@ -174,8 +174,8 @@ void ModelPainter::PaintAtomGroupGausMainChain(
         if (amplitude_graph[0]->GetN() == 0) continue;
 
         auto scaling{ 0.3 };
-        auto amplitude_range{ ArrayStats<double>::ComputeScalingRangeTuple(amplitude_array, scaling) };
-        auto width_range{ ArrayStats<double>::ComputeScalingRangeTuple(width_array, scaling) };
+        auto amplitude_range{ array_helper::ComputeScalingRangeTuple(amplitude_array, scaling) };
+        auto width_range{ array_helper::ComputeScalingRangeTuple(width_array, scaling) };
         for (int i = 0; i < primary_element_size; i++)
         {
             std::string name_amplitude{ "amplitude_hist_"+ std::to_string(i) };
@@ -367,8 +367,8 @@ void ModelPainter::PaintBondGroupGausMainChain(
     }
 
     auto scaling{ 0.3 };
-    auto amplitude_range{ ArrayStats<double>::ComputeScalingRangeTuple(amplitude_array, scaling) };
-    auto width_range{ ArrayStats<double>::ComputeScalingRangeTuple(width_array, scaling) };
+    auto amplitude_range{ array_helper::ComputeScalingRangeTuple(amplitude_array, scaling) };
+    auto width_range{ array_helper::ComputeScalingRangeTuple(width_array, scaling) };
     for (int i = 0; i < primary_element_size; i++)
     {
         std::string name_amplitude{ "amplitude_hist_"+ std::to_string(i) };
@@ -568,8 +568,8 @@ void ModelPainter::PaintAtomGroupGausNucleotideMainChain(
     }
 
     auto scaling{ 0.3 };
-    auto amplitude_range{ ArrayStats<double>::ComputeScalingRangeTuple(amplitude_array, scaling) };
-    auto width_range{ ArrayStats<double>::ComputeScalingRangeTuple(width_array, scaling) };
+    auto amplitude_range{ array_helper::ComputeScalingRangeTuple(amplitude_array, scaling) };
+    auto width_range{ array_helper::ComputeScalingRangeTuple(width_array, scaling) };
     for (int i = 0; i < component_size; i++)
     {
         std::string name_amplitude{ "amplitude_hist_"+ std::to_string(i) };
@@ -776,7 +776,7 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
         width_prior[k] = entry_iter->GetAtomGausEstimatePrior(group_key, class_key, 1);
     }
 
-    auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(y_array, 0.15) };
+    auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.15) };
     auto x_min{ 0.01 };
     auto x_max{ 1.49 };
     auto y_min{ std::get<0>(y_range) };
@@ -945,7 +945,7 @@ void ModelPainter::PaintBondMapValueMainChain(ModelObject * model_object, const 
         member_entries[k] = static_cast<int>(entry_iter->GetBondObjectList(group_key, class_key).size());
     }
 
-    auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(y_array, 0.15) };
+    auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.15) };
     auto x_min{ 0.01 };
     auto x_max{ 1.49 };
     auto y_min{ std::get<0>(y_range) };
@@ -1136,12 +1136,12 @@ void ModelPainter::PaintGroupWidthScatterPlot(
     double x_max[col_size];
     for (int i = 0; i < col_size; i++)
     {
-        auto x_range{ ArrayStats<double>::ComputeScalingRangeTuple(global_x_array[i], 0.05) };
+        auto x_range{ array_helper::ComputeScalingRangeTuple(global_x_array[i], 0.05) };
         x_min[i] = std::get<0>(x_range);
         x_max[i] = std::get<1>(x_range);
     }
 
-    auto y_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(global_y_array, 0.1) };
+    auto y_range{ array_helper::ComputeScalingPercentileRangeTuple(global_y_array, 0.1) };
     auto y_min{ std::get<0>(y_range) };
     auto y_max{ std::get<1>(y_range) };
 
@@ -1150,8 +1150,8 @@ void ModelPainter::PaintGroupWidthScatterPlot(
     {
         for (int j = 0; j < row_size; j++)
         {
-            auto x_range_tmp{ ArrayStats<double>::ComputeScalingRangeTuple(x_array[i][j], 0.0) };
-            auto y_range_tmp{ ArrayStats<double>::ComputeScalingRangeTuple(y_array[i][j], 0.0) };
+            auto x_range_tmp{ array_helper::ComputeScalingRangeTuple(x_array[i][j], 0.0) };
+            auto y_range_tmp{ array_helper::ComputeScalingRangeTuple(y_array[i][j], 0.0) };
             summary_hist[i][j] = root_helper::CreateHist2D(
                 Form("hist_%d_%d", i, j), "",
                 5, std::get<0>(x_range_tmp), std::get<1>(x_range_tmp),
@@ -1247,11 +1247,11 @@ void ModelPainter::PaintAtomXYPosition(
         y_array.emplace_back(graph->GetPointY(p));
     }
 
-    auto x_range{ ArrayStats<double>::ComputeScalingRangeTuple(x_array, 0.1) };
+    auto x_range{ array_helper::ComputeScalingRangeTuple(x_array, 0.1) };
     double x_min{ std::get<0>(x_range) };
     double x_max{ std::get<1>(x_range) };
 
-    auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(y_array, 0.1) };
+    auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.1) };
     double y_min{ std::get<0>(y_range) };
     double y_max{ std::get<1>(y_range) };
 
@@ -1357,11 +1357,11 @@ void ModelPainter::PaintAtomGausScatterPlot(
         graph_map.emplace(element_type, std::move(graph));
     }
 
-    auto x_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(x_array, 0.2, 0.005, 0.995) };
+    auto x_range{ array_helper::ComputeScalingPercentileRangeTuple(x_array, 0.2, 0.005, 0.995) };
     double x_min{ std::get<0>(x_range) };
     double x_max{ std::get<1>(x_range) };
 
-    auto y_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(y_array, 0.2, 0.005, 0.995) };
+    auto y_range{ array_helper::ComputeScalingPercentileRangeTuple(y_array, 0.2, 0.005, 0.995) };
     double y_min{ std::get<0>(y_range) };
     double y_max{ std::get<1>(y_range) };
 
@@ -1462,11 +1462,11 @@ void ModelPainter::PaintBondGausScatterPlot(
         graph_map.emplace(element_type, std::move(graph));
     }
 
-    auto x_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(x_array, 0.2, 0.005, 0.995) };
+    auto x_range{ array_helper::ComputeScalingPercentileRangeTuple(x_array, 0.2, 0.005, 0.995) };
     double x_min{ std::get<0>(x_range) };
     double x_max{ std::get<1>(x_range) };
 
-    auto y_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(y_array, 0.2, 0.005, 0.995) };
+    auto y_range{ array_helper::ComputeScalingPercentileRangeTuple(y_array, 0.2, 0.005, 0.995) };
     double y_min{ std::get<0>(y_range) };
     double y_max{ std::get<1>(y_range) };
 
@@ -1569,11 +1569,11 @@ void ModelPainter::PaintAtomGausMainChain(ModelObject * model_object, const std:
                     y_array[j].emplace_back(gaus_graph_map[j][k].at(chain_id)->GetPointY(p));
                 }
             }
-            auto y_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(y_array[j], 0.2) };
+            auto y_range{ array_helper::ComputeScalingPercentileRangeTuple(y_array[j], 0.2) };
             y_min[j] = std::get<0>(y_range);
             y_max[j] = std::get<1>(y_range);
         }
-        auto x_range{ ArrayStats<double>::ComputeScalingRangeTuple(x_array, 0.05) };
+        auto x_range{ array_helper::ComputeScalingRangeTuple(x_array, 0.05) };
         auto x_min{ std::get<0>(x_range) };
         auto x_max{ std::get<1>(x_range) };
 
@@ -1720,11 +1720,11 @@ void ModelPainter::PaintBondGausMainChain(ModelObject * model_object, const std:
                     y_array[j].emplace_back(gaus_graph_map[j][k].at(chain_id)->GetPointY(p));
                 }
             }
-            auto y_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(y_array[j], 0.2) };
+            auto y_range{ array_helper::ComputeScalingPercentileRangeTuple(y_array[j], 0.2) };
             y_min[j] = std::get<0>(y_range);
             y_max[j] = std::get<1>(y_range);
         }
-        auto x_range{ ArrayStats<double>::ComputeScalingRangeTuple(x_array, 0.05) };
+        auto x_range{ array_helper::ComputeScalingRangeTuple(x_array, 0.05) };
         auto x_min{ std::get<0>(x_range) };
         auto x_max{ std::get<1>(x_range) };
 

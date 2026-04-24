@@ -1,5 +1,5 @@
 #include "data/detail/LocalPotentialEntry.hpp"
-#include <rhbm_gem/utils/math/ArrayStats.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -121,7 +121,7 @@ std::tuple<float, float> LocalPotentialEntry::GetDistanceRange(double margin_rat
         if (!IsEffectiveSample(sample)) continue;
         distance_array.emplace_back(sample.distance);
     }
-    return ArrayStats<float>::ComputeScalingRangeTuple(
+    return array_helper::ComputeScalingRangeTuple(
         distance_array, static_cast<float>(margin_rate));
 }
 
@@ -134,7 +134,7 @@ std::tuple<float, float> LocalPotentialEntry::GetResponseRange(double margin_rat
         if (!IsEffectiveSample(sample)) continue;
         map_value_array.emplace_back(sample.response);
     }
-    return ArrayStats<float>::ComputeScalingRangeTuple(
+    return array_helper::ComputeScalingRangeTuple(
         map_value_array, static_cast<float>(margin_rate));
 }
 
@@ -171,11 +171,11 @@ SeriesPointList LocalPotentialEntry::GetBinnedDistanceResponseSeries(
         const auto x_value{ static_cast<float>(x_min + (i + 0.5) * bin_spacing) };
         const auto & bin_values{ bin_map.at(static_cast<size_t>(i)) };
         const auto & bin_scores{ bin_score_map.at(static_cast<size_t>(i)) };
-        const auto y_value{ bin_values.empty() ? 0.0f : ArrayStats<float>::ComputeMedian(bin_values) };
+        const auto y_value{ bin_values.empty() ? 0.0f : array_helper::ComputeMedian(bin_values) };
         const auto score_value{
             bin_scores.empty()
                 ? 0.0f
-                : ArrayStats<float>::ComputeMean(bin_scores.data(), bin_scores.size())
+                : array_helper::ComputeMean(bin_scores.data(), bin_scores.size())
         };
         binned_distance_response_series.emplace_back(SeriesPoint{ { x_value }, y_value, score_value });
     }
@@ -294,8 +294,8 @@ double LocalPotentialEntry::CalculateQScore(int par_choice) const
         return 0.0;
     }
 
-    float map_value_mean{ ArrayStats<float>::ComputeMean(map_value_list.data(), map_value_list.size()) };
-    float reference_value_mean{ ArrayStats<float>::ComputeMean(reference_value_list.data(), reference_value_list.size()) };
+    float map_value_mean{ array_helper::ComputeMean(map_value_list.data(), map_value_list.size()) };
+    float reference_value_mean{ array_helper::ComputeMean(reference_value_list.data(), reference_value_list.size()) };
     
     auto numerator{ 0.0 };
     auto denominator{ 0.0 };

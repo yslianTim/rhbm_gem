@@ -1,6 +1,6 @@
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
-#include <rhbm_gem/utils/math/ArrayStats.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <cstring>
@@ -222,25 +222,25 @@ void MapObject::CheckPosition(const std::array<float, 3> & position) const
 
 void MapObject::CalculateMapValueMean()
 {
-    m_map_value_mean = ArrayStats<float>::ComputeMean(
+    m_map_value_mean = array_helper::ComputeMean(
         m_map_value_array.get(), m_voxel_size);
 }
 
 void MapObject::CalculateMapValueMin()
 {
-    m_map_value_min = ArrayStats<float>::ComputeMin(
+    m_map_value_min = array_helper::ComputeMin(
         m_map_value_array.get(), m_voxel_size);
 }
 
 void MapObject::CalculateMapValueMax()
 {
-    m_map_value_max = ArrayStats<float>::ComputeMax(
+    m_map_value_max = array_helper::ComputeMax(
         m_map_value_array.get(), m_voxel_size);
 }
 
 void MapObject::CalculateMapValueSD()
 {
-    m_map_value_sd = ArrayStats<float>::ComputeStandardDeviation(
+    m_map_value_sd = array_helper::ComputeStandardDeviation(
         m_map_value_array.get(), m_voxel_size, m_map_value_mean);
 }
 

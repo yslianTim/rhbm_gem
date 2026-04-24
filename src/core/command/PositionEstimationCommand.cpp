@@ -2,7 +2,7 @@
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
-#include <rhbm_gem/utils/math/ArrayStats.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ChimeraXHelper.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>

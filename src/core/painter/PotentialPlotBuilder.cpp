@@ -8,7 +8,7 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include <rhbm_gem/utils/math/ArrayStats.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
@@ -223,7 +223,7 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateAtomGausEstimateHistogram(
     double x_max{ 1.0 };
 
     auto estimate_range{
-        ArrayStats<double>::ComputeScalingPercentileRangeTuple(gaus_estimate_list, 0.1, 0.05, 0.95)
+        array_helper::ComputeScalingPercentileRangeTuple(gaus_estimate_list, 0.1, 0.05, 0.95)
     };
 
     if (gaus_estimate_list.size() > 1)
@@ -281,7 +281,7 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateLinearModelDataHistogram(int d
         }
     }
 
-    auto data_range{ ArrayStats<float>::ComputeScalingRangeTuple(data_list, 0.1f) };
+    auto data_range{ array_helper::ComputeScalingRangeTuple(data_list, 0.1f) };
     double x_min{ std::get<0>(data_range) };
     double x_max{ std::get<1>(data_range) };
 
@@ -374,7 +374,7 @@ std::vector<std::unique_ptr<TH1D>> PotentialPlotBuilder::CreateMainChainAtomGaus
         {
             for (auto & [sequence_id, values] : values_map_tmp)
             {
-                hist->Fill(ArrayStats<double>::ComputeRank(values, i));
+                hist->Fill(array_helper::ComputeRank(values, i));
             }
         }
         hist_list.emplace_back(std::move(hist));
@@ -770,7 +770,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateCOMDistanceToGausEstim
     for (auto & atom : GetModelView().GetAtomObjectList(group_key, class_key))
     {
         const auto & atom_pos{ atom->GetPositionRef() };
-        auto distance{ ArrayStats<float>::ComputeNorm(atom_pos, center_of_mass_pos) };
+        auto distance{ array_helper::ComputeNorm(atom_pos, center_of_mass_pos) };
         const auto atom_entry{ LocalPotentialView::RequireFor(*atom) };
         graph->SetPoint(
             count,

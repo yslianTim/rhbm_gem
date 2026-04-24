@@ -11,7 +11,7 @@
 #include <rhbm_gem/utils/domain/ComponentHelper.hpp>
 #include <rhbm_gem/utils/math/ElectricPotential.hpp>
 #include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
-#include <rhbm_gem/utils/math/ArrayStats.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <algorithm>
 #include <limits>
@@ -336,7 +336,7 @@ void MapSimulationCommand::PopulateMapValueArray(MapObject * map_object, double 
         for (const auto grid_index : in_range_grid_index_list)
         {
             auto distance{
-                ArrayStats<float>::ComputeNorm(
+                array_helper::ComputeNorm(
                     atom_position,
                     map_object->GetGridPosition(grid_index))
             };

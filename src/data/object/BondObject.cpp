@@ -1,7 +1,7 @@
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
-#include <rhbm_gem/utils/math/ArrayStats.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 #include <stdexcept>
 
@@ -39,7 +39,7 @@ BondObject::BondObject(AtomObject * atom_object_1, AtomObject * atom_object_2) :
         position_2[1] - position_1[1],
         position_2[2] - position_1[2]
     };
-    auto norm{ ArrayStats<float>::ComputeNorm(m_bond_vector) };
+    auto norm{ array_helper::ComputeNorm(m_bond_vector) };
     if (norm > 0.0f)
     {
         m_unit_vector = {

@@ -5,7 +5,7 @@
 #include "PotentialPlotBuilder.hpp"
 #include "detail/PainterModelAccess.hpp"
 #include "detail/PainterSupport.hpp"
-#include <rhbm_gem/utils/math/ArrayStats.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #ifdef HAVE_ROOT

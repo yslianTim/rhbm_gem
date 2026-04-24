@@ -13,7 +13,7 @@
 #include <rhbm_gem/utils/domain/KeyPacker.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
-#include <rhbm_gem/utils/math/ArrayStats.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 #include <algorithm>
 #include <array>
@@ -229,12 +229,12 @@ void ResultDumpCommand::RunMapValueDumping()
             y_list.emplace_back(atom->GetPosition().at(1));
             z_list.emplace_back(atom->GetPosition().at(2));
         }
-        atom_range_min.at(0) = ArrayStats<float>::ComputeMin(x_list.data(), atom_size) - margin;
-        atom_range_min.at(1) = ArrayStats<float>::ComputeMin(y_list.data(), atom_size) - margin;
-        atom_range_min.at(2) = ArrayStats<float>::ComputeMin(z_list.data(), atom_size) - margin;
-        atom_range_max.at(0) = ArrayStats<float>::ComputeMax(x_list.data(), atom_size) + margin;
-        atom_range_max.at(1) = ArrayStats<float>::ComputeMax(y_list.data(), atom_size) + margin;
-        atom_range_max.at(2) = ArrayStats<float>::ComputeMax(z_list.data(), atom_size) + margin;
+        atom_range_min.at(0) = array_helper::ComputeMin(x_list.data(), atom_size) - margin;
+        atom_range_min.at(1) = array_helper::ComputeMin(y_list.data(), atom_size) - margin;
+        atom_range_min.at(2) = array_helper::ComputeMin(z_list.data(), atom_size) - margin;
+        atom_range_max.at(0) = array_helper::ComputeMax(x_list.data(), atom_size) + margin;
+        atom_range_max.at(1) = array_helper::ComputeMax(y_list.data(), atom_size) + margin;
+        atom_range_max.at(2) = array_helper::ComputeMax(z_list.data(), atom_size) + margin;
 
         const std::string file_name{
             "map_value_list_" + model_object->GetEmdID() + "_" + model_object->GetPdbID()

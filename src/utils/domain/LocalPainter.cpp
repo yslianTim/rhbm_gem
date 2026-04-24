@@ -1,7 +1,7 @@
 #include <rhbm_gem/utils/domain/LocalPainter.hpp>
 
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include <rhbm_gem/utils/math/ArrayStats.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -84,7 +84,7 @@ std::optional<std::pair<double, double>> ResolveAutoRange(
         return std::nullopt;
     }
 
-    const auto range_tuple{ ArrayStats<double>::ComputeRangeTuple(values) };
+    const auto range_tuple{ array_helper::ComputeRangeTuple(values) };
     const double min_value{ std::get<0>(range_tuple) };
     const double max_value{ std::get<1>(range_tuple) };
     if (!std::isfinite(min_value) || !std::isfinite(max_value))
