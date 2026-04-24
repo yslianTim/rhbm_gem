@@ -1,7 +1,6 @@
 #include <rhbm_gem/utils/hrl/HRLGroupEstimator.hpp>
 
-#include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
-#include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
+#include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
@@ -20,7 +19,7 @@ HRLGroupEstimationResult HRLGroupEstimator::Estimate(
 {
     rhbm_gem::numeric_validation::RequirePositive(input.basis_size, "basis_size");
     const auto validated_input{
-        HRLDataTransform::BuildGroupInput(input.member_datasets, input.member_fit_results)
+        rhbm_gem::rhbm_helper::BuildGroupInput(input.member_datasets, input.member_fit_results)
     };
     if (validated_input.basis_size != input.basis_size)
     {
@@ -34,8 +33,8 @@ HRLGroupEstimationResult HRLGroupEstimator::Estimate(
         beta_list.emplace_back(fit_result.beta_mdpde);
     }
 
-    const auto beta_matrix{ HRLDataTransform::BuildBetaMatrix(beta_list) };
-    auto mu_result{ HRLModelAlgorithms::EstimateMuMDPDE(alpha_g, beta_matrix, m_options) };
+    const auto beta_matrix{ rhbm_gem::rhbm_helper::BuildBetaMatrix(beta_list) };
+    auto mu_result{ rhbm_gem::rhbm_helper::EstimateMuMDPDE(alpha_g, beta_matrix, m_options) };
     if (mu_result.status == HRLEstimationStatus::SINGLE_MEMBER)
     {
         if (!m_options.quiet_mode)
@@ -53,7 +52,7 @@ HRLGroupEstimationResult HRLGroupEstimator::Estimate(
         capital_sigma_list.emplace_back(fit_result.data_covariance);
     }
     auto web_result{
-        HRLModelAlgorithms::EstimateWEB(
+        rhbm_gem::rhbm_helper::EstimateWEB(
             validated_input.member_datasets,
             capital_sigma_list,
             mu_result.mu_mdpde,
@@ -80,12 +79,12 @@ HRLGroupEstimationResult HRLGroupEstimator::Estimate(
     result.beta_posterior_matrix = web_result.beta_posterior_matrix;
     result.capital_sigma_posterior_list = std::move(web_result.capital_sigma_posterior_list);
     result.omega_array = mu_result.omega_array;
-    result.statistical_distance_array = HRLModelAlgorithms::CalculateMemberStatisticalDistance(
+    result.statistical_distance_array = rhbm_gem::rhbm_helper::CalculateMemberStatisticalDistance(
         result.mu_prior,
         result.capital_lambda,
         result.beta_posterior_matrix
     );
-    result.outlier_flag_array = HRLModelAlgorithms::CalculateOutlierMemberFlag(
+    result.outlier_flag_array = rhbm_gem::rhbm_helper::CalculateOutlierMemberFlag(
         validated_input.basis_size,
         result.statistical_distance_array
     );
@@ -107,7 +106,7 @@ HRLGroupEstimationResult HRLGroupEstimator::BuildFallbackResult(
     {
         beta_list.emplace_back(fit_result.beta_mdpde);
     }
-    const auto beta_matrix{ HRLDataTransform::BuildBetaMatrix(beta_list) };
+    const auto beta_matrix{ rhbm_gem::rhbm_helper::BuildBetaMatrix(beta_list) };
 
     HRLGroupEstimationResult result;
     result.status = (mu_result.status == HRLEstimationStatus::SUCCESS)
@@ -123,12 +122,12 @@ HRLGroupEstimationResult HRLGroupEstimator::BuildFallbackResult(
         input.member_fit_results.size(),
         HRLPosteriorCovarianceMatrix::Zero(input.basis_size, input.basis_size)
     );
-    result.statistical_distance_array = HRLModelAlgorithms::CalculateMemberStatisticalDistance(
+    result.statistical_distance_array = rhbm_gem::rhbm_helper::CalculateMemberStatisticalDistance(
         result.mu_prior,
         result.capital_lambda,
         result.beta_posterior_matrix
     );
-    result.outlier_flag_array = HRLModelAlgorithms::CalculateOutlierMemberFlag(
+    result.outlier_flag_array = rhbm_gem::rhbm_helper::CalculateOutlierMemberFlag(
         input.basis_size,
         result.statistical_distance_array
     );

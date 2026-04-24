@@ -1,7 +1,7 @@
 #include <rhbm_gem/utils/hrl/HRLModelTester.hpp>
 #include <rhbm_gem/utils/hrl/HRLAlphaTrainer.hpp>
 #include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
-#include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
+#include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
@@ -81,7 +81,7 @@ HRLModelTester::BetaReplicaResidual EstimateBetaReplicaResidual(
     double alpha_r,
     const HRLExecutionOptions & options)
 {
-    const auto beta_result{ HRLModelAlgorithms::EstimateBetaMDPDE(alpha_r, dataset, options) };
+    const auto beta_result{ rhbm_gem::rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset, options) };
     return HRLModelTester::BetaReplicaResidual{
         CalculateNormalizedResidual(beta_result.beta_ols, gaus_true),
         CalculateNormalizedResidual(beta_result.beta_mdpde, gaus_true)
@@ -94,8 +94,8 @@ MuReplicaResidual EstimateMuReplicaResidual(
     double alpha_g,
     const HRLExecutionOptions & options)
 {
-    const auto mdpde_result{ HRLModelAlgorithms::EstimateMuMDPDE(alpha_g, beta_matrix, options) };
-    const auto ols_result{ HRLModelAlgorithms::EstimateMuMDPDE(0.0, beta_matrix, options) };
+    const auto mdpde_result{ rhbm_gem::rhbm_helper::EstimateMuMDPDE(alpha_g, beta_matrix, options) };
+    const auto ols_result{ rhbm_gem::rhbm_helper::EstimateMuMDPDE(0.0, beta_matrix, options) };
     return MuReplicaResidual{
         CalculateNormalizedResidual(ols_result.mu_mdpde, gaus_true),
         CalculateNormalizedResidual(mdpde_result.mu_mdpde, gaus_true)

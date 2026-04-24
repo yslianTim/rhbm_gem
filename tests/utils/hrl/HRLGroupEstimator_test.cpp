@@ -5,7 +5,7 @@
 #include <utility>
 #include <vector>
 
-#include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
+#include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/hrl/HRLGroupEstimator.hpp>
 
 namespace
@@ -38,7 +38,7 @@ SeriesPoint MakeSeriesPoint(std::initializer_list<double> values)
 
 HRLMemberDataset MakeDataset(std::initializer_list<SeriesPoint> rows)
 {
-    return HRLDataTransform::BuildMemberDataset(SeriesPointList(rows));
+    return rhbm_gem::rhbm_helper::BuildMemberDataset(SeriesPointList(rows));
 }
 
 HRLBetaEstimateResult MakeFitResult(
@@ -61,7 +61,7 @@ HRLBetaEstimateResult MakeFitResult(
 TEST(HRLGroupEstimatorTest, EstimateSingleMemberUsesFallbackResult)
 {
     const auto input{
-        HRLDataTransform::BuildGroupInput(
+        rhbm_gem::rhbm_helper::BuildGroupInput(
             {
                 MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 1.0 }), MakeSeriesPoint({ 1.0, 1.0, 3.0 }) })
             },
@@ -140,7 +140,7 @@ TEST(HRLGroupEstimatorTest, EstimateRejectsBasisSizeMismatchWithMemberDatasets)
 TEST(HRLGroupEstimatorTest, EstimateTwoMembersPinsMuPriorToMuMDPDE)
 {
     const auto input{
-        HRLDataTransform::BuildGroupInput(
+        rhbm_gem::rhbm_helper::BuildGroupInput(
             {
                 MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 1.0 }), MakeSeriesPoint({ 1.0, 1.0, 3.0 }) }),
                 MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 2.0 }), MakeSeriesPoint({ 1.0, 1.0, 4.0 }) })
@@ -165,7 +165,7 @@ TEST(HRLGroupEstimatorTest, EstimateTwoMembersPinsMuPriorToMuMDPDE)
 TEST(HRLGroupEstimatorTest, EstimateAllowsConvergenceFallbackStatuses)
 {
     const auto input{
-        HRLDataTransform::BuildGroupInput(
+        rhbm_gem::rhbm_helper::BuildGroupInput(
             {
                 MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 1.0 }), MakeSeriesPoint({ 1.0, 1.0, 3.0 }) }),
                 MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 2.0 }), MakeSeriesPoint({ 1.0, 1.0, 4.0 }) })

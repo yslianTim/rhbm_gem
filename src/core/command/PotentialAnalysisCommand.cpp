@@ -16,9 +16,8 @@
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/hrl/HRLAlphaTrainer.hpp>
 #include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
-#include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
+#include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/hrl/HRLGroupEstimator.hpp>
-#include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelTypes.hpp>
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
 
@@ -449,7 +448,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFittingWorkflow(
                 analysis_view.GetAtomAlphaG(group_key, class_key) : request.alpha_g
             };
             const auto input{
-                HRLDataTransform::BuildGroupInput(member_datasets, member_fit_results)
+                rhbm_gem::rhbm_helper::BuildGroupInput(member_datasets, member_fit_results)
             };
             HRLGroupEstimator estimator(MakePotentialAnalysisExecutionOptions(ThreadSize(), true));
             const auto result{ estimator.Estimate(input, alpha_g) };
@@ -772,7 +771,7 @@ void PotentialAnalysisCommand::RunLocalPotentialFitting(
         auto local_entry{ local_entry_list[i] };
         local_entry.SetAlphaR(alpha_r);
         const auto result{
-            HRLModelAlgorithms::EstimateBetaMDPDE(
+            rhbm_gem::rhbm_helper::EstimateBetaMDPDE(
                 alpha_r,
                 local_entry.GetDataset(),
                 MakePotentialAnalysisExecutionOptions(thread_size, true))

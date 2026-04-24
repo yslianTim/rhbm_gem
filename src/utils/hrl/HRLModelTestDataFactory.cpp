@@ -2,7 +2,7 @@
 
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
-#include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
+#include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/GaussianResponseMath.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
@@ -98,7 +98,7 @@ HRLBetaTestInput HRLModelTestDataFactory::BuildBetaTestInput(const BetaScenario 
             )
         };
         input.replica_datasets.emplace_back(
-            HRLDataTransform::BuildMemberDataset(data_entry_list)
+            rhbm_gem::rhbm_helper::BuildMemberDataset(data_entry_list)
         );
     }
 
@@ -209,10 +209,10 @@ HRLNeighborhoodTestInput HRLModelTestDataFactory::BuildNeighborhoodTestInput(
             )
         };
         input.no_cut_datasets.emplace_back(
-            HRLDataTransform::BuildMemberDataset(no_cut_data_entry_list)
+            rhbm_gem::rhbm_helper::BuildMemberDataset(no_cut_data_entry_list)
         );
         input.cut_datasets.emplace_back(
-            HRLDataTransform::BuildMemberDataset(cut_data_entry_list)
+            rhbm_gem::rhbm_helper::BuildMemberDataset(cut_data_entry_list)
         );
     }
 

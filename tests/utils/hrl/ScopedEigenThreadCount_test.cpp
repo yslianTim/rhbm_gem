@@ -28,7 +28,7 @@ TEST(ScopedEigenThreadCountTest, NonPositiveRequestFallsBackToOneThreadAndRestor
     ScopedEigenThreadCountRestorer restore_original_thread_count(original_thread_count);
 
     {
-        HRLModelAlgorithms::detail::ScopedEigenThreadCount scoped_thread_count(0);
+        rhbm_gem::rhbm_helper::detail::ScopedEigenThreadCount scoped_thread_count(0);
         EXPECT_EQ(1, Eigen::nbThreads());
     }
 
@@ -41,7 +41,7 @@ TEST(ScopedEigenThreadCountTest, MatchingRequestKeepsObservableThreadCountUnchan
     ScopedEigenThreadCountRestorer restore_original_thread_count(original_thread_count);
 
     {
-        HRLModelAlgorithms::detail::ScopedEigenThreadCount scoped_thread_count(original_thread_count);
+        rhbm_gem::rhbm_helper::detail::ScopedEigenThreadCount scoped_thread_count(original_thread_count);
         EXPECT_EQ(original_thread_count, Eigen::nbThreads());
     }
 
@@ -55,7 +55,7 @@ TEST(ScopedEigenThreadCountTest, ScopeRestoresPreviousThreadCountAfterChange)
     const int alternate_thread_count{ (original_thread_count == 1) ? 2 : 1 };
 
     {
-        HRLModelAlgorithms::detail::ScopedEigenThreadCount scoped_thread_count(alternate_thread_count);
+        rhbm_gem::rhbm_helper::detail::ScopedEigenThreadCount scoped_thread_count(alternate_thread_count);
         EXPECT_EQ(alternate_thread_count, Eigen::nbThreads());
     }
 
@@ -72,11 +72,11 @@ TEST(ScopedEigenThreadCountTest, NestedScopesRestoreOuterThenOriginalThreadCount
     };
 
     {
-        HRLModelAlgorithms::detail::ScopedEigenThreadCount outer_scope(outer_thread_count);
+        rhbm_gem::rhbm_helper::detail::ScopedEigenThreadCount outer_scope(outer_thread_count);
         EXPECT_EQ(outer_thread_count, Eigen::nbThreads());
 
         {
-            HRLModelAlgorithms::detail::ScopedEigenThreadCount inner_scope(inner_thread_count);
+            rhbm_gem::rhbm_helper::detail::ScopedEigenThreadCount inner_scope(inner_thread_count);
             EXPECT_EQ(inner_thread_count, Eigen::nbThreads());
         }
 

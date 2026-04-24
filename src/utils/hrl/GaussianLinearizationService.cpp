@@ -2,7 +2,7 @@
 
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
+#include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
@@ -415,7 +415,7 @@ HRLMemberDataset GaussianLinearizationService::BuildDataset(
     double x_max,
     const GaussianLinearizationContext & context) const
 {
-    return HRLDataTransform::BuildMemberDataset(
+    return rhbm_gem::rhbm_helper::BuildMemberDataset(
         BuildDatasetSeries(sampling_entries, x_min, x_max, context));
 }
 

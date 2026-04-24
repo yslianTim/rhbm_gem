@@ -2,7 +2,7 @@
 
 #include <Eigen/Core>
 
-namespace HRLModelAlgorithms::detail
+namespace rhbm_gem::rhbm_helper::detail
 {
 
 // Scoped override for Eigen's global thread count. This changes process-wide
@@ -42,4 +42,4 @@ private:
     bool m_changed;
 };
 
-} // namespace HRLModelAlgorithms::detail
+} // namespace rhbm_gem::rhbm_helper::detail

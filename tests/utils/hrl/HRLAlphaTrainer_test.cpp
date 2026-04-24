@@ -4,7 +4,7 @@
 #include <stdexcept>
 #include <vector>
 
-#include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
+#include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/hrl/HRLAlphaTrainer.hpp>
 
 namespace
@@ -30,7 +30,7 @@ HRLMemberDataset MakeLinearDataset(double slope)
         SeriesPoint({ 1.0, 4.0 }, 1.0 + 4.0 * slope),
         SeriesPoint({ 1.0, 5.0 }, 1.0 + 5.0 * slope)
     };
-    return HRLDataTransform::BuildMemberDataset(data_list);
+    return rhbm_gem::rhbm_helper::BuildMemberDataset(data_list);
 }
 
 double BestAlphaForErrors(
@@ -94,7 +94,7 @@ TEST(HRLAlphaTrainerTest, TrainAlphaRSingleDatasetWithExactLinearDataReturnsZero
         SeriesPoint({ 1.0, 4.0 }, 9.0),
         SeriesPoint({ 1.0, 5.0 }, 11.0)
     };
-    const auto dataset{ HRLDataTransform::BuildMemberDataset(data_list) };
+    const auto dataset{ rhbm_gem::rhbm_helper::BuildMemberDataset(data_list) };
     const HRLAlphaTrainer trainer{ 0.0, 0.5, 0.5 };
     HRLAlphaTrainer::AlphaTrainingOptions options;
     options.subset_size = 3;

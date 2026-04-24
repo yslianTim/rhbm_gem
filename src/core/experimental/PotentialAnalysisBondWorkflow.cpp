@@ -11,9 +11,8 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
-#include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
+#include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/hrl/HRLGroupEstimator.hpp>
-#include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
 #include <rhbm_gem/utils/math/CylinderSampler.hpp>
 
 #include <array>
@@ -201,7 +200,7 @@ void RunLocalBondFitting(
         auto local_entry{ local_entry_list[i] };
         const auto & dataset{ local_entry.GetDataset() };
         const auto result{
-            HRLModelAlgorithms::EstimateBetaMDPDE(
+            rhbm_gem::rhbm_helper::EstimateBetaMDPDE(
                 universal_alpha_r,
                 dataset,
                 MakePotentialAnalysisExecutionOptions(context.thread_size, true))
@@ -259,7 +258,7 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
                 member_fit_results.emplace_back(local_entry.GetFitResult());
             }
             const auto input{
-                HRLDataTransform::BuildGroupInput(member_datasets, member_fit_results)
+                rhbm_gem::rhbm_helper::BuildGroupInput(member_datasets, member_fit_results)
             };
             HRLGroupEstimator estimator(
                 MakePotentialAnalysisExecutionOptions(context.thread_size, true));

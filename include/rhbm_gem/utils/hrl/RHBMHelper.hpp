@@ -5,9 +5,19 @@
 #include <Eigen/Dense>
 
 #include <rhbm_gem/utils/hrl/HRLModelTypes.hpp>
+#include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
-namespace HRLModelAlgorithms
+namespace rhbm_gem::rhbm_helper
 {
+HRLMemberDataset BuildMemberDataset(const SeriesPointList & series_point_list);
+
+HRLBetaMatrix BuildBetaMatrix(const std::vector<HRLBetaVector> & beta_list);
+
+HRLGroupEstimationInput BuildGroupInput(
+    const std::vector<HRLMemberDataset> & member_datasets,
+    const std::vector<HRLBetaEstimateResult> & member_fit_results
+);
+
 HRLBetaEstimateResult EstimateBetaMDPDE(
     double alpha_r,
     const HRLMemberDataset & dataset,
@@ -38,4 +48,4 @@ Eigen::Array<bool, Eigen::Dynamic, 1> CalculateOutlierMemberFlag(
     int basis_size,
     const Eigen::ArrayXd & statistical_distance_array
 );
-} // namespace HRLModelAlgorithms
+} // namespace rhbm_gem::rhbm_helper

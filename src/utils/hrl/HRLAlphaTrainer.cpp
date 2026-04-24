@@ -1,8 +1,7 @@
 #include <rhbm_gem/utils/hrl/HRLAlphaTrainer.hpp>
 
-#include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
+#include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
-#include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
@@ -195,7 +194,7 @@ Eigen::VectorXd EvaluateAlphaRForDataset(
         for (std::size_t i = 0; i < subset_size; i++)
         {
             const auto beta_result_test{
-                HRLModelAlgorithms::EstimateBetaMDPDE(
+                rhbm_gem::rhbm_helper::EstimateBetaMDPDE(
                     alpha,
                     data_set_test.at(i),
                     algorithm_options
@@ -203,7 +202,7 @@ Eigen::VectorXd EvaluateAlphaRForDataset(
             };
 
             const auto beta_result_training{
-                HRLModelAlgorithms::EstimateBetaMDPDE(
+                rhbm_gem::rhbm_helper::EstimateBetaMDPDE(
                     alpha,
                     data_set_training.at(i),
                     algorithm_options
@@ -255,17 +254,17 @@ Eigen::VectorXd EvaluateAlphaGForGroup(
         for (std::size_t i = 0; i < subset_size; i++)
         {
             const auto beta_matrix_test{
-                HRLDataTransform::BuildBetaMatrix(data_set_test.at(i))
+                rhbm_gem::rhbm_helper::BuildBetaMatrix(data_set_test.at(i))
             };
             const auto mu_result_test{
-                HRLModelAlgorithms::EstimateMuMDPDE(alpha, beta_matrix_test, algorithm_options)
+                rhbm_gem::rhbm_helper::EstimateMuMDPDE(alpha, beta_matrix_test, algorithm_options)
             };
 
             const auto beta_matrix_training{
-                HRLDataTransform::BuildBetaMatrix(data_set_training.at(i))
+                rhbm_gem::rhbm_helper::BuildBetaMatrix(data_set_training.at(i))
             };
             const auto mu_result_training{
-                HRLModelAlgorithms::EstimateMuMDPDE(alpha, beta_matrix_training, algorithm_options)
+                rhbm_gem::rhbm_helper::EstimateMuMDPDE(alpha, beta_matrix_training, algorithm_options)
             };
 
             mu_error_sum +=
@@ -457,7 +456,7 @@ Eigen::MatrixXd HRLAlphaTrainer::StudyAlphaRBias(
         {
             const auto alpha_r{ m_alpha_grid.at(static_cast<std::size_t>(j)) };
             const auto result{
-                HRLModelAlgorithms::EstimateBetaMDPDE(
+                rhbm_gem::rhbm_helper::EstimateBetaMDPDE(
                     alpha_r,
                     dataset_list.at(i),
                     algorithm_options)
@@ -510,14 +509,14 @@ Eigen::MatrixXd HRLAlphaTrainer::StudyAlphaGBias(
     {
         auto algorithm_options{ options.execution_options };
         algorithm_options.quiet_mode = true;
-        const auto beta_matrix{ HRLDataTransform::BuildBetaMatrix(beta_group_list.at(i)) };
+        const auto beta_matrix{ rhbm_gem::rhbm_helper::BuildBetaMatrix(beta_group_list.at(i)) };
 
         Eigen::MatrixXd local_bias_array{ Eigen::MatrixXd::Zero(3, alpha_size) };
         for (int j = 0; j < alpha_size; j++)
         {
             const auto alpha_g{ m_alpha_grid.at(static_cast<std::size_t>(j)) };
             const auto result{
-                HRLModelAlgorithms::EstimateMuMDPDE(alpha_g, beta_matrix, algorithm_options)
+                rhbm_gem::rhbm_helper::EstimateMuMDPDE(alpha_g, beta_matrix, algorithm_options)
             };
             local_bias_array.col(j) = CalculateAbsoluteGaussianDifference(
                 result.mu_mdpde,
