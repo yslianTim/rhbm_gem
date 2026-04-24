@@ -1,7 +1,7 @@
 #include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
 
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
-#include <rhbm_gem/utils/math/EigenMatrixUtility.hpp>
+#include <rhbm_gem/utils/math/EigenHelper.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include "utils/hrl/detail/ScopedEigenThreadCount.hpp"
@@ -352,10 +352,10 @@ HRLWebEstimateResult HRLModelAlgorithms::EstimateWEB(
             "EstimateWEB member covariance input is invalid.");
 
         const auto inv_capital_sigma{
-            EigenMatrixUtility::GetInverseDiagonalMatrix(capital_sigma)
+            rhbm_gem::eigen_helper::GetInverseDiagonalMatrix(capital_sigma)
         };
         const auto inv_member_capital_lambda{
-            EigenMatrixUtility::GetInverseMatrix(member_capital_lambda)
+            rhbm_gem::eigen_helper::GetInverseMatrix(member_capital_lambda)
         };
         const HRLGroupCovarianceMatrix gram_matrix{
             dataset.X.transpose() * inv_capital_sigma * dataset.X
@@ -367,7 +367,7 @@ HRLWebEstimateResult HRLModelAlgorithms::EstimateWEB(
             gram_matrix + inv_member_capital_lambda
         };
         const HRLPosteriorCovarianceMatrix capital_sigma_posterior{
-            EigenMatrixUtility::GetInverseMatrix(inv_capital_sigma_posterior)
+            rhbm_gem::eigen_helper::GetInverseMatrix(inv_capital_sigma_posterior)
         };
 
         result.capital_sigma_posterior_list.emplace_back(capital_sigma_posterior);
@@ -377,7 +377,7 @@ HRLWebEstimateResult HRLModelAlgorithms::EstimateWEB(
         denominator += inv_member_capital_lambda * capital_sigma_posterior * gram_matrix;
     }
 
-    result.mu_prior = EigenMatrixUtility::GetInverseMatrix(denominator) * numerator;
+    result.mu_prior = rhbm_gem::eigen_helper::GetInverseMatrix(denominator) * numerator;
     if (member_size == 2)
     {
         result.mu_prior = mu_mdpde;
@@ -393,7 +393,7 @@ HRLBetaVector CalculateBetaByOLS(
 {
     const HRLGroupCovarianceMatrix gram_matrix{ design_matrix.transpose() * design_matrix };
     const HRLGroupCovarianceMatrix inverse_gram_matrix{
-        EigenMatrixUtility::GetInverseMatrix(gram_matrix)
+        rhbm_gem::eigen_helper::GetInverseMatrix(gram_matrix)
     };
     return inverse_gram_matrix * (design_matrix.transpose() * response_vector);
 }
@@ -458,7 +458,7 @@ HRLBetaVector CalculateBetaByMDPDE(
     const HRLGroupCovarianceMatrix gram_matrix{
         design_matrix.transpose() * W * design_matrix
     };
-    const auto inverse_gram_matrix{ EigenMatrixUtility::GetInverseMatrix(gram_matrix) };
+    const auto inverse_gram_matrix{ rhbm_gem::eigen_helper::GetInverseMatrix(gram_matrix) };
     return inverse_gram_matrix * (design_matrix.transpose() * W * response_vector);
 }
 
@@ -469,7 +469,7 @@ HRLMuVector CalculateMuByMedian(const HRLBetaMatrix & beta_matrix)
     HRLMuVector mu{ HRLMuVector::Zero(basis_size) };
     for (int b = 0; b < basis_size; b++)
     {
-        mu(b) = EigenMatrixUtility::GetMedian(beta_matrix.row(b));
+        mu(b) = rhbm_gem::eigen_helper::GetMedian(beta_matrix.row(b));
     }
     return mu;
 }
@@ -581,7 +581,7 @@ HRLDiagonalMatrix CalculateDataCovariance(
     const HRLResponseVector data_weight_array{ W.diagonal() };
     const auto n{ static_cast<int>(data_weight_array.size()) };
     const auto W_inverse_trace{
-        EigenMatrixUtility::GetInverseDiagonalMatrix(W).diagonal().sum()
+        rhbm_gem::eigen_helper::GetInverseDiagonalMatrix(W).diagonal().sum()
     };
     if (!rhbm_gem::numeric_validation::IsFinitePositive(W_inverse_trace))
     {
@@ -626,7 +626,7 @@ Eigen::ArrayXd CalculateMemberWeight(
 
     const auto member_size{ static_cast<int>(beta_matrix.cols()) };
     const auto weight_member_min{ weight_min / static_cast<double>(member_size) };
-    const auto inverse_capital_lambda{ EigenMatrixUtility::GetInverseMatrix(capital_lambda) };
+    const auto inverse_capital_lambda{ rhbm_gem::eigen_helper::GetInverseMatrix(capital_lambda) };
     const HRLBetaMatrix residual_matrix{ beta_matrix.colwise() - mu };
     Eigen::ArrayXd omega_array{ Eigen::ArrayXd::Zero(member_size) };
     for (int i = 0; i < member_size; i++)
@@ -759,7 +759,7 @@ Eigen::ArrayXd HRLModelAlgorithms::CalculateMemberStatisticalDistance(
     const auto member_size{ static_cast<int>(beta_posterior_matrix.cols()) };
     Eigen::ArrayXd statistical_distance_array{ Eigen::ArrayXd::Zero(member_size) };
     const HRLBetaPosteriorMatrix error_matrix{ beta_posterior_matrix.colwise() - mu_prior };
-    const auto inv_capital_lambda{ EigenMatrixUtility::GetInverseMatrix(capital_lambda) };
+    const auto inv_capital_lambda{ rhbm_gem::eigen_helper::GetInverseMatrix(capital_lambda) };
     for (int i = 0; i < member_size; i++)
     {
         statistical_distance_array(i) =

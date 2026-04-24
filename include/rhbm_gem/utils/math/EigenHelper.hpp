@@ -10,10 +10,10 @@
 
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
-namespace EigenMatrixUtility
-{
+namespace rhbm_gem {
+namespace eigen_helper {
 
-template<typename Derived>
+template <typename Derived>
 typename Derived::Scalar GetMedian(Eigen::DenseBase<Derived>& d)
 {
     auto array{ d.reshaped() };
@@ -21,21 +21,21 @@ typename Derived::Scalar GetMedian(Eigen::DenseBase<Derived>& d)
     if (array_size == 0)
     {
         Logger::Log(LogLevel::Warning,
-                    " [EigenMatrixUtility::GetMedian] The input data size is zero, return 0...");
+                    " [eigen_helper::GetMedian] The input data size is zero, return 0...");
         return 0.0;
     }
     std::sort(array.begin(), array.end());
     return (array_size % 2 == 0) ? array.segment((array_size - 2)/2, 2).mean() : array(array_size/2);
 }
 
-template<typename Derived>
+template <typename Derived>
 typename Derived::Scalar GetMedian(const Eigen::DenseBase<Derived>& d)
 {
     typename Derived::PlainObject m{ d.replicate(1,1) };
     return GetMedian(m);
 }
 
-template<typename Derived>
+template <typename Derived>
 typename Derived::Scalar GetStandardDeviation(Eigen::DenseBase<Derived>& d)
 {
     auto array{ d.reshaped() };
@@ -43,21 +43,21 @@ typename Derived::Scalar GetStandardDeviation(Eigen::DenseBase<Derived>& d)
     if (array_size == 0)
     {
         Logger::Log(LogLevel::Warning,
-                    " [EigenMatrixUtility::GetStandardDeviation] The input data size is zero, return 0...");
+                    " [eigen_helper::GetStandardDeviation] The input data size is zero, return 0...");
         return 0.0;
     }
     if (array_size <= 1) return 0.0f;
     return (array - array.mean()).matrix().norm()/std::sqrt(array_size - 1);
 }
 
-template<typename Derived>
+template <typename Derived>
 typename Derived::Scalar GetStandardDeviation(const Eigen::DenseBase<Derived>& d)
 {
     typename Derived::PlainObject m{ d.replicate(1,1) };
     return GetStandardDeviation(m);
 }
 
-template<typename Derived>
+template <typename Derived>
 typename Derived::PlainObject GetInverseMatrix(const Eigen::MatrixBase<Derived>& matrix)
 {
     Eigen::FullPivLU<typename Derived::PlainObject> lu_decomposition(matrix);
@@ -68,7 +68,7 @@ typename Derived::PlainObject GetInverseMatrix(const Eigen::MatrixBase<Derived>&
     return lu_decomposition.inverse();
 }
 
-template<typename Scalar, int SizeAtCompileTime, int MaxSizeAtCompileTime = SizeAtCompileTime>
+template <typename Scalar, int SizeAtCompileTime, int MaxSizeAtCompileTime = SizeAtCompileTime>
 Eigen::DiagonalMatrix<Scalar, SizeAtCompileTime, MaxSizeAtCompileTime>
 GetInverseDiagonalMatrix(const Eigen::DiagonalMatrix<Scalar, SizeAtCompileTime, MaxSizeAtCompileTime>& matrix)
 {
@@ -82,4 +82,5 @@ GetInverseDiagonalMatrix(const Eigen::DiagonalMatrix<Scalar, SizeAtCompileTime, 
     return inverseDiagMatrix;
 }
 
-}
+} // namespace eigen_helper
+} // namespace rhbm_gem
