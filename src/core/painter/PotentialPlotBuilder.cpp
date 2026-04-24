@@ -132,7 +132,7 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateComponentCountHistogram(
     }
     auto component_size{ static_cast<int>(group_key_list.size()) };
     auto hist{
-        ROOTHelper::CreateHist1D(
+        root_helper::CreateHist1D(
             "hist_" + class_key, "Component Count", component_size, -0.5, component_size - 0.5)
     };
     for (size_t i = 0; i < group_key_list.size(); i++)
@@ -150,7 +150,7 @@ std::unique_ptr<TH2D> PotentialPlotBuilder::CreateAtomResidueCountHistogram2D(
     {
         return nullptr;
     }
-    auto hist{ ROOTHelper::CreateHist2D("hist", "Residue Count", 20, -0.5, 19.5, 3, -0.5, 2.5) };
+    auto hist{ root_helper::CreateHist2D("hist", "Residue Count", 20, -0.5, 19.5, 3, -0.5, 2.5) };
     std::vector<Structure> structure_list{ Structure::FREE, Structure::HELX_P, Structure::SHEET };
     for (size_t i = 0; i < structure_list.size(); i++)
     {
@@ -172,7 +172,7 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateAtomResidueCountHistogram(
     {
         return nullptr;
     }
-    auto hist{ ROOTHelper::CreateHist1D("hist", "Residue Count", 20, -0.5, 19.5) };
+    auto hist{ root_helper::CreateHist1D("hist", "Residue Count", 20, -0.5, 19.5) };
     for (auto & residue : ChemicalDataHelper::GetStandardAminoAcidList())
     {
         auto count{ GetAtomResidueCount(class_key, residue, structure) };
@@ -188,7 +188,7 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateBondResidueCountHistogram(
     {
         return nullptr;
     }
-    auto hist{ ROOTHelper::CreateHist1D("hist", "Residue Count", 20, -0.5, 19.5) };
+    auto hist{ root_helper::CreateHist1D("hist", "Residue Count", 20, -0.5, 19.5) };
     for (auto & residue : ChemicalDataHelper::GetStandardAminoAcidList())
     {
         auto count{ GetBondResidueCount(class_key, residue) };
@@ -253,7 +253,7 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateAtomGausEstimateHistogram(
     }
 
     auto hist_name{ std::to_string(group_key) + "_" + class_key + "_par" + std::to_string(par_id) };
-    auto hist{ ROOTHelper::CreateHist1D(hist_name.data(), "", 25, x_min, x_max) };
+    auto hist{ root_helper::CreateHist1D(hist_name.data(), "", 25, x_min, x_max) };
     for (auto & value : gaus_estimate_list)
     {
         hist->Fill(value);
@@ -286,7 +286,7 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateLinearModelDataHistogram(int d
     double x_max{ std::get<1>(data_range) };
 
     auto hist_name{ "data_dim" + std::to_string(dimension_id) };
-    auto hist{ ROOTHelper::CreateHist1D(hist_name.data(), "", 25, x_min, x_max) };
+    auto hist{ root_helper::CreateHist1D(hist_name.data(), "", 25, x_min, x_max) };
     for (auto & value : data_list)
     {
         hist->Fill(value);
@@ -300,7 +300,7 @@ std::unique_ptr<TH2D> PotentialPlotBuilder::CreateDistanceToMapValueHistogram(
     auto distance_range{ GetLocalEntry().GetDistanceRange(0.0) };
     auto map_value_range{ GetLocalEntry().GetResponseRange(0.1) };
     auto hist{
-        ROOTHelper::CreateHist2D(
+        root_helper::CreateHist2D(
             "hist_distance_mapvalue", "Distance vs Map Value",
             x_bin_size, std::get<0>(distance_range), std::get<1>(distance_range),
             y_bin_size, std::get<0>(map_value_range), std::get<1>(map_value_range))
@@ -369,7 +369,7 @@ std::vector<std::unique_ptr<TH1D>> PotentialPlotBuilder::CreateMainChainAtomGaus
             Form("h%d_%d_%d_%d", static_cast<int>(extra_id), static_cast<int>(i),
                 static_cast<int>(residue), par_id)
         };
-        auto hist{ ROOTHelper::CreateHist1D(name, "", 4, 0.5, 4.5) };
+        auto hist{ root_helper::CreateHist1D(name, "", 4, 0.5, 4.5) };
         for (auto & [chain_id, values_map_tmp] : values_map)
         {
             for (auto & [sequence_id, values] : values_map_tmp)
@@ -389,7 +389,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToResi
     {
         return nullptr;
     }
-    auto graph{ ROOTHelper::CreateGraphErrors() };
+    auto graph{ root_helper::CreateGraphErrors() };
     const auto model_view{ GetModelView() };
 
     auto count{ 0 };
@@ -416,7 +416,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBondGausEstimateToResi
     {
         return nullptr;
     }
-    auto graph{ ROOTHelper::CreateGraphErrors() };
+    auto graph{ root_helper::CreateGraphErrors() };
     const auto model_view{ GetModelView() };
 
     auto count{ 0 };
@@ -443,7 +443,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToSpot
     {
         return nullptr;
     }
-    auto graph{ ROOTHelper::CreateGraphErrors() };
+    auto graph{ root_helper::CreateGraphErrors() };
     const auto model_view{ GetModelView() };
 
     auto count{ 0 };
@@ -473,7 +473,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToAtom
     {
         return nullptr;
     }
-    auto graph{ ROOTHelper::CreateGraphErrors() };
+    auto graph{ root_helper::CreateGraphErrors() };
     const auto model_view{ GetModelView() };
     auto count{ 0 };
     for (size_t i = 0; i < atom_id_list.size(); i++)
@@ -506,7 +506,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatte
         return nullptr;
     }
     auto atom_list{ GetModelView().GetAtomObjectList(group_key, class_key) };
-    auto graph{ ROOTHelper::CreateGraphErrors() };
+    auto graph{ root_helper::CreateGraphErrors() };
     auto count{ 0 };
     for (auto atom : atom_list)
     {
@@ -534,7 +534,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatte
     {
         return nullptr;
     }
-    auto graph{ ROOTHelper::CreateGraphErrors() };
+    auto graph{ root_helper::CreateGraphErrors() };
 
     auto count{ 0 };
     for (auto & group_key : group_key_list)
@@ -564,7 +564,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBondGausEstimateScatte
     {
         return nullptr;
     }
-    auto graph{ ROOTHelper::CreateGraphErrors() };
+    auto graph{ root_helper::CreateGraphErrors() };
 
     auto count{ 0 };
     for (auto & group_key : group_key_list)
@@ -595,7 +595,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatte
     }
 
     auto model_object{ m_model_object };
-    auto graph{ ROOTHelper::CreateGraphErrors() };
+    auto graph{ root_helper::CreateGraphErrors() };
     auto count{ 0 };
     for (auto & atom : model_object->GetSelectedAtoms())
     {
@@ -626,7 +626,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBondGausEstimateScatte
     }
 
     auto model_object{ m_model_object };
-    auto graph{ ROOTHelper::CreateGraphErrors() };
+    auto graph{ root_helper::CreateGraphErrors() };
     auto count{ 0 };
     for (auto & bond : model_object->GetSelectedBonds())
     {
@@ -661,7 +661,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateGausEstimateScatterGra
         Logger::Log(LogLevel::Error, "Group key is not available.");
         return nullptr;
     }
-    auto graph{ ROOTHelper::CreateGraphErrors() };
+    auto graph{ root_helper::CreateGraphErrors() };
 
     const auto & atom_list1{ GetModelView().GetAtomObjectList(group_key1, class_key) };
     const auto & atom_list2{ GetModelView().GetAtomObjectList(group_key2, class_key) };
@@ -690,7 +690,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateGausEstimateScatterGra
 
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateDistanceToMapValueGraph()
 {
-    auto graph{ ROOTHelper::CreateGraphErrors() };
+    auto graph{ root_helper::CreateGraphErrors() };
     auto count{ 0 };
     for (const auto & sample : GetLocalEntry().GetSamplingEntries())
     {
@@ -706,7 +706,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateDistanceToMapValueGrap
 
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateLinearModelDistanceToMapValueGraph()
 {
-    auto graph{ ROOTHelper::CreateGraphErrors() };
+    auto graph{ root_helper::CreateGraphErrors() };
     auto count{ 0 };
     for (const auto & point : GetLocalEntry().GetLinearModelSeries())
     {
@@ -720,7 +720,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToMapVal
     int bin_size, double x_min, double x_max)
 {
     auto data_array{ GetLocalEntry().GetBinnedDistanceResponseSeries(bin_size, x_min, x_max) };
-    auto graph{ ROOTHelper::CreateGraphErrors(bin_size) };
+    auto graph{ root_helper::CreateGraphErrors(bin_size) };
     auto count{ 0 };
     for (const auto & point : data_array)
     {
@@ -738,7 +738,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateInRangeAtomsToGausEsti
         return nullptr;
     }
     auto model_object{ m_model_object };
-    auto graph{ ROOTHelper::CreateGraphErrors() };
+    auto graph{ root_helper::CreateGraphErrors() };
 
     auto count{ 0 };
     for (auto & atom : GetModelView().GetAtomObjectList(group_key, class_key))
@@ -763,7 +763,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateCOMDistanceToGausEstim
         return nullptr;
     }
     auto model_object{ m_model_object };
-    auto graph{ ROOTHelper::CreateGraphErrors() };
+    auto graph{ root_helper::CreateGraphErrors() };
     auto center_of_mass_pos{ model_object->GetCenterOfMassPosition() };
 
     auto count{ 0 };
@@ -792,7 +792,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomXYPositionTomograp
     auto com_pos{
         com_center ? model_object->GetCenterOfMassPosition() : std::array<float, 3>{ 0.0, 0.0, 0.0 }
     };
-    auto graph{ ROOTHelper::CreateGraphErrors() };
+    auto graph{ root_helper::CreateGraphErrors() };
     auto z_pos{ model_object->GetModelPosition(2, normalized_z_pos) };
     auto window_width{ 0.5 * model_object->GetModelLength(2) * z_ratio_window };
     auto z_window_min{ z_pos - window_width };
@@ -822,7 +822,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalLinearModelFunctionOLS
     const auto beta{ atom_local_entry.GetEstimateOLS().ToBeta() };
     auto beta_0{ beta(0) };
     auto beta_1{ beta(1) };
-    return ROOTHelper::CreateLinearModelFunction("linear", beta_0, beta_1);
+    return root_helper::CreateLinearModelFunction("linear", beta_0, beta_1);
 }
 
 std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalLinearModelFunctionMDPDE() const
@@ -835,7 +835,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalLinearModelFunctionMDP
     const auto beta{ atom_local_entry.GetEstimateMDPDE().ToBeta() };
     auto beta_0{ beta(0) };
     auto beta_1{ beta(1) };
-    return ROOTHelper::CreateLinearModelFunction("linear", beta_0, beta_1);
+    return root_helper::CreateLinearModelFunction("linear", beta_0, beta_1);
 }
 
 std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalGausFunctionOLS() const
@@ -847,7 +847,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalGausFunctionOLS() cons
     const auto atom_local_entry{ LocalPotentialView::RequireFor(*m_atom_object) };
     auto amplitude{ atom_local_entry.GetEstimateOLS().amplitude };
     auto width{ atom_local_entry.GetEstimateOLS().width };
-    return ROOTHelper::CreateGaus3DFunctionIn1D("gaus", amplitude, width);
+    return root_helper::CreateGaus3DFunctionIn1D("gaus", amplitude, width);
 }
 
 std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalGausFunctionMDPDE() const
@@ -859,7 +859,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalGausFunctionMDPDE() co
     const auto atom_local_entry{ LocalPotentialView::RequireFor(*m_atom_object) };
     auto amplitude{ atom_local_entry.GetEstimateMDPDE().amplitude };
     auto width{ atom_local_entry.GetEstimateMDPDE().width };
-    return ROOTHelper::CreateGaus3DFunctionIn1D("gaus", amplitude, width);
+    return root_helper::CreateGaus3DFunctionIn1D("gaus", amplitude, width);
 }
 
 std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupLinearModelFunctionMean(
@@ -872,7 +872,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupLinearModelFunctionMea
     const auto beta{ GetModelView().GetAtomGroupMean(group_key, class_key).ToBeta() };
     auto mu_0{ beta(0) };
     auto mu_1{ beta(1) };
-    return ROOTHelper::CreateLinearModelFunction("linear_mean", mu_0, mu_1, x_min, x_max);
+    return root_helper::CreateLinearModelFunction("linear_mean", mu_0, mu_1, x_min, x_max);
 }
 
 std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupLinearModelFunctionPrior(
@@ -885,7 +885,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupLinearModelFunctionPri
     const auto beta{ GetModelView().GetAtomGroupPrior(group_key, class_key).ToBeta() };
     auto mu_0{ beta(0) };
     auto mu_1{ beta(1) };
-    return ROOTHelper::CreateLinearModelFunction("linear_prior", mu_0, mu_1, x_min, x_max);
+    return root_helper::CreateLinearModelFunction("linear_prior", mu_0, mu_1, x_min, x_max);
 }
 
 std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionMean(
@@ -898,7 +898,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionMean(
     const auto & mean{ GetModelView().GetAtomGroupMean(group_key, class_key) };
     auto amplitude{ mean.amplitude };
     auto width{ mean.width };
-    return ROOTHelper::CreateGaus3DFunctionIn1D("group_gaus_mean", amplitude, width);
+    return root_helper::CreateGaus3DFunctionIn1D("group_gaus_mean", amplitude, width);
 }
 
 std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionPrior(
@@ -911,7 +911,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionPrior(
     const auto & prior{ GetModelView().GetAtomGroupPrior(group_key, class_key) };
     auto amplitude{ prior.amplitude };
     auto width{ prior.width };
-    return ROOTHelper::CreateGaus3DFunctionIn1D("group_gaus_prior", amplitude, width);
+    return root_helper::CreateGaus3DFunctionIn1D("group_gaus_prior", amplitude, width);
 }
 
 std::unique_ptr<TF1> PotentialPlotBuilder::CreateBondGroupGausFunctionPrior(
@@ -924,7 +924,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateBondGroupGausFunctionPrior(
     const auto & prior{ GetModelView().GetBondGroupPrior(group_key, class_key) };
     auto amplitude{ prior.amplitude };
     auto width{ prior.width };
-    return ROOTHelper::CreateGaus2DFunctionIn1D("group_gaus_prior", amplitude, width);
+    return root_helper::CreateGaus2DFunctionIn1D("group_gaus_prior", amplitude, width);
 }
 
 #endif
@@ -943,7 +943,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateNormalizedAtomGausEsti
         return nullptr;
     }
     auto model_object{ m_model_object };
-    auto graph{ ROOTHelper::CreateGraphErrors() };
+    auto graph{ root_helper::CreateGraphErrors() };
     std::unordered_map<int, double> amplitude_diff_to_carbonyl_oxygen_map;
     for (auto & atom : model_object->GetSelectedAtoms())
     {
@@ -988,7 +988,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateNormalizedBondGausEsti
         return nullptr;
     }
     auto model_object{ m_model_object };
-    auto graph{ ROOTHelper::CreateGraphErrors() };
+    auto graph{ root_helper::CreateGraphErrors() };
     std::unordered_map<int, double> amplitude_diff_to_carbonyl_oxygen_map;
     for (auto & bond : model_object->GetSelectedBonds())
     {
@@ -1048,7 +1048,7 @@ PotentialPlotBuilder::CreateAtomMapValueToSequenceIDGraphMap(
         if (sequence_id < 0) continue;
         if (graph_map.find(chain_id) == graph_map.end())
         {
-            graph_map[chain_id] = ROOTHelper::CreateGraphErrors();
+            graph_map[chain_id] = root_helper::CreateGraphErrors();
             count_map[chain_id] = 0;
         }
         auto x_value{ static_cast<double>(sequence_id) };
@@ -1082,7 +1082,7 @@ PotentialPlotBuilder::CreateAtomQScoreToSequenceIDGraphMap(
         if (sequence_id < 0) continue;
         if (graph_map.find(chain_id) == graph_map.end())
         {
-            graph_map[chain_id] = ROOTHelper::CreateGraphErrors();
+            graph_map[chain_id] = root_helper::CreateGraphErrors();
             count_map[chain_id] = 0;
         }
         auto x_value{ static_cast<double>(sequence_id) };
@@ -1126,7 +1126,7 @@ PotentialPlotBuilder::CreateAtomGausEstimateToSequenceIDGraphMap(
         if (sequence_id < 0) continue;
         if (graph_map.find(chain_id) == graph_map.end())
         {
-            graph_map[chain_id] = ROOTHelper::CreateGraphErrors();
+            graph_map[chain_id] = root_helper::CreateGraphErrors();
             count_map[chain_id] = 0;
         }
         auto x_value{ static_cast<double>(sequence_id) };
@@ -1159,7 +1159,7 @@ PotentialPlotBuilder::CreateBondGausEstimateToSequenceIDGraphMap(
         if (sequence_id < 0) continue;
         if (graph_map.find(chain_id) == graph_map.end())
         {
-            graph_map[chain_id] = ROOTHelper::CreateGraphErrors();
+            graph_map[chain_id] = root_helper::CreateGraphErrors();
             count_map[chain_id] = 0;
         }
         auto x_value{ static_cast<double>(sequence_id) };
@@ -1199,7 +1199,7 @@ PotentialPlotBuilder::CreateAtomGausEstimatePosteriorToSequenceIDGraphMap(
         if (sequence_id < 0) continue;
         if (graph_map.find(chain_id) == graph_map.end())
         {
-            graph_map[chain_id] = ROOTHelper::CreateGraphErrors();
+            graph_map[chain_id] = root_helper::CreateGraphErrors();
             count_map[chain_id] = 0;
         }
         auto x_value{ static_cast<double>(sequence_id) };

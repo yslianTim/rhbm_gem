@@ -27,87 +27,78 @@ class TGraphErrors;
 class TGraph2DErrors;
 #endif
 
-class ROOTHelper
-{
+namespace rhbm_gem {
+namespace root_helper {
 
-public:
-    ROOTHelper() = default;
-    ~ROOTHelper() = default;
-    #ifdef HAVE_ROOT
-    static std::unique_ptr<TCanvas> CreateCanvas(const std::string & name, const std::string & title, int width=600, int height=600);
-    static std::unique_ptr<TPad> CreatePad(const std::string & name, const std::string & title, double x_low, double y_low, double x_up, double y_up);
-    static std::unique_ptr<TH1D> CreateHist1D(const std::string & name, const std::string & title, int x_bin, double x_min, double x_max);
-    static std::unique_ptr<TH2D> CreateHist2D(const std::string & name, const std::string & title, int x_bin, double x_min, double x_max, int y_bin, double y_min, double y_max);
-    static std::unique_ptr<TGraphErrors> CreateGraphErrors();
-    static std::unique_ptr<TGraphErrors> CreateGraphErrors(const int & point_size);
-    static std::unique_ptr<TGraph2DErrors> CreateGraph2DErrors();
-    static std::unique_ptr<TGraph2DErrors> CreateGraph2DErrors(const int & point_size);
-    static std::unique_ptr<TGraph2DErrors> CreateGraph2DErrors(const int & point_size, std::vector<double> & x, std::vector<double> & y, std::vector<double> & z);
-    static std::unique_ptr<TPaveText> CreatePaveText(double x1, double y1, double x2, double y2, std::string option="nbNDC", bool in_partition=false);
-    static std::unique_ptr<TLegend> CreateLegend(double x1, double y1, double x2, double y2, bool in_partition=false);
-    static std::unique_ptr<TF1> CreateFunction1D(const std::string & name, const std::string & form);
-    static std::unique_ptr<TF1> CreateLinearModelFunction(const std::string & name, double beta_0, double beta_1, double x_min=-2.0, double x_max=1.0);
-    static std::unique_ptr<TF1> CreateGaus2DFunctionIn1D(const std::string & name, double amplitude, double width, double x_min=0.0, double x_max=1.5);
-    static std::unique_ptr<TF1> CreateGaus3DFunctionIn1D(const std::string & name, double amplitude, double width, double x_min=0.0, double x_max=1.5);
-    static std::unique_ptr<TLine> CreateLine(double x1, double y1, double x2, double y2);
-    static void PrintCanvasOpen(TCanvas * canvas, const std::string & name);
-    static void PrintCanvasPad(TCanvas * canvas, const std::string & name);
-    static void PrintCanvasClose(TCanvas * canvas, const std::string & name);
-    static void SetPadFrameAttribute(
+#ifdef HAVE_ROOT
+    std::unique_ptr<TCanvas> CreateCanvas(const std::string & name, const std::string & title, int width=600, int height=600);
+    std::unique_ptr<TPad> CreatePad(const std::string & name, const std::string & title, double x_low, double y_low, double x_up, double y_up);
+    std::unique_ptr<TH1D> CreateHist1D(const std::string & name, const std::string & title, int x_bin, double x_min, double x_max);
+    std::unique_ptr<TH2D> CreateHist2D(const std::string & name, const std::string & title, int x_bin, double x_min, double x_max, int y_bin, double y_min, double y_max);
+    std::unique_ptr<TGraphErrors> CreateGraphErrors();
+    std::unique_ptr<TGraphErrors> CreateGraphErrors(const int & point_size);
+    std::unique_ptr<TGraph2DErrors> CreateGraph2DErrors();
+    std::unique_ptr<TGraph2DErrors> CreateGraph2DErrors(const int & point_size);
+    std::unique_ptr<TGraph2DErrors> CreateGraph2DErrors(const int & point_size, std::vector<double> & x, std::vector<double> & y, std::vector<double> & z);
+    std::unique_ptr<TPaveText> CreatePaveText(double x1, double y1, double x2, double y2, std::string option="nbNDC", bool in_partition=false);
+    std::unique_ptr<TLegend> CreateLegend(double x1, double y1, double x2, double y2, bool in_partition=false);
+    std::unique_ptr<TF1> CreateFunction1D(const std::string & name, const std::string & form);
+    std::unique_ptr<TF1> CreateLinearModelFunction(const std::string & name, double beta_0, double beta_1, double x_min=-2.0, double x_max=1.0);
+    std::unique_ptr<TF1> CreateGaus2DFunctionIn1D(const std::string & name, double amplitude, double width, double x_min=0.0, double x_max=1.5);
+    std::unique_ptr<TF1> CreateGaus3DFunctionIn1D(const std::string & name, double amplitude, double width, double x_min=0.0, double x_max=1.5);
+    std::unique_ptr<TLine> CreateLine(double x1, double y1, double x2, double y2);
+    void PrintCanvasOpen(TCanvas * canvas, const std::string & name);
+    void PrintCanvasPad(TCanvas * canvas, const std::string & name);
+    void PrintCanvasClose(TCanvas * canvas, const std::string & name);
+    void SetPadFrameAttribute(
         TAttPad * pad, int mode=0, short size=0, short fill_style=4000, short fill_color=0,
         short line_style=0, short line_width=1, short line_color=1);
-    static void SetPadMarginAttribute(
+    void SetPadMarginAttribute(
         TAttPad * pad, float left, float right, float bottom, float top);
-    static void SetPadMarginInCanvas(TVirtualPad * pad, double left, double right, double bottom, double top);
-    static void SetPaveTextMarginInCanvas(TVirtualPad * pad, TPaveText * pave, double left, double right, double bottom, double top);
-    static void SetLegendMarginInCanvas(TVirtualPad * pad, TLegend * legend, double left, double right, double bottom, double top);
-    static void SetAxisTitleAttribute(
+    void SetPadMarginInCanvas(TVirtualPad * pad, double left, double right, double bottom, double top);
+    void SetPaveTextMarginInCanvas(TVirtualPad * pad, TPaveText * pave, double left, double right, double bottom, double top);
+    void SetLegendMarginInCanvas(TVirtualPad * pad, TLegend * legend, double left, double right, double bottom, double top);
+    void SetAxisTitleAttribute(
         TAttAxis * axis, float size, float offset=1.0f, short font=133, short color=1);
-    static void SetAxisLabelAttribute(
+    void SetAxisLabelAttribute(
         TAttAxis * axis, float size, float offset=0.005f, short font=133, short color=1);
-    static void SetAxisTickAttribute(
+    void SetAxisTickAttribute(
         TAttAxis * axis, float length=0.03f, int division=510);
-    static void SetTextAttribute(
+    void SetTextAttribute(
         TAttText * _text,
         float size=1.0f, short font=133, short align=12, float angle=0.0f, short color=1, float transparent=1.0f);
-    static void SetLineAttribute(
+    void SetLineAttribute(
         TAttLine * line, short style=1, short width=1, short color=1, float transparent=1.0f);
-    static void SetFillAttribute(
+    void SetFillAttribute(
         TAttFill * fill, short style=4000, short color=0, float transparent=1.0f);
-    static void SetMarkerAttribute(
+    void SetMarkerAttribute(
         TAttMarker * marker, short style, float size=1.0f, short color=1, float transparent=1.0f);
-    static void SetPaveAttribute(
+    void SetPaveAttribute(
         TPave * pave, int border_size=0, double radius=0.2);
-    static void SetBoxAttribute(
+    void SetBoxAttribute(
         TBox * box, double left, double right, double bottom, double top);
-    static void SetPadInCanvas(TVirtualPad * pad, int width, int height, int division_x=1, int division_y=1, float margin_x=0.0f, float margin_y=0.0f);
-    static void SetPadDefaultStyle(TVirtualPad * pad);
-    static void SetPadRangeInCanvas(TVirtualPad * pad, double x1, double y1, double x2, double y2);
-    static void SetPadLayout(
+    void SetPadInCanvas(TVirtualPad * pad, int width, int height, int division_x=1, int division_y=1, float margin_x=0.0f, float margin_y=0.0f);
+    void SetPadDefaultStyle(TVirtualPad * pad);
+    void SetPadRangeInCanvas(TVirtualPad * pad, double x1, double y1, double x2, double y2);
+    void SetPadLayout(
         TVirtualPad * pad, int grid_x=0, int grid_y=0, int log_x=0, int log_y=0, int tick_x=0, int tick_y=1);
-    static void SetCanvasDefaultStyle(TCanvas * canvas);
-    static void SetPaveTextDefaultStyle(TPaveText * text);
-    static void SetLegendDefaultStyle(TLegend * legend);
-    static void SetCanvasPartition(
+    void SetCanvasDefaultStyle(TCanvas * canvas);
+    void SetPaveTextDefaultStyle(TPaveText * text);
+    void SetLegendDefaultStyle(TLegend * legend);
+    void SetCanvasPartition(
         TCanvas * canvas, const int Nx, const int Ny,
         float lMargin, float rMargin, float bMargin, float tMargin,
         float vSpacing = 0.0, float hSpacing = 0.0);
-    static void FindPadInCanvasPartition(TCanvas * canvas, int id_x, int id_y);
-    static float GetPadXfactorInCanvasPartition(TCanvas * canvas, TVirtualPad * pad);
-    static float GetPadYfactorInCanvasPartition(TCanvas * canvas, TVirtualPad * pad);
-    static double GetXtoPadInCanvasPartition(double x);
-    static double GetYtoPadInCanvasPartition(double y);
-    static double ConvertGlobalTickLengthToPadTickLength(TVirtualPad * pad, double global_tick_length, bool use_width=true);
-    static double GetLinearRegressionRSquare(const TGraphErrors * graph, const TF1 * function);
-    static double PerformLinearRegression(TGraphErrors * graph, double & slope, double & intercept);
-    static std::tuple<double, double> GetRangeInGraph(TGraphErrors * graph);
-    #endif
+    void FindPadInCanvasPartition(TCanvas * canvas, int id_x, int id_y);
+    float GetPadXfactorInCanvasPartition(TCanvas * canvas, TVirtualPad * pad);
+    float GetPadYfactorInCanvasPartition(TCanvas * canvas, TVirtualPad * pad);
+    double GetXtoPadInCanvasPartition(double x);
+    double GetYtoPadInCanvasPartition(double y);
+    double ConvertGlobalTickLengthToPadTickLength(TVirtualPad * pad, double global_tick_length, bool use_width=true);
+    double GetLinearRegressionRSquare(const TGraphErrors * graph, const TF1 * function);
+    double PerformLinearRegression(TGraphErrors * graph, double & slope, double & intercept);
+    std::tuple<double, double> GetRangeInGraph(TGraphErrors * graph);
+#endif
 
-private:
-    #ifdef HAVE_ROOT
-    static double LinearModelFunction(double * x, double * par);
-    static double Gaus2DModelFunction(double * x, double * par);
-    static double Gaus3DModelFunction(double * x, double * par);
-    #endif
-
-};
+} // namespace root_helper
+} // namespace rhbm_gem

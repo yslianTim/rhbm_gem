@@ -911,12 +911,12 @@ void PrintDataOutlierResult(
     gStyle->SetGridColor(kGray);
     const int col_size{ 3 };
     const int row_size{ 2 };
-    auto canvas{ ROOTHelper::CreateCanvas("test","", 1500, 750) };
-    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::SetCanvasPartition(
+    auto canvas{ root_helper::CreateCanvas("test","", 1500, 750) };
+    root_helper::SetCanvasDefaultStyle(canvas.get());
+    root_helper::SetCanvasPartition(
         canvas.get(), col_size, row_size, 0.17f, 0.08f, 0.12f, 0.14f, 0.01f, 0.01f
     );
-    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+    root_helper::PrintCanvasOpen(canvas.get(), file_path);
 
     std::vector<std::unique_ptr<TGraphErrors>> graph_ols_list[col_size][row_size];
     std::vector<std::unique_ptr<TGraphErrors>> graph_mdpde_list[col_size][row_size];
@@ -927,9 +927,9 @@ void PrintDataOutlierResult(
     {
         for (size_t j = 0; j < row_size; j++)
         {
-            auto graph_ols{ ROOTHelper::CreateGraphErrors() };
-            auto graph_mdpde{ ROOTHelper::CreateGraphErrors() };
-            auto graph_train{ ROOTHelper::CreateGraphErrors() };
+            auto graph_ols{ root_helper::CreateGraphErrors() };
+            auto graph_mdpde{ root_helper::CreateGraphErrors() };
+            auto graph_train{ root_helper::CreateGraphErrors() };
             for (int p = 0; p < static_cast<int>(outlier_list.size()); p++)
             {
                 auto x_value{ (is_neighbor_distance) ?
@@ -992,19 +992,19 @@ void PrintDataOutlierResult(
         for (int j = 0; j < row_size; j++)
         {
             auto par_id{ row_size - j - 1 };
-            ROOTHelper::FindPadInCanvasPartition(canvas.get(), i, j);
-            ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
-            ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-            auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
-            auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
-            frame[i][j] = ROOTHelper::CreateHist2D(Form("frame_%d_%d", i, j),"", 500, x_min[i], x_max[i], 500, y_min[par_id], y_max[par_id]);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 50.0f, 1.0f, 133);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 40.0f, 0.005f, 133);
-            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.08/x_factor), 505);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 50.0f, 1.2f, 133);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 45.0f, 0.02f, 133);
-            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 505);
-            ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
+            root_helper::FindPadInCanvasPartition(canvas.get(), i, j);
+            root_helper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+            root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+            auto x_factor{ root_helper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
+            auto y_factor{ root_helper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
+            frame[i][j] = root_helper::CreateHist2D(Form("frame_%d_%d", i, j),"", 500, x_min[i], x_max[i], 500, y_min[par_id], y_max[par_id]);
+            root_helper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 50.0f, 1.0f, 133);
+            root_helper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 40.0f, 0.005f, 133);
+            root_helper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.08/x_factor), 505);
+            root_helper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 50.0f, 1.2f, 133);
+            root_helper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 45.0f, 0.02f, 133);
+            root_helper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 505);
+            root_helper::SetLineAttribute(frame[i][j].get(), 1, 0);
             frame[i][j]->GetXaxis()->SetTitle("");
             frame[i][j]->GetYaxis()->SetTitle("");
             frame[i][j]->GetXaxis()->CenterTitle();
@@ -1017,23 +1017,23 @@ void PrintDataOutlierResult(
             short color_train{ kRed };
             for (auto & graph : graph_ols_list[i][par_id])
             {
-                ROOTHelper::SetMarkerAttribute(graph.get(), 24, 1.5f, color_ols);
-                ROOTHelper::SetLineAttribute(graph.get(), 2, 2, color_ols);
-                ROOTHelper::SetFillAttribute(graph.get(), 1001, color_ols, 0.2f);
+                root_helper::SetMarkerAttribute(graph.get(), 24, 1.5f, color_ols);
+                root_helper::SetLineAttribute(graph.get(), 2, 2, color_ols);
+                root_helper::SetFillAttribute(graph.get(), 1001, color_ols, 0.2f);
                 graph->Draw("PL3");
             }
             for (auto & graph : graph_mdpde_list[i][par_id])
             {
-                ROOTHelper::SetMarkerAttribute(graph.get(), 25, 1.5f, color_mdpde);
-                ROOTHelper::SetLineAttribute(graph.get(), 1, 2, color_mdpde);
-                ROOTHelper::SetFillAttribute(graph.get(), 1001, color_mdpde, 0.2f);
+                root_helper::SetMarkerAttribute(graph.get(), 25, 1.5f, color_mdpde);
+                root_helper::SetLineAttribute(graph.get(), 1, 2, color_mdpde);
+                root_helper::SetFillAttribute(graph.get(), 1001, color_mdpde, 0.2f);
                 graph->Draw("PL3");
             }
             for (auto & graph : graph_train_list[i][par_id])
             {
-                ROOTHelper::SetMarkerAttribute(graph.get(), 20, 1.5f, color_train);
-                ROOTHelper::SetLineAttribute(graph.get(), 3, 2, color_train);
-                ROOTHelper::SetFillAttribute(graph.get(), 1001, color_train, 0.2f);
+                root_helper::SetMarkerAttribute(graph.get(), 20, 1.5f, color_train);
+                root_helper::SetLineAttribute(graph.get(), 3, 2, color_train);
+                root_helper::SetFillAttribute(graph.get(), 1001, color_train, 0.2f);
                 if (options.options.tester_choice != TesterType::MODEL_ALPHA_DATA)
                 {
                     graph->Draw("PL3");
@@ -1042,23 +1042,23 @@ void PrintDataOutlierResult(
 
             if (i == 0)
             {
-                title_y_text[j] = ROOTHelper::CreatePaveText(-0.68, 0.30, 0.00, 0.70, "nbNDC ARC", true);
-                ROOTHelper::SetPaveTextDefaultStyle(title_y_text[j].get());
-                ROOTHelper::SetPaveAttribute(title_y_text[j].get(), 0, 0.1);
-                ROOTHelper::SetLineAttribute(title_y_text[j].get(), 1, 0);
-                ROOTHelper::SetTextAttribute(title_y_text[j].get(), 45.0f, 133, 22);
-                ROOTHelper::SetFillAttribute(title_y_text[j].get(), 1001, kAzure-7, 0.5f);
+                title_y_text[j] = root_helper::CreatePaveText(-0.68, 0.30, 0.00, 0.70, "nbNDC ARC", true);
+                root_helper::SetPaveTextDefaultStyle(title_y_text[j].get());
+                root_helper::SetPaveAttribute(title_y_text[j].get(), 0, 0.1);
+                root_helper::SetLineAttribute(title_y_text[j].get(), 1, 0);
+                root_helper::SetTextAttribute(title_y_text[j].get(), 45.0f, 133, 22);
+                root_helper::SetFillAttribute(title_y_text[j].get(), 1001, kAzure-7, 0.5f);
                 title_y_text[j]->AddText(title_y_list[static_cast<size_t>(par_id)].data());
                 title_y_text[j]->Draw();
             }
 
             if (j == row_size - 1)
             {
-                title_x_text[i] = ROOTHelper::CreatePaveText(0.10, 0.95, 0.90, 1.15, "nbNDC ARC", true);
-                ROOTHelper::SetPaveTextDefaultStyle(title_x_text[i].get());
-                ROOTHelper::SetPaveAttribute(title_x_text[i].get(), 0, 0.2);
-                ROOTHelper::SetTextAttribute(title_x_text[i].get(), 45.0f, 133, 22);
-                ROOTHelper::SetFillAttribute(title_x_text[i].get(), 1001, kRed+1, 0.5f);
+                title_x_text[i] = root_helper::CreatePaveText(0.10, 0.95, 0.90, 1.15, "nbNDC ARC", true);
+                root_helper::SetPaveTextDefaultStyle(title_x_text[i].get());
+                root_helper::SetPaveAttribute(title_x_text[i].get(), 0, 0.2);
+                root_helper::SetTextAttribute(title_x_text[i].get(), 45.0f, 133, 22);
+                root_helper::SetFillAttribute(title_x_text[i].get(), 1001, kRed+1, 0.5f);
                 title_x_text[i]->AddText(Form("#sigma_{#epsilon} = %.1f%% D_{max}", error_value[i]));
                 title_x_text[i]->Draw();
             }
@@ -1066,16 +1066,16 @@ void PrintDataOutlierResult(
     }
 
     canvas->cd();
-    auto pad_extra0{ ROOTHelper::CreatePad("pad_extra0","", 0.02, 0.92, 0.98, 1.00) };
-    //auto pad_extra0{ ROOTHelper::CreatePad("pad_extra0","", 0.20, 0.92, 0.98, 1.00) };
+    auto pad_extra0{ root_helper::CreatePad("pad_extra0","", 0.02, 0.92, 0.98, 1.00) };
+    //auto pad_extra0{ root_helper::CreatePad("pad_extra0","", 0.20, 0.92, 0.98, 1.00) };
     pad_extra0->Draw();
     pad_extra0->cd();
-    ROOTHelper::SetPadDefaultStyle(pad_extra0.get());
-    ROOTHelper::SetFillAttribute(pad_extra0.get(), 4000);
-    auto legend{ ROOTHelper::CreateLegend(0.0, 0.0, 1.0, 1.0, false) };
-    ROOTHelper::SetLegendDefaultStyle(legend.get());
-    ROOTHelper::SetFillAttribute(legend.get(), 4000);
-    ROOTHelper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
+    root_helper::SetPadDefaultStyle(pad_extra0.get());
+    root_helper::SetFillAttribute(pad_extra0.get(), 4000);
+    auto legend{ root_helper::CreateLegend(0.0, 0.0, 1.0, 1.0, false) };
+    root_helper::SetLegendDefaultStyle(legend.get());
+    root_helper::SetFillAttribute(legend.get(), 4000);
+    root_helper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
     legend->SetMargin(0.25f);
     legend->SetNColumns(3);
     if (options.options.tester_choice == TesterType::MODEL_ALPHA_DATA)
@@ -1097,15 +1097,15 @@ void PrintDataOutlierResult(
     legend->Draw();
 
     canvas->cd();
-    auto pad_extra1{ ROOTHelper::CreatePad("pad_extra1","", 0.17, 0.00, 0.92, 0.06) };
+    auto pad_extra1{ root_helper::CreatePad("pad_extra1","", 0.17, 0.00, 0.92, 0.06) };
     pad_extra1->Draw();
     pad_extra1->cd();
-    ROOTHelper::SetPadDefaultStyle(pad_extra1.get());
-    ROOTHelper::SetFillAttribute(pad_extra1.get(), 4000);
-    auto bottom_title_text{ ROOTHelper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
-    ROOTHelper::SetPaveTextDefaultStyle(bottom_title_text.get());
-    ROOTHelper::SetFillAttribute(bottom_title_text.get(), 4000);
-    ROOTHelper::SetTextAttribute(bottom_title_text.get(), 45.0f, 133, 22);
+    root_helper::SetPadDefaultStyle(pad_extra1.get());
+    root_helper::SetFillAttribute(pad_extra1.get(), 4000);
+    auto bottom_title_text{ root_helper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
+    root_helper::SetPaveTextDefaultStyle(bottom_title_text.get());
+    root_helper::SetFillAttribute(bottom_title_text.get(), 4000);
+    root_helper::SetTextAttribute(bottom_title_text.get(), 45.0f, 133, 22);
     if (is_neighbor_distance)
     {
         bottom_title_text->AddText("Distance to Neighbor Atom (Angstrom)");
@@ -1117,22 +1117,22 @@ void PrintDataOutlierResult(
     bottom_title_text->Draw();
 
     canvas->cd();
-    auto pad_extra2{ ROOTHelper::CreatePad("pad_extra2","", 0.96, 0.10, 1.00, 0.86) };
+    auto pad_extra2{ root_helper::CreatePad("pad_extra2","", 0.96, 0.10, 1.00, 0.86) };
     pad_extra2->Draw();
     pad_extra2->cd();
-    ROOTHelper::SetPadDefaultStyle(pad_extra2.get());
-    ROOTHelper::SetFillAttribute(pad_extra2.get(), 4000);
-    auto right_title_text{ ROOTHelper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
-    ROOTHelper::SetPaveTextDefaultStyle(right_title_text.get());
-    ROOTHelper::SetFillAttribute(right_title_text.get(), 4000);
-    ROOTHelper::SetTextAttribute(right_title_text.get(), 50.0f, 133, 22);
+    root_helper::SetPadDefaultStyle(pad_extra2.get());
+    root_helper::SetFillAttribute(pad_extra2.get(), 4000);
+    auto right_title_text{ root_helper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
+    root_helper::SetPaveTextDefaultStyle(right_title_text.get());
+    root_helper::SetFillAttribute(right_title_text.get(), 4000);
+    root_helper::SetTextAttribute(right_title_text.get(), 50.0f, 133, 22);
     right_title_text->AddText("Normalized Bias");
     auto text{ right_title_text->GetLineWith("Bias") };
     text->SetTextAngle(90.0f);
     right_title_text->Draw();
 
-    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
-    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    root_helper::PrintCanvasPad(canvas.get(), file_path);
+    root_helper::PrintCanvasClose(canvas.get(), file_path);
     Logger::Log(LogLevel::Info, " Output file: " + file_path.string());
     #endif
 }
@@ -1170,12 +1170,12 @@ void PrintMemberOutlierResult(
     gStyle->SetGridColor(kGray);
     const int col_size{ 2 };
     const int row_size{ 2 };
-    auto canvas{ ROOTHelper::CreateCanvas("test","", 1500, 750) };
-    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::SetCanvasPartition(
+    auto canvas{ root_helper::CreateCanvas("test","", 1500, 750) };
+    root_helper::SetCanvasDefaultStyle(canvas.get());
+    root_helper::SetCanvasPartition(
         canvas.get(), col_size, row_size, 0.19f, 0.10f, 0.12f, 0.14f, 0.01f, 0.01f
     );
-    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+    root_helper::PrintCanvasOpen(canvas.get(), file_path);
 
     std::vector<std::unique_ptr<TGraphErrors>> graph_ols_list[col_size][row_size];
     std::vector<std::unique_ptr<TGraphErrors>> graph_mdpde_list[col_size][row_size];
@@ -1185,9 +1185,9 @@ void PrintMemberOutlierResult(
     {
         for (size_t j = 0; j < row_size; j++)
         {
-            auto graph_ols{ ROOTHelper::CreateGraphErrors() };
-            auto graph_mdpde{ ROOTHelper::CreateGraphErrors() };
-            auto graph_train{ ROOTHelper::CreateGraphErrors() };
+            auto graph_ols{ root_helper::CreateGraphErrors() };
+            auto graph_mdpde{ root_helper::CreateGraphErrors() };
+            auto graph_train{ root_helper::CreateGraphErrors() };
             for (int p = 0; p < static_cast<int>(outlier_list.size()); p++)
             {
                 auto x_value{ outlier_list.at(static_cast<size_t>(p)) * 100.0 };
@@ -1238,19 +1238,19 @@ void PrintMemberOutlierResult(
         for (int j = 0; j < row_size; j++)
         {
             auto par_id{ row_size - j - 1 };
-            ROOTHelper::FindPadInCanvasPartition(canvas.get(), i, j);
-            ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
-            ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-            auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
-            auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
-            frame[i][j] = ROOTHelper::CreateHist2D(Form("frame_%d_%d", i, j),"", 500, x_min[i], x_max[i], 500, y_min[par_id], y_max[par_id]);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 50.0f, 1.0f, 133);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 40.0f, 0.005f, 133);
-            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.08/x_factor), 505);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 50.0f, 1.2f, 133);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 45.0f, 0.02f, 133);
-            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 505);
-            ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
+            root_helper::FindPadInCanvasPartition(canvas.get(), i, j);
+            root_helper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+            root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+            auto x_factor{ root_helper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
+            auto y_factor{ root_helper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
+            frame[i][j] = root_helper::CreateHist2D(Form("frame_%d_%d", i, j),"", 500, x_min[i], x_max[i], 500, y_min[par_id], y_max[par_id]);
+            root_helper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 50.0f, 1.0f, 133);
+            root_helper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 40.0f, 0.005f, 133);
+            root_helper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.08/x_factor), 505);
+            root_helper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 50.0f, 1.2f, 133);
+            root_helper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 45.0f, 0.02f, 133);
+            root_helper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 505);
+            root_helper::SetLineAttribute(frame[i][j].get(), 1, 0);
             frame[i][j]->GetXaxis()->SetTitle("");
             frame[i][j]->GetYaxis()->SetTitle("");
             frame[i][j]->GetXaxis()->CenterTitle();
@@ -1263,23 +1263,23 @@ void PrintMemberOutlierResult(
             short color_train{ kGreen+1 };
             for (auto & graph : graph_ols_list[i][par_id])
             {
-                ROOTHelper::SetMarkerAttribute(graph.get(), 24, 1.5f, color_ols);
-                ROOTHelper::SetLineAttribute(graph.get(), 2, 2, color_ols);
-                ROOTHelper::SetFillAttribute(graph.get(), 1001, color_ols, 0.2f);
+                root_helper::SetMarkerAttribute(graph.get(), 24, 1.5f, color_ols);
+                root_helper::SetLineAttribute(graph.get(), 2, 2, color_ols);
+                root_helper::SetFillAttribute(graph.get(), 1001, color_ols, 0.2f);
                 graph->Draw("PL3");
             }
             for (auto & graph : graph_mdpde_list[i][par_id])
             {
-                ROOTHelper::SetMarkerAttribute(graph.get(), 20, 1.5f, color_mdpde);
-                ROOTHelper::SetLineAttribute(graph.get(), 1, 2, color_mdpde);
-                ROOTHelper::SetFillAttribute(graph.get(), 1001, color_mdpde, 0.2f);
+                root_helper::SetMarkerAttribute(graph.get(), 20, 1.5f, color_mdpde);
+                root_helper::SetLineAttribute(graph.get(), 1, 2, color_mdpde);
+                root_helper::SetFillAttribute(graph.get(), 1001, color_mdpde, 0.2f);
                 graph->Draw("PL3");
             }
             for (auto & graph : graph_train_list[i][par_id])
             {
-                ROOTHelper::SetMarkerAttribute(graph.get(), 25, 1.5f, color_train);
-                ROOTHelper::SetLineAttribute(graph.get(), 3, 2, color_train);
-                ROOTHelper::SetFillAttribute(graph.get(), 1001, color_train, 0.2f);
+                root_helper::SetMarkerAttribute(graph.get(), 25, 1.5f, color_train);
+                root_helper::SetLineAttribute(graph.get(), 3, 2, color_train);
+                root_helper::SetFillAttribute(graph.get(), 1001, color_train, 0.2f);
                 if (options.options.tester_choice != TesterType::MODEL_ALPHA_MEMBER)
                 {
                     graph->Draw("PL3");
@@ -1288,23 +1288,23 @@ void PrintMemberOutlierResult(
 
             if (i == 0)
             {
-                title_y_text[j] = ROOTHelper::CreatePaveText(-0.52, 0.30, 0.00, 0.70, "nbNDC ARC", true);
-                ROOTHelper::SetPaveTextDefaultStyle(title_y_text[j].get());
-                ROOTHelper::SetPaveAttribute(title_y_text[j].get(), 0, 0.1);
-                ROOTHelper::SetLineAttribute(title_y_text[j].get(), 1, 0);
-                ROOTHelper::SetTextAttribute(title_y_text[j].get(), 45.0f, 133, 22);
-                ROOTHelper::SetFillAttribute(title_y_text[j].get(), 1001, kAzure-7, 0.5f);
+                title_y_text[j] = root_helper::CreatePaveText(-0.52, 0.30, 0.00, 0.70, "nbNDC ARC", true);
+                root_helper::SetPaveTextDefaultStyle(title_y_text[j].get());
+                root_helper::SetPaveAttribute(title_y_text[j].get(), 0, 0.1);
+                root_helper::SetLineAttribute(title_y_text[j].get(), 1, 0);
+                root_helper::SetTextAttribute(title_y_text[j].get(), 45.0f, 133, 22);
+                root_helper::SetFillAttribute(title_y_text[j].get(), 1001, kAzure-7, 0.5f);
                 title_y_text[j]->AddText(title_y_list[static_cast<size_t>(par_id)].data());
                 title_y_text[j]->Draw();
             }
 
             if (j == row_size - 1)
             {
-                title_x_text[i] = ROOTHelper::CreatePaveText(0.10, 0.95, 0.90, 1.15, "nbNDC ARC", true);
-                ROOTHelper::SetPaveTextDefaultStyle(title_x_text[i].get());
-                ROOTHelper::SetPaveAttribute(title_x_text[i].get(), 0, 0.2);
-                ROOTHelper::SetTextAttribute(title_x_text[i].get(), 45.0f, 133, 22);
-                ROOTHelper::SetFillAttribute(title_x_text[i].get(), 1001, kRed+1, 0.5f);
+                title_x_text[i] = root_helper::CreatePaveText(0.10, 0.95, 0.90, 1.15, "nbNDC ARC", true);
+                root_helper::SetPaveTextDefaultStyle(title_x_text[i].get());
+                root_helper::SetPaveAttribute(title_x_text[i].get(), 0, 0.2);
+                root_helper::SetTextAttribute(title_x_text[i].get(), 45.0f, 133, 22);
+                root_helper::SetFillAttribute(title_x_text[i].get(), 1001, kRed+1, 0.5f);
                 title_x_text[i]->AddText(
                     Form("Outlier in %s", outlier_type_list[static_cast<size_t>(i)].data())
                 );
@@ -1314,15 +1314,15 @@ void PrintMemberOutlierResult(
     }
 
     canvas->cd();
-    auto pad_extra0{ ROOTHelper::CreatePad("pad_extra0","", 0.02, 0.92, 0.98, 1.00) };
+    auto pad_extra0{ root_helper::CreatePad("pad_extra0","", 0.02, 0.92, 0.98, 1.00) };
     pad_extra0->Draw();
     pad_extra0->cd();
-    ROOTHelper::SetPadDefaultStyle(pad_extra0.get());
-    ROOTHelper::SetFillAttribute(pad_extra0.get(), 4000);
-    auto legend{ ROOTHelper::CreateLegend(0.0, 0.0, 1.0, 1.0, false) };
-    ROOTHelper::SetLegendDefaultStyle(legend.get());
-    ROOTHelper::SetFillAttribute(legend.get(), 4000);
-    ROOTHelper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
+    root_helper::SetPadDefaultStyle(pad_extra0.get());
+    root_helper::SetFillAttribute(pad_extra0.get(), 4000);
+    auto legend{ root_helper::CreateLegend(0.0, 0.0, 1.0, 1.0, false) };
+    root_helper::SetLegendDefaultStyle(legend.get());
+    root_helper::SetFillAttribute(legend.get(), 4000);
+    root_helper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
     legend->SetMargin(0.25f);
     legend->SetNColumns(3);
     if (options.options.tester_choice == TesterType::MODEL_ALPHA_MEMBER)
@@ -1344,35 +1344,35 @@ void PrintMemberOutlierResult(
     legend->Draw();
 
     canvas->cd();
-    auto pad_extra1{ ROOTHelper::CreatePad("pad_extra1","", 0.19, 0.00, 0.90, 0.06) };
+    auto pad_extra1{ root_helper::CreatePad("pad_extra1","", 0.19, 0.00, 0.90, 0.06) };
     pad_extra1->Draw();
     pad_extra1->cd();
-    ROOTHelper::SetPadDefaultStyle(pad_extra1.get());
-    ROOTHelper::SetFillAttribute(pad_extra1.get(), 4000);
-    auto bottom_title_text{ ROOTHelper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
-    ROOTHelper::SetPaveTextDefaultStyle(bottom_title_text.get());
-    ROOTHelper::SetFillAttribute(bottom_title_text.get(), 4000);
-    ROOTHelper::SetTextAttribute(bottom_title_text.get(), 45.0f, 133, 22);
+    root_helper::SetPadDefaultStyle(pad_extra1.get());
+    root_helper::SetFillAttribute(pad_extra1.get(), 4000);
+    auto bottom_title_text{ root_helper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
+    root_helper::SetPaveTextDefaultStyle(bottom_title_text.get());
+    root_helper::SetFillAttribute(bottom_title_text.get(), 4000);
+    root_helper::SetTextAttribute(bottom_title_text.get(), 45.0f, 133, 22);
     bottom_title_text->AddText("Member Contamination Ratio (%)");
     bottom_title_text->Draw();
 
     canvas->cd();
-    auto pad_extra2{ ROOTHelper::CreatePad("pad_extra2","", 0.96, 0.10, 1.00, 0.86) };
+    auto pad_extra2{ root_helper::CreatePad("pad_extra2","", 0.96, 0.10, 1.00, 0.86) };
     pad_extra2->Draw();
     pad_extra2->cd();
-    ROOTHelper::SetPadDefaultStyle(pad_extra2.get());
-    ROOTHelper::SetFillAttribute(pad_extra2.get(), 4000);
-    auto right_title_text{ ROOTHelper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
-    ROOTHelper::SetPaveTextDefaultStyle(right_title_text.get());
-    ROOTHelper::SetFillAttribute(right_title_text.get(), 4000);
-    ROOTHelper::SetTextAttribute(right_title_text.get(), 50.0f, 133, 22);
+    root_helper::SetPadDefaultStyle(pad_extra2.get());
+    root_helper::SetFillAttribute(pad_extra2.get(), 4000);
+    auto right_title_text{ root_helper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
+    root_helper::SetPaveTextDefaultStyle(right_title_text.get());
+    root_helper::SetFillAttribute(right_title_text.get(), 4000);
+    root_helper::SetTextAttribute(right_title_text.get(), 50.0f, 133, 22);
     right_title_text->AddText("Normalized Bias");
     auto text{ right_title_text->GetLineWith("Bias") };
     text->SetTextAngle(90.0f);
     right_title_text->Draw();
 
-    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
-    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    root_helper::PrintCanvasPad(canvas.get(), file_path);
+    root_helper::PrintCanvasClose(canvas.get(), file_path);
     Logger::Log(LogLevel::Info, " Output file: " + file_path.string());
     #endif
 }
@@ -1392,13 +1392,13 @@ void PrintAtomSamplingDataSummary(
     gStyle->SetLineScalePS(2.0);
     gStyle->SetGridColor(kGray);
 
-    auto canvas{ ROOTHelper::CreateCanvas("test","", 1000, 750) };
-    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+    auto canvas{ root_helper::CreateCanvas("test","", 1000, 750) };
+    root_helper::SetCanvasDefaultStyle(canvas.get());
+    root_helper::PrintCanvasOpen(canvas.get(), file_path);
     const int pad_size{ 1 };
 
     std::unique_ptr<TPad> pad[pad_size];
-    pad[0] = ROOTHelper::CreatePad("pad0","", 0.00, 0.00, 1.00, 1.00); // The left pad
+    pad[0] = root_helper::CreatePad("pad0","", 0.00, 0.00, 1.00, 1.00); // The left pad
     
     size_t count{ 0 };
     for (auto sampling_entries : sampling_entries_list)
@@ -1410,22 +1410,22 @@ void PrintAtomSamplingDataSummary(
         canvas->cd();
         for (int i = 0; i < pad_size; i++)
         {
-            ROOTHelper::SetPadDefaultStyle(pad[i].get());
+            root_helper::SetPadDefaultStyle(pad[i].get());
             pad[i]->Draw();
         }
 
         pad[0]->cd();
-        ROOTHelper::SetPadMarginInCanvas(gPad, 0.16, 0.05, 0.15, 0.05);
-        auto frame{ ROOTHelper::CreateHist2D("hist_0","", 100, 0.0, 1.0, 100, 0.0, 1.0) };
-        ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
-        ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-        ROOTHelper::SetAxisTitleAttribute(frame->GetXaxis(), 50.0f, 0.9f);
-        ROOTHelper::SetAxisLabelAttribute(frame->GetXaxis(), 50.0f, 0.005f, 133);
-        ROOTHelper::SetAxisTickAttribute(frame->GetXaxis(), 0.06f, 505);
-        ROOTHelper::SetAxisTitleAttribute(frame->GetYaxis(), 60.0f, 1.25f);
-        ROOTHelper::SetAxisLabelAttribute(frame->GetYaxis(), 50.0f, 0.01f, 133);
-        ROOTHelper::SetAxisTickAttribute(frame->GetYaxis(), 0.03f, 506);
-        ROOTHelper::SetLineAttribute(frame.get(), 1, 0);
+        root_helper::SetPadMarginInCanvas(gPad, 0.16, 0.05, 0.15, 0.05);
+        auto frame{ root_helper::CreateHist2D("hist_0","", 100, 0.0, 1.0, 100, 0.0, 1.0) };
+        root_helper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+        root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+        root_helper::SetAxisTitleAttribute(frame->GetXaxis(), 50.0f, 0.9f);
+        root_helper::SetAxisLabelAttribute(frame->GetXaxis(), 50.0f, 0.005f, 133);
+        root_helper::SetAxisTickAttribute(frame->GetXaxis(), 0.06f, 505);
+        root_helper::SetAxisTitleAttribute(frame->GetYaxis(), 60.0f, 1.25f);
+        root_helper::SetAxisLabelAttribute(frame->GetYaxis(), 50.0f, 0.01f, 133);
+        root_helper::SetAxisTickAttribute(frame->GetYaxis(), 0.03f, 506);
+        root_helper::SetLineAttribute(frame.get(), 1, 0);
         frame->SetStats(0);
         frame->GetYaxis()->CenterTitle();
         frame->GetXaxis()->SetTitle("Radial Distance #[]{#AA}");
@@ -1438,29 +1438,29 @@ void PrintAtomSamplingDataSummary(
         frame->GetYaxis()->SetLimits(y_min, y_max);
         frame->SetStats(0);
         frame->Draw();
-        ROOTHelper::SetMarkerAttribute(data_graph.get(), 20, 0.8f, kAzure-7, 0.5f);
+        root_helper::SetMarkerAttribute(data_graph.get(), 20, 0.8f, kAzure-7, 0.5f);
         data_graph->Draw("P");
 
         data_hist->SetStats(0);
         data_hist->SetBarWidth(1.0);
-        ROOTHelper::SetFillAttribute(data_hist.get(), 1001, kGray, 0.3f);
-        ROOTHelper::SetLineAttribute(data_hist.get(), 1, 2, kGray+2);
+        root_helper::SetFillAttribute(data_hist.get(), 1001, kGray, 0.3f);
+        root_helper::SetLineAttribute(data_hist.get(), 1, 2, kGray+2);
         data_hist->Draw("CANDLE2 SAME");
 
-        auto component_text{ ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
-        ROOTHelper::SetPaveTextMarginInCanvas(gPad, component_text.get(), 0.25, 0.02, 0.85, 0.02);
-        ROOTHelper::SetPaveTextDefaultStyle(component_text.get());
-        ROOTHelper::SetPaveAttribute(component_text.get(), 0, 0.1);
-        ROOTHelper::SetFillAttribute(component_text.get(), 1001, kAzure-7);
-        ROOTHelper::SetTextAttribute(component_text.get(), 75.0f, 103, 22, 0.0, kYellow-10);
+        auto component_text{ root_helper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
+        root_helper::SetPaveTextMarginInCanvas(gPad, component_text.get(), 0.25, 0.02, 0.85, 0.02);
+        root_helper::SetPaveTextDefaultStyle(component_text.get());
+        root_helper::SetPaveAttribute(component_text.get(), 0, 0.1);
+        root_helper::SetFillAttribute(component_text.get(), 1001, kAzure-7);
+        root_helper::SetTextAttribute(component_text.get(), 75.0f, 103, 22, 0.0, kYellow-10);
         component_text->AddText(Form("Distance = %.1f #AA", neighbor_distance));
         component_text->Draw();
 
         count++;
-        ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
+        root_helper::PrintCanvasPad(canvas.get(), file_path);
     }
 
-    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    root_helper::PrintCanvasClose(canvas.get(), file_path);
     #endif
 }
 
@@ -1468,7 +1468,7 @@ void PrintAtomSamplingDataSummary(
 std::unique_ptr<TGraphErrors> CreateDistanceToResponseGraph(
     const LocalPotentialSampleList & sampling_entries)
 {
-    auto graph{ ROOTHelper::CreateGraphErrors() };
+    auto graph{ root_helper::CreateGraphErrors() };
     auto count{ 0 };
     for (const auto & sample : sampling_entries)
     {
@@ -1482,7 +1482,7 @@ std::unique_ptr<TH2D> CreateDistanceToResponseHistogram(
     const LocalPotentialSampleList & sampling_entries, int x_bin_size, int y_bin_size)
 {
     auto hist{
-        ROOTHelper::CreateHist2D(
+        root_helper::CreateHist2D(
             "hist_distance_response", "Distance vs Response",
             x_bin_size, 0.0, 4.0,
             y_bin_size, 0.0, 1.0)

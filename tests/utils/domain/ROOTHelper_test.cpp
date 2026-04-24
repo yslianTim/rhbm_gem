@@ -13,7 +13,7 @@ TEST(ROOTHelperTest, SetPadMarginInCanvasThrowsForNullPad)
 {
     gROOT->SetBatch(kTRUE);
     EXPECT_THROW(
-        ROOTHelper::SetPadMarginInCanvas(nullptr, 0.1, 0.1, 0.1, 0.1),
+        rhbm_gem::root_helper::SetPadMarginInCanvas(nullptr, 0.1, 0.1, 0.1, 0.1),
         std::invalid_argument);
 }
 
@@ -21,16 +21,16 @@ TEST(ROOTHelperTest, SetPaveTextMarginInCanvasThrowsForNullPave)
 {
     gROOT->SetBatch(kTRUE);
     EXPECT_THROW(
-        ROOTHelper::SetPaveTextMarginInCanvas(nullptr, nullptr, 0.1, 0.1, 0.1, 0.1),
+        rhbm_gem::root_helper::SetPaveTextMarginInCanvas(nullptr, nullptr, 0.1, 0.1, 0.1, 0.1),
         std::invalid_argument);
 }
 
 TEST(ROOTHelperTest, SetPaveTextMarginInCanvasThrowsForNullPad)
 {
     gROOT->SetBatch(kTRUE);
-    auto pave{ ROOTHelper::CreatePaveText(0.0, 0.0, 1.0, 1.0) };
+    auto pave{ rhbm_gem::root_helper::CreatePaveText(0.0, 0.0, 1.0, 1.0) };
     EXPECT_THROW(
-        ROOTHelper::SetPaveTextMarginInCanvas(nullptr, pave.get(), 0.1, 0.1, 0.1, 0.1),
+        rhbm_gem::root_helper::SetPaveTextMarginInCanvas(nullptr, pave.get(), 0.1, 0.1, 0.1, 0.1),
         std::invalid_argument);
 }
 
@@ -38,16 +38,16 @@ TEST(ROOTHelperTest, SetLegendMarginInCanvasThrowsForNullLegend)
 {
     gROOT->SetBatch(kTRUE);
     EXPECT_THROW(
-        ROOTHelper::SetLegendMarginInCanvas(nullptr, nullptr, 0.1, 0.1, 0.1, 0.1),
+        rhbm_gem::root_helper::SetLegendMarginInCanvas(nullptr, nullptr, 0.1, 0.1, 0.1, 0.1),
         std::invalid_argument);
 }
 
 TEST(ROOTHelperTest, SetLegendMarginInCanvasThrowsForNullPad)
 {
     gROOT->SetBatch(kTRUE);
-    auto legend{ ROOTHelper::CreateLegend(0.0, 0.0, 1.0, 1.0) };
+    auto legend{ rhbm_gem::root_helper::CreateLegend(0.0, 0.0, 1.0, 1.0) };
     EXPECT_THROW(
-        ROOTHelper::SetLegendMarginInCanvas(nullptr, legend.get(), 0.1, 0.1, 0.1, 0.1),
+        rhbm_gem::root_helper::SetLegendMarginInCanvas(nullptr, legend.get(), 0.1, 0.1, 0.1, 0.1),
         std::invalid_argument);
 }
 

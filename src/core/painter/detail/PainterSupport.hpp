@@ -45,12 +45,12 @@ inline void PrintGausTitlePad(
     auto left_margin{ 0.001 + pad->GetLeftMargin() * pad->GetAbsWNDC() };
     auto right_margin{ 0.001 + pad->GetRightMargin() * pad->GetAbsWNDC() };
     auto bottom_margin{ 0.005 + (1.0 - pad->GetTopMargin()) * pad->GetAbsHNDC() };
-    ROOTHelper::SetPaveTextMarginInCanvas(pad, text, left_margin, right_margin, bottom_margin, 0.005);
-    ROOTHelper::SetPaveTextDefaultStyle(text);
-    ROOTHelper::SetPaveAttribute(text, 0, 0.2);
-    ROOTHelper::SetFillAttribute(text, 1001, kAzure - 7);
-    ROOTHelper::SetTextAttribute(text, text_size, 23, 22, 0.0, kYellow - 10);
-    ROOTHelper::SetLineAttribute(text, 1, 0);
+    root_helper::SetPaveTextMarginInCanvas(pad, text, left_margin, right_margin, bottom_margin, 0.005);
+    root_helper::SetPaveTextDefaultStyle(text);
+    root_helper::SetPaveAttribute(text, 0, 0.2);
+    root_helper::SetFillAttribute(text, 1001, kAzure - 7);
+    root_helper::SetTextAttribute(text, text_size, 23, 22, 0.0, kYellow - 10);
+    root_helper::SetLineAttribute(text, 1, 0);
     text->AddText(title.data());
     pad->Update();
 }
@@ -65,17 +65,17 @@ inline void PrintGausResultGlobalPad(
     bool is_right_side_pad)
 {
     pad->cd();
-    ROOTHelper::SetPadMarginInCanvas(pad, left_margin, right_margin, bottom_margin, top_margin);
-    ROOTHelper::SetPadLayout(pad, 1, 1, 0, 0);
-    ROOTHelper::SetAxisTitleAttribute(hist->GetXaxis(), 0.0f);
-    ROOTHelper::SetAxisTitleAttribute(hist->GetYaxis(), 0.0f);
-    ROOTHelper::SetAxisLabelAttribute(hist->GetXaxis(), 55.0f, 0.11f, 103, kCyan + 3);
-    ROOTHelper::SetAxisLabelAttribute(hist->GetYaxis(), 50.0f, 0.01f);
+    root_helper::SetPadMarginInCanvas(pad, left_margin, right_margin, bottom_margin, top_margin);
+    root_helper::SetPadLayout(pad, 1, 1, 0, 0);
+    root_helper::SetAxisTitleAttribute(hist->GetXaxis(), 0.0f);
+    root_helper::SetAxisTitleAttribute(hist->GetYaxis(), 0.0f);
+    root_helper::SetAxisLabelAttribute(hist->GetXaxis(), 55.0f, 0.11f, 103, kCyan + 3);
+    root_helper::SetAxisLabelAttribute(hist->GetYaxis(), 50.0f, 0.01f);
 
-    auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.0, 0) };
-    auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.008, 1) };
-    ROOTHelper::SetAxisTickAttribute(hist->GetXaxis(), static_cast<float>(x_tick_length), 21);
-    ROOTHelper::SetAxisTickAttribute(hist->GetYaxis(), static_cast<float>(y_tick_length), 505);
+    auto x_tick_length{ root_helper::ConvertGlobalTickLengthToPadTickLength(pad, 0.0, 0) };
+    auto y_tick_length{ root_helper::ConvertGlobalTickLengthToPadTickLength(pad, 0.008, 1) };
+    root_helper::SetAxisTickAttribute(hist->GetXaxis(), static_cast<float>(x_tick_length), 21);
+    root_helper::SetAxisTickAttribute(hist->GetYaxis(), static_cast<float>(y_tick_length), 505);
     hist->GetXaxis()->SetLimits(-1.0, 20.0);
     hist->GetXaxis()->ChangeLabel(1, -1.0, 0.0);
     hist->GetXaxis()->ChangeLabel(-1, -1.0, 0.0);

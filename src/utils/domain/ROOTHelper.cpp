@@ -34,27 +34,38 @@
 
 using namespace ROOT;
 
-std::unique_ptr<TCanvas> ROOTHelper::CreateCanvas(
+namespace rhbm_gem {
+namespace {
+
+double LinearModelFunction(double * x, double * par);
+double Gaus2DModelFunction(double * x, double * par);
+double Gaus3DModelFunction(double * x, double * par);
+
+} // namespace
+
+namespace root_helper {
+
+std::unique_ptr<TCanvas> CreateCanvas(
     const std::string & name, const std::string & title, int width, int height)
 {
     return std::make_unique<TCanvas>(name.data(), title.data(), width, height);
 }
 
-std::unique_ptr<TPad> ROOTHelper::CreatePad(
+std::unique_ptr<TPad> CreatePad(
     const std::string & name, const std::string & title,
     double x_low, double y_low, double x_up, double y_up)
 {
     return std::make_unique<TPad>(name.data(), title.data(), x_low, y_low, x_up, y_up);
 }
 
-std::unique_ptr<TH1D> ROOTHelper::CreateHist1D(
+std::unique_ptr<TH1D> CreateHist1D(
     const std::string & name, const std::string & title,
     int x_bin, double x_min, double x_max)
 {
     return std::make_unique<TH1D>(name.data(), title.data(), x_bin, x_min, x_max);
 }
 
-std::unique_ptr<TH2D> ROOTHelper::CreateHist2D(
+std::unique_ptr<TH2D> CreateHist2D(
     const std::string & name, const std::string & title,
     int x_bin, double x_min, double x_max,
     int y_bin, double y_min, double y_max)
@@ -62,34 +73,34 @@ std::unique_ptr<TH2D> ROOTHelper::CreateHist2D(
     return std::make_unique<TH2D>(name.data(), title.data(), x_bin, x_min, x_max, y_bin, y_min, y_max);
 }
 
-std::unique_ptr<TGraphErrors> ROOTHelper::CreateGraphErrors()
+std::unique_ptr<TGraphErrors> CreateGraphErrors()
 {
     return std::make_unique<TGraphErrors>();
 }
 
-std::unique_ptr<TGraphErrors> ROOTHelper::CreateGraphErrors(const int & point_size)
+std::unique_ptr<TGraphErrors> CreateGraphErrors(const int & point_size)
 {
     return std::make_unique<TGraphErrors>(point_size);
 }
 
-std::unique_ptr<TGraph2DErrors> ROOTHelper::CreateGraph2DErrors()
+std::unique_ptr<TGraph2DErrors> CreateGraph2DErrors()
 {
     return std::make_unique<TGraph2DErrors>();
 }
 
-std::unique_ptr<TGraph2DErrors> ROOTHelper::CreateGraph2DErrors(const int & point_size)
+std::unique_ptr<TGraph2DErrors> CreateGraph2DErrors(const int & point_size)
 {
     return std::make_unique<TGraph2DErrors>(point_size);
 }
 
-std::unique_ptr<TGraph2DErrors> ROOTHelper::CreateGraph2DErrors(
+std::unique_ptr<TGraph2DErrors> CreateGraph2DErrors(
     const int & point_size,
     std::vector<double> & x, std::vector<double> & y, std::vector<double> & z)
 {
     return std::make_unique<TGraph2DErrors>(point_size, &x[0], &y[0], &z[0]);
 }
 
-std::unique_ptr<TPaveText> ROOTHelper::CreatePaveText(
+std::unique_ptr<TPaveText> CreatePaveText(
     double x1, double y1, double x2, double y2, std::string option, bool in_partition)
 {
     if (in_partition == true)
@@ -102,7 +113,7 @@ std::unique_ptr<TPaveText> ROOTHelper::CreatePaveText(
     return std::make_unique<TPaveText>(x1, y1, x2, y2, option.data());
 }
 
-std::unique_ptr<TLegend> ROOTHelper::CreateLegend(
+std::unique_ptr<TLegend> CreateLegend(
     double x1, double y1, double x2, double y2, bool in_partition)
 {
     if (in_partition == true)
@@ -115,12 +126,12 @@ std::unique_ptr<TLegend> ROOTHelper::CreateLegend(
     return std::make_unique<TLegend>(x1, y1, x2, y2);
 }
 
-std::unique_ptr<TF1> ROOTHelper::CreateFunction1D(const std::string & name, const std::string & form)
+std::unique_ptr<TF1> CreateFunction1D(const std::string & name, const std::string & form)
 {
     return std::make_unique<TF1>(name.data(), form.data());
 }
 
-std::unique_ptr<TF1> ROOTHelper::CreateLinearModelFunction(
+std::unique_ptr<TF1> CreateLinearModelFunction(
     const std::string & name, double beta_0, double beta_1, double x_min, double x_max)
 {
     auto function{ std::make_unique<TF1>(name.data(), LinearModelFunction, x_min, x_max, 2) };
@@ -129,7 +140,7 @@ std::unique_ptr<TF1> ROOTHelper::CreateLinearModelFunction(
     return function;
 }
 
-std::unique_ptr<TF1> ROOTHelper::CreateGaus2DFunctionIn1D(
+std::unique_ptr<TF1> CreateGaus2DFunctionIn1D(
     const std::string & name, double amplitude, double width, double x_min, double x_max)
 {
     auto function{ std::make_unique<TF1>(name.data(), Gaus2DModelFunction, x_min, x_max, 2) };
@@ -138,7 +149,7 @@ std::unique_ptr<TF1> ROOTHelper::CreateGaus2DFunctionIn1D(
     return function;
 }
 
-std::unique_ptr<TF1> ROOTHelper::CreateGaus3DFunctionIn1D(
+std::unique_ptr<TF1> CreateGaus3DFunctionIn1D(
     const std::string & name, double amplitude, double width, double x_min, double x_max)
 {
     auto function{ std::make_unique<TF1>(name.data(), Gaus3DModelFunction, x_min, x_max, 2) };
@@ -147,30 +158,30 @@ std::unique_ptr<TF1> ROOTHelper::CreateGaus3DFunctionIn1D(
     return function;
 }
 
-std::unique_ptr<TLine> ROOTHelper::CreateLine(double x1, double y1, double x2, double y2)
+std::unique_ptr<TLine> CreateLine(double x1, double y1, double x2, double y2)
 {
     return std::make_unique<TLine>(x1, y1, x2, y2);
 }
 
-void ROOTHelper::PrintCanvasOpen(TCanvas * canvas, const std::string & name)
+void PrintCanvasOpen(TCanvas * canvas, const std::string & name)
 {
     gErrorIgnoreLevel = kWarning;
     canvas->cd();
     canvas->Print(std::string(name).append("[").data());
 }
 
-void ROOTHelper::PrintCanvasPad(TCanvas * canvas, const std::string & name)
+void PrintCanvasPad(TCanvas * canvas, const std::string & name)
 {
     canvas->Update();
     canvas->Print(name.data());
 }
 
-void ROOTHelper::PrintCanvasClose(TCanvas * canvas, const std::string & name)
+void PrintCanvasClose(TCanvas * canvas, const std::string & name)
 {
     canvas->Print(std::string(name).append("]").data());
 }
 
-void ROOTHelper::SetPadFrameAttribute(
+void SetPadFrameAttribute(
     TAttPad * pad, int mode, short size, short fill_style, short fill_color,
     short line_style, short line_width, short line_color)
 {
@@ -183,7 +194,7 @@ void ROOTHelper::SetPadFrameAttribute(
     pad->SetFrameLineColor(line_color);
 }
 
-void ROOTHelper::SetPadMarginAttribute(
+void SetPadMarginAttribute(
     TAttPad * pad, float left, float right, float bottom, float top)
 {
     pad->SetLeftMargin(left);
@@ -192,17 +203,17 @@ void ROOTHelper::SetPadMarginAttribute(
     pad->SetTopMargin(top);
 }
 
-void ROOTHelper::SetPadMarginInCanvas(
+void SetPadMarginInCanvas(
     TVirtualPad * pad, double left, double right, double bottom, double top)
 {
     if (pad == nullptr)
     {
-        throw std::invalid_argument("ROOTHelper::SetPadMarginInCanvas() requires a non-null pad.");
+        throw std::invalid_argument("root_helper::SetPadMarginInCanvas() requires a non-null pad.");
     }
     if (pad->GetCanvas() == nullptr)
     {
         throw std::runtime_error(
-            "ROOTHelper::SetPadMarginInCanvas() requires the pad to be attached to a canvas.");
+            "root_helper::SetPadMarginInCanvas() requires the pad to be attached to a canvas.");
     }
     pad->GetCanvas()->Update();
 
@@ -225,18 +236,18 @@ void ROOTHelper::SetPadMarginInCanvas(
     SetPadMarginAttribute(pad, pad_left_margin, pad_right_margin, pad_bottom_margin, pad_top_margin);
 }
 
-void ROOTHelper::SetPaveTextMarginInCanvas(
+void SetPaveTextMarginInCanvas(
     TVirtualPad * pad, TPaveText * pave, double left, double right, double bottom, double top)
 {
     if (!pave)
     {
         throw std::invalid_argument(
-            "ROOTHelper::SetPaveTextMarginInCanvas() requires a non-null TPaveText.");
+            "root_helper::SetPaveTextMarginInCanvas() requires a non-null TPaveText.");
     }
     if (!pad)
     {
         throw std::invalid_argument(
-            "ROOTHelper::SetPaveTextMarginInCanvas() requires a non-null TVirtualPad.");
+            "root_helper::SetPaveTextMarginInCanvas() requires a non-null TVirtualPad.");
     }
     pave->Draw();
     if (pad->GetCanvas()) pad->GetCanvas()->Update();
@@ -252,20 +263,20 @@ void ROOTHelper::SetPaveTextMarginInCanvas(
     pave->SetY2NDC((y2_canvas - pad->GetYlowNDC()) / pad->GetAbsHNDC());
 }
 
-void ROOTHelper::SetLegendMarginInCanvas(
+void SetLegendMarginInCanvas(
     TVirtualPad * pad, TLegend * legend, double left, double right, double bottom, double top)
 {
     if (!legend)
     {
         throw std::invalid_argument(
-            "ROOTHelper::SetLegendMarginInCanvas() requires a non-null TLegend.");
+            "root_helper::SetLegendMarginInCanvas() requires a non-null TLegend.");
     }
     //legend->Draw();
 
     if (!pad)
     {
         throw std::invalid_argument(
-            "ROOTHelper::SetLegendMarginInCanvas() requires a non-null TVirtualPad.");
+            "root_helper::SetLegendMarginInCanvas() requires a non-null TVirtualPad.");
     }
     if (pad->GetCanvas()) pad->GetCanvas()->Update();
 
@@ -280,7 +291,7 @@ void ROOTHelper::SetLegendMarginInCanvas(
     legend->SetY2NDC((y2_canvas - pad->GetYlowNDC()) / pad->GetAbsHNDC());
 }
 
-void ROOTHelper::SetAxisTitleAttribute(TAttAxis * axis, float size, float offset, short font, short color)
+void SetAxisTitleAttribute(TAttAxis * axis, float size, float offset, short font, short color)
 {
     axis->SetTitleFont(font);
     axis->SetTitleSize(size);
@@ -288,7 +299,7 @@ void ROOTHelper::SetAxisTitleAttribute(TAttAxis * axis, float size, float offset
     axis->SetTitleColor(color);
 }
 
-void ROOTHelper::SetAxisLabelAttribute(TAttAxis * axis, float size, float offset, short font, short color)
+void SetAxisLabelAttribute(TAttAxis * axis, float size, float offset, short font, short color)
 {
     axis->SetLabelFont(font);
     axis->SetLabelSize(size);
@@ -296,13 +307,13 @@ void ROOTHelper::SetAxisLabelAttribute(TAttAxis * axis, float size, float offset
     axis->SetLabelColor(color);
 }
 
-void ROOTHelper::SetAxisTickAttribute(TAttAxis * axis, float length, int division)
+void SetAxisTickAttribute(TAttAxis * axis, float length, int division)
 {
     axis->SetTickLength(length);
     axis->SetNdivisions(division);
 }
 
-void ROOTHelper::SetTextAttribute(
+void SetTextAttribute(
     TAttText * text,
     float size, short font, short align, float angle, short color, float transparent)
 {
@@ -313,7 +324,7 @@ void ROOTHelper::SetTextAttribute(
     text->SetTextAngle(angle);
 }
 
-void ROOTHelper::SetLineAttribute(
+void SetLineAttribute(
     TAttLine * line, short style, short width, short color, float transparent)
 {
     line->SetLineStyle(style);
@@ -321,26 +332,26 @@ void ROOTHelper::SetLineAttribute(
     line->SetLineColorAlpha(color, transparent);
 }
 
-void ROOTHelper::SetFillAttribute(TAttFill * fill, short style, short color, float transparent)
+void SetFillAttribute(TAttFill * fill, short style, short color, float transparent)
 {
     fill->SetFillStyle(style);
     fill->SetFillColorAlpha(color, transparent);
 }
 
-void ROOTHelper::SetMarkerAttribute(TAttMarker * marker, short style, float size, short color, float transparent)
+void SetMarkerAttribute(TAttMarker * marker, short style, float size, short color, float transparent)
 {
     marker->SetMarkerStyle(style);
     marker->SetMarkerSize(size);
     marker->SetMarkerColorAlpha(color, transparent);
 }
 
-void ROOTHelper::SetPaveAttribute(TPave * pave, int bordersize, double radius)
+void SetPaveAttribute(TPave * pave, int bordersize, double radius)
 {
     pave->SetBorderSize(bordersize);
     pave->SetCornerRadius(radius);
 }
 
-void ROOTHelper::SetBoxAttribute(
+void SetBoxAttribute(
     TBox * box, double left, double right, double bottom, double top)
 {
     gPad->Update();
@@ -350,7 +361,7 @@ void ROOTHelper::SetBoxAttribute(
     box->SetBBoxY2(gPad->YtoPixel(top));
 }
 
-void ROOTHelper::SetPadInCanvas(
+void SetPadInCanvas(
     TVirtualPad * pad, int width, int height,
     int division_x, int division_y, float margin_x, float margin_y)
 {
@@ -358,13 +369,13 @@ void ROOTHelper::SetPadInCanvas(
     pad->Divide(division_x, division_y, margin_x, margin_y);
 }
 
-void ROOTHelper::SetPadDefaultStyle(TVirtualPad * pad)
+void SetPadDefaultStyle(TVirtualPad * pad)
 {
-    ROOTHelper::SetPadFrameAttribute(pad);
-    ROOTHelper::SetFillAttribute(pad);
+    SetPadFrameAttribute(pad);
+    SetFillAttribute(pad);
 }
 
-void ROOTHelper::SetPadRangeInCanvas(TVirtualPad * pad, double x1, double y1, double x2, double y2)
+void SetPadRangeInCanvas(TVirtualPad * pad, double x1, double y1, double x2, double y2)
 {
     auto x1_default = pad->GetAbsXlowNDC();
     auto y1_default = pad->GetAbsYlowNDC();
@@ -380,7 +391,7 @@ void ROOTHelper::SetPadRangeInCanvas(TVirtualPad * pad, double x1, double y1, do
     }
 }
 
-void ROOTHelper::SetPadLayout(
+void SetPadLayout(
     TVirtualPad * pad, int grid_x, int grid_y, int log_x, int log_y, int tick_x, int tick_y)
 {
     pad->SetGrid(grid_x, grid_y);
@@ -389,26 +400,26 @@ void ROOTHelper::SetPadLayout(
     pad->SetTicks(tick_x, tick_y);
 }
 
-void ROOTHelper::SetCanvasDefaultStyle(TCanvas * canvas)
+void SetCanvasDefaultStyle(TCanvas * canvas)
 {
-    ROOTHelper::SetFillAttribute(canvas);
+    SetFillAttribute(canvas);
 }
 
-void ROOTHelper::SetPaveTextDefaultStyle(TPaveText * text)
+void SetPaveTextDefaultStyle(TPaveText * text)
 {
-    ROOTHelper::SetPaveAttribute(text);
-    ROOTHelper::SetFillAttribute(text);
-    ROOTHelper::SetTextAttribute(text);
+    SetPaveAttribute(text);
+    SetFillAttribute(text);
+    SetTextAttribute(text);
 }
 
-void ROOTHelper::SetLegendDefaultStyle(TLegend * legend)
+void SetLegendDefaultStyle(TLegend * legend)
 {
-    ROOTHelper::SetPaveAttribute(legend);
-    ROOTHelper::SetFillAttribute(legend);
-    ROOTHelper::SetTextAttribute(legend);
+    SetPaveAttribute(legend);
+    SetFillAttribute(legend);
+    SetTextAttribute(legend);
 }
 
-void ROOTHelper::SetCanvasPartition(
+void SetCanvasPartition(
     TCanvas * canvas, const int Nx, const int Ny,
     float lMargin, float rMargin, float bMargin, float tMargin,
     float vSpacing, float hSpacing)
@@ -482,40 +493,40 @@ void ROOTHelper::SetCanvasPartition(
     }
 }
 
-void ROOTHelper::FindPadInCanvasPartition(TCanvas * canvas, int id_x, int id_y)
+void FindPadInCanvasPartition(TCanvas * canvas, int id_x, int id_y)
 {
     canvas->cd(0);
     auto pad{ dynamic_cast<TPad*>(canvas->FindObject(
         TString::Format("pad_%d_%d", id_x, id_y).Data())) };
     if (pad == nullptr)
     {
-        throw std::runtime_error("ROOTHelper::FindPadInCanvasPartition(): pad not found");
+        throw std::runtime_error("FindPadInCanvasPartition(): pad not found");
     }
     pad->Draw();
     pad->cd();
 }
 
-float ROOTHelper::GetPadXfactorInCanvasPartition(TCanvas * canvas, TVirtualPad * pad)
+float GetPadXfactorInCanvasPartition(TCanvas * canvas, TVirtualPad * pad)
 {
     auto pad_origin{ dynamic_cast<TPad*>(canvas->FindObject("pad_0_0")) };
     if (pad_origin == nullptr)
     {
-        throw std::runtime_error("ROOTHelper::GetPadXfactorInCanvasPartition(): pad_0_0 not found");
+        throw std::runtime_error("GetPadXfactorInCanvasPartition(): pad_0_0 not found");
     }
     return static_cast<float>(pad_origin->GetAbsWNDC() / pad->GetAbsWNDC());
 }
 
-float ROOTHelper::GetPadYfactorInCanvasPartition(TCanvas * canvas, TVirtualPad * pad)
+float GetPadYfactorInCanvasPartition(TCanvas * canvas, TVirtualPad * pad)
 {
     auto pad_origin{ dynamic_cast<TPad*>(canvas->FindObject("pad_0_0")) };
     if (pad_origin == nullptr)
     {
-        throw std::runtime_error("ROOTHelper::GetPadYfactorInCanvasPartition(): pad_0_0 not found");
+        throw std::runtime_error("GetPadYfactorInCanvasPartition(): pad_0_0 not found");
     }
     return static_cast<float>(pad_origin->GetAbsHNDC() / pad->GetAbsHNDC());
 }
 
-double ROOTHelper::GetXtoPadInCanvasPartition(double x)
+double GetXtoPadInCanvasPartition(double x)
 {
     double xl, yl, xu, yu;
     gPad->GetPadPar(xl, yl, xu, yu);
@@ -526,7 +537,7 @@ double ROOTHelper::GetXtoPadInCanvasPartition(double x)
     return (x * fw + pw * lm) / pw;
 }
 
-double ROOTHelper::GetYtoPadInCanvasPartition(double y)
+double GetYtoPadInCanvasPartition(double y)
 {
     double xl, yl, xu, yu;
     gPad->GetPadPar(xl, yl, xu, yu);
@@ -537,7 +548,7 @@ double ROOTHelper::GetYtoPadInCanvasPartition(double y)
     return (y * fh + bm * ph) / ph;
 }
 
-double ROOTHelper::ConvertGlobalTickLengthToPadTickLength(
+double ConvertGlobalTickLengthToPadTickLength(
     TVirtualPad * pad, double global_tick_length, bool use_width)
 {
     auto fraction_pad_w{ 1.0 - pad->GetLeftMargin() - pad->GetRightMargin() };
@@ -547,7 +558,7 @@ double ROOTHelper::ConvertGlobalTickLengthToPadTickLength(
     return (use_width) ? global_tick_length / tick_scale_y : global_tick_length / tick_scale_x;
 }
 
-double ROOTHelper::GetLinearRegressionRSquare(const TGraphErrors * graph, const TF1 * function)
+double GetLinearRegressionRSquare(const TGraphErrors * graph, const TF1 * function)
 {
     auto data_size{ graph->GetN() };
     auto y_mean{ graph->GetMean(2) };
@@ -566,7 +577,7 @@ double ROOTHelper::GetLinearRegressionRSquare(const TGraphErrors * graph, const 
     return r_square;
 }
 
-double ROOTHelper::PerformLinearRegression(
+double PerformLinearRegression(
     TGraphErrors * graph, double & slope, double & intercept)
 {
     auto fit_tmp{ CreateFunction1D("fit_linear","[1]*x+[0]") };
@@ -578,7 +589,7 @@ double ROOTHelper::PerformLinearRegression(
     return GetLinearRegressionRSquare(graph, fit_tmp.get());
 }
 
-std::tuple<double, double> ROOTHelper::GetRangeInGraph(TGraphErrors * graph)
+std::tuple<double, double> GetRangeInGraph(TGraphErrors * graph)
 {
     double y_min{ std::numeric_limits<double>::max() };
     double y_max{ std::numeric_limits<double>::lowest() };
@@ -592,24 +603,31 @@ std::tuple<double, double> ROOTHelper::GetRangeInGraph(TGraphErrors * graph)
     return std::make_tuple(y_min, y_max);
 }
 
-double ROOTHelper::LinearModelFunction(double * x, double * par)
+} // namespace root_helper
+
+namespace {
+
+double LinearModelFunction(double * x, double * par)
 {
     double y{ par[0] + par[1]*x[0] };
     return y;
 }
 
-double ROOTHelper::Gaus2DModelFunction(double * x, double * par)
+double Gaus2DModelFunction(double * x, double * par)
 {
     double tau_square{ par[1]*par[1] };
     double y{ par[0] / (2.0*TMath::Pi()*tau_square) * std::exp(-x[0]*x[0]/(2.0*tau_square)) };
     return y;
 }
 
-double ROOTHelper::Gaus3DModelFunction(double * x, double * par)
+double Gaus3DModelFunction(double * x, double * par)
 {
     double tau_square{ par[1]*par[1] };
     double y{ par[0] * std::pow(2.0*TMath::Pi()*tau_square, -1.5) * std::exp(-x[0]*x[0]/(2.0*tau_square)) };
     return y;
 }
+
+} // namespace
+} // namespace rhbm_gem
 
 #endif

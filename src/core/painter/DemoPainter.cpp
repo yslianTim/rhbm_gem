@@ -179,10 +179,10 @@ void DemoPainter::PainMapValueComparisonSingle(
     const int col_size{ 4 };
     const int row_size{ 1 };
 
-    auto canvas{ ROOTHelper::CreateCanvas("test","", 1500, 600) };
-    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.08f, 0.02f, 0.20f, 0.12f, 0.01f, 0.005f);
-    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+    auto canvas{ root_helper::CreateCanvas("test","", 1500, 600) };
+    root_helper::SetCanvasDefaultStyle(canvas.get());
+    root_helper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.08f, 0.02f, 0.20f, 0.12f, 0.01f, 0.005f);
+    root_helper::PrintCanvasOpen(canvas.get(), file_path);
 
     std::vector<std::unique_ptr<TGraphErrors>> scatter_graph_list;
     std::vector<std::unique_ptr<TF1>> fit_function_list;
@@ -196,11 +196,11 @@ void DemoPainter::PainMapValueComparisonSingle(
     for (size_t i = 0; i < col_size; i++)
     {
         auto group_key{ AtomClassifier::GetMainChainSimpleAtomClassGroupKey(i) };
-        auto graph{ ROOTHelper::CreateGraphErrors() };
+        auto graph{ root_helper::CreateGraphErrors() };
         painter_internal::BuildMapValueScatterGraph(
             group_key, graph.get(), ref_model_object, model_object, 15, 0.0, 1.5);
-        r_square[i] = ROOTHelper::PerformLinearRegression(graph.get(), slope[i], intercept[i]);
-        auto function{ ROOTHelper::CreateFunction1D(Form("fit_%d", static_cast<int>(i)), "x*[1]+[0]") };
+        r_square[i] = root_helper::PerformLinearRegression(graph.get(), slope[i], intercept[i]);
+        auto function{ root_helper::CreateFunction1D(Form("fit_%d", static_cast<int>(i)), "x*[1]+[0]") };
         function->SetParameters(intercept[i], slope[i]);
         scatter_graph[i] = graph.get();
         fit_function[i] = function.get();
@@ -233,51 +233,51 @@ void DemoPainter::PainMapValueComparisonSingle(
         auto element_label{ AtomStyleCatalog::GetMainChainElementLabel(i) };
         for (int j = 0; j < row_size; j++)
         {
-            ROOTHelper::FindPadInCanvasPartition(canvas.get(), static_cast<int>(i), j);
-            ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
-            ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-            auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
-            auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
-            frame[i][j] = ROOTHelper::CreateHist2D(Form("hist_%d_%d", static_cast<int>(i), j),"", 500, x_min, x_max, 500, y_min, y_max);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 0.0f);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 50.0f, 0.005f, 133);
-            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 506);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 60.0f, 1.0f, 133);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 50.0f, 0.01f, 133);
-            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.08/y_factor), 506);
-            ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
+            root_helper::FindPadInCanvasPartition(canvas.get(), static_cast<int>(i), j);
+            root_helper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+            root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+            auto x_factor{ root_helper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
+            auto y_factor{ root_helper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
+            frame[i][j] = root_helper::CreateHist2D(Form("hist_%d_%d", static_cast<int>(i), j),"", 500, x_min, x_max, 500, y_min, y_max);
+            root_helper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 0.0f);
+            root_helper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 50.0f, 0.005f, 133);
+            root_helper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 506);
+            root_helper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 60.0f, 1.0f, 133);
+            root_helper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 50.0f, 0.01f, 133);
+            root_helper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.08/y_factor), 506);
+            root_helper::SetLineAttribute(frame[i][j].get(), 1, 0);
             frame[i][j]->GetXaxis()->SetTitle("");
             frame[i][j]->GetYaxis()->SetTitle("Real Map Value");
             frame[i][j]->GetYaxis()->CenterTitle();
             frame[i][j]->SetStats(0);
             frame[i][j]->Draw();
-            ROOTHelper::SetMarkerAttribute(scatter_graph[i], element_marker, 1.0f, element_color);
-            ROOTHelper::SetLineAttribute(scatter_graph[i], 1, 2, element_color);
+            root_helper::SetMarkerAttribute(scatter_graph[i], element_marker, 1.0f, element_color);
+            root_helper::SetLineAttribute(scatter_graph[i], 1, 2, element_color);
             scatter_graph[i]->Draw("P");
-            ROOTHelper::SetLineAttribute(fit_function[i], 2, 2, kRed);
+            root_helper::SetLineAttribute(fit_function[i], 2, 2, kRed);
             fit_function[i]->SetRange(x_min, x_max);
             fit_function[i]->Draw("SAME");
         }
-        title_text[i] = ROOTHelper::CreatePaveText(0.30, 1.01, 0.70, 1.16, "nbNDC ARC", true);
-        ROOTHelper::SetPaveTextDefaultStyle(title_text[i].get());
-        ROOTHelper::SetPaveAttribute(title_text[i].get(), 0, 0.2);
-        ROOTHelper::SetTextAttribute(title_text[i].get(), 60.0f, 103, 22);
-        ROOTHelper::SetFillAttribute(title_text[i].get(), 1001, element_color, 0.5f);
+        title_text[i] = root_helper::CreatePaveText(0.30, 1.01, 0.70, 1.16, "nbNDC ARC", true);
+        root_helper::SetPaveTextDefaultStyle(title_text[i].get());
+        root_helper::SetPaveAttribute(title_text[i].get(), 0, 0.2);
+        root_helper::SetTextAttribute(title_text[i].get(), 60.0f, 103, 22);
+        root_helper::SetFillAttribute(title_text[i].get(), 1001, element_color, 0.5f);
         title_text[i]->AddText(element_label.data());
         title_text[i]->Draw();
 
-        r_square_text[i] = ROOTHelper::CreatePaveText(0.30, 0.05, 0.95, 0.18, "nbNDC ARC", true);
-        ROOTHelper::SetPaveTextDefaultStyle(r_square_text[i].get());
-        ROOTHelper::SetPaveAttribute(r_square_text[i].get(), 0, 0.5);
-        ROOTHelper::SetLineAttribute(r_square_text[i].get(), 1, 0);
-        ROOTHelper::SetTextAttribute(r_square_text[i].get(), 45.0f, 133, 22);
-        ROOTHelper::SetFillAttribute(r_square_text[i].get(), 1001, kAzure-7, 0.20f);
+        r_square_text[i] = root_helper::CreatePaveText(0.30, 0.05, 0.95, 0.18, "nbNDC ARC", true);
+        root_helper::SetPaveTextDefaultStyle(r_square_text[i].get());
+        root_helper::SetPaveAttribute(r_square_text[i].get(), 0, 0.5);
+        root_helper::SetLineAttribute(r_square_text[i].get(), 1, 0);
+        root_helper::SetTextAttribute(r_square_text[i].get(), 45.0f, 133, 22);
+        root_helper::SetFillAttribute(r_square_text[i].get(), 1001, kAzure-7, 0.20f);
         r_square_text[i]->AddText(Form("R^{2} = %.2f", r_square[i]));
         r_square_text[i]->Draw();
 
-        fit_info_text[i] = ROOTHelper::CreatePaveText(0.05, 0.88, 0.95, 0.99, "nbNDC", true);
-        ROOTHelper::SetPaveTextDefaultStyle(fit_info_text[i].get());
-        ROOTHelper::SetTextAttribute(fit_info_text[i].get(), 45.0f, 133, 22, 0.0, kGray+2);
+        fit_info_text[i] = root_helper::CreatePaveText(0.05, 0.88, 0.95, 0.99, "nbNDC", true);
+        root_helper::SetPaveTextDefaultStyle(fit_info_text[i].get());
+        root_helper::SetTextAttribute(fit_info_text[i].get(), 45.0f, 133, 22, 0.0, kGray+2);
         if (intercept[i] > 0.0)
         {
             fit_info_text[i]->AddText(Form("#font[1]{y} = %.2f#font[1]{x}+ %.2f", slope[i], intercept[i]));
@@ -289,20 +289,20 @@ void DemoPainter::PainMapValueComparisonSingle(
         fit_info_text[i]->Draw();
     }
     canvas->cd();
-    auto pad_extra{ ROOTHelper::CreatePad("pad_extra","", 0.08, 0.00, 0.98, 0.12) };
+    auto pad_extra{ root_helper::CreatePad("pad_extra","", 0.08, 0.00, 0.98, 0.12) };
     pad_extra->Draw();
     pad_extra->cd();
-    ROOTHelper::SetPadDefaultStyle(pad_extra.get());
-    ROOTHelper::SetFillAttribute(pad_extra.get(), 4000);
-    auto bottom_title_text{ ROOTHelper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
-    ROOTHelper::SetPaveTextDefaultStyle(bottom_title_text.get());
-    ROOTHelper::SetFillAttribute(bottom_title_text.get(), 4000);
-    ROOTHelper::SetTextAttribute(bottom_title_text.get(), 50.0f, 133, 22);
+    root_helper::SetPadDefaultStyle(pad_extra.get());
+    root_helper::SetFillAttribute(pad_extra.get(), 4000);
+    auto bottom_title_text{ root_helper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
+    root_helper::SetPaveTextDefaultStyle(bottom_title_text.get());
+    root_helper::SetFillAttribute(bottom_title_text.get(), 4000);
+    root_helper::SetTextAttribute(bottom_title_text.get(), 50.0f, 133, 22);
     bottom_title_text->AddText("Simulated Map Value");
     bottom_title_text->Draw();
-    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
+    root_helper::PrintCanvasPad(canvas.get(), file_path);
 
-    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    root_helper::PrintCanvasClose(canvas.get(), file_path);
     Logger::Log(LogLevel::Info, " Output file: " + file_path);
     #endif
 }
@@ -323,9 +323,9 @@ void DemoPainter::PaintAtomMapValueExample(
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);
 
-    auto canvas{ ROOTHelper::CreateCanvas("test","", 1000, 1000) };
-    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+    auto canvas{ root_helper::CreateCanvas("test","", 1000, 1000) };
+    root_helper::SetCanvasDefaultStyle(canvas.get());
+    root_helper::PrintCanvasOpen(canvas.get(), file_path);
 
     std::vector<std::unique_ptr<TGraphErrors>> map_value_graph_list;
     std::unique_ptr<TF1> gaus_function;
@@ -338,7 +338,7 @@ void DemoPainter::PaintAtomMapValueExample(
     {
         auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
         auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
-        ROOTHelper::SetLineAttribute(graph.get(), 1, 5, static_cast<short>(kAzure-7), 0.3f);
+        root_helper::SetLineAttribute(graph.get(), 1, 5, static_cast<short>(kAzure-7), 0.3f);
         map_value_graph_list.emplace_back(std::move(graph));
         auto map_value_range{ LocalPotentialView::RequireFor(*atom).GetResponseRange(0.0) };
         y_array.emplace_back(std::get<0>(map_value_range));
@@ -354,19 +354,19 @@ void DemoPainter::PaintAtomMapValueExample(
     auto x_max{ 1.49 };
     auto y_min{ std::get<0>(y_range) };
     auto y_max{ std::get<1>(y_range) };
-    auto line_ref{ ROOTHelper::CreateLine(x_min, 0.0, x_max, 0.0) };
+    auto line_ref{ root_helper::CreateLine(x_min, 0.0, x_max, 0.0) };
 
-    auto frame{ ROOTHelper::CreateHist2D("frame","", 100, x_min, x_max, 100, y_min, y_max) };
-    ROOTHelper::SetPadMarginAttribute(gPad, 0.20f, 0.05f, 0.20f, 0.05f);
-    ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
-    ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-    ROOTHelper::SetAxisTitleAttribute(frame->GetXaxis(), 90.0f, 1.0f);
-    ROOTHelper::SetAxisTitleAttribute(frame->GetYaxis(), 90.0f, 1.0f);
-    ROOTHelper::SetAxisLabelAttribute(frame->GetXaxis(), 80.0f, 0.005f, 133);
-    ROOTHelper::SetAxisLabelAttribute(frame->GetYaxis(), 80.0f, 0.01f, 133);
-    ROOTHelper::SetAxisTickAttribute(frame->GetXaxis(), 0.05f, 505);
-    ROOTHelper::SetAxisTickAttribute(frame->GetYaxis(), 0.05f, 505);
-    ROOTHelper::SetLineAttribute(frame.get(), 1, 0);
+    auto frame{ root_helper::CreateHist2D("frame","", 100, x_min, x_max, 100, y_min, y_max) };
+    root_helper::SetPadMarginAttribute(gPad, 0.20f, 0.05f, 0.20f, 0.05f);
+    root_helper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+    root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+    root_helper::SetAxisTitleAttribute(frame->GetXaxis(), 90.0f, 1.0f);
+    root_helper::SetAxisTitleAttribute(frame->GetYaxis(), 90.0f, 1.0f);
+    root_helper::SetAxisLabelAttribute(frame->GetXaxis(), 80.0f, 0.005f, 133);
+    root_helper::SetAxisLabelAttribute(frame->GetYaxis(), 80.0f, 0.01f, 133);
+    root_helper::SetAxisTickAttribute(frame->GetXaxis(), 0.05f, 505);
+    root_helper::SetAxisTickAttribute(frame->GetYaxis(), 0.05f, 505);
+    root_helper::SetLineAttribute(frame.get(), 1, 0);
     frame->SetStats(0);
     frame->GetXaxis()->SetTitle("Radial Distance #[]{#AA}");
     frame->GetYaxis()->SetTitle("Map Value");
@@ -374,23 +374,23 @@ void DemoPainter::PaintAtomMapValueExample(
 
     for (auto & graph : map_value_graph_list) graph->Draw("L X0");
 
-    ROOTHelper::SetLineAttribute(line_ref.get(), 2, 3, kBlack);
+    root_helper::SetLineAttribute(line_ref.get(), 2, 3, kBlack);
     line_ref->Draw();
 
-    ROOTHelper::SetLineAttribute(gaus_function.get(), 9, 5, kRed+1);
+    root_helper::SetLineAttribute(gaus_function.get(), 9, 5, kRed+1);
     gaus_function->Draw("SAME");
 
-    auto result_text{ ROOTHelper::CreatePaveText(0.25, 0.20, 0.95, 0.40, "nbNDC", false) };
-    ROOTHelper::SetPaveTextDefaultStyle(result_text.get());
-    ROOTHelper::SetTextAttribute(result_text.get(), 80.0f, 133, 22, 0.0, kRed+1);
-    ROOTHelper::SetFillAttribute(result_text.get(), 4000);
+    auto result_text{ root_helper::CreatePaveText(0.25, 0.20, 0.95, 0.40, "nbNDC", false) };
+    root_helper::SetPaveTextDefaultStyle(result_text.get());
+    root_helper::SetTextAttribute(result_text.get(), 80.0f, 133, 22, 0.0, kRed+1);
+    root_helper::SetFillAttribute(result_text.get(), 4000);
     result_text->AddText(Form("#font[2]{A} = %.2f  ;  #font[2]{#tau} = %.2f", amplitude_prior, width_prior));
     result_text->Draw();
 
-    auto legend{ ROOTHelper::CreateLegend(0.25, 0.82, 0.99, 0.95, false) };
-    ROOTHelper::SetLegendDefaultStyle(legend.get());
-    ROOTHelper::SetFillAttribute(legend.get(), 4000);
-    ROOTHelper::SetTextAttribute(legend.get(), 65.0f, 133, 12, 0.0);
+    auto legend{ root_helper::CreateLegend(0.25, 0.82, 0.99, 0.95, false) };
+    root_helper::SetLegendDefaultStyle(legend.get());
+    root_helper::SetFillAttribute(legend.get(), 4000);
+    root_helper::SetTextAttribute(legend.get(), 65.0f, 133, 12, 0.0);
     legend->SetMargin(0.15f);
     legend->AddEntry(gaus_function.get(),
         "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})}", "l");
@@ -398,8 +398,8 @@ void DemoPainter::PaintAtomMapValueExample(
         "Map Value", "l");
     legend->Draw();
 
-    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
-    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    root_helper::PrintCanvasPad(canvas.get(), file_path);
+    root_helper::PrintCanvasClose(canvas.get(), file_path);
     Logger::Log(LogLevel::Info, " Output file: " + file_path);
     #endif
 }
@@ -420,9 +420,9 @@ void DemoPainter::PaintGroupGausMainChainSummary(
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);
 
-    auto canvas{ ROOTHelper::CreateCanvas("test","", 3000, 1200) };
-    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+    auto canvas{ root_helper::CreateCanvas("test","", 3000, 1200) };
+    root_helper::SetCanvasDefaultStyle(canvas.get());
+    root_helper::PrintCanvasOpen(canvas.get(), file_path);
     const int pad_size_x{ 4 };
     const int pad_size_y{ 4 };
     std::unique_ptr<TPad> pad[pad_size_x][pad_size_y];
@@ -435,7 +435,7 @@ void DemoPainter::PaintGroupGausMainChainSummary(
         for (int j = 0; j < pad_size_y; j++)
         {
             auto pad_name{ "pad"+ std::to_string(i) + std::to_string(j) };
-            pad[i][j] = ROOTHelper::CreatePad(pad_name.data(),"", x_pos[i], y_pos[j], x_pos[i+1], y_pos[j+1]);
+            pad[i][j] = root_helper::CreatePad(pad_name.data(),"", x_pos[i], y_pos[j], x_pos[i+1], y_pos[j+1]);
         }
     }
 
@@ -449,8 +449,8 @@ void DemoPainter::PaintGroupGausMainChainSummary(
     {
         auto model_object{ model_list.at(j) };
         std::vector<double> amplitude_array, width_array;
-        info_text[j] = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
-        resolution_text[j] = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
+        info_text[j] = root_helper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
+        resolution_text[j] = root_helper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
         auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
         auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
         for (size_t k = 0; k < main_chain_element_count; k++)
@@ -467,24 +467,24 @@ void DemoPainter::PaintGroupGausMainChainSummary(
             }
             auto element_color{ AtomStyleCatalog::GetMainChainElementColor(k) };
             auto element_marker{ AtomStyleCatalog::GetMainChainElementOpenMarker(k) };
-            ROOTHelper::SetMarkerAttribute(amplitude_graph[j][k].get(), element_marker, marker_size, element_color);
-            ROOTHelper::SetMarkerAttribute(width_graph[j][k].get(), element_marker, marker_size, element_color);
-            ROOTHelper::SetMarkerAttribute(correlation_graph[j][k].get(), element_marker, marker_size, element_color);
-            ROOTHelper::SetLineAttribute(amplitude_graph[j][k].get(), 1, 1, element_color);
-            ROOTHelper::SetLineAttribute(width_graph[j][k].get(), 1, 1, element_color);
-            ROOTHelper::SetLineAttribute(correlation_graph[j][k].get(), 1, 1, element_color);
+            root_helper::SetMarkerAttribute(amplitude_graph[j][k].get(), element_marker, marker_size, element_color);
+            root_helper::SetMarkerAttribute(width_graph[j][k].get(), element_marker, marker_size, element_color);
+            root_helper::SetMarkerAttribute(correlation_graph[j][k].get(), element_marker, marker_size, element_color);
+            root_helper::SetLineAttribute(amplitude_graph[j][k].get(), 1, 1, element_color);
+            root_helper::SetLineAttribute(width_graph[j][k].get(), 1, 1, element_color);
+            root_helper::SetLineAttribute(correlation_graph[j][k].get(), 1, 1, element_color);
         }
         auto amplitude_range{ ArrayStats<double>::ComputeScalingRangeTuple(amplitude_array, 0.2) };
         auto width_range{ ArrayStats<double>::ComputeScalingRangeTuple(width_array, 0.1) };
 
-        frame[0][j] = ROOTHelper::CreateHist2D(("frame0"+std::to_string(j)).data(),"", 100, 0.0, 1.0, 100, std::get<0>(amplitude_range), std::get<1>(amplitude_range));
-        frame[1][j] = ROOTHelper::CreateHist2D(("frame1"+std::to_string(j)).data(),"", 100, std::get<0>(width_range), std::get<1>(width_range), 100, std::get<0>(amplitude_range), std::get<1>(amplitude_range));
-        frame[2][j] = ROOTHelper::CreateHist2D(("frame2"+std::to_string(j)).data(),"", 100, 0.0, 1.0, 100, std::get<0>(width_range), std::get<1>(width_range));
+        frame[0][j] = root_helper::CreateHist2D(("frame0"+std::to_string(j)).data(),"", 100, 0.0, 1.0, 100, std::get<0>(amplitude_range), std::get<1>(amplitude_range));
+        frame[1][j] = root_helper::CreateHist2D(("frame1"+std::to_string(j)).data(),"", 100, std::get<0>(width_range), std::get<1>(width_range), 100, std::get<0>(amplitude_range), std::get<1>(amplitude_range));
+        frame[2][j] = root_helper::CreateHist2D(("frame2"+std::to_string(j)).data(),"", 100, 0.0, 1.0, 100, std::get<0>(width_range), std::get<1>(width_range));
     }
 
-    auto amplitude_title_text{ ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
-    auto width_title_text{ ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
-    auto correlation_title_text{ ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
+    auto amplitude_title_text{ root_helper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
+    auto width_title_text{ root_helper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
+    auto correlation_title_text{ root_helper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
 
     auto width_range_total{ ArrayStats<double>::ComputeScalingRangeTuple(width_array_total, 0.2) };
     for (int j = 0; j < pad_size_y; j++)
@@ -497,7 +497,7 @@ void DemoPainter::PaintGroupGausMainChainSummary(
     {
         for (int j = 0; j < pad_size_y; j++)
         {
-            ROOTHelper::SetPadDefaultStyle(pad[i][j].get());
+            root_helper::SetPadDefaultStyle(pad[i][j].get());
             pad[i][j]->Draw();
         }
     }
@@ -516,12 +516,12 @@ void DemoPainter::PaintGroupGausMainChainSummary(
         // PDB & EMD Text
         auto info_top_margin{ (draw_title_flag) ? 0.12 : 0.025 };
         auto info_bottom_margin{ (draw_axis_flag) ? 0.12 : 0.025 };
-        ROOTHelper::SetPaveTextMarginInCanvas(pad[0][j].get(), info_text[j].get(), 0.003, 0.00, info_bottom_margin, info_top_margin);
-        ROOTHelper::SetPaveTextDefaultStyle(info_text[j].get());
-        ROOTHelper::SetPaveAttribute(info_text[j].get(), 0, 0.1);
-        ROOTHelper::SetFillAttribute(info_text[j].get(), 1001, kAzure-7, 0.3f);
-        ROOTHelper::SetTextAttribute(info_text[j].get(), 80.0f, 103, 32);
-        ROOTHelper::SetLineAttribute(info_text[j].get(), 1, 0);
+        root_helper::SetPaveTextMarginInCanvas(pad[0][j].get(), info_text[j].get(), 0.003, 0.00, info_bottom_margin, info_top_margin);
+        root_helper::SetPaveTextDefaultStyle(info_text[j].get());
+        root_helper::SetPaveAttribute(info_text[j].get(), 0, 0.1);
+        root_helper::SetFillAttribute(info_text[j].get(), 1001, kAzure-7, 0.3f);
+        root_helper::SetTextAttribute(info_text[j].get(), 80.0f, 103, 32);
+        root_helper::SetLineAttribute(info_text[j].get(), 1, 0);
         info_text[j]->AddText(pdb_id.data());
         info_text[j]->AddText(emd_id.data());
         info_text[j]->Draw();
@@ -529,11 +529,11 @@ void DemoPainter::PaintGroupGausMainChainSummary(
         // Resolution Text
         auto top_margin{ (draw_title_flag) ? 0.10 : 0.01 };
         auto bottom_margin{ (draw_axis_flag) ? 0.20 : 0.10 };
-        ROOTHelper::SetPaveTextMarginInCanvas(pad[0][j].get(), resolution_text[j].get(), 0.001, 0.07, bottom_margin, top_margin);
-        ROOTHelper::SetPaveTextDefaultStyle(resolution_text[j].get());
-        ROOTHelper::SetPaveAttribute(resolution_text[j].get(), 0, 0.2);
-        ROOTHelper::SetFillAttribute(resolution_text[j].get(), 1001, kAzure-7);
-        ROOTHelper::SetTextAttribute(resolution_text[j].get(), 80.0f, 133, 22, 0.0, kYellow-10);
+        root_helper::SetPaveTextMarginInCanvas(pad[0][j].get(), resolution_text[j].get(), 0.001, 0.07, bottom_margin, top_margin);
+        root_helper::SetPaveTextDefaultStyle(resolution_text[j].get());
+        root_helper::SetPaveAttribute(resolution_text[j].get(), 0, 0.2);
+        root_helper::SetFillAttribute(resolution_text[j].get(), 1001, kAzure-7);
+        root_helper::SetTextAttribute(resolution_text[j].get(), 80.0f, 133, 22, 0.0, kYellow-10);
         resolution_text[j]->AddText(Form("%.2f #AA", resolution));
         resolution_text[j]->Draw();
 
@@ -556,8 +556,8 @@ void DemoPainter::PaintGroupGausMainChainSummary(
             pad[3][j].get(), width_title_text.get(), "Width #font[2]{#tau}", 80.0f);
     }
 
-    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
-    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    root_helper::PrintCanvasPad(canvas.get(), file_path);
+    root_helper::PrintCanvasClose(canvas.get(), file_path);
     Logger::Log(LogLevel::Info, " Output file: " + file_path);
     #endif
 }
@@ -580,9 +580,9 @@ void DemoPainter::PaintGroupGausMainChainSingle(
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);
 
-    auto canvas{ ROOTHelper::CreateCanvas("test","", 3000, 500) };
-    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+    auto canvas{ root_helper::CreateCanvas("test","", 3000, 500) };
+    root_helper::SetCanvasDefaultStyle(canvas.get());
+    root_helper::PrintCanvasOpen(canvas.get(), file_path);
     const int pad_size{ 4 };
     std::unique_ptr<TPad> pad[pad_size];
     std::unique_ptr<TH2> frame[pad_size];
@@ -591,7 +591,7 @@ void DemoPainter::PaintGroupGausMainChainSingle(
     for (int i = 0; i < pad_size; i++)
     {
         auto pad_name{ "pad"+ std::to_string(i) };
-        pad[i] = ROOTHelper::CreatePad(pad_name.data(),"", x_pos[i], 0.0, x_pos[i+1], 1.0);
+        pad[i] = root_helper::CreatePad(pad_name.data(),"", x_pos[i], 0.0, x_pos[i+1], 1.0);
     }
 
     std::unique_ptr<TPaveText> info_text;
@@ -600,8 +600,8 @@ void DemoPainter::PaintGroupGausMainChainSingle(
     std::unique_ptr<TGraphErrors> width_graph[main_chain_element_count];
     std::unique_ptr<TGraphErrors> correlation_graph[main_chain_element_count];
     std::vector<double> amplitude_array, width_array;
-    info_text = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
-    resolution_text = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
+    info_text = root_helper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
+    resolution_text = root_helper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
     for (size_t k = 0; k < main_chain_element_count; k++)
     {
         auto group_key_list{ AtomClassifier::GetMainChainComponentAtomClassGroupKeyList(k) };
@@ -615,28 +615,28 @@ void DemoPainter::PaintGroupGausMainChainSingle(
         }
         auto element_color{ AtomStyleCatalog::GetMainChainElementColor(k) };
         auto element_marker{ AtomStyleCatalog::GetMainChainElementOpenMarker(k) };
-        ROOTHelper::SetMarkerAttribute(amplitude_graph[k].get(), element_marker, marker_size, element_color);
-        ROOTHelper::SetMarkerAttribute(width_graph[k].get(), element_marker, marker_size, element_color);
-        ROOTHelper::SetMarkerAttribute(correlation_graph[k].get(), element_marker, marker_size, element_color);
-        ROOTHelper::SetLineAttribute(amplitude_graph[k].get(), 1, 1, element_color);
-        ROOTHelper::SetLineAttribute(width_graph[k].get(), 1, 1, element_color);
-        ROOTHelper::SetLineAttribute(correlation_graph[k].get(), 1, 1, element_color);
+        root_helper::SetMarkerAttribute(amplitude_graph[k].get(), element_marker, marker_size, element_color);
+        root_helper::SetMarkerAttribute(width_graph[k].get(), element_marker, marker_size, element_color);
+        root_helper::SetMarkerAttribute(correlation_graph[k].get(), element_marker, marker_size, element_color);
+        root_helper::SetLineAttribute(amplitude_graph[k].get(), 1, 1, element_color);
+        root_helper::SetLineAttribute(width_graph[k].get(), 1, 1, element_color);
+        root_helper::SetLineAttribute(correlation_graph[k].get(), 1, 1, element_color);
     }
     auto amplitude_range{ ArrayStats<double>::ComputeScalingRangeTuple(amplitude_array, 0.2) };
     auto width_range{ ArrayStats<double>::ComputeScalingRangeTuple(width_array, 0.1) };
 
-    frame[0] = ROOTHelper::CreateHist2D("frame0","", 100, 0.0, 1.0, 100, std::get<0>(amplitude_range), std::get<1>(amplitude_range));
-    frame[1] = ROOTHelper::CreateHist2D("frame1","", 100, std::get<0>(width_range), std::get<1>(width_range), 100, std::get<0>(amplitude_range), std::get<1>(amplitude_range));
-    frame[2] = ROOTHelper::CreateHist2D("frame2","", 100, 0.0, 1.0, 100, std::get<0>(width_range), std::get<1>(width_range));
+    frame[0] = root_helper::CreateHist2D("frame0","", 100, 0.0, 1.0, 100, std::get<0>(amplitude_range), std::get<1>(amplitude_range));
+    frame[1] = root_helper::CreateHist2D("frame1","", 100, std::get<0>(width_range), std::get<1>(width_range), 100, std::get<0>(amplitude_range), std::get<1>(amplitude_range));
+    frame[2] = root_helper::CreateHist2D("frame2","", 100, 0.0, 1.0, 100, std::get<0>(width_range), std::get<1>(width_range));
 
-    auto amplitude_title_text{ ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
-    auto width_title_text{ ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
-    auto correlation_title_text{ ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
+    auto amplitude_title_text{ root_helper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
+    auto width_title_text{ root_helper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
+    auto correlation_title_text{ root_helper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
 
     canvas->cd();
     for (int i = 0; i < pad_size; i++)
     {
-        ROOTHelper::SetPadDefaultStyle(pad[i].get());
+        root_helper::SetPadDefaultStyle(pad[i].get());
         pad[i]->Draw();
     }
 
@@ -645,22 +645,22 @@ void DemoPainter::PaintGroupGausMainChainSingle(
     auto emd_id{ model_object->GetEmdID() };
 
     // PDB & EMD Text
-    ROOTHelper::SetPaveTextMarginInCanvas(pad[0].get(), info_text.get(), 0.003, 0.00, 0.25, 0.25);
-    ROOTHelper::SetPaveTextDefaultStyle(info_text.get());
-    ROOTHelper::SetPaveAttribute(info_text.get(), 0, 0.1);
-    ROOTHelper::SetFillAttribute(info_text.get(), 1001, kAzure-7, 0.3f);
-    ROOTHelper::SetTextAttribute(info_text.get(), 75.0f, 103, 32);
-    ROOTHelper::SetLineAttribute(info_text.get(), 1, 0);
+    root_helper::SetPaveTextMarginInCanvas(pad[0].get(), info_text.get(), 0.003, 0.00, 0.25, 0.25);
+    root_helper::SetPaveTextDefaultStyle(info_text.get());
+    root_helper::SetPaveAttribute(info_text.get(), 0, 0.1);
+    root_helper::SetFillAttribute(info_text.get(), 1001, kAzure-7, 0.3f);
+    root_helper::SetTextAttribute(info_text.get(), 75.0f, 103, 32);
+    root_helper::SetLineAttribute(info_text.get(), 1, 0);
     info_text->AddText(pdb_id.data());
     info_text->AddText(emd_id.data());
     info_text->Draw();
     
     // Resolution Text
-    ROOTHelper::SetPaveTextMarginInCanvas(pad[0].get(), resolution_text.get(), 0.001, 0.07, 0.50, 0.20);
-    ROOTHelper::SetPaveTextDefaultStyle(resolution_text.get());
-    ROOTHelper::SetPaveAttribute(resolution_text.get(), 0, 0.2);
-    ROOTHelper::SetFillAttribute(resolution_text.get(), 1001, kAzure-7);
-    ROOTHelper::SetTextAttribute(resolution_text.get(), 80.0f, 133, 22, 0.0, kYellow-10);
+    root_helper::SetPaveTextMarginInCanvas(pad[0].get(), resolution_text.get(), 0.001, 0.07, 0.50, 0.20);
+    root_helper::SetPaveTextDefaultStyle(resolution_text.get());
+    root_helper::SetPaveAttribute(resolution_text.get(), 0, 0.2);
+    root_helper::SetFillAttribute(resolution_text.get(), 1001, kAzure-7);
+    root_helper::SetTextAttribute(resolution_text.get(), 80.0f, 133, 22, 0.0, kYellow-10);
     auto resolution{ model_object->GetResolution() };
     if (emd_id == "Simulation")
     {
@@ -672,10 +672,10 @@ void DemoPainter::PaintGroupGausMainChainSingle(
     }
     resolution_text->Draw();
 
-    auto legend{ ROOTHelper::CreateLegend(0.15, 0.00, 1.00, 0.20, false) };
-    ROOTHelper::SetLegendDefaultStyle(legend.get());
-    ROOTHelper::SetTextAttribute(legend.get(), 70.0f, 103, 12);
-    ROOTHelper::SetFillAttribute(legend.get(), 4000);
+    auto legend{ root_helper::CreateLegend(0.15, 0.00, 1.00, 0.20, false) };
+    root_helper::SetLegendDefaultStyle(legend.get());
+    root_helper::SetTextAttribute(legend.get(), 70.0f, 103, 12);
+    root_helper::SetFillAttribute(legend.get(), 4000);
     for (size_t k = 0; k < main_chain_element_count; k++)
     {
         auto element_color{ AtomStyleCatalog::GetMainChainElementColor(k) };
@@ -694,16 +694,16 @@ void DemoPainter::PaintGroupGausMainChainSingle(
         pad[1].get(), amplitude_title_text.get(), "Amplitude #font[2]{A}", 80.0f);
 
     pad[2]->cd();
-    ROOTHelper::SetPadMarginInCanvas(pad[2].get(), 0.005, 0.005, 0.205, 0.205);
-    ROOTHelper::SetPadLayout(pad[2].get(), 1, 1, 0, 0);
-    ROOTHelper::SetAxisTitleAttribute(frame[1]->GetXaxis(), 60.0f, 0.75f);
-    ROOTHelper::SetAxisTitleAttribute(frame[1]->GetYaxis(), 0.0f);
-    ROOTHelper::SetAxisLabelAttribute(frame[1]->GetXaxis(), 47.0f);
-    ROOTHelper::SetAxisLabelAttribute(frame[1]->GetYaxis(), 0.0f);
-    auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad[2].get(), 0.040, 0) };
-    auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad[2].get(), 0.008, 1) };
-    ROOTHelper::SetAxisTickAttribute(frame[1]->GetXaxis(), static_cast<float>(x_tick_length), 505);
-    ROOTHelper::SetAxisTickAttribute(frame[1]->GetYaxis(), static_cast<float>(y_tick_length), 505);
+    root_helper::SetPadMarginInCanvas(pad[2].get(), 0.005, 0.005, 0.205, 0.205);
+    root_helper::SetPadLayout(pad[2].get(), 1, 1, 0, 0);
+    root_helper::SetAxisTitleAttribute(frame[1]->GetXaxis(), 60.0f, 0.75f);
+    root_helper::SetAxisTitleAttribute(frame[1]->GetYaxis(), 0.0f);
+    root_helper::SetAxisLabelAttribute(frame[1]->GetXaxis(), 47.0f);
+    root_helper::SetAxisLabelAttribute(frame[1]->GetYaxis(), 0.0f);
+    auto x_tick_length{ root_helper::ConvertGlobalTickLengthToPadTickLength(pad[2].get(), 0.040, 0) };
+    auto y_tick_length{ root_helper::ConvertGlobalTickLengthToPadTickLength(pad[2].get(), 0.008, 1) };
+    root_helper::SetAxisTickAttribute(frame[1]->GetXaxis(), static_cast<float>(x_tick_length), 505);
+    root_helper::SetAxisTickAttribute(frame[1]->GetYaxis(), static_cast<float>(y_tick_length), 505);
     frame[1]->SetStats(0);
     frame[1]->GetXaxis()->SetTitle("Width #font[2]{#tau}");
     frame[1]->GetXaxis()->CenterTitle();
@@ -719,8 +719,8 @@ void DemoPainter::PaintGroupGausMainChainSingle(
     painter_internal::PrintGausTitlePad(
         pad[3].get(), width_title_text.get(), "Width #font[2]{#tau}", 80.0f);
 
-    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
-    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    root_helper::PrintCanvasPad(canvas.get(), file_path);
+    root_helper::PrintCanvasClose(canvas.get(), file_path);
     Logger::Log(LogLevel::Info, " Output file: " + file_path);
     #endif
 }
@@ -748,10 +748,10 @@ void DemoPainter::PaintGroupGausToFSC(
     const int col_size{ 4 };
     const int row_size{ 1 };
 
-    auto canvas{ ROOTHelper::CreateCanvas("test","", 1500, 300) };
-    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.08f, 0.01f, 0.30f, 0.02f, 0.01f, 0.005f);
-    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+    auto canvas{ root_helper::CreateCanvas("test","", 1500, 300) };
+    root_helper::SetCanvasDefaultStyle(canvas.get());
+    root_helper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.08f, 0.01f, 0.30f, 0.02f, 0.01f, 0.005f);
+    root_helper::PrintCanvasOpen(canvas.get(), file_path);
 
     std::unique_ptr<TGraphErrors> graph[col_size];
     std::unique_ptr<TF1> fit_function[col_size];
@@ -763,7 +763,7 @@ void DemoPainter::PaintGroupGausToFSC(
     {
         if (i >= col_size) continue;
         auto group_key{ AtomClassifier::GetMainChainSimpleAtomClassGroupKey(i) };
-        graph[i] = ROOTHelper::CreateGraphErrors();
+        graph[i] = root_helper::CreateGraphErrors();
         auto count{ 0 };
         for (auto model : model_list)
         {
@@ -781,13 +781,13 @@ void DemoPainter::PaintGroupGausToFSC(
             y_array.push_back(graph[i]->GetPointY(p));
         }
         auto element_color{ AtomStyleCatalog::GetMainChainElementColor(i) };
-        ROOTHelper::SetMarkerAttribute(graph[i].get(), 20, 1.2f, element_color);
-        ROOTHelper::SetLineAttribute(graph[i].get(), 1, 2, element_color);
+        root_helper::SetMarkerAttribute(graph[i].get(), 20, 1.2f, element_color);
+        root_helper::SetLineAttribute(graph[i].get(), 1, 2, element_color);
 
-        r_square[i] = ROOTHelper::PerformLinearRegression(graph[i].get(), slope[i], intercept[i]);
-        fit_function[i] = ROOTHelper::CreateFunction1D(Form("fit_%d", static_cast<int>(i)), "x*[1]+[0]");
+        r_square[i] = root_helper::PerformLinearRegression(graph[i].get(), slope[i], intercept[i]);
+        fit_function[i] = root_helper::CreateFunction1D(Form("fit_%d", static_cast<int>(i)), "x*[1]+[0]");
         fit_function[i]->SetParameters(intercept[i], slope[i]);
-        ROOTHelper::SetLineAttribute(fit_function[i].get(), 2, 2, kRed);
+        root_helper::SetLineAttribute(fit_function[i].get(), 2, 2, kRed);
     }
 
     auto x_range{ ArrayStats<double>::ComputeScalingRangeTuple(x_array, 0.2) };
@@ -807,19 +807,19 @@ void DemoPainter::PaintGroupGausToFSC(
         auto element_label{ AtomStyleCatalog::GetMainChainElementLabel(i) };
         for (int j = 0; j < row_size; j++)
         {
-            ROOTHelper::FindPadInCanvasPartition(canvas.get(), static_cast<int>(i), j);
-            ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
-            ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-            auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
-            auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
-            frame[i][j] = ROOTHelper::CreateHist2D(Form("hist_%d_%d", static_cast<int>(i), j),"", 500, x_min, x_max, 500, y_min, y_max);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 0.0f);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 40.0f, 0.005f, 133);
-            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 506);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 45.0f, 1.3f, 133);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 45.0f, 0.01f, 133);
-            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.08/y_factor), 506);
-            ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
+            root_helper::FindPadInCanvasPartition(canvas.get(), static_cast<int>(i), j);
+            root_helper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+            root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+            auto x_factor{ root_helper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
+            auto y_factor{ root_helper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
+            frame[i][j] = root_helper::CreateHist2D(Form("hist_%d_%d", static_cast<int>(i), j),"", 500, x_min, x_max, 500, y_min, y_max);
+            root_helper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 0.0f);
+            root_helper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 40.0f, 0.005f, 133);
+            root_helper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 506);
+            root_helper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 45.0f, 1.3f, 133);
+            root_helper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 45.0f, 0.01f, 133);
+            root_helper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.08/y_factor), 506);
+            root_helper::SetLineAttribute(frame[i][j].get(), 1, 0);
             frame[i][j]->GetXaxis()->SetTitle("");
             frame[i][j]->GetYaxis()->SetTitle("Width #tau");
             frame[i][j]->GetXaxis()->CenterTitle();
@@ -830,37 +830,37 @@ void DemoPainter::PaintGroupGausToFSC(
             fit_function[i]->SetRange(x_min, x_max);
             fit_function[i]->Draw("SAME");
         }
-        title_text[i] = ROOTHelper::CreatePaveText(0.10, 0.75, 0.40, 0.99, "nbNDC ARC", true);
-        ROOTHelper::SetPaveTextDefaultStyle(title_text[i].get());
-        ROOTHelper::SetPaveAttribute(title_text[i].get(), 0, 0.2);
-        ROOTHelper::SetTextAttribute(title_text[i].get(), 60.0f, 103, 22);
-        ROOTHelper::SetFillAttribute(title_text[i].get(), 1001, element_color, 0.5f);
+        title_text[i] = root_helper::CreatePaveText(0.10, 0.75, 0.40, 0.99, "nbNDC ARC", true);
+        root_helper::SetPaveTextDefaultStyle(title_text[i].get());
+        root_helper::SetPaveAttribute(title_text[i].get(), 0, 0.2);
+        root_helper::SetTextAttribute(title_text[i].get(), 60.0f, 103, 22);
+        root_helper::SetFillAttribute(title_text[i].get(), 1001, element_color, 0.5f);
         title_text[i]->AddText(element_label.data());
         title_text[i]->Draw();
 
-        r_square_text[i] = ROOTHelper::CreatePaveText(0.48, 0.05, 0.99, 0.25, "nbNDC ARC", true);
-        ROOTHelper::SetPaveTextDefaultStyle(r_square_text[i].get());
-        ROOTHelper::SetPaveAttribute(r_square_text[i].get(), 0, 0.5);
-        ROOTHelper::SetLineAttribute(r_square_text[i].get(), 1, 0);
-        ROOTHelper::SetTextAttribute(r_square_text[i].get(), 40.0f, 133, 22);
-        ROOTHelper::SetFillAttribute(r_square_text[i].get(), 1001, kAzure-7, 0.20f);
+        r_square_text[i] = root_helper::CreatePaveText(0.48, 0.05, 0.99, 0.25, "nbNDC ARC", true);
+        root_helper::SetPaveTextDefaultStyle(r_square_text[i].get());
+        root_helper::SetPaveAttribute(r_square_text[i].get(), 0, 0.5);
+        root_helper::SetLineAttribute(r_square_text[i].get(), 1, 0);
+        root_helper::SetTextAttribute(r_square_text[i].get(), 40.0f, 133, 22);
+        root_helper::SetFillAttribute(r_square_text[i].get(), 1001, kAzure-7, 0.20f);
         r_square_text[i]->AddText(Form("R^{2} = %.2f", r_square[i]));
         r_square_text[i]->Draw();
     }
     canvas->cd();
-    auto pad_extra{ ROOTHelper::CreatePad("pad_extra","", 0.08, 0.00, 0.98, 0.19) };
+    auto pad_extra{ root_helper::CreatePad("pad_extra","", 0.08, 0.00, 0.98, 0.19) };
     pad_extra->Draw();
     pad_extra->cd();
-    ROOTHelper::SetPadDefaultStyle(pad_extra.get());
-    ROOTHelper::SetFillAttribute(pad_extra.get(), 4000);
-    auto bottom_title_text{ ROOTHelper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
-    ROOTHelper::SetPaveTextDefaultStyle(bottom_title_text.get());
-    ROOTHelper::SetFillAttribute(bottom_title_text.get(), 4000);
-    ROOTHelper::SetTextAttribute(bottom_title_text.get(), 40.0f, 133, 22);
+    root_helper::SetPadDefaultStyle(pad_extra.get());
+    root_helper::SetFillAttribute(pad_extra.get(), 4000);
+    auto bottom_title_text{ root_helper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
+    root_helper::SetPaveTextDefaultStyle(bottom_title_text.get());
+    root_helper::SetFillAttribute(bottom_title_text.get(), 4000);
+    root_helper::SetTextAttribute(bottom_title_text.get(), 40.0f, 133, 22);
     bottom_title_text->AddText("FSC Resolution #[]{#AA}");
     bottom_title_text->Draw();
-    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
-    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    root_helper::PrintCanvasPad(canvas.get(), file_path);
+    root_helper::PrintCanvasClose(canvas.get(), file_path);
     Logger::Log(LogLevel::Info, " Output file: " + file_path);
     #endif
 }
@@ -884,11 +884,11 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
 
     const int pad_size{ 5 };
 
-    auto canvas{ ROOTHelper::CreateCanvas("test","", 1500, 400) };
-    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::SetCanvasPartition(
+    auto canvas{ root_helper::CreateCanvas("test","", 1500, 400) };
+    root_helper::SetCanvasDefaultStyle(canvas.get());
+    root_helper::SetCanvasPartition(
         canvas.get(), pad_size, 1, 0.08f, 0.08f, 0.25f, 0.13f, 0.011f, 0.011f);
-    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+    root_helper::PrintCanvasOpen(canvas.get(), file_path);
 
     auto normalized_z_position{ 0.5 };
     auto z_ratio_window{ 0.1 };
@@ -950,7 +950,7 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
     std::unique_ptr<TH2D> summary_hist[pad_size - 1];
     for (int i = 0; i < pad_size - 1; i++)
     {
-        summary_hist[i] = ROOTHelper::CreateHist2D(
+        summary_hist[i] = root_helper::CreateHist2D(
             Form("hist_%d", i), "", 5, 35.0, 65.0, 100, y_min, y_max);
         for (auto & graph : graph_list[i])
         {
@@ -962,41 +962,41 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
     }
 
     std::unique_ptr<TH2> frame[pad_size];
-    ROOTHelper::FindPadInCanvasPartition(canvas.get(), 0, 0);
-    ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
-    ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-    auto x_factor_tmp{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
-    auto y_factor_tmp{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
-    frame[0] = ROOTHelper::CreateHist2D(Form("frame_%d_%d", 0, 0),"", 500, x_pos_min, x_pos_max, 500, y_pos_min, y_pos_max);
-    ROOTHelper::SetAxisTitleAttribute(frame[0]->GetXaxis(), 50.0f, 0.8f, 133);
-    ROOTHelper::SetAxisLabelAttribute(frame[0]->GetXaxis(), 45.0f, 0.005f, 133);
-    ROOTHelper::SetAxisTickAttribute(frame[0]->GetXaxis(), static_cast<float>(y_factor_tmp*0.05/x_factor_tmp), 506);
-    ROOTHelper::SetAxisTitleAttribute(frame[0]->GetYaxis(), 50.0f, 1.1f, 133);
-    ROOTHelper::SetAxisLabelAttribute(frame[0]->GetYaxis(), 45.0f, 0.01f, 133);
-    ROOTHelper::SetAxisTickAttribute(frame[0]->GetYaxis(), static_cast<float>(x_factor_tmp*0.05/y_factor_tmp), 506);
-    ROOTHelper::SetLineAttribute(frame[0].get(), 1, 0);
+    root_helper::FindPadInCanvasPartition(canvas.get(), 0, 0);
+    root_helper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+    root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+    auto x_factor_tmp{ root_helper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
+    auto y_factor_tmp{ root_helper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
+    frame[0] = root_helper::CreateHist2D(Form("frame_%d_%d", 0, 0),"", 500, x_pos_min, x_pos_max, 500, y_pos_min, y_pos_max);
+    root_helper::SetAxisTitleAttribute(frame[0]->GetXaxis(), 50.0f, 0.8f, 133);
+    root_helper::SetAxisLabelAttribute(frame[0]->GetXaxis(), 45.0f, 0.005f, 133);
+    root_helper::SetAxisTickAttribute(frame[0]->GetXaxis(), static_cast<float>(y_factor_tmp*0.05/x_factor_tmp), 506);
+    root_helper::SetAxisTitleAttribute(frame[0]->GetYaxis(), 50.0f, 1.1f, 133);
+    root_helper::SetAxisLabelAttribute(frame[0]->GetYaxis(), 45.0f, 0.01f, 133);
+    root_helper::SetAxisTickAttribute(frame[0]->GetYaxis(), static_cast<float>(x_factor_tmp*0.05/y_factor_tmp), 506);
+    root_helper::SetLineAttribute(frame[0].get(), 1, 0);
     frame[0]->GetXaxis()->SetTitle("#font[2]{x} #[]{#AA}");
     frame[0]->GetYaxis()->SetTitle("#font[2]{y} #[]{#AA}");
     frame[0]->GetXaxis()->CenterTitle();
     frame[0]->GetYaxis()->CenterTitle();
     frame[0]->SetStats(0);
     frame[0]->Draw();
-    ROOTHelper::SetMarkerAttribute(graph_position.get(), 20, 0.2f, kAzure-7);
+    root_helper::SetMarkerAttribute(graph_position.get(), 20, 0.2f, kAzure-7);
     graph_position->Draw("P X0");
 
     auto circle_inner{ new TEllipse(0.0, 0.0, 40.0) };
-    ROOTHelper::SetFillAttribute(circle_inner, 0);
-    ROOTHelper::SetLineAttribute(circle_inner, 1, 1, kRed);
+    root_helper::SetFillAttribute(circle_inner, 0);
+    root_helper::SetLineAttribute(circle_inner, 1, 1, kRed);
     circle_inner->Draw();
     auto circle_outer{ new TEllipse(0.0, 0.0, 60.0) };
-    ROOTHelper::SetFillAttribute(circle_outer, 0);
-    ROOTHelper::SetLineAttribute(circle_outer, 1, 1, kRed);
+    root_helper::SetFillAttribute(circle_outer, 0);
+    root_helper::SetLineAttribute(circle_outer, 1, 1, kRed);
     circle_outer->Draw();
 
-    auto pos_text{ ROOTHelper::CreatePaveText(0.08, 1.0, 1.0, 1.2, "nbNDC", true) };
-    ROOTHelper::SetPaveTextDefaultStyle(pos_text.get());
-    ROOTHelper::SetFillAttribute(pos_text.get(), 4000);
-    ROOTHelper::SetTextAttribute(pos_text.get(), 35, 133, 32, 0.0, kAzure-7);
+    auto pos_text{ root_helper::CreatePaveText(0.08, 1.0, 1.0, 1.2, "nbNDC", true) };
+    root_helper::SetPaveTextDefaultStyle(pos_text.get());
+    root_helper::SetFillAttribute(pos_text.get(), 4000);
+    root_helper::SetTextAttribute(pos_text.get(), 35, 133, 32, 0.0, kAzure-7);
     auto slicing_z_center{ z_position - com_pos.at(2) };
     pos_text->AddText(
         Form("#font[2]{z} #in [%.1f, %.1f] #AA",
@@ -1007,19 +1007,19 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
     for (int i = 1; i < pad_size; i++)
     {
         auto element_id{ i - 1 };
-        ROOTHelper::FindPadInCanvasPartition(canvas.get(), i, 0);
-        ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
-        ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-        auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
-        auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
-        frame[i] = ROOTHelper::CreateHist2D(Form("frame_%d_%d", i, 0),"", 500, x_min[element_id], x_max[element_id], 500, y_min, y_max);
-        ROOTHelper::SetAxisTitleAttribute(frame[i]->GetXaxis(), 0.0f);
-        ROOTHelper::SetAxisLabelAttribute(frame[i]->GetXaxis(), 45.0f, 0.005f, 133);
-        ROOTHelper::SetAxisTickAttribute(frame[i]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 505);
-        ROOTHelper::SetAxisTitleAttribute(frame[i]->GetYaxis(), 55.0f, 1.0f, 133);
-        ROOTHelper::SetAxisLabelAttribute(frame[i]->GetYaxis(), 45.0f, 0.01f, 133);
-        ROOTHelper::SetAxisTickAttribute(frame[i]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 505);
-        ROOTHelper::SetLineAttribute(frame[i].get(), 1, 0);
+        root_helper::FindPadInCanvasPartition(canvas.get(), i, 0);
+        root_helper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+        root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+        auto x_factor{ root_helper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
+        auto y_factor{ root_helper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
+        frame[i] = root_helper::CreateHist2D(Form("frame_%d_%d", i, 0),"", 500, x_min[element_id], x_max[element_id], 500, y_min, y_max);
+        root_helper::SetAxisTitleAttribute(frame[i]->GetXaxis(), 0.0f);
+        root_helper::SetAxisLabelAttribute(frame[i]->GetXaxis(), 45.0f, 0.005f, 133);
+        root_helper::SetAxisTickAttribute(frame[i]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 505);
+        root_helper::SetAxisTitleAttribute(frame[i]->GetYaxis(), 55.0f, 1.0f, 133);
+        root_helper::SetAxisLabelAttribute(frame[i]->GetYaxis(), 45.0f, 0.01f, 133);
+        root_helper::SetAxisTickAttribute(frame[i]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 505);
+        root_helper::SetLineAttribute(frame[i].get(), 1, 0);
         frame[i]->GetXaxis()->SetTitle("");
         frame[i]->GetYaxis()->SetTitle("Width #tau");
         frame[i]->GetXaxis()->CenterTitle();
@@ -1032,42 +1032,42 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
         auto element_label{ AtomStyleCatalog::GetMainChainElementLabel(static_cast<size_t>(element_id)) };
         if (draw_box_plot == true)
         {
-            ROOTHelper::SetLineAttribute(summary_hist[element_id].get(), 1, 1, element_color);
-            ROOTHelper::SetFillAttribute(summary_hist[element_id].get(), 1001, element_color, 0.3f);
+            root_helper::SetLineAttribute(summary_hist[element_id].get(), 1, 1, element_color);
+            root_helper::SetFillAttribute(summary_hist[element_id].get(), 1001, element_color, 0.3f);
             summary_hist[element_id]->Draw("CANDLE3 SAME");
         }
         else
         {
             for (auto & graph : graph_list[element_id])
             {
-                ROOTHelper::SetMarkerAttribute(graph.get(), 24, 0.1f, element_color);
+                root_helper::SetMarkerAttribute(graph.get(), 24, 0.1f, element_color);
                 graph->Draw("P");
             }
         }
-        title_text[element_id] = ROOTHelper::CreatePaveText(0.01, 0.95, 0.39, 1.20, "nbNDC ARC", true);
-        ROOTHelper::SetPaveTextDefaultStyle(title_text[element_id].get());
-        ROOTHelper::SetPaveAttribute(title_text[element_id].get(), 0, 0.2);
-        ROOTHelper::SetTextAttribute(title_text[element_id].get(), 60.0f, 103, 22);
-        ROOTHelper::SetFillAttribute(title_text[element_id].get(), 1001, element_color, 0.5f);
+        title_text[element_id] = root_helper::CreatePaveText(0.01, 0.95, 0.39, 1.20, "nbNDC ARC", true);
+        root_helper::SetPaveTextDefaultStyle(title_text[element_id].get());
+        root_helper::SetPaveAttribute(title_text[element_id].get(), 0, 0.2);
+        root_helper::SetTextAttribute(title_text[element_id].get(), 60.0f, 103, 22);
+        root_helper::SetFillAttribute(title_text[element_id].get(), 1001, element_color, 0.5f);
         title_text[element_id]->AddText(element_label.data());
         title_text[element_id]->Draw();
     }
 
     canvas->cd();
-    auto pad_extra{ ROOTHelper::CreatePad("pad_extra","", 0.25, 0.00, 0.92, 0.15) };
+    auto pad_extra{ root_helper::CreatePad("pad_extra","", 0.25, 0.00, 0.92, 0.15) };
     pad_extra->Draw();
     pad_extra->cd();
-    ROOTHelper::SetPadDefaultStyle(pad_extra.get());
-    ROOTHelper::SetFillAttribute(pad_extra.get(), 4000);
-    auto bottom_title_text{ ROOTHelper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
-    ROOTHelper::SetPaveTextDefaultStyle(bottom_title_text.get());
-    ROOTHelper::SetFillAttribute(bottom_title_text.get(), 4000);
-    ROOTHelper::SetTextAttribute(bottom_title_text.get(), 50.0f, 133, 22);
+    root_helper::SetPadDefaultStyle(pad_extra.get());
+    root_helper::SetFillAttribute(pad_extra.get(), 4000);
+    auto bottom_title_text{ root_helper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
+    root_helper::SetPaveTextDefaultStyle(bottom_title_text.get());
+    root_helper::SetFillAttribute(bottom_title_text.get(), 4000);
+    root_helper::SetTextAttribute(bottom_title_text.get(), 50.0f, 133, 22);
     bottom_title_text->AddText("Distance to Center of Mass #font[2]{d} #[]{#AA}");
     bottom_title_text->Draw();
 
-    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
-    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    root_helper::PrintCanvasPad(canvas.get(), file_path);
+    root_helper::PrintCanvasClose(canvas.get(), file_path);
     Logger::Log(LogLevel::Info, " Output file: " + file_path);
     #endif
 }
@@ -1092,10 +1092,10 @@ void DemoPainter::PaintGroupWidthScatterPlot(
     gStyle->SetGridColor(kGray);
     const int col_size{ 4 };
     const int row_size{ 4 };
-    auto canvas{ ROOTHelper::CreateCanvas("test","", 1500, 800) };
-    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.17f, 0.08f, 0.10f, 0.05f, 0.01f, 0.01f);
-    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+    auto canvas{ root_helper::CreateCanvas("test","", 1500, 800) };
+    root_helper::SetCanvasDefaultStyle(canvas.get());
+    root_helper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.17f, 0.08f, 0.10f, 0.05f, 0.01f, 0.01f);
+    root_helper::PrintCanvasOpen(canvas.get(), file_path);
 
     std::vector<std::unique_ptr<TGraphErrors>> graph_list[col_size][row_size];
     std::vector<double> x_array[col_size][row_size];
@@ -1154,7 +1154,7 @@ void DemoPainter::PaintGroupWidthScatterPlot(
             auto x_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(x_array[i][j], 0.0, 0.005, 0.995) };
             //auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(y_array[i][j], 0.15) };
             auto y_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(y_array[i][j], 0.5, 0.005, 0.995) };
-            summary_hist[i][j] = ROOTHelper::CreateHist2D(
+            summary_hist[i][j] = root_helper::CreateHist2D(
                 Form("summary_hist_%d_%d", i, j), "",
                 5, std::get<0>(x_range), std::get<1>(x_range),
                 100, std::get<0>(y_range), std::get<1>(y_range));
@@ -1180,19 +1180,19 @@ void DemoPainter::PaintGroupWidthScatterPlot(
         for (int j = 0; j < row_size; j++)
         {
             auto model_id{ j };
-            ROOTHelper::FindPadInCanvasPartition(canvas.get(), i, j);
-            ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
-            ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-            auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
-            auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
-            frame[i][j] = ROOTHelper::CreateHist2D(Form("frame_%d_%d", i, j),"", 500, x_min[i], x_max[i], 500, y_min[j], y_max[j]);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 50.0f, 1.0f, 133);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 40.0f, 0.005f, 133);
-            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.08/x_factor), 505);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 50.0f, 1.2f, 133);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 45.0f, 0.02f, 133);
-            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 505);
-            ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
+            root_helper::FindPadInCanvasPartition(canvas.get(), i, j);
+            root_helper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+            root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+            auto x_factor{ root_helper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
+            auto y_factor{ root_helper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
+            frame[i][j] = root_helper::CreateHist2D(Form("frame_%d_%d", i, j),"", 500, x_min[i], x_max[i], 500, y_min[j], y_max[j]);
+            root_helper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 50.0f, 1.0f, 133);
+            root_helper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 40.0f, 0.005f, 133);
+            root_helper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.08/x_factor), 505);
+            root_helper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 50.0f, 1.2f, 133);
+            root_helper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 45.0f, 0.02f, 133);
+            root_helper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 505);
+            root_helper::SetLineAttribute(frame[i][j].get(), 1, 0);
             frame[i][j]->GetXaxis()->SetTitle("");
             frame[i][j]->GetYaxis()->SetTitle("");
             frame[i][j]->GetXaxis()->CenterTitle();
@@ -1203,48 +1203,48 @@ void DemoPainter::PaintGroupWidthScatterPlot(
             
             if (draw_box_plot == true)
             {
-                ROOTHelper::SetLineAttribute(summary_hist[i][j].get(), 1, 1, element_color);
-                ROOTHelper::SetFillAttribute(summary_hist[i][j].get(), 1001, element_color, 0.3f);
+                root_helper::SetLineAttribute(summary_hist[i][j].get(), 1, 1, element_color);
+                root_helper::SetFillAttribute(summary_hist[i][j].get(), 1001, element_color, 0.3f);
                 summary_hist[i][j]->Draw("CANDLE3 SAME");
             }
             else
             {
                 for (auto & graph : graph_list[i][j])
                 {
-                    ROOTHelper::SetMarkerAttribute(graph.get(), 24, 1.0f, element_color);
-                    ROOTHelper::SetLineAttribute(graph.get(), 1, 2, element_color);
+                    root_helper::SetMarkerAttribute(graph.get(), 24, 1.0f, element_color);
+                    root_helper::SetLineAttribute(graph.get(), 1, 2, element_color);
                     graph->Draw("P");
                 }
             }
 
             if (i == 0)
             {
-                title_y_text[j] = ROOTHelper::CreatePaveText(-0.90, 0.20, 0.02, 0.80, "nbNDC ARC", true);
-                ROOTHelper::SetPaveTextDefaultStyle(title_y_text[j].get());
-                ROOTHelper::SetPaveAttribute(title_y_text[j].get(), 0, 0.1);
-                ROOTHelper::SetLineAttribute(title_y_text[j].get(), 1, 0);
-                ROOTHelper::SetTextAttribute(title_y_text[j].get(), 40.0f, 103, 32);
-                ROOTHelper::SetFillAttribute(title_y_text[j].get(), 1001, kAzure-7, 0.5f);
+                title_y_text[j] = root_helper::CreatePaveText(-0.90, 0.20, 0.02, 0.80, "nbNDC ARC", true);
+                root_helper::SetPaveTextDefaultStyle(title_y_text[j].get());
+                root_helper::SetPaveAttribute(title_y_text[j].get(), 0, 0.1);
+                root_helper::SetLineAttribute(title_y_text[j].get(), 1, 0);
+                root_helper::SetTextAttribute(title_y_text[j].get(), 40.0f, 103, 32);
+                root_helper::SetFillAttribute(title_y_text[j].get(), 1001, kAzure-7, 0.5f);
                 title_y_text[j]->AddText(model_list.at(static_cast<size_t>(model_id))->GetPdbID().data());
                 title_y_text[j]->AddText(model_list.at(static_cast<size_t>(model_id))->GetEmdID().data());
                 title_y_text[j]->Draw();
 
-                resolution_text[j] = ROOTHelper::CreatePaveText(-0.92, 0.50,-0.40, 0.90, "nbNDC ARC", true);
-                ROOTHelper::SetPaveTextDefaultStyle(resolution_text[j].get());
-                ROOTHelper::SetPaveAttribute(resolution_text[j].get(), 0, 0.2);
-                ROOTHelper::SetFillAttribute(resolution_text[j].get(), 1001, kAzure-7);
-                ROOTHelper::SetTextAttribute(resolution_text[j].get(), 45.0f, 133, 22, 0.0, kYellow-10);
+                resolution_text[j] = root_helper::CreatePaveText(-0.92, 0.50,-0.40, 0.90, "nbNDC ARC", true);
+                root_helper::SetPaveTextDefaultStyle(resolution_text[j].get());
+                root_helper::SetPaveAttribute(resolution_text[j].get(), 0, 0.2);
+                root_helper::SetFillAttribute(resolution_text[j].get(), 1001, kAzure-7);
+                root_helper::SetTextAttribute(resolution_text[j].get(), 45.0f, 133, 22, 0.0, kYellow-10);
                 resolution_text[j]->AddText(Form("%.2f #AA", model_list.at(static_cast<size_t>(model_id))->GetResolution()));
                 resolution_text[j]->Draw();
             }
 
             if (j == row_size - 1)
             {
-                title_x_text[i] = ROOTHelper::CreatePaveText(0.02, 0.95, 0.35, 1.23, "nbNDC ARC", true);
-                ROOTHelper::SetPaveTextDefaultStyle(title_x_text[i].get());
-                ROOTHelper::SetPaveAttribute(title_x_text[i].get(), 0, 0.2);
-                ROOTHelper::SetTextAttribute(title_x_text[i].get(), 50.0f, 103, 22);
-                ROOTHelper::SetFillAttribute(title_x_text[i].get(), 1001, element_color, 0.5f);
+                title_x_text[i] = root_helper::CreatePaveText(0.02, 0.95, 0.35, 1.23, "nbNDC ARC", true);
+                root_helper::SetPaveTextDefaultStyle(title_x_text[i].get());
+                root_helper::SetPaveAttribute(title_x_text[i].get(), 0, 0.2);
+                root_helper::SetTextAttribute(title_x_text[i].get(), 50.0f, 103, 22);
+                root_helper::SetFillAttribute(title_x_text[i].get(), 1001, element_color, 0.5f);
                 title_x_text[i]->AddText(element_label.data());
                 //title_x_text[i]->Draw();
             }
@@ -1252,37 +1252,37 @@ void DemoPainter::PaintGroupWidthScatterPlot(
     }
 
     canvas->cd();
-    auto pad_extra1{ ROOTHelper::CreatePad("pad_extra1","", 0.07, 0.00, 0.92, 0.06) };
+    auto pad_extra1{ root_helper::CreatePad("pad_extra1","", 0.07, 0.00, 0.92, 0.06) };
     pad_extra1->Draw();
     pad_extra1->cd();
-    ROOTHelper::SetPadDefaultStyle(pad_extra1.get());
-    ROOTHelper::SetFillAttribute(pad_extra1.get(), 4000);
-    auto bottom_title_text{ ROOTHelper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
-    ROOTHelper::SetPaveTextDefaultStyle(bottom_title_text.get());
-    ROOTHelper::SetFillAttribute(bottom_title_text.get(), 4000);
-    ROOTHelper::SetTextAttribute(bottom_title_text.get(), 40.0f, 133, 22);
+    root_helper::SetPadDefaultStyle(pad_extra1.get());
+    root_helper::SetFillAttribute(pad_extra1.get(), 4000);
+    auto bottom_title_text{ root_helper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
+    root_helper::SetPaveTextDefaultStyle(bottom_title_text.get());
+    root_helper::SetFillAttribute(bottom_title_text.get(), 4000);
+    root_helper::SetTextAttribute(bottom_title_text.get(), 40.0f, 133, 22);
     bottom_title_text->AddText("Number of In-Range Atoms");
     bottom_title_text->Draw();
-    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
-    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    root_helper::PrintCanvasPad(canvas.get(), file_path);
+    root_helper::PrintCanvasClose(canvas.get(), file_path);
     Logger::Log(LogLevel::Info, " Output file: " + file_path);
 
     canvas->cd();
-    auto pad_extra2{ ROOTHelper::CreatePad("pad_extra2","", 0.96, 0.10, 1.00, 0.90) };
+    auto pad_extra2{ root_helper::CreatePad("pad_extra2","", 0.96, 0.10, 1.00, 0.90) };
     pad_extra2->Draw();
     pad_extra2->cd();
-    ROOTHelper::SetPadDefaultStyle(pad_extra2.get());
-    ROOTHelper::SetFillAttribute(pad_extra2.get(), 4000);
-    auto right_title_text{ ROOTHelper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
-    ROOTHelper::SetPaveTextDefaultStyle(right_title_text.get());
-    ROOTHelper::SetFillAttribute(right_title_text.get(), 4000);
-    ROOTHelper::SetTextAttribute(right_title_text.get(), 50.0f, 133, 22);
+    root_helper::SetPadDefaultStyle(pad_extra2.get());
+    root_helper::SetFillAttribute(pad_extra2.get(), 4000);
+    auto right_title_text{ root_helper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
+    root_helper::SetPaveTextDefaultStyle(right_title_text.get());
+    root_helper::SetFillAttribute(right_title_text.get(), 4000);
+    root_helper::SetTextAttribute(right_title_text.get(), 50.0f, 133, 22);
     right_title_text->AddText("Width #tau");
     auto text{ right_title_text->GetLineWith("Width") };
     text->SetTextAngle(90.0f);
     right_title_text->Draw();
-    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
-    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    root_helper::PrintCanvasPad(canvas.get(), file_path);
+    root_helper::PrintCanvasClose(canvas.get(), file_path);
     Logger::Log(LogLevel::Info, " Output file: " + file_path);
     #endif
 }
@@ -1307,9 +1307,9 @@ void DemoPainter::PaintAtomGausMainChainDemo(
     gStyle->SetLineScalePS(1.0);
     gStyle->SetGridColor(kGray);
 
-    auto canvas{ ROOTHelper::CreateCanvas("test","", 1500, 600) };
-    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+    auto canvas{ root_helper::CreateCanvas("test","", 1500, 600) };
+    root_helper::SetCanvasDefaultStyle(canvas.get());
+    root_helper::PrintCanvasOpen(canvas.get(), file_path);
 
     std::unique_ptr<TGraphErrors> gaus_graph[main_chain_element_count];
     std::unique_ptr<TGraphErrors> gaus_gly_graph;
@@ -1326,7 +1326,7 @@ void DemoPainter::PaintAtomGausMainChainDemo(
     }
     auto x_range{ ArrayStats<double>::ComputeScalingRangeTuple(x_array, 0.01) };
     auto y_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(y_array, 0.2) };
-    auto frame{ ROOTHelper::CreateHist2D(
+    auto frame{ root_helper::CreateHist2D(
         "frame","",
         100, 0.0, std::get<1>(x_range), 100, std::get<0>(y_range), std::get<1>(y_range)) };
 
@@ -1345,17 +1345,17 @@ void DemoPainter::PaintAtomGausMainChainDemo(
     }
 
     canvas->cd();
-    ROOTHelper::SetPadMarginInCanvas(gPad, 0.07, 0.08, 0.25, 0.05);
-    ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
-    ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-    ROOTHelper::SetAxisTitleAttribute(frame->GetXaxis(), 70.0f, 0.75f, 133);
-    ROOTHelper::SetAxisTitleAttribute(frame->GetYaxis(), 80.0f, 1.30f, 133);
-    ROOTHelper::SetAxisLabelAttribute(frame->GetXaxis(), 60.0f, 0.001f, 103, kCyan+3);
-    ROOTHelper::SetAxisLabelAttribute(frame->GetYaxis(), 70.0f, 0.005f, 133);
-    auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.055, 0) };
-    auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.010, 1) };
-    ROOTHelper::SetAxisTickAttribute(frame->GetXaxis(), static_cast<float>(x_tick_length), 520);
-    ROOTHelper::SetAxisTickAttribute(frame->GetYaxis(), static_cast<float>(y_tick_length), 505);
+    root_helper::SetPadMarginInCanvas(gPad, 0.07, 0.08, 0.25, 0.05);
+    root_helper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+    root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+    root_helper::SetAxisTitleAttribute(frame->GetXaxis(), 70.0f, 0.75f, 133);
+    root_helper::SetAxisTitleAttribute(frame->GetYaxis(), 80.0f, 1.30f, 133);
+    root_helper::SetAxisLabelAttribute(frame->GetXaxis(), 60.0f, 0.001f, 103, kCyan+3);
+    root_helper::SetAxisLabelAttribute(frame->GetYaxis(), 70.0f, 0.005f, 133);
+    auto x_tick_length{ root_helper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.055, 0) };
+    auto y_tick_length{ root_helper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.010, 1) };
+    root_helper::SetAxisTickAttribute(frame->GetXaxis(), static_cast<float>(x_tick_length), 520);
+    root_helper::SetAxisTickAttribute(frame->GetYaxis(), static_cast<float>(y_tick_length), 505);
     frame->SetStats(0);
     frame->GetXaxis()->CenterTitle();
     frame->GetYaxis()->CenterTitle();
@@ -1365,19 +1365,19 @@ void DemoPainter::PaintAtomGausMainChainDemo(
     for (size_t i = 0; i < main_chain_element_count; i++)
     {
         auto element_color{ AtomStyleCatalog::GetMainChainElementColor(i) };
-        ROOTHelper::SetMarkerAttribute(gaus_graph[i].get(), 20, 1.0f, element_color);
-        ROOTHelper::SetLineAttribute(gaus_graph[i].get(), 1, 2, element_color);
+        root_helper::SetMarkerAttribute(gaus_graph[i].get(), 20, 1.0f, element_color);
+        root_helper::SetLineAttribute(gaus_graph[i].get(), 1, 2, element_color);
         gaus_graph[i]->Draw("PL X0");
     }
-    ROOTHelper::SetMarkerAttribute(gaus_gly_graph.get(), 23, 2.5f, kOrange-6);
+    root_helper::SetMarkerAttribute(gaus_gly_graph.get(), 23, 2.5f, kOrange-6);
     gaus_gly_graph->Draw("P X0");
-    ROOTHelper::SetMarkerAttribute(gaus_pro_graph.get(), 23, 2.5f, kCyan+1);
+    root_helper::SetMarkerAttribute(gaus_pro_graph.get(), 23, 2.5f, kCyan+1);
     gaus_pro_graph->Draw("P X0");
 
-    auto legend{ ROOTHelper::CreateLegend(0.93, 0.20, 1.00, 1.00, false) };
-    ROOTHelper::SetLegendDefaultStyle(legend.get());
-    ROOTHelper::SetTextAttribute(legend.get(), 70.0f, 103, 12);
-    ROOTHelper::SetFillAttribute(legend.get(), 4000);
+    auto legend{ root_helper::CreateLegend(0.93, 0.20, 1.00, 1.00, false) };
+    root_helper::SetLegendDefaultStyle(legend.get());
+    root_helper::SetTextAttribute(legend.get(), 70.0f, 103, 12);
+    root_helper::SetFillAttribute(legend.get(), 4000);
     legend->AddEntry(gaus_gly_graph.get(), "GLY", "p");
     legend->AddEntry(gaus_pro_graph.get(), "PRO", "p");
     for (size_t i = 0; i < main_chain_element_count; i++)
@@ -1387,8 +1387,8 @@ void DemoPainter::PaintAtomGausMainChainDemo(
     }
     legend->Draw();
 
-    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
-    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    root_helper::PrintCanvasPad(canvas.get(), file_path);
+    root_helper::PrintCanvasClose(canvas.get(), file_path);
     Logger::Log(LogLevel::Info, " Output file: " + file_path);
     #endif
 }
@@ -1411,9 +1411,9 @@ void DemoPainter::PaintAtomGausMainChainDemoSingle(
     gStyle->SetLineScalePS(1.0);
     gStyle->SetGridColor(kGray);
 
-    auto canvas{ ROOTHelper::CreateCanvas("test","", 3000, 500) };
-    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+    auto canvas{ root_helper::CreateCanvas("test","", 3000, 500) };
+    root_helper::SetCanvasDefaultStyle(canvas.get());
+    root_helper::PrintCanvasOpen(canvas.get(), file_path);
 
     std::unique_ptr<TGraphErrors> gaus_graph[main_chain_element_count];
     std::unique_ptr<TGraphErrors> gaus_gly_graph;
@@ -1431,7 +1431,7 @@ void DemoPainter::PaintAtomGausMainChainDemoSingle(
     }
     auto x_range{ ArrayStats<double>::ComputeScalingRangeTuple(x_array, 0.01) };
     auto y_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(y_array, 0.2) };
-    auto frame{ ROOTHelper::CreateHist2D(
+    auto frame{ root_helper::CreateHist2D(
         "frame","",
         100, 0.0, std::get<1>(x_range), 100, std::get<0>(y_range), std::get<1>(y_range)) };
 
@@ -1450,17 +1450,17 @@ void DemoPainter::PaintAtomGausMainChainDemoSingle(
     }
 
     canvas->cd();
-    ROOTHelper::SetPadMarginInCanvas(gPad, 0.07, 0.08, 0.25, 0.05);
-    ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
-    ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-    ROOTHelper::SetAxisTitleAttribute(frame->GetXaxis(), 70.0f, 0.75f, 133);
-    ROOTHelper::SetAxisTitleAttribute(frame->GetYaxis(), 80.0f, 1.30f, 133);
-    ROOTHelper::SetAxisLabelAttribute(frame->GetXaxis(), 60.0f, 0.001f, 103, kCyan+3);
-    ROOTHelper::SetAxisLabelAttribute(frame->GetYaxis(), 70.0f, 0.005f, 133);
-    auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.055, 0) };
-    auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.010, 1) };
-    ROOTHelper::SetAxisTickAttribute(frame->GetXaxis(), static_cast<float>(x_tick_length), 520);
-    ROOTHelper::SetAxisTickAttribute(frame->GetYaxis(), static_cast<float>(y_tick_length), 505);
+    root_helper::SetPadMarginInCanvas(gPad, 0.07, 0.08, 0.25, 0.05);
+    root_helper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+    root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+    root_helper::SetAxisTitleAttribute(frame->GetXaxis(), 70.0f, 0.75f, 133);
+    root_helper::SetAxisTitleAttribute(frame->GetYaxis(), 80.0f, 1.30f, 133);
+    root_helper::SetAxisLabelAttribute(frame->GetXaxis(), 60.0f, 0.001f, 103, kCyan+3);
+    root_helper::SetAxisLabelAttribute(frame->GetYaxis(), 70.0f, 0.005f, 133);
+    auto x_tick_length{ root_helper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.055, 0) };
+    auto y_tick_length{ root_helper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.010, 1) };
+    root_helper::SetAxisTickAttribute(frame->GetXaxis(), static_cast<float>(x_tick_length), 520);
+    root_helper::SetAxisTickAttribute(frame->GetYaxis(), static_cast<float>(y_tick_length), 505);
     frame->SetStats(0);
     frame->GetXaxis()->CenterTitle();
     frame->GetYaxis()->CenterTitle();
@@ -1470,19 +1470,19 @@ void DemoPainter::PaintAtomGausMainChainDemoSingle(
     for (size_t i = 0; i < main_chain_element_count; i++)
     {
         auto element_color{ AtomStyleCatalog::GetMainChainElementColor(i) };
-        ROOTHelper::SetMarkerAttribute(gaus_graph[i].get(), 20, 1.0f, element_color);
-        ROOTHelper::SetLineAttribute(gaus_graph[i].get(), 1, 2, element_color);
+        root_helper::SetMarkerAttribute(gaus_graph[i].get(), 20, 1.0f, element_color);
+        root_helper::SetLineAttribute(gaus_graph[i].get(), 1, 2, element_color);
         gaus_graph[i]->Draw("PL X0");
     }
-    ROOTHelper::SetMarkerAttribute(gaus_gly_graph.get(), 23, 2.5f, kOrange-6);
+    root_helper::SetMarkerAttribute(gaus_gly_graph.get(), 23, 2.5f, kOrange-6);
     gaus_gly_graph->Draw("P X0");
-    ROOTHelper::SetMarkerAttribute(gaus_pro_graph.get(), 23, 2.5f, kCyan+1);
+    root_helper::SetMarkerAttribute(gaus_pro_graph.get(), 23, 2.5f, kCyan+1);
     gaus_pro_graph->Draw("P X0");
 
-    auto legend{ ROOTHelper::CreateLegend(0.93, 0.20, 1.00, 1.00, false) };
-    ROOTHelper::SetLegendDefaultStyle(legend.get());
-    ROOTHelper::SetTextAttribute(legend.get(), 70.0f, 103, 12);
-    ROOTHelper::SetFillAttribute(legend.get(), 4000);
+    auto legend{ root_helper::CreateLegend(0.93, 0.20, 1.00, 1.00, false) };
+    root_helper::SetLegendDefaultStyle(legend.get());
+    root_helper::SetTextAttribute(legend.get(), 70.0f, 103, 12);
+    root_helper::SetFillAttribute(legend.get(), 4000);
     legend->AddEntry(gaus_gly_graph.get(), "GLY", "p");
     legend->AddEntry(gaus_pro_graph.get(), "PRO", "p");
     for (size_t i = 0; i < main_chain_element_count; i++)
@@ -1492,8 +1492,8 @@ void DemoPainter::PaintAtomGausMainChainDemoSingle(
     }
     legend->Draw();
 
-    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
-    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    root_helper::PrintCanvasPad(canvas.get(), file_path);
+    root_helper::PrintCanvasClose(canvas.get(), file_path);
     Logger::Log(LogLevel::Info, " Output file: " + file_path);
     #endif
 }
@@ -1513,11 +1513,11 @@ void DemoPainter::PaintGroupWidthAlphaCarbonDemo(
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);
 
-    auto canvas{ ROOTHelper::CreateCanvas("test","", 1000, 1000) };
-    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+    auto canvas{ root_helper::CreateCanvas("test","", 1000, 1000) };
+    root_helper::SetCanvasDefaultStyle(canvas.get());
+    root_helper::PrintCanvasOpen(canvas.get(), file_path);
 
-    auto pad{ ROOTHelper::CreatePad("pad_0","", 0.0, 0.0, 1.0, 1.0) };
+    auto pad{ root_helper::CreatePad("pad_0","", 0.0, 0.0, 1.0, 1.0) };
     std::unique_ptr<TH2> frame;
 
     const size_t model_size{ 6 };
@@ -1539,20 +1539,20 @@ void DemoPainter::PaintGroupWidthAlphaCarbonDemo(
         {
             width_array.push_back(width_graph[j]->GetPointY(p));
         }
-        ROOTHelper::SetMarkerAttribute(width_graph[j].get(), marker_list[j], marker_size, color_list[j]);
-        ROOTHelper::SetLineAttribute(width_graph[j].get(), line_style_list[j], 1, color_list[j]);
+        root_helper::SetMarkerAttribute(width_graph[j].get(), marker_list[j], marker_size, color_list[j]);
+        root_helper::SetLineAttribute(width_graph[j].get(), line_style_list[j], 1, color_list[j]);
     }
 
     auto width_range{ ArrayStats<double>::ComputeScalingRangeTuple(width_array, 0.2) };
-    frame = ROOTHelper::CreateHist2D("frame_total","", 100, 0.0, 1.0, 100, std::get<0>(width_range), std::get<1>(width_range));
+    frame = root_helper::CreateHist2D("frame_total","", 100, 0.0, 1.0, 100, std::get<0>(width_range), std::get<1>(width_range));
     frame->GetYaxis()->SetLimits(std::get<0>(width_range), std::get<1>(width_range));
     frame->GetYaxis()->SetTitle("Width #font[2]{#tau}");
     frame->GetYaxis()->CenterTitle();
 
-    auto legend{ ROOTHelper::CreateLegend(0.05, 0.85, 0.95, 1.00, false) };
-    ROOTHelper::SetLegendDefaultStyle(legend.get());
-    ROOTHelper::SetTextAttribute(legend.get(), 40.0f, 133, 12);
-    ROOTHelper::SetFillAttribute(legend.get(), 4000);
+    auto legend{ root_helper::CreateLegend(0.05, 0.85, 0.95, 1.00, false) };
+    root_helper::SetLegendDefaultStyle(legend.get());
+    root_helper::SetTextAttribute(legend.get(), 40.0f, 133, 12);
+    root_helper::SetFillAttribute(legend.get(), 4000);
     for (size_t j = 0; j < model_size; j++)
     {
         auto model_object{ model_list.at(j) };
@@ -1562,7 +1562,7 @@ void DemoPainter::PaintGroupWidthAlphaCarbonDemo(
     legend->SetNColumns(2);
 
     canvas->cd();
-    ROOTHelper::SetPadDefaultStyle(pad.get());
+    root_helper::SetPadDefaultStyle(pad.get());
     pad->Draw();
     pad->cd();
     auto left_margin{ 0.15 };
@@ -1570,18 +1570,18 @@ void DemoPainter::PaintGroupWidthAlphaCarbonDemo(
     auto bottom_margin{ 0.12 };
     auto top_margin{ 0.15 };
     auto label_size{ 55.0f };
-    ROOTHelper::SetPadMarginInCanvas(gPad, left_margin, right_margin, bottom_margin, top_margin);
-    ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0);
-    ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0, 0);
-    ROOTHelper::SetAxisTitleAttribute(frame->GetXaxis(), 0.0f);
-    ROOTHelper::SetAxisTitleAttribute(frame->GetYaxis(), 60.0f, 1.2f);
-    ROOTHelper::SetAxisLabelAttribute(frame->GetXaxis(), label_size, 0.06f, 103, kCyan+3);
-    ROOTHelper::SetAxisLabelAttribute(frame->GetYaxis(), 50.0f, 0.01f);
+    root_helper::SetPadMarginInCanvas(gPad, left_margin, right_margin, bottom_margin, top_margin);
+    root_helper::SetPadLayout(gPad, 1, 1, 0, 0);
+    root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0, 0);
+    root_helper::SetAxisTitleAttribute(frame->GetXaxis(), 0.0f);
+    root_helper::SetAxisTitleAttribute(frame->GetYaxis(), 60.0f, 1.2f);
+    root_helper::SetAxisLabelAttribute(frame->GetXaxis(), label_size, 0.06f, 103, kCyan+3);
+    root_helper::SetAxisLabelAttribute(frame->GetYaxis(), 50.0f, 0.01f);
 
-    auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.00, 0) };
-    auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.02, 1) };
-    ROOTHelper::SetAxisTickAttribute(frame->GetXaxis(), static_cast<float>(x_tick_length), 21);
-    ROOTHelper::SetAxisTickAttribute(frame->GetYaxis(), static_cast<float>(y_tick_length), 505);
+    auto x_tick_length{ root_helper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.00, 0) };
+    auto y_tick_length{ root_helper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.02, 1) };
+    root_helper::SetAxisTickAttribute(frame->GetXaxis(), static_cast<float>(x_tick_length), 21);
+    root_helper::SetAxisTickAttribute(frame->GetYaxis(), static_cast<float>(y_tick_length), 505);
     frame->GetXaxis()->SetLimits(-1.0, 20.0);
     frame->GetXaxis()->ChangeLabel(1, -1.0, 0.0);
     frame->GetXaxis()->ChangeLabel(-1, -1.0, 0.0);
@@ -1598,8 +1598,8 @@ void DemoPainter::PaintGroupWidthAlphaCarbonDemo(
 
     for (size_t j = 0; j < model_size; j++) width_graph[j]->Draw("PL X0");
 
-    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
-    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    root_helper::PrintCanvasPad(canvas.get(), file_path);
+    root_helper::PrintCanvasClose(canvas.get(), file_path);
     Logger::Log(LogLevel::Info, " Output file: " + file_path);
     #endif
 }
@@ -1648,10 +1648,10 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);
 
-    auto canvas{ ROOTHelper::CreateCanvas("test","", 1200, 500) };
-    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.09f, 0.07f, 0.09f, 0.12f, 0.02f, 0.01f);
-    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+    auto canvas{ root_helper::CreateCanvas("test","", 1200, 500) };
+    root_helper::SetCanvasDefaultStyle(canvas.get());
+    root_helper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.09f, 0.07f, 0.09f, 0.12f, 0.02f, 0.01f);
+    root_helper::PrintCanvasOpen(canvas.get(), file_path);
 
     std::map<Spot, std::unique_ptr<TGraphErrors>> graph_map[col_size];
     std::map<Spot, std::unique_ptr<TH2D>> hist_map[col_size][row_size];
@@ -1707,13 +1707,13 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
             auto amplitude_range_tmp{ (i == model_list.size() - 1) ? range_last[1] : range[1] };
             auto width_range_tmp{ (i == model_list.size() - 1) ? range_last[0] : range[0] };
             auto amplitude_hist{
-                ROOTHelper::CreateHist2D(
+                root_helper::CreateHist2D(
                     name_amplitude.data(),"",
                     static_cast<int>(spot_count), -0.5, static_cast<int>(spot_count)-0.5,
                     100, std::get<0>(amplitude_range_tmp), std::get<1>(amplitude_range_tmp))
             };
             auto width_hist{
-                ROOTHelper::CreateHist2D(
+                root_helper::CreateHist2D(
                     name_width.data(),"",
                     static_cast<int>(spot_count), -0.5, static_cast<int>(spot_count)-0.5,
                     100, std::get<0>(width_range_tmp), std::get<1>(width_range_tmp))
@@ -1814,21 +1814,21 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
         auto model_object{ model_list.at(i) };
         for (int j = 0; j < row_size; j++)
         {
-            ROOTHelper::FindPadInCanvasPartition(canvas.get(), static_cast<int>(i), j);
-            ROOTHelper::SetPadLayout(gPad, 0, 1, 0, 0, 0, 0);
-            ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+            root_helper::FindPadInCanvasPartition(canvas.get(), static_cast<int>(i), j);
+            root_helper::SetPadLayout(gPad, 0, 1, 0, 0, 0, 0);
+            root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
             auto range_tmp{ (i == model_list.size() - 1) ? range_last[j] : range[j] };
-            auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
-            auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
-            frame[i][j] = ROOTHelper::CreateHist2D(Form("hist_%d_%d", static_cast<int>(i), j),"", 100, 0.0, 3.0, 500, std::get<0>(range_tmp), std::get<1>(range_tmp));
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 0.0f);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 35.0f, 0.005f, 103, kCyan+3);
-            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 506);
-            if (i == col_size - 1) ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 0.0);
-            else ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 35.0f, 1.5f, 133);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 35.0f, 0.02f, 133);
-            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 506);
-            ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
+            auto x_factor{ root_helper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
+            auto y_factor{ root_helper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
+            frame[i][j] = root_helper::CreateHist2D(Form("hist_%d_%d", static_cast<int>(i), j),"", 100, 0.0, 3.0, 500, std::get<0>(range_tmp), std::get<1>(range_tmp));
+            root_helper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 0.0f);
+            root_helper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 35.0f, 0.005f, 103, kCyan+3);
+            root_helper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 506);
+            if (i == col_size - 1) root_helper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 0.0);
+            else root_helper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 35.0f, 1.5f, 133);
+            root_helper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 35.0f, 0.02f, 133);
+            root_helper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 506);
+            root_helper::SetLineAttribute(frame[i][j].get(), 1, 0);
             frame[i][j]->GetXaxis()->SetTitle("");
             frame[i][j]->GetYaxis()->SetTitle((j == 0) ? "Width" : "Amplitude");
             frame[i][j]->GetXaxis()->CenterTitle();
@@ -1842,21 +1842,21 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
             {
                 auto spot_color{ AtomStyleCatalog::GetMainChainSpotColor(spot) };
                 auto spot_marker{ AtomStyleCatalog::GetMainChainSpotOpenMarker(spot) };
-                ROOTHelper::SetLineAttribute(hist.get(), 1, 1, spot_color);
-                ROOTHelper::SetFillAttribute(hist.get(), 1001, spot_color, 0.3f);
-                ROOTHelper::SetMarkerAttribute(hist.get(), spot_marker, 1.0f, spot_color);
+                root_helper::SetLineAttribute(hist.get(), 1, 1, spot_color);
+                root_helper::SetFillAttribute(hist.get(), 1001, spot_color, 0.3f);
+                root_helper::SetMarkerAttribute(hist.get(), spot_marker, 1.0f, spot_color);
                 hist->SetBarWidth(0.6f);
                 hist->Draw("VIOLIN SAME");
             }
 
             if (j == row_size - 1)
             {
-                title_text[i] = ROOTHelper::CreatePaveText(0.02, 1.02, 0.98, 1.30, "nbNDC ARC", true);
-                ROOTHelper::SetPaveTextDefaultStyle(title_text[i].get());
-                ROOTHelper::SetPaveAttribute(title_text[i].get(), 0, 0.2);
-                ROOTHelper::SetTextAttribute(title_text[i].get(), 35.0f, 133, 22);
-                ROOTHelper::SetFillAttribute(title_text[i].get(), 1001, kAzure-7, 0.5f);
-                ROOTHelper::SetLineAttribute(title_text[i].get(), 1, 0);
+                title_text[i] = root_helper::CreatePaveText(0.02, 1.02, 0.98, 1.30, "nbNDC ARC", true);
+                root_helper::SetPaveTextDefaultStyle(title_text[i].get());
+                root_helper::SetPaveAttribute(title_text[i].get(), 0, 0.2);
+                root_helper::SetTextAttribute(title_text[i].get(), 35.0f, 133, 22);
+                root_helper::SetFillAttribute(title_text[i].get(), 1001, kAzure-7, 0.5f);
+                root_helper::SetLineAttribute(title_text[i].get(), 1, 0);
                 title_text[i]->AddText(Form("#font[102]{%s} (FSC = %.2f #AA)",
                     model_object->GetPdbID().data(), model_object->GetResolution()));
                 title_text[i]->Draw();
@@ -1865,22 +1865,22 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
     }
 /*
     canvas->cd();
-    auto pad_extra1{ ROOTHelper::CreatePad("pad_extra1","", 0.00, 0.00, 0.50, 0.35) };
+    auto pad_extra1{ root_helper::CreatePad("pad_extra1","", 0.00, 0.00, 0.50, 0.35) };
     pad_extra1->Draw();
     pad_extra1->cd();
-    ROOTHelper::SetPadDefaultStyle(pad_extra1.get());
-    ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
-    ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-    ROOTHelper::SetPadMarginInCanvas(gPad, 0.09, 0.06, 0.11, 0.03);
-    ROOTHelper::SetFillAttribute(pad_extra1.get(), 4000);
-    auto frame_extra1{ ROOTHelper::CreateHist2D("frame_extra1","", 100, 0.0, 1.0, 100, 0.0, 1.0) };
-    ROOTHelper::SetAxisTitleAttribute(frame_extra1->GetXaxis(), 35.0f, 0.9f, 133);
-    ROOTHelper::SetAxisLabelAttribute(frame_extra1->GetXaxis(), 35.0f, 0.005f, 133);
-    ROOTHelper::SetAxisTickAttribute(frame_extra1->GetXaxis(), 0.06f, 506);
-    ROOTHelper::SetAxisTitleAttribute(frame_extra1->GetYaxis(), 35.0f, 1.5f, 133);
-    ROOTHelper::SetAxisLabelAttribute(frame_extra1->GetYaxis(), 35.0f, 0.02f, 133);
-    ROOTHelper::SetAxisTickAttribute(frame_extra1->GetYaxis(), 0.03f, 506);
-    ROOTHelper::SetLineAttribute(frame_extra1.get(), 1, 0);
+    root_helper::SetPadDefaultStyle(pad_extra1.get());
+    root_helper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+    root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+    root_helper::SetPadMarginInCanvas(gPad, 0.09, 0.06, 0.11, 0.03);
+    root_helper::SetFillAttribute(pad_extra1.get(), 4000);
+    auto frame_extra1{ root_helper::CreateHist2D("frame_extra1","", 100, 0.0, 1.0, 100, 0.0, 1.0) };
+    root_helper::SetAxisTitleAttribute(frame_extra1->GetXaxis(), 35.0f, 0.9f, 133);
+    root_helper::SetAxisLabelAttribute(frame_extra1->GetXaxis(), 35.0f, 0.005f, 133);
+    root_helper::SetAxisTickAttribute(frame_extra1->GetXaxis(), 0.06f, 506);
+    root_helper::SetAxisTitleAttribute(frame_extra1->GetYaxis(), 35.0f, 1.5f, 133);
+    root_helper::SetAxisLabelAttribute(frame_extra1->GetYaxis(), 35.0f, 0.02f, 133);
+    root_helper::SetAxisTickAttribute(frame_extra1->GetYaxis(), 0.03f, 506);
+    root_helper::SetLineAttribute(frame_extra1.get(), 1, 0);
     frame_extra1->GetXaxis()->SetTitle("FSC Resolution (#AA)");
     frame_extra1->GetYaxis()->SetTitle("Width Mean");
     frame_extra1->GetXaxis()->CenterTitle();
@@ -1894,28 +1894,28 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
         auto spot_color{ AtomStyleCatalog::GetMainChainSpotColor(spot) };
         auto spot_marker{ AtomStyleCatalog::GetMainChainSpotOpenMarker(spot) };
         auto spot_line_style{ AtomStyleCatalog::GetMainChainSpotLineStyle(spot) };
-        ROOTHelper::SetLineAttribute(graph.get(), spot_line_style, 1, spot_color);
-        ROOTHelper::SetMarkerAttribute(graph.get(), spot_marker, 1.0f, spot_color);
+        root_helper::SetLineAttribute(graph.get(), spot_line_style, 1, spot_color);
+        root_helper::SetMarkerAttribute(graph.get(), spot_marker, 1.0f, spot_color);
         graph->Draw("PL");
     }
 
     canvas->cd();
-    auto pad_extra2{ ROOTHelper::CreatePad("pad_extra2","", 0.50, 0.00, 1.00, 0.35) };
+    auto pad_extra2{ root_helper::CreatePad("pad_extra2","", 0.50, 0.00, 1.00, 0.35) };
     pad_extra2->Draw();
     pad_extra2->cd();
-    ROOTHelper::SetPadDefaultStyle(pad_extra2.get());
-    ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
-    ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-    ROOTHelper::SetPadMarginInCanvas(gPad, 0.09, 0.06, 0.11, 0.03);
-    ROOTHelper::SetFillAttribute(pad_extra2.get(), 4000);
-    auto frame_extra2{ ROOTHelper::CreateHist2D("frame_extra2","", 100, 0.0, 1.0, 100, 0.0, 1.0) };
-    ROOTHelper::SetAxisTitleAttribute(frame_extra2->GetXaxis(), 35.0f, 0.9f, 133);
-    ROOTHelper::SetAxisLabelAttribute(frame_extra2->GetXaxis(), 35.0f, 0.005f, 133);
-    ROOTHelper::SetAxisTickAttribute(frame_extra2->GetXaxis(), 0.06f, 506);
-    ROOTHelper::SetAxisTitleAttribute(frame_extra2->GetYaxis(), 35.0f, 1.7f, 133);
-    ROOTHelper::SetAxisLabelAttribute(frame_extra2->GetYaxis(), 35.0f, 0.02f, 133);
-    ROOTHelper::SetAxisTickAttribute(frame_extra2->GetYaxis(), 0.03f, 506);
-    ROOTHelper::SetLineAttribute(frame_extra2.get(), 1, 0);
+    root_helper::SetPadDefaultStyle(pad_extra2.get());
+    root_helper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+    root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+    root_helper::SetPadMarginInCanvas(gPad, 0.09, 0.06, 0.11, 0.03);
+    root_helper::SetFillAttribute(pad_extra2.get(), 4000);
+    auto frame_extra2{ root_helper::CreateHist2D("frame_extra2","", 100, 0.0, 1.0, 100, 0.0, 1.0) };
+    root_helper::SetAxisTitleAttribute(frame_extra2->GetXaxis(), 35.0f, 0.9f, 133);
+    root_helper::SetAxisLabelAttribute(frame_extra2->GetXaxis(), 35.0f, 0.005f, 133);
+    root_helper::SetAxisTickAttribute(frame_extra2->GetXaxis(), 0.06f, 506);
+    root_helper::SetAxisTitleAttribute(frame_extra2->GetYaxis(), 35.0f, 1.7f, 133);
+    root_helper::SetAxisLabelAttribute(frame_extra2->GetYaxis(), 35.0f, 0.02f, 133);
+    root_helper::SetAxisTickAttribute(frame_extra2->GetYaxis(), 0.03f, 506);
+    root_helper::SetLineAttribute(frame_extra2.get(), 1, 0);
     frame_extra2->GetXaxis()->SetTitle("FSC Resolution (#AA)");
     frame_extra2->GetYaxis()->SetTitle("Width S.D.");
     frame_extra2->GetXaxis()->CenterTitle();
@@ -1929,15 +1929,15 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
         auto spot_color{ AtomStyleCatalog::GetMainChainSpotColor(spot) };
         auto spot_marker{ AtomStyleCatalog::GetMainChainSpotOpenMarker(spot) };
         auto spot_line_style{ AtomStyleCatalog::GetMainChainSpotLineStyle(spot) };
-        ROOTHelper::SetLineAttribute(graph.get(), spot_line_style, 1, spot_color);
-        ROOTHelper::SetMarkerAttribute(graph.get(), spot_marker, 1.0f, spot_color);
+        root_helper::SetLineAttribute(graph.get(), spot_line_style, 1, spot_color);
+        root_helper::SetMarkerAttribute(graph.get(), spot_marker, 1.0f, spot_color);
         graph->Draw("PL");
     }
 
-    auto legend{ ROOTHelper::CreateLegend(0.88, 0.35, 1.00, 0.93, false) };
-    ROOTHelper::SetLegendDefaultStyle(legend.get());
-    ROOTHelper::SetTextAttribute(legend.get(), 25.0f, 133, 12);
-    ROOTHelper::SetFillAttribute(legend.get(), 4000);
+    auto legend{ root_helper::CreateLegend(0.88, 0.35, 1.00, 0.93, false) };
+    root_helper::SetLegendDefaultStyle(legend.get());
+    root_helper::SetTextAttribute(legend.get(), 25.0f, 133, 12);
+    root_helper::SetFillAttribute(legend.get(), 4000);
     legend->AddEntry(summary_graph1_map.at(Spot::CA).get(), "C_{#alpha}", "lp");
     legend->AddEntry(summary_graph1_map.at(Spot::C).get(), "C", "lp");
     legend->AddEntry(summary_graph1_map.at(Spot::N).get(), "N", "lp");
@@ -1945,8 +1945,8 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
     legend->Draw();
 */
 
-    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
-    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    root_helper::PrintCanvasPad(canvas.get(), file_path);
+    root_helper::PrintCanvasClose(canvas.get(), file_path);
     Logger::Log(LogLevel::Info, " Output file: " + file_path);
     #endif
 }
@@ -1961,18 +1961,18 @@ void DemoPainter::PrintGausResultPad(
     auto bottom_margin{ (draw_x_axis) ? 0.105 : 0.010 };
     auto top_margin{ (draw_title_label) ? 0.105 : 0.010 };
     auto label_size{ (draw_x_axis) ? 55.0f : 0.0f };
-    ROOTHelper::SetPadMarginInCanvas(pad, left_margin, right_margin, bottom_margin, top_margin);
-    ROOTHelper::SetPadLayout(pad, 1, 1, 0, 0);
-    ROOTHelper::SetPadFrameAttribute(pad, 0, 0, 4000, 0, 0, 0, 0);
-    ROOTHelper::SetAxisTitleAttribute(hist->GetXaxis(), 0.0f);
-    ROOTHelper::SetAxisTitleAttribute(hist->GetYaxis(), 0.0f);
-    ROOTHelper::SetAxisLabelAttribute(hist->GetXaxis(), label_size, 0.17f, 103, kCyan+3);
-    ROOTHelper::SetAxisLabelAttribute(hist->GetYaxis(), 50.0f, 0.01f);
+    root_helper::SetPadMarginInCanvas(pad, left_margin, right_margin, bottom_margin, top_margin);
+    root_helper::SetPadLayout(pad, 1, 1, 0, 0);
+    root_helper::SetPadFrameAttribute(pad, 0, 0, 4000, 0, 0, 0, 0);
+    root_helper::SetAxisTitleAttribute(hist->GetXaxis(), 0.0f);
+    root_helper::SetAxisTitleAttribute(hist->GetYaxis(), 0.0f);
+    root_helper::SetAxisLabelAttribute(hist->GetXaxis(), label_size, 0.17f, 103, kCyan+3);
+    root_helper::SetAxisLabelAttribute(hist->GetYaxis(), 50.0f, 0.01f);
 
-    auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.0, 0) };
-    auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.008, 1) };
-    ROOTHelper::SetAxisTickAttribute(hist->GetXaxis(), static_cast<float>(x_tick_length), 21);
-    ROOTHelper::SetAxisTickAttribute(hist->GetYaxis(), static_cast<float>(y_tick_length), 505);
+    auto x_tick_length{ root_helper::ConvertGlobalTickLengthToPadTickLength(pad, 0.0, 0) };
+    auto y_tick_length{ root_helper::ConvertGlobalTickLengthToPadTickLength(pad, 0.008, 1) };
+    root_helper::SetAxisTickAttribute(hist->GetXaxis(), static_cast<float>(x_tick_length), 21);
+    root_helper::SetAxisTickAttribute(hist->GetYaxis(), static_cast<float>(y_tick_length), 505);
     hist->GetXaxis()->SetLimits(-1.0, 20.0);
     hist->GetXaxis()->ChangeLabel(1, -1.0, 0.0);
     hist->GetXaxis()->ChangeLabel(-1, -1.0, 0.0);
@@ -1994,18 +1994,18 @@ void DemoPainter::PrintGausCorrelationPad(TPad * pad, TH2 * hist, bool draw_x_ax
     auto top_margin{ (draw_title_label) ? 0.105 : 0.010 };
     auto title_size{ (draw_x_axis) ? 80.0f : 0.0f };
     //auto label_size{ (draw_x_axis) ? 50.0f : 12.0f };
-    ROOTHelper::SetPadMarginInCanvas(pad, 0.005, 0.005, bottom_margin, top_margin);
-    ROOTHelper::SetPadLayout(pad, 1, 1, 0, 0, 0, 0);
-    ROOTHelper::SetPadFrameAttribute(pad, 0, 0, 4000, 0, 0, 0, 0);
-    ROOTHelper::SetAxisTitleAttribute(hist->GetXaxis(), title_size, 0.5f);
-    ROOTHelper::SetAxisTitleAttribute(hist->GetYaxis(), 0.0f);
-    ROOTHelper::SetAxisLabelAttribute(hist->GetXaxis(), 0.0f);
-    ROOTHelper::SetAxisLabelAttribute(hist->GetYaxis(), 0.0f);
+    root_helper::SetPadMarginInCanvas(pad, 0.005, 0.005, bottom_margin, top_margin);
+    root_helper::SetPadLayout(pad, 1, 1, 0, 0, 0, 0);
+    root_helper::SetPadFrameAttribute(pad, 0, 0, 4000, 0, 0, 0, 0);
+    root_helper::SetAxisTitleAttribute(hist->GetXaxis(), title_size, 0.5f);
+    root_helper::SetAxisTitleAttribute(hist->GetYaxis(), 0.0f);
+    root_helper::SetAxisLabelAttribute(hist->GetXaxis(), 0.0f);
+    root_helper::SetAxisLabelAttribute(hist->GetYaxis(), 0.0f);
 
-    auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.022, 0) };
-    auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.008, 1) };
-    ROOTHelper::SetAxisTickAttribute(hist->GetXaxis(), static_cast<float>(x_tick_length), 505);
-    ROOTHelper::SetAxisTickAttribute(hist->GetYaxis(), static_cast<float>(y_tick_length), 505);
+    auto x_tick_length{ root_helper::ConvertGlobalTickLengthToPadTickLength(pad, 0.022, 0) };
+    auto y_tick_length{ root_helper::ConvertGlobalTickLengthToPadTickLength(pad, 0.008, 1) };
+    root_helper::SetAxisTickAttribute(hist->GetXaxis(), static_cast<float>(x_tick_length), 505);
+    root_helper::SetAxisTickAttribute(hist->GetYaxis(), static_cast<float>(y_tick_length), 505);
     hist->SetStats(0);
     hist->GetXaxis()->SetTitle("Width #font[2]{#tau}");
     hist->GetXaxis()->CenterTitle();

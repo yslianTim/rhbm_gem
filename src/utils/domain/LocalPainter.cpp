@@ -333,12 +333,12 @@ PlotResult RenderLinePlotWithRoot(const LinePlotRequest & request)
     const int panel_count{ static_cast<int>(request.panels.size()) };
     const int canvas_height{ std::max(1, panel_count) * request.canvas_height_per_panel };
     auto canvas{
-        ROOTHelper::CreateCanvas("local_line_plot", "", request.canvas_width, canvas_height)
+        root_helper::CreateCanvas("local_line_plot", "", request.canvas_width, canvas_height)
     };
-    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::SetCanvasPartition(
+    root_helper::SetCanvasDefaultStyle(canvas.get());
+    root_helper::SetCanvasPartition(
         canvas.get(), 1, panel_count, 0.18f, 0.10f, 0.14f, 0.06f, 0.02f, 0.01f);
-    ROOTHelper::PrintCanvasOpen(canvas.get(), request.output_path.string());
+    root_helper::PrintCanvasOpen(canvas.get(), request.output_path.string());
 
     const auto x_range{
         ResolveLineAxisRange(
@@ -383,25 +383,25 @@ PlotResult RenderLinePlotWithRoot(const LinePlotRequest & request)
         }
 
         const int canvas_row{ panel_count - panel_index - 1 };
-        ROOTHelper::FindPadInCanvasPartition(canvas.get(), 0, canvas_row);
-        ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
-        ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+        root_helper::FindPadInCanvasPartition(canvas.get(), 0, canvas_row);
+        root_helper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+        root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
 
         const std::string frame_name{ "local_line_frame_" + std::to_string(panel_index) };
-        frames[static_cast<std::size_t>(panel_index)] = ROOTHelper::CreateHist2D(
+        frames[static_cast<std::size_t>(panel_index)] = root_helper::CreateHist2D(
             frame_name,
             request.title,
             500, x_range->first, x_range->second,
             500, y_range->first, y_range->second);
 
         auto * frame{ frames[static_cast<std::size_t>(panel_index)].get() };
-        ROOTHelper::SetAxisTitleAttribute(frame->GetXaxis(), 45.0f, 1.0f, 133);
-        ROOTHelper::SetAxisLabelAttribute(frame->GetXaxis(), 38.0f, 0.01f, 133);
-        ROOTHelper::SetAxisTickAttribute(frame->GetXaxis(), 0.03f, 505);
-        ROOTHelper::SetAxisTitleAttribute(frame->GetYaxis(), 45.0f, 1.3f, 133);
-        ROOTHelper::SetAxisLabelAttribute(frame->GetYaxis(), 38.0f, 0.01f, 133);
-        ROOTHelper::SetAxisTickAttribute(frame->GetYaxis(), 0.03f, 505);
-        ROOTHelper::SetLineAttribute(frame, 1, 0);
+        root_helper::SetAxisTitleAttribute(frame->GetXaxis(), 45.0f, 1.0f, 133);
+        root_helper::SetAxisLabelAttribute(frame->GetXaxis(), 38.0f, 0.01f, 133);
+        root_helper::SetAxisTickAttribute(frame->GetXaxis(), 0.03f, 505);
+        root_helper::SetAxisTitleAttribute(frame->GetYaxis(), 45.0f, 1.3f, 133);
+        root_helper::SetAxisLabelAttribute(frame->GetYaxis(), 38.0f, 0.01f, 133);
+        root_helper::SetAxisTickAttribute(frame->GetYaxis(), 0.03f, 505);
+        root_helper::SetLineAttribute(frame, 1, 0);
         frame->GetXaxis()->SetTitle(
             panel_index == panel_count - 1 ? request.x_axis.title.c_str() : "");
         frame->GetYaxis()->SetTitle(panel.y_axis.title.c_str());
@@ -416,7 +416,7 @@ PlotResult RenderLinePlotWithRoot(const LinePlotRequest & request)
         for (std::size_t series_index = 0; series_index < panel.series.size(); ++series_index)
         {
             const auto & series{ panel.series[series_index] };
-            auto graph{ ROOTHelper::CreateGraphErrors() };
+            auto graph{ root_helper::CreateGraphErrors() };
             for (int point_index = 0; point_index < static_cast<int>(series.x_values.size()); ++point_index)
             {
                 graph->SetPoint(
@@ -425,8 +425,8 @@ PlotResult RenderLinePlotWithRoot(const LinePlotRequest & request)
                     series.y_values[static_cast<std::size_t>(point_index)]);
             }
             const short color{ ResolveSeriesColor(series, series_index) };
-            ROOTHelper::SetMarkerAttribute(graph.get(), 20, 1.3f, color);
-            ROOTHelper::SetLineAttribute(graph.get(), 1, 2, color);
+            root_helper::SetMarkerAttribute(graph.get(), 20, 1.3f, color);
+            root_helper::SetLineAttribute(graph.get(), 1, 2, color);
             graph->Draw("P SAME");
             if (series.name.empty())
             {
@@ -437,9 +437,9 @@ PlotResult RenderLinePlotWithRoot(const LinePlotRequest & request)
 
         if (draw_legend)
         {
-            auto legend{ ROOTHelper::CreateLegend(0.62, 0.72, 0.92, 0.90, false) };
-            ROOTHelper::SetLegendDefaultStyle(legend.get());
-            ROOTHelper::SetFillAttribute(legend.get(), 1001, 0, 0.0f);
+            auto legend{ root_helper::CreateLegend(0.62, 0.72, 0.92, 0.90, false) };
+            root_helper::SetLegendDefaultStyle(legend.get());
+            root_helper::SetFillAttribute(legend.get(), 1001, 0, 0.0f);
             for (std::size_t series_index = 0; series_index < panel.series.size(); ++series_index)
             {
                 legend->AddEntry(
@@ -453,12 +453,12 @@ PlotResult RenderLinePlotWithRoot(const LinePlotRequest & request)
 
         if (!panel.label.empty())
         {
-            auto label{ ROOTHelper::CreatePaveText(0.02, 0.78, 0.34, 0.94, "nbNDC ARC", false) };
-            ROOTHelper::SetPaveTextDefaultStyle(label.get());
-            ROOTHelper::SetPaveAttribute(label.get(), 0, 0.1);
-            ROOTHelper::SetLineAttribute(label.get(), 1, 0);
-            ROOTHelper::SetTextAttribute(label.get(), 30.0f, 133, 12);
-            ROOTHelper::SetFillAttribute(label.get(), 1001, kAzure - 7, 0.45f);
+            auto label{ root_helper::CreatePaveText(0.02, 0.78, 0.34, 0.94, "nbNDC ARC", false) };
+            root_helper::SetPaveTextDefaultStyle(label.get());
+            root_helper::SetPaveAttribute(label.get(), 0, 0.1);
+            root_helper::SetLineAttribute(label.get(), 1, 0);
+            root_helper::SetTextAttribute(label.get(), 30.0f, 133, 12);
+            root_helper::SetFillAttribute(label.get(), 1001, kAzure - 7, 0.45f);
             label->AddText(panel.label.c_str());
             label->Draw();
             panel_labels[static_cast<std::size_t>(panel_index)] = std::move(label);
@@ -468,16 +468,16 @@ PlotResult RenderLinePlotWithRoot(const LinePlotRequest & request)
     if (!request.shared_y_axis_title.empty())
     {
         canvas->cd();
-        shared_axis_pad = ROOTHelper::CreatePad(
+        shared_axis_pad = root_helper::CreatePad(
             "local_line_plot_axis_title", "", 0.94, 0.10, 1.00, 0.96);
         shared_axis_pad->Draw();
         shared_axis_pad->cd();
-        ROOTHelper::SetPadDefaultStyle(shared_axis_pad.get());
-        ROOTHelper::SetFillAttribute(shared_axis_pad.get(), 4000);
-        shared_axis_title = ROOTHelper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false);
-        ROOTHelper::SetPaveTextDefaultStyle(shared_axis_title.get());
-        ROOTHelper::SetFillAttribute(shared_axis_title.get(), 4000);
-        ROOTHelper::SetTextAttribute(shared_axis_title.get(), 42.0f, 133, 22);
+        root_helper::SetPadDefaultStyle(shared_axis_pad.get());
+        root_helper::SetFillAttribute(shared_axis_pad.get(), 4000);
+        shared_axis_title = root_helper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false);
+        root_helper::SetPaveTextDefaultStyle(shared_axis_title.get());
+        root_helper::SetFillAttribute(shared_axis_title.get(), 4000);
+        root_helper::SetTextAttribute(shared_axis_title.get(), 42.0f, 133, 22);
         shared_axis_title->AddText(request.shared_y_axis_title.c_str());
         if (auto * text{ shared_axis_title->GetLineWith(request.shared_y_axis_title.c_str()) })
         {
@@ -486,8 +486,8 @@ PlotResult RenderLinePlotWithRoot(const LinePlotRequest & request)
         shared_axis_title->Draw();
     }
 
-    ROOTHelper::PrintCanvasPad(canvas.get(), request.output_path.string());
-    ROOTHelper::PrintCanvasClose(canvas.get(), request.output_path.string());
+    root_helper::PrintCanvasPad(canvas.get(), request.output_path.string());
+    root_helper::PrintCanvasClose(canvas.get(), request.output_path.string());
 
     if (!std::filesystem::exists(request.output_path))
     {
@@ -511,10 +511,10 @@ PlotResult RenderHeatmapWithRoot(const HeatmapRequest & request)
     gStyle->SetNumberContours(50);
 
     auto canvas{
-        ROOTHelper::CreateCanvas("local_heatmap", "", request.canvas_width, request.canvas_height)
+        root_helper::CreateCanvas("local_heatmap", "", request.canvas_width, request.canvas_height)
     };
-    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::PrintCanvasOpen(canvas.get(), request.output_path.string());
+    root_helper::SetCanvasDefaultStyle(canvas.get());
+    root_helper::PrintCanvasOpen(canvas.get(), request.output_path.string());
 
     const std::pair<double, double> x_range{
         request.x_axis.range.value_or(std::make_pair(0.0, static_cast<double>(request.values.cols())))
@@ -539,7 +539,7 @@ PlotResult RenderHeatmapWithRoot(const HeatmapRequest & request)
     };
     const auto z_range{ ExpandDegenerateRange(z_range_spec.first, z_range_spec.second) };
 
-    auto hist_data{ ROOTHelper::CreateHist2D(
+    auto hist_data{ root_helper::CreateHist2D(
         "local_heatmap_data",
         request.title,
         static_cast<int>(request.values.cols()), x_range.first, x_range.second,
@@ -557,19 +557,19 @@ PlotResult RenderHeatmapWithRoot(const HeatmapRequest & request)
     }
 
     canvas->cd();
-    ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
-    ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-    ROOTHelper::SetPadMarginInCanvas(gPad, 0.15, 0.20, 0.15, 0.10);
-    ROOTHelper::SetAxisTitleAttribute(hist_data->GetXaxis(), 60.0f, 1.0f, 133);
-    ROOTHelper::SetAxisLabelAttribute(hist_data->GetXaxis(), 60.0f, 0.01f, 133);
-    ROOTHelper::SetAxisTickAttribute(hist_data->GetXaxis(), 0.04f, 505);
-    ROOTHelper::SetAxisTitleAttribute(hist_data->GetYaxis(), 60.0f, 1.5f, 133);
-    ROOTHelper::SetAxisLabelAttribute(hist_data->GetYaxis(), 60.0f, 0.01f, 133);
-    ROOTHelper::SetAxisTickAttribute(hist_data->GetYaxis(), 0.04f, 505);
-    ROOTHelper::SetAxisTitleAttribute(hist_data->GetZaxis(), 60.0f, 1.3f, 133);
-    ROOTHelper::SetAxisLabelAttribute(hist_data->GetZaxis(), 60.0f, 0.005f, 133);
-    ROOTHelper::SetAxisTickAttribute(hist_data->GetZaxis(), 0.02f, 505);
-    ROOTHelper::SetLineAttribute(hist_data.get(), 1, 0);
+    root_helper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+    root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+    root_helper::SetPadMarginInCanvas(gPad, 0.15, 0.20, 0.15, 0.10);
+    root_helper::SetAxisTitleAttribute(hist_data->GetXaxis(), 60.0f, 1.0f, 133);
+    root_helper::SetAxisLabelAttribute(hist_data->GetXaxis(), 60.0f, 0.01f, 133);
+    root_helper::SetAxisTickAttribute(hist_data->GetXaxis(), 0.04f, 505);
+    root_helper::SetAxisTitleAttribute(hist_data->GetYaxis(), 60.0f, 1.5f, 133);
+    root_helper::SetAxisLabelAttribute(hist_data->GetYaxis(), 60.0f, 0.01f, 133);
+    root_helper::SetAxisTickAttribute(hist_data->GetYaxis(), 0.04f, 505);
+    root_helper::SetAxisTitleAttribute(hist_data->GetZaxis(), 60.0f, 1.3f, 133);
+    root_helper::SetAxisLabelAttribute(hist_data->GetZaxis(), 60.0f, 0.005f, 133);
+    root_helper::SetAxisTickAttribute(hist_data->GetZaxis(), 0.02f, 505);
+    root_helper::SetLineAttribute(hist_data.get(), 1, 0);
     hist_data->GetXaxis()->SetTitle(request.x_axis.title.c_str());
     hist_data->GetYaxis()->SetTitle(request.y_axis.title.c_str());
     hist_data->GetZaxis()->SetTitle(request.z_axis.title.c_str());
@@ -580,8 +580,8 @@ PlotResult RenderHeatmapWithRoot(const HeatmapRequest & request)
     hist_data->SetStats(0);
     hist_data->Draw("COLZ");
 
-    ROOTHelper::PrintCanvasPad(canvas.get(), request.output_path.string());
-    ROOTHelper::PrintCanvasClose(canvas.get(), request.output_path.string());
+    root_helper::PrintCanvasPad(canvas.get(), request.output_path.string());
+    root_helper::PrintCanvasClose(canvas.get(), request.output_path.string());
 
     if (!std::filesystem::exists(request.output_path))
     {
