@@ -38,6 +38,12 @@ RHBMWebEstimateResult EstimateWEB(
     const RHBMExecutionOptions & options = {}
 );
 
+RHBMGroupEstimationResult EstimateGroup(
+    double alpha_g,
+    const RHBMGroupEstimationInput & input,
+    const RHBMExecutionOptions & options = {}
+);
+
 Eigen::ArrayXd CalculateMemberStatisticalDistance(
     const RHBMMuVector & mu_prior,
     const RHBMGroupCovarianceMatrix & capital_lambda,

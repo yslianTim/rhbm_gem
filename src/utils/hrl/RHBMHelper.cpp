@@ -1,5 +1,6 @@
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 
+#include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
@@ -270,6 +271,10 @@ RHBMGroupCovarianceMatrix CalculateMemberCovariance(
 std::vector<RHBMMemberCovarianceMatrix> CalculateWeightedMemberCovariance(
     const RHBMGroupCovarianceMatrix & capital_lambda,
     const Eigen::ArrayXd & omega_array);
+
+RHBMGroupEstimationResult BuildGroupFallbackResult(
+    const RHBMGroupEstimationInput & input,
+    const RHBMMuEstimateResult & mu_result);
 } // namespace
 
 RHBMBetaEstimateResult rhbm_gem::rhbm_helper::EstimateBetaMDPDE(
@@ -527,6 +532,90 @@ RHBMWebEstimateResult rhbm_gem::rhbm_helper::EstimateWEB(
     if (member_size == 2)
     {
         result.mu_prior = mu_mdpde;
+    }
+    return result;
+}
+
+RHBMGroupEstimationResult rhbm_gem::rhbm_helper::EstimateGroup(
+    double alpha_g,
+    const RHBMGroupEstimationInput & input,
+    const RHBMExecutionOptions & options)
+{
+    rhbm_gem::numeric_validation::RequirePositive(input.basis_size, "basis_size");
+    const auto validated_input{
+        BuildGroupInput(input.member_datasets, input.member_fit_results)
+    };
+    if (validated_input.basis_size != input.basis_size)
+    {
+        throw std::invalid_argument("basis_size is inconsistent with member datasets.");
+    }
+
+    std::vector<RHBMBetaVector> beta_list;
+    beta_list.reserve(validated_input.member_fit_results.size());
+    for (const auto & fit_result : validated_input.member_fit_results)
+    {
+        beta_list.emplace_back(fit_result.beta_mdpde);
+    }
+
+    const auto beta_matrix{ BuildBetaMatrix(beta_list) };
+    auto mu_result{ EstimateMuMDPDE(alpha_g, beta_matrix, options) };
+    if (mu_result.status == RHBMEstimationStatus::SINGLE_MEMBER)
+    {
+        if (!options.quiet_mode)
+        {
+            Logger::Log(LogLevel::Debug,
+                "RHBMHelper::EstimateGroup : single-member group, using fallback result.");
+        }
+        return BuildGroupFallbackResult(validated_input, mu_result);
+    }
+
+    std::vector<RHBMDiagonalMatrix> capital_sigma_list;
+    capital_sigma_list.reserve(validated_input.member_fit_results.size());
+    for (const auto & fit_result : validated_input.member_fit_results)
+    {
+        capital_sigma_list.emplace_back(fit_result.data_covariance);
+    }
+    auto web_result{
+        EstimateWEB(
+            validated_input.member_datasets,
+            capital_sigma_list,
+            mu_result.mu_mdpde,
+            mu_result.member_capital_lambda_list,
+            options
+        )
+    };
+    if (web_result.status != RHBMEstimationStatus::SUCCESS)
+    {
+        if (!options.quiet_mode)
+        {
+            Logger::Log(LogLevel::Debug,
+                "RHBMHelper::EstimateGroup : WEB estimation skipped, using fallback result.");
+        }
+        return BuildGroupFallbackResult(validated_input, mu_result);
+    }
+
+    RHBMGroupEstimationResult result;
+    result.status = mu_result.status;
+    result.mu_mean = mu_result.mu_mean;
+    result.mu_mdpde = mu_result.mu_mdpde;
+    result.mu_prior = web_result.mu_prior;
+    result.capital_lambda = mu_result.capital_lambda;
+    result.beta_posterior_matrix = web_result.beta_posterior_matrix;
+    result.capital_sigma_posterior_list = web_result.capital_sigma_posterior_list;
+    result.omega_array = mu_result.omega_array;
+    result.statistical_distance_array = CalculateMemberStatisticalDistance(
+        result.mu_prior,
+        result.capital_lambda,
+        result.beta_posterior_matrix
+    );
+    result.outlier_flag_array = CalculateOutlierMemberFlag(
+        validated_input.basis_size,
+        result.statistical_distance_array
+    );
+    if (mu_result.status == RHBMEstimationStatus::MAX_ITERATIONS_REACHED ||
+        web_result.status == RHBMEstimationStatus::MAX_ITERATIONS_REACHED)
+    {
+        result.status = RHBMEstimationStatus::MAX_ITERATIONS_REACHED;
     }
     return result;
 }
@@ -883,6 +972,45 @@ std::vector<RHBMMemberCovarianceMatrix> CalculateWeightedMemberCovariance(
             (member_size * omega_h / omega_array(i)) * capital_lambda;
     }
     return member_capital_lambda_list;
+}
+
+RHBMGroupEstimationResult BuildGroupFallbackResult(
+    const RHBMGroupEstimationInput & input,
+    const RHBMMuEstimateResult & mu_result)
+{
+    std::vector<RHBMBetaVector> beta_list;
+    beta_list.reserve(input.member_fit_results.size());
+    for (const auto & fit_result : input.member_fit_results)
+    {
+        beta_list.emplace_back(fit_result.beta_mdpde);
+    }
+    const auto beta_matrix{ rhbm_gem::rhbm_helper::BuildBetaMatrix(beta_list) };
+
+    RHBMGroupEstimationResult result;
+    result.status = (mu_result.status == RHBMEstimationStatus::SUCCESS)
+        ? RHBMEstimationStatus::NUMERICAL_FALLBACK
+        : mu_result.status;
+    result.mu_mean = mu_result.mu_mean;
+    result.mu_mdpde = mu_result.mu_mdpde;
+    result.mu_prior = mu_result.mu_mdpde;
+    result.capital_lambda = mu_result.capital_lambda;
+    result.beta_posterior_matrix = beta_matrix;
+    result.omega_array = mu_result.omega_array;
+    result.capital_sigma_posterior_list.assign(
+        input.member_fit_results.size(),
+        RHBMPosteriorCovarianceMatrix::Zero(input.basis_size, input.basis_size)
+    );
+    result.statistical_distance_array =
+        rhbm_gem::rhbm_helper::CalculateMemberStatisticalDistance(
+            result.mu_prior,
+            result.capital_lambda,
+            result.beta_posterior_matrix
+        );
+    result.outlier_flag_array = rhbm_gem::rhbm_helper::CalculateOutlierMemberFlag(
+        input.basis_size,
+        result.statistical_distance_array
+    );
+    return result;
 }
 } // namespace
 

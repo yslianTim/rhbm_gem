@@ -17,7 +17,6 @@
 #include <rhbm_gem/utils/hrl/HRLAlphaTrainer.hpp>
 #include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
-#include <rhbm_gem/utils/hrl/HRLGroupEstimator.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
 
@@ -450,8 +449,12 @@ void PotentialAnalysisCommand::RunAtomPotentialFittingWorkflow(
             const auto input{
                 rhbm_gem::rhbm_helper::BuildGroupInput(member_datasets, member_fit_results)
             };
-            HRLGroupEstimator estimator(MakePotentialAnalysisExecutionOptions(ThreadSize(), true));
-            const auto result{ estimator.Estimate(input, alpha_g) };
+            const auto result{
+                rhbm_gem::rhbm_helper::EstimateGroup(
+                    alpha_g,
+                    input,
+                    MakePotentialAnalysisExecutionOptions(ThreadSize(), true))
+            };
 
 #ifdef USE_OPENMP
             #pragma omp critical

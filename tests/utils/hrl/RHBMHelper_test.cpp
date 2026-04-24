@@ -279,6 +279,141 @@ TEST(RHBMHelperTest, BuildGroupInputRejectsInconsistentMemberBetaBasisSize)
     );
 }
 
+TEST(RHBMHelperTest, EstimateGroupSingleMemberUsesFallbackResult)
+{
+    const auto input{
+        rhbm_gem::rhbm_helper::BuildGroupInput(
+            {
+                MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 1.0 }), MakeSeriesPoint({ 1.0, 1.0, 3.0 }) })
+            },
+            {
+                MakeFitResult({ 1.0, 2.0 }, 0.25, { 1.0, 1.0 }, { 0.25, 0.25 })
+            }
+        )
+    };
+
+    const auto result{ rhbm_gem::rhbm_helper::EstimateGroup(0.0, input) };
+
+    EXPECT_EQ(RHBMEstimationStatus::SINGLE_MEMBER, result.status);
+    EXPECT_TRUE(result.mu_mean.isApprox(MakeVector({ 1.0, 2.0 }), 1e-12));
+    EXPECT_TRUE(result.mu_prior.isApprox(MakeVector({ 1.0, 2.0 }), 1e-12));
+    EXPECT_TRUE(result.beta_posterior_matrix.col(0).isApprox(MakeVector({ 1.0, 2.0 }), 1e-12));
+    ASSERT_EQ(1u, result.capital_sigma_posterior_list.size());
+    EXPECT_TRUE(result.capital_sigma_posterior_list[0].isApprox(Eigen::MatrixXd::Zero(2, 2), 1e-12));
+}
+
+TEST(RHBMHelperTest, EstimateGroupRejectsMissingMemberFitResults)
+{
+    RHBMGroupEstimationInput input;
+    input.basis_size = 2;
+    input.member_datasets.push_back(
+        { Eigen::MatrixXd::Identity(2, 2), MakeVector({ 1.0, 2.0 }), MakeVector({ 1.0, 1.0 }) });
+
+    EXPECT_THROW(rhbm_gem::rhbm_helper::EstimateGroup(0.0, input), std::invalid_argument);
+}
+
+TEST(RHBMHelperTest, EstimateGroupRejectsMismatchedWeightSize)
+{
+    RHBMGroupEstimationInput input;
+    input.basis_size = 2;
+    input.member_datasets.push_back({
+        Eigen::MatrixXd::Identity(2, 2),
+        MakeVector({ 1.0, 2.0 }),
+        MakeVector({ 1.0, 1.0 })
+    });
+
+    auto fit_result{ MakeFitResult({ 1.0, 2.0 }, 0.25, { 1.0 }, { 0.25, 0.25 }) };
+    input.member_fit_results.push_back(fit_result);
+
+    EXPECT_THROW(rhbm_gem::rhbm_helper::EstimateGroup(0.0, input), std::invalid_argument);
+}
+
+TEST(RHBMHelperTest, EstimateGroupRejectsInconsistentScoreSize)
+{
+    RHBMGroupEstimationInput input;
+    input.basis_size = 2;
+    input.member_datasets.push_back({
+        Eigen::MatrixXd::Identity(2, 2),
+        MakeVector({ 1.0, 2.0 }),
+        MakeVector({ 1.0 })
+    });
+    input.member_fit_results.push_back(
+        MakeFitResult({ 1.0, 2.0 }, 0.25, { 1.0, 1.0 }, { 0.25, 0.25 }));
+
+    EXPECT_THROW(rhbm_gem::rhbm_helper::EstimateGroup(0.0, input), std::invalid_argument);
+}
+
+TEST(RHBMHelperTest, EstimateGroupRejectsBasisSizeMismatchWithMemberDatasets)
+{
+    RHBMGroupEstimationInput input;
+    input.basis_size = 3;
+    input.member_datasets.push_back({
+        Eigen::MatrixXd::Identity(2, 2),
+        MakeVector({ 1.0, 2.0 }),
+        MakeVector({ 1.0, 1.0 })
+    });
+    input.member_fit_results.push_back(
+        MakeFitResult({ 1.0, 2.0 }, 0.25, { 1.0, 1.0 }, { 0.25, 0.25 }));
+
+    EXPECT_THROW(rhbm_gem::rhbm_helper::EstimateGroup(0.0, input), std::invalid_argument);
+}
+
+TEST(RHBMHelperTest, EstimateGroupTwoMembersPinsMuPriorToMuMDPDE)
+{
+    const auto input{
+        rhbm_gem::rhbm_helper::BuildGroupInput(
+            {
+                MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 1.0 }), MakeSeriesPoint({ 1.0, 1.0, 3.0 }) }),
+                MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 2.0 }), MakeSeriesPoint({ 1.0, 1.0, 4.0 }) })
+            },
+            {
+                MakeFitResult({ 1.0, 2.0 }, 0.25, { 1.0, 1.0 }, { 0.25, 0.25 }),
+                MakeFitResult({ 2.0, 2.0 }, 0.5, { 1.0, 1.0 }, { 0.5, 0.5 })
+            }
+        )
+    };
+
+    const auto result{ rhbm_gem::rhbm_helper::EstimateGroup(0.0, input) };
+
+    EXPECT_EQ(RHBMEstimationStatus::SUCCESS, result.status);
+    EXPECT_TRUE(result.mu_prior.isApprox(result.mu_mdpde, 1e-12));
+    EXPECT_EQ(2, result.beta_posterior_matrix.cols());
+    ASSERT_EQ(2u, result.capital_sigma_posterior_list.size());
+    EXPECT_EQ(2, result.statistical_distance_array.size());
+    EXPECT_EQ(2, result.outlier_flag_array.size());
+}
+
+TEST(RHBMHelperTest, EstimateGroupAllowsConvergenceFallbackStatuses)
+{
+    const auto input{
+        rhbm_gem::rhbm_helper::BuildGroupInput(
+            {
+                MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 1.0 }), MakeSeriesPoint({ 1.0, 1.0, 3.0 }) }),
+                MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 2.0 }), MakeSeriesPoint({ 1.0, 1.0, 4.0 }) })
+            },
+            {
+                MakeFitResult(
+                    { 1.0, 2.0 },
+                    0.25,
+                    { 1.0, 1.0 },
+                    { 0.25, 0.25 },
+                    RHBMEstimationStatus::MAX_ITERATIONS_REACHED),
+                MakeFitResult(
+                    { 2.0, 2.0 },
+                    0.5,
+                    { 1.0, 1.0 },
+                    { 0.5, 0.5 },
+                    RHBMEstimationStatus::NUMERICAL_FALLBACK)
+            }
+        )
+    };
+
+    const auto result{ rhbm_gem::rhbm_helper::EstimateGroup(0.0, input) };
+
+    EXPECT_EQ(RHBMEstimationStatus::SUCCESS, result.status);
+    EXPECT_EQ(2, result.beta_posterior_matrix.cols());
+}
+
 TEST(RHBMHelperTest, EstimateBetaMDPDEAlphaZeroMatchesOLS)
 {
     Eigen::MatrixXd X(4, 2);

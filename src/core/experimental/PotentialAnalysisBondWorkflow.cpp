@@ -12,7 +12,6 @@
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
-#include <rhbm_gem/utils/hrl/HRLGroupEstimator.hpp>
 #include <rhbm_gem/utils/math/CylinderSampler.hpp>
 
 #include <array>
@@ -260,9 +259,12 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
             const auto input{
                 rhbm_gem::rhbm_helper::BuildGroupInput(member_datasets, member_fit_results)
             };
-            HRLGroupEstimator estimator(
-                MakePotentialAnalysisExecutionOptions(context.thread_size, true));
-            const auto result{ estimator.Estimate(input, context.options.alpha_g) };
+            const auto result{
+                rhbm_gem::rhbm_helper::EstimateGroup(
+                    context.options.alpha_g,
+                    input,
+                    MakePotentialAnalysisExecutionOptions(context.thread_size, true))
+            };
 
 #ifdef USE_OPENMP
             #pragma omp critical
