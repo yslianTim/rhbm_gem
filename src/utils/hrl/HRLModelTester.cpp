@@ -21,9 +21,9 @@ constexpr double kAlphaGMin{ 0.0 };
 constexpr double kAlphaGMax{ 1.0 };
 constexpr double kAlphaGStep{ 0.1 };
 
-HRLExecutionOptions MakeTesterExecutionOptions()
+RHBMExecutionOptions MakeTesterExecutionOptions()
 {
-    HRLExecutionOptions options;
+    RHBMExecutionOptions options;
     options.quiet_mode = true;
     options.thread_size = 1;
     return options;
@@ -38,7 +38,7 @@ const rhbm_gem::GaussianLinearizationService & MetricDecodeService()
 }
 
 rhbm_gem::GaussianParameterVector CalculateNormalizedResidual(
-    const HRLBetaVector & linear_estimate,
+    const RHBMBetaVector & linear_estimate,
     const rhbm_gem::GaussianParameterVector & gaussian_truth)
 {
     const auto gaussian_estimate{ MetricDecodeService().DecodeGroupBeta(linear_estimate) };
@@ -76,10 +76,10 @@ struct NeighborhoodReplicaResidual
 };
 
 HRLModelTester::BetaReplicaResidual EstimateBetaReplicaResidual(
-    const HRLMemberDataset & dataset,
+    const RHBMMemberDataset & dataset,
     const Eigen::VectorXd & gaus_true,
     double alpha_r,
-    const HRLExecutionOptions & options)
+    const RHBMExecutionOptions & options)
 {
     const auto beta_result{ rhbm_gem::rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset, options) };
     return HRLModelTester::BetaReplicaResidual{
@@ -89,10 +89,10 @@ HRLModelTester::BetaReplicaResidual EstimateBetaReplicaResidual(
 }
 
 MuReplicaResidual EstimateMuReplicaResidual(
-    const HRLBetaMatrix & beta_matrix,
+    const RHBMBetaMatrix & beta_matrix,
     const Eigen::VectorXd & gaus_true,
     double alpha_g,
-    const HRLExecutionOptions & options)
+    const RHBMExecutionOptions & options)
 {
     const auto mdpde_result{ rhbm_gem::rhbm_helper::EstimateMuMDPDE(alpha_g, beta_matrix, options) };
     const auto ols_result{ rhbm_gem::rhbm_helper::EstimateMuMDPDE(0.0, beta_matrix, options) };
@@ -103,21 +103,21 @@ MuReplicaResidual EstimateMuReplicaResidual(
 }
 
 NeighborhoodReplicaResidual EstimateNeighborhoodReplicaResidual(
-    const HRLMemberDataset & no_cut_dataset,
-    const HRLMemberDataset & cut_dataset,
+    const RHBMMemberDataset & no_cut_dataset,
+    const RHBMMemberDataset & cut_dataset,
     const Eigen::VectorXd & gaus_true,
     const HRLAlphaTrainer & alpha_r_trainer,
     const HRLAlphaTrainer::AlphaTrainingOptions & alpha_r_training_options,
-    const HRLExecutionOptions & options)
+    const RHBMExecutionOptions & options)
 {
     const auto no_cut_training_result{
         alpha_r_trainer.TrainAlphaR(
-            std::vector<HRLMemberDataset>{ no_cut_dataset },
+            std::vector<RHBMMemberDataset>{ no_cut_dataset },
             alpha_r_training_options)
     };
     const auto cut_training_result{
         alpha_r_trainer.TrainAlphaR(
-            std::vector<HRLMemberDataset>{ cut_dataset },
+            std::vector<RHBMMemberDataset>{ cut_dataset },
             alpha_r_training_options)
     };
     const auto no_cut_alpha_r_train{ no_cut_training_result.best_alpha };
@@ -169,7 +169,7 @@ HRLModelTester::HRLModelTester(int gaus_par_size) :
 
 bool HRLModelTester::RunSingleBetaMDPDETest(
     BetaReplicaResidual & result,
-    const HRLMemberDataset & dataset,
+    const RHBMMemberDataset & dataset,
     const Eigen::VectorXd & gaus_true,
     double alpha_r,
     int thread_size)
@@ -236,7 +236,7 @@ bool HRLModelTester::RunBetaMDPDETest(
 
         const auto alpha_r_training_result{
             alpha_r_trainer.TrainAlphaR(
-                std::vector<HRLMemberDataset>{ dataset }, alpha_r_training_options)
+                std::vector<RHBMMemberDataset>{ dataset }, alpha_r_training_options)
         };
         const auto trained_alpha_r{ alpha_r_training_result.best_alpha };
         const auto options{ MakeTesterExecutionOptions() };

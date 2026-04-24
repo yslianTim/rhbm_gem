@@ -230,7 +230,7 @@ std::string FormatDistanceLabel(double distance)
 }
 
 bool ValidateLinearizedDataset(
-    const HRLMemberDataset & dataset,
+    const RHBMMemberDataset & dataset,
     std::string_view dataset_label)
 {
     if (dataset.X.rows() != dataset.y.size())
@@ -253,7 +253,7 @@ bool ValidateLinearizedDataset(
 }
 
 LineSeries BuildLinearizedDatasetSeries(
-    const HRLMemberDataset & dataset,
+    const RHBMMemberDataset & dataset,
     std::string_view dataset_label,
     std::string series_name)
 {
@@ -290,8 +290,8 @@ LineSeries BuildLinearizedDatasetSeries(
 bool TryAppendBenchmarkLinearizedPanel(
     std::vector<LinePlotPanel> & panels,
     double distance,
-    const HRLMemberDataset & no_cut_dataset,
-    const HRLMemberDataset & cut_dataset)
+    const RHBMMemberDataset & no_cut_dataset,
+    const RHBMMemberDataset & cut_dataset)
 {
     const auto label{ FormatDistanceLabel(distance) };
     if (!ValidateLinearizedDataset(no_cut_dataset, label + " (No Cut)") ||

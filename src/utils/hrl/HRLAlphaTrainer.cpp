@@ -26,8 +26,8 @@ const rhbm_gem::GaussianLinearizationService & MetricDecodeService()
 }
 
 rhbm_gem::GaussianParameterVector CalculateAbsoluteGaussianDifference(
-    const HRLBetaVector & linear_a,
-    const HRLBetaVector & linear_b)
+    const RHBMBetaVector & linear_a,
+    const RHBMBetaVector & linear_b)
 {
     const auto gaussian_a{ MetricDecodeService().DecodeGroupBeta(linear_a) };
     const auto gaussian_b{ MetricDecodeService().DecodeGroupBeta(linear_b) };
@@ -71,7 +71,7 @@ void ValidateTrainingBatch(
     }
 }
 
-void ValidateMemberDataset(const HRLMemberDataset & dataset)
+void ValidateMemberDataset(const RHBMMemberDataset & dataset)
 {
     if (dataset.X.rows() != dataset.y.size())
     {
@@ -83,8 +83,8 @@ void ValidateMemberDataset(const HRLMemberDataset & dataset)
     }
 }
 
-HRLMemberDataset BuildDatasetSlice(
-    const HRLMemberDataset & dataset,
+RHBMMemberDataset BuildDatasetSlice(
+    const RHBMMemberDataset & dataset,
     const std::vector<int> & row_indices)
 {
     if (row_indices.empty())
@@ -93,10 +93,10 @@ HRLMemberDataset BuildDatasetSlice(
     }
 
     const auto row_count{ static_cast<Eigen::Index>(row_indices.size()) };
-    HRLMemberDataset slice;
-    slice.X = HRLDesignMatrix::Zero(row_count, dataset.X.cols());
-    slice.y = HRLResponseVector::Zero(row_count);
-    slice.score = HRLScoreVector::Zero(row_count);
+    RHBMMemberDataset slice;
+    slice.X = RHBMDesignMatrix::Zero(row_count, dataset.X.cols());
+    slice.y = RHBMResponseVector::Zero(row_count);
+    slice.score = RHBMScoreVector::Zero(row_count);
     for (Eigen::Index i = 0; i < row_count; i++)
     {
         const auto row_index{ static_cast<Eigen::Index>(row_indices.at(static_cast<std::size_t>(i))) };
@@ -136,10 +136,10 @@ HRLAlphaTrainer::AlphaTrainingResult BuildTrainingResult(
 }
 
 Eigen::VectorXd EvaluateAlphaRForDataset(
-    const HRLMemberDataset & dataset,
+    const RHBMMemberDataset & dataset,
     std::size_t subset_size,
     const std::vector<double> & alpha_list,
-    const HRLExecutionOptions & options)
+    const RHBMExecutionOptions & options)
 {
     ValidateMemberDataset(dataset);
     ValidateTrainingInputs(static_cast<std::size_t>(dataset.y.size()), subset_size, alpha_list);
@@ -157,8 +157,8 @@ Eigen::VectorXd EvaluateAlphaRForDataset(
         data_subset_rows[row % subset_size].emplace_back(static_cast<int>(row));
     }
 
-    std::vector<HRLMemberDataset> data_set_test;
-    std::vector<HRLMemberDataset> data_set_training;
+    std::vector<RHBMMemberDataset> data_set_test;
+    std::vector<RHBMMemberDataset> data_set_training;
     data_set_test.reserve(subset_size);
     data_set_training.reserve(subset_size);
     for (std::size_t i = 0; i < subset_size; i++)
@@ -218,25 +218,25 @@ Eigen::VectorXd EvaluateAlphaRForDataset(
 }
 
 Eigen::VectorXd EvaluateAlphaGForGroup(
-    const std::vector<HRLBetaVector> & beta_list,
+    const std::vector<RHBMBetaVector> & beta_list,
     std::size_t subset_size,
     const std::vector<double> & alpha_list,
-    const HRLExecutionOptions & options)
+    const RHBMExecutionOptions & options)
 {
     ValidateTrainingInputs(beta_list.size(), subset_size, alpha_list);
 
     const auto data_size_in_half{ beta_list.size() / 2 };
-    std::vector<std::vector<HRLBetaVector>> data_set_test(subset_size);
-    std::vector<std::vector<HRLBetaVector>> data_set_training(subset_size);
+    std::vector<std::vector<RHBMBetaVector>> data_set_test(subset_size);
+    std::vector<std::vector<RHBMBetaVector>> data_set_training(subset_size);
     for (std::size_t i = 0; i < subset_size; i++)
     {
         data_set_test[i].reserve(data_size_in_half);
         data_set_training[i].reserve(beta_list.size() - data_size_in_half);
-        std::vector<HRLBetaVector> shuffled_data{ beta_list };
+        std::vector<RHBMBetaVector> shuffled_data{ beta_list };
         auto generator{ BuildGenerator(options.random_seed, i) };
         std::shuffle(shuffled_data.begin(), shuffled_data.end(), generator);
         const auto diff{
-            static_cast<std::vector<HRLBetaVector>::difference_type>(data_size_in_half)
+            static_cast<std::vector<RHBMBetaVector>::difference_type>(data_size_in_half)
         };
         data_set_test[i].assign(shuffled_data.begin(), shuffled_data.begin() + diff);
         data_set_training[i].assign(shuffled_data.begin() + diff, shuffled_data.end());
@@ -335,7 +335,7 @@ std::vector<double> HRLAlphaTrainer::BuildAlphaGrid(
 }
 
 HRLAlphaTrainer::AlphaTrainingResult HRLAlphaTrainer::TrainAlphaR(
-    const std::vector<HRLMemberDataset> & dataset_list,
+    const std::vector<RHBMMemberDataset> & dataset_list,
     const AlphaTrainingOptions & options) const
 {
     ValidateTrainingBatch(dataset_list.size(), options.subset_size, m_alpha_grid);
@@ -384,7 +384,7 @@ HRLAlphaTrainer::AlphaTrainingResult HRLAlphaTrainer::TrainAlphaR(
 }
 
 HRLAlphaTrainer::AlphaTrainingResult HRLAlphaTrainer::TrainAlphaG(
-    const std::vector<std::vector<HRLBetaVector>> & beta_group_list,
+    const std::vector<std::vector<RHBMBetaVector>> & beta_group_list,
     const AlphaTrainingOptions & options) const
 {
     ValidateTrainingBatch(beta_group_list.size(), options.subset_size, m_alpha_grid);
@@ -429,7 +429,7 @@ HRLAlphaTrainer::AlphaTrainingResult HRLAlphaTrainer::TrainAlphaG(
 }
 
 Eigen::MatrixXd HRLAlphaTrainer::StudyAlphaRBias(
-    const std::vector<HRLMemberDataset> & dataset_list,
+    const std::vector<RHBMMemberDataset> & dataset_list,
     const AlphaRunOptions & options) const
 {
     ValidateTrainingBatch(dataset_list.size(), 1, m_alpha_grid);
@@ -485,7 +485,7 @@ Eigen::MatrixXd HRLAlphaTrainer::StudyAlphaRBias(
 }
 
 Eigen::MatrixXd HRLAlphaTrainer::StudyAlphaGBias(
-    const std::vector<std::vector<HRLBetaVector>> & beta_group_list,
+    const std::vector<std::vector<RHBMBetaVector>> & beta_group_list,
     const AlphaRunOptions & options) const
 {
     ValidateTrainingBatch(beta_group_list.size(), 1, m_alpha_grid);

@@ -19,8 +19,8 @@ Eigen::VectorXd MakeVector(std::initializer_list<double> values)
 }
 
 void ExpectDatasetEquals(
-    const HRLMemberDataset & lhs,
-    const HRLMemberDataset & rhs)
+    const RHBMMemberDataset & lhs,
+    const RHBMMemberDataset & rhs)
 {
     ASSERT_EQ(lhs.X.rows(), rhs.X.rows());
     ASSERT_EQ(lhs.X.cols(), rhs.X.cols());

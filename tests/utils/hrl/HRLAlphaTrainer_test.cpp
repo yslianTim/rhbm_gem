@@ -20,7 +20,7 @@ Eigen::VectorXd MakeVector(std::initializer_list<double> values)
     return result;
 }
 
-HRLMemberDataset MakeLinearDataset(double slope)
+RHBMMemberDataset MakeLinearDataset(double slope)
 {
     const SeriesPointList data_list{
         SeriesPoint({ 1.0, 0.0 }, 1.0),
@@ -127,7 +127,7 @@ TEST(HRLAlphaTrainerTest, TrainAlphaRAggregatesSingleBatchResultsAndSelectsMinim
 {
     const HRLAlphaTrainer trainer{ 0.0, 1.0, 0.5 };
     const auto & alpha_list{ trainer.AlphaGrid() };
-    const std::vector<HRLMemberDataset> dataset_list{
+    const std::vector<RHBMMemberDataset> dataset_list{
         MakeLinearDataset(2.0),
         MakeLinearDataset(-0.5)
     };
@@ -220,8 +220,8 @@ TEST(HRLAlphaTrainerTest, TrainAlphaRequiresExplicitSubsetSizeAndRejectsInvalidI
 {
     const HRLAlphaTrainer trainer{ 0.0, 1.0, 0.5 };
     const auto dataset{ MakeLinearDataset(1.0) };
-    const std::vector<HRLMemberDataset> empty_dataset_list;
-    const std::vector<HRLMemberDataset> dataset_list{ dataset };
+    const std::vector<RHBMMemberDataset> empty_dataset_list;
+    const std::vector<RHBMMemberDataset> dataset_list{ dataset };
     HRLAlphaTrainer::AlphaTrainingOptions default_options;
 
     EXPECT_THROW(
@@ -257,7 +257,7 @@ TEST(HRLAlphaTrainerTest, TrainAlphaRequiresExplicitSubsetSizeAndRejectsInvalidI
 TEST(HRLAlphaTrainerTest, AlphaRunOptionsPropagatesProgressToBiasStudies)
 {
     const HRLAlphaTrainer trainer{ 0.0, 1.0, 0.5 };
-    const std::vector<HRLMemberDataset> dataset_list{
+    const std::vector<RHBMMemberDataset> dataset_list{
         MakeLinearDataset(2.0),
         MakeLinearDataset(-0.5)
     };
@@ -293,7 +293,7 @@ TEST(HRLAlphaTrainerTest, AlphaRunOptionsPropagatesProgressToBiasStudies)
 TEST(HRLAlphaTrainerTest, StudyAlphaRBiasReturnsFiniteMatrixAndReportsProgress)
 {
     const HRLAlphaTrainer trainer{ 0.0, 1.0, 0.5 };
-    const std::vector<HRLMemberDataset> dataset_list{
+    const std::vector<RHBMMemberDataset> dataset_list{
         MakeLinearDataset(2.0),
         MakeLinearDataset(-0.5)
     };
@@ -349,7 +349,7 @@ TEST(HRLAlphaTrainerTest, StudyAlphaGBiasReturnsFiniteMatrixAndReportsProgress)
 TEST(HRLAlphaTrainerTest, StudyAlphaBiasRejectsEmptyInputs)
 {
     const HRLAlphaTrainer trainer{ 0.0, 1.0, 0.5 };
-    const std::vector<HRLMemberDataset> empty_dataset_list;
+    const std::vector<RHBMMemberDataset> empty_dataset_list;
     const std::vector<std::vector<Eigen::VectorXd>> empty_beta_group_list;
     const std::vector<std::vector<Eigen::VectorXd>> beta_group_with_empty_member_list{
         {}

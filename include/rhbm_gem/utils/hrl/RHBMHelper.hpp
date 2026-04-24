@@ -4,44 +4,44 @@
 
 #include <Eigen/Dense>
 
-#include <rhbm_gem/utils/hrl/HRLModelTypes.hpp>
+#include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace rhbm_gem::rhbm_helper
 {
-HRLMemberDataset BuildMemberDataset(const SeriesPointList & series_point_list);
+RHBMMemberDataset BuildMemberDataset(const SeriesPointList & series_point_list);
 
-HRLBetaMatrix BuildBetaMatrix(const std::vector<HRLBetaVector> & beta_list);
+RHBMBetaMatrix BuildBetaMatrix(const std::vector<RHBMBetaVector> & beta_list);
 
-HRLGroupEstimationInput BuildGroupInput(
-    const std::vector<HRLMemberDataset> & member_datasets,
-    const std::vector<HRLBetaEstimateResult> & member_fit_results
+RHBMGroupEstimationInput BuildGroupInput(
+    const std::vector<RHBMMemberDataset> & member_datasets,
+    const std::vector<RHBMBetaEstimateResult> & member_fit_results
 );
 
-HRLBetaEstimateResult EstimateBetaMDPDE(
+RHBMBetaEstimateResult EstimateBetaMDPDE(
     double alpha_r,
-    const HRLMemberDataset & dataset,
-    const HRLExecutionOptions & options = {}
+    const RHBMMemberDataset & dataset,
+    const RHBMExecutionOptions & options = {}
 );
 
-HRLMuEstimateResult EstimateMuMDPDE(
+RHBMMuEstimateResult EstimateMuMDPDE(
     double alpha_g,
-    const HRLBetaMatrix & beta_matrix,
-    const HRLExecutionOptions & options = {}
+    const RHBMBetaMatrix & beta_matrix,
+    const RHBMExecutionOptions & options = {}
 );
 
-HRLWebEstimateResult EstimateWEB(
-    const std::vector<HRLMemberDataset> & member_datasets,
-    const std::vector<HRLDiagonalMatrix> & capital_sigma_list,
-    const HRLMuVector & mu_mdpde,
-    const std::vector<HRLMemberCovarianceMatrix> & member_capital_lambda_list,
-    const HRLExecutionOptions & options = {}
+RHBMWebEstimateResult EstimateWEB(
+    const std::vector<RHBMMemberDataset> & member_datasets,
+    const std::vector<RHBMDiagonalMatrix> & capital_sigma_list,
+    const RHBMMuVector & mu_mdpde,
+    const std::vector<RHBMMemberCovarianceMatrix> & member_capital_lambda_list,
+    const RHBMExecutionOptions & options = {}
 );
 
 Eigen::ArrayXd CalculateMemberStatisticalDistance(
-    const HRLMuVector & mu_prior,
-    const HRLGroupCovarianceMatrix & capital_lambda,
-    const HRLBetaPosteriorMatrix & beta_posterior_matrix
+    const RHBMMuVector & mu_prior,
+    const RHBMGroupCovarianceMatrix & capital_lambda,
+    const RHBMBetaPosteriorMatrix & beta_posterior_matrix
 );
 
 Eigen::Array<bool, Eigen::Dynamic, 1> CalculateOutlierMemberFlag(

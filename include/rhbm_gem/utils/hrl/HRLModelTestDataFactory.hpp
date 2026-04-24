@@ -8,14 +8,14 @@
 #include <Eigen/Dense>
 
 #include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
-#include <rhbm_gem/utils/hrl/HRLModelTypes.hpp>
+#include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 #include <rhbm_gem/utils/math/GaussianPotentialSampler.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 struct HRLBetaTestInput
 {
     Eigen::VectorXd gaus_true;
-    std::vector<HRLMemberDataset> replica_datasets;
+    std::vector<RHBMMemberDataset> replica_datasets;
 };
 
 struct HRLMuTestInput
@@ -27,8 +27,8 @@ struct HRLMuTestInput
 struct HRLNeighborhoodTestInput
 {
     Eigen::VectorXd gaus_true;
-    std::vector<HRLMemberDataset> no_cut_datasets;
-    std::vector<HRLMemberDataset> cut_datasets;
+    std::vector<RHBMMemberDataset> no_cut_datasets;
+    std::vector<RHBMMemberDataset> cut_datasets;
     std::vector<LocalPotentialSampleList> sampling_summaries;
 };
 

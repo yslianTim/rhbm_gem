@@ -1,18 +1,18 @@
 #pragma once
 
-#include <rhbm_gem/utils/hrl/HRLModelTypes.hpp>
+#include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 
 class HRLGroupEstimator final
 {
-    HRLExecutionOptions m_options;
+    RHBMExecutionOptions m_options;
 
 public:
-    explicit HRLGroupEstimator(HRLExecutionOptions options = {});
-    HRLGroupEstimationResult Estimate(const HRLGroupEstimationInput & input, double alpha_g) const;
+    explicit HRLGroupEstimator(RHBMExecutionOptions options = {});
+    RHBMGroupEstimationResult Estimate(const RHBMGroupEstimationInput & input, double alpha_g) const;
 
 private:
-    static HRLGroupEstimationResult BuildFallbackResult(
-        const HRLGroupEstimationInput & input,
-        const HRLMuEstimateResult & mu_result
+    static RHBMGroupEstimationResult BuildFallbackResult(
+        const RHBMGroupEstimationInput & input,
+        const RHBMMuEstimateResult & mu_result
     );
 };

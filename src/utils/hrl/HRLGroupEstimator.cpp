@@ -8,13 +8,13 @@
 #include <utility>
 #include <vector>
 
-HRLGroupEstimator::HRLGroupEstimator(HRLExecutionOptions options) :
+HRLGroupEstimator::HRLGroupEstimator(RHBMExecutionOptions options) :
     m_options{ std::move(options) }
 {
 }
 
-HRLGroupEstimationResult HRLGroupEstimator::Estimate(
-    const HRLGroupEstimationInput & input,
+RHBMGroupEstimationResult HRLGroupEstimator::Estimate(
+    const RHBMGroupEstimationInput & input,
     double alpha_g) const
 {
     rhbm_gem::numeric_validation::RequirePositive(input.basis_size, "basis_size");
@@ -26,7 +26,7 @@ HRLGroupEstimationResult HRLGroupEstimator::Estimate(
         throw std::invalid_argument("basis_size is inconsistent with member datasets.");
     }
 
-    std::vector<HRLBetaVector> beta_list;
+    std::vector<RHBMBetaVector> beta_list;
     beta_list.reserve(validated_input.member_fit_results.size());
     for (const auto & fit_result : validated_input.member_fit_results)
     {
@@ -35,7 +35,7 @@ HRLGroupEstimationResult HRLGroupEstimator::Estimate(
 
     const auto beta_matrix{ rhbm_gem::rhbm_helper::BuildBetaMatrix(beta_list) };
     auto mu_result{ rhbm_gem::rhbm_helper::EstimateMuMDPDE(alpha_g, beta_matrix, m_options) };
-    if (mu_result.status == HRLEstimationStatus::SINGLE_MEMBER)
+    if (mu_result.status == RHBMEstimationStatus::SINGLE_MEMBER)
     {
         if (!m_options.quiet_mode)
         {
@@ -45,7 +45,7 @@ HRLGroupEstimationResult HRLGroupEstimator::Estimate(
         return BuildFallbackResult(validated_input, mu_result);
     }
 
-    std::vector<HRLDiagonalMatrix> capital_sigma_list;
+    std::vector<RHBMDiagonalMatrix> capital_sigma_list;
     capital_sigma_list.reserve(validated_input.member_fit_results.size());
     for (const auto & fit_result : validated_input.member_fit_results)
     {
@@ -60,7 +60,7 @@ HRLGroupEstimationResult HRLGroupEstimator::Estimate(
             m_options
         )
     };
-    if (web_result.status != HRLEstimationStatus::SUCCESS)
+    if (web_result.status != RHBMEstimationStatus::SUCCESS)
     {
         if (!m_options.quiet_mode)
         {
@@ -70,7 +70,7 @@ HRLGroupEstimationResult HRLGroupEstimator::Estimate(
         return BuildFallbackResult(validated_input, mu_result);
     }
 
-    HRLGroupEstimationResult result;
+    RHBMGroupEstimationResult result;
     result.status = mu_result.status;
     result.mu_mean = mu_result.mu_mean;
     result.mu_mdpde = mu_result.mu_mdpde;
@@ -88,19 +88,19 @@ HRLGroupEstimationResult HRLGroupEstimator::Estimate(
         validated_input.basis_size,
         result.statistical_distance_array
     );
-    if (mu_result.status == HRLEstimationStatus::MAX_ITERATIONS_REACHED ||
-        web_result.status == HRLEstimationStatus::MAX_ITERATIONS_REACHED)
+    if (mu_result.status == RHBMEstimationStatus::MAX_ITERATIONS_REACHED ||
+        web_result.status == RHBMEstimationStatus::MAX_ITERATIONS_REACHED)
     {
-        result.status = HRLEstimationStatus::MAX_ITERATIONS_REACHED;
+        result.status = RHBMEstimationStatus::MAX_ITERATIONS_REACHED;
     }
     return result;
 }
 
-HRLGroupEstimationResult HRLGroupEstimator::BuildFallbackResult(
-    const HRLGroupEstimationInput & input,
-    const HRLMuEstimateResult & mu_result)
+RHBMGroupEstimationResult HRLGroupEstimator::BuildFallbackResult(
+    const RHBMGroupEstimationInput & input,
+    const RHBMMuEstimateResult & mu_result)
 {
-    std::vector<HRLBetaVector> beta_list;
+    std::vector<RHBMBetaVector> beta_list;
     beta_list.reserve(input.member_fit_results.size());
     for (const auto & fit_result : input.member_fit_results)
     {
@@ -108,9 +108,9 @@ HRLGroupEstimationResult HRLGroupEstimator::BuildFallbackResult(
     }
     const auto beta_matrix{ rhbm_gem::rhbm_helper::BuildBetaMatrix(beta_list) };
 
-    HRLGroupEstimationResult result;
-    result.status = (mu_result.status == HRLEstimationStatus::SUCCESS)
-        ? HRLEstimationStatus::NUMERICAL_FALLBACK
+    RHBMGroupEstimationResult result;
+    result.status = (mu_result.status == RHBMEstimationStatus::SUCCESS)
+        ? RHBMEstimationStatus::NUMERICAL_FALLBACK
         : mu_result.status;
     result.mu_mean = mu_result.mu_mean;
     result.mu_mdpde = mu_result.mu_mdpde;
@@ -120,7 +120,7 @@ HRLGroupEstimationResult HRLGroupEstimator::BuildFallbackResult(
     result.omega_array = mu_result.omega_array;
     result.capital_sigma_posterior_list.assign(
         input.member_fit_results.size(),
-        HRLPosteriorCovarianceMatrix::Zero(input.basis_size, input.basis_size)
+        RHBMPosteriorCovarianceMatrix::Zero(input.basis_size, input.basis_size)
     );
     result.statistical_distance_array = rhbm_gem::rhbm_helper::CalculateMemberStatisticalDistance(
         result.mu_prior,

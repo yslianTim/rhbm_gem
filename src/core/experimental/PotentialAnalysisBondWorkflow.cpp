@@ -38,11 +38,11 @@ struct PotentialAnalysisBondWorkflowContext
     int thread_size;
 };
 
-HRLExecutionOptions MakePotentialAnalysisExecutionOptions(
+RHBMExecutionOptions MakePotentialAnalysisExecutionOptions(
     int thread_size,
     bool quiet_mode)
 {
-    HRLExecutionOptions execution_options;
+    RHBMExecutionOptions execution_options;
     execution_options.quiet_mode = quiet_mode;
     execution_options.thread_size = thread_size;
     return execution_options;
@@ -246,8 +246,8 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
             auto group_key{ group_keys[idx] };
             const auto & bond_list{ analysis_view.GetBondObjectList(group_key, class_key) };
             const auto group_size{ bond_list.size() };
-            std::vector<HRLMemberDataset> member_datasets;
-            std::vector<HRLBetaEstimateResult> member_fit_results;
+            std::vector<RHBMMemberDataset> member_datasets;
+            std::vector<RHBMBetaEstimateResult> member_fit_results;
             member_datasets.reserve(group_size);
             member_fit_results.reserve(group_size);
             for (const auto & bond : bond_list)

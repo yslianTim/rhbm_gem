@@ -9,7 +9,7 @@
 #include <Eigen/Dense>
 
 #include <rhbm_gem/utils/hrl/GaussianStatistics.hpp>
-#include <rhbm_gem/utils/hrl/HRLModelTypes.hpp>
+#include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace rhbm_gem {
@@ -28,8 +28,8 @@ class LocalPotentialEntry
     GaussianEstimate m_gaus_estimate_ols;
     GaussianEstimate m_gaus_estimate_mdpde;
     std::unordered_map<std::string, LocalPotentialAnnotation> m_annotation_map;
-    std::optional<HRLMemberDataset> m_dataset;
-    std::optional<HRLBetaEstimateResult> m_fit_result;
+    std::optional<RHBMMemberDataset> m_dataset;
+    std::optional<RHBMBetaEstimateResult> m_fit_result;
 
 public:
     LocalPotentialEntry();
@@ -39,8 +39,8 @@ public:
     void SetSamplingEntries(LocalPotentialSampleList value);
     void SetEstimateOLS(const GaussianEstimate & estimate) { m_gaus_estimate_ols = estimate; }
     void SetEstimateMDPDE(const GaussianEstimate & estimate) { m_gaus_estimate_mdpde = estimate; }
-    void SetDataset(HRLMemberDataset dataset);
-    void SetFitResult(HRLBetaEstimateResult value);
+    void SetDataset(RHBMMemberDataset dataset);
+    void SetFitResult(RHBMBetaEstimateResult value);
     void SetAnnotation(const std::string & key, LocalPotentialAnnotation annotation);
     void ClearTransientFitState();
 
@@ -50,8 +50,8 @@ public:
     bool HasFitResult() const { return m_fit_result.has_value(); }
     const GaussianEstimate & GetEstimateOLS() const { return m_gaus_estimate_ols; }
     const GaussianEstimate & GetEstimateMDPDE() const { return m_gaus_estimate_mdpde; }
-    const HRLMemberDataset & GetDataset() const;
-    const HRLBetaEstimateResult & GetFitResult() const;
+    const RHBMMemberDataset & GetDataset() const;
+    const RHBMBetaEstimateResult & GetFitResult() const;
     LocalPotentialAnnotation * FindAnnotation(const std::string & key);
     const LocalPotentialAnnotation * FindAnnotation(const std::string & key) const;
     const std::unordered_map<std::string, LocalPotentialAnnotation> & Annotations() const;

@@ -8,7 +8,7 @@
 
 #include <rhbm_gem/utils/hrl/GaussianStatistics.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
-#include <rhbm_gem/utils/hrl/HRLModelTypes.hpp>
+#include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace rhbm_gem {
@@ -30,15 +30,15 @@ public:
     MutableLocalPotentialView() = default;
 
     void SetSamplingEntries(LocalPotentialSampleList value);
-    void SetDataset(HRLMemberDataset value);
-    void SetFitResult(HRLBetaEstimateResult value);
+    void SetDataset(RHBMMemberDataset value);
+    void SetFitResult(RHBMBetaEstimateResult value);
     void SetAlphaR(double value);
     void SetAnnotation(const std::string & key, const LocalPotentialAnnotationData & value);
 
     bool HasDataset() const;
     bool HasFitResult() const;
-    const HRLMemberDataset & GetDataset() const;
-    const HRLBetaEstimateResult & GetFitResult() const;
+    const RHBMMemberDataset & GetDataset() const;
+    const RHBMBetaEstimateResult & GetFitResult() const;
     const AtomObject * GetAtomObjectPtr() const { return m_atom_object; }
     const BondObject * GetBondObjectPtr() const { return m_bond_object; }
     const void * GetEntryHandle() const { return m_entry_ptr; }
@@ -47,8 +47,8 @@ private:
     AtomObject * m_atom_object{ nullptr };
     BondObject * m_bond_object{ nullptr };
     void * m_entry_ptr{ nullptr };
-    mutable HRLMemberDataset m_dataset_cache{};
-    mutable HRLBetaEstimateResult m_fit_result_cache{};
+    mutable RHBMMemberDataset m_dataset_cache{};
+    mutable RHBMBetaEstimateResult m_fit_result_cache{};
 
     explicit MutableLocalPotentialView(AtomObject * atom_object);
     explicit MutableLocalPotentialView(BondObject * bond_object);
@@ -75,12 +75,12 @@ public:
     void ApplyAtomGroupEstimateResult(
         GroupKey group_key,
         const std::string & class_key,
-        const HRLGroupEstimationResult & result,
+        const RHBMGroupEstimationResult & result,
         double alpha_g);
     void ApplyBondGroupEstimateResult(
         GroupKey group_key,
         const std::string & class_key,
-        const HRLGroupEstimationResult & result,
+        const RHBMGroupEstimationResult & result,
         double alpha_g);
 
     void SetAtomGroupAlphaG(GroupKey group_key, const std::string & class_key, double alpha_g);

@@ -6,12 +6,12 @@
 #include <Eigen/Dense>
 
 #include <rhbm_gem/utils/domain/Constants.hpp>
-#include <rhbm_gem/utils/hrl/HRLModelTypes.hpp>
+#include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 
 namespace rhbm_gem {
 
 // GaussianParameterVector stays in Gaussian-model space; its dimension depends on the model.
-// HRLBetaVector stays in HRL linearized coefficient space.
+// RHBMBetaVector stays in HRL linearized coefficient space.
 using GaussianParameterVector = Eigen::VectorXd;
 
 // Shared Gaussian value types used by HRL linearization and downstream consumers.
@@ -44,9 +44,9 @@ struct GaussianEstimate
         return amplitude * std::pow(Constants::two_pi * width * width, -1.5);
     }
 
-    HRLBetaVector ToBeta() const
+    RHBMBetaVector ToBeta() const
     {
-        HRLBetaVector coefficient_vector{ HRLBetaVector::Zero(3) };
+        RHBMBetaVector coefficient_vector{ RHBMBetaVector::Zero(3) };
         if (width == 0.0)
         {
             return coefficient_vector;

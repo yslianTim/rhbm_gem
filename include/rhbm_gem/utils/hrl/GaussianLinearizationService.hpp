@@ -5,7 +5,7 @@
 #include <Eigen/Dense>
 
 #include <rhbm_gem/utils/hrl/GaussianStatistics.hpp>
-#include <rhbm_gem/utils/hrl/HRLModelTypes.hpp>
+#include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace rhbm_gem {
@@ -63,37 +63,37 @@ public:
     SeriesPointList BuildLinearModelSeries(
         const LocalPotentialSampleList & sampling_entries,
         const GaussianLinearizationContext & context = {}) const;
-    HRLMemberDataset BuildDataset(
+    RHBMMemberDataset BuildDataset(
         const LocalPotentialSampleList & sampling_entries,
         double x_min,
         double x_max,
         const GaussianLinearizationContext & context = {}) const;
 
-    HRLBetaVector EncodeGaussianToBeta(const GaussianParameterVector & gaussian_parameters) const;
-    HRLBetaVector EncodeGaussianToBeta(const GaussianEstimate & gaussian_estimate) const;
+    RHBMBetaVector EncodeGaussianToBeta(const GaussianParameterVector & gaussian_parameters) const;
+    RHBMBetaVector EncodeGaussianToBeta(const GaussianEstimate & gaussian_estimate) const;
 
     GaussianParameterVector DecodeLocalBeta(
-        const HRLBetaVector & linear_model,
+        const RHBMBetaVector & linear_model,
         const GaussianLinearizationContext & context = {}) const;
-    GaussianParameterVector DecodeGroupBeta(const HRLBetaVector & linear_model) const;
+    GaussianParameterVector DecodeGroupBeta(const RHBMBetaVector & linear_model) const;
 
     std::tuple<GaussianParameterVector, GaussianParameterVector> DecodePosterior(
-        const HRLBetaVector & linear_model,
-        const HRLPosteriorCovarianceMatrix & covariance_matrix) const;
+        const RHBMBetaVector & linear_model,
+        const RHBMPosteriorCovarianceMatrix & covariance_matrix) const;
 
     GaussianEstimate DecodeLocalEstimate(
-        const HRLBetaVector & linear_model,
+        const RHBMBetaVector & linear_model,
         const GaussianLinearizationContext & context = {}) const;
-    GaussianEstimate DecodeGroupEstimate(const HRLBetaVector & linear_model) const;
+    GaussianEstimate DecodeGroupEstimate(const RHBMBetaVector & linear_model) const;
     GaussianPosterior DecodePosteriorEstimate(
-        const HRLBetaVector & linear_model,
-        const HRLPosteriorCovarianceMatrix & covariance_matrix) const;
+        const RHBMBetaVector & linear_model,
+        const RHBMPosteriorCovarianceMatrix & covariance_matrix) const;
 
 private:
     void ValidateSpec() const;
     void ValidateContextIfRequired(const GaussianLinearizationContext & context) const;
     GaussianParameterVector BuildGaussianVector(
-        const HRLBetaVector & linear_model,
+        const RHBMBetaVector & linear_model,
         const GaussianLinearizationContext * context) const;
 
 };

@@ -146,7 +146,7 @@ LocalPotentialAnnotation ToDetailAnnotation(const LocalPotentialAnnotationData &
 
 LocalPotentialEstimates BuildLocalPotentialEstimates(
     const LocalPotentialEntry & entry,
-    const HRLBetaEstimateResult & value)
+    const RHBMBetaEstimateResult & value)
 {
     const auto context{ BuildLocalDecodeContext(entry) };
     const auto gaus_ols{ LocalDecodeService().DecodeLocalEstimate(value.beta_ols, context) };
@@ -159,7 +159,7 @@ LocalPotentialEstimates BuildLocalPotentialEstimates(
 }
 
 void ValidateGroupEstimateResult(
-    const HRLGroupEstimationResult & result,
+    const RHBMGroupEstimationResult & result,
     std::size_t member_count,
     const char * context)
 {
@@ -190,7 +190,7 @@ void ApplyAtomGroupStatistics(
     ModelAnalysisData & analysis_data,
     GroupKey group_key,
     const std::string & class_key,
-    const HRLGroupEstimationResult & result,
+    const RHBMGroupEstimationResult & result,
     double alpha_g)
 {
     const auto gaus_group_mean{ AtomGroupDecodeService().DecodeGroupEstimate(result.mu_mean) };
@@ -214,7 +214,7 @@ void ApplyBondGroupStatistics(
     ModelAnalysisData & analysis_data,
     GroupKey group_key,
     const std::string & class_key,
-    const HRLGroupEstimationResult & result,
+    const RHBMGroupEstimationResult & result,
     double alpha_g)
 {
     const auto gaus_group_mean{ BondGroupDecodeService().DecodeGroupEstimate(result.mu_mean) };
@@ -235,7 +235,7 @@ void ApplyBondGroupStatistics(
 }
 
 LocalPotentialAnnotationData BuildAtomAnnotationData(
-    const HRLGroupEstimationResult & result,
+    const RHBMGroupEstimationResult & result,
     Eigen::Index member_index)
 {
     const auto beta_vector_posterior{ result.beta_posterior_matrix.col(member_index) };
@@ -255,7 +255,7 @@ LocalPotentialAnnotationData BuildAtomAnnotationData(
 }
 
 LocalPotentialAnnotationData BuildBondAnnotationData(
-    const HRLGroupEstimationResult & result,
+    const RHBMGroupEstimationResult & result,
     Eigen::Index member_index)
 {
     const auto beta_vector_posterior{ result.beta_posterior_matrix.col(member_index) };
@@ -291,12 +291,12 @@ void MutableLocalPotentialView::SetSamplingEntries(LocalPotentialSampleList valu
     EnsureResolvedLocalEntry(*this).SetSamplingEntries(std::move(value));
 }
 
-void MutableLocalPotentialView::SetDataset(HRLMemberDataset value)
+void MutableLocalPotentialView::SetDataset(RHBMMemberDataset value)
 {
     EnsureResolvedLocalEntry(*this).SetDataset(std::move(value));
 }
 
-void MutableLocalPotentialView::SetFitResult(HRLBetaEstimateResult value)
+void MutableLocalPotentialView::SetFitResult(RHBMBetaEstimateResult value)
 {
     auto & entry{ EnsureResolvedLocalEntry(*this) };
     const auto estimates{ BuildLocalPotentialEstimates(entry, value) };
@@ -330,14 +330,14 @@ bool MutableLocalPotentialView::HasFitResult() const
     return entry != nullptr && entry->HasFitResult();
 }
 
-const HRLMemberDataset & MutableLocalPotentialView::GetDataset() const
+const RHBMMemberDataset & MutableLocalPotentialView::GetDataset() const
 {
     const auto & dataset{ RequireResolvedLocalEntry(*this, "Local dataset").GetDataset() };
     m_dataset_cache = dataset;
     return m_dataset_cache;
 }
 
-const HRLBetaEstimateResult & MutableLocalPotentialView::GetFitResult() const
+const RHBMBetaEstimateResult & MutableLocalPotentialView::GetFitResult() const
 {
     const auto & fit_result{ RequireResolvedLocalEntry(*this, "Local fit result").GetFitResult() };
     m_fit_result_cache = fit_result;
@@ -395,7 +395,7 @@ void ModelAnalysisEditor::RebuildBondGroupsFromSelection()
 void ModelAnalysisEditor::ApplyAtomGroupEstimateResult(
     GroupKey group_key,
     const std::string & class_key,
-    const HRLGroupEstimationResult & result,
+    const RHBMGroupEstimationResult & result,
     double alpha_g)
 {
     auto & analysis_data{ ModelAnalysisData::Of(m_model_object) };
@@ -417,7 +417,7 @@ void ModelAnalysisEditor::ApplyAtomGroupEstimateResult(
 void ModelAnalysisEditor::ApplyBondGroupEstimateResult(
     GroupKey group_key,
     const std::string & class_key,
-    const HRLGroupEstimationResult & result,
+    const RHBMGroupEstimationResult & result,
     double alpha_g)
 {
     auto & analysis_data{ ModelAnalysisData::Of(m_model_object) };

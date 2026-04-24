@@ -21,9 +21,9 @@ Eigen::VectorXd MakeVector(std::initializer_list<double> values)
     return result;
 }
 
-HRLDiagonalMatrix MakeDiagonal(std::initializer_list<double> values)
+RHBMDiagonalMatrix MakeDiagonal(std::initializer_list<double> values)
 {
-    HRLDiagonalMatrix result(static_cast<Eigen::Index>(values.size()));
+    RHBMDiagonalMatrix result(static_cast<Eigen::Index>(values.size()));
     result.diagonal() = MakeVector(values);
     return result;
 }
@@ -36,19 +36,19 @@ SeriesPoint MakeSeriesPoint(std::initializer_list<double> values)
     return SeriesPoint{ std::move(row), response };
 }
 
-HRLMemberDataset MakeDataset(std::initializer_list<SeriesPoint> rows)
+RHBMMemberDataset MakeDataset(std::initializer_list<SeriesPoint> rows)
 {
     return rhbm_gem::rhbm_helper::BuildMemberDataset(SeriesPointList(rows));
 }
 
-HRLBetaEstimateResult MakeFitResult(
+RHBMBetaEstimateResult MakeFitResult(
     std::initializer_list<double> beta_values,
     double sigma_square,
     std::initializer_list<double> weight_values,
     std::initializer_list<double> covariance_values,
-    HRLEstimationStatus status = HRLEstimationStatus::SUCCESS)
+    RHBMEstimationStatus status = RHBMEstimationStatus::SUCCESS)
 {
-    HRLBetaEstimateResult fit_result;
+    RHBMBetaEstimateResult fit_result;
     fit_result.status = status;
     fit_result.beta_mdpde = MakeVector(beta_values);
     fit_result.sigma_square = sigma_square;
@@ -73,7 +73,7 @@ TEST(HRLGroupEstimatorTest, EstimateSingleMemberUsesFallbackResult)
 
     const auto result{ HRLGroupEstimator().Estimate(input, 0.0) };
 
-    EXPECT_EQ(HRLEstimationStatus::SINGLE_MEMBER, result.status);
+    EXPECT_EQ(RHBMEstimationStatus::SINGLE_MEMBER, result.status);
     EXPECT_TRUE(result.mu_mean.isApprox(MakeVector({ 1.0, 2.0 }), 1e-12));
     EXPECT_TRUE(result.mu_prior.isApprox(MakeVector({ 1.0, 2.0 }), 1e-12));
     EXPECT_TRUE(result.beta_posterior_matrix.col(0).isApprox(MakeVector({ 1.0, 2.0 }), 1e-12));
@@ -83,7 +83,7 @@ TEST(HRLGroupEstimatorTest, EstimateSingleMemberUsesFallbackResult)
 
 TEST(HRLGroupEstimatorTest, EstimateRejectsMissingMemberFitResults)
 {
-    HRLGroupEstimationInput input;
+    RHBMGroupEstimationInput input;
     input.basis_size = 2;
     input.member_datasets.push_back(
         { Eigen::MatrixXd::Identity(2, 2), MakeVector({ 1.0, 2.0 }), MakeVector({ 1.0, 1.0 }) });
@@ -93,7 +93,7 @@ TEST(HRLGroupEstimatorTest, EstimateRejectsMissingMemberFitResults)
 
 TEST(HRLGroupEstimatorTest, EstimateRejectsMismatchedWeightSize)
 {
-    HRLGroupEstimationInput input;
+    RHBMGroupEstimationInput input;
     input.basis_size = 2;
     input.member_datasets.push_back({
         Eigen::MatrixXd::Identity(2, 2),
@@ -109,7 +109,7 @@ TEST(HRLGroupEstimatorTest, EstimateRejectsMismatchedWeightSize)
 
 TEST(HRLGroupEstimatorTest, EstimateRejectsInconsistentScoreSize)
 {
-    HRLGroupEstimationInput input;
+    RHBMGroupEstimationInput input;
     input.basis_size = 2;
     input.member_datasets.push_back({
         Eigen::MatrixXd::Identity(2, 2),
@@ -124,7 +124,7 @@ TEST(HRLGroupEstimatorTest, EstimateRejectsInconsistentScoreSize)
 
 TEST(HRLGroupEstimatorTest, EstimateRejectsBasisSizeMismatchWithMemberDatasets)
 {
-    HRLGroupEstimationInput input;
+    RHBMGroupEstimationInput input;
     input.basis_size = 3;
     input.member_datasets.push_back({
         Eigen::MatrixXd::Identity(2, 2),
@@ -154,7 +154,7 @@ TEST(HRLGroupEstimatorTest, EstimateTwoMembersPinsMuPriorToMuMDPDE)
 
     const auto result{ HRLGroupEstimator().Estimate(input, 0.0) };
 
-    EXPECT_EQ(HRLEstimationStatus::SUCCESS, result.status);
+    EXPECT_EQ(RHBMEstimationStatus::SUCCESS, result.status);
     EXPECT_TRUE(result.mu_prior.isApprox(result.mu_mdpde, 1e-12));
     EXPECT_EQ(2, result.beta_posterior_matrix.cols());
     ASSERT_EQ(2u, result.capital_sigma_posterior_list.size());
@@ -176,19 +176,19 @@ TEST(HRLGroupEstimatorTest, EstimateAllowsConvergenceFallbackStatuses)
                     0.25,
                     { 1.0, 1.0 },
                     { 0.25, 0.25 },
-                    HRLEstimationStatus::MAX_ITERATIONS_REACHED),
+                    RHBMEstimationStatus::MAX_ITERATIONS_REACHED),
                 MakeFitResult(
                     { 2.0, 2.0 },
                     0.5,
                     { 1.0, 1.0 },
                     { 0.5, 0.5 },
-                    HRLEstimationStatus::NUMERICAL_FALLBACK)
+                    RHBMEstimationStatus::NUMERICAL_FALLBACK)
             }
         )
     };
 
     const auto result{ HRLGroupEstimator().Estimate(input, 0.0) };
 
-    EXPECT_EQ(HRLEstimationStatus::SUCCESS, result.status);
+    EXPECT_EQ(RHBMEstimationStatus::SUCCESS, result.status);
     EXPECT_EQ(2, result.beta_posterior_matrix.cols());
 }

@@ -43,12 +43,12 @@ void LocalPotentialEntry::SetSamplingEntries(LocalPotentialSampleList value)
 }
 
 void LocalPotentialEntry::SetDataset(
-    HRLMemberDataset dataset)
+    RHBMMemberDataset dataset)
 {
     m_dataset = std::move(dataset);
 }
 
-void LocalPotentialEntry::SetFitResult(HRLBetaEstimateResult value)
+void LocalPotentialEntry::SetFitResult(RHBMBetaEstimateResult value)
 {
     m_fit_result = std::move(value);
 }
@@ -89,7 +89,7 @@ LocalPotentialEntry::Annotations() const
     return m_annotation_map;
 }
 
-const HRLMemberDataset & LocalPotentialEntry::GetDataset() const
+const RHBMMemberDataset & LocalPotentialEntry::GetDataset() const
 {
     if (!m_dataset.has_value())
     {
@@ -98,7 +98,7 @@ const HRLMemberDataset & LocalPotentialEntry::GetDataset() const
     return *m_dataset;
 }
 
-const HRLBetaEstimateResult & LocalPotentialEntry::GetFitResult() const
+const RHBMBetaEstimateResult & LocalPotentialEntry::GetFitResult() const
 {
     if (!m_fit_result.has_value())
     {

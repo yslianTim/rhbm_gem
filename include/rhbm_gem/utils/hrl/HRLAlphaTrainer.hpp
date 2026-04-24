@@ -7,7 +7,7 @@
 
 #include <Eigen/Dense>
 
-#include <rhbm_gem/utils/hrl/HRLModelTypes.hpp>
+#include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 
 class HRLAlphaTrainer
 {
@@ -21,7 +21,7 @@ public:
 
     struct AlphaRunOptions
     {
-        HRLExecutionOptions execution_options{};
+        RHBMExecutionOptions execution_options{};
         ProgressCallback progress_callback{};
     };
 
@@ -42,22 +42,22 @@ public:
     std::ostringstream GetAlphaGridSummary() const;
 
     AlphaTrainingResult TrainAlphaR(
-        const std::vector<HRLMemberDataset> & dataset_list,
+        const std::vector<RHBMMemberDataset> & dataset_list,
         const AlphaTrainingOptions & options
     ) const;
 
     AlphaTrainingResult TrainAlphaG(
-        const std::vector<std::vector<HRLBetaVector>> & beta_group_list,
+        const std::vector<std::vector<RHBMBetaVector>> & beta_group_list,
         const AlphaTrainingOptions & options
     ) const;
 
     Eigen::MatrixXd StudyAlphaRBias(
-        const std::vector<HRLMemberDataset> & dataset_list,
+        const std::vector<RHBMMemberDataset> & dataset_list,
         const AlphaRunOptions & options
     ) const;
 
     Eigen::MatrixXd StudyAlphaGBias(
-        const std::vector<std::vector<HRLBetaVector>> & beta_group_list,
+        const std::vector<std::vector<RHBMBetaVector>> & beta_group_list,
         const AlphaRunOptions & options
     ) const;
 

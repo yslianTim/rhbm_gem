@@ -23,7 +23,7 @@ public:
 
     bool RunSingleBetaMDPDETest(
         BetaReplicaResidual & result,
-        const HRLMemberDataset & dataset,
+        const RHBMMemberDataset & dataset,
         const Eigen::VectorXd & gaus_true,
         double alpha_r,
         int thread_size = 1

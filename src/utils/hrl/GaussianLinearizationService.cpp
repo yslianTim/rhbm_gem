@@ -82,9 +82,9 @@ GaussianParameterVector BuildLinearModelDataVector(
     return linear_model_data_vector;
 }
 
-HRLBetaVector BuildLinearModelCoefficientVector(double amplitude, double width)
+RHBMBetaVector BuildLinearModelCoefficientVector(double amplitude, double width)
 {
-    HRLBetaVector linear_model_coeff{ HRLBetaVector::Zero(3) };
+    RHBMBetaVector linear_model_coeff{ RHBMBetaVector::Zero(3) };
     if (width == 0.0)
     {
         return linear_model_coeff;
@@ -98,7 +98,7 @@ HRLBetaVector BuildLinearModelCoefficientVector(double amplitude, double width)
     return linear_model_coeff;
 }
 
-GaussianParameterVector BuildGaus2DModel(const HRLBetaVector & linear_model)
+GaussianParameterVector BuildGaus2DModel(const RHBMBetaVector & linear_model)
 {
     GaussianParameterVector gaus_model{ GaussianParameterVector::Zero(2) };
     if (linear_model(1) <= 0.0)
@@ -121,7 +121,7 @@ GaussianParameterVector BuildGaus2DModel(const HRLBetaVector & linear_model)
     return gaus_model;
 }
 
-GaussianParameterVector BuildGaus3DModel(const HRLBetaVector & linear_model)
+GaussianParameterVector BuildGaus3DModel(const RHBMBetaVector & linear_model)
 {
     GaussianParameterVector gaus_model{ GaussianParameterVector::Zero(3) };
     if (linear_model(1) <= 0.0)
@@ -148,7 +148,7 @@ GaussianParameterVector BuildGaus3DModel(const HRLBetaVector & linear_model)
 }
 
 GaussianParameterVector BuildGaus3DModel(
-    const HRLBetaVector & linear_model,
+    const RHBMBetaVector & linear_model,
     const GaussianParameterVector & model_parameters)
 {
     GaussianParameterVector gaus_model{ GaussianParameterVector::Zero(3) };
@@ -176,8 +176,8 @@ GaussianParameterVector BuildGaus3DModel(
 }
 
 std::tuple<GaussianParameterVector, GaussianParameterVector> BuildGaus2DModelWithVariance(
-    const HRLBetaVector & linear_model,
-    const HRLPosteriorCovarianceMatrix & covariance_matrix)
+    const RHBMBetaVector & linear_model,
+    const RHBMPosteriorCovarianceMatrix & covariance_matrix)
 {
     GaussianParameterVector gaus_model{ GaussianParameterVector::Zero(2) };
     GaussianParameterVector gaus_model_variance{ GaussianParameterVector::Zero(2) };
@@ -221,8 +221,8 @@ std::tuple<GaussianParameterVector, GaussianParameterVector> BuildGaus2DModelWit
 }
 
 std::tuple<GaussianParameterVector, GaussianParameterVector> BuildGaus3DModelWithVariance(
-    const HRLBetaVector & linear_model,
-    const HRLPosteriorCovarianceMatrix & covariance_matrix)
+    const RHBMBetaVector & linear_model,
+    const RHBMPosteriorCovarianceMatrix & covariance_matrix)
 {
     GaussianParameterVector gaus_model{ GaussianParameterVector::Zero(2) };
     GaussianParameterVector gaus_model_variance{ GaussianParameterVector::Zero(2) };
@@ -409,7 +409,7 @@ SeriesPointList GaussianLinearizationService::BuildLinearModelSeries(
     return linear_model_series;
 }
 
-HRLMemberDataset GaussianLinearizationService::BuildDataset(
+RHBMMemberDataset GaussianLinearizationService::BuildDataset(
     const LocalPotentialSampleList & sampling_entries,
     double x_min,
     double x_max,
@@ -419,7 +419,7 @@ HRLMemberDataset GaussianLinearizationService::BuildDataset(
         BuildDatasetSeries(sampling_entries, x_min, x_max, context));
 }
 
-HRLBetaVector GaussianLinearizationService::EncodeGaussianToBeta(
+RHBMBetaVector GaussianLinearizationService::EncodeGaussianToBeta(
     const GaussianParameterVector & gaussian_parameters) const
 {
     if (m_spec.linearization_kind != GaussianLinearizationKind::LOG_QUADRATIC)
@@ -443,7 +443,7 @@ HRLBetaVector GaussianLinearizationService::EncodeGaussianToBeta(
     return encoded.head(m_spec.basis_size);
 }
 
-HRLBetaVector GaussianLinearizationService::EncodeGaussianToBeta(
+RHBMBetaVector GaussianLinearizationService::EncodeGaussianToBeta(
     const GaussianEstimate & gaussian_estimate) const
 {
     GaussianParameterVector gaussian_parameters{ GaussianParameterVector::Zero(2) };
@@ -453,22 +453,22 @@ HRLBetaVector GaussianLinearizationService::EncodeGaussianToBeta(
 }
 
 GaussianParameterVector GaussianLinearizationService::DecodeLocalBeta(
-    const HRLBetaVector & linear_model,
+    const RHBMBetaVector & linear_model,
     const GaussianLinearizationContext & context) const
 {
     return BuildGaussianVector(linear_model, &context);
 }
 
 GaussianParameterVector GaussianLinearizationService::DecodeGroupBeta(
-    const HRLBetaVector & linear_model) const
+    const RHBMBetaVector & linear_model) const
 {
     return BuildGaussianVector(linear_model, nullptr);
 }
 
 std::tuple<GaussianParameterVector, GaussianParameterVector>
 GaussianLinearizationService::DecodePosterior(
-    const HRLBetaVector & linear_model,
-    const HRLPosteriorCovarianceMatrix & covariance_matrix) const
+    const RHBMBetaVector & linear_model,
+    const RHBMPosteriorCovarianceMatrix & covariance_matrix) const
 {
     switch (m_spec.model_kind)
     {
@@ -481,21 +481,21 @@ GaussianLinearizationService::DecodePosterior(
 }
 
 GaussianEstimate GaussianLinearizationService::DecodeLocalEstimate(
-    const HRLBetaVector & linear_model,
+    const RHBMBetaVector & linear_model,
     const GaussianLinearizationContext & context) const
 {
     return BuildGaussianEstimate(DecodeLocalBeta(linear_model, context));
 }
 
 GaussianEstimate GaussianLinearizationService::DecodeGroupEstimate(
-    const HRLBetaVector & linear_model) const
+    const RHBMBetaVector & linear_model) const
 {
     return BuildGaussianEstimate(DecodeGroupBeta(linear_model));
 }
 
 GaussianPosterior GaussianLinearizationService::DecodePosteriorEstimate(
-    const HRLBetaVector & linear_model,
-    const HRLPosteriorCovarianceMatrix & covariance_matrix) const
+    const RHBMBetaVector & linear_model,
+    const RHBMPosteriorCovarianceMatrix & covariance_matrix) const
 {
     const auto decoded{ DecodePosterior(linear_model, covariance_matrix) };
     return GaussianPosterior{
@@ -514,7 +514,7 @@ void GaussianLinearizationService::ValidateContextIfRequired(
 }
 
 GaussianParameterVector GaussianLinearizationService::BuildGaussianVector(
-    const HRLBetaVector & linear_model,
+    const RHBMBetaVector & linear_model,
     const GaussianLinearizationContext * context) const
 {
     switch (m_spec.model_kind)
