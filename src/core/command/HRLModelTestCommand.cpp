@@ -2,7 +2,7 @@
 #include <rhbm_gem/utils/domain/LocalPainter.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
-#include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
+#include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelTestDataFactory.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelTester.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
@@ -183,7 +183,7 @@ HRLModelTestDataFactory BuildDataFactory(const HRLModelTestExecutionContext & op
 {
     HRLModelTestDataFactory factory(
         kGausParSize,
-        rhbm_gem::GaussianLinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(options.options.fit_range_min, options.options.fit_range_max);
     return factory;
 }

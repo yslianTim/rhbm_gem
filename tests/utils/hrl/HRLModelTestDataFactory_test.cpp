@@ -56,7 +56,7 @@ TEST(HRLModelTestDataFactoryTest, BuildBetaTestInputIsReproducibleWithFixedSeed)
 {
     HRLModelTestDataFactory factory(
         3,
-        rhbm_gem::GaussianLinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
 
     const auto scenario{ HRLModelTestDataFactory::BetaScenario{
@@ -85,7 +85,7 @@ TEST(HRLModelTestDataFactoryTest, BuildBetaTestInputChangesWhenOutlierPolicyChan
 {
     HRLModelTestDataFactory factory(
         3,
-        rhbm_gem::GaussianLinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
 
     const auto base_scenario{ HRLModelTestDataFactory::BetaScenario{
@@ -115,7 +115,7 @@ TEST(HRLModelTestDataFactoryTest, BuildBetaTestInputChangesWhenNoisePolicyChange
 {
     HRLModelTestDataFactory factory(
         3,
-        rhbm_gem::GaussianLinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
 
     const auto noiseless_scenario{ HRLModelTestDataFactory::BetaScenario{
@@ -145,7 +145,7 @@ TEST(HRLModelTestDataFactoryTest, BuildMuTestInputIsReproducibleWithFixedSeed)
 {
     HRLModelTestDataFactory factory(
         3,
-        rhbm_gem::GaussianLinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
 
     const auto scenario{ HRLModelTestDataFactory::MuScenario{
         4,
@@ -175,7 +175,7 @@ TEST(HRLModelTestDataFactoryTest, BuildNeighborhoodTestInputProvidesPairedDatase
 {
     HRLModelTestDataFactory factory(
         3,
-        rhbm_gem::GaussianLinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
 
     const auto input{
@@ -215,10 +215,10 @@ TEST(HRLModelTestDataFactoryTest, ConstructorRejectsInvalidNumericInputs)
     EXPECT_THROW(
         HRLModelTestDataFactory(
             0,
-            rhbm_gem::GaussianLinearizationSpec::DefaultDataset()),
+            rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset()),
         std::invalid_argument);
 
-    auto spec{ rhbm_gem::GaussianLinearizationSpec::DefaultDataset() };
+    auto spec{ rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset() };
     spec.basis_size = 0;
     EXPECT_THROW(HRLModelTestDataFactory(3, spec), std::invalid_argument);
 }
@@ -227,7 +227,7 @@ TEST(HRLModelTestDataFactoryTest, SetFittingRangeRejectsInvalidRange)
 {
     HRLModelTestDataFactory factory(
         3,
-        rhbm_gem::GaussianLinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
 
     EXPECT_THROW(factory.SetFittingRange(-1.0, 1.0), std::invalid_argument);
     EXPECT_THROW(factory.SetFittingRange(2.0, 1.0), std::invalid_argument);
@@ -240,7 +240,7 @@ TEST(HRLModelTestDataFactoryTest, BuildBetaTestInputRejectsNonPositiveScenarioSi
 {
     HRLModelTestDataFactory factory(
         3,
-        rhbm_gem::GaussianLinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
 
     EXPECT_THROW(
         factory.BuildBetaTestInput(HRLModelTestDataFactory::BetaScenario{

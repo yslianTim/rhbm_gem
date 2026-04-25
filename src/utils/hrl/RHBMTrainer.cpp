@@ -1,7 +1,7 @@
 #include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
 
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
-#include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
+#include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
@@ -18,22 +18,22 @@ namespace rhbm_gem::rhbm_trainer
 
 namespace
 {
+namespace ls = rhbm_gem::linearization_service;
+
 constexpr double kAlphaGridTolerance{ 1.0e-12 };
 
-const rhbm_gem::GaussianLinearizationService & MetricDecodeService()
+const ls::LinearizationSpec & MetricDecodeSpec()
 {
-    static const rhbm_gem::GaussianLinearizationService service{
-        rhbm_gem::GaussianLinearizationSpec::DefaultMetricModel()
-    };
-    return service;
+    static const auto spec{ ls::LinearizationSpec::DefaultMetricModel() };
+    return spec;
 }
 
 rhbm_gem::GaussianParameterVector CalculateAbsoluteGaussianDifference(
     const RHBMBetaVector & linear_a,
     const RHBMBetaVector & linear_b)
 {
-    const auto gaussian_a{ MetricDecodeService().DecodeGroupBeta(linear_a) };
-    const auto gaussian_b{ MetricDecodeService().DecodeGroupBeta(linear_b) };
+    const auto gaussian_a{ ls::DecodeGroupBeta(MetricDecodeSpec(), linear_a) };
+    const auto gaussian_b{ ls::DecodeGroupBeta(MetricDecodeSpec(), linear_b) };
     rhbm_gem::eigen_validation::RequireVectorSize(gaussian_a, gaussian_b.rows(), "gaussian");
     return (gaussian_a - gaussian_b).array().abs().matrix();
 }

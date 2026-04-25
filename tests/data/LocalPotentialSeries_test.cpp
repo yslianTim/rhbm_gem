@@ -10,9 +10,10 @@
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
+#include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 
 namespace rg = rhbm_gem;
+namespace ls = rhbm_gem::linearization_service;
 
 namespace {
 
@@ -23,15 +24,16 @@ std::shared_ptr<rg::ModelObject> LoadModelFixture(const std::string & fixture_na
     return std::shared_ptr<rg::ModelObject>{ std::move(model) };
 }
 
-rg::GaussianLinearizationService MakeDatasetService()
+const ls::LinearizationSpec & DatasetLinearizationSpec()
 {
-    return rg::GaussianLinearizationService{ rg::GaussianLinearizationSpec::DefaultDataset() };
+    static const auto spec{ ls::LinearizationSpec::DefaultDataset() };
+    return spec;
 }
 
 SeriesPointList BuildExpectedLinearModelSeries(
     const LocalPotentialSampleList & sampling_entries)
 {
-    return MakeDatasetService().BuildLinearModelSeries(sampling_entries);
+    return ls::BuildLinearModelSeries(DatasetLinearizationSpec(), sampling_entries);
 }
 
 SeriesPointList BuildExpectedDatasetSeries(
@@ -39,7 +41,7 @@ SeriesPointList BuildExpectedDatasetSeries(
     double x_min,
     double x_max)
 {
-    return MakeDatasetService().BuildDatasetSeries(sampling_entries, x_min, x_max);
+    return ls::BuildDatasetSeries(DatasetLinearizationSpec(), sampling_entries, x_min, x_max);
 }
 
 } // namespace
@@ -168,7 +170,7 @@ TEST(LocalPotentialSeriesTest, ViewForwardsSeriesDerivationsFromResolvedEntry)
     EXPECT_FLOAT_EQ(binned.at(1).score, 5.0f);
 
     const auto fit_dataset_series{
-        MakeDatasetService().BuildDatasetSeries(view.GetSamplingEntries(), 0.0, 0.5)
+        ls::BuildDatasetSeries(DatasetLinearizationSpec(), view.GetSamplingEntries(), 0.0, 0.5)
     };
     ASSERT_EQ(fit_dataset_series.size(), 2U);
     EXPECT_EQ(fit_dataset_series.at(0).GetBasisSize(), 2U);

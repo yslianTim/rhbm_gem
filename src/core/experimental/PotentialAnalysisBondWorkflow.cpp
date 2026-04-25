@@ -10,7 +10,7 @@
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
-#include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
+#include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/math/CylinderSampler.hpp>
 
@@ -28,6 +28,8 @@
 namespace rhbm_gem::experimental {
 
 namespace {
+namespace ls = rhbm_gem::linearization_service;
+
 
 struct PotentialAnalysisBondWorkflowContext
 {
@@ -47,17 +49,18 @@ RHBMExecutionOptions MakePotentialAnalysisExecutionOptions(
     return execution_options;
 }
 
-GaussianLinearizationService MakeGaussianDatasetService()
+const ls::LinearizationSpec & GaussianDatasetSpec()
 {
-    return GaussianLinearizationService{ GaussianLinearizationSpec::DefaultDataset() };
+    static const auto spec{ ls::LinearizationSpec::DefaultDataset() };
+    return spec;
 }
 
-GaussianLinearizationContext BuildLocalLinearizationContext(const LocalPotentialView & view)
+ls::LinearizationContext BuildLocalLinearizationContext(const LocalPotentialView & view)
 {
     Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
     model_par_init(0) = view.GetMomentZeroEstimate();
     model_par_init(1) = view.GetMomentTwoEstimate();
-    return GaussianLinearizationContext::FromModelParameters(model_par_init);
+    return ls::LinearizationContext::FromModelParameters(model_par_init);
 }
 
 void RunBondSampling(
@@ -67,7 +70,7 @@ void RunBondSampling(
     int thread_size)
 {
     ScopeTimer timer("PotentialAnalysisBondWorkflow::RunBondMapValueSampling");
-    const auto dataset_service{ MakeGaussianDatasetService() };
+    const auto & dataset_spec{ GaussianDatasetSpec() };
     CylinderSampler sampler;
     sampler.SetSampleCount(static_cast<unsigned int>(options.sampling_size));
     sampler.SetDistanceRange(options.sampling_range_min, options.sampling_range_max);
@@ -111,7 +114,8 @@ void RunBondSampling(
             entry.SetSamplingEntries(sampling_entries);
             const auto local_view{ LocalPotentialView::RequireFor(*bond) };
             entry.SetDataset(
-                dataset_service.BuildDataset(
+                ls::BuildDataset(
+                    dataset_spec,
                     sampling_entries,
                     options.fit_range_min,
                     options.fit_range_max,
@@ -140,7 +144,8 @@ void RunBondSampling(
         entry.SetSamplingEntries(sampling_entries);
         const auto local_view{ LocalPotentialView::RequireFor(*bond) };
         entry.SetDataset(
-            dataset_service.BuildDataset(
+            ls::BuildDataset(
+                dataset_spec,
                 sampling_entries,
                 options.fit_range_min,
                 options.fit_range_max,

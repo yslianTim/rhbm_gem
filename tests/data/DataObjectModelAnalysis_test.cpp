@@ -13,28 +13,25 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/AtomSelector.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
-#include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
+#include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include "support/DataObjectTestSupport.hpp"
 
 namespace rg = rhbm_gem;
+namespace ls = rhbm_gem::linearization_service;
 
 namespace
 {
 
-const rg::GaussianLinearizationService & AtomGroupDecodeService()
+const ls::LinearizationSpec & AtomGroupDecodeSpec()
 {
-    static const rg::GaussianLinearizationService service{
-        rg::GaussianLinearizationSpec::AtomGroupDecode()
-    };
-    return service;
+    static const auto spec{ ls::LinearizationSpec::AtomGroupDecode() };
+    return spec;
 }
 
-const rg::GaussianLinearizationService & BondGroupDecodeService()
+const ls::LinearizationSpec & BondGroupDecodeSpec()
 {
-    static const rg::GaussianLinearizationService service{
-        rg::GaussianLinearizationSpec::BondGroupDecode()
-    };
-    return service;
+    static const auto spec{ ls::LinearizationSpec::BondGroupDecode() };
+    return spec;
 }
 
 } // namespace
@@ -278,10 +275,10 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupEstimateRes
     constexpr double alpha_g{ 0.25 };
     analysis.ApplyAtomGroupEstimateResult(group_key, class_key, result, alpha_g);
 
-    const auto expected_mean{ AtomGroupDecodeService().DecodeGroupEstimate(result.mu_mean) };
-    const auto expected_mdpde{ AtomGroupDecodeService().DecodeGroupEstimate(result.mu_mdpde) };
+    const auto expected_mean{ ls::DecodeGroupEstimate(AtomGroupDecodeSpec(), result.mu_mean) };
+    const auto expected_mdpde{ ls::DecodeGroupEstimate(AtomGroupDecodeSpec(), result.mu_mdpde) };
     const auto expected_prior{
-        AtomGroupDecodeService().DecodePosteriorEstimate(result.mu_prior, result.capital_lambda)
+        ls::DecodePosteriorEstimate(AtomGroupDecodeSpec(), result.mu_prior, result.capital_lambda)
     };
     EXPECT_NEAR(expected_mean.amplitude, analysis_view.GetAtomGroupMean(group_key, class_key).amplitude, 1e-12);
     EXPECT_NEAR(expected_mean.width, analysis_view.GetAtomGroupMean(group_key, class_key).width, 1e-12);
@@ -296,7 +293,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupEstimateRes
     const auto annotation{ rg::LocalPotentialView::RequireFor(*atom_list.front()).FindAnnotation(class_key) };
     ASSERT_TRUE(annotation.has_value());
     const auto expected_posterior{
-        AtomGroupDecodeService().DecodePosteriorEstimate(
+        ls::DecodePosteriorEstimate(AtomGroupDecodeSpec(),
             result.beta_posterior_matrix.col(0),
             result.capital_sigma_posterior_list.front())
     };
@@ -366,9 +363,9 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesBondGroupEstimateRes
     constexpr double alpha_g{ 0.5 };
     analysis.ApplyBondGroupEstimateResult(group_key, class_key, result, alpha_g);
 
-    const auto expected_mean{ BondGroupDecodeService().DecodeGroupEstimate(result.mu_mean) };
+    const auto expected_mean{ ls::DecodeGroupEstimate(BondGroupDecodeSpec(), result.mu_mean) };
     const auto expected_prior{
-        BondGroupDecodeService().DecodePosteriorEstimate(result.mu_prior, result.capital_lambda)
+        ls::DecodePosteriorEstimate(BondGroupDecodeSpec(), result.mu_prior, result.capital_lambda)
     };
     EXPECT_NEAR(expected_mean.amplitude, analysis_view.GetBondGroupMean(group_key, class_key).amplitude, 1e-12);
     EXPECT_NEAR(expected_mean.width, analysis_view.GetBondGroupMean(group_key, class_key).width, 1e-12);

@@ -26,7 +26,7 @@ TEST(HRLModelTesterTest, RunBetaMDPDETestPopulatesResidualOutputs)
 {
     HRLModelTestDataFactory factory(
         3,
-        rhbm_gem::GaussianLinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
     HRLModelTester tester(3);
 
@@ -86,7 +86,7 @@ TEST(HRLModelTesterTest, RunMuMDPDETestPopulatesResidualOutputs)
 {
     HRLModelTestDataFactory factory(
         3,
-        rhbm_gem::GaussianLinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     HRLModelTester tester(3);
 
     const auto test_input{
@@ -130,7 +130,7 @@ TEST(HRLModelTesterTest, RunBetaMDPDEWithNeighborhoodTestConsumesPreparedInputs)
 {
     HRLModelTestDataFactory factory(
         3,
-        rhbm_gem::GaussianLinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
     HRLModelTester tester(3);
 
@@ -176,7 +176,7 @@ TEST(HRLModelTesterTest, RunBetaMDPDETestRejectsWrongSizedTruth)
 {
     HRLModelTestDataFactory factory(
         3,
-        rhbm_gem::GaussianLinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
     HRLModelTester tester(3);
 

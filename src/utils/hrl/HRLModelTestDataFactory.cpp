@@ -1,7 +1,7 @@
 #include <rhbm_gem/utils/hrl/HRLModelTestDataFactory.hpp>
 
 #include <rhbm_gem/utils/domain/Constants.hpp>
-#include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
+#include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/GaussianResponseMath.hpp>
@@ -14,6 +14,8 @@
 
 namespace
 {
+namespace ls = rhbm_gem::linearization_service;
+
 int ValidateGaussianParameterSize(int value)
 {
     if (value != 3)
@@ -50,7 +52,7 @@ std::mt19937 BuildReplicaGenerator(
 
 HRLModelTestDataFactory::HRLModelTestDataFactory(
     int gaus_par_size,
-    rhbm_gem::GaussianLinearizationSpec linearization_spec) :
+    ls::LinearizationSpec linearization_spec) :
     m_gaus_par_size{
         ValidateGaussianParameterSize(
             rhbm_gem::numeric_validation::RequirePositive(gaus_par_size, "gaus_par_size"))
@@ -279,17 +281,17 @@ SeriesPointList HRLModelTestDataFactory::BuildLinearDataset(
     std::mt19937 & generator
 ) const
 {
-    const rhbm_gem::GaussianLinearizationService linearization_service{ m_linearization_spec };
     Eigen::VectorXd model_parameters{ Eigen::VectorXd::Zero(3) };
     model_parameters(0) = model.amplitude;
     model_parameters(1) = model.width;
     model_parameters(2) = model.intercept;
     auto linear_data_entry_list{
-        linearization_service.BuildDatasetSeries(
+        ls::BuildDatasetSeries(
+            m_linearization_spec,
             sampling_entries,
             m_fit_range_min,
             m_fit_range_max,
-            rhbm_gem::GaussianLinearizationContext::FromModelParameters(model_parameters)
+            ls::LinearizationContext::FromModelParameters(model_parameters)
         )
     };
     const auto max_response{
@@ -375,13 +377,12 @@ Eigen::MatrixXd HRLModelTestDataFactory::BuildRandomGausParameters(
 Eigen::MatrixXd HRLModelTestDataFactory::BuildBetaMatrix(const Eigen::MatrixXd & gaus_array) const
 {
     const auto member_size{ static_cast<int>(gaus_array.cols()) };
-    const rhbm_gem::GaussianLinearizationService linearization_service{ m_linearization_spec };
     Eigen::MatrixXd beta_matrix{
         Eigen::MatrixXd::Zero(m_linearization_spec.basis_size, member_size)
     };
     for (int i = 0; i < member_size; i++)
     {
-        beta_matrix.col(i) = linearization_service.EncodeGaussianToBeta(gaus_array.col(i));
+        beta_matrix.col(i) = ls::EncodeGaussianToBeta(m_linearization_spec, gaus_array.col(i));
     }
     return beta_matrix;
 }

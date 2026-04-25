@@ -15,7 +15,7 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
-#include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
+#include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
@@ -38,6 +38,8 @@
 #endif
 
 namespace {
+namespace ls = rhbm_gem::linearization_service;
+
 constexpr std::string_view kModelKey{ "model" };
 constexpr std::string_view kMapKey{ "map" };
 constexpr std::string_view kModelOption{ "--model" };
@@ -137,13 +139,13 @@ bool EmitTrainingReportIfRequested(
     return true;
 }
 
-rhbm_gem::GaussianLinearizationContext BuildLocalLinearizationContext(
+ls::LinearizationContext BuildLocalLinearizationContext(
     const rhbm_gem::LocalPotentialView & view)
 {
     Eigen::VectorXd gaus_par_init{ Eigen::VectorXd::Zero(3) };
     gaus_par_init(0) = view.GetMomentZeroEstimate();
     gaus_par_init(1) = view.GetMomentTwoEstimate();
-    return rhbm_gem::GaussianLinearizationContext::FromModelParameters(gaus_par_init);
+    return ls::LinearizationContext::FromModelParameters(gaus_par_init);
 }
 
 } // namespace
@@ -546,11 +548,7 @@ void PotentialAnalysisCommand::RunDatasetPreparationWorkflow(
     const auto atom_size{ atom_list.size() };
     size_t atom_count{ 0 };
     auto local_entry_list{ BuildSelectedAtomLocalEntryViews(model_object) };
-    const auto dataset_service{
-        rhbm_gem::GaussianLinearizationService{
-            rhbm_gem::GaussianLinearizationSpec::DefaultDataset()
-        }
-    };
+    const auto dataset_spec{ ls::LinearizationSpec::DefaultDataset() };
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(ThreadSize())
@@ -560,7 +558,8 @@ void PotentialAnalysisCommand::RunDatasetPreparationWorkflow(
         auto entry{ local_entry_list[i] };
         const auto local_view{ LocalPotentialView::RequireFor(*atom_list[i]) };
         entry.SetDataset(
-            dataset_service.BuildDataset(
+            ls::BuildDataset(
+                dataset_spec,
                 local_view.GetSamplingEntries(),
                 fit_range_min,
                 fit_range_max,

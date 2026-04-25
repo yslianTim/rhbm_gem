@@ -1,4 +1,4 @@
-#include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
+#include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -10,7 +10,8 @@
 #include <stdexcept>
 #include <utility>
 
-namespace rhbm_gem {
+namespace rhbm_gem::linearization_service
+{
 
 namespace {
 
@@ -265,63 +266,93 @@ std::tuple<GaussianParameterVector, GaussianParameterVector> BuildGaus3DModelWit
     return std::make_tuple(gaus_model, gaus_model_variance);
 }
 
+void ValidateSpec(const LinearizationSpec & spec)
+{
+    rhbm_gem::numeric_validation::RequirePositive(
+        spec.basis_size,
+        "LinearizationSpec basis_size");
+}
+
+void ValidateContextIfRequired(
+    const LinearizationSpec & spec,
+    const LinearizationContext & context)
+{
+    if (spec.requires_local_context && !context.HasModelParameters())
+    {
+        throw std::invalid_argument("Gaussian linearization context is required for this spec.");
+    }
+}
+
+GaussianParameterVector BuildGaussianVector(
+    const LinearizationSpec & spec,
+    const RHBMBetaVector & linear_model,
+    const LinearizationContext * context)
+{
+    switch (spec.model_kind)
+    {
+    case GaussianModelKind::MODEL_2D:
+        return BuildGaus2DModel(linear_model);
+    case GaussianModelKind::MODEL_3D:
+        if (context != nullptr && context->HasModelParameters())
+        {
+            return BuildGaus3DModel(linear_model, context->model_parameters);
+        }
+        return BuildGaus3DModel(linear_model);
+    }
+    throw std::invalid_argument("Unsupported Gaussian model kind.");
+}
+
 } // namespace
 
-GaussianLinearizationSpec GaussianLinearizationSpec::DefaultDataset()
+LinearizationSpec LinearizationSpec::DefaultDataset()
 {
-    return GaussianLinearizationSpec{};
+    return LinearizationSpec{};
 }
 
-GaussianLinearizationSpec GaussianLinearizationSpec::DefaultMetricModel()
+LinearizationSpec LinearizationSpec::DefaultMetricModel()
 {
-    return GaussianLinearizationSpec{};
+    return LinearizationSpec{};
 }
 
-GaussianLinearizationSpec GaussianLinearizationSpec::AtomLocalDecode()
+LinearizationSpec LinearizationSpec::AtomLocalDecode()
 {
-    return GaussianLinearizationSpec{};
+    return LinearizationSpec{};
 }
 
-GaussianLinearizationSpec GaussianLinearizationSpec::AtomGroupDecode()
+LinearizationSpec LinearizationSpec::AtomGroupDecode()
 {
-    return GaussianLinearizationSpec{};
+    return LinearizationSpec{};
 }
 
-GaussianLinearizationSpec GaussianLinearizationSpec::BondGroupDecode()
+LinearizationSpec LinearizationSpec::BondGroupDecode()
 {
-    auto spec{ GaussianLinearizationSpec{} };
+    auto spec{ LinearizationSpec{} };
     spec.model_kind = GaussianModelKind::MODEL_2D;
     return spec;
 }
 
-bool GaussianLinearizationContext::HasModelParameters() const
+bool LinearizationContext::HasModelParameters() const
 {
     return model_parameters.rows() > 0;
 }
 
-GaussianLinearizationContext GaussianLinearizationContext::FromModelParameters(
+LinearizationContext LinearizationContext::FromModelParameters(
     const GaussianParameterVector & model_parameters)
 {
-    GaussianLinearizationContext context;
+    LinearizationContext context;
     context.model_parameters = model_parameters;
     return context;
 }
 
-GaussianLinearizationService::GaussianLinearizationService(GaussianLinearizationSpec spec) :
-    m_spec{ std::move(spec) }
-{
-    rhbm_gem::numeric_validation::RequirePositive(
-        m_spec.basis_size,
-        "GaussianLinearizationSpec basis_size");
-}
-
-SeriesPointList GaussianLinearizationService::BuildDatasetSeries(
+SeriesPointList BuildDatasetSeries(
+    const LinearizationSpec & spec,
     const LocalPotentialSampleList & sampling_entries,
     double x_min,
     double x_max,
-    const GaussianLinearizationContext & context) const
+    const LinearizationContext & context)
 {
-    ValidateContextIfRequired(context);
+    ValidateSpec(spec);
+    ValidateContextIfRequired(spec, context);
 
     SeriesPointList basis_and_response_entry_list;
     basis_and_response_entry_list.reserve(sampling_entries.size());
@@ -346,18 +377,18 @@ SeriesPointList GaussianLinearizationService::BuildDatasetSeries(
                 static_cast<double>(distance),
                 gaussian_response,
                 model_parameters,
-                m_spec.basis_size)
+                spec.basis_size)
         };
         std::vector<double> basis_values;
-        basis_values.reserve(static_cast<std::size_t>(m_spec.basis_size));
-        for (int i = 0; i < m_spec.basis_size; i++)
+        basis_values.reserve(static_cast<std::size_t>(spec.basis_size));
+        for (int i = 0; i < spec.basis_size; i++)
         {
             basis_values.emplace_back(data_vector(i));
         }
         basis_and_response_entry_list.emplace_back(
             SeriesPoint{
                 std::move(basis_values),
-                data_vector(m_spec.basis_size),
+                data_vector(spec.basis_size),
                 sample.score
             });
     }
@@ -365,21 +396,23 @@ SeriesPointList GaussianLinearizationService::BuildDatasetSeries(
     if (basis_and_response_entry_list.empty())
     {
         Logger::Log(LogLevel::Warning,
-            "GaussianLinearizationService::BuildDatasetSeries : "
+            "linearization_service::BuildDatasetSeries : "
             "No valid gaus data entry in the specified range.");
         basis_and_response_entry_list.emplace_back(
-            SeriesPoint{ std::vector<double>(static_cast<std::size_t>(m_spec.basis_size), 0.0), 0.0 });
+            SeriesPoint{ std::vector<double>(static_cast<std::size_t>(spec.basis_size), 0.0), 0.0 });
     }
     basis_and_response_entry_list.shrink_to_fit();
     return basis_and_response_entry_list;
 }
 
-SeriesPointList GaussianLinearizationService::BuildLinearModelSeries(
+SeriesPointList BuildLinearModelSeries(
+    const LinearizationSpec & spec,
     const LocalPotentialSampleList & sampling_entries,
-    const GaussianLinearizationContext & context) const
+    const LinearizationContext & context)
 {
-    ValidateContextIfRequired(context);
-    if (m_spec.basis_size < 2)
+    ValidateSpec(spec);
+    ValidateContextIfRequired(spec, context);
+    if (spec.basis_size < 2)
     {
         throw std::invalid_argument("Linear model series requires basis_size >= 2.");
     }
@@ -401,28 +434,31 @@ SeriesPointList GaussianLinearizationService::BuildLinearModelSeries(
                 static_cast<double>(sample.distance),
                 static_cast<double>(sample.response),
                 model_parameters,
-                m_spec.basis_size)
+                spec.basis_size)
         };
         linear_model_series.emplace_back(
-            SeriesPoint{ { data_vector(1) }, data_vector(m_spec.basis_size), sample.score });
+            SeriesPoint{ { data_vector(1) }, data_vector(spec.basis_size), sample.score });
     }
     return linear_model_series;
 }
 
-RHBMMemberDataset GaussianLinearizationService::BuildDataset(
+RHBMMemberDataset BuildDataset(
+    const LinearizationSpec & spec,
     const LocalPotentialSampleList & sampling_entries,
     double x_min,
     double x_max,
-    const GaussianLinearizationContext & context) const
+    const LinearizationContext & context)
 {
     return rhbm_gem::rhbm_helper::BuildMemberDataset(
-        BuildDatasetSeries(sampling_entries, x_min, x_max, context));
+        BuildDatasetSeries(spec, sampling_entries, x_min, x_max, context));
 }
 
-RHBMBetaVector GaussianLinearizationService::EncodeGaussianToBeta(
-    const GaussianParameterVector & gaussian_parameters) const
+RHBMBetaVector EncodeGaussianToBeta(
+    const LinearizationSpec & spec,
+    const GaussianParameterVector & gaussian_parameters)
 {
-    if (m_spec.linearization_kind != GaussianLinearizationKind::LOG_QUADRATIC)
+    ValidateSpec(spec);
+    if (spec.linearization_kind != LinearizationKind::LOG_QUADRATIC)
     {
         throw std::invalid_argument("EncodeGaussianToBeta only supports log-quadratic linearization.");
     }
@@ -436,41 +472,48 @@ RHBMBetaVector GaussianLinearizationService::EncodeGaussianToBeta(
             gaussian_parameters(0),
             gaussian_parameters(1))
     };
-    if (m_spec.basis_size > encoded.rows())
+    if (spec.basis_size > encoded.rows())
     {
         throw std::invalid_argument("Requested basis size exceeds supported encoded Gaussian size.");
     }
-    return encoded.head(m_spec.basis_size);
+    return encoded.head(spec.basis_size);
 }
 
-RHBMBetaVector GaussianLinearizationService::EncodeGaussianToBeta(
-    const GaussianEstimate & gaussian_estimate) const
+RHBMBetaVector EncodeGaussianToBeta(
+    const LinearizationSpec & spec,
+    const GaussianEstimate & gaussian_estimate)
 {
     GaussianParameterVector gaussian_parameters{ GaussianParameterVector::Zero(2) };
     gaussian_parameters(0) = gaussian_estimate.amplitude;
     gaussian_parameters(1) = gaussian_estimate.width;
-    return EncodeGaussianToBeta(gaussian_parameters);
+    return EncodeGaussianToBeta(spec, gaussian_parameters);
 }
 
-GaussianParameterVector GaussianLinearizationService::DecodeLocalBeta(
+GaussianParameterVector DecodeLocalBeta(
+    const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model,
-    const GaussianLinearizationContext & context) const
+    const LinearizationContext & context)
 {
-    return BuildGaussianVector(linear_model, &context);
+    ValidateSpec(spec);
+    ValidateContextIfRequired(spec, context);
+    return BuildGaussianVector(spec, linear_model, &context);
 }
 
-GaussianParameterVector GaussianLinearizationService::DecodeGroupBeta(
-    const RHBMBetaVector & linear_model) const
+GaussianParameterVector DecodeGroupBeta(
+    const LinearizationSpec & spec,
+    const RHBMBetaVector & linear_model)
 {
-    return BuildGaussianVector(linear_model, nullptr);
+    ValidateSpec(spec);
+    return BuildGaussianVector(spec, linear_model, nullptr);
 }
 
-std::tuple<GaussianParameterVector, GaussianParameterVector>
-GaussianLinearizationService::DecodePosterior(
+std::tuple<GaussianParameterVector, GaussianParameterVector> DecodePosterior(
+    const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model,
-    const RHBMPosteriorCovarianceMatrix & covariance_matrix) const
+    const RHBMPosteriorCovarianceMatrix & covariance_matrix)
 {
-    switch (m_spec.model_kind)
+    ValidateSpec(spec);
+    switch (spec.model_kind)
     {
     case GaussianModelKind::MODEL_2D:
         return BuildGaus2DModelWithVariance(linear_model, covariance_matrix);
@@ -480,55 +523,31 @@ GaussianLinearizationService::DecodePosterior(
     throw std::invalid_argument("Unsupported Gaussian model kind.");
 }
 
-GaussianEstimate GaussianLinearizationService::DecodeLocalEstimate(
+GaussianEstimate DecodeLocalEstimate(
+    const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model,
-    const GaussianLinearizationContext & context) const
+    const LinearizationContext & context)
 {
-    return BuildGaussianEstimate(DecodeLocalBeta(linear_model, context));
+    return BuildGaussianEstimate(DecodeLocalBeta(spec, linear_model, context));
 }
 
-GaussianEstimate GaussianLinearizationService::DecodeGroupEstimate(
-    const RHBMBetaVector & linear_model) const
+GaussianEstimate DecodeGroupEstimate(
+    const LinearizationSpec & spec,
+    const RHBMBetaVector & linear_model)
 {
-    return BuildGaussianEstimate(DecodeGroupBeta(linear_model));
+    return BuildGaussianEstimate(DecodeGroupBeta(spec, linear_model));
 }
 
-GaussianPosterior GaussianLinearizationService::DecodePosteriorEstimate(
+GaussianPosterior DecodePosteriorEstimate(
+    const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model,
-    const RHBMPosteriorCovarianceMatrix & covariance_matrix) const
+    const RHBMPosteriorCovarianceMatrix & covariance_matrix)
 {
-    const auto decoded{ DecodePosterior(linear_model, covariance_matrix) };
+    const auto decoded{ DecodePosterior(spec, linear_model, covariance_matrix) };
     return GaussianPosterior{
         BuildGaussianEstimate(std::get<0>(decoded)),
         BuildGaussianEstimate(std::get<1>(decoded))
     };
 }
 
-void GaussianLinearizationService::ValidateContextIfRequired(
-    const GaussianLinearizationContext & context) const
-{
-    if (m_spec.requires_local_context && !context.HasModelParameters())
-    {
-        throw std::invalid_argument("Gaussian linearization context is required for this spec.");
-    }
-}
-
-GaussianParameterVector GaussianLinearizationService::BuildGaussianVector(
-    const RHBMBetaVector & linear_model,
-    const GaussianLinearizationContext * context) const
-{
-    switch (m_spec.model_kind)
-    {
-    case GaussianModelKind::MODEL_2D:
-        return BuildGaus2DModel(linear_model);
-    case GaussianModelKind::MODEL_3D:
-        if (context != nullptr && context->HasModelParameters())
-        {
-            return BuildGaus3DModel(linear_model, context->model_parameters);
-        }
-        return BuildGaus3DModel(linear_model);
-    }
-    throw std::invalid_argument("Unsupported Gaussian model kind.");
-}
-
-} // namespace rhbm_gem
+} // namespace rhbm_gem::linearization_service

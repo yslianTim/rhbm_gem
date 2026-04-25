@@ -1,0 +1,105 @@
+#pragma once
+
+#include <tuple>
+
+#include <Eigen/Dense>
+
+#include <rhbm_gem/utils/hrl/GaussianStatistics.hpp>
+#include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
+#include <rhbm_gem/utils/math/SamplingTypes.hpp>
+
+namespace rhbm_gem::linearization_service
+{
+
+enum class LinearizationKind
+{
+    LOG_QUADRATIC,
+    TAYLOR_EXPANSION
+};
+
+enum class GaussianModelKind
+{
+    MODEL_2D,
+    MODEL_3D
+};
+
+struct LinearizationSpec
+{
+    int basis_size{ 2 };
+    LinearizationKind linearization_kind{ LinearizationKind::LOG_QUADRATIC };
+    GaussianModelKind model_kind{ GaussianModelKind::MODEL_3D };
+    bool requires_local_context{ false };
+
+    static LinearizationSpec DefaultDataset();
+    static LinearizationSpec DefaultMetricModel();
+    static LinearizationSpec AtomLocalDecode();
+    static LinearizationSpec AtomGroupDecode();
+    static LinearizationSpec BondGroupDecode();
+};
+
+struct LinearizationContext
+{
+    GaussianParameterVector model_parameters{};
+
+    bool HasModelParameters() const;
+
+    static LinearizationContext FromModelParameters(
+        const GaussianParameterVector & model_parameters);
+};
+
+SeriesPointList BuildDatasetSeries(
+    const LinearizationSpec & spec,
+    const LocalPotentialSampleList & sampling_entries,
+    double x_min,
+    double x_max,
+    const LinearizationContext & context = {});
+
+SeriesPointList BuildLinearModelSeries(
+    const LinearizationSpec & spec,
+    const LocalPotentialSampleList & sampling_entries,
+    const LinearizationContext & context = {});
+
+RHBMMemberDataset BuildDataset(
+    const LinearizationSpec & spec,
+    const LocalPotentialSampleList & sampling_entries,
+    double x_min,
+    double x_max,
+    const LinearizationContext & context = {});
+
+RHBMBetaVector EncodeGaussianToBeta(
+    const LinearizationSpec & spec,
+    const GaussianParameterVector & gaussian_parameters);
+
+RHBMBetaVector EncodeGaussianToBeta(
+    const LinearizationSpec & spec,
+    const GaussianEstimate & gaussian_estimate);
+
+GaussianParameterVector DecodeLocalBeta(
+    const LinearizationSpec & spec,
+    const RHBMBetaVector & linear_model,
+    const LinearizationContext & context = {});
+
+GaussianParameterVector DecodeGroupBeta(
+    const LinearizationSpec & spec,
+    const RHBMBetaVector & linear_model);
+
+std::tuple<GaussianParameterVector, GaussianParameterVector> DecodePosterior(
+    const LinearizationSpec & spec,
+    const RHBMBetaVector & linear_model,
+    const RHBMPosteriorCovarianceMatrix & covariance_matrix);
+
+GaussianEstimate DecodeLocalEstimate(
+    const LinearizationSpec & spec,
+    const RHBMBetaVector & linear_model,
+    const LinearizationContext & context = {});
+
+GaussianEstimate DecodeGroupEstimate(
+    const LinearizationSpec & spec,
+    const RHBMBetaVector & linear_model);
+
+GaussianPosterior DecodePosteriorEstimate(
+    const LinearizationSpec & spec,
+    const RHBMBetaVector & linear_model,
+    const RHBMPosteriorCovarianceMatrix & covariance_matrix);
+
+} // namespace rhbm_gem::linearization_service

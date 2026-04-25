@@ -7,7 +7,7 @@
 
 #include <Eigen/Dense>
 
-#include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
+#include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 #include <rhbm_gem/utils/math/GaussianPotentialSampler.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
@@ -76,7 +76,7 @@ public:
 
 private:
     int m_gaus_par_size;
-    rhbm_gem::GaussianLinearizationSpec m_linearization_spec;
+    rhbm_gem::linearization_service::LinearizationSpec m_linearization_spec;
     double m_fit_range_min;
     double m_fit_range_max;
     GaussianPotentialSampler m_potential_sampler;
@@ -85,7 +85,7 @@ public:
     HRLModelTestDataFactory() = delete;
     HRLModelTestDataFactory(
         int gaus_par_size,
-        rhbm_gem::GaussianLinearizationSpec linearization_spec);
+        rhbm_gem::linearization_service::LinearizationSpec linearization_spec);
     ~HRLModelTestDataFactory() = default;
 
     void SetFittingRange(double x_min, double x_max);

@@ -1,6 +1,6 @@
 #include <rhbm_gem/utils/hrl/HRLModelTester.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
-#include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
+#include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
@@ -11,6 +11,8 @@
 
 namespace
 {
+namespace ls = rhbm_gem::linearization_service;
+
 constexpr std::size_t kAlphaRSubsetSize{ 5 };
 constexpr double kAlphaRMin{ 0.0 };
 constexpr double kAlphaRMax{ 2.0 };
@@ -29,19 +31,17 @@ RHBMExecutionOptions MakeTesterExecutionOptions()
     return options;
 }
 
-const rhbm_gem::GaussianLinearizationService & MetricDecodeService()
+const ls::LinearizationSpec & MetricDecodeSpec()
 {
-    static const rhbm_gem::GaussianLinearizationService service{
-        rhbm_gem::GaussianLinearizationSpec::DefaultMetricModel()
-    };
-    return service;
+    static const auto spec{ ls::LinearizationSpec::DefaultMetricModel() };
+    return spec;
 }
 
 rhbm_gem::GaussianParameterVector CalculateNormalizedResidual(
     const RHBMBetaVector & linear_estimate,
     const rhbm_gem::GaussianParameterVector & gaussian_truth)
 {
-    const auto gaussian_estimate{ MetricDecodeService().DecodeGroupBeta(linear_estimate) };
+    const auto gaussian_estimate{ ls::DecodeGroupBeta(MetricDecodeSpec(), linear_estimate) };
     rhbm_gem::eigen_validation::RequireVectorSize(
         gaussian_estimate,
         gaussian_truth.rows(),

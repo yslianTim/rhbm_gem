@@ -1,6 +1,6 @@
 #include "data/detail/LocalPotentialEntry.hpp"
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
-#include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
+#include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
@@ -10,18 +10,17 @@
 
 namespace rhbm_gem {
 namespace {
+namespace ls = rhbm_gem::linearization_service;
 
 inline bool IsEffectiveSample(const LocalPotentialSample & sample)
 {
     return sample.score > 0.0f;
 }
 
-const GaussianLinearizationService & LinearizationService()
+const ls::LinearizationSpec & DatasetLinearizationSpec()
 {
-    static const GaussianLinearizationService service{
-        GaussianLinearizationSpec::DefaultDataset()
-    };
-    return service;
+    static const auto spec{ ls::LinearizationSpec::DefaultDataset() };
+    return spec;
 }
 
 } // namespace
@@ -184,7 +183,7 @@ SeriesPointList LocalPotentialEntry::GetBinnedDistanceResponseSeries(
 
 SeriesPointList LocalPotentialEntry::GetLinearModelSeries() const
 {
-    return LinearizationService().BuildLinearModelSeries(m_sampling_entries);
+    return ls::BuildLinearModelSeries(DatasetLinearizationSpec(), m_sampling_entries);
 }
 
 double LocalPotentialEntry::GetMapValueNearCenter() const

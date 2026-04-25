@@ -7,7 +7,7 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
+#include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 
 #include <stdexcept>
 #include <string>
@@ -15,6 +15,7 @@
 namespace rhbm_gem {
 
 namespace {
+namespace ls = rhbm_gem::linearization_service;
 
 struct LocalPotentialEstimates
 {
@@ -22,36 +23,30 @@ struct LocalPotentialEstimates
     GaussianEstimate mdpde{};
 };
 
-GaussianLinearizationContext BuildLocalDecodeContext(const LocalPotentialEntry & entry)
+ls::LinearizationContext BuildLocalDecodeContext(const LocalPotentialEntry & entry)
 {
     Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
     model_par_init(0) = entry.GetMomentZeroEstimate();
     model_par_init(1) = entry.GetMomentTwoEstimate();
-    return GaussianLinearizationContext::FromModelParameters(model_par_init);
+    return ls::LinearizationContext::FromModelParameters(model_par_init);
 }
 
-const GaussianLinearizationService & LocalDecodeService()
+const ls::LinearizationSpec & LocalDecodeSpec()
 {
-    static const GaussianLinearizationService service{
-        GaussianLinearizationSpec::AtomLocalDecode()
-    };
-    return service;
+    static const auto spec{ ls::LinearizationSpec::AtomLocalDecode() };
+    return spec;
 }
 
-const GaussianLinearizationService & AtomGroupDecodeService()
+const ls::LinearizationSpec & AtomGroupDecodeSpec()
 {
-    static const GaussianLinearizationService service{
-        GaussianLinearizationSpec::AtomGroupDecode()
-    };
-    return service;
+    static const auto spec{ ls::LinearizationSpec::AtomGroupDecode() };
+    return spec;
 }
 
-const GaussianLinearizationService & BondGroupDecodeService()
+const ls::LinearizationSpec & BondGroupDecodeSpec()
 {
-    static const GaussianLinearizationService service{
-        GaussianLinearizationSpec::BondGroupDecode()
-    };
-    return service;
+    static const auto spec{ ls::LinearizationSpec::BondGroupDecode() };
+    return spec;
 }
 
 template <typename EntryT>
@@ -149,8 +144,10 @@ LocalPotentialEstimates BuildLocalPotentialEstimates(
     const RHBMBetaEstimateResult & value)
 {
     const auto context{ BuildLocalDecodeContext(entry) };
-    const auto gaus_ols{ LocalDecodeService().DecodeLocalEstimate(value.beta_ols, context) };
-    const auto gaus_mdpde{ LocalDecodeService().DecodeLocalEstimate(value.beta_mdpde, context) };
+    const auto gaus_ols{ ls::DecodeLocalEstimate(LocalDecodeSpec(), value.beta_ols, context) };
+    const auto gaus_mdpde{
+        ls::DecodeLocalEstimate(LocalDecodeSpec(), value.beta_mdpde, context)
+    };
 
     return LocalPotentialEstimates{
         gaus_ols,
@@ -193,10 +190,11 @@ void ApplyAtomGroupStatistics(
     const RHBMGroupEstimationResult & result,
     double alpha_g)
 {
-    const auto gaus_group_mean{ AtomGroupDecodeService().DecodeGroupEstimate(result.mu_mean) };
-    const auto gaus_group_mdpde{ AtomGroupDecodeService().DecodeGroupEstimate(result.mu_mdpde) };
+    const auto gaus_group_mean{ ls::DecodeGroupEstimate(AtomGroupDecodeSpec(), result.mu_mean) };
+    const auto gaus_group_mdpde{ ls::DecodeGroupEstimate(AtomGroupDecodeSpec(), result.mu_mdpde) };
     const auto gaus_prior{
-        AtomGroupDecodeService().DecodePosteriorEstimate(
+        ls::DecodePosteriorEstimate(
+            AtomGroupDecodeSpec(),
             result.mu_prior,
             result.capital_lambda)
     };
@@ -217,10 +215,11 @@ void ApplyBondGroupStatistics(
     const RHBMGroupEstimationResult & result,
     double alpha_g)
 {
-    const auto gaus_group_mean{ BondGroupDecodeService().DecodeGroupEstimate(result.mu_mean) };
-    const auto gaus_group_mdpde{ BondGroupDecodeService().DecodeGroupEstimate(result.mu_mdpde) };
+    const auto gaus_group_mean{ ls::DecodeGroupEstimate(BondGroupDecodeSpec(), result.mu_mean) };
+    const auto gaus_group_mdpde{ ls::DecodeGroupEstimate(BondGroupDecodeSpec(), result.mu_mdpde) };
     const auto gaus_prior{
-        BondGroupDecodeService().DecodePosteriorEstimate(
+        ls::DecodePosteriorEstimate(
+            BondGroupDecodeSpec(),
             result.mu_prior,
             result.capital_lambda)
     };
@@ -243,7 +242,8 @@ LocalPotentialAnnotationData BuildAtomAnnotationData(
         result.capital_sigma_posterior_list.at(static_cast<std::size_t>(member_index))
     };
     const auto gaus_posterior{
-        AtomGroupDecodeService().DecodePosteriorEstimate(
+        ls::DecodePosteriorEstimate(
+            AtomGroupDecodeSpec(),
             beta_vector_posterior,
             sigma_matrix_posterior)
     };
@@ -263,7 +263,8 @@ LocalPotentialAnnotationData BuildBondAnnotationData(
         result.capital_sigma_posterior_list.at(static_cast<std::size_t>(member_index))
     };
     const auto gaus_posterior{
-        BondGroupDecodeService().DecodePosteriorEstimate(
+        ls::DecodePosteriorEstimate(
+            BondGroupDecodeSpec(),
             beta_vector_posterior,
             sigma_matrix_posterior)
     };
