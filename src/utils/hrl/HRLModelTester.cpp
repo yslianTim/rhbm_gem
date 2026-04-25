@@ -1,5 +1,5 @@
 #include <rhbm_gem/utils/hrl/HRLModelTester.hpp>
-#include <rhbm_gem/utils/hrl/HRLAlphaTrainer.hpp>
+#include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
 #include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
@@ -106,8 +106,8 @@ NeighborhoodReplicaResidual EstimateNeighborhoodReplicaResidual(
     const RHBMMemberDataset & no_cut_dataset,
     const RHBMMemberDataset & cut_dataset,
     const Eigen::VectorXd & gaus_true,
-    const HRLAlphaTrainer & alpha_r_trainer,
-    const HRLAlphaTrainer::AlphaTrainingOptions & alpha_r_training_options,
+    const rhbm_gem::rhbm_trainer::AlphaTrainer & alpha_r_trainer,
+    const rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions & alpha_r_training_options,
     const RHBMExecutionOptions & options)
 {
     const auto no_cut_training_result{
@@ -222,8 +222,8 @@ bool HRLModelTester::RunBetaMDPDETest(
     residual_sigma_ols_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
     residual_sigma_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
 
-    const HRLAlphaTrainer alpha_r_trainer{ kAlphaRMin, kAlphaRMax, kAlphaRStep };
-    HRLAlphaTrainer::AlphaTrainingOptions alpha_r_training_options;
+    const rhbm_gem::rhbm_trainer::AlphaTrainer alpha_r_trainer{ kAlphaRMin, kAlphaRMax, kAlphaRStep };
+    rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_r_training_options;
     alpha_r_training_options.subset_size = kAlphaRSubsetSize;
     alpha_r_training_options.execution_options = MakeTesterExecutionOptions();
 
@@ -304,8 +304,8 @@ bool HRLModelTester::RunMuMDPDETest(
     residual_sigma_median_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
     residual_sigma_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
 
-    const HRLAlphaTrainer alpha_g_trainer{ kAlphaGMin, kAlphaGMax, kAlphaGStep };
-    HRLAlphaTrainer::AlphaTrainingOptions alpha_g_training_options;
+    const rhbm_gem::rhbm_trainer::AlphaTrainer alpha_g_trainer{ kAlphaGMin, kAlphaGMax, kAlphaGStep };
+    rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_g_training_options;
     alpha_g_training_options.subset_size = kAlphaGSubsetSize;
     alpha_g_training_options.execution_options = MakeTesterExecutionOptions();
 
@@ -388,8 +388,8 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
     residual_mean_list.assign(method_size, Eigen::VectorXd::Zero(m_gaus_par_size));
     residual_sigma_list.assign(method_size, Eigen::VectorXd::Zero(m_gaus_par_size));
 
-    const HRLAlphaTrainer alpha_r_trainer{ kAlphaRMin, kAlphaRMax, kAlphaRStep };
-    HRLAlphaTrainer::AlphaTrainingOptions alpha_r_training_options;
+    const rhbm_gem::rhbm_trainer::AlphaTrainer alpha_r_trainer{ kAlphaRMin, kAlphaRMax, kAlphaRStep };
+    rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_r_training_options;
     alpha_r_training_options.subset_size = kAlphaRSubsetSize;
     alpha_r_training_options.execution_options = MakeTesterExecutionOptions();
 

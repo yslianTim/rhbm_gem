@@ -1,4 +1,4 @@
-#include <rhbm_gem/utils/hrl/HRLAlphaTrainer.hpp>
+#include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
 
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
@@ -12,6 +12,9 @@
 #include <string>
 #include <stdexcept>
 #include <vector>
+
+namespace rhbm_gem::rhbm_trainer
+{
 
 namespace
 {
@@ -122,14 +125,14 @@ std::mt19937 BuildGenerator(
     return std::mt19937(std::random_device{}());
 }
 
-HRLAlphaTrainer::AlphaTrainingResult BuildTrainingResult(
+AlphaTrainer::AlphaTrainingResult BuildTrainingResult(
     const std::vector<double> & alpha_list,
     const Eigen::VectorXd & error_sum_list)
 {
     int error_min_id{ 0 };
     error_sum_list.minCoeff(&error_min_id);
 
-    HRLAlphaTrainer::AlphaTrainingResult result;
+    AlphaTrainer::AlphaTrainingResult result;
     result.best_alpha = alpha_list.at(static_cast<std::size_t>(error_min_id));
     result.error_sum_list = error_sum_list;
     return result;
@@ -277,7 +280,7 @@ Eigen::VectorXd EvaluateAlphaGForGroup(
 }
 } // namespace
 
-HRLAlphaTrainer::HRLAlphaTrainer(
+AlphaTrainer::AlphaTrainer(
     double alpha_min,
     double alpha_max,
     double alpha_step) :
@@ -288,7 +291,7 @@ HRLAlphaTrainer::HRLAlphaTrainer(
 {
 }
 
-std::ostringstream HRLAlphaTrainer::GetAlphaGridSummary() const
+std::ostringstream AlphaTrainer::GetAlphaGridSummary() const
 {
     std::ostringstream summary;
     summary
@@ -299,7 +302,7 @@ std::ostringstream HRLAlphaTrainer::GetAlphaGridSummary() const
     return summary;
 }
 
-std::vector<double> HRLAlphaTrainer::BuildAlphaGrid(
+std::vector<double> AlphaTrainer::BuildAlphaGrid(
     double alpha_min,
     double alpha_max,
     double alpha_step)
@@ -334,7 +337,7 @@ std::vector<double> HRLAlphaTrainer::BuildAlphaGrid(
     return alpha_list;
 }
 
-HRLAlphaTrainer::AlphaTrainingResult HRLAlphaTrainer::TrainAlphaR(
+AlphaTrainer::AlphaTrainingResult AlphaTrainer::TrainAlphaR(
     const std::vector<RHBMMemberDataset> & dataset_list,
     const AlphaTrainingOptions & options) const
 {
@@ -383,7 +386,7 @@ HRLAlphaTrainer::AlphaTrainingResult HRLAlphaTrainer::TrainAlphaR(
     return BuildTrainingResult(m_alpha_grid, error_sum_array.matrix());
 }
 
-HRLAlphaTrainer::AlphaTrainingResult HRLAlphaTrainer::TrainAlphaG(
+AlphaTrainer::AlphaTrainingResult AlphaTrainer::TrainAlphaG(
     const std::vector<std::vector<RHBMBetaVector>> & beta_group_list,
     const AlphaTrainingOptions & options) const
 {
@@ -428,7 +431,7 @@ HRLAlphaTrainer::AlphaTrainingResult HRLAlphaTrainer::TrainAlphaG(
     return BuildTrainingResult(m_alpha_grid, error_sum_array.matrix());
 }
 
-Eigen::MatrixXd HRLAlphaTrainer::StudyAlphaRBias(
+Eigen::MatrixXd AlphaTrainer::StudyAlphaRBias(
     const std::vector<RHBMMemberDataset> & dataset_list,
     const AlphaRunOptions & options) const
 {
@@ -484,7 +487,7 @@ Eigen::MatrixXd HRLAlphaTrainer::StudyAlphaRBias(
     return gaus_bias_matrix;
 }
 
-Eigen::MatrixXd HRLAlphaTrainer::StudyAlphaGBias(
+Eigen::MatrixXd AlphaTrainer::StudyAlphaGBias(
     const std::vector<std::vector<RHBMBetaVector>> & beta_group_list,
     const AlphaRunOptions & options) const
 {
@@ -540,3 +543,5 @@ Eigen::MatrixXd HRLAlphaTrainer::StudyAlphaGBias(
     gaus_bias_matrix /= static_cast<double>(group_size);
     return gaus_bias_matrix;
 }
+
+} // namespace rhbm_gem::rhbm_trainer

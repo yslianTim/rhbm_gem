@@ -5,7 +5,7 @@
 #include <vector>
 
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
-#include <rhbm_gem/utils/hrl/HRLAlphaTrainer.hpp>
+#include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
 
 namespace
 {
@@ -43,9 +43,9 @@ double BestAlphaForErrors(
 }
 } // namespace
 
-TEST(HRLAlphaTrainerTest, ConstructorBuildsAlphaGridWithExactMax)
+TEST(RHBMTrainerTest, ConstructorBuildsAlphaGridWithExactMax)
 {
-    const HRLAlphaTrainer trainer{ 0.2, 0.8, 0.2 };
+    const rhbm_gem::rhbm_trainer::AlphaTrainer trainer{ 0.2, 0.8, 0.2 };
     const auto & alpha_grid{ trainer.AlphaGrid() };
     const auto summary{ trainer.GetAlphaGridSummary() };
 
@@ -60,9 +60,9 @@ TEST(HRLAlphaTrainerTest, ConstructorBuildsAlphaGridWithExactMax)
         "step = 0.200000, count = 4");
 }
 
-TEST(HRLAlphaTrainerTest, ConstructorBuildsAlphaGridWithoutExceedingMax)
+TEST(RHBMTrainerTest, ConstructorBuildsAlphaGridWithoutExceedingMax)
 {
-    const HRLAlphaTrainer trainer{ 0.0, 1.0, 0.3 };
+    const rhbm_gem::rhbm_trainer::AlphaTrainer trainer{ 0.0, 1.0, 0.3 };
     const auto & alpha_grid{ trainer.AlphaGrid() };
     const auto summary{ trainer.GetAlphaGridSummary() };
 
@@ -77,14 +77,14 @@ TEST(HRLAlphaTrainerTest, ConstructorBuildsAlphaGridWithoutExceedingMax)
         "step = 0.300000, count = 4");
 }
 
-TEST(HRLAlphaTrainerTest, ConstructorRejectsInvalidAlphaGrid)
+TEST(RHBMTrainerTest, ConstructorRejectsInvalidAlphaGrid)
 {
-    EXPECT_THROW(HRLAlphaTrainer(-0.1, 1.0, 0.1), std::invalid_argument);
-    EXPECT_THROW(HRLAlphaTrainer(1.0, 0.0, 0.1), std::invalid_argument);
-    EXPECT_THROW(HRLAlphaTrainer(0.0, 1.0, 0.0), std::invalid_argument);
+    EXPECT_THROW(rhbm_gem::rhbm_trainer::AlphaTrainer(-0.1, 1.0, 0.1), std::invalid_argument);
+    EXPECT_THROW(rhbm_gem::rhbm_trainer::AlphaTrainer(1.0, 0.0, 0.1), std::invalid_argument);
+    EXPECT_THROW(rhbm_gem::rhbm_trainer::AlphaTrainer(0.0, 1.0, 0.0), std::invalid_argument);
 }
 
-TEST(HRLAlphaTrainerTest, TrainAlphaRSingleDatasetWithExactLinearDataReturnsZeroError)
+TEST(RHBMTrainerTest, TrainAlphaRSingleDatasetWithExactLinearDataReturnsZeroError)
 {
     const SeriesPointList data_list{
         SeriesPoint({ 1.0, 0.0 }, 1.0),
@@ -95,8 +95,8 @@ TEST(HRLAlphaTrainerTest, TrainAlphaRSingleDatasetWithExactLinearDataReturnsZero
         SeriesPoint({ 1.0, 5.0 }, 11.0)
     };
     const auto dataset{ rhbm_gem::rhbm_helper::BuildMemberDataset(data_list) };
-    const HRLAlphaTrainer trainer{ 0.0, 0.5, 0.5 };
-    HRLAlphaTrainer::AlphaTrainingOptions options;
+    const rhbm_gem::rhbm_trainer::AlphaTrainer trainer{ 0.0, 0.5, 0.5 };
+    rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions options;
     options.subset_size = 3;
 
     const auto result{ trainer.TrainAlphaR({ dataset }, options) };
@@ -107,11 +107,11 @@ TEST(HRLAlphaTrainerTest, TrainAlphaRSingleDatasetWithExactLinearDataReturnsZero
     EXPECT_DOUBLE_EQ(result.best_alpha, BestAlphaForErrors(trainer.AlphaGrid(), result.error_sum_list));
 }
 
-TEST(HRLAlphaTrainerTest, TrainAlphaGSingleGroupWithIdenticalBetasReturnsZeroError)
+TEST(RHBMTrainerTest, TrainAlphaGSingleGroupWithIdenticalBetasReturnsZeroError)
 {
     const std::vector<Eigen::VectorXd> beta_list(6, MakeVector({ 1.5, -0.5 }));
-    const HRLAlphaTrainer trainer{ 0.0, 1.0, 0.5 };
-    HRLAlphaTrainer::AlphaTrainingOptions options;
+    const rhbm_gem::rhbm_trainer::AlphaTrainer trainer{ 0.0, 1.0, 0.5 };
+    rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions options;
     options.subset_size = 4;
 
     const auto result{ trainer.TrainAlphaG({ beta_list }, options) };
@@ -123,16 +123,16 @@ TEST(HRLAlphaTrainerTest, TrainAlphaGSingleGroupWithIdenticalBetasReturnsZeroErr
     EXPECT_DOUBLE_EQ(result.best_alpha, BestAlphaForErrors(trainer.AlphaGrid(), result.error_sum_list));
 }
 
-TEST(HRLAlphaTrainerTest, TrainAlphaRAggregatesSingleBatchResultsAndSelectsMinimum)
+TEST(RHBMTrainerTest, TrainAlphaRAggregatesSingleBatchResultsAndSelectsMinimum)
 {
-    const HRLAlphaTrainer trainer{ 0.0, 1.0, 0.5 };
+    const rhbm_gem::rhbm_trainer::AlphaTrainer trainer{ 0.0, 1.0, 0.5 };
     const auto & alpha_list{ trainer.AlphaGrid() };
     const std::vector<RHBMMemberDataset> dataset_list{
         MakeLinearDataset(2.0),
         MakeLinearDataset(-0.5)
     };
 
-    HRLAlphaTrainer::AlphaTrainingOptions options;
+    rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions options;
     options.subset_size = 3;
     const auto result{ trainer.TrainAlphaR(dataset_list, options) };
     const auto first_single{ trainer.TrainAlphaR({ dataset_list.at(0) }, options) };
@@ -143,9 +143,9 @@ TEST(HRLAlphaTrainerTest, TrainAlphaRAggregatesSingleBatchResultsAndSelectsMinim
     EXPECT_DOUBLE_EQ(result.best_alpha, BestAlphaForErrors(alpha_list, result.error_sum_list));
 }
 
-TEST(HRLAlphaTrainerTest, TrainAlphaGAggregatesSingleBatchResultsAndSelectsMinimum)
+TEST(RHBMTrainerTest, TrainAlphaGAggregatesSingleBatchResultsAndSelectsMinimum)
 {
-    const HRLAlphaTrainer trainer{ 0.0, 1.0, 0.5 };
+    const rhbm_gem::rhbm_trainer::AlphaTrainer trainer{ 0.0, 1.0, 0.5 };
     const auto & alpha_list{ trainer.AlphaGrid() };
     const std::vector<std::vector<Eigen::VectorXd>> beta_group_list{
         {
@@ -165,7 +165,7 @@ TEST(HRLAlphaTrainerTest, TrainAlphaGAggregatesSingleBatchResultsAndSelectsMinim
             MakeVector({ -3.5, 3.0 })
         }
     };
-    HRLAlphaTrainer::AlphaTrainingOptions options;
+    rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions options;
     options.subset_size = 3;
     options.execution_options.random_seed = 11U;
 
@@ -178,9 +178,9 @@ TEST(HRLAlphaTrainerTest, TrainAlphaGAggregatesSingleBatchResultsAndSelectsMinim
     EXPECT_DOUBLE_EQ(result.best_alpha, BestAlphaForErrors(alpha_list, result.error_sum_list));
 }
 
-TEST(HRLAlphaTrainerTest, TrainAlphaGWithSeedIsDeterministic)
+TEST(RHBMTrainerTest, TrainAlphaGWithSeedIsDeterministic)
 {
-    const HRLAlphaTrainer trainer{ 0.0, 1.0, 0.5 };
+    const rhbm_gem::rhbm_trainer::AlphaTrainer trainer{ 0.0, 1.0, 0.5 };
     const std::vector<std::vector<Eigen::VectorXd>> beta_group_list{
         {
             MakeVector({ 1.0, 2.0 }),
@@ -200,7 +200,7 @@ TEST(HRLAlphaTrainerTest, TrainAlphaGWithSeedIsDeterministic)
         }
     };
     const auto & alpha_list{ trainer.AlphaGrid() };
-    HRLAlphaTrainer::AlphaTrainingOptions options;
+    rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions options;
     options.subset_size = 3;
     options.execution_options.random_seed = 7U;
 
@@ -216,32 +216,32 @@ TEST(HRLAlphaTrainerTest, TrainAlphaGWithSeedIsDeterministic)
     EXPECT_DOUBLE_EQ(first.best_alpha, BestAlphaForErrors(alpha_list, first.error_sum_list));
 }
 
-TEST(HRLAlphaTrainerTest, TrainAlphaRequiresExplicitSubsetSizeAndRejectsInvalidInputs)
+TEST(RHBMTrainerTest, TrainAlphaRequiresExplicitSubsetSizeAndRejectsInvalidInputs)
 {
-    const HRLAlphaTrainer trainer{ 0.0, 1.0, 0.5 };
+    const rhbm_gem::rhbm_trainer::AlphaTrainer trainer{ 0.0, 1.0, 0.5 };
     const auto dataset{ MakeLinearDataset(1.0) };
     const std::vector<RHBMMemberDataset> empty_dataset_list;
     const std::vector<RHBMMemberDataset> dataset_list{ dataset };
-    HRLAlphaTrainer::AlphaTrainingOptions default_options;
+    rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions default_options;
 
     EXPECT_THROW(
         trainer.TrainAlphaR(dataset_list, default_options),
         std::invalid_argument);
 
-    HRLAlphaTrainer::AlphaTrainingOptions alpha_r_empty_options;
+    rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_r_empty_options;
     alpha_r_empty_options.subset_size = 3;
 
     EXPECT_THROW(
         trainer.TrainAlphaR(empty_dataset_list, alpha_r_empty_options),
         std::invalid_argument);
 
-    HRLAlphaTrainer::AlphaTrainingOptions alpha_r_options;
+    rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_r_options;
     alpha_r_options.subset_size = 7;
     EXPECT_THROW(
         trainer.TrainAlphaR(dataset_list, alpha_r_options),
         std::invalid_argument);
 
-    HRLAlphaTrainer::AlphaTrainingOptions alpha_g_options;
+    rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_g_options;
     alpha_g_options.subset_size = 3;
     const std::vector<std::vector<Eigen::VectorXd>> beta_group_list{
         {
@@ -254,9 +254,9 @@ TEST(HRLAlphaTrainerTest, TrainAlphaRequiresExplicitSubsetSizeAndRejectsInvalidI
         std::invalid_argument);
 }
 
-TEST(HRLAlphaTrainerTest, AlphaRunOptionsPropagatesProgressToBiasStudies)
+TEST(RHBMTrainerTest, AlphaRunOptionsPropagatesProgressToBiasStudies)
 {
-    const HRLAlphaTrainer trainer{ 0.0, 1.0, 0.5 };
+    const rhbm_gem::rhbm_trainer::AlphaTrainer trainer{ 0.0, 1.0, 0.5 };
     const std::vector<RHBMMemberDataset> dataset_list{
         MakeLinearDataset(2.0),
         MakeLinearDataset(-0.5)
@@ -274,7 +274,7 @@ TEST(HRLAlphaTrainerTest, AlphaRunOptionsPropagatesProgressToBiasStudies)
         }
     };
     std::size_t progress_count{ 0 };
-    HRLAlphaTrainer::AlphaRunOptions options;
+    rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaRunOptions options;
     options.execution_options.thread_size = 1;
     options.progress_callback =
         [&progress_count](std::size_t, std::size_t)
@@ -290,15 +290,15 @@ TEST(HRLAlphaTrainerTest, AlphaRunOptionsPropagatesProgressToBiasStudies)
     EXPECT_EQ(progress_count, dataset_list.size() + beta_group_list.size());
 }
 
-TEST(HRLAlphaTrainerTest, StudyAlphaRBiasReturnsFiniteMatrixAndReportsProgress)
+TEST(RHBMTrainerTest, StudyAlphaRBiasReturnsFiniteMatrixAndReportsProgress)
 {
-    const HRLAlphaTrainer trainer{ 0.0, 1.0, 0.5 };
+    const rhbm_gem::rhbm_trainer::AlphaTrainer trainer{ 0.0, 1.0, 0.5 };
     const std::vector<RHBMMemberDataset> dataset_list{
         MakeLinearDataset(2.0),
         MakeLinearDataset(-0.5)
     };
     std::size_t progress_count{ 0 };
-    HRLAlphaTrainer::AlphaRunOptions options;
+    rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaRunOptions options;
     options.execution_options.thread_size = 1;
     options.progress_callback =
         [&progress_count](std::size_t, std::size_t)
@@ -314,9 +314,9 @@ TEST(HRLAlphaTrainerTest, StudyAlphaRBiasReturnsFiniteMatrixAndReportsProgress)
     EXPECT_EQ(progress_count, dataset_list.size());
 }
 
-TEST(HRLAlphaTrainerTest, StudyAlphaGBiasReturnsFiniteMatrixAndReportsProgress)
+TEST(RHBMTrainerTest, StudyAlphaGBiasReturnsFiniteMatrixAndReportsProgress)
 {
-    const HRLAlphaTrainer trainer{ 0.0, 1.0, 0.5 };
+    const rhbm_gem::rhbm_trainer::AlphaTrainer trainer{ 0.0, 1.0, 0.5 };
     const std::vector<std::vector<Eigen::VectorXd>> beta_group_list{
         {
             MakeVector({ 1.0, 2.0 }),
@@ -330,7 +330,7 @@ TEST(HRLAlphaTrainerTest, StudyAlphaGBiasReturnsFiniteMatrixAndReportsProgress)
         }
     };
     std::size_t progress_count{ 0 };
-    HRLAlphaTrainer::AlphaRunOptions options;
+    rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaRunOptions options;
     options.execution_options.thread_size = 1;
     options.progress_callback =
         [&progress_count](std::size_t, std::size_t)
@@ -346,15 +346,15 @@ TEST(HRLAlphaTrainerTest, StudyAlphaGBiasReturnsFiniteMatrixAndReportsProgress)
     EXPECT_EQ(progress_count, beta_group_list.size());
 }
 
-TEST(HRLAlphaTrainerTest, StudyAlphaBiasRejectsEmptyInputs)
+TEST(RHBMTrainerTest, StudyAlphaBiasRejectsEmptyInputs)
 {
-    const HRLAlphaTrainer trainer{ 0.0, 1.0, 0.5 };
+    const rhbm_gem::rhbm_trainer::AlphaTrainer trainer{ 0.0, 1.0, 0.5 };
     const std::vector<RHBMMemberDataset> empty_dataset_list;
     const std::vector<std::vector<Eigen::VectorXd>> empty_beta_group_list;
     const std::vector<std::vector<Eigen::VectorXd>> beta_group_with_empty_member_list{
         {}
     };
-    HRLAlphaTrainer::AlphaRunOptions options;
+    rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaRunOptions options;
 
     EXPECT_THROW(trainer.StudyAlphaRBias(empty_dataset_list, options), std::invalid_argument);
     EXPECT_THROW(trainer.StudyAlphaGBias(empty_beta_group_list, options), std::invalid_argument);

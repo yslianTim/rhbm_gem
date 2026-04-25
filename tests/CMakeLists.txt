@@ -158,7 +158,7 @@ set(UTILS_DOMAIN_TEST_SOURCES
 
 set(UTILS_HRL_TEST_SOURCES
     utils/hrl/GaussianLinearizationService_test.cpp
-    utils/hrl/HRLAlphaTrainer_test.cpp
+    utils/hrl/RHBMTrainer_test.cpp
     utils/hrl/RHBMHelper_test.cpp
     utils/hrl/HRLModelTestDataFactory_test.cpp
     utils/hrl/HRLModelTester_test.cpp

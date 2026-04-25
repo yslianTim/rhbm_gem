@@ -14,7 +14,7 @@
 #include <rhbm_gem/utils/domain/LocalPainter.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
-#include <rhbm_gem/utils/hrl/HRLAlphaTrainer.hpp>
+#include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
 #include <rhbm_gem/utils/hrl/GaussianLinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
@@ -584,7 +584,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     ScopeTimer timer("PotentialAnalysisCommand::RunAtomAlphaTraining");
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
-    HRLAlphaTrainer alpha_trainer(
+    rhbm_gem::rhbm_trainer::AlphaTrainer alpha_trainer(
         request.training_alpha_min,
         request.training_alpha_max,
         request.training_alpha_step);
@@ -609,7 +609,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     auto alpha_r{ alpha_training_list.front() };
     if (!selected_atom_dataset_list.empty())
     {
-        HRLAlphaTrainer::AlphaTrainingOptions alpha_r_options;
+        rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_r_options;
         alpha_r_options.subset_size = 5;
         alpha_r_options.execution_options =
             MakePotentialAnalysisExecutionOptions(ThreadSize(), true);
@@ -661,7 +661,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     auto alpha_g{ alpha_training_list.front() };
     if (!beta_group_list.empty())
     {
-        HRLAlphaTrainer::AlphaTrainingOptions alpha_g_options;
+        rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_g_options;
         alpha_g_options.subset_size = 10;
         alpha_g_options.execution_options =
             MakePotentialAnalysisExecutionOptions(ThreadSize(), true);
@@ -691,7 +691,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
         }
     }
 
-    HRLAlphaTrainer::AlphaRunOptions alpha_bias_study_options;
+    rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaRunOptions alpha_bias_study_options;
     alpha_bias_study_options.execution_options =
         MakePotentialAnalysisExecutionOptions(ThreadSize(), true);
     alpha_bias_study_options.progress_callback =

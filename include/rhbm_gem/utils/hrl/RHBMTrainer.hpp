@@ -9,7 +9,10 @@
 
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 
-class HRLAlphaTrainer
+namespace rhbm_gem::rhbm_trainer
+{
+
+class AlphaTrainer
 {
     double m_alpha_min{ 0.0 };
     double m_alpha_max{ 0.0 };
@@ -36,7 +39,7 @@ public:
         Eigen::VectorXd error_sum_list;
     };
 
-    HRLAlphaTrainer(double alpha_min, double alpha_max, double alpha_step);
+    AlphaTrainer(double alpha_min, double alpha_max, double alpha_step);
 
     const std::vector<double> & AlphaGrid() const { return m_alpha_grid; }
     std::ostringstream GetAlphaGridSummary() const;
@@ -64,3 +67,5 @@ public:
 private:
     std::vector<double> BuildAlphaGrid(double alpha_min, double alpha_max, double alpha_step);
 };
+
+} // namespace rhbm_gem::rhbm_trainer

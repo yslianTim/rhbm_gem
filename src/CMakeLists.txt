@@ -75,7 +75,7 @@ target_sources(rhbm_gem PRIVATE
     utils/math/GaussianResponseMath.cpp
     utils/math/GridSampler.cpp
     utils/math/SphereSampler.cpp
-    utils/hrl/HRLAlphaTrainer.cpp
+    utils/hrl/RHBMTrainer.cpp
     utils/hrl/RHBMHelper.cpp
     utils/hrl/GaussianLinearizationService.cpp
     utils/hrl/HRLModelTestDataFactory.cpp
