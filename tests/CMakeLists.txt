@@ -160,7 +160,7 @@ set(UTILS_HRL_TEST_SOURCES
     utils/hrl/LinearizationService_test.cpp
     utils/hrl/RHBMTrainer_test.cpp
     utils/hrl/RHBMHelper_test.cpp
-    utils/hrl/HRLModelTestDataFactory_test.cpp
+    utils/hrl/TestDataFactory_test.cpp
     utils/hrl/RHBMTester_test.cpp
     utils/hrl/ScopedEigenThreadCount_test.cpp
 )

@@ -15,6 +15,7 @@ namespace rhbm_gem::rhbm_tester
 namespace
 {
 namespace ls = rhbm_gem::linearization_service;
+namespace tdf = rhbm_gem::test_data_factory;
 
 constexpr std::size_t kAlphaRSubsetSize{ 5 };
 constexpr double kAlphaRMin{ 0.0 };
@@ -194,7 +195,7 @@ bool RunBetaMDPDETest(
     std::vector<Eigen::VectorXd> & residual_mean_mdpde_list,
     std::vector<Eigen::VectorXd> & residual_sigma_ols_list,
     std::vector<Eigen::VectorXd> & residual_sigma_mdpde_list,
-    const HRLBetaTestInput & test_input,
+    const tdf::RHBMBetaTestInput & test_input,
     int thread_size)
 {
 #ifndef USE_OPENMP
@@ -278,7 +279,7 @@ bool RunMuMDPDETest(
     std::vector<Eigen::VectorXd> & residual_mean_mdpde_list,
     std::vector<Eigen::VectorXd> & residual_sigma_median_list,
     std::vector<Eigen::VectorXd> & residual_sigma_mdpde_list,
-    const HRLMuTestInput & test_input,
+    const tdf::RHBMMuTestInput & test_input,
     int thread_size)
 {
 #ifndef USE_OPENMP
@@ -366,7 +367,7 @@ bool RunBetaMDPDEWithNeighborhoodTest(
     int gaussian_parameter_size,
     std::vector<Eigen::VectorXd> & residual_mean_list,
     std::vector<Eigen::VectorXd> & residual_sigma_list,
-    const HRLNeighborhoodTestInput & test_input,
+    const tdf::RHBMNeighborhoodTestInput & test_input,
     double & training_alpha_r_average,
     int thread_size,
     double angle)

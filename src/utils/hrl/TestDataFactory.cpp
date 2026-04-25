@@ -1,4 +1,4 @@
-#include <rhbm_gem/utils/hrl/HRLModelTestDataFactory.hpp>
+#include <rhbm_gem/utils/hrl/TestDataFactory.hpp>
 
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
@@ -50,7 +50,10 @@ std::mt19937 BuildReplicaGenerator(
 }
 } // namespace
 
-HRLModelTestDataFactory::HRLModelTestDataFactory(
+namespace rhbm_gem::test_data_factory
+{
+
+TestDataFactory::TestDataFactory(
     int gaus_par_size,
     ls::LinearizationSpec linearization_spec) :
     m_gaus_par_size{
@@ -67,14 +70,14 @@ HRLModelTestDataFactory::HRLModelTestDataFactory(
         "linearization_spec basis_size");
 }
 
-void HRLModelTestDataFactory::SetFittingRange(double x_min, double x_max)
+void TestDataFactory::SetFittingRange(double x_min, double x_max)
 {
     rhbm_gem::numeric_validation::RequireFiniteNonNegativeRange(x_min, x_max, "fitting range");
     m_fit_range_min = x_min;
     m_fit_range_max = x_max;
 }
 
-HRLBetaTestInput HRLModelTestDataFactory::BuildBetaTestInput(const BetaScenario & scenario) const
+RHBMBetaTestInput TestDataFactory::BuildBetaTestInput(const BetaScenario & scenario) const
 {
     rhbm_gem::numeric_validation::RequirePositive(
         scenario.sampling_entry_size,
@@ -83,7 +86,7 @@ HRLBetaTestInput HRLModelTestDataFactory::BuildBetaTestInput(const BetaScenario 
     ValidateGausParametersDimension(scenario.gaus_true);
     const auto gaussian_model{ BuildGaussianModel(scenario.gaus_true) };
 
-    HRLBetaTestInput input;
+    RHBMBetaTestInput input;
     input.gaus_true = scenario.gaus_true;
     input.replica_datasets.reserve(static_cast<size_t>(scenario.replica_size));
 
@@ -107,7 +110,7 @@ HRLBetaTestInput HRLModelTestDataFactory::BuildBetaTestInput(const BetaScenario 
     return input;
 }
 
-HRLMuTestInput HRLModelTestDataFactory::BuildMuTestInput(const MuScenario & scenario) const
+RHBMMuTestInput TestDataFactory::BuildMuTestInput(const MuScenario & scenario) const
 {
     rhbm_gem::numeric_validation::RequirePositive(scenario.member_size, "member_size");
     rhbm_gem::numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
@@ -116,7 +119,7 @@ HRLMuTestInput HRLModelTestDataFactory::BuildMuTestInput(const MuScenario & scen
     ValidateGausParametersDimension(scenario.outlier_prior);
     ValidateGausParametersDimension(scenario.outlier_sigma);
 
-    HRLMuTestInput input;
+    RHBMMuTestInput input;
     input.gaus_true = scenario.gaus_prior;
     input.replica_beta_matrices.reserve(static_cast<size_t>(scenario.replica_size));
 
@@ -140,7 +143,7 @@ HRLMuTestInput HRLModelTestDataFactory::BuildMuTestInput(const MuScenario & scen
     return input;
 }
 
-HRLNeighborhoodTestInput HRLModelTestDataFactory::BuildNeighborhoodTestInput(
+RHBMNeighborhoodTestInput TestDataFactory::BuildNeighborhoodTestInput(
     const NeighborhoodScenario & scenario) const
 {
     rhbm_gem::numeric_validation::RequirePositive(
@@ -167,7 +170,7 @@ HRLNeighborhoodTestInput HRLModelTestDataFactory::BuildNeighborhoodTestInput(
         NeighborhoodRejectedPointPolicy::RemoveRejectedPoints
     };
 
-    HRLNeighborhoodTestInput input;
+    RHBMNeighborhoodTestInput input;
     input.gaus_true = scenario.gaus_true;
     input.no_cut_datasets.reserve(static_cast<size_t>(scenario.replica_size));
     input.cut_datasets.reserve(static_cast<size_t>(scenario.replica_size));
@@ -221,7 +224,7 @@ HRLNeighborhoodTestInput HRLModelTestDataFactory::BuildNeighborhoodTestInput(
     return input;
 }
 
-void HRLModelTestDataFactory::ValidateGausParametersDimension(const Eigen::VectorXd & gaus_par) const
+void TestDataFactory::ValidateGausParametersDimension(const Eigen::VectorXd & gaus_par) const
 {
     try
     {
@@ -238,13 +241,13 @@ void HRLModelTestDataFactory::ValidateGausParametersDimension(const Eigen::Vecto
     }
 }
 
-GaussianModel3D HRLModelTestDataFactory::BuildGaussianModel(const Eigen::VectorXd & gaus_par) const
+GaussianModel3D TestDataFactory::BuildGaussianModel(const Eigen::VectorXd & gaus_par) const
 {
     ValidateGausParametersDimension(gaus_par);
     return GaussianModel3D{ gaus_par(0), gaus_par(1), gaus_par(2) };
 }
 
-LocalPotentialSampleList HRLModelTestDataFactory::BuildGaussianSampling(
+LocalPotentialSampleList TestDataFactory::BuildGaussianSampling(
     size_t sampling_entry_size,
     const GaussianModel3D & model,
     double outlier_ratio,
@@ -274,7 +277,7 @@ LocalPotentialSampleList HRLModelTestDataFactory::BuildGaussianSampling(
     return sampling_entries;
 }
 
-SeriesPointList HRLModelTestDataFactory::BuildLinearDataset(
+SeriesPointList TestDataFactory::BuildLinearDataset(
     const LocalPotentialSampleList & sampling_entries,
     const GaussianModel3D & model,
     double error_sigma,
@@ -306,7 +309,7 @@ SeriesPointList HRLModelTestDataFactory::BuildLinearDataset(
     return linear_data_entry_list;
 }
 
-SeriesPointList HRLModelTestDataFactory::BuildLinearDataset(
+SeriesPointList TestDataFactory::BuildLinearDataset(
     size_t sampling_entry_size,
     const GaussianModel3D & model,
     double error_sigma,
@@ -320,7 +323,7 @@ SeriesPointList HRLModelTestDataFactory::BuildLinearDataset(
     return BuildLinearDataset(sampling_entries, model, error_sigma, generator);
 }
 
-SeriesPointList HRLModelTestDataFactory::BuildLinearDatasetWithNeighborhood(
+SeriesPointList TestDataFactory::BuildLinearDatasetWithNeighborhood(
     size_t samples_per_radius,
     const GaussianModel3D & model,
     double error_sigma,
@@ -334,7 +337,7 @@ SeriesPointList HRLModelTestDataFactory::BuildLinearDatasetWithNeighborhood(
     return BuildLinearDataset(sampling_entries, model, error_sigma, generator);
 }
 
-Eigen::MatrixXd HRLModelTestDataFactory::BuildRandomGausParameters(
+Eigen::MatrixXd TestDataFactory::BuildRandomGausParameters(
     int member_size,
     const Eigen::VectorXd & gaus_prior,
     const Eigen::VectorXd & gaus_sigma,
@@ -374,7 +377,7 @@ Eigen::MatrixXd HRLModelTestDataFactory::BuildRandomGausParameters(
     return gaus_par_matrix;
 }
 
-Eigen::MatrixXd HRLModelTestDataFactory::BuildBetaMatrix(const Eigen::MatrixXd & gaus_array) const
+Eigen::MatrixXd TestDataFactory::BuildBetaMatrix(const Eigen::MatrixXd & gaus_array) const
 {
     const auto member_size{ static_cast<int>(gaus_array.cols()) };
     Eigen::MatrixXd beta_matrix{
@@ -386,3 +389,5 @@ Eigen::MatrixXd HRLModelTestDataFactory::BuildBetaMatrix(const Eigen::MatrixXd &
     }
     return beta_matrix;
 }
+
+} // namespace rhbm_gem::test_data_factory

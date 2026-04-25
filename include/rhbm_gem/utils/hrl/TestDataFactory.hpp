@@ -12,19 +12,22 @@
 #include <rhbm_gem/utils/math/GaussianPotentialSampler.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
-struct HRLBetaTestInput
+namespace rhbm_gem::test_data_factory
+{
+
+struct RHBMBetaTestInput
 {
     Eigen::VectorXd gaus_true;
     std::vector<RHBMMemberDataset> replica_datasets;
 };
 
-struct HRLMuTestInput
+struct RHBMMuTestInput
 {
     Eigen::VectorXd gaus_true;
     std::vector<Eigen::MatrixXd> replica_beta_matrices;
 };
 
-struct HRLNeighborhoodTestInput
+struct RHBMNeighborhoodTestInput
 {
     Eigen::VectorXd gaus_true;
     std::vector<RHBMMemberDataset> no_cut_datasets;
@@ -32,7 +35,7 @@ struct HRLNeighborhoodTestInput
     std::vector<LocalPotentialSampleList> sampling_summaries;
 };
 
-class HRLModelTestDataFactory
+class TestDataFactory
 {
 public:
     struct BetaScenario
@@ -82,17 +85,17 @@ private:
     GaussianPotentialSampler m_potential_sampler;
 
 public:
-    HRLModelTestDataFactory() = delete;
-    HRLModelTestDataFactory(
+    TestDataFactory() = delete;
+    TestDataFactory(
         int gaus_par_size,
         rhbm_gem::linearization_service::LinearizationSpec linearization_spec);
-    ~HRLModelTestDataFactory() = default;
+    ~TestDataFactory() = default;
 
     void SetFittingRange(double x_min, double x_max);
 
-    HRLBetaTestInput BuildBetaTestInput(const BetaScenario & scenario) const;
-    HRLMuTestInput BuildMuTestInput(const MuScenario & scenario) const;
-    HRLNeighborhoodTestInput BuildNeighborhoodTestInput(
+    RHBMBetaTestInput BuildBetaTestInput(const BetaScenario & scenario) const;
+    RHBMMuTestInput BuildMuTestInput(const MuScenario & scenario) const;
+    RHBMNeighborhoodTestInput BuildNeighborhoodTestInput(
         const NeighborhoodScenario & scenario) const;
 
 private:
@@ -135,3 +138,5 @@ private:
     ) const;
     Eigen::MatrixXd BuildBetaMatrix(const Eigen::MatrixXd & gaus_array) const;
 };
+
+} // namespace rhbm_gem::test_data_factory

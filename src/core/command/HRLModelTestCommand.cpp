@@ -3,7 +3,7 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
-#include <rhbm_gem/utils/hrl/HRLModelTestDataFactory.hpp>
+#include <rhbm_gem/utils/hrl/TestDataFactory.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTester.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
@@ -39,8 +39,6 @@
 namespace rhbm_gem {
 
 namespace {
-namespace rt = rhbm_gem::rhbm_tester;
-
 constexpr std::string_view kTesterOption{ "--tester" };
 constexpr std::string_view kFitMinOption{ "--fit-min" };
 constexpr std::string_view kFitMaxOption{ "--fit-max" };
@@ -109,6 +107,8 @@ struct HRLModelTestExecutionContext
 };
 
 namespace {
+namespace rt = rhbm_gem::rhbm_tester;
+namespace tdf = rhbm_gem::test_data_factory;
 
 constexpr int kGausParSize{ 3 };
 struct BetaScenarioConfig
@@ -181,23 +181,23 @@ std::vector<double> BuildDescendingSweep(int count, double start, double step)
     return values;
 }
 
-HRLModelTestDataFactory BuildDataFactory(const HRLModelTestExecutionContext & options)
+tdf::TestDataFactory BuildDataFactory(const HRLModelTestExecutionContext & options)
 {
-    HRLModelTestDataFactory factory(
+    tdf::TestDataFactory factory(
         kGausParSize,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(options.options.fit_range_min, options.options.fit_range_max);
     return factory;
 }
 
-HRLModelTestDataFactory::NeighborhoodScenario BuildNeighborhoodScenario(
+tdf::TestDataFactory::NeighborhoodScenario BuildNeighborhoodScenario(
     const Eigen::VectorXd & model_par_prior,
     const NeighborDistanceScenarioConfig & scenario,
     double error_sigma,
     double neighbor_distance,
     bool include_sampling_summary = false)
 {
-    return HRLModelTestDataFactory::NeighborhoodScenario{
+    return tdf::TestDataFactory::NeighborhoodScenario{
         model_par_prior,
         scenario.sampling_entry_size,
         error_sigma,
@@ -498,7 +498,7 @@ void RunSimulationTestOnDataOutlier(const HRLModelTestExecutionContext & options
             std::vector<Eigen::VectorXd> residual_sigma_ols_list;
             std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
             const auto test_input{
-                data_factory.BuildBetaTestInput(HRLModelTestDataFactory::BetaScenario{
+                data_factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
                     model_par_prior,
                     scenario.sampling_entry_size,
                     error_sigma,
@@ -588,7 +588,7 @@ void RunSimulationTestOnMemberOutlier(const HRLModelTestExecutionContext & optio
             std::vector<Eigen::VectorXd> residual_sigma_median_list;
             std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
             const auto test_input{
-                data_factory.BuildMuTestInput(HRLModelTestDataFactory::MuScenario{
+                data_factory.BuildMuTestInput(tdf::TestDataFactory::MuScenario{
                     scenario.member_size,
                     model_par_prior,
                     model_par_sigma,
@@ -664,7 +664,7 @@ void RunSimulationTestOnModelAlphaData(const HRLModelTestExecutionContext & opti
             std::vector<Eigen::VectorXd> residual_sigma_ols_list;
             std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
             const auto test_input{
-                data_factory.BuildBetaTestInput(HRLModelTestDataFactory::BetaScenario{
+                data_factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
                     model_par_prior,
                     scenario.sampling_entry_size,
                     error_sigma,
@@ -746,7 +746,7 @@ void RunSimulationTestOnModelAlphaMember(const HRLModelTestExecutionContext & op
             std::vector<Eigen::VectorXd> residual_sigma_median_list;
             std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
             const auto test_input{
-                data_factory.BuildMuTestInput(HRLModelTestDataFactory::MuScenario{
+                data_factory.BuildMuTestInput(tdf::TestDataFactory::MuScenario{
                     scenario.member_size,
                     model_par_prior,
                     model_par_sigma,

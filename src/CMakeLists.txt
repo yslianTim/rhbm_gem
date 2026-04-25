@@ -78,7 +78,7 @@ target_sources(rhbm_gem PRIVATE
     utils/hrl/RHBMTrainer.cpp
     utils/hrl/RHBMHelper.cpp
     utils/hrl/LinearizationService.cpp
-    utils/hrl/HRLModelTestDataFactory.cpp
+    utils/hrl/TestDataFactory.cpp
     utils/hrl/RHBMTester.cpp
 )
 

@@ -3,9 +3,10 @@
 #include <initializer_list>
 #include <limits>
 
-#include <rhbm_gem/utils/hrl/HRLModelTestDataFactory.hpp>
+#include <rhbm_gem/utils/hrl/TestDataFactory.hpp>
 
 namespace {
+namespace tdf = rhbm_gem::test_data_factory;
 
 Eigen::VectorXd MakeVector(std::initializer_list<double> values)
 {
@@ -52,14 +53,14 @@ void ExpectMatrixEquals(const Eigen::MatrixXd & lhs, const Eigen::MatrixXd & rhs
 
 } // namespace
 
-TEST(HRLModelTestDataFactoryTest, BuildBetaTestInputIsReproducibleWithFixedSeed)
+TEST(TestDataFactoryTest, BuildBetaTestInputIsReproducibleWithFixedSeed)
 {
-    HRLModelTestDataFactory factory(
+    tdf::TestDataFactory factory(
         3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
 
-    const auto scenario{ HRLModelTestDataFactory::BetaScenario{
+    const auto scenario{ tdf::TestDataFactory::BetaScenario{
         MakeVector({ 1.0, 0.5, 0.0 }),
         8,
         0.05,
@@ -81,14 +82,14 @@ TEST(HRLModelTestDataFactoryTest, BuildBetaTestInputIsReproducibleWithFixedSeed)
     }
 }
 
-TEST(HRLModelTestDataFactoryTest, BuildBetaTestInputChangesWhenOutlierPolicyChanges)
+TEST(TestDataFactoryTest, BuildBetaTestInputChangesWhenOutlierPolicyChanges)
 {
-    HRLModelTestDataFactory factory(
+    tdf::TestDataFactory factory(
         3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
 
-    const auto base_scenario{ HRLModelTestDataFactory::BetaScenario{
+    const auto base_scenario{ tdf::TestDataFactory::BetaScenario{
         MakeVector({ 1.0, 0.5, 0.0 }),
         8,
         0.0,
@@ -111,14 +112,14 @@ TEST(HRLModelTestDataFactoryTest, BuildBetaTestInputChangesWhenOutlierPolicyChan
     );
 }
 
-TEST(HRLModelTestDataFactoryTest, BuildBetaTestInputChangesWhenNoisePolicyChanges)
+TEST(TestDataFactoryTest, BuildBetaTestInputChangesWhenNoisePolicyChanges)
 {
-    HRLModelTestDataFactory factory(
+    tdf::TestDataFactory factory(
         3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
 
-    const auto noiseless_scenario{ HRLModelTestDataFactory::BetaScenario{
+    const auto noiseless_scenario{ tdf::TestDataFactory::BetaScenario{
         MakeVector({ 1.0, 0.5, 0.0 }),
         8,
         0.0,
@@ -141,13 +142,13 @@ TEST(HRLModelTestDataFactoryTest, BuildBetaTestInputChangesWhenNoisePolicyChange
     );
 }
 
-TEST(HRLModelTestDataFactoryTest, BuildMuTestInputIsReproducibleWithFixedSeed)
+TEST(TestDataFactoryTest, BuildMuTestInputIsReproducibleWithFixedSeed)
 {
-    HRLModelTestDataFactory factory(
+    tdf::TestDataFactory factory(
         3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
 
-    const auto scenario{ HRLModelTestDataFactory::MuScenario{
+    const auto scenario{ tdf::TestDataFactory::MuScenario{
         4,
         MakeVector({ 1.0, 0.5, 0.1 }),
         MakeVector({ 0.05, 0.025, 0.01 }),
@@ -171,15 +172,15 @@ TEST(HRLModelTestDataFactoryTest, BuildMuTestInputIsReproducibleWithFixedSeed)
     }
 }
 
-TEST(HRLModelTestDataFactoryTest, BuildNeighborhoodTestInputProvidesPairedDatasetsAndSamplingSummary)
+TEST(TestDataFactoryTest, BuildNeighborhoodTestInputProvidesPairedDatasetsAndSamplingSummary)
 {
-    HRLModelTestDataFactory factory(
+    tdf::TestDataFactory factory(
         3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
 
     const auto input{
-        factory.BuildNeighborhoodTestInput(HRLModelTestDataFactory::NeighborhoodScenario{
+        factory.BuildNeighborhoodTestInput(tdf::TestDataFactory::NeighborhoodScenario{
             MakeVector({ 1.0, 0.5, 0.0 }),
             8,
             0.05,
@@ -210,22 +211,22 @@ TEST(HRLModelTestDataFactoryTest, BuildNeighborhoodTestInputProvidesPairedDatase
     }
 }
 
-TEST(HRLModelTestDataFactoryTest, ConstructorRejectsInvalidNumericInputs)
+TEST(TestDataFactoryTest, ConstructorRejectsInvalidNumericInputs)
 {
     EXPECT_THROW(
-        HRLModelTestDataFactory(
+        tdf::TestDataFactory(
             0,
             rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset()),
         std::invalid_argument);
 
     auto spec{ rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset() };
     spec.basis_size = 0;
-    EXPECT_THROW(HRLModelTestDataFactory(3, spec), std::invalid_argument);
+    EXPECT_THROW(tdf::TestDataFactory(3, spec), std::invalid_argument);
 }
 
-TEST(HRLModelTestDataFactoryTest, SetFittingRangeRejectsInvalidRange)
+TEST(TestDataFactoryTest, SetFittingRangeRejectsInvalidRange)
 {
-    HRLModelTestDataFactory factory(
+    tdf::TestDataFactory factory(
         3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
 
@@ -236,14 +237,14 @@ TEST(HRLModelTestDataFactoryTest, SetFittingRangeRejectsInvalidRange)
         std::invalid_argument);
 }
 
-TEST(HRLModelTestDataFactoryTest, BuildBetaTestInputRejectsNonPositiveScenarioSizes)
+TEST(TestDataFactoryTest, BuildBetaTestInputRejectsNonPositiveScenarioSizes)
 {
-    HRLModelTestDataFactory factory(
+    tdf::TestDataFactory factory(
         3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
 
     EXPECT_THROW(
-        factory.BuildBetaTestInput(HRLModelTestDataFactory::BetaScenario{
+        factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
             MakeVector({ 1.0, 0.5, 0.0 }),
             0,
             0.05,
@@ -253,7 +254,7 @@ TEST(HRLModelTestDataFactoryTest, BuildBetaTestInputRejectsNonPositiveScenarioSi
         }),
         std::invalid_argument);
     EXPECT_THROW(
-        factory.BuildBetaTestInput(HRLModelTestDataFactory::BetaScenario{
+        factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
             MakeVector({ 1.0, 0.5, 0.0 }),
             8,
             0.05,

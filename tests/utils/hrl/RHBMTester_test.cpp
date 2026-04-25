@@ -4,11 +4,12 @@
 #include <stdexcept>
 #include <vector>
 
-#include <rhbm_gem/utils/hrl/HRLModelTestDataFactory.hpp>
+#include <rhbm_gem/utils/hrl/TestDataFactory.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTester.hpp>
 
 namespace {
 namespace rt = rhbm_gem::rhbm_tester;
+namespace tdf = rhbm_gem::test_data_factory;
 
 
 Eigen::VectorXd MakeVector(std::initializer_list<double> values)
@@ -26,12 +27,12 @@ Eigen::VectorXd MakeVector(std::initializer_list<double> values)
 
 TEST(RHBMTesterTest, RunBetaMDPDETestPopulatesResidualOutputs)
 {
-    HRLModelTestDataFactory factory(
+    tdf::TestDataFactory factory(
         3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
     const auto test_input{
-        factory.BuildBetaTestInput(HRLModelTestDataFactory::BetaScenario{
+        factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
             MakeVector({ 1.0, 0.5, 0.0 }),
             10,
             0.01,
@@ -85,11 +86,11 @@ TEST(RHBMTesterTest, RunBetaMDPDETestPopulatesResidualOutputs)
 
 TEST(RHBMTesterTest, RunMuMDPDETestPopulatesResidualOutputs)
 {
-    HRLModelTestDataFactory factory(
+    tdf::TestDataFactory factory(
         3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     const auto test_input{
-        factory.BuildMuTestInput(HRLModelTestDataFactory::MuScenario{
+        factory.BuildMuTestInput(tdf::TestDataFactory::MuScenario{
             12,
             MakeVector({ 1.0, 0.5, 0.1 }),
             MakeVector({ 0.05, 0.025, 0.01 }),
@@ -128,12 +129,12 @@ TEST(RHBMTesterTest, RunMuMDPDETestPopulatesResidualOutputs)
 
 TEST(RHBMTesterTest, RunBetaMDPDEWithNeighborhoodTestConsumesPreparedInputs)
 {
-    HRLModelTestDataFactory factory(
+    tdf::TestDataFactory factory(
         3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
     const auto test_input{
-        factory.BuildNeighborhoodTestInput(HRLModelTestDataFactory::NeighborhoodScenario{
+        factory.BuildNeighborhoodTestInput(tdf::TestDataFactory::NeighborhoodScenario{
             MakeVector({ 1.0, 0.5, 0.0 }),
             8,
             0.01,
@@ -173,12 +174,12 @@ TEST(RHBMTesterTest, RunBetaMDPDEWithNeighborhoodTestConsumesPreparedInputs)
 
 TEST(RHBMTesterTest, RunBetaMDPDETestRejectsWrongSizedTruth)
 {
-    HRLModelTestDataFactory factory(
+    tdf::TestDataFactory factory(
         3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
     auto test_input{
-        factory.BuildBetaTestInput(HRLModelTestDataFactory::BetaScenario{
+        factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
             MakeVector({ 1.0, 0.5, 0.0 }),
             10,
             0.01,
