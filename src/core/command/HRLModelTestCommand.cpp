@@ -4,7 +4,7 @@
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelTestDataFactory.hpp>
-#include <rhbm_gem/utils/hrl/HRLModelTester.hpp>
+#include <rhbm_gem/utils/hrl/RHBMTester.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 #include <algorithm>
@@ -39,6 +39,8 @@
 namespace rhbm_gem {
 
 namespace {
+namespace rt = rhbm_gem::rhbm_tester;
+
 constexpr std::string_view kTesterOption{ "--tester" };
 constexpr std::string_view kFitMinOption{ "--fit-min" };
 constexpr std::string_view kFitMaxOption{ "--fit-max" };
@@ -414,8 +416,6 @@ void RunSimulationTestOnBenchMark(const HRLModelTestExecutionContext & options)
     } };
     const auto model_par_prior{ MakeDefaultModelPrior() };
     auto data_factory{ BuildDataFactory(options) };
-    HRLModelTester tester(kGausParSize);
-
     for (auto error_sigma : scenario.error_list)
     {
         std::vector<LinePlotPanel> linearized_panels;
@@ -430,8 +430,9 @@ void RunSimulationTestOnBenchMark(const HRLModelTestExecutionContext & options)
                         error_sigma,
                         distance))
             };
-            HRLModelTester::BetaReplicaResidual residual_result;
-            tester.RunSingleBetaMDPDETest(
+            rt::BetaReplicaResidual residual_result;
+            rt::RunSingleBetaMDPDETest(
+                kGausParSize,
                 residual_result,
                 test_input.cut_datasets.front(),
                 test_input.gaus_true,
@@ -471,7 +472,6 @@ void RunSimulationTestOnDataOutlier(const HRLModelTestExecutionContext & options
     } };
     const auto model_par_prior{ MakeDefaultModelPrior() };
     auto data_factory{ BuildDataFactory(options) };
-    HRLModelTester tester(kGausParSize);
     std::vector<double> error_list{ 0.1, 0.2, 0.3 };
     std::vector<Eigen::MatrixXd> mean_matrix_ols_list;
     std::vector<Eigen::MatrixXd> mean_matrix_mdpde_list;
@@ -506,7 +506,8 @@ void RunSimulationTestOnDataOutlier(const HRLModelTestExecutionContext & options
                     scenario.replica_size
                 })
             };
-            tester.RunBetaMDPDETest(
+            rt::RunBetaMDPDETest(
+                kGausParSize,
                 scenario.alpha_r_list,
                 residual_mean_ols_list, residual_mean_mdpde_list,
                 residual_sigma_ols_list, residual_sigma_mdpde_list,
@@ -562,8 +563,6 @@ void RunSimulationTestOnMemberOutlier(const HRLModelTestExecutionContext & optio
     const auto model_par_prior{ MakeDefaultModelPrior() };
     const auto model_par_sigma{ MakeDefaultModelSigma() };
     auto data_factory{ BuildDataFactory(options) };
-    HRLModelTester tester(kGausParSize);
-
     std::vector<Eigen::MatrixXd> mean_matrix_median_list;
     std::vector<Eigen::MatrixXd> mean_matrix_mdpde_list;
     std::vector<Eigen::MatrixXd> mean_matrix_train_list;
@@ -599,7 +598,8 @@ void RunSimulationTestOnMemberOutlier(const HRLModelTestExecutionContext & optio
                     scenario.replica_size
                 })
             };
-            tester.RunMuMDPDETest(
+            rt::RunMuMDPDETest(
+                kGausParSize,
                 scenario.alpha_g_list,
                 residual_mean_median_list, residual_mean_mdpde_list,
                 residual_sigma_median_list, residual_sigma_mdpde_list,
@@ -642,7 +642,6 @@ void RunSimulationTestOnModelAlphaData(const HRLModelTestExecutionContext & opti
     } };
     const auto model_par_prior{ MakeDefaultModelPrior() };
     auto data_factory{ BuildDataFactory(options) };
-    HRLModelTester tester(kGausParSize);
     std::vector<double> error_list{ 0.1, 0.2, 0.3 };
     std::vector<Eigen::MatrixXd> mean_matrix_alpha1_list;
     std::vector<Eigen::MatrixXd> mean_matrix_alpha2_list;
@@ -673,7 +672,8 @@ void RunSimulationTestOnModelAlphaData(const HRLModelTestExecutionContext & opti
                     scenario.replica_size
                 })
             };
-            tester.RunBetaMDPDETest(
+            rt::RunBetaMDPDETest(
+                kGausParSize,
                 scenario.alpha_r_list,
                 residual_mean_ols_list, residual_mean_mdpde_list,
                 residual_sigma_ols_list, residual_sigma_mdpde_list,
@@ -725,8 +725,6 @@ void RunSimulationTestOnModelAlphaMember(const HRLModelTestExecutionContext & op
     const auto model_par_prior{ MakeDefaultModelPrior() };
     const auto model_par_sigma{ MakeDefaultModelSigma() };
     auto data_factory{ BuildDataFactory(options) };
-    HRLModelTester tester(kGausParSize);
-
     std::vector<Eigen::MatrixXd> mean_matrix_alpha1_list;
     std::vector<Eigen::MatrixXd> mean_matrix_alpha2_list;
     std::vector<Eigen::MatrixXd> sigma_matrix_alpha1_list;
@@ -758,7 +756,8 @@ void RunSimulationTestOnModelAlphaMember(const HRLModelTestExecutionContext & op
                     scenario.replica_size
                 })
             };
-            tester.RunMuMDPDETest(
+            rt::RunMuMDPDETest(
+                kGausParSize,
                 scenario.alpha_g_list,
                 residual_mean_median_list, residual_mean_mdpde_list,
                 residual_sigma_median_list, residual_sigma_mdpde_list,
@@ -800,8 +799,6 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
     } };
     const auto model_par_prior{ MakeDefaultModelPrior() };
     auto data_factory{ BuildDataFactory(options) };
-    HRLModelTester tester(kGausParSize);
-
     std::vector<Eigen::MatrixXd> mean_matrix_ols_list;
     std::vector<Eigen::MatrixXd> mean_matrix_mdpde_list;
     std::vector<Eigen::MatrixXd> mean_matrix_train_list;
@@ -835,7 +832,8 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
                         scenario.distance_list[static_cast<size_t>(i)],
                         true))
             };
-            tester.RunBetaMDPDEWithNeighborhoodTest(
+            rt::RunBetaMDPDEWithNeighborhoodTest(
+                kGausParSize,
                 residual_mean_list, residual_sigma_list,
                 test_input,
                 training_alpha_r_average,

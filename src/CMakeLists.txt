@@ -79,7 +79,7 @@ target_sources(rhbm_gem PRIVATE
     utils/hrl/RHBMHelper.cpp
     utils/hrl/LinearizationService.cpp
     utils/hrl/HRLModelTestDataFactory.cpp
-    utils/hrl/HRLModelTester.cpp
+    utils/hrl/RHBMTester.cpp
 )
 
 if(RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE)

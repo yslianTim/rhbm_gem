@@ -5,9 +5,11 @@
 #include <vector>
 
 #include <rhbm_gem/utils/hrl/HRLModelTestDataFactory.hpp>
-#include <rhbm_gem/utils/hrl/HRLModelTester.hpp>
+#include <rhbm_gem/utils/hrl/RHBMTester.hpp>
 
 namespace {
+namespace rt = rhbm_gem::rhbm_tester;
+
 
 Eigen::VectorXd MakeVector(std::initializer_list<double> values)
 {
@@ -22,14 +24,12 @@ Eigen::VectorXd MakeVector(std::initializer_list<double> values)
 
 } // namespace
 
-TEST(HRLModelTesterTest, RunBetaMDPDETestPopulatesResidualOutputs)
+TEST(RHBMTesterTest, RunBetaMDPDETestPopulatesResidualOutputs)
 {
     HRLModelTestDataFactory factory(
         3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
-    HRLModelTester tester(3);
-
     const auto test_input{
         factory.BuildBetaTestInput(HRLModelTestDataFactory::BetaScenario{
             MakeVector({ 1.0, 0.5, 0.0 }),
@@ -48,7 +48,8 @@ TEST(HRLModelTesterTest, RunBetaMDPDETestPopulatesResidualOutputs)
 
     const std::vector<double> alpha_r_list{ 0.0, 0.5 };
     const bool result{
-        tester.RunBetaMDPDETest(
+        rt::RunBetaMDPDETest(
+            3,
             alpha_r_list,
             residual_mean_ols_list,
             residual_mean_mdpde_list,
@@ -82,13 +83,11 @@ TEST(HRLModelTesterTest, RunBetaMDPDETestPopulatesResidualOutputs)
     }
 }
 
-TEST(HRLModelTesterTest, RunMuMDPDETestPopulatesResidualOutputs)
+TEST(RHBMTesterTest, RunMuMDPDETestPopulatesResidualOutputs)
 {
     HRLModelTestDataFactory factory(
         3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
-    HRLModelTester tester(3);
-
     const auto test_input{
         factory.BuildMuTestInput(HRLModelTestDataFactory::MuScenario{
             12,
@@ -109,7 +108,8 @@ TEST(HRLModelTesterTest, RunMuMDPDETestPopulatesResidualOutputs)
 
     const std::vector<double> alpha_g_list{ 0.2 };
     const bool result{
-        tester.RunMuMDPDETest(
+        rt::RunMuMDPDETest(
+            3,
             alpha_g_list,
             residual_mean_median_list,
             residual_mean_mdpde_list,
@@ -126,14 +126,12 @@ TEST(HRLModelTesterTest, RunMuMDPDETestPopulatesResidualOutputs)
     ASSERT_EQ(residual_sigma_mdpde_list.size(), alpha_g_list.size() + 1);
 }
 
-TEST(HRLModelTesterTest, RunBetaMDPDEWithNeighborhoodTestConsumesPreparedInputs)
+TEST(RHBMTesterTest, RunBetaMDPDEWithNeighborhoodTestConsumesPreparedInputs)
 {
     HRLModelTestDataFactory factory(
         3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
-    HRLModelTester tester(3);
-
     const auto test_input{
         factory.BuildNeighborhoodTestInput(HRLModelTestDataFactory::NeighborhoodScenario{
             MakeVector({ 1.0, 0.5, 0.0 }),
@@ -157,7 +155,8 @@ TEST(HRLModelTesterTest, RunBetaMDPDEWithNeighborhoodTestConsumesPreparedInputs)
     double training_alpha_r_average{ 0.0 };
 
     const bool result{
-        tester.RunBetaMDPDEWithNeighborhoodTest(
+        rt::RunBetaMDPDEWithNeighborhoodTest(
+            3,
             residual_mean_list,
             residual_sigma_list,
             test_input,
@@ -172,14 +171,12 @@ TEST(HRLModelTesterTest, RunBetaMDPDEWithNeighborhoodTestConsumesPreparedInputs)
     EXPECT_GT(training_alpha_r_average, 0.0);
 }
 
-TEST(HRLModelTesterTest, RunBetaMDPDETestRejectsWrongSizedTruth)
+TEST(RHBMTesterTest, RunBetaMDPDETestRejectsWrongSizedTruth)
 {
     HRLModelTestDataFactory factory(
         3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
-    HRLModelTester tester(3);
-
     auto test_input{
         factory.BuildBetaTestInput(HRLModelTestDataFactory::BetaScenario{
             MakeVector({ 1.0, 0.5, 0.0 }),
@@ -198,7 +195,8 @@ TEST(HRLModelTesterTest, RunBetaMDPDETestRejectsWrongSizedTruth)
     std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
 
     EXPECT_THROW(
-        tester.RunBetaMDPDETest(
+        rt::RunBetaMDPDETest(
+            3,
             std::vector<double>{ 0.0 },
             residual_mean_ols_list,
             residual_mean_mdpde_list,

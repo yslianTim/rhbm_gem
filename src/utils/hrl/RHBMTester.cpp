@@ -1,4 +1,4 @@
-#include <rhbm_gem/utils/hrl/HRLModelTester.hpp>
+#include <rhbm_gem/utils/hrl/RHBMTester.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
@@ -8,6 +8,9 @@
 #include <array>
 #include <cmath>
 #include <stdexcept>
+
+namespace rhbm_gem::rhbm_tester
+{
 
 namespace
 {
@@ -29,6 +32,11 @@ RHBMExecutionOptions MakeTesterExecutionOptions()
     options.quiet_mode = true;
     options.thread_size = 1;
     return options;
+}
+
+int ValidateGaussianParameterSize(int value)
+{
+    return rhbm_gem::numeric_validation::RequirePositive(value, "gaussian_parameter_size");
 }
 
 const ls::LinearizationSpec & MetricDecodeSpec()
@@ -75,14 +83,14 @@ struct NeighborhoodReplicaResidual
     double trained_alpha_r{ 0.0 };
 };
 
-HRLModelTester::BetaReplicaResidual EstimateBetaReplicaResidual(
+BetaReplicaResidual EstimateBetaReplicaResidual(
     const RHBMMemberDataset & dataset,
     const Eigen::VectorXd & gaus_true,
     double alpha_r,
     const RHBMExecutionOptions & options)
 {
     const auto beta_result{ rhbm_gem::rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset, options) };
-    return HRLModelTester::BetaReplicaResidual{
+    return BetaReplicaResidual{
         CalculateNormalizedResidual(beta_result.beta_ols, gaus_true),
         CalculateNormalizedResidual(beta_result.beta_mdpde, gaus_true)
     };
@@ -160,23 +168,18 @@ void FinalizeResidualStatistics(
 }
 } // namespace
 
-HRLModelTester::HRLModelTester(int gaus_par_size) :
-    m_gaus_par_size{
-        rhbm_gem::numeric_validation::RequirePositive(gaus_par_size, "gaus_par_size")
-    }
-{
-}
-
-bool HRLModelTester::RunSingleBetaMDPDETest(
+bool RunSingleBetaMDPDETest(
+    int gaussian_parameter_size,
     BetaReplicaResidual & result,
     const RHBMMemberDataset & dataset,
     const Eigen::VectorXd & gaus_true,
     double alpha_r,
     int thread_size)
 {
+    const auto gaus_par_size{ ValidateGaussianParameterSize(gaussian_parameter_size) };
     rhbm_gem::eigen_validation::RequireVectorSize(
         gaus_true,
-        m_gaus_par_size,
+        gaus_par_size,
         "gaus_true");
     auto options{ MakeTesterExecutionOptions() };
     options.thread_size = thread_size;
@@ -184,7 +187,8 @@ bool HRLModelTester::RunSingleBetaMDPDETest(
     return true;
 }
 
-bool HRLModelTester::RunBetaMDPDETest(
+bool RunBetaMDPDETest(
+    int gaussian_parameter_size,
     const std::vector<double> & alpha_r_list,
     std::vector<Eigen::VectorXd> & residual_mean_ols_list,
     std::vector<Eigen::VectorXd> & residual_mean_mdpde_list,
@@ -197,9 +201,10 @@ bool HRLModelTester::RunBetaMDPDETest(
     (void)thread_size;
 #endif
 
+    const auto gaus_par_size{ ValidateGaussianParameterSize(gaussian_parameter_size) };
     rhbm_gem::eigen_validation::RequireVectorSize(
         test_input.gaus_true,
-        m_gaus_par_size,
+        gaus_par_size,
         "test_input.gaus_true");
     const auto replica_size{ static_cast<int>(test_input.replica_datasets.size()) };
     if (replica_size <= 0)
@@ -212,15 +217,15 @@ bool HRLModelTester::RunBetaMDPDETest(
     std::vector<Eigen::MatrixXd> residual_matrix_ols_list(alpha_size);
     std::vector<Eigen::MatrixXd> residual_matrix_mdpde_list(alpha_size);
     residual_matrix_ols_list.assign(
-        alpha_size, Eigen::MatrixXd::Zero(m_gaus_par_size, replica_size)
+        alpha_size, Eigen::MatrixXd::Zero(gaus_par_size, replica_size)
     );
     residual_matrix_mdpde_list.assign(
-        alpha_size, Eigen::MatrixXd::Zero(m_gaus_par_size, replica_size)
+        alpha_size, Eigen::MatrixXd::Zero(gaus_par_size, replica_size)
     );
-    residual_mean_ols_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
-    residual_mean_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
-    residual_sigma_ols_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
-    residual_sigma_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
+    residual_mean_ols_list.assign(alpha_size, Eigen::VectorXd::Zero(gaus_par_size));
+    residual_mean_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(gaus_par_size));
+    residual_sigma_ols_list.assign(alpha_size, Eigen::VectorXd::Zero(gaus_par_size));
+    residual_sigma_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(gaus_par_size));
 
     const rhbm_gem::rhbm_trainer::AlphaTrainer alpha_r_trainer{ kAlphaRMin, kAlphaRMax, kAlphaRStep };
     rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_r_training_options;
@@ -266,7 +271,8 @@ bool HRLModelTester::RunBetaMDPDETest(
     return true;
 }
 
-bool HRLModelTester::RunMuMDPDETest(
+bool RunMuMDPDETest(
+    int gaussian_parameter_size,
     const std::vector<double> & alpha_g_list,
     std::vector<Eigen::VectorXd> & residual_mean_median_list,
     std::vector<Eigen::VectorXd> & residual_mean_mdpde_list,
@@ -279,9 +285,10 @@ bool HRLModelTester::RunMuMDPDETest(
     (void)thread_size;
 #endif
 
+    const auto gaus_par_size{ ValidateGaussianParameterSize(gaussian_parameter_size) };
     rhbm_gem::eigen_validation::RequireVectorSize(
         test_input.gaus_true,
-        m_gaus_par_size,
+        gaus_par_size,
         "test_input.gaus_true");
     const auto replica_size{ static_cast<int>(test_input.replica_beta_matrices.size()) };
     if (replica_size <= 0)
@@ -294,15 +301,15 @@ bool HRLModelTester::RunMuMDPDETest(
     std::vector<Eigen::MatrixXd> residual_matrix_median_list(alpha_size);
     std::vector<Eigen::MatrixXd> residual_matrix_mdpde_list(alpha_size);
     residual_matrix_median_list.assign(
-        alpha_size, Eigen::MatrixXd::Zero(m_gaus_par_size, replica_size)
+        alpha_size, Eigen::MatrixXd::Zero(gaus_par_size, replica_size)
     );
     residual_matrix_mdpde_list.assign(
-        alpha_size, Eigen::MatrixXd::Zero(m_gaus_par_size, replica_size)
+        alpha_size, Eigen::MatrixXd::Zero(gaus_par_size, replica_size)
     );
-    residual_mean_median_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
-    residual_mean_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
-    residual_sigma_median_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
-    residual_sigma_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
+    residual_mean_median_list.assign(alpha_size, Eigen::VectorXd::Zero(gaus_par_size));
+    residual_mean_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(gaus_par_size));
+    residual_sigma_median_list.assign(alpha_size, Eigen::VectorXd::Zero(gaus_par_size));
+    residual_sigma_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(gaus_par_size));
 
     const rhbm_gem::rhbm_trainer::AlphaTrainer alpha_g_trainer{ kAlphaGMin, kAlphaGMax, kAlphaGStep };
     rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_g_training_options;
@@ -355,7 +362,8 @@ bool HRLModelTester::RunMuMDPDETest(
     return true;
 }
 
-bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
+bool RunBetaMDPDEWithNeighborhoodTest(
+    int gaussian_parameter_size,
     std::vector<Eigen::VectorXd> & residual_mean_list,
     std::vector<Eigen::VectorXd> & residual_sigma_list,
     const HRLNeighborhoodTestInput & test_input,
@@ -368,9 +376,10 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
 #endif
     (void)angle;
 
+    const auto gaus_par_size{ ValidateGaussianParameterSize(gaussian_parameter_size) };
     rhbm_gem::eigen_validation::RequireVectorSize(
         test_input.gaus_true,
-        m_gaus_par_size,
+        gaus_par_size,
         "test_input.gaus_true");
     const auto replica_size{ static_cast<int>(test_input.no_cut_datasets.size()) };
     if (replica_size <= 0)
@@ -384,9 +393,9 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
 
     const size_t method_size{ 3 }; // OLS (no cut), MDPDE (no cut and cut)
     std::vector<Eigen::MatrixXd> replica_residual_list(method_size);
-    replica_residual_list.assign(method_size, Eigen::MatrixXd::Zero(m_gaus_par_size, replica_size));
-    residual_mean_list.assign(method_size, Eigen::VectorXd::Zero(m_gaus_par_size));
-    residual_sigma_list.assign(method_size, Eigen::VectorXd::Zero(m_gaus_par_size));
+    replica_residual_list.assign(method_size, Eigen::MatrixXd::Zero(gaus_par_size, replica_size));
+    residual_mean_list.assign(method_size, Eigen::VectorXd::Zero(gaus_par_size));
+    residual_sigma_list.assign(method_size, Eigen::VectorXd::Zero(gaus_par_size));
 
     const rhbm_gem::rhbm_trainer::AlphaTrainer alpha_r_trainer{ kAlphaRMin, kAlphaRMax, kAlphaRStep };
     rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_r_training_options;
@@ -431,3 +440,5 @@ bool HRLModelTester::RunBetaMDPDEWithNeighborhoodTest(
 
     return true;
 }
+
+} // namespace rhbm_gem::rhbm_tester
