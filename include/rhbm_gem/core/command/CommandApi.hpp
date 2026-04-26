@@ -118,7 +118,7 @@ struct MapSimulationRequest : public CommandRequestBase
     std::vector<double> blurring_width_list{ 1.50 };
 };
 
-struct HRLModelTestRequest : public CommandRequestBase
+struct RHBMTestRequest : public CommandRequestBase
 {
     TesterType tester_choice{ TesterType::BENCHMARK };
     double fit_range_min{ 0.0 };

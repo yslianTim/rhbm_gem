@@ -1,6 +1,6 @@
 #include <rhbm_gem/core/command/CommandApi.hpp>
 
-#include "HRLModelTestCommand.hpp"
+#include "RHBMTestCommand.hpp"
 #include "MapSimulationCommand.hpp"
 #include "PotentialAnalysisCommand.hpp"
 #include "PotentialDisplayCommand.hpp"

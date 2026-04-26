@@ -15,9 +15,9 @@ RHBM_GEM_COMMAND(
     "map_simulation",
     "Run map simulation command")
 RHBM_GEM_COMMAND(
-    HRLModelTest,
-    "model_test",
-    "Run HRL model simulation test")
+    RHBMTest,
+    "rhbm_test",
+    "Run RHBM simulation test")
 
 #ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
 RHBM_GEM_COMMAND(

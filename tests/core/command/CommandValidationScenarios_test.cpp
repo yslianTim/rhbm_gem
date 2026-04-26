@@ -2,7 +2,7 @@
 
 #include "support/CommandValidationAssertions.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include "command/HRLModelTestCommand.hpp"
+#include "command/RHBMTestCommand.hpp"
 #include "command/MapSimulationCommand.hpp"
 #include "command/PotentialAnalysisCommand.hpp"
 #include "command/PotentialDisplayCommand.hpp"
@@ -126,10 +126,10 @@ TEST(CommandValidationScenariosTest, PotentialAnalysisRejectsEmptySavedKeyAtPars
         nullptr);
 }
 
-TEST(CommandValidationScenariosTest, HRLModelTestRejectsInvertedFitRangeAtPrepare)
+TEST(CommandValidationScenariosTest, RHBMTestRejectsInvertedFitRangeAtPrepare)
 {
-    rg::HRLModelTestCommand command{};
-    rg::HRLModelTestRequest request{};
+    rg::RHBMTestCommand command{};
+    rg::RHBMTestRequest request{};
     request.fit_range_min = 2.0;
     request.fit_range_max = 1.0;
 

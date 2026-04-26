@@ -1,4 +1,4 @@
-#include "HRLModelTestCommand.hpp"
+#include "RHBMTestCommand.hpp"
 #include <rhbm_gem/utils/domain/LocalPainter.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
@@ -47,12 +47,12 @@ constexpr std::string_view kAlphaROption{ "--alpha-r" };
 constexpr std::string_view kAlphaGOption{ "--alpha-g" };
 } // namespace
 
-HRLModelTestCommand::HRLModelTestCommand() :
-    CommandWithRequest<HRLModelTestRequest>{}
+RHBMTestCommand::RHBMTestCommand() :
+    CommandWithRequest<RHBMTestRequest>{}
 {
 }
 
-void HRLModelTestCommand::NormalizeRequest()
+void RHBMTestCommand::NormalizeRequest()
 {
     auto & request{ MutableRequest() };
     CoerceEnum(
@@ -86,7 +86,7 @@ void HRLModelTestCommand::NormalizeRequest()
         "Alpha-G");
 }
 
-void HRLModelTestCommand::ValidateOptions()
+void RHBMTestCommand::ValidateOptions()
 {
     const auto & request{ RequestOptions() };
     RequireCondition(
@@ -99,9 +99,9 @@ void HRLModelTestCommand::ValidateOptions()
 
 namespace rhbm_gem::detail {
 
-struct HRLModelTestExecutionContext
+struct RHBMTestExecutionContext
 {
-    const HRLModelTestRequest & options;
+    const RHBMTestRequest & options;
     int thread_size;
     const std::filesystem::path & output_folder;
 };
@@ -137,7 +137,7 @@ struct NeighborDistanceScenarioConfig
 };
 
 std::filesystem::path BuildOutputPath(
-    const HRLModelTestExecutionContext & options,
+    const RHBMTestExecutionContext & options,
     std::string_view stem)
 {
     return options.output_folder / std::string(stem);
@@ -181,7 +181,7 @@ std::vector<double> BuildDescendingSweep(int count, double start, double step)
     return values;
 }
 
-tdf::TestDataFactory BuildDataFactory(const HRLModelTestExecutionContext & options)
+tdf::TestDataFactory BuildDataFactory(const RHBMTestExecutionContext & options)
 {
     tdf::TestDataFactory factory(
         kGausParSize,
@@ -326,7 +326,7 @@ bool TryAppendBenchmarkLinearizedPanel(
 }
 
 void SaveBenchmarkLinearizedDatasetReport(
-    const HRLModelTestExecutionContext & options,
+    const RHBMTestExecutionContext & options,
     double error_sigma,
     const std::vector<LinePlotPanel> & panels)
 {
@@ -362,7 +362,7 @@ void SaveBenchmarkLinearizedDatasetReport(
 } // namespace
 
 void PrintDataOutlierResult(
-    const HRLModelTestExecutionContext & options,
+    const RHBMTestExecutionContext & options,
     const std::string & name,
     const std::vector<double> & outlier_list,
     const std::vector<Eigen::MatrixXd> & mean_matrix_ols_list,
@@ -375,7 +375,7 @@ void PrintDataOutlierResult(
 );
 
 void PrintMemberOutlierResult(
-    const HRLModelTestExecutionContext & options,
+    const RHBMTestExecutionContext & options,
     const std::string & name,
     const std::vector<double> & outlier_list,
     const std::vector<Eigen::MatrixXd> & mean_matrix_median_list,
@@ -387,7 +387,7 @@ void PrintMemberOutlierResult(
 );
 
 void PrintAtomSamplingDataSummary(
-    const HRLModelTestExecutionContext & options,
+    const RHBMTestExecutionContext & options,
     const std::string & name,
     const std::vector<LocalPotentialSampleList> & sampling_entries_list,
     const std::vector<double> & distance_list
@@ -402,9 +402,9 @@ std::unique_ptr<TH2D> CreateDistanceToResponseHistogram(
     int x_bin_size, int y_bin_size = 500);
 #endif
 
-void RunSimulationTestOnBenchMark(const HRLModelTestExecutionContext & options)
+void RunSimulationTestOnBenchMark(const RHBMTestExecutionContext & options)
 {
-    ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnBenchMark");
+    ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnBenchMark");
 
     const auto scenario{ NeighborDistanceScenarioConfig{
         1,
@@ -461,9 +461,9 @@ void RunSimulationTestOnBenchMark(const HRLModelTestExecutionContext & options)
     }
 }
 
-void RunSimulationTestOnDataOutlier(const HRLModelTestExecutionContext & options)
+void RunSimulationTestOnDataOutlier(const RHBMTestExecutionContext & options)
 {
-    ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnDataOutlier");
+    ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnDataOutlier");
 
     const auto scenario{ BetaScenarioConfig{
         100,
@@ -539,9 +539,9 @@ void RunSimulationTestOnDataOutlier(const HRLModelTestExecutionContext & options
     );
 }
 
-void RunSimulationTestOnMemberOutlier(const HRLModelTestExecutionContext & options)
+void RunSimulationTestOnMemberOutlier(const RHBMTestExecutionContext & options)
 {
-    ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnMemberOutlier");
+    ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnMemberOutlier");
 
     const auto scenario{ MuScenarioConfig{
         100,
@@ -631,9 +631,9 @@ void RunSimulationTestOnMemberOutlier(const HRLModelTestExecutionContext & optio
     );
 }
 
-void RunSimulationTestOnModelAlphaData(const HRLModelTestExecutionContext & options)
+void RunSimulationTestOnModelAlphaData(const RHBMTestExecutionContext & options)
 {
-    ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnModelAlphaData");
+    ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnModelAlphaData");
 
     const auto scenario{ BetaScenarioConfig{
         100,
@@ -701,9 +701,9 @@ void RunSimulationTestOnModelAlphaData(const HRLModelTestExecutionContext & opti
     );
 }
 
-void RunSimulationTestOnModelAlphaMember(const HRLModelTestExecutionContext & options)
+void RunSimulationTestOnModelAlphaMember(const RHBMTestExecutionContext & options)
 {
-    ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnModelAlphaMember");
+    ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnModelAlphaMember");
 
     const auto scenario{ MuScenarioConfig{
         100,
@@ -785,9 +785,9 @@ void RunSimulationTestOnModelAlphaMember(const HRLModelTestExecutionContext & op
     );
 }
 
-void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & options)
+void RunSimulationTestOnNeighborDistance(const RHBMTestExecutionContext & options)
 {
-    ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnNeighborDistance");
+    ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnNeighborDistance");
 
     const auto scenario{ NeighborDistanceScenarioConfig{
         10,
@@ -886,7 +886,7 @@ void RunSimulationTestOnNeighborDistance(const HRLModelTestExecutionContext & op
 }
 
 void PrintDataOutlierResult(
-    const HRLModelTestExecutionContext & options,
+    const RHBMTestExecutionContext & options,
     const std::string & name,
     const std::vector<double> & outlier_list,
     const std::vector<Eigen::MatrixXd> & mean_matrix_ols_list,
@@ -898,7 +898,7 @@ void PrintDataOutlierResult(
     bool is_neighbor_distance)
 {
     auto file_path{ BuildOutputPath(options, name) };
-    Logger::Log(LogLevel::Info, " HRLModelTestCommand::PrintDataOutlierResult");
+    Logger::Log(LogLevel::Info, " RHBMTestCommand::PrintDataOutlierResult");
 
     std::vector<std::string> title_y_list{
         "Amplitude #font[2]{A}", "Width #tau"
@@ -1136,7 +1136,7 @@ void PrintDataOutlierResult(
 }
 
 void PrintMemberOutlierResult(
-    const HRLModelTestExecutionContext & options,
+    const RHBMTestExecutionContext & options,
     const std::string & name,
     const std::vector<double> & outlier_list,
     const std::vector<Eigen::MatrixXd> & mean_matrix_median_list,
@@ -1147,7 +1147,7 @@ void PrintMemberOutlierResult(
     const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list)
 {
     auto file_path{ BuildOutputPath(options, name) };
-    Logger::Log(LogLevel::Info, " HRLModelTestCommand::PrintMemberOutlierResult");
+    Logger::Log(LogLevel::Info, " RHBMTestCommand::PrintMemberOutlierResult");
     (void)outlier_list;
     (void)mean_matrix_median_list;
     (void)mean_matrix_mdpde_list;
@@ -1376,14 +1376,14 @@ void PrintMemberOutlierResult(
 }
 
 void PrintAtomSamplingDataSummary(
-    const HRLModelTestExecutionContext & options,
+    const RHBMTestExecutionContext & options,
     const std::string & name,
     const std::vector<LocalPotentialSampleList> & sampling_entries_list,
     const std::vector<double> & distance_list
 )
 {
     auto file_path{ BuildOutputPath(options, name) };
-    Logger::Log(LogLevel::Info, " HRLModelTestCommand::PrintAtomSamplingDataSummary");
+    Logger::Log(LogLevel::Info, " RHBMTestCommand::PrintAtomSamplingDataSummary");
 
     #ifdef HAVE_ROOT
 
@@ -1493,7 +1493,7 @@ std::unique_ptr<TH2D> CreateDistanceToResponseHistogram(
 }
 #endif
 
-bool RunHRLModelTestWorkflow(const HRLModelTestExecutionContext & options)
+bool RunRHBMTestWorkflow(const RHBMTestExecutionContext & options)
 {
     switch (options.options.tester_choice)
     {
@@ -1529,9 +1529,9 @@ bool RunHRLModelTestWorkflow(const HRLModelTestExecutionContext & options)
 
 namespace rhbm_gem {
 
-bool HRLModelTestCommand::ExecuteImpl()
+bool RHBMTestCommand::ExecuteImpl()
 {
-    return detail::RunHRLModelTestWorkflow(detail::HRLModelTestExecutionContext{
+    return detail::RunRHBMTestWorkflow(detail::RHBMTestExecutionContext{
         RequestOptions(),
         ThreadSize(),
         OutputFolder(),

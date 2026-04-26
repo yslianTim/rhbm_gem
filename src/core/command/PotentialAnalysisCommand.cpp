@@ -38,8 +38,7 @@
 #endif
 
 namespace {
-namespace ls = rhbm_gem::linearization_service;
-namespace rg = rhbm_gem;
+using namespace rhbm_gem;
 
 constexpr std::string_view kModelKey{ "model" };
 constexpr std::string_view kMapKey{ "map" };
@@ -62,9 +61,10 @@ constexpr std::string_view kSamplingRangeIssue{ "--sampling-range" };
 constexpr std::string_view kFitRangeIssue{ "--fit-range" };
 constexpr std::string_view kTrainingAlphaRangeIssue{ "--training-alpha-range" };
 
-rg::RHBMExecutionOptions MakePotentialAnalysisExecutionOptions(int thread_size, bool quiet_mode)
+RHBMExecutionOptions MakePotentialAnalysisExecutionOptions(
+    int thread_size, bool quiet_mode)
 {
-    rg::RHBMExecutionOptions execution_options;
+    RHBMExecutionOptions execution_options;
     execution_options.quiet_mode = quiet_mode;
     execution_options.thread_size = thread_size;
     return execution_options;
@@ -103,24 +103,24 @@ bool EmitTrainingReportIfRequested(
         width_values.emplace_back(gaus_bias_matrix(1, column));
     }
 
-    rhbm_gem::LinePlotRequest report_request;
+    LinePlotRequest report_request;
     report_request.output_path = report_path;
     report_request.x_axis.title = std::string(x_label);
     report_request.shared_y_axis_title = std::string(y_label);
     report_request.panels = {
-        rhbm_gem::LinePlotPanel{
+        LinePlotPanel{
             "Amplitude #font[2]{A}",
-            rhbm_gem::AxisSpec{},
-            { rhbm_gem::LineSeries{ "Amplitude", alpha_list, amplitude_values, std::nullopt } }
+            AxisSpec{},
+            { LineSeries{ "Amplitude", alpha_list, amplitude_values, std::nullopt } }
         },
-        rhbm_gem::LinePlotPanel{
+        LinePlotPanel{
             "Width #tau",
-            rhbm_gem::AxisSpec{},
-            { rhbm_gem::LineSeries{ "Width", alpha_list, width_values, std::nullopt } }
+            AxisSpec{},
+            { LineSeries{ "Width", alpha_list, width_values, std::nullopt } }
         }
     };
 
-    const auto plot_result{ rhbm_gem::local_painter::SaveLinePlot(report_request) };
+    const auto plot_result{ local_painter::SaveLinePlot(report_request) };
     if (!plot_result.Succeeded())
     {
         Logger::Log(LogLevel::Warning,
@@ -140,13 +140,13 @@ bool EmitTrainingReportIfRequested(
     return true;
 }
 
-ls::LinearizationContext BuildLocalLinearizationContext(
-    const rhbm_gem::LocalPotentialView & view)
+linearization_service::LinearizationContext BuildLocalLinearizationContext(
+    const LocalPotentialView & view)
 {
     Eigen::VectorXd gaus_par_init{ Eigen::VectorXd::Zero(3) };
     gaus_par_init(0) = view.GetMomentZeroEstimate();
     gaus_par_init(1) = view.GetMomentTwoEstimate();
-    return ls::LinearizationContext::FromModelParameters(gaus_par_init);
+    return linearization_service::LinearizationContext::FromModelParameters(gaus_par_init);
 }
 
 } // namespace
@@ -436,8 +436,8 @@ void PotentialAnalysisCommand::RunAtomPotentialFittingWorkflow(
             auto group_key{ group_keys[idx] };
             const auto & atom_list{ analysis_view.GetAtomObjectList(group_key, class_key) };
             auto group_size{ atom_list.size() };
-            std::vector<rg::RHBMMemberDataset> member_datasets;
-            std::vector<rg::RHBMBetaEstimateResult> member_fit_results;
+            std::vector<RHBMMemberDataset> member_datasets;
+            std::vector<RHBMBetaEstimateResult> member_fit_results;
             member_datasets.reserve(group_size);
             member_fit_results.reserve(group_size);
             for (const auto & atom : atom_list)
@@ -450,10 +450,10 @@ void PotentialAnalysisCommand::RunAtomPotentialFittingWorkflow(
                 analysis_view.GetAtomAlphaG(group_key, class_key) : request.alpha_g
             };
             const auto input{
-                rhbm_gem::rhbm_helper::BuildGroupInput(member_datasets, member_fit_results)
+                rhbm_helper::BuildGroupInput(member_datasets, member_fit_results)
             };
             const auto result{
-                rhbm_gem::rhbm_helper::EstimateGroup(
+                rhbm_helper::EstimateGroup(
                     alpha_g,
                     input,
                     MakePotentialAnalysisExecutionOptions(ThreadSize(), true))
@@ -549,7 +549,7 @@ void PotentialAnalysisCommand::RunDatasetPreparationWorkflow(
     const auto atom_size{ atom_list.size() };
     size_t atom_count{ 0 };
     auto local_entry_list{ BuildSelectedAtomLocalEntryViews(model_object) };
-    const auto dataset_spec{ ls::LinearizationSpec::DefaultDataset() };
+    const auto dataset_spec{ linearization_service::LinearizationSpec::DefaultDataset() };
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(ThreadSize())
@@ -559,7 +559,7 @@ void PotentialAnalysisCommand::RunDatasetPreparationWorkflow(
         auto entry{ local_entry_list[i] };
         const auto local_view{ LocalPotentialView::RequireFor(*atom_list[i]) };
         entry.SetDataset(
-            ls::BuildDataset(
+            linearization_service::BuildDataset(
                 dataset_spec,
                 local_view.GetSamplingEntries(),
                 fit_range_min,
@@ -584,7 +584,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     ScopeTimer timer("PotentialAnalysisCommand::RunAtomAlphaTraining");
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
-    rhbm_gem::rhbm_trainer::AlphaTrainer alpha_trainer(
+    rhbm_trainer::AlphaTrainer alpha_trainer(
         request.training_alpha_min,
         request.training_alpha_max,
         request.training_alpha_step);
@@ -592,7 +592,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     Logger::Log(LogLevel::Info, alpha_trainer.GetAlphaGridSummary().str());
 
     // Alpha_R Training
-    std::vector<rg::RHBMMemberDataset> selected_atom_dataset_list;
+    std::vector<RHBMMemberDataset> selected_atom_dataset_list;
     selected_atom_dataset_list.reserve(model_object.GetSelectedAtomCount());
     for (auto & atom : model_object.GetSelectedAtoms())
     {
@@ -609,7 +609,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     auto alpha_r{ alpha_training_list.front() };
     if (!selected_atom_dataset_list.empty())
     {
-        rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_r_options;
+        rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_r_options;
         alpha_r_options.subset_size = 5;
         alpha_r_options.execution_options =
             MakePotentialAnalysisExecutionOptions(ThreadSize(), true);
@@ -634,7 +634,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     // Alpha_G Training
     RunLocalPotentialFitting(model_object, alpha_r);
     
-    std::vector<std::vector<rg::RHBMBetaVector>> beta_group_list;
+    std::vector<std::vector<RHBMBetaVector>> beta_group_list;
     const auto component_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     const auto component_group_keys{ analysis_view.CollectAtomGroupKeys(component_class_key) };
     beta_group_list.reserve(component_group_keys.size());
@@ -644,7 +644,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
         if (group_atom_list.size() < 10) continue;
         if (group_atom_list.front()->IsMainChainAtom() == false) continue;
 
-        std::vector<rg::RHBMBetaVector> beta_list;
+        std::vector<RHBMBetaVector> beta_list;
         beta_list.reserve(group_atom_list.size());
         for (auto * atom : group_atom_list)
         {
@@ -661,7 +661,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     auto alpha_g{ alpha_training_list.front() };
     if (!beta_group_list.empty())
     {
-        rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_g_options;
+        rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_g_options;
         alpha_g_options.subset_size = 10;
         alpha_g_options.execution_options =
             MakePotentialAnalysisExecutionOptions(ThreadSize(), true);
@@ -691,7 +691,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
         }
     }
 
-    rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaRunOptions alpha_bias_study_options;
+    rhbm_trainer::AlphaTrainer::AlphaRunOptions alpha_bias_study_options;
     alpha_bias_study_options.execution_options =
         MakePotentialAnalysisExecutionOptions(ThreadSize(), true);
     alpha_bias_study_options.progress_callback =
@@ -774,7 +774,7 @@ void PotentialAnalysisCommand::RunLocalPotentialFitting(
         auto local_entry{ local_entry_list[i] };
         local_entry.SetAlphaR(alpha_r);
         const auto result{
-            rhbm_gem::rhbm_helper::EstimateBetaMDPDE(
+            rhbm_helper::EstimateBetaMDPDE(
                 alpha_r,
                 local_entry.GetDataset(),
                 MakePotentialAnalysisExecutionOptions(thread_size, true))

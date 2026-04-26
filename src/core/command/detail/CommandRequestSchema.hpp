@@ -414,12 +414,12 @@ struct CommandRequestSchema<MapSimulationRequest>
 };
 
 template <>
-struct CommandRequestSchema<HRLModelTestRequest>
+struct CommandRequestSchema<RHBMTestRequest>
 {
     template <typename Visitor>
     static void Visit(Visitor && visitor)
     {
-        using Self = HRLModelTestRequest;
+        using Self = RHBMTestRequest;
         visitor(MakeEnumField<Self>(
             "tester_choice",
             "-t,--tester",

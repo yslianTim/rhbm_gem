@@ -6,11 +6,11 @@
 
 namespace rhbm_gem {
 
-class HRLModelTestCommand : public CommandWithRequest<HRLModelTestRequest>
+class RHBMTestCommand : public CommandWithRequest<RHBMTestRequest>
 {
 public:
-    HRLModelTestCommand();
-    ~HRLModelTestCommand() = default;
+    RHBMTestCommand();
+    ~RHBMTestCommand() = default;
 
 private:
     void NormalizeRequest() override;

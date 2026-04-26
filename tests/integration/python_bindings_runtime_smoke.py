@@ -50,7 +50,7 @@ def assert_request_objects_are_usable() -> None:
         m.PotentialDisplayRequest,
         m.ResultDumpRequest,
         m.MapSimulationRequest,
-        m.HRLModelTestRequest,
+        m.RHBMTestRequest,
     ]
     if EXPERIMENTAL_FEATURE_ENABLED:
         request_types.extend(
