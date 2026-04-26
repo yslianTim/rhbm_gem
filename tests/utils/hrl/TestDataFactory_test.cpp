@@ -52,6 +52,24 @@ void ExpectMatrixEquals(const Eigen::MatrixXd & lhs, const Eigen::MatrixXd & rhs
     }
 }
 
+void ExpectSamplingEntriesEquals(
+    const LocalPotentialSampleList & lhs,
+    const LocalPotentialSampleList & rhs)
+{
+    ASSERT_EQ(lhs.size(), rhs.size());
+    for (size_t i = 0; i < lhs.size(); i++)
+    {
+        EXPECT_FLOAT_EQ(lhs.at(i).distance, rhs.at(i).distance);
+        EXPECT_FLOAT_EQ(lhs.at(i).response, rhs.at(i).response);
+        EXPECT_FLOAT_EQ(lhs.at(i).score, rhs.at(i).score);
+        EXPECT_EQ(lhs.at(i).position.has_value(), rhs.at(i).position.has_value());
+        if (lhs.at(i).position.has_value() && rhs.at(i).position.has_value())
+        {
+            EXPECT_EQ(lhs.at(i).position.value(), rhs.at(i).position.value());
+        }
+    }
+}
+
 } // namespace
 
 TEST(TestDataFactoryTest, BuildBetaTestInputIsReproducibleWithFixedSeed)
@@ -202,6 +220,10 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputProvidesPairedDatasetsAndSam
     ASSERT_EQ(input.cut_datasets.size(), 2u);
     ASSERT_EQ(input.sampling_summaries.size(), 1u);
     ASSERT_FALSE(input.sampling_summaries.front().empty());
+    for (const auto & sample : input.sampling_summaries.front())
+    {
+        EXPECT_TRUE(sample.position.has_value());
+    }
 
     for (size_t i = 0; i < input.no_cut_datasets.size(); i++)
     {
@@ -209,6 +231,52 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputProvidesPairedDatasetsAndSam
             input.cut_datasets.at(i).y.rows(),
             input.no_cut_datasets.at(i).y.rows()
         );
+    }
+}
+
+TEST(TestDataFactoryTest, BuildNeighborhoodTestInputIsReproducibleWithFixedSeed)
+{
+    tdf::TestDataFactory factory(
+        3,
+        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+    factory.SetFittingRange(0.0, 1.0);
+
+    const auto scenario{ tdf::TestDataFactory::NeighborhoodScenario{
+        MakeVector({ 1.0, 0.5, 0.0 }),
+        8,
+        0.05,
+        0.0,
+        1.0,
+        2.0,
+        1,
+        120.0,
+        true,
+        0.0,
+        4.0,
+        2,
+        11
+    } };
+
+    const auto first_input{ factory.BuildNeighborhoodTestInput(scenario) };
+    const auto second_input{ factory.BuildNeighborhoodTestInput(scenario) };
+
+    ASSERT_EQ(first_input.no_cut_datasets.size(), second_input.no_cut_datasets.size());
+    ASSERT_EQ(first_input.cut_datasets.size(), second_input.cut_datasets.size());
+    ASSERT_EQ(first_input.sampling_summaries.size(), second_input.sampling_summaries.size());
+    for (size_t i = 0; i < first_input.no_cut_datasets.size(); i++)
+    {
+        ExpectDatasetEquals(
+            first_input.no_cut_datasets.at(i),
+            second_input.no_cut_datasets.at(i));
+        ExpectDatasetEquals(
+            first_input.cut_datasets.at(i),
+            second_input.cut_datasets.at(i));
+    }
+    for (size_t i = 0; i < first_input.sampling_summaries.size(); i++)
+    {
+        ExpectSamplingEntriesEquals(
+            first_input.sampling_summaries.at(i),
+            second_input.sampling_summaries.at(i));
     }
 }
 
@@ -235,6 +303,65 @@ TEST(TestDataFactoryTest, SetFittingRangeRejectsInvalidRange)
     EXPECT_THROW(factory.SetFittingRange(2.0, 1.0), std::invalid_argument);
     EXPECT_THROW(
         factory.SetFittingRange(0.0, std::numeric_limits<double>::infinity()),
+        std::invalid_argument);
+}
+
+TEST(TestDataFactoryTest, BuildNeighborhoodTestInputRejectsInvalidSamplingInputs)
+{
+    tdf::TestDataFactory factory(
+        3,
+        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+
+    EXPECT_THROW(
+        factory.BuildNeighborhoodTestInput(tdf::TestDataFactory::NeighborhoodScenario{
+            MakeVector({ 1.0, 0.5, 0.0 }),
+            8,
+            0.05,
+            0.0,
+            1.0,
+            std::numeric_limits<double>::infinity(),
+            1,
+            120.0,
+            false,
+            0.0,
+            4.0,
+            1,
+            11
+        }),
+        std::invalid_argument);
+    EXPECT_THROW(
+        factory.BuildNeighborhoodTestInput(tdf::TestDataFactory::NeighborhoodScenario{
+            MakeVector({ 1.0, 0.5, 0.0 }),
+            8,
+            0.05,
+            0.0,
+            1.0,
+            2.0,
+            5,
+            120.0,
+            false,
+            0.0,
+            4.0,
+            1,
+            11
+        }),
+        std::invalid_argument);
+    EXPECT_THROW(
+        factory.BuildNeighborhoodTestInput(tdf::TestDataFactory::NeighborhoodScenario{
+            MakeVector({ 1.0, 0.5, 0.0 }),
+            8,
+            0.05,
+            2.0,
+            1.0,
+            2.0,
+            1,
+            120.0,
+            false,
+            0.0,
+            4.0,
+            1,
+            11
+        }),
         std::invalid_argument);
 }
 
