@@ -199,13 +199,13 @@ TEST(DataObjectModelAnalysisTest, LocalPotentialEntryCanClearTransientFitPayload
 TEST(DataObjectModelAnalysisTest, LocalPotentialEntryPreservesFitResultStatus)
 {
     rg::LocalPotentialEntry entry;
-    RHBMBetaEstimateResult fit_result;
-    fit_result.status = RHBMEstimationStatus::NUMERICAL_FALLBACK;
+    rg::RHBMBetaEstimateResult fit_result;
+    fit_result.status = rg::RHBMEstimationStatus::NUMERICAL_FALLBACK;
 
     entry.SetFitResult(fit_result);
 
     ASSERT_TRUE(entry.HasFitResult());
-    EXPECT_EQ(RHBMEstimationStatus::NUMERICAL_FALLBACK, entry.GetFitResult().status);
+    EXPECT_EQ(rg::RHBMEstimationStatus::NUMERICAL_FALLBACK, entry.GetFitResult().status);
 }
 
 TEST(DataObjectModelAnalysisTest, MutableLocalPotentialViewSetFitResultUpdatesFitAndEstimates)
@@ -222,15 +222,15 @@ TEST(DataObjectModelAnalysisTest, MutableLocalPotentialViewSetFitResultUpdatesFi
     };
     entry.SetSamplingEntries(sampling_entries);
 
-    RHBMBetaEstimateResult fit_result;
-    fit_result.status = RHBMEstimationStatus::SUCCESS;
+    rg::RHBMBetaEstimateResult fit_result;
+    fit_result.status = rg::RHBMEstimationStatus::SUCCESS;
     fit_result.beta_ols = Eigen::VectorXd::Zero(3);
     fit_result.beta_mdpde = Eigen::VectorXd::Zero(3);
 
     entry.SetFitResult(fit_result);
 
     ASSERT_TRUE(entry.HasFitResult());
-    EXPECT_EQ(RHBMEstimationStatus::SUCCESS, entry.GetFitResult().status);
+    EXPECT_EQ(rg::RHBMEstimationStatus::SUCCESS, entry.GetFitResult().status);
     EXPECT_TRUE(entry.GetFitResult().beta_ols.isApprox(Eigen::VectorXd::Zero(3), 1e-12));
     EXPECT_TRUE(entry.GetFitResult().beta_mdpde.isApprox(Eigen::VectorXd::Zero(3), 1e-12));
     EXPECT_DOUBLE_EQ(0.0, rg::LocalPotentialView::RequireFor(*atom).GetEstimateOLS().width);
@@ -253,7 +253,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupEstimateRes
     const auto & atom_list{ analysis_view.GetAtomObjectList(group_key, class_key) };
     ASSERT_FALSE(atom_list.empty());
 
-    RHBMGroupEstimationResult result;
+    rg::RHBMGroupEstimationResult result;
     result.mu_mean = (Eigen::Vector2d() << 0.1, 1.2).finished();
     result.mu_mdpde = (Eigen::Vector2d() << 0.2, 1.1).finished();
     result.mu_prior = (Eigen::Vector2d() << 0.3, 1.0).finished();
@@ -316,7 +316,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorRejectsAtomGroupEstimateRes
     const auto & class_key{ ChemicalDataHelper::GetSimpleAtomClassKey() };
     const auto group_key{ analysis_view.CollectAtomGroupKeys(class_key).front() };
 
-    RHBMGroupEstimationResult result;
+    rg::RHBMGroupEstimationResult result;
     result.beta_posterior_matrix = Eigen::MatrixXd::Zero(2, 0);
     result.outlier_flag_array = Eigen::Array<bool, Eigen::Dynamic, 1>::Zero(0);
     result.statistical_distance_array = Eigen::ArrayXd::Zero(0);
@@ -341,7 +341,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesBondGroupEstimateRes
     const auto & bond_list{ analysis_view.GetBondObjectList(group_key, class_key) };
     ASSERT_FALSE(bond_list.empty());
 
-    RHBMGroupEstimationResult result;
+    rg::RHBMGroupEstimationResult result;
     result.mu_mean = (Eigen::Vector2d() << 0.1, 1.2).finished();
     result.mu_mdpde = (Eigen::Vector2d() << 0.2, 1.1).finished();
     result.mu_prior = (Eigen::Vector2d() << 0.3, 1.0).finished();
@@ -392,7 +392,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorRejectsBondGroupEstimateRes
     const auto group_key{ analysis_view.CollectBondGroupKeys(class_key).front() };
     const auto member_count{ analysis_view.GetBondObjectList(group_key, class_key).size() };
 
-    RHBMGroupEstimationResult result;
+    rg::RHBMGroupEstimationResult result;
     result.beta_posterior_matrix =
         Eigen::MatrixXd::Zero(2, static_cast<Eigen::Index>(member_count));
     result.capital_sigma_posterior_list.assign(member_count == 0 ? 0 : member_count - 1, Eigen::Matrix2d::Identity());

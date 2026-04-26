@@ -7,6 +7,8 @@
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
 
+namespace rg = rhbm_gem;
+
 namespace
 {
 Eigen::VectorXd MakeVector(std::initializer_list<double> values)
@@ -20,7 +22,7 @@ Eigen::VectorXd MakeVector(std::initializer_list<double> values)
     return result;
 }
 
-RHBMMemberDataset MakeLinearDataset(double slope)
+rg::RHBMMemberDataset MakeLinearDataset(double slope)
 {
     const SeriesPointList data_list{
         SeriesPoint({ 1.0, 0.0 }, 1.0),
@@ -127,7 +129,7 @@ TEST(RHBMTrainerTest, TrainAlphaRAggregatesSingleBatchResultsAndSelectsMinimum)
 {
     const rhbm_gem::rhbm_trainer::AlphaTrainer trainer{ 0.0, 1.0, 0.5 };
     const auto & alpha_list{ trainer.AlphaGrid() };
-    const std::vector<RHBMMemberDataset> dataset_list{
+    const std::vector<rg::RHBMMemberDataset> dataset_list{
         MakeLinearDataset(2.0),
         MakeLinearDataset(-0.5)
     };
@@ -220,8 +222,8 @@ TEST(RHBMTrainerTest, TrainAlphaRequiresExplicitSubsetSizeAndRejectsInvalidInput
 {
     const rhbm_gem::rhbm_trainer::AlphaTrainer trainer{ 0.0, 1.0, 0.5 };
     const auto dataset{ MakeLinearDataset(1.0) };
-    const std::vector<RHBMMemberDataset> empty_dataset_list;
-    const std::vector<RHBMMemberDataset> dataset_list{ dataset };
+    const std::vector<rg::RHBMMemberDataset> empty_dataset_list;
+    const std::vector<rg::RHBMMemberDataset> dataset_list{ dataset };
     rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions default_options;
 
     EXPECT_THROW(
@@ -257,7 +259,7 @@ TEST(RHBMTrainerTest, TrainAlphaRequiresExplicitSubsetSizeAndRejectsInvalidInput
 TEST(RHBMTrainerTest, AlphaRunOptionsPropagatesProgressToBiasStudies)
 {
     const rhbm_gem::rhbm_trainer::AlphaTrainer trainer{ 0.0, 1.0, 0.5 };
-    const std::vector<RHBMMemberDataset> dataset_list{
+    const std::vector<rg::RHBMMemberDataset> dataset_list{
         MakeLinearDataset(2.0),
         MakeLinearDataset(-0.5)
     };
@@ -293,7 +295,7 @@ TEST(RHBMTrainerTest, AlphaRunOptionsPropagatesProgressToBiasStudies)
 TEST(RHBMTrainerTest, StudyAlphaRBiasReturnsFiniteMatrixAndReportsProgress)
 {
     const rhbm_gem::rhbm_trainer::AlphaTrainer trainer{ 0.0, 1.0, 0.5 };
-    const std::vector<RHBMMemberDataset> dataset_list{
+    const std::vector<rg::RHBMMemberDataset> dataset_list{
         MakeLinearDataset(2.0),
         MakeLinearDataset(-0.5)
     };
@@ -349,7 +351,7 @@ TEST(RHBMTrainerTest, StudyAlphaGBiasReturnsFiniteMatrixAndReportsProgress)
 TEST(RHBMTrainerTest, StudyAlphaBiasRejectsEmptyInputs)
 {
     const rhbm_gem::rhbm_trainer::AlphaTrainer trainer{ 0.0, 1.0, 0.5 };
-    const std::vector<RHBMMemberDataset> empty_dataset_list;
+    const std::vector<rg::RHBMMemberDataset> empty_dataset_list;
     const std::vector<std::vector<Eigen::VectorXd>> empty_beta_group_list;
     const std::vector<std::vector<Eigen::VectorXd>> beta_group_with_empty_member_list{
         {}

@@ -2,7 +2,7 @@
 
 #include <cmath>
 
-#include <rhbm_gem/utils/hrl/GaussianStatistics.hpp>
+#include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 #include <rhbm_gem/utils/domain/Constants.hpp>
 
 #include "data/detail/GroupPotentialEntry.hpp"
@@ -10,7 +10,7 @@
 
 namespace rg = rhbm_gem;
 
-TEST(GaussianStatisticsTest, LocalAndGroupIntensityStayEquivalent)
+TEST(RHBMTypesTest, LocalAndGroupIntensityStayEquivalent)
 {
     const rg::GaussianEstimate estimate{ 9.0, 1.5 };
     const rg::GaussianEstimate variance{ 0.5, 0.2 };
@@ -34,7 +34,7 @@ TEST(GaussianStatisticsTest, LocalAndGroupIntensityStayEquivalent)
         group_posterior.GetVariance(2));
 }
 
-TEST(GaussianStatisticsTest, PublicGaussianStatisticsHeaderExposesStableValueMath)
+TEST(RHBMTypesTest, PublicRHBMTypesHeaderExposesStableGaussianValueMath)
 {
     const rg::GaussianEstimate estimate{ 9.0, 1.5 };
     const rg::GaussianEstimate variance{ 0.5, 0.2 };

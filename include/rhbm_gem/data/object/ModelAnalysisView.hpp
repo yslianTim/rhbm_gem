@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include <rhbm_gem/utils/hrl/GaussianStatistics.hpp>
+#include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 

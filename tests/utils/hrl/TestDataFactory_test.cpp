@@ -7,6 +7,7 @@
 
 namespace {
 namespace tdf = rhbm_gem::test_data_factory;
+namespace rg = rhbm_gem;
 
 Eigen::VectorXd MakeVector(std::initializer_list<double> values)
 {
@@ -20,8 +21,8 @@ Eigen::VectorXd MakeVector(std::initializer_list<double> values)
 }
 
 void ExpectDatasetEquals(
-    const RHBMMemberDataset & lhs,
-    const RHBMMemberDataset & rhs)
+    const rg::RHBMMemberDataset & lhs,
+    const rg::RHBMMemberDataset & rhs)
 {
     ASSERT_EQ(lhs.X.rows(), rhs.X.rows());
     ASSERT_EQ(lhs.X.cols(), rhs.X.cols());

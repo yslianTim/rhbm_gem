@@ -15,6 +15,8 @@
 
 #include <boost/math/distributions/chi_squared.hpp>
 
+using namespace rhbm_gem;
+
 RHBMMemberDataset rhbm_gem::rhbm_helper::BuildMemberDataset(
     const SeriesPointList & series_point_list)
 {

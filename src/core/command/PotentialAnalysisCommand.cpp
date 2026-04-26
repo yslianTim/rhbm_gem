@@ -39,6 +39,7 @@
 
 namespace {
 namespace ls = rhbm_gem::linearization_service;
+namespace rg = rhbm_gem;
 
 constexpr std::string_view kModelKey{ "model" };
 constexpr std::string_view kMapKey{ "map" };
@@ -61,9 +62,9 @@ constexpr std::string_view kSamplingRangeIssue{ "--sampling-range" };
 constexpr std::string_view kFitRangeIssue{ "--fit-range" };
 constexpr std::string_view kTrainingAlphaRangeIssue{ "--training-alpha-range" };
 
-RHBMExecutionOptions MakePotentialAnalysisExecutionOptions(int thread_size, bool quiet_mode)
+rg::RHBMExecutionOptions MakePotentialAnalysisExecutionOptions(int thread_size, bool quiet_mode)
 {
-    RHBMExecutionOptions execution_options;
+    rg::RHBMExecutionOptions execution_options;
     execution_options.quiet_mode = quiet_mode;
     execution_options.thread_size = thread_size;
     return execution_options;
@@ -435,8 +436,8 @@ void PotentialAnalysisCommand::RunAtomPotentialFittingWorkflow(
             auto group_key{ group_keys[idx] };
             const auto & atom_list{ analysis_view.GetAtomObjectList(group_key, class_key) };
             auto group_size{ atom_list.size() };
-            std::vector<RHBMMemberDataset> member_datasets;
-            std::vector<RHBMBetaEstimateResult> member_fit_results;
+            std::vector<rg::RHBMMemberDataset> member_datasets;
+            std::vector<rg::RHBMBetaEstimateResult> member_fit_results;
             member_datasets.reserve(group_size);
             member_fit_results.reserve(group_size);
             for (const auto & atom : atom_list)
@@ -591,7 +592,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     Logger::Log(LogLevel::Info, alpha_trainer.GetAlphaGridSummary().str());
 
     // Alpha_R Training
-    std::vector<RHBMMemberDataset> selected_atom_dataset_list;
+    std::vector<rg::RHBMMemberDataset> selected_atom_dataset_list;
     selected_atom_dataset_list.reserve(model_object.GetSelectedAtomCount());
     for (auto & atom : model_object.GetSelectedAtoms())
     {
@@ -633,7 +634,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     // Alpha_G Training
     RunLocalPotentialFitting(model_object, alpha_r);
     
-    std::vector<std::vector<RHBMBetaVector>> beta_group_list;
+    std::vector<std::vector<rg::RHBMBetaVector>> beta_group_list;
     const auto component_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     const auto component_group_keys{ analysis_view.CollectAtomGroupKeys(component_class_key) };
     beta_group_list.reserve(component_group_keys.size());
@@ -643,7 +644,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
         if (group_atom_list.size() < 10) continue;
         if (group_atom_list.front()->IsMainChainAtom() == false) continue;
 
-        std::vector<RHBMBetaVector> beta_list;
+        std::vector<rg::RHBMBetaVector> beta_list;
         beta_list.reserve(group_atom_list.size());
         for (auto * atom : group_atom_list)
         {

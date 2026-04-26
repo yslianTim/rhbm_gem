@@ -90,7 +90,7 @@ cmake --build build --target lint_repo
 - `DataObjectModelAnalysis_test.cpp` for selection, local entry, and group rebuild behavior.
 - `DataObjectAssemblySpatialQuery_test.cpp` for model assembly, derived state, and neighbor queries.
 - `DataObjectPainterIngestion_test.cpp` for painter ingestion contracts.
-- `GaussianStatistics_test.cpp` and `LocalPotentialSeries_test.cpp` for analysis value math and local potential series derivations.
+- `RHBMTypes_test.cpp` and `LocalPotentialSeries_test.cpp` for analysis value math and local potential series derivations.
 - `DataObjectPersistence_test.cpp`, `DataObjectSchemaLifecycle_test.cpp`, and `DataObjectSchemaValidation_test.cpp` for database persistence/schema behavior.
 - Place new fixture files under `tests/fixtures/`.
 - Use `tests/support/` for shared test-only seams and reusable helpers/assertions.

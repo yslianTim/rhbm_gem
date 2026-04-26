@@ -115,7 +115,7 @@ set(DATA_RUNTIME_TEST_SOURCES
     data/DataObjectModelAnalysis_test.cpp
     data/DataObjectPainterIngestion_test.cpp
     data/DataObjectImportRegression_test.cpp
-    data/GaussianStatistics_test.cpp
+    data/RHBMTypes_test.cpp
     data/LocalPotentialSeries_test.cpp
 )
 

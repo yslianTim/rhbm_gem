@@ -9,6 +9,8 @@
 
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 
+namespace rg = rhbm_gem;
+
 namespace
 {
 template <typename Callable>
@@ -38,19 +40,19 @@ Eigen::VectorXd MakeVector(std::initializer_list<double> values)
     return result;
 }
 
-RHBMDiagonalMatrix MakeDiagonal(std::initializer_list<double> values)
+rg::RHBMDiagonalMatrix MakeDiagonal(std::initializer_list<double> values)
 {
-    RHBMDiagonalMatrix result(static_cast<Eigen::Index>(values.size()));
+    rg::RHBMDiagonalMatrix result(static_cast<Eigen::Index>(values.size()));
     result.diagonal() = MakeVector(values);
     return result;
 }
 
-RHBMMemberDataset MakeDataset(
+rg::RHBMMemberDataset MakeDataset(
     const Eigen::MatrixXd & X,
     const Eigen::VectorXd & y,
     const Eigen::VectorXd & score)
 {
-    return RHBMMemberDataset{ X, y, score };
+    return rg::RHBMMemberDataset{ X, y, score };
 }
 
 SeriesPoint MakeSeriesPoint(std::initializer_list<double> values)
@@ -61,19 +63,19 @@ SeriesPoint MakeSeriesPoint(std::initializer_list<double> values)
     return SeriesPoint{ std::move(row), response };
 }
 
-RHBMMemberDataset MakeDataset(std::initializer_list<SeriesPoint> rows)
+rg::RHBMMemberDataset MakeDataset(std::initializer_list<SeriesPoint> rows)
 {
     return rhbm_gem::rhbm_helper::BuildMemberDataset(SeriesPointList(rows));
 }
 
-RHBMBetaEstimateResult MakeFitResult(
+rg::RHBMBetaEstimateResult MakeFitResult(
     std::initializer_list<double> beta_values,
     double sigma_square,
     std::initializer_list<double> weight_values,
     std::initializer_list<double> covariance_values,
-    RHBMEstimationStatus status = RHBMEstimationStatus::SUCCESS)
+    rg::RHBMEstimationStatus status = rg::RHBMEstimationStatus::SUCCESS)
 {
-    RHBMBetaEstimateResult fit_result;
+    rg::RHBMBetaEstimateResult fit_result;
     fit_result.status = status;
     fit_result.beta_mdpde = MakeVector(beta_values);
     fit_result.sigma_square = sigma_square;
@@ -294,7 +296,7 @@ TEST(RHBMHelperTest, EstimateGroupSingleMemberUsesFallbackResult)
 
     const auto result{ rhbm_gem::rhbm_helper::EstimateGroup(0.0, input) };
 
-    EXPECT_EQ(RHBMEstimationStatus::SINGLE_MEMBER, result.status);
+    EXPECT_EQ(rg::RHBMEstimationStatus::SINGLE_MEMBER, result.status);
     EXPECT_TRUE(result.mu_mean.isApprox(MakeVector({ 1.0, 2.0 }), 1e-12));
     EXPECT_TRUE(result.mu_prior.isApprox(MakeVector({ 1.0, 2.0 }), 1e-12));
     EXPECT_TRUE(result.beta_posterior_matrix.col(0).isApprox(MakeVector({ 1.0, 2.0 }), 1e-12));
@@ -304,7 +306,7 @@ TEST(RHBMHelperTest, EstimateGroupSingleMemberUsesFallbackResult)
 
 TEST(RHBMHelperTest, EstimateGroupRejectsMissingMemberFitResults)
 {
-    RHBMGroupEstimationInput input;
+    rg::RHBMGroupEstimationInput input;
     input.basis_size = 2;
     input.member_datasets.push_back(
         { Eigen::MatrixXd::Identity(2, 2), MakeVector({ 1.0, 2.0 }), MakeVector({ 1.0, 1.0 }) });
@@ -314,7 +316,7 @@ TEST(RHBMHelperTest, EstimateGroupRejectsMissingMemberFitResults)
 
 TEST(RHBMHelperTest, EstimateGroupRejectsMismatchedWeightSize)
 {
-    RHBMGroupEstimationInput input;
+    rg::RHBMGroupEstimationInput input;
     input.basis_size = 2;
     input.member_datasets.push_back({
         Eigen::MatrixXd::Identity(2, 2),
@@ -330,7 +332,7 @@ TEST(RHBMHelperTest, EstimateGroupRejectsMismatchedWeightSize)
 
 TEST(RHBMHelperTest, EstimateGroupRejectsInconsistentScoreSize)
 {
-    RHBMGroupEstimationInput input;
+    rg::RHBMGroupEstimationInput input;
     input.basis_size = 2;
     input.member_datasets.push_back({
         Eigen::MatrixXd::Identity(2, 2),
@@ -345,7 +347,7 @@ TEST(RHBMHelperTest, EstimateGroupRejectsInconsistentScoreSize)
 
 TEST(RHBMHelperTest, EstimateGroupRejectsBasisSizeMismatchWithMemberDatasets)
 {
-    RHBMGroupEstimationInput input;
+    rg::RHBMGroupEstimationInput input;
     input.basis_size = 3;
     input.member_datasets.push_back({
         Eigen::MatrixXd::Identity(2, 2),
@@ -375,7 +377,7 @@ TEST(RHBMHelperTest, EstimateGroupTwoMembersPinsMuPriorToMuMDPDE)
 
     const auto result{ rhbm_gem::rhbm_helper::EstimateGroup(0.0, input) };
 
-    EXPECT_EQ(RHBMEstimationStatus::SUCCESS, result.status);
+    EXPECT_EQ(rg::RHBMEstimationStatus::SUCCESS, result.status);
     EXPECT_TRUE(result.mu_prior.isApprox(result.mu_mdpde, 1e-12));
     EXPECT_EQ(2, result.beta_posterior_matrix.cols());
     ASSERT_EQ(2u, result.capital_sigma_posterior_list.size());
@@ -397,20 +399,20 @@ TEST(RHBMHelperTest, EstimateGroupAllowsConvergenceFallbackStatuses)
                     0.25,
                     { 1.0, 1.0 },
                     { 0.25, 0.25 },
-                    RHBMEstimationStatus::MAX_ITERATIONS_REACHED),
+                    rg::RHBMEstimationStatus::MAX_ITERATIONS_REACHED),
                 MakeFitResult(
                     { 2.0, 2.0 },
                     0.5,
                     { 1.0, 1.0 },
                     { 0.5, 0.5 },
-                    RHBMEstimationStatus::NUMERICAL_FALLBACK)
+                    rg::RHBMEstimationStatus::NUMERICAL_FALLBACK)
             }
         )
     };
 
     const auto result{ rhbm_gem::rhbm_helper::EstimateGroup(0.0, input) };
 
-    EXPECT_EQ(RHBMEstimationStatus::SUCCESS, result.status);
+    EXPECT_EQ(rg::RHBMEstimationStatus::SUCCESS, result.status);
     EXPECT_EQ(2, result.beta_posterior_matrix.cols());
 }
 
@@ -430,7 +432,7 @@ TEST(RHBMHelperTest, EstimateBetaMDPDEAlphaZeroMatchesOLS)
 
     const auto result{ rhbm_gem::rhbm_helper::EstimateBetaMDPDE(0.0, MakeDataset(X, y, score)) };
 
-    EXPECT_EQ(RHBMEstimationStatus::SUCCESS, result.status);
+    EXPECT_EQ(rg::RHBMEstimationStatus::SUCCESS, result.status);
     EXPECT_TRUE(result.beta_ols.isApprox(expected_beta, 1e-12));
     EXPECT_TRUE(result.beta_mdpde.isApprox(expected_beta, 1e-12));
 }
@@ -443,7 +445,7 @@ TEST(RHBMHelperTest, EstimateBetaMDPDESingleDatumReturnsInsufficientData)
 
     const auto result{ rhbm_gem::rhbm_helper::EstimateBetaMDPDE(0.2, MakeDataset(X, y, score)) };
 
-    EXPECT_EQ(RHBMEstimationStatus::INSUFFICIENT_DATA, result.status);
+    EXPECT_EQ(rg::RHBMEstimationStatus::INSUFFICIENT_DATA, result.status);
     EXPECT_TRUE(result.beta_mdpde.isApprox(Eigen::VectorXd::Zero(2), 1e-12));
     EXPECT_DOUBLE_EQ(std::numeric_limits<double>::max(), result.sigma_square);
 }
@@ -453,7 +455,7 @@ TEST(RHBMHelperTest, EstimateBetaMDPDERejectsInvalidParameters)
     const Eigen::MatrixXd X{ Eigen::MatrixXd::Identity(2, 2) };
     const Eigen::VectorXd y{ MakeVector({ 1.0, 2.0 }) };
     const Eigen::VectorXd score{ MakeVector({ 1.0, 1.0 }) };
-    RHBMExecutionOptions options;
+    rg::RHBMExecutionOptions options;
 
     EXPECT_THROW(
         rhbm_gem::rhbm_helper::EstimateBetaMDPDE(-0.1, MakeDataset(X, y, score), options),
@@ -466,14 +468,14 @@ TEST(RHBMHelperTest, EstimateBetaMDPDERejectsInvalidParameters)
         std::invalid_argument
     );
 
-    options = RHBMExecutionOptions{};
+    options = rg::RHBMExecutionOptions{};
     options.tolerance = -1.0;
     EXPECT_THROW(
         rhbm_gem::rhbm_helper::EstimateBetaMDPDE(0.0, MakeDataset(X, y, score), options),
         std::invalid_argument
     );
 
-    options = RHBMExecutionOptions{};
+    options = rg::RHBMExecutionOptions{};
     options.data_weight_min = 0.0;
     EXPECT_THROW(
         rhbm_gem::rhbm_helper::EstimateBetaMDPDE(0.0, MakeDataset(X, y, score), options),
@@ -525,7 +527,7 @@ TEST(RHBMHelperTest, EstimateMuMDPDESingleMemberReturnsSingleMember)
 
     const auto result{ rhbm_gem::rhbm_helper::EstimateMuMDPDE(0.2, beta_array) };
 
-    EXPECT_EQ(RHBMEstimationStatus::SINGLE_MEMBER, result.status);
+    EXPECT_EQ(rg::RHBMEstimationStatus::SINGLE_MEMBER, result.status);
     EXPECT_TRUE(result.mu_mean.isApprox(MakeVector({ 1.0, 2.0 }), 1e-12));
     EXPECT_TRUE(result.mu_mdpde.isApprox(MakeVector({ 1.0, 2.0 }), 1e-12));
 }
@@ -535,7 +537,7 @@ TEST(RHBMHelperTest, EstimateMuMDPDERejectsInvalidParameters)
     Eigen::MatrixXd beta_array(2, 2);
     beta_array << 1.0, 2.0,
                   3.0, 4.0;
-    RHBMExecutionOptions options;
+    rg::RHBMExecutionOptions options;
 
     EXPECT_THROW(
         rhbm_gem::rhbm_helper::EstimateMuMDPDE(std::numeric_limits<double>::quiet_NaN(), beta_array, options),
@@ -545,14 +547,14 @@ TEST(RHBMHelperTest, EstimateMuMDPDERejectsInvalidParameters)
     options.max_iterations = 0;
     EXPECT_THROW(rhbm_gem::rhbm_helper::EstimateMuMDPDE(0.0, beta_array, options), std::invalid_argument);
 
-    options = RHBMExecutionOptions{};
+    options = rg::RHBMExecutionOptions{};
     options.member_weight_min = 0.0;
     EXPECT_THROW(rhbm_gem::rhbm_helper::EstimateMuMDPDE(0.0, beta_array, options), std::invalid_argument);
 }
 
 TEST(RHBMHelperTest, EstimateWEBRejectsInvalidMemberCovarianceShapeWithHelperMessage)
 {
-    const std::vector<RHBMMemberDataset> member_datasets{
+    const std::vector<rg::RHBMMemberDataset> member_datasets{
         { Eigen::MatrixXd::Identity(2, 2), MakeVector({ 1.0, 2.0 }), MakeVector({ 1.0, 1.0 }) },
         { Eigen::MatrixXd::Identity(2, 2), MakeVector({ 3.0, 4.0 }), MakeVector({ 1.0, 1.0 }) }
     };
@@ -573,7 +575,7 @@ TEST(RHBMHelperTest, EstimateWEBRejectsInvalidMemberCovarianceShapeWithHelperMes
 
 TEST(RHBMHelperTest, EstimateWEBReturnsSingleMemberStatus)
 {
-    const std::vector<RHBMMemberDataset> member_datasets{
+    const std::vector<rg::RHBMMemberDataset> member_datasets{
         { Eigen::MatrixXd::Identity(2, 2), MakeVector({ 1.0, 2.0 }), MakeVector({ 1.0, 1.0 }) }
     };
 
@@ -586,12 +588,12 @@ TEST(RHBMHelperTest, EstimateWEBReturnsSingleMemberStatus)
         )
     };
 
-    EXPECT_EQ(RHBMEstimationStatus::SINGLE_MEMBER, result.status);
+    EXPECT_EQ(rg::RHBMEstimationStatus::SINGLE_MEMBER, result.status);
 }
 
 TEST(RHBMHelperTest, EstimateWEBForTwoMembersPinsMuPriorToMuMDPDE)
 {
-    const std::vector<RHBMMemberDataset> member_datasets{
+    const std::vector<rg::RHBMMemberDataset> member_datasets{
         { Eigen::MatrixXd::Identity(2, 2), MakeVector({ 1.0, 3.0 }), MakeVector({ 1.0, 1.0 }) },
         { Eigen::MatrixXd::Identity(2, 2), MakeVector({ 5.0, 7.0 }), MakeVector({ 1.0, 1.0 }) }
     };
@@ -606,13 +608,13 @@ TEST(RHBMHelperTest, EstimateWEBForTwoMembersPinsMuPriorToMuMDPDE)
         )
     };
 
-    EXPECT_EQ(RHBMEstimationStatus::SUCCESS, result.status);
+    EXPECT_EQ(rg::RHBMEstimationStatus::SUCCESS, result.status);
     EXPECT_TRUE(result.mu_prior.isApprox(mu_mdpde, 1e-12));
 }
 
 TEST(RHBMHelperTest, EstimateWEBRejectsMismatchedMemberCounts)
 {
-    const std::vector<RHBMMemberDataset> member_datasets{
+    const std::vector<rg::RHBMMemberDataset> member_datasets{
         { Eigen::MatrixXd::Identity(2, 2), MakeVector({ 1.0, 2.0 }), MakeVector({ 1.0, 1.0 }) },
         { Eigen::MatrixXd::Identity(2, 2), MakeVector({ 3.0, 4.0 }), MakeVector({ 1.0, 1.0 }) }
     };
