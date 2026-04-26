@@ -266,13 +266,6 @@ std::tuple<GaussianParameterVector, GaussianParameterVector> BuildGaus3DModelWit
     return std::make_tuple(gaus_model, gaus_model_variance);
 }
 
-void ValidateSpec(const LinearizationSpec & spec)
-{
-    rhbm_gem::numeric_validation::RequirePositive(
-        spec.basis_size,
-        "LinearizationSpec basis_size");
-}
-
 void ValidateContextIfRequired(
     const LinearizationSpec & spec,
     const LinearizationContext & context)
@@ -351,7 +344,7 @@ SeriesPointList BuildDatasetSeries(
     double x_max,
     const LinearizationContext & context)
 {
-    ValidateSpec(spec);
+    numeric_validation::RequirePositive(spec.basis_size, "LinearizationSpec basis_size");
     ValidateContextIfRequired(spec, context);
 
     SeriesPointList basis_and_response_entry_list;
@@ -410,7 +403,7 @@ SeriesPointList BuildLinearModelSeries(
     const LocalPotentialSampleList & sampling_entries,
     const LinearizationContext & context)
 {
-    ValidateSpec(spec);
+    numeric_validation::RequirePositive(spec.basis_size, "LinearizationSpec basis_size");
     ValidateContextIfRequired(spec, context);
     if (spec.basis_size < 2)
     {
@@ -449,7 +442,7 @@ RHBMMemberDataset BuildDataset(
     double x_max,
     const LinearizationContext & context)
 {
-    return rhbm_gem::rhbm_helper::BuildMemberDataset(
+    return rhbm_helper::BuildMemberDataset(
         BuildDatasetSeries(spec, sampling_entries, x_min, x_max, context));
 }
 
@@ -457,7 +450,7 @@ RHBMBetaVector EncodeGaussianToBeta(
     const LinearizationSpec & spec,
     const GaussianParameterVector & gaussian_parameters)
 {
-    ValidateSpec(spec);
+    numeric_validation::RequirePositive(spec.basis_size, "LinearizationSpec basis_size");
     if (spec.linearization_kind != LinearizationKind::LOG_QUADRATIC)
     {
         throw std::invalid_argument("EncodeGaussianToBeta only supports log-quadratic linearization.");
@@ -494,7 +487,7 @@ GaussianParameterVector DecodeLocalBeta(
     const RHBMBetaVector & linear_model,
     const LinearizationContext & context)
 {
-    ValidateSpec(spec);
+    numeric_validation::RequirePositive(spec.basis_size, "LinearizationSpec basis_size");
     ValidateContextIfRequired(spec, context);
     return BuildGaussianVector(spec, linear_model, &context);
 }
@@ -503,7 +496,7 @@ GaussianParameterVector DecodeGroupBeta(
     const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model)
 {
-    ValidateSpec(spec);
+    numeric_validation::RequirePositive(spec.basis_size, "LinearizationSpec basis_size");
     return BuildGaussianVector(spec, linear_model, nullptr);
 }
 
@@ -512,7 +505,7 @@ std::tuple<GaussianParameterVector, GaussianParameterVector> DecodePosterior(
     const RHBMBetaVector & linear_model,
     const RHBMPosteriorCovarianceMatrix & covariance_matrix)
 {
-    ValidateSpec(spec);
+    numeric_validation::RequirePositive(spec.basis_size, "LinearizationSpec basis_size");
     switch (spec.model_kind)
     {
     case GaussianModelKind::MODEL_2D:
