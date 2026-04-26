@@ -71,7 +71,6 @@ target_sources(rhbm_gem PRIVATE
     utils/domain/ROOTHelper.cpp
     utils/math/CylinderSampler.cpp
     utils/math/ElectricPotential.cpp
-    utils/math/GaussianResponseMath.cpp
     utils/math/GridSampler.cpp
     utils/math/SphereSampler.cpp
     utils/hrl/RHBMTrainer.cpp

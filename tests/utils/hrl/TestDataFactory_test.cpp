@@ -1,8 +1,10 @@
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <initializer_list>
 #include <limits>
 
+#include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/hrl/TestDataFactory.hpp>
 
 namespace {
@@ -18,6 +20,13 @@ Eigen::VectorXd MakeVector(std::initializer_list<double> values)
         result(index++) = value;
     }
     return result;
+}
+
+double ComputeExpectedGaussianResponseAtDistance3D(double distance, double width)
+{
+    const auto width_square{ width * width };
+    return 1.0 / std::pow(Constants::two_pi * width_square, 1.5) *
+        std::exp(-0.5 * distance * distance / width_square);
 }
 
 void ExpectDatasetEquals(
@@ -161,6 +170,42 @@ TEST(TestDataFactoryTest, BuildBetaTestInputChangesWhenNoisePolicyChanges)
     );
 }
 
+TEST(TestDataFactoryTest, BuildBetaTestInputUsesExpectedZeroDistanceGaussianResponse)
+{
+    tdf::TestDataFactory factory(
+        3,
+        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+    factory.SetFittingRange(0.0, 0.0);
+
+    constexpr double amplitude{ 2.0 };
+    constexpr double width{ 0.5 };
+    constexpr double intercept{ 0.0 };
+    const auto input{
+        factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
+            MakeVector({ amplitude, width, intercept }),
+            1,
+            0.0,
+            0.0,
+            1,
+            42
+        })
+    };
+
+    ASSERT_EQ(input.replica_datasets.size(), 1u);
+    const auto & dataset{ input.replica_datasets.front() };
+    ASSERT_EQ(dataset.X.rows(), 1);
+    ASSERT_EQ(dataset.X.cols(), 2);
+    ASSERT_EQ(dataset.y.rows(), 1);
+    EXPECT_DOUBLE_EQ(dataset.X(0, 0), 1.0);
+    EXPECT_DOUBLE_EQ(dataset.X(0, 1), 0.0);
+    EXPECT_DOUBLE_EQ(dataset.score(0), 1.0);
+
+    const auto expected_response{
+        amplitude * ComputeExpectedGaussianResponseAtDistance3D(0.0, width) + intercept
+    };
+    EXPECT_NEAR(std::log(static_cast<float>(expected_response)), dataset.y(0), 1.0e-7);
+}
+
 TEST(TestDataFactoryTest, BuildMuTestInputIsReproducibleWithFixedSeed)
 {
     tdf::TestDataFactory factory(
@@ -234,6 +279,50 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputProvidesPairedDatasetsAndSam
     }
 }
 
+TEST(TestDataFactoryTest, BuildNeighborhoodTestInputSamplingSummaryIncludesNeighborContribution)
+{
+    tdf::TestDataFactory factory(
+        3,
+        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+    factory.SetFittingRange(0.0, 1.0);
+
+    constexpr double amplitude{ 2.0 };
+    constexpr double width{ 0.5 };
+    constexpr double intercept{ 0.25 };
+    constexpr double neighbor_distance{ 1.0 };
+    const auto input{
+        factory.BuildNeighborhoodTestInput(tdf::TestDataFactory::NeighborhoodScenario{
+            MakeVector({ amplitude, width, intercept }),
+            1,
+            0.0,
+            0.0,
+            1.0,
+            neighbor_distance,
+            1,
+            0.0,
+            true,
+            0.0,
+            0.0,
+            1,
+            11
+        })
+    };
+
+    ASSERT_EQ(input.sampling_summaries.size(), 1u);
+    const auto & summary{ input.sampling_summaries.front() };
+    ASSERT_EQ(summary.size(), 1u);
+    EXPECT_FLOAT_EQ(summary.front().distance, 0.0f);
+    ASSERT_TRUE(summary.front().position.has_value());
+
+    const auto expected_response{
+        amplitude * (
+            ComputeExpectedGaussianResponseAtDistance3D(0.0, width) +
+            ComputeExpectedGaussianResponseAtDistance3D(neighbor_distance, width)) +
+        intercept
+    };
+    EXPECT_NEAR(expected_response, summary.front().response, 1.0e-5);
+}
+
 TEST(TestDataFactoryTest, BuildNeighborhoodTestInputIsReproducibleWithFixedSeed)
 {
     tdf::TestDataFactory factory(
@@ -278,6 +367,41 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputIsReproducibleWithFixedSeed)
             first_input.sampling_summaries.at(i),
             second_input.sampling_summaries.at(i));
     }
+}
+
+TEST(TestDataFactoryTest, BuildTestInputsRejectNonPositiveGaussianWidth)
+{
+    tdf::TestDataFactory factory(
+        3,
+        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+
+    EXPECT_THROW(
+        factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
+            MakeVector({ 1.0, 0.0, 0.0 }),
+            8,
+            0.05,
+            0.1,
+            1,
+            42
+        }),
+        std::invalid_argument);
+    EXPECT_THROW(
+        factory.BuildNeighborhoodTestInput(tdf::TestDataFactory::NeighborhoodScenario{
+            MakeVector({ 1.0, -0.5, 0.0 }),
+            8,
+            0.05,
+            0.0,
+            1.0,
+            2.0,
+            1,
+            120.0,
+            false,
+            0.0,
+            4.0,
+            1,
+            11
+        }),
+        std::invalid_argument);
 }
 
 TEST(TestDataFactoryTest, ConstructorRejectsInvalidNumericInputs)

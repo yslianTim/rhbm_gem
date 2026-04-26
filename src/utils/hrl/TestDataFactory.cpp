@@ -4,7 +4,6 @@
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
-#include <rhbm_gem/utils/math/GaussianResponseMath.hpp>
 #include <rhbm_gem/utils/math/LocalPotentialSampleScoring.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
@@ -105,6 +104,43 @@ void ValidateGaussianModel(const GaussianModel3D & model)
     rhbm_gem::numeric_validation::RequireFinite(model.intercept, "GaussianModel3D intercept");
 }
 
+double ComputeGaussianCoefficient3D(double width)
+{
+    const auto width_square{ width * width };
+    return 1.0 / std::pow(Constants::two_pi * width_square, 1.5);
+}
+
+double ComputeGaussianResponseAtDistance3D(double distance, double width)
+{
+    const auto width_square{ width * width };
+    return ComputeGaussianCoefficient3D(width) *
+        std::exp(-0.5 * distance * distance / width_square);
+}
+
+double ComputeGaussianResponseAtPoint3D(
+    const Eigen::VectorXd & point,
+    const Eigen::VectorXd & center,
+    double width)
+{
+    const auto width_square{ width * width };
+    return ComputeGaussianCoefficient3D(width) *
+        std::exp(-0.5 * (point - center).squaredNorm() / width_square);
+}
+
+double ComputeGaussianResponseWithNeighborhood3D(
+    const Eigen::VectorXd & point,
+    const Eigen::VectorXd & center,
+    const std::vector<Eigen::VectorXd> & neighbor_center_list,
+    double width)
+{
+    auto response{ ComputeGaussianResponseAtPoint3D(point, center, width) };
+    for (const auto & neighbor_center : neighbor_center_list)
+    {
+        response += ComputeGaussianResponseAtPoint3D(point, neighbor_center, width);
+    }
+    return response;
+}
+
 std::vector<Eigen::VectorXd> BuildNeighborCenterList(
     const NeighborhoodSamplingOptions & options)
 {
@@ -184,10 +220,7 @@ LocalPotentialSampleList GenerateRadialSamples(
     {
         const auto distance{ dist_distance(generator) };
         const auto response{
-            model.amplitude *
-                rhbm_gem::GaussianResponseMath::GetGaussianResponseAtDistance(
-                    distance,
-                    model.width) +
+            model.amplitude * ComputeGaussianResponseAtDistance3D(distance, model.width) +
             model.intercept
         };
         sample_list.emplace_back(LocalPotentialSample{
@@ -257,13 +290,12 @@ LocalPotentialSampleList GenerateNeighborhoodSamples(
         point(2) = sampling_point.position[2];
 
         const auto response{
-            model.amplitude *
-                rhbm_gem::GaussianResponseMath::GetGaussianResponseAtPointWithNeighborhood(
-                    point,
-                    atom_center,
-                    neighbor_center_list,
-                    model.width
-                ) +
+            model.amplitude * ComputeGaussianResponseWithNeighborhood3D(
+                point,
+                atom_center,
+                neighbor_center_list,
+                model.width
+            ) +
             model.intercept
         };
         sample_list.emplace_back(LocalPotentialSample{
@@ -296,7 +328,7 @@ LocalPotentialSampleList BuildGaussianSampling(
     };
     std::uniform_real_distribution<> dist_outlier(0.0, 1.0);
     const auto outlier_response{
-        0.5 * model.amplitude * std::pow(Constants::two_pi * std::pow(model.width, 2), -1.5)
+        0.5 * model.amplitude * ComputeGaussianResponseAtDistance3D(0.0, model.width)
     };
     for (auto & sampling_entry : sampling_entries)
     {
@@ -331,8 +363,7 @@ SeriesPointList BuildLinearDataset(
         )
     };
     const auto max_response{
-        model.amplitude *
-        rhbm_gem::GaussianResponseMath::GetGaussianResponseAtDistance(0.0, model.width)
+        model.amplitude * ComputeGaussianResponseAtDistance3D(0.0, model.width)
     };
     std::normal_distribution<> dist_error(0.0, error_sigma * max_response);
     for (auto & data_entry : linear_data_entry_list)
