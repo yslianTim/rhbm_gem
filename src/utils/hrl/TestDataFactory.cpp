@@ -18,7 +18,7 @@
 
 namespace
 {
-namespace ls = rhbm_gem::linearization_service;
+using namespace rhbm_gem;
 
 struct GaussianModel3D
 {
@@ -75,7 +75,7 @@ void ValidateGausParametersDimension(
 {
     try
     {
-        rhbm_gem::eigen_validation::RequireVectorSize(
+        eigen_validation::RequireVectorSize(
             gaus_par,
             gaussian_parameter_size,
             "gaus_par");
@@ -99,9 +99,9 @@ GaussianModel3D BuildGaussianModel(
 
 void ValidateGaussianModel(const GaussianModel3D & model)
 {
-    rhbm_gem::numeric_validation::RequireFinite(model.amplitude, "GaussianModel3D amplitude");
-    rhbm_gem::numeric_validation::RequireFinitePositive(model.width, "GaussianModel3D width");
-    rhbm_gem::numeric_validation::RequireFinite(model.intercept, "GaussianModel3D intercept");
+    numeric_validation::RequireFinite(model.amplitude, "GaussianModel3D amplitude");
+    numeric_validation::RequireFinitePositive(model.width, "GaussianModel3D width");
+    numeric_validation::RequireFinite(model.intercept, "GaussianModel3D intercept");
 }
 
 double ComputeGaussianCoefficient3D(double width)
@@ -145,7 +145,7 @@ std::vector<Eigen::VectorXd> BuildNeighborCenterList(
     const NeighborhoodSamplingOptions & options)
 {
     constexpr size_t max_neighbor_count{ 4 };
-    rhbm_gem::numeric_validation::RequireAtMost(
+    numeric_validation::RequireAtMost(
         options.neighbor_count,
         max_neighbor_count,
         "neighbor_count");
@@ -203,16 +203,16 @@ LocalPotentialSampleList GenerateRadialSamples(
     double distance_max,
     std::mt19937 & generator)
 {
-    rhbm_gem::numeric_validation::RequirePositive(sample_count, "sample_count");
+    numeric_validation::RequirePositive(sample_count, "sample_count");
     ValidateGaussianModel(model);
-    rhbm_gem::numeric_validation::RequireFiniteNonNegativeRange(
+    numeric_validation::RequireFiniteNonNegativeRange(
         distance_min,
         distance_max,
         "distance range");
 
     std::uniform_real_distribution<> dist_distance(distance_min, distance_max);
     const auto sampling_scores{
-        rhbm_gem::BuildDefaultLocalPotentialSampleScoreList(sample_count)
+        BuildDefaultLocalPotentialSampleScoreList(sample_count)
     };
     LocalPotentialSampleList sample_list;
     sample_list.reserve(sample_count);
@@ -238,13 +238,13 @@ LocalPotentialSampleList GenerateNeighborhoodSamples(
     const GaussianModel3D & model,
     const NeighborhoodSamplingOptions & options)
 {
-    rhbm_gem::numeric_validation::RequirePositive(samples_per_radius, "samples_per_radius");
+    numeric_validation::RequirePositive(samples_per_radius, "samples_per_radius");
     ValidateGaussianModel(model);
-    rhbm_gem::numeric_validation::RequireFiniteNonNegativeRange(
+    numeric_validation::RequireFiniteNonNegativeRange(
         options.radius_min,
         options.radius_max,
         "radius range");
-    rhbm_gem::numeric_validation::RequireFinitePositive(
+    numeric_validation::RequireFinitePositive(
         options.neighbor_distance,
         "neighbor_distance");
 
@@ -262,7 +262,7 @@ LocalPotentialSampleList GenerateNeighborhoodSamples(
     );
     const auto sampling_points{ sampler.GenerateSamplingPoints({ 0.0f, 0.0f, 0.0f }) };
     const auto sampling_scores{
-        rhbm_gem::BuildLocalPotentialSampleScoreList(
+        BuildLocalPotentialSampleScoreList(
             sampling_points, neighbor_center_list, options.reject_angle_deg)
     };
 
@@ -344,7 +344,7 @@ SeriesPointList BuildLinearDataset(
     const LocalPotentialSampleList & sampling_entries,
     const GaussianModel3D & model,
     double error_sigma,
-    const ls::LinearizationSpec & linearization_spec,
+    const linearization_service::LinearizationSpec & linearization_spec,
     double fit_range_min,
     double fit_range_max,
     std::mt19937 & generator)
@@ -354,12 +354,12 @@ SeriesPointList BuildLinearDataset(
     model_parameters(1) = model.width;
     model_parameters(2) = model.intercept;
     auto linear_data_entry_list{
-        ls::BuildDatasetSeries(
+        linearization_service::BuildDatasetSeries(
             linearization_spec,
             sampling_entries,
             fit_range_min,
             fit_range_max,
-            ls::LinearizationContext::FromModelParameters(model_parameters)
+            linearization_service::LinearizationContext::FromModelParameters(model_parameters)
         )
     };
     const auto max_response{
@@ -378,7 +378,7 @@ SeriesPointList BuildLinearDataset(
     const GaussianModel3D & model,
     double error_sigma,
     double outlier_ratio,
-    const ls::LinearizationSpec & linearization_spec,
+    const linearization_service::LinearizationSpec & linearization_spec,
     double fit_range_min,
     double fit_range_max,
     std::mt19937 & generator)
@@ -407,7 +407,7 @@ SeriesPointList BuildLinearDatasetWithNeighborhood(
     const GaussianModel3D & model,
     double error_sigma,
     const NeighborhoodSamplingOptions & options,
-    const ls::LinearizationSpec & linearization_spec,
+    const linearization_service::LinearizationSpec & linearization_spec,
     double fit_range_min,
     double fit_range_max,
     std::mt19937 & generator)
@@ -470,7 +470,7 @@ Eigen::MatrixXd BuildRandomGausParameters(
 
 Eigen::MatrixXd BuildBetaMatrix(
     const Eigen::MatrixXd & gaus_array,
-    const ls::LinearizationSpec & linearization_spec)
+    const linearization_service::LinearizationSpec & linearization_spec)
 {
     const auto member_size{ static_cast<int>(gaus_array.cols()) };
     Eigen::MatrixXd beta_matrix{
@@ -478,7 +478,7 @@ Eigen::MatrixXd BuildBetaMatrix(
     };
     for (int i = 0; i < member_size; i++)
     {
-        beta_matrix.col(i) = ls::EncodeGaussianToBeta(linearization_spec, gaus_array.col(i));
+        beta_matrix.col(i) = linearization_service::EncodeGaussianToBeta(linearization_spec, gaus_array.col(i));
     }
     return beta_matrix;
 }
@@ -489,33 +489,33 @@ namespace rhbm_gem::test_data_factory
 
 TestDataFactory::TestDataFactory(
     int gaus_par_size,
-    ls::LinearizationSpec linearization_spec) :
+    linearization_service::LinearizationSpec linearization_spec) :
     m_gaus_par_size{
         ValidateGaussianParameterSize(
-            rhbm_gem::numeric_validation::RequirePositive(gaus_par_size, "gaus_par_size"))
+            numeric_validation::RequirePositive(gaus_par_size, "gaus_par_size"))
     },
     m_linearization_spec{ std::move(linearization_spec) },
     m_fit_range_min{ 0.0 },
     m_fit_range_max{ 1.0 }
 {
-    rhbm_gem::numeric_validation::RequirePositive(
+    numeric_validation::RequirePositive(
         m_linearization_spec.basis_size,
         "linearization_spec basis_size");
 }
 
 void TestDataFactory::SetFittingRange(double x_min, double x_max)
 {
-    rhbm_gem::numeric_validation::RequireFiniteNonNegativeRange(x_min, x_max, "fitting range");
+    numeric_validation::RequireFiniteNonNegativeRange(x_min, x_max, "fitting range");
     m_fit_range_min = x_min;
     m_fit_range_max = x_max;
 }
 
 RHBMBetaTestInput TestDataFactory::BuildBetaTestInput(const BetaScenario & scenario) const
 {
-    rhbm_gem::numeric_validation::RequirePositive(
+    numeric_validation::RequirePositive(
         scenario.sampling_entry_size,
         "sampling_entry_size");
-    rhbm_gem::numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
+    numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
     ValidateGausParametersDimension(scenario.gaus_true, m_gaus_par_size);
     const auto gaussian_model{ BuildGaussianModel(scenario.gaus_true, m_gaus_par_size) };
 
@@ -538,9 +538,7 @@ RHBMBetaTestInput TestDataFactory::BuildBetaTestInput(const BetaScenario & scena
                 generator
             )
         };
-        input.replica_datasets.emplace_back(
-            rhbm_gem::rhbm_helper::BuildMemberDataset(data_entry_list)
-        );
+        input.replica_datasets.emplace_back(rhbm_helper::BuildMemberDataset(data_entry_list));
     }
 
     return input;
@@ -548,8 +546,8 @@ RHBMBetaTestInput TestDataFactory::BuildBetaTestInput(const BetaScenario & scena
 
 RHBMMuTestInput TestDataFactory::BuildMuTestInput(const MuScenario & scenario) const
 {
-    rhbm_gem::numeric_validation::RequirePositive(scenario.member_size, "member_size");
-    rhbm_gem::numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
+    numeric_validation::RequirePositive(scenario.member_size, "member_size");
+    numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
     ValidateGausParametersDimension(scenario.gaus_prior, m_gaus_par_size);
     ValidateGausParametersDimension(scenario.gaus_sigma, m_gaus_par_size);
     ValidateGausParametersDimension(scenario.outlier_prior, m_gaus_par_size);
@@ -584,10 +582,10 @@ RHBMMuTestInput TestDataFactory::BuildMuTestInput(const MuScenario & scenario) c
 RHBMNeighborhoodTestInput TestDataFactory::BuildNeighborhoodTestInput(
     const NeighborhoodScenario & scenario) const
 {
-    rhbm_gem::numeric_validation::RequirePositive(
+    numeric_validation::RequirePositive(
         scenario.sampling_entry_size,
         "sampling_entry_size");
-    rhbm_gem::numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
+    numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
     ValidateGausParametersDimension(scenario.gaus_true, m_gaus_par_size);
     const auto gaussian_model{ BuildGaussianModel(scenario.gaus_true, m_gaus_par_size) };
 
@@ -656,10 +654,10 @@ RHBMNeighborhoodTestInput TestDataFactory::BuildNeighborhoodTestInput(
             )
         };
         input.no_cut_datasets.emplace_back(
-            rhbm_gem::rhbm_helper::BuildMemberDataset(no_cut_data_entry_list)
+            rhbm_helper::BuildMemberDataset(no_cut_data_entry_list)
         );
         input.cut_datasets.emplace_back(
-            rhbm_gem::rhbm_helper::BuildMemberDataset(cut_data_entry_list)
+            rhbm_helper::BuildMemberDataset(cut_data_entry_list)
         );
     }
 
