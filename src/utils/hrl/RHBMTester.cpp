@@ -168,6 +168,7 @@ ResidualStatistics FinalizeResidualStatistics(const Eigen::MatrixXd & residual_m
 void FinalizeResidualStatisticsSeries(
     const std::vector<Eigen::MatrixXd> & residual_matrix_list,
     size_t requested_alpha_size,
+    bool alpha_training,
     ResidualStatisticsSeries & result)
 {
     result.requested_alpha.assign(requested_alpha_size, ResidualStatistics{});
@@ -175,13 +176,16 @@ void FinalizeResidualStatisticsSeries(
     {
         result.requested_alpha.at(i) = FinalizeResidualStatistics(residual_matrix_list.at(i));
     }
-    result.trained_alpha = FinalizeResidualStatistics(residual_matrix_list.at(requested_alpha_size));
+    result.trained_alpha.reset();
+    if (alpha_training)
+    {
+        result.trained_alpha = FinalizeResidualStatistics(residual_matrix_list.at(requested_alpha_size));
+    }
 }
 } // namespace
 
 bool RunBetaMDPDETest(
     BetaMDPDETestResidual & result,
-    const std::vector<double> & alpha_r_list,
     const test_data_factory::RHBMBetaTestInput & test_input,
     int thread_size)
 {
@@ -196,8 +200,9 @@ bool RunBetaMDPDETest(
         throw std::invalid_argument("test_input.replica_datasets must not be empty");
     }
 
-    const auto local_alpha_r_list{ alpha_r_list };
-    const auto alpha_size{ local_alpha_r_list.size() + 1 }; // add one for training alpha_r
+    const auto local_alpha_r_list{ test_input.requested_alpha_r_list };
+    const bool alpha_training{ test_input.alpha_training };
+    const auto alpha_size{ local_alpha_r_list.size() + (alpha_training ? 1 : 0) };
     Eigen::MatrixXd residual_matrix_ols{
         Eigen::MatrixXd::Zero(GaussianModel3D::kParameterSize, replica_size)
     };
@@ -218,26 +223,36 @@ bool RunBetaMDPDETest(
     {
         const auto & dataset{ test_input.replica_datasets.at(static_cast<size_t>(i)) };
 
-        const auto alpha_r_training_result{
-            alpha_r_trainer.TrainAlphaR(
-                std::vector<RHBMMemberDataset>{ dataset }, alpha_r_training_options)
-        };
-        const auto trained_alpha_r{ alpha_r_training_result.best_alpha };
         const auto options{ MakeTesterExecutionOptions() };
+        const auto baseline_result{
+            EstimateBetaReplicaResidual(dataset, test_input.gaus_true, 0.0, options)
+        };
+        residual_matrix_ols.col(i) = baseline_result.ols_residual;
 
-        for (size_t j = 0; j < alpha_size; j++)
+        for (size_t j = 0; j < local_alpha_r_list.size(); j++)
         {
-            const auto alpha{ (j < local_alpha_r_list.size()) ?
-                local_alpha_r_list.at(j) : trained_alpha_r
-            };
             const auto replica_result{
-                EstimateBetaReplicaResidual(dataset, test_input.gaus_true, alpha, options)
+                EstimateBetaReplicaResidual(
+                    dataset,
+                    test_input.gaus_true,
+                    local_alpha_r_list.at(j),
+                    options)
             };
-            if (j == 0)
-            {
-                residual_matrix_ols.col(i) = replica_result.ols_residual;
-            }
             residual_matrix_mdpde_list.at(j).col(i) = replica_result.mdpde_residual;
+        }
+
+        if (alpha_training)
+        {
+            const auto alpha_r_training_result{
+                alpha_r_trainer.TrainAlphaR(
+                    std::vector<RHBMMemberDataset>{ dataset }, alpha_r_training_options)
+            };
+            const auto trained_alpha_r{ alpha_r_training_result.best_alpha };
+            const auto replica_result{
+                EstimateBetaReplicaResidual(dataset, test_input.gaus_true, trained_alpha_r, options)
+            };
+            residual_matrix_mdpde_list.at(local_alpha_r_list.size()).col(i) =
+                replica_result.mdpde_residual;
         }
     }
 
@@ -246,6 +261,7 @@ bool RunBetaMDPDETest(
     FinalizeResidualStatisticsSeries(
         residual_matrix_mdpde_list,
         local_alpha_r_list.size(),
+        alpha_training,
         result.mdpde);
 
     return true;
@@ -253,7 +269,6 @@ bool RunBetaMDPDETest(
 
 bool RunMuMDPDETest(
     MuMDPDETestResidual & result,
-    const std::vector<double> & alpha_g_list,
     const test_data_factory::RHBMMuTestInput & test_input,
     int thread_size)
 {
@@ -268,8 +283,9 @@ bool RunMuMDPDETest(
         throw std::invalid_argument("test_input.replica_beta_matrices must not be empty");
     }
 
-    const auto local_alpha_g_list{ alpha_g_list };
-    const auto alpha_size{ local_alpha_g_list.size() + 1 }; // add one for training alpha_g
+    const auto local_alpha_g_list{ test_input.requested_alpha_g_list };
+    const bool alpha_training{ test_input.alpha_training };
+    const auto alpha_size{ local_alpha_g_list.size() + (alpha_training ? 1 : 0) };
     Eigen::MatrixXd residual_matrix_median{
         Eigen::MatrixXd::Zero(GaussianModel3D::kParameterSize, replica_size)
     };
@@ -289,34 +305,44 @@ bool RunMuMDPDETest(
     for (int i = 0; i < replica_size; i++)
     {
         const auto & beta_matrix{ test_input.replica_beta_matrices.at(static_cast<size_t>(i)) };
-        std::vector<Eigen::VectorXd> train_data_entry_list;
-        train_data_entry_list.reserve(static_cast<size_t>(beta_matrix.cols()));
-        for (int m = 0; m < beta_matrix.cols(); m++)
+        const auto options{ MakeTesterExecutionOptions() };
+        const auto baseline_result{
+            EstimateMuReplicaResidual(beta_matrix, test_input.gaus_true, 0.0, options)
+        };
+        residual_matrix_median.col(i) = baseline_result.median_residual;
+
+        for (size_t j = 0; j < local_alpha_g_list.size(); j++)
         {
-            train_data_entry_list.emplace_back(beta_matrix.col(m));
+            const auto replica_result{
+                EstimateMuReplicaResidual(
+                    beta_matrix,
+                    test_input.gaus_true,
+                    local_alpha_g_list.at(j),
+                    options)
+            };
+            residual_matrix_mdpde_list.at(j).col(i) = replica_result.mdpde_residual;
         }
 
-        const auto alpha_g_training_result{
-            alpha_g_trainer.TrainAlphaG(
-                std::vector<std::vector<Eigen::VectorXd>>{ train_data_entry_list },
-                alpha_g_training_options)
-        };
-        const auto trained_alpha_g{ alpha_g_training_result.best_alpha };
-        const auto options{ MakeTesterExecutionOptions() };
-
-        for (size_t j = 0; j < alpha_size; j++)
+        if (alpha_training)
         {
-            const auto alpha{ (j < local_alpha_g_list.size()) ?
-                local_alpha_g_list.at(j) : trained_alpha_g
-            };
-            const auto replica_result{
-                EstimateMuReplicaResidual(beta_matrix, test_input.gaus_true, alpha, options)
-            };
-            if (j == 0)
+            std::vector<Eigen::VectorXd> train_data_entry_list;
+            train_data_entry_list.reserve(static_cast<size_t>(beta_matrix.cols()));
+            for (int m = 0; m < beta_matrix.cols(); m++)
             {
-                residual_matrix_median.col(i) = replica_result.median_residual;
+                train_data_entry_list.emplace_back(beta_matrix.col(m));
             }
-            residual_matrix_mdpde_list.at(j).col(i) = replica_result.mdpde_residual;
+
+            const auto alpha_g_training_result{
+                alpha_g_trainer.TrainAlphaG(
+                    std::vector<std::vector<Eigen::VectorXd>>{ train_data_entry_list },
+                    alpha_g_training_options)
+            };
+            const auto trained_alpha_g{ alpha_g_training_result.best_alpha };
+            const auto replica_result{
+                EstimateMuReplicaResidual(beta_matrix, test_input.gaus_true, trained_alpha_g, options)
+            };
+            residual_matrix_mdpde_list.at(local_alpha_g_list.size()).col(i) =
+                replica_result.mdpde_residual;
         }
     }
 
@@ -325,6 +351,7 @@ bool RunMuMDPDETest(
     FinalizeResidualStatisticsSeries(
         residual_matrix_mdpde_list,
         local_alpha_g_list.size(),
+        alpha_training,
         result.mdpde);
 
     return true;

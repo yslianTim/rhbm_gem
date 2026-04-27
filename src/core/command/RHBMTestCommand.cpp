@@ -679,12 +679,14 @@ void RunSimulationTestOnDataOutlier(const RHBMTestExecutionContext & options)
                     scenario.sampling_entry_size,
                     error_sigma,
                     outlier_list.at(i),
-                    scenario.replica_size
+                    scenario.replica_size,
+                    {},
+                    scenario.alpha_r_list,
+                    true
                 })
             };
             rhbm_tester::RunBetaMDPDETest(
                 residual,
-                scenario.alpha_r_list,
                 test_input,
                 options.thread_size
             );
@@ -694,10 +696,13 @@ void RunSimulationTestOnDataOutlier(const RHBMTestExecutionContext & options)
                 panel.curves.at(1),
                 outlier_list.at(i),
                 residual.mdpde.requested_alpha.front());
-            AppendResidualCurvePoint(
-                panel.curves.at(2),
-                outlier_list.at(i),
-                residual.mdpde.trained_alpha);
+            if (residual.mdpde.trained_alpha.has_value())
+            {
+                AppendResidualCurvePoint(
+                    panel.curves.at(2),
+                    outlier_list.at(i),
+                    residual.mdpde.trained_alpha.value());
+            }
         }
         plot_request.panels.emplace_back(std::move(panel));
     }
@@ -755,12 +760,14 @@ void RunSimulationTestOnMemberOutlier(const RHBMTestExecutionContext & options)
                     outlier_prior,
                     model_par_sigma,
                     outlier_list.at(i),
-                    scenario.replica_size
+                    scenario.replica_size,
+                    {},
+                    scenario.alpha_g_list,
+                    true
                 })
             };
             rhbm_tester::RunMuMDPDETest(
                 residual,
-                scenario.alpha_g_list,
                 test_input,
                 options.thread_size
             );
@@ -770,10 +777,13 @@ void RunSimulationTestOnMemberOutlier(const RHBMTestExecutionContext & options)
                 panel.curves.at(1),
                 outlier_list.at(i),
                 residual.mdpde.requested_alpha.front());
-            AppendResidualCurvePoint(
-                panel.curves.at(2),
-                outlier_list.at(i),
-                residual.mdpde.trained_alpha);
+            if (residual.mdpde.trained_alpha.has_value())
+            {
+                AppendResidualCurvePoint(
+                    panel.curves.at(2),
+                    outlier_list.at(i),
+                    residual.mdpde.trained_alpha.value());
+            }
         }
         plot_request.panels.emplace_back(std::move(panel));
     }
@@ -816,12 +826,14 @@ void RunSimulationTestOnModelAlphaData(const RHBMTestExecutionContext & options)
                     scenario.sampling_entry_size,
                     error_sigma,
                     outlier_list.at(i),
-                    scenario.replica_size
+                    scenario.replica_size,
+                    {},
+                    scenario.alpha_r_list,
+                    true
                 })
             };
             rhbm_tester::RunBetaMDPDETest(
                 residual,
-                scenario.alpha_r_list,
                 test_input,
                 options.thread_size
             );
@@ -830,10 +842,13 @@ void RunSimulationTestOnModelAlphaData(const RHBMTestExecutionContext & options)
                 panel.curves.at(0),
                 outlier_list.at(i),
                 residual.mdpde.requested_alpha.front());
-            AppendResidualCurvePoint(
-                panel.curves.at(1),
-                outlier_list.at(i),
-                residual.mdpde.trained_alpha);
+            if (residual.mdpde.trained_alpha.has_value())
+            {
+                AppendResidualCurvePoint(
+                    panel.curves.at(1),
+                    outlier_list.at(i),
+                    residual.mdpde.trained_alpha.value());
+            }
         }
         plot_request.panels.emplace_back(std::move(panel));
     }
@@ -890,12 +905,14 @@ void RunSimulationTestOnModelAlphaMember(const RHBMTestExecutionContext & option
                     outlier_prior,
                     model_par_sigma,
                     outlier_list.at(i),
-                    scenario.replica_size
+                    scenario.replica_size,
+                    {},
+                    scenario.alpha_g_list,
+                    true
                 })
             };
             rhbm_tester::RunMuMDPDETest(
                 residual,
-                scenario.alpha_g_list,
                 test_input,
                 options.thread_size
             );
@@ -904,10 +921,13 @@ void RunSimulationTestOnModelAlphaMember(const RHBMTestExecutionContext & option
                 panel.curves.at(0),
                 outlier_list.at(i),
                 residual.mdpde.requested_alpha.front());
-            AppendResidualCurvePoint(
-                panel.curves.at(1),
-                outlier_list.at(i),
-                residual.mdpde.trained_alpha);
+            if (residual.mdpde.trained_alpha.has_value())
+            {
+                AppendResidualCurvePoint(
+                    panel.curves.at(1),
+                    outlier_list.at(i),
+                    residual.mdpde.trained_alpha.value());
+            }
         }
         plot_request.panels.emplace_back(std::move(panel));
     }

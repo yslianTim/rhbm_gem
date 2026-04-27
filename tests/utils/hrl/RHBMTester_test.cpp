@@ -36,6 +36,7 @@ TEST(RHBMTesterTest, RunBetaMDPDETestPopulatesResidualOutputs)
     tdf::TestDataFactory factory(
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
+    const std::vector<double> alpha_r_list{ 0.0, 0.5 };
     const auto test_input{
         factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
             MakeVector({ 1.0, 0.5, 0.0 }),
@@ -43,16 +44,16 @@ TEST(RHBMTesterTest, RunBetaMDPDETestPopulatesResidualOutputs)
             0.01,
             0.0,
             2,
-            42
+            42,
+            alpha_r_list,
+            true
         })
     };
 
     rt::BetaMDPDETestResidual residual;
-    const std::vector<double> alpha_r_list{ 0.0, 0.5 };
     const bool result{
         rt::RunBetaMDPDETest(
             residual,
-            alpha_r_list,
             test_input,
             1)
     };
@@ -64,13 +65,15 @@ TEST(RHBMTesterTest, RunBetaMDPDETestPopulatesResidualOutputs)
     {
         ExpectResidualStatisticSize(requested_alpha_residual);
     }
-    ExpectResidualStatisticSize(residual.mdpde.trained_alpha);
+    ASSERT_TRUE(residual.mdpde.trained_alpha.has_value());
+    ExpectResidualStatisticSize(residual.mdpde.trained_alpha.value());
 }
 
 TEST(RHBMTesterTest, RunMuMDPDETestPopulatesResidualOutputs)
 {
     tdf::TestDataFactory factory(
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+    const std::vector<double> alpha_g_list{ 0.2 };
     const auto test_input{
         factory.BuildMuTestInput(tdf::TestDataFactory::MuScenario{
             12,
@@ -80,16 +83,16 @@ TEST(RHBMTesterTest, RunMuMDPDETestPopulatesResidualOutputs)
             MakeVector({ 0.05, 0.025, 0.01 }),
             0.1,
             2,
-            33
+            33,
+            alpha_g_list,
+            true
         })
     };
 
     rt::MuMDPDETestResidual residual;
-    const std::vector<double> alpha_g_list{ 0.2 };
     const bool result{
         rt::RunMuMDPDETest(
             residual,
-            alpha_g_list,
             test_input,
             1)
     };
@@ -101,7 +104,109 @@ TEST(RHBMTesterTest, RunMuMDPDETestPopulatesResidualOutputs)
     {
         ExpectResidualStatisticSize(requested_alpha_residual);
     }
-    ExpectResidualStatisticSize(residual.mdpde.trained_alpha);
+    ASSERT_TRUE(residual.mdpde.trained_alpha.has_value());
+    ExpectResidualStatisticSize(residual.mdpde.trained_alpha.value());
+}
+
+TEST(RHBMTesterTest, RunBetaMDPDETestSkipsTrainedAlphaWhenDisabled)
+{
+    tdf::TestDataFactory factory(
+        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+    factory.SetFittingRange(0.0, 1.0);
+    const std::vector<double> alpha_r_list{ 0.5 };
+    const auto test_input{
+        factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
+            MakeVector({ 1.0, 0.5, 0.0 }),
+            10,
+            0.01,
+            0.0,
+            2,
+            42,
+            alpha_r_list,
+            false
+        })
+    };
+
+    rt::BetaMDPDETestResidual residual;
+    const bool result{
+        rt::RunBetaMDPDETest(
+            residual,
+            test_input,
+            1)
+    };
+
+    ASSERT_TRUE(result);
+    ASSERT_EQ(residual.mdpde.requested_alpha.size(), alpha_r_list.size());
+    ExpectResidualStatisticSize(residual.ols);
+    ExpectResidualStatisticSize(residual.mdpde.requested_alpha.front());
+    EXPECT_FALSE(residual.mdpde.trained_alpha.has_value());
+}
+
+TEST(RHBMTesterTest, RunMuMDPDETestSkipsTrainedAlphaWhenDisabled)
+{
+    tdf::TestDataFactory factory(
+        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+    const std::vector<double> alpha_g_list{ 0.2 };
+    const auto test_input{
+        factory.BuildMuTestInput(tdf::TestDataFactory::MuScenario{
+            12,
+            MakeVector({ 1.0, 0.5, 0.1 }),
+            MakeVector({ 0.05, 0.025, 0.01 }),
+            MakeVector({ 1.5, 0.5, 0.1 }),
+            MakeVector({ 0.05, 0.025, 0.01 }),
+            0.1,
+            2,
+            33,
+            alpha_g_list,
+            false
+        })
+    };
+
+    rt::MuMDPDETestResidual residual;
+    const bool result{
+        rt::RunMuMDPDETest(
+            residual,
+            test_input,
+            1)
+    };
+
+    ASSERT_TRUE(result);
+    ASSERT_EQ(residual.mdpde.requested_alpha.size(), alpha_g_list.size());
+    ExpectResidualStatisticSize(residual.median);
+    ExpectResidualStatisticSize(residual.mdpde.requested_alpha.front());
+    EXPECT_FALSE(residual.mdpde.trained_alpha.has_value());
+}
+
+TEST(RHBMTesterTest, RunBetaMDPDETestAllowsEmptyAlphaListWithoutTraining)
+{
+    tdf::TestDataFactory factory(
+        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+    factory.SetFittingRange(0.0, 1.0);
+    const auto test_input{
+        factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
+            MakeVector({ 1.0, 0.5, 0.0 }),
+            10,
+            0.01,
+            0.0,
+            2,
+            42,
+            {},
+            false
+        })
+    };
+
+    rt::BetaMDPDETestResidual residual;
+    const bool result{
+        rt::RunBetaMDPDETest(
+            residual,
+            test_input,
+            1)
+    };
+
+    ASSERT_TRUE(result);
+    EXPECT_TRUE(residual.mdpde.requested_alpha.empty());
+    ExpectResidualStatisticSize(residual.ols);
+    EXPECT_FALSE(residual.mdpde.trained_alpha.has_value());
 }
 
 TEST(RHBMTesterTest, RunBetaMDPDEWithNeighborhoodTestConsumesPreparedInputs)
@@ -165,7 +270,6 @@ TEST(RHBMTesterTest, RunBetaMDPDETestRejectsWrongSizedTruth)
     EXPECT_THROW(
         rt::RunBetaMDPDETest(
             residual,
-            std::vector<double>{ 0.0 },
             test_input,
             1),
         std::invalid_argument

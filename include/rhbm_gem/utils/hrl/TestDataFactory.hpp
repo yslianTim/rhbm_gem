@@ -17,12 +17,16 @@ struct RHBMBetaTestInput
 {
     Eigen::VectorXd gaus_true;
     std::vector<RHBMMemberDataset> replica_datasets;
+    std::vector<double> requested_alpha_r_list;
+    bool alpha_training{ true };
 };
 
 struct RHBMMuTestInput
 {
     Eigen::VectorXd gaus_true;
     std::vector<Eigen::MatrixXd> replica_beta_matrices;
+    std::vector<double> requested_alpha_g_list;
+    bool alpha_training{ true };
 };
 
 struct RHBMNeighborhoodTestInput
@@ -44,6 +48,8 @@ public:
         double outlier_ratio{ 0.0 };
         int replica_size{ 1 };
         std::optional<std::uint32_t> random_seed{};
+        std::vector<double> requested_alpha_r_list{};
+        bool alpha_training{ true };
     };
 
     struct MuScenario
@@ -56,6 +62,8 @@ public:
         double outlier_ratio{ 0.0 };
         int replica_size{ 1 };
         std::optional<std::uint32_t> random_seed{};
+        std::vector<double> requested_alpha_g_list{};
+        bool alpha_training{ true };
     };
 
     struct NeighborhoodScenario

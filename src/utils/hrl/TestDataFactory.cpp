@@ -442,6 +442,8 @@ RHBMBetaTestInput TestDataFactory::BuildBetaTestInput(const BetaScenario & scena
 
     RHBMBetaTestInput input;
     input.gaus_true = scenario.gaus_true;
+    input.requested_alpha_r_list = scenario.requested_alpha_r_list;
+    input.alpha_training = scenario.alpha_training;
     input.replica_datasets.reserve(static_cast<size_t>(scenario.replica_size));
 
     for (int i = 0; i < scenario.replica_size; i++)
@@ -488,6 +490,8 @@ RHBMMuTestInput TestDataFactory::BuildMuTestInput(const MuScenario & scenario) c
 
     RHBMMuTestInput input;
     input.gaus_true = scenario.gaus_prior;
+    input.requested_alpha_g_list = scenario.requested_alpha_g_list;
+    input.alpha_training = scenario.alpha_training;
     input.replica_beta_matrices.reserve(static_cast<size_t>(scenario.replica_size));
 
     for (int i = 0; i < scenario.replica_size; i++)

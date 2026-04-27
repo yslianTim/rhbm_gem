@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <vector>
 
 #include <Eigen/Dense>
@@ -18,7 +19,7 @@ struct ResidualStatistics
 struct ResidualStatisticsSeries
 {
     std::vector<ResidualStatistics> requested_alpha;
-    ResidualStatistics trained_alpha;
+    std::optional<ResidualStatistics> trained_alpha;
 };
 
 struct BetaMDPDETestResidual
@@ -43,14 +44,12 @@ struct NeighborhoodMDPDETestResidual
 
 bool RunBetaMDPDETest(
     BetaMDPDETestResidual & result,
-    const std::vector<double> & alpha_r_list,
     const test_data_factory::RHBMBetaTestInput & test_input,
     int thread_size = 1
 );
 
 bool RunMuMDPDETest(
     MuMDPDETestResidual & result,
-    const std::vector<double> & alpha_g_list,
     const test_data_factory::RHBMMuTestInput & test_input,
     int thread_size = 1
 );
