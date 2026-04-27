@@ -57,10 +57,8 @@ const ls::LinearizationSpec & GaussianDatasetSpec()
 
 ls::LinearizationContext BuildLocalLinearizationContext(const LocalPotentialView & view)
 {
-    Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
-    model_par_init(0) = view.GetMomentZeroEstimate();
-    model_par_init(1) = view.GetMomentTwoEstimate();
-    return ls::LinearizationContext::FromModelParameters(model_par_init);
+    return ls::LinearizationContext::FromModel(
+        GaussianModel3D{ view.GetMomentZeroEstimate(), view.GetMomentTwoEstimate(), 0.0 });
 }
 
 void RunBondSampling(

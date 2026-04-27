@@ -25,10 +25,8 @@ struct LocalPotentialEstimates
 
 ls::LinearizationContext BuildLocalDecodeContext(const LocalPotentialEntry & entry)
 {
-    Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
-    model_par_init(0) = entry.GetMomentZeroEstimate();
-    model_par_init(1) = entry.GetMomentTwoEstimate();
-    return ls::LinearizationContext::FromModelParameters(model_par_init);
+    return ls::LinearizationContext::FromModel(
+        GaussianModel3D{ entry.GetMomentZeroEstimate(), entry.GetMomentTwoEstimate(), 0.0 });
 }
 
 const ls::LinearizationSpec & LocalDecodeSpec()

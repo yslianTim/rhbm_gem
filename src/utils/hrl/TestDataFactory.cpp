@@ -20,13 +20,6 @@ namespace
 {
 using namespace rhbm_gem;
 
-struct GaussianModel3D
-{
-    double amplitude{ 0.0 };
-    double width{ 1.0 };
-    double intercept{ 0.0 };
-};
-
 struct NeighborhoodSamplingOptions
 {
     double radius_min{ 0.0 };
@@ -38,7 +31,7 @@ struct NeighborhoodSamplingOptions
 
 int ValidateGaussianParameterSize(int value)
 {
-    if (value != 3)
+    if (value != GaussianModel3D::kParameterSize)
     {
         throw std::invalid_argument(
             "Gaussian test data requires gaus_par_size to be 3");
@@ -94,7 +87,7 @@ GaussianModel3D BuildGaussianModel(
     int gaussian_parameter_size)
 {
     ValidateGausParametersDimension(gaus_par, gaussian_parameter_size);
-    return GaussianModel3D{ gaus_par(0), gaus_par(1), gaus_par(2) };
+    return GaussianModel3D::FromVector(gaus_par);
 }
 
 void ValidateGaussianModel(const GaussianModel3D & model)
@@ -108,13 +101,6 @@ double ComputeGaussianCoefficient3D(double width)
 {
     const auto width_square{ width * width };
     return 1.0 / std::pow(Constants::two_pi * width_square, 1.5);
-}
-
-double ComputeGaussianResponseAtDistance3D(double distance, double width)
-{
-    const auto width_square{ width * width };
-    return ComputeGaussianCoefficient3D(width) *
-        std::exp(-0.5 * distance * distance / width_square);
 }
 
 double ComputeGaussianResponseAtPoint3D(
@@ -220,8 +206,7 @@ LocalPotentialSampleList GenerateRadialSamples(
     {
         const auto distance{ dist_distance(generator) };
         const auto response{
-            model.amplitude * ComputeGaussianResponseAtDistance3D(distance, model.width) +
-            model.intercept
+            model.ResponseAtDistance(distance)
         };
         sample_list.emplace_back(LocalPotentialSample{
             static_cast<float>(distance),
@@ -328,7 +313,7 @@ LocalPotentialSampleList BuildGaussianSampling(
     };
     std::uniform_real_distribution<> dist_outlier(0.0, 1.0);
     const auto outlier_response{
-        0.5 * model.amplitude * ComputeGaussianResponseAtDistance3D(0.0, model.width)
+        0.5 * model.Intensity()
     };
     for (auto & sampling_entry : sampling_entries)
     {
@@ -349,22 +334,16 @@ SeriesPointList BuildLinearDataset(
     double fit_range_max,
     std::mt19937 & generator)
 {
-    Eigen::VectorXd model_parameters{ Eigen::VectorXd::Zero(3) };
-    model_parameters(0) = model.amplitude;
-    model_parameters(1) = model.width;
-    model_parameters(2) = model.intercept;
     auto linear_data_entry_list{
         linearization_service::BuildDatasetSeries(
             linearization_spec,
             sampling_entries,
             fit_range_min,
             fit_range_max,
-            linearization_service::LinearizationContext::FromModelParameters(model_parameters)
+            linearization_service::LinearizationContext::FromModel(model)
         )
     };
-    const auto max_response{
-        model.amplitude * ComputeGaussianResponseAtDistance3D(0.0, model.width)
-    };
+    const auto max_response{ model.Intensity() };
     std::normal_distribution<> dist_error(0.0, error_sigma * max_response);
     for (auto & data_entry : linear_data_entry_list)
     {
@@ -473,7 +452,7 @@ Eigen::MatrixXd BuildBetaMatrix(
     for (int i = 0; i < member_size; i++)
     {
         beta_matrix.col(i) = linearization_service::EncodeGaussianToBeta(
-            linearization_spec, gaus_array.col(i));
+            linearization_spec, GaussianModel3D::FromVector(gaus_array.col(i)));
     }
     return beta_matrix;
 }

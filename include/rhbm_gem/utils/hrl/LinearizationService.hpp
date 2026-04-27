@@ -44,6 +44,7 @@ struct LinearizationContext
 
     static LinearizationContext FromModelParameters(
         const GaussianParameterVector & model_parameters);
+    static LinearizationContext FromModel(const GaussianModel3D & model);
 };
 
 SeriesPointList BuildDatasetSeries(
@@ -65,6 +66,10 @@ RHBMBetaVector EncodeGaussianToBeta(
 RHBMBetaVector EncodeGaussianToBeta(
     const LinearizationSpec & spec,
     const GaussianEstimate & gaussian_estimate);
+
+RHBMBetaVector EncodeGaussianToBeta(
+    const LinearizationSpec & spec,
+    const GaussianModel3D & gaussian_model);
 
 GaussianParameterVector DecodeLocalBeta(
     const LinearizationSpec & spec,

@@ -29,20 +29,107 @@ using RHBMDiagonalMatrix = Eigen::DiagonalMatrix<double, Eigen::Dynamic>;
 using GaussianParameterVector = Eigen::VectorXd;
 
 // Shared Gaussian value types used by HRL linearization and downstream consumers.
+struct GaussianModel3D
+{
+    static constexpr int kParameterSize{ 3 };
+    static constexpr int kAmplitudeIndex{ 0 };
+    static constexpr int kWidthIndex{ 1 };
+    static constexpr int kInterceptIndex{ 2 };
+
+    double amplitude{ 0.0 };
+    double width{ 1.0 };
+    double intercept{ 0.0 };
+
+    static GaussianModel3D FromVector(const GaussianParameterVector & parameters)
+    {
+        if (parameters.rows() < kParameterSize)
+        {
+            throw std::invalid_argument("GaussianModel3D parameter vector must have three entries.");
+        }
+        return GaussianModel3D{
+            parameters(kAmplitudeIndex),
+            parameters(kWidthIndex),
+            parameters(kInterceptIndex)
+        };
+    }
+
+    GaussianParameterVector ToVector() const
+    {
+        GaussianParameterVector parameters{ GaussianParameterVector::Zero(kParameterSize) };
+        parameters(kAmplitudeIndex) = amplitude;
+        parameters(kWidthIndex) = width;
+        parameters(kInterceptIndex) = intercept;
+        return parameters;
+    }
+
+    double GetModelParameter(int par_id) const
+    {
+        switch (par_id)
+        {
+        case kAmplitudeIndex:
+            return amplitude;
+        case kWidthIndex:
+            return width;
+        case kInterceptIndex:
+            return intercept;
+        default:
+            throw std::out_of_range("GaussianModel3D parameter index is out of range.");
+        }
+    }
+
+    double Coefficient() const
+    {
+        if (width == 0.0)
+        {
+            return 0.0;
+        }
+        return std::pow(Constants::two_pi * width * width, -1.5);
+    }
+
+    double Intensity() const
+    {
+        return amplitude * Coefficient();
+    }
+
+    double ResponseAtDistance(double distance) const
+    {
+        if (width == 0.0)
+        {
+            return intercept;
+        }
+        return Intensity() * std::exp(-0.5 * distance * distance / (width * width)) + intercept;
+    }
+};
+
 struct GaussianEstimate
 {
     double amplitude{ 0.0 };
     double width{ 0.0 };
 
+    GaussianModel3D ToModel() const
+    {
+        return GaussianModel3D{ amplitude, width, 0.0 };
+    }
+
+    static GaussianEstimate FromModel(const GaussianModel3D & model)
+    {
+        return GaussianEstimate{ model.amplitude, model.width };
+    }
+
+    double GetModelParameter(int par_id) const
+    {
+        return ToModel().GetModelParameter(par_id);
+    }
+
     double GetParameter(int par_id) const
     {
         switch (par_id)
         {
-        case 0:
+        case GaussianModel3D::kAmplitudeIndex:
             return amplitude;
-        case 1:
+        case GaussianModel3D::kWidthIndex:
             return width;
-        case 2:
+        case GaussianModel3D::kInterceptIndex:
             return Intensity();
         default:
             throw std::out_of_range("GaussianEstimate parameter index is out of range.");
@@ -51,11 +138,7 @@ struct GaussianEstimate
 
     double Intensity() const
     {
-        if (width == 0.0)
-        {
-            return 0.0;
-        }
-        return amplitude * std::pow(Constants::two_pi * width * width, -1.5);
+        return ToModel().Intensity();
     }
 
 };
@@ -64,6 +147,23 @@ struct GaussianParameterUncertainty
 {
     double amplitude{ 0.0 };
     double width{ 0.0 };
+    double intercept{ 0.0 };
+
+    double GetModelParameter(int par_id) const
+    {
+        switch (par_id)
+        {
+        case GaussianModel3D::kAmplitudeIndex:
+            return amplitude;
+        case GaussianModel3D::kWidthIndex:
+            return width;
+        case GaussianModel3D::kInterceptIndex:
+            return intercept;
+        default:
+            throw std::out_of_range(
+                "GaussianParameterUncertainty parameter index is out of range.");
+        }
+    }
 };
 
 struct GaussianEstimateWithUncertainty

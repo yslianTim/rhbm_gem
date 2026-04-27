@@ -27,6 +27,13 @@ const ls::LinearizationSpec & DatasetLinearizationSpec()
     return spec;
 }
 
+ls::LinearizationSpec DirectGaussianModelSpec()
+{
+    auto spec{ ls::LinearizationSpec::DefaultDataset() };
+    spec.basis_size = rhbm_gem::GaussianModel3D::kParameterSize;
+    return spec;
+}
+
 } // namespace
 
 TEST(LinearizationServiceTest, BuildLinearModelSeriesTransformsPositiveWeightedSamplesOnly)
@@ -77,6 +84,19 @@ TEST(LinearizationServiceTest, EncodeGaussianEstimateToBetaMatchesClosedForm)
     EXPECT_NEAR(expected_beta1, beta(1), 1.0e-12);
 }
 
+TEST(LinearizationServiceTest, EncodeGaussianModelToBetaMatchesVectorOverload)
+{
+    const rhbm_gem::GaussianModel3D model{ 2.0, 0.5, 0.25 };
+    const auto spec{ DirectGaussianModelSpec() };
+
+    const auto typed_beta{ ls::EncodeGaussianToBeta(spec, model) };
+    const auto vector_beta{ ls::EncodeGaussianToBeta(spec, model.ToVector()) };
+
+    ASSERT_EQ(typed_beta.size(), rhbm_gem::GaussianModel3D::kParameterSize);
+    EXPECT_TRUE(typed_beta.isApprox(vector_beta, 1.0e-12));
+    EXPECT_NEAR(0.25, typed_beta(rhbm_gem::GaussianModel3D::kInterceptIndex), 1.0e-12);
+}
+
 TEST(LinearizationServiceTest, DecodeGroupEstimateMatchesClosedForm)
 {
     const auto estimate{
@@ -87,6 +107,18 @@ TEST(LinearizationServiceTest, DecodeGroupEstimateMatchesClosedForm)
 
     EXPECT_NEAR(expected_amplitude, estimate.amplitude, 1.0e-12);
     EXPECT_NEAR(expected_width, estimate.width, 1.0e-12);
+}
+
+TEST(LinearizationServiceTest, DecodeGroupBetaPreservesDirect3DModelIntercept)
+{
+    const auto gaussian{
+        ls::DecodeGroupBeta(DirectGaussianModelSpec(), MakeVector({ 2.0, 0.5, 0.25 }))
+    };
+
+    ASSERT_EQ(gaussian.size(), rhbm_gem::GaussianModel3D::kParameterSize);
+    EXPECT_NEAR(2.0, gaussian(rhbm_gem::GaussianModel3D::kAmplitudeIndex), 1.0e-12);
+    EXPECT_NEAR(0.5, gaussian(rhbm_gem::GaussianModel3D::kWidthIndex), 1.0e-12);
+    EXPECT_NEAR(0.25, gaussian(rhbm_gem::GaussianModel3D::kInterceptIndex), 1.0e-12);
 }
 
 TEST(LinearizationServiceTest, DecodeGaussianEstimateWithUncertaintyReturnsStandardDeviation)
@@ -113,4 +145,43 @@ TEST(LinearizationServiceTest, DecodeGaussianEstimateWithUncertaintyReturnsStand
     EXPECT_NEAR(expected_width, gaussian.estimate.width, 1.0e-12);
     EXPECT_NEAR(std::sqrt(expected_var_amplitude), gaussian.standard_deviation.amplitude, 1.0e-12);
     EXPECT_NEAR(std::sqrt(expected_var_width), gaussian.standard_deviation.width, 1.0e-12);
+}
+
+TEST(LinearizationServiceTest, DecodePosteriorFor2Beta3DModelAddsZeroIntercept)
+{
+    const auto linear_model{ MakeVector({ 0.5, 2.0 }) };
+    Eigen::MatrixXd covariance_matrix(2, 2);
+    covariance_matrix << 0.1, 0.05,
+                         0.05, 0.2;
+
+    const auto decoded{
+        ls::DecodePosterior(DatasetLinearizationSpec(), linear_model, covariance_matrix)
+    };
+    const auto gaussian{ std::get<0>(decoded) };
+    const auto standard_deviation{ std::get<1>(decoded) };
+
+    ASSERT_EQ(gaussian.size(), rhbm_gem::GaussianModel3D::kParameterSize);
+    ASSERT_EQ(standard_deviation.size(), rhbm_gem::GaussianModel3D::kParameterSize);
+    EXPECT_NEAR(0.0, gaussian(rhbm_gem::GaussianModel3D::kInterceptIndex), 1.0e-12);
+    EXPECT_NEAR(0.0, standard_deviation(rhbm_gem::GaussianModel3D::kInterceptIndex), 1.0e-12);
+}
+
+TEST(LinearizationServiceTest, DecodePosteriorForDirect3DModelUsesDiagonalStandardDeviation)
+{
+    const auto linear_model{ MakeVector({ 2.0, 0.5, 0.25 }) };
+    Eigen::MatrixXd covariance_matrix{ Eigen::MatrixXd::Zero(3, 3) };
+    covariance_matrix(0, 0) = 0.04;
+    covariance_matrix(1, 1) = 0.09;
+    covariance_matrix(2, 2) = 0.16;
+
+    const auto decoded{
+        ls::DecodePosterior(DirectGaussianModelSpec(), linear_model, covariance_matrix)
+    };
+    const auto gaussian{ std::get<0>(decoded) };
+    const auto standard_deviation{ std::get<1>(decoded) };
+
+    EXPECT_TRUE(gaussian.isApprox(linear_model, 1.0e-12));
+    EXPECT_NEAR(0.2, standard_deviation(rhbm_gem::GaussianModel3D::kAmplitudeIndex), 1.0e-12);
+    EXPECT_NEAR(0.3, standard_deviation(rhbm_gem::GaussianModel3D::kWidthIndex), 1.0e-12);
+    EXPECT_NEAR(0.4, standard_deviation(rhbm_gem::GaussianModel3D::kInterceptIndex), 1.0e-12);
 }

@@ -143,10 +143,8 @@ bool EmitTrainingReportIfRequested(
 linearization_service::LinearizationContext BuildLocalLinearizationContext(
     const LocalPotentialView & view)
 {
-    Eigen::VectorXd gaus_par_init{ Eigen::VectorXd::Zero(3) };
-    gaus_par_init(0) = view.GetMomentZeroEstimate();
-    gaus_par_init(1) = view.GetMomentTwoEstimate();
-    return linearization_service::LinearizationContext::FromModelParameters(gaus_par_init);
+    return linearization_service::LinearizationContext::FromModel(
+        GaussianModel3D{ view.GetMomentZeroEstimate(), view.GetMomentTwoEstimate(), 0.0 });
 }
 
 } // namespace

@@ -30,21 +30,29 @@ GaussianParameterUncertainty BuildGaussianParameterUncertainty(
     {
         throw std::invalid_argument("Gaussian parameter vector must have at least two entries.");
     }
-    return GaussianParameterUncertainty{ gaussian_parameters(0), gaussian_parameters(1) };
+    return GaussianParameterUncertainty{
+        gaussian_parameters(GaussianModel3D::kAmplitudeIndex),
+        gaussian_parameters(GaussianModel3D::kWidthIndex),
+        (gaussian_parameters.rows() > GaussianModel3D::kInterceptIndex) ?
+            gaussian_parameters(GaussianModel3D::kInterceptIndex) : 0.0
+    };
 }
 
 GaussianParameterVector GetTaylorSeriesBasisVector(
     double distance,
     const GaussianParameterVector & model_parameters)
 {
-    const auto amplitude_0{ model_parameters(0) };
-    const auto width_0{ model_parameters(1) };
+    const auto model{ GaussianModel3D::FromVector(model_parameters) };
+    const auto amplitude_0{ model.amplitude };
+    const auto width_0{ model.width };
     const auto width_square{ width_0 * width_0 };
     const auto gaussian_0{
         1.0 / std::pow(Constants::two_pi * width_square, 1.5) *
         std::exp(-0.5 * distance * distance / width_square)
     };
-    GaussianParameterVector basis_vector{ GaussianParameterVector::Zero(3) };
+    GaussianParameterVector basis_vector{
+        GaussianParameterVector::Zero(GaussianModel3D::kParameterSize)
+    };
     basis_vector(0) = gaussian_0;
     basis_vector(1) =
         amplitude_0 * gaussian_0 * (-3.0 / width_0 + distance * distance / std::pow(width_0, 3));
@@ -76,8 +84,9 @@ GaussianParameterVector BuildLinearModelDataVector(
     }
 
     const auto basis_vector{ GetTaylorSeriesBasisVector(x, model_parameters) };
-    const auto amplitude_0{ model_parameters(0) };
-    const auto width_0{ model_parameters(1) };
+    const auto model{ GaussianModel3D::FromVector(model_parameters) };
+    const auto amplitude_0{ model.amplitude };
+    const auto width_0{ model.width };
     for (int i = 0; i < basis_dimension; i++)
     {
         linear_model_data_vector(i) = basis_vector(i);
@@ -87,24 +96,24 @@ GaussianParameterVector BuildLinearModelDataVector(
         1.0 / std::pow(Constants::two_pi * width_square, 1.5) *
         std::exp(-0.5 * x * x / width_square)
     };
-    const auto intercept{ amplitude_0 * gaussian_response + model_parameters(2) };
+    const auto intercept{ amplitude_0 * gaussian_response + model.intercept };
     linear_model_data_vector(basis_dimension) = y - intercept;
     return linear_model_data_vector;
 }
 
-RHBMBetaVector BuildLinearModelCoefficientVector(double amplitude, double width)
+RHBMBetaVector BuildLinearModelCoefficientVector(const GaussianModel3D & model)
 {
     RHBMBetaVector linear_model_coeff{ RHBMBetaVector::Zero(3) };
-    if (width == 0.0)
+    if (model.width == 0.0)
     {
         return linear_model_coeff;
     }
 
-    const auto width_square{ width * width };
-    linear_model_coeff(0) = (amplitude <= 0.0) ?
-        0.0 : std::log(amplitude) - 1.5 * std::log(Constants::two_pi * width_square);
+    const auto width_square{ model.width * model.width };
+    linear_model_coeff(0) = (model.amplitude <= 0.0) ?
+        0.0 : std::log(model.amplitude) - 1.5 * std::log(Constants::two_pi * width_square);
     linear_model_coeff(1) = 1.0 / width_square;
-    linear_model_coeff(2) = 0.0;
+    linear_model_coeff(2) = model.intercept;
     return linear_model_coeff;
 }
 
@@ -131,9 +140,9 @@ GaussianParameterVector BuildGaus2DModel(const RHBMBetaVector & linear_model)
     return gaus_model;
 }
 
-GaussianParameterVector BuildGaus3DModel(const RHBMBetaVector & linear_model)
+GaussianModel3D BuildGaus3DModel(const RHBMBetaVector & linear_model)
 {
-    GaussianParameterVector gaus_model{ GaussianParameterVector::Zero(3) };
+    GaussianModel3D gaus_model{ 0.0, 0.0, 0.0 };
     if (linear_model(1) <= 0.0)
     {
         return gaus_model;
@@ -142,26 +151,26 @@ GaussianParameterVector BuildGaus3DModel(const RHBMBetaVector & linear_model)
     const auto model_dimension{ linear_model.rows() };
     if (model_dimension == 2)
     {
-        gaus_model(0) =
+        gaus_model.amplitude =
             std::exp(linear_model(0)) * std::pow(Constants::two_pi / linear_model(1), 1.5);
-        gaus_model(1) = 1.0 / std::sqrt(linear_model(1));
-        gaus_model(2) = 0.0;
+        gaus_model.width = 1.0 / std::sqrt(linear_model(1));
+        gaus_model.intercept = 0.0;
     }
     else
     {
-        gaus_model(0) = linear_model(0);
-        gaus_model(1) = linear_model(1);
-        gaus_model(2) = linear_model(2);
+        gaus_model.amplitude = linear_model(0);
+        gaus_model.width = linear_model(1);
+        gaus_model.intercept = linear_model(2);
     }
 
     return gaus_model;
 }
 
-GaussianParameterVector BuildGaus3DModel(
+GaussianModel3D BuildGaus3DModel(
     const RHBMBetaVector & linear_model,
     const GaussianParameterVector & model_parameters)
 {
-    GaussianParameterVector gaus_model{ GaussianParameterVector::Zero(3) };
+    GaussianModel3D gaus_model{ 0.0, 0.0, 0.0 };
     if (linear_model(1) <= 0.0)
     {
         return gaus_model;
@@ -170,22 +179,23 @@ GaussianParameterVector BuildGaus3DModel(
     const auto model_dimension{ linear_model.rows() };
     if (model_dimension == 2)
     {
-        gaus_model(0) =
+        gaus_model.amplitude =
             std::exp(linear_model(0)) * std::pow(Constants::two_pi / linear_model(1), 1.5);
-        gaus_model(1) = 1.0 / std::sqrt(linear_model(1));
-        gaus_model(2) = 0.0;
+        gaus_model.width = 1.0 / std::sqrt(linear_model(1));
+        gaus_model.intercept = 0.0;
     }
     else
     {
-        gaus_model(0) = std::exp(linear_model(0)) * model_parameters(0);
-        gaus_model(1) = std::exp(linear_model(1)) + model_parameters(1);
-        gaus_model(2) = linear_model(2) + model_parameters(2);
+        const auto model{ GaussianModel3D::FromVector(model_parameters) };
+        gaus_model.amplitude = std::exp(linear_model(0)) * model.amplitude;
+        gaus_model.width = std::exp(linear_model(1)) + model.width;
+        gaus_model.intercept = linear_model(2) + model.intercept;
     }
 
     return gaus_model;
 }
 
-std::tuple<GaussianParameterVector, GaussianParameterVector> BuildGaus2DModelWithVariance(
+std::tuple<GaussianParameterVector, GaussianParameterVector> BuildGaus2DModelWithUncertainty(
     const RHBMBetaVector & linear_model,
     const RHBMPosteriorCovarianceMatrix & covariance_matrix)
 {
@@ -230,12 +240,14 @@ std::tuple<GaussianParameterVector, GaussianParameterVector> BuildGaus2DModelWit
     return std::make_tuple(gaus_model, gaus_model_variance);
 }
 
-std::tuple<GaussianParameterVector, GaussianParameterVector> BuildGaus3DModelWithVariance(
+std::tuple<GaussianParameterVector, GaussianParameterVector> BuildGaus3DModelWithUncertainty(
     const RHBMBetaVector & linear_model,
     const RHBMPosteriorCovarianceMatrix & covariance_matrix)
 {
-    GaussianParameterVector gaus_model{ GaussianParameterVector::Zero(2) };
-    GaussianParameterVector gaus_model_variance{ GaussianParameterVector::Zero(2) };
+    GaussianParameterVector gaus_model{ GaussianParameterVector::Zero(GaussianModel3D::kParameterSize) };
+    GaussianParameterVector gaus_model_variance{
+        GaussianParameterVector::Zero(GaussianModel3D::kParameterSize)
+    };
 
     if (linear_model.rows() == 2)
     {
@@ -252,7 +264,7 @@ std::tuple<GaussianParameterVector, GaussianParameterVector> BuildGaus3DModelWit
             throw std::invalid_argument("covariance_matrix must be symmetric");
         }
 
-        gaus_model = BuildGaus3DModel(linear_model);
+        gaus_model = BuildGaus3DModel(linear_model).ToVector();
         const auto beta0{ linear_model(0) };
         const auto beta1{ linear_model(1) };
         if (beta1 <= 0.0)
@@ -270,6 +282,33 @@ std::tuple<GaussianParameterVector, GaussianParameterVector> BuildGaus3DModelWit
         const auto var_width{ 0.25 * std::pow(beta1, -3) * var_beta1 };
         gaus_model_variance(0) = std::sqrt(var_amplitude);
         gaus_model_variance(1) = std::sqrt(var_width);
+        return std::make_tuple(gaus_model, gaus_model_variance);
+    }
+
+    if (linear_model.rows() == GaussianModel3D::kParameterSize)
+    {
+        try
+        {
+            eigen_validation::RequireShape(
+                covariance_matrix,
+                GaussianModel3D::kParameterSize,
+                GaussianModel3D::kParameterSize,
+                "covariance_matrix");
+        }
+        catch (const std::invalid_argument &)
+        {
+            throw std::invalid_argument("covariance_matrix must be 3x3");
+        }
+        if (!covariance_matrix.isApprox(covariance_matrix.transpose()))
+        {
+            throw std::invalid_argument("covariance_matrix must be symmetric");
+        }
+
+        gaus_model = BuildGaus3DModel(linear_model).ToVector();
+        for (int i = 0; i < GaussianModel3D::kParameterSize; i++)
+        {
+            gaus_model_variance(i) = std::sqrt(covariance_matrix(i, i));
+        }
     }
 
     return std::make_tuple(gaus_model, gaus_model_variance);
@@ -297,9 +336,9 @@ GaussianParameterVector BuildGaussianVector(
     case GaussianModelKind::MODEL_3D:
         if (context != nullptr && context->HasModelParameters())
         {
-            return BuildGaus3DModel(linear_model, context->model_parameters);
+            return BuildGaus3DModel(linear_model, context->model_parameters).ToVector();
         }
-        return BuildGaus3DModel(linear_model);
+        return BuildGaus3DModel(linear_model).ToVector();
     }
     throw std::invalid_argument("Unsupported Gaussian model kind.");
 }
@@ -346,6 +385,11 @@ LinearizationContext LinearizationContext::FromModelParameters(
     return context;
 }
 
+LinearizationContext LinearizationContext::FromModel(const GaussianModel3D & model)
+{
+    return FromModelParameters(model.ToVector());
+}
+
 SeriesPointList BuildDatasetSeries(
     const LinearizationSpec & spec,
     const LocalPotentialSampleList & sampling_entries,
@@ -359,7 +403,9 @@ SeriesPointList BuildDatasetSeries(
     SeriesPointList basis_and_response_entry_list;
     basis_and_response_entry_list.reserve(sampling_entries.size());
     const auto model_parameters{
-        context.HasModelParameters() ? context.model_parameters : Eigen::VectorXd::Zero(3)
+        context.HasModelParameters() ?
+            context.model_parameters :
+            Eigen::VectorXd::Zero(GaussianModel3D::kParameterSize)
     };
     for (const auto & sample : sampling_entries)
     {
@@ -422,7 +468,9 @@ SeriesPointList BuildLinearModelSeries(
     SeriesPointList linear_model_series;
     linear_model_series.reserve(sampling_entries.size());
     const auto model_parameters{
-        context.HasModelParameters() ? context.model_parameters : Eigen::VectorXd::Zero(3)
+        context.HasModelParameters() ?
+            context.model_parameters :
+            Eigen::VectorXd::Zero(GaussianModel3D::kParameterSize)
     };
     for (const auto & sample : sampling_entries)
     {
@@ -458,11 +506,11 @@ RHBMBetaVector EncodeGaussianToBeta(
         throw std::invalid_argument("Gaussian parameter vector must have at least two entries.");
     }
 
-    const auto encoded{
-        BuildLinearModelCoefficientVector(
-            gaussian_parameters(0),
-            gaussian_parameters(1))
+    const auto gaussian_model{ (gaussian_parameters.rows() >= GaussianModel3D::kParameterSize) ?
+        GaussianModel3D::FromVector(gaussian_parameters) :
+        GaussianModel3D{ gaussian_parameters(0), gaussian_parameters(1), 0.0 }
     };
+    const auto encoded{ BuildLinearModelCoefficientVector(gaussian_model) };
     if (spec.basis_size > encoded.rows())
     {
         throw std::invalid_argument("Requested basis size exceeds supported encoded Gaussian size.");
@@ -474,10 +522,25 @@ RHBMBetaVector EncodeGaussianToBeta(
     const LinearizationSpec & spec,
     const GaussianEstimate & gaussian_estimate)
 {
-    GaussianParameterVector gaussian_parameters{ GaussianParameterVector::Zero(2) };
-    gaussian_parameters(0) = gaussian_estimate.amplitude;
-    gaussian_parameters(1) = gaussian_estimate.width;
-    return EncodeGaussianToBeta(spec, gaussian_parameters);
+    return EncodeGaussianToBeta(spec, gaussian_estimate.ToModel());
+}
+
+RHBMBetaVector EncodeGaussianToBeta(
+    const LinearizationSpec & spec,
+    const GaussianModel3D & gaussian_model)
+{
+    numeric_validation::RequirePositive(spec.basis_size, "LinearizationSpec basis_size");
+    if (spec.linearization_kind != LinearizationKind::LOG_QUADRATIC)
+    {
+        throw std::invalid_argument("EncodeGaussianToBeta only supports log-quadratic linearization.");
+    }
+
+    const auto encoded{ BuildLinearModelCoefficientVector(gaussian_model) };
+    if (spec.basis_size > encoded.rows())
+    {
+        throw std::invalid_argument("Requested basis size exceeds supported encoded Gaussian size.");
+    }
+    return encoded.head(spec.basis_size);
 }
 
 GaussianParameterVector DecodeLocalBeta(
@@ -507,9 +570,9 @@ std::tuple<GaussianParameterVector, GaussianParameterVector> DecodePosterior(
     switch (spec.model_kind)
     {
     case GaussianModelKind::MODEL_2D:
-        return BuildGaus2DModelWithVariance(linear_model, covariance_matrix);
+        return BuildGaus2DModelWithUncertainty(linear_model, covariance_matrix);
     case GaussianModelKind::MODEL_3D:
-        return BuildGaus3DModelWithVariance(linear_model, covariance_matrix);
+        return BuildGaus3DModelWithUncertainty(linear_model, covariance_matrix);
     }
     throw std::invalid_argument("Unsupported Gaussian model kind.");
 }
