@@ -2,7 +2,6 @@
 
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
@@ -433,17 +432,6 @@ SeriesPointList BuildLinearModelSeries(
             SeriesPoint{ { data_vector(1) }, data_vector(spec.basis_size), sample.score });
     }
     return linear_model_series;
-}
-
-RHBMMemberDataset BuildDataset(
-    const LinearizationSpec & spec,
-    const LocalPotentialSampleList & sampling_entries,
-    double x_min,
-    double x_max,
-    const LinearizationContext & context)
-{
-    return rhbm_helper::BuildMemberDataset(
-        BuildDatasetSeries(spec, sampling_entries, x_min, x_max, context));
 }
 
 RHBMBetaVector EncodeGaussianToBeta(

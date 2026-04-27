@@ -38,14 +38,15 @@ struct GroupingSummary
 
 class LocalPotentialView
 {
+    const AtomObject * m_atom_object{ nullptr };
+    const BondObject * m_bond_object{ nullptr };
+
 public:
     LocalPotentialView() = default;
-
     static LocalPotentialView For(const AtomObject & atom_object);
     static LocalPotentialView For(const BondObject & bond_object);
     static LocalPotentialView RequireFor(const AtomObject & atom_object);
     static LocalPotentialView RequireFor(const BondObject & bond_object);
-
     bool IsAvailable() const;
     const GaussianEstimate & GetEstimateOLS() const;
     const GaussianEstimate & GetEstimateMDPDE() const;
@@ -68,11 +69,9 @@ public:
     const BondObject * GetBondObjectPtr() const { return m_bond_object; }
 
 private:
-    const AtomObject * m_atom_object{ nullptr };
-    const BondObject * m_bond_object{ nullptr };
-
     explicit LocalPotentialView(const AtomObject * atom_object);
     explicit LocalPotentialView(const BondObject * bond_object);
+
 };
 
 class ModelAnalysisView
@@ -81,9 +80,7 @@ class ModelAnalysisView
 
 public:
     explicit ModelAnalysisView(const ModelObject & model_object);
-
     static ModelAnalysisView Of(const ModelObject & model_object);
-
     bool HasGroupedAnalysisData() const;
     GroupingSummary CollectAtomGroupingSummary() const;
     GroupingSummary CollectBondGroupingSummary() const;
@@ -118,6 +115,7 @@ public:
     Residue GetResidueFromBondGroupKey(GroupKey group_key, const std::string & class_key) const;
     std::vector<GroupKey> CollectAtomGroupKeys(const std::string & class_key) const;
     std::vector<GroupKey> CollectBondGroupKeys(const std::string & class_key) const;
+    
 };
 
 } // namespace rhbm_gem

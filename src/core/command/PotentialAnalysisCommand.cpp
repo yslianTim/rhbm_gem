@@ -559,12 +559,13 @@ void PotentialAnalysisCommand::RunDatasetPreparationWorkflow(
         auto entry{ local_entry_list[i] };
         const auto local_view{ LocalPotentialView::RequireFor(*atom_list[i]) };
         entry.SetDataset(
-            linearization_service::BuildDataset(
-                dataset_spec,
-                local_view.GetSamplingEntries(),
-                fit_range_min,
-                fit_range_max,
-                BuildLocalLinearizationContext(local_view))
+            rhbm_helper::BuildMemberDataset(
+                linearization_service::BuildDatasetSeries(
+                    dataset_spec,
+                    local_view.GetSamplingEntries(),
+                    fit_range_min,
+                    fit_range_max,
+                    BuildLocalLinearizationContext(local_view)))
         );
 
 #ifdef USE_OPENMP

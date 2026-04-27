@@ -58,13 +58,6 @@ SeriesPointList BuildLinearModelSeries(
     const LocalPotentialSampleList & sampling_entries,
     const LinearizationContext & context = {});
 
-RHBMMemberDataset BuildDataset(
-    const LinearizationSpec & spec,
-    const LocalPotentialSampleList & sampling_entries,
-    double x_min,
-    double x_max,
-    const LinearizationContext & context = {});
-
 RHBMBetaVector EncodeGaussianToBeta(
     const LinearizationSpec & spec,
     const GaussianParameterVector & gaussian_parameters);
