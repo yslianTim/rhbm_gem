@@ -23,6 +23,12 @@ constexpr double kAlphaGMin{ 0.0 };
 constexpr double kAlphaGMax{ 1.0 };
 constexpr double kAlphaGStep{ 0.1 };
 
+struct BetaReplicaResidual
+{
+    Eigen::VectorXd ols_residual;
+    Eigen::VectorXd mdpde_residual;
+};
+
 RHBMExecutionOptions MakeTesterExecutionOptions()
 {
     RHBMExecutionOptions options;
@@ -158,20 +164,6 @@ void FinalizeResidualStatisticsSeries(
     result.trained_alpha = FinalizeResidualStatistics(residual_matrix_list.at(requested_alpha_size));
 }
 } // namespace
-
-bool RunSingleBetaMDPDETest(
-    BetaReplicaResidual & result,
-    const RHBMMemberDataset & dataset,
-    const GaussianParameterVector & gaus_true,
-    double alpha_r,
-    int thread_size)
-{
-    ValidateGaussianTruthVector(gaus_true, "gaus_true");
-    auto options{ MakeTesterExecutionOptions() };
-    options.thread_size = thread_size;
-    result = EstimateBetaReplicaResidual(dataset, gaus_true, alpha_r, options);
-    return true;
-}
 
 bool RunBetaMDPDETest(
     BetaMDPDETestResidual & result,

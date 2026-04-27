@@ -9,12 +9,6 @@
 namespace rhbm_gem::rhbm_tester
 {
 
-struct BetaReplicaResidual
-{
-    Eigen::VectorXd ols_residual;
-    Eigen::VectorXd mdpde_residual;
-};
-
 struct MuReplicaResidual
 {
     Eigen::VectorXd median_residual;
@@ -60,14 +54,6 @@ struct NeighborhoodMDPDETestResidual
     ResidualStatistics cut_mdpde;
     double trained_alpha_r_average{ 0.0 };
 };
-
-bool RunSingleBetaMDPDETest(
-    BetaReplicaResidual & result,
-    const RHBMMemberDataset & dataset,
-    const GaussianParameterVector & gaussian_truth,
-    double alpha_r,
-    int thread_size = 1
-);
 
 bool RunBetaMDPDETest(
     BetaMDPDETestResidual & result,

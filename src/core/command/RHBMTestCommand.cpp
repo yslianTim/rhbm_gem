@@ -588,7 +588,7 @@ void RunSimulationTestOnBenchMark(const RHBMTestExecutionContext & options)
     ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnBenchMark");
 
     const auto scenario{ NeighborDistanceScenarioConfig{
-        1,
+        10,
         50,
         3,
         45.0,
@@ -611,13 +611,12 @@ void RunSimulationTestOnBenchMark(const RHBMTestExecutionContext & options)
                         error_sigma,
                         distance))
             };
-            rhbm_tester::BetaReplicaResidual residual_result;
-            rhbm_tester::RunSingleBetaMDPDETest(
+            rhbm_tester::NeighborhoodMDPDETestResidual residual_result;
+            rhbm_tester::RunBetaMDPDEWithNeighborhoodTest(
                 residual_result,
-                test_input.cut_datasets.front(),
-                test_input.gaus_true,
-                options.options.alpha_r,
-                options.thread_size);
+                test_input,
+                options.thread_size,
+                scenario.rejected_angle);
             TryAppendBenchmarkLinearizedPanel(
                 linearized_panels,
                 distance,
@@ -626,15 +625,19 @@ void RunSimulationTestOnBenchMark(const RHBMTestExecutionContext & options)
 
             std::ostringstream stream;
             stream << "Distance: " << distance
-                   << " , OLS: "
-                   << residual_result.ols_residual(0) << " , "
-                   << residual_result.ols_residual(1) << " , "
-                   << residual_result.ols_residual(2)
-                   << " , MDPDE: "
-                   << residual_result.mdpde_residual(0) << " , "
-                   << residual_result.mdpde_residual(1) << " , "
-                   << residual_result.mdpde_residual(2)
-                   << " (Alpha-R = " << options.options.alpha_r << ")";
+                   << " , OLS (No Cut): "
+                   << residual_result.no_cut_ols.mean(0) << " , "
+                   << residual_result.no_cut_ols.mean(1) << " , "
+                   << residual_result.no_cut_ols.mean(2)
+                   << " , MDPDE (No Cut): "
+                   << residual_result.no_cut_mdpde.mean(0) << " , "
+                   << residual_result.no_cut_mdpde.mean(1) << " , "
+                   << residual_result.no_cut_mdpde.mean(2)
+                   << " , MDPDE (Cut): "
+                   << residual_result.cut_mdpde.mean(0) << " , "
+                   << residual_result.cut_mdpde.mean(1) << " , "
+                   << residual_result.cut_mdpde.mean(2)
+                   << " (Alpha-R = " << residual_result.trained_alpha_r_average << ")";
             Logger::Log(LogLevel::Info, stream.str());
         }
         SaveBenchmarkLinearizedDatasetReport(options, error_sigma, linearized_panels);
