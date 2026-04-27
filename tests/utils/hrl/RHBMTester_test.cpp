@@ -23,6 +23,12 @@ Eigen::VectorXd MakeVector(std::initializer_list<double> values)
     return result;
 }
 
+void ExpectResidualStatisticSize(const rt::ResidualStatistics & residual)
+{
+    EXPECT_EQ(residual.mean.size(), rhbm_gem::GaussianModel3D::kParameterSize);
+    EXPECT_EQ(residual.sigma.size(), rhbm_gem::GaussianModel3D::kParameterSize);
+}
+
 } // namespace
 
 TEST(RHBMTesterTest, RunBetaMDPDETestPopulatesResidualOutputs)
@@ -41,45 +47,24 @@ TEST(RHBMTesterTest, RunBetaMDPDETestPopulatesResidualOutputs)
         })
     };
 
-    std::vector<Eigen::VectorXd> residual_mean_ols_list;
-    std::vector<Eigen::VectorXd> residual_mean_mdpde_list;
-    std::vector<Eigen::VectorXd> residual_sigma_ols_list;
-    std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
-
+    rt::BetaMDPDETestResidual residual;
     const std::vector<double> alpha_r_list{ 0.0, 0.5 };
     const bool result{
         rt::RunBetaMDPDETest(
+            residual,
             alpha_r_list,
-            residual_mean_ols_list,
-            residual_mean_mdpde_list,
-            residual_sigma_ols_list,
-            residual_sigma_mdpde_list,
             test_input,
             1)
     };
 
     ASSERT_TRUE(result);
-    ASSERT_EQ(residual_mean_ols_list.size(), alpha_r_list.size() + 1);
-    ASSERT_EQ(residual_mean_mdpde_list.size(), alpha_r_list.size() + 1);
-    ASSERT_EQ(residual_sigma_ols_list.size(), alpha_r_list.size() + 1);
-    ASSERT_EQ(residual_sigma_mdpde_list.size(), alpha_r_list.size() + 1);
-
-    for (const auto & residual : residual_mean_ols_list)
+    ASSERT_EQ(residual.mdpde.requested_alpha.size(), alpha_r_list.size());
+    ExpectResidualStatisticSize(residual.ols);
+    for (const auto & requested_alpha_residual : residual.mdpde.requested_alpha)
     {
-        EXPECT_EQ(residual.size(), rhbm_gem::GaussianModel3D::kParameterSize);
+        ExpectResidualStatisticSize(requested_alpha_residual);
     }
-    for (const auto & residual : residual_mean_mdpde_list)
-    {
-        EXPECT_EQ(residual.size(), rhbm_gem::GaussianModel3D::kParameterSize);
-    }
-    for (const auto & residual : residual_sigma_ols_list)
-    {
-        EXPECT_EQ(residual.size(), rhbm_gem::GaussianModel3D::kParameterSize);
-    }
-    for (const auto & residual : residual_sigma_mdpde_list)
-    {
-        EXPECT_EQ(residual.size(), rhbm_gem::GaussianModel3D::kParameterSize);
-    }
+    ExpectResidualStatisticSize(residual.mdpde.trained_alpha);
 }
 
 TEST(RHBMTesterTest, RunMuMDPDETestPopulatesResidualOutputs)
@@ -99,28 +84,24 @@ TEST(RHBMTesterTest, RunMuMDPDETestPopulatesResidualOutputs)
         })
     };
 
-    std::vector<Eigen::VectorXd> residual_mean_median_list;
-    std::vector<Eigen::VectorXd> residual_mean_mdpde_list;
-    std::vector<Eigen::VectorXd> residual_sigma_median_list;
-    std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
-
+    rt::MuMDPDETestResidual residual;
     const std::vector<double> alpha_g_list{ 0.2 };
     const bool result{
         rt::RunMuMDPDETest(
+            residual,
             alpha_g_list,
-            residual_mean_median_list,
-            residual_mean_mdpde_list,
-            residual_sigma_median_list,
-            residual_sigma_mdpde_list,
             test_input,
             1)
     };
 
     ASSERT_TRUE(result);
-    ASSERT_EQ(residual_mean_median_list.size(), alpha_g_list.size() + 1);
-    ASSERT_EQ(residual_mean_mdpde_list.size(), alpha_g_list.size() + 1);
-    ASSERT_EQ(residual_sigma_median_list.size(), alpha_g_list.size() + 1);
-    ASSERT_EQ(residual_sigma_mdpde_list.size(), alpha_g_list.size() + 1);
+    ASSERT_EQ(residual.mdpde.requested_alpha.size(), alpha_g_list.size());
+    ExpectResidualStatisticSize(residual.median);
+    for (const auto & requested_alpha_residual : residual.mdpde.requested_alpha)
+    {
+        ExpectResidualStatisticSize(requested_alpha_residual);
+    }
+    ExpectResidualStatisticSize(residual.mdpde.trained_alpha);
 }
 
 TEST(RHBMTesterTest, RunBetaMDPDEWithNeighborhoodTestConsumesPreparedInputs)
@@ -146,24 +127,21 @@ TEST(RHBMTesterTest, RunBetaMDPDEWithNeighborhoodTestConsumesPreparedInputs)
         })
     };
 
-    std::vector<Eigen::VectorXd> residual_mean_list;
-    std::vector<Eigen::VectorXd> residual_sigma_list;
-    double training_alpha_r_average{ 0.0 };
+    rt::NeighborhoodMDPDETestResidual residual;
 
     const bool result{
         rt::RunBetaMDPDEWithNeighborhoodTest(
-            residual_mean_list,
-            residual_sigma_list,
+            residual,
             test_input,
-            training_alpha_r_average,
             1,
             45.0)
     };
 
     ASSERT_TRUE(result);
-    ASSERT_EQ(residual_mean_list.size(), 3u);
-    ASSERT_EQ(residual_sigma_list.size(), 3u);
-    EXPECT_GT(training_alpha_r_average, 0.0);
+    ExpectResidualStatisticSize(residual.no_cut_ols);
+    ExpectResidualStatisticSize(residual.no_cut_mdpde);
+    ExpectResidualStatisticSize(residual.cut_mdpde);
+    EXPECT_GT(residual.trained_alpha_r_average, 0.0);
 }
 
 TEST(RHBMTesterTest, RunBetaMDPDETestRejectsWrongSizedTruth)
@@ -183,18 +161,12 @@ TEST(RHBMTesterTest, RunBetaMDPDETestRejectsWrongSizedTruth)
     };
     test_input.gaus_true = MakeVector({ 1.0, 0.5 });
 
-    std::vector<Eigen::VectorXd> residual_mean_ols_list;
-    std::vector<Eigen::VectorXd> residual_mean_mdpde_list;
-    std::vector<Eigen::VectorXd> residual_sigma_ols_list;
-    std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
+    rt::BetaMDPDETestResidual residual;
 
     EXPECT_THROW(
         rt::RunBetaMDPDETest(
+            residual,
             std::vector<double>{ 0.0 },
-            residual_mean_ols_list,
-            residual_mean_mdpde_list,
-            residual_sigma_ols_list,
-            residual_sigma_mdpde_list,
             test_input,
             1),
         std::invalid_argument

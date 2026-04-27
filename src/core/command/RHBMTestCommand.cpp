@@ -425,10 +425,7 @@ void RunSimulationTestOnDataOutlier(const RHBMTestExecutionContext & options)
         Eigen::MatrixXd sigma_matrix_train{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
         for (int i = 0; i < outlier_size; i++)
         {
-            std::vector<Eigen::VectorXd> residual_mean_ols_list;
-            std::vector<Eigen::VectorXd> residual_mean_mdpde_list;
-            std::vector<Eigen::VectorXd> residual_sigma_ols_list;
-            std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
+            rhbm_tester::BetaMDPDETestResidual residual;
             const auto test_input{
                 data_factory.BuildBetaTestInput(test_data_factory::TestDataFactory::BetaScenario{
                     model_par_prior,
@@ -439,19 +436,18 @@ void RunSimulationTestOnDataOutlier(const RHBMTestExecutionContext & options)
                 })
             };
             rhbm_tester::RunBetaMDPDETest(
+                residual,
                 scenario.alpha_r_list,
-                residual_mean_ols_list, residual_mean_mdpde_list,
-                residual_sigma_ols_list, residual_sigma_mdpde_list,
                 test_input,
                 options.thread_size
             );
 
-            mean_matrix_ols.col(i) = residual_mean_ols_list.front();
-            sigma_matrix_ols.col(i) = residual_sigma_ols_list.front();
-            mean_matrix_mdpde.col(i) = residual_mean_mdpde_list.front();
-            sigma_matrix_mdpde.col(i) = residual_sigma_mdpde_list.front();
-            mean_matrix_train.col(i) = residual_mean_mdpde_list.back();
-            sigma_matrix_train.col(i) = residual_sigma_mdpde_list.back();
+            mean_matrix_ols.col(i) = residual.ols.mean;
+            sigma_matrix_ols.col(i) = residual.ols.sigma;
+            mean_matrix_mdpde.col(i) = residual.mdpde.requested_alpha.front().mean;
+            sigma_matrix_mdpde.col(i) = residual.mdpde.requested_alpha.front().sigma;
+            mean_matrix_train.col(i) = residual.mdpde.trained_alpha.mean;
+            sigma_matrix_train.col(i) = residual.mdpde.trained_alpha.sigma;
         }
         mean_matrix_ols_list.emplace_back(mean_matrix_ols);
         mean_matrix_mdpde_list.emplace_back(mean_matrix_mdpde);
@@ -514,10 +510,7 @@ void RunSimulationTestOnMemberOutlier(const RHBMTestExecutionContext & options)
         Eigen::MatrixXd sigma_matrix_train{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
         for (int i = 0; i < outlier_size; i++)
         {
-            std::vector<Eigen::VectorXd> residual_mean_median_list;
-            std::vector<Eigen::VectorXd> residual_mean_mdpde_list;
-            std::vector<Eigen::VectorXd> residual_sigma_median_list;
-            std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
+            rhbm_tester::MuMDPDETestResidual residual;
             const auto test_input{
                 data_factory.BuildMuTestInput(test_data_factory::TestDataFactory::MuScenario{
                     scenario.member_size,
@@ -530,19 +523,18 @@ void RunSimulationTestOnMemberOutlier(const RHBMTestExecutionContext & options)
                 })
             };
             rhbm_tester::RunMuMDPDETest(
+                residual,
                 scenario.alpha_g_list,
-                residual_mean_median_list, residual_mean_mdpde_list,
-                residual_sigma_median_list, residual_sigma_mdpde_list,
                 test_input,
                 options.thread_size
             );
 
-            mean_matrix_median.col(i) = residual_mean_median_list.front();
-            mean_matrix_mdpde.col(i) = residual_mean_mdpde_list.front();
-            mean_matrix_train.col(i) = residual_mean_mdpde_list.back();
-            sigma_matrix_median.col(i) = residual_sigma_median_list.front();
-            sigma_matrix_mdpde.col(i) = residual_sigma_mdpde_list.front();
-            sigma_matrix_train.col(i) = residual_sigma_mdpde_list.back();
+            mean_matrix_median.col(i) = residual.median.mean;
+            mean_matrix_mdpde.col(i) = residual.mdpde.requested_alpha.front().mean;
+            mean_matrix_train.col(i) = residual.mdpde.trained_alpha.mean;
+            sigma_matrix_median.col(i) = residual.median.sigma;
+            sigma_matrix_mdpde.col(i) = residual.mdpde.requested_alpha.front().sigma;
+            sigma_matrix_train.col(i) = residual.mdpde.trained_alpha.sigma;
         }
         mean_matrix_median_list.emplace_back(mean_matrix_median);
         mean_matrix_mdpde_list.emplace_back(mean_matrix_mdpde);
@@ -589,10 +581,7 @@ void RunSimulationTestOnModelAlphaData(const RHBMTestExecutionContext & options)
         Eigen::MatrixXd sigma_matrix_alpha2{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
         for (int i = 0; i < outlier_size; i++)
         {
-            std::vector<Eigen::VectorXd> residual_mean_ols_list;
-            std::vector<Eigen::VectorXd> residual_mean_mdpde_list;
-            std::vector<Eigen::VectorXd> residual_sigma_ols_list;
-            std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
+            rhbm_tester::BetaMDPDETestResidual residual;
             const auto test_input{
                 data_factory.BuildBetaTestInput(test_data_factory::TestDataFactory::BetaScenario{
                     model_par_prior,
@@ -603,17 +592,16 @@ void RunSimulationTestOnModelAlphaData(const RHBMTestExecutionContext & options)
                 })
             };
             rhbm_tester::RunBetaMDPDETest(
+                residual,
                 scenario.alpha_r_list,
-                residual_mean_ols_list, residual_mean_mdpde_list,
-                residual_sigma_ols_list, residual_sigma_mdpde_list,
                 test_input,
                 options.thread_size
             );
 
-            mean_matrix_alpha1.col(i) = residual_mean_mdpde_list.front();
-            mean_matrix_alpha2.col(i) = residual_mean_mdpde_list.back();
-            sigma_matrix_alpha1.col(i) = residual_sigma_mdpde_list.front();
-            sigma_matrix_alpha2.col(i) = residual_sigma_mdpde_list.back();
+            mean_matrix_alpha1.col(i) = residual.mdpde.requested_alpha.front().mean;
+            mean_matrix_alpha2.col(i) = residual.mdpde.trained_alpha.mean;
+            sigma_matrix_alpha1.col(i) = residual.mdpde.requested_alpha.front().sigma;
+            sigma_matrix_alpha2.col(i) = residual.mdpde.trained_alpha.sigma;
         }
         mean_matrix_alpha1_list.emplace_back(mean_matrix_alpha1);
         mean_matrix_alpha2_list.emplace_back(mean_matrix_alpha2);
@@ -670,10 +658,7 @@ void RunSimulationTestOnModelAlphaMember(const RHBMTestExecutionContext & option
         Eigen::MatrixXd sigma_matrix_alpha2{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
         for (int i = 0; i < outlier_size; i++)
         {
-            std::vector<Eigen::VectorXd> residual_mean_median_list;
-            std::vector<Eigen::VectorXd> residual_mean_mdpde_list;
-            std::vector<Eigen::VectorXd> residual_sigma_median_list;
-            std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
+            rhbm_tester::MuMDPDETestResidual residual;
             const auto test_input{
                 data_factory.BuildMuTestInput(test_data_factory::TestDataFactory::MuScenario{
                     scenario.member_size,
@@ -686,17 +671,16 @@ void RunSimulationTestOnModelAlphaMember(const RHBMTestExecutionContext & option
                 })
             };
             rhbm_tester::RunMuMDPDETest(
+                residual,
                 scenario.alpha_g_list,
-                residual_mean_median_list, residual_mean_mdpde_list,
-                residual_sigma_median_list, residual_sigma_mdpde_list,
                 test_input,
                 options.thread_size
             );
 
-            mean_matrix_alpha1.col(i) = residual_mean_mdpde_list.front();
-            mean_matrix_alpha2.col(i) = residual_mean_mdpde_list.back();
-            sigma_matrix_alpha1.col(i) = residual_sigma_mdpde_list.front();
-            sigma_matrix_alpha2.col(i) = residual_sigma_mdpde_list.back();
+            mean_matrix_alpha1.col(i) = residual.mdpde.requested_alpha.front().mean;
+            mean_matrix_alpha2.col(i) = residual.mdpde.trained_alpha.mean;
+            sigma_matrix_alpha1.col(i) = residual.mdpde.requested_alpha.front().sigma;
+            sigma_matrix_alpha2.col(i) = residual.mdpde.trained_alpha.sigma;
         }
         mean_matrix_alpha1_list.emplace_back(mean_matrix_alpha1);
         mean_matrix_alpha2_list.emplace_back(mean_matrix_alpha2);
@@ -746,11 +730,9 @@ void RunSimulationTestOnNeighborDistance(const RHBMTestExecutionContext & option
         Eigen::MatrixXd sigma_matrix_train{ Eigen::MatrixXd::Zero(kGausParSize, distance_size) };
         std::vector<LocalPotentialSampleList> sampling_entries_list;
         sampling_entries_list.reserve(static_cast<size_t>(distance_size));
-        double training_alpha_r_average{ 0.0 };
         for (int i = 0; i < distance_size; i++)
         {
-            std::vector<Eigen::VectorXd> residual_mean_list;
-            std::vector<Eigen::VectorXd> residual_sigma_list;
+            rhbm_tester::NeighborhoodMDPDETestResidual residual;
             const auto test_input{
                 data_factory.BuildNeighborhoodTestInput(
                     BuildNeighborhoodScenario(
@@ -761,28 +743,27 @@ void RunSimulationTestOnNeighborDistance(const RHBMTestExecutionContext & option
                         true))
             };
             rhbm_tester::RunBetaMDPDEWithNeighborhoodTest(
-                residual_mean_list, residual_sigma_list,
+                residual,
                 test_input,
-                training_alpha_r_average,
                 options.thread_size,
                 scenario.rejected_angle
             );
 
             sampling_entries_list.emplace_back(test_input.sampling_summaries.front());
 
-            mean_matrix_ols.col(i) = residual_mean_list.at(0);
-            sigma_matrix_ols.col(i) = residual_sigma_list.at(0);
-            mean_matrix_mdpde.col(i) = residual_mean_list.at(1);
-            sigma_matrix_mdpde.col(i) = residual_sigma_list.at(1);
-            mean_matrix_train.col(i) = residual_mean_list.at(2);
-            sigma_matrix_train.col(i) = residual_sigma_list.at(2);
+            mean_matrix_ols.col(i) = residual.no_cut_ols.mean;
+            sigma_matrix_ols.col(i) = residual.no_cut_ols.sigma;
+            mean_matrix_mdpde.col(i) = residual.no_cut_mdpde.mean;
+            sigma_matrix_mdpde.col(i) = residual.no_cut_mdpde.sigma;
+            mean_matrix_train.col(i) = residual.cut_mdpde.mean;
+            sigma_matrix_train.col(i) = residual.cut_mdpde.sigma;
 
             Logger::Log(LogLevel::Info,
                 std::string("Distance: ") + std::to_string(scenario.distance_list[static_cast<size_t>(i)])
                 + " , OLS: " + std::to_string(mean_matrix_ols.col(i)(0)) + " +- " + std::to_string(sigma_matrix_ols.col(i)(0))
                 + " , MDPDE: " + std::to_string(mean_matrix_mdpde.col(i)(0)) + " +- " + std::to_string(sigma_matrix_mdpde.col(i)(0))
                 + " , Train: " + std::to_string(mean_matrix_train.col(i)(0)) + " +- " + std::to_string(sigma_matrix_train.col(i)(0))
-                + " (Alpha-R = " + std::to_string(training_alpha_r_average) + ")"
+                + " (Alpha-R = " + std::to_string(residual.trained_alpha_r_average) + ")"
             );
         }
         mean_matrix_ols_list.emplace_back(mean_matrix_ols);
