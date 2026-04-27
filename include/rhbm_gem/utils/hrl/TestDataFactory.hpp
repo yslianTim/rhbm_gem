@@ -31,9 +31,8 @@ struct RHBMMuTestInput
 
 struct RHBMNeighborhoodTestInput
 {
-    Eigen::VectorXd gaus_true;
-    std::vector<RHBMMemberDataset> no_cut_datasets;
-    std::vector<RHBMMemberDataset> cut_datasets;
+    RHBMBetaTestInput no_cut_input;
+    RHBMBetaTestInput cut_input;
     std::vector<LocalPotentialSampleList> sampling_summaries;
 };
 

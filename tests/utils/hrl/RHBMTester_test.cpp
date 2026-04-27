@@ -67,6 +67,8 @@ TEST(RHBMTesterTest, RunBetaMDPDETestPopulatesResidualOutputs)
     }
     ASSERT_TRUE(residual.mdpde.trained_alpha.has_value());
     ExpectResidualStatisticSize(residual.mdpde.trained_alpha.value());
+    ASSERT_TRUE(residual.mdpde.trained_alpha_average.has_value());
+    EXPECT_GE(residual.mdpde.trained_alpha_average.value(), 0.0);
 }
 
 TEST(RHBMTesterTest, RunMuMDPDETestPopulatesResidualOutputs)
@@ -106,6 +108,8 @@ TEST(RHBMTesterTest, RunMuMDPDETestPopulatesResidualOutputs)
     }
     ASSERT_TRUE(residual.mdpde.trained_alpha.has_value());
     ExpectResidualStatisticSize(residual.mdpde.trained_alpha.value());
+    ASSERT_TRUE(residual.mdpde.trained_alpha_average.has_value());
+    EXPECT_GE(residual.mdpde.trained_alpha_average.value(), 0.0);
 }
 
 TEST(RHBMTesterTest, RunBetaMDPDETestSkipsTrainedAlphaWhenDisabled)
@@ -140,6 +144,7 @@ TEST(RHBMTesterTest, RunBetaMDPDETestSkipsTrainedAlphaWhenDisabled)
     ExpectResidualStatisticSize(residual.ols);
     ExpectResidualStatisticSize(residual.mdpde.requested_alpha.front());
     EXPECT_FALSE(residual.mdpde.trained_alpha.has_value());
+    EXPECT_FALSE(residual.mdpde.trained_alpha_average.has_value());
 }
 
 TEST(RHBMTesterTest, RunMuMDPDETestSkipsTrainedAlphaWhenDisabled)
@@ -175,6 +180,7 @@ TEST(RHBMTesterTest, RunMuMDPDETestSkipsTrainedAlphaWhenDisabled)
     ExpectResidualStatisticSize(residual.median);
     ExpectResidualStatisticSize(residual.mdpde.requested_alpha.front());
     EXPECT_FALSE(residual.mdpde.trained_alpha.has_value());
+    EXPECT_FALSE(residual.mdpde.trained_alpha_average.has_value());
 }
 
 TEST(RHBMTesterTest, RunBetaMDPDETestAllowsEmptyAlphaListWithoutTraining)
@@ -207,45 +213,42 @@ TEST(RHBMTesterTest, RunBetaMDPDETestAllowsEmptyAlphaListWithoutTraining)
     EXPECT_TRUE(residual.mdpde.requested_alpha.empty());
     ExpectResidualStatisticSize(residual.ols);
     EXPECT_FALSE(residual.mdpde.trained_alpha.has_value());
+    EXPECT_FALSE(residual.mdpde.trained_alpha_average.has_value());
 }
 
-TEST(RHBMTesterTest, RunBetaMDPDEWithNeighborhoodTestConsumesPreparedInputs)
+TEST(RHBMTesterTest, RunBetaMDPDETestAllowsEmptyAlphaListWithTraining)
 {
     tdf::TestDataFactory factory(
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
     const auto test_input{
-        factory.BuildNeighborhoodTestInput(tdf::TestDataFactory::NeighborhoodScenario{
+        factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
             MakeVector({ 1.0, 0.5, 0.0 }),
-            8,
+            10,
             0.01,
             0.0,
-            1.0,
-            2.0,
-            1,
-            45.0,
-            true,
-            0.0,
-            4.0,
             2,
-            101
+            42,
+            {},
+            true
         })
     };
 
-    rt::NeighborhoodMDPDETestResidual residual;
-
+    rt::BetaMDPDETestResidual residual;
     const bool result{
-        rt::RunBetaMDPDEWithNeighborhoodTest(
+        rt::RunBetaMDPDETest(
             residual,
             test_input,
             1)
     };
 
     ASSERT_TRUE(result);
-    ExpectResidualStatisticSize(residual.no_cut_ols);
-    ExpectResidualStatisticSize(residual.no_cut_mdpde);
-    ExpectResidualStatisticSize(residual.cut_mdpde);
-    EXPECT_GT(residual.trained_alpha_r_average, 0.0);
+    EXPECT_TRUE(residual.mdpde.requested_alpha.empty());
+    ExpectResidualStatisticSize(residual.ols);
+    ASSERT_TRUE(residual.mdpde.trained_alpha.has_value());
+    ExpectResidualStatisticSize(residual.mdpde.trained_alpha.value());
+    ASSERT_TRUE(residual.mdpde.trained_alpha_average.has_value());
+    EXPECT_GE(residual.mdpde.trained_alpha_average.value(), 0.0);
 }
 
 TEST(RHBMTesterTest, RunBetaMDPDETestRejectsWrongSizedTruth)

@@ -542,9 +542,12 @@ RHBMNeighborhoodTestInput TestDataFactory::BuildNeighborhoodTestInput(
     };
 
     RHBMNeighborhoodTestInput input;
-    input.gaus_true = scenario.gaus_true;
-    input.no_cut_datasets.reserve(static_cast<size_t>(scenario.replica_size));
-    input.cut_datasets.reserve(static_cast<size_t>(scenario.replica_size));
+    input.no_cut_input.gaus_true = scenario.gaus_true;
+    input.no_cut_input.alpha_training = true;
+    input.cut_input.gaus_true = scenario.gaus_true;
+    input.cut_input.alpha_training = true;
+    input.no_cut_input.replica_datasets.reserve(static_cast<size_t>(scenario.replica_size));
+    input.cut_input.replica_datasets.reserve(static_cast<size_t>(scenario.replica_size));
     if (scenario.include_sampling_summary)
     {
         input.sampling_summaries.reserve(1);
@@ -590,10 +593,10 @@ RHBMNeighborhoodTestInput TestDataFactory::BuildNeighborhoodTestInput(
                 generator
             )
         };
-        input.no_cut_datasets.emplace_back(
+        input.no_cut_input.replica_datasets.emplace_back(
             rhbm_helper::BuildMemberDataset(no_cut_data_entry_list)
         );
-        input.cut_datasets.emplace_back(
+        input.cut_input.replica_datasets.emplace_back(
             rhbm_helper::BuildMemberDataset(cut_data_entry_list)
         );
     }

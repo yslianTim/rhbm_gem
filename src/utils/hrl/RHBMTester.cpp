@@ -35,14 +35,6 @@ struct MuReplicaResidual
     Eigen::VectorXd mdpde_residual;
 };
 
-struct NeighborhoodReplicaResidual
-{
-    Eigen::VectorXd no_cut_ols_residual;
-    Eigen::VectorXd no_cut_mdpde_residual;
-    Eigen::VectorXd cut_mdpde_residual;
-    double trained_alpha_r{ 0.0 };
-};
-
 RHBMExecutionOptions MakeTesterExecutionOptions()
 {
     RHBMExecutionOptions options;
@@ -114,49 +106,6 @@ MuReplicaResidual EstimateMuReplicaResidual(
     };
 }
 
-NeighborhoodReplicaResidual EstimateNeighborhoodReplicaResidual(
-    const RHBMMemberDataset & no_cut_dataset,
-    const RHBMMemberDataset & cut_dataset,
-    const GaussianParameterVector & gaus_true,
-    const rhbm_trainer::AlphaTrainer & alpha_r_trainer,
-    const rhbm_trainer::AlphaTrainer::AlphaTrainingOptions & alpha_r_training_options,
-    const RHBMExecutionOptions & options)
-{
-    const auto no_cut_training_result{
-        alpha_r_trainer.TrainAlphaR(
-            std::vector<RHBMMemberDataset>{ no_cut_dataset },
-            alpha_r_training_options)
-    };
-    const auto cut_training_result{
-        alpha_r_trainer.TrainAlphaR(
-            std::vector<RHBMMemberDataset>{ cut_dataset },
-            alpha_r_training_options)
-    };
-    const auto no_cut_alpha_r_train{ no_cut_training_result.best_alpha };
-    const auto cut_alpha_r_train{ cut_training_result.best_alpha };
-    const auto no_cut_result{
-        EstimateBetaReplicaResidual(
-            no_cut_dataset,
-            gaus_true,
-            no_cut_alpha_r_train,
-            options)
-    };
-    const auto cut_result{
-        EstimateBetaReplicaResidual(
-            cut_dataset,
-            gaus_true,
-            cut_alpha_r_train,
-            options)
-    };
-
-    NeighborhoodReplicaResidual result;
-    result.no_cut_ols_residual = no_cut_result.ols_residual;
-    result.no_cut_mdpde_residual = no_cut_result.mdpde_residual;
-    result.cut_mdpde_residual = cut_result.mdpde_residual;
-    result.trained_alpha_r = cut_alpha_r_train;
-    return result;
-}
-
 ResidualStatistics FinalizeResidualStatistics(const Eigen::MatrixXd & residual_matrix)
 {
     ResidualStatistics result;
@@ -169,6 +118,7 @@ void FinalizeResidualStatisticsSeries(
     const std::vector<Eigen::MatrixXd> & residual_matrix_list,
     size_t requested_alpha_size,
     bool alpha_training,
+    double trained_alpha_average,
     ResidualStatisticsSeries & result)
 {
     result.requested_alpha.assign(requested_alpha_size, ResidualStatistics{});
@@ -180,6 +130,11 @@ void FinalizeResidualStatisticsSeries(
     if (alpha_training)
     {
         result.trained_alpha = FinalizeResidualStatistics(residual_matrix_list.at(requested_alpha_size));
+        result.trained_alpha_average = trained_alpha_average;
+    }
+    else
+    {
+        result.trained_alpha_average.reset();
     }
 }
 } // namespace
@@ -210,6 +165,7 @@ bool RunBetaMDPDETest(
     residual_matrix_mdpde_list.assign(
         alpha_size, Eigen::MatrixXd::Zero(GaussianModel3D::kParameterSize, replica_size)
     );
+    std::vector<double> trained_alpha_list(static_cast<size_t>(replica_size), 0.0);
 
     const rhbm_trainer::AlphaTrainer alpha_r_trainer{ kAlphaRMin, kAlphaRMax, kAlphaRStep };
     rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_r_training_options;
@@ -248,6 +204,7 @@ bool RunBetaMDPDETest(
                     std::vector<RHBMMemberDataset>{ dataset }, alpha_r_training_options)
             };
             const auto trained_alpha_r{ alpha_r_training_result.best_alpha };
+            trained_alpha_list.at(static_cast<size_t>(i)) = trained_alpha_r;
             const auto replica_result{
                 EstimateBetaReplicaResidual(dataset, test_input.gaus_true, trained_alpha_r, options)
             };
@@ -256,12 +213,23 @@ bool RunBetaMDPDETest(
         }
     }
 
+    double trained_alpha_average{ 0.0 };
+    if (alpha_training)
+    {
+        for (const auto trained_alpha : trained_alpha_list)
+        {
+            trained_alpha_average += trained_alpha;
+        }
+        trained_alpha_average /= static_cast<double>(replica_size);
+    }
+
     result = BetaMDPDETestResidual{};
     result.ols = FinalizeResidualStatistics(residual_matrix_ols);
     FinalizeResidualStatisticsSeries(
         residual_matrix_mdpde_list,
         local_alpha_r_list.size(),
         alpha_training,
+        trained_alpha_average,
         result.mdpde);
 
     return true;
@@ -293,6 +261,7 @@ bool RunMuMDPDETest(
     residual_matrix_mdpde_list.assign(
         alpha_size, Eigen::MatrixXd::Zero(GaussianModel3D::kParameterSize, replica_size)
     );
+    std::vector<double> trained_alpha_list(static_cast<size_t>(replica_size), 0.0);
 
     const rhbm_trainer::AlphaTrainer alpha_g_trainer{ kAlphaGMin, kAlphaGMax, kAlphaGStep };
     rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_g_training_options;
@@ -338,6 +307,7 @@ bool RunMuMDPDETest(
                     alpha_g_training_options)
             };
             const auto trained_alpha_g{ alpha_g_training_result.best_alpha };
+            trained_alpha_list.at(static_cast<size_t>(i)) = trained_alpha_g;
             const auto replica_result{
                 EstimateMuReplicaResidual(beta_matrix, test_input.gaus_true, trained_alpha_g, options)
             };
@@ -346,81 +316,24 @@ bool RunMuMDPDETest(
         }
     }
 
+    double trained_alpha_average{ 0.0 };
+    if (alpha_training)
+    {
+        for (const auto trained_alpha : trained_alpha_list)
+        {
+            trained_alpha_average += trained_alpha;
+        }
+        trained_alpha_average /= static_cast<double>(replica_size);
+    }
+
     result = MuMDPDETestResidual{};
     result.median = FinalizeResidualStatistics(residual_matrix_median);
     FinalizeResidualStatisticsSeries(
         residual_matrix_mdpde_list,
         local_alpha_g_list.size(),
         alpha_training,
+        trained_alpha_average,
         result.mdpde);
-
-    return true;
-}
-
-bool RunBetaMDPDEWithNeighborhoodTest(
-    NeighborhoodMDPDETestResidual & result,
-    const test_data_factory::RHBMNeighborhoodTestInput & test_input,
-    int thread_size)
-{
-#ifndef USE_OPENMP
-    (void)thread_size;
-#endif
-
-    ValidateGaussianTruthVector(test_input.gaus_true, "test_input.gaus_true");
-    const auto replica_size{ static_cast<int>(test_input.no_cut_datasets.size()) };
-    if (replica_size <= 0)
-    {
-        throw std::invalid_argument("test_input.no_cut_datasets must not be empty");
-    }
-    if (test_input.cut_datasets.size() != test_input.no_cut_datasets.size())
-    {
-        throw std::invalid_argument("test_input cut/no_cut dataset sizes must match");
-    }
-
-    const size_t method_size{ 3 }; // OLS (no cut), MDPDE (no cut and cut)
-    std::vector<Eigen::MatrixXd> replica_residual_list(method_size);
-    replica_residual_list.assign(
-        method_size, Eigen::MatrixXd::Zero(GaussianModel3D::kParameterSize, replica_size));
-
-    const rhbm_trainer::AlphaTrainer alpha_r_trainer{ kAlphaRMin, kAlphaRMax, kAlphaRStep };
-    rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_r_training_options;
-    alpha_r_training_options.subset_size = kAlphaRSubsetSize;
-    alpha_r_training_options.execution_options = MakeTesterExecutionOptions();
-
-    result = NeighborhoodMDPDETestResidual{};
-
-#ifdef USE_OPENMP
-    #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
-#endif
-    for (int i = 0; i < replica_size; i++)
-    {
-        const auto & no_cut_dataset{ test_input.no_cut_datasets.at(static_cast<size_t>(i)) };
-        const auto & cut_dataset{ test_input.cut_datasets.at(static_cast<size_t>(i)) };
-        const auto options{ MakeTesterExecutionOptions() };
-        const auto replica_result{
-            EstimateNeighborhoodReplicaResidual(
-                no_cut_dataset,
-                cut_dataset,
-                test_input.gaus_true,
-                alpha_r_trainer,
-                alpha_r_training_options,
-                options)
-        };
-
-        replica_residual_list.at(0).col(i) = replica_result.no_cut_ols_residual;
-        replica_residual_list.at(1).col(i) = replica_result.no_cut_mdpde_residual;
-        replica_residual_list.at(2).col(i) = replica_result.cut_mdpde_residual;
-
-        #pragma omp critical
-        {
-            result.trained_alpha_r_average += replica_result.trained_alpha_r;
-        }
-    }
-    result.trained_alpha_r_average /= replica_size;
-
-    result.no_cut_ols = FinalizeResidualStatistics(replica_residual_list.at(0));
-    result.no_cut_mdpde = FinalizeResidualStatistics(replica_residual_list.at(1));
-    result.cut_mdpde = FinalizeResidualStatistics(replica_residual_list.at(2));
 
     return true;
 }

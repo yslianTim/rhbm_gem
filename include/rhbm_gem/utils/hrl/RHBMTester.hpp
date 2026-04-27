@@ -20,6 +20,7 @@ struct ResidualStatisticsSeries
 {
     std::vector<ResidualStatistics> requested_alpha;
     std::optional<ResidualStatistics> trained_alpha;
+    std::optional<double> trained_alpha_average;
 };
 
 struct BetaMDPDETestResidual
@@ -34,14 +35,6 @@ struct MuMDPDETestResidual
     ResidualStatisticsSeries mdpde;
 };
 
-struct NeighborhoodMDPDETestResidual
-{
-    ResidualStatistics no_cut_ols;
-    ResidualStatistics no_cut_mdpde;
-    ResidualStatistics cut_mdpde;
-    double trained_alpha_r_average{ 0.0 };
-};
-
 bool RunBetaMDPDETest(
     BetaMDPDETestResidual & result,
     const test_data_factory::RHBMBetaTestInput & test_input,
@@ -51,12 +44,6 @@ bool RunBetaMDPDETest(
 bool RunMuMDPDETest(
     MuMDPDETestResidual & result,
     const test_data_factory::RHBMMuTestInput & test_input,
-    int thread_size = 1
-);
-
-bool RunBetaMDPDEWithNeighborhoodTest(
-    NeighborhoodMDPDETestResidual & result,
-    const test_data_factory::RHBMNeighborhoodTestInput & test_input,
     int thread_size = 1
 );
 

@@ -611,32 +611,37 @@ void RunSimulationTestOnBenchMark(const RHBMTestExecutionContext & options)
                         error_sigma,
                         distance))
             };
-            rhbm_tester::NeighborhoodMDPDETestResidual residual_result;
-            rhbm_tester::RunBetaMDPDEWithNeighborhoodTest(
-                residual_result,
-                test_input,
+            rhbm_tester::BetaMDPDETestResidual no_cut_result;
+            rhbm_tester::BetaMDPDETestResidual cut_result;
+            rhbm_tester::RunBetaMDPDETest(
+                no_cut_result,
+                test_input.no_cut_input,
+                options.thread_size);
+            rhbm_tester::RunBetaMDPDETest(
+                cut_result,
+                test_input.cut_input,
                 options.thread_size);
             TryAppendBenchmarkLinearizedPanel(
                 linearized_panels,
                 distance,
-                test_input.no_cut_datasets.front(),
-                test_input.cut_datasets.front());
+                test_input.no_cut_input.replica_datasets.front(),
+                test_input.cut_input.replica_datasets.front());
 
             std::ostringstream stream;
             stream << "Distance: " << distance
                    << " , OLS (No Cut): "
-                   << residual_result.no_cut_ols.mean(0) << " , "
-                   << residual_result.no_cut_ols.mean(1) << " , "
-                   << residual_result.no_cut_ols.mean(2)
+                   << no_cut_result.ols.mean(0) << " , "
+                   << no_cut_result.ols.mean(1) << " , "
+                   << no_cut_result.ols.mean(2)
                    << " , MDPDE (No Cut): "
-                   << residual_result.no_cut_mdpde.mean(0) << " , "
-                   << residual_result.no_cut_mdpde.mean(1) << " , "
-                   << residual_result.no_cut_mdpde.mean(2)
+                   << no_cut_result.mdpde.trained_alpha.value().mean(0) << " , "
+                   << no_cut_result.mdpde.trained_alpha.value().mean(1) << " , "
+                   << no_cut_result.mdpde.trained_alpha.value().mean(2)
                    << " , MDPDE (Cut): "
-                   << residual_result.cut_mdpde.mean(0) << " , "
-                   << residual_result.cut_mdpde.mean(1) << " , "
-                   << residual_result.cut_mdpde.mean(2)
-                   << " (Alpha-R = " << residual_result.trained_alpha_r_average << ")";
+                   << cut_result.mdpde.trained_alpha.value().mean(0) << " , "
+                   << cut_result.mdpde.trained_alpha.value().mean(1) << " , "
+                   << cut_result.mdpde.trained_alpha.value().mean(2)
+                   << " (Alpha-R = " << cut_result.mdpde.trained_alpha_average.value() << ")";
             Logger::Log(LogLevel::Info, stream.str());
         }
         SaveBenchmarkLinearizedDatasetReport(options, error_sigma, linearized_panels);
@@ -968,7 +973,6 @@ void RunSimulationTestOnNeighborDistance(const RHBMTestExecutionContext & option
         sampling_entries_list.reserve(scenario.distance_list.size());
         for (size_t i = 0; i < scenario.distance_list.size(); i++)
         {
-            rhbm_tester::NeighborhoodMDPDETestResidual residual;
             const auto test_input{
                 data_factory.BuildNeighborhoodTestInput(
                     BuildNeighborhoodScenario(
@@ -978,9 +982,16 @@ void RunSimulationTestOnNeighborDistance(const RHBMTestExecutionContext & option
                         scenario.distance_list.at(i),
                         true))
             };
-            rhbm_tester::RunBetaMDPDEWithNeighborhoodTest(
-                residual,
-                test_input,
+            rhbm_tester::BetaMDPDETestResidual no_cut_result;
+            rhbm_tester::BetaMDPDETestResidual cut_result;
+            rhbm_tester::RunBetaMDPDETest(
+                no_cut_result,
+                test_input.no_cut_input,
+                options.thread_size
+            );
+            rhbm_tester::RunBetaMDPDETest(
+                cut_result,
+                test_input.cut_input,
                 options.thread_size
             );
 
@@ -989,22 +1000,22 @@ void RunSimulationTestOnNeighborDistance(const RHBMTestExecutionContext & option
             AppendResidualCurvePoint(
                 panel.curves.at(0),
                 scenario.distance_list.at(i),
-                residual.no_cut_ols);
+                no_cut_result.ols);
             AppendResidualCurvePoint(
                 panel.curves.at(1),
                 scenario.distance_list.at(i),
-                residual.no_cut_mdpde);
+                no_cut_result.mdpde.trained_alpha.value());
             AppendResidualCurvePoint(
                 panel.curves.at(2),
                 scenario.distance_list.at(i),
-                residual.cut_mdpde);
+                cut_result.mdpde.trained_alpha.value());
 
             Logger::Log(LogLevel::Info,
                 std::string("Distance: ") + std::to_string(scenario.distance_list.at(i))
-                + " , OLS: " + std::to_string(residual.no_cut_ols.mean(0)) + " +- " + std::to_string(residual.no_cut_ols.sigma(0))
-                + " , MDPDE: " + std::to_string(residual.no_cut_mdpde.mean(0)) + " +- " + std::to_string(residual.no_cut_mdpde.sigma(0))
-                + " , Train: " + std::to_string(residual.cut_mdpde.mean(0)) + " +- " + std::to_string(residual.cut_mdpde.sigma(0))
-                + " (Alpha-R = " + std::to_string(residual.trained_alpha_r_average) + ")"
+                + " , OLS: " + std::to_string(no_cut_result.ols.mean(0)) + " +- " + std::to_string(no_cut_result.ols.sigma(0))
+                + " , MDPDE: " + std::to_string(no_cut_result.mdpde.trained_alpha.value().mean(0)) + " +- " + std::to_string(no_cut_result.mdpde.trained_alpha.value().sigma(0))
+                + " , Train: " + std::to_string(cut_result.mdpde.trained_alpha.value().mean(0)) + " +- " + std::to_string(cut_result.mdpde.trained_alpha.value().sigma(0))
+                + " (Alpha-R = " + std::to_string(cut_result.mdpde.trained_alpha_average.value()) + ")"
             );
         }
         plot_request.panels.emplace_back(std::move(panel));

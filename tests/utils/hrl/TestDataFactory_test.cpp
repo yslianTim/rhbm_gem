@@ -255,8 +255,12 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputProvidesPairedDatasetsAndSam
         })
     };
 
-    ASSERT_EQ(input.no_cut_datasets.size(), 2u);
-    ASSERT_EQ(input.cut_datasets.size(), 2u);
+    ASSERT_EQ(input.no_cut_input.replica_datasets.size(), 2u);
+    ASSERT_EQ(input.cut_input.replica_datasets.size(), 2u);
+    EXPECT_TRUE(input.no_cut_input.gaus_true.isApprox(MakeVector({ 1.0, 0.5, 0.0 })));
+    EXPECT_TRUE(input.cut_input.gaus_true.isApprox(MakeVector({ 1.0, 0.5, 0.0 })));
+    EXPECT_TRUE(input.no_cut_input.alpha_training);
+    EXPECT_TRUE(input.cut_input.alpha_training);
     ASSERT_EQ(input.sampling_summaries.size(), 1u);
     ASSERT_FALSE(input.sampling_summaries.front().empty());
     for (const auto & sample : input.sampling_summaries.front())
@@ -264,11 +268,11 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputProvidesPairedDatasetsAndSam
         EXPECT_TRUE(sample.position.has_value());
     }
 
-    for (size_t i = 0; i < input.no_cut_datasets.size(); i++)
+    for (size_t i = 0; i < input.no_cut_input.replica_datasets.size(); i++)
     {
         EXPECT_LE(
-            input.cut_datasets.at(i).y.rows(),
-            input.no_cut_datasets.at(i).y.rows()
+            input.cut_input.replica_datasets.at(i).y.rows(),
+            input.no_cut_input.replica_datasets.at(i).y.rows()
         );
     }
 }
@@ -341,17 +345,21 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputIsReproducibleWithFixedSeed)
     const auto first_input{ factory.BuildNeighborhoodTestInput(scenario) };
     const auto second_input{ factory.BuildNeighborhoodTestInput(scenario) };
 
-    ASSERT_EQ(first_input.no_cut_datasets.size(), second_input.no_cut_datasets.size());
-    ASSERT_EQ(first_input.cut_datasets.size(), second_input.cut_datasets.size());
+    ASSERT_EQ(
+        first_input.no_cut_input.replica_datasets.size(),
+        second_input.no_cut_input.replica_datasets.size());
+    ASSERT_EQ(
+        first_input.cut_input.replica_datasets.size(),
+        second_input.cut_input.replica_datasets.size());
     ASSERT_EQ(first_input.sampling_summaries.size(), second_input.sampling_summaries.size());
-    for (size_t i = 0; i < first_input.no_cut_datasets.size(); i++)
+    for (size_t i = 0; i < first_input.no_cut_input.replica_datasets.size(); i++)
     {
         ExpectDatasetEquals(
-            first_input.no_cut_datasets.at(i),
-            second_input.no_cut_datasets.at(i));
+            first_input.no_cut_input.replica_datasets.at(i),
+            second_input.no_cut_input.replica_datasets.at(i));
         ExpectDatasetEquals(
-            first_input.cut_datasets.at(i),
-            second_input.cut_datasets.at(i));
+            first_input.cut_input.replica_datasets.at(i),
+            second_input.cut_input.replica_datasets.at(i));
     }
     for (size_t i = 0; i < first_input.sampling_summaries.size(); i++)
     {
