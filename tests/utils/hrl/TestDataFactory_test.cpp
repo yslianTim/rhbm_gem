@@ -84,7 +84,6 @@ void ExpectSamplingEntriesEquals(
 TEST(TestDataFactoryTest, BuildBetaTestInputIsReproducibleWithFixedSeed)
 {
     tdf::TestDataFactory factory(
-        3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
 
@@ -113,7 +112,6 @@ TEST(TestDataFactoryTest, BuildBetaTestInputIsReproducibleWithFixedSeed)
 TEST(TestDataFactoryTest, BuildBetaTestInputChangesWhenOutlierPolicyChanges)
 {
     tdf::TestDataFactory factory(
-        3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
 
@@ -143,7 +141,6 @@ TEST(TestDataFactoryTest, BuildBetaTestInputChangesWhenOutlierPolicyChanges)
 TEST(TestDataFactoryTest, BuildBetaTestInputChangesWhenNoisePolicyChanges)
 {
     tdf::TestDataFactory factory(
-        3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
 
@@ -173,7 +170,6 @@ TEST(TestDataFactoryTest, BuildBetaTestInputChangesWhenNoisePolicyChanges)
 TEST(TestDataFactoryTest, BuildBetaTestInputUsesExpectedZeroDistanceGaussianResponse)
 {
     tdf::TestDataFactory factory(
-        3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 0.0);
 
@@ -209,7 +205,6 @@ TEST(TestDataFactoryTest, BuildBetaTestInputUsesExpectedZeroDistanceGaussianResp
 TEST(TestDataFactoryTest, BuildMuTestInputIsReproducibleWithFixedSeed)
 {
     tdf::TestDataFactory factory(
-        3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
 
     const auto scenario{ tdf::TestDataFactory::MuScenario{
@@ -239,7 +234,6 @@ TEST(TestDataFactoryTest, BuildMuTestInputIsReproducibleWithFixedSeed)
 TEST(TestDataFactoryTest, BuildNeighborhoodTestInputProvidesPairedDatasetsAndSamplingSummary)
 {
     tdf::TestDataFactory factory(
-        3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
 
@@ -282,7 +276,6 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputProvidesPairedDatasetsAndSam
 TEST(TestDataFactoryTest, BuildNeighborhoodTestInputSamplingSummaryIncludesNeighborContribution)
 {
     tdf::TestDataFactory factory(
-        3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
 
@@ -326,7 +319,6 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputSamplingSummaryIncludesNeigh
 TEST(TestDataFactoryTest, BuildNeighborhoodTestInputIsReproducibleWithFixedSeed)
 {
     tdf::TestDataFactory factory(
-        3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
 
@@ -372,7 +364,6 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputIsReproducibleWithFixedSeed)
 TEST(TestDataFactoryTest, BuildTestInputsRejectNonPositiveGaussianWidth)
 {
     tdf::TestDataFactory factory(
-        3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
 
     EXPECT_THROW(
@@ -406,21 +397,64 @@ TEST(TestDataFactoryTest, BuildTestInputsRejectNonPositiveGaussianWidth)
 
 TEST(TestDataFactoryTest, ConstructorRejectsInvalidNumericInputs)
 {
-    EXPECT_THROW(
-        tdf::TestDataFactory(
-            0,
-            rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset()),
-        std::invalid_argument);
-
     auto spec{ rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset() };
     spec.basis_size = 0;
-    EXPECT_THROW(tdf::TestDataFactory(3, spec), std::invalid_argument);
+    EXPECT_THROW(
+        {
+            tdf::TestDataFactory factory{ spec };
+        },
+        std::invalid_argument);
+}
+
+TEST(TestDataFactoryTest, BuildTestInputsRejectInvalidGaussianVectorSize)
+{
+    tdf::TestDataFactory factory(
+        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+
+    EXPECT_THROW(
+        factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
+            MakeVector({ 1.0, 0.5 }),
+            8,
+            0.05,
+            0.1,
+            1,
+            42
+        }),
+        std::invalid_argument);
+    EXPECT_THROW(
+        factory.BuildMuTestInput(tdf::TestDataFactory::MuScenario{
+            4,
+            MakeVector({ 1.0, 0.5 }),
+            MakeVector({ 0.05, 0.025, 0.01 }),
+            MakeVector({ 1.5, 0.5, 0.1 }),
+            MakeVector({ 0.05, 0.025, 0.01 }),
+            0.2,
+            1,
+            77
+        }),
+        std::invalid_argument);
+    EXPECT_THROW(
+        factory.BuildNeighborhoodTestInput(tdf::TestDataFactory::NeighborhoodScenario{
+            MakeVector({ 1.0, 0.5 }),
+            8,
+            0.05,
+            0.0,
+            1.0,
+            2.0,
+            1,
+            120.0,
+            false,
+            0.0,
+            4.0,
+            1,
+            11
+        }),
+        std::invalid_argument);
 }
 
 TEST(TestDataFactoryTest, SetFittingRangeRejectsInvalidRange)
 {
     tdf::TestDataFactory factory(
-        3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
 
     EXPECT_THROW(factory.SetFittingRange(-1.0, 1.0), std::invalid_argument);
@@ -433,7 +467,6 @@ TEST(TestDataFactoryTest, SetFittingRangeRejectsInvalidRange)
 TEST(TestDataFactoryTest, BuildNeighborhoodTestInputRejectsInvalidSamplingInputs)
 {
     tdf::TestDataFactory factory(
-        3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
 
     EXPECT_THROW(
@@ -492,7 +525,6 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputRejectsInvalidSamplingInputs
 TEST(TestDataFactoryTest, BuildBetaTestInputRejectsNonPositiveScenarioSizes)
 {
     tdf::TestDataFactory factory(
-        3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
 
     EXPECT_THROW(

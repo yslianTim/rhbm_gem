@@ -77,18 +77,13 @@ struct GaussianModel3D
         }
     }
 
-    double Coefficient() const
+    double Intensity() const
     {
         if (width == 0.0)
         {
             return 0.0;
         }
-        return std::pow(Constants::two_pi * width * width, -1.5);
-    }
-
-    double Intensity() const
-    {
-        return amplitude * Coefficient();
+        return amplitude * std::pow(Constants::two_pi * width * width, -1.5);
     }
 
     double ResponseAtDistance(double distance) const

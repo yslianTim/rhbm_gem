@@ -76,15 +76,13 @@ public:
     };
 
 private:
-    int m_gaus_par_size;
     linearization_service::LinearizationSpec m_linearization_spec;
     double m_fit_range_min;
     double m_fit_range_max;
 
 public:
     TestDataFactory() = delete;
-    TestDataFactory(
-        int gaus_par_size,
+    explicit TestDataFactory(
         linearization_service::LinearizationSpec linearization_spec);
     ~TestDataFactory() = default;
 

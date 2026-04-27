@@ -28,7 +28,6 @@ Eigen::VectorXd MakeVector(std::initializer_list<double> values)
 TEST(RHBMTesterTest, RunBetaMDPDETestPopulatesResidualOutputs)
 {
     tdf::TestDataFactory factory(
-        3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
     const auto test_input{
@@ -87,7 +86,6 @@ TEST(RHBMTesterTest, RunBetaMDPDETestPopulatesResidualOutputs)
 TEST(RHBMTesterTest, RunMuMDPDETestPopulatesResidualOutputs)
 {
     tdf::TestDataFactory factory(
-        3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     const auto test_input{
         factory.BuildMuTestInput(tdf::TestDataFactory::MuScenario{
@@ -130,7 +128,6 @@ TEST(RHBMTesterTest, RunMuMDPDETestPopulatesResidualOutputs)
 TEST(RHBMTesterTest, RunBetaMDPDEWithNeighborhoodTestConsumesPreparedInputs)
 {
     tdf::TestDataFactory factory(
-        3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
     const auto test_input{
@@ -175,7 +172,6 @@ TEST(RHBMTesterTest, RunBetaMDPDEWithNeighborhoodTestConsumesPreparedInputs)
 TEST(RHBMTesterTest, RunBetaMDPDETestRejectsWrongSizedTruth)
 {
     tdf::TestDataFactory factory(
-        3,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(0.0, 1.0);
     auto test_input{

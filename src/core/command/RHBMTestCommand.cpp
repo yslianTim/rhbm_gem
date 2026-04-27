@@ -110,7 +110,7 @@ namespace {
 namespace rt = rhbm_gem::rhbm_tester;
 namespace tdf = rhbm_gem::test_data_factory;
 
-constexpr int kGausParSize{ 3 };
+constexpr int kGausParSize{ GaussianModel3D::kParameterSize };
 struct BetaScenarioConfig
 {
     int replica_size;
@@ -184,7 +184,6 @@ std::vector<double> BuildDescendingSweep(int count, double start, double step)
 tdf::TestDataFactory BuildDataFactory(const RHBMTestExecutionContext & options)
 {
     tdf::TestDataFactory factory(
-        kGausParSize,
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(options.options.fit_range_min, options.options.fit_range_max);
     return factory;

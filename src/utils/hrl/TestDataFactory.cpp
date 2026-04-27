@@ -12,7 +12,6 @@
 #include <cmath>
 #include <random>
 #include <stdexcept>
-#include <string>
 #include <utility>
 #include <vector>
 
@@ -28,16 +27,6 @@ struct NeighborhoodSamplingOptions
     size_t neighbor_count{ 1 };
     double reject_angle_deg{ 0.0 };
 };
-
-int ValidateGaussianParameterSize(int value)
-{
-    if (value != GaussianModel3D::kParameterSize)
-    {
-        throw std::invalid_argument(
-            "Gaussian test data requires gaus_par_size to be 3");
-    }
-    return value;
-}
 
 std::mt19937 BuildReplicaGenerator(
     int replica_index,
@@ -62,45 +51,11 @@ std::mt19937 BuildReplicaGenerator(
     return std::mt19937(seed_sequence);
 }
 
-void ValidateGausParametersDimension(
-    const Eigen::VectorXd & gaus_par,
-    int gaussian_parameter_size)
-{
-    try
-    {
-        eigen_validation::RequireVectorSize(
-            gaus_par,
-            gaussian_parameter_size,
-            "gaus_par");
-    }
-    catch (const std::invalid_argument &)
-    {
-        throw std::invalid_argument(
-            "model parameters size invalid, must be : " +
-            std::to_string(gaussian_parameter_size)
-        );
-    }
-}
-
-GaussianModel3D BuildGaussianModel(
-    const Eigen::VectorXd & gaus_par,
-    int gaussian_parameter_size)
-{
-    ValidateGausParametersDimension(gaus_par, gaussian_parameter_size);
-    return GaussianModel3D::FromVector(gaus_par);
-}
-
 void ValidateGaussianModel(const GaussianModel3D & model)
 {
     numeric_validation::RequireFinite(model.amplitude, "GaussianModel3D amplitude");
     numeric_validation::RequireFinitePositive(model.width, "GaussianModel3D width");
     numeric_validation::RequireFinite(model.intercept, "GaussianModel3D intercept");
-}
-
-double ComputeGaussianCoefficient3D(double width)
-{
-    const auto width_square{ width * width };
-    return 1.0 / std::pow(Constants::two_pi * width_square, 1.5);
 }
 
 double ComputeGaussianResponseAtPoint3D(
@@ -109,7 +64,7 @@ double ComputeGaussianResponseAtPoint3D(
     double width)
 {
     const auto width_square{ width * width };
-    return ComputeGaussianCoefficient3D(width) *
+    return 1.0 / std::pow(Constants::two_pi * width_square, 1.5) *
         std::exp(-0.5 * (point - center).squaredNorm() / width_square);
 }
 
@@ -312,9 +267,7 @@ LocalPotentialSampleList BuildGaussianSampling(
         )
     };
     std::uniform_real_distribution<> dist_outlier(0.0, 1.0);
-    const auto outlier_response{
-        0.5 * model.Intensity()
-    };
+    const auto outlier_response{ 0.5 * model.Intensity() };
     for (auto & sampling_entry : sampling_entries)
     {
         if (dist_outlier(generator) < outlier_ratio)
@@ -403,7 +356,6 @@ SeriesPointList BuildLinearDatasetWithNeighborhood(
 }
 
 Eigen::MatrixXd BuildRandomGausParameters(
-    int gaussian_parameter_size,
     int member_size,
     const Eigen::VectorXd & gaus_prior,
     const Eigen::VectorXd & gaus_sigma,
@@ -415,7 +367,7 @@ Eigen::MatrixXd BuildRandomGausParameters(
     std::uniform_real_distribution<> dist_outlier(0.0, 1.0);
     std::vector<std::normal_distribution<>> dist_gaus_list;
     std::vector<std::normal_distribution<>> dist_outlier_list;
-    for (int p = 0; p < gaussian_parameter_size; p++)
+    for (int p = 0; p < GaussianModel3D::kParameterSize; p++)
     {
         std::normal_distribution<> dist_gaus_par(gaus_prior(p), gaus_sigma(p));
         std::normal_distribution<> dist_outlier_par(outlier_prior(p), outlier_sigma(p));
@@ -423,13 +375,15 @@ Eigen::MatrixXd BuildRandomGausParameters(
         dist_outlier_list.emplace_back(dist_outlier_par);
     }
 
-    Eigen::MatrixXd gaus_par_matrix{ Eigen::MatrixXd::Zero(gaussian_parameter_size, member_size) };
+    Eigen::MatrixXd gaus_par_matrix{
+        Eigen::MatrixXd::Zero(GaussianModel3D::kParameterSize, member_size)
+    };
     for (int i = 0; i < member_size; i++)
     {
-        Eigen::VectorXd gaus_par{ Eigen::VectorXd::Zero(gaussian_parameter_size) };
-        Eigen::VectorXd outlier_par{ Eigen::VectorXd::Zero(gaussian_parameter_size) };
+        Eigen::VectorXd gaus_par{ Eigen::VectorXd::Zero(GaussianModel3D::kParameterSize) };
+        Eigen::VectorXd outlier_par{ Eigen::VectorXd::Zero(GaussianModel3D::kParameterSize) };
         const bool outlier_flag{ dist_outlier(generator) < outlier_ratio };
-        for (int p = 0; p < gaussian_parameter_size; p++)
+        for (int p = 0; p < GaussianModel3D::kParameterSize; p++)
         {
             gaus_par(p) = dist_gaus_list.at(static_cast<size_t>(p))(generator);
             outlier_par(p) = dist_outlier_list.at(static_cast<size_t>(p))(generator);
@@ -461,12 +415,7 @@ Eigen::MatrixXd BuildBetaMatrix(
 namespace rhbm_gem::test_data_factory
 {
 
-TestDataFactory::TestDataFactory(
-    int gaus_par_size,
-    linearization_service::LinearizationSpec linearization_spec) :
-    m_gaus_par_size{
-        ValidateGaussianParameterSize(numeric_validation::RequirePositive(gaus_par_size, "gaus_par_size"))
-    },
+TestDataFactory::TestDataFactory(linearization_service::LinearizationSpec linearization_spec) :
     m_linearization_spec{ std::move(linearization_spec) },
     m_fit_range_min{ 0.0 },
     m_fit_range_max{ 1.0 }
@@ -485,8 +434,11 @@ RHBMBetaTestInput TestDataFactory::BuildBetaTestInput(const BetaScenario & scena
 {
     numeric_validation::RequirePositive(scenario.sampling_entry_size, "sampling_entry_size");
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
-    ValidateGausParametersDimension(scenario.gaus_true, m_gaus_par_size);
-    const auto gaussian_model{ BuildGaussianModel(scenario.gaus_true, m_gaus_par_size) };
+    eigen_validation::RequireVectorSize(
+        scenario.gaus_true,
+        GaussianModel3D::kParameterSize,
+        "scenario.gaus_true");
+    const auto gaussian_model{ GaussianModel3D::FromVector(scenario.gaus_true) };
 
     RHBMBetaTestInput input;
     input.gaus_true = scenario.gaus_true;
@@ -517,10 +469,22 @@ RHBMMuTestInput TestDataFactory::BuildMuTestInput(const MuScenario & scenario) c
 {
     numeric_validation::RequirePositive(scenario.member_size, "member_size");
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
-    ValidateGausParametersDimension(scenario.gaus_prior, m_gaus_par_size);
-    ValidateGausParametersDimension(scenario.gaus_sigma, m_gaus_par_size);
-    ValidateGausParametersDimension(scenario.outlier_prior, m_gaus_par_size);
-    ValidateGausParametersDimension(scenario.outlier_sigma, m_gaus_par_size);
+    eigen_validation::RequireVectorSize(
+        scenario.gaus_prior,
+        GaussianModel3D::kParameterSize,
+        "scenario.gaus_prior");
+    eigen_validation::RequireVectorSize(
+        scenario.gaus_sigma,
+        GaussianModel3D::kParameterSize,
+        "scenario.gaus_sigma");
+    eigen_validation::RequireVectorSize(
+        scenario.outlier_prior,
+        GaussianModel3D::kParameterSize,
+        "scenario.outlier_prior");
+    eigen_validation::RequireVectorSize(
+        scenario.outlier_sigma,
+        GaussianModel3D::kParameterSize,
+        "scenario.outlier_sigma");
 
     RHBMMuTestInput input;
     input.gaus_true = scenario.gaus_prior;
@@ -531,7 +495,6 @@ RHBMMuTestInput TestDataFactory::BuildMuTestInput(const MuScenario & scenario) c
         auto generator{ BuildReplicaGenerator(i, scenario.random_seed) };
         const auto random_gaus_array{
             BuildRandomGausParameters(
-                m_gaus_par_size,
                 scenario.member_size,
                 scenario.gaus_prior,
                 scenario.gaus_sigma,
@@ -553,8 +516,11 @@ RHBMNeighborhoodTestInput TestDataFactory::BuildNeighborhoodTestInput(
 {
     numeric_validation::RequirePositive(scenario.sampling_entry_size, "sampling_entry_size");
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
-    ValidateGausParametersDimension(scenario.gaus_true, m_gaus_par_size);
-    const auto gaussian_model{ BuildGaussianModel(scenario.gaus_true, m_gaus_par_size) };
+    eigen_validation::RequireVectorSize(
+        scenario.gaus_true,
+        GaussianModel3D::kParameterSize,
+        "scenario.gaus_true");
+    const auto gaussian_model{ GaussianModel3D::FromVector(scenario.gaus_true) };
 
     const NeighborhoodSamplingOptions no_cut_options{
         scenario.radius_min,
