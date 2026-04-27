@@ -23,6 +23,16 @@ GaussianEstimate BuildGaussianEstimate(const GaussianParameterVector & gaussian_
     return GaussianEstimate{ gaussian_parameters(0), gaussian_parameters(1) };
 }
 
+GaussianParameterUncertainty BuildGaussianParameterUncertainty(
+    const GaussianParameterVector & gaussian_parameters)
+{
+    if (gaussian_parameters.rows() < 2)
+    {
+        throw std::invalid_argument("Gaussian parameter vector must have at least two entries.");
+    }
+    return GaussianParameterUncertainty{ gaussian_parameters(0), gaussian_parameters(1) };
+}
+
 GaussianParameterVector GetTaylorSeriesBasisVector(
     double distance,
     const GaussianParameterVector & model_parameters)
@@ -519,15 +529,15 @@ GaussianEstimate DecodeGroupEstimate(
     return BuildGaussianEstimate(DecodeGroupBeta(spec, linear_model));
 }
 
-GaussianPosterior DecodePosteriorEstimate(
+GaussianEstimateWithUncertainty DecodeGaussianEstimateWithUncertainty(
     const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model,
     const RHBMPosteriorCovarianceMatrix & covariance_matrix)
 {
     const auto decoded{ DecodePosterior(spec, linear_model, covariance_matrix) };
-    return GaussianPosterior{
+    return GaussianEstimateWithUncertainty{
         BuildGaussianEstimate(std::get<0>(decoded)),
-        BuildGaussianEstimate(std::get<1>(decoded))
+        BuildGaussianParameterUncertainty(std::get<1>(decoded))
     };
 }
 

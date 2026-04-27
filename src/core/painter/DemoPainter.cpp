@@ -770,7 +770,7 @@ void DemoPainter::PaintGroupGausToFSC(
             auto entry_iter{ std::make_unique<ModelAnalysisView>(*model) };
             auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model) };
             auto width_value{ entry_iter->GetAtomGausEstimatePrior(group_key, ChemicalDataHelper::GetSimpleAtomClassKey(), 1) };
-            auto width_error{ entry_iter->GetAtomGausVariancePrior(group_key, ChemicalDataHelper::GetSimpleAtomClassKey(), 1) };
+            auto width_error{ entry_iter->GetAtomGausPriorStandardDeviation(group_key, ChemicalDataHelper::GetSimpleAtomClassKey(), 1) };
             graph[i]->SetPoint(count, model->GetResolution(), width_value);
             graph[i]->SetPointError(count, 0.0, width_error);
             count++;

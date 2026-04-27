@@ -89,7 +89,7 @@ GaussianEstimate DecodeGroupEstimate(
     const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model);
 
-GaussianPosterior DecodePosteriorEstimate(
+GaussianEstimateWithUncertainty DecodeGaussianEstimateWithUncertainty(
     const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model,
     const RHBMPosteriorCovarianceMatrix & covariance_matrix);

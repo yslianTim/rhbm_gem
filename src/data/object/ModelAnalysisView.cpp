@@ -190,7 +190,7 @@ std::optional<LocalPotentialAnnotationView> LocalPotentialView::FindAnnotation(
         return std::nullopt;
     }
     return LocalPotentialAnnotationView{
-        annotation->posterior,
+        annotation->gaussian,
         annotation->is_outlier,
         annotation->statistical_distance
     };
@@ -445,7 +445,7 @@ const GaussianEstimate & ModelAnalysisView::GetBondGroupPrior(
     return entry->GetPrior(group_key);
 }
 
-GaussianPosterior ModelAnalysisView::GetAtomGroupPriorPosterior(
+GaussianEstimateWithUncertainty ModelAnalysisView::GetAtomGroupPriorWithUncertainty(
     GroupKey group_key,
     const std::string & class_key) const
 {
@@ -454,10 +454,10 @@ GaussianPosterior ModelAnalysisView::GetAtomGroupPriorPosterior(
             ModelAnalysisData::Of(m_model_object).FindAtomGroupEntry(class_key),
             "Atom group entry")
     };
-    return entry->BuildPriorPosterior(group_key);
+    return entry->GetPriorWithUncertainty(group_key);
 }
 
-GaussianPosterior ModelAnalysisView::GetBondGroupPriorPosterior(
+GaussianEstimateWithUncertainty ModelAnalysisView::GetBondGroupPriorWithUncertainty(
     GroupKey group_key,
     const std::string & class_key) const
 {
@@ -466,7 +466,7 @@ GaussianPosterior ModelAnalysisView::GetBondGroupPriorPosterior(
             ModelAnalysisData::Of(m_model_object).FindBondGroupEntry(class_key),
             "Bond group entry")
     };
-    return entry->BuildPriorPosterior(group_key);
+    return entry->GetPriorWithUncertainty(group_key);
 }
 
 double ModelAnalysisView::GetAtomGausEstimatePrior(
@@ -485,20 +485,20 @@ double ModelAnalysisView::GetBondGausEstimatePrior(
     return GetBondGroupPrior(group_key, class_key).GetParameter(par_id);
 }
 
-double ModelAnalysisView::GetAtomGausVariancePrior(
+double ModelAnalysisView::GetAtomGausPriorStandardDeviation(
     GroupKey group_key,
     const std::string & class_key,
     int par_id) const
 {
-    return GetAtomGroupPriorPosterior(group_key, class_key).GetVariance(par_id);
+    return GetAtomGroupPriorWithUncertainty(group_key, class_key).GetStandardDeviation(par_id);
 }
 
-double ModelAnalysisView::GetBondGausVariancePrior(
+double ModelAnalysisView::GetBondGausPriorStandardDeviation(
     GroupKey group_key,
     const std::string & class_key,
     int par_id) const
 {
-    return GetBondGroupPriorPosterior(group_key, class_key).GetVariance(par_id);
+    return GetBondGroupPriorWithUncertainty(group_key, class_key).GetStandardDeviation(par_id);
 }
 
 const std::vector<AtomObject *> & ModelAnalysisView::GetAtomObjectList(

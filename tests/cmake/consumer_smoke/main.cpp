@@ -24,7 +24,7 @@ int main()
     static_assert(kHeaderExposesCompleteType<rhbm_gem::BondObject>);
     static_assert(kHeaderExposesCompleteType<rhbm_gem::ChemicalComponentEntry>);
     static_assert(kHeaderExposesCompleteType<rhbm_gem::GaussianEstimate>);
-    static_assert(kHeaderExposesCompleteType<rhbm_gem::GaussianPosterior>);
+    static_assert(kHeaderExposesCompleteType<rhbm_gem::GaussianEstimateWithUncertainty>);
     static_assert(kHeaderExposesCompleteType<rhbm_gem::MapObject>);
     static_assert(kHeaderExposesCompleteType<rhbm_gem::ModelAnalysisEditor>);
     static_assert(kHeaderExposesCompleteType<rhbm_gem::LocalPotentialView>);

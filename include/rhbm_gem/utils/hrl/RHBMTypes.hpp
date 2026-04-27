@@ -60,35 +60,42 @@ struct GaussianEstimate
 
 };
 
-struct GaussianPosterior
+struct GaussianParameterUncertainty
+{
+    double amplitude{ 0.0 };
+    double width{ 0.0 };
+};
+
+struct GaussianEstimateWithUncertainty
 {
     GaussianEstimate estimate{};
-    GaussianEstimate variance{};
+    GaussianParameterUncertainty standard_deviation{};
 
     double GetEstimate(int par_id) const
     {
         return estimate.GetParameter(par_id);
     }
 
-    double GetVariance(int par_id) const
+    double GetStandardDeviation(int par_id) const
     {
         switch (par_id)
         {
         case 0:
-            return variance.amplitude;
+            return standard_deviation.amplitude;
         case 1:
-            return variance.width;
+            return standard_deviation.width;
         case 2:
-            return IntensityVariance();
+            return IntensityStandardDeviation();
         default:
-            throw std::out_of_range("GaussianPosterior variance index is out of range.");
+            throw std::out_of_range(
+                "GaussianEstimateWithUncertainty standard deviation index is out of range.");
         }
     }
 
-    double IntensityVariance() const
+    double IntensityStandardDeviation() const
     {
-        const auto sigma_amplitude{ variance.amplitude };
-        const auto sigma_width{ variance.width };
+        const auto sigma_amplitude{ standard_deviation.amplitude };
+        const auto sigma_width{ standard_deviation.width };
         const auto amplitude{ estimate.amplitude };
         const auto width{ estimate.width };
         return std::sqrt(

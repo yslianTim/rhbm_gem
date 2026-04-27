@@ -158,9 +158,9 @@ void GausPainter::PaintAtomLocalGausSummary(
             root_helper::SetTextAttribute(result_text.get(), 50.0f, 133, 12, 0.0, kRed);
             root_helper::SetFillAttribute(result_text.get(), 4000);
             auto amplitude_prior{ entry_iter->GetAtomGausEstimatePrior(group_key, class_key, 0) };
-            auto amplitude_error{ entry_iter->GetAtomGausVariancePrior(group_key, class_key, 0) };
+            auto amplitude_error{ entry_iter->GetAtomGausPriorStandardDeviation(group_key, class_key, 0) };
             auto width_prior{ entry_iter->GetAtomGausEstimatePrior(group_key, class_key, 1) };
-            auto width_error{ entry_iter->GetAtomGausVariancePrior(group_key, class_key, 1) };
+            auto width_error{ entry_iter->GetAtomGausPriorStandardDeviation(group_key, class_key, 1) };
             result_text->AddText(Form("#font[2]{#hat{A}} = %.2f #pm %.2f", amplitude_prior, amplitude_error));
             result_text->AddText(Form("#hat{#tau} = %.2f #pm %.2f", width_prior, width_error));
             result_text->Draw();

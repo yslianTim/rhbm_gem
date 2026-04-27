@@ -1048,10 +1048,10 @@ void SaveAtomLocalPotentialEntrySubList(
             statement_db.Bind<std::string>(1, key_tag);
             statement_db.Bind<std::string>(2, class_key);
             statement_db.Bind<int>(3, atom_object->GetSerialID());
-            statement_db.Bind<double>(4, annotation->posterior.estimate.amplitude);
-            statement_db.Bind<double>(5, annotation->posterior.estimate.width);
-            statement_db.Bind<double>(6, annotation->posterior.variance.amplitude);
-            statement_db.Bind<double>(7, annotation->posterior.variance.width);
+            statement_db.Bind<double>(4, annotation->gaussian.estimate.amplitude);
+            statement_db.Bind<double>(5, annotation->gaussian.estimate.width);
+            statement_db.Bind<double>(6, annotation->gaussian.standard_deviation.amplitude);
+            statement_db.Bind<double>(7, annotation->gaussian.standard_deviation.width);
             statement_db.Bind<int>(8, static_cast<int>(annotation->is_outlier));
             statement_db.Bind<double>(9, annotation->statistical_distance);
         });
@@ -1078,10 +1078,10 @@ void SaveBondLocalPotentialEntrySubList(
             statement_db.Bind<std::string>(2, class_key);
             statement_db.Bind<int>(3, bond_object->GetAtomSerialID1());
             statement_db.Bind<int>(4, bond_object->GetAtomSerialID2());
-            statement_db.Bind<double>(5, annotation->posterior.estimate.amplitude);
-            statement_db.Bind<double>(6, annotation->posterior.estimate.width);
-            statement_db.Bind<double>(7, annotation->posterior.variance.amplitude);
-            statement_db.Bind<double>(8, annotation->posterior.variance.width);
+            statement_db.Bind<double>(5, annotation->gaussian.estimate.amplitude);
+            statement_db.Bind<double>(6, annotation->gaussian.estimate.width);
+            statement_db.Bind<double>(7, annotation->gaussian.standard_deviation.amplitude);
+            statement_db.Bind<double>(8, annotation->gaussian.standard_deviation.width);
             statement_db.Bind<int>(9, static_cast<int>(annotation->is_outlier));
             statement_db.Bind<double>(10, annotation->statistical_distance);
         });
@@ -1102,7 +1102,9 @@ void SaveAtomGroupPotentialEntryList(
             const auto & mean{ group_entry.GetMean(group_key) };
             const auto & mdpde{ group_entry.GetMDPDE(group_key) };
             const auto & prior{ group_entry.GetPrior(group_key) };
-            const auto & prior_variance{ group_entry.GetPriorVariance(group_key) };
+            const auto & prior_standard_deviation{
+                group_entry.GetPriorStandardDeviation(group_key)
+            };
             statement_db.Bind<std::string>(1, key_tag);
             statement_db.Bind<std::string>(2, class_key);
             statement_db.Bind<GroupKey>(3, group_key);
@@ -1113,8 +1115,8 @@ void SaveAtomGroupPotentialEntryList(
             statement_db.Bind<double>(8, mdpde.width);
             statement_db.Bind<double>(9, prior.amplitude);
             statement_db.Bind<double>(10, prior.width);
-            statement_db.Bind<double>(11, prior_variance.amplitude);
-            statement_db.Bind<double>(12, prior_variance.width);
+            statement_db.Bind<double>(11, prior_standard_deviation.amplitude);
+            statement_db.Bind<double>(12, prior_standard_deviation.width);
             statement_db.Bind<double>(13, group_entry.GetAlphaG(group_key));
         });
     }
@@ -1134,7 +1136,9 @@ void SaveBondGroupPotentialEntryList(
             const auto & mean{ group_entry.GetMean(group_key) };
             const auto & mdpde{ group_entry.GetMDPDE(group_key) };
             const auto & prior{ group_entry.GetPrior(group_key) };
-            const auto & prior_variance{ group_entry.GetPriorVariance(group_key) };
+            const auto & prior_standard_deviation{
+                group_entry.GetPriorStandardDeviation(group_key)
+            };
             statement_db.Bind<std::string>(1, key_tag);
             statement_db.Bind<std::string>(2, class_key);
             statement_db.Bind<GroupKey>(3, group_key);
@@ -1145,8 +1149,8 @@ void SaveBondGroupPotentialEntryList(
             statement_db.Bind<double>(8, mdpde.width);
             statement_db.Bind<double>(9, prior.amplitude);
             statement_db.Bind<double>(10, prior.width);
-            statement_db.Bind<double>(11, prior_variance.amplitude);
-            statement_db.Bind<double>(12, prior_variance.width);
+            statement_db.Bind<double>(11, prior_standard_deviation.amplitude);
+            statement_db.Bind<double>(12, prior_standard_deviation.width);
             statement_db.Bind<double>(13, group_entry.GetAlphaG(group_key));
         });
     }
@@ -1178,15 +1182,15 @@ void LoadAtomLocalPotentialEntrySubList(
         auto iter{ entry_map.find(serial_id) };
         if (iter == entry_map.end()) continue;
         auto & entry{ iter->second };
-        rhbm_gem::GaussianPosterior posterior;
-        posterior.estimate = rhbm_gem::GaussianEstimate{
+        rhbm_gem::GaussianEstimateWithUncertainty gaussian;
+        gaussian.estimate = rhbm_gem::GaussianEstimate{
             database.GetColumn<double>(1), database.GetColumn<double>(2) };
-        posterior.variance = rhbm_gem::GaussianEstimate{
+        gaussian.standard_deviation = rhbm_gem::GaussianParameterUncertainty{
             database.GetColumn<double>(3), database.GetColumn<double>(4) };
         entry->SetAnnotation(
             class_key,
             rhbm_gem::LocalPotentialAnnotation{
-                posterior,
+                gaussian,
                 static_cast<bool>(database.GetColumn<int>(5)),
                 database.GetColumn<double>(6)
             });
@@ -1220,15 +1224,15 @@ void LoadBondLocalPotentialEntrySubList(
         auto iter{ entry_map.find(atom_pair) };
         if (iter == entry_map.end()) continue;
         auto & entry{ iter->second };
-        rhbm_gem::GaussianPosterior posterior;
-        posterior.estimate = rhbm_gem::GaussianEstimate{
+        rhbm_gem::GaussianEstimateWithUncertainty gaussian;
+        gaussian.estimate = rhbm_gem::GaussianEstimate{
             database.GetColumn<double>(2), database.GetColumn<double>(3) };
-        posterior.variance = rhbm_gem::GaussianEstimate{
+        gaussian.standard_deviation = rhbm_gem::GaussianParameterUncertainty{
             database.GetColumn<double>(4), database.GetColumn<double>(5) };
         entry->SetAnnotation(
             class_key,
             rhbm_gem::LocalPotentialAnnotation{
-                posterior,
+                gaussian,
                 static_cast<bool>(database.GetColumn<int>(6)),
                 database.GetColumn<double>(7)
             });
@@ -1353,7 +1357,7 @@ void LoadAtomGroupPotentialEntryList(
                 database.GetColumn<double>(4), database.GetColumn<double>(5) },
             rhbm_gem::GaussianEstimate{
                 database.GetColumn<double>(6), database.GetColumn<double>(7) },
-            rhbm_gem::GaussianEstimate{
+            rhbm_gem::GaussianParameterUncertainty{
                 database.GetColumn<double>(8), database.GetColumn<double>(9) },
             database.GetColumn<double>(10));
     }
@@ -1399,7 +1403,7 @@ void LoadBondGroupPotentialEntryList(
                 database.GetColumn<double>(4), database.GetColumn<double>(5) },
             rhbm_gem::GaussianEstimate{
                 database.GetColumn<double>(6), database.GetColumn<double>(7) },
-            rhbm_gem::GaussianEstimate{
+            rhbm_gem::GaussianParameterUncertainty{
                 database.GetColumn<double>(8), database.GetColumn<double>(9) },
             database.GetColumn<double>(10));
     }

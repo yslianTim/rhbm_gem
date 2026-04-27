@@ -165,7 +165,7 @@ Behavior:
 There is no shared manager-owned iteration API for loaded objects. Traversal and selection stay in typed command workflows or ordinary container iteration.
 
 Analysis-owned state stays behind internal `ModelAnalysisData` and `ModelDerivedState` helpers. Commands and painters should not expose owner lookup, analysis access, fit-state cleanup, or spatial-range helpers through public data headers.
-Gaussian statistical value types such as `GaussianEstimate` and `GaussianPosterior` are public value objects under `<rhbm_gem/utils/hrl/RHBMTypes.hpp>`, while analysis-owned containers that store or derive those values remain internal.
+Gaussian statistical value types such as `GaussianEstimate` and `GaussianEstimateWithUncertainty` are public value objects under `<rhbm_gem/utils/hrl/RHBMTypes.hpp>`, while analysis-owned containers that store or derive those values remain internal.
 Internal painter orchestration should prepare analysis-ready models through painter detail helpers and should not route new code through compatibility-only `AddModel(...)` / `AddReferenceModel(...)` ingestion paths.
 
 ## 10. Key Files

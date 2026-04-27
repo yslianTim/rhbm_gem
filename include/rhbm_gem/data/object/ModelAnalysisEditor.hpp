@@ -18,7 +18,7 @@ class ModelObject;
 
 struct LocalPotentialAnnotationData
 {
-    GaussianPosterior posterior{};
+    GaussianEstimateWithUncertainty gaussian{};
     bool is_outlier{ false };
     double statistical_distance{ 0.0 };
 };

@@ -89,15 +89,15 @@ TEST(LinearizationServiceTest, DecodeGroupEstimateMatchesClosedForm)
     EXPECT_NEAR(expected_width, estimate.width, 1.0e-12);
 }
 
-TEST(LinearizationServiceTest, DecodePosteriorEstimateMatchesCurrentVarianceFormula)
+TEST(LinearizationServiceTest, DecodeGaussianEstimateWithUncertaintyReturnsStandardDeviation)
 {
     const auto linear_model{ MakeVector({ 0.5, 2.0 }) };
     Eigen::MatrixXd covariance_matrix(2, 2);
     covariance_matrix << 0.1, 0.05,
                          0.05, 0.2;
 
-    const auto posterior{
-        ls::DecodePosteriorEstimate(DatasetLinearizationSpec(), linear_model, covariance_matrix)
+    const auto gaussian{
+        ls::DecodeGaussianEstimateWithUncertainty(DatasetLinearizationSpec(), linear_model, covariance_matrix)
     };
     const auto expected_amplitude{
         std::exp(0.5) * std::pow(Constants::two_pi / 2.0, 1.5)
@@ -109,8 +109,8 @@ TEST(LinearizationServiceTest, DecodePosteriorEstimateMatchesCurrentVarianceForm
     };
     const auto expected_var_width{ 0.25 * std::pow(2.0, -3) * 0.2 };
 
-    EXPECT_NEAR(expected_amplitude, posterior.estimate.amplitude, 1.0e-12);
-    EXPECT_NEAR(expected_width, posterior.estimate.width, 1.0e-12);
-    EXPECT_NEAR(std::sqrt(expected_var_amplitude), posterior.variance.amplitude, 1.0e-12);
-    EXPECT_NEAR(std::sqrt(expected_var_width), posterior.variance.width, 1.0e-12);
+    EXPECT_NEAR(expected_amplitude, gaussian.estimate.amplitude, 1.0e-12);
+    EXPECT_NEAR(expected_width, gaussian.estimate.width, 1.0e-12);
+    EXPECT_NEAR(std::sqrt(expected_var_amplitude), gaussian.standard_deviation.amplitude, 1.0e-12);
+    EXPECT_NEAR(std::sqrt(expected_var_width), gaussian.standard_deviation.width, 1.0e-12);
 }

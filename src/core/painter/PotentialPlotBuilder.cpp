@@ -418,7 +418,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToResi
         }
         auto x_value{ static_cast<int>(model_view.GetResidueFromAtomGroupKey(group_key, class_key)) - 1 };
         auto y_value{ model_view.GetAtomGroupPrior(group_key, class_key).GetParameter(par_id) };
-        auto y_error{ model_view.GetAtomGroupPriorPosterior(group_key, class_key).GetVariance(par_id) };
+        auto y_error{ model_view.GetAtomGroupPriorWithUncertainty(group_key, class_key).GetStandardDeviation(par_id) };
         graph->SetPoint(count, x_value, y_value);
         graph->SetPointError(count, 0.0, y_error);
         count++;
@@ -445,7 +445,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBondGausEstimateToResi
         }
         auto x_value{ static_cast<int>(model_view.GetResidueFromBondGroupKey(group_key, class_key)) - 1 };
         auto y_value{ model_view.GetBondGroupPrior(group_key, class_key).GetParameter(par_id) };
-        auto y_error{ model_view.GetBondGroupPriorPosterior(group_key, class_key).GetVariance(par_id) };
+        auto y_error{ model_view.GetBondGroupPriorWithUncertainty(group_key, class_key).GetStandardDeviation(par_id) };
         graph->SetPoint(count, x_value, y_value);
         graph->SetPointError(count, 0.0, y_error);
         count++;
@@ -473,7 +473,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToSpot
         }
         auto x_value{ static_cast<double>(i) };
         auto y_value{ model_view.GetAtomGroupPrior(group_key, class_key).GetParameter(par_id) };
-        auto y_error{ model_view.GetAtomGroupPriorPosterior(group_key, class_key).GetVariance(par_id) };
+        auto y_error{ model_view.GetAtomGroupPriorWithUncertainty(group_key, class_key).GetStandardDeviation(par_id) };
         graph->SetPoint(count, x_value, y_value);
         graph->SetPointError(count, 0.0, y_error);
         count++;
@@ -507,7 +507,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToAtom
         }
         auto x_value{ static_cast<double>(i) };
         auto y_value{ model_view.GetAtomGroupPrior(group_key, class_key).GetParameter(par_id) };
-        auto y_error{ model_view.GetAtomGroupPriorPosterior(group_key, class_key).GetVariance(par_id) };
+        auto y_error{ model_view.GetAtomGroupPriorWithUncertainty(group_key, class_key).GetStandardDeviation(par_id) };
         graph->SetPoint(count, x_value, y_value);
         graph->SetPointError(count, 0.0, y_error);
         count++;
@@ -566,8 +566,8 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatte
             GetModelView().GetAtomGausEstimatePrior(group_key, class_key, par2_id));
         graph->SetPointError(
             count,
-            GetModelView().GetAtomGausVariancePrior(group_key, class_key, par1_id),
-            GetModelView().GetAtomGausVariancePrior(group_key, class_key, par2_id));
+            GetModelView().GetAtomGausPriorStandardDeviation(group_key, class_key, par1_id),
+            GetModelView().GetAtomGausPriorStandardDeviation(group_key, class_key, par2_id));
         count++;
     }
     return graph;
@@ -596,8 +596,8 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBondGausEstimateScatte
             GetModelView().GetBondGausEstimatePrior(group_key, class_key, par2_id));
         graph->SetPointError(
             count,
-            GetModelView().GetBondGausVariancePrior(group_key, class_key, par1_id),
-            GetModelView().GetBondGausVariancePrior(group_key, class_key, par2_id));
+            GetModelView().GetBondGausPriorStandardDeviation(group_key, class_key, par1_id),
+            GetModelView().GetBondGausPriorStandardDeviation(group_key, class_key, par2_id));
         count++;
     }
     return graph;
@@ -1230,10 +1230,10 @@ PotentialPlotBuilder::CreateAtomGausEstimatePosteriorToSequenceIDGraphMap(
             continue;
         }
         graph_map[chain_id]->SetPoint(
-            count_map[chain_id], x_value, annotation->posterior.GetEstimate(par_id)
+            count_map[chain_id], x_value, annotation->gaussian.GetEstimate(par_id)
         );
         graph_map[chain_id]->SetPointError(
-            count_map[chain_id], 0.0, annotation->posterior.GetVariance(par_id)
+            count_map[chain_id], 0.0, annotation->gaussian.GetStandardDeviation(par_id)
         );
         count_map[chain_id]++;
     }

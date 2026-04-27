@@ -772,9 +772,9 @@ void ComparisonPainter::BuildGausRatioToResolutionGraph(
         if (!entry_view.HasAtomGroup(ref_group_key, class_key)) continue;
         auto x_value{ model_object->GetResolution() };
         auto y_value{ entry_view.GetAtomGausEstimatePrior(group_key, class_key, par_id) };
-        auto y_error{ entry_view.GetAtomGausVariancePrior(group_key, class_key, par_id) };
+        auto y_error{ entry_view.GetAtomGausPriorStandardDeviation(group_key, class_key, par_id) };
         auto ref_y_value{ entry_view.GetAtomGausEstimatePrior(ref_group_key, class_key, par_id) };
-        auto ref_y_error{ entry_view.GetAtomGausVariancePrior(ref_group_key, class_key, par_id) };
+        auto ref_y_error{ entry_view.GetAtomGausPriorStandardDeviation(ref_group_key, class_key, par_id) };
         if (x_value == 0.0 || ref_y_value == 0.0) continue;
         auto ratio{ y_value/ref_y_value };
         auto error{ ratio * std::sqrt(std::pow(y_error/y_value, 2) + std::pow(ref_y_error/ref_y_value, 2)) };
@@ -812,10 +812,10 @@ void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
         if (!entry_view.HasAtomGroup(ref_group_key, class_key)) continue;
         auto x_value{ entry_view.GetAtomGausEstimatePrior(group_key, class_key, 1) };
         auto y_value{ entry_view.GetAtomGausEstimatePrior(group_key, class_key, 0) };
-        auto x_error{ std::sqrt(entry_view.GetAtomGausVariancePrior(group_key, class_key, 1)) };
-        auto y_error{ std::sqrt(entry_view.GetAtomGausVariancePrior(group_key, class_key, 0)) };
+        auto x_error{ entry_view.GetAtomGausPriorStandardDeviation(group_key, class_key, 1) };
+        auto y_error{ entry_view.GetAtomGausPriorStandardDeviation(group_key, class_key, 0) };
         auto ref_y_value{ entry_view.GetAtomGausEstimatePrior(ref_group_key, class_key, 0) };
-        auto ref_y_error{ std::sqrt(entry_view.GetAtomGausVariancePrior(ref_group_key, class_key, 0)) };
+        auto ref_y_error{ entry_view.GetAtomGausPriorStandardDeviation(ref_group_key, class_key, 0) };
         if (x_value == 0.0 || ref_y_value == 0.0) continue;
         auto ratio{ y_value/ref_y_value };
         auto error{ ratio * std::sqrt(std::pow(y_error/y_value, 2) + std::pow(ref_y_error/ref_y_value, 2)) };

@@ -19,7 +19,7 @@ class ModelObject;
 
 struct LocalPotentialAnnotationView
 {
-    GaussianPosterior posterior{};
+    GaussianEstimateWithUncertainty gaussian{};
     bool is_outlier{ false };
     double statistical_distance{ 0.0 };
 };
@@ -96,12 +96,12 @@ public:
     const GaussianEstimate & GetBondGroupMDPDE(GroupKey group_key, const std::string & class_key) const;
     const GaussianEstimate & GetAtomGroupPrior(GroupKey group_key, const std::string & class_key) const;
     const GaussianEstimate & GetBondGroupPrior(GroupKey group_key, const std::string & class_key) const;
-    GaussianPosterior GetAtomGroupPriorPosterior(GroupKey group_key, const std::string & class_key) const;
-    GaussianPosterior GetBondGroupPriorPosterior(GroupKey group_key, const std::string & class_key) const;
+    GaussianEstimateWithUncertainty GetAtomGroupPriorWithUncertainty(GroupKey group_key, const std::string & class_key) const;
+    GaussianEstimateWithUncertainty GetBondGroupPriorWithUncertainty(GroupKey group_key, const std::string & class_key) const;
     double GetAtomGausEstimatePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
     double GetBondGausEstimatePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
-    double GetAtomGausVariancePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
-    double GetBondGausVariancePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
+    double GetAtomGausPriorStandardDeviation(GroupKey group_key, const std::string & class_key, int par_id) const;
+    double GetBondGausPriorStandardDeviation(GroupKey group_key, const std::string & class_key, int par_id) const;
     const std::vector<AtomObject *> & GetAtomObjectList(GroupKey group_key, const std::string & class_key) const;
     const std::vector<BondObject *> & GetBondObjectList(GroupKey group_key, const std::string & class_key) const;
     std::vector<AtomObject *> GetOutlierAtomObjectList(GroupKey group_key, const std::string & class_key) const;

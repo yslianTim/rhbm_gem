@@ -223,7 +223,7 @@ ModelObject::ModelObject(const ModelObject & other) :
                         entry.GetMean(group_key),
                         entry.GetMDPDE(group_key),
                         entry.GetPrior(group_key),
-                        entry.GetPriorVariance(group_key),
+                        entry.GetPriorStandardDeviation(group_key),
                         entry.GetAlphaG(group_key));
                     copy_members(entry, group_key, *cloned_entry);
                 }

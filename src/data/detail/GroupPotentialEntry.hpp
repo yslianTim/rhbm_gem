@@ -22,8 +22,7 @@ class GroupPotentialEntry
         std::vector<MemberT *> members;
         GaussianEstimate mean{};
         GaussianEstimate mdpde{};
-        GaussianEstimate prior{};
-        GaussianEstimate prior_variance{};
+        GaussianEstimateWithUncertainty prior{};
         double alpha_g{ 0.0 };
     };
 
@@ -80,14 +79,14 @@ public:
         const GaussianEstimate & mean,
         const GaussianEstimate & mdpde,
         const GaussianEstimate & prior,
-        const GaussianEstimate & prior_variance,
+        const GaussianParameterUncertainty & prior_standard_deviation,
         double alpha_g)
     {
         auto & group{ EnsureGroup(group_key) };
         group.mean = mean;
         group.mdpde = mdpde;
-        group.prior = prior;
-        group.prior_variance = prior_variance;
+        group.prior.estimate = prior;
+        group.prior.standard_deviation = prior_standard_deviation;
         group.alpha_g = alpha_g;
     }
 
@@ -108,20 +107,17 @@ public:
 
     const GaussianEstimate & GetPrior(GroupKey group_key) const
     {
+        return RequireGroup(group_key).prior.estimate;
+    }
+
+    const GaussianParameterUncertainty & GetPriorStandardDeviation(GroupKey group_key) const
+    {
+        return RequireGroup(group_key).prior.standard_deviation;
+    }
+
+    GaussianEstimateWithUncertainty GetPriorWithUncertainty(GroupKey group_key) const
+    {
         return RequireGroup(group_key).prior;
-    }
-
-    const GaussianEstimate & GetPriorVariance(GroupKey group_key) const
-    {
-        return RequireGroup(group_key).prior_variance;
-    }
-
-    GaussianPosterior BuildPriorPosterior(GroupKey group_key) const
-    {
-        GaussianPosterior posterior;
-        posterior.estimate = GetPrior(group_key);
-        posterior.variance = GetPriorVariance(group_key);
-        return posterior;
     }
 
     double GetAlphaG(GroupKey group_key) const

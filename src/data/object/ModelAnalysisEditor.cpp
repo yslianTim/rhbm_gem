@@ -133,7 +133,7 @@ const LocalPotentialEntry & RequireResolvedLocalEntry(
 LocalPotentialAnnotation ToDetailAnnotation(const LocalPotentialAnnotationData & value)
 {
     return LocalPotentialAnnotation{
-        value.posterior,
+        value.gaussian,
         value.is_outlier,
         value.statistical_distance
     };
@@ -193,7 +193,7 @@ void ApplyAtomGroupStatistics(
     const auto gaus_group_mean{ ls::DecodeGroupEstimate(AtomGroupDecodeSpec(), result.mu_mean) };
     const auto gaus_group_mdpde{ ls::DecodeGroupEstimate(AtomGroupDecodeSpec(), result.mu_mdpde) };
     const auto gaus_prior{
-        ls::DecodePosteriorEstimate(
+        ls::DecodeGaussianEstimateWithUncertainty(
             AtomGroupDecodeSpec(),
             result.mu_prior,
             result.capital_lambda)
@@ -204,7 +204,7 @@ void ApplyAtomGroupStatistics(
         gaus_group_mean,
         gaus_group_mdpde,
         gaus_prior.estimate,
-        gaus_prior.variance,
+        gaus_prior.standard_deviation,
         alpha_g);
 }
 
@@ -218,7 +218,7 @@ void ApplyBondGroupStatistics(
     const auto gaus_group_mean{ ls::DecodeGroupEstimate(BondGroupDecodeSpec(), result.mu_mean) };
     const auto gaus_group_mdpde{ ls::DecodeGroupEstimate(BondGroupDecodeSpec(), result.mu_mdpde) };
     const auto gaus_prior{
-        ls::DecodePosteriorEstimate(
+        ls::DecodeGaussianEstimateWithUncertainty(
             BondGroupDecodeSpec(),
             result.mu_prior,
             result.capital_lambda)
@@ -229,7 +229,7 @@ void ApplyBondGroupStatistics(
         gaus_group_mean,
         gaus_group_mdpde,
         gaus_prior.estimate,
-        gaus_prior.variance,
+        gaus_prior.standard_deviation,
         alpha_g);
 }
 
@@ -241,14 +241,14 @@ LocalPotentialAnnotationData BuildAtomAnnotationData(
     const auto & sigma_matrix_posterior{
         result.capital_sigma_posterior_list.at(static_cast<std::size_t>(member_index))
     };
-    const auto gaus_posterior{
-        ls::DecodePosteriorEstimate(
+    const auto gaussian_with_uncertainty{
+        ls::DecodeGaussianEstimateWithUncertainty(
             AtomGroupDecodeSpec(),
             beta_vector_posterior,
             sigma_matrix_posterior)
     };
     return LocalPotentialAnnotationData{
-        gaus_posterior,
+        gaussian_with_uncertainty,
         static_cast<bool>(result.outlier_flag_array(member_index)),
         result.statistical_distance_array(member_index)
     };
@@ -262,14 +262,14 @@ LocalPotentialAnnotationData BuildBondAnnotationData(
     const auto & sigma_matrix_posterior{
         result.capital_sigma_posterior_list.at(static_cast<std::size_t>(member_index))
     };
-    const auto gaus_posterior{
-        ls::DecodePosteriorEstimate(
+    const auto gaussian_with_uncertainty{
+        ls::DecodeGaussianEstimateWithUncertainty(
             BondGroupDecodeSpec(),
             beta_vector_posterior,
             sigma_matrix_posterior)
     };
     return LocalPotentialAnnotationData{
-        gaus_posterior,
+        gaussian_with_uncertainty,
         static_cast<bool>(result.outlier_flag_array(member_index)),
         result.statistical_distance_array(member_index)
     };
