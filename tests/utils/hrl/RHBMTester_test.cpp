@@ -133,8 +133,7 @@ TEST(RHBMTesterTest, RunBetaMDPDEWithNeighborhoodTestConsumesPreparedInputs)
         rt::RunBetaMDPDEWithNeighborhoodTest(
             residual,
             test_input,
-            1,
-            45.0)
+            1)
     };
 
     ASSERT_TRUE(result);

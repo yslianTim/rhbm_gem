@@ -29,6 +29,20 @@ struct BetaReplicaResidual
     Eigen::VectorXd mdpde_residual;
 };
 
+struct MuReplicaResidual
+{
+    Eigen::VectorXd median_residual;
+    Eigen::VectorXd mdpde_residual;
+};
+
+struct NeighborhoodReplicaResidual
+{
+    Eigen::VectorXd no_cut_ols_residual;
+    Eigen::VectorXd no_cut_mdpde_residual;
+    Eigen::VectorXd cut_mdpde_residual;
+    double trained_alpha_r{ 0.0 };
+};
+
 RHBMExecutionOptions MakeTesterExecutionOptions()
 {
     RHBMExecutionOptions options;
@@ -319,13 +333,11 @@ bool RunMuMDPDETest(
 bool RunBetaMDPDEWithNeighborhoodTest(
     NeighborhoodMDPDETestResidual & result,
     const test_data_factory::RHBMNeighborhoodTestInput & test_input,
-    int thread_size,
-    double angle)
+    int thread_size)
 {
 #ifndef USE_OPENMP
     (void)thread_size;
 #endif
-    (void)angle;
 
     ValidateGaussianTruthVector(test_input.gaus_true, "test_input.gaus_true");
     const auto replica_size{ static_cast<int>(test_input.no_cut_datasets.size()) };

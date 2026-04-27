@@ -615,8 +615,7 @@ void RunSimulationTestOnBenchMark(const RHBMTestExecutionContext & options)
             rhbm_tester::RunBetaMDPDEWithNeighborhoodTest(
                 residual_result,
                 test_input,
-                options.thread_size,
-                scenario.rejected_angle);
+                options.thread_size);
             TryAppendBenchmarkLinearizedPanel(
                 linearized_panels,
                 distance,
@@ -962,8 +961,7 @@ void RunSimulationTestOnNeighborDistance(const RHBMTestExecutionContext & option
             rhbm_tester::RunBetaMDPDEWithNeighborhoodTest(
                 residual,
                 test_input,
-                options.thread_size,
-                scenario.rejected_angle
+                options.thread_size
             );
 
             sampling_entries_list.emplace_back(test_input.sampling_summaries.front());

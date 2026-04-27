@@ -9,20 +9,6 @@
 namespace rhbm_gem::rhbm_tester
 {
 
-struct MuReplicaResidual
-{
-    Eigen::VectorXd median_residual;
-    Eigen::VectorXd mdpde_residual;
-};
-
-struct NeighborhoodReplicaResidual
-{
-    Eigen::VectorXd no_cut_ols_residual;
-    Eigen::VectorXd no_cut_mdpde_residual;
-    Eigen::VectorXd cut_mdpde_residual;
-    double trained_alpha_r{ 0.0 };
-};
-
 struct ResidualStatistics
 {
     Eigen::VectorXd mean;
@@ -72,8 +58,7 @@ bool RunMuMDPDETest(
 bool RunBetaMDPDEWithNeighborhoodTest(
     NeighborhoodMDPDETestResidual & result,
     const test_data_factory::RHBMNeighborhoodTestInput & test_input,
-    int thread_size = 1,
-    double angle = 0.0
+    int thread_size = 1
 );
 
 } // namespace rhbm_gem::rhbm_tester
