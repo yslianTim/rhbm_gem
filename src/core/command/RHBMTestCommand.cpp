@@ -78,6 +78,57 @@ struct NeighborDistanceScenarioConfig
     std::vector<double> distance_list;
 };
 
+enum class ResidualCurveKind
+{
+    Ols,
+    Median,
+    Mdpde,
+    TrainedMdpde,
+    RequestedAlpha,
+    TrainedAlpha
+};
+
+enum class ResidualPlotFlavor
+{
+    DataOutlier,
+    MemberOutlier,
+    ModelAlphaData,
+    ModelAlphaMember,
+    NeighborDistance
+};
+
+enum class ResidualXAxisMode
+{
+    ContaminationRatio,
+    NeighborDistance
+};
+
+struct ResidualCurvePoint
+{
+    double x{ 0.0 };
+    rhbm_tester::ResidualStatistics residual;
+};
+
+struct ResidualCurve
+{
+    ResidualCurveKind kind;
+    std::vector<ResidualCurvePoint> points;
+};
+
+struct ResidualPlotPanel
+{
+    std::string label;
+    std::vector<ResidualCurve> curves;
+};
+
+struct ResidualPlotRequest
+{
+    std::string output_name;
+    ResidualPlotFlavor flavor{ ResidualPlotFlavor::DataOutlier };
+    ResidualXAxisMode x_axis_mode{ ResidualXAxisMode::ContaminationRatio };
+    std::vector<ResidualPlotPanel> panels;
+};
+
 Eigen::VectorXd MakeDefaultModelPrior()
 {
     Eigen::VectorXd model_par_prior{ Eigen::VectorXd::Zero(kGausParSize) };
@@ -114,6 +165,39 @@ std::vector<double> BuildDescendingSweep(int count, double start, double step)
         values[static_cast<size_t>(i)] = start - static_cast<double>(i) * step;
     }
     return values;
+}
+
+ResidualCurve MakeResidualCurve(ResidualCurveKind kind, size_t point_capacity)
+{
+    ResidualCurve curve{ kind, {} };
+    curve.points.reserve(point_capacity);
+    return curve;
+}
+
+void AppendResidualCurvePoint(
+    ResidualCurve & curve,
+    double x,
+    const rhbm_tester::ResidualStatistics & residual)
+{
+    curve.points.emplace_back(ResidualCurvePoint{ x, residual });
+}
+
+std::string FormatDataResidualPanelLabel(size_t panel_index)
+{
+    const double error_value[3]{ 0.0, 2.5, 5.0 };
+    const auto value{ error_value[panel_index] };
+    std::ostringstream stream;
+    stream << std::fixed << std::setprecision(1)
+           << "#sigma_{#epsilon} = " << value << "% D_{max}";
+    return stream.str();
+}
+
+std::string FormatMemberResidualPanelLabel(size_t panel_index)
+{
+    const std::string outlier_type_list[2]{
+        "#font[2]{A}", "#tau"
+    };
+    return "Outlier in " + outlier_type_list[panel_index];
 }
 
 test_data_factory::TestDataFactory BuildDataFactory(const RHBMTestExecutionContext & options)
@@ -292,31 +376,195 @@ void SaveBenchmarkLinearizedDatasetReport(
     }
 }
 
+#ifdef HAVE_ROOT
+double ScaleResidualPlotX(double x, ResidualXAxisMode x_axis_mode)
+{
+    if (x_axis_mode == ResidualXAxisMode::NeighborDistance)
+    {
+        return -1.0 * x;
+    }
+    return 100.0 * x;
+}
+
+bool ShouldDrawResidualCurve(ResidualPlotFlavor, ResidualCurveKind)
+{
+    return true;
+}
+
+short GetResidualCurveColor(ResidualPlotFlavor flavor, ResidualCurveKind kind)
+{
+    if (flavor == ResidualPlotFlavor::MemberOutlier)
+    {
+        if (kind == ResidualCurveKind::Median)
+        {
+            return kAzure;
+        }
+        if (kind == ResidualCurveKind::Mdpde)
+        {
+            return kRed;
+        }
+        return kGreen + 1;
+    }
+    if (flavor == ResidualPlotFlavor::ModelAlphaMember)
+    {
+        return (kind == ResidualCurveKind::RequestedAlpha) ? kAzure : kRed;
+    }
+    if (flavor == ResidualPlotFlavor::ModelAlphaData)
+    {
+        return (kind == ResidualCurveKind::RequestedAlpha) ? kAzure : kGreen + 2;
+    }
+    if (kind == ResidualCurveKind::Ols)
+    {
+        return kAzure;
+    }
+    if (kind == ResidualCurveKind::Mdpde)
+    {
+        return kGreen + 2;
+    }
+    return kRed;
+}
+
+short GetResidualCurveMarker(ResidualPlotFlavor flavor, ResidualCurveKind kind)
+{
+    if (flavor == ResidualPlotFlavor::MemberOutlier)
+    {
+        if (kind == ResidualCurveKind::Median)
+        {
+            return 24;
+        }
+        if (kind == ResidualCurveKind::Mdpde)
+        {
+            return 20;
+        }
+        return 25;
+    }
+    if (flavor == ResidualPlotFlavor::ModelAlphaMember)
+    {
+        return (kind == ResidualCurveKind::RequestedAlpha) ? 24 : 20;
+    }
+    if (kind == ResidualCurveKind::Ols || kind == ResidualCurveKind::RequestedAlpha)
+    {
+        return 24;
+    }
+    if (kind == ResidualCurveKind::Mdpde || kind == ResidualCurveKind::TrainedAlpha)
+    {
+        return 25;
+    }
+    return 20;
+}
+
+short GetResidualCurveLineStyle(ResidualPlotFlavor flavor, ResidualCurveKind kind)
+{
+    if (kind == ResidualCurveKind::Ols ||
+        kind == ResidualCurveKind::Median ||
+        kind == ResidualCurveKind::RequestedAlpha)
+    {
+        return 2;
+    }
+    if (kind == ResidualCurveKind::TrainedMdpde &&
+        flavor != ResidualPlotFlavor::ModelAlphaMember)
+    {
+        return 3;
+    }
+    return 1;
+}
+
+void ApplyResidualCurveStyle(
+    TGraphErrors * graph,
+    ResidualPlotFlavor flavor,
+    ResidualCurveKind kind)
+{
+    const auto color{ GetResidualCurveColor(flavor, kind) };
+    root_helper::SetMarkerAttribute(
+        graph,
+        GetResidualCurveMarker(flavor, kind),
+        1.5f,
+        color);
+    root_helper::SetLineAttribute(
+        graph,
+        GetResidualCurveLineStyle(flavor, kind),
+        2,
+        color);
+    root_helper::SetFillAttribute(graph, 1001, color, 0.2f);
+}
+
+std::vector<ResidualCurveKind> GetResidualLegendOrder(ResidualPlotFlavor flavor)
+{
+    if (flavor == ResidualPlotFlavor::ModelAlphaData ||
+        flavor == ResidualPlotFlavor::ModelAlphaMember)
+    {
+        return { ResidualCurveKind::RequestedAlpha, ResidualCurveKind::TrainedAlpha };
+    }
+    if (flavor == ResidualPlotFlavor::MemberOutlier)
+    {
+        return { ResidualCurveKind::TrainedMdpde, ResidualCurveKind::Mdpde, ResidualCurveKind::Median };
+    }
+    return { ResidualCurveKind::TrainedMdpde, ResidualCurveKind::Mdpde, ResidualCurveKind::Ols };
+}
+
+std::string GetResidualLegendLabel(ResidualPlotFlavor flavor, ResidualCurveKind kind)
+{
+    if (flavor == ResidualPlotFlavor::ModelAlphaData)
+    {
+        return (kind == ResidualCurveKind::RequestedAlpha) ?
+            "MDPDE (#alpha_{r} = 0.1)" :
+            "MDPDE (#alpha_{r} = 0.4)";
+    }
+    if (flavor == ResidualPlotFlavor::ModelAlphaMember)
+    {
+        return (kind == ResidualCurveKind::RequestedAlpha) ?
+            "MDPDE (#alpha_{g} = 0.2)" :
+            "MDPDE (#alpha_{g} = 0.5)";
+    }
+    if (flavor == ResidualPlotFlavor::MemberOutlier)
+    {
+        if (kind == ResidualCurveKind::TrainedMdpde)
+        {
+            return "MDPDE (#alpha_{g} from Alg.5)";
+        }
+        if (kind == ResidualCurveKind::Mdpde)
+        {
+            return "MDPDE (#alpha_{g} = 0.2)";
+        }
+        return "MDPDE (#alpha_{g} = 0)";
+    }
+    if (kind == ResidualCurveKind::TrainedMdpde)
+    {
+        return "MDPDE (w/ Sampling Scheme)";
+    }
+    if (kind == ResidualCurveKind::Mdpde)
+    {
+        return "MDPDE";
+    }
+    return "Ordinary Least Squares";
+}
+
+TGraphErrors * FindResidualGraph(
+    std::vector<std::unique_ptr<TGraphErrors>> & graph_list,
+    const std::vector<ResidualCurveKind> & kind_list,
+    ResidualCurveKind kind)
+{
+    for (size_t i = 0; i < kind_list.size(); i++)
+    {
+        if (kind_list.at(i) == kind)
+        {
+            return graph_list.at(i).get();
+        }
+    }
+    return nullptr;
+}
+#endif
+
 } // namespace
 
 void PrintDataOutlierResult(
     const RHBMTestExecutionContext & options,
-    const std::string & name,
-    const std::vector<double> & outlier_list,
-    const std::vector<Eigen::MatrixXd> & mean_matrix_ols_list,
-    const std::vector<Eigen::MatrixXd> & mean_matrix_mdpde_list,
-    const std::vector<Eigen::MatrixXd> & mean_matrix_train_list,
-    const std::vector<Eigen::MatrixXd> & sigma_matrix_ols_list,
-    const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list,
-    const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list,
-    bool is_neighbor_distance = false
+    const ResidualPlotRequest & request
 );
 
 void PrintMemberOutlierResult(
     const RHBMTestExecutionContext & options,
-    const std::string & name,
-    const std::vector<double> & outlier_list,
-    const std::vector<Eigen::MatrixXd> & mean_matrix_median_list,
-    const std::vector<Eigen::MatrixXd> & mean_matrix_mdpde_list,
-    const std::vector<Eigen::MatrixXd> & mean_matrix_train_list,
-    const std::vector<Eigen::MatrixXd> & sigma_matrix_median_list,
-    const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list,
-    const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list
+    const ResidualPlotRequest & request
 );
 
 void PrintAtomSamplingDataSummary(
@@ -405,25 +653,22 @@ void RunSimulationTestOnDataOutlier(const RHBMTestExecutionContext & options)
     const auto model_par_prior{ MakeDefaultModelPrior() };
     auto data_factory{ BuildDataFactory(options) };
     std::vector<double> error_list{ 0.1, 0.2, 0.3 };
-    std::vector<Eigen::MatrixXd> mean_matrix_ols_list;
-    std::vector<Eigen::MatrixXd> mean_matrix_mdpde_list;
-    std::vector<Eigen::MatrixXd> mean_matrix_train_list;
-    std::vector<Eigen::MatrixXd> sigma_matrix_ols_list;
-    std::vector<Eigen::MatrixXd> sigma_matrix_mdpde_list;
-    std::vector<Eigen::MatrixXd> sigma_matrix_train_list;
-
     const auto outlier_list{ BuildLinearSweep(9, 0.025) };
-    const auto outlier_size{ static_cast<int>(outlier_list.size()) };
+    ResidualPlotRequest plot_request;
+    plot_request.output_name = "bias_outlier_in_data.pdf";
+    plot_request.flavor = ResidualPlotFlavor::DataOutlier;
+    plot_request.x_axis_mode = ResidualXAxisMode::ContaminationRatio;
+    plot_request.panels.reserve(error_list.size());
 
-    for (auto error_sigma : error_list)
+    for (size_t panel_index = 0; panel_index < error_list.size(); panel_index++)
     {
-        Eigen::MatrixXd mean_matrix_ols{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
-        Eigen::MatrixXd mean_matrix_mdpde{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
-        Eigen::MatrixXd mean_matrix_train{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
-        Eigen::MatrixXd sigma_matrix_ols{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
-        Eigen::MatrixXd sigma_matrix_mdpde{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
-        Eigen::MatrixXd sigma_matrix_train{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
-        for (int i = 0; i < outlier_size; i++)
+        const auto error_sigma{ error_list.at(panel_index) };
+        ResidualPlotPanel panel;
+        panel.label = FormatDataResidualPanelLabel(panel_index);
+        panel.curves.emplace_back(MakeResidualCurve(ResidualCurveKind::Ols, outlier_list.size()));
+        panel.curves.emplace_back(MakeResidualCurve(ResidualCurveKind::Mdpde, outlier_list.size()));
+        panel.curves.emplace_back(MakeResidualCurve(ResidualCurveKind::TrainedMdpde, outlier_list.size()));
+        for (size_t i = 0; i < outlier_list.size(); i++)
         {
             rhbm_tester::BetaMDPDETestResidual residual;
             const auto test_input{
@@ -431,7 +676,7 @@ void RunSimulationTestOnDataOutlier(const RHBMTestExecutionContext & options)
                     model_par_prior,
                     scenario.sampling_entry_size,
                     error_sigma,
-                    outlier_list[static_cast<size_t>(i)],
+                    outlier_list.at(i),
                     scenario.replica_size
                 })
             };
@@ -442,28 +687,20 @@ void RunSimulationTestOnDataOutlier(const RHBMTestExecutionContext & options)
                 options.thread_size
             );
 
-            mean_matrix_ols.col(i) = residual.ols.mean;
-            sigma_matrix_ols.col(i) = residual.ols.sigma;
-            mean_matrix_mdpde.col(i) = residual.mdpde.requested_alpha.front().mean;
-            sigma_matrix_mdpde.col(i) = residual.mdpde.requested_alpha.front().sigma;
-            mean_matrix_train.col(i) = residual.mdpde.trained_alpha.mean;
-            sigma_matrix_train.col(i) = residual.mdpde.trained_alpha.sigma;
+            AppendResidualCurvePoint(panel.curves.at(0), outlier_list.at(i), residual.ols);
+            AppendResidualCurvePoint(
+                panel.curves.at(1),
+                outlier_list.at(i),
+                residual.mdpde.requested_alpha.front());
+            AppendResidualCurvePoint(
+                panel.curves.at(2),
+                outlier_list.at(i),
+                residual.mdpde.trained_alpha);
         }
-        mean_matrix_ols_list.emplace_back(mean_matrix_ols);
-        mean_matrix_mdpde_list.emplace_back(mean_matrix_mdpde);
-        mean_matrix_train_list.emplace_back(mean_matrix_train);
-        sigma_matrix_ols_list.emplace_back(sigma_matrix_ols);
-        sigma_matrix_mdpde_list.emplace_back(sigma_matrix_mdpde);
-        sigma_matrix_train_list.emplace_back(sigma_matrix_train);
+        plot_request.panels.emplace_back(std::move(panel));
     }
 
-    PrintDataOutlierResult(
-        options,
-        "bias_outlier_in_data.pdf",
-        outlier_list,
-        mean_matrix_ols_list, mean_matrix_mdpde_list, mean_matrix_train_list,
-        sigma_matrix_ols_list, sigma_matrix_mdpde_list, sigma_matrix_train_list
-    );
+    PrintDataOutlierResult(options, plot_request);
 }
 
 void RunSimulationTestOnMemberOutlier(const RHBMTestExecutionContext & options)
@@ -490,25 +727,22 @@ void RunSimulationTestOnMemberOutlier(const RHBMTestExecutionContext & options)
     const auto model_par_prior{ MakeDefaultModelPrior() };
     const auto model_par_sigma{ MakeDefaultModelSigma() };
     auto data_factory{ BuildDataFactory(options) };
-    std::vector<Eigen::MatrixXd> mean_matrix_median_list;
-    std::vector<Eigen::MatrixXd> mean_matrix_mdpde_list;
-    std::vector<Eigen::MatrixXd> mean_matrix_train_list;
-    std::vector<Eigen::MatrixXd> sigma_matrix_median_list;
-    std::vector<Eigen::MatrixXd> sigma_matrix_mdpde_list;
-    std::vector<Eigen::MatrixXd> sigma_matrix_train_list;
-
     const auto outlier_list{ BuildLinearSweep(9, 0.025) };
-    const auto outlier_size{ static_cast<int>(outlier_list.size()) };
+    ResidualPlotRequest plot_request;
+    plot_request.output_name = "bias_outlier_in_member.pdf";
+    plot_request.flavor = ResidualPlotFlavor::MemberOutlier;
+    plot_request.x_axis_mode = ResidualXAxisMode::ContaminationRatio;
+    plot_request.panels.reserve(outlier_prior_list.size());
 
-    for (auto outlier_prior : outlier_prior_list)
+    for (size_t panel_index = 0; panel_index < outlier_prior_list.size(); panel_index++)
     {
-        Eigen::MatrixXd mean_matrix_median{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
-        Eigen::MatrixXd mean_matrix_mdpde{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
-        Eigen::MatrixXd mean_matrix_train{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
-        Eigen::MatrixXd sigma_matrix_median{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
-        Eigen::MatrixXd sigma_matrix_mdpde{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
-        Eigen::MatrixXd sigma_matrix_train{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
-        for (int i = 0; i < outlier_size; i++)
+        const auto & outlier_prior{ outlier_prior_list.at(panel_index) };
+        ResidualPlotPanel panel;
+        panel.label = FormatMemberResidualPanelLabel(panel_index);
+        panel.curves.emplace_back(MakeResidualCurve(ResidualCurveKind::Median, outlier_list.size()));
+        panel.curves.emplace_back(MakeResidualCurve(ResidualCurveKind::Mdpde, outlier_list.size()));
+        panel.curves.emplace_back(MakeResidualCurve(ResidualCurveKind::TrainedMdpde, outlier_list.size()));
+        for (size_t i = 0; i < outlier_list.size(); i++)
         {
             rhbm_tester::MuMDPDETestResidual residual;
             const auto test_input{
@@ -518,7 +752,7 @@ void RunSimulationTestOnMemberOutlier(const RHBMTestExecutionContext & options)
                     model_par_sigma,
                     outlier_prior,
                     model_par_sigma,
-                    outlier_list[static_cast<size_t>(i)],
+                    outlier_list.at(i),
                     scenario.replica_size
                 })
             };
@@ -529,28 +763,20 @@ void RunSimulationTestOnMemberOutlier(const RHBMTestExecutionContext & options)
                 options.thread_size
             );
 
-            mean_matrix_median.col(i) = residual.median.mean;
-            mean_matrix_mdpde.col(i) = residual.mdpde.requested_alpha.front().mean;
-            mean_matrix_train.col(i) = residual.mdpde.trained_alpha.mean;
-            sigma_matrix_median.col(i) = residual.median.sigma;
-            sigma_matrix_mdpde.col(i) = residual.mdpde.requested_alpha.front().sigma;
-            sigma_matrix_train.col(i) = residual.mdpde.trained_alpha.sigma;
+            AppendResidualCurvePoint(panel.curves.at(0), outlier_list.at(i), residual.median);
+            AppendResidualCurvePoint(
+                panel.curves.at(1),
+                outlier_list.at(i),
+                residual.mdpde.requested_alpha.front());
+            AppendResidualCurvePoint(
+                panel.curves.at(2),
+                outlier_list.at(i),
+                residual.mdpde.trained_alpha);
         }
-        mean_matrix_median_list.emplace_back(mean_matrix_median);
-        mean_matrix_mdpde_list.emplace_back(mean_matrix_mdpde);
-        mean_matrix_train_list.emplace_back(mean_matrix_train);
-        sigma_matrix_median_list.emplace_back(sigma_matrix_median);
-        sigma_matrix_mdpde_list.emplace_back(sigma_matrix_mdpde);
-        sigma_matrix_train_list.emplace_back(sigma_matrix_train);
+        plot_request.panels.emplace_back(std::move(panel));
     }
 
-    PrintMemberOutlierResult(
-        options,
-        "bias_outlier_in_member.pdf",
-        outlier_list,
-        mean_matrix_median_list, mean_matrix_mdpde_list, mean_matrix_train_list,
-        sigma_matrix_median_list, sigma_matrix_mdpde_list, sigma_matrix_train_list
-    );
+    PrintMemberOutlierResult(options, plot_request);
 }
 
 void RunSimulationTestOnModelAlphaData(const RHBMTestExecutionContext & options)
@@ -565,21 +791,21 @@ void RunSimulationTestOnModelAlphaData(const RHBMTestExecutionContext & options)
     const auto model_par_prior{ MakeDefaultModelPrior() };
     auto data_factory{ BuildDataFactory(options) };
     std::vector<double> error_list{ 0.1, 0.2, 0.3 };
-    std::vector<Eigen::MatrixXd> mean_matrix_alpha1_list;
-    std::vector<Eigen::MatrixXd> mean_matrix_alpha2_list;
-    std::vector<Eigen::MatrixXd> sigma_matrix_alpha1_list;
-    std::vector<Eigen::MatrixXd> sigma_matrix_alpha2_list;
-
     const auto outlier_list{ BuildLinearSweep(10, 0.05) };
-    const auto outlier_size{ static_cast<int>(outlier_list.size()) };
+    ResidualPlotRequest plot_request;
+    plot_request.output_name = "bias_outlier_with_alpha_in_data.pdf";
+    plot_request.flavor = ResidualPlotFlavor::ModelAlphaData;
+    plot_request.x_axis_mode = ResidualXAxisMode::ContaminationRatio;
+    plot_request.panels.reserve(error_list.size());
 
-    for (auto error_sigma : error_list)
+    for (size_t panel_index = 0; panel_index < error_list.size(); panel_index++)
     {
-        Eigen::MatrixXd mean_matrix_alpha1{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
-        Eigen::MatrixXd mean_matrix_alpha2{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
-        Eigen::MatrixXd sigma_matrix_alpha1{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
-        Eigen::MatrixXd sigma_matrix_alpha2{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
-        for (int i = 0; i < outlier_size; i++)
+        const auto error_sigma{ error_list.at(panel_index) };
+        ResidualPlotPanel panel;
+        panel.label = FormatDataResidualPanelLabel(panel_index);
+        panel.curves.emplace_back(MakeResidualCurve(ResidualCurveKind::RequestedAlpha, outlier_list.size()));
+        panel.curves.emplace_back(MakeResidualCurve(ResidualCurveKind::TrainedAlpha, outlier_list.size()));
+        for (size_t i = 0; i < outlier_list.size(); i++)
         {
             rhbm_tester::BetaMDPDETestResidual residual;
             const auto test_input{
@@ -587,7 +813,7 @@ void RunSimulationTestOnModelAlphaData(const RHBMTestExecutionContext & options)
                     model_par_prior,
                     scenario.sampling_entry_size,
                     error_sigma,
-                    outlier_list[static_cast<size_t>(i)],
+                    outlier_list.at(i),
                     scenario.replica_size
                 })
             };
@@ -598,24 +824,19 @@ void RunSimulationTestOnModelAlphaData(const RHBMTestExecutionContext & options)
                 options.thread_size
             );
 
-            mean_matrix_alpha1.col(i) = residual.mdpde.requested_alpha.front().mean;
-            mean_matrix_alpha2.col(i) = residual.mdpde.trained_alpha.mean;
-            sigma_matrix_alpha1.col(i) = residual.mdpde.requested_alpha.front().sigma;
-            sigma_matrix_alpha2.col(i) = residual.mdpde.trained_alpha.sigma;
+            AppendResidualCurvePoint(
+                panel.curves.at(0),
+                outlier_list.at(i),
+                residual.mdpde.requested_alpha.front());
+            AppendResidualCurvePoint(
+                panel.curves.at(1),
+                outlier_list.at(i),
+                residual.mdpde.trained_alpha);
         }
-        mean_matrix_alpha1_list.emplace_back(mean_matrix_alpha1);
-        mean_matrix_alpha2_list.emplace_back(mean_matrix_alpha2);
-        sigma_matrix_alpha1_list.emplace_back(sigma_matrix_alpha1);
-        sigma_matrix_alpha2_list.emplace_back(sigma_matrix_alpha2);
+        plot_request.panels.emplace_back(std::move(panel));
     }
 
-    PrintDataOutlierResult(
-        options,
-        "bias_outlier_with_alpha_in_data.pdf",
-        outlier_list,
-        mean_matrix_alpha1_list, mean_matrix_alpha2_list, mean_matrix_alpha2_list,
-        sigma_matrix_alpha1_list, sigma_matrix_alpha2_list, sigma_matrix_alpha2_list
-    );
+    PrintDataOutlierResult(options, plot_request);
 }
 
 void RunSimulationTestOnModelAlphaMember(const RHBMTestExecutionContext & options)
@@ -642,21 +863,21 @@ void RunSimulationTestOnModelAlphaMember(const RHBMTestExecutionContext & option
     const auto model_par_prior{ MakeDefaultModelPrior() };
     const auto model_par_sigma{ MakeDefaultModelSigma() };
     auto data_factory{ BuildDataFactory(options) };
-    std::vector<Eigen::MatrixXd> mean_matrix_alpha1_list;
-    std::vector<Eigen::MatrixXd> mean_matrix_alpha2_list;
-    std::vector<Eigen::MatrixXd> sigma_matrix_alpha1_list;
-    std::vector<Eigen::MatrixXd> sigma_matrix_alpha2_list;
-
     const auto outlier_list{ BuildLinearSweep(10, 0.05) };
-    const auto outlier_size{ static_cast<int>(outlier_list.size()) };
+    ResidualPlotRequest plot_request;
+    plot_request.output_name = "bias_outlier_with_alpha_in_member.pdf";
+    plot_request.flavor = ResidualPlotFlavor::ModelAlphaMember;
+    plot_request.x_axis_mode = ResidualXAxisMode::ContaminationRatio;
+    plot_request.panels.reserve(outlier_prior_list.size());
 
-    for (auto outlier_prior : outlier_prior_list)
+    for (size_t panel_index = 0; panel_index < outlier_prior_list.size(); panel_index++)
     {
-        Eigen::MatrixXd mean_matrix_alpha1{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
-        Eigen::MatrixXd mean_matrix_alpha2{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
-        Eigen::MatrixXd sigma_matrix_alpha1{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
-        Eigen::MatrixXd sigma_matrix_alpha2{ Eigen::MatrixXd::Zero(kGausParSize, outlier_size) };
-        for (int i = 0; i < outlier_size; i++)
+        const auto & outlier_prior{ outlier_prior_list.at(panel_index) };
+        ResidualPlotPanel panel;
+        panel.label = FormatMemberResidualPanelLabel(panel_index);
+        panel.curves.emplace_back(MakeResidualCurve(ResidualCurveKind::RequestedAlpha, outlier_list.size()));
+        panel.curves.emplace_back(MakeResidualCurve(ResidualCurveKind::TrainedAlpha, outlier_list.size()));
+        for (size_t i = 0; i < outlier_list.size(); i++)
         {
             rhbm_tester::MuMDPDETestResidual residual;
             const auto test_input{
@@ -666,7 +887,7 @@ void RunSimulationTestOnModelAlphaMember(const RHBMTestExecutionContext & option
                     model_par_sigma,
                     outlier_prior,
                     model_par_sigma,
-                    outlier_list[static_cast<size_t>(i)],
+                    outlier_list.at(i),
                     scenario.replica_size
                 })
             };
@@ -677,24 +898,19 @@ void RunSimulationTestOnModelAlphaMember(const RHBMTestExecutionContext & option
                 options.thread_size
             );
 
-            mean_matrix_alpha1.col(i) = residual.mdpde.requested_alpha.front().mean;
-            mean_matrix_alpha2.col(i) = residual.mdpde.trained_alpha.mean;
-            sigma_matrix_alpha1.col(i) = residual.mdpde.requested_alpha.front().sigma;
-            sigma_matrix_alpha2.col(i) = residual.mdpde.trained_alpha.sigma;
+            AppendResidualCurvePoint(
+                panel.curves.at(0),
+                outlier_list.at(i),
+                residual.mdpde.requested_alpha.front());
+            AppendResidualCurvePoint(
+                panel.curves.at(1),
+                outlier_list.at(i),
+                residual.mdpde.trained_alpha);
         }
-        mean_matrix_alpha1_list.emplace_back(mean_matrix_alpha1);
-        mean_matrix_alpha2_list.emplace_back(mean_matrix_alpha2);
-        sigma_matrix_alpha1_list.emplace_back(sigma_matrix_alpha1);
-        sigma_matrix_alpha2_list.emplace_back(sigma_matrix_alpha2);
+        plot_request.panels.emplace_back(std::move(panel));
     }
 
-    PrintMemberOutlierResult(
-        options,
-        "bias_outlier_with_alpha_in_member.pdf",
-        outlier_list,
-        mean_matrix_alpha1_list, mean_matrix_alpha2_list, mean_matrix_alpha2_list,
-        sigma_matrix_alpha1_list, sigma_matrix_alpha2_list, sigma_matrix_alpha2_list
-    );
+    PrintMemberOutlierResult(options, plot_request);
 }
 
 void RunSimulationTestOnNeighborDistance(const RHBMTestExecutionContext & options)
@@ -711,26 +927,24 @@ void RunSimulationTestOnNeighborDistance(const RHBMTestExecutionContext & option
     } };
     const auto model_par_prior{ MakeDefaultModelPrior() };
     auto data_factory{ BuildDataFactory(options) };
-    std::vector<Eigen::MatrixXd> mean_matrix_ols_list;
-    std::vector<Eigen::MatrixXd> mean_matrix_mdpde_list;
-    std::vector<Eigen::MatrixXd> mean_matrix_train_list;
-    std::vector<Eigen::MatrixXd> sigma_matrix_ols_list;
-    std::vector<Eigen::MatrixXd> sigma_matrix_mdpde_list;
-    std::vector<Eigen::MatrixXd> sigma_matrix_train_list;
+    ResidualPlotRequest plot_request;
+    plot_request.output_name = "bias_from_neighbor_atom.pdf";
+    plot_request.flavor = ResidualPlotFlavor::NeighborDistance;
+    plot_request.x_axis_mode = ResidualXAxisMode::NeighborDistance;
+    plot_request.panels.reserve(scenario.error_list.size());
 
-    const auto distance_size{ static_cast<int>(scenario.distance_list.size()) };
     bool is_print_sampling_summary{ false };
-    for (auto error_sigma : scenario.error_list)
+    for (size_t panel_index = 0; panel_index < scenario.error_list.size(); panel_index++)
     {
-        Eigen::MatrixXd mean_matrix_ols{ Eigen::MatrixXd::Zero(kGausParSize, distance_size) };
-        Eigen::MatrixXd mean_matrix_mdpde{ Eigen::MatrixXd::Zero(kGausParSize, distance_size) };
-        Eigen::MatrixXd mean_matrix_train{ Eigen::MatrixXd::Zero(kGausParSize, distance_size) };
-        Eigen::MatrixXd sigma_matrix_ols{ Eigen::MatrixXd::Zero(kGausParSize, distance_size) };
-        Eigen::MatrixXd sigma_matrix_mdpde{ Eigen::MatrixXd::Zero(kGausParSize, distance_size) };
-        Eigen::MatrixXd sigma_matrix_train{ Eigen::MatrixXd::Zero(kGausParSize, distance_size) };
+        const auto error_sigma{ scenario.error_list.at(panel_index) };
+        ResidualPlotPanel panel;
+        panel.label = FormatDataResidualPanelLabel(panel_index);
+        panel.curves.emplace_back(MakeResidualCurve(ResidualCurveKind::Ols, scenario.distance_list.size()));
+        panel.curves.emplace_back(MakeResidualCurve(ResidualCurveKind::Mdpde, scenario.distance_list.size()));
+        panel.curves.emplace_back(MakeResidualCurve(ResidualCurveKind::TrainedMdpde, scenario.distance_list.size()));
         std::vector<LocalPotentialSampleList> sampling_entries_list;
-        sampling_entries_list.reserve(static_cast<size_t>(distance_size));
-        for (int i = 0; i < distance_size; i++)
+        sampling_entries_list.reserve(scenario.distance_list.size());
+        for (size_t i = 0; i < scenario.distance_list.size(); i++)
         {
             rhbm_tester::NeighborhoodMDPDETestResidual residual;
             const auto test_input{
@@ -739,7 +953,7 @@ void RunSimulationTestOnNeighborDistance(const RHBMTestExecutionContext & option
                         model_par_prior,
                         scenario,
                         error_sigma,
-                        scenario.distance_list[static_cast<size_t>(i)],
+                        scenario.distance_list.at(i),
                         true))
             };
             rhbm_tester::RunBetaMDPDEWithNeighborhoodTest(
@@ -751,27 +965,28 @@ void RunSimulationTestOnNeighborDistance(const RHBMTestExecutionContext & option
 
             sampling_entries_list.emplace_back(test_input.sampling_summaries.front());
 
-            mean_matrix_ols.col(i) = residual.no_cut_ols.mean;
-            sigma_matrix_ols.col(i) = residual.no_cut_ols.sigma;
-            mean_matrix_mdpde.col(i) = residual.no_cut_mdpde.mean;
-            sigma_matrix_mdpde.col(i) = residual.no_cut_mdpde.sigma;
-            mean_matrix_train.col(i) = residual.cut_mdpde.mean;
-            sigma_matrix_train.col(i) = residual.cut_mdpde.sigma;
+            AppendResidualCurvePoint(
+                panel.curves.at(0),
+                scenario.distance_list.at(i),
+                residual.no_cut_ols);
+            AppendResidualCurvePoint(
+                panel.curves.at(1),
+                scenario.distance_list.at(i),
+                residual.no_cut_mdpde);
+            AppendResidualCurvePoint(
+                panel.curves.at(2),
+                scenario.distance_list.at(i),
+                residual.cut_mdpde);
 
             Logger::Log(LogLevel::Info,
-                std::string("Distance: ") + std::to_string(scenario.distance_list[static_cast<size_t>(i)])
-                + " , OLS: " + std::to_string(mean_matrix_ols.col(i)(0)) + " +- " + std::to_string(sigma_matrix_ols.col(i)(0))
-                + " , MDPDE: " + std::to_string(mean_matrix_mdpde.col(i)(0)) + " +- " + std::to_string(sigma_matrix_mdpde.col(i)(0))
-                + " , Train: " + std::to_string(mean_matrix_train.col(i)(0)) + " +- " + std::to_string(sigma_matrix_train.col(i)(0))
+                std::string("Distance: ") + std::to_string(scenario.distance_list.at(i))
+                + " , OLS: " + std::to_string(residual.no_cut_ols.mean(0)) + " +- " + std::to_string(residual.no_cut_ols.sigma(0))
+                + " , MDPDE: " + std::to_string(residual.no_cut_mdpde.mean(0)) + " +- " + std::to_string(residual.no_cut_mdpde.sigma(0))
+                + " , Train: " + std::to_string(residual.cut_mdpde.mean(0)) + " +- " + std::to_string(residual.cut_mdpde.sigma(0))
                 + " (Alpha-R = " + std::to_string(residual.trained_alpha_r_average) + ")"
             );
         }
-        mean_matrix_ols_list.emplace_back(mean_matrix_ols);
-        mean_matrix_mdpde_list.emplace_back(mean_matrix_mdpde);
-        mean_matrix_train_list.emplace_back(mean_matrix_train);
-        sigma_matrix_ols_list.emplace_back(sigma_matrix_ols);
-        sigma_matrix_mdpde_list.emplace_back(sigma_matrix_mdpde);
-        sigma_matrix_train_list.emplace_back(sigma_matrix_train);
+        plot_request.panels.emplace_back(std::move(panel));
 
         if (!is_print_sampling_summary)
         {
@@ -784,28 +999,14 @@ void RunSimulationTestOnNeighborDistance(const RHBMTestExecutionContext & option
         }
     }
 
-    PrintDataOutlierResult(
-        options,
-        "bias_from_neighbor_atom.pdf",
-        scenario.distance_list,
-        mean_matrix_ols_list, mean_matrix_mdpde_list, mean_matrix_train_list,
-        sigma_matrix_ols_list, sigma_matrix_mdpde_list, sigma_matrix_train_list, true
-    );
+    PrintDataOutlierResult(options, plot_request);
 }
 
 void PrintDataOutlierResult(
     const RHBMTestExecutionContext & options,
-    const std::string & name,
-    const std::vector<double> & outlier_list,
-    const std::vector<Eigen::MatrixXd> & mean_matrix_ols_list,
-    const std::vector<Eigen::MatrixXd> & mean_matrix_mdpde_list,
-    const std::vector<Eigen::MatrixXd> & mean_matrix_train_list,
-    const std::vector<Eigen::MatrixXd> & sigma_matrix_ols_list,
-    const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list,
-    const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list,
-    bool is_neighbor_distance)
+    const ResidualPlotRequest & request)
 {
-    auto file_path{ options.output_folder / name };
+    auto file_path{ options.output_folder / request.output_name };
     Logger::Log(LogLevel::Info, " RHBMTestCommand::PrintDataOutlierResult");
 
     std::vector<std::string> title_y_list{
@@ -824,46 +1025,30 @@ void PrintDataOutlierResult(
     );
     root_helper::PrintCanvasOpen(canvas.get(), file_path);
 
-    std::vector<std::unique_ptr<TGraphErrors>> graph_ols_list[col_size][row_size];
-    std::vector<std::unique_ptr<TGraphErrors>> graph_mdpde_list[col_size][row_size];
-    std::vector<std::unique_ptr<TGraphErrors>> graph_train_list[col_size][row_size];
-    std::vector<double> y_array[col_size][row_size];
+    std::vector<std::unique_ptr<TGraphErrors>> graph_list[col_size][row_size];
+    std::vector<ResidualCurveKind> graph_kind_list[col_size][row_size];
     std::vector<double> global_y_array[row_size];
     for (size_t i = 0; i < col_size; i++)
     {
+        const auto & panel{ request.panels.at(i) };
         for (size_t j = 0; j < row_size; j++)
         {
-            auto graph_ols{ root_helper::CreateGraphErrors() };
-            auto graph_mdpde{ root_helper::CreateGraphErrors() };
-            auto graph_train{ root_helper::CreateGraphErrors() };
-            for (int p = 0; p < static_cast<int>(outlier_list.size()); p++)
+            for (const auto & curve : panel.curves)
             {
-                auto x_value{ (is_neighbor_distance) ?
-                    outlier_list.at(static_cast<size_t>(p)) * -1.0:
-                    outlier_list.at(static_cast<size_t>(p)) * 100.0
-                };
-                auto mean_ols{ mean_matrix_ols_list.at(i).col(p)(static_cast<int>(j)) };
-                auto sigma_ols{ sigma_matrix_ols_list.at(i).col(p)(static_cast<int>(j)) };
-                auto mean_mdpde{ mean_matrix_mdpde_list.at(i).col(p)(static_cast<int>(j)) };
-                auto sigma_mdpde{ sigma_matrix_mdpde_list.at(i).col(p)(static_cast<int>(j)) };
-                auto mean_train{ mean_matrix_train_list.at(i).col(p)(static_cast<int>(j)) };
-                auto sigma_train{ sigma_matrix_train_list.at(i).col(p)(static_cast<int>(j)) };
-                graph_ols->SetPoint(p, x_value, mean_ols);
-                graph_ols->SetPointError(p, 0.0, sigma_ols);
-                graph_mdpde->SetPoint(p, x_value, mean_mdpde);
-                graph_mdpde->SetPointError(p, 0.0, sigma_mdpde);
-                graph_train->SetPoint(p, x_value, mean_train);
-                graph_train->SetPointError(p, 0.0, sigma_train);
-                y_array[i][j].emplace_back(mean_ols);
-                y_array[i][j].emplace_back(mean_mdpde);
-                y_array[i][j].emplace_back(mean_train);
-                global_y_array[j].emplace_back(mean_ols);
-                global_y_array[j].emplace_back(mean_mdpde);
-                global_y_array[j].emplace_back(mean_train);
+                auto graph{ root_helper::CreateGraphErrors() };
+                for (size_t p = 0; p < curve.points.size(); p++)
+                {
+                    const auto & point{ curve.points.at(p) };
+                    const auto x_value{ ScaleResidualPlotX(point.x, request.x_axis_mode) };
+                    const auto mean{ point.residual.mean(static_cast<int>(j)) };
+                    const auto sigma{ point.residual.sigma(static_cast<int>(j)) };
+                    graph->SetPoint(static_cast<int>(p), x_value, mean);
+                    graph->SetPointError(static_cast<int>(p), 0.0, sigma);
+                    global_y_array[j].emplace_back(mean);
+                }
+                graph_kind_list[i][j].emplace_back(curve.kind);
+                graph_list[i][j].emplace_back(std::move(graph));
             }
-            graph_ols_list[i][j].emplace_back(std::move(graph_ols));
-            graph_mdpde_list[i][j].emplace_back(std::move(graph_mdpde));
-            graph_train_list[i][j].emplace_back(std::move(graph_train));
         }
     }
 
@@ -873,9 +1058,9 @@ void PrintDataOutlierResult(
     double y_max[row_size]{ 0.0 };
     for (size_t i = 0; i < col_size; i++)
     {
-        x_min[i] = (options.options.tester_choice == TesterType::MODEL_ALPHA_DATA) ? -2.0 : -0.7;
-        x_max[i] = (options.options.tester_choice == TesterType::MODEL_ALPHA_DATA) ? 47.0 : 22.0;
-        if (is_neighbor_distance)
+        x_min[i] = (request.flavor == ResidualPlotFlavor::ModelAlphaData) ? -2.0 : -0.7;
+        x_max[i] = (request.flavor == ResidualPlotFlavor::ModelAlphaData) ? 47.0 : 22.0;
+        if (request.x_axis_mode == ResidualXAxisMode::NeighborDistance)
         {
             x_min[i] = -2.6;
             x_max[i] = -0.8;
@@ -892,7 +1077,6 @@ void PrintDataOutlierResult(
     std::unique_ptr<TPaveText> resolution_text[col_size];
     std::unique_ptr<TPaveText> title_x_text[col_size];
     std::unique_ptr<TPaveText> title_y_text[row_size];
-    double error_value[3]{ 0.0, 2.5, 5.0 };
     for (int i = 0; i < col_size; i++)
     {
         for (int j = 0; j < row_size; j++)
@@ -918,29 +1102,12 @@ void PrintDataOutlierResult(
             frame[i][j]->SetStats(0);
             frame[i][j]->Draw("Y+");
 
-            short color_ols{ kAzure };
-            short color_mdpde{ kGreen+2 };
-            short color_train{ kRed };
-            for (auto & graph : graph_ols_list[i][par_id])
+            for (size_t graph_index = 0; graph_index < graph_list[i][par_id].size(); graph_index++)
             {
-                root_helper::SetMarkerAttribute(graph.get(), 24, 1.5f, color_ols);
-                root_helper::SetLineAttribute(graph.get(), 2, 2, color_ols);
-                root_helper::SetFillAttribute(graph.get(), 1001, color_ols, 0.2f);
-                graph->Draw("PL3");
-            }
-            for (auto & graph : graph_mdpde_list[i][par_id])
-            {
-                root_helper::SetMarkerAttribute(graph.get(), 25, 1.5f, color_mdpde);
-                root_helper::SetLineAttribute(graph.get(), 1, 2, color_mdpde);
-                root_helper::SetFillAttribute(graph.get(), 1001, color_mdpde, 0.2f);
-                graph->Draw("PL3");
-            }
-            for (auto & graph : graph_train_list[i][par_id])
-            {
-                root_helper::SetMarkerAttribute(graph.get(), 20, 1.5f, color_train);
-                root_helper::SetLineAttribute(graph.get(), 3, 2, color_train);
-                root_helper::SetFillAttribute(graph.get(), 1001, color_train, 0.2f);
-                if (options.options.tester_choice != TesterType::MODEL_ALPHA_DATA)
+                const auto kind{ graph_kind_list[i][par_id].at(graph_index) };
+                auto & graph{ graph_list[i][par_id].at(graph_index) };
+                ApplyResidualCurveStyle(graph.get(), request.flavor, kind);
+                if (ShouldDrawResidualCurve(request.flavor, kind))
                 {
                     graph->Draw("PL3");
                 }
@@ -965,7 +1132,7 @@ void PrintDataOutlierResult(
                 root_helper::SetPaveAttribute(title_x_text[i].get(), 0, 0.2);
                 root_helper::SetTextAttribute(title_x_text[i].get(), 45.0f, 133, 22);
                 root_helper::SetFillAttribute(title_x_text[i].get(), 1001, kRed+1, 0.5f);
-                title_x_text[i]->AddText(Form("#sigma_{#epsilon} = %.1f%% D_{max}", error_value[i]));
+                title_x_text[i]->AddText(request.panels.at(static_cast<size_t>(i)).label.data());
                 title_x_text[i]->Draw();
             }
         }
@@ -984,21 +1151,13 @@ void PrintDataOutlierResult(
     root_helper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
     legend->SetMargin(0.25f);
     legend->SetNColumns(3);
-    if (options.options.tester_choice == TesterType::MODEL_ALPHA_DATA)
+    for (const auto kind : GetResidualLegendOrder(request.flavor))
     {
-        legend->AddEntry(graph_ols_list[0][0].front().get(),
-            "MDPDE (#alpha_{r} = 0.1)", "plf");
-        legend->AddEntry(graph_mdpde_list[0][0].front().get(),
-            "MDPDE (#alpha_{r} = 0.4)", "plf");
-    }
-    else
-    {
-        legend->AddEntry(graph_train_list[0][0].front().get(),
-            "MDPDE (w/ Sampling Scheme)", "plf");
-        legend->AddEntry(graph_mdpde_list[0][0].front().get(),
-            "MDPDE", "plf");
-        legend->AddEntry(graph_ols_list[0][0].front().get(),
-            "Ordinary Least Squares", "plf");
+        auto * graph{ FindResidualGraph(graph_list[0][0], graph_kind_list[0][0], kind) };
+        if (graph != nullptr)
+        {
+            legend->AddEntry(graph, GetResidualLegendLabel(request.flavor, kind).data(), "plf");
+        }
     }
     legend->Draw();
 
@@ -1012,7 +1171,7 @@ void PrintDataOutlierResult(
     root_helper::SetPaveTextDefaultStyle(bottom_title_text.get());
     root_helper::SetFillAttribute(bottom_title_text.get(), 4000);
     root_helper::SetTextAttribute(bottom_title_text.get(), 45.0f, 133, 22);
-    if (is_neighbor_distance)
+    if (request.x_axis_mode == ResidualXAxisMode::NeighborDistance)
     {
         bottom_title_text->AddText("Distance to Neighbor Atom (Angstrom)");
     }
@@ -1045,30 +1204,13 @@ void PrintDataOutlierResult(
 
 void PrintMemberOutlierResult(
     const RHBMTestExecutionContext & options,
-    const std::string & name,
-    const std::vector<double> & outlier_list,
-    const std::vector<Eigen::MatrixXd> & mean_matrix_median_list,
-    const std::vector<Eigen::MatrixXd> & mean_matrix_mdpde_list,
-    const std::vector<Eigen::MatrixXd> & mean_matrix_train_list,
-    const std::vector<Eigen::MatrixXd> & sigma_matrix_median_list,
-    const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list,
-    const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list)
+    const ResidualPlotRequest & request)
 {
-    auto file_path{ options.output_folder / name };
+    auto file_path{ options.output_folder / request.output_name };
     Logger::Log(LogLevel::Info, " RHBMTestCommand::PrintMemberOutlierResult");
-    (void)outlier_list;
-    (void)mean_matrix_median_list;
-    (void)mean_matrix_mdpde_list;
-    (void)mean_matrix_train_list;
-    (void)sigma_matrix_median_list;
-    (void)sigma_matrix_mdpde_list;
-    (void)sigma_matrix_train_list;
 
     std::vector<std::string> title_y_list{
         "Amplitude #font[2]{A}", "Width #tau"
-    };
-    std::vector<std::string> outlier_type_list{
-        "#font[2]{A}", "#tau"
     };
 
     #ifdef HAVE_ROOT
@@ -1083,39 +1225,30 @@ void PrintMemberOutlierResult(
     );
     root_helper::PrintCanvasOpen(canvas.get(), file_path);
 
-    std::vector<std::unique_ptr<TGraphErrors>> graph_ols_list[col_size][row_size];
-    std::vector<std::unique_ptr<TGraphErrors>> graph_mdpde_list[col_size][row_size];
-    std::vector<std::unique_ptr<TGraphErrors>> graph_train_list[col_size][row_size];
+    std::vector<std::unique_ptr<TGraphErrors>> graph_list[col_size][row_size];
+    std::vector<ResidualCurveKind> graph_kind_list[col_size][row_size];
     std::vector<double> global_y_array;
     for (size_t i = 0; i < col_size; i++)
     {
+        const auto & panel{ request.panels.at(i) };
         for (size_t j = 0; j < row_size; j++)
         {
-            auto graph_ols{ root_helper::CreateGraphErrors() };
-            auto graph_mdpde{ root_helper::CreateGraphErrors() };
-            auto graph_train{ root_helper::CreateGraphErrors() };
-            for (int p = 0; p < static_cast<int>(outlier_list.size()); p++)
+            for (const auto & curve : panel.curves)
             {
-                auto x_value{ outlier_list.at(static_cast<size_t>(p)) * 100.0 };
-                auto mean_ols{ mean_matrix_median_list.at(i).col(p)(static_cast<int>(j)) };
-                auto sigma_ols{ sigma_matrix_median_list.at(i).col(p)(static_cast<int>(j)) };
-                auto mean_mdpde{ mean_matrix_mdpde_list.at(i).col(p)(static_cast<int>(j)) };
-                auto sigma_mdpde{ sigma_matrix_mdpde_list.at(i).col(p)(static_cast<int>(j)) };
-                auto mean_train{ mean_matrix_train_list.at(i).col(p)(static_cast<int>(j)) };
-                auto sigma_train{ sigma_matrix_train_list.at(i).col(p)(static_cast<int>(j)) };
-                graph_ols->SetPoint(p, x_value, mean_ols);
-                graph_ols->SetPointError(p, 0.0, sigma_ols);
-                graph_mdpde->SetPoint(p, x_value, mean_mdpde);
-                graph_mdpde->SetPointError(p, 0.0, sigma_mdpde);
-                graph_train->SetPoint(p, x_value, mean_train);
-                graph_train->SetPointError(p, 0.0, sigma_train);
-                global_y_array.emplace_back(mean_ols);
-                global_y_array.emplace_back(mean_mdpde);
-                global_y_array.emplace_back(mean_train);
+                auto graph{ root_helper::CreateGraphErrors() };
+                for (size_t p = 0; p < curve.points.size(); p++)
+                {
+                    const auto & point{ curve.points.at(p) };
+                    const auto x_value{ ScaleResidualPlotX(point.x, request.x_axis_mode) };
+                    const auto mean{ point.residual.mean(static_cast<int>(j)) };
+                    const auto sigma{ point.residual.sigma(static_cast<int>(j)) };
+                    graph->SetPoint(static_cast<int>(p), x_value, mean);
+                    graph->SetPointError(static_cast<int>(p), 0.0, sigma);
+                    global_y_array.emplace_back(mean);
+                }
+                graph_kind_list[i][j].emplace_back(curve.kind);
+                graph_list[i][j].emplace_back(std::move(graph));
             }
-            graph_ols_list[i][j].emplace_back(std::move(graph_ols));
-            graph_mdpde_list[i][j].emplace_back(std::move(graph_mdpde));
-            graph_train_list[i][j].emplace_back(std::move(graph_train));
         }
     }
 
@@ -1125,8 +1258,8 @@ void PrintMemberOutlierResult(
     double y_max[row_size]{ 0.0 };
     for (size_t i = 0; i < col_size; i++)
     {
-        x_min[i] = (options.options.tester_choice == TesterType::MODEL_ALPHA_MEMBER) ? -2.0 : -0.7;
-        x_max[i] = (options.options.tester_choice == TesterType::MODEL_ALPHA_MEMBER) ? 47.0 : 22.0;
+        x_min[i] = (request.flavor == ResidualPlotFlavor::ModelAlphaMember) ? -2.0 : -0.7;
+        x_max[i] = (request.flavor == ResidualPlotFlavor::ModelAlphaMember) ? 47.0 : 22.0;
     }
     auto y_range{ array_helper::ComputeScalingRangeTuple(global_y_array, 0.3) };
     for (size_t j = 0; j < row_size; j++)
@@ -1164,29 +1297,12 @@ void PrintMemberOutlierResult(
             frame[i][j]->SetStats(0);
             frame[i][j]->Draw("Y+");
 
-            short color_ols{ kAzure };
-            short color_mdpde{ kRed };
-            short color_train{ kGreen+1 };
-            for (auto & graph : graph_ols_list[i][par_id])
+            for (size_t graph_index = 0; graph_index < graph_list[i][par_id].size(); graph_index++)
             {
-                root_helper::SetMarkerAttribute(graph.get(), 24, 1.5f, color_ols);
-                root_helper::SetLineAttribute(graph.get(), 2, 2, color_ols);
-                root_helper::SetFillAttribute(graph.get(), 1001, color_ols, 0.2f);
-                graph->Draw("PL3");
-            }
-            for (auto & graph : graph_mdpde_list[i][par_id])
-            {
-                root_helper::SetMarkerAttribute(graph.get(), 20, 1.5f, color_mdpde);
-                root_helper::SetLineAttribute(graph.get(), 1, 2, color_mdpde);
-                root_helper::SetFillAttribute(graph.get(), 1001, color_mdpde, 0.2f);
-                graph->Draw("PL3");
-            }
-            for (auto & graph : graph_train_list[i][par_id])
-            {
-                root_helper::SetMarkerAttribute(graph.get(), 25, 1.5f, color_train);
-                root_helper::SetLineAttribute(graph.get(), 3, 2, color_train);
-                root_helper::SetFillAttribute(graph.get(), 1001, color_train, 0.2f);
-                if (options.options.tester_choice != TesterType::MODEL_ALPHA_MEMBER)
+                const auto kind{ graph_kind_list[i][par_id].at(graph_index) };
+                auto & graph{ graph_list[i][par_id].at(graph_index) };
+                ApplyResidualCurveStyle(graph.get(), request.flavor, kind);
+                if (ShouldDrawResidualCurve(request.flavor, kind))
                 {
                     graph->Draw("PL3");
                 }
@@ -1211,9 +1327,7 @@ void PrintMemberOutlierResult(
                 root_helper::SetPaveAttribute(title_x_text[i].get(), 0, 0.2);
                 root_helper::SetTextAttribute(title_x_text[i].get(), 45.0f, 133, 22);
                 root_helper::SetFillAttribute(title_x_text[i].get(), 1001, kRed+1, 0.5f);
-                title_x_text[i]->AddText(
-                    Form("Outlier in %s", outlier_type_list[static_cast<size_t>(i)].data())
-                );
+                title_x_text[i]->AddText(request.panels.at(static_cast<size_t>(i)).label.data());
                 title_x_text[i]->Draw();
             }
         }
@@ -1231,21 +1345,13 @@ void PrintMemberOutlierResult(
     root_helper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
     legend->SetMargin(0.25f);
     legend->SetNColumns(3);
-    if (options.options.tester_choice == TesterType::MODEL_ALPHA_MEMBER)
+    for (const auto kind : GetResidualLegendOrder(request.flavor))
     {
-        legend->AddEntry(graph_ols_list[0][0].front().get(),
-            "MDPDE (#alpha_{g} = 0.2)", "plf");
-        legend->AddEntry(graph_mdpde_list[0][0].front().get(),
-            "MDPDE (#alpha_{g} = 0.5)", "plf");
-    }
-    else
-    {
-        legend->AddEntry(graph_train_list[0][0].front().get(),
-            "MDPDE (#alpha_{g} from Alg.5)", "plf");
-        legend->AddEntry(graph_mdpde_list[0][0].front().get(),
-            "MDPDE (#alpha_{g} = 0.2)", "plf");
-        legend->AddEntry(graph_ols_list[0][0].front().get(),
-            "MDPDE (#alpha_{g} = 0)", "plf");
+        auto * graph{ FindResidualGraph(graph_list[0][0], graph_kind_list[0][0], kind) };
+        if (graph != nullptr)
+        {
+            legend->AddEntry(graph, GetResidualLegendLabel(request.flavor, kind).data(), "plf");
+        }
     }
     legend->Draw();
 
