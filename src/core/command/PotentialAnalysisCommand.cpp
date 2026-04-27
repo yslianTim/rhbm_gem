@@ -424,8 +424,8 @@ void PotentialAnalysisCommand::RunAtomPotentialFittingWorkflow(
         Logger::Log(LogLevel::Info, "Class type: " + class_key);
 
         // Group Atom Potential Fitting
-        auto group_keys{ analysis_view.CollectAtomGroupKeys(class_key) };
-        auto group_key_size{ group_keys.size() };
+        auto group_key_list{ analysis_view.CollectAtomGroupKeys(class_key) };
+        auto group_key_size{ group_key_list.size() };
         std::atomic<size_t> key_count{ 0 };
 
 #ifdef USE_OPENMP
@@ -433,13 +433,12 @@ void PotentialAnalysisCommand::RunAtomPotentialFittingWorkflow(
 #endif
         for (size_t idx = 0; idx < group_key_size; idx++)
         {
-            auto group_key{ group_keys[idx] };
+            auto group_key{ group_key_list[idx] };
             const auto & atom_list{ analysis_view.GetAtomObjectList(group_key, class_key) };
-            auto group_size{ atom_list.size() };
             std::vector<RHBMMemberDataset> member_datasets;
             std::vector<RHBMBetaEstimateResult> member_fit_results;
-            member_datasets.reserve(group_size);
-            member_fit_results.reserve(group_size);
+            member_datasets.reserve(atom_list.size());
+            member_fit_results.reserve(atom_list.size());
             for (const auto & atom : atom_list)
             {
                 const auto local_entry{ local_entry_map.at(atom) };
@@ -449,13 +448,10 @@ void PotentialAnalysisCommand::RunAtomPotentialFittingWorkflow(
             auto alpha_g{ request.training_alpha_flag ?
                 analysis_view.GetAtomAlphaG(group_key, class_key) : request.alpha_g
             };
-            const auto input{
-                rhbm_helper::BuildGroupInput(member_datasets, member_fit_results)
-            };
             const auto result{
                 rhbm_helper::EstimateGroup(
                     alpha_g,
-                    input,
+                    rhbm_helper::BuildGroupInput(member_datasets, member_fit_results),
                     MakePotentialAnalysisExecutionOptions(ThreadSize(), true))
             };
 
@@ -612,8 +608,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     {
         rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_r_options;
         alpha_r_options.subset_size = 5;
-        alpha_r_options.execution_options =
-            MakePotentialAnalysisExecutionOptions(ThreadSize(), true);
+        alpha_r_options.execution_options = MakePotentialAnalysisExecutionOptions(ThreadSize(), true);
         alpha_r_options.progress_callback =
             [](std::size_t completed, std::size_t total)
             {
@@ -664,8 +659,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     {
         rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_g_options;
         alpha_g_options.subset_size = 10;
-        alpha_g_options.execution_options =
-            MakePotentialAnalysisExecutionOptions(ThreadSize(), true);
+        alpha_g_options.execution_options = MakePotentialAnalysisExecutionOptions(ThreadSize(), true);
         alpha_g_options.progress_callback =
             [](std::size_t completed, std::size_t total)
             {
@@ -759,11 +753,10 @@ void PotentialAnalysisCommand::RunLocalPotentialFitting(
     double alpha_r)
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunLocalPotentialFitting");
-    auto thread_size{ ThreadSize() };
-    std::atomic<size_t> atom_count{ 0 };
-    const auto & selected_atom_list{ model_object.GetSelectedAtoms() };
-    const auto selected_atom_size{ selected_atom_list.size() };
+    const auto thread_size{ ThreadSize() };
+    const auto selected_atom_size{ model_object.GetSelectedAtomCount() };
     auto local_entry_list{ BuildSelectedAtomLocalEntryViews(model_object) };
+    std::atomic<size_t> atom_count{ 0 };
     Logger::Log(LogLevel::Info,
         "Run Local atom fitting for " + std::to_string(selected_atom_size) + " atoms.");
 
