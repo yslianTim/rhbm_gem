@@ -412,9 +412,7 @@ SeriesPointList BuildLinearDatasetWithNeighborhood(
     double fit_range_max,
     std::mt19937 & generator)
 {
-    const auto sampling_entries{
-        GenerateNeighborhoodSamples(samples_per_radius, model, options)
-    };
+    const auto sampling_entries{ GenerateNeighborhoodSamples(samples_per_radius, model, options) };
     return BuildLinearDataset(
         sampling_entries,
         model,
@@ -446,9 +444,7 @@ Eigen::MatrixXd BuildRandomGausParameters(
         dist_outlier_list.emplace_back(dist_outlier_par);
     }
 
-    Eigen::MatrixXd gaus_par_matrix{
-        Eigen::MatrixXd::Zero(gaussian_parameter_size, member_size)
-    };
+    Eigen::MatrixXd gaus_par_matrix{ Eigen::MatrixXd::Zero(gaussian_parameter_size, member_size) };
     for (int i = 0; i < member_size; i++)
     {
         Eigen::VectorXd gaus_par{ Eigen::VectorXd::Zero(gaussian_parameter_size) };
@@ -473,12 +469,11 @@ Eigen::MatrixXd BuildBetaMatrix(
     const linearization_service::LinearizationSpec & linearization_spec)
 {
     const auto member_size{ static_cast<int>(gaus_array.cols()) };
-    Eigen::MatrixXd beta_matrix{
-        Eigen::MatrixXd::Zero(linearization_spec.basis_size, member_size)
-    };
+    Eigen::MatrixXd beta_matrix{ Eigen::MatrixXd::Zero(linearization_spec.basis_size, member_size) };
     for (int i = 0; i < member_size; i++)
     {
-        beta_matrix.col(i) = linearization_service::EncodeGaussianToBeta(linearization_spec, gaus_array.col(i));
+        beta_matrix.col(i) = linearization_service::EncodeGaussianToBeta(
+            linearization_spec, gaus_array.col(i));
     }
     return beta_matrix;
 }
@@ -491,16 +486,13 @@ TestDataFactory::TestDataFactory(
     int gaus_par_size,
     linearization_service::LinearizationSpec linearization_spec) :
     m_gaus_par_size{
-        ValidateGaussianParameterSize(
-            numeric_validation::RequirePositive(gaus_par_size, "gaus_par_size"))
+        ValidateGaussianParameterSize(numeric_validation::RequirePositive(gaus_par_size, "gaus_par_size"))
     },
     m_linearization_spec{ std::move(linearization_spec) },
     m_fit_range_min{ 0.0 },
     m_fit_range_max{ 1.0 }
 {
-    numeric_validation::RequirePositive(
-        m_linearization_spec.basis_size,
-        "linearization_spec basis_size");
+    numeric_validation::RequirePositive(m_linearization_spec.basis_size, "linearization_spec basis_size");
 }
 
 void TestDataFactory::SetFittingRange(double x_min, double x_max)
@@ -512,9 +504,7 @@ void TestDataFactory::SetFittingRange(double x_min, double x_max)
 
 RHBMBetaTestInput TestDataFactory::BuildBetaTestInput(const BetaScenario & scenario) const
 {
-    numeric_validation::RequirePositive(
-        scenario.sampling_entry_size,
-        "sampling_entry_size");
+    numeric_validation::RequirePositive(scenario.sampling_entry_size, "sampling_entry_size");
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
     ValidateGausParametersDimension(scenario.gaus_true, m_gaus_par_size);
     const auto gaussian_model{ BuildGaussianModel(scenario.gaus_true, m_gaus_par_size) };
@@ -582,9 +572,7 @@ RHBMMuTestInput TestDataFactory::BuildMuTestInput(const MuScenario & scenario) c
 RHBMNeighborhoodTestInput TestDataFactory::BuildNeighborhoodTestInput(
     const NeighborhoodScenario & scenario) const
 {
-    numeric_validation::RequirePositive(
-        scenario.sampling_entry_size,
-        "sampling_entry_size");
+    numeric_validation::RequirePositive(scenario.sampling_entry_size, "sampling_entry_size");
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
     ValidateGausParametersDimension(scenario.gaus_true, m_gaus_par_size);
     const auto gaussian_model{ BuildGaussianModel(scenario.gaus_true, m_gaus_par_size) };
