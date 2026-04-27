@@ -45,60 +45,7 @@ constexpr std::string_view kFitMaxOption{ "--fit-max" };
 constexpr std::string_view kFitRangeIssue{ "--fit-range" };
 constexpr std::string_view kAlphaROption{ "--alpha-r" };
 constexpr std::string_view kAlphaGOption{ "--alpha-g" };
-} // namespace
-
-RHBMTestCommand::RHBMTestCommand() :
-    CommandWithRequest<RHBMTestRequest>{}
-{
-}
-
-void RHBMTestCommand::NormalizeRequest()
-{
-    auto & request{ MutableRequest() };
-    CoerceEnum(
-        request.tester_choice,
-        kTesterOption,
-        TesterType::BENCHMARK,
-        "Tester choice");
-    CoerceFiniteNonNegativeScalar(
-        request.fit_range_min,
-        kFitMinOption,
-        0.0,
-        LogLevel::Error,
-        "Minimum fitting range");
-    CoerceFiniteNonNegativeScalar(
-        request.fit_range_max,
-        kFitMaxOption,
-        1.0,
-        LogLevel::Error,
-        "Maximum fitting range");
-    CoerceFinitePositiveScalar(
-        request.alpha_r,
-        kAlphaROption,
-        0.1,
-        LogLevel::Error,
-        "Alpha-R");
-    CoerceFinitePositiveScalar(
-        request.alpha_g,
-        kAlphaGOption,
-        0.2,
-        LogLevel::Error,
-        "Alpha-G");
-}
-
-void RHBMTestCommand::ValidateOptions()
-{
-    const auto & request{ RequestOptions() };
-    RequireCondition(
-        request.fit_range_min <= request.fit_range_max,
-        kFitRangeIssue,
-        "Expected --fit-min <= --fit-max.");
-}
-
-} // namespace rhbm_gem
-
-namespace rhbm_gem::detail {
-
+constexpr int kGausParSize{ GaussianModel3D::kParameterSize };
 struct RHBMTestExecutionContext
 {
     const RHBMTestRequest & options;
@@ -106,11 +53,6 @@ struct RHBMTestExecutionContext
     const std::filesystem::path & output_folder;
 };
 
-namespace {
-namespace rt = rhbm_gem::rhbm_tester;
-namespace tdf = rhbm_gem::test_data_factory;
-
-constexpr int kGausParSize{ GaussianModel3D::kParameterSize };
 struct BetaScenarioConfig
 {
     int replica_size;
@@ -135,13 +77,6 @@ struct NeighborDistanceScenarioConfig
     std::vector<double> error_list;
     std::vector<double> distance_list;
 };
-
-std::filesystem::path BuildOutputPath(
-    const RHBMTestExecutionContext & options,
-    std::string_view stem)
-{
-    return options.output_folder / std::string(stem);
-}
 
 Eigen::VectorXd MakeDefaultModelPrior()
 {
@@ -181,22 +116,22 @@ std::vector<double> BuildDescendingSweep(int count, double start, double step)
     return values;
 }
 
-tdf::TestDataFactory BuildDataFactory(const RHBMTestExecutionContext & options)
+test_data_factory::TestDataFactory BuildDataFactory(const RHBMTestExecutionContext & options)
 {
-    tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+    test_data_factory::TestDataFactory factory(
+        linearization_service::LinearizationSpec::DefaultDataset());
     factory.SetFittingRange(options.options.fit_range_min, options.options.fit_range_max);
     return factory;
 }
 
-tdf::TestDataFactory::NeighborhoodScenario BuildNeighborhoodScenario(
+test_data_factory::TestDataFactory::NeighborhoodScenario BuildNeighborhoodScenario(
     const Eigen::VectorXd & model_par_prior,
     const NeighborDistanceScenarioConfig & scenario,
     double error_sigma,
     double neighbor_distance,
     bool include_sampling_summary = false)
 {
-    return tdf::TestDataFactory::NeighborhoodScenario{
+    return test_data_factory::TestDataFactory::NeighborhoodScenario{
         model_par_prior,
         scenario.sampling_entry_size,
         error_sigma,
@@ -338,9 +273,8 @@ void SaveBenchmarkLinearizedDatasetReport(
     }
 
     LinePlotRequest request;
-    request.output_path = BuildOutputPath(
-        options,
-        "benchmark_linearized_cut_vs_no_cut_sigma_" + FormatSigmaToken(error_sigma) + ".pdf");
+    request.output_path = options.output_folder /
+        std::string("benchmark_cut_vs_no_cut_sigma_" + FormatSigmaToken(error_sigma) + ".pdf");
     request.title = "";
     request.x_axis.title = "Linearized Basis";
     request.shared_y_axis_title = "Linearized Response";
@@ -429,8 +363,8 @@ void RunSimulationTestOnBenchMark(const RHBMTestExecutionContext & options)
                         error_sigma,
                         distance))
             };
-            rt::BetaReplicaResidual residual_result;
-            rt::RunSingleBetaMDPDETest(
+            rhbm_tester::BetaReplicaResidual residual_result;
+            rhbm_tester::RunSingleBetaMDPDETest(
                 kGausParSize,
                 residual_result,
                 test_input.cut_datasets.front(),
@@ -497,7 +431,7 @@ void RunSimulationTestOnDataOutlier(const RHBMTestExecutionContext & options)
             std::vector<Eigen::VectorXd> residual_sigma_ols_list;
             std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
             const auto test_input{
-                data_factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
+                data_factory.BuildBetaTestInput(test_data_factory::TestDataFactory::BetaScenario{
                     model_par_prior,
                     scenario.sampling_entry_size,
                     error_sigma,
@@ -505,7 +439,7 @@ void RunSimulationTestOnDataOutlier(const RHBMTestExecutionContext & options)
                     scenario.replica_size
                 })
             };
-            rt::RunBetaMDPDETest(
+            rhbm_tester::RunBetaMDPDETest(
                 kGausParSize,
                 scenario.alpha_r_list,
                 residual_mean_ols_list, residual_mean_mdpde_list,
@@ -587,7 +521,7 @@ void RunSimulationTestOnMemberOutlier(const RHBMTestExecutionContext & options)
             std::vector<Eigen::VectorXd> residual_sigma_median_list;
             std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
             const auto test_input{
-                data_factory.BuildMuTestInput(tdf::TestDataFactory::MuScenario{
+                data_factory.BuildMuTestInput(test_data_factory::TestDataFactory::MuScenario{
                     scenario.member_size,
                     model_par_prior,
                     model_par_sigma,
@@ -597,7 +531,7 @@ void RunSimulationTestOnMemberOutlier(const RHBMTestExecutionContext & options)
                     scenario.replica_size
                 })
             };
-            rt::RunMuMDPDETest(
+            rhbm_tester::RunMuMDPDETest(
                 kGausParSize,
                 scenario.alpha_g_list,
                 residual_mean_median_list, residual_mean_mdpde_list,
@@ -663,7 +597,7 @@ void RunSimulationTestOnModelAlphaData(const RHBMTestExecutionContext & options)
             std::vector<Eigen::VectorXd> residual_sigma_ols_list;
             std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
             const auto test_input{
-                data_factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
+                data_factory.BuildBetaTestInput(test_data_factory::TestDataFactory::BetaScenario{
                     model_par_prior,
                     scenario.sampling_entry_size,
                     error_sigma,
@@ -671,7 +605,7 @@ void RunSimulationTestOnModelAlphaData(const RHBMTestExecutionContext & options)
                     scenario.replica_size
                 })
             };
-            rt::RunBetaMDPDETest(
+            rhbm_tester::RunBetaMDPDETest(
                 kGausParSize,
                 scenario.alpha_r_list,
                 residual_mean_ols_list, residual_mean_mdpde_list,
@@ -745,7 +679,7 @@ void RunSimulationTestOnModelAlphaMember(const RHBMTestExecutionContext & option
             std::vector<Eigen::VectorXd> residual_sigma_median_list;
             std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
             const auto test_input{
-                data_factory.BuildMuTestInput(tdf::TestDataFactory::MuScenario{
+                data_factory.BuildMuTestInput(test_data_factory::TestDataFactory::MuScenario{
                     scenario.member_size,
                     model_par_prior,
                     model_par_sigma,
@@ -755,7 +689,7 @@ void RunSimulationTestOnModelAlphaMember(const RHBMTestExecutionContext & option
                     scenario.replica_size
                 })
             };
-            rt::RunMuMDPDETest(
+            rhbm_tester::RunMuMDPDETest(
                 kGausParSize,
                 scenario.alpha_g_list,
                 residual_mean_median_list, residual_mean_mdpde_list,
@@ -831,7 +765,7 @@ void RunSimulationTestOnNeighborDistance(const RHBMTestExecutionContext & option
                         scenario.distance_list[static_cast<size_t>(i)],
                         true))
             };
-            rt::RunBetaMDPDEWithNeighborhoodTest(
+            rhbm_tester::RunBetaMDPDEWithNeighborhoodTest(
                 kGausParSize,
                 residual_mean_list, residual_sigma_list,
                 test_input,
@@ -866,7 +800,7 @@ void RunSimulationTestOnNeighborDistance(const RHBMTestExecutionContext & option
 
         if (!is_print_sampling_summary)
         {
-            detail::PrintAtomSamplingDataSummary(
+            PrintAtomSamplingDataSummary(
                 options,
                 "neighbor_atom_sampling_entries.pdf",
                 sampling_entries_list, scenario.distance_list
@@ -896,7 +830,7 @@ void PrintDataOutlierResult(
     const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list,
     bool is_neighbor_distance)
 {
-    auto file_path{ BuildOutputPath(options, name) };
+    auto file_path{ options.output_folder / name };
     Logger::Log(LogLevel::Info, " RHBMTestCommand::PrintDataOutlierResult");
 
     std::vector<std::string> title_y_list{
@@ -1145,7 +1079,7 @@ void PrintMemberOutlierResult(
     const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list,
     const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list)
 {
-    auto file_path{ BuildOutputPath(options, name) };
+    auto file_path{ options.output_folder / name };
     Logger::Log(LogLevel::Info, " RHBMTestCommand::PrintMemberOutlierResult");
     (void)outlier_list;
     (void)mean_matrix_median_list;
@@ -1381,7 +1315,7 @@ void PrintAtomSamplingDataSummary(
     const std::vector<double> & distance_list
 )
 {
-    auto file_path{ BuildOutputPath(options, name) };
+    auto file_path{ options.output_folder / name };
     Logger::Log(LogLevel::Info, " RHBMTestCommand::PrintAtomSamplingDataSummary");
 
     #ifdef HAVE_ROOT
@@ -1401,8 +1335,8 @@ void PrintAtomSamplingDataSummary(
     for (auto sampling_entries : sampling_entries_list)
     {
         auto neighbor_distance{ distance_list.at(count) };
-        auto data_graph{ detail::CreateDistanceToResponseGraph(sampling_entries) };
-        auto data_hist{ detail::CreateDistanceToResponseHistogram(sampling_entries, 40) };
+        auto data_graph{ CreateDistanceToResponseGraph(sampling_entries) };
+        auto data_hist{ CreateDistanceToResponseHistogram(sampling_entries, 40) };
 
         canvas->cd();
         for (int i = 0; i < pad_size; i++)
@@ -1528,9 +1462,57 @@ bool RunRHBMTestWorkflow(const RHBMTestExecutionContext & options)
 
 namespace rhbm_gem {
 
+RHBMTestCommand::RHBMTestCommand() :
+    CommandWithRequest<RHBMTestRequest>{}
+{
+}
+
+void RHBMTestCommand::NormalizeRequest()
+{
+    auto & request{ MutableRequest() };
+    CoerceEnum(
+        request.tester_choice,
+        kTesterOption,
+        TesterType::BENCHMARK,
+        "Tester choice");
+    CoerceFiniteNonNegativeScalar(
+        request.fit_range_min,
+        kFitMinOption,
+        0.0,
+        LogLevel::Error,
+        "Minimum fitting range");
+    CoerceFiniteNonNegativeScalar(
+        request.fit_range_max,
+        kFitMaxOption,
+        1.0,
+        LogLevel::Error,
+        "Maximum fitting range");
+    CoerceFinitePositiveScalar(
+        request.alpha_r,
+        kAlphaROption,
+        0.1,
+        LogLevel::Error,
+        "Alpha-R");
+    CoerceFinitePositiveScalar(
+        request.alpha_g,
+        kAlphaGOption,
+        0.2,
+        LogLevel::Error,
+        "Alpha-G");
+}
+
+void RHBMTestCommand::ValidateOptions()
+{
+    const auto & request{ RequestOptions() };
+    RequireCondition(
+        request.fit_range_min <= request.fit_range_max,
+        kFitRangeIssue,
+        "Expected --fit-min <= --fit-max.");
+}
+
 bool RHBMTestCommand::ExecuteImpl()
 {
-    return detail::RunRHBMTestWorkflow(detail::RHBMTestExecutionContext{
+    return RunRHBMTestWorkflow(RHBMTestExecutionContext{
         RequestOptions(),
         ThreadSize(),
         OutputFolder(),
