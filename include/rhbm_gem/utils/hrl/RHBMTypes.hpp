@@ -58,19 +58,6 @@ struct GaussianEstimate
         return amplitude * std::pow(Constants::two_pi * width * width, -1.5);
     }
 
-    RHBMBetaVector ToBeta() const
-    {
-        RHBMBetaVector coefficient_vector{ RHBMBetaVector::Zero(3) };
-        if (width == 0.0)
-        {
-            return coefficient_vector;
-        }
-        const auto width_square{ width * width };
-        coefficient_vector(0) = (amplitude <= 0.0) ?
-            0.0 : std::log(amplitude) - 1.5 * std::log(Constants::two_pi * width_square);
-        coefficient_vector(1) = 1.0 / width_square;
-        return coefficient_vector;
-    }
 };
 
 struct GaussianPosterior

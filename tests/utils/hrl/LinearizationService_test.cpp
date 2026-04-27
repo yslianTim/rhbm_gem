@@ -62,6 +62,21 @@ TEST(LinearizationServiceTest, EncodeGaussianToBetaMatchesClosedForm)
     EXPECT_NEAR(expected_beta1, beta(1), 1.0e-12);
 }
 
+TEST(LinearizationServiceTest, EncodeGaussianEstimateToBetaMatchesClosedForm)
+{
+    const rhbm_gem::GaussianEstimate estimate{ 2.0, 0.5 };
+    const auto beta{ ls::EncodeGaussianToBeta(DatasetLinearizationSpec(), estimate) };
+    const auto expected_beta0{
+        std::log(estimate.amplitude)
+            - 1.5 * std::log(Constants::two_pi * estimate.width * estimate.width)
+    };
+    const auto expected_beta1{ 1.0 / (estimate.width * estimate.width) };
+
+    ASSERT_EQ(beta.size(), 2);
+    EXPECT_NEAR(expected_beta0, beta(0), 1.0e-12);
+    EXPECT_NEAR(expected_beta1, beta(1), 1.0e-12);
+}
+
 TEST(LinearizationServiceTest, DecodeGroupEstimateMatchesClosedForm)
 {
     const auto estimate{

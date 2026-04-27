@@ -43,17 +43,9 @@ TEST(RHBMTypesTest, PublicRHBMTypesHeaderExposesStableGaussianValueMath)
     const auto expected_intensity{
         estimate.amplitude
         * std::pow(Constants::two_pi * estimate.width * estimate.width, -1.5) };
-    const auto beta{ estimate.ToBeta() };
 
-    ASSERT_EQ(beta.size(), 3);
     EXPECT_DOUBLE_EQ(estimate.GetParameter(2), expected_intensity);
     EXPECT_DOUBLE_EQ(estimate.Intensity(), expected_intensity);
-    EXPECT_DOUBLE_EQ(
-        beta(0),
-        std::log(estimate.amplitude)
-            - 1.5 * std::log(Constants::two_pi * estimate.width * estimate.width));
-    EXPECT_DOUBLE_EQ(beta(1), 1.0 / (estimate.width * estimate.width));
-    EXPECT_DOUBLE_EQ(beta(2), 0.0);
     EXPECT_DOUBLE_EQ(posterior.GetEstimate(2), expected_intensity);
     EXPECT_DOUBLE_EQ(
         posterior.GetVariance(2),
