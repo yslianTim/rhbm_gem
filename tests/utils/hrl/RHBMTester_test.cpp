@@ -49,7 +49,6 @@ TEST(RHBMTesterTest, RunBetaMDPDETestPopulatesResidualOutputs)
     const std::vector<double> alpha_r_list{ 0.0, 0.5 };
     const bool result{
         rt::RunBetaMDPDETest(
-            3,
             alpha_r_list,
             residual_mean_ols_list,
             residual_mean_mdpde_list,
@@ -67,19 +66,19 @@ TEST(RHBMTesterTest, RunBetaMDPDETestPopulatesResidualOutputs)
 
     for (const auto & residual : residual_mean_ols_list)
     {
-        EXPECT_EQ(residual.size(), 3);
+        EXPECT_EQ(residual.size(), rhbm_gem::GaussianModel3D::kParameterSize);
     }
     for (const auto & residual : residual_mean_mdpde_list)
     {
-        EXPECT_EQ(residual.size(), 3);
+        EXPECT_EQ(residual.size(), rhbm_gem::GaussianModel3D::kParameterSize);
     }
     for (const auto & residual : residual_sigma_ols_list)
     {
-        EXPECT_EQ(residual.size(), 3);
+        EXPECT_EQ(residual.size(), rhbm_gem::GaussianModel3D::kParameterSize);
     }
     for (const auto & residual : residual_sigma_mdpde_list)
     {
-        EXPECT_EQ(residual.size(), 3);
+        EXPECT_EQ(residual.size(), rhbm_gem::GaussianModel3D::kParameterSize);
     }
 }
 
@@ -108,7 +107,6 @@ TEST(RHBMTesterTest, RunMuMDPDETestPopulatesResidualOutputs)
     const std::vector<double> alpha_g_list{ 0.2 };
     const bool result{
         rt::RunMuMDPDETest(
-            3,
             alpha_g_list,
             residual_mean_median_list,
             residual_mean_mdpde_list,
@@ -154,7 +152,6 @@ TEST(RHBMTesterTest, RunBetaMDPDEWithNeighborhoodTestConsumesPreparedInputs)
 
     const bool result{
         rt::RunBetaMDPDEWithNeighborhoodTest(
-            3,
             residual_mean_list,
             residual_sigma_list,
             test_input,
@@ -193,7 +190,6 @@ TEST(RHBMTesterTest, RunBetaMDPDETestRejectsWrongSizedTruth)
 
     EXPECT_THROW(
         rt::RunBetaMDPDETest(
-            3,
             std::vector<double>{ 0.0 },
             residual_mean_ols_list,
             residual_mean_mdpde_list,

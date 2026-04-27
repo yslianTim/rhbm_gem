@@ -3,7 +3,6 @@
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
-#include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <array>
 #include <cmath>
@@ -14,9 +13,6 @@ namespace rhbm_gem::rhbm_tester
 
 namespace
 {
-namespace ls = rhbm_gem::linearization_service;
-namespace tdf = rhbm_gem::test_data_factory;
-
 constexpr std::size_t kAlphaRSubsetSize{ 5 };
 constexpr double kAlphaRMin{ 0.0 };
 constexpr double kAlphaRMax{ 2.0 };
@@ -35,27 +31,26 @@ RHBMExecutionOptions MakeTesterExecutionOptions()
     return options;
 }
 
-int ValidateGaussianParameterSize(int value)
+void ValidateGaussianTruthVector(
+    const Eigen::VectorXd & gaussian_truth,
+    const char * value_name)
 {
-    return rhbm_gem::numeric_validation::RequirePositive(value, "gaussian_parameter_size");
+    eigen_validation::RequireVectorSize(
+        gaussian_truth,
+        GaussianModel3D::kParameterSize,
+        value_name);
 }
 
-const ls::LinearizationSpec & MetricDecodeSpec()
-{
-    static const auto spec{ ls::LinearizationSpec::DefaultMetricModel() };
-    return spec;
-}
-
-rhbm_gem::GaussianParameterVector CalculateNormalizedResidual(
+GaussianParameterVector CalculateNormalizedResidual(
     const RHBMBetaVector & linear_estimate,
-    const rhbm_gem::GaussianParameterVector & gaussian_truth)
+    const GaussianParameterVector & gaussian_truth)
 {
-    const auto gaussian_estimate{ ls::DecodeGroupBeta(MetricDecodeSpec(), linear_estimate) };
-    rhbm_gem::eigen_validation::RequireVectorSize(
-        gaussian_estimate,
-        gaussian_truth.rows(),
-        "gaussian"
-    );
+    ValidateGaussianTruthVector(gaussian_truth, "gaussian_truth");
+    const auto gaussian_estimate{
+        linearization_service::DecodeGroupBeta(
+            linearization_service::LinearizationSpec::DefaultMetricModel(), linear_estimate)
+    };
+    eigen_validation::RequireVectorSize(gaussian_estimate, gaussian_truth.rows(), "gaussian");
     return ((gaussian_estimate - gaussian_truth).array() / gaussian_truth.array()).matrix();
 }
 
@@ -72,25 +67,13 @@ Eigen::VectorXd CalculateReplicaSigma(
         / std::sqrt(static_cast<double>(residual_matrix.cols() - 1));
 }
 
-struct MuReplicaResidual
-{
-    Eigen::VectorXd median_residual;
-    Eigen::VectorXd mdpde_residual;
-};
-
-struct NeighborhoodReplicaResidual
-{
-    std::array<Eigen::VectorXd, 3> residuals;
-    double trained_alpha_r{ 0.0 };
-};
-
 BetaReplicaResidual EstimateBetaReplicaResidual(
     const RHBMMemberDataset & dataset,
     const Eigen::VectorXd & gaus_true,
     double alpha_r,
     const RHBMExecutionOptions & options)
 {
-    const auto beta_result{ rhbm_gem::rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset, options) };
+    const auto beta_result{ rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset, options) };
     return BetaReplicaResidual{
         CalculateNormalizedResidual(beta_result.beta_ols, gaus_true),
         CalculateNormalizedResidual(beta_result.beta_mdpde, gaus_true)
@@ -103,8 +86,8 @@ MuReplicaResidual EstimateMuReplicaResidual(
     double alpha_g,
     const RHBMExecutionOptions & options)
 {
-    const auto mdpde_result{ rhbm_gem::rhbm_helper::EstimateMuMDPDE(alpha_g, beta_matrix, options) };
-    const auto ols_result{ rhbm_gem::rhbm_helper::EstimateMuMDPDE(0.0, beta_matrix, options) };
+    const auto mdpde_result{ rhbm_helper::EstimateMuMDPDE(alpha_g, beta_matrix, options) };
+    const auto ols_result{ rhbm_helper::EstimateMuMDPDE(0.0, beta_matrix, options) };
     return MuReplicaResidual{
         CalculateNormalizedResidual(ols_result.mu_mdpde, gaus_true),
         CalculateNormalizedResidual(mdpde_result.mu_mdpde, gaus_true)
@@ -115,8 +98,8 @@ NeighborhoodReplicaResidual EstimateNeighborhoodReplicaResidual(
     const RHBMMemberDataset & no_cut_dataset,
     const RHBMMemberDataset & cut_dataset,
     const Eigen::VectorXd & gaus_true,
-    const rhbm_gem::rhbm_trainer::AlphaTrainer & alpha_r_trainer,
-    const rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions & alpha_r_training_options,
+    const rhbm_trainer::AlphaTrainer & alpha_r_trainer,
+    const rhbm_trainer::AlphaTrainer::AlphaTrainingOptions & alpha_r_training_options,
     const RHBMExecutionOptions & options)
 {
     const auto no_cut_training_result{
@@ -170,18 +153,13 @@ void FinalizeResidualStatistics(
 } // namespace
 
 bool RunSingleBetaMDPDETest(
-    int gaussian_parameter_size,
     BetaReplicaResidual & result,
     const RHBMMemberDataset & dataset,
     const Eigen::VectorXd & gaus_true,
     double alpha_r,
     int thread_size)
 {
-    const auto gaus_par_size{ ValidateGaussianParameterSize(gaussian_parameter_size) };
-    rhbm_gem::eigen_validation::RequireVectorSize(
-        gaus_true,
-        gaus_par_size,
-        "gaus_true");
+    ValidateGaussianTruthVector(gaus_true, "gaus_true");
     auto options{ MakeTesterExecutionOptions() };
     options.thread_size = thread_size;
     result = EstimateBetaReplicaResidual(dataset, gaus_true, alpha_r, options);
@@ -189,24 +167,19 @@ bool RunSingleBetaMDPDETest(
 }
 
 bool RunBetaMDPDETest(
-    int gaussian_parameter_size,
     const std::vector<double> & alpha_r_list,
     std::vector<Eigen::VectorXd> & residual_mean_ols_list,
     std::vector<Eigen::VectorXd> & residual_mean_mdpde_list,
     std::vector<Eigen::VectorXd> & residual_sigma_ols_list,
     std::vector<Eigen::VectorXd> & residual_sigma_mdpde_list,
-    const tdf::RHBMBetaTestInput & test_input,
+    const test_data_factory::RHBMBetaTestInput & test_input,
     int thread_size)
 {
 #ifndef USE_OPENMP
     (void)thread_size;
 #endif
 
-    const auto gaus_par_size{ ValidateGaussianParameterSize(gaussian_parameter_size) };
-    rhbm_gem::eigen_validation::RequireVectorSize(
-        test_input.gaus_true,
-        gaus_par_size,
-        "test_input.gaus_true");
+    ValidateGaussianTruthVector(test_input.gaus_true, "test_input.gaus_true");
     const auto replica_size{ static_cast<int>(test_input.replica_datasets.size()) };
     if (replica_size <= 0)
     {
@@ -218,18 +191,22 @@ bool RunBetaMDPDETest(
     std::vector<Eigen::MatrixXd> residual_matrix_ols_list(alpha_size);
     std::vector<Eigen::MatrixXd> residual_matrix_mdpde_list(alpha_size);
     residual_matrix_ols_list.assign(
-        alpha_size, Eigen::MatrixXd::Zero(gaus_par_size, replica_size)
+        alpha_size, Eigen::MatrixXd::Zero(GaussianModel3D::kParameterSize, replica_size)
     );
     residual_matrix_mdpde_list.assign(
-        alpha_size, Eigen::MatrixXd::Zero(gaus_par_size, replica_size)
+        alpha_size, Eigen::MatrixXd::Zero(GaussianModel3D::kParameterSize, replica_size)
     );
-    residual_mean_ols_list.assign(alpha_size, Eigen::VectorXd::Zero(gaus_par_size));
-    residual_mean_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(gaus_par_size));
-    residual_sigma_ols_list.assign(alpha_size, Eigen::VectorXd::Zero(gaus_par_size));
-    residual_sigma_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(gaus_par_size));
+    residual_mean_ols_list.assign(
+        alpha_size, Eigen::VectorXd::Zero(GaussianModel3D::kParameterSize));
+    residual_mean_mdpde_list.assign(
+        alpha_size, Eigen::VectorXd::Zero(GaussianModel3D::kParameterSize));
+    residual_sigma_ols_list.assign(
+        alpha_size, Eigen::VectorXd::Zero(GaussianModel3D::kParameterSize));
+    residual_sigma_mdpde_list.assign(
+        alpha_size, Eigen::VectorXd::Zero(GaussianModel3D::kParameterSize));
 
-    const rhbm_gem::rhbm_trainer::AlphaTrainer alpha_r_trainer{ kAlphaRMin, kAlphaRMax, kAlphaRStep };
-    rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_r_training_options;
+    const rhbm_trainer::AlphaTrainer alpha_r_trainer{ kAlphaRMin, kAlphaRMax, kAlphaRStep };
+    rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_r_training_options;
     alpha_r_training_options.subset_size = kAlphaRSubsetSize;
     alpha_r_training_options.execution_options = MakeTesterExecutionOptions();
 
@@ -273,24 +250,19 @@ bool RunBetaMDPDETest(
 }
 
 bool RunMuMDPDETest(
-    int gaussian_parameter_size,
     const std::vector<double> & alpha_g_list,
     std::vector<Eigen::VectorXd> & residual_mean_median_list,
     std::vector<Eigen::VectorXd> & residual_mean_mdpde_list,
     std::vector<Eigen::VectorXd> & residual_sigma_median_list,
     std::vector<Eigen::VectorXd> & residual_sigma_mdpde_list,
-    const tdf::RHBMMuTestInput & test_input,
+    const test_data_factory::RHBMMuTestInput & test_input,
     int thread_size)
 {
 #ifndef USE_OPENMP
     (void)thread_size;
 #endif
 
-    const auto gaus_par_size{ ValidateGaussianParameterSize(gaussian_parameter_size) };
-    rhbm_gem::eigen_validation::RequireVectorSize(
-        test_input.gaus_true,
-        gaus_par_size,
-        "test_input.gaus_true");
+    ValidateGaussianTruthVector(test_input.gaus_true, "test_input.gaus_true");
     const auto replica_size{ static_cast<int>(test_input.replica_beta_matrices.size()) };
     if (replica_size <= 0)
     {
@@ -302,18 +274,22 @@ bool RunMuMDPDETest(
     std::vector<Eigen::MatrixXd> residual_matrix_median_list(alpha_size);
     std::vector<Eigen::MatrixXd> residual_matrix_mdpde_list(alpha_size);
     residual_matrix_median_list.assign(
-        alpha_size, Eigen::MatrixXd::Zero(gaus_par_size, replica_size)
+        alpha_size, Eigen::MatrixXd::Zero(GaussianModel3D::kParameterSize, replica_size)
     );
     residual_matrix_mdpde_list.assign(
-        alpha_size, Eigen::MatrixXd::Zero(gaus_par_size, replica_size)
+        alpha_size, Eigen::MatrixXd::Zero(GaussianModel3D::kParameterSize, replica_size)
     );
-    residual_mean_median_list.assign(alpha_size, Eigen::VectorXd::Zero(gaus_par_size));
-    residual_mean_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(gaus_par_size));
-    residual_sigma_median_list.assign(alpha_size, Eigen::VectorXd::Zero(gaus_par_size));
-    residual_sigma_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(gaus_par_size));
+    residual_mean_median_list.assign(
+        alpha_size, Eigen::VectorXd::Zero(GaussianModel3D::kParameterSize));
+    residual_mean_mdpde_list.assign(
+        alpha_size, Eigen::VectorXd::Zero(GaussianModel3D::kParameterSize));
+    residual_sigma_median_list.assign(
+        alpha_size, Eigen::VectorXd::Zero(GaussianModel3D::kParameterSize));
+    residual_sigma_mdpde_list.assign(
+        alpha_size, Eigen::VectorXd::Zero(GaussianModel3D::kParameterSize));
 
-    const rhbm_gem::rhbm_trainer::AlphaTrainer alpha_g_trainer{ kAlphaGMin, kAlphaGMax, kAlphaGStep };
-    rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_g_training_options;
+    const rhbm_trainer::AlphaTrainer alpha_g_trainer{ kAlphaGMin, kAlphaGMax, kAlphaGStep };
+    rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_g_training_options;
     alpha_g_training_options.subset_size = kAlphaGSubsetSize;
     alpha_g_training_options.execution_options = MakeTesterExecutionOptions();
 
@@ -364,10 +340,9 @@ bool RunMuMDPDETest(
 }
 
 bool RunBetaMDPDEWithNeighborhoodTest(
-    int gaussian_parameter_size,
     std::vector<Eigen::VectorXd> & residual_mean_list,
     std::vector<Eigen::VectorXd> & residual_sigma_list,
-    const tdf::RHBMNeighborhoodTestInput & test_input,
+    const test_data_factory::RHBMNeighborhoodTestInput & test_input,
     double & training_alpha_r_average,
     int thread_size,
     double angle)
@@ -377,11 +352,7 @@ bool RunBetaMDPDEWithNeighborhoodTest(
 #endif
     (void)angle;
 
-    const auto gaus_par_size{ ValidateGaussianParameterSize(gaussian_parameter_size) };
-    rhbm_gem::eigen_validation::RequireVectorSize(
-        test_input.gaus_true,
-        gaus_par_size,
-        "test_input.gaus_true");
+    ValidateGaussianTruthVector(test_input.gaus_true, "test_input.gaus_true");
     const auto replica_size{ static_cast<int>(test_input.no_cut_datasets.size()) };
     if (replica_size <= 0)
     {
@@ -394,12 +365,15 @@ bool RunBetaMDPDEWithNeighborhoodTest(
 
     const size_t method_size{ 3 }; // OLS (no cut), MDPDE (no cut and cut)
     std::vector<Eigen::MatrixXd> replica_residual_list(method_size);
-    replica_residual_list.assign(method_size, Eigen::MatrixXd::Zero(gaus_par_size, replica_size));
-    residual_mean_list.assign(method_size, Eigen::VectorXd::Zero(gaus_par_size));
-    residual_sigma_list.assign(method_size, Eigen::VectorXd::Zero(gaus_par_size));
+    replica_residual_list.assign(
+        method_size, Eigen::MatrixXd::Zero(GaussianModel3D::kParameterSize, replica_size));
+    residual_mean_list.assign(
+        method_size, Eigen::VectorXd::Zero(GaussianModel3D::kParameterSize));
+    residual_sigma_list.assign(
+        method_size, Eigen::VectorXd::Zero(GaussianModel3D::kParameterSize));
 
-    const rhbm_gem::rhbm_trainer::AlphaTrainer alpha_r_trainer{ kAlphaRMin, kAlphaRMax, kAlphaRStep };
-    rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_r_training_options;
+    const rhbm_trainer::AlphaTrainer alpha_r_trainer{ kAlphaRMin, kAlphaRMax, kAlphaRStep };
+    rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_r_training_options;
     alpha_r_training_options.subset_size = kAlphaRSubsetSize;
     alpha_r_training_options.execution_options = MakeTesterExecutionOptions();
 

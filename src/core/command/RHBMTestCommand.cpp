@@ -365,7 +365,6 @@ void RunSimulationTestOnBenchMark(const RHBMTestExecutionContext & options)
             };
             rhbm_tester::BetaReplicaResidual residual_result;
             rhbm_tester::RunSingleBetaMDPDETest(
-                kGausParSize,
                 residual_result,
                 test_input.cut_datasets.front(),
                 test_input.gaus_true,
@@ -440,7 +439,6 @@ void RunSimulationTestOnDataOutlier(const RHBMTestExecutionContext & options)
                 })
             };
             rhbm_tester::RunBetaMDPDETest(
-                kGausParSize,
                 scenario.alpha_r_list,
                 residual_mean_ols_list, residual_mean_mdpde_list,
                 residual_sigma_ols_list, residual_sigma_mdpde_list,
@@ -532,7 +530,6 @@ void RunSimulationTestOnMemberOutlier(const RHBMTestExecutionContext & options)
                 })
             };
             rhbm_tester::RunMuMDPDETest(
-                kGausParSize,
                 scenario.alpha_g_list,
                 residual_mean_median_list, residual_mean_mdpde_list,
                 residual_sigma_median_list, residual_sigma_mdpde_list,
@@ -606,7 +603,6 @@ void RunSimulationTestOnModelAlphaData(const RHBMTestExecutionContext & options)
                 })
             };
             rhbm_tester::RunBetaMDPDETest(
-                kGausParSize,
                 scenario.alpha_r_list,
                 residual_mean_ols_list, residual_mean_mdpde_list,
                 residual_sigma_ols_list, residual_sigma_mdpde_list,
@@ -690,7 +686,6 @@ void RunSimulationTestOnModelAlphaMember(const RHBMTestExecutionContext & option
                 })
             };
             rhbm_tester::RunMuMDPDETest(
-                kGausParSize,
                 scenario.alpha_g_list,
                 residual_mean_median_list, residual_mean_mdpde_list,
                 residual_sigma_median_list, residual_sigma_mdpde_list,
@@ -766,7 +761,6 @@ void RunSimulationTestOnNeighborDistance(const RHBMTestExecutionContext & option
                         true))
             };
             rhbm_tester::RunBetaMDPDEWithNeighborhoodTest(
-                kGausParSize,
                 residual_mean_list, residual_sigma_list,
                 test_input,
                 training_alpha_r_average,
