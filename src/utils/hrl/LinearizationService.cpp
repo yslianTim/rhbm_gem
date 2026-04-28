@@ -72,22 +72,21 @@ std::tuple<std::vector<double>, double> BuildLogQuadraticBasisVector(double x, d
         std::log(y));
 }
 
-RHBMParameterVector BuildLinearModelCoefficientVector(const GaussianModel3D & model)
+RHBMParameterVector BuildParameterVector(const GaussianModel3D & model)
 {
-    RHBMParameterVector linear_model_coeff{ RHBMParameterVector::Zero(3) };
+    RHBMParameterVector parameter_vector{ RHBMParameterVector::Zero(kLogQuadraticBasisSize) };
     const auto width{ model.GetWidth() };
     const auto amplitude{ model.GetAmplitude() };
     if (width == 0.0)
     {
-        return linear_model_coeff;
+        return parameter_vector;
     }
 
     const auto width_square{ width * width };
-    linear_model_coeff(0) = (amplitude <= 0.0) ?
+    parameter_vector(0) = (amplitude <= 0.0) ?
         0.0 : std::log(amplitude) - 1.5 * std::log(Constants::two_pi * width_square);
-    linear_model_coeff(1) = 1.0 / width_square;
-    linear_model_coeff(2) = model.GetIntercept();
-    return linear_model_coeff;
+    parameter_vector(1) = 1.0 / width_square;
+    return parameter_vector;
 }
 
 GaussianModel3D DecodeLogQuadratic2D(const RHBMParameterVector & linear_model)
@@ -274,8 +273,7 @@ RHBMParameterVector EncodeGaussianToParameterVector(
     const GaussianModel3D & gaussian_model)
 {
     (void)spec;
-    const auto encoded{ BuildLinearModelCoefficientVector(gaussian_model) };
-    return encoded.head(kLogQuadraticBasisSize);
+    return BuildParameterVector(gaussian_model);
 }
 
 GaussianModel3D DecodeParameterVector(
