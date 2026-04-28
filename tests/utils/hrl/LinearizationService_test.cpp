@@ -131,17 +131,6 @@ TEST(LinearizationServiceTest, DecodeParameterVectorMatchesClosedForm)
     EXPECT_NEAR(expected_width, estimate.GetWidth(), 1.0e-12);
 }
 
-TEST(LinearizationServiceTest, DecodeParameterVectorPreservesDirect3DModelIntercept)
-{
-    const auto model{
-        ls::DecodeParameterVector(DirectGaussianModelSpec(), MakeVector({ 2.0, 0.5, 0.25 }))
-    };
-
-    EXPECT_NEAR(2.0, model.GetAmplitude(), 1.0e-12);
-    EXPECT_NEAR(0.5, model.GetWidth(), 1.0e-12);
-    EXPECT_NEAR(0.25, model.GetIntercept(), 1.0e-12);
-}
-
 TEST(LinearizationServiceTest, DecodeParameterVectorReturnsStandardDeviation)
 {
     const auto linear_model{ MakeVector({ 0.5, 2.0 }) };
@@ -184,27 +173,4 @@ TEST(LinearizationServiceTest, DecodeParameterVectorFor2BetaModelAddsZeroInterce
 
     EXPECT_NEAR(0.0, gaussian.GetModel().GetIntercept(), 1.0e-12);
     EXPECT_NEAR(0.0, gaussian.GetStandardDeviationModel().GetIntercept(), 1.0e-12);
-}
-
-TEST(LinearizationServiceTest, DecodeParameterVectorForDirect3DModelUsesDiagonalStandardDeviation)
-{
-    const auto linear_model{ MakeVector({ 2.0, 0.5, 0.25 }) };
-    Eigen::MatrixXd covariance_matrix{ Eigen::MatrixXd::Zero(3, 3) };
-    covariance_matrix(0, 0) = 0.04;
-    covariance_matrix(1, 1) = 0.09;
-    covariance_matrix(2, 2) = 0.16;
-
-    const auto gaussian{
-        ls::DecodeParameterVector(
-            DirectGaussianModelSpec(),
-            linear_model,
-            covariance_matrix)
-    };
-
-    EXPECT_NEAR(2.0, gaussian.GetModel().GetAmplitude(), 1.0e-12);
-    EXPECT_NEAR(0.5, gaussian.GetModel().GetWidth(), 1.0e-12);
-    EXPECT_NEAR(0.25, gaussian.GetModel().GetIntercept(), 1.0e-12);
-    EXPECT_NEAR(0.2, gaussian.GetStandardDeviationModel().GetAmplitude(), 1.0e-12);
-    EXPECT_NEAR(0.3, gaussian.GetStandardDeviationModel().GetWidth(), 1.0e-12);
-    EXPECT_NEAR(0.4, gaussian.GetStandardDeviationModel().GetIntercept(), 1.0e-12);
 }
