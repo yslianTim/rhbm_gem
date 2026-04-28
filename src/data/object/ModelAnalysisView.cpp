@@ -165,12 +165,6 @@ SeriesPointList LocalPotentialView::GetBinnedDistanceResponseSeries(
         .GetBinnedDistanceResponseSeries(bin_size, x_min, x_max);
 }
 
-SeriesPointList LocalPotentialView::GetLinearModelSeries() const
-{
-    return RequireResolvedLocalEntry(*this, "Local linear-model series")
-        .GetLinearModelSeries();
-}
-
 int LocalPotentialView::GetSamplingEntryCount() const
 {
     return RequireResolvedLocalEntry(*this, "Local sampling-entry count").GetSamplingEntryCount();

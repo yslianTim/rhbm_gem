@@ -394,7 +394,7 @@ SeriesPointList BuildDatasetSeries(
         {
             continue;
         }
-        if (gaussian_response <= 0.0)
+        if (sample.score <= 0.0f || gaussian_response <= 0.0)
         {
             continue;
         }
@@ -430,42 +430,6 @@ SeriesPointList BuildDatasetSeries(
     }
     basis_and_response_entry_list.shrink_to_fit();
     return basis_and_response_entry_list;
-}
-
-SeriesPointList BuildLinearModelSeries(
-    const LinearizationSpec & spec,
-    const LocalPotentialSampleList & sampling_entries,
-    const LinearizationContext & context)
-{
-    numeric_validation::RequirePositive(spec.basis_size, "LinearizationSpec basis_size");
-    ValidateContextIfRequired(spec, context);
-    if (spec.basis_size < 2)
-    {
-        throw std::invalid_argument("Linear model series requires basis_size >= 2.");
-    }
-
-    SeriesPointList linear_model_series;
-    linear_model_series.reserve(sampling_entries.size());
-    const GaussianModel3D default_model{ 0.0, 0.0, 0.0 };
-    const auto & model{ context.model.value_or(default_model) };
-    for (const auto & sample : sampling_entries)
-    {
-        if (sample.score <= 0.0f || sample.response <= 0.0f)
-        {
-            continue;
-        }
-
-        const auto data_vector{
-            BuildLinearModelDataVector(
-                static_cast<double>(sample.distance),
-                static_cast<double>(sample.response),
-                model,
-                spec.basis_size)
-        };
-        linear_model_series.emplace_back(
-            SeriesPoint{ { data_vector(1) }, data_vector(spec.basis_size), sample.score });
-    }
-    return linear_model_series;
 }
 
 RHBMParameterVector EncodeGaussianToParameterVector(

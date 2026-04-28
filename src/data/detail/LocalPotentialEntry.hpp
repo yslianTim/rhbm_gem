@@ -64,7 +64,6 @@ public:
         int bin_size = 15,
         double x_min = 0.0,
         double x_max = 1.5) const;
-    SeriesPointList GetLinearModelSeries() const;
     double GetMapValueNearCenter() const;
     double GetMomentZeroEstimate() const;
     double GetMomentTwoEstimate() const;

@@ -21,6 +21,7 @@
 
 #include <array>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
 namespace rhbm_gem {
@@ -37,6 +38,15 @@ const ls::LinearizationSpec & AtomGaussianEncodeSpec()
 RHBMParameterVector EncodeAtomGaussianToParameterVector(const GaussianModel3D & estimate)
 {
     return ls::EncodeGaussianToParameterVector(AtomGaussianEncodeSpec(), estimate);
+}
+
+SeriesPointList BuildLocalDatasetSeries(const LocalPotentialView & view)
+{
+    return ls::BuildDatasetSeries(
+        ls::LinearizationSpec::DefaultDataset(),
+        view.GetSamplingEntries(),
+        -std::numeric_limits<double>::infinity(),
+        std::numeric_limits<double>::infinity());
 }
 
 } // namespace
@@ -280,7 +290,7 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateAtomGausEstimateHistogram(
 
 std::unique_ptr<TH1D> PotentialPlotBuilder::CreateLinearModelDataHistogram(int dimension_id) const
 {
-    auto data_array{ GetLocalEntry().GetLinearModelSeries() };
+    auto data_array{ BuildLocalDatasetSeries(GetLocalEntry()) };
     std::vector<float> data_list;
     data_list.reserve(data_array.size());
     for (const auto & point : data_array)
@@ -288,7 +298,7 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateLinearModelDataHistogram(int d
         switch (dimension_id)
         {
             case 0:
-                data_list.emplace_back(static_cast<float>(point.GetBasisValue(0)));
+                data_list.emplace_back(static_cast<float>(point.GetBasisValue(1)));
                 break;
             case 1:
                 data_list.emplace_back(static_cast<float>(point.response));
@@ -725,9 +735,9 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateLinearModelDistanceToM
 {
     auto graph{ root_helper::CreateGraphErrors() };
     auto count{ 0 };
-    for (const auto & point : GetLocalEntry().GetLinearModelSeries())
+    for (const auto & point : BuildLocalDatasetSeries(GetLocalEntry()))
     {
-        graph->SetPoint(count, point.GetBasisValue(0), point.response);
+        graph->SetPoint(count, point.GetBasisValue(1), point.response);
         count++;
     }
     return graph;

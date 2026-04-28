@@ -36,22 +36,29 @@ ls::LinearizationSpec DirectGaussianModelSpec()
 
 } // namespace
 
-TEST(LinearizationServiceTest, BuildLinearModelSeriesTransformsPositiveWeightedSamplesOnly)
+TEST(LinearizationServiceTest, BuildDatasetSeriesTransformsEffectiveSamplesWithinRange)
 {
     const LocalPotentialSampleList sampling_entries{
         {0.1f, 4.0f, 0.5f},
         {0.2f, -2.0f, 7.0f},
         {0.3f, 8.0f, 2.5f},
         {0.4f, 9.0f, 0.0f},
+        {0.8f, 16.0f, 3.0f},
     };
 
-    const auto series{ ls::BuildLinearModelSeries(DatasetLinearizationSpec(), sampling_entries) };
+    const auto series{
+        ls::BuildDatasetSeries(DatasetLinearizationSpec(), sampling_entries, 0.0, 0.5)
+    };
 
     ASSERT_EQ(series.size(), 2U);
-    EXPECT_NEAR(-0.5 * 0.1 * 0.1, series.at(0).GetBasisValue(0), 1.0e-7);
+    EXPECT_NEAR(1.0, series.at(0).GetBasisValue(0), 1.0e-7);
+    EXPECT_NEAR(-0.5 * 0.1 * 0.1, series.at(0).GetBasisValue(1), 1.0e-7);
     EXPECT_NEAR(std::log(4.0), series.at(0).response, 1.0e-7);
-    EXPECT_NEAR(-0.5 * 0.3 * 0.3, series.at(1).GetBasisValue(0), 1.0e-7);
+    EXPECT_FLOAT_EQ(0.5f, series.at(0).score);
+    EXPECT_NEAR(1.0, series.at(1).GetBasisValue(0), 1.0e-7);
+    EXPECT_NEAR(-0.5 * 0.3 * 0.3, series.at(1).GetBasisValue(1), 1.0e-7);
     EXPECT_NEAR(std::log(8.0), series.at(1).response, 1.0e-7);
+    EXPECT_FLOAT_EQ(2.5f, series.at(1).score);
 }
 
 TEST(LinearizationServiceTest, EncodeGaussianToParameterVectorMatchesClosedForm)

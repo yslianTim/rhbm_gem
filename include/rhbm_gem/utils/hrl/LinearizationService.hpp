@@ -51,11 +51,6 @@ SeriesPointList BuildDatasetSeries(
     double x_max,
     const LinearizationContext & context = {});
 
-SeriesPointList BuildLinearModelSeries(
-    const LinearizationSpec & spec,
-    const LocalPotentialSampleList & sampling_entries,
-    const LinearizationContext & context = {});
-
 RHBMParameterVector EncodeGaussianToParameterVector(
     const LinearizationSpec & spec,
     const GaussianModel3D & gaussian_model);
