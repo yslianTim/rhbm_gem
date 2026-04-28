@@ -50,7 +50,7 @@ TEST(RHBMTypesTest, PublicRHBMTypesHeaderExposesStableGaussianValueMath)
     EXPECT_DOUBLE_EQ(estimate.Intensity(), expected_intensity);
     EXPECT_DOUBLE_EQ(gaussian.GetEstimate(2), expected_intensity);
     EXPECT_DOUBLE_EQ(
-        gaussian.standard_deviation.GetModelParameter(rg::GaussianModel3D::kInterceptIndex),
+        gaussian.standard_deviation.GetModelParameter(rg::GaussianModel3D::InterceptIndex()),
         0.0);
     EXPECT_DOUBLE_EQ(
         gaussian.GetStandardDeviation(2),

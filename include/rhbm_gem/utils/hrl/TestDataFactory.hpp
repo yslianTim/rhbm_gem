@@ -41,7 +41,7 @@ class TestDataFactory
 public:
     struct BetaScenario
     {
-        Eigen::VectorXd gaus_true;
+        GaussianModel3D gaus_true;
         int sampling_entry_size{ 1 };
         double data_error_sigma{ 1.0 };
         double outlier_ratio{ 0.0 };
@@ -67,7 +67,7 @@ public:
 
     struct NeighborhoodScenario
     {
-        Eigen::VectorXd gaus_true;
+        GaussianModel3D gaus_true;
         int sampling_entry_size{ 1 };
         double data_error_sigma{ 1.0 };
         double radius_min{ 0.0 };

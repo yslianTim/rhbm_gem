@@ -25,8 +25,8 @@ Eigen::VectorXd MakeVector(std::initializer_list<double> values)
 
 void ExpectBiasStatisticSize(const rt::BiasStatistics & bias)
 {
-    EXPECT_EQ(bias.mean.size(), rhbm_gem::GaussianModel3D::kParameterSize);
-    EXPECT_EQ(bias.sigma.size(), rhbm_gem::GaussianModel3D::kParameterSize);
+    EXPECT_EQ(bias.mean.size(), rhbm_gem::GaussianModel3D::ParameterSize());
+    EXPECT_EQ(bias.sigma.size(), rhbm_gem::GaussianModel3D::ParameterSize());
 }
 
 } // namespace
@@ -39,7 +39,7 @@ TEST(RHBMTesterTest, RunBetaMDPDETestPopulatesBiasOutputs)
     const std::vector<double> alpha_r_list{ 0.0, 0.5 };
     const auto test_input{
         factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
-            MakeVector({ 1.0, 0.5, 0.0 }),
+            rhbm_gem::GaussianModel3D{ 1.0, 0.5, 0.0 },
             10,
             0.01,
             0.0,
@@ -120,7 +120,7 @@ TEST(RHBMTesterTest, RunBetaMDPDETestSkipsTrainedAlphaWhenDisabled)
     const std::vector<double> alpha_r_list{ 0.5 };
     const auto test_input{
         factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
-            MakeVector({ 1.0, 0.5, 0.0 }),
+            rhbm_gem::GaussianModel3D{ 1.0, 0.5, 0.0 },
             10,
             0.01,
             0.0,
@@ -190,7 +190,7 @@ TEST(RHBMTesterTest, RunBetaMDPDETestAllowsEmptyAlphaListWithoutTraining)
     factory.SetFittingRange(0.0, 1.0);
     const auto test_input{
         factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
-            MakeVector({ 1.0, 0.5, 0.0 }),
+            rhbm_gem::GaussianModel3D{ 1.0, 0.5, 0.0 },
             10,
             0.01,
             0.0,
@@ -223,7 +223,7 @@ TEST(RHBMTesterTest, RunBetaMDPDETestAllowsEmptyAlphaListWithTraining)
     factory.SetFittingRange(0.0, 1.0);
     const auto test_input{
         factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
-            MakeVector({ 1.0, 0.5, 0.0 }),
+            rhbm_gem::GaussianModel3D{ 1.0, 0.5, 0.0 },
             10,
             0.01,
             0.0,
@@ -258,7 +258,7 @@ TEST(RHBMTesterTest, RunBetaMDPDETestRejectsWrongSizedTruth)
     factory.SetFittingRange(0.0, 1.0);
     auto test_input{
         factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
-            MakeVector({ 1.0, 0.5, 0.0 }),
+            rhbm_gem::GaussianModel3D{ 1.0, 0.5, 0.0 },
             10,
             0.01,
             0.0,

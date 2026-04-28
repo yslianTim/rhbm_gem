@@ -33,23 +33,23 @@ TEST(GaussianModel3DTest, RoundTripsThroughCanonicalVector)
     const auto parameters{ model.ToVector() };
     const auto round_trip{ rg::GaussianModel3D::FromVector(parameters) };
 
-    ASSERT_EQ(parameters.size(), rg::GaussianModel3D::kParameterSize);
-    EXPECT_DOUBLE_EQ(parameters(rg::GaussianModel3D::kAmplitudeIndex), model.amplitude);
-    EXPECT_DOUBLE_EQ(parameters(rg::GaussianModel3D::kWidthIndex), model.width);
-    EXPECT_DOUBLE_EQ(parameters(rg::GaussianModel3D::kInterceptIndex), model.intercept);
-    EXPECT_DOUBLE_EQ(round_trip.amplitude, model.amplitude);
-    EXPECT_DOUBLE_EQ(round_trip.width, model.width);
-    EXPECT_DOUBLE_EQ(round_trip.intercept, model.intercept);
+    ASSERT_EQ(parameters.size(), rg::GaussianModel3D::ParameterSize());
+    EXPECT_DOUBLE_EQ(parameters(rg::GaussianModel3D::AmplitudeIndex()), model.GetAmplitude());
+    EXPECT_DOUBLE_EQ(parameters(rg::GaussianModel3D::WidthIndex()), model.GetWidth());
+    EXPECT_DOUBLE_EQ(parameters(rg::GaussianModel3D::InterceptIndex()), model.GetIntercept());
+    EXPECT_DOUBLE_EQ(round_trip.GetAmplitude(), model.GetAmplitude());
+    EXPECT_DOUBLE_EQ(round_trip.GetWidth(), model.GetWidth());
+    EXPECT_DOUBLE_EQ(round_trip.GetIntercept(), model.GetIntercept());
 }
 
 TEST(GaussianModel3DTest, DefaultsToZeroIntercept)
 {
     const rg::GaussianModel3D model{};
 
-    EXPECT_DOUBLE_EQ(model.amplitude, 0.0);
-    EXPECT_DOUBLE_EQ(model.width, 1.0);
-    EXPECT_DOUBLE_EQ(model.intercept, 0.0);
-    EXPECT_DOUBLE_EQ(model.GetModelParameter(rg::GaussianModel3D::kInterceptIndex), 0.0);
+    EXPECT_DOUBLE_EQ(model.GetAmplitude(), 0.0);
+    EXPECT_DOUBLE_EQ(model.GetWidth(), 1.0);
+    EXPECT_DOUBLE_EQ(model.GetIntercept(), 0.0);
+    EXPECT_DOUBLE_EQ(model.GetModelParameter(rg::GaussianModel3D::InterceptIndex()), 0.0);
 }
 
 TEST(GaussianModel3DTest, FromVectorRequiresExactlyThreeFiniteEntries)
@@ -69,9 +69,39 @@ TEST(GaussianModel3DTest, FromVectorPrefixAllowsLongerLegacyVectors)
     const auto model{
         rg::GaussianModel3D::FromVectorPrefix(MakeVector({ 1.0, 0.5, 0.25, 8.0 })) };
 
-    EXPECT_DOUBLE_EQ(model.amplitude, 1.0);
-    EXPECT_DOUBLE_EQ(model.width, 0.5);
-    EXPECT_DOUBLE_EQ(model.intercept, 0.25);
+    EXPECT_DOUBLE_EQ(model.GetAmplitude(), 1.0);
+    EXPECT_DOUBLE_EQ(model.GetWidth(), 0.5);
+    EXPECT_DOUBLE_EQ(model.GetIntercept(), 0.25);
+}
+
+TEST(GaussianModel3DTest, RejectsInvalidSamplingModels)
+{
+    EXPECT_NO_THROW(rg::GaussianModel3D::RequireFinitePositiveWidthModel(
+        rg::GaussianModel3D{ 1.0, 0.5, 0.0 }));
+    EXPECT_THROW(
+        rg::GaussianModel3D::RequireFinitePositiveWidthModel(
+            rg::GaussianModel3D{ 1.0, 0.0, 0.0 }),
+        std::invalid_argument);
+    EXPECT_THROW(
+        rg::GaussianModel3D::RequireFinitePositiveWidthModel(
+            rg::GaussianModel3D{ 1.0, -0.5, 0.0 }),
+        std::invalid_argument);
+    EXPECT_THROW(
+        rg::GaussianModel3D::RequireFinitePositiveWidthModel(
+            rg::GaussianModel3D{ 1.0, std::numeric_limits<double>::infinity(), 0.0 }),
+        std::invalid_argument);
+}
+
+TEST(GaussianModel3DTest, WithMethodsReturnAdjustedCopies)
+{
+    const rg::GaussianModel3D model{ 9.0, 1.5, 0.25 };
+
+    EXPECT_DOUBLE_EQ(model.WithAmplitude(8.0).GetAmplitude(), 8.0);
+    EXPECT_DOUBLE_EQ(model.WithWidth(0.75).GetWidth(), 0.75);
+    EXPECT_DOUBLE_EQ(model.WithIntercept(0.5).GetIntercept(), 0.5);
+    EXPECT_DOUBLE_EQ(model.GetAmplitude(), 9.0);
+    EXPECT_DOUBLE_EQ(model.GetWidth(), 1.5);
+    EXPECT_DOUBLE_EQ(model.GetIntercept(), 0.25);
 }
 
 TEST(GaussianModel3DTest, IntensityAndResponseMatchClosedForm)
@@ -79,10 +109,12 @@ TEST(GaussianModel3DTest, IntensityAndResponseMatchClosedForm)
     const rg::GaussianModel3D model{ 9.0, 1.5, 0.25 };
     constexpr double distance{ 0.75 };
     const auto expected_intensity{
-        model.amplitude * std::pow(Constants::two_pi * model.width * model.width, -1.5) };
+        model.GetAmplitude()
+        * std::pow(Constants::two_pi * model.GetWidth() * model.GetWidth(), -1.5) };
     const auto expected_response{
-        expected_intensity * std::exp(-0.5 * distance * distance / (model.width * model.width)) +
-        model.intercept };
+        expected_intensity
+            * std::exp(-0.5 * distance * distance / (model.GetWidth() * model.GetWidth())) +
+        model.GetIntercept() };
 
     EXPECT_DOUBLE_EQ(model.Intensity(), expected_intensity);
     EXPECT_DOUBLE_EQ(model.ResponseAtDistance(distance), expected_response);
@@ -93,5 +125,5 @@ TEST(GaussianModel3DTest, ZeroWidthKeepsExistingFallbackBehavior)
     const rg::GaussianModel3D model{ 9.0, 0.0, 0.25 };
 
     EXPECT_DOUBLE_EQ(model.Intensity(), 0.0);
-    EXPECT_DOUBLE_EQ(model.ResponseAtDistance(0.75), model.intercept);
+    EXPECT_DOUBLE_EQ(model.ResponseAtDistance(0.75), model.GetIntercept());
 }

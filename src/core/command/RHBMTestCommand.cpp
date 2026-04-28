@@ -45,7 +45,7 @@ constexpr std::string_view kFitMaxOption{ "--fit-max" };
 constexpr std::string_view kFitRangeIssue{ "--fit-range" };
 constexpr std::string_view kAlphaROption{ "--alpha-r" };
 constexpr std::string_view kAlphaGOption{ "--alpha-g" };
-constexpr int kGausParSize{ GaussianModel3D::kParameterSize };
+constexpr int kGausParSize{ GaussianModel3D::ParameterSize() };
 struct RHBMTestExecutionContext
 {
     const RHBMTestRequest & options;
@@ -216,7 +216,7 @@ test_data_factory::TestDataFactory::NeighborhoodScenario BuildNeighborhoodScenar
     bool include_sampling_summary = false)
 {
     return test_data_factory::TestDataFactory::NeighborhoodScenario{
-        model_par_prior,
+        GaussianModel3D::FromVector(model_par_prior),
         scenario.sampling_entry_size,
         error_sigma,
         0.0,
@@ -680,7 +680,7 @@ void RunSimulationTestOnDataOutlier(const RHBMTestExecutionContext & options)
             rhbm_tester::BetaMDPDETestBias bias;
             const auto test_input{
                 data_factory.BuildBetaTestInput(test_data_factory::TestDataFactory::BetaScenario{
-                    model_par_prior,
+                    GaussianModel3D::FromVector(model_par_prior),
                     scenario.sampling_entry_size,
                     error_sigma,
                     outlier_list.at(i),
@@ -827,7 +827,7 @@ void RunSimulationTestOnModelAlphaData(const RHBMTestExecutionContext & options)
             rhbm_tester::BetaMDPDETestBias bias;
             const auto test_input{
                 data_factory.BuildBetaTestInput(test_data_factory::TestDataFactory::BetaScenario{
-                    model_par_prior,
+                    GaussianModel3D::FromVector(model_par_prior),
                     scenario.sampling_entry_size,
                     error_sigma,
                     outlier_list.at(i),

@@ -37,7 +37,7 @@ struct GaussianEstimate
 
     static GaussianEstimate FromModel(const GaussianModel3D & model)
     {
-        return GaussianEstimate{ model.amplitude, model.width };
+        return GaussianEstimate{ model.GetAmplitude(), model.GetWidth() };
     }
 
     double GetModelParameter(int par_id) const
@@ -49,11 +49,11 @@ struct GaussianEstimate
     {
         switch (par_id)
         {
-        case GaussianModel3D::kAmplitudeIndex:
+        case GaussianModel3D::AmplitudeIndex():
             return amplitude;
-        case GaussianModel3D::kWidthIndex:
+        case GaussianModel3D::WidthIndex():
             return width;
-        case GaussianModel3D::kInterceptIndex:
+        case GaussianModel3D::InterceptIndex():
             return Intensity();
         default:
             throw std::out_of_range("GaussianEstimate parameter index is out of range.");
@@ -77,11 +77,11 @@ struct GaussianParameterUncertainty
     {
         switch (par_id)
         {
-        case GaussianModel3D::kAmplitudeIndex:
+        case GaussianModel3D::AmplitudeIndex():
             return amplitude;
-        case GaussianModel3D::kWidthIndex:
+        case GaussianModel3D::WidthIndex():
             return width;
-        case GaussianModel3D::kInterceptIndex:
+        case GaussianModel3D::InterceptIndex():
             return intercept;
         default:
             throw std::out_of_range(

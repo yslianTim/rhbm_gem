@@ -88,7 +88,7 @@ TEST(TestDataFactoryTest, BuildBetaTestInputIsReproducibleWithFixedSeed)
     factory.SetFittingRange(0.0, 1.0);
 
     const auto scenario{ tdf::TestDataFactory::BetaScenario{
-        MakeVector({ 1.0, 0.5, 0.0 }),
+        rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
         8,
         0.05,
         0.1,
@@ -116,7 +116,7 @@ TEST(TestDataFactoryTest, BuildBetaTestInputChangesWhenOutlierPolicyChanges)
     factory.SetFittingRange(0.0, 1.0);
 
     const auto base_scenario{ tdf::TestDataFactory::BetaScenario{
-        MakeVector({ 1.0, 0.5, 0.0 }),
+        rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
         8,
         0.0,
         0.0,
@@ -145,7 +145,7 @@ TEST(TestDataFactoryTest, BuildBetaTestInputChangesWhenNoisePolicyChanges)
     factory.SetFittingRange(0.0, 1.0);
 
     const auto noiseless_scenario{ tdf::TestDataFactory::BetaScenario{
-        MakeVector({ 1.0, 0.5, 0.0 }),
+        rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
         8,
         0.0,
         0.0,
@@ -178,7 +178,7 @@ TEST(TestDataFactoryTest, BuildBetaTestInputUsesExpectedZeroDistanceGaussianResp
     constexpr double intercept{ 0.0 };
     const auto input{
         factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
-            MakeVector({ amplitude, width, intercept }),
+            rg::GaussianModel3D{ amplitude, width, intercept },
             1,
             0.0,
             0.0,
@@ -239,7 +239,7 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputProvidesPairedDatasetsAndSam
 
     const auto input{
         factory.BuildNeighborhoodTestInput(tdf::TestDataFactory::NeighborhoodScenario{
-            MakeVector({ 1.0, 0.5, 0.0 }),
+            rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
             8,
             0.05,
             0.0,
@@ -289,7 +289,7 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputSamplingSummaryIncludesNeigh
     constexpr double neighbor_distance{ 1.0 };
     const auto input{
         factory.BuildNeighborhoodTestInput(tdf::TestDataFactory::NeighborhoodScenario{
-            MakeVector({ amplitude, width, intercept }),
+            rg::GaussianModel3D{ amplitude, width, intercept },
             1,
             0.0,
             0.0,
@@ -327,7 +327,7 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputIsReproducibleWithFixedSeed)
     factory.SetFittingRange(0.0, 1.0);
 
     const auto scenario{ tdf::TestDataFactory::NeighborhoodScenario{
-        MakeVector({ 1.0, 0.5, 0.0 }),
+        rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
         8,
         0.05,
         0.0,
@@ -376,7 +376,7 @@ TEST(TestDataFactoryTest, BuildTestInputsRejectNonPositiveGaussianWidth)
 
     EXPECT_THROW(
         factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
-            MakeVector({ 1.0, 0.0, 0.0 }),
+            rg::GaussianModel3D{ 1.0, 0.0, 0.0 },
             8,
             0.05,
             0.1,
@@ -386,7 +386,7 @@ TEST(TestDataFactoryTest, BuildTestInputsRejectNonPositiveGaussianWidth)
         std::invalid_argument);
     EXPECT_THROW(
         factory.BuildNeighborhoodTestInput(tdf::TestDataFactory::NeighborhoodScenario{
-            MakeVector({ 1.0, -0.5, 0.0 }),
+            rg::GaussianModel3D{ 1.0, -0.5, 0.0 },
             8,
             0.05,
             0.0,
@@ -414,21 +414,11 @@ TEST(TestDataFactoryTest, ConstructorRejectsInvalidNumericInputs)
         std::invalid_argument);
 }
 
-TEST(TestDataFactoryTest, BuildTestInputsRejectInvalidGaussianVectorSize)
+TEST(TestDataFactoryTest, BuildMuTestInputRejectsInvalidGaussianVectorSize)
 {
     tdf::TestDataFactory factory(
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
 
-    EXPECT_THROW(
-        factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
-            MakeVector({ 1.0, 0.5 }),
-            8,
-            0.05,
-            0.1,
-            1,
-            42
-        }),
-        std::invalid_argument);
     EXPECT_THROW(
         factory.BuildMuTestInput(tdf::TestDataFactory::MuScenario{
             4,
@@ -439,23 +429,6 @@ TEST(TestDataFactoryTest, BuildTestInputsRejectInvalidGaussianVectorSize)
             0.2,
             1,
             77
-        }),
-        std::invalid_argument);
-    EXPECT_THROW(
-        factory.BuildNeighborhoodTestInput(tdf::TestDataFactory::NeighborhoodScenario{
-            MakeVector({ 1.0, 0.5 }),
-            8,
-            0.05,
-            0.0,
-            1.0,
-            2.0,
-            1,
-            120.0,
-            false,
-            0.0,
-            4.0,
-            1,
-            11
         }),
         std::invalid_argument);
 }
@@ -479,7 +452,7 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputRejectsInvalidSamplingInputs
 
     EXPECT_THROW(
         factory.BuildNeighborhoodTestInput(tdf::TestDataFactory::NeighborhoodScenario{
-            MakeVector({ 1.0, 0.5, 0.0 }),
+            rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
             8,
             0.05,
             0.0,
@@ -496,7 +469,7 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputRejectsInvalidSamplingInputs
         std::invalid_argument);
     EXPECT_THROW(
         factory.BuildNeighborhoodTestInput(tdf::TestDataFactory::NeighborhoodScenario{
-            MakeVector({ 1.0, 0.5, 0.0 }),
+            rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
             8,
             0.05,
             0.0,
@@ -513,7 +486,7 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputRejectsInvalidSamplingInputs
         std::invalid_argument);
     EXPECT_THROW(
         factory.BuildNeighborhoodTestInput(tdf::TestDataFactory::NeighborhoodScenario{
-            MakeVector({ 1.0, 0.5, 0.0 }),
+            rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
             8,
             0.05,
             2.0,
@@ -537,7 +510,7 @@ TEST(TestDataFactoryTest, BuildBetaTestInputRejectsNonPositiveScenarioSizes)
 
     EXPECT_THROW(
         factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
-            MakeVector({ 1.0, 0.5, 0.0 }),
+            rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
             0,
             0.05,
             0.1,
@@ -547,7 +520,7 @@ TEST(TestDataFactoryTest, BuildBetaTestInputRejectsNonPositiveScenarioSizes)
         std::invalid_argument);
     EXPECT_THROW(
         factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
-            MakeVector({ 1.0, 0.5, 0.0 }),
+            rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
             8,
             0.05,
             0.1,

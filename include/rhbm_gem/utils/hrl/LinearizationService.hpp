@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <tuple>
 
 #include <Eigen/Dense>
@@ -38,7 +39,7 @@ struct LinearizationSpec
 
 struct LinearizationContext
 {
-    GaussianParameterVector model_parameters{};
+    std::optional<GaussianModel3D> model{};
 
     bool HasModelParameters() const;
 
@@ -77,6 +78,15 @@ GaussianParameterVector DecodeLocalBeta(
     const LinearizationContext & context = {});
 
 GaussianParameterVector DecodeGroupBeta(
+    const LinearizationSpec & spec,
+    const RHBMBetaVector & linear_model);
+
+GaussianModel3D DecodeLocalModel3D(
+    const LinearizationSpec & spec,
+    const RHBMBetaVector & linear_model,
+    const LinearizationContext & context = {});
+
+GaussianModel3D DecodeGroupModel3D(
     const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model);
 

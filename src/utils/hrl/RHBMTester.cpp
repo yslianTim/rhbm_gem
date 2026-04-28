@@ -47,10 +47,7 @@ void ValidateGaussianTruthVector(
     const Eigen::VectorXd & gaussian_truth,
     const char * value_name)
 {
-    eigen_validation::RequireVectorSize(
-        gaussian_truth,
-        GaussianModel3D::kParameterSize,
-        value_name);
+    GaussianModel3D::RequireParameterVector(gaussian_truth, value_name);
 }
 
 GaussianParameterVector CalculateNormalizedBias(
@@ -159,11 +156,11 @@ bool RunBetaMDPDETest(
     const bool alpha_training{ test_input.alpha_training };
     const auto alpha_size{ local_alpha_r_list.size() + (alpha_training ? 1 : 0) };
     Eigen::MatrixXd bias_matrix_ols{
-        Eigen::MatrixXd::Zero(GaussianModel3D::kParameterSize, replica_size)
+        Eigen::MatrixXd::Zero(GaussianModel3D::ParameterSize(), replica_size)
     };
     std::vector<Eigen::MatrixXd> bias_matrix_mdpde_list(alpha_size);
     bias_matrix_mdpde_list.assign(
-        alpha_size, Eigen::MatrixXd::Zero(GaussianModel3D::kParameterSize, replica_size)
+        alpha_size, Eigen::MatrixXd::Zero(GaussianModel3D::ParameterSize(), replica_size)
     );
     std::vector<double> trained_alpha_list(static_cast<size_t>(replica_size), 0.0);
 
@@ -255,11 +252,11 @@ bool RunMuMDPDETest(
     const bool alpha_training{ test_input.alpha_training };
     const auto alpha_size{ local_alpha_g_list.size() + (alpha_training ? 1 : 0) };
     Eigen::MatrixXd bias_matrix_median{
-        Eigen::MatrixXd::Zero(GaussianModel3D::kParameterSize, replica_size)
+        Eigen::MatrixXd::Zero(GaussianModel3D::ParameterSize(), replica_size)
     };
     std::vector<Eigen::MatrixXd> bias_matrix_mdpde_list(alpha_size);
     bias_matrix_mdpde_list.assign(
-        alpha_size, Eigen::MatrixXd::Zero(GaussianModel3D::kParameterSize, replica_size)
+        alpha_size, Eigen::MatrixXd::Zero(GaussianModel3D::ParameterSize(), replica_size)
     );
     std::vector<double> trained_alpha_list(static_cast<size_t>(replica_size), 0.0);
 
