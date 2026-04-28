@@ -43,9 +43,9 @@ RHBMExecutionOptions MakeTesterExecutionOptions()
     return options;
 }
 
-GaussianParameterVector CalculateNormalizedBias(
+Eigen::VectorXd CalculateNormalizedBias(
     const RHBMBetaVector & linear_estimate,
-    const GaussianParameterVector & gaussian_truth)
+    const Eigen::VectorXd & gaussian_truth)
 {
     GaussianModel3D::RequireParameterVector(gaussian_truth, "gaussian_truth");
     const auto gaussian_estimate{
@@ -71,7 +71,7 @@ Eigen::VectorXd CalculateReplicaBiasSigma(
 
 BetaReplicaBias EstimateBetaReplicaBias(
     const RHBMMemberDataset & dataset,
-    const GaussianParameterVector & gaus_true,
+    const Eigen::VectorXd & gaus_true,
     double alpha_r,
     const RHBMExecutionOptions & options)
 {
@@ -84,7 +84,7 @@ BetaReplicaBias EstimateBetaReplicaBias(
 
 MuReplicaBias EstimateMuReplicaBias(
     const RHBMBetaMatrix & beta_matrix,
-    const GaussianParameterVector & gaus_true,
+    const Eigen::VectorXd & gaus_true,
     double alpha_g,
     const RHBMExecutionOptions & options)
 {

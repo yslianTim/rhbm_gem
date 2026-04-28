@@ -7,9 +7,6 @@
 namespace rhbm_gem
 {
 
-// GaussianParameterVector stays in Gaussian-model space; its dimension depends on the model.
-using GaussianParameterVector = Eigen::VectorXd;
-
 class GaussianModel3D
 {
     double m_amplitude{ 0.0 };
@@ -31,11 +28,11 @@ public:
     static constexpr int InterceptIndex() { return kInterceptIndex; }
 
     static void RequireParameterVector(
-        const GaussianParameterVector & parameters,
+        const Eigen::VectorXd & parameters,
         std::string_view value_name = "GaussianModel3D parameter vector");
 
-    static GaussianModel3D FromVector(const GaussianParameterVector & parameters);
-    static GaussianModel3D FromVectorPrefix(const GaussianParameterVector & parameters);
+    static GaussianModel3D FromVector(const Eigen::VectorXd & parameters);
+    static GaussianModel3D FromVectorPrefix(const Eigen::VectorXd & parameters);
 
     static void RequireFiniteModel(
         const GaussianModel3D & model,
@@ -51,7 +48,7 @@ public:
     double GetAmplitude() const;
     double GetWidth() const;
     double GetIntercept() const;
-    GaussianParameterVector ToVector() const;
+    Eigen::VectorXd ToVector() const;
     double GetModelParameter(int par_id) const;
     double Intensity() const;
     double ResponseAtDistance(double distance) const;

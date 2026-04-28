@@ -24,7 +24,7 @@ const GaussianModel3D & RequireContextModel(
     return context.model.value();
 }
 
-GaussianEstimate BuildGaussianEstimate(const GaussianParameterVector & gaussian_parameters)
+GaussianEstimate BuildGaussianEstimate(const Eigen::VectorXd & gaussian_parameters)
 {
     if (gaussian_parameters.rows() < 2)
     {
@@ -34,7 +34,7 @@ GaussianEstimate BuildGaussianEstimate(const GaussianParameterVector & gaussian_
 }
 
 GaussianParameterUncertainty BuildGaussianParameterUncertainty(
-    const GaussianParameterVector & gaussian_parameters)
+    const Eigen::VectorXd & gaussian_parameters)
 {
     if (gaussian_parameters.rows() < 2)
     {
@@ -48,7 +48,7 @@ GaussianParameterUncertainty BuildGaussianParameterUncertainty(
     };
 }
 
-GaussianParameterVector GetTaylorSeriesBasisVector(
+Eigen::VectorXd GetTaylorSeriesBasisVector(
     double distance,
     const GaussianModel3D & model)
 {
@@ -59,8 +59,8 @@ GaussianParameterVector GetTaylorSeriesBasisVector(
         1.0 / std::pow(Constants::two_pi * width_square, 1.5) *
         std::exp(-0.5 * distance * distance / width_square)
     };
-    GaussianParameterVector basis_vector{
-        GaussianParameterVector::Zero(GaussianModel3D::ParameterSize())
+    Eigen::VectorXd basis_vector{
+        Eigen::VectorXd::Zero(GaussianModel3D::ParameterSize())
     };
     basis_vector(0) = gaussian_0;
     basis_vector(1) =
@@ -69,15 +69,15 @@ GaussianParameterVector GetTaylorSeriesBasisVector(
     return basis_vector;
 }
 
-GaussianParameterVector BuildLinearModelDataVector(
+Eigen::VectorXd BuildLinearModelDataVector(
     double x,
     double y,
     const GaussianModel3D & model,
     int basis_dimension)
 {
     const auto data_vector_dimension{ basis_dimension + 1 };
-    GaussianParameterVector linear_model_data_vector{
-        GaussianParameterVector::Zero(data_vector_dimension)
+    Eigen::VectorXd linear_model_data_vector{
+        Eigen::VectorXd::Zero(data_vector_dimension)
     };
 
     if (basis_dimension == 2)
@@ -127,9 +127,9 @@ RHBMBetaVector BuildLinearModelCoefficientVector(const GaussianModel3D & model)
     return linear_model_coeff;
 }
 
-GaussianParameterVector BuildGaus2DModel(const RHBMBetaVector & linear_model)
+Eigen::VectorXd BuildGaus2DModel(const RHBMBetaVector & linear_model)
 {
-    GaussianParameterVector gaus_model{ GaussianParameterVector::Zero(2) };
+    Eigen::VectorXd gaus_model{ Eigen::VectorXd::Zero(2) };
     if (linear_model(1) <= 0.0)
     {
         return gaus_model;
@@ -196,12 +196,12 @@ GaussianModel3D BuildGaus3DModel(
     };
 }
 
-std::tuple<GaussianParameterVector, GaussianParameterVector> BuildGaus2DModelWithUncertainty(
+std::tuple<Eigen::VectorXd, Eigen::VectorXd> BuildGaus2DModelWithUncertainty(
     const RHBMBetaVector & linear_model,
     const RHBMPosteriorCovarianceMatrix & covariance_matrix)
 {
-    GaussianParameterVector gaus_model{ GaussianParameterVector::Zero(2) };
-    GaussianParameterVector gaus_model_variance{ GaussianParameterVector::Zero(2) };
+    Eigen::VectorXd gaus_model{ Eigen::VectorXd::Zero(2) };
+    Eigen::VectorXd gaus_model_variance{ Eigen::VectorXd::Zero(2) };
 
     if (linear_model.rows() == 2)
     {
@@ -241,13 +241,13 @@ std::tuple<GaussianParameterVector, GaussianParameterVector> BuildGaus2DModelWit
     return std::make_tuple(gaus_model, gaus_model_variance);
 }
 
-std::tuple<GaussianParameterVector, GaussianParameterVector> BuildGaus3DModelWithUncertainty(
+std::tuple<Eigen::VectorXd, Eigen::VectorXd> BuildGaus3DModelWithUncertainty(
     const RHBMBetaVector & linear_model,
     const RHBMPosteriorCovarianceMatrix & covariance_matrix)
 {
-    GaussianParameterVector gaus_model{ GaussianParameterVector::Zero(GaussianModel3D::ParameterSize()) };
-    GaussianParameterVector gaus_model_variance{
-        GaussianParameterVector::Zero(GaussianModel3D::ParameterSize())
+    Eigen::VectorXd gaus_model{ Eigen::VectorXd::Zero(GaussianModel3D::ParameterSize()) };
+    Eigen::VectorXd gaus_model_variance{
+        Eigen::VectorXd::Zero(GaussianModel3D::ParameterSize())
     };
 
     if (linear_model.rows() == 2)
@@ -333,7 +333,7 @@ void Validate3DModelSpec(const LinearizationSpec & spec)
     }
 }
 
-GaussianParameterVector BuildGaussianVector(
+Eigen::VectorXd BuildGaussianVector(
     const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model,
     const LinearizationContext * context)
@@ -387,7 +387,7 @@ bool LinearizationContext::HasModelParameters() const
 }
 
 LinearizationContext LinearizationContext::FromModelParameters(
-    const GaussianParameterVector & model_parameters)
+    const Eigen::VectorXd & model_parameters)
 {
     return FromModel(GaussianModel3D::FromVector(model_parameters));
 }
@@ -497,7 +497,7 @@ SeriesPointList BuildLinearModelSeries(
 
 RHBMBetaVector EncodeGaussianToBeta(
     const LinearizationSpec & spec,
-    const GaussianParameterVector & gaussian_parameters)
+    const Eigen::VectorXd & gaussian_parameters)
 {
     numeric_validation::RequirePositive(spec.basis_size, "LinearizationSpec basis_size");
     if (spec.linearization_kind != LinearizationKind::LOG_QUADRATIC)
@@ -546,7 +546,7 @@ RHBMBetaVector EncodeGaussianToBeta(
     return encoded.head(spec.basis_size);
 }
 
-GaussianParameterVector DecodeLocalBeta(
+Eigen::VectorXd DecodeLocalBeta(
     const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model,
     const LinearizationContext & context)
@@ -556,7 +556,7 @@ GaussianParameterVector DecodeLocalBeta(
     return BuildGaussianVector(spec, linear_model, &context);
 }
 
-GaussianParameterVector DecodeGroupBeta(
+Eigen::VectorXd DecodeGroupBeta(
     const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model)
 {
@@ -588,7 +588,7 @@ GaussianModel3D DecodeGroupModel3D(
     return BuildGaus3DModel(linear_model);
 }
 
-std::tuple<GaussianParameterVector, GaussianParameterVector> DecodePosterior(
+std::tuple<Eigen::VectorXd, Eigen::VectorXd> DecodePosterior(
     const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model,
     const RHBMPosteriorCovarianceMatrix & covariance_matrix)

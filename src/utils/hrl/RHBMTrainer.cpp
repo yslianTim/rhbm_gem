@@ -18,23 +18,21 @@ namespace rhbm_gem::rhbm_trainer
 
 namespace
 {
-namespace ls = rhbm_gem::linearization_service;
-
 constexpr double kAlphaGridTolerance{ 1.0e-12 };
 
-const ls::LinearizationSpec & MetricDecodeSpec()
+const linearization_service::LinearizationSpec & MetricDecodeSpec()
 {
-    static const auto spec{ ls::LinearizationSpec::DefaultMetricModel() };
+    static const auto spec{ linearization_service::LinearizationSpec::DefaultMetricModel() };
     return spec;
 }
 
-rhbm_gem::GaussianParameterVector CalculateAbsoluteGaussianDifference(
+Eigen::VectorXd CalculateAbsoluteGaussianDifference(
     const RHBMBetaVector & linear_a,
     const RHBMBetaVector & linear_b)
 {
-    const auto gaussian_a{ ls::DecodeGroupBeta(MetricDecodeSpec(), linear_a) };
-    const auto gaussian_b{ ls::DecodeGroupBeta(MetricDecodeSpec(), linear_b) };
-    rhbm_gem::eigen_validation::RequireVectorSize(gaussian_a, gaussian_b.rows(), "gaussian");
+    const auto gaussian_a{ linearization_service::DecodeGroupBeta(MetricDecodeSpec(), linear_a) };
+    const auto gaussian_b{ linearization_service::DecodeGroupBeta(MetricDecodeSpec(), linear_b) };
+    eigen_validation::RequireVectorSize(gaussian_a, gaussian_b.rows(), "gaussian");
     return (gaussian_a - gaussian_b).array().abs().matrix();
 }
 
@@ -47,7 +45,7 @@ void ValidateTrainingInputs(
     {
         throw std::invalid_argument("training data must not be empty.");
     }
-    rhbm_gem::numeric_validation::RequirePositive(subset_size, "subset_size");
+    numeric_validation::RequirePositive(subset_size, "subset_size");
     if (subset_size > data_size)
     {
         throw std::invalid_argument("subset_size must not exceed data size.");
@@ -67,7 +65,7 @@ void ValidateTrainingBatch(
     {
         throw std::invalid_argument("training data must not be empty.");
     }
-    rhbm_gem::numeric_validation::RequirePositive(subset_size, "subset_size");
+    numeric_validation::RequirePositive(subset_size, "subset_size");
     if (alpha_list.empty())
     {
         throw std::invalid_argument("alpha_list must not be empty.");
@@ -197,7 +195,7 @@ Eigen::VectorXd EvaluateAlphaRForDataset(
         for (std::size_t i = 0; i < subset_size; i++)
         {
             const auto beta_result_test{
-                rhbm_gem::rhbm_helper::EstimateBetaMDPDE(
+                rhbm_helper::EstimateBetaMDPDE(
                     alpha,
                     data_set_test.at(i),
                     algorithm_options
@@ -205,7 +203,7 @@ Eigen::VectorXd EvaluateAlphaRForDataset(
             };
 
             const auto beta_result_training{
-                rhbm_gem::rhbm_helper::EstimateBetaMDPDE(
+                rhbm_helper::EstimateBetaMDPDE(
                     alpha,
                     data_set_training.at(i),
                     algorithm_options
@@ -257,17 +255,17 @@ Eigen::VectorXd EvaluateAlphaGForGroup(
         for (std::size_t i = 0; i < subset_size; i++)
         {
             const auto beta_matrix_test{
-                rhbm_gem::rhbm_helper::BuildBetaMatrix(data_set_test.at(i))
+                rhbm_helper::BuildBetaMatrix(data_set_test.at(i))
             };
             const auto mu_result_test{
-                rhbm_gem::rhbm_helper::EstimateMuMDPDE(alpha, beta_matrix_test, algorithm_options)
+                rhbm_helper::EstimateMuMDPDE(alpha, beta_matrix_test, algorithm_options)
             };
 
             const auto beta_matrix_training{
-                rhbm_gem::rhbm_helper::BuildBetaMatrix(data_set_training.at(i))
+                rhbm_helper::BuildBetaMatrix(data_set_training.at(i))
             };
             const auto mu_result_training{
-                rhbm_gem::rhbm_helper::EstimateMuMDPDE(alpha, beta_matrix_training, algorithm_options)
+                rhbm_helper::EstimateMuMDPDE(alpha, beta_matrix_training, algorithm_options)
             };
 
             mu_error_sum +=
@@ -307,11 +305,8 @@ std::vector<double> AlphaTrainer::BuildAlphaGrid(
     double alpha_max,
     double alpha_step)
 {
-    rhbm_gem::numeric_validation::RequireFiniteNonNegativeRange(
-        alpha_min,
-        alpha_max,
-        "alpha training range");
-    rhbm_gem::numeric_validation::RequireFinitePositive(alpha_step, "alpha training step");
+    numeric_validation::RequireFiniteNonNegativeRange(alpha_min, alpha_max, "alpha training range");
+    numeric_validation::RequireFinitePositive(alpha_step, "alpha training step");
 
     std::vector<double> alpha_list;
     for (double alpha{ alpha_min };
@@ -459,7 +454,7 @@ Eigen::MatrixXd AlphaTrainer::StudyAlphaRBias(
         {
             const auto alpha_r{ m_alpha_grid.at(static_cast<std::size_t>(j)) };
             const auto result{
-                rhbm_gem::rhbm_helper::EstimateBetaMDPDE(
+                rhbm_helper::EstimateBetaMDPDE(
                     alpha_r,
                     dataset_list.at(i),
                     algorithm_options)
@@ -512,14 +507,14 @@ Eigen::MatrixXd AlphaTrainer::StudyAlphaGBias(
     {
         auto algorithm_options{ options.execution_options };
         algorithm_options.quiet_mode = true;
-        const auto beta_matrix{ rhbm_gem::rhbm_helper::BuildBetaMatrix(beta_group_list.at(i)) };
+        const auto beta_matrix{ rhbm_helper::BuildBetaMatrix(beta_group_list.at(i)) };
 
         Eigen::MatrixXd local_bias_array{ Eigen::MatrixXd::Zero(3, alpha_size) };
         for (int j = 0; j < alpha_size; j++)
         {
             const auto alpha_g{ m_alpha_grid.at(static_cast<std::size_t>(j)) };
             const auto result{
-                rhbm_gem::rhbm_helper::EstimateMuMDPDE(alpha_g, beta_matrix, algorithm_options)
+                rhbm_helper::EstimateMuMDPDE(alpha_g, beta_matrix, algorithm_options)
             };
             local_bias_array.col(j) = CalculateAbsoluteGaussianDifference(
                 result.mu_mdpde,

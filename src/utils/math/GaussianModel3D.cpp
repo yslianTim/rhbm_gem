@@ -15,7 +15,7 @@ namespace
 {
 
 void RequireFiniteParameterValues(
-    const GaussianParameterVector & parameters,
+    const Eigen::VectorXd & parameters,
     std::string_view value_name)
 {
     const auto name{ std::string(value_name) };
@@ -40,14 +40,14 @@ GaussianModel3D::GaussianModel3D(double amplitude, double width, double intercep
 }
 
 void GaussianModel3D::RequireParameterVector(
-    const GaussianParameterVector & parameters,
+    const Eigen::VectorXd & parameters,
     std::string_view value_name)
 {
     eigen_validation::RequireVectorSize(parameters, kParameterSize, value_name);
     RequireFiniteParameterValues(parameters, value_name);
 }
 
-GaussianModel3D GaussianModel3D::FromVector(const GaussianParameterVector & parameters)
+GaussianModel3D GaussianModel3D::FromVector(const Eigen::VectorXd & parameters)
 {
     RequireParameterVector(parameters);
     return GaussianModel3D{
@@ -57,7 +57,7 @@ GaussianModel3D GaussianModel3D::FromVector(const GaussianParameterVector & para
     };
 }
 
-GaussianModel3D GaussianModel3D::FromVectorPrefix(const GaussianParameterVector & parameters)
+GaussianModel3D GaussianModel3D::FromVectorPrefix(const Eigen::VectorXd & parameters)
 {
     if (parameters.rows() < kParameterSize)
     {
@@ -122,9 +122,9 @@ double GaussianModel3D::GetIntercept() const
     return m_intercept;
 }
 
-GaussianParameterVector GaussianModel3D::ToVector() const
+Eigen::VectorXd GaussianModel3D::ToVector() const
 {
-    GaussianParameterVector parameters{ GaussianParameterVector::Zero(kParameterSize) };
+    Eigen::VectorXd parameters{ Eigen::VectorXd::Zero(kParameterSize) };
     parameters(kAmplitudeIndex) = m_amplitude;
     parameters(kWidthIndex) = m_width;
     parameters(kInterceptIndex) = m_intercept;

@@ -44,7 +44,7 @@ struct LinearizationContext
     bool HasModelParameters() const;
 
     static LinearizationContext FromModelParameters(
-        const GaussianParameterVector & model_parameters);
+        const Eigen::VectorXd & model_parameters);
     static LinearizationContext FromModel(const GaussianModel3D & model);
 };
 
@@ -62,7 +62,7 @@ SeriesPointList BuildLinearModelSeries(
 
 RHBMBetaVector EncodeGaussianToBeta(
     const LinearizationSpec & spec,
-    const GaussianParameterVector & gaussian_parameters);
+    const Eigen::VectorXd & gaussian_parameters);
 
 RHBMBetaVector EncodeGaussianToBeta(
     const LinearizationSpec & spec,
@@ -72,12 +72,12 @@ RHBMBetaVector EncodeGaussianToBeta(
     const LinearizationSpec & spec,
     const GaussianModel3D & gaussian_model);
 
-GaussianParameterVector DecodeLocalBeta(
+Eigen::VectorXd DecodeLocalBeta(
     const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model,
     const LinearizationContext & context = {});
 
-GaussianParameterVector DecodeGroupBeta(
+Eigen::VectorXd DecodeGroupBeta(
     const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model);
 
@@ -90,7 +90,7 @@ GaussianModel3D DecodeGroupModel3D(
     const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model);
 
-std::tuple<GaussianParameterVector, GaussianParameterVector> DecodePosterior(
+std::tuple<Eigen::VectorXd, Eigen::VectorXd> DecodePosterior(
     const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model,
     const RHBMPosteriorCovarianceMatrix & covariance_matrix);
