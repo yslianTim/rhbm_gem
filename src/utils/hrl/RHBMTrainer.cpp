@@ -20,21 +20,15 @@ namespace
 {
 constexpr double kAlphaGridTolerance{ 1.0e-12 };
 
-const linearization_service::LinearizationSpec & MetricDecodeSpec()
-{
-    static const auto spec{ linearization_service::LinearizationSpec::DefaultMetricModel() };
-    return spec;
-}
-
 Eigen::VectorXd CalculateAbsoluteGaussianDifference(
     const RHBMParameterVector & linear_a,
     const RHBMParameterVector & linear_b)
 {
     const auto gaussian_a{ linearization_service::DecodeParameterVector(
-        MetricDecodeSpec(),
+        linearization_service::LinearizationSpec::AtomDecode(),
         linear_a).ToVector() };
     const auto gaussian_b{ linearization_service::DecodeParameterVector(
-        MetricDecodeSpec(),
+        linearization_service::LinearizationSpec::AtomDecode(),
         linear_b).ToVector() };
     eigen_validation::RequireVectorSize(gaussian_a, gaussian_b.rows(), "gaussian");
     return (gaussian_a - gaussian_b).array().abs().matrix();

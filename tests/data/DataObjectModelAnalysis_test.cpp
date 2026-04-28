@@ -22,15 +22,15 @@ namespace ls = rhbm_gem::linearization_service;
 namespace
 {
 
-const ls::LinearizationSpec & AtomGroupDecodeSpec()
+const ls::LinearizationSpec & AtomDecodeSpec()
 {
-    static const auto spec{ ls::LinearizationSpec::AtomGroupDecode() };
+    static const auto spec{ ls::LinearizationSpec::AtomDecode() };
     return spec;
 }
 
-const ls::LinearizationSpec & BondGroupDecodeSpec()
+const ls::LinearizationSpec & BondDecodeSpec()
 {
-    static const auto spec{ ls::LinearizationSpec::BondGroupDecode() };
+    static const auto spec{ ls::LinearizationSpec::BondDecode() };
     return spec;
 }
 
@@ -275,10 +275,10 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupEstimateRes
     constexpr double alpha_g{ 0.25 };
     analysis.ApplyAtomGroupEstimateResult(group_key, class_key, result, alpha_g);
 
-    const auto expected_mean{ ls::DecodeParameterVector(AtomGroupDecodeSpec(), result.mu_mean) };
-    const auto expected_mdpde{ ls::DecodeParameterVector(AtomGroupDecodeSpec(), result.mu_mdpde) };
+    const auto expected_mean{ ls::DecodeParameterVector(AtomDecodeSpec(), result.mu_mean) };
+    const auto expected_mdpde{ ls::DecodeParameterVector(AtomDecodeSpec(), result.mu_mdpde) };
     const auto expected_prior{
-        ls::DecodeParameterVector(AtomGroupDecodeSpec(), result.mu_prior, result.capital_lambda)
+        ls::DecodeParameterVector(AtomDecodeSpec(), result.mu_prior, result.capital_lambda)
     };
     EXPECT_NEAR(expected_mean.GetAmplitude(), analysis_view.GetAtomGroupMean(group_key, class_key).GetAmplitude(), 1e-12);
     EXPECT_NEAR(expected_mean.GetWidth(), analysis_view.GetAtomGroupMean(group_key, class_key).GetWidth(), 1e-12);
@@ -293,7 +293,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupEstimateRes
     const auto annotation{ rg::LocalPotentialView::RequireFor(*atom_list.front()).FindAnnotation(class_key) };
     ASSERT_TRUE(annotation.has_value());
     const auto expected_gaussian{
-        ls::DecodeParameterVector(AtomGroupDecodeSpec(),
+        ls::DecodeParameterVector(AtomDecodeSpec(),
             result.beta_posterior_matrix.col(0),
             result.capital_sigma_posterior_list.front())
     };
@@ -369,9 +369,9 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesBondGroupEstimateRes
     constexpr double alpha_g{ 0.5 };
     analysis.ApplyBondGroupEstimateResult(group_key, class_key, result, alpha_g);
 
-    const auto expected_mean{ ls::DecodeParameterVector(BondGroupDecodeSpec(), result.mu_mean) };
+    const auto expected_mean{ ls::DecodeParameterVector(BondDecodeSpec(), result.mu_mean) };
     const auto expected_prior{
-        ls::DecodeParameterVector(BondGroupDecodeSpec(), result.mu_prior, result.capital_lambda)
+        ls::DecodeParameterVector(BondDecodeSpec(), result.mu_prior, result.capital_lambda)
     };
     EXPECT_NEAR(expected_mean.GetAmplitude(), analysis_view.GetBondGroupMean(group_key, class_key).GetAmplitude(), 1e-12);
     EXPECT_NEAR(expected_mean.GetWidth(), analysis_view.GetBondGroupMean(group_key, class_key).GetWidth(), 1e-12);

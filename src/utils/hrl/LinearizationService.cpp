@@ -3,7 +3,6 @@
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
-#include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <cmath>
 #include <stdexcept>
@@ -18,26 +17,23 @@ namespace {
 
 constexpr int kLogQuadraticBasisSize{ 2 };
 
-void RequireParameterVectorSize(
-    const LinearizationSpec & spec,
-    const RHBMParameterVector & parameter_vector)
+void RequireParameterVectorSize(const RHBMParameterVector & parameter_vector)
 {
-    numeric_validation::RequirePositive(spec.basis_size, "LinearizationSpec basis_size");
-    if (parameter_vector.rows() != spec.basis_size)
+    if (parameter_vector.rows() != kLogQuadraticBasisSize)
     {
-        throw std::invalid_argument("parameter_vector size must match LinearizationSpec basis_size.");
+        throw std::invalid_argument("parameter_vector size must match log-quadratic basis size.");
     }
 }
 
-void RequireSupportedDecodeSpec(const LinearizationSpec & spec)
+void RequireLinearizationRange(const LinearizationRange & range)
 {
-    if (spec.model_kind == GaussianModelKind::MODEL_2D && spec.basis_size != kLogQuadraticBasisSize)
+    if (std::isnan(range.min) || std::isnan(range.max))
     {
-        throw std::invalid_argument("2D Gaussian decode only supports basis_size == 2.");
+        throw std::invalid_argument("linearization range values must not be NaN.");
     }
-    if (spec.model_kind == GaussianModelKind::MODEL_3D && spec.basis_size != kLogQuadraticBasisSize)
+    if (range.min > range.max)
     {
-        throw std::invalid_argument("3D Gaussian decode only supports basis_size == 2.");
+        throw std::invalid_argument("linearization range min must not exceed max.");
     }
 }
 
@@ -221,7 +217,7 @@ GaussianModel3DWithUncertainty DecodeGaussianWithUncertaintyBySpec(
 
 } // namespace
 
-LinearizationSpec LinearizationSpec::BondGroupDecode()
+LinearizationSpec LinearizationSpec::BondDecode()
 {
     auto spec{ LinearizationSpec{} };
     spec.model_kind = GaussianModelKind::MODEL_2D;
@@ -229,16 +225,10 @@ LinearizationSpec LinearizationSpec::BondGroupDecode()
 }
 
 SeriesPointList BuildDatasetSeries(
-    const LinearizationSpec & spec,
     const LocalPotentialSampleList & sampling_entries,
-    double x_min,
-    double x_max)
+    const LinearizationRange & fit_range)
 {
-    numeric_validation::RequirePositive(spec.basis_size, "LinearizationSpec basis_size");
-    if (spec.basis_size != kLogQuadraticBasisSize)
-    {
-        throw std::invalid_argument("BuildDatasetSeries only supports log-quadratic basis_size == 2.");
-    }
+    RequireLinearizationRange(fit_range);
 
     SeriesPointList basis_and_response_entry_list;
     basis_and_response_entry_list.reserve(sampling_entries.size());
@@ -246,7 +236,8 @@ SeriesPointList BuildDatasetSeries(
     {
         const auto distance{ sample.distance };
         const auto gaussian_response{ static_cast<double>(sample.response) };
-        if (distance < static_cast<float>(x_min) || distance > static_cast<float>(x_max))
+        if (distance < static_cast<float>(fit_range.min) ||
+            distance > static_cast<float>(fit_range.max))
         {
             continue;
         }
@@ -272,7 +263,7 @@ SeriesPointList BuildDatasetSeries(
             "linearization_service::BuildDatasetSeries : "
             "No valid gaus data entry in the specified range.");
         basis_and_response_entry_list.emplace_back(
-            SeriesPoint{ std::vector<double>(static_cast<std::size_t>(spec.basis_size), 0.0), 0.0 });
+            SeriesPoint{ std::vector<double>(kLogQuadraticBasisSize, 0.0), 0.0 });
     }
     basis_and_response_entry_list.shrink_to_fit();
     return basis_and_response_entry_list;
@@ -282,22 +273,16 @@ RHBMParameterVector EncodeGaussianToParameterVector(
     const LinearizationSpec & spec,
     const GaussianModel3D & gaussian_model)
 {
-    numeric_validation::RequirePositive(spec.basis_size, "LinearizationSpec basis_size");
-
+    (void)spec;
     const auto encoded{ BuildLinearModelCoefficientVector(gaussian_model) };
-    if (spec.basis_size > encoded.rows())
-    {
-        throw std::invalid_argument("Requested basis size exceeds supported encoded Gaussian size.");
-    }
-    return encoded.head(spec.basis_size);
+    return encoded.head(kLogQuadraticBasisSize);
 }
 
 GaussianModel3D DecodeParameterVector(
     const LinearizationSpec & spec,
     const RHBMParameterVector & parameter_vector)
 {
-    RequireParameterVectorSize(spec, parameter_vector);
-    RequireSupportedDecodeSpec(spec);
+    RequireParameterVectorSize(parameter_vector);
     return DecodeGaussianBySpec(spec, parameter_vector);
 }
 
@@ -306,8 +291,7 @@ GaussianModel3DWithUncertainty DecodeParameterVector(
     const RHBMParameterVector & parameter_vector,
     const RHBMPosteriorCovarianceMatrix & covariance_matrix)
 {
-    RequireParameterVectorSize(spec, parameter_vector);
-    RequireSupportedDecodeSpec(spec);
+    RequireParameterVectorSize(parameter_vector);
     return DecodeGaussianWithUncertaintyBySpec(spec, parameter_vector, covariance_matrix);
 }
 

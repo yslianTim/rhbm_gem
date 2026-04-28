@@ -31,7 +31,7 @@ namespace ls = rhbm_gem::linearization_service;
 
 const ls::LinearizationSpec & AtomGaussianEncodeSpec()
 {
-    static const auto spec{ ls::LinearizationSpec::AtomGroupDecode() };
+    static const auto spec{ ls::LinearizationSpec::AtomDecode() };
     return spec;
 }
 
@@ -43,10 +43,11 @@ RHBMParameterVector EncodeAtomGaussianToParameterVector(const GaussianModel3D & 
 SeriesPointList BuildLocalDatasetSeries(const LocalPotentialView & view)
 {
     return ls::BuildDatasetSeries(
-        ls::LinearizationSpec::DefaultDataset(),
         view.GetSamplingEntries(),
-        -std::numeric_limits<double>::infinity(),
-        std::numeric_limits<double>::infinity());
+        ls::LinearizationRange{
+            -std::numeric_limits<double>::infinity(),
+            std::numeric_limits<double>::infinity()
+        });
 }
 
 } // namespace

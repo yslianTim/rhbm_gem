@@ -203,7 +203,7 @@ std::string FormatMemberBiasPanelLabel(size_t panel_index)
 test_data_factory::TestDataFactory BuildDataFactory(const RHBMTestExecutionContext & options)
 {
     test_data_factory::TestDataFactory factory(
-        linearization_service::LinearizationSpec::DefaultDataset());
+        linearization_service::LinearizationSpec::AtomDecode());
     factory.SetFittingRange(options.options.fit_range_min, options.options.fit_range_max);
     return factory;
 }

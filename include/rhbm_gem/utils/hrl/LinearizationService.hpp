@@ -16,21 +16,21 @@ enum class GaussianModelKind
 
 struct LinearizationSpec
 {
-    int basis_size{ 2 };
     GaussianModelKind model_kind{ GaussianModelKind::MODEL_3D };
 
-    static LinearizationSpec DefaultDataset() { return LinearizationSpec{}; }
-    static LinearizationSpec DefaultMetricModel() { return DefaultDataset(); }
-    static LinearizationSpec AtomLocalDecode() { return DefaultDataset(); }
-    static LinearizationSpec AtomGroupDecode() { return DefaultDataset(); }
-    static LinearizationSpec BondGroupDecode();
+    static LinearizationSpec AtomDecode() { return LinearizationSpec{}; }
+    static LinearizationSpec BondDecode();
+};
+
+struct LinearizationRange
+{
+    double min{ 0.0 };
+    double max{ 1.0 };
 };
 
 SeriesPointList BuildDatasetSeries(
-    const LinearizationSpec & spec,
     const LocalPotentialSampleList & sampling_entries,
-    double x_min,
-    double x_max);
+    const LinearizationRange & fit_range);
 
 RHBMParameterVector EncodeGaussianToParameterVector(
     const LinearizationSpec & spec,

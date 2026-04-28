@@ -24,18 +24,12 @@ std::shared_ptr<rg::ModelObject> LoadModelFixture(const std::string & fixture_na
     return std::shared_ptr<rg::ModelObject>{ std::move(model) };
 }
 
-const ls::LinearizationSpec & DatasetLinearizationSpec()
-{
-    static const auto spec{ ls::LinearizationSpec::DefaultDataset() };
-    return spec;
-}
-
 SeriesPointList BuildExpectedDatasetSeries(
     const LocalPotentialSampleList & sampling_entries,
     double x_min,
     double x_max)
 {
-    return ls::BuildDatasetSeries(DatasetLinearizationSpec(), sampling_entries, x_min, x_max);
+    return ls::BuildDatasetSeries(sampling_entries, ls::LinearizationRange{ x_min, x_max });
 }
 
 } // namespace
@@ -141,7 +135,7 @@ TEST(LocalPotentialSeriesTest, ViewForwardsSeriesDerivationsFromResolvedEntry)
     EXPECT_FLOAT_EQ(binned.at(1).score, 5.0f);
 
     const auto fit_dataset_series{
-        ls::BuildDatasetSeries(DatasetLinearizationSpec(), view.GetSamplingEntries(), 0.0, 0.5)
+        ls::BuildDatasetSeries(view.GetSamplingEntries(), ls::LinearizationRange{ 0.0, 0.5 })
     };
     ASSERT_EQ(fit_dataset_series.size(), 2U);
     EXPECT_EQ(fit_dataset_series.at(0).GetBasisSize(), 2U);

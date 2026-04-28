@@ -50,7 +50,7 @@ Eigen::VectorXd CalculateNormalizedBias(
     GaussianModel3D::RequireParameterVector(gaussian_truth, "gaussian_truth");
     const auto gaussian_estimate{
         linearization_service::DecodeParameterVector(
-            linearization_service::LinearizationSpec::DefaultMetricModel(),
+            linearization_service::LinearizationSpec::AtomDecode(),
             linear_estimate).ToVector()
     };
     eigen_validation::RequireVectorSize(gaussian_estimate, gaussian_truth.rows(), "gaussian");

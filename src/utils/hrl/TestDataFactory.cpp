@@ -275,18 +275,14 @@ SeriesPointList BuildLinearDataset(
     const LocalPotentialSampleList & sampling_entries,
     const GaussianModel3D & model,
     double error_sigma,
-    const linearization_service::LinearizationSpec & linearization_spec,
     double fit_range_min,
     double fit_range_max,
     std::mt19937 & generator)
 {
     auto linear_data_entry_list{
         linearization_service::BuildDatasetSeries(
-            linearization_spec,
             sampling_entries,
-            fit_range_min,
-            fit_range_max
-        )
+            linearization_service::LinearizationRange{ fit_range_min, fit_range_max })
     };
     const auto max_response{ model.Intensity() };
     std::normal_distribution<> dist_error(0.0, error_sigma * max_response);
@@ -302,7 +298,6 @@ SeriesPointList BuildLinearDataset(
     const GaussianModel3D & model,
     double error_sigma,
     double outlier_ratio,
-    const linearization_service::LinearizationSpec & linearization_spec,
     double fit_range_min,
     double fit_range_max,
     std::mt19937 & generator)
@@ -320,7 +315,6 @@ SeriesPointList BuildLinearDataset(
         sampling_entries,
         model,
         error_sigma,
-        linearization_spec,
         fit_range_min,
         fit_range_max,
         generator);
@@ -331,7 +325,6 @@ SeriesPointList BuildLinearDatasetWithNeighborhood(
     const GaussianModel3D & model,
     double error_sigma,
     const NeighborhoodSamplingOptions & options,
-    const linearization_service::LinearizationSpec & linearization_spec,
     double fit_range_min,
     double fit_range_max,
     std::mt19937 & generator)
@@ -341,7 +334,6 @@ SeriesPointList BuildLinearDatasetWithNeighborhood(
         sampling_entries,
         model,
         error_sigma,
-        linearization_spec,
         fit_range_min,
         fit_range_max,
         generator);
@@ -394,8 +386,16 @@ Eigen::MatrixXd BuildBetaMatrix(
     const linearization_service::LinearizationSpec & linearization_spec)
 {
     const auto member_size{ static_cast<int>(gaus_array.cols()) };
-    Eigen::MatrixXd beta_matrix{ Eigen::MatrixXd::Zero(linearization_spec.basis_size, member_size) };
-    for (int i = 0; i < member_size; i++)
+    if (member_size == 0)
+    {
+        return Eigen::MatrixXd{};
+    }
+
+    const auto first_beta{ linearization_service::EncodeGaussianToParameterVector(
+        linearization_spec, GaussianModel3D::FromVector(gaus_array.col(0))) };
+    Eigen::MatrixXd beta_matrix{ Eigen::MatrixXd::Zero(first_beta.rows(), member_size) };
+    beta_matrix.col(0) = first_beta;
+    for (int i = 1; i < member_size; i++)
     {
         beta_matrix.col(i) = linearization_service::EncodeGaussianToParameterVector(
             linearization_spec, GaussianModel3D::FromVector(gaus_array.col(i)));
@@ -412,7 +412,6 @@ TestDataFactory::TestDataFactory(linearization_service::LinearizationSpec linear
     m_fit_range_min{ 0.0 },
     m_fit_range_max{ 1.0 }
 {
-    numeric_validation::RequirePositive(m_linearization_spec.basis_size, "linearization_spec basis_size");
 }
 
 void TestDataFactory::SetFittingRange(double x_min, double x_max)
@@ -443,7 +442,6 @@ RHBMBetaTestInput TestDataFactory::BuildBetaTestInput(const BetaScenario & scena
                 scenario.gaus_true,
                 scenario.data_error_sigma,
                 scenario.outlier_ratio,
-                m_linearization_spec,
                 m_fit_range_min,
                 m_fit_range_max,
                 generator
@@ -559,7 +557,6 @@ RHBMNeighborhoodTestInput TestDataFactory::BuildNeighborhoodTestInput(
                 scenario.gaus_true,
                 scenario.data_error_sigma,
                 no_cut_options,
-                m_linearization_spec,
                 m_fit_range_min,
                 m_fit_range_max,
                 generator
@@ -571,7 +568,6 @@ RHBMNeighborhoodTestInput TestDataFactory::BuildNeighborhoodTestInput(
                 scenario.gaus_true,
                 scenario.data_error_sigma,
                 cut_options,
-                m_linearization_spec,
                 m_fit_range_min,
                 m_fit_range_max,
                 generator

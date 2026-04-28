@@ -536,7 +536,7 @@ void PotentialAnalysisCommand::RunDatasetPreparationWorkflow(
     const auto atom_size{ atom_list.size() };
     size_t atom_count{ 0 };
     auto local_entry_list{ BuildSelectedAtomLocalEntryViews(model_object) };
-    const auto dataset_spec{ linearization_service::LinearizationSpec::DefaultDataset() };
+    const linearization_service::LinearizationRange fit_range{ fit_range_min, fit_range_max };
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(ThreadSize())
@@ -547,11 +547,7 @@ void PotentialAnalysisCommand::RunDatasetPreparationWorkflow(
         const auto local_view{ LocalPotentialView::RequireFor(*atom_list[i]) };
         entry.SetDataset(
             rhbm_helper::BuildMemberDataset(
-                linearization_service::BuildDatasetSeries(
-                    dataset_spec,
-                    local_view.GetSamplingEntries(),
-                    fit_range_min,
-                    fit_range_max))
+                linearization_service::BuildDatasetSeries(local_view.GetSamplingEntries(),fit_range))
         );
 
 #ifdef USE_OPENMP

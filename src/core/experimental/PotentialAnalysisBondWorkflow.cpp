@@ -28,8 +28,6 @@
 namespace rhbm_gem::experimental {
 
 namespace {
-namespace ls = rhbm_gem::linearization_service;
-
 
 struct PotentialAnalysisBondWorkflowContext
 {
@@ -49,12 +47,6 @@ RHBMExecutionOptions MakePotentialAnalysisExecutionOptions(
     return execution_options;
 }
 
-const ls::LinearizationSpec & GaussianDatasetSpec()
-{
-    static const auto spec{ ls::LinearizationSpec::DefaultDataset() };
-    return spec;
-}
-
 void RunBondSampling(
     ModelObject & model_object,
     const MapObject & map_object,
@@ -62,7 +54,10 @@ void RunBondSampling(
     int thread_size)
 {
     ScopeTimer timer("PotentialAnalysisBondWorkflow::RunBondMapValueSampling");
-    const auto & dataset_spec{ GaussianDatasetSpec() };
+    const linearization_service::LinearizationRange fit_range{
+        options.fit_range_min,
+        options.fit_range_max
+    };
     CylinderSampler sampler;
     sampler.SetSampleCount(static_cast<unsigned int>(options.sampling_size));
     sampler.SetDistanceRange(options.sampling_range_min, options.sampling_range_max);
@@ -104,14 +99,9 @@ void RunBondSampling(
                     bond_vector)
             };
             entry.SetSamplingEntries(sampling_entries);
-            const auto local_view{ LocalPotentialView::RequireFor(*bond) };
             entry.SetDataset(
-                rhbm_gem::rhbm_helper::BuildMemberDataset(
-                    ls::BuildDatasetSeries(
-                        dataset_spec,
-                        sampling_entries,
-                        options.fit_range_min,
-                        options.fit_range_max))
+                rhbm_helper::BuildMemberDataset(
+                    linearization_service::BuildDatasetSeries(sampling_entries, fit_range))
             );
             entry.SetAlphaR(options.alpha_r);
             #pragma omp critical
@@ -135,12 +125,8 @@ void RunBondSampling(
         };
         entry.SetSamplingEntries(sampling_entries);
         entry.SetDataset(
-            rhbm_gem::rhbm_helper::BuildMemberDataset(
-                ls::BuildDatasetSeries(
-                    dataset_spec,
-                    sampling_entries,
-                    options.fit_range_min,
-                    options.fit_range_max))
+            rhbm_helper::BuildMemberDataset(
+                linearization_service::BuildDatasetSeries(sampling_entries, fit_range))
         );
         entry.SetAlphaR(options.alpha_r);
         bond_count++;
@@ -195,7 +181,7 @@ void RunLocalBondFitting(
         auto local_entry{ local_entry_list[i] };
         const auto & dataset{ local_entry.GetDataset() };
         const auto result{
-            rhbm_gem::rhbm_helper::EstimateBetaMDPDE(
+            rhbm_helper::EstimateBetaMDPDE(
                 universal_alpha_r,
                 dataset,
                 MakePotentialAnalysisExecutionOptions(context.thread_size, true))
@@ -252,11 +238,9 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
                 member_datasets.emplace_back(dataset);
                 member_fit_results.emplace_back(local_entry.GetFitResult());
             }
-            const auto input{
-                rhbm_gem::rhbm_helper::BuildGroupInput(member_datasets, member_fit_results)
-            };
+            const auto input{ rhbm_helper::BuildGroupInput(member_datasets, member_fit_results) };
             const auto result{
-                rhbm_gem::rhbm_helper::EstimateGroup(
+                rhbm_helper::EstimateGroup(
                     context.options.alpha_g,
                     input,
                     MakePotentialAnalysisExecutionOptions(context.thread_size, true))

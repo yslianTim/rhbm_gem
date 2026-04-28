@@ -84,7 +84,7 @@ void ExpectSamplingEntriesEquals(
 TEST(TestDataFactoryTest, BuildBetaTestInputIsReproducibleWithFixedSeed)
 {
     tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
     factory.SetFittingRange(0.0, 1.0);
 
     const auto scenario{ tdf::TestDataFactory::BetaScenario{
@@ -112,7 +112,7 @@ TEST(TestDataFactoryTest, BuildBetaTestInputIsReproducibleWithFixedSeed)
 TEST(TestDataFactoryTest, BuildBetaTestInputChangesWhenOutlierPolicyChanges)
 {
     tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
     factory.SetFittingRange(0.0, 1.0);
 
     const auto base_scenario{ tdf::TestDataFactory::BetaScenario{
@@ -141,7 +141,7 @@ TEST(TestDataFactoryTest, BuildBetaTestInputChangesWhenOutlierPolicyChanges)
 TEST(TestDataFactoryTest, BuildBetaTestInputChangesWhenNoisePolicyChanges)
 {
     tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
     factory.SetFittingRange(0.0, 1.0);
 
     const auto noiseless_scenario{ tdf::TestDataFactory::BetaScenario{
@@ -170,7 +170,7 @@ TEST(TestDataFactoryTest, BuildBetaTestInputChangesWhenNoisePolicyChanges)
 TEST(TestDataFactoryTest, BuildBetaTestInputUsesExpectedZeroDistanceGaussianResponse)
 {
     tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
     factory.SetFittingRange(0.0, 0.0);
 
     constexpr double amplitude{ 2.0 };
@@ -205,7 +205,7 @@ TEST(TestDataFactoryTest, BuildBetaTestInputUsesExpectedZeroDistanceGaussianResp
 TEST(TestDataFactoryTest, BuildMuTestInputIsReproducibleWithFixedSeed)
 {
     tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
 
     const auto scenario{ tdf::TestDataFactory::MuScenario{
         4,
@@ -234,7 +234,7 @@ TEST(TestDataFactoryTest, BuildMuTestInputIsReproducibleWithFixedSeed)
 TEST(TestDataFactoryTest, BuildNeighborhoodTestInputProvidesPairedDatasetsAndSamplingSummary)
 {
     tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
     factory.SetFittingRange(0.0, 1.0);
 
     const auto input{
@@ -280,7 +280,7 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputProvidesPairedDatasetsAndSam
 TEST(TestDataFactoryTest, BuildNeighborhoodTestInputSamplingSummaryIncludesNeighborContribution)
 {
     tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
     factory.SetFittingRange(0.0, 1.0);
 
     constexpr double amplitude{ 2.0 };
@@ -323,7 +323,7 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputSamplingSummaryIncludesNeigh
 TEST(TestDataFactoryTest, BuildNeighborhoodTestInputIsReproducibleWithFixedSeed)
 {
     tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
     factory.SetFittingRange(0.0, 1.0);
 
     const auto scenario{ tdf::TestDataFactory::NeighborhoodScenario{
@@ -372,7 +372,7 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputIsReproducibleWithFixedSeed)
 TEST(TestDataFactoryTest, BuildTestInputsRejectNonPositiveGaussianWidth)
 {
     tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
 
     EXPECT_THROW(
         factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
@@ -403,21 +403,10 @@ TEST(TestDataFactoryTest, BuildTestInputsRejectNonPositiveGaussianWidth)
         std::invalid_argument);
 }
 
-TEST(TestDataFactoryTest, ConstructorRejectsInvalidNumericInputs)
-{
-    auto spec{ rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset() };
-    spec.basis_size = 0;
-    EXPECT_THROW(
-        {
-            tdf::TestDataFactory factory{ spec };
-        },
-        std::invalid_argument);
-}
-
 TEST(TestDataFactoryTest, BuildMuTestInputRejectsInvalidGaussianVectorSize)
 {
     tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
 
     EXPECT_THROW(
         factory.BuildMuTestInput(tdf::TestDataFactory::MuScenario{
@@ -436,7 +425,7 @@ TEST(TestDataFactoryTest, BuildMuTestInputRejectsInvalidGaussianVectorSize)
 TEST(TestDataFactoryTest, SetFittingRangeRejectsInvalidRange)
 {
     tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
 
     EXPECT_THROW(factory.SetFittingRange(-1.0, 1.0), std::invalid_argument);
     EXPECT_THROW(factory.SetFittingRange(2.0, 1.0), std::invalid_argument);
@@ -448,7 +437,7 @@ TEST(TestDataFactoryTest, SetFittingRangeRejectsInvalidRange)
 TEST(TestDataFactoryTest, BuildNeighborhoodTestInputRejectsInvalidSamplingInputs)
 {
     tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
 
     EXPECT_THROW(
         factory.BuildNeighborhoodTestInput(tdf::TestDataFactory::NeighborhoodScenario{
@@ -506,7 +495,7 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputRejectsInvalidSamplingInputs
 TEST(TestDataFactoryTest, BuildBetaTestInputRejectsNonPositiveScenarioSizes)
 {
     tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
 
     EXPECT_THROW(
         factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{

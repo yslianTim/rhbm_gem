@@ -34,7 +34,7 @@ void ExpectBiasStatisticSize(const rt::BiasStatistics & bias)
 TEST(RHBMTesterTest, RunBetaMDPDETestPopulatesBiasOutputs)
 {
     tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
     factory.SetFittingRange(0.0, 1.0);
     const std::vector<double> alpha_r_list{ 0.0, 0.5 };
     const auto test_input{
@@ -74,7 +74,7 @@ TEST(RHBMTesterTest, RunBetaMDPDETestPopulatesBiasOutputs)
 TEST(RHBMTesterTest, RunMuMDPDETestPopulatesBiasOutputs)
 {
     tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
     const std::vector<double> alpha_g_list{ 0.2 };
     const auto test_input{
         factory.BuildMuTestInput(tdf::TestDataFactory::MuScenario{
@@ -115,7 +115,7 @@ TEST(RHBMTesterTest, RunMuMDPDETestPopulatesBiasOutputs)
 TEST(RHBMTesterTest, RunBetaMDPDETestSkipsTrainedAlphaWhenDisabled)
 {
     tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
     factory.SetFittingRange(0.0, 1.0);
     const std::vector<double> alpha_r_list{ 0.5 };
     const auto test_input{
@@ -150,7 +150,7 @@ TEST(RHBMTesterTest, RunBetaMDPDETestSkipsTrainedAlphaWhenDisabled)
 TEST(RHBMTesterTest, RunMuMDPDETestSkipsTrainedAlphaWhenDisabled)
 {
     tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
     const std::vector<double> alpha_g_list{ 0.2 };
     const auto test_input{
         factory.BuildMuTestInput(tdf::TestDataFactory::MuScenario{
@@ -186,7 +186,7 @@ TEST(RHBMTesterTest, RunMuMDPDETestSkipsTrainedAlphaWhenDisabled)
 TEST(RHBMTesterTest, RunBetaMDPDETestAllowsEmptyAlphaListWithoutTraining)
 {
     tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
     factory.SetFittingRange(0.0, 1.0);
     const auto test_input{
         factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
@@ -219,7 +219,7 @@ TEST(RHBMTesterTest, RunBetaMDPDETestAllowsEmptyAlphaListWithoutTraining)
 TEST(RHBMTesterTest, RunBetaMDPDETestAllowsEmptyAlphaListWithTraining)
 {
     tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
     factory.SetFittingRange(0.0, 1.0);
     const auto test_input{
         factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
@@ -254,7 +254,7 @@ TEST(RHBMTesterTest, RunBetaMDPDETestAllowsEmptyAlphaListWithTraining)
 TEST(RHBMTesterTest, RunBetaMDPDETestRejectsWrongSizedTruth)
 {
     tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
+        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
     factory.SetFittingRange(0.0, 1.0);
     auto test_input{
         factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
