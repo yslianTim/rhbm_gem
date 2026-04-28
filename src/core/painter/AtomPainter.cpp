@@ -131,8 +131,8 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
     map_value_hist->Draw("CANDLE2 SAME");
 
     const auto & estimate{ atom_entry.GetEstimateMDPDE() };
-    auto amplitude{ estimate.amplitude };
-    auto width{ estimate.width };
+    auto amplitude{ estimate.GetAmplitude() };
+    auto width{ estimate.GetWidth() };
     auto gaus_func{ root_helper::CreateGaus3DFunctionIn1D("gaus", amplitude, width) };
     root_helper::SetLineAttribute(gaus_func.get(), 9, 4, kRed+1);
     gaus_func->Draw("SAME");
@@ -215,8 +215,8 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         root_helper::SetTextAttribute(result_text.get(), 50.0f, 133, 12, 0.0, kRed);
         root_helper::SetFillAttribute(result_text.get(), 4000);
         const auto & estimate_mdpde{ entry_view.GetEstimateMDPDE() };
-        auto amplitude_prior{ estimate_mdpde.amplitude };
-        auto width_prior{ estimate_mdpde.width };
+        auto amplitude_prior{ estimate_mdpde.GetAmplitude() };
+        auto width_prior{ estimate_mdpde.GetWidth() };
         result_text->AddText(Form("#font[2]{A} = %.2f", amplitude_prior));
         result_text->AddText(Form("#tau = %.2f", width_prior));
         //result_text->Draw();

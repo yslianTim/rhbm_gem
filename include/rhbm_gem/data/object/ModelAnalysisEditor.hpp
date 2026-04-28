@@ -18,7 +18,10 @@ class ModelObject;
 
 struct LocalPotentialAnnotationData
 {
-    GaussianEstimateWithUncertainty gaussian{};
+    GaussianModel3DWithUncertainty gaussian{
+        GaussianModel3D{ 0.0, 0.0 },
+        GaussianModel3DUncertainty{}
+    };
     bool is_outlier{ false };
     double statistical_distance{ 0.0 };
 };

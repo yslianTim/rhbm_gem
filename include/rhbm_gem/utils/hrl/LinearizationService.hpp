@@ -66,10 +66,6 @@ RHBMBetaVector EncodeGaussianToBeta(
 
 RHBMBetaVector EncodeGaussianToBeta(
     const LinearizationSpec & spec,
-    const GaussianEstimate & gaussian_estimate);
-
-RHBMBetaVector EncodeGaussianToBeta(
-    const LinearizationSpec & spec,
     const GaussianModel3D & gaussian_model);
 
 Eigen::VectorXd DecodeLocalBeta(
@@ -95,16 +91,16 @@ std::tuple<Eigen::VectorXd, Eigen::VectorXd> DecodePosterior(
     const RHBMBetaVector & linear_model,
     const RHBMPosteriorCovarianceMatrix & covariance_matrix);
 
-GaussianEstimate DecodeLocalEstimate(
+GaussianModel3D DecodeLocalEstimate(
     const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model,
     const LinearizationContext & context = {});
 
-GaussianEstimate DecodeGroupEstimate(
+GaussianModel3D DecodeGroupEstimate(
     const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model);
 
-GaussianEstimateWithUncertainty DecodeGaussianEstimateWithUncertainty(
+GaussianModel3DWithUncertainty DecodeGaussianModel3DWithUncertainty(
     const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model,
     const RHBMPosteriorCovarianceMatrix & covariance_matrix);

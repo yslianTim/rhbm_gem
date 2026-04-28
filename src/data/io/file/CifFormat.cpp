@@ -1587,7 +1587,7 @@ void WriteAtomSiteBlock(
         if (ModelAnalysisData::FindLocalEntry(*atom) == nullptr)
             continue;
         const auto & model_entry{ModelAnalysisData::RequireLocalEntry(*atom)};
-        auto gaus_estimate{model_entry.GetEstimateMDPDE().GetParameter(model_par)};
+        auto gaus_estimate{model_entry.GetEstimateMDPDE().GetDisplayParameter(model_par)};
         auto position{atom->GetPosition()};
         WriteAtomSiteBlockEntry(
             atom,

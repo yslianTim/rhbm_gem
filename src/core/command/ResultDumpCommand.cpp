@@ -293,8 +293,8 @@ void ResultDumpCommand::RunGausEstimatesDumping()
         {
             const auto entry{ LocalPotentialView::RequireFor(*atom) };
             const auto & estimate{ entry.GetEstimateMDPDE() };
-            outfile << atom->GetSerialID() << ',' << estimate.amplitude << ','
-                    << estimate.width << ',' << atom->GetPosition().at(0) << ','
+            outfile << atom->GetSerialID() << ',' << estimate.GetAmplitude() << ','
+                    << estimate.GetWidth() << ',' << atom->GetPosition().at(0) << ','
                     << atom->GetPosition().at(1) << ',' << atom->GetPosition().at(2) << ','
                     << ChemicalDataHelper::GetLabel(atom->GetResidue()) << ','
                     << ChemicalDataHelper::GetLabel(atom->GetElement()) << ','

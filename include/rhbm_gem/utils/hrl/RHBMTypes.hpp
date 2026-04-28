@@ -1,14 +1,11 @@
 #pragma once
 
-#include <cmath>
 #include <cstdint>
 #include <optional>
-#include <stdexcept>
 #include <vector>
 
 #include <Eigen/Dense>
 
-#include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
 namespace rhbm_gem {
@@ -24,112 +21,6 @@ using RHBMMemberCovarianceMatrix = Eigen::MatrixXd;
 using RHBMBetaPosteriorMatrix = Eigen::MatrixXd;
 using RHBMPosteriorCovarianceMatrix = Eigen::MatrixXd;
 using RHBMDiagonalMatrix = Eigen::DiagonalMatrix<double, Eigen::Dynamic>;
-
-struct GaussianEstimate
-{
-    double amplitude{ 0.0 };
-    double width{ 0.0 };
-
-    GaussianModel3D ToModel() const
-    {
-        return GaussianModel3D{ amplitude, width, 0.0 };
-    }
-
-    static GaussianEstimate FromModel(const GaussianModel3D & model)
-    {
-        return GaussianEstimate{ model.GetAmplitude(), model.GetWidth() };
-    }
-
-    double GetModelParameter(int par_id) const
-    {
-        return ToModel().GetModelParameter(par_id);
-    }
-
-    double GetParameter(int par_id) const
-    {
-        switch (par_id)
-        {
-        case GaussianModel3D::AmplitudeIndex():
-            return amplitude;
-        case GaussianModel3D::WidthIndex():
-            return width;
-        case GaussianModel3D::InterceptIndex():
-            return Intensity();
-        default:
-            throw std::out_of_range("GaussianEstimate parameter index is out of range.");
-        }
-    }
-
-    double Intensity() const
-    {
-        return ToModel().Intensity();
-    }
-
-};
-
-struct GaussianParameterUncertainty
-{
-    double amplitude{ 0.0 };
-    double width{ 0.0 };
-    double intercept{ 0.0 };
-
-    double GetModelParameter(int par_id) const
-    {
-        switch (par_id)
-        {
-        case GaussianModel3D::AmplitudeIndex():
-            return amplitude;
-        case GaussianModel3D::WidthIndex():
-            return width;
-        case GaussianModel3D::InterceptIndex():
-            return intercept;
-        default:
-            throw std::out_of_range(
-                "GaussianParameterUncertainty parameter index is out of range.");
-        }
-    }
-};
-
-struct GaussianEstimateWithUncertainty
-{
-    GaussianEstimate estimate{};
-    GaussianParameterUncertainty standard_deviation{};
-
-    double GetEstimate(int par_id) const
-    {
-        return estimate.GetParameter(par_id);
-    }
-
-    double GetStandardDeviation(int par_id) const
-    {
-        switch (par_id)
-        {
-        case 0:
-            return standard_deviation.amplitude;
-        case 1:
-            return standard_deviation.width;
-        case 2:
-            return IntensityStandardDeviation();
-        default:
-            throw std::out_of_range(
-                "GaussianEstimateWithUncertainty standard deviation index is out of range.");
-        }
-    }
-
-    double IntensityStandardDeviation() const
-    {
-        const auto sigma_amplitude{ standard_deviation.amplitude };
-        const auto sigma_width{ standard_deviation.width };
-        const auto amplitude{ estimate.amplitude };
-        const auto width{ estimate.width };
-        return std::sqrt(
-            std::pow(std::pow(Constants::two_pi * width * width, -1.5) * sigma_amplitude, 2) +
-            std::pow(
-                -3.0 * amplitude * std::pow(Constants::two_pi, -1.5)
-                    * std::pow(width, -4) * sigma_width,
-                2));
-    }
-};
 
 enum class RHBMEstimationStatus
 {

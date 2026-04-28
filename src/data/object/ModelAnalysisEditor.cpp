@@ -19,8 +19,8 @@ namespace ls = rhbm_gem::linearization_service;
 
 struct LocalPotentialEstimates
 {
-    GaussianEstimate ols{};
-    GaussianEstimate mdpde{};
+    GaussianModel3D ols{};
+    GaussianModel3D mdpde{};
 };
 
 ls::LinearizationContext BuildLocalDecodeContext(const LocalPotentialEntry & entry)
@@ -191,7 +191,7 @@ void ApplyAtomGroupStatistics(
     const auto gaus_group_mean{ ls::DecodeGroupEstimate(AtomGroupDecodeSpec(), result.mu_mean) };
     const auto gaus_group_mdpde{ ls::DecodeGroupEstimate(AtomGroupDecodeSpec(), result.mu_mdpde) };
     const auto gaus_prior{
-        ls::DecodeGaussianEstimateWithUncertainty(
+        ls::DecodeGaussianModel3DWithUncertainty(
             AtomGroupDecodeSpec(),
             result.mu_prior,
             result.capital_lambda)
@@ -201,8 +201,8 @@ void ApplyAtomGroupStatistics(
         group_key,
         gaus_group_mean,
         gaus_group_mdpde,
-        gaus_prior.estimate,
-        gaus_prior.standard_deviation,
+        gaus_prior.GetModel(),
+        gaus_prior.GetStandardDeviationModel(),
         alpha_g);
 }
 
@@ -216,7 +216,7 @@ void ApplyBondGroupStatistics(
     const auto gaus_group_mean{ ls::DecodeGroupEstimate(BondGroupDecodeSpec(), result.mu_mean) };
     const auto gaus_group_mdpde{ ls::DecodeGroupEstimate(BondGroupDecodeSpec(), result.mu_mdpde) };
     const auto gaus_prior{
-        ls::DecodeGaussianEstimateWithUncertainty(
+        ls::DecodeGaussianModel3DWithUncertainty(
             BondGroupDecodeSpec(),
             result.mu_prior,
             result.capital_lambda)
@@ -226,8 +226,8 @@ void ApplyBondGroupStatistics(
         group_key,
         gaus_group_mean,
         gaus_group_mdpde,
-        gaus_prior.estimate,
-        gaus_prior.standard_deviation,
+        gaus_prior.GetModel(),
+        gaus_prior.GetStandardDeviationModel(),
         alpha_g);
 }
 
@@ -240,7 +240,7 @@ LocalPotentialAnnotationData BuildAtomAnnotationData(
         result.capital_sigma_posterior_list.at(static_cast<std::size_t>(member_index))
     };
     const auto gaussian_with_uncertainty{
-        ls::DecodeGaussianEstimateWithUncertainty(
+        ls::DecodeGaussianModel3DWithUncertainty(
             AtomGroupDecodeSpec(),
             beta_vector_posterior,
             sigma_matrix_posterior)
@@ -261,7 +261,7 @@ LocalPotentialAnnotationData BuildBondAnnotationData(
         result.capital_sigma_posterior_list.at(static_cast<std::size_t>(member_index))
     };
     const auto gaussian_with_uncertainty{
-        ls::DecodeGaussianEstimateWithUncertainty(
+        ls::DecodeGaussianModel3DWithUncertainty(
             BondGroupDecodeSpec(),
             beta_vector_posterior,
             sigma_matrix_posterior)

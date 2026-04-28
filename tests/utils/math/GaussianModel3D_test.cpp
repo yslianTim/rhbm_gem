@@ -127,3 +127,73 @@ TEST(GaussianModel3DTest, ZeroWidthKeepsExistingFallbackBehavior)
     EXPECT_DOUBLE_EQ(model.Intensity(), 0.0);
     EXPECT_DOUBLE_EQ(model.ResponseAtDistance(0.75), model.GetIntercept());
 }
+
+TEST(GaussianModel3DTest, DisplayParameterKeepsIntensitySeparateFromModelIntercept)
+{
+    const rg::GaussianModel3D model{ 9.0, 1.5, 0.25 };
+
+    EXPECT_DOUBLE_EQ(
+        model.GetModelParameter(rg::GaussianModel3D::InterceptIndex()),
+        model.GetIntercept());
+    EXPECT_DOUBLE_EQ(
+        model.GetDisplayParameter(rg::GaussianModel3D::InterceptIndex()),
+        model.Intensity());
+}
+
+TEST(GaussianModel3DTest, UncertaintyRoundTripsThroughCanonicalVector)
+{
+    const rg::GaussianModel3DUncertainty uncertainty{ 0.5, 0.2, 0.1 };
+
+    const auto parameters{ uncertainty.ToVector() };
+
+    ASSERT_EQ(parameters.size(), rg::GaussianModel3D::ParameterSize());
+    EXPECT_DOUBLE_EQ(parameters(rg::GaussianModel3D::AmplitudeIndex()), 0.5);
+    EXPECT_DOUBLE_EQ(parameters(rg::GaussianModel3D::WidthIndex()), 0.2);
+    EXPECT_DOUBLE_EQ(parameters(rg::GaussianModel3D::InterceptIndex()), 0.1);
+}
+
+TEST(GaussianModel3DTest, UncertaintyRequiresFiniteNonNegativeValues)
+{
+    EXPECT_NO_THROW(rg::GaussianModel3DUncertainty::RequireFiniteNonNegativeUncertainty(
+        rg::GaussianModel3DUncertainty{ 0.5, 0.2, 0.0 }));
+    EXPECT_THROW(
+        rg::GaussianModel3DUncertainty::RequireFiniteNonNegativeUncertainty(
+            rg::GaussianModel3DUncertainty{ -0.5, 0.2, 0.0 }),
+        std::invalid_argument);
+    EXPECT_THROW(
+        rg::GaussianModel3DUncertainty::RequireFiniteNonNegativeUncertainty(
+            rg::GaussianModel3DUncertainty{
+                0.5,
+                std::numeric_limits<double>::infinity(),
+                0.0 }),
+        std::invalid_argument);
+}
+
+TEST(GaussianModel3DTest, WithUncertaintyComputesIntensityStandardDeviation)
+{
+    const rg::GaussianModel3D model{ 9.0, 1.5 };
+    const rg::GaussianModel3DUncertainty standard_deviation{ 0.5, 0.2 };
+    const rg::GaussianModel3DWithUncertainty gaussian{ model, standard_deviation };
+
+    const auto expected_intensity{
+        model.GetAmplitude()
+        * std::pow(Constants::two_pi * model.GetWidth() * model.GetWidth(), -1.5) };
+    const auto expected_intensity_standard_deviation{
+        std::sqrt(
+            std::pow(
+                expected_intensity * standard_deviation.GetAmplitude() / model.GetAmplitude(),
+                2)
+            + std::pow(
+                -3.0 * model.GetAmplitude() * std::pow(Constants::two_pi, -1.5)
+                    * std::pow(model.GetWidth(), -4) * standard_deviation.GetWidth(),
+                2))
+    };
+
+    EXPECT_DOUBLE_EQ(gaussian.GetModel().GetAmplitude(), model.GetAmplitude());
+    EXPECT_DOUBLE_EQ(
+        gaussian.GetStandardDeviationModel().GetWidth(),
+        standard_deviation.GetWidth());
+    EXPECT_DOUBLE_EQ(
+        gaussian.GetDisplayStandardDeviation(rg::GaussianModel3D::InterceptIndex()),
+        expected_intensity_standard_deviation);
+}

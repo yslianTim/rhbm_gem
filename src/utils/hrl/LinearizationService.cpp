@@ -24,23 +24,23 @@ const GaussianModel3D & RequireContextModel(
     return context.model.value();
 }
 
-GaussianEstimate BuildGaussianEstimate(const Eigen::VectorXd & gaussian_parameters)
+GaussianModel3D BuildGaussianModel(const Eigen::VectorXd & gaussian_parameters)
 {
     if (gaussian_parameters.rows() < 2)
     {
         throw std::invalid_argument("Gaussian parameter vector must have at least two entries.");
     }
-    return GaussianEstimate{ gaussian_parameters(0), gaussian_parameters(1) };
+    return GaussianModel3D{ gaussian_parameters(0), gaussian_parameters(1) };
 }
 
-GaussianParameterUncertainty BuildGaussianParameterUncertainty(
+GaussianModel3DUncertainty BuildGaussianModelUncertainty(
     const Eigen::VectorXd & gaussian_parameters)
 {
     if (gaussian_parameters.rows() < 2)
     {
         throw std::invalid_argument("Gaussian parameter vector must have at least two entries.");
     }
-    return GaussianParameterUncertainty{
+    return GaussianModel3DUncertainty{
         gaussian_parameters(GaussianModel3D::AmplitudeIndex()),
         gaussian_parameters(GaussianModel3D::WidthIndex()),
         (gaussian_parameters.rows() > GaussianModel3D::InterceptIndex()) ?
@@ -523,13 +523,6 @@ RHBMBetaVector EncodeGaussianToBeta(
 
 RHBMBetaVector EncodeGaussianToBeta(
     const LinearizationSpec & spec,
-    const GaussianEstimate & gaussian_estimate)
-{
-    return EncodeGaussianToBeta(spec, gaussian_estimate.ToModel());
-}
-
-RHBMBetaVector EncodeGaussianToBeta(
-    const LinearizationSpec & spec,
     const GaussianModel3D & gaussian_model)
 {
     numeric_validation::RequirePositive(spec.basis_size, "LinearizationSpec basis_size");
@@ -604,30 +597,30 @@ std::tuple<Eigen::VectorXd, Eigen::VectorXd> DecodePosterior(
     throw std::invalid_argument("Unsupported Gaussian model kind.");
 }
 
-GaussianEstimate DecodeLocalEstimate(
+GaussianModel3D DecodeLocalEstimate(
     const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model,
     const LinearizationContext & context)
 {
-    return BuildGaussianEstimate(DecodeLocalBeta(spec, linear_model, context));
+    return BuildGaussianModel(DecodeLocalBeta(spec, linear_model, context));
 }
 
-GaussianEstimate DecodeGroupEstimate(
+GaussianModel3D DecodeGroupEstimate(
     const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model)
 {
-    return BuildGaussianEstimate(DecodeGroupBeta(spec, linear_model));
+    return BuildGaussianModel(DecodeGroupBeta(spec, linear_model));
 }
 
-GaussianEstimateWithUncertainty DecodeGaussianEstimateWithUncertainty(
+GaussianModel3DWithUncertainty DecodeGaussianModel3DWithUncertainty(
     const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model,
     const RHBMPosteriorCovarianceMatrix & covariance_matrix)
 {
     const auto decoded{ DecodePosterior(spec, linear_model, covariance_matrix) };
-    return GaussianEstimateWithUncertainty{
-        BuildGaussianEstimate(std::get<0>(decoded)),
-        BuildGaussianParameterUncertainty(std::get<1>(decoded))
+    return GaussianModel3DWithUncertainty{
+        BuildGaussianModel(std::get<0>(decoded)),
+        BuildGaussianModelUncertainty(std::get<1>(decoded))
     };
 }
 

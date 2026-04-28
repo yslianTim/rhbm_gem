@@ -71,13 +71,13 @@ TEST(LinearizationServiceTest, EncodeGaussianToBetaMatchesClosedForm)
 
 TEST(LinearizationServiceTest, EncodeGaussianEstimateToBetaMatchesClosedForm)
 {
-    const rhbm_gem::GaussianEstimate estimate{ 2.0, 0.5 };
+    const rhbm_gem::GaussianModel3D estimate{ 2.0, 0.5 };
     const auto beta{ ls::EncodeGaussianToBeta(DatasetLinearizationSpec(), estimate) };
     const auto expected_beta0{
-        std::log(estimate.amplitude)
-            - 1.5 * std::log(Constants::two_pi * estimate.width * estimate.width)
+        std::log(estimate.GetAmplitude())
+            - 1.5 * std::log(Constants::two_pi * estimate.GetWidth() * estimate.GetWidth())
     };
-    const auto expected_beta1{ 1.0 / (estimate.width * estimate.width) };
+    const auto expected_beta1{ 1.0 / (estimate.GetWidth() * estimate.GetWidth()) };
 
     ASSERT_EQ(beta.size(), 2);
     EXPECT_NEAR(expected_beta0, beta(0), 1.0e-12);
@@ -105,8 +105,8 @@ TEST(LinearizationServiceTest, DecodeGroupEstimateMatchesClosedForm)
     const auto expected_amplitude{ 2.0 * std::pow(Constants::two_pi / 4.0, 1.5) };
     const auto expected_width{ 1.0 / std::sqrt(4.0) };
 
-    EXPECT_NEAR(expected_amplitude, estimate.amplitude, 1.0e-12);
-    EXPECT_NEAR(expected_width, estimate.width, 1.0e-12);
+    EXPECT_NEAR(expected_amplitude, estimate.GetAmplitude(), 1.0e-12);
+    EXPECT_NEAR(expected_width, estimate.GetWidth(), 1.0e-12);
 }
 
 TEST(LinearizationServiceTest, DecodeGroupBetaPreservesDirect3DModelIntercept)
@@ -148,7 +148,7 @@ TEST(LinearizationServiceTest, DecodeLocalModel3DUsesTypedContext)
     EXPECT_NEAR(0.75, decoded.GetIntercept(), 1.0e-12);
 }
 
-TEST(LinearizationServiceTest, DecodeGaussianEstimateWithUncertaintyReturnsStandardDeviation)
+TEST(LinearizationServiceTest, DecodeGaussianModel3DWithUncertaintyReturnsStandardDeviation)
 {
     const auto linear_model{ MakeVector({ 0.5, 2.0 }) };
     Eigen::MatrixXd covariance_matrix(2, 2);
@@ -156,7 +156,7 @@ TEST(LinearizationServiceTest, DecodeGaussianEstimateWithUncertaintyReturnsStand
                          0.05, 0.2;
 
     const auto gaussian{
-        ls::DecodeGaussianEstimateWithUncertainty(DatasetLinearizationSpec(), linear_model, covariance_matrix)
+        ls::DecodeGaussianModel3DWithUncertainty(DatasetLinearizationSpec(), linear_model, covariance_matrix)
     };
     const auto expected_amplitude{
         std::exp(0.5) * std::pow(Constants::two_pi / 2.0, 1.5)
@@ -168,10 +168,10 @@ TEST(LinearizationServiceTest, DecodeGaussianEstimateWithUncertaintyReturnsStand
     };
     const auto expected_var_width{ 0.25 * std::pow(2.0, -3) * 0.2 };
 
-    EXPECT_NEAR(expected_amplitude, gaussian.estimate.amplitude, 1.0e-12);
-    EXPECT_NEAR(expected_width, gaussian.estimate.width, 1.0e-12);
-    EXPECT_NEAR(std::sqrt(expected_var_amplitude), gaussian.standard_deviation.amplitude, 1.0e-12);
-    EXPECT_NEAR(std::sqrt(expected_var_width), gaussian.standard_deviation.width, 1.0e-12);
+    EXPECT_NEAR(expected_amplitude, gaussian.GetModel().GetAmplitude(), 1.0e-12);
+    EXPECT_NEAR(expected_width, gaussian.GetModel().GetWidth(), 1.0e-12);
+    EXPECT_NEAR(std::sqrt(expected_var_amplitude), gaussian.GetStandardDeviationModel().GetAmplitude(), 1.0e-12);
+    EXPECT_NEAR(std::sqrt(expected_var_width), gaussian.GetStandardDeviationModel().GetWidth(), 1.0e-12);
 }
 
 TEST(LinearizationServiceTest, DecodePosteriorFor2Beta3DModelAddsZeroIntercept)

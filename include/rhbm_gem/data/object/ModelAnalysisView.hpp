@@ -19,7 +19,10 @@ class ModelObject;
 
 struct LocalPotentialAnnotationView
 {
-    GaussianEstimateWithUncertainty gaussian{};
+    GaussianModel3DWithUncertainty gaussian{
+        GaussianModel3D{ 0.0, 0.0 },
+        GaussianModel3DUncertainty{}
+    };
     bool is_outlier{ false };
     double statistical_distance{ 0.0 };
 };
@@ -48,8 +51,8 @@ public:
     static LocalPotentialView RequireFor(const AtomObject & atom_object);
     static LocalPotentialView RequireFor(const BondObject & bond_object);
     bool IsAvailable() const;
-    const GaussianEstimate & GetEstimateOLS() const;
-    const GaussianEstimate & GetEstimateMDPDE() const;
+    const GaussianModel3D & GetEstimateOLS() const;
+    const GaussianModel3D & GetEstimateMDPDE() const;
     const LocalPotentialSampleList & GetSamplingEntries() const;
     std::tuple<float, float> GetDistanceRange(double margin_rate = 0.0) const;
     std::tuple<float, float> GetResponseRange(double margin_rate = 0.0) const;
@@ -90,14 +93,14 @@ public:
     double GetBondGausEstimateMinimum(int par_id) const;
     bool HasAtomGroup(GroupKey group_key, const std::string & class_key, bool verbose=false) const;
     bool HasBondGroup(GroupKey group_key, const std::string & class_key, bool verbose=false) const;
-    const GaussianEstimate & GetAtomGroupMean(GroupKey group_key, const std::string & class_key) const;
-    const GaussianEstimate & GetBondGroupMean(GroupKey group_key, const std::string & class_key) const;
-    const GaussianEstimate & GetAtomGroupMDPDE(GroupKey group_key, const std::string & class_key) const;
-    const GaussianEstimate & GetBondGroupMDPDE(GroupKey group_key, const std::string & class_key) const;
-    const GaussianEstimate & GetAtomGroupPrior(GroupKey group_key, const std::string & class_key) const;
-    const GaussianEstimate & GetBondGroupPrior(GroupKey group_key, const std::string & class_key) const;
-    GaussianEstimateWithUncertainty GetAtomGroupPriorWithUncertainty(GroupKey group_key, const std::string & class_key) const;
-    GaussianEstimateWithUncertainty GetBondGroupPriorWithUncertainty(GroupKey group_key, const std::string & class_key) const;
+    const GaussianModel3D & GetAtomGroupMean(GroupKey group_key, const std::string & class_key) const;
+    const GaussianModel3D & GetBondGroupMean(GroupKey group_key, const std::string & class_key) const;
+    const GaussianModel3D & GetAtomGroupMDPDE(GroupKey group_key, const std::string & class_key) const;
+    const GaussianModel3D & GetBondGroupMDPDE(GroupKey group_key, const std::string & class_key) const;
+    const GaussianModel3D & GetAtomGroupPrior(GroupKey group_key, const std::string & class_key) const;
+    const GaussianModel3D & GetBondGroupPrior(GroupKey group_key, const std::string & class_key) const;
+    GaussianModel3DWithUncertainty GetAtomGroupPriorWithUncertainty(GroupKey group_key, const std::string & class_key) const;
+    GaussianModel3DWithUncertainty GetBondGroupPriorWithUncertainty(GroupKey group_key, const std::string & class_key) const;
     double GetAtomGausEstimatePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
     double GetBondGausEstimatePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
     double GetAtomGausPriorStandardDeviation(GroupKey group_key, const std::string & class_key, int par_id) const;

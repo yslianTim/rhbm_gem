@@ -34,7 +34,7 @@ const ls::LinearizationSpec & AtomGaussianEncodeSpec()
     return spec;
 }
 
-RHBMBetaVector EncodeAtomGaussianToBeta(const GaussianEstimate & estimate)
+RHBMBetaVector EncodeAtomGaussianToBeta(const GaussianModel3D & estimate)
 {
     return ls::EncodeGaussianToBeta(AtomGaussianEncodeSpec(), estimate);
 }
@@ -233,7 +233,7 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateAtomGausEstimateHistogram(
     for (auto atom : atom_list)
     {
         const auto local_entry{ LocalPotentialView::RequireFor(*atom) };
-        gaus_estimate_list.emplace_back(local_entry.GetEstimateMDPDE().GetParameter(par_id));
+        gaus_estimate_list.emplace_back(local_entry.GetEstimateMDPDE().GetDisplayParameter(par_id));
     }
 
     double x_min{ 0.0 };
@@ -374,7 +374,7 @@ std::vector<std::unique_ptr<TH1D>> PotentialPlotBuilder::CreateMainChainAtomGaus
         auto sequence_id{ atom->GetSequenceID() };
         auto chain_id{ atom->GetChainID() };
         const auto entry{ LocalPotentialView::RequireFor(*atom) };
-        auto gaus_value{ entry.GetEstimateMDPDE().GetParameter(par_id) };
+        auto gaus_value{ entry.GetEstimateMDPDE().GetDisplayParameter(par_id) };
         values_map[chain_id][sequence_id].at(id) = gaus_value;
     }
     chain_size = static_cast<int>(values_map.size());
@@ -417,8 +417,8 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToResi
             continue;
         }
         auto x_value{ static_cast<int>(model_view.GetResidueFromAtomGroupKey(group_key, class_key)) - 1 };
-        auto y_value{ model_view.GetAtomGroupPrior(group_key, class_key).GetParameter(par_id) };
-        auto y_error{ model_view.GetAtomGroupPriorWithUncertainty(group_key, class_key).GetStandardDeviation(par_id) };
+        auto y_value{ model_view.GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(par_id) };
+        auto y_error{ model_view.GetAtomGroupPriorWithUncertainty(group_key, class_key).GetDisplayStandardDeviation(par_id) };
         graph->SetPoint(count, x_value, y_value);
         graph->SetPointError(count, 0.0, y_error);
         count++;
@@ -444,8 +444,8 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBondGausEstimateToResi
             continue;
         }
         auto x_value{ static_cast<int>(model_view.GetResidueFromBondGroupKey(group_key, class_key)) - 1 };
-        auto y_value{ model_view.GetBondGroupPrior(group_key, class_key).GetParameter(par_id) };
-        auto y_error{ model_view.GetBondGroupPriorWithUncertainty(group_key, class_key).GetStandardDeviation(par_id) };
+        auto y_value{ model_view.GetBondGroupPrior(group_key, class_key).GetDisplayParameter(par_id) };
+        auto y_error{ model_view.GetBondGroupPriorWithUncertainty(group_key, class_key).GetDisplayStandardDeviation(par_id) };
         graph->SetPoint(count, x_value, y_value);
         graph->SetPointError(count, 0.0, y_error);
         count++;
@@ -472,8 +472,8 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToSpot
             continue;
         }
         auto x_value{ static_cast<double>(i) };
-        auto y_value{ model_view.GetAtomGroupPrior(group_key, class_key).GetParameter(par_id) };
-        auto y_error{ model_view.GetAtomGroupPriorWithUncertainty(group_key, class_key).GetStandardDeviation(par_id) };
+        auto y_value{ model_view.GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(par_id) };
+        auto y_error{ model_view.GetAtomGroupPriorWithUncertainty(group_key, class_key).GetDisplayStandardDeviation(par_id) };
         graph->SetPoint(count, x_value, y_value);
         graph->SetPointError(count, 0.0, y_error);
         count++;
@@ -506,8 +506,8 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToAtom
             continue;
         }
         auto x_value{ static_cast<double>(i) };
-        auto y_value{ model_view.GetAtomGroupPrior(group_key, class_key).GetParameter(par_id) };
-        auto y_error{ model_view.GetAtomGroupPriorWithUncertainty(group_key, class_key).GetStandardDeviation(par_id) };
+        auto y_value{ model_view.GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(par_id) };
+        auto y_error{ model_view.GetAtomGroupPriorWithUncertainty(group_key, class_key).GetDisplayStandardDeviation(par_id) };
         graph->SetPoint(count, x_value, y_value);
         graph->SetPointError(count, 0.0, y_error);
         count++;
@@ -536,8 +536,8 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatte
         }
         graph->SetPoint(
             count,
-            entry.GetEstimateMDPDE().GetParameter(par1_id),
-            entry.GetEstimateMDPDE().GetParameter(par2_id));
+            entry.GetEstimateMDPDE().GetDisplayParameter(par1_id),
+            entry.GetEstimateMDPDE().GetDisplayParameter(par2_id));
         count++;
     }
     return graph;
@@ -623,11 +623,11 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatte
         const auto entry{ LocalPotentialView::RequireFor(*atom) };
         if (reverse == false)
         {
-            graph->SetPoint(count, entry.GetEstimateMDPDE().amplitude, entry.GetEstimateMDPDE().width);
+            graph->SetPoint(count, entry.GetEstimateMDPDE().GetAmplitude(), entry.GetEstimateMDPDE().GetWidth());
         }
         else
         {
-            graph->SetPoint(count, entry.GetEstimateMDPDE().width, entry.GetEstimateMDPDE().amplitude);
+            graph->SetPoint(count, entry.GetEstimateMDPDE().GetWidth(), entry.GetEstimateMDPDE().GetAmplitude());
         }
         count++;
     }
@@ -654,11 +654,11 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBondGausEstimateScatte
         const auto entry{ LocalPotentialView::RequireFor(*bond) };
         if (reverse == false)
         {
-            graph->SetPoint(count, entry.GetEstimateMDPDE().amplitude, entry.GetEstimateMDPDE().width);
+            graph->SetPoint(count, entry.GetEstimateMDPDE().GetAmplitude(), entry.GetEstimateMDPDE().GetWidth());
         }
         else
         {
-            graph->SetPoint(count, entry.GetEstimateMDPDE().width, entry.GetEstimateMDPDE().amplitude);
+            graph->SetPoint(count, entry.GetEstimateMDPDE().GetWidth(), entry.GetEstimateMDPDE().GetAmplitude());
         }
         count++;
     }
@@ -695,8 +695,8 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateGausEstimateScatterGra
             {
                 graph->SetPoint(
                     count,
-                    entry1.GetEstimateMDPDE().GetParameter(par_id),
-                    entry2.GetEstimateMDPDE().GetParameter(par_id));
+                    entry1.GetEstimateMDPDE().GetDisplayParameter(par_id),
+                    entry2.GetEstimateMDPDE().GetDisplayParameter(par_id));
                 count++;
                 break;
             }
@@ -766,7 +766,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateInRangeAtomsToGausEsti
         graph->SetPoint(
             count,
             static_cast<double>(in_range_atom_list.size()),
-            atom_entry.GetEstimateMDPDE().GetParameter(par_id));
+            atom_entry.GetEstimateMDPDE().GetDisplayParameter(par_id));
         count++;
     }
     return graph;
@@ -792,7 +792,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateCOMDistanceToGausEstim
         graph->SetPoint(
             count,
             static_cast<double>(distance),
-            atom_entry.GetEstimateMDPDE().GetParameter(par_id));
+            atom_entry.GetEstimateMDPDE().GetDisplayParameter(par_id));
         count++;
     }
     return graph;
@@ -862,8 +862,8 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalGausFunctionOLS() cons
         return nullptr;
     }
     const auto atom_local_entry{ LocalPotentialView::RequireFor(*m_atom_object) };
-    auto amplitude{ atom_local_entry.GetEstimateOLS().amplitude };
-    auto width{ atom_local_entry.GetEstimateOLS().width };
+    auto amplitude{ atom_local_entry.GetEstimateOLS().GetAmplitude() };
+    auto width{ atom_local_entry.GetEstimateOLS().GetWidth() };
     return root_helper::CreateGaus3DFunctionIn1D("gaus", amplitude, width);
 }
 
@@ -874,8 +874,8 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalGausFunctionMDPDE() co
         return nullptr;
     }
     const auto atom_local_entry{ LocalPotentialView::RequireFor(*m_atom_object) };
-    auto amplitude{ atom_local_entry.GetEstimateMDPDE().amplitude };
-    auto width{ atom_local_entry.GetEstimateMDPDE().width };
+    auto amplitude{ atom_local_entry.GetEstimateMDPDE().GetAmplitude() };
+    auto width{ atom_local_entry.GetEstimateMDPDE().GetWidth() };
     return root_helper::CreateGaus3DFunctionIn1D("gaus", amplitude, width);
 }
 
@@ -917,8 +917,8 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionMean(
         return nullptr;
     }
     const auto & mean{ GetModelView().GetAtomGroupMean(group_key, class_key) };
-    auto amplitude{ mean.amplitude };
-    auto width{ mean.width };
+    auto amplitude{ mean.GetAmplitude() };
+    auto width{ mean.GetWidth() };
     return root_helper::CreateGaus3DFunctionIn1D("group_gaus_mean", amplitude, width);
 }
 
@@ -930,8 +930,8 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionPrior(
         return nullptr;
     }
     const auto & prior{ GetModelView().GetAtomGroupPrior(group_key, class_key) };
-    auto amplitude{ prior.amplitude };
-    auto width{ prior.width };
+    auto amplitude{ prior.GetAmplitude() };
+    auto width{ prior.GetWidth() };
     return root_helper::CreateGaus3DFunctionIn1D("group_gaus_prior", amplitude, width);
 }
 
@@ -943,8 +943,8 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateBondGroupGausFunctionPrior(
         return nullptr;
     }
     const auto & prior{ GetModelView().GetBondGroupPrior(group_key, class_key) };
-    auto amplitude{ prior.amplitude };
-    auto width{ prior.width };
+    auto amplitude{ prior.GetAmplitude() };
+    auto width{ prior.GetWidth() };
     return root_helper::CreateGaus2DFunctionIn1D("group_gaus_prior", amplitude, width);
 }
 
@@ -973,7 +973,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateNormalizedAtomGausEsti
         {
             const auto entry{ LocalPotentialView::RequireFor(*atom) };
             auto sequence_id{ atom->GetSequenceID() };
-            auto amplitude_estimate{ entry.GetEstimateMDPDE().amplitude };
+            auto amplitude_estimate{ entry.GetEstimateMDPDE().GetAmplitude() };
             amplitude_diff_to_carbonyl_oxygen_map[sequence_id] = amplitude_estimate - reference_amplitude;
         }
     }
@@ -983,18 +983,18 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateNormalizedAtomGausEsti
         if (atom->GetElement() != element) continue;
         auto sequence_id{ atom->GetSequenceID() };
         const auto entry{ LocalPotentialView::RequireFor(*atom) };
-        auto normalized_amplitude{ entry.GetEstimateMDPDE().amplitude };
+        auto normalized_amplitude{ entry.GetEstimateMDPDE().GetAmplitude() };
         if (amplitude_diff_to_carbonyl_oxygen_map.find(sequence_id) != amplitude_diff_to_carbonyl_oxygen_map.end())
         {
             normalized_amplitude -= amplitude_diff_to_carbonyl_oxygen_map.at(sequence_id);
         }
         if (reverse == false)
         {
-            graph->SetPoint(count, normalized_amplitude, entry.GetEstimateMDPDE().width);
+            graph->SetPoint(count, normalized_amplitude, entry.GetEstimateMDPDE().GetWidth());
         }
         else
         {
-            graph->SetPoint(count, entry.GetEstimateMDPDE().width, normalized_amplitude);
+            graph->SetPoint(count, entry.GetEstimateMDPDE().GetWidth(), normalized_amplitude);
         }
         count++;
     }
@@ -1017,7 +1017,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateNormalizedBondGausEsti
         {
             const auto entry{ LocalPotentialView::RequireFor(*bond) };
             auto sequence_id{ bond->GetAtomObject1()->GetSequenceID() };
-            auto amplitude_estimate{ entry.GetEstimateMDPDE().amplitude };
+            auto amplitude_estimate{ entry.GetEstimateMDPDE().GetAmplitude() };
             amplitude_diff_to_carbonyl_oxygen_map[sequence_id] = amplitude_estimate - reference_amplitude;
         }
     }
@@ -1027,18 +1027,18 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateNormalizedBondGausEsti
         if (bond->GetAtomObject1()->GetElement() != element) continue;
         auto sequence_id{ bond->GetAtomObject1()->GetSequenceID() };
         const auto entry{ LocalPotentialView::RequireFor(*bond) };
-        auto normalized_amplitude{ entry.GetEstimateMDPDE().amplitude };
+        auto normalized_amplitude{ entry.GetEstimateMDPDE().GetAmplitude() };
         if (amplitude_diff_to_carbonyl_oxygen_map.find(sequence_id) != amplitude_diff_to_carbonyl_oxygen_map.end())
         {
             normalized_amplitude -= amplitude_diff_to_carbonyl_oxygen_map.at(sequence_id);
         }
         if (reverse == false)
         {
-            graph->SetPoint(count, normalized_amplitude, entry.GetEstimateMDPDE().width);
+            graph->SetPoint(count, normalized_amplitude, entry.GetEstimateMDPDE().GetWidth());
         }
         else
         {
-            graph->SetPoint(count, entry.GetEstimateMDPDE().width, normalized_amplitude);
+            graph->SetPoint(count, entry.GetEstimateMDPDE().GetWidth(), normalized_amplitude);
         }
         count++;
     }
@@ -1152,7 +1152,7 @@ PotentialPlotBuilder::CreateAtomGausEstimateToSequenceIDGraphMap(
         }
         auto x_value{ static_cast<double>(sequence_id) };
         graph_map[chain_id]->SetPoint(
-            count_map[chain_id], x_value, entry.GetEstimateMDPDE().GetParameter(par_id));
+            count_map[chain_id], x_value, entry.GetEstimateMDPDE().GetDisplayParameter(par_id));
         count_map[chain_id]++;
     }
     return graph_map;
@@ -1184,7 +1184,7 @@ PotentialPlotBuilder::CreateBondGausEstimateToSequenceIDGraphMap(
             count_map[chain_id] = 0;
         }
         auto x_value{ static_cast<double>(sequence_id) };
-        auto y_value{ entry.GetEstimateMDPDE().GetParameter(par_id) };
+        auto y_value{ entry.GetEstimateMDPDE().GetDisplayParameter(par_id) };
         graph_map[chain_id]->SetPoint(count_map[chain_id], x_value, y_value);
         count_map[chain_id]++;
     }
@@ -1230,10 +1230,10 @@ PotentialPlotBuilder::CreateAtomGausEstimatePosteriorToSequenceIDGraphMap(
             continue;
         }
         graph_map[chain_id]->SetPoint(
-            count_map[chain_id], x_value, annotation->gaussian.GetEstimate(par_id)
+            count_map[chain_id], x_value, annotation->gaussian.GetDisplayParameter(par_id)
         );
         graph_map[chain_id]->SetPointError(
-            count_map[chain_id], 0.0, annotation->gaussian.GetStandardDeviation(par_id)
+            count_map[chain_id], 0.0, annotation->gaussian.GetDisplayStandardDeviation(par_id)
         );
         count_map[chain_id]++;
     }

@@ -233,8 +233,8 @@ TEST(DataObjectModelAnalysisTest, MutableLocalPotentialViewSetFitResultUpdatesFi
     EXPECT_EQ(rg::RHBMEstimationStatus::SUCCESS, entry.GetFitResult().status);
     EXPECT_TRUE(entry.GetFitResult().beta_ols.isApprox(Eigen::VectorXd::Zero(3), 1e-12));
     EXPECT_TRUE(entry.GetFitResult().beta_mdpde.isApprox(Eigen::VectorXd::Zero(3), 1e-12));
-    EXPECT_DOUBLE_EQ(0.0, rg::LocalPotentialView::RequireFor(*atom).GetEstimateOLS().width);
-    EXPECT_DOUBLE_EQ(0.0, rg::LocalPotentialView::RequireFor(*atom).GetEstimateMDPDE().width);
+    EXPECT_DOUBLE_EQ(0.0, rg::LocalPotentialView::RequireFor(*atom).GetEstimateOLS().GetWidth());
+    EXPECT_DOUBLE_EQ(0.0, rg::LocalPotentialView::RequireFor(*atom).GetEstimateMDPDE().GetWidth());
 }
 
 TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupEstimateResultToStatisticsAndAnnotations)
@@ -278,34 +278,34 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupEstimateRes
     const auto expected_mean{ ls::DecodeGroupEstimate(AtomGroupDecodeSpec(), result.mu_mean) };
     const auto expected_mdpde{ ls::DecodeGroupEstimate(AtomGroupDecodeSpec(), result.mu_mdpde) };
     const auto expected_prior{
-        ls::DecodeGaussianEstimateWithUncertainty(AtomGroupDecodeSpec(), result.mu_prior, result.capital_lambda)
+        ls::DecodeGaussianModel3DWithUncertainty(AtomGroupDecodeSpec(), result.mu_prior, result.capital_lambda)
     };
-    EXPECT_NEAR(expected_mean.amplitude, analysis_view.GetAtomGroupMean(group_key, class_key).amplitude, 1e-12);
-    EXPECT_NEAR(expected_mean.width, analysis_view.GetAtomGroupMean(group_key, class_key).width, 1e-12);
-    EXPECT_NEAR(expected_mdpde.amplitude, analysis_view.GetAtomGroupMDPDE(group_key, class_key).amplitude, 1e-12);
-    EXPECT_NEAR(expected_mdpde.width, analysis_view.GetAtomGroupMDPDE(group_key, class_key).width, 1e-12);
-    EXPECT_NEAR(expected_prior.estimate.amplitude, analysis_view.GetAtomGroupPrior(group_key, class_key).amplitude, 1e-12);
-    EXPECT_NEAR(expected_prior.estimate.width, analysis_view.GetAtomGroupPrior(group_key, class_key).width, 1e-12);
-    EXPECT_NEAR(expected_prior.standard_deviation.amplitude, analysis_view.GetAtomGroupPriorWithUncertainty(group_key, class_key).standard_deviation.amplitude, 1e-12);
-    EXPECT_NEAR(expected_prior.standard_deviation.width, analysis_view.GetAtomGroupPriorWithUncertainty(group_key, class_key).standard_deviation.width, 1e-12);
+    EXPECT_NEAR(expected_mean.GetAmplitude(), analysis_view.GetAtomGroupMean(group_key, class_key).GetAmplitude(), 1e-12);
+    EXPECT_NEAR(expected_mean.GetWidth(), analysis_view.GetAtomGroupMean(group_key, class_key).GetWidth(), 1e-12);
+    EXPECT_NEAR(expected_mdpde.GetAmplitude(), analysis_view.GetAtomGroupMDPDE(group_key, class_key).GetAmplitude(), 1e-12);
+    EXPECT_NEAR(expected_mdpde.GetWidth(), analysis_view.GetAtomGroupMDPDE(group_key, class_key).GetWidth(), 1e-12);
+    EXPECT_NEAR(expected_prior.GetModel().GetAmplitude(), analysis_view.GetAtomGroupPrior(group_key, class_key).GetAmplitude(), 1e-12);
+    EXPECT_NEAR(expected_prior.GetModel().GetWidth(), analysis_view.GetAtomGroupPrior(group_key, class_key).GetWidth(), 1e-12);
+    EXPECT_NEAR(expected_prior.GetStandardDeviationModel().GetAmplitude(), analysis_view.GetAtomGroupPriorWithUncertainty(group_key, class_key).GetStandardDeviationModel().GetAmplitude(), 1e-12);
+    EXPECT_NEAR(expected_prior.GetStandardDeviationModel().GetWidth(), analysis_view.GetAtomGroupPriorWithUncertainty(group_key, class_key).GetStandardDeviationModel().GetWidth(), 1e-12);
     EXPECT_DOUBLE_EQ(alpha_g, analysis_view.GetAtomAlphaG(group_key, class_key));
 
     const auto annotation{ rg::LocalPotentialView::RequireFor(*atom_list.front()).FindAnnotation(class_key) };
     ASSERT_TRUE(annotation.has_value());
     const auto expected_gaussian{
-        ls::DecodeGaussianEstimateWithUncertainty(AtomGroupDecodeSpec(),
+        ls::DecodeGaussianModel3DWithUncertainty(AtomGroupDecodeSpec(),
             result.beta_posterior_matrix.col(0),
             result.capital_sigma_posterior_list.front())
     };
-    EXPECT_NEAR(expected_gaussian.estimate.amplitude, annotation->gaussian.estimate.amplitude, 1e-12);
-    EXPECT_NEAR(expected_gaussian.estimate.width, annotation->gaussian.estimate.width, 1e-12);
+    EXPECT_NEAR(expected_gaussian.GetModel().GetAmplitude(), annotation->gaussian.GetModel().GetAmplitude(), 1e-12);
+    EXPECT_NEAR(expected_gaussian.GetModel().GetWidth(), annotation->gaussian.GetModel().GetWidth(), 1e-12);
     EXPECT_NEAR(
-        expected_gaussian.standard_deviation.amplitude,
-        annotation->gaussian.standard_deviation.amplitude,
+        expected_gaussian.GetStandardDeviationModel().GetAmplitude(),
+        annotation->gaussian.GetStandardDeviationModel().GetAmplitude(),
         1e-12);
     EXPECT_NEAR(
-        expected_gaussian.standard_deviation.width,
-        annotation->gaussian.standard_deviation.width,
+        expected_gaussian.GetStandardDeviationModel().GetWidth(),
+        annotation->gaussian.GetStandardDeviationModel().GetWidth(),
         1e-12);
     EXPECT_TRUE(annotation->is_outlier);
     EXPECT_DOUBLE_EQ(1.5, annotation->statistical_distance);
@@ -371,14 +371,14 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesBondGroupEstimateRes
 
     const auto expected_mean{ ls::DecodeGroupEstimate(BondGroupDecodeSpec(), result.mu_mean) };
     const auto expected_prior{
-        ls::DecodeGaussianEstimateWithUncertainty(BondGroupDecodeSpec(), result.mu_prior, result.capital_lambda)
+        ls::DecodeGaussianModel3DWithUncertainty(BondGroupDecodeSpec(), result.mu_prior, result.capital_lambda)
     };
-    EXPECT_NEAR(expected_mean.amplitude, analysis_view.GetBondGroupMean(group_key, class_key).amplitude, 1e-12);
-    EXPECT_NEAR(expected_mean.width, analysis_view.GetBondGroupMean(group_key, class_key).width, 1e-12);
-    EXPECT_NEAR(expected_prior.estimate.amplitude, analysis_view.GetBondGroupPrior(group_key, class_key).amplitude, 1e-12);
-    EXPECT_NEAR(expected_prior.estimate.width, analysis_view.GetBondGroupPrior(group_key, class_key).width, 1e-12);
-    EXPECT_NEAR(expected_prior.standard_deviation.amplitude, analysis_view.GetBondGroupPriorWithUncertainty(group_key, class_key).standard_deviation.amplitude, 1e-12);
-    EXPECT_NEAR(expected_prior.standard_deviation.width, analysis_view.GetBondGroupPriorWithUncertainty(group_key, class_key).standard_deviation.width, 1e-12);
+    EXPECT_NEAR(expected_mean.GetAmplitude(), analysis_view.GetBondGroupMean(group_key, class_key).GetAmplitude(), 1e-12);
+    EXPECT_NEAR(expected_mean.GetWidth(), analysis_view.GetBondGroupMean(group_key, class_key).GetWidth(), 1e-12);
+    EXPECT_NEAR(expected_prior.GetModel().GetAmplitude(), analysis_view.GetBondGroupPrior(group_key, class_key).GetAmplitude(), 1e-12);
+    EXPECT_NEAR(expected_prior.GetModel().GetWidth(), analysis_view.GetBondGroupPrior(group_key, class_key).GetWidth(), 1e-12);
+    EXPECT_NEAR(expected_prior.GetStandardDeviationModel().GetAmplitude(), analysis_view.GetBondGroupPriorWithUncertainty(group_key, class_key).GetStandardDeviationModel().GetAmplitude(), 1e-12);
+    EXPECT_NEAR(expected_prior.GetStandardDeviationModel().GetWidth(), analysis_view.GetBondGroupPriorWithUncertainty(group_key, class_key).GetStandardDeviationModel().GetWidth(), 1e-12);
     EXPECT_DOUBLE_EQ(alpha_g, analysis_view.GetBondAlphaG(group_key, class_key));
 
     const auto annotation{ rg::LocalPotentialView::RequireFor(*bond_list.front()).FindAnnotation(class_key) };

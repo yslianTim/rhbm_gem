@@ -132,7 +132,7 @@ void PdbFormat::WriteModel(const ModelObject& model_object, std::ostream& stream
         float b_factor{atom->GetTemperature()};
         if (ModelAnalysisData::FindLocalEntry(*atom) != nullptr) {
             b_factor = static_cast<float>(
-                ModelAnalysisData::RequireLocalEntry(*atom).GetEstimateMDPDE().GetParameter(par));
+                ModelAnalysisData::RequireLocalEntry(*atom).GetEstimateMDPDE().GetDisplayParameter(par));
         }
 
         char line[128];

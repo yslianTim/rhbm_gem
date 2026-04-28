@@ -131,12 +131,12 @@ bool LocalPotentialView::IsAvailable() const
     return FindResolvedLocalEntry(*this) != nullptr;
 }
 
-const GaussianEstimate & LocalPotentialView::GetEstimateOLS() const
+const GaussianModel3D & LocalPotentialView::GetEstimateOLS() const
 {
     return RequireResolvedLocalEntry(*this, "Local estimate OLS").GetEstimateOLS();
 }
 
-const GaussianEstimate & LocalPotentialView::GetEstimateMDPDE() const
+const GaussianModel3D & LocalPotentialView::GetEstimateMDPDE() const
 {
     return RequireResolvedLocalEntry(*this, "Local estimate MDPDE").GetEstimateMDPDE();
 }
@@ -274,7 +274,7 @@ double ModelAnalysisView::GetAtomGausEstimateMinimum(int par_id, Element element
     {
         if (atom->GetElement() != element) continue;
         gaus_estimate_list.emplace_back(
-            LocalPotentialView::RequireFor(*atom).GetEstimateMDPDE().GetParameter(par_id));
+            LocalPotentialView::RequireFor(*atom).GetEstimateMDPDE().GetDisplayParameter(par_id));
     }
     return array_helper::ComputeMin(gaus_estimate_list.data(), gaus_estimate_list.size());
 }
@@ -286,7 +286,7 @@ double ModelAnalysisView::GetBondGausEstimateMinimum(int par_id) const
     for (const auto * bond : m_model_object.GetSelectedBonds())
     {
         gaus_estimate_list.emplace_back(
-            LocalPotentialView::RequireFor(*bond).GetEstimateMDPDE().GetParameter(par_id));
+            LocalPotentialView::RequireFor(*bond).GetEstimateMDPDE().GetDisplayParameter(par_id));
     }
     return array_helper::ComputeMin(gaus_estimate_list.data(), gaus_estimate_list.size());
 }
@@ -373,7 +373,7 @@ bool ModelAnalysisView::HasBondGroup(
     return true;
 }
 
-const GaussianEstimate & ModelAnalysisView::GetAtomGroupMean(
+const GaussianModel3D & ModelAnalysisView::GetAtomGroupMean(
     GroupKey group_key,
     const std::string & class_key) const
 {
@@ -385,7 +385,7 @@ const GaussianEstimate & ModelAnalysisView::GetAtomGroupMean(
     return entry->GetMean(group_key);
 }
 
-const GaussianEstimate & ModelAnalysisView::GetBondGroupMean(
+const GaussianModel3D & ModelAnalysisView::GetBondGroupMean(
     GroupKey group_key,
     const std::string & class_key) const
 {
@@ -397,7 +397,7 @@ const GaussianEstimate & ModelAnalysisView::GetBondGroupMean(
     return entry->GetMean(group_key);
 }
 
-const GaussianEstimate & ModelAnalysisView::GetAtomGroupMDPDE(
+const GaussianModel3D & ModelAnalysisView::GetAtomGroupMDPDE(
     GroupKey group_key,
     const std::string & class_key) const
 {
@@ -409,7 +409,7 @@ const GaussianEstimate & ModelAnalysisView::GetAtomGroupMDPDE(
     return entry->GetMDPDE(group_key);
 }
 
-const GaussianEstimate & ModelAnalysisView::GetBondGroupMDPDE(
+const GaussianModel3D & ModelAnalysisView::GetBondGroupMDPDE(
     GroupKey group_key,
     const std::string & class_key) const
 {
@@ -421,7 +421,7 @@ const GaussianEstimate & ModelAnalysisView::GetBondGroupMDPDE(
     return entry->GetMDPDE(group_key);
 }
 
-const GaussianEstimate & ModelAnalysisView::GetAtomGroupPrior(
+const GaussianModel3D & ModelAnalysisView::GetAtomGroupPrior(
     GroupKey group_key,
     const std::string & class_key) const
 {
@@ -433,7 +433,7 @@ const GaussianEstimate & ModelAnalysisView::GetAtomGroupPrior(
     return entry->GetPrior(group_key);
 }
 
-const GaussianEstimate & ModelAnalysisView::GetBondGroupPrior(
+const GaussianModel3D & ModelAnalysisView::GetBondGroupPrior(
     GroupKey group_key,
     const std::string & class_key) const
 {
@@ -445,7 +445,7 @@ const GaussianEstimate & ModelAnalysisView::GetBondGroupPrior(
     return entry->GetPrior(group_key);
 }
 
-GaussianEstimateWithUncertainty ModelAnalysisView::GetAtomGroupPriorWithUncertainty(
+GaussianModel3DWithUncertainty ModelAnalysisView::GetAtomGroupPriorWithUncertainty(
     GroupKey group_key,
     const std::string & class_key) const
 {
@@ -457,7 +457,7 @@ GaussianEstimateWithUncertainty ModelAnalysisView::GetAtomGroupPriorWithUncertai
     return entry->GetPriorWithUncertainty(group_key);
 }
 
-GaussianEstimateWithUncertainty ModelAnalysisView::GetBondGroupPriorWithUncertainty(
+GaussianModel3DWithUncertainty ModelAnalysisView::GetBondGroupPriorWithUncertainty(
     GroupKey group_key,
     const std::string & class_key) const
 {
@@ -474,7 +474,7 @@ double ModelAnalysisView::GetAtomGausEstimatePrior(
     const std::string & class_key,
     int par_id) const
 {
-    return GetAtomGroupPrior(group_key, class_key).GetParameter(par_id);
+    return GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(par_id);
 }
 
 double ModelAnalysisView::GetBondGausEstimatePrior(
@@ -482,7 +482,7 @@ double ModelAnalysisView::GetBondGausEstimatePrior(
     const std::string & class_key,
     int par_id) const
 {
-    return GetBondGroupPrior(group_key, class_key).GetParameter(par_id);
+    return GetBondGroupPrior(group_key, class_key).GetDisplayParameter(par_id);
 }
 
 double ModelAnalysisView::GetAtomGausPriorStandardDeviation(
@@ -490,7 +490,7 @@ double ModelAnalysisView::GetAtomGausPriorStandardDeviation(
     const std::string & class_key,
     int par_id) const
 {
-    return GetAtomGroupPriorWithUncertainty(group_key, class_key).GetStandardDeviation(par_id);
+    return GetAtomGroupPriorWithUncertainty(group_key, class_key).GetDisplayStandardDeviation(par_id);
 }
 
 double ModelAnalysisView::GetBondGausPriorStandardDeviation(
@@ -498,7 +498,7 @@ double ModelAnalysisView::GetBondGausPriorStandardDeviation(
     const std::string & class_key,
     int par_id) const
 {
-    return GetBondGroupPriorWithUncertainty(group_key, class_key).GetStandardDeviation(par_id);
+    return GetBondGroupPriorWithUncertainty(group_key, class_key).GetDisplayStandardDeviation(par_id);
 }
 
 const std::vector<AtomObject *> & ModelAnalysisView::GetAtomObjectList(

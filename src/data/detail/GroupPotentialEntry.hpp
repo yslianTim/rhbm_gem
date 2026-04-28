@@ -20,9 +20,12 @@ class GroupPotentialEntry
     struct GroupPotentialBucket
     {
         std::vector<MemberT *> members;
-        GaussianEstimate mean{};
-        GaussianEstimate mdpde{};
-        GaussianEstimateWithUncertainty prior{};
+        GaussianModel3D mean{ 0.0, 0.0 };
+        GaussianModel3D mdpde{ 0.0, 0.0 };
+        GaussianModel3DWithUncertainty prior{
+            GaussianModel3D{ 0.0, 0.0 },
+            GaussianModel3DUncertainty{}
+        };
         double alpha_g{ 0.0 };
     };
 
@@ -76,17 +79,16 @@ public:
 
     void SetGroupStatistics(
         GroupKey group_key,
-        const GaussianEstimate & mean,
-        const GaussianEstimate & mdpde,
-        const GaussianEstimate & prior,
-        const GaussianParameterUncertainty & prior_standard_deviation,
+        const GaussianModel3D & mean,
+        const GaussianModel3D & mdpde,
+        const GaussianModel3D & prior,
+        const GaussianModel3DUncertainty & prior_standard_deviation,
         double alpha_g)
     {
         auto & group{ EnsureGroup(group_key) };
         group.mean = mean;
         group.mdpde = mdpde;
-        group.prior.estimate = prior;
-        group.prior.standard_deviation = prior_standard_deviation;
+        group.prior = GaussianModel3DWithUncertainty{ prior, prior_standard_deviation };
         group.alpha_g = alpha_g;
     }
 
@@ -95,27 +97,27 @@ public:
         EnsureGroup(group_key).alpha_g = alpha_g;
     }
 
-    const GaussianEstimate & GetMean(GroupKey group_key) const
+    const GaussianModel3D & GetMean(GroupKey group_key) const
     {
         return RequireGroup(group_key).mean;
     }
 
-    const GaussianEstimate & GetMDPDE(GroupKey group_key) const
+    const GaussianModel3D & GetMDPDE(GroupKey group_key) const
     {
         return RequireGroup(group_key).mdpde;
     }
 
-    const GaussianEstimate & GetPrior(GroupKey group_key) const
+    const GaussianModel3D & GetPrior(GroupKey group_key) const
     {
-        return RequireGroup(group_key).prior.estimate;
+        return RequireGroup(group_key).prior.GetModel();
     }
 
-    const GaussianParameterUncertainty & GetPriorStandardDeviation(GroupKey group_key) const
+    const GaussianModel3DUncertainty & GetPriorStandardDeviation(GroupKey group_key) const
     {
-        return RequireGroup(group_key).prior.standard_deviation;
+        return RequireGroup(group_key).prior.GetStandardDeviationModel();
     }
 
-    GaussianEstimateWithUncertainty GetPriorWithUncertainty(GroupKey group_key) const
+    GaussianModel3DWithUncertainty GetPriorWithUncertainty(GroupKey group_key) const
     {
         return RequireGroup(group_key).prior;
     }

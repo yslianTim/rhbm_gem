@@ -23,8 +23,8 @@ int main()
     static_assert(kHeaderExposesCompleteType<rhbm_gem::AtomObject>);
     static_assert(kHeaderExposesCompleteType<rhbm_gem::BondObject>);
     static_assert(kHeaderExposesCompleteType<rhbm_gem::ChemicalComponentEntry>);
-    static_assert(kHeaderExposesCompleteType<rhbm_gem::GaussianEstimate>);
-    static_assert(kHeaderExposesCompleteType<rhbm_gem::GaussianEstimateWithUncertainty>);
+    static_assert(kHeaderExposesCompleteType<rhbm_gem::GaussianModel3D>);
+    static_assert(kHeaderExposesCompleteType<rhbm_gem::GaussianModel3DWithUncertainty>);
     static_assert(kHeaderExposesCompleteType<rhbm_gem::MapObject>);
     static_assert(kHeaderExposesCompleteType<rhbm_gem::ModelAnalysisEditor>);
     static_assert(kHeaderExposesCompleteType<rhbm_gem::LocalPotentialView>);
@@ -32,7 +32,7 @@ int main()
 
     rhbm_gem::ModelObject model_object;
     (void)model_object;
-    const rhbm_gem::GaussianEstimate estimate{ 4.0, 2.0 };
+    const rhbm_gem::GaussianModel3D estimate{ 4.0, 2.0 };
     const std::array<int, 3> compile_only_sizes{
         static_cast<int>(sizeof(rhbm_gem::AtomObject)),
         static_cast<int>(sizeof(rhbm_gem::BondObject)),

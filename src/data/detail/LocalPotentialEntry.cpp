@@ -264,7 +264,7 @@ double LocalPotentialEntry::CalculateQScore(int par_choice) const
     {
         const auto & estimate{ GetEstimateMDPDE() };
         amplitude = estimate.Intensity();
-        width = estimate.width;
+        width = estimate.GetWidth();
         intersect = 0.0;
     }
 
