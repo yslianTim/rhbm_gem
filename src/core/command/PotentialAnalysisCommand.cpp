@@ -140,13 +140,6 @@ bool EmitTrainingReportIfRequested(
     return true;
 }
 
-linearization_service::LinearizationContext BuildLocalLinearizationContext(
-    const LocalPotentialView & view)
-{
-    return linearization_service::LinearizationContext::FromModel(
-        GaussianModel3D{ view.GetMomentZeroEstimate(), view.GetMomentTwoEstimate(), 0.0 });
-}
-
 } // namespace
 
 namespace rhbm_gem {
@@ -558,8 +551,7 @@ void PotentialAnalysisCommand::RunDatasetPreparationWorkflow(
                     dataset_spec,
                     local_view.GetSamplingEntries(),
                     fit_range_min,
-                    fit_range_max,
-                    BuildLocalLinearizationContext(local_view)))
+                    fit_range_max))
         );
 
 #ifdef USE_OPENMP

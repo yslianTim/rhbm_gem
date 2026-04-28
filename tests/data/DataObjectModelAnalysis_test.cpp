@@ -224,15 +224,15 @@ TEST(DataObjectModelAnalysisTest, MutableLocalPotentialViewSetFitResultUpdatesFi
 
     rg::RHBMBetaEstimateResult fit_result;
     fit_result.status = rg::RHBMEstimationStatus::SUCCESS;
-    fit_result.beta_ols = Eigen::VectorXd::Zero(3);
-    fit_result.beta_mdpde = Eigen::VectorXd::Zero(3);
+    fit_result.beta_ols = Eigen::VectorXd::Zero(2);
+    fit_result.beta_mdpde = Eigen::VectorXd::Zero(2);
 
     entry.SetFitResult(fit_result);
 
     ASSERT_TRUE(entry.HasFitResult());
     EXPECT_EQ(rg::RHBMEstimationStatus::SUCCESS, entry.GetFitResult().status);
-    EXPECT_TRUE(entry.GetFitResult().beta_ols.isApprox(Eigen::VectorXd::Zero(3), 1e-12));
-    EXPECT_TRUE(entry.GetFitResult().beta_mdpde.isApprox(Eigen::VectorXd::Zero(3), 1e-12));
+    EXPECT_TRUE(entry.GetFitResult().beta_ols.isApprox(Eigen::VectorXd::Zero(2), 1e-12));
+    EXPECT_TRUE(entry.GetFitResult().beta_mdpde.isApprox(Eigen::VectorXd::Zero(2), 1e-12));
     EXPECT_DOUBLE_EQ(0.0, rg::LocalPotentialView::RequireFor(*atom).GetEstimateOLS().GetWidth());
     EXPECT_DOUBLE_EQ(0.0, rg::LocalPotentialView::RequireFor(*atom).GetEstimateMDPDE().GetWidth());
 }

@@ -285,8 +285,7 @@ SeriesPointList BuildLinearDataset(
             linearization_spec,
             sampling_entries,
             fit_range_min,
-            fit_range_max,
-            linearization_service::LinearizationContext::FromModel(model)
+            fit_range_max
         )
     };
     const auto max_response{ model.Intensity() };

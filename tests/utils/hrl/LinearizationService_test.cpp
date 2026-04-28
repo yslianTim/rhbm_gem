@@ -35,6 +35,12 @@ ls::LinearizationSpec DirectGaussianModelSpec()
     return spec;
 }
 
+const ls::LinearizationSpec & BondGroupLinearizationSpec()
+{
+    static const auto spec{ ls::LinearizationSpec::BondGroupDecode() };
+    return spec;
+}
+
 } // namespace
 
 TEST(LinearizationServiceTest, BuildDatasetSeriesTransformsEffectiveSamplesWithinRange)
@@ -131,6 +137,19 @@ TEST(LinearizationServiceTest, DecodeParameterVectorMatchesClosedForm)
     EXPECT_NEAR(expected_width, estimate.GetWidth(), 1.0e-12);
 }
 
+TEST(LinearizationServiceTest, DecodeParameterVectorPreservesThreeParameterIntercept)
+{
+    const auto estimate{
+        ls::DecodeParameterVector(DirectGaussianModelSpec(), MakeVector({ std::log(2.0), 4.0, 0.25 }))
+    };
+    const auto expected_amplitude{ 2.0 * std::pow(Constants::two_pi / 4.0, 1.5) };
+    const auto expected_width{ 1.0 / std::sqrt(4.0) };
+
+    EXPECT_NEAR(expected_amplitude, estimate.GetAmplitude(), 1.0e-12);
+    EXPECT_NEAR(expected_width, estimate.GetWidth(), 1.0e-12);
+    EXPECT_NEAR(0.25, estimate.GetIntercept(), 1.0e-12);
+}
+
 TEST(LinearizationServiceTest, DecodeParameterVectorReturnsStandardDeviation)
 {
     const auto linear_model{ MakeVector({ 0.5, 2.0 }) };
@@ -157,6 +176,46 @@ TEST(LinearizationServiceTest, DecodeParameterVectorReturnsStandardDeviation)
     EXPECT_NEAR(std::sqrt(expected_var_width), gaussian.GetStandardDeviationModel().GetWidth(), 1.0e-12);
 }
 
+TEST(LinearizationServiceTest, DecodeParameterVectorForThreeParameterModelReturnsInterceptStandardDeviation)
+{
+    const auto linear_model{ MakeVector({ 0.5, 2.0, 0.25 }) };
+    Eigen::MatrixXd covariance_matrix(3, 3);
+    covariance_matrix << 0.1, 0.05, 0.0,
+                         0.05, 0.2, 0.0,
+                         0.0, 0.0, 0.09;
+
+    const auto gaussian{
+        ls::DecodeParameterVector(DirectGaussianModelSpec(), linear_model, covariance_matrix)
+    };
+
+    EXPECT_NEAR(0.25, gaussian.GetModel().GetIntercept(), 1.0e-12);
+    EXPECT_NEAR(0.3, gaussian.GetStandardDeviationModel().GetIntercept(), 1.0e-12);
+}
+
+TEST(LinearizationServiceTest, DecodeParameterVectorForBondGroupUsesTwoDimensionalUncertainty)
+{
+    const auto linear_model{ MakeVector({ 0.5, 2.0 }) };
+    Eigen::MatrixXd covariance_matrix(2, 2);
+    covariance_matrix << 0.1, 0.05,
+                         0.05, 0.2;
+
+    const auto gaussian{
+        ls::DecodeParameterVector(BondGroupLinearizationSpec(), linear_model, covariance_matrix)
+    };
+    const auto expected_amplitude{ std::exp(0.5) * Constants::two_pi / 2.0 };
+    const auto expected_width{ 1.0 / std::sqrt(2.0) };
+    const auto expected_var_amplitude{
+        expected_amplitude * expected_amplitude *
+        (0.1 + 0.2 / (2.0 * 2.0) - 2.0 * 0.05 / 2.0)
+    };
+    const auto expected_var_width{ 0.25 * std::pow(2.0, -3) * 0.2 };
+
+    EXPECT_NEAR(expected_amplitude, gaussian.GetModel().GetAmplitude(), 1.0e-12);
+    EXPECT_NEAR(expected_width, gaussian.GetModel().GetWidth(), 1.0e-12);
+    EXPECT_NEAR(std::sqrt(expected_var_amplitude), gaussian.GetStandardDeviationModel().GetAmplitude(), 1.0e-12);
+    EXPECT_NEAR(std::sqrt(expected_var_width), gaussian.GetStandardDeviationModel().GetWidth(), 1.0e-12);
+}
+
 TEST(LinearizationServiceTest, DecodeParameterVectorFor2BetaModelAddsZeroIntercept)
 {
     const auto linear_model{ MakeVector({ 0.5, 2.0 }) };
@@ -173,4 +232,19 @@ TEST(LinearizationServiceTest, DecodeParameterVectorFor2BetaModelAddsZeroInterce
 
     EXPECT_NEAR(0.0, gaussian.GetModel().GetIntercept(), 1.0e-12);
     EXPECT_NEAR(0.0, gaussian.GetStandardDeviationModel().GetIntercept(), 1.0e-12);
+}
+
+TEST(LinearizationServiceTest, DecodeParameterVectorRejectsMismatchedBasisSize)
+{
+    EXPECT_THROW(
+        ls::DecodeParameterVector(DatasetLinearizationSpec(), MakeVector({ 0.5, 2.0, 0.25 })),
+        std::invalid_argument);
+
+    Eigen::MatrixXd covariance_matrix{ Eigen::MatrixXd::Identity(2, 2) };
+    EXPECT_THROW(
+        ls::DecodeParameterVector(
+            DirectGaussianModelSpec(),
+            MakeVector({ 0.5, 2.0 }),
+            covariance_matrix),
+        std::invalid_argument);
 }

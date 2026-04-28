@@ -55,12 +55,6 @@ const ls::LinearizationSpec & GaussianDatasetSpec()
     return spec;
 }
 
-ls::LinearizationContext BuildLocalLinearizationContext(const LocalPotentialView & view)
-{
-    return ls::LinearizationContext::FromModel(
-        GaussianModel3D{ view.GetMomentZeroEstimate(), view.GetMomentTwoEstimate(), 0.0 });
-}
-
 void RunBondSampling(
     ModelObject & model_object,
     const MapObject & map_object,
@@ -117,8 +111,7 @@ void RunBondSampling(
                         dataset_spec,
                         sampling_entries,
                         options.fit_range_min,
-                        options.fit_range_max,
-                        BuildLocalLinearizationContext(local_view)))
+                        options.fit_range_max))
             );
             entry.SetAlphaR(options.alpha_r);
             #pragma omp critical
@@ -141,15 +134,13 @@ void RunBondSampling(
                 bond->GetBondVector())
         };
         entry.SetSamplingEntries(sampling_entries);
-        const auto local_view{ LocalPotentialView::RequireFor(*bond) };
         entry.SetDataset(
             rhbm_gem::rhbm_helper::BuildMemberDataset(
                 ls::BuildDatasetSeries(
                     dataset_spec,
                     sampling_entries,
                     options.fit_range_min,
-                    options.fit_range_max,
-                    BuildLocalLinearizationContext(local_view)))
+                    options.fit_range_max))
         );
         entry.SetAlphaR(options.alpha_r);
         bond_count++;
