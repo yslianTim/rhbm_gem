@@ -354,26 +354,6 @@ Eigen::VectorXd BuildGaussianVector(
 
 } // namespace
 
-LinearizationSpec LinearizationSpec::DefaultDataset()
-{
-    return LinearizationSpec{};
-}
-
-LinearizationSpec LinearizationSpec::DefaultMetricModel()
-{
-    return LinearizationSpec{};
-}
-
-LinearizationSpec LinearizationSpec::AtomLocalDecode()
-{
-    return LinearizationSpec{};
-}
-
-LinearizationSpec LinearizationSpec::AtomGroupDecode()
-{
-    return LinearizationSpec{};
-}
-
 LinearizationSpec LinearizationSpec::BondGroupDecode()
 {
     auto spec{ LinearizationSpec{} };
@@ -381,15 +361,9 @@ LinearizationSpec LinearizationSpec::BondGroupDecode()
     return spec;
 }
 
-bool LinearizationContext::HasModelParameters() const
+LinearizationContext LinearizationContext::FromModelParameters(const Eigen::VectorXd & vector)
 {
-    return model.has_value();
-}
-
-LinearizationContext LinearizationContext::FromModelParameters(
-    const Eigen::VectorXd & model_parameters)
-{
-    return FromModel(GaussianModel3D::FromVector(model_parameters));
+    return FromModel(GaussianModel3D::FromVector(vector));
 }
 
 LinearizationContext LinearizationContext::FromModel(const GaussianModel3D & model)

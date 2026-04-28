@@ -30,10 +30,10 @@ struct LinearizationSpec
     GaussianModelKind model_kind{ GaussianModelKind::MODEL_3D };
     bool requires_local_context{ false };
 
-    static LinearizationSpec DefaultDataset();
-    static LinearizationSpec DefaultMetricModel();
-    static LinearizationSpec AtomLocalDecode();
-    static LinearizationSpec AtomGroupDecode();
+    static LinearizationSpec DefaultDataset() { return LinearizationSpec{}; }
+    static LinearizationSpec DefaultMetricModel() { return LinearizationSpec{}; }
+    static LinearizationSpec AtomLocalDecode() { return LinearizationSpec{}; }
+    static LinearizationSpec AtomGroupDecode() { return LinearizationSpec{}; }
     static LinearizationSpec BondGroupDecode();
 };
 
@@ -41,10 +41,8 @@ struct LinearizationContext
 {
     std::optional<GaussianModel3D> model{};
 
-    bool HasModelParameters() const;
-
-    static LinearizationContext FromModelParameters(
-        const Eigen::VectorXd & model_parameters);
+    bool HasModelParameters() const { return model.has_value(); }
+    static LinearizationContext FromModelParameters(const Eigen::VectorXd & vector);
     static LinearizationContext FromModel(const GaussianModel3D & model);
 };
 
