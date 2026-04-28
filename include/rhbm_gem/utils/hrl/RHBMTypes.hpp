@@ -9,6 +9,7 @@
 #include <Eigen/Dense>
 
 #include <rhbm_gem/utils/domain/Constants.hpp>
+#include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
 namespace rhbm_gem {
 
@@ -23,78 +24,6 @@ using RHBMMemberCovarianceMatrix = Eigen::MatrixXd;
 using RHBMBetaPosteriorMatrix = Eigen::MatrixXd;
 using RHBMPosteriorCovarianceMatrix = Eigen::MatrixXd;
 using RHBMDiagonalMatrix = Eigen::DiagonalMatrix<double, Eigen::Dynamic>;
-
-// GaussianParameterVector stays in Gaussian-model space; its dimension depends on the model.
-// RHBMBetaVector stays in HRL linearized coefficient space.
-using GaussianParameterVector = Eigen::VectorXd;
-
-// Shared Gaussian value types used by HRL linearization and downstream consumers.
-struct GaussianModel3D
-{
-    static constexpr int kParameterSize{ 3 };
-    static constexpr int kAmplitudeIndex{ 0 };
-    static constexpr int kWidthIndex{ 1 };
-    static constexpr int kInterceptIndex{ 2 };
-
-    double amplitude{ 0.0 };
-    double width{ 1.0 };
-    double intercept{ 0.0 };
-
-    static GaussianModel3D FromVector(const GaussianParameterVector & parameters)
-    {
-        if (parameters.rows() < kParameterSize)
-        {
-            throw std::invalid_argument("GaussianModel3D parameter vector must have three entries.");
-        }
-        return GaussianModel3D{
-            parameters(kAmplitudeIndex),
-            parameters(kWidthIndex),
-            parameters(kInterceptIndex)
-        };
-    }
-
-    GaussianParameterVector ToVector() const
-    {
-        GaussianParameterVector parameters{ GaussianParameterVector::Zero(kParameterSize) };
-        parameters(kAmplitudeIndex) = amplitude;
-        parameters(kWidthIndex) = width;
-        parameters(kInterceptIndex) = intercept;
-        return parameters;
-    }
-
-    double GetModelParameter(int par_id) const
-    {
-        switch (par_id)
-        {
-        case kAmplitudeIndex:
-            return amplitude;
-        case kWidthIndex:
-            return width;
-        case kInterceptIndex:
-            return intercept;
-        default:
-            throw std::out_of_range("GaussianModel3D parameter index is out of range.");
-        }
-    }
-
-    double Intensity() const
-    {
-        if (width == 0.0)
-        {
-            return 0.0;
-        }
-        return amplitude * std::pow(Constants::two_pi * width * width, -1.5);
-    }
-
-    double ResponseAtDistance(double distance) const
-    {
-        if (width == 0.0)
-        {
-            return intercept;
-        }
-        return Intensity() * std::exp(-0.5 * distance * distance / (width * width)) + intercept;
-    }
-};
 
 struct GaussianEstimate
 {

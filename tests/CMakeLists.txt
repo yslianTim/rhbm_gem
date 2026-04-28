@@ -130,6 +130,7 @@ set(UTILS_MATH_TEST_SOURCES
     utils/math/EigenValidation_test.cpp
     utils/math/EigenHelper_test.cpp
     utils/math/ElectricPotential_test.cpp
+    utils/math/GaussianModel3D_test.cpp
     utils/math/NumericValidation_test.cpp
     utils/math/KDTreeAlgorithm_test.cpp
     utils/math/SamplingPointAcceptanceMask_test.cpp
