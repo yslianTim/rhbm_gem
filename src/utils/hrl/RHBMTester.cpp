@@ -43,18 +43,11 @@ RHBMExecutionOptions MakeTesterExecutionOptions()
     return options;
 }
 
-void ValidateGaussianTruthVector(
-    const Eigen::VectorXd & gaussian_truth,
-    const char * value_name)
-{
-    GaussianModel3D::RequireParameterVector(gaussian_truth, value_name);
-}
-
 GaussianParameterVector CalculateNormalizedBias(
     const RHBMBetaVector & linear_estimate,
     const GaussianParameterVector & gaussian_truth)
 {
-    ValidateGaussianTruthVector(gaussian_truth, "gaussian_truth");
+    GaussianModel3D::RequireParameterVector(gaussian_truth, "gaussian_truth");
     const auto gaussian_estimate{
         linearization_service::DecodeGroupBeta(
             linearization_service::LinearizationSpec::DefaultMetricModel(), linear_estimate)
@@ -63,7 +56,7 @@ GaussianParameterVector CalculateNormalizedBias(
     return ((gaussian_estimate - gaussian_truth).array() / gaussian_truth.array()).matrix();
 }
 
-Eigen::VectorXd CalculateReplicaSigma(
+Eigen::VectorXd CalculateReplicaBiasSigma(
     const Eigen::MatrixXd & bias_matrix,
     const Eigen::VectorXd & bias_mean)
 {
@@ -107,7 +100,7 @@ BiasStatistics FinalizeBiasStatistics(const Eigen::MatrixXd & bias_matrix)
 {
     BiasStatistics result;
     result.mean = bias_matrix.rowwise().mean();
-    result.sigma = CalculateReplicaSigma(bias_matrix, result.mean);
+    result.sigma = CalculateReplicaBiasSigma(bias_matrix, result.mean);
     return result;
 }
 
@@ -145,7 +138,7 @@ bool RunBetaMDPDETest(
     (void)thread_size;
 #endif
 
-    ValidateGaussianTruthVector(test_input.gaus_true, "test_input.gaus_true");
+    GaussianModel3D::RequireParameterVector(test_input.gaus_true, "test_input.gaus_true");
     const auto replica_size{ static_cast<int>(test_input.replica_datasets.size()) };
     if (replica_size <= 0)
     {
@@ -241,7 +234,7 @@ bool RunMuMDPDETest(
     (void)thread_size;
 #endif
 
-    ValidateGaussianTruthVector(test_input.gaus_true, "test_input.gaus_true");
+    GaussianModel3D::RequireParameterVector(test_input.gaus_true, "test_input.gaus_true");
     const auto replica_size{ static_cast<int>(test_input.replica_beta_matrices.size()) };
     if (replica_size <= 0)
     {
