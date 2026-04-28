@@ -10,39 +10,39 @@
 namespace rhbm_gem::rhbm_tester
 {
 
-struct ResidualStatistics
+struct BiasStatistics
 {
     Eigen::VectorXd mean;
     Eigen::VectorXd sigma;
 };
 
-struct ResidualStatisticsSeries
+struct BiasStatisticsSeries
 {
-    std::vector<ResidualStatistics> requested_alpha;
-    std::optional<ResidualStatistics> trained_alpha;
+    std::vector<BiasStatistics> requested_alpha;
+    std::optional<BiasStatistics> trained_alpha;
     std::optional<double> trained_alpha_average;
 };
 
-struct BetaMDPDETestResidual
+struct BetaMDPDETestBias
 {
-    ResidualStatistics ols;
-    ResidualStatisticsSeries mdpde;
+    BiasStatistics ols;
+    BiasStatisticsSeries mdpde;
 };
 
-struct MuMDPDETestResidual
+struct MuMDPDETestBias
 {
-    ResidualStatistics median;
-    ResidualStatisticsSeries mdpde;
+    BiasStatistics median;
+    BiasStatisticsSeries mdpde;
 };
 
 bool RunBetaMDPDETest(
-    BetaMDPDETestResidual & result,
+    BetaMDPDETestBias & result,
     const test_data_factory::RHBMBetaTestInput & test_input,
     int thread_size = 1
 );
 
 bool RunMuMDPDETest(
-    MuMDPDETestResidual & result,
+    MuMDPDETestBias & result,
     const test_data_factory::RHBMMuTestInput & test_input,
     int thread_size = 1
 );

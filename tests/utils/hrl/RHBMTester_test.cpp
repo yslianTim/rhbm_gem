@@ -23,15 +23,15 @@ Eigen::VectorXd MakeVector(std::initializer_list<double> values)
     return result;
 }
 
-void ExpectResidualStatisticSize(const rt::ResidualStatistics & residual)
+void ExpectBiasStatisticSize(const rt::BiasStatistics & bias)
 {
-    EXPECT_EQ(residual.mean.size(), rhbm_gem::GaussianModel3D::kParameterSize);
-    EXPECT_EQ(residual.sigma.size(), rhbm_gem::GaussianModel3D::kParameterSize);
+    EXPECT_EQ(bias.mean.size(), rhbm_gem::GaussianModel3D::kParameterSize);
+    EXPECT_EQ(bias.sigma.size(), rhbm_gem::GaussianModel3D::kParameterSize);
 }
 
 } // namespace
 
-TEST(RHBMTesterTest, RunBetaMDPDETestPopulatesResidualOutputs)
+TEST(RHBMTesterTest, RunBetaMDPDETestPopulatesBiasOutputs)
 {
     tdf::TestDataFactory factory(
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
@@ -50,28 +50,28 @@ TEST(RHBMTesterTest, RunBetaMDPDETestPopulatesResidualOutputs)
         })
     };
 
-    rt::BetaMDPDETestResidual residual;
+    rt::BetaMDPDETestBias bias;
     const bool result{
         rt::RunBetaMDPDETest(
-            residual,
+            bias,
             test_input,
             1)
     };
 
     ASSERT_TRUE(result);
-    ASSERT_EQ(residual.mdpde.requested_alpha.size(), alpha_r_list.size());
-    ExpectResidualStatisticSize(residual.ols);
-    for (const auto & requested_alpha_residual : residual.mdpde.requested_alpha)
+    ASSERT_EQ(bias.mdpde.requested_alpha.size(), alpha_r_list.size());
+    ExpectBiasStatisticSize(bias.ols);
+    for (const auto & requested_alpha_bias : bias.mdpde.requested_alpha)
     {
-        ExpectResidualStatisticSize(requested_alpha_residual);
+        ExpectBiasStatisticSize(requested_alpha_bias);
     }
-    ASSERT_TRUE(residual.mdpde.trained_alpha.has_value());
-    ExpectResidualStatisticSize(residual.mdpde.trained_alpha.value());
-    ASSERT_TRUE(residual.mdpde.trained_alpha_average.has_value());
-    EXPECT_GE(residual.mdpde.trained_alpha_average.value(), 0.0);
+    ASSERT_TRUE(bias.mdpde.trained_alpha.has_value());
+    ExpectBiasStatisticSize(bias.mdpde.trained_alpha.value());
+    ASSERT_TRUE(bias.mdpde.trained_alpha_average.has_value());
+    EXPECT_GE(bias.mdpde.trained_alpha_average.value(), 0.0);
 }
 
-TEST(RHBMTesterTest, RunMuMDPDETestPopulatesResidualOutputs)
+TEST(RHBMTesterTest, RunMuMDPDETestPopulatesBiasOutputs)
 {
     tdf::TestDataFactory factory(
         rhbm_gem::linearization_service::LinearizationSpec::DefaultDataset());
@@ -91,25 +91,25 @@ TEST(RHBMTesterTest, RunMuMDPDETestPopulatesResidualOutputs)
         })
     };
 
-    rt::MuMDPDETestResidual residual;
+    rt::MuMDPDETestBias bias;
     const bool result{
         rt::RunMuMDPDETest(
-            residual,
+            bias,
             test_input,
             1)
     };
 
     ASSERT_TRUE(result);
-    ASSERT_EQ(residual.mdpde.requested_alpha.size(), alpha_g_list.size());
-    ExpectResidualStatisticSize(residual.median);
-    for (const auto & requested_alpha_residual : residual.mdpde.requested_alpha)
+    ASSERT_EQ(bias.mdpde.requested_alpha.size(), alpha_g_list.size());
+    ExpectBiasStatisticSize(bias.median);
+    for (const auto & requested_alpha_bias : bias.mdpde.requested_alpha)
     {
-        ExpectResidualStatisticSize(requested_alpha_residual);
+        ExpectBiasStatisticSize(requested_alpha_bias);
     }
-    ASSERT_TRUE(residual.mdpde.trained_alpha.has_value());
-    ExpectResidualStatisticSize(residual.mdpde.trained_alpha.value());
-    ASSERT_TRUE(residual.mdpde.trained_alpha_average.has_value());
-    EXPECT_GE(residual.mdpde.trained_alpha_average.value(), 0.0);
+    ASSERT_TRUE(bias.mdpde.trained_alpha.has_value());
+    ExpectBiasStatisticSize(bias.mdpde.trained_alpha.value());
+    ASSERT_TRUE(bias.mdpde.trained_alpha_average.has_value());
+    EXPECT_GE(bias.mdpde.trained_alpha_average.value(), 0.0);
 }
 
 TEST(RHBMTesterTest, RunBetaMDPDETestSkipsTrainedAlphaWhenDisabled)
@@ -131,20 +131,20 @@ TEST(RHBMTesterTest, RunBetaMDPDETestSkipsTrainedAlphaWhenDisabled)
         })
     };
 
-    rt::BetaMDPDETestResidual residual;
+    rt::BetaMDPDETestBias bias;
     const bool result{
         rt::RunBetaMDPDETest(
-            residual,
+            bias,
             test_input,
             1)
     };
 
     ASSERT_TRUE(result);
-    ASSERT_EQ(residual.mdpde.requested_alpha.size(), alpha_r_list.size());
-    ExpectResidualStatisticSize(residual.ols);
-    ExpectResidualStatisticSize(residual.mdpde.requested_alpha.front());
-    EXPECT_FALSE(residual.mdpde.trained_alpha.has_value());
-    EXPECT_FALSE(residual.mdpde.trained_alpha_average.has_value());
+    ASSERT_EQ(bias.mdpde.requested_alpha.size(), alpha_r_list.size());
+    ExpectBiasStatisticSize(bias.ols);
+    ExpectBiasStatisticSize(bias.mdpde.requested_alpha.front());
+    EXPECT_FALSE(bias.mdpde.trained_alpha.has_value());
+    EXPECT_FALSE(bias.mdpde.trained_alpha_average.has_value());
 }
 
 TEST(RHBMTesterTest, RunMuMDPDETestSkipsTrainedAlphaWhenDisabled)
@@ -167,20 +167,20 @@ TEST(RHBMTesterTest, RunMuMDPDETestSkipsTrainedAlphaWhenDisabled)
         })
     };
 
-    rt::MuMDPDETestResidual residual;
+    rt::MuMDPDETestBias bias;
     const bool result{
         rt::RunMuMDPDETest(
-            residual,
+            bias,
             test_input,
             1)
     };
 
     ASSERT_TRUE(result);
-    ASSERT_EQ(residual.mdpde.requested_alpha.size(), alpha_g_list.size());
-    ExpectResidualStatisticSize(residual.median);
-    ExpectResidualStatisticSize(residual.mdpde.requested_alpha.front());
-    EXPECT_FALSE(residual.mdpde.trained_alpha.has_value());
-    EXPECT_FALSE(residual.mdpde.trained_alpha_average.has_value());
+    ASSERT_EQ(bias.mdpde.requested_alpha.size(), alpha_g_list.size());
+    ExpectBiasStatisticSize(bias.median);
+    ExpectBiasStatisticSize(bias.mdpde.requested_alpha.front());
+    EXPECT_FALSE(bias.mdpde.trained_alpha.has_value());
+    EXPECT_FALSE(bias.mdpde.trained_alpha_average.has_value());
 }
 
 TEST(RHBMTesterTest, RunBetaMDPDETestAllowsEmptyAlphaListWithoutTraining)
@@ -201,19 +201,19 @@ TEST(RHBMTesterTest, RunBetaMDPDETestAllowsEmptyAlphaListWithoutTraining)
         })
     };
 
-    rt::BetaMDPDETestResidual residual;
+    rt::BetaMDPDETestBias bias;
     const bool result{
         rt::RunBetaMDPDETest(
-            residual,
+            bias,
             test_input,
             1)
     };
 
     ASSERT_TRUE(result);
-    EXPECT_TRUE(residual.mdpde.requested_alpha.empty());
-    ExpectResidualStatisticSize(residual.ols);
-    EXPECT_FALSE(residual.mdpde.trained_alpha.has_value());
-    EXPECT_FALSE(residual.mdpde.trained_alpha_average.has_value());
+    EXPECT_TRUE(bias.mdpde.requested_alpha.empty());
+    ExpectBiasStatisticSize(bias.ols);
+    EXPECT_FALSE(bias.mdpde.trained_alpha.has_value());
+    EXPECT_FALSE(bias.mdpde.trained_alpha_average.has_value());
 }
 
 TEST(RHBMTesterTest, RunBetaMDPDETestAllowsEmptyAlphaListWithTraining)
@@ -234,21 +234,21 @@ TEST(RHBMTesterTest, RunBetaMDPDETestAllowsEmptyAlphaListWithTraining)
         })
     };
 
-    rt::BetaMDPDETestResidual residual;
+    rt::BetaMDPDETestBias bias;
     const bool result{
         rt::RunBetaMDPDETest(
-            residual,
+            bias,
             test_input,
             1)
     };
 
     ASSERT_TRUE(result);
-    EXPECT_TRUE(residual.mdpde.requested_alpha.empty());
-    ExpectResidualStatisticSize(residual.ols);
-    ASSERT_TRUE(residual.mdpde.trained_alpha.has_value());
-    ExpectResidualStatisticSize(residual.mdpde.trained_alpha.value());
-    ASSERT_TRUE(residual.mdpde.trained_alpha_average.has_value());
-    EXPECT_GE(residual.mdpde.trained_alpha_average.value(), 0.0);
+    EXPECT_TRUE(bias.mdpde.requested_alpha.empty());
+    ExpectBiasStatisticSize(bias.ols);
+    ASSERT_TRUE(bias.mdpde.trained_alpha.has_value());
+    ExpectBiasStatisticSize(bias.mdpde.trained_alpha.value());
+    ASSERT_TRUE(bias.mdpde.trained_alpha_average.has_value());
+    EXPECT_GE(bias.mdpde.trained_alpha_average.value(), 0.0);
 }
 
 TEST(RHBMTesterTest, RunBetaMDPDETestRejectsWrongSizedTruth)
@@ -268,11 +268,11 @@ TEST(RHBMTesterTest, RunBetaMDPDETestRejectsWrongSizedTruth)
     };
     test_input.gaus_true = MakeVector({ 1.0, 0.5 });
 
-    rt::BetaMDPDETestResidual residual;
+    rt::BetaMDPDETestBias bias;
 
     EXPECT_THROW(
         rt::RunBetaMDPDETest(
-            residual,
+            bias,
             test_input,
             1),
         std::invalid_argument

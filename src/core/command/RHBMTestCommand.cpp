@@ -78,7 +78,7 @@ struct NeighborDistanceScenarioConfig
     std::vector<double> distance_list;
 };
 
-enum class ResidualCurveKind
+enum class BiasCurveKind
 {
     Ols,
     Median,
@@ -88,7 +88,7 @@ enum class ResidualCurveKind
     TrainedAlpha
 };
 
-enum class ResidualPlotFlavor
+enum class BiasPlotFlavor
 {
     DataOutlier,
     MemberOutlier,
@@ -97,36 +97,36 @@ enum class ResidualPlotFlavor
     NeighborDistance
 };
 
-enum class ResidualXAxisMode
+enum class BiasXAxisMode
 {
     ContaminationRatio,
     NeighborDistance
 };
 
-struct ResidualCurvePoint
+struct BiasCurvePoint
 {
     double x{ 0.0 };
-    rhbm_tester::ResidualStatistics residual;
+    rhbm_tester::BiasStatistics bias;
 };
 
-struct ResidualCurve
+struct BiasCurve
 {
-    ResidualCurveKind kind;
-    std::vector<ResidualCurvePoint> points;
+    BiasCurveKind kind;
+    std::vector<BiasCurvePoint> points;
 };
 
-struct ResidualPlotPanel
+struct BiasPlotPanel
 {
     std::string label;
-    std::vector<ResidualCurve> curves;
+    std::vector<BiasCurve> curves;
 };
 
-struct ResidualPlotRequest
+struct BiasPlotRequest
 {
     std::string output_name;
-    ResidualPlotFlavor flavor{ ResidualPlotFlavor::DataOutlier };
-    ResidualXAxisMode x_axis_mode{ ResidualXAxisMode::ContaminationRatio };
-    std::vector<ResidualPlotPanel> panels;
+    BiasPlotFlavor flavor{ BiasPlotFlavor::DataOutlier };
+    BiasXAxisMode x_axis_mode{ BiasXAxisMode::ContaminationRatio };
+    std::vector<BiasPlotPanel> panels;
 };
 
 Eigen::VectorXd MakeDefaultModelPrior()
@@ -167,22 +167,22 @@ std::vector<double> BuildDescendingSweep(int count, double start, double step)
     return values;
 }
 
-ResidualCurve MakeResidualCurve(ResidualCurveKind kind, size_t point_capacity)
+BiasCurve MakeBiasCurve(BiasCurveKind kind, size_t point_capacity)
 {
-    ResidualCurve curve{ kind, {} };
+    BiasCurve curve{ kind, {} };
     curve.points.reserve(point_capacity);
     return curve;
 }
 
-void AppendResidualCurvePoint(
-    ResidualCurve & curve,
+void AppendBiasCurvePoint(
+    BiasCurve & curve,
     double x,
-    const rhbm_tester::ResidualStatistics & residual)
+    const rhbm_tester::BiasStatistics & bias)
 {
-    curve.points.emplace_back(ResidualCurvePoint{ x, residual });
+    curve.points.emplace_back(BiasCurvePoint{ x, bias });
 }
 
-std::string FormatDataResidualPanelLabel(size_t panel_index)
+std::string FormatDataBiasPanelLabel(size_t panel_index)
 {
     const double error_value[3]{ 0.0, 2.5, 5.0 };
     const auto value{ error_value[panel_index] };
@@ -192,7 +192,7 @@ std::string FormatDataResidualPanelLabel(size_t panel_index)
     return stream.str();
 }
 
-std::string FormatMemberResidualPanelLabel(size_t panel_index)
+std::string FormatMemberBiasPanelLabel(size_t panel_index)
 {
     const std::string outlier_type_list[2]{
         "#font[2]{A}", "#tau"
@@ -377,172 +377,172 @@ void SaveBenchmarkLinearizedDatasetReport(
 }
 
 #ifdef HAVE_ROOT
-double ScaleResidualPlotX(double x, ResidualXAxisMode x_axis_mode)
+double ScaleBiasPlotX(double x, BiasXAxisMode x_axis_mode)
 {
-    if (x_axis_mode == ResidualXAxisMode::NeighborDistance)
+    if (x_axis_mode == BiasXAxisMode::NeighborDistance)
     {
         return -1.0 * x;
     }
     return 100.0 * x;
 }
 
-bool ShouldDrawResidualCurve(ResidualPlotFlavor, ResidualCurveKind)
+bool ShouldDrawBiasCurve(BiasPlotFlavor, BiasCurveKind)
 {
     return true;
 }
 
-short GetResidualCurveColor(ResidualPlotFlavor flavor, ResidualCurveKind kind)
+short GetBiasCurveColor(BiasPlotFlavor flavor, BiasCurveKind kind)
 {
-    if (flavor == ResidualPlotFlavor::MemberOutlier)
+    if (flavor == BiasPlotFlavor::MemberOutlier)
     {
-        if (kind == ResidualCurveKind::Median)
+        if (kind == BiasCurveKind::Median)
         {
             return kAzure;
         }
-        if (kind == ResidualCurveKind::Mdpde)
+        if (kind == BiasCurveKind::Mdpde)
         {
             return kRed;
         }
         return kGreen + 1;
     }
-    if (flavor == ResidualPlotFlavor::ModelAlphaMember)
+    if (flavor == BiasPlotFlavor::ModelAlphaMember)
     {
-        return (kind == ResidualCurveKind::RequestedAlpha) ? kAzure : kRed;
+        return (kind == BiasCurveKind::RequestedAlpha) ? kAzure : kRed;
     }
-    if (flavor == ResidualPlotFlavor::ModelAlphaData)
+    if (flavor == BiasPlotFlavor::ModelAlphaData)
     {
-        return (kind == ResidualCurveKind::RequestedAlpha) ? kAzure : kGreen + 2;
+        return (kind == BiasCurveKind::RequestedAlpha) ? kAzure : kGreen + 2;
     }
-    if (kind == ResidualCurveKind::Ols)
+    if (kind == BiasCurveKind::Ols)
     {
         return kAzure;
     }
-    if (kind == ResidualCurveKind::Mdpde)
+    if (kind == BiasCurveKind::Mdpde)
     {
         return kGreen + 2;
     }
     return kRed;
 }
 
-short GetResidualCurveMarker(ResidualPlotFlavor flavor, ResidualCurveKind kind)
+short GetBiasCurveMarker(BiasPlotFlavor flavor, BiasCurveKind kind)
 {
-    if (flavor == ResidualPlotFlavor::MemberOutlier)
+    if (flavor == BiasPlotFlavor::MemberOutlier)
     {
-        if (kind == ResidualCurveKind::Median)
+        if (kind == BiasCurveKind::Median)
         {
             return 24;
         }
-        if (kind == ResidualCurveKind::Mdpde)
+        if (kind == BiasCurveKind::Mdpde)
         {
             return 20;
         }
         return 25;
     }
-    if (flavor == ResidualPlotFlavor::ModelAlphaMember)
+    if (flavor == BiasPlotFlavor::ModelAlphaMember)
     {
-        return (kind == ResidualCurveKind::RequestedAlpha) ? 24 : 20;
+        return (kind == BiasCurveKind::RequestedAlpha) ? 24 : 20;
     }
-    if (kind == ResidualCurveKind::Ols || kind == ResidualCurveKind::RequestedAlpha)
+    if (kind == BiasCurveKind::Ols || kind == BiasCurveKind::RequestedAlpha)
     {
         return 24;
     }
-    if (kind == ResidualCurveKind::Mdpde || kind == ResidualCurveKind::TrainedAlpha)
+    if (kind == BiasCurveKind::Mdpde || kind == BiasCurveKind::TrainedAlpha)
     {
         return 25;
     }
     return 20;
 }
 
-short GetResidualCurveLineStyle(ResidualPlotFlavor flavor, ResidualCurveKind kind)
+short GetBiasCurveLineStyle(BiasPlotFlavor flavor, BiasCurveKind kind)
 {
-    if (kind == ResidualCurveKind::Ols ||
-        kind == ResidualCurveKind::Median ||
-        kind == ResidualCurveKind::RequestedAlpha)
+    if (kind == BiasCurveKind::Ols ||
+        kind == BiasCurveKind::Median ||
+        kind == BiasCurveKind::RequestedAlpha)
     {
         return 2;
     }
-    if (kind == ResidualCurveKind::TrainedMdpde &&
-        flavor != ResidualPlotFlavor::ModelAlphaMember)
+    if (kind == BiasCurveKind::TrainedMdpde &&
+        flavor != BiasPlotFlavor::ModelAlphaMember)
     {
         return 3;
     }
     return 1;
 }
 
-void ApplyResidualCurveStyle(
+void ApplyBiasCurveStyle(
     TGraphErrors * graph,
-    ResidualPlotFlavor flavor,
-    ResidualCurveKind kind)
+    BiasPlotFlavor flavor,
+    BiasCurveKind kind)
 {
-    const auto color{ GetResidualCurveColor(flavor, kind) };
+    const auto color{ GetBiasCurveColor(flavor, kind) };
     root_helper::SetMarkerAttribute(
         graph,
-        GetResidualCurveMarker(flavor, kind),
+        GetBiasCurveMarker(flavor, kind),
         1.5f,
         color);
     root_helper::SetLineAttribute(
         graph,
-        GetResidualCurveLineStyle(flavor, kind),
+        GetBiasCurveLineStyle(flavor, kind),
         2,
         color);
     root_helper::SetFillAttribute(graph, 1001, color, 0.2f);
 }
 
-std::vector<ResidualCurveKind> GetResidualLegendOrder(ResidualPlotFlavor flavor)
+std::vector<BiasCurveKind> GetBiasLegendOrder(BiasPlotFlavor flavor)
 {
-    if (flavor == ResidualPlotFlavor::ModelAlphaData ||
-        flavor == ResidualPlotFlavor::ModelAlphaMember)
+    if (flavor == BiasPlotFlavor::ModelAlphaData ||
+        flavor == BiasPlotFlavor::ModelAlphaMember)
     {
-        return { ResidualCurveKind::RequestedAlpha, ResidualCurveKind::TrainedAlpha };
+        return { BiasCurveKind::RequestedAlpha, BiasCurveKind::TrainedAlpha };
     }
-    if (flavor == ResidualPlotFlavor::MemberOutlier)
+    if (flavor == BiasPlotFlavor::MemberOutlier)
     {
-        return { ResidualCurveKind::TrainedMdpde, ResidualCurveKind::Mdpde, ResidualCurveKind::Median };
+        return { BiasCurveKind::TrainedMdpde, BiasCurveKind::Mdpde, BiasCurveKind::Median };
     }
-    return { ResidualCurveKind::TrainedMdpde, ResidualCurveKind::Mdpde, ResidualCurveKind::Ols };
+    return { BiasCurveKind::TrainedMdpde, BiasCurveKind::Mdpde, BiasCurveKind::Ols };
 }
 
-std::string GetResidualLegendLabel(ResidualPlotFlavor flavor, ResidualCurveKind kind)
+std::string GetBiasLegendLabel(BiasPlotFlavor flavor, BiasCurveKind kind)
 {
-    if (flavor == ResidualPlotFlavor::ModelAlphaData)
+    if (flavor == BiasPlotFlavor::ModelAlphaData)
     {
-        return (kind == ResidualCurveKind::RequestedAlpha) ?
+        return (kind == BiasCurveKind::RequestedAlpha) ?
             "MDPDE (#alpha_{r} = 0.1)" :
             "MDPDE (#alpha_{r} = 0.4)";
     }
-    if (flavor == ResidualPlotFlavor::ModelAlphaMember)
+    if (flavor == BiasPlotFlavor::ModelAlphaMember)
     {
-        return (kind == ResidualCurveKind::RequestedAlpha) ?
+        return (kind == BiasCurveKind::RequestedAlpha) ?
             "MDPDE (#alpha_{g} = 0.2)" :
             "MDPDE (#alpha_{g} = 0.5)";
     }
-    if (flavor == ResidualPlotFlavor::MemberOutlier)
+    if (flavor == BiasPlotFlavor::MemberOutlier)
     {
-        if (kind == ResidualCurveKind::TrainedMdpde)
+        if (kind == BiasCurveKind::TrainedMdpde)
         {
             return "MDPDE (#alpha_{g} from Alg.5)";
         }
-        if (kind == ResidualCurveKind::Mdpde)
+        if (kind == BiasCurveKind::Mdpde)
         {
             return "MDPDE (#alpha_{g} = 0.2)";
         }
         return "MDPDE (#alpha_{g} = 0)";
     }
-    if (kind == ResidualCurveKind::TrainedMdpde)
+    if (kind == BiasCurveKind::TrainedMdpde)
     {
         return "MDPDE (w/ Sampling Scheme)";
     }
-    if (kind == ResidualCurveKind::Mdpde)
+    if (kind == BiasCurveKind::Mdpde)
     {
         return "MDPDE";
     }
     return "Ordinary Least Squares";
 }
 
-TGraphErrors * FindResidualGraph(
+TGraphErrors * FindBiasGraph(
     std::vector<std::unique_ptr<TGraphErrors>> & graph_list,
-    const std::vector<ResidualCurveKind> & kind_list,
-    ResidualCurveKind kind)
+    const std::vector<BiasCurveKind> & kind_list,
+    BiasCurveKind kind)
 {
     for (size_t i = 0; i < kind_list.size(); i++)
     {
@@ -559,12 +559,12 @@ TGraphErrors * FindResidualGraph(
 
 void PrintDataOutlierResult(
     const RHBMTestExecutionContext & options,
-    const ResidualPlotRequest & request
+    const BiasPlotRequest & request
 );
 
 void PrintMemberOutlierResult(
     const RHBMTestExecutionContext & options,
-    const ResidualPlotRequest & request
+    const BiasPlotRequest & request
 );
 
 void PrintAtomSamplingDataSummary(
@@ -611,8 +611,8 @@ void RunSimulationTestOnBenchMark(const RHBMTestExecutionContext & options)
                         error_sigma,
                         distance))
             };
-            rhbm_tester::BetaMDPDETestResidual no_cut_result;
-            rhbm_tester::BetaMDPDETestResidual cut_result;
+            rhbm_tester::BetaMDPDETestBias no_cut_result;
+            rhbm_tester::BetaMDPDETestBias cut_result;
             rhbm_tester::RunBetaMDPDETest(
                 no_cut_result,
                 test_input.no_cut_input,
@@ -661,23 +661,23 @@ void RunSimulationTestOnDataOutlier(const RHBMTestExecutionContext & options)
     auto data_factory{ BuildDataFactory(options) };
     std::vector<double> error_list{ 0.1, 0.2, 0.3 };
     const auto outlier_list{ BuildLinearSweep(9, 0.025) };
-    ResidualPlotRequest plot_request;
+    BiasPlotRequest plot_request;
     plot_request.output_name = "bias_outlier_in_data.pdf";
-    plot_request.flavor = ResidualPlotFlavor::DataOutlier;
-    plot_request.x_axis_mode = ResidualXAxisMode::ContaminationRatio;
+    plot_request.flavor = BiasPlotFlavor::DataOutlier;
+    plot_request.x_axis_mode = BiasXAxisMode::ContaminationRatio;
     plot_request.panels.reserve(error_list.size());
 
     for (size_t panel_index = 0; panel_index < error_list.size(); panel_index++)
     {
         const auto error_sigma{ error_list.at(panel_index) };
-        ResidualPlotPanel panel;
-        panel.label = FormatDataResidualPanelLabel(panel_index);
-        panel.curves.emplace_back(MakeResidualCurve(ResidualCurveKind::Ols, outlier_list.size()));
-        panel.curves.emplace_back(MakeResidualCurve(ResidualCurveKind::Mdpde, outlier_list.size()));
-        panel.curves.emplace_back(MakeResidualCurve(ResidualCurveKind::TrainedMdpde, outlier_list.size()));
+        BiasPlotPanel panel;
+        panel.label = FormatDataBiasPanelLabel(panel_index);
+        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Ols, outlier_list.size()));
+        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Mdpde, outlier_list.size()));
+        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::TrainedMdpde, outlier_list.size()));
         for (size_t i = 0; i < outlier_list.size(); i++)
         {
-            rhbm_tester::BetaMDPDETestResidual residual;
+            rhbm_tester::BetaMDPDETestBias bias;
             const auto test_input{
                 data_factory.BuildBetaTestInput(test_data_factory::TestDataFactory::BetaScenario{
                     model_par_prior,
@@ -691,22 +691,22 @@ void RunSimulationTestOnDataOutlier(const RHBMTestExecutionContext & options)
                 })
             };
             rhbm_tester::RunBetaMDPDETest(
-                residual,
+                bias,
                 test_input,
                 options.thread_size
             );
 
-            AppendResidualCurvePoint(panel.curves.at(0), outlier_list.at(i), residual.ols);
-            AppendResidualCurvePoint(
+            AppendBiasCurvePoint(panel.curves.at(0), outlier_list.at(i), bias.ols);
+            AppendBiasCurvePoint(
                 panel.curves.at(1),
                 outlier_list.at(i),
-                residual.mdpde.requested_alpha.front());
-            if (residual.mdpde.trained_alpha.has_value())
+                bias.mdpde.requested_alpha.front());
+            if (bias.mdpde.trained_alpha.has_value())
             {
-                AppendResidualCurvePoint(
+                AppendBiasCurvePoint(
                     panel.curves.at(2),
                     outlier_list.at(i),
-                    residual.mdpde.trained_alpha.value());
+                    bias.mdpde.trained_alpha.value());
             }
         }
         plot_request.panels.emplace_back(std::move(panel));
@@ -740,23 +740,23 @@ void RunSimulationTestOnMemberOutlier(const RHBMTestExecutionContext & options)
     const auto model_par_sigma{ MakeDefaultModelSigma() };
     auto data_factory{ BuildDataFactory(options) };
     const auto outlier_list{ BuildLinearSweep(9, 0.025) };
-    ResidualPlotRequest plot_request;
+    BiasPlotRequest plot_request;
     plot_request.output_name = "bias_outlier_in_member.pdf";
-    plot_request.flavor = ResidualPlotFlavor::MemberOutlier;
-    plot_request.x_axis_mode = ResidualXAxisMode::ContaminationRatio;
+    plot_request.flavor = BiasPlotFlavor::MemberOutlier;
+    plot_request.x_axis_mode = BiasXAxisMode::ContaminationRatio;
     plot_request.panels.reserve(outlier_prior_list.size());
 
     for (size_t panel_index = 0; panel_index < outlier_prior_list.size(); panel_index++)
     {
         const auto & outlier_prior{ outlier_prior_list.at(panel_index) };
-        ResidualPlotPanel panel;
-        panel.label = FormatMemberResidualPanelLabel(panel_index);
-        panel.curves.emplace_back(MakeResidualCurve(ResidualCurveKind::Median, outlier_list.size()));
-        panel.curves.emplace_back(MakeResidualCurve(ResidualCurveKind::Mdpde, outlier_list.size()));
-        panel.curves.emplace_back(MakeResidualCurve(ResidualCurveKind::TrainedMdpde, outlier_list.size()));
+        BiasPlotPanel panel;
+        panel.label = FormatMemberBiasPanelLabel(panel_index);
+        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Median, outlier_list.size()));
+        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Mdpde, outlier_list.size()));
+        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::TrainedMdpde, outlier_list.size()));
         for (size_t i = 0; i < outlier_list.size(); i++)
         {
-            rhbm_tester::MuMDPDETestResidual residual;
+            rhbm_tester::MuMDPDETestBias bias;
             const auto test_input{
                 data_factory.BuildMuTestInput(test_data_factory::TestDataFactory::MuScenario{
                     scenario.member_size,
@@ -772,22 +772,22 @@ void RunSimulationTestOnMemberOutlier(const RHBMTestExecutionContext & options)
                 })
             };
             rhbm_tester::RunMuMDPDETest(
-                residual,
+                bias,
                 test_input,
                 options.thread_size
             );
 
-            AppendResidualCurvePoint(panel.curves.at(0), outlier_list.at(i), residual.median);
-            AppendResidualCurvePoint(
+            AppendBiasCurvePoint(panel.curves.at(0), outlier_list.at(i), bias.median);
+            AppendBiasCurvePoint(
                 panel.curves.at(1),
                 outlier_list.at(i),
-                residual.mdpde.requested_alpha.front());
-            if (residual.mdpde.trained_alpha.has_value())
+                bias.mdpde.requested_alpha.front());
+            if (bias.mdpde.trained_alpha.has_value())
             {
-                AppendResidualCurvePoint(
+                AppendBiasCurvePoint(
                     panel.curves.at(2),
                     outlier_list.at(i),
-                    residual.mdpde.trained_alpha.value());
+                    bias.mdpde.trained_alpha.value());
             }
         }
         plot_request.panels.emplace_back(std::move(panel));
@@ -809,22 +809,22 @@ void RunSimulationTestOnModelAlphaData(const RHBMTestExecutionContext & options)
     auto data_factory{ BuildDataFactory(options) };
     std::vector<double> error_list{ 0.1, 0.2, 0.3 };
     const auto outlier_list{ BuildLinearSweep(10, 0.05) };
-    ResidualPlotRequest plot_request;
+    BiasPlotRequest plot_request;
     plot_request.output_name = "bias_outlier_with_alpha_in_data.pdf";
-    plot_request.flavor = ResidualPlotFlavor::ModelAlphaData;
-    plot_request.x_axis_mode = ResidualXAxisMode::ContaminationRatio;
+    plot_request.flavor = BiasPlotFlavor::ModelAlphaData;
+    plot_request.x_axis_mode = BiasXAxisMode::ContaminationRatio;
     plot_request.panels.reserve(error_list.size());
 
     for (size_t panel_index = 0; panel_index < error_list.size(); panel_index++)
     {
         const auto error_sigma{ error_list.at(panel_index) };
-        ResidualPlotPanel panel;
-        panel.label = FormatDataResidualPanelLabel(panel_index);
-        panel.curves.emplace_back(MakeResidualCurve(ResidualCurveKind::RequestedAlpha, outlier_list.size()));
-        panel.curves.emplace_back(MakeResidualCurve(ResidualCurveKind::TrainedAlpha, outlier_list.size()));
+        BiasPlotPanel panel;
+        panel.label = FormatDataBiasPanelLabel(panel_index);
+        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::RequestedAlpha, outlier_list.size()));
+        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::TrainedAlpha, outlier_list.size()));
         for (size_t i = 0; i < outlier_list.size(); i++)
         {
-            rhbm_tester::BetaMDPDETestResidual residual;
+            rhbm_tester::BetaMDPDETestBias bias;
             const auto test_input{
                 data_factory.BuildBetaTestInput(test_data_factory::TestDataFactory::BetaScenario{
                     model_par_prior,
@@ -838,21 +838,21 @@ void RunSimulationTestOnModelAlphaData(const RHBMTestExecutionContext & options)
                 })
             };
             rhbm_tester::RunBetaMDPDETest(
-                residual,
+                bias,
                 test_input,
                 options.thread_size
             );
 
-            AppendResidualCurvePoint(
+            AppendBiasCurvePoint(
                 panel.curves.at(0),
                 outlier_list.at(i),
-                residual.mdpde.requested_alpha.front());
-            if (residual.mdpde.trained_alpha.has_value())
+                bias.mdpde.requested_alpha.front());
+            if (bias.mdpde.trained_alpha.has_value())
             {
-                AppendResidualCurvePoint(
+                AppendBiasCurvePoint(
                     panel.curves.at(1),
                     outlier_list.at(i),
-                    residual.mdpde.trained_alpha.value());
+                    bias.mdpde.trained_alpha.value());
             }
         }
         plot_request.panels.emplace_back(std::move(panel));
@@ -886,22 +886,22 @@ void RunSimulationTestOnModelAlphaMember(const RHBMTestExecutionContext & option
     const auto model_par_sigma{ MakeDefaultModelSigma() };
     auto data_factory{ BuildDataFactory(options) };
     const auto outlier_list{ BuildLinearSweep(10, 0.05) };
-    ResidualPlotRequest plot_request;
+    BiasPlotRequest plot_request;
     plot_request.output_name = "bias_outlier_with_alpha_in_member.pdf";
-    plot_request.flavor = ResidualPlotFlavor::ModelAlphaMember;
-    plot_request.x_axis_mode = ResidualXAxisMode::ContaminationRatio;
+    plot_request.flavor = BiasPlotFlavor::ModelAlphaMember;
+    plot_request.x_axis_mode = BiasXAxisMode::ContaminationRatio;
     plot_request.panels.reserve(outlier_prior_list.size());
 
     for (size_t panel_index = 0; panel_index < outlier_prior_list.size(); panel_index++)
     {
         const auto & outlier_prior{ outlier_prior_list.at(panel_index) };
-        ResidualPlotPanel panel;
-        panel.label = FormatMemberResidualPanelLabel(panel_index);
-        panel.curves.emplace_back(MakeResidualCurve(ResidualCurveKind::RequestedAlpha, outlier_list.size()));
-        panel.curves.emplace_back(MakeResidualCurve(ResidualCurveKind::TrainedAlpha, outlier_list.size()));
+        BiasPlotPanel panel;
+        panel.label = FormatMemberBiasPanelLabel(panel_index);
+        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::RequestedAlpha, outlier_list.size()));
+        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::TrainedAlpha, outlier_list.size()));
         for (size_t i = 0; i < outlier_list.size(); i++)
         {
-            rhbm_tester::MuMDPDETestResidual residual;
+            rhbm_tester::MuMDPDETestBias bias;
             const auto test_input{
                 data_factory.BuildMuTestInput(test_data_factory::TestDataFactory::MuScenario{
                     scenario.member_size,
@@ -917,21 +917,21 @@ void RunSimulationTestOnModelAlphaMember(const RHBMTestExecutionContext & option
                 })
             };
             rhbm_tester::RunMuMDPDETest(
-                residual,
+                bias,
                 test_input,
                 options.thread_size
             );
 
-            AppendResidualCurvePoint(
+            AppendBiasCurvePoint(
                 panel.curves.at(0),
                 outlier_list.at(i),
-                residual.mdpde.requested_alpha.front());
-            if (residual.mdpde.trained_alpha.has_value())
+                bias.mdpde.requested_alpha.front());
+            if (bias.mdpde.trained_alpha.has_value())
             {
-                AppendResidualCurvePoint(
+                AppendBiasCurvePoint(
                     panel.curves.at(1),
                     outlier_list.at(i),
-                    residual.mdpde.trained_alpha.value());
+                    bias.mdpde.trained_alpha.value());
             }
         }
         plot_request.panels.emplace_back(std::move(panel));
@@ -954,21 +954,21 @@ void RunSimulationTestOnNeighborDistance(const RHBMTestExecutionContext & option
     } };
     const auto model_par_prior{ MakeDefaultModelPrior() };
     auto data_factory{ BuildDataFactory(options) };
-    ResidualPlotRequest plot_request;
+    BiasPlotRequest plot_request;
     plot_request.output_name = "bias_from_neighbor_atom.pdf";
-    plot_request.flavor = ResidualPlotFlavor::NeighborDistance;
-    plot_request.x_axis_mode = ResidualXAxisMode::NeighborDistance;
+    plot_request.flavor = BiasPlotFlavor::NeighborDistance;
+    plot_request.x_axis_mode = BiasXAxisMode::NeighborDistance;
     plot_request.panels.reserve(scenario.error_list.size());
 
     bool is_print_sampling_summary{ false };
     for (size_t panel_index = 0; panel_index < scenario.error_list.size(); panel_index++)
     {
         const auto error_sigma{ scenario.error_list.at(panel_index) };
-        ResidualPlotPanel panel;
-        panel.label = FormatDataResidualPanelLabel(panel_index);
-        panel.curves.emplace_back(MakeResidualCurve(ResidualCurveKind::Ols, scenario.distance_list.size()));
-        panel.curves.emplace_back(MakeResidualCurve(ResidualCurveKind::Mdpde, scenario.distance_list.size()));
-        panel.curves.emplace_back(MakeResidualCurve(ResidualCurveKind::TrainedMdpde, scenario.distance_list.size()));
+        BiasPlotPanel panel;
+        panel.label = FormatDataBiasPanelLabel(panel_index);
+        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Ols, scenario.distance_list.size()));
+        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Mdpde, scenario.distance_list.size()));
+        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::TrainedMdpde, scenario.distance_list.size()));
         std::vector<LocalPotentialSampleList> sampling_entries_list;
         sampling_entries_list.reserve(scenario.distance_list.size());
         for (size_t i = 0; i < scenario.distance_list.size(); i++)
@@ -982,8 +982,8 @@ void RunSimulationTestOnNeighborDistance(const RHBMTestExecutionContext & option
                         scenario.distance_list.at(i),
                         true))
             };
-            rhbm_tester::BetaMDPDETestResidual no_cut_result;
-            rhbm_tester::BetaMDPDETestResidual cut_result;
+            rhbm_tester::BetaMDPDETestBias no_cut_result;
+            rhbm_tester::BetaMDPDETestBias cut_result;
             rhbm_tester::RunBetaMDPDETest(
                 no_cut_result,
                 test_input.no_cut_input,
@@ -997,15 +997,15 @@ void RunSimulationTestOnNeighborDistance(const RHBMTestExecutionContext & option
 
             sampling_entries_list.emplace_back(test_input.sampling_summaries.front());
 
-            AppendResidualCurvePoint(
+            AppendBiasCurvePoint(
                 panel.curves.at(0),
                 scenario.distance_list.at(i),
                 no_cut_result.ols);
-            AppendResidualCurvePoint(
+            AppendBiasCurvePoint(
                 panel.curves.at(1),
                 scenario.distance_list.at(i),
                 no_cut_result.mdpde.trained_alpha.value());
-            AppendResidualCurvePoint(
+            AppendBiasCurvePoint(
                 panel.curves.at(2),
                 scenario.distance_list.at(i),
                 cut_result.mdpde.trained_alpha.value());
@@ -1036,7 +1036,7 @@ void RunSimulationTestOnNeighborDistance(const RHBMTestExecutionContext & option
 
 void PrintDataOutlierResult(
     const RHBMTestExecutionContext & options,
-    const ResidualPlotRequest & request)
+    const BiasPlotRequest & request)
 {
     auto file_path{ options.output_folder / request.output_name };
     Logger::Log(LogLevel::Info, " RHBMTestCommand::PrintDataOutlierResult");
@@ -1058,7 +1058,7 @@ void PrintDataOutlierResult(
     root_helper::PrintCanvasOpen(canvas.get(), file_path);
 
     std::vector<std::unique_ptr<TGraphErrors>> graph_list[col_size][row_size];
-    std::vector<ResidualCurveKind> graph_kind_list[col_size][row_size];
+    std::vector<BiasCurveKind> graph_kind_list[col_size][row_size];
     std::vector<double> global_y_array[row_size];
     for (size_t i = 0; i < col_size; i++)
     {
@@ -1071,9 +1071,9 @@ void PrintDataOutlierResult(
                 for (size_t p = 0; p < curve.points.size(); p++)
                 {
                     const auto & point{ curve.points.at(p) };
-                    const auto x_value{ ScaleResidualPlotX(point.x, request.x_axis_mode) };
-                    const auto mean{ point.residual.mean(static_cast<int>(j)) };
-                    const auto sigma{ point.residual.sigma(static_cast<int>(j)) };
+                    const auto x_value{ ScaleBiasPlotX(point.x, request.x_axis_mode) };
+                    const auto mean{ point.bias.mean(static_cast<int>(j)) };
+                    const auto sigma{ point.bias.sigma(static_cast<int>(j)) };
                     graph->SetPoint(static_cast<int>(p), x_value, mean);
                     graph->SetPointError(static_cast<int>(p), 0.0, sigma);
                     global_y_array[j].emplace_back(mean);
@@ -1090,9 +1090,9 @@ void PrintDataOutlierResult(
     double y_max[row_size]{ 0.0 };
     for (size_t i = 0; i < col_size; i++)
     {
-        x_min[i] = (request.flavor == ResidualPlotFlavor::ModelAlphaData) ? -2.0 : -0.7;
-        x_max[i] = (request.flavor == ResidualPlotFlavor::ModelAlphaData) ? 47.0 : 22.0;
-        if (request.x_axis_mode == ResidualXAxisMode::NeighborDistance)
+        x_min[i] = (request.flavor == BiasPlotFlavor::ModelAlphaData) ? -2.0 : -0.7;
+        x_max[i] = (request.flavor == BiasPlotFlavor::ModelAlphaData) ? 47.0 : 22.0;
+        if (request.x_axis_mode == BiasXAxisMode::NeighborDistance)
         {
             x_min[i] = -2.6;
             x_max[i] = -0.8;
@@ -1138,8 +1138,8 @@ void PrintDataOutlierResult(
             {
                 const auto kind{ graph_kind_list[i][par_id].at(graph_index) };
                 auto & graph{ graph_list[i][par_id].at(graph_index) };
-                ApplyResidualCurveStyle(graph.get(), request.flavor, kind);
-                if (ShouldDrawResidualCurve(request.flavor, kind))
+                ApplyBiasCurveStyle(graph.get(), request.flavor, kind);
+                if (ShouldDrawBiasCurve(request.flavor, kind))
                 {
                     graph->Draw("PL3");
                 }
@@ -1183,12 +1183,12 @@ void PrintDataOutlierResult(
     root_helper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
     legend->SetMargin(0.25f);
     legend->SetNColumns(3);
-    for (const auto kind : GetResidualLegendOrder(request.flavor))
+    for (const auto kind : GetBiasLegendOrder(request.flavor))
     {
-        auto * graph{ FindResidualGraph(graph_list[0][0], graph_kind_list[0][0], kind) };
+        auto * graph{ FindBiasGraph(graph_list[0][0], graph_kind_list[0][0], kind) };
         if (graph != nullptr)
         {
-            legend->AddEntry(graph, GetResidualLegendLabel(request.flavor, kind).data(), "plf");
+            legend->AddEntry(graph, GetBiasLegendLabel(request.flavor, kind).data(), "plf");
         }
     }
     legend->Draw();
@@ -1203,7 +1203,7 @@ void PrintDataOutlierResult(
     root_helper::SetPaveTextDefaultStyle(bottom_title_text.get());
     root_helper::SetFillAttribute(bottom_title_text.get(), 4000);
     root_helper::SetTextAttribute(bottom_title_text.get(), 45.0f, 133, 22);
-    if (request.x_axis_mode == ResidualXAxisMode::NeighborDistance)
+    if (request.x_axis_mode == BiasXAxisMode::NeighborDistance)
     {
         bottom_title_text->AddText("Distance to Neighbor Atom (Angstrom)");
     }
@@ -1236,7 +1236,7 @@ void PrintDataOutlierResult(
 
 void PrintMemberOutlierResult(
     const RHBMTestExecutionContext & options,
-    const ResidualPlotRequest & request)
+    const BiasPlotRequest & request)
 {
     auto file_path{ options.output_folder / request.output_name };
     Logger::Log(LogLevel::Info, " RHBMTestCommand::PrintMemberOutlierResult");
@@ -1258,7 +1258,7 @@ void PrintMemberOutlierResult(
     root_helper::PrintCanvasOpen(canvas.get(), file_path);
 
     std::vector<std::unique_ptr<TGraphErrors>> graph_list[col_size][row_size];
-    std::vector<ResidualCurveKind> graph_kind_list[col_size][row_size];
+    std::vector<BiasCurveKind> graph_kind_list[col_size][row_size];
     std::vector<double> global_y_array;
     for (size_t i = 0; i < col_size; i++)
     {
@@ -1271,9 +1271,9 @@ void PrintMemberOutlierResult(
                 for (size_t p = 0; p < curve.points.size(); p++)
                 {
                     const auto & point{ curve.points.at(p) };
-                    const auto x_value{ ScaleResidualPlotX(point.x, request.x_axis_mode) };
-                    const auto mean{ point.residual.mean(static_cast<int>(j)) };
-                    const auto sigma{ point.residual.sigma(static_cast<int>(j)) };
+                    const auto x_value{ ScaleBiasPlotX(point.x, request.x_axis_mode) };
+                    const auto mean{ point.bias.mean(static_cast<int>(j)) };
+                    const auto sigma{ point.bias.sigma(static_cast<int>(j)) };
                     graph->SetPoint(static_cast<int>(p), x_value, mean);
                     graph->SetPointError(static_cast<int>(p), 0.0, sigma);
                     global_y_array.emplace_back(mean);
@@ -1290,8 +1290,8 @@ void PrintMemberOutlierResult(
     double y_max[row_size]{ 0.0 };
     for (size_t i = 0; i < col_size; i++)
     {
-        x_min[i] = (request.flavor == ResidualPlotFlavor::ModelAlphaMember) ? -2.0 : -0.7;
-        x_max[i] = (request.flavor == ResidualPlotFlavor::ModelAlphaMember) ? 47.0 : 22.0;
+        x_min[i] = (request.flavor == BiasPlotFlavor::ModelAlphaMember) ? -2.0 : -0.7;
+        x_max[i] = (request.flavor == BiasPlotFlavor::ModelAlphaMember) ? 47.0 : 22.0;
     }
     auto y_range{ array_helper::ComputeScalingRangeTuple(global_y_array, 0.3) };
     for (size_t j = 0; j < row_size; j++)
@@ -1333,8 +1333,8 @@ void PrintMemberOutlierResult(
             {
                 const auto kind{ graph_kind_list[i][par_id].at(graph_index) };
                 auto & graph{ graph_list[i][par_id].at(graph_index) };
-                ApplyResidualCurveStyle(graph.get(), request.flavor, kind);
-                if (ShouldDrawResidualCurve(request.flavor, kind))
+                ApplyBiasCurveStyle(graph.get(), request.flavor, kind);
+                if (ShouldDrawBiasCurve(request.flavor, kind))
                 {
                     graph->Draw("PL3");
                 }
@@ -1377,12 +1377,12 @@ void PrintMemberOutlierResult(
     root_helper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
     legend->SetMargin(0.25f);
     legend->SetNColumns(3);
-    for (const auto kind : GetResidualLegendOrder(request.flavor))
+    for (const auto kind : GetBiasLegendOrder(request.flavor))
     {
-        auto * graph{ FindResidualGraph(graph_list[0][0], graph_kind_list[0][0], kind) };
+        auto * graph{ FindBiasGraph(graph_list[0][0], graph_kind_list[0][0], kind) };
         if (graph != nullptr)
         {
-            legend->AddEntry(graph, GetResidualLegendLabel(request.flavor, kind).data(), "plf");
+            legend->AddEntry(graph, GetBiasLegendLabel(request.flavor, kind).data(), "plf");
         }
     }
     legend->Draw();
