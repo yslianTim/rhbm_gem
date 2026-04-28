@@ -275,10 +275,10 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupEstimateRes
     constexpr double alpha_g{ 0.25 };
     analysis.ApplyAtomGroupEstimateResult(group_key, class_key, result, alpha_g);
 
-    const auto expected_mean{ ls::DecodeGroupEstimate(AtomGroupDecodeSpec(), result.mu_mean) };
-    const auto expected_mdpde{ ls::DecodeGroupEstimate(AtomGroupDecodeSpec(), result.mu_mdpde) };
+    const auto expected_mean{ ls::DecodeParameterVector(AtomGroupDecodeSpec(), result.mu_mean) };
+    const auto expected_mdpde{ ls::DecodeParameterVector(AtomGroupDecodeSpec(), result.mu_mdpde) };
     const auto expected_prior{
-        ls::DecodeGaussianModel3DWithUncertainty(AtomGroupDecodeSpec(), result.mu_prior, result.capital_lambda)
+        ls::DecodeParameterVector(AtomGroupDecodeSpec(), result.mu_prior, result.capital_lambda)
     };
     EXPECT_NEAR(expected_mean.GetAmplitude(), analysis_view.GetAtomGroupMean(group_key, class_key).GetAmplitude(), 1e-12);
     EXPECT_NEAR(expected_mean.GetWidth(), analysis_view.GetAtomGroupMean(group_key, class_key).GetWidth(), 1e-12);
@@ -293,7 +293,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupEstimateRes
     const auto annotation{ rg::LocalPotentialView::RequireFor(*atom_list.front()).FindAnnotation(class_key) };
     ASSERT_TRUE(annotation.has_value());
     const auto expected_gaussian{
-        ls::DecodeGaussianModel3DWithUncertainty(AtomGroupDecodeSpec(),
+        ls::DecodeParameterVector(AtomGroupDecodeSpec(),
             result.beta_posterior_matrix.col(0),
             result.capital_sigma_posterior_list.front())
     };
@@ -369,9 +369,9 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesBondGroupEstimateRes
     constexpr double alpha_g{ 0.5 };
     analysis.ApplyBondGroupEstimateResult(group_key, class_key, result, alpha_g);
 
-    const auto expected_mean{ ls::DecodeGroupEstimate(BondGroupDecodeSpec(), result.mu_mean) };
+    const auto expected_mean{ ls::DecodeParameterVector(BondGroupDecodeSpec(), result.mu_mean) };
     const auto expected_prior{
-        ls::DecodeGaussianModel3DWithUncertainty(BondGroupDecodeSpec(), result.mu_prior, result.capital_lambda)
+        ls::DecodeParameterVector(BondGroupDecodeSpec(), result.mu_prior, result.capital_lambda)
     };
     EXPECT_NEAR(expected_mean.GetAmplitude(), analysis_view.GetBondGroupMean(group_key, class_key).GetAmplitude(), 1e-12);
     EXPECT_NEAR(expected_mean.GetWidth(), analysis_view.GetBondGroupMean(group_key, class_key).GetWidth(), 1e-12);

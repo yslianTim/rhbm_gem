@@ -56,22 +56,18 @@ SeriesPointList BuildLinearModelSeries(
     const LocalPotentialSampleList & sampling_entries,
     const LinearizationContext & context = {});
 
-RHBMBetaVector EncodeGaussianToBeta(
+RHBMParameterVector EncodeGaussianToParameterVector(
     const LinearizationSpec & spec,
     const GaussianModel3D & gaussian_model);
 
-GaussianModel3D DecodeLocalEstimate(
+GaussianModel3D DecodeParameterVector(
     const LinearizationSpec & spec,
-    const RHBMBetaVector & linear_model,
+    const RHBMParameterVector & parameter_vector,
     const LinearizationContext & context = {});
 
-GaussianModel3D DecodeGroupEstimate(
+GaussianModel3DWithUncertainty DecodeParameterVector(
     const LinearizationSpec & spec,
-    const RHBMBetaVector & linear_model);
-
-GaussianModel3DWithUncertainty DecodeGaussianModel3DWithUncertainty(
-    const LinearizationSpec & spec,
-    const RHBMBetaVector & linear_model,
+    const RHBMParameterVector & parameter_vector,
     const RHBMPosteriorCovarianceMatrix & covariance_matrix);
 
 } // namespace rhbm_gem::linearization_service

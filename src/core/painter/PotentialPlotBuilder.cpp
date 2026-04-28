@@ -34,9 +34,9 @@ const ls::LinearizationSpec & AtomGaussianEncodeSpec()
     return spec;
 }
 
-RHBMBetaVector EncodeAtomGaussianToBeta(const GaussianModel3D & estimate)
+RHBMParameterVector EncodeAtomGaussianToParameterVector(const GaussianModel3D & estimate)
 {
-    return ls::EncodeGaussianToBeta(AtomGaussianEncodeSpec(), estimate);
+    return ls::EncodeGaussianToParameterVector(AtomGaussianEncodeSpec(), estimate);
 }
 
 } // namespace
@@ -836,7 +836,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalLinearModelFunctionOLS
         return nullptr;
     }
     const auto atom_local_entry{ LocalPotentialView::RequireFor(*m_atom_object) };
-    const auto beta{ EncodeAtomGaussianToBeta(atom_local_entry.GetEstimateOLS()) };
+    const auto beta{ EncodeAtomGaussianToParameterVector(atom_local_entry.GetEstimateOLS()) };
     auto beta_0{ beta(0) };
     auto beta_1{ beta(1) };
     return root_helper::CreateLinearModelFunction("linear", beta_0, beta_1);
@@ -849,7 +849,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalLinearModelFunctionMDP
         return nullptr;
     }
     const auto atom_local_entry{ LocalPotentialView::RequireFor(*m_atom_object) };
-    const auto beta{ EncodeAtomGaussianToBeta(atom_local_entry.GetEstimateMDPDE()) };
+    const auto beta{ EncodeAtomGaussianToParameterVector(atom_local_entry.GetEstimateMDPDE()) };
     auto beta_0{ beta(0) };
     auto beta_1{ beta(1) };
     return root_helper::CreateLinearModelFunction("linear", beta_0, beta_1);
@@ -887,7 +887,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupLinearModelFunctionMea
         return nullptr;
     }
     const auto beta{
-        EncodeAtomGaussianToBeta(GetModelView().GetAtomGroupMean(group_key, class_key))
+        EncodeAtomGaussianToParameterVector(GetModelView().GetAtomGroupMean(group_key, class_key))
     };
     auto mu_0{ beta(0) };
     auto mu_1{ beta(1) };
@@ -902,7 +902,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupLinearModelFunctionPri
         return nullptr;
     }
     const auto beta{
-        EncodeAtomGaussianToBeta(GetModelView().GetAtomGroupPrior(group_key, class_key))
+        EncodeAtomGaussianToParameterVector(GetModelView().GetAtomGroupPrior(group_key, class_key))
     };
     auto mu_0{ beta(0) };
     auto mu_1{ beta(1) };

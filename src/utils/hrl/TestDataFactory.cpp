@@ -398,7 +398,7 @@ Eigen::MatrixXd BuildBetaMatrix(
     Eigen::MatrixXd beta_matrix{ Eigen::MatrixXd::Zero(linearization_spec.basis_size, member_size) };
     for (int i = 0; i < member_size; i++)
     {
-        beta_matrix.col(i) = linearization_service::EncodeGaussianToBeta(
+        beta_matrix.col(i) = linearization_service::EncodeGaussianToParameterVector(
             linearization_spec, GaussianModel3D::FromVector(gaus_array.col(i)));
     }
     return beta_matrix;

@@ -67,7 +67,7 @@ RHBMMemberDataset rhbm_gem::rhbm_helper::BuildMemberDataset(
 }
 
 RHBMBetaMatrix rhbm_gem::rhbm_helper::BuildBetaMatrix(
-    const std::vector<RHBMBetaVector> & beta_list)
+    const std::vector<RHBMParameterVector> & beta_list)
 {
     if (beta_list.empty())
     {
@@ -217,22 +217,22 @@ double CalculateChiSquareQuantile(int df)
     return boost::math::quantile(distribution, 0.99);
 }
 
-RHBMBetaVector CalculateBetaByOLS(
+RHBMParameterVector CalculateBetaByOLS(
     const RHBMDesignMatrix & design_matrix,
     const RHBMResponseVector & response_vector);
 
-[[maybe_unused]] RHBMBetaVector CalculateBetaWithSelectedDataByOLS(
+[[maybe_unused]] RHBMParameterVector CalculateBetaWithSelectedDataByOLS(
     const RHBMMemberDataset & dataset);
 
-RHBMBetaVector CalculateBetaByMDPDE(
+RHBMParameterVector CalculateBetaByMDPDE(
     const RHBMDesignMatrix & design_matrix,
     const RHBMResponseVector & response_vector,
     const RHBMDiagonalMatrix & W);
 
-RHBMMuVector CalculateMuByMedian(
+RHBMParameterVector CalculateMuByMedian(
     const RHBMBetaMatrix & beta_matrix);
 
-RHBMMuVector CalculateMuByMDPDE(
+RHBMParameterVector CalculateMuByMDPDE(
     const RHBMBetaMatrix & beta_matrix,
     const Eigen::ArrayXd & omega_array,
     double omega_sum);
@@ -241,7 +241,7 @@ RHBMDiagonalMatrix CalculateDataWeight(
     double alpha,
     const RHBMDesignMatrix & design_matrix,
     const RHBMResponseVector & response_vector,
-    const RHBMBetaVector & beta,
+    const RHBMParameterVector & beta,
     double sigma_square,
     double weight_min);
 
@@ -250,7 +250,7 @@ double CalculateDataVarianceSquare(
     const RHBMDesignMatrix & design_matrix,
     const RHBMResponseVector & response_vector,
     const RHBMDiagonalMatrix & W,
-    const RHBMBetaVector & beta);
+    const RHBMParameterVector & beta);
 
 RHBMDiagonalMatrix CalculateDataCovariance(
     double sigma_square,
@@ -259,14 +259,14 @@ RHBMDiagonalMatrix CalculateDataCovariance(
 Eigen::ArrayXd CalculateMemberWeight(
     double alpha,
     const RHBMBetaMatrix & beta_matrix,
-    const RHBMMuVector & mu,
+    const RHBMParameterVector & mu,
     const RHBMGroupCovarianceMatrix & capital_lambda,
     double weight_min);
 
 RHBMGroupCovarianceMatrix CalculateMemberCovariance(
     double alpha,
     const RHBMBetaMatrix & beta_matrix,
-    const RHBMMuVector & mu,
+    const RHBMParameterVector & mu,
     const Eigen::ArrayXd & omega_array,
     double omega_sum);
 
@@ -303,8 +303,8 @@ RHBMBetaEstimateResult rhbm_gem::rhbm_helper::EstimateBetaMDPDE(
     if (data_size <= 1)
     {
         result.status = RHBMEstimationStatus::INSUFFICIENT_DATA;
-        result.beta_ols = RHBMBetaVector::Zero(design_matrix.cols());
-        result.beta_mdpde = RHBMBetaVector::Zero(design_matrix.cols());
+        result.beta_ols = RHBMParameterVector::Zero(design_matrix.cols());
+        result.beta_mdpde = RHBMParameterVector::Zero(design_matrix.cols());
         result.sigma_square = std::numeric_limits<double>::max();
         result.data_weight.resize(1);
         result.data_weight.diagonal().setOnes();
@@ -449,7 +449,7 @@ RHBMMuEstimateResult rhbm_gem::rhbm_helper::EstimateMuMDPDE(
 RHBMWebEstimateResult rhbm_gem::rhbm_helper::EstimateWEB(
     const std::vector<RHBMMemberDataset> & member_datasets,
     const std::vector<RHBMDiagonalMatrix> & capital_sigma_list,
-    const RHBMMuVector & mu_mdpde,
+    const RHBMParameterVector & mu_mdpde,
     const std::vector<RHBMMemberCovarianceMatrix> & member_capital_lambda_list,
     const RHBMExecutionOptions & options)
 {
@@ -470,7 +470,7 @@ RHBMWebEstimateResult rhbm_gem::rhbm_helper::EstimateWEB(
     RHBMWebEstimateResult result;
     const auto basis_size{ static_cast<int>(mu_mdpde.rows()) };
     const auto member_size{ static_cast<int>(member_datasets.size()) };
-    result.mu_prior = RHBMMuVector::Zero(basis_size);
+    result.mu_prior = RHBMParameterVector::Zero(basis_size);
     result.beta_posterior_matrix = RHBMBetaPosteriorMatrix::Zero(basis_size, member_size);
     result.capital_sigma_posterior_list.clear();
     result.capital_sigma_posterior_list.reserve(static_cast<std::size_t>(member_size));
@@ -480,7 +480,7 @@ RHBMWebEstimateResult rhbm_gem::rhbm_helper::EstimateWEB(
         return result;
     }
 
-    RHBMMuVector numerator{ RHBMMuVector::Zero(basis_size) };
+    RHBMParameterVector numerator{ RHBMParameterVector::Zero(basis_size) };
     RHBMGroupCovarianceMatrix denominator{
         RHBMGroupCovarianceMatrix::Zero(basis_size, basis_size)
     };
@@ -513,7 +513,7 @@ RHBMWebEstimateResult rhbm_gem::rhbm_helper::EstimateWEB(
         const RHBMGroupCovarianceMatrix gram_matrix{
             dataset.X.transpose() * inv_capital_sigma * dataset.X
         };
-        const RHBMMuVector moment_matrix{
+        const RHBMParameterVector moment_matrix{
             dataset.X.transpose() * inv_capital_sigma * dataset.y
         };
         const RHBMGroupCovarianceMatrix inv_capital_sigma_posterior{
@@ -552,7 +552,7 @@ RHBMGroupEstimationResult rhbm_gem::rhbm_helper::EstimateGroup(
         throw std::invalid_argument("basis_size is inconsistent with member datasets.");
     }
 
-    std::vector<RHBMBetaVector> beta_list;
+    std::vector<RHBMParameterVector> beta_list;
     beta_list.reserve(validated_input.member_fit_results.size());
     for (const auto & fit_result : validated_input.member_fit_results)
     {
@@ -624,7 +624,7 @@ RHBMGroupEstimationResult rhbm_gem::rhbm_helper::EstimateGroup(
 
 namespace
 {
-RHBMBetaVector CalculateBetaByOLS(
+RHBMParameterVector CalculateBetaByOLS(
     const RHBMDesignMatrix & design_matrix,
     const RHBMResponseVector & response_vector)
 {
@@ -635,7 +635,7 @@ RHBMBetaVector CalculateBetaByOLS(
     return inverse_gram_matrix * (design_matrix.transpose() * response_vector);
 }
 
-[[maybe_unused]] RHBMBetaVector CalculateBetaWithSelectedDataByOLS(
+[[maybe_unused]] RHBMParameterVector CalculateBetaWithSelectedDataByOLS(
     const RHBMMemberDataset & dataset)
 {
     ValidateDatasetShape(
@@ -678,7 +678,7 @@ RHBMBetaVector CalculateBetaByOLS(
     return CalculateBetaByOLS(selected_design_matrix, selected_response_vector);
 }
 
-RHBMBetaVector CalculateBetaByMDPDE(
+RHBMParameterVector CalculateBetaByMDPDE(
     const RHBMDesignMatrix & design_matrix,
     const RHBMResponseVector & response_vector,
     const RHBMDiagonalMatrix & W)
@@ -699,11 +699,11 @@ RHBMBetaVector CalculateBetaByMDPDE(
     return inverse_gram_matrix * (design_matrix.transpose() * W * response_vector);
 }
 
-RHBMMuVector CalculateMuByMedian(const RHBMBetaMatrix & beta_matrix)
+RHBMParameterVector CalculateMuByMedian(const RHBMBetaMatrix & beta_matrix)
 {
     rhbm_gem::eigen_validation::RequireNonEmpty(beta_matrix, "beta_matrix");
     const auto basis_size{ static_cast<int>(beta_matrix.rows()) };
-    RHBMMuVector mu{ RHBMMuVector::Zero(basis_size) };
+    RHBMParameterVector mu{ RHBMParameterVector::Zero(basis_size) };
     for (int b = 0; b < basis_size; b++)
     {
         mu(b) = rhbm_gem::eigen_helper::GetMedian(beta_matrix.row(b));
@@ -711,7 +711,7 @@ RHBMMuVector CalculateMuByMedian(const RHBMBetaMatrix & beta_matrix)
     return mu;
 }
 
-RHBMMuVector CalculateMuByMDPDE(
+RHBMParameterVector CalculateMuByMDPDE(
     const RHBMBetaMatrix & beta_matrix,
     const Eigen::ArrayXd & omega_array,
     double omega_sum)
@@ -734,7 +734,7 @@ RHBMDiagonalMatrix CalculateDataWeight(
     double alpha,
     const RHBMDesignMatrix & design_matrix,
     const RHBMResponseVector & response_vector,
-    const RHBMBetaVector & beta,
+    const RHBMParameterVector & beta,
     double sigma_square,
     double weight_min)
 {
@@ -777,7 +777,7 @@ double CalculateDataVarianceSquare(
     const RHBMDesignMatrix & design_matrix,
     const RHBMResponseVector & response_vector,
     const RHBMDiagonalMatrix & W,
-    const RHBMBetaVector & beta)
+    const RHBMParameterVector & beta)
 {
     rhbm_gem::numeric_validation::RequireFiniteNonNegative(alpha, "alpha");
     ValidateDatasetShape(
@@ -844,7 +844,7 @@ RHBMDiagonalMatrix CalculateDataCovariance(
 Eigen::ArrayXd CalculateMemberWeight(
     double alpha,
     const RHBMBetaMatrix & beta_matrix,
-    const RHBMMuVector & mu,
+    const RHBMParameterVector & mu,
     const RHBMGroupCovarianceMatrix & capital_lambda,
     double weight_min)
 {
@@ -868,7 +868,7 @@ Eigen::ArrayXd CalculateMemberWeight(
     Eigen::ArrayXd omega_array{ Eigen::ArrayXd::Zero(member_size) };
     for (int i = 0; i < member_size; i++)
     {
-        const RHBMBetaVector residual{ residual_matrix.col(i) };
+        const RHBMParameterVector residual{ residual_matrix.col(i) };
         const auto exp_index{
             static_cast<double>(residual.transpose() * inverse_capital_lambda * residual)
         };
@@ -891,7 +891,7 @@ Eigen::ArrayXd CalculateMemberWeight(
 RHBMGroupCovarianceMatrix CalculateMemberCovariance(
     double alpha,
     const RHBMBetaMatrix & beta_matrix,
-    const RHBMMuVector & mu,
+    const RHBMParameterVector & mu,
     const Eigen::ArrayXd & omega_array,
     double omega_sum)
 {
@@ -922,7 +922,7 @@ RHBMGroupCovarianceMatrix CalculateMemberCovariance(
     const RHBMBetaMatrix residual_matrix{ beta_matrix.colwise() - mu };
     for (int i = 0; i < member_size; i++)
     {
-        const RHBMBetaVector residual{ residual_matrix.col(i) };
+        const RHBMParameterVector residual{ residual_matrix.col(i) };
         numerator += omega_array(i) * (residual * residual.transpose());
     }
 
@@ -980,7 +980,7 @@ RHBMGroupEstimationResult BuildGroupFallbackResult(
     const RHBMGroupEstimationInput & input,
     const RHBMMuEstimateResult & mu_result)
 {
-    std::vector<RHBMBetaVector> beta_list;
+    std::vector<RHBMParameterVector> beta_list;
     beta_list.reserve(input.member_fit_results.size());
     for (const auto & fit_result : input.member_fit_results)
     {
@@ -1017,7 +1017,7 @@ RHBMGroupEstimationResult BuildGroupFallbackResult(
 } // namespace
 
 Eigen::ArrayXd rhbm_gem::rhbm_helper::CalculateMemberStatisticalDistance(
-    const RHBMMuVector & mu_prior,
+    const RHBMParameterVector & mu_prior,
     const RHBMGroupCovarianceMatrix & capital_lambda,
     const RHBMBetaPosteriorMatrix & beta_posterior_matrix)
 {

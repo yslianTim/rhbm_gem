@@ -44,12 +44,12 @@ RHBMExecutionOptions MakeTesterExecutionOptions()
 }
 
 Eigen::VectorXd CalculateNormalizedBias(
-    const RHBMBetaVector & linear_estimate,
+    const RHBMParameterVector & linear_estimate,
     const Eigen::VectorXd & gaussian_truth)
 {
     GaussianModel3D::RequireParameterVector(gaussian_truth, "gaussian_truth");
     const auto gaussian_estimate{
-        linearization_service::DecodeGroupEstimate(
+        linearization_service::DecodeParameterVector(
             linearization_service::LinearizationSpec::DefaultMetricModel(),
             linear_estimate).ToVector()
     };

@@ -13,8 +13,7 @@ namespace rhbm_gem {
 using RHBMDesignMatrix = Eigen::MatrixXd;
 using RHBMResponseVector = Eigen::VectorXd;
 using RHBMScoreVector = Eigen::VectorXd;
-using RHBMBetaVector = Eigen::VectorXd;
-using RHBMMuVector = Eigen::VectorXd;
+using RHBMParameterVector = Eigen::VectorXd;
 using RHBMBetaMatrix = Eigen::MatrixXd;
 using RHBMGroupCovarianceMatrix = Eigen::MatrixXd;
 using RHBMMemberCovarianceMatrix = Eigen::MatrixXd;
@@ -52,8 +51,8 @@ struct RHBMMemberDataset
 struct RHBMBetaEstimateResult
 {
     RHBMEstimationStatus status{ RHBMEstimationStatus::SUCCESS };
-    RHBMBetaVector beta_ols;
-    RHBMBetaVector beta_mdpde;
+    RHBMParameterVector beta_ols;
+    RHBMParameterVector beta_mdpde;
     double sigma_square{ 0.0 };
     RHBMDiagonalMatrix data_weight;
     RHBMDiagonalMatrix data_covariance;
@@ -69,8 +68,8 @@ struct RHBMGroupEstimationInput
 struct RHBMMuEstimateResult
 {
     RHBMEstimationStatus status{ RHBMEstimationStatus::SUCCESS };
-    RHBMMuVector mu_mean;
-    RHBMMuVector mu_mdpde;
+    RHBMParameterVector mu_mean;
+    RHBMParameterVector mu_mdpde;
     Eigen::ArrayXd omega_array;
     double omega_sum{ 0.0 };
     RHBMGroupCovarianceMatrix capital_lambda;
@@ -80,7 +79,7 @@ struct RHBMMuEstimateResult
 struct RHBMWebEstimateResult
 {
     RHBMEstimationStatus status{ RHBMEstimationStatus::SUCCESS };
-    RHBMMuVector mu_prior;
+    RHBMParameterVector mu_prior;
     RHBMBetaPosteriorMatrix beta_posterior_matrix;
     std::vector<RHBMPosteriorCovarianceMatrix> capital_sigma_posterior_list;
 };
@@ -88,9 +87,9 @@ struct RHBMWebEstimateResult
 struct RHBMGroupEstimationResult
 {
     RHBMEstimationStatus status{ RHBMEstimationStatus::SUCCESS };
-    RHBMMuVector mu_mean;
-    RHBMMuVector mu_mdpde;
-    RHBMMuVector mu_prior;
+    RHBMParameterVector mu_mean;
+    RHBMParameterVector mu_mdpde;
+    RHBMParameterVector mu_prior;
     RHBMGroupCovarianceMatrix capital_lambda;
     RHBMBetaPosteriorMatrix beta_posterior_matrix;
     std::vector<RHBMPosteriorCovarianceMatrix> capital_sigma_posterior_list;

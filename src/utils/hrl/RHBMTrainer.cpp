@@ -27,13 +27,13 @@ const linearization_service::LinearizationSpec & MetricDecodeSpec()
 }
 
 Eigen::VectorXd CalculateAbsoluteGaussianDifference(
-    const RHBMBetaVector & linear_a,
-    const RHBMBetaVector & linear_b)
+    const RHBMParameterVector & linear_a,
+    const RHBMParameterVector & linear_b)
 {
-    const auto gaussian_a{ linearization_service::DecodeGroupEstimate(
+    const auto gaussian_a{ linearization_service::DecodeParameterVector(
         MetricDecodeSpec(),
         linear_a).ToVector() };
-    const auto gaussian_b{ linearization_service::DecodeGroupEstimate(
+    const auto gaussian_b{ linearization_service::DecodeParameterVector(
         MetricDecodeSpec(),
         linear_b).ToVector() };
     eigen_validation::RequireVectorSize(gaussian_a, gaussian_b.rows(), "gaussian");
@@ -223,7 +223,7 @@ Eigen::VectorXd EvaluateAlphaRForDataset(
 }
 
 Eigen::VectorXd EvaluateAlphaGForGroup(
-    const std::vector<RHBMBetaVector> & beta_list,
+    const std::vector<RHBMParameterVector> & beta_list,
     std::size_t subset_size,
     const std::vector<double> & alpha_list,
     const RHBMExecutionOptions & options)
@@ -231,17 +231,17 @@ Eigen::VectorXd EvaluateAlphaGForGroup(
     ValidateTrainingInputs(beta_list.size(), subset_size, alpha_list);
 
     const auto data_size_in_half{ beta_list.size() / 2 };
-    std::vector<std::vector<RHBMBetaVector>> data_set_test(subset_size);
-    std::vector<std::vector<RHBMBetaVector>> data_set_training(subset_size);
+    std::vector<std::vector<RHBMParameterVector>> data_set_test(subset_size);
+    std::vector<std::vector<RHBMParameterVector>> data_set_training(subset_size);
     for (std::size_t i = 0; i < subset_size; i++)
     {
         data_set_test[i].reserve(data_size_in_half);
         data_set_training[i].reserve(beta_list.size() - data_size_in_half);
-        std::vector<RHBMBetaVector> shuffled_data{ beta_list };
+        std::vector<RHBMParameterVector> shuffled_data{ beta_list };
         auto generator{ BuildGenerator(options.random_seed, i) };
         std::shuffle(shuffled_data.begin(), shuffled_data.end(), generator);
         const auto diff{
-            static_cast<std::vector<RHBMBetaVector>::difference_type>(data_size_in_half)
+            static_cast<std::vector<RHBMParameterVector>::difference_type>(data_size_in_half)
         };
         data_set_test[i].assign(shuffled_data.begin(), shuffled_data.begin() + diff);
         data_set_training[i].assign(shuffled_data.begin() + diff, shuffled_data.end());
@@ -386,7 +386,7 @@ AlphaTrainer::AlphaTrainingResult AlphaTrainer::TrainAlphaR(
 }
 
 AlphaTrainer::AlphaTrainingResult AlphaTrainer::TrainAlphaG(
-    const std::vector<std::vector<RHBMBetaVector>> & beta_group_list,
+    const std::vector<std::vector<RHBMParameterVector>> & beta_group_list,
     const AlphaTrainingOptions & options) const
 {
     ValidateTrainingBatch(beta_group_list.size(), options.subset_size, m_alpha_grid);
@@ -487,7 +487,7 @@ Eigen::MatrixXd AlphaTrainer::StudyAlphaRBias(
 }
 
 Eigen::MatrixXd AlphaTrainer::StudyAlphaGBias(
-    const std::vector<std::vector<RHBMBetaVector>> & beta_group_list,
+    const std::vector<std::vector<RHBMParameterVector>> & beta_group_list,
     const AlphaRunOptions & options) const
 {
     ValidateTrainingBatch(beta_group_list.size(), 1, m_alpha_grid);

@@ -11,7 +11,7 @@ namespace rhbm_gem::rhbm_helper
 {
 RHBMMemberDataset BuildMemberDataset(const SeriesPointList & series_point_list);
 
-RHBMBetaMatrix BuildBetaMatrix(const std::vector<RHBMBetaVector> & beta_list);
+RHBMBetaMatrix BuildBetaMatrix(const std::vector<RHBMParameterVector> & beta_list);
 
 RHBMGroupEstimationInput BuildGroupInput(
     const std::vector<RHBMMemberDataset> & member_datasets,
@@ -33,7 +33,7 @@ RHBMMuEstimateResult EstimateMuMDPDE(
 RHBMWebEstimateResult EstimateWEB(
     const std::vector<RHBMMemberDataset> & member_datasets,
     const std::vector<RHBMDiagonalMatrix> & capital_sigma_list,
-    const RHBMMuVector & mu_mdpde,
+    const RHBMParameterVector & mu_mdpde,
     const std::vector<RHBMMemberCovarianceMatrix> & member_capital_lambda_list,
     const RHBMExecutionOptions & options = {}
 );
@@ -45,7 +45,7 @@ RHBMGroupEstimationResult EstimateGroup(
 );
 
 Eigen::ArrayXd CalculateMemberStatisticalDistance(
-    const RHBMMuVector & mu_prior,
+    const RHBMParameterVector & mu_prior,
     const RHBMGroupCovarianceMatrix & capital_lambda,
     const RHBMBetaPosteriorMatrix & beta_posterior_matrix
 );
