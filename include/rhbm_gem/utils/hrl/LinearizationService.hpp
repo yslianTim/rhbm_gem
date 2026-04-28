@@ -1,7 +1,6 @@
 #pragma once
 
 #include <optional>
-#include <tuple>
 
 #include <Eigen/Dense>
 
@@ -42,7 +41,6 @@ struct LinearizationContext
     std::optional<GaussianModel3D> model{};
 
     bool HasModelParameters() const { return model.has_value(); }
-    static LinearizationContext FromModelParameters(const Eigen::VectorXd & vector);
     static LinearizationContext FromModel(const GaussianModel3D & model);
 };
 
@@ -60,10 +58,6 @@ SeriesPointList BuildLinearModelSeries(
 
 RHBMBetaVector EncodeGaussianToBeta(
     const LinearizationSpec & spec,
-    const Eigen::VectorXd & gaussian_parameters);
-
-RHBMBetaVector EncodeGaussianToBeta(
-    const LinearizationSpec & spec,
     const GaussianModel3D & gaussian_model);
 
 Eigen::VectorXd DecodeLocalBeta(
@@ -74,20 +68,6 @@ Eigen::VectorXd DecodeLocalBeta(
 Eigen::VectorXd DecodeGroupBeta(
     const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model);
-
-GaussianModel3D DecodeLocalModel3D(
-    const LinearizationSpec & spec,
-    const RHBMBetaVector & linear_model,
-    const LinearizationContext & context = {});
-
-GaussianModel3D DecodeGroupModel3D(
-    const LinearizationSpec & spec,
-    const RHBMBetaVector & linear_model);
-
-std::tuple<Eigen::VectorXd, Eigen::VectorXd> DecodePosterior(
-    const LinearizationSpec & spec,
-    const RHBMBetaVector & linear_model,
-    const RHBMPosteriorCovarianceMatrix & covariance_matrix);
 
 GaussianModel3D DecodeLocalEstimate(
     const LinearizationSpec & spec,

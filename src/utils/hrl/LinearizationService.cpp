@@ -7,6 +7,7 @@
 
 #include <cmath>
 #include <stdexcept>
+#include <tuple>
 #include <utility>
 
 namespace rhbm_gem::linearization_service
@@ -14,23 +15,18 @@ namespace rhbm_gem::linearization_service
 
 namespace {
 
-const GaussianModel3D & RequireContextModel(
-    const LinearizationContext & context)
-{
-    if (!context.model.has_value())
-    {
-        throw std::invalid_argument("Gaussian linearization context is required for this spec.");
-    }
-    return context.model.value();
-}
-
 GaussianModel3D BuildGaussianModel(const Eigen::VectorXd & gaussian_parameters)
 {
     if (gaussian_parameters.rows() < 2)
     {
         throw std::invalid_argument("Gaussian parameter vector must have at least two entries.");
     }
-    return GaussianModel3D{ gaussian_parameters(0), gaussian_parameters(1) };
+    return GaussianModel3D{
+        gaussian_parameters(GaussianModel3D::AmplitudeIndex()),
+        gaussian_parameters(GaussianModel3D::WidthIndex()),
+        (gaussian_parameters.rows() > GaussianModel3D::InterceptIndex()) ?
+            gaussian_parameters(GaussianModel3D::InterceptIndex()) : 0.0
+    };
 }
 
 GaussianModel3DUncertainty BuildGaussianModelUncertainty(
@@ -325,14 +321,6 @@ void ValidateContextIfRequired(
     }
 }
 
-void Validate3DModelSpec(const LinearizationSpec & spec)
-{
-    if (spec.model_kind != GaussianModelKind::MODEL_3D)
-    {
-        throw std::invalid_argument("GaussianModel3D decode requires MODEL_3D.");
-    }
-}
-
 Eigen::VectorXd BuildGaussianVector(
     const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model,
@@ -352,6 +340,22 @@ Eigen::VectorXd BuildGaussianVector(
     throw std::invalid_argument("Unsupported Gaussian model kind.");
 }
 
+std::tuple<Eigen::VectorXd, Eigen::VectorXd> DecodePosteriorParameters(
+    const LinearizationSpec & spec,
+    const RHBMBetaVector & linear_model,
+    const RHBMPosteriorCovarianceMatrix & covariance_matrix)
+{
+    numeric_validation::RequirePositive(spec.basis_size, "LinearizationSpec basis_size");
+    switch (spec.model_kind)
+    {
+    case GaussianModelKind::MODEL_2D:
+        return BuildGaus2DModelWithUncertainty(linear_model, covariance_matrix);
+    case GaussianModelKind::MODEL_3D:
+        return BuildGaus3DModelWithUncertainty(linear_model, covariance_matrix);
+    }
+    throw std::invalid_argument("Unsupported Gaussian model kind.");
+}
+
 } // namespace
 
 LinearizationSpec LinearizationSpec::BondGroupDecode()
@@ -359,11 +363,6 @@ LinearizationSpec LinearizationSpec::BondGroupDecode()
     auto spec{ LinearizationSpec{} };
     spec.model_kind = GaussianModelKind::MODEL_2D;
     return spec;
-}
-
-LinearizationContext LinearizationContext::FromModelParameters(const Eigen::VectorXd & vector)
-{
-    return FromModel(GaussianModel3D::FromVector(vector));
 }
 
 LinearizationContext LinearizationContext::FromModel(const GaussianModel3D & model)
@@ -471,32 +470,6 @@ SeriesPointList BuildLinearModelSeries(
 
 RHBMBetaVector EncodeGaussianToBeta(
     const LinearizationSpec & spec,
-    const Eigen::VectorXd & gaussian_parameters)
-{
-    numeric_validation::RequirePositive(spec.basis_size, "LinearizationSpec basis_size");
-    if (spec.linearization_kind != LinearizationKind::LOG_QUADRATIC)
-    {
-        throw std::invalid_argument("EncodeGaussianToBeta only supports log-quadratic linearization.");
-    }
-    if (gaussian_parameters.rows() < 2)
-    {
-        throw std::invalid_argument("Gaussian parameter vector must have at least two entries.");
-    }
-
-    const auto gaussian_model{ (gaussian_parameters.rows() >= GaussianModel3D::ParameterSize()) ?
-        GaussianModel3D::FromVector(gaussian_parameters) :
-        GaussianModel3D{ gaussian_parameters(0), gaussian_parameters(1), 0.0 }
-    };
-    const auto encoded{ BuildLinearModelCoefficientVector(gaussian_model) };
-    if (spec.basis_size > encoded.rows())
-    {
-        throw std::invalid_argument("Requested basis size exceeds supported encoded Gaussian size.");
-    }
-    return encoded.head(spec.basis_size);
-}
-
-RHBMBetaVector EncodeGaussianToBeta(
-    const LinearizationSpec & spec,
     const GaussianModel3D & gaussian_model)
 {
     numeric_validation::RequirePositive(spec.basis_size, "LinearizationSpec basis_size");
@@ -531,46 +504,6 @@ Eigen::VectorXd DecodeGroupBeta(
     return BuildGaussianVector(spec, linear_model, nullptr);
 }
 
-GaussianModel3D DecodeLocalModel3D(
-    const LinearizationSpec & spec,
-    const RHBMBetaVector & linear_model,
-    const LinearizationContext & context)
-{
-    numeric_validation::RequirePositive(spec.basis_size, "LinearizationSpec basis_size");
-    Validate3DModelSpec(spec);
-    ValidateContextIfRequired(spec, context);
-    if (context.HasModelParameters())
-    {
-        return BuildGaus3DModel(linear_model, RequireContextModel(context));
-    }
-    return BuildGaus3DModel(linear_model);
-}
-
-GaussianModel3D DecodeGroupModel3D(
-    const LinearizationSpec & spec,
-    const RHBMBetaVector & linear_model)
-{
-    numeric_validation::RequirePositive(spec.basis_size, "LinearizationSpec basis_size");
-    Validate3DModelSpec(spec);
-    return BuildGaus3DModel(linear_model);
-}
-
-std::tuple<Eigen::VectorXd, Eigen::VectorXd> DecodePosterior(
-    const LinearizationSpec & spec,
-    const RHBMBetaVector & linear_model,
-    const RHBMPosteriorCovarianceMatrix & covariance_matrix)
-{
-    numeric_validation::RequirePositive(spec.basis_size, "LinearizationSpec basis_size");
-    switch (spec.model_kind)
-    {
-    case GaussianModelKind::MODEL_2D:
-        return BuildGaus2DModelWithUncertainty(linear_model, covariance_matrix);
-    case GaussianModelKind::MODEL_3D:
-        return BuildGaus3DModelWithUncertainty(linear_model, covariance_matrix);
-    }
-    throw std::invalid_argument("Unsupported Gaussian model kind.");
-}
-
 GaussianModel3D DecodeLocalEstimate(
     const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model,
@@ -591,7 +524,7 @@ GaussianModel3DWithUncertainty DecodeGaussianModel3DWithUncertainty(
     const RHBMBetaVector & linear_model,
     const RHBMPosteriorCovarianceMatrix & covariance_matrix)
 {
-    const auto decoded{ DecodePosterior(spec, linear_model, covariance_matrix) };
+    const auto decoded{ DecodePosteriorParameters(spec, linear_model, covariance_matrix) };
     return GaussianModel3DWithUncertainty{
         BuildGaussianModel(std::get<0>(decoded)),
         BuildGaussianModelUncertainty(std::get<1>(decoded))
