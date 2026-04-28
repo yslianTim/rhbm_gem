@@ -60,15 +60,6 @@ RHBMBetaVector EncodeGaussianToBeta(
     const LinearizationSpec & spec,
     const GaussianModel3D & gaussian_model);
 
-Eigen::VectorXd DecodeLocalBeta(
-    const LinearizationSpec & spec,
-    const RHBMBetaVector & linear_model,
-    const LinearizationContext & context = {});
-
-Eigen::VectorXd DecodeGroupBeta(
-    const LinearizationSpec & spec,
-    const RHBMBetaVector & linear_model);
-
 GaussianModel3D DecodeLocalEstimate(
     const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model,

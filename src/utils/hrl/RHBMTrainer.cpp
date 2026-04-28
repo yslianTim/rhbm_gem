@@ -30,8 +30,12 @@ Eigen::VectorXd CalculateAbsoluteGaussianDifference(
     const RHBMBetaVector & linear_a,
     const RHBMBetaVector & linear_b)
 {
-    const auto gaussian_a{ linearization_service::DecodeGroupBeta(MetricDecodeSpec(), linear_a) };
-    const auto gaussian_b{ linearization_service::DecodeGroupBeta(MetricDecodeSpec(), linear_b) };
+    const auto gaussian_a{ linearization_service::DecodeGroupEstimate(
+        MetricDecodeSpec(),
+        linear_a).ToVector() };
+    const auto gaussian_b{ linearization_service::DecodeGroupEstimate(
+        MetricDecodeSpec(),
+        linear_b).ToVector() };
     eigen_validation::RequireVectorSize(gaussian_a, gaussian_b.rows(), "gaussian");
     return (gaussian_a - gaussian_b).array().abs().matrix();
 }

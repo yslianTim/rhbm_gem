@@ -486,37 +486,22 @@ RHBMBetaVector EncodeGaussianToBeta(
     return encoded.head(spec.basis_size);
 }
 
-Eigen::VectorXd DecodeLocalBeta(
+GaussianModel3D DecodeLocalEstimate(
     const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model,
     const LinearizationContext & context)
 {
     numeric_validation::RequirePositive(spec.basis_size, "LinearizationSpec basis_size");
     ValidateContextIfRequired(spec, context);
-    return BuildGaussianVector(spec, linear_model, &context);
-}
-
-Eigen::VectorXd DecodeGroupBeta(
-    const LinearizationSpec & spec,
-    const RHBMBetaVector & linear_model)
-{
-    numeric_validation::RequirePositive(spec.basis_size, "LinearizationSpec basis_size");
-    return BuildGaussianVector(spec, linear_model, nullptr);
-}
-
-GaussianModel3D DecodeLocalEstimate(
-    const LinearizationSpec & spec,
-    const RHBMBetaVector & linear_model,
-    const LinearizationContext & context)
-{
-    return BuildGaussianModel(DecodeLocalBeta(spec, linear_model, context));
+    return BuildGaussianModel(BuildGaussianVector(spec, linear_model, &context));
 }
 
 GaussianModel3D DecodeGroupEstimate(
     const LinearizationSpec & spec,
     const RHBMBetaVector & linear_model)
 {
-    return BuildGaussianModel(DecodeGroupBeta(spec, linear_model));
+    numeric_validation::RequirePositive(spec.basis_size, "LinearizationSpec basis_size");
+    return BuildGaussianModel(BuildGaussianVector(spec, linear_model, nullptr));
 }
 
 GaussianModel3DWithUncertainty DecodeGaussianModel3DWithUncertainty(
