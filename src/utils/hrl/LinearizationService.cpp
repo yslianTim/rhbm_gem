@@ -44,65 +44,15 @@ GaussianModel3DUncertainty BuildGaussianModelUncertainty(
     };
 }
 
-Eigen::VectorXd GetTaylorSeriesBasisVector(
-    double distance,
-    const GaussianModel3D & model)
+std::tuple<std::vector<double>, double> BuildLogQuadraticBasisVector(double x, double y)
 {
-    const auto amplitude_0{ model.GetAmplitude() };
-    const auto width_0{ model.GetWidth() };
-    const auto width_square{ width_0 * width_0 };
-    const auto gaussian_0{
-        1.0 / std::pow(Constants::two_pi * width_square, 1.5) *
-        std::exp(-0.5 * distance * distance / width_square)
-    };
-    Eigen::VectorXd basis_vector{
-        Eigen::VectorXd::Zero(GaussianModel3D::ParameterSize())
-    };
-    basis_vector(0) = gaussian_0;
-    basis_vector(1) =
-        amplitude_0 * gaussian_0 * (-3.0 / width_0 + distance * distance / std::pow(width_0, 3));
-    basis_vector(2) = 1.0;
-    return basis_vector;
-}
-
-Eigen::VectorXd BuildLinearModelDataVector(
-    double x,
-    double y,
-    const GaussianModel3D & model,
-    int basis_dimension)
-{
-    const auto data_vector_dimension{ basis_dimension + 1 };
-    Eigen::VectorXd linear_model_data_vector{
-        Eigen::VectorXd::Zero(data_vector_dimension)
-    };
-
-    if (basis_dimension == 2)
+    if (y <= 0.0)
     {
-        if (y <= 0.0)
-        {
-            throw std::runtime_error("The gaus y value should be positive value.");
-        }
-        linear_model_data_vector(0) = 1.0;
-        linear_model_data_vector(1) = -0.5 * x * x;
-        linear_model_data_vector(2) = std::log(y);
-        return linear_model_data_vector;
+        throw std::runtime_error("The gaus y value should be positive value.");
     }
-
-    const auto basis_vector{ GetTaylorSeriesBasisVector(x, model) };
-    const auto amplitude_0{ model.GetAmplitude() };
-    const auto width_0{ model.GetWidth() };
-    for (int i = 0; i < basis_dimension; i++)
-    {
-        linear_model_data_vector(i) = basis_vector(i);
-    }
-    const auto width_square{ width_0 * width_0 };
-    const auto gaussian_response{
-        1.0 / std::pow(Constants::two_pi * width_square, 1.5) *
-        std::exp(-0.5 * x * x / width_square)
-    };
-    const auto intercept{ amplitude_0 * gaussian_response + model.GetIntercept() };
-    linear_model_data_vector(basis_dimension) = y - intercept;
-    return linear_model_data_vector;
+    return std::make_tuple(
+        std::vector<double>{ 1.0, -0.5 * x * x },
+        std::log(y));
 }
 
 RHBMParameterVector BuildLinearModelCoefficientVector(const GaussianModel3D & model)
@@ -380,12 +330,14 @@ SeriesPointList BuildDatasetSeries(
     const LinearizationContext & context)
 {
     numeric_validation::RequirePositive(spec.basis_size, "LinearizationSpec basis_size");
+    if (spec.basis_size != 2)
+    {
+        throw std::invalid_argument("BuildDatasetSeries only supports log-quadratic basis_size == 2.");
+    }
     ValidateContextIfRequired(spec, context);
 
     SeriesPointList basis_and_response_entry_list;
     basis_and_response_entry_list.reserve(sampling_entries.size());
-    const GaussianModel3D default_model{ 0.0, 0.0, 0.0 };
-    const auto & model{ context.model.value_or(default_model) };
     for (const auto & sample : sampling_entries)
     {
         const auto distance{ sample.distance };
@@ -399,23 +351,13 @@ SeriesPointList BuildDatasetSeries(
             continue;
         }
 
-        const auto data_vector{
-            BuildLinearModelDataVector(
-                static_cast<double>(distance),
-                gaussian_response,
-                model,
-                spec.basis_size)
+        auto [basis_values, transformed_response]{
+            BuildLogQuadraticBasisVector(static_cast<double>(distance), gaussian_response)
         };
-        std::vector<double> basis_values;
-        basis_values.reserve(static_cast<std::size_t>(spec.basis_size));
-        for (int i = 0; i < spec.basis_size; i++)
-        {
-            basis_values.emplace_back(data_vector(i));
-        }
         basis_and_response_entry_list.emplace_back(
             SeriesPoint{
                 std::move(basis_values),
-                data_vector(spec.basis_size),
+                transformed_response,
                 sample.score
             });
     }
@@ -437,10 +379,6 @@ RHBMParameterVector EncodeGaussianToParameterVector(
     const GaussianModel3D & gaussian_model)
 {
     numeric_validation::RequirePositive(spec.basis_size, "LinearizationSpec basis_size");
-    if (spec.linearization_kind != LinearizationKind::LOG_QUADRATIC)
-    {
-        throw std::invalid_argument("EncodeGaussianToParameterVector only supports log-quadratic linearization.");
-    }
 
     const auto encoded{ BuildLinearModelCoefficientVector(gaussian_model) };
     if (spec.basis_size > encoded.rows())

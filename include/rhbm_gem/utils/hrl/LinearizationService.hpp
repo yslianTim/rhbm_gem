@@ -10,12 +10,6 @@
 namespace rhbm_gem::linearization_service
 {
 
-enum class LinearizationKind
-{
-    LOG_QUADRATIC,
-    TAYLOR_EXPANSION
-};
-
 enum class GaussianModelKind
 {
     MODEL_2D,
@@ -25,7 +19,6 @@ enum class GaussianModelKind
 struct LinearizationSpec
 {
     int basis_size{ 2 };
-    LinearizationKind linearization_kind{ LinearizationKind::LOG_QUADRATIC };
     GaussianModelKind model_kind{ GaussianModelKind::MODEL_3D };
     bool requires_local_context{ false };
 

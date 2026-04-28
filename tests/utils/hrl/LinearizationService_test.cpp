@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <initializer_list>
+#include <stdexcept>
 
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
@@ -59,6 +60,19 @@ TEST(LinearizationServiceTest, BuildDatasetSeriesTransformsEffectiveSamplesWithi
     EXPECT_NEAR(-0.5 * 0.3 * 0.3, series.at(1).GetBasisValue(1), 1.0e-7);
     EXPECT_NEAR(std::log(8.0), series.at(1).response, 1.0e-7);
     EXPECT_FLOAT_EQ(2.5f, series.at(1).score);
+}
+
+TEST(LinearizationServiceTest, BuildDatasetSeriesRejectsNonLogQuadraticBasisSize)
+{
+    auto spec{ DatasetLinearizationSpec() };
+    spec.basis_size = rhbm_gem::GaussianModel3D::ParameterSize();
+    const LocalPotentialSampleList sampling_entries{
+        {0.1f, 4.0f, 0.5f},
+    };
+
+    EXPECT_THROW(
+        ls::BuildDatasetSeries(spec, sampling_entries, 0.0, 0.5),
+        std::invalid_argument);
 }
 
 TEST(LinearizationServiceTest, EncodeGaussianToParameterVectorMatchesClosedForm)
