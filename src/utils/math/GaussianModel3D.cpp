@@ -107,21 +107,6 @@ GaussianModel3D GaussianModel3D::WithIntercept(double value) const
     return GaussianModel3D{ m_amplitude, m_width, value };
 }
 
-double GaussianModel3D::GetAmplitude() const
-{
-    return m_amplitude;
-}
-
-double GaussianModel3D::GetWidth() const
-{
-    return m_width;
-}
-
-double GaussianModel3D::GetIntercept() const
-{
-    return m_intercept;
-}
-
 Eigen::VectorXd GaussianModel3D::ToVector() const
 {
     Eigen::VectorXd parameters{ Eigen::VectorXd::Zero(kParameterSize) };
@@ -206,21 +191,6 @@ void GaussianModel3DUncertainty::RequireFiniteNonNegativeUncertainty(
         name + " intercept");
 }
 
-double GaussianModel3DUncertainty::GetAmplitude() const
-{
-    return m_amplitude;
-}
-
-double GaussianModel3DUncertainty::GetWidth() const
-{
-    return m_width;
-}
-
-double GaussianModel3DUncertainty::GetIntercept() const
-{
-    return m_intercept;
-}
-
 Eigen::VectorXd GaussianModel3DUncertainty::ToVector() const
 {
     Eigen::VectorXd parameters{ Eigen::VectorXd::Zero(GaussianModel3D::ParameterSize()) };
@@ -252,17 +222,6 @@ GaussianModel3DWithUncertainty::GaussianModel3DWithUncertainty(
     m_model{ model },
     m_standard_deviation{ standard_deviation }
 {
-}
-
-const GaussianModel3D & GaussianModel3DWithUncertainty::GetModel() const
-{
-    return m_model;
-}
-
-const GaussianModel3DUncertainty &
-GaussianModel3DWithUncertainty::GetStandardDeviationModel() const
-{
-    return m_standard_deviation;
 }
 
 double GaussianModel3DWithUncertainty::GetDisplayParameter(int par_id) const

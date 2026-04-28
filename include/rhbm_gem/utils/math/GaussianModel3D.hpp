@@ -45,9 +45,9 @@ public:
     GaussianModel3D WithWidth(double value) const;
     GaussianModel3D WithIntercept(double value) const;
 
-    double GetAmplitude() const;
-    double GetWidth() const;
-    double GetIntercept() const;
+    double GetAmplitude() const { return m_amplitude; }
+    double GetWidth() const { return m_width; }
+    double GetIntercept() const { return m_intercept; }
     Eigen::VectorXd ToVector() const;
     double GetModelParameter(int par_id) const;
     double GetDisplayParameter(int par_id) const;
@@ -69,9 +69,9 @@ public:
         const GaussianModel3DUncertainty & uncertainty,
         std::string_view value_name = "GaussianModel3DUncertainty");
 
-    double GetAmplitude() const;
-    double GetWidth() const;
-    double GetIntercept() const;
+    double GetAmplitude() const { return m_amplitude; }
+    double GetWidth() const { return m_width; }
+    double GetIntercept() const { return m_intercept; }
     Eigen::VectorXd ToVector() const;
     double GetModelParameter(int par_id) const;
 };
@@ -87,8 +87,8 @@ public:
         GaussianModel3D model,
         GaussianModel3DUncertainty standard_deviation);
 
-    const GaussianModel3D & GetModel() const;
-    const GaussianModel3DUncertainty & GetStandardDeviationModel() const;
+    const GaussianModel3D & GetModel() const { return m_model; }
+    const GaussianModel3DUncertainty & GetStandardDeviationModel() const { return m_standard_deviation; }
     double GetDisplayParameter(int par_id) const;
     double GetDisplayStandardDeviation(int par_id) const;
     double IntensityStandardDeviation() const;
