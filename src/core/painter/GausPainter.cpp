@@ -1068,7 +1068,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponentSimple(
 
     auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
-    const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N };
+    const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
 
     #ifdef HAVE_ROOT
 
@@ -1133,9 +1133,15 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponentSimple(
     std::vector<double> amplitude_array, width_array;
     amplitude_array.reserve(group_key_list_map.at(Spot::CA).size()*4);
     width_array.reserve(group_key_list_map.at(Spot::CA).size()*4);
-    std::map<Spot, short> color_list{ { Spot::CA,kRed }, { Spot::C, kBlue }, { Spot::N, kGreen+2 } };
-    std::map<Spot, short> marker_list{ { Spot::CA, 72 }, { Spot::C, 71 }, { Spot::N, 73 } };
-    std::map<Spot, short> line_list{ { Spot::CA, 1 }, { Spot::C, 2 }, { Spot::N, 3 } };
+    std::map<Spot, short> color_list{
+        { Spot::CA,kRed }, { Spot::C, kBlue }, { Spot::N, kGreen+2 }, { Spot::O, kAzure-7 }
+    };
+    std::map<Spot, short> marker_list{
+        { Spot::CA, 72 }, { Spot::C, 71 }, { Spot::N, 73 }, { Spot::O, 74 }
+    };
+    std::map<Spot, short> line_list{
+        { Spot::CA, 1 }, { Spot::C, 2 }, { Spot::N, 3 }, { Spot::O, 4 }
+    };
     
     for (auto & [spot, group_key_list] : group_key_list_map)
     {
@@ -1794,7 +1800,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent(
 
     auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
-    const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N };
+    const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
 
     #ifdef HAVE_ROOT
 

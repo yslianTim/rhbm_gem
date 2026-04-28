@@ -141,7 +141,7 @@ void DemoPainter::Painting()
         }
     };
 
-    //PaintGroupGausMergeResidueDemo(demo_alpha_carbon_list, "figure_gaus_backbone_boxplot.pdf");
+    PaintGroupGausMergeResidueDemo(demo_alpha_carbon_list, "figure_gaus_backbone_boxplot.pdf");
 
     PaintAtomMapValueExample(demo_model_object, "figure_1_a.pdf");
     PaintGroupGausMainChainSummary(demo_model_list, "figure_1_b.pdf");
@@ -1617,7 +1617,7 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
     const int row_size{ 2 };
     auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     (void)row_size;
-    const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N };
+    const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
     std::map<Spot, std::vector<GroupKey>> group_key_list_map[col_size];
     for (size_t i = 0; i < model_list.size(); i++)
     {
