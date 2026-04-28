@@ -80,19 +80,8 @@ Eigen::VectorXd BuildGaus2DModel(const RHBMParameterVector & linear_model)
     {
         return gaus_model;
     }
-
-    const auto model_dimension{ linear_model.rows() };
-    if (model_dimension == 2)
-    {
-        gaus_model(0) = std::exp(linear_model(0)) * Constants::two_pi / linear_model(1);
-        gaus_model(1) = 1.0 / std::sqrt(linear_model(1));
-    }
-    else
-    {
-        gaus_model(0) = linear_model(0);
-        gaus_model(1) = linear_model(1);
-    }
-
+    gaus_model(0) = std::exp(linear_model(0)) * Constants::two_pi / linear_model(1);
+    gaus_model(1) = 1.0 / std::sqrt(linear_model(1));
     return gaus_model;
 }
 
@@ -102,43 +91,10 @@ GaussianModel3D BuildGaus3DModel(const RHBMParameterVector & linear_model)
     {
         return GaussianModel3D{ 0.0, 0.0, 0.0 };
     }
-
-    const auto model_dimension{ linear_model.rows() };
-    if (model_dimension == 2)
-    {
-        return GaussianModel3D{
-            std::exp(linear_model(0)) * std::pow(Constants::two_pi / linear_model(1), 1.5),
-            1.0 / std::sqrt(linear_model(1)),
-            0.0
-        };
-    }
-
-    return GaussianModel3D{ linear_model(0), linear_model(1), linear_model(2) };
-}
-
-GaussianModel3D BuildGaus3DModel(
-    const RHBMParameterVector & linear_model,
-    const GaussianModel3D & model)
-{
-    if (linear_model(1) <= 0.0)
-    {
-        return GaussianModel3D{ 0.0, 0.0, 0.0 };
-    }
-
-    const auto model_dimension{ linear_model.rows() };
-    if (model_dimension == 2)
-    {
-        return GaussianModel3D{
-            std::exp(linear_model(0)) * std::pow(Constants::two_pi / linear_model(1), 1.5),
-            1.0 / std::sqrt(linear_model(1)),
-            0.0
-        };
-    }
-
     return GaussianModel3D{
-        std::exp(linear_model(0)) * model.GetAmplitude(),
-        std::exp(linear_model(1)) + model.GetWidth(),
-        linear_model(2) + model.GetIntercept()
+        std::exp(linear_model(0)) * std::pow(Constants::two_pi / linear_model(1), 1.5),
+        1.0 / std::sqrt(linear_model(1)),
+        0.0
     };
 }
 
@@ -273,18 +229,13 @@ void ValidateContextIfRequired(
 
 Eigen::VectorXd BuildGaussianVector(
     const LinearizationSpec & spec,
-    const RHBMParameterVector & linear_model,
-    const LinearizationContext * context)
+    const RHBMParameterVector & linear_model)
 {
     switch (spec.model_kind)
     {
     case GaussianModelKind::MODEL_2D:
         return BuildGaus2DModel(linear_model);
     case GaussianModelKind::MODEL_3D:
-        if (context != nullptr && context->model.has_value())
-        {
-            return BuildGaus3DModel(linear_model, context->model.value()).ToVector();
-        }
         return BuildGaus3DModel(linear_model).ToVector();
     }
     throw std::invalid_argument("Unsupported Gaussian model kind.");
@@ -390,12 +341,10 @@ RHBMParameterVector EncodeGaussianToParameterVector(
 
 GaussianModel3D DecodeParameterVector(
     const LinearizationSpec & spec,
-    const RHBMParameterVector & parameter_vector,
-    const LinearizationContext & context)
+    const RHBMParameterVector & parameter_vector)
 {
     numeric_validation::RequirePositive(spec.basis_size, "LinearizationSpec basis_size");
-    ValidateContextIfRequired(spec, context);
-    return BuildGaussianModel(BuildGaussianVector(spec, parameter_vector, &context));
+    return BuildGaussianModel(BuildGaussianVector(spec, parameter_vector));
 }
 
 GaussianModel3DWithUncertainty DecodeParameterVector(

@@ -142,22 +142,6 @@ TEST(LinearizationServiceTest, DecodeParameterVectorPreservesDirect3DModelInterc
     EXPECT_NEAR(0.25, model.GetIntercept(), 1.0e-12);
 }
 
-TEST(LinearizationServiceTest, DecodeParameterVectorUsesTypedContext)
-{
-    auto spec{ DirectGaussianModelSpec() };
-    spec.requires_local_context = true;
-    const rhbm_gem::GaussianModel3D local_model{ 2.0, 0.5, 0.25 };
-    const auto context{ ls::LinearizationContext::FromModel(local_model) };
-
-    const auto model{
-        ls::DecodeParameterVector(spec, MakeVector({ std::log(3.0), 0.25, 0.5 }), context)
-    };
-
-    EXPECT_NEAR(6.0, model.GetAmplitude(), 1.0e-12);
-    EXPECT_NEAR(std::exp(0.25) + 0.5, model.GetWidth(), 1.0e-12);
-    EXPECT_NEAR(0.75, model.GetIntercept(), 1.0e-12);
-}
-
 TEST(LinearizationServiceTest, DecodeParameterVectorReturnsStandardDeviation)
 {
     const auto linear_model{ MakeVector({ 0.5, 2.0 }) };

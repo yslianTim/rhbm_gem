@@ -50,8 +50,7 @@ RHBMParameterVector EncodeGaussianToParameterVector(
 
 GaussianModel3D DecodeParameterVector(
     const LinearizationSpec & spec,
-    const RHBMParameterVector & parameter_vector,
-    const LinearizationContext & context = {});
+    const RHBMParameterVector & parameter_vector);
 
 GaussianModel3DWithUncertainty DecodeParameterVector(
     const LinearizationSpec & spec,

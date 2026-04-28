@@ -23,12 +23,6 @@ struct LocalPotentialEstimates
     GaussianModel3D mdpde{};
 };
 
-ls::LinearizationContext BuildLocalDecodeContext(const LocalPotentialEntry & entry)
-{
-    return ls::LinearizationContext::FromModel(
-        GaussianModel3D{ entry.GetMomentZeroEstimate(), entry.GetMomentTwoEstimate(), 0.0 });
-}
-
 const ls::LinearizationSpec & LocalDecodeSpec()
 {
     static const auto spec{ ls::LinearizationSpec::AtomLocalDecode() };
@@ -137,14 +131,11 @@ LocalPotentialAnnotation ToDetailAnnotation(const LocalPotentialAnnotationData &
     };
 }
 
-LocalPotentialEstimates BuildLocalPotentialEstimates(
-    const LocalPotentialEntry & entry,
-    const RHBMBetaEstimateResult & value)
+LocalPotentialEstimates BuildLocalPotentialEstimates(const RHBMBetaEstimateResult & value)
 {
-    const auto context{ BuildLocalDecodeContext(entry) };
-    const auto gaus_ols{ ls::DecodeParameterVector(LocalDecodeSpec(), value.beta_ols, context) };
+    const auto gaus_ols{ ls::DecodeParameterVector(LocalDecodeSpec(), value.beta_ols) };
     const auto gaus_mdpde{
-        ls::DecodeParameterVector(LocalDecodeSpec(), value.beta_mdpde, context)
+        ls::DecodeParameterVector(LocalDecodeSpec(), value.beta_mdpde)
     };
 
     return LocalPotentialEstimates{
@@ -298,7 +289,7 @@ void MutableLocalPotentialView::SetDataset(RHBMMemberDataset value)
 void MutableLocalPotentialView::SetFitResult(RHBMBetaEstimateResult value)
 {
     auto & entry{ EnsureResolvedLocalEntry(*this) };
-    const auto estimates{ BuildLocalPotentialEstimates(entry, value) };
+    const auto estimates{ BuildLocalPotentialEstimates(value) };
 
     entry.SetFitResult(std::move(value));
     entry.SetEstimateOLS(estimates.ols);
