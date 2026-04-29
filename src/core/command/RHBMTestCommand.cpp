@@ -70,13 +70,15 @@ enum class BiasPlotFlavor
     MemberOutlier,
     ModelAlphaData,
     ModelAlphaMember,
-    NeighborDistance
+    NeighborDistance,
+    NeighborType
 };
 
 enum class BiasXAxisMode
 {
     ContaminationRatio,
-    NeighborDistance
+    NeighborDistance,
+    NeighborType
 };
 
 struct BiasCurvePoint
@@ -406,11 +408,6 @@ double ScaleBiasPlotX(double x, BiasXAxisMode x_axis_mode)
     return 100.0 * x;
 }
 
-bool ShouldDrawBiasCurve(BiasPlotFlavor, BiasCurveKind)
-{
-    return true;
-}
-
 short GetBiasCurveColor(BiasPlotFlavor flavor, BiasCurveKind kind)
 {
     if (flavor == BiasPlotFlavor::MemberOutlier)
@@ -607,6 +604,7 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
 {
     ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnBenchMark");
 
+    const size_t method_size{ 3 };
     const auto error_sigma{ 0.0 };
     const auto model_par_prior{ MakeDefaultModelPrior() };
     const auto test_data_options{ BuildTestDataOptions(request) };
@@ -618,13 +616,24 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
         test_data_factory::AtomNeighborType::CA
     };
 
-    std::vector<rhbm_tester::BetaMDPDETestBias> no_cut_results;
-    std::vector<rhbm_tester::BetaMDPDETestBias> cut_results;
+    BiasPlotRequest plot_request;
+    plot_request.output_name = "bias_from_neighbor_atom.pdf";
+    plot_request.flavor = BiasPlotFlavor::NeighborType;
+    plot_request.x_axis_mode = BiasXAxisMode::NeighborType;
+    plot_request.panels.reserve(method_size);
+
+    std::vector<rhbm_tester::BiasStatistics> method0_fit_results;
+    std::vector<rhbm_tester::BiasStatistics> method1_fit_results;
+    std::vector<rhbm_tester::BiasStatistics> method2_fit_results;
+    method0_fit_results.reserve(neighbor_type_list.size());
+    method1_fit_results.reserve(neighbor_type_list.size());
+    method2_fit_results.reserve(neighbor_type_list.size());
+
     for (const auto neighbor_type : neighbor_type_list)
     {
         test_data_factory::AtomNeighborhoodScenario base_scenario;
         base_scenario.gaus_true = GaussianModel3D::FromVector(model_par_prior);
-        base_scenario.sampling_entry_size = 50;
+        base_scenario.sampling_entry_size = 25;
         base_scenario.data_error_sigma = error_sigma;
         base_scenario.radius_min = test_data_options.fitting_range.min;
         base_scenario.radius_max = test_data_options.fitting_range.max;
@@ -633,7 +642,7 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
         base_scenario.include_sampling_summary = false;
         base_scenario.summary_radius_min = 0.0;
         base_scenario.summary_radius_max = 4.0;
-        base_scenario.replica_size = 10;
+        base_scenario.replica_size = 1;
 
         std::vector<LinePlotPanel> linearized_panels;
         linearized_panels.reserve(1);
@@ -663,7 +672,31 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
                 << cut_result.mdpde.trained_alpha.value().mean(1)
                 << " (Alpha-R = " << cut_result.mdpde.trained_alpha_average.value() << ")";
         Logger::Log(LogLevel::Info, stream.str());
+
+        method0_fit_results.emplace_back(no_cut_result.ols);
+        method1_fit_results.emplace_back(no_cut_result.mdpde.trained_alpha.value());
+        method2_fit_results.emplace_back(cut_result.mdpde.trained_alpha.value());
         //SaveBenchmarkLinearizedDatasetReport(request, error_sigma, linearized_panels);
+    }
+
+    for (size_t panel_index = 0; panel_index < method_size; panel_index++)
+    {
+        BiasPlotPanel panel;
+        panel.label = "method";
+        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Ols, neighbor_type_list.size()));
+        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Mdpde, neighbor_type_list.size()));
+        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::TrainedMdpde, neighbor_type_list.size()));
+        for (size_t i = 0; i < neighbor_type_list.size(); i++)
+        {
+            const auto neighbor_type_value{ static_cast<double>(neighbor_type_list.at(i)) };
+            AppendBiasCurvePoint(
+                panel.curves.at(panel_index), neighbor_type_value, method0_fit_results.at(i));
+            AppendBiasCurvePoint(
+                panel.curves.at(panel_index), neighbor_type_value, method1_fit_results.at(i));
+            AppendBiasCurvePoint(
+                panel.curves.at(panel_index), neighbor_type_value, method2_fit_results.at(i));
+        }
+        plot_request.panels.emplace_back(std::move(panel));
     }
 
     PrintDataOutlierResult(request, plot_request);    
@@ -1047,6 +1080,11 @@ void PrintDataOutlierResult(
     {
         x_min[i] = (plot_request.flavor == BiasPlotFlavor::ModelAlphaData) ? -2.0 : -0.7;
         x_max[i] = (plot_request.flavor == BiasPlotFlavor::ModelAlphaData) ? 47.0 : 22.0;
+        if (plot_request.x_axis_mode == BiasXAxisMode::NeighborType)
+        {
+            x_min[i] = 0.0;
+            x_max[i] = 5.0;
+        }
         if (plot_request.x_axis_mode == BiasXAxisMode::NeighborDistance)
         {
             x_min[i] = -2.6;
@@ -1094,10 +1132,8 @@ void PrintDataOutlierResult(
                 const auto kind{ graph_kind_list[i][par_id].at(graph_index) };
                 auto & graph{ graph_list[i][par_id].at(graph_index) };
                 ApplyBiasCurveStyle(graph.get(), plot_request.flavor, kind);
-                if (ShouldDrawBiasCurve(plot_request.flavor, kind))
-                {
-                    graph->Draw("PL3");
-                }
+                //graph->Draw("PL3");
+                graph->Draw("P");
             }
 
             if (i == 0)
@@ -1289,10 +1325,7 @@ void PrintMemberOutlierResult(
                 const auto kind{ graph_kind_list[i][par_id].at(graph_index) };
                 auto & graph{ graph_list[i][par_id].at(graph_index) };
                 ApplyBiasCurveStyle(graph.get(), plot_request.flavor, kind);
-                if (ShouldDrawBiasCurve(plot_request.flavor, kind))
-                {
-                    graph->Draw("PL3");
-                }
+                graph->Draw("PL3");
             }
 
             if (i == 0)

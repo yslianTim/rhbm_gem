@@ -13,9 +13,9 @@
 namespace rhbm_gem::test_data_factory
 {
 
-enum class AtomNeighborType
+enum class AtomNeighborType : int
 {
-    None, C, CA, N, O
+    None = 0, O = 1, N = 2, C = 3, CA = 4
 };
 
 struct RHBMBetaTestInput
