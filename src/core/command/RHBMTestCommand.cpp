@@ -46,13 +46,6 @@ constexpr std::string_view kFitRangeIssue{ "--fit-range" };
 constexpr std::string_view kAlphaROption{ "--alpha-r" };
 constexpr std::string_view kAlphaGOption{ "--alpha-g" };
 constexpr int kGausParSize{ GaussianModel3D::ParameterSize() };
-struct RHBMTestExecutionContext
-{
-    const RHBMTestRequest & options;
-    int thread_size;
-    const std::filesystem::path & output_folder;
-};
-
 struct BetaScenarioConfig
 {
     int replica_size;
@@ -201,13 +194,13 @@ std::string FormatMemberBiasPanelLabel(size_t panel_index)
 }
 
 test_data_factory::TestDataBuildOptions BuildTestDataOptions(
-    const RHBMTestExecutionContext & options)
+    const RHBMTestRequest & request)
 {
     return test_data_factory::TestDataBuildOptions{
         linearization_service::LinearizationSpec::AtomDecode(),
         linearization_service::LinearizationRange{
-            options.options.fit_range_min,
-            options.options.fit_range_max
+            request.fit_range_min,
+            request.fit_range_max
         }
     };
 }
@@ -348,7 +341,7 @@ bool TryAppendBenchmarkLinearizedPanel(
 }
 
 void SaveBenchmarkLinearizedDatasetReport(
-    const RHBMTestExecutionContext & options,
+    const RHBMTestRequest & request,
     double error_sigma,
     const std::vector<LinePlotPanel> & panels)
 {
@@ -360,23 +353,23 @@ void SaveBenchmarkLinearizedDatasetReport(
         return;
     }
 
-    LinePlotRequest request;
-    request.output_path = options.output_folder /
+    LinePlotRequest line_plot_request;
+    line_plot_request.output_path = request.output_dir /
         std::string("benchmark_cut_vs_no_cut_sigma_" + FormatSigmaToken(error_sigma) + ".pdf");
-    request.title = "";
-    request.x_axis.title = "Linearized Basis";
-    request.shared_y_axis_title = "Linearized Response";
-    request.panels = panels;
-    request.canvas_width = 2000;
-    request.canvas_height_per_panel = 200;
+    line_plot_request.title = "";
+    line_plot_request.x_axis.title = "Linearized Basis";
+    line_plot_request.shared_y_axis_title = "Linearized Response";
+    line_plot_request.panels = panels;
+    line_plot_request.canvas_width = 2000;
+    line_plot_request.canvas_height_per_panel = 200;
 
-    const auto plot_result{ local_painter::SaveLinePlot(request) };
+    const auto plot_result{ local_painter::SaveLinePlot(line_plot_request) };
     if (!plot_result.Succeeded())
     {
         Logger::Log(
             LogLevel::Warning,
             "Failed to emit benchmark linearized dataset report '"
-                + request.output_path.string() + "': " + plot_result.message);
+                + line_plot_request.output_path.string() + "': " + plot_result.message);
     }
 }
 
@@ -562,17 +555,17 @@ TGraphErrors * FindBiasGraph(
 } // namespace
 
 void PrintDataOutlierResult(
-    const RHBMTestExecutionContext & options,
-    const BiasPlotRequest & request
+    const RHBMTestRequest & request,
+    const BiasPlotRequest & plot_request
 );
 
 void PrintMemberOutlierResult(
-    const RHBMTestExecutionContext & options,
-    const BiasPlotRequest & request
+    const RHBMTestRequest & request,
+    const BiasPlotRequest & plot_request
 );
 
 void PrintAtomSamplingDataSummary(
-    const RHBMTestExecutionContext & options,
+    const RHBMTestRequest & request,
     const std::string & name,
     const std::vector<LocalPotentialSampleList> & sampling_entries_list,
     const std::vector<double> & distance_list
@@ -587,7 +580,7 @@ std::unique_ptr<TH2D> CreateDistanceToResponseHistogram(
     int x_bin_size, int y_bin_size = 500);
 #endif
 
-void RunSimulationTestOnBenchMark(const RHBMTestExecutionContext & options)
+void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
 {
     ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnBenchMark");
 
@@ -600,7 +593,7 @@ void RunSimulationTestOnBenchMark(const RHBMTestExecutionContext & options)
         BuildDescendingSweep(16, 2.5, 0.1)
     } };
     const auto model_par_prior{ MakeDefaultModelPrior() };
-    const auto test_data_options{ BuildTestDataOptions(options) };
+    const auto test_data_options{ BuildTestDataOptions(request) };
     for (auto error_sigma : scenario.error_list)
     {
         std::vector<LinePlotPanel> linearized_panels;
@@ -621,11 +614,11 @@ void RunSimulationTestOnBenchMark(const RHBMTestExecutionContext & options)
             rhbm_tester::RunBetaMDPDETest(
                 no_cut_result,
                 test_input.no_cut_input,
-                options.thread_size);
+                request.job_count);
             rhbm_tester::RunBetaMDPDETest(
                 cut_result,
                 test_input.cut_input,
-                options.thread_size);
+                request.job_count);
             TryAppendBenchmarkLinearizedPanel(
                 linearized_panels,
                 distance,
@@ -649,21 +642,21 @@ void RunSimulationTestOnBenchMark(const RHBMTestExecutionContext & options)
                    << " (Alpha-R = " << cut_result.mdpde.trained_alpha_average.value() << ")";
             Logger::Log(LogLevel::Info, stream.str());
         }
-        SaveBenchmarkLinearizedDatasetReport(options, error_sigma, linearized_panels);
+        SaveBenchmarkLinearizedDatasetReport(request, error_sigma, linearized_panels);
     }
 }
 
-void RunSimulationTestOnDataOutlier(const RHBMTestExecutionContext & options)
+void RunSimulationTestOnDataOutlier(const RHBMTestRequest & request)
 {
     ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnDataOutlier");
 
     const auto scenario{ BetaScenarioConfig{
         10,
         50,
-        std::vector<double>{ options.options.alpha_r }
+        std::vector<double>{ request.alpha_r }
     } };
     const auto model_par_prior{ MakeDefaultModelPrior() };
-    const auto test_data_options{ BuildTestDataOptions(options) };
+    const auto test_data_options{ BuildTestDataOptions(request) };
     std::vector<double> error_list{ 0.1, 0.2, 0.3 };
     const auto outlier_list{ BuildLinearSweep(9, 0.025) };
     BiasPlotRequest plot_request;
@@ -698,7 +691,7 @@ void RunSimulationTestOnDataOutlier(const RHBMTestExecutionContext & options)
             rhbm_tester::RunBetaMDPDETest(
                 bias,
                 test_input,
-                options.thread_size
+                request.job_count
             );
 
             AppendBiasCurvePoint(panel.curves.at(0), outlier_list.at(i), bias.ols);
@@ -717,17 +710,17 @@ void RunSimulationTestOnDataOutlier(const RHBMTestExecutionContext & options)
         plot_request.panels.emplace_back(std::move(panel));
     }
 
-    PrintDataOutlierResult(options, plot_request);
+    PrintDataOutlierResult(request, plot_request);
 }
 
-void RunSimulationTestOnMemberOutlier(const RHBMTestExecutionContext & options)
+void RunSimulationTestOnMemberOutlier(const RHBMTestRequest & request)
 {
     ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnMemberOutlier");
 
     const auto scenario{ MuScenarioConfig{
         100,
         100,
-        std::vector<double>{ options.options.alpha_g },
+        std::vector<double>{ request.alpha_g },
         std::vector<Eigen::VectorXd>{
             Eigen::VectorXd::Zero(kGausParSize),
             Eigen::VectorXd::Zero(kGausParSize)
@@ -743,7 +736,7 @@ void RunSimulationTestOnMemberOutlier(const RHBMTestExecutionContext & options)
 
     const auto model_par_prior{ MakeDefaultModelPrior() };
     const auto model_par_sigma{ MakeDefaultModelSigma() };
-    const auto test_data_options{ BuildTestDataOptions(options) };
+    const auto test_data_options{ BuildTestDataOptions(request) };
     const auto outlier_list{ BuildLinearSweep(9, 0.025) };
     BiasPlotRequest plot_request;
     plot_request.output_name = "bias_outlier_in_member.pdf";
@@ -779,7 +772,7 @@ void RunSimulationTestOnMemberOutlier(const RHBMTestExecutionContext & options)
             rhbm_tester::RunMuMDPDETest(
                 bias,
                 test_input,
-                options.thread_size
+                request.job_count
             );
 
             AppendBiasCurvePoint(panel.curves.at(0), outlier_list.at(i), bias.median);
@@ -798,20 +791,20 @@ void RunSimulationTestOnMemberOutlier(const RHBMTestExecutionContext & options)
         plot_request.panels.emplace_back(std::move(panel));
     }
 
-    PrintMemberOutlierResult(options, plot_request);
+    PrintMemberOutlierResult(request, plot_request);
 }
 
-void RunSimulationTestOnModelAlphaData(const RHBMTestExecutionContext & options)
+void RunSimulationTestOnModelAlphaData(const RHBMTestRequest & request)
 {
     ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnModelAlphaData");
 
     const auto scenario{ BetaScenarioConfig{
         10,
         50,
-        std::vector<double>{ options.options.alpha_r }
+        std::vector<double>{ request.alpha_r }
     } };
     const auto model_par_prior{ MakeDefaultModelPrior() };
-    const auto test_data_options{ BuildTestDataOptions(options) };
+    const auto test_data_options{ BuildTestDataOptions(request) };
     std::vector<double> error_list{ 0.1, 0.2, 0.3 };
     const auto outlier_list{ BuildLinearSweep(10, 0.05) };
     BiasPlotRequest plot_request;
@@ -845,7 +838,7 @@ void RunSimulationTestOnModelAlphaData(const RHBMTestExecutionContext & options)
             rhbm_tester::RunBetaMDPDETest(
                 bias,
                 test_input,
-                options.thread_size
+                request.job_count
             );
 
             AppendBiasCurvePoint(
@@ -863,17 +856,17 @@ void RunSimulationTestOnModelAlphaData(const RHBMTestExecutionContext & options)
         plot_request.panels.emplace_back(std::move(panel));
     }
 
-    PrintDataOutlierResult(options, plot_request);
+    PrintDataOutlierResult(request, plot_request);
 }
 
-void RunSimulationTestOnModelAlphaMember(const RHBMTestExecutionContext & options)
+void RunSimulationTestOnModelAlphaMember(const RHBMTestRequest & request)
 {
     ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnModelAlphaMember");
 
     const auto scenario{ MuScenarioConfig{
         100,
         100,
-        std::vector<double>{ options.options.alpha_g },
+        std::vector<double>{ request.alpha_g },
         std::vector<Eigen::VectorXd>{
             Eigen::VectorXd::Zero(kGausParSize),
             Eigen::VectorXd::Zero(kGausParSize)
@@ -889,7 +882,7 @@ void RunSimulationTestOnModelAlphaMember(const RHBMTestExecutionContext & option
 
     const auto model_par_prior{ MakeDefaultModelPrior() };
     const auto model_par_sigma{ MakeDefaultModelSigma() };
-    const auto test_data_options{ BuildTestDataOptions(options) };
+    const auto test_data_options{ BuildTestDataOptions(request) };
     const auto outlier_list{ BuildLinearSweep(10, 0.05) };
     BiasPlotRequest plot_request;
     plot_request.output_name = "bias_outlier_with_alpha_in_member.pdf";
@@ -924,7 +917,7 @@ void RunSimulationTestOnModelAlphaMember(const RHBMTestExecutionContext & option
             rhbm_tester::RunMuMDPDETest(
                 bias,
                 test_input,
-                options.thread_size
+                request.job_count
             );
 
             AppendBiasCurvePoint(
@@ -942,10 +935,10 @@ void RunSimulationTestOnModelAlphaMember(const RHBMTestExecutionContext & option
         plot_request.panels.emplace_back(std::move(panel));
     }
 
-    PrintMemberOutlierResult(options, plot_request);
+    PrintMemberOutlierResult(request, plot_request);
 }
 
-void RunSimulationTestOnNeighborDistance(const RHBMTestExecutionContext & options)
+void RunSimulationTestOnNeighborDistance(const RHBMTestRequest & request)
 {
     ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnNeighborDistance");
 
@@ -958,7 +951,7 @@ void RunSimulationTestOnNeighborDistance(const RHBMTestExecutionContext & option
         BuildDescendingSweep(16, 2.5, 0.1)
     } };
     const auto model_par_prior{ MakeDefaultModelPrior() };
-    const auto test_data_options{ BuildTestDataOptions(options) };
+    const auto test_data_options{ BuildTestDataOptions(request) };
     BiasPlotRequest plot_request;
     plot_request.output_name = "bias_from_neighbor_atom.pdf";
     plot_request.flavor = BiasPlotFlavor::NeighborDistance;
@@ -993,12 +986,12 @@ void RunSimulationTestOnNeighborDistance(const RHBMTestExecutionContext & option
             rhbm_tester::RunBetaMDPDETest(
                 no_cut_result,
                 test_input.no_cut_input,
-                options.thread_size
+                request.job_count
             );
             rhbm_tester::RunBetaMDPDETest(
                 cut_result,
                 test_input.cut_input,
-                options.thread_size
+                request.job_count
             );
 
             sampling_entries_list.emplace_back(test_input.sampling_summaries.front());
@@ -1029,7 +1022,7 @@ void RunSimulationTestOnNeighborDistance(const RHBMTestExecutionContext & option
         if (!is_print_sampling_summary)
         {
             PrintAtomSamplingDataSummary(
-                options,
+                request,
                 "neighbor_atom_sampling_entries.pdf",
                 sampling_entries_list, scenario.distance_list
             );
@@ -1037,14 +1030,14 @@ void RunSimulationTestOnNeighborDistance(const RHBMTestExecutionContext & option
         }
     }
 
-    PrintDataOutlierResult(options, plot_request);
+    PrintDataOutlierResult(request, plot_request);
 }
 
 void PrintDataOutlierResult(
-    const RHBMTestExecutionContext & options,
-    const BiasPlotRequest & request)
+    const RHBMTestRequest & request,
+    const BiasPlotRequest & plot_request)
 {
-    auto file_path{ options.output_folder / request.output_name };
+    auto file_path{ request.output_dir / plot_request.output_name };
     Logger::Log(LogLevel::Info, " RHBMTestCommand::PrintDataOutlierResult");
 
     std::vector<std::string> title_y_list{
@@ -1068,7 +1061,7 @@ void PrintDataOutlierResult(
     std::vector<double> global_y_array[row_size];
     for (size_t i = 0; i < col_size; i++)
     {
-        const auto & panel{ request.panels.at(i) };
+        const auto & panel{ plot_request.panels.at(i) };
         for (size_t j = 0; j < row_size; j++)
         {
             for (const auto & curve : panel.curves)
@@ -1077,7 +1070,7 @@ void PrintDataOutlierResult(
                 for (size_t p = 0; p < curve.points.size(); p++)
                 {
                     const auto & point{ curve.points.at(p) };
-                    const auto x_value{ ScaleBiasPlotX(point.x, request.x_axis_mode) };
+                    const auto x_value{ ScaleBiasPlotX(point.x, plot_request.x_axis_mode) };
                     const auto mean{ point.bias.mean(static_cast<int>(j)) };
                     const auto sigma{ point.bias.sigma(static_cast<int>(j)) };
                     graph->SetPoint(static_cast<int>(p), x_value, mean);
@@ -1096,9 +1089,9 @@ void PrintDataOutlierResult(
     double y_max[row_size]{ 0.0 };
     for (size_t i = 0; i < col_size; i++)
     {
-        x_min[i] = (request.flavor == BiasPlotFlavor::ModelAlphaData) ? -2.0 : -0.7;
-        x_max[i] = (request.flavor == BiasPlotFlavor::ModelAlphaData) ? 47.0 : 22.0;
-        if (request.x_axis_mode == BiasXAxisMode::NeighborDistance)
+        x_min[i] = (plot_request.flavor == BiasPlotFlavor::ModelAlphaData) ? -2.0 : -0.7;
+        x_max[i] = (plot_request.flavor == BiasPlotFlavor::ModelAlphaData) ? 47.0 : 22.0;
+        if (plot_request.x_axis_mode == BiasXAxisMode::NeighborDistance)
         {
             x_min[i] = -2.6;
             x_max[i] = -0.8;
@@ -1144,8 +1137,8 @@ void PrintDataOutlierResult(
             {
                 const auto kind{ graph_kind_list[i][par_id].at(graph_index) };
                 auto & graph{ graph_list[i][par_id].at(graph_index) };
-                ApplyBiasCurveStyle(graph.get(), request.flavor, kind);
-                if (ShouldDrawBiasCurve(request.flavor, kind))
+                ApplyBiasCurveStyle(graph.get(), plot_request.flavor, kind);
+                if (ShouldDrawBiasCurve(plot_request.flavor, kind))
                 {
                     graph->Draw("PL3");
                 }
@@ -1170,7 +1163,7 @@ void PrintDataOutlierResult(
                 root_helper::SetPaveAttribute(title_x_text[i].get(), 0, 0.2);
                 root_helper::SetTextAttribute(title_x_text[i].get(), 45.0f, 133, 22);
                 root_helper::SetFillAttribute(title_x_text[i].get(), 1001, kRed+1, 0.5f);
-                title_x_text[i]->AddText(request.panels.at(static_cast<size_t>(i)).label.data());
+                title_x_text[i]->AddText(plot_request.panels.at(static_cast<size_t>(i)).label.data());
                 title_x_text[i]->Draw();
             }
         }
@@ -1189,12 +1182,12 @@ void PrintDataOutlierResult(
     root_helper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
     legend->SetMargin(0.25f);
     legend->SetNColumns(3);
-    for (const auto kind : GetBiasLegendOrder(request.flavor))
+    for (const auto kind : GetBiasLegendOrder(plot_request.flavor))
     {
         auto * graph{ FindBiasGraph(graph_list[0][0], graph_kind_list[0][0], kind) };
         if (graph != nullptr)
         {
-            legend->AddEntry(graph, GetBiasLegendLabel(request.flavor, kind).data(), "plf");
+            legend->AddEntry(graph, GetBiasLegendLabel(plot_request.flavor, kind).data(), "plf");
         }
     }
     legend->Draw();
@@ -1209,7 +1202,7 @@ void PrintDataOutlierResult(
     root_helper::SetPaveTextDefaultStyle(bottom_title_text.get());
     root_helper::SetFillAttribute(bottom_title_text.get(), 4000);
     root_helper::SetTextAttribute(bottom_title_text.get(), 45.0f, 133, 22);
-    if (request.x_axis_mode == BiasXAxisMode::NeighborDistance)
+    if (plot_request.x_axis_mode == BiasXAxisMode::NeighborDistance)
     {
         bottom_title_text->AddText("Distance to Neighbor Atom (Angstrom)");
     }
@@ -1241,10 +1234,10 @@ void PrintDataOutlierResult(
 }
 
 void PrintMemberOutlierResult(
-    const RHBMTestExecutionContext & options,
-    const BiasPlotRequest & request)
+    const RHBMTestRequest & request,
+    const BiasPlotRequest & plot_request)
 {
-    auto file_path{ options.output_folder / request.output_name };
+    auto file_path{ request.output_dir / plot_request.output_name };
     Logger::Log(LogLevel::Info, " RHBMTestCommand::PrintMemberOutlierResult");
 
     std::vector<std::string> title_y_list{
@@ -1268,7 +1261,7 @@ void PrintMemberOutlierResult(
     std::vector<double> global_y_array;
     for (size_t i = 0; i < col_size; i++)
     {
-        const auto & panel{ request.panels.at(i) };
+        const auto & panel{ plot_request.panels.at(i) };
         for (size_t j = 0; j < row_size; j++)
         {
             for (const auto & curve : panel.curves)
@@ -1277,7 +1270,7 @@ void PrintMemberOutlierResult(
                 for (size_t p = 0; p < curve.points.size(); p++)
                 {
                     const auto & point{ curve.points.at(p) };
-                    const auto x_value{ ScaleBiasPlotX(point.x, request.x_axis_mode) };
+                    const auto x_value{ ScaleBiasPlotX(point.x, plot_request.x_axis_mode) };
                     const auto mean{ point.bias.mean(static_cast<int>(j)) };
                     const auto sigma{ point.bias.sigma(static_cast<int>(j)) };
                     graph->SetPoint(static_cast<int>(p), x_value, mean);
@@ -1296,8 +1289,8 @@ void PrintMemberOutlierResult(
     double y_max[row_size]{ 0.0 };
     for (size_t i = 0; i < col_size; i++)
     {
-        x_min[i] = (request.flavor == BiasPlotFlavor::ModelAlphaMember) ? -2.0 : -0.7;
-        x_max[i] = (request.flavor == BiasPlotFlavor::ModelAlphaMember) ? 47.0 : 22.0;
+        x_min[i] = (plot_request.flavor == BiasPlotFlavor::ModelAlphaMember) ? -2.0 : -0.7;
+        x_max[i] = (plot_request.flavor == BiasPlotFlavor::ModelAlphaMember) ? 47.0 : 22.0;
     }
     auto y_range{ array_helper::ComputeScalingRangeTuple(global_y_array, 0.3) };
     for (size_t j = 0; j < row_size; j++)
@@ -1339,8 +1332,8 @@ void PrintMemberOutlierResult(
             {
                 const auto kind{ graph_kind_list[i][par_id].at(graph_index) };
                 auto & graph{ graph_list[i][par_id].at(graph_index) };
-                ApplyBiasCurveStyle(graph.get(), request.flavor, kind);
-                if (ShouldDrawBiasCurve(request.flavor, kind))
+                ApplyBiasCurveStyle(graph.get(), plot_request.flavor, kind);
+                if (ShouldDrawBiasCurve(plot_request.flavor, kind))
                 {
                     graph->Draw("PL3");
                 }
@@ -1365,7 +1358,7 @@ void PrintMemberOutlierResult(
                 root_helper::SetPaveAttribute(title_x_text[i].get(), 0, 0.2);
                 root_helper::SetTextAttribute(title_x_text[i].get(), 45.0f, 133, 22);
                 root_helper::SetFillAttribute(title_x_text[i].get(), 1001, kRed+1, 0.5f);
-                title_x_text[i]->AddText(request.panels.at(static_cast<size_t>(i)).label.data());
+                title_x_text[i]->AddText(plot_request.panels.at(static_cast<size_t>(i)).label.data());
                 title_x_text[i]->Draw();
             }
         }
@@ -1383,12 +1376,12 @@ void PrintMemberOutlierResult(
     root_helper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
     legend->SetMargin(0.25f);
     legend->SetNColumns(3);
-    for (const auto kind : GetBiasLegendOrder(request.flavor))
+    for (const auto kind : GetBiasLegendOrder(plot_request.flavor))
     {
         auto * graph{ FindBiasGraph(graph_list[0][0], graph_kind_list[0][0], kind) };
         if (graph != nullptr)
         {
-            legend->AddEntry(graph, GetBiasLegendLabel(request.flavor, kind).data(), "plf");
+            legend->AddEntry(graph, GetBiasLegendLabel(plot_request.flavor, kind).data(), "plf");
         }
     }
     legend->Draw();
@@ -1428,13 +1421,13 @@ void PrintMemberOutlierResult(
 }
 
 void PrintAtomSamplingDataSummary(
-    const RHBMTestExecutionContext & options,
+    const RHBMTestRequest & request,
     const std::string & name,
     const std::vector<LocalPotentialSampleList> & sampling_entries_list,
     const std::vector<double> & distance_list
 )
 {
-    auto file_path{ options.output_folder / name };
+    auto file_path{ request.output_dir / name };
     Logger::Log(LogLevel::Info, " RHBMTestCommand::PrintAtomSamplingDataSummary");
 
     #ifdef HAVE_ROOT
@@ -1545,33 +1538,33 @@ std::unique_ptr<TH2D> CreateDistanceToResponseHistogram(
 }
 #endif
 
-bool RunRHBMTestWorkflow(const RHBMTestExecutionContext & options)
+bool RunRHBMTestWorkflow(const RHBMTestRequest & request)
 {
-    switch (options.options.tester_choice)
+    switch (request.tester_choice)
     {
     case TesterType::BENCHMARK:
-        RunSimulationTestOnBenchMark(options);
+        RunSimulationTestOnBenchMark(request);
         return true;
     case TesterType::DATA_OUTLIER:
-        RunSimulationTestOnDataOutlier(options);
+        RunSimulationTestOnDataOutlier(request);
         return true;
     case TesterType::MEMBER_OUTLIER:
-        RunSimulationTestOnMemberOutlier(options);
+        RunSimulationTestOnMemberOutlier(request);
         return true;
     case TesterType::MODEL_ALPHA_DATA:
-        RunSimulationTestOnModelAlphaData(options);
+        RunSimulationTestOnModelAlphaData(request);
         return true;
     case TesterType::MODEL_ALPHA_MEMBER:
-        RunSimulationTestOnModelAlphaMember(options);
+        RunSimulationTestOnModelAlphaMember(request);
         return true;
     case TesterType::NEIGHBOR_DISTANCE:
-        RunSimulationTestOnNeighborDistance(options);
+        RunSimulationTestOnNeighborDistance(request);
         return true;
     default:
         Logger::Log(
             LogLevel::Error,
             "Invalid tester choice reached execution path: ["
-                + std::to_string(static_cast<int>(options.options.tester_choice)) + "]");
+                + std::to_string(static_cast<int>(request.tester_choice)) + "]");
         return false;
     }
 }
@@ -1631,11 +1624,7 @@ void RHBMTestCommand::ValidateOptions()
 
 bool RHBMTestCommand::ExecuteImpl()
 {
-    return RunRHBMTestWorkflow(RHBMTestExecutionContext{
-        RequestOptions(),
-        ThreadSize(),
-        OutputFolder(),
-    });
+    return RunRHBMTestWorkflow(RequestOptions());
 }
 
 } // namespace rhbm_gem
