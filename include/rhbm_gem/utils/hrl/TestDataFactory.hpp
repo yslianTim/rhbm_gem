@@ -13,6 +13,11 @@
 namespace rhbm_gem::test_data_factory
 {
 
+enum class AtomNeighborType
+{
+    None, C, CA, N, O
+};
+
 struct RHBMBetaTestInput
 {
     GaussianModel3D gaus_true;
@@ -87,6 +92,22 @@ struct NeighborhoodScenario
     std::optional<std::uint32_t> random_seed{};
 };
 
+struct AtomNeighborhoodScenario
+{
+    AtomNeighborType neighbor_type{ AtomNeighborType::None };
+    GaussianModel3D gaus_true;
+    int sampling_entry_size{ 1 };
+    double data_error_sigma{ 1.0 };
+    double radius_min{ 0.0 };
+    double radius_max{ 1.0 };
+    double rejected_angle{ 0.0 };
+    bool include_sampling_summary{ false };
+    double summary_radius_min{ 0.0 };
+    double summary_radius_max{ 1.0 };
+    int replica_size{ 1 };
+    std::optional<std::uint32_t> random_seed{};
+};
+
 RHBMBetaTestInput BuildBetaTestInput(
     const BetaScenario & scenario,
     const TestDataBuildOptions & options = {});
@@ -97,6 +118,10 @@ RHBMMuTestInput BuildMuTestInput(
 
 RHBMNeighborhoodTestInput BuildNeighborhoodTestInput(
     const NeighborhoodScenario & scenario,
+    const TestDataBuildOptions & options = {});
+
+RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
+    const AtomNeighborhoodScenario & scenario,
     const TestDataBuildOptions & options = {});
 
 } // namespace rhbm_gem::test_data_factory

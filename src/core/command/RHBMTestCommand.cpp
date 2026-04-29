@@ -607,53 +607,66 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
 {
     ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnBenchMark");
 
+    const auto error_sigma{ 0.0 };
     const auto model_par_prior{ MakeDefaultModelPrior() };
-    const auto sweep{ NeighborDistanceSweepConfig{
-        BuildBaseNeighborDistanceScenario(model_par_prior, 3),
-        std::vector<double>{ 0.0 },
-        BuildDescendingSweep(16, 2.5, 0.1)
-    } };
     const auto test_data_options{ BuildTestDataOptions(request) };
-    for (auto error_sigma : sweep.error_list)
-    {
-        std::vector<LinePlotPanel> linearized_panels;
-        linearized_panels.reserve(sweep.distance_list.size());
-        for (double distance : sweep.distance_list)
-        {
-            const auto test_input{
-                test_data_factory::BuildNeighborhoodTestInput(
-                    BuildNeighborDistanceScenario(sweep.base_scenario, error_sigma, distance),
-                    test_data_options)
-            };
-            rhbm_tester::BetaMDPDETestBias no_cut_result;
-            rhbm_tester::BetaMDPDETestBias cut_result;
-            rhbm_tester::RunBetaMDPDETest(no_cut_result, test_input.no_cut_input, request.job_count);
-            rhbm_tester::RunBetaMDPDETest(cut_result, test_input.cut_input, request.job_count);
-            TryAppendBenchmarkLinearizedPanel(
-                linearized_panels,
-                distance,
-                test_input.no_cut_input.replica_datasets.front(),
-                test_input.cut_input.replica_datasets.front());
 
-            std::ostringstream stream;
-            stream << "Distance: " << distance
-                   << " , OLS (No Cut): "
-                   << no_cut_result.ols.mean(0) << " , "
-                   << no_cut_result.ols.mean(1) << " , "
-                   << no_cut_result.ols.mean(2)
-                   << " , MDPDE (No Cut): "
-                   << no_cut_result.mdpde.trained_alpha.value().mean(0) << " , "
-                   << no_cut_result.mdpde.trained_alpha.value().mean(1) << " , "
-                   << no_cut_result.mdpde.trained_alpha.value().mean(2)
-                   << " , MDPDE (Cut): "
-                   << cut_result.mdpde.trained_alpha.value().mean(0) << " , "
-                   << cut_result.mdpde.trained_alpha.value().mean(1) << " , "
-                   << cut_result.mdpde.trained_alpha.value().mean(2)
-                   << " (Alpha-R = " << cut_result.mdpde.trained_alpha_average.value() << ")";
-            Logger::Log(LogLevel::Info, stream.str());
-        }
-        SaveBenchmarkLinearizedDatasetReport(request, error_sigma, linearized_panels);
+    std::vector<test_data_factory::AtomNeighborType> neighbor_type_list{
+        test_data_factory::AtomNeighborType::O,
+        test_data_factory::AtomNeighborType::N,
+        test_data_factory::AtomNeighborType::C,
+        test_data_factory::AtomNeighborType::CA
+    };
+
+    std::vector<rhbm_tester::BetaMDPDETestBias> no_cut_results;
+    std::vector<rhbm_tester::BetaMDPDETestBias> cut_results;
+    for (const auto neighbor_type : neighbor_type_list)
+    {
+        test_data_factory::AtomNeighborhoodScenario base_scenario;
+        base_scenario.gaus_true = GaussianModel3D::FromVector(model_par_prior);
+        base_scenario.sampling_entry_size = 50;
+        base_scenario.data_error_sigma = error_sigma;
+        base_scenario.radius_min = test_data_options.fitting_range.min;
+        base_scenario.radius_max = test_data_options.fitting_range.max;
+        base_scenario.neighbor_type = neighbor_type;
+        base_scenario.rejected_angle = 45.0;
+        base_scenario.include_sampling_summary = false;
+        base_scenario.summary_radius_min = 0.0;
+        base_scenario.summary_radius_max = 4.0;
+        base_scenario.replica_size = 10;
+
+        std::vector<LinePlotPanel> linearized_panels;
+        linearized_panels.reserve(1);
+
+        const auto test_input{
+            test_data_factory::BuildAtomNeighborhoodTestInput(base_scenario, test_data_options)
+        };
+        rhbm_tester::BetaMDPDETestBias no_cut_result;
+        rhbm_tester::BetaMDPDETestBias cut_result;
+        rhbm_tester::RunBetaMDPDETest(no_cut_result, test_input.no_cut_input, request.job_count);
+        rhbm_tester::RunBetaMDPDETest(cut_result, test_input.cut_input, request.job_count);
+        TryAppendBenchmarkLinearizedPanel(
+            linearized_panels,
+            0.0,
+            test_input.no_cut_input.replica_datasets.front(),
+            test_input.cut_input.replica_datasets.front());
+
+        std::ostringstream stream;
+        stream  << " OLS   (No Cut): " << std::setprecision(3) << std::fixed
+                << no_cut_result.ols.mean(0) << " , "
+                << no_cut_result.ols.mean(1)
+                << " , MDPDE (No Cut): "
+                << no_cut_result.mdpde.trained_alpha.value().mean(0) << " , "
+                << no_cut_result.mdpde.trained_alpha.value().mean(1)
+                << " , MDPDE (Cut):    "
+                << cut_result.mdpde.trained_alpha.value().mean(0) << " , "
+                << cut_result.mdpde.trained_alpha.value().mean(1)
+                << " (Alpha-R = " << cut_result.mdpde.trained_alpha_average.value() << ")";
+        Logger::Log(LogLevel::Info, stream.str());
+        //SaveBenchmarkLinearizedDatasetReport(request, error_sigma, linearized_panels);
     }
+
+    PrintDataOutlierResult(request, plot_request);    
 }
 
 void RunSimulationTestOnDataOutlier(const RHBMTestRequest & request)

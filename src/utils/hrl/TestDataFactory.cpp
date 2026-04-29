@@ -27,6 +27,14 @@ struct NeighborhoodSamplingOptions
     double reject_angle_deg{ 0.0 };
 };
 
+struct AtomNeighborhoodSamplingOptions
+{
+    double radius_min{ 0.0 };
+    double radius_max{ 1.0 };
+    test_data_factory::AtomNeighborType neighbor_type{ test_data_factory::AtomNeighborType::None };
+    double reject_angle_deg{ 0.0 };
+};
+
 std::mt19937 BuildReplicaGenerator(
     int replica_index,
     const std::optional<std::uint32_t> & random_seed)
@@ -70,6 +78,22 @@ double ComputeGaussianResponseWithNeighborhood3D(
     for (const auto & neighbor_center : neighbor_center_list)
     {
         response += ComputeGaussianResponseAtPoint3D(point, neighbor_center, width);
+    }
+    return response;
+}
+
+double ComputeGaussianResponseWithAtomNeighborhood3D(
+    const Eigen::VectorXd & point,
+    const Eigen::VectorXd & center,
+    const std::vector<Eigen::VectorXd> & neighbor_center_list,
+    const std::vector<double> & neighbor_amplitude_list,
+    double width)
+{
+    auto response{ ComputeGaussianResponseAtPoint3D(point, center, width) };
+    for (size_t i = 0; i < neighbor_center_list.size(); i++)
+    {
+        response += neighbor_amplitude_list[i] *
+            ComputeGaussianResponseAtPoint3D(point, neighbor_center_list[i], width);
     }
     return response;
 }
@@ -127,6 +151,88 @@ std::vector<Eigen::VectorXd> BuildNeighborCenterList(
     }
 
     return neighbor_center_list;
+}
+
+std::tuple<std::vector<Eigen::VectorXd>, std::vector<double>>
+BuildAtomNeighborCenterList(const AtomNeighborhoodSamplingOptions & options)
+{
+    std::vector<Eigen::VectorXd> neighbor_center_list;
+    std::vector<double> neighbor_amplitude_list;
+    neighbor_center_list.reserve(4);
+    neighbor_amplitude_list.reserve(4);
+
+    Eigen::VectorXd neighbor_center[4];
+    for (size_t i = 0; i < 4; i++) neighbor_center[i] = Eigen::VectorXd::Zero(3);
+
+    if (options.neighbor_type == test_data_factory::AtomNeighborType::None)
+    {
+        return std::make_tuple(neighbor_center_list, neighbor_amplitude_list);
+    }
+
+    if (options.neighbor_type == test_data_factory::AtomNeighborType::O)
+    {
+        neighbor_center[0] << 1.0, 0.0, 0.0;
+        neighbor_center[0] *= 1.23; // C=O bond length
+        neighbor_center_list.emplace_back(neighbor_center[0]);
+        neighbor_amplitude_list.emplace_back(6.0/8.0);
+        return std::make_tuple(neighbor_center_list, neighbor_amplitude_list);
+    }
+
+    if (options.neighbor_type == test_data_factory::AtomNeighborType::N)
+    {
+        neighbor_center[0] << 1.0, 0.0, 0.0;
+        neighbor_center[1] << -0.5, std::sqrt(3) / 2.0, 0.0;
+        neighbor_center[2] << -0.5, -std::sqrt(3) / 2.0, 0.0;
+        neighbor_center[0] *= 1.02; // N-H bond length
+        neighbor_center[1] *= 1.48; // N-C bond length
+        neighbor_center[2] *= 1.48; // N-C bond length
+        neighbor_center_list.emplace_back(neighbor_center[0]);
+        neighbor_center_list.emplace_back(neighbor_center[1]);
+        neighbor_center_list.emplace_back(neighbor_center[2]);
+        neighbor_amplitude_list.emplace_back(1.0/7.0);
+        neighbor_amplitude_list.emplace_back(6.0/7.0);
+        neighbor_amplitude_list.emplace_back(6.0/7.0);
+        return std::make_tuple(neighbor_center_list, neighbor_amplitude_list);
+    }
+
+    if (options.neighbor_type == test_data_factory::AtomNeighborType::C)
+    {
+        neighbor_center[0] << 1.0, 0.0, 0.0;
+        neighbor_center[1] << -0.5, std::sqrt(3) / 2.0, 0.0;
+        neighbor_center[2] << -0.5, -std::sqrt(3) / 2.0, 0.0;
+        neighbor_center[0] *= 1.23; // C=O bond length
+        neighbor_center[1] *= 1.48; // C-N bond length
+        neighbor_center[2] *= 1.54; // C-C bond length
+        neighbor_center_list.emplace_back(neighbor_center[0]);
+        neighbor_center_list.emplace_back(neighbor_center[1]);
+        neighbor_center_list.emplace_back(neighbor_center[2]);
+        neighbor_amplitude_list.emplace_back(8.0/6.0);
+        neighbor_amplitude_list.emplace_back(7.0/6.0);
+        neighbor_amplitude_list.emplace_back(1.0);
+        return std::make_tuple(neighbor_center_list, neighbor_amplitude_list);
+    }
+
+    if (options.neighbor_type == test_data_factory::AtomNeighborType::CA)
+    {
+        neighbor_center[0] << 0.0, 0.0, 1.0;
+        neighbor_center[1] << 0.0, 2.0 * std::sqrt(2) / 3.0, -1.0 / 3.0;
+        neighbor_center[2] << -std::sqrt(6) / 3.0, -std::sqrt(2) / 3.0, -1.0 / 3.0;
+        neighbor_center[3] << std::sqrt(6) / 3.0, -std::sqrt(2) / 3.0, -1.0 / 3.0;
+        neighbor_center[0] *= 1.06; // C-H bond length
+        neighbor_center[1] *= 1.48; // C-N bond length
+        neighbor_center[2] *= 1.54; // C-C bond length
+        neighbor_center[3] *= 1.54; // C-C bond length
+        neighbor_center_list.emplace_back(neighbor_center[0]);
+        neighbor_center_list.emplace_back(neighbor_center[1]);
+        neighbor_center_list.emplace_back(neighbor_center[2]);
+        neighbor_center_list.emplace_back(neighbor_center[3]);
+        neighbor_amplitude_list.emplace_back(1.0/6.0);
+        neighbor_amplitude_list.emplace_back(7.0/6.0);
+        neighbor_amplitude_list.emplace_back(1.0);
+        neighbor_amplitude_list.emplace_back(1.0);
+        return std::make_tuple(neighbor_center_list, neighbor_amplitude_list);
+    }
+    return std::make_tuple(neighbor_center_list, neighbor_amplitude_list);
 }
 
 LocalPotentialSampleList GenerateRadialSamples(
@@ -241,6 +347,79 @@ LocalPotentialSampleList GenerateNeighborhoodSamples(
     return sample_list;
 }
 
+LocalPotentialSampleList GenerateAtomNeighborhoodSamples(
+    size_t samples_per_radius,
+    const GaussianModel3D & model,
+    const AtomNeighborhoodSamplingOptions & options)
+{
+    numeric_validation::RequirePositive(samples_per_radius, "samples_per_radius");
+    GaussianModel3D::RequireFinitePositiveWidthModel(model);
+    numeric_validation::RequireFiniteNonNegativeRange(
+        options.radius_min,
+        options.radius_max,
+        "radius range");
+
+    auto [neighbor_center_list, neighbor_amplitude_list]{ BuildAtomNeighborCenterList(options) };
+    const Eigen::VectorXd atom_center{ Eigen::VectorXd::Zero(3) };
+
+    SphereSampler sampler;
+    sampler.SetSamplingProfile(
+        SphereSamplingProfile::FibonacciDeterministic(
+            SphereDistanceRange{ options.radius_min, options.radius_max },
+            0.1,
+            static_cast<unsigned int>(samples_per_radius),
+            false
+        )
+    );
+    const auto sampling_points{ sampler.GenerateSamplingPoints({ 0.0f, 0.0f, 0.0f }) };
+    const auto sampling_scores{
+        BuildLocalPotentialSampleScoreList(
+            sampling_points, neighbor_center_list, options.reject_angle_deg)
+    };
+    LocalPotentialSampleList sample_list;
+    sample_list.reserve(static_cast<size_t>(std::count_if(
+        sampling_scores.begin(),
+        sampling_scores.end(),
+        [](float score)
+        {
+            return score > 0.0f;
+        })));
+
+    for (size_t i = 0; i < sampling_points.size(); i++)
+    {
+        const auto & sampling_point{ sampling_points.at(i) };
+        const auto sampling_score{ sampling_scores.at(i) };
+        if (sampling_score <= 0.0f)
+        {
+            continue;
+        }
+
+        Eigen::VectorXd point{ Eigen::VectorXd::Zero(3) };
+        point(0) = sampling_point.position[0];
+        point(1) = sampling_point.position[1];
+        point(2) = sampling_point.position[2];
+
+        const auto response{
+            model.GetAmplitude() * ComputeGaussianResponseWithAtomNeighborhood3D(
+                point,
+                atom_center,
+                neighbor_center_list,
+                neighbor_amplitude_list,
+                model.GetWidth()
+            ) +
+            model.GetIntercept()
+        };
+        sample_list.emplace_back(LocalPotentialSample{
+            sampling_point.distance,
+            static_cast<float>(response),
+            sampling_score,
+            sampling_point.position
+        });
+    }
+
+    return sample_list;
+}
+
 LocalPotentialSampleList BuildGaussianSampling(
     size_t sampling_entry_size,
     const GaussianModel3D & model,
@@ -329,6 +508,25 @@ SeriesPointList BuildLinearDatasetWithNeighborhood(
     std::mt19937 & generator)
 {
     const auto sampling_entries{ GenerateNeighborhoodSamples(samples_per_radius, model, options) };
+    return BuildLinearDataset(
+        sampling_entries,
+        model,
+        error_sigma,
+        fit_range_min,
+        fit_range_max,
+        generator);
+}
+
+SeriesPointList BuildLinearDatasetWithAtomNeighborhood(
+    size_t samples_per_radius,
+    const GaussianModel3D & model,
+    double error_sigma,
+    const AtomNeighborhoodSamplingOptions & options,
+    double fit_range_min,
+    double fit_range_max,
+    std::mt19937 & generator)
+{
+    const auto sampling_entries{ GenerateAtomNeighborhoodSamples(samples_per_radius, model, options) };
     return BuildLinearDataset(
         sampling_entries,
         model,
@@ -562,6 +760,91 @@ RHBMNeighborhoodTestInput BuildNeighborhoodTestInput(
         };
         const auto cut_data_entry_list{
             BuildLinearDatasetWithNeighborhood(
+                static_cast<size_t>(scenario.sampling_entry_size),
+                scenario.gaus_true,
+                scenario.data_error_sigma,
+                cut_options,
+                options.fitting_range.min,
+                options.fitting_range.max,
+                generator
+            )
+        };
+        input.no_cut_input.replica_datasets.emplace_back(
+            rhbm_helper::BuildMemberDataset(no_cut_data_entry_list)
+        );
+        input.cut_input.replica_datasets.emplace_back(
+            rhbm_helper::BuildMemberDataset(cut_data_entry_list)
+        );
+    }
+
+    return input;
+}
+
+RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
+    const AtomNeighborhoodScenario & scenario,
+    const TestDataBuildOptions & options)
+{
+    numeric_validation::RequireFiniteNonNegativeRange(
+        options.fitting_range.min,
+        options.fitting_range.max,
+        "fitting range");
+    numeric_validation::RequirePositive(scenario.sampling_entry_size, "sampling_entry_size");
+    numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
+    GaussianModel3D::RequireFinitePositiveWidthModel(scenario.gaus_true, "scenario.gaus_true");
+
+    const AtomNeighborhoodSamplingOptions no_cut_options{
+        scenario.radius_min,
+        scenario.radius_max,
+        scenario.neighbor_type,
+        0.0
+    };
+    const AtomNeighborhoodSamplingOptions cut_options{
+        scenario.radius_min,
+        scenario.radius_max,
+        scenario.neighbor_type,
+        scenario.rejected_angle
+    };
+
+    RHBMNeighborhoodTestInput input;
+    input.no_cut_input.gaus_true = scenario.gaus_true;
+    input.no_cut_input.alpha_training = true;
+    input.cut_input.gaus_true = scenario.gaus_true;
+    input.cut_input.alpha_training = true;
+    input.no_cut_input.replica_datasets.reserve(static_cast<size_t>(scenario.replica_size));
+    input.cut_input.replica_datasets.reserve(static_cast<size_t>(scenario.replica_size));
+    if (scenario.include_sampling_summary)
+    {
+        input.sampling_summaries.reserve(1);
+        input.sampling_summaries.emplace_back(
+            GenerateAtomNeighborhoodSamples(
+                static_cast<size_t>(scenario.sampling_entry_size),
+                scenario.gaus_true,
+                AtomNeighborhoodSamplingOptions{
+                    scenario.summary_radius_min,
+                    scenario.summary_radius_max,
+                    scenario.neighbor_type,
+                    scenario.rejected_angle
+                }
+            )
+        );
+    }
+
+    for (int i = 0; i < scenario.replica_size; i++)
+    {
+        auto generator{ BuildReplicaGenerator(i, scenario.random_seed) };
+        const auto no_cut_data_entry_list{
+            BuildLinearDatasetWithAtomNeighborhood(
+                static_cast<size_t>(scenario.sampling_entry_size),
+                scenario.gaus_true,
+                scenario.data_error_sigma,
+                no_cut_options,
+                options.fitting_range.min,
+                options.fitting_range.max,
+                generator
+            )
+        };
+        const auto cut_data_entry_list{
+            BuildLinearDatasetWithAtomNeighborhood(
                 static_cast<size_t>(scenario.sampling_entry_size),
                 scenario.gaus_true,
                 scenario.data_error_sigma,
