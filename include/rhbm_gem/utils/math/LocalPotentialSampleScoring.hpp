@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <stdexcept>
@@ -7,12 +8,22 @@
 
 #include <Eigen/Dense>
 
+#include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
-#include <rhbm_gem/utils/math/SamplingPointAcceptanceMask.hpp>
+#include <rhbm_gem/utils/math/NumericValidation.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace rhbm_gem {
 namespace detail {
+
+inline Eigen::Vector3d ToVector3d(const std::array<float, 3> & position)
+{
+    return Eigen::Vector3d{
+        static_cast<double>(position[0]),
+        static_cast<double>(position[1]),
+        static_cast<double>(position[2])
+    };
+}
 
 inline Eigen::Vector3d ValidateAndConvertLocalPotentialRejectDirection(
     const Eigen::VectorXd & reject_direction)
@@ -47,6 +58,53 @@ inline std::vector<Eigen::Vector3d> BuildLocalPotentialRejectPositionList(
     return reject_position_list;
 }
 
+inline std::vector<Eigen::Vector3d> BuildLocalPotentialNormalizedRejectDirectionList(
+    const std::vector<Eigen::VectorXd> & reject_direction_list)
+{
+    std::vector<Eigen::Vector3d> normalized_reject_direction_list;
+    normalized_reject_direction_list.reserve(reject_direction_list.size());
+
+    for (const auto & reject_direction : reject_direction_list)
+    {
+        const auto direction{
+            ValidateAndConvertLocalPotentialRejectDirection(reject_direction)
+        };
+        const auto norm{ direction.norm() };
+        if (norm <= 0.0)
+        {
+            continue;
+        }
+
+        normalized_reject_direction_list.emplace_back(direction / norm);
+    }
+
+    return normalized_reject_direction_list;
+}
+
+inline bool ShouldRejectLocalPotentialSamplingPoint(
+    const SamplingPoint & point,
+    const std::vector<Eigen::Vector3d> & normalized_reject_direction_list,
+    double cos_threshold)
+{
+    const Eigen::Vector3d sampling_vector{ ToVector3d(point.position) };
+    const auto sampling_norm{ sampling_vector.norm() };
+    if (sampling_norm <= 0.0)
+    {
+        return false;
+    }
+
+    const Eigen::Vector3d normalized_sampling_direction{ sampling_vector / sampling_norm };
+    for (const auto & reject_direction : normalized_reject_direction_list)
+    {
+        if (normalized_sampling_direction.dot(reject_direction) > cos_threshold)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 inline float ComputeLocalPotentialCleanScore(
     const Eigen::Vector3d & sampling_position,
     const std::vector<Eigen::Vector3d> & reject_position_list)
@@ -79,10 +137,38 @@ inline std::vector<float> BuildLocalPotentialSampleScoreList(
 {
     // Callers provide score-policy inputs as plain data. This layer stays agnostic
     // to domain objects such as atoms and only owns the score calculation itself.
-    return BuildSamplingPointAcceptanceMask(point_list, reject_direction_list, angle);
+    numeric_validation::RequireFiniteInclusiveRange(angle, 0.0, 180.0, "angle");
+
+    std::vector<float> score_list(point_list.size(), 1.0f);
+    if (angle == 0.0)
+    {
+        return score_list;
+    }
+
+    const auto normalized_reject_direction_list{
+        detail::BuildLocalPotentialNormalizedRejectDirectionList(reject_direction_list)
+    };
+    if (normalized_reject_direction_list.empty())
+    {
+        return score_list;
+    }
+
+    const auto cos_threshold{ std::cos(angle * Constants::pi / 180.0) };
+    for (std::size_t i = 0; i < point_list.size(); i++)
+    {
+        if (detail::ShouldRejectLocalPotentialSamplingPoint(
+                point_list.at(i),
+                normalized_reject_direction_list,
+                cos_threshold))
+        {
+            score_list.at(i) = 0.0f;
+        }
+    }
+
+    return score_list;
 }
 
-inline std::vector<float> BuildLocalPotentialCleanSampleScoreList(
+inline std::vector<float> BuildLocalPotentialSampleCleanScoreList(
     const SamplingPointList & point_list,
     const std::vector<Eigen::VectorXd> & reject_direction_list)
 {
@@ -95,7 +181,7 @@ inline std::vector<float> BuildLocalPotentialCleanSampleScoreList(
     const auto reject_position_list{
         detail::BuildLocalPotentialRejectPositionList(reject_direction_list)
     };
-    for (size_t i = 0; i < point_list.size(); ++i)
+    for (std::size_t i = 0; i < point_list.size(); ++i)
     {
         score_list.at(i) = detail::ComputeLocalPotentialCleanScore(
             detail::ToVector3d(point_list.at(i).position),

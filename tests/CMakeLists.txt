@@ -133,7 +133,7 @@ set(UTILS_MATH_TEST_SOURCES
     utils/math/GaussianModel3D_test.cpp
     utils/math/NumericValidation_test.cpp
     utils/math/KDTreeAlgorithm_test.cpp
-    utils/math/SamplingPointAcceptanceMask_test.cpp
+    utils/math/LocalPotentialSampleScoring_test.cpp
     utils/math/CylinderSampler_test.cpp
     utils/math/GridSampler_test.cpp
     utils/math/SphereSampler_test.cpp
