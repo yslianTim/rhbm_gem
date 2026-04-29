@@ -15,7 +15,7 @@ namespace rhbm_gem::test_data_factory
 
 struct RHBMBetaTestInput
 {
-    Eigen::VectorXd gaus_true;
+    GaussianModel3D gaus_true;
     std::vector<RHBMMemberDataset> replica_datasets;
     std::vector<double> requested_alpha_r_list;
     bool alpha_training{ true };
@@ -23,7 +23,7 @@ struct RHBMBetaTestInput
 
 struct RHBMMuTestInput
 {
-    Eigen::VectorXd gaus_true;
+    GaussianModel3D gaus_true;
     std::vector<Eigen::MatrixXd> replica_beta_matrices;
     std::vector<double> requested_alpha_g_list;
     bool alpha_training{ true };

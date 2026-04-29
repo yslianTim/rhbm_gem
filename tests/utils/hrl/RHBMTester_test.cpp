@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <initializer_list>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -235,7 +236,7 @@ TEST(RHBMTesterTest, RunBetaMDPDETestAllowsEmptyAlphaListWithTraining)
     EXPECT_GE(bias.mdpde.trained_alpha_average.value(), 0.0);
 }
 
-TEST(RHBMTesterTest, RunBetaMDPDETestRejectsWrongSizedTruth)
+TEST(RHBMTesterTest, RunBetaMDPDETestRejectsNonFiniteTruth)
 {
     auto test_input{
         tdf::BuildBetaTestInput(tdf::BetaScenario{
@@ -247,7 +248,11 @@ TEST(RHBMTesterTest, RunBetaMDPDETestRejectsWrongSizedTruth)
             42
         })
     };
-    test_input.gaus_true = MakeVector({ 1.0, 0.5 });
+    test_input.gaus_true = rhbm_gem::GaussianModel3D{
+        std::numeric_limits<double>::quiet_NaN(),
+        0.5,
+        0.0
+    };
 
     rt::BetaMDPDETestBias bias;
 

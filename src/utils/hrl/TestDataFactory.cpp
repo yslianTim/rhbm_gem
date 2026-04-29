@@ -419,7 +419,7 @@ RHBMBetaTestInput BuildBetaTestInput(
     GaussianModel3D::RequireFinitePositiveWidthModel(scenario.gaus_true, "scenario.gaus_true");
 
     RHBMBetaTestInput input;
-    input.gaus_true = scenario.gaus_true.ToVector();
+    input.gaus_true = scenario.gaus_true;
     input.requested_alpha_r_list = scenario.requested_alpha_r_list;
     input.alpha_training = scenario.alpha_training;
     input.replica_datasets.reserve(static_cast<size_t>(scenario.replica_size));
@@ -468,7 +468,7 @@ RHBMMuTestInput BuildMuTestInput(
         "scenario.outlier_sigma");
 
     RHBMMuTestInput input;
-    input.gaus_true = scenario.gaus_prior;
+    input.gaus_true = GaussianModel3D::FromVector(scenario.gaus_prior);
     input.requested_alpha_g_list = scenario.requested_alpha_g_list;
     input.alpha_training = scenario.alpha_training;
     input.replica_beta_matrices.reserve(static_cast<size_t>(scenario.replica_size));
@@ -522,9 +522,9 @@ RHBMNeighborhoodTestInput BuildNeighborhoodTestInput(
     };
 
     RHBMNeighborhoodTestInput input;
-    input.no_cut_input.gaus_true = scenario.gaus_true.ToVector();
+    input.no_cut_input.gaus_true = scenario.gaus_true;
     input.no_cut_input.alpha_training = true;
-    input.cut_input.gaus_true = scenario.gaus_true.ToVector();
+    input.cut_input.gaus_true = scenario.gaus_true;
     input.cut_input.alpha_training = true;
     input.no_cut_input.replica_datasets.reserve(static_cast<size_t>(scenario.replica_size));
     input.cut_input.replica_datasets.reserve(static_cast<size_t>(scenario.replica_size));

@@ -239,8 +239,8 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputProvidesPairedDatasetsAndSam
 
     ASSERT_EQ(input.no_cut_input.replica_datasets.size(), 2u);
     ASSERT_EQ(input.cut_input.replica_datasets.size(), 2u);
-    EXPECT_TRUE(input.no_cut_input.gaus_true.isApprox(MakeVector({ 1.0, 0.5, 0.0 })));
-    EXPECT_TRUE(input.cut_input.gaus_true.isApprox(MakeVector({ 1.0, 0.5, 0.0 })));
+    EXPECT_TRUE(input.no_cut_input.gaus_true.ToVector().isApprox(MakeVector({ 1.0, 0.5, 0.0 })));
+    EXPECT_TRUE(input.cut_input.gaus_true.ToVector().isApprox(MakeVector({ 1.0, 0.5, 0.0 })));
     EXPECT_TRUE(input.no_cut_input.alpha_training);
     EXPECT_TRUE(input.cut_input.alpha_training);
     ASSERT_EQ(input.sampling_summaries.size(), 1u);
