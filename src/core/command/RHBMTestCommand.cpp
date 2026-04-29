@@ -593,11 +593,14 @@ TGraphErrors * FindBiasGraph(
 
 void ApplyNeighborTypeAxisLabels(TAxis * axis)
 {
-    axis->SetNdivisions(4, false);
-    axis->SetBinLabel(axis->FindBin(1.0), "O");
-    axis->SetBinLabel(axis->FindBin(2.0), "N");
-    axis->SetBinLabel(axis->FindBin(3.0), "C");
-    axis->SetBinLabel(axis->FindBin(4.0), "C_{#alpha}");
+    axis->SetNdivisions(5, false);
+    const auto label_color{ kCyan+3 };
+    axis->ChangeLabel(1, -1, 0, -1, -1, -1, "");
+    axis->ChangeLabel(2, -90.0, -1, -1, label_color, 103, "O");
+    axis->ChangeLabel(3, -90.0, -1, -1, label_color, 103, "N");
+    axis->ChangeLabel(4, -90.0, -1, -1, label_color, 103, "C");
+    axis->ChangeLabel(5, -90.0, -1, -1, label_color, 103, "C_{#alpha}");
+    axis->ChangeLabel(-1, -1, 0, -1, -1, -1, "");
 }
 #endif
 
