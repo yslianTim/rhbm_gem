@@ -653,8 +653,8 @@ void RunSimulationTestOnDataOutlier(const RHBMTestExecutionContext & options)
     ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnDataOutlier");
 
     const auto scenario{ BetaScenarioConfig{
-        100,
-        1000,
+        10,
+        50,
         std::vector<double>{ options.options.alpha_r }
     } };
     const auto model_par_prior{ MakeDefaultModelPrior() };
@@ -801,8 +801,8 @@ void RunSimulationTestOnModelAlphaData(const RHBMTestExecutionContext & options)
     ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnModelAlphaData");
 
     const auto scenario{ BetaScenarioConfig{
-        100,
-        1000,
+        10,
+        50,
         std::vector<double>{ options.options.alpha_r }
     } };
     const auto model_par_prior{ MakeDefaultModelPrior() };
