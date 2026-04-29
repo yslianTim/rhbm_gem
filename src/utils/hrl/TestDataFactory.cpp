@@ -455,6 +455,10 @@ LocalPotentialSampleList GenerateAtomNeighborhoodSamples(
         });
     }
 
+    if (options.reject_angle_deg == 0.0)
+    {
+        return sample_list;
+    }
     return KeepLowestResponseDecileByDistance(std::move(sample_list));
 }
 

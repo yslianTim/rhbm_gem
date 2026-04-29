@@ -633,7 +633,7 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
 {
     ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnBenchMark");
 
-    const auto error_sigma{ 0.0 };
+    const auto error_sigma{ 0.05 };
     const auto model_par_prior{ MakeDefaultModelPrior() };
     const auto test_data_options{ BuildTestDataOptions(request) };
 
@@ -660,16 +660,16 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
     {
         test_data_factory::AtomNeighborhoodScenario base_scenario;
         base_scenario.gaus_true = GaussianModel3D::FromVector(model_par_prior);
-        base_scenario.sampling_entry_size = 25;
+        base_scenario.sampling_entry_size = 50;
         base_scenario.data_error_sigma = error_sigma;
         base_scenario.radius_min = test_data_options.fitting_range.min;
         base_scenario.radius_max = test_data_options.fitting_range.max;
         base_scenario.neighbor_type = neighbor_type;
-        base_scenario.rejected_angle = 45.0;
+        base_scenario.rejected_angle = 15.0;
         base_scenario.include_sampling_summary = false;
         base_scenario.summary_radius_min = 0.0;
         base_scenario.summary_radius_max = 4.0;
-        base_scenario.replica_size = 1;
+        base_scenario.replica_size = 10;
 
         std::vector<LinePlotPanel> linearized_panels;
         linearized_panels.reserve(1);
@@ -1182,7 +1182,7 @@ void PrintDataOutlierResult(
                 auto & graph{ pad_graph_list.at(graph_index) };
                 ApplyBiasCurveStyle(graph.get(), plot_request.flavor, kind);
                 //graph->Draw("PL3");
-                graph->Draw("P");
+                graph->Draw("PL3");
             }
 
             if (i == 0)
