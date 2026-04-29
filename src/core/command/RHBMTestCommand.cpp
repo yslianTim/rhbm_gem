@@ -181,10 +181,7 @@ test_data_factory::TestDataBuildOptions BuildTestDataOptions(
 {
     return test_data_factory::TestDataBuildOptions{
         linearization_service::LinearizationSpec::AtomDecode(),
-        linearization_service::LinearizationRange{
-            request.fit_range_min,
-            request.fit_range_max
-        }
+        linearization_service::LinearizationRange{request.fit_range_min, request.fit_range_max}
     };
 }
 
