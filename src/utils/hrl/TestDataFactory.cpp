@@ -10,6 +10,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <iterator>
+#include <map>
 #include <random>
 #include <stdexcept>
 #include <vector>
@@ -34,6 +37,41 @@ struct AtomNeighborhoodSamplingOptions
     test_data_factory::AtomNeighborType neighbor_type{ test_data_factory::AtomNeighborType::None };
     double reject_angle_deg{ 0.0 };
 };
+
+LocalPotentialSampleList KeepLowestResponseDecileByDistance(LocalPotentialSampleList sample_list)
+{
+    std::map<float, LocalPotentialSampleList> samples_by_distance;
+    for (auto & sample : sample_list)
+    {
+        samples_by_distance[sample.distance].emplace_back(std::move(sample));
+    }
+
+    LocalPotentialSampleList retained_samples;
+    for (auto & distance_entry : samples_by_distance)
+    {
+        auto & distance_samples{ distance_entry.second };
+        std::stable_sort(
+            distance_samples.begin(),
+            distance_samples.end(),
+            [](const LocalPotentialSample & lhs, const LocalPotentialSample & rhs)
+            {
+                return lhs.response < rhs.response;
+            });
+
+        const auto keep_count{
+            std::max<size_t>(
+                1,
+                static_cast<size_t>(std::ceil(static_cast<double>(distance_samples.size()) * 0.1)))
+        };
+        retained_samples.insert(
+            retained_samples.end(),
+            std::make_move_iterator(distance_samples.begin()),
+            std::make_move_iterator(
+                distance_samples.begin() + static_cast<std::ptrdiff_t>(keep_count)));
+    }
+
+    return retained_samples;
+}
 
 std::mt19937 BuildReplicaGenerator(
     int replica_index,
@@ -417,7 +455,7 @@ LocalPotentialSampleList GenerateAtomNeighborhoodSamples(
         });
     }
 
-    return sample_list;
+    return KeepLowestResponseDecileByDistance(std::move(sample_list));
 }
 
 LocalPotentialSampleList BuildGaussianSampling(

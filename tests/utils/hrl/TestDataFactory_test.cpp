@@ -1,11 +1,17 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstddef>
 #include <initializer_list>
 #include <limits>
+#include <map>
+#include <vector>
 
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/hrl/TestDataFactory.hpp>
+#include <rhbm_gem/utils/math/SphereSampler.hpp>
 
 namespace {
 namespace tdf = rhbm_gem::test_data_factory;
@@ -27,6 +33,90 @@ double ComputeExpectedGaussianResponseAtDistance3D(double distance, double width
     const auto width_square{ width * width };
     return 1.0 / std::pow(Constants::two_pi * width_square, 1.5) *
         std::exp(-0.5 * distance * distance / width_square);
+}
+
+double ComputeDistance3D(
+    const std::array<float, 3> & position,
+    const std::array<double, 3> & center)
+{
+    const auto dx{ static_cast<double>(position[0]) - center[0] };
+    const auto dy{ static_cast<double>(position[1]) - center[1] };
+    const auto dz{ static_cast<double>(position[2]) - center[2] };
+    return std::sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+double ComputeExpectedAtomOResponse(
+    const SamplingPoint & sampling_point,
+    double amplitude,
+    double width,
+    double intercept)
+{
+    constexpr double oxygen_neighbor_amplitude{ 6.0 / 8.0 };
+    constexpr std::array<double, 3> oxygen_neighbor_center{ 1.23, 0.0, 0.0 };
+    return amplitude * (
+        ComputeExpectedGaussianResponseAtDistance3D(sampling_point.distance, width) +
+        oxygen_neighbor_amplitude * ComputeExpectedGaussianResponseAtDistance3D(
+            ComputeDistance3D(sampling_point.position, oxygen_neighbor_center),
+            width)) +
+        intercept;
+}
+
+LocalPotentialSampleList BuildExpectedLowestAtomOResponseDecileByDistance(
+    size_t samples_per_radius,
+    double radius_min,
+    double radius_max,
+    double amplitude,
+    double width,
+    double intercept)
+{
+    SphereSampler sampler;
+    sampler.SetSamplingProfile(
+        SphereSamplingProfile::FibonacciDeterministic(
+            SphereDistanceRange{ radius_min, radius_max },
+            0.1,
+            static_cast<unsigned int>(samples_per_radius),
+            false
+        )
+    );
+
+    std::map<float, LocalPotentialSampleList> samples_by_distance;
+    for (const auto & sampling_point : sampler.GenerateSamplingPoints({ 0.0f, 0.0f, 0.0f }))
+    {
+        samples_by_distance[sampling_point.distance].emplace_back(LocalPotentialSample{
+            sampling_point.distance,
+            static_cast<float>(ComputeExpectedAtomOResponse(
+                sampling_point,
+                amplitude,
+                width,
+                intercept)),
+            1.0f,
+            sampling_point.position
+        });
+    }
+
+    LocalPotentialSampleList retained_samples;
+    for (auto & distance_entry : samples_by_distance)
+    {
+        auto & distance_samples{ distance_entry.second };
+        std::stable_sort(
+            distance_samples.begin(),
+            distance_samples.end(),
+            [](const LocalPotentialSample & lhs, const LocalPotentialSample & rhs)
+            {
+                return lhs.response < rhs.response;
+            });
+        const auto keep_count{
+            std::max<size_t>(
+                1,
+                static_cast<size_t>(std::ceil(static_cast<double>(distance_samples.size()) * 0.1)))
+        };
+        retained_samples.insert(
+            retained_samples.end(),
+            distance_samples.begin(),
+            distance_samples.begin() + static_cast<std::ptrdiff_t>(keep_count));
+    }
+
+    return retained_samples;
 }
 
 void ExpectDatasetEquals(
@@ -296,6 +386,106 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputSamplingSummaryIncludesNeigh
         intercept
     };
     EXPECT_NEAR(expected_response, summary.front().response, 1.0e-5);
+}
+
+TEST(TestDataFactoryTest, BuildAtomNeighborhoodTestInputKeepsLowestResponseDecileByDistance)
+{
+    constexpr double amplitude{ 2.0 };
+    constexpr double width{ 0.5 };
+    constexpr double intercept{ 0.25 };
+    constexpr size_t samples_per_radius{ 11 };
+    constexpr double radius_min{ 0.5 };
+    constexpr double radius_max{ 0.7 };
+
+    const auto input{
+        tdf::BuildAtomNeighborhoodTestInput(tdf::AtomNeighborhoodScenario{
+            tdf::AtomNeighborType::O,
+            rg::GaussianModel3D{ amplitude, width, intercept },
+            static_cast<int>(samples_per_radius),
+            0.0,
+            radius_min,
+            radius_max,
+            0.0,
+            true,
+            radius_min,
+            radius_max,
+            1,
+            11
+        })
+    };
+
+    ASSERT_EQ(input.sampling_summaries.size(), 1u);
+    const auto & summary{ input.sampling_summaries.front() };
+    const auto expected_summary{
+        BuildExpectedLowestAtomOResponseDecileByDistance(
+            samples_per_radius,
+            radius_min,
+            radius_max,
+            amplitude,
+            width,
+            intercept)
+    };
+
+    ExpectSamplingEntriesEquals(summary, expected_summary);
+    ASSERT_EQ(summary.size(), 4u);
+    EXPECT_EQ(2u, std::count_if(
+        summary.begin(),
+        summary.end(),
+        [](const LocalPotentialSample & sample)
+        {
+            return sample.distance == 0.55f;
+        }));
+    EXPECT_EQ(2u, std::count_if(
+        summary.begin(),
+        summary.end(),
+        [](const LocalPotentialSample & sample)
+        {
+            return sample.distance == 0.65f;
+        }));
+}
+
+TEST(TestDataFactoryTest, BuildAtomNeighborhoodTestInputKeepsOneSampleForSmallDistanceGroup)
+{
+    constexpr double amplitude{ 2.0 };
+    constexpr double width{ 0.5 };
+    constexpr double intercept{ 0.25 };
+    constexpr size_t samples_per_radius{ 5 };
+    constexpr double radius{ 0.5 };
+
+    const auto input{
+        tdf::BuildAtomNeighborhoodTestInput(tdf::AtomNeighborhoodScenario{
+            tdf::AtomNeighborType::O,
+            rg::GaussianModel3D{ amplitude, width, intercept },
+            static_cast<int>(samples_per_radius),
+            0.0,
+            radius,
+            radius,
+            0.0,
+            true,
+            radius,
+            radius,
+            1,
+            11
+        })
+    };
+
+    ASSERT_EQ(input.sampling_summaries.size(), 1u);
+    const auto & summary{ input.sampling_summaries.front() };
+    const auto expected_summary{
+        BuildExpectedLowestAtomOResponseDecileByDistance(
+            samples_per_radius,
+            radius,
+            radius,
+            amplitude,
+            width,
+            intercept)
+    };
+
+    ExpectSamplingEntriesEquals(summary, expected_summary);
+    ASSERT_EQ(summary.size(), 1u);
+    EXPECT_FLOAT_EQ(radius, summary.front().distance);
+    EXPECT_FLOAT_EQ(1.0f, summary.front().score);
+    EXPECT_TRUE(summary.front().position.has_value());
 }
 
 TEST(TestDataFactoryTest, BuildNeighborhoodTestInputIsReproducibleWithFixedSeed)
