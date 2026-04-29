@@ -3,6 +3,7 @@
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
+#include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <cmath>
 #include <stdexcept>
@@ -14,52 +15,7 @@ namespace rhbm_gem::linearization_service
 {
 
 namespace {
-
 constexpr int kLogQuadraticBasisSize{ 2 };
-
-void RequireParameterVectorSize(const RHBMParameterVector & parameter_vector)
-{
-    if (parameter_vector.rows() != kLogQuadraticBasisSize)
-    {
-        throw std::invalid_argument("parameter_vector size must match log-quadratic basis size.");
-    }
-}
-
-void RequireLinearizationRange(const LinearizationRange & range)
-{
-    if (std::isnan(range.min) || std::isnan(range.max))
-    {
-        throw std::invalid_argument("linearization range values must not be NaN.");
-    }
-    if (range.min > range.max)
-    {
-        throw std::invalid_argument("linearization range min must not exceed max.");
-    }
-}
-
-void RequireCovarianceMatrix(
-    const RHBMPosteriorCovarianceMatrix & covariance_matrix,
-    Eigen::Index expected_size)
-{
-    try
-    {
-        eigen_validation::RequireShape(
-            covariance_matrix,
-            expected_size,
-            expected_size,
-            "covariance_matrix");
-    }
-    catch (const std::invalid_argument &)
-    {
-        throw std::invalid_argument(
-            "covariance_matrix must be " + std::to_string(expected_size) +
-            "x" + std::to_string(expected_size));
-    }
-    if (!covariance_matrix.isApprox(covariance_matrix.transpose()))
-    {
-        throw std::invalid_argument("covariance_matrix must be symmetric");
-    }
-}
 
 std::tuple<std::vector<double>, double> BuildLogQuadraticBasisVector(double x, double y)
 {
@@ -89,39 +45,39 @@ RHBMParameterVector BuildParameterVector(const GaussianModel3D & model)
     return parameter_vector;
 }
 
-GaussianModel3D DecodeLogQuadratic2D(const RHBMParameterVector & linear_model)
+double ResolveLogQuadraticDimension(const LinearizationSpec & spec)
 {
-    if (linear_model(1) <= 0.0)
+    switch (spec.model_kind)
+    {
+    case GaussianModelKind::MODEL_2D:
+        return 2.0;
+    case GaussianModelKind::MODEL_3D:
+        return 3.0;
+    }
+    throw std::invalid_argument("Unsupported Gaussian model kind.");
+}
+
+GaussianModel3D DecodeLogQuadratic(
+    const RHBMParameterVector & linear_model,
+    double dimension)
+{
+    const auto beta1{ linear_model(1) };
+    if (beta1 <= 0.0)
     {
         return GaussianModel3D{ 0.0, 0.0, 0.0 };
     }
     return GaussianModel3D{
-        std::exp(linear_model(0)) * Constants::two_pi / linear_model(1),
-        1.0 / std::sqrt(linear_model(1)),
+        std::exp(linear_model(0)) * std::pow(Constants::two_pi / beta1, 0.5 * dimension),
+        1.0 / std::sqrt(beta1),
         0.0
     };
 }
 
-GaussianModel3D DecodeLogQuadratic3D(const RHBMParameterVector & linear_model)
-{
-    const auto intercept{
-        (linear_model.rows() > GaussianModel3D::InterceptIndex()) ?
-            linear_model(GaussianModel3D::InterceptIndex()) : 0.0
-    };
-    if (linear_model(1) <= 0.0)
-    {
-        return GaussianModel3D{ 0.0, 0.0, intercept };
-    }
-    return GaussianModel3D{
-        std::exp(linear_model(0)) * std::pow(Constants::two_pi / linear_model(1), 1.5),
-        1.0 / std::sqrt(linear_model(1)),
-        intercept
-    };
-}
-
-GaussianModel3DUncertainty CalculateLogQuadratic2DStandardDeviation(
+GaussianModel3DUncertainty CalculateLogQuadraticStandardDeviation(
     const RHBMParameterVector & linear_model,
-    const RHBMPosteriorCovarianceMatrix & covariance_matrix)
+    const RHBMPosteriorCovarianceMatrix & covariance_matrix,
+    double dimension,
+    const GaussianModel3D & model)
 {
     const auto beta1{ linear_model(1) };
     if (beta1 <= 0.0)
@@ -129,89 +85,18 @@ GaussianModel3DUncertainty CalculateLogQuadratic2DStandardDeviation(
         return GaussianModel3DUncertainty{};
     }
 
-    const auto amplitude{ DecodeLogQuadratic2D(linear_model).GetAmplitude() };
+    const auto amplitude{ model.GetAmplitude() };
     const auto var_beta0{ covariance_matrix(0, 0) };
     const auto var_beta1{ covariance_matrix(1, 1) };
     const auto cov{ covariance_matrix(0, 1) };
+    const auto half_dimension{ 0.5 * dimension };
     const auto var_amplitude{
         amplitude * amplitude *
-        (var_beta0 + var_beta1 / (beta1 * beta1) - 2.0 * cov / beta1)
+        (var_beta0 + half_dimension * half_dimension * var_beta1 / (beta1 * beta1) -
+            dimension * cov / beta1)
     };
     const auto var_width{ 0.25 * std::pow(beta1, -3) * var_beta1 };
-    return GaussianModel3DUncertainty{
-        std::sqrt(var_amplitude),
-        std::sqrt(var_width),
-        0.0
-    };
-}
-
-GaussianModel3DUncertainty CalculateLogQuadratic3DStandardDeviation(
-    const RHBMParameterVector & linear_model,
-    const RHBMPosteriorCovarianceMatrix & covariance_matrix)
-{
-    const auto beta1{ linear_model(1) };
-    const auto intercept_standard_deviation{
-        (linear_model.rows() > GaussianModel3D::InterceptIndex()) ?
-            std::sqrt(covariance_matrix(
-                GaussianModel3D::InterceptIndex(),
-                GaussianModel3D::InterceptIndex())) : 0.0
-    };
-    if (beta1 <= 0.0)
-    {
-        return GaussianModel3DUncertainty{ 0.0, 0.0, intercept_standard_deviation };
-    }
-
-    const auto amplitude{ DecodeLogQuadratic3D(linear_model).GetAmplitude() };
-    const auto var_beta0{ covariance_matrix(0, 0) };
-    const auto var_beta1{ covariance_matrix(1, 1) };
-    const auto cov{ covariance_matrix(0, 1) };
-    const auto var_amplitude{
-        amplitude * amplitude *
-        (var_beta0 + 2.25 * var_beta1 / (beta1 * beta1) - 3.0 * cov / beta1)
-    };
-    const auto var_width{ 0.25 * std::pow(beta1, -3) * var_beta1 };
-    return GaussianModel3DUncertainty{
-        std::sqrt(var_amplitude),
-        std::sqrt(var_width),
-        intercept_standard_deviation
-    };
-}
-
-GaussianModel3D DecodeGaussianBySpec(
-    const LinearizationSpec & spec,
-    const RHBMParameterVector & parameter_vector)
-{
-    switch (spec.model_kind)
-    {
-    case GaussianModelKind::MODEL_2D:
-        return DecodeLogQuadratic2D(parameter_vector);
-    case GaussianModelKind::MODEL_3D:
-        return DecodeLogQuadratic3D(parameter_vector);
-    }
-    throw std::invalid_argument("Unsupported Gaussian model kind.");
-}
-
-GaussianModel3DWithUncertainty DecodeGaussianWithUncertaintyBySpec(
-    const LinearizationSpec & spec,
-    const RHBMParameterVector & parameter_vector,
-    const RHBMPosteriorCovarianceMatrix & covariance_matrix)
-{
-    RequireCovarianceMatrix(covariance_matrix, parameter_vector.rows());
-    const auto model{ DecodeGaussianBySpec(spec, parameter_vector) };
-    switch (spec.model_kind)
-    {
-    case GaussianModelKind::MODEL_2D:
-        return GaussianModel3DWithUncertainty{
-            model,
-            CalculateLogQuadratic2DStandardDeviation(parameter_vector, covariance_matrix)
-        };
-    case GaussianModelKind::MODEL_3D:
-        return GaussianModel3DWithUncertainty{
-            model,
-            CalculateLogQuadratic3DStandardDeviation(parameter_vector, covariance_matrix)
-        };
-    }
-    throw std::invalid_argument("Unsupported Gaussian model kind.");
+    return GaussianModel3DUncertainty{ std::sqrt(var_amplitude), std::sqrt(var_width), 0.0 };
 }
 
 } // namespace
@@ -227,7 +112,14 @@ SeriesPointList BuildDatasetSeries(
     const LocalPotentialSampleList & sampling_entries,
     const LinearizationRange & fit_range)
 {
-    RequireLinearizationRange(fit_range);
+    if (std::isnan(fit_range.min) || std::isnan(fit_range.max))
+    {
+        throw std::invalid_argument("linearization range values must not be NaN.");
+    }
+    if (fit_range.min > fit_range.max)
+    {
+        throw std::invalid_argument("linearization range min must not exceed max.");
+    }
 
     SeriesPointList basis_and_response_entry_list;
     basis_and_response_entry_list.reserve(sampling_entries.size());
@@ -280,8 +172,9 @@ GaussianModel3D DecodeParameterVector(
     const LinearizationSpec & spec,
     const RHBMParameterVector & parameter_vector)
 {
-    RequireParameterVectorSize(parameter_vector);
-    return DecodeGaussianBySpec(spec, parameter_vector);
+    eigen_validation::RequireVectorSize(parameter_vector, kLogQuadraticBasisSize, "parameter_vector");
+    const auto dimension{ ResolveLogQuadraticDimension(spec) };
+    return DecodeLogQuadratic(parameter_vector, dimension);
 }
 
 GaussianModel3DWithUncertainty DecodeParameterVector(
@@ -289,8 +182,15 @@ GaussianModel3DWithUncertainty DecodeParameterVector(
     const RHBMParameterVector & parameter_vector,
     const RHBMPosteriorCovarianceMatrix & covariance_matrix)
 {
-    RequireParameterVectorSize(parameter_vector);
-    return DecodeGaussianWithUncertaintyBySpec(spec, parameter_vector, covariance_matrix);
+    eigen_validation::RequireVectorSize(parameter_vector, kLogQuadraticBasisSize, "parameter_vector");
+    eigen_validation::RequireShape(
+        covariance_matrix, kLogQuadraticBasisSize, kLogQuadraticBasisSize, "covariance_matrix");
+    const auto dimension{ ResolveLogQuadraticDimension(spec) };
+    const auto model{ DecodeLogQuadratic(parameter_vector, dimension) };
+    return GaussianModel3DWithUncertainty{
+        model,
+        CalculateLogQuadraticStandardDeviation(parameter_vector, covariance_matrix, dimension, model)
+    };
 }
 
 } // namespace rhbm_gem::linearization_service
