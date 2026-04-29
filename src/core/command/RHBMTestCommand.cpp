@@ -405,6 +405,10 @@ double ScaleBiasPlotX(double x, BiasXAxisMode x_axis_mode)
     {
         return -1.0 * x;
     }
+    if (x_axis_mode == BiasXAxisMode::NeighborType)
+    {
+        return x;
+    }
     return 100.0 * x;
 }
 
@@ -507,6 +511,10 @@ void ApplyBiasCurveStyle(
 
 std::vector<BiasCurveKind> GetBiasLegendOrder(BiasPlotFlavor flavor)
 {
+    if (flavor == BiasPlotFlavor::NeighborType)
+    {
+        return { BiasCurveKind::Ols, BiasCurveKind::Mdpde, BiasCurveKind::TrainedMdpde };
+    }
     if (flavor == BiasPlotFlavor::ModelAlphaData ||
         flavor == BiasPlotFlavor::ModelAlphaMember)
     {
@@ -521,6 +529,18 @@ std::vector<BiasCurveKind> GetBiasLegendOrder(BiasPlotFlavor flavor)
 
 std::string GetBiasLegendLabel(BiasPlotFlavor flavor, BiasCurveKind kind)
 {
+    if (flavor == BiasPlotFlavor::NeighborType)
+    {
+        if (kind == BiasCurveKind::Ols)
+        {
+            return "OLS";
+        }
+        if (kind == BiasCurveKind::Mdpde)
+        {
+            return "MDPDE";
+        }
+        return "MDPDE (Sampling Scheme)";
+    }
     if (flavor == BiasPlotFlavor::ModelAlphaData)
     {
         return (kind == BiasCurveKind::RequestedAlpha) ?
@@ -570,6 +590,15 @@ TGraphErrors * FindBiasGraph(
     }
     return nullptr;
 }
+
+void ApplyNeighborTypeAxisLabels(TAxis * axis)
+{
+    axis->SetNdivisions(4, false);
+    axis->SetBinLabel(axis->FindBin(1.0), "O");
+    axis->SetBinLabel(axis->FindBin(2.0), "N");
+    axis->SetBinLabel(axis->FindBin(3.0), "C");
+    axis->SetBinLabel(axis->FindBin(4.0), "C_{#alpha}");
+}
 #endif
 
 } // namespace
@@ -604,7 +633,6 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
 {
     ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnBenchMark");
 
-    const size_t method_size{ 3 };
     const auto error_sigma{ 0.0 };
     const auto model_par_prior{ MakeDefaultModelPrior() };
     const auto test_data_options{ BuildTestDataOptions(request) };
@@ -620,14 +648,13 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
     plot_request.output_name = "bias_from_neighbor_atom.pdf";
     plot_request.flavor = BiasPlotFlavor::NeighborType;
     plot_request.x_axis_mode = BiasXAxisMode::NeighborType;
-    plot_request.panels.reserve(method_size);
+    plot_request.panels.reserve(1);
 
-    std::vector<rhbm_tester::BiasStatistics> method0_fit_results;
-    std::vector<rhbm_tester::BiasStatistics> method1_fit_results;
-    std::vector<rhbm_tester::BiasStatistics> method2_fit_results;
-    method0_fit_results.reserve(neighbor_type_list.size());
-    method1_fit_results.reserve(neighbor_type_list.size());
-    method2_fit_results.reserve(neighbor_type_list.size());
+    BiasPlotPanel panel;
+    panel.label = "Neighbor Atom Type";
+    panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Ols, neighbor_type_list.size()));
+    panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Mdpde, neighbor_type_list.size()));
+    panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::TrainedMdpde, neighbor_type_list.size()));
 
     for (const auto neighbor_type : neighbor_type_list)
     {
@@ -673,31 +700,23 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
                 << " (Alpha-R = " << cut_result.mdpde.trained_alpha_average.value() << ")";
         Logger::Log(LogLevel::Info, stream.str());
 
-        method0_fit_results.emplace_back(no_cut_result.ols);
-        method1_fit_results.emplace_back(no_cut_result.mdpde.trained_alpha.value());
-        method2_fit_results.emplace_back(cut_result.mdpde.trained_alpha.value());
+        const auto neighbor_type_value{ static_cast<double>(neighbor_type) };
+        AppendBiasCurvePoint(
+            panel.curves.at(0),
+            neighbor_type_value,
+            no_cut_result.ols);
+        AppendBiasCurvePoint(
+            panel.curves.at(1),
+            neighbor_type_value,
+            no_cut_result.mdpde.trained_alpha.value());
+        AppendBiasCurvePoint(
+            panel.curves.at(2),
+            neighbor_type_value,
+            cut_result.mdpde.trained_alpha.value());
         //SaveBenchmarkLinearizedDatasetReport(request, error_sigma, linearized_panels);
     }
 
-    for (size_t panel_index = 0; panel_index < method_size; panel_index++)
-    {
-        BiasPlotPanel panel;
-        panel.label = "method";
-        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Ols, neighbor_type_list.size()));
-        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Mdpde, neighbor_type_list.size()));
-        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::TrainedMdpde, neighbor_type_list.size()));
-        for (size_t i = 0; i < neighbor_type_list.size(); i++)
-        {
-            const auto neighbor_type_value{ static_cast<double>(neighbor_type_list.at(i)) };
-            AppendBiasCurvePoint(
-                panel.curves.at(panel_index), neighbor_type_value, method0_fit_results.at(i));
-            AppendBiasCurvePoint(
-                panel.curves.at(panel_index), neighbor_type_value, method1_fit_results.at(i));
-            AppendBiasCurvePoint(
-                panel.curves.at(panel_index), neighbor_type_value, method2_fit_results.at(i));
-        }
-        plot_request.panels.emplace_back(std::move(panel));
-    }
+    plot_request.panels.emplace_back(std::move(panel));
 
     PrintDataOutlierResult(request, plot_request);    
 }
@@ -1028,6 +1047,11 @@ void PrintDataOutlierResult(
 {
     auto file_path{ request.output_dir / plot_request.output_name };
     Logger::Log(LogLevel::Info, " RHBMTestCommand::PrintDataOutlierResult");
+    if (plot_request.panels.empty())
+    {
+        Logger::Log(LogLevel::Warning, "Skip data outlier result plot because no panels were collected.");
+        return;
+    }
 
     std::vector<std::string> title_y_list{
         "Amplitude #font[2]{A}", "Width #tau"
@@ -1036,19 +1060,31 @@ void PrintDataOutlierResult(
     #ifdef HAVE_ROOT
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);
-    const int col_size{ 3 };
+    const size_t col_count{ plot_request.panels.size() };
+    const int col_size{ static_cast<int>(col_count) };
     const int row_size{ 2 };
-    auto canvas{ root_helper::CreateCanvas("test","", 1500, 750) };
+    const int canvas_width{ (col_size == 1) ? 900 : 1500 };
+    auto canvas{ root_helper::CreateCanvas("test","", canvas_width, 750) };
     root_helper::SetCanvasDefaultStyle(canvas.get());
     root_helper::SetCanvasPartition(
-        canvas.get(), col_size, row_size, 0.17f, 0.08f, 0.12f, 0.14f, 0.01f, 0.01f
+        canvas.get(), col_size, row_size,
+        (plot_request.flavor == BiasPlotFlavor::NeighborType) ? 0.25f : 0.17f,
+        (plot_request.flavor == BiasPlotFlavor::NeighborType) ? 0.15f : 0.08f,
+        0.12f,
+        0.14f,
+        0.01f, 0.01f
     );
     root_helper::PrintCanvasOpen(canvas.get(), file_path);
 
-    std::vector<std::unique_ptr<TGraphErrors>> graph_list[col_size][row_size];
-    std::vector<BiasCurveKind> graph_kind_list[col_size][row_size];
-    std::vector<double> global_y_array[row_size];
-    for (size_t i = 0; i < col_size; i++)
+    std::vector<std::vector<std::vector<std::unique_ptr<TGraphErrors>>>> graph_list(col_count);
+    std::vector<std::vector<std::vector<BiasCurveKind>>> graph_kind_list(col_count);
+    for (size_t i = 0; i < col_count; i++)
+    {
+        graph_list.at(i).resize(row_size);
+        graph_kind_list.at(i).resize(row_size);
+    }
+    std::vector<std::vector<double>> global_y_array(row_size);
+    for (size_t i = 0; i < col_count; i++)
     {
         const auto & panel{ plot_request.panels.at(i) };
         for (size_t j = 0; j < row_size; j++)
@@ -1064,44 +1100,47 @@ void PrintDataOutlierResult(
                     const auto sigma{ point.bias.sigma(static_cast<int>(j)) };
                     graph->SetPoint(static_cast<int>(p), x_value, mean);
                     graph->SetPointError(static_cast<int>(p), 0.0, sigma);
-                    global_y_array[j].emplace_back(mean);
+                    global_y_array.at(j).emplace_back(mean);
                 }
-                graph_kind_list[i][j].emplace_back(curve.kind);
-                graph_list[i][j].emplace_back(std::move(graph));
+                graph_kind_list.at(i).at(j).emplace_back(curve.kind);
+                graph_list.at(i).at(j).emplace_back(std::move(graph));
             }
         }
     }
 
-    double x_min[col_size]{ 0.0 };
-    double x_max[col_size]{ 0.0 };
-    double y_min[row_size]{ 0.0 };
-    double y_max[row_size]{ 0.0 };
-    for (size_t i = 0; i < col_size; i++)
+    std::vector<double> x_min(col_count, 0.0);
+    std::vector<double> x_max(col_count, 0.0);
+    std::vector<double> y_min(row_size, 0.0);
+    std::vector<double> y_max(row_size, 0.0);
+    for (size_t i = 0; i < col_count; i++)
     {
-        x_min[i] = (plot_request.flavor == BiasPlotFlavor::ModelAlphaData) ? -2.0 : -0.7;
-        x_max[i] = (plot_request.flavor == BiasPlotFlavor::ModelAlphaData) ? 47.0 : 22.0;
+        x_min.at(i) = (plot_request.flavor == BiasPlotFlavor::ModelAlphaData) ? -2.0 : -0.7;
+        x_max.at(i) = (plot_request.flavor == BiasPlotFlavor::ModelAlphaData) ? 47.0 : 22.0;
         if (plot_request.x_axis_mode == BiasXAxisMode::NeighborType)
         {
-            x_min[i] = 0.0;
-            x_max[i] = 5.0;
+            x_min.at(i) = 0.0;
+            x_max.at(i) = 5.0;
         }
         if (plot_request.x_axis_mode == BiasXAxisMode::NeighborDistance)
         {
-            x_min[i] = -2.6;
-            x_max[i] = -0.8;
+            x_min.at(i) = -2.6;
+            x_max.at(i) = -0.8;
         }
     }
     for (size_t j = 0; j < row_size; j++)
     {
-        auto y_range{ array_helper::ComputeScalingPercentileRangeTuple(global_y_array[j], 0.38, 0.005, 0.995) };
-        y_min[j] = std::get<0>(y_range);
-        y_max[j] = std::get<1>(y_range);
+        auto y_range{ array_helper::ComputeScalingPercentileRangeTuple(global_y_array.at(j), 0.2, 0.005, 0.995) };
+        y_min.at(j) = std::get<0>(y_range);
+        y_max.at(j) = std::get<1>(y_range);
     }
 
-    std::unique_ptr<TH2> frame[col_size][row_size];
-    std::unique_ptr<TPaveText> resolution_text[col_size];
-    std::unique_ptr<TPaveText> title_x_text[col_size];
-    std::unique_ptr<TPaveText> title_y_text[row_size];
+    std::vector<std::vector<std::unique_ptr<TH2>>> frame(col_count);
+    for (auto & frame_column : frame)
+    {
+        frame_column.resize(row_size);
+    }
+    std::vector<std::unique_ptr<TPaveText>> title_x_text(col_count);
+    std::vector<std::unique_ptr<TPaveText>> title_y_text(row_size);
     for (int i = 0; i < col_size; i++)
     {
         for (int j = 0; j < row_size; j++)
@@ -1112,25 +1151,35 @@ void PrintDataOutlierResult(
             root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
             auto x_factor{ root_helper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
             auto y_factor{ root_helper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
-            frame[i][j] = root_helper::CreateHist2D(Form("frame_%d_%d", i, j),"", 500, x_min[i], x_max[i], 500, y_min[par_id], y_max[par_id]);
-            root_helper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 50.0f, 1.0f, 133);
-            root_helper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 40.0f, 0.005f, 133);
-            root_helper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.08/x_factor), 505);
-            root_helper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 50.0f, 1.2f, 133);
-            root_helper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 45.0f, 0.02f, 133);
-            root_helper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 505);
-            root_helper::SetLineAttribute(frame[i][j].get(), 1, 0);
-            frame[i][j]->GetXaxis()->SetTitle("");
-            frame[i][j]->GetYaxis()->SetTitle("");
-            frame[i][j]->GetXaxis()->CenterTitle();
-            frame[i][j]->GetYaxis()->CenterTitle();
-            frame[i][j]->SetStats(0);
-            frame[i][j]->Draw("Y+");
-
-            for (size_t graph_index = 0; graph_index < graph_list[i][par_id].size(); graph_index++)
+            auto & frame_hist{ frame.at(static_cast<size_t>(i)).at(static_cast<size_t>(j)) };
+            frame_hist = root_helper::CreateHist2D(
+                Form("frame_%d_%d", i, j), "",
+                500, x_min.at(static_cast<size_t>(i)), x_max.at(static_cast<size_t>(i)),
+                500, y_min.at(static_cast<size_t>(par_id)), y_max.at(static_cast<size_t>(par_id)));
+            root_helper::SetAxisTitleAttribute(frame_hist->GetXaxis(), 50.0f, 1.0f, 133);
+            root_helper::SetAxisLabelAttribute(frame_hist->GetXaxis(), 40.0f, 0.005f, 133);
+            root_helper::SetAxisTickAttribute(frame_hist->GetXaxis(), static_cast<float>(y_factor*0.08/x_factor), 505);
+            root_helper::SetAxisTitleAttribute(frame_hist->GetYaxis(), 50.0f, 1.2f, 133);
+            root_helper::SetAxisLabelAttribute(frame_hist->GetYaxis(), 45.0f, 0.02f, 133);
+            root_helper::SetAxisTickAttribute(frame_hist->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 505);
+            if (plot_request.x_axis_mode == BiasXAxisMode::NeighborType)
             {
-                const auto kind{ graph_kind_list[i][par_id].at(graph_index) };
-                auto & graph{ graph_list[i][par_id].at(graph_index) };
+                ApplyNeighborTypeAxisLabels(frame_hist->GetXaxis());
+            }
+            root_helper::SetLineAttribute(frame_hist.get(), 1, 0);
+            frame_hist->GetXaxis()->SetTitle("");
+            frame_hist->GetYaxis()->SetTitle("");
+            frame_hist->GetXaxis()->CenterTitle();
+            frame_hist->GetYaxis()->CenterTitle();
+            frame_hist->SetStats(0);
+            frame_hist->Draw("Y+");
+
+            auto & pad_graph_list{ graph_list.at(static_cast<size_t>(i)).at(static_cast<size_t>(par_id)) };
+            auto & pad_graph_kind_list{ graph_kind_list.at(static_cast<size_t>(i)).at(static_cast<size_t>(par_id)) };
+            for (size_t graph_index = 0; graph_index < pad_graph_list.size(); graph_index++)
+            {
+                const auto kind{ pad_graph_kind_list.at(graph_index) };
+                auto & graph{ pad_graph_list.at(graph_index) };
                 ApplyBiasCurveStyle(graph.get(), plot_request.flavor, kind);
                 //graph->Draw("PL3");
                 graph->Draw("P");
@@ -1138,25 +1187,29 @@ void PrintDataOutlierResult(
 
             if (i == 0)
             {
-                title_y_text[j] = root_helper::CreatePaveText(-0.68, 0.30, 0.00, 0.70, "nbNDC ARC", true);
-                root_helper::SetPaveTextDefaultStyle(title_y_text[j].get());
-                root_helper::SetPaveAttribute(title_y_text[j].get(), 0, 0.1);
-                root_helper::SetLineAttribute(title_y_text[j].get(), 1, 0);
-                root_helper::SetTextAttribute(title_y_text[j].get(), 45.0f, 133, 22);
-                root_helper::SetFillAttribute(title_y_text[j].get(), 1001, kAzure-7, 0.5f);
-                title_y_text[j]->AddText(title_y_list[static_cast<size_t>(par_id)].data());
-                title_y_text[j]->Draw();
+                auto & text{ title_y_text.at(static_cast<size_t>(j)) };
+                text = (plot_request.flavor == BiasPlotFlavor::NeighborType) ?
+                    root_helper::CreatePaveText(-0.41, 0.30, 0.00, 0.70, "nbNDC ARC", true) :
+                    root_helper::CreatePaveText(-0.68, 0.30, 0.00, 0.70, "nbNDC ARC", true);
+                root_helper::SetPaveTextDefaultStyle(text.get());
+                root_helper::SetPaveAttribute(text.get(), 0, 0.1);
+                root_helper::SetLineAttribute(text.get(), 1, 0);
+                root_helper::SetTextAttribute(text.get(), 45.0f, 133, 22);
+                root_helper::SetFillAttribute(text.get(), 1001, kAzure-7, 0.5f);
+                text->AddText(title_y_list.at(static_cast<size_t>(par_id)).data());
+                text->Draw();
             }
 
             if (j == row_size - 1)
             {
-                title_x_text[i] = root_helper::CreatePaveText(0.10, 0.95, 0.90, 1.15, "nbNDC ARC", true);
-                root_helper::SetPaveTextDefaultStyle(title_x_text[i].get());
-                root_helper::SetPaveAttribute(title_x_text[i].get(), 0, 0.2);
-                root_helper::SetTextAttribute(title_x_text[i].get(), 45.0f, 133, 22);
-                root_helper::SetFillAttribute(title_x_text[i].get(), 1001, kRed+1, 0.5f);
-                title_x_text[i]->AddText(plot_request.panels.at(static_cast<size_t>(i)).label.data());
-                title_x_text[i]->Draw();
+                auto & text{ title_x_text.at(static_cast<size_t>(i)) };
+                text = root_helper::CreatePaveText(0.10, 0.95, 0.90, 1.15, "nbNDC ARC", true);
+                root_helper::SetPaveTextDefaultStyle(text.get());
+                root_helper::SetPaveAttribute(text.get(), 0, 0.2);
+                root_helper::SetTextAttribute(text.get(), 45.0f, 133, 22);
+                root_helper::SetFillAttribute(text.get(), 1001, kRed+1, 0.5f);
+                text->AddText(plot_request.panels.at(static_cast<size_t>(i)).label.data());
+                if (plot_request.flavor != BiasPlotFlavor::NeighborType) text->Draw();
             }
         }
     }
@@ -1176,7 +1229,7 @@ void PrintDataOutlierResult(
     legend->SetNColumns(3);
     for (const auto kind : GetBiasLegendOrder(plot_request.flavor))
     {
-        auto * graph{ FindBiasGraph(graph_list[0][0], graph_kind_list[0][0], kind) };
+        auto * graph{ FindBiasGraph(graph_list.at(0).at(0), graph_kind_list.at(0).at(0), kind) };
         if (graph != nullptr)
         {
             legend->AddEntry(graph, GetBiasLegendLabel(plot_request.flavor, kind).data(), "plf");
@@ -1194,7 +1247,11 @@ void PrintDataOutlierResult(
     root_helper::SetPaveTextDefaultStyle(bottom_title_text.get());
     root_helper::SetFillAttribute(bottom_title_text.get(), 4000);
     root_helper::SetTextAttribute(bottom_title_text.get(), 45.0f, 133, 22);
-    if (plot_request.x_axis_mode == BiasXAxisMode::NeighborDistance)
+    if (plot_request.x_axis_mode == BiasXAxisMode::NeighborType)
+    {
+        bottom_title_text->AddText("Atom Type");
+    }
+    else if (plot_request.x_axis_mode == BiasXAxisMode::NeighborDistance)
     {
         bottom_title_text->AddText("Distance to Neighbor Atom (Angstrom)");
     }
