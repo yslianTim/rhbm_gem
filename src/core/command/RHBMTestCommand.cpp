@@ -46,27 +46,10 @@ constexpr std::string_view kFitRangeIssue{ "--fit-range" };
 constexpr std::string_view kAlphaROption{ "--alpha-r" };
 constexpr std::string_view kAlphaGOption{ "--alpha-g" };
 constexpr int kGausParSize{ GaussianModel3D::ParameterSize() };
-struct BetaScenarioConfig
-{
-    int replica_size;
-    int sampling_entry_size;
-    std::vector<double> alpha_r_list;
-};
 
-struct MuScenarioConfig
+struct NeighborDistanceSweepConfig
 {
-    int replica_size;
-    int member_size;
-    std::vector<double> alpha_g_list;
-    std::vector<Eigen::VectorXd> outlier_prior_list;
-};
-
-struct NeighborDistanceScenarioConfig
-{
-    int replica_size;
-    int sampling_entry_size;
-    size_t neighbor_count;
-    double rejected_angle;
+    test_data_factory::NeighborhoodScenario base_scenario;
     std::vector<double> error_list;
     std::vector<double> distance_list;
 };
@@ -205,27 +188,70 @@ test_data_factory::TestDataBuildOptions BuildTestDataOptions(
     };
 }
 
-test_data_factory::NeighborhoodScenario BuildNeighborhoodScenario(
-    const Eigen::VectorXd & model_par_prior,
-    const NeighborDistanceScenarioConfig & scenario,
+test_data_factory::NeighborhoodScenario BuildNeighborDistanceScenario(
+    const test_data_factory::NeighborhoodScenario & base_scenario,
     double error_sigma,
     double neighbor_distance,
     bool include_sampling_summary = false)
 {
-    return test_data_factory::NeighborhoodScenario{
-        GaussianModel3D::FromVector(model_par_prior),
-        scenario.sampling_entry_size,
-        error_sigma,
-        0.0,
-        1.0,
-        neighbor_distance,
-        scenario.neighbor_count,
-        scenario.rejected_angle,
-        include_sampling_summary,
-        0.0,
-        4.0,
-        scenario.replica_size
-    };
+    auto scenario{ base_scenario };
+    scenario.data_error_sigma = error_sigma;
+    scenario.neighbor_distance = neighbor_distance;
+    scenario.include_sampling_summary = include_sampling_summary;
+    return scenario;
+}
+
+test_data_factory::BetaScenario BuildBaseBetaScenario(
+    const Eigen::VectorXd & model_par_prior,
+    std::vector<double> alpha_r_list)
+{
+    test_data_factory::BetaScenario scenario;
+    scenario.gaus_true = GaussianModel3D::FromVector(model_par_prior);
+    scenario.sampling_entry_size = 50;
+    scenario.data_error_sigma = 1.0;
+    scenario.outlier_ratio = 0.0;
+    scenario.replica_size = 10;
+    scenario.requested_alpha_r_list = std::move(alpha_r_list);
+    scenario.alpha_training = true;
+    return scenario;
+}
+
+test_data_factory::MuScenario BuildBaseMuScenario(
+    const Eigen::VectorXd & model_par_prior,
+    const Eigen::VectorXd & model_par_sigma,
+    std::vector<double> alpha_g_list)
+{
+    test_data_factory::MuScenario scenario;
+    scenario.member_size = 100;
+    scenario.gaus_prior = model_par_prior;
+    scenario.gaus_sigma = model_par_sigma;
+    scenario.outlier_prior = model_par_prior;
+    scenario.outlier_sigma = model_par_sigma;
+    scenario.outlier_ratio = 0.0;
+    scenario.replica_size = 100;
+    scenario.requested_alpha_g_list = std::move(alpha_g_list);
+    scenario.alpha_training = true;
+    return scenario;
+}
+
+test_data_factory::NeighborhoodScenario BuildBaseNeighborDistanceScenario(
+    const Eigen::VectorXd & model_par_prior,
+    size_t neighbor_count)
+{
+    test_data_factory::NeighborhoodScenario scenario;
+    scenario.gaus_true = GaussianModel3D::FromVector(model_par_prior);
+    scenario.sampling_entry_size = 50;
+    scenario.data_error_sigma = 1.0;
+    scenario.radius_min = 0.0;
+    scenario.radius_max = 1.0;
+    scenario.neighbor_distance = 2.0;
+    scenario.neighbor_count = neighbor_count;
+    scenario.rejected_angle = 45.0;
+    scenario.include_sampling_summary = false;
+    scenario.summary_radius_min = 0.0;
+    scenario.summary_radius_max = 4.0;
+    scenario.replica_size = 10;
+    return scenario;
 }
 
 std::string FormatSigmaToken(double value)
@@ -584,41 +610,28 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
 {
     ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnBenchMark");
 
-    const auto scenario{ NeighborDistanceScenarioConfig{
-        10,
-        50,
-        3,
-        45.0,
+    const auto model_par_prior{ MakeDefaultModelPrior() };
+    const auto sweep{ NeighborDistanceSweepConfig{
+        BuildBaseNeighborDistanceScenario(model_par_prior, 3),
         std::vector<double>{ 0.0 },
         BuildDescendingSweep(16, 2.5, 0.1)
     } };
-    const auto model_par_prior{ MakeDefaultModelPrior() };
     const auto test_data_options{ BuildTestDataOptions(request) };
-    for (auto error_sigma : scenario.error_list)
+    for (auto error_sigma : sweep.error_list)
     {
         std::vector<LinePlotPanel> linearized_panels;
-        linearized_panels.reserve(scenario.distance_list.size());
-        for (double distance : scenario.distance_list)
+        linearized_panels.reserve(sweep.distance_list.size());
+        for (double distance : sweep.distance_list)
         {
             const auto test_input{
                 test_data_factory::BuildNeighborhoodTestInput(
-                    BuildNeighborhoodScenario(
-                        model_par_prior,
-                        scenario,
-                        error_sigma,
-                        distance),
+                    BuildNeighborDistanceScenario(sweep.base_scenario, error_sigma, distance),
                     test_data_options)
             };
             rhbm_tester::BetaMDPDETestBias no_cut_result;
             rhbm_tester::BetaMDPDETestBias cut_result;
-            rhbm_tester::RunBetaMDPDETest(
-                no_cut_result,
-                test_input.no_cut_input,
-                request.job_count);
-            rhbm_tester::RunBetaMDPDETest(
-                cut_result,
-                test_input.cut_input,
-                request.job_count);
+            rhbm_tester::RunBetaMDPDETest(no_cut_result, test_input.no_cut_input, request.job_count);
+            rhbm_tester::RunBetaMDPDETest(cut_result, test_input.cut_input, request.job_count);
             TryAppendBenchmarkLinearizedPanel(
                 linearized_panels,
                 distance,
@@ -650,12 +663,10 @@ void RunSimulationTestOnDataOutlier(const RHBMTestRequest & request)
 {
     ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnDataOutlier");
 
-    const auto scenario{ BetaScenarioConfig{
-        10,
-        50,
-        std::vector<double>{ request.alpha_r }
-    } };
     const auto model_par_prior{ MakeDefaultModelPrior() };
+    const auto base_scenario{
+        BuildBaseBetaScenario(model_par_prior, std::vector<double>{ request.alpha_r })
+    };
     const auto test_data_options{ BuildTestDataOptions(request) };
     std::vector<double> error_list{ 0.1, 0.2, 0.3 };
     const auto outlier_list{ BuildLinearSweep(9, 0.025) };
@@ -676,23 +687,13 @@ void RunSimulationTestOnDataOutlier(const RHBMTestRequest & request)
         for (size_t i = 0; i < outlier_list.size(); i++)
         {
             rhbm_tester::BetaMDPDETestBias bias;
+            auto beta_scenario{ base_scenario };
+            beta_scenario.data_error_sigma = error_sigma;
+            beta_scenario.outlier_ratio = outlier_list.at(i);
             const auto test_input{
-                test_data_factory::BuildBetaTestInput(test_data_factory::BetaScenario{
-                    GaussianModel3D::FromVector(model_par_prior),
-                    scenario.sampling_entry_size,
-                    error_sigma,
-                    outlier_list.at(i),
-                    scenario.replica_size,
-                    {},
-                    scenario.alpha_r_list,
-                    true
-                }, test_data_options)
+                test_data_factory::BuildBetaTestInput(beta_scenario, test_data_options)
             };
-            rhbm_tester::RunBetaMDPDETest(
-                bias,
-                test_input,
-                request.job_count
-            );
+            rhbm_tester::RunBetaMDPDETest(bias, test_input, request.job_count);
 
             AppendBiasCurvePoint(panel.curves.at(0), outlier_list.at(i), bias.ols);
             AppendBiasCurvePoint(
@@ -717,16 +718,10 @@ void RunSimulationTestOnMemberOutlier(const RHBMTestRequest & request)
 {
     ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnMemberOutlier");
 
-    const auto scenario{ MuScenarioConfig{
-        100,
-        100,
-        std::vector<double>{ request.alpha_g },
-        std::vector<Eigen::VectorXd>{
-            Eigen::VectorXd::Zero(kGausParSize),
-            Eigen::VectorXd::Zero(kGausParSize)
-        }
+    auto outlier_prior_list{ std::vector<Eigen::VectorXd>{
+        Eigen::VectorXd::Zero(kGausParSize),
+        Eigen::VectorXd::Zero(kGausParSize)
     } };
-    auto outlier_prior_list{ scenario.outlier_prior_list };
     outlier_prior_list.at(0)(0) = 1.50;
     outlier_prior_list.at(0)(1) = 0.50;
     outlier_prior_list.at(0)(2) = 0.10;
@@ -736,6 +731,9 @@ void RunSimulationTestOnMemberOutlier(const RHBMTestRequest & request)
 
     const auto model_par_prior{ MakeDefaultModelPrior() };
     const auto model_par_sigma{ MakeDefaultModelSigma() };
+    const auto base_scenario{
+        BuildBaseMuScenario(model_par_prior, model_par_sigma, std::vector<double>{ request.alpha_g })
+    };
     const auto test_data_options{ BuildTestDataOptions(request) };
     const auto outlier_list{ BuildLinearSweep(9, 0.025) };
     BiasPlotRequest plot_request;
@@ -755,25 +753,13 @@ void RunSimulationTestOnMemberOutlier(const RHBMTestRequest & request)
         for (size_t i = 0; i < outlier_list.size(); i++)
         {
             rhbm_tester::MuMDPDETestBias bias;
+            auto mu_scenario{ base_scenario };
+            mu_scenario.outlier_prior = outlier_prior;
+            mu_scenario.outlier_ratio = outlier_list.at(i);
             const auto test_input{
-                test_data_factory::BuildMuTestInput(test_data_factory::MuScenario{
-                    scenario.member_size,
-                    model_par_prior,
-                    model_par_sigma,
-                    outlier_prior,
-                    model_par_sigma,
-                    outlier_list.at(i),
-                    scenario.replica_size,
-                    {},
-                    scenario.alpha_g_list,
-                    true
-                }, test_data_options)
+                test_data_factory::BuildMuTestInput(mu_scenario, test_data_options)
             };
-            rhbm_tester::RunMuMDPDETest(
-                bias,
-                test_input,
-                request.job_count
-            );
+            rhbm_tester::RunMuMDPDETest(bias, test_input, request.job_count);
 
             AppendBiasCurvePoint(panel.curves.at(0), outlier_list.at(i), bias.median);
             AppendBiasCurvePoint(
@@ -798,12 +784,10 @@ void RunSimulationTestOnModelAlphaData(const RHBMTestRequest & request)
 {
     ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnModelAlphaData");
 
-    const auto scenario{ BetaScenarioConfig{
-        10,
-        50,
-        std::vector<double>{ request.alpha_r }
-    } };
     const auto model_par_prior{ MakeDefaultModelPrior() };
+    const auto base_scenario{
+        BuildBaseBetaScenario(model_par_prior, std::vector<double>{ request.alpha_r })
+    };
     const auto test_data_options{ BuildTestDataOptions(request) };
     std::vector<double> error_list{ 0.1, 0.2, 0.3 };
     const auto outlier_list{ BuildLinearSweep(10, 0.05) };
@@ -823,23 +807,13 @@ void RunSimulationTestOnModelAlphaData(const RHBMTestRequest & request)
         for (size_t i = 0; i < outlier_list.size(); i++)
         {
             rhbm_tester::BetaMDPDETestBias bias;
+            auto beta_scenario{ base_scenario };
+            beta_scenario.data_error_sigma = error_sigma;
+            beta_scenario.outlier_ratio = outlier_list.at(i);
             const auto test_input{
-                test_data_factory::BuildBetaTestInput(test_data_factory::BetaScenario{
-                    GaussianModel3D::FromVector(model_par_prior),
-                    scenario.sampling_entry_size,
-                    error_sigma,
-                    outlier_list.at(i),
-                    scenario.replica_size,
-                    {},
-                    scenario.alpha_r_list,
-                    true
-                }, test_data_options)
+                test_data_factory::BuildBetaTestInput(beta_scenario, test_data_options)
             };
-            rhbm_tester::RunBetaMDPDETest(
-                bias,
-                test_input,
-                request.job_count
-            );
+            rhbm_tester::RunBetaMDPDETest(bias, test_input, request.job_count);
 
             AppendBiasCurvePoint(
                 panel.curves.at(0),
@@ -863,16 +837,10 @@ void RunSimulationTestOnModelAlphaMember(const RHBMTestRequest & request)
 {
     ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnModelAlphaMember");
 
-    const auto scenario{ MuScenarioConfig{
-        100,
-        100,
-        std::vector<double>{ request.alpha_g },
-        std::vector<Eigen::VectorXd>{
-            Eigen::VectorXd::Zero(kGausParSize),
-            Eigen::VectorXd::Zero(kGausParSize)
-        }
+    auto outlier_prior_list{ std::vector<Eigen::VectorXd>{
+        Eigen::VectorXd::Zero(kGausParSize),
+        Eigen::VectorXd::Zero(kGausParSize)
     } };
-    auto outlier_prior_list{ scenario.outlier_prior_list };
     outlier_prior_list.at(0)(0) = 1.50;
     outlier_prior_list.at(0)(1) = 0.50;
     outlier_prior_list.at(0)(2) = 0.10;
@@ -882,6 +850,9 @@ void RunSimulationTestOnModelAlphaMember(const RHBMTestRequest & request)
 
     const auto model_par_prior{ MakeDefaultModelPrior() };
     const auto model_par_sigma{ MakeDefaultModelSigma() };
+    const auto base_scenario{
+        BuildBaseMuScenario(model_par_prior, model_par_sigma, std::vector<double>{ request.alpha_g })
+    };
     const auto test_data_options{ BuildTestDataOptions(request) };
     const auto outlier_list{ BuildLinearSweep(10, 0.05) };
     BiasPlotRequest plot_request;
@@ -900,25 +871,13 @@ void RunSimulationTestOnModelAlphaMember(const RHBMTestRequest & request)
         for (size_t i = 0; i < outlier_list.size(); i++)
         {
             rhbm_tester::MuMDPDETestBias bias;
+            auto mu_scenario{ base_scenario };
+            mu_scenario.outlier_prior = outlier_prior;
+            mu_scenario.outlier_ratio = outlier_list.at(i);
             const auto test_input{
-                test_data_factory::BuildMuTestInput(test_data_factory::MuScenario{
-                    scenario.member_size,
-                    model_par_prior,
-                    model_par_sigma,
-                    outlier_prior,
-                    model_par_sigma,
-                    outlier_list.at(i),
-                    scenario.replica_size,
-                    {},
-                    scenario.alpha_g_list,
-                    true
-                }, test_data_options)
+                test_data_factory::BuildMuTestInput(mu_scenario, test_data_options)
             };
-            rhbm_tester::RunMuMDPDETest(
-                bias,
-                test_input,
-                request.job_count
-            );
+            rhbm_tester::RunMuMDPDETest(bias, test_input, request.job_count);
 
             AppendBiasCurvePoint(
                 panel.curves.at(0),
@@ -942,75 +901,62 @@ void RunSimulationTestOnNeighborDistance(const RHBMTestRequest & request)
 {
     ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnNeighborDistance");
 
-    const auto scenario{ NeighborDistanceScenarioConfig{
-        10,
-        50,
-        2,
-        45.0,
+    const auto model_par_prior{ MakeDefaultModelPrior() };
+    const auto sweep{ NeighborDistanceSweepConfig{
+        BuildBaseNeighborDistanceScenario(model_par_prior, 2),
         std::vector<double>{ 0.0, 0.025, 0.05 },
         BuildDescendingSweep(16, 2.5, 0.1)
     } };
-    const auto model_par_prior{ MakeDefaultModelPrior() };
     const auto test_data_options{ BuildTestDataOptions(request) };
     BiasPlotRequest plot_request;
     plot_request.output_name = "bias_from_neighbor_atom.pdf";
     plot_request.flavor = BiasPlotFlavor::NeighborDistance;
     plot_request.x_axis_mode = BiasXAxisMode::NeighborDistance;
-    plot_request.panels.reserve(scenario.error_list.size());
+    plot_request.panels.reserve(sweep.error_list.size());
 
     bool is_print_sampling_summary{ false };
-    for (size_t panel_index = 0; panel_index < scenario.error_list.size(); panel_index++)
+    for (size_t panel_index = 0; panel_index < sweep.error_list.size(); panel_index++)
     {
-        const auto error_sigma{ scenario.error_list.at(panel_index) };
+        const auto error_sigma{ sweep.error_list.at(panel_index) };
         BiasPlotPanel panel;
         panel.label = FormatDataBiasPanelLabel(panel_index);
-        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Ols, scenario.distance_list.size()));
-        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Mdpde, scenario.distance_list.size()));
-        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::TrainedMdpde, scenario.distance_list.size()));
+        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Ols, sweep.distance_list.size()));
+        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Mdpde, sweep.distance_list.size()));
+        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::TrainedMdpde, sweep.distance_list.size()));
         std::vector<LocalPotentialSampleList> sampling_entries_list;
-        sampling_entries_list.reserve(scenario.distance_list.size());
-        for (size_t i = 0; i < scenario.distance_list.size(); i++)
+        sampling_entries_list.reserve(sweep.distance_list.size());
+        for (size_t i = 0; i < sweep.distance_list.size(); i++)
         {
             const auto test_input{
                 test_data_factory::BuildNeighborhoodTestInput(
-                    BuildNeighborhoodScenario(
-                        model_par_prior,
-                        scenario,
+                    BuildNeighborDistanceScenario(
+                        sweep.base_scenario,
                         error_sigma,
-                        scenario.distance_list.at(i),
+                        sweep.distance_list.at(i),
                         true),
                     test_data_options)
             };
             rhbm_tester::BetaMDPDETestBias no_cut_result;
             rhbm_tester::BetaMDPDETestBias cut_result;
-            rhbm_tester::RunBetaMDPDETest(
-                no_cut_result,
-                test_input.no_cut_input,
-                request.job_count
-            );
-            rhbm_tester::RunBetaMDPDETest(
-                cut_result,
-                test_input.cut_input,
-                request.job_count
-            );
-
+            rhbm_tester::RunBetaMDPDETest(no_cut_result, test_input.no_cut_input, request.job_count);
+            rhbm_tester::RunBetaMDPDETest(cut_result, test_input.cut_input, request.job_count);
             sampling_entries_list.emplace_back(test_input.sampling_summaries.front());
 
             AppendBiasCurvePoint(
                 panel.curves.at(0),
-                scenario.distance_list.at(i),
+                sweep.distance_list.at(i),
                 no_cut_result.ols);
             AppendBiasCurvePoint(
                 panel.curves.at(1),
-                scenario.distance_list.at(i),
+                sweep.distance_list.at(i),
                 no_cut_result.mdpde.trained_alpha.value());
             AppendBiasCurvePoint(
                 panel.curves.at(2),
-                scenario.distance_list.at(i),
+                sweep.distance_list.at(i),
                 cut_result.mdpde.trained_alpha.value());
 
             Logger::Log(LogLevel::Info,
-                std::string("Distance: ") + std::to_string(scenario.distance_list.at(i))
+                std::string("Distance: ") + std::to_string(sweep.distance_list.at(i))
                 + " , OLS: " + std::to_string(no_cut_result.ols.mean(0)) + " +- " + std::to_string(no_cut_result.ols.sigma(0))
                 + " , MDPDE: " + std::to_string(no_cut_result.mdpde.trained_alpha.value().mean(0)) + " +- " + std::to_string(no_cut_result.mdpde.trained_alpha.value().sigma(0))
                 + " , Train: " + std::to_string(cut_result.mdpde.trained_alpha.value().mean(0)) + " +- " + std::to_string(cut_result.mdpde.trained_alpha.value().sigma(0))
@@ -1024,7 +970,7 @@ void RunSimulationTestOnNeighborDistance(const RHBMTestRequest & request)
             PrintAtomSamplingDataSummary(
                 request,
                 "neighbor_atom_sampling_entries.pdf",
-                sampling_entries_list, scenario.distance_list
+                sampling_entries_list, sweep.distance_list
             );
             is_print_sampling_summary = true;
         }
