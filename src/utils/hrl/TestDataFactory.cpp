@@ -12,7 +12,6 @@
 #include <cmath>
 #include <random>
 #include <stdexcept>
-#include <utility>
 #include <vector>
 
 namespace
@@ -407,22 +406,14 @@ Eigen::MatrixXd BuildBetaMatrix(
 namespace rhbm_gem::test_data_factory
 {
 
-TestDataFactory::TestDataFactory(linearization_service::LinearizationSpec linearization_spec) :
-    m_linearization_spec{ std::move(linearization_spec) },
-    m_fit_range_min{ 0.0 },
-    m_fit_range_max{ 1.0 }
+RHBMBetaTestInput BuildBetaTestInput(
+    const BetaScenario & scenario,
+    const TestDataBuildOptions & options)
 {
-}
-
-void TestDataFactory::SetFittingRange(double x_min, double x_max)
-{
-    numeric_validation::RequireFiniteNonNegativeRange(x_min, x_max, "fitting range");
-    m_fit_range_min = x_min;
-    m_fit_range_max = x_max;
-}
-
-RHBMBetaTestInput TestDataFactory::BuildBetaTestInput(const BetaScenario & scenario) const
-{
+    numeric_validation::RequireFiniteNonNegativeRange(
+        options.fitting_range.min,
+        options.fitting_range.max,
+        "fitting range");
     numeric_validation::RequirePositive(scenario.sampling_entry_size, "sampling_entry_size");
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
     GaussianModel3D::RequireFinitePositiveWidthModel(scenario.gaus_true, "scenario.gaus_true");
@@ -442,8 +433,8 @@ RHBMBetaTestInput TestDataFactory::BuildBetaTestInput(const BetaScenario & scena
                 scenario.gaus_true,
                 scenario.data_error_sigma,
                 scenario.outlier_ratio,
-                m_fit_range_min,
-                m_fit_range_max,
+                options.fitting_range.min,
+                options.fitting_range.max,
                 generator
             )
         };
@@ -453,7 +444,9 @@ RHBMBetaTestInput TestDataFactory::BuildBetaTestInput(const BetaScenario & scena
     return input;
 }
 
-RHBMMuTestInput TestDataFactory::BuildMuTestInput(const MuScenario & scenario) const
+RHBMMuTestInput BuildMuTestInput(
+    const MuScenario & scenario,
+    const TestDataBuildOptions & options)
 {
     numeric_validation::RequirePositive(scenario.member_size, "member_size");
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
@@ -495,15 +488,20 @@ RHBMMuTestInput TestDataFactory::BuildMuTestInput(const MuScenario & scenario) c
             )
         };
         input.replica_beta_matrices.emplace_back(
-            BuildBetaMatrix(random_gaus_array, m_linearization_spec));
+            BuildBetaMatrix(random_gaus_array, options.linearization_spec));
     }
 
     return input;
 }
 
-RHBMNeighborhoodTestInput TestDataFactory::BuildNeighborhoodTestInput(
-    const NeighborhoodScenario & scenario) const
+RHBMNeighborhoodTestInput BuildNeighborhoodTestInput(
+    const NeighborhoodScenario & scenario,
+    const TestDataBuildOptions & options)
 {
+    numeric_validation::RequireFiniteNonNegativeRange(
+        options.fitting_range.min,
+        options.fitting_range.max,
+        "fitting range");
     numeric_validation::RequirePositive(scenario.sampling_entry_size, "sampling_entry_size");
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
     GaussianModel3D::RequireFinitePositiveWidthModel(scenario.gaus_true, "scenario.gaus_true");
@@ -557,8 +555,8 @@ RHBMNeighborhoodTestInput TestDataFactory::BuildNeighborhoodTestInput(
                 scenario.gaus_true,
                 scenario.data_error_sigma,
                 no_cut_options,
-                m_fit_range_min,
-                m_fit_range_max,
+                options.fitting_range.min,
+                options.fitting_range.max,
                 generator
             )
         };
@@ -568,8 +566,8 @@ RHBMNeighborhoodTestInput TestDataFactory::BuildNeighborhoodTestInput(
                 scenario.gaus_true,
                 scenario.data_error_sigma,
                 cut_options,
-                m_fit_range_min,
-                m_fit_range_max,
+                options.fitting_range.min,
+                options.fitting_range.max,
                 generator
             )
         };

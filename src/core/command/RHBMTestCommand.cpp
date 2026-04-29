@@ -200,22 +200,26 @@ std::string FormatMemberBiasPanelLabel(size_t panel_index)
     return "Outlier in " + outlier_type_list[panel_index];
 }
 
-test_data_factory::TestDataFactory BuildDataFactory(const RHBMTestExecutionContext & options)
+test_data_factory::TestDataBuildOptions BuildTestDataOptions(
+    const RHBMTestExecutionContext & options)
 {
-    test_data_factory::TestDataFactory factory(
-        linearization_service::LinearizationSpec::AtomDecode());
-    factory.SetFittingRange(options.options.fit_range_min, options.options.fit_range_max);
-    return factory;
+    return test_data_factory::TestDataBuildOptions{
+        linearization_service::LinearizationSpec::AtomDecode(),
+        linearization_service::LinearizationRange{
+            options.options.fit_range_min,
+            options.options.fit_range_max
+        }
+    };
 }
 
-test_data_factory::TestDataFactory::NeighborhoodScenario BuildNeighborhoodScenario(
+test_data_factory::NeighborhoodScenario BuildNeighborhoodScenario(
     const Eigen::VectorXd & model_par_prior,
     const NeighborDistanceScenarioConfig & scenario,
     double error_sigma,
     double neighbor_distance,
     bool include_sampling_summary = false)
 {
-    return test_data_factory::TestDataFactory::NeighborhoodScenario{
+    return test_data_factory::NeighborhoodScenario{
         GaussianModel3D::FromVector(model_par_prior),
         scenario.sampling_entry_size,
         error_sigma,
@@ -596,7 +600,7 @@ void RunSimulationTestOnBenchMark(const RHBMTestExecutionContext & options)
         BuildDescendingSweep(16, 2.5, 0.1)
     } };
     const auto model_par_prior{ MakeDefaultModelPrior() };
-    auto data_factory{ BuildDataFactory(options) };
+    const auto test_data_options{ BuildTestDataOptions(options) };
     for (auto error_sigma : scenario.error_list)
     {
         std::vector<LinePlotPanel> linearized_panels;
@@ -604,12 +608,13 @@ void RunSimulationTestOnBenchMark(const RHBMTestExecutionContext & options)
         for (double distance : scenario.distance_list)
         {
             const auto test_input{
-                data_factory.BuildNeighborhoodTestInput(
+                test_data_factory::BuildNeighborhoodTestInput(
                     BuildNeighborhoodScenario(
                         model_par_prior,
                         scenario,
                         error_sigma,
-                        distance))
+                        distance),
+                    test_data_options)
             };
             rhbm_tester::BetaMDPDETestBias no_cut_result;
             rhbm_tester::BetaMDPDETestBias cut_result;
@@ -658,7 +663,7 @@ void RunSimulationTestOnDataOutlier(const RHBMTestExecutionContext & options)
         std::vector<double>{ options.options.alpha_r }
     } };
     const auto model_par_prior{ MakeDefaultModelPrior() };
-    auto data_factory{ BuildDataFactory(options) };
+    const auto test_data_options{ BuildTestDataOptions(options) };
     std::vector<double> error_list{ 0.1, 0.2, 0.3 };
     const auto outlier_list{ BuildLinearSweep(9, 0.025) };
     BiasPlotRequest plot_request;
@@ -679,7 +684,7 @@ void RunSimulationTestOnDataOutlier(const RHBMTestExecutionContext & options)
         {
             rhbm_tester::BetaMDPDETestBias bias;
             const auto test_input{
-                data_factory.BuildBetaTestInput(test_data_factory::TestDataFactory::BetaScenario{
+                test_data_factory::BuildBetaTestInput(test_data_factory::BetaScenario{
                     GaussianModel3D::FromVector(model_par_prior),
                     scenario.sampling_entry_size,
                     error_sigma,
@@ -688,7 +693,7 @@ void RunSimulationTestOnDataOutlier(const RHBMTestExecutionContext & options)
                     {},
                     scenario.alpha_r_list,
                     true
-                })
+                }, test_data_options)
             };
             rhbm_tester::RunBetaMDPDETest(
                 bias,
@@ -738,7 +743,7 @@ void RunSimulationTestOnMemberOutlier(const RHBMTestExecutionContext & options)
 
     const auto model_par_prior{ MakeDefaultModelPrior() };
     const auto model_par_sigma{ MakeDefaultModelSigma() };
-    auto data_factory{ BuildDataFactory(options) };
+    const auto test_data_options{ BuildTestDataOptions(options) };
     const auto outlier_list{ BuildLinearSweep(9, 0.025) };
     BiasPlotRequest plot_request;
     plot_request.output_name = "bias_outlier_in_member.pdf";
@@ -758,7 +763,7 @@ void RunSimulationTestOnMemberOutlier(const RHBMTestExecutionContext & options)
         {
             rhbm_tester::MuMDPDETestBias bias;
             const auto test_input{
-                data_factory.BuildMuTestInput(test_data_factory::TestDataFactory::MuScenario{
+                test_data_factory::BuildMuTestInput(test_data_factory::MuScenario{
                     scenario.member_size,
                     model_par_prior,
                     model_par_sigma,
@@ -769,7 +774,7 @@ void RunSimulationTestOnMemberOutlier(const RHBMTestExecutionContext & options)
                     {},
                     scenario.alpha_g_list,
                     true
-                })
+                }, test_data_options)
             };
             rhbm_tester::RunMuMDPDETest(
                 bias,
@@ -806,7 +811,7 @@ void RunSimulationTestOnModelAlphaData(const RHBMTestExecutionContext & options)
         std::vector<double>{ options.options.alpha_r }
     } };
     const auto model_par_prior{ MakeDefaultModelPrior() };
-    auto data_factory{ BuildDataFactory(options) };
+    const auto test_data_options{ BuildTestDataOptions(options) };
     std::vector<double> error_list{ 0.1, 0.2, 0.3 };
     const auto outlier_list{ BuildLinearSweep(10, 0.05) };
     BiasPlotRequest plot_request;
@@ -826,7 +831,7 @@ void RunSimulationTestOnModelAlphaData(const RHBMTestExecutionContext & options)
         {
             rhbm_tester::BetaMDPDETestBias bias;
             const auto test_input{
-                data_factory.BuildBetaTestInput(test_data_factory::TestDataFactory::BetaScenario{
+                test_data_factory::BuildBetaTestInput(test_data_factory::BetaScenario{
                     GaussianModel3D::FromVector(model_par_prior),
                     scenario.sampling_entry_size,
                     error_sigma,
@@ -835,7 +840,7 @@ void RunSimulationTestOnModelAlphaData(const RHBMTestExecutionContext & options)
                     {},
                     scenario.alpha_r_list,
                     true
-                })
+                }, test_data_options)
             };
             rhbm_tester::RunBetaMDPDETest(
                 bias,
@@ -884,7 +889,7 @@ void RunSimulationTestOnModelAlphaMember(const RHBMTestExecutionContext & option
 
     const auto model_par_prior{ MakeDefaultModelPrior() };
     const auto model_par_sigma{ MakeDefaultModelSigma() };
-    auto data_factory{ BuildDataFactory(options) };
+    const auto test_data_options{ BuildTestDataOptions(options) };
     const auto outlier_list{ BuildLinearSweep(10, 0.05) };
     BiasPlotRequest plot_request;
     plot_request.output_name = "bias_outlier_with_alpha_in_member.pdf";
@@ -903,7 +908,7 @@ void RunSimulationTestOnModelAlphaMember(const RHBMTestExecutionContext & option
         {
             rhbm_tester::MuMDPDETestBias bias;
             const auto test_input{
-                data_factory.BuildMuTestInput(test_data_factory::TestDataFactory::MuScenario{
+                test_data_factory::BuildMuTestInput(test_data_factory::MuScenario{
                     scenario.member_size,
                     model_par_prior,
                     model_par_sigma,
@@ -914,7 +919,7 @@ void RunSimulationTestOnModelAlphaMember(const RHBMTestExecutionContext & option
                     {},
                     scenario.alpha_g_list,
                     true
-                })
+                }, test_data_options)
             };
             rhbm_tester::RunMuMDPDETest(
                 bias,
@@ -953,7 +958,7 @@ void RunSimulationTestOnNeighborDistance(const RHBMTestExecutionContext & option
         BuildDescendingSweep(16, 2.5, 0.1)
     } };
     const auto model_par_prior{ MakeDefaultModelPrior() };
-    auto data_factory{ BuildDataFactory(options) };
+    const auto test_data_options{ BuildTestDataOptions(options) };
     BiasPlotRequest plot_request;
     plot_request.output_name = "bias_from_neighbor_atom.pdf";
     plot_request.flavor = BiasPlotFlavor::NeighborDistance;
@@ -974,13 +979,14 @@ void RunSimulationTestOnNeighborDistance(const RHBMTestExecutionContext & option
         for (size_t i = 0; i < scenario.distance_list.size(); i++)
         {
             const auto test_input{
-                data_factory.BuildNeighborhoodTestInput(
+                test_data_factory::BuildNeighborhoodTestInput(
                     BuildNeighborhoodScenario(
                         model_par_prior,
                         scenario,
                         error_sigma,
                         scenario.distance_list.at(i),
-                        true))
+                        true),
+                    test_data_options)
             };
             rhbm_tester::BetaMDPDETestBias no_cut_result;
             rhbm_tester::BetaMDPDETestBias cut_result;

@@ -83,11 +83,7 @@ void ExpectSamplingEntriesEquals(
 
 TEST(TestDataFactoryTest, BuildBetaTestInputIsReproducibleWithFixedSeed)
 {
-    tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
-    factory.SetFittingRange(0.0, 1.0);
-
-    const auto scenario{ tdf::TestDataFactory::BetaScenario{
+    const auto scenario{ tdf::BetaScenario{
         rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
         8,
         0.05,
@@ -96,8 +92,8 @@ TEST(TestDataFactoryTest, BuildBetaTestInputIsReproducibleWithFixedSeed)
         42
     } };
 
-    const auto first_input{ factory.BuildBetaTestInput(scenario) };
-    const auto second_input{ factory.BuildBetaTestInput(scenario) };
+    const auto first_input{ tdf::BuildBetaTestInput(scenario) };
+    const auto second_input{ tdf::BuildBetaTestInput(scenario) };
 
     ASSERT_EQ(first_input.replica_datasets.size(), second_input.replica_datasets.size());
     for (size_t i = 0; i < first_input.replica_datasets.size(); i++)
@@ -111,11 +107,7 @@ TEST(TestDataFactoryTest, BuildBetaTestInputIsReproducibleWithFixedSeed)
 
 TEST(TestDataFactoryTest, BuildBetaTestInputChangesWhenOutlierPolicyChanges)
 {
-    tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
-    factory.SetFittingRange(0.0, 1.0);
-
-    const auto base_scenario{ tdf::TestDataFactory::BetaScenario{
+    const auto base_scenario{ tdf::BetaScenario{
         rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
         8,
         0.0,
@@ -127,8 +119,8 @@ TEST(TestDataFactoryTest, BuildBetaTestInputChangesWhenOutlierPolicyChanges)
     auto outlier_scenario{ base_scenario };
     outlier_scenario.outlier_ratio = 1.0;
 
-    const auto baseline_input{ factory.BuildBetaTestInput(base_scenario) };
-    const auto outlier_input{ factory.BuildBetaTestInput(outlier_scenario) };
+    const auto baseline_input{ tdf::BuildBetaTestInput(base_scenario) };
+    const auto outlier_input{ tdf::BuildBetaTestInput(outlier_scenario) };
 
     ASSERT_EQ(baseline_input.replica_datasets.size(), 1u);
     ASSERT_EQ(outlier_input.replica_datasets.size(), 1u);
@@ -140,11 +132,7 @@ TEST(TestDataFactoryTest, BuildBetaTestInputChangesWhenOutlierPolicyChanges)
 
 TEST(TestDataFactoryTest, BuildBetaTestInputChangesWhenNoisePolicyChanges)
 {
-    tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
-    factory.SetFittingRange(0.0, 1.0);
-
-    const auto noiseless_scenario{ tdf::TestDataFactory::BetaScenario{
+    const auto noiseless_scenario{ tdf::BetaScenario{
         rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
         8,
         0.0,
@@ -156,8 +144,8 @@ TEST(TestDataFactoryTest, BuildBetaTestInputChangesWhenNoisePolicyChanges)
     auto noisy_scenario{ noiseless_scenario };
     noisy_scenario.data_error_sigma = 0.1;
 
-    const auto noiseless_input{ factory.BuildBetaTestInput(noiseless_scenario) };
-    const auto noisy_input{ factory.BuildBetaTestInput(noisy_scenario) };
+    const auto noiseless_input{ tdf::BuildBetaTestInput(noiseless_scenario) };
+    const auto noisy_input{ tdf::BuildBetaTestInput(noisy_scenario) };
 
     ASSERT_EQ(noiseless_input.replica_datasets.size(), 1u);
     ASSERT_EQ(noisy_input.replica_datasets.size(), 1u);
@@ -169,22 +157,23 @@ TEST(TestDataFactoryTest, BuildBetaTestInputChangesWhenNoisePolicyChanges)
 
 TEST(TestDataFactoryTest, BuildBetaTestInputUsesExpectedZeroDistanceGaussianResponse)
 {
-    tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
-    factory.SetFittingRange(0.0, 0.0);
+    const auto options{ tdf::TestDataBuildOptions{
+        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode(),
+        rhbm_gem::linearization_service::LinearizationRange{ 0.0, 0.0 }
+    } };
 
     constexpr double amplitude{ 2.0 };
     constexpr double width{ 0.5 };
     constexpr double intercept{ 0.0 };
     const auto input{
-        factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
+        tdf::BuildBetaTestInput(tdf::BetaScenario{
             rg::GaussianModel3D{ amplitude, width, intercept },
             1,
             0.0,
             0.0,
             1,
             42
-        })
+        }, options)
     };
 
     ASSERT_EQ(input.replica_datasets.size(), 1u);
@@ -204,10 +193,7 @@ TEST(TestDataFactoryTest, BuildBetaTestInputUsesExpectedZeroDistanceGaussianResp
 
 TEST(TestDataFactoryTest, BuildMuTestInputIsReproducibleWithFixedSeed)
 {
-    tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
-
-    const auto scenario{ tdf::TestDataFactory::MuScenario{
+    const auto scenario{ tdf::MuScenario{
         4,
         MakeVector({ 1.0, 0.5, 0.1 }),
         MakeVector({ 0.05, 0.025, 0.01 }),
@@ -218,8 +204,8 @@ TEST(TestDataFactoryTest, BuildMuTestInputIsReproducibleWithFixedSeed)
         77
     } };
 
-    const auto first_input{ factory.BuildMuTestInput(scenario) };
-    const auto second_input{ factory.BuildMuTestInput(scenario) };
+    const auto first_input{ tdf::BuildMuTestInput(scenario) };
+    const auto second_input{ tdf::BuildMuTestInput(scenario) };
 
     ASSERT_EQ(first_input.replica_beta_matrices.size(), second_input.replica_beta_matrices.size());
     for (size_t i = 0; i < first_input.replica_beta_matrices.size(); i++)
@@ -233,12 +219,8 @@ TEST(TestDataFactoryTest, BuildMuTestInputIsReproducibleWithFixedSeed)
 
 TEST(TestDataFactoryTest, BuildNeighborhoodTestInputProvidesPairedDatasetsAndSamplingSummary)
 {
-    tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
-    factory.SetFittingRange(0.0, 1.0);
-
     const auto input{
-        factory.BuildNeighborhoodTestInput(tdf::TestDataFactory::NeighborhoodScenario{
+        tdf::BuildNeighborhoodTestInput(tdf::NeighborhoodScenario{
             rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
             8,
             0.05,
@@ -279,16 +261,12 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputProvidesPairedDatasetsAndSam
 
 TEST(TestDataFactoryTest, BuildNeighborhoodTestInputSamplingSummaryIncludesNeighborContribution)
 {
-    tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
-    factory.SetFittingRange(0.0, 1.0);
-
     constexpr double amplitude{ 2.0 };
     constexpr double width{ 0.5 };
     constexpr double intercept{ 0.25 };
     constexpr double neighbor_distance{ 1.0 };
     const auto input{
-        factory.BuildNeighborhoodTestInput(tdf::TestDataFactory::NeighborhoodScenario{
+        tdf::BuildNeighborhoodTestInput(tdf::NeighborhoodScenario{
             rg::GaussianModel3D{ amplitude, width, intercept },
             1,
             0.0,
@@ -322,11 +300,7 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputSamplingSummaryIncludesNeigh
 
 TEST(TestDataFactoryTest, BuildNeighborhoodTestInputIsReproducibleWithFixedSeed)
 {
-    tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
-    factory.SetFittingRange(0.0, 1.0);
-
-    const auto scenario{ tdf::TestDataFactory::NeighborhoodScenario{
+    const auto scenario{ tdf::NeighborhoodScenario{
         rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
         8,
         0.05,
@@ -342,8 +316,8 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputIsReproducibleWithFixedSeed)
         11
     } };
 
-    const auto first_input{ factory.BuildNeighborhoodTestInput(scenario) };
-    const auto second_input{ factory.BuildNeighborhoodTestInput(scenario) };
+    const auto first_input{ tdf::BuildNeighborhoodTestInput(scenario) };
+    const auto second_input{ tdf::BuildNeighborhoodTestInput(scenario) };
 
     ASSERT_EQ(
         first_input.no_cut_input.replica_datasets.size(),
@@ -371,11 +345,8 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputIsReproducibleWithFixedSeed)
 
 TEST(TestDataFactoryTest, BuildTestInputsRejectNonPositiveGaussianWidth)
 {
-    tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
-
     EXPECT_THROW(
-        factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
+        tdf::BuildBetaTestInput(tdf::BetaScenario{
             rg::GaussianModel3D{ 1.0, 0.0, 0.0 },
             8,
             0.05,
@@ -385,7 +356,7 @@ TEST(TestDataFactoryTest, BuildTestInputsRejectNonPositiveGaussianWidth)
         }),
         std::invalid_argument);
     EXPECT_THROW(
-        factory.BuildNeighborhoodTestInput(tdf::TestDataFactory::NeighborhoodScenario{
+        tdf::BuildNeighborhoodTestInput(tdf::NeighborhoodScenario{
             rg::GaussianModel3D{ 1.0, -0.5, 0.0 },
             8,
             0.05,
@@ -405,11 +376,8 @@ TEST(TestDataFactoryTest, BuildTestInputsRejectNonPositiveGaussianWidth)
 
 TEST(TestDataFactoryTest, BuildMuTestInputRejectsInvalidGaussianVectorSize)
 {
-    tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
-
     EXPECT_THROW(
-        factory.BuildMuTestInput(tdf::TestDataFactory::MuScenario{
+        tdf::BuildMuTestInput(tdf::MuScenario{
             4,
             MakeVector({ 1.0, 0.5 }),
             MakeVector({ 0.05, 0.025, 0.01 }),
@@ -422,25 +390,50 @@ TEST(TestDataFactoryTest, BuildMuTestInputRejectsInvalidGaussianVectorSize)
         std::invalid_argument);
 }
 
-TEST(TestDataFactoryTest, SetFittingRangeRejectsInvalidRange)
+TEST(TestDataFactoryTest, BuildBetaTestInputRejectsInvalidFittingRange)
 {
-    tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
+    const auto scenario{ tdf::BetaScenario{
+        rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
+        8,
+        0.05,
+        0.1,
+        1,
+        42
+    } };
 
-    EXPECT_THROW(factory.SetFittingRange(-1.0, 1.0), std::invalid_argument);
-    EXPECT_THROW(factory.SetFittingRange(2.0, 1.0), std::invalid_argument);
     EXPECT_THROW(
-        factory.SetFittingRange(0.0, std::numeric_limits<double>::infinity()),
+        tdf::BuildBetaTestInput(
+            scenario,
+            tdf::TestDataBuildOptions{
+                rhbm_gem::linearization_service::LinearizationSpec::AtomDecode(),
+                rhbm_gem::linearization_service::LinearizationRange{ -1.0, 1.0 }
+            }),
+        std::invalid_argument);
+    EXPECT_THROW(
+        tdf::BuildBetaTestInput(
+            scenario,
+            tdf::TestDataBuildOptions{
+                rhbm_gem::linearization_service::LinearizationSpec::AtomDecode(),
+                rhbm_gem::linearization_service::LinearizationRange{ 2.0, 1.0 }
+            }),
+        std::invalid_argument);
+    EXPECT_THROW(
+        tdf::BuildBetaTestInput(
+            scenario,
+            tdf::TestDataBuildOptions{
+                rhbm_gem::linearization_service::LinearizationSpec::AtomDecode(),
+                rhbm_gem::linearization_service::LinearizationRange{
+                    0.0,
+                    std::numeric_limits<double>::infinity()
+                }
+            }),
         std::invalid_argument);
 }
 
 TEST(TestDataFactoryTest, BuildNeighborhoodTestInputRejectsInvalidSamplingInputs)
 {
-    tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
-
     EXPECT_THROW(
-        factory.BuildNeighborhoodTestInput(tdf::TestDataFactory::NeighborhoodScenario{
+        tdf::BuildNeighborhoodTestInput(tdf::NeighborhoodScenario{
             rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
             8,
             0.05,
@@ -457,7 +450,7 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputRejectsInvalidSamplingInputs
         }),
         std::invalid_argument);
     EXPECT_THROW(
-        factory.BuildNeighborhoodTestInput(tdf::TestDataFactory::NeighborhoodScenario{
+        tdf::BuildNeighborhoodTestInput(tdf::NeighborhoodScenario{
             rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
             8,
             0.05,
@@ -474,7 +467,7 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputRejectsInvalidSamplingInputs
         }),
         std::invalid_argument);
     EXPECT_THROW(
-        factory.BuildNeighborhoodTestInput(tdf::TestDataFactory::NeighborhoodScenario{
+        tdf::BuildNeighborhoodTestInput(tdf::NeighborhoodScenario{
             rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
             8,
             0.05,
@@ -494,11 +487,8 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputRejectsInvalidSamplingInputs
 
 TEST(TestDataFactoryTest, BuildBetaTestInputRejectsNonPositiveScenarioSizes)
 {
-    tdf::TestDataFactory factory(
-        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode());
-
     EXPECT_THROW(
-        factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
+        tdf::BuildBetaTestInput(tdf::BetaScenario{
             rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
             0,
             0.05,
@@ -508,7 +498,7 @@ TEST(TestDataFactoryTest, BuildBetaTestInputRejectsNonPositiveScenarioSizes)
         }),
         std::invalid_argument);
     EXPECT_THROW(
-        factory.BuildBetaTestInput(tdf::TestDataFactory::BetaScenario{
+        tdf::BuildBetaTestInput(tdf::BetaScenario{
             rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
             8,
             0.05,
