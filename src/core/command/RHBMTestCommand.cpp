@@ -571,37 +571,6 @@ void RunSimulationTestOnNeighborDistance(const RHBMTestRequest & request)
     rhbm_test_plotting::SaveDataOutlierBiasPlot(request, plot_request);
 }
 
-bool RunRHBMTestWorkflow(const RHBMTestRequest & request)
-{
-    switch (request.tester_choice)
-    {
-    case TesterType::BENCHMARK:
-        RunSimulationTestOnBenchMark(request);
-        return true;
-    case TesterType::DATA_OUTLIER:
-        RunSimulationTestOnDataOutlier(request);
-        return true;
-    case TesterType::MEMBER_OUTLIER:
-        RunSimulationTestOnMemberOutlier(request);
-        return true;
-    case TesterType::MODEL_ALPHA_DATA:
-        RunSimulationTestOnModelAlphaData(request);
-        return true;
-    case TesterType::MODEL_ALPHA_MEMBER:
-        RunSimulationTestOnModelAlphaMember(request);
-        return true;
-    case TesterType::NEIGHBOR_DISTANCE:
-        RunSimulationTestOnNeighborDistance(request);
-        return true;
-    default:
-        Logger::Log(
-            LogLevel::Error,
-            "Invalid tester choice reached execution path: ["
-                + std::to_string(static_cast<int>(request.tester_choice)) + "]");
-        return false;
-    }
-}
-
 RHBMTestCommand::RHBMTestCommand() :
     CommandWithRequest<RHBMTestRequest>{}
 {
@@ -652,7 +621,34 @@ void RHBMTestCommand::ValidateOptions()
 
 bool RHBMTestCommand::ExecuteImpl()
 {
-    return RunRHBMTestWorkflow(RequestOptions());
+    const auto & request{ RequestOptions() };
+    switch (request.tester_choice)
+    {
+    case TesterType::BENCHMARK:
+        RunSimulationTestOnBenchMark(request);
+        return true;
+    case TesterType::DATA_OUTLIER:
+        RunSimulationTestOnDataOutlier(request);
+        return true;
+    case TesterType::MEMBER_OUTLIER:
+        RunSimulationTestOnMemberOutlier(request);
+        return true;
+    case TesterType::MODEL_ALPHA_DATA:
+        RunSimulationTestOnModelAlphaData(request);
+        return true;
+    case TesterType::MODEL_ALPHA_MEMBER:
+        RunSimulationTestOnModelAlphaMember(request);
+        return true;
+    case TesterType::NEIGHBOR_DISTANCE:
+        RunSimulationTestOnNeighborDistance(request);
+        return true;
+    default:
+        Logger::Log(
+            LogLevel::Error,
+            "Invalid tester choice reached execution path: ["
+                + std::to_string(static_cast<int>(request.tester_choice)) + "]");
+        return false;
+    }
 }
 
 } // namespace rhbm_gem
