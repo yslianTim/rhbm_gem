@@ -21,15 +21,16 @@ That manifest is expanded by:
 Public command headers separate concerns:
 
 - [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp)
+  - `ListCommands()`
+  - one `Run*` declaration per command
+- [`include/rhbm_gem/core/command/CommandTypes.hpp`](/include/rhbm_gem/core/command/CommandTypes.hpp)
+  - shared public enums
   - `CommandRequestBase`
   - one plain request DTO per command
   - default data/database path helpers
   - `ValidationIssue`
   - `CommandResult`
-  - `ListCommands()`
-  - one `Run*` declaration per command
-- [`include/rhbm_gem/core/command/CommandEnums.hpp`](/include/rhbm_gem/core/command/CommandEnums.hpp)
-  - shared public enums
+  - `CommandInfo`
 
 The public API is centered on typed requests, `Run*` entrypoints, shared enums, and path helpers.
 CLI wiring, enum metadata, and request binding schema stay internal.
@@ -73,7 +74,7 @@ Public enum types stay small; alias maps and binding tokens are internal-only.
 - one request type per command
 - `CommandResult`
 - `ValidationIssue`
-- shared enums from `CommandEnums.hpp`
+- shared enums from `CommandTypes.hpp`
 
 Request type registration and `Run*` binding membership are expanded from
 `CommandManifest.def`. Individual request fields still come from

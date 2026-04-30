@@ -18,6 +18,7 @@ namespace command_detail {
 class CommandObjectCache
 {
     using ObjectHandle = std::variant<std::shared_ptr<ModelObject>, std::shared_ptr<MapObject>>;
+    std::unordered_map<std::string, ObjectHandle> m_object_map;
 
 public:
     enum class ObjectKind
@@ -97,7 +98,6 @@ private:
         throw std::runtime_error("Invalid data type for " + key_tag);
     }
 
-    std::unordered_map<std::string, ObjectHandle> m_object_map;
 };
 
 } // namespace command_detail

@@ -19,7 +19,6 @@ class AtomObject;
 
 class MapSimulationCommand : public CommandWithRequest<MapSimulationRequest>
 {
-private:
     std::vector<AtomObject *> m_selected_atom_list;
     std::unordered_map<int, double> m_atom_charge_map;
     std::shared_ptr<ModelObject> m_model_object;

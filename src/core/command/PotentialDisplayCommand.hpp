@@ -16,7 +16,6 @@ class ModelObject;
 
 class PotentialDisplayCommand : public CommandWithRequest<PotentialDisplayRequest>
 {
-private:
     std::unique_ptr<::AtomSelector> m_atom_selector;
     std::vector<std::shared_ptr<ModelObject>> m_model_object_list;
     std::unordered_map<std::string, std::vector<std::shared_ptr<ModelObject>>> m_ref_model_object_list_map;

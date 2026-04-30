@@ -15,7 +15,6 @@ namespace rhbm_gem {
 
 class PositionEstimationCommand : public CommandWithRequest<PositionEstimationRequest>
 {
-private:
     std::vector<VoxelNode> m_selected_voxel_list;
     std::vector<VoxelNode> m_query_point_list;
     std::vector<std::array<float, 3>> m_position_list;

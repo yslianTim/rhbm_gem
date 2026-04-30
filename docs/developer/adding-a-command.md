@@ -10,7 +10,7 @@ Related references:
 Public API:
 
 - [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp)
-- [`include/rhbm_gem/core/command/CommandEnums.hpp`](/include/rhbm_gem/core/command/CommandEnums.hpp) only when the command needs a new shared enum
+- [`include/rhbm_gem/core/command/CommandTypes.hpp`](/include/rhbm_gem/core/command/CommandTypes.hpp)
 
 Internal wiring:
 
@@ -51,7 +51,7 @@ The manifest drives:
 ## Public Request DTO
 
 Add `<YourCommand>Request` to
-[`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp).
+[`include/rhbm_gem/core/command/CommandTypes.hpp`](/include/rhbm_gem/core/command/CommandTypes.hpp).
 
 Requests are plain DTOs. Shared options come from `CommandRequestBase`:
 
@@ -61,7 +61,7 @@ Requests are plain DTOs. Shared options come from `CommandRequestBase`:
 
 Command-specific fields live directly on the request type.
 
-Shared default path helpers such as `GetDefaultDatabasePath()` also live in `CommandApi.hpp`.
+Shared default path helpers such as `GetDefaultDatabasePath()` also live in `CommandTypes.hpp`.
 
 `Run*` declarations are generated from `CommandManifest.def`, so adding a request DTO does not
 require a handwritten `RunYourCommand(...)` declaration.

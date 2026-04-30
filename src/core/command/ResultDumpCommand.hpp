@@ -16,7 +16,6 @@ class MapObject;
 
 class ResultDumpCommand : public CommandWithRequest<ResultDumpRequest>
 {
-private:
     std::string m_map_key_tag;
     std::unordered_map<std::string, std::vector<AtomObject *>> m_selected_atom_list_map;
     std::vector<std::shared_ptr<ModelObject>> m_model_object_list;

@@ -6,7 +6,7 @@
 #include <string_view>
 #include <type_traits>
 
-#include <rhbm_gem/core/command/CommandEnums.hpp>
+#include <rhbm_gem/core/command/CommandTypes.hpp>
 
 namespace rhbm_gem::internal {
 

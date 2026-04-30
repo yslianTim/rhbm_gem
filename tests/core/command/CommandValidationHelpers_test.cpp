@@ -9,7 +9,7 @@
 
 #include "command/detail/CommandBase.hpp"
 #include "support/CommandTestHelpers.hpp"
-#include <rhbm_gem/core/command/CommandEnums.hpp>
+#include <rhbm_gem/core/command/CommandTypes.hpp>
 
 namespace rg = rhbm_gem;
 
