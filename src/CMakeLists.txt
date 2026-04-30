@@ -3,6 +3,7 @@ target_compile_features(rhbm_gem PUBLIC cxx_std_17)
 
 set(RHBM_GEM_COMMAND_SOURCES
     core/command/RHBMTestCommand.cpp
+    core/command/detail/RHBMTestPlotting.cpp
     core/command/MapSimulationCommand.cpp
     core/command/PotentialAnalysisCommand.cpp
     core/command/PotentialDisplayCommand.cpp
