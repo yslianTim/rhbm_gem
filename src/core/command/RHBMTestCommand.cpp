@@ -26,20 +26,12 @@ using rhbm_test_plotting::BiasXAxisMode;
 using rhbm_test_plotting::FormatDataBiasPanelLabel;
 using rhbm_test_plotting::FormatMemberBiasPanelLabel;
 using rhbm_test_plotting::MakeBiasCurve;
-using rhbm_test_plotting::TryAppendBenchmarkLinearizedPanel;
 
 namespace {
-constexpr std::string_view kTesterOption{ "--tester" };
-constexpr std::string_view kFitMinOption{ "--fit-min" };
-constexpr std::string_view kFitMaxOption{ "--fit-max" };
-constexpr std::string_view kFitRangeIssue{ "--fit-range" };
-constexpr std::string_view kAlphaROption{ "--alpha-r" };
-constexpr std::string_view kAlphaGOption{ "--alpha-g" };
-constexpr int kGausParSize{ GaussianModel3D::ParameterSize() };
 
 Eigen::VectorXd MakeDefaultModelPrior()
 {
-    Eigen::VectorXd model_par_prior{ Eigen::VectorXd::Zero(kGausParSize) };
+    Eigen::VectorXd model_par_prior{ Eigen::VectorXd::Zero(GaussianModel3D::ParameterSize()) };
     model_par_prior(0) = 1.0;
     model_par_prior(1) = 0.5;
     model_par_prior(2) = 0.0;
@@ -48,7 +40,7 @@ Eigen::VectorXd MakeDefaultModelPrior()
 
 Eigen::VectorXd MakeDefaultModelSigma()
 {
-    Eigen::VectorXd model_par_sigma{ Eigen::VectorXd::Zero(kGausParSize) };
+    Eigen::VectorXd model_par_sigma{ Eigen::VectorXd::Zero(GaussianModel3D::ParameterSize()) };
     model_par_sigma(0) = 0.050;
     model_par_sigma(1) = 0.025;
     model_par_sigma(2) = 0.010;
@@ -75,8 +67,7 @@ std::vector<double> BuildDescendingSweep(int count, double start, double step)
     return values;
 }
 
-test_data_factory::TestDataBuildOptions BuildTestDataOptions(
-    const RHBMTestRequest & request)
+test_data_factory::TestDataBuildOptions BuildTestDataOptions(const RHBMTestRequest & request)
 {
     return test_data_factory::TestDataBuildOptions{
         linearization_service::LinearizationSpec::AtomDecode(),
@@ -113,6 +104,8 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
     panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Mdpde, neighbor_type_list.size()));
     panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::TrainedMdpde, neighbor_type_list.size()));
 
+    std::vector<LinePlotPanel> linearized_panels;
+    linearized_panels.reserve(neighbor_type_list.size());
     for (const auto neighbor_type : neighbor_type_list)
     {
         test_data_factory::AtomNeighborhoodScenario base_scenario;
@@ -128,9 +121,6 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
         base_scenario.summary_radius_max = 4.0;
         base_scenario.replica_size = 10;
 
-        std::vector<LinePlotPanel> linearized_panels;
-        linearized_panels.reserve(1);
-
         const auto test_input{
             test_data_factory::BuildAtomNeighborhoodTestInput(base_scenario, test_data_options)
         };
@@ -138,7 +128,7 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
         rhbm_tester::BetaMDPDETestBias cut_result;
         rhbm_tester::RunBetaMDPDETest(no_cut_result, test_input.no_cut_input, request.job_count);
         rhbm_tester::RunBetaMDPDETest(cut_result, test_input.cut_input, request.job_count);
-        TryAppendBenchmarkLinearizedPanel(
+        rhbm_test_plotting::TryAppendBenchmarkLinearizedPanel(
             linearized_panels,
             0.0,
             test_input.no_cut_input.replica_datasets.front(),
@@ -170,11 +160,10 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
             panel.curves.at(2),
             neighbor_type_value,
             cut_result.mdpde.trained_alpha.value());
-        //rhbm_test_plotting::SaveBenchmarkLinearizedDatasetReport(request, error_sigma, linearized_panels);
+        
     }
-
     plot_request.panels.emplace_back(std::move(panel));
-
+    rhbm_test_plotting::SaveBenchmarkLinearizedDatasetReport(request, error_sigma, linearized_panels);
     rhbm_test_plotting::SaveDataOutlierBiasPlot(request, plot_request);
 }
 
@@ -243,8 +232,8 @@ void RunSimulationTestOnMemberOutlier(const RHBMTestRequest & request)
     ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnMemberOutlier");
 
     auto outlier_prior_list{ std::vector<Eigen::VectorXd>{
-        Eigen::VectorXd::Zero(kGausParSize),
-        Eigen::VectorXd::Zero(kGausParSize)
+        Eigen::VectorXd::Zero(GaussianModel3D::ParameterSize()),
+        Eigen::VectorXd::Zero(GaussianModel3D::ParameterSize())
     } };
     outlier_prior_list.at(0)(0) = 1.50;
     outlier_prior_list.at(0)(1) = 0.50;
@@ -374,8 +363,8 @@ void RunSimulationTestOnModelAlphaMember(const RHBMTestRequest & request)
     ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnModelAlphaMember");
 
     auto outlier_prior_list{ std::vector<Eigen::VectorXd>{
-        Eigen::VectorXd::Zero(kGausParSize),
-        Eigen::VectorXd::Zero(kGausParSize)
+        Eigen::VectorXd::Zero(GaussianModel3D::ParameterSize()),
+        Eigen::VectorXd::Zero(GaussianModel3D::ParameterSize())
     } };
     outlier_prior_list.at(0)(0) = 1.50;
     outlier_prior_list.at(0)(1) = 0.50;
@@ -540,30 +529,30 @@ void RHBMTestCommand::NormalizeRequest()
     auto & request{ MutableRequest() };
     CoerceEnum(
         request.tester_choice,
-        kTesterOption,
+        "--tester",
         TesterType::BENCHMARK,
         "Tester choice");
     CoerceFiniteNonNegativeScalar(
         request.fit_range_min,
-        kFitMinOption,
+        "--fit-min",
         0.0,
         LogLevel::Error,
         "Minimum fitting range");
     CoerceFiniteNonNegativeScalar(
         request.fit_range_max,
-        kFitMaxOption,
+        "--fit-max",
         1.0,
         LogLevel::Error,
         "Maximum fitting range");
     CoerceFinitePositiveScalar(
         request.alpha_r,
-        kAlphaROption,
+        "--alpha-r",
         0.1,
         LogLevel::Error,
         "Alpha-R");
     CoerceFinitePositiveScalar(
         request.alpha_g,
-        kAlphaGOption,
+        "--alpha-g",
         0.2,
         LogLevel::Error,
         "Alpha-G");
@@ -574,7 +563,7 @@ void RHBMTestCommand::ValidateOptions()
     const auto & request{ RequestOptions() };
     RequireCondition(
         request.fit_range_min <= request.fit_range_max,
-        kFitRangeIssue,
+        "--fit-range",
         "Expected --fit-min <= --fit-max.");
 }
 
@@ -602,8 +591,7 @@ bool RHBMTestCommand::ExecuteImpl()
         RunSimulationTestOnNeighborDistance(request);
         return true;
     default:
-        Logger::Log(
-            LogLevel::Error,
+        Logger::Log(LogLevel::Error,
             "Invalid tester choice reached execution path: ["
                 + std::to_string(static_cast<int>(request.tester_choice)) + "]");
         return false;
