@@ -7,12 +7,12 @@
 #include "CommandRequestSchema.hpp"
 
 #include <CLI/CLI.hpp>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <sstream>
 #include <string>
 #include <string_view>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -64,8 +64,40 @@ std::optional<std::string> MakeCliDefaultValue(const std::vector<ValueType> & va
     return stream.str();
 }
 
+void ApplyCliOptionSettings(CLI::Option & option, bool required)
+{
+    if (required)
+    {
+        option.required();
+    }
+}
+
+template <typename DefaultType>
+void ApplyCliOptionSettings(
+    CLI::Option & option,
+    bool required,
+    const std::optional<DefaultType> & default_value)
+{
+    ApplyCliOptionSettings(option, required);
+    if (default_value.has_value())
+    {
+        option.default_val(*default_value);
+    }
+}
+
+std::optional<std::string> MakeCliPathDefaultText(const std::filesystem::path & value)
+{
+    const auto default_value{ MakeCliDefaultValue(value) };
+    if (!default_value.has_value())
+    {
+        return std::nullopt;
+    }
+    return default_value->string();
+}
+
 std::pair<std::string, std::vector<std::string>> ParseReferenceGroupArgument(
     const std::string & text,
+    const std::string & option_name,
     char assignment_delimiter,
     char item_delimiter)
 {
@@ -73,7 +105,7 @@ std::pair<std::string, std::vector<std::string>> ParseReferenceGroupArgument(
     if (delimiter_position == std::string::npos)
     {
         throw CLI::ValidationError(
-            "--ref-group",
+            option_name,
             "Expected value in the form <group>=key1,key2,...");
     }
 
@@ -81,26 +113,26 @@ std::pair<std::string, std::vector<std::string>> ParseReferenceGroupArgument(
     const std::string member_text{ text.substr(delimiter_position + 1) };
     if (group_name.empty())
     {
-        throw CLI::ValidationError("--ref-group", "Reference group name cannot be empty.");
+        throw CLI::ValidationError(option_name, "Reference group name cannot be empty.");
     }
 
     const auto members{ string_helper::ParseListOption<std::string>(member_text, item_delimiter) };
     if (members.empty())
     {
-        throw CLI::ValidationError("--ref-group", "Reference group members cannot be empty.");
+        throw CLI::ValidationError(option_name, "Reference group members cannot be empty.");
     }
     return { group_name, members };
 }
 
 template <typename Request, typename FieldType>
 void BindCliField(
-    CLI::App * command,
+    CLI::App & command,
     Request * request,
     const internal::RequestScalarFieldSpec<Request, FieldType> & field)
 {
     const auto & current_value{ request->*(field.member) };
-    auto * option{
-        command->add_option_function<FieldType>(
+    auto & option{
+        *command.add_option_function<FieldType>(
             field.cli_flags,
             [request, member = field.member](const FieldType & value)
             {
@@ -108,24 +140,17 @@ void BindCliField(
             },
             field.help)
     };
-    if (field.required)
-    {
-        option->required();
-    }
-    if (const auto default_value{ MakeCliDefaultValue(current_value) }; default_value.has_value())
-    {
-        option->default_val(*default_value);
-    }
+    ApplyCliOptionSettings(option, field.required, MakeCliDefaultValue(current_value));
 }
 
 template <typename Request>
 void BindCliField(
-    CLI::App * command,
+    CLI::App & command,
     Request * request,
     const internal::RequestPathFieldSpec<Request> & field)
 {
-    auto * option{
-        command->add_option_function<std::string>(
+    auto & option{
+        *command.add_option_function<std::string>(
             field.cli_flags,
             [request, member = field.member](const std::string & value)
             {
@@ -133,25 +158,20 @@ void BindCliField(
             },
             field.help)
     };
-    if (field.required)
-    {
-        option->required();
-    }
-    if (const auto default_value{ MakeCliDefaultValue(request->*(field.member)) };
-        default_value.has_value())
-    {
-        option->default_val(default_value->string());
-    }
+    ApplyCliOptionSettings(
+        option,
+        field.required,
+        MakeCliPathDefaultText(request->*(field.member)));
 }
 
 template <typename Request, typename EnumType>
 void BindCliField(
-    CLI::App * command,
+    CLI::App & command,
     Request * request,
     const internal::RequestEnumFieldSpec<Request, EnumType> & field)
 {
-    auto * option{
-        command->add_option_function<EnumType>(
+    auto & option{
+        *command.add_option_function<EnumType>(
             field.cli_flags,
             [request, member = field.member](const EnumType & value)
             {
@@ -159,27 +179,19 @@ void BindCliField(
             },
             field.help)
     };
-    if (field.required)
-    {
-        option->required();
-    }
-    if (const auto default_value{ MakeCliDefaultValue(request->*(field.member)) };
-        default_value.has_value())
-    {
-        option->default_val(*default_value);
-    }
-    option->transform(CLI::CheckedTransformer(
+    ApplyCliOptionSettings(option, field.required, MakeCliDefaultValue(request->*(field.member)));
+    option.transform(CLI::CheckedTransformer(
         internal::BuildCommandEnumCliMap<EnumType>(), CLI::ignore_case));
 }
 
 template <typename Request, typename ElementType>
 void BindCliField(
-    CLI::App * command,
+    CLI::App & command,
     Request * request,
     const internal::RequestCsvListFieldSpec<Request, ElementType> & field)
 {
-    auto * option{
-        command->add_option_function<std::string>(
+    auto & option{
+        *command.add_option_function<std::string>(
             field.cli_flags,
             [request, member = field.member, delimiter = field.delimiter](const std::string & value)
             {
@@ -187,28 +199,24 @@ void BindCliField(
             },
             field.help)
     };
-    if (field.required)
-    {
-        option->required();
-    }
-    if (const auto default_value{ MakeCliDefaultValue(request->*(field.member), field.delimiter) };
-        default_value.has_value())
-    {
-        option->default_val(*default_value);
-    }
+    ApplyCliOptionSettings(
+        option,
+        field.required,
+        MakeCliDefaultValue(request->*(field.member), field.delimiter));
 }
 
 template <typename Request>
 void BindCliField(
-    CLI::App * command,
+    CLI::App & command,
     Request * request,
     const internal::RequestRefGroupFieldSpec<Request> & field)
 {
-    auto * option{
-        command->add_option_function<std::vector<std::string>>(
+    auto & option{
+        *command.add_option_function<std::vector<std::string>>(
             field.cli_flags,
             [request,
              member = field.member,
+             option_name = field.cli_flags,
              assignment_delimiter = field.assignment_delimiter,
              item_delimiter = field.item_delimiter](const std::vector<std::string> & values)
             {
@@ -216,7 +224,11 @@ void BindCliField(
                 for (const auto & value : values)
                 {
                     const auto [group_name, members]{
-                        ParseReferenceGroupArgument(value, assignment_delimiter, item_delimiter)
+                        ParseReferenceGroupArgument(
+                            value,
+                            option_name,
+                            assignment_delimiter,
+                            item_delimiter)
                     };
                     auto & stored_members{ group_map[group_name] };
                     stored_members.insert(stored_members.end(), members.begin(), members.end());
@@ -225,11 +237,22 @@ void BindCliField(
             field.help)
     };
     // Reference groups accumulate repeated CLI occurrences into one logical map.
-    option->multi_option_policy(CLI::MultiOptionPolicy::TakeAll);
-    if (field.required)
+    option.multi_option_policy(CLI::MultiOptionPolicy::TakeAll);
+    ApplyCliOptionSettings(option, field.required);
+}
+
+template <typename RequestType>
+void BindRequestFields(CLI::App & command, RequestType & request)
+{
+    auto & base_request{ static_cast<CommandRequestBase &>(request) };
+    internal::VisitBaseRequestFields([&](const auto & field)
     {
-        option->required();
-    }
+        BindCliField(command, &base_request, field);
+    });
+    internal::VisitRequestFields<RequestType>([&](const auto & field)
+    {
+        BindCliField(command, &request, field);
+    });
 }
 
 template <typename RequestType, auto RunCommandFn>
@@ -238,24 +261,16 @@ void RegisterCommand(
     std::string_view name,
     std::string_view description)
 {
-    CLI::App * command{
-        app.add_subcommand(
+    CLI::App & command{
+        *app.add_subcommand(
             std::string(name),
             std::string(description))
     };
     auto request{ std::make_shared<RequestType>() };
 
-    // Base and command-specific fields are bound from the shared internal schema.
-    internal::VisitBaseRequestFields([&](const auto & field)
-    {
-        BindCliField(command, static_cast<CommandRequestBase *>(request.get()), field);
-    });
-    internal::VisitRequestFields<RequestType>([&](const auto & field)
-    {
-        BindCliField(command, request.get(), field);
-    });
+    BindRequestFields(command, *request);
 
-    command->callback([request]()
+    command.callback([request]()
     {
         ScopeTimer timer("Command CLI callback");
         const auto result{ RunCommandFn(*request) };
