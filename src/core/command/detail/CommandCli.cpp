@@ -13,6 +13,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -95,6 +96,30 @@ std::optional<std::string> MakeCliPathDefaultText(const std::filesystem::path & 
     return default_value->string();
 }
 
+template <typename Request, typename MemberType, typename CliValueType, typename Parser, typename DefaultType>
+CLI::Option & AddRequestOption(
+    CLI::App & command,
+    Request * request,
+    const char * cli_flags,
+    const char * help,
+    bool required,
+    MemberType Request::* member,
+    Parser parser,
+    const std::optional<DefaultType> & default_value)
+{
+    auto & option{
+        *command.add_option_function<CliValueType>(
+            cli_flags,
+            [request, member, parser = std::move(parser)](const CliValueType & value)
+            {
+                request->*member = parser(value);
+            },
+            help)
+    };
+    ApplyCliOptionSettings(option, required, default_value);
+    return option;
+}
+
 std::pair<std::string, std::vector<std::string>> ParseReferenceGroupArgument(
     const std::string & text,
     const std::string & option_name,
@@ -124,6 +149,27 @@ std::pair<std::string, std::vector<std::string>> ParseReferenceGroupArgument(
     return { group_name, members };
 }
 
+void AccumulateReferenceGroups(
+    std::unordered_map<std::string, std::vector<std::string>> & group_map,
+    const std::vector<std::string> & values,
+    const std::string & option_name,
+    char assignment_delimiter,
+    char item_delimiter)
+{
+    for (const auto & value : values)
+    {
+        const auto [group_name, members]{
+            ParseReferenceGroupArgument(
+                value,
+                option_name,
+                assignment_delimiter,
+                item_delimiter)
+        };
+        auto & stored_members{ group_map[group_name] };
+        stored_members.insert(stored_members.end(), members.begin(), members.end());
+    }
+}
+
 template <typename Request, typename FieldType>
 void BindCliField(
     CLI::App & command,
@@ -131,16 +177,18 @@ void BindCliField(
     const internal::RequestScalarFieldSpec<Request, FieldType> & field)
 {
     const auto & current_value{ request->*(field.member) };
-    auto & option{
-        *command.add_option_function<FieldType>(
-            field.cli_flags,
-            [request, member = field.member](const FieldType & value)
-            {
-                request->*member = value;
-            },
-            field.help)
-    };
-    ApplyCliOptionSettings(option, field.required, MakeCliDefaultValue(current_value));
+    AddRequestOption<Request, FieldType, FieldType>(
+        command,
+        request,
+        field.cli_flags,
+        field.help,
+        field.required,
+        field.member,
+        [](const FieldType & value)
+        {
+            return value;
+        },
+        MakeCliDefaultValue(current_value));
 }
 
 template <typename Request>
@@ -149,18 +197,17 @@ void BindCliField(
     Request * request,
     const internal::RequestPathFieldSpec<Request> & field)
 {
-    auto & option{
-        *command.add_option_function<std::string>(
-            field.cli_flags,
-            [request, member = field.member](const std::string & value)
-            {
-                request->*member = std::filesystem::path{ value };
-            },
-            field.help)
-    };
-    ApplyCliOptionSettings(
-        option,
+    AddRequestOption<Request, std::filesystem::path, std::string>(
+        command,
+        request,
+        field.cli_flags,
+        field.help,
         field.required,
+        field.member,
+        [](const std::string & value)
+        {
+            return std::filesystem::path{ value };
+        },
         MakeCliPathDefaultText(request->*(field.member)));
 }
 
@@ -171,15 +218,19 @@ void BindCliField(
     const internal::RequestEnumFieldSpec<Request, EnumType> & field)
 {
     auto & option{
-        *command.add_option_function<EnumType>(
+        AddRequestOption<Request, EnumType, EnumType>(
+            command,
+            request,
             field.cli_flags,
-            [request, member = field.member](const EnumType & value)
+            field.help,
+            field.required,
+            field.member,
+            [](const EnumType & value)
             {
-                request->*member = value;
+                return value;
             },
-            field.help)
+            MakeCliDefaultValue(request->*(field.member)))
     };
-    ApplyCliOptionSettings(option, field.required, MakeCliDefaultValue(request->*(field.member)));
     option.transform(CLI::CheckedTransformer(
         internal::BuildCommandEnumCliMap<EnumType>(), CLI::ignore_case));
 }
@@ -190,18 +241,17 @@ void BindCliField(
     Request * request,
     const internal::RequestCsvListFieldSpec<Request, ElementType> & field)
 {
-    auto & option{
-        *command.add_option_function<std::string>(
-            field.cli_flags,
-            [request, member = field.member, delimiter = field.delimiter](const std::string & value)
-            {
-                request->*member = string_helper::ParseListOption<ElementType>(value, delimiter);
-            },
-            field.help)
-    };
-    ApplyCliOptionSettings(
-        option,
+    AddRequestOption<Request, std::vector<ElementType>, std::string>(
+        command,
+        request,
+        field.cli_flags,
+        field.help,
         field.required,
+        field.member,
+        [delimiter = field.delimiter](const std::string & value)
+        {
+            return string_helper::ParseListOption<ElementType>(value, delimiter);
+        },
         MakeCliDefaultValue(request->*(field.member), field.delimiter));
 }
 
@@ -221,18 +271,12 @@ void BindCliField(
              item_delimiter = field.item_delimiter](const std::vector<std::string> & values)
             {
                 auto & group_map{ request->*member };
-                for (const auto & value : values)
-                {
-                    const auto [group_name, members]{
-                        ParseReferenceGroupArgument(
-                            value,
-                            option_name,
-                            assignment_delimiter,
-                            item_delimiter)
-                    };
-                    auto & stored_members{ group_map[group_name] };
-                    stored_members.insert(stored_members.end(), members.begin(), members.end());
-                }
+                AccumulateReferenceGroups(
+                    group_map,
+                    values,
+                    option_name,
+                    assignment_delimiter,
+                    item_delimiter);
             },
             field.help)
     };
