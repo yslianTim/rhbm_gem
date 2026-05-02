@@ -90,14 +90,14 @@ Expected result contract:
 
 `PotentialAnalysisCommand::BuildDataObject()`:
 
-- attaches `DataRepository` to `request.database_path`
-- loads the model and map through `LoadInputFile<T>(...)`, which delegates to `FileIO`
-- stores loaded objects in the command-local runtime cache owned by `CommandBase`
+- opens `DataRepository` for `request.database_path`
+- loads the model and map through `LoadModelFile(...)` and `LoadMapFile(...)`
+- stores loaded objects directly in typed command-owned members
 - wraps load failures with command-specific error context
 
 `PotentialAnalysisCommand::SavePreparedModel()`:
 
-- persists the prepared model through `SaveStoredObject(...)`
+- persists the prepared model through `SaveModelToRepository(...)`
 - writes to the repository using `request.saved_key_tag` as the persisted key
 - clears sampled local-potential distance/value buffers after persistence to keep runtime state lean
 

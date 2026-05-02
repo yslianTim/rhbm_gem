@@ -26,7 +26,7 @@ def main() -> int:
 
     stdout = result.stdout
     expected_paths = [
-        project_root / "src" / "core" / "internal" / "command" / "ExampleCommand.hpp",
+        project_root / "src" / "core" / "command" / "ExampleCommand.hpp",
         project_root / "src" / "core" / "command" / "ExampleCommand.cpp",
         project_root / "docs" / "developer" / "commands" / "example.md",
     ]
@@ -39,6 +39,8 @@ def main() -> int:
         str(project_root / "resources" / "src"),
         str(project_root / "resources" / "tests"),
         str(project_root / "resources" / "docs"),
+        "src/core/" + "internal" + "/command",
+        "internal" + "/command/ExampleCommand.hpp",
     ]
     for unexpected_fragment in unexpected_fragments:
         if unexpected_fragment in stdout:

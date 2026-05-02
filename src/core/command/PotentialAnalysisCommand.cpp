@@ -293,9 +293,9 @@ bool PotentialAnalysisCommand::BuildDataObject(const PotentialAnalysisRequest & 
     ScopeTimer timer("PotentialAnalysisCommand::BuildDataObject");
     try
     {
-        AttachDataRepository(request.database_path);
-        m_model_object = LoadInputFile<ModelObject>(request.model_file_path, m_model_key_tag);
-        m_map_object = LoadInputFile<MapObject>(request.map_file_path, m_map_key_tag);
+        OpenDataRepository(request.database_path);
+        m_model_object = LoadModelFile(request.model_file_path, m_model_key_tag);
+        m_map_object = LoadMapFile(request.map_file_path, m_map_key_tag);
         if (m_model_object == nullptr || m_map_object == nullptr)
         {
             Logger::Log(
@@ -462,7 +462,7 @@ void PotentialAnalysisCommand::SavePreparedModel(
     ModelObject & model_object, std::string_view saved_key_tag)
 {
     ScopeTimer timer("PotentialAnalysisCommand::SavePreparedModel");
-    SaveStoredObject(m_model_key_tag, std::string(saved_key_tag));
+    SaveModelToRepository(model_object, std::string(saved_key_tag));
     model_object.EditAnalysis().ClearTransientFitStates();
 }
 
@@ -516,9 +516,7 @@ void PotentialAnalysisCommand::RunSamplingWorkflow(
     {
         auto atom{ atom_list[i] };
         auto entry{ local_entry_list[i] };
-        auto sampling_entries{
-            SampleMapValues(map_object, sampler, *atom, sampling_range_max)
-        };
+        auto sampling_entries{ SampleMapValues(map_object, sampler, *atom, sampling_range_max) };
         entry.SetSamplingEntries(sampling_entries);
         atom_count++;
         Logger::ProgressPercent(atom_count, atom_size);

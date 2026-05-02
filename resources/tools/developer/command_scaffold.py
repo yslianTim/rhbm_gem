@@ -92,7 +92,7 @@ def _append_cmake_list_entry(text: str, variable_name: str, entry: str) -> tuple
 
 
 def _append_command_api_include(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
-    include_line = f'#include "internal/command/{spec.command_type}.hpp"'
+    include_line = f'#include "{spec.command_type}.hpp"'
     if include_line in text:
         return text, False
 
@@ -110,7 +110,7 @@ def _append_command_api_include(text: str, spec: ScaffoldSpec) -> tuple[str, boo
         updated = text[:insert_at] + include_line + "\n" + text[insert_at:]
         return updated, True
 
-    stable_pattern = re.compile(r'^(#include\s+"internal/command/[^"]+Command\.hpp")\n', re.MULTILINE)
+    stable_pattern = re.compile(r'^(#include\s+"[^"]+Command\.hpp")\n', re.MULTILINE)
     matches = [
         match for match in stable_pattern.finditer(text)
         if "MapVisualizationCommand.hpp" not in match.group(1)
@@ -151,7 +151,7 @@ def _update_file(
 def _header_template(spec: ScaffoldSpec) -> str:
     return f"""#pragma once
 
-#include "CommandBase.hpp"
+#include "detail/CommandBase.hpp"
 
 namespace rhbm_gem {{
 
@@ -176,7 +176,7 @@ private:
 
 
 def _source_template(spec: ScaffoldSpec) -> str:
-    return f"""#include "internal/command/{spec.command_type}.hpp"
+    return f"""#include "{spec.command_type}.hpp"
 
 #include <rhbm_gem/core/command/CommandApi.hpp>
 
@@ -219,19 +219,19 @@ Scaffold generated for CLI command `{spec.cli_name}`.
 
 ## Registration Checklist
 
-1. Add `{spec.command_type.removesuffix("Command")}` into `src/core/command/CommandManifest.def`.
+1. Add `{spec.command_type.removesuffix("Command")}` into `include/rhbm_gem/core/command/CommandManifest.def`.
    If it is experimental, place it inside the `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` block.
-2. Add the request struct in `include/rhbm_gem/core/command/CommandApi.hpp`.
-3. Add the internal request schema specialization in `src/core/internal/command/CommandRequestSchema.hpp`.
-4. Add `#include "internal/command/{spec.command_type}.hpp"` to `src/core/command/CommandApi.cpp`.
-4. Extend the grouped command tests under `tests/core/command/`.
+2. Add the request struct in `include/rhbm_gem/core/command/CommandTypes.hpp`.
+3. Add the internal request schema specialization in `src/core/command/detail/CommandRequestSchema.hpp`.
+4. Add `#include "{spec.command_type}.hpp"` to `src/core/command/CommandApi.cpp`.
+5. Extend the grouped command tests under `tests/core/command/`.
    Validation-only coverage usually belongs in `CommandValidationScenarios_test.cpp`.
    Workflow/output coverage usually belongs in `CommandWorkflowScenarios_test.cpp`.
 """
 
 
 def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, strict: bool) -> None:
-    command_def = root / "src" / "core" / "command" / "CommandManifest.def"
+    command_def = root / "include" / "rhbm_gem" / "core" / "command" / "CommandManifest.def"
     command_api = root / "src" / "core" / "command" / "CommandApi.cpp"
     source_cmake = root / "src" / "CMakeLists.txt"
 
@@ -247,7 +247,7 @@ def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, stri
         lambda text: _append_command_api_include(text, spec),
         dry_run,
         strict,
-        f'Add #include "internal/command/{spec.command_type}.hpp" to CommandApi.cpp.',
+        f'Add #include "{spec.command_type}.hpp" to CommandApi.cpp.',
     )
     _update_file(
         source_cmake,
@@ -301,7 +301,7 @@ def main() -> int:
 
     doc_stem = re.sub(r"(?<!^)([A-Z])", r"-\1", spec.command_type.removesuffix("Command")).lower()
     files = {
-        root / "src" / "core" / "internal" / "command" / f"{spec.command_type}.hpp": _header_template(spec),
+        root / "src" / "core" / "command" / f"{spec.command_type}.hpp": _header_template(spec),
         root / "src" / "core" / "command" / f"{spec.command_type}.cpp": _source_template(spec),
         root / "docs" / "developer" / "commands" / f"{doc_stem}.md": _doc_template(spec),
     }
@@ -330,7 +330,8 @@ def main() -> int:
     else:
         print(
             "Next: wire CommandManifest.def, update CommandApi.cpp includes and source CMake list, "
-            "add the public request DTO and internal request schema, and extend the grouped command tests."
+            "add the public request DTO in CommandTypes.hpp and internal request schema, "
+            "and extend the grouped command tests."
         )
     return 0
 

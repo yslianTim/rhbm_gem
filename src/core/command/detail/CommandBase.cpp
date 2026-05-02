@@ -1,8 +1,12 @@
 #include "CommandBase.hpp"
+#include <rhbm_gem/data/object/MapObject.hpp>
+#include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 
 #include <algorithm>
 #include <array>
+#include <memory>
+#include <stdexcept>
 #include <string>
 #include <system_error>
 
@@ -149,25 +153,6 @@ void CommandBase::BeginValidationMutation(ValidationPhase phase)
     m_was_prepared = false;
 }
 
-void CommandBase::RequireNonEmptyText(
-    std::string_view field,
-    std::string_view option_name,
-    std::string_view label,
-    ValidationPhase phase)
-{
-    BeginValidationMutation(phase);
-    ClearValidationIssues(option_name, phase);
-    if (!field.empty())
-    {
-        return;
-    }
-
-    AddValidationError(
-        option_name,
-        std::string(label) + " cannot be empty.",
-        phase);
-}
-
 void CommandBase::RequireCondition(
     bool condition,
     std::string_view option_name,
@@ -257,21 +242,21 @@ void CommandBase::ValidateOptionalExistingPath(
 }
 
 void CommandBase::ValidateRequiredPath(
-    std::filesystem::path & field,
+    const std::filesystem::path & path,
     std::string_view option_name,
     std::string_view label)
 {
     InvalidatePreparedState();
-    ValidateRequiredExistingPath(field, option_name, label);
+    ValidateRequiredExistingPath(path, option_name, label);
 }
 
 void CommandBase::ValidateOptionalPath(
-    std::filesystem::path & field,
+    const std::filesystem::path & path,
     std::string_view option_name,
     std::string_view label)
 {
     InvalidatePreparedState();
-    ValidateOptionalExistingPath(field, option_name, label);
+    ValidateOptionalExistingPath(path, option_name, label);
 }
 
 void CommandBase::AddValidationIssue(
@@ -306,7 +291,6 @@ void CommandBase::BeginPreparationPass()
 {
     Logger::SetLogLevel(VerboseLevel());
     ResetRuntimeState();
-    m_runtime_object_cache.Clear();
     m_data_repository.reset();
     InvalidatePreparedState();
 }
@@ -342,6 +326,62 @@ bool CommandBase::RunFilesystemPreflight()
 
     ReportValidationIssues();
     return !HasValidationErrors();
+}
+
+void CommandBase::OpenDataRepository(const std::filesystem::path & database_path)
+{
+    m_data_repository = std::make_unique<DataRepository>(database_path);
+}
+
+DataRepository & CommandBase::RequireDataRepository()
+{
+    if (m_data_repository == nullptr)
+    {
+        throw std::runtime_error("Database repository is not initialized.");
+    }
+    return *m_data_repository;
+}
+
+std::shared_ptr<ModelObject> CommandBase::LoadModelFile(
+    const std::filesystem::path & filename,
+    const std::string & key_tag)
+{
+    auto data_object{ ReadModel(filename) };
+    data_object->SetKeyTag(key_tag);
+    return std::shared_ptr<ModelObject>{ std::move(data_object) };
+}
+
+std::shared_ptr<MapObject> CommandBase::LoadMapFile(
+    const std::filesystem::path & filename,
+    const std::string & key_tag)
+{
+    auto data_object{ ReadMap(filename) };
+    data_object->SetKeyTag(key_tag);
+    return std::shared_ptr<MapObject>{ std::move(data_object) };
+}
+
+std::shared_ptr<ModelObject> CommandBase::LoadModelFromRepository(const std::string & key_tag)
+{
+    return std::shared_ptr<ModelObject>{ RequireDataRepository().LoadModel(key_tag) };
+}
+
+std::shared_ptr<MapObject> CommandBase::LoadMapFromRepository(const std::string & key_tag)
+{
+    return std::shared_ptr<MapObject>{ RequireDataRepository().LoadMap(key_tag) };
+}
+
+void CommandBase::SaveModelToRepository(
+    const ModelObject & model_object,
+    const std::string & key_tag)
+{
+    RequireDataRepository().SaveModel(model_object, key_tag);
+}
+
+void CommandBase::SaveMapToRepository(
+    const MapObject & map_object,
+    const std::string & key_tag)
+{
+    RequireDataRepository().SaveMap(map_object, key_tag);
 }
 
 } // namespace rhbm_gem

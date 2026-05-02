@@ -79,7 +79,6 @@ set(RHBM_GEM_CORE_COMMAND_TEST_SOURCES
 
 set(CORE_COMMAND_TEST_SOURCES
     core/command/CommandBaseLifecycle_test.cpp
-    core/command/CommandObjectCache_test.cpp
     core/command/CommandValidationHelpers_test.cpp
     core/command/MapSampling_test.cpp
     ${RHBM_GEM_CORE_COMMAND_TEST_SOURCES}

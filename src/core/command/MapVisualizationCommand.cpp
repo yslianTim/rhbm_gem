@@ -127,12 +127,8 @@ bool MapVisualizationCommand::BuildDataObject()
     ScopeTimer timer("MapVisualizationCommand::BuildDataObject");
     try
     {
-        m_model_object = LoadInputFile<ModelObject>(
-            request.model_file_path,
-            m_model_key_tag);
-        m_map_object = LoadInputFile<MapObject>(
-            request.map_file_path,
-            m_map_key_tag);
+        m_model_object = LoadModelFile(request.model_file_path, m_model_key_tag);
+        m_map_object = LoadMapFile(request.map_file_path, m_map_key_tag);
     }
     catch (const std::exception & e)
     {

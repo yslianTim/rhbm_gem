@@ -5,11 +5,8 @@
 #include <memory>
 #include <optional>
 #include <sstream>
-#include <stdexcept>
 #include <string>
 #include <string_view>
-#include <type_traits>
-#include <utility>
 #include <vector>
 
 #include <rhbm_gem/core/command/CommandApi.hpp>
@@ -18,7 +15,6 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
-#include "CommandObjectCache.hpp"
 #include "CommandEnumMetadata.hpp"
 
 namespace rhbm_gem {
@@ -62,24 +58,6 @@ std::string BuildConstraintMessage(
 }
 
 template <typename LowerType, typename UpperType>
-std::string BuildInclusiveRangeMessage(
-    std::string_view label,
-    LowerType lower,
-    UpperType upper,
-    LogLevel issue_level)
-{
-    std::string message{
-        std::string(label) + " must be a finite value within ["
-            + ToString(lower) + ", " + ToString(upper) + "]"
-    };
-    if (issue_level == LogLevel::Warning)
-    {
-        message += '.';
-    }
-    return message;
-}
-
-template <typename LowerType, typename UpperType>
 std::string BuildExclusiveInclusiveRangeMessage(
     std::string_view label,
     LowerType lower,
@@ -93,22 +71,6 @@ std::string BuildExclusiveInclusiveRangeMessage(
     if (issue_level == LogLevel::Warning)
     {
         message += '.';
-    }
-    return message;
-}
-
-template <typename FieldType, typename LowerType, typename UpperType>
-std::string BuildInclusiveRangeMessage(
-    std::string_view label,
-    LowerType lower,
-    UpperType upper,
-    const FieldType & fallback_value,
-    LogLevel issue_level)
-{
-    std::string message{ BuildInclusiveRangeMessage(label, lower, upper, issue_level) };
-    if (issue_level == LogLevel::Warning)
-    {
-        message += " Using " + ToString(fallback_value) + " instead.";
     }
     return message;
 }
@@ -148,6 +110,11 @@ struct ValidationIssueRecord
 
 class CommandBase
 {
+    CommandRequestBase * m_base_request{ nullptr };
+    std::unique_ptr<DataRepository> m_data_repository;
+    std::vector<ValidationIssueRecord> m_validation_issues;
+    bool m_was_prepared{ false };
+
 public:
     virtual ~CommandBase() = default;
     bool Run();
@@ -156,12 +123,7 @@ public:
     const std::vector<ValidationIssueRecord> & GetValidationIssues() const { return m_validation_issues; }
 
 protected:
-    command_detail::CommandObjectCache m_runtime_object_cache;
-    std::unique_ptr<DataRepository> m_data_repository;
-    std::vector<ValidationIssueRecord> m_validation_issues;
-
     CommandBase() = default;
-
     virtual void ValidateOptions() {}
     virtual void ResetRuntimeState() {}
     virtual bool ExecuteImpl() = 0;
@@ -180,18 +142,13 @@ protected:
     void ClearPrepareIssues(std::string_view option_name);
 
     void ValidateRequiredPath(
-        std::filesystem::path & field,
+        const std::filesystem::path & path,
         std::string_view option_name,
         std::string_view label);
     void ValidateOptionalPath(
-        std::filesystem::path & field,
+        const std::filesystem::path & path,
         std::string_view option_name,
         std::string_view label);
-    void RequireNonEmptyText(
-        std::string_view field,
-        std::string_view option_name,
-        std::string_view label,
-        ValidationPhase phase = ValidationPhase::Parse);
     template <typename Container>
     void RequireNonEmptyList(
         const Container & field,
@@ -201,15 +158,8 @@ protected:
     {
         BeginValidationMutation(phase);
         ClearValidationIssues(option_name, phase);
-        if (!field.empty())
-        {
-            return;
-        }
-
-        AddValidationError(
-            option_name,
-            std::string(label) + " cannot be empty.",
-            phase);
+        if (!field.empty()) return;
+        AddValidationError(option_name, std::string(label) + " cannot be empty.", phase);
     }
     void RequireCondition(
         bool condition,
@@ -227,18 +177,13 @@ protected:
     {
         InvalidatePreparedState();
         ClearParseIssues(option_name);
-        if (is_valid(field))
-        {
-            return;
-        }
-
+        if (is_valid(field)) return;
         field = fallback_value;
         if (issue_level == LogLevel::Warning)
         {
             AddNormalizationWarning(option_name, message);
             return;
         }
-
         AddValidationIssue(option_name, ValidationPhase::Parse, issue_level, message, false);
     }
     template <typename FieldType>
@@ -256,10 +201,7 @@ protected:
             fallback_value,
             issue_level,
             command_validation_detail::BuildConstraintMessage(
-                label,
-                "positive",
-                fallback_value,
-                issue_level));
+                label, "positive", fallback_value, issue_level));
     }
     template <typename FieldType>
     void CoerceFinitePositiveScalar(
@@ -276,10 +218,7 @@ protected:
             fallback_value,
             issue_level,
             command_validation_detail::BuildConstraintMessage(
-                label,
-                "a finite positive value",
-                fallback_value,
-                issue_level));
+                label, "a finite positive value", fallback_value, issue_level));
     }
     template <typename FieldType>
     void CoerceFiniteNonNegativeScalar(
@@ -296,36 +235,7 @@ protected:
             fallback_value,
             issue_level,
             command_validation_detail::BuildConstraintMessage(
-                label,
-                "a finite non-negative value",
-                fallback_value,
-                issue_level));
-    }
-    template <typename FieldType, typename LowerType, typename UpperType>
-    void CoerceFiniteInclusiveRangeScalar(
-        FieldType & field,
-        std::string_view option_name,
-        LowerType lower,
-        UpperType upper,
-        FieldType fallback_value,
-        LogLevel issue_level,
-        std::string_view label)
-    {
-        CoerceScalar(
-            field,
-            option_name,
-            [lower, upper](const auto candidate)
-            {
-                return numeric_validation::IsFiniteInclusiveRange(candidate, lower, upper);
-            },
-            fallback_value,
-            issue_level,
-            command_validation_detail::BuildInclusiveRangeMessage(
-                label,
-                lower,
-                upper,
-                fallback_value,
-                issue_level));
+                label, "a finite non-negative value", fallback_value, issue_level));
     }
     template <typename FieldType, typename LowerType, typename UpperType>
     void CoerceFiniteExclusiveInclusiveRangeScalar(
@@ -347,11 +257,7 @@ protected:
             fallback_value,
             issue_level,
             command_validation_detail::BuildExclusiveInclusiveRangeMessage(
-                label,
-                lower,
-                upper,
-                fallback_value,
-                issue_level));
+                label, lower, upper, fallback_value, issue_level));
     }
     template <typename FieldType>
     void CoerceEnum(
@@ -364,11 +270,7 @@ protected:
         ClearParseIssues(option_name);
         using UnderlyingType = std::underlying_type_t<FieldType>;
         const auto raw_numeric{ static_cast<UnderlyingType>(field) };
-        if (internal::IsSupportedCommandEnumValue(field))
-        {
-            return;
-        }
-
+        if (internal::IsSupportedCommandEnumValue(field)) return;
         field = fallback_value;
         AddValidationError(
             option_name,
@@ -376,105 +278,23 @@ protected:
                 + std::to_string(static_cast<long long>(raw_numeric)),
             ValidationPhase::Parse);
     }
-    std::filesystem::path BuildOutputPath(
-        std::string_view stem,
-        std::string_view extension) const;
-    void AttachDataRepository(const std::filesystem::path & database_path)
-    {
-        m_data_repository = std::make_unique<DataRepository>(database_path);
-    }
-    template <typename TypedDataObject>
-    std::shared_ptr<TypedDataObject> LoadInputFile(
+    std::filesystem::path BuildOutputPath(std::string_view stem, std::string_view extension) const;
+    void OpenDataRepository(const std::filesystem::path & database_path);
+    std::shared_ptr<ModelObject> LoadModelFile(
         const std::filesystem::path & filename,
-        const std::string & key_tag)
-    {
-        std::unique_ptr<TypedDataObject> data_object;
-        if constexpr (std::is_same_v<TypedDataObject, ModelObject>)
-        {
-            data_object = ReadModel(filename);
-        }
-        else if constexpr (std::is_same_v<TypedDataObject, MapObject>)
-        {
-            data_object = ReadMap(filename);
-        }
-        else
-        {
-            static_assert(
-                std::is_same_v<TypedDataObject, ModelObject>
-                    || std::is_same_v<TypedDataObject, MapObject>,
-                "LoadInputFile only supports ModelObject or MapObject.");
-        }
-        data_object->SetKeyTag(key_tag);
-        std::shared_ptr<TypedDataObject> shared_object{ std::move(data_object) };
-        if constexpr (std::is_same_v<TypedDataObject, ModelObject>)
-        {
-            m_runtime_object_cache.PutModel(key_tag, shared_object);
-        }
-        else
-        {
-            m_runtime_object_cache.PutMap(key_tag, shared_object);
-        }
-        return shared_object;
-    }
-    template <typename TypedDataObject>
-    std::shared_ptr<TypedDataObject> LoadPersistedObject(const std::string & key_tag)
-    {
-        if (m_data_repository == nullptr)
-        {
-            throw std::runtime_error("Database repository is not initialized.");
-        }
-        std::unique_ptr<TypedDataObject> data_object;
-        if constexpr (std::is_same_v<TypedDataObject, ModelObject>)
-        {
-            data_object = m_data_repository->LoadModel(key_tag);
-        }
-        else if constexpr (std::is_same_v<TypedDataObject, MapObject>)
-        {
-            data_object = m_data_repository->LoadMap(key_tag);
-        }
-        else
-        {
-            static_assert(
-                std::is_same_v<TypedDataObject, ModelObject>
-                    || std::is_same_v<TypedDataObject, MapObject>,
-                "LoadPersistedObject only supports ModelObject or MapObject.");
-        }
-        std::shared_ptr<TypedDataObject> shared_object{ std::move(data_object) };
-        if constexpr (std::is_same_v<TypedDataObject, ModelObject>)
-        {
-            m_runtime_object_cache.PutModel(key_tag, shared_object);
-        }
-        else
-        {
-            m_runtime_object_cache.PutMap(key_tag, shared_object);
-        }
-        return shared_object;
-    }
-    void SaveStoredObject(
-        const std::string & key_tag,
-        const std::string & persisted_key = "")
-    {
-        if (m_data_repository == nullptr)
-        {
-            throw std::runtime_error("Database repository is not initialized.");
-        }
-        const auto saved_key_tag{ persisted_key.empty() ? key_tag : persisted_key };
-        switch (m_runtime_object_cache.GetKind(key_tag))
-        {
-        case command_detail::CommandObjectCache::ObjectKind::Model:
-            m_data_repository->SaveModel(*m_runtime_object_cache.GetModel(key_tag), saved_key_tag);
-            return;
-        case command_detail::CommandObjectCache::ObjectKind::Map:
-            m_data_repository->SaveMap(*m_runtime_object_cache.GetMap(key_tag), saved_key_tag);
-            return;
-        }
-    }
+        const std::string & key_tag);
+    std::shared_ptr<MapObject> LoadMapFile(
+        const std::filesystem::path & filename,
+        const std::string & key_tag);
+    std::shared_ptr<ModelObject> LoadModelFromRepository(const std::string & key_tag);
+    std::shared_ptr<MapObject> LoadMapFromRepository(const std::string & key_tag);
+    void SaveModelToRepository(const ModelObject & model_object, const std::string & key_tag);
+    void SaveMapToRepository(const MapObject & map_object, const std::string & key_tag);
 
 private:
-    CommandRequestBase * m_base_request{ nullptr };
-    bool m_was_prepared{ false };
     CommandRequestBase & BaseRequest() { return *m_base_request; }
     const CommandRequestBase & BaseRequest() const { return *m_base_request; }
+    DataRepository & RequireDataRepository();
     void BeginValidationMutation(ValidationPhase phase);
     void BeginPreparationPass();
     bool RunValidationPass();
@@ -490,21 +310,22 @@ private:
         const std::filesystem::path & path,
         std::string_view option_name,
         std::string_view label);
-
     void AddValidationIssue(
         std::string_view option_name,
         ValidationPhase phase,
         LogLevel level,
         const std::string & message,
         bool auto_corrected);
+    
 };
 
 template <typename Request>
 class CommandWithRequest : public CommandBase
 {
+    Request m_request{};
+
 public:
-    CommandWithRequest() :
-        CommandBase{}
+    CommandWithRequest() : CommandBase{}
     {
         BindBaseRequest(m_request);
     }
@@ -521,9 +342,7 @@ protected:
     const Request & RequestOptions() const { return m_request; }
     Request & MutableRequest() { return m_request; }
     virtual void NormalizeRequest() {}
-
-private:
-    Request m_request{};
+    
 };
 
 } // namespace rhbm_gem

@@ -19,8 +19,8 @@ Use the narrowest boundary that matches the change.
 - reusable typed object behavior belongs in shared typed helpers or domain-layer code that works on `ModelObject` or `MapObject`
 - file format support and extension dispatch belong in `FileIO` and codecs under `/src/data/io/file`
 - database persistence behavior belongs in `DataRepository` and `/src/data/io/sqlite`
-- command-specific loading, caching, logging, and orchestration belong in `/src/core/command/` and `/src/core/command/detail/`
-- do not promote `CommandObjectCache` or other command-private helpers into shared data-layer APIs
+- command-specific loading, command-owned object state, logging, and orchestration belong in `/src/core/command/` and `/src/core/command/detail/`
+- do not promote command-private orchestration helpers into shared data-layer APIs
 - do not add a public type-erased dispatch layer unless the actual public surface is changing
 - do not add a shared helper that only forwards to one file I/O or repository call
 
@@ -56,7 +56,6 @@ If you change database persistence behavior:
 If you change command-side loading or persistence orchestration:
 
 - `/src/core/command/detail/CommandBase.hpp`
-- `/src/core/command/detail/CommandObjectCache.hpp`
 - the relevant command implementation under `/src/core/command/`
 - related command tests under `/tests/core/command/`
 
@@ -92,7 +91,7 @@ std::vector<AtomObject *> CollectAtomsWithLocalPotentialEntries(ModelObject & mo
 - prefer concrete typed methods over a shared runtime-dispatch layer
 - if only `ModelObject` is supported, accept `ModelObject &` directly
 - if only `MapObject` is supported, accept `MapObject &` directly
-- if a command owns mixed top-level objects, keep type bookkeeping inside `CommandObjectCache`
+- if a command owns mixed top-level objects, keep those objects in explicit typed command members
 - keep persistence routing private to `CommandBase` and repository internals; do not add public dispatch helpers just for catalog naming or repository/file routing
 - if command-local branches start growing, move the multi-step logic into typed helpers instead of adding another type-erased facade
 
@@ -100,14 +99,14 @@ std::vector<AtomObject *> CollectAtomsWithLocalPotentialEntries(ModelObject & mo
 
 Typical command flow:
 
-1. for file-backed input, call `LoadInputFile<T>(...)` from `CommandBase`, or `ReadModel(...)` / `ReadMap(...)` directly outside command classes
-2. for database-backed input, call `AttachDataRepository(...)` and then `LoadPersistedObject<T>(...)`
-3. when persisting a command-owned object, call `SaveStoredObject(key_tag, persisted_key)` or use `DataRepository::Save*` directly outside commands
-4. let `CommandObjectCache` keep the loaded `shared_ptr` objects keyed by command-local `key_tag`
+1. for file-backed input, call `LoadModelFile(...)` or `LoadMapFile(...)` from `CommandBase`, or `ReadModel(...)` / `ReadMap(...)` directly outside command classes
+2. for database-backed input, call `OpenDataRepository(...)` and then `LoadModelFromRepository(...)` or `LoadMapFromRepository(...)`
+3. when persisting a command-owned object, call `SaveModelToRepository(...)` or `SaveMapToRepository(...)`, or use `DataRepository::Save*` directly outside commands
+4. keep loaded `shared_ptr` objects in typed command-owned members
 5. wrap failures with command-specific context near the orchestration boundary
 6. keep `ExecuteImpl()` and local workflow helpers focused on typed orchestration
 
-Repository-backed command request structs default `database_path` through `GetDefaultDatabasePath()` in `/include/rhbm_gem/core/command/CommandApi.hpp`, so command changes should preserve that behavior unless the command contract is intentionally changing.
+Repository-backed command request structs default `database_path` through `GetDefaultDatabasePath()` in `/include/rhbm_gem/core/command/CommandTypes.hpp`, so command changes should preserve that behavior unless the command contract is intentionally changing.
 
 ## 6. Test Checklist
 
@@ -137,7 +136,6 @@ Common suites:
 - `/tests/data/DataObjectSchemaBootstrap_test.cpp`
 - `/tests/data/DataObjectSchemaCompatibility_test.cpp`
 - `/tests/data/DataObjectSchemaValidation_test.cpp`
-- `/tests/core/command/CommandObjectCache_test.cpp`
 - `/tests/core/command/`
 
 ## 7. Documentation Checklist

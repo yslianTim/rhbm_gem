@@ -5,10 +5,13 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <memory>
+#include <stdexcept>
 #include <vector>
 
 #include "command/detail/CommandBase.hpp"
 #include "support/CommandTestHelpers.hpp"
+#include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/core/command/CommandTypes.hpp>
 
 namespace rg = rhbm_gem;
@@ -176,6 +179,44 @@ public:
 private:
     rg::CommandRequestBase m_base_request{};
     ValidationHelperCommandOptions m_options{};
+
+    bool ExecuteImpl() override { return true; }
+};
+
+class CommandIoHelperCommand final : public rg::CommandBase
+{
+public:
+    CommandIoHelperCommand()
+    {
+        BindBaseRequest(m_base_request);
+    }
+
+    std::shared_ptr<rg::ModelObject> LoadModelFileForTest(
+        const std::filesystem::path & model_path,
+        const std::string & key_tag)
+    {
+        return LoadModelFile(model_path, key_tag);
+    }
+
+    void OpenRepositoryForTest(const std::filesystem::path & database_path)
+    {
+        OpenDataRepository(database_path);
+    }
+
+    void SaveModelForTest(const rg::ModelObject & model_object, const std::string & key_tag)
+    {
+        SaveModelToRepository(model_object, key_tag);
+    }
+
+    std::shared_ptr<rg::ModelObject> LoadModelFromRepositoryForTest(const std::string & key_tag)
+    {
+        return LoadModelFromRepository(key_tag);
+    }
+
+    void ResetRuntimeState() override {}
+
+private:
+    rg::CommandRequestBase m_base_request{};
 
     bool ExecuteImpl() override { return true; }
 };
@@ -442,4 +483,34 @@ TEST(CommandValidationHelpersTest, BaseNormalizationWarningsAreProgrammaticallyV
     EXPECT_EQ(verbose_issue->phase, rg::ValidationPhase::Parse);
     EXPECT_EQ(verbose_issue->level, LogLevel::Warning);
     EXPECT_TRUE(verbose_issue->auto_corrected);
+}
+
+TEST(CommandValidationHelpersTest, TypedIoHelpersLoadFileAndRoundTripRepositoryModel)
+{
+    command_test::ScopedTempDir temp_dir{ "command_typed_io_helpers" };
+    CommandIoHelperCommand command{};
+    const auto model{
+        command.LoadModelFileForTest(command_test::TestDataPath("test_model.cif"), "source_model")
+    };
+    ASSERT_NE(model, nullptr);
+    EXPECT_EQ(model->GetKeyTag(), "source_model");
+
+    command.OpenRepositoryForTest(temp_dir.path() / "repository.sqlite");
+    command.SaveModelForTest(*model, "persisted_model");
+
+    const auto loaded_model{ command.LoadModelFromRepositoryForTest("persisted_model") };
+    ASSERT_NE(loaded_model, nullptr);
+    EXPECT_EQ(loaded_model->GetKeyTag(), "persisted_model");
+}
+
+TEST(CommandValidationHelpersTest, RepositoryHelpersRequireOpenRepository)
+{
+    CommandIoHelperCommand command{};
+    const auto model{
+        command.LoadModelFileForTest(command_test::TestDataPath("test_model.cif"), "source_model")
+    };
+    ASSERT_NE(model, nullptr);
+
+    EXPECT_THROW(command.LoadModelFromRepositoryForTest("missing"), std::runtime_error);
+    EXPECT_THROW(command.SaveModelForTest(*model, "persisted_model"), std::runtime_error);
 }

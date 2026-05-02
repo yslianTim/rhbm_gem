@@ -369,16 +369,13 @@ Commands do not invent another shared object abstraction.
 Command-side integration uses:
 
 - [`/src/core/command/detail/CommandBase.hpp`](/src/core/command/detail/CommandBase.hpp)
-- [`/src/core/command/detail/CommandObjectCache.hpp`](/src/core/command/detail/CommandObjectCache.hpp)
 
 Current pattern:
 
-1. `LoadInputFile<T>(...)` reads a typed file object and assigns a command-local `key_tag`
-2. `LoadPersistedObject<T>(...)` loads a typed object from `DataRepository`
-3. both routes store a `shared_ptr<ModelObject>` or `shared_ptr<MapObject>` in `CommandObjectCache`
-4. `SaveStoredObject(...)` switches on cached object kind and forwards to typed repository save
-
-`CommandObjectCache` is a command-private orchestration helper. It should not be promoted into the shared data-layer API.
+1. `LoadModelFile(...)` or `LoadMapFile(...)` reads a typed file object and assigns a command-local `key_tag`
+2. `LoadModelFromRepository(...)` or `LoadMapFromRepository(...)` loads a typed object from `DataRepository`
+3. concrete commands store the returned `shared_ptr<ModelObject>` or `shared_ptr<MapObject>` in typed members
+4. `SaveModelToRepository(...)` and `SaveMapToRepository(...)` forward directly to typed repository save methods
 
 ## 13. Where to Change Things
 
@@ -399,8 +396,7 @@ Use this as a quick routing guide when modifying the object system.
   [`/src/data/detail/ModelAnalysisData.*`](/src/data/detail/ModelAnalysisData.hpp),
   [`/src/data/detail/ModelDerivedState.*`](/src/data/detail/ModelDerivedState.hpp)
 - Change command-side loading/persistence orchestration:
-  [`/src/core/command/detail/CommandBase.hpp`](/src/core/command/detail/CommandBase.hpp),
-  [`/src/core/command/detail/CommandObjectCache.hpp`](/src/core/command/detail/CommandObjectCache.hpp)
+  [`/src/core/command/detail/CommandBase.hpp`](/src/core/command/detail/CommandBase.hpp)
 
 ## 14. Common Gotchas
 

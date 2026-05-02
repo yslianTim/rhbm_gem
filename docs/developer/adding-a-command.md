@@ -128,7 +128,7 @@ request-field list still comes from `CommandRequestSchema`.
 Before merge, verify:
 
 1. the command header and source exist together under `src/core/command/`
-2. `CommandApi.hpp` contains the new request DTO
+2. `CommandTypes.hpp` contains the new request DTO
 3. `CommandRequestSchema.hpp` contains the internal schema specialization
 4. `CommandManifest.def` contains the manifest entry in the correct stable or experimental section
 5. `CommandApi.cpp` includes the new command header

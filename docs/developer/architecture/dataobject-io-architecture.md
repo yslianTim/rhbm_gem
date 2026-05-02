@@ -75,8 +75,8 @@ flowchart LR
 
     subgraph R["Command runtime"]
       A --> M["CommandBase helpers"]
-      M --> N["LoadInputFile<T> / LoadPersistedObject<T> / SaveStoredObject"]
-      N --> O["CommandObjectCache"]
+      M --> N["typed file/repository load helpers"]
+      N --> O["command-owned typed members"]
     end
 ```
 
@@ -148,19 +148,18 @@ Current invariants:
 
 Commands built on `CommandBase` use internal helpers, not public data-layer dispatch:
 
-- `AttachDataRepository(database_path)`
-- `LoadInputFile<T>(path, key_tag)`
-- `LoadPersistedObject<T>(key_tag)`
-- `SaveStoredObject(key_tag, persisted_key="")`
+- `OpenDataRepository(database_path)`
+- `LoadModelFile(path, key_tag)` / `LoadMapFile(path, key_tag)`
+- `LoadModelFromRepository(key_tag)` / `LoadMapFromRepository(key_tag)`
+- `SaveModelToRepository(model, key_tag)` / `SaveMapToRepository(map, key_tag)`
 
 Behavior:
 
-- `LoadInputFile<T>(...)` supports `ModelObject` and `MapObject` only
-- file-backed loads call `ReadModel(...)` or `ReadMap(...)`, assign `key_tag`, and store the result in `CommandObjectCache`
-- persisted loads call `DataRepository::LoadModel(...)` or `DataRepository::LoadMap(...)` and store the result in the same cache
-- `SaveStoredObject(...)` switches on `CommandObjectCache::ObjectKind` and forwards to the typed repository save method
-- `CommandObjectCache` is command-internal state, not a shared data-layer abstraction
-- repository-backed command request structs in `CommandApi.hpp` default `database_path` to `GetDefaultDatabasePath()`
+- file-backed loads call `ReadModel(...)` or `ReadMap(...)`, assign `key_tag`, and return typed shared objects
+- persisted loads call `DataRepository::LoadModel(...)` or `DataRepository::LoadMap(...)` and return typed shared objects
+- save helpers forward directly to the typed repository save method
+- concrete commands keep loaded objects in typed command-owned members
+- repository-backed command request structs in `CommandTypes.hpp` default `database_path` to `GetDefaultDatabasePath()`
 
 There is no shared manager-owned iteration API for loaded objects. Traversal and selection stay in typed command workflows or ordinary container iteration.
 
@@ -195,7 +194,6 @@ Command integration:
 
 - `/include/rhbm_gem/core/command/CommandApi.hpp`
 - `/src/core/command/detail/CommandBase.hpp`
-- `/src/core/command/detail/CommandObjectCache.hpp`
 
 Contract tests:
 
