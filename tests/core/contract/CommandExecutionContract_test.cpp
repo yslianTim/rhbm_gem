@@ -17,14 +17,9 @@ struct LifecycleCommandOptions
     bool execution_toggle{ false };
 };
 
-class LifecycleCommand final : public rg::CommandBase
+class LifecycleCommand final : public rg::CommandWithRequest<rg::CommandRequestBase>
 {
 public:
-    LifecycleCommand()
-    {
-        BindBaseRequest(m_base_request);
-    }
-
     int validate_count{ 0 };
     int reset_count{ 0 };
     int execute_impl_count{ 0 };
@@ -33,13 +28,11 @@ public:
     void SetFailPrepare(bool value)
     {
         m_options.fail_prepare = value;
-        InvalidatePreparedState();
     }
 
     void SetExecutionToggle(bool value)
     {
         m_options.execution_toggle = value;
-        InvalidatePreparedState();
     }
 
     void ValidateOptions() override
@@ -55,7 +48,6 @@ public:
     }
 
 private:
-    rg::CommandRequestBase m_base_request{};
     LifecycleCommandOptions m_options{};
 
     bool ExecuteImpl() override

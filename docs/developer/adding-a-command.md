@@ -92,7 +92,7 @@ Shared command-framework helpers stay under [`src/core/command/detail/`](/src/co
 Use this shape:
 
 1. derive from `CommandWithRequest<XxxRequest>`
-2. implement `NormalizeRequest()`
+2. implement `NormalizeAndValidateRequest()`
 3. implement `ValidateOptions()`
 4. implement `ResetRuntimeState()`
 5. implement `ExecuteImpl()`
@@ -101,8 +101,8 @@ Use this shape:
 
 - stores the typed request internally
 - binds the request to `CommandBase`
-- coerces `CommandRequestBase` shared options through `CoerceBaseRequest(...)`
-- calls `NormalizeRequest()`
+- coerces `CommandRequestBase` shared options
+- calls `NormalizeAndValidateRequest()`
 
 ## Registration Surfaces
 

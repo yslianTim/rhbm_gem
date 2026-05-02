@@ -116,7 +116,7 @@ MapSimulationCommand::MapSimulationCommand() :
 {
 }
 
-void MapSimulationCommand::NormalizeRequest()
+void MapSimulationCommand::NormalizeAndValidateRequest()
 {
     auto & request{ MutableRequest() };
     ValidateRequiredPath(request.model_file_path, kModelOption, "Model file");
@@ -143,15 +143,14 @@ void MapSimulationCommand::NormalizeRequest()
         LogLevel::Warning,
         "Grid spacing");
 
-    InvalidatePreparedState();
-    ClearParseIssues(kBlurringWidthOption);
+    ResetParseIssue(kBlurringWidthOption);
     std::vector<double> filtered_widths;
     filtered_widths.reserve(request.blurring_width_list.size());
     for (const auto width : request.blurring_width_list)
     {
         if (!numeric_validation::IsFinitePositive(width))
         {
-            AddNormalizationWarning(
+            AddParseNormalizationWarning(
                 kBlurringWidthOption,
                 "Blurring width must be a finite positive value, dropping current setting: "
                     + std::to_string(width));

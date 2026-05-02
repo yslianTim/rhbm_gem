@@ -56,6 +56,13 @@ def main() -> int:
         if fragment not in stdout:
             raise AssertionError(f"Expected dry-run output to mention {fragment}.\n{stdout}")
 
+    scaffold_source = scaffold_script.read_text(encoding="utf-8")
+    if "NormalizeAndValidateRequest" not in scaffold_source:
+        raise AssertionError("Scaffold template should use NormalizeAndValidateRequest().")
+    old_hook_name = "Normalize" + "Request"
+    if old_hook_name in scaffold_source:
+        raise AssertionError(f"Scaffold template still references {old_hook_name}().")
+
     return 0
 
 

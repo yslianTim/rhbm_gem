@@ -26,7 +26,7 @@ public:
     ~PositionEstimationCommand() override;
 
 private:
-    void NormalizeRequest() override;
+    void NormalizeAndValidateRequest() override;
     void ResetRuntimeState() override;
     bool ExecuteImpl() override;
     bool BuildDataObject();

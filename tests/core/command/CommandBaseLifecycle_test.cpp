@@ -15,24 +15,19 @@ struct TestCommandOptions
     bool force_invalid{ false };
 };
 
-class TestCommand final : public rg::CommandBase
+class TestCommand final : public rg::CommandWithRequest<rg::CommandRequestBase>
 {
 public:
-    TestCommand()
-    {
-        BindBaseRequest(m_base_request);
-    }
-
     void SetForceInvalid(bool value)
     {
         m_options.force_invalid = value;
-        InvalidatePreparedState();
     }
 
     void ConfigureFilesystemOptions(const std::filesystem::path & folder_path)
     {
-        m_base_request.output_dir = folder_path;
-        CoerceBaseRequest(m_base_request);
+        rg::CommandRequestBase request{};
+        request.output_dir = folder_path;
+        ApplyRequest(request);
     }
 
     void ValidateOptions() override
@@ -43,7 +38,6 @@ public:
     void ResetRuntimeState() override {}
 
 private:
-    rg::CommandRequestBase m_base_request{};
     TestCommandOptions m_options{};
 
     bool ExecuteImpl() override

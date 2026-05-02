@@ -148,16 +148,13 @@ Current invariants:
 
 Commands built on `CommandBase` use internal helpers, not public data-layer dispatch:
 
-- `OpenDataRepository(database_path)`
 - `LoadModelFile(path, key_tag)` / `LoadMapFile(path, key_tag)`
-- `LoadModelFromRepository(key_tag)` / `LoadMapFromRepository(key_tag)`
-- `SaveModelToRepository(model, key_tag)` / `SaveMapToRepository(map, key_tag)`
 
 Behavior:
 
 - file-backed loads call `ReadModel(...)` or `ReadMap(...)`, assign `key_tag`, and return typed shared objects
-- persisted loads call `DataRepository::LoadModel(...)` or `DataRepository::LoadMap(...)` and return typed shared objects
-- save helpers forward directly to the typed repository save method
+- persisted loads call `DataRepository::LoadModel(...)` or `DataRepository::LoadMap(...)` directly in the command workflow
+- save workflows call `DataRepository::SaveModel(...)` or `DataRepository::SaveMap(...)` directly in the command workflow
 - concrete commands keep loaded objects in typed command-owned members
 - repository-backed command request structs in `CommandTypes.hpp` default `database_path` to `GetDefaultDatabasePath()`
 

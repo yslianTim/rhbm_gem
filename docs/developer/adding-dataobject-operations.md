@@ -100,8 +100,8 @@ std::vector<AtomObject *> CollectAtomsWithLocalPotentialEntries(ModelObject & mo
 Typical command flow:
 
 1. for file-backed input, call `LoadModelFile(...)` or `LoadMapFile(...)` from `CommandBase`, or `ReadModel(...)` / `ReadMap(...)` directly outside command classes
-2. for database-backed input, call `OpenDataRepository(...)` and then `LoadModelFromRepository(...)` or `LoadMapFromRepository(...)`
-3. when persisting a command-owned object, call `SaveModelToRepository(...)` or `SaveMapToRepository(...)`, or use `DataRepository::Save*` directly outside commands
+2. for database-backed input, create `DataRepository repository{database_path}` in the command workflow and call `LoadModel(...)` or `LoadMap(...)`
+3. when persisting a command-owned object, call `DataRepository::SaveModel(...)` or `DataRepository::SaveMap(...)`
 4. keep loaded `shared_ptr` objects in typed command-owned members
 5. wrap failures with command-specific context near the orchestration boundary
 6. keep `ExecuteImpl()` and local workflow helpers focused on typed orchestration

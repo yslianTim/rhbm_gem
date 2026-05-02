@@ -1,5 +1,6 @@
 #include "PotentialDisplayCommand.hpp"
 #include "core/painter/detail/PainterModelAccess.hpp"
+#include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -47,7 +48,7 @@ PotentialDisplayCommand::PotentialDisplayCommand() :
 {
 }
 
-void PotentialDisplayCommand::NormalizeRequest()
+void PotentialDisplayCommand::NormalizeAndValidateRequest()
 {
     auto & request{ MutableRequest() };
     CoerceEnum(
@@ -56,24 +57,21 @@ void PotentialDisplayCommand::NormalizeRequest()
         PainterType::MODEL,
         "Painter choice");
     RequireNonEmptyList(request.model_key_tag_list, kModelKeyListOption, "Model key list");
-    InvalidatePreparedState();
-    ClearParseIssues(kRefGroupOption);
+    ResetParseIssue(kRefGroupOption);
     for (const auto & [group_name, members] : request.reference_model_groups)
     {
         if (group_name.empty())
         {
-            AddValidationError(
+            AddParseError(
                 kRefGroupOption,
-                "Reference group name cannot be empty.",
-                ValidationPhase::Parse);
+                "Reference group name cannot be empty.");
             continue;
         }
         if (members.empty())
         {
-            AddValidationError(
+            AddParseError(
                 kRefGroupOption,
-                "Reference group '" + group_name + "' cannot be empty.",
-                ValidationPhase::Parse);
+                "Reference group '" + group_name + "' cannot be empty.");
         }
     }
 }
@@ -100,14 +98,14 @@ bool PotentialDisplayCommand::BuildDataObject()
     ScopeTimer timer{ "PotentialDisplayCommand::BuildDataObject" };
     try
     {
-        OpenDataRepository(request.database_path);
+        DataRepository repository{ request.database_path };
         auto model_size{ request.model_key_tag_list.size() };
         size_t model_count{ 1 };
         Logger::Log(LogLevel::Info, "Load model object list:");
         for (const auto & key : request.model_key_tag_list)
         {
             Logger::ProgressBar(model_count, model_size);
-            m_model_object_list.emplace_back(LoadModelFromRepository(key));
+            m_model_object_list.emplace_back(repository.LoadModel(key));
             model_count++;
         }
         for (const auto & [map_key, key_tag_list] : request.reference_model_groups)
@@ -118,7 +116,7 @@ bool PotentialDisplayCommand::BuildDataObject()
             for (auto & key_tag : key_tag_list)
             {
                 Logger::ProgressBar(ref_model_count, ref_model_size);
-                m_ref_model_object_list_map[map_key].emplace_back(LoadModelFromRepository(key_tag));
+                m_ref_model_object_list_map[map_key].emplace_back(repository.LoadModel(key_tag));
                 ref_model_count++;
             }
         }

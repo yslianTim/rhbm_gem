@@ -66,7 +66,7 @@ Expected result contract:
 
 ## Command Behavior
 
-`PotentialAnalysisCommand::NormalizeRequest()` handles parse-phase normalization and validation:
+`PotentialAnalysisCommand::NormalizeAndValidateRequest()` handles parse-phase normalization and validation:
 
 - validates required model and map paths
 - coerces invalid scalar inputs back to command defaults when the command is designed to recover
@@ -90,14 +90,13 @@ Expected result contract:
 
 `PotentialAnalysisCommand::BuildDataObject()`:
 
-- opens `DataRepository` for `request.database_path`
 - loads the model and map through `LoadModelFile(...)` and `LoadMapFile(...)`
 - stores loaded objects directly in typed command-owned members
 - wraps load failures with command-specific error context
 
 `PotentialAnalysisCommand::SavePreparedModel()`:
 
-- persists the prepared model through `SaveModelToRepository(...)`
+- persists the prepared model through `DataRepository::SaveModel(...)`
 - writes to the repository using `request.saved_key_tag` as the persisted key
 - clears sampled local-potential distance/value buffers after persistence to keep runtime state lean
 

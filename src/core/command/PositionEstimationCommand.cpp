@@ -54,7 +54,7 @@ PositionEstimationCommand::PositionEstimationCommand() :
 
 PositionEstimationCommand::~PositionEstimationCommand() = default;
 
-void PositionEstimationCommand::NormalizeRequest()
+void PositionEstimationCommand::NormalizeAndValidateRequest()
 {
     auto & request{ MutableRequest() };
     ValidateRequiredPath(request.map_file_path, kMapOption, "Map file");

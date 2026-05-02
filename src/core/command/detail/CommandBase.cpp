@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <array>
 #include <memory>
-#include <stdexcept>
 #include <string>
 #include <system_error>
 
@@ -140,6 +139,26 @@ void CommandBase::ClearParseIssues(std::string_view option_name)
 void CommandBase::ClearPrepareIssues(std::string_view option_name)
 {
     ClearValidationIssues(option_name, ValidationPhase::Prepare);
+}
+
+void CommandBase::ResetParseIssue(std::string_view option_name)
+{
+    InvalidatePreparedState();
+    ClearParseIssues(option_name);
+}
+
+void CommandBase::AddParseError(
+    std::string_view option_name,
+    const std::string & message)
+{
+    AddValidationError(option_name, message, ValidationPhase::Parse);
+}
+
+void CommandBase::AddParseNormalizationWarning(
+    std::string_view option_name,
+    const std::string & message)
+{
+    AddNormalizationWarning(option_name, message);
 }
 
 void CommandBase::BeginValidationMutation(ValidationPhase phase)
@@ -291,7 +310,6 @@ void CommandBase::BeginPreparationPass()
 {
     Logger::SetLogLevel(VerboseLevel());
     ResetRuntimeState();
-    m_data_repository.reset();
     InvalidatePreparedState();
 }
 
@@ -328,20 +346,6 @@ bool CommandBase::RunFilesystemPreflight()
     return !HasValidationErrors();
 }
 
-void CommandBase::OpenDataRepository(const std::filesystem::path & database_path)
-{
-    m_data_repository = std::make_unique<DataRepository>(database_path);
-}
-
-DataRepository & CommandBase::RequireDataRepository()
-{
-    if (m_data_repository == nullptr)
-    {
-        throw std::runtime_error("Database repository is not initialized.");
-    }
-    return *m_data_repository;
-}
-
 std::shared_ptr<ModelObject> CommandBase::LoadModelFile(
     const std::filesystem::path & filename,
     const std::string & key_tag)
@@ -358,30 +362,6 @@ std::shared_ptr<MapObject> CommandBase::LoadMapFile(
     auto data_object{ ReadMap(filename) };
     data_object->SetKeyTag(key_tag);
     return std::shared_ptr<MapObject>{ std::move(data_object) };
-}
-
-std::shared_ptr<ModelObject> CommandBase::LoadModelFromRepository(const std::string & key_tag)
-{
-    return std::shared_ptr<ModelObject>{ RequireDataRepository().LoadModel(key_tag) };
-}
-
-std::shared_ptr<MapObject> CommandBase::LoadMapFromRepository(const std::string & key_tag)
-{
-    return std::shared_ptr<MapObject>{ RequireDataRepository().LoadMap(key_tag) };
-}
-
-void CommandBase::SaveModelToRepository(
-    const ModelObject & model_object,
-    const std::string & key_tag)
-{
-    RequireDataRepository().SaveModel(model_object, key_tag);
-}
-
-void CommandBase::SaveMapToRepository(
-    const MapObject & map_object,
-    const std::string & key_tag)
-{
-    RequireDataRepository().SaveMap(map_object, key_tag);
 }
 
 } // namespace rhbm_gem

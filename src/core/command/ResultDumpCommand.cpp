@@ -1,5 +1,6 @@
 #include "ResultDumpCommand.hpp"
 
+#include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -35,7 +36,7 @@ ResultDumpCommand::ResultDumpCommand() :
 {
 }
 
-void ResultDumpCommand::NormalizeRequest()
+void ResultDumpCommand::NormalizeAndValidateRequest()
 {
     auto & request{ MutableRequest() };
     CoerceEnum(
@@ -69,7 +70,7 @@ bool ResultDumpCommand::BuildDataObjectList()
     ScopeTimer timer("ResultDumpCommand::BuildDataObjectList");
     try
     {
-        OpenDataRepository(request.database_path);
+        DataRepository repository{ request.database_path };
         if (request.map_file_path.empty())
         {
             m_map_object.reset();
@@ -81,7 +82,7 @@ bool ResultDumpCommand::BuildDataObjectList()
         m_selected_atom_list_map.clear();
         for (const auto & key : request.model_key_tag_list)
         {
-            auto model_object{ LoadModelFromRepository(key) };
+            auto model_object{ std::shared_ptr<ModelObject>{ repository.LoadModel(key) } };
             m_model_object_list.emplace_back(model_object);
             const auto & selected_atom_list{ model_object->GetSelectedAtoms() };
             m_selected_atom_list_map[key] = {

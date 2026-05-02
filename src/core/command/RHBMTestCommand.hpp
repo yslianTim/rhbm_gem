@@ -13,7 +13,7 @@ public:
     ~RHBMTestCommand() = default;
 
 private:
-    void NormalizeRequest() override;
+    void NormalizeAndValidateRequest() override;
     void ValidateOptions() override;
     bool ExecuteImpl() override;
 };

@@ -1,18 +1,16 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
-#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <limits>
 #include <memory>
-#include <stdexcept>
 #include <vector>
 
 #include "command/detail/CommandBase.hpp"
 #include "support/CommandTestHelpers.hpp"
-#include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/core/command/CommandTypes.hpp>
+#include <rhbm_gem/data/object/ModelObject.hpp>
 
 namespace rg = rhbm_gem;
 
@@ -31,14 +29,9 @@ struct ValidationHelperCommandOptions
     bool add_prepare_error{ false };
 };
 
-class ValidationHelperCommand final : public rg::CommandBase
+class ValidationHelperCommand final : public rg::CommandWithRequest<rg::CommandRequestBase>
 {
 public:
-    ValidationHelperCommand()
-    {
-        BindBaseRequest(m_base_request);
-    }
-
     void SetRequiredPath(const std::filesystem::path & value)
     {
         m_options.required_path = value;
@@ -54,13 +47,12 @@ public:
     void SetPositiveCount(int value)
     {
         m_options.normalized_count = value;
-        CoerceScalar(
+        CoercePositiveScalar(
             m_options.normalized_count,
             "--count",
-            [](int candidate) { return candidate > 0; },
             4,
             LogLevel::Warning,
-            "Count must be positive, reset to default 4");
+            "Count");
     }
 
     int Count() const { return m_options.normalized_count; }
@@ -80,49 +72,39 @@ public:
     void SetFinitePositiveValue(double value)
     {
         m_options.finite_positive_value = value;
-        CoerceScalar(
+        CoerceFinitePositiveScalar(
             m_options.finite_positive_value,
             "--finite-positive",
-            [](double candidate)
-            {
-                return std::isfinite(candidate) && candidate > 0.0;
-            },
             2.0,
             LogLevel::Error,
-            "Finite positive value must be a finite positive number.");
+            "Finite positive value");
     }
 
     void SetFiniteNonNegativeValue(double value)
     {
         m_options.finite_non_negative_value = value;
-        CoerceScalar(
+        CoerceFiniteNonNegativeScalar(
             m_options.finite_non_negative_value,
             "--finite-non-negative",
-            [](double candidate)
-            {
-                return std::isfinite(candidate) && candidate >= 0.0;
-            },
             0.0,
             LogLevel::Error,
-            "Finite non-negative value must be a finite non-negative number.");
+            "Finite non-negative value");
     }
 
     void SetPositiveCountValue(int value)
     {
         m_options.positive_count = value;
-        CoerceScalar(
+        CoercePositiveScalar(
             m_options.positive_count,
             "--positive-count",
-            [](int candidate) { return candidate > 0; },
             1,
             LogLevel::Error,
-            "Positive count must be positive.");
+            "Positive count");
     }
 
     void SetCommandLocalValidatedValue(double value)
     {
-        InvalidatePreparedState();
-        ClearParseIssues("--validated");
+        ResetParseIssue("--validated");
         if (value == 3.5)
         {
             m_options.command_local_value = value;
@@ -130,10 +112,9 @@ public:
         }
 
         m_options.command_local_value = 1.25;
-        AddValidationError(
+        AddParseError(
             "--validated",
-            "Validated value must equal 3.5.",
-            rg::ValidationPhase::Parse);
+            "Validated value must equal 3.5.");
     }
 
     double CommandLocalValidatedValue() const { return m_options.command_local_value; }
@@ -143,54 +124,46 @@ public:
 
     void SetProblematicValue(int value)
     {
-        InvalidatePreparedState();
-        ClearParseIssues("--problem");
+        ResetParseIssue("--problem");
         if (value <= 0)
         {
-            AddNormalizationWarning("--problem", "normalized to 1");
-            AddNormalizationWarning("--problem", "clamped to safe range");
+            AddParseNormalizationWarning("--problem", "normalized to 1");
+            AddParseNormalizationWarning("--problem", "clamped to safe range");
         }
     }
 
     void SetPrepareError(bool value)
     {
         m_options.add_prepare_error = value;
-        InvalidatePreparedState();
     }
 
     void SetCommonOptionsForTest(int thread_size, int verbose_level)
     {
-        m_base_request.job_count = thread_size;
-        m_base_request.verbosity = verbose_level;
-        CoerceBaseRequest(m_base_request);
+        rg::CommandRequestBase request{};
+        request.job_count = thread_size;
+        request.verbosity = verbose_level;
+        ApplyRequest(request);
     }
 
     void ValidateOptions() override
     {
-        ClearPrepareIssues("--problem");
-        if (m_options.add_prepare_error)
-        {
-            AddValidationError("--problem", "semantic validation failed");
-        }
+        RequireCondition(
+            !m_options.add_prepare_error,
+            "--problem",
+            "semantic validation failed");
     }
 
     void ResetRuntimeState() override {}
 
 private:
-    rg::CommandRequestBase m_base_request{};
     ValidationHelperCommandOptions m_options{};
 
     bool ExecuteImpl() override { return true; }
 };
 
-class CommandIoHelperCommand final : public rg::CommandBase
+class CommandIoHelperCommand final : public rg::CommandWithRequest<rg::CommandRequestBase>
 {
 public:
-    CommandIoHelperCommand()
-    {
-        BindBaseRequest(m_base_request);
-    }
-
     std::shared_ptr<rg::ModelObject> LoadModelFileForTest(
         const std::filesystem::path & model_path,
         const std::string & key_tag)
@@ -198,26 +171,9 @@ public:
         return LoadModelFile(model_path, key_tag);
     }
 
-    void OpenRepositoryForTest(const std::filesystem::path & database_path)
-    {
-        OpenDataRepository(database_path);
-    }
-
-    void SaveModelForTest(const rg::ModelObject & model_object, const std::string & key_tag)
-    {
-        SaveModelToRepository(model_object, key_tag);
-    }
-
-    std::shared_ptr<rg::ModelObject> LoadModelFromRepositoryForTest(const std::string & key_tag)
-    {
-        return LoadModelFromRepository(key_tag);
-    }
-
     void ResetRuntimeState() override {}
 
 private:
-    rg::CommandRequestBase m_base_request{};
-
     bool ExecuteImpl() override { return true; }
 };
 
@@ -485,32 +441,12 @@ TEST(CommandValidationHelpersTest, BaseNormalizationWarningsAreProgrammaticallyV
     EXPECT_TRUE(verbose_issue->auto_corrected);
 }
 
-TEST(CommandValidationHelpersTest, TypedIoHelpersLoadFileAndRoundTripRepositoryModel)
+TEST(CommandValidationHelpersTest, TypedIoHelpersLoadFileModel)
 {
-    command_test::ScopedTempDir temp_dir{ "command_typed_io_helpers" };
     CommandIoHelperCommand command{};
     const auto model{
         command.LoadModelFileForTest(command_test::TestDataPath("test_model.cif"), "source_model")
     };
     ASSERT_NE(model, nullptr);
     EXPECT_EQ(model->GetKeyTag(), "source_model");
-
-    command.OpenRepositoryForTest(temp_dir.path() / "repository.sqlite");
-    command.SaveModelForTest(*model, "persisted_model");
-
-    const auto loaded_model{ command.LoadModelFromRepositoryForTest("persisted_model") };
-    ASSERT_NE(loaded_model, nullptr);
-    EXPECT_EQ(loaded_model->GetKeyTag(), "persisted_model");
-}
-
-TEST(CommandValidationHelpersTest, RepositoryHelpersRequireOpenRepository)
-{
-    CommandIoHelperCommand command{};
-    const auto model{
-        command.LoadModelFileForTest(command_test::TestDataPath("test_model.cif"), "source_model")
-    };
-    ASSERT_NE(model, nullptr);
-
-    EXPECT_THROW(command.LoadModelFromRepositoryForTest("missing"), std::runtime_error);
-    EXPECT_THROW(command.SaveModelForTest(*model, "persisted_model"), std::runtime_error);
 }

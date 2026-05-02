@@ -76,7 +76,7 @@ MapVisualizationCommand::MapVisualizationCommand() :
 {
 }
 
-void MapVisualizationCommand::NormalizeRequest()
+void MapVisualizationCommand::NormalizeAndValidateRequest()
 {
     auto & request{ MutableRequest() };
     ValidateRequiredPath(

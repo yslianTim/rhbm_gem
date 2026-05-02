@@ -165,7 +165,7 @@ public:
     ~{spec.command_type}() override = default;
 
 private:
-    void NormalizeRequest() override;
+    void NormalizeAndValidateRequest() override;
     void ValidateOptions() override;
     void ResetRuntimeState() override;
     bool ExecuteImpl() override;
@@ -187,12 +187,11 @@ namespace rhbm_gem {{
 {{
 }}
 
-void {spec.command_type}::NormalizeRequest()
+void {spec.command_type}::NormalizeAndValidateRequest()
 {{
     auto & request{{ MutableRequest() }};
     (void)request;
-    // Normalize typed request fields here. Use CommandBase helpers when you need
-    // validation issues, filesystem checks, or fallback behavior.
+    // Normalize typed request fields and emit parse-phase validation issues here.
 }}
 
 void {spec.command_type}::ValidateOptions()

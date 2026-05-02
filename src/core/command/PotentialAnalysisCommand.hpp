@@ -23,7 +23,7 @@ public:
     ~PotentialAnalysisCommand() override = default;
 
 private:
-    void NormalizeRequest() override;
+    void NormalizeAndValidateRequest() override;
     void ValidateOptions() override;
     void ResetRuntimeState() override;
     bool ExecuteImpl() override;
@@ -48,7 +48,10 @@ private:
     void RunAtomPotentialFittingWorkflow(
         ModelObject & model_object,
         const PotentialAnalysisRequest & request);
-    void SavePreparedModel(ModelObject & model_object, std::string_view saved_key_tag);
+    void SavePreparedModel(
+        ModelObject & model_object,
+        const std::filesystem::path & database_path,
+        std::string_view saved_key_tag);
 
 };
 

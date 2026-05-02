@@ -29,7 +29,7 @@ public:
     ~MapSimulationCommand() override = default;
 
 private:
-    void NormalizeRequest() override;
+    void NormalizeAndValidateRequest() override;
     void ValidateOptions() override;
     void ResetRuntimeState() override;
     bool ExecuteImpl() override;

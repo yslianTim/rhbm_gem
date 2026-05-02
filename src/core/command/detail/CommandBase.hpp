@@ -10,7 +10,6 @@
 #include <vector>
 
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
@@ -18,6 +17,9 @@
 #include "CommandEnumMetadata.hpp"
 
 namespace rhbm_gem {
+
+template <typename Request>
+class CommandWithRequest;
 
 namespace command_validation_detail {
 
@@ -111,9 +113,11 @@ struct ValidationIssueRecord
 class CommandBase
 {
     CommandRequestBase * m_base_request{ nullptr };
-    std::unique_ptr<DataRepository> m_data_repository;
     std::vector<ValidationIssueRecord> m_validation_issues;
     bool m_was_prepared{ false };
+
+    template <typename Request>
+    friend class CommandWithRequest;
 
 public:
     virtual ~CommandBase() = default;
@@ -128,19 +132,10 @@ protected:
     virtual void ResetRuntimeState() {}
     virtual bool ExecuteImpl() = 0;
     int ThreadSize() const { return BaseRequest().job_count; }
-    int VerboseLevel() const { return BaseRequest().verbosity; }
     const std::filesystem::path & OutputFolder() const { return BaseRequest().output_dir; }
-    void BindBaseRequest(CommandRequestBase & request) { m_base_request = &request; }
-    void InvalidatePreparedState();
-    void CoerceBaseRequest(CommandRequestBase & request);
-    void AddValidationError(
-        std::string_view option_name,
-        const std::string & message,
-        ValidationPhase phase = ValidationPhase::Prepare);
-    void AddNormalizationWarning(std::string_view option_name, const std::string & message);
-    void ClearParseIssues(std::string_view option_name);
-    void ClearPrepareIssues(std::string_view option_name);
-
+    void ResetParseIssue(std::string_view option_name);
+    void AddParseError(std::string_view option_name, const std::string & message);
+    void AddParseNormalizationWarning(std::string_view option_name, const std::string & message);
     void ValidateRequiredPath(
         const std::filesystem::path & path,
         std::string_view option_name,
@@ -166,26 +161,6 @@ protected:
         std::string_view option_name,
         const std::string & message,
         ValidationPhase phase = ValidationPhase::Prepare);
-    template <typename FieldType, typename Predicate>
-    void CoerceScalar(
-        FieldType & field,
-        std::string_view option_name,
-        Predicate is_valid,
-        FieldType fallback_value,
-        LogLevel issue_level,
-        const std::string & message)
-    {
-        InvalidatePreparedState();
-        ClearParseIssues(option_name);
-        if (is_valid(field)) return;
-        field = fallback_value;
-        if (issue_level == LogLevel::Warning)
-        {
-            AddNormalizationWarning(option_name, message);
-            return;
-        }
-        AddValidationIssue(option_name, ValidationPhase::Parse, issue_level, message, false);
-    }
     template <typename FieldType>
     void CoercePositiveScalar(
         FieldType & field,
@@ -279,22 +254,47 @@ protected:
             ValidationPhase::Parse);
     }
     std::filesystem::path BuildOutputPath(std::string_view stem, std::string_view extension) const;
-    void OpenDataRepository(const std::filesystem::path & database_path);
     std::shared_ptr<ModelObject> LoadModelFile(
         const std::filesystem::path & filename,
         const std::string & key_tag);
     std::shared_ptr<MapObject> LoadMapFile(
         const std::filesystem::path & filename,
         const std::string & key_tag);
-    std::shared_ptr<ModelObject> LoadModelFromRepository(const std::string & key_tag);
-    std::shared_ptr<MapObject> LoadMapFromRepository(const std::string & key_tag);
-    void SaveModelToRepository(const ModelObject & model_object, const std::string & key_tag);
-    void SaveMapToRepository(const MapObject & map_object, const std::string & key_tag);
 
 private:
     CommandRequestBase & BaseRequest() { return *m_base_request; }
     const CommandRequestBase & BaseRequest() const { return *m_base_request; }
-    DataRepository & RequireDataRepository();
+    int VerboseLevel() const { return BaseRequest().verbosity; }
+    void BindBaseRequest(CommandRequestBase & request) { m_base_request = &request; }
+    void InvalidatePreparedState();
+    void CoerceBaseRequest(CommandRequestBase & request);
+    void AddValidationError(
+        std::string_view option_name,
+        const std::string & message,
+        ValidationPhase phase = ValidationPhase::Prepare);
+    void AddNormalizationWarning(std::string_view option_name, const std::string & message);
+    void ClearParseIssues(std::string_view option_name);
+    void ClearPrepareIssues(std::string_view option_name);
+    template <typename FieldType, typename Predicate>
+    void CoerceScalar(
+        FieldType & field,
+        std::string_view option_name,
+        Predicate is_valid,
+        FieldType fallback_value,
+        LogLevel issue_level,
+        const std::string & message)
+    {
+        InvalidatePreparedState();
+        ClearParseIssues(option_name);
+        if (is_valid(field)) return;
+        field = fallback_value;
+        if (issue_level == LogLevel::Warning)
+        {
+            AddNormalizationWarning(option_name, message);
+            return;
+        }
+        AddValidationIssue(option_name, ValidationPhase::Parse, issue_level, message, false);
+    }
     void BeginValidationMutation(ValidationPhase phase);
     void BeginPreparationPass();
     bool RunValidationPass();
@@ -335,13 +335,13 @@ public:
         m_request = request;
         InvalidatePreparedState();
         CoerceBaseRequest(m_request);
-        NormalizeRequest();
+        NormalizeAndValidateRequest();
     }
 
 protected:
     const Request & RequestOptions() const { return m_request; }
     Request & MutableRequest() { return m_request; }
-    virtual void NormalizeRequest() {}
+    virtual void NormalizeAndValidateRequest() {}
     
 };
 

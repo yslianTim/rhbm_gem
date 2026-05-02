@@ -524,7 +524,7 @@ RHBMTestCommand::RHBMTestCommand() :
 {
 }
 
-void RHBMTestCommand::NormalizeRequest()
+void RHBMTestCommand::NormalizeAndValidateRequest()
 {
     auto & request{ MutableRequest() };
     CoerceEnum(

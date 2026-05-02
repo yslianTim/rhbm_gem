@@ -3,6 +3,7 @@
 #include "detail/MapSampling.hpp"
 #include "experimental/PotentialAnalysisBondWorkflow.hpp"
 
+#include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
@@ -151,7 +152,7 @@ PotentialAnalysisCommand::PotentialAnalysisCommand() :
 {
 }
 
-void PotentialAnalysisCommand::NormalizeRequest()
+void PotentialAnalysisCommand::NormalizeAndValidateRequest()
 {
     auto & request{ MutableRequest() };
     ValidateRequiredPath(request.model_file_path, kModelOption, "Model file");
@@ -162,15 +163,13 @@ void PotentialAnalysisCommand::NormalizeRequest()
         0.0,
         LogLevel::Error,
         "Simulated map resolution");
-    InvalidatePreparedState();
-    ClearParseIssues(kSaveKeyOption);
+    ResetParseIssue(kSaveKeyOption);
     if (request.saved_key_tag.empty())
     {
         request.saved_key_tag = "model";
-        AddValidationError(
+        AddParseError(
             kSaveKeyOption,
-            "Saved key tag cannot be empty. Using 'model' instead.",
-            ValidationPhase::Parse);
+            "Saved key tag cannot be empty. Using 'model' instead.");
     }
     CoercePositiveScalar(
         request.sampling_size,
@@ -257,7 +256,7 @@ bool PotentialAnalysisCommand::ExecuteImpl()
     experimental::RunPotentialAnalysisBondWorkflow(
         model_object, map_object, request, ThreadSize());
 #endif
-    SavePreparedModel(model_object, request.saved_key_tag);
+    SavePreparedModel(model_object, request.database_path, request.saved_key_tag);
     return true;
 }
 
@@ -293,7 +292,6 @@ bool PotentialAnalysisCommand::BuildDataObject(const PotentialAnalysisRequest & 
     ScopeTimer timer("PotentialAnalysisCommand::BuildDataObject");
     try
     {
-        OpenDataRepository(request.database_path);
         m_model_object = LoadModelFile(request.model_file_path, m_model_key_tag);
         m_map_object = LoadMapFile(request.map_file_path, m_map_key_tag);
         if (m_model_object == nullptr || m_map_object == nullptr)
@@ -459,10 +457,13 @@ void PotentialAnalysisCommand::RunAtomPotentialFittingWorkflow(
 }
 
 void PotentialAnalysisCommand::SavePreparedModel(
-    ModelObject & model_object, std::string_view saved_key_tag)
+    ModelObject & model_object,
+    const std::filesystem::path & database_path,
+    std::string_view saved_key_tag)
 {
     ScopeTimer timer("PotentialAnalysisCommand::SavePreparedModel");
-    SaveModelToRepository(model_object, std::string(saved_key_tag));
+    DataRepository repository{ database_path };
+    repository.SaveModel(model_object, std::string(saved_key_tag));
     model_object.EditAnalysis().ClearTransientFitStates();
 }
 
