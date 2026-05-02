@@ -20,14 +20,23 @@
 namespace rhbm_gem {
 namespace {
 
+struct IdentityParser
+{
+    template <typename ValueType>
+    ValueType operator()(const ValueType & value) const
+    {
+        return value;
+    }
+};
+
 template <typename ValueType>
-std::optional<ValueType> MakeCliDefaultValue(const ValueType & value)
+std::optional<ValueType> MakeCliDefaultDisplayValue(const ValueType & value)
 {
     return value;
 }
 
 template <>
-std::optional<std::string> MakeCliDefaultValue(const std::string & value)
+std::optional<std::string> MakeCliDefaultDisplayValue(const std::string & value)
 {
     if (value.empty())
     {
@@ -36,17 +45,19 @@ std::optional<std::string> MakeCliDefaultValue(const std::string & value)
     return value;
 }
 
-std::optional<std::filesystem::path> MakeCliDefaultValue(const std::filesystem::path & value)
+std::optional<std::string> MakeCliDefaultDisplayValue(const std::filesystem::path & value)
 {
     if (value.empty())
     {
         return std::nullopt;
     }
-    return value;
+    return value.string();
 }
 
 template <typename ValueType>
-std::optional<std::string> MakeCliDefaultValue(const std::vector<ValueType> & values, char delimiter)
+std::optional<std::string> MakeCliDefaultDisplayValue(
+    const std::vector<ValueType> & values,
+    char delimiter)
 {
     if (values.empty())
     {
@@ -65,35 +76,20 @@ std::optional<std::string> MakeCliDefaultValue(const std::vector<ValueType> & va
     return stream.str();
 }
 
-void ApplyCliOptionSettings(CLI::Option & option, bool required)
+template <typename DefaultType = std::string>
+void ApplyRequiredAndDefault(
+    CLI::Option & option,
+    bool required,
+    const std::optional<DefaultType> & default_value = std::nullopt)
 {
     if (required)
     {
         option.required();
     }
-}
-
-template <typename DefaultType>
-void ApplyCliOptionSettings(
-    CLI::Option & option,
-    bool required,
-    const std::optional<DefaultType> & default_value)
-{
-    ApplyCliOptionSettings(option, required);
     if (default_value.has_value())
     {
         option.default_val(*default_value);
     }
-}
-
-std::optional<std::string> MakeCliPathDefaultText(const std::filesystem::path & value)
-{
-    const auto default_value{ MakeCliDefaultValue(value) };
-    if (!default_value.has_value())
-    {
-        return std::nullopt;
-    }
-    return default_value->string();
 }
 
 template <typename Request, typename MemberType, typename CliValueType, typename Parser, typename DefaultType>
@@ -116,7 +112,7 @@ CLI::Option & AddRequestOption(
             },
             help)
     };
-    ApplyCliOptionSettings(option, required, default_value);
+    ApplyRequiredAndDefault(option, required, default_value);
     return option;
 }
 
@@ -149,7 +145,7 @@ std::pair<std::string, std::vector<std::string>> ParseReferenceGroupArgument(
     return { group_name, members };
 }
 
-void AccumulateReferenceGroups(
+void AppendReferenceGroupArguments(
     std::unordered_map<std::string, std::vector<std::string>> & group_map,
     const std::vector<std::string> & values,
     const std::string & option_name,
@@ -184,11 +180,8 @@ void BindCliField(
         field.help,
         field.required,
         field.member,
-        [](const FieldType & value)
-        {
-            return value;
-        },
-        MakeCliDefaultValue(current_value));
+        IdentityParser{},
+        MakeCliDefaultDisplayValue(current_value));
 }
 
 template <typename Request>
@@ -208,7 +201,7 @@ void BindCliField(
         {
             return std::filesystem::path{ value };
         },
-        MakeCliPathDefaultText(request->*(field.member)));
+        MakeCliDefaultDisplayValue(request->*(field.member)));
 }
 
 template <typename Request, typename EnumType>
@@ -225,11 +218,8 @@ void BindCliField(
             field.help,
             field.required,
             field.member,
-            [](const EnumType & value)
-            {
-                return value;
-            },
-            MakeCliDefaultValue(request->*(field.member)))
+            IdentityParser{},
+            MakeCliDefaultDisplayValue(request->*(field.member)))
     };
     option.transform(CLI::CheckedTransformer(
         internal::BuildCommandEnumCliMap<EnumType>(), CLI::ignore_case));
@@ -252,7 +242,7 @@ void BindCliField(
         {
             return string_helper::ParseListOption<ElementType>(value, delimiter);
         },
-        MakeCliDefaultValue(request->*(field.member), field.delimiter));
+        MakeCliDefaultDisplayValue(request->*(field.member), field.delimiter));
 }
 
 template <typename Request>
@@ -271,7 +261,7 @@ void BindCliField(
              item_delimiter = field.item_delimiter](const std::vector<std::string> & values)
             {
                 auto & group_map{ request->*member };
-                AccumulateReferenceGroups(
+                AppendReferenceGroupArguments(
                     group_map,
                     values,
                     option_name,
@@ -282,7 +272,7 @@ void BindCliField(
     };
     // Reference groups accumulate repeated CLI occurrences into one logical map.
     option.multi_option_policy(CLI::MultiOptionPolicy::TakeAll);
-    ApplyCliOptionSettings(option, field.required);
+    ApplyRequiredAndDefault(option, field.required);
 }
 
 template <typename RequestType>
