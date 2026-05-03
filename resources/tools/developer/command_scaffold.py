@@ -166,7 +166,7 @@ public:
 
 private:
     void NormalizeAndValidateRequest() override;
-    void ValidateOptions() override;
+    void ValidatePreparedRequest() override;
     void ResetRuntimeState() override;
     bool ExecuteImpl() override;
 }};
@@ -194,7 +194,7 @@ void {spec.command_type}::NormalizeAndValidateRequest()
     // Normalize typed request fields and emit parse-phase validation issues here.
 }}
 
-void {spec.command_type}::ValidateOptions()
+void {spec.command_type}::ValidatePreparedRequest()
 {{
 }}
 

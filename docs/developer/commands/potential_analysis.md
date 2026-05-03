@@ -73,7 +73,7 @@ Expected result contract:
 - coerces invalid training alpha grid scalar values back to `0.0..1.0` with step `0.1`
 - resets empty `saved_key_tag` values back to `"model"` and records a parse-phase issue
 
-`PotentialAnalysisCommand::ValidateOptions()` performs prepare-phase semantic checks:
+`PotentialAnalysisCommand::ValidatePreparedRequest()` performs prepare-phase semantic checks:
 
 - `--simulation` requires positive simulated resolution
 - sampling and fit ranges must be ordered correctly
@@ -90,7 +90,8 @@ Expected result contract:
 
 `PotentialAnalysisCommand::BuildDataObject()`:
 
-- loads the model and map through `LoadModelFile(...)` and `LoadMapFile(...)`
+- loads the model and map through `ReadModel(...)` and `ReadMap(...)`
+- assigns command-local key tags before storing the loaded objects
 - stores loaded objects directly in typed command-owned members
 - wraps load failures with command-specific error context
 

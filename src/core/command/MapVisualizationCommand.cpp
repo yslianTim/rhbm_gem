@@ -1,5 +1,6 @@
 #include "MapVisualizationCommand.hpp"
 #include "detail/MapSampling.hpp"
+#include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
@@ -127,8 +128,12 @@ bool MapVisualizationCommand::BuildDataObject()
     ScopeTimer timer("MapVisualizationCommand::BuildDataObject");
     try
     {
-        m_model_object = LoadModelFile(request.model_file_path, m_model_key_tag);
-        m_map_object = LoadMapFile(request.map_file_path, m_map_key_tag);
+        auto model_object{ ReadModel(request.model_file_path) };
+        model_object->SetKeyTag(m_model_key_tag);
+        m_model_object = std::shared_ptr<ModelObject>{ std::move(model_object) };
+        auto map_object{ ReadMap(request.map_file_path) };
+        map_object->SetKeyTag(m_map_key_tag);
+        m_map_object = std::shared_ptr<MapObject>{ std::move(map_object) };
     }
     catch (const std::exception & e)
     {

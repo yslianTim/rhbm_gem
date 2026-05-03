@@ -30,9 +30,9 @@ public:
         ApplyRequest(request);
     }
 
-    void ValidateOptions() override
+    void ValidatePreparedRequest() override
     {
-        RequireCondition(!m_options.force_invalid, "--test", "forced invalid config");
+        RequirePrepareCondition(!m_options.force_invalid, "--test", "forced invalid config");
     }
 
     void ResetRuntimeState() override {}

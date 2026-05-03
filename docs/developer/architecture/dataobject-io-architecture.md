@@ -74,8 +74,8 @@ flowchart LR
     end
 
     subgraph R["Command runtime"]
-      A --> M["CommandBase helpers"]
-      M --> N["typed file/repository load helpers"]
+      A --> M["command workflow"]
+      M --> N["typed file/repository calls"]
       N --> O["command-owned typed members"]
     end
 ```
@@ -146,9 +146,7 @@ Current invariants:
 
 ## 9. Command Integration Contract
 
-Commands built on `CommandBase` use internal helpers, not public data-layer dispatch:
-
-- `LoadModelFile(path, key_tag)` / `LoadMapFile(path, key_tag)`
+Commands keep data-object I/O explicit in their own workflow:
 
 Behavior:
 

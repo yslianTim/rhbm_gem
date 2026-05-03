@@ -143,7 +143,6 @@ void MapSimulationCommand::NormalizeAndValidateRequest()
         LogLevel::Warning,
         "Grid spacing");
 
-    ResetParseIssue(kBlurringWidthOption);
     std::vector<double> filtered_widths;
     filtered_widths.reserve(request.blurring_width_list.size());
     for (const auto width : request.blurring_width_list)
@@ -168,10 +167,10 @@ bool MapSimulationCommand::ExecuteImpl()
     return true;
 }
 
-void MapSimulationCommand::ValidateOptions()
+void MapSimulationCommand::ValidatePreparedRequest()
 {
     const auto & request{ RequestOptions() };
-    RequireCondition(
+    RequirePrepareCondition(
         !request.blurring_width_list.empty(),
         kBlurringWidthOption,
         "At least one positive blurring width is required.");
@@ -200,7 +199,9 @@ bool MapSimulationCommand::BuildDataObject()
     ScopeTimer timer("MapSimulationCommand::BuildDataObject");
     try
     {
-        m_model_object = LoadModelFile(request.model_file_path, std::string(kModelKey));
+        auto model_object{ ReadModel(request.model_file_path) };
+        model_object->SetKeyTag(std::string(kModelKey));
+        m_model_object = std::shared_ptr<ModelObject>{ std::move(model_object) };
         BuildAtomList(m_model_object.get());
     }
     catch(const std::exception & e)

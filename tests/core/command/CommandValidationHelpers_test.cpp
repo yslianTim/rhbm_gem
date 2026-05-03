@@ -4,13 +4,11 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
-#include <memory>
 #include <vector>
 
 #include "command/detail/CommandBase.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/CommandTypes.hpp>
-#include <rhbm_gem/data/object/ModelObject.hpp>
 
 namespace rg = rhbm_gem;
 
@@ -104,7 +102,6 @@ public:
 
     void SetCommandLocalValidatedValue(double value)
     {
-        ResetParseIssue("--validated");
         if (value == 3.5)
         {
             m_options.command_local_value = value;
@@ -124,7 +121,6 @@ public:
 
     void SetProblematicValue(int value)
     {
-        ResetParseIssue("--problem");
         if (value <= 0)
         {
             AddParseNormalizationWarning("--problem", "normalized to 1");
@@ -145,9 +141,9 @@ public:
         ApplyRequest(request);
     }
 
-    void ValidateOptions() override
+    void ValidatePreparedRequest() override
     {
-        RequireCondition(
+        RequirePrepareCondition(
             !m_options.add_prepare_error,
             "--problem",
             "semantic validation failed");
@@ -158,22 +154,6 @@ public:
 private:
     ValidationHelperCommandOptions m_options{};
 
-    bool ExecuteImpl() override { return true; }
-};
-
-class CommandIoHelperCommand final : public rg::CommandWithRequest<rg::CommandRequestBase>
-{
-public:
-    std::shared_ptr<rg::ModelObject> LoadModelFileForTest(
-        const std::filesystem::path & model_path,
-        const std::string & key_tag)
-    {
-        return LoadModelFile(model_path, key_tag);
-    }
-
-    void ResetRuntimeState() override {}
-
-private:
     bool ExecuteImpl() override { return true; }
 };
 
@@ -292,16 +272,15 @@ TEST(CommandValidationHelpersTest, CommandLocalValidationPatternRejectsInvalidIn
     EXPECT_FALSE(issue->auto_corrected);
 }
 
-TEST(CommandValidationHelpersTest, CommandLocalValidationPatternAcceptsValidInputAndClearsPriorIssue)
+TEST(CommandValidationHelpersTest, ApplyRequestClearsPriorValidationIssues)
 {
     ValidationHelperCommand command{};
 
     command.SetCommandLocalValidatedValue(2.0);
     ASSERT_NE(FindIssue(command, "--validated"), nullptr);
 
-    command.SetCommandLocalValidatedValue(3.5);
+    command.ApplyRequest(rg::CommandRequestBase{});
 
-    EXPECT_DOUBLE_EQ(command.CommandLocalValidatedValue(), 3.5);
     EXPECT_EQ(FindIssue(command, "--validated"), nullptr);
 }
 
@@ -439,14 +418,4 @@ TEST(CommandValidationHelpersTest, BaseNormalizationWarningsAreProgrammaticallyV
     EXPECT_EQ(verbose_issue->phase, rg::ValidationPhase::Parse);
     EXPECT_EQ(verbose_issue->level, LogLevel::Warning);
     EXPECT_TRUE(verbose_issue->auto_corrected);
-}
-
-TEST(CommandValidationHelpersTest, TypedIoHelpersLoadFileModel)
-{
-    CommandIoHelperCommand command{};
-    const auto model{
-        command.LoadModelFileForTest(command_test::TestDataPath("test_model.cif"), "source_model")
-    };
-    ASSERT_NE(model, nullptr);
-    EXPECT_EQ(model->GetKeyTag(), "source_model");
 }

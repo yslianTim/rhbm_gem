@@ -372,7 +372,7 @@ Command-side integration uses:
 
 Current pattern:
 
-1. `LoadModelFile(...)` or `LoadMapFile(...)` reads a typed file object and assigns a command-local `key_tag`
+1. file-backed commands call `ReadModel(...)` or `ReadMap(...)` directly and assign a command-local `key_tag`
 2. repository-backed commands create `DataRepository` in the command workflow and call typed load methods directly
 3. concrete commands store the returned `shared_ptr<ModelObject>` or `shared_ptr<MapObject>` in typed members
 4. save workflows call `DataRepository::SaveModel(...)` or `DataRepository::SaveMap(...)` directly

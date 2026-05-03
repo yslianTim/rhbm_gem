@@ -93,15 +93,15 @@ Use this shape:
 
 1. derive from `CommandWithRequest<XxxRequest>`
 2. implement `NormalizeAndValidateRequest()`
-3. implement `ValidateOptions()`
+3. implement `ValidatePreparedRequest()`
 4. implement `ResetRuntimeState()`
 5. implement `ExecuteImpl()`
 
 `CommandWithRequest<XxxRequest>` already:
 
 - stores the typed request internally
-- binds the request to `CommandBase`
 - coerces `CommandRequestBase` shared options
+- lets `CommandBase` read shared options for lifecycle/preflight
 - calls `NormalizeAndValidateRequest()`
 
 ## Registration Surfaces

@@ -116,14 +116,14 @@ The standard shape is:
 
 1. derive from `CommandWithRequest<XxxRequest>`
 2. keep parse-phase request normalization and validation in `NormalizeAndValidateRequest()`
-3. keep semantic checks in `ValidateOptions()`
+3. keep semantic checks in `ValidatePreparedRequest()`
 4. clear transient runtime state in `ResetRuntimeState()`
 5. keep orchestration in `ExecuteImpl()`
 
 `CommandWithRequest<XxxRequest>`:
 
 1. stores the typed request internally
-2. binds the request to `CommandBase`
+2. exposes shared base options to `CommandBase` lifecycle code
 3. coerces shared base options
 4. calls `NormalizeAndValidateRequest()`
 

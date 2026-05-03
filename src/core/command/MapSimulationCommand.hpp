@@ -30,7 +30,7 @@ public:
 
 private:
     void NormalizeAndValidateRequest() override;
-    void ValidateOptions() override;
+    void ValidatePreparedRequest() override;
     void ResetRuntimeState() override;
     bool ExecuteImpl() override;
     bool BuildDataObject();

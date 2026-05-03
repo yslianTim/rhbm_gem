@@ -48,10 +48,10 @@ void ResultDumpCommand::NormalizeAndValidateRequest()
     RequireNonEmptyList(request.model_key_tag_list, kModelKeyListOption, "Model key list");
 }
 
-void ResultDumpCommand::ValidateOptions()
+void ResultDumpCommand::ValidatePreparedRequest()
 {
     const auto & request{ RequestOptions() };
-    RequireCondition(
+    RequirePrepareCondition(
         request.printer_choice != PrinterType::MAP_VALUE || !request.map_file_path.empty(),
         kMapOption,
         "A map file is required when '--printer map' is selected.");
@@ -77,7 +77,9 @@ bool ResultDumpCommand::BuildDataObjectList()
         }
         else
         {
-            m_map_object = LoadMapFile(request.map_file_path, m_map_key_tag);
+            auto map_object{ ReadMap(request.map_file_path) };
+            map_object->SetKeyTag(m_map_key_tag);
+            m_map_object = std::shared_ptr<MapObject>{ std::move(map_object) };
         }
         m_selected_atom_list_map.clear();
         for (const auto & key : request.model_key_tag_list)

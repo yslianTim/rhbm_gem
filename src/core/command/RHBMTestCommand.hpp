@@ -14,7 +14,7 @@ public:
 
 private:
     void NormalizeAndValidateRequest() override;
-    void ValidateOptions() override;
+    void ValidatePreparedRequest() override;
     bool ExecuteImpl() override;
 };
 

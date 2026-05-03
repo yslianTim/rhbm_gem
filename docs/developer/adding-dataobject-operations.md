@@ -92,14 +92,14 @@ std::vector<AtomObject *> CollectAtomsWithLocalPotentialEntries(ModelObject & mo
 - if only `ModelObject` is supported, accept `ModelObject &` directly
 - if only `MapObject` is supported, accept `MapObject &` directly
 - if a command owns mixed top-level objects, keep those objects in explicit typed command members
-- keep persistence routing private to `CommandBase` and repository internals; do not add public dispatch helpers just for catalog naming or repository/file routing
+- keep persistence routing private to command workflows and repository internals; do not add public dispatch helpers just for catalog naming or repository/file routing
 - if command-local branches start growing, move the multi-step logic into typed helpers instead of adding another type-erased facade
 
 ## 5. Command Integration Pattern
 
 Typical command flow:
 
-1. for file-backed input, call `LoadModelFile(...)` or `LoadMapFile(...)` from `CommandBase`, or `ReadModel(...)` / `ReadMap(...)` directly outside command classes
+1. for file-backed input, call `ReadModel(...)` or `ReadMap(...)` directly and assign any command-local `key_tag`
 2. for database-backed input, create `DataRepository repository{database_path}` in the command workflow and call `LoadModel(...)` or `LoadMap(...)`
 3. when persisting a command-owned object, call `DataRepository::SaveModel(...)` or `DataRepository::SaveMap(...)`
 4. keep loaded `shared_ptr` objects in typed command-owned members

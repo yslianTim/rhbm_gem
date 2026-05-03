@@ -2,7 +2,6 @@
 
 #include <cmath>
 #include <filesystem>
-#include <memory>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -10,7 +9,6 @@
 #include <vector>
 
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
@@ -112,7 +110,6 @@ struct ValidationIssueRecord
 
 class CommandBase
 {
-    CommandRequestBase * m_base_request{ nullptr };
     std::vector<ValidationIssueRecord> m_validation_issues;
     bool m_was_prepared{ false };
 
@@ -128,12 +125,11 @@ public:
 
 protected:
     CommandBase() = default;
-    virtual void ValidateOptions() {}
+    virtual void ValidatePreparedRequest() {}
     virtual void ResetRuntimeState() {}
     virtual bool ExecuteImpl() = 0;
     int ThreadSize() const { return BaseRequest().job_count; }
     const std::filesystem::path & OutputFolder() const { return BaseRequest().output_dir; }
-    void ResetParseIssue(std::string_view option_name);
     void AddParseError(std::string_view option_name, const std::string & message);
     void AddParseNormalizationWarning(std::string_view option_name, const std::string & message);
     void ValidateRequiredPath(
@@ -148,19 +144,20 @@ protected:
     void RequireNonEmptyList(
         const Container & field,
         std::string_view option_name,
-        std::string_view label,
-        ValidationPhase phase = ValidationPhase::Parse)
+        std::string_view label)
     {
-        BeginValidationMutation(phase);
-        ClearValidationIssues(option_name, phase);
         if (!field.empty()) return;
-        AddValidationError(option_name, std::string(label) + " cannot be empty.", phase);
+        AddValidationIssue(
+            option_name,
+            ValidationPhase::Parse,
+            LogLevel::Error,
+            std::string(label) + " cannot be empty.",
+            false);
     }
-    void RequireCondition(
+    void RequirePrepareCondition(
         bool condition,
         std::string_view option_name,
-        const std::string & message,
-        ValidationPhase phase = ValidationPhase::Prepare);
+        const std::string & message);
     template <typename FieldType>
     void CoercePositiveScalar(
         FieldType & field,
@@ -175,8 +172,7 @@ protected:
             [](const auto candidate) { return numeric_validation::IsPositive(candidate); },
             fallback_value,
             issue_level,
-            command_validation_detail::BuildConstraintMessage(
-                label, "positive", fallback_value, issue_level));
+            command_validation_detail::BuildConstraintMessage(label, "positive", fallback_value, issue_level));
     }
     template <typename FieldType>
     void CoerceFinitePositiveScalar(
@@ -242,39 +238,26 @@ protected:
         std::string_view label)
     {
         InvalidatePreparedState();
-        ClearParseIssues(option_name);
         using UnderlyingType = std::underlying_type_t<FieldType>;
         const auto raw_numeric{ static_cast<UnderlyingType>(field) };
         if (internal::IsSupportedCommandEnumValue(field)) return;
         field = fallback_value;
-        AddValidationError(
+        AddValidationIssue(
             option_name,
+            ValidationPhase::Parse,
+            LogLevel::Error,
             std::string(label) + " must be one of the supported values. Received: "
-                + std::to_string(static_cast<long long>(raw_numeric)),
-            ValidationPhase::Parse);
+                + std::to_string(static_cast<long long>(raw_numeric)), false);
     }
     std::filesystem::path BuildOutputPath(std::string_view stem, std::string_view extension) const;
-    std::shared_ptr<ModelObject> LoadModelFile(
-        const std::filesystem::path & filename,
-        const std::string & key_tag);
-    std::shared_ptr<MapObject> LoadMapFile(
-        const std::filesystem::path & filename,
-        const std::string & key_tag);
 
 private:
-    CommandRequestBase & BaseRequest() { return *m_base_request; }
-    const CommandRequestBase & BaseRequest() const { return *m_base_request; }
+    virtual CommandRequestBase & BaseRequest() = 0;
+    virtual const CommandRequestBase & BaseRequest() const = 0;
     int VerboseLevel() const { return BaseRequest().verbosity; }
-    void BindBaseRequest(CommandRequestBase & request) { m_base_request = &request; }
+    void BeginRequestApply(CommandRequestBase & request);
     void InvalidatePreparedState();
     void CoerceBaseRequest(CommandRequestBase & request);
-    void AddValidationError(
-        std::string_view option_name,
-        const std::string & message,
-        ValidationPhase phase = ValidationPhase::Prepare);
-    void AddNormalizationWarning(std::string_view option_name, const std::string & message);
-    void ClearParseIssues(std::string_view option_name);
-    void ClearPrepareIssues(std::string_view option_name);
     template <typename FieldType, typename Predicate>
     void CoerceScalar(
         FieldType & field,
@@ -285,22 +268,24 @@ private:
         const std::string & message)
     {
         InvalidatePreparedState();
-        ClearParseIssues(option_name);
         if (is_valid(field)) return;
         field = fallback_value;
         if (issue_level == LogLevel::Warning)
         {
-            AddNormalizationWarning(option_name, message);
+            AddValidationIssue(
+                option_name,
+                ValidationPhase::Parse,
+                LogLevel::Warning,
+                message,
+                true);
             return;
         }
         AddValidationIssue(option_name, ValidationPhase::Parse, issue_level, message, false);
     }
-    void BeginValidationMutation(ValidationPhase phase);
     void BeginPreparationPass();
     bool RunValidationPass();
     bool RunFilesystemPreflight();
     void ReportValidationIssues() const;
-    void ClearValidationIssues(std::string_view option_name, std::optional<ValidationPhase> phase);
     void ClearValidationIssues(std::optional<ValidationPhase> phase = std::nullopt);
     void ValidateRequiredExistingPath(
         const std::filesystem::path & path,
@@ -325,16 +310,11 @@ class CommandWithRequest : public CommandBase
     Request m_request{};
 
 public:
-    CommandWithRequest() : CommandBase{}
-    {
-        BindBaseRequest(m_request);
-    }
-
+    CommandWithRequest() : CommandBase{} {}
     void ApplyRequest(const Request & request)
     {
         m_request = request;
-        InvalidatePreparedState();
-        CoerceBaseRequest(m_request);
+        BeginRequestApply(m_request);
         NormalizeAndValidateRequest();
     }
 
@@ -342,6 +322,10 @@ protected:
     const Request & RequestOptions() const { return m_request; }
     Request & MutableRequest() { return m_request; }
     virtual void NormalizeAndValidateRequest() {}
+
+private:
+    CommandRequestBase & BaseRequest() override { return m_request; }
+    const CommandRequestBase & BaseRequest() const override { return m_request; }
     
 };
 

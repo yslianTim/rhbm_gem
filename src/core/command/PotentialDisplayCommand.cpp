@@ -57,7 +57,6 @@ void PotentialDisplayCommand::NormalizeAndValidateRequest()
         PainterType::MODEL,
         "Painter choice");
     RequireNonEmptyList(request.model_key_tag_list, kModelKeyListOption, "Model key list");
-    ResetParseIssue(kRefGroupOption);
     for (const auto & [group_name, members] : request.reference_model_groups)
     {
         if (group_name.empty())

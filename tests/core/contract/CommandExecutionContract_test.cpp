@@ -35,10 +35,10 @@ public:
         m_options.execution_toggle = value;
     }
 
-    void ValidateOptions() override
+    void ValidatePreparedRequest() override
     {
         ++validate_count;
-        RequireCondition(!m_options.fail_prepare, "--contract", "prepare failed");
+        RequirePrepareCondition(!m_options.fail_prepare, "--contract", "prepare failed");
     }
 
     void ResetRuntimeState() override

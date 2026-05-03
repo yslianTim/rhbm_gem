@@ -4,6 +4,7 @@
 #include "experimental/PotentialAnalysisBondWorkflow.hpp"
 
 #include <rhbm_gem/data/io/DataRepository.hpp>
+#include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
@@ -163,7 +164,6 @@ void PotentialAnalysisCommand::NormalizeAndValidateRequest()
         0.0,
         LogLevel::Error,
         "Simulated map resolution");
-    ResetParseIssue(kSaveKeyOption);
     if (request.saved_key_tag.empty())
     {
         request.saved_key_tag = "model";
@@ -260,22 +260,22 @@ bool PotentialAnalysisCommand::ExecuteImpl()
     return true;
 }
 
-void PotentialAnalysisCommand::ValidateOptions()
+void PotentialAnalysisCommand::ValidatePreparedRequest()
 {
     const auto & request{ RequestOptions() };
-    RequireCondition(
+    RequirePrepareCondition(
         !request.simulation_flag || request.simulated_map_resolution > 0.0,
         kSimResolutionOption,
         "Expected a positive simulated-map resolution when '--simulation true' is selected.");
-    RequireCondition(
+    RequirePrepareCondition(
         request.sampling_range_min <= request.sampling_range_max,
         kSamplingRangeIssue,
         "Expected --sampling-min <= --sampling-max.");
-    RequireCondition(
+    RequirePrepareCondition(
         request.fit_range_min <= request.fit_range_max,
         kFitRangeIssue,
         "Expected --fit-min <= --fit-max.");
-    RequireCondition(
+    RequirePrepareCondition(
         request.training_alpha_min <= request.training_alpha_max,
         kTrainingAlphaRangeIssue,
         "Expected --training-alpha-min <= --training-alpha-max.");
@@ -292,8 +292,12 @@ bool PotentialAnalysisCommand::BuildDataObject(const PotentialAnalysisRequest & 
     ScopeTimer timer("PotentialAnalysisCommand::BuildDataObject");
     try
     {
-        m_model_object = LoadModelFile(request.model_file_path, m_model_key_tag);
-        m_map_object = LoadMapFile(request.map_file_path, m_map_key_tag);
+        auto model_object{ ReadModel(request.model_file_path) };
+        model_object->SetKeyTag(m_model_key_tag);
+        m_model_object = std::shared_ptr<ModelObject>{ std::move(model_object) };
+        auto map_object{ ReadMap(request.map_file_path) };
+        map_object->SetKeyTag(m_map_key_tag);
+        m_map_object = std::shared_ptr<MapObject>{ std::move(map_object) };
         if (m_model_object == nullptr || m_map_object == nullptr)
         {
             Logger::Log(

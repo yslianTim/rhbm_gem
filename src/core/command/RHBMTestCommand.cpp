@@ -558,10 +558,10 @@ void RHBMTestCommand::NormalizeAndValidateRequest()
         "Alpha-G");
 }
 
-void RHBMTestCommand::ValidateOptions()
+void RHBMTestCommand::ValidatePreparedRequest()
 {
     const auto & request{ RequestOptions() };
-    RequireCondition(
+    RequirePrepareCondition(
         request.fit_range_min <= request.fit_range_max,
         "--fit-range",
         "Expected --fit-min <= --fit-max.");

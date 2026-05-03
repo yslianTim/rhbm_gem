@@ -1,4 +1,5 @@
 #include "PositionEstimationCommand.hpp"
+#include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
@@ -118,7 +119,9 @@ bool PositionEstimationCommand::BuildDataObject()
     ScopeTimer timer("PositionEstimationCommand::BuildDataObject");
     try
     {
-        m_map_object = LoadMapFile(request.map_file_path, std::string(kMapKey));
+        auto map_object{ ReadMap(request.map_file_path) };
+        map_object->SetKeyTag(std::string(kMapKey));
+        m_map_object = std::shared_ptr<MapObject>{ std::move(map_object) };
         m_map_object->MapValueArrayNormalization();
     }
     catch (const std::exception & e)

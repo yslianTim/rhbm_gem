@@ -59,9 +59,15 @@ def main() -> int:
     scaffold_source = scaffold_script.read_text(encoding="utf-8")
     if "NormalizeAndValidateRequest" not in scaffold_source:
         raise AssertionError("Scaffold template should use NormalizeAndValidateRequest().")
+    if "ValidatePreparedRequest" not in scaffold_source:
+        raise AssertionError("Scaffold template should use ValidatePreparedRequest().")
     old_hook_name = "Normalize" + "Request"
     if old_hook_name in scaffold_source:
         raise AssertionError(f"Scaffold template still references {old_hook_name}().")
+    old_validation_hook_name = "Validate" + "Options"
+    if old_validation_hook_name in scaffold_source:
+        raise AssertionError(
+            f"Scaffold template still references {old_validation_hook_name}().")
 
     return 0
 
