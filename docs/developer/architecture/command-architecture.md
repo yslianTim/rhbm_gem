@@ -13,7 +13,7 @@ That manifest is expanded by:
 
 - [`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp)
 - [`src/core/command/CommandSystem.cpp`](/src/core/command/CommandSystem.cpp)
-- [`src/core/command/detail/CommandCli.cpp`](/src/core/command/detail/CommandCli.cpp)
+- [`src/core/command/detail/CommandCLI.cpp`](/src/core/command/detail/CommandCLI.cpp)
 - [`src/python/CommandSystemBindings.cpp`](/src/python/CommandSystemBindings.cpp)
 
 ## Public Surface
@@ -54,10 +54,10 @@ The helper symbols stay under `rhbm_gem::internal`.
 
 ### CLI
 
-[`src/main.cpp`](/src/main.cpp) creates `CLI::App` and calls the internal
-[`ConfigureCommandCli(...)`](/src/core/command/detail/CommandCli.hpp).
+[`src/main.cpp`](/src/main.cpp) creates `CLI::App` and calls the public
+[`ConfigureCommandCLI(...)`](/include/rhbm_gem/core/command/CommandSystem.hpp).
 
-[`src/core/command/detail/CommandCli.cpp`](/src/core/command/detail/CommandCli.cpp):
+[`src/core/command/detail/CommandCLI.cpp`](/src/core/command/detail/CommandCLI.cpp):
 
 1. enables `require_subcommand(1)`
 2. expands `CommandManifest.def`

@@ -13,7 +13,7 @@ Internal schema and wiring:
 
 - [`src/core/command/detail/CommandRequestSchema.hpp`](/src/core/command/detail/CommandRequestSchema.hpp)
 - [`src/core/command/CommandSystem.cpp`](/src/core/command/CommandSystem.cpp)
-- [`src/core/command/detail/CommandCli.cpp`](/src/core/command/detail/CommandCli.cpp)
+- [`src/core/command/detail/CommandCLI.cpp`](/src/core/command/detail/CommandCLI.cpp)
 - [`src/python/CommandSystemBindings.cpp`](/src/python/CommandSystemBindings.cpp)
 
 Concrete implementation:

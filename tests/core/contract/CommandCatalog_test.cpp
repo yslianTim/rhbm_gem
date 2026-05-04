@@ -11,7 +11,6 @@
 #include <utility>
 #include <vector>
 
-#include "command/detail/CommandCli.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/CommandSystem.hpp>
 #include <CLI/CLI.hpp>
@@ -117,10 +116,10 @@ std::vector<std::string> ParseExperimentalCommandNamesFromManifest()
 
 } // namespace
 
-TEST(CommandCatalogTest, ConfigureCommandCliBuildsOneSubcommandPerManifestEntry)
+TEST(CommandCatalogTest, ConfigureCommandCLIBuildsOneSubcommandPerManifestEntry)
 {
     CLI::App app{"RHBM-GEM"};
-    rg::ConfigureCommandCli(app);
+    rg::ConfigureCommandCLI(app);
 
     const auto subcommands{
         app.get_subcommands([](CLI::App * subcommand)
@@ -156,10 +155,10 @@ TEST(CommandCatalogTest, ManifestKeepsExperimentalEntriesBehindFeatureGuard)
     EXPECT_EQ(ParseExperimentalCommandNamesFromManifest(), expected_experimental_names);
 }
 
-TEST(CommandCatalogTest, ConfigureCommandCliSharedOptionsMatchCommandMetadata)
+TEST(CommandCatalogTest, ConfigureCommandCLISharedOptionsMatchCommandMetadata)
 {
     CLI::App app{"RHBM-GEM"};
-    rg::ConfigureCommandCli(app);
+    rg::ConfigureCommandCLI(app);
 
     for (const auto & descriptor : BuildExpectedCommandMetadata())
     {
@@ -177,20 +176,20 @@ TEST(CommandCatalogTest, ConfigureCommandCliSharedOptionsMatchCommandMetadata)
     }
 }
 
-TEST(CommandCatalogTest, ConfigureCommandCliPropagatesCommandFailureAsRuntimeError)
+TEST(CommandCatalogTest, ConfigureCommandCLIPropagatesCommandFailureAsRuntimeError)
 {
     CLI::App app{"RHBM-GEM"};
-    rg::ConfigureCommandCli(app);
+    rg::ConfigureCommandCLI(app);
 
     EXPECT_THROW(
         app.parse("map_simulation --model missing.cif --blurring-width 1.0", false),
         CLI::RuntimeError);
 }
 
-TEST(CommandCatalogTest, ConfigureCommandCliAcceptsRepeatedReferenceGroups)
+TEST(CommandCatalogTest, ConfigureCommandCLIAcceptsRepeatedReferenceGroups)
 {
     CLI::App app{"RHBM-GEM"};
-    rg::ConfigureCommandCli(app);
+    rg::ConfigureCommandCLI(app);
 
     EXPECT_THROW(
         app.parse(
@@ -200,19 +199,19 @@ TEST(CommandCatalogTest, ConfigureCommandCliAcceptsRepeatedReferenceGroups)
         CLI::RuntimeError);
 }
 
-TEST(CommandCatalogTest, ConfigureCommandCliEnforcesRequiredOptionsBeforeCallback)
+TEST(CommandCatalogTest, ConfigureCommandCLIEnforcesRequiredOptionsBeforeCallback)
 {
     CLI::App app{"RHBM-GEM"};
-    rg::ConfigureCommandCli(app);
+    rg::ConfigureCommandCLI(app);
 
     EXPECT_THROW(app.parse("map_simulation", false), CLI::RequiredError);
     EXPECT_THROW(app.parse("potential_display --model-keylist model_a", false), CLI::RequiredError);
 }
 
-TEST(CommandCatalogTest, ConfigureCommandCliAppliesEnumTransformBeforeCommandExecution)
+TEST(CommandCatalogTest, ConfigureCommandCLIAppliesEnumTransformBeforeCommandExecution)
 {
     CLI::App app{"RHBM-GEM"};
-    rg::ConfigureCommandCli(app);
+    rg::ConfigureCommandCLI(app);
 
     EXPECT_THROW(
         app.parse("potential_display --painter MODEL --model-keylist model_a", false),
@@ -222,10 +221,10 @@ TEST(CommandCatalogTest, ConfigureCommandCliAppliesEnumTransformBeforeCommandExe
         CLI::ValidationError);
 }
 
-TEST(CommandCatalogTest, ConfigureCommandCliRejectsMalformedReferenceGroupsAtParseTime)
+TEST(CommandCatalogTest, ConfigureCommandCLIRejectsMalformedReferenceGroupsAtParseTime)
 {
     CLI::App app{"RHBM-GEM"};
-    rg::ConfigureCommandCli(app);
+    rg::ConfigureCommandCLI(app);
 
     EXPECT_THROW(
         app.parse(

@@ -1,4 +1,4 @@
-#include "CommandCli.hpp"
+#include <rhbm_gem/core/command/CommandSystem.hpp>
 
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
@@ -305,7 +305,7 @@ void RegisterCommand(
 
 } // namespace
 
-void ConfigureCommandCli(CLI::App & app)
+void ConfigureCommandCLI(CLI::App & app)
 {
     app.require_subcommand(1);
 

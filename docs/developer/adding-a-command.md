@@ -45,7 +45,7 @@ The manifest drives:
 - public `Run*` declarations in `CommandSystem.hpp`
 - `ListCommands()`
 - `Run*` definitions in `CommandSystem.cpp`
-- CLI registration in `detail/CommandCli.cpp`
+- CLI registration in `detail/CommandCLI.cpp`
 - Python request-type and `Run*` binding registration in `CommandSystemBindings.cpp`
 
 ## Public Request DTO
@@ -109,8 +109,9 @@ Use this shape:
 [`src/core/command/CommandSystem.cpp`](/src/core/command/CommandSystem.cpp) owns public `Run*`
 definitions and `ListCommands()`.
 
-[`src/core/command/detail/CommandCli.cpp`](/src/core/command/detail/CommandCli.cpp) owns CLI registration
-through the internal `ConfigureCommandCli(...)`.
+[`src/core/command/detail/CommandCLI.cpp`](/src/core/command/detail/CommandCLI.cpp) owns CLI registration
+through the public `ConfigureCommandCLI(...)` declared in
+[`CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp).
 
 [`src/python/CommandSystemBindings.cpp`](/src/python/CommandSystemBindings.cpp) binds:
 
