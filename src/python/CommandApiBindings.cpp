@@ -15,11 +15,10 @@ namespace {
 template <typename EnumType>
 void BindEnumEntries(py::enum_<EnumType> & py_enum)
 {
-    const auto binding_entries{ internal::GetCommandEnumBindingEntries<EnumType>() };
-    for (const auto & entry : binding_entries)
+    for (const auto & option : internal::CommandEnumTraits<EnumType>::kOptions)
     {
-        const std::string name{ entry.token };
-        py_enum.value(name.c_str(), entry.value);
+        const std::string name{ option.binding_token };
+        py_enum.value(name.c_str(), option.value);
     }
 }
 

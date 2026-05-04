@@ -7,6 +7,7 @@
 
 #include <CLI/CLI.hpp>
 #include <filesystem>
+#include <map>
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -89,6 +90,20 @@ void ApplyRequiredAndDefault(
     {
         option.default_val(*default_value);
     }
+}
+
+template <typename EnumType>
+std::map<std::string, EnumType> BuildEnumCliMap()
+{
+    std::map<std::string, EnumType> option_map;
+    for (const auto & option : internal::CommandEnumTraits<EnumType>::kOptions)
+    {
+        for (const auto alias : option.cli_aliases)
+        {
+            option_map.emplace(std::string(alias), option.value);
+        }
+    }
+    return option_map;
 }
 
 template <typename Request, typename MemberType, typename CliValueType, typename Parser, typename DefaultType>
@@ -221,7 +236,7 @@ void BindCliField(
             MakeCliDefaultDisplayValue(request->*(field.member)))
     };
     option.transform(CLI::CheckedTransformer(
-        internal::BuildCommandEnumCliMap<EnumType>(), CLI::ignore_case));
+        BuildEnumCliMap<EnumType>(), CLI::ignore_case));
 }
 
 template <typename Request, typename ElementType>

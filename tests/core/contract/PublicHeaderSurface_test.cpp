@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <map>
 #include <set>
 #include <string>
 #include <string_view>
@@ -15,25 +16,41 @@ namespace rg = rhbm_gem;
 namespace {
 
 template <typename EnumType>
-std::set<int> BuildValueSetFromCLI()
+std::map<std::string, EnumType> BuildCliMapFromTraits()
+{
+    std::map<std::string, EnumType> option_map;
+    for (const auto & option : rg::internal::CommandEnumTraits<EnumType>::kOptions)
+    {
+        for (const auto alias : option.cli_aliases)
+        {
+            option_map.emplace(std::string(alias), option.value);
+        }
+    }
+    return option_map;
+}
+
+template <typename EnumType>
+std::set<int> BuildCliValueSetFromTraits()
 {
     std::set<int> values;
-    for (const auto & [token, value] : rg::internal::BuildCommandEnumCliMap<EnumType>())
+    for (const auto & option : rg::internal::CommandEnumTraits<EnumType>::kOptions)
     {
-        static_cast<void>(token);
-        values.insert(static_cast<int>(value));
+        for (const auto alias : option.cli_aliases)
+        {
+            static_cast<void>(alias);
+            values.insert(static_cast<int>(option.value));
+        }
     }
     return values;
 }
 
 template <typename EnumType>
-std::set<int> BuildValueSetFromBindings()
+std::set<int> BuildBindingValueSetFromTraits()
 {
     std::set<int> values;
-    const auto binding_entries{ rg::internal::GetCommandEnumBindingEntries<EnumType>() };
-    for (const auto & entry : binding_entries)
+    for (const auto & option : rg::internal::CommandEnumTraits<EnumType>::kOptions)
     {
-        values.insert(static_cast<int>(entry.value));
+        values.insert(static_cast<int>(option.value));
     }
     return values;
 }
@@ -104,16 +121,16 @@ struct EnumMappingTraits<rg::TesterType>
 template <typename EnumType>
 void AssertEnumMappingsStayInSync()
 {
-    const auto cli_map{ rg::internal::BuildCommandEnumCliMap<EnumType>() };
+    const auto cli_map{ BuildCliMapFromTraits<EnumType>() };
     for (const auto & expectation : EnumMappingTraits<EnumType>::kExpectations)
     {
         EXPECT_EQ(cli_map.at(std::string(expectation.token)), expectation.value);
     }
 
-    const auto binding_entries{ rg::internal::GetCommandEnumBindingEntries<EnumType>() };
-    ASSERT_FALSE(binding_entries.empty());
-    EXPECT_EQ(binding_entries.front().token, EnumMappingTraits<EnumType>::kFirstBindingToken);
-    EXPECT_EQ(BuildValueSetFromCLI<EnumType>(), BuildValueSetFromBindings<EnumType>());
+    const auto & enum_options{ rg::internal::CommandEnumTraits<EnumType>::kOptions };
+    ASSERT_FALSE(enum_options.empty());
+    EXPECT_EQ(enum_options.front().binding_token, EnumMappingTraits<EnumType>::kFirstBindingToken);
+    EXPECT_EQ(BuildCliValueSetFromTraits<EnumType>(), BuildBindingValueSetFromTraits<EnumType>());
 }
 
 template <typename EnumType>
