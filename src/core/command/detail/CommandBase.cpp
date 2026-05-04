@@ -10,7 +10,7 @@ namespace rhbm_gem {
 
 bool CommandBase::Run()
 {
-    Logger::SetLogLevel(VerboseLevel());
+    Logger::SetLogLevel(BaseRequest().verbosity);
     ResetRuntimeState();
     InvalidatePreparedState();
     ValidatePreparedRequest();
@@ -40,30 +40,15 @@ void CommandBase::BeginRequestApply(CommandRequestBase & request)
 {
     m_was_prepared = false;
     ClearValidationIssues();
-    CoerceBaseRequest(request);
-}
-
-void CommandBase::CoerceBaseRequest(CommandRequestBase & request)
-{
-    const auto raw_verbose_level{ request.verbosity };
-    CoercePositiveScalar(
-        request.job_count,
-        "--jobs",
-        1,
-        LogLevel::Warning,
-        "Thread size");
-    CoerceScalar(
-        request.verbosity,
-        "--verbose",
+    CoercePositiveScalar(request.job_count, "--jobs", 1, LogLevel::Warning, "Thread size");
+    CoerceScalar(request.verbosity, "--verbose",
         [](int candidate)
         {
             return candidate >= static_cast<int>(LogLevel::Error)
                 && candidate <= static_cast<int>(LogLevel::Debug);
         },
-        static_cast<int>(LogLevel::Info),
-        LogLevel::Warning,
-        "Invalid verbose level: " + std::to_string(raw_verbose_level)
-        + ", using default level 3 [Info]");
+        static_cast<int>(LogLevel::Info), LogLevel::Warning,
+        "Invalid verbose level: "+ std::to_string(request.verbosity) +", using default level 3 [Info]");
     request.output_dir = std::filesystem::path(path_helper::EnsureTrailingSlash(request.output_dir));
 }
 
@@ -139,24 +124,16 @@ void CommandBase::ValidateRequiredPath(
     InvalidatePreparedState();
     if (path.empty())
     {
-        AddValidationIssue(
-            std::string(option_name),
-            ValidationPhase::Parse,
-            LogLevel::Error,
-            std::string(label) + " path is required.",
-            false);
+        AddValidationIssue(std::string(option_name), ValidationPhase::Parse, LogLevel::Error,
+            std::string(label) + " path is required.", false);
         return;
     }
 
     std::error_code error_code;
     if (!std::filesystem::exists(path, error_code))
     {
-        AddValidationIssue(
-            std::string(option_name),
-            ValidationPhase::Parse,
-            LogLevel::Error,
-            std::string(label) + " does not exist: " + path.string(),
-            false);
+        AddValidationIssue(std::string(option_name), ValidationPhase::Parse, LogLevel::Error,
+            std::string(label) + " does not exist: " + path.string(), false);
     }
 }
 
@@ -171,12 +148,8 @@ void CommandBase::ValidateOptionalPath(
     std::error_code error_code;
     if (!std::filesystem::exists(path, error_code))
     {
-        AddValidationIssue(
-            std::string(option_name),
-            ValidationPhase::Parse,
-            LogLevel::Error,
-            std::string(label) + " does not exist: " + path.string(),
-            false);
+        AddValidationIssue(std::string(option_name), ValidationPhase::Parse, LogLevel::Error,
+            std::string(label) + " does not exist: " + path.string(), false);
     }
 }
 
@@ -187,13 +160,9 @@ void CommandBase::AddValidationIssue(
     const std::string & message,
     bool auto_corrected)
 {
-    m_validation_issues.push_back(ValidationIssueRecord{
-        std::string(option_name),
-        phase,
-        level,
-        message,
-        auto_corrected
-    });
+    m_validation_issues.push_back(
+        ValidationIssueRecord{ std::string(option_name), phase, level, message, auto_corrected }
+    );
 }
 
 std::filesystem::path CommandBase::BuildOutputPath(
@@ -217,16 +186,11 @@ bool CommandBase::RunFilesystemPreflight()
         std::filesystem::create_directories(folder_path, error_code);
         if (error_code)
         {
-            AddValidationIssue(
-                "--folder",
-                ValidationPhase::Prepare,
-                LogLevel::Error,
+            AddValidationIssue("--folder", ValidationPhase::Prepare, LogLevel::Error,
                 "Failed to create output directory '" + folder_path.string()
-                    + "': " + error_code.message(),
-                false);
+                + "': " + error_code.message(), false);
         }
     }
-
     ReportValidationIssues();
     return !HasValidationErrors();
 }

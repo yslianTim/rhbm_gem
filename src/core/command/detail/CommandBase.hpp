@@ -84,12 +84,8 @@ protected:
         std::string_view label)
     {
         if (!field.empty()) return;
-        AddValidationIssue(
-            option_name,
-            ValidationPhase::Parse,
-            LogLevel::Error,
-            std::string(label) + " cannot be empty.",
-            false);
+        AddValidationIssue(option_name, ValidationPhase::Parse, LogLevel::Error,
+            std::string(label) + " cannot be empty.", false);
     }
     void RequirePrepareCondition(
         bool condition,
@@ -107,13 +103,9 @@ protected:
             std::string(label) + " must be positive. Using "
             + ToString(fallback_value) + " instead."
         };
-        CoerceScalar(
-            field,
-            option_name,
+        CoerceScalar(field, option_name,
             [](const auto candidate) { return numeric_validation::IsPositive(candidate); },
-            fallback_value,
-            issue_level,
-            message);
+            fallback_value, issue_level, message);
     }
     template <typename FieldType>
     void CoerceFinitePositiveScalar(
@@ -127,13 +119,9 @@ protected:
             std::string(label) + " must be a finite positive value. Using "
             + ToString(fallback_value) + " instead."
         };
-        CoerceScalar(
-            field,
-            option_name,
+        CoerceScalar(field, option_name,
             [](const auto candidate) { return numeric_validation::IsFinitePositive(candidate); },
-            fallback_value,
-            issue_level,
-            message);
+            fallback_value, issue_level, message);
     }
     template <typename FieldType>
     void CoerceFiniteNonNegativeScalar(
@@ -147,13 +135,9 @@ protected:
             std::string(label) + " must be a finite non-negative value. Using "
             + ToString(fallback_value) + " instead."
         };
-        CoerceScalar(
-            field,
-            option_name,
+        CoerceScalar(field, option_name,
             [](const auto candidate) { return numeric_validation::IsFiniteNonNegative(candidate); },
-            fallback_value,
-            issue_level,
-            message);
+            fallback_value, issue_level, message);
     }
     template <typename FieldType, typename LowerType, typename UpperType>
     void CoerceFiniteExclusiveInclusiveRangeScalar(
@@ -170,16 +154,12 @@ protected:
                 + ToString(lower) + ", " + ToString(upper) + "]. Using "
                 + ToString(fallback_value) + " instead."
         };
-        CoerceScalar(
-            field,
-            option_name,
+        CoerceScalar(field, option_name,
             [lower, upper](const auto candidate)
             {
                 return numeric_validation::IsFiniteExclusiveInclusiveRange(candidate, lower, upper);
             },
-            fallback_value,
-            issue_level,
-            message);
+            fallback_value, issue_level, message);
     }
     template <typename FieldType>
     void CoerceEnum(
@@ -199,10 +179,7 @@ protected:
             }
         }
         field = fallback_value;
-        AddValidationIssue(
-            option_name,
-            ValidationPhase::Parse,
-            LogLevel::Error,
+        AddValidationIssue(option_name, ValidationPhase::Parse, LogLevel::Error,
             std::string(label) + " must be one of the supported values. Received: "
                 + std::to_string(static_cast<long long>(raw_numeric)), false);
     }
@@ -211,10 +188,8 @@ protected:
 private:
     virtual CommandRequestBase & BaseRequest() = 0;
     virtual const CommandRequestBase & BaseRequest() const = 0;
-    int VerboseLevel() const { return BaseRequest().verbosity; }
     void BeginRequestApply(CommandRequestBase & request);
     void InvalidatePreparedState();
-    void CoerceBaseRequest(CommandRequestBase & request);
     template <typename FieldType, typename Predicate>
     void CoerceScalar(
         FieldType & field,
@@ -229,12 +204,7 @@ private:
         field = fallback_value;
         if (issue_level == LogLevel::Warning)
         {
-            AddValidationIssue(
-                option_name,
-                ValidationPhase::Parse,
-                LogLevel::Warning,
-                message,
-                true);
+            AddValidationIssue(option_name, ValidationPhase::Parse, LogLevel::Warning, message, true);
             return;
         }
         AddValidationIssue(option_name, ValidationPhase::Parse, issue_level, message, false);
