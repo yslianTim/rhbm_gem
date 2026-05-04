@@ -13,7 +13,7 @@
 
 #include "command/detail/CommandCli.hpp"
 #include "support/CommandTestHelpers.hpp"
-#include <rhbm_gem/core/command/CommandApi.hpp>
+#include <rhbm_gem/core/command/CommandSystem.hpp>
 #include <CLI/CLI.hpp>
 
 namespace rg = rhbm_gem;

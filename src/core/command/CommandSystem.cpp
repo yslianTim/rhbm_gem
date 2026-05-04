@@ -1,4 +1,4 @@
-#include <rhbm_gem/core/command/CommandApi.hpp>
+#include <rhbm_gem/core/command/CommandSystem.hpp>
 
 #include "RHBMTestCommand.hpp"
 #include "MapSimulationCommand.hpp"

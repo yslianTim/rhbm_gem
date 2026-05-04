@@ -2,7 +2,7 @@
 #include <pybind11/stl.h>
 #include <pybind11/stl/filesystem.h>
 
-#include <rhbm_gem/core/command/CommandApi.hpp>
+#include <rhbm_gem/core/command/CommandSystem.hpp>
 
 #include "command/detail/CommandRequestSchema.hpp"
 
@@ -62,7 +62,7 @@ void BindCommonTypes(py::module_ & module)
     py::implicitly_convertible<int, TesterType>();
 }
 
-void BindCommandApi(py::module_ & module)
+void BindCommandSystem(py::module_ & module)
 {
     py::class_<CommandRequestBase>(module, "CommandRequestBase")
         .def(py::init<>())
@@ -91,5 +91,5 @@ void BindCommandApi(py::module_ & module)
 PYBIND11_MODULE(rhbm_gem_module, module)
 {
     rhbm_gem::bindings::BindCommonTypes(module);
-    rhbm_gem::bindings::BindCommandApi(module);
+    rhbm_gem::bindings::BindCommandSystem(module);
 }

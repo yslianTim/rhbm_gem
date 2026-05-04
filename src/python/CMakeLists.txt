@@ -1,5 +1,5 @@
 set(BINDINGS_SOURCES
-    CommandApiBindings.cpp
+    CommandSystemBindings.cpp
 )
 
 set(BINDINGS_MODULE_TARGET rhbm_gem_module)

@@ -6,7 +6,7 @@
 #include <string_view>
 #include <vector>
 
-#include <rhbm_gem/core/command/CommandApi.hpp>
+#include <rhbm_gem/core/command/CommandSystem.hpp>
 #include <rhbm_gem/utils/domain/LocalPainter.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTester.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>

@@ -11,16 +11,16 @@ Each entry uses:
 
 That manifest is expanded by:
 
-- [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp)
-- [`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp)
+- [`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp)
+- [`src/core/command/CommandSystem.cpp`](/src/core/command/CommandSystem.cpp)
 - [`src/core/command/detail/CommandCli.cpp`](/src/core/command/detail/CommandCli.cpp)
-- [`src/python/CommandApiBindings.cpp`](/src/python/CommandApiBindings.cpp)
+- [`src/python/CommandSystemBindings.cpp`](/src/python/CommandSystemBindings.cpp)
 
 ## Public Surface
 
 Public command headers separate concerns:
 
-- [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp)
+- [`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp)
   - `ListCommands()`
   - one `Run*` declaration per command
 - [`include/rhbm_gem/core/command/CommandTypes.hpp`](/include/rhbm_gem/core/command/CommandTypes.hpp)
@@ -68,7 +68,7 @@ The helper symbols stay under `rhbm_gem::internal`.
 
 ### Python
 
-[`src/python/CommandApiBindings.cpp`](/src/python/CommandApiBindings.cpp) binds:
+[`src/python/CommandSystemBindings.cpp`](/src/python/CommandSystemBindings.cpp) binds:
 
 - `CommandRequestBase`
 - one request type per command

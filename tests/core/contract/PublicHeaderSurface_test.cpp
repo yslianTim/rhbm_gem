@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "support/PublicHeaderSurfaceTestSupport.hpp"
-#include <rhbm_gem/core/command/CommandApi.hpp>
+#include <rhbm_gem/core/command/CommandSystem.hpp>
 #include <rhbm_gem/core/command/CommandTypes.hpp>
 
 namespace rg = rhbm_gem;
@@ -149,7 +149,7 @@ TYPED_TEST_SUITE(CommandEnumMappingTest, CommandEnumTypes, );
 
 TEST(PublicHeaderSurfaceTest, CorePublicHeadersMatchApprovedSurface) {
     const std::vector<std::string> expected{
-        "core/command/CommandApi.hpp",
+        "core/command/CommandSystem.hpp",
         "core/command/CommandManifest.def",
         "core/command/CommandTypes.hpp",
         "core/painter/AtomPainter.hpp",

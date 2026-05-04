@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "support/CommandValidationAssertions.hpp"
-#include <rhbm_gem/core/command/CommandApi.hpp>
+#include <rhbm_gem/core/command/CommandSystem.hpp>
 #include "command/RHBMTestCommand.hpp"
 #include "command/MapSimulationCommand.hpp"
 #include "command/PotentialAnalysisCommand.hpp"

@@ -7,14 +7,14 @@ The command membership entry lives in
 
 Public request and entrypoint:
 
-- [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp)
+- [`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp)
 
 Internal schema and wiring:
 
 - [`src/core/command/detail/CommandRequestSchema.hpp`](/src/core/command/detail/CommandRequestSchema.hpp)
-- [`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp)
+- [`src/core/command/CommandSystem.cpp`](/src/core/command/CommandSystem.cpp)
 - [`src/core/command/detail/CommandCli.cpp`](/src/core/command/detail/CommandCli.cpp)
-- [`src/python/CommandApiBindings.cpp`](/src/python/CommandApiBindings.cpp)
+- [`src/python/CommandSystemBindings.cpp`](/src/python/CommandSystemBindings.cpp)
 
 Concrete implementation:
 

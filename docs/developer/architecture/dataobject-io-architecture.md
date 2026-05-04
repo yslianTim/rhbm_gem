@@ -187,7 +187,7 @@ SQLite persistence:
 
 Command integration:
 
-- `/include/rhbm_gem/core/command/CommandApi.hpp`
+- `/include/rhbm_gem/core/command/CommandSystem.hpp`
 - `/src/core/command/detail/CommandBase.hpp`
 
 Contract tests:

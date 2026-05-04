@@ -9,14 +9,14 @@ Related references:
 
 Public API:
 
-- [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp)
+- [`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp)
 - [`include/rhbm_gem/core/command/CommandTypes.hpp`](/include/rhbm_gem/core/command/CommandTypes.hpp)
 
 Internal wiring:
 
 - [`include/rhbm_gem/core/command/CommandManifest.def`](/include/rhbm_gem/core/command/CommandManifest.def)
 - [`src/core/command/detail/CommandRequestSchema.hpp`](/src/core/command/detail/CommandRequestSchema.hpp)
-- [`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp) to include the new concrete command header
+- [`src/core/command/CommandSystem.cpp`](/src/core/command/CommandSystem.cpp) to include the new concrete command header
 
 Concrete implementation:
 
@@ -42,11 +42,11 @@ Stable commands live in the main list. Experimental commands stay inside the
 
 The manifest drives:
 
-- public `Run*` declarations in `CommandApi.hpp`
+- public `Run*` declarations in `CommandSystem.hpp`
 - `ListCommands()`
-- `Run*` definitions in `CommandApi.cpp`
+- `Run*` definitions in `CommandSystem.cpp`
 - CLI registration in `detail/CommandCli.cpp`
-- Python request-type and `Run*` binding registration in `CommandApiBindings.cpp`
+- Python request-type and `Run*` binding registration in `CommandSystemBindings.cpp`
 
 ## Public Request DTO
 
@@ -106,13 +106,13 @@ Use this shape:
 
 ## Registration Surfaces
 
-[`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp) owns public `Run*`
+[`src/core/command/CommandSystem.cpp`](/src/core/command/CommandSystem.cpp) owns public `Run*`
 definitions and `ListCommands()`.
 
 [`src/core/command/detail/CommandCli.cpp`](/src/core/command/detail/CommandCli.cpp) owns CLI registration
 through the internal `ConfigureCommandCli(...)`.
 
-[`src/python/CommandApiBindings.cpp`](/src/python/CommandApiBindings.cpp) binds:
+[`src/python/CommandSystemBindings.cpp`](/src/python/CommandSystemBindings.cpp) binds:
 
 - `CommandRequestBase`
 - one request type per command
@@ -131,7 +131,7 @@ Before merge, verify:
 2. `CommandTypes.hpp` contains the new request DTO
 3. `CommandRequestSchema.hpp` contains the internal schema specialization
 4. `CommandManifest.def` contains the manifest entry in the correct stable or experimental section
-5. `CommandApi.cpp` includes the new command header
+5. `CommandSystem.cpp` includes the new command header
 6. `src/CMakeLists.txt` includes the source in the correct stable or experimental list
 7. grouped command tests cover validation and workflow behavior
 

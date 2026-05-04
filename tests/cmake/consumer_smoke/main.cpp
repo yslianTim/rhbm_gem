@@ -1,4 +1,4 @@
-#include <rhbm_gem/core/command/CommandApi.hpp>
+#include <rhbm_gem/core/command/CommandSystem.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>

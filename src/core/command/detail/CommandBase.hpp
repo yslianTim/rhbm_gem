@@ -12,7 +12,7 @@
 #include <type_traits>
 #include <vector>
 
-#include <rhbm_gem/core/command/CommandApi.hpp>
+#include <rhbm_gem/core/command/CommandSystem.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>

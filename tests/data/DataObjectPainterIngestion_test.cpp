@@ -5,7 +5,7 @@
 #include <stdexcept>
 
 #include "support/CommandTestHelpers.hpp"
-#include <rhbm_gem/core/command/CommandApi.hpp>
+#include <rhbm_gem/core/command/CommandSystem.hpp>
 #include <rhbm_gem/core/painter/AtomPainter.hpp>
 #include <rhbm_gem/core/painter/ComparisonPainter.hpp>
 #include <rhbm_gem/core/painter/DemoPainter.hpp>

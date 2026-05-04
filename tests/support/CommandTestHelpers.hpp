@@ -12,7 +12,7 @@
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include "data/detail/LocalPotentialEntry.hpp"
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
-#include <rhbm_gem/core/command/CommandApi.hpp>
+#include <rhbm_gem/core/command/CommandSystem.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 
