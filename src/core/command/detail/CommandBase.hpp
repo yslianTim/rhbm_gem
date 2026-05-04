@@ -18,7 +18,7 @@ namespace rhbm_gem {
 template <typename Request>
 class CommandWithRequest;
 
-namespace command_validation_detail {
+namespace {
 
 template <typename Type>
 std::string ToString(const Type & value)
@@ -28,41 +28,7 @@ std::string ToString(const Type & value)
     return oss.str();
 }
 
-template <typename Type>
-std::string BuildConstraintMessage(
-    std::string_view label,
-    std::string_view constraint,
-    const Type & fallback_value,
-    LogLevel issue_level)
-{
-    std::string message{ std::string(label) + " must be " + std::string(constraint) };
-    if (issue_level == LogLevel::Warning)
-    {
-        message += ". Using " + ToString(fallback_value) + " instead.";
-    }
-    return message;
-}
-
-template <typename FieldType, typename LowerType, typename UpperType>
-std::string BuildExclusiveInclusiveRangeMessage(
-    std::string_view label,
-    LowerType lower,
-    UpperType upper,
-    const FieldType & fallback_value,
-    LogLevel issue_level)
-{
-    std::string message{
-        std::string(label) + " must be a finite value within ("
-            + ToString(lower) + ", " + ToString(upper) + "]"
-    };
-    if (issue_level == LogLevel::Warning)
-    {
-        message += ". Using " + ToString(fallback_value) + " instead.";
-    }
-    return message;
-}
-
-} // namespace command_validation_detail
+} // namespace
 
 enum class ValidationPhase : std::uint8_t
 {
@@ -137,13 +103,17 @@ protected:
         LogLevel issue_level,
         std::string_view label)
     {
+        std::string message{
+            std::string(label) + " must be positive. Using "
+            + ToString(fallback_value) + " instead."
+        };
         CoerceScalar(
             field,
             option_name,
             [](const auto candidate) { return numeric_validation::IsPositive(candidate); },
             fallback_value,
             issue_level,
-            command_validation_detail::BuildConstraintMessage(label, "positive", fallback_value, issue_level));
+            message);
     }
     template <typename FieldType>
     void CoerceFinitePositiveScalar(
@@ -153,14 +123,17 @@ protected:
         LogLevel issue_level,
         std::string_view label)
     {
+        std::string message{
+            std::string(label) + " must be a finite positive value. Using "
+            + ToString(fallback_value) + " instead."
+        };
         CoerceScalar(
             field,
             option_name,
             [](const auto candidate) { return numeric_validation::IsFinitePositive(candidate); },
             fallback_value,
             issue_level,
-            command_validation_detail::BuildConstraintMessage(
-                label, "a finite positive value", fallback_value, issue_level));
+            message);
     }
     template <typename FieldType>
     void CoerceFiniteNonNegativeScalar(
@@ -170,14 +143,17 @@ protected:
         LogLevel issue_level,
         std::string_view label)
     {
+        std::string message{
+            std::string(label) + " must be a finite non-negative value. Using "
+            + ToString(fallback_value) + " instead."
+        };
         CoerceScalar(
             field,
             option_name,
             [](const auto candidate) { return numeric_validation::IsFiniteNonNegative(candidate); },
             fallback_value,
             issue_level,
-            command_validation_detail::BuildConstraintMessage(
-                label, "a finite non-negative value", fallback_value, issue_level));
+            message);
     }
     template <typename FieldType, typename LowerType, typename UpperType>
     void CoerceFiniteExclusiveInclusiveRangeScalar(
@@ -189,6 +165,11 @@ protected:
         LogLevel issue_level,
         std::string_view label)
     {
+        std::string message{
+            std::string(label) + " must be a finite value within ("
+                + ToString(lower) + ", " + ToString(upper) + "]. Using "
+                + ToString(fallback_value) + " instead."
+        };
         CoerceScalar(
             field,
             option_name,
@@ -198,8 +179,7 @@ protected:
             },
             fallback_value,
             issue_level,
-            command_validation_detail::BuildExclusiveInclusiveRangeMessage(
-                label, lower, upper, fallback_value, issue_level));
+            message);
     }
     template <typename FieldType>
     void CoerceEnum(
@@ -259,19 +239,9 @@ private:
         }
         AddValidationIssue(option_name, ValidationPhase::Parse, issue_level, message, false);
     }
-    void BeginPreparationPass();
-    bool RunValidationPass();
     bool RunFilesystemPreflight();
     void ReportValidationIssues() const;
     void ClearValidationIssues(std::optional<ValidationPhase> phase = std::nullopt);
-    void ValidateRequiredExistingPath(
-        const std::filesystem::path & path,
-        std::string_view option_name,
-        std::string_view label);
-    void ValidateOptionalExistingPath(
-        const std::filesystem::path & path,
-        std::string_view option_name,
-        std::string_view label);
     void AddValidationIssue(
         std::string_view option_name,
         ValidationPhase phase,

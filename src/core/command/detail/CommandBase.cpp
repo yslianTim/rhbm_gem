@@ -8,36 +8,17 @@
 
 namespace rhbm_gem {
 
-namespace {
-
-constexpr std::array<std::string_view, 2> kValidationPhaseLabels{
-    "parse",
-    "prepare"
-};
-
-std::string BuildIssuePrefix(const ValidationIssueRecord & issue)
-{
-    const auto phase_index{ static_cast<std::size_t>(issue.phase) };
-    const auto phase_label{
-        phase_index < kValidationPhaseLabels.size()
-            ? kValidationPhaseLabels[phase_index]
-            : std::string_view{"unknown"}
-    };
-    std::string prefix{ "[" + std::string(phase_label) };
-    if (issue.auto_corrected)
-    {
-        prefix += "; auto-corrected";
-    }
-    prefix += "]";
-    return prefix;
-}
-
-} // namespace
-
 bool CommandBase::Run()
 {
-    BeginPreparationPass();
-    if (!RunValidationPass()) return false;
+    Logger::SetLogLevel(VerboseLevel());
+    ResetRuntimeState();
+    InvalidatePreparedState();
+    ValidatePreparedRequest();
+    if (HasValidationErrors())
+    {
+        ReportValidationIssues();
+        return false;
+    }
     if (!RunFilesystemPreflight()) return false;
 
     m_was_prepared = true;
@@ -82,16 +63,23 @@ void CommandBase::CoerceBaseRequest(CommandRequestBase & request)
         static_cast<int>(LogLevel::Info),
         LogLevel::Warning,
         "Invalid verbose level: " + std::to_string(raw_verbose_level)
-            + ", using default level 3 [Info]");
+        + ", using default level 3 [Info]");
     request.output_dir = std::filesystem::path(path_helper::EnsureTrailingSlash(request.output_dir));
 }
 
 void CommandBase::ReportValidationIssues() const
 {
+    static constexpr std::array<std::string_view, 2> phase_labels{ "parse", "prepare" };
     for (const auto & issue : m_validation_issues)
     {
-        Logger::Log(issue.level,
-            BuildIssuePrefix(issue) + " Option " + issue.option_name + ": " + issue.message);
+        const auto phase_index{ static_cast<std::size_t>(issue.phase) };
+        const auto phase_label{ phase_index < phase_labels.size() ?
+            phase_labels[phase_index] : std::string_view{"unknown"}
+        };
+        std::string prefix{ "[" + std::string(phase_label) };
+        if (issue.auto_corrected) prefix += "; auto-corrected";
+        prefix += "]";
+        Logger::Log(issue.level, prefix + " Option " + issue.option_name + ": " + issue.message);
     }
 }
 
@@ -143,11 +131,12 @@ void CommandBase::ClearValidationIssues(std::optional<ValidationPhase> phase)
         m_validation_issues.end());
 }
 
-void CommandBase::ValidateRequiredExistingPath(
+void CommandBase::ValidateRequiredPath(
     const std::filesystem::path & path,
     std::string_view option_name,
     std::string_view label)
 {
+    InvalidatePreparedState();
     if (path.empty())
     {
         AddValidationIssue(
@@ -171,11 +160,12 @@ void CommandBase::ValidateRequiredExistingPath(
     }
 }
 
-void CommandBase::ValidateOptionalExistingPath(
+void CommandBase::ValidateOptionalPath(
     const std::filesystem::path & path,
     std::string_view option_name,
     std::string_view label)
 {
+    InvalidatePreparedState();
     if (path.empty()) return;
 
     std::error_code error_code;
@@ -188,24 +178,6 @@ void CommandBase::ValidateOptionalExistingPath(
             std::string(label) + " does not exist: " + path.string(),
             false);
     }
-}
-
-void CommandBase::ValidateRequiredPath(
-    const std::filesystem::path & path,
-    std::string_view option_name,
-    std::string_view label)
-{
-    InvalidatePreparedState();
-    ValidateRequiredExistingPath(path, option_name, label);
-}
-
-void CommandBase::ValidateOptionalPath(
-    const std::filesystem::path & path,
-    std::string_view option_name,
-    std::string_view label)
-{
-    InvalidatePreparedState();
-    ValidateOptionalExistingPath(path, option_name, label);
 }
 
 void CommandBase::AddValidationIssue(
@@ -234,24 +206,6 @@ std::filesystem::path CommandBase::BuildOutputPath(
         normalized_extension.insert(normalized_extension.begin(), '.');
     }
     return OutputFolder() / (std::string(stem) + normalized_extension);
-}
-
-void CommandBase::BeginPreparationPass()
-{
-    Logger::SetLogLevel(VerboseLevel());
-    ResetRuntimeState();
-    InvalidatePreparedState();
-}
-
-bool CommandBase::RunValidationPass()
-{
-    ValidatePreparedRequest();
-    if (HasValidationErrors())
-    {
-        ReportValidationIssues();
-        return false;
-    }
-    return true;
 }
 
 bool CommandBase::RunFilesystemPreflight()
