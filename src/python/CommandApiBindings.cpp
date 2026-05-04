@@ -4,7 +4,6 @@
 
 #include <rhbm_gem/core/command/CommandApi.hpp>
 
-#include "command/detail/CommandEnumMetadata.hpp"
 #include "command/detail/CommandRequestSchema.hpp"
 
 namespace py = pybind11;

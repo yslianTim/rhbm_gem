@@ -25,6 +25,7 @@ Public command headers separate concerns:
   - one `Run*` declaration per command
 - [`include/rhbm_gem/core/command/CommandTypes.hpp`](/include/rhbm_gem/core/command/CommandTypes.hpp)
   - shared public enums
+  - enum alias and binding metadata in `rhbm_gem::internal`
   - `CommandRequestBase`
   - one plain request DTO per command
   - default data/database path helpers
@@ -33,7 +34,7 @@ Public command headers separate concerns:
   - `CommandInfo`
 
 The public API is centered on typed requests, `Run*` entrypoints, shared enums, and path helpers.
-CLI wiring, enum metadata, and request binding schema stay internal.
+CLI wiring and request binding schema stay internal.
 
 ## Internal Binding Model
 
@@ -45,10 +46,9 @@ That schema is the single source for:
 - CLI option registration
 - Python request field binding
 
-Internal enum alias and binding metadata live in
-[`src/core/command/detail/CommandEnumMetadata.hpp`](/src/core/command/detail/CommandEnumMetadata.hpp).
-
-Public enum types stay small; alias maps and binding tokens are internal-only.
+Enum alias and binding metadata live next to the enum declarations in
+[`include/rhbm_gem/core/command/CommandTypes.hpp`](/include/rhbm_gem/core/command/CommandTypes.hpp).
+The helper symbols stay under `rhbm_gem::internal`.
 
 ## Execution Surfaces
 

@@ -6,7 +6,6 @@
 #include <string_view>
 #include <vector>
 
-#include "command/detail/CommandEnumMetadata.hpp"
 #include "support/PublicHeaderSurfaceTestSupport.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/core/command/CommandTypes.hpp>

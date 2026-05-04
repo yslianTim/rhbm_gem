@@ -12,8 +12,6 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
-#include "CommandEnumMetadata.hpp"
-
 namespace rhbm_gem {
 
 template <typename Request>
@@ -212,7 +210,13 @@ protected:
         InvalidatePreparedState();
         using UnderlyingType = std::underlying_type_t<FieldType>;
         const auto raw_numeric{ static_cast<UnderlyingType>(field) };
-        if (internal::IsSupportedCommandEnumValue(field)) return;
+        for (const auto & option : internal::CommandEnumTraits<FieldType>::kOptions)
+        {
+            if (static_cast<UnderlyingType>(option.value) == raw_numeric)
+            {
+                return;
+            }
+        }
         field = fallback_value;
         AddValidationIssue(
             option_name,

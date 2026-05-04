@@ -3,7 +3,6 @@
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 
-#include "CommandEnumMetadata.hpp"
 #include "CommandRequestSchema.hpp"
 
 #include <CLI/CLI.hpp>
