@@ -76,13 +76,13 @@ That internal schema is the single source for:
 - CLI flag registration
 - Python field binding
 
-Use the internal helpers there:
+Declare fields directly with the internal field specs:
 
-- `MakeScalarField(...)`
-- `MakePathField(...)`
-- `MakeEnumField(...)`
-- `MakeCsvListField(...)`
-- `MakeRefGroupField(...)`
+- `RequestScalarFieldSpec{...}`
+- `RequestPathFieldSpec{...}`
+- `RequestEnumFieldSpec{...}`
+- `RequestCsvListFieldSpec{...}`
+- `RequestRefGroupFieldSpec{...}`
 
 ## Concrete Command
 

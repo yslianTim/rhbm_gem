@@ -27,7 +27,7 @@ void BindRequestType(py::module_ & module, const char * type_name)
 {
     auto py_request{ py::class_<Request, CommandRequestBase>(module, type_name) };
     py_request.def(py::init<>());
-    internal::VisitRequestFields<Request>([&](const auto & field)
+    internal::CommandRequestSchema<Request>::Visit([&](const auto & field)
     {
         py_request.def_readwrite(field.python_name, field.member);
     });
@@ -64,11 +64,12 @@ void BindCommonTypes(py::module_ & module)
 
 void BindCommandSystem(py::module_ & module)
 {
-    py::class_<CommandRequestBase>(module, "CommandRequestBase")
-        .def(py::init<>())
-        .def_readwrite("job_count", &CommandRequestBase::job_count)
-        .def_readwrite("verbosity", &CommandRequestBase::verbosity)
-        .def_readwrite("output_dir", &CommandRequestBase::output_dir);
+    auto base_request{ py::class_<CommandRequestBase>(module, "CommandRequestBase") };
+    base_request.def(py::init<>());
+    internal::CommandRequestSchema<CommandRequestBase>::Visit([&](const auto & field)
+    {
+        base_request.def_readwrite(field.python_name, field.member);
+    });
 
 #define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)                                    \
     BindRequestType<COMMAND_ID##Request>(module, #COMMAND_ID "Request");

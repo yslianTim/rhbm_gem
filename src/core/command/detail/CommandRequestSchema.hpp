@@ -3,10 +3,9 @@
 #include <filesystem>
 #include <string>
 #include <unordered_map>
-#include <utility>
 #include <vector>
 
-#include <rhbm_gem/core/command/CommandSystem.hpp>
+#include <rhbm_gem/core/command/CommandTypes.hpp>
 
 namespace rhbm_gem::internal {
 
@@ -16,9 +15,17 @@ struct RequestScalarFieldSpec
     const char * python_name;
     const char * cli_flags;
     const char * help;
-    bool required;
     FieldType Owner::* member;
+    bool required{ false };
 };
+
+template <typename Owner, typename FieldType>
+RequestScalarFieldSpec(const char *, const char *, const char *, FieldType Owner::*)
+    -> RequestScalarFieldSpec<Owner, FieldType>;
+
+template <typename Owner, typename FieldType>
+RequestScalarFieldSpec(const char *, const char *, const char *, FieldType Owner::*, bool)
+    -> RequestScalarFieldSpec<Owner, FieldType>;
 
 template <typename Owner>
 struct RequestPathFieldSpec
@@ -26,9 +33,17 @@ struct RequestPathFieldSpec
     const char * python_name;
     const char * cli_flags;
     const char * help;
-    bool required;
     std::filesystem::path Owner::* member;
+    bool required{ false };
 };
+
+template <typename Owner>
+RequestPathFieldSpec(const char *, const char *, const char *, std::filesystem::path Owner::*)
+    -> RequestPathFieldSpec<Owner>;
+
+template <typename Owner>
+RequestPathFieldSpec(const char *, const char *, const char *, std::filesystem::path Owner::*, bool)
+    -> RequestPathFieldSpec<Owner>;
 
 template <typename Owner, typename EnumType>
 struct RequestEnumFieldSpec
@@ -36,9 +51,17 @@ struct RequestEnumFieldSpec
     const char * python_name;
     const char * cli_flags;
     const char * help;
-    bool required;
     EnumType Owner::* member;
+    bool required{ false };
 };
+
+template <typename Owner, typename EnumType>
+RequestEnumFieldSpec(const char *, const char *, const char *, EnumType Owner::*)
+    -> RequestEnumFieldSpec<Owner, EnumType>;
+
+template <typename Owner, typename EnumType>
+RequestEnumFieldSpec(const char *, const char *, const char *, EnumType Owner::*, bool)
+    -> RequestEnumFieldSpec<Owner, EnumType>;
 
 template <typename Owner, typename ElementType>
 struct RequestCsvListFieldSpec
@@ -46,10 +69,28 @@ struct RequestCsvListFieldSpec
     const char * python_name;
     const char * cli_flags;
     const char * help;
-    bool required;
-    char delimiter;
     std::vector<ElementType> Owner::* member;
+    bool required{ false };
+    char delimiter{ ',' };
 };
+
+template <typename Owner, typename ElementType>
+RequestCsvListFieldSpec(const char *, const char *, const char *, std::vector<ElementType> Owner::*)
+    -> RequestCsvListFieldSpec<Owner, ElementType>;
+
+template <typename Owner, typename ElementType>
+RequestCsvListFieldSpec(const char *, const char *, const char *, std::vector<ElementType> Owner::*, bool)
+    -> RequestCsvListFieldSpec<Owner, ElementType>;
+
+template <typename Owner, typename ElementType>
+RequestCsvListFieldSpec(
+    const char *,
+    const char *,
+    const char *,
+    std::vector<ElementType> Owner::*,
+    bool,
+    char)
+    -> RequestCsvListFieldSpec<Owner, ElementType>;
 
 template <typename Owner>
 struct RequestRefGroupFieldSpec
@@ -57,109 +98,67 @@ struct RequestRefGroupFieldSpec
     const char * python_name;
     const char * cli_flags;
     const char * help;
-    bool required;
-    char assignment_delimiter;
-    char item_delimiter;
     std::unordered_map<std::string, std::vector<std::string>> Owner::* member;
+    bool required{ false };
+    char assignment_delimiter{ '=' };
+    char item_delimiter{ ',' };
 };
 
-template <typename Owner, typename FieldType>
-constexpr RequestScalarFieldSpec<Owner, FieldType> MakeScalarField(
-    const char * python_name,
-    const char * cli_flags,
-    const char * help,
-    FieldType Owner::* member,
-    bool required = false)
-{
-    return RequestScalarFieldSpec<Owner, FieldType>{ python_name, cli_flags, help, required, member };
-}
+template <typename Owner>
+RequestRefGroupFieldSpec(
+    const char *,
+    const char *,
+    const char *,
+    std::unordered_map<std::string, std::vector<std::string>> Owner::*)
+    -> RequestRefGroupFieldSpec<Owner>;
 
 template <typename Owner>
-constexpr RequestPathFieldSpec<Owner> MakePathField(
-    const char * python_name,
-    const char * cli_flags,
-    const char * help,
-    std::filesystem::path Owner::* member,
-    bool required = false)
-{
-    return RequestPathFieldSpec<Owner>{ python_name, cli_flags, help, required, member };
-}
-
-template <typename Owner, typename EnumType>
-constexpr RequestEnumFieldSpec<Owner, EnumType> MakeEnumField(
-    const char * python_name,
-    const char * cli_flags,
-    const char * help,
-    EnumType Owner::* member,
-    bool required = false)
-{
-    return RequestEnumFieldSpec<Owner, EnumType>{ python_name, cli_flags, help, required, member };
-}
-
-template <typename Owner, typename ElementType>
-constexpr RequestCsvListFieldSpec<Owner, ElementType> MakeCsvListField(
-    const char * python_name,
-    const char * cli_flags,
-    const char * help,
-    std::vector<ElementType> Owner::* member,
-    bool required = false,
-    char delimiter = ',')
-{
-    return RequestCsvListFieldSpec<Owner, ElementType>{
-        python_name, cli_flags, help, required, delimiter, member
-    };
-}
+RequestRefGroupFieldSpec(
+    const char *,
+    const char *,
+    const char *,
+    std::unordered_map<std::string, std::vector<std::string>> Owner::*,
+    bool)
+    -> RequestRefGroupFieldSpec<Owner>;
 
 template <typename Owner>
-constexpr RequestRefGroupFieldSpec<Owner> MakeRefGroupField(
-    const char * python_name,
-    const char * cli_flags,
-    const char * help,
-    std::unordered_map<std::string, std::vector<std::string>> Owner::* member,
-    bool required = false,
-    char assignment_delimiter = '=',
-    char item_delimiter = ',')
-{
-    return RequestRefGroupFieldSpec<Owner>{
-        python_name,
-        cli_flags,
-        help,
-        required,
-        assignment_delimiter,
-        item_delimiter,
-        member
-    };
-}
+RequestRefGroupFieldSpec(
+    const char *,
+    const char *,
+    const char *,
+    std::unordered_map<std::string, std::vector<std::string>> Owner::*,
+    bool,
+    char,
+    char)
+    -> RequestRefGroupFieldSpec<Owner>;
 
 template <typename Request>
 struct CommandRequestSchema;
 
-template <typename Visitor>
-void VisitBaseRequestFields(Visitor && visitor)
+template <>
+struct CommandRequestSchema<CommandRequestBase>
 {
-    using Base = CommandRequestBase;
-    visitor(MakeScalarField<Base>(
-        "job_count",
-        "-j,--jobs",
-        "Number of threads",
-        &Base::job_count));
-    visitor(MakeScalarField<Base>(
-        "verbosity",
-        "-v,--verbose",
-        "Verbose level",
-        &Base::verbosity));
-    visitor(MakePathField<Base>(
-        "output_dir",
-        "-o,--folder",
-        "folder path for output files",
-        &Base::output_dir));
-}
-
-template <typename Request, typename Visitor>
-void VisitRequestFields(Visitor && visitor)
-{
-    CommandRequestSchema<Request>::Visit(std::forward<Visitor>(visitor));
-}
+    template <typename Visitor>
+    static void Visit(Visitor && visitor)
+    {
+        using Self = CommandRequestBase;
+        visitor(RequestScalarFieldSpec{
+            "job_count",
+            "-j,--jobs",
+            "Number of threads",
+            &Self::job_count });
+        visitor(RequestScalarFieldSpec{
+            "verbosity",
+            "-v,--verbose",
+            "Verbose level",
+            &Self::verbosity });
+        visitor(RequestPathFieldSpec{
+            "output_dir",
+            "-o,--folder",
+            "folder path for output files",
+            &Self::output_dir });
+    }
+};
 
 template <>
 struct CommandRequestSchema<PotentialAnalysisRequest>
@@ -168,108 +167,108 @@ struct CommandRequestSchema<PotentialAnalysisRequest>
     static void Visit(Visitor && visitor)
     {
         using Self = PotentialAnalysisRequest;
-        visitor(MakePathField<Self>(
+        visitor(RequestPathFieldSpec{
             "database_path",
             "-d,--database",
             "Database file path",
-            &Self::database_path));
-        visitor(MakePathField<Self>(
+            &Self::database_path });
+        visitor(RequestPathFieldSpec{
             "model_file_path",
             "-a,--model",
             "Model file path",
             &Self::model_file_path,
-            true));
-        visitor(MakePathField<Self>(
+            true });
+        visitor(RequestPathFieldSpec{
             "map_file_path",
             "-m,--map",
             "Map file path",
             &Self::map_file_path,
-            true));
-        visitor(MakePathField<Self>(
+            true });
+        visitor(RequestPathFieldSpec{
             "training_report_dir",
             "--training-report-dir",
             "Optional output directory for alpha training reports",
-            &Self::training_report_dir));
-        visitor(MakeScalarField<Self>(
+            &Self::training_report_dir });
+        visitor(RequestScalarFieldSpec{
             "simulation_flag",
             "--simulation",
             "Simulation flag",
-            &Self::simulation_flag));
-        visitor(MakeScalarField<Self>(
+            &Self::simulation_flag });
+        visitor(RequestScalarFieldSpec{
             "simulated_map_resolution",
             "-r,--sim-resolution",
             "Set simulated map's resolution (blurring width)",
-            &Self::simulated_map_resolution));
-        visitor(MakeScalarField<Self>(
+            &Self::simulated_map_resolution });
+        visitor(RequestScalarFieldSpec{
             "saved_key_tag",
             "-k,--save-key",
             "New key tag for saving ModelObject results into database",
-            &Self::saved_key_tag));
-        visitor(MakeScalarField<Self>(
+            &Self::saved_key_tag });
+        visitor(RequestScalarFieldSpec{
             "training_alpha_flag",
             "--training-alpha",
             "Turn On/Off alpha training flag",
-            &Self::training_alpha_flag));
-        visitor(MakeScalarField<Self>(
+            &Self::training_alpha_flag });
+        visitor(RequestScalarFieldSpec{
             "training_alpha_min",
             "--training-alpha-min",
             "Minimum alpha value for training search",
-            &Self::training_alpha_min));
-        visitor(MakeScalarField<Self>(
+            &Self::training_alpha_min });
+        visitor(RequestScalarFieldSpec{
             "training_alpha_max",
             "--training-alpha-max",
             "Maximum alpha value for training search",
-            &Self::training_alpha_max));
-        visitor(MakeScalarField<Self>(
+            &Self::training_alpha_max });
+        visitor(RequestScalarFieldSpec{
             "training_alpha_step",
             "--training-alpha-step",
             "Step size for alpha training search",
-            &Self::training_alpha_step));
-        visitor(MakeScalarField<Self>(
+            &Self::training_alpha_step });
+        visitor(RequestScalarFieldSpec{
             "asymmetry_flag",
             "--asymmetry",
             "Turn On/Off asymmetry flag",
-            &Self::asymmetry_flag));
-        visitor(MakeScalarField<Self>(
+            &Self::asymmetry_flag });
+        visitor(RequestScalarFieldSpec{
             "sampling_size",
             "-s,--sampling",
             "Number of sampling points per atom",
-            &Self::sampling_size));
-        visitor(MakeScalarField<Self>(
+            &Self::sampling_size });
+        visitor(RequestScalarFieldSpec{
             "sampling_range_min",
             "--sampling-min",
             "Minimum sampling range",
-            &Self::sampling_range_min));
-        visitor(MakeScalarField<Self>(
+            &Self::sampling_range_min });
+        visitor(RequestScalarFieldSpec{
             "sampling_range_max",
             "--sampling-max",
             "Maximum sampling range",
-            &Self::sampling_range_max));
-        visitor(MakeScalarField<Self>(
+            &Self::sampling_range_max });
+        visitor(RequestScalarFieldSpec{
             "sampling_height",
             "--sampling-height",
             "Maximum sampling height",
-            &Self::sampling_height));
-        visitor(MakeScalarField<Self>(
+            &Self::sampling_height });
+        visitor(RequestScalarFieldSpec{
             "fit_range_min",
             "--fit-min",
             "Minimum fitting range",
-            &Self::fit_range_min));
-        visitor(MakeScalarField<Self>(
+            &Self::fit_range_min });
+        visitor(RequestScalarFieldSpec{
             "fit_range_max",
             "--fit-max",
             "Maximum fitting range",
-            &Self::fit_range_max));
-        visitor(MakeScalarField<Self>(
+            &Self::fit_range_max });
+        visitor(RequestScalarFieldSpec{
             "alpha_r",
             "--alpha-r",
             "Alpha value for R",
-            &Self::alpha_r));
-        visitor(MakeScalarField<Self>(
+            &Self::alpha_r });
+        visitor(RequestScalarFieldSpec{
             "alpha_g",
             "--alpha-g",
             "Alpha value for G",
-            &Self::alpha_g));
+            &Self::alpha_g });
     }
 };
 
@@ -280,58 +279,58 @@ struct CommandRequestSchema<PotentialDisplayRequest>
     static void Visit(Visitor && visitor)
     {
         using Self = PotentialDisplayRequest;
-        visitor(MakePathField<Self>(
+        visitor(RequestPathFieldSpec{
             "database_path",
             "-d,--database",
             "Database file path",
-            &Self::database_path));
-        visitor(MakeEnumField<Self>(
+            &Self::database_path });
+        visitor(RequestEnumFieldSpec{
             "painter_choice",
             "-p,--painter",
             "Painter choice",
             &Self::painter_choice,
-            true));
-        visitor(MakeCsvListField<Self, std::string>(
+            true });
+        visitor(RequestCsvListFieldSpec{
             "model_key_tag_list",
             "-k,--model-keylist",
             "List of model key tag to be display",
             &Self::model_key_tag_list,
-            true));
-        visitor(MakeRefGroupField<Self>(
+            true });
+        visitor(RequestRefGroupFieldSpec{
             "reference_model_groups",
             "--ref-group",
             "Reference group in the form group=key1,key2,...",
-            &Self::reference_model_groups));
-        visitor(MakeScalarField<Self>(
+            &Self::reference_model_groups });
+        visitor(RequestScalarFieldSpec{
             "pick_chain_id",
             "--pick-chain",
             "Pick chain ID",
-            &Self::pick_chain_id));
-        visitor(MakeScalarField<Self>(
+            &Self::pick_chain_id });
+        visitor(RequestScalarFieldSpec{
             "pick_residue",
             "--pick-residue",
             "Pick residue type",
-            &Self::pick_residue));
-        visitor(MakeScalarField<Self>(
+            &Self::pick_residue });
+        visitor(RequestScalarFieldSpec{
             "pick_element",
             "--pick-element",
             "Pick element type",
-            &Self::pick_element));
-        visitor(MakeScalarField<Self>(
+            &Self::pick_element });
+        visitor(RequestScalarFieldSpec{
             "veto_chain_id",
             "--veto-chain",
             "Veto chain ID",
-            &Self::veto_chain_id));
-        visitor(MakeScalarField<Self>(
+            &Self::veto_chain_id });
+        visitor(RequestScalarFieldSpec{
             "veto_residue",
             "--veto-residue",
             "Veto residue type",
-            &Self::veto_residue));
-        visitor(MakeScalarField<Self>(
+            &Self::veto_residue });
+        visitor(RequestScalarFieldSpec{
             "veto_element",
             "--veto-element",
             "Veto element type",
-            &Self::veto_element));
+            &Self::veto_element });
     }
 };
 
@@ -342,28 +341,28 @@ struct CommandRequestSchema<ResultDumpRequest>
     static void Visit(Visitor && visitor)
     {
         using Self = ResultDumpRequest;
-        visitor(MakePathField<Self>(
+        visitor(RequestPathFieldSpec{
             "database_path",
             "-d,--database",
             "Database file path",
-            &Self::database_path));
-        visitor(MakeEnumField<Self>(
+            &Self::database_path });
+        visitor(RequestEnumFieldSpec{
             "printer_choice",
             "-p,--printer",
             "Printer choice",
             &Self::printer_choice,
-            true));
-        visitor(MakeCsvListField<Self, std::string>(
+            true });
+        visitor(RequestCsvListFieldSpec{
             "model_key_tag_list",
             "-k,--model-keylist",
             "List of model key tag to be display",
             &Self::model_key_tag_list,
-            true));
-        visitor(MakePathField<Self>(
+            true });
+        visitor(RequestPathFieldSpec{
             "map_file_path",
             "-m,--map",
             "Map file path",
-            &Self::map_file_path));
+            &Self::map_file_path });
     }
 };
 
@@ -374,42 +373,42 @@ struct CommandRequestSchema<MapSimulationRequest>
     static void Visit(Visitor && visitor)
     {
         using Self = MapSimulationRequest;
-        visitor(MakePathField<Self>(
+        visitor(RequestPathFieldSpec{
             "model_file_path",
             "-a,--model",
             "Model file path",
             &Self::model_file_path,
-            true));
-        visitor(MakeScalarField<Self>(
+            true });
+        visitor(RequestScalarFieldSpec{
             "map_file_name",
             "-n,--name",
             "File name for output map files",
-            &Self::map_file_name));
-        visitor(MakeEnumField<Self>(
+            &Self::map_file_name });
+        visitor(RequestEnumFieldSpec{
             "potential_model_choice",
             "--potential-model",
             "Atomic potential model option",
-            &Self::potential_model_choice));
-        visitor(MakeEnumField<Self>(
+            &Self::potential_model_choice });
+        visitor(RequestEnumFieldSpec{
             "partial_charge_choice",
             "--charge",
             "Partial charge table option",
-            &Self::partial_charge_choice));
-        visitor(MakeScalarField<Self>(
+            &Self::partial_charge_choice });
+        visitor(RequestScalarFieldSpec{
             "cutoff_distance",
             "-c,--cut-off",
             "Cutoff distance",
-            &Self::cutoff_distance));
-        visitor(MakeScalarField<Self>(
+            &Self::cutoff_distance });
+        visitor(RequestScalarFieldSpec{
             "grid_spacing",
             "-g,--grid-spacing",
             "Grid spacing",
-            &Self::grid_spacing));
-        visitor(MakeCsvListField<Self, double>(
+            &Self::grid_spacing });
+        visitor(RequestCsvListFieldSpec{
             "blurring_width_list",
             "--blurring-width",
             "Blurring width (list) setting",
-            &Self::blurring_width_list));
+            &Self::blurring_width_list });
     }
 };
 
@@ -420,31 +419,31 @@ struct CommandRequestSchema<RHBMTestRequest>
     static void Visit(Visitor && visitor)
     {
         using Self = RHBMTestRequest;
-        visitor(MakeEnumField<Self>(
+        visitor(RequestEnumFieldSpec{
             "tester_choice",
             "-t,--tester",
             "Tester option",
-            &Self::tester_choice));
-        visitor(MakeScalarField<Self>(
+            &Self::tester_choice });
+        visitor(RequestScalarFieldSpec{
             "fit_range_min",
             "--fit-min",
             "Minimum fitting range",
-            &Self::fit_range_min));
-        visitor(MakeScalarField<Self>(
+            &Self::fit_range_min });
+        visitor(RequestScalarFieldSpec{
             "fit_range_max",
             "--fit-max",
             "Maximum fitting range",
-            &Self::fit_range_max));
-        visitor(MakeScalarField<Self>(
+            &Self::fit_range_max });
+        visitor(RequestScalarFieldSpec{
             "alpha_r",
             "--alpha-r",
             "Alpha value for R",
-            &Self::alpha_r));
-        visitor(MakeScalarField<Self>(
+            &Self::alpha_r });
+        visitor(RequestScalarFieldSpec{
             "alpha_g",
             "--alpha-g",
             "Alpha value for G",
-            &Self::alpha_g));
+            &Self::alpha_g });
     }
 };
 
@@ -456,33 +455,33 @@ struct CommandRequestSchema<MapVisualizationRequest>
     static void Visit(Visitor && visitor)
     {
         using Self = MapVisualizationRequest;
-        visitor(MakePathField<Self>(
+        visitor(RequestPathFieldSpec{
             "model_file_path",
             "-a,--model",
             "Model file path",
             &Self::model_file_path,
-            true));
-        visitor(MakePathField<Self>(
+            true });
+        visitor(RequestPathFieldSpec{
             "map_file_path",
             "-m,--map",
             "Map file path",
             &Self::map_file_path,
-            true));
-        visitor(MakeScalarField<Self>(
+            true });
+        visitor(RequestScalarFieldSpec{
             "atom_serial_id",
             "-i,--atom-id",
             "Atom serial ID for visualization",
-            &Self::atom_serial_id));
-        visitor(MakeScalarField<Self>(
+            &Self::atom_serial_id });
+        visitor(RequestScalarFieldSpec{
             "sampling_size",
             "-s,--sampling",
             "Number of sampling points per atom",
-            &Self::sampling_size));
-        visitor(MakeScalarField<Self>(
+            &Self::sampling_size });
+        visitor(RequestScalarFieldSpec{
             "window_size",
             "--window-size",
             "Window size for sampling",
-            &Self::window_size));
+            &Self::window_size });
     }
 };
 
@@ -493,37 +492,37 @@ struct CommandRequestSchema<PositionEstimationRequest>
     static void Visit(Visitor && visitor)
     {
         using Self = PositionEstimationRequest;
-        visitor(MakePathField<Self>(
+        visitor(RequestPathFieldSpec{
             "map_file_path",
             "-m,--map",
             "Map file path",
             &Self::map_file_path,
-            true));
-        visitor(MakeScalarField<Self>(
+            true });
+        visitor(RequestScalarFieldSpec{
             "iteration_count",
             "--iter",
             "Iteration count for estimation",
-            &Self::iteration_count));
-        visitor(MakeScalarField<Self>(
+            &Self::iteration_count });
+        visitor(RequestScalarFieldSpec{
             "knn_size",
             "--knn",
             "KNN size for estimation",
-            &Self::knn_size));
-        visitor(MakeScalarField<Self>(
+            &Self::knn_size });
+        visitor(RequestScalarFieldSpec{
             "alpha",
             "--alpha",
             "Alpha value for robust regression",
-            &Self::alpha));
-        visitor(MakeScalarField<Self>(
+            &Self::alpha });
+        visitor(RequestScalarFieldSpec{
             "threshold_ratio",
             "--threshold",
             "Ratio of threshold of map values",
-            &Self::threshold_ratio));
-        visitor(MakeScalarField<Self>(
+            &Self::threshold_ratio });
+        visitor(RequestScalarFieldSpec{
             "dedup_tolerance",
             "--dedup-tolerance",
             "Tolerance for deduplicating points",
-            &Self::dedup_tolerance));
+            &Self::dedup_tolerance });
     }
 };
 #endif

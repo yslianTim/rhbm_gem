@@ -238,11 +238,11 @@ void RegisterCommand(CLI::App & app, std::string_view name, std::string_view des
     CLI::App & command{ *app.add_subcommand(std::string(name), std::string(description)) };
     auto request{ std::make_shared<RequestType>() };
     auto & base_request{ static_cast<CommandRequestBase &>(*request) };
-    internal::VisitBaseRequestFields([&](const auto & field)
+    internal::CommandRequestSchema<CommandRequestBase>::Visit([&](const auto & field)
     {
         BindCliField(command, &base_request, field);
     });
-    internal::VisitRequestFields<RequestType>([&](const auto & field)
+    internal::CommandRequestSchema<RequestType>::Visit([&](const auto & field)
     {
         BindCliField(command, request.get(), field);
     });
