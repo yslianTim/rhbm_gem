@@ -6,7 +6,7 @@
 
 namespace rhbm_gem {
 
-class RHBMTestCommand : public CommandWithRequest<RHBMTestRequest>
+class RHBMTestCommand : public CommandBase<RHBMTestRequest>
 {
 public:
     RHBMTestCommand();

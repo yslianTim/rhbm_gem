@@ -14,7 +14,7 @@ namespace rhbm_gem {
 
 class ModelObject;
 
-class PotentialDisplayCommand : public CommandWithRequest<PotentialDisplayRequest>
+class PotentialDisplayCommand : public CommandBase<PotentialDisplayRequest>
 {
     std::unique_ptr<::AtomSelector> m_atom_selector;
     std::vector<std::shared_ptr<ModelObject>> m_model_object_list;

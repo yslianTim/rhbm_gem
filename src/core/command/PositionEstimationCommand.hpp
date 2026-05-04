@@ -13,7 +13,7 @@ template <typename T> struct KDNode;
 
 namespace rhbm_gem {
 
-class PositionEstimationCommand : public CommandWithRequest<PositionEstimationRequest>
+class PositionEstimationCommand : public CommandBase<PositionEstimationRequest>
 {
     std::vector<VoxelNode> m_selected_voxel_list;
     std::vector<VoxelNode> m_query_point_list;

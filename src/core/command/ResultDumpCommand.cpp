@@ -28,7 +28,7 @@ constexpr std::string_view kMapKey{ "map" };
 namespace rhbm_gem {
 
 ResultDumpCommand::ResultDumpCommand() :
-    CommandWithRequest<ResultDumpRequest>{},
+    CommandBase<ResultDumpRequest>{},
     m_map_key_tag{ kMapKey }, m_map_object{ nullptr }
 {
 }

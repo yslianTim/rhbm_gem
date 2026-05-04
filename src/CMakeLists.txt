@@ -21,7 +21,6 @@ target_sources(rhbm_gem PRIVATE
     core/command/CommandApi.cpp
     core/command/detail/CommandCli.cpp
     core/painter/AtomPainter.cpp
-    core/command/detail/CommandBase.cpp
     core/painter/ComparisonPainter.cpp
     core/painter/DemoPainter.cpp
     core/painter/GausPainter.cpp

@@ -520,7 +520,7 @@ void RunSimulationTestOnNeighborDistance(const RHBMTestRequest & request)
 }
 
 RHBMTestCommand::RHBMTestCommand() :
-    CommandWithRequest<RHBMTestRequest>{}
+    CommandBase<RHBMTestRequest>{}
 {
 }
 

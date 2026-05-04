@@ -97,7 +97,7 @@ SimulationAtomPreparationResult PrepareSimulationAtoms(
 namespace rhbm_gem {
 
 MapSimulationCommand::MapSimulationCommand() :
-    CommandWithRequest<MapSimulationRequest>{},
+    CommandBase<MapSimulationRequest>{},
     m_selected_atom_list{}, m_atom_charge_map{}, m_model_object{ nullptr },
     m_atom_range_minimum{
         std::numeric_limits<float>::max(),

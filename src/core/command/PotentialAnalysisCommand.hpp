@@ -12,7 +12,7 @@ class ModelObject;
 class MapObject;
 class MutableLocalPotentialView;
 
-class PotentialAnalysisCommand : public CommandWithRequest<PotentialAnalysisRequest>
+class PotentialAnalysisCommand : public CommandBase<PotentialAnalysisRequest>
 {
     std::string m_model_key_tag, m_map_key_tag;
     std::shared_ptr<MapObject> m_map_object;

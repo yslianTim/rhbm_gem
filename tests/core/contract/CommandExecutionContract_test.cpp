@@ -17,7 +17,7 @@ struct LifecycleCommandOptions
     bool execution_toggle{ false };
 };
 
-class LifecycleCommand final : public rg::CommandWithRequest<rg::CommandRequestBase>
+class LifecycleCommand final : public rg::CommandBase<rg::CommandRequestBase>
 {
 public:
     int validate_count{ 0 };

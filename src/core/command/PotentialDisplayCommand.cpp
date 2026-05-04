@@ -39,7 +39,7 @@ void ApplyModelSelection(
 namespace rhbm_gem {
 
 PotentialDisplayCommand::PotentialDisplayCommand() :
-    CommandWithRequest<PotentialDisplayRequest>{},
+    CommandBase<PotentialDisplayRequest>{},
     m_atom_selector{ std::make_unique<AtomSelector>() }
 {
 }

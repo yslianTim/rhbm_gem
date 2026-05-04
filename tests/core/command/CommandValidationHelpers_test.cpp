@@ -27,7 +27,7 @@ struct ValidationHelperCommandOptions
     bool add_prepare_error{ false };
 };
 
-class ValidationHelperCommand final : public rg::CommandWithRequest<rg::CommandRequestBase>
+class ValidationHelperCommand final : public rg::CommandBase<rg::CommandRequestBase>
 {
 public:
     void SetRequiredPath(const std::filesystem::path & value)

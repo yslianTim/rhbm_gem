@@ -114,16 +114,16 @@ Shared command-framework internals live in:
 
 The standard shape is:
 
-1. derive from `CommandWithRequest<XxxRequest>`
+1. derive from `CommandBase<XxxRequest>`
 2. keep parse-phase request normalization and validation in `NormalizeAndValidateRequest()`
 3. keep semantic checks in `ValidatePreparedRequest()`
 4. clear transient runtime state in `ResetRuntimeState()`
 5. keep orchestration in `ExecuteImpl()`
 
-`CommandWithRequest<XxxRequest>`:
+`CommandBase<XxxRequest>`:
 
 1. stores the typed request internally
-2. exposes shared base options to `CommandBase` lifecycle code
+2. uses shared base options during lifecycle/preflight
 3. coerces shared base options
 4. calls `NormalizeAndValidateRequest()`
 

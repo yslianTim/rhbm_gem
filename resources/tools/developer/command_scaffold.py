@@ -158,7 +158,7 @@ namespace rhbm_gem {{
 struct {spec.command_type.removesuffix("Command")}Request;
 
 class {spec.command_type}
-    : public CommandWithRequest<{spec.command_type.removesuffix("Command")}Request>
+    : public CommandBase<{spec.command_type.removesuffix("Command")}Request>
 {{
 public:
     {spec.command_type}();
@@ -183,7 +183,7 @@ def _source_template(spec: ScaffoldSpec) -> str:
 namespace rhbm_gem {{
 
 {spec.command_type}::{spec.command_type}() :
-    CommandWithRequest<{spec.command_type.removesuffix("Command")}Request>{{}}
+    CommandBase<{spec.command_type.removesuffix("Command")}Request>{{}}
 {{
 }}
 

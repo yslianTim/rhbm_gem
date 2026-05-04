@@ -12,7 +12,7 @@ class ModelObject;
 class MapObject;
 class AtomObject;
 
-class MapVisualizationCommand : public CommandWithRequest<MapVisualizationRequest>
+class MapVisualizationCommand : public CommandBase<MapVisualizationRequest>
 {
     std::string m_model_key_tag, m_map_key_tag;
     std::shared_ptr<MapObject> m_map_object;

@@ -17,7 +17,7 @@ class ModelObject;
 class MapObject;
 class AtomObject;
 
-class MapSimulationCommand : public CommandWithRequest<MapSimulationRequest>
+class MapSimulationCommand : public CommandBase<MapSimulationRequest>
 {
     std::vector<AtomObject *> m_selected_atom_list;
     std::unordered_map<int, double> m_atom_charge_map;

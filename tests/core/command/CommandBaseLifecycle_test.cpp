@@ -15,7 +15,7 @@ struct TestCommandOptions
     bool force_invalid{ false };
 };
 
-class TestCommand final : public rg::CommandWithRequest<rg::CommandRequestBase>
+class TestCommand final : public rg::CommandBase<rg::CommandRequestBase>
 {
 public:
     void SetForceInvalid(bool value)

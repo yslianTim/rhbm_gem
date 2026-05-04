@@ -59,10 +59,7 @@ bool EmitTrainingReportIfRequested(
     const std::filesystem::path & training_report_dir,
     std::string_view report_file_name)
 {
-    if (training_report_dir.empty())
-    {
-        return false;
-    }
+    if (training_report_dir.empty()) return false;
 
     const auto report_path{ training_report_dir / std::filesystem::path{ report_file_name } };
     if (gaus_bias_matrix.rows() < 2 ||
@@ -105,16 +102,14 @@ bool EmitTrainingReportIfRequested(
     if (!plot_result.Succeeded())
     {
         Logger::Log(LogLevel::Warning,
-            "Failed to emit training report '" + report_path.string() +
-                "': " + plot_result.message);
+            "Failed to emit training report '" + report_path.string() + "': " + plot_result.message);
         return false;
     }
 
     if (!std::filesystem::exists(report_path))
     {
         Logger::Log(LogLevel::Warning,
-            "Training report output was requested but no file was produced: " +
-                report_path.string());
+            "Training report output was requested but no file was produced: " + report_path.string());
         return false;
     }
 
@@ -126,7 +121,7 @@ bool EmitTrainingReportIfRequested(
 namespace rhbm_gem {
 
 PotentialAnalysisCommand::PotentialAnalysisCommand() :
-    CommandWithRequest<PotentialAnalysisRequest>{},
+    CommandBase<PotentialAnalysisRequest>{},
     m_model_key_tag{ "model" }, m_map_key_tag{ "map" },
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {
@@ -137,85 +132,35 @@ void PotentialAnalysisCommand::NormalizeAndValidateRequest()
     auto & request{ MutableRequest() };
     ValidateRequiredPath(request.model_file_path, "--model", "Model file");
     ValidateRequiredPath(request.map_file_path, "--map", "Map file");
-    CoerceFiniteNonNegativeScalar(
-        request.simulated_map_resolution,
-        "--sim-resolution",
-        0.0,
-        LogLevel::Error,
-        "Simulated map resolution");
+    CoerceFiniteNonNegativeScalar(request.simulated_map_resolution, "--sim-resolution",
+        0.0, LogLevel::Error, "Simulated map resolution");
     if (request.saved_key_tag.empty())
     {
         request.saved_key_tag = "model";
-        AddParseError(
-            "--save-key",
-            "Saved key tag cannot be empty. Using 'model' instead.");
+        AddParseError("--save-key", "Saved key tag cannot be empty. Using 'model' instead.");
     }
-    CoercePositiveScalar(
-        request.sampling_size,
-        "--sampling",
-        1500,
-        LogLevel::Warning,
-        "Sampling size");
-    CoerceFiniteNonNegativeScalar(
-        request.sampling_range_min,
-        "--sampling-min",
-        0.0,
-        LogLevel::Error,
-        "Minimum sampling range");
-    CoerceFiniteNonNegativeScalar(
-        request.sampling_range_max,
-        "--sampling-max",
-        1.5,
-        LogLevel::Error,
-        "Maximum sampling range");
-    CoerceFinitePositiveScalar(
-        request.sampling_height,
-        "--sampling-height",
-        0.1,
-        LogLevel::Error,
-        "Sampling height");
-    CoerceFiniteNonNegativeScalar(
-        request.fit_range_min,
-        "--fit-min",
-        0.0,
-        LogLevel::Error,
-        "Minimum fitting range");
-    CoerceFiniteNonNegativeScalar(
-        request.fit_range_max,
-        "--fit-max",
-        1.0,
-        LogLevel::Error,
-        "Maximum fitting range");
-    CoerceFinitePositiveScalar(
-        request.alpha_r,
-        "--alpha-r",
-        0.1,
-        LogLevel::Error,
-        "Alpha-R");
-    CoerceFinitePositiveScalar(
-        request.alpha_g,
-        "--alpha-g",
-        0.2,
-        LogLevel::Error,
-        "Alpha-G");
-    CoerceFiniteNonNegativeScalar(
-        request.training_alpha_min,
-        "--training-alpha-min",
-        0.0,
-        LogLevel::Error,
-        "Minimum training alpha");
-    CoerceFiniteNonNegativeScalar(
-        request.training_alpha_max,
-        "--training-alpha-max",
-        1.0,
-        LogLevel::Error,
-        "Maximum training alpha");
-    CoerceFinitePositiveScalar(
-        request.training_alpha_step,
-        "--training-alpha-step",
-        0.1,
-        LogLevel::Error,
-        "Training alpha step");
+    CoercePositiveScalar(request.sampling_size, "--sampling",
+        1500, LogLevel::Warning, "Sampling size");
+    CoerceFiniteNonNegativeScalar(request.sampling_range_min, "--sampling-min",
+        0.0, LogLevel::Error, "Minimum sampling range");
+    CoerceFiniteNonNegativeScalar(request.sampling_range_max, "--sampling-max",
+        1.5, LogLevel::Error, "Maximum sampling range");
+    CoerceFinitePositiveScalar(request.sampling_height, "--sampling-height",
+        0.1, LogLevel::Error, "Sampling height");
+    CoerceFiniteNonNegativeScalar(request.fit_range_min, "--fit-min",
+        0.0, LogLevel::Error, "Minimum fitting range");
+    CoerceFiniteNonNegativeScalar(request.fit_range_max, "--fit-max",
+        1.0, LogLevel::Error, "Maximum fitting range");
+    CoerceFinitePositiveScalar(request.alpha_r, "--alpha-r",
+        0.1, LogLevel::Error, "Alpha-R");
+    CoerceFinitePositiveScalar(request.alpha_g, "--alpha-g",
+        0.2, LogLevel::Error, "Alpha-G");
+    CoerceFiniteNonNegativeScalar(request.training_alpha_min, "--training-alpha-min",
+        0.0, LogLevel::Error, "Minimum training alpha");
+    CoerceFiniteNonNegativeScalar(request.training_alpha_max, "--training-alpha-max",
+        1.0, LogLevel::Error, "Maximum training alpha");
+    CoerceFinitePositiveScalar(request.training_alpha_step, "--training-alpha-step",
+        0.1, LogLevel::Error, "Training alpha step");
 }
 
 bool PotentialAnalysisCommand::ExecuteImpl()
@@ -226,14 +171,12 @@ bool PotentialAnalysisCommand::ExecuteImpl()
     auto & map_object{ *m_map_object };
     RunMapObjectPreprocessing(map_object);
     RunModelObjectPreprocessing(model_object, request.asymmetry_flag);
-    RunSamplingWorkflow(
-        map_object, model_object,
+    RunSamplingWorkflow(map_object, model_object,
         request.sampling_size, request.sampling_range_min, request.sampling_range_max);
     RunDatasetPreparationWorkflow(model_object, request.fit_range_min, request.fit_range_max);
     RunAtomPotentialFittingWorkflow(model_object, request);
 #ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
-    experimental::RunPotentialAnalysisBondWorkflow(
-        model_object, map_object, request, ThreadSize());
+    experimental::RunPotentialAnalysisBondWorkflow(model_object, map_object, request, ThreadSize());
 #endif
     SavePreparedModel(model_object, request.database_path, request.saved_key_tag);
     return true;
@@ -279,8 +222,7 @@ bool PotentialAnalysisCommand::BuildDataObject(const PotentialAnalysisRequest & 
         m_map_object = std::shared_ptr<MapObject>{ std::move(map_object) };
         if (m_model_object == nullptr || m_map_object == nullptr)
         {
-            Logger::Log(
-                LogLevel::Error,
+            Logger::Log(LogLevel::Error,
                 "PotentialAnalysisCommand::BuildDataObject : model/map object missing after load.");
             return false;
         }
@@ -327,9 +269,7 @@ void PotentialAnalysisCommand::RunMapObjectPreprocessing(MapObject & map_object)
     map_object.MapValueArrayNormalization();
 }
 
-void PotentialAnalysisCommand::RunModelObjectPreprocessing(
-    ModelObject & model_object,
-    bool asymmetry_flag)
+void PotentialAnalysisCommand::RunModelObjectPreprocessing(ModelObject & model_object, bool asymmetry_flag)
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunModelObjectPreprocessing");
     auto analysis{ model_object.EditAnalysis() };
@@ -352,14 +292,11 @@ void PotentialAnalysisCommand::RunModelObjectPreprocessing(
     analysis.RebuildAtomGroupsFromSelection();
 
     Logger::Log(LogLevel::Info,
-        "Number of selected atom = "
-            + std::to_string(model_object.GetSelectedAtomCount()));
+        "Number of selected atom = " + std::to_string(model_object.GetSelectedAtomCount()));
     Logger::Log(LogLevel::Info,
-        "Number of selected bond = "
-            + std::to_string(model_object.GetSelectedBondCount()));
+        "Number of selected bond = " + std::to_string(model_object.GetSelectedBondCount()));
     Logger::Log(LogLevel::Info, model_object.GetAnalysisView().DescribeAtomGrouping());
-    if (model_object.GetNumberOfAtom() > 0 &&
-        model_object.GetSelectedAtomCount() == 0)
+    if (model_object.GetNumberOfAtom() > 0 && model_object.GetSelectedAtomCount() == 0)
     {
         Logger::Log(LogLevel::Warning,
             "No atoms are selected after symmetry filtering. "
@@ -550,9 +487,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
     rhbm_trainer::AlphaTrainer alpha_trainer(
-        request.training_alpha_min,
-        request.training_alpha_max,
-        request.training_alpha_step);
+        request.training_alpha_min, request.training_alpha_max, request.training_alpha_step);
     const auto & alpha_training_list{ alpha_trainer.AlphaGrid() };
     Logger::Log(LogLevel::Info, alpha_trainer.GetAlphaGridSummary().str());
 
@@ -670,12 +605,8 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
         };
         const bool report_emitted{
             EmitTrainingReportIfRequested(
-                alpha_r_bias_matrix,
-                alpha_training_list,
-                "#alpha_{r}",
-                "Deviation with OLS",
-                request.training_report_dir,
-                "alpha_r_bias.pdf")
+                alpha_r_bias_matrix, alpha_training_list, "#alpha_{r}", "Deviation with OLS",
+                request.training_report_dir, "alpha_r_bias.pdf")
         };
         if (!report_emitted)
         {
@@ -696,12 +627,8 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
         };
         const bool report_emitted{
             EmitTrainingReportIfRequested(
-                alpha_g_bias_matrix,
-                alpha_training_list,
-                "#alpha_{g}",
-                "Deviation with Mean",
-                request.training_report_dir,
-                "alpha_g_bias.pdf")
+                alpha_g_bias_matrix, alpha_training_list, "#alpha_{g}", "Deviation with Mean",
+                request.training_report_dir, "alpha_g_bias.pdf")
         };
         if (!report_emitted)
         {
