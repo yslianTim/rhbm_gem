@@ -14,7 +14,6 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
-#include <utility>
 #include <vector>
 
 namespace rhbm_gem {
@@ -97,56 +96,6 @@ std::map<std::string, EnumType> BuildEnumCliMap()
     return option_map;
 }
 
-std::pair<std::string, std::vector<std::string>> ParseReferenceGroupArgument(
-    const std::string & text,
-    const std::string & option_name,
-    char assignment_delimiter,
-    char item_delimiter)
-{
-    const auto delimiter_position{ text.find(assignment_delimiter) };
-    if (delimiter_position == std::string::npos)
-    {
-        throw CLI::ValidationError(
-            option_name,
-            "Expected value in the form <group>=key1,key2,...");
-    }
-
-    const std::string group_name{ text.substr(0, delimiter_position) };
-    const std::string member_text{ text.substr(delimiter_position + 1) };
-    if (group_name.empty())
-    {
-        throw CLI::ValidationError(option_name, "Reference group name cannot be empty.");
-    }
-
-    const auto members{ string_helper::ParseListOption<std::string>(member_text, item_delimiter) };
-    if (members.empty())
-    {
-        throw CLI::ValidationError(option_name, "Reference group members cannot be empty.");
-    }
-    return { group_name, members };
-}
-
-void AppendReferenceGroupArguments(
-    std::unordered_map<std::string, std::vector<std::string>> & group_map,
-    const std::vector<std::string> & values,
-    const std::string & option_name,
-    char assignment_delimiter,
-    char item_delimiter)
-{
-    for (const auto & value : values)
-    {
-        const auto [group_name, members]{
-            ParseReferenceGroupArgument(
-                value,
-                option_name,
-                assignment_delimiter,
-                item_delimiter)
-        };
-        auto & stored_members{ group_map[group_name] };
-        stored_members.insert(stored_members.end(), members.begin(), members.end());
-    }
-}
-
 template <typename Request, typename FieldType>
 void BindCliField(
     CLI::App & command,
@@ -163,10 +112,7 @@ void BindCliField(
             },
             field.help)
     };
-    ApplyRequiredAndDefault(
-        option,
-        field.required,
-        MakeCliDefaultDisplayValue(current_value));
+    ApplyRequiredAndDefault(option, field.required, MakeCliDefaultDisplayValue(current_value));
 }
 
 template <typename Request>
@@ -184,10 +130,7 @@ void BindCliField(
             },
             field.help)
     };
-    ApplyRequiredAndDefault(
-        option,
-        field.required,
-        MakeCliDefaultDisplayValue(request->*(field.member)));
+    ApplyRequiredAndDefault(option, field.required, MakeCliDefaultDisplayValue(request->*(field.member)));
 }
 
 template <typename Request, typename EnumType>
@@ -205,10 +148,7 @@ void BindCliField(
             },
             field.help)
     };
-    ApplyRequiredAndDefault(
-        option,
-        field.required,
-        MakeCliDefaultDisplayValue(request->*(field.member)));
+    ApplyRequiredAndDefault(option, field.required, MakeCliDefaultDisplayValue(request->*(field.member)));
     option.transform(CLI::CheckedTransformer(BuildEnumCliMap<EnumType>(), CLI::ignore_case));
 }
 
@@ -227,9 +167,7 @@ void BindCliField(
             },
             field.help)
     };
-    ApplyRequiredAndDefault(
-        option,
-        field.required,
+    ApplyRequiredAndDefault(option, field.required,
         MakeCliDefaultDisplayValue(request->*(field.member), field.delimiter));
 }
 
@@ -248,13 +186,39 @@ void BindCliField(
              assignment_delimiter = field.assignment_delimiter,
              item_delimiter = field.item_delimiter](const std::vector<std::string> & values)
             {
-                auto & group_map{ request->*member };
-                AppendReferenceGroupArguments(
-                    group_map,
-                    values,
-                    option_name,
-                    assignment_delimiter,
-                    item_delimiter);
+                for (const auto & value : values)
+                {
+                    const auto delimiter_position{ value.find(assignment_delimiter) };
+                    if (delimiter_position == std::string::npos)
+                    {
+                        throw CLI::ValidationError(
+                            option_name,
+                            "Expected value in the form <group>=key1,key2,...");
+                    }
+
+                    const std::string group_name{ value.substr(0, delimiter_position) };
+                    const std::string member_text{ value.substr(delimiter_position + 1) };
+                    if (group_name.empty())
+                    {
+                        throw CLI::ValidationError(
+                            option_name,
+                            "Reference group name cannot be empty.");
+                    }
+
+                    const auto members{
+                        string_helper::ParseListOption<std::string>(member_text, item_delimiter)
+                    };
+                    if (members.empty())
+                    {
+                        throw CLI::ValidationError(
+                            option_name,
+                            "Reference group members cannot be empty.");
+                    }
+
+                    auto & group_map{ request->*member };
+                    auto & stored_members{ group_map[group_name] };
+                    stored_members.insert(stored_members.end(), members.begin(), members.end());
+                }
             },
             field.help)
     };
@@ -263,59 +227,51 @@ void BindCliField(
     ApplyRequiredAndDefault(option, field.required);
 }
 
-template <typename RequestType>
-void BindRequestFields(CLI::App & command, RequestType & request)
+template <typename RequestType, auto RunCommandFn>
+void RegisterCommand(CLI::App & app, std::string_view name, std::string_view description)
 {
-    auto & base_request{ static_cast<CommandRequestBase &>(request) };
+    CLI::App & command{ *app.add_subcommand(std::string(name), std::string(description)) };
+    auto request{ std::make_shared<RequestType>() };
+    auto & base_request{ static_cast<CommandRequestBase &>(*request) };
     internal::VisitBaseRequestFields([&](const auto & field)
     {
         BindCliField(command, &base_request, field);
     });
     internal::VisitRequestFields<RequestType>([&](const auto & field)
     {
-        BindCliField(command, &request, field);
+        BindCliField(command, request.get(), field);
     });
-}
-
-template <typename RequestType, auto RunCommandFn>
-void RegisterCommand(
-    CLI::App & app,
-    std::string_view name,
-    std::string_view description)
-{
-    CLI::App & command{
-        *app.add_subcommand(
-            std::string(name),
-            std::string(description))
-    };
-    auto request{ std::make_shared<RequestType>() };
-
-    BindRequestFields(command, *request);
 
     command.callback([request]()
     {
         ScopeTimer timer("Command CLI callback");
         const auto result{ RunCommandFn(*request) };
-        if (!result.succeeded)
-        {
-            throw CLI::RuntimeError(1);
-        }
+        if (!result.succeeded) throw CLI::RuntimeError(1);
     });
 }
 
 } // namespace
 
-void ConfigureCommandCLI(CLI::App & app)
+int RunCommandCLI(int argc, char * argv[])
 {
+    CLI::App app{"RHBM-GEM"};
     app.require_subcommand(1);
 
 #define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)                                    \
-    RegisterCommand<COMMAND_ID##Request, &Run##COMMAND_ID>(                                    \
-        app,                                                                                   \
-        CLI_NAME,                                                                              \
-        DESCRIPTION);
+    RegisterCommand<COMMAND_ID##Request, &Run##COMMAND_ID>(app, CLI_NAME, DESCRIPTION);
 #include <rhbm_gem/core/command/CommandManifest.def>
 #undef RHBM_GEM_COMMAND
+
+    try
+    {
+        app.parse(argc, argv);
+    }
+    catch (const CLI::ParseError & error)
+    {
+        return app.exit(error);
+    }
+
+    return 0;
 }
 
 } // namespace rhbm_gem

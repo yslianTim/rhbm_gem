@@ -54,8 +54,9 @@ The helper symbols stay under `rhbm_gem::internal`.
 
 ### CLI
 
-[`src/main.cpp`](/src/main.cpp) creates `CLI::App` and calls the public
-[`ConfigureCommandCLI(...)`](/include/rhbm_gem/core/command/CommandSystem.hpp).
+[`src/main.cpp`](/src/main.cpp) delegates to the public
+[`RunCommandCLI(...)`](/include/rhbm_gem/core/command/CommandSystem.hpp), so the executable entrypoint
+does not expose CLI11 setup or parsing details.
 
 [`src/core/command/detail/CommandCLI.cpp`](/src/core/command/detail/CommandCLI.cpp):
 
@@ -65,6 +66,7 @@ The helper symbols stay under `rhbm_gem::internal`.
 4. binds shared `CommandRequestBase` fields
 5. binds command-specific fields from `CommandRequestSchema`
 6. routes the callback to the corresponding `Run*` function
+7. wraps CLI11 parsing and exit-code handling in `RunCommandCLI(...)`
 
 ### Python
 

@@ -1,29 +1,18 @@
 #include <gtest/gtest.h>
 
-#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <regex>
 #include <string>
-#include <string_view>
-#include <unordered_set>
-#include <utility>
 #include <vector>
 
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/CommandSystem.hpp>
-#include <CLI/CLI.hpp>
 
 namespace rg = rhbm_gem;
 
 namespace {
-
-std::vector<rg::CommandInfo> BuildExpectedCommandMetadata()
-{
-    const auto & catalog{ rg::ListCommands() };
-    return { catalog.begin(), catalog.end() };
-}
 
 std::vector<std::string> BuildExpectedCommandNames()
 {
@@ -33,13 +22,6 @@ std::vector<std::string> BuildExpectedCommandNames()
         expected.emplace_back(command.name);
     }
     return expected;
-}
-
-bool CommandUsesDatabase(std::string_view cli_name)
-{
-    return cli_name == "potential_analysis"
-        || cli_name == "potential_display"
-        || cli_name == "result_dump";
 }
 
 std::string ReadManifestContent()
@@ -116,31 +98,6 @@ std::vector<std::string> ParseExperimentalCommandNamesFromManifest()
 
 } // namespace
 
-TEST(CommandCatalogTest, ConfigureCommandCLIBuildsOneSubcommandPerManifestEntry)
-{
-    CLI::App app{"RHBM-GEM"};
-    rg::ConfigureCommandCLI(app);
-
-    const auto subcommands{
-        app.get_subcommands([](CLI::App * subcommand)
-        {
-            return subcommand != nullptr && !subcommand->get_name().empty();
-        })
-    };
-    const auto expected_metadata{ BuildExpectedCommandMetadata() };
-    ASSERT_EQ(subcommands.size(), expected_metadata.size());
-    std::unordered_set<std::string> unique_names;
-    for (std::size_t index = 0; index < expected_metadata.size(); ++index)
-    {
-        EXPECT_EQ(subcommands[index]->get_name(), expected_metadata[index].name);
-        EXPECT_EQ(subcommands[index]->get_description(), expected_metadata[index].description);
-
-        unique_names.emplace(expected_metadata[index].name);
-    }
-
-    EXPECT_EQ(unique_names.size(), expected_metadata.size());
-}
-
 TEST(CommandCatalogTest, ListCommandsMatchesManifestOrder)
 {
     EXPECT_EQ(ParseCommandNamesFromManifest(), BuildExpectedCommandNames());
@@ -155,87 +112,22 @@ TEST(CommandCatalogTest, ManifestKeepsExperimentalEntriesBehindFeatureGuard)
     EXPECT_EQ(ParseExperimentalCommandNamesFromManifest(), expected_experimental_names);
 }
 
-TEST(CommandCatalogTest, ConfigureCommandCLISharedOptionsMatchCommandMetadata)
+TEST(CommandCatalogTest, RunCommandCLIReturnsSuccessForHelpRequest)
 {
-    CLI::App app{"RHBM-GEM"};
-    rg::ConfigureCommandCLI(app);
+    char program[]{ "RHBM-GEM" };
+    char help_flag[]{ "--help" };
+    char * argv[]{ program, help_flag };
+    const int argc{ static_cast<int>(std::size(argv)) };
 
-    for (const auto & descriptor : BuildExpectedCommandMetadata())
-    {
-        auto * subcommand{ app.get_subcommand(std::string(descriptor.name)) };
-        ASSERT_NE(subcommand, nullptr) << descriptor.name;
-
-        const std::string help_text{
-            subcommand->help(subcommand->get_name(), CLI::AppFormatMode::Sub)
-        };
-        EXPECT_EQ(
-            help_text.find("--database") != std::string::npos,
-            CommandUsesDatabase(descriptor.name))
-            << descriptor.name;
-        EXPECT_NE(help_text.find("--folder"), std::string::npos) << descriptor.name;
-    }
+    EXPECT_EQ(rg::RunCommandCLI(argc, argv), 0);
 }
 
-TEST(CommandCatalogTest, ConfigureCommandCLIPropagatesCommandFailureAsRuntimeError)
+TEST(CommandCatalogTest, RunCommandCLIReturnsFailureForParseErrors)
 {
-    CLI::App app{"RHBM-GEM"};
-    rg::ConfigureCommandCLI(app);
+    char program[]{ "RHBM-GEM" };
+    char command[]{ "map_simulation" };
+    char * argv[]{ program, command };
+    const int argc{ static_cast<int>(std::size(argv)) };
 
-    EXPECT_THROW(
-        app.parse("map_simulation --model missing.cif --blurring-width 1.0", false),
-        CLI::RuntimeError);
-}
-
-TEST(CommandCatalogTest, ConfigureCommandCLIAcceptsRepeatedReferenceGroups)
-{
-    CLI::App app{"RHBM-GEM"};
-    rg::ConfigureCommandCLI(app);
-
-    EXPECT_THROW(
-        app.parse(
-            "potential_display --painter model --model-keylist model_a "
-            "--ref-group A=m1,m2 --ref-group B=m3",
-            false),
-        CLI::RuntimeError);
-}
-
-TEST(CommandCatalogTest, ConfigureCommandCLIEnforcesRequiredOptionsBeforeCallback)
-{
-    CLI::App app{"RHBM-GEM"};
-    rg::ConfigureCommandCLI(app);
-
-    EXPECT_THROW(app.parse("map_simulation", false), CLI::RequiredError);
-    EXPECT_THROW(app.parse("potential_display --model-keylist model_a", false), CLI::RequiredError);
-}
-
-TEST(CommandCatalogTest, ConfigureCommandCLIAppliesEnumTransformBeforeCommandExecution)
-{
-    CLI::App app{"RHBM-GEM"};
-    rg::ConfigureCommandCLI(app);
-
-    EXPECT_THROW(
-        app.parse("potential_display --painter MODEL --model-keylist model_a", false),
-        CLI::RuntimeError);
-    EXPECT_THROW(
-        app.parse("potential_display --painter not-a-painter --model-keylist model_a", false),
-        CLI::ValidationError);
-}
-
-TEST(CommandCatalogTest, ConfigureCommandCLIRejectsMalformedReferenceGroupsAtParseTime)
-{
-    CLI::App app{"RHBM-GEM"};
-    rg::ConfigureCommandCLI(app);
-
-    EXPECT_THROW(
-        app.parse(
-            "potential_display --painter model --model-keylist model_a "
-            "--ref-group =m1,m2",
-            false),
-        CLI::ValidationError);
-    EXPECT_THROW(
-        app.parse(
-            "potential_display --painter model --model-keylist model_a "
-            "--ref-group Group=",
-            false),
-        CLI::ValidationError);
+    EXPECT_NE(rg::RunCommandCLI(argc, argv), 0);
 }

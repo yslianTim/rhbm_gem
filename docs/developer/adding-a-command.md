@@ -110,8 +110,7 @@ Use this shape:
 definitions and `ListCommands()`.
 
 [`src/core/command/detail/CommandCLI.cpp`](/src/core/command/detail/CommandCLI.cpp) owns CLI registration
-through the public `ConfigureCommandCLI(...)` declared in
-[`CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp).
+internally, and `RunCommandCLI(...)` wraps CLI parsing for the executable entrypoint.
 
 [`src/python/CommandSystemBindings.cpp`](/src/python/CommandSystemBindings.cpp) binds:
 
