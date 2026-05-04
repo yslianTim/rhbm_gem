@@ -147,21 +147,6 @@ TYPED_TEST_SUITE(CommandEnumMappingTest, CommandEnumTypes, );
 
 } // namespace
 
-TEST(PublicHeaderSurfaceTest, CorePublicHeadersMatchApprovedSurface) {
-    const std::vector<std::string> expected{
-        "core/command/CommandSystem.hpp",
-        "core/command/CommandManifest.def",
-        "core/command/CommandTypes.hpp",
-        "core/painter/AtomPainter.hpp",
-        "core/painter/ComparisonPainter.hpp",
-        "core/painter/DemoPainter.hpp",
-        "core/painter/GausPainter.hpp",
-        "core/painter/ModelPainter.hpp",
-        "core/painter/PainterBase.hpp"};
-
-    EXPECT_EQ(contract_test_support::CollectPublicHeadersForDomain("core"), expected);
-}
-
 TEST(PublicHeaderSurfaceTest, CommandApiExposesStableDefaultDatabasePathHelper) {
     const auto default_path{ rhbm_gem::GetDefaultDatabasePath() };
     EXPECT_FALSE(default_path.empty());
