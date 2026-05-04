@@ -42,8 +42,6 @@
 namespace {
 using namespace rhbm_gem;
 
-constexpr std::string_view kModelKey{ "model" };
-constexpr std::string_view kMapKey{ "map" };
 constexpr std::string_view kModelOption{ "--model" };
 constexpr std::string_view kMapOption{ "--map" };
 constexpr std::string_view kSimResolutionOption{ "--sim-resolution" };
@@ -148,7 +146,7 @@ namespace rhbm_gem {
 
 PotentialAnalysisCommand::PotentialAnalysisCommand() :
     CommandWithRequest<PotentialAnalysisRequest>{},
-    m_model_key_tag{ kModelKey }, m_map_key_tag{ kMapKey },
+    m_model_key_tag{ "model" }, m_map_key_tag{ "map" },
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {
 }
