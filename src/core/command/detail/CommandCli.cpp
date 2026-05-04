@@ -20,15 +20,6 @@
 namespace rhbm_gem {
 namespace {
 
-struct IdentityParser
-{
-    template <typename ValueType>
-    ValueType operator()(const ValueType & value) const
-    {
-        return value;
-    }
-};
-
 template <typename ValueType>
 std::optional<ValueType> MakeCliDefaultDisplayValue(const ValueType & value)
 {
@@ -106,30 +97,6 @@ std::map<std::string, EnumType> BuildEnumCliMap()
     return option_map;
 }
 
-template <typename Request, typename MemberType, typename CliValueType, typename Parser, typename DefaultType>
-CLI::Option & AddRequestOption(
-    CLI::App & command,
-    Request * request,
-    const char * cli_flags,
-    const char * help,
-    bool required,
-    MemberType Request::* member,
-    Parser parser,
-    const std::optional<DefaultType> & default_value)
-{
-    auto & option{
-        *command.add_option_function<CliValueType>(
-            cli_flags,
-            [request, member, parser = std::move(parser)](const CliValueType & value)
-            {
-                request->*member = parser(value);
-            },
-            help)
-    };
-    ApplyRequiredAndDefault(option, required, default_value);
-    return option;
-}
-
 std::pair<std::string, std::vector<std::string>> ParseReferenceGroupArgument(
     const std::string & text,
     const std::string & option_name,
@@ -187,14 +154,18 @@ void BindCliField(
     const internal::RequestScalarFieldSpec<Request, FieldType> & field)
 {
     const auto & current_value{ request->*(field.member) };
-    AddRequestOption<Request, FieldType, FieldType>(
-        command,
-        request,
-        field.cli_flags,
-        field.help,
+    auto & option{
+        *command.add_option_function<FieldType>(
+            field.cli_flags,
+            [request, member = field.member](const FieldType & value)
+            {
+                request->*member = value;
+            },
+            field.help)
+    };
+    ApplyRequiredAndDefault(
+        option,
         field.required,
-        field.member,
-        IdentityParser{},
         MakeCliDefaultDisplayValue(current_value));
 }
 
@@ -204,17 +175,18 @@ void BindCliField(
     Request * request,
     const internal::RequestPathFieldSpec<Request> & field)
 {
-    AddRequestOption<Request, std::filesystem::path, std::string>(
-        command,
-        request,
-        field.cli_flags,
-        field.help,
+    auto & option{
+        *command.add_option_function<std::string>(
+            field.cli_flags,
+            [request, member = field.member](const std::string & value)
+            {
+                request->*member = std::filesystem::path{ value };
+            },
+            field.help)
+    };
+    ApplyRequiredAndDefault(
+        option,
         field.required,
-        field.member,
-        [](const std::string & value)
-        {
-            return std::filesystem::path{ value };
-        },
         MakeCliDefaultDisplayValue(request->*(field.member)));
 }
 
@@ -225,18 +197,19 @@ void BindCliField(
     const internal::RequestEnumFieldSpec<Request, EnumType> & field)
 {
     auto & option{
-        AddRequestOption<Request, EnumType, EnumType>(
-            command,
-            request,
+        *command.add_option_function<EnumType>(
             field.cli_flags,
-            field.help,
-            field.required,
-            field.member,
-            IdentityParser{},
-            MakeCliDefaultDisplayValue(request->*(field.member)))
+            [request, member = field.member](const EnumType & value)
+            {
+                request->*member = value;
+            },
+            field.help)
     };
-    option.transform(CLI::CheckedTransformer(
-        BuildEnumCliMap<EnumType>(), CLI::ignore_case));
+    ApplyRequiredAndDefault(
+        option,
+        field.required,
+        MakeCliDefaultDisplayValue(request->*(field.member)));
+    option.transform(CLI::CheckedTransformer(BuildEnumCliMap<EnumType>(), CLI::ignore_case));
 }
 
 template <typename Request, typename ElementType>
@@ -245,17 +218,18 @@ void BindCliField(
     Request * request,
     const internal::RequestCsvListFieldSpec<Request, ElementType> & field)
 {
-    AddRequestOption<Request, std::vector<ElementType>, std::string>(
-        command,
-        request,
-        field.cli_flags,
-        field.help,
+    auto & option{
+        *command.add_option_function<std::string>(
+            field.cli_flags,
+            [request, member = field.member, delimiter = field.delimiter](const std::string & value)
+            {
+                request->*member = string_helper::ParseListOption<ElementType>(value, delimiter);
+            },
+            field.help)
+    };
+    ApplyRequiredAndDefault(
+        option,
         field.required,
-        field.member,
-        [delimiter = field.delimiter](const std::string & value)
-        {
-            return string_helper::ParseListOption<ElementType>(value, delimiter);
-        },
         MakeCliDefaultDisplayValue(request->*(field.member), field.delimiter));
 }
 
