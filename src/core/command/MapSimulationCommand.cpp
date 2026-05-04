@@ -19,12 +19,6 @@
 
 namespace {
 constexpr std::string_view kModelKey{ "model" };
-constexpr std::string_view kModelOption{ "--model" };
-constexpr std::string_view kPotentialModelOption{ "--potential-model" };
-constexpr std::string_view kChargeOption{ "--charge" };
-constexpr std::string_view kCutoffOption{ "--cut-off" };
-constexpr std::string_view kGridSpacingOption{ "--grid-spacing" };
-constexpr std::string_view kBlurringWidthOption{ "--blurring-width" };
 
 struct SimulationAtomPreparationResult
 {
@@ -119,26 +113,26 @@ MapSimulationCommand::MapSimulationCommand() :
 void MapSimulationCommand::NormalizeAndValidateRequest()
 {
     auto & request{ MutableRequest() };
-    ValidateRequiredPath(request.model_file_path, kModelOption, "Model file");
+    ValidateRequiredPath(request.model_file_path, "--model", "Model file");
     CoerceEnum(
         request.potential_model_choice,
-        kPotentialModelOption,
+        "--potential-model",
         PotentialModel::FIVE_GAUS_CHARGE,
         "Potential model");
     CoerceEnum(
         request.partial_charge_choice,
-        kChargeOption,
+        "--charge",
         PartialCharge::PARTIAL,
         "Partial charge choice");
     CoerceFinitePositiveScalar(
         request.cutoff_distance,
-        kCutoffOption,
+        "--cut-off",
         5.0,
         LogLevel::Warning,
         "Cutoff distance");
     CoerceFinitePositiveScalar(
         request.grid_spacing,
-        kGridSpacingOption,
+        "--grid-spacing",
         0.5,
         LogLevel::Warning,
         "Grid spacing");
@@ -150,7 +144,7 @@ void MapSimulationCommand::NormalizeAndValidateRequest()
         if (!numeric_validation::IsFinitePositive(width))
         {
             AddParseNormalizationWarning(
-                kBlurringWidthOption,
+                "--blurring-width",
                 "Blurring width must be a finite positive value, dropping current setting: "
                     + std::to_string(width));
             continue;
@@ -172,7 +166,7 @@ void MapSimulationCommand::ValidatePreparedRequest()
     const auto & request{ RequestOptions() };
     RequirePrepareCondition(
         !request.blurring_width_list.empty(),
-        kBlurringWidthOption,
+        "--blurring-width",
         "At least one positive blurring width is required.");
 }
 

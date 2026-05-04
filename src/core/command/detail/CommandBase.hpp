@@ -29,19 +29,6 @@ std::string ToString(const Type & value)
     return oss.str();
 }
 
-inline std::string BuildConstraintMessage(
-    std::string_view label,
-    std::string_view constraint,
-    LogLevel issue_level)
-{
-    std::string message{ std::string(label) + " must be " + std::string(constraint) };
-    if (issue_level == LogLevel::Warning)
-    {
-        message += '.';
-    }
-    return message;
-}
-
 template <typename Type>
 std::string BuildConstraintMessage(
     std::string_view label,
@@ -49,28 +36,10 @@ std::string BuildConstraintMessage(
     const Type & fallback_value,
     LogLevel issue_level)
 {
-    std::string message{ BuildConstraintMessage(label, constraint, issue_level) };
+    std::string message{ std::string(label) + " must be " + std::string(constraint) };
     if (issue_level == LogLevel::Warning)
     {
-        message += " Using " + ToString(fallback_value) + " instead.";
-    }
-    return message;
-}
-
-template <typename LowerType, typename UpperType>
-std::string BuildExclusiveInclusiveRangeMessage(
-    std::string_view label,
-    LowerType lower,
-    UpperType upper,
-    LogLevel issue_level)
-{
-    std::string message{
-        std::string(label) + " must be a finite value within ("
-            + ToString(lower) + ", " + ToString(upper) + "]"
-    };
-    if (issue_level == LogLevel::Warning)
-    {
-        message += '.';
+        message += ". Using " + ToString(fallback_value) + " instead.";
     }
     return message;
 }
@@ -83,10 +52,13 @@ std::string BuildExclusiveInclusiveRangeMessage(
     const FieldType & fallback_value,
     LogLevel issue_level)
 {
-    std::string message{ BuildExclusiveInclusiveRangeMessage(label, lower, upper, issue_level) };
+    std::string message{
+        std::string(label) + " must be a finite value within ("
+            + ToString(lower) + ", " + ToString(upper) + "]"
+    };
     if (issue_level == LogLevel::Warning)
     {
-        message += " Using " + ToString(fallback_value) + " instead.";
+        message += ". Using " + ToString(fallback_value) + " instead.";
     }
     return message;
 }

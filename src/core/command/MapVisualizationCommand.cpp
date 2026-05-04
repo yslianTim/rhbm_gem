@@ -29,11 +29,6 @@
 namespace {
 constexpr std::string_view kModelKey{ "model" };
 constexpr std::string_view kMapKey{ "map" };
-constexpr std::string_view kModelOption{ "--model" };
-constexpr std::string_view kMapOption{ "--map" };
-constexpr std::string_view kAtomIdOption{ "--atom-id" };
-constexpr std::string_view kSamplingOption{ "--sampling" };
-constexpr std::string_view kWindowSizeOption{ "--window-size" };
 
 struct ModelAtomBondContext
 {
@@ -82,27 +77,27 @@ void MapVisualizationCommand::NormalizeAndValidateRequest()
     auto & request{ MutableRequest() };
     ValidateRequiredPath(
         request.model_file_path,
-        kModelOption,
+        "--model",
         "Model file");
     ValidateRequiredPath(
         request.map_file_path,
-        kMapOption,
+        "--map",
         "Map file");
     CoercePositiveScalar(
         request.atom_serial_id,
-        kAtomIdOption,
+        "--atom-id",
         1,
         LogLevel::Error,
         "Atom serial ID");
     CoercePositiveScalar(
         request.sampling_size,
-        kSamplingOption,
+        "--sampling",
         100,
         LogLevel::Warning,
         "Sampling size");
     CoerceFinitePositiveScalar(
         request.window_size,
-        kWindowSizeOption,
+        "--window-size",
         5.0,
         LogLevel::Error,
         "Window size");

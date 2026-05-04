@@ -42,25 +42,6 @@
 namespace {
 using namespace rhbm_gem;
 
-constexpr std::string_view kModelOption{ "--model" };
-constexpr std::string_view kMapOption{ "--map" };
-constexpr std::string_view kSimResolutionOption{ "--sim-resolution" };
-constexpr std::string_view kSaveKeyOption{ "--save-key" };
-constexpr std::string_view kSamplingOption{ "--sampling" };
-constexpr std::string_view kSamplingMinOption{ "--sampling-min" };
-constexpr std::string_view kSamplingMaxOption{ "--sampling-max" };
-constexpr std::string_view kSamplingHeightOption{ "--sampling-height" };
-constexpr std::string_view kFitMinOption{ "--fit-min" };
-constexpr std::string_view kFitMaxOption{ "--fit-max" };
-constexpr std::string_view kAlphaROption{ "--alpha-r" };
-constexpr std::string_view kAlphaGOption{ "--alpha-g" };
-constexpr std::string_view kTrainingAlphaMinOption{ "--training-alpha-min" };
-constexpr std::string_view kTrainingAlphaMaxOption{ "--training-alpha-max" };
-constexpr std::string_view kTrainingAlphaStepOption{ "--training-alpha-step" };
-constexpr std::string_view kSamplingRangeIssue{ "--sampling-range" };
-constexpr std::string_view kFitRangeIssue{ "--fit-range" };
-constexpr std::string_view kTrainingAlphaRangeIssue{ "--training-alpha-range" };
-
 RHBMExecutionOptions MakePotentialAnalysisExecutionOptions(
     int thread_size, bool quiet_mode)
 {
@@ -154,11 +135,11 @@ PotentialAnalysisCommand::PotentialAnalysisCommand() :
 void PotentialAnalysisCommand::NormalizeAndValidateRequest()
 {
     auto & request{ MutableRequest() };
-    ValidateRequiredPath(request.model_file_path, kModelOption, "Model file");
-    ValidateRequiredPath(request.map_file_path, kMapOption, "Map file");
+    ValidateRequiredPath(request.model_file_path, "--model", "Model file");
+    ValidateRequiredPath(request.map_file_path, "--map", "Map file");
     CoerceFiniteNonNegativeScalar(
         request.simulated_map_resolution,
-        kSimResolutionOption,
+        "--sim-resolution",
         0.0,
         LogLevel::Error,
         "Simulated map resolution");
@@ -166,72 +147,72 @@ void PotentialAnalysisCommand::NormalizeAndValidateRequest()
     {
         request.saved_key_tag = "model";
         AddParseError(
-            kSaveKeyOption,
+            "--save-key",
             "Saved key tag cannot be empty. Using 'model' instead.");
     }
     CoercePositiveScalar(
         request.sampling_size,
-        kSamplingOption,
+        "--sampling",
         1500,
         LogLevel::Warning,
         "Sampling size");
     CoerceFiniteNonNegativeScalar(
         request.sampling_range_min,
-        kSamplingMinOption,
+        "--sampling-min",
         0.0,
         LogLevel::Error,
         "Minimum sampling range");
     CoerceFiniteNonNegativeScalar(
         request.sampling_range_max,
-        kSamplingMaxOption,
+        "--sampling-max",
         1.5,
         LogLevel::Error,
         "Maximum sampling range");
     CoerceFinitePositiveScalar(
         request.sampling_height,
-        kSamplingHeightOption,
+        "--sampling-height",
         0.1,
         LogLevel::Error,
         "Sampling height");
     CoerceFiniteNonNegativeScalar(
         request.fit_range_min,
-        kFitMinOption,
+        "--fit-min",
         0.0,
         LogLevel::Error,
         "Minimum fitting range");
     CoerceFiniteNonNegativeScalar(
         request.fit_range_max,
-        kFitMaxOption,
+        "--fit-max",
         1.0,
         LogLevel::Error,
         "Maximum fitting range");
     CoerceFinitePositiveScalar(
         request.alpha_r,
-        kAlphaROption,
+        "--alpha-r",
         0.1,
         LogLevel::Error,
         "Alpha-R");
     CoerceFinitePositiveScalar(
         request.alpha_g,
-        kAlphaGOption,
+        "--alpha-g",
         0.2,
         LogLevel::Error,
         "Alpha-G");
     CoerceFiniteNonNegativeScalar(
         request.training_alpha_min,
-        kTrainingAlphaMinOption,
+        "--training-alpha-min",
         0.0,
         LogLevel::Error,
         "Minimum training alpha");
     CoerceFiniteNonNegativeScalar(
         request.training_alpha_max,
-        kTrainingAlphaMaxOption,
+        "--training-alpha-max",
         1.0,
         LogLevel::Error,
         "Maximum training alpha");
     CoerceFinitePositiveScalar(
         request.training_alpha_step,
-        kTrainingAlphaStepOption,
+        "--training-alpha-step",
         0.1,
         LogLevel::Error,
         "Training alpha step");
@@ -263,19 +244,19 @@ void PotentialAnalysisCommand::ValidatePreparedRequest()
     const auto & request{ RequestOptions() };
     RequirePrepareCondition(
         !request.simulation_flag || request.simulated_map_resolution > 0.0,
-        kSimResolutionOption,
+        "--sim-resolution",
         "Expected a positive simulated-map resolution when '--simulation true' is selected.");
     RequirePrepareCondition(
         request.sampling_range_min <= request.sampling_range_max,
-        kSamplingRangeIssue,
+        "--sampling-range",
         "Expected --sampling-min <= --sampling-max.");
     RequirePrepareCondition(
         request.fit_range_min <= request.fit_range_max,
-        kFitRangeIssue,
+        "--fit-range",
         "Expected --fit-min <= --fit-max.");
     RequirePrepareCondition(
         request.training_alpha_min <= request.training_alpha_max,
-        kTrainingAlphaRangeIssue,
+        "--training-alpha-range",
         "Expected --training-alpha-min <= --training-alpha-max.");
 }
 

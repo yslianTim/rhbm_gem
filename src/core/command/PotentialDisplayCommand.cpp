@@ -20,10 +20,6 @@
 #include <stdexcept>
 
 namespace {
-constexpr std::string_view kPainterOption{ "--painter" };
-constexpr std::string_view kModelKeyListOption{ "--model-keylist" };
-constexpr std::string_view kRefGroupOption{ "--ref-group" };
-
 void ApplyModelSelection(
     rhbm_gem::ModelObject & model_object,
     ::AtomSelector & selector)
@@ -53,23 +49,23 @@ void PotentialDisplayCommand::NormalizeAndValidateRequest()
     auto & request{ MutableRequest() };
     CoerceEnum(
         request.painter_choice,
-        kPainterOption,
+        "--painter",
         PainterType::MODEL,
         "Painter choice");
-    RequireNonEmptyList(request.model_key_tag_list, kModelKeyListOption, "Model key list");
+    RequireNonEmptyList(request.model_key_tag_list, "--model-keylist", "Model key list");
     for (const auto & [group_name, members] : request.reference_model_groups)
     {
         if (group_name.empty())
         {
             AddParseError(
-                kRefGroupOption,
+                "--ref-group",
                 "Reference group name cannot be empty.");
             continue;
         }
         if (members.empty())
         {
             AddParseError(
-                kRefGroupOption,
+                "--ref-group",
                 "Reference group '" + group_name + "' cannot be empty.");
         }
     }

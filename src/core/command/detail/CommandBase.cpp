@@ -14,9 +14,6 @@ constexpr std::array<std::string_view, 2> kValidationPhaseLabels{
     "parse",
     "prepare"
 };
-constexpr std::string_view kJobsOption{ "--jobs" };
-constexpr std::string_view kVerboseOption{ "--verbose" };
-constexpr std::string_view kFolderOption{ "--folder" };
 
 std::string BuildIssuePrefix(const ValidationIssueRecord & issue)
 {
@@ -70,13 +67,13 @@ void CommandBase::CoerceBaseRequest(CommandRequestBase & request)
     const auto raw_verbose_level{ request.verbosity };
     CoercePositiveScalar(
         request.job_count,
-        kJobsOption,
+        "--jobs",
         1,
         LogLevel::Warning,
         "Thread size");
     CoerceScalar(
         request.verbosity,
-        kVerboseOption,
+        "--verbose",
         [](int candidate)
         {
             return candidate >= static_cast<int>(LogLevel::Error)
@@ -254,7 +251,6 @@ bool CommandBase::RunValidationPass()
         ReportValidationIssues();
         return false;
     }
-
     return true;
 }
 
@@ -268,7 +264,7 @@ bool CommandBase::RunFilesystemPreflight()
         if (error_code)
         {
             AddValidationIssue(
-                kFolderOption,
+                "--folder",
                 ValidationPhase::Prepare,
                 LogLevel::Error,
                 "Failed to create output directory '" + folder_path.string()

@@ -23,9 +23,6 @@
 
 namespace {
 constexpr std::string_view kMapKey{ "map" };
-constexpr std::string_view kPrinterOption{ "--printer" };
-constexpr std::string_view kModelKeyListOption{ "--model-keylist" };
-constexpr std::string_view kMapOption{ "--map" };
 }
 
 namespace rhbm_gem {
@@ -41,11 +38,11 @@ void ResultDumpCommand::NormalizeAndValidateRequest()
     auto & request{ MutableRequest() };
     CoerceEnum(
         request.printer_choice,
-        kPrinterOption,
+        "--printer",
         PrinterType::GAUS_ESTIMATES,
         "Printer choice");
-    ValidateOptionalPath(request.map_file_path, kMapOption, "Map file");
-    RequireNonEmptyList(request.model_key_tag_list, kModelKeyListOption, "Model key list");
+    ValidateOptionalPath(request.map_file_path, "--map", "Map file");
+    RequireNonEmptyList(request.model_key_tag_list, "--model-keylist", "Model key list");
 }
 
 void ResultDumpCommand::ValidatePreparedRequest()
@@ -53,7 +50,7 @@ void ResultDumpCommand::ValidatePreparedRequest()
     const auto & request{ RequestOptions() };
     RequirePrepareCondition(
         request.printer_choice != PrinterType::MAP_VALUE || !request.map_file_path.empty(),
-        kMapOption,
+        "--map",
         "A map file is required when '--printer map' is selected.");
 }
 

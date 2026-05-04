@@ -24,12 +24,6 @@
 
 namespace {
 constexpr std::string_view kMapKey{ "map" };
-constexpr std::string_view kMapOption{ "--map" };
-constexpr std::string_view kIterationOption{ "--iter" };
-constexpr std::string_view kKnnOption{ "--knn" };
-constexpr std::string_view kAlphaOption{ "--alpha" };
-constexpr std::string_view kThresholdOption{ "--threshold" };
-constexpr std::string_view kDedupToleranceOption{ "--dedup-tolerance" };
 
 struct QuantizedPointHash
 {
@@ -58,28 +52,28 @@ PositionEstimationCommand::~PositionEstimationCommand() = default;
 void PositionEstimationCommand::NormalizeAndValidateRequest()
 {
     auto & request{ MutableRequest() };
-    ValidateRequiredPath(request.map_file_path, kMapOption, "Map file");
+    ValidateRequiredPath(request.map_file_path, "--map", "Map file");
     CoercePositiveScalar(
         request.iteration_count,
-        kIterationOption,
+        "--iter",
         15,
         LogLevel::Warning,
         "Iteration count");
     CoercePositiveScalar(
         request.knn_size,
-        kKnnOption,
+        "--knn",
         static_cast<std::size_t>(20),
         LogLevel::Warning,
         "KNN size");
     CoerceFinitePositiveScalar(
         request.alpha,
-        kAlphaOption,
+        "--alpha",
         2.0,
         LogLevel::Warning,
         "Alpha");
     CoerceFiniteExclusiveInclusiveRangeScalar(
         request.threshold_ratio,
-        kThresholdOption,
+        "--threshold",
         0.0,
         1.0,
         0.01,
@@ -87,7 +81,7 @@ void PositionEstimationCommand::NormalizeAndValidateRequest()
         "Threshold ratio");
     CoerceFinitePositiveScalar(
         request.dedup_tolerance,
-        kDedupToleranceOption,
+        "--dedup-tolerance",
         1.0e-2,
         LogLevel::Warning,
         "Dedup tolerance");
