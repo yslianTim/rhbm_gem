@@ -5,7 +5,6 @@
 #include <cmath>
 #include <filesystem>
 #include <optional>
-#include <sstream>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -15,21 +14,10 @@
 #include <rhbm_gem/core/command/CommandSystem.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
+#include <rhbm_gem/utils/domain/StringHelper.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 namespace rhbm_gem {
-
-namespace {
-
-template <typename Type>
-std::string ToString(const Type & value)
-{
-    std::ostringstream oss;
-    oss << value;
-    return oss.str();
-}
-
-} // namespace
 
 enum class ValidationPhase : std::uint8_t
 {
@@ -179,7 +167,8 @@ protected:
         std::string_view label)
     {
         std::string message{
-            std::string(label) +" must be positive. Using "+ ToString(fallback_value) +" instead."
+            std::string(label) + " must be positive. Using "
+            + string_helper::ToStringWithPrecision(fallback_value) + " instead."
         };
         CoerceScalar(field, option_name,
             [](const auto candidate) { return numeric_validation::IsPositive(candidate); },
@@ -195,7 +184,7 @@ protected:
     {
         std::string message{
             std::string(label) + " must be a finite positive value. Using "
-            + ToString(fallback_value) + " instead."
+            + string_helper::ToStringWithPrecision(fallback_value) + " instead."
         };
         CoerceScalar(field, option_name,
             [](const auto candidate) { return numeric_validation::IsFinitePositive(candidate); },
@@ -211,7 +200,7 @@ protected:
     {
         std::string message{
             std::string(label) + " must be a finite non-negative value. Using "
-            + ToString(fallback_value) + " instead."
+            + string_helper::ToStringWithPrecision(fallback_value) + " instead."
         };
         CoerceScalar(field, option_name,
             [](const auto candidate) { return numeric_validation::IsFiniteNonNegative(candidate); },
@@ -229,8 +218,9 @@ protected:
     {
         std::string message{
             std::string(label) + " must be a finite value within ("
-                + ToString(lower) + ", " + ToString(upper) + "]. Using "
-                + ToString(fallback_value) + " instead."
+                + string_helper::ToStringWithPrecision(lower) + ", "
+                + string_helper::ToStringWithPrecision(upper) + "]. Using "
+                + string_helper::ToStringWithPrecision(fallback_value) + " instead."
         };
         CoerceScalar(field, option_name,
             [lower, upper](const auto candidate)
