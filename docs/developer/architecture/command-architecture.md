@@ -13,7 +13,6 @@ That manifest is expanded by:
 
 - [`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp)
 - [`src/core/command/CommandSystem.cpp`](/src/core/command/CommandSystem.cpp)
-- [`src/core/command/detail/CommandCLI.cpp`](/src/core/command/detail/CommandCLI.cpp)
 - [`src/python/CommandSystemBindings.cpp`](/src/python/CommandSystemBindings.cpp)
 
 ## Public Surface
@@ -58,7 +57,7 @@ The helper symbols stay under `rhbm_gem::internal`.
 [`RunCommandCLI(...)`](/include/rhbm_gem/core/command/CommandSystem.hpp), so the executable entrypoint
 does not expose CLI11 setup or parsing details.
 
-[`src/core/command/detail/CommandCLI.cpp`](/src/core/command/detail/CommandCLI.cpp):
+[`src/core/command/CommandSystem.cpp`](/src/core/command/CommandSystem.cpp):
 
 1. enables `require_subcommand(1)`
 2. expands `CommandManifest.def`
@@ -88,7 +87,7 @@ All public execution entrypoints converge on the same flow:
 
 ```mermaid
 flowchart LR
-    A["CLI callback or Python call"] --> B["Run* in CommandApi"]
+    A["CLI callback or Python call"] --> B["Run* in CommandSystem"]
     B --> C["RunCommand(...)"]
     C --> D["Construct concrete command"]
     D --> E["ApplyRequest(...)"]

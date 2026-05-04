@@ -45,7 +45,7 @@ The manifest drives:
 - public `Run*` declarations in `CommandSystem.hpp`
 - `ListCommands()`
 - `Run*` definitions in `CommandSystem.cpp`
-- CLI registration in `detail/CommandCLI.cpp`
+- CLI registration in `CommandSystem.cpp`
 - Python request-type and `Run*` binding registration in `CommandSystemBindings.cpp`
 
 ## Public Request DTO
@@ -107,10 +107,8 @@ Use this shape:
 ## Registration Surfaces
 
 [`src/core/command/CommandSystem.cpp`](/src/core/command/CommandSystem.cpp) owns public `Run*`
-definitions and `ListCommands()`.
-
-[`src/core/command/detail/CommandCLI.cpp`](/src/core/command/detail/CommandCLI.cpp) owns CLI registration
-internally, and `RunCommandCLI(...)` wraps CLI parsing for the executable entrypoint.
+definitions, `ListCommands()`, internal CLI registration, and `RunCommandCLI(...)` parsing for the
+executable entrypoint.
 
 [`src/python/CommandSystemBindings.cpp`](/src/python/CommandSystemBindings.cpp) binds:
 
