@@ -388,11 +388,11 @@ CommandResult ExecuteCommand(const typename CommandType::RequestType & request)
     command.ApplyRequest(request);
 
     const auto & internal_issues{ command.GetValidationIssues() };
-    std::vector<ValidationIssue> public_issues;
+    std::vector<CommandDiagnostic> public_issues;
     public_issues.reserve(internal_issues.size());
     for (const auto & issue : internal_issues)
     {
-        public_issues.push_back(ValidationIssue{ issue.option_name, issue.message });
+        public_issues.push_back(CommandDiagnostic{ issue.option_name, issue.message });
     }
 
     CommandResult result;

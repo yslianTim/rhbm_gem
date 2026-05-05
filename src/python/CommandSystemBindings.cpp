@@ -28,9 +28,9 @@ void BindEnumEntries(py::enum_<EnumType> & py_enum)
 
 void BindCommandTypes(py::module_ & module)
 {
-    py::class_<ValidationIssue>(module, "ValidationIssue")
-        .def_readonly("option_name", &ValidationIssue::option_name)
-        .def_readonly("message", &ValidationIssue::message);
+    py::class_<CommandDiagnostic>(module, "CommandDiagnostic")
+        .def_readonly("option_name", &CommandDiagnostic::option_name)
+        .def_readonly("message", &CommandDiagnostic::message);
 
     auto painter_type{ py::enum_<PainterType>(module, "PainterType") };
     BindEnumEntries(painter_type);

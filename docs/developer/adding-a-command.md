@@ -121,7 +121,7 @@ execution, internal CLI registration, and `RunCommandCLI(...)` parsing for the e
 - one request type per command
 - `CommandResult`
 - shared enums
-- `ValidationIssue`
+- `CommandDiagnostic`
 
 The command catalog controls which request types and `RunCommand(...)` overloads are registered
 there. The request-field list comes from `RequestFieldCatalog` in the same internal catalog.

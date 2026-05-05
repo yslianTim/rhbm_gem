@@ -9,15 +9,15 @@
 
 namespace command_test {
 
-inline const rhbm_gem::ValidationIssue * FindValidationIssue(
-    const std::vector<rhbm_gem::ValidationIssue> & issues,
+inline const rhbm_gem::CommandDiagnostic * FindValidationIssue(
+    const std::vector<rhbm_gem::CommandDiagnostic> & issues,
     std::string_view option_name)
 {
     const auto iter{
         std::find_if(
             issues.begin(),
             issues.end(),
-            [&](const rhbm_gem::ValidationIssue & issue)
+            [&](const rhbm_gem::CommandDiagnostic & issue)
             {
                 return issue.option_name == option_name;
             })

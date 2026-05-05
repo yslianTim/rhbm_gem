@@ -262,7 +262,7 @@ CommandResult RunCommandByRequestType(
 {
     CommandResult result;
     result.succeeded = false;
-    result.issues.push_back(ValidationIssue{ "request_type", "Unsupported command request type." });
+    result.issues.push_back(CommandDiagnostic{ "request_type", "Unsupported command request type." });
     bool matched{ false };
     VisitCommandCatalog([&](const auto & entry)
     {

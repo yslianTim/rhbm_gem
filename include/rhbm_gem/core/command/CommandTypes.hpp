@@ -74,7 +74,7 @@ inline std::filesystem::path GetDefaultDatabasePath()
     return GetDefaultDataRootPath() / "database.sqlite";
 }
 
-struct ValidationIssue
+struct CommandDiagnostic
 {
     std::string option_name;
     std::string message;
@@ -83,7 +83,7 @@ struct ValidationIssue
 struct CommandResult
 {
     bool succeeded{ false };
-    std::vector<ValidationIssue> issues{};
+    std::vector<CommandDiagnostic> issues{};
 };
 
 struct CommandRequestBase

@@ -25,7 +25,7 @@ DATABASE_REQUEST_TYPES = {
 
 
 def assert_module_surface() -> None:
-    assert hasattr(m, "ValidationIssue")
+    assert hasattr(m, "CommandDiagnostic")
     assert hasattr(m, "CommandResult")
     assert hasattr(m, "RunCommand")
     assert hasattr(m, "PrinterType")

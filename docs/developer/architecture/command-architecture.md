@@ -29,7 +29,7 @@ Public command headers separate concerns:
   - `CommandRequestBase`
   - one plain request DTO per command
   - default data/database path helpers
-  - `ValidationIssue`
+  - `CommandDiagnostic`
   - `CommandResult`
 
 The public API is centered on typed requests, `RunCommand(request)`, shared enums, and path helpers.
@@ -81,7 +81,7 @@ does not expose CLI11 setup or parsing details.
 - `CommandRequestBase`
 - one request type per command
 - `CommandResult`
-- `ValidationIssue`
+- `CommandDiagnostic`
 - shared enums from `CommandTypes.hpp`
 
 Request type registration, `RunCommand(...)` overload membership, and request fields come from
