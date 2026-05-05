@@ -104,7 +104,7 @@ Repository guard checks (style/structure/hygiene/fixture tracking/absolute-path/
 cmake --build build --target lint_repo
 ```
 
-`lint_repo` also exercises the command list indirectly through compile-time typed visitors and
+`lint_repo` also exercises the command registry indirectly through compile-time typed visitors and
 contract tests.
 
 ## Static Quality Checks (Targeted)

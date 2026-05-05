@@ -266,7 +266,7 @@ const std::vector<CommandInfo> & ListCommands()
     static const std::vector<CommandInfo> commands = []
     {
         std::vector<CommandInfo> command_infos;
-        command_list::VisitCommands([&](const auto & entry)
+        command::VisitCommands([&](const auto & entry)
         {
             command_infos.push_back(CommandInfo{ entry.cli_name, entry.description });
         });
@@ -317,7 +317,7 @@ int RunCommandCLI(int argc, char * argv[])
     CLI::App app{"RHBM-GEM"};
     app.require_subcommand(1);
 
-    command_list::VisitCommands([&](const auto & entry)
+    command::VisitCommands([&](const auto & entry)
     {
         using RequestType = typename std::decay_t<decltype(entry)>::Request;
         RegisterCommand<RequestType>(app, entry.run, entry.cli_name, entry.description);

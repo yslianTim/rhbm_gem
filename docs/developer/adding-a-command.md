@@ -10,7 +10,6 @@ Related references:
 Public API:
 
 - [`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp)
-- [`include/rhbm_gem/core/command/CommandList.hpp`](/include/rhbm_gem/core/command/CommandList.hpp)
 - [`include/rhbm_gem/core/command/CommandTypes.hpp`](/include/rhbm_gem/core/command/CommandTypes.hpp)
 
 Internal wiring:
@@ -26,7 +25,8 @@ Concrete implementation:
 ## Command List
 
 Top-level command membership is defined in
-[`include/rhbm_gem/core/command/CommandList.hpp`](/include/rhbm_gem/core/command/CommandList.hpp).
+the `rhbm_gem::command` registry in
+[`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp).
 
 Each entry uses:
 
@@ -41,11 +41,11 @@ CommandEntry<ExampleRequest>{
 ```
 
 Stable commands live in the main list. Experimental commands stay inside the
-`RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` command list block.
+`RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` command registry block.
 
-The command list drives:
+The command registry drives:
 
-- public `Run*` declarations in `CommandList.hpp`
+- public `Run*` declarations in `CommandSystem.hpp`
 - `ListCommands()`
 - CLI registration in `CommandSystem.cpp`
 - Python request-type and `Run*` binding registration in `CommandSystemBindings.cpp`
@@ -65,7 +65,7 @@ Command-specific fields live directly on the request type.
 
 Shared default path helpers such as `GetDefaultDatabasePath()` also live in `CommandTypes.hpp`.
 
-`Run*` declarations live in `CommandList.hpp` next to the command entry. Add the explicit
+`Run*` declarations live in `CommandSystem.hpp` next to the command entry. Add the explicit
 `RunYourCommand(...)` wrapper definition in `CommandSystem.cpp`.
 
 ## Internal Request Schema
@@ -120,7 +120,7 @@ executable entrypoint.
 - shared enums
 - `ValidationIssue`
 
-The command list controls which request types and `Run*` functions are registered there. The
+The command registry controls which request types and `Run*` functions are registered there. The
 request-field list still comes from `CommandRequestSchema`.
 
 ## Validation Checklist
@@ -130,7 +130,7 @@ Before merge, verify:
 1. the command header and source exist together under `src/core/command/`
 2. `CommandTypes.hpp` contains the new request DTO
 3. `CommandRequestSchema.hpp` contains the internal schema specialization
-4. `CommandList.hpp` contains the typed entry in the correct stable or experimental section
+4. `CommandSystem.hpp` contains the typed entry in the correct stable or experimental section
 5. `CommandSystem.cpp` includes the new command header and explicit `Run*` wrapper
 6. `src/CMakeLists.txt` includes the source in the correct stable or experimental list
 7. grouped command tests cover validation and workflow behavior

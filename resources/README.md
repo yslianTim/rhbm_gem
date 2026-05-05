@@ -26,8 +26,8 @@ Ownership rules:
 ## Developer Scripts
 
 - [`resources/tools/developer/command_scaffold.py`](/resources/tools/developer/command_scaffold.py): generate a new command/binding/test/doc scaffold.
-  - add `--wire` to also update `CommandList.hpp`, `CommandSystem.cpp`, and the command source CMake list.
-  - add `--wire --strict` to fail-fast if command-list update fails.
+  - add `--wire` to also update `CommandSystem.hpp`, `CommandSystem.cpp`, and the command source CMake list.
+  - add `--wire --strict` to fail-fast if command-registry update fails.
 - [`resources/tools/developer/run_clang_tidy_check.sh`](/resources/tools/developer/run_clang_tidy_check.sh): run clang-tidy for painter/parser source files (check-only),
   and optionally compare warning counts with [`resources/tools/developer/clang_tidy_baseline.json`](/resources/tools/developer/clang_tidy_baseline.json).
 - [`resources/tools/developer/check_clang_tidy_baseline.py`](/resources/tools/developer/check_clang_tidy_baseline.py): compare/update clang-tidy warning baseline.

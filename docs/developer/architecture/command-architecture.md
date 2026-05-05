@@ -3,7 +3,8 @@
 ## Source of Truth
 
 Top-level command membership is defined in
-[`include/rhbm_gem/core/command/CommandList.hpp`](/include/rhbm_gem/core/command/CommandList.hpp).
+the `rhbm_gem::command` registry in
+[`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp).
 
 Each entry uses:
 
@@ -20,7 +21,7 @@ Public command headers separate concerns:
 
 - [`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp)
   - `ListCommands()`
-- [`include/rhbm_gem/core/command/CommandList.hpp`](/include/rhbm_gem/core/command/CommandList.hpp)
+- [`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp)
   - one `Run*` declaration per command
   - typed command metadata and `VisitCommands(...)`
 - [`include/rhbm_gem/core/command/CommandTypes.hpp`](/include/rhbm_gem/core/command/CommandTypes.hpp)
@@ -61,7 +62,7 @@ does not expose CLI11 setup or parsing details.
 [`src/core/command/CommandSystem.cpp`](/src/core/command/CommandSystem.cpp):
 
 1. enables `require_subcommand(1)`
-2. visits `CommandList.hpp`
+2. visits `rhbm_gem::command`
 3. creates one subcommand per command entry
 4. binds shared `CommandRequestBase` fields
 5. binds command-specific fields from `CommandRequestSchema`
@@ -79,7 +80,7 @@ does not expose CLI11 setup or parsing details.
 - shared enums from `CommandTypes.hpp`
 
 Request type registration and `Run*` binding membership come from
-`CommandList.hpp`. Individual request fields still come from
+`rhbm_gem::command`. Individual request fields still come from
 `CommandRequestSchema`.
 
 ## Runtime Flow

@@ -73,7 +73,7 @@ void BindCommandSystem(py::module_ & module)
         base_request.def_readwrite(field.python_name, field.member);
     });
 
-    command_list::VisitCommands([&](const auto & entry)
+    command::VisitCommands([&](const auto & entry)
     {
         using RequestType = typename std::decay_t<decltype(entry)>::Request;
         BindRequestType<RequestType>(module, entry.request_type_name.data());
@@ -84,7 +84,7 @@ void BindCommandSystem(py::module_ & module)
         .def_readonly("succeeded", &CommandResult::succeeded)
         .def_readonly("issues", &CommandResult::issues);
 
-    command_list::VisitCommands([&](const auto & entry)
+    command::VisitCommands([&](const auto & entry)
     {
         module.def(entry.run_function_name.data(), entry.run);
     });

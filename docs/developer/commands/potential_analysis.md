@@ -3,7 +3,8 @@
 ## Registration and Implementation Files
 
 The command membership entry lives in
-[`include/rhbm_gem/core/command/CommandList.hpp`](/include/rhbm_gem/core/command/CommandList.hpp).
+the `rhbm_gem::command` registry in
+[`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp).
 
 Public request and entrypoint:
 
