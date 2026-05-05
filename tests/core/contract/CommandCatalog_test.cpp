@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#include "support/CommandTestHelpers.hpp"
+#include "command/detail/CommandCatalog.hpp"
 #include <rhbm_gem/core/command/CommandSystem.hpp>
 
 namespace rg = rhbm_gem;
@@ -31,16 +31,16 @@ std::vector<std::string> BuildExpectedCommandNames()
 std::vector<std::string> BuildCommandNames()
 {
     std::vector<std::string> names;
-    for (const auto & command : rg::ListCommands())
+    rg::command_internal::VisitCommandCatalog([&](const auto & entry)
     {
-        names.emplace_back(command.name);
-    }
+        names.emplace_back(entry.cli_name);
+    });
     return names;
 }
 
 } // namespace
 
-TEST(CommandCatalogTest, ListCommandsMatchesCommandRegistryOrder)
+TEST(CommandCatalogTest, CommandCatalogKeepsExpectedOrder)
 {
     EXPECT_EQ(BuildExpectedCommandNames(), BuildCommandNames());
 }

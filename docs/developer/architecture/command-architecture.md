@@ -22,8 +22,6 @@ the same command execution path without exposing concrete command headers throug
 Public command headers separate concerns:
 
 - [`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp)
-  - `ListCommands()`
-- [`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp)
   - typed `RunCommand(request)` execution API
 - [`include/rhbm_gem/core/command/CommandTypes.hpp`](/include/rhbm_gem/core/command/CommandTypes.hpp)
   - shared public enums
@@ -33,7 +31,6 @@ Public command headers separate concerns:
   - default data/database path helpers
   - `ValidationIssue`
   - `CommandResult`
-  - `CommandInfo`
 
 The public API is centered on typed requests, `RunCommand(request)`, shared enums, and path helpers.
 CLI wiring and request binding schema stay internal.

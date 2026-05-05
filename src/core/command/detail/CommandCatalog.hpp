@@ -56,15 +56,9 @@ struct RequestFieldCatalog<CommandRequestBase>
     {
         using Self = CommandRequestBase;
         VisitFieldList(visitor,
-            RequestField{ "job_count", "-j,--jobs",
-                "Number of threads",
-                &Self::job_count },
-            RequestField{ "verbosity", "-v,--verbose",
-                "Verbose level",
-                &Self::verbosity },
-            RequestField{ "output_dir", "-o,--folder",
-                "folder path for output files",
-                &Self::output_dir });
+            RequestField{"job_count",  "-j,--jobs",    "Number of threads",  &Self::job_count },
+            RequestField{"verbosity",  "-v,--verbose", "Verbose level",      &Self::verbosity },
+            RequestField{"output_dir", "-o,--folder",  "folder for outputs", &Self::output_dir});
     }
 };
 

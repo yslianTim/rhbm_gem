@@ -86,12 +86,6 @@ struct CommandResult
     std::vector<ValidationIssue> issues{};
 };
 
-struct CommandInfo
-{
-    std::string_view name;
-    std::string_view description;
-};
-
 struct CommandRequestBase
 {
     int job_count{ 1 };

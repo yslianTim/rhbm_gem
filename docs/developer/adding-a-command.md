@@ -41,7 +41,6 @@ Stable commands live in the main list. Experimental commands stay inside the
 
 The command catalog drives:
 
-- `ListCommands()`
 - CLI registration in `CommandSystem.cpp`
 - Python request-type and `RunCommand(...)` overload registration in `CommandSystemBindings.cpp`
 
@@ -114,8 +113,7 @@ Use this shape:
 ## Registration Surfaces
 
 [`src/core/command/CommandSystem.cpp`](/src/core/command/CommandSystem.cpp) owns typed command
-execution, `ListCommands()`, internal CLI registration, and `RunCommandCLI(...)` parsing for the
-executable entrypoint.
+execution, internal CLI registration, and `RunCommandCLI(...)` parsing for the executable entrypoint.
 
 [`src/python/CommandSystemBindings.cpp`](/src/python/CommandSystemBindings.cpp) binds:
 

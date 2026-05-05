@@ -2,13 +2,11 @@
 
 #include <typeinfo>
 #include <type_traits>
-#include <vector>
 
 #include <rhbm_gem/core/command/CommandTypes.hpp>
 
 namespace rhbm_gem {
 
-const std::vector<CommandInfo> & ListCommands();
 int RunCommandCLI(int argc, char * argv[]);
 
 namespace command_internal {

@@ -254,20 +254,6 @@ void BindCliField(
 
 } // namespace
 
-const std::vector<CommandInfo> & ListCommands()
-{
-    static const std::vector<CommandInfo> commands = []
-    {
-        std::vector<CommandInfo> command_infos;
-        command_internal::VisitCommandCatalog([&](const auto & entry)
-        {
-            command_infos.push_back(CommandInfo{ entry.cli_name, entry.description });
-        });
-        return command_infos;
-    }();
-    return commands;
-}
-
 namespace command_internal {
 
 CommandResult RunCommandByRequestType(
