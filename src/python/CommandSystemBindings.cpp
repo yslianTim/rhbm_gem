@@ -4,6 +4,7 @@
 
 #include <rhbm_gem/core/command/CommandSystem.hpp>
 
+#include "command/detail/CommandCatalog.hpp"
 #include "command/detail/CommandRequestSchema.hpp"
 
 #include <type_traits>
@@ -73,7 +74,7 @@ void BindCommandSystem(py::module_ & module)
         base_request.def_readwrite(field.field_name, field.member);
     });
 
-    command::VisitCommands([&](const auto & entry)
+    command_internal::VisitCommandCatalog([&](const auto & entry)
     {
         using RequestType = typename std::decay_t<decltype(entry)>::Request;
         BindRequestType<RequestType>(module, entry.request_type_name.data());
@@ -84,12 +85,16 @@ void BindCommandSystem(py::module_ & module)
         .def_readonly("succeeded", &CommandResult::succeeded)
         .def_readonly("issues", &CommandResult::issues);
 
-    command::VisitCommands([&](const auto & entry)
+    command_internal::VisitCommandCatalog([&](const auto & entry)
     {
+        using CommandType = typename std::decay_t<decltype(entry)>::Command;
         using RequestType = typename std::decay_t<decltype(entry)>::Request;
         module.def(
             "RunCommand",
-            static_cast<CommandResult (*)(const RequestType &)>(&RunCommand<RequestType>));
+            [](const RequestType & request)
+            {
+                return command_internal::ExecuteCommand<CommandType>(request);
+            });
     });
 }
 

@@ -14,11 +14,17 @@ namespace {
 
 std::vector<std::string> BuildExpectedCommandNames()
 {
-    std::vector<std::string> expected;
-    rg::command::VisitCommands([&](const auto & entry)
-    {
-        expected.emplace_back(entry.cli_name);
-    });
+    std::vector<std::string> expected{
+        "potential_analysis",
+        "potential_display",
+        "result_dump",
+        "map_simulation",
+        "rhbm_test",
+    };
+#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
+    expected.emplace_back("map_visualization");
+    expected.emplace_back("position_estimation");
+#endif
     return expected;
 }
 

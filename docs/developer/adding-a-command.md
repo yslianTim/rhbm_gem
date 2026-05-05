@@ -9,13 +9,12 @@ Related references:
 
 Public API:
 
-- [`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp)
 - [`include/rhbm_gem/core/command/CommandTypes.hpp`](/include/rhbm_gem/core/command/CommandTypes.hpp)
 
 Internal wiring:
 
+- [`src/core/command/detail/CommandCatalog.hpp`](/src/core/command/detail/CommandCatalog.hpp)
 - [`src/core/command/detail/CommandRequestSchema.hpp`](/src/core/command/detail/CommandRequestSchema.hpp)
-- [`src/core/command/CommandSystem.cpp`](/src/core/command/CommandSystem.cpp) to include the new concrete command header
 
 Concrete implementation:
 
@@ -25,13 +24,13 @@ Concrete implementation:
 ## Command List
 
 Top-level command membership is defined in
-the `rhbm_gem::command` registry in
-[`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp).
+the internal command catalog in
+[`src/core/command/detail/CommandCatalog.hpp`](/src/core/command/detail/CommandCatalog.hpp).
 
 Each entry uses:
 
 ```cpp
-CommandEntry<ExampleRequest>{
+CommandEntry<ExampleCommand>{
     "example",
     "Run example command",
     "ExampleRequest"
@@ -39,9 +38,9 @@ CommandEntry<ExampleRequest>{
 ```
 
 Stable commands live in the main list. Experimental commands stay inside the
-`RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` command registry block.
+`RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` command catalog block.
 
-The command registry drives:
+The command catalog drives:
 
 - `ListCommands()`
 - CLI registration in `CommandSystem.cpp`
@@ -63,8 +62,8 @@ Command-specific fields live directly on the request type.
 Shared default path helpers such as `GetDefaultDatabasePath()` also live in `CommandTypes.hpp`.
 
 Public execution goes through the typed `RunCommand(request)` API in `CommandSystem.hpp`.
-Each concrete command still needs a private `CommandSystem.cpp` mapping from `<YourCommand>Request`
-to `<YourCommand>Command`, plus an explicit `RunCommand<<YourCommand>Request>(...)` instantiation.
+Each concrete command is associated with its request type through its `CommandBase<XxxRequest>`
+base and the internal `CommandEntry<XxxCommand>` catalog entry.
 
 ## Internal Request Schema
 
@@ -80,7 +79,7 @@ That internal schema is the single source for:
 Declare fields directly with the internal field spec:
 
 ```cpp
-VisitFields(visitor,
+VisitFieldList(visitor,
     FieldSpec{
         "model_file_path",
         "-a,--model",
@@ -127,7 +126,7 @@ executable entrypoint.
 - shared enums
 - `ValidationIssue`
 
-The command registry controls which request types and `RunCommand(...)` overloads are registered
+The command catalog controls which request types and `RunCommand(...)` overloads are registered
 there. The request-field list still comes from `CommandRequestSchema`.
 
 ## Validation Checklist
@@ -137,8 +136,8 @@ Before merge, verify:
 1. the command header and source exist together under `src/core/command/`
 2. `CommandTypes.hpp` contains the new request DTO
 3. `CommandRequestSchema.hpp` contains the internal schema specialization
-4. `CommandSystem.hpp` contains the typed entry in the correct stable or experimental section
-5. `CommandSystem.cpp` includes the new command header and maps the request type to the command type
+4. `CommandCatalog.hpp` contains the command include and typed entry in the correct stable or experimental section
+5. the command derives from `CommandBase<XxxRequest>`
 6. `src/CMakeLists.txt` includes the source in the correct stable or experimental list
 7. grouped command tests cover validation and workflow behavior
 

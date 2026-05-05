@@ -2,18 +2,20 @@
 
 ## Source of Truth
 
-Top-level command membership is defined in
-the `rhbm_gem::command` registry in
-[`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp).
+Top-level command membership is defined in the internal command catalog in
+[`src/core/command/detail/CommandCatalog.hpp`](/src/core/command/detail/CommandCatalog.hpp).
 
 Each entry uses:
 
-- `CommandEntry<RequestType>{cli_name, description, request_type_name}`
+- `CommandEntry<CommandType>{cli_name, description, request_type_name}`
 
 That typed list is visited by:
 
 - [`src/core/command/CommandSystem.cpp`](/src/core/command/CommandSystem.cpp)
 - [`src/python/CommandSystemBindings.cpp`](/src/python/CommandSystemBindings.cpp)
+
+The catalog also keeps the shared typed execution helper internal, so CLI and Python bindings reuse
+the same command execution path without exposing concrete command headers through the public API.
 
 ## Public Surface
 
@@ -23,7 +25,6 @@ Public command headers separate concerns:
   - `ListCommands()`
 - [`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp)
   - typed `RunCommand(request)` execution API
-  - typed command metadata and `VisitCommands(...)`
 - [`include/rhbm_gem/core/command/CommandTypes.hpp`](/include/rhbm_gem/core/command/CommandTypes.hpp)
   - shared public enums
   - enum alias and binding metadata in `rhbm_gem::internal`
@@ -36,8 +37,8 @@ Public command headers separate concerns:
 
 The public API is centered on typed requests, `RunCommand(request)`, shared enums, and path helpers.
 CLI wiring and request binding schema stay internal.
-The private request-to-command mapping lives in `CommandSystem.cpp`, so concrete command headers do
-not become public includes.
+The private command catalog owns request-to-command routing, so concrete command headers do not
+become public includes.
 
 ## Internal Binding Model
 
@@ -69,7 +70,7 @@ does not expose CLI11 setup or parsing details.
 [`src/core/command/CommandSystem.cpp`](/src/core/command/CommandSystem.cpp):
 
 1. enables `require_subcommand(1)`
-2. visits `rhbm_gem::command`
+2. visits the internal command catalog
 3. creates one subcommand per command entry
 4. binds shared `CommandRequestBase` fields
 5. binds command-specific fields from `CommandRequestSchema`
@@ -87,7 +88,7 @@ does not expose CLI11 setup or parsing details.
 - shared enums from `CommandTypes.hpp`
 
 Request type registration and `RunCommand(...)` overload membership come from
-`rhbm_gem::command`. Individual request fields still come from `CommandRequestSchema`.
+the internal command catalog. Individual request fields still come from `CommandRequestSchema`.
 
 ## Runtime Flow
 

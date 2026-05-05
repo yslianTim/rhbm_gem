@@ -3,8 +3,8 @@
 ## Registration and Implementation Files
 
 The command membership entry lives in
-the `rhbm_gem::command` registry in
-[`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp).
+the internal command catalog in
+[`src/core/command/detail/CommandCatalog.hpp`](/src/core/command/detail/CommandCatalog.hpp).
 
 Public request and entrypoint:
 
@@ -12,6 +12,7 @@ Public request and entrypoint:
 
 Internal schema and wiring:
 
+- [`src/core/command/detail/CommandCatalog.hpp`](/src/core/command/detail/CommandCatalog.hpp)
 - [`src/core/command/detail/CommandRequestSchema.hpp`](/src/core/command/detail/CommandRequestSchema.hpp)
 - [`src/core/command/CommandSystem.cpp`](/src/core/command/CommandSystem.cpp)
 - [`src/python/CommandSystemBindings.cpp`](/src/python/CommandSystemBindings.cpp)

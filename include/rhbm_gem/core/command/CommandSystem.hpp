@@ -1,106 +1,31 @@
 #pragma once
 
-#include <cstddef>
-#include <string_view>
-#include <tuple>
+#include <typeinfo>
 #include <type_traits>
-#include <utility>
 #include <vector>
 
 #include <rhbm_gem/core/command/CommandTypes.hpp>
 
 namespace rhbm_gem {
 
-template <typename RequestType>
-CommandResult RunCommand(const RequestType & request);
-
 const std::vector<CommandInfo> & ListCommands();
 int RunCommandCLI(int argc, char * argv[]);
 
-namespace command {
+namespace command_internal {
+
+CommandResult RunCommandByRequestType(
+    const std::type_info & request_type,
+    const CommandRequestBase & request);
+
+} // namespace command_internal
 
 template <typename RequestType>
-struct CommandEntry
+CommandResult RunCommand(const RequestType & request)
 {
-    using Request = RequestType;
-
-    std::string_view cli_name;
-    std::string_view description;
-    std::string_view request_type_name;
-};
-
-inline constexpr auto kStableCommands = std::tuple{
-    CommandEntry<PotentialAnalysisRequest>{
-        "potential_analysis",
-        "Run potential analysis",
-        "PotentialAnalysisRequest"
-    },
-    CommandEntry<PotentialDisplayRequest>{
-        "potential_display",
-        "Run potential display",
-        "PotentialDisplayRequest"
-    },
-    CommandEntry<ResultDumpRequest>{
-        "result_dump",
-        "Run result dump",
-        "ResultDumpRequest"
-    },
-    CommandEntry<MapSimulationRequest>{
-        "map_simulation",
-        "Run map simulation command",
-        "MapSimulationRequest"
-    },
-    CommandEntry<RHBMTestRequest>{
-        "rhbm_test",
-        "Run RHBM simulation test",
-        "RHBMTestRequest"
-    },
-};
-
-#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
-inline constexpr auto kExperimentalCommands = std::tuple{
-    CommandEntry<MapVisualizationRequest>{
-        "map_visualization",
-        "Run map visualization",
-        "MapVisualizationRequest"
-    },
-    CommandEntry<PositionEstimationRequest>{
-        "position_estimation",
-        "Run atom position estimation",
-        "PositionEstimationRequest"
-    },
-};
-#endif
-
-namespace detail {
-
-template <typename Tuple, typename Visitor, std::size_t... Indices>
-void VisitTuple(Tuple && commands, Visitor & visitor, std::index_sequence<Indices...>)
-{
-    (static_cast<void>(visitor(std::get<Indices>(std::forward<Tuple>(commands)))), ...);
+    static_assert(
+        std::is_base_of_v<CommandRequestBase, RequestType>,
+        "RunCommand<RequestType> requires RequestType to derive from CommandRequestBase.");
+    return command_internal::RunCommandByRequestType(typeid(RequestType), request);
 }
-
-template <typename Tuple, typename Visitor>
-void VisitTuple(Tuple && commands, Visitor & visitor)
-{
-    using TupleType = std::remove_reference_t<Tuple>;
-    VisitTuple(
-        std::forward<Tuple>(commands),
-        visitor,
-        std::make_index_sequence<std::tuple_size_v<TupleType>>{});
-}
-
-} // namespace detail
-
-template <typename Visitor>
-void VisitCommands(Visitor && visitor)
-{
-    detail::VisitTuple(kStableCommands, visitor);
-#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
-    detail::VisitTuple(kExperimentalCommands, visitor);
-#endif
-}
-
-} // namespace command
 
 } // namespace rhbm_gem

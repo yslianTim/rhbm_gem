@@ -3,16 +3,8 @@
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 
+#include "detail/CommandCatalog.hpp"
 #include "detail/CommandRequestSchema.hpp"
-#include "RHBMTestCommand.hpp"
-#include "MapSimulationCommand.hpp"
-#include "PotentialAnalysisCommand.hpp"
-#include "PotentialDisplayCommand.hpp"
-#include "ResultDumpCommand.hpp"
-#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
-#include "MapVisualizationCommand.hpp"
-#include "PositionEstimationCommand.hpp"
-#endif
 
 #include <CLI/CLI.hpp>
 #include <filesystem>
@@ -22,76 +14,18 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <typeinfo>
 #include <unordered_map>
 #include <vector>
 
 namespace rhbm_gem {
 namespace {
 
-template <typename RequestType>
-struct CommandTypeFor;
-
-template <>
-struct CommandTypeFor<PotentialAnalysisRequest>
+CommandResult BuildUnsupportedRequestResult()
 {
-    using Type = PotentialAnalysisCommand;
-};
-
-template <>
-struct CommandTypeFor<PotentialDisplayRequest>
-{
-    using Type = PotentialDisplayCommand;
-};
-
-template <>
-struct CommandTypeFor<ResultDumpRequest>
-{
-    using Type = ResultDumpCommand;
-};
-
-template <>
-struct CommandTypeFor<MapSimulationRequest>
-{
-    using Type = MapSimulationCommand;
-};
-
-template <>
-struct CommandTypeFor<RHBMTestRequest>
-{
-    using Type = RHBMTestCommand;
-};
-
-#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
-template <>
-struct CommandTypeFor<MapVisualizationRequest>
-{
-    using Type = MapVisualizationCommand;
-};
-
-template <>
-struct CommandTypeFor<PositionEstimationRequest>
-{
-    using Type = PositionEstimationCommand;
-};
-#endif
-
-template <typename CommandType, typename RequestType>
-CommandResult ExecuteCommand(const RequestType & request)
-{
-    CommandType command{};
-    command.ApplyRequest(request);
-
-    const auto & internal_issues{ command.GetValidationIssues() };
-    std::vector<ValidationIssue> public_issues;
-    public_issues.reserve(internal_issues.size());
-    for (const auto & issue : internal_issues)
-    {
-        public_issues.push_back(ValidationIssue{ issue.option_name, issue.message });
-    }
-
     CommandResult result;
-    result.succeeded = command.Run();
-    result.issues = public_issues;
+    result.succeeded = false;
+    result.issues.push_back(ValidationIssue{ "request_type", "Unsupported command request type." });
     return result;
 }
 
@@ -361,7 +295,7 @@ const std::vector<CommandInfo> & ListCommands()
     static const std::vector<CommandInfo> commands = []
     {
         std::vector<CommandInfo> command_infos;
-        command::VisitCommands([&](const auto & entry)
+        command_internal::VisitCommandCatalog([&](const auto & entry)
         {
             command_infos.push_back(CommandInfo{ entry.cli_name, entry.description });
         });
@@ -370,30 +304,35 @@ const std::vector<CommandInfo> & ListCommands()
     return commands;
 }
 
-template <typename RequestType>
-CommandResult RunCommand(const RequestType & request)
+namespace command_internal {
+
+CommandResult RunCommandByRequestType(
+    const std::type_info & request_type,
+    const CommandRequestBase & request)
 {
-    using CommandType = typename CommandTypeFor<RequestType>::Type;
-    return ExecuteCommand<CommandType>(request);
+    CommandResult result{ BuildUnsupportedRequestResult() };
+    bool matched{ false };
+    VisitCommandCatalog([&](const auto & entry)
+    {
+        if (matched) return;
+        using CommandType = typename std::decay_t<decltype(entry)>::Command;
+        using RequestType = typename std::decay_t<decltype(entry)>::Request;
+        if (request_type != typeid(RequestType)) return;
+
+        result = ExecuteCommand<CommandType>(static_cast<const RequestType &>(request));
+        matched = true;
+    });
+    return result;
 }
 
-template CommandResult RunCommand<PotentialAnalysisRequest>(const PotentialAnalysisRequest & request);
-template CommandResult RunCommand<PotentialDisplayRequest>(const PotentialDisplayRequest & request);
-template CommandResult RunCommand<ResultDumpRequest>(const ResultDumpRequest & request);
-template CommandResult RunCommand<MapSimulationRequest>(const MapSimulationRequest & request);
-template CommandResult RunCommand<RHBMTestRequest>(const RHBMTestRequest & request);
-
-#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
-template CommandResult RunCommand<MapVisualizationRequest>(const MapVisualizationRequest & request);
-template CommandResult RunCommand<PositionEstimationRequest>(const PositionEstimationRequest & request);
-#endif
+} // namespace command_internal
 
 int RunCommandCLI(int argc, char * argv[])
 {
     CLI::App app{"RHBM-GEM"};
     app.require_subcommand(1);
 
-    command::VisitCommands([&](const auto & entry)
+    command_internal::VisitCommandCatalog([&](const auto & entry)
     {
         using RequestType = typename std::decay_t<decltype(entry)>::Request;
         RegisterCommand<RequestType>(app, entry.cli_name, entry.description);

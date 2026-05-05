@@ -2,7 +2,7 @@
 """Generate a command scaffold.
 
 By default this script creates command/binding/doc skeleton files.
-When ``--wire`` is set, it also updates the command registry, command include, and source CMake list.
+When ``--wire`` is set, it also updates the command catalog and source CMake list.
 Command tests live in grouped files under ``tests/core/command/`` and are updated manually.
 """
 
@@ -62,11 +62,11 @@ def _is_experimental_command(spec: ScaffoldSpec) -> bool:
 
 
 def _append_command_registry_entry(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
-    if f"CommandEntry<{spec.command_id}Request>" in text:
+    if f"CommandEntry<{spec.command_type}>" in text:
         return text, False
 
     entry = (
-        f"    CommandEntry<{spec.command_id}Request>{{\n"
+        f"    CommandEntry<{spec.command_type}>{{\n"
         f'        "{spec.cli_name}",\n'
         f'        "{spec.description}",\n'
         f'        "{spec.command_id}Request",\n'
@@ -87,7 +87,7 @@ def _append_command_registry_entry(text: str, spec: ScaffoldSpec) -> tuple[str, 
     list_match = list_pattern.search(text)
     if not list_match:
         command_group = "experimental" if _is_experimental_command(spec) else "stable"
-        raise RuntimeError(f"could not find {command_group} command registry in CommandSystem.hpp")
+        raise RuntimeError(f"could not find {command_group} command catalog in CommandCatalog.hpp")
     updated = text[:list_match.start(3)] + entry + text[list_match.start(3):]
     return updated, True
 
@@ -113,8 +113,8 @@ def _append_cmake_list_entry(text: str, variable_name: str, entry: str) -> tuple
     return updated_text, True
 
 
-def _append_command_api_include(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
-    include_line = f'#include "{spec.command_type}.hpp"'
+def _append_command_catalog_include(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
+    include_line = f'#include "command/{spec.command_type}.hpp"'
     if include_line in text:
         return text, False
 
@@ -125,72 +125,25 @@ def _append_command_api_include(text: str, spec: ScaffoldSpec) -> tuple[str, boo
         )
         match = block_pattern.search(text)
         if not match:
-            raise RuntimeError("could not find experimental command include block in CommandSystem.cpp")
+            raise RuntimeError("could not find experimental command include block in CommandCatalog.hpp")
 
         body = match.group(2)
         insert_at = match.start(2) + len(body)
         updated = text[:insert_at] + include_line + "\n" + text[insert_at:]
         return updated, True
 
-    stable_pattern = re.compile(r'^(#include\s+"[^"]+Command\.hpp")\n', re.MULTILINE)
+    stable_pattern = re.compile(r'^(#include\s+"command/[^"]+Command\.hpp")\n', re.MULTILINE)
     matches = [
         match for match in stable_pattern.finditer(text)
         if "MapVisualizationCommand.hpp" not in match.group(1)
         and "PositionEstimationCommand.hpp" not in match.group(1)
     ]
     if not matches:
-        raise RuntimeError("could not find stable command include block in CommandSystem.cpp")
+        raise RuntimeError("could not find stable command include block in CommandCatalog.hpp")
 
     insert_at = matches[-1].end()
     updated = text[:insert_at] + include_line + "\n" + text[insert_at:]
     return updated, True
-
-
-def _append_command_type_mapping(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
-    if f"CommandTypeFor<{spec.command_id}Request>" in text:
-        return text, False
-
-    mapping = (
-        "template <>\n"
-        f"struct CommandTypeFor<{spec.command_id}Request>\n"
-        "{\n"
-        f"    using Type = {spec.command_type};\n"
-        "};\n\n"
-    )
-    if _is_experimental_command(spec):
-        pattern = re.compile(r"(#endif\n\ntemplate <typename CommandType, typename RequestType>)")
-    else:
-        pattern = re.compile(r"(#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE\n)")
-    match = pattern.search(text)
-    if not match:
-        raise RuntimeError("could not find command request-to-implementation mapping block in CommandSystem.cpp")
-    return text[:match.start(1)] + mapping + text[match.start(1):], True
-
-
-def _append_command_run_instantiation(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
-    if f"RunCommand<{spec.command_id}Request>" in text:
-        return text, False
-
-    instantiation = (
-        f"template CommandResult RunCommand<{spec.command_id}Request>"
-        f"(const {spec.command_id}Request & request);\n"
-    )
-    if _is_experimental_command(spec):
-        pattern = re.compile(r"(#endif\n\nint RunCommandCLI)")
-    else:
-        pattern = re.compile(
-            r"(#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE\n"
-            r"template CommandResult RunCommand<)"
-        )
-        match = pattern.search(text)
-        if match:
-            return text[:match.start(1)] + instantiation + text[match.start(1):], True
-        pattern = re.compile(r"(int RunCommandCLI)")
-
-    match = pattern.search(text)
-    if not match:
-        raise RuntimeError("could not find RunCommand explicit-instantiation block in CommandSystem.cpp")
-    return text[:match.start(1)] + instantiation + text[match.start(1):], True
 
 
 def _update_file(
@@ -288,10 +241,10 @@ Scaffold generated for CLI command `{spec.cli_name}`.
 ## Registration Checklist
 
 1. Add `{spec.command_type.removesuffix("Command")}` into `include/rhbm_gem/core/command/CommandSystem.hpp`.
-   If it is experimental, place it inside the `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` command registry.
+   If it is experimental, place it inside the `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` command catalog.
 2. Add the request struct in `include/rhbm_gem/core/command/CommandTypes.hpp`.
 3. Add the internal request schema specialization in `src/core/command/detail/CommandRequestSchema.hpp`.
-4. Add `#include "{spec.command_type}.hpp"`, `CommandTypeFor`, and `RunCommand` instantiation to `src/core/command/CommandSystem.cpp`.
+4. Add `{spec.command_type}` to `src/core/command/detail/CommandCatalog.hpp`.
 5. Extend the grouped command tests under `tests/core/command/`.
    Validation-only coverage usually belongs in `CommandValidationScenarios_test.cpp`.
    Workflow/output coverage usually belongs in `CommandWorkflowScenarios_test.cpp`.
@@ -299,37 +252,22 @@ Scaffold generated for CLI command `{spec.cli_name}`.
 
 
 def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, strict: bool) -> None:
-    command_system = root / "include" / "rhbm_gem" / "core" / "command" / "CommandSystem.hpp"
-    command_api = root / "src" / "core" / "command" / "CommandSystem.cpp"
+    command_catalog = root / "src" / "core" / "command" / "detail" / "CommandCatalog.hpp"
     source_cmake = root / "src" / "CMakeLists.txt"
 
     _update_file(
-        command_system,
+        command_catalog,
+        lambda text: _append_command_catalog_include(text, spec),
+        dry_run,
+        strict,
+        f'Add #include "command/{spec.command_type}.hpp" to CommandCatalog.hpp.',
+    )
+    _update_file(
+        command_catalog,
         lambda text: _append_command_registry_entry(text, spec),
         dry_run,
         strict,
-        "Append a new typed CommandEntry block to CommandSystem.hpp.",
-    )
-    _update_file(
-        command_api,
-        lambda text: _append_command_api_include(text, spec),
-        dry_run,
-        strict,
-        f'Add #include "{spec.command_type}.hpp" to CommandSystem.cpp.',
-    )
-    _update_file(
-        command_api,
-        lambda text: _append_command_type_mapping(text, spec),
-        dry_run,
-        strict,
-        f"Map {spec.command_id}Request to {spec.command_type} in CommandSystem.cpp.",
-    )
-    _update_file(
-        command_api,
-        lambda text: _append_command_run_instantiation(text, spec),
-        dry_run,
-        strict,
-        f"Instantiate RunCommand<{spec.command_id}Request>(...) in CommandSystem.cpp.",
+        "Append a new typed CommandEntry block to CommandCatalog.hpp.",
     )
     _update_file(
         source_cmake,
@@ -367,12 +305,12 @@ def main() -> int:
     parser.add_argument(
         "--wire",
         action="store_true",
-        help=("Also update CommandSystem.hpp, CommandSystem.cpp, and the command source CMake list."),
+        help=("Also update CommandCatalog.hpp and the command source CMake list."),
     )
     parser.add_argument(
         "--strict",
         action="store_true",
-        help=("Only valid with --wire. Fail-fast when command-registry or CMake wiring fails."),
+        help=("Only valid with --wire. Fail-fast when command-catalog or CMake wiring fails."),
     )
     args = parser.parse_args()
     if args.strict and not args.wire:
@@ -408,10 +346,10 @@ def main() -> int:
 
     print("\nScaffold complete.")
     if args.wire:
-        print("Command registry, command execution mapping, and command source CMake list were wired automatically.")
+        print("Command catalog and command source CMake list were wired automatically.")
     else:
         print(
-            "Next: wire CommandSystem.hpp, update CommandSystem.cpp includes and source CMake list, "
+            "Next: wire CommandCatalog.hpp and source CMake list, "
             "add the public request DTO in CommandTypes.hpp and internal request schema, "
             "and extend the grouped command tests."
         )

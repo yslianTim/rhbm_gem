@@ -17,6 +17,10 @@ struct LifecycleCommandOptions
     bool execution_toggle{ false };
 };
 
+struct UnsupportedRequest : rg::CommandRequestBase
+{
+};
+
 class LifecycleCommand final : public rg::CommandBase<rg::CommandRequestBase>
 {
 public:
@@ -126,4 +130,14 @@ TEST(CommandExecutionContractTest, PublicRunEntryPointReportsPreparationFailureA
             result.issues,
             "--model"),
         nullptr);
+}
+
+TEST(CommandExecutionContractTest, PublicRunEntryPointReportsUnsupportedRequestType)
+{
+    const auto result{ rg::RunCommand(UnsupportedRequest{}) };
+
+    EXPECT_FALSE(result.succeeded);
+    ASSERT_EQ(result.issues.size(), 1);
+    EXPECT_EQ(result.issues.front().option_name, "request_type");
+    EXPECT_EQ(result.issues.front().message, "Unsupported command request type.");
 }

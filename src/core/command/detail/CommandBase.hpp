@@ -45,6 +45,8 @@ class CommandBase
     bool m_was_prepared{ false };
 
 public:
+    using RequestType = Request;
+
     virtual ~CommandBase() = default;
     void ApplyRequest(const Request & request)
     {
