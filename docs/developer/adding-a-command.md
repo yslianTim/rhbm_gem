@@ -64,22 +64,22 @@ Public execution goes through the typed `RunCommand(request)` API in `CommandSys
 Each concrete command is associated with its request type through its `CommandBase<XxxRequest>`
 base and the internal `CommandEntry<XxxCommand>` catalog entry.
 
-## Internal Request Schema
+## Internal Request Fields
 
-Add a `CommandRequestSchema<<YourCommand>Request>` specialization to
+Add a `RequestFieldCatalog<<YourCommand>Request>` specialization to
 [`src/core/command/detail/CommandCatalog.hpp`](/src/core/command/detail/CommandCatalog.hpp).
-The request schema helpers live in `rhbm_gem::command_internal`.
+The request field catalog helpers live in `rhbm_gem::command_internal`.
 
-That internal schema is the single source for:
+That internal field catalog is the single source for:
 
 - CLI flag registration
 - Python field binding
 
-Declare fields directly with the internal field spec:
+Declare fields directly with the internal request field:
 
 ```cpp
 VisitFieldList(visitor,
-    FieldSpec{
+    RequestField{
         "model_file_path",
         "-a,--model",
         "Model file path",
@@ -126,7 +126,7 @@ executable entrypoint.
 - `ValidationIssue`
 
 The command catalog controls which request types and `RunCommand(...)` overloads are registered
-there. The request-field list comes from `CommandRequestSchema` in the same internal catalog.
+there. The request-field list comes from `RequestFieldCatalog` in the same internal catalog.
 
 ## Validation Checklist
 
@@ -134,7 +134,7 @@ Before merge, verify:
 
 1. the command header and source exist together under `src/core/command/`
 2. `CommandTypes.hpp` contains the new request DTO
-3. `CommandCatalog.hpp` contains the internal request schema specialization
+3. `CommandCatalog.hpp` contains the internal request field catalog specialization
 4. `CommandCatalog.hpp` contains the command include and typed entry in the correct stable or experimental section
 5. the command derives from `CommandBase<XxxRequest>`
 6. `src/CMakeLists.txt` includes the source in the correct stable or experimental list

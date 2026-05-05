@@ -243,7 +243,7 @@ Scaffold generated for CLI command `{spec.cli_name}`.
 1. Add `{spec.command_type.removesuffix("Command")}` into `include/rhbm_gem/core/command/CommandSystem.hpp`.
    If it is experimental, place it inside the `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` command catalog.
 2. Add the request struct in `include/rhbm_gem/core/command/CommandTypes.hpp`.
-3. Add the internal request schema specialization in `src/core/command/detail/CommandCatalog.hpp`.
+3. Add the internal request field catalog specialization in `src/core/command/detail/CommandCatalog.hpp`.
 4. Add `{spec.command_type}` to `src/core/command/detail/CommandCatalog.hpp`.
 5. Extend the grouped command tests under `tests/core/command/`.
    Validation-only coverage usually belongs in `CommandValidationScenarios_test.cpp`.
@@ -350,7 +350,7 @@ def main() -> int:
     else:
         print(
             "Next: wire CommandCatalog.hpp and source CMake list, "
-            "add the public request DTO in CommandTypes.hpp and the CommandCatalog request schema, "
+            "add the public request DTO in CommandTypes.hpp and the CommandCatalog request fields, "
             "and extend the grouped command tests."
         )
     return 0

@@ -24,20 +24,9 @@ void BindEnumEntries(py::enum_<EnumType> & py_enum)
     }
 }
 
-template <typename Request>
-void BindRequestType(py::module_ & module, const char * type_name)
-{
-    auto py_request{ py::class_<Request, CommandRequestBase>(module, type_name) };
-    py_request.def(py::init<>());
-    command_internal::CommandRequestSchema<Request>::Visit([&](const auto & field)
-    {
-        py_request.def_readwrite(field.field_name, field.member);
-    });
-}
-
 } // namespace
 
-void BindCommonTypes(py::module_ & module)
+void BindCommandTypes(py::module_ & module)
 {
     py::class_<ValidationIssue>(module, "ValidationIssue")
         .def_readonly("option_name", &ValidationIssue::option_name)
@@ -68,7 +57,7 @@ void BindCommandSystem(py::module_ & module)
 {
     auto base_request{ py::class_<CommandRequestBase>(module, "CommandRequestBase") };
     base_request.def(py::init<>());
-    command_internal::CommandRequestSchema<CommandRequestBase>::Visit([&](const auto & field)
+    command_internal::RequestFieldCatalog<CommandRequestBase>::Visit([&](const auto & field)
     {
         base_request.def_readwrite(field.field_name, field.member);
     });
@@ -76,7 +65,14 @@ void BindCommandSystem(py::module_ & module)
     command_internal::VisitCommandCatalog([&](const auto & entry)
     {
         using RequestType = typename std::decay_t<decltype(entry)>::Request;
-        BindRequestType<RequestType>(module, entry.request_type_name.data());
+        auto py_request{
+            py::class_<RequestType, CommandRequestBase>(module, entry.request_type_name.data())
+        };
+        py_request.def(py::init<>());
+        command_internal::RequestFieldCatalog<RequestType>::Visit([&](const auto & field)
+        {
+            py_request.def_readwrite(field.field_name, field.member);
+        });
     });
 
     py::class_<CommandResult>(module, "CommandResult")
@@ -101,6 +97,6 @@ void BindCommandSystem(py::module_ & module)
 
 PYBIND11_MODULE(rhbm_gem_module, module)
 {
-    rhbm_gem::bindings::BindCommonTypes(module);
+    rhbm_gem::bindings::BindCommandTypes(module);
     rhbm_gem::bindings::BindCommandSystem(module);
 }

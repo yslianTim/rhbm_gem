@@ -42,13 +42,13 @@ become public includes.
 
 ## Internal Binding Model
 
-CLI and Python bindings share one internal schema in
+CLI and Python bindings share one internal request field catalog in
 [`src/core/command/detail/CommandCatalog.hpp`](/src/core/command/detail/CommandCatalog.hpp).
-Those request-schema helpers live under `rhbm_gem::command_internal`.
-Each schema entry uses `FieldSpec{...}`; CLI binding behavior is inferred from the request member
+Those request field helpers live under `rhbm_gem::command_internal`.
+Each request field entry uses `RequestField{...}`; CLI binding behavior is inferred from the request member
 type. CSV lists use `,`, and reference groups use `group=item1,item2` parsing as fixed binder
 behavior rather than schema configuration.
-The `FieldSpec` field name is also used as the Python request attribute name.
+The `RequestField` field name is also used as the Python request attribute name.
 
 That schema is the single source for:
 
@@ -73,7 +73,7 @@ does not expose CLI11 setup or parsing details.
 2. visits the internal command catalog
 3. creates one subcommand per command entry
 4. binds shared `CommandRequestBase` fields
-5. binds command-specific fields from `CommandRequestSchema`
+5. binds command-specific fields from `RequestFieldCatalog`
 6. routes the callback to `RunCommand(request)`
 7. wraps CLI11 parsing and exit-code handling in `RunCommandCLI(...)`
 

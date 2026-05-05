@@ -58,7 +58,7 @@ template <typename Request>
 void BindPathCliField(
     CLI::App & command,
     Request * request,
-    const command_internal::FieldSpec<Request, std::filesystem::path> & field)
+    const command_internal::RequestField<Request, std::filesystem::path> & field)
 {
     auto & option{
         *command.add_option_function<std::string>(
@@ -80,7 +80,7 @@ template <typename Request, typename FieldType>
 void BindReferenceGroupCliField(
     CLI::App & command,
     Request * request,
-    const command_internal::FieldSpec<Request, FieldType> & field)
+    const command_internal::RequestField<Request, FieldType> & field)
 {
     static constexpr char kRefGroupAssignmentDelimiter{ '=' };
     static constexpr char kRefGroupItemDelimiter{ ',' };
@@ -137,7 +137,7 @@ template <typename Request, typename FieldType>
 void BindVectorCliField(
     CLI::App & command,
     Request * request,
-    const command_internal::FieldSpec<Request, FieldType> & field)
+    const command_internal::RequestField<Request, FieldType> & field)
 {
     using ElementType = typename VectorTraits<FieldType>::Element;
     static constexpr char kCsvListDelimiter{ ',' };
@@ -171,7 +171,7 @@ template <typename Request, typename FieldType>
 void BindEnumCliField(
     CLI::App & command,
     Request * request,
-    const command_internal::FieldSpec<Request, FieldType> & field)
+    const command_internal::RequestField<Request, FieldType> & field)
 {
     auto & option{
         *command.add_option_function<FieldType>(
@@ -199,7 +199,7 @@ template <typename Request, typename FieldType>
 void BindScalarCliField(
     CLI::App & command,
     Request * request,
-    const command_internal::FieldSpec<Request, FieldType> & field)
+    const command_internal::RequestField<Request, FieldType> & field)
 {
     const auto & current_value{ request->*(field.member) };
     auto & option{
@@ -228,7 +228,7 @@ template <typename Request, typename FieldType>
 void BindCliField(
     CLI::App & command,
     Request * request,
-    const command_internal::FieldSpec<Request, FieldType> & field)
+    const command_internal::RequestField<Request, FieldType> & field)
 {
     if constexpr (std::is_same_v<FieldType, std::filesystem::path>)
     {
@@ -306,11 +306,11 @@ int RunCommandCLI(int argc, char * argv[])
         };
         auto request{ std::make_shared<RequestType>() };
         auto & base_request{ static_cast<CommandRequestBase &>(*request) };
-        command_internal::CommandRequestSchema<CommandRequestBase>::Visit([&](const auto & field)
+        command_internal::RequestFieldCatalog<CommandRequestBase>::Visit([&](const auto & field)
         {
             BindCliField(command, &base_request, field);
         });
-        command_internal::CommandRequestSchema<RequestType>::Visit([&](const auto & field)
+        command_internal::RequestFieldCatalog<RequestType>::Visit([&](const auto & field)
         {
             BindCliField(command, request.get(), field);
         });
