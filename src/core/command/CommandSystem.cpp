@@ -98,7 +98,7 @@ template <typename Request, typename FieldType>
 void BindCliField(
     CLI::App & command,
     Request * request,
-    const internal::RequestScalarFieldSpec<Request, FieldType> & field)
+    const command_internal::RequestScalarFieldSpec<Request, FieldType> & field)
 {
     const auto & current_value{ request->*(field.member) };
     auto & option{
@@ -131,7 +131,7 @@ template <typename Request>
 void BindCliField(
     CLI::App & command,
     Request * request,
-    const internal::RequestPathFieldSpec<Request> & field)
+    const command_internal::RequestPathFieldSpec<Request> & field)
 {
     auto & option{
         *command.add_option_function<std::string>(
@@ -157,7 +157,7 @@ template <typename Request, typename EnumType>
 void BindCliField(
     CLI::App & command,
     Request * request,
-    const internal::RequestEnumFieldSpec<Request, EnumType> & field)
+    const command_internal::RequestEnumFieldSpec<Request, EnumType> & field)
 {
     auto & option{
         *command.add_option_function<EnumType>(
@@ -189,7 +189,7 @@ template <typename Request, typename ElementType>
 void BindCliField(
     CLI::App & command,
     Request * request,
-    const internal::RequestCsvListFieldSpec<Request, ElementType> & field)
+    const command_internal::RequestCsvListFieldSpec<Request, ElementType> & field)
 {
     auto & option{
         *command.add_option_function<std::string>(
@@ -224,7 +224,7 @@ template <typename Request>
 void BindCliField(
     CLI::App & command,
     Request * request,
-    const internal::RequestRefGroupFieldSpec<Request> & field)
+    const command_internal::RequestRefGroupFieldSpec<Request> & field)
 {
     auto & option{
         *command.add_option_function<std::vector<std::string>>(
@@ -288,11 +288,11 @@ void RegisterCommand(
     CLI::App & command{ *app.add_subcommand(std::string(name), std::string(description)) };
     auto request{ std::make_shared<RequestType>() };
     auto & base_request{ static_cast<CommandRequestBase &>(*request) };
-    internal::CommandRequestSchema<CommandRequestBase>::Visit([&](const auto & field)
+    command_internal::CommandRequestSchema<CommandRequestBase>::Visit([&](const auto & field)
     {
         BindCliField(command, &base_request, field);
     });
-    internal::CommandRequestSchema<RequestType>::Visit([&](const auto & field)
+    command_internal::CommandRequestSchema<RequestType>::Visit([&](const auto & field)
     {
         BindCliField(command, request.get(), field);
     });

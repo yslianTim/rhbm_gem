@@ -29,7 +29,7 @@ void BindRequestType(py::module_ & module, const char * type_name)
 {
     auto py_request{ py::class_<Request, CommandRequestBase>(module, type_name) };
     py_request.def(py::init<>());
-    internal::CommandRequestSchema<Request>::Visit([&](const auto & field)
+    command_internal::CommandRequestSchema<Request>::Visit([&](const auto & field)
     {
         py_request.def_readwrite(field.python_name, field.member);
     });
@@ -68,7 +68,7 @@ void BindCommandSystem(py::module_ & module)
 {
     auto base_request{ py::class_<CommandRequestBase>(module, "CommandRequestBase") };
     base_request.def(py::init<>());
-    internal::CommandRequestSchema<CommandRequestBase>::Visit([&](const auto & field)
+    command_internal::CommandRequestSchema<CommandRequestBase>::Visit([&](const auto & field)
     {
         base_request.def_readwrite(field.python_name, field.member);
     });

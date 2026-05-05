@@ -70,6 +70,7 @@ to `<YourCommand>Command`, plus an explicit `RunCommand<<YourCommand>Request>(..
 
 Add a `CommandRequestSchema<<YourCommand>Request>` specialization to
 [`src/core/command/detail/CommandRequestSchema.hpp`](/src/core/command/detail/CommandRequestSchema.hpp).
+The request schema helpers live in `rhbm_gem::command_internal`.
 
 That internal schema is the single source for:
 

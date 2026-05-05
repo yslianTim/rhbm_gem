@@ -43,6 +43,7 @@ not become public includes.
 
 CLI and Python bindings share one internal schema in
 [`src/core/command/detail/CommandRequestSchema.hpp`](/src/core/command/detail/CommandRequestSchema.hpp).
+Those request-schema helpers live under `rhbm_gem::command_internal`.
 
 That schema is the single source for:
 

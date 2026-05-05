@@ -7,7 +7,7 @@
 
 #include <rhbm_gem/core/command/CommandTypes.hpp>
 
-namespace rhbm_gem::internal {
+namespace rhbm_gem::command_internal {
 
 template <typename Owner, typename FieldType>
 struct RequestScalarFieldSpec
@@ -527,4 +527,4 @@ struct CommandRequestSchema<PositionEstimationRequest>
 };
 #endif
 
-} // namespace rhbm_gem::internal
+} // namespace rhbm_gem::command_internal
