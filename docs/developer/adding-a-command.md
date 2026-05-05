@@ -77,13 +77,10 @@ That internal schema is the single source for:
 - CLI flag registration
 - Python field binding
 
-Declare fields directly with the internal field specs:
-
-- `RequestScalarFieldSpec{...}`
-- `RequestPathFieldSpec{...}`
-- `RequestEnumFieldSpec{...}`
-- `RequestCsvListFieldSpec{...}`
-- `RequestRefGroupFieldSpec{...}`
+Declare fields directly with the internal field spec `FieldSpec{...}`.
+CLI behavior is inferred from the request member type: paths bind as paths, vectors bind as CSV
+lists, enum fields use `CommandEnumTraits`, and reference-group maps bind as repeated group
+assignments.
 
 ## Concrete Command
 
