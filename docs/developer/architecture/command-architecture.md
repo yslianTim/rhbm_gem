@@ -45,7 +45,9 @@ CLI and Python bindings share one internal schema in
 [`src/core/command/detail/CommandRequestSchema.hpp`](/src/core/command/detail/CommandRequestSchema.hpp).
 Those request-schema helpers live under `rhbm_gem::command_internal`.
 Each schema entry uses `FieldSpec{...}`; CLI binding behavior is inferred from the request member
-type.
+type. CSV lists use `,`, and reference groups use `group=item1,item2` parsing as fixed binder
+behavior rather than schema configuration.
+The `FieldSpec` field name is also used as the Python request attribute name.
 
 That schema is the single source for:
 
