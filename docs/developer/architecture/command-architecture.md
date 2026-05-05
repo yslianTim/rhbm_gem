@@ -43,7 +43,7 @@ become public includes.
 ## Internal Binding Model
 
 CLI and Python bindings share one internal schema in
-[`src/core/command/detail/CommandRequestSchema.hpp`](/src/core/command/detail/CommandRequestSchema.hpp).
+[`src/core/command/detail/CommandCatalog.hpp`](/src/core/command/detail/CommandCatalog.hpp).
 Those request-schema helpers live under `rhbm_gem::command_internal`.
 Each schema entry uses `FieldSpec{...}`; CLI binding behavior is inferred from the request member
 type. CSV lists use `,`, and reference groups use `group=item1,item2` parsing as fixed binder
@@ -87,8 +87,8 @@ does not expose CLI11 setup or parsing details.
 - `ValidationIssue`
 - shared enums from `CommandTypes.hpp`
 
-Request type registration and `RunCommand(...)` overload membership come from
-the internal command catalog. Individual request fields still come from `CommandRequestSchema`.
+Request type registration, `RunCommand(...)` overload membership, and request fields come from
+the internal command catalog.
 
 ## Runtime Flow
 

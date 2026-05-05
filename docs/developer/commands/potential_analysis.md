@@ -13,7 +13,6 @@ Public request and entrypoint:
 Internal schema and wiring:
 
 - [`src/core/command/detail/CommandCatalog.hpp`](/src/core/command/detail/CommandCatalog.hpp)
-- [`src/core/command/detail/CommandRequestSchema.hpp`](/src/core/command/detail/CommandRequestSchema.hpp)
 - [`src/core/command/CommandSystem.cpp`](/src/core/command/CommandSystem.cpp)
 - [`src/python/CommandSystemBindings.cpp`](/src/python/CommandSystemBindings.cpp)
 

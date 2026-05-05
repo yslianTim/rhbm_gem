@@ -4,7 +4,6 @@
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 
 #include "detail/CommandCatalog.hpp"
-#include "detail/CommandRequestSchema.hpp"
 
 #include <CLI/CLI.hpp>
 #include <filesystem>

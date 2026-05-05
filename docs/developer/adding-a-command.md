@@ -14,7 +14,6 @@ Public API:
 Internal wiring:
 
 - [`src/core/command/detail/CommandCatalog.hpp`](/src/core/command/detail/CommandCatalog.hpp)
-- [`src/core/command/detail/CommandRequestSchema.hpp`](/src/core/command/detail/CommandRequestSchema.hpp)
 
 Concrete implementation:
 
@@ -68,7 +67,7 @@ base and the internal `CommandEntry<XxxCommand>` catalog entry.
 ## Internal Request Schema
 
 Add a `CommandRequestSchema<<YourCommand>Request>` specialization to
-[`src/core/command/detail/CommandRequestSchema.hpp`](/src/core/command/detail/CommandRequestSchema.hpp).
+[`src/core/command/detail/CommandCatalog.hpp`](/src/core/command/detail/CommandCatalog.hpp).
 The request schema helpers live in `rhbm_gem::command_internal`.
 
 That internal schema is the single source for:
@@ -127,7 +126,7 @@ executable entrypoint.
 - `ValidationIssue`
 
 The command catalog controls which request types and `RunCommand(...)` overloads are registered
-there. The request-field list still comes from `CommandRequestSchema`.
+there. The request-field list comes from `CommandRequestSchema` in the same internal catalog.
 
 ## Validation Checklist
 
@@ -135,7 +134,7 @@ Before merge, verify:
 
 1. the command header and source exist together under `src/core/command/`
 2. `CommandTypes.hpp` contains the new request DTO
-3. `CommandRequestSchema.hpp` contains the internal schema specialization
+3. `CommandCatalog.hpp` contains the internal request schema specialization
 4. `CommandCatalog.hpp` contains the command include and typed entry in the correct stable or experimental section
 5. the command derives from `CommandBase<XxxRequest>`
 6. `src/CMakeLists.txt` includes the source in the correct stable or experimental list

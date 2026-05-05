@@ -5,7 +5,6 @@
 #include <rhbm_gem/core/command/CommandSystem.hpp>
 
 #include "command/detail/CommandCatalog.hpp"
-#include "command/detail/CommandRequestSchema.hpp"
 
 #include <type_traits>
 
