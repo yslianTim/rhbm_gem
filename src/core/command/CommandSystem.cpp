@@ -253,29 +253,6 @@ void BindCliField(
     }
 }
 
-template <typename RequestType>
-void RegisterCommand(CLI::App & app, std::string_view name, std::string_view description)
-{
-    CLI::App & command{ *app.add_subcommand(std::string(name), std::string(description)) };
-    auto request{ std::make_shared<RequestType>() };
-    auto & base_request{ static_cast<CommandRequestBase &>(*request) };
-    command_internal::CommandRequestSchema<CommandRequestBase>::Visit([&](const auto & field)
-    {
-        BindCliField(command, &base_request, field);
-    });
-    command_internal::CommandRequestSchema<RequestType>::Visit([&](const auto & field)
-    {
-        BindCliField(command, request.get(), field);
-    });
-
-    command.callback([request]()
-    {
-        ScopeTimer timer("Command CLI callback");
-        const auto result{ rhbm_gem::RunCommand(*request) };
-        if (!result.succeeded) throw CLI::RuntimeError(1);
-    });
-}
-
 } // namespace
 
 const std::vector<CommandInfo> & ListCommands()
@@ -325,7 +302,26 @@ int RunCommandCLI(int argc, char * argv[])
     command_internal::VisitCommandCatalog([&](const auto & entry)
     {
         using RequestType = typename std::decay_t<decltype(entry)>::Request;
-        RegisterCommand<RequestType>(app, entry.cli_name, entry.description);
+        CLI::App & command{
+            *app.add_subcommand(std::string(entry.cli_name), std::string(entry.description))
+        };
+        auto request{ std::make_shared<RequestType>() };
+        auto & base_request{ static_cast<CommandRequestBase &>(*request) };
+        command_internal::CommandRequestSchema<CommandRequestBase>::Visit([&](const auto & field)
+        {
+            BindCliField(command, &base_request, field);
+        });
+        command_internal::CommandRequestSchema<RequestType>::Visit([&](const auto & field)
+        {
+            BindCliField(command, request.get(), field);
+        });
+
+        command.callback([request]()
+        {
+            ScopeTimer timer("Command CLI callback");
+            const auto result{ rhbm_gem::RunCommand(*request) };
+            if (!result.succeeded) throw CLI::RuntimeError(1);
+        });
     });
 
     try
