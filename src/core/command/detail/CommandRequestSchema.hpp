@@ -31,7 +31,7 @@ struct FieldSpec
 };
 
 template <typename Visitor, typename... Fields>
-void VisitFields(Visitor && visitor, const Fields &... fields)
+void VisitFieldList(Visitor && visitor, const Fields &... fields)
 {
     (static_cast<void>(visitor(fields)), ...);
 }
@@ -46,7 +46,7 @@ struct CommandRequestSchema<CommandRequestBase>
     static void Visit(Visitor && visitor)
     {
         using Self = CommandRequestBase;
-        VisitFields(visitor,
+        VisitFieldList(visitor,
             FieldSpec{ "job_count", "-j,--jobs",
                 "Number of threads",
                 &Self::job_count },
@@ -66,7 +66,7 @@ struct CommandRequestSchema<PotentialAnalysisRequest>
     static void Visit(Visitor && visitor)
     {
         using Self = PotentialAnalysisRequest;
-        VisitFields(visitor,
+        VisitFieldList(visitor,
             FieldSpec{ "database_path", "-d,--database",
                 "Database file path",
                 &Self::database_path },
@@ -137,7 +137,7 @@ struct CommandRequestSchema<PotentialDisplayRequest>
     static void Visit(Visitor && visitor)
     {
         using Self = PotentialDisplayRequest;
-        VisitFields(visitor,
+        VisitFieldList(visitor,
             FieldSpec{ "database_path", "-d,--database",
                 "Database file path",
                 &Self::database_path },
@@ -178,7 +178,7 @@ struct CommandRequestSchema<ResultDumpRequest>
     static void Visit(Visitor && visitor)
     {
         using Self = ResultDumpRequest;
-        VisitFields(visitor,
+        VisitFieldList(visitor,
             FieldSpec{ "database_path", "-d,--database",
                 "Database file path",
                 &Self::database_path },
@@ -201,7 +201,7 @@ struct CommandRequestSchema<MapSimulationRequest>
     static void Visit(Visitor && visitor)
     {
         using Self = MapSimulationRequest;
-        VisitFields(visitor,
+        VisitFieldList(visitor,
             FieldSpec{ "model_file_path", "-a,--model",
                 "Model file path",
                 &Self::model_file_path },
@@ -233,7 +233,7 @@ struct CommandRequestSchema<RHBMTestRequest>
     static void Visit(Visitor && visitor)
     {
         using Self = RHBMTestRequest;
-        VisitFields(visitor,
+        VisitFieldList(visitor,
             FieldSpec{ "tester_choice", "-t,--tester",
                 "Tester option",
                 &Self::tester_choice },
@@ -260,7 +260,7 @@ struct CommandRequestSchema<MapVisualizationRequest>
     static void Visit(Visitor && visitor)
     {
         using Self = MapVisualizationRequest;
-        VisitFields(visitor,
+        VisitFieldList(visitor,
             FieldSpec{ "model_file_path", "-a,--model",
                 "Model file path",
                 &Self::model_file_path },
@@ -286,7 +286,7 @@ struct CommandRequestSchema<PositionEstimationRequest>
     static void Visit(Visitor && visitor)
     {
         using Self = PositionEstimationRequest;
-        VisitFields(visitor,
+        VisitFieldList(visitor,
             FieldSpec{ "map_file_path", "-m,--map",
                 "Map file path",
                 &Self::map_file_path },
