@@ -85,14 +85,13 @@ VisitFields(visitor,
         "model_file_path",
         "-a,--model",
         "Model file path",
-        &Self::model_file_path,
-        true });
+        &Self::model_file_path });
 ```
 
 The first argument is the public request field name used by Python bindings.
 CLI behavior is inferred from the request member type: paths bind as paths, vectors bind as CSV
 lists, enum fields use `CommandEnumTraits`, and reference-group maps bind as repeated group
-assignments. Delimiters are fixed by the binder, not configured in the schema.
+assignments.
 
 ## Concrete Command
 

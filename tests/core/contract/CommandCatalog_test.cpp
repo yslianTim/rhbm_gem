@@ -74,7 +74,7 @@ TEST(CommandCatalogTest, RunCommandCLIReturnsSuccessForHelpRequest)
     EXPECT_EQ(rg::RunCommandCLI(argc, argv), 0);
 }
 
-TEST(CommandCatalogTest, RunCommandCLIReturnsFailureForParseErrors)
+TEST(CommandCatalogTest, RunCommandCLIReturnsFailureForMissingCommandInput)
 {
     char program[]{ "RHBM-GEM" };
     char command[]{ "map_simulation" };

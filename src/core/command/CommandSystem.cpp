@@ -148,10 +148,6 @@ void BindPathCliField(
             },
             field.help)
     };
-    if (field.required)
-    {
-        option.required();
-    }
     const auto & current_value{ request->*(field.member) };
     if (!current_value.empty())
     {
@@ -212,10 +208,6 @@ void BindReferenceGroupCliField(
     };
     // Reference groups accumulate repeated CLI occurrences into one logical map.
     option.multi_option_policy(CLI::MultiOptionPolicy::TakeAll);
-    if (field.required)
-    {
-        option.required();
-    }
 }
 
 template <typename Request, typename FieldType>
@@ -235,10 +227,6 @@ void BindVectorCliField(
             },
             field.help)
     };
-    if (field.required)
-    {
-        option.required();
-    }
     const auto & current_value{ request->*(field.member) };
     if (!current_value.empty())
     {
@@ -270,10 +258,6 @@ void BindEnumCliField(
             },
             field.help)
     };
-    if (field.required)
-    {
-        option.required();
-    }
     option.default_val(request->*(field.member));
 
     std::map<std::string, FieldType> option_map;
@@ -303,10 +287,6 @@ void BindScalarCliField(
             },
             field.help)
     };
-    if (field.required)
-    {
-        option.required();
-    }
     if constexpr (std::is_same_v<FieldType, std::string>)
     {
         if (!current_value.empty())
