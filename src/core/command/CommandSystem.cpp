@@ -21,14 +21,6 @@
 namespace rhbm_gem {
 namespace {
 
-CommandResult BuildUnsupportedRequestResult()
-{
-    CommandResult result;
-    result.succeeded = false;
-    result.issues.push_back(ValidationIssue{ "request_type", "Unsupported command request type." });
-    return result;
-}
-
 template <typename FieldType>
 struct VectorTraits
 {
@@ -63,10 +55,6 @@ struct HasCommandEnumTraits<EnumType, std::void_t<decltype(internal::CommandEnum
 {
 };
 
-constexpr char kCsvListDelimiter{ ',' };
-constexpr char kRefGroupAssignmentDelimiter{ '=' };
-constexpr char kRefGroupItemDelimiter{ ',' };
-
 template <typename Request>
 void BindPathCliField(
     CLI::App & command,
@@ -95,6 +83,8 @@ void BindReferenceGroupCliField(
     Request * request,
     const command_internal::FieldSpec<Request, FieldType> & field)
 {
+    static constexpr char kRefGroupAssignmentDelimiter{ '=' };
+    static constexpr char kRefGroupItemDelimiter{ ',' };
     auto & option{
         *command.add_option_function<std::vector<std::string>>(
             field.cli_flags,
@@ -151,6 +141,7 @@ void BindVectorCliField(
     const command_internal::FieldSpec<Request, FieldType> & field)
 {
     using ElementType = typename VectorTraits<FieldType>::Element;
+    static constexpr char kCsvListDelimiter{ ',' };
     auto & option{
         *command.add_option_function<std::string>(
             field.cli_flags,
@@ -263,10 +254,7 @@ void BindCliField(
 }
 
 template <typename RequestType>
-void RegisterCommand(
-    CLI::App & app,
-    std::string_view name,
-    std::string_view description)
+void RegisterCommand(CLI::App & app, std::string_view name, std::string_view description)
 {
     CLI::App & command{ *app.add_subcommand(std::string(name), std::string(description)) };
     auto request{ std::make_shared<RequestType>() };
@@ -310,7 +298,9 @@ CommandResult RunCommandByRequestType(
     const std::type_info & request_type,
     const CommandRequestBase & request)
 {
-    CommandResult result{ BuildUnsupportedRequestResult() };
+    CommandResult result;
+    result.succeeded = false;
+    result.issues.push_back(ValidationIssue{ "request_type", "Unsupported command request type." });
     bool matched{ false };
     VisitCommandCatalog([&](const auto & entry)
     {

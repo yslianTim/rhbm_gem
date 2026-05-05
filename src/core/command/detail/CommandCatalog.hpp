@@ -10,11 +10,8 @@
 #include "command/PositionEstimationCommand.hpp"
 #endif
 
-#include <cstddef>
 #include <string_view>
 #include <tuple>
-#include <type_traits>
-#include <utility>
 #include <vector>
 
 namespace rhbm_gem::command_internal {
@@ -73,32 +70,18 @@ inline constexpr auto kExperimentalCommands = std::tuple{
 };
 #endif
 
-namespace detail {
-
-template <typename Tuple, typename Visitor, std::size_t... Indices>
-void VisitTuple(Tuple && commands, Visitor & visitor, std::index_sequence<Indices...>)
-{
-    (static_cast<void>(visitor(std::get<Indices>(std::forward<Tuple>(commands)))), ...);
-}
-
-template <typename Tuple, typename Visitor>
-void VisitTuple(Tuple && commands, Visitor & visitor)
-{
-    using TupleType = std::remove_reference_t<Tuple>;
-    VisitTuple(
-        std::forward<Tuple>(commands),
-        visitor,
-        std::make_index_sequence<std::tuple_size_v<TupleType>>{});
-}
-
-} // namespace detail
-
 template <typename Visitor>
 void VisitCommandCatalog(Visitor && visitor)
 {
-    detail::VisitTuple(kStableCommands, visitor);
+    std::apply([&visitor](const auto &... entries)
+    {
+        (static_cast<void>(visitor(entries)), ...);
+    }, kStableCommands);
 #ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
-    detail::VisitTuple(kExperimentalCommands, visitor);
+    std::apply([&visitor](const auto &... entries)
+    {
+        (static_cast<void>(visitor(entries)), ...);
+    }, kExperimentalCommands);
 #endif
 }
 
