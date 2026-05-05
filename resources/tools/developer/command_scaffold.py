@@ -2,7 +2,7 @@
 """Generate a command scaffold.
 
 By default this script creates command/binding/doc skeleton files.
-When ``--wire`` is set, it also updates the command registry, public runner, and source CMake list.
+When ``--wire`` is set, it also updates the command registry, command include, and source CMake list.
 Command tests live in grouped files under ``tests/core/command/`` and are updated manually.
 """
 
@@ -62,59 +62,33 @@ def _is_experimental_command(spec: ScaffoldSpec) -> bool:
 
 
 def _append_command_registry_entry(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
-    if f"Run{spec.command_id}(const {spec.command_id}Request & request)" in text:
+    if f"CommandEntry<{spec.command_id}Request>" in text:
         return text, False
 
-    declaration = f"CommandResult Run{spec.command_id}(const {spec.command_id}Request & request);\n"
     entry = (
         f"    CommandEntry<{spec.command_id}Request>{{\n"
         f'        "{spec.cli_name}",\n'
         f'        "{spec.description}",\n'
         f'        "{spec.command_id}Request",\n'
-        f'        "Run{spec.command_id}",\n'
-        f"        &Run{spec.command_id},\n"
         f"    }},\n"
     )
 
     if _is_experimental_command(spec):
-        declaration_pattern = re.compile(
-            r"(#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE\n)(.*?)(#endif\n\nconst std::vector<CommandInfo)",
-            re.DOTALL,
-        )
         list_pattern = re.compile(
             r"(inline constexpr auto kExperimentalCommands = std::tuple\{\n)(.*?)(\};)",
             re.DOTALL,
         )
     else:
-        declaration_pattern = re.compile(
-            r"(CommandResult RunRHBMTest\(const RHBMTestRequest & request\);\n)",
-            re.DOTALL,
-        )
         list_pattern = re.compile(
             r"(inline constexpr auto kStableCommands = std::tuple\{\n)(.*?)(\};)",
             re.DOTALL,
         )
 
-    if _is_experimental_command(spec):
-        declaration_match = declaration_pattern.search(text)
-        if not declaration_match:
-            raise RuntimeError("could not find experimental run declaration block in CommandSystem.hpp")
-        updated = (
-            text[:declaration_match.start(3)]
-            + declaration
-            + text[declaration_match.start(3):]
-        )
-    else:
-        declaration_match = declaration_pattern.search(text)
-        if not declaration_match:
-            raise RuntimeError("could not find stable run declaration block in CommandSystem.hpp")
-        updated = text[:declaration_match.end(1)] + declaration + text[declaration_match.end(1):]
-
-    list_match = list_pattern.search(updated)
+    list_match = list_pattern.search(text)
     if not list_match:
         command_group = "experimental" if _is_experimental_command(spec) else "stable"
         raise RuntimeError(f"could not find {command_group} command registry in CommandSystem.hpp")
-    updated = updated[:list_match.start(3)] + entry + updated[list_match.start(3):]
+    updated = text[:list_match.start(3)] + entry + text[list_match.start(3):]
     return updated, True
 
 
@@ -172,33 +146,51 @@ def _append_command_api_include(text: str, spec: ScaffoldSpec) -> tuple[str, boo
     return updated, True
 
 
-def _append_command_run_definition(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
-    if re.search(rf"CommandResult\s+Run{re.escape(spec.command_id)}\s*\(", text):
+def _append_command_type_mapping(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
+    if f"CommandTypeFor<{spec.command_id}Request>" in text:
         return text, False
 
-    definition = (
-        f"CommandResult Run{spec.command_id}(const {spec.command_id}Request & request)\n"
+    mapping = (
+        "template <>\n"
+        f"struct CommandTypeFor<{spec.command_id}Request>\n"
         "{\n"
-        f"    return RunCommand<{spec.command_type}>(request);\n"
-        "}\n\n"
+        f"    using Type = {spec.command_type};\n"
+        "};\n\n"
+    )
+    if _is_experimental_command(spec):
+        pattern = re.compile(r"(#endif\n\ntemplate <typename CommandType, typename RequestType>)")
+    else:
+        pattern = re.compile(r"(#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE\n)")
+    match = pattern.search(text)
+    if not match:
+        raise RuntimeError("could not find command request-to-implementation mapping block in CommandSystem.cpp")
+    return text[:match.start(1)] + mapping + text[match.start(1):], True
+
+
+def _append_command_run_instantiation(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
+    if f"RunCommand<{spec.command_id}Request>" in text:
+        return text, False
+
+    instantiation = (
+        f"template CommandResult RunCommand<{spec.command_id}Request>"
+        f"(const {spec.command_id}Request & request);\n"
     )
     if _is_experimental_command(spec):
         pattern = re.compile(r"(#endif\n\nint RunCommandCLI)")
+    else:
+        pattern = re.compile(
+            r"(#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE\n"
+            r"template CommandResult RunCommand<)"
+        )
         match = pattern.search(text)
-        if not match:
-            raise RuntimeError("could not find experimental run definition block in CommandSystem.cpp")
-        return text[:match.start(1)] + definition + text[match.start(1):], True
+        if match:
+            return text[:match.start(1)] + instantiation + text[match.start(1):], True
+        pattern = re.compile(r"(int RunCommandCLI)")
 
-    pattern = re.compile(r"(#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE\nCommandResult)")
     match = pattern.search(text)
-    if match:
-        return text[:match.start(1)] + definition + text[match.start(1):], True
-
-    fallback = re.compile(r"(int RunCommandCLI)")
-    match = fallback.search(text)
     if not match:
-        raise RuntimeError("could not find RunCommandCLI in CommandSystem.cpp")
-    return text[:match.start(1)] + definition + text[match.start(1):], True
+        raise RuntimeError("could not find RunCommand explicit-instantiation block in CommandSystem.cpp")
+    return text[:match.start(1)] + instantiation + text[match.start(1):], True
 
 
 def _update_file(
@@ -299,7 +291,7 @@ Scaffold generated for CLI command `{spec.cli_name}`.
    If it is experimental, place it inside the `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` command registry.
 2. Add the request struct in `include/rhbm_gem/core/command/CommandTypes.hpp`.
 3. Add the internal request schema specialization in `src/core/command/detail/CommandRequestSchema.hpp`.
-4. Add `#include "{spec.command_type}.hpp"` and the `Run{spec.command_id}(...)` wrapper to `src/core/command/CommandSystem.cpp`.
+4. Add `#include "{spec.command_type}.hpp"`, `CommandTypeFor`, and `RunCommand` instantiation to `src/core/command/CommandSystem.cpp`.
 5. Extend the grouped command tests under `tests/core/command/`.
    Validation-only coverage usually belongs in `CommandValidationScenarios_test.cpp`.
    Workflow/output coverage usually belongs in `CommandWorkflowScenarios_test.cpp`.
@@ -327,10 +319,17 @@ def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, stri
     )
     _update_file(
         command_api,
-        lambda text: _append_command_run_definition(text, spec),
+        lambda text: _append_command_type_mapping(text, spec),
         dry_run,
         strict,
-        f"Add Run{spec.command_id}(...) wrapper to CommandSystem.cpp.",
+        f"Map {spec.command_id}Request to {spec.command_type} in CommandSystem.cpp.",
+    )
+    _update_file(
+        command_api,
+        lambda text: _append_command_run_instantiation(text, spec),
+        dry_run,
+        strict,
+        f"Instantiate RunCommand<{spec.command_id}Request>(...) in CommandSystem.cpp.",
     )
     _update_file(
         source_cmake,
@@ -409,10 +408,10 @@ def main() -> int:
 
     print("\nScaffold complete.")
     if args.wire:
-        print("Command registry, command runner, and command source CMake list were wired automatically.")
+        print("Command registry, command execution mapping, and command source CMake list were wired automatically.")
     else:
         print(
-            "Next: wire CommandSystem.hpp, update CommandSystem.cpp includes/wrappers and source CMake list, "
+            "Next: wire CommandSystem.hpp, update CommandSystem.cpp includes and source CMake list, "
             "add the public request DTO in CommandTypes.hpp and internal request schema, "
             "and extend the grouped command tests."
         )

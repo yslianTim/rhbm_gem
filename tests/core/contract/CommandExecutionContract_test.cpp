@@ -118,7 +118,7 @@ TEST(CommandExecutionContractTest, MutatingAssignedOptionBeforeSecondRunStillUse
 
 TEST(CommandExecutionContractTest, PublicRunEntryPointReportsPreparationFailureAndValidationIssues)
 {
-    const auto result{ rg::RunMapSimulation(rg::MapSimulationRequest{}) };
+    const auto result{ rg::RunCommand(rg::MapSimulationRequest{}) };
 
     EXPECT_FALSE(result.succeeded);
     EXPECT_NE(

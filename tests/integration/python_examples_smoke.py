@@ -46,7 +46,7 @@ def stage_quickstart_inputs(workdir: Path) -> None:
     simulation_request.output_dir = str(data_dir)
     simulation_request.map_file_name = "emd_11103_additional"
     simulation_request.blurring_width_list = [1.50]
-    ensure_execute(rgm.RunMapSimulation(simulation_request), "RunMapSimulation")
+    ensure_execute(rgm.RunCommand(simulation_request), "RunCommand(MapSimulationRequest)")
 
     generated_maps = sorted(data_dir.glob("emd_11103_additional_*.map"))
     assert len(generated_maps) == 1, generated_maps
@@ -94,7 +94,7 @@ def assert_end_to_end_smoke() -> None:
             simulation_request.output_dir = str(data_dir)
             simulation_request.map_file_name = Path(map_name).stem
             simulation_request.blurring_width_list = [1.50]
-            ensure_execute(rgm.RunMapSimulation(simulation_request), "RunMapSimulation")
+            ensure_execute(rgm.RunCommand(simulation_request), "RunCommand(MapSimulationRequest)")
 
             generated_maps = sorted(data_dir.glob(f"{Path(map_name).stem}_*.map"))
             assert len(generated_maps) == 1, generated_maps

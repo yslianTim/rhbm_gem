@@ -34,9 +34,7 @@ Each entry uses:
 CommandEntry<ExampleRequest>{
     "example",
     "Run example command",
-    "ExampleRequest",
-    "RunExample",
-    &RunExample,
+    "ExampleRequest"
 },
 ```
 
@@ -45,10 +43,9 @@ Stable commands live in the main list. Experimental commands stay inside the
 
 The command registry drives:
 
-- public `Run*` declarations in `CommandSystem.hpp`
 - `ListCommands()`
 - CLI registration in `CommandSystem.cpp`
-- Python request-type and `Run*` binding registration in `CommandSystemBindings.cpp`
+- Python request-type and `RunCommand(...)` overload registration in `CommandSystemBindings.cpp`
 
 ## Public Request DTO
 
@@ -65,8 +62,9 @@ Command-specific fields live directly on the request type.
 
 Shared default path helpers such as `GetDefaultDatabasePath()` also live in `CommandTypes.hpp`.
 
-`Run*` declarations live in `CommandSystem.hpp` next to the command entry. Add the explicit
-`RunYourCommand(...)` wrapper definition in `CommandSystem.cpp`.
+Public execution goes through the typed `RunCommand(request)` API in `CommandSystem.hpp`.
+Each concrete command still needs a private `CommandSystem.cpp` mapping from `<YourCommand>Request`
+to `<YourCommand>Command`, plus an explicit `RunCommand<<YourCommand>Request>(...)` instantiation.
 
 ## Internal Request Schema
 
@@ -108,8 +106,8 @@ Use this shape:
 
 ## Registration Surfaces
 
-[`src/core/command/CommandSystem.cpp`](/src/core/command/CommandSystem.cpp) owns public `Run*`
-definitions, `ListCommands()`, internal CLI registration, and `RunCommandCLI(...)` parsing for the
+[`src/core/command/CommandSystem.cpp`](/src/core/command/CommandSystem.cpp) owns typed command
+execution, `ListCommands()`, internal CLI registration, and `RunCommandCLI(...)` parsing for the
 executable entrypoint.
 
 [`src/python/CommandSystemBindings.cpp`](/src/python/CommandSystemBindings.cpp) binds:
@@ -120,8 +118,8 @@ executable entrypoint.
 - shared enums
 - `ValidationIssue`
 
-The command registry controls which request types and `Run*` functions are registered there. The
-request-field list still comes from `CommandRequestSchema`.
+The command registry controls which request types and `RunCommand(...)` overloads are registered
+there. The request-field list still comes from `CommandRequestSchema`.
 
 ## Validation Checklist
 
@@ -131,7 +129,7 @@ Before merge, verify:
 2. `CommandTypes.hpp` contains the new request DTO
 3. `CommandRequestSchema.hpp` contains the internal schema specialization
 4. `CommandSystem.hpp` contains the typed entry in the correct stable or experimental section
-5. `CommandSystem.cpp` includes the new command header and explicit `Run*` wrapper
+5. `CommandSystem.cpp` includes the new command header and maps the request type to the command type
 6. `src/CMakeLists.txt` includes the source in the correct stable or experimental list
 7. grouped command tests cover validation and workflow behavior
 

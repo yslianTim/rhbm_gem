@@ -27,6 +27,7 @@ DATABASE_REQUEST_TYPES = {
 def assert_module_surface() -> None:
     assert hasattr(m, "ValidationIssue")
     assert hasattr(m, "CommandResult")
+    assert hasattr(m, "RunCommand")
     assert hasattr(m, "PrinterType")
     assert hasattr(m.PrinterType, "ATOM_OUTLIER")
     assert hasattr(m, "TesterType")
@@ -35,13 +36,20 @@ def assert_module_surface() -> None:
     if EXPERIMENTAL_FEATURE_ENABLED:
         assert hasattr(m, "MapVisualizationRequest")
         assert hasattr(m, "PositionEstimationRequest")
-        assert hasattr(m, "RunMapVisualization")
-        assert hasattr(m, "RunPositionEstimation")
     else:
         assert not hasattr(m, "MapVisualizationRequest")
         assert not hasattr(m, "PositionEstimationRequest")
-        assert not hasattr(m, "RunMapVisualization")
-        assert not hasattr(m, "RunPositionEstimation")
+
+    for old_run_name in (
+        "RunPotentialAnalysis",
+        "RunPotentialDisplay",
+        "RunResultDump",
+        "RunMapSimulation",
+        "RunRHBMTest",
+        "RunMapVisualization",
+        "RunPositionEstimation",
+    ):
+        assert not hasattr(m, old_run_name)
 
 
 def assert_request_objects_are_usable() -> None:
@@ -101,14 +109,14 @@ def has_issue(report, option_name: str) -> bool:
 
 
 def assert_command_result_runtime_behavior() -> None:
-    report = m.RunMapSimulation(m.MapSimulationRequest())
+    report = m.RunCommand(m.MapSimulationRequest())
     assert isinstance(report, m.CommandResult)
     assert not report.succeeded
     assert has_issue(report, "--model")
 
     analysis = m.PotentialAnalysisRequest()
     analysis.saved_key_tag = ""
-    report = m.RunPotentialAnalysis(analysis)
+    report = m.RunCommand(analysis)
     assert isinstance(report, m.CommandResult)
     assert not report.succeeded
     assert has_issue(report, "--save-key")

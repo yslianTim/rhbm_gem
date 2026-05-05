@@ -11,16 +11,8 @@
 
 namespace rhbm_gem {
 
-CommandResult RunPotentialAnalysis(const PotentialAnalysisRequest & request);
-CommandResult RunPotentialDisplay(const PotentialDisplayRequest & request);
-CommandResult RunResultDump(const ResultDumpRequest & request);
-CommandResult RunMapSimulation(const MapSimulationRequest & request);
-CommandResult RunRHBMTest(const RHBMTestRequest & request);
-
-#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
-CommandResult RunMapVisualization(const MapVisualizationRequest & request);
-CommandResult RunPositionEstimation(const PositionEstimationRequest & request);
-#endif
+template <typename RequestType>
+CommandResult RunCommand(const RequestType & request);
 
 const std::vector<CommandInfo> & ListCommands();
 int RunCommandCLI(int argc, char * argv[]);
@@ -35,45 +27,33 @@ struct CommandEntry
     std::string_view cli_name;
     std::string_view description;
     std::string_view request_type_name;
-    std::string_view run_function_name;
-    CommandResult (*run)(const RequestType & request);
 };
 
 inline constexpr auto kStableCommands = std::tuple{
     CommandEntry<PotentialAnalysisRequest>{
         "potential_analysis",
         "Run potential analysis",
-        "PotentialAnalysisRequest",
-        "RunPotentialAnalysis",
-        &RunPotentialAnalysis,
+        "PotentialAnalysisRequest"
     },
     CommandEntry<PotentialDisplayRequest>{
         "potential_display",
         "Run potential display",
-        "PotentialDisplayRequest",
-        "RunPotentialDisplay",
-        &RunPotentialDisplay,
+        "PotentialDisplayRequest"
     },
     CommandEntry<ResultDumpRequest>{
         "result_dump",
         "Run result dump",
-        "ResultDumpRequest",
-        "RunResultDump",
-        &RunResultDump,
+        "ResultDumpRequest"
     },
     CommandEntry<MapSimulationRequest>{
         "map_simulation",
         "Run map simulation command",
-        "MapSimulationRequest",
-        "RunMapSimulation",
-        &RunMapSimulation,
+        "MapSimulationRequest"
     },
     CommandEntry<RHBMTestRequest>{
         "rhbm_test",
         "Run RHBM simulation test",
-        "RHBMTestRequest",
-        "RunRHBMTest",
-        &RunRHBMTest,
+        "RHBMTestRequest"
     },
 };
 
@@ -82,16 +62,12 @@ inline constexpr auto kExperimentalCommands = std::tuple{
     CommandEntry<MapVisualizationRequest>{
         "map_visualization",
         "Run map visualization",
-        "MapVisualizationRequest",
-        "RunMapVisualization",
-        &RunMapVisualization,
+        "MapVisualizationRequest"
     },
     CommandEntry<PositionEstimationRequest>{
         "position_estimation",
         "Run atom position estimation",
-        "PositionEstimationRequest",
-        "RunPositionEstimation",
-        &RunPositionEstimation,
+        "PositionEstimationRequest"
     },
 };
 #endif

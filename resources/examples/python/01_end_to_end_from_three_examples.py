@@ -235,7 +235,7 @@ def main() -> int:
         analysis_request.map_file_path = str(map_path)
         analysis_request.saved_key_tag = spec.key_tag
         analysis_request.training_alpha_flag = False
-        ensure_execute(rgm.RunPotentialAnalysis(analysis_request), "RunPotentialAnalysis")
+        ensure_execute(rgm.RunCommand(analysis_request), "RunCommand(PotentialAnalysisRequest)")
         key_tags.append(spec.key_tag)
         print(f"  key tag:  {spec.key_tag}")
         print(f"  model:    {model_path.name}")
@@ -248,7 +248,7 @@ def main() -> int:
     dump_request.output_dir = str(workdir)
     dump_request.model_key_tag_list = key_tags
     dump_request.printer_choice = rgm.PrinterType.GAUS_ESTIMATES
-    ensure_execute(rgm.RunResultDump(dump_request), "RunResultDump")
+    ensure_execute(rgm.RunCommand(dump_request), "RunCommand(ResultDumpRequest)")
 
     dump_outputs = sorted(path.name for path in workdir.iterdir() if path.is_file())
     print(f"  key tags: {dump_request.model_key_tag_list}")

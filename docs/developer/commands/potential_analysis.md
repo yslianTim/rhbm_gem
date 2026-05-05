@@ -56,7 +56,7 @@ Command-specific fields:
 
 ## Execution Contract
 
-`RunPotentialAnalysis(...)` returns `CommandResult`.
+`RunCommand(PotentialAnalysisRequest{...})` returns `CommandResult`.
 
 Expected result contract:
 

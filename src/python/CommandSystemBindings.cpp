@@ -86,7 +86,10 @@ void BindCommandSystem(py::module_ & module)
 
     command::VisitCommands([&](const auto & entry)
     {
-        module.def(entry.run_function_name.data(), entry.run);
+        using RequestType = typename std::decay_t<decltype(entry)>::Request;
+        module.def(
+            "RunCommand",
+            static_cast<CommandResult (*)(const RequestType &)>(&RunCommand<RequestType>));
     });
 }
 

@@ -72,7 +72,7 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     simulation_request.blurring_width_list = { 1.50 };
 
     const auto simulation_result{
-        rg::RunMapSimulation(simulation_request)
+        rg::RunCommand(simulation_request)
     };
     ASSERT_TRUE(simulation_result.succeeded);
 
@@ -89,7 +89,7 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     analysis_request.sampling_size = 200;
 
     const auto analysis_result{
-        rg::RunPotentialAnalysis(analysis_request)
+        rg::RunCommand(analysis_request)
     };
     ASSERT_TRUE(analysis_result.succeeded);
 
@@ -100,7 +100,7 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     dump_request.model_key_tag_list = { "pipeline_model" };
 
     const auto dump_result{
-        rg::RunResultDump(dump_request)
+        rg::RunCommand(dump_request)
     };
     ASSERT_TRUE(dump_result.succeeded);
     EXPECT_GT(CountRegularFiles(dump_output_dir), 0u);
@@ -126,7 +126,7 @@ TEST(CommandApiPipelineTest, PotentialAnalysisTrainingEmitsRequestedAlphaRReport
     simulation_request.blurring_width_list = { 1.50 };
 
     const auto simulation_result{
-        rg::RunMapSimulation(simulation_request)
+        rg::RunCommand(simulation_request)
     };
     ASSERT_TRUE(simulation_result.succeeded);
 
@@ -145,7 +145,7 @@ TEST(CommandApiPipelineTest, PotentialAnalysisTrainingEmitsRequestedAlphaRReport
     analysis_request.sampling_size = 600;
 
     const auto analysis_result{
-        rg::RunPotentialAnalysis(analysis_request)
+        rg::RunCommand(analysis_request)
     };
     ASSERT_TRUE(analysis_result.succeeded);
     EXPECT_TRUE(std::filesystem::exists(training_report_dir / "alpha_r_bias.pdf"));
@@ -157,7 +157,7 @@ TEST(CommandApiPipelineTest, PotentialAnalysisTrainingEmitsRequestedAlphaRReport
     dump_request.model_key_tag_list = { "trained_model" };
 
     const auto dump_result{
-        rg::RunResultDump(dump_request)
+        rg::RunCommand(dump_request)
     };
     ASSERT_TRUE(dump_result.succeeded);
     EXPECT_GT(CountRegularFiles(dump_output_dir), 0u);

@@ -34,7 +34,7 @@ std::shared_ptr<rg::ModelObject> LoadAnalyzedModelFixture(
     request.map_file_path = map_path;
     request.saved_key_tag = "analyzed_model";
 
-    const auto result{ rg::RunPotentialAnalysis(request) };
+    const auto result{ rg::RunCommand(request) };
     if (!result.succeeded)
     {
         throw std::runtime_error("Failed to build analysis-ready model fixture.");

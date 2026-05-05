@@ -8,7 +8,7 @@ the `rhbm_gem::command` registry in
 
 Each entry uses:
 
-- `CommandEntry<RequestType>{cli_name, description, request_type_name, run_function_name, run_function}`
+- `CommandEntry<RequestType>{cli_name, description, request_type_name}`
 
 That typed list is visited by:
 
@@ -22,7 +22,7 @@ Public command headers separate concerns:
 - [`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp)
   - `ListCommands()`
 - [`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp)
-  - one `Run*` declaration per command
+  - typed `RunCommand(request)` execution API
   - typed command metadata and `VisitCommands(...)`
 - [`include/rhbm_gem/core/command/CommandTypes.hpp`](/include/rhbm_gem/core/command/CommandTypes.hpp)
   - shared public enums
@@ -34,8 +34,10 @@ Public command headers separate concerns:
   - `CommandResult`
   - `CommandInfo`
 
-The public API is centered on typed requests, `Run*` entrypoints, shared enums, and path helpers.
+The public API is centered on typed requests, `RunCommand(request)`, shared enums, and path helpers.
 CLI wiring and request binding schema stay internal.
+The private request-to-command mapping lives in `CommandSystem.cpp`, so concrete command headers do
+not become public includes.
 
 ## Internal Binding Model
 
@@ -66,7 +68,7 @@ does not expose CLI11 setup or parsing details.
 3. creates one subcommand per command entry
 4. binds shared `CommandRequestBase` fields
 5. binds command-specific fields from `CommandRequestSchema`
-6. routes the callback to the corresponding `Run*` function
+6. routes the callback to `RunCommand(request)`
 7. wraps CLI11 parsing and exit-code handling in `RunCommandCLI(...)`
 
 ### Python
@@ -79,9 +81,8 @@ does not expose CLI11 setup or parsing details.
 - `ValidationIssue`
 - shared enums from `CommandTypes.hpp`
 
-Request type registration and `Run*` binding membership come from
-`rhbm_gem::command`. Individual request fields still come from
-`CommandRequestSchema`.
+Request type registration and `RunCommand(...)` overload membership come from
+`rhbm_gem::command`. Individual request fields still come from `CommandRequestSchema`.
 
 ## Runtime Flow
 
@@ -89,19 +90,18 @@ All public execution entrypoints converge on the same flow:
 
 ```mermaid
 flowchart LR
-    A["CLI callback or Python call"] --> B["Run* in CommandSystem"]
-    B --> C["RunCommand(...)"]
-    C --> D["Construct concrete command"]
-    D --> E["ApplyRequest(...)"]
-    E --> F["command.Run()"]
-    F --> G["BeginPreparationPass()"]
-    G --> H["RunValidationPass()"]
-    H --> I["RunFilesystemPreflight()"]
-    I --> J["ExecuteImpl()"]
-    J --> K["CommandResult"]
+    A["CLI callback or Python call"] --> B["RunCommand(request)"]
+    B --> C["Construct concrete command"]
+    C --> D["ApplyRequest(...)"]
+    D --> E["command.Run()"]
+    E --> F["BeginPreparationPass()"]
+    F --> G["RunValidationPass()"]
+    G --> H["RunFilesystemPreflight()"]
+    H --> I["ExecuteImpl()"]
+    I --> J["CommandResult"]
 ```
 
-`Run*` returns `CommandResult` with:
+`RunCommand(request)` returns `CommandResult` with:
 
 - `succeeded == true` when execution completes
 - `succeeded == false` when validation, preflight, or execution stops the command

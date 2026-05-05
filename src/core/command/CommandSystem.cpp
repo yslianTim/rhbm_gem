@@ -27,8 +27,55 @@
 namespace rhbm_gem {
 namespace {
 
+template <typename RequestType>
+struct CommandTypeFor;
+
+template <>
+struct CommandTypeFor<PotentialAnalysisRequest>
+{
+    using Type = PotentialAnalysisCommand;
+};
+
+template <>
+struct CommandTypeFor<PotentialDisplayRequest>
+{
+    using Type = PotentialDisplayCommand;
+};
+
+template <>
+struct CommandTypeFor<ResultDumpRequest>
+{
+    using Type = ResultDumpCommand;
+};
+
+template <>
+struct CommandTypeFor<MapSimulationRequest>
+{
+    using Type = MapSimulationCommand;
+};
+
+template <>
+struct CommandTypeFor<RHBMTestRequest>
+{
+    using Type = RHBMTestCommand;
+};
+
+#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
+template <>
+struct CommandTypeFor<MapVisualizationRequest>
+{
+    using Type = MapVisualizationCommand;
+};
+
+template <>
+struct CommandTypeFor<PositionEstimationRequest>
+{
+    using Type = PositionEstimationCommand;
+};
+#endif
+
 template <typename CommandType, typename RequestType>
-CommandResult RunCommand(const RequestType & request)
+CommandResult ExecuteCommand(const RequestType & request)
 {
     CommandType command{};
     command.ApplyRequest(request);
@@ -235,7 +282,6 @@ void BindCliField(
 template <typename RequestType>
 void RegisterCommand(
     CLI::App & app,
-    CommandResult (*run_command_fn)(const RequestType & request),
     std::string_view name,
     std::string_view description)
 {
@@ -251,10 +297,10 @@ void RegisterCommand(
         BindCliField(command, request.get(), field);
     });
 
-    command.callback([request, run_command_fn]()
+    command.callback([request]()
     {
         ScopeTimer timer("Command CLI callback");
-        const auto result{ run_command_fn(*request) };
+        const auto result{ rhbm_gem::RunCommand(*request) };
         if (!result.succeeded) throw CLI::RuntimeError(1);
     });
 }
@@ -275,41 +321,22 @@ const std::vector<CommandInfo> & ListCommands()
     return commands;
 }
 
-CommandResult RunPotentialAnalysis(const PotentialAnalysisRequest & request)
+template <typename RequestType>
+CommandResult RunCommand(const RequestType & request)
 {
-    return RunCommand<PotentialAnalysisCommand>(request);
+    using CommandType = typename CommandTypeFor<RequestType>::Type;
+    return ExecuteCommand<CommandType>(request);
 }
 
-CommandResult RunPotentialDisplay(const PotentialDisplayRequest & request)
-{
-    return RunCommand<PotentialDisplayCommand>(request);
-}
-
-CommandResult RunResultDump(const ResultDumpRequest & request)
-{
-    return RunCommand<ResultDumpCommand>(request);
-}
-
-CommandResult RunMapSimulation(const MapSimulationRequest & request)
-{
-    return RunCommand<MapSimulationCommand>(request);
-}
-
-CommandResult RunRHBMTest(const RHBMTestRequest & request)
-{
-    return RunCommand<RHBMTestCommand>(request);
-}
+template CommandResult RunCommand<PotentialAnalysisRequest>(const PotentialAnalysisRequest & request);
+template CommandResult RunCommand<PotentialDisplayRequest>(const PotentialDisplayRequest & request);
+template CommandResult RunCommand<ResultDumpRequest>(const ResultDumpRequest & request);
+template CommandResult RunCommand<MapSimulationRequest>(const MapSimulationRequest & request);
+template CommandResult RunCommand<RHBMTestRequest>(const RHBMTestRequest & request);
 
 #ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
-CommandResult RunMapVisualization(const MapVisualizationRequest & request)
-{
-    return RunCommand<MapVisualizationCommand>(request);
-}
-
-CommandResult RunPositionEstimation(const PositionEstimationRequest & request)
-{
-    return RunCommand<PositionEstimationCommand>(request);
-}
+template CommandResult RunCommand<MapVisualizationRequest>(const MapVisualizationRequest & request);
+template CommandResult RunCommand<PositionEstimationRequest>(const PositionEstimationRequest & request);
 #endif
 
 int RunCommandCLI(int argc, char * argv[])
@@ -320,7 +347,7 @@ int RunCommandCLI(int argc, char * argv[])
     command::VisitCommands([&](const auto & entry)
     {
         using RequestType = typename std::decay_t<decltype(entry)>::Request;
-        RegisterCommand<RequestType>(app, entry.run, entry.cli_name, entry.description);
+        RegisterCommand<RequestType>(app, entry.cli_name, entry.description);
     });
 
     try
