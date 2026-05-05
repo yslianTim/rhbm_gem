@@ -232,8 +232,12 @@ void BindCliField(
     }
 }
 
-template <typename RequestType, auto RunCommandFn>
-void RegisterCommand(CLI::App & app, std::string_view name, std::string_view description)
+template <typename RequestType>
+void RegisterCommand(
+    CLI::App & app,
+    CommandResult (*run_command_fn)(const RequestType & request),
+    std::string_view name,
+    std::string_view description)
 {
     CLI::App & command{ *app.add_subcommand(std::string(name), std::string(description)) };
     auto request{ std::make_shared<RequestType>() };
@@ -247,10 +251,10 @@ void RegisterCommand(CLI::App & app, std::string_view name, std::string_view des
         BindCliField(command, request.get(), field);
     });
 
-    command.callback([request]()
+    command.callback([request, run_command_fn]()
     {
         ScopeTimer timer("Command CLI callback");
-        const auto result{ RunCommandFn(*request) };
+        const auto result{ run_command_fn(*request) };
         if (!result.succeeded) throw CLI::RuntimeError(1);
     });
 }
@@ -259,32 +263,65 @@ void RegisterCommand(CLI::App & app, std::string_view name, std::string_view des
 
 const std::vector<CommandInfo> & ListCommands()
 {
-    static const std::vector<CommandInfo> commands{
-#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)                                    \
-        CommandInfo{ CLI_NAME, DESCRIPTION },
-#include <rhbm_gem/core/command/CommandManifest.def>
-#undef RHBM_GEM_COMMAND
-    };
+    static const std::vector<CommandInfo> commands = []
+    {
+        std::vector<CommandInfo> command_infos;
+        command_list::VisitCommands([&](const auto & entry)
+        {
+            command_infos.push_back(CommandInfo{ entry.cli_name, entry.description });
+        });
+        return command_infos;
+    }();
     return commands;
 }
 
-#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)                                    \
-CommandResult Run##COMMAND_ID(const COMMAND_ID##Request & request)                             \
-{                                                                                              \
-    return RunCommand<COMMAND_ID##Command>(request);                                           \
+CommandResult RunPotentialAnalysis(const PotentialAnalysisRequest & request)
+{
+    return RunCommand<PotentialAnalysisCommand>(request);
 }
-#include <rhbm_gem/core/command/CommandManifest.def>
-#undef RHBM_GEM_COMMAND
+
+CommandResult RunPotentialDisplay(const PotentialDisplayRequest & request)
+{
+    return RunCommand<PotentialDisplayCommand>(request);
+}
+
+CommandResult RunResultDump(const ResultDumpRequest & request)
+{
+    return RunCommand<ResultDumpCommand>(request);
+}
+
+CommandResult RunMapSimulation(const MapSimulationRequest & request)
+{
+    return RunCommand<MapSimulationCommand>(request);
+}
+
+CommandResult RunRHBMTest(const RHBMTestRequest & request)
+{
+    return RunCommand<RHBMTestCommand>(request);
+}
+
+#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
+CommandResult RunMapVisualization(const MapVisualizationRequest & request)
+{
+    return RunCommand<MapVisualizationCommand>(request);
+}
+
+CommandResult RunPositionEstimation(const PositionEstimationRequest & request)
+{
+    return RunCommand<PositionEstimationCommand>(request);
+}
+#endif
 
 int RunCommandCLI(int argc, char * argv[])
 {
     CLI::App app{"RHBM-GEM"};
     app.require_subcommand(1);
 
-#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)                                    \
-    RegisterCommand<COMMAND_ID##Request, &Run##COMMAND_ID>(app, CLI_NAME, DESCRIPTION);
-#include <rhbm_gem/core/command/CommandManifest.def>
-#undef RHBM_GEM_COMMAND
+    command_list::VisitCommands([&](const auto & entry)
+    {
+        using RequestType = typename std::decay_t<decltype(entry)>::Request;
+        RegisterCommand<RequestType>(app, entry.run, entry.cli_name, entry.description);
+    });
 
     try
     {

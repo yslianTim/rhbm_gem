@@ -6,6 +6,8 @@
 
 #include "command/detail/CommandRequestSchema.hpp"
 
+#include <type_traits>
+
 namespace py = pybind11;
 
 namespace rhbm_gem::bindings {
@@ -71,20 +73,21 @@ void BindCommandSystem(py::module_ & module)
         base_request.def_readwrite(field.python_name, field.member);
     });
 
-#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)                                    \
-    BindRequestType<COMMAND_ID##Request>(module, #COMMAND_ID "Request");
-#include <rhbm_gem/core/command/CommandManifest.def>
-#undef RHBM_GEM_COMMAND
+    command_list::VisitCommands([&](const auto & entry)
+    {
+        using RequestType = typename std::decay_t<decltype(entry)>::Request;
+        BindRequestType<RequestType>(module, entry.request_type_name.data());
+    });
 
     py::class_<CommandResult>(module, "CommandResult")
         .def(py::init<>())
         .def_readonly("succeeded", &CommandResult::succeeded)
         .def_readonly("issues", &CommandResult::issues);
 
-#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)                                    \
-    module.def("Run" #COMMAND_ID, &Run##COMMAND_ID);
-#include <rhbm_gem/core/command/CommandManifest.def>
-#undef RHBM_GEM_COMMAND
+    command_list::VisitCommands([&](const auto & entry)
+    {
+        module.def(entry.run_function_name.data(), entry.run);
+    });
 }
 
 } // namespace rhbm_gem::bindings

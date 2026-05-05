@@ -1,13 +1,12 @@
 #include <gtest/gtest.h>
 
-#include <filesystem>
-#include <fstream>
-#include <iterator>
-#include <regex>
+#include <algorithm>
+#include <cstddef>
 #include <string>
 #include <vector>
 
 #include "support/CommandTestHelpers.hpp"
+#include <rhbm_gem/core/command/CommandList.hpp>
 #include <rhbm_gem/core/command/CommandSystem.hpp>
 
 namespace rg = rhbm_gem;
@@ -17,99 +16,53 @@ namespace {
 std::vector<std::string> BuildExpectedCommandNames()
 {
     std::vector<std::string> expected;
-    for (const auto & command : rg::ListCommands())
+    rg::command_list::VisitCommands([&](const auto & entry)
     {
-        expected.emplace_back(command.name);
-    }
+        expected.emplace_back(entry.cli_name);
+    });
     return expected;
 }
 
-std::string ReadManifestContent()
+std::vector<std::string> BuildCommandNames()
 {
-    const auto manifest_path{
-        command_test::ProjectRootPath() / "include" / "rhbm_gem" / "core" / "command"
-            / "CommandManifest.def"
-    };
-    std::ifstream manifest_stream{ manifest_path };
-    if (!manifest_stream.is_open())
+    std::vector<std::string> names;
+    for (const auto & command : rg::ListCommands())
     {
-        return {};
+        names.emplace_back(command.name);
     }
-
-    return std::string{
-        std::istreambuf_iterator<char>{ manifest_stream },
-        std::istreambuf_iterator<char>{}
-    };
-}
-
-std::vector<std::string> ExtractCommandNames(const std::string & manifest)
-{
-    const std::regex command_pattern{
-        R"manifest(RHBM_GEM_COMMAND\(\s*[A-Za-z_][A-Za-z0-9_]*\s*,\s*"([^"]+)")manifest"
-    };
-
-    std::vector<std::string> command_names;
-    for (std::sregex_iterator iter{ manifest.begin(), manifest.end(), command_pattern };
-        iter != std::sregex_iterator{};
-        ++iter)
-    {
-        command_names.push_back((*iter)[1].str());
-    }
-    return command_names;
-}
-
-std::vector<std::string> ParseCommandNamesFromManifest()
-{
-    auto manifest{ ReadManifestContent() };
-    if (manifest.empty())
-    {
-        return {};
-    }
-
-#ifndef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
-    const std::regex experimental_block_pattern{
-        R"(#ifdef\s+RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE[\s\S]*?#endif\s*)"
-    };
-    manifest = std::regex_replace(manifest, experimental_block_pattern, "");
-#endif
-
-    return ExtractCommandNames(manifest);
-}
-
-std::vector<std::string> ParseExperimentalCommandNamesFromManifest()
-{
-    const auto manifest{ ReadManifestContent() };
-    if (manifest.empty())
-    {
-        return {};
-    }
-
-    const std::regex experimental_block_pattern{
-        R"(#ifdef\s+RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE\s*([\s\S]*?)#endif)"
-    };
-    std::smatch match;
-    if (!std::regex_search(manifest, match, experimental_block_pattern) || match.size() < 2)
-    {
-        return {};
-    }
-
-    return ExtractCommandNames(match[1].str());
+    return names;
 }
 
 } // namespace
 
-TEST(CommandCatalogTest, ListCommandsMatchesManifestOrder)
+TEST(CommandCatalogTest, ListCommandsMatchesCommandListOrder)
 {
-    EXPECT_EQ(ParseCommandNamesFromManifest(), BuildExpectedCommandNames());
+    EXPECT_EQ(BuildExpectedCommandNames(), BuildCommandNames());
 }
 
-TEST(CommandCatalogTest, ManifestKeepsExperimentalEntriesBehindFeatureGuard)
+TEST(CommandCatalogTest, ExperimentalCommandVisibilityFollowsFeatureGuard)
 {
     const std::vector<std::string> expected_experimental_names{
         "map_visualization",
         "position_estimation",
     };
-    EXPECT_EQ(ParseExperimentalCommandNamesFromManifest(), expected_experimental_names);
+    const auto command_names{ BuildCommandNames() };
+
+#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
+    ASSERT_GE(command_names.size(), expected_experimental_names.size());
+    const std::vector<std::string> trailing_names{
+        command_names.end() - static_cast<std::ptrdiff_t>(expected_experimental_names.size()),
+        command_names.end()
+    };
+    EXPECT_EQ(trailing_names, expected_experimental_names);
+#else
+    for (const auto & experimental_name : expected_experimental_names)
+    {
+        EXPECT_EQ(
+            std::find(command_names.begin(), command_names.end(), experimental_name),
+            command_names.end());
+    }
+#endif
 }
 
 TEST(CommandCatalogTest, RunCommandCLIReturnsSuccessForHelpRequest)

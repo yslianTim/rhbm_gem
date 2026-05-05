@@ -3,15 +3,14 @@
 ## Source of Truth
 
 Top-level command membership is defined in
-[`include/rhbm_gem/core/command/CommandManifest.def`](/include/rhbm_gem/core/command/CommandManifest.def).
+[`include/rhbm_gem/core/command/CommandList.hpp`](/include/rhbm_gem/core/command/CommandList.hpp).
 
 Each entry uses:
 
-- `RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)`
+- `CommandEntry<RequestType>{cli_name, description, request_type_name, run_function_name, run_function}`
 
-That manifest is expanded by:
+That typed list is visited by:
 
-- [`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp)
 - [`src/core/command/CommandSystem.cpp`](/src/core/command/CommandSystem.cpp)
 - [`src/python/CommandSystemBindings.cpp`](/src/python/CommandSystemBindings.cpp)
 
@@ -21,7 +20,9 @@ Public command headers separate concerns:
 
 - [`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp)
   - `ListCommands()`
+- [`include/rhbm_gem/core/command/CommandList.hpp`](/include/rhbm_gem/core/command/CommandList.hpp)
   - one `Run*` declaration per command
+  - typed command metadata and `VisitCommands(...)`
 - [`include/rhbm_gem/core/command/CommandTypes.hpp`](/include/rhbm_gem/core/command/CommandTypes.hpp)
   - shared public enums
   - enum alias and binding metadata in `rhbm_gem::internal`
@@ -60,8 +61,8 @@ does not expose CLI11 setup or parsing details.
 [`src/core/command/CommandSystem.cpp`](/src/core/command/CommandSystem.cpp):
 
 1. enables `require_subcommand(1)`
-2. expands `CommandManifest.def`
-3. creates one subcommand per manifest entry
+2. visits `CommandList.hpp`
+3. creates one subcommand per command entry
 4. binds shared `CommandRequestBase` fields
 5. binds command-specific fields from `CommandRequestSchema`
 6. routes the callback to the corresponding `Run*` function
@@ -77,8 +78,8 @@ does not expose CLI11 setup or parsing details.
 - `ValidationIssue`
 - shared enums from `CommandTypes.hpp`
 
-Request type registration and `Run*` binding membership are expanded from
-`CommandManifest.def`. Individual request fields still come from
+Request type registration and `Run*` binding membership come from
+`CommandList.hpp`. Individual request fields still come from
 `CommandRequestSchema`.
 
 ## Runtime Flow

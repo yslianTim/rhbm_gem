@@ -10,11 +10,11 @@ Related references:
 Public API:
 
 - [`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp)
+- [`include/rhbm_gem/core/command/CommandList.hpp`](/include/rhbm_gem/core/command/CommandList.hpp)
 - [`include/rhbm_gem/core/command/CommandTypes.hpp`](/include/rhbm_gem/core/command/CommandTypes.hpp)
 
 Internal wiring:
 
-- [`include/rhbm_gem/core/command/CommandManifest.def`](/include/rhbm_gem/core/command/CommandManifest.def)
 - [`src/core/command/detail/CommandRequestSchema.hpp`](/src/core/command/detail/CommandRequestSchema.hpp)
 - [`src/core/command/CommandSystem.cpp`](/src/core/command/CommandSystem.cpp) to include the new concrete command header
 
@@ -23,28 +23,30 @@ Concrete implementation:
 - [`src/core/command/detail/`](/src/core/command/detail/)
 - [`src/core/command/`](/src/core/command/)
 
-## Manifest
+## Command List
 
 Top-level command membership is defined in
-[`include/rhbm_gem/core/command/CommandManifest.def`](/include/rhbm_gem/core/command/CommandManifest.def).
+[`include/rhbm_gem/core/command/CommandList.hpp`](/include/rhbm_gem/core/command/CommandList.hpp).
 
 Each entry uses:
 
 ```cpp
-RHBM_GEM_COMMAND(
-    Example,
+CommandEntry<ExampleRequest>{
     "example",
-    "Run example command")
+    "Run example command",
+    "ExampleRequest",
+    "RunExample",
+    &RunExample,
+},
 ```
 
 Stable commands live in the main list. Experimental commands stay inside the
-`#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` block.
+`RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` command list block.
 
-The manifest drives:
+The command list drives:
 
-- public `Run*` declarations in `CommandSystem.hpp`
+- public `Run*` declarations in `CommandList.hpp`
 - `ListCommands()`
-- `Run*` definitions in `CommandSystem.cpp`
 - CLI registration in `CommandSystem.cpp`
 - Python request-type and `Run*` binding registration in `CommandSystemBindings.cpp`
 
@@ -63,8 +65,8 @@ Command-specific fields live directly on the request type.
 
 Shared default path helpers such as `GetDefaultDatabasePath()` also live in `CommandTypes.hpp`.
 
-`Run*` declarations are generated from `CommandManifest.def`, so adding a request DTO does not
-require a handwritten `RunYourCommand(...)` declaration.
+`Run*` declarations live in `CommandList.hpp` next to the command entry. Add the explicit
+`RunYourCommand(...)` wrapper definition in `CommandSystem.cpp`.
 
 ## Internal Request Schema
 
@@ -118,7 +120,7 @@ executable entrypoint.
 - shared enums
 - `ValidationIssue`
 
-The manifest controls which request types and `Run*` functions are registered there. The
+The command list controls which request types and `Run*` functions are registered there. The
 request-field list still comes from `CommandRequestSchema`.
 
 ## Validation Checklist
@@ -128,8 +130,8 @@ Before merge, verify:
 1. the command header and source exist together under `src/core/command/`
 2. `CommandTypes.hpp` contains the new request DTO
 3. `CommandRequestSchema.hpp` contains the internal schema specialization
-4. `CommandManifest.def` contains the manifest entry in the correct stable or experimental section
-5. `CommandSystem.cpp` includes the new command header
+4. `CommandList.hpp` contains the typed entry in the correct stable or experimental section
+5. `CommandSystem.cpp` includes the new command header and explicit `Run*` wrapper
 6. `src/CMakeLists.txt` includes the source in the correct stable or experimental list
 7. grouped command tests cover validation and workflow behavior
 

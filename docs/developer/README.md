@@ -5,7 +5,7 @@ Start here if you are changing the codebase, validating build configurations, or
 ## Recommended Reading Order
 
 1. Read [`docs/developer/build-and-configuration.md`](/docs/developer/build-and-configuration.md) for CMake parameters, dependency selection, coverage, and feature-mode validation commands.
-2. Read [`docs/developer/development-guidelines.md`](/docs/developer/development-guidelines.md) for repository-wide engineering rules, test/label expectations, command-manifest sync requirements, and quality-check alignment (`lint_repo`, formatter/tidy checks).
+2. Read [`docs/developer/development-guidelines.md`](/docs/developer/development-guidelines.md) for repository-wide engineering rules, test/label expectations, command-list sync requirements, and quality-check alignment (`lint_repo`, formatter/tidy checks).
 3. Read [`docs/developer/architecture/command-architecture.md`](/docs/developer/architecture/command-architecture.md), [`docs/developer/architecture/object-architecture.md`](/docs/developer/architecture/object-architecture.md), and [`docs/developer/architecture/dataobject-io-architecture.md`](/docs/developer/architecture/dataobject-io-architecture.md) when you need architecture context for commands, object internals, typed dispatch, data I/O, or persistence.
 4. Read [`docs/developer/adding-dataobject-operations.md`](/docs/developer/adding-dataobject-operations.md) when you need implementation checklists for extending operations on existing `DataObject` types.
 5. Read [`docs/developer/adding-a-command.md`](/docs/developer/adding-a-command.md) when you need a concrete implementation template for a new command.
