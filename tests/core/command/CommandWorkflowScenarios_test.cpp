@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 
+#include <cstddef>
 #include <filesystem>
+#include <string>
 
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/CommandSystem.hpp>
@@ -14,6 +16,22 @@
 
 namespace rg = rhbm_gem;
 
+namespace {
+
+std::size_t CountSubstring(const std::string & text, const std::string & target)
+{
+    std::size_t count{ 0 };
+    std::size_t position{ 0 };
+    while ((position = text.find(target, position)) != std::string::npos)
+    {
+        ++count;
+        position += target.size();
+    }
+    return count;
+}
+
+} // namespace
+
 TEST(CommandWorkflowScenariosTest, MapSimulationGeneratesMapForEachValidBlurringWidth)
 {
     command_test::ScopedTempDir temp_dir{ "map_simulation_valid" };
@@ -26,8 +44,18 @@ TEST(CommandWorkflowScenariosTest, MapSimulationGeneratesMapForEachValidBlurring
     request.blurring_width_list = { 1.0, -2.0, 3.0 };
     command.ApplyRequest(request);
 
-    ASSERT_TRUE(command.Run());
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    const bool succeeded{ command.Run() };
+    const std::string error_output{ testing::internal::GetCapturedStderr() };
+    const std::string standard_output{ testing::internal::GetCapturedStdout() };
+
+    ASSERT_TRUE(succeeded);
     EXPECT_EQ(command_test::CountFilesWithExtension(temp_dir.path(), ".map"), 2);
+    EXPECT_EQ(CountSubstring(standard_output, "Building KD-Tree from"), 1);
+    EXPECT_EQ(
+        error_output.find("MapObject::SetMapValueArray - MapObject already has a map value array"),
+        std::string::npos);
 }
 
 TEST(CommandWorkflowScenariosTest, ResultDumpRerunRefreshesRuntimeStateAndUsesCurrentPaths)

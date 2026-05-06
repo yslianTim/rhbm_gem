@@ -46,6 +46,7 @@ public:
     float GetMapValueMax() const { return m_map_value_max; }
     float GetMapValueSD() const { return m_map_value_sd; }
     void SetMapValueArray(std::unique_ptr<float[]> map_value_array);
+    void ClearMapValueArray();
     void MapValueArrayNormalization();
 
 private:

@@ -218,13 +218,15 @@ void MapSimulationCommand::RunMapSimulation()
         + std::to_string(request.blurring_width_list.size()));
     
     auto map_object{ CreateMapObject() };
+    MapSpatialIndex spatial_index(*map_object, ThreadSize());
+    spatial_index.Build();
     for (auto & blurring_width : request.blurring_width_list)
     {
         auto map_key_tag{
             m_model_object->GetPdbID() + "_bw" +
             string_helper::ToStringWithPrecision<double>(blurring_width, 2)
         };
-        PopulateMapValueArray(map_object.get(), blurring_width);
+        PopulateMapValueArray(map_object.get(), spatial_index, blurring_width);
         const auto output_file_name{
             BuildOutputPath(request.map_file_name + "_" + map_key_tag, ".map")
         };
@@ -276,16 +278,15 @@ std::unique_ptr<MapObject> MapSimulationCommand::CreateMapObject()
     auto origin{ CalculateOrigin(grid_spacing) };
     auto grid_size{ CalculateGridSize(grid_spacing) };
     auto map_object{ std::make_unique<MapObject>(grid_size, grid_spacing, origin) };
-
-    auto voxel_size{ map_object->GetMapValueArraySize() };
-    auto map_value_array{ std::make_unique<float[]>(voxel_size) };
-    std::fill_n(map_value_array.get(), voxel_size, 0.0f);
-    map_object->SetMapValueArray(std::move(map_value_array));
+    map_object->ClearMapValueArray();
 
     return map_object;
 }
 
-void MapSimulationCommand::PopulateMapValueArray(MapObject * map_object, double blurring_width)
+void MapSimulationCommand::PopulateMapValueArray(
+    MapObject * map_object,
+    const MapSpatialIndex & spatial_index,
+    double blurring_width)
 {
     const auto & request{ RequestOptions() };
     ScopeTimer timer("MapSimulationCommand::PopulateMapValueArray");
@@ -309,8 +310,6 @@ void MapSimulationCommand::PopulateMapValueArray(MapObject * map_object, double 
     Logger::Log(LogLevel::Info,
         " /- Total number of atoms to be processed: "+ std::to_string(atom_size) + " atoms."
     );
-    MapSpatialIndex spatial_index(*map_object, ThreadSize());
-    spatial_index.Build();
 #ifdef USE_OPENMP
     #pragma omp parallel for num_threads(ThreadSize()) private(in_range_grid_index_list)
 #endif
@@ -346,6 +345,7 @@ void MapSimulationCommand::PopulateMapValueArray(MapObject * map_object, double 
         }
     }
 
+    map_object->ClearMapValueArray();
     map_object->SetMapValueArray(std::move(map_value_array));
     command_detail::LogMapSummary(*map_object);
 }

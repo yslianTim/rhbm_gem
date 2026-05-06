@@ -50,3 +50,20 @@ TEST(DataObjectMapBehaviorTest, SetMapValueArrayRefreshesStatisticsAndPreservesS
     EXPECT_FLOAT_EQ(map.GetMapValueMax(), 17.0f);
     EXPECT_FLOAT_EQ(map.GetMapValueMean(), 13.5f);
 }
+
+TEST(DataObjectMapBehaviorTest, ClearMapValueArrayResetsValuesAndStatistics)
+{
+    auto map{ data_test::MakeMapObject() };
+    ASSERT_GT(map.GetMapValueMax(), 0.0f);
+
+    map.ClearMapValueArray();
+
+    for (size_t i = 0; i < map.GetMapValueArraySize(); ++i)
+    {
+        EXPECT_FLOAT_EQ(map.GetMapValue(i), 0.0f);
+    }
+    EXPECT_FLOAT_EQ(map.GetMapValueMin(), 0.0f);
+    EXPECT_FLOAT_EQ(map.GetMapValueMax(), 0.0f);
+    EXPECT_FLOAT_EQ(map.GetMapValueMean(), 0.0f);
+    EXPECT_FLOAT_EQ(map.GetMapValueSD(), 0.0f);
+}

@@ -106,6 +106,12 @@ void MapObject::SetMapValueArray(std::unique_ptr<float[]> map_value_array)
     RecomputeStatistics();
 }
 
+void MapObject::ClearMapValueArray()
+{
+    std::fill_n(m_map_value_array.get(), m_voxel_size, 0.0f);
+    RecomputeStatistics();
+}
+
 size_t MapObject::GetGlobalIndex(int index_x, int index_y, int index_z) const
 {
     if (index_x < 0 || index_x >= m_grid_size[0] ||

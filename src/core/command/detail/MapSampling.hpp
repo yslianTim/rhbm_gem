@@ -162,6 +162,7 @@ inline LocalPotentialSampleList KeepLowestResponseDecileByDistance(LocalPotentia
     std::map<float, LocalPotentialSampleList> samples_by_distance;
     for (auto & sample : sample_list)
     {
+        if (sample.score <= 0.0f) continue;
         samples_by_distance[sample.distance].emplace_back(std::move(sample));
     }
 
@@ -241,8 +242,8 @@ LocalPotentialSampleList SampleMapValues(
         BuildLocalPotentialSampleScoreList(local_sampling_points, reject_direction_list, angle)
     };
     auto sample_list{ detail::BuildLocalPotentialSampleList(map_object, sampling_points, &sampling_scores) };
-    //return detail::KeepLowestResponseDecileByDistance(std::move(sample_list));
-    return sample_list;
+    return detail::KeepLowestResponseDecileByDistance(std::move(sample_list));
+    //return sample_list;
 }
 
 } // namespace rhbm_gem
