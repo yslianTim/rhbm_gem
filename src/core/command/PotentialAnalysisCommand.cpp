@@ -395,7 +395,9 @@ void PotentialAnalysisCommand::RunSamplingWorkflow(
     double sampling_range_max)
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunSamplingWorkflow");
+#ifdef USE_OPENMP
     auto thread_size{ ThreadSize() };
+#endif
     SphereSampler sampler;
     sampler.SetSamplingProfile(
         //SphereSamplingProfile::RadiusUniformRandom(
@@ -414,35 +416,22 @@ void PotentialAnalysisCommand::RunSamplingWorkflow(
     auto local_entry_list{ BuildSelectedAtomLocalEntryViews(model_object) };
 
 #ifdef USE_OPENMP
-    #pragma omp parallel num_threads(thread_size)
-    {
-        #pragma omp for
-        for (size_t i = 0; i < atom_size; i++)
-        {
-            auto atom{ atom_list[i] };
-            auto entry{ local_entry_list[i] };
-            auto sampling_entries{
-                SampleMapValues(map_object, sampler, *atom, sampling_range_max)
-            };
-            entry.SetSamplingEntries(sampling_entries);
-            #pragma omp critical
-            {
-                atom_count++;
-                Logger::ProgressPercent(atom_count, atom_size);
-            }
-        }
-    }
-#else
+    #pragma omp parallel for num_threads(thread_size)
+#endif
     for (size_t i = 0; i < atom_size; i++)
     {
         auto atom{ atom_list[i] };
         auto entry{ local_entry_list[i] };
         auto sampling_entries{ SampleMapValues(map_object, sampler, *atom, sampling_range_max) };
         entry.SetSamplingEntries(sampling_entries);
-        atom_count++;
-        Logger::ProgressPercent(atom_count, atom_size);
-    }
+#ifdef USE_OPENMP
+        #pragma omp critical
 #endif
+        {
+            atom_count++;
+            Logger::ProgressPercent(atom_count, atom_size);
+        }
+    }
 }
 
 void PotentialAnalysisCommand::RunDatasetPreparationWorkflow(
