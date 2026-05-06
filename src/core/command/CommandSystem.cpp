@@ -4,8 +4,10 @@
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 
 #include "detail/CommandCatalog.hpp"
+#include "detail/CommandEnumCatalog.hpp"
 
 #include <CLI/CLI.hpp>
+#include <cstdlib>
 #include <filesystem>
 #include <map>
 #include <memory>
@@ -18,6 +20,29 @@
 #include <vector>
 
 namespace rhbm_gem {
+
+std::filesystem::path GetDefaultDataRootPath()
+{
+    if (const char * configured_root{ std::getenv("RHBM_GEM_DATA_DIR") };
+        configured_root != nullptr && configured_root[0] != '\0')
+    {
+        return std::filesystem::path(configured_root);
+    }
+
+    if (const char * home{ std::getenv("HOME") };
+        home != nullptr && home[0] != '\0')
+    {
+        return std::filesystem::path(home) / ".rhbmgem" / "data";
+    }
+
+    return std::filesystem::path(".rhbmgem") / "data";
+}
+
+std::filesystem::path GetDefaultDatabasePath()
+{
+    return GetDefaultDataRootPath() / "database.sqlite";
+}
+
 namespace {
 
 template <typename FieldType>
@@ -49,7 +74,9 @@ struct HasCommandEnumTraits : std::false_type
 };
 
 template <typename EnumType>
-struct HasCommandEnumTraits<EnumType, std::void_t<decltype(internal::CommandEnumTraits<EnumType>::kOptions)>>
+struct HasCommandEnumTraits<
+    EnumType,
+    std::void_t<decltype(command_internal::CommandEnumTraits<EnumType>::kOptions)>>
     : std::true_type
 {
 };
@@ -185,7 +212,7 @@ void BindEnumCliField(
     option.default_val(request->*(field.member));
 
     std::map<std::string, FieldType> option_map;
-    for (const auto & option_definition : internal::CommandEnumTraits<FieldType>::kOptions)
+    for (const auto & option_definition : command_internal::CommandEnumTraits<FieldType>::kOptions)
     {
         for (const auto alias : option_definition.cli_aliases)
         {

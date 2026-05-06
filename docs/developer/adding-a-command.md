@@ -57,7 +57,8 @@ Requests are plain DTOs. Shared options come from `CommandRequestBase`:
 
 Command-specific fields live directly on the request type.
 
-Shared default path helpers such as `GetDefaultDatabasePath()` also live in `CommandTypes.hpp`.
+Shared default path helper declarations such as `GetDefaultDatabasePath()` also live in
+`CommandTypes.hpp`.
 
 Public execution goes through the typed `RunCommand(request)` API in `CommandSystem.hpp`.
 Each concrete command is associated with its request type through its `CommandBase<XxxRequest>`
@@ -87,8 +88,9 @@ VisitFieldList(visitor,
 
 The first argument is the public request field name used by Python bindings.
 CLI behavior is inferred from the request member type: paths bind as paths, vectors bind as CSV
-lists, enum fields use `CommandEnumTraits`, and reference-group maps bind as repeated group
-assignments.
+lists, enum fields use `CommandEnumTraits` from
+[`src/core/command/detail/CommandEnumCatalog.hpp`](/src/core/command/detail/CommandEnumCatalog.hpp),
+and reference-group maps bind as repeated group assignments.
 
 ## Concrete Command
 

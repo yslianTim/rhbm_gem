@@ -17,6 +17,8 @@
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
+#include "CommandEnumCatalog.hpp"
+
 namespace rhbm_gem {
 
 enum class ValidationPhase : std::uint8_t
@@ -241,7 +243,7 @@ protected:
         InvalidatePreparedState();
         using UnderlyingType = std::underlying_type_t<FieldType>;
         const auto raw_numeric{ static_cast<UnderlyingType>(field) };
-        for (const auto & option : internal::CommandEnumTraits<FieldType>::kOptions)
+        for (const auto & option : command_internal::CommandEnumTraits<FieldType>::kOptions)
         {
             if (static_cast<UnderlyingType>(option.value) == raw_numeric)
             {

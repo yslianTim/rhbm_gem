@@ -5,6 +5,7 @@
 #include <rhbm_gem/core/command/CommandSystem.hpp>
 
 #include "command/detail/CommandCatalog.hpp"
+#include "command/detail/CommandEnumCatalog.hpp"
 
 #include <type_traits>
 
@@ -17,7 +18,7 @@ namespace {
 template <typename EnumType>
 void BindEnumEntries(py::enum_<EnumType> & py_enum)
 {
-    for (const auto & option : internal::CommandEnumTraits<EnumType>::kOptions)
+    for (const auto & option : command_internal::CommandEnumTraits<EnumType>::kOptions)
     {
         const std::string name{ option.binding_token };
         py_enum.value(name.c_str(), option.value);

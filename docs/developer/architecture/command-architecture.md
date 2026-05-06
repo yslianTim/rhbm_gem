@@ -25,10 +25,9 @@ Public command headers separate concerns:
   - typed `RunCommand(request)` execution API
 - [`include/rhbm_gem/core/command/CommandTypes.hpp`](/include/rhbm_gem/core/command/CommandTypes.hpp)
   - shared public enums
-  - enum alias and binding metadata in `rhbm_gem::internal`
   - `CommandRequestBase`
   - one plain request DTO per command
-  - default data/database path helpers
+  - default data/database path helper declarations
   - `CommandDiagnostic`
   - `CommandResult`
 
@@ -52,9 +51,9 @@ That schema is the single source for:
 - CLI option registration
 - Python request field binding
 
-Enum alias and binding metadata live next to the enum declarations in
-[`include/rhbm_gem/core/command/CommandTypes.hpp`](/include/rhbm_gem/core/command/CommandTypes.hpp).
-The helper symbols stay under `rhbm_gem::internal`.
+Enum alias and binding metadata live in
+[`src/core/command/detail/CommandEnumCatalog.hpp`](/src/core/command/detail/CommandEnumCatalog.hpp)
+under `rhbm_gem::command_internal`.
 
 ## Execution Surfaces
 
