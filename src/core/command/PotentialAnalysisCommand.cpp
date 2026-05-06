@@ -12,7 +12,6 @@
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
-#include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/LocalPainter.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
@@ -24,13 +23,18 @@
 
 #include <atomic>
 #include <cmath>
+#include <filesystem>
 #include <iterator>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <random>
 #include <sstream>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 #include <tuple>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -41,8 +45,15 @@
 #include <omp.h>
 #endif
 
+namespace rhbm_gem {
+
 namespace {
-using namespace rhbm_gem;
+
+struct PotentialAnalysisInputs
+{
+    std::unique_ptr<ModelObject> model_object;
+    std::unique_ptr<MapObject> map_object;
+};
 
 RHBMExecutionOptions MakePotentialAnalysisExecutionOptions(
     int thread_size, bool quiet_mode)
@@ -118,115 +129,21 @@ bool EmitTrainingReportIfRequested(
     return true;
 }
 
-} // namespace
-
-namespace rhbm_gem {
-
-PotentialAnalysisCommand::PotentialAnalysisCommand() :
-    CommandBase<PotentialAnalysisRequest>{},
-    m_model_key_tag{ "model" }, m_map_key_tag{ "map" },
-    m_map_object{ nullptr }, m_model_object{ nullptr }
-{
-}
-
-void PotentialAnalysisCommand::NormalizeAndValidateRequest()
-{
-    auto & request{ MutableRequest() };
-    ValidateRequiredPath(request.model_file_path, "--model", "Model file");
-    ValidateRequiredPath(request.map_file_path, "--map", "Map file");
-    CoerceFiniteNonNegativeScalar(request.simulated_map_resolution, "--sim-resolution",
-        0.0, LogLevel::Error, "Simulated map resolution");
-    if (request.saved_key_tag.empty())
-    {
-        request.saved_key_tag = "model";
-        AddParseError("--save-key", "Saved key tag cannot be empty. Using 'model' instead.");
-    }
-    CoercePositiveScalar(request.sampling_size, "--sampling",
-        1500, LogLevel::Warning, "Sampling size");
-    CoerceFiniteNonNegativeScalar(request.sampling_range_min, "--sampling-min",
-        0.0, LogLevel::Error, "Minimum sampling range");
-    CoerceFiniteNonNegativeScalar(request.sampling_range_max, "--sampling-max",
-        1.5, LogLevel::Error, "Maximum sampling range");
-    CoerceFinitePositiveScalar(request.sampling_height, "--sampling-height",
-        0.1, LogLevel::Error, "Sampling height");
-    CoerceFiniteNonNegativeScalar(request.fit_range_min, "--fit-min",
-        0.0, LogLevel::Error, "Minimum fitting range");
-    CoerceFiniteNonNegativeScalar(request.fit_range_max, "--fit-max",
-        1.0, LogLevel::Error, "Maximum fitting range");
-    CoerceFinitePositiveScalar(request.alpha_r, "--alpha-r",
-        0.1, LogLevel::Error, "Alpha-R");
-    CoerceFinitePositiveScalar(request.alpha_g, "--alpha-g",
-        0.2, LogLevel::Error, "Alpha-G");
-    CoerceFiniteNonNegativeScalar(request.training_alpha_min, "--training-alpha-min",
-        0.0, LogLevel::Error, "Minimum training alpha");
-    CoerceFiniteNonNegativeScalar(request.training_alpha_max, "--training-alpha-max",
-        1.0, LogLevel::Error, "Maximum training alpha");
-    CoerceFinitePositiveScalar(request.training_alpha_step, "--training-alpha-step",
-        0.1, LogLevel::Error, "Training alpha step");
-}
-
-bool PotentialAnalysisCommand::ExecuteImpl()
-{
-    const auto & request{ RequestOptions() };
-    if (!BuildDataObject(request)) return false;
-    auto & model_object{ *m_model_object };
-    auto & map_object{ *m_map_object };
-    RunMapObjectPreprocessing(map_object);
-    RunModelObjectPreprocessing(model_object, request.asymmetry_flag);
-    RunSamplingWorkflow(map_object, model_object,
-        request.sampling_size, request.sampling_range_min, request.sampling_range_max);
-    RunDatasetPreparationWorkflow(model_object, request.fit_range_min, request.fit_range_max);
-    RunAtomPotentialFittingWorkflow(model_object, request);
-#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
-    experimental::RunPotentialAnalysisBondWorkflow(model_object, map_object, request, ThreadSize());
-#endif
-    SavePreparedModel(model_object, request.database_path, request.saved_key_tag);
-    return true;
-}
-
-void PotentialAnalysisCommand::ValidatePreparedRequest()
-{
-    const auto & request{ RequestOptions() };
-    RequirePrepareCondition(
-        !request.simulation_flag || request.simulated_map_resolution > 0.0,
-        "--sim-resolution",
-        "Expected a positive simulated-map resolution when '--simulation true' is selected.");
-    RequirePrepareCondition(
-        request.sampling_range_min <= request.sampling_range_max,
-        "--sampling-range",
-        "Expected --sampling-min <= --sampling-max.");
-    RequirePrepareCondition(
-        request.fit_range_min <= request.fit_range_max,
-        "--fit-range",
-        "Expected --fit-min <= --fit-max.");
-    RequirePrepareCondition(
-        request.training_alpha_min <= request.training_alpha_max,
-        "--training-alpha-range",
-        "Expected --training-alpha-min <= --training-alpha-max.");
-}
-
-void PotentialAnalysisCommand::ResetRuntimeState()
-{
-    m_map_object.reset();
-    m_model_object.reset();
-}
-
-bool PotentialAnalysisCommand::BuildDataObject(const PotentialAnalysisRequest & request)
+std::optional<PotentialAnalysisInputs> LoadPotentialAnalysisInputs(
+    const PotentialAnalysisRequest & request)
 {
     ScopeTimer timer("PotentialAnalysisCommand::BuildDataObject");
     try
     {
         auto model_object{ ReadModel(request.model_file_path) };
-        model_object->SetKeyTag(m_model_key_tag);
-        m_model_object = std::shared_ptr<ModelObject>{ std::move(model_object) };
+        model_object->SetKeyTag("model");
         auto map_object{ ReadMap(request.map_file_path) };
-        map_object->SetKeyTag(m_map_key_tag);
-        m_map_object = std::shared_ptr<MapObject>{ std::move(map_object) };
-        if (m_model_object == nullptr || m_map_object == nullptr)
+        map_object->SetKeyTag("map");
+        if (model_object == nullptr || map_object == nullptr)
         {
             Logger::Log(LogLevel::Error,
                 "PotentialAnalysisCommand::BuildDataObject : model/map object missing after load.");
-            return false;
+            return std::nullopt;
         }
         if (request.simulation_flag)
         {
@@ -237,22 +154,22 @@ bool PotentialAnalysisCommand::BuildDataObject(const PotentialAnalysisRequest & 
                     "          Please give the corresponding resolution value for this map.\n"
                     "          (-r, --sim-resolution)");
             }
-            m_model_object->SetEmdID("Simulation");
-            m_model_object->SetResolution(request.simulated_map_resolution);
-            m_model_object->SetResolutionMethod("Blurring Width");
+            model_object->SetEmdID("Simulation");
+            model_object->SetResolution(request.simulated_map_resolution);
+            model_object->SetResolutionMethod("Blurring Width");
         }
+        return PotentialAnalysisInputs{ std::move(model_object), std::move(map_object) };
     }
     catch (const std::exception & e)
     {
         Logger::Log(LogLevel::Error,
             "PotentialAnalysisCommand::BuildDataObject : " + std::string(e.what()));
-        return false;
+        return std::nullopt;
     }
-    return true;
 }
 
 std::vector<MutableLocalPotentialView>
-PotentialAnalysisCommand::BuildSelectedAtomLocalEntryViews(ModelObject & model_object)
+BuildSelectedAtomLocalEntryViews(ModelObject & model_object)
 {
     auto analysis{ model_object.EditAnalysis() };
     const auto & atom_list{ model_object.GetSelectedAtoms() };
@@ -265,13 +182,7 @@ PotentialAnalysisCommand::BuildSelectedAtomLocalEntryViews(ModelObject & model_o
     return local_entry_list;
 }
 
-void PotentialAnalysisCommand::RunMapObjectPreprocessing(MapObject & map_object)
-{
-    ScopeTimer timer("PotentialAnalysisCommand::RunMapObjectPreprocessing");
-    map_object.MapValueArrayNormalization();
-}
-
-void PotentialAnalysisCommand::RunModelObjectPreprocessing(ModelObject & model_object, bool asymmetry_flag)
+void RunModelObjectPreprocessing(ModelObject & model_object, bool asymmetry_flag)
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunModelObjectPreprocessing");
     auto analysis{ model_object.EditAnalysis() };
@@ -307,172 +218,48 @@ void PotentialAnalysisCommand::RunModelObjectPreprocessing(ModelObject & model_o
     }
 }
 
-void PotentialAnalysisCommand::RunAtomPotentialFittingWorkflow(
+void RunLocalPotentialFitting(
     ModelObject & model_object,
-    const PotentialAnalysisRequest & request)
+    double alpha_r,
+    int thread_size)
 {
-    ScopeTimer timer("PotentialAnalysisCommand::RunAtomPotentialFittingWorkflow");
-    if (request.training_alpha_flag)
-    {
-        RunAtomAlphaTraining(model_object, request);
-    }
-    else
-    {
-        RunLocalPotentialFitting(model_object, request.alpha_r);
-    }
-
-    auto analysis{ model_object.EditAnalysis() };
-    const auto analysis_view{ model_object.GetAnalysisView() };
-    std::unordered_map<const AtomObject *, MutableLocalPotentialView> local_entry_map;
-    local_entry_map.reserve(model_object.GetSelectedAtomCount());
-    for (auto * atom : model_object.GetSelectedAtoms())
-    {
-        local_entry_map.emplace(atom, analysis.EnsureAtomLocalPotential(*atom));
-    }
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
-    {
-        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        Logger::Log(LogLevel::Info, "Class type: " + class_key);
-
-        // Group Atom Potential Fitting
-        auto group_key_list{ analysis_view.CollectAtomGroupKeys(class_key) };
-        auto group_key_size{ group_key_list.size() };
-        std::atomic<size_t> key_count{ 0 };
-
-#ifdef USE_OPENMP
-        #pragma omp parallel for schedule(dynamic) num_threads(ThreadSize())
-#endif
-        for (size_t idx = 0; idx < group_key_size; idx++)
-        {
-            auto group_key{ group_key_list[idx] };
-            const auto & atom_list{ analysis_view.GetAtomObjectList(group_key, class_key) };
-            std::vector<RHBMMemberDataset> member_datasets;
-            std::vector<RHBMBetaEstimateResult> member_fit_results;
-            member_datasets.reserve(atom_list.size());
-            member_fit_results.reserve(atom_list.size());
-            for (const auto & atom : atom_list)
-            {
-                const auto local_entry{ local_entry_map.at(atom) };
-                member_datasets.emplace_back(local_entry.GetDataset());
-                member_fit_results.emplace_back(local_entry.GetFitResult());
-            }
-            auto alpha_g{ request.training_alpha_flag ?
-                analysis_view.GetAtomAlphaG(group_key, class_key) : request.alpha_g
-            };
-            const auto result{
-                rhbm_helper::EstimateGroup(
-                    alpha_g,
-                    rhbm_helper::BuildGroupInput(member_datasets, member_fit_results),
-                    MakePotentialAnalysisExecutionOptions(ThreadSize(), true))
-            };
-
-#ifdef USE_OPENMP
-            #pragma omp critical
-#endif
-            {
-                analysis.ApplyAtomGroupEstimateResult(group_key, class_key, result, alpha_g);
-                key_count++;
-                Logger::ProgressBar(key_count, group_key_size);
-            }
-        }
-    }
-}
-
-void PotentialAnalysisCommand::SavePreparedModel(
-    ModelObject & model_object,
-    const std::filesystem::path & database_path,
-    std::string_view saved_key_tag)
-{
-    ScopeTimer timer("PotentialAnalysisCommand::SavePreparedModel");
-    DataRepository repository{ database_path };
-    repository.SaveModel(model_object, std::string(saved_key_tag));
-    model_object.EditAnalysis().ClearTransientFitStates();
-}
-
-void PotentialAnalysisCommand::RunSamplingWorkflow(
-    MapObject & map_object,
-    ModelObject & model_object,
-    int sampling_size,
-    double sampling_range_min,
-    double sampling_range_max)
-{
-    ScopeTimer timer("PotentialAnalysisCommand::RunSamplingWorkflow");
-#ifdef USE_OPENMP
-    auto thread_size{ ThreadSize() };
-#endif
-    SphereSampler sampler;
-    sampler.SetSamplingProfile(
-        //SphereSamplingProfile::RadiusUniformRandom(
-        //    SphereDistanceRange{ sampling_range_min, sampling_range_max },
-        //    static_cast<unsigned int>(sampling_size))
-        SphereSamplingProfile::FibonacciDeterministic(
-            SphereDistanceRange{ sampling_range_min, sampling_range_max },
-            0.1,
-            static_cast<unsigned int>(sampling_size))
-    );
-    sampler.Print();
-
-    const auto & atom_list{ model_object.GetSelectedAtoms() };
-    const auto atom_size{ atom_list.size() };
-    size_t atom_count{ 0 };
+    ScopeTimer timer("PotentialAnalysisCommand::RunLocalPotentialFitting");
+    const auto selected_atom_size{ model_object.GetSelectedAtomCount() };
     auto local_entry_list{ BuildSelectedAtomLocalEntryViews(model_object) };
+    std::atomic<size_t> atom_count{ 0 };
+    Logger::Log(LogLevel::Info,
+        "Run Local atom fitting for " + std::to_string(selected_atom_size) + " atoms.");
 
 #ifdef USE_OPENMP
-    #pragma omp parallel for num_threads(thread_size)
+    #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
 #endif
-    for (size_t i = 0; i < atom_size; i++)
+    for (size_t i = 0; i < selected_atom_size; i++)
     {
-        auto atom{ atom_list[i] };
-        auto entry{ local_entry_list[i] };
-        auto sampling_entries{ SampleMapValues(map_object, sampler, *atom, sampling_range_max, 0.0) };
-        entry.SetSamplingEntries(sampling_entries);
-#ifdef USE_OPENMP
-        #pragma omp critical
-#endif
-        {
-            atom_count++;
-            Logger::ProgressPercent(atom_count, atom_size);
-        }
-    }
-}
+        auto local_entry{ local_entry_list[i] };
+        local_entry.SetAlphaR(alpha_r);
+        const auto result{
+            rhbm_helper::EstimateBetaMDPDE(
+                alpha_r,
+                local_entry.GetDataset(),
+                MakePotentialAnalysisExecutionOptions(thread_size, true))
+        };
 
-void PotentialAnalysisCommand::RunDatasetPreparationWorkflow(
-    ModelObject & model_object,
-    double fit_range_min,
-    double fit_range_max)
-{
-    ScopeTimer timer("PotentialAnalysisCommand::RunDatasetPreparationWorkflow");
-    const auto & atom_list{ model_object.GetSelectedAtoms() };
-    const auto atom_size{ atom_list.size() };
-    size_t atom_count{ 0 };
-    auto local_entry_list{ BuildSelectedAtomLocalEntryViews(model_object) };
-    const linearization_service::LinearizationRange fit_range{ fit_range_min, fit_range_max };
-
-#ifdef USE_OPENMP
-    #pragma omp parallel for schedule(dynamic) num_threads(ThreadSize())
-#endif
-    for (size_t i = 0; i < atom_size; i++)
-    {
-        auto entry{ local_entry_list[i] };
-        const auto local_view{ LocalPotentialView::RequireFor(*atom_list[i]) };
-        entry.SetDataset(
-            rhbm_helper::BuildMemberDataset(
-                linearization_service::BuildDatasetSeries(local_view.GetSamplingEntries(),fit_range))
-        );
+        local_entry.SetFitResult(result);
 
 #ifdef USE_OPENMP
         #pragma omp critical
 #endif
         {
             atom_count++;
-            Logger::ProgressPercent(atom_count, atom_size);
+            Logger::ProgressPercent(atom_count, selected_atom_size);
         }
     }
 }
 
-void PotentialAnalysisCommand::RunAtomAlphaTraining(
+void RunAtomAlphaTraining(
     ModelObject & model_object,
-    const PotentialAnalysisRequest & request)
+    const PotentialAnalysisRequest & request,
+    int thread_size)
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunAtomAlphaTraining");
     auto analysis{ model_object.EditAnalysis() };
@@ -502,7 +289,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     {
         rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_r_options;
         alpha_r_options.subset_size = 5;
-        alpha_r_options.execution_options = MakePotentialAnalysisExecutionOptions(ThreadSize(), true);
+        alpha_r_options.execution_options = MakePotentialAnalysisExecutionOptions(thread_size, true);
         alpha_r_options.progress_callback =
             [](std::size_t completed, std::size_t total)
             {
@@ -522,7 +309,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
         "Alpha_R Training Results Summary: best alpha_r = "+ std::to_string(alpha_r));
     
     // Alpha_G Training
-    RunLocalPotentialFitting(model_object, alpha_r);
+    RunLocalPotentialFitting(model_object, alpha_r, thread_size);
     
     std::vector<std::vector<RHBMParameterVector>> beta_group_list;
     const auto component_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
@@ -553,7 +340,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     {
         rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_g_options;
         alpha_g_options.subset_size = 10;
-        alpha_g_options.execution_options = MakePotentialAnalysisExecutionOptions(ThreadSize(), true);
+        alpha_g_options.execution_options = MakePotentialAnalysisExecutionOptions(thread_size, true);
         alpha_g_options.progress_callback =
             [](std::size_t completed, std::size_t total)
             {
@@ -582,7 +369,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
 
     rhbm_trainer::AlphaTrainer::AlphaRunOptions alpha_bias_study_options;
     alpha_bias_study_options.execution_options =
-        MakePotentialAnalysisExecutionOptions(ThreadSize(), true);
+        MakePotentialAnalysisExecutionOptions(thread_size, true);
     alpha_bias_study_options.progress_callback =
         [](std::size_t completed, std::size_t total)
         {
@@ -634,42 +421,257 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(
     }
 }
 
-void PotentialAnalysisCommand::RunLocalPotentialFitting(
+void RunAtomPotentialFittingWorkflow(
     ModelObject & model_object,
-    double alpha_r)
+    const PotentialAnalysisRequest & request,
+    int thread_size)
 {
-    ScopeTimer timer("PotentialAnalysisCommand::RunLocalPotentialFitting");
-    const auto thread_size{ ThreadSize() };
-    const auto selected_atom_size{ model_object.GetSelectedAtomCount() };
+    ScopeTimer timer("PotentialAnalysisCommand::RunAtomPotentialFittingWorkflow");
+    if (request.training_alpha_flag)
+    {
+        RunAtomAlphaTraining(model_object, request, thread_size);
+    }
+    else
+    {
+        RunLocalPotentialFitting(model_object, request.alpha_r, thread_size);
+    }
+
+    auto analysis{ model_object.EditAnalysis() };
+    const auto analysis_view{ model_object.GetAnalysisView() };
+    std::unordered_map<const AtomObject *, MutableLocalPotentialView> local_entry_map;
+    local_entry_map.reserve(model_object.GetSelectedAtomCount());
+    for (auto * atom : model_object.GetSelectedAtoms())
+    {
+        local_entry_map.emplace(atom, analysis.EnsureAtomLocalPotential(*atom));
+    }
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
+    {
+        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
+        Logger::Log(LogLevel::Info, "Class type: " + class_key);
+
+        // Group Atom Potential Fitting
+        auto group_key_list{ analysis_view.CollectAtomGroupKeys(class_key) };
+        auto group_key_size{ group_key_list.size() };
+        std::atomic<size_t> key_count{ 0 };
+
+#ifdef USE_OPENMP
+        #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
+#endif
+        for (size_t idx = 0; idx < group_key_size; idx++)
+        {
+            auto group_key{ group_key_list[idx] };
+            const auto & atom_list{ analysis_view.GetAtomObjectList(group_key, class_key) };
+            std::vector<RHBMMemberDataset> member_datasets;
+            std::vector<RHBMBetaEstimateResult> member_fit_results;
+            member_datasets.reserve(atom_list.size());
+            member_fit_results.reserve(atom_list.size());
+            for (const auto & atom : atom_list)
+            {
+                const auto local_entry{ local_entry_map.at(atom) };
+                member_datasets.emplace_back(local_entry.GetDataset());
+                member_fit_results.emplace_back(local_entry.GetFitResult());
+            }
+            auto alpha_g{ request.training_alpha_flag ?
+                analysis_view.GetAtomAlphaG(group_key, class_key) : request.alpha_g
+            };
+            const auto result{
+                rhbm_helper::EstimateGroup(
+                    alpha_g,
+                    rhbm_helper::BuildGroupInput(member_datasets, member_fit_results),
+                    MakePotentialAnalysisExecutionOptions(thread_size, true))
+            };
+
+#ifdef USE_OPENMP
+            #pragma omp critical
+#endif
+            {
+                analysis.ApplyAtomGroupEstimateResult(group_key, class_key, result, alpha_g);
+                key_count++;
+                Logger::ProgressBar(key_count, group_key_size);
+            }
+        }
+    }
+}
+
+void SavePreparedModel(
+    ModelObject & model_object,
+    const std::filesystem::path & database_path,
+    std::string_view saved_key_tag)
+{
+    ScopeTimer timer("PotentialAnalysisCommand::SavePreparedModel");
+    DataRepository repository{ database_path };
+    repository.SaveModel(model_object, std::string(saved_key_tag));
+    model_object.EditAnalysis().ClearTransientFitStates();
+}
+
+void RunSamplingWorkflow(
+    MapObject & map_object,
+    ModelObject & model_object,
+    int sampling_size,
+    double sampling_range_min,
+    double sampling_range_max,
+    int thread_size)
+{
+    ScopeTimer timer("PotentialAnalysisCommand::RunSamplingWorkflow");
+    SphereSampler sampler;
+    sampler.SetSamplingProfile(
+        //SphereSamplingProfile::RadiusUniformRandom(
+        //    SphereDistanceRange{ sampling_range_min, sampling_range_max },
+        //    static_cast<unsigned int>(sampling_size))
+        SphereSamplingProfile::FibonacciDeterministic(
+            SphereDistanceRange{ sampling_range_min, sampling_range_max },
+            0.1,
+            static_cast<unsigned int>(sampling_size))
+    );
+    sampler.Print();
+
+    const auto & atom_list{ model_object.GetSelectedAtoms() };
+    const auto atom_size{ atom_list.size() };
+    size_t atom_count{ 0 };
     auto local_entry_list{ BuildSelectedAtomLocalEntryViews(model_object) };
-    std::atomic<size_t> atom_count{ 0 };
-    Logger::Log(LogLevel::Info,
-        "Run Local atom fitting for " + std::to_string(selected_atom_size) + " atoms.");
+
+#ifdef USE_OPENMP
+    #pragma omp parallel for num_threads(thread_size)
+#endif
+    for (size_t i = 0; i < atom_size; i++)
+    {
+        auto atom{ atom_list[i] };
+        auto entry{ local_entry_list[i] };
+        auto sampling_entries{ SampleMapValues(map_object, sampler, *atom, sampling_range_max, 0.0) };
+        entry.SetSamplingEntries(sampling_entries);
+#ifdef USE_OPENMP
+        #pragma omp critical
+#endif
+        {
+            atom_count++;
+            Logger::ProgressPercent(atom_count, atom_size);
+        }
+    }
+}
+
+void RunDatasetPreparationWorkflow(
+    ModelObject & model_object,
+    double fit_range_min,
+    double fit_range_max,
+    int thread_size)
+{
+    ScopeTimer timer("PotentialAnalysisCommand::RunDatasetPreparationWorkflow");
+    const auto & atom_list{ model_object.GetSelectedAtoms() };
+    const auto atom_size{ atom_list.size() };
+    size_t atom_count{ 0 };
+    auto local_entry_list{ BuildSelectedAtomLocalEntryViews(model_object) };
+    const linearization_service::LinearizationRange fit_range{ fit_range_min, fit_range_max };
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
 #endif
-    for (size_t i = 0; i < selected_atom_size; i++)
+    for (size_t i = 0; i < atom_size; i++)
     {
-        auto local_entry{ local_entry_list[i] };
-        local_entry.SetAlphaR(alpha_r);
-        const auto result{
-            rhbm_helper::EstimateBetaMDPDE(
-                alpha_r,
-                local_entry.GetDataset(),
-                MakePotentialAnalysisExecutionOptions(thread_size, true))
-        };
-
-        local_entry.SetFitResult(result);
+        auto entry{ local_entry_list[i] };
+        const auto local_view{ LocalPotentialView::RequireFor(*atom_list[i]) };
+        entry.SetDataset(
+            rhbm_helper::BuildMemberDataset(
+                linearization_service::BuildDatasetSeries(local_view.GetSamplingEntries(),fit_range))
+        );
 
 #ifdef USE_OPENMP
         #pragma omp critical
 #endif
         {
             atom_count++;
-            Logger::ProgressPercent(atom_count, selected_atom_size);
+            Logger::ProgressPercent(atom_count, atom_size);
         }
     }
+}
+
+} // namespace
+
+PotentialAnalysisCommand::PotentialAnalysisCommand() :
+    CommandBase<PotentialAnalysisRequest>{}
+{
+}
+
+void PotentialAnalysisCommand::NormalizeAndValidateRequest()
+{
+    auto & request{ MutableRequest() };
+    ValidateRequiredPath(request.model_file_path, "--model", "Model file");
+    ValidateRequiredPath(request.map_file_path, "--map", "Map file");
+    CoerceFiniteNonNegativeScalar(request.simulated_map_resolution, "--sim-resolution",
+        0.0, LogLevel::Error, "Simulated map resolution");
+    if (request.saved_key_tag.empty())
+    {
+        request.saved_key_tag = "model";
+        AddParseError("--save-key", "Saved key tag cannot be empty. Using 'model' instead.");
+    }
+    CoercePositiveScalar(request.sampling_size, "--sampling",
+        1500, LogLevel::Warning, "Sampling size");
+    CoerceFiniteNonNegativeScalar(request.sampling_range_min, "--sampling-min",
+        0.0, LogLevel::Error, "Minimum sampling range");
+    CoerceFiniteNonNegativeScalar(request.sampling_range_max, "--sampling-max",
+        1.5, LogLevel::Error, "Maximum sampling range");
+    CoerceFinitePositiveScalar(request.sampling_height, "--sampling-height",
+        0.1, LogLevel::Error, "Sampling height");
+    CoerceFiniteNonNegativeScalar(request.fit_range_min, "--fit-min",
+        0.0, LogLevel::Error, "Minimum fitting range");
+    CoerceFiniteNonNegativeScalar(request.fit_range_max, "--fit-max",
+        1.0, LogLevel::Error, "Maximum fitting range");
+    CoerceFinitePositiveScalar(request.alpha_r, "--alpha-r",
+        0.1, LogLevel::Error, "Alpha-R");
+    CoerceFinitePositiveScalar(request.alpha_g, "--alpha-g",
+        0.2, LogLevel::Error, "Alpha-G");
+    CoerceFiniteNonNegativeScalar(request.training_alpha_min, "--training-alpha-min",
+        0.0, LogLevel::Error, "Minimum training alpha");
+    CoerceFiniteNonNegativeScalar(request.training_alpha_max, "--training-alpha-max",
+        1.0, LogLevel::Error, "Maximum training alpha");
+    CoerceFinitePositiveScalar(request.training_alpha_step, "--training-alpha-step",
+        0.1, LogLevel::Error, "Training alpha step");
+}
+
+bool PotentialAnalysisCommand::ExecuteImpl()
+{
+    const auto & request{ RequestOptions() };
+    const auto thread_size{ ThreadSize() };
+    auto inputs{ LoadPotentialAnalysisInputs(request) };
+    if (!inputs.has_value()) return false;
+
+    auto & model_object{ *inputs->model_object };
+    auto & map_object{ *inputs->map_object };
+    {
+        ScopeTimer timer("PotentialAnalysisCommand::RunMapObjectPreprocessing");
+        map_object.MapValueArrayNormalization();
+    }
+    RunModelObjectPreprocessing(model_object, request.asymmetry_flag);
+    RunSamplingWorkflow(map_object, model_object,
+        request.sampling_size, request.sampling_range_min, request.sampling_range_max, thread_size);
+    RunDatasetPreparationWorkflow(
+        model_object, request.fit_range_min, request.fit_range_max, thread_size);
+    RunAtomPotentialFittingWorkflow(model_object, request, thread_size);
+#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
+    experimental::RunPotentialAnalysisBondWorkflow(model_object, map_object, request, thread_size);
+#endif
+    SavePreparedModel(model_object, request.database_path, request.saved_key_tag);
+    return true;
+}
+
+void PotentialAnalysisCommand::ValidatePreparedRequest()
+{
+    const auto & request{ RequestOptions() };
+    RequirePrepareCondition(
+        !request.simulation_flag || request.simulated_map_resolution > 0.0,
+        "--sim-resolution",
+        "Expected a positive simulated-map resolution when '--simulation true' is selected.");
+    RequirePrepareCondition(
+        request.sampling_range_min <= request.sampling_range_max,
+        "--sampling-range",
+        "Expected --sampling-min <= --sampling-max.");
+    RequirePrepareCondition(
+        request.fit_range_min <= request.fit_range_max,
+        "--fit-range",
+        "Expected --fit-min <= --fit-max.");
+    RequirePrepareCondition(
+        request.training_alpha_min <= request.training_alpha_max,
+        "--training-alpha-range",
+        "Expected --training-alpha-min <= --training-alpha-max.");
 }
 
 } // namespace rhbm_gem
