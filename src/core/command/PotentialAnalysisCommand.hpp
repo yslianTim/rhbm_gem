@@ -2,8 +2,6 @@
 
 #include <memory>
 
-#include <Eigen/Dense>
-
 #include "detail/CommandBase.hpp"
 
 namespace rhbm_gem {
