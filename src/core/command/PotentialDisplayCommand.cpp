@@ -4,22 +4,96 @@
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/data/object/MapObject.hpp>
-#include <rhbm_gem/core/painter/PainterBase.hpp>
 #include <rhbm_gem/core/painter/GausPainter.hpp>
 #include <rhbm_gem/core/painter/AtomPainter.hpp>
 #include <rhbm_gem/core/painter/ModelPainter.hpp>
 #include <rhbm_gem/core/painter/ComparisonPainter.hpp>
 #include <rhbm_gem/core/painter/DemoPainter.hpp>
-#include <rhbm_gem/utils/domain/StringHelper.hpp>
 #include <rhbm_gem/utils/domain/AtomSelector.hpp>
-#include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 
-#include <stdexcept>
+#include <cstddef>
+#include <exception>
+#include <memory>
+#include <optional>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 namespace {
+
+using namespace rhbm_gem;
+
+struct PotentialDisplayInputs
+{
+    std::vector<std::unique_ptr<rhbm_gem::ModelObject>> model_objects;
+    std::unordered_map<
+        std::string,
+        std::vector<std::unique_ptr<rhbm_gem::ModelObject>>> reference_model_groups;
+};
+
+std::optional<PotentialDisplayInputs> LoadPotentialDisplayInputs(
+    const rhbm_gem::PotentialDisplayRequest & request)
+{
+    ScopeTimer timer{ "PotentialDisplayCommand::BuildDataObject" };
+    try
+    {
+        DataRepository repository{ request.database_path };
+        PotentialDisplayInputs inputs;
+
+        auto model_size{ request.model_key_tag_list.size() };
+        size_t model_count{ 1 };
+        Logger::Log(LogLevel::Info, "Load model object list:");
+        inputs.model_objects.reserve(model_size);
+        for (const auto & key : request.model_key_tag_list)
+        {
+            Logger::ProgressBar(model_count, model_size);
+            inputs.model_objects.emplace_back(repository.LoadModel(key));
+            model_count++;
+        }
+
+        for (const auto & [map_key, key_tag_list] : request.reference_model_groups)
+        {
+            auto ref_model_size{ key_tag_list.size() };
+            size_t ref_model_count{ 1 };
+            auto & ref_model_objects{ inputs.reference_model_groups[map_key] };
+            ref_model_objects.reserve(ref_model_size);
+            Logger::Log(LogLevel::Info, "Load ["+ map_key +"] reference model object list:");
+            for (const auto & key_tag : key_tag_list)
+            {
+                Logger::ProgressBar(ref_model_count, ref_model_size);
+                ref_model_objects.emplace_back(repository.LoadModel(key_tag));
+                ref_model_count++;
+            }
+        }
+
+        Logger::Log(LogLevel::Info,
+            "Total number of model object sets to be display: "
+            + std::to_string(request.model_key_tag_list.size()));
+        return inputs;
+    }
+    catch(const std::exception & e)
+    {
+        Logger::Log(LogLevel::Error,
+            "PotentialDisplayCommand::BuildDataObject : Failed to load model data from database: "
+                + std::string(e.what()));
+        return std::nullopt;
+    }
+}
+
+::AtomSelector BuildAtomSelector(const rhbm_gem::PotentialDisplayRequest & request)
+{
+    ::AtomSelector selector;
+    selector.PickChainID(request.pick_chain_id);
+    selector.PickResidueType(request.pick_residue);
+    selector.PickElementType(request.pick_element);
+    selector.VetoChainID(request.veto_chain_id);
+    selector.VetoResidueType(request.veto_residue);
+    selector.VetoElementType(request.veto_element);
+    return selector;
+}
+
 void ApplyModelSelection(
     rhbm_gem::ModelObject & model_object,
     ::AtomSelector & selector)
@@ -34,13 +108,24 @@ void ApplyModelSelection(
                 && rhbm_gem::LocalPotentialView::For(atom).IsAvailable();
         });
 }
+
+void ApplyDataObjectSelection(
+    const std::vector<std::unique_ptr<rhbm_gem::ModelObject>> & model_objects,
+    ::AtomSelector & selector)
+{
+    ScopeTimer timer{ "PotentialDisplayCommand::RunDataObjectSelection" };
+    for (const auto & model_object : model_objects)
+    {
+        ApplyModelSelection(*model_object, selector);
+    }
 }
+
+} // namespace
 
 namespace rhbm_gem {
 
 PotentialDisplayCommand::PotentialDisplayCommand() :
-    CommandBase<PotentialDisplayRequest>{},
-    m_atom_selector{ std::make_unique<AtomSelector>() }
+    CommandBase<PotentialDisplayRequest>{}
 {
 }
 
@@ -71,118 +156,49 @@ void PotentialDisplayCommand::NormalizeAndValidateRequest()
     }
 }
 
-PotentialDisplayCommand::~PotentialDisplayCommand() = default;
-
 bool PotentialDisplayCommand::ExecuteImpl()
 {
-    if (BuildDataObject() == false) return false;
-    RunDataObjectSelection();
-    RunDisplay();
-    return true;
-}
-
-void PotentialDisplayCommand::ResetRuntimeState()
-{
-    m_model_object_list.clear();
-    m_ref_model_object_list_map.clear();
-}
-
-bool PotentialDisplayCommand::BuildDataObject()
-{
     const auto & request{ RequestOptions() };
-    ScopeTimer timer{ "PotentialDisplayCommand::BuildDataObject" };
-    try
-    {
-        DataRepository repository{ request.database_path };
-        auto model_size{ request.model_key_tag_list.size() };
-        size_t model_count{ 1 };
-        Logger::Log(LogLevel::Info, "Load model object list:");
-        for (const auto & key : request.model_key_tag_list)
-        {
-            Logger::ProgressBar(model_count, model_size);
-            m_model_object_list.emplace_back(repository.LoadModel(key));
-            model_count++;
-        }
-        for (const auto & [map_key, key_tag_list] : request.reference_model_groups)
-        {
-            auto ref_model_size{ key_tag_list.size() };
-            size_t ref_model_count{ 1 };
-            Logger::Log(LogLevel::Info, "Load ["+ map_key +"] reference model object list:");
-            for (auto & key_tag : key_tag_list)
-            {
-                Logger::ProgressBar(ref_model_count, ref_model_size);
-                m_ref_model_object_list_map[map_key].emplace_back(repository.LoadModel(key_tag));
-                ref_model_count++;
-            }
-        }
-        Logger::Log(LogLevel::Info,
-            "Total number of model object sets to be display: "
-            + std::to_string(request.model_key_tag_list.size()));
-    }
-    catch(const std::exception & e)
-    {
-        Logger::Log(LogLevel::Error,
-            "PotentialDisplayCommand::BuildDataObject : Failed to load model data from database: "
-                + std::string(e.what()));
-        return false;
-    }
-    return true;
-}
+    auto inputs{ LoadPotentialDisplayInputs(request) };
+    if (!inputs.has_value()) return false;
 
-void PotentialDisplayCommand::RunDataObjectSelection()
-{
-    const auto & request{ RequestOptions() };
-    ScopeTimer timer{ "PotentialDisplayCommand::RunDataObjectSelection" };
-    if (m_atom_selector == nullptr) return;
-    m_atom_selector->PickChainID(request.pick_chain_id);
-    m_atom_selector->PickResidueType(request.pick_residue);
-    m_atom_selector->PickElementType(request.pick_element);
-    m_atom_selector->VetoChainID(request.veto_chain_id);
-    m_atom_selector->VetoResidueType(request.veto_residue);
-    m_atom_selector->VetoElementType(request.veto_element);
+    auto selector{ BuildAtomSelector(request) };
+    ApplyDataObjectSelection(inputs->model_objects, selector);
 
-    for (const auto & model_object : m_model_object_list)
-    {
-        ApplyModelSelection(*model_object, *m_atom_selector);
-    }
-}
-
-void PotentialDisplayCommand::RunDisplay()
-{
-    const auto & request{ RequestOptions() };
     ScopeTimer timer{ "PotentialDisplayCommand::RunDisplay" };
+    const auto output_folder{ OutputFolder().string() };
     switch (request.painter_choice)
     {
         case PainterType::GAUS:
         {
             GausPainter painter;
-            for (const auto & model_object : m_model_object_list)
+            for (const auto & model_object : inputs->model_objects)
             {
                 painter_internal::PainterModelIngress::AddModel(
                     painter,
                     painter_internal::RequireGroupedAnalyzedModel(*model_object, "GausPainter"));
             }
-            painter.SetFolder(OutputFolder().string());
+            painter.SetFolder(output_folder);
             painter.Painting();
             break;
         }
         case PainterType::MODEL:
         {
             ModelPainter painter;
-            for (const auto & model_object : m_model_object_list)
+            for (const auto & model_object : inputs->model_objects)
             {
                 painter_internal::PainterModelIngress::AddModel(
                     painter,
                     painter_internal::RequireGroupedAnalyzedModel(*model_object, "ModelPainter"));
             }
-            painter.SetFolder(OutputFolder().string());
+            painter.SetFolder(output_folder);
             painter.Painting();
             break;
         }
         case PainterType::COMPARISON:
         {
             ComparisonPainter painter;
-            for (const auto & model_object : m_model_object_list)
+            for (const auto & model_object : inputs->model_objects)
             {
                 painter_internal::PainterModelIngress::AddModel(
                     painter,
@@ -190,7 +206,7 @@ void PotentialDisplayCommand::RunDisplay()
                         *model_object,
                         "ComparisonPainter"));
             }
-            for (const auto & [class_key, ref_model_list] : m_ref_model_object_list_map)
+            for (const auto & [class_key, ref_model_list] : inputs->reference_model_groups)
             {
                 for (const auto & model_object : ref_model_list)
                 {
@@ -202,20 +218,20 @@ void PotentialDisplayCommand::RunDisplay()
                         class_key);
                 }
             }
-            painter.SetFolder(OutputFolder().string());
+            painter.SetFolder(output_folder);
             painter.Painting();
             break;
         }
         case PainterType::DEMO:
         {
             DemoPainter painter;
-            for (const auto & model_object : m_model_object_list)
+            for (const auto & model_object : inputs->model_objects)
             {
                 painter_internal::PainterModelIngress::AddModel(
                     painter,
                     painter_internal::RequireGroupedAnalyzedModel(*model_object, "DemoPainter"));
             }
-            for (const auto & [class_key, ref_model_list] : m_ref_model_object_list_map)
+            for (const auto & [class_key, ref_model_list] : inputs->reference_model_groups)
             {
                 for (const auto & model_object : ref_model_list)
                 {
@@ -227,21 +243,21 @@ void PotentialDisplayCommand::RunDisplay()
                         class_key);
                 }
             }
-            painter.SetFolder(OutputFolder().string());
+            painter.SetFolder(output_folder);
             painter.Painting();
             break;
         }
         case PainterType::ATOM:
         {
             AtomPainter painter;
-            for (const auto & model_object : m_model_object_list)
+            for (const auto & model_object : inputs->model_objects)
             {
                 painter_internal::PainterModelIngress::AddModel(
                     painter,
                     painter_internal::RequireLocalAnalyzedModel(*model_object, "AtomPainter"));
             }
-            m_atom_selector->Print();
-            painter.SetFolder(OutputFolder().string());
+            selector.Print();
+            painter.SetFolder(output_folder);
             painter.Painting();
             break;
         }
@@ -257,6 +273,7 @@ void PotentialDisplayCommand::RunDisplay()
                         "  [3] DemoPainter");
             break;
     }
+    return true;
 }
 
 } // namespace rhbm_gem
