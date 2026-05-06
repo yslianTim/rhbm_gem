@@ -18,11 +18,10 @@ constexpr double F_1{ 14.39964393 };
 double ComputeSingleGaus(Element element, double distance, double blurring_width)
 {
     const double atomic_number{ static_cast<double>(ChemicalDataHelper::GetAtomicNumber(element)) };
-    const double inv_atomic_number{ 1.0 / atomic_number };
-    const double sigma_total_square{ inv_atomic_number * inv_atomic_number +
-                                     blurring_width * blurring_width };
-    const double exp_index{ -(distance * distance) / (2.0 * sigma_total_square) };
-    return std::pow(2.0 * PI * sigma_total_square, -1.5) * std::exp(exp_index);
+    const double width_square{ blurring_width * blurring_width };
+    const double exp_index{ -(distance * distance) / (2.0 * width_square) };
+    return atomic_number * std::pow(2.0 * PI * width_square, -1.5) *
+           std::exp(exp_index);
 }
 
 double ComputeFiveGausChargeIntrinsicTerm(
@@ -93,9 +92,12 @@ TEST(ElectricPotentialTest, SetModelChoiceSelectsModel)
     ElectricPotential potential;
 
     // Model 0: SINGLE_GAUS
-    potential.SetBlurringWidth(0.0);
+    constexpr double single_gaus_blurring_width{ 0.1 };
+    potential.SetBlurringWidth(single_gaus_blurring_width);
     potential.SetModelChoice(0);
-    const double expected_single_gaus{ ComputeSingleGaus(Element::CARBON, 1.0, 0.0) };
+    const double expected_single_gaus{
+        ComputeSingleGaus(Element::CARBON, 1.0, single_gaus_blurring_width)
+    };
     const double actual_single_gaus{ potential.GetPotentialValue(Element::CARBON, 1.0, 0.0) };
     EXPECT_DOUBLE_EQ(expected_single_gaus, actual_single_gaus);
 
@@ -134,14 +136,7 @@ TEST(ElectricPotentialTest, DefaultConstructorSetsExpectedState)
     double computed{ potential.GetPotentialValue(element, distance, 0.0) };
 
     // Expected value computed independently using blurring width 0.5
-    int atomic_number{ ChemicalDataHelper::GetAtomicNumber(element) };
-    double inv_atomic_number{ 1.0 / static_cast<double>(atomic_number) };
-    double sigma_total_square{ inv_atomic_number * inv_atomic_number + 0.5 * 0.5 };
-    double distance_square{ distance * distance };
-    double exp_index{ -distance_square / (2.0 * sigma_total_square) };
-    double expected{
-        std::pow(2.0 * M_PI * sigma_total_square, -1.5) * std::exp(exp_index)
-    };
+    double expected{ ComputeSingleGaus(element, distance, 0.5) };
 
     EXPECT_NEAR(expected, computed, 1e-12);
 }
@@ -159,14 +154,7 @@ TEST(ElectricPotentialTest, SingleGaussianCarbon)
     double computed{ potential.GetPotentialValue(element, distance, 0.0) };
 
     // Expected value using the formula from CalculateSingleGausModel
-    int atomic_number{ ChemicalDataHelper::GetAtomicNumber(element) };
-    double inv_atomic_number{ 1.0 / static_cast<double>(atomic_number) };
-    double sigma_total_square{ inv_atomic_number * inv_atomic_number + 0.1 * 0.1 };
-    double distance_square{ distance * distance };
-    double exp_index{ -distance_square / (2.0 * sigma_total_square) };
-    double expected{
-        std::pow(2.0 * M_PI * sigma_total_square, -1.5) * std::exp(exp_index)
-    };
+    double expected{ ComputeSingleGaus(element, distance, 0.1) };
 
     EXPECT_NEAR(expected, computed, 1e-12);
 }
