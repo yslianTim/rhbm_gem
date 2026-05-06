@@ -1,11 +1,14 @@
 #include <gtest/gtest.h>
 
+#include <array>
 #include <cstddef>
 #include <filesystem>
 #include <string>
 
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/CommandSystem.hpp>
+#include <rhbm_gem/data/io/ModelMapFileIO.hpp>
+#include <rhbm_gem/data/object/MapObject.hpp>
 #include "command/MapSimulationCommand.hpp"
 #include "command/ResultDumpCommand.hpp"
 
@@ -56,6 +59,39 @@ TEST(CommandWorkflowScenariosTest, MapSimulationGeneratesMapForEachValidBlurring
     EXPECT_EQ(
         error_output.find("MapObject::SetMapValueArray - MapObject already has a map value array"),
         std::string::npos);
+}
+
+TEST(CommandWorkflowScenariosTest, MapSimulationEmptyModelUsesZeroOrigin)
+{
+    command_test::ScopedTempDir temp_dir{ "map_simulation_empty_model" };
+
+    rg::MapSimulationCommand command{};
+    rg::MapSimulationRequest request{};
+    request.output_dir = temp_dir.path();
+    request.map_file_name = "sim_map";
+    request.model_file_path = command_test::TestDataPath("test_model_no_atoms.cif");
+    request.blurring_width_list = { 1.0 };
+    command.ApplyRequest(request);
+
+    ASSERT_TRUE(command.Run());
+    ASSERT_EQ(command_test::CountFilesWithExtension(temp_dir.path(), ".map"), 1);
+
+    std::filesystem::path map_path;
+    for (const auto & entry : std::filesystem::directory_iterator(temp_dir.path()))
+    {
+        if (entry.is_regular_file() && entry.path().extension() == ".map")
+        {
+            map_path = entry.path();
+            break;
+        }
+    }
+    ASSERT_FALSE(map_path.empty());
+
+    auto loaded_map{ rg::ReadMap(map_path) };
+    ASSERT_NE(loaded_map, nullptr);
+    EXPECT_EQ(loaded_map->GetGridSize(), (std::array<int, 3>{ 1, 1, 1 }));
+    EXPECT_EQ(loaded_map->GetOrigin(), (std::array<float, 3>{ 0.0f, 0.0f, 0.0f }));
+    EXPECT_NE(loaded_map->GetMapValueArray(), nullptr);
 }
 
 TEST(CommandWorkflowScenariosTest, ResultDumpRerunRefreshesRuntimeStateAndUsesCurrentPaths)

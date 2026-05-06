@@ -1,0 +1,25 @@
+data_test
+#
+loop_
+_database_2.database_id
+_database_2.database_code
+PDB EMPTY
+#
+loop_
+_entity.id
+_entity.type
+_entity.pdbx_number_of_molecules
+1 polymer 1
+#
+loop_
+_struct_asym.id
+_struct_asym.entity_id
+A 1
+#
+_em_3d_reconstruction.resolution 2.0
+_em_3d_reconstruction.resolution_method 'FSC'
+#
+loop_
+_atom_type.symbol
+C
+#

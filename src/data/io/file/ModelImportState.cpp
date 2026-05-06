@@ -140,19 +140,26 @@ void ModelImportState::SetStructureInfo(AtomObject* atom_object) {
 
 std::unique_ptr<ModelObject> ModelImportState::TakeModelObject(int preferred_model_number) {
     auto model_number_list{GetModelNumberList()};
-    if (model_number_list.empty()) {
+    if (model_number_list.empty()
+        && GetPdbID().empty()
+        && GetChainIDListMap().empty()
+        && GetElementTypeList().empty()) {
         throw std::runtime_error("No atom model found in the input model file.");
     }
 
     int selected_model_number{preferred_model_number};
-    if (HasModelNumber(selected_model_number) == false) {
+    if (!model_number_list.empty() && HasModelNumber(selected_model_number) == false) {
         selected_model_number = model_number_list.front();
         Logger::Log(
             LogLevel::Warning,
             "Model " + std::to_string(preferred_model_number) + " not found. Fallback to model " + std::to_string(selected_model_number) + ".");
     }
 
-    auto atom_list{ MoveAtomObjectList(selected_model_number) };
+    auto atom_list{
+        model_number_list.empty()
+            ? std::vector<std::unique_ptr<AtomObject>>{}
+            : MoveAtomObjectList(selected_model_number)
+    };
 
     std::unordered_set<const AtomObject*> selected_atom_set;
     selected_atom_set.reserve(atom_list.size());

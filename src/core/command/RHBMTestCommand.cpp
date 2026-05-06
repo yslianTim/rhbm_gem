@@ -14,6 +14,8 @@
 #include <utility>
 #include <vector>
 
+#include <Eigen/Dense>
+
 namespace rhbm_gem {
 
 namespace rhbm_test_plotting = command_detail::rhbm_test_plotting;
