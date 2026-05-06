@@ -5,6 +5,7 @@
 #include <cmath>
 #include <stdexcept>
 #include <vector>
+#include <map>
 
 #include <Eigen/Dense>
 
@@ -156,6 +157,41 @@ inline LocalPotentialSampleList BuildLocalPotentialSampleList(
     return sampling_data_list;
 }
 
+inline LocalPotentialSampleList KeepLowestResponseDecileByDistance(LocalPotentialSampleList sample_list)
+{
+    std::map<float, LocalPotentialSampleList> samples_by_distance;
+    for (auto & sample : sample_list)
+    {
+        samples_by_distance[sample.distance].emplace_back(std::move(sample));
+    }
+
+    LocalPotentialSampleList retained_samples;
+    for (auto & distance_entry : samples_by_distance)
+    {
+        auto & distance_samples{ distance_entry.second };
+        std::stable_sort(
+            distance_samples.begin(),
+            distance_samples.end(),
+            [](const LocalPotentialSample & lhs, const LocalPotentialSample & rhs)
+            {
+                return lhs.response < rhs.response;
+            });
+
+        const auto keep_count{
+            std::max<size_t>(
+                1,
+                static_cast<size_t>(std::ceil(static_cast<double>(distance_samples.size()) * 0.1)))
+        };
+        retained_samples.insert(
+            retained_samples.end(),
+            std::make_move_iterator(distance_samples.begin()),
+            std::make_move_iterator(
+                distance_samples.begin() + static_cast<std::ptrdiff_t>(keep_count)));
+    }
+
+    return retained_samples;
+}
+
 } // namespace detail
 
 // Prefer overloads that match the sampler's real inputs instead of forcing every sampler to
@@ -194,11 +230,6 @@ LocalPotentialSampleList SampleMapValues(
 
     const auto position{ atom.GetPosition() };
     const auto sampling_points{ sampler.GenerateSamplingPoints(position) };
-    if (angle == 0.0)
-    {
-        return detail::BuildLocalPotentialSampleList(map_object, sampling_points);
-    }
-
     const auto neighbor_atom_list{ atom.FindNeighborAtoms(neighbor_radius, false) };
     const auto reject_direction_list{
         detail::BuildAtomRejectDirectionList(atom, neighbor_atom_list)
@@ -209,7 +240,9 @@ LocalPotentialSampleList SampleMapValues(
     const auto sampling_scores{
         BuildLocalPotentialSampleScoreList(local_sampling_points, reject_direction_list, angle)
     };
-    return detail::BuildLocalPotentialSampleList(map_object, sampling_points, &sampling_scores);
+    auto sample_list{ detail::BuildLocalPotentialSampleList(map_object, sampling_points, &sampling_scores) };
+    //return detail::KeepLowestResponseDecileByDistance(std::move(sample_list));
+    return sample_list;
 }
 
 } // namespace rhbm_gem

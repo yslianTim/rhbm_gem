@@ -251,11 +251,10 @@ double ElectricPotential::CalculateSingleGausModel(
     Element element, double distance) const
 {
     auto atomic_number{ ChemicalDataHelper::GetAtomicNumber(element) };
-    auto inv_atomic_number{ 1.0/static_cast<double>(atomic_number) };
-    auto sigma_total_square{ inv_atomic_number * inv_atomic_number + m_blurring_width * m_blurring_width };
+    auto width_square{ m_blurring_width * m_blurring_width };
     auto distance_square{ distance * distance };
-    auto exp_index{ -distance_square/(2.0 * sigma_total_square) };
-    return std::pow(2.0 * M_PI * sigma_total_square, -1.5) * std::exp(exp_index);
+    auto exp_index{ -distance_square/(2.0 * width_square) };
+    return atomic_number * std::pow(2.0 * M_PI * width_square, -1.5) * std::exp(exp_index);
 }
 
 double ElectricPotential::CalculateSingleGausUserModel(

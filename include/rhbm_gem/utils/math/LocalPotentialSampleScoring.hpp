@@ -124,8 +124,7 @@ inline float ComputeLocalPotentialCleanScore(
 
 } // namespace detail
 
-inline std::vector<float> BuildDefaultLocalPotentialSampleScoreList(
-    std::size_t sample_count)
+inline std::vector<float> BuildDefaultLocalPotentialSampleScoreList(std::size_t sample_count)
 {
     return std::vector<float>(sample_count, 1.0f);
 }
