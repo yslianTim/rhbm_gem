@@ -159,7 +159,7 @@ TEST(MapSamplingTest, AtomSamplerWithZeroAngleMatchesPositionOnlySampling)
     EXPECT_FLOAT_EQ(from_atom.front().position->at(0), 0.0f);
 }
 
-TEST(MapSamplingTest, AtomSamplerRejectsPointsWithinAngleThresholdOfNeighborDirections)
+TEST(MapSamplingTest, AtomSamplerRetainsLowestResponseSamplesAfterAngleFiltering)
 {
     auto map{ MakeMapObject() };
     FixedPointSampler sampler;
@@ -169,43 +169,43 @@ TEST(MapSamplingTest, AtomSamplerRejectsPointsWithinAngleThresholdOfNeighborDire
     const auto sampling_data{
         rg::SampleMapValues(map, sampler, *atom, 1.1, 30.0) };
 
-    ASSERT_EQ(sampling_data.size(), 4u);
+    ASSERT_EQ(sampling_data.size(), 2u);
     EXPECT_FLOAT_EQ(sampling_data.at(0).distance, 0.0f);
     EXPECT_FLOAT_EQ(sampling_data.at(0).score, 1.0f);
+    ASSERT_TRUE(sampling_data.at(0).HasPosition());
+    EXPECT_FLOAT_EQ(sampling_data.at(0).position->at(0), 0.0f);
+    EXPECT_FLOAT_EQ(sampling_data.at(0).position->at(1), 0.0f);
     ASSERT_TRUE(sampling_data.at(1).HasPosition());
-    EXPECT_FLOAT_EQ(sampling_data.at(1).position->at(0), 1.0f);
+    EXPECT_FLOAT_EQ(sampling_data.at(1).distance, 1.0f);
+    EXPECT_FLOAT_EQ(sampling_data.at(1).position->at(0), -1.0f);
     EXPECT_FLOAT_EQ(sampling_data.at(1).position->at(1), 0.0f);
-    EXPECT_FLOAT_EQ(sampling_data.at(1).score, 0.0f);
-    ASSERT_TRUE(sampling_data.at(2).HasPosition());
-    EXPECT_FLOAT_EQ(sampling_data.at(2).position->at(0), 0.0f);
-    EXPECT_FLOAT_EQ(sampling_data.at(2).position->at(1), 1.0f);
-    EXPECT_FLOAT_EQ(sampling_data.at(2).score, 1.0f);
-    ASSERT_TRUE(sampling_data.at(3).HasPosition());
-    EXPECT_FLOAT_EQ(sampling_data.at(3).position->at(0), -1.0f);
-    EXPECT_FLOAT_EQ(sampling_data.at(3).position->at(1), 0.0f);
-    EXPECT_FLOAT_EQ(sampling_data.at(3).score, 1.0f);
+    EXPECT_FLOAT_EQ(sampling_data.at(1).score, 1.0f);
 }
 
-TEST(MapSamplingTest, AtomSamplerUsesSamplingPointScoresForFilteredEntries)
+TEST(MapSamplingTest, AtomSamplerRemovesFilteredEntriesBeforeRetainingSamples)
 {
     auto map{ MakeMapObject() };
     FixedPointSampler sampler;
     auto model{ MakeLinearNeighborModel() };
     const auto * atom{ model->GetAtomList().at(0).get() };
 
-    const auto sampling_points{ sampler.GenerateSamplingPoints(atom->GetPosition()) };
     const auto sampling_data{
         rg::SampleMapValues(map, sampler, *atom, 1.1, 30.0) };
 
-    ASSERT_EQ(sampling_data.size(), sampling_points.size());
-    ASSERT_EQ(sampling_data.size(), 4u);
+    ASSERT_EQ(sampling_data.size(), 2u);
     EXPECT_FLOAT_EQ(sampling_data.at(0).score, 1.0f);
-    EXPECT_FLOAT_EQ(sampling_data.at(1).score, 0.0f);
-    EXPECT_FLOAT_EQ(sampling_data.at(2).score, 1.0f);
-    EXPECT_FLOAT_EQ(sampling_data.at(3).score, 1.0f);
+    EXPECT_FLOAT_EQ(sampling_data.at(1).score, 1.0f);
+    for (const auto & sample : sampling_data)
+    {
+        ASSERT_TRUE(sample.HasPosition());
+        EXPECT_FALSE(
+            sample.position->at(0) == 1.0f &&
+            sample.position->at(1) == 0.0f &&
+            sample.position->at(2) == 0.0f);
+    }
 }
 
-TEST(MapSamplingTest, AtomSamplerKeepsAllPointsWhenNeighborRadiusFindsNoNeighbors)
+TEST(MapSamplingTest, AtomSamplerAppliesDecileRetentionWhenNeighborRadiusFindsNoNeighbors)
 {
     auto map{ MakeMapObject() };
     FixedPointSampler sampler;
@@ -215,24 +215,30 @@ TEST(MapSamplingTest, AtomSamplerKeepsAllPointsWhenNeighborRadiusFindsNoNeighbor
     const auto sampling_data{
         rg::SampleMapValues(map, sampler, *atom, 0.5, 30.0) };
 
-    ASSERT_EQ(sampling_data.size(), 4u);
+    ASSERT_EQ(sampling_data.size(), 2u);
+    ASSERT_TRUE(sampling_data.at(0).HasPosition());
+    EXPECT_FLOAT_EQ(sampling_data.at(0).distance, 0.0f);
+    EXPECT_FLOAT_EQ(sampling_data.at(0).position->at(0), 0.0f);
+    ASSERT_TRUE(sampling_data.at(1).HasPosition());
+    EXPECT_FLOAT_EQ(sampling_data.at(1).distance, 1.0f);
+    EXPECT_FLOAT_EQ(sampling_data.at(1).position->at(0), -1.0f);
+    EXPECT_FLOAT_EQ(sampling_data.at(1).position->at(1), 0.0f);
     for (const auto & sample : sampling_data)
     {
         EXPECT_FLOAT_EQ(sample.score, 1.0f);
     }
 }
 
-TEST(MapSamplingTest, AtomSamplerAllowsDetachedAtomWhenAngleIsZeroButRejectsAngleFiltering)
+TEST(MapSamplingTest, AtomSamplerRequiresAttachedAtomBeforeSampling)
 {
     auto map{ MakeMapObject() };
     SinglePointSampler sampler;
     rg::AtomObject detached_atom;
     detached_atom.SetPosition(0.0f, 0.0f, 0.0f);
 
-    const auto sampling_data{
-        rg::SampleMapValues(map, sampler, detached_atom, 1.0, 0.0) };
-
-    ASSERT_EQ(sampling_data.size(), 1u);
+    EXPECT_THROW(
+        (void)rg::SampleMapValues(map, sampler, detached_atom, 1.0, 0.0),
+        std::runtime_error);
     EXPECT_THROW(
         (void)rg::SampleMapValues(map, sampler, detached_atom, 1.0, 30.0),
         std::runtime_error);
