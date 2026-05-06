@@ -167,8 +167,8 @@ void PopulateMapValueArray(
     std::vector<size_t> in_range_grid_index_list;
 
     Logger::Log(LogLevel::Info,
-        " /- Total number of atoms to be processed: "+ std::to_string(atom_size) + " atoms."
-    );
+        " /- Total number of atoms to be processed: "+ std::to_string(atom_size) + " atoms.");
+    
 #ifdef USE_OPENMP
     #pragma omp parallel for num_threads(thread_size) private(in_range_grid_index_list)
 #endif
@@ -179,16 +179,12 @@ void PopulateMapValueArray(
         auto element{ atom->GetElement() };
         auto atom_position{ atom->GetPosition() };
         spatial_index.CollectGridIndicesInRange(
-            atom_position,
-            static_cast<float>(request.cutoff_distance),
-            in_range_grid_index_list);
+            atom_position, static_cast<float>(request.cutoff_distance), in_range_grid_index_list);
 
         for (const auto grid_index : in_range_grid_index_list)
         {
             auto distance{
-                array_helper::ComputeNorm(
-                    atom_position,
-                    map_object->GetGridPosition(grid_index))
+                array_helper::ComputeNorm(atom_position, map_object->GetGridPosition(grid_index))
             };
             map_value_array[grid_index] += static_cast<float>(
                 electric_potential->GetPotentialValue(element, distance, charge)
@@ -208,45 +204,9 @@ void PopulateMapValueArray(
     map_object->SetMapValueArray(std::move(map_value_array));
     command_detail::LogMapSummary(*map_object);
 }
-
-void RunMapSimulation(
-    const MapSimulationRequest & request,
-    const ModelObject & model_object,
-    const SimulationAtomPreparationResult & atom_list,
-    int thread_size)
-{
-    ScopeTimer timer("MapSimulationCommand::RunMapSimulation");
-
-    Logger::Log(LogLevel::Info,
-        "Total number of blurring width sets to be simulated: "
-        + std::to_string(request.blurring_width_list.size()));
-
-    auto map_object{ CreateMapObject(request, atom_list) };
-    MapSpatialIndex spatial_index(*map_object, thread_size);
-    spatial_index.Build();
-    for (auto & blurring_width : request.blurring_width_list)
-    {
-        auto map_key_tag{
-            model_object.GetPdbID() + "_bw" +
-            string_helper::ToStringWithPrecision<double>(blurring_width, 2)
-        };
-        PopulateMapValueArray(
-            map_object.get(),
-            spatial_index,
-            atom_list,
-            request,
-            blurring_width,
-            thread_size);
-        const auto output_file_name{
-            request.output_dir / (request.map_file_name + "_" + map_key_tag + ".map")
-        };
-        WriteMap(output_file_name, *map_object);
-    }
-}
 } // namespace
 
-MapSimulationCommand::MapSimulationCommand() :
-    CommandBase<MapSimulationRequest>{}
+MapSimulationCommand::MapSimulationCommand() : CommandBase<MapSimulationRequest>{}
 {
 }
 
@@ -282,7 +242,6 @@ void MapSimulationCommand::NormalizeAndValidateRequest()
 bool MapSimulationCommand::ExecuteImpl()
 {
     const auto & request{ RequestOptions() };
-    ScopeTimer timer("MapSimulationCommand::BuildDataObject");
     std::unique_ptr<ModelObject> model_object;
     try
     {
@@ -298,7 +257,24 @@ bool MapSimulationCommand::ExecuteImpl()
     }
 
     auto atom_list{ PrepareSimulationAtomList(*model_object, request) };
-    RunMapSimulation(request, *model_object, atom_list, ThreadSize());
+    Logger::Log(LogLevel::Info,
+        "Total number of blurring width sets to be simulated: "
+        + std::to_string(request.blurring_width_list.size()));
+
+    auto map_object{ CreateMapObject(request, atom_list) };
+    MapSpatialIndex spatial_index(*map_object, ThreadSize());
+    spatial_index.Build();
+    for (auto & blurring_width : request.blurring_width_list)
+    {
+        auto map_key_tag{
+            model_object->GetPdbID() + "_bw" +
+            string_helper::ToStringWithPrecision<double>(blurring_width, 2)
+        };
+        PopulateMapValueArray(
+            map_object.get(), spatial_index, atom_list, request, blurring_width, ThreadSize());
+        auto output{ request.output_dir / (request.map_file_name + "_" + map_key_tag + ".map") };
+        WriteMap(output, *map_object);
+    }
     return true;
 }
 
