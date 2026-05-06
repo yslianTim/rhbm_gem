@@ -18,18 +18,46 @@
 
 #include <algorithm>
 #include <array>
+#include <filesystem>
 #include <fstream>
+#include <memory>
+#include <optional>
 #include <stdexcept>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <vector>
 
 namespace {
+using namespace rhbm_gem;
+
 constexpr std::string_view kMapKey{ "map" };
+
+struct ResultDumpInputs
+{
+    std::vector<std::unique_ptr<rhbm_gem::ModelObject>> model_objects;
+    std::unique_ptr<rhbm_gem::MapObject> map_object;
+};
+
+std::filesystem::path BuildResultDumpOutputPath(
+    const std::filesystem::path & output_dir,
+    std::string_view stem,
+    std::string_view extension)
+{
+    std::string normalized_extension{ extension };
+    if (!normalized_extension.empty() && normalized_extension.front() != '.')
+    {
+        normalized_extension.insert(normalized_extension.begin(), '.');
+    }
+    return output_dir / (std::string(stem) + normalized_extension);
 }
+
+} // namespace
 
 namespace rhbm_gem {
 
 ResultDumpCommand::ResultDumpCommand() :
-    CommandBase<ResultDumpRequest>{},
-    m_map_key_tag{ kMapKey }, m_map_object{ nullptr }
+    CommandBase<ResultDumpRequest>{}
 {
 }
 
@@ -54,45 +82,38 @@ void ResultDumpCommand::ValidatePreparedRequest()
         "A map file is required when '--printer map' is selected.");
 }
 
-void ResultDumpCommand::ResetRuntimeState()
-{
-    m_selected_atom_list_map.clear();
-    m_model_object_list.clear();
-    m_map_object.reset();
-}
+} // namespace rhbm_gem
 
-bool ResultDumpCommand::BuildDataObjectList()
+namespace {
+
+std::optional<ResultDumpInputs> LoadResultDumpInputs(const rhbm_gem::ResultDumpRequest & request)
 {
-    const auto & request{ RequestOptions() };
     ScopeTimer timer("ResultDumpCommand::BuildDataObjectList");
     try
     {
         DataRepository repository{ request.database_path };
+        ResultDumpInputs inputs;
         if (request.map_file_path.empty())
         {
-            m_map_object.reset();
+            inputs.map_object.reset();
         }
         else
         {
             auto map_object{ ReadMap(request.map_file_path) };
-            map_object->SetKeyTag(m_map_key_tag);
-            m_map_object = std::shared_ptr<MapObject>{ std::move(map_object) };
+            map_object->SetKeyTag(std::string(kMapKey));
+            inputs.map_object = std::move(map_object);
         }
-        m_selected_atom_list_map.clear();
+        inputs.model_objects.reserve(request.model_key_tag_list.size());
         for (const auto & key : request.model_key_tag_list)
         {
-            auto model_object{ std::shared_ptr<ModelObject>{ repository.LoadModel(key) } };
-            m_model_object_list.emplace_back(model_object);
-            const auto & selected_atom_list{ model_object->GetSelectedAtoms() };
-            m_selected_atom_list_map[key] = {
-                selected_atom_list.begin(),
-                selected_atom_list.end()
-            };
+            auto model_object{ repository.LoadModel(key) };
             Logger::Log(
                 LogLevel::Info,
                 "Selected atoms for key tag [" + key + "]: "
-                    + std::to_string(m_selected_atom_list_map[key].size()));
+                    + std::to_string(model_object->GetSelectedAtoms().size()));
+            inputs.model_objects.emplace_back(std::move(model_object));
         }
+        return inputs;
     }
     catch (const std::exception & e)
     {
@@ -100,19 +121,19 @@ bool ResultDumpCommand::BuildDataObjectList()
             LogLevel::Error,
             "ResultDumpCommand::BuildDataObjectList : Failed to load dump inputs: "
                 + std::string(e.what()));
-        return false;
+        return std::nullopt;
     }
-    return true;
 }
 
-void ResultDumpCommand::RunAtomOutlierDumping()
+void RunAtomOutlierDumping(
+    const std::vector<std::unique_ptr<ModelObject>> & model_object_list,
+    const std::filesystem::path & output_dir)
 {
-    for (const auto & model_object : m_model_object_list)
+    for (const auto & model_object : model_object_list)
     {
-        const auto key_tag{ model_object->GetKeyTag() };
         std::unordered_map<std::string, std::vector<std::array<float, 3>>> outlier_position_map;
         const std::string file_name{ "atom_outlier_list_" + model_object->GetPdbID() };
-        const auto output_path{ BuildOutputPath(file_name, ".csv") };
+        const auto output_path{ BuildResultDumpOutputPath(output_dir, file_name, ".csv") };
         std::ofstream outfile(output_path);
         if (!outfile.is_open())
         {
@@ -122,7 +143,7 @@ void ResultDumpCommand::RunAtomOutlierDumping()
             return;
         }
         outfile << "SerialID,ClassType,Residue,Element,Spot\n";
-        for (auto & atom : m_selected_atom_list_map.at(key_tag))
+        for (auto * atom : model_object->GetSelectedAtoms())
         {
             for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
             {
@@ -149,7 +170,9 @@ void ResultDumpCommand::RunAtomOutlierDumping()
             const std::string class_file_name{
                 "atom_outlier_position_" + class_key + "_" + model_object->GetPdbID()
             };
-            const auto class_output_path{ BuildOutputPath(class_file_name, ".cmm") };
+            const auto class_output_path{
+                BuildResultDumpOutputPath(output_dir, class_file_name, ".cmm")
+            };
             const std::string marker_set_name{ class_key + "_" + model_object->GetPdbID() };
             if (!ChimeraXHelper::WriteCMMPoints(
                     position_list,
@@ -168,13 +191,14 @@ void ResultDumpCommand::RunAtomOutlierDumping()
     }
 }
 
-void ResultDumpCommand::RunAtomPositionDumping()
+void RunAtomPositionDumping(
+    const std::vector<std::unique_ptr<ModelObject>> & model_object_list,
+    const std::filesystem::path & output_dir)
 {
-    for (const auto & model_object : m_model_object_list)
+    for (const auto & model_object : model_object_list)
     {
-        const auto key_tag{ model_object->GetKeyTag() };
         const std::string file_name{ "atom_position_list_" + model_object->GetPdbID() };
-        const auto output_path{ BuildOutputPath(file_name, ".csv") };
+        const auto output_path{ BuildResultDumpOutputPath(output_dir, file_name, ".csv") };
         std::ofstream outfile(output_path);
         if (!outfile.is_open())
         {
@@ -184,7 +208,7 @@ void ResultDumpCommand::RunAtomPositionDumping()
             return;
         }
         outfile << "SerialID,X,Y,Z,Residue,Element,Spot\n";
-        for (auto & atom : m_selected_atom_list_map.at(key_tag))
+        for (auto * atom : model_object->GetSelectedAtoms())
         {
             outfile << atom->GetSerialID() << ',' << atom->GetPosition().at(0) << ','
                     << atom->GetPosition().at(1) << ',' << atom->GetPosition().at(2) << ','
@@ -197,9 +221,12 @@ void ResultDumpCommand::RunAtomPositionDumping()
     }
 }
 
-void ResultDumpCommand::RunMapValueDumping()
+void RunMapValueDumping(
+    const std::vector<std::unique_ptr<ModelObject>> & model_object_list,
+    const MapObject * map_object,
+    const std::filesystem::path & output_dir)
 {
-    if (m_map_object == nullptr)
+    if (map_object == nullptr)
     {
         Logger::Log(LogLevel::Error, "Please give the path of map file via -m option.");
         return;
@@ -207,10 +234,11 @@ void ResultDumpCommand::RunMapValueDumping()
 
     const auto margin{ 3.0f };
 
-    for (const auto & model_object : m_model_object_list)
+    for (const auto & model_object : model_object_list)
     {
         const auto key_tag{ model_object->GetKeyTag() };
-        const auto atom_size{ m_selected_atom_list_map.at(key_tag).size() };
+        const auto & selected_atoms{ model_object->GetSelectedAtoms() };
+        const auto atom_size{ selected_atoms.size() };
         if (atom_size == 0)
         {
             Logger::Log(
@@ -223,7 +251,7 @@ void ResultDumpCommand::RunMapValueDumping()
         x_list.reserve(atom_size);
         y_list.reserve(atom_size);
         z_list.reserve(atom_size);
-        for (auto & atom : m_selected_atom_list_map.at(key_tag))
+        for (auto * atom : selected_atoms)
         {
             x_list.emplace_back(atom->GetPosition().at(0));
             y_list.emplace_back(atom->GetPosition().at(1));
@@ -239,7 +267,7 @@ void ResultDumpCommand::RunMapValueDumping()
         const std::string file_name{
             "map_value_list_" + model_object->GetEmdID() + "_" + model_object->GetPdbID()
         };
-        const auto output_path{ BuildOutputPath(file_name, ".csv") };
+        const auto output_path{ BuildResultDumpOutputPath(output_dir, file_name, ".csv") };
         std::ofstream outfile(output_path);
         if (!outfile.is_open())
         {
@@ -250,16 +278,16 @@ void ResultDumpCommand::RunMapValueDumping()
         }
         outfile << "GridID,X,Y,Z,MapValue\n";
         auto count{ 0 };
-        for (size_t i = 0; i < m_map_object->GetMapValueArraySize(); i++)
+        for (size_t i = 0; i < map_object->GetMapValueArraySize(); i++)
         {
-            const auto grid_position{ m_map_object->GetGridPosition(i) };
+            const auto grid_position{ map_object->GetGridPosition(i) };
             if (grid_position.at(0) < atom_range_min.at(0)) continue;
             if (grid_position.at(0) > atom_range_max.at(0)) continue;
             if (grid_position.at(1) < atom_range_min.at(1)) continue;
             if (grid_position.at(1) > atom_range_max.at(1)) continue;
             if (grid_position.at(2) < atom_range_min.at(2)) continue;
             if (grid_position.at(2) > atom_range_max.at(2)) continue;
-            const auto map_value{ m_map_object->GetMapValue(i) };
+            const auto map_value{ map_object->GetMapValue(i) };
             if (map_value <= 0.0f) continue;
             outfile << i << ',' << grid_position.at(0) << ',' << grid_position.at(1) << ','
                     << grid_position.at(2) << ',' << map_value << '\n';
@@ -268,17 +296,20 @@ void ResultDumpCommand::RunMapValueDumping()
         Logger::Log(
             LogLevel::Info,
             " Selected map grid size = " + std::to_string(count) + " / "
-                + std::to_string(m_map_object->GetMapValueArraySize()));
+                + std::to_string(map_object->GetMapValueArraySize()));
     }
 }
 
-void ResultDumpCommand::RunGausEstimatesDumping()
+void RunGausEstimatesDumping(
+    const std::vector<std::unique_ptr<ModelObject>> & model_object_list,
+    const std::filesystem::path & output_dir)
 {
-    for (const auto & model_object : m_model_object_list)
+    for (const auto & model_object : model_object_list)
     {
-        const auto key_tag{ model_object->GetKeyTag() };
         const std::string csv_file_name{ "local_gaus_list_" + model_object->GetPdbID() };
-        const auto output_csv_file{ BuildOutputPath(csv_file_name, ".csv") };
+        const auto output_csv_file{
+            BuildResultDumpOutputPath(output_dir, csv_file_name, ".csv")
+        };
         std::ofstream outfile(output_csv_file);
         if (!outfile.is_open())
         {
@@ -289,7 +320,7 @@ void ResultDumpCommand::RunGausEstimatesDumping()
         }
 
         outfile << "SerialID,Amplitude,Width,X,Y,Z,Residue,Element,Spot\n";
-        for (auto & atom : m_selected_atom_list_map.at(key_tag))
+        for (auto * atom : model_object->GetSelectedAtoms())
         {
             const auto entry{ LocalPotentialView::RequireFor(*atom) };
             const auto & estimate{ entry.GetEstimateMDPDE() };
@@ -304,32 +335,34 @@ void ResultDumpCommand::RunGausEstimatesDumping()
         Logger::Log(LogLevel::Info, "Output file: " + output_csv_file.string());
 /*
         const std::string amplitude_file_name{ model_object->GetPdbID() + "_gaus_amplitude" };
-        const auto output_amplitude_cif_file{ BuildOutputPath(amplitude_file_name, ".cif") };
+        const auto output_amplitude_cif_file{ BuildResultDumpOutputPath(output_dir, amplitude_file_name, ".cif") };
         WriteModel(output_amplitude_cif_file, *model_object, 0);
         Logger::Log(LogLevel::Info, "Output file: " + output_amplitude_cif_file.string());
 
         const std::string width_file_name{ model_object->GetPdbID() + "_gaus_width" };
-        const auto output_width_cif_file{ BuildOutputPath(width_file_name, ".cif") };
+        const auto output_width_cif_file{ BuildResultDumpOutputPath(output_dir, width_file_name, ".cif") };
         WriteModel(output_width_cif_file, *model_object, 1);
         Logger::Log(LogLevel::Info, "Output file: " + output_width_cif_file.string());
 
         const std::string intensity_file_name{ model_object->GetPdbID() + "_gaus_intensity" };
-        const auto output_intensity_cif_file{ BuildOutputPath(intensity_file_name, ".cif") };
+        const auto output_intensity_cif_file{ BuildResultDumpOutputPath(output_dir, intensity_file_name, ".cif") };
         WriteModel(output_intensity_cif_file, *model_object, 2);
         Logger::Log(LogLevel::Info, "Output file: " + output_intensity_cif_file.string());*/
     }
 }
 
-void ResultDumpCommand::RunGroupGausEstimatesDumping()
+void RunGroupGausEstimatesDumping(
+    const std::vector<std::unique_ptr<ModelObject>> & model_object_list,
+    const std::filesystem::path & output_dir)
 {
     const auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
 
-    for (const auto & model_object : m_model_object_list)
+    for (const auto & model_object : model_object_list)
     {
         const ModelAnalysisView entry_view{ *model_object };
 
         const std::string file_name{ "group_gaus_list_" + model_object->GetPdbID() };
-        const auto output_path{ BuildOutputPath(file_name, ".csv") };
+        const auto output_path{ BuildResultDumpOutputPath(output_dir, file_name, ".csv") };
         std::ofstream outfile(output_path);
         if (!outfile.is_open())
         {
@@ -361,48 +394,59 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping()
     }
 }
 
-void ResultDumpCommand::RunDumpWorkflow()
+} // namespace
+
+namespace rhbm_gem {
+
+bool ResultDumpCommand::ExecuteImpl()
 {
+    const auto & request{ RequestOptions() };
+    auto inputs{ LoadResultDumpInputs(request) };
+    if (!inputs.has_value())
+    {
+        return false;
+    }
+
     ScopeTimer timer("ResultDumpCommand::RunResultDump");
     Logger::Log(
         LogLevel::Info,
         "Total number of model object sets to be dump: "
-            + std::to_string(RequestOptions().model_key_tag_list.size()));
+            + std::to_string(request.model_key_tag_list.size()));
 
     const bool has_selected_atoms{
         std::any_of(
-            m_selected_atom_list_map.begin(),
-            m_selected_atom_list_map.end(),
-            [](const auto & entry) { return !entry.second.empty(); })
+            inputs->model_objects.begin(),
+            inputs->model_objects.end(),
+            [](const auto & model_object) { return !model_object->GetSelectedAtoms().empty(); })
     };
     if (!has_selected_atoms)
     {
         Logger::Log(
             LogLevel::Warning,
             "No selected atoms with local potential entries were found. Skipping dump.");
-        return;
+        return true;
     }
 
-    switch (RequestOptions().printer_choice)
+    switch (request.printer_choice)
     {
     case PrinterType::ATOM_POSITION:
-        RunAtomPositionDumping();
+        RunAtomPositionDumping(inputs->model_objects, request.output_dir);
         break;
     case PrinterType::MAP_VALUE:
-        RunMapValueDumping();
+        RunMapValueDumping(inputs->model_objects, inputs->map_object.get(), request.output_dir);
         break;
     case PrinterType::GAUS_ESTIMATES:
-        RunGroupGausEstimatesDumping();
-        RunGausEstimatesDumping();
+        RunGroupGausEstimatesDumping(inputs->model_objects, request.output_dir);
+        RunGausEstimatesDumping(inputs->model_objects, request.output_dir);
         break;
     case PrinterType::ATOM_OUTLIER:
-        RunAtomOutlierDumping();
+        RunAtomOutlierDumping(inputs->model_objects, request.output_dir);
         break;
     default:
         Logger::Log(
             LogLevel::Warning,
             "Invalid printer choice input : ["
-                + std::to_string(static_cast<int>(RequestOptions().printer_choice)) + "]");
+                + std::to_string(static_cast<int>(request.printer_choice)) + "]");
         Logger::Log(
             LogLevel::Warning,
             "Available Printer Choices:\n"
@@ -412,15 +456,6 @@ void ResultDumpCommand::RunDumpWorkflow()
             "  [3] AtomOutlierDumping");
         break;
     }
-}
-
-bool ResultDumpCommand::ExecuteImpl()
-{
-    if (!BuildDataObjectList())
-    {
-        return false;
-    }
-    RunDumpWorkflow();
     return true;
 }
 
