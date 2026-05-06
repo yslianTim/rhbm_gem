@@ -7,28 +7,36 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
-#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/math/GridSampler.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/LocalPainter.hpp>
 
-#include <unordered_set>
+#include <array>
+#include <cstddef>
+#include <exception>
+#include <filesystem>
+#include <memory>
+#include <optional>
+#include <string>
+#include <string_view>
 #include <unordered_map>
-#include <tuple>
-#include <vector>
-#include <atomic>
 #include <utility>
-#include <iterator>
-#include <stdexcept>
-#include <limits>
+#include <vector>
 
 #ifdef USE_OPENMP
 #include <omp.h>
 #endif
 
 namespace {
+
 constexpr std::string_view kModelKey{ "model" };
 constexpr std::string_view kMapKey{ "map" };
+
+struct MapVisualizationInputs
+{
+    std::unique_ptr<rhbm_gem::ModelObject> model_object;
+    std::unique_ptr<rhbm_gem::MapObject> map_object;
+};
 
 struct ModelAtomBondContext
 {
@@ -61,117 +69,91 @@ ModelAtomBondContext BuildModelAtomBondContext(rhbm_gem::ModelObject & model_obj
     }
     return result;
 }
+
+std::filesystem::path BuildMapVisualizationOutputPath(
+    const std::filesystem::path & output_dir,
+    std::string_view stem,
+    std::string_view extension)
+{
+    std::string normalized_extension{ extension };
+    if (!normalized_extension.empty() && normalized_extension.front() != '.')
+    {
+        normalized_extension.insert(normalized_extension.begin(), '.');
+    }
+    return output_dir / (std::string(stem) + normalized_extension);
 }
 
-namespace rhbm_gem {
-
-MapVisualizationCommand::MapVisualizationCommand() :
-    CommandBase<MapVisualizationRequest>{},
-    m_model_key_tag{ kModelKey }, m_map_key_tag{ kMapKey },
-    m_map_object{ nullptr }, m_model_object{ nullptr }
+std::optional<MapVisualizationInputs> LoadMapVisualizationInputs(
+    const rhbm_gem::MapVisualizationRequest & request)
 {
-}
-
-void MapVisualizationCommand::NormalizeAndValidateRequest()
-{
-    auto & request{ MutableRequest() };
-    ValidateRequiredPath(
-        request.model_file_path,
-        "--model",
-        "Model file");
-    ValidateRequiredPath(
-        request.map_file_path,
-        "--map",
-        "Map file");
-    CoercePositiveScalar(
-        request.atom_serial_id,
-        "--atom-id",
-        1,
-        LogLevel::Error,
-        "Atom serial ID");
-    CoercePositiveScalar(
-        request.sampling_size,
-        "--sampling",
-        100,
-        LogLevel::Warning,
-        "Sampling size");
-    CoerceFinitePositiveScalar(
-        request.window_size,
-        "--window-size",
-        5.0,
-        LogLevel::Error,
-        "Window size");
-}
-
-bool MapVisualizationCommand::ExecuteImpl()
-{
-    if (BuildDataObject() == false) return false;
-    RunMapObjectPreprocessing();
-    RunModelObjectPreprocessing();
-    return RunAtomMapValueSampling();
-}
-
-void MapVisualizationCommand::ResetRuntimeState()
-{
-    m_map_object.reset();
-    m_model_object.reset();
-}
-
-bool MapVisualizationCommand::BuildDataObject()
-{
-    const auto & request{ RequestOptions() };
     ScopeTimer timer("MapVisualizationCommand::BuildDataObject");
     try
     {
-        auto model_object{ ReadModel(request.model_file_path) };
-        model_object->SetKeyTag(m_model_key_tag);
-        m_model_object = std::shared_ptr<ModelObject>{ std::move(model_object) };
-        auto map_object{ ReadMap(request.map_file_path) };
-        map_object->SetKeyTag(m_map_key_tag);
-        m_map_object = std::shared_ptr<MapObject>{ std::move(map_object) };
+        MapVisualizationInputs inputs;
+        inputs.model_object = rhbm_gem::ReadModel(request.model_file_path);
+        inputs.model_object->SetKeyTag(std::string(kModelKey));
+        inputs.map_object = rhbm_gem::ReadMap(request.map_file_path);
+        inputs.map_object->SetKeyTag(std::string(kMapKey));
+        return std::move(inputs);
     }
     catch (const std::exception & e)
     {
         Logger::Log(LogLevel::Error,
             "MapVisualizationCommand::BuildDataObject : " + std::string(e.what()));
-        return false;
+        return std::nullopt;
     }
-    return true;
 }
 
-void MapVisualizationCommand::RunMapObjectPreprocessing()
-{
-    ScopeTimer timer("MapVisualizationCommand::RunMapObjectPreprocessing");
-    m_map_object->MapValueArrayNormalization();
-}
-
-void MapVisualizationCommand::RunModelObjectPreprocessing()
+void RunModelObjectPreprocessing(rhbm_gem::ModelObject & model_object)
 {
     ScopeTimer timer("MapVisualizationCommand::RunModelObjectPreprocessing");
-    PrepareModelForVisualization(*m_model_object);
-        Logger::Log(LogLevel::Info,
-            "Number of selected atom = "
-            + std::to_string(m_model_object->GetSelectedAtomCount()));
-        Logger::Log(LogLevel::Info,
-            "Number of selected bond = "
-            + std::to_string(m_model_object->GetSelectedBondCount()));
+    PrepareModelForVisualization(model_object);
+    Logger::Log(LogLevel::Info,
+        "Number of selected atom = "
+        + std::to_string(model_object.GetSelectedAtomCount()));
+    Logger::Log(LogLevel::Info,
+        "Number of selected bond = "
+        + std::to_string(model_object.GetSelectedBondCount()));
 }
 
-bool MapVisualizationCommand::RunAtomMapValueSampling()
+std::filesystem::path BuildOutputFilePath(
+    const rhbm_gem::MapVisualizationRequest & request,
+    const rhbm_gem::ModelObject & model_object,
+    const std::filesystem::path & output_dir)
 {
-    const auto & request{ RequestOptions() };
-    ScopeTimer timer("MapVisualizationCommand::RunAtomMapValueSampling");
-    if (m_map_object == nullptr || m_model_object == nullptr)
+    std::string model_name;
+    if (!model_object.GetPdbID().empty())
     {
-        Logger::Log(LogLevel::Error, "Map or model object is unavailable for visualization.");
-        return false;
+        model_name = model_object.GetPdbID();
     }
+    else
+    {
+        model_name = rhbm_gem::path_helper::GetFileName(request.model_file_path, false);
+        if (model_name.empty())
+        {
+            model_name = "model";
+        }
+    }
+
+    const std::string file_name{
+        "map_slice_" + model_name + "_atom" + std::to_string(request.atom_serial_id)
+    };
+    return BuildMapVisualizationOutputPath(output_dir, file_name, ".pdf");
+}
+
+bool RunAtomMapValueSampling(
+    const rhbm_gem::MapVisualizationRequest & request,
+    rhbm_gem::MapObject & map_object,
+    rhbm_gem::ModelObject & model_object,
+    const std::filesystem::path & output_dir)
+{
+    ScopeTimer timer("MapVisualizationCommand::RunAtomMapValueSampling");
     GridSampler sampler;
     sampler.SetGridResolution(static_cast<unsigned int>(request.sampling_size));
     sampler.SetWindowSize(static_cast<float>(request.window_size));
     sampler.Print();
-    
-    auto context{ BuildModelAtomBondContext(*m_model_object) };
+
+    auto context{ BuildModelAtomBondContext(model_object) };
     const auto & atom_map{ context.atom_map };
     const auto & bond_map{ context.bond_map };
 
@@ -232,15 +214,17 @@ bool MapVisualizationCommand::RunAtomMapValueSampling()
     sampler.SetReferenceUVector({u_vector(0), u_vector(1), u_vector(2)});
 
     auto sampling_data_list{
-        SampleMapValues(
-            *m_map_object,
+        rhbm_gem::SampleMapValues(
+            map_object,
             sampler,
             target_atom_position,
             {n_vector(0), n_vector(1), n_vector(2)})
     };
     if (sampling_data_list.empty())
     {
-        Logger::Log(LogLevel::Error, "Map sampling produced no data points.");
+        Logger::Log(
+            LogLevel::Error,
+            "Map sampling produced no data points.");
         return false;
     }
     Eigen::MatrixXd map_value_matrix{
@@ -267,8 +251,8 @@ bool MapVisualizationCommand::RunAtomMapValueSampling()
     auto y_min{ target_atom_position.at(1) - 0.5 * request.window_size };
     auto y_max{ target_atom_position.at(1) + 0.5 * request.window_size };
 
-    HeatmapRequest heatmap_request;
-    heatmap_request.output_path = BuildOutputFilePath();
+    rhbm_gem::HeatmapRequest heatmap_request;
+    heatmap_request.output_path = BuildOutputFilePath(request, model_object, output_dir);
     heatmap_request.values = std::move(map_value_matrix);
     heatmap_request.x_axis.title = "#font[2]{u} Position #[]{#AA}";
     heatmap_request.x_axis.range = std::make_pair(x_min, x_max);
@@ -288,27 +272,62 @@ bool MapVisualizationCommand::RunAtomMapValueSampling()
     return true;
 }
 
-std::filesystem::path MapVisualizationCommand::BuildOutputFilePath() const
+}
+
+namespace rhbm_gem {
+
+MapVisualizationCommand::MapVisualizationCommand() :
+    CommandBase<MapVisualizationRequest>{}
+{
+}
+
+void MapVisualizationCommand::NormalizeAndValidateRequest()
+{
+    auto & request{ MutableRequest() };
+    ValidateRequiredPath(
+        request.model_file_path,
+        "--model",
+        "Model file");
+    ValidateRequiredPath(
+        request.map_file_path,
+        "--map",
+        "Map file");
+    CoercePositiveScalar(
+        request.atom_serial_id,
+        "--atom-id",
+        1,
+        LogLevel::Error,
+        "Atom serial ID");
+    CoercePositiveScalar(
+        request.sampling_size,
+        "--sampling",
+        100,
+        LogLevel::Warning,
+        "Sampling size");
+    CoerceFinitePositiveScalar(
+        request.window_size,
+        "--window-size",
+        5.0,
+        LogLevel::Error,
+        "Window size");
+}
+
+bool MapVisualizationCommand::ExecuteImpl()
 {
     const auto & request{ RequestOptions() };
-    std::string model_name;
-    if (m_model_object && !m_model_object->GetPdbID().empty())
-    {
-        model_name = m_model_object->GetPdbID();
-    }
-    else
-    {
-        model_name = path_helper::GetFileName(request.model_file_path, false);
-        if (model_name.empty())
-        {
-            model_name = "model";
-        }
-    }
+    auto inputs{ LoadMapVisualizationInputs(request) };
+    if (!inputs.has_value()) return false;
 
-    const std::string file_name{
-        "map_slice_" + model_name + "_atom" + std::to_string(request.atom_serial_id)
-    };
-    return BuildOutputPath(file_name, ".pdf");
+    {
+        ScopeTimer timer("MapVisualizationCommand::RunMapObjectPreprocessing");
+        inputs->map_object->MapValueArrayNormalization();
+    }
+    RunModelObjectPreprocessing(*inputs->model_object);
+    return RunAtomMapValueSampling(
+        request,
+        *inputs->map_object,
+        *inputs->model_object,
+        OutputFolder());
 }
 
 } // namespace rhbm_gem
