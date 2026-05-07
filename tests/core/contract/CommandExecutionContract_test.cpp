@@ -1,7 +1,5 @@
 #include <gtest/gtest.h>
 
-#include <vector>
-
 #include "command/detail/CommandBase.hpp"
 #include "support/CommandValidationAssertions.hpp"
 #include "support/CommandTestHelpers.hpp"
@@ -45,12 +43,6 @@ private:
         ++execute_impl_count;
         return true;
     }
-
-public:
-    const std::vector<rg::ValidationIssueRecord> & Issues() const
-    {
-        return GetValidationIssues();
-    }
 };
 
 } // namespace
@@ -84,24 +76,24 @@ TEST(CommandExecutionContractTest, RepeatedRunRecomputesPrepareIssues)
     LifecycleCommand command{};
 
     command.SetFailPrepare(true);
-    ASSERT_FALSE(command.ExecuteRequest(rg::CommandRequestBase{}).succeeded);
+    const auto failed_result{ command.ExecuteRequest(rg::CommandRequestBase{}) };
+    ASSERT_FALSE(failed_result.succeeded);
     EXPECT_NE(
         command_test::FindValidationIssue(
-            command.Issues(),
-            "--contract",
-            LogLevel::Error),
+            failed_result.issues,
+            "--contract"),
         nullptr);
 
     command.SetFailPrepare(false);
-    ASSERT_TRUE(command.ExecuteRequest(rg::CommandRequestBase{}).succeeded);
+    const auto succeeded_result{ command.ExecuteRequest(rg::CommandRequestBase{}) };
+    ASSERT_TRUE(succeeded_result.succeeded);
 
     EXPECT_EQ(command.validate_count, 2);
     EXPECT_EQ(command.execute_impl_count, 1);
     EXPECT_EQ(
         command_test::FindValidationIssue(
-            command.Issues(),
-            "--contract",
-            LogLevel::Error),
+            succeeded_result.issues,
+            "--contract"),
         nullptr);
 }
 

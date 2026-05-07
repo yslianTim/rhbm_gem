@@ -18,21 +18,20 @@
 
 namespace rhbm_gem {
 
-struct ValidationIssueRecord
-{
-    std::string option_name;
-    LogLevel level;
-    std::string message;
-    bool auto_corrected{ false };
-};
-
 template <typename Request>
 class CommandBase
 {
     static_assert(std::is_base_of_v<CommandRequestBase, Request>,
         "CommandBase<Request> requires Request to derive from CommandRequestBase.");
 
-    std::vector<ValidationIssueRecord> m_validation_issues;
+    struct PendingIssue
+    {
+        CommandDiagnostic diagnostic;
+        LogLevel level;
+        bool auto_corrected{ false };
+    };
+
+    std::vector<PendingIssue> m_issues;
 
 public:
     virtual ~CommandBase() = default;
@@ -40,7 +39,7 @@ public:
     CommandResult ExecuteRequest(const Request & request)
     {
         Request command_request{ request };
-        m_validation_issues.clear();
+        m_issues.clear();
         NormalizeCommonRequestOptions(command_request);
         NormalizeAndValidateRequest(command_request);
         CommandResult result;
@@ -49,7 +48,7 @@ public:
         ValidatePreparedRequest(command_request);
         if (HasValidationErrors())
         {
-            ReportValidationIssues();
+            ReportPendingIssues();
             result.succeeded = false;
             result.issues = BuildDiagnostics();
             return result;
@@ -64,7 +63,7 @@ public:
                 Logger::Log(LogLevel::Error, "Command execution failed. Aborting command execution.");
             }
         }
-        ReportValidationIssues();
+        ReportPendingIssues();
         result.issues = BuildDiagnostics();
         return result;
     }
@@ -74,14 +73,13 @@ protected:
     virtual void NormalizeAndValidateRequest(Request &) {}
     virtual void ValidatePreparedRequest(const Request &) {}
     virtual bool ExecuteImpl(const Request &) = 0;
-    const std::vector<ValidationIssueRecord> & GetValidationIssues() const { return m_validation_issues; }
     void AddParseError(std::string_view option_name, const std::string & message)
     {
-        AddValidationIssue(option_name, LogLevel::Error, message, false);
+        AddPendingIssue(option_name, LogLevel::Error, message, false);
     }
     void AddParseNormalizationWarning(std::string_view option_name, const std::string & message)
     {
-        AddValidationIssue(option_name, LogLevel::Warning, message, true);
+        AddPendingIssue(option_name, LogLevel::Warning, message, true);
     }
     void ValidateRequiredPath(
         const std::filesystem::path & path,
@@ -90,7 +88,7 @@ protected:
     {
         if (path.empty())
         {
-            AddValidationIssue(option_name, LogLevel::Error,
+            AddPendingIssue(option_name, LogLevel::Error,
                 std::string(label) + " path is required.", false);
             return;
         }
@@ -98,7 +96,7 @@ protected:
         std::error_code error_code;
         if (!std::filesystem::exists(path, error_code))
         {
-            AddValidationIssue(option_name, LogLevel::Error,
+            AddPendingIssue(option_name, LogLevel::Error,
                 std::string(label) + " does not exist: " + path.string(), false);
         }
     }
@@ -112,7 +110,7 @@ protected:
         std::error_code error_code;
         if (!std::filesystem::exists(path, error_code))
         {
-            AddValidationIssue(option_name, LogLevel::Error,
+            AddPendingIssue(option_name, LogLevel::Error,
                 std::string(label) + " does not exist: " + path.string(), false);
         }
     }
@@ -123,7 +121,7 @@ protected:
         std::string_view label)
     {
         if (!field.empty()) return;
-        AddValidationIssue(option_name, LogLevel::Error,
+        AddPendingIssue(option_name, LogLevel::Error,
             std::string(label) + " cannot be empty.", false);
     }
     void RequirePrepareCondition(
@@ -132,7 +130,7 @@ protected:
         const std::string & message)
     {
         if (condition) return;
-        AddValidationIssue(option_name, LogLevel::Error, message, false);
+        AddPendingIssue(option_name, LogLevel::Error, message, false);
     }
     template <typename FieldType>
     void CoercePositiveScalar(
@@ -222,7 +220,7 @@ protected:
             }
         }
         field = fallback_value;
-        AddValidationIssue(option_name, LogLevel::Error,
+        AddPendingIssue(option_name, LogLevel::Error,
             std::string(label) + " must be one of the supported values. Received: "
                 + std::to_string(static_cast<long long>(raw_numeric)), false);
     }
@@ -231,19 +229,19 @@ private:
     std::vector<CommandDiagnostic> BuildDiagnostics() const
     {
         std::vector<CommandDiagnostic> diagnostics;
-        diagnostics.reserve(m_validation_issues.size());
-        for (const auto & issue : m_validation_issues)
+        diagnostics.reserve(m_issues.size());
+        for (const auto & issue : m_issues)
         {
-            diagnostics.push_back(CommandDiagnostic{ issue.option_name, issue.message });
+            diagnostics.push_back(issue.diagnostic);
         }
         return diagnostics;
     }
     bool HasValidationErrors() const
     {
         return std::any_of(
-            m_validation_issues.begin(),
-            m_validation_issues.end(),
-            [](const ValidationIssueRecord & issue)
+            m_issues.begin(),
+            m_issues.end(),
+            [](const PendingIssue & issue)
             {
                 return issue.level == LogLevel::Error;
             });
@@ -276,10 +274,10 @@ private:
         field = fallback_value;
         if (issue_level == LogLevel::Warning)
         {
-            AddValidationIssue(option_name, LogLevel::Warning, message, true);
+            AddPendingIssue(option_name, LogLevel::Warning, message, true);
             return;
         }
-        AddValidationIssue(option_name, issue_level, message, false);
+        AddPendingIssue(option_name, issue_level, message, false);
     }
     bool RunFilesystemPreflight(const Request & request)
     {
@@ -290,34 +288,34 @@ private:
             std::filesystem::create_directories(folder_path, error_code);
             if (error_code)
             {
-                AddValidationIssue("--folder", LogLevel::Error,
+                AddPendingIssue("--folder", LogLevel::Error,
                     "Failed to create output directory '" + folder_path.string()
                     + "': " + error_code.message(), false);
             }
         }
         return !HasValidationErrors();
     }
-    void ReportValidationIssues() const
+    void ReportPendingIssues() const
     {
-        for (const auto & issue : m_validation_issues)
+        for (const auto & issue : m_issues)
         {
             std::string prefix{ "[validation" };
             if (issue.auto_corrected) prefix += "; auto-corrected";
             prefix += "]";
-            Logger::Log(issue.level, prefix + " Option " + issue.option_name + ": " + issue.message);
+            Logger::Log(issue.level, prefix + " Option " + issue.diagnostic.option_name + ": "
+                + issue.diagnostic.message);
         }
     }
-    void AddValidationIssue(
+    void AddPendingIssue(
         std::string_view option_name,
         LogLevel level,
         const std::string & message,
         bool auto_corrected)
     {
-        m_validation_issues.push_back(
-            ValidationIssueRecord{ std::string(option_name), level, message, auto_corrected }
-        );
+        m_issues.push_back(PendingIssue{ CommandDiagnostic{ std::string(option_name), message },
+            level, auto_corrected });
     }
-    
+
 };
 
 } // namespace rhbm_gem

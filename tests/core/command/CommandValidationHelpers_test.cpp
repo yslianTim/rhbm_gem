@@ -4,9 +4,11 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <string_view>
 #include <vector>
 
 #include "command/detail/CommandBase.hpp"
+#include "support/CommandValidationAssertions.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/CommandTypes.hpp>
 
@@ -17,13 +19,21 @@ namespace {
 struct ValidationHelperCommandOptions
 {
     std::filesystem::path required_path;
+    bool validate_required_path{ false };
     std::filesystem::path optional_path;
+    bool validate_optional_path{ false };
     int normalized_count{ 1 };
+    bool validate_count{ false };
     rg::PrinterType printer{ rg::PrinterType::GAUS_ESTIMATES };
+    bool validate_printer{ false };
     double finite_positive_value{ 2.0 };
+    bool validate_finite_positive{ false };
     double finite_non_negative_value{ 0.0 };
+    bool validate_finite_non_negative{ false };
     int positive_count{ 1 };
-    double command_local_value{ 1.25 };
+    bool validate_positive_count{ false };
+    double command_local_value{ 3.5 };
+    bool validate_command_local_value{ false };
     bool add_problematic_parse_warnings{ false };
     bool add_prepare_error{ false };
 };
@@ -34,24 +44,19 @@ public:
     void SetRequiredPath(const std::filesystem::path & value)
     {
         m_options.required_path = value;
-        ValidateRequiredPath(m_options.required_path, "--input", "Input file");
+        m_options.validate_required_path = true;
     }
 
     void SetOptionalPath(const std::filesystem::path & value)
     {
         m_options.optional_path = value;
-        ValidateOptionalPath(m_options.optional_path, "--optional", "Optional file");
+        m_options.validate_optional_path = true;
     }
 
     void SetPositiveCount(int value)
     {
         m_options.normalized_count = value;
-        CoercePositiveScalar(
-            m_options.normalized_count,
-            "--count",
-            4,
-            LogLevel::Warning,
-            "Count");
+        m_options.validate_count = true;
     }
 
     int Count() const { return m_options.normalized_count; }
@@ -59,11 +64,7 @@ public:
     void SetPrinter(rg::PrinterType value)
     {
         m_options.printer = value;
-        CoerceEnum(
-            m_options.printer,
-            "--printer",
-            rg::PrinterType::GAUS_ESTIMATES,
-            "Printer choice");
+        m_options.validate_printer = true;
     }
 
     rg::PrinterType Printer() const { return m_options.printer; }
@@ -71,48 +72,25 @@ public:
     void SetFinitePositiveValue(double value)
     {
         m_options.finite_positive_value = value;
-        CoerceFinitePositiveScalar(
-            m_options.finite_positive_value,
-            "--finite-positive",
-            2.0,
-            LogLevel::Error,
-            "Finite positive value");
+        m_options.validate_finite_positive = true;
     }
 
     void SetFiniteNonNegativeValue(double value)
     {
         m_options.finite_non_negative_value = value;
-        CoerceFiniteNonNegativeScalar(
-            m_options.finite_non_negative_value,
-            "--finite-non-negative",
-            0.0,
-            LogLevel::Error,
-            "Finite non-negative value");
+        m_options.validate_finite_non_negative = true;
     }
 
     void SetPositiveCountValue(int value)
     {
         m_options.positive_count = value;
-        CoercePositiveScalar(
-            m_options.positive_count,
-            "--positive-count",
-            1,
-            LogLevel::Error,
-            "Positive count");
+        m_options.validate_positive_count = true;
     }
 
     void SetCommandLocalValidatedValue(double value)
     {
-        if (value == 3.5)
-        {
-            m_options.command_local_value = value;
-            return;
-        }
-
-        m_options.command_local_value = 1.25;
-        AddParseError(
-            "--validated",
-            "Validated value must equal 3.5.");
+        m_options.command_local_value = value;
+        m_options.validate_command_local_value = true;
     }
 
     double CommandLocalValidatedValue() const { return m_options.command_local_value; }
@@ -130,16 +108,67 @@ public:
         m_options.add_prepare_error = value;
     }
 
-    void SetCommonOptionsForTest(int thread_size, int verbose_level)
-    {
-        rg::CommandRequestBase request{};
-        request.job_count = thread_size;
-        request.verbosity = verbose_level;
-        ExecuteRequest(request);
-    }
-
     void NormalizeAndValidateRequest(rg::CommandRequestBase &) override
     {
+        if (m_options.validate_required_path)
+        {
+            ValidateRequiredPath(m_options.required_path, "--input", "Input file");
+        }
+        if (m_options.validate_optional_path)
+        {
+            ValidateOptionalPath(m_options.optional_path, "--optional", "Optional file");
+        }
+        if (m_options.validate_count)
+        {
+            CoercePositiveScalar(
+                m_options.normalized_count,
+                "--count",
+                4,
+                LogLevel::Warning,
+                "Count");
+        }
+        if (m_options.validate_printer)
+        {
+            CoerceEnum(
+                m_options.printer,
+                "--printer",
+                rg::PrinterType::GAUS_ESTIMATES,
+                "Printer choice");
+        }
+        if (m_options.validate_finite_positive)
+        {
+            CoerceFinitePositiveScalar(
+                m_options.finite_positive_value,
+                "--finite-positive",
+                2.0,
+                LogLevel::Error,
+                "Finite positive value");
+        }
+        if (m_options.validate_finite_non_negative)
+        {
+            CoerceFiniteNonNegativeScalar(
+                m_options.finite_non_negative_value,
+                "--finite-non-negative",
+                0.0,
+                LogLevel::Error,
+                "Finite non-negative value");
+        }
+        if (m_options.validate_positive_count)
+        {
+            CoercePositiveScalar(
+                m_options.positive_count,
+                "--positive-count",
+                1,
+                LogLevel::Error,
+                "Positive count");
+        }
+        if (m_options.validate_command_local_value && m_options.command_local_value != 3.5)
+        {
+            m_options.command_local_value = 1.25;
+            AddParseError(
+                "--validated",
+                "Validated value must equal 3.5.");
+        }
         if (!m_options.add_problematic_parse_warnings) return;
         AddParseNormalizationWarning("--problem", "normalized to 1");
         AddParseNormalizationWarning("--problem", "clamped to safe range");
@@ -157,29 +186,20 @@ private:
     ValidationHelperCommandOptions m_options{};
 
     bool ExecuteImpl(const rg::CommandRequestBase &) override { return true; }
-
-public:
-    const std::vector<rg::ValidationIssueRecord> & Issues() const
-    {
-        return GetValidationIssues();
-    }
 };
 
-const rg::ValidationIssueRecord * FindIssue(
-    const ValidationHelperCommand & command,
-    const char * option_name)
+std::size_t CountDiagnostics(
+    const std::vector<rg::CommandDiagnostic> & issues,
+    std::string_view option_name)
 {
-    const auto & issues{ command.Issues() };
-    const auto iter{
-        std::find_if(
+    return static_cast<std::size_t>(
+        std::count_if(
             issues.begin(),
             issues.end(),
-            [option_name](const rg::ValidationIssueRecord & issue)
+            [option_name](const rg::CommandDiagnostic & issue)
             {
                 return issue.option_name == option_name;
-            })
-    };
-    return iter == issues.end() ? nullptr : &(*iter);
+            }));
 }
 
 } // namespace
@@ -193,47 +213,31 @@ TEST(CommandValidationHelpersTest, PathHelpersValidateRequiredAndOptionalInputs)
         output << "fixture";
     }
     const auto missing_file{ temp_dir.path() / "missing.txt" };
-    ValidationHelperCommand command{};
-    command.SetRequiredPath(existing_file);
-    EXPECT_TRUE(command.Issues().empty());
+    ValidationHelperCommand required_command{};
+    required_command.SetRequiredPath(existing_file);
+    EXPECT_TRUE(required_command.ExecuteRequest(rg::CommandRequestBase{}).issues.empty());
 
-    command.SetRequiredPath(missing_file);
-    const auto required_issue{
-        std::find_if(
-            command.Issues().begin(),
-            command.Issues().end(),
-            [](const rg::ValidationIssueRecord & issue)
-            {
-                return issue.option_name == "--input"
-                    && issue.level == LogLevel::Error;
-            })
-    };
-    EXPECT_NE(required_issue, command.Issues().end());
+    required_command.SetRequiredPath(missing_file);
+    const auto required_result{ required_command.ExecuteRequest(rg::CommandRequestBase{}) };
+    EXPECT_FALSE(required_result.succeeded);
+    EXPECT_NE(
+        command_test::FindValidationIssue(required_result.issues, "--input"),
+        nullptr);
 
-    command.SetOptionalPath({});
-    const auto optional_empty_issue{
-        std::find_if(
-            command.Issues().begin(),
-            command.Issues().end(),
-            [](const rg::ValidationIssueRecord & issue)
-            {
-                return issue.option_name == "--optional";
-            })
-    };
-    EXPECT_EQ(optional_empty_issue, command.Issues().end());
+    ValidationHelperCommand optional_command{};
+    optional_command.SetOptionalPath({});
+    const auto optional_empty_result{ optional_command.ExecuteRequest(rg::CommandRequestBase{}) };
+    EXPECT_TRUE(optional_empty_result.succeeded);
+    EXPECT_EQ(
+        command_test::FindValidationIssue(optional_empty_result.issues, "--optional"),
+        nullptr);
 
-    command.SetOptionalPath(missing_file);
-    const auto optional_issue{
-        std::find_if(
-            command.Issues().begin(),
-            command.Issues().end(),
-            [](const rg::ValidationIssueRecord & issue)
-            {
-                return issue.option_name == "--optional"
-                    && issue.level == LogLevel::Error;
-            })
-    };
-    EXPECT_NE(optional_issue, command.Issues().end());
+    optional_command.SetOptionalPath(missing_file);
+    const auto optional_result{ optional_command.ExecuteRequest(rg::CommandRequestBase{}) };
+    EXPECT_FALSE(optional_result.succeeded);
+    EXPECT_NE(
+        command_test::FindValidationIssue(optional_result.issues, "--optional"),
+        nullptr);
 }
 
 TEST(CommandValidationHelpersTest, NormalizedScalarHelperReportsAutoCorrectedWarning)
@@ -242,11 +246,15 @@ TEST(CommandValidationHelpersTest, NormalizedScalarHelperReportsAutoCorrectedWar
 
     command.SetPositiveCount(0);
 
+    testing::internal::CaptureStderr();
+    const auto result{ command.ExecuteRequest(rg::CommandRequestBase{}) };
+    const std::string error_output{ testing::internal::GetCapturedStderr() };
+
+    EXPECT_TRUE(result.succeeded);
     EXPECT_EQ(command.Count(), 4);
-    ASSERT_EQ(command.Issues().size(), 1u);
-    EXPECT_EQ(command.Issues().front().option_name, "--count");
-    EXPECT_EQ(command.Issues().front().level, LogLevel::Warning);
-    EXPECT_TRUE(command.Issues().front().auto_corrected);
+    ASSERT_EQ(result.issues.size(), 1u);
+    EXPECT_EQ(result.issues.front().option_name, "--count");
+    EXPECT_NE(error_output.find("[validation; auto-corrected] Option --count"), std::string::npos);
 }
 
 TEST(CommandValidationHelpersTest, ValidatedEnumHelperFallsBackAndReportsParseError)
@@ -255,11 +263,12 @@ TEST(CommandValidationHelpersTest, ValidatedEnumHelperFallsBackAndReportsParseEr
 
     command.SetPrinter(static_cast<rg::PrinterType>(999));
 
+    const auto result{ command.ExecuteRequest(rg::CommandRequestBase{}) };
+
+    EXPECT_FALSE(result.succeeded);
     EXPECT_EQ(command.Printer(), rg::PrinterType::GAUS_ESTIMATES);
-    ASSERT_EQ(command.Issues().size(), 1u);
-    EXPECT_EQ(command.Issues().front().option_name, "--printer");
-    EXPECT_EQ(command.Issues().front().level, LogLevel::Error);
-    EXPECT_FALSE(command.Issues().front().auto_corrected);
+    ASSERT_EQ(result.issues.size(), 1u);
+    EXPECT_EQ(result.issues.front().option_name, "--printer");
 }
 
 TEST(CommandValidationHelpersTest, CommandLocalValidationPatternRejectsInvalidInputWithParseError)
@@ -268,11 +277,13 @@ TEST(CommandValidationHelpersTest, CommandLocalValidationPatternRejectsInvalidIn
 
     command.SetCommandLocalValidatedValue(2.0);
 
+    const auto result{ command.ExecuteRequest(rg::CommandRequestBase{}) };
+
+    EXPECT_FALSE(result.succeeded);
     EXPECT_DOUBLE_EQ(command.CommandLocalValidatedValue(), 1.25);
-    const auto * issue{ FindIssue(command, "--validated") };
-    ASSERT_NE(issue, nullptr);
-    EXPECT_EQ(issue->level, LogLevel::Error);
-    EXPECT_FALSE(issue->auto_corrected);
+    EXPECT_NE(
+        command_test::FindValidationIssue(result.issues, "--validated"),
+        nullptr);
 }
 
 TEST(CommandValidationHelpersTest, ExecuteRequestClearsPriorValidationIssues)
@@ -280,11 +291,19 @@ TEST(CommandValidationHelpersTest, ExecuteRequestClearsPriorValidationIssues)
     ValidationHelperCommand command{};
 
     command.SetCommandLocalValidatedValue(2.0);
-    ASSERT_NE(FindIssue(command, "--validated"), nullptr);
+    ASSERT_NE(
+        command_test::FindValidationIssue(
+            command.ExecuteRequest(rg::CommandRequestBase{}).issues,
+            "--validated"),
+        nullptr);
 
-    command.ExecuteRequest(rg::CommandRequestBase{});
+    command.SetCommandLocalValidatedValue(3.5);
+    const auto result{ command.ExecuteRequest(rg::CommandRequestBase{}) };
 
-    EXPECT_EQ(FindIssue(command, "--validated"), nullptr);
+    EXPECT_TRUE(result.succeeded);
+    EXPECT_EQ(
+        command_test::FindValidationIssue(result.issues, "--validated"),
+        nullptr);
 }
 
 TEST(CommandValidationHelpersTest, FinitePositiveScalarOptionRejectsZeroNegativeNanAndInfinity)
@@ -301,11 +320,13 @@ TEST(CommandValidationHelpersTest, FinitePositiveScalarOptionRejectsZeroNegative
         ValidationHelperCommand command{};
         command.SetFinitePositiveValue(value);
 
+        const auto result{ command.ExecuteRequest(rg::CommandRequestBase{}) };
+
+        EXPECT_FALSE(result.succeeded);
         EXPECT_DOUBLE_EQ(command.FinitePositiveValue(), 2.0);
-        const auto * issue{ FindIssue(command, "--finite-positive") };
-        ASSERT_NE(issue, nullptr);
-        EXPECT_EQ(issue->level, LogLevel::Error);
-        EXPECT_FALSE(issue->auto_corrected);
+        EXPECT_NE(
+            command_test::FindValidationIssue(result.issues, "--finite-positive"),
+            nullptr);
     }
 }
 
@@ -322,11 +343,13 @@ TEST(CommandValidationHelpersTest, FiniteNonNegativeScalarOptionRejectsNegativeN
         ValidationHelperCommand command{};
         command.SetFiniteNonNegativeValue(value);
 
+        const auto result{ command.ExecuteRequest(rg::CommandRequestBase{}) };
+
+        EXPECT_FALSE(result.succeeded);
         EXPECT_DOUBLE_EQ(command.FiniteNonNegativeValue(), 0.0);
-        const auto * issue{ FindIssue(command, "--finite-non-negative") };
-        ASSERT_NE(issue, nullptr);
-        EXPECT_EQ(issue->level, LogLevel::Error);
-        EXPECT_FALSE(issue->auto_corrected);
+        EXPECT_NE(
+            command_test::FindValidationIssue(result.issues, "--finite-non-negative"),
+            nullptr);
     }
 }
 
@@ -336,11 +359,13 @@ TEST(CommandValidationHelpersTest, PositiveScalarOptionRejectsNonPositiveInteger
 
     command.SetPositiveCountValue(0);
 
+    const auto result{ command.ExecuteRequest(rg::CommandRequestBase{}) };
+
+    EXPECT_FALSE(result.succeeded);
     EXPECT_EQ(command.PositiveCountValue(), 1);
-    const auto * issue{ FindIssue(command, "--positive-count") };
-    ASSERT_NE(issue, nullptr);
-    EXPECT_EQ(issue->level, LogLevel::Error);
-    EXPECT_FALSE(issue->auto_corrected);
+    EXPECT_NE(
+        command_test::FindValidationIssue(result.issues, "--positive-count"),
+        nullptr);
 }
 
 TEST(CommandValidationHelpersTest, KeepsWarningsAndErrorsForSameOption)
@@ -349,68 +374,28 @@ TEST(CommandValidationHelpersTest, KeepsWarningsAndErrorsForSameOption)
     command.SetProblematicValue(0);
     command.SetPrepareError(true);
 
-    EXPECT_FALSE(command.ExecuteRequest(rg::CommandRequestBase{}).succeeded);
+    const auto result{ command.ExecuteRequest(rg::CommandRequestBase{}) };
 
-    const auto & issues{ command.Issues() };
-    ASSERT_EQ(issues.size(), 3u);
-
-    const auto parse_warning_count{
-        std::count_if(
-            issues.begin(),
-            issues.end(),
-            [](const rg::ValidationIssueRecord & issue)
-            {
-                return issue.option_name == "--problem"
-                    && issue.level == LogLevel::Warning
-                    && issue.auto_corrected;
-            })
-    };
-    const auto prepare_error_count{
-        std::count_if(
-            issues.begin(),
-            issues.end(),
-            [](const rg::ValidationIssueRecord & issue)
-            {
-                return issue.option_name == "--problem"
-                    && issue.level == LogLevel::Error;
-            })
-    };
-
-    EXPECT_EQ(parse_warning_count, 2);
-    EXPECT_EQ(prepare_error_count, 1);
+    EXPECT_FALSE(result.succeeded);
+    ASSERT_EQ(result.issues.size(), 3u);
+    EXPECT_EQ(CountDiagnostics(result.issues, "--problem"), 3u);
 }
 
 TEST(CommandValidationHelpersTest, BaseNormalizationWarningsAreProgrammaticallyVisible)
 {
     ValidationHelperCommand command{};
-    command.SetCommonOptionsForTest(0, 99);
+    rg::CommandRequestBase request{};
+    request.job_count = 0;
+    request.verbosity = 99;
 
-    const auto & issues{ command.Issues() };
-    ASSERT_EQ(issues.size(), 2u);
+    testing::internal::CaptureStderr();
+    const auto result{ command.ExecuteRequest(request) };
+    const std::string error_output{ testing::internal::GetCapturedStderr() };
 
-    const auto jobs_issue{
-        std::find_if(
-            issues.begin(),
-            issues.end(),
-            [](const rg::ValidationIssueRecord & issue)
-            {
-                return issue.option_name == "--jobs";
-            })
-    };
-    ASSERT_NE(jobs_issue, issues.end());
-    EXPECT_EQ(jobs_issue->level, LogLevel::Warning);
-    EXPECT_TRUE(jobs_issue->auto_corrected);
-
-    const auto verbose_issue{
-        std::find_if(
-            issues.begin(),
-            issues.end(),
-            [](const rg::ValidationIssueRecord & issue)
-            {
-                return issue.option_name == "--verbose";
-            })
-    };
-    ASSERT_NE(verbose_issue, issues.end());
-    EXPECT_EQ(verbose_issue->level, LogLevel::Warning);
-    EXPECT_TRUE(verbose_issue->auto_corrected);
+    EXPECT_TRUE(result.succeeded);
+    ASSERT_EQ(result.issues.size(), 2u);
+    EXPECT_NE(command_test::FindValidationIssue(result.issues, "--jobs"), nullptr);
+    EXPECT_NE(command_test::FindValidationIssue(result.issues, "--verbose"), nullptr);
+    EXPECT_NE(error_output.find("[validation; auto-corrected] Option --jobs"), std::string::npos);
+    EXPECT_NE(error_output.find("[validation; auto-corrected] Option --verbose"), std::string::npos);
 }
