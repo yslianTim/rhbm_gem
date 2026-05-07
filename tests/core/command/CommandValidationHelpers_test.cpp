@@ -149,8 +149,6 @@ public:
             "semantic validation failed");
     }
 
-    void ResetRuntimeState() override {}
-
 private:
     ValidationHelperCommandOptions m_options{};
 
@@ -350,7 +348,6 @@ TEST(CommandValidationHelpersTest, KeepsParseAndPrepareIssuesForSameOption)
     command.SetPrepareError(true);
 
     EXPECT_FALSE(command.Run());
-    EXPECT_FALSE(command.WasPrepared());
 
     const auto & issues{ command.GetValidationIssues() };
     ASSERT_EQ(issues.size(), 3u);

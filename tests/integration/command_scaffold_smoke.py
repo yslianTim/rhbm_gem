@@ -61,6 +61,10 @@ def main() -> int:
         raise AssertionError("Scaffold template should use NormalizeAndValidateRequest().")
     if "ValidatePreparedRequest" not in scaffold_source:
         raise AssertionError("Scaffold template should use ValidatePreparedRequest().")
+    removed_runtime_hook_name = "Reset" + "Runtime" + "State"
+    if removed_runtime_hook_name in scaffold_source:
+        raise AssertionError(
+            f"Scaffold template still references {removed_runtime_hook_name}().")
     old_hook_name = "Normalize" + "Request"
     if old_hook_name in scaffold_source:
         raise AssertionError(f"Scaffold template still references {old_hook_name}().")

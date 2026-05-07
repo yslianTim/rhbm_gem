@@ -28,7 +28,6 @@ TEST(CommandValidationScenariosTest, MapSimulationRejectsAllInvalidBlurringWidth
     request.blurring_width_list = { -1.0, 0.0 };
 
     EXPECT_FALSE(ApplyAndRun(command, request));
-    EXPECT_FALSE(command.WasPrepared());
     EXPECT_NE(
         command_test::FindValidationIssue(
             command,
@@ -46,7 +45,6 @@ TEST(CommandValidationScenariosTest, PotentialAnalysisRequiresPositiveResolution
     request.simulated_map_resolution = 0.0;
 
     EXPECT_FALSE(ApplyAndRun(command, request));
-    EXPECT_FALSE(command.WasPrepared());
     EXPECT_NE(
         command_test::FindValidationIssue(
             command,
@@ -64,7 +62,6 @@ TEST(CommandValidationScenariosTest, PotentialAnalysisRejectsInvertedSamplingRan
     request.sampling_range_max = 1.0;
 
     EXPECT_FALSE(ApplyAndRun(command, request));
-    EXPECT_FALSE(command.WasPrepared());
     EXPECT_NE(
         command_test::FindValidationIssue(
             command,
@@ -82,7 +79,6 @@ TEST(CommandValidationScenariosTest, PotentialAnalysisRejectsInvertedTrainingAlp
     request.training_alpha_max = 0.5;
 
     EXPECT_FALSE(ApplyAndRun(command, request));
-    EXPECT_FALSE(command.WasPrepared());
     EXPECT_NE(
         command_test::FindValidationIssue(
             command,
@@ -99,7 +95,6 @@ TEST(CommandValidationScenariosTest, PotentialAnalysisCoercesInvalidTrainingAlph
     request.training_alpha_step = 0.0;
 
     EXPECT_FALSE(ApplyAndRun(command, request));
-    EXPECT_FALSE(command.WasPrepared());
     EXPECT_NE(
         command_test::FindValidationIssue(
             command,
@@ -116,7 +111,6 @@ TEST(CommandValidationScenariosTest, PotentialAnalysisRejectsEmptySavedKeyAtPars
     request.saved_key_tag = "";
 
     EXPECT_FALSE(ApplyAndRun(command, request));
-    EXPECT_FALSE(command.WasPrepared());
     EXPECT_NE(
         command_test::FindValidationIssue(
             command,
@@ -134,7 +128,6 @@ TEST(CommandValidationScenariosTest, RHBMTestRejectsInvertedFitRangeAtPrepare)
     request.fit_range_max = 1.0;
 
     EXPECT_FALSE(ApplyAndRun(command, request));
-    EXPECT_FALSE(command.WasPrepared());
     EXPECT_NE(
         command_test::FindValidationIssue(
             command,
@@ -153,7 +146,6 @@ TEST(CommandValidationScenariosTest, PotentialDisplayRejectsMalformedReferenceGr
     request.reference_model_groups[""] = { "invalid" };
 
     EXPECT_FALSE(ApplyAndRun(command, request));
-    EXPECT_FALSE(command.WasPrepared());
     EXPECT_NE(
         command_test::FindValidationIssue(
             command,
@@ -175,7 +167,6 @@ TEST(CommandValidationScenariosTest, PotentialDisplayAllowsWellFormedReferenceGr
     };
 
     EXPECT_FALSE(ApplyAndRun(command, request));
-    EXPECT_TRUE(command.WasPrepared());
     EXPECT_EQ(
         command_test::FindValidationIssue(
             command,
@@ -193,7 +184,6 @@ TEST(CommandValidationScenariosTest, ResultDumpRequiresMapFileForMapPrinterAtPre
     request.model_key_tag_list = { "model" };
 
     EXPECT_FALSE(ApplyAndRun(command, request));
-    EXPECT_FALSE(command.WasPrepared());
     EXPECT_NE(
         command_test::FindValidationIssue(
             command,

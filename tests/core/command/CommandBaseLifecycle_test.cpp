@@ -18,6 +18,8 @@ struct TestCommandOptions
 class TestCommand final : public rg::CommandBase<rg::CommandRequestBase>
 {
 public:
+    int execute_impl_count{ 0 };
+
     void SetForceInvalid(bool value)
     {
         m_options.force_invalid = value;
@@ -35,13 +37,12 @@ public:
         RequirePrepareCondition(!m_options.force_invalid, "--test", "forced invalid config");
     }
 
-    void ResetRuntimeState() override {}
-
 private:
     TestCommandOptions m_options{};
 
     bool ExecuteImpl() override
     {
+        ++execute_impl_count;
         return true;
     }
 };
@@ -58,7 +59,7 @@ TEST(CommandBaseLifecycleTest, RunCreatesOutputFolder)
     EXPECT_FALSE(std::filesystem::exists(folder_path));
 
     ASSERT_TRUE(command.Run());
-    EXPECT_TRUE(command.WasPrepared());
+    EXPECT_EQ(command.execute_impl_count, 1);
     EXPECT_TRUE(std::filesystem::exists(folder_path));
 }
 
@@ -71,7 +72,7 @@ TEST(CommandBaseLifecycleTest, RunReportsValidationIssues)
     EXPECT_FALSE(command.Run());
     const std::string error_output{ testing::internal::GetCapturedStderr() };
 
-    EXPECT_FALSE(command.WasPrepared());
+    EXPECT_EQ(command.execute_impl_count, 0);
     ASSERT_FALSE(command.GetValidationIssues().empty());
     EXPECT_NE(error_output.find("Option --test: forced invalid config"), std::string::npos);
 }
@@ -85,6 +86,6 @@ TEST(CommandBaseLifecycleTest, ValidationFailureSkipsFilesystemPreflight)
     command.SetForceInvalid(true);
 
     ASSERT_FALSE(command.Run());
-    EXPECT_FALSE(command.WasPrepared());
+    EXPECT_EQ(command.execute_impl_count, 0);
     EXPECT_FALSE(std::filesystem::exists(folder_path));
 }

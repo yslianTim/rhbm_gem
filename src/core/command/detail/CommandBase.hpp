@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cmath>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -44,7 +43,6 @@ class CommandBase
 
     Request m_request{};
     std::vector<ValidationIssueRecord> m_validation_issues;
-    bool m_was_prepared{ false };
 
 public:
     using RequestType = Request;
@@ -59,8 +57,7 @@ public:
     bool Run()
     {
         Logger::SetLogLevel(m_request.verbosity);
-        ResetRuntimeState();
-        InvalidatePreparedState();
+        ClearPrepareValidationIssues();
         ValidatePreparedRequest();
         if (HasValidationErrors())
         {
@@ -69,7 +66,6 @@ public:
         }
         if (!RunFilesystemPreflight()) return false;
 
-        m_was_prepared = true;
         const bool executed{ ExecuteImpl() };
         if (!executed)
         {
@@ -77,7 +73,6 @@ public:
         }
         return executed;
     }
-    bool WasPrepared() const { return m_was_prepared; }
     bool HasValidationErrors() const
     {
         return std::any_of(
@@ -96,7 +91,6 @@ protected:
     Request & MutableRequest() { return m_request; }
     virtual void NormalizeAndValidateRequest() {}
     virtual void ValidatePreparedRequest() {}
-    virtual void ResetRuntimeState() {}
     virtual bool ExecuteImpl() = 0;
     int ThreadSize() const { return m_request.job_count; }
     const std::filesystem::path & OutputFolder() const { return m_request.output_dir; }
@@ -113,7 +107,7 @@ protected:
         std::string_view option_name,
         std::string_view label)
     {
-        InvalidatePreparedState();
+        ClearPrepareValidationIssues();
         if (path.empty())
         {
             AddValidationIssue(option_name, ValidationPhase::Parse, LogLevel::Error,
@@ -133,7 +127,7 @@ protected:
         std::string_view option_name,
         std::string_view label)
     {
-        InvalidatePreparedState();
+        ClearPrepareValidationIssues();
         if (path.empty()) return;
 
         std::error_code error_code;
@@ -158,7 +152,6 @@ protected:
         std::string_view option_name,
         const std::string & message)
     {
-        m_was_prepared = false;
         if (condition) return;
         AddValidationIssue(option_name, ValidationPhase::Prepare, LogLevel::Error, message, false);
     }
@@ -240,7 +233,7 @@ protected:
         FieldType fallback_value,
         std::string_view label)
     {
-        InvalidatePreparedState();
+        ClearPrepareValidationIssues();
         using UnderlyingType = std::underlying_type_t<FieldType>;
         const auto raw_numeric{ static_cast<UnderlyingType>(field) };
         for (const auto & option : command_internal::CommandEnumTraits<FieldType>::kOptions)
@@ -255,20 +248,10 @@ protected:
             std::string(label) + " must be one of the supported values. Received: "
                 + std::to_string(static_cast<long long>(raw_numeric)), false);
     }
-    std::filesystem::path BuildOutputPath(std::string_view stem, std::string_view extension) const
-    {
-        std::string normalized_extension{ extension };
-        if (!normalized_extension.empty() && normalized_extension.front() != '.')
-        {
-            normalized_extension.insert(normalized_extension.begin(), '.');
-        }
-        return OutputFolder() / (std::string(stem) + normalized_extension);
-    }
 
 private:
     void BeginRequestApply()
     {
-        m_was_prepared = false;
         ClearValidationIssues();
         CoercePositiveScalar(m_request.job_count, "--jobs", 1, LogLevel::Warning, "Thread size");
         CoerceScalar(m_request.verbosity, "--verbose",
@@ -283,9 +266,8 @@ private:
         m_request.output_dir =
             std::filesystem::path(path_helper::EnsureTrailingSlash(m_request.output_dir));
     }
-    void InvalidatePreparedState()
+    void ClearPrepareValidationIssues()
     {
-        m_was_prepared = false;
         ClearValidationIssues(ValidationPhase::Prepare);
     }
     template <typename FieldType, typename Predicate>
@@ -297,7 +279,7 @@ private:
         LogLevel issue_level,
         const std::string & message)
     {
-        InvalidatePreparedState();
+        ClearPrepareValidationIssues();
         if (is_valid(field)) return;
         field = fallback_value;
         if (issue_level == LogLevel::Warning)

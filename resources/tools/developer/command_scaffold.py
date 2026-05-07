@@ -189,7 +189,6 @@ public:
 private:
     void NormalizeAndValidateRequest() override;
     void ValidatePreparedRequest() override;
-    void ResetRuntimeState() override;
     bool ExecuteImpl() override;
 }};
 
@@ -217,10 +216,6 @@ void {spec.command_type}::NormalizeAndValidateRequest()
 }}
 
 void {spec.command_type}::ValidatePreparedRequest()
-{{
-}}
-
-void {spec.command_type}::ResetRuntimeState()
 {{
 }}
 

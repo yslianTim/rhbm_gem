@@ -102,8 +102,7 @@ Use this shape:
 1. derive from `CommandBase<XxxRequest>`
 2. implement `NormalizeAndValidateRequest()`
 3. implement `ValidatePreparedRequest()`
-4. implement `ResetRuntimeState()`
-5. implement `ExecuteImpl()`
+4. implement `ExecuteImpl()`
 
 `CommandBase<XxxRequest>` already:
 

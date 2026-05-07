@@ -122,8 +122,7 @@ The standard shape is:
 1. derive from `CommandBase<XxxRequest>`
 2. keep parse-phase request normalization and validation in `NormalizeAndValidateRequest()`
 3. keep semantic checks in `ValidatePreparedRequest()`
-4. clear transient runtime state in `ResetRuntimeState()`
-5. keep orchestration in `ExecuteImpl()`
+4. keep orchestration in `ExecuteImpl()`
 
 `CommandBase<XxxRequest>`:
 
