@@ -104,8 +104,7 @@ Expected result contract:
 
 ## Tests to Update When Behavior Changes
 
-- [`tests/core/command/CommandValidationScenarios_test.cpp`](/tests/core/command/CommandValidationScenarios_test.cpp)
-- [`tests/core/command/CommandWorkflowScenarios_test.cpp`](/tests/core/command/CommandWorkflowScenarios_test.cpp)
+- [`tests/core/command/CommandScenarios_test.cpp`](/tests/core/command/CommandScenarios_test.cpp)
 - [`tests/core/contract/CommandExecutionContract_test.cpp`](/tests/core/contract/CommandExecutionContract_test.cpp)
 - [`tests/core/contract/CommandCatalog_test.cpp`](/tests/core/contract/CommandCatalog_test.cpp)
 - [`tests/integration/CommandApiPipeline_test.cpp`](/tests/integration/CommandApiPipeline_test.cpp)

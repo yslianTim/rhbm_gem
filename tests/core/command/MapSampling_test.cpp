@@ -12,7 +12,7 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
-namespace rg = rhbm_gem;
+using namespace rhbm_gem;
 
 namespace {
 
@@ -57,7 +57,7 @@ public:
     }
 };
 
-rg::MapObject MakeMapObject()
+MapObject MakeMapObject()
 {
     std::array<int, 3> grid_size{ 2, 2, 2 };
     std::array<float, 3> grid_spacing{ 1.0f, 1.0f, 1.0f };
@@ -67,25 +67,25 @@ rg::MapObject MakeMapObject()
     {
         values[i] = static_cast<float>(i + 1);
     }
-    return rg::MapObject{ grid_size, grid_spacing, origin, std::move(values) };
+    return MapObject{ grid_size, grid_spacing, origin, std::move(values) };
 }
 
-std::unique_ptr<rg::ModelObject> MakeLinearNeighborModel()
+std::unique_ptr<ModelObject> MakeLinearNeighborModel()
 {
-    std::vector<std::unique_ptr<rg::AtomObject>> atom_list;
+    std::vector<std::unique_ptr<AtomObject>> atom_list;
     atom_list.reserve(2);
 
-    auto center_atom{ std::make_unique<rg::AtomObject>() };
+    auto center_atom{ std::make_unique<AtomObject>() };
     center_atom->SetSerialID(1);
     center_atom->SetPosition(0.0f, 0.0f, 0.0f);
 
-    auto neighbor_atom{ std::make_unique<rg::AtomObject>() };
+    auto neighbor_atom{ std::make_unique<AtomObject>() };
     neighbor_atom->SetSerialID(2);
     neighbor_atom->SetPosition(1.0f, 0.0f, 0.0f);
 
     atom_list.emplace_back(std::move(center_atom));
     atom_list.emplace_back(std::move(neighbor_atom));
-    return std::make_unique<rg::ModelObject>(std::move(atom_list));
+    return std::make_unique<ModelObject>(std::move(atom_list));
 }
 
 } // namespace
@@ -95,11 +95,11 @@ TEST(MapSamplingTest, PositionOnlySamplerReturnsExpectedPointValueAndIsDetermini
     auto map{ MakeMapObject() };
     SinglePointSampler sampler;
     const auto first{
-        rg::SampleMapValues(map, sampler, { 0.0f, 0.0f, 0.0f }) };
+        SampleMapValues(map, sampler, { 0.0f, 0.0f, 0.0f }) };
     const auto second{
-        rg::SampleMapValues(map, sampler, { 1.0f, 1.0f, 1.0f }) };
+        SampleMapValues(map, sampler, { 1.0f, 1.0f, 1.0f }) };
     const auto first_again{
-        rg::SampleMapValues(map, sampler, { 0.0f, 0.0f, 0.0f }) };
+        SampleMapValues(map, sampler, { 0.0f, 0.0f, 0.0f }) };
 
     ASSERT_EQ(first.size(), 1u);
     ASSERT_EQ(second.size(), 1u);
@@ -122,7 +122,7 @@ TEST(MapSamplingTest, OrientedSamplerUsesDirectionLikeInput)
     ShiftedPointSampler sampler;
 
     const auto sampling_data{
-        rg::SampleMapValues(
+        SampleMapValues(
             map,
             sampler,
             { 0.0f, 0.0f, 0.0f },
@@ -145,9 +145,9 @@ TEST(MapSamplingTest, AtomSamplerWithZeroAngleMatchesPositionOnlySampling)
     const auto * atom{ model->GetAtomList().at(0).get() };
 
     const auto from_position{
-        rg::SampleMapValues(map, sampler, atom->GetPosition()) };
+        SampleMapValues(map, sampler, atom->GetPosition()) };
     const auto from_atom{
-        rg::SampleMapValues(map, sampler, *atom, 1.1, 0.0) };
+        SampleMapValues(map, sampler, *atom, 1.1, 0.0) };
 
     ASSERT_EQ(from_position.size(), from_atom.size());
     ASSERT_EQ(from_atom.size(), 1u);
@@ -167,7 +167,7 @@ TEST(MapSamplingTest, AtomSamplerRetainsLowestResponseSamplesAfterAngleFiltering
     const auto * atom{ model->GetAtomList().at(0).get() };
 
     const auto sampling_data{
-        rg::SampleMapValues(map, sampler, *atom, 1.1, 30.0) };
+        SampleMapValues(map, sampler, *atom, 1.1, 30.0) };
 
     ASSERT_EQ(sampling_data.size(), 2u);
     EXPECT_FLOAT_EQ(sampling_data.at(0).distance, 0.0f);
@@ -190,7 +190,7 @@ TEST(MapSamplingTest, AtomSamplerRemovesFilteredEntriesBeforeRetainingSamples)
     const auto * atom{ model->GetAtomList().at(0).get() };
 
     const auto sampling_data{
-        rg::SampleMapValues(map, sampler, *atom, 1.1, 30.0) };
+        SampleMapValues(map, sampler, *atom, 1.1, 30.0) };
 
     ASSERT_EQ(sampling_data.size(), 2u);
     EXPECT_FLOAT_EQ(sampling_data.at(0).score, 1.0f);
@@ -213,7 +213,7 @@ TEST(MapSamplingTest, AtomSamplerAppliesDecileRetentionWhenNeighborRadiusFindsNo
     const auto * atom{ model->GetAtomList().at(0).get() };
 
     const auto sampling_data{
-        rg::SampleMapValues(map, sampler, *atom, 0.5, 30.0) };
+        SampleMapValues(map, sampler, *atom, 0.5, 30.0) };
 
     ASSERT_EQ(sampling_data.size(), 2u);
     ASSERT_TRUE(sampling_data.at(0).HasPosition());
@@ -233,14 +233,14 @@ TEST(MapSamplingTest, AtomSamplerRequiresAttachedAtomBeforeSampling)
 {
     auto map{ MakeMapObject() };
     SinglePointSampler sampler;
-    rg::AtomObject detached_atom;
+    AtomObject detached_atom;
     detached_atom.SetPosition(0.0f, 0.0f, 0.0f);
 
     EXPECT_THROW(
-        (void)rg::SampleMapValues(map, sampler, detached_atom, 1.0, 0.0),
+        (void)SampleMapValues(map, sampler, detached_atom, 1.0, 0.0),
         std::runtime_error);
     EXPECT_THROW(
-        (void)rg::SampleMapValues(map, sampler, detached_atom, 1.0, 30.0),
+        (void)SampleMapValues(map, sampler, detached_atom, 1.0, 30.0),
         std::runtime_error);
 }
 
@@ -252,10 +252,10 @@ TEST(MapSamplingTest, AtomSamplerRejectsInvalidFilterParameters)
     const auto * atom{ model->GetAtomList().at(0).get() };
 
     EXPECT_THROW(
-        (void)rg::SampleMapValues(map, sampler, *atom, -0.1, 0.0),
+        (void)SampleMapValues(map, sampler, *atom, -0.1, 0.0),
         std::invalid_argument);
     EXPECT_THROW(
-        (void)rg::SampleMapValues(
+        (void)SampleMapValues(
             map,
             sampler,
             *atom,
@@ -263,9 +263,9 @@ TEST(MapSamplingTest, AtomSamplerRejectsInvalidFilterParameters)
             std::numeric_limits<double>::infinity()),
         std::invalid_argument);
     EXPECT_THROW(
-        (void)rg::SampleMapValues(map, sampler, *atom, 1.0, -1.0),
+        (void)SampleMapValues(map, sampler, *atom, 1.0, -1.0),
         std::invalid_argument);
     EXPECT_THROW(
-        (void)rg::SampleMapValues(map, sampler, *atom, 1.0, 181.0),
+        (void)SampleMapValues(map, sampler, *atom, 1.0, 181.0),
         std::invalid_argument);
 }

@@ -79,8 +79,7 @@ cmake --build build --target lint_repo
 - For `tests/core/command/`, prefer extending the existing grouped files:
 - `CommandBaseLifecycle_test.cpp` for base lifecycle/preflight behavior.
 - `CommandValidationHelpers_test.cpp` for reusable helper semantics.
-- `CommandValidationScenarios_test.cpp` for command-specific validation rules.
-- `CommandWorkflowScenarios_test.cpp` for command workflows and output side effects.
+- `CommandScenarios_test.cpp` for command-specific validation rules, workflows, and output side effects.
 - Only create a new command `*_test.cpp` when you are introducing a new testing responsibility.
 - For `tests/data/`, prefer extending the responsibility-based files:
 - `DataPublicHeaders_test.cpp` for public header surface guards.

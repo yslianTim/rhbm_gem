@@ -73,8 +73,7 @@ function(add_rhbm_gtest_group test_name)
 endfunction()
 
 set(RHBM_GEM_CORE_COMMAND_TEST_SOURCES
-    core/command/CommandValidationScenarios_test.cpp
-    core/command/CommandWorkflowScenarios_test.cpp
+    core/command/CommandScenarios_test.cpp
 )
 
 set(CORE_COMMAND_TEST_SOURCES

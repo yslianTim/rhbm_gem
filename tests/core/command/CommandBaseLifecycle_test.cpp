@@ -6,7 +6,7 @@
 #include "command/detail/CommandBase.hpp"
 #include "support/CommandTestHelpers.hpp"
 
-namespace rg = rhbm_gem;
+using namespace rhbm_gem;
 
 namespace {
 
@@ -15,7 +15,7 @@ struct TestCommandOptions
     bool force_invalid{ false };
 };
 
-class TestCommand final : public rg::CommandBase<rg::CommandRequestBase>
+class TestCommand final : public CommandBase<CommandRequestBase>
 {
 public:
     int execute_impl_count{ 0 };
@@ -30,23 +30,23 @@ public:
         m_configured_request.output_dir = folder_path;
     }
 
-    void ValidatePreparedRequest(const rg::CommandRequestBase &) override
+    void ValidatePreparedRequest(const CommandRequestBase &) override
     {
         RequirePrepareCondition(!m_options.force_invalid, "--test", "forced invalid config");
     }
 
 private:
     TestCommandOptions m_options{};
-    rg::CommandRequestBase m_configured_request{};
+    CommandRequestBase m_configured_request{};
 
-    bool ExecuteImpl(const rg::CommandRequestBase &) override
+    bool ExecuteImpl(const CommandRequestBase &) override
     {
         ++execute_impl_count;
         return true;
     }
 
 public:
-    rg::CommandResult ExecuteConfiguredRequest()
+    CommandResult ExecuteConfiguredRequest()
     {
         return ExecuteRequest(m_configured_request);
     }

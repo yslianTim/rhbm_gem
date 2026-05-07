@@ -238,8 +238,8 @@ Scaffold generated for CLI command `{spec.cli_name}`.
 3. Add `Execute{spec.command_type}` declaration and `CommandEntry<{spec.command_id}Request>` to `src/core/command/detail/CommandCatalog.hpp`.
 4. Add `core/command/{spec.command_type}.cpp` to the command source list in `src/CMakeLists.txt`.
 5. Extend the grouped command tests under `tests/core/command/`.
-   Validation-only coverage usually belongs in `CommandValidationScenarios_test.cpp`.
-   Workflow/output coverage usually belongs in `CommandWorkflowScenarios_test.cpp`.
+   Command-specific validation, workflow, and output coverage usually belongs in
+   `CommandScenarios_test.cpp`.
 """
 
 
@@ -324,12 +324,8 @@ def main() -> int:
     print("\nTest guidance:")
     print(f"  - Extend grouped command tests under {grouped_test_dir}")
     print(
-        "  - Validation and request-shape coverage usually belongs in "
-        f"{grouped_test_dir / 'CommandValidationScenarios_test.cpp'}"
-    )
-    print(
-        "  - Workflow/output coverage usually belongs in "
-        f"{grouped_test_dir / 'CommandWorkflowScenarios_test.cpp'}"
+        "  - Command-specific validation, workflow, and output coverage usually belongs in "
+        f"{grouped_test_dir / 'CommandScenarios_test.cpp'}"
     )
 
     if args.wire:

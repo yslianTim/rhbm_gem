@@ -48,8 +48,7 @@ def main() -> int:
 
     guidance_fragments = [
         str(project_root / "tests" / "core" / "command"),
-        str(project_root / "tests" / "core" / "command" / "CommandValidationScenarios_test.cpp"),
-        str(project_root / "tests" / "core" / "command" / "CommandWorkflowScenarios_test.cpp"),
+        str(project_root / "tests" / "core" / "command" / "CommandScenarios_test.cpp"),
         "extend the grouped command tests",
     ]
     for fragment in guidance_fragments:
