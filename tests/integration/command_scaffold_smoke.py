@@ -61,8 +61,11 @@ def main() -> int:
         raise AssertionError("Scaffold template should use NormalizeAndValidateRequest().")
     if "ValidatePreparedRequest" not in scaffold_source:
         raise AssertionError("Scaffold template should use ValidatePreparedRequest().")
-    if "CommandExecutor.hpp" not in scaffold_source:
-        raise AssertionError("Scaffold template should use CommandExecutor.hpp.")
+    if "CommandBase.hpp" not in scaffold_source:
+        raise AssertionError("Scaffold template should use CommandBase.hpp.")
+    removed_executor_header = "Command" + "Executor.hpp"
+    if removed_executor_header in scaffold_source:
+        raise AssertionError(f"Scaffold template still references {removed_executor_header}.")
     removed_runtime_hook_name = "Reset" + "Runtime" + "State"
     if removed_runtime_hook_name in scaffold_source:
         raise AssertionError(

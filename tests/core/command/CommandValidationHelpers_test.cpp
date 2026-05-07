@@ -24,6 +24,7 @@ struct ValidationHelperCommandOptions
     double finite_non_negative_value{ 0.0 };
     int positive_count{ 1 };
     double command_local_value{ 1.25 };
+    bool add_problematic_parse_warnings{ false };
     bool add_prepare_error{ false };
 };
 
@@ -121,11 +122,7 @@ public:
 
     void SetProblematicValue(int value)
     {
-        if (value <= 0)
-        {
-            AddParseNormalizationWarning("--problem", "normalized to 1");
-            AddParseNormalizationWarning("--problem", "clamped to safe range");
-        }
+        m_options.add_problematic_parse_warnings = value <= 0;
     }
 
     void SetPrepareError(bool value)
@@ -138,10 +135,17 @@ public:
         rg::CommandRequestBase request{};
         request.job_count = thread_size;
         request.verbosity = verbose_level;
-        ApplyRequest(request);
+        ExecuteRequest(request);
     }
 
-    void ValidatePreparedRequest() override
+    void NormalizeAndValidateRequest(rg::CommandRequestBase &) override
+    {
+        if (!m_options.add_problematic_parse_warnings) return;
+        AddParseNormalizationWarning("--problem", "normalized to 1");
+        AddParseNormalizationWarning("--problem", "clamped to safe range");
+    }
+
+    void ValidatePreparedRequest(const rg::CommandRequestBase &) override
     {
         RequirePrepareCondition(
             !m_options.add_prepare_error,
@@ -152,14 +156,20 @@ public:
 private:
     ValidationHelperCommandOptions m_options{};
 
-    bool ExecuteImpl() override { return true; }
+    bool ExecuteImpl(const rg::CommandRequestBase &) override { return true; }
+
+public:
+    const std::vector<rg::ValidationIssueRecord> & Issues() const
+    {
+        return GetValidationIssues();
+    }
 };
 
 const rg::ValidationIssueRecord * FindIssue(
     const ValidationHelperCommand & command,
     const char * option_name)
 {
-    const auto & issues{ command.GetValidationIssues() };
+    const auto & issues{ command.Issues() };
     const auto iter{
         std::find_if(
             issues.begin(),
@@ -185,13 +195,13 @@ TEST(CommandValidationHelpersTest, PathHelpersValidateRequiredAndOptionalInputs)
     const auto missing_file{ temp_dir.path() / "missing.txt" };
     ValidationHelperCommand command{};
     command.SetRequiredPath(existing_file);
-    EXPECT_TRUE(command.GetValidationIssues().empty());
+    EXPECT_TRUE(command.Issues().empty());
 
     command.SetRequiredPath(missing_file);
     const auto required_issue{
         std::find_if(
-            command.GetValidationIssues().begin(),
-            command.GetValidationIssues().end(),
+            command.Issues().begin(),
+            command.Issues().end(),
             [](const rg::ValidationIssueRecord & issue)
             {
                 return issue.option_name == "--input"
@@ -199,25 +209,25 @@ TEST(CommandValidationHelpersTest, PathHelpersValidateRequiredAndOptionalInputs)
                     && issue.level == LogLevel::Error;
             })
     };
-    EXPECT_NE(required_issue, command.GetValidationIssues().end());
+    EXPECT_NE(required_issue, command.Issues().end());
 
     command.SetOptionalPath({});
     const auto optional_empty_issue{
         std::find_if(
-            command.GetValidationIssues().begin(),
-            command.GetValidationIssues().end(),
+            command.Issues().begin(),
+            command.Issues().end(),
             [](const rg::ValidationIssueRecord & issue)
             {
                 return issue.option_name == "--optional";
             })
     };
-    EXPECT_EQ(optional_empty_issue, command.GetValidationIssues().end());
+    EXPECT_EQ(optional_empty_issue, command.Issues().end());
 
     command.SetOptionalPath(missing_file);
     const auto optional_issue{
         std::find_if(
-            command.GetValidationIssues().begin(),
-            command.GetValidationIssues().end(),
+            command.Issues().begin(),
+            command.Issues().end(),
             [](const rg::ValidationIssueRecord & issue)
             {
                 return issue.option_name == "--optional"
@@ -225,7 +235,7 @@ TEST(CommandValidationHelpersTest, PathHelpersValidateRequiredAndOptionalInputs)
                     && issue.level == LogLevel::Error;
             })
     };
-    EXPECT_NE(optional_issue, command.GetValidationIssues().end());
+    EXPECT_NE(optional_issue, command.Issues().end());
 }
 
 TEST(CommandValidationHelpersTest, NormalizedScalarHelperReportsAutoCorrectedWarning)
@@ -235,11 +245,11 @@ TEST(CommandValidationHelpersTest, NormalizedScalarHelperReportsAutoCorrectedWar
     command.SetPositiveCount(0);
 
     EXPECT_EQ(command.Count(), 4);
-    ASSERT_EQ(command.GetValidationIssues().size(), 1u);
-    EXPECT_EQ(command.GetValidationIssues().front().option_name, "--count");
-    EXPECT_EQ(command.GetValidationIssues().front().phase, rg::ValidationPhase::Parse);
-    EXPECT_EQ(command.GetValidationIssues().front().level, LogLevel::Warning);
-    EXPECT_TRUE(command.GetValidationIssues().front().auto_corrected);
+    ASSERT_EQ(command.Issues().size(), 1u);
+    EXPECT_EQ(command.Issues().front().option_name, "--count");
+    EXPECT_EQ(command.Issues().front().phase, rg::ValidationPhase::Parse);
+    EXPECT_EQ(command.Issues().front().level, LogLevel::Warning);
+    EXPECT_TRUE(command.Issues().front().auto_corrected);
 }
 
 TEST(CommandValidationHelpersTest, ValidatedEnumHelperFallsBackAndReportsParseError)
@@ -249,11 +259,11 @@ TEST(CommandValidationHelpersTest, ValidatedEnumHelperFallsBackAndReportsParseEr
     command.SetPrinter(static_cast<rg::PrinterType>(999));
 
     EXPECT_EQ(command.Printer(), rg::PrinterType::GAUS_ESTIMATES);
-    ASSERT_EQ(command.GetValidationIssues().size(), 1u);
-    EXPECT_EQ(command.GetValidationIssues().front().option_name, "--printer");
-    EXPECT_EQ(command.GetValidationIssues().front().phase, rg::ValidationPhase::Parse);
-    EXPECT_EQ(command.GetValidationIssues().front().level, LogLevel::Error);
-    EXPECT_FALSE(command.GetValidationIssues().front().auto_corrected);
+    ASSERT_EQ(command.Issues().size(), 1u);
+    EXPECT_EQ(command.Issues().front().option_name, "--printer");
+    EXPECT_EQ(command.Issues().front().phase, rg::ValidationPhase::Parse);
+    EXPECT_EQ(command.Issues().front().level, LogLevel::Error);
+    EXPECT_FALSE(command.Issues().front().auto_corrected);
 }
 
 TEST(CommandValidationHelpersTest, CommandLocalValidationPatternRejectsInvalidInputWithParseError)
@@ -277,7 +287,7 @@ TEST(CommandValidationHelpersTest, ApplyRequestClearsPriorValidationIssues)
     command.SetCommandLocalValidatedValue(2.0);
     ASSERT_NE(FindIssue(command, "--validated"), nullptr);
 
-    command.ApplyRequest(rg::CommandRequestBase{});
+    command.ExecuteRequest(rg::CommandRequestBase{});
 
     EXPECT_EQ(FindIssue(command, "--validated"), nullptr);
 }
@@ -347,9 +357,9 @@ TEST(CommandValidationHelpersTest, KeepsParseAndPrepareIssuesForSameOption)
     command.SetProblematicValue(0);
     command.SetPrepareError(true);
 
-    EXPECT_FALSE(command.Run());
+    EXPECT_FALSE(command.ExecuteRequest(rg::CommandRequestBase{}).succeeded);
 
-    const auto & issues{ command.GetValidationIssues() };
+    const auto & issues{ command.Issues() };
     ASSERT_EQ(issues.size(), 3u);
 
     const auto parse_warning_count{
@@ -385,7 +395,7 @@ TEST(CommandValidationHelpersTest, BaseNormalizationWarningsAreProgrammaticallyV
     ValidationHelperCommand command{};
     command.SetCommonOptionsForTest(0, 99);
 
-    const auto & issues{ command.GetValidationIssues() };
+    const auto & issues{ command.Issues() };
     ASSERT_EQ(issues.size(), 2u);
 
     const auto jobs_issue{

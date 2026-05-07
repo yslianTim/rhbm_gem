@@ -1,4 +1,4 @@
-#include "detail/CommandExecutor.hpp"
+#include "detail/CommandBase.hpp"
 #include "core/painter/detail/PainterModelAccess.hpp"
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
@@ -29,8 +29,8 @@ public:
     PotentialDisplayCommand();
 
 private:
-    void NormalizeAndValidateRequest() override;
-    bool ExecuteImpl() override;
+    void NormalizeAndValidateRequest(PotentialDisplayRequest & request) override;
+    bool ExecuteImpl(const PotentialDisplayRequest & request) override;
 };
 
 } // namespace rhbm_gem
@@ -143,9 +143,8 @@ PotentialDisplayCommand::PotentialDisplayCommand() :
 {
 }
 
-void PotentialDisplayCommand::NormalizeAndValidateRequest()
+void PotentialDisplayCommand::NormalizeAndValidateRequest(PotentialDisplayRequest & request)
 {
-    auto & request{ MutableRequest() };
     CoerceEnum(
         request.painter_choice,
         "--painter",
@@ -170,9 +169,8 @@ void PotentialDisplayCommand::NormalizeAndValidateRequest()
     }
 }
 
-bool PotentialDisplayCommand::ExecuteImpl()
+bool PotentialDisplayCommand::ExecuteImpl(const PotentialDisplayRequest & request)
 {
-    const auto & request{ RequestOptions() };
     auto inputs{ LoadPotentialDisplayInputs(request) };
     if (!inputs.has_value()) return false;
 
@@ -180,7 +178,7 @@ bool PotentialDisplayCommand::ExecuteImpl()
     ApplyDataObjectSelection(inputs->model_objects, selector);
 
     ScopeTimer timer{ "PotentialDisplayCommand::RunDisplay" };
-    const auto output_folder{ OutputFolder().string() };
+    const auto output_folder{ request.output_dir.string() };
     switch (request.painter_choice)
     {
         case PainterType::GAUS:
@@ -294,7 +292,8 @@ namespace command_internal {
 
 CommandResult ExecutePotentialDisplayCommand(const PotentialDisplayRequest & request)
 {
-    return ExecuteCommandInstance<PotentialDisplayCommand>(request);
+    PotentialDisplayCommand command;
+    return command.ExecuteRequest(request);
 }
 
 } // namespace command_internal

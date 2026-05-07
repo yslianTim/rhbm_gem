@@ -27,23 +27,28 @@ public:
 
     void ConfigureFilesystemOptions(const std::filesystem::path & folder_path)
     {
-        rg::CommandRequestBase request{};
-        request.output_dir = folder_path;
-        ApplyRequest(request);
+        m_request.output_dir = folder_path;
     }
 
-    void ValidatePreparedRequest() override
+    void ValidatePreparedRequest(const rg::CommandRequestBase &) override
     {
         RequirePrepareCondition(!m_options.force_invalid, "--test", "forced invalid config");
     }
 
 private:
     TestCommandOptions m_options{};
+    rg::CommandRequestBase m_request{};
 
-    bool ExecuteImpl() override
+    bool ExecuteImpl(const rg::CommandRequestBase &) override
     {
         ++execute_impl_count;
         return true;
+    }
+
+public:
+    rg::CommandResult ExecuteConfiguredRequest()
+    {
+        return ExecuteRequest(m_request);
     }
 };
 
@@ -58,7 +63,7 @@ TEST(CommandBaseLifecycleTest, RunCreatesOutputFolder)
 
     EXPECT_FALSE(std::filesystem::exists(folder_path));
 
-    ASSERT_TRUE(command.Run());
+    ASSERT_TRUE(command.ExecuteConfiguredRequest().succeeded);
     EXPECT_EQ(command.execute_impl_count, 1);
     EXPECT_TRUE(std::filesystem::exists(folder_path));
 }
@@ -69,11 +74,12 @@ TEST(CommandBaseLifecycleTest, RunReportsValidationIssues)
     command.SetForceInvalid(true);
 
     testing::internal::CaptureStderr();
-    EXPECT_FALSE(command.Run());
+    const auto result{ command.ExecuteConfiguredRequest() };
     const std::string error_output{ testing::internal::GetCapturedStderr() };
 
+    EXPECT_FALSE(result.succeeded);
     EXPECT_EQ(command.execute_impl_count, 0);
-    ASSERT_FALSE(command.GetValidationIssues().empty());
+    ASSERT_FALSE(result.issues.empty());
     EXPECT_NE(error_output.find("Option --test: forced invalid config"), std::string::npos);
 }
 
@@ -85,7 +91,7 @@ TEST(CommandBaseLifecycleTest, ValidationFailureSkipsFilesystemPreflight)
     command.ConfigureFilesystemOptions(folder_path);
     command.SetForceInvalid(true);
 
-    ASSERT_FALSE(command.Run());
+    ASSERT_FALSE(command.ExecuteConfiguredRequest().succeeded);
     EXPECT_EQ(command.execute_impl_count, 0);
     EXPECT_FALSE(std::filesystem::exists(folder_path));
 }

@@ -1,4 +1,4 @@
-#include "detail/CommandExecutor.hpp"
+#include "detail/CommandBase.hpp"
 #include "detail/RHBMTestPlotting.hpp"
 
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -24,9 +24,9 @@ public:
     RHBMTestCommand();
 
 private:
-    void NormalizeAndValidateRequest() override;
-    void ValidatePreparedRequest() override;
-    bool ExecuteImpl() override;
+    void NormalizeAndValidateRequest(RHBMTestRequest & request) override;
+    void ValidatePreparedRequest(const RHBMTestRequest & request) override;
+    bool ExecuteImpl(const RHBMTestRequest & request) override;
 };
 
 namespace rhbm_test_plotting = command_detail::rhbm_test_plotting;
@@ -537,9 +537,8 @@ RHBMTestCommand::RHBMTestCommand() :
 {
 }
 
-void RHBMTestCommand::NormalizeAndValidateRequest()
+void RHBMTestCommand::NormalizeAndValidateRequest(RHBMTestRequest & request)
 {
-    auto & request{ MutableRequest() };
     CoerceEnum(
         request.tester_choice,
         "--tester",
@@ -571,18 +570,16 @@ void RHBMTestCommand::NormalizeAndValidateRequest()
         "Alpha-G");
 }
 
-void RHBMTestCommand::ValidatePreparedRequest()
+void RHBMTestCommand::ValidatePreparedRequest(const RHBMTestRequest & request)
 {
-    const auto & request{ RequestOptions() };
     RequirePrepareCondition(
         request.fit_range_min <= request.fit_range_max,
         "--fit-range",
         "Expected --fit-min <= --fit-max.");
 }
 
-bool RHBMTestCommand::ExecuteImpl()
+bool RHBMTestCommand::ExecuteImpl(const RHBMTestRequest & request)
 {
-    const auto & request{ RequestOptions() };
     switch (request.tester_choice)
     {
     case TesterType::BENCHMARK:
@@ -615,7 +612,8 @@ namespace command_internal {
 
 CommandResult ExecuteRHBMTestCommand(const RHBMTestRequest & request)
 {
-    return ExecuteCommandInstance<RHBMTestCommand>(request);
+    RHBMTestCommand command;
+    return command.ExecuteRequest(request);
 }
 
 } // namespace command_internal

@@ -1,4 +1,4 @@
-#include "detail/CommandExecutor.hpp"
+#include "detail/CommandBase.hpp"
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
@@ -33,8 +33,8 @@ public:
     PositionEstimationCommand();
 
 private:
-    void NormalizeAndValidateRequest() override;
-    bool ExecuteImpl() override;
+    void NormalizeAndValidateRequest(PositionEstimationRequest & request) override;
+    bool ExecuteImpl(const PositionEstimationRequest & request) override;
 };
 
 } // namespace rhbm_gem
@@ -362,9 +362,8 @@ PositionEstimationCommand::PositionEstimationCommand() :
 {
 }
 
-void PositionEstimationCommand::NormalizeAndValidateRequest()
+void PositionEstimationCommand::NormalizeAndValidateRequest(PositionEstimationRequest & request)
 {
-    auto & request{ MutableRequest() };
     ValidateRequiredPath(request.map_file_path, "--map", "Map file");
     CoercePositiveScalar(
         request.iteration_count,
@@ -400,17 +399,16 @@ void PositionEstimationCommand::NormalizeAndValidateRequest()
         "Dedup tolerance");
 }
 
-bool PositionEstimationCommand::ExecuteImpl()
+bool PositionEstimationCommand::ExecuteImpl(const PositionEstimationRequest & request)
 {
-    const auto & request{ RequestOptions() };
     auto map_object{ LoadPositionEstimationMap(request) };
     if (!map_object.has_value()) return false;
 
     PositionEstimationState state;
-    if (!BuildVoxelList(request, **map_object, state, ThreadSize())) return false;
-    RunMapValueConvergence(request, state, ThreadSize());
+    if (!BuildVoxelList(request, **map_object, state, request.job_count)) return false;
+    RunMapValueConvergence(request, state, request.job_count);
     RunUniquePointList(state, static_cast<float>(request.dedup_tolerance));
-    OutputPointList(request, state, OutputFolder());
+    OutputPointList(request, state, request.output_dir);
     return true;
 }
 
@@ -418,7 +416,8 @@ namespace command_internal {
 
 CommandResult ExecutePositionEstimationCommand(const PositionEstimationRequest & request)
 {
-    return ExecuteCommandInstance<PositionEstimationCommand>(request);
+    PositionEstimationCommand command;
+    return command.ExecuteRequest(request);
 }
 
 } // namespace command_internal

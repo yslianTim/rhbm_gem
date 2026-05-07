@@ -101,11 +101,11 @@ The command class stays local to its `.cpp`; do not add a matching command heade
 
 Use this shape:
 
-1. include `detail/CommandExecutor.hpp`
+1. include `detail/CommandBase.hpp`
 2. define a local class deriving from `CommandBase<XxxRequest>`
-3. implement `NormalizeAndValidateRequest()`
-4. implement `ValidatePreparedRequest()`
-5. implement `ExecuteImpl()`
+3. implement `NormalizeAndValidateRequest(XxxRequest & request)`
+4. implement `ValidatePreparedRequest(const XxxRequest & request)`
+5. implement `ExecuteImpl(const XxxRequest & request)`
 6. expose `command_internal::ExecuteXxxCommand(const XxxRequest & request)`
 
 `CommandBase<XxxRequest>` already:
@@ -113,7 +113,7 @@ Use this shape:
 - stores the typed request internally
 - coerces `CommandRequestBase` shared options
 - uses shared options for lifecycle/preflight
-- calls `NormalizeAndValidateRequest()`
+- calls `NormalizeAndValidateRequest(request)`
 
 ## Registration Surfaces
 

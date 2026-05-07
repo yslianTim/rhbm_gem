@@ -10,7 +10,7 @@
 #include <type_traits>
 #include <vector>
 
-#include <rhbm_gem/core/command/CommandSystem.hpp>
+#include <rhbm_gem/core/command/CommandTypes.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
@@ -48,52 +48,29 @@ public:
     using RequestType = Request;
 
     virtual ~CommandBase() = default;
-    void ApplyRequest(const Request & request)
+
+    CommandResult ExecuteRequest(const Request & request)
     {
         m_request = request;
         BeginRequestApply();
-        NormalizeAndValidateRequest();
-    }
-    bool Run()
-    {
-        Logger::SetLogLevel(m_request.verbosity);
-        ClearPrepareValidationIssues();
-        ValidatePreparedRequest();
-        if (HasValidationErrors())
-        {
-            ReportValidationIssues();
-            return false;
-        }
-        if (!RunFilesystemPreflight()) return false;
+        NormalizeAndValidateRequest(m_request);
 
-        const bool executed{ ExecuteImpl() };
-        if (!executed)
+        CommandResult result;
+        result.succeeded = Run();
+        result.issues.reserve(m_validation_issues.size());
+        for (const auto & issue : m_validation_issues)
         {
-            Logger::Log(LogLevel::Error, "Command execution failed. Aborting command execution.");
+            result.issues.push_back(CommandDiagnostic{ issue.option_name, issue.message });
         }
-        return executed;
+        return result;
     }
-    bool HasValidationErrors() const
-    {
-        return std::any_of(
-            m_validation_issues.begin(),
-            m_validation_issues.end(),
-            [](const ValidationIssueRecord & issue)
-            {
-                return issue.level == LogLevel::Error;
-            });
-    }
-    const std::vector<ValidationIssueRecord> & GetValidationIssues() const { return m_validation_issues; }
 
 protected:
     CommandBase() = default;
-    const Request & RequestOptions() const { return m_request; }
-    Request & MutableRequest() { return m_request; }
-    virtual void NormalizeAndValidateRequest() {}
-    virtual void ValidatePreparedRequest() {}
-    virtual bool ExecuteImpl() = 0;
-    int ThreadSize() const { return m_request.job_count; }
-    const std::filesystem::path & OutputFolder() const { return m_request.output_dir; }
+    virtual void NormalizeAndValidateRequest(Request &) {}
+    virtual void ValidatePreparedRequest(const Request &) {}
+    virtual bool ExecuteImpl(const Request &) = 0;
+    const std::vector<ValidationIssueRecord> & GetValidationIssues() const { return m_validation_issues; }
     void AddParseError(std::string_view option_name, const std::string & message)
     {
         AddValidationIssue(option_name, ValidationPhase::Parse, LogLevel::Error, message, false);
@@ -250,6 +227,35 @@ protected:
     }
 
 private:
+    bool Run()
+    {
+        Logger::SetLogLevel(m_request.verbosity);
+        ClearPrepareValidationIssues();
+        ValidatePreparedRequest(m_request);
+        if (HasValidationErrors())
+        {
+            ReportValidationIssues();
+            return false;
+        }
+        if (!RunFilesystemPreflight()) return false;
+
+        const bool executed{ ExecuteImpl(m_request) };
+        if (!executed)
+        {
+            Logger::Log(LogLevel::Error, "Command execution failed. Aborting command execution.");
+        }
+        return executed;
+    }
+    bool HasValidationErrors() const
+    {
+        return std::any_of(
+            m_validation_issues.begin(),
+            m_validation_issues.end(),
+            [](const ValidationIssueRecord & issue)
+            {
+                return issue.level == LogLevel::Error;
+            });
+    }
     void BeginRequestApply()
     {
         ClearValidationIssues();
@@ -291,7 +297,7 @@ private:
     }
     bool RunFilesystemPreflight()
     {
-        const auto & folder_path{ OutputFolder() };
+        const auto & folder_path{ m_request.output_dir };
         if (!folder_path.empty() && !std::filesystem::exists(folder_path))
         {
             std::error_code error_code;

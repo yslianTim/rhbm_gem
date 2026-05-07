@@ -1,4 +1,4 @@
-#include "detail/CommandExecutor.hpp"
+#include "detail/CommandBase.hpp"
 #include "detail/MapSampling.hpp"
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -35,8 +35,8 @@ public:
     MapVisualizationCommand();
 
 private:
-    void NormalizeAndValidateRequest() override;
-    bool ExecuteImpl() override;
+    void NormalizeAndValidateRequest(MapVisualizationRequest & request) override;
+    bool ExecuteImpl(const MapVisualizationRequest & request) override;
 };
 
 } // namespace rhbm_gem
@@ -295,9 +295,8 @@ MapVisualizationCommand::MapVisualizationCommand() :
 {
 }
 
-void MapVisualizationCommand::NormalizeAndValidateRequest()
+void MapVisualizationCommand::NormalizeAndValidateRequest(MapVisualizationRequest & request)
 {
-    auto & request{ MutableRequest() };
     ValidateRequiredPath(
         request.model_file_path,
         "--model",
@@ -326,9 +325,8 @@ void MapVisualizationCommand::NormalizeAndValidateRequest()
         "Window size");
 }
 
-bool MapVisualizationCommand::ExecuteImpl()
+bool MapVisualizationCommand::ExecuteImpl(const MapVisualizationRequest & request)
 {
-    const auto & request{ RequestOptions() };
     auto inputs{ LoadMapVisualizationInputs(request) };
     if (!inputs.has_value()) return false;
 
@@ -341,14 +339,15 @@ bool MapVisualizationCommand::ExecuteImpl()
         request,
         *inputs->map_object,
         *inputs->model_object,
-        OutputFolder());
+        request.output_dir);
 }
 
 namespace command_internal {
 
 CommandResult ExecuteMapVisualizationCommand(const MapVisualizationRequest & request)
 {
-    return ExecuteCommandInstance<MapVisualizationCommand>(request);
+    MapVisualizationCommand command;
+    return command.ExecuteRequest(request);
 }
 
 } // namespace command_internal

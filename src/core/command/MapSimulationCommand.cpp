@@ -1,4 +1,4 @@
-#include "detail/CommandExecutor.hpp"
+#include "detail/CommandBase.hpp"
 #include "detail/DataObjectSummaryLog.hpp"
 #include "data/detail/MapSpatialIndex.hpp"
 
@@ -33,9 +33,9 @@ public:
     MapSimulationCommand();
 
 private:
-    void NormalizeAndValidateRequest() override;
-    void ValidatePreparedRequest() override;
-    bool ExecuteImpl() override;
+    void NormalizeAndValidateRequest(MapSimulationRequest & request) override;
+    void ValidatePreparedRequest(const MapSimulationRequest & request) override;
+    bool ExecuteImpl(const MapSimulationRequest & request) override;
 };
 
 namespace {
@@ -221,9 +221,8 @@ MapSimulationCommand::MapSimulationCommand() : CommandBase<MapSimulationRequest>
 {
 }
 
-void MapSimulationCommand::NormalizeAndValidateRequest()
+void MapSimulationCommand::NormalizeAndValidateRequest(MapSimulationRequest & request)
 {
-    auto & request{ MutableRequest() };
     ValidateRequiredPath(request.model_file_path, "--model", "Model file");
     CoerceEnum(request.potential_model_choice, "--potential-model",
         PotentialModel::FIVE_GAUS_CHARGE, "Potential model");
@@ -250,9 +249,8 @@ void MapSimulationCommand::NormalizeAndValidateRequest()
     request.blurring_width_list = std::move(filtered_widths);
 }
 
-bool MapSimulationCommand::ExecuteImpl()
+bool MapSimulationCommand::ExecuteImpl(const MapSimulationRequest & request)
 {
-    const auto & request{ RequestOptions() };
     std::unique_ptr<ModelObject> model_object;
     try
     {
@@ -273,7 +271,7 @@ bool MapSimulationCommand::ExecuteImpl()
         + std::to_string(request.blurring_width_list.size()));
 
     auto map_object{ CreateMapObject(request, atom_list) };
-    MapSpatialIndex spatial_index(*map_object, ThreadSize());
+    MapSpatialIndex spatial_index(*map_object, request.job_count);
     spatial_index.Build();
     for (auto & blurring_width : request.blurring_width_list)
     {
@@ -282,16 +280,15 @@ bool MapSimulationCommand::ExecuteImpl()
             string_helper::ToStringWithPrecision<double>(blurring_width, 2)
         };
         PopulateMapValueArray(
-            map_object.get(), spatial_index, atom_list, request, blurring_width, ThreadSize());
+            map_object.get(), spatial_index, atom_list, request, blurring_width, request.job_count);
         auto output{ request.output_dir / (request.map_file_name + "_" + map_key_tag + ".map") };
         WriteMap(output, *map_object);
     }
     return true;
 }
 
-void MapSimulationCommand::ValidatePreparedRequest()
+void MapSimulationCommand::ValidatePreparedRequest(const MapSimulationRequest & request)
 {
-    const auto & request{ RequestOptions() };
     RequirePrepareCondition(
         !request.blurring_width_list.empty(),
         "--blurring-width",
@@ -302,7 +299,8 @@ namespace command_internal {
 
 CommandResult ExecuteMapSimulationCommand(const MapSimulationRequest & request)
 {
-    return ExecuteCommandInstance<MapSimulationCommand>(request);
+    MapSimulationCommand command;
+    return command.ExecuteRequest(request);
 }
 
 } // namespace command_internal

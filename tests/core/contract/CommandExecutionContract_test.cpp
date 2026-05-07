@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <vector>
+
 #include "command/detail/CommandBase.hpp"
 #include "support/CommandValidationAssertions.hpp"
 #include "support/CommandTestHelpers.hpp"
@@ -29,7 +31,7 @@ public:
         m_options.fail_prepare = value;
     }
 
-    void ValidatePreparedRequest() override
+    void ValidatePreparedRequest(const rg::CommandRequestBase &) override
     {
         ++validate_count;
         RequirePrepareCondition(!m_options.fail_prepare, "--contract", "prepare failed");
@@ -38,10 +40,16 @@ public:
 private:
     LifecycleCommandOptions m_options{};
 
-    bool ExecuteImpl() override
+    bool ExecuteImpl(const rg::CommandRequestBase &) override
     {
         ++execute_impl_count;
         return true;
+    }
+
+public:
+    const std::vector<rg::ValidationIssueRecord> & Issues() const
+    {
+        return GetValidationIssues();
     }
 };
 
@@ -52,15 +60,13 @@ TEST(CommandExecutionContractTest, RunValidatesBeforeExecuteImpl)
     LifecycleCommand command{};
     command.SetFailPrepare(true);
 
-    EXPECT_FALSE(command.Run());
+    const auto result{ command.ExecuteRequest(rg::CommandRequestBase{}) };
+
+    EXPECT_FALSE(result.succeeded);
     EXPECT_EQ(command.validate_count, 1);
     EXPECT_EQ(command.execute_impl_count, 0);
     EXPECT_NE(
-        command_test::FindValidationIssue(
-            command,
-            "--contract",
-            rg::ValidationPhase::Prepare,
-            LogLevel::Error),
+        command_test::FindValidationIssue(result.issues, "--contract"),
         nullptr);
 }
 
@@ -68,7 +74,7 @@ TEST(CommandExecutionContractTest, RunExecutesValidationAndExecuteOnce)
 {
     LifecycleCommand command{};
 
-    ASSERT_TRUE(command.Run());
+    ASSERT_TRUE(command.ExecuteRequest(rg::CommandRequestBase{}).succeeded);
     EXPECT_EQ(command.validate_count, 1);
     EXPECT_EQ(command.execute_impl_count, 1);
 }
@@ -78,23 +84,23 @@ TEST(CommandExecutionContractTest, RepeatedRunRecomputesPrepareIssues)
     LifecycleCommand command{};
 
     command.SetFailPrepare(true);
-    ASSERT_FALSE(command.Run());
+    ASSERT_FALSE(command.ExecuteRequest(rg::CommandRequestBase{}).succeeded);
     EXPECT_NE(
         command_test::FindValidationIssue(
-            command,
+            command.Issues(),
             "--contract",
             rg::ValidationPhase::Prepare,
             LogLevel::Error),
         nullptr);
 
     command.SetFailPrepare(false);
-    ASSERT_TRUE(command.Run());
+    ASSERT_TRUE(command.ExecuteRequest(rg::CommandRequestBase{}).succeeded);
 
     EXPECT_EQ(command.validate_count, 2);
     EXPECT_EQ(command.execute_impl_count, 1);
     EXPECT_EQ(
         command_test::FindValidationIssue(
-            command,
+            command.Issues(),
             "--contract",
             rg::ValidationPhase::Prepare,
             LogLevel::Error),
@@ -105,11 +111,11 @@ TEST(CommandExecutionContractTest, RepeatedRunExecutesEachTime)
 {
     LifecycleCommand command{};
 
-    ASSERT_TRUE(command.Run());
+    ASSERT_TRUE(command.ExecuteRequest(rg::CommandRequestBase{}).succeeded);
     EXPECT_EQ(command.validate_count, 1);
     EXPECT_EQ(command.execute_impl_count, 1);
 
-    ASSERT_TRUE(command.Run());
+    ASSERT_TRUE(command.ExecuteRequest(rg::CommandRequestBase{}).succeeded);
     EXPECT_EQ(command.validate_count, 2);
     EXPECT_EQ(command.execute_impl_count, 2);
 }

@@ -95,12 +95,11 @@ flowchart LR
     A["CLI callback or Python call"] --> B["RunCommand(request)"]
     B --> C["Catalog executor"]
     C --> D["Construct local command"]
-    D --> E["ApplyRequest(...)"]
-    E --> F["command.Run()"]
-    F --> G["RunValidationPass()"]
-    G --> H["RunFilesystemPreflight()"]
-    H --> I["ExecuteImpl()"]
-    I --> J["CommandResult"]
+    D --> E["ExecuteRequest(request)"]
+    E --> F["RunValidationPass()"]
+    F --> G["RunFilesystemPreflight()"]
+    G --> H["ExecuteImpl(request)"]
+    H --> I["CommandResult"]
 ```
 
 `RunCommand(request)` returns `CommandResult` with:
@@ -122,9 +121,9 @@ Shared command-framework internals live in:
 The standard shape is:
 
 1. derive from `CommandBase<XxxRequest>`
-2. keep parse-phase request normalization and validation in `NormalizeAndValidateRequest()`
-3. keep semantic checks in `ValidatePreparedRequest()`
-4. keep orchestration in `ExecuteImpl()`
+2. keep parse-phase request normalization and validation in `NormalizeAndValidateRequest(request)`
+3. keep semantic checks in `ValidatePreparedRequest(request)`
+4. keep orchestration in `ExecuteImpl(request)`
 5. expose `command_internal::ExecuteXxxCommand(...)` through `CommandCatalog.hpp`
 
 `CommandBase<XxxRequest>`:
@@ -132,7 +131,7 @@ The standard shape is:
 1. stores the typed request internally
 2. uses shared base options during lifecycle/preflight
 3. coerces shared base options
-4. calls `NormalizeAndValidateRequest()`
+4. calls `NormalizeAndValidateRequest(request)`
 
 ## Shared Request Base
 

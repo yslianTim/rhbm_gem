@@ -1,4 +1,4 @@
-#include "detail/CommandExecutor.hpp"
+#include "detail/CommandBase.hpp"
 
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
@@ -36,9 +36,9 @@ public:
     ResultDumpCommand();
 
 private:
-    void NormalizeAndValidateRequest() override;
-    void ValidatePreparedRequest() override;
-    bool ExecuteImpl() override;
+    void NormalizeAndValidateRequest(ResultDumpRequest & request) override;
+    void ValidatePreparedRequest(const ResultDumpRequest & request) override;
+    bool ExecuteImpl(const ResultDumpRequest & request) override;
 };
 
 } // namespace rhbm_gem
@@ -76,9 +76,8 @@ ResultDumpCommand::ResultDumpCommand() :
 {
 }
 
-void ResultDumpCommand::NormalizeAndValidateRequest()
+void ResultDumpCommand::NormalizeAndValidateRequest(ResultDumpRequest & request)
 {
-    auto & request{ MutableRequest() };
     CoerceEnum(
         request.printer_choice,
         "--printer",
@@ -88,9 +87,8 @@ void ResultDumpCommand::NormalizeAndValidateRequest()
     RequireNonEmptyList(request.model_key_tag_list, "--model-keylist", "Model key list");
 }
 
-void ResultDumpCommand::ValidatePreparedRequest()
+void ResultDumpCommand::ValidatePreparedRequest(const ResultDumpRequest & request)
 {
-    const auto & request{ RequestOptions() };
     RequirePrepareCondition(
         request.printer_choice != PrinterType::MAP_VALUE || !request.map_file_path.empty(),
         "--map",
@@ -413,9 +411,8 @@ void RunGroupGausEstimatesDumping(
 
 namespace rhbm_gem {
 
-bool ResultDumpCommand::ExecuteImpl()
+bool ResultDumpCommand::ExecuteImpl(const ResultDumpRequest & request)
 {
-    const auto & request{ RequestOptions() };
     auto inputs{ LoadResultDumpInputs(request) };
     if (!inputs.has_value())
     {
@@ -478,7 +475,8 @@ namespace command_internal {
 
 CommandResult ExecuteResultDumpCommand(const ResultDumpRequest & request)
 {
-    return ExecuteCommandInstance<ResultDumpCommand>(request);
+    ResultDumpCommand command;
+    return command.ExecuteRequest(request);
 }
 
 } // namespace command_internal

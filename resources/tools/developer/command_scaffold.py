@@ -174,7 +174,7 @@ def _update_file(
 
 
 def _source_template(spec: ScaffoldSpec) -> str:
-    return f"""#include "detail/CommandExecutor.hpp"
+    return f"""#include "detail/CommandBase.hpp"
 
 namespace rhbm_gem {{
 
@@ -184,9 +184,9 @@ public:
     {spec.command_type}();
 
 private:
-    void NormalizeAndValidateRequest() override;
-    void ValidatePreparedRequest() override;
-    bool ExecuteImpl() override;
+    void NormalizeAndValidateRequest({spec.command_id}Request & request) override;
+    void ValidatePreparedRequest(const {spec.command_id}Request & request) override;
+    bool ExecuteImpl(const {spec.command_id}Request & request) override;
 }};
 
 {spec.command_type}::{spec.command_type}() :
@@ -194,19 +194,20 @@ private:
 {{
 }}
 
-void {spec.command_type}::NormalizeAndValidateRequest()
+void {spec.command_type}::NormalizeAndValidateRequest({spec.command_id}Request & request)
 {{
-    auto & request{{ MutableRequest() }};
     (void)request;
     // Normalize typed request fields and emit parse-phase validation issues here.
 }}
 
-void {spec.command_type}::ValidatePreparedRequest()
+void {spec.command_type}::ValidatePreparedRequest(const {spec.command_id}Request & request)
 {{
+    (void)request;
 }}
 
-bool {spec.command_type}::ExecuteImpl()
+bool {spec.command_type}::ExecuteImpl(const {spec.command_id}Request & request)
 {{
+    (void)request;
     return true;
 }}
 
@@ -214,7 +215,8 @@ namespace command_internal {{
 
 CommandResult Execute{spec.command_type}(const {spec.command_id}Request & request)
 {{
-    return ExecuteCommandInstance<{spec.command_type}>(request);
+    {spec.command_type} command;
+    return command.ExecuteRequest(request);
 }}
 
 }} // namespace command_internal

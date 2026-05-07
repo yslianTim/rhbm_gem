@@ -1,4 +1,4 @@
-#include "detail/CommandExecutor.hpp"
+#include "detail/CommandBase.hpp"
 
 #include "detail/MapSampling.hpp"
 #include "experimental/PotentialAnalysisBondWorkflow.hpp"
@@ -53,9 +53,9 @@ public:
     PotentialAnalysisCommand();
 
 private:
-    void NormalizeAndValidateRequest() override;
-    void ValidatePreparedRequest() override;
-    bool ExecuteImpl() override;
+    void NormalizeAndValidateRequest(PotentialAnalysisRequest & request) override;
+    void ValidatePreparedRequest(const PotentialAnalysisRequest & request) override;
+    bool ExecuteImpl(const PotentialAnalysisRequest & request) override;
 };
 
 namespace {
@@ -602,9 +602,8 @@ PotentialAnalysisCommand::PotentialAnalysisCommand() :
 {
 }
 
-void PotentialAnalysisCommand::NormalizeAndValidateRequest()
+void PotentialAnalysisCommand::NormalizeAndValidateRequest(PotentialAnalysisRequest & request)
 {
-    auto & request{ MutableRequest() };
     ValidateRequiredPath(request.model_file_path, "--model", "Model file");
     ValidateRequiredPath(request.map_file_path, "--map", "Map file");
     CoerceFiniteNonNegativeScalar(request.simulated_map_resolution, "--sim-resolution",
@@ -638,10 +637,9 @@ void PotentialAnalysisCommand::NormalizeAndValidateRequest()
         0.1, LogLevel::Error, "Training alpha step");
 }
 
-bool PotentialAnalysisCommand::ExecuteImpl()
+bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & request)
 {
-    const auto & request{ RequestOptions() };
-    const auto thread_size{ ThreadSize() };
+    const auto thread_size{ request.job_count };
     auto inputs{ LoadPotentialAnalysisInputs(request) };
     if (!inputs.has_value()) return false;
 
@@ -664,9 +662,8 @@ bool PotentialAnalysisCommand::ExecuteImpl()
     return true;
 }
 
-void PotentialAnalysisCommand::ValidatePreparedRequest()
+void PotentialAnalysisCommand::ValidatePreparedRequest(const PotentialAnalysisRequest & request)
 {
-    const auto & request{ RequestOptions() };
     RequirePrepareCondition(
         !request.simulation_flag || request.simulated_map_resolution > 0.0,
         "--sim-resolution",
@@ -689,7 +686,8 @@ namespace command_internal {
 
 CommandResult ExecutePotentialAnalysisCommand(const PotentialAnalysisRequest & request)
 {
-    return ExecuteCommandInstance<PotentialAnalysisCommand>(request);
+    PotentialAnalysisCommand command;
+    return command.ExecuteRequest(request);
 }
 
 } // namespace command_internal

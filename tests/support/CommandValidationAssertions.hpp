@@ -25,14 +25,12 @@ inline const rhbm_gem::CommandDiagnostic * FindValidationIssue(
     return iter == issues.end() ? nullptr : &(*iter);
 }
 
-template <typename CommandType>
-const rhbm_gem::ValidationIssueRecord * FindValidationIssue(
-    const CommandType & command,
+inline const rhbm_gem::ValidationIssueRecord * FindValidationIssue(
+    const std::vector<rhbm_gem::ValidationIssueRecord> & issues,
     std::string_view option_name,
     std::optional<rhbm_gem::ValidationPhase> phase = std::nullopt,
     std::optional<LogLevel> level = std::nullopt)
 {
-    const auto & issues{ command.GetValidationIssues() };
     const auto iter{
         std::find_if(
             issues.begin(),
