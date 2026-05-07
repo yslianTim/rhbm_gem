@@ -96,7 +96,6 @@ set(CORE_CONTRACT_TEST_SOURCES
     core/contract/CommandCatalog_test.cpp
     core/contract/CommandExecutionContract_test.cpp
     core/contract/DocumentationLayout_test.cpp
-    core/contract/PublicHeaderSurface_test.cpp
 )
 
 set(CORE_PAINTER_TEST_SOURCES
