@@ -1,4 +1,4 @@
-#include "PotentialAnalysisCommand.hpp"
+#include "detail/CommandExecutor.hpp"
 
 #include "detail/MapSampling.hpp"
 #include "experimental/PotentialAnalysisBondWorkflow.hpp"
@@ -46,6 +46,17 @@
 #endif
 
 namespace rhbm_gem {
+
+class PotentialAnalysisCommand final : public CommandBase<PotentialAnalysisRequest>
+{
+public:
+    PotentialAnalysisCommand();
+
+private:
+    void NormalizeAndValidateRequest() override;
+    void ValidatePreparedRequest() override;
+    bool ExecuteImpl() override;
+};
 
 namespace {
 
@@ -673,5 +684,14 @@ void PotentialAnalysisCommand::ValidatePreparedRequest()
         "--training-alpha-range",
         "Expected --training-alpha-min <= --training-alpha-max.");
 }
+
+namespace command_internal {
+
+CommandResult ExecutePotentialAnalysisCommand(const PotentialAnalysisRequest & request)
+{
+    return ExecuteCommandInstance<PotentialAnalysisCommand>(request);
+}
+
+} // namespace command_internal
 
 } // namespace rhbm_gem

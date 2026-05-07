@@ -1,7 +1,7 @@
 #include "experimental/PotentialAnalysisBondWorkflow.hpp"
 
 #include "command/detail/MapSampling.hpp"
-#include "command/PotentialAnalysisCommand.hpp"
+#include <rhbm_gem/core/command/CommandTypes.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>

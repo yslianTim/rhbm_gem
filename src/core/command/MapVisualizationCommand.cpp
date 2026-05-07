@@ -1,4 +1,4 @@
-#include "MapVisualizationCommand.hpp"
+#include "detail/CommandExecutor.hpp"
 #include "detail/MapSampling.hpp"
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -26,6 +26,20 @@
 #ifdef USE_OPENMP
 #include <omp.h>
 #endif
+
+namespace rhbm_gem {
+
+class MapVisualizationCommand final : public CommandBase<MapVisualizationRequest>
+{
+public:
+    MapVisualizationCommand();
+
+private:
+    void NormalizeAndValidateRequest() override;
+    bool ExecuteImpl() override;
+};
+
+} // namespace rhbm_gem
 
 namespace {
 
@@ -329,5 +343,14 @@ bool MapVisualizationCommand::ExecuteImpl()
         *inputs->model_object,
         OutputFolder());
 }
+
+namespace command_internal {
+
+CommandResult ExecuteMapVisualizationCommand(const MapVisualizationRequest & request)
+{
+    return ExecuteCommandInstance<MapVisualizationCommand>(request);
+}
+
+} // namespace command_internal
 
 } // namespace rhbm_gem

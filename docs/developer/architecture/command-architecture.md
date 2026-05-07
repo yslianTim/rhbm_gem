@@ -7,15 +7,15 @@ Top-level command membership is defined in the internal command catalog in
 
 Each entry uses:
 
-- `CommandEntry<CommandType>{cli_name, description, request_type_name}`
+- `CommandEntry<RequestType>{cli_name, description, request_type_name, execute}`
 
 That typed list is visited by:
 
 - [`src/core/command/CommandSystem.cpp`](/src/core/command/CommandSystem.cpp)
 - [`src/python/CommandSystemBindings.cpp`](/src/python/CommandSystemBindings.cpp)
 
-The catalog also keeps the shared typed execution helper internal, so CLI and Python bindings reuse
-the same command execution path without exposing concrete command headers through the public API.
+The catalog stores typed executor functions, so CLI and Python bindings reuse the same command
+execution path without exposing concrete command classes or per-command headers.
 
 ## Public Surface
 
@@ -93,10 +93,10 @@ All public execution entrypoints converge on the same flow:
 ```mermaid
 flowchart LR
     A["CLI callback or Python call"] --> B["RunCommand(request)"]
-    B --> C["Construct concrete command"]
-    C --> D["ApplyRequest(...)"]
-    D --> E["command.Run()"]
-    E --> F["BeginPreparationPass()"]
+    B --> C["Catalog executor"]
+    C --> D["Construct local command"]
+    D --> E["ApplyRequest(...)"]
+    E --> F["command.Run()"]
     F --> G["RunValidationPass()"]
     G --> H["RunFilesystemPreflight()"]
     H --> I["ExecuteImpl()"]
@@ -111,7 +111,9 @@ flowchart LR
 
 ## Concrete Command Shape
 
-Concrete command classes live in [`src/core/command/`](/src/core/command/).
+Concrete command classes live inside their implementation files under
+[`src/core/command/`](/src/core/command/).
+Do not add per-command headers; each `.cpp` exposes only its internal executor function.
 
 Shared command-framework internals live in:
 
@@ -123,6 +125,7 @@ The standard shape is:
 2. keep parse-phase request normalization and validation in `NormalizeAndValidateRequest()`
 3. keep semantic checks in `ValidatePreparedRequest()`
 4. keep orchestration in `ExecuteImpl()`
+5. expose `command_internal::ExecuteXxxCommand(...)` through `CommandCatalog.hpp`
 
 `CommandBase<XxxRequest>`:
 

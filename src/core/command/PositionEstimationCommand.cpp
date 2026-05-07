@@ -1,4 +1,4 @@
-#include "PositionEstimationCommand.hpp"
+#include "detail/CommandExecutor.hpp"
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
@@ -24,6 +24,20 @@
 #ifdef USE_OPENMP
 #include <omp.h>
 #endif
+
+namespace rhbm_gem {
+
+class PositionEstimationCommand final : public CommandBase<PositionEstimationRequest>
+{
+public:
+    PositionEstimationCommand();
+
+private:
+    void NormalizeAndValidateRequest() override;
+    bool ExecuteImpl() override;
+};
+
+} // namespace rhbm_gem
 
 namespace {
 
@@ -399,5 +413,14 @@ bool PositionEstimationCommand::ExecuteImpl()
     OutputPointList(request, state, OutputFolder());
     return true;
 }
+
+namespace command_internal {
+
+CommandResult ExecutePositionEstimationCommand(const PositionEstimationRequest & request)
+{
+    return ExecuteCommandInstance<PositionEstimationCommand>(request);
+}
+
+} // namespace command_internal
 
 } // namespace rhbm_gem

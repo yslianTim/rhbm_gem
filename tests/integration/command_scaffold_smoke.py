@@ -26,7 +26,6 @@ def main() -> int:
 
     stdout = result.stdout
     expected_paths = [
-        project_root / "src" / "core" / "command" / "ExampleCommand.hpp",
         project_root / "src" / "core" / "command" / "ExampleCommand.cpp",
         project_root / "docs" / "developer" / "commands" / "example.md",
     ]
@@ -41,6 +40,7 @@ def main() -> int:
         str(project_root / "resources" / "docs"),
         "src/core/" + "internal" + "/command",
         "internal" + "/command/ExampleCommand.hpp",
+        str(project_root / "src" / "core" / "command" / "ExampleCommand.hpp"),
     ]
     for unexpected_fragment in unexpected_fragments:
         if unexpected_fragment in stdout:
@@ -61,6 +61,8 @@ def main() -> int:
         raise AssertionError("Scaffold template should use NormalizeAndValidateRequest().")
     if "ValidatePreparedRequest" not in scaffold_source:
         raise AssertionError("Scaffold template should use ValidatePreparedRequest().")
+    if "CommandExecutor.hpp" not in scaffold_source:
+        raise AssertionError("Scaffold template should use CommandExecutor.hpp.")
     removed_runtime_hook_name = "Reset" + "Runtime" + "State"
     if removed_runtime_hook_name in scaffold_source:
         raise AssertionError(
@@ -72,6 +74,9 @@ def main() -> int:
     if old_validation_hook_name in scaffold_source:
         raise AssertionError(
             f"Scaffold template still references {old_validation_hook_name}().")
+    removed_header_suffix = "Command" + ".hpp"
+    if removed_header_suffix in scaffold_source:
+        raise AssertionError(f"Scaffold template still references per-command {removed_header_suffix}.")
 
     return 0
 

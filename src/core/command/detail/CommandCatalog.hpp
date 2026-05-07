@@ -1,14 +1,6 @@
 #pragma once
 
-#include "command/MapSimulationCommand.hpp"
-#include "command/PotentialAnalysisCommand.hpp"
-#include "command/PotentialDisplayCommand.hpp"
-#include "command/RHBMTestCommand.hpp"
-#include "command/ResultDumpCommand.hpp"
-#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
-#include "command/MapVisualizationCommand.hpp"
-#include "command/PositionEstimationCommand.hpp"
-#endif
+#include <rhbm_gem/core/command/CommandTypes.hpp>
 
 #include <filesystem>
 #include <string_view>
@@ -312,56 +304,74 @@ struct RequestFieldCatalog<PositionEstimationRequest>
 };
 #endif
 
-template <typename CommandType>
+CommandResult ExecutePotentialAnalysisCommand(const PotentialAnalysisRequest & request);
+CommandResult ExecutePotentialDisplayCommand(const PotentialDisplayRequest & request);
+CommandResult ExecuteResultDumpCommand(const ResultDumpRequest & request);
+CommandResult ExecuteMapSimulationCommand(const MapSimulationRequest & request);
+CommandResult ExecuteRHBMTestCommand(const RHBMTestRequest & request);
+#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
+CommandResult ExecuteMapVisualizationCommand(const MapVisualizationRequest & request);
+CommandResult ExecutePositionEstimationCommand(const PositionEstimationRequest & request);
+#endif
+
+template <typename RequestType>
 struct CommandEntry
 {
-    using Command = CommandType;
-    using Request = typename CommandType::RequestType;
+    using Request = RequestType;
+    using ExecuteFunction = CommandResult (*)(const RequestType & request);
 
     std::string_view cli_name;
     std::string_view description;
     std::string_view request_type_name;
+    ExecuteFunction execute;
 };
 
 inline constexpr auto kStableCommands = std::tuple{
-    CommandEntry<PotentialAnalysisCommand>{
+    CommandEntry<PotentialAnalysisRequest>{
         "potential_analysis",
         "Run potential analysis",
-        "PotentialAnalysisRequest"
+        "PotentialAnalysisRequest",
+        ExecutePotentialAnalysisCommand
     },
-    CommandEntry<PotentialDisplayCommand>{
+    CommandEntry<PotentialDisplayRequest>{
         "potential_display",
         "Run potential display",
-        "PotentialDisplayRequest"
+        "PotentialDisplayRequest",
+        ExecutePotentialDisplayCommand
     },
-    CommandEntry<ResultDumpCommand>{
+    CommandEntry<ResultDumpRequest>{
         "result_dump",
         "Run result dump",
-        "ResultDumpRequest"
+        "ResultDumpRequest",
+        ExecuteResultDumpCommand
     },
-    CommandEntry<MapSimulationCommand>{
+    CommandEntry<MapSimulationRequest>{
         "map_simulation",
         "Run map simulation command",
-        "MapSimulationRequest"
+        "MapSimulationRequest",
+        ExecuteMapSimulationCommand
     },
-    CommandEntry<RHBMTestCommand>{
+    CommandEntry<RHBMTestRequest>{
         "rhbm_test",
         "Run RHBM simulation test",
-        "RHBMTestRequest"
+        "RHBMTestRequest",
+        ExecuteRHBMTestCommand
     },
 };
 
 #ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
 inline constexpr auto kExperimentalCommands = std::tuple{
-    CommandEntry<MapVisualizationCommand>{
+    CommandEntry<MapVisualizationRequest>{
         "map_visualization",
         "Run map visualization",
-        "MapVisualizationRequest"
+        "MapVisualizationRequest",
+        ExecuteMapVisualizationCommand
     },
-    CommandEntry<PositionEstimationCommand>{
+    CommandEntry<PositionEstimationRequest>{
         "position_estimation",
         "Run atom position estimation",
-        "PositionEstimationRequest"
+        "PositionEstimationRequest",
+        ExecutePositionEstimationCommand
     },
 };
 #endif
@@ -379,26 +389,6 @@ void VisitCommandCatalog(Visitor && visitor)
         (static_cast<void>(visitor(entries)), ...);
     }, kExperimentalCommands);
 #endif
-}
-
-template <typename CommandType>
-CommandResult ExecuteCommand(const typename CommandType::RequestType & request)
-{
-    CommandType command{};
-    command.ApplyRequest(request);
-
-    const auto & internal_issues{ command.GetValidationIssues() };
-    std::vector<CommandDiagnostic> public_issues;
-    public_issues.reserve(internal_issues.size());
-    for (const auto & issue : internal_issues)
-    {
-        public_issues.push_back(CommandDiagnostic{ issue.option_name, issue.message });
-    }
-
-    CommandResult result;
-    result.succeeded = command.Run();
-    result.issues = public_issues;
-    return result;
 }
 
 } // namespace rhbm_gem::command_internal

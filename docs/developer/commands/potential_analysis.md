@@ -18,7 +18,6 @@ Internal schema and wiring:
 
 Concrete implementation:
 
-- [`src/core/command/PotentialAnalysisCommand.hpp`](/src/core/command/PotentialAnalysisCommand.hpp)
 - [`src/core/command/PotentialAnalysisCommand.cpp`](/src/core/command/PotentialAnalysisCommand.cpp)
 
 ## Request Surface

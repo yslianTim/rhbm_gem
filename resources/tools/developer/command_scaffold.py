@@ -62,14 +62,15 @@ def _is_experimental_command(spec: ScaffoldSpec) -> bool:
 
 
 def _append_command_registry_entry(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
-    if f"CommandEntry<{spec.command_type}>" in text:
+    if f"CommandEntry<{spec.command_id}Request>" in text:
         return text, False
 
     entry = (
-        f"    CommandEntry<{spec.command_type}>{{\n"
+        f"    CommandEntry<{spec.command_id}Request>{{\n"
         f'        "{spec.cli_name}",\n'
         f'        "{spec.description}",\n'
         f'        "{spec.command_id}Request",\n'
+        f"        Execute{spec.command_type}\n"
         f"    }},\n"
     )
 
@@ -92,6 +93,41 @@ def _append_command_registry_entry(text: str, spec: ScaffoldSpec) -> tuple[str, 
     return updated, True
 
 
+def _append_command_executor_declaration(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
+    declaration = (
+        f"CommandResult Execute{spec.command_type}"
+        f"(const {spec.command_id}Request & request);"
+    )
+    if declaration in text:
+        return text, False
+
+    if _is_experimental_command(spec):
+        pattern = re.compile(
+            r"(#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE\n"
+            r"CommandResult ExecuteMapVisualizationCommand.*?\n"
+            r"CommandResult ExecutePositionEstimationCommand.*?\n)"
+            r"(#endif)",
+            re.DOTALL,
+        )
+    else:
+        pattern = re.compile(
+            r"(CommandResult ExecutePotentialAnalysisCommand.*?\n"
+            r"CommandResult ExecutePotentialDisplayCommand.*?\n"
+            r"CommandResult ExecuteResultDumpCommand.*?\n"
+            r"CommandResult ExecuteMapSimulationCommand.*?\n"
+            r"CommandResult ExecuteRHBMTestCommand.*?\n)"
+            r"(#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE)",
+            re.DOTALL,
+        )
+
+    match = pattern.search(text)
+    if not match:
+        command_group = "experimental" if _is_experimental_command(spec) else "stable"
+        raise RuntimeError(f"could not find {command_group} executor declarations")
+    updated = text[:match.start(2)] + declaration + "\n" + text[match.start(2):]
+    return updated, True
+
+
 def _append_cmake_list_entry(text: str, variable_name: str, entry: str) -> tuple[str, bool]:
     pattern = re.compile(
         rf"(^set\({re.escape(variable_name)}\n)(.*?)(^\))",
@@ -111,39 +147,6 @@ def _append_cmake_list_entry(text: str, variable_name: str, entry: str) -> tuple
     updated_body = "\n".join(body_lines) + "\n"
     updated_text = text[:match.start(2)] + updated_body + text[match.start(3):]
     return updated_text, True
-
-
-def _append_command_catalog_include(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
-    include_line = f'#include "command/{spec.command_type}.hpp"'
-    if include_line in text:
-        return text, False
-
-    if _is_experimental_command(spec):
-        block_pattern = re.compile(
-            r'(#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE\n)(.*?)(#endif\n)',
-            re.DOTALL,
-        )
-        match = block_pattern.search(text)
-        if not match:
-            raise RuntimeError("could not find experimental command include block in CommandCatalog.hpp")
-
-        body = match.group(2)
-        insert_at = match.start(2) + len(body)
-        updated = text[:insert_at] + include_line + "\n" + text[insert_at:]
-        return updated, True
-
-    stable_pattern = re.compile(r'^(#include\s+"command/[^"]+Command\.hpp")\n', re.MULTILINE)
-    matches = [
-        match for match in stable_pattern.finditer(text)
-        if "MapVisualizationCommand.hpp" not in match.group(1)
-        and "PositionEstimationCommand.hpp" not in match.group(1)
-    ]
-    if not matches:
-        raise RuntimeError("could not find stable command include block in CommandCatalog.hpp")
-
-    insert_at = matches[-1].end()
-    updated = text[:insert_at] + include_line + "\n" + text[insert_at:]
-    return updated, True
 
 
 def _update_file(
@@ -170,21 +173,15 @@ def _update_file(
     return changed
 
 
-def _header_template(spec: ScaffoldSpec) -> str:
-    return f"""#pragma once
-
-#include "detail/CommandBase.hpp"
+def _source_template(spec: ScaffoldSpec) -> str:
+    return f"""#include "detail/CommandExecutor.hpp"
 
 namespace rhbm_gem {{
 
-struct {spec.command_type.removesuffix("Command")}Request;
-
-class {spec.command_type}
-    : public CommandBase<{spec.command_type.removesuffix("Command")}Request>
+class {spec.command_type} final : public CommandBase<{spec.command_id}Request>
 {{
 public:
     {spec.command_type}();
-    ~{spec.command_type}() override = default;
 
 private:
     void NormalizeAndValidateRequest() override;
@@ -192,19 +189,8 @@ private:
     bool ExecuteImpl() override;
 }};
 
-}} // namespace rhbm_gem
-"""
-
-
-def _source_template(spec: ScaffoldSpec) -> str:
-    return f"""#include "{spec.command_type}.hpp"
-
-#include <rhbm_gem/core/command/CommandSystem.hpp>
-
-namespace rhbm_gem {{
-
 {spec.command_type}::{spec.command_type}() :
-    CommandBase<{spec.command_type.removesuffix("Command")}Request>{{}}
+    CommandBase<{spec.command_id}Request>{{}}
 {{
 }}
 
@@ -224,6 +210,15 @@ bool {spec.command_type}::ExecuteImpl()
     return true;
 }}
 
+namespace command_internal {{
+
+CommandResult Execute{spec.command_type}(const {spec.command_id}Request & request)
+{{
+    return ExecuteCommandInstance<{spec.command_type}>(request);
+}}
+
+}} // namespace command_internal
+
 }} // namespace rhbm_gem
 """
 
@@ -235,11 +230,11 @@ Scaffold generated for CLI command `{spec.cli_name}`.
 
 ## Registration Checklist
 
-1. Add `{spec.command_type.removesuffix("Command")}` into `include/rhbm_gem/core/command/CommandSystem.hpp`.
-   If it is experimental, place it inside the `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` command catalog.
-2. Add the request struct in `include/rhbm_gem/core/command/CommandTypes.hpp`.
-3. Add the internal request field catalog specialization in `src/core/command/detail/CommandCatalog.hpp`.
-4. Add `{spec.command_type}` to `src/core/command/detail/CommandCatalog.hpp`.
+1. Add the `{spec.command_id}Request` struct in `include/rhbm_gem/core/command/CommandTypes.hpp`.
+   If it is experimental, keep it inside the `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` block.
+2. Add the internal request field catalog specialization in `src/core/command/detail/CommandCatalog.hpp`.
+3. Add `Execute{spec.command_type}` declaration and `CommandEntry<{spec.command_id}Request>` to `src/core/command/detail/CommandCatalog.hpp`.
+4. Add `core/command/{spec.command_type}.cpp` to the command source list in `src/CMakeLists.txt`.
 5. Extend the grouped command tests under `tests/core/command/`.
    Validation-only coverage usually belongs in `CommandValidationScenarios_test.cpp`.
    Workflow/output coverage usually belongs in `CommandWorkflowScenarios_test.cpp`.
@@ -252,10 +247,10 @@ def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, stri
 
     _update_file(
         command_catalog,
-        lambda text: _append_command_catalog_include(text, spec),
+        lambda text: _append_command_executor_declaration(text, spec),
         dry_run,
         strict,
-        f'Add #include "command/{spec.command_type}.hpp" to CommandCatalog.hpp.',
+        f"Declare Execute{spec.command_type}(const {spec.command_id}Request &) in CommandCatalog.hpp.",
     )
     _update_file(
         command_catalog,
@@ -316,7 +311,6 @@ def main() -> int:
 
     doc_stem = re.sub(r"(?<!^)([A-Z])", r"-\1", spec.command_type.removesuffix("Command")).lower()
     files = {
-        root / "src" / "core" / "command" / f"{spec.command_type}.hpp": _header_template(spec),
         root / "src" / "core" / "command" / f"{spec.command_type}.cpp": _source_template(spec),
         root / "docs" / "developer" / "commands" / f"{doc_stem}.md": _doc_template(spec),
     }

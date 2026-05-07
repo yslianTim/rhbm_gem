@@ -1,4 +1,4 @@
-#include "RHBMTestCommand.hpp"
+#include "detail/CommandExecutor.hpp"
 #include "detail/RHBMTestPlotting.hpp"
 
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -17,6 +17,17 @@
 #include <Eigen/Dense>
 
 namespace rhbm_gem {
+
+class RHBMTestCommand final : public CommandBase<RHBMTestRequest>
+{
+public:
+    RHBMTestCommand();
+
+private:
+    void NormalizeAndValidateRequest() override;
+    void ValidatePreparedRequest() override;
+    bool ExecuteImpl() override;
+};
 
 namespace rhbm_test_plotting = command_detail::rhbm_test_plotting;
 using rhbm_test_plotting::AppendBiasCurvePoint;
@@ -599,5 +610,14 @@ bool RHBMTestCommand::ExecuteImpl()
         return false;
     }
 }
+
+namespace command_internal {
+
+CommandResult ExecuteRHBMTestCommand(const RHBMTestRequest & request)
+{
+    return ExecuteCommandInstance<RHBMTestCommand>(request);
+}
+
+} // namespace command_internal
 
 } // namespace rhbm_gem

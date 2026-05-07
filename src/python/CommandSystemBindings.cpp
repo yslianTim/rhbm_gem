@@ -83,13 +83,12 @@ void BindCommandSystem(py::module_ & module)
 
     command_internal::VisitCommandCatalog([&](const auto & entry)
     {
-        using CommandType = typename std::decay_t<decltype(entry)>::Command;
         using RequestType = typename std::decay_t<decltype(entry)>::Request;
         module.def(
             "RunCommand",
-            [](const RequestType & request)
+            [execute = entry.execute](const RequestType & request)
             {
-                return command_internal::ExecuteCommand<CommandType>(request);
+                return execute(request);
             });
     });
 }

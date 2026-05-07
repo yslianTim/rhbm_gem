@@ -29,10 +29,11 @@ the internal command catalog in
 Each entry uses:
 
 ```cpp
-CommandEntry<ExampleCommand>{
+CommandEntry<ExampleRequest>{
     "example",
     "Run example command",
-    "ExampleRequest"
+    "ExampleRequest",
+    ExecuteExampleCommand
 },
 ```
 
@@ -61,8 +62,8 @@ Shared default path helper declarations such as `GetDefaultDatabasePath()` also 
 `CommandTypes.hpp`.
 
 Public execution goes through the typed `RunCommand(request)` API in `CommandSystem.hpp`.
-Each concrete command is associated with its request type through its `CommandBase<XxxRequest>`
-base and the internal `CommandEntry<XxxCommand>` catalog entry.
+Each request type is associated with its executor through the internal
+`CommandEntry<XxxRequest>` catalog entry.
 
 ## Internal Request Fields
 
@@ -96,13 +97,16 @@ and reference-group maps bind as repeated group assignments.
 
 Implement the concrete command under [`src/core/command/`](/src/core/command/).
 Shared command-framework helpers stay under [`src/core/command/detail/`](/src/core/command/detail/).
+The command class stays local to its `.cpp`; do not add a matching command header.
 
 Use this shape:
 
-1. derive from `CommandBase<XxxRequest>`
-2. implement `NormalizeAndValidateRequest()`
-3. implement `ValidatePreparedRequest()`
-4. implement `ExecuteImpl()`
+1. include `detail/CommandExecutor.hpp`
+2. define a local class deriving from `CommandBase<XxxRequest>`
+3. implement `NormalizeAndValidateRequest()`
+4. implement `ValidatePreparedRequest()`
+5. implement `ExecuteImpl()`
+6. expose `command_internal::ExecuteXxxCommand(const XxxRequest & request)`
 
 `CommandBase<XxxRequest>` already:
 
@@ -131,11 +135,11 @@ there. The request-field list comes from `RequestFieldCatalog` in the same inter
 
 Before merge, verify:
 
-1. the command header and source exist together under `src/core/command/`
+1. the command source exists under `src/core/command/`
 2. `CommandTypes.hpp` contains the new request DTO
 3. `CommandCatalog.hpp` contains the internal request field catalog specialization
-4. `CommandCatalog.hpp` contains the command include and typed entry in the correct stable or experimental section
-5. the command derives from `CommandBase<XxxRequest>`
+4. `CommandCatalog.hpp` contains the executor declaration and typed request entry in the correct stable or experimental section
+5. the command implementation derives from `CommandBase<XxxRequest>` inside the `.cpp`
 6. `src/CMakeLists.txt` includes the source in the correct stable or experimental list
 7. grouped command tests cover validation and workflow behavior
 

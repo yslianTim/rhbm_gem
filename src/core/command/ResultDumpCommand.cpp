@@ -1,4 +1,4 @@
-#include "ResultDumpCommand.hpp"
+#include "detail/CommandExecutor.hpp"
 
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
@@ -27,6 +27,21 @@
 #include <string_view>
 #include <unordered_map>
 #include <vector>
+
+namespace rhbm_gem {
+
+class ResultDumpCommand final : public CommandBase<ResultDumpRequest>
+{
+public:
+    ResultDumpCommand();
+
+private:
+    void NormalizeAndValidateRequest() override;
+    void ValidatePreparedRequest() override;
+    bool ExecuteImpl() override;
+};
+
+} // namespace rhbm_gem
 
 namespace {
 using namespace rhbm_gem;
@@ -458,5 +473,14 @@ bool ResultDumpCommand::ExecuteImpl()
     }
     return true;
 }
+
+namespace command_internal {
+
+CommandResult ExecuteResultDumpCommand(const ResultDumpRequest & request)
+{
+    return ExecuteCommandInstance<ResultDumpCommand>(request);
+}
+
+} // namespace command_internal
 
 } // namespace rhbm_gem

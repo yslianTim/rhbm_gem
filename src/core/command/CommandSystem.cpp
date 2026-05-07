@@ -294,11 +294,10 @@ CommandResult RunCommandByRequestType(
     VisitCommandCatalog([&](const auto & entry)
     {
         if (matched) return;
-        using CommandType = typename std::decay_t<decltype(entry)>::Command;
         using RequestType = typename std::decay_t<decltype(entry)>::Request;
         if (request_type != typeid(RequestType)) return;
 
-        result = ExecuteCommand<CommandType>(static_cast<const RequestType &>(request));
+        result = entry.execute(static_cast<const RequestType &>(request));
         matched = true;
     });
     return result;

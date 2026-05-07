@@ -7,7 +7,6 @@ Related implementation files:
 
 - [`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp)
 - [`src/core/command/detail/CommandCatalog.hpp`](/src/core/command/detail/CommandCatalog.hpp)
-- [`src/core/command/MapVisualizationCommand.hpp`](/src/core/command/MapVisualizationCommand.hpp)
 - [`src/core/command/MapVisualizationCommand.cpp`](/src/core/command/MapVisualizationCommand.cpp)
 - [`include/rhbm_gem/utils/math/GridSampler.hpp`](/include/rhbm_gem/utils/math/GridSampler.hpp)
 - [`src/utils/math/GridSampler.cpp`](/src/utils/math/GridSampler.cpp)

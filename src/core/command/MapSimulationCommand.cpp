@@ -1,4 +1,4 @@
-#include "MapSimulationCommand.hpp"
+#include "detail/CommandExecutor.hpp"
 #include "detail/DataObjectSummaryLog.hpp"
 #include "data/detail/MapSpatialIndex.hpp"
 
@@ -26,6 +26,17 @@
 #include <vector>
 
 namespace rhbm_gem {
+
+class MapSimulationCommand final : public CommandBase<MapSimulationRequest>
+{
+public:
+    MapSimulationCommand();
+
+private:
+    void NormalizeAndValidateRequest() override;
+    void ValidatePreparedRequest() override;
+    bool ExecuteImpl() override;
+};
 
 namespace {
 
@@ -286,5 +297,14 @@ void MapSimulationCommand::ValidatePreparedRequest()
         "--blurring-width",
         "At least one positive blurring width is required.");
 }
+
+namespace command_internal {
+
+CommandResult ExecuteMapSimulationCommand(const MapSimulationRequest & request)
+{
+    return ExecuteCommandInstance<MapSimulationCommand>(request);
+}
+
+} // namespace command_internal
 
 } // namespace rhbm_gem

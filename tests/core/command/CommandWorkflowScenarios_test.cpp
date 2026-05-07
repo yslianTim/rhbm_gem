@@ -9,13 +9,6 @@
 #include <rhbm_gem/core/command/CommandSystem.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
-#include "command/MapSimulationCommand.hpp"
-#include "command/ResultDumpCommand.hpp"
-
-#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
-#include "command/MapVisualizationCommand.hpp"
-#include "command/PositionEstimationCommand.hpp"
-#endif
 
 namespace rg = rhbm_gem;
 
@@ -39,21 +32,19 @@ TEST(CommandWorkflowScenariosTest, MapSimulationGeneratesMapForEachValidBlurring
 {
     command_test::ScopedTempDir temp_dir{ "map_simulation_valid" };
 
-    rg::MapSimulationCommand command{};
     rg::MapSimulationRequest request{};
     request.output_dir = temp_dir.path();
     request.map_file_name = "sim_map";
     request.model_file_path = command_test::TestDataPath("test_model.cif");
     request.blurring_width_list = { 1.0, -2.0, 3.0 };
-    command.ApplyRequest(request);
 
     testing::internal::CaptureStdout();
     testing::internal::CaptureStderr();
-    const bool succeeded{ command.Run() };
+    const auto result{ rg::RunCommand(request) };
     const std::string error_output{ testing::internal::GetCapturedStderr() };
     const std::string standard_output{ testing::internal::GetCapturedStdout() };
 
-    ASSERT_TRUE(succeeded);
+    ASSERT_TRUE(result.succeeded);
     EXPECT_EQ(command_test::CountFilesWithExtension(temp_dir.path(), ".map"), 2);
     EXPECT_EQ(CountSubstring(standard_output, "Building KD-Tree from"), 1);
     EXPECT_EQ(
@@ -65,15 +56,13 @@ TEST(CommandWorkflowScenariosTest, MapSimulationEmptyModelUsesZeroOrigin)
 {
     command_test::ScopedTempDir temp_dir{ "map_simulation_empty_model" };
 
-    rg::MapSimulationCommand command{};
     rg::MapSimulationRequest request{};
     request.output_dir = temp_dir.path();
     request.map_file_name = "sim_map";
     request.model_file_path = command_test::TestDataPath("test_model_no_atoms.cif");
     request.blurring_width_list = { 1.0 };
-    command.ApplyRequest(request);
 
-    ASSERT_TRUE(command.Run());
+    ASSERT_TRUE(rg::RunCommand(request).succeeded);
     ASSERT_EQ(command_test::CountFilesWithExtension(temp_dir.path(), ".map"), 1);
 
     std::filesystem::path map_path;
@@ -94,7 +83,7 @@ TEST(CommandWorkflowScenariosTest, MapSimulationEmptyModelUsesZeroOrigin)
     EXPECT_NE(loaded_map->GetMapValueArray(), nullptr);
 }
 
-TEST(CommandWorkflowScenariosTest, ResultDumpRerunRefreshesRuntimeStateAndUsesCurrentPaths)
+TEST(CommandWorkflowScenariosTest, ResultDumpUsesCurrentRequestPaths)
 {
     command_test::ScopedTempDir temp_dir{ "result_dump_context_paths" };
     const auto model_path{ command_test::TestDataPath("test_model.cif") };
@@ -108,22 +97,19 @@ TEST(CommandWorkflowScenariosTest, ResultDumpRerunRefreshesRuntimeStateAndUsesCu
     command_test::SeedSavedModel(database_path_a, model_path, "shared_key", "MODEL_FROM_A");
     command_test::SeedSavedModel(database_path_b, model_path, "shared_key", "MODEL_FROM_B");
 
-    rg::ResultDumpCommand command{};
     rg::ResultDumpRequest request{};
     request.printer_choice = rg::PrinterType::ATOM_POSITION;
     request.model_key_tag_list = { "shared_key" };
 
     request.database_path = database_path_a;
     request.output_dir = output_dir_a;
-    command.ApplyRequest(request);
-    ASSERT_TRUE(command.Run());
+    ASSERT_TRUE(rg::RunCommand(request).succeeded);
     EXPECT_TRUE(std::filesystem::exists(output_dir_a / "atom_position_list_MODEL_FROM_A.csv"));
     EXPECT_FALSE(std::filesystem::exists(output_dir_a / "atom_position_list_MODEL_FROM_B.csv"));
 
     request.database_path = database_path_b;
     request.output_dir = output_dir_b;
-    command.ApplyRequest(request);
-    ASSERT_TRUE(command.Run());
+    ASSERT_TRUE(rg::RunCommand(request).succeeded);
     EXPECT_TRUE(std::filesystem::exists(output_dir_b / "atom_position_list_MODEL_FROM_B.csv"));
     EXPECT_FALSE(std::filesystem::exists(output_dir_b / "atom_position_list_MODEL_FROM_A.csv"));
     EXPECT_EQ(command_test::CountFilesWithExtension(output_dir_b, ".csv"), 1);
@@ -138,15 +124,13 @@ TEST(CommandWorkflowScenariosTest, ResultDumpDatabaseLoadFailureRetainsCommandCo
     std::filesystem::create_directories(database_path.parent_path());
     command_test::SeedSavedModel(database_path, model_path, "present_key", "MODEL_PRESENT");
 
-    rg::ResultDumpCommand command{};
     rg::ResultDumpRequest request{};
     request.database_path = database_path;
     request.model_key_tag_list = { "missing_key" };
     request.printer_choice = rg::PrinterType::ATOM_POSITION;
-    command.ApplyRequest(request);
 
     testing::internal::CaptureStderr();
-    EXPECT_FALSE(command.Run());
+    EXPECT_FALSE(rg::RunCommand(request).succeeded);
     const std::string error_output{ testing::internal::GetCapturedStderr() };
     EXPECT_NE(error_output.find("ResultDumpCommand::BuildDataObjectList"), std::string::npos);
     EXPECT_NE(error_output.find("Failed to load dump inputs"), std::string::npos);
@@ -160,16 +144,14 @@ TEST(CommandWorkflowScenariosTest, MapSimulationFileLoadFailureRetainsCommandCon
     const auto map_dir{ temp_dir.path() / "map" };
     const auto wrong_input_path{ command_test::GenerateMapFile(map_dir, model_path, "fixture_map") };
 
-    rg::MapSimulationCommand command{};
     rg::MapSimulationRequest request{};
     request.output_dir = temp_dir.path() / "out";
     request.model_file_path = wrong_input_path;
     request.map_file_name = "sim_map";
     request.blurring_width_list = { 1.0 };
-    command.ApplyRequest(request);
 
     testing::internal::CaptureStderr();
-    EXPECT_FALSE(command.Run());
+    EXPECT_FALSE(rg::RunCommand(request).succeeded);
     const std::string error_output{ testing::internal::GetCapturedStderr() };
     EXPECT_NE(error_output.find("MapSimulationCommand::BuildDataObject"), std::string::npos);
     EXPECT_NE(error_output.find("Failed to load model file"), std::string::npos);
@@ -188,15 +170,13 @@ TEST(CommandWorkflowScenariosTest, MapVisualizationInvalidAtomIdFailsWithoutWrit
     const auto output_dir{ temp_dir.path() / "out" };
     const auto map_path{ command_test::GenerateMapFile(map_dir, model_path, "fixture_map") };
 
-    rg::MapVisualizationCommand command{};
     rg::MapVisualizationRequest request{};
     request.output_dir = output_dir;
     request.model_file_path = model_path;
     request.map_file_path = map_path;
     request.atom_serial_id = 999;
-    command.ApplyRequest(request);
 
-    EXPECT_FALSE(command.Run());
+    EXPECT_FALSE(rg::RunCommand(request).succeeded);
     EXPECT_EQ(command_test::CountFilesWithExtension(output_dir, ".pdf"), 0);
 }
 
@@ -211,15 +191,13 @@ TEST(CommandWorkflowScenariosTest, MapVisualizationWritesPdfToConfiguredFolder)
     const auto output_dir{ temp_dir.path() / "out" };
     const auto map_path{ command_test::GenerateMapFile(map_dir, model_path, "fixture_map") };
 
-    rg::MapVisualizationCommand command{};
     rg::MapVisualizationRequest request{};
     request.output_dir = output_dir;
     request.model_file_path = model_path;
     request.map_file_path = map_path;
     request.atom_serial_id = 1;
-    command.ApplyRequest(request);
 
-    ASSERT_TRUE(command.Run());
+    ASSERT_TRUE(rg::RunCommand(request).succeeded);
     EXPECT_EQ(command_test::CountFilesWithExtension(output_dir, ".pdf"), 1);
 }
 #endif
@@ -232,13 +210,11 @@ TEST(CommandWorkflowScenariosTest, PositionEstimationDoesNotRequireDatabaseConfi
     const auto output_dir{ temp_dir.path() / "out" };
     const auto map_path{ command_test::GenerateMapFile(map_dir, model_path, "fixture_map") };
 
-    rg::PositionEstimationCommand command{};
     rg::PositionEstimationRequest request{};
     request.output_dir = output_dir;
     request.map_file_path = map_path;
-    command.ApplyRequest(request);
 
-    ASSERT_TRUE(command.Run());
+    ASSERT_TRUE(rg::RunCommand(request).succeeded);
     EXPECT_EQ(command_test::CountFilesWithExtension(output_dir, ".cmm"), 1);
 }
 

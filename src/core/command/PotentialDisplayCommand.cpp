@@ -1,4 +1,4 @@
-#include "PotentialDisplayCommand.hpp"
+#include "detail/CommandExecutor.hpp"
 #include "core/painter/detail/PainterModelAccess.hpp"
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
@@ -20,6 +20,20 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+namespace rhbm_gem {
+
+class PotentialDisplayCommand final : public CommandBase<PotentialDisplayRequest>
+{
+public:
+    PotentialDisplayCommand();
+
+private:
+    void NormalizeAndValidateRequest() override;
+    bool ExecuteImpl() override;
+};
+
+} // namespace rhbm_gem
 
 namespace {
 
@@ -275,5 +289,14 @@ bool PotentialDisplayCommand::ExecuteImpl()
     }
     return true;
 }
+
+namespace command_internal {
+
+CommandResult ExecutePotentialDisplayCommand(const PotentialDisplayRequest & request)
+{
+    return ExecuteCommandInstance<PotentialDisplayCommand>(request);
+}
+
+} // namespace command_internal
 
 } // namespace rhbm_gem
