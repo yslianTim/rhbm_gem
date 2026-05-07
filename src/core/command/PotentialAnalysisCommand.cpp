@@ -645,10 +645,7 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
 
     auto & model_object{ *inputs->model_object };
     auto & map_object{ *inputs->map_object };
-    {
-        ScopeTimer timer("PotentialAnalysisCommand::RunMapObjectPreprocessing");
-        map_object.MapValueArrayNormalization();
-    }
+    map_object.MapValueArrayNormalization();
     RunModelObjectPreprocessing(model_object, request.asymmetry_flag);
     RunSamplingWorkflow(map_object, model_object,
         request.sampling_size, request.sampling_range_min, request.sampling_range_max, thread_size);
