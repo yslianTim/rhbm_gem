@@ -89,7 +89,6 @@ TEST(CommandExecutionContractTest, RepeatedRunRecomputesPrepareIssues)
         command_test::FindValidationIssue(
             command.Issues(),
             "--contract",
-            rg::ValidationPhase::Prepare,
             LogLevel::Error),
         nullptr);
 
@@ -102,7 +101,6 @@ TEST(CommandExecutionContractTest, RepeatedRunRecomputesPrepareIssues)
         command_test::FindValidationIssue(
             command.Issues(),
             "--contract",
-            rg::ValidationPhase::Prepare,
             LogLevel::Error),
         nullptr);
 }

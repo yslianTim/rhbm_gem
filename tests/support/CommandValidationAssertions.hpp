@@ -28,7 +28,6 @@ inline const rhbm_gem::CommandDiagnostic * FindValidationIssue(
 inline const rhbm_gem::ValidationIssueRecord * FindValidationIssue(
     const std::vector<rhbm_gem::ValidationIssueRecord> & issues,
     std::string_view option_name,
-    std::optional<rhbm_gem::ValidationPhase> phase = std::nullopt,
     std::optional<LogLevel> level = std::nullopt)
 {
     const auto iter{
@@ -38,7 +37,6 @@ inline const rhbm_gem::ValidationIssueRecord * FindValidationIssue(
             [&](const rhbm_gem::ValidationIssueRecord & issue)
             {
                 return issue.option_name == option_name
-                    && (!phase.has_value() || issue.phase == phase.value())
                     && (!level.has_value() || issue.level == level.value());
             })
     };

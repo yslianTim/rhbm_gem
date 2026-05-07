@@ -197,7 +197,7 @@ private:
 void {spec.command_type}::NormalizeAndValidateRequest({spec.command_id}Request & request)
 {{
     (void)request;
-    // Normalize typed request fields and emit parse-phase validation issues here.
+    // Normalize typed request fields and emit validation issues here.
 }}
 
 void {spec.command_type}::ValidatePreparedRequest(const {spec.command_id}Request & request)

@@ -1,9 +1,7 @@
 #pragma once
 
 #include <algorithm>
-#include <array>
 #include <filesystem>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -20,16 +18,9 @@
 
 namespace rhbm_gem {
 
-enum class ValidationPhase : std::uint8_t
-{
-    Parse = 0,
-    Prepare = 1
-};
-
 struct ValidationIssueRecord
 {
     std::string option_name;
-    ValidationPhase phase;
     LogLevel level;
     std::string message;
     bool auto_corrected{ false };
@@ -41,27 +32,40 @@ class CommandBase
     static_assert(std::is_base_of_v<CommandRequestBase, Request>,
         "CommandBase<Request> requires Request to derive from CommandRequestBase.");
 
-    Request m_request{};
     std::vector<ValidationIssueRecord> m_validation_issues;
 
 public:
-    using RequestType = Request;
-
     virtual ~CommandBase() = default;
 
     CommandResult ExecuteRequest(const Request & request)
     {
-        m_request = request;
-        BeginRequestApply();
-        NormalizeAndValidateRequest(m_request);
-
+        Request command_request{ request };
+        m_validation_issues.clear();
+        NormalizeCommonRequestOptions(command_request);
+        NormalizeAndValidateRequest(command_request);
         CommandResult result;
-        result.succeeded = Run();
-        result.issues.reserve(m_validation_issues.size());
-        for (const auto & issue : m_validation_issues)
+
+        Logger::SetLogLevel(command_request.verbosity);
+        ValidatePreparedRequest(command_request);
+        if (HasValidationErrors())
         {
-            result.issues.push_back(CommandDiagnostic{ issue.option_name, issue.message });
+            ReportValidationIssues();
+            result.succeeded = false;
+            result.issues = BuildDiagnostics();
+            return result;
         }
+
+        result.succeeded = RunFilesystemPreflight(command_request);
+        if (result.succeeded)
+        {
+            result.succeeded = ExecuteImpl(command_request);
+            if (!result.succeeded)
+            {
+                Logger::Log(LogLevel::Error, "Command execution failed. Aborting command execution.");
+            }
+        }
+        ReportValidationIssues();
+        result.issues = BuildDiagnostics();
         return result;
     }
 
@@ -73,21 +77,20 @@ protected:
     const std::vector<ValidationIssueRecord> & GetValidationIssues() const { return m_validation_issues; }
     void AddParseError(std::string_view option_name, const std::string & message)
     {
-        AddValidationIssue(option_name, ValidationPhase::Parse, LogLevel::Error, message, false);
+        AddValidationIssue(option_name, LogLevel::Error, message, false);
     }
     void AddParseNormalizationWarning(std::string_view option_name, const std::string & message)
     {
-        AddValidationIssue(option_name, ValidationPhase::Parse, LogLevel::Warning, message, true);
+        AddValidationIssue(option_name, LogLevel::Warning, message, true);
     }
     void ValidateRequiredPath(
         const std::filesystem::path & path,
         std::string_view option_name,
         std::string_view label)
     {
-        ClearPrepareValidationIssues();
         if (path.empty())
         {
-            AddValidationIssue(option_name, ValidationPhase::Parse, LogLevel::Error,
+            AddValidationIssue(option_name, LogLevel::Error,
                 std::string(label) + " path is required.", false);
             return;
         }
@@ -95,7 +98,7 @@ protected:
         std::error_code error_code;
         if (!std::filesystem::exists(path, error_code))
         {
-            AddValidationIssue(option_name, ValidationPhase::Parse, LogLevel::Error,
+            AddValidationIssue(option_name, LogLevel::Error,
                 std::string(label) + " does not exist: " + path.string(), false);
         }
     }
@@ -104,13 +107,12 @@ protected:
         std::string_view option_name,
         std::string_view label)
     {
-        ClearPrepareValidationIssues();
         if (path.empty()) return;
 
         std::error_code error_code;
         if (!std::filesystem::exists(path, error_code))
         {
-            AddValidationIssue(option_name, ValidationPhase::Parse, LogLevel::Error,
+            AddValidationIssue(option_name, LogLevel::Error,
                 std::string(label) + " does not exist: " + path.string(), false);
         }
     }
@@ -121,7 +123,7 @@ protected:
         std::string_view label)
     {
         if (!field.empty()) return;
-        AddValidationIssue(option_name, ValidationPhase::Parse, LogLevel::Error,
+        AddValidationIssue(option_name, LogLevel::Error,
             std::string(label) + " cannot be empty.", false);
     }
     void RequirePrepareCondition(
@@ -130,7 +132,7 @@ protected:
         const std::string & message)
     {
         if (condition) return;
-        AddValidationIssue(option_name, ValidationPhase::Prepare, LogLevel::Error, message, false);
+        AddValidationIssue(option_name, LogLevel::Error, message, false);
     }
     template <typename FieldType>
     void CoercePositiveScalar(
@@ -210,7 +212,6 @@ protected:
         FieldType fallback_value,
         std::string_view label)
     {
-        ClearPrepareValidationIssues();
         using UnderlyingType = std::underlying_type_t<FieldType>;
         const auto raw_numeric{ static_cast<UnderlyingType>(field) };
         for (const auto & option : command_internal::CommandEnumTraits<FieldType>::kOptions)
@@ -221,30 +222,21 @@ protected:
             }
         }
         field = fallback_value;
-        AddValidationIssue(option_name, ValidationPhase::Parse, LogLevel::Error,
+        AddValidationIssue(option_name, LogLevel::Error,
             std::string(label) + " must be one of the supported values. Received: "
                 + std::to_string(static_cast<long long>(raw_numeric)), false);
     }
 
 private:
-    bool Run()
+    std::vector<CommandDiagnostic> BuildDiagnostics() const
     {
-        Logger::SetLogLevel(m_request.verbosity);
-        ClearPrepareValidationIssues();
-        ValidatePreparedRequest(m_request);
-        if (HasValidationErrors())
+        std::vector<CommandDiagnostic> diagnostics;
+        diagnostics.reserve(m_validation_issues.size());
+        for (const auto & issue : m_validation_issues)
         {
-            ReportValidationIssues();
-            return false;
+            diagnostics.push_back(CommandDiagnostic{ issue.option_name, issue.message });
         }
-        if (!RunFilesystemPreflight()) return false;
-
-        const bool executed{ ExecuteImpl(m_request) };
-        if (!executed)
-        {
-            Logger::Log(LogLevel::Error, "Command execution failed. Aborting command execution.");
-        }
-        return executed;
+        return diagnostics;
     }
     bool HasValidationErrors() const
     {
@@ -256,25 +248,20 @@ private:
                 return issue.level == LogLevel::Error;
             });
     }
-    void BeginRequestApply()
+    void NormalizeCommonRequestOptions(Request & request)
     {
-        ClearValidationIssues();
-        CoercePositiveScalar(m_request.job_count, "--jobs", 1, LogLevel::Warning, "Thread size");
-        CoerceScalar(m_request.verbosity, "--verbose",
+        CoercePositiveScalar(request.job_count, "--jobs", 1, LogLevel::Warning, "Thread size");
+        CoerceScalar(request.verbosity, "--verbose",
             [](int candidate)
             {
                 return candidate >= static_cast<int>(LogLevel::Error)
                     && candidate <= static_cast<int>(LogLevel::Debug);
             },
             static_cast<int>(LogLevel::Info), LogLevel::Warning,
-            "Invalid verbose level: " + std::to_string(m_request.verbosity)
+            "Invalid verbose level: " + std::to_string(request.verbosity)
                 + ", using default level 3 [Info]");
-        m_request.output_dir =
-            std::filesystem::path(path_helper::EnsureTrailingSlash(m_request.output_dir));
-    }
-    void ClearPrepareValidationIssues()
-    {
-        ClearValidationIssues(ValidationPhase::Prepare);
+        request.output_dir =
+            std::filesystem::path(path_helper::EnsureTrailingSlash(request.output_dir));
     }
     template <typename FieldType, typename Predicate>
     void CoerceScalar(
@@ -285,71 +272,49 @@ private:
         LogLevel issue_level,
         const std::string & message)
     {
-        ClearPrepareValidationIssues();
         if (is_valid(field)) return;
         field = fallback_value;
         if (issue_level == LogLevel::Warning)
         {
-            AddValidationIssue(option_name, ValidationPhase::Parse, LogLevel::Warning, message, true);
+            AddValidationIssue(option_name, LogLevel::Warning, message, true);
             return;
         }
-        AddValidationIssue(option_name, ValidationPhase::Parse, issue_level, message, false);
+        AddValidationIssue(option_name, issue_level, message, false);
     }
-    bool RunFilesystemPreflight()
+    bool RunFilesystemPreflight(const Request & request)
     {
-        const auto & folder_path{ m_request.output_dir };
+        const auto & folder_path{ request.output_dir };
         if (!folder_path.empty() && !std::filesystem::exists(folder_path))
         {
             std::error_code error_code;
             std::filesystem::create_directories(folder_path, error_code);
             if (error_code)
             {
-                AddValidationIssue("--folder", ValidationPhase::Prepare, LogLevel::Error,
+                AddValidationIssue("--folder", LogLevel::Error,
                     "Failed to create output directory '" + folder_path.string()
                     + "': " + error_code.message(), false);
             }
         }
-        ReportValidationIssues();
         return !HasValidationErrors();
     }
     void ReportValidationIssues() const
     {
-        static constexpr std::array<std::string_view, 2> phase_labels{ "parse", "prepare" };
         for (const auto & issue : m_validation_issues)
         {
-            const auto phase_index{ static_cast<std::size_t>(issue.phase) };
-            const auto phase_label{
-                phase_index < phase_labels.size()
-                    ? phase_labels[phase_index]
-                    : std::string_view{ "unknown" }
-            };
-            std::string prefix{ "[" + std::string(phase_label) };
+            std::string prefix{ "[validation" };
             if (issue.auto_corrected) prefix += "; auto-corrected";
             prefix += "]";
             Logger::Log(issue.level, prefix + " Option " + issue.option_name + ": " + issue.message);
         }
     }
-    void ClearValidationIssues(std::optional<ValidationPhase> phase = std::nullopt)
-    {
-        m_validation_issues.erase(
-            std::remove_if(
-                m_validation_issues.begin(),
-                m_validation_issues.end(),
-                [phase](const ValidationIssueRecord & issue)
-                {
-                    return !phase.has_value() || issue.phase == phase.value();
-                }),
-            m_validation_issues.end());
-    }
     void AddValidationIssue(
         std::string_view option_name,
-        ValidationPhase phase,
         LogLevel level,
         const std::string & message,
         bool auto_corrected)
     {
         m_validation_issues.push_back(
-            ValidationIssueRecord{ std::string(option_name), phase, level, message, auto_corrected }
+            ValidationIssueRecord{ std::string(option_name), level, message, auto_corrected }
         );
     }
     

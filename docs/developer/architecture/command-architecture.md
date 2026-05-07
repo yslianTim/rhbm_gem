@@ -96,8 +96,8 @@ flowchart LR
     B --> C["Catalog executor"]
     C --> D["Construct local command"]
     D --> E["ExecuteRequest(request)"]
-    E --> F["RunValidationPass()"]
-    F --> G["RunFilesystemPreflight()"]
+    E --> F["Normalize and validate request"]
+    F --> G["Output folder preflight"]
     G --> H["ExecuteImpl(request)"]
     H --> I["CommandResult"]
 ```
@@ -106,7 +106,7 @@ flowchart LR
 
 - `succeeded == true` when execution completes
 - `succeeded == false` when validation, preflight, or execution stops the command
-- `issues` containing public validation diagnostics without exposing internal phase metadata
+- `issues` containing public validation diagnostics as option/message pairs
 
 ## Concrete Command Shape
 
@@ -121,17 +121,18 @@ Shared command-framework internals live in:
 The standard shape is:
 
 1. derive from `CommandBase<XxxRequest>`
-2. keep parse-phase request normalization and validation in `NormalizeAndValidateRequest(request)`
+2. keep request normalization and field validation in `NormalizeAndValidateRequest(request)`
 3. keep semantic checks in `ValidatePreparedRequest(request)`
 4. keep orchestration in `ExecuteImpl(request)`
 5. expose `command_internal::ExecuteXxxCommand(...)` through `CommandCatalog.hpp`
 
 `CommandBase<XxxRequest>`:
 
-1. stores the typed request internally
-2. uses shared base options during lifecycle/preflight
-3. coerces shared base options
-4. calls `NormalizeAndValidateRequest(request)`
+1. copies the typed request for one execution
+2. coerces shared base options
+3. calls `NormalizeAndValidateRequest(request)`
+4. calls `ValidatePreparedRequest(request)`
+5. runs output-directory preflight before `ExecuteImpl(request)`
 
 ## Shared Request Base
 
@@ -152,5 +153,5 @@ Command-specific fields live directly on each request DTO.
 3. logger-level setup from `verbosity`
 
 The generic layer manages only the shared `output_dir`. Internal validation still tracks
-parse/prepare phase boundaries for issue clearing and log formatting, but those phases are
-not part of the public DTO surface.
+option name, level, message, and whether a value was auto-corrected. The public result
+keeps only option/message diagnostics.

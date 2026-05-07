@@ -33,11 +33,7 @@ private:
     bool ExecuteImpl(const PotentialDisplayRequest & request) override;
 };
 
-} // namespace rhbm_gem
-
 namespace {
-
-using namespace rhbm_gem;
 
 struct PotentialDisplayInputs
 {
@@ -96,9 +92,9 @@ std::optional<PotentialDisplayInputs> LoadPotentialDisplayInputs(
     }
 }
 
-::AtomSelector BuildAtomSelector(const rhbm_gem::PotentialDisplayRequest & request)
+AtomSelector BuildAtomSelector(const rhbm_gem::PotentialDisplayRequest & request)
 {
-    ::AtomSelector selector;
+    AtomSelector selector;
     selector.PickChainID(request.pick_chain_id);
     selector.PickResidueType(request.pick_residue);
     selector.PickElementType(request.pick_element);
@@ -108,9 +104,7 @@ std::optional<PotentialDisplayInputs> LoadPotentialDisplayInputs(
     return selector;
 }
 
-void ApplyModelSelection(
-    rhbm_gem::ModelObject & model_object,
-    ::AtomSelector & selector)
+void ApplyModelSelection(rhbm_gem::ModelObject & model_object, AtomSelector & selector)
 {
     model_object.SelectAtoms(
         [&selector](const rhbm_gem::AtomObject & atom)
@@ -125,7 +119,7 @@ void ApplyModelSelection(
 
 void ApplyDataObjectSelection(
     const std::vector<std::unique_ptr<rhbm_gem::ModelObject>> & model_objects,
-    ::AtomSelector & selector)
+    AtomSelector & selector)
 {
     ScopeTimer timer{ "PotentialDisplayCommand::RunDataObjectSelection" };
     for (const auto & model_object : model_objects)
@@ -136,35 +130,24 @@ void ApplyDataObjectSelection(
 
 } // namespace
 
-namespace rhbm_gem {
-
-PotentialDisplayCommand::PotentialDisplayCommand() :
-    CommandBase<PotentialDisplayRequest>{}
+PotentialDisplayCommand::PotentialDisplayCommand() : CommandBase<PotentialDisplayRequest>{}
 {
 }
 
 void PotentialDisplayCommand::NormalizeAndValidateRequest(PotentialDisplayRequest & request)
 {
-    CoerceEnum(
-        request.painter_choice,
-        "--painter",
-        PainterType::MODEL,
-        "Painter choice");
+    CoerceEnum(request.painter_choice, "--painter", PainterType::MODEL, "Painter choice");
     RequireNonEmptyList(request.model_key_tag_list, "--model-keylist", "Model key list");
     for (const auto & [group_name, members] : request.reference_model_groups)
     {
         if (group_name.empty())
         {
-            AddParseError(
-                "--ref-group",
-                "Reference group name cannot be empty.");
+            AddParseError("--ref-group", "Reference group name cannot be empty.");
             continue;
         }
         if (members.empty())
         {
-            AddParseError(
-                "--ref-group",
-                "Reference group '" + group_name + "' cannot be empty.");
+            AddParseError("--ref-group", "Reference group '" + group_name + "' cannot be empty.");
         }
     }
 }
@@ -214,9 +197,7 @@ bool PotentialDisplayCommand::ExecuteImpl(const PotentialDisplayRequest & reques
             {
                 painter_internal::PainterModelIngress::AddModel(
                     painter,
-                    painter_internal::RequireGroupedAnalyzedModel(
-                        *model_object,
-                        "ComparisonPainter"));
+                    painter_internal::RequireGroupedAnalyzedModel(*model_object, "ComparisonPainter"));
             }
             for (const auto & [class_key, ref_model_list] : inputs->reference_model_groups)
             {
@@ -224,9 +205,7 @@ bool PotentialDisplayCommand::ExecuteImpl(const PotentialDisplayRequest & reques
                 {
                     painter_internal::PainterModelIngress::AddReferenceModel(
                         painter,
-                        painter_internal::RequireGroupedAnalyzedModel(
-                            *model_object,
-                            "ComparisonPainter"),
+                        painter_internal::RequireGroupedAnalyzedModel(*model_object, "ComparisonPainter"),
                         class_key);
                 }
             }
@@ -249,9 +228,7 @@ bool PotentialDisplayCommand::ExecuteImpl(const PotentialDisplayRequest & reques
                 {
                     painter_internal::PainterModelIngress::AddReferenceModel(
                         painter,
-                        painter_internal::RequireGroupedAnalyzedModel(
-                            *model_object,
-                            "DemoPainter"),
+                        painter_internal::RequireGroupedAnalyzedModel(*model_object, "DemoPainter"),
                         class_key);
                 }
             }

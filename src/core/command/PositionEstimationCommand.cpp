@@ -37,11 +37,7 @@ private:
     bool ExecuteImpl(const PositionEstimationRequest & request) override;
 };
 
-} // namespace rhbm_gem
-
 namespace {
-
-constexpr std::string_view kMapKey{ "map" };
 
 struct VoxelNode
 {
@@ -101,7 +97,7 @@ std::optional<std::unique_ptr<rhbm_gem::MapObject>> LoadPositionEstimationMap(
     try
     {
         auto map_object{ rhbm_gem::ReadMap(request.map_file_path) };
-        map_object->SetKeyTag(std::string(kMapKey));
+        map_object->SetKeyTag("map");
         map_object->MapValueArrayNormalization();
         return std::optional<std::unique_ptr<rhbm_gem::MapObject>>{ std::move(map_object) };
     }
@@ -355,48 +351,21 @@ void OutputPointList(
 
 } // namespace
 
-namespace rhbm_gem {
-
-PositionEstimationCommand::PositionEstimationCommand() :
-    CommandBase<PositionEstimationRequest>{}
+PositionEstimationCommand::PositionEstimationCommand() : CommandBase<PositionEstimationRequest>{}
 {
 }
 
 void PositionEstimationCommand::NormalizeAndValidateRequest(PositionEstimationRequest & request)
 {
     ValidateRequiredPath(request.map_file_path, "--map", "Map file");
-    CoercePositiveScalar(
-        request.iteration_count,
-        "--iter",
-        15,
-        LogLevel::Warning,
-        "Iteration count");
-    CoercePositiveScalar(
-        request.knn_size,
-        "--knn",
-        static_cast<std::size_t>(20),
-        LogLevel::Warning,
+    CoercePositiveScalar(request.iteration_count, "--iter", 15, LogLevel::Warning, "Iteration count");
+    CoercePositiveScalar(request.knn_size, "--knn", static_cast<std::size_t>(20), LogLevel::Warning,
         "KNN size");
-    CoerceFinitePositiveScalar(
-        request.alpha,
-        "--alpha",
-        2.0,
-        LogLevel::Warning,
-        "Alpha");
-    CoerceFiniteExclusiveInclusiveRangeScalar(
-        request.threshold_ratio,
-        "--threshold",
-        0.0,
-        1.0,
-        0.01,
-        LogLevel::Warning,
-        "Threshold ratio");
-    CoerceFinitePositiveScalar(
-        request.dedup_tolerance,
-        "--dedup-tolerance",
-        1.0e-2,
-        LogLevel::Warning,
-        "Dedup tolerance");
+    CoerceFinitePositiveScalar(request.alpha, "--alpha", 2.0, LogLevel::Warning, "Alpha");
+    CoerceFiniteExclusiveInclusiveRangeScalar(request.threshold_ratio, "--threshold",
+        0.0, 1.0, 0.01, LogLevel::Warning, "Threshold ratio");
+    CoerceFinitePositiveScalar(request.dedup_tolerance, "--dedup-tolerance",
+        1.0e-2, LogLevel::Warning, "Dedup tolerance");
 }
 
 bool PositionEstimationCommand::ExecuteImpl(const PositionEstimationRequest & request)

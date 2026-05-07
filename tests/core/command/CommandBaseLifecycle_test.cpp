@@ -27,7 +27,7 @@ public:
 
     void ConfigureFilesystemOptions(const std::filesystem::path & folder_path)
     {
-        m_request.output_dir = folder_path;
+        m_configured_request.output_dir = folder_path;
     }
 
     void ValidatePreparedRequest(const rg::CommandRequestBase &) override
@@ -37,7 +37,7 @@ public:
 
 private:
     TestCommandOptions m_options{};
-    rg::CommandRequestBase m_request{};
+    rg::CommandRequestBase m_configured_request{};
 
     bool ExecuteImpl(const rg::CommandRequestBase &) override
     {
@@ -48,7 +48,7 @@ private:
 public:
     rg::CommandResult ExecuteConfiguredRequest()
     {
-        return ExecuteRequest(m_request);
+        return ExecuteRequest(m_configured_request);
     }
 };
 

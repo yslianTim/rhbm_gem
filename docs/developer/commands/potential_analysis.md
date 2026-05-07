@@ -65,14 +65,14 @@ Expected result contract:
 
 ## Command Behavior
 
-`PotentialAnalysisCommand::NormalizeAndValidateRequest()` handles parse-phase normalization and validation:
+`PotentialAnalysisCommand::NormalizeAndValidateRequest()` handles request normalization and field validation:
 
 - validates required model and map paths
 - coerces invalid scalar inputs back to command defaults when the command is designed to recover
 - coerces invalid training alpha grid scalar values back to `0.0..1.0` with step `0.1`
-- resets empty `saved_key_tag` values back to `"model"` and records a parse-phase issue
+- resets empty `saved_key_tag` values back to `"model"` and records a validation issue
 
-`PotentialAnalysisCommand::ValidatePreparedRequest()` performs prepare-phase semantic checks:
+`PotentialAnalysisCommand::ValidatePreparedRequest()` performs semantic checks after normalization:
 
 - `--simulation` requires positive simulated resolution
 - sampling and fit ranges must be ordered correctly

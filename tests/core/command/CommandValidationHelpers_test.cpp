@@ -205,7 +205,6 @@ TEST(CommandValidationHelpersTest, PathHelpersValidateRequiredAndOptionalInputs)
             [](const rg::ValidationIssueRecord & issue)
             {
                 return issue.option_name == "--input"
-                    && issue.phase == rg::ValidationPhase::Parse
                     && issue.level == LogLevel::Error;
             })
     };
@@ -231,7 +230,6 @@ TEST(CommandValidationHelpersTest, PathHelpersValidateRequiredAndOptionalInputs)
             [](const rg::ValidationIssueRecord & issue)
             {
                 return issue.option_name == "--optional"
-                    && issue.phase == rg::ValidationPhase::Parse
                     && issue.level == LogLevel::Error;
             })
     };
@@ -247,7 +245,6 @@ TEST(CommandValidationHelpersTest, NormalizedScalarHelperReportsAutoCorrectedWar
     EXPECT_EQ(command.Count(), 4);
     ASSERT_EQ(command.Issues().size(), 1u);
     EXPECT_EQ(command.Issues().front().option_name, "--count");
-    EXPECT_EQ(command.Issues().front().phase, rg::ValidationPhase::Parse);
     EXPECT_EQ(command.Issues().front().level, LogLevel::Warning);
     EXPECT_TRUE(command.Issues().front().auto_corrected);
 }
@@ -261,7 +258,6 @@ TEST(CommandValidationHelpersTest, ValidatedEnumHelperFallsBackAndReportsParseEr
     EXPECT_EQ(command.Printer(), rg::PrinterType::GAUS_ESTIMATES);
     ASSERT_EQ(command.Issues().size(), 1u);
     EXPECT_EQ(command.Issues().front().option_name, "--printer");
-    EXPECT_EQ(command.Issues().front().phase, rg::ValidationPhase::Parse);
     EXPECT_EQ(command.Issues().front().level, LogLevel::Error);
     EXPECT_FALSE(command.Issues().front().auto_corrected);
 }
@@ -275,12 +271,11 @@ TEST(CommandValidationHelpersTest, CommandLocalValidationPatternRejectsInvalidIn
     EXPECT_DOUBLE_EQ(command.CommandLocalValidatedValue(), 1.25);
     const auto * issue{ FindIssue(command, "--validated") };
     ASSERT_NE(issue, nullptr);
-    EXPECT_EQ(issue->phase, rg::ValidationPhase::Parse);
     EXPECT_EQ(issue->level, LogLevel::Error);
     EXPECT_FALSE(issue->auto_corrected);
 }
 
-TEST(CommandValidationHelpersTest, ApplyRequestClearsPriorValidationIssues)
+TEST(CommandValidationHelpersTest, ExecuteRequestClearsPriorValidationIssues)
 {
     ValidationHelperCommand command{};
 
@@ -309,7 +304,6 @@ TEST(CommandValidationHelpersTest, FinitePositiveScalarOptionRejectsZeroNegative
         EXPECT_DOUBLE_EQ(command.FinitePositiveValue(), 2.0);
         const auto * issue{ FindIssue(command, "--finite-positive") };
         ASSERT_NE(issue, nullptr);
-        EXPECT_EQ(issue->phase, rg::ValidationPhase::Parse);
         EXPECT_EQ(issue->level, LogLevel::Error);
         EXPECT_FALSE(issue->auto_corrected);
     }
@@ -331,7 +325,6 @@ TEST(CommandValidationHelpersTest, FiniteNonNegativeScalarOptionRejectsNegativeN
         EXPECT_DOUBLE_EQ(command.FiniteNonNegativeValue(), 0.0);
         const auto * issue{ FindIssue(command, "--finite-non-negative") };
         ASSERT_NE(issue, nullptr);
-        EXPECT_EQ(issue->phase, rg::ValidationPhase::Parse);
         EXPECT_EQ(issue->level, LogLevel::Error);
         EXPECT_FALSE(issue->auto_corrected);
     }
@@ -346,12 +339,11 @@ TEST(CommandValidationHelpersTest, PositiveScalarOptionRejectsNonPositiveInteger
     EXPECT_EQ(command.PositiveCountValue(), 1);
     const auto * issue{ FindIssue(command, "--positive-count") };
     ASSERT_NE(issue, nullptr);
-    EXPECT_EQ(issue->phase, rg::ValidationPhase::Parse);
     EXPECT_EQ(issue->level, LogLevel::Error);
     EXPECT_FALSE(issue->auto_corrected);
 }
 
-TEST(CommandValidationHelpersTest, KeepsParseAndPrepareIssuesForSameOption)
+TEST(CommandValidationHelpersTest, KeepsWarningsAndErrorsForSameOption)
 {
     ValidationHelperCommand command{};
     command.SetProblematicValue(0);
@@ -369,7 +361,6 @@ TEST(CommandValidationHelpersTest, KeepsParseAndPrepareIssuesForSameOption)
             [](const rg::ValidationIssueRecord & issue)
             {
                 return issue.option_name == "--problem"
-                    && issue.phase == rg::ValidationPhase::Parse
                     && issue.level == LogLevel::Warning
                     && issue.auto_corrected;
             })
@@ -381,7 +372,6 @@ TEST(CommandValidationHelpersTest, KeepsParseAndPrepareIssuesForSameOption)
             [](const rg::ValidationIssueRecord & issue)
             {
                 return issue.option_name == "--problem"
-                    && issue.phase == rg::ValidationPhase::Prepare
                     && issue.level == LogLevel::Error;
             })
     };
@@ -408,7 +398,6 @@ TEST(CommandValidationHelpersTest, BaseNormalizationWarningsAreProgrammaticallyV
             })
     };
     ASSERT_NE(jobs_issue, issues.end());
-    EXPECT_EQ(jobs_issue->phase, rg::ValidationPhase::Parse);
     EXPECT_EQ(jobs_issue->level, LogLevel::Warning);
     EXPECT_TRUE(jobs_issue->auto_corrected);
 
@@ -422,7 +411,6 @@ TEST(CommandValidationHelpersTest, BaseNormalizationWarningsAreProgrammaticallyV
             })
     };
     ASSERT_NE(verbose_issue, issues.end());
-    EXPECT_EQ(verbose_issue->phase, rg::ValidationPhase::Parse);
     EXPECT_EQ(verbose_issue->level, LogLevel::Warning);
     EXPECT_TRUE(verbose_issue->auto_corrected);
 }
