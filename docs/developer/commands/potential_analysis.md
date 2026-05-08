@@ -36,6 +36,7 @@ Command-specific fields:
 - `model_file_path`
 - `map_file_path`
 - `simulation_flag`
+- `map_normalization_flag`
 - `simulated_map_resolution`
 - `saved_key_tag`
 - `training_report_dir`
@@ -68,6 +69,7 @@ Expected result contract:
 `PotentialAnalysisCommand::NormalizeAndValidateRequest()` handles request normalization and field validation:
 
 - validates required model and map paths
+- disables map normalization by default for simulation requests unless CLI explicitly sets it
 - coerces invalid scalar inputs back to command defaults when the command is designed to recover
 - coerces invalid training alpha grid scalar values back to `0.0..1.0` with step `0.1`
 - resets empty `saved_key_tag` values back to `"model"` and records a validation issue
@@ -82,7 +84,7 @@ Expected result contract:
 
 - builds command-owned data objects through `BuildDataObject()`
 - optionally switches the model object into simulation mode
-- runs map preprocessing and model preprocessing
+- optionally runs map normalization, then runs model preprocessing
 - performs atom sampling, classification, fitting, and optional alpha training
 - runs the experimental bond workflow when enabled
 - saves the prepared model through `SavePreparedModel()`

@@ -87,7 +87,11 @@ def assert_request_objects_are_usable() -> None:
     assert simulation.blurring_width_list == [1.50]
 
     analysis = m.PotentialAnalysisRequest()
+    assert analysis.map_normalization_flag is True
+    analysis.map_normalization_flag = False
+    assert analysis.map_normalization_flag is False
     for field_name in (
+        "map_normalization_flag",
         "training_alpha_min",
         "training_alpha_max",
         "training_alpha_step",

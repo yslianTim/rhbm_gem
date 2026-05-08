@@ -4,6 +4,7 @@
 #include <array>
 #include <cstddef>
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -42,6 +43,63 @@ bool HasDiagnosticForOption(
         });
 }
 
+MapObject MakeConstantMapObject()
+{
+    std::array<int, 3> grid_size{ 2, 2, 2 };
+    std::array<float, 3> grid_spacing{ 1.0f, 1.0f, 1.0f };
+    std::array<float, 3> origin{ 0.0f, 0.0f, 0.0f };
+    auto values{ std::make_unique<float[]>(8) };
+    for (size_t i = 0; i < 8; ++i)
+    {
+        values[i] = 1.0f;
+    }
+    return MapObject{ grid_size, grid_spacing, origin, std::move(values) };
+}
+
+std::filesystem::path WriteConstantMapFixture(const std::filesystem::path & output_dir)
+{
+    std::filesystem::create_directories(output_dir);
+    const auto map_path{ output_dir / "constant.map" };
+    auto map_object{ MakeConstantMapObject() };
+    WriteMap(map_path, map_object);
+    return map_path;
+}
+
+PotentialAnalysisRequest MakeNormalizationScenarioRequest(
+    const std::filesystem::path & temp_dir,
+    const std::filesystem::path & map_path)
+{
+    PotentialAnalysisRequest request{};
+    request.database_path = temp_dir / "analysis.sqlite";
+    request.model_file_path = command_test::TestDataPath("test_model.cif");
+    request.map_file_path = map_path;
+    request.sampling_size = 1;
+    return request;
+}
+
+std::string CapturePotentialAnalysisStderr(const PotentialAnalysisRequest & request)
+{
+    testing::internal::CaptureStderr();
+    static_cast<void>(RunCommand(request));
+    return testing::internal::GetCapturedStderr();
+}
+
+std::string CapturePotentialAnalysisCliStderr(std::vector<std::string> args)
+{
+    std::vector<char *> argv;
+    argv.reserve(args.size());
+    for (auto & arg : args)
+    {
+        argv.push_back(arg.data());
+    }
+
+    testing::internal::CaptureStderr();
+    static_cast<void>(RunCommandCLI(static_cast<int>(argv.size()), argv.data()));
+    return testing::internal::GetCapturedStderr();
+}
+
+constexpr const char * kMapNormalizationWarning{ "MapObject::MapValueArrayNormalization" };
+
 } // namespace
 
 TEST(CommandScenariosTest, MapSimulationRejectsAllInvalidBlurringWidthsAtPrepare)
@@ -68,6 +126,14 @@ TEST(CommandScenariosTest, PotentialAnalysisRequiresPositiveResolutionWhenSimula
 
     EXPECT_FALSE(result.succeeded);
     EXPECT_TRUE(HasDiagnosticForOption(result.issues, "request"));
+}
+
+TEST(CommandScenariosTest, PotentialAnalysisDefaultsMapNormalizationOn)
+{
+    PotentialAnalysisRequest request{};
+
+    EXPECT_TRUE(request.map_normalization_flag);
+    EXPECT_FALSE(request.map_normalization_flag_set_by_cli);
 }
 
 TEST(CommandScenariosTest, PotentialAnalysisRejectsInvertedSamplingRangeAtPrepare)
@@ -118,6 +184,84 @@ TEST(CommandScenariosTest, PotentialAnalysisRejectsEmptySavedKeyAtParse)
 
     EXPECT_FALSE(result.succeeded);
     EXPECT_TRUE(HasDiagnosticForOption(result.issues, "-k,--save-key"));
+}
+
+TEST(CommandScenariosTest, PotentialAnalysisNormalizesMapByDefault)
+{
+    command_test::ScopedTempDir temp_dir{ "potential_analysis_normalization_default" };
+    const auto map_path{ WriteConstantMapFixture(temp_dir.path() / "maps") };
+    auto request{ MakeNormalizationScenarioRequest(temp_dir.path(), map_path) };
+
+    const auto error_output{ CapturePotentialAnalysisStderr(request) };
+
+    EXPECT_NE(error_output.find(kMapNormalizationWarning), std::string::npos);
+}
+
+TEST(CommandScenariosTest, PotentialAnalysisSkipsMapNormalizationForSimulationDefault)
+{
+    command_test::ScopedTempDir temp_dir{ "potential_analysis_normalization_simulation" };
+    const auto map_path{ WriteConstantMapFixture(temp_dir.path() / "maps") };
+    auto request{ MakeNormalizationScenarioRequest(temp_dir.path(), map_path) };
+    request.simulation_flag = true;
+    request.simulated_map_resolution = 1.5;
+
+    const auto error_output{ CapturePotentialAnalysisStderr(request) };
+
+    EXPECT_EQ(error_output.find(kMapNormalizationWarning), std::string::npos);
+}
+
+TEST(CommandScenariosTest, PotentialAnalysisCliMapNormalizationTrueOverridesSimulationDefault)
+{
+    command_test::ScopedTempDir temp_dir{ "potential_analysis_normalization_cli_true" };
+    const auto map_path{ WriteConstantMapFixture(temp_dir.path() / "maps") };
+
+    const auto error_output{
+        CapturePotentialAnalysisCliStderr({
+            "RHBM-GEM",
+            "potential_analysis",
+            "--database",
+            (temp_dir.path() / "analysis.sqlite").string(),
+            "--model",
+            command_test::TestDataPath("test_model.cif").string(),
+            "--map",
+            map_path.string(),
+            "--sampling",
+            "1",
+            "--simulation",
+            "true",
+            "--sim-resolution",
+            "1.5",
+            "--map-normalization",
+            "true",
+        })
+    };
+
+    EXPECT_NE(error_output.find(kMapNormalizationWarning), std::string::npos);
+}
+
+TEST(CommandScenariosTest, PotentialAnalysisCliMapNormalizationFalseSkipsNormalization)
+{
+    command_test::ScopedTempDir temp_dir{ "potential_analysis_normalization_cli_false" };
+    const auto map_path{ WriteConstantMapFixture(temp_dir.path() / "maps") };
+
+    const auto error_output{
+        CapturePotentialAnalysisCliStderr({
+            "RHBM-GEM",
+            "potential_analysis",
+            "--database",
+            (temp_dir.path() / "analysis.sqlite").string(),
+            "--model",
+            command_test::TestDataPath("test_model.cif").string(),
+            "--map",
+            map_path.string(),
+            "--sampling",
+            "1",
+            "--map-normalization",
+            "false",
+        })
+    };
+
+    EXPECT_EQ(error_output.find(kMapNormalizationWarning), std::string::npos);
 }
 
 TEST(CommandScenariosTest, RHBMTestRejectsInvertedFitRangeAtPrepare)
