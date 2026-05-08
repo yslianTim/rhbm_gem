@@ -359,7 +359,7 @@ TEST(CommandValidationHelpersTest, NormalizedScalarHelperReportsAutoCorrectedWar
     EXPECT_EQ(result.issues.front().option_name, "-c,--count");
     EXPECT_NE(result.issues.front().message.find("normalized_count"), std::string::npos);
     EXPECT_NE(
-        error_output.find("[validation; auto-corrected] Option -c,--count"),
+        error_output.find("[validation] Option -c,--count"),
         std::string::npos);
 }
 
@@ -560,9 +560,9 @@ TEST(CommandValidationHelpersTest, BaseNormalizationWarningsAreProgrammaticallyV
     EXPECT_TRUE(HasDiagnosticForOption(result.issues, "-j,--jobs"));
     EXPECT_TRUE(HasDiagnosticForOption(result.issues, "-v,--verbose"));
     EXPECT_NE(
-        error_output.find("[validation; auto-corrected] Option -j,--jobs"),
+        error_output.find("[validation] Option -j,--jobs"),
         std::string::npos);
     EXPECT_NE(
-        error_output.find("[validation; auto-corrected] Option -v,--verbose"),
+        error_output.find("[validation] Option -v,--verbose"),
         std::string::npos);
 }

@@ -30,7 +30,6 @@ class CommandBase
     {
         CommandDiagnostic diagnostic;
         LogLevel level;
-        bool auto_corrected{ false };
     };
 
     struct FieldMetadata
@@ -95,7 +94,7 @@ protected:
     {
         static_cast<void>(request);
         const auto metadata{ ResolveFieldMetadata(member) };
-        AddPendingIssue(metadata.option_name, LogLevel::Error, message, false);
+        AddPendingIssue(metadata.option_name, LogLevel::Error, message);
     }
     template <typename Owner, typename FieldType>
     void AddParseNormalizationWarning(
@@ -105,7 +104,7 @@ protected:
     {
         static_cast<void>(request);
         const auto metadata{ ResolveFieldMetadata(member) };
-        AddPendingIssue(metadata.option_name, LogLevel::Warning, message, true);
+        AddPendingIssue(metadata.option_name, LogLevel::Warning, message);
     }
     template <typename Owner>
     void RequireExistingPath(const Request & request, std::filesystem::path Owner::* member)
@@ -115,7 +114,7 @@ protected:
         if (path.empty())
         {
             AddPendingIssue(metadata.option_name, LogLevel::Error,
-                metadata.field_name + " path is required.", false);
+                metadata.field_name + " path is required.");
             return;
         }
 
@@ -123,7 +122,7 @@ protected:
         if (!std::filesystem::exists(path, error_code))
         {
             AddPendingIssue(metadata.option_name, LogLevel::Error,
-                metadata.field_name + " does not exist: " + path.string(), false);
+                metadata.field_name + " does not exist: " + path.string());
         }
     }
     template <typename Owner>
@@ -137,7 +136,7 @@ protected:
         if (!std::filesystem::exists(path, error_code))
         {
             AddPendingIssue(metadata.option_name, LogLevel::Error,
-                metadata.field_name + " does not exist: " + path.string(), false);
+                metadata.field_name + " does not exist: " + path.string());
         }
     }
     template <typename Owner, typename Container>
@@ -147,12 +146,12 @@ protected:
         const auto & field{ request.*member };
         if (!field.empty()) return;
         AddPendingIssue(metadata.option_name, LogLevel::Error,
-            metadata.field_name + " cannot be empty.", false);
+            metadata.field_name + " cannot be empty.");
     }
     void RequirePrepareCondition(bool condition, const std::string & message)
     {
         if (condition) return;
-        AddPendingIssue("request", LogLevel::Error, message, false);
+        AddPendingIssue("request", LogLevel::Error, message);
     }
     template <typename Owner, typename FieldType>
     void NormalizePositiveScalar(
@@ -281,7 +280,7 @@ protected:
         }
         AddPendingIssue(metadata.option_name, LogLevel::Error,
             metadata.field_name + " must be one of the supported values. Received: "
-                + std::to_string(static_cast<long long>(raw_numeric)), false);
+                + std::to_string(static_cast<long long>(raw_numeric)));
     }
 
 private:
@@ -331,7 +330,7 @@ private:
     {
         if (is_valid(field)) return;
         field = fallback_value;
-        AddPendingIssue(metadata.option_name, LogLevel::Warning, message, true);
+        AddPendingIssue(metadata.option_name, LogLevel::Warning, message);
     }
     template <typename FieldType, typename Predicate>
     void RequireScalar(
@@ -341,7 +340,7 @@ private:
         const std::string & message)
     {
         if (is_valid(field)) return;
-        AddPendingIssue(metadata.option_name, LogLevel::Error, message, false);
+        AddPendingIssue(metadata.option_name, LogLevel::Error, message);
     }
     bool RunFilesystemPreflight(const Request & request)
     {
@@ -354,7 +353,7 @@ private:
             {
                 AddPendingIssue("--folder", LogLevel::Error,
                     "Failed to create output directory '" + folder_path.string()
-                    + "': " + error_code.message(), false);
+                    + "': " + error_code.message());
             }
         }
         return !HasValidationErrors();
@@ -363,21 +362,14 @@ private:
     {
         for (const auto & issue : m_issues)
         {
-            std::string prefix{ "[validation" };
-            if (issue.auto_corrected) prefix += "; auto-corrected";
-            prefix += "]";
-            Logger::Log(issue.level, prefix + " Option " + issue.diagnostic.option_name + ": "
+            Logger::Log(issue.level, "[validation] Option " + issue.diagnostic.option_name + ": "
                 + issue.diagnostic.message);
         }
     }
-    void AddPendingIssue(
-        std::string_view option_name,
-        LogLevel level,
-        const std::string & message,
-        bool auto_corrected)
+    void AddPendingIssue(std::string_view option_name, LogLevel level, const std::string & message)
     {
-        m_issues.push_back(PendingIssue{ CommandDiagnostic{ std::string(option_name), message },
-            level, auto_corrected });
+        m_issues.push_back(PendingIssue{
+            CommandDiagnostic{ std::string(option_name), message }, level });
     }
     template <typename Owner, typename FieldType>
     FieldMetadata ResolveFieldMetadata(FieldType Owner::* member) const

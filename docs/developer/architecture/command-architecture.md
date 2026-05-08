@@ -153,5 +153,4 @@ Command-specific fields live directly on each request DTO.
 3. logger-level setup from `verbosity`
 
 The generic layer manages only the shared `output_dir`. Internal validation still tracks
-option name, level, message, and whether a value was auto-corrected. The public result
-keeps only option/message diagnostics.
+option name, level, and message. The public result keeps only option/message diagnostics.
