@@ -208,6 +208,19 @@ TEST(DataObjectModelAnalysisTest, LocalPotentialEntryPreservesFitResultStatus)
     EXPECT_EQ(rg::RHBMEstimationStatus::NUMERICAL_FALLBACK, entry.GetFitResult().status);
 }
 
+TEST(DataObjectModelAnalysisTest, MutableLocalPotentialViewCanSetAndReadAlphaR)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto * atom{ model->GetAtomList().at(0).get() };
+    auto analysis{ model->EditAnalysis() };
+    auto entry{ analysis.EnsureAtomLocalPotential(*atom) };
+
+    entry.SetAlphaR(0.37);
+
+    EXPECT_DOUBLE_EQ(0.37, entry.GetAlphaR());
+    EXPECT_DOUBLE_EQ(0.37, rg::LocalPotentialView::RequireFor(*atom).GetAlphaR());
+}
+
 TEST(DataObjectModelAnalysisTest, MutableLocalPotentialViewSetFitResultUpdatesFitAndEstimates)
 {
     auto model{ data_test::MakeModelWithBond() };

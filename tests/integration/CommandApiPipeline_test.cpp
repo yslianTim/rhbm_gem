@@ -1,9 +1,13 @@
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <filesystem>
 
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/CommandSystem.hpp>
+#include <rhbm_gem/data/io/DataRepository.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
+#include <rhbm_gem/data/object/ModelObject.hpp>
 
 namespace rg = rhbm_gem;
 
@@ -34,6 +38,28 @@ std::size_t CountRegularFiles(const std::filesystem::path & directory)
         }
     }
     return count;
+}
+
+void ExpectSelectedAtomsHaveAlphaR(const rg::ModelObject & model, double alpha_r)
+{
+    const auto & atom_list{ model.GetSelectedAtoms() };
+    ASSERT_GT(atom_list.size(), 0u);
+    for (const auto * atom : atom_list)
+    {
+        EXPECT_DOUBLE_EQ(alpha_r, rg::LocalPotentialView::RequireFor(*atom).GetAlphaR());
+    }
+}
+
+void ExpectSelectedAtomsShareAlphaR(const rg::ModelObject & model)
+{
+    const auto & atom_list{ model.GetSelectedAtoms() };
+    ASSERT_GT(atom_list.size(), 0u);
+    const auto alpha_r{ rg::LocalPotentialView::RequireFor(*atom_list.front()).GetAlphaR() };
+    ASSERT_TRUE(std::isfinite(alpha_r));
+    for (const auto * atom : atom_list)
+    {
+        EXPECT_DOUBLE_EQ(alpha_r, rg::LocalPotentialView::RequireFor(*atom).GetAlphaR());
+    }
 }
 
 } // namespace
@@ -87,11 +113,17 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     analysis_request.map_file_path = generated_map_file;
     analysis_request.saved_key_tag = "pipeline_model";
     analysis_request.sampling_size = 200;
+    analysis_request.alpha_r = 0.37;
 
     const auto analysis_result{
         rg::RunCommand(analysis_request)
     };
     ASSERT_TRUE(analysis_result.succeeded);
+
+    rg::DataRepository repository{ database_path };
+    auto model{ repository.LoadModel("pipeline_model") };
+    ASSERT_NE(model, nullptr);
+    ExpectSelectedAtomsHaveAlphaR(*model, analysis_request.alpha_r);
 
     rg::ResultDumpRequest dump_request;
     dump_request.database_path = database_path;
@@ -149,6 +181,11 @@ TEST(CommandApiPipelineTest, PotentialAnalysisTrainingEmitsRequestedAlphaRReport
     };
     ASSERT_TRUE(analysis_result.succeeded);
     EXPECT_TRUE(std::filesystem::exists(training_report_dir / "alpha_r_bias.pdf"));
+
+    rg::DataRepository repository{ database_path };
+    auto model{ repository.LoadModel("trained_model") };
+    ASSERT_NE(model, nullptr);
+    ExpectSelectedAtomsShareAlphaR(*model);
 
     rg::ResultDumpRequest dump_request;
     dump_request.database_path = database_path;

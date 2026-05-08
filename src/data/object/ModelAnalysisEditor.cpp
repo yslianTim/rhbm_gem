@@ -295,6 +295,11 @@ void MutableLocalPotentialView::SetAlphaR(double value)
     EnsureResolvedLocalEntry(*this).SetAlphaR(value);
 }
 
+double MutableLocalPotentialView::GetAlphaR() const
+{
+    return RequireResolvedLocalEntry(*this, "Local alpha-r").GetAlphaR();
+}
+
 void MutableLocalPotentialView::SetAnnotation(
     const std::string & key,
     const LocalPotentialAnnotationData & value)

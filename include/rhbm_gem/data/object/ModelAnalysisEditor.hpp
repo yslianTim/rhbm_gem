@@ -43,6 +43,7 @@ public:
     void SetAnnotation(const std::string & key, const LocalPotentialAnnotationData & value);
     bool HasDataset() const;
     bool HasFitResult() const;
+    double GetAlphaR() const;
     const RHBMMemberDataset & GetDataset() const;
     const RHBMBetaEstimateResult & GetFitResult() const;
     const AtomObject * GetAtomObjectPtr() const { return m_atom_object; }

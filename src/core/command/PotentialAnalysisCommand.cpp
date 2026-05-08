@@ -193,6 +193,17 @@ BuildSelectedAtomLocalEntryViews(ModelObject & model_object)
     return local_entry_list;
 }
 
+void SetSelectedAtomAlphaR(
+    ModelAnalysisEditor & analysis,
+    const std::vector<AtomObject *> & atom_list,
+    double alpha_r)
+{
+    for (auto * atom : atom_list)
+    {
+        analysis.EnsureAtomLocalPotential(*atom).SetAlphaR(alpha_r);
+    }
+}
+
 void RunModelObjectPreprocessing(ModelObject & model_object, bool asymmetry_flag)
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunModelObjectPreprocessing");
@@ -231,7 +242,6 @@ void RunModelObjectPreprocessing(ModelObject & model_object, bool asymmetry_flag
 
 void RunLocalPotentialFitting(
     ModelObject & model_object,
-    double alpha_r,
     int thread_size)
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunLocalPotentialFitting");
@@ -247,7 +257,7 @@ void RunLocalPotentialFitting(
     for (size_t i = 0; i < selected_atom_size; i++)
     {
         auto local_entry{ local_entry_list[i] };
-        local_entry.SetAlphaR(alpha_r);
+        const auto alpha_r{ local_entry.GetAlphaR() };
         const auto result{
             rhbm_helper::EstimateBetaMDPDE(
                 alpha_r,
@@ -281,47 +291,39 @@ void RunAtomAlphaTraining(
     Logger::Log(LogLevel::Info, alpha_trainer.GetAlphaGridSummary().str());
 
     // Alpha_R Training
-    std::vector<RHBMMemberDataset> selected_atom_dataset_list;
-    selected_atom_dataset_list.reserve(model_object.GetSelectedAtomCount());
-    for (auto & atom : model_object.GetSelectedAtoms())
+    const auto simple_class_key{ ChemicalDataHelper::GetSimpleAtomClassKey() };
+    const auto simple_group_keys{ analysis_view.CollectAtomGroupKeys(simple_class_key) };
+    size_t count{ 0 };
+    for (const auto group_key : simple_group_keys)
     {
-        if (atom->IsMainChainAtom() == false) continue;
-        const auto local_entry{ analysis.EnsureAtomLocalPotential(*atom) };
-        if (!local_entry.HasDataset()) continue;
-        selected_atom_dataset_list.emplace_back(local_entry.GetDataset());
-    }
-    selected_atom_dataset_list.shrink_to_fit();
-    
-    auto selected_atom_size{ selected_atom_dataset_list.size() };
-    Logger::Log(LogLevel::Info,
-        "Run Alpha_R Training with "+ std::to_string(selected_atom_size) +" atoms.");
-    auto alpha_r{ alpha_training_list.front() };
-    if (!selected_atom_dataset_list.empty())
-    {
-        rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_r_options;
-        alpha_r_options.subset_size = 5;
-        alpha_r_options.execution_options = MakePotentialAnalysisExecutionOptions(thread_size, true);
-        alpha_r_options.progress_callback =
-            [](std::size_t completed, std::size_t total)
-            {
-                Logger::ProgressPercent(completed, total);
+        const auto & group_atom_list{ analysis_view.GetAtomObjectList(group_key, simple_class_key) };
+        std::vector<RHBMMemberDataset> selected_atom_dataset_list;
+        selected_atom_dataset_list.reserve(group_atom_list.size());
+        for (auto & atom : group_atom_list)
+        {
+            const auto local_entry{ analysis.EnsureAtomLocalPotential(*atom) };
+            if (!local_entry.HasDataset()) continue;
+            if (local_entry.GetDataset().y.rows() < 10) continue;
+            selected_atom_dataset_list.emplace_back(local_entry.GetDataset());
+        }
+        selected_atom_dataset_list.shrink_to_fit();
+        if (!selected_atom_dataset_list.empty())
+        {
+            rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_r_options;
+            alpha_r_options.subset_size = 5;
+            alpha_r_options.execution_options = MakePotentialAnalysisExecutionOptions(thread_size, true);
+            const auto alpha_r_result{
+                alpha_trainer.TrainAlphaR(selected_atom_dataset_list, alpha_r_options)
             };
-        const auto alpha_r_result{
-            alpha_trainer.TrainAlphaR(selected_atom_dataset_list, alpha_r_options)
-        };
-        alpha_r = alpha_r_result.best_alpha;
+            const auto alpha_r{ alpha_r_result.best_alpha };
+            SetSelectedAtomAlphaR(analysis, group_atom_list, alpha_r);
+        }
+        Logger::ProgressPercent(++count, simple_group_keys.size());
     }
-    else
-    {
-        Logger::Log(LogLevel::Warning,
-            "Skip Alpha_R Training because no eligible atoms were selected.");
-    }
-    Logger::Log(LogLevel::Info,
-        "Alpha_R Training Results Summary: best alpha_r = "+ std::to_string(alpha_r));
     
     // Alpha_G Training
-    RunLocalPotentialFitting(model_object, alpha_r, thread_size);
-    
+    RunLocalPotentialFitting(model_object, thread_size);
+
     std::vector<std::vector<RHBMParameterVector>> beta_group_list;
     const auto component_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     const auto component_group_keys{ analysis_view.CollectAtomGroupKeys(component_class_key) };
@@ -387,28 +389,6 @@ void RunAtomAlphaTraining(
             Logger::ProgressPercent(completed, total);
         };
 
-    if (!selected_atom_dataset_list.empty())
-    {
-        const auto alpha_r_bias_matrix{
-            alpha_trainer.StudyAlphaRBias(selected_atom_dataset_list, alpha_bias_study_options)
-        };
-        const bool report_emitted{
-            EmitTrainingReportIfRequested(
-                alpha_r_bias_matrix, alpha_training_list, "#alpha_{r}", "Deviation with OLS",
-                request.training_report_dir, "alpha_r_bias.pdf")
-        };
-        if (!report_emitted)
-        {
-            Logger::Log(LogLevel::Debug,
-                "Alpha_R bias report was skipped (set --training-report-dir to emit PDF output).");
-        }
-    }
-    else
-    {
-        Logger::Log(LogLevel::Warning,
-            "Skip Alpha_R bias study because no eligible atoms were selected.");
-    }
-
     if (!beta_group_list.empty())
     {
         const auto alpha_g_bias_matrix{
@@ -444,7 +424,7 @@ void RunAtomPotentialFittingWorkflow(
     }
     else
     {
-        RunLocalPotentialFitting(model_object, request.alpha_r, thread_size);
+        RunLocalPotentialFitting(model_object, thread_size);
     }
 
     auto analysis{ model_object.EditAnalysis() };
@@ -630,6 +610,8 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
     auto & map_object{ *inputs->map_object };
     map_object.MapValueArrayNormalization();
     RunModelObjectPreprocessing(model_object, request.asymmetry_flag);
+    auto analysis{ model_object.EditAnalysis() };
+    SetSelectedAtomAlphaR(analysis, model_object.GetSelectedAtoms(), request.alpha_r);
     RunSamplingWorkflow(map_object, model_object,
         request.sampling_size, request.sampling_range_min, request.sampling_range_max, thread_size);
     RunDatasetPreparationWorkflow(
