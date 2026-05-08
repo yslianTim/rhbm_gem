@@ -606,34 +606,34 @@ void PotentialAnalysisCommand::NormalizeAndValidateRequest(PotentialAnalysisRequ
 {
     ValidateRequiredPath(request.model_file_path, "--model", "Model file");
     ValidateRequiredPath(request.map_file_path, "--map", "Map file");
-    CoerceFiniteNonNegativeScalar(request.simulated_map_resolution, "--sim-resolution",
+    ValidateFiniteNonNegativeScalar(request.simulated_map_resolution, "--sim-resolution",
         0.0, LogLevel::Error, "Simulated map resolution");
     if (request.saved_key_tag.empty())
     {
         request.saved_key_tag = "model";
         AddParseError("--save-key", "Saved key tag cannot be empty. Using 'model' instead.");
     }
-    CoercePositiveScalar(request.sampling_size, "--sampling",
+    ValidatePositiveScalar(request.sampling_size, "--sampling",
         1500, LogLevel::Warning, "Sampling size");
-    CoerceFiniteNonNegativeScalar(request.sampling_range_min, "--sampling-min",
+    ValidateFiniteNonNegativeScalar(request.sampling_range_min, "--sampling-min",
         0.0, LogLevel::Error, "Minimum sampling range");
-    CoerceFiniteNonNegativeScalar(request.sampling_range_max, "--sampling-max",
+    ValidateFiniteNonNegativeScalar(request.sampling_range_max, "--sampling-max",
         1.5, LogLevel::Error, "Maximum sampling range");
-    CoerceFinitePositiveScalar(request.sampling_height, "--sampling-height",
+    ValidateFinitePositiveScalar(request.sampling_height, "--sampling-height",
         0.1, LogLevel::Error, "Sampling height");
-    CoerceFiniteNonNegativeScalar(request.fit_range_min, "--fit-min",
+    ValidateFiniteNonNegativeScalar(request.fit_range_min, "--fit-min",
         0.0, LogLevel::Error, "Minimum fitting range");
-    CoerceFiniteNonNegativeScalar(request.fit_range_max, "--fit-max",
+    ValidateFiniteNonNegativeScalar(request.fit_range_max, "--fit-max",
         1.0, LogLevel::Error, "Maximum fitting range");
-    CoerceFinitePositiveScalar(request.alpha_r, "--alpha-r",
+    ValidateFinitePositiveScalar(request.alpha_r, "--alpha-r",
         0.1, LogLevel::Error, "Alpha-R");
-    CoerceFinitePositiveScalar(request.alpha_g, "--alpha-g",
+    ValidateFinitePositiveScalar(request.alpha_g, "--alpha-g",
         0.2, LogLevel::Error, "Alpha-G");
-    CoerceFiniteNonNegativeScalar(request.training_alpha_min, "--training-alpha-min",
+    ValidateFiniteNonNegativeScalar(request.training_alpha_min, "--training-alpha-min",
         0.0, LogLevel::Error, "Minimum training alpha");
-    CoerceFiniteNonNegativeScalar(request.training_alpha_max, "--training-alpha-max",
+    ValidateFiniteNonNegativeScalar(request.training_alpha_max, "--training-alpha-max",
         1.0, LogLevel::Error, "Maximum training alpha");
-    CoerceFinitePositiveScalar(request.training_alpha_step, "--training-alpha-step",
+    ValidateFinitePositiveScalar(request.training_alpha_step, "--training-alpha-step",
         0.1, LogLevel::Error, "Training alpha step");
 }
 

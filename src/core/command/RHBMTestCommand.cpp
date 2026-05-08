@@ -539,30 +539,30 @@ RHBMTestCommand::RHBMTestCommand() :
 
 void RHBMTestCommand::NormalizeAndValidateRequest(RHBMTestRequest & request)
 {
-    CoerceEnum(
+    ValidateEnum(
         request.tester_choice,
         "--tester",
         TesterType::BENCHMARK,
         "Tester choice");
-    CoerceFiniteNonNegativeScalar(
+    ValidateFiniteNonNegativeScalar(
         request.fit_range_min,
         "--fit-min",
         0.0,
         LogLevel::Error,
         "Minimum fitting range");
-    CoerceFiniteNonNegativeScalar(
+    ValidateFiniteNonNegativeScalar(
         request.fit_range_max,
         "--fit-max",
         1.0,
         LogLevel::Error,
         "Maximum fitting range");
-    CoerceFinitePositiveScalar(
+    ValidateFinitePositiveScalar(
         request.alpha_r,
         "--alpha-r",
         0.1,
         LogLevel::Error,
         "Alpha-R");
-    CoerceFinitePositiveScalar(
+    ValidateFinitePositiveScalar(
         request.alpha_g,
         "--alpha-g",
         0.2,

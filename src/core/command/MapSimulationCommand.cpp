@@ -224,13 +224,13 @@ MapSimulationCommand::MapSimulationCommand() : CommandBase<MapSimulationRequest>
 void MapSimulationCommand::NormalizeAndValidateRequest(MapSimulationRequest & request)
 {
     ValidateRequiredPath(request.model_file_path, "--model", "Model file");
-    CoerceEnum(request.potential_model_choice, "--potential-model",
+    ValidateEnum(request.potential_model_choice, "--potential-model",
         PotentialModel::FIVE_GAUS_CHARGE, "Potential model");
-    CoerceEnum(request.partial_charge_choice, "--charge",
+    ValidateEnum(request.partial_charge_choice, "--charge",
         PartialCharge::PARTIAL, "Partial charge choice");
-    CoerceFinitePositiveScalar(request.cutoff_distance, "--cut-off",
+    ValidateFinitePositiveScalar(request.cutoff_distance, "--cut-off",
         5.0, LogLevel::Warning, "Cutoff distance");
-    CoerceFinitePositiveScalar(request.grid_spacing, "--grid-spacing",
+    ValidateFinitePositiveScalar(request.grid_spacing, "--grid-spacing",
         0.5, LogLevel::Warning, "Grid spacing");
 
     std::vector<double> filtered_widths;

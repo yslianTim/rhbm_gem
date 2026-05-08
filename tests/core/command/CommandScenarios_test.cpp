@@ -91,7 +91,7 @@ TEST(CommandScenariosTest, PotentialAnalysisRejectsInvertedTrainingAlphaRangeAtP
     EXPECT_TRUE(HasDiagnosticForOption(result.issues, "--training-alpha-range"));
 }
 
-TEST(CommandScenariosTest, PotentialAnalysisCoercesInvalidTrainingAlphaStepAtParse)
+TEST(CommandScenariosTest, PotentialAnalysisValidatesInvalidTrainingAlphaStepAtParse)
 {
     PotentialAnalysisRequest request{};
     request.training_alpha_step = 0.0;

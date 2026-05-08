@@ -277,9 +277,9 @@ void MapVisualizationCommand::NormalizeAndValidateRequest(MapVisualizationReques
 {
     ValidateRequiredPath(request.model_file_path, "--model", "Model file");
     ValidateRequiredPath(request.map_file_path, "--map", "Map file");
-    CoercePositiveScalar(request.atom_serial_id, "--atom-id", 1, LogLevel::Error, "Atom serial ID");
-    CoercePositiveScalar(request.sampling_size, "--sampling", 100, LogLevel::Warning, "Sampling size");
-    CoerceFinitePositiveScalar(request.window_size, "--window-size", 5.0, LogLevel::Error, "Window size");
+    ValidatePositiveScalar(request.atom_serial_id, "--atom-id", 1, LogLevel::Error, "Atom serial ID");
+    ValidatePositiveScalar(request.sampling_size, "--sampling", 100, LogLevel::Warning, "Sampling size");
+    ValidateFinitePositiveScalar(request.window_size, "--window-size", 5.0, LogLevel::Error, "Window size");
 }
 
 bool MapVisualizationCommand::ExecuteImpl(const MapVisualizationRequest & request)

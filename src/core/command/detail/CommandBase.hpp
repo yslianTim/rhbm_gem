@@ -133,7 +133,7 @@ protected:
         AddPendingIssue(option_name, LogLevel::Error, message, false);
     }
     template <typename FieldType>
-    void CoercePositiveScalar(
+    void ValidatePositiveScalar(
         FieldType & field,
         std::string_view option_name,
         FieldType fallback_value,
@@ -144,12 +144,12 @@ protected:
             std::string(label) + " must be positive. Using "
             + string_helper::ToStringWithPrecision(fallback_value) + " instead."
         };
-        CoerceScalar(field, option_name,
+        ValidateScalar(field, option_name,
             [](const auto candidate) { return numeric_validation::IsPositive(candidate); },
             fallback_value, issue_level, message);
     }
     template <typename FieldType>
-    void CoerceFinitePositiveScalar(
+    void ValidateFinitePositiveScalar(
         FieldType & field,
         std::string_view option_name,
         FieldType fallback_value,
@@ -160,12 +160,12 @@ protected:
             std::string(label) + " must be a finite positive value. Using "
             + string_helper::ToStringWithPrecision(fallback_value) + " instead."
         };
-        CoerceScalar(field, option_name,
+        ValidateScalar(field, option_name,
             [](const auto candidate) { return numeric_validation::IsFinitePositive(candidate); },
             fallback_value, issue_level, message);
     }
     template <typename FieldType>
-    void CoerceFiniteNonNegativeScalar(
+    void ValidateFiniteNonNegativeScalar(
         FieldType & field,
         std::string_view option_name,
         FieldType fallback_value,
@@ -176,12 +176,12 @@ protected:
             std::string(label) + " must be a finite non-negative value. Using "
             + string_helper::ToStringWithPrecision(fallback_value) + " instead."
         };
-        CoerceScalar(field, option_name,
+        ValidateScalar(field, option_name,
             [](const auto candidate) { return numeric_validation::IsFiniteNonNegative(candidate); },
             fallback_value, issue_level, message);
     }
     template <typename FieldType, typename LowerType, typename UpperType>
-    void CoerceFiniteExclusiveInclusiveRangeScalar(
+    void ValidateFiniteExclusiveInclusiveRangeScalar(
         FieldType & field,
         std::string_view option_name,
         LowerType lower,
@@ -196,7 +196,7 @@ protected:
                 + string_helper::ToStringWithPrecision(upper) + "]. Using "
                 + string_helper::ToStringWithPrecision(fallback_value) + " instead."
         };
-        CoerceScalar(field, option_name,
+        ValidateScalar(field, option_name,
             [lower, upper](const auto candidate)
             {
                 return numeric_validation::IsFiniteExclusiveInclusiveRange(candidate, lower, upper);
@@ -204,7 +204,7 @@ protected:
             fallback_value, issue_level, message);
     }
     template <typename FieldType>
-    void CoerceEnum(
+    void ValidateEnum(
         FieldType & field,
         std::string_view option_name,
         FieldType fallback_value,
@@ -248,8 +248,8 @@ private:
     }
     void NormalizeCommonRequestOptions(Request & request)
     {
-        CoercePositiveScalar(request.job_count, "--jobs", 1, LogLevel::Warning, "Thread size");
-        CoerceScalar(request.verbosity, "--verbose",
+        ValidatePositiveScalar(request.job_count, "--jobs", 1, LogLevel::Warning, "Thread size");
+        ValidateScalar(request.verbosity, "--verbose",
             [](int candidate)
             {
                 return candidate >= static_cast<int>(LogLevel::Error)
@@ -262,7 +262,7 @@ private:
             std::filesystem::path(path_helper::EnsureTrailingSlash(request.output_dir));
     }
     template <typename FieldType, typename Predicate>
-    void CoerceScalar(
+    void ValidateScalar(
         FieldType & field,
         std::string_view option_name,
         Predicate is_valid,

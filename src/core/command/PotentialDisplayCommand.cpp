@@ -136,7 +136,7 @@ PotentialDisplayCommand::PotentialDisplayCommand() : CommandBase<PotentialDispla
 
 void PotentialDisplayCommand::NormalizeAndValidateRequest(PotentialDisplayRequest & request)
 {
-    CoerceEnum(request.painter_choice, "--painter", PainterType::MODEL, "Painter choice");
+    ValidateEnum(request.painter_choice, "--painter", PainterType::MODEL, "Painter choice");
     RequireNonEmptyList(request.model_key_tag_list, "--model-keylist", "Model key list");
     for (const auto & [group_name, members] : request.reference_model_groups)
     {

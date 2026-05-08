@@ -119,7 +119,7 @@ public:
         }
         if (m_options.validate_count)
         {
-            CoercePositiveScalar(
+            ValidatePositiveScalar(
                 m_options.normalized_count,
                 "--count",
                 4,
@@ -128,7 +128,7 @@ public:
         }
         if (m_options.validate_printer)
         {
-            CoerceEnum(
+            ValidateEnum(
                 m_options.printer,
                 "--printer",
                 PrinterType::GAUS_ESTIMATES,
@@ -136,7 +136,7 @@ public:
         }
         if (m_options.validate_finite_positive)
         {
-            CoerceFinitePositiveScalar(
+            ValidateFinitePositiveScalar(
                 m_options.finite_positive_value,
                 "--finite-positive",
                 2.0,
@@ -145,7 +145,7 @@ public:
         }
         if (m_options.validate_finite_non_negative)
         {
-            CoerceFiniteNonNegativeScalar(
+            ValidateFiniteNonNegativeScalar(
                 m_options.finite_non_negative_value,
                 "--finite-non-negative",
                 0.0,
@@ -154,7 +154,7 @@ public:
         }
         if (m_options.validate_positive_count)
         {
-            CoercePositiveScalar(
+            ValidatePositiveScalar(
                 m_options.positive_count,
                 "--positive-count",
                 1,
