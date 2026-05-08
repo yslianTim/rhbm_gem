@@ -227,6 +227,38 @@ TEST(ArrayHelperTest, ComputeScalingRangeTupleContractsRangeSymmetrically)
     EXPECT_LE(std::get<0>(scaled), std::get<1>(scaled));
 }
 
+TEST(ArrayHelperTest, ComputeScalingRangeTupleKeepsRangeAboveMinRange)
+{
+    std::vector<double> data{ 1.0, 3.0 };
+    auto scaled{ rhbm_gem::array_helper::ComputeScalingRangeTuple(data, 0.0, 0.1) };
+    EXPECT_DOUBLE_EQ(1.0, std::get<0>(scaled));
+    EXPECT_DOUBLE_EQ(3.0, std::get<1>(scaled));
+}
+
+TEST(ArrayHelperTest, ComputeScalingRangeTupleExpandsSmallRangeAroundCenter)
+{
+    std::vector<double> data{ 1.0, 1.05 };
+    auto scaled{ rhbm_gem::array_helper::ComputeScalingRangeTuple(data, 0.0, 0.1) };
+    EXPECT_DOUBLE_EQ(0.925, std::get<0>(scaled));
+    EXPECT_DOUBLE_EQ(1.125, std::get<1>(scaled));
+}
+
+TEST(ArrayHelperTest, ComputeScalingRangeTupleDefaultMinRangeExpandsFlatData)
+{
+    std::vector<double> data{ 2.0, 2.0 };
+    auto scaled{ rhbm_gem::array_helper::ComputeScalingRangeTuple(data, 0.0) };
+    EXPECT_DOUBLE_EQ(1.9, std::get<0>(scaled));
+    EXPECT_DOUBLE_EQ(2.1, std::get<1>(scaled));
+}
+
+TEST(ArrayHelperTest, ComputeScalingRangeTupleCustomMinRange)
+{
+    std::vector<double> data{ 2.0, 2.02 };
+    auto scaled{ rhbm_gem::array_helper::ComputeScalingRangeTuple(data, 0.0, 0.25) };
+    EXPECT_DOUBLE_EQ(1.76, std::get<0>(scaled));
+    EXPECT_DOUBLE_EQ(2.26, std::get<1>(scaled));
+}
+
 TEST(ArrayHelperTest, ScalingRangeDefaultAndEmpty)
 {
     std::vector<double> data{ 1.0, 2.0, 3.0, 4.0, 5.0 };

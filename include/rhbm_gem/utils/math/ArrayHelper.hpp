@@ -201,12 +201,26 @@ std::tuple<Type, Type> ComputeRangeTuple(
 
 template <typename Type>
 std::tuple<Type, Type> ComputeScalingRangeTuple(
-    const std::vector<Type> & data, Type scaling, int thread_size = 1)
+    const std::vector<Type> & data,
+    Type scaling,
+    Type min_range = static_cast<Type>(0.1),
+    int thread_size = 1)
     {
+        if (data.empty())
+        {
+            return std::make_tuple(static_cast<Type>(0.0), static_cast<Type>(0.0));
+        }
         auto range_tuple{ ComputeRangeTuple(data, thread_size) };
         auto range{ std::get<1>(range_tuple) - std::get<0>(range_tuple) };
         auto min_value{ std::get<0>(range_tuple) - scaling * range };
         auto max_value{ std::get<1>(range_tuple) + scaling * range };
+        auto range_mean{ (min_value + max_value) / static_cast<Type>(2.0) };
+        auto half_range{ (max_value - min_value) / static_cast<Type>(2.0) };
+        if (half_range < min_range)
+        {
+            min_value = range_mean - min_range;
+            max_value = range_mean + min_range;
+        }
         return std::make_tuple(min_value, max_value);
     }
 

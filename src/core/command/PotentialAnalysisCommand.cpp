@@ -528,7 +528,7 @@ void RunSamplingWorkflow(
     {
         auto atom{ atom_list[i] };
         auto entry{ local_entry_list[i] };
-        auto sampling_entries{ SampleMapValues(map_object, sampler, *atom, sampling_range_max, 0.0) };
+        auto sampling_entries{ SampleMapValues(map_object, sampler, *atom, sampling_range_max, 15.0) };
         entry.SetSamplingEntries(sampling_entries);
 #ifdef USE_OPENMP
         #pragma omp critical
