@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -48,33 +49,29 @@ public:
         Request command_request{ request };
         m_issues.clear();
         NormalizeCommonRequestOptions(command_request);
-        NormalizeAndValidateRequest(command_request);
-        CommandResult result;
-
         Logger::SetLogLevel(command_request.verbosity);
-        if (HasValidationErrors())
+
+        NormalizeAndValidateRequest(command_request);
+        if (const auto failure_result{ BuildValidationFailureResultIfNeeded() })
         {
-            ReportPendingIssues();
-            result.succeeded = false;
-            result.issues = BuildDiagnostics();
-            return result;
+            return *failure_result;
         }
         ValidatePreparedRequest(command_request);
-        if (HasValidationErrors())
+        if (const auto failure_result{ BuildValidationFailureResultIfNeeded() })
         {
-            ReportPendingIssues();
-            result.succeeded = false;
-            result.issues = BuildDiagnostics();
-            return result;
+            return *failure_result;
         }
-        result.succeeded = RunFilesystemPreflight(command_request);
-        if (result.succeeded)
+        EnsureOutputDirectoryExists(command_request);
+        if (const auto failure_result{ BuildValidationFailureResultIfNeeded() })
         {
-            result.succeeded = ExecuteImpl(command_request);
-            if (!result.succeeded)
-            {
-                Logger::Log(LogLevel::Error, "Command execution failed. Aborting command execution.");
-            }
+            return *failure_result;
+        }
+
+        CommandResult result;
+        result.succeeded = ExecuteImpl(command_request);
+        if (!result.succeeded)
+        {
+            Logger::Log(LogLevel::Error, "Command execution failed. Aborting command execution.");
         }
         ReportPendingIssues();
         result.issues = BuildDiagnostics();
@@ -251,15 +248,22 @@ private:
         }
         return diagnostics;
     }
-    bool HasValidationErrors() const
+    std::optional<CommandResult> BuildValidationFailureResultIfNeeded() const
     {
-        return std::any_of(
+        const bool has_validation_errors{ std::any_of(
             m_issues.begin(),
             m_issues.end(),
             [](const PendingIssue & issue)
             {
                 return issue.level == LogLevel::Error;
-            });
+            }) };
+        if (!has_validation_errors) return std::nullopt;
+
+        ReportPendingIssues();
+        CommandResult result;
+        result.succeeded = false;
+        result.issues = BuildDiagnostics();
+        return result;
     }
     void NormalizeCommonRequestOptions(Request & request)
     {
@@ -299,7 +303,7 @@ private:
         if (is_valid(field)) return;
         AddPendingIssue(metadata.option_name, LogLevel::Error, message);
     }
-    bool RunFilesystemPreflight(const Request & request)
+    void EnsureOutputDirectoryExists(const Request & request)
     {
         const auto & folder_path{ request.output_dir };
         if (!folder_path.empty() && !std::filesystem::exists(folder_path))
@@ -313,7 +317,6 @@ private:
                     + "': " + error_code.message());
             }
         }
-        return !HasValidationErrors();
     }
     void ReportPendingIssues() const
     {

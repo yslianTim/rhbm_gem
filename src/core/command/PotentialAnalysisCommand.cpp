@@ -597,8 +597,7 @@ void RunDatasetPreparationWorkflow(
 
 } // namespace
 
-PotentialAnalysisCommand::PotentialAnalysisCommand() :
-    CommandBase<PotentialAnalysisRequest>{}
+PotentialAnalysisCommand::PotentialAnalysisCommand() : CommandBase<PotentialAnalysisRequest>{}
 {
 }
 
@@ -607,13 +606,8 @@ void PotentialAnalysisCommand::NormalizeAndValidateRequest(PotentialAnalysisRequ
     RequireExistingPath(request, &PotentialAnalysisRequest::model_file_path);
     RequireExistingPath(request, &PotentialAnalysisRequest::map_file_path);
     RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::simulated_map_resolution);
-    if (request.saved_key_tag.empty())
-    {
-        request.saved_key_tag = "model";
-        AddFieldValidationError(&PotentialAnalysisRequest::saved_key_tag,
-            "Saved key tag cannot be empty. Using 'model' instead.");
-    }
-    NormalizePositiveScalar(request, &PotentialAnalysisRequest::sampling_size, 1500);
+    RequireNonEmptyList(request, &PotentialAnalysisRequest::saved_key_tag);
+    RequireFinitePositiveScalar(request, &PotentialAnalysisRequest::sampling_size);
     RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::sampling_range_min);
     RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::sampling_range_max);
     RequireFinitePositiveScalar(request, &PotentialAnalysisRequest::sampling_height);
