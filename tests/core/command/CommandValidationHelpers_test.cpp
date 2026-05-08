@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <limits>
@@ -96,6 +97,9 @@ struct ValidationHelperCommandOptions
 class ValidationHelperCommand final : public CommandBase<ValidationHelperRequest>
 {
 public:
+    int validate_prepared_count{ 0 };
+    int execute_impl_count{ 0 };
+
     void SetRequiredPath(const std::filesystem::path & value)
     {
         m_configured_request.required_path = value;
@@ -191,50 +195,40 @@ public:
     {
         if (m_options.validate_required_path)
         {
-            ValidateRequiredPath(request, &ValidationHelperRequest::required_path);
+            RequireExistingPath(request, &ValidationHelperRequest::required_path);
         }
         if (m_options.validate_optional_path)
         {
-            ValidateOptionalPath(request, &ValidationHelperRequest::optional_path);
+            RequireOptionalExistingPath(request, &ValidationHelperRequest::optional_path);
         }
         if (m_options.validate_count)
         {
-            ValidatePositiveScalar(
+            NormalizePositiveScalar(
                 request,
                 &ValidationHelperRequest::normalized_count,
-                4,
-                LogLevel::Warning);
+                4);
         }
         if (m_options.validate_printer)
         {
-            ValidateEnum(
-                request,
-                &ValidationHelperRequest::printer,
-                PrinterType::GAUS_ESTIMATES);
+            RequireEnum(request, &ValidationHelperRequest::printer);
         }
         if (m_options.validate_finite_positive)
         {
-            ValidateFinitePositiveScalar(
+            RequireFinitePositiveScalar(
                 request,
-                &ValidationHelperRequest::finite_positive_value,
-                2.0,
-                LogLevel::Error);
+                &ValidationHelperRequest::finite_positive_value);
         }
         if (m_options.validate_finite_non_negative)
         {
-            ValidateFiniteNonNegativeScalar(
+            RequireFiniteNonNegativeScalar(
                 request,
-                &ValidationHelperRequest::finite_non_negative_value,
-                0.0,
-                LogLevel::Error);
+                &ValidationHelperRequest::finite_non_negative_value);
         }
         if (m_options.validate_positive_count)
         {
-            ValidatePositiveScalar(
+            RequirePositiveScalar(
                 request,
-                &ValidationHelperRequest::positive_count,
-                1,
-                LogLevel::Error);
+                &ValidationHelperRequest::positive_count);
         }
         if (m_options.validate_required_list)
         {
@@ -242,19 +236,15 @@ public:
         }
         if (m_options.validate_alpha_r)
         {
-            ValidateFinitePositiveScalar(
+            RequireFinitePositiveScalar(
                 request,
-                &ValidationHelperRequest::alpha_r,
-                0.1,
-                LogLevel::Error);
+                &ValidationHelperRequest::alpha_r);
         }
         if (m_options.validate_uncataloged_value)
         {
-            ValidatePositiveScalar(
+            RequirePositiveScalar(
                 request,
-                &ValidationHelperRequest::uncataloged_value,
-                1,
-                LogLevel::Error);
+                &ValidationHelperRequest::uncataloged_value);
         }
         if (m_options.validate_command_local_value && request.command_local_value != 3.5)
         {
@@ -280,9 +270,9 @@ public:
 
     void ValidatePreparedRequest(const ValidationHelperRequest &) override
     {
+        ++validate_prepared_count;
         RequirePrepareCondition(
             !m_options.add_prepare_error,
-            "--problem",
             "semantic validation failed");
     }
 
@@ -291,7 +281,11 @@ private:
     ValidationHelperRequest m_configured_request{};
     ValidationHelperRequest m_last_request{};
 
-    bool ExecuteImpl(const ValidationHelperRequest &) override { return true; }
+    bool ExecuteImpl(const ValidationHelperRequest &) override
+    {
+        ++execute_impl_count;
+        return true;
+    }
 };
 
 std::size_t CountDiagnostics(
@@ -369,7 +363,7 @@ TEST(CommandValidationHelpersTest, NormalizedScalarHelperReportsAutoCorrectedWar
         std::string::npos);
 }
 
-TEST(CommandValidationHelpersTest, ValidatedEnumHelperFallsBackAndReportsParseError)
+TEST(CommandValidationHelpersTest, RequiredEnumHelperRejectsInvalidValueWithoutFallback)
 {
     ValidationHelperCommand command{};
 
@@ -378,7 +372,7 @@ TEST(CommandValidationHelpersTest, ValidatedEnumHelperFallsBackAndReportsParseEr
     const auto result{ command.ExecuteConfiguredRequest() };
 
     EXPECT_FALSE(result.succeeded);
-    EXPECT_EQ(command.Printer(), PrinterType::GAUS_ESTIMATES);
+    EXPECT_EQ(command.Printer(), static_cast<PrinterType>(999));
     ASSERT_EQ(result.issues.size(), 1u);
     EXPECT_EQ(result.issues.front().option_name, "--printer");
 }
@@ -430,8 +424,17 @@ TEST(CommandValidationHelpersTest, FinitePositiveScalarOptionRejectsZeroNegative
         const auto result{ command.ExecuteConfiguredRequest() };
 
         EXPECT_FALSE(result.succeeded);
-        EXPECT_DOUBLE_EQ(command.FinitePositiveValue(), 2.0);
+        if (std::isnan(value))
+        {
+            EXPECT_TRUE(std::isnan(command.FinitePositiveValue()));
+        }
+        else
+        {
+            EXPECT_DOUBLE_EQ(command.FinitePositiveValue(), value);
+        }
         EXPECT_TRUE(HasDiagnosticForOption(result.issues, "--finite-positive"));
+        ASSERT_FALSE(result.issues.empty());
+        EXPECT_EQ(result.issues.front().message.find("Using"), std::string::npos);
     }
 }
 
@@ -451,8 +454,17 @@ TEST(CommandValidationHelpersTest, FiniteNonNegativeScalarOptionRejectsNegativeN
         const auto result{ command.ExecuteConfiguredRequest() };
 
         EXPECT_FALSE(result.succeeded);
-        EXPECT_DOUBLE_EQ(command.FiniteNonNegativeValue(), 0.0);
+        if (std::isnan(value))
+        {
+            EXPECT_TRUE(std::isnan(command.FiniteNonNegativeValue()));
+        }
+        else
+        {
+            EXPECT_DOUBLE_EQ(command.FiniteNonNegativeValue(), value);
+        }
         EXPECT_TRUE(HasDiagnosticForOption(result.issues, "--finite-non-negative"));
+        ASSERT_FALSE(result.issues.empty());
+        EXPECT_EQ(result.issues.front().message.find("Using"), std::string::npos);
     }
 }
 
@@ -465,11 +477,11 @@ TEST(CommandValidationHelpersTest, PositiveScalarOptionRejectsNonPositiveInteger
     const auto result{ command.ExecuteConfiguredRequest() };
 
     EXPECT_FALSE(result.succeeded);
-    EXPECT_EQ(command.PositiveCountValue(), 1);
+    EXPECT_EQ(command.PositiveCountValue(), 0);
     EXPECT_TRUE(HasDiagnosticForOption(result.issues, "--positive-count"));
 }
 
-TEST(CommandValidationHelpersTest, KeepsWarningsAndErrorsForSameOption)
+TEST(CommandValidationHelpersTest, KeepsWarningsAndPrepareErrors)
 {
     ValidationHelperCommand command{};
     command.SetProblematicValue(0);
@@ -479,7 +491,8 @@ TEST(CommandValidationHelpersTest, KeepsWarningsAndErrorsForSameOption)
 
     EXPECT_FALSE(result.succeeded);
     ASSERT_EQ(result.issues.size(), 3u);
-    EXPECT_EQ(CountDiagnostics(result.issues, "--problem"), 3u);
+    EXPECT_EQ(CountDiagnostics(result.issues, "--problem"), 2u);
+    EXPECT_EQ(CountDiagnostics(result.issues, "request"), 1u);
 }
 
 TEST(CommandValidationHelpersTest, NonEmptyListUsesCatalogMetadata)
@@ -505,6 +518,22 @@ TEST(CommandValidationHelpersTest, FieldMetadataUsesCliFlagsAsOptionName)
     EXPECT_FALSE(result.succeeded);
     ASSERT_EQ(result.issues.size(), 1u);
     EXPECT_EQ(result.issues.front().option_name, "--alpha-r");
+    EXPECT_EQ(result.issues.front().message.find("Using"), std::string::npos);
+}
+
+TEST(CommandValidationHelpersTest, FieldLevelErrorSkipsPreparedValidation)
+{
+    ValidationHelperCommand command{};
+    command.SetPositiveCountValue(0);
+    command.SetPrepareError(true);
+
+    const auto result{ command.ExecuteConfiguredRequest() };
+
+    EXPECT_FALSE(result.succeeded);
+    EXPECT_EQ(command.validate_prepared_count, 0);
+    EXPECT_EQ(command.execute_impl_count, 0);
+    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "--positive-count"));
+    EXPECT_FALSE(HasDiagnosticForOption(result.issues, "request"));
 }
 
 TEST(CommandValidationHelpersTest, MissingRequestFieldMetadataReportsLogicError)

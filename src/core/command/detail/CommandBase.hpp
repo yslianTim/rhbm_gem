@@ -53,7 +53,6 @@ public:
         CommandResult result;
 
         Logger::SetLogLevel(command_request.verbosity);
-        ValidatePreparedRequest(command_request);
         if (HasValidationErrors())
         {
             ReportPendingIssues();
@@ -61,7 +60,7 @@ public:
             result.issues = BuildDiagnostics();
             return result;
         }
-
+        ValidatePreparedRequest(command_request);
         result.succeeded = RunFilesystemPreflight(command_request);
         if (result.succeeded)
         {
@@ -110,7 +109,7 @@ protected:
         AddParseNormalizationWarning(metadata.option_name, message);
     }
     template <typename Owner>
-    void ValidateRequiredPath(
+    void RequireExistingPath(
         const Request & request,
         std::filesystem::path Owner::* member)
     {
@@ -131,7 +130,7 @@ protected:
         }
     }
     template <typename Owner>
-    void ValidateOptionalPath(
+    void RequireOptionalExistingPath(
         const Request & request,
         std::filesystem::path Owner::* member)
     {
@@ -159,68 +158,63 @@ protected:
     }
     void RequirePrepareCondition(
         bool condition,
-        std::string_view option_name,
         const std::string & message)
     {
         if (condition) return;
-        AddPendingIssue(option_name, LogLevel::Error, message, false);
+        AddPendingIssue("request", LogLevel::Error, message, false);
     }
     template <typename Owner, typename FieldType>
-    void ValidatePositiveScalar(
+    void NormalizePositiveScalar(
         Request & request,
         FieldType Owner::* member,
-        FieldType fallback_value,
-        LogLevel issue_level)
+        FieldType fallback_value)
     {
         const auto metadata{ ResolveFieldMetadata(member) };
         std::string message{
             metadata.field_name + " must be positive. Using "
             + string_helper::ToStringWithPrecision(fallback_value) + " instead."
         };
-        ValidateScalar(request.*member, metadata,
+        NormalizeScalar(request.*member, metadata,
             [](const auto candidate) { return numeric_validation::IsPositive(candidate); },
-            fallback_value, issue_level, message);
+            fallback_value, message);
     }
     template <typename Owner, typename FieldType>
-    void ValidateFinitePositiveScalar(
+    void NormalizeFinitePositiveScalar(
         Request & request,
         FieldType Owner::* member,
-        FieldType fallback_value,
-        LogLevel issue_level)
+        FieldType fallback_value)
     {
         const auto metadata{ ResolveFieldMetadata(member) };
         std::string message{
             metadata.field_name + " must be a finite positive value. Using "
             + string_helper::ToStringWithPrecision(fallback_value) + " instead."
         };
-        ValidateScalar(request.*member, metadata,
+        NormalizeScalar(request.*member, metadata,
             [](const auto candidate) { return numeric_validation::IsFinitePositive(candidate); },
-            fallback_value, issue_level, message);
+            fallback_value, message);
     }
     template <typename Owner, typename FieldType>
-    void ValidateFiniteNonNegativeScalar(
+    void NormalizeFiniteNonNegativeScalar(
         Request & request,
         FieldType Owner::* member,
-        FieldType fallback_value,
-        LogLevel issue_level)
+        FieldType fallback_value)
     {
         const auto metadata{ ResolveFieldMetadata(member) };
         std::string message{
             metadata.field_name + " must be a finite non-negative value. Using "
             + string_helper::ToStringWithPrecision(fallback_value) + " instead."
         };
-        ValidateScalar(request.*member, metadata,
+        NormalizeScalar(request.*member, metadata,
             [](const auto candidate) { return numeric_validation::IsFiniteNonNegative(candidate); },
-            fallback_value, issue_level, message);
+            fallback_value, message);
     }
     template <typename Owner, typename FieldType, typename LowerType, typename UpperType>
-    void ValidateFiniteExclusiveInclusiveRangeScalar(
+    void NormalizeFiniteExclusiveInclusiveRangeScalar(
         Request & request,
         FieldType Owner::* member,
         LowerType lower,
         UpperType upper,
-        FieldType fallback_value,
-        LogLevel issue_level)
+        FieldType fallback_value)
     {
         const auto metadata{ ResolveFieldMetadata(member) };
         std::string message{
@@ -229,21 +223,66 @@ protected:
                 + string_helper::ToStringWithPrecision(upper) + "]. Using "
                 + string_helper::ToStringWithPrecision(fallback_value) + " instead."
         };
-        ValidateScalar(request.*member, metadata,
+        NormalizeScalar(request.*member, metadata,
             [lower, upper](const auto candidate)
             {
                 return numeric_validation::IsFiniteExclusiveInclusiveRange(candidate, lower, upper);
             },
-            fallback_value, issue_level, message);
+            fallback_value, message);
     }
     template <typename Owner, typename FieldType>
-    void ValidateEnum(
-        Request & request,
-        FieldType Owner::* member,
-        FieldType fallback_value)
+    void RequirePositiveScalar(const Request & request, FieldType Owner::* member)
     {
         const auto metadata{ ResolveFieldMetadata(member) };
-        auto & field{ request.*member };
+        RequireScalar(request.*member, metadata,
+            [](const auto candidate) { return numeric_validation::IsPositive(candidate); },
+            metadata.field_name + " must be positive.");
+    }
+    template <typename Owner, typename FieldType>
+    void RequireFinitePositiveScalar(const Request & request, FieldType Owner::* member)
+    {
+        const auto metadata{ ResolveFieldMetadata(member) };
+        RequireScalar(request.*member, metadata,
+            [](const auto candidate) { return numeric_validation::IsFinitePositive(candidate); },
+            metadata.field_name + " must be a finite positive value.");
+    }
+    template <typename Owner, typename FieldType>
+    void RequireFiniteNonNegativeScalar(
+        const Request & request,
+        FieldType Owner::* member)
+    {
+        const auto metadata{ ResolveFieldMetadata(member) };
+        RequireScalar(request.*member, metadata,
+            [](const auto candidate) { return numeric_validation::IsFiniteNonNegative(candidate); },
+            metadata.field_name + " must be a finite non-negative value.");
+    }
+    template <typename Owner, typename FieldType, typename LowerType, typename UpperType>
+    void RequireFiniteExclusiveInclusiveRangeScalar(
+        const Request & request,
+        FieldType Owner::* member,
+        LowerType lower,
+        UpperType upper)
+    {
+        const auto metadata{ ResolveFieldMetadata(member) };
+        std::string message{
+            metadata.field_name + " must be a finite value within ("
+                + string_helper::ToStringWithPrecision(lower) + ", "
+                + string_helper::ToStringWithPrecision(upper) + "]."
+        };
+        RequireScalar(request.*member, metadata,
+            [lower, upper](const auto candidate)
+            {
+                return numeric_validation::IsFiniteExclusiveInclusiveRange(candidate, lower, upper);
+            },
+            message);
+    }
+    template <typename Owner, typename FieldType>
+    void RequireEnum(
+        const Request & request,
+        FieldType Owner::* member)
+    {
+        const auto metadata{ ResolveFieldMetadata(member) };
+        const auto & field{ request.*member };
         using UnderlyingType = std::underlying_type_t<FieldType>;
         const auto raw_numeric{ static_cast<UnderlyingType>(field) };
         for (const auto & option : command_internal::CommandEnumTraits<FieldType>::kOptions)
@@ -253,7 +292,6 @@ protected:
                 return;
             }
         }
-        field = fallback_value;
         AddPendingIssue(metadata.option_name, LogLevel::Error,
             metadata.field_name + " must be one of the supported values. Received: "
                 + std::to_string(static_cast<long long>(raw_numeric)), false);
@@ -282,37 +320,41 @@ private:
     }
     void NormalizeCommonRequestOptions(Request & request)
     {
-        ValidatePositiveScalar(request, &CommandRequestBase::job_count, 1, LogLevel::Warning);
+        NormalizePositiveScalar(request, &CommandRequestBase::job_count, 1);
         const auto verbosity_metadata{ ResolveFieldMetadata(&CommandRequestBase::verbosity) };
-        ValidateScalar(request.verbosity, verbosity_metadata,
+        NormalizeScalar(request.verbosity, verbosity_metadata,
             [](int candidate)
             {
                 return candidate >= static_cast<int>(LogLevel::Error)
                     && candidate <= static_cast<int>(LogLevel::Debug);
             },
-            static_cast<int>(LogLevel::Info), LogLevel::Warning,
+            static_cast<int>(LogLevel::Info),
             "Invalid verbose level: " + std::to_string(request.verbosity)
                 + ", using default level 3 [Info]");
         request.output_dir =
             std::filesystem::path(path_helper::EnsureTrailingSlash(request.output_dir));
     }
     template <typename FieldType, typename Predicate>
-    void ValidateScalar(
+    void NormalizeScalar(
         FieldType & field,
         const FieldMetadata & metadata,
         Predicate is_valid,
         FieldType fallback_value,
-        LogLevel issue_level,
         const std::string & message)
     {
         if (is_valid(field)) return;
         field = fallback_value;
-        if (issue_level == LogLevel::Warning)
-        {
-            AddPendingIssue(metadata.option_name, LogLevel::Warning, message, true);
-            return;
-        }
-        AddPendingIssue(metadata.option_name, issue_level, message, false);
+        AddPendingIssue(metadata.option_name, LogLevel::Warning, message, true);
+    }
+    template <typename FieldType, typename Predicate>
+    void RequireScalar(
+        const FieldType & field,
+        const FieldMetadata & metadata,
+        Predicate is_valid,
+        const std::string & message)
+    {
+        if (is_valid(field)) return;
+        AddPendingIssue(metadata.option_name, LogLevel::Error, message, false);
     }
     bool RunFilesystemPreflight(const Request & request)
     {

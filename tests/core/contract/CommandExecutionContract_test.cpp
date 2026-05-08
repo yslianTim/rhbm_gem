@@ -34,7 +34,7 @@ public:
     void ValidatePreparedRequest(const CommandRequestBase &) override
     {
         ++validate_count;
-        RequirePrepareCondition(!m_options.fail_prepare, "--contract", "prepare failed");
+        RequirePrepareCondition(!m_options.fail_prepare, "prepare failed");
     }
 
 private:
@@ -72,7 +72,7 @@ TEST(CommandExecutionContractTest, RunValidatesBeforeExecuteImpl)
     EXPECT_FALSE(result.succeeded);
     EXPECT_EQ(command.validate_count, 1);
     EXPECT_EQ(command.execute_impl_count, 0);
-    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "--contract"));
+    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "request"));
 }
 
 TEST(CommandExecutionContractTest, RunExecutesValidationAndExecuteOnce)
@@ -91,7 +91,7 @@ TEST(CommandExecutionContractTest, RepeatedRunRecomputesPrepareIssues)
     command.SetFailPrepare(true);
     const auto failed_result{ command.ExecuteRequest(CommandRequestBase{}) };
     ASSERT_FALSE(failed_result.succeeded);
-    EXPECT_TRUE(HasDiagnosticForOption(failed_result.issues, "--contract"));
+    EXPECT_TRUE(HasDiagnosticForOption(failed_result.issues, "request"));
 
     command.SetFailPrepare(false);
     const auto succeeded_result{ command.ExecuteRequest(CommandRequestBase{}) };
@@ -99,7 +99,7 @@ TEST(CommandExecutionContractTest, RepeatedRunRecomputesPrepareIssues)
 
     EXPECT_EQ(command.validate_count, 2);
     EXPECT_EQ(command.execute_impl_count, 1);
-    EXPECT_FALSE(HasDiagnosticForOption(succeeded_result.issues, "--contract"));
+    EXPECT_FALSE(HasDiagnosticForOption(succeeded_result.issues, "request"));
 }
 
 TEST(CommandExecutionContractTest, RepeatedRunExecutesEachTime)

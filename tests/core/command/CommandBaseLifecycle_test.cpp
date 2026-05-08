@@ -32,7 +32,7 @@ public:
 
     void ValidatePreparedRequest(const CommandRequestBase &) override
     {
-        RequirePrepareCondition(!m_options.force_invalid, "--test", "forced invalid config");
+        RequirePrepareCondition(!m_options.force_invalid, "forced invalid config");
     }
 
 private:
@@ -80,7 +80,7 @@ TEST(CommandBaseLifecycleTest, RunReportsValidationIssues)
     EXPECT_FALSE(result.succeeded);
     EXPECT_EQ(command.execute_impl_count, 0);
     ASSERT_FALSE(result.issues.empty());
-    EXPECT_NE(error_output.find("Option --test: forced invalid config"), std::string::npos);
+    EXPECT_NE(error_output.find("Option request: forced invalid config"), std::string::npos);
 }
 
 TEST(CommandBaseLifecycleTest, ValidationFailureSkipsFilesystemPreflight)

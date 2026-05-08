@@ -47,48 +47,55 @@ bool HasDiagnosticForOption(
 TEST(CommandScenariosTest, MapSimulationRejectsAllInvalidBlurringWidthsAtPrepare)
 {
     MapSimulationRequest request{};
+    request.model_file_path = command_test::TestDataPath("test_model.cif");
     request.blurring_width_list = { -1.0, 0.0 };
 
     const auto result{ RunCommand(request) };
 
     EXPECT_FALSE(result.succeeded);
-    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "--blurring-width"));
+    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "request"));
 }
 
 TEST(CommandScenariosTest, PotentialAnalysisRequiresPositiveResolutionWhenSimulationEnabled)
 {
     PotentialAnalysisRequest request{};
+    request.model_file_path = command_test::TestDataPath("test_model.cif");
+    request.map_file_path = command_test::TestDataPath("test_model.cif");
     request.simulation_flag = true;
     request.simulated_map_resolution = 0.0;
 
     const auto result{ RunCommand(request) };
 
     EXPECT_FALSE(result.succeeded);
-    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "--sim-resolution"));
+    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "request"));
 }
 
 TEST(CommandScenariosTest, PotentialAnalysisRejectsInvertedSamplingRangeAtPrepare)
 {
     PotentialAnalysisRequest request{};
+    request.model_file_path = command_test::TestDataPath("test_model.cif");
+    request.map_file_path = command_test::TestDataPath("test_model.cif");
     request.sampling_range_min = 2.0;
     request.sampling_range_max = 1.0;
 
     const auto result{ RunCommand(request) };
 
     EXPECT_FALSE(result.succeeded);
-    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "--sampling-range"));
+    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "request"));
 }
 
 TEST(CommandScenariosTest, PotentialAnalysisRejectsInvertedTrainingAlphaRangeAtPrepare)
 {
     PotentialAnalysisRequest request{};
+    request.model_file_path = command_test::TestDataPath("test_model.cif");
+    request.map_file_path = command_test::TestDataPath("test_model.cif");
     request.training_alpha_min = 1.0;
     request.training_alpha_max = 0.5;
 
     const auto result{ RunCommand(request) };
 
     EXPECT_FALSE(result.succeeded);
-    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "--training-alpha-range"));
+    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "request"));
 }
 
 TEST(CommandScenariosTest, PotentialAnalysisValidatesInvalidTrainingAlphaStepAtParse)
@@ -122,7 +129,7 @@ TEST(CommandScenariosTest, RHBMTestRejectsInvertedFitRangeAtPrepare)
     const auto result{ RunCommand(request) };
 
     EXPECT_FALSE(result.succeeded);
-    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "--fit-range"));
+    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "request"));
 }
 
 TEST(CommandScenariosTest, PotentialDisplayRejectsMalformedReferenceGroups)
@@ -163,7 +170,7 @@ TEST(CommandScenariosTest, ResultDumpRequiresMapFileForMapPrinterAtPrepare)
     const auto result{ RunCommand(request) };
 
     EXPECT_FALSE(result.succeeded);
-    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "--map"));
+    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "request"));
 }
 
 TEST(CommandScenariosTest, MapSimulationGeneratesMapForEachValidBlurringWidth)

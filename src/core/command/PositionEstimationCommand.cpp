@@ -357,17 +357,13 @@ PositionEstimationCommand::PositionEstimationCommand() : CommandBase<PositionEst
 
 void PositionEstimationCommand::NormalizeAndValidateRequest(PositionEstimationRequest & request)
 {
-    ValidateRequiredPath(request, &PositionEstimationRequest::map_file_path);
-    ValidatePositiveScalar(request, &PositionEstimationRequest::iteration_count,
-        15, LogLevel::Warning);
-    ValidatePositiveScalar(request, &PositionEstimationRequest::knn_size,
-        static_cast<std::size_t>(20), LogLevel::Warning);
-    ValidateFinitePositiveScalar(request, &PositionEstimationRequest::alpha,
-        2.0, LogLevel::Warning);
-    ValidateFiniteExclusiveInclusiveRangeScalar(request, &PositionEstimationRequest::threshold_ratio,
-        0.0, 1.0, 0.01, LogLevel::Warning);
-    ValidateFinitePositiveScalar(request, &PositionEstimationRequest::dedup_tolerance,
-        1.0e-2, LogLevel::Warning);
+    using Request = PositionEstimationRequest;
+    RequireExistingPath(request, &Request::map_file_path);
+    NormalizePositiveScalar(request, &Request::iteration_count, 15);
+    NormalizePositiveScalar(request, &Request::knn_size, static_cast<std::size_t>(20));
+    NormalizeFinitePositiveScalar(request, &Request::alpha, 2.0);
+    NormalizeFiniteExclusiveInclusiveRangeScalar(request, &Request::threshold_ratio, 0.0, 1.0, 0.01);
+    NormalizeFinitePositiveScalar(request, &Request::dedup_tolerance, 1.0e-2);
 }
 
 bool PositionEstimationCommand::ExecuteImpl(const PositionEstimationRequest & request)

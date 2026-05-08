@@ -360,8 +360,8 @@ ResultDumpCommand::ResultDumpCommand() : CommandBase<ResultDumpRequest>{}
 
 void ResultDumpCommand::NormalizeAndValidateRequest(ResultDumpRequest & request)
 {
-    ValidateEnum(request, &ResultDumpRequest::printer_choice, PrinterType::GAUS_ESTIMATES);
-    ValidateOptionalPath(request, &ResultDumpRequest::map_file_path);
+    RequireEnum(request, &ResultDumpRequest::printer_choice);
+    RequireOptionalExistingPath(request, &ResultDumpRequest::map_file_path);
     RequireNonEmptyList(request, &ResultDumpRequest::model_key_tag_list);
 }
 
@@ -369,7 +369,6 @@ void ResultDumpCommand::ValidatePreparedRequest(const ResultDumpRequest & reques
 {
     RequirePrepareCondition(
         request.printer_choice != PrinterType::MAP_VALUE || !request.map_file_path.empty(),
-        "--map",
         "A map file is required when '--printer map' is selected.");
 }
 

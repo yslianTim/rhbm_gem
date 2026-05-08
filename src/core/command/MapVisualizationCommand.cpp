@@ -275,14 +275,11 @@ MapVisualizationCommand::MapVisualizationCommand() : CommandBase<MapVisualizatio
 
 void MapVisualizationCommand::NormalizeAndValidateRequest(MapVisualizationRequest & request)
 {
-    ValidateRequiredPath(request, &MapVisualizationRequest::model_file_path);
-    ValidateRequiredPath(request, &MapVisualizationRequest::map_file_path);
-    ValidatePositiveScalar(request, &MapVisualizationRequest::atom_serial_id,
-        1, LogLevel::Error);
-    ValidatePositiveScalar(request, &MapVisualizationRequest::sampling_size,
-        100, LogLevel::Warning);
-    ValidateFinitePositiveScalar(request, &MapVisualizationRequest::window_size,
-        5.0, LogLevel::Error);
+    RequireExistingPath(request, &MapVisualizationRequest::model_file_path);
+    RequireExistingPath(request, &MapVisualizationRequest::map_file_path);
+    RequirePositiveScalar(request, &MapVisualizationRequest::atom_serial_id);
+    NormalizePositiveScalar(request, &MapVisualizationRequest::sampling_size, 100);
+    RequireFinitePositiveScalar(request, &MapVisualizationRequest::window_size);
 }
 
 bool MapVisualizationCommand::ExecuteImpl(const MapVisualizationRequest & request)

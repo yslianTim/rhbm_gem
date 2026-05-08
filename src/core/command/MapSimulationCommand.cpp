@@ -223,15 +223,11 @@ MapSimulationCommand::MapSimulationCommand() : CommandBase<MapSimulationRequest>
 
 void MapSimulationCommand::NormalizeAndValidateRequest(MapSimulationRequest & request)
 {
-    ValidateRequiredPath(request, &MapSimulationRequest::model_file_path);
-    ValidateEnum(request, &MapSimulationRequest::potential_model_choice,
-        PotentialModel::FIVE_GAUS_CHARGE);
-    ValidateEnum(request, &MapSimulationRequest::partial_charge_choice,
-        PartialCharge::PARTIAL);
-    ValidateFinitePositiveScalar(request, &MapSimulationRequest::cutoff_distance,
-        5.0, LogLevel::Warning);
-    ValidateFinitePositiveScalar(request, &MapSimulationRequest::grid_spacing,
-        0.5, LogLevel::Warning);
+    RequireExistingPath(request, &MapSimulationRequest::model_file_path);
+    RequireEnum(request, &MapSimulationRequest::potential_model_choice);
+    RequireEnum(request, &MapSimulationRequest::partial_charge_choice);
+    NormalizeFinitePositiveScalar(request, &MapSimulationRequest::cutoff_distance, 5.0);
+    NormalizeFinitePositiveScalar(request, &MapSimulationRequest::grid_spacing, 0.5);
 
     std::vector<double> filtered_widths;
     filtered_widths.reserve(request.blurring_width_list.size());
@@ -291,7 +287,6 @@ void MapSimulationCommand::ValidatePreparedRequest(const MapSimulationRequest & 
 {
     RequirePrepareCondition(
         !request.blurring_width_list.empty(),
-        "--blurring-width",
         "At least one positive blurring width is required.");
 }
 

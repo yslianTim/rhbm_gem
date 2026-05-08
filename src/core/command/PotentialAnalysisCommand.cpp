@@ -604,10 +604,9 @@ PotentialAnalysisCommand::PotentialAnalysisCommand() :
 
 void PotentialAnalysisCommand::NormalizeAndValidateRequest(PotentialAnalysisRequest & request)
 {
-    ValidateRequiredPath(request, &PotentialAnalysisRequest::model_file_path);
-    ValidateRequiredPath(request, &PotentialAnalysisRequest::map_file_path);
-    ValidateFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::simulated_map_resolution,
-        0.0, LogLevel::Error);
+    RequireExistingPath(request, &PotentialAnalysisRequest::model_file_path);
+    RequireExistingPath(request, &PotentialAnalysisRequest::map_file_path);
+    RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::simulated_map_resolution);
     if (request.saved_key_tag.empty())
     {
         request.saved_key_tag = "model";
@@ -616,28 +615,17 @@ void PotentialAnalysisCommand::NormalizeAndValidateRequest(PotentialAnalysisRequ
             &PotentialAnalysisRequest::saved_key_tag,
             "Saved key tag cannot be empty. Using 'model' instead.");
     }
-    ValidatePositiveScalar(request, &PotentialAnalysisRequest::sampling_size,
-        1500, LogLevel::Warning);
-    ValidateFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::sampling_range_min,
-        0.0, LogLevel::Error);
-    ValidateFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::sampling_range_max,
-        1.5, LogLevel::Error);
-    ValidateFinitePositiveScalar(request, &PotentialAnalysisRequest::sampling_height,
-        0.1, LogLevel::Error);
-    ValidateFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::fit_range_min,
-        0.0, LogLevel::Error);
-    ValidateFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::fit_range_max,
-        1.0, LogLevel::Error);
-    ValidateFinitePositiveScalar(request, &PotentialAnalysisRequest::alpha_r,
-        0.1, LogLevel::Error);
-    ValidateFinitePositiveScalar(request, &PotentialAnalysisRequest::alpha_g,
-        0.2, LogLevel::Error);
-    ValidateFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::training_alpha_min,
-        0.0, LogLevel::Error);
-    ValidateFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::training_alpha_max,
-        1.0, LogLevel::Error);
-    ValidateFinitePositiveScalar(request, &PotentialAnalysisRequest::training_alpha_step,
-        0.1, LogLevel::Error);
+    NormalizePositiveScalar(request, &PotentialAnalysisRequest::sampling_size, 1500);
+    RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::sampling_range_min);
+    RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::sampling_range_max);
+    RequireFinitePositiveScalar(request, &PotentialAnalysisRequest::sampling_height);
+    RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::fit_range_min);
+    RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::fit_range_max);
+    RequireFinitePositiveScalar(request, &PotentialAnalysisRequest::alpha_r);
+    RequireFinitePositiveScalar(request, &PotentialAnalysisRequest::alpha_g);
+    RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::training_alpha_min);
+    RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::training_alpha_max);
+    RequireFinitePositiveScalar(request, &PotentialAnalysisRequest::training_alpha_step);
 }
 
 bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & request)
@@ -666,19 +654,15 @@ void PotentialAnalysisCommand::ValidatePreparedRequest(const PotentialAnalysisRe
 {
     RequirePrepareCondition(
         !request.simulation_flag || request.simulated_map_resolution > 0.0,
-        "--sim-resolution",
         "Expected a positive simulated-map resolution when '--simulation true' is selected.");
     RequirePrepareCondition(
         request.sampling_range_min <= request.sampling_range_max,
-        "--sampling-range",
         "Expected --sampling-min <= --sampling-max.");
     RequirePrepareCondition(
         request.fit_range_min <= request.fit_range_max,
-        "--fit-range",
         "Expected --fit-min <= --fit-max.");
     RequirePrepareCondition(
         request.training_alpha_min <= request.training_alpha_max,
-        "--training-alpha-range",
         "Expected --training-alpha-min <= --training-alpha-max.");
 }
 
