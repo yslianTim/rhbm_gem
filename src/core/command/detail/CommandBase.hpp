@@ -61,6 +61,13 @@ public:
             return result;
         }
         ValidatePreparedRequest(command_request);
+        if (HasValidationErrors())
+        {
+            ReportPendingIssues();
+            result.succeeded = false;
+            result.issues = BuildDiagnostics();
+            return result;
+        }
         result.succeeded = RunFilesystemPreflight(command_request);
         if (result.succeeded)
         {
@@ -80,10 +87,6 @@ protected:
     virtual void NormalizeAndValidateRequest(Request &) {}
     virtual void ValidatePreparedRequest(const Request &) {}
     virtual bool ExecuteImpl(const Request &) = 0;
-    void AddParseError(std::string_view option_name, const std::string & message)
-    {
-        AddPendingIssue(option_name, LogLevel::Error, message, false);
-    }
     template <typename Owner, typename FieldType>
     void AddParseError(
         const Request & request,
@@ -92,11 +95,7 @@ protected:
     {
         static_cast<void>(request);
         const auto metadata{ ResolveFieldMetadata(member) };
-        AddParseError(metadata.option_name, message);
-    }
-    void AddParseNormalizationWarning(std::string_view option_name, const std::string & message)
-    {
-        AddPendingIssue(option_name, LogLevel::Warning, message, true);
+        AddPendingIssue(metadata.option_name, LogLevel::Error, message, false);
     }
     template <typename Owner, typename FieldType>
     void AddParseNormalizationWarning(
@@ -106,12 +105,10 @@ protected:
     {
         static_cast<void>(request);
         const auto metadata{ ResolveFieldMetadata(member) };
-        AddParseNormalizationWarning(metadata.option_name, message);
+        AddPendingIssue(metadata.option_name, LogLevel::Warning, message, true);
     }
     template <typename Owner>
-    void RequireExistingPath(
-        const Request & request,
-        std::filesystem::path Owner::* member)
+    void RequireExistingPath(const Request & request, std::filesystem::path Owner::* member)
     {
         const auto metadata{ ResolveFieldMetadata(member) };
         const auto & path{ request.*member };
@@ -130,9 +127,7 @@ protected:
         }
     }
     template <typename Owner>
-    void RequireOptionalExistingPath(
-        const Request & request,
-        std::filesystem::path Owner::* member)
+    void RequireOptionalExistingPath(const Request & request, std::filesystem::path Owner::* member)
     {
         const auto metadata{ ResolveFieldMetadata(member) };
         const auto & path{ request.*member };
@@ -146,9 +141,7 @@ protected:
         }
     }
     template <typename Owner, typename Container>
-    void RequireNonEmptyList(
-        const Request & request,
-        Container Owner::* member)
+    void RequireNonEmptyList(const Request & request, Container Owner::* member)
     {
         const auto metadata{ ResolveFieldMetadata(member) };
         const auto & field{ request.*member };
@@ -156,9 +149,7 @@ protected:
         AddPendingIssue(metadata.option_name, LogLevel::Error,
             metadata.field_name + " cannot be empty.", false);
     }
-    void RequirePrepareCondition(
-        bool condition,
-        const std::string & message)
+    void RequirePrepareCondition(bool condition, const std::string & message)
     {
         if (condition) return;
         AddPendingIssue("request", LogLevel::Error, message, false);
@@ -247,9 +238,7 @@ protected:
             metadata.field_name + " must be a finite positive value.");
     }
     template <typename Owner, typename FieldType>
-    void RequireFiniteNonNegativeScalar(
-        const Request & request,
-        FieldType Owner::* member)
+    void RequireFiniteNonNegativeScalar(const Request & request, FieldType Owner::* member)
     {
         const auto metadata{ ResolveFieldMetadata(member) };
         RequireScalar(request.*member, metadata,
@@ -277,9 +266,7 @@ protected:
             message);
     }
     template <typename Owner, typename FieldType>
-    void RequireEnum(
-        const Request & request,
-        FieldType Owner::* member)
+    void RequireEnum(const Request & request, FieldType Owner::* member)
     {
         const auto metadata{ ResolveFieldMetadata(member) };
         const auto & field{ request.*member };
