@@ -291,7 +291,7 @@ void RunAtomAlphaTraining(
     Logger::Log(LogLevel::Info, alpha_trainer.GetAlphaGridSummary().str());
 
     // Alpha_R Training
-    const auto simple_class_key{ ChemicalDataHelper::GetSimpleAtomClassKey() };
+    const auto simple_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     const auto simple_group_keys{ analysis_view.CollectAtomGroupKeys(simple_class_key) };
     size_t count{ 0 };
     for (const auto group_key : simple_group_keys)
