@@ -78,8 +78,6 @@ struct PotentialAnalysisRequest : public CommandRequestBase
     std::filesystem::path map_file_path{};
     bool simulation_flag{ false };
     bool map_normalization_flag{ true };
-    // CLI presence metadata; intentionally not registered in RequestFieldCatalog.
-    bool map_normalization_flag_set_by_cli{ false };
     double simulated_map_resolution{ 0.0 };
     std::string saved_key_tag{ "model" };
     std::filesystem::path training_report_dir{};

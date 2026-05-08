@@ -82,16 +82,6 @@ struct HasCommandEnumTraits<
 };
 
 template <typename Request>
-void ApplyCliPresenceMetadata(Request &, const CLI::App &)
-{
-}
-
-void ApplyCliPresenceMetadata(PotentialAnalysisRequest & request, const CLI::App & command)
-{
-    request.map_normalization_flag_set_by_cli = command.count("--map-normalization") > 0;
-}
-
-template <typename Request>
 void BindPathCliField(
     CLI::App & command,
     Request * request,
@@ -337,10 +327,8 @@ int RunCommandCLI(int argc, char * argv[])
             BindCliField(command, request.get(), field);
         });
 
-        auto * command_ptr{ &command };
-        command.callback([request, command_ptr]()
+        command.callback([request]()
         {
-            ApplyCliPresenceMetadata(*request, *command_ptr);
             ScopeTimer timer("Command CLI callback");
             const auto result{ rhbm_gem::RunCommand(*request) };
             if (!result.succeeded) throw CLI::RuntimeError(1);

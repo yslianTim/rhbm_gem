@@ -583,11 +583,6 @@ PotentialAnalysisCommand::PotentialAnalysisCommand() : CommandBase<PotentialAnal
 
 void PotentialAnalysisCommand::NormalizeAndValidateRequest(PotentialAnalysisRequest & request)
 {
-    if (request.simulation_flag && !request.map_normalization_flag_set_by_cli)
-    {
-        request.map_normalization_flag = false;
-    }
-
     RequireExistingPath(request, &PotentialAnalysisRequest::model_file_path);
     RequireExistingPath(request, &PotentialAnalysisRequest::map_file_path);
     RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::simulated_map_resolution);
@@ -613,7 +608,7 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
 
     auto & model_object{ *inputs->model_object };
     auto & map_object{ *inputs->map_object };
-    if (request.map_normalization_flag)
+    if (!request.simulation_flag && request.map_normalization_flag)
     {
         map_object.MapValueArrayNormalization();
     }

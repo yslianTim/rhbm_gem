@@ -69,7 +69,8 @@ Expected result contract:
 `PotentialAnalysisCommand::NormalizeAndValidateRequest()` handles request normalization and field validation:
 
 - validates required model and map paths
-- disables map normalization by default for simulation requests unless CLI explicitly sets it
+- leaves map normalization as an execution-time choice: simulation requests always skip it,
+  and non-simulation requests use `map_normalization_flag`
 - coerces invalid scalar inputs back to command defaults when the command is designed to recover
 - coerces invalid training alpha grid scalar values back to `0.0..1.0` with step `0.1`
 - resets empty `saved_key_tag` values back to `"model"` and records a validation issue

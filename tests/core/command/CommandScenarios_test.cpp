@@ -133,7 +133,6 @@ TEST(CommandScenariosTest, PotentialAnalysisDefaultsMapNormalizationOn)
     PotentialAnalysisRequest request{};
 
     EXPECT_TRUE(request.map_normalization_flag);
-    EXPECT_FALSE(request.map_normalization_flag_set_by_cli);
 }
 
 TEST(CommandScenariosTest, PotentialAnalysisRejectsInvertedSamplingRangeAtPrepare)
@@ -210,7 +209,7 @@ TEST(CommandScenariosTest, PotentialAnalysisSkipsMapNormalizationForSimulationDe
     EXPECT_EQ(error_output.find(kMapNormalizationWarning), std::string::npos);
 }
 
-TEST(CommandScenariosTest, PotentialAnalysisCliMapNormalizationTrueOverridesSimulationDefault)
+TEST(CommandScenariosTest, PotentialAnalysisCliMapNormalizationTrueStillSkipsSimulationNormalization)
 {
     command_test::ScopedTempDir temp_dir{ "potential_analysis_normalization_cli_true" };
     const auto map_path{ WriteConstantMapFixture(temp_dir.path() / "maps") };
@@ -236,7 +235,7 @@ TEST(CommandScenariosTest, PotentialAnalysisCliMapNormalizationTrueOverridesSimu
         })
     };
 
-    EXPECT_NE(error_output.find(kMapNormalizationWarning), std::string::npos);
+    EXPECT_EQ(error_output.find(kMapNormalizationWarning), std::string::npos);
 }
 
 TEST(CommandScenariosTest, PotentialAnalysisCliMapNormalizationFalseSkipsNormalization)
