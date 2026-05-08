@@ -604,37 +604,40 @@ PotentialAnalysisCommand::PotentialAnalysisCommand() :
 
 void PotentialAnalysisCommand::NormalizeAndValidateRequest(PotentialAnalysisRequest & request)
 {
-    ValidateRequiredPath(request.model_file_path, "--model", "Model file");
-    ValidateRequiredPath(request.map_file_path, "--map", "Map file");
-    ValidateFiniteNonNegativeScalar(request.simulated_map_resolution, "--sim-resolution",
-        0.0, LogLevel::Error, "Simulated map resolution");
+    ValidateRequiredPath(request, &PotentialAnalysisRequest::model_file_path);
+    ValidateRequiredPath(request, &PotentialAnalysisRequest::map_file_path);
+    ValidateFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::simulated_map_resolution,
+        0.0, LogLevel::Error);
     if (request.saved_key_tag.empty())
     {
         request.saved_key_tag = "model";
-        AddParseError("--save-key", "Saved key tag cannot be empty. Using 'model' instead.");
+        AddParseError(
+            request,
+            &PotentialAnalysisRequest::saved_key_tag,
+            "Saved key tag cannot be empty. Using 'model' instead.");
     }
-    ValidatePositiveScalar(request.sampling_size, "--sampling",
-        1500, LogLevel::Warning, "Sampling size");
-    ValidateFiniteNonNegativeScalar(request.sampling_range_min, "--sampling-min",
-        0.0, LogLevel::Error, "Minimum sampling range");
-    ValidateFiniteNonNegativeScalar(request.sampling_range_max, "--sampling-max",
-        1.5, LogLevel::Error, "Maximum sampling range");
-    ValidateFinitePositiveScalar(request.sampling_height, "--sampling-height",
-        0.1, LogLevel::Error, "Sampling height");
-    ValidateFiniteNonNegativeScalar(request.fit_range_min, "--fit-min",
-        0.0, LogLevel::Error, "Minimum fitting range");
-    ValidateFiniteNonNegativeScalar(request.fit_range_max, "--fit-max",
-        1.0, LogLevel::Error, "Maximum fitting range");
-    ValidateFinitePositiveScalar(request.alpha_r, "--alpha-r",
-        0.1, LogLevel::Error, "Alpha-R");
-    ValidateFinitePositiveScalar(request.alpha_g, "--alpha-g",
-        0.2, LogLevel::Error, "Alpha-G");
-    ValidateFiniteNonNegativeScalar(request.training_alpha_min, "--training-alpha-min",
-        0.0, LogLevel::Error, "Minimum training alpha");
-    ValidateFiniteNonNegativeScalar(request.training_alpha_max, "--training-alpha-max",
-        1.0, LogLevel::Error, "Maximum training alpha");
-    ValidateFinitePositiveScalar(request.training_alpha_step, "--training-alpha-step",
-        0.1, LogLevel::Error, "Training alpha step");
+    ValidatePositiveScalar(request, &PotentialAnalysisRequest::sampling_size,
+        1500, LogLevel::Warning);
+    ValidateFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::sampling_range_min,
+        0.0, LogLevel::Error);
+    ValidateFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::sampling_range_max,
+        1.5, LogLevel::Error);
+    ValidateFinitePositiveScalar(request, &PotentialAnalysisRequest::sampling_height,
+        0.1, LogLevel::Error);
+    ValidateFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::fit_range_min,
+        0.0, LogLevel::Error);
+    ValidateFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::fit_range_max,
+        1.0, LogLevel::Error);
+    ValidateFinitePositiveScalar(request, &PotentialAnalysisRequest::alpha_r,
+        0.1, LogLevel::Error);
+    ValidateFinitePositiveScalar(request, &PotentialAnalysisRequest::alpha_g,
+        0.2, LogLevel::Error);
+    ValidateFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::training_alpha_min,
+        0.0, LogLevel::Error);
+    ValidateFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::training_alpha_max,
+        1.0, LogLevel::Error);
+    ValidateFinitePositiveScalar(request, &PotentialAnalysisRequest::training_alpha_step,
+        0.1, LogLevel::Error);
 }
 
 bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & request)

@@ -223,15 +223,15 @@ MapSimulationCommand::MapSimulationCommand() : CommandBase<MapSimulationRequest>
 
 void MapSimulationCommand::NormalizeAndValidateRequest(MapSimulationRequest & request)
 {
-    ValidateRequiredPath(request.model_file_path, "--model", "Model file");
-    ValidateEnum(request.potential_model_choice, "--potential-model",
-        PotentialModel::FIVE_GAUS_CHARGE, "Potential model");
-    ValidateEnum(request.partial_charge_choice, "--charge",
-        PartialCharge::PARTIAL, "Partial charge choice");
-    ValidateFinitePositiveScalar(request.cutoff_distance, "--cut-off",
-        5.0, LogLevel::Warning, "Cutoff distance");
-    ValidateFinitePositiveScalar(request.grid_spacing, "--grid-spacing",
-        0.5, LogLevel::Warning, "Grid spacing");
+    ValidateRequiredPath(request, &MapSimulationRequest::model_file_path);
+    ValidateEnum(request, &MapSimulationRequest::potential_model_choice,
+        PotentialModel::FIVE_GAUS_CHARGE);
+    ValidateEnum(request, &MapSimulationRequest::partial_charge_choice,
+        PartialCharge::PARTIAL);
+    ValidateFinitePositiveScalar(request, &MapSimulationRequest::cutoff_distance,
+        5.0, LogLevel::Warning);
+    ValidateFinitePositiveScalar(request, &MapSimulationRequest::grid_spacing,
+        0.5, LogLevel::Warning);
 
     std::vector<double> filtered_widths;
     filtered_widths.reserve(request.blurring_width_list.size());
@@ -239,7 +239,7 @@ void MapSimulationCommand::NormalizeAndValidateRequest(MapSimulationRequest & re
     {
         if (!numeric_validation::IsFinitePositive(width))
         {
-            AddParseNormalizationWarning("--blurring-width",
+            AddParseNormalizationWarning(request, &MapSimulationRequest::blurring_width_list,
                 "Blurring width must be a finite positive value, dropping current setting: "
                     + std::to_string(width));
             continue;

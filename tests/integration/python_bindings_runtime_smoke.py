@@ -112,14 +112,14 @@ def assert_command_result_runtime_behavior() -> None:
     report = m.RunCommand(m.MapSimulationRequest())
     assert isinstance(report, m.CommandResult)
     assert not report.succeeded
-    assert has_issue(report, "--model")
+    assert has_issue(report, "-a,--model")
 
     analysis = m.PotentialAnalysisRequest()
     analysis.saved_key_tag = ""
     report = m.RunCommand(analysis)
     assert isinstance(report, m.CommandResult)
     assert not report.succeeded
-    assert has_issue(report, "--save-key")
+    assert has_issue(report, "-k,--save-key")
 
 
 def main() -> int:

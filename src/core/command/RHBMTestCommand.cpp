@@ -539,35 +539,15 @@ RHBMTestCommand::RHBMTestCommand() :
 
 void RHBMTestCommand::NormalizeAndValidateRequest(RHBMTestRequest & request)
 {
-    ValidateEnum(
-        request.tester_choice,
-        "--tester",
-        TesterType::BENCHMARK,
-        "Tester choice");
-    ValidateFiniteNonNegativeScalar(
-        request.fit_range_min,
-        "--fit-min",
-        0.0,
-        LogLevel::Error,
-        "Minimum fitting range");
-    ValidateFiniteNonNegativeScalar(
-        request.fit_range_max,
-        "--fit-max",
-        1.0,
-        LogLevel::Error,
-        "Maximum fitting range");
-    ValidateFinitePositiveScalar(
-        request.alpha_r,
-        "--alpha-r",
-        0.1,
-        LogLevel::Error,
-        "Alpha-R");
-    ValidateFinitePositiveScalar(
-        request.alpha_g,
-        "--alpha-g",
-        0.2,
-        LogLevel::Error,
-        "Alpha-G");
+    ValidateEnum(request, &RHBMTestRequest::tester_choice, TesterType::BENCHMARK);
+    ValidateFiniteNonNegativeScalar(request, &RHBMTestRequest::fit_range_min,
+        0.0, LogLevel::Error);
+    ValidateFiniteNonNegativeScalar(request, &RHBMTestRequest::fit_range_max,
+        1.0, LogLevel::Error);
+    ValidateFinitePositiveScalar(request, &RHBMTestRequest::alpha_r,
+        0.1, LogLevel::Error);
+    ValidateFinitePositiveScalar(request, &RHBMTestRequest::alpha_g,
+        0.2, LogLevel::Error);
 }
 
 void RHBMTestCommand::ValidatePreparedRequest(const RHBMTestRequest & request)

@@ -360,9 +360,9 @@ ResultDumpCommand::ResultDumpCommand() : CommandBase<ResultDumpRequest>{}
 
 void ResultDumpCommand::NormalizeAndValidateRequest(ResultDumpRequest & request)
 {
-    ValidateEnum(request.printer_choice, "--printer", PrinterType::GAUS_ESTIMATES, "Printer choice");
-    ValidateOptionalPath(request.map_file_path, "--map", "Map file");
-    RequireNonEmptyList(request.model_key_tag_list, "--model-keylist", "Model key list");
+    ValidateEnum(request, &ResultDumpRequest::printer_choice, PrinterType::GAUS_ESTIMATES);
+    ValidateOptionalPath(request, &ResultDumpRequest::map_file_path);
+    RequireNonEmptyList(request, &ResultDumpRequest::model_key_tag_list);
 }
 
 void ResultDumpCommand::ValidatePreparedRequest(const ResultDumpRequest & request)

@@ -120,7 +120,7 @@ TEST(CommandExecutionContractTest, PublicRunEntryPointReportsPreparationFailureA
     const auto result{ RunCommand(MapSimulationRequest{}) };
 
     EXPECT_FALSE(result.succeeded);
-    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "--model"));
+    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "-a,--model"));
 }
 
 TEST(CommandExecutionContractTest, PublicRunEntryPointReportsUnsupportedRequestType)

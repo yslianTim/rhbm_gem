@@ -357,15 +357,17 @@ PositionEstimationCommand::PositionEstimationCommand() : CommandBase<PositionEst
 
 void PositionEstimationCommand::NormalizeAndValidateRequest(PositionEstimationRequest & request)
 {
-    ValidateRequiredPath(request.map_file_path, "--map", "Map file");
-    ValidatePositiveScalar(request.iteration_count, "--iter", 15, LogLevel::Warning, "Iteration count");
-    ValidatePositiveScalar(request.knn_size, "--knn", static_cast<std::size_t>(20), LogLevel::Warning,
-        "KNN size");
-    ValidateFinitePositiveScalar(request.alpha, "--alpha", 2.0, LogLevel::Warning, "Alpha");
-    ValidateFiniteExclusiveInclusiveRangeScalar(request.threshold_ratio, "--threshold",
-        0.0, 1.0, 0.01, LogLevel::Warning, "Threshold ratio");
-    ValidateFinitePositiveScalar(request.dedup_tolerance, "--dedup-tolerance",
-        1.0e-2, LogLevel::Warning, "Dedup tolerance");
+    ValidateRequiredPath(request, &PositionEstimationRequest::map_file_path);
+    ValidatePositiveScalar(request, &PositionEstimationRequest::iteration_count,
+        15, LogLevel::Warning);
+    ValidatePositiveScalar(request, &PositionEstimationRequest::knn_size,
+        static_cast<std::size_t>(20), LogLevel::Warning);
+    ValidateFinitePositiveScalar(request, &PositionEstimationRequest::alpha,
+        2.0, LogLevel::Warning);
+    ValidateFiniteExclusiveInclusiveRangeScalar(request, &PositionEstimationRequest::threshold_ratio,
+        0.0, 1.0, 0.01, LogLevel::Warning);
+    ValidateFinitePositiveScalar(request, &PositionEstimationRequest::dedup_tolerance,
+        1.0e-2, LogLevel::Warning);
 }
 
 bool PositionEstimationCommand::ExecuteImpl(const PositionEstimationRequest & request)

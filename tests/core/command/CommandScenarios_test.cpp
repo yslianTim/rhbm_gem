@@ -110,7 +110,7 @@ TEST(CommandScenariosTest, PotentialAnalysisRejectsEmptySavedKeyAtParse)
     const auto result{ RunCommand(request) };
 
     EXPECT_FALSE(result.succeeded);
-    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "--save-key"));
+    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "-k,--save-key"));
 }
 
 TEST(CommandScenariosTest, RHBMTestRejectsInvertedFitRangeAtPrepare)

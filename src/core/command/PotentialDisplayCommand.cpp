@@ -136,18 +136,24 @@ PotentialDisplayCommand::PotentialDisplayCommand() : CommandBase<PotentialDispla
 
 void PotentialDisplayCommand::NormalizeAndValidateRequest(PotentialDisplayRequest & request)
 {
-    ValidateEnum(request.painter_choice, "--painter", PainterType::MODEL, "Painter choice");
-    RequireNonEmptyList(request.model_key_tag_list, "--model-keylist", "Model key list");
+    ValidateEnum(request, &PotentialDisplayRequest::painter_choice, PainterType::MODEL);
+    RequireNonEmptyList(request, &PotentialDisplayRequest::model_key_tag_list);
     for (const auto & [group_name, members] : request.reference_model_groups)
     {
         if (group_name.empty())
         {
-            AddParseError("--ref-group", "Reference group name cannot be empty.");
+            AddParseError(
+                request,
+                &PotentialDisplayRequest::reference_model_groups,
+                "Reference group name cannot be empty.");
             continue;
         }
         if (members.empty())
         {
-            AddParseError("--ref-group", "Reference group '" + group_name + "' cannot be empty.");
+            AddParseError(
+                request,
+                &PotentialDisplayRequest::reference_model_groups,
+                "Reference group '" + group_name + "' cannot be empty.");
         }
     }
 }
