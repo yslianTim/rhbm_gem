@@ -87,22 +87,14 @@ protected:
     virtual void ValidatePreparedRequest(const Request &) {}
     virtual bool ExecuteImpl(const Request &) = 0;
     template <typename Owner, typename FieldType>
-    void AddParseError(
-        const Request & request,
-        FieldType Owner::* member,
-        const std::string & message)
+    void AddFieldValidationError(FieldType Owner::* member, const std::string & message)
     {
-        static_cast<void>(request);
         const auto metadata{ ResolveFieldMetadata(member) };
         AddPendingIssue(metadata.option_name, LogLevel::Error, message);
     }
     template <typename Owner, typename FieldType>
-    void AddParseNormalizationWarning(
-        const Request & request,
-        FieldType Owner::* member,
-        const std::string & message)
+    void AddFieldNormalizationWarning(FieldType Owner::* member, const std::string & message)
     {
-        static_cast<void>(request);
         const auto metadata{ ResolveFieldMetadata(member) };
         AddPendingIssue(metadata.option_name, LogLevel::Warning, message);
     }
@@ -183,21 +175,6 @@ protected:
             [](const auto candidate) { return numeric_validation::IsFinitePositive(candidate); },
             fallback_value, message);
     }
-    template <typename Owner, typename FieldType>
-    void NormalizeFiniteNonNegativeScalar(
-        Request & request,
-        FieldType Owner::* member,
-        FieldType fallback_value)
-    {
-        const auto metadata{ ResolveFieldMetadata(member) };
-        std::string message{
-            metadata.field_name + " must be a finite non-negative value. Using "
-            + string_helper::ToStringWithPrecision(fallback_value) + " instead."
-        };
-        NormalizeScalar(request.*member, metadata,
-            [](const auto candidate) { return numeric_validation::IsFiniteNonNegative(candidate); },
-            fallback_value, message);
-    }
     template <typename Owner, typename FieldType, typename LowerType, typename UpperType>
     void NormalizeFiniteExclusiveInclusiveRangeScalar(
         Request & request,
@@ -243,26 +220,6 @@ protected:
         RequireScalar(request.*member, metadata,
             [](const auto candidate) { return numeric_validation::IsFiniteNonNegative(candidate); },
             metadata.field_name + " must be a finite non-negative value.");
-    }
-    template <typename Owner, typename FieldType, typename LowerType, typename UpperType>
-    void RequireFiniteExclusiveInclusiveRangeScalar(
-        const Request & request,
-        FieldType Owner::* member,
-        LowerType lower,
-        UpperType upper)
-    {
-        const auto metadata{ ResolveFieldMetadata(member) };
-        std::string message{
-            metadata.field_name + " must be a finite value within ("
-                + string_helper::ToStringWithPrecision(lower) + ", "
-                + string_helper::ToStringWithPrecision(upper) + "]."
-        };
-        RequireScalar(request.*member, metadata,
-            [lower, upper](const auto candidate)
-            {
-                return numeric_validation::IsFiniteExclusiveInclusiveRange(candidate, lower, upper);
-            },
-            message);
     }
     template <typename Owner, typename FieldType>
     void RequireEnum(const Request & request, FieldType Owner::* member)

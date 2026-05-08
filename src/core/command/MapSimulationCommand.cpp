@@ -235,7 +235,7 @@ void MapSimulationCommand::NormalizeAndValidateRequest(MapSimulationRequest & re
     {
         if (!numeric_validation::IsFinitePositive(width))
         {
-            AddParseNormalizationWarning(request, &MapSimulationRequest::blurring_width_list,
+            AddFieldNormalizationWarning(&MapSimulationRequest::blurring_width_list,
                 "Blurring width must be a finite positive value, dropping current setting: "
                     + std::to_string(width));
             continue;

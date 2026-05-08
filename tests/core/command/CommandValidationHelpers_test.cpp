@@ -249,19 +249,16 @@ public:
         if (m_options.validate_command_local_value && request.command_local_value != 3.5)
         {
             request.command_local_value = 1.25;
-            AddParseError(
-                request,
+            AddFieldValidationError(
                 &ValidationHelperRequest::command_local_value,
                 "Validated value must equal 3.5.");
         }
         if (m_options.add_problematic_parse_warnings)
         {
-            AddParseNormalizationWarning(
-                request,
+            AddFieldNormalizationWarning(
                 &ValidationHelperRequest::problematic_value,
                 "normalized to 1");
-            AddParseNormalizationWarning(
-                request,
+            AddFieldNormalizationWarning(
                 &ValidationHelperRequest::problematic_value,
                 "clamped to safe range");
         }

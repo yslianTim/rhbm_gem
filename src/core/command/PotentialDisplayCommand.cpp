@@ -142,13 +142,13 @@ void PotentialDisplayCommand::NormalizeAndValidateRequest(PotentialDisplayReques
     {
         if (group_name.empty())
         {
-            AddParseError(request, &PotentialDisplayRequest::reference_model_groups,
+            AddFieldValidationError(&PotentialDisplayRequest::reference_model_groups,
                 "Reference group name cannot be empty.");
             continue;
         }
         if (members.empty())
         {
-            AddParseError(request, &PotentialDisplayRequest::reference_model_groups,
+            AddFieldValidationError(&PotentialDisplayRequest::reference_model_groups,
                 "Reference group '" + group_name + "' cannot be empty.");
         }
     }

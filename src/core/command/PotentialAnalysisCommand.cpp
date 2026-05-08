@@ -610,7 +610,7 @@ void PotentialAnalysisCommand::NormalizeAndValidateRequest(PotentialAnalysisRequ
     if (request.saved_key_tag.empty())
     {
         request.saved_key_tag = "model";
-        AddParseError(request, &PotentialAnalysisRequest::saved_key_tag,
+        AddFieldValidationError(&PotentialAnalysisRequest::saved_key_tag,
             "Saved key tag cannot be empty. Using 'model' instead.");
     }
     NormalizePositiveScalar(request, &PotentialAnalysisRequest::sampling_size, 1500);
