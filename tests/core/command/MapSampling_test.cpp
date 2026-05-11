@@ -1,9 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <array>
-#include <limits>
 #include <memory>
-#include <tuple>
 #include <vector>
 
 #include "command/detail/MapSampling.hpp"
@@ -15,15 +13,6 @@
 using namespace rhbm_gem;
 
 namespace {
-
-class SinglePointSampler
-{
-public:
-    SamplingPointList GenerateSamplingPoints(const std::array<float, 3> & position) const
-    {
-        return { SamplingPoint{ 0.0f, position } };
-    }
-};
 
 class ShiftedPointSampler
 {
@@ -40,20 +29,6 @@ public:
                 position[2] + direction_like_input[2]
             }
         } };
-    }
-};
-
-class FixedPointSampler
-{
-public:
-    SamplingPointList GenerateSamplingPoints(const std::array<float, 3> & position) const
-    {
-        return {
-            SamplingPoint{ 0.0f, position },
-            SamplingPoint{ 1.0f, { position[0] + 1.0f, position[1], position[2] } },
-            SamplingPoint{ 1.0f, { position[0], position[1] + 1.0f, position[2] } },
-            SamplingPoint{ 1.0f, { position[0] - 1.0f, position[1], position[2] } }
-        };
     }
 };
 
@@ -111,133 +86,32 @@ TEST(MapSamplingTest, OrientedSamplerUsesDirectionLikeInput)
     EXPECT_FLOAT_EQ(1.0f, sampling_data.front().position->at(0));
 }
 
-TEST(MapSamplingTest, AtomSamplerWithZeroAngleReturnsUnfilteredSinglePointSample)
+TEST(MapSamplingTest, CommandAtomSamplerBuildsSphereSamplerFromProfileChoice)
 {
     auto map{ MakeMapObject() };
-    SinglePointSampler sampler;
     auto model{ MakeLinearNeighborModel() };
     const auto * atom{ model->GetAtomList().at(0).get() };
 
     const auto sampling_data{
-        SampleMapValues(map, sampler, *atom, 1.1, 0.0) };
+        SampleAtomMapValues(
+            map,
+            *atom,
+            SphereSamplingProfileChoice::FIBONACCI_DETERMINISTIC)
+    };
 
-    ASSERT_EQ(sampling_data.size(), 1u);
-    EXPECT_FLOAT_EQ(sampling_data.front().distance, 0.0f);
-    EXPECT_FLOAT_EQ(sampling_data.front().response, map.GetMapValue(0, 0, 0));
-    EXPECT_FLOAT_EQ(sampling_data.front().score, 1.0f);
-    ASSERT_TRUE(sampling_data.front().HasPosition());
-    EXPECT_FLOAT_EQ(sampling_data.front().position->at(0), 0.0f);
-    EXPECT_FLOAT_EQ(sampling_data.front().position->at(1), 0.0f);
-    EXPECT_FLOAT_EQ(sampling_data.front().position->at(2), 0.0f);
-}
-
-TEST(MapSamplingTest, AtomSamplerRetainsLowestResponseSamplesAfterAngleFiltering)
-{
-    auto map{ MakeMapObject() };
-    FixedPointSampler sampler;
-    auto model{ MakeLinearNeighborModel() };
-    const auto * atom{ model->GetAtomList().at(0).get() };
-
-    const auto sampling_data{
-        SampleMapValues(map, sampler, *atom, 1.1, 30.0) };
-
-    ASSERT_EQ(sampling_data.size(), 2u);
-    EXPECT_FLOAT_EQ(sampling_data.at(0).distance, 0.0f);
-    EXPECT_FLOAT_EQ(sampling_data.at(0).score, 1.0f);
-    ASSERT_TRUE(sampling_data.at(0).HasPosition());
-    EXPECT_FLOAT_EQ(sampling_data.at(0).position->at(0), 0.0f);
-    EXPECT_FLOAT_EQ(sampling_data.at(0).position->at(1), 0.0f);
-    ASSERT_TRUE(sampling_data.at(1).HasPosition());
-    EXPECT_FLOAT_EQ(sampling_data.at(1).distance, 1.0f);
-    EXPECT_FLOAT_EQ(sampling_data.at(1).position->at(0), -1.0f);
-    EXPECT_FLOAT_EQ(sampling_data.at(1).position->at(1), 0.0f);
-    EXPECT_FLOAT_EQ(sampling_data.at(1).score, 1.0f);
-}
-
-TEST(MapSamplingTest, AtomSamplerRemovesFilteredEntriesBeforeRetainingSamples)
-{
-    auto map{ MakeMapObject() };
-    FixedPointSampler sampler;
-    auto model{ MakeLinearNeighborModel() };
-    const auto * atom{ model->GetAtomList().at(0).get() };
-
-    const auto sampling_data{
-        SampleMapValues(map, sampler, *atom, 1.1, 30.0) };
-
-    ASSERT_EQ(sampling_data.size(), 2u);
-    EXPECT_FLOAT_EQ(sampling_data.at(0).score, 1.0f);
-    EXPECT_FLOAT_EQ(sampling_data.at(1).score, 1.0f);
-    for (const auto & sample : sampling_data)
-    {
-        ASSERT_TRUE(sample.HasPosition());
-        EXPECT_FALSE(
-            sample.position->at(0) == 1.0f &&
-            sample.position->at(1) == 0.0f &&
-            sample.position->at(2) == 0.0f);
-    }
-}
-
-TEST(MapSamplingTest, AtomSamplerAppliesDecileRetentionWhenNeighborRadiusFindsNoNeighbors)
-{
-    auto map{ MakeMapObject() };
-    FixedPointSampler sampler;
-    auto model{ MakeLinearNeighborModel() };
-    const auto * atom{ model->GetAtomList().at(0).get() };
-
-    const auto sampling_data{
-        SampleMapValues(map, sampler, *atom, 0.5, 30.0) };
-
-    ASSERT_EQ(sampling_data.size(), 2u);
-    ASSERT_TRUE(sampling_data.at(0).HasPosition());
-    EXPECT_FLOAT_EQ(sampling_data.at(0).distance, 0.0f);
-    EXPECT_FLOAT_EQ(sampling_data.at(0).position->at(0), 0.0f);
-    ASSERT_TRUE(sampling_data.at(1).HasPosition());
-    EXPECT_FLOAT_EQ(sampling_data.at(1).distance, 1.0f);
-    EXPECT_FLOAT_EQ(sampling_data.at(1).position->at(0), -1.0f);
-    EXPECT_FLOAT_EQ(sampling_data.at(1).position->at(1), 0.0f);
-    for (const auto & sample : sampling_data)
-    {
-        EXPECT_FLOAT_EQ(sample.score, 1.0f);
-    }
+    EXPECT_FALSE(sampling_data.empty());
 }
 
 TEST(MapSamplingTest, AtomSamplerRequiresAttachedAtomBeforeSampling)
 {
     auto map{ MakeMapObject() };
-    SinglePointSampler sampler;
     AtomObject detached_atom;
     detached_atom.SetPosition(0.0f, 0.0f, 0.0f);
 
     EXPECT_THROW(
-        (void)SampleMapValues(map, sampler, detached_atom, 1.0, 0.0),
-        std::runtime_error);
-    EXPECT_THROW(
-        (void)SampleMapValues(map, sampler, detached_atom, 1.0, 30.0),
-        std::runtime_error);
-}
-
-TEST(MapSamplingTest, AtomSamplerRejectsInvalidFilterParameters)
-{
-    auto map{ MakeMapObject() };
-    SinglePointSampler sampler;
-    auto model{ MakeLinearNeighborModel() };
-    const auto * atom{ model->GetAtomList().at(0).get() };
-
-    EXPECT_THROW(
-        (void)SampleMapValues(map, sampler, *atom, -0.1, 0.0),
-        std::invalid_argument);
-    EXPECT_THROW(
-        (void)SampleMapValues(
+        (void)SampleAtomMapValues(
             map,
-            sampler,
-            *atom,
-            1.0,
-            std::numeric_limits<double>::infinity()),
-        std::invalid_argument);
-    EXPECT_THROW(
-        (void)SampleMapValues(map, sampler, *atom, 1.0, -1.0),
-        std::invalid_argument);
-    EXPECT_THROW(
-        (void)SampleMapValues(map, sampler, *atom, 1.0, 181.0),
-        std::invalid_argument);
+            detached_atom,
+            SphereSamplingProfileChoice::FIBONACCI_DETERMINISTIC),
+        std::runtime_error);
 }

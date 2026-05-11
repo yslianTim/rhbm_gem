@@ -93,7 +93,6 @@ struct PotentialAnalysisRequest : public CommandRequestBase
     double training_alpha_max{ 2.0 };
     double training_alpha_step{ 0.1 };
     bool asymmetry_flag{ false };
-    int sampling_size{ 50 };
     SphereSamplingProfileChoice sampling_profile_choice{
         SphereSamplingProfileChoice::FIBONACCI_DETERMINISTIC
     };

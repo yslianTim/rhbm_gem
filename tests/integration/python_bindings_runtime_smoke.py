@@ -101,6 +101,7 @@ def assert_request_objects_are_usable() -> None:
     ):
         assert hasattr(analysis, field_name), f"PotentialAnalysisRequest missing {field_name}"
     for removed_field_name in (
+        "sampling_size",
         "sampling_range_min",
         "sampling_range_max",
         "sampling_height",

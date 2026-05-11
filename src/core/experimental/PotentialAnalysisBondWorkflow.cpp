@@ -62,7 +62,7 @@ void RunBondSampling(
         options.fit_range_max
     };
     CylinderSampler sampler;
-    sampler.SetSampleCount(static_cast<unsigned int>(options.sampling_size));
+    sampler.SetSampleCount(50);
     sampler.SetDistanceRange(kDefaultSamplingRangeMin, kDefaultSamplingRangeMax);
     sampler.SetHeight(kDefaultSamplingHeight);
     sampler.Print();

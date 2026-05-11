@@ -73,7 +73,6 @@ PotentialAnalysisRequest MakeNormalizationScenarioRequest(
     request.database_path = temp_dir / "analysis.sqlite";
     request.model_file_path = command_test::TestDataPath("test_model.cif");
     request.map_file_path = map_path;
-    request.sampling_size = 1;
     return request;
 }
 
@@ -232,8 +231,6 @@ TEST(CommandScenariosTest, PotentialAnalysisCliMapNormalizationTrueStillSkipsSim
             command_test::TestDataPath("test_model.cif").string(),
             "--map",
             map_path.string(),
-            "--sampling",
-            "1",
             "--simulation",
             "true",
             "--sim-resolution",
@@ -261,8 +258,6 @@ TEST(CommandScenariosTest, PotentialAnalysisCliMapNormalizationFalseSkipsNormali
             command_test::TestDataPath("test_model.cif").string(),
             "--map",
             map_path.string(),
-            "--sampling",
-            "1",
             "--map-normalization",
             "false",
         })

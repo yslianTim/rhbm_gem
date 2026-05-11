@@ -112,7 +112,6 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     analysis_request.model_file_path = command_test::TestDataPath("test_model.cif");
     analysis_request.map_file_path = generated_map_file;
     analysis_request.saved_key_tag = "pipeline_model";
-    analysis_request.sampling_size = 200;
     analysis_request.alpha_r = 0.37;
 
     const auto analysis_result{
@@ -174,7 +173,6 @@ TEST(CommandApiPipelineTest, PotentialAnalysisTrainingEmitsRequestedAlphaRReport
     analysis_request.saved_key_tag = "trained_model";
     analysis_request.training_alpha_flag = true;
     analysis_request.training_report_dir = training_report_dir;
-    analysis_request.sampling_size = 600;
 
     const auto analysis_result{
         rg::RunCommand(analysis_request)

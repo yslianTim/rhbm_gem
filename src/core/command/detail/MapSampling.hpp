@@ -9,14 +9,31 @@
 
 #include <Eigen/Dense>
 
+#include <rhbm_gem/core/command/CommandTypes.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/utils/math/LocalPotentialSampleScoring.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
+#include <rhbm_gem/utils/math/SphereSampler.hpp>
 
 namespace rhbm_gem {
 namespace detail {
+
+inline SphereSamplingMethod ResolveSphereSamplingMethod(SphereSamplingProfileChoice choice)
+{
+    switch (choice)
+    {
+        case SphereSamplingProfileChoice::RADIUS_UNIFORM_RANDOM:
+            return SphereSamplingMethod::RadiusUniformRandom;
+        case SphereSamplingProfileChoice::VOLUME_UNIFORM_RANDOM:
+            return SphereSamplingMethod::VolumeUniformRandom;
+        case SphereSamplingProfileChoice::FIBONACCI_DETERMINISTIC:
+            return SphereSamplingMethod::FibonacciDeterministic;
+    }
+
+    return SphereSamplingMethod::FibonacciDeterministic;
+}
 
 inline float MakeInterpolationInMapObject(
     const MapObject & data_object, const std::array<float, 3> & position)
@@ -195,9 +212,6 @@ inline LocalPotentialSampleList KeepLowestResponseDecileByDistance(LocalPotentia
 
 } // namespace detail
 
-// Keep SampleMapValues entry points aligned with the two supported command sampling modes:
-// oriented sampling from a position plus direction-like input, and atom-centered sampling with
-// neighbor/angle scoring.
 template <typename Sampler>
 LocalPotentialSampleList SampleMapValues(
     const MapObject & map_object,
@@ -209,19 +223,23 @@ LocalPotentialSampleList SampleMapValues(
     return detail::BuildLocalPotentialSampleList(map_object, sampling_points);
 }
 
-template <typename Sampler>
-LocalPotentialSampleList SampleMapValues(
+inline LocalPotentialSampleList SampleAtomMapValues(
     const MapObject & map_object,
-    const Sampler & sampler,
     const AtomObject & atom,
-    double neighbor_radius,
-    double angle = 0.0)
+    SphereSamplingProfileChoice sampling_profile_choice)
 {
-    numeric_validation::RequireFiniteNonNegative(neighbor_radius, "SampleMapValues neighbor radius");
+    constexpr unsigned int kAtomSamplingSize{ 50 };
+    constexpr double kRejectAngle{ 15.0 };
+
+    SphereSampler sampler;
+    sampler.SetSamplingProfile(
+        SphereSamplingProfile::AnalysisDefault(
+            detail::ResolveSphereSamplingMethod(sampling_profile_choice),
+            kAtomSamplingSize));
 
     const auto position{ atom.GetPosition() };
     const auto sampling_points{ sampler.GenerateSamplingPoints(position) };
-    const auto neighbor_atom_list{ atom.FindNeighborAtoms(neighbor_radius, false) };
+    const auto neighbor_atom_list{ atom.FindNeighborAtoms(sampler.GetNeighborSearchRadius(), false) };
     const auto reject_direction_list{
         detail::BuildAtomRejectDirectionList(atom, neighbor_atom_list)
     };
@@ -229,11 +247,12 @@ LocalPotentialSampleList SampleMapValues(
         detail::BuildAtomCenteredSamplingPointList(sampling_points, position)
     };
     const auto sampling_scores{
-        BuildLocalPotentialSampleScoreList(local_sampling_points, reject_direction_list, angle)
+        BuildLocalPotentialSampleScoreList(local_sampling_points, reject_direction_list, kRejectAngle)
     };
-    auto sample_list{ detail::BuildLocalPotentialSampleList(map_object, sampling_points, &sampling_scores) };
+    auto sample_list{
+        detail::BuildLocalPotentialSampleList(map_object, sampling_points, &sampling_scores)
+    };
     return detail::KeepLowestResponseDecileByDistance(std::move(sample_list));
-    //return sample_list;
 }
 
 } // namespace rhbm_gem

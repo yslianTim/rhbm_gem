@@ -45,7 +45,6 @@ Command-specific fields:
 - `training_alpha_max`
 - `training_alpha_step`
 - `asymmetry_flag`
-- `sampling_size`
 - `sampling_profile_choice`
 - `fit_range_min`
 - `fit_range_max`
