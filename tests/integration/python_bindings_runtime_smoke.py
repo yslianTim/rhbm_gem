@@ -32,6 +32,8 @@ def assert_module_surface() -> None:
     assert hasattr(m.PrinterType, "ATOM_OUTLIER")
     assert hasattr(m, "TesterType")
     assert hasattr(m.TesterType, "BENCHMARK")
+    assert hasattr(m, "SphereSamplingProfileChoice")
+    assert hasattr(m.SphereSamplingProfileChoice, "FIBONACCI_DETERMINISTIC")
 
     if EXPERIMENTAL_FEATURE_ENABLED:
         assert hasattr(m, "MapVisualizationRequest")
@@ -95,8 +97,26 @@ def assert_request_objects_are_usable() -> None:
         "training_alpha_min",
         "training_alpha_max",
         "training_alpha_step",
+        "sampling_profile_choice",
     ):
         assert hasattr(analysis, field_name), f"PotentialAnalysisRequest missing {field_name}"
+    for removed_field_name in (
+        "sampling_range_min",
+        "sampling_range_max",
+        "sampling_height",
+    ):
+        assert not hasattr(analysis, removed_field_name), (
+            f"PotentialAnalysisRequest still exposes {removed_field_name}"
+        )
+    assert (
+        analysis.sampling_profile_choice
+        == m.SphereSamplingProfileChoice.FIBONACCI_DETERMINISTIC
+    )
+    analysis.sampling_profile_choice = m.SphereSamplingProfileChoice.VOLUME_UNIFORM_RANDOM
+    assert (
+        analysis.sampling_profile_choice
+        == m.SphereSamplingProfileChoice.VOLUME_UNIFORM_RANDOM
+    )
     analysis.training_alpha_min = 0.2
     analysis.training_alpha_max = 0.8
     analysis.training_alpha_step = 0.2

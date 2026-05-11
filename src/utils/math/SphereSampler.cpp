@@ -14,6 +14,9 @@
 
 namespace {
 
+constexpr SphereDistanceRange kAnalysisDistanceRange{ 0.0, 1.5 };
+constexpr double kAnalysisFibonacciRadiusBinSize{ 0.1 };
+
 std::string_view GetSphereSamplingMethodName(SphereSamplingMethod method)
 {
     switch (method)
@@ -154,6 +157,30 @@ SphereSamplingProfile SphereSamplingProfile::FibonacciDeterministic(
             samples_per_radius,
             vary_with_radius
         });
+}
+
+SphereSamplingProfile SphereSamplingProfile::AnalysisDefault(
+    SphereSamplingMethod method,
+    unsigned int sampling_size)
+{
+    switch (method)
+    {
+        case SphereSamplingMethod::RadiusUniformRandom:
+            return SphereSamplingProfile::RadiusUniformRandom(
+                kAnalysisDistanceRange,
+                sampling_size);
+        case SphereSamplingMethod::VolumeUniformRandom:
+            return SphereSamplingProfile::VolumeUniformRandom(
+                kAnalysisDistanceRange,
+                sampling_size);
+        case SphereSamplingMethod::FibonacciDeterministic:
+            return SphereSamplingProfile::FibonacciDeterministic(
+                kAnalysisDistanceRange,
+                kAnalysisFibonacciRadiusBinSize,
+                sampling_size);
+    }
+
+    throw std::invalid_argument("Unsupported SphereSamplingMethod.");
 }
 
 const SphereRandomSamplingConfig & SphereSamplingProfile::GetRandomConfig() const

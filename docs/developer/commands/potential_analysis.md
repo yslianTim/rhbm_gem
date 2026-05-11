@@ -46,9 +46,7 @@ Command-specific fields:
 - `training_alpha_step`
 - `asymmetry_flag`
 - `sampling_size`
-- `sampling_range_min`
-- `sampling_range_max`
-- `sampling_height`
+- `sampling_profile_choice`
 - `fit_range_min`
 - `fit_range_max`
 - `alpha_r`
@@ -78,7 +76,7 @@ Expected result contract:
 `PotentialAnalysisCommand::ValidatePreparedRequest()` performs semantic checks after normalization:
 
 - `--simulation` requires positive simulated resolution
-- sampling and fit ranges must be ordered correctly
+- fit ranges must be ordered correctly
 - training alpha ranges must satisfy `--training-alpha-min <= --training-alpha-max`
 
 `PotentialAnalysisCommand::ExecuteImpl()`:

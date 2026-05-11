@@ -135,18 +135,26 @@ TEST(CommandScenariosTest, PotentialAnalysisDefaultsMapNormalizationOn)
     EXPECT_TRUE(request.map_normalization_flag);
 }
 
-TEST(CommandScenariosTest, PotentialAnalysisRejectsInvertedSamplingRangeAtPrepare)
+TEST(CommandScenariosTest, PotentialAnalysisDefaultsToFibonacciSamplingProfile)
+{
+    PotentialAnalysisRequest request{};
+
+    EXPECT_EQ(
+        SphereSamplingProfileChoice::FIBONACCI_DETERMINISTIC,
+        request.sampling_profile_choice);
+}
+
+TEST(CommandScenariosTest, PotentialAnalysisRejectsInvalidSamplingProfileAtParse)
 {
     PotentialAnalysisRequest request{};
     request.model_file_path = command_test::TestDataPath("test_model.cif");
     request.map_file_path = command_test::TestDataPath("test_model.cif");
-    request.sampling_range_min = 2.0;
-    request.sampling_range_max = 1.0;
+    request.sampling_profile_choice = static_cast<SphereSamplingProfileChoice>(99);
 
     const auto result{ RunCommand(request) };
 
     EXPECT_FALSE(result.succeeded);
-    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "request"));
+    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "--sampling-profile"));
 }
 
 TEST(CommandScenariosTest, PotentialAnalysisRejectsInvertedTrainingAlphaRangeAtPrepare)

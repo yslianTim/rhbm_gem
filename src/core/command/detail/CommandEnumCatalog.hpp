@@ -75,4 +75,21 @@ struct CommandEnumTraits<TesterType>
     }};
 };
 
+template <>
+struct CommandEnumTraits<SphereSamplingProfileChoice>
+{
+    inline static constexpr std::array<
+        CommandEnumDefinition<SphereSamplingProfileChoice, 2>, 3> kOptions{{
+        { SphereSamplingProfileChoice::RADIUS_UNIFORM_RANDOM,
+            "RADIUS_UNIFORM_RANDOM",
+            { "0", "radius_uniform" } },
+        { SphereSamplingProfileChoice::VOLUME_UNIFORM_RANDOM,
+            "VOLUME_UNIFORM_RANDOM",
+            { "1", "volume_uniform" } },
+        { SphereSamplingProfileChoice::FIBONACCI_DETERMINISTIC,
+            "FIBONACCI_DETERMINISTIC",
+            { "2", "fibonacci" } }
+    }};
+};
+
 } // namespace rhbm_gem::command_internal

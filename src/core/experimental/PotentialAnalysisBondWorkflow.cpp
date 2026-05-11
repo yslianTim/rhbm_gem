@@ -54,14 +54,17 @@ void RunBondSampling(
     int thread_size)
 {
     ScopeTimer timer("PotentialAnalysisBondWorkflow::RunBondMapValueSampling");
+    constexpr double kDefaultSamplingRangeMin{ 0.0 };
+    constexpr double kDefaultSamplingRangeMax{ 1.5 };
+    constexpr double kDefaultSamplingHeight{ 0.1 };
     const linearization_service::LinearizationRange fit_range{
         options.fit_range_min,
         options.fit_range_max
     };
     CylinderSampler sampler;
     sampler.SetSampleCount(static_cast<unsigned int>(options.sampling_size));
-    sampler.SetDistanceRange(options.sampling_range_min, options.sampling_range_max);
-    sampler.SetHeight(options.sampling_height);
+    sampler.SetDistanceRange(kDefaultSamplingRangeMin, kDefaultSamplingRangeMax);
+    sampler.SetHeight(kDefaultSamplingHeight);
     sampler.Print();
 
     const auto & bond_list{ model_object.GetSelectedBonds() };

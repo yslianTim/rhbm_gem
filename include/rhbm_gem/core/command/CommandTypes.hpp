@@ -49,6 +49,13 @@ enum class TesterType : int
     NEIGHBOR_DISTANCE  = 5
 };
 
+enum class SphereSamplingProfileChoice : int
+{
+    RADIUS_UNIFORM_RANDOM   = 0,
+    VOLUME_UNIFORM_RANDOM   = 1,
+    FIBONACCI_DETERMINISTIC = 2
+};
+
 std::filesystem::path GetDefaultDataRootPath();
 std::filesystem::path GetDefaultDatabasePath();
 
@@ -87,9 +94,9 @@ struct PotentialAnalysisRequest : public CommandRequestBase
     double training_alpha_step{ 0.1 };
     bool asymmetry_flag{ false };
     int sampling_size{ 50 };
-    double sampling_range_min{ 0.0 };
-    double sampling_range_max{ 1.5 };
-    double sampling_height{ 0.1 };
+    SphereSamplingProfileChoice sampling_profile_choice{
+        SphereSamplingProfileChoice::FIBONACCI_DETERMINISTIC
+    };
     double fit_range_min{ 0.0 };
     double fit_range_max{ 1.0 };
     double alpha_r{ 0.1 };

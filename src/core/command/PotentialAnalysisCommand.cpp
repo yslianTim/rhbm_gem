@@ -484,25 +484,34 @@ void SavePreparedModel(
     model_object.EditAnalysis().ClearTransientFitStates();
 }
 
+SphereSamplingMethod ResolveSphereSamplingMethod(SphereSamplingProfileChoice choice)
+{
+    switch (choice)
+    {
+        case SphereSamplingProfileChoice::RADIUS_UNIFORM_RANDOM:
+            return SphereSamplingMethod::RadiusUniformRandom;
+        case SphereSamplingProfileChoice::VOLUME_UNIFORM_RANDOM:
+            return SphereSamplingMethod::VolumeUniformRandom;
+        case SphereSamplingProfileChoice::FIBONACCI_DETERMINISTIC:
+            return SphereSamplingMethod::FibonacciDeterministic;
+    }
+
+    return SphereSamplingMethod::FibonacciDeterministic;
+}
+
 void RunSamplingWorkflow(
     MapObject & map_object,
     ModelObject & model_object,
+    SphereSamplingProfileChoice sampling_profile_choice,
     int sampling_size,
-    double sampling_range_min,
-    double sampling_range_max,
     int thread_size)
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunSamplingWorkflow");
     SphereSampler sampler;
     sampler.SetSamplingProfile(
-        //SphereSamplingProfile::RadiusUniformRandom(
-        //    SphereDistanceRange{ sampling_range_min, sampling_range_max },
-        //    static_cast<unsigned int>(sampling_size))
-        SphereSamplingProfile::FibonacciDeterministic(
-            SphereDistanceRange{ sampling_range_min, sampling_range_max },
-            0.1,
-            static_cast<unsigned int>(sampling_size))
-    );
+        SphereSamplingProfile::AnalysisDefault(
+            ResolveSphereSamplingMethod(sampling_profile_choice),
+            static_cast<unsigned int>(sampling_size)));
     sampler.Print();
 
     const auto & atom_list{ model_object.GetSelectedAtoms() };
@@ -517,7 +526,9 @@ void RunSamplingWorkflow(
     {
         auto atom{ atom_list[i] };
         auto entry{ local_entry_list[i] };
-        auto sampling_entries{ SampleMapValues(map_object, sampler, *atom, sampling_range_max, 15.0) };
+        auto sampling_entries{
+            SampleMapValues(map_object, sampler, *atom, sampler.GetNeighborSearchRadius(), 15.0)
+        };
         entry.SetSamplingEntries(sampling_entries);
 #ifdef USE_OPENMP
         #pragma omp critical
@@ -576,9 +587,7 @@ void PotentialAnalysisCommand::NormalizeAndValidateRequest(PotentialAnalysisRequ
     RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::simulated_map_resolution);
     RequireNonEmptyList(request, &PotentialAnalysisRequest::saved_key_tag);
     RequireFinitePositiveScalar(request, &PotentialAnalysisRequest::sampling_size);
-    RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::sampling_range_min);
-    RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::sampling_range_max);
-    RequireFinitePositiveScalar(request, &PotentialAnalysisRequest::sampling_height);
+    RequireEnum(request, &PotentialAnalysisRequest::sampling_profile_choice);
     RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::fit_range_min);
     RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::fit_range_max);
     RequireFinitePositiveScalar(request, &PotentialAnalysisRequest::alpha_r);
@@ -604,7 +613,7 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
     auto analysis{ model_object.EditAnalysis() };
     SetSelectedAtomAlphaR(analysis, model_object.GetSelectedAtoms(), request.alpha_r);
     RunSamplingWorkflow(map_object, model_object,
-        request.sampling_size, request.sampling_range_min, request.sampling_range_max, thread_size);
+        request.sampling_profile_choice, request.sampling_size, thread_size);
     RunDatasetPreparationWorkflow(
         model_object, request.fit_range_min, request.fit_range_max, thread_size);
     RunAtomPotentialFittingWorkflow(model_object, request, thread_size);
@@ -620,9 +629,6 @@ void PotentialAnalysisCommand::ValidatePreparedRequest(const PotentialAnalysisRe
     RequirePrepareCondition(
         !request.simulation_flag || request.simulated_map_resolution > 0.0,
         "Expected a positive simulated-map resolution when '--simulation true' is selected.");
-    RequirePrepareCondition(
-        request.sampling_range_min <= request.sampling_range_max,
-        "Expected --sampling-min <= --sampling-max.");
     RequirePrepareCondition(
         request.fit_range_min <= request.fit_range_max,
         "Expected --fit-min <= --fit-max.");

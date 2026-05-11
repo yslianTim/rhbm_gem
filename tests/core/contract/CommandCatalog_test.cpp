@@ -120,6 +120,18 @@ struct EnumMappingTraits<TesterType>
     }};
 };
 
+template <>
+struct EnumMappingTraits<SphereSamplingProfileChoice>
+{
+    static constexpr std::string_view kFirstBindingToken{ "RADIUS_UNIFORM_RANDOM" };
+    static constexpr std::array<EnumMappingExpectation<SphereSamplingProfileChoice>, 4> kExpectations{{
+        { "radius_uniform", SphereSamplingProfileChoice::RADIUS_UNIFORM_RANDOM },
+        { "0", SphereSamplingProfileChoice::RADIUS_UNIFORM_RANDOM },
+        { "fibonacci", SphereSamplingProfileChoice::FIBONACCI_DETERMINISTIC },
+        { "2", SphereSamplingProfileChoice::FIBONACCI_DETERMINISTIC },
+    }};
+};
+
 template <typename EnumType>
 void AssertEnumMappingsStayInSync()
 {
@@ -143,7 +155,8 @@ using CommandEnumTypes = testing::Types<
     PrinterType,
     PotentialModel,
     PartialCharge,
-    TesterType>;
+    TesterType,
+    SphereSamplingProfileChoice>;
 
 TYPED_TEST_SUITE(CommandEnumMappingTest, CommandEnumTypes, );
 

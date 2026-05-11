@@ -98,6 +98,37 @@ TEST(SphereSamplerTest, PrintOutputsHeader)
     EXPECT_NE(output.find("SphereSampler Configuration:"), std::string::npos);
 }
 
+TEST(SphereSamplerTest, AnalysisDefaultUsesCommandDistanceRange)
+{
+    const auto profile{
+        SphereSamplingProfile::AnalysisDefault(
+            SphereSamplingMethod::VolumeUniformRandom,
+            12)
+    };
+
+    EXPECT_EQ(SphereSamplingMethod::VolumeUniformRandom, profile.GetMethod());
+    EXPECT_DOUBLE_EQ(0.0, profile.GetDistanceRange().min);
+    EXPECT_DOUBLE_EQ(1.5, profile.GetDistanceRange().max);
+    EXPECT_DOUBLE_EQ(1.5, profile.GetNeighborSearchRadius());
+    EXPECT_EQ(12u, profile.GetRandomConfig().sample_count);
+}
+
+TEST(SphereSamplerTest, AnalysisDefaultFibonacciKeepsCommandSamplingSizePerRadius)
+{
+    const auto profile{
+        SphereSamplingProfile::AnalysisDefault(
+            SphereSamplingMethod::FibonacciDeterministic,
+            7)
+    };
+
+    EXPECT_EQ(SphereSamplingMethod::FibonacciDeterministic, profile.GetMethod());
+    EXPECT_DOUBLE_EQ(0.0, profile.GetDistanceRange().min);
+    EXPECT_DOUBLE_EQ(1.5, profile.GetDistanceRange().max);
+    EXPECT_DOUBLE_EQ(0.1, profile.GetFibonacciConfig().radius_bin_size);
+    EXPECT_EQ(7u, profile.GetFibonacciConfig().samples_per_radius);
+    EXPECT_FALSE(profile.GetFibonacciConfig().vary_with_radius);
+}
+
 TEST(SphereSamplerTest, PrintOutputsConfiguration)
 {
     SphereSampler sampler;
