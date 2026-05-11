@@ -240,9 +240,7 @@ void RunModelObjectPreprocessing(ModelObject & model_object, bool asymmetry_flag
     }
 }
 
-void RunLocalPotentialFitting(
-    ModelObject & model_object,
-    int thread_size)
+void RunLocalPotentialFitting(ModelObject & model_object, int thread_size)
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunLocalPotentialFitting");
     const auto selected_atom_size{ model_object.GetSelectedAtomCount() };
@@ -288,15 +286,15 @@ void RunAtomAlphaTraining(
     rhbm_trainer::AlphaTrainer alpha_trainer(
         request.training_alpha_min, request.training_alpha_max, request.training_alpha_step);
     const auto & alpha_training_list{ alpha_trainer.AlphaGrid() };
+    const auto component_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
+    const auto component_group_keys{ analysis_view.CollectAtomGroupKeys(component_class_key) };
     Logger::Log(LogLevel::Info, alpha_trainer.GetAlphaGridSummary().str());
 
     // Alpha_R Training
-    const auto simple_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
-    const auto simple_group_keys{ analysis_view.CollectAtomGroupKeys(simple_class_key) };
     size_t count{ 0 };
-    for (const auto group_key : simple_group_keys)
+    for (const auto group_key : component_group_keys)
     {
-        const auto & group_atom_list{ analysis_view.GetAtomObjectList(group_key, simple_class_key) };
+        const auto & group_atom_list{ analysis_view.GetAtomObjectList(group_key, component_class_key) };
         std::vector<RHBMMemberDataset> selected_atom_dataset_list;
         selected_atom_dataset_list.reserve(group_atom_list.size());
         for (auto & atom : group_atom_list)
@@ -318,15 +316,13 @@ void RunAtomAlphaTraining(
             const auto alpha_r{ alpha_r_result.best_alpha };
             SetSelectedAtomAlphaR(analysis, group_atom_list, alpha_r);
         }
-        Logger::ProgressPercent(++count, simple_group_keys.size());
+        Logger::ProgressPercent(++count, component_group_keys.size());
     }
     
     // Alpha_G Training
     RunLocalPotentialFitting(model_object, thread_size);
 
     std::vector<std::vector<RHBMParameterVector>> beta_group_list;
-    const auto component_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
-    const auto component_group_keys{ analysis_view.CollectAtomGroupKeys(component_class_key) };
     beta_group_list.reserve(component_group_keys.size());
     for (const auto group_key : component_group_keys)
     {
