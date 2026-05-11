@@ -1102,8 +1102,7 @@ void LoadStructureConnectionBlock(CifFormatState& state) {
                     ptnr1_atom_id_value, ptnr2_atom_id_value)};
             auto bond_id{state.data_block->GetBondKeySystemPtr()->GetBondId(bond_key)};
             auto bond_type{ChemicalDataHelper::GetBondTypeFromString(*conn_type_id)};
-            if (bond_type == BondType::HYDROGEN)
-                return;
+            //if (bond_type == BondType::HYDROGEN) return;
 
             ComponentBondEntry bond_entry;
             bond_entry.bond_id = bond_id;
@@ -1347,8 +1346,7 @@ void LoadAtomSiteBlock(CifFormatState& state) {
             string_helper::EraseCharFromString(atom_id, '\"');
 
             auto element_enum{ChemicalDataHelper::GetElementFromString(element_type)};
-            if (element_enum == Element::HYDROGEN)
-                return;
+            //if (element_enum == Element::HYDROGEN) return;
             state.observed_component_atom_id_set_map[comp_id].insert(atom_id);
 
             auto is_special_atom{group_type == "HETATM"};

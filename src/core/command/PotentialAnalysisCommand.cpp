@@ -143,7 +143,6 @@ bool EmitTrainingReportIfRequested(
 std::optional<PotentialAnalysisInputs> LoadPotentialAnalysisInputs(
     const PotentialAnalysisRequest & request)
 {
-    ScopeTimer timer("PotentialAnalysisCommand::BuildDataObject");
     try
     {
         auto model_object{ ReadModel(request.model_file_path) };
@@ -153,7 +152,7 @@ std::optional<PotentialAnalysisInputs> LoadPotentialAnalysisInputs(
         if (model_object == nullptr || map_object == nullptr)
         {
             Logger::Log(LogLevel::Error,
-                "PotentialAnalysisCommand::BuildDataObject : model/map object missing after load.");
+                "LoadPotentialAnalysisInputs : model/map object missing after load.");
             return std::nullopt;
         }
         if (request.simulation_flag)
@@ -173,8 +172,7 @@ std::optional<PotentialAnalysisInputs> LoadPotentialAnalysisInputs(
     }
     catch (const std::exception & e)
     {
-        Logger::Log(LogLevel::Error,
-            "PotentialAnalysisCommand::BuildDataObject : " + std::string(e.what()));
+        Logger::Log(LogLevel::Error, "LoadPotentialAnalysisInputs : " + std::string(e.what()));
         return std::nullopt;
     }
 }

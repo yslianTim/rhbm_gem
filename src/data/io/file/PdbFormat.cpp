@@ -77,16 +77,14 @@ void PdbFormat::ScanAtomEntry(char* line, bool is_special, int model_number) {
     auto atom_object{std::make_unique<AtomObject>()};
     auto atom_name{string_helper::ConvertCharArrayToString(atom->atom_name)};
     auto element_name{string_helper::ConvertCharArrayToString(atom->element)};
-    if (element_name == "H")
-        return; // Skip hydrogen atom
+    //if (element_name == "H") return; // Skip hydrogen atom
     auto indicator{(atom->indicator == ' ') ? "." : std::string(1, atom->indicator)};
     atom_object->SetElement(ChemicalDataHelper::GetElementFromString(element_name));
     atom_object->SetComponentID(atom->segment_id);
     atom_object->SetAtomID(atom_name);
     atom_object->SetResidue(
         ChemicalDataHelper::GetResidueFromString(
-            string_helper::ConvertCharArrayToString(atom->residue_name),
-            false));
+            string_helper::ConvertCharArrayToString(atom->residue_name), false));
     atom_object->SetIndicator(indicator);
     atom_object->SetSequenceID(atom->sequence_id);
     atom_object->SetSerialID(atom->serial_id);
