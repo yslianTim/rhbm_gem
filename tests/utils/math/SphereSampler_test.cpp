@@ -109,7 +109,6 @@ TEST(SphereSamplerTest, AnalysisDefaultUsesCommandDistanceRange)
     EXPECT_EQ(SphereSamplingMethod::VolumeUniformRandom, profile.GetMethod());
     EXPECT_DOUBLE_EQ(0.0, profile.GetDistanceRange().min);
     EXPECT_DOUBLE_EQ(1.5, profile.GetDistanceRange().max);
-    EXPECT_DOUBLE_EQ(1.5, profile.GetNeighborSearchRadius());
     EXPECT_EQ(12u, profile.GetRandomConfig().sample_count);
 }
 

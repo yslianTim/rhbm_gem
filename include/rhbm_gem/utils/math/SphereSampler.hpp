@@ -61,7 +61,6 @@ public:
     const SphereDistanceRange & GetDistanceRange() const { return m_distance_range; }
     const SphereRandomSamplingConfig & GetRandomConfig() const;
     const SphereDeterministicSamplingConfig & GetFibonacciConfig() const;
-    double GetNeighborSearchRadius() const { return m_distance_range.max; }
 
 private:
     SphereSamplingProfile(
@@ -89,7 +88,6 @@ public:
     void SetSamplingProfile(const SphereSamplingProfile & profile);
     const SphereSamplingProfile & GetSamplingProfile() const { return m_profile; }
     std::size_t GetExpectedPointCount() const;
-    double GetNeighborSearchRadius() const { return m_profile.GetNeighborSearchRadius(); }
 
     SamplingPointList GenerateSamplingPoints(const std::array<float, 3> & reference_position) const;
 

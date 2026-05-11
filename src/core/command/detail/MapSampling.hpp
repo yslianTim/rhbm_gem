@@ -230,6 +230,7 @@ inline LocalPotentialSampleList SampleAtomMapValues(
 {
     constexpr unsigned int kAtomSamplingSize{ 50 };
     constexpr double kRejectAngle{ 15.0 };
+    constexpr double kNeighborSearchRadius{ 2.0 };
 
     SphereSampler sampler;
     sampler.SetSamplingProfile(
@@ -239,7 +240,7 @@ inline LocalPotentialSampleList SampleAtomMapValues(
 
     const auto position{ atom.GetPosition() };
     const auto sampling_points{ sampler.GenerateSamplingPoints(position) };
-    const auto neighbor_atom_list{ atom.FindNeighborAtoms(sampler.GetNeighborSearchRadius(), false) };
+    const auto neighbor_atom_list{ atom.FindNeighborAtoms(kNeighborSearchRadius, false) };
     const auto reject_direction_list{
         detail::BuildAtomRejectDirectionList(atom, neighbor_atom_list)
     };

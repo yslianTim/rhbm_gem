@@ -245,7 +245,7 @@ void RunLocalPotentialFitting(ModelObject & model_object, int thread_size)
         "Run Local atom fitting for " + std::to_string(selected_atom_size) + " atoms.");
 
 #ifdef USE_OPENMP
-    #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
+    #pragma omp parallel for num_threads(thread_size)
 #endif
     for (size_t i = 0; i < selected_atom_size; i++)
     {
@@ -435,7 +435,7 @@ void RunAtomPotentialFittingWorkflow(
         std::atomic<size_t> key_count{ 0 };
 
 #ifdef USE_OPENMP
-        #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
+        #pragma omp parallel for num_threads(thread_size)
 #endif
         for (size_t idx = 0; idx < group_key_size; idx++)
         {
@@ -527,7 +527,7 @@ void RunDatasetPreparationWorkflow(
     const linearization_service::LinearizationRange fit_range{ fit_range_min, fit_range_max };
 
 #ifdef USE_OPENMP
-    #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
+    #pragma omp parallel for num_threads(thread_size)
 #endif
     for (size_t i = 0; i < atom_size; i++)
     {
