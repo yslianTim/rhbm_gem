@@ -195,19 +195,9 @@ inline LocalPotentialSampleList KeepLowestResponseDecileByDistance(LocalPotentia
 
 } // namespace detail
 
-// Prefer overloads that match the sampler's real inputs instead of forcing every sampler to
-// accept the same parameter list. Add new overloads here only when a sampler introduces a new
-// input shape that SampleMapValues needs to support.
-template <typename Sampler>
-LocalPotentialSampleList SampleMapValues(
-    const MapObject & map_object,
-    const Sampler & sampler,
-    const std::array<float, 3> & position)
-{
-    const auto sampling_points{ sampler.GenerateSamplingPoints(position) };
-    return detail::BuildLocalPotentialSampleList(map_object, sampling_points);
-}
-
+// Keep SampleMapValues entry points aligned with the two supported command sampling modes:
+// oriented sampling from a position plus direction-like input, and atom-centered sampling with
+// neighbor/angle scoring.
 template <typename Sampler>
 LocalPotentialSampleList SampleMapValues(
     const MapObject & map_object,

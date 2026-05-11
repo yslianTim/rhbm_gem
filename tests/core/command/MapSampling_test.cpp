@@ -90,32 +90,6 @@ std::unique_ptr<ModelObject> MakeLinearNeighborModel()
 
 } // namespace
 
-TEST(MapSamplingTest, PositionOnlySamplerReturnsExpectedPointValueAndIsDeterministic)
-{
-    auto map{ MakeMapObject() };
-    SinglePointSampler sampler;
-    const auto first{
-        SampleMapValues(map, sampler, { 0.0f, 0.0f, 0.0f }) };
-    const auto second{
-        SampleMapValues(map, sampler, { 1.0f, 1.0f, 1.0f }) };
-    const auto first_again{
-        SampleMapValues(map, sampler, { 0.0f, 0.0f, 0.0f }) };
-
-    ASSERT_EQ(first.size(), 1u);
-    ASSERT_EQ(second.size(), 1u);
-    ASSERT_EQ(first_again.size(), 1u);
-    EXPECT_FLOAT_EQ(first.front().distance, 0.0f);
-    EXPECT_FLOAT_EQ(second.front().distance, 0.0f);
-    EXPECT_FLOAT_EQ(first.front().response, map.GetMapValue(0, 0, 0));
-    EXPECT_FLOAT_EQ(second.front().response, map.GetMapValue(1, 1, 1));
-    EXPECT_FLOAT_EQ(first.front().score, 1.0f);
-    EXPECT_FLOAT_EQ(second.front().score, 1.0f);
-    EXPECT_TRUE(first.front().HasPosition());
-    EXPECT_FLOAT_EQ(first.front().position->at(0), 0.0f);
-    EXPECT_FLOAT_EQ(first_again.front().response, first.front().response);
-    EXPECT_FLOAT_EQ(first_again.front().score, first.front().score);
-}
-
 TEST(MapSamplingTest, OrientedSamplerUsesDirectionLikeInput)
 {
     auto map{ MakeMapObject() };
@@ -137,26 +111,24 @@ TEST(MapSamplingTest, OrientedSamplerUsesDirectionLikeInput)
     EXPECT_FLOAT_EQ(1.0f, sampling_data.front().position->at(0));
 }
 
-TEST(MapSamplingTest, AtomSamplerWithZeroAngleMatchesPositionOnlySampling)
+TEST(MapSamplingTest, AtomSamplerWithZeroAngleReturnsUnfilteredSinglePointSample)
 {
     auto map{ MakeMapObject() };
     SinglePointSampler sampler;
     auto model{ MakeLinearNeighborModel() };
     const auto * atom{ model->GetAtomList().at(0).get() };
 
-    const auto from_position{
-        SampleMapValues(map, sampler, atom->GetPosition()) };
-    const auto from_atom{
+    const auto sampling_data{
         SampleMapValues(map, sampler, *atom, 1.1, 0.0) };
 
-    ASSERT_EQ(from_position.size(), from_atom.size());
-    ASSERT_EQ(from_atom.size(), 1u);
-    EXPECT_FLOAT_EQ(from_position.front().distance, from_atom.front().distance);
-    EXPECT_FLOAT_EQ(from_position.front().response, from_atom.front().response);
-    EXPECT_FLOAT_EQ(from_position.front().score, from_atom.front().score);
-    EXPECT_FLOAT_EQ(from_atom.front().score, 1.0f);
-    ASSERT_TRUE(from_atom.front().HasPosition());
-    EXPECT_FLOAT_EQ(from_atom.front().position->at(0), 0.0f);
+    ASSERT_EQ(sampling_data.size(), 1u);
+    EXPECT_FLOAT_EQ(sampling_data.front().distance, 0.0f);
+    EXPECT_FLOAT_EQ(sampling_data.front().response, map.GetMapValue(0, 0, 0));
+    EXPECT_FLOAT_EQ(sampling_data.front().score, 1.0f);
+    ASSERT_TRUE(sampling_data.front().HasPosition());
+    EXPECT_FLOAT_EQ(sampling_data.front().position->at(0), 0.0f);
+    EXPECT_FLOAT_EQ(sampling_data.front().position->at(1), 0.0f);
+    EXPECT_FLOAT_EQ(sampling_data.front().position->at(2), 0.0f);
 }
 
 TEST(MapSamplingTest, AtomSamplerRetainsLowestResponseSamplesAfterAngleFiltering)

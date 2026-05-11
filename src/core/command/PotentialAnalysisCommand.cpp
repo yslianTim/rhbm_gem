@@ -204,7 +204,6 @@ void SetSelectedAtomAlphaR(
 
 void RunModelObjectPreprocessing(ModelObject & model_object, bool asymmetry_flag)
 {
-    ScopeTimer timer("PotentialAnalysisCommand::RunModelObjectPreprocessing");
     auto analysis{ model_object.EditAnalysis() };
     analysis.Clear();
     model_object.SelectAllAtoms();
@@ -240,7 +239,6 @@ void RunModelObjectPreprocessing(ModelObject & model_object, bool asymmetry_flag
 
 void RunLocalPotentialFitting(ModelObject & model_object, int thread_size)
 {
-    ScopeTimer timer("PotentialAnalysisCommand::RunLocalPotentialFitting");
     const auto selected_atom_size{ model_object.GetSelectedAtomCount() };
     auto local_entry_list{ BuildSelectedAtomLocalEntryViews(model_object) };
     std::atomic<size_t> atom_count{ 0 };
@@ -253,10 +251,9 @@ void RunLocalPotentialFitting(ModelObject & model_object, int thread_size)
     for (size_t i = 0; i < selected_atom_size; i++)
     {
         auto local_entry{ local_entry_list[i] };
-        const auto alpha_r{ local_entry.GetAlphaR() };
         const auto result{
             rhbm_helper::EstimateBetaMDPDE(
-                alpha_r,
+                local_entry.GetAlphaR(),
                 local_entry.GetDataset(),
                 MakePotentialAnalysisExecutionOptions(thread_size, true))
         };
@@ -278,7 +275,6 @@ void RunAtomAlphaTraining(
     const PotentialAnalysisRequest & request,
     int thread_size)
 {
-    ScopeTimer timer("PotentialAnalysisCommand::RunAtomAlphaTraining");
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
     rhbm_trainer::AlphaTrainer alpha_trainer(
@@ -483,7 +479,6 @@ void SavePreparedModel(
     const std::filesystem::path & database_path,
     std::string_view saved_key_tag)
 {
-    ScopeTimer timer("PotentialAnalysisCommand::SavePreparedModel");
     DataRepository repository{ database_path };
     repository.SaveModel(model_object, std::string(saved_key_tag));
     model_object.EditAnalysis().ClearTransientFitStates();
@@ -540,7 +535,6 @@ void RunDatasetPreparationWorkflow(
     double fit_range_max,
     int thread_size)
 {
-    ScopeTimer timer("PotentialAnalysisCommand::RunDatasetPreparationWorkflow");
     const auto & atom_list{ model_object.GetSelectedAtoms() };
     const auto atom_size{ atom_list.size() };
     size_t atom_count{ 0 };

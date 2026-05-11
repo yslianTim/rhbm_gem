@@ -86,7 +86,7 @@ struct PotentialAnalysisRequest : public CommandRequestBase
     double training_alpha_max{ 2.0 };
     double training_alpha_step{ 0.1 };
     bool asymmetry_flag{ false };
-    int sampling_size{ 1500 };
+    int sampling_size{ 50 };
     double sampling_range_min{ 0.0 };
     double sampling_range_max{ 1.5 };
     double sampling_height{ 0.1 };
