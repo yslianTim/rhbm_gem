@@ -18,12 +18,8 @@ SeriesPointList BuildDatasetSeries(
     const LocalPotentialSampleList & sampling_entries,
     const LinearizationRange & fit_range);
 
-RHBMParameterVector EncodeGaussianToParameterVector(
-    const GaussianModel3D & gaussian_model);
-
-GaussianModel3D DecodeParameterVector(
-    const RHBMParameterVector & parameter_vector);
-
+RHBMParameterVector EncodeGaussianToParameterVector(const GaussianModel3D & gaussian_model);
+GaussianModel3D DecodeParameterVector(const RHBMParameterVector & parameter_vector);
 GaussianModel3DWithUncertainty DecodeParameterVector(
     const RHBMParameterVector & parameter_vector,
     const RHBMPosteriorCovarianceMatrix & covariance_matrix);
