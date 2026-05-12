@@ -17,45 +17,64 @@
 
 using namespace rhbm_gem;
 
-RHBMMemberDataset rhbm_gem::rhbm_helper::BuildMemberDataset(
-    const SeriesPointList & series_point_list)
+namespace
 {
-    if (series_point_list.empty())
-    {
-        throw std::invalid_argument("series_point_list must not be empty.");
-    }
+constexpr int kLogQuadraticBasisSize{ 2 };
+} // namespace
 
-    const auto basis_size{ static_cast<int>(series_point_list.front().GetBasisSize()) };
-    rhbm_gem::numeric_validation::RequirePositive(basis_size, "basis_size");
+RHBMMemberDataset rhbm_gem::rhbm_helper::BuildMemberDataset(
+    const LocalPotentialSampleList & sampling_entries,
+    double range_min,
+    double range_max)
+{
+    rhbm_gem::numeric_validation::RequireFiniteNonNegativeRange(
+        range_min, range_max, "data range");
     rhbm_gem::numeric_validation::RequireAtMost(
-        series_point_list.size(),
+        sampling_entries.size(),
         static_cast<std::size_t>(std::numeric_limits<int>::max()),
-        "series_point_list size");
-    const auto data_size{ static_cast<int>(series_point_list.size()) };
+        "sampling_entries size");
 
     RHBMMemberDataset dataset;
-    dataset.X = RHBMDesignMatrix::Zero(data_size, basis_size);
-    dataset.y = RHBMResponseVector::Zero(data_size);
-    for (int i = 0; i < data_size; i++)
-    {
-        const auto & point{ series_point_list.at(static_cast<std::size_t>(i)) };
-        if (static_cast<int>(point.GetBasisSize()) != basis_size)
-        {
-            throw std::invalid_argument("All data entries must share the same basis size.");
-        }
-        rhbm_gem::numeric_validation::RequireFinite(
-            point.response,
-            "response",
-            "Member dataset contains non-finite value.");
-        rhbm_gem::numeric_validation::RequireAllFinite(
-            point.basis_list,
-            "basis_list",
-            "Member dataset contains non-finite value.");
+    dataset.X = RHBMDesignMatrix::Zero(
+        static_cast<int>(sampling_entries.size()), kLogQuadraticBasisSize);
+    dataset.y = RHBMResponseVector::Zero(static_cast<int>(sampling_entries.size()));
 
-        dataset.X.row(i) = Eigen::Map<const Eigen::RowVectorXd>(
-            point.basis_list.data(), basis_size);
-        dataset.y(i) = point.response;
+    int data_size{ 0 };
+    for (const auto & sample : sampling_entries)
+    {
+        const auto distance{ sample.distance };
+        const auto response{ static_cast<double>(sample.response) };
+        if (distance < static_cast<float>(range_min)) continue;
+        if (distance > static_cast<float>(range_max)) continue;
+        if (response <= 0.0) continue;
+
+        dataset.X(data_size, 0) = 1.0;
+        dataset.X(data_size, 1) = -0.5 * static_cast<double>(distance) *
+            static_cast<double>(distance);
+        dataset.y(data_size) = std::log(response);
+        data_size++;
     }
+
+    if (data_size == 0)
+    {
+        Logger::Log(LogLevel::Warning,
+            "rhbm_helper::BuildMemberDataset : "
+            "No valid gaus data entry in the specified range.");
+        dataset.X = RHBMDesignMatrix::Zero(1, kLogQuadraticBasisSize);
+        dataset.y = RHBMResponseVector::Zero(1);
+        return dataset;
+    }
+
+    dataset.X.conservativeResize(data_size, Eigen::NoChange);
+    dataset.y.conservativeResize(data_size);
+    rhbm_gem::eigen_validation::RequireFinite(
+        dataset.X,
+        "X",
+        "Member dataset contains non-finite value.");
+    rhbm_gem::eigen_validation::RequireFinite(
+        dataset.y,
+        "y",
+        "Member dataset contains non-finite value.");
 
     return dataset;
 }

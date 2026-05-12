@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <random>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 namespace
@@ -420,7 +421,7 @@ LocalPotentialSampleList BuildGaussianSampling(
     return sampling_entries;
 }
 
-SeriesPointList BuildLinearDataset(
+RHBMMemberDataset BuildLinearDataset(
     const LocalPotentialSampleList & sampling_entries,
     const GaussianModel3D & model,
     double error_sigma,
@@ -428,16 +429,13 @@ SeriesPointList BuildLinearDataset(
     double fit_range_max,
     std::mt19937 & generator)
 {
-    auto linear_data_entry_list{
-        linearization_service::BuildDatasetSeries(sampling_entries, fit_range_min, fit_range_max)
-    };
-    const auto max_response{ model.Intensity() };
-    std::normal_distribution<> dist_error(0.0, error_sigma * max_response);
-    for (auto & data_entry : linear_data_entry_list)
+    auto dataset{ rhbm_helper::BuildMemberDataset(sampling_entries, fit_range_min, fit_range_max) };
+    std::normal_distribution<> dist_error(0.0, error_sigma * model.Intensity());
+    for (Eigen::Index i = 0; i < dataset.y.rows(); i++)
     {
-        data_entry.response += dist_error(generator);
+        dataset.y(i) += dist_error(generator);
     }
-    return linear_data_entry_list;
+    return dataset;
 }
 
 Eigen::MatrixXd BuildRandomGausParameters(
@@ -532,7 +530,7 @@ RHBMBetaTestInput BuildBetaTestInput(const BetaScenario & scenario, const TestDa
                 options.fit_range_max,
                 generator)
         };
-        const auto data_entry_list{
+        auto dataset{
             BuildLinearDataset(
                 sampling_entries,
                 scenario.gaus_true,
@@ -541,7 +539,7 @@ RHBMBetaTestInput BuildBetaTestInput(const BetaScenario & scenario, const TestDa
                 options.fit_range_max,
                 generator)
         };
-        input.replica_datasets.emplace_back(rhbm_helper::BuildMemberDataset(data_entry_list));
+        input.replica_datasets.emplace_back(std::move(dataset));
     }
 
     return input;
@@ -656,7 +654,7 @@ RHBMNeighborhoodTestInput BuildNeighborhoodTestInput(
             GenerateNeighborhoodSamples(
                 static_cast<size_t>(scenario.sampling_entry_size), scenario.gaus_true, cut_options)
         };
-        const auto no_cut_data_entry_list{
+        auto no_cut_dataset{
             BuildLinearDataset(
                 no_cut_sampling_entries,
                 scenario.gaus_true,
@@ -666,7 +664,7 @@ RHBMNeighborhoodTestInput BuildNeighborhoodTestInput(
                 generator
             )
         };
-        const auto cut_data_entry_list{
+        auto cut_dataset{
             BuildLinearDataset(
                 cut_sampling_entries,
                 scenario.gaus_true,
@@ -676,12 +674,8 @@ RHBMNeighborhoodTestInput BuildNeighborhoodTestInput(
                 generator
             )
         };
-        input.no_cut_input.replica_datasets.emplace_back(
-            rhbm_helper::BuildMemberDataset(no_cut_data_entry_list)
-        );
-        input.cut_input.replica_datasets.emplace_back(
-            rhbm_helper::BuildMemberDataset(cut_data_entry_list)
-        );
+        input.no_cut_input.replica_datasets.emplace_back(std::move(no_cut_dataset));
+        input.cut_input.replica_datasets.emplace_back(std::move(cut_dataset));
     }
 
     return input;
@@ -747,7 +741,7 @@ RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
             GenerateAtomNeighborhoodSamples(
                 static_cast<size_t>(scenario.sampling_entry_size), scenario.gaus_true, cut_options)
         };
-        const auto no_cut_data_entry_list{
+        auto no_cut_dataset{
             BuildLinearDataset(
                 no_cut_sampling_entries,
                 scenario.gaus_true,
@@ -757,7 +751,7 @@ RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
                 generator
             )
         };
-        const auto cut_data_entry_list{
+        auto cut_dataset{
             BuildLinearDataset(
                 cut_sampling_entries,
                 scenario.gaus_true,
@@ -767,12 +761,8 @@ RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
                 generator
             )
         };
-        input.no_cut_input.replica_datasets.emplace_back(
-            rhbm_helper::BuildMemberDataset(no_cut_data_entry_list)
-        );
-        input.cut_input.replica_datasets.emplace_back(
-            rhbm_helper::BuildMemberDataset(cut_data_entry_list)
-        );
+        input.no_cut_input.replica_datasets.emplace_back(std::move(no_cut_dataset));
+        input.cut_input.replica_datasets.emplace_back(std::move(cut_dataset));
     }
 
     return input;

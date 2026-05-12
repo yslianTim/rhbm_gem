@@ -1,10 +1,11 @@
 #include <gtest/gtest.h>
 
+#include <cmath>
+#include <cstddef>
 #include <initializer_list>
 #include <limits>
 #include <stdexcept>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
@@ -54,17 +55,32 @@ rg::RHBMMemberDataset MakeDataset(
     return rg::RHBMMemberDataset{ X, y };
 }
 
-SeriesPoint MakeSeriesPoint(std::initializer_list<double> values)
+using DatasetRow = std::vector<double>;
+
+DatasetRow MakeDatasetRow(std::initializer_list<double> values)
 {
-    std::vector<double> row(values);
-    const auto response{ row.back() };
-    row.pop_back();
-    return SeriesPoint{ std::move(row), response };
+    return DatasetRow(values);
 }
 
-rg::RHBMMemberDataset MakeDataset(std::initializer_list<SeriesPoint> rows)
+rg::RHBMMemberDataset MakeDataset(std::initializer_list<DatasetRow> rows)
 {
-    return rhbm_gem::rhbm_helper::BuildMemberDataset(SeriesPointList(rows));
+    const auto data_size{ static_cast<Eigen::Index>(rows.size()) };
+    const auto basis_size{ static_cast<Eigen::Index>(rows.begin()->size() - 1) };
+    rg::RHBMMemberDataset dataset;
+    dataset.X = rg::RHBMDesignMatrix::Zero(data_size, basis_size);
+    dataset.y = rg::RHBMResponseVector::Zero(data_size);
+
+    Eigen::Index row_index{ 0 };
+    for (const auto & row : rows)
+    {
+        for (Eigen::Index column = 0; column < basis_size; column++)
+        {
+            dataset.X(row_index, column) = row.at(static_cast<std::size_t>(column));
+        }
+        dataset.y(row_index) = row.back();
+        row_index++;
+    }
+    return dataset;
 }
 
 rg::RHBMBetaEstimateResult MakeFitResult(
@@ -84,56 +100,81 @@ rg::RHBMBetaEstimateResult MakeFitResult(
 }
 } // namespace
 
-TEST(RHBMHelperTest, BuildMemberDatasetSplitsPredictorsAndResponse)
+TEST(RHBMHelperTest, BuildMemberDatasetTransformsSamplesToLogQuadraticDataset)
 {
-    const SeriesPointList data_series{
-        SeriesPoint({ 1.0, 2.0 }, 10.0),
-        SeriesPoint({ 3.0, 4.0 }, 20.0)
+    const LocalPotentialSampleList sampling_entries{
+        LocalPotentialSample{ 1.0F, 2.0F },
+        LocalPotentialSample{ 2.0F, 4.0F }
     };
 
-    const auto dataset{ rhbm_gem::rhbm_helper::BuildMemberDataset(data_series) };
+    const auto dataset{ rhbm_gem::rhbm_helper::BuildMemberDataset(sampling_entries, 0.0, 3.0) };
 
     Eigen::MatrixXd expected_X(2, 2);
-    expected_X << 1.0, 2.0,
-                  3.0, 4.0;
+    expected_X << 1.0, -0.5,
+                  1.0, -2.0;
     EXPECT_TRUE(dataset.X.isApprox(expected_X, 1e-12));
-    EXPECT_TRUE(dataset.y.isApprox(MakeVector({ 10.0, 20.0 }), 1e-12));
+    EXPECT_TRUE(dataset.y.isApprox(MakeVector({ std::log(2.0), std::log(4.0) }), 1e-12));
 }
 
-TEST(RHBMHelperTest, BuildMemberDatasetRejectsEmptyInput)
+TEST(RHBMHelperTest, BuildMemberDatasetFiltersByRangeAndPositiveResponse)
 {
-    const SeriesPointList data_series;
-    EXPECT_THROW(rhbm_gem::rhbm_helper::BuildMemberDataset(data_series), std::invalid_argument);
+    const LocalPotentialSampleList sampling_entries{
+        LocalPotentialSample{ 0.5F, 2.0F },
+        LocalPotentialSample{ 1.0F, 3.0F },
+        LocalPotentialSample{ 2.0F, -1.0F },
+        LocalPotentialSample{ 3.0F, 5.0F },
+        LocalPotentialSample{ 3.5F, 7.0F }
+    };
+
+    const auto dataset{ rhbm_gem::rhbm_helper::BuildMemberDataset(sampling_entries, 1.0, 3.0) };
+
+    Eigen::MatrixXd expected_X(2, 2);
+    expected_X << 1.0, -0.5,
+                  1.0, -4.5;
+    EXPECT_TRUE(dataset.X.isApprox(expected_X, 1e-12));
+    EXPECT_TRUE(dataset.y.isApprox(MakeVector({ std::log(3.0), std::log(5.0) }), 1e-12));
+}
+
+TEST(RHBMHelperTest, BuildMemberDatasetReturnsZeroFallbackWhenNoSampleIsValid)
+{
+    const LocalPotentialSampleList sampling_entries{
+        LocalPotentialSample{ 0.5F, 2.0F },
+        LocalPotentialSample{ 1.5F, 0.0F }
+    };
+
+    const auto dataset{ rhbm_gem::rhbm_helper::BuildMemberDataset(sampling_entries, 1.0, 2.0) };
+
+    Eigen::MatrixXd expected_X{ Eigen::MatrixXd::Zero(1, 2) };
+    EXPECT_TRUE(dataset.X.isApprox(expected_X, 1e-12));
+    EXPECT_TRUE(dataset.y.isApprox(MakeVector({ 0.0 }), 1e-12));
+}
+
+TEST(RHBMHelperTest, BuildMemberDatasetRejectsInvalidRange)
+{
+    const LocalPotentialSampleList sampling_entries{
+        LocalPotentialSample{ 1.0F, 2.0F }
+    };
+
+    EXPECT_THROW(
+        rhbm_gem::rhbm_helper::BuildMemberDataset(sampling_entries, 2.0, 1.0),
+        std::invalid_argument);
 }
 
 TEST(RHBMHelperTest, BuildMemberDatasetRejectsNonFiniteValues)
 {
-    const SeriesPointList data_series{
-        SeriesPoint({ 1.0, std::numeric_limits<double>::quiet_NaN() }, 10.0)
+    const LocalPotentialSampleList distance_nan{
+        LocalPotentialSample{ std::numeric_limits<float>::quiet_NaN(), 2.0F }
     };
-    EXPECT_THROW(rhbm_gem::rhbm_helper::BuildMemberDataset(data_series), std::invalid_argument);
+    const LocalPotentialSampleList response_nan{
+        LocalPotentialSample{ 1.0F, std::numeric_limits<float>::quiet_NaN() }
+    };
+
     EXPECT_THROW(
-        rhbm_gem::rhbm_helper::BuildMemberDataset({
-            SeriesPoint({ 1.0, 2.0 }, std::numeric_limits<double>::quiet_NaN())
-        }),
+        rhbm_gem::rhbm_helper::BuildMemberDataset(distance_nan, 0.0, 2.0),
         std::invalid_argument);
-}
-
-TEST(RHBMHelperTest, BuildMemberDatasetRejectsInconsistentBasis)
-{
-    const SeriesPointList data_series{
-        SeriesPoint({ 1.0, 2.0 }, 10.0),
-        SeriesPoint({ 3.0, 4.0, 5.0 }, 20.0)
-    };
-    EXPECT_THROW(rhbm_gem::rhbm_helper::BuildMemberDataset(data_series), std::invalid_argument);
-}
-
-TEST(RHBMHelperTest, BuildMemberDatasetRejectsEmptyBasis)
-{
-    const SeriesPointList data_series{
-        SeriesPoint(std::vector<double>{}, 10.0)
-    };
-    EXPECT_THROW(rhbm_gem::rhbm_helper::BuildMemberDataset(data_series), std::invalid_argument);
+    EXPECT_THROW(
+        rhbm_gem::rhbm_helper::BuildMemberDataset(response_nan, 0.0, 2.0),
+        std::invalid_argument);
 }
 
 TEST(RHBMHelperTest, BuildBetaMatrixMapsVectorsToColumns)
@@ -190,8 +231,8 @@ TEST(RHBMHelperTest, BuildGroupInputBuildsStructuredRequest)
     const auto input{
         rhbm_gem::rhbm_helper::BuildGroupInput(
             {
-                MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 1.0 }), MakeSeriesPoint({ 1.0, 1.0, 3.0 }) }),
-                MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 2.0 }), MakeSeriesPoint({ 1.0, 1.0, 4.0 }) })
+                MakeDataset({ MakeDatasetRow({ 1.0, 0.0, 1.0 }), MakeDatasetRow({ 1.0, 1.0, 3.0 }) }),
+                MakeDataset({ MakeDatasetRow({ 1.0, 0.0, 2.0 }), MakeDatasetRow({ 1.0, 1.0, 4.0 }) })
             },
             {
                 MakeFitResult({ 1.0, 2.0 }, 0.25, { 1.0, 1.0 }, { 0.25, 0.25 }),
@@ -210,7 +251,7 @@ TEST(RHBMHelperTest, BuildGroupInputRejectsMismatchedMemberCounts)
 {
     EXPECT_THROW(
         rhbm_gem::rhbm_helper::BuildGroupInput(
-            { MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 1.0 }) }) },
+            { MakeDataset({ MakeDatasetRow({ 1.0, 0.0, 1.0 }) }) },
             {
                 MakeFitResult({ 1.0, 2.0 }, 0.25, { 1.0 }, { 1.0 }),
                 MakeFitResult({ 3.0, 4.0 }, 0.5, { 1.0 }, { 1.0 })
@@ -225,7 +266,7 @@ TEST(RHBMHelperTest, BuildGroupInputRejectsInconsistentWeightSize)
     EXPECT_THROW(
         rhbm_gem::rhbm_helper::BuildGroupInput(
             {
-                MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 1.0 }), MakeSeriesPoint({ 1.0, 1.0, 3.0 }) })
+                MakeDataset({ MakeDatasetRow({ 1.0, 0.0, 1.0 }), MakeDatasetRow({ 1.0, 1.0, 3.0 }) })
             },
             {
                 MakeFitResult({ 1.0, 2.0 }, 0.25, { 1.0 }, { 0.25, 0.25 })
@@ -241,8 +282,8 @@ TEST(RHBMHelperTest, BuildGroupInputRejectsInconsistentMemberBetaBasisSize)
         rhbm_gem::rhbm_helper::BuildGroupInput(
             {
                 MakeDataset({
-                    MakeSeriesPoint({ 1.0, 0.0, 1.0 }),
-                    MakeSeriesPoint({ 1.0, 1.0, 3.0 })
+                    MakeDatasetRow({ 1.0, 0.0, 1.0 }),
+                    MakeDatasetRow({ 1.0, 1.0, 3.0 })
                 })
             },
             {
@@ -258,7 +299,7 @@ TEST(RHBMHelperTest, EstimateGroupSingleMemberUsesFallbackResult)
     const auto input{
         rhbm_gem::rhbm_helper::BuildGroupInput(
             {
-                MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 1.0 }), MakeSeriesPoint({ 1.0, 1.0, 3.0 }) })
+                MakeDataset({ MakeDatasetRow({ 1.0, 0.0, 1.0 }), MakeDatasetRow({ 1.0, 1.0, 3.0 }) })
             },
             {
                 MakeFitResult({ 1.0, 2.0 }, 0.25, { 1.0, 1.0 }, { 0.25, 0.25 })
@@ -320,8 +361,8 @@ TEST(RHBMHelperTest, EstimateGroupTwoMembersPinsMuPriorToMuMDPDE)
     const auto input{
         rhbm_gem::rhbm_helper::BuildGroupInput(
             {
-                MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 1.0 }), MakeSeriesPoint({ 1.0, 1.0, 3.0 }) }),
-                MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 2.0 }), MakeSeriesPoint({ 1.0, 1.0, 4.0 }) })
+                MakeDataset({ MakeDatasetRow({ 1.0, 0.0, 1.0 }), MakeDatasetRow({ 1.0, 1.0, 3.0 }) }),
+                MakeDataset({ MakeDatasetRow({ 1.0, 0.0, 2.0 }), MakeDatasetRow({ 1.0, 1.0, 4.0 }) })
             },
             {
                 MakeFitResult({ 1.0, 2.0 }, 0.25, { 1.0, 1.0 }, { 0.25, 0.25 }),
@@ -345,8 +386,8 @@ TEST(RHBMHelperTest, EstimateGroupAllowsConvergenceFallbackStatuses)
     const auto input{
         rhbm_gem::rhbm_helper::BuildGroupInput(
             {
-                MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 1.0 }), MakeSeriesPoint({ 1.0, 1.0, 3.0 }) }),
-                MakeDataset({ MakeSeriesPoint({ 1.0, 0.0, 2.0 }), MakeSeriesPoint({ 1.0, 1.0, 4.0 }) })
+                MakeDataset({ MakeDatasetRow({ 1.0, 0.0, 1.0 }), MakeDatasetRow({ 1.0, 1.0, 3.0 }) }),
+                MakeDataset({ MakeDatasetRow({ 1.0, 0.0, 2.0 }), MakeDatasetRow({ 1.0, 1.0, 4.0 }) })
             },
             {
                 MakeFitResult(

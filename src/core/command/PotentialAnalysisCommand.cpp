@@ -15,7 +15,6 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
-#include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 
@@ -499,8 +498,7 @@ void RunPotentialSamplingWorkflow(
         };
         auto dataset{
             rhbm_helper::BuildMemberDataset(
-                linearization_service::BuildDatasetSeries(
-                    sampling_entries, request.fit_range_min, request.fit_range_max))
+                sampling_entries, request.fit_range_min, request.fit_range_max)
         };
         entry.SetSamplingEntries(std::move(sampling_entries));
         entry.SetDataset(std::move(dataset));

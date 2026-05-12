@@ -1,11 +1,12 @@
 #include <gtest/gtest.h>
 
+#include <cstddef>
 #include <initializer_list>
 #include <stdexcept>
 #include <vector>
 
-#include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
+#include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 
 namespace rg = rhbm_gem;
 
@@ -24,15 +25,16 @@ Eigen::VectorXd MakeVector(std::initializer_list<double> values)
 
 rg::RHBMMemberDataset MakeLinearDataset(double slope)
 {
-    const SeriesPointList data_list{
-        SeriesPoint({ 1.0, 0.0 }, 1.0),
-        SeriesPoint({ 1.0, 1.0 }, 1.0 + slope),
-        SeriesPoint({ 1.0, 2.0 }, 1.0 + 2.0 * slope),
-        SeriesPoint({ 1.0, 3.0 }, 1.0 + 3.0 * slope),
-        SeriesPoint({ 1.0, 4.0 }, 1.0 + 4.0 * slope),
-        SeriesPoint({ 1.0, 5.0 }, 1.0 + 5.0 * slope)
-    };
-    return rhbm_gem::rhbm_helper::BuildMemberDataset(data_list);
+    rg::RHBMMemberDataset dataset;
+    dataset.X = rg::RHBMDesignMatrix::Zero(6, 2);
+    dataset.y = rg::RHBMResponseVector::Zero(6);
+    for (Eigen::Index i = 0; i < dataset.X.rows(); i++)
+    {
+        dataset.X(i, 0) = 1.0;
+        dataset.X(i, 1) = static_cast<double>(i);
+        dataset.y(i) = 1.0 + static_cast<double>(i) * slope;
+    }
+    return dataset;
 }
 
 double BestAlphaForErrors(
@@ -88,15 +90,7 @@ TEST(RHBMTrainerTest, ConstructorRejectsInvalidAlphaGrid)
 
 TEST(RHBMTrainerTest, TrainAlphaRSingleDatasetWithExactLinearDataReturnsZeroError)
 {
-    const SeriesPointList data_list{
-        SeriesPoint({ 1.0, 0.0 }, 1.0),
-        SeriesPoint({ 1.0, 1.0 }, 3.0),
-        SeriesPoint({ 1.0, 2.0 }, 5.0),
-        SeriesPoint({ 1.0, 3.0 }, 7.0),
-        SeriesPoint({ 1.0, 4.0 }, 9.0),
-        SeriesPoint({ 1.0, 5.0 }, 11.0)
-    };
-    const auto dataset{ rhbm_gem::rhbm_helper::BuildMemberDataset(data_list) };
+    const auto dataset{ MakeLinearDataset(2.0) };
     const rhbm_gem::rhbm_trainer::AlphaTrainer trainer{ 0.0, 0.5, 0.5 };
     rhbm_gem::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions options;
     options.subset_size = 3;
