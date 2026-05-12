@@ -531,8 +531,9 @@ void RunDatasetPreparationWorkflow(
 #endif
     for (size_t i = 0; i < atom_size; i++)
     {
+        auto atom{ atom_list[i] };
         auto entry{ local_entry_list[i] };
-        const auto local_view{ LocalPotentialView::RequireFor(*atom_list[i]) };
+        const auto local_view{ LocalPotentialView::RequireFor(*atom) };
         entry.SetDataset(
             rhbm_helper::BuildMemberDataset(
                 linearization_service::BuildDatasetSeries(local_view.GetSamplingEntries(),fit_range))
