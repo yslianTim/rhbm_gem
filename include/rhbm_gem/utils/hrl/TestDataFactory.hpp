@@ -6,7 +6,6 @@
 
 #include <Eigen/Dense>
 
-#include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
@@ -43,7 +42,8 @@ struct RHBMNeighborhoodTestInput
 
 struct TestDataBuildOptions
 {
-    linearization_service::LinearizationRange fitting_range{ 0.0, 1.0 };
+    double fit_range_min{ 0.0 };
+    double fit_range_max{ 1.0 };
 };
 
 struct BetaScenario

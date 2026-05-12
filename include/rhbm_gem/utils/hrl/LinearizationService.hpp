@@ -8,15 +8,10 @@
 namespace rhbm_gem::linearization_service
 {
 
-struct LinearizationRange
-{
-    double min{ 0.0 };
-    double max{ 1.0 };
-};
-
 SeriesPointList BuildDatasetSeries(
     const LocalPotentialSampleList & sampling_entries,
-    const LinearizationRange & fit_range);
+    double range_min,
+    double range_max);
 
 RHBMParameterVector EncodeGaussianToParameterVector(const GaussianModel3D & gaussian_model);
 GaussianModel3D DecodeParameterVector(const RHBMParameterVector & parameter_vector);

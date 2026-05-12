@@ -487,11 +487,6 @@ void RunPotentialSamplingWorkflow(
     const auto atom_size{ atom_list.size() };
     size_t atom_count{ 0 };
     auto local_entry_list{ BuildSelectedAtomLocalEntryViews(model_object) };
-    const linearization_service::LinearizationRange fit_range{
-        request.fit_range_min,
-        request.fit_range_max
-    };
-
 #ifdef USE_OPENMP
     #pragma omp parallel for num_threads(thread_size)
 #endif
@@ -504,7 +499,8 @@ void RunPotentialSamplingWorkflow(
         };
         auto dataset{
             rhbm_helper::BuildMemberDataset(
-                linearization_service::BuildDatasetSeries(sampling_entries, fit_range))
+                linearization_service::BuildDatasetSeries(
+                    sampling_entries, request.fit_range_min, request.fit_range_max))
         };
         entry.SetSamplingEntries(std::move(sampling_entries));
         entry.SetDataset(std::move(dataset));

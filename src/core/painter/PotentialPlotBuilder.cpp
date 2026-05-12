@@ -38,10 +38,8 @@ SeriesPointList BuildLocalDatasetSeries(const LocalPotentialView & view)
 {
     return ls::BuildDatasetSeries(
         view.GetSamplingEntries(),
-        ls::LinearizationRange{
-            -std::numeric_limits<double>::infinity(),
-            std::numeric_limits<double>::infinity()
-        });
+        -std::numeric_limits<double>::infinity(),
+        std::numeric_limits<double>::infinity());
 }
 
 } // namespace

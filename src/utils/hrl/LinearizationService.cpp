@@ -3,6 +3,7 @@
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
+#include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <cmath>
 #include <stdexcept>
@@ -17,16 +18,10 @@ constexpr int kLogQuadraticBasisSize{ 2 };
 
 SeriesPointList BuildDatasetSeries(
     const LocalPotentialSampleList & sampling_entries,
-    const LinearizationRange & fit_range)
+    double range_min,
+    double range_max)
 {
-    if (std::isnan(fit_range.min) || std::isnan(fit_range.max))
-    {
-        throw std::invalid_argument("linearization range values must not be NaN.");
-    }
-    if (fit_range.min > fit_range.max)
-    {
-        throw std::invalid_argument("linearization range min must not exceed max.");
-    }
+    numeric_validation::RequireFiniteNonNegativeRange(range_min, range_max, "data range");
 
     SeriesPointList basis_and_response_entry_list;
     basis_and_response_entry_list.reserve(sampling_entries.size());
@@ -34,8 +29,8 @@ SeriesPointList BuildDatasetSeries(
     {
         const auto distance{ sample.distance };
         const auto gaussian_response{ static_cast<double>(sample.response) };
-        if (distance < static_cast<float>(fit_range.min)) continue;
-        if (distance > static_cast<float>(fit_range.max)) continue;
+        if (distance < static_cast<float>(range_min)) continue;
+        if (distance > static_cast<float>(range_max)) continue;
         if (sample.score <= 0.0f) continue;
         if (gaussian_response <= 0.0) continue;
 

@@ -500,9 +500,7 @@ SeriesPointList BuildLinearDataset(
     std::mt19937 & generator)
 {
     auto linear_data_entry_list{
-        linearization_service::BuildDatasetSeries(
-            sampling_entries,
-            linearization_service::LinearizationRange{ fit_range_min, fit_range_max })
+        linearization_service::BuildDatasetSeries(sampling_entries, fit_range_min, fit_range_max)
     };
     const auto max_response{ model.Intensity() };
     std::normal_distribution<> dist_error(0.0, error_sigma * max_response);
@@ -649,9 +647,7 @@ RHBMBetaTestInput BuildBetaTestInput(
     const TestDataBuildOptions & options)
 {
     numeric_validation::RequireFiniteNonNegativeRange(
-        options.fitting_range.min,
-        options.fitting_range.max,
-        "fitting range");
+        options.fit_range_min, options.fit_range_max, "fitting range");
     numeric_validation::RequirePositive(scenario.sampling_entry_size, "sampling_entry_size");
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
     GaussianModel3D::RequireFinitePositiveWidthModel(scenario.gaus_true, "scenario.gaus_true");
@@ -671,8 +667,8 @@ RHBMBetaTestInput BuildBetaTestInput(
                 scenario.gaus_true,
                 scenario.data_error_sigma,
                 scenario.outlier_ratio,
-                options.fitting_range.min,
-                options.fitting_range.max,
+                options.fit_range_min,
+                options.fit_range_max,
                 generator
             )
         };
@@ -735,9 +731,7 @@ RHBMNeighborhoodTestInput BuildNeighborhoodTestInput(
     const TestDataBuildOptions & options)
 {
     numeric_validation::RequireFiniteNonNegativeRange(
-        options.fitting_range.min,
-        options.fitting_range.max,
-        "fitting range");
+        options.fit_range_min, options.fit_range_max, "fitting range");
     numeric_validation::RequirePositive(scenario.sampling_entry_size, "sampling_entry_size");
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
     GaussianModel3D::RequireFinitePositiveWidthModel(scenario.gaus_true, "scenario.gaus_true");
@@ -791,8 +785,8 @@ RHBMNeighborhoodTestInput BuildNeighborhoodTestInput(
                 scenario.gaus_true,
                 scenario.data_error_sigma,
                 no_cut_options,
-                options.fitting_range.min,
-                options.fitting_range.max,
+                options.fit_range_min,
+                options.fit_range_max,
                 generator
             )
         };
@@ -802,8 +796,8 @@ RHBMNeighborhoodTestInput BuildNeighborhoodTestInput(
                 scenario.gaus_true,
                 scenario.data_error_sigma,
                 cut_options,
-                options.fitting_range.min,
-                options.fitting_range.max,
+                options.fit_range_min,
+                options.fit_range_max,
                 generator
             )
         };
@@ -823,8 +817,8 @@ RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
     const TestDataBuildOptions & options)
 {
     numeric_validation::RequireFiniteNonNegativeRange(
-        options.fitting_range.min,
-        options.fitting_range.max,
+        options.fit_range_min,
+        options.fit_range_max,
         "fitting range");
     numeric_validation::RequirePositive(scenario.sampling_entry_size, "sampling_entry_size");
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
@@ -876,8 +870,8 @@ RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
                 scenario.gaus_true,
                 scenario.data_error_sigma,
                 no_cut_options,
-                options.fitting_range.min,
-                options.fitting_range.max,
+                options.fit_range_min,
+                options.fit_range_max,
                 generator
             )
         };
@@ -887,8 +881,8 @@ RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
                 scenario.gaus_true,
                 scenario.data_error_sigma,
                 cut_options,
-                options.fitting_range.min,
-                options.fitting_range.max,
+                options.fit_range_min,
+                options.fit_range_max,
                 generator
             )
         };

@@ -3,7 +3,6 @@
 
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
-#include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/TestDataFactory.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTester.hpp>
 
@@ -83,7 +82,8 @@ std::vector<double> BuildDescendingSweep(int count, double start, double step)
 test_data_factory::TestDataBuildOptions BuildTestDataOptions(const RHBMTestRequest & request)
 {
     return test_data_factory::TestDataBuildOptions{
-        linearization_service::LinearizationRange{request.fit_range_min, request.fit_range_max}
+        request.fit_range_min,
+        request.fit_range_max
     };
 }
 
@@ -124,8 +124,8 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
         base_scenario.gaus_true = GaussianModel3D::FromVector(model_par_prior);
         base_scenario.sampling_entry_size = 50;
         base_scenario.data_error_sigma = error_sigma;
-        base_scenario.radius_min = test_data_options.fitting_range.min;
-        base_scenario.radius_max = test_data_options.fitting_range.max;
+        base_scenario.radius_min = test_data_options.fit_range_min;
+        base_scenario.radius_max = test_data_options.fit_range_max;
         base_scenario.neighbor_type = neighbor_type;
         base_scenario.rejected_angle = 15.0;
         base_scenario.include_sampling_summary = false;

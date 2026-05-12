@@ -36,7 +36,7 @@ TEST(LinearizationServiceTest, BuildDatasetSeriesTransformsEffectiveSamplesWithi
     };
 
     const auto series{
-        ls::BuildDatasetSeries(sampling_entries, ls::LinearizationRange{ 0.0, 0.5 })
+        ls::BuildDatasetSeries(sampling_entries, 0.0, 0.5)
     };
 
     ASSERT_EQ(series.size(), 2U);
@@ -57,12 +57,13 @@ TEST(LinearizationServiceTest, BuildDatasetSeriesRejectsInvalidRange)
     };
 
     EXPECT_THROW(
-        ls::BuildDatasetSeries(sampling_entries, ls::LinearizationRange{ 1.0, 0.0 }),
+        ls::BuildDatasetSeries(sampling_entries, 1.0, 0.0),
         std::invalid_argument);
     EXPECT_THROW(
         ls::BuildDatasetSeries(
             sampling_entries,
-            ls::LinearizationRange{ std::numeric_limits<double>::quiet_NaN(), 1.0 }),
+            std::numeric_limits<double>::quiet_NaN(),
+            1.0),
         std::invalid_argument);
 }
 
