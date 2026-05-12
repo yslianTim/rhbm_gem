@@ -65,8 +65,7 @@ struct PotentialAnalysisInputs
     std::unique_ptr<MapObject> map_object;
 };
 
-RHBMExecutionOptions MakePotentialAnalysisExecutionOptions(
-    int thread_size, bool quiet_mode)
+RHBMExecutionOptions MakePotentialAnalysisExecutionOptions(int thread_size, bool quiet_mode)
 {
     RHBMExecutionOptions execution_options;
     execution_options.quiet_mode = quiet_mode;
@@ -176,8 +175,7 @@ std::optional<PotentialAnalysisInputs> LoadPotentialAnalysisInputs(
     }
 }
 
-std::vector<MutableLocalPotentialView>
-BuildSelectedAtomLocalEntryViews(ModelObject & model_object)
+std::vector<MutableLocalPotentialView> BuildSelectedAtomLocalEntryViews(ModelObject & model_object)
 {
     auto analysis{ model_object.EditAnalysis() };
     const auto & atom_list{ model_object.GetSelectedAtoms() };
@@ -190,18 +188,7 @@ BuildSelectedAtomLocalEntryViews(ModelObject & model_object)
     return local_entry_list;
 }
 
-void SetSelectedAtomAlphaR(
-    ModelAnalysisEditor & analysis,
-    const std::vector<AtomObject *> & atom_list,
-    double alpha_r)
-{
-    for (auto * atom : atom_list)
-    {
-        analysis.EnsureAtomLocalPotential(*atom).SetAlphaR(alpha_r);
-    }
-}
-
-void RunModelObjectPreprocessing(ModelObject & model_object, bool asymmetry_flag)
+void RunModelObjectPreprocessing(ModelObject & model_object, bool asymmetry_flag, double alpha_r)
 {
     auto analysis{ model_object.EditAnalysis() };
     analysis.Clear();
@@ -219,8 +206,13 @@ void RunModelObjectPreprocessing(ModelObject & model_object, bool asymmetry_flag
     }
 
     // Establish the model-analysis preprocessing invariant for downstream steps:
-    // selection is finalized, local entries exist, and atom groups are materialized.
+    // selection is finalized, local entries exist, atom groups are materialized,
+    // and selected atoms carry the initial alpha-r.
     analysis.RebuildAtomGroupsFromSelection();
+    for (auto * atom : model_object.GetSelectedAtoms())
+    {
+        analysis.EnsureAtomLocalPotential(*atom).SetAlphaR(alpha_r);
+    }
 
     Logger::Log(LogLevel::Info,
         "Number of selected atom = " + std::to_string(model_object.GetSelectedAtomCount()));
@@ -306,8 +298,10 @@ void RunAtomAlphaTraining(
             const auto alpha_r_result{
                 alpha_trainer.TrainAlphaR(selected_atom_dataset_list, alpha_r_options)
             };
-            const auto alpha_r{ alpha_r_result.best_alpha };
-            SetSelectedAtomAlphaR(analysis, group_atom_list, alpha_r);
+            for (auto * atom : group_atom_list)
+            {
+                analysis.EnsureAtomLocalPotential(*atom).SetAlphaR(alpha_r_result.best_alpha);
+            }
         }
         Logger::ProgressPercent(++count, component_group_keys.size());
     }
@@ -483,17 +477,21 @@ void SavePreparedModel(
     model_object.EditAnalysis().ClearTransientFitStates();
 }
 
-void RunSamplingWorkflow(
+void RunPotentialSamplingWorkflow(
     MapObject & map_object,
     ModelObject & model_object,
-    SphereSamplingProfileChoice sampling_profile_choice,
+    const PotentialAnalysisRequest & request,
     int thread_size)
 {
-    ScopeTimer timer("PotentialAnalysisCommand::RunSamplingWorkflow");
+    ScopeTimer timer("PotentialAnalysisCommand::RunPotentialSamplingWorkflow");
     const auto & atom_list{ model_object.GetSelectedAtoms() };
     const auto atom_size{ atom_list.size() };
     size_t atom_count{ 0 };
     auto local_entry_list{ BuildSelectedAtomLocalEntryViews(model_object) };
+    const linearization_service::LinearizationRange fit_range{
+        request.fit_range_min,
+        request.fit_range_max
+    };
 
 #ifdef USE_OPENMP
     #pragma omp parallel for num_threads(thread_size)
@@ -502,42 +500,15 @@ void RunSamplingWorkflow(
     {
         auto atom{ atom_list[i] };
         auto entry{ local_entry_list[i] };
-        auto sampling_entries{ SampleAtomMapValues(map_object, *atom, sampling_profile_choice) };
-        entry.SetSamplingEntries(sampling_entries);
-#ifdef USE_OPENMP
-        #pragma omp critical
-#endif
-        {
-            atom_count++;
-            Logger::ProgressPercent(atom_count, atom_size);
-        }
-    }
-}
-
-void RunDatasetPreparationWorkflow(
-    ModelObject & model_object,
-    double fit_range_min,
-    double fit_range_max,
-    int thread_size)
-{
-    const auto & atom_list{ model_object.GetSelectedAtoms() };
-    const auto atom_size{ atom_list.size() };
-    size_t atom_count{ 0 };
-    auto local_entry_list{ BuildSelectedAtomLocalEntryViews(model_object) };
-    const linearization_service::LinearizationRange fit_range{ fit_range_min, fit_range_max };
-
-#ifdef USE_OPENMP
-    #pragma omp parallel for num_threads(thread_size)
-#endif
-    for (size_t i = 0; i < atom_size; i++)
-    {
-        auto atom{ atom_list[i] };
-        auto entry{ local_entry_list[i] };
-        const auto local_view{ LocalPotentialView::RequireFor(*atom) };
-        entry.SetDataset(
+        auto sampling_entries{
+            SampleAtomMapValues(map_object, *atom, request.sampling_profile_choice)
+        };
+        auto dataset{
             rhbm_helper::BuildMemberDataset(
-                linearization_service::BuildDatasetSeries(local_view.GetSamplingEntries(),fit_range))
-        );
+                linearization_service::BuildDatasetSeries(sampling_entries, fit_range))
+        };
+        entry.SetSamplingEntries(std::move(sampling_entries));
+        entry.SetDataset(std::move(dataset));
 
 #ifdef USE_OPENMP
         #pragma omp critical
@@ -583,12 +554,8 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
     {
         map_object.MapValueArrayNormalization();
     }
-    RunModelObjectPreprocessing(model_object, request.asymmetry_flag);
-    auto analysis{ model_object.EditAnalysis() };
-    SetSelectedAtomAlphaR(analysis, model_object.GetSelectedAtoms(), request.alpha_r);
-    RunSamplingWorkflow(map_object, model_object, request.sampling_profile_choice, thread_size);
-    RunDatasetPreparationWorkflow(
-        model_object, request.fit_range_min, request.fit_range_max, thread_size);
+    RunModelObjectPreprocessing(model_object, request.asymmetry_flag, request.alpha_r);
+    RunPotentialSamplingWorkflow(map_object, model_object, request, thread_size);
     RunAtomPotentialFittingWorkflow(model_object, request, thread_size);
 #ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
     experimental::RunPotentialAnalysisBondWorkflow(model_object, map_object, request, thread_size);
