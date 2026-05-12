@@ -127,7 +127,6 @@ set(UTILS_MATH_TEST_SOURCES
     utils/math/NumericValidation_test.cpp
     utils/math/KDTreeAlgorithm_test.cpp
     utils/math/LocalPotentialSampleScoring_test.cpp
-    utils/math/CylinderSampler_test.cpp
     utils/math/GridSampler_test.cpp
     utils/math/SphereSampler_test.cpp
 )
