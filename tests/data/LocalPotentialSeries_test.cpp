@@ -72,18 +72,23 @@ TEST(LocalPotentialSeriesTest, EntryFitDatasetSeriesKeepsFullBasisWithinFitRange
     entry.SetSamplingEntries(sampling_entries);
 
     const auto transformed{ BuildExpectedDatasetSeries(sampling_entries, 0.1, 0.3) };
-    ASSERT_EQ(transformed.size(), 2U);
+    ASSERT_EQ(transformed.size(), 3U);
 
     ASSERT_EQ(transformed.at(0).GetBasisSize(), 2U);
     ASSERT_EQ(transformed.at(1).GetBasisSize(), 2U);
+    ASSERT_EQ(transformed.at(2).GetBasisSize(), 2U);
     EXPECT_NEAR(transformed.at(0).GetBasisValue(0), 1.0, 1e-6);
     EXPECT_NEAR(transformed.at(0).GetBasisValue(1), -0.5 * 0.1 * 0.1, 1e-6);
     EXPECT_NEAR(transformed.at(0).response, std::log(4.0), 1e-6);
     EXPECT_NEAR(transformed.at(1).GetBasisValue(0), 1.0, 1e-6);
-    EXPECT_NEAR(transformed.at(1).GetBasisValue(1), -0.5 * 0.3 * 0.3, 1e-6);
-    EXPECT_NEAR(transformed.at(1).response, std::log(8.0), 1e-6);
+    EXPECT_NEAR(transformed.at(1).GetBasisValue(1), -0.5 * 0.25 * 0.25, 1e-6);
+    EXPECT_NEAR(transformed.at(1).response, std::log(9.0), 1e-6);
+    EXPECT_NEAR(transformed.at(2).GetBasisValue(0), 1.0, 1e-6);
+    EXPECT_NEAR(transformed.at(2).GetBasisValue(1), -0.5 * 0.3 * 0.3, 1e-6);
+    EXPECT_NEAR(transformed.at(2).response, std::log(8.0), 1e-6);
     EXPECT_FLOAT_EQ(transformed.at(0).score, 0.5f);
-    EXPECT_FLOAT_EQ(transformed.at(1).score, 2.5f);
+    EXPECT_FLOAT_EQ(transformed.at(1).score, 0.0f);
+    EXPECT_FLOAT_EQ(transformed.at(2).score, 2.5f);
 }
 
 TEST(LocalPotentialSeriesTest, EntryBinningRespectsNonZeroMinimum)
