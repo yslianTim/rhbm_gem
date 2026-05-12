@@ -46,9 +46,7 @@ RHBMParameterVector BuildParameterVector(const GaussianModel3D & model)
     return parameter_vector;
 }
 
-GaussianModel3D DecodeLogQuadratic(
-    const RHBMParameterVector & linear_model,
-    double dimension)
+GaussianModel3D DecodeLogQuadratic(const RHBMParameterVector & linear_model, double dimension)
 {
     const auto beta1{ linear_model(1) };
     if (beta1 <= 0.0)
