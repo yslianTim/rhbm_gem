@@ -36,7 +36,7 @@ SeriesPointList BuildDatasetSeries(
         auto basis_vector{ std::vector<double>{ 1.0, -0.5 * distance * distance } };
         auto transformed_response{ std::log(gaussian_response) };
         basis_and_response_entry_list.emplace_back(
-            SeriesPoint{ std::move(basis_vector), transformed_response, sample.score }
+            SeriesPoint{ std::move(basis_vector), transformed_response }
         );
     }
 

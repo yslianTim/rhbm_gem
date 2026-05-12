@@ -43,15 +43,12 @@ TEST(LinearizationServiceTest, BuildDatasetSeriesTransformsPositiveResponsesWith
     EXPECT_NEAR(1.0, series.at(0).GetBasisValue(0), 1.0e-7);
     EXPECT_NEAR(-0.5 * 0.1 * 0.1, series.at(0).GetBasisValue(1), 1.0e-7);
     EXPECT_NEAR(std::log(4.0), series.at(0).response, 1.0e-7);
-    EXPECT_FLOAT_EQ(0.5f, series.at(0).score);
     EXPECT_NEAR(1.0, series.at(1).GetBasisValue(0), 1.0e-7);
     EXPECT_NEAR(-0.5 * 0.3 * 0.3, series.at(1).GetBasisValue(1), 1.0e-7);
     EXPECT_NEAR(std::log(8.0), series.at(1).response, 1.0e-7);
-    EXPECT_FLOAT_EQ(2.5f, series.at(1).score);
     EXPECT_NEAR(1.0, series.at(2).GetBasisValue(0), 1.0e-7);
     EXPECT_NEAR(-0.5 * 0.4 * 0.4, series.at(2).GetBasisValue(1), 1.0e-7);
     EXPECT_NEAR(std::log(9.0), series.at(2).response, 1.0e-7);
-    EXPECT_FLOAT_EQ(0.0f, series.at(2).score);
 }
 
 TEST(LinearizationServiceTest, BuildDatasetSeriesRejectsInvalidRange)

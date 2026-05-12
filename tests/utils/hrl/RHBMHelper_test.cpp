@@ -87,8 +87,8 @@ rg::RHBMBetaEstimateResult MakeFitResult(
 TEST(RHBMHelperTest, BuildMemberDatasetSplitsPredictorsAndResponse)
 {
     const SeriesPointList data_series{
-        SeriesPoint({ 1.0, 2.0 }, 10.0, 0.5),
-        SeriesPoint({ 3.0, 4.0 }, 20.0, 2.0)
+        SeriesPoint({ 1.0, 2.0 }, 10.0),
+        SeriesPoint({ 3.0, 4.0 }, 20.0)
     };
 
     const auto dataset{ rhbm_gem::rhbm_helper::BuildMemberDataset(data_series) };

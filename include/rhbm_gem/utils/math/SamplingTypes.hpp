@@ -32,27 +32,22 @@ struct SeriesPoint
 {
     std::vector<double> basis_list{};
     double response{ 0.0 };
-    double score{ 1.0 };
 
     SeriesPoint() = default;
 
     SeriesPoint(
         std::initializer_list<double> basis_list_value,
-        double response_value,
-        double score_value = 1.0) :
+        double response_value) :
         basis_list{ basis_list_value },
-        response{ response_value },
-        score{ score_value }
+        response{ response_value }
     {
     }
 
     SeriesPoint(
         std::vector<double> basis_list_value,
-        double response_value,
-        double score_value = 1.0) :
+        double response_value) :
         basis_list{ std::move(basis_list_value) },
-        response{ response_value },
-        score{ score_value }
+        response{ response_value }
     {
     }
 

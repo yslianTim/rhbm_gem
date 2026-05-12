@@ -55,8 +55,6 @@ TEST(LocalPotentialSeriesTest, EntryComputesRangeAndBinningForDistanceMapSeries)
     ASSERT_EQ(binned.size(), 2U);
     EXPECT_FLOAT_EQ(binned.at(0).response, 3.0f);
     EXPECT_FLOAT_EQ(binned.at(1).response, 8.0f);
-    EXPECT_FLOAT_EQ(binned.at(0).score, 2.0f);
-    EXPECT_FLOAT_EQ(binned.at(1).score, 2.0f);
 }
 
 TEST(LocalPotentialSeriesTest, EntryFitDatasetSeriesKeepsFullBasisWithinFitRange)
@@ -86,9 +84,6 @@ TEST(LocalPotentialSeriesTest, EntryFitDatasetSeriesKeepsFullBasisWithinFitRange
     EXPECT_NEAR(transformed.at(2).GetBasisValue(0), 1.0, 1e-6);
     EXPECT_NEAR(transformed.at(2).GetBasisValue(1), -0.5 * 0.3 * 0.3, 1e-6);
     EXPECT_NEAR(transformed.at(2).response, std::log(8.0), 1e-6);
-    EXPECT_FLOAT_EQ(transformed.at(0).score, 0.5f);
-    EXPECT_FLOAT_EQ(transformed.at(1).score, 0.0f);
-    EXPECT_FLOAT_EQ(transformed.at(2).score, 2.5f);
 }
 
 TEST(LocalPotentialSeriesTest, EntryBinningRespectsNonZeroMinimum)
@@ -108,8 +103,6 @@ TEST(LocalPotentialSeriesTest, EntryBinningRespectsNonZeroMinimum)
     EXPECT_FLOAT_EQ(binned.at(1).GetBasisValue(0), 1.25f);
     EXPECT_FLOAT_EQ(binned.at(0).response, 5.0f);
     EXPECT_FLOAT_EQ(binned.at(1).response, 8.0f);
-    EXPECT_FLOAT_EQ(binned.at(0).score, 3.0f);
-    EXPECT_FLOAT_EQ(binned.at(1).score, 6.0f);
 }
 
 TEST(LocalPotentialSeriesTest, ViewForwardsSeriesDerivationsFromResolvedEntry)
@@ -136,8 +129,6 @@ TEST(LocalPotentialSeriesTest, ViewForwardsSeriesDerivationsFromResolvedEntry)
     ASSERT_EQ(binned.size(), 2U);
     EXPECT_FLOAT_EQ(binned.at(0).response, 3.0f);
     EXPECT_FLOAT_EQ(binned.at(1).response, 6.0f);
-    EXPECT_FLOAT_EQ(binned.at(0).score, 1.5f);
-    EXPECT_FLOAT_EQ(binned.at(1).score, 5.0f);
 
     const auto fit_dataset_series{
         ls::BuildDatasetSeries(view.GetSamplingEntries(), 0.0, 0.5)
@@ -146,7 +137,7 @@ TEST(LocalPotentialSeriesTest, ViewForwardsSeriesDerivationsFromResolvedEntry)
     EXPECT_EQ(fit_dataset_series.at(0).GetBasisSize(), 2U);
 }
 
-TEST(LocalPotentialSeriesTest, EntryBinningReturnsZeroWeightForEmptyBins)
+TEST(LocalPotentialSeriesTest, EntryBinningReturnsZeroResponseForEmptyBins)
 {
     rg::LocalPotentialEntry entry;
     entry.SetSamplingEntries({
@@ -156,6 +147,6 @@ TEST(LocalPotentialSeriesTest, EntryBinningReturnsZeroWeightForEmptyBins)
     const auto binned{ entry.GetBinnedDistanceResponseSeries(2, 0.0, 1.0) };
 
     ASSERT_EQ(binned.size(), 2U);
-    EXPECT_FLOAT_EQ(binned.at(0).score, 4.0f);
-    EXPECT_FLOAT_EQ(binned.at(1).score, 0.0f);
+    EXPECT_FLOAT_EQ(binned.at(0).response, 2.0f);
+    EXPECT_FLOAT_EQ(binned.at(1).response, 0.0f);
 }
