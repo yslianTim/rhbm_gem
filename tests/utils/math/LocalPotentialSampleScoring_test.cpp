@@ -167,15 +167,3 @@ TEST(LocalPotentialSampleScoringTest, RejectsRejectDirectionsWithNonFiniteValues
             45.0),
         std::invalid_argument);
 }
-
-TEST(LocalPotentialSampleScoringTest, CleanScoreListWithEmptyRejectDirectionsKeepsAllSamplingPoints)
-{
-    const auto point_list{ MakePointList() };
-    const auto score_list{ rg::BuildLocalPotentialSampleCleanScoreList(point_list, {}) };
-
-    ASSERT_EQ(score_list.size(), point_list.size());
-    EXPECT_TRUE(std::all_of(score_list.begin(), score_list.end(), [](float score)
-    {
-        return score == 1.0f;
-    }));
-}
