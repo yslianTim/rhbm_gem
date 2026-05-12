@@ -38,10 +38,10 @@ TEST(LocalPotentialSeriesTest, EntryComputesRangeAndBinningForDistanceMapSeries)
 {
     rg::LocalPotentialEntry entry;
     entry.SetSamplingEntries({
-        {0.0f, 2.0f, 1.0f},
-        {0.2f, 4.0f, 3.0f},
-        {0.7f, 8.0f, 2.0f},
-        {1.0f, -1.0f, 9.0f},
+        {0.0f, 2.0f},
+        {0.2f, 4.0f},
+        {0.7f, 8.0f},
+        {1.0f, -1.0f},
     });
 
     const auto distance_range{ entry.GetDistanceRange(0.0) };
@@ -61,11 +61,11 @@ TEST(LocalPotentialSeriesTest, EntryFitDatasetSeriesKeepsFullBasisWithinFitRange
 {
     rg::LocalPotentialEntry entry;
     const LocalPotentialSampleList sampling_entries{
-        {0.1f, 4.0f, 0.5f},
-        {0.2f, -2.0f, 7.0f},
-        {0.25f, 9.0f, 0.0f},
-        {0.3f, 8.0f, 2.5f},
-        {1.1f, 16.0f, 3.0f},
+        {0.1f, 4.0f},
+        {0.2f, -2.0f},
+        {0.25f, 9.0f},
+        {0.3f, 8.0f},
+        {1.1f, 16.0f},
     };
     entry.SetSamplingEntries(sampling_entries);
 
@@ -90,10 +90,10 @@ TEST(LocalPotentialSeriesTest, EntryBinningRespectsNonZeroMinimum)
 {
     rg::LocalPotentialEntry entry;
     entry.SetSamplingEntries({
-        {0.20f, 1.0f, 8.0f},
-        {0.60f, 4.0f, 2.0f},
-        {0.90f, 6.0f, 4.0f},
-        {1.20f, 8.0f, 6.0f},
+        {0.20f, 1.0f},
+        {0.60f, 4.0f},
+        {0.90f, 6.0f},
+        {1.20f, 8.0f},
     });
 
     const auto binned{ entry.GetBinnedDistanceResponseSeries(2, 0.5, 1.5) };
@@ -115,9 +115,9 @@ TEST(LocalPotentialSeriesTest, ViewForwardsSeriesDerivationsFromResolvedEntry)
     auto analysis{ model->EditAnalysis() };
     auto mutable_view{ analysis.EnsureAtomLocalPotential(*atom) };
     mutable_view.SetSamplingEntries({
-        {0.1f, 2.0f, 1.0f},
-        {0.4f, 4.0f, 2.0f},
-        {0.8f, 6.0f, 5.0f},
+        {0.1f, 2.0f},
+        {0.4f, 4.0f},
+        {0.8f, 6.0f},
     });
 
     const auto view{ rg::LocalPotentialView::RequireFor(*atom) };
@@ -141,7 +141,7 @@ TEST(LocalPotentialSeriesTest, EntryBinningReturnsZeroResponseForEmptyBins)
 {
     rg::LocalPotentialEntry entry;
     entry.SetSamplingEntries({
-        {0.10f, 2.0f, 4.0f},
+        {0.10f, 2.0f},
     });
 
     const auto binned{ entry.GetBinnedDistanceResponseSeries(2, 0.0, 1.0) };

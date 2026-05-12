@@ -212,9 +212,9 @@ TEST(DataObjectModelAnalysisTest, MutableLocalPotentialViewSetFitResultUpdatesFi
     auto entry{ analysis.EnsureAtomLocalPotential(*atom) };
 
     LocalPotentialSampleList sampling_entries{
-        LocalPotentialSample{ 0.0f, 6.0f, 1.0f },
-        LocalPotentialSample{ 0.5f, 4.0f, 1.0f },
-        LocalPotentialSample{ 0.9f, 2.0f, 1.0f }
+        LocalPotentialSample{ 0.0f, 6.0f },
+        LocalPotentialSample{ 0.5f, 4.0f },
+        LocalPotentialSample{ 0.9f, 2.0f }
     };
     entry.SetSamplingEntries(sampling_entries);
 

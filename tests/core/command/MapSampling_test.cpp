@@ -81,7 +81,6 @@ TEST(MapSamplingTest, OrientedSamplerUsesDirectionLikeInput)
     ASSERT_EQ(1u, sampling_data.size());
     EXPECT_FLOAT_EQ(1.0f, sampling_data.front().distance);
     EXPECT_FLOAT_EQ(map.GetMapValue(1, 1, 1), sampling_data.front().response);
-    EXPECT_FLOAT_EQ(1.0f, sampling_data.front().score);
     ASSERT_TRUE(sampling_data.front().HasPosition());
     EXPECT_FLOAT_EQ(1.0f, sampling_data.front().position->at(0));
 }

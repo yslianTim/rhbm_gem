@@ -8,15 +8,6 @@
 #include <utility>
 
 namespace rhbm_gem {
-namespace {
-
-inline bool IsEffectiveSample(const LocalPotentialSample & sample)
-{
-    return sample.score > 0.0f;
-}
-
-} // namespace
-
 LocalPotentialEntry::LocalPotentialEntry() :
     m_alpha_r{ 0.0 }
 {
@@ -109,7 +100,6 @@ std::tuple<float, float> LocalPotentialEntry::GetDistanceRange(double margin_rat
     distance_array.reserve(m_sampling_entries.size());
     for (const auto & sample : m_sampling_entries)
     {
-        if (!IsEffectiveSample(sample)) continue;
         distance_array.emplace_back(sample.distance);
     }
     return array_helper::ComputeScalingRangeTuple(
@@ -122,7 +112,6 @@ std::tuple<float, float> LocalPotentialEntry::GetResponseRange(double margin_rat
     map_value_array.reserve(m_sampling_entries.size());
     for (const auto & sample : m_sampling_entries)
     {
-        if (!IsEffectiveSample(sample)) continue;
         map_value_array.emplace_back(sample.response);
     }
     return array_helper::ComputeScalingRangeTuple(
@@ -138,7 +127,6 @@ SeriesPointList LocalPotentialEntry::GetBinnedDistanceResponseSeries(
     std::vector<std::vector<float>> bin_map(static_cast<size_t>(bin_size));
     for (const auto & sample : m_sampling_entries)
     {
-        if (!IsEffectiveSample(sample)) continue;
         const auto distance{ sample.distance };
         if (distance < x_min || distance >= x_max)
         {
@@ -173,7 +161,6 @@ double LocalPotentialEntry::GetMapValueNearCenter() const
     double sum{ 0.0 };
     for (const auto & sample : data_list)
     {
-        if (!IsEffectiveSample(sample)) continue;
         if (sample.distance > 0.05f) continue;
         sum += sample.response;
         count++;
@@ -190,7 +177,6 @@ double LocalPotentialEntry::GetMomentZeroEstimate() const
     auto count{ 0 };
     for (const auto & sample : m_sampling_entries)
     {
-        if (!IsEffectiveSample(sample)) continue;
         auto y_value{ static_cast<double>(sample.response) };
         if (y_value <= 0.0) continue;
         if (sample.distance > 1.0f) continue;
@@ -210,7 +196,6 @@ double LocalPotentialEntry::GetMomentTwoEstimate() const
     auto count{ 0 };
     for (const auto & sample : m_sampling_entries)
     {
-        if (!IsEffectiveSample(sample)) continue;
         auto y_value{ static_cast<double>(sample.response) };
         if (y_value <= 0.0) continue;
         if (sample.distance > 1.0f) continue;
@@ -261,7 +246,6 @@ double LocalPotentialEntry::CalculateQScore(int par_choice) const
     reference_value_list.reserve(m_sampling_entries.size());
     for (const auto & sample : m_sampling_entries)
     {
-        if (!IsEffectiveSample(sample)) continue;
         distance_list.emplace_back(sample.distance);
         map_value_list.emplace_back(sample.response);
         reference_value_list.emplace_back(

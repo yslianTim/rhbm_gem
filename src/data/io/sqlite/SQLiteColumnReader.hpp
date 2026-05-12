@@ -169,7 +169,6 @@ struct SQLiteColumnReader<LocalPotentialSampleList>
             result.emplace_back(LocalPotentialSample{
                 first,
                 second,
-                1.0f,
                 std::nullopt
             });
         }

@@ -12,8 +12,8 @@
 #include <rhbm_gem/core/command/CommandTypes.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
-#include <rhbm_gem/utils/math/LocalPotentialSampleScoring.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
+#include <rhbm_gem/utils/math/PotentialSampleSelection.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
 
@@ -144,30 +144,18 @@ inline SamplingPointList BuildAtomCenteredSamplingPointList(
 inline LocalPotentialSampleList BuildLocalPotentialSampleList(
     const MapObject & map_object,
     const SamplingPointList & sampling_points,
-    const std::vector<float> * sampling_scores = nullptr)
+    const std::vector<std::size_t> & selected_indices)
 {
-    const auto resolved_sampling_scores{ (sampling_scores == nullptr) ?
-        BuildDefaultLocalPotentialSampleScoreList(sampling_points.size()) : *sampling_scores
-    };
-
-    if (resolved_sampling_scores.size() != sampling_points.size())
-    {
-        throw std::invalid_argument(
-            "BuildLocalPotentialSampleList sampling_scores must align with sampling_points.");
-    }
-
     LocalPotentialSampleList sampling_data_list;
-    sampling_data_list.reserve(sampling_points.size());
-    for (size_t i = 0; i < sampling_points.size(); i++)
+    sampling_data_list.reserve(selected_indices.size());
+    for (const auto selected_index : selected_indices)
     {
-        const auto & sampling_point{ sampling_points.at(i) };
-        const auto sampling_score{ resolved_sampling_scores.at(i) };
+        const auto & sampling_point{ sampling_points.at(selected_index) };
 
         auto map_value{ MakeInterpolationInMapObject(map_object, sampling_point.position) };
         sampling_data_list.emplace_back(LocalPotentialSample{
             sampling_point.distance,
             map_value,
-            sampling_score,
             sampling_point.position
         });
     }
@@ -179,7 +167,6 @@ inline LocalPotentialSampleList KeepLowestResponseDecileByDistance(LocalPotentia
     std::map<float, LocalPotentialSampleList> samples_by_distance;
     for (auto & sample : sample_list)
     {
-        if (sample.score <= 0.0f) continue;
         samples_by_distance[sample.distance].emplace_back(std::move(sample));
     }
 
@@ -220,7 +207,10 @@ LocalPotentialSampleList SampleMapValues(
     const std::array<float, 3> & direction_like_input)
 {
     const auto sampling_points{ sampler.GenerateSamplingPoints(position, direction_like_input) };
-    return detail::BuildLocalPotentialSampleList(map_object, sampling_points);
+    const auto selected_indices{
+        BuildSelectedLocalPotentialSampleIndexList(sampling_points, {})
+    };
+    return detail::BuildLocalPotentialSampleList(map_object, sampling_points, selected_indices);
 }
 
 inline LocalPotentialSampleList SampleAtomMapValues(
@@ -247,11 +237,12 @@ inline LocalPotentialSampleList SampleAtomMapValues(
     const auto local_sampling_points{
         detail::BuildAtomCenteredSamplingPointList(sampling_points, position)
     };
-    const auto sampling_scores{
-        BuildLocalPotentialSampleScoreList(local_sampling_points, reject_direction_list, kRejectAngle)
+    const auto selected_indices{
+        BuildSelectedLocalPotentialSampleIndexList(
+            local_sampling_points, reject_direction_list, kRejectAngle)
     };
     auto sample_list{
-        detail::BuildLocalPotentialSampleList(map_object, sampling_points, &sampling_scores)
+        detail::BuildLocalPotentialSampleList(map_object, sampling_points, selected_indices)
     };
     return detail::KeepLowestResponseDecileByDistance(std::move(sample_list));
 }

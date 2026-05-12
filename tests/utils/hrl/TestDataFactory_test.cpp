@@ -74,7 +74,6 @@ void ExpectSamplingEntriesEquals(
     {
         EXPECT_FLOAT_EQ(lhs.at(i).distance, rhs.at(i).distance);
         EXPECT_FLOAT_EQ(lhs.at(i).response, rhs.at(i).response);
-        EXPECT_FLOAT_EQ(lhs.at(i).score, rhs.at(i).score);
         EXPECT_EQ(lhs.at(i).position.has_value(), rhs.at(i).position.has_value());
         if (lhs.at(i).position.has_value() && rhs.at(i).position.has_value())
         {

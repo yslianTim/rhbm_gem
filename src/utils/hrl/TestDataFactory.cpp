@@ -4,8 +4,8 @@
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
-#include <rhbm_gem/utils/math/LocalPotentialSampleScoring.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
+#include <rhbm_gem/utils/math/PotentialSampleSelection.hpp>
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
 
 #include <algorithm>
@@ -282,27 +282,18 @@ LocalPotentialSampleList GenerateRadialSamples(
 {
     numeric_validation::RequirePositive(sample_count, "sample_count");
     GaussianModel3D::RequireFinitePositiveWidthModel(model);
-    numeric_validation::RequireFiniteNonNegativeRange(
-        distance_min,
-        distance_max,
-        "distance range");
+    numeric_validation::RequireFiniteNonNegativeRange(distance_min, distance_max, "distance range");
 
     std::uniform_real_distribution<> dist_distance(distance_min, distance_max);
-    const auto sampling_scores{
-        BuildDefaultLocalPotentialSampleScoreList(sample_count)
-    };
     LocalPotentialSampleList sample_list;
     sample_list.reserve(sample_count);
     for (size_t i = 0; i < sample_count; i++)
     {
         const auto distance{ dist_distance(generator) };
-        const auto response{
-            model.ResponseAtDistance(distance)
-        };
+        const auto response{ model.ResponseAtDistance(distance) };
         sample_list.emplace_back(LocalPotentialSample{
             static_cast<float>(distance),
-            static_cast<float>(response),
-            sampling_scores.at(i)
+            static_cast<float>(response)
         });
     }
 
@@ -337,28 +328,17 @@ LocalPotentialSampleList GenerateNeighborhoodSamples(
         )
     );
     const auto sampling_points{ sampler.GenerateSamplingPoints({ 0.0f, 0.0f, 0.0f }) };
-    const auto sampling_scores{
-        BuildLocalPotentialSampleScoreList(
+    const auto selected_indices{
+        BuildSelectedLocalPotentialSampleIndexList(
             sampling_points, neighbor_center_list, options.reject_angle_deg)
     };
 
     LocalPotentialSampleList sample_list;
-    sample_list.reserve(static_cast<size_t>(std::count_if(
-        sampling_scores.begin(),
-        sampling_scores.end(),
-        [](float score)
-        {
-            return score > 0.0f;
-        })));
+    sample_list.reserve(selected_indices.size());
 
-    for (size_t i = 0; i < sampling_points.size(); i++)
+    for (const auto selected_index : selected_indices)
     {
-        const auto & sampling_point{ sampling_points.at(i) };
-        const auto sampling_score{ sampling_scores.at(i) };
-        if (sampling_score <= 0.0f)
-        {
-            continue;
-        }
+        const auto & sampling_point{ sampling_points.at(selected_index) };
 
         Eigen::VectorXd point{ Eigen::VectorXd::Zero(3) };
         point(0) = sampling_point.position[0];
@@ -377,7 +357,6 @@ LocalPotentialSampleList GenerateNeighborhoodSamples(
         sample_list.emplace_back(LocalPotentialSample{
             sampling_point.distance,
             static_cast<float>(response),
-            sampling_score,
             sampling_point.position
         });
     }
@@ -410,27 +389,16 @@ LocalPotentialSampleList GenerateAtomNeighborhoodSamples(
         )
     );
     const auto sampling_points{ sampler.GenerateSamplingPoints({ 0.0f, 0.0f, 0.0f }) };
-    const auto sampling_scores{
-        BuildLocalPotentialSampleScoreList(
+    const auto selected_indices{
+        BuildSelectedLocalPotentialSampleIndexList(
             sampling_points, neighbor_center_list, options.reject_angle_deg)
     };
     LocalPotentialSampleList sample_list;
-    sample_list.reserve(static_cast<size_t>(std::count_if(
-        sampling_scores.begin(),
-        sampling_scores.end(),
-        [](float score)
-        {
-            return score > 0.0f;
-        })));
+    sample_list.reserve(selected_indices.size());
 
-    for (size_t i = 0; i < sampling_points.size(); i++)
+    for (const auto selected_index : selected_indices)
     {
-        const auto & sampling_point{ sampling_points.at(i) };
-        const auto sampling_score{ sampling_scores.at(i) };
-        if (sampling_score <= 0.0f)
-        {
-            continue;
-        }
+        const auto & sampling_point{ sampling_points.at(selected_index) };
 
         Eigen::VectorXd point{ Eigen::VectorXd::Zero(3) };
         point(0) = sampling_point.position[0];
@@ -450,7 +418,6 @@ LocalPotentialSampleList GenerateAtomNeighborhoodSamples(
         sample_list.emplace_back(LocalPotentialSample{
             sampling_point.distance,
             static_cast<float>(response),
-            sampling_score,
             sampling_point.position
         });
     }

@@ -20,7 +20,6 @@ struct LocalPotentialSample
 {
     float distance{ 0.0f };
     float response{ 0.0f };
-    float score{ 1.0f };
     std::optional<std::array<float, 3>> position{};
 
     bool HasPosition() const noexcept { return position.has_value(); }

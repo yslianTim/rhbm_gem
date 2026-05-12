@@ -32,14 +32,14 @@ inline Eigen::Vector3d ValidateAndConvertLocalPotentialRejectDirection(
     {
         return eigen_validation::RequireVector3d(
             reject_direction,
-            "LocalPotentialSampleScoring reject directions");
+            "PotentialSampleSelection reject directions");
     }
     catch (const std::invalid_argument &)
     {
         throw std::invalid_argument(
             reject_direction.size() != 3 ?
-                "LocalPotentialSampleScoring reject directions must have dimension 3." :
-                "LocalPotentialSampleScoring reject directions must contain finite values.");
+                "PotentialSampleSelection reject directions must have dimension 3." :
+                "PotentialSampleSelection reject directions must contain finite values.");
     }
 }
 
@@ -105,26 +105,29 @@ inline bool ShouldRejectLocalPotentialSamplingPoint(
     return false;
 }
 
-} // namespace detail
-
-inline std::vector<float> BuildDefaultLocalPotentialSampleScoreList(std::size_t sample_count)
+inline std::vector<std::size_t> BuildAllLocalPotentialSampleIndexList(std::size_t sample_count)
 {
-    return std::vector<float>(sample_count, 1.0f);
+    std::vector<std::size_t> selected_indices;
+    selected_indices.reserve(sample_count);
+    for (std::size_t i = 0; i < sample_count; i++)
+    {
+        selected_indices.emplace_back(i);
+    }
+    return selected_indices;
 }
 
-inline std::vector<float> BuildLocalPotentialSampleScoreList(
+} // namespace detail
+
+inline std::vector<std::size_t> BuildSelectedLocalPotentialSampleIndexList(
     const SamplingPointList & point_list,
     const std::vector<Eigen::VectorXd> & reject_direction_list,
     double angle = 0.0)
 {
-    // Callers provide score-policy inputs as plain data. This layer stays agnostic
-    // to domain objects such as atoms and only owns the score calculation itself.
     numeric_validation::RequireFiniteInclusiveRange(angle, 0.0, 180.0, "angle");
 
-    std::vector<float> score_list(point_list.size(), 1.0f);
     if (angle == 0.0)
     {
-        return score_list;
+        return detail::BuildAllLocalPotentialSampleIndexList(point_list.size());
     }
 
     const auto normalized_reject_direction_list{
@@ -132,22 +135,24 @@ inline std::vector<float> BuildLocalPotentialSampleScoreList(
     };
     if (normalized_reject_direction_list.empty())
     {
-        return score_list;
+        return detail::BuildAllLocalPotentialSampleIndexList(point_list.size());
     }
 
+    std::vector<std::size_t> selected_indices;
+    selected_indices.reserve(point_list.size());
     const auto cos_threshold{ std::cos(angle * Constants::pi / 180.0) };
     for (std::size_t i = 0; i < point_list.size(); i++)
     {
-        if (detail::ShouldRejectLocalPotentialSamplingPoint(
-                point_list.at(i),
-                normalized_reject_direction_list,
-                cos_threshold))
+        if (!detail::ShouldRejectLocalPotentialSamplingPoint(
+            point_list.at(i),
+            normalized_reject_direction_list,
+            cos_threshold))
         {
-            score_list.at(i) = 0.0f;
+            selected_indices.emplace_back(i);
         }
     }
 
-    return score_list;
+    return selected_indices;
 }
 
 } // namespace rhbm_gem
