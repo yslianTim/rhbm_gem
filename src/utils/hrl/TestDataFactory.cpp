@@ -511,71 +511,6 @@ SeriesPointList BuildLinearDataset(
     return linear_data_entry_list;
 }
 
-SeriesPointList BuildLinearDataset(
-    size_t sampling_entry_size,
-    const GaussianModel3D & model,
-    double error_sigma,
-    double outlier_ratio,
-    double fit_range_min,
-    double fit_range_max,
-    std::mt19937 & generator)
-{
-    const auto sampling_entries{
-        BuildGaussianSampling(
-            sampling_entry_size,
-            model,
-            outlier_ratio,
-            fit_range_min,
-            fit_range_max,
-            generator)
-    };
-    return BuildLinearDataset(
-        sampling_entries,
-        model,
-        error_sigma,
-        fit_range_min,
-        fit_range_max,
-        generator);
-}
-
-SeriesPointList BuildLinearDatasetWithNeighborhood(
-    size_t samples_per_radius,
-    const GaussianModel3D & model,
-    double error_sigma,
-    const NeighborhoodSamplingOptions & options,
-    double fit_range_min,
-    double fit_range_max,
-    std::mt19937 & generator)
-{
-    const auto sampling_entries{ GenerateNeighborhoodSamples(samples_per_radius, model, options) };
-    return BuildLinearDataset(
-        sampling_entries,
-        model,
-        error_sigma,
-        fit_range_min,
-        fit_range_max,
-        generator);
-}
-
-SeriesPointList BuildLinearDatasetWithAtomNeighborhood(
-    size_t samples_per_radius,
-    const GaussianModel3D & model,
-    double error_sigma,
-    const AtomNeighborhoodSamplingOptions & options,
-    double fit_range_min,
-    double fit_range_max,
-    std::mt19937 & generator)
-{
-    const auto sampling_entries{ GenerateAtomNeighborhoodSamples(samples_per_radius, model, options) };
-    return BuildLinearDataset(
-        sampling_entries,
-        model,
-        error_sigma,
-        fit_range_min,
-        fit_range_max,
-        generator);
-}
-
 Eigen::MatrixXd BuildRandomGausParameters(
     int member_size,
     const Eigen::VectorXd & gaus_prior,
@@ -642,9 +577,7 @@ Eigen::MatrixXd BuildBetaMatrix(const Eigen::MatrixXd & gaus_array)
 namespace rhbm_gem::test_data_factory
 {
 
-RHBMBetaTestInput BuildBetaTestInput(
-    const BetaScenario & scenario,
-    const TestDataBuildOptions & options)
+RHBMBetaTestInput BuildBetaTestInput(const BetaScenario & scenario, const TestDataBuildOptions & options)
 {
     numeric_validation::RequireFiniteNonNegativeRange(
         options.fit_range_min, options.fit_range_max, "fitting range");
@@ -661,16 +594,23 @@ RHBMBetaTestInput BuildBetaTestInput(
     for (int i = 0; i < scenario.replica_size; i++)
     {
         auto generator{ BuildReplicaGenerator(i, scenario.random_seed) };
-        const auto data_entry_list{
-            BuildLinearDataset(
+        auto sampling_entries{
+            BuildGaussianSampling(
                 static_cast<size_t>(scenario.sampling_entry_size),
                 scenario.gaus_true,
-                scenario.data_error_sigma,
                 scenario.outlier_ratio,
                 options.fit_range_min,
                 options.fit_range_max,
-                generator
-            )
+                generator)
+        };
+        const auto data_entry_list{
+            BuildLinearDataset(
+                sampling_entries,
+                scenario.gaus_true,
+                scenario.data_error_sigma,
+                options.fit_range_min,
+                options.fit_range_max,
+                generator)
         };
         input.replica_datasets.emplace_back(rhbm_helper::BuildMemberDataset(data_entry_list));
     }
@@ -779,23 +719,29 @@ RHBMNeighborhoodTestInput BuildNeighborhoodTestInput(
     for (int i = 0; i < scenario.replica_size; i++)
     {
         auto generator{ BuildReplicaGenerator(i, scenario.random_seed) };
+        const auto no_cut_sampling_entries{
+            GenerateNeighborhoodSamples(
+                static_cast<size_t>(scenario.sampling_entry_size), scenario.gaus_true, no_cut_options)
+        };
+        const auto cut_sampling_entries{
+            GenerateNeighborhoodSamples(
+                static_cast<size_t>(scenario.sampling_entry_size), scenario.gaus_true, cut_options)
+        };
         const auto no_cut_data_entry_list{
-            BuildLinearDatasetWithNeighborhood(
-                static_cast<size_t>(scenario.sampling_entry_size),
+            BuildLinearDataset(
+                no_cut_sampling_entries,
                 scenario.gaus_true,
                 scenario.data_error_sigma,
-                no_cut_options,
                 options.fit_range_min,
                 options.fit_range_max,
                 generator
             )
         };
         const auto cut_data_entry_list{
-            BuildLinearDatasetWithNeighborhood(
-                static_cast<size_t>(scenario.sampling_entry_size),
+            BuildLinearDataset(
+                cut_sampling_entries,
                 scenario.gaus_true,
                 scenario.data_error_sigma,
-                cut_options,
                 options.fit_range_min,
                 options.fit_range_max,
                 generator
@@ -864,23 +810,29 @@ RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
     for (int i = 0; i < scenario.replica_size; i++)
     {
         auto generator{ BuildReplicaGenerator(i, scenario.random_seed) };
+        const auto no_cut_sampling_entries{
+            GenerateAtomNeighborhoodSamples(
+                static_cast<size_t>(scenario.sampling_entry_size), scenario.gaus_true, no_cut_options)
+        };
+        const auto cut_sampling_entries{
+            GenerateAtomNeighborhoodSamples(
+                static_cast<size_t>(scenario.sampling_entry_size), scenario.gaus_true, cut_options)
+        };
         const auto no_cut_data_entry_list{
-            BuildLinearDatasetWithAtomNeighborhood(
-                static_cast<size_t>(scenario.sampling_entry_size),
+            BuildLinearDataset(
+                no_cut_sampling_entries,
                 scenario.gaus_true,
                 scenario.data_error_sigma,
-                no_cut_options,
                 options.fit_range_min,
                 options.fit_range_max,
                 generator
             )
         };
         const auto cut_data_entry_list{
-            BuildLinearDatasetWithAtomNeighborhood(
-                static_cast<size_t>(scenario.sampling_entry_size),
+            BuildLinearDataset(
+                cut_sampling_entries,
                 scenario.gaus_true,
                 scenario.data_error_sigma,
-                cut_options,
                 options.fit_range_min,
                 options.fit_range_max,
                 generator
