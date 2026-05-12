@@ -620,9 +620,7 @@ Eigen::MatrixXd BuildRandomGausParameters(
     return gaus_par_matrix;
 }
 
-Eigen::MatrixXd BuildBetaMatrix(
-    const Eigen::MatrixXd & gaus_array,
-    const linearization_service::LinearizationSpec & linearization_spec)
+Eigen::MatrixXd BuildBetaMatrix(const Eigen::MatrixXd & gaus_array)
 {
     const auto member_size{ static_cast<int>(gaus_array.cols()) };
     if (member_size == 0)
@@ -631,13 +629,13 @@ Eigen::MatrixXd BuildBetaMatrix(
     }
 
     const auto first_beta{ linearization_service::EncodeGaussianToParameterVector(
-        linearization_spec, GaussianModel3D::FromVector(gaus_array.col(0))) };
+        GaussianModel3D::FromVector(gaus_array.col(0))) };
     Eigen::MatrixXd beta_matrix{ Eigen::MatrixXd::Zero(first_beta.rows(), member_size) };
     beta_matrix.col(0) = first_beta;
     for (int i = 1; i < member_size; i++)
     {
         beta_matrix.col(i) = linearization_service::EncodeGaussianToParameterVector(
-            linearization_spec, GaussianModel3D::FromVector(gaus_array.col(i)));
+            GaussianModel3D::FromVector(gaus_array.col(i)));
     }
     return beta_matrix;
 }
@@ -684,9 +682,7 @@ RHBMBetaTestInput BuildBetaTestInput(
     return input;
 }
 
-RHBMMuTestInput BuildMuTestInput(
-    const MuScenario & scenario,
-    const TestDataBuildOptions & options)
+RHBMMuTestInput BuildMuTestInput(const MuScenario & scenario)
 {
     numeric_validation::RequirePositive(scenario.member_size, "member_size");
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
@@ -728,7 +724,7 @@ RHBMMuTestInput BuildMuTestInput(
             )
         };
         input.replica_beta_matrices.emplace_back(
-            BuildBetaMatrix(random_gaus_array, options.linearization_spec));
+            BuildBetaMatrix(random_gaus_array));
     }
 
     return input;

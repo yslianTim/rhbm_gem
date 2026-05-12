@@ -29,15 +29,9 @@ namespace rhbm_gem {
 namespace {
 namespace ls = rhbm_gem::linearization_service;
 
-const ls::LinearizationSpec & AtomGaussianEncodeSpec()
-{
-    static const auto spec{ ls::LinearizationSpec::AtomDecode() };
-    return spec;
-}
-
 RHBMParameterVector EncodeAtomGaussianToParameterVector(const GaussianModel3D & estimate)
 {
-    return ls::EncodeGaussianToParameterVector(AtomGaussianEncodeSpec(), estimate);
+    return ls::EncodeGaussianToParameterVector(estimate);
 }
 
 SeriesPointList BuildLocalDatasetSeries(const LocalPotentialView & view)

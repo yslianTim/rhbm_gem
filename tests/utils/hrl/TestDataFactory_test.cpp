@@ -164,7 +164,6 @@ TEST(TestDataFactoryTest, BuildBetaTestInputChangesWhenNoisePolicyChanges)
 TEST(TestDataFactoryTest, BuildBetaTestInputUsesExpectedZeroDistanceGaussianResponse)
 {
     const auto options{ tdf::TestDataBuildOptions{
-        rhbm_gem::linearization_service::LinearizationSpec::AtomDecode(),
         rhbm_gem::linearization_service::LinearizationRange{ 0.0, 0.0 }
     } };
 
@@ -411,7 +410,6 @@ TEST(TestDataFactoryTest, BuildBetaTestInputRejectsInvalidFittingRange)
         tdf::BuildBetaTestInput(
             scenario,
             tdf::TestDataBuildOptions{
-                rhbm_gem::linearization_service::LinearizationSpec::AtomDecode(),
                 rhbm_gem::linearization_service::LinearizationRange{ -1.0, 1.0 }
             }),
         std::invalid_argument);
@@ -419,7 +417,6 @@ TEST(TestDataFactoryTest, BuildBetaTestInputRejectsInvalidFittingRange)
         tdf::BuildBetaTestInput(
             scenario,
             tdf::TestDataBuildOptions{
-                rhbm_gem::linearization_service::LinearizationSpec::AtomDecode(),
                 rhbm_gem::linearization_service::LinearizationRange{ 2.0, 1.0 }
             }),
         std::invalid_argument);
@@ -427,7 +424,6 @@ TEST(TestDataFactoryTest, BuildBetaTestInputRejectsInvalidFittingRange)
         tdf::BuildBetaTestInput(
             scenario,
             tdf::TestDataBuildOptions{
-                rhbm_gem::linearization_service::LinearizationSpec::AtomDecode(),
                 rhbm_gem::linearization_service::LinearizationRange{
                     0.0,
                     std::numeric_limits<double>::infinity()

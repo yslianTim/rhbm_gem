@@ -75,11 +75,6 @@ public:
         const std::string & class_key,
         const RHBMGroupEstimationResult & result,
         double alpha_g);
-    void ApplyBondGroupEstimateResult(
-        GroupKey group_key,
-        const std::string & class_key,
-        const RHBMGroupEstimationResult & result,
-        double alpha_g);
     void SetAtomGroupAlphaG(GroupKey group_key, const std::string & class_key, double alpha_g);
     void SetBondGroupAlphaG(GroupKey group_key, const std::string & class_key, double alpha_g);
     

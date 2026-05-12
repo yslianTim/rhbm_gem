@@ -19,23 +19,6 @@
 namespace rg = rhbm_gem;
 namespace ls = rhbm_gem::linearization_service;
 
-namespace
-{
-
-const ls::LinearizationSpec & AtomDecodeSpec()
-{
-    static const auto spec{ ls::LinearizationSpec::AtomDecode() };
-    return spec;
-}
-
-const ls::LinearizationSpec & BondDecodeSpec()
-{
-    static const auto spec{ ls::LinearizationSpec::BondDecode() };
-    return spec;
-}
-
-} // namespace
-
 TEST(DataObjectModelAnalysisTest, SelectedModelEntriesCanBeInitializedForTypedWorkflows)
 {
     auto model{ data_test::MakeModelWithBond() };
@@ -288,10 +271,10 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupEstimateRes
     constexpr double alpha_g{ 0.25 };
     analysis.ApplyAtomGroupEstimateResult(group_key, class_key, result, alpha_g);
 
-    const auto expected_mean{ ls::DecodeParameterVector(AtomDecodeSpec(), result.mu_mean) };
-    const auto expected_mdpde{ ls::DecodeParameterVector(AtomDecodeSpec(), result.mu_mdpde) };
+    const auto expected_mean{ ls::DecodeParameterVector(result.mu_mean) };
+    const auto expected_mdpde{ ls::DecodeParameterVector(result.mu_mdpde) };
     const auto expected_prior{
-        ls::DecodeParameterVector(AtomDecodeSpec(), result.mu_prior, result.capital_lambda)
+        ls::DecodeParameterVector(result.mu_prior, result.capital_lambda)
     };
     EXPECT_NEAR(expected_mean.GetAmplitude(), analysis_view.GetAtomGroupMean(group_key, class_key).GetAmplitude(), 1e-12);
     EXPECT_NEAR(expected_mean.GetWidth(), analysis_view.GetAtomGroupMean(group_key, class_key).GetWidth(), 1e-12);
@@ -306,7 +289,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupEstimateRes
     const auto annotation{ rg::LocalPotentialView::RequireFor(*atom_list.front()).FindAnnotation(class_key) };
     ASSERT_TRUE(annotation.has_value());
     const auto expected_gaussian{
-        ls::DecodeParameterVector(AtomDecodeSpec(),
+        ls::DecodeParameterVector(
             result.beta_posterior_matrix.col(0),
             result.capital_sigma_posterior_list.front())
     };
@@ -342,86 +325,6 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorRejectsAtomGroupEstimateRes
 
     EXPECT_THROW(
         analysis.ApplyAtomGroupEstimateResult(group_key, class_key, result, 0.0),
-        std::invalid_argument);
-}
-
-TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesBondGroupEstimateResultToStatisticsAndAnnotations)
-{
-    auto model{ data_test::MakeModelWithBond() };
-    model->SelectAllBonds();
-    auto analysis{ model->EditAnalysis() };
-    analysis.RebuildBondGroupsFromSelection();
-    const auto analysis_view{ model->GetAnalysisView() };
-    const auto & class_key{ ChemicalDataHelper::GetSimpleBondClassKey() };
-    const auto group_keys{ analysis_view.CollectBondGroupKeys(class_key) };
-    ASSERT_FALSE(group_keys.empty());
-
-    const auto group_key{ group_keys.front() };
-    const auto & bond_list{ analysis_view.GetBondObjectList(group_key, class_key) };
-    ASSERT_FALSE(bond_list.empty());
-
-    rg::RHBMGroupEstimationResult result;
-    result.mu_mean = (Eigen::Vector2d() << 0.1, 1.2).finished();
-    result.mu_mdpde = (Eigen::Vector2d() << 0.2, 1.1).finished();
-    result.mu_prior = (Eigen::Vector2d() << 0.3, 1.0).finished();
-    result.capital_lambda = Eigen::Matrix2d::Identity();
-    result.beta_posterior_matrix = Eigen::MatrixXd::Zero(2, static_cast<Eigen::Index>(bond_list.size()));
-    result.capital_sigma_posterior_list.assign(bond_list.size(), Eigen::Matrix2d::Identity());
-    result.outlier_flag_array =
-        Eigen::Array<bool, Eigen::Dynamic, 1>::Constant(static_cast<Eigen::Index>(bond_list.size()), false);
-    result.statistical_distance_array =
-        Eigen::ArrayXd::Zero(static_cast<Eigen::Index>(bond_list.size()));
-    for (Eigen::Index i = 0; i < static_cast<Eigen::Index>(bond_list.size()); i++)
-    {
-        result.beta_posterior_matrix.col(i) =
-            (Eigen::Vector2d() << 0.4 + 0.1 * static_cast<double>(i), 0.9).finished();
-        result.outlier_flag_array(i) = (i == 0);
-        result.statistical_distance_array(i) = 2.5 + static_cast<double>(i);
-    }
-
-    constexpr double alpha_g{ 0.5 };
-    analysis.ApplyBondGroupEstimateResult(group_key, class_key, result, alpha_g);
-
-    const auto expected_mean{ ls::DecodeParameterVector(BondDecodeSpec(), result.mu_mean) };
-    const auto expected_prior{
-        ls::DecodeParameterVector(BondDecodeSpec(), result.mu_prior, result.capital_lambda)
-    };
-    EXPECT_NEAR(expected_mean.GetAmplitude(), analysis_view.GetBondGroupMean(group_key, class_key).GetAmplitude(), 1e-12);
-    EXPECT_NEAR(expected_mean.GetWidth(), analysis_view.GetBondGroupMean(group_key, class_key).GetWidth(), 1e-12);
-    EXPECT_NEAR(expected_prior.GetModel().GetAmplitude(), analysis_view.GetBondGroupPrior(group_key, class_key).GetAmplitude(), 1e-12);
-    EXPECT_NEAR(expected_prior.GetModel().GetWidth(), analysis_view.GetBondGroupPrior(group_key, class_key).GetWidth(), 1e-12);
-    EXPECT_NEAR(expected_prior.GetStandardDeviationModel().GetAmplitude(), analysis_view.GetBondGroupPriorWithUncertainty(group_key, class_key).GetStandardDeviationModel().GetAmplitude(), 1e-12);
-    EXPECT_NEAR(expected_prior.GetStandardDeviationModel().GetWidth(), analysis_view.GetBondGroupPriorWithUncertainty(group_key, class_key).GetStandardDeviationModel().GetWidth(), 1e-12);
-    EXPECT_DOUBLE_EQ(alpha_g, analysis_view.GetBondAlphaG(group_key, class_key));
-
-    const auto annotation{ rg::LocalPotentialView::RequireFor(*bond_list.front()).FindAnnotation(class_key) };
-    ASSERT_TRUE(annotation.has_value());
-    EXPECT_TRUE(annotation->is_outlier);
-    EXPECT_DOUBLE_EQ(2.5, annotation->statistical_distance);
-}
-
-TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorRejectsBondGroupEstimateResultWithMismatchedCovarianceSize)
-{
-    auto model{ data_test::MakeModelWithBond() };
-    model->SelectAllBonds();
-    auto analysis{ model->EditAnalysis() };
-    analysis.RebuildBondGroupsFromSelection();
-    const auto analysis_view{ model->GetAnalysisView() };
-    const auto & class_key{ ChemicalDataHelper::GetSimpleBondClassKey() };
-    const auto group_key{ analysis_view.CollectBondGroupKeys(class_key).front() };
-    const auto member_count{ analysis_view.GetBondObjectList(group_key, class_key).size() };
-
-    rg::RHBMGroupEstimationResult result;
-    result.beta_posterior_matrix =
-        Eigen::MatrixXd::Zero(2, static_cast<Eigen::Index>(member_count));
-    result.capital_sigma_posterior_list.assign(member_count == 0 ? 0 : member_count - 1, Eigen::Matrix2d::Identity());
-    result.outlier_flag_array =
-        Eigen::Array<bool, Eigen::Dynamic, 1>::Constant(static_cast<Eigen::Index>(member_count), false);
-    result.statistical_distance_array =
-        Eigen::ArrayXd::Zero(static_cast<Eigen::Index>(member_count));
-
-    EXPECT_THROW(
-        analysis.ApplyBondGroupEstimateResult(group_key, class_key, result, 0.0),
         std::invalid_argument);
 }
 

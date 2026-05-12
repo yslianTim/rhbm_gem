@@ -23,18 +23,6 @@ struct LocalPotentialEstimates
     GaussianModel3D mdpde{};
 };
 
-const ls::LinearizationSpec & AtomDecodeSpec()
-{
-    static const auto spec{ ls::LinearizationSpec::AtomDecode() };
-    return spec;
-}
-
-const ls::LinearizationSpec & BondDecodeSpec()
-{
-    static const auto spec{ ls::LinearizationSpec::BondDecode() };
-    return spec;
-}
-
 template <typename EntryT>
 const EntryT & RequireGroupEntry(const EntryT * entry, const char * context)
 {
@@ -127,10 +115,8 @@ LocalPotentialAnnotation ToDetailAnnotation(const LocalPotentialAnnotationData &
 
 LocalPotentialEstimates BuildLocalPotentialEstimates(const RHBMBetaEstimateResult & value)
 {
-    const auto gaus_ols{ ls::DecodeParameterVector(AtomDecodeSpec(), value.beta_ols) };
-    const auto gaus_mdpde{
-        ls::DecodeParameterVector(AtomDecodeSpec(), value.beta_mdpde)
-    };
+    const auto gaus_ols{ ls::DecodeParameterVector(value.beta_ols) };
+    const auto gaus_mdpde{ ls::DecodeParameterVector(value.beta_mdpde) };
 
     return LocalPotentialEstimates{
         gaus_ols,
@@ -173,41 +159,15 @@ void ApplyAtomGroupStatistics(
     const RHBMGroupEstimationResult & result,
     double alpha_g)
 {
-    const auto gaus_group_mean{ ls::DecodeParameterVector(AtomDecodeSpec(), result.mu_mean) };
-    const auto gaus_group_mdpde{ ls::DecodeParameterVector(AtomDecodeSpec(), result.mu_mdpde) };
+    const auto gaus_group_mean{ ls::DecodeParameterVector(result.mu_mean) };
+    const auto gaus_group_mdpde{ ls::DecodeParameterVector(result.mu_mdpde) };
     const auto gaus_prior{
         ls::DecodeParameterVector(
-            AtomDecodeSpec(),
             result.mu_prior,
             result.capital_lambda)
     };
 
     analysis_data.EnsureAtomGroupEntry(class_key).SetGroupStatistics(
-        group_key,
-        gaus_group_mean,
-        gaus_group_mdpde,
-        gaus_prior.GetModel(),
-        gaus_prior.GetStandardDeviationModel(),
-        alpha_g);
-}
-
-void ApplyBondGroupStatistics(
-    ModelAnalysisData & analysis_data,
-    GroupKey group_key,
-    const std::string & class_key,
-    const RHBMGroupEstimationResult & result,
-    double alpha_g)
-{
-    const auto gaus_group_mean{ ls::DecodeParameterVector(BondDecodeSpec(), result.mu_mean) };
-    const auto gaus_group_mdpde{ ls::DecodeParameterVector(BondDecodeSpec(), result.mu_mdpde) };
-    const auto gaus_prior{
-        ls::DecodeParameterVector(
-            BondDecodeSpec(),
-            result.mu_prior,
-            result.capital_lambda)
-    };
-
-    analysis_data.EnsureBondGroupEntry(class_key).SetGroupStatistics(
         group_key,
         gaus_group_mean,
         gaus_group_mdpde,
@@ -226,28 +186,6 @@ LocalPotentialAnnotationData BuildAtomAnnotationData(
     };
     const auto gaussian_with_uncertainty{
         ls::DecodeParameterVector(
-            AtomDecodeSpec(),
-            beta_vector_posterior,
-            sigma_matrix_posterior)
-    };
-    return LocalPotentialAnnotationData{
-        gaussian_with_uncertainty,
-        static_cast<bool>(result.outlier_flag_array(member_index)),
-        result.statistical_distance_array(member_index)
-    };
-}
-
-LocalPotentialAnnotationData BuildBondAnnotationData(
-    const RHBMGroupEstimationResult & result,
-    Eigen::Index member_index)
-{
-    const auto beta_vector_posterior{ result.beta_posterior_matrix.col(member_index) };
-    const auto & sigma_matrix_posterior{
-        result.capital_sigma_posterior_list.at(static_cast<std::size_t>(member_index))
-    };
-    const auto gaussian_with_uncertainty{
-        ls::DecodeParameterVector(
-            BondDecodeSpec(),
             beta_vector_posterior,
             sigma_matrix_posterior)
     };
@@ -401,28 +339,6 @@ void ModelAnalysisEditor::ApplyAtomGroupEstimateResult(
     }
 
     ApplyAtomGroupStatistics(analysis_data, group_key, class_key, result, alpha_g);
-}
-
-void ModelAnalysisEditor::ApplyBondGroupEstimateResult(
-    GroupKey group_key,
-    const std::string & class_key,
-    const RHBMGroupEstimationResult & result,
-    double alpha_g)
-{
-    auto & analysis_data{ ModelAnalysisData::Of(m_model_object) };
-    const auto & group_entry{
-        RequireGroupEntry(analysis_data.FindBondGroupEntry(class_key), "Bond group entry")
-    };
-    const auto & bond_list{ group_entry.GetMembers(group_key) };
-    ValidateGroupEstimateResult(result, bond_list.size(), "Bond group result");
-
-    for (Eigen::Index i = 0; i < static_cast<Eigen::Index>(bond_list.size()); i++)
-    {
-        auto & bond_entry{ analysis_data.EnsureBondLocalEntry(*bond_list[static_cast<std::size_t>(i)]) };
-        bond_entry.SetAnnotation(class_key, ToDetailAnnotation(BuildBondAnnotationData(result, i)));
-    }
-
-    ApplyBondGroupStatistics(analysis_data, group_key, class_key, result, alpha_g);
 }
 
 void ModelAnalysisEditor::SetAtomGroupAlphaG(

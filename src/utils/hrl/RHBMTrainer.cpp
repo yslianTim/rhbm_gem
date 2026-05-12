@@ -25,10 +25,8 @@ Eigen::VectorXd CalculateAbsoluteGaussianDifference(
     const RHBMParameterVector & linear_b)
 {
     const auto gaussian_a{ linearization_service::DecodeParameterVector(
-        linearization_service::LinearizationSpec::AtomDecode(),
         linear_a).ToVector() };
     const auto gaussian_b{ linearization_service::DecodeParameterVector(
-        linearization_service::LinearizationSpec::AtomDecode(),
         linear_b).ToVector() };
     eigen_validation::RequireVectorSize(gaussian_a, gaussian_b.rows(), "gaussian");
     return (gaussian_a - gaussian_b).array().abs().matrix();

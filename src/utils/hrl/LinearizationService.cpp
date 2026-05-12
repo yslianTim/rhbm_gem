@@ -16,6 +16,7 @@ namespace rhbm_gem::linearization_service
 
 namespace {
 constexpr int kLogQuadraticBasisSize{ 2 };
+constexpr double kLogQuadraticDimension{ 3.0 };
 
 std::tuple<std::vector<double>, double> BuildLogQuadraticBasisVector(double x, double y)
 {
@@ -43,18 +44,6 @@ RHBMParameterVector BuildParameterVector(const GaussianModel3D & model)
         0.0 : std::log(amplitude) - 1.5 * std::log(Constants::two_pi * width_square);
     parameter_vector(1) = 1.0 / width_square;
     return parameter_vector;
-}
-
-double ResolveLogQuadraticDimension(const LinearizationSpec & spec)
-{
-    switch (spec.model_kind)
-    {
-    case GaussianModelKind::MODEL_2D:
-        return 2.0;
-    case GaussianModelKind::MODEL_3D:
-        return 3.0;
-    }
-    throw std::invalid_argument("Unsupported Gaussian model kind.");
 }
 
 GaussianModel3D DecodeLogQuadratic(
@@ -100,13 +89,6 @@ GaussianModel3DUncertainty CalculateLogQuadraticStandardDeviation(
 }
 
 } // namespace
-
-LinearizationSpec LinearizationSpec::BondDecode()
-{
-    auto spec{ LinearizationSpec{} };
-    spec.model_kind = GaussianModelKind::MODEL_2D;
-    return spec;
-}
 
 SeriesPointList BuildDatasetSeries(
     const LocalPotentialSampleList & sampling_entries,
@@ -160,36 +142,29 @@ SeriesPointList BuildDatasetSeries(
     return basis_and_response_entry_list;
 }
 
-RHBMParameterVector EncodeGaussianToParameterVector(
-    const LinearizationSpec & spec,
-    const GaussianModel3D & gaussian_model)
+RHBMParameterVector EncodeGaussianToParameterVector(const GaussianModel3D & gaussian_model)
 {
-    (void)spec;
     return BuildParameterVector(gaussian_model);
 }
 
-GaussianModel3D DecodeParameterVector(
-    const LinearizationSpec & spec,
-    const RHBMParameterVector & parameter_vector)
+GaussianModel3D DecodeParameterVector(const RHBMParameterVector & parameter_vector)
 {
     eigen_validation::RequireVectorSize(parameter_vector, kLogQuadraticBasisSize, "parameter_vector");
-    const auto dimension{ ResolveLogQuadraticDimension(spec) };
-    return DecodeLogQuadratic(parameter_vector, dimension);
+    return DecodeLogQuadratic(parameter_vector, kLogQuadraticDimension);
 }
 
 GaussianModel3DWithUncertainty DecodeParameterVector(
-    const LinearizationSpec & spec,
     const RHBMParameterVector & parameter_vector,
     const RHBMPosteriorCovarianceMatrix & covariance_matrix)
 {
     eigen_validation::RequireVectorSize(parameter_vector, kLogQuadraticBasisSize, "parameter_vector");
     eigen_validation::RequireShape(
         covariance_matrix, kLogQuadraticBasisSize, kLogQuadraticBasisSize, "covariance_matrix");
-    const auto dimension{ ResolveLogQuadraticDimension(spec) };
-    const auto model{ DecodeLogQuadratic(parameter_vector, dimension) };
+    const auto model{ DecodeLogQuadratic(parameter_vector, kLogQuadraticDimension) };
     return GaussianModel3DWithUncertainty{
         model,
-        CalculateLogQuadraticStandardDeviation(parameter_vector, covariance_matrix, dimension, model)
+        CalculateLogQuadraticStandardDeviation(
+            parameter_vector, covariance_matrix, kLogQuadraticDimension, model)
     };
 }
 

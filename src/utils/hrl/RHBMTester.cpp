@@ -42,8 +42,7 @@ Eigen::VectorXd CalculateNormalizedBias(
     GaussianModel3D::RequireFiniteModel(gaussian_truth, "gaussian_truth");
     const auto gaussian_truth_vector{ gaussian_truth.ToVector() };
     const auto gaussian_estimate{
-        linearization_service::DecodeParameterVector(
-            linearization_service::LinearizationSpec::AtomDecode(), linear_estimate).ToVector()
+        linearization_service::DecodeParameterVector(linear_estimate).ToVector()
     };
     eigen_validation::RequireVectorSize(gaussian_estimate, gaussian_truth_vector.rows(), "gaussian");
     return ((gaussian_estimate - gaussian_truth_vector).array() / gaussian_truth_vector.array()).matrix();

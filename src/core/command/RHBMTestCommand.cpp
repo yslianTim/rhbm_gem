@@ -83,7 +83,6 @@ std::vector<double> BuildDescendingSweep(int count, double start, double step)
 test_data_factory::TestDataBuildOptions BuildTestDataOptions(const RHBMTestRequest & request)
 {
     return test_data_factory::TestDataBuildOptions{
-        linearization_service::LinearizationSpec::AtomDecode(),
         linearization_service::LinearizationRange{request.fit_range_min, request.fit_range_max}
     };
 }
@@ -267,7 +266,6 @@ void RunSimulationTestOnMemberOutlier(const RHBMTestRequest & request)
     base_scenario.replica_size = 100;
     base_scenario.requested_alpha_g_list = { request.alpha_g };
     base_scenario.alpha_training = true;
-    const auto test_data_options{ BuildTestDataOptions(request) };
     const auto outlier_list{ BuildLinearSweep(9, 0.025) };
     BiasPlotRequest plot_request;
     plot_request.output_name = "bias_outlier_in_member.pdf";
@@ -290,7 +288,7 @@ void RunSimulationTestOnMemberOutlier(const RHBMTestRequest & request)
             mu_scenario.outlier_prior = outlier_prior;
             mu_scenario.outlier_ratio = outlier_list.at(i);
             const auto test_input{
-                test_data_factory::BuildMuTestInput(mu_scenario, test_data_options)
+                test_data_factory::BuildMuTestInput(mu_scenario)
             };
             rhbm_tester::RunMuMDPDETest(bias, test_input, request.job_count);
 
@@ -398,7 +396,6 @@ void RunSimulationTestOnModelAlphaMember(const RHBMTestRequest & request)
     base_scenario.replica_size = 100;
     base_scenario.requested_alpha_g_list = { request.alpha_g };
     base_scenario.alpha_training = true;
-    const auto test_data_options{ BuildTestDataOptions(request) };
     const auto outlier_list{ BuildLinearSweep(10, 0.05) };
     BiasPlotRequest plot_request;
     plot_request.output_name = "bias_outlier_with_alpha_in_member.pdf";
@@ -420,7 +417,7 @@ void RunSimulationTestOnModelAlphaMember(const RHBMTestRequest & request)
             mu_scenario.outlier_prior = outlier_prior;
             mu_scenario.outlier_ratio = outlier_list.at(i);
             const auto test_input{
-                test_data_factory::BuildMuTestInput(mu_scenario, test_data_options)
+                test_data_factory::BuildMuTestInput(mu_scenario)
             };
             rhbm_tester::RunMuMDPDETest(bias, test_input, request.job_count);
 

@@ -43,9 +43,6 @@ struct RHBMNeighborhoodTestInput
 
 struct TestDataBuildOptions
 {
-    linearization_service::LinearizationSpec linearization_spec{
-        linearization_service::LinearizationSpec::AtomDecode()
-    };
     linearization_service::LinearizationRange fitting_range{ 0.0, 1.0 };
 };
 
@@ -112,9 +109,7 @@ RHBMBetaTestInput BuildBetaTestInput(
     const BetaScenario & scenario,
     const TestDataBuildOptions & options = {});
 
-RHBMMuTestInput BuildMuTestInput(
-    const MuScenario & scenario,
-    const TestDataBuildOptions & options = {});
+RHBMMuTestInput BuildMuTestInput(const MuScenario & scenario);
 
 RHBMNeighborhoodTestInput BuildNeighborhoodTestInput(
     const NeighborhoodScenario & scenario,

@@ -84,7 +84,6 @@ Expected result contract:
 - optionally switches the model object into simulation mode
 - optionally runs map normalization, then runs model preprocessing
 - performs atom sampling, classification, fitting, and optional alpha training
-- runs the experimental bond workflow when enabled
 - saves the prepared model through `SavePreparedModel()`
 
 `PotentialAnalysisCommand::BuildDataObject()`:

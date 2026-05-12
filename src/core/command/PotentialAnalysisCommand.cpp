@@ -1,7 +1,6 @@
 #include "detail/CommandBase.hpp"
 
 #include "detail/MapSampling.hpp"
-#include "experimental/PotentialAnalysisBondWorkflow.hpp"
 
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
@@ -557,9 +556,6 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
     RunModelObjectPreprocessing(model_object, request.asymmetry_flag, request.alpha_r);
     RunPotentialSamplingWorkflow(map_object, model_object, request, thread_size);
     RunAtomPotentialFittingWorkflow(model_object, request, thread_size);
-#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
-    experimental::RunPotentialAnalysisBondWorkflow(model_object, map_object, request, thread_size);
-#endif
     SavePreparedModel(model_object, request.database_path, request.saved_key_tag);
     return true;
 }

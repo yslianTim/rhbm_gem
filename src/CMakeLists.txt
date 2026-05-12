@@ -13,7 +13,6 @@ set(RHBM_GEM_COMMAND_SOURCES
 set(RHBM_GEM_EXPERIMENTAL_SOURCES
     core/command/MapVisualizationCommand.cpp
     core/command/PositionEstimationCommand.cpp
-    core/experimental/PotentialAnalysisBondWorkflow.cpp
 )
 
 target_sources(rhbm_gem PRIVATE
