@@ -93,7 +93,6 @@ RHBMMemberDataset BuildDatasetSlice(
     RHBMMemberDataset slice;
     slice.X = RHBMDesignMatrix::Zero(row_count, dataset.X.cols());
     slice.y = RHBMResponseVector::Zero(row_count);
-    slice.score = RHBMScoreVector::Zero(row_count);
     for (Eigen::Index i = 0; i < row_count; i++)
     {
         const auto row_index{ static_cast<Eigen::Index>(row_indices.at(static_cast<std::size_t>(i))) };
@@ -103,7 +102,6 @@ RHBMMemberDataset BuildDatasetSlice(
         }
         slice.X.row(i) = dataset.X.row(row_index);
         slice.y(i) = dataset.y(row_index);
-        slice.score(i) = dataset.score(row_index);
     }
     return slice;
 }

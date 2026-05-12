@@ -42,7 +42,6 @@ void ExpectDatasetEquals(
     ASSERT_EQ(lhs.X.rows(), rhs.X.rows());
     ASSERT_EQ(lhs.X.cols(), rhs.X.cols());
     ASSERT_EQ(lhs.y.rows(), rhs.y.rows());
-    ASSERT_EQ(lhs.score.rows(), rhs.score.rows());
     for (Eigen::Index row = 0; row < lhs.X.rows(); row++)
     {
         for (Eigen::Index col = 0; col < lhs.X.cols(); col++)
@@ -50,7 +49,6 @@ void ExpectDatasetEquals(
             EXPECT_DOUBLE_EQ(lhs.X(row, col), rhs.X(row, col));
         }
         EXPECT_DOUBLE_EQ(lhs.y(row), rhs.y(row));
-        EXPECT_DOUBLE_EQ(lhs.score(row), rhs.score(row));
     }
 }
 
@@ -189,7 +187,6 @@ TEST(TestDataFactoryTest, BuildBetaTestInputUsesExpectedZeroDistanceGaussianResp
     ASSERT_EQ(dataset.y.rows(), 1);
     EXPECT_DOUBLE_EQ(dataset.X(0, 0), 1.0);
     EXPECT_DOUBLE_EQ(dataset.X(0, 1), 0.0);
-    EXPECT_DOUBLE_EQ(dataset.score(0), 1.0);
 
     const auto expected_response{
         amplitude * ComputeExpectedGaussianResponseAtDistance3D(0.0, width) + intercept

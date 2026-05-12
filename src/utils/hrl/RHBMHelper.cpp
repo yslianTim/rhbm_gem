@@ -36,7 +36,6 @@ RHBMMemberDataset rhbm_gem::rhbm_helper::BuildMemberDataset(
     RHBMMemberDataset dataset;
     dataset.X = RHBMDesignMatrix::Zero(data_size, basis_size);
     dataset.y = RHBMResponseVector::Zero(data_size);
-    dataset.score = RHBMScoreVector::Zero(data_size);
     for (int i = 0; i < data_size; i++)
     {
         const auto & point{ series_point_list.at(static_cast<std::size_t>(i)) };
@@ -48,10 +47,6 @@ RHBMMemberDataset rhbm_gem::rhbm_helper::BuildMemberDataset(
             point.response,
             "response",
             "Member dataset contains non-finite value.");
-        rhbm_gem::numeric_validation::RequireFinite(
-            point.score,
-            "score",
-            "Member dataset contains non-finite value.");
         rhbm_gem::numeric_validation::RequireAllFinite(
             point.basis_list,
             "basis_list",
@@ -60,7 +55,6 @@ RHBMMemberDataset rhbm_gem::rhbm_helper::BuildMemberDataset(
         dataset.X.row(i) = Eigen::Map<const Eigen::RowVectorXd>(
             point.basis_list.data(), basis_size);
         dataset.y(i) = point.response;
-        dataset.score(i) = point.score;
     }
 
     return dataset;
@@ -134,11 +128,6 @@ RHBMGroupEstimationInput rhbm_gem::rhbm_helper::BuildGroupInput(
             dataset.y,
             dataset.X.rows(),
             "Member dataset response",
-            "Member dataset shape is inconsistent.");
-        rhbm_gem::eigen_validation::RequireSameSize(
-            dataset.score,
-            dataset.y,
-            "Member dataset shape",
             "Member dataset shape is inconsistent.");
         rhbm_gem::eigen_validation::RequireVectorSize(
             fit_result.beta_mdpde,
@@ -220,9 +209,6 @@ double CalculateChiSquareQuantile(int df)
 RHBMParameterVector CalculateBetaByOLS(
     const RHBMDesignMatrix & design_matrix,
     const RHBMResponseVector & response_vector);
-
-[[maybe_unused]] RHBMParameterVector CalculateBetaWithSelectedDataByOLS(
-    const RHBMMemberDataset & dataset);
 
 RHBMParameterVector CalculateBetaByMDPDE(
     const RHBMDesignMatrix & design_matrix,
@@ -315,7 +301,6 @@ RHBMBetaEstimateResult rhbm_gem::rhbm_helper::EstimateBetaMDPDE(
 
     result.beta_ols = CalculateBetaByOLS(design_matrix, response_vector);
     result.beta_mdpde = result.beta_ols;
-    //result.beta_mdpde = CalculateBetaWithSelectedDataByOLS(dataset); // TEST
     result.sigma_square =
         (response_vector - (design_matrix * result.beta_mdpde)).squaredNorm() /
         static_cast<double>(data_size - 1);
@@ -633,49 +618,6 @@ RHBMParameterVector CalculateBetaByOLS(
         rhbm_gem::eigen_helper::GetInverseMatrix(gram_matrix)
     };
     return inverse_gram_matrix * (design_matrix.transpose() * response_vector);
-}
-
-[[maybe_unused]] RHBMParameterVector CalculateBetaWithSelectedDataByOLS(
-    const RHBMMemberDataset & dataset)
-{
-    ValidateDatasetShape(
-        dataset.X,
-        dataset.y,
-        "Selected-data OLS input is invalid.");
-    rhbm_gem::eigen_validation::RequireSameSize(
-        dataset.score,
-        dataset.y,
-        "dataset score",
-        "Selected-data OLS input is invalid.");
-
-    std::vector<Eigen::Index> selected_row_indices;
-    selected_row_indices.reserve(static_cast<std::size_t>(dataset.y.size()));
-    for (Eigen::Index row = 0; row < dataset.score.size(); row++)
-    {
-        if (dataset.score(row) != 0.0)
-        {
-            selected_row_indices.emplace_back(row);
-        }
-    }
-
-    if (selected_row_indices.size() <= 1U)
-    {
-        return CalculateBetaByOLS(dataset.X, dataset.y);
-    }
-
-    const auto selected_row_count{ static_cast<Eigen::Index>(selected_row_indices.size()) };
-    RHBMDesignMatrix selected_design_matrix{
-        RHBMDesignMatrix::Zero(selected_row_count, dataset.X.cols())
-    };
-    RHBMResponseVector selected_response_vector{ RHBMResponseVector::Zero(selected_row_count) };
-    for (Eigen::Index i = 0; i < selected_row_count; i++)
-    {
-        const auto row{ selected_row_indices.at(static_cast<std::size_t>(i)) };
-        selected_design_matrix.row(i) = dataset.X.row(row);
-        selected_response_vector(i) = dataset.y(row);
-    }
-
-    return CalculateBetaByOLS(selected_design_matrix, selected_response_vector);
 }
 
 RHBMParameterVector CalculateBetaByMDPDE(

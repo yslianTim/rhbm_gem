@@ -12,7 +12,6 @@ namespace rhbm_gem {
 
 using RHBMDesignMatrix = Eigen::MatrixXd;
 using RHBMResponseVector = Eigen::VectorXd;
-using RHBMScoreVector = Eigen::VectorXd;
 using RHBMParameterVector = Eigen::VectorXd;
 using RHBMBetaMatrix = Eigen::MatrixXd;
 using RHBMGroupCovarianceMatrix = Eigen::MatrixXd;
@@ -45,7 +44,6 @@ struct RHBMMemberDataset
 {
     RHBMDesignMatrix X;     // member basis/design matrix
     RHBMResponseVector y;   // regression response vector
-    RHBMScoreVector score;  // member score/weight vector
 };
 
 struct RHBMBetaEstimateResult
