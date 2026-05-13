@@ -264,9 +264,9 @@ void RunAtomAlphaTraining(
     RunLocalPotentialFitting(model_object, alpha_options);
 
     std::vector<std::vector<LocalPotentialSampleList>> sample_group_list;
-    std::vector<std::vector<double>> alpha_r_group_list;
+    std::vector<std::vector<LocalGaussianResult>> member_result_list;
     sample_group_list.reserve(component_group_keys.size());
-    alpha_r_group_list.reserve(component_group_keys.size());
+    member_result_list.reserve(component_group_keys.size());
     for (const auto group_key : component_group_keys)
     {
         const auto & group_atom_list{ analysis_view.GetAtomObjectList(group_key, component_class_key) };
@@ -274,22 +274,22 @@ void RunAtomAlphaTraining(
         if (group_atom_list.front()->IsMainChainAtom() == false) continue;
 
         std::vector<LocalPotentialSampleList> group_samples;
-        std::vector<double> group_alpha_r_list;
+        std::vector<LocalGaussianResult> group_member_results;
         group_samples.reserve(group_atom_list.size());
-        group_alpha_r_list.reserve(group_atom_list.size());
+        group_member_results.reserve(group_atom_list.size());
         for (auto * atom : group_atom_list)
         {
             const auto local_entry{ analysis.EnsureAtomLocalPotential(*atom) };
             group_samples.emplace_back(local_entry.GetSamplingEntries());
-            group_alpha_r_list.emplace_back(local_entry.GetAlphaR());
+            group_member_results.emplace_back(local_entry.GetGaussianResult());
         }
         sample_group_list.emplace_back(std::move(group_samples));
-        alpha_r_group_list.emplace_back(std::move(group_alpha_r_list));
+        member_result_list.emplace_back(std::move(group_member_results));
     }
 
     const auto alpha_g{
         gaussian_estimator::CrossValidationAlphaG(
-            sample_group_list, alpha_r_group_list, alpha_options, !request.training_report_dir.empty())
+            sample_group_list, member_result_list, alpha_options, !request.training_report_dir.empty())
     };
 
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)

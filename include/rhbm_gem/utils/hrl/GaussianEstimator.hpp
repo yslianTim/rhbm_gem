@@ -39,7 +39,7 @@ double CrossValidationAlphaG(
 
 double CrossValidationAlphaG(
     const std::vector<std::vector<LocalPotentialSampleList>> & sample_group_list,
-    const std::vector<std::vector<double>> & alpha_r_group_list,
+    const std::vector<std::vector<LocalGaussianResult>> & member_result_list,
     const CrossValidationOptions & options,
     bool output_study_plot = false);
 
