@@ -13,11 +13,9 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/AtomSelector.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
-#include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include "support/DataObjectTestSupport.hpp"
 
 namespace rg = rhbm_gem;
-namespace ls = rhbm_gem::linearization_service;
 
 TEST(DataObjectModelAnalysisTest, SelectedModelEntriesCanBeInitializedForTypedWorkflows)
 {
@@ -112,19 +110,17 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisDataCanClearTransientFitStatesWit
     auto & bond_entry{ analysis_data.EnsureBondLocalEntry(*bond) };
     analysis_data.EnsureAtomGroupEntry("atom_class");
     analysis_data.EnsureBondGroupEntry("bond_class");
-    atom_entry.SetDataset({});
-    atom_entry.SetFitResult({});
-    bond_entry.SetDataset({});
-    bond_entry.SetFitResult({});
+    rg::LocalGaussianResult atom_result;
+    atom_result.alpha_r = 0.2;
+    rg::LocalGaussianResult bond_result;
+    bond_result.alpha_r = 0.3;
+    atom_entry.SetGaussianResult(atom_result);
+    bond_entry.SetGaussianResult(bond_result);
 
     ASSERT_NE(analysis_data.FindAtomLocalEntry(*atom), nullptr);
     ASSERT_NE(analysis_data.FindBondLocalEntry(*bond), nullptr);
     ASSERT_NE(analysis_data.FindAtomGroupEntry("atom_class"), nullptr);
     ASSERT_NE(analysis_data.FindBondGroupEntry("bond_class"), nullptr);
-    ASSERT_TRUE(atom_entry.HasDataset());
-    ASSERT_TRUE(atom_entry.HasFitResult());
-    ASSERT_TRUE(bond_entry.HasDataset());
-    ASSERT_TRUE(bond_entry.HasFitResult());
 
     analysis_data.ClearTransientFitStates();
 
@@ -134,10 +130,8 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisDataCanClearTransientFitStatesWit
     ASSERT_NE(cleared_bond_entry, nullptr);
     EXPECT_NE(analysis_data.FindAtomGroupEntry("atom_class"), nullptr);
     EXPECT_NE(analysis_data.FindBondGroupEntry("bond_class"), nullptr);
-    EXPECT_FALSE(cleared_atom_entry->HasDataset());
-    EXPECT_FALSE(cleared_atom_entry->HasFitResult());
-    EXPECT_FALSE(cleared_bond_entry->HasDataset());
-    EXPECT_FALSE(cleared_bond_entry->HasFitResult());
+    EXPECT_DOUBLE_EQ(0.2, cleared_atom_entry->GetAlphaR());
+    EXPECT_DOUBLE_EQ(0.3, cleared_bond_entry->GetAlphaR());
 }
 
 TEST(DataObjectModelAnalysisTest, ModelAnalysisDataClearDropsEntriesAndFitStates)
@@ -151,10 +145,8 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisDataClearDropsEntriesAndFitStates
     auto & bond_entry{ analysis_data.EnsureBondLocalEntry(*bond) };
     analysis_data.EnsureAtomGroupEntry("atom_class");
     analysis_data.EnsureBondGroupEntry("bond_class");
-    atom_entry.SetDataset({});
-    atom_entry.SetFitResult({});
-    bond_entry.SetDataset({});
-    bond_entry.SetFitResult({});
+    atom_entry.SetAlphaR(0.2);
+    bond_entry.SetAlphaR(0.3);
 
     analysis_data.Clear();
 
@@ -164,31 +156,43 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisDataClearDropsEntriesAndFitStates
     EXPECT_EQ(analysis_data.FindBondGroupEntry("bond_class"), nullptr);
 }
 
-TEST(DataObjectModelAnalysisTest, LocalPotentialEntryCanClearTransientFitPayload)
+TEST(DataObjectModelAnalysisTest, LocalPotentialEntryClearTransientFitStateKeepsGaussianResult)
 {
     rg::LocalPotentialEntry entry;
-    entry.SetDataset({});
-    entry.SetFitResult({});
-
-    ASSERT_TRUE(entry.HasDataset());
-    ASSERT_TRUE(entry.HasFitResult());
+    rg::LocalGaussianResult result;
+    result.alpha_r = 0.4;
+    result.mdpde = rg::GaussianModel3DWithUncertainty{
+        rg::GaussianModel3D{ 2.0, 0.7 },
+        rg::GaussianModel3DUncertainty{}
+    };
+    entry.SetGaussianResult(result);
 
     entry.ClearTransientFitState();
 
-    EXPECT_FALSE(entry.HasDataset());
-    EXPECT_FALSE(entry.HasFitResult());
+    EXPECT_DOUBLE_EQ(0.4, entry.GetAlphaR());
+    EXPECT_DOUBLE_EQ(2.0, entry.GetEstimateMDPDE().GetAmplitude());
+    EXPECT_DOUBLE_EQ(0.7, entry.GetEstimateMDPDE().GetWidth());
 }
 
-TEST(DataObjectModelAnalysisTest, LocalPotentialEntryPreservesFitResultStatus)
+TEST(DataObjectModelAnalysisTest, LocalPotentialEntryStoresGaussianResult)
 {
     rg::LocalPotentialEntry entry;
-    rg::RHBMBetaEstimateResult fit_result;
-    fit_result.status = rg::RHBMEstimationStatus::NUMERICAL_FALLBACK;
+    rg::LocalGaussianResult result;
+    result.alpha_r = 0.5;
+    result.ols = rg::GaussianModel3DWithUncertainty{
+        rg::GaussianModel3D{ 1.0, 0.6 },
+        rg::GaussianModel3DUncertainty{}
+    };
+    result.mdpde = rg::GaussianModel3DWithUncertainty{
+        rg::GaussianModel3D{ 1.5, 0.8 },
+        rg::GaussianModel3DUncertainty{}
+    };
 
-    entry.SetFitResult(fit_result);
+    entry.SetGaussianResult(result);
 
-    ASSERT_TRUE(entry.HasFitResult());
-    EXPECT_EQ(rg::RHBMEstimationStatus::NUMERICAL_FALLBACK, entry.GetFitResult().status);
+    EXPECT_DOUBLE_EQ(0.5, entry.GetGaussianResult().alpha_r);
+    EXPECT_DOUBLE_EQ(1.0, entry.GetEstimateOLS().GetAmplitude());
+    EXPECT_DOUBLE_EQ(1.5, entry.GetEstimateMDPDE().GetAmplitude());
 }
 
 TEST(DataObjectModelAnalysisTest, MutableLocalPotentialViewCanSetAndReadAlphaR)
@@ -204,7 +208,7 @@ TEST(DataObjectModelAnalysisTest, MutableLocalPotentialViewCanSetAndReadAlphaR)
     EXPECT_DOUBLE_EQ(0.37, rg::LocalPotentialView::RequireFor(*atom).GetAlphaR());
 }
 
-TEST(DataObjectModelAnalysisTest, MutableLocalPotentialViewSetFitResultUpdatesFitAndEstimates)
+TEST(DataObjectModelAnalysisTest, MutableLocalPotentialViewSetGaussianResultUpdatesEstimates)
 {
     auto model{ data_test::MakeModelWithBond() };
     auto * atom{ model->GetAtomList().at(0).get() };
@@ -218,22 +222,25 @@ TEST(DataObjectModelAnalysisTest, MutableLocalPotentialViewSetFitResultUpdatesFi
     };
     entry.SetSamplingEntries(sampling_entries);
 
-    rg::RHBMBetaEstimateResult fit_result;
-    fit_result.status = rg::RHBMEstimationStatus::SUCCESS;
-    fit_result.beta_ols = Eigen::VectorXd::Zero(2);
-    fit_result.beta_mdpde = Eigen::VectorXd::Zero(2);
+    rg::LocalGaussianResult gaussian_result;
+    gaussian_result.alpha_r = 0.6;
+    gaussian_result.ols = rg::GaussianModel3DWithUncertainty{
+        rg::GaussianModel3D{ 0.0, 0.0 },
+        rg::GaussianModel3DUncertainty{}
+    };
+    gaussian_result.mdpde = rg::GaussianModel3DWithUncertainty{
+        rg::GaussianModel3D{ 0.0, 0.0 },
+        rg::GaussianModel3DUncertainty{}
+    };
 
-    entry.SetFitResult(fit_result);
+    entry.SetGaussianResult(gaussian_result);
 
-    ASSERT_TRUE(entry.HasFitResult());
-    EXPECT_EQ(rg::RHBMEstimationStatus::SUCCESS, entry.GetFitResult().status);
-    EXPECT_TRUE(entry.GetFitResult().beta_ols.isApprox(Eigen::VectorXd::Zero(2), 1e-12));
-    EXPECT_TRUE(entry.GetFitResult().beta_mdpde.isApprox(Eigen::VectorXd::Zero(2), 1e-12));
+    EXPECT_DOUBLE_EQ(0.6, entry.GetGaussianResult().alpha_r);
     EXPECT_DOUBLE_EQ(0.0, rg::LocalPotentialView::RequireFor(*atom).GetEstimateOLS().GetWidth());
     EXPECT_DOUBLE_EQ(0.0, rg::LocalPotentialView::RequireFor(*atom).GetEstimateMDPDE().GetWidth());
 }
 
-TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupEstimateResultToStatisticsAndAnnotations)
+TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupGaussianResultToStatisticsAndAnnotations)
 {
     auto model{ data_test::MakeModelWithBond() };
     model->SelectAllAtoms();
@@ -249,50 +256,43 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupEstimateRes
     const auto & atom_list{ analysis_view.GetAtomObjectList(group_key, class_key) };
     ASSERT_FALSE(atom_list.empty());
 
-    rg::RHBMGroupEstimationResult result;
-    result.mu_mean = (Eigen::Vector2d() << 0.1, 1.2).finished();
-    result.mu_mdpde = (Eigen::Vector2d() << 0.2, 1.1).finished();
-    result.mu_prior = (Eigen::Vector2d() << 0.3, 1.0).finished();
-    result.capital_lambda = Eigen::Matrix2d::Identity();
-    result.beta_posterior_matrix = Eigen::MatrixXd::Zero(2, static_cast<Eigen::Index>(atom_list.size()));
-    result.capital_sigma_posterior_list.assign(atom_list.size(), Eigen::Matrix2d::Identity());
-    result.outlier_flag_array =
-        Eigen::Array<bool, Eigen::Dynamic, 1>::Constant(static_cast<Eigen::Index>(atom_list.size()), false);
-    result.statistical_distance_array =
-        Eigen::ArrayXd::Zero(static_cast<Eigen::Index>(atom_list.size()));
-    for (Eigen::Index i = 0; i < static_cast<Eigen::Index>(atom_list.size()); i++)
+    constexpr double alpha_g{ 0.25 };
+    rg::GroupGaussianResult result;
+    result.alpha_g = alpha_g;
+    result.mean = rg::GaussianModel3D{ 1.1, 1.2 };
+    result.mdpde = rg::GaussianModel3D{ 1.2, 1.1 };
+    result.prior = rg::GaussianModel3DWithUncertainty{
+        rg::GaussianModel3D{ 1.3, 1.0 },
+        rg::GaussianModel3DUncertainty{ 0.1, 0.2 }
+    };
+    result.member_results.reserve(atom_list.size());
+    for (std::size_t i = 0; i < atom_list.size(); i++)
     {
-        result.beta_posterior_matrix.col(i) =
-            (Eigen::Vector2d() << 0.4 + 0.1 * static_cast<double>(i), 0.9).finished();
-        result.outlier_flag_array(i) = (i == 0);
-        result.statistical_distance_array(i) = 1.5 + static_cast<double>(i);
+        rg::LocalGaussianResult member_result;
+        member_result.mdpde = rg::GaussianModel3DWithUncertainty{
+            rg::GaussianModel3D{ 0.4 + 0.1 * static_cast<double>(i), 0.9 },
+            rg::GaussianModel3DUncertainty{ 0.01, 0.02 }
+        };
+        member_result.is_outlier = (i == 0);
+        member_result.statistical_distance = 1.5 + static_cast<double>(i);
+        result.member_results.emplace_back(member_result);
     }
 
-    constexpr double alpha_g{ 0.25 };
-    analysis.ApplyAtomGroupEstimateResult(group_key, class_key, result, alpha_g);
+    analysis.ApplyAtomGroupGaussianResult(group_key, class_key, result);
 
-    const auto expected_mean{ ls::DecodeParameterVector(result.mu_mean) };
-    const auto expected_mdpde{ ls::DecodeParameterVector(result.mu_mdpde) };
-    const auto expected_prior{
-        ls::DecodeParameterVector(result.mu_prior, result.capital_lambda)
-    };
-    EXPECT_NEAR(expected_mean.GetAmplitude(), analysis_view.GetAtomGroupMean(group_key, class_key).GetAmplitude(), 1e-12);
-    EXPECT_NEAR(expected_mean.GetWidth(), analysis_view.GetAtomGroupMean(group_key, class_key).GetWidth(), 1e-12);
-    EXPECT_NEAR(expected_mdpde.GetAmplitude(), analysis_view.GetAtomGroupMDPDE(group_key, class_key).GetAmplitude(), 1e-12);
-    EXPECT_NEAR(expected_mdpde.GetWidth(), analysis_view.GetAtomGroupMDPDE(group_key, class_key).GetWidth(), 1e-12);
-    EXPECT_NEAR(expected_prior.GetModel().GetAmplitude(), analysis_view.GetAtomGroupPrior(group_key, class_key).GetAmplitude(), 1e-12);
-    EXPECT_NEAR(expected_prior.GetModel().GetWidth(), analysis_view.GetAtomGroupPrior(group_key, class_key).GetWidth(), 1e-12);
-    EXPECT_NEAR(expected_prior.GetStandardDeviationModel().GetAmplitude(), analysis_view.GetAtomGroupPriorWithUncertainty(group_key, class_key).GetStandardDeviationModel().GetAmplitude(), 1e-12);
-    EXPECT_NEAR(expected_prior.GetStandardDeviationModel().GetWidth(), analysis_view.GetAtomGroupPriorWithUncertainty(group_key, class_key).GetStandardDeviationModel().GetWidth(), 1e-12);
+    EXPECT_NEAR(result.mean.GetAmplitude(), analysis_view.GetAtomGroupMean(group_key, class_key).GetAmplitude(), 1e-12);
+    EXPECT_NEAR(result.mean.GetWidth(), analysis_view.GetAtomGroupMean(group_key, class_key).GetWidth(), 1e-12);
+    EXPECT_NEAR(result.mdpde.GetAmplitude(), analysis_view.GetAtomGroupMDPDE(group_key, class_key).GetAmplitude(), 1e-12);
+    EXPECT_NEAR(result.mdpde.GetWidth(), analysis_view.GetAtomGroupMDPDE(group_key, class_key).GetWidth(), 1e-12);
+    EXPECT_NEAR(result.prior.GetModel().GetAmplitude(), analysis_view.GetAtomGroupPrior(group_key, class_key).GetAmplitude(), 1e-12);
+    EXPECT_NEAR(result.prior.GetModel().GetWidth(), analysis_view.GetAtomGroupPrior(group_key, class_key).GetWidth(), 1e-12);
+    EXPECT_NEAR(result.prior.GetStandardDeviationModel().GetAmplitude(), analysis_view.GetAtomGroupPriorWithUncertainty(group_key, class_key).GetStandardDeviationModel().GetAmplitude(), 1e-12);
+    EXPECT_NEAR(result.prior.GetStandardDeviationModel().GetWidth(), analysis_view.GetAtomGroupPriorWithUncertainty(group_key, class_key).GetStandardDeviationModel().GetWidth(), 1e-12);
     EXPECT_DOUBLE_EQ(alpha_g, analysis_view.GetAtomAlphaG(group_key, class_key));
 
     const auto annotation{ rg::LocalPotentialView::RequireFor(*atom_list.front()).FindAnnotation(class_key) };
     ASSERT_TRUE(annotation.has_value());
-    const auto expected_gaussian{
-        ls::DecodeParameterVector(
-            result.beta_posterior_matrix.col(0),
-            result.capital_sigma_posterior_list.front())
-    };
+    const auto expected_gaussian{ result.member_results.front().mdpde };
     EXPECT_NEAR(expected_gaussian.GetModel().GetAmplitude(), annotation->gaussian.GetModel().GetAmplitude(), 1e-12);
     EXPECT_NEAR(expected_gaussian.GetModel().GetWidth(), annotation->gaussian.GetModel().GetWidth(), 1e-12);
     EXPECT_NEAR(
@@ -307,7 +307,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupEstimateRes
     EXPECT_DOUBLE_EQ(1.5, annotation->statistical_distance);
 }
 
-TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorRejectsAtomGroupEstimateResultWithMismatchedMemberCount)
+TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorRejectsAtomGroupGaussianResultWithMismatchedMemberCount)
 {
     auto model{ data_test::MakeModelWithBond() };
     model->SelectAllAtoms();
@@ -318,13 +318,10 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorRejectsAtomGroupEstimateRes
     const auto & class_key{ ChemicalDataHelper::GetSimpleAtomClassKey() };
     const auto group_key{ analysis_view.CollectAtomGroupKeys(class_key).front() };
 
-    rg::RHBMGroupEstimationResult result;
-    result.beta_posterior_matrix = Eigen::MatrixXd::Zero(2, 0);
-    result.outlier_flag_array = Eigen::Array<bool, Eigen::Dynamic, 1>::Zero(0);
-    result.statistical_distance_array = Eigen::ArrayXd::Zero(0);
+    rg::GroupGaussianResult result;
 
     EXPECT_THROW(
-        analysis.ApplyAtomGroupEstimateResult(group_key, class_key, result, 0.0),
+        analysis.ApplyAtomGroupGaussianResult(group_key, class_key, result),
         std::invalid_argument);
 }
 

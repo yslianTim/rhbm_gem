@@ -7,7 +7,7 @@
 #include <Eigen/Dense>
 
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
-#include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
+#include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace rhbm_gem {
@@ -31,21 +31,17 @@ class MutableLocalPotentialView
     AtomObject * m_atom_object{ nullptr };
     BondObject * m_bond_object{ nullptr };
     void * m_entry_ptr{ nullptr };
-    mutable RHBMMemberDataset m_dataset_cache{};
-    mutable RHBMBetaEstimateResult m_fit_result_cache{};
     
 public:
     MutableLocalPotentialView() = default;
     void SetSamplingEntries(LocalPotentialSampleList value);
-    void SetDataset(RHBMMemberDataset value);
-    void SetFitResult(RHBMBetaEstimateResult value);
+    void SetGaussianResult(LocalGaussianResult value);
     void SetAlphaR(double value);
     void SetAnnotation(const std::string & key, const LocalPotentialAnnotationData & value);
-    bool HasDataset() const;
-    bool HasFitResult() const;
     double GetAlphaR() const;
-    const RHBMMemberDataset & GetDataset() const;
-    const RHBMBetaEstimateResult & GetFitResult() const;
+    const LocalGaussianResult & GetGaussianResult() const;
+    const LocalPotentialSampleList & GetSamplingEntries() const;
+    int GetSamplingEntryCount() const;
     const AtomObject * GetAtomObjectPtr() const { return m_atom_object; }
     const BondObject * GetBondObjectPtr() const { return m_bond_object; }
     const void * GetEntryHandle() const { return m_entry_ptr; }
@@ -70,11 +66,10 @@ public:
     MutableLocalPotentialView EnsureBondLocalPotential(const BondObject & bond_object);
     void RebuildAtomGroupsFromSelection();
     void RebuildBondGroupsFromSelection();
-    void ApplyAtomGroupEstimateResult(
+    void ApplyAtomGroupGaussianResult(
         GroupKey group_key,
         const std::string & class_key,
-        const RHBMGroupEstimationResult & result,
-        double alpha_g);
+        const GroupGaussianResult & group_result);
     void SetAtomGroupAlphaG(GroupKey group_key, const std::string & class_key, double alpha_g);
     void SetBondGroupAlphaG(GroupKey group_key, const std::string & class_key, double alpha_g);
     

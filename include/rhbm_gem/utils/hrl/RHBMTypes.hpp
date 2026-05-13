@@ -6,8 +6,6 @@
 
 #include <Eigen/Dense>
 
-#include <rhbm_gem/utils/math/GaussianModel3D.hpp>
-
 namespace rhbm_gem {
 
 using RHBMDesignMatrix = Eigen::MatrixXd;

@@ -2,11 +2,13 @@
 
 #include <rhbm_gem/utils/domain/LocalPainter.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
+#include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
 
 #include <filesystem>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -15,7 +17,6 @@
 
 namespace rhbm_gem::gaussian_estimator {
 namespace {
-
 constexpr std::size_t kAlphaRSubsetSize{ 5 };
 constexpr std::size_t kAlphaGSubsetSize{ 10 };
 
@@ -153,26 +154,135 @@ rhbm_trainer::AlphaTrainer::AlphaRunOptions MakeStudyOptions(
     return study_options;
 }
 
-} // namespace
-
-double CrossValidationAlphaR(
+RHBMMemberDataset BuildMemberDataset(
     const LocalPotentialSampleList & sample_entries,
-    bool output_study_plot)
+    const CrossValidationOptions & options)
 {
-    const CrossValidationOptions options;
-    const std::vector<RHBMMemberDataset> dataset_list{
-        rhbm_helper::BuildMemberDataset(sample_entries, options.fit_range_min, options.fit_range_max)
-    };
-    return CrossValidationAlphaR(dataset_list, options, output_study_plot);
+    return rhbm_helper::BuildMemberDataset(
+        sample_entries, options.fit_range_min, options.fit_range_max);
 }
 
-double CrossValidationAlphaG(
-    const std::vector<std::vector<RHBMParameterVector>> & beta_group_list,
-    bool output_study_plot)
+std::vector<RHBMMemberDataset> BuildMemberDatasetList(
+    const std::vector<LocalPotentialSampleList> & sample_entries_list,
+    const CrossValidationOptions & options)
 {
-    const CrossValidationOptions options;
-    return CrossValidationAlphaG(beta_group_list, options, output_study_plot);
+    std::vector<RHBMMemberDataset> dataset_list;
+    dataset_list.reserve(sample_entries_list.size());
+    for (const auto & sample_entries : sample_entries_list)
+    {
+        dataset_list.emplace_back(BuildMemberDataset(sample_entries, options));
+    }
+    return dataset_list;
 }
+
+RHBMBetaEstimateResult EstimateMemberBeta(
+    const LocalPotentialSampleList & sample_entries,
+    double alpha_r,
+    const CrossValidationOptions & options)
+{
+    return rhbm_helper::EstimateBetaMDPDE(
+        alpha_r,
+        BuildMemberDataset(sample_entries, options),
+        MakeExecutionOptions(options));
+}
+
+std::vector<RHBMBetaEstimateResult> EstimateMemberBetaList(
+    const std::vector<LocalPotentialSampleList> & sample_entries_list,
+    const std::vector<double> & alpha_r_list,
+    const CrossValidationOptions & options)
+{
+    if (sample_entries_list.size() != alpha_r_list.size())
+    {
+        throw std::invalid_argument("sample_entries_list and alpha_r_list sizes are inconsistent.");
+    }
+
+    std::vector<RHBMBetaEstimateResult> fit_result_list;
+    fit_result_list.reserve(sample_entries_list.size());
+    for (std::size_t i = 0; i < sample_entries_list.size(); i++)
+    {
+        fit_result_list.emplace_back(
+            EstimateMemberBeta(sample_entries_list.at(i), alpha_r_list.at(i), options));
+    }
+    return fit_result_list;
+}
+
+LocalGaussianResult DecodeLocalGaussianResult(
+    double alpha_r,
+    const RHBMBetaEstimateResult & fit_result)
+{
+    return LocalGaussianResult{
+        alpha_r,
+        GaussianModel3DWithUncertainty{
+            linearization_service::DecodeParameterVector(fit_result.beta_ols),
+            GaussianModel3DUncertainty{}
+        },
+        GaussianModel3DWithUncertainty{
+            linearization_service::DecodeParameterVector(fit_result.beta_mdpde),
+            GaussianModel3DUncertainty{}
+        },
+        false,
+        0.0
+    };
+}
+
+GroupGaussianResult DecodeGroupGaussianResult(
+    double alpha_g,
+    const RHBMGroupEstimationResult & result)
+{
+    return GroupGaussianResult{
+        alpha_g,
+        linearization_service::DecodeParameterVector(result.mu_mean),
+        linearization_service::DecodeParameterVector(result.mu_mdpde),
+        linearization_service::DecodeParameterVector(result.mu_prior, result.capital_lambda)
+    };
+}
+
+std::vector<LocalGaussianResult> DecodeMemberGaussianResults(
+    const RHBMGroupEstimationResult & result)
+{
+    const auto member_count{ static_cast<std::size_t>(result.beta_posterior_matrix.cols()) };
+    if (result.capital_sigma_posterior_list.size() != member_count ||
+        result.outlier_flag_array.rows() != static_cast<Eigen::Index>(member_count) ||
+        result.statistical_distance_array.rows() != static_cast<Eigen::Index>(member_count))
+    {
+        throw std::invalid_argument("Group Gaussian member result count is inconsistent.");
+    }
+
+    std::vector<LocalGaussianResult> member_results;
+    member_results.reserve(member_count);
+    for (Eigen::Index i = 0; i < result.beta_posterior_matrix.cols(); i++)
+    {
+        const auto gaussian{
+            linearization_service::DecodeParameterVector(
+                result.beta_posterior_matrix.col(i),
+                result.capital_sigma_posterior_list.at(static_cast<std::size_t>(i)))
+        };
+        member_results.emplace_back(LocalGaussianResult{
+            0.0,
+            gaussian,
+            gaussian,
+            static_cast<bool>(result.outlier_flag_array(i)),
+            result.statistical_distance_array(i)
+        });
+    }
+    return member_results;
+}
+
+RHBMGroupEstimationResult EstimateGroupFromSamples(
+    const std::vector<LocalPotentialSampleList> & sample_entries_list,
+    const std::vector<double> & alpha_r_list,
+    double alpha_g,
+    const CrossValidationOptions & options)
+{
+    const auto dataset_list{ BuildMemberDatasetList(sample_entries_list, options) };
+    const auto fit_result_list{ EstimateMemberBetaList(sample_entries_list, alpha_r_list, options) };
+    return rhbm_helper::EstimateGroup(
+        alpha_g,
+        rhbm_helper::BuildGroupInput(dataset_list, fit_result_list),
+        MakeExecutionOptions(options));
+}
+
+} // namespace
 
 double CrossValidationAlphaR(
     const std::vector<RHBMMemberDataset> & dataset_list,
@@ -195,6 +305,15 @@ double CrossValidationAlphaR(
     }
 
     return training_result.best_alpha;
+}
+
+double CrossValidationAlphaR(
+    const std::vector<LocalPotentialSampleList> & sample_entries_list,
+    const CrossValidationOptions & options,
+    bool output_study_plot)
+{
+    return CrossValidationAlphaR(
+        BuildMemberDatasetList(sample_entries_list, options), options, output_study_plot);
 }
 
 double CrossValidationAlphaG(
@@ -243,6 +362,59 @@ double CrossValidationAlphaG(
             + std::to_string(training_result.best_alpha));
     }
     return training_result.best_alpha;
+}
+
+double CrossValidationAlphaG(
+    const std::vector<std::vector<LocalPotentialSampleList>> & sample_group_list,
+    const std::vector<std::vector<double>> & alpha_r_group_list,
+    const CrossValidationOptions & options,
+    bool output_study_plot)
+{
+    if (sample_group_list.size() != alpha_r_group_list.size())
+    {
+        throw std::invalid_argument("sample_group_list and alpha_r_group_list sizes are inconsistent.");
+    }
+
+    std::vector<std::vector<RHBMParameterVector>> beta_group_list;
+    beta_group_list.reserve(sample_group_list.size());
+    for (std::size_t i = 0; i < sample_group_list.size(); i++)
+    {
+        const auto fit_result_list{
+            EstimateMemberBetaList(sample_group_list.at(i), alpha_r_group_list.at(i), options)
+        };
+        std::vector<RHBMParameterVector> beta_list;
+        beta_list.reserve(fit_result_list.size());
+        for (const auto & fit_result : fit_result_list)
+        {
+            beta_list.emplace_back(fit_result.beta_mdpde);
+        }
+        beta_group_list.emplace_back(std::move(beta_list));
+    }
+    return CrossValidationAlphaG(beta_group_list, options, output_study_plot);
+}
+
+LocalGaussianResult EstimateLocalGaussian(
+    const LocalPotentialSampleList & sample_entries,
+    double alpha_r,
+    const CrossValidationOptions & options)
+{
+    return DecodeLocalGaussianResult(
+        alpha_r,
+        EstimateMemberBeta(sample_entries, alpha_r, options));
+}
+
+GroupGaussianResult EstimateGroupGaussian(
+    const std::vector<LocalPotentialSampleList> & sample_entries_list,
+    const std::vector<double> & alpha_r_list,
+    double alpha_g,
+    const CrossValidationOptions & options)
+{
+    const auto raw_result{
+        EstimateGroupFromSamples(sample_entries_list, alpha_r_list, alpha_g, options)
+    };
+    auto result{ DecodeGroupGaussianResult(alpha_g, raw_result) };
+    result.member_results = DecodeMemberGaussianResults(raw_result);
+    return result;
 }
 
 } // namespace rhbm_gem::gaussian_estimator

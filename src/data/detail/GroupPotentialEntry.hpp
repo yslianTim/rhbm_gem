@@ -6,8 +6,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
+#include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
 
 namespace rhbm_gem {
 
@@ -90,6 +90,15 @@ public:
         group.mdpde = mdpde;
         group.prior = GaussianModel3DWithUncertainty{ prior, prior_standard_deviation };
         group.alpha_g = alpha_g;
+    }
+
+    void SetGaussianResult(GroupKey group_key, const GroupGaussianResult & result)
+    {
+        auto & group{ EnsureGroup(group_key) };
+        group.mean = result.mean;
+        group.mdpde = result.mdpde;
+        group.prior = result.prior;
+        group.alpha_g = result.alpha_g;
     }
 
     void SetAlphaG(GroupKey group_key, double alpha_g)

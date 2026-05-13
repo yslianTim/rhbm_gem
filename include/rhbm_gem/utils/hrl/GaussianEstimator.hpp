@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <vector>
 
+#include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
@@ -22,21 +23,35 @@ struct CrossValidationOptions
 };
 
 double CrossValidationAlphaR(
-    const LocalPotentialSampleList & sample_entries,
-    bool output_study_plot = false);
-
-double CrossValidationAlphaG(
-    const std::vector<std::vector<RHBMParameterVector>> & beta_group_list,
-    bool output_study_plot = false);
-
-double CrossValidationAlphaR(
     const std::vector<RHBMMemberDataset> & dataset_list,
     const CrossValidationOptions & options,
     bool output_study_plot = false);
 
+double CrossValidationAlphaR(
+    const std::vector<LocalPotentialSampleList> & sample_entries_list,
+    const CrossValidationOptions & options,
+    bool output_study_plot = false);
+
 double CrossValidationAlphaG(
     const std::vector<std::vector<RHBMParameterVector>> & beta_group_list,
     const CrossValidationOptions & options,
     bool output_study_plot = false);
+
+double CrossValidationAlphaG(
+    const std::vector<std::vector<LocalPotentialSampleList>> & sample_group_list,
+    const std::vector<std::vector<double>> & alpha_r_group_list,
+    const CrossValidationOptions & options,
+    bool output_study_plot = false);
+
+LocalGaussianResult EstimateLocalGaussian(
+    const LocalPotentialSampleList & sample_entries,
+    double alpha_r,
+    const CrossValidationOptions & options);
+
+GroupGaussianResult EstimateGroupGaussian(
+    const std::vector<LocalPotentialSampleList> & sample_entries_list,
+    const std::vector<double> & alpha_r_list,
+    double alpha_g,
+    const CrossValidationOptions & options);
 
 } // namespace rhbm_gem::gaussian_estimator

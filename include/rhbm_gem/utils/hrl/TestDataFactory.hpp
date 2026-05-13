@@ -7,6 +7,7 @@
 #include <Eigen/Dense>
 
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
+#include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace rhbm_gem::test_data_factory

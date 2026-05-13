@@ -8,8 +8,7 @@
 #include <utility>
 
 namespace rhbm_gem {
-LocalPotentialEntry::LocalPotentialEntry() :
-    m_alpha_r{ 0.0 }
+LocalPotentialEntry::LocalPotentialEntry()
 {
 
 }
@@ -24,15 +23,25 @@ void LocalPotentialEntry::SetSamplingEntries(LocalPotentialSampleList value)
     m_sampling_entries = std::move(value);
 }
 
-void LocalPotentialEntry::SetDataset(
-    RHBMMemberDataset dataset)
+void LocalPotentialEntry::SetEstimateOLS(const GaussianModel3D & estimate)
 {
-    m_dataset = std::move(dataset);
+    m_gaussian_result.ols = GaussianModel3DWithUncertainty{
+        estimate,
+        GaussianModel3DUncertainty{}
+    };
 }
 
-void LocalPotentialEntry::SetFitResult(RHBMBetaEstimateResult value)
+void LocalPotentialEntry::SetEstimateMDPDE(const GaussianModel3D & estimate)
 {
-    m_fit_result = std::move(value);
+    m_gaussian_result.mdpde = GaussianModel3DWithUncertainty{
+        estimate,
+        GaussianModel3DUncertainty{}
+    };
+}
+
+void LocalPotentialEntry::SetGaussianResult(LocalGaussianResult value)
+{
+    m_gaussian_result = std::move(value);
 }
 
 void LocalPotentialEntry::SetAnnotation(
@@ -44,8 +53,6 @@ void LocalPotentialEntry::SetAnnotation(
 
 void LocalPotentialEntry::ClearTransientFitState()
 {
-    m_dataset.reset();
-    m_fit_result.reset();
 }
 
 LocalPotentialAnnotation * LocalPotentialEntry::FindAnnotation(const std::string & key)
@@ -69,24 +76,6 @@ const std::unordered_map<std::string, LocalPotentialAnnotation> &
 LocalPotentialEntry::Annotations() const
 {
     return m_annotation_map;
-}
-
-const RHBMMemberDataset & LocalPotentialEntry::GetDataset() const
-{
-    if (!m_dataset.has_value())
-    {
-        throw std::runtime_error("LocalPotentialEntry dataset is not available");
-    }
-    return *m_dataset;
-}
-
-const RHBMBetaEstimateResult & LocalPotentialEntry::GetFitResult() const
-{
-    if (!m_fit_result.has_value())
-    {
-        throw std::runtime_error("LocalPotentialEntry fit result is not available");
-    }
-    return *m_fit_result;
 }
 
 const LocalPotentialSampleList & LocalPotentialEntry::GetSamplingEntries() const

@@ -14,8 +14,6 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/hrl/GaussianEstimator.hpp>
-#include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
-#include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 
 #include <atomic>
 #include <filesystem>
@@ -53,14 +51,6 @@ struct PotentialAnalysisInputs
     std::unique_ptr<ModelObject> model_object;
     std::unique_ptr<MapObject> map_object;
 };
-
-RHBMExecutionOptions MakePotentialAnalysisExecutionOptions(int thread_size, bool quiet_mode)
-{
-    RHBMExecutionOptions execution_options;
-    execution_options.quiet_mode = quiet_mode;
-    execution_options.thread_size = thread_size;
-    return execution_options;
-}
 
 std::optional<PotentialAnalysisInputs> LoadPotentialAnalysisInputs(
     const PotentialAnalysisRequest & request)
@@ -110,6 +100,38 @@ std::vector<MutableLocalPotentialView> BuildSelectedAtomLocalEntryViews(ModelObj
         local_entry_list.emplace_back(analysis.EnsureAtomLocalPotential(*atom));
     }
     return local_entry_list;
+}
+
+gaussian_estimator::CrossValidationOptions MakeGaussianEstimatorOptions(
+    const PotentialAnalysisRequest & request)
+{
+    gaussian_estimator::CrossValidationOptions options;
+    options.alpha_min = request.training_alpha_min;
+    options.alpha_max = request.training_alpha_max;
+    options.alpha_step = request.training_alpha_step;
+    options.fit_range_min = request.fit_range_min;
+    options.fit_range_max = request.fit_range_max;
+    options.thread_size = request.job_count;
+    options.output_progress = true;
+    options.output_summary_log = true;
+    options.study_plot_dir = request.training_report_dir;
+    return options;
+}
+
+bool HasEnoughSamplesInFitRange(
+    const LocalPotentialSampleList & sample_entries,
+    double fit_range_min,
+    double fit_range_max,
+    std::size_t minimum_sample_count)
+{
+    std::size_t count{ 0 };
+    for (const auto & sample : sample_entries)
+    {
+        if (sample.distance < fit_range_min || sample.distance > fit_range_max) continue;
+        count++;
+        if (count >= minimum_sample_count) return true;
+    }
+    return false;
 }
 
 void RunModelObjectPreprocessing(
@@ -162,7 +184,9 @@ void RunModelObjectPreprocessing(
     }
 }
 
-void RunLocalPotentialFitting(ModelObject & model_object, int thread_size)
+void RunLocalPotentialFitting(
+    ModelObject & model_object,
+    const gaussian_estimator::CrossValidationOptions & options)
 {
     const auto selected_atom_size{ model_object.GetSelectedAtomCount() };
     auto local_entry_list{ BuildSelectedAtomLocalEntryViews(model_object) };
@@ -171,19 +195,19 @@ void RunLocalPotentialFitting(ModelObject & model_object, int thread_size)
         "Run Local atom fitting for " + std::to_string(selected_atom_size) + " atoms.");
 
 #ifdef USE_OPENMP
-    #pragma omp parallel for num_threads(thread_size)
+    #pragma omp parallel for num_threads(options.thread_size)
 #endif
     for (size_t i = 0; i < selected_atom_size; i++)
     {
         auto local_entry{ local_entry_list[i] };
         const auto result{
-            rhbm_helper::EstimateBetaMDPDE(
+            gaussian_estimator::EstimateLocalGaussian(
+                local_entry.GetSamplingEntries(),
                 local_entry.GetAlphaR(),
-                local_entry.GetDataset(),
-                MakePotentialAnalysisExecutionOptions(thread_size, true))
+                options)
         };
 
-        local_entry.SetFitResult(result);
+        local_entry.SetGaussianResult(result);
 
 #ifdef USE_OPENMP
         #pragma omp critical
@@ -197,21 +221,11 @@ void RunLocalPotentialFitting(ModelObject & model_object, int thread_size)
 
 void RunAtomAlphaTraining(
     ModelObject & model_object,
-    const PotentialAnalysisRequest & request,
-    int thread_size)
+    const PotentialAnalysisRequest & request)
 {
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
-    gaussian_estimator::CrossValidationOptions alpha_options;
-    alpha_options.alpha_min = request.training_alpha_min;
-    alpha_options.alpha_max = request.training_alpha_max;
-    alpha_options.alpha_step = request.training_alpha_step;
-    alpha_options.fit_range_min = request.fit_range_min;
-    alpha_options.fit_range_max = request.fit_range_max;
-    alpha_options.thread_size = thread_size;
-    alpha_options.output_progress = true;
-    alpha_options.output_summary_log = true;
-    alpha_options.study_plot_dir = request.training_report_dir;
+    auto alpha_options{ MakeGaussianEstimatorOptions(request) };
     const auto component_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     const auto component_group_keys{ analysis_view.CollectAtomGroupKeys(component_class_key) };
 
@@ -220,22 +234,23 @@ void RunAtomAlphaTraining(
     for (const auto group_key : component_group_keys)
     {
         const auto & group_atom_list{ analysis_view.GetAtomObjectList(group_key, component_class_key) };
-        std::vector<RHBMMemberDataset> selected_atom_dataset_list;
-        selected_atom_dataset_list.reserve(group_atom_list.size());
+        std::vector<LocalPotentialSampleList> selected_sample_entries_list;
+        selected_sample_entries_list.reserve(group_atom_list.size());
         for (auto & atom : group_atom_list)
         {
             const auto local_entry{ analysis.EnsureAtomLocalPotential(*atom) };
-            if (!local_entry.HasDataset()) continue;
-            if (local_entry.GetDataset().y.rows() < 10) continue;
-            selected_atom_dataset_list.emplace_back(local_entry.GetDataset());
+            const auto & sample_entries{ local_entry.GetSamplingEntries() };
+            if (!HasEnoughSamplesInFitRange(
+                sample_entries, request.fit_range_min, request.fit_range_max, 10)) continue;
+            selected_sample_entries_list.emplace_back(sample_entries);
         }
-        selected_atom_dataset_list.shrink_to_fit();
-        if (!selected_atom_dataset_list.empty())
+        selected_sample_entries_list.shrink_to_fit();
+        if (!selected_sample_entries_list.empty())
         {
             auto alpha_r_options{ alpha_options };
             alpha_r_options.output_progress = false;
             const auto alpha_r{
-                gaussian_estimator::CrossValidationAlphaR(selected_atom_dataset_list, alpha_r_options)
+                gaussian_estimator::CrossValidationAlphaR(selected_sample_entries_list, alpha_r_options)
             };
             for (auto * atom : group_atom_list)
             {
@@ -246,30 +261,35 @@ void RunAtomAlphaTraining(
     }
     
     // Alpha_G Training
-    RunLocalPotentialFitting(model_object, thread_size);
+    RunLocalPotentialFitting(model_object, alpha_options);
 
-    std::vector<std::vector<RHBMParameterVector>> beta_group_list;
-    beta_group_list.reserve(component_group_keys.size());
+    std::vector<std::vector<LocalPotentialSampleList>> sample_group_list;
+    std::vector<std::vector<double>> alpha_r_group_list;
+    sample_group_list.reserve(component_group_keys.size());
+    alpha_r_group_list.reserve(component_group_keys.size());
     for (const auto group_key : component_group_keys)
     {
         const auto & group_atom_list{ analysis_view.GetAtomObjectList(group_key, component_class_key) };
         if (group_atom_list.size() < 10) continue;
         if (group_atom_list.front()->IsMainChainAtom() == false) continue;
 
-        std::vector<RHBMParameterVector> beta_list;
-        beta_list.reserve(group_atom_list.size());
+        std::vector<LocalPotentialSampleList> group_samples;
+        std::vector<double> group_alpha_r_list;
+        group_samples.reserve(group_atom_list.size());
+        group_alpha_r_list.reserve(group_atom_list.size());
         for (auto * atom : group_atom_list)
         {
-            beta_list.emplace_back(
-                analysis.EnsureAtomLocalPotential(*atom).GetFitResult().beta_mdpde
-            );
+            const auto local_entry{ analysis.EnsureAtomLocalPotential(*atom) };
+            group_samples.emplace_back(local_entry.GetSamplingEntries());
+            group_alpha_r_list.emplace_back(local_entry.GetAlphaR());
         }
-        beta_group_list.emplace_back(std::move(beta_list));
+        sample_group_list.emplace_back(std::move(group_samples));
+        alpha_r_group_list.emplace_back(std::move(group_alpha_r_list));
     }
 
     const auto alpha_g{
         gaussian_estimator::CrossValidationAlphaG(
-            beta_group_list, alpha_options, !request.training_report_dir.empty())
+            sample_group_list, alpha_r_group_list, alpha_options, !request.training_report_dir.empty())
     };
 
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
@@ -282,19 +302,17 @@ void RunAtomAlphaTraining(
     }
 }
 
-void RunAtomPotentialFittingWorkflow(
-    ModelObject & model_object,
-    const PotentialAnalysisRequest & request,
-    int thread_size)
+void RunAtomPotentialFittingWorkflow(ModelObject & model_object, const PotentialAnalysisRequest & request)
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunAtomPotentialFittingWorkflow");
     if (request.training_alpha_flag)
     {
-        RunAtomAlphaTraining(model_object, request, thread_size);
+        RunAtomAlphaTraining(model_object, request);
     }
     else
     {
-        RunLocalPotentialFitting(model_object, thread_size);
+        const auto options{ MakeGaussianEstimatorOptions(request) };
+        RunLocalPotentialFitting(model_object, options);
     }
 
     auto analysis{ model_object.EditAnalysis() };
@@ -316,35 +334,36 @@ void RunAtomPotentialFittingWorkflow(
         std::atomic<size_t> key_count{ 0 };
 
 #ifdef USE_OPENMP
-        #pragma omp parallel for num_threads(thread_size)
+        #pragma omp parallel for num_threads(request.job_count)
 #endif
         for (size_t idx = 0; idx < group_key_size; idx++)
         {
             auto group_key{ group_key_list[idx] };
             const auto & atom_list{ analysis_view.GetAtomObjectList(group_key, class_key) };
-            std::vector<RHBMMemberDataset> member_datasets;
-            std::vector<RHBMBetaEstimateResult> member_fit_results;
-            member_datasets.reserve(atom_list.size());
-            member_fit_results.reserve(atom_list.size());
+            std::vector<LocalPotentialSampleList> member_sample_entries_list;
+            std::vector<double> member_alpha_r_list;
+            member_sample_entries_list.reserve(atom_list.size());
+            member_alpha_r_list.reserve(atom_list.size());
             for (const auto & atom : atom_list)
             {
                 const auto local_entry{ local_entry_map.at(atom) };
-                member_datasets.emplace_back(local_entry.GetDataset());
-                member_fit_results.emplace_back(local_entry.GetFitResult());
+                member_sample_entries_list.emplace_back(local_entry.GetSamplingEntries());
+                member_alpha_r_list.emplace_back(local_entry.GetAlphaR());
             }
             const auto result{
-                rhbm_helper::EstimateGroup(
+                gaussian_estimator::EstimateGroupGaussian(
+                    member_sample_entries_list,
+                    member_alpha_r_list,
                     analysis_view.GetAtomAlphaG(group_key, class_key),
-                    rhbm_helper::BuildGroupInput(member_datasets, member_fit_results),
-                    MakePotentialAnalysisExecutionOptions(thread_size, true))
+                    MakeGaussianEstimatorOptions(request))
             };
 
 #ifdef USE_OPENMP
             #pragma omp critical
 #endif
             {
-                analysis.ApplyAtomGroupEstimateResult(
-                    group_key, class_key, result, analysis_view.GetAtomAlphaG(group_key, class_key));
+                analysis.ApplyAtomGroupGaussianResult(
+                    group_key, class_key, result);
                 key_count++;
                 Logger::ProgressBar(key_count, group_key_size);
             }
@@ -365,8 +384,7 @@ void SavePreparedModel(
 void RunPotentialSamplingWorkflow(
     MapObject & map_object,
     ModelObject & model_object,
-    const PotentialAnalysisRequest & request,
-    int thread_size)
+    const PotentialAnalysisRequest & request)
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunPotentialSamplingWorkflow");
     const auto & atom_list{ model_object.GetSelectedAtoms() };
@@ -374,7 +392,7 @@ void RunPotentialSamplingWorkflow(
     size_t atom_count{ 0 };
     auto local_entry_list{ BuildSelectedAtomLocalEntryViews(model_object) };
 #ifdef USE_OPENMP
-    #pragma omp parallel for num_threads(thread_size)
+    #pragma omp parallel for num_threads(request.job_count)
 #endif
     for (size_t i = 0; i < atom_size; i++)
     {
@@ -383,12 +401,7 @@ void RunPotentialSamplingWorkflow(
         auto sampling_entries{
             SampleAtomMapValues(map_object, *atom, request.sampling_profile_choice)
         };
-        auto dataset{
-            rhbm_helper::BuildMemberDataset(
-                sampling_entries, request.fit_range_min, request.fit_range_max)
-        };
         entry.SetSamplingEntries(std::move(sampling_entries));
-        entry.SetDataset(std::move(dataset));
 
 #ifdef USE_OPENMP
         #pragma omp critical
@@ -424,7 +437,6 @@ void PotentialAnalysisCommand::NormalizeAndValidateRequest(PotentialAnalysisRequ
 
 bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & request)
 {
-    const auto thread_size{ request.job_count };
     auto inputs{ LoadPotentialAnalysisInputs(request) };
     if (!inputs.has_value()) return false;
 
@@ -435,8 +447,8 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
         map_object.MapValueArrayNormalization();
     }
     RunModelObjectPreprocessing(model_object, request.asymmetry_flag, request.alpha_r, request.alpha_g);
-    RunPotentialSamplingWorkflow(map_object, model_object, request, thread_size);
-    RunAtomPotentialFittingWorkflow(model_object, request, thread_size);
+    RunPotentialSamplingWorkflow(map_object, model_object, request);
+    RunAtomPotentialFittingWorkflow(model_object, request);
     SavePreparedModel(model_object, request.database_path, request.saved_key_tag);
     return true;
 }

@@ -4,14 +4,18 @@
 #include <initializer_list>
 #include <optional>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 #include <rhbm_gem/utils/hrl/GaussianEstimator.hpp>
+#include <rhbm_gem/utils/hrl/LinearizationService.hpp>
+#include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace rg = rhbm_gem;
+namespace ls = rhbm_gem::linearization_service;
 
 namespace
 {
@@ -66,13 +70,17 @@ rg::gaussian_estimator::CrossValidationOptions MakeOptions()
 
 } // namespace
 
-TEST(GaussianEstimatorTest, SimpleAlphaRReturnsFiniteDefaultAlpha)
+TEST(GaussianEstimatorTest, SampleListAlphaRReturnsFiniteAlpha)
 {
-    const auto alpha_r{ rg::gaussian_estimator::CrossValidationAlphaR(MakeSampleEntries()) };
+    const auto options{ MakeOptions() };
+    const std::vector<LocalPotentialSampleList> sample_entries_list{ MakeSampleEntries() };
+    const auto alpha_r{
+        rg::gaussian_estimator::CrossValidationAlphaR(sample_entries_list, options)
+    };
 
     EXPECT_TRUE(std::isfinite(alpha_r));
-    EXPECT_GE(alpha_r, 0.0);
-    EXPECT_LE(alpha_r, 2.0);
+    EXPECT_GE(alpha_r, options.alpha_min);
+    EXPECT_LE(alpha_r, options.alpha_max);
 }
 
 TEST(GaussianEstimatorTest, AlphaRMatchesAlphaTrainerBestAlpha)
@@ -183,4 +191,80 @@ TEST(GaussianEstimatorTest, PlotRequestWithEmptyDirectoryDoesNotRequireRoot)
         };
         EXPECT_TRUE(std::isfinite(alpha_g));
     });
+}
+
+TEST(GaussianEstimatorTest, EstimateLocalGaussianMatchesHelperPath)
+{
+    const auto options{ MakeOptions() };
+    const auto sample_entries{ MakeSampleEntries() };
+    constexpr double alpha_r{ 0.2 };
+    const auto dataset{
+        rg::rhbm_helper::BuildMemberDataset(
+            sample_entries, options.fit_range_min, options.fit_range_max)
+    };
+    const auto expected_fit{
+        rg::rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset)
+    };
+
+    const auto actual{
+        rg::gaussian_estimator::EstimateLocalGaussian(sample_entries, alpha_r, options)
+    };
+
+    const auto expected_ols{ ls::DecodeParameterVector(expected_fit.beta_ols) };
+    const auto expected_mdpde{ ls::DecodeParameterVector(expected_fit.beta_mdpde) };
+    EXPECT_NEAR(expected_ols.GetAmplitude(), actual.ols.GetModel().GetAmplitude(), 1e-12);
+    EXPECT_NEAR(expected_ols.GetWidth(), actual.ols.GetModel().GetWidth(), 1e-12);
+    EXPECT_NEAR(expected_mdpde.GetAmplitude(), actual.mdpde.GetModel().GetAmplitude(), 1e-12);
+    EXPECT_NEAR(expected_mdpde.GetWidth(), actual.mdpde.GetModel().GetWidth(), 1e-12);
+    EXPECT_DOUBLE_EQ(alpha_r, actual.alpha_r);
+}
+
+TEST(GaussianEstimatorTest, EstimateGroupGaussianMatchesHelperPath)
+{
+    const auto options{ MakeOptions() };
+    const std::vector<LocalPotentialSampleList> sample_entries_list{
+        MakeSampleEntries(),
+        MakeSampleEntries(),
+        MakeSampleEntries()
+    };
+    const std::vector<double> alpha_r_list{ 0.0, 0.1, 0.2 };
+    constexpr double alpha_g{ 0.3 };
+
+    std::vector<rg::RHBMMemberDataset> dataset_list;
+    std::vector<rg::RHBMBetaEstimateResult> fit_result_list;
+    dataset_list.reserve(sample_entries_list.size());
+    fit_result_list.reserve(sample_entries_list.size());
+    for (std::size_t i = 0; i < sample_entries_list.size(); i++)
+    {
+        auto dataset{
+            rg::rhbm_helper::BuildMemberDataset(
+                sample_entries_list.at(i), options.fit_range_min, options.fit_range_max)
+        };
+        fit_result_list.emplace_back(
+            rg::rhbm_helper::EstimateBetaMDPDE(alpha_r_list.at(i), dataset));
+        dataset_list.emplace_back(std::move(dataset));
+    }
+    const auto expected_raw{
+        rg::rhbm_helper::EstimateGroup(
+            alpha_g,
+            rg::rhbm_helper::BuildGroupInput(dataset_list, fit_result_list))
+    };
+
+    const auto actual{
+        rg::gaussian_estimator::EstimateGroupGaussian(
+            sample_entries_list, alpha_r_list, alpha_g, options)
+    };
+
+    const auto expected_mean{ ls::DecodeParameterVector(expected_raw.mu_mean) };
+    const auto expected_mdpde{ ls::DecodeParameterVector(expected_raw.mu_mdpde) };
+    const auto expected_prior{
+        ls::DecodeParameterVector(expected_raw.mu_prior, expected_raw.capital_lambda)
+    };
+    EXPECT_NEAR(expected_mean.GetAmplitude(), actual.mean.GetAmplitude(), 1e-12);
+    EXPECT_NEAR(expected_mean.GetWidth(), actual.mean.GetWidth(), 1e-12);
+    EXPECT_NEAR(expected_mdpde.GetAmplitude(), actual.mdpde.GetAmplitude(), 1e-12);
+    EXPECT_NEAR(expected_mdpde.GetWidth(), actual.mdpde.GetWidth(), 1e-12);
+    EXPECT_NEAR(expected_prior.GetModel().GetAmplitude(), actual.prior.GetModel().GetAmplitude(), 1e-12);
+    EXPECT_NEAR(expected_prior.GetModel().GetWidth(), actual.prior.GetModel().GetWidth(), 1e-12);
+    ASSERT_EQ(sample_entries_list.size(), actual.member_results.size());
 }

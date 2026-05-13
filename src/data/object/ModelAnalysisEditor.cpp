@@ -7,7 +7,6 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 
 #include <stdexcept>
 #include <string>
@@ -15,14 +14,6 @@
 namespace rhbm_gem {
 
 namespace {
-namespace ls = rhbm_gem::linearization_service;
-
-struct LocalPotentialEstimates
-{
-    GaussianModel3D ols{};
-    GaussianModel3D mdpde{};
-};
-
 template <typename EntryT>
 const EntryT & RequireGroupEntry(const EntryT * entry, const char * context)
 {
@@ -113,87 +104,40 @@ LocalPotentialAnnotation ToDetailAnnotation(const LocalPotentialAnnotationData &
     };
 }
 
-LocalPotentialEstimates BuildLocalPotentialEstimates(const RHBMBetaEstimateResult & value)
+LocalPotentialAnnotation ToDetailAnnotation(const LocalGaussianResult & value)
 {
-    const auto gaus_ols{ ls::DecodeParameterVector(value.beta_ols) };
-    const auto gaus_mdpde{ ls::DecodeParameterVector(value.beta_mdpde) };
-
-    return LocalPotentialEstimates{
-        gaus_ols,
-        gaus_mdpde
+    return LocalPotentialAnnotation{
+        value.mdpde,
+        value.is_outlier,
+        value.statistical_distance
     };
 }
 
-void ValidateGroupEstimateResult(
-    const RHBMGroupEstimationResult & result,
+void ValidateGroupGaussianResult(
+    const std::vector<LocalGaussianResult> & member_results,
     std::size_t member_count,
     const char * context)
 {
-    const auto expected_member_count{ static_cast<Eigen::Index>(member_count) };
-    if (result.beta_posterior_matrix.cols() != expected_member_count)
+    if (member_results.size() != member_count)
     {
         throw std::invalid_argument(
-            std::string(context) + " beta_posterior_matrix member count is inconsistent.");
-    }
-    if (result.capital_sigma_posterior_list.size() != member_count)
-    {
-        throw std::invalid_argument(
-            std::string(context) + " capital_sigma_posterior_list member count is inconsistent.");
-    }
-    if (result.outlier_flag_array.rows() != expected_member_count)
-    {
-        throw std::invalid_argument(
-            std::string(context) + " outlier_flag_array member count is inconsistent.");
-    }
-    if (result.statistical_distance_array.rows() != expected_member_count)
-    {
-        throw std::invalid_argument(
-            std::string(context) + " statistical_distance_array member count is inconsistent.");
+            std::string(context) + " member result count is inconsistent.");
     }
 }
 
-void ApplyAtomGroupStatistics(
+void ApplyAtomGroupGaussianResultToEntry(
     ModelAnalysisData & analysis_data,
     GroupKey group_key,
     const std::string & class_key,
-    const RHBMGroupEstimationResult & result,
-    double alpha_g)
+    const GroupGaussianResult & result)
 {
-    const auto gaus_group_mean{ ls::DecodeParameterVector(result.mu_mean) };
-    const auto gaus_group_mdpde{ ls::DecodeParameterVector(result.mu_mdpde) };
-    const auto gaus_prior{
-        ls::DecodeParameterVector(
-            result.mu_prior,
-            result.capital_lambda)
-    };
-
     analysis_data.EnsureAtomGroupEntry(class_key).SetGroupStatistics(
         group_key,
-        gaus_group_mean,
-        gaus_group_mdpde,
-        gaus_prior.GetModel(),
-        gaus_prior.GetStandardDeviationModel(),
-        alpha_g);
-}
-
-LocalPotentialAnnotationData BuildAtomAnnotationData(
-    const RHBMGroupEstimationResult & result,
-    Eigen::Index member_index)
-{
-    const auto beta_vector_posterior{ result.beta_posterior_matrix.col(member_index) };
-    const auto & sigma_matrix_posterior{
-        result.capital_sigma_posterior_list.at(static_cast<std::size_t>(member_index))
-    };
-    const auto gaussian_with_uncertainty{
-        ls::DecodeParameterVector(
-            beta_vector_posterior,
-            sigma_matrix_posterior)
-    };
-    return LocalPotentialAnnotationData{
-        gaussian_with_uncertainty,
-        static_cast<bool>(result.outlier_flag_array(member_index)),
-        result.statistical_distance_array(member_index)
-    };
+        result.mean,
+        result.mdpde,
+        result.prior.GetModel(),
+        result.prior.GetStandardDeviationModel(),
+        result.alpha_g);
 }
 
 } // namespace
@@ -213,19 +157,9 @@ void MutableLocalPotentialView::SetSamplingEntries(LocalPotentialSampleList valu
     EnsureResolvedLocalEntry(*this).SetSamplingEntries(std::move(value));
 }
 
-void MutableLocalPotentialView::SetDataset(RHBMMemberDataset value)
+void MutableLocalPotentialView::SetGaussianResult(LocalGaussianResult value)
 {
-    EnsureResolvedLocalEntry(*this).SetDataset(std::move(value));
-}
-
-void MutableLocalPotentialView::SetFitResult(RHBMBetaEstimateResult value)
-{
-    auto & entry{ EnsureResolvedLocalEntry(*this) };
-    const auto estimates{ BuildLocalPotentialEstimates(value) };
-
-    entry.SetFitResult(std::move(value));
-    entry.SetEstimateOLS(estimates.ols);
-    entry.SetEstimateMDPDE(estimates.mdpde);
+    EnsureResolvedLocalEntry(*this).SetGaussianResult(std::move(value));
 }
 
 void MutableLocalPotentialView::SetAlphaR(double value)
@@ -245,30 +179,19 @@ void MutableLocalPotentialView::SetAnnotation(
     EnsureResolvedLocalEntry(*this).SetAnnotation(key, ToDetailAnnotation(value));
 }
 
-bool MutableLocalPotentialView::HasDataset() const
+const LocalGaussianResult & MutableLocalPotentialView::GetGaussianResult() const
 {
-    const auto * entry{ FindResolvedLocalEntry(*this) };
-    return entry != nullptr && entry->HasDataset();
+    return RequireResolvedLocalEntry(*this, "Local Gaussian result").GetGaussianResult();
 }
 
-bool MutableLocalPotentialView::HasFitResult() const
+const LocalPotentialSampleList & MutableLocalPotentialView::GetSamplingEntries() const
 {
-    const auto * entry{ FindResolvedLocalEntry(*this) };
-    return entry != nullptr && entry->HasFitResult();
+    return RequireResolvedLocalEntry(*this, "Local sampling entries").GetSamplingEntries();
 }
 
-const RHBMMemberDataset & MutableLocalPotentialView::GetDataset() const
+int MutableLocalPotentialView::GetSamplingEntryCount() const
 {
-    const auto & dataset{ RequireResolvedLocalEntry(*this, "Local dataset").GetDataset() };
-    m_dataset_cache = dataset;
-    return m_dataset_cache;
-}
-
-const RHBMBetaEstimateResult & MutableLocalPotentialView::GetFitResult() const
-{
-    const auto & fit_result{ RequireResolvedLocalEntry(*this, "Local fit result").GetFitResult() };
-    m_fit_result_cache = fit_result;
-    return m_fit_result_cache;
+    return RequireResolvedLocalEntry(*this, "Local sampling entry count").GetSamplingEntryCount();
 }
 
 ModelAnalysisEditor::ModelAnalysisEditor(ModelObject & model_object) :
@@ -319,26 +242,25 @@ void ModelAnalysisEditor::RebuildBondGroupsFromSelection()
     ModelAnalysisData::Of(m_model_object).RebuildBondGroupEntriesFromSelection(m_model_object);
 }
 
-void ModelAnalysisEditor::ApplyAtomGroupEstimateResult(
+void ModelAnalysisEditor::ApplyAtomGroupGaussianResult(
     GroupKey group_key,
     const std::string & class_key,
-    const RHBMGroupEstimationResult & result,
-    double alpha_g)
+    const GroupGaussianResult & group_result)
 {
     auto & analysis_data{ ModelAnalysisData::Of(m_model_object) };
     const auto & group_entry{
         RequireGroupEntry(analysis_data.FindAtomGroupEntry(class_key), "Atom group entry")
     };
     const auto & atom_list{ group_entry.GetMembers(group_key) };
-    ValidateGroupEstimateResult(result, atom_list.size(), "Atom group result");
+    ValidateGroupGaussianResult(group_result.member_results, atom_list.size(), "Atom group result");
 
-    for (Eigen::Index i = 0; i < static_cast<Eigen::Index>(atom_list.size()); i++)
+    for (std::size_t i = 0; i < atom_list.size(); i++)
     {
-        auto & atom_entry{ analysis_data.EnsureAtomLocalEntry(*atom_list[static_cast<std::size_t>(i)]) };
-        atom_entry.SetAnnotation(class_key, ToDetailAnnotation(BuildAtomAnnotationData(result, i)));
+        auto & atom_entry{ analysis_data.EnsureAtomLocalEntry(*atom_list.at(i)) };
+        atom_entry.SetAnnotation(class_key, ToDetailAnnotation(group_result.member_results.at(i)));
     }
 
-    ApplyAtomGroupStatistics(analysis_data, group_key, class_key, result, alpha_g);
+    ApplyAtomGroupGaussianResultToEntry(analysis_data, group_key, class_key, group_result);
 }
 
 void ModelAnalysisEditor::SetAtomGroupAlphaG(
