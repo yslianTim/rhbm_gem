@@ -421,21 +421,28 @@ LocalPotentialSampleList BuildGaussianSampling(
     return sampling_entries;
 }
 
-RHBMMemberDataset BuildLinearDataset(
-    const LocalPotentialSampleList & sampling_entries,
+LocalPotentialSampleList AddLogSpaceNoise(
+    LocalPotentialSampleList sampling_entries,
     const GaussianModel3D & model,
     double error_sigma,
-    double fit_range_min,
-    double fit_range_max,
     std::mt19937 & generator)
 {
-    auto dataset{ rhbm_helper::BuildMemberDataset(sampling_entries, fit_range_min, fit_range_max) };
     std::normal_distribution<> dist_error(0.0, error_sigma * model.Intensity());
-    for (Eigen::Index i = 0; i < dataset.y.rows(); i++)
+    for (auto & sampling_entry : sampling_entries)
     {
-        dataset.y(i) += dist_error(generator);
+        sampling_entry.response =
+            static_cast<float>(static_cast<double>(sampling_entry.response)
+                * std::exp(dist_error(generator)));
     }
-    return dataset;
+    return sampling_entries;
+}
+
+RHBMMemberDataset BuildLinearDataset(
+    const LocalPotentialSampleList & sampling_entries,
+    double fit_range_min,
+    double fit_range_max)
+{
+    return rhbm_helper::BuildMemberDataset(sampling_entries, fit_range_min, fit_range_max);
 }
 
 Eigen::MatrixXd BuildRandomGausParameters(
@@ -516,6 +523,7 @@ RHBMBetaTestInput BuildBetaTestInput(const BetaScenario & scenario, const TestDa
     input.gaus_true = scenario.gaus_true;
     input.requested_alpha_r_list = scenario.requested_alpha_r_list;
     input.alpha_training = scenario.alpha_training;
+    input.replica_sampling_entries.reserve(static_cast<size_t>(scenario.replica_size));
     input.replica_datasets.reserve(static_cast<size_t>(scenario.replica_size));
 
     for (int i = 0; i < scenario.replica_size; i++)
@@ -530,15 +538,17 @@ RHBMBetaTestInput BuildBetaTestInput(const BetaScenario & scenario, const TestDa
                 options.fit_range_max,
                 generator)
         };
-        auto dataset{
-            BuildLinearDataset(
-                sampling_entries,
+        auto noisy_sampling_entries{
+            AddLogSpaceNoise(
+                std::move(sampling_entries),
                 scenario.gaus_true,
                 scenario.data_error_sigma,
-                options.fit_range_min,
-                options.fit_range_max,
                 generator)
         };
+        auto dataset{
+            BuildLinearDataset(noisy_sampling_entries, options.fit_range_min, options.fit_range_max)
+        };
+        input.replica_sampling_entries.emplace_back(std::move(noisy_sampling_entries));
         input.replica_datasets.emplace_back(std::move(dataset));
     }
 
@@ -623,6 +633,8 @@ RHBMNeighborhoodTestInput BuildNeighborhoodTestInput(
     input.no_cut_input.alpha_training = true;
     input.cut_input.gaus_true = scenario.gaus_true;
     input.cut_input.alpha_training = true;
+    input.no_cut_input.replica_sampling_entries.reserve(static_cast<size_t>(scenario.replica_size));
+    input.cut_input.replica_sampling_entries.reserve(static_cast<size_t>(scenario.replica_size));
     input.no_cut_input.replica_datasets.reserve(static_cast<size_t>(scenario.replica_size));
     input.cut_input.replica_datasets.reserve(static_cast<size_t>(scenario.replica_size));
     if (scenario.include_sampling_summary)
@@ -646,34 +658,32 @@ RHBMNeighborhoodTestInput BuildNeighborhoodTestInput(
     for (int i = 0; i < scenario.replica_size; i++)
     {
         auto generator{ BuildReplicaGenerator(i, scenario.random_seed) };
-        const auto no_cut_sampling_entries{
+        auto no_cut_sampling_entries{
             GenerateNeighborhoodSamples(
                 static_cast<size_t>(scenario.sampling_entry_size), scenario.gaus_true, no_cut_options)
         };
-        const auto cut_sampling_entries{
+        auto cut_sampling_entries{
             GenerateNeighborhoodSamples(
                 static_cast<size_t>(scenario.sampling_entry_size), scenario.gaus_true, cut_options)
         };
+        no_cut_sampling_entries = AddLogSpaceNoise(
+            std::move(no_cut_sampling_entries),
+            scenario.gaus_true,
+            scenario.data_error_sigma,
+            generator);
+        cut_sampling_entries = AddLogSpaceNoise(
+            std::move(cut_sampling_entries),
+            scenario.gaus_true,
+            scenario.data_error_sigma,
+            generator);
         auto no_cut_dataset{
-            BuildLinearDataset(
-                no_cut_sampling_entries,
-                scenario.gaus_true,
-                scenario.data_error_sigma,
-                options.fit_range_min,
-                options.fit_range_max,
-                generator
-            )
+            BuildLinearDataset(no_cut_sampling_entries, options.fit_range_min, options.fit_range_max)
         };
         auto cut_dataset{
-            BuildLinearDataset(
-                cut_sampling_entries,
-                scenario.gaus_true,
-                scenario.data_error_sigma,
-                options.fit_range_min,
-                options.fit_range_max,
-                generator
-            )
+            BuildLinearDataset(cut_sampling_entries, options.fit_range_min, options.fit_range_max)
         };
+        input.no_cut_input.replica_sampling_entries.emplace_back(std::move(no_cut_sampling_entries));
+        input.cut_input.replica_sampling_entries.emplace_back(std::move(cut_sampling_entries));
         input.no_cut_input.replica_datasets.emplace_back(std::move(no_cut_dataset));
         input.cut_input.replica_datasets.emplace_back(std::move(cut_dataset));
     }
@@ -711,6 +721,8 @@ RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
     input.no_cut_input.alpha_training = true;
     input.cut_input.gaus_true = scenario.gaus_true;
     input.cut_input.alpha_training = true;
+    input.no_cut_input.replica_sampling_entries.reserve(static_cast<size_t>(scenario.replica_size));
+    input.cut_input.replica_sampling_entries.reserve(static_cast<size_t>(scenario.replica_size));
     input.no_cut_input.replica_datasets.reserve(static_cast<size_t>(scenario.replica_size));
     input.cut_input.replica_datasets.reserve(static_cast<size_t>(scenario.replica_size));
     if (scenario.include_sampling_summary)
@@ -733,34 +745,32 @@ RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
     for (int i = 0; i < scenario.replica_size; i++)
     {
         auto generator{ BuildReplicaGenerator(i, scenario.random_seed) };
-        const auto no_cut_sampling_entries{
+        auto no_cut_sampling_entries{
             GenerateAtomNeighborhoodSamples(
                 static_cast<size_t>(scenario.sampling_entry_size), scenario.gaus_true, no_cut_options)
         };
-        const auto cut_sampling_entries{
+        auto cut_sampling_entries{
             GenerateAtomNeighborhoodSamples(
                 static_cast<size_t>(scenario.sampling_entry_size), scenario.gaus_true, cut_options)
         };
+        no_cut_sampling_entries = AddLogSpaceNoise(
+            std::move(no_cut_sampling_entries),
+            scenario.gaus_true,
+            scenario.data_error_sigma,
+            generator);
+        cut_sampling_entries = AddLogSpaceNoise(
+            std::move(cut_sampling_entries),
+            scenario.gaus_true,
+            scenario.data_error_sigma,
+            generator);
         auto no_cut_dataset{
-            BuildLinearDataset(
-                no_cut_sampling_entries,
-                scenario.gaus_true,
-                scenario.data_error_sigma,
-                options.fit_range_min,
-                options.fit_range_max,
-                generator
-            )
+            BuildLinearDataset(no_cut_sampling_entries, options.fit_range_min, options.fit_range_max)
         };
         auto cut_dataset{
-            BuildLinearDataset(
-                cut_sampling_entries,
-                scenario.gaus_true,
-                scenario.data_error_sigma,
-                options.fit_range_min,
-                options.fit_range_max,
-                generator
-            )
+            BuildLinearDataset(cut_sampling_entries, options.fit_range_min, options.fit_range_max)
         };
+        input.no_cut_input.replica_sampling_entries.emplace_back(std::move(no_cut_sampling_entries));
+        input.cut_input.replica_sampling_entries.emplace_back(std::move(cut_sampling_entries));
         input.no_cut_input.replica_datasets.emplace_back(std::move(no_cut_dataset));
         input.cut_input.replica_datasets.emplace_back(std::move(cut_dataset));
     }

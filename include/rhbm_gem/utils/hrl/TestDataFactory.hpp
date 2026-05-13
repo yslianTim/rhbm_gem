@@ -21,6 +21,7 @@ enum class AtomNeighborType : int
 struct RHBMBetaTestInput
 {
     GaussianModel3D gaus_true;
+    std::vector<LocalPotentialSampleList> replica_sampling_entries;
     std::vector<RHBMMemberDataset> replica_datasets;
     std::vector<double> requested_alpha_r_list;
     bool alpha_training{ true };

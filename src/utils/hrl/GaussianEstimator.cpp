@@ -285,10 +285,11 @@ RHBMGroupEstimationResult EstimateGroupFromSamples(
 } // namespace
 
 double CrossValidationAlphaR(
-    const std::vector<RHBMMemberDataset> & dataset_list,
+    const std::vector<LocalPotentialSampleList> & sample_entries_list,
     const CrossValidationOptions & options,
     bool output_study_plot)
 {
+    const auto dataset_list{ BuildMemberDatasetList(sample_entries_list, options) };
     const auto trainer{ MakeAlphaTrainer(options) };
     const auto training_result{
         trainer.TrainAlphaR(dataset_list, MakeTrainingOptions(kAlphaRSubsetSize, options))
@@ -305,15 +306,6 @@ double CrossValidationAlphaR(
     }
 
     return training_result.best_alpha;
-}
-
-double CrossValidationAlphaR(
-    const std::vector<LocalPotentialSampleList> & sample_entries_list,
-    const CrossValidationOptions & options,
-    bool output_study_plot)
-{
-    return CrossValidationAlphaR(
-        BuildMemberDatasetList(sample_entries_list, options), options, output_study_plot);
 }
 
 double CrossValidationAlphaG(

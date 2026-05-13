@@ -31,28 +31,16 @@ Eigen::VectorXd MakeVector(std::initializer_list<double> values)
     return result;
 }
 
-rg::RHBMMemberDataset MakeLinearDataset(double slope)
-{
-    rg::RHBMMemberDataset dataset;
-    dataset.X = rg::RHBMDesignMatrix::Zero(6, 2);
-    dataset.y = rg::RHBMResponseVector::Zero(6);
-    for (Eigen::Index i = 0; i < dataset.X.rows(); i++)
-    {
-        dataset.X(i, 0) = 1.0;
-        dataset.X(i, 1) = static_cast<double>(i);
-        dataset.y(i) = 1.0 + static_cast<double>(i) * slope;
-    }
-    return dataset;
-}
-
-LocalPotentialSampleList MakeSampleEntries()
+LocalPotentialSampleList MakeSampleEntries(double log_response_shift = 0.0)
 {
     LocalPotentialSampleList sample_entries;
     sample_entries.reserve(6);
     for (int i = 0; i < 6; i++)
     {
         const auto distance{ static_cast<float>(0.1 * static_cast<double>(i)) };
-        const auto response{ static_cast<float>(std::exp(1.0 - 0.5 * distance * distance)) };
+        const auto response{
+            static_cast<float>(std::exp(1.0 + log_response_shift - 0.5 * distance * distance))
+        };
         sample_entries.emplace_back(LocalPotentialSample{ distance, response, std::nullopt });
     }
     return sample_entries;
@@ -86,9 +74,15 @@ TEST(GaussianEstimatorTest, SampleListAlphaRReturnsFiniteAlpha)
 TEST(GaussianEstimatorTest, AlphaRMatchesAlphaTrainerBestAlpha)
 {
     const auto options{ MakeOptions() };
+    const std::vector<LocalPotentialSampleList> sample_entries_list{
+        MakeSampleEntries(),
+        MakeSampleEntries(0.2)
+    };
     const std::vector<rg::RHBMMemberDataset> dataset_list{
-        MakeLinearDataset(2.0),
-        MakeLinearDataset(-0.5)
+        rg::rhbm_helper::BuildMemberDataset(
+            sample_entries_list.at(0), options.fit_range_min, options.fit_range_max),
+        rg::rhbm_helper::BuildMemberDataset(
+            sample_entries_list.at(1), options.fit_range_min, options.fit_range_max)
     };
     const rg::rhbm_trainer::AlphaTrainer trainer{
         options.alpha_min,
@@ -102,7 +96,7 @@ TEST(GaussianEstimatorTest, AlphaRMatchesAlphaTrainerBestAlpha)
 
     const auto expected{ trainer.TrainAlphaR(dataset_list, trainer_options).best_alpha };
     const auto actual{
-        rg::gaussian_estimator::CrossValidationAlphaR(dataset_list, options)
+        rg::gaussian_estimator::CrossValidationAlphaR(sample_entries_list, options)
     };
 
     EXPECT_DOUBLE_EQ(actual, expected);
@@ -157,10 +151,10 @@ TEST(GaussianEstimatorTest, QuietAlphaGOptionsDoNotChangeBestAlpha)
 TEST(GaussianEstimatorTest, RejectsEmptyAlphaRTrainingInputs)
 {
     const auto options{ MakeOptions() };
-    const std::vector<rg::RHBMMemberDataset> empty_dataset_list;
+    const std::vector<LocalPotentialSampleList> empty_sample_entries_list;
 
     EXPECT_THROW(
-        rg::gaussian_estimator::CrossValidationAlphaR(empty_dataset_list, options),
+        rg::gaussian_estimator::CrossValidationAlphaR(empty_sample_entries_list, options),
         std::invalid_argument);
 }
 

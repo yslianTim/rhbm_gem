@@ -23,11 +23,6 @@ struct CrossValidationOptions
 };
 
 double CrossValidationAlphaR(
-    const std::vector<RHBMMemberDataset> & dataset_list,
-    const CrossValidationOptions & options,
-    bool output_study_plot = false);
-
-double CrossValidationAlphaR(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
     const CrossValidationOptions & options,
     bool output_study_plot = false);
