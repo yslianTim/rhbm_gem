@@ -12,13 +12,6 @@ namespace rhbm_gem::rhbm_tester
 
 namespace
 {
-constexpr double kAlphaRMin{ 0.0 };
-constexpr double kAlphaRMax{ 2.0 };
-constexpr double kAlphaRStep{ 0.1 };
-
-constexpr double kAlphaGMin{ 0.0 };
-constexpr double kAlphaGMax{ 1.0 };
-constexpr double kAlphaGStep{ 0.1 };
 
 struct BetaReplicaBias
 {
@@ -32,22 +25,9 @@ struct MuReplicaBias
     Eigen::VectorXd mdpde_bias;
 };
 
-gaussian_estimator::CrossValidationOptions MakeAlphaROptions()
+gaussian_estimator::CrossValidationOptions MakeAlphaOptions()
 {
     gaussian_estimator::CrossValidationOptions options;
-    options.alpha_min = kAlphaRMin;
-    options.alpha_max = kAlphaRMax;
-    options.alpha_step = kAlphaRStep;
-    options.thread_size = 1;
-    return options;
-}
-
-gaussian_estimator::CrossValidationOptions MakeAlphaGOptions()
-{
-    gaussian_estimator::CrossValidationOptions options;
-    options.alpha_min = kAlphaGMin;
-    options.alpha_max = kAlphaGMax;
-    options.alpha_step = kAlphaGStep;
     options.thread_size = 1;
     return options;
 }
@@ -141,7 +121,6 @@ bool RunBetaMDPDETest(
         trained_alpha_list.assign(static_cast<size_t>(replica_size), 0.0);
     }
 
-    const auto alpha_r_options{ MakeAlphaROptions() };
     const RHBMExecutionOptions algorithm_options{ true };
 
 #ifdef USE_OPENMP
@@ -171,7 +150,7 @@ bool RunBetaMDPDETest(
         {
             const auto trained_alpha_r{
                 gaussian_estimator::CrossValidationAlphaR(
-                    std::vector<RHBMMemberDataset>{ dataset }, alpha_r_options)
+                    std::vector<RHBMMemberDataset>{ dataset }, MakeAlphaOptions())
             };
             trained_alpha_list.at(static_cast<size_t>(i)) = trained_alpha_r;
             const auto replica_result{
@@ -243,7 +222,6 @@ bool RunMuMDPDETest(
         trained_alpha_list.assign(static_cast<size_t>(replica_size), 0.0);
     }
 
-    const auto alpha_g_options{ MakeAlphaGOptions() };
     const RHBMExecutionOptions algorithm_options{ true };
 
 #ifdef USE_OPENMP
@@ -281,7 +259,7 @@ bool RunMuMDPDETest(
             const auto trained_alpha_g{
                 gaussian_estimator::CrossValidationAlphaG(
                     std::vector<std::vector<Eigen::VectorXd>>{ train_data_entry_list },
-                    alpha_g_options)
+                    MakeAlphaOptions())
             };
             trained_alpha_list.at(static_cast<size_t>(i)) = trained_alpha_g;
             const auto replica_result{
