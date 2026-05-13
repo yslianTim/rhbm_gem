@@ -124,6 +124,28 @@ TEST(GaussianEstimatorTest, AlphaGMatchesAlphaTrainerBestAlpha)
     EXPECT_DOUBLE_EQ(actual, expected);
 }
 
+TEST(GaussianEstimatorTest, QuietAlphaGOptionsDoNotChangeBestAlpha)
+{
+    auto quiet_options{ MakeOptions() };
+    quiet_options.output_summary_log = false;
+    quiet_options.output_progress = false;
+    auto verbose_options{ quiet_options };
+    verbose_options.output_summary_log = true;
+    verbose_options.output_progress = true;
+    const std::vector<std::vector<rg::RHBMParameterVector>> beta_group_list{
+        std::vector<rg::RHBMParameterVector>(10, MakeVector({ 1.5, -0.5 }))
+    };
+
+    const auto quiet_alpha{
+        rg::gaussian_estimator::CrossValidationAlphaG(beta_group_list, quiet_options)
+    };
+    const auto verbose_alpha{
+        rg::gaussian_estimator::CrossValidationAlphaG(beta_group_list, verbose_options)
+    };
+
+    EXPECT_DOUBLE_EQ(quiet_alpha, verbose_alpha);
+}
+
 TEST(GaussianEstimatorTest, RejectsEmptyAlphaRTrainingInputs)
 {
     const auto options{ MakeOptions() };
@@ -136,7 +158,9 @@ TEST(GaussianEstimatorTest, RejectsEmptyAlphaRTrainingInputs)
 
 TEST(GaussianEstimatorTest, EmptyAlphaGTrainingInputReturnsFallbackAlpha)
 {
-    const auto options{ MakeOptions() };
+    auto options{ MakeOptions() };
+    options.output_summary_log = false;
+    options.output_progress = false;
     const std::vector<std::vector<rg::RHBMParameterVector>> empty_beta_group_list;
 
     const auto alpha_g{

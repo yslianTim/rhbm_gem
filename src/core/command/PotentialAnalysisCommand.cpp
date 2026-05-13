@@ -209,6 +209,8 @@ void RunAtomAlphaTraining(
     alpha_options.fit_range_min = request.fit_range_min;
     alpha_options.fit_range_max = request.fit_range_max;
     alpha_options.thread_size = thread_size;
+    alpha_options.output_progress = true;
+    alpha_options.output_summary_log = true;
     alpha_options.study_plot_dir = request.training_report_dir;
     const auto component_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     const auto component_group_keys{ analysis_view.CollectAtomGroupKeys(component_class_key) };
@@ -230,8 +232,10 @@ void RunAtomAlphaTraining(
         selected_atom_dataset_list.shrink_to_fit();
         if (!selected_atom_dataset_list.empty())
         {
+            auto alpha_r_options{ alpha_options };
+            alpha_r_options.output_progress = false;
             const auto alpha_r{
-                gaussian_estimator::CrossValidationAlphaR(selected_atom_dataset_list, alpha_options)
+                gaussian_estimator::CrossValidationAlphaR(selected_atom_dataset_list, alpha_r_options)
             };
             for (auto * atom : group_atom_list)
             {

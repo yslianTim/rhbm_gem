@@ -1,10 +1,9 @@
 #include <rhbm_gem/utils/hrl/RHBMTester.hpp>
-#include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
+#include <rhbm_gem/utils/hrl/GaussianEstimator.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
 
-#include <array>
 #include <cmath>
 #include <stdexcept>
 
@@ -13,12 +12,10 @@ namespace rhbm_gem::rhbm_tester
 
 namespace
 {
-constexpr std::size_t kAlphaRSubsetSize{ 5 };
 constexpr double kAlphaRMin{ 0.0 };
 constexpr double kAlphaRMax{ 2.0 };
 constexpr double kAlphaRStep{ 0.1 };
 
-constexpr std::size_t kAlphaGSubsetSize{ 10 };
 constexpr double kAlphaGMin{ 0.0 };
 constexpr double kAlphaGMax{ 1.0 };
 constexpr double kAlphaGStep{ 0.1 };
@@ -34,6 +31,26 @@ struct MuReplicaBias
     Eigen::VectorXd median_bias;
     Eigen::VectorXd mdpde_bias;
 };
+
+gaussian_estimator::CrossValidationOptions MakeAlphaROptions()
+{
+    gaussian_estimator::CrossValidationOptions options;
+    options.alpha_min = kAlphaRMin;
+    options.alpha_max = kAlphaRMax;
+    options.alpha_step = kAlphaRStep;
+    options.thread_size = 1;
+    return options;
+}
+
+gaussian_estimator::CrossValidationOptions MakeAlphaGOptions()
+{
+    gaussian_estimator::CrossValidationOptions options;
+    options.alpha_min = kAlphaGMin;
+    options.alpha_max = kAlphaGMax;
+    options.alpha_step = kAlphaGStep;
+    options.thread_size = 1;
+    return options;
+}
 
 Eigen::VectorXd CalculateNormalizedBias(
     const RHBMParameterVector & linear_estimate,
@@ -124,10 +141,8 @@ bool RunBetaMDPDETest(
         trained_alpha_list.assign(static_cast<size_t>(replica_size), 0.0);
     }
 
-    const rhbm_trainer::AlphaTrainer alpha_r_trainer{ kAlphaRMin, kAlphaRMax, kAlphaRStep };
-    rhbm_trainer::AlphaTrainer::AlphaTrainingOptions trainer_options;
-    trainer_options.subset_size = kAlphaRSubsetSize;
-    trainer_options.execution_options = RHBMExecutionOptions{ true };
+    const auto alpha_r_options{ MakeAlphaROptions() };
+    const RHBMExecutionOptions algorithm_options{ true };
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
@@ -136,7 +151,7 @@ bool RunBetaMDPDETest(
     {
         const auto & dataset{ input.replica_datasets.at(static_cast<size_t>(i)) };
         const auto baseline_result{
-            EstimateBetaReplicaBias(dataset, input.gaus_true, 0.0, trainer_options.execution_options)
+            EstimateBetaReplicaBias(dataset, input.gaus_true, 0.0, algorithm_options)
         };
         bias_matrix_ols.col(i) = baseline_result.ols_bias;
 
@@ -147,21 +162,20 @@ bool RunBetaMDPDETest(
                     dataset,
                     input.gaus_true,
                     local_alpha_r_list.at(j),
-                    trainer_options.execution_options)
+                    algorithm_options)
             };
             bias_matrix_mdpde_requested_list.at(j).col(i) = replica_result.mdpde_bias;
         }
 
         if (input.alpha_training)
         {
-            const auto alpha_r_training_result{
-                alpha_r_trainer.TrainAlphaR(
-                    std::vector<RHBMMemberDataset>{ dataset }, trainer_options)
+            const auto trained_alpha_r{
+                gaussian_estimator::CrossValidationAlphaR(
+                    std::vector<RHBMMemberDataset>{ dataset }, alpha_r_options)
             };
-            const auto trained_alpha_r{ alpha_r_training_result.best_alpha };
             trained_alpha_list.at(static_cast<size_t>(i)) = trained_alpha_r;
             const auto replica_result{
-                EstimateBetaReplicaBias(dataset, input.gaus_true, trained_alpha_r, trainer_options.execution_options)
+                EstimateBetaReplicaBias(dataset, input.gaus_true, trained_alpha_r, algorithm_options)
             };
             bias_matrix_mdpde_trained.col(i) = replica_result.mdpde_bias;
         }
@@ -229,10 +243,8 @@ bool RunMuMDPDETest(
         trained_alpha_list.assign(static_cast<size_t>(replica_size), 0.0);
     }
 
-    const rhbm_trainer::AlphaTrainer alpha_g_trainer{ kAlphaGMin, kAlphaGMax, kAlphaGStep };
-    rhbm_trainer::AlphaTrainer::AlphaTrainingOptions trainer_options;
-    trainer_options.subset_size = kAlphaGSubsetSize;
-    trainer_options.execution_options = RHBMExecutionOptions{ true };
+    const auto alpha_g_options{ MakeAlphaGOptions() };
+    const RHBMExecutionOptions algorithm_options{ true };
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
@@ -241,7 +253,7 @@ bool RunMuMDPDETest(
     {
         const auto & beta_matrix{ input.replica_beta_matrices.at(static_cast<size_t>(i)) };
         const auto baseline_result{
-            EstimateMuReplicaBias(beta_matrix, input.gaus_true, 0.0, trainer_options.execution_options)
+            EstimateMuReplicaBias(beta_matrix, input.gaus_true, 0.0, algorithm_options)
         };
         bias_matrix_median.col(i) = baseline_result.median_bias;
 
@@ -252,7 +264,7 @@ bool RunMuMDPDETest(
                     beta_matrix,
                     input.gaus_true,
                     local_alpha_g_list.at(j),
-                    trainer_options.execution_options)
+                    algorithm_options)
             };
             bias_matrix_mdpde_requested_list.at(j).col(i) = replica_result.mdpde_bias;
         }
@@ -266,15 +278,14 @@ bool RunMuMDPDETest(
                 train_data_entry_list.emplace_back(beta_matrix.col(m));
             }
 
-            const auto alpha_g_training_result{
-                alpha_g_trainer.TrainAlphaG(
+            const auto trained_alpha_g{
+                gaussian_estimator::CrossValidationAlphaG(
                     std::vector<std::vector<Eigen::VectorXd>>{ train_data_entry_list },
-                    trainer_options)
+                    alpha_g_options)
             };
-            const auto trained_alpha_g{ alpha_g_training_result.best_alpha };
             trained_alpha_list.at(static_cast<size_t>(i)) = trained_alpha_g;
             const auto replica_result{
-                EstimateMuReplicaBias(beta_matrix, input.gaus_true, trained_alpha_g, trainer_options.execution_options)
+                EstimateMuReplicaBias(beta_matrix, input.gaus_true, trained_alpha_g, algorithm_options)
             };
             bias_matrix_mdpde_trained.col(i) = replica_result.mdpde_bias;
         }

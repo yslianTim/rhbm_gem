@@ -121,13 +121,12 @@ bool ShouldOutputStudyPlot(
 
 rhbm_trainer::AlphaTrainer::AlphaTrainingOptions MakeTrainingOptions(
     std::size_t subset_size,
-    const CrossValidationOptions & options,
-    bool output_progress)
+    const CrossValidationOptions & options)
 {
     rhbm_trainer::AlphaTrainer::AlphaTrainingOptions training_options;
     training_options.subset_size = subset_size;
     training_options.execution_options = MakeExecutionOptions(options);
-    if (output_progress)
+    if (options.output_progress)
     {
         training_options.progress_callback =
             [](std::size_t completed, std::size_t total)
@@ -143,11 +142,14 @@ rhbm_trainer::AlphaTrainer::AlphaRunOptions MakeStudyOptions(
 {
     rhbm_trainer::AlphaTrainer::AlphaRunOptions study_options;
     study_options.execution_options = MakeExecutionOptions(options);
-    study_options.progress_callback =
-        [](std::size_t completed, std::size_t total)
-        {
-            Logger::ProgressPercent(completed, total);
-        };
+    if (options.output_progress)
+    {
+        study_options.progress_callback =
+            [](std::size_t completed, std::size_t total)
+            {
+                Logger::ProgressPercent(completed, total);
+            };
+    }
     return study_options;
 }
 
@@ -179,7 +181,7 @@ double CrossValidationAlphaR(
 {
     const auto trainer{ MakeAlphaTrainer(options) };
     const auto training_result{
-        trainer.TrainAlphaR(dataset_list, MakeTrainingOptions(kAlphaRSubsetSize, options, false))
+        trainer.TrainAlphaR(dataset_list, MakeTrainingOptions(kAlphaRSubsetSize, options))
     };
 
     if (ShouldOutputStudyPlot(output_study_plot, options))
@@ -200,22 +202,28 @@ double CrossValidationAlphaG(
     const CrossValidationOptions & options,
     bool output_study_plot)
 {
-    Logger::Log(LogLevel::Info,
-        "Run Alpha_G Training with " + std::to_string(beta_group_list.size()) + " groups.");
+    if (options.output_summary_log)
+    {
+        Logger::Log(LogLevel::Info,
+            "Run Alpha_G Training with " + std::to_string(beta_group_list.size()) + " groups.");
+    }
 
     if (beta_group_list.empty())
     {
-        Logger::Log(LogLevel::Warning,
-            "Skip Alpha_G Training because no eligible groups were selected.");
-        Logger::Log(LogLevel::Info,
-            "Alpha_G Training Results Summary: minimum mu error sum alpha_g = "
-            + std::to_string(options.alpha_min));
+        if (options.output_summary_log)
+        {
+            Logger::Log(LogLevel::Warning,
+                "Skip Alpha_G Training because no eligible groups were selected.");
+            Logger::Log(LogLevel::Info,
+                "Alpha_G Training Results Summary: minimum mu error sum alpha_g = "
+                + std::to_string(options.alpha_min));
+        }
         return options.alpha_min;
     }
 
     const auto trainer{ MakeAlphaTrainer(options) };
     const auto training_result{
-        trainer.TrainAlphaG(beta_group_list, MakeTrainingOptions(kAlphaGSubsetSize, options, true))
+        trainer.TrainAlphaG(beta_group_list, MakeTrainingOptions(kAlphaGSubsetSize, options))
     };
 
     if (ShouldOutputStudyPlot(output_study_plot, options))
@@ -228,9 +236,12 @@ double CrossValidationAlphaG(
             options.study_plot_dir, "alpha_g_bias.pdf");
     }
 
-    Logger::Log(LogLevel::Info,
-        "Alpha_G Training Results Summary: minimum mu error sum alpha_g = "
-        + std::to_string(training_result.best_alpha));
+    if (options.output_summary_log)
+    {
+        Logger::Log(LogLevel::Info,
+            "Alpha_G Training Results Summary: minimum mu error sum alpha_g = "
+            + std::to_string(training_result.best_alpha));
+    }
     return training_result.best_alpha;
 }
 
