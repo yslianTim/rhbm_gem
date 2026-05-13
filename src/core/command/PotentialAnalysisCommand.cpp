@@ -11,32 +11,23 @@
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
-#include <rhbm_gem/utils/domain/LocalPainter.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
-#include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
+#include <rhbm_gem/utils/hrl/GaussianEstimator.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 
 #include <atomic>
-#include <cmath>
 #include <filesystem>
-#include <iterator>
-#include <limits>
 #include <memory>
 #include <optional>
-#include <random>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
 #include <unordered_map>
-#include <unordered_set>
 #include <utility>
 #include <vector>
-
-#include <Eigen/Dense>
 
 #ifdef USE_OPENMP
 #include <omp.h>
@@ -69,71 +60,6 @@ RHBMExecutionOptions MakePotentialAnalysisExecutionOptions(int thread_size, bool
     execution_options.quiet_mode = quiet_mode;
     execution_options.thread_size = thread_size;
     return execution_options;
-}
-
-bool EmitTrainingReportIfRequested(
-    const Eigen::MatrixXd & gaus_bias_matrix,
-    const std::vector<double> & alpha_list,
-    std::string_view x_label,
-    std::string_view y_label,
-    const std::filesystem::path & training_report_dir,
-    std::string_view report_file_name)
-{
-    if (training_report_dir.empty()) return false;
-
-    const auto report_path{ training_report_dir / std::filesystem::path{ report_file_name } };
-    if (gaus_bias_matrix.rows() < 2 ||
-        gaus_bias_matrix.cols() != static_cast<Eigen::Index>(alpha_list.size()))
-    {
-        Logger::Log(LogLevel::Warning,
-            "Skip training report '" + report_path.string() +
-                "' because the alpha bias matrix shape does not match the alpha grid.");
-        return false;
-    }
-
-    std::vector<double> amplitude_values;
-    std::vector<double> width_values;
-    amplitude_values.reserve(alpha_list.size());
-    width_values.reserve(alpha_list.size());
-    for (Eigen::Index column = 0; column < gaus_bias_matrix.cols(); ++column)
-    {
-        amplitude_values.emplace_back(gaus_bias_matrix(0, column));
-        width_values.emplace_back(gaus_bias_matrix(1, column));
-    }
-
-    LinePlotRequest report_request;
-    report_request.output_path = report_path;
-    report_request.x_axis.title = std::string(x_label);
-    report_request.shared_y_axis_title = std::string(y_label);
-    report_request.panels = {
-        LinePlotPanel{
-            "Amplitude #font[2]{A}",
-            AxisSpec{},
-            { LineSeries{ "Amplitude", alpha_list, amplitude_values, std::nullopt } }
-        },
-        LinePlotPanel{
-            "Width #tau",
-            AxisSpec{},
-            { LineSeries{ "Width", alpha_list, width_values, std::nullopt } }
-        }
-    };
-
-    const auto plot_result{ local_painter::SaveLinePlot(report_request) };
-    if (!plot_result.Succeeded())
-    {
-        Logger::Log(LogLevel::Warning,
-            "Failed to emit training report '" + report_path.string() + "': " + plot_result.message);
-        return false;
-    }
-
-    if (!std::filesystem::exists(report_path))
-    {
-        Logger::Log(LogLevel::Warning,
-            "Training report output was requested but no file was produced: " + report_path.string());
-        return false;
-    }
-
-    return true;
 }
 
 std::optional<PotentialAnalysisInputs> LoadPotentialAnalysisInputs(
@@ -276,12 +202,16 @@ void RunAtomAlphaTraining(
 {
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
-    rhbm_trainer::AlphaTrainer alpha_trainer(
-        request.training_alpha_min, request.training_alpha_max, request.training_alpha_step);
-    const auto & alpha_training_list{ alpha_trainer.AlphaGrid() };
+    gaussian_estimator::CrossValidationOptions alpha_options;
+    alpha_options.alpha_min = request.training_alpha_min;
+    alpha_options.alpha_max = request.training_alpha_max;
+    alpha_options.alpha_step = request.training_alpha_step;
+    alpha_options.fit_range_min = request.fit_range_min;
+    alpha_options.fit_range_max = request.fit_range_max;
+    alpha_options.thread_size = thread_size;
+    alpha_options.study_plot_dir = request.training_report_dir;
     const auto component_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     const auto component_group_keys{ analysis_view.CollectAtomGroupKeys(component_class_key) };
-    Logger::Log(LogLevel::Info, alpha_trainer.GetAlphaGridSummary().str());
 
     // Alpha_R Training
     size_t count{ 0 };
@@ -300,15 +230,12 @@ void RunAtomAlphaTraining(
         selected_atom_dataset_list.shrink_to_fit();
         if (!selected_atom_dataset_list.empty())
         {
-            rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_r_options;
-            alpha_r_options.subset_size = 5;
-            alpha_r_options.execution_options = MakePotentialAnalysisExecutionOptions(thread_size, true);
-            const auto alpha_r_result{
-                alpha_trainer.TrainAlphaR(selected_atom_dataset_list, alpha_r_options)
+            const auto alpha_r{
+                gaussian_estimator::CrossValidationAlphaR(selected_atom_dataset_list, alpha_options)
             };
             for (auto * atom : group_atom_list)
             {
-                analysis.EnsureAtomLocalPotential(*atom).SetAlphaR(alpha_r_result.best_alpha);
+                analysis.EnsureAtomLocalPotential(*atom).SetAlphaR(alpha_r);
             }
         }
         Logger::ProgressPercent(++count, component_group_keys.size());
@@ -336,31 +263,10 @@ void RunAtomAlphaTraining(
         beta_group_list.emplace_back(std::move(beta_list));
     }
 
-    auto selected_group_size{ beta_group_list.size() };
-    Logger::Log(LogLevel::Info,
-        "Run Alpha_G Training with "+ std::to_string(selected_group_size) +" groups.");
-    auto alpha_g{ alpha_training_list.front() };
-    if (!beta_group_list.empty())
-    {
-        rhbm_trainer::AlphaTrainer::AlphaTrainingOptions alpha_g_options;
-        alpha_g_options.subset_size = 10;
-        alpha_g_options.execution_options = MakePotentialAnalysisExecutionOptions(thread_size, true);
-        alpha_g_options.progress_callback =
-            [](std::size_t completed, std::size_t total)
-            {
-                Logger::ProgressPercent(completed, total);
-            };
-        const auto alpha_g_result{ alpha_trainer.TrainAlphaG(beta_group_list, alpha_g_options) };
-        alpha_g = alpha_g_result.best_alpha;
-    }
-    else
-    {
-        Logger::Log(LogLevel::Warning,
-            "Skip Alpha_G Training because no eligible groups were selected.");
-    }
-    Logger::Log(LogLevel::Info,
-        "Alpha_G Training Results Summary: minimum mu error sum alpha_g = "
-        + std::to_string(alpha_g));
+    const auto alpha_g{
+        gaussian_estimator::CrossValidationAlphaG(
+            beta_group_list, alpha_options, !request.training_report_dir.empty())
+    };
 
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {
@@ -369,37 +275,6 @@ void RunAtomAlphaTraining(
         {
             analysis.SetAtomGroupAlphaG(group_key, class_key, alpha_g);
         }
-    }
-
-    rhbm_trainer::AlphaTrainer::AlphaRunOptions alpha_bias_study_options;
-    alpha_bias_study_options.execution_options =
-        MakePotentialAnalysisExecutionOptions(thread_size, true);
-    alpha_bias_study_options.progress_callback =
-        [](std::size_t completed, std::size_t total)
-        {
-            Logger::ProgressPercent(completed, total);
-        };
-
-    if (!beta_group_list.empty())
-    {
-        const auto alpha_g_bias_matrix{
-            alpha_trainer.StudyAlphaGBias(beta_group_list, alpha_bias_study_options)
-        };
-        const bool report_emitted{
-            EmitTrainingReportIfRequested(
-                alpha_g_bias_matrix, alpha_training_list, "#alpha_{g}", "Deviation with Mean",
-                request.training_report_dir, "alpha_g_bias.pdf")
-        };
-        if (!report_emitted)
-        {
-            Logger::Log(LogLevel::Debug,
-                "Alpha_G bias report was skipped (set --training-report-dir to emit PDF output).");
-        }
-    }
-    else
-    {
-        Logger::Log(LogLevel::Warning,
-            "Skip Alpha_G bias study because no eligible groups were selected.");
     }
 }
 
