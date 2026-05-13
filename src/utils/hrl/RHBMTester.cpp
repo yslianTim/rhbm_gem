@@ -1,10 +1,9 @@
 #include <rhbm_gem/utils/hrl/RHBMTester.hpp>
 #include <rhbm_gem/utils/hrl/GaussianEstimator.hpp>
-#include <rhbm_gem/utils/hrl/LinearizationService.hpp>
-#include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
 
 #include <cmath>
+#include <cstddef>
 #include <stdexcept>
 
 namespace rhbm_gem::rhbm_tester
@@ -43,15 +42,6 @@ Eigen::VectorXd CalculateNormalizedBias(
     return ((gaussian_estimate_vector - gaussian_truth_vector).array() / gaussian_truth_vector.array()).matrix();
 }
 
-Eigen::VectorXd CalculateNormalizedBias(
-    const RHBMParameterVector & linear_estimate,
-    const GaussianModel3D & gaussian_truth)
-{
-    return CalculateNormalizedBias(
-        linearization_service::DecodeParameterVector(linear_estimate),
-        gaussian_truth);
-}
-
 BetaReplicaBias EstimateBetaReplicaBias(
     const LocalPotentialSampleList & sample_entries,
     const GaussianModel3D & gaus_true,
@@ -67,17 +57,41 @@ BetaReplicaBias EstimateBetaReplicaBias(
     };
 }
 
+std::vector<double> BuildZeroAlphaRList(std::size_t member_size)
+{
+    return std::vector<double>(member_size, 0.0);
+}
+
+std::vector<LocalGaussianResult> EstimateLocalGaussianList(
+    const std::vector<LocalPotentialSampleList> & sample_entries_list,
+    const gaussian_estimator::CrossValidationOptions & options)
+{
+    std::vector<LocalGaussianResult> member_results;
+    member_results.reserve(sample_entries_list.size());
+    for (const auto & sample_entries : sample_entries_list)
+    {
+        member_results.emplace_back(
+            gaussian_estimator::EstimateLocalGaussian(sample_entries, 0.0, options));
+    }
+    return member_results;
+}
+
 MuReplicaBias EstimateMuReplicaBias(
-    const RHBMBetaMatrix & beta_matrix,
+    const std::vector<LocalPotentialSampleList> & sample_entries_list,
     const GaussianModel3D & gaus_true,
     double alpha_g,
-    const RHBMExecutionOptions & options)
+    const gaussian_estimator::CrossValidationOptions & options)
 {
-    const auto mdpde_result{ rhbm_helper::EstimateMuMDPDE(alpha_g, beta_matrix, options) };
-    const auto ols_result{ rhbm_helper::EstimateMuMDPDE(0.0, beta_matrix, options) };
+    const auto alpha_r_list{ BuildZeroAlphaRList(sample_entries_list.size()) };
+    const auto baseline_result{
+        gaussian_estimator::EstimateGroupGaussian(sample_entries_list, alpha_r_list, 0.0, options)
+    };
+    const auto mdpde_result{
+        gaussian_estimator::EstimateGroupGaussian(sample_entries_list, alpha_r_list, alpha_g, options)
+    };
     return MuReplicaBias{
-        CalculateNormalizedBias(ols_result.mu_mdpde, gaus_true),
-        CalculateNormalizedBias(mdpde_result.mu_mdpde, gaus_true)
+        CalculateNormalizedBias(baseline_result.mdpde, gaus_true),
+        CalculateNormalizedBias(mdpde_result.mdpde, gaus_true)
     };
 }
 
@@ -209,10 +223,10 @@ bool RunMuMDPDETest(
 #endif
 
     GaussianModel3D::RequireFiniteModel(input.gaus_true, "input.gaus_true");
-    const auto replica_size{ static_cast<int>(input.replica_beta_matrices.size()) };
+    const auto replica_size{ static_cast<int>(input.replica_member_sampling_entries.size()) };
     if (replica_size <= 0)
     {
-        throw std::invalid_argument("input.replica_beta_matrices must not be empty");
+        throw std::invalid_argument("input.replica_member_sampling_entries must not be empty");
     }
 
     const auto local_alpha_g_list{ input.requested_alpha_g_list };
@@ -232,16 +246,18 @@ bool RunMuMDPDETest(
         trained_alpha_list.assign(static_cast<size_t>(replica_size), 0.0);
     }
 
-    const RHBMExecutionOptions algorithm_options{ true };
+    const auto estimator_options{ MakeAlphaOptions() };
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
 #endif
     for (int i = 0; i < replica_size; i++)
     {
-        const auto & beta_matrix{ input.replica_beta_matrices.at(static_cast<size_t>(i)) };
+        const auto & sample_entries_list{
+            input.replica_member_sampling_entries.at(static_cast<size_t>(i))
+        };
         const auto baseline_result{
-            EstimateMuReplicaBias(beta_matrix, input.gaus_true, 0.0, algorithm_options)
+            EstimateMuReplicaBias(sample_entries_list, input.gaus_true, 0.0, estimator_options)
         };
         bias_matrix_median.col(i) = baseline_result.median_bias;
 
@@ -249,31 +265,29 @@ bool RunMuMDPDETest(
         {
             const auto replica_result{
                 EstimateMuReplicaBias(
-                    beta_matrix,
+                    sample_entries_list,
                     input.gaus_true,
                     local_alpha_g_list.at(j),
-                    algorithm_options)
+                    estimator_options)
             };
             bias_matrix_mdpde_requested_list.at(j).col(i) = replica_result.mdpde_bias;
         }
 
         if (input.alpha_training)
         {
-            std::vector<Eigen::VectorXd> train_data_entry_list;
-            train_data_entry_list.reserve(static_cast<size_t>(beta_matrix.cols()));
-            for (int m = 0; m < beta_matrix.cols(); m++)
-            {
-                train_data_entry_list.emplace_back(beta_matrix.col(m));
-            }
-
+            const auto member_results{
+                EstimateLocalGaussianList(sample_entries_list, estimator_options)
+            };
             const auto trained_alpha_g{
                 gaussian_estimator::CrossValidationAlphaG(
-                    std::vector<std::vector<Eigen::VectorXd>>{ train_data_entry_list },
-                    MakeAlphaOptions())
+                    std::vector<std::vector<LocalPotentialSampleList>>{ sample_entries_list },
+                    std::vector<std::vector<LocalGaussianResult>>{ member_results },
+                    estimator_options)
             };
             trained_alpha_list.at(static_cast<size_t>(i)) = trained_alpha_g;
             const auto replica_result{
-                EstimateMuReplicaBias(beta_matrix, input.gaus_true, trained_alpha_g, algorithm_options)
+                EstimateMuReplicaBias(
+                    sample_entries_list, input.gaus_true, trained_alpha_g, estimator_options)
             };
             bias_matrix_mdpde_trained.col(i) = replica_result.mdpde_bias;
         }

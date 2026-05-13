@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
-#include <initializer_list>
+#include <cstddef>
 #include <optional>
 #include <stdexcept>
 #include <utility>
@@ -19,17 +19,6 @@ namespace ls = rhbm_gem::linearization_service;
 
 namespace
 {
-
-Eigen::VectorXd MakeVector(std::initializer_list<double> values)
-{
-    Eigen::VectorXd result(static_cast<Eigen::Index>(values.size()));
-    Eigen::Index index{ 0 };
-    for (double value : values)
-    {
-        result(index++) = value;
-    }
-    return result;
-}
 
 LocalPotentialSampleList MakeSampleEntries(double log_response_shift = 0.0)
 {
@@ -54,6 +43,50 @@ rg::gaussian_estimator::CrossValidationOptions MakeOptions()
     options.alpha_step = 0.5;
     options.thread_size = 1;
     return options;
+}
+
+std::vector<LocalPotentialSampleList> MakeSampleGroup(std::size_t member_size)
+{
+    std::vector<LocalPotentialSampleList> sample_group;
+    sample_group.reserve(member_size);
+    for (std::size_t i = 0; i < member_size; i++)
+    {
+        sample_group.emplace_back(MakeSampleEntries(0.01 * static_cast<double>(i)));
+    }
+    return sample_group;
+}
+
+std::vector<rg::LocalGaussianResult> EstimateMemberResults(
+    const std::vector<LocalPotentialSampleList> & sample_group,
+    const rg::gaussian_estimator::CrossValidationOptions & options)
+{
+    std::vector<rg::LocalGaussianResult> member_results;
+    member_results.reserve(sample_group.size());
+    for (const auto & sample_entries : sample_group)
+    {
+        member_results.emplace_back(
+            rg::gaussian_estimator::EstimateLocalGaussian(sample_entries, 0.0, options));
+    }
+    return member_results;
+}
+
+std::vector<std::vector<rg::RHBMParameterVector>> BuildBetaGroupList(
+    const std::vector<std::vector<rg::LocalGaussianResult>> & member_result_list)
+{
+    std::vector<std::vector<rg::RHBMParameterVector>> beta_group_list;
+    beta_group_list.reserve(member_result_list.size());
+    for (const auto & group_results : member_result_list)
+    {
+        std::vector<rg::RHBMParameterVector> beta_list;
+        beta_list.reserve(group_results.size());
+        for (const auto & member_result : group_results)
+        {
+            beta_list.emplace_back(
+                ls::EncodeGaussianToParameterVector(member_result.mdpde.GetModel()));
+        }
+        beta_group_list.emplace_back(std::move(beta_list));
+    }
+    return beta_group_list;
 }
 
 } // namespace
@@ -105,9 +138,13 @@ TEST(GaussianEstimatorTest, AlphaRMatchesAlphaTrainerBestAlpha)
 TEST(GaussianEstimatorTest, AlphaGMatchesAlphaTrainerBestAlpha)
 {
     const auto options{ MakeOptions() };
-    const std::vector<std::vector<rg::RHBMParameterVector>> beta_group_list{
-        std::vector<rg::RHBMParameterVector>(10, MakeVector({ 1.5, -0.5 }))
+    const std::vector<std::vector<LocalPotentialSampleList>> sample_group_list{
+        MakeSampleGroup(10)
     };
+    const std::vector<std::vector<rg::LocalGaussianResult>> member_result_list{
+        EstimateMemberResults(sample_group_list.front(), options)
+    };
+    const auto beta_group_list{ BuildBetaGroupList(member_result_list) };
     const rg::rhbm_trainer::AlphaTrainer trainer{
         options.alpha_min,
         options.alpha_max,
@@ -120,7 +157,8 @@ TEST(GaussianEstimatorTest, AlphaGMatchesAlphaTrainerBestAlpha)
 
     const auto expected{ trainer.TrainAlphaG(beta_group_list, trainer_options).best_alpha };
     const auto actual{
-        rg::gaussian_estimator::CrossValidationAlphaG(beta_group_list, options)
+        rg::gaussian_estimator::CrossValidationAlphaG(
+            sample_group_list, member_result_list, options)
     };
 
     EXPECT_DOUBLE_EQ(actual, expected);
@@ -134,15 +172,20 @@ TEST(GaussianEstimatorTest, QuietAlphaGOptionsDoNotChangeBestAlpha)
     auto verbose_options{ quiet_options };
     verbose_options.output_summary_log = true;
     verbose_options.output_progress = true;
-    const std::vector<std::vector<rg::RHBMParameterVector>> beta_group_list{
-        std::vector<rg::RHBMParameterVector>(10, MakeVector({ 1.5, -0.5 }))
+    const std::vector<std::vector<LocalPotentialSampleList>> sample_group_list{
+        MakeSampleGroup(10)
+    };
+    const std::vector<std::vector<rg::LocalGaussianResult>> member_result_list{
+        EstimateMemberResults(sample_group_list.front(), quiet_options)
     };
 
     const auto quiet_alpha{
-        rg::gaussian_estimator::CrossValidationAlphaG(beta_group_list, quiet_options)
+        rg::gaussian_estimator::CrossValidationAlphaG(
+            sample_group_list, member_result_list, quiet_options)
     };
     const auto verbose_alpha{
-        rg::gaussian_estimator::CrossValidationAlphaG(beta_group_list, verbose_options)
+        rg::gaussian_estimator::CrossValidationAlphaG(
+            sample_group_list, member_result_list, verbose_options)
     };
 
     EXPECT_DOUBLE_EQ(quiet_alpha, verbose_alpha);
@@ -163,10 +206,12 @@ TEST(GaussianEstimatorTest, EmptyAlphaGTrainingInputReturnsFallbackAlpha)
     auto options{ MakeOptions() };
     options.output_summary_log = false;
     options.output_progress = false;
-    const std::vector<std::vector<rg::RHBMParameterVector>> empty_beta_group_list;
+    const std::vector<std::vector<LocalPotentialSampleList>> empty_sample_group_list;
+    const std::vector<std::vector<rg::LocalGaussianResult>> empty_member_result_list;
 
     const auto alpha_g{
-        rg::gaussian_estimator::CrossValidationAlphaG(empty_beta_group_list, options)
+        rg::gaussian_estimator::CrossValidationAlphaG(
+            empty_sample_group_list, empty_member_result_list, options)
     };
 
     EXPECT_DOUBLE_EQ(alpha_g, options.alpha_min);
@@ -175,13 +220,17 @@ TEST(GaussianEstimatorTest, EmptyAlphaGTrainingInputReturnsFallbackAlpha)
 TEST(GaussianEstimatorTest, PlotRequestWithEmptyDirectoryDoesNotRequireRoot)
 {
     const auto options{ MakeOptions() };
-    const std::vector<std::vector<rg::RHBMParameterVector>> beta_group_list{
-        std::vector<rg::RHBMParameterVector>(10, MakeVector({ 1.5, -0.5 }))
+    const std::vector<std::vector<LocalPotentialSampleList>> sample_group_list{
+        MakeSampleGroup(10)
+    };
+    const std::vector<std::vector<rg::LocalGaussianResult>> member_result_list{
+        EstimateMemberResults(sample_group_list.front(), options)
     };
 
     EXPECT_NO_THROW({
         const auto alpha_g{
-            rg::gaussian_estimator::CrossValidationAlphaG(beta_group_list, options, true)
+            rg::gaussian_estimator::CrossValidationAlphaG(
+                sample_group_list, member_result_list, options, true)
         };
         EXPECT_TRUE(std::isfinite(alpha_g));
     });

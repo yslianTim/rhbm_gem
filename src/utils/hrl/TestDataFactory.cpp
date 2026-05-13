@@ -19,6 +19,8 @@ namespace
 {
 using namespace rhbm_gem;
 
+constexpr size_t kMuMemberSamplingEntrySize{ 10 };
+
 struct NeighborhoodSamplingOptions
 {
     double radius_min{ 0.0 };
@@ -506,6 +508,25 @@ Eigen::MatrixXd BuildBetaMatrix(const Eigen::MatrixXd & gaus_array)
     }
     return beta_matrix;
 }
+
+std::vector<LocalPotentialSampleList> BuildMuMemberSamplingEntries(
+    const Eigen::MatrixXd & gaus_array,
+    std::mt19937 & generator)
+{
+    std::vector<LocalPotentialSampleList> member_sampling_entries;
+    member_sampling_entries.reserve(static_cast<std::size_t>(gaus_array.cols()));
+    for (Eigen::Index i = 0; i < gaus_array.cols(); i++)
+    {
+        member_sampling_entries.emplace_back(
+            GenerateRadialSamples(
+                kMuMemberSamplingEntrySize,
+                GaussianModel3D::FromVector(gaus_array.col(i)),
+                0.0,
+                1.0,
+                generator));
+    }
+    return member_sampling_entries;
+}
 } // namespace
 
 namespace rhbm_gem::test_data_factory
@@ -580,6 +601,7 @@ RHBMMuTestInput BuildMuTestInput(const MuScenario & scenario)
     input.gaus_true = GaussianModel3D::FromVector(scenario.gaus_prior);
     input.requested_alpha_g_list = scenario.requested_alpha_g_list;
     input.alpha_training = scenario.alpha_training;
+    input.replica_member_sampling_entries.reserve(static_cast<size_t>(scenario.replica_size));
     input.replica_beta_matrices.reserve(static_cast<size_t>(scenario.replica_size));
 
     for (int i = 0; i < scenario.replica_size; i++)
@@ -596,6 +618,8 @@ RHBMMuTestInput BuildMuTestInput(const MuScenario & scenario)
                 generator
             )
         };
+        input.replica_member_sampling_entries.emplace_back(
+            BuildMuMemberSamplingEntries(random_gaus_array, generator));
         input.replica_beta_matrices.emplace_back(
             BuildBetaMatrix(random_gaus_array));
     }

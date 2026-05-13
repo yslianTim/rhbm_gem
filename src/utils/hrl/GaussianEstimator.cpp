@@ -309,10 +309,36 @@ double CrossValidationAlphaR(
 }
 
 double CrossValidationAlphaG(
-    const std::vector<std::vector<RHBMParameterVector>> & beta_group_list,
+    const std::vector<std::vector<LocalPotentialSampleList>> & sample_group_list,
+    const std::vector<std::vector<LocalGaussianResult>> & member_result_list,
     const CrossValidationOptions & options,
     bool output_study_plot)
 {
+    if (sample_group_list.size() != member_result_list.size())
+    {
+        throw std::invalid_argument("sample_group_list and member_result_list sizes are inconsistent.");
+    }
+
+    std::vector<std::vector<RHBMParameterVector>> beta_group_list;
+    beta_group_list.reserve(sample_group_list.size());
+    for (std::size_t i = 0; i < sample_group_list.size(); i++)
+    {
+        if (sample_group_list.at(i).size() != member_result_list.at(i).size())
+        {
+            throw std::invalid_argument("sample group and member result group sizes are inconsistent.");
+        }
+
+        std::vector<RHBMParameterVector> beta_list;
+        beta_list.reserve(member_result_list.at(i).size());
+        for (const auto & member_result : member_result_list.at(i))
+        {
+            beta_list.emplace_back(
+                linearization_service::EncodeGaussianToParameterVector(
+                    member_result.mdpde.GetModel()));
+        }
+        beta_group_list.emplace_back(std::move(beta_list));
+    }
+    
     if (options.output_summary_log)
     {
         Logger::Log(LogLevel::Info,
@@ -354,39 +380,6 @@ double CrossValidationAlphaG(
             + std::to_string(training_result.best_alpha));
     }
     return training_result.best_alpha;
-}
-
-double CrossValidationAlphaG(
-    const std::vector<std::vector<LocalPotentialSampleList>> & sample_group_list,
-    const std::vector<std::vector<LocalGaussianResult>> & member_result_list,
-    const CrossValidationOptions & options,
-    bool output_study_plot)
-{
-    if (sample_group_list.size() != member_result_list.size())
-    {
-        throw std::invalid_argument("sample_group_list and member_result_list sizes are inconsistent.");
-    }
-
-    std::vector<std::vector<RHBMParameterVector>> beta_group_list;
-    beta_group_list.reserve(sample_group_list.size());
-    for (std::size_t i = 0; i < sample_group_list.size(); i++)
-    {
-        if (sample_group_list.at(i).size() != member_result_list.at(i).size())
-        {
-            throw std::invalid_argument("sample group and member result group sizes are inconsistent.");
-        }
-
-        std::vector<RHBMParameterVector> beta_list;
-        beta_list.reserve(member_result_list.at(i).size());
-        for (const auto & member_result : member_result_list.at(i))
-        {
-            beta_list.emplace_back(
-                linearization_service::EncodeGaussianToParameterVector(
-                    member_result.mdpde.GetModel()));
-        }
-        beta_group_list.emplace_back(std::move(beta_list));
-    }
-    return CrossValidationAlphaG(beta_group_list, options, output_study_plot);
 }
 
 LocalGaussianResult EstimateLocalGaussian(

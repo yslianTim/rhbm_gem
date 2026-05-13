@@ -257,9 +257,24 @@ TEST(TestDataFactoryTest, BuildMuTestInputIsReproducibleWithFixedSeed)
     const auto first_input{ tdf::BuildMuTestInput(scenario) };
     const auto second_input{ tdf::BuildMuTestInput(scenario) };
 
+    ASSERT_EQ(
+        first_input.replica_member_sampling_entries.size(),
+        second_input.replica_member_sampling_entries.size());
     ASSERT_EQ(first_input.replica_beta_matrices.size(), second_input.replica_beta_matrices.size());
     for (size_t i = 0; i < first_input.replica_beta_matrices.size(); i++)
     {
+        ASSERT_EQ(
+            first_input.replica_member_sampling_entries.at(i).size(),
+            static_cast<size_t>(first_input.replica_beta_matrices.at(i).cols()));
+        ASSERT_EQ(
+            second_input.replica_member_sampling_entries.at(i).size(),
+            static_cast<size_t>(second_input.replica_beta_matrices.at(i).cols()));
+        for (size_t j = 0; j < first_input.replica_member_sampling_entries.at(i).size(); j++)
+        {
+            ExpectSamplingEntriesEquals(
+                first_input.replica_member_sampling_entries.at(i).at(j),
+                second_input.replica_member_sampling_entries.at(i).at(j));
+        }
         ExpectMatrixEquals(
             first_input.replica_beta_matrices.at(i),
             second_input.replica_beta_matrices.at(i)

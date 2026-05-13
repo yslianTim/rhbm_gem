@@ -4,7 +4,6 @@
 #include <vector>
 
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
-#include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace rhbm_gem::gaussian_estimator {
@@ -24,11 +23,6 @@ struct CrossValidationOptions
 
 double CrossValidationAlphaR(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
-    const CrossValidationOptions & options,
-    bool output_study_plot = false);
-
-double CrossValidationAlphaG(
-    const std::vector<std::vector<RHBMParameterVector>> & beta_group_list,
     const CrossValidationOptions & options,
     bool output_study_plot = false);
 
