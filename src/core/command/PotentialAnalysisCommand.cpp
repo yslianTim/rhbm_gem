@@ -186,7 +186,8 @@ std::vector<MutableLocalPotentialView> BuildSelectedAtomLocalEntryViews(ModelObj
     return local_entry_list;
 }
 
-void RunModelObjectPreprocessing(ModelObject & model_object, bool asymmetry_flag, double alpha_r)
+void RunModelObjectPreprocessing(
+    ModelObject & model_object, bool asymmetry_flag, double alpha_r, double alpha_g)
 {
     auto analysis{ model_object.EditAnalysis() };
     analysis.Clear();
@@ -205,11 +206,20 @@ void RunModelObjectPreprocessing(ModelObject & model_object, bool asymmetry_flag
 
     // Establish the model-analysis preprocessing invariant for downstream steps:
     // selection is finalized, local entries exist, atom groups are materialized,
-    // and selected atoms carry the initial alpha-r.
+    // and selected atoms carry the initial alpha-r and alpha_g.
     analysis.RebuildAtomGroupsFromSelection();
     for (auto * atom : model_object.GetSelectedAtoms())
     {
         analysis.EnsureAtomLocalPotential(*atom).SetAlphaR(alpha_r);
+    }
+    const auto analysis_view{ model_object.GetAnalysisView() };
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
+    {
+        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
+        for (const auto group_key : analysis_view.CollectAtomGroupKeys(class_key))
+        {
+            analysis.SetAtomGroupAlphaG(group_key, class_key, alpha_g);
+        }
     }
 
     Logger::Log(LogLevel::Info,
@@ -443,12 +453,9 @@ void RunAtomPotentialFittingWorkflow(
                 member_datasets.emplace_back(local_entry.GetDataset());
                 member_fit_results.emplace_back(local_entry.GetFitResult());
             }
-            auto alpha_g{ request.training_alpha_flag ?
-                analysis_view.GetAtomAlphaG(group_key, class_key) : request.alpha_g
-            };
             const auto result{
                 rhbm_helper::EstimateGroup(
-                    alpha_g,
+                    analysis_view.GetAtomAlphaG(group_key, class_key),
                     rhbm_helper::BuildGroupInput(member_datasets, member_fit_results),
                     MakePotentialAnalysisExecutionOptions(thread_size, true))
             };
@@ -457,7 +464,8 @@ void RunAtomPotentialFittingWorkflow(
             #pragma omp critical
 #endif
             {
-                analysis.ApplyAtomGroupEstimateResult(group_key, class_key, result, alpha_g);
+                analysis.ApplyAtomGroupEstimateResult(
+                    group_key, class_key, result, analysis_view.GetAtomAlphaG(group_key, class_key));
                 key_count++;
                 Logger::ProgressBar(key_count, group_key_size);
             }
@@ -547,7 +555,7 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
     {
         map_object.MapValueArrayNormalization();
     }
-    RunModelObjectPreprocessing(model_object, request.asymmetry_flag, request.alpha_r);
+    RunModelObjectPreprocessing(model_object, request.asymmetry_flag, request.alpha_r, request.alpha_g);
     RunPotentialSamplingWorkflow(map_object, model_object, request, thread_size);
     RunAtomPotentialFittingWorkflow(model_object, request, thread_size);
     SavePreparedModel(model_object, request.database_path, request.saved_key_tag);
