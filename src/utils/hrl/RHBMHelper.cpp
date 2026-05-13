@@ -18,6 +18,339 @@
 
 using namespace rhbm_gem;
 
+namespace
+{
+void ValidateDatasetShape(
+    const RHBMDesignMatrix & design_matrix,
+    const RHBMResponseVector & response_vector,
+    std::string_view context = {})
+{
+    eigen_validation::RequireRows(design_matrix, response_vector.rows(), "X", context);
+    numeric_validation::RequirePositive(design_matrix.cols(), "X column count", context);
+    eigen_validation::RequireFinite(design_matrix, "X", context);
+    eigen_validation::RequireFinite(response_vector, "y", context);
+}
+
+void ValidateDiagonalAgainstSize(
+    const RHBMDiagonalMatrix & matrix,
+    Eigen::Index expected_size,
+    const char * name,
+    std::string_view context = {})
+{
+    eigen_validation::RequireVectorSize(matrix.diagonal(), expected_size, name, context);
+}
+
+template <typename Derived>
+void ValidateSquareBasisMatrix(
+    const Eigen::DenseBase<Derived> & matrix,
+    Eigen::Index basis_size,
+    const char * name,
+    std::string_view context = {})
+{
+    eigen_validation::RequireShape(matrix, basis_size, basis_size, name, context);
+}
+
+double CalculateChiSquareQuantile(int df)
+{
+    const boost::math::chi_squared_distribution<double> distribution(static_cast<double>(df));
+    return boost::math::quantile(distribution, 0.99);
+}
+
+RHBMParameterVector CalculateBetaByOLS(
+    const RHBMDesignMatrix & design_matrix,
+    const RHBMResponseVector & response_vector)
+{
+    const RHBMGroupCovarianceMatrix gram_matrix{ design_matrix.transpose() * design_matrix };
+    const RHBMGroupCovarianceMatrix inverse_gram_matrix{ eigen_helper::GetInverseMatrix(gram_matrix) };
+    return inverse_gram_matrix * (design_matrix.transpose() * response_vector);
+}
+
+RHBMParameterVector CalculateBetaByMDPDE(
+    const RHBMDesignMatrix & design_matrix,
+    const RHBMResponseVector & response_vector,
+    const RHBMDiagonalMatrix & W)
+{
+    ValidateDatasetShape(design_matrix, response_vector, "MDPDE beta update input is invalid.");
+    ValidateDiagonalAgainstSize(W, response_vector.size(), "W", "MDPDE beta update input is invalid.");
+    const RHBMGroupCovarianceMatrix gram_matrix{ design_matrix.transpose() * W * design_matrix };
+    const auto inverse_gram_matrix{ eigen_helper::GetInverseMatrix(gram_matrix) };
+    return inverse_gram_matrix * (design_matrix.transpose() * W * response_vector);
+}
+
+RHBMParameterVector CalculateMuByMedian(const RHBMBetaMatrix & beta_matrix)
+{
+    eigen_validation::RequireNonEmpty(beta_matrix, "beta_matrix");
+    const auto basis_size{ static_cast<int>(beta_matrix.rows()) };
+    RHBMParameterVector mu{ RHBMParameterVector::Zero(basis_size) };
+    for (int b = 0; b < basis_size; b++)
+    {
+        mu(b) = eigen_helper::GetMedian(beta_matrix.row(b));
+    }
+    return mu;
+}
+
+RHBMParameterVector CalculateMuByMDPDE(
+    const RHBMBetaMatrix & beta_matrix,
+    const Eigen::ArrayXd & omega_array,
+    double omega_sum)
+{
+    eigen_validation::RequireCols(beta_matrix, omega_array.rows(), "beta_matrix",
+        "Mu estimation input is invalid.");
+    numeric_validation::RequireFinitePositive(omega_sum, "omega_sum");
+    RHBMBetaMatrix numerator{ beta_matrix.array() / omega_sum };
+    for (int i = 0; i < numerator.cols(); i++)
+    {
+        numerator.col(i) *= omega_array(i);
+    }
+    return numerator.rowwise().sum();
+}
+
+RHBMDiagonalMatrix CalculateDataWeight(
+    double alpha,
+    const RHBMDesignMatrix & design_matrix,
+    const RHBMResponseVector & response_vector,
+    const RHBMParameterVector & beta,
+    double sigma_square,
+    double weight_min)
+{
+    numeric_validation::RequireFiniteNonNegative(alpha, "alpha");
+    numeric_validation::RequireFinitePositive(weight_min, "weight_min");
+    ValidateDatasetShape(design_matrix, response_vector, "Data weight input is invalid.");
+    eigen_validation::RequireVectorSize(beta, design_matrix.cols(), "beta",
+        "Data weight input is invalid.");
+
+    if (alpha == 0.0)
+    {
+        return RHBMResponseVector::Ones(response_vector.size()).asDiagonal();
+    }
+    if (!numeric_validation::IsFinitePositive(sigma_square))
+    {
+        sigma_square = weight_min;
+    }
+
+    const auto max_log{ std::log(std::numeric_limits<double>::max()) };
+    Eigen::ArrayXd exponent{
+        -0.5 * alpha * (response_vector - (design_matrix * beta)).array().square() / sigma_square
+    };
+    exponent = exponent.cwiseMin(max_log);
+    Eigen::ArrayXd W{ exponent.exp() };
+    W = W.unaryExpr([weight_min](double w) {
+        return numeric_validation::IsFinite(w) ? w : weight_min;
+    });
+    W = W.cwiseMax(weight_min);
+    return W.matrix().asDiagonal();
+}
+
+double CalculateDataVarianceSquare(
+    double alpha,
+    const RHBMDesignMatrix & design_matrix,
+    const RHBMResponseVector & response_vector,
+    const RHBMDiagonalMatrix & W,
+    const RHBMParameterVector & beta)
+{
+    numeric_validation::RequireFiniteNonNegative(alpha, "alpha");
+    ValidateDatasetShape(design_matrix, response_vector, "Data variance input is invalid.");
+    ValidateDiagonalAgainstSize(W, response_vector.size(), "W", "Data variance input is invalid.");
+    eigen_validation::RequireVectorSize(beta, design_matrix.cols(), "beta",
+        "Data variance input is invalid.");
+
+    const auto n{ static_cast<double>(response_vector.size()) };
+    const RHBMResponseVector residual{ response_vector - (design_matrix * beta) };
+    const auto numerator{ static_cast<double>(residual.transpose() * W * residual) };
+    auto denominator{ W.diagonal().sum() - n * alpha * std::pow(1.0 + alpha, -1.5) };
+    if (denominator <= 0.0)
+    {
+        denominator = std::numeric_limits<double>::min();
+    }
+    auto sigma_square{ numerator / denominator };
+    if (!numeric_validation::IsFinitePositive(sigma_square))
+    {
+        sigma_square = std::numeric_limits<double>::max();
+    }
+    return sigma_square;
+}
+
+RHBMDiagonalMatrix CalculateDataCovariance(double sigma_square, const RHBMDiagonalMatrix & W)
+{
+    const RHBMResponseVector data_weight_array{ W.diagonal() };
+    const auto n{ static_cast<int>(data_weight_array.size()) };
+    const auto W_inverse_trace{ eigen_helper::GetInverseDiagonalMatrix(W).diagonal().sum()};
+    if (!numeric_validation::IsFinitePositive(W_inverse_trace))
+    {
+        return RHBMResponseVector::Ones(n).asDiagonal();
+    }
+
+    RHBMResponseVector capital_sigma{ RHBMResponseVector::Zero(n) };
+    for (int j = 0; j < n; j++)
+    {
+        if (data_weight_array(j) == 0.0 || W_inverse_trace == 0.0)
+        {
+            continue;
+        }
+        capital_sigma(j) = n * sigma_square / data_weight_array(j) / W_inverse_trace;
+        if (!numeric_validation::IsFinitePositive(capital_sigma(j)))
+        {
+            capital_sigma(j) = 1.0;
+        }
+    }
+    return capital_sigma.asDiagonal();
+}
+
+Eigen::ArrayXd CalculateMemberWeight(
+    double alpha,
+    const RHBMBetaMatrix & beta_matrix,
+    const RHBMParameterVector & mu,
+    const RHBMGroupCovarianceMatrix & capital_lambda,
+    double weight_min)
+{
+    numeric_validation::RequireFiniteNonNegative(alpha, "alpha");
+    numeric_validation::RequireFinitePositive(weight_min, "weight_min");
+    eigen_validation::RequireRows(beta_matrix, mu.rows(), "beta_matrix",
+        "Member weight input is invalid.");
+    ValidateSquareBasisMatrix(capital_lambda, beta_matrix.rows(), "capital_lambda",
+        "Member weight input is invalid.");
+
+    const auto member_size{ static_cast<int>(beta_matrix.cols()) };
+    const auto weight_member_min{ weight_min / static_cast<double>(member_size) };
+    const auto inverse_capital_lambda{ eigen_helper::GetInverseMatrix(capital_lambda) };
+    const RHBMBetaMatrix residual_matrix{ beta_matrix.colwise() - mu };
+    Eigen::ArrayXd omega_array{ Eigen::ArrayXd::Zero(member_size) };
+    for (int i = 0; i < member_size; i++)
+    {
+        const RHBMParameterVector residual{ residual_matrix.col(i) };
+        const auto exp_index{
+            static_cast<double>(residual.transpose() * inverse_capital_lambda * residual)
+        };
+        if (!numeric_validation::IsFinite(exp_index))
+        {
+            omega_array(i) = weight_member_min;
+        }
+        else
+        {
+            omega_array(i) = std::exp(-0.5 * alpha * exp_index);
+            if (omega_array(i) < weight_member_min)
+            {
+                omega_array(i) = weight_member_min;
+            }
+        }
+    }
+    return omega_array;
+}
+
+RHBMGroupCovarianceMatrix CalculateMemberCovariance(
+    double alpha,
+    const RHBMBetaMatrix & beta_matrix,
+    const RHBMParameterVector & mu,
+    const Eigen::ArrayXd & omega_array,
+    double omega_sum)
+{
+    numeric_validation::RequireFiniteNonNegative(alpha, "alpha");
+    eigen_validation::RequireRows(beta_matrix, mu.rows(), "beta_matrix",
+        "Member covariance input is invalid.");
+    eigen_validation::RequireCols(beta_matrix, omega_array.rows(), "beta_matrix",
+        "Member covariance input is invalid.");
+    const auto basis_size{ static_cast<int>(beta_matrix.rows()) };
+    const auto member_size{ static_cast<int>(beta_matrix.cols()) };
+    RHBMGroupCovarianceMatrix numerator{ RHBMGroupCovarianceMatrix::Zero(basis_size, basis_size) };
+    const double denominator{
+        omega_sum - member_size * alpha * std::pow(1.0 + alpha, -1.0 - 0.5 * basis_size)
+    };
+    if (denominator <= 0.0)
+    {
+        return RHBMGroupCovarianceMatrix::Identity(basis_size, basis_size);
+    }
+
+    const RHBMBetaMatrix residual_matrix{ beta_matrix.colwise() - mu };
+    for (int i = 0; i < member_size; i++)
+    {
+        const RHBMParameterVector residual{ residual_matrix.col(i) };
+        numerator += omega_array(i) * (residual * residual.transpose());
+    }
+
+    RHBMGroupCovarianceMatrix capital_lambda{ numerator / denominator };
+    try
+    {
+        eigen_validation::RequireFinite(capital_lambda, "capital_lambda");
+    }
+    catch (const std::invalid_argument &)
+    {
+        capital_lambda = RHBMGroupCovarianceMatrix::Identity(basis_size, basis_size);
+    }
+    return capital_lambda;
+}
+
+std::vector<RHBMMemberCovarianceMatrix> CalculateWeightedMemberCovariance(
+    const RHBMGroupCovarianceMatrix & capital_lambda,
+    const Eigen::ArrayXd & omega_array)
+{
+    eigen_validation::RequireSquare(capital_lambda, "capital_lambda",
+        "Weighted member covariance input is invalid.");
+    eigen_validation::RequireNonEmpty(omega_array, "omega_array",
+        "Weighted member covariance input is invalid.");
+    const auto member_size{ static_cast<int>(omega_array.size()) };
+
+    auto omega_inverse_sum{ 0.0 };
+    for (int i = 0; i < member_size; i++)
+    {
+        omega_inverse_sum += (omega_array(i) == 0.0) ? 0.0 : 1.0 / omega_array(i);
+    }
+    if (omega_inverse_sum <= 0.0)
+    {
+        return std::vector<RHBMMemberCovarianceMatrix>(
+            static_cast<std::size_t>(member_size), capital_lambda
+        );
+    }
+
+    const auto omega_h{ 1.0 / omega_inverse_sum };
+    std::vector<RHBMMemberCovarianceMatrix> member_capital_lambda_list(
+        static_cast<std::size_t>(member_size));
+    for (int i = 0; i < member_size; i++)
+    {
+        member_capital_lambda_list.at(static_cast<std::size_t>(i)) =
+            (member_size * omega_h / omega_array(i)) * capital_lambda;
+    }
+    return member_capital_lambda_list;
+}
+
+RHBMGroupEstimationResult BuildGroupFallbackResult(
+    const RHBMGroupEstimationInput & input,
+    const RHBMMuEstimateResult & mu_result)
+{
+    std::vector<RHBMParameterVector> beta_list;
+    beta_list.reserve(input.member_fit_results.size());
+    for (const auto & fit_result : input.member_fit_results)
+    {
+        beta_list.emplace_back(fit_result.beta_mdpde);
+    }
+    const auto beta_matrix{ rhbm_helper::BuildBetaMatrix(beta_list) };
+
+    RHBMGroupEstimationResult result;
+    result.status = (mu_result.status == RHBMEstimationStatus::SUCCESS) ?
+        RHBMEstimationStatus::NUMERICAL_FALLBACK : mu_result.status;
+    result.mu_mean = mu_result.mu_mean;
+    result.mu_mdpde = mu_result.mu_mdpde;
+    result.mu_prior = mu_result.mu_mdpde;
+    result.capital_lambda = mu_result.capital_lambda;
+    result.beta_posterior_matrix = beta_matrix;
+    result.omega_array = mu_result.omega_array;
+    result.capital_sigma_posterior_list.assign(
+        input.member_fit_results.size(),
+        RHBMPosteriorCovarianceMatrix::Zero(input.basis_size, input.basis_size)
+    );
+    result.statistical_distance_array =
+        rhbm_helper::CalculateMemberStatisticalDistance(
+            result.mu_prior,
+            result.capital_lambda,
+            result.beta_posterior_matrix
+        );
+    result.outlier_flag_array = rhbm_helper::CalculateOutlierMemberFlag(
+        input.basis_size,
+        result.statistical_distance_array
+    );
+    return result;
+}
+} // namespace
+
 RHBMMemberDataset rhbm_helper::BuildMemberDataset(
     const LocalPotentialSampleList & sampling_entries,
     double range_min,
@@ -135,103 +468,6 @@ RHBMGroupEstimationInput rhbm_helper::BuildGroupInput(
 
     return input;
 }
-
-namespace
-{
-void ValidateDatasetShape(
-    const RHBMDesignMatrix & design_matrix,
-    const RHBMResponseVector & response_vector,
-    std::string_view context = {})
-{
-    eigen_validation::RequireRows(design_matrix, response_vector.rows(), "X", context);
-    numeric_validation::RequirePositive(design_matrix.cols(), "X column count", context);
-    eigen_validation::RequireFinite(design_matrix, "X", context);
-    eigen_validation::RequireFinite(response_vector, "y", context);
-}
-
-void ValidateDiagonalAgainstSize(
-    const RHBMDiagonalMatrix & matrix,
-    Eigen::Index expected_size,
-    const char * name,
-    std::string_view context = {})
-{
-    eigen_validation::RequireVectorSize(matrix.diagonal(), expected_size, name, context);
-}
-
-template <typename Derived>
-void ValidateSquareBasisMatrix(
-    const Eigen::DenseBase<Derived> & matrix,
-    Eigen::Index basis_size,
-    const char * name,
-    std::string_view context = {})
-{
-    eigen_validation::RequireShape(matrix, basis_size, basis_size, name, context);
-}
-
-double CalculateChiSquareQuantile(int df)
-{
-    const boost::math::chi_squared_distribution<double> distribution(static_cast<double>(df));
-    return boost::math::quantile(distribution, 0.99);
-}
-
-RHBMParameterVector CalculateBetaByOLS(
-    const RHBMDesignMatrix & design_matrix,
-    const RHBMResponseVector & response_vector);
-
-RHBMParameterVector CalculateBetaByMDPDE(
-    const RHBMDesignMatrix & design_matrix,
-    const RHBMResponseVector & response_vector,
-    const RHBMDiagonalMatrix & W);
-
-RHBMParameterVector CalculateMuByMedian(
-    const RHBMBetaMatrix & beta_matrix);
-
-RHBMParameterVector CalculateMuByMDPDE(
-    const RHBMBetaMatrix & beta_matrix,
-    const Eigen::ArrayXd & omega_array,
-    double omega_sum);
-
-RHBMDiagonalMatrix CalculateDataWeight(
-    double alpha,
-    const RHBMDesignMatrix & design_matrix,
-    const RHBMResponseVector & response_vector,
-    const RHBMParameterVector & beta,
-    double sigma_square,
-    double weight_min);
-
-double CalculateDataVarianceSquare(
-    double alpha,
-    const RHBMDesignMatrix & design_matrix,
-    const RHBMResponseVector & response_vector,
-    const RHBMDiagonalMatrix & W,
-    const RHBMParameterVector & beta);
-
-RHBMDiagonalMatrix CalculateDataCovariance(
-    double sigma_square,
-    const RHBMDiagonalMatrix & W);
-
-Eigen::ArrayXd CalculateMemberWeight(
-    double alpha,
-    const RHBMBetaMatrix & beta_matrix,
-    const RHBMParameterVector & mu,
-    const RHBMGroupCovarianceMatrix & capital_lambda,
-    double weight_min);
-
-RHBMGroupCovarianceMatrix CalculateMemberCovariance(
-    double alpha,
-    const RHBMBetaMatrix & beta_matrix,
-    const RHBMParameterVector & mu,
-    const Eigen::ArrayXd & omega_array,
-    double omega_sum);
-
-std::vector<RHBMMemberCovarianceMatrix> CalculateWeightedMemberCovariance(
-    const RHBMGroupCovarianceMatrix & capital_lambda,
-    const Eigen::ArrayXd & omega_array);
-
-RHBMGroupEstimationResult BuildGroupFallbackResult(
-    const RHBMGroupEstimationInput & input,
-    const RHBMMuEstimateResult & mu_result);
-} // namespace
 
 RHBMBetaEstimateResult rhbm_helper::EstimateBetaMDPDE(
     double alpha_r,
@@ -555,342 +791,14 @@ RHBMGroupEstimationResult rhbm_helper::EstimateGroup(
     return result;
 }
 
-namespace
-{
-RHBMParameterVector CalculateBetaByOLS(
-    const RHBMDesignMatrix & design_matrix,
-    const RHBMResponseVector & response_vector)
-{
-    const RHBMGroupCovarianceMatrix gram_matrix{ design_matrix.transpose() * design_matrix };
-    const RHBMGroupCovarianceMatrix inverse_gram_matrix{ eigen_helper::GetInverseMatrix(gram_matrix) };
-    return inverse_gram_matrix * (design_matrix.transpose() * response_vector);
-}
-
-RHBMParameterVector CalculateBetaByMDPDE(
-    const RHBMDesignMatrix & design_matrix,
-    const RHBMResponseVector & response_vector,
-    const RHBMDiagonalMatrix & W)
-{
-    ValidateDatasetShape(design_matrix, response_vector, "MDPDE beta update input is invalid.");
-    ValidateDiagonalAgainstSize(W, response_vector.size(), "W", "MDPDE beta update input is invalid.");
-    const RHBMGroupCovarianceMatrix gram_matrix{ design_matrix.transpose() * W * design_matrix };
-    const auto inverse_gram_matrix{ eigen_helper::GetInverseMatrix(gram_matrix) };
-    return inverse_gram_matrix * (design_matrix.transpose() * W * response_vector);
-}
-
-RHBMParameterVector CalculateMuByMedian(const RHBMBetaMatrix & beta_matrix)
-{
-    eigen_validation::RequireNonEmpty(beta_matrix, "beta_matrix");
-    const auto basis_size{ static_cast<int>(beta_matrix.rows()) };
-    RHBMParameterVector mu{ RHBMParameterVector::Zero(basis_size) };
-    for (int b = 0; b < basis_size; b++)
-    {
-        mu(b) = eigen_helper::GetMedian(beta_matrix.row(b));
-    }
-    return mu;
-}
-
-RHBMParameterVector CalculateMuByMDPDE(
-    const RHBMBetaMatrix & beta_matrix,
-    const Eigen::ArrayXd & omega_array,
-    double omega_sum)
-{
-    eigen_validation::RequireCols(
-        beta_matrix,
-        omega_array.rows(),
-        "beta_matrix",
-        "Mu estimation input is invalid.");
-    numeric_validation::RequireFinitePositive(omega_sum, "omega_sum");
-    RHBMBetaMatrix numerator{ beta_matrix.array() / omega_sum };
-    for (int i = 0; i < numerator.cols(); i++)
-    {
-        numerator.col(i) *= omega_array(i);
-    }
-    return numerator.rowwise().sum();
-}
-
-RHBMDiagonalMatrix CalculateDataWeight(
-    double alpha,
-    const RHBMDesignMatrix & design_matrix,
-    const RHBMResponseVector & response_vector,
-    const RHBMParameterVector & beta,
-    double sigma_square,
-    double weight_min)
-{
-    numeric_validation::RequireFiniteNonNegative(alpha, "alpha");
-    numeric_validation::RequireFinitePositive(weight_min, "weight_min");
-    ValidateDatasetShape(design_matrix, response_vector, "Data weight input is invalid.");
-    eigen_validation::RequireVectorSize(beta, design_matrix.cols(), "beta",
-        "Data weight input is invalid.");
-
-    if (alpha == 0.0)
-    {
-        return RHBMResponseVector::Ones(response_vector.size()).asDiagonal();
-    }
-    if (!numeric_validation::IsFinitePositive(sigma_square))
-    {
-        sigma_square = weight_min;
-    }
-
-    const auto max_log{ std::log(std::numeric_limits<double>::max()) };
-    Eigen::ArrayXd exponent{
-        -0.5 * alpha * (response_vector - (design_matrix * beta)).array().square() / sigma_square
-    };
-    exponent = exponent.cwiseMin(max_log);
-    Eigen::ArrayXd W{ exponent.exp() };
-    W = W.unaryExpr([weight_min](double w) {
-        return numeric_validation::IsFinite(w) ? w : weight_min;
-    });
-    W = W.cwiseMax(weight_min);
-    return W.matrix().asDiagonal();
-}
-
-double CalculateDataVarianceSquare(
-    double alpha,
-    const RHBMDesignMatrix & design_matrix,
-    const RHBMResponseVector & response_vector,
-    const RHBMDiagonalMatrix & W,
-    const RHBMParameterVector & beta)
-{
-    numeric_validation::RequireFiniteNonNegative(alpha, "alpha");
-    ValidateDatasetShape(design_matrix, response_vector, "Data variance input is invalid.");
-    ValidateDiagonalAgainstSize(W, response_vector.size(), "W", "Data variance input is invalid.");
-    eigen_validation::RequireVectorSize(beta, design_matrix.cols(), "beta",
-        "Data variance input is invalid.");
-
-    const auto n{ static_cast<double>(response_vector.size()) };
-    const RHBMResponseVector residual{ response_vector - (design_matrix * beta) };
-    const auto numerator{ static_cast<double>(residual.transpose() * W * residual) };
-    auto denominator{ W.diagonal().sum() - n * alpha * std::pow(1.0 + alpha, -1.5) };
-    if (denominator <= 0.0)
-    {
-        denominator = std::numeric_limits<double>::min();
-    }
-    auto sigma_square{ numerator / denominator };
-    if (!numeric_validation::IsFinitePositive(sigma_square))
-    {
-        sigma_square = std::numeric_limits<double>::max();
-    }
-    return sigma_square;
-}
-
-RHBMDiagonalMatrix CalculateDataCovariance(
-    double sigma_square,
-    const RHBMDiagonalMatrix & W)
-{
-    const RHBMResponseVector data_weight_array{ W.diagonal() };
-    const auto n{ static_cast<int>(data_weight_array.size()) };
-    const auto W_inverse_trace{ eigen_helper::GetInverseDiagonalMatrix(W).diagonal().sum()};
-    if (!numeric_validation::IsFinitePositive(W_inverse_trace))
-    {
-        return RHBMResponseVector::Ones(n).asDiagonal();
-    }
-
-    RHBMResponseVector capital_sigma{ RHBMResponseVector::Zero(n) };
-    for (int j = 0; j < n; j++)
-    {
-        if (data_weight_array(j) == 0.0 || W_inverse_trace == 0.0)
-        {
-            continue;
-        }
-        capital_sigma(j) = n * sigma_square / data_weight_array(j) / W_inverse_trace;
-        if (!numeric_validation::IsFinitePositive(capital_sigma(j)))
-        {
-            capital_sigma(j) = 1.0;
-        }
-    }
-    return capital_sigma.asDiagonal();
-}
-
-Eigen::ArrayXd CalculateMemberWeight(
-    double alpha,
-    const RHBMBetaMatrix & beta_matrix,
-    const RHBMParameterVector & mu,
-    const RHBMGroupCovarianceMatrix & capital_lambda,
-    double weight_min)
-{
-    numeric_validation::RequireFiniteNonNegative(alpha, "alpha");
-    numeric_validation::RequireFinitePositive(weight_min, "weight_min");
-    eigen_validation::RequireRows(
-        beta_matrix,
-        mu.rows(),
-        "beta_matrix",
-        "Member weight input is invalid.");
-    ValidateSquareBasisMatrix(
-        capital_lambda,
-        beta_matrix.rows(),
-        "capital_lambda",
-        "Member weight input is invalid.");
-
-    const auto member_size{ static_cast<int>(beta_matrix.cols()) };
-    const auto weight_member_min{ weight_min / static_cast<double>(member_size) };
-    const auto inverse_capital_lambda{ eigen_helper::GetInverseMatrix(capital_lambda) };
-    const RHBMBetaMatrix residual_matrix{ beta_matrix.colwise() - mu };
-    Eigen::ArrayXd omega_array{ Eigen::ArrayXd::Zero(member_size) };
-    for (int i = 0; i < member_size; i++)
-    {
-        const RHBMParameterVector residual{ residual_matrix.col(i) };
-        const auto exp_index{
-            static_cast<double>(residual.transpose() * inverse_capital_lambda * residual)
-        };
-        if (!numeric_validation::IsFinite(exp_index))
-        {
-            omega_array(i) = weight_member_min;
-        }
-        else
-        {
-            omega_array(i) = std::exp(-0.5 * alpha * exp_index);
-            if (omega_array(i) < weight_member_min)
-            {
-                omega_array(i) = weight_member_min;
-            }
-        }
-    }
-    return omega_array;
-}
-
-RHBMGroupCovarianceMatrix CalculateMemberCovariance(
-    double alpha,
-    const RHBMBetaMatrix & beta_matrix,
-    const RHBMParameterVector & mu,
-    const Eigen::ArrayXd & omega_array,
-    double omega_sum)
-{
-    numeric_validation::RequireFiniteNonNegative(alpha, "alpha");
-    eigen_validation::RequireRows(
-        beta_matrix,
-        mu.rows(),
-        "beta_matrix",
-        "Member covariance input is invalid.");
-    eigen_validation::RequireCols(
-        beta_matrix,
-        omega_array.rows(),
-        "beta_matrix",
-        "Member covariance input is invalid.");
-    const auto basis_size{ static_cast<int>(beta_matrix.rows()) };
-    const auto member_size{ static_cast<int>(beta_matrix.cols()) };
-    RHBMGroupCovarianceMatrix numerator{
-        RHBMGroupCovarianceMatrix::Zero(basis_size, basis_size)
-    };
-    const double denominator{
-        omega_sum - member_size * alpha * std::pow(1.0 + alpha, -1.0 - 0.5 * basis_size)
-    };
-    if (denominator <= 0.0)
-    {
-        return RHBMGroupCovarianceMatrix::Identity(basis_size, basis_size);
-    }
-
-    const RHBMBetaMatrix residual_matrix{ beta_matrix.colwise() - mu };
-    for (int i = 0; i < member_size; i++)
-    {
-        const RHBMParameterVector residual{ residual_matrix.col(i) };
-        numerator += omega_array(i) * (residual * residual.transpose());
-    }
-
-    RHBMGroupCovarianceMatrix capital_lambda{ numerator / denominator };
-    try
-    {
-        eigen_validation::RequireFinite(capital_lambda, "capital_lambda");
-    }
-    catch (const std::invalid_argument &)
-    {
-        capital_lambda = RHBMGroupCovarianceMatrix::Identity(basis_size, basis_size);
-    }
-    return capital_lambda;
-}
-
-std::vector<RHBMMemberCovarianceMatrix> CalculateWeightedMemberCovariance(
-    const RHBMGroupCovarianceMatrix & capital_lambda,
-    const Eigen::ArrayXd & omega_array)
-{
-    eigen_validation::RequireSquare(
-        capital_lambda,
-        "capital_lambda",
-        "Weighted member covariance input is invalid.");
-    eigen_validation::RequireNonEmpty(
-        omega_array,
-        "omega_array",
-        "Weighted member covariance input is invalid.");
-    const auto member_size{ static_cast<int>(omega_array.size()) };
-
-    auto omega_inverse_sum{ 0.0 };
-    for (int i = 0; i < member_size; i++)
-    {
-        omega_inverse_sum += (omega_array(i) == 0.0) ? 0.0 : 1.0 / omega_array(i);
-    }
-    if (omega_inverse_sum <= 0.0)
-    {
-        return std::vector<RHBMMemberCovarianceMatrix>(
-            static_cast<std::size_t>(member_size),
-            capital_lambda
-        );
-    }
-
-    const auto omega_h{ 1.0 / omega_inverse_sum };
-    std::vector<RHBMMemberCovarianceMatrix> member_capital_lambda_list(
-        static_cast<std::size_t>(member_size));
-    for (int i = 0; i < member_size; i++)
-    {
-        member_capital_lambda_list.at(static_cast<std::size_t>(i)) =
-            (member_size * omega_h / omega_array(i)) * capital_lambda;
-    }
-    return member_capital_lambda_list;
-}
-
-RHBMGroupEstimationResult BuildGroupFallbackResult(
-    const RHBMGroupEstimationInput & input,
-    const RHBMMuEstimateResult & mu_result)
-{
-    std::vector<RHBMParameterVector> beta_list;
-    beta_list.reserve(input.member_fit_results.size());
-    for (const auto & fit_result : input.member_fit_results)
-    {
-        beta_list.emplace_back(fit_result.beta_mdpde);
-    }
-    const auto beta_matrix{ rhbm_helper::BuildBetaMatrix(beta_list) };
-
-    RHBMGroupEstimationResult result;
-    result.status = (mu_result.status == RHBMEstimationStatus::SUCCESS)
-        ? RHBMEstimationStatus::NUMERICAL_FALLBACK
-        : mu_result.status;
-    result.mu_mean = mu_result.mu_mean;
-    result.mu_mdpde = mu_result.mu_mdpde;
-    result.mu_prior = mu_result.mu_mdpde;
-    result.capital_lambda = mu_result.capital_lambda;
-    result.beta_posterior_matrix = beta_matrix;
-    result.omega_array = mu_result.omega_array;
-    result.capital_sigma_posterior_list.assign(
-        input.member_fit_results.size(),
-        RHBMPosteriorCovarianceMatrix::Zero(input.basis_size, input.basis_size)
-    );
-    result.statistical_distance_array =
-        rhbm_helper::CalculateMemberStatisticalDistance(
-            result.mu_prior,
-            result.capital_lambda,
-            result.beta_posterior_matrix
-        );
-    result.outlier_flag_array = rhbm_helper::CalculateOutlierMemberFlag(
-        input.basis_size,
-        result.statistical_distance_array
-    );
-    return result;
-}
-} // namespace
-
 Eigen::ArrayXd rhbm_helper::CalculateMemberStatisticalDistance(
     const RHBMParameterVector & mu_prior,
     const RHBMGroupCovarianceMatrix & capital_lambda,
     const RHBMBetaPosteriorMatrix & beta_posterior_matrix)
 {
-    eigen_validation::RequireRows(
-        beta_posterior_matrix,
-        mu_prior.rows(),
-        "beta_posterior_matrix",
+    eigen_validation::RequireRows(beta_posterior_matrix, mu_prior.rows(), "beta_posterior_matrix",
         "Statistical distance input is invalid.");
-    ValidateSquareBasisMatrix(
-        capital_lambda,
-        mu_prior.rows(),
-        "capital_lambda",
+    ValidateSquareBasisMatrix(capital_lambda, mu_prior.rows(), "capital_lambda",
         "Statistical distance input is invalid.");
 
     const auto member_size{ static_cast<int>(beta_posterior_matrix.cols()) };
