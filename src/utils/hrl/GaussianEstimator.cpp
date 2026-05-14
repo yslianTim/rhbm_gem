@@ -511,12 +511,11 @@ LocalGaussianResult EstimateLocalGaussian(
     double alpha_r,
     const TrainingOptions & options)
 {
-    auto result{
-        rhbm_helper::EstimateBetaMDPDE(
-            alpha_r,
-            rhbm_helper::BuildMemberDataset(sample_entries, options.fit_range_min, options.fit_range_max),
-            MakeExecutionOptions(options))
+    auto dataset{
+        rhbm_helper::BuildMemberDataset(sample_entries, options.fit_range_min, options.fit_range_max)
     };
+    auto execution_options{ MakeExecutionOptions(options) };
+    auto result{ rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset, execution_options) };
     return DecodeLocalGaussianResult(alpha_r, result);
 }
 
@@ -531,14 +530,11 @@ GroupGaussianResult EstimateGroupGaussian(
         throw std::invalid_argument("sample_entries_list and member_result_list sizes are inconsistent.");
     }
 
+    auto execution_options{ MakeExecutionOptions(options) };
     const auto dataset_list{ BuildMemberDatasetList(sample_entries_list, options) };
     const auto fit_result_list{ BuildMemberFitResultList(member_result_list) };
-    const auto raw_result{
-        rhbm_helper::EstimateGroup(
-            alpha_g,
-            rhbm_helper::BuildGroupInput(dataset_list, fit_result_list),
-            MakeExecutionOptions(options))
-    };
+    const auto group_input{ rhbm_helper::BuildGroupInput(dataset_list, fit_result_list) };
+    const auto raw_result{ rhbm_helper::EstimateGroup(alpha_g, group_input, execution_options) };
     auto result{ DecodeGroupGaussianResult(alpha_g, raw_result) };
     result.member_results = DecodeMemberGaussianResults(raw_result);
     return result;
