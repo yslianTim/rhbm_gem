@@ -24,13 +24,6 @@ struct MuReplicaBias
     Eigen::VectorXd mdpde_bias;
 };
 
-gaussian_estimator::TrainingOptions MakeAlphaOptions()
-{
-    gaussian_estimator::TrainingOptions options;
-    options.thread_size = 1;
-    return options;
-}
-
 Eigen::VectorXd CalculateNormalizedBias(
     const GaussianModel3D & gaussian_estimate,
     const GaussianModel3D & gaussian_truth)
@@ -144,7 +137,7 @@ bool RunBetaMDPDETest(
         trained_alpha_list.assign(static_cast<size_t>(replica_size), 0.0);
     }
 
-    const auto estimator_options{ MakeAlphaOptions() };
+    const gaussian_estimator::TrainingOptions estimator_options;
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
@@ -246,7 +239,7 @@ bool RunMuMDPDETest(
         trained_alpha_list.assign(static_cast<size_t>(replica_size), 0.0);
     }
 
-    const auto estimator_options{ MakeAlphaOptions() };
+    const gaussian_estimator::TrainingOptions estimator_options;
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(thread_size)

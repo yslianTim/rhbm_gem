@@ -14,28 +14,18 @@ namespace rhbm_gem
 namespace
 {
 
-void RequireFiniteParameterValues(
-    const Eigen::VectorXd & parameters,
-    std::string_view value_name)
+void RequireFiniteParameterValues(const Eigen::VectorXd & parameters, std::string_view value_name)
 {
     const auto name{ std::string(value_name) };
-    numeric_validation::RequireFinite(
-        parameters(GaussianModel3D::AmplitudeIndex()),
-        name + " amplitude");
-    numeric_validation::RequireFinite(
-        parameters(GaussianModel3D::WidthIndex()),
-        name + " width");
-    numeric_validation::RequireFinite(
-        parameters(GaussianModel3D::InterceptIndex()),
-        name + " intercept");
+    numeric_validation::RequireFinite(parameters(GaussianModel3D::AmplitudeIndex()), name + " amplitude");
+    numeric_validation::RequireFinite(parameters(GaussianModel3D::WidthIndex()), name + " width");
+    numeric_validation::RequireFinite(parameters(GaussianModel3D::InterceptIndex()), name + " intercept");
 }
 
 } // namespace
 
 GaussianModel3D::GaussianModel3D(double amplitude, double width, double intercept) :
-    m_amplitude{ amplitude },
-    m_width{ width },
-    m_intercept{ intercept }
+    m_amplitude{ amplitude }, m_width{ width }, m_intercept{ intercept }
 {
 }
 
