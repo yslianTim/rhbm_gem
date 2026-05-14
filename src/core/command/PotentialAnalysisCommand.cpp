@@ -219,9 +219,7 @@ void RunLocalPotentialFitting(
     }
 }
 
-void RunAtomAlphaTraining(
-    ModelObject & model_object,
-    const PotentialAnalysisRequest & request)
+void RunAtomAlphaTraining(ModelObject & model_object, const PotentialAnalysisRequest & request)
 {
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
@@ -336,23 +334,23 @@ void RunAtomPotentialFittingWorkflow(ModelObject & model_object, const Potential
 #ifdef USE_OPENMP
         #pragma omp parallel for num_threads(request.job_count)
 #endif
-        for (size_t idx = 0; idx < group_key_size; idx++)
+        for (size_t k = 0; k < group_key_size; k++)
         {
-            auto group_key{ group_key_list[idx] };
+            auto group_key{ group_key_list[k] };
             const auto & atom_list{ analysis_view.GetAtomObjectList(group_key, class_key) };
-            std::vector<LocalPotentialSampleList> member_sample_entries_list;
+            std::vector<LocalPotentialSampleList> member_sample_list;
             std::vector<LocalGaussianResult> member_result_list;
-            member_sample_entries_list.reserve(atom_list.size());
+            member_sample_list.reserve(atom_list.size());
             member_result_list.reserve(atom_list.size());
             for (const auto & atom : atom_list)
             {
                 const auto local_entry{ local_entry_map.at(atom) };
-                member_sample_entries_list.emplace_back(local_entry.GetSamplingEntries());
+                member_sample_list.emplace_back(local_entry.GetSamplingEntries());
                 member_result_list.emplace_back(local_entry.GetGaussianResult());
             }
             const auto result{
                 gaussian_estimator::EstimateGroupGaussian(
-                    member_sample_entries_list,
+                    member_sample_list,
                     member_result_list,
                     analysis_view.GetAtomAlphaG(group_key, class_key),
                     MakeGaussianEstimatorOptions(request))
@@ -362,23 +360,12 @@ void RunAtomPotentialFittingWorkflow(ModelObject & model_object, const Potential
             #pragma omp critical
 #endif
             {
-                analysis.ApplyAtomGroupGaussianResult(
-                    group_key, class_key, result);
+                analysis.ApplyAtomGroupGaussianResult(group_key, class_key, result);
                 key_count++;
                 Logger::ProgressBar(key_count, group_key_size);
             }
         }
     }
-}
-
-void SavePreparedModel(
-    ModelObject & model_object,
-    const std::filesystem::path & database_path,
-    std::string_view saved_key_tag)
-{
-    DataRepository repository{ database_path };
-    repository.SaveModel(model_object, std::string(saved_key_tag));
-    model_object.EditAnalysis().ClearTransientFitStates();
 }
 
 void RunPotentialSamplingWorkflow(
@@ -449,7 +436,10 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
     RunModelObjectPreprocessing(model_object, request.asymmetry_flag, request.alpha_r, request.alpha_g);
     RunPotentialSamplingWorkflow(map_object, model_object, request);
     RunAtomPotentialFittingWorkflow(model_object, request);
-    SavePreparedModel(model_object, request.database_path, request.saved_key_tag);
+
+    DataRepository repository{ request.database_path };
+    repository.SaveModel(model_object, request.saved_key_tag);
+    model_object.EditAnalysis().ClearTransientFitStates();
     return true;
 }
 
