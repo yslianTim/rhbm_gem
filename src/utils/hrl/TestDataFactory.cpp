@@ -19,17 +19,6 @@ namespace
 {
 using namespace rhbm_gem;
 
-constexpr size_t kMuMemberSamplingEntrySize{ 10 };
-
-struct NeighborhoodSamplingOptions
-{
-    double radius_min{ 0.0 };
-    double radius_max{ 1.0 };
-    double neighbor_distance{ 2.0 };
-    size_t neighbor_count{ 1 };
-    double reject_angle_deg{ 0.0 };
-};
-
 struct AtomNeighborhoodSamplingOptions
 {
     double radius_min{ 0.0 };
@@ -38,16 +27,11 @@ struct AtomNeighborhoodSamplingOptions
     double reject_angle_deg{ 0.0 };
 };
 
-std::mt19937 BuildReplicaGenerator(
-    int replica_index,
-    const std::optional<std::uint32_t> & random_seed)
+std::mt19937 BuildReplicaGenerator(int replica_index, const std::optional<std::uint32_t> & random_seed)
 {
     if (random_seed.has_value())
     {
-        std::seed_seq seed_sequence{
-            *random_seed,
-            static_cast<std::uint32_t>(replica_index)
-        };
+        std::seed_seq seed_sequence{ *random_seed, static_cast<std::uint32_t>(replica_index) };
         return std::mt19937(seed_sequence);
     }
 
@@ -71,20 +55,6 @@ double ComputeGaussianResponseAtPoint3D(
         std::exp(-0.5 * (point - center).squaredNorm() / width_square);
 }
 
-double ComputeGaussianResponseWithNeighborhood3D(
-    const Eigen::VectorXd & point,
-    const Eigen::VectorXd & center,
-    const std::vector<Eigen::VectorXd> & neighbor_center_list,
-    double width)
-{
-    auto response{ ComputeGaussianResponseAtPoint3D(point, center, width) };
-    for (const auto & neighbor_center : neighbor_center_list)
-    {
-        response += ComputeGaussianResponseAtPoint3D(point, neighbor_center, width);
-    }
-    return response;
-}
-
 double ComputeGaussianResponseWithAtomNeighborhood3D(
     const Eigen::VectorXd & point,
     const Eigen::VectorXd & center,
@@ -99,61 +69,6 @@ double ComputeGaussianResponseWithAtomNeighborhood3D(
             ComputeGaussianResponseAtPoint3D(point, neighbor_center_list[i], width);
     }
     return response;
-}
-
-std::vector<Eigen::VectorXd> BuildNeighborCenterList(
-    const NeighborhoodSamplingOptions & options)
-{
-    constexpr size_t max_neighbor_count{ 4 };
-    numeric_validation::RequireAtMost(
-        options.neighbor_count,
-        max_neighbor_count,
-        "neighbor_count");
-
-    std::vector<Eigen::VectorXd> neighbor_center_list;
-    neighbor_center_list.reserve(options.neighbor_count);
-    if (options.neighbor_count == 0)
-    {
-        return neighbor_center_list;
-    }
-
-    Eigen::VectorXd neighbor_center[max_neighbor_count];
-    for (size_t i = 0; i < max_neighbor_count; i++)
-    {
-        neighbor_center[i] = Eigen::VectorXd::Zero(3);
-    }
-
-    if (options.neighbor_count <= 2)
-    {
-        neighbor_center[0] << 1.0, 0.0, 0.0;
-        if (options.neighbor_count == 2)
-        {
-            neighbor_center[1] << -1.0, 0.0, 0.0;
-        }
-    }
-
-    if (options.neighbor_count == 3)
-    {
-        neighbor_center[0] << 1.0, 0.0, 0.0;
-        neighbor_center[1] << -0.5, std::sqrt(3) / 2.0, 0.0;
-        neighbor_center[2] << -0.5, -std::sqrt(3) / 2.0, 0.0;
-    }
-
-    if (options.neighbor_count == 4)
-    {
-        neighbor_center[0] << 0.0, 0.0, 1.0;
-        neighbor_center[1] << 0.0, 2.0 * std::sqrt(2) / 3.0, -1.0 / 3.0;
-        neighbor_center[2] << -std::sqrt(6) / 3.0, -std::sqrt(2) / 3.0, -1.0 / 3.0;
-        neighbor_center[3] << std::sqrt(6) / 3.0, -std::sqrt(2) / 3.0, -1.0 / 3.0;
-    }
-
-    for (size_t i = 0; i < options.neighbor_count; i++)
-    {
-        neighbor_center[i] *= options.neighbor_distance;
-        neighbor_center_list.emplace_back(neighbor_center[i]);
-    }
-
-    return neighbor_center_list;
 }
 
 std::tuple<std::vector<Eigen::VectorXd>, std::vector<double>>
@@ -259,70 +174,6 @@ LocalPotentialSampleList GenerateRadialSamples(
         sample_list.emplace_back(LocalPotentialSample{
             static_cast<float>(distance),
             static_cast<float>(response)
-        });
-    }
-
-    return sample_list;
-}
-
-LocalPotentialSampleList GenerateNeighborhoodSamples(
-    size_t samples_per_radius,
-    const GaussianModel3D & model,
-    const NeighborhoodSamplingOptions & options)
-{
-    numeric_validation::RequirePositive(samples_per_radius, "samples_per_radius");
-    GaussianModel3D::RequireFinitePositiveWidthModel(model);
-    numeric_validation::RequireFiniteNonNegativeRange(
-        options.radius_min,
-        options.radius_max,
-        "radius range");
-    numeric_validation::RequireFinitePositive(
-        options.neighbor_distance,
-        "neighbor_distance");
-
-    auto neighbor_center_list{ BuildNeighborCenterList(options) };
-    const Eigen::VectorXd atom_center{ Eigen::VectorXd::Zero(3) };
-
-    SphereSampler sampler;
-    sampler.SetSamplingProfile(
-        SphereSamplingProfile::FibonacciDeterministic(
-            SphereDistanceRange{ options.radius_min, options.radius_max },
-            0.1,
-            static_cast<unsigned int>(samples_per_radius),
-            false
-        )
-    );
-    const auto sampling_points{ sampler.GenerateSamplingPoints({ 0.0f, 0.0f, 0.0f }) };
-    const auto selected_indices{
-        BuildSelectedLocalPotentialSampleIndexList(
-            sampling_points, neighbor_center_list, options.reject_angle_deg)
-    };
-
-    LocalPotentialSampleList sample_list;
-    sample_list.reserve(selected_indices.size());
-
-    for (const auto selected_index : selected_indices)
-    {
-        const auto & sampling_point{ sampling_points.at(selected_index) };
-
-        Eigen::VectorXd point{ Eigen::VectorXd::Zero(3) };
-        point(0) = sampling_point.position[0];
-        point(1) = sampling_point.position[1];
-        point(2) = sampling_point.position[2];
-
-        const auto response{
-            model.GetAmplitude() * ComputeGaussianResponseWithNeighborhood3D(
-                point,
-                atom_center,
-                neighbor_center_list,
-                model.GetWidth()
-            ) +
-            model.GetIntercept()
-        };
-        sample_list.emplace_back(LocalPotentialSample{
-            sampling_point.distance,
-            static_cast<float>(response),
-            sampling_point.position
         });
     }
 
@@ -505,6 +356,7 @@ std::vector<LocalPotentialSampleList> BuildMuMemberSamplingEntries(
     const Eigen::MatrixXd & gaus_array,
     std::mt19937 & generator)
 {
+    static constexpr size_t kMuMemberSamplingEntrySize{ 10 };
     std::vector<LocalPotentialSampleList> member_sampling_entries;
     member_sampling_entries.reserve(static_cast<std::size_t>(gaus_array.cols()));
     for (Eigen::Index i = 0; i < gaus_array.cols(); i++)
@@ -615,96 +467,6 @@ RHBMMuTestInput BuildMuTestInput(const MuScenario & scenario)
             BuildMuMemberSamplingEntries(random_gaus_array, generator));
         input.replica_beta_matrices.emplace_back(
             BuildBetaMatrix(random_gaus_array));
-    }
-
-    return input;
-}
-
-RHBMNeighborhoodTestInput BuildNeighborhoodTestInput(
-    const NeighborhoodScenario & scenario,
-    const TestDataBuildOptions & options)
-{
-    numeric_validation::RequireFiniteNonNegativeRange(
-        options.fit_range_min, options.fit_range_max, "fitting range");
-    numeric_validation::RequirePositive(scenario.sampling_entry_size, "sampling_entry_size");
-    numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
-    GaussianModel3D::RequireFinitePositiveWidthModel(scenario.gaus_true, "scenario.gaus_true");
-
-    const NeighborhoodSamplingOptions no_cut_options{
-        scenario.radius_min,
-        scenario.radius_max,
-        scenario.neighbor_distance,
-        scenario.neighbor_count,
-        0.0
-    };
-    const NeighborhoodSamplingOptions cut_options{
-        scenario.radius_min,
-        scenario.radius_max,
-        scenario.neighbor_distance,
-        scenario.neighbor_count,
-        scenario.rejected_angle
-    };
-
-    RHBMNeighborhoodTestInput input;
-    input.no_cut_input.gaus_true = scenario.gaus_true;
-    input.no_cut_input.alpha_training = true;
-    input.cut_input.gaus_true = scenario.gaus_true;
-    input.cut_input.alpha_training = true;
-    input.no_cut_input.replica_sampling_entries.reserve(static_cast<size_t>(scenario.replica_size));
-    input.cut_input.replica_sampling_entries.reserve(static_cast<size_t>(scenario.replica_size));
-    input.no_cut_input.replica_datasets.reserve(static_cast<size_t>(scenario.replica_size));
-    input.cut_input.replica_datasets.reserve(static_cast<size_t>(scenario.replica_size));
-    if (scenario.include_sampling_summary)
-    {
-        input.sampling_summaries.reserve(1);
-        input.sampling_summaries.emplace_back(
-            GenerateNeighborhoodSamples(
-                static_cast<size_t>(scenario.sampling_entry_size),
-                scenario.gaus_true,
-                NeighborhoodSamplingOptions{
-                    scenario.summary_radius_min,
-                    scenario.summary_radius_max,
-                    scenario.neighbor_distance,
-                    scenario.neighbor_count,
-                    scenario.rejected_angle
-                }
-            )
-        );
-    }
-
-    for (int i = 0; i < scenario.replica_size; i++)
-    {
-        auto generator{ BuildReplicaGenerator(i, scenario.random_seed) };
-        auto no_cut_sampling_entries{
-            GenerateNeighborhoodSamples(
-                static_cast<size_t>(scenario.sampling_entry_size), scenario.gaus_true, no_cut_options)
-        };
-        auto cut_sampling_entries{
-            GenerateNeighborhoodSamples(
-                static_cast<size_t>(scenario.sampling_entry_size), scenario.gaus_true, cut_options)
-        };
-        no_cut_sampling_entries = AddLogSpaceNoise(
-            std::move(no_cut_sampling_entries),
-            scenario.gaus_true,
-            scenario.data_error_sigma,
-            generator);
-        cut_sampling_entries = AddLogSpaceNoise(
-            std::move(cut_sampling_entries),
-            scenario.gaus_true,
-            scenario.data_error_sigma,
-            generator);
-        auto no_cut_dataset{
-            rhbm_helper::BuildMemberDataset(
-                no_cut_sampling_entries, options.fit_range_min, options.fit_range_max)
-        };
-        auto cut_dataset{
-            rhbm_helper::BuildMemberDataset(
-                cut_sampling_entries, options.fit_range_min, options.fit_range_max)
-        };
-        input.no_cut_input.replica_sampling_entries.emplace_back(std::move(no_cut_sampling_entries));
-        input.cut_input.replica_sampling_entries.emplace_back(std::move(cut_sampling_entries));
-        input.no_cut_input.replica_datasets.emplace_back(std::move(no_cut_dataset));
-        input.cut_input.replica_datasets.emplace_back(std::move(cut_dataset));
     }
 
     return input;

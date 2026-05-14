@@ -106,10 +106,6 @@ LineSeries BuildLinearizedDatasetSeries(
 #ifdef HAVE_ROOT
 double ScaleBiasPlotX(double x, BiasXAxisMode x_axis_mode)
 {
-    if (x_axis_mode == BiasXAxisMode::NeighborDistance)
-    {
-        return -1.0 * x;
-    }
     if (x_axis_mode == BiasXAxisMode::NeighborType)
     {
         return x;
@@ -308,34 +304,6 @@ void ApplyNeighborTypeAxisLabels(TAxis * axis)
     axis->ChangeLabel(-1, -1, 0, -1, -1, -1, "");
 }
 
-std::unique_ptr<TGraphErrors> CreateDistanceToResponseGraph(
-    const LocalPotentialSampleList & sampling_entries)
-{
-    auto graph{ root_helper::CreateGraphErrors() };
-    auto count{ 0 };
-    for (const auto & sample : sampling_entries)
-    {
-        graph->SetPoint(count, sample.distance, sample.response);
-        count++;
-    }
-    return graph;
-}
-
-std::unique_ptr<TH2D> CreateDistanceToResponseHistogram(
-    const LocalPotentialSampleList & sampling_entries, int x_bin_size, int y_bin_size = 500)
-{
-    auto hist{
-        root_helper::CreateHist2D(
-            "hist_distance_response", "Distance vs Response",
-            x_bin_size, 0.0, 4.0,
-            y_bin_size, 0.0, 1.0)
-    };
-    for (const auto & sample : sampling_entries)
-    {
-        hist->Fill(sample.distance, sample.response);
-    }
-    return hist;
-}
 #endif
 
 } // namespace
@@ -522,11 +490,6 @@ void SaveDataOutlierBiasPlot(
             x_min.at(i) = 0.0;
             x_max.at(i) = 5.0;
         }
-        if (plot_request.x_axis_mode == BiasXAxisMode::NeighborDistance)
-        {
-            x_min.at(i) = -2.6;
-            x_max.at(i) = -0.8;
-        }
     }
     for (size_t j = 0; j < row_size; j++)
     {
@@ -649,10 +612,6 @@ void SaveDataOutlierBiasPlot(
     if (plot_request.x_axis_mode == BiasXAxisMode::NeighborType)
     {
         bottom_title_text->AddText("Atom Type");
-    }
-    else if (plot_request.x_axis_mode == BiasXAxisMode::NeighborDistance)
-    {
-        bottom_title_text->AddText("Distance to Neighbor Atom (Angstrom)");
     }
     else
     {
@@ -866,97 +825,6 @@ void SaveMemberOutlierBiasPlot(
     #else
     (void)request;
     (void)plot_request;
-    #endif
-}
-
-void SaveAtomSamplingSummary(
-    const RHBMTestRequest & request,
-    const std::string & name,
-    const std::vector<LocalPotentialSampleList> & sampling_entries_list,
-    const std::vector<double> & distance_list)
-{
-    #ifdef HAVE_ROOT
-    auto file_path{ request.output_dir / name };
-    Logger::Log(LogLevel::Info, " RHBMTestCommand::SaveAtomSamplingSummary");
-
-    gStyle->SetLineScalePS(2.0);
-    gStyle->SetGridColor(kGray);
-
-    auto canvas{ root_helper::CreateCanvas("test","", 1000, 750) };
-    root_helper::SetCanvasDefaultStyle(canvas.get());
-    root_helper::PrintCanvasOpen(canvas.get(), file_path);
-    const int pad_size{ 1 };
-
-    std::unique_ptr<TPad> pad[pad_size];
-    pad[0] = root_helper::CreatePad("pad0","", 0.00, 0.00, 1.00, 1.00);
-
-    size_t count{ 0 };
-    for (const auto & sampling_entries : sampling_entries_list)
-    {
-        auto neighbor_distance{ distance_list.at(count) };
-        auto data_graph{ CreateDistanceToResponseGraph(sampling_entries) };
-        auto data_hist{ CreateDistanceToResponseHistogram(sampling_entries, 40) };
-
-        canvas->cd();
-        for (int i = 0; i < pad_size; i++)
-        {
-            root_helper::SetPadDefaultStyle(pad[i].get());
-            pad[i]->Draw();
-        }
-
-        pad[0]->cd();
-        root_helper::SetPadMarginInCanvas(gPad, 0.16, 0.05, 0.15, 0.05);
-        auto frame{ root_helper::CreateHist2D("hist_0","", 100, 0.0, 1.0, 100, 0.0, 1.0) };
-        root_helper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
-        root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-        root_helper::SetAxisTitleAttribute(frame->GetXaxis(), 50.0f, 0.9f);
-        root_helper::SetAxisLabelAttribute(frame->GetXaxis(), 50.0f, 0.005f, 133);
-        root_helper::SetAxisTickAttribute(frame->GetXaxis(), 0.06f, 505);
-        root_helper::SetAxisTitleAttribute(frame->GetYaxis(), 60.0f, 1.25f);
-        root_helper::SetAxisLabelAttribute(frame->GetYaxis(), 50.0f, 0.01f, 133);
-        root_helper::SetAxisTickAttribute(frame->GetYaxis(), 0.03f, 506);
-        root_helper::SetLineAttribute(frame.get(), 1, 0);
-        frame->SetStats(0);
-        frame->GetYaxis()->CenterTitle();
-        frame->GetXaxis()->SetTitle("Radial Distance #[]{#AA}");
-        frame->GetYaxis()->SetTitle("Response");
-        auto x_min{ 0.00 };
-        auto x_max{ 4.00 };
-        auto y_min{ 0.00 };
-        auto y_max{ 1.00 };
-        frame->GetXaxis()->SetLimits(x_min, x_max);
-        frame->GetYaxis()->SetLimits(y_min, y_max);
-        frame->SetStats(0);
-        frame->Draw();
-        root_helper::SetMarkerAttribute(data_graph.get(), 20, 0.8f, kAzure-7, 0.5f);
-        data_graph->Draw("P");
-
-        data_hist->SetStats(0);
-        data_hist->SetBarWidth(1.0);
-        root_helper::SetFillAttribute(data_hist.get(), 1001, kGray, 0.3f);
-        root_helper::SetLineAttribute(data_hist.get(), 1, 2, kGray+2);
-        data_hist->Draw("CANDLE2 SAME");
-
-        auto component_text{ root_helper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
-        root_helper::SetPaveTextMarginInCanvas(gPad, component_text.get(), 0.25, 0.02, 0.85, 0.02);
-        root_helper::SetPaveTextDefaultStyle(component_text.get());
-        root_helper::SetPaveAttribute(component_text.get(), 0, 0.1);
-        root_helper::SetFillAttribute(component_text.get(), 1001, kAzure-7);
-        root_helper::SetTextAttribute(component_text.get(), 75.0f, 103, 22, 0.0, kYellow-10);
-        component_text->AddText(Form("Distance = %.1f #AA", neighbor_distance));
-        component_text->Draw();
-
-        count++;
-        root_helper::PrintCanvasPad(canvas.get(), file_path);
-    }
-
-    root_helper::PrintCanvasClose(canvas.get(), file_path);
-    #else
-    (void)request;
-    (void)name;
-    (void)sampling_entries_list;
-    (void)distance_list;
-    Logger::Log(LogLevel::Info, " RHBMTestCommand::SaveAtomSamplingSummary");
     #endif
 }
 

@@ -75,23 +75,6 @@ struct MuScenario
     bool alpha_training{ true };
 };
 
-struct NeighborhoodScenario
-{
-    GaussianModel3D gaus_true;
-    int sampling_entry_size{ 1 };
-    double data_error_sigma{ 1.0 };
-    double radius_min{ 0.0 };
-    double radius_max{ 1.0 };
-    double neighbor_distance{ 2.0 };
-    size_t neighbor_count{ 1 };
-    double rejected_angle{ 0.0 };
-    bool include_sampling_summary{ false };
-    double summary_radius_min{ 0.0 };
-    double summary_radius_max{ 1.0 };
-    int replica_size{ 1 };
-    std::optional<std::uint32_t> random_seed{};
-};
-
 struct AtomNeighborhoodScenario
 {
     AtomNeighborType neighbor_type{ AtomNeighborType::None };
@@ -113,10 +96,6 @@ RHBMBetaTestInput BuildBetaTestInput(
     const TestDataBuildOptions & options = {});
 
 RHBMMuTestInput BuildMuTestInput(const MuScenario & scenario);
-
-RHBMNeighborhoodTestInput BuildNeighborhoodTestInput(
-    const NeighborhoodScenario & scenario,
-    const TestDataBuildOptions & options = {});
 
 RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
     const AtomNeighborhoodScenario & scenario,

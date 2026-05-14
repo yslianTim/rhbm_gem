@@ -282,25 +282,25 @@ TEST(TestDataFactoryTest, BuildMuTestInputIsReproducibleWithFixedSeed)
     }
 }
 
-TEST(TestDataFactoryTest, BuildNeighborhoodTestInputProvidesPairedDatasetsAndSamplingSummary)
+TEST(TestDataFactoryTest, BuildAtomNeighborhoodTestInputProvidesPairedDatasetsAndIsReproducible)
 {
-    const auto input{
-        tdf::BuildNeighborhoodTestInput(tdf::NeighborhoodScenario{
-            rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
-            8,
-            0.05,
-            0.0,
-            1.0,
-            2.0,
-            1,
-            120.0,
-            true,
-            0.0,
-            4.0,
-            2,
-            11
-        })
-    };
+    const auto scenario{ tdf::AtomNeighborhoodScenario{
+        tdf::AtomNeighborType::O,
+        rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
+        8,
+        0.05,
+        0.0,
+        1.0,
+        15.0,
+        true,
+        0.0,
+        4.0,
+        2,
+        11
+    } };
+
+    const auto input{ tdf::BuildAtomNeighborhoodTestInput(scenario) };
+    const auto repeated_input{ tdf::BuildAtomNeighborhoodTestInput(scenario) };
 
     ASSERT_EQ(input.no_cut_input.replica_datasets.size(), 2u);
     ASSERT_EQ(input.cut_input.replica_datasets.size(), 2u);
@@ -329,102 +329,24 @@ TEST(TestDataFactoryTest, BuildNeighborhoodTestInputProvidesPairedDatasetsAndSam
         ExpectDatasetMatchesSamplingEntries(
             input.cut_input.replica_datasets.at(i),
             input.cut_input.replica_sampling_entries.at(i));
+        ExpectSamplingEntriesEquals(
+            input.no_cut_input.replica_sampling_entries.at(i),
+            repeated_input.no_cut_input.replica_sampling_entries.at(i));
+        ExpectSamplingEntriesEquals(
+            input.cut_input.replica_sampling_entries.at(i),
+            repeated_input.cut_input.replica_sampling_entries.at(i));
+        ExpectDatasetEquals(
+            input.no_cut_input.replica_datasets.at(i),
+            repeated_input.no_cut_input.replica_datasets.at(i));
+        ExpectDatasetEquals(
+            input.cut_input.replica_datasets.at(i),
+            repeated_input.cut_input.replica_datasets.at(i));
     }
-}
-
-TEST(TestDataFactoryTest, BuildNeighborhoodTestInputSamplingSummaryIncludesNeighborContribution)
-{
-    constexpr double amplitude{ 2.0 };
-    constexpr double width{ 0.5 };
-    constexpr double intercept{ 0.25 };
-    constexpr double neighbor_distance{ 1.0 };
-    const auto input{
-        tdf::BuildNeighborhoodTestInput(tdf::NeighborhoodScenario{
-            rg::GaussianModel3D{ amplitude, width, intercept },
-            1,
-            0.0,
-            0.0,
-            1.0,
-            neighbor_distance,
-            1,
-            0.0,
-            true,
-            0.0,
-            0.0,
-            1,
-            11
-        })
-    };
-
-    ASSERT_EQ(input.sampling_summaries.size(), 1u);
-    const auto & summary{ input.sampling_summaries.front() };
-    ASSERT_EQ(summary.size(), 1u);
-    EXPECT_FLOAT_EQ(summary.front().distance, 0.0f);
-    ASSERT_TRUE(summary.front().position.has_value());
-
-    const auto expected_response{
-        amplitude * (
-            ComputeExpectedGaussianResponseAtDistance3D(0.0, width) +
-            ComputeExpectedGaussianResponseAtDistance3D(neighbor_distance, width)) +
-        intercept
-    };
-    EXPECT_NEAR(expected_response, summary.front().response, 1.0e-5);
-}
-
-TEST(TestDataFactoryTest, BuildNeighborhoodTestInputIsReproducibleWithFixedSeed)
-{
-    const auto scenario{ tdf::NeighborhoodScenario{
-        rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
-        8,
-        0.05,
-        0.0,
-        1.0,
-        2.0,
-        1,
-        120.0,
-        true,
-        0.0,
-        4.0,
-        2,
-        11
-    } };
-
-    const auto first_input{ tdf::BuildNeighborhoodTestInput(scenario) };
-    const auto second_input{ tdf::BuildNeighborhoodTestInput(scenario) };
-
-    ASSERT_EQ(
-        first_input.no_cut_input.replica_sampling_entries.size(),
-        second_input.no_cut_input.replica_sampling_entries.size());
-    ASSERT_EQ(
-        first_input.cut_input.replica_sampling_entries.size(),
-        second_input.cut_input.replica_sampling_entries.size());
-    ASSERT_EQ(
-        first_input.no_cut_input.replica_datasets.size(),
-        second_input.no_cut_input.replica_datasets.size());
-    ASSERT_EQ(
-        first_input.cut_input.replica_datasets.size(),
-        second_input.cut_input.replica_datasets.size());
-    ASSERT_EQ(first_input.sampling_summaries.size(), second_input.sampling_summaries.size());
-    for (size_t i = 0; i < first_input.no_cut_input.replica_datasets.size(); i++)
+    for (size_t i = 0; i < input.sampling_summaries.size(); i++)
     {
         ExpectSamplingEntriesEquals(
-            first_input.no_cut_input.replica_sampling_entries.at(i),
-            second_input.no_cut_input.replica_sampling_entries.at(i));
-        ExpectSamplingEntriesEquals(
-            first_input.cut_input.replica_sampling_entries.at(i),
-            second_input.cut_input.replica_sampling_entries.at(i));
-        ExpectDatasetEquals(
-            first_input.no_cut_input.replica_datasets.at(i),
-            second_input.no_cut_input.replica_datasets.at(i));
-        ExpectDatasetEquals(
-            first_input.cut_input.replica_datasets.at(i),
-            second_input.cut_input.replica_datasets.at(i));
-    }
-    for (size_t i = 0; i < first_input.sampling_summaries.size(); i++)
-    {
-        ExpectSamplingEntriesEquals(
-            first_input.sampling_summaries.at(i),
-            second_input.sampling_summaries.at(i));
+            input.sampling_summaries.at(i),
+            repeated_input.sampling_summaries.at(i));
     }
 }
 
@@ -441,15 +363,14 @@ TEST(TestDataFactoryTest, BuildTestInputsRejectNonPositiveGaussianWidth)
         }),
         std::invalid_argument);
     EXPECT_THROW(
-        tdf::BuildNeighborhoodTestInput(tdf::NeighborhoodScenario{
+        tdf::BuildAtomNeighborhoodTestInput(tdf::AtomNeighborhoodScenario{
+            tdf::AtomNeighborType::O,
             rg::GaussianModel3D{ 1.0, -0.5, 0.0 },
             8,
             0.05,
             0.0,
             1.0,
-            2.0,
-            1,
-            120.0,
+            15.0,
             false,
             0.0,
             4.0,
@@ -509,61 +430,6 @@ TEST(TestDataFactoryTest, BuildBetaTestInputRejectsInvalidFittingRange)
                 0.0,
                 std::numeric_limits<double>::infinity()
             }),
-        std::invalid_argument);
-}
-
-TEST(TestDataFactoryTest, BuildNeighborhoodTestInputRejectsInvalidSamplingInputs)
-{
-    EXPECT_THROW(
-        tdf::BuildNeighborhoodTestInput(tdf::NeighborhoodScenario{
-            rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
-            8,
-            0.05,
-            0.0,
-            1.0,
-            std::numeric_limits<double>::infinity(),
-            1,
-            120.0,
-            false,
-            0.0,
-            4.0,
-            1,
-            11
-        }),
-        std::invalid_argument);
-    EXPECT_THROW(
-        tdf::BuildNeighborhoodTestInput(tdf::NeighborhoodScenario{
-            rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
-            8,
-            0.05,
-            0.0,
-            1.0,
-            2.0,
-            5,
-            120.0,
-            false,
-            0.0,
-            4.0,
-            1,
-            11
-        }),
-        std::invalid_argument);
-    EXPECT_THROW(
-        tdf::BuildNeighborhoodTestInput(tdf::NeighborhoodScenario{
-            rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
-            8,
-            0.05,
-            2.0,
-            1.0,
-            2.0,
-            1,
-            120.0,
-            false,
-            0.0,
-            4.0,
-            1,
-            11
-        }),
         std::invalid_argument);
 }
 

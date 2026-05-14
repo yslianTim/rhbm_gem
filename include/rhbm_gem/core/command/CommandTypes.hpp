@@ -45,8 +45,7 @@ enum class TesterType : int
     DATA_OUTLIER       = 1,
     MEMBER_OUTLIER     = 2,
     MODEL_ALPHA_DATA   = 3,
-    MODEL_ALPHA_MEMBER = 4,
-    NEIGHBOR_DISTANCE  = 5
+    MODEL_ALPHA_MEMBER = 4
 };
 
 enum class SphereSamplingProfileChoice : int

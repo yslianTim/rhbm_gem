@@ -10,7 +10,6 @@
 #include <rhbm_gem/utils/domain/LocalPainter.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTester.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
-#include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace rhbm_gem::command_detail::rhbm_test_plotting {
 
@@ -30,14 +29,12 @@ enum class BiasPlotFlavor
     MemberOutlier,
     ModelAlphaData,
     ModelAlphaMember,
-    NeighborDistance,
     NeighborType
 };
 
 enum class BiasXAxisMode
 {
     ContaminationRatio,
-    NeighborDistance,
     NeighborType
 };
 
@@ -96,11 +93,5 @@ void SaveDataOutlierBiasPlot(
 void SaveMemberOutlierBiasPlot(
     const RHBMTestRequest & request,
     const BiasPlotRequest & plot_request);
-
-void SaveAtomSamplingSummary(
-    const RHBMTestRequest & request,
-    const std::string & name,
-    const std::vector<LocalPotentialSampleList> & sampling_entries_list,
-    const std::vector<double> & distance_list);
 
 } // namespace rhbm_gem::command_detail::rhbm_test_plotting

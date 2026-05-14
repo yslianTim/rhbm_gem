@@ -69,16 +69,6 @@ std::vector<double> BuildLinearSweep(int count, double step, double start = 0.0)
     return values;
 }
 
-std::vector<double> BuildDescendingSweep(int count, double start, double step)
-{
-    std::vector<double> values(static_cast<size_t>(count));
-    for (int i = 0; i < count; i++)
-    {
-        values[static_cast<size_t>(i)] = start - static_cast<double>(i) * step;
-    }
-    return values;
-}
-
 test_data_factory::TestDataBuildOptions BuildTestDataOptions(const RHBMTestRequest & request)
 {
     return test_data_factory::TestDataBuildOptions{
@@ -91,8 +81,6 @@ test_data_factory::TestDataBuildOptions BuildTestDataOptions(const RHBMTestReque
 
 void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
 {
-    ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnBenchMark");
-
     const auto error_sigma{ 0.1 };
     const auto model_par_prior{ MakeDefaultModelPrior() };
     const auto test_data_options{ BuildTestDataOptions(request) };
@@ -439,98 +427,7 @@ void RunSimulationTestOnModelAlphaMember(const RHBMTestRequest & request)
     rhbm_test_plotting::SaveMemberOutlierBiasPlot(request, plot_request);
 }
 
-void RunSimulationTestOnNeighborDistance(const RHBMTestRequest & request)
-{
-    ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnNeighborDistance");
-
-    const auto model_par_prior{ MakeDefaultModelPrior() };
-    test_data_factory::NeighborhoodScenario base_scenario;
-    base_scenario.gaus_true = GaussianModel3D::FromVector(model_par_prior);
-    base_scenario.sampling_entry_size = 50;
-    base_scenario.data_error_sigma = 1.0;
-    base_scenario.radius_min = 0.0;
-    base_scenario.radius_max = 1.0;
-    base_scenario.neighbor_distance = 2.0;
-    base_scenario.neighbor_count = 2;
-    base_scenario.rejected_angle = 45.0;
-    base_scenario.include_sampling_summary = false;
-    base_scenario.summary_radius_min = 0.0;
-    base_scenario.summary_radius_max = 4.0;
-    base_scenario.replica_size = 10;
-    const std::vector<double> error_list{ 0.0, 0.025, 0.05 };
-    const auto distance_list{ BuildDescendingSweep(16, 2.5, 0.1) };
-    const auto test_data_options{ BuildTestDataOptions(request) };
-    BiasPlotRequest plot_request;
-    plot_request.output_name = "bias_from_neighbor_atom.pdf";
-    plot_request.flavor = BiasPlotFlavor::NeighborDistance;
-    plot_request.x_axis_mode = BiasXAxisMode::NeighborDistance;
-    plot_request.panels.reserve(error_list.size());
-
-    bool is_print_sampling_summary{ false };
-    for (size_t panel_index = 0; panel_index < error_list.size(); panel_index++)
-    {
-        const auto error_sigma{ error_list.at(panel_index) };
-        BiasPlotPanel panel;
-        panel.label = FormatDataBiasPanelLabel(panel_index);
-        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Ols, distance_list.size()));
-        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Mdpde, distance_list.size()));
-        panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::TrainedMdpde, distance_list.size()));
-        std::vector<LocalPotentialSampleList> sampling_entries_list;
-        sampling_entries_list.reserve(distance_list.size());
-        for (size_t i = 0; i < distance_list.size(); i++)
-        {
-            auto scenario{ base_scenario };
-            scenario.data_error_sigma = error_sigma;
-            scenario.neighbor_distance = distance_list.at(i);
-            scenario.include_sampling_summary = true;
-            const auto test_input{
-                test_data_factory::BuildNeighborhoodTestInput(scenario, test_data_options)
-            };
-            rhbm_tester::BetaMDPDETestBias no_cut_result;
-            rhbm_tester::BetaMDPDETestBias cut_result;
-            rhbm_tester::RunBetaMDPDETest(no_cut_result, test_input.no_cut_input, request.job_count);
-            rhbm_tester::RunBetaMDPDETest(cut_result, test_input.cut_input, request.job_count);
-            sampling_entries_list.emplace_back(test_input.sampling_summaries.front());
-
-            AppendBiasCurvePoint(
-                panel.curves.at(0),
-                distance_list.at(i),
-                no_cut_result.ols);
-            AppendBiasCurvePoint(
-                panel.curves.at(1),
-                distance_list.at(i),
-                no_cut_result.mdpde.trained_alpha.value());
-            AppendBiasCurvePoint(
-                panel.curves.at(2),
-                distance_list.at(i),
-                cut_result.mdpde.trained_alpha.value());
-
-            Logger::Log(LogLevel::Info,
-                std::string("Distance: ") + std::to_string(distance_list.at(i))
-                + " , OLS: " + std::to_string(no_cut_result.ols.mean(0)) + " +- " + std::to_string(no_cut_result.ols.sigma(0))
-                + " , MDPDE: " + std::to_string(no_cut_result.mdpde.trained_alpha.value().mean(0)) + " +- " + std::to_string(no_cut_result.mdpde.trained_alpha.value().sigma(0))
-                + " , Train: " + std::to_string(cut_result.mdpde.trained_alpha.value().mean(0)) + " +- " + std::to_string(cut_result.mdpde.trained_alpha.value().sigma(0))
-                + " (Alpha-R = " + std::to_string(cut_result.mdpde.trained_alpha_average.value()) + ")"
-            );
-        }
-        plot_request.panels.emplace_back(std::move(panel));
-
-        if (!is_print_sampling_summary)
-        {
-            rhbm_test_plotting::SaveAtomSamplingSummary(
-                request,
-                "neighbor_atom_sampling_entries.pdf",
-                sampling_entries_list, distance_list
-            );
-            is_print_sampling_summary = true;
-        }
-    }
-
-    rhbm_test_plotting::SaveDataOutlierBiasPlot(request, plot_request);
-}
-
-RHBMTestCommand::RHBMTestCommand() :
-    CommandBase<RHBMTestRequest>{}
+RHBMTestCommand::RHBMTestCommand() : CommandBase<RHBMTestRequest>{}
 {
 }
 
@@ -568,9 +465,6 @@ bool RHBMTestCommand::ExecuteImpl(const RHBMTestRequest & request)
         return true;
     case TesterType::MODEL_ALPHA_MEMBER:
         RunSimulationTestOnModelAlphaMember(request);
-        return true;
-    case TesterType::NEIGHBOR_DISTANCE:
-        RunSimulationTestOnNeighborDistance(request);
         return true;
     default:
         Logger::Log(LogLevel::Error,
