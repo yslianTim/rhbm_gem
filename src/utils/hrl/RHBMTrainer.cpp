@@ -1,8 +1,6 @@
 #include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
 
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
-#include <rhbm_gem/utils/hrl/LinearizationService.hpp>
-#include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <algorithm>
@@ -19,18 +17,6 @@ namespace rhbm_gem::rhbm_trainer
 namespace
 {
 constexpr double kAlphaGridTolerance{ 1.0e-12 };
-
-Eigen::VectorXd CalculateAbsoluteGaussianDifference(
-    const RHBMParameterVector & linear_a,
-    const RHBMParameterVector & linear_b)
-{
-    const auto gaussian_a{ linearization_service::DecodeParameterVector(
-        linear_a).ToVector() };
-    const auto gaussian_b{ linearization_service::DecodeParameterVector(
-        linear_b).ToVector() };
-    eigen_validation::RequireVectorSize(gaussian_a, gaussian_b.rows(), "gaussian");
-    return (gaussian_a - gaussian_b).array().abs().matrix();
-}
 
 void ValidateTrainingInputs(
     std::size_t data_size,
@@ -418,119 +404,6 @@ AlphaTrainer::AlphaTrainingResult AlphaTrainer::TrainAlphaG(
     }
 
     return BuildTrainingResult(m_alpha_grid, error_sum_array.matrix());
-}
-
-Eigen::MatrixXd AlphaTrainer::StudyAlphaRBias(
-    const std::vector<RHBMMemberDataset> & dataset_list,
-    const AlphaRunOptions & options) const
-{
-    ValidateTrainingBatch(dataset_list.size(), 1, m_alpha_grid);
-    for (const auto & dataset : dataset_list)
-    {
-        ValidateMemberDataset(dataset);
-    }
-
-    const auto dataset_size{ dataset_list.size() };
-    const auto alpha_size{ static_cast<int>(m_alpha_grid.size()) };
-    std::atomic<std::size_t> completed_count{ 0 };
-    Eigen::MatrixXd gaus_bias_matrix{ Eigen::MatrixXd::Zero(3, alpha_size) };
-
-#ifdef USE_OPENMP
-    #pragma omp parallel for schedule(dynamic) num_threads(options.execution_options.thread_size)
-#endif
-    for (std::size_t i = 0; i < dataset_size; i++)
-    {
-        auto algorithm_options{ options.execution_options };
-        algorithm_options.quiet_mode = true;
-
-        Eigen::MatrixXd local_bias_array{ Eigen::MatrixXd::Zero(3, alpha_size) };
-        for (int j = 0; j < alpha_size; j++)
-        {
-            const auto alpha_r{ m_alpha_grid.at(static_cast<std::size_t>(j)) };
-            const auto result{
-                rhbm_helper::EstimateBetaMDPDE(
-                    alpha_r,
-                    dataset_list.at(i),
-                    algorithm_options)
-            };
-            local_bias_array.col(j) = CalculateAbsoluteGaussianDifference(
-                result.beta_mdpde,
-                result.beta_ols
-            );
-        }
-
-#ifdef USE_OPENMP
-        #pragma omp critical
-#endif
-        {
-            gaus_bias_matrix += local_bias_array;
-            const auto completed{ ++completed_count };
-            if (options.progress_callback)
-            {
-                options.progress_callback(completed, dataset_size);
-            }
-        }
-    }
-
-    gaus_bias_matrix /= static_cast<double>(dataset_size);
-    return gaus_bias_matrix;
-}
-
-Eigen::MatrixXd AlphaTrainer::StudyAlphaGBias(
-    const std::vector<std::vector<RHBMParameterVector>> & beta_group_list,
-    const AlphaRunOptions & options) const
-{
-    ValidateTrainingBatch(beta_group_list.size(), 1, m_alpha_grid);
-    for (const auto & beta_list : beta_group_list)
-    {
-        if (beta_list.empty())
-        {
-            throw std::invalid_argument("training data must not be empty.");
-        }
-    }
-
-    const auto group_size{ beta_group_list.size() };
-    const auto alpha_size{ static_cast<int>(m_alpha_grid.size()) };
-    std::atomic<std::size_t> completed_count{ 0 };
-    Eigen::MatrixXd gaus_bias_matrix{ Eigen::MatrixXd::Zero(3, alpha_size) };
-
-#ifdef USE_OPENMP
-    #pragma omp parallel for schedule(dynamic) num_threads(options.execution_options.thread_size)
-#endif
-    for (std::size_t i = 0; i < group_size; i++)
-    {
-        auto algorithm_options{ options.execution_options };
-        algorithm_options.quiet_mode = true;
-        const auto beta_matrix{ rhbm_helper::BuildBetaMatrix(beta_group_list.at(i)) };
-
-        Eigen::MatrixXd local_bias_array{ Eigen::MatrixXd::Zero(3, alpha_size) };
-        for (int j = 0; j < alpha_size; j++)
-        {
-            const auto alpha_g{ m_alpha_grid.at(static_cast<std::size_t>(j)) };
-            const auto result{
-                rhbm_helper::EstimateMuMDPDE(alpha_g, beta_matrix, algorithm_options)
-            };
-            local_bias_array.col(j) = CalculateAbsoluteGaussianDifference(
-                result.mu_mdpde,
-                result.mu_mean
-            );
-        }
-
-#ifdef USE_OPENMP
-        #pragma omp critical
-#endif
-        {
-            gaus_bias_matrix += local_bias_array;
-            const auto completed{ ++completed_count };
-            if (options.progress_callback)
-            {
-                options.progress_callback(completed, group_size);
-            }
-        }
-    }
-
-    gaus_bias_matrix /= static_cast<double>(group_size);
-    return gaus_bias_matrix;
 }
 
 } // namespace rhbm_gem::rhbm_trainer

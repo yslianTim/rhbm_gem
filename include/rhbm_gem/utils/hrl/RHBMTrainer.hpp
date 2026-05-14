@@ -54,16 +54,6 @@ public:
         const AlphaTrainingOptions & options
     ) const;
 
-    Eigen::MatrixXd StudyAlphaRBias(
-        const std::vector<RHBMMemberDataset> & dataset_list,
-        const AlphaRunOptions & options
-    ) const;
-
-    Eigen::MatrixXd StudyAlphaGBias(
-        const std::vector<std::vector<RHBMParameterVector>> & beta_group_list,
-        const AlphaRunOptions & options
-    ) const;
-
 private:
     std::vector<double> BuildAlphaGrid(double alpha_min, double alpha_max, double alpha_step);
 };

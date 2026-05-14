@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstddef>
+#include <filesystem>
 #include <optional>
 #include <stdexcept>
 #include <utility>
@@ -52,6 +53,17 @@ std::vector<LocalPotentialSampleList> MakeSampleGroup(std::size_t member_size)
     for (std::size_t i = 0; i < member_size; i++)
     {
         sample_group.emplace_back(MakeSampleEntries(0.01 * static_cast<double>(i)));
+    }
+    return sample_group;
+}
+
+std::vector<LocalPotentialSampleList> MakeIdenticalSampleGroup(std::size_t member_size)
+{
+    std::vector<LocalPotentialSampleList> sample_group;
+    sample_group.reserve(member_size);
+    for (std::size_t i = 0; i < member_size; i++)
+    {
+        sample_group.emplace_back(MakeSampleEntries());
     }
     return sample_group;
 }
@@ -139,7 +151,7 @@ TEST(GaussianEstimatorTest, AlphaGMatchesAlphaTrainerBestAlpha)
 {
     const auto options{ MakeOptions() };
     const std::vector<std::vector<LocalPotentialSampleList>> sample_group_list{
-        MakeSampleGroup(10)
+        MakeIdenticalSampleGroup(10)
     };
     const std::vector<std::vector<rg::LocalGaussianResult>> member_result_list{
         EstimateMemberResults(sample_group_list.front(), options)
@@ -173,7 +185,7 @@ TEST(GaussianEstimatorTest, QuietAlphaGOptionsDoNotChangeBestAlpha)
     verbose_options.output_summary_log = true;
     verbose_options.output_progress = true;
     const std::vector<std::vector<LocalPotentialSampleList>> sample_group_list{
-        MakeSampleGroup(10)
+        MakeIdenticalSampleGroup(10)
     };
     const std::vector<std::vector<rg::LocalGaussianResult>> member_result_list{
         EstimateMemberResults(sample_group_list.front(), quiet_options)
@@ -189,6 +201,52 @@ TEST(GaussianEstimatorTest, QuietAlphaGOptionsDoNotChangeBestAlpha)
     };
 
     EXPECT_DOUBLE_EQ(quiet_alpha, verbose_alpha);
+}
+
+TEST(GaussianEstimatorTest, AlphaRStudyPlotPathDoesNotChangeBestAlpha)
+{
+    auto options{ MakeOptions() };
+    options.study_plot_dir = std::filesystem::path{ testing::TempDir() } / "alpha_r_study";
+    std::filesystem::create_directories(options.study_plot_dir);
+    const std::vector<LocalPotentialSampleList> sample_entries_list{
+        MakeSampleEntries(),
+        MakeSampleEntries(0.2)
+    };
+
+    const auto expected{
+        rg::gaussian_estimator::CrossValidationAlphaR(sample_entries_list, options)
+    };
+    const auto actual{
+        rg::gaussian_estimator::CrossValidationAlphaR(sample_entries_list, options, true)
+    };
+
+    EXPECT_TRUE(std::isfinite(actual));
+    EXPECT_DOUBLE_EQ(actual, expected);
+}
+
+TEST(GaussianEstimatorTest, AlphaGStudyPlotPathDoesNotChangeBestAlpha)
+{
+    auto options{ MakeOptions() };
+    options.study_plot_dir = std::filesystem::path{ testing::TempDir() } / "alpha_g_study";
+    std::filesystem::create_directories(options.study_plot_dir);
+    const std::vector<std::vector<LocalPotentialSampleList>> sample_group_list{
+        MakeIdenticalSampleGroup(10)
+    };
+    const std::vector<std::vector<rg::LocalGaussianResult>> member_result_list{
+        EstimateMemberResults(sample_group_list.front(), options)
+    };
+
+    const auto expected{
+        rg::gaussian_estimator::CrossValidationAlphaG(
+            sample_group_list, member_result_list, options)
+    };
+    const auto actual{
+        rg::gaussian_estimator::CrossValidationAlphaG(
+            sample_group_list, member_result_list, options, true)
+    };
+
+    EXPECT_TRUE(std::isfinite(actual));
+    EXPECT_DOUBLE_EQ(actual, expected);
 }
 
 TEST(GaussianEstimatorTest, RejectsEmptyAlphaRTrainingInputs)

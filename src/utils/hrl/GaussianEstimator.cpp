@@ -5,7 +5,9 @@
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
+#include <rhbm_gem/utils/math/EigenValidation.hpp>
 
+#include <atomic>
 #include <filesystem>
 #include <optional>
 #include <stdexcept>
@@ -154,6 +156,161 @@ rhbm_trainer::AlphaTrainer::AlphaRunOptions MakeStudyOptions(
     return study_options;
 }
 
+Eigen::VectorXd CalculateAbsoluteGaussianDifference(
+    const RHBMParameterVector & linear_a,
+    const RHBMParameterVector & linear_b)
+{
+    const auto gaussian_a{ linearization_service::DecodeParameterVector(
+        linear_a).ToVector() };
+    const auto gaussian_b{ linearization_service::DecodeParameterVector(
+        linear_b).ToVector() };
+    eigen_validation::RequireVectorSize(gaussian_a, gaussian_b.rows(), "gaussian");
+    return (gaussian_a - gaussian_b).array().abs().matrix();
+}
+
+void ValidateStudyBatch(
+    std::size_t batch_size,
+    const std::vector<double> & alpha_list)
+{
+    if (batch_size == 0)
+    {
+        throw std::invalid_argument("training data must not be empty.");
+    }
+    if (alpha_list.empty())
+    {
+        throw std::invalid_argument("alpha_list must not be empty.");
+    }
+}
+
+void ValidateStudyMemberDataset(const RHBMMemberDataset & dataset)
+{
+    if (dataset.X.rows() != dataset.y.size())
+    {
+        throw std::invalid_argument("dataset shape is inconsistent.");
+    }
+    if (dataset.X.rows() == 0 || dataset.X.cols() == 0)
+    {
+        throw std::invalid_argument("dataset must not be empty.");
+    }
+}
+
+Eigen::MatrixXd StudyAlphaRBias(
+    const rhbm_trainer::AlphaTrainer & trainer,
+    const std::vector<RHBMMemberDataset> & dataset_list,
+    const rhbm_trainer::AlphaTrainer::AlphaRunOptions & options)
+{
+    const auto & alpha_grid{ trainer.AlphaGrid() };
+    ValidateStudyBatch(dataset_list.size(), alpha_grid);
+    for (const auto & dataset : dataset_list)
+    {
+        ValidateStudyMemberDataset(dataset);
+    }
+
+    const auto dataset_size{ dataset_list.size() };
+    const auto alpha_size{ static_cast<int>(alpha_grid.size()) };
+    std::atomic<std::size_t> completed_count{ 0 };
+    Eigen::MatrixXd gaus_bias_matrix{ Eigen::MatrixXd::Zero(3, alpha_size) };
+
+#ifdef USE_OPENMP
+    #pragma omp parallel for schedule(dynamic) num_threads(options.execution_options.thread_size)
+#endif
+    for (std::size_t i = 0; i < dataset_size; i++)
+    {
+        auto algorithm_options{ options.execution_options };
+        algorithm_options.quiet_mode = true;
+
+        Eigen::MatrixXd local_bias_array{ Eigen::MatrixXd::Zero(3, alpha_size) };
+        for (int j = 0; j < alpha_size; j++)
+        {
+            const auto alpha_r{ alpha_grid.at(static_cast<std::size_t>(j)) };
+            const auto result{
+                rhbm_helper::EstimateBetaMDPDE(
+                    alpha_r,
+                    dataset_list.at(i),
+                    algorithm_options)
+            };
+            local_bias_array.col(j) = CalculateAbsoluteGaussianDifference(
+                result.beta_mdpde,
+                result.beta_ols
+            );
+        }
+
+#ifdef USE_OPENMP
+        #pragma omp critical
+#endif
+        {
+            gaus_bias_matrix += local_bias_array;
+            const auto completed{ ++completed_count };
+            if (options.progress_callback)
+            {
+                options.progress_callback(completed, dataset_size);
+            }
+        }
+    }
+
+    gaus_bias_matrix /= static_cast<double>(dataset_size);
+    return gaus_bias_matrix;
+}
+
+Eigen::MatrixXd StudyAlphaGBias(
+    const rhbm_trainer::AlphaTrainer & trainer,
+    const std::vector<std::vector<RHBMParameterVector>> & beta_group_list,
+    const rhbm_trainer::AlphaTrainer::AlphaRunOptions & options)
+{
+    const auto & alpha_grid{ trainer.AlphaGrid() };
+    ValidateStudyBatch(beta_group_list.size(), alpha_grid);
+    for (const auto & beta_list : beta_group_list)
+    {
+        if (beta_list.empty())
+        {
+            throw std::invalid_argument("training data must not be empty.");
+        }
+    }
+
+    const auto group_size{ beta_group_list.size() };
+    const auto alpha_size{ static_cast<int>(alpha_grid.size()) };
+    std::atomic<std::size_t> completed_count{ 0 };
+    Eigen::MatrixXd gaus_bias_matrix{ Eigen::MatrixXd::Zero(3, alpha_size) };
+
+#ifdef USE_OPENMP
+    #pragma omp parallel for schedule(dynamic) num_threads(options.execution_options.thread_size)
+#endif
+    for (std::size_t i = 0; i < group_size; i++)
+    {
+        auto algorithm_options{ options.execution_options };
+        algorithm_options.quiet_mode = true;
+        const auto beta_matrix{ rhbm_helper::BuildBetaMatrix(beta_group_list.at(i)) };
+
+        Eigen::MatrixXd local_bias_array{ Eigen::MatrixXd::Zero(3, alpha_size) };
+        for (int j = 0; j < alpha_size; j++)
+        {
+            const auto alpha_g{ alpha_grid.at(static_cast<std::size_t>(j)) };
+            const auto result{
+                rhbm_helper::EstimateMuMDPDE(alpha_g, beta_matrix, algorithm_options)
+            };
+            local_bias_array.col(j) = CalculateAbsoluteGaussianDifference(
+                result.mu_mdpde,
+                result.mu_mean
+            );
+        }
+
+#ifdef USE_OPENMP
+        #pragma omp critical
+#endif
+        {
+            gaus_bias_matrix += local_bias_array;
+            const auto completed{ ++completed_count };
+            if (options.progress_callback)
+            {
+                options.progress_callback(completed, group_size);
+            }
+        }
+    }
+
+    gaus_bias_matrix /= static_cast<double>(group_size);
+    return gaus_bias_matrix;
+}
+
 RHBMMemberDataset BuildMemberDataset(
     const LocalPotentialSampleList & sample_entries,
     const CrossValidationOptions & options)
@@ -298,7 +455,7 @@ double CrossValidationAlphaR(
     if (ShouldOutputStudyPlot(output_study_plot, options))
     {
         const auto bias_matrix{
-            trainer.StudyAlphaRBias(dataset_list, MakeStudyOptions(options))
+            StudyAlphaRBias(trainer, dataset_list, MakeStudyOptions(options))
         };
         (void)EmitTrainingReportIfRequested(
             bias_matrix, trainer.AlphaGrid(), "#alpha_{r}", "Deviation with OLS",
@@ -366,7 +523,7 @@ double CrossValidationAlphaG(
     if (ShouldOutputStudyPlot(output_study_plot, options))
     {
         const auto bias_matrix{
-            trainer.StudyAlphaGBias(beta_group_list, MakeStudyOptions(options))
+            StudyAlphaGBias(trainer, beta_group_list, MakeStudyOptions(options))
         };
         (void)EmitTrainingReportIfRequested(
             bias_matrix, trainer.AlphaGrid(), "#alpha_{g}", "Deviation with Mean",
