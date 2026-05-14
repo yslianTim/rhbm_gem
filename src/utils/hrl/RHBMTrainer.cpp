@@ -195,9 +195,7 @@ Eigen::VectorXd EvaluateAlphaRForDataset(
         data_set_training.emplace_back(BuildDatasetSlice(dataset, training_rows));
     }
 
-    Eigen::VectorXd error_sum_list{
-        Eigen::VectorXd::Zero(static_cast<Eigen::Index>(alpha_list.size()))
-    };
+    Eigen::VectorXd error_sum_list{ Eigen::VectorXd::Zero(static_cast<Eigen::Index>(alpha_list.size())) };
     auto algorithm_options{ options };
     algorithm_options.quiet_mode = true;
     for (int p = 0; p < error_sum_list.size(); p++)
@@ -207,23 +205,12 @@ Eigen::VectorXd EvaluateAlphaRForDataset(
         for (std::size_t i = 0; i < subset_size; i++)
         {
             const auto beta_result_test{
-                rhbm_helper::EstimateBetaMDPDE(
-                    alpha,
-                    data_set_test.at(i),
-                    algorithm_options
-                )
+                rhbm_helper::EstimateBetaMDPDE(alpha, data_set_test.at(i), algorithm_options)
             };
-
             const auto beta_result_training{
-                rhbm_helper::EstimateBetaMDPDE(
-                    alpha,
-                    data_set_training.at(i),
-                    algorithm_options
-                )
+                rhbm_helper::EstimateBetaMDPDE(alpha, data_set_training.at(i), algorithm_options)
             };
-
-            beta_error_sum +=
-                (beta_result_test.beta_mdpde - beta_result_training.beta_mdpde).norm();
+            beta_error_sum += (beta_result_test.beta_mdpde - beta_result_training.beta_mdpde).norm();
         }
         error_sum_list(p) = beta_error_sum;
     }
@@ -272,20 +259,16 @@ Eigen::VectorXd EvaluateAlphaGForGroup(
             const auto mu_result_test{
                 rhbm_helper::EstimateMuMDPDE(alpha, beta_matrix_test, algorithm_options)
             };
-
             const auto beta_matrix_training{
                 rhbm_helper::BuildBetaMatrix(data_set_training.at(i))
             };
             const auto mu_result_training{
                 rhbm_helper::EstimateMuMDPDE(alpha, beta_matrix_training, algorithm_options)
             };
-
-            mu_error_sum +=
-                (mu_result_test.mu_mdpde - mu_result_training.mu_mdpde).norm();
+            mu_error_sum += (mu_result_test.mu_mdpde - mu_result_training.mu_mdpde).norm();
         }
         error_sum_list(p) = mu_error_sum;
     }
-
     return error_sum_list;
 }
 } // namespace
@@ -303,16 +286,12 @@ AlphaTrainingResult TrainAlphaR(
     {
         ValidateMemberDataset(dataset);
         ValidateTrainingInputs(
-            static_cast<std::size_t>(dataset.y.size()),
-            options.subset_size,
-            alpha_grid);
+            static_cast<std::size_t>(dataset.y.size()), options.subset_size, alpha_grid);
     }
 
     const auto dataset_size{ dataset_list.size() };
     std::atomic<std::size_t> completed_count{ 0 };
-    Eigen::ArrayXd error_sum_array{
-        Eigen::ArrayXd::Zero(static_cast<Eigen::Index>(alpha_grid.size()))
-    };
+    Eigen::ArrayXd error_sum_array{ Eigen::ArrayXd::Zero(static_cast<Eigen::Index>(alpha_grid.size())) };
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(options.execution_options.thread_size)
@@ -321,10 +300,7 @@ AlphaTrainingResult TrainAlphaR(
     {
         const auto error_array{
             EvaluateAlphaRForDataset(
-                dataset_list.at(i),
-                options.subset_size,
-                alpha_grid,
-                options.execution_options)
+                dataset_list.at(i), options.subset_size, alpha_grid, options.execution_options)
         };
 
 #ifdef USE_OPENMP
@@ -359,9 +335,7 @@ AlphaTrainingResult TrainAlphaG(
 
     const auto group_size{ beta_group_list.size() };
     std::atomic<std::size_t> completed_count{ 0 };
-    Eigen::ArrayXd error_sum_array{
-        Eigen::ArrayXd::Zero(static_cast<Eigen::Index>(alpha_grid.size()))
-    };
+    Eigen::ArrayXd error_sum_array{ Eigen::ArrayXd::Zero(static_cast<Eigen::Index>(alpha_grid.size())) };
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(options.execution_options.thread_size)
@@ -370,10 +344,7 @@ AlphaTrainingResult TrainAlphaG(
     {
         const auto error_array{
             EvaluateAlphaGForGroup(
-                beta_group_list.at(i),
-                options.subset_size,
-                alpha_grid,
-                options.execution_options)
+                beta_group_list.at(i), options.subset_size, alpha_grid, options.execution_options)
         };
 
 #ifdef USE_OPENMP
