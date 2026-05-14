@@ -398,25 +398,6 @@ std::vector<RHBMBetaEstimateResult> BuildMemberFitResultList(
     return fit_result_list;
 }
 
-RHBMGroupEstimationResult EstimateGroupFromMemberResults(
-    const std::vector<LocalPotentialSampleList> & sample_entries_list,
-    const std::vector<LocalGaussianResult> & member_result_list,
-    double alpha_g,
-    const TrainingOptions & options)
-{
-    if (sample_entries_list.size() != member_result_list.size())
-    {
-        throw std::invalid_argument("sample_entries_list and member_result_list sizes are inconsistent.");
-    }
-
-    const auto dataset_list{ BuildMemberDatasetList(sample_entries_list, options) };
-    const auto fit_result_list{ BuildMemberFitResultList(member_result_list) };
-    return rhbm_helper::EstimateGroup(
-        alpha_g,
-        rhbm_helper::BuildGroupInput(dataset_list, fit_result_list),
-        MakeExecutionOptions(options));
-}
-
 } // namespace
 
 double TrainAlphaR(
@@ -545,8 +526,18 @@ GroupGaussianResult EstimateGroupGaussian(
     double alpha_g,
     const TrainingOptions & options)
 {
+    if (sample_entries_list.size() != member_result_list.size())
+    {
+        throw std::invalid_argument("sample_entries_list and member_result_list sizes are inconsistent.");
+    }
+
+    const auto dataset_list{ BuildMemberDatasetList(sample_entries_list, options) };
+    const auto fit_result_list{ BuildMemberFitResultList(member_result_list) };
     const auto raw_result{
-        EstimateGroupFromMemberResults(sample_entries_list, member_result_list, alpha_g, options)
+        rhbm_helper::EstimateGroup(
+            alpha_g,
+            rhbm_helper::BuildGroupInput(dataset_list, fit_result_list),
+            MakeExecutionOptions(options))
     };
     auto result{ DecodeGroupGaussianResult(alpha_g, raw_result) };
     result.member_results = DecodeMemberGaussianResults(raw_result);
