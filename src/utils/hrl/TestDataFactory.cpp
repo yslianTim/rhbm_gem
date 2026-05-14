@@ -439,14 +439,6 @@ LocalPotentialSampleList AddLogSpaceNoise(
     return sampling_entries;
 }
 
-RHBMMemberDataset BuildLinearDataset(
-    const LocalPotentialSampleList & sampling_entries,
-    double fit_range_min,
-    double fit_range_max)
-{
-    return rhbm_helper::BuildMemberDataset(sampling_entries, fit_range_min, fit_range_max);
-}
-
 Eigen::MatrixXd BuildRandomGausParameters(
     int member_size,
     const Eigen::VectorXd & gaus_prior,
@@ -567,7 +559,8 @@ RHBMBetaTestInput BuildBetaTestInput(const BetaScenario & scenario, const TestDa
                 generator)
         };
         auto dataset{
-            BuildLinearDataset(noisy_sampling_entries, options.fit_range_min, options.fit_range_max)
+            rhbm_helper::BuildMemberDataset(
+                noisy_sampling_entries, options.fit_range_min, options.fit_range_max)
         };
         input.replica_sampling_entries.emplace_back(std::move(noisy_sampling_entries));
         input.replica_datasets.emplace_back(std::move(dataset));
@@ -701,10 +694,12 @@ RHBMNeighborhoodTestInput BuildNeighborhoodTestInput(
             scenario.data_error_sigma,
             generator);
         auto no_cut_dataset{
-            BuildLinearDataset(no_cut_sampling_entries, options.fit_range_min, options.fit_range_max)
+            rhbm_helper::BuildMemberDataset(
+                no_cut_sampling_entries, options.fit_range_min, options.fit_range_max)
         };
         auto cut_dataset{
-            BuildLinearDataset(cut_sampling_entries, options.fit_range_min, options.fit_range_max)
+            rhbm_helper::BuildMemberDataset(
+                cut_sampling_entries, options.fit_range_min, options.fit_range_max)
         };
         input.no_cut_input.replica_sampling_entries.emplace_back(std::move(no_cut_sampling_entries));
         input.cut_input.replica_sampling_entries.emplace_back(std::move(cut_sampling_entries));
@@ -788,10 +783,12 @@ RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
             scenario.data_error_sigma,
             generator);
         auto no_cut_dataset{
-            BuildLinearDataset(no_cut_sampling_entries, options.fit_range_min, options.fit_range_max)
+            rhbm_helper::BuildMemberDataset(
+                no_cut_sampling_entries, options.fit_range_min, options.fit_range_max)
         };
         auto cut_dataset{
-            BuildLinearDataset(cut_sampling_entries, options.fit_range_min, options.fit_range_max)
+            rhbm_helper::BuildMemberDataset(
+                cut_sampling_entries, options.fit_range_min, options.fit_range_max)
         };
         input.no_cut_input.replica_sampling_entries.emplace_back(std::move(no_cut_sampling_entries));
         input.cut_input.replica_sampling_entries.emplace_back(std::move(cut_sampling_entries));
