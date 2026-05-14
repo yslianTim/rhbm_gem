@@ -116,7 +116,7 @@ TEST(GaussianEstimatorTest, SampleListAlphaRReturnsFiniteAlpha)
     EXPECT_LE(alpha_r, options.alpha_max);
 }
 
-TEST(GaussianEstimatorTest, AlphaRMatchesAlphaTrainerBestAlpha)
+TEST(GaussianEstimatorTest, AlphaRMatchesTrainingFunctionBestAlpha)
 {
     const auto options{ MakeOptions() };
     const std::vector<LocalPotentialSampleList> sample_entries_list{
@@ -129,17 +129,19 @@ TEST(GaussianEstimatorTest, AlphaRMatchesAlphaTrainerBestAlpha)
         rg::rhbm_helper::BuildMemberDataset(
             sample_entries_list.at(1), options.fit_range_min, options.fit_range_max)
     };
-    const rg::rhbm_trainer::AlphaTrainer trainer{
-        options.alpha_min,
-        options.alpha_max,
-        options.alpha_step
-    };
-    rg::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions trainer_options;
+    rg::rhbm_trainer::AlphaTrainingOptions trainer_options;
     trainer_options.subset_size = 5;
     trainer_options.execution_options.quiet_mode = true;
     trainer_options.execution_options.thread_size = options.thread_size;
 
-    const auto expected{ trainer.TrainAlphaR(dataset_list, trainer_options).best_alpha };
+    const auto expected{
+        rg::rhbm_trainer::TrainAlphaR(
+            dataset_list,
+            options.alpha_min,
+            options.alpha_max,
+            options.alpha_step,
+            trainer_options).best_alpha
+    };
     const auto actual{
         rg::gaussian_estimator::CrossValidationAlphaR(sample_entries_list, options)
     };
@@ -147,7 +149,7 @@ TEST(GaussianEstimatorTest, AlphaRMatchesAlphaTrainerBestAlpha)
     EXPECT_DOUBLE_EQ(actual, expected);
 }
 
-TEST(GaussianEstimatorTest, AlphaGMatchesAlphaTrainerBestAlpha)
+TEST(GaussianEstimatorTest, AlphaGMatchesTrainingFunctionBestAlpha)
 {
     const auto options{ MakeOptions() };
     const std::vector<std::vector<LocalPotentialSampleList>> sample_group_list{
@@ -157,17 +159,19 @@ TEST(GaussianEstimatorTest, AlphaGMatchesAlphaTrainerBestAlpha)
         EstimateMemberResults(sample_group_list.front(), options)
     };
     const auto beta_group_list{ BuildBetaGroupList(member_result_list) };
-    const rg::rhbm_trainer::AlphaTrainer trainer{
-        options.alpha_min,
-        options.alpha_max,
-        options.alpha_step
-    };
-    rg::rhbm_trainer::AlphaTrainer::AlphaTrainingOptions trainer_options;
+    rg::rhbm_trainer::AlphaTrainingOptions trainer_options;
     trainer_options.subset_size = 10;
     trainer_options.execution_options.quiet_mode = true;
     trainer_options.execution_options.thread_size = options.thread_size;
 
-    const auto expected{ trainer.TrainAlphaG(beta_group_list, trainer_options).best_alpha };
+    const auto expected{
+        rg::rhbm_trainer::TrainAlphaG(
+            beta_group_list,
+            options.alpha_min,
+            options.alpha_max,
+            options.alpha_step,
+            trainer_options).best_alpha
+    };
     const auto actual{
         rg::gaussian_estimator::CrossValidationAlphaG(
             sample_group_list, member_result_list, options)

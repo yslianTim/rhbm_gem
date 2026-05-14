@@ -2,7 +2,6 @@
 
 #include <cstddef>
 #include <functional>
-#include <sstream>
 #include <vector>
 
 #include <Eigen/Dense>
@@ -12,46 +11,36 @@
 namespace rhbm_gem::rhbm_trainer
 {
 
-class AlphaTrainer
+using ProgressCallback = std::function<void(std::size_t completed, std::size_t total)>;
+
+struct AlphaTrainingOptions
 {
-    double m_alpha_min{ 0.0 };
-    double m_alpha_max{ 0.0 };
-    double m_alpha_step{ 0.0 };
-    std::vector<double> m_alpha_grid;
-
-public:
-    using ProgressCallback = std::function<void(std::size_t completed, std::size_t total)>;
-
-    struct AlphaTrainingOptions
-    {
-        RHBMExecutionOptions execution_options{};
-        ProgressCallback progress_callback{};
-        std::size_t subset_size{ 0 };
-    };
-
-    struct AlphaTrainingResult
-    {
-        double best_alpha{ 0.0 };
-        Eigen::VectorXd error_sum_list;
-    };
-
-    AlphaTrainer(double alpha_min, double alpha_max, double alpha_step);
-
-    const std::vector<double> & AlphaGrid() const { return m_alpha_grid; }
-    std::ostringstream GetAlphaGridSummary() const;
-
-    AlphaTrainingResult TrainAlphaR(
-        const std::vector<RHBMMemberDataset> & dataset_list,
-        const AlphaTrainingOptions & options
-    ) const;
-
-    AlphaTrainingResult TrainAlphaG(
-        const std::vector<std::vector<RHBMParameterVector>> & beta_group_list,
-        const AlphaTrainingOptions & options
-    ) const;
-
-private:
-    std::vector<double> BuildAlphaGrid(double alpha_min, double alpha_max, double alpha_step);
+    RHBMExecutionOptions execution_options{};
+    ProgressCallback progress_callback{};
+    std::size_t subset_size{ 0 };
 };
+
+struct AlphaTrainingResult
+{
+    double best_alpha{ 0.0 };
+    Eigen::VectorXd error_sum_list;
+    std::vector<double> alpha_grid;
+};
+
+AlphaTrainingResult TrainAlphaR(
+    const std::vector<RHBMMemberDataset> & dataset_list,
+    double alpha_min,
+    double alpha_max,
+    double alpha_step,
+    const AlphaTrainingOptions & options
+);
+
+AlphaTrainingResult TrainAlphaG(
+    const std::vector<std::vector<RHBMParameterVector>> & beta_group_list,
+    double alpha_min,
+    double alpha_max,
+    double alpha_step,
+    const AlphaTrainingOptions & options
+);
 
 } // namespace rhbm_gem::rhbm_trainer

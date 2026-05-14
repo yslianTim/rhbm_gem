@@ -25,7 +25,7 @@ constexpr std::size_t kAlphaGSubsetSize{ 10 };
 struct AlphaStudyOptions
 {
     RHBMExecutionOptions execution_options{};
-    rhbm_trainer::AlphaTrainer::ProgressCallback progress_callback{};
+    rhbm_trainer::ProgressCallback progress_callback{};
 };
 
 RHBMExecutionOptions MakeExecutionOptions(const CrossValidationOptions & options)
@@ -34,16 +34,6 @@ RHBMExecutionOptions MakeExecutionOptions(const CrossValidationOptions & options
     execution_options.quiet_mode = true;
     execution_options.thread_size = options.thread_size;
     return execution_options;
-}
-
-rhbm_trainer::AlphaTrainer MakeAlphaTrainer(const CrossValidationOptions & options)
-{
-    rhbm_trainer::AlphaTrainer trainer{
-        options.alpha_min,
-        options.alpha_max,
-        options.alpha_step
-    };
-    return trainer;
 }
 
 bool EmitTrainingReportIfRequested(
@@ -128,11 +118,11 @@ bool ShouldOutputStudyPlot(
     return false;
 }
 
-rhbm_trainer::AlphaTrainer::AlphaTrainingOptions MakeTrainingOptions(
+rhbm_trainer::AlphaTrainingOptions MakeTrainingOptions(
     std::size_t subset_size,
     const CrossValidationOptions & options)
 {
-    rhbm_trainer::AlphaTrainer::AlphaTrainingOptions training_options;
+    rhbm_trainer::AlphaTrainingOptions training_options;
     training_options.subset_size = subset_size;
     training_options.execution_options = MakeExecutionOptions(options);
     if (options.output_progress)
@@ -201,11 +191,10 @@ void ValidateStudyMemberDataset(const RHBMMemberDataset & dataset)
 }
 
 Eigen::MatrixXd StudyAlphaRBias(
-    const rhbm_trainer::AlphaTrainer & trainer,
+    const std::vector<double> & alpha_grid,
     const std::vector<RHBMMemberDataset> & dataset_list,
     const AlphaStudyOptions & options)
 {
-    const auto & alpha_grid{ trainer.AlphaGrid() };
     ValidateStudyBatch(dataset_list.size(), alpha_grid);
     for (const auto & dataset : dataset_list)
     {
@@ -259,11 +248,10 @@ Eigen::MatrixXd StudyAlphaRBias(
 }
 
 Eigen::MatrixXd StudyAlphaGBias(
-    const rhbm_trainer::AlphaTrainer & trainer,
+    const std::vector<double> & alpha_grid,
     const std::vector<std::vector<RHBMParameterVector>> & beta_group_list,
     const AlphaStudyOptions & options)
 {
-    const auto & alpha_grid{ trainer.AlphaGrid() };
     ValidateStudyBatch(beta_group_list.size(), alpha_grid);
     for (const auto & beta_list : beta_group_list)
     {
@@ -453,18 +441,22 @@ double CrossValidationAlphaR(
     bool output_study_plot)
 {
     const auto dataset_list{ BuildMemberDatasetList(sample_entries_list, options) };
-    const auto trainer{ MakeAlphaTrainer(options) };
     const auto training_result{
-        trainer.TrainAlphaR(dataset_list, MakeTrainingOptions(kAlphaRSubsetSize, options))
+        rhbm_trainer::TrainAlphaR(
+            dataset_list,
+            options.alpha_min,
+            options.alpha_max,
+            options.alpha_step,
+            MakeTrainingOptions(kAlphaRSubsetSize, options))
     };
 
     if (ShouldOutputStudyPlot(output_study_plot, options))
     {
         const auto bias_matrix{
-            StudyAlphaRBias(trainer, dataset_list, MakeStudyOptions(options))
+            StudyAlphaRBias(training_result.alpha_grid, dataset_list, MakeStudyOptions(options))
         };
         (void)EmitTrainingReportIfRequested(
-            bias_matrix, trainer.AlphaGrid(), "#alpha_{r}", "Deviation with OLS",
+            bias_matrix, training_result.alpha_grid, "#alpha_{r}", "Deviation with OLS",
             options.study_plot_dir, "alpha_r_bias.pdf");
     }
 
@@ -521,18 +513,22 @@ double CrossValidationAlphaG(
         return options.alpha_min;
     }
 
-    const auto trainer{ MakeAlphaTrainer(options) };
     const auto training_result{
-        trainer.TrainAlphaG(beta_group_list, MakeTrainingOptions(kAlphaGSubsetSize, options))
+        rhbm_trainer::TrainAlphaG(
+            beta_group_list,
+            options.alpha_min,
+            options.alpha_max,
+            options.alpha_step,
+            MakeTrainingOptions(kAlphaGSubsetSize, options))
     };
 
     if (ShouldOutputStudyPlot(output_study_plot, options))
     {
         const auto bias_matrix{
-            StudyAlphaGBias(trainer, beta_group_list, MakeStudyOptions(options))
+            StudyAlphaGBias(training_result.alpha_grid, beta_group_list, MakeStudyOptions(options))
         };
         (void)EmitTrainingReportIfRequested(
-            bias_matrix, trainer.AlphaGrid(), "#alpha_{g}", "Deviation with Mean",
+            bias_matrix, training_result.alpha_grid, "#alpha_{g}", "Deviation with Mean",
             options.study_plot_dir, "alpha_g_bias.pdf");
     }
 
