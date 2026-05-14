@@ -53,6 +53,7 @@ void LocalPotentialEntry::SetAnnotation(
 
 void LocalPotentialEntry::ClearTransientFitState()
 {
+    m_gaussian_result.fit_result.reset();
 }
 
 LocalPotentialAnnotation * LocalPotentialEntry::FindAnnotation(const std::string & key)

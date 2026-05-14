@@ -39,7 +39,7 @@ LocalGaussianResult EstimateLocalGaussian(
 
 GroupGaussianResult EstimateGroupGaussian(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
-    const std::vector<double> & alpha_r_list,
+    const std::vector<LocalGaussianResult> & member_result_list,
     double alpha_g,
     const TrainingOptions & options);
 

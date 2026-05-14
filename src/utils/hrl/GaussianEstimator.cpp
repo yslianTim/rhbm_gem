@@ -337,26 +337,6 @@ RHBMBetaEstimateResult EstimateMemberBeta(
         MakeExecutionOptions(options));
 }
 
-std::vector<RHBMBetaEstimateResult> EstimateMemberBetaList(
-    const std::vector<LocalPotentialSampleList> & sample_entries_list,
-    const std::vector<double> & alpha_r_list,
-    const TrainingOptions & options)
-{
-    if (sample_entries_list.size() != alpha_r_list.size())
-    {
-        throw std::invalid_argument("sample_entries_list and alpha_r_list sizes are inconsistent.");
-    }
-
-    std::vector<RHBMBetaEstimateResult> fit_result_list;
-    fit_result_list.reserve(sample_entries_list.size());
-    for (std::size_t i = 0; i < sample_entries_list.size(); i++)
-    {
-        fit_result_list.emplace_back(
-            EstimateMemberBeta(sample_entries_list.at(i), alpha_r_list.at(i), options));
-    }
-    return fit_result_list;
-}
-
 LocalGaussianResult DecodeLocalGaussianResult(
     double alpha_r,
     const RHBMBetaEstimateResult & fit_result)
@@ -372,7 +352,8 @@ LocalGaussianResult DecodeLocalGaussianResult(
             GaussianModel3DUncertainty{}
         },
         false,
-        0.0
+        0.0,
+        fit_result
     };
 }
 
@@ -419,14 +400,36 @@ std::vector<LocalGaussianResult> DecodeMemberGaussianResults(
     return member_results;
 }
 
-RHBMGroupEstimationResult EstimateGroupFromSamples(
+std::vector<RHBMBetaEstimateResult> BuildMemberFitResultList(
+    const std::vector<LocalGaussianResult> & member_result_list)
+{
+    std::vector<RHBMBetaEstimateResult> fit_result_list;
+    fit_result_list.reserve(member_result_list.size());
+    for (const auto & member_result : member_result_list)
+    {
+        if (!member_result.fit_result.has_value())
+        {
+            throw std::invalid_argument(
+                "member_result_list contains a result without transient fit state.");
+        }
+        fit_result_list.emplace_back(*member_result.fit_result);
+    }
+    return fit_result_list;
+}
+
+RHBMGroupEstimationResult EstimateGroupFromMemberResults(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
-    const std::vector<double> & alpha_r_list,
+    const std::vector<LocalGaussianResult> & member_result_list,
     double alpha_g,
     const TrainingOptions & options)
 {
+    if (sample_entries_list.size() != member_result_list.size())
+    {
+        throw std::invalid_argument("sample_entries_list and member_result_list sizes are inconsistent.");
+    }
+
     const auto dataset_list{ BuildMemberDatasetList(sample_entries_list, options) };
-    const auto fit_result_list{ EstimateMemberBetaList(sample_entries_list, alpha_r_list, options) };
+    const auto fit_result_list{ BuildMemberFitResultList(member_result_list) };
     return rhbm_helper::EstimateGroup(
         alpha_g,
         rhbm_helper::BuildGroupInput(dataset_list, fit_result_list),
@@ -553,12 +556,12 @@ LocalGaussianResult EstimateLocalGaussian(
 
 GroupGaussianResult EstimateGroupGaussian(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
-    const std::vector<double> & alpha_r_list,
+    const std::vector<LocalGaussianResult> & member_result_list,
     double alpha_g,
     const TrainingOptions & options)
 {
     const auto raw_result{
-        EstimateGroupFromSamples(sample_entries_list, alpha_r_list, alpha_g, options)
+        EstimateGroupFromMemberResults(sample_entries_list, member_result_list, alpha_g, options)
     };
     auto result{ DecodeGroupGaussianResult(alpha_g, raw_result) };
     result.member_results = DecodeMemberGaussianResults(raw_result);

@@ -341,19 +341,19 @@ void RunAtomPotentialFittingWorkflow(ModelObject & model_object, const Potential
             auto group_key{ group_key_list[idx] };
             const auto & atom_list{ analysis_view.GetAtomObjectList(group_key, class_key) };
             std::vector<LocalPotentialSampleList> member_sample_entries_list;
-            std::vector<double> member_alpha_r_list;
+            std::vector<LocalGaussianResult> member_result_list;
             member_sample_entries_list.reserve(atom_list.size());
-            member_alpha_r_list.reserve(atom_list.size());
+            member_result_list.reserve(atom_list.size());
             for (const auto & atom : atom_list)
             {
                 const auto local_entry{ local_entry_map.at(atom) };
                 member_sample_entries_list.emplace_back(local_entry.GetSamplingEntries());
-                member_alpha_r_list.emplace_back(local_entry.GetAlphaR());
+                member_result_list.emplace_back(local_entry.GetGaussianResult());
             }
             const auto result{
                 gaussian_estimator::EstimateGroupGaussian(
                     member_sample_entries_list,
-                    member_alpha_r_list,
+                    member_result_list,
                     analysis_view.GetAtomAlphaG(group_key, class_key),
                     MakeGaussianEstimatorOptions(request))
             };

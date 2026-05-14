@@ -1,7 +1,9 @@
 #pragma once
 
+#include <optional>
 #include <vector>
 
+#include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
 namespace rhbm_gem {
@@ -19,6 +21,7 @@ struct LocalGaussianResult
     };
     bool is_outlier{ false };
     double statistical_distance{ 0.0 };
+    std::optional<RHBMBetaEstimateResult> fit_result{};
 };
 
 struct GroupGaussianResult

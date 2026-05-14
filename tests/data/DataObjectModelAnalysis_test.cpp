@@ -112,8 +112,10 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisDataCanClearTransientFitStatesWit
     analysis_data.EnsureBondGroupEntry("bond_class");
     rg::LocalGaussianResult atom_result;
     atom_result.alpha_r = 0.2;
+    atom_result.fit_result = rg::RHBMBetaEstimateResult{};
     rg::LocalGaussianResult bond_result;
     bond_result.alpha_r = 0.3;
+    bond_result.fit_result = rg::RHBMBetaEstimateResult{};
     atom_entry.SetGaussianResult(atom_result);
     bond_entry.SetGaussianResult(bond_result);
 
@@ -132,6 +134,8 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisDataCanClearTransientFitStatesWit
     EXPECT_NE(analysis_data.FindBondGroupEntry("bond_class"), nullptr);
     EXPECT_DOUBLE_EQ(0.2, cleared_atom_entry->GetAlphaR());
     EXPECT_DOUBLE_EQ(0.3, cleared_bond_entry->GetAlphaR());
+    EXPECT_FALSE(cleared_atom_entry->GetGaussianResult().fit_result.has_value());
+    EXPECT_FALSE(cleared_bond_entry->GetGaussianResult().fit_result.has_value());
 }
 
 TEST(DataObjectModelAnalysisTest, ModelAnalysisDataClearDropsEntriesAndFitStates)
@@ -165,13 +169,16 @@ TEST(DataObjectModelAnalysisTest, LocalPotentialEntryClearTransientFitStateKeeps
         rg::GaussianModel3D{ 2.0, 0.7 },
         rg::GaussianModel3DUncertainty{}
     };
+    result.fit_result = rg::RHBMBetaEstimateResult{};
     entry.SetGaussianResult(result);
+    ASSERT_TRUE(entry.GetGaussianResult().fit_result.has_value());
 
     entry.ClearTransientFitState();
 
     EXPECT_DOUBLE_EQ(0.4, entry.GetAlphaR());
     EXPECT_DOUBLE_EQ(2.0, entry.GetEstimateMDPDE().GetAmplitude());
     EXPECT_DOUBLE_EQ(0.7, entry.GetEstimateMDPDE().GetWidth());
+    EXPECT_FALSE(entry.GetGaussianResult().fit_result.has_value());
 }
 
 TEST(DataObjectModelAnalysisTest, LocalPotentialEntryStoresGaussianResult)
