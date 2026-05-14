@@ -156,10 +156,8 @@ Eigen::VectorXd CalculateAbsoluteGaussianDifference(
     const RHBMParameterVector & linear_a,
     const RHBMParameterVector & linear_b)
 {
-    const auto gaussian_a{ linearization_service::DecodeParameterVector(
-        linear_a).ToVector() };
-    const auto gaussian_b{ linearization_service::DecodeParameterVector(
-        linear_b).ToVector() };
+    const auto gaussian_a{ linearization_service::DecodeParameterVector(linear_a).ToVector() };
+    const auto gaussian_b{ linearization_service::DecodeParameterVector(linear_b).ToVector() };
     eigen_validation::RequireVectorSize(gaussian_a, gaussian_b.rows(), "gaussian");
     return (gaussian_a - gaussian_b).array().abs().matrix();
 }
@@ -305,14 +303,6 @@ Eigen::MatrixXd StudyAlphaGBias(
     return gaus_bias_matrix;
 }
 
-RHBMMemberDataset BuildMemberDataset(
-    const LocalPotentialSampleList & sample_entries,
-    const TrainingOptions & options)
-{
-    return rhbm_helper::BuildMemberDataset(
-        sample_entries, options.fit_range_min, options.fit_range_max);
-}
-
 std::vector<RHBMMemberDataset> BuildMemberDatasetList(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
     const TrainingOptions & options)
@@ -321,20 +311,11 @@ std::vector<RHBMMemberDataset> BuildMemberDatasetList(
     dataset_list.reserve(sample_entries_list.size());
     for (const auto & sample_entries : sample_entries_list)
     {
-        dataset_list.emplace_back(BuildMemberDataset(sample_entries, options));
+        dataset_list.emplace_back(
+            rhbm_helper::BuildMemberDataset(sample_entries, options.fit_range_min, options.fit_range_max)
+        );
     }
     return dataset_list;
-}
-
-RHBMBetaEstimateResult EstimateMemberBeta(
-    const LocalPotentialSampleList & sample_entries,
-    double alpha_r,
-    const TrainingOptions & options)
-{
-    return rhbm_helper::EstimateBetaMDPDE(
-        alpha_r,
-        BuildMemberDataset(sample_entries, options),
-        MakeExecutionOptions(options));
 }
 
 LocalGaussianResult DecodeLocalGaussianResult(
@@ -549,9 +530,13 @@ LocalGaussianResult EstimateLocalGaussian(
     double alpha_r,
     const TrainingOptions & options)
 {
-    return DecodeLocalGaussianResult(
-        alpha_r,
-        EstimateMemberBeta(sample_entries, alpha_r, options));
+    auto result{
+        rhbm_helper::EstimateBetaMDPDE(
+            alpha_r,
+            rhbm_helper::BuildMemberDataset(sample_entries, options.fit_range_min, options.fit_range_max),
+            MakeExecutionOptions(options))
+    };
+    return DecodeLocalGaussianResult(alpha_r, result);
 }
 
 GroupGaussianResult EstimateGroupGaussian(
