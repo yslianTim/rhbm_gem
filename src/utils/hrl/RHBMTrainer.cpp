@@ -16,23 +16,16 @@ namespace rhbm_gem::rhbm_trainer
 
 namespace
 {
-constexpr double kAlphaGridTolerance{ 1.0e-12 };
 
 void ValidateTrainingInputs(
     std::size_t data_size,
     std::size_t subset_size,
     const std::vector<double> & alpha_list)
 {
-    if (data_size == 0)
-    {
-        throw std::invalid_argument("training data must not be empty.");
-    }
+    numeric_validation::RequirePositive(data_size, "data_size");
     numeric_validation::RequirePositive(subset_size, "subset_size");
     numeric_validation::RequireAtMost(subset_size, data_size, "subset_size");
-    if (alpha_list.empty())
-    {
-        throw std::invalid_argument("alpha_list must not be empty.");
-    }
+    numeric_validation::RequirePositive(alpha_list.size(), "alpha_list");
 }
 
 void ValidateTrainingBatch(
@@ -40,15 +33,9 @@ void ValidateTrainingBatch(
     std::size_t subset_size,
     const std::vector<double> & alpha_list)
 {
-    if (batch_size == 0)
-    {
-        throw std::invalid_argument("training data must not be empty.");
-    }
+    numeric_validation::RequirePositive(batch_size, "batch_size");
     numeric_validation::RequirePositive(subset_size, "subset_size");
-    if (alpha_list.empty())
-    {
-        throw std::invalid_argument("alpha_list must not be empty.");
-    }
+    numeric_validation::RequirePositive(alpha_list.size(), "alpha_list");
 }
 
 void ValidateMemberDataset(const RHBMMemberDataset & dataset)
@@ -63,10 +50,7 @@ RHBMMemberDataset BuildDatasetSlice(
     const RHBMMemberDataset & dataset,
     const std::vector<int> & row_indices)
 {
-    if (row_indices.empty())
-    {
-        throw std::invalid_argument("dataset slice must not be empty.");
-    }
+    numeric_validation::RequirePositive(row_indices.size(), "row_indices");
 
     const auto row_count{ static_cast<Eigen::Index>(row_indices.size()) };
     RHBMMemberDataset slice;
@@ -96,14 +80,12 @@ std::mt19937 BuildGenerator(
     return std::mt19937(std::random_device{}());
 }
 
-std::vector<double> BuildAlphaGrid(
-    double alpha_min,
-    double alpha_max,
-    double alpha_step)
+std::vector<double> BuildAlphaGrid(double alpha_min, double alpha_max, double alpha_step)
 {
     numeric_validation::RequireFiniteNonNegativeRange(alpha_min, alpha_max, "alpha training range");
     numeric_validation::RequireFinitePositive(alpha_step, "alpha training step");
 
+    static constexpr double kAlphaGridTolerance{ 1.0e-12 };
     std::vector<double> alpha_list;
     for (double alpha{ alpha_min };
          alpha <= alpha_max + kAlphaGridTolerance;
@@ -114,16 +96,10 @@ std::vector<double> BuildAlphaGrid(
         {
             alpha_value = alpha_max;
         }
-        if (alpha_value > alpha_max)
-        {
-            break;
-        }
+        if (alpha_value > alpha_max) break;
 
         alpha_list.emplace_back(alpha_value);
-        if (alpha_value == alpha_max)
-        {
-            break;
-        }
+        if (alpha_value == alpha_max) break;
     }
     return alpha_list;
 }
@@ -175,10 +151,7 @@ Eigen::VectorXd EvaluateAlphaRForDataset(
         training_rows.reserve(total_entry_size - test_set_size);
         for (std::size_t j = 0; j < subset_size; j++)
         {
-            if (i == j)
-            {
-                continue;
-            }
+            if (i == j) continue;
             training_rows.insert(
                 training_rows.end(),
                 data_subset_rows[j].begin(),
