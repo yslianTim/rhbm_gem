@@ -35,16 +35,14 @@ struct MuMDPDETestBias
     BiasStatisticsSeries mdpde;
 };
 
-bool RunBetaMDPDETest(
-    BetaMDPDETestBias & result,
+BetaMDPDETestBias RunBetaMDPDETest(
     const test_data_factory::RHBMBetaTestInput & test_input,
-    int thread_size = 1
+    int thread_size
 );
 
-bool RunMuMDPDETest(
-    MuMDPDETestBias & result,
+MuMDPDETestBias RunMuMDPDETest(
     const test_data_factory::RHBMMuTestInput & test_input,
-    int thread_size = 1
+    int thread_size
 );
 
 } // namespace rhbm_gem::rhbm_tester

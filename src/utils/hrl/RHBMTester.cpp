@@ -24,50 +24,34 @@ struct MuReplicaBias
     Eigen::VectorXd mdpde_bias;
 };
 
-Eigen::VectorXd CalculateNormalizedBias(
-    const GaussianModel3D & gaussian_estimate,
-    const GaussianModel3D & gaussian_truth)
+Eigen::VectorXd CalculateNormalizedBias(const GaussianModel3D & estimate, const GaussianModel3D & truth)
 {
-    GaussianModel3D::RequireFiniteModel(gaussian_truth, "gaussian_truth");
-    const auto gaussian_truth_vector{ gaussian_truth.ToVector() };
-    const auto gaussian_estimate_vector{ gaussian_estimate.ToVector() };
-    eigen_validation::RequireVectorSize(gaussian_estimate_vector, gaussian_truth_vector.rows(), "gaussian");
-    return ((gaussian_estimate_vector - gaussian_truth_vector).array() / gaussian_truth_vector.array()).matrix();
+    GaussianModel3D::RequireFiniteModel(truth, "truth");
+    const auto truth_vector{ truth.ToVector() };
+    const auto estimate_vector{ estimate.ToVector() };
+    eigen_validation::RequireVectorSize(estimate_vector, truth_vector.rows(), "gaussian");
+    return ((estimate_vector - truth_vector).array() / truth_vector.array()).matrix();
 }
 
 BetaReplicaBias EstimateBetaReplicaBias(
     const LocalPotentialSampleList & sample_entries,
-    const GaussianModel3D & gaus_true,
+    const GaussianModel3D & truth,
     double alpha_r,
     const gaussian_estimator::TrainingOptions & options)
 {
-    const auto gaussian_result{
+    const auto estimate{
         gaussian_estimator::EstimateLocalGaussian(sample_entries, alpha_r, options)
     };
     return BetaReplicaBias{
-        CalculateNormalizedBias(gaussian_result.ols.GetModel(), gaus_true),
-        CalculateNormalizedBias(gaussian_result.mdpde.GetModel(), gaus_true)
+        CalculateNormalizedBias(estimate.ols.GetModel(), truth),
+        CalculateNormalizedBias(estimate.mdpde.GetModel(), truth)
     };
-}
-
-std::vector<LocalGaussianResult> EstimateLocalGaussianList(
-    const std::vector<LocalPotentialSampleList> & sample_entries_list,
-    const gaussian_estimator::TrainingOptions & options)
-{
-    std::vector<LocalGaussianResult> member_results;
-    member_results.reserve(sample_entries_list.size());
-    for (const auto & sample_entries : sample_entries_list)
-    {
-        member_results.emplace_back(
-            gaussian_estimator::EstimateLocalGaussian(sample_entries, 0.0, options));
-    }
-    return member_results;
 }
 
 MuReplicaBias EstimateMuReplicaBias(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
     const std::vector<LocalGaussianResult> & member_results,
-    const GaussianModel3D & gaus_true,
+    const GaussianModel3D & truth,
     double alpha_g,
     const gaussian_estimator::TrainingOptions & options)
 {
@@ -78,8 +62,8 @@ MuReplicaBias EstimateMuReplicaBias(
         gaussian_estimator::EstimateGroupGaussian(sample_entries_list, member_results, alpha_g, options)
     };
     return MuReplicaBias{
-        CalculateNormalizedBias(baseline_result.mdpde, gaus_true),
-        CalculateNormalizedBias(mdpde_result.mdpde, gaus_true)
+        CalculateNormalizedBias(baseline_result.mdpde, truth),
+        CalculateNormalizedBias(mdpde_result.mdpde, truth)
     };
 }
 
@@ -100,8 +84,7 @@ BiasStatistics FinalizeBiasStatistics(const Eigen::MatrixXd & bias_matrix)
 
 } // namespace
 
-bool RunBetaMDPDETest(
-    BetaMDPDETestBias & result,
+BetaMDPDETestBias RunBetaMDPDETest(
     const test_data_factory::RHBMBetaTestInput & input,
     int thread_size)
 {
@@ -182,7 +165,7 @@ bool RunBetaMDPDETest(
         trained_alpha_average /= static_cast<double>(replica_size);
     }
 
-    result = BetaMDPDETestBias{};
+    BetaMDPDETestBias result;
     result.ols = FinalizeBiasStatistics(bias_matrix_ols);
     result.mdpde.requested_alpha.assign(local_alpha_r_list.size(), BiasStatistics{});
     for (size_t i = 0; i < local_alpha_r_list.size(); i++)
@@ -198,11 +181,10 @@ bool RunBetaMDPDETest(
         result.mdpde.trained_alpha_average = trained_alpha_average;
     }
 
-    return true;
+    return result;
 }
 
-bool RunMuMDPDETest(
-    MuMDPDETestBias & result,
+MuMDPDETestBias RunMuMDPDETest(
     const test_data_factory::RHBMMuTestInput & input,
     int thread_size)
 {
@@ -244,9 +226,13 @@ bool RunMuMDPDETest(
         const auto & sample_entries_list{
             input.replica_member_sampling_entries.at(static_cast<size_t>(i))
         };
-        const auto member_results{
-            EstimateLocalGaussianList(sample_entries_list, estimator_options)
-        };
+        std::vector<LocalGaussianResult> member_results;
+        member_results.reserve(sample_entries_list.size());
+        for (const auto & sample_entries : sample_entries_list)
+        {
+            member_results.emplace_back(
+                gaussian_estimator::EstimateLocalGaussian(sample_entries, 0.0, estimator_options));
+        }
         const auto baseline_result{
             EstimateMuReplicaBias(
                 sample_entries_list, member_results, input.gaus_true, 0.0, estimator_options)
@@ -297,7 +283,7 @@ bool RunMuMDPDETest(
         trained_alpha_average /= static_cast<double>(replica_size);
     }
 
-    result = MuMDPDETestBias{};
+    MuMDPDETestBias result;
     result.median = FinalizeBiasStatistics(bias_matrix_median);
     result.mdpde.requested_alpha.assign(local_alpha_g_list.size(), BiasStatistics{});
     for (size_t i = 0; i < local_alpha_g_list.size(); i++)
@@ -313,7 +299,7 @@ bool RunMuMDPDETest(
         result.mdpde.trained_alpha_average = trained_alpha_average;
     }
 
-    return true;
+    return result;
 }
 
 } // namespace rhbm_gem::rhbm_tester

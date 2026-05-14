@@ -48,15 +48,10 @@ TEST(RHBMTesterTest, RunBetaMDPDETestPopulatesBiasOutputs)
         })
     };
 
-    rt::BetaMDPDETestBias bias;
-    const bool result{
-        rt::RunBetaMDPDETest(
-            bias,
-            test_input,
-            1)
+    const auto bias{
+        rt::RunBetaMDPDETest(test_input, 1)
     };
 
-    ASSERT_TRUE(result);
     ASSERT_EQ(bias.mdpde.requested_alpha.size(), alpha_r_list.size());
     ExpectBiasStatisticSize(bias.ols);
     for (const auto & requested_alpha_bias : bias.mdpde.requested_alpha)
@@ -87,15 +82,10 @@ TEST(RHBMTesterTest, RunMuMDPDETestPopulatesBiasOutputs)
         })
     };
 
-    rt::MuMDPDETestBias bias;
-    const bool result{
-        rt::RunMuMDPDETest(
-            bias,
-            test_input,
-            1)
+    const auto bias{
+        rt::RunMuMDPDETest(test_input, 1)
     };
 
-    ASSERT_TRUE(result);
     ASSERT_EQ(bias.mdpde.requested_alpha.size(), alpha_g_list.size());
     ExpectBiasStatisticSize(bias.median);
     for (const auto & requested_alpha_bias : bias.mdpde.requested_alpha)
@@ -124,15 +114,10 @@ TEST(RHBMTesterTest, RunBetaMDPDETestSkipsTrainedAlphaWhenDisabled)
         })
     };
 
-    rt::BetaMDPDETestBias bias;
-    const bool result{
-        rt::RunBetaMDPDETest(
-            bias,
-            test_input,
-            1)
+    const auto bias{
+        rt::RunBetaMDPDETest(test_input, 1)
     };
 
-    ASSERT_TRUE(result);
     ASSERT_EQ(bias.mdpde.requested_alpha.size(), alpha_r_list.size());
     ExpectBiasStatisticSize(bias.ols);
     ExpectBiasStatisticSize(bias.mdpde.requested_alpha.front());
@@ -158,15 +143,10 @@ TEST(RHBMTesterTest, RunMuMDPDETestSkipsTrainedAlphaWhenDisabled)
         })
     };
 
-    rt::MuMDPDETestBias bias;
-    const bool result{
-        rt::RunMuMDPDETest(
-            bias,
-            test_input,
-            1)
+    const auto bias{
+        rt::RunMuMDPDETest(test_input, 1)
     };
 
-    ASSERT_TRUE(result);
     ASSERT_EQ(bias.mdpde.requested_alpha.size(), alpha_g_list.size());
     ExpectBiasStatisticSize(bias.median);
     ExpectBiasStatisticSize(bias.mdpde.requested_alpha.front());
@@ -189,15 +169,10 @@ TEST(RHBMTesterTest, RunBetaMDPDETestAllowsEmptyAlphaListWithoutTraining)
         })
     };
 
-    rt::BetaMDPDETestBias bias;
-    const bool result{
-        rt::RunBetaMDPDETest(
-            bias,
-            test_input,
-            1)
+    const auto bias{
+        rt::RunBetaMDPDETest(test_input, 1)
     };
 
-    ASSERT_TRUE(result);
     EXPECT_TRUE(bias.mdpde.requested_alpha.empty());
     ExpectBiasStatisticSize(bias.ols);
     EXPECT_FALSE(bias.mdpde.trained_alpha.has_value());
@@ -219,15 +194,10 @@ TEST(RHBMTesterTest, RunBetaMDPDETestAllowsEmptyAlphaListWithTraining)
         })
     };
 
-    rt::BetaMDPDETestBias bias;
-    const bool result{
-        rt::RunBetaMDPDETest(
-            bias,
-            test_input,
-            1)
+    const auto bias{
+        rt::RunBetaMDPDETest(test_input, 1)
     };
 
-    ASSERT_TRUE(result);
     EXPECT_TRUE(bias.mdpde.requested_alpha.empty());
     ExpectBiasStatisticSize(bias.ols);
     ASSERT_TRUE(bias.mdpde.trained_alpha.has_value());
@@ -254,13 +224,8 @@ TEST(RHBMTesterTest, RunBetaMDPDETestRejectsNonFiniteTruth)
         0.0
     };
 
-    rt::BetaMDPDETestBias bias;
-
     EXPECT_THROW(
-        rt::RunBetaMDPDETest(
-            bias,
-            test_input,
-            1),
+        rt::RunBetaMDPDETest(test_input, 1),
         std::invalid_argument
     );
 }
