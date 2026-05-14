@@ -22,14 +22,10 @@ class AlphaTrainer
 public:
     using ProgressCallback = std::function<void(std::size_t completed, std::size_t total)>;
 
-    struct AlphaRunOptions
+    struct AlphaTrainingOptions
     {
         RHBMExecutionOptions execution_options{};
         ProgressCallback progress_callback{};
-    };
-
-    struct AlphaTrainingOptions : AlphaRunOptions
-    {
         std::size_t subset_size{ 0 };
     };
 

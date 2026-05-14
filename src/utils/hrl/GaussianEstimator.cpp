@@ -22,6 +22,12 @@ namespace {
 constexpr std::size_t kAlphaRSubsetSize{ 5 };
 constexpr std::size_t kAlphaGSubsetSize{ 10 };
 
+struct AlphaStudyOptions
+{
+    RHBMExecutionOptions execution_options{};
+    rhbm_trainer::AlphaTrainer::ProgressCallback progress_callback{};
+};
+
 RHBMExecutionOptions MakeExecutionOptions(const CrossValidationOptions & options)
 {
     RHBMExecutionOptions execution_options;
@@ -140,10 +146,10 @@ rhbm_trainer::AlphaTrainer::AlphaTrainingOptions MakeTrainingOptions(
     return training_options;
 }
 
-rhbm_trainer::AlphaTrainer::AlphaRunOptions MakeStudyOptions(
+AlphaStudyOptions MakeStudyOptions(
     const CrossValidationOptions & options)
 {
-    rhbm_trainer::AlphaTrainer::AlphaRunOptions study_options;
+    AlphaStudyOptions study_options;
     study_options.execution_options = MakeExecutionOptions(options);
     if (options.output_progress)
     {
@@ -197,7 +203,7 @@ void ValidateStudyMemberDataset(const RHBMMemberDataset & dataset)
 Eigen::MatrixXd StudyAlphaRBias(
     const rhbm_trainer::AlphaTrainer & trainer,
     const std::vector<RHBMMemberDataset> & dataset_list,
-    const rhbm_trainer::AlphaTrainer::AlphaRunOptions & options)
+    const AlphaStudyOptions & options)
 {
     const auto & alpha_grid{ trainer.AlphaGrid() };
     ValidateStudyBatch(dataset_list.size(), alpha_grid);
@@ -255,7 +261,7 @@ Eigen::MatrixXd StudyAlphaRBias(
 Eigen::MatrixXd StudyAlphaGBias(
     const rhbm_trainer::AlphaTrainer & trainer,
     const std::vector<std::vector<RHBMParameterVector>> & beta_group_list,
-    const rhbm_trainer::AlphaTrainer::AlphaRunOptions & options)
+    const AlphaStudyOptions & options)
 {
     const auto & alpha_grid{ trainer.AlphaGrid() };
     ValidateStudyBatch(beta_group_list.size(), alpha_grid);
