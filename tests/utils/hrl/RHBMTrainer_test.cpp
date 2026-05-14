@@ -280,3 +280,15 @@ TEST(RHBMTrainerTest, TrainAlphaRequiresExplicitSubsetSizeAndRejectsInvalidInput
             beta_group_list, kAlphaMin, kAlphaMax, kAlphaStep, alpha_g_options),
         std::invalid_argument);
 }
+
+TEST(RHBMTrainerTest, TrainAlphaRRejectsInconsistentDatasetShape)
+{
+    auto dataset{ MakeLinearDataset(1.0) };
+    dataset.y = rg::RHBMResponseVector::Zero(dataset.X.rows() - 1);
+    rg::rhbm_trainer::AlphaTrainingOptions options;
+    options.subset_size = 3;
+
+    EXPECT_THROW(
+        rg::rhbm_trainer::TrainAlphaR({ dataset }, kAlphaMin, kAlphaMax, kAlphaStep, options),
+        std::invalid_argument);
+}

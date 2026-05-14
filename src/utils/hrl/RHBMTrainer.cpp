@@ -1,6 +1,7 @@
 #include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
 
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
+#include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <algorithm>
@@ -27,10 +28,7 @@ void ValidateTrainingInputs(
         throw std::invalid_argument("training data must not be empty.");
     }
     numeric_validation::RequirePositive(subset_size, "subset_size");
-    if (subset_size > data_size)
-    {
-        throw std::invalid_argument("subset_size must not exceed data size.");
-    }
+    numeric_validation::RequireAtMost(subset_size, data_size, "subset_size");
     if (alpha_list.empty())
     {
         throw std::invalid_argument("alpha_list must not be empty.");
@@ -55,14 +53,10 @@ void ValidateTrainingBatch(
 
 void ValidateMemberDataset(const RHBMMemberDataset & dataset)
 {
-    if (dataset.X.rows() != dataset.y.size())
-    {
-        throw std::invalid_argument("dataset shape is inconsistent.");
-    }
-    if (dataset.X.rows() == 0 || dataset.X.cols() == 0)
-    {
-        throw std::invalid_argument("dataset must not be empty.");
-    }
+    eigen_validation::RequireVectorSize(
+        dataset.y, dataset.X.rows(), "dataset.y", "dataset shape is inconsistent.");
+    eigen_validation::RequireNonEmpty(dataset.X, "dataset.X");
+    numeric_validation::RequirePositive(dataset.X.cols(), "dataset.X column count");
 }
 
 RHBMMemberDataset BuildDatasetSlice(
