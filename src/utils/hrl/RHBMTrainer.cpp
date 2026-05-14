@@ -104,14 +104,14 @@ std::vector<double> BuildAlphaGrid(double alpha_min, double alpha_max, double al
     return alpha_list;
 }
 
-AlphaTrainingResult BuildTrainingResult(
+RHBMTrainingResult BuildTrainingResult(
     const std::vector<double> & alpha_list,
     const Eigen::VectorXd & error_sum_list)
 {
     int error_min_id{ 0 };
     error_sum_list.minCoeff(&error_min_id);
 
-    AlphaTrainingResult result;
+    RHBMTrainingResult result;
     result.best_alpha = alpha_list.at(static_cast<std::size_t>(error_min_id));
     result.error_sum_list = error_sum_list;
     result.alpha_grid = alpha_list;
@@ -240,12 +240,12 @@ Eigen::VectorXd EvaluateAlphaGForGroup(
 }
 } // namespace
 
-AlphaTrainingResult TrainAlphaR(
+RHBMTrainingResult CrossValidationAlphaR(
     const std::vector<RHBMMemberDataset> & dataset_list,
     double alpha_min,
     double alpha_max,
     double alpha_step,
-    const AlphaTrainingOptions & options)
+    const RHBMTrainingOptions & options)
 {
     const auto alpha_grid{ BuildAlphaGrid(alpha_min, alpha_max, alpha_step) };
     ValidateTrainingBatch(dataset_list.size(), options.subset_size, alpha_grid);
@@ -286,12 +286,12 @@ AlphaTrainingResult TrainAlphaR(
     return BuildTrainingResult(alpha_grid, error_sum_array.matrix());
 }
 
-AlphaTrainingResult TrainAlphaG(
+RHBMTrainingResult CrossValidationAlphaG(
     const std::vector<std::vector<RHBMParameterVector>> & beta_group_list,
     double alpha_min,
     double alpha_max,
     double alpha_step,
-    const AlphaTrainingOptions & options)
+    const RHBMTrainingOptions & options)
 {
     const auto alpha_grid{ BuildAlphaGrid(alpha_min, alpha_max, alpha_step) };
     ValidateTrainingBatch(beta_group_list.size(), options.subset_size, alpha_grid);

@@ -28,7 +28,7 @@ struct AlphaStudyOptions
     rhbm_trainer::ProgressCallback progress_callback{};
 };
 
-RHBMExecutionOptions MakeExecutionOptions(const CrossValidationOptions & options)
+RHBMExecutionOptions MakeExecutionOptions(const TrainingOptions & options)
 {
     RHBMExecutionOptions execution_options;
     execution_options.quiet_mode = true;
@@ -108,7 +108,7 @@ bool EmitTrainingReportIfRequested(
 
 bool ShouldOutputStudyPlot(
     bool output_study_plot,
-    const CrossValidationOptions & options)
+    const TrainingOptions & options)
 {
     if (!output_study_plot) return false;
     if (!options.study_plot_dir.empty()) return true;
@@ -118,11 +118,11 @@ bool ShouldOutputStudyPlot(
     return false;
 }
 
-rhbm_trainer::AlphaTrainingOptions MakeTrainingOptions(
+rhbm_trainer::RHBMTrainingOptions MakeTrainingOptions(
     std::size_t subset_size,
-    const CrossValidationOptions & options)
+    const TrainingOptions & options)
 {
-    rhbm_trainer::AlphaTrainingOptions training_options;
+    rhbm_trainer::RHBMTrainingOptions training_options;
     training_options.subset_size = subset_size;
     training_options.execution_options = MakeExecutionOptions(options);
     if (options.output_progress)
@@ -137,7 +137,7 @@ rhbm_trainer::AlphaTrainingOptions MakeTrainingOptions(
 }
 
 AlphaStudyOptions MakeStudyOptions(
-    const CrossValidationOptions & options)
+    const TrainingOptions & options)
 {
     AlphaStudyOptions study_options;
     study_options.execution_options = MakeExecutionOptions(options);
@@ -307,7 +307,7 @@ Eigen::MatrixXd StudyAlphaGBias(
 
 RHBMMemberDataset BuildMemberDataset(
     const LocalPotentialSampleList & sample_entries,
-    const CrossValidationOptions & options)
+    const TrainingOptions & options)
 {
     return rhbm_helper::BuildMemberDataset(
         sample_entries, options.fit_range_min, options.fit_range_max);
@@ -315,7 +315,7 @@ RHBMMemberDataset BuildMemberDataset(
 
 std::vector<RHBMMemberDataset> BuildMemberDatasetList(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
-    const CrossValidationOptions & options)
+    const TrainingOptions & options)
 {
     std::vector<RHBMMemberDataset> dataset_list;
     dataset_list.reserve(sample_entries_list.size());
@@ -329,7 +329,7 @@ std::vector<RHBMMemberDataset> BuildMemberDatasetList(
 RHBMBetaEstimateResult EstimateMemberBeta(
     const LocalPotentialSampleList & sample_entries,
     double alpha_r,
-    const CrossValidationOptions & options)
+    const TrainingOptions & options)
 {
     return rhbm_helper::EstimateBetaMDPDE(
         alpha_r,
@@ -340,7 +340,7 @@ RHBMBetaEstimateResult EstimateMemberBeta(
 std::vector<RHBMBetaEstimateResult> EstimateMemberBetaList(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
     const std::vector<double> & alpha_r_list,
-    const CrossValidationOptions & options)
+    const TrainingOptions & options)
 {
     if (sample_entries_list.size() != alpha_r_list.size())
     {
@@ -423,7 +423,7 @@ RHBMGroupEstimationResult EstimateGroupFromSamples(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
     const std::vector<double> & alpha_r_list,
     double alpha_g,
-    const CrossValidationOptions & options)
+    const TrainingOptions & options)
 {
     const auto dataset_list{ BuildMemberDatasetList(sample_entries_list, options) };
     const auto fit_result_list{ EstimateMemberBetaList(sample_entries_list, alpha_r_list, options) };
@@ -435,14 +435,14 @@ RHBMGroupEstimationResult EstimateGroupFromSamples(
 
 } // namespace
 
-double CrossValidationAlphaR(
+double TrainAlphaR(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
-    const CrossValidationOptions & options,
+    const TrainingOptions & options,
     bool output_study_plot)
 {
     const auto dataset_list{ BuildMemberDatasetList(sample_entries_list, options) };
     const auto training_result{
-        rhbm_trainer::TrainAlphaR(
+        rhbm_trainer::CrossValidationAlphaR(
             dataset_list,
             options.alpha_min,
             options.alpha_max,
@@ -463,10 +463,10 @@ double CrossValidationAlphaR(
     return training_result.best_alpha;
 }
 
-double CrossValidationAlphaG(
+double TrainAlphaG(
     const std::vector<std::vector<LocalPotentialSampleList>> & sample_group_list,
     const std::vector<std::vector<LocalGaussianResult>> & member_result_list,
-    const CrossValidationOptions & options,
+    const TrainingOptions & options,
     bool output_study_plot)
 {
     if (sample_group_list.size() != member_result_list.size())
@@ -514,7 +514,7 @@ double CrossValidationAlphaG(
     }
 
     const auto training_result{
-        rhbm_trainer::TrainAlphaG(
+        rhbm_trainer::CrossValidationAlphaG(
             beta_group_list,
             options.alpha_min,
             options.alpha_max,
@@ -544,7 +544,7 @@ double CrossValidationAlphaG(
 LocalGaussianResult EstimateLocalGaussian(
     const LocalPotentialSampleList & sample_entries,
     double alpha_r,
-    const CrossValidationOptions & options)
+    const TrainingOptions & options)
 {
     return DecodeLocalGaussianResult(
         alpha_r,
@@ -555,7 +555,7 @@ GroupGaussianResult EstimateGroupGaussian(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
     const std::vector<double> & alpha_r_list,
     double alpha_g,
-    const CrossValidationOptions & options)
+    const TrainingOptions & options)
 {
     const auto raw_result{
         EstimateGroupFromSamples(sample_entries_list, alpha_r_list, alpha_g, options)

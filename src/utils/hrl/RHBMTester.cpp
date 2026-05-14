@@ -24,9 +24,9 @@ struct MuReplicaBias
     Eigen::VectorXd mdpde_bias;
 };
 
-gaussian_estimator::CrossValidationOptions MakeAlphaOptions()
+gaussian_estimator::TrainingOptions MakeAlphaOptions()
 {
-    gaussian_estimator::CrossValidationOptions options;
+    gaussian_estimator::TrainingOptions options;
     options.thread_size = 1;
     return options;
 }
@@ -46,7 +46,7 @@ BetaReplicaBias EstimateBetaReplicaBias(
     const LocalPotentialSampleList & sample_entries,
     const GaussianModel3D & gaus_true,
     double alpha_r,
-    const gaussian_estimator::CrossValidationOptions & options)
+    const gaussian_estimator::TrainingOptions & options)
 {
     const auto gaussian_result{
         gaussian_estimator::EstimateLocalGaussian(sample_entries, alpha_r, options)
@@ -64,7 +64,7 @@ std::vector<double> BuildZeroAlphaRList(std::size_t member_size)
 
 std::vector<LocalGaussianResult> EstimateLocalGaussianList(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
-    const gaussian_estimator::CrossValidationOptions & options)
+    const gaussian_estimator::TrainingOptions & options)
 {
     std::vector<LocalGaussianResult> member_results;
     member_results.reserve(sample_entries_list.size());
@@ -80,7 +80,7 @@ MuReplicaBias EstimateMuReplicaBias(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
     const GaussianModel3D & gaus_true,
     double alpha_g,
-    const gaussian_estimator::CrossValidationOptions & options)
+    const gaussian_estimator::TrainingOptions & options)
 {
     const auto alpha_r_list{ BuildZeroAlphaRList(sample_entries_list.size()) };
     const auto baseline_result{
@@ -172,7 +172,7 @@ bool RunBetaMDPDETest(
         if (input.alpha_training)
         {
             const auto trained_alpha_r{
-                gaussian_estimator::CrossValidationAlphaR(
+                gaussian_estimator::TrainAlphaR(
                     std::vector<LocalPotentialSampleList>{ sample_entries }, estimator_options)
             };
             trained_alpha_list.at(static_cast<size_t>(i)) = trained_alpha_r;
@@ -279,7 +279,7 @@ bool RunMuMDPDETest(
                 EstimateLocalGaussianList(sample_entries_list, estimator_options)
             };
             const auto trained_alpha_g{
-                gaussian_estimator::CrossValidationAlphaG(
+                gaussian_estimator::TrainAlphaG(
                     std::vector<std::vector<LocalPotentialSampleList>>{ sample_entries_list },
                     std::vector<std::vector<LocalGaussianResult>>{ member_results },
                     estimator_options)

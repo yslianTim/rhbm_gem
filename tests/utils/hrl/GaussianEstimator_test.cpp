@@ -36,9 +36,9 @@ LocalPotentialSampleList MakeSampleEntries(double log_response_shift = 0.0)
     return sample_entries;
 }
 
-rg::gaussian_estimator::CrossValidationOptions MakeOptions()
+rg::gaussian_estimator::TrainingOptions MakeOptions()
 {
-    rg::gaussian_estimator::CrossValidationOptions options;
+    rg::gaussian_estimator::TrainingOptions options;
     options.alpha_min = 0.0;
     options.alpha_max = 0.5;
     options.alpha_step = 0.5;
@@ -70,7 +70,7 @@ std::vector<LocalPotentialSampleList> MakeIdenticalSampleGroup(std::size_t membe
 
 std::vector<rg::LocalGaussianResult> EstimateMemberResults(
     const std::vector<LocalPotentialSampleList> & sample_group,
-    const rg::gaussian_estimator::CrossValidationOptions & options)
+    const rg::gaussian_estimator::TrainingOptions & options)
 {
     std::vector<rg::LocalGaussianResult> member_results;
     member_results.reserve(sample_group.size());
@@ -108,7 +108,7 @@ TEST(GaussianEstimatorTest, SampleListAlphaRReturnsFiniteAlpha)
     const auto options{ MakeOptions() };
     const std::vector<LocalPotentialSampleList> sample_entries_list{ MakeSampleEntries() };
     const auto alpha_r{
-        rg::gaussian_estimator::CrossValidationAlphaR(sample_entries_list, options)
+        rg::gaussian_estimator::TrainAlphaR(sample_entries_list, options)
     };
 
     EXPECT_TRUE(std::isfinite(alpha_r));
@@ -129,13 +129,13 @@ TEST(GaussianEstimatorTest, AlphaRMatchesTrainingFunctionBestAlpha)
         rg::rhbm_helper::BuildMemberDataset(
             sample_entries_list.at(1), options.fit_range_min, options.fit_range_max)
     };
-    rg::rhbm_trainer::AlphaTrainingOptions trainer_options;
+    rg::rhbm_trainer::RHBMTrainingOptions trainer_options;
     trainer_options.subset_size = 5;
     trainer_options.execution_options.quiet_mode = true;
     trainer_options.execution_options.thread_size = options.thread_size;
 
     const auto expected{
-        rg::rhbm_trainer::TrainAlphaR(
+        rg::rhbm_trainer::CrossValidationAlphaR(
             dataset_list,
             options.alpha_min,
             options.alpha_max,
@@ -143,7 +143,7 @@ TEST(GaussianEstimatorTest, AlphaRMatchesTrainingFunctionBestAlpha)
             trainer_options).best_alpha
     };
     const auto actual{
-        rg::gaussian_estimator::CrossValidationAlphaR(sample_entries_list, options)
+        rg::gaussian_estimator::TrainAlphaR(sample_entries_list, options)
     };
 
     EXPECT_DOUBLE_EQ(actual, expected);
@@ -159,13 +159,13 @@ TEST(GaussianEstimatorTest, AlphaGMatchesTrainingFunctionBestAlpha)
         EstimateMemberResults(sample_group_list.front(), options)
     };
     const auto beta_group_list{ BuildBetaGroupList(member_result_list) };
-    rg::rhbm_trainer::AlphaTrainingOptions trainer_options;
+    rg::rhbm_trainer::RHBMTrainingOptions trainer_options;
     trainer_options.subset_size = 10;
     trainer_options.execution_options.quiet_mode = true;
     trainer_options.execution_options.thread_size = options.thread_size;
 
     const auto expected{
-        rg::rhbm_trainer::TrainAlphaG(
+        rg::rhbm_trainer::CrossValidationAlphaG(
             beta_group_list,
             options.alpha_min,
             options.alpha_max,
@@ -173,7 +173,7 @@ TEST(GaussianEstimatorTest, AlphaGMatchesTrainingFunctionBestAlpha)
             trainer_options).best_alpha
     };
     const auto actual{
-        rg::gaussian_estimator::CrossValidationAlphaG(
+        rg::gaussian_estimator::TrainAlphaG(
             sample_group_list, member_result_list, options)
     };
 
@@ -196,11 +196,11 @@ TEST(GaussianEstimatorTest, QuietAlphaGOptionsDoNotChangeBestAlpha)
     };
 
     const auto quiet_alpha{
-        rg::gaussian_estimator::CrossValidationAlphaG(
+        rg::gaussian_estimator::TrainAlphaG(
             sample_group_list, member_result_list, quiet_options)
     };
     const auto verbose_alpha{
-        rg::gaussian_estimator::CrossValidationAlphaG(
+        rg::gaussian_estimator::TrainAlphaG(
             sample_group_list, member_result_list, verbose_options)
     };
 
@@ -218,10 +218,10 @@ TEST(GaussianEstimatorTest, AlphaRStudyPlotPathDoesNotChangeBestAlpha)
     };
 
     const auto expected{
-        rg::gaussian_estimator::CrossValidationAlphaR(sample_entries_list, options)
+        rg::gaussian_estimator::TrainAlphaR(sample_entries_list, options)
     };
     const auto actual{
-        rg::gaussian_estimator::CrossValidationAlphaR(sample_entries_list, options, true)
+        rg::gaussian_estimator::TrainAlphaR(sample_entries_list, options, true)
     };
 
     EXPECT_TRUE(std::isfinite(actual));
@@ -241,11 +241,11 @@ TEST(GaussianEstimatorTest, AlphaGStudyPlotPathDoesNotChangeBestAlpha)
     };
 
     const auto expected{
-        rg::gaussian_estimator::CrossValidationAlphaG(
+        rg::gaussian_estimator::TrainAlphaG(
             sample_group_list, member_result_list, options)
     };
     const auto actual{
-        rg::gaussian_estimator::CrossValidationAlphaG(
+        rg::gaussian_estimator::TrainAlphaG(
             sample_group_list, member_result_list, options, true)
     };
 
@@ -259,7 +259,7 @@ TEST(GaussianEstimatorTest, RejectsEmptyAlphaRTrainingInputs)
     const std::vector<LocalPotentialSampleList> empty_sample_entries_list;
 
     EXPECT_THROW(
-        rg::gaussian_estimator::CrossValidationAlphaR(empty_sample_entries_list, options),
+        rg::gaussian_estimator::TrainAlphaR(empty_sample_entries_list, options),
         std::invalid_argument);
 }
 
@@ -272,7 +272,7 @@ TEST(GaussianEstimatorTest, EmptyAlphaGTrainingInputReturnsFallbackAlpha)
     const std::vector<std::vector<rg::LocalGaussianResult>> empty_member_result_list;
 
     const auto alpha_g{
-        rg::gaussian_estimator::CrossValidationAlphaG(
+        rg::gaussian_estimator::TrainAlphaG(
             empty_sample_group_list, empty_member_result_list, options)
     };
 
@@ -291,7 +291,7 @@ TEST(GaussianEstimatorTest, PlotRequestWithEmptyDirectoryDoesNotRequireRoot)
 
     EXPECT_NO_THROW({
         const auto alpha_g{
-            rg::gaussian_estimator::CrossValidationAlphaG(
+            rg::gaussian_estimator::TrainAlphaG(
                 sample_group_list, member_result_list, options, true)
         };
         EXPECT_TRUE(std::isfinite(alpha_g));

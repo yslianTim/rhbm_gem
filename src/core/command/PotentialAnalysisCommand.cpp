@@ -102,10 +102,10 @@ std::vector<MutableLocalPotentialView> BuildSelectedAtomLocalEntryViews(ModelObj
     return local_entry_list;
 }
 
-gaussian_estimator::CrossValidationOptions MakeGaussianEstimatorOptions(
+gaussian_estimator::TrainingOptions MakeGaussianEstimatorOptions(
     const PotentialAnalysisRequest & request)
 {
-    gaussian_estimator::CrossValidationOptions options;
+    gaussian_estimator::TrainingOptions options;
     options.alpha_min = request.training_alpha_min;
     options.alpha_max = request.training_alpha_max;
     options.alpha_step = request.training_alpha_step;
@@ -186,7 +186,7 @@ void RunModelObjectPreprocessing(
 
 void RunLocalPotentialFitting(
     ModelObject & model_object,
-    const gaussian_estimator::CrossValidationOptions & options)
+    const gaussian_estimator::TrainingOptions & options)
 {
     const auto selected_atom_size{ model_object.GetSelectedAtomCount() };
     auto local_entry_list{ BuildSelectedAtomLocalEntryViews(model_object) };
@@ -250,7 +250,7 @@ void RunAtomAlphaTraining(
             auto alpha_r_options{ alpha_options };
             alpha_r_options.output_progress = false;
             const auto alpha_r{
-                gaussian_estimator::CrossValidationAlphaR(selected_sample_entries_list, alpha_r_options)
+                gaussian_estimator::TrainAlphaR(selected_sample_entries_list, alpha_r_options)
             };
             for (auto * atom : group_atom_list)
             {
@@ -288,7 +288,7 @@ void RunAtomAlphaTraining(
     }
 
     const auto alpha_g{
-        gaussian_estimator::CrossValidationAlphaG(
+        gaussian_estimator::TrainAlphaG(
             sample_group_list, member_result_list, alpha_options, !request.training_report_dir.empty())
     };
 
