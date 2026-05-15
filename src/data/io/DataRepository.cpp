@@ -5,8 +5,6 @@
 
 #include "sqlite/SQLitePersistence.hpp"
 
-#include <stdexcept>
-
 namespace rhbm_gem {
 
 DataRepository::DataRepository(const std::filesystem::path & database_path) :

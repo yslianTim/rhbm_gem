@@ -7,7 +7,6 @@
 #include <cmath>
 #include <filesystem>
 #include <system_error>
-#include <tuple>
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>

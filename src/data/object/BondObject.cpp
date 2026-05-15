@@ -3,8 +3,6 @@
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
-#include <stdexcept>
-
 namespace rhbm_gem {
 
 BondObject::BondObject() :

@@ -5,7 +5,6 @@
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 #include "MapAxisOrderHelper.hpp"
 
-#include <fstream>
 #include <cstring>
 #include <stdexcept>
 #include <algorithm>

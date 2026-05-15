@@ -28,8 +28,6 @@
 #include <TLine.h>
 #endif
 
-#include <tuple>
-
 namespace rhbm_gem {
 
 ComparisonPainter::ComparisonPainter() = default;

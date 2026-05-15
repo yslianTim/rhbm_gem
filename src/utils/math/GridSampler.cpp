@@ -5,9 +5,7 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <stdexcept>
-#include <cmath>
 #include <sstream>
-#include <algorithm>
 #include <Eigen/Dense>
 
 using Eigen::Vector3f;

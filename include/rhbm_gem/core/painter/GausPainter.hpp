@@ -2,7 +2,6 @@
 
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>

@@ -6,7 +6,6 @@
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <cmath>
-#include <stdexcept>
 #include <utility>
 
 namespace rhbm_gem::linearization_service

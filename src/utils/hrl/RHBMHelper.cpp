@@ -11,7 +11,6 @@
 #include <cmath>
 #include <limits>
 #include <stdexcept>
-#include <string>
 #include <string_view>
 
 #include <boost/math/distributions/chi_squared.hpp>

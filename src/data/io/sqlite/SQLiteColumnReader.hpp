@@ -2,12 +2,12 @@
 
 #include <cstddef>
 #include <sqlite3.h>
-#include <rhbm_gem/utils/math/SamplingTypes.hpp>
-#include <stdexcept>
 #include <string>
 #include <cstring>
 #include <tuple>
 #include <vector>
+
+#include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace rhbm_gem {
 

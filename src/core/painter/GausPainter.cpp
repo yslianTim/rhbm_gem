@@ -5,13 +5,11 @@
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include "PotentialPlotBuilder.hpp"
 #include "core/painter/AtomStyleCatalog.hpp"
-#include "core/painter/BondStyleCatalog.hpp"
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/ComponentHelper.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include "data/detail/AtomClassifier.hpp"
-#include "data/detail/BondClassifier.hpp"
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>

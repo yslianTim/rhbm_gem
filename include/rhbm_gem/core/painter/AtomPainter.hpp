@@ -1,7 +1,6 @@
 #pragma once
 
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 #include <rhbm_gem/core/painter/PainterBase.hpp>

@@ -2,8 +2,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cmath>
-#include <stdexcept>
 #include <vector>
 
 #include <Eigen/Dense>

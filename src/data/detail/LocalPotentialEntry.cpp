@@ -4,7 +4,6 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <cmath>
-#include <stdexcept>
 #include <utility>
 
 namespace rhbm_gem {

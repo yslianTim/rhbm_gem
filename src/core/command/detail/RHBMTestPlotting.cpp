@@ -8,7 +8,6 @@
 #include <iomanip>
 #include <memory>
 #include <sstream>
-#include <tuple>
 #include <utility>
 
 #ifdef HAVE_ROOT

@@ -3,7 +3,6 @@
 #include <chrono>
 #include <string>
 #include <sstream>
-#include <memory>
 #include <type_traits>
 
 #include <rhbm_gem/utils/domain/Logger.hpp>

@@ -4,7 +4,6 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include "PotentialPlotBuilder.hpp"
 #include "detail/PainterModelAccess.hpp"
-#include "detail/PainterSupport.hpp"
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
@@ -25,7 +24,6 @@
 #endif
 
 #include <vector>
-#include <tuple>
 
 namespace rhbm_gem {
 

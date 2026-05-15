@@ -3,7 +3,6 @@
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
-#include <iostream>
 #include <stdexcept>
 #include <string>
 #include <cmath>

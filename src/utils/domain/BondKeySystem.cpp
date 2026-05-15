@@ -4,8 +4,6 @@
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
-#include <algorithm>
-
 const BondKey BondKeySystem::k_dynamic_base{ 10000 };
 const BondKey BondKeySystem::k_max_key{ std::numeric_limits<BondKey>::max() };
 
