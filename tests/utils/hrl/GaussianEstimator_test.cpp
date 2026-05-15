@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstddef>
 #include <filesystem>
+#include <limits>
 #include <optional>
 #include <stdexcept>
 #include <utility>
@@ -277,6 +278,69 @@ TEST(GaussianEstimatorTest, EmptyAlphaGTrainingInputReturnsFallbackAlpha)
     };
 
     EXPECT_DOUBLE_EQ(alpha_g, options.alpha_min);
+}
+
+TEST(GaussianEstimatorTest, EmptyAlphaGTrainingInputRejectsInvalidAlphaRange)
+{
+    auto options{ MakeOptions() };
+    options.alpha_min = 1.0;
+    options.alpha_max = 0.5;
+    const std::vector<std::vector<LocalPotentialSampleList>> empty_sample_group_list;
+    const std::vector<std::vector<rg::LocalGaussianResult>> empty_member_result_list;
+
+    EXPECT_THROW(
+        rg::gaussian_estimator::TrainAlphaG(
+            empty_sample_group_list, empty_member_result_list, options),
+        std::invalid_argument);
+}
+
+TEST(GaussianEstimatorTest, EmptyAlphaGTrainingInputRejectsNonFiniteFallbackAlpha)
+{
+    auto options{ MakeOptions() };
+    options.alpha_min = std::numeric_limits<double>::infinity();
+    const std::vector<std::vector<LocalPotentialSampleList>> empty_sample_group_list;
+    const std::vector<std::vector<rg::LocalGaussianResult>> empty_member_result_list;
+
+    EXPECT_THROW(
+        rg::gaussian_estimator::TrainAlphaG(
+            empty_sample_group_list, empty_member_result_list, options),
+        std::invalid_argument);
+}
+
+TEST(GaussianEstimatorTest, EstimateLocalGaussianRejectsInvalidAlphaR)
+{
+    const auto options{ MakeOptions() };
+    const auto sample_entries{ MakeSampleEntries() };
+
+    EXPECT_THROW(
+        rg::gaussian_estimator::EstimateLocalGaussian(
+            sample_entries, -std::numeric_limits<double>::min(), options),
+        std::invalid_argument);
+}
+
+TEST(GaussianEstimatorTest, EstimateGroupGaussianRejectsInvalidAlphaG)
+{
+    const auto options{ MakeOptions() };
+    const std::vector<LocalPotentialSampleList> sample_entries_list;
+    const std::vector<rg::LocalGaussianResult> member_result_list;
+
+    EXPECT_THROW(
+        rg::gaussian_estimator::EstimateGroupGaussian(
+            sample_entries_list, member_result_list,
+            std::numeric_limits<double>::quiet_NaN(), options),
+        std::invalid_argument);
+}
+
+TEST(GaussianEstimatorTest, TrainAlphaRRejectsInvalidFitRange)
+{
+    auto options{ MakeOptions() };
+    options.fit_range_min = 1.0;
+    options.fit_range_max = 0.5;
+    const std::vector<LocalPotentialSampleList> sample_entries_list{ MakeSampleEntries() };
+
+    EXPECT_THROW(
+        rg::gaussian_estimator::TrainAlphaR(sample_entries_list, options),
+        std::invalid_argument);
 }
 
 TEST(GaussianEstimatorTest, PlotRequestWithEmptyDirectoryDoesNotRequireRoot)

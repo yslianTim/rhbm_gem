@@ -6,6 +6,7 @@
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
+#include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <atomic>
 #include <filesystem>
@@ -34,6 +35,19 @@ RHBMExecutionOptions MakeExecutionOptions(const TrainingOptions & options)
     execution_options.quiet_mode = true;
     execution_options.thread_size = options.thread_size;
     return execution_options;
+}
+
+void ValidateTrainingAlphaGridOptions(const TrainingOptions & options)
+{
+    numeric_validation::RequireFiniteNonNegativeRange(
+        options.alpha_min, options.alpha_max, "alpha training range");
+    numeric_validation::RequireFinitePositive(options.alpha_step, "alpha training step");
+}
+
+void ValidateFitRange(const TrainingOptions & options)
+{
+    numeric_validation::RequireFiniteNonNegativeRange(
+        options.fit_range_min, options.fit_range_max, "fit range");
 }
 
 bool EmitTrainingReportIfRequested(
@@ -158,7 +172,7 @@ Eigen::VectorXd CalculateAbsoluteGaussianDifference(
 {
     const auto gaussian_a{ linearization_service::DecodeParameterVector(linear_a).ToVector() };
     const auto gaussian_b{ linearization_service::DecodeParameterVector(linear_b).ToVector() };
-    eigen_validation::RequireVectorSize(gaussian_a, gaussian_b.rows(), "gaussian");
+    eigen_validation::RequireSameSize(gaussian_a, gaussian_b, "gaussian");
     return (gaussian_a - gaussian_b).array().abs().matrix();
 }
 
@@ -166,26 +180,19 @@ void ValidateStudyBatch(
     std::size_t batch_size,
     const std::vector<double> & alpha_list)
 {
-    if (batch_size == 0)
-    {
-        throw std::invalid_argument("training data must not be empty.");
-    }
-    if (alpha_list.empty())
-    {
-        throw std::invalid_argument("alpha_list must not be empty.");
-    }
+    numeric_validation::RequirePositive(batch_size, "training data size");
+    numeric_validation::RequirePositive(alpha_list.size(), "alpha_list");
+    numeric_validation::RequireAllFinite(alpha_list, "alpha_list");
 }
 
 void ValidateStudyMemberDataset(const RHBMMemberDataset & dataset)
 {
-    if (dataset.X.rows() != dataset.y.size())
-    {
-        throw std::invalid_argument("dataset shape is inconsistent.");
-    }
-    if (dataset.X.rows() == 0 || dataset.X.cols() == 0)
-    {
-        throw std::invalid_argument("dataset must not be empty.");
-    }
+    eigen_validation::RequireVectorSize(
+        dataset.y, dataset.X.rows(), "dataset.y", "dataset shape is inconsistent.");
+    eigen_validation::RequireNonEmpty(dataset.X, "dataset.X");
+    numeric_validation::RequirePositive(dataset.X.cols(), "dataset.X column count");
+    eigen_validation::RequireFinite(dataset.X, "dataset.X");
+    eigen_validation::RequireFinite(dataset.y, "dataset.y");
 }
 
 Eigen::MatrixXd StudyAlphaRBias(
@@ -253,10 +260,7 @@ Eigen::MatrixXd StudyAlphaGBias(
     ValidateStudyBatch(beta_group_list.size(), alpha_grid);
     for (const auto & beta_list : beta_group_list)
     {
-        if (beta_list.empty())
-        {
-            throw std::invalid_argument("training data must not be empty.");
-        }
+        numeric_validation::RequirePositive(beta_list.size(), "training data size");
     }
 
     const auto group_size{ beta_group_list.size() };
@@ -354,12 +358,16 @@ std::vector<LocalGaussianResult> DecodeMemberGaussianResults(
     const RHBMGroupEstimationResult & result)
 {
     const auto member_count{ static_cast<std::size_t>(result.beta_posterior_matrix.cols()) };
-    if (result.capital_sigma_posterior_list.size() != member_count ||
-        result.outlier_flag_array.rows() != static_cast<Eigen::Index>(member_count) ||
-        result.statistical_distance_array.rows() != static_cast<Eigen::Index>(member_count))
+    if (result.capital_sigma_posterior_list.size() != member_count)
     {
         throw std::invalid_argument("Group Gaussian member result count is inconsistent.");
     }
+    eigen_validation::RequireVectorSize(
+        result.outlier_flag_array, result.beta_posterior_matrix.cols(),
+        "outlier_flag_array", "Group Gaussian member result count is inconsistent.");
+    eigen_validation::RequireVectorSize(
+        result.statistical_distance_array, result.beta_posterior_matrix.cols(),
+        "statistical_distance_array", "Group Gaussian member result count is inconsistent.");
 
     std::vector<LocalGaussianResult> member_results;
     member_results.reserve(member_count);
@@ -405,6 +413,9 @@ double TrainAlphaR(
     const TrainingOptions & options,
     bool output_study_plot)
 {
+    ValidateTrainingAlphaGridOptions(options);
+    ValidateFitRange(options);
+
     const auto dataset_list{ BuildMemberDatasetList(sample_entries_list, options) };
     const auto training_result{
         rhbm_trainer::CrossValidationAlphaR(
@@ -434,6 +445,8 @@ double TrainAlphaG(
     const TrainingOptions & options,
     bool output_study_plot)
 {
+    ValidateTrainingAlphaGridOptions(options);
+
     if (sample_group_list.size() != member_result_list.size())
     {
         throw std::invalid_argument("sample_group_list and member_result_list sizes are inconsistent.");
@@ -511,6 +524,9 @@ LocalGaussianResult EstimateLocalGaussian(
     double alpha_r,
     const TrainingOptions & options)
 {
+    ValidateFitRange(options);
+    numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
+
     auto dataset{
         rhbm_helper::BuildMemberDataset(sample_entries, options.fit_range_min, options.fit_range_max)
     };
@@ -525,6 +541,9 @@ GroupGaussianResult EstimateGroupGaussian(
     double alpha_g,
     const TrainingOptions & options)
 {
+    ValidateFitRange(options);
+    numeric_validation::RequireFiniteNonNegative(alpha_g, "alpha_g");
+
     if (sample_entries_list.size() != member_result_list.size())
     {
         throw std::invalid_argument("sample_entries_list and member_result_list sizes are inconsistent.");
