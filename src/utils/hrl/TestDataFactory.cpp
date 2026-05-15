@@ -11,7 +11,6 @@
 #include <cmath>
 #include <cstddef>
 #include <random>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
