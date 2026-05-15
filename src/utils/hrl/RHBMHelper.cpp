@@ -6,13 +6,13 @@
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
-#include "utils/hrl/detail/ScopedEigenThreadCount.hpp"
-
 #include <cmath>
 #include <limits>
 #include <stdexcept>
 #include <string_view>
+#include <utility>
 
+#include <Eigen/Core>
 #include <boost/math/distributions/chi_squared.hpp>
 
 using namespace rhbm_gem;
@@ -47,6 +47,43 @@ void ValidateSquareBasisMatrix(
     std::string_view context = {})
 {
     eigen_validation::RequireShape(matrix, basis_size, basis_size, name, context);
+}
+
+int NormalizeEigenThreadCount(int requested_thread_count)
+{
+    return (requested_thread_count <= 0) ? 1 : requested_thread_count;
+}
+
+void RestoreEigenThreadCountIfChanged(bool changed, int previous_thread_count)
+{
+    if (changed && Eigen::nbThreads() != previous_thread_count)
+    {
+        Eigen::setNbThreads(previous_thread_count);
+    }
+}
+
+template <typename Callable>
+auto RunWithTemporaryEigenThreadCount(int requested_thread_count, Callable && callable)
+{
+    const int previous_thread_count{ Eigen::nbThreads() };
+    const int active_thread_count{ NormalizeEigenThreadCount(requested_thread_count) };
+    const bool changed{ active_thread_count != previous_thread_count };
+    if (changed)
+    {
+        Eigen::setNbThreads(active_thread_count);
+    }
+
+    try
+    {
+        auto result{ std::forward<Callable>(callable)() };
+        RestoreEigenThreadCountIfChanged(changed, previous_thread_count);
+        return result;
+    }
+    catch (...)
+    {
+        RestoreEigenThreadCountIfChanged(changed, previous_thread_count);
+        throw;
+    }
 }
 
 double CalculateChiSquareQuantile(int df)
@@ -481,72 +518,72 @@ RHBMBetaEstimateResult rhbm_helper::EstimateBetaMDPDE(
     const auto & response_vector{ dataset.y };
     ValidateDatasetShape(design_matrix, response_vector, "EstimateBetaMDPDE dataset is invalid.");
 
-    detail::ScopedEigenThreadCount thread_guard(options.thread_size);
-    (void)thread_guard;
-
-    RHBMBetaEstimateResult result;
-    const auto data_size{ static_cast<int>(response_vector.size()) };
-    if (data_size <= 1)
+    return RunWithTemporaryEigenThreadCount(options.thread_size, [&]()
     {
-        result.status = RHBMEstimationStatus::INSUFFICIENT_DATA;
-        result.beta_ols = RHBMParameterVector::Zero(design_matrix.cols());
-        result.beta_mdpde = RHBMParameterVector::Zero(design_matrix.cols());
-        result.sigma_square = std::numeric_limits<double>::max();
-        result.data_weight.resize(1);
-        result.data_weight.diagonal().setOnes();
-        result.data_covariance.resize(1);
-        result.data_covariance.diagonal().setOnes();
-        return result;
-    }
-
-    result.beta_ols = CalculateBetaByOLS(design_matrix, response_vector);
-    result.beta_mdpde = result.beta_ols;
-    result.sigma_square =
-        (response_vector - (design_matrix * result.beta_mdpde)).squaredNorm() /
-        static_cast<double>(data_size - 1);
-    result.data_weight = RHBMResponseVector::Ones(data_size).asDiagonal();
-
-    auto beta_in_previous_iter{ result.beta_mdpde };
-    bool converged{ false };
-    for (int t = 0; t < options.max_iterations; t++)
-    {
-        result.data_weight = CalculateDataWeight(
-            alpha_r,
-            design_matrix,
-            response_vector,
-            result.beta_mdpde,
-            result.sigma_square,
-            options.data_weight_min
-        );
-        result.beta_mdpde = CalculateBetaByMDPDE(
-            design_matrix,
-            response_vector,
-            result.data_weight);
-        result.sigma_square = CalculateDataVarianceSquare(
-            alpha_r,
-            design_matrix,
-            response_vector,
-            result.data_weight,
-            result.beta_mdpde
-        );
-        if ((result.beta_mdpde - beta_in_previous_iter).squaredNorm() < options.tolerance)
+        RHBMBetaEstimateResult result;
+        const auto data_size{ static_cast<int>(response_vector.size()) };
+        if (data_size <= 1)
         {
-            converged = true;
-            break;
+            result.status = RHBMEstimationStatus::INSUFFICIENT_DATA;
+            result.beta_ols = RHBMParameterVector::Zero(design_matrix.cols());
+            result.beta_mdpde = RHBMParameterVector::Zero(design_matrix.cols());
+            result.sigma_square = std::numeric_limits<double>::max();
+            result.data_weight.resize(1);
+            result.data_weight.diagonal().setOnes();
+            result.data_covariance.resize(1);
+            result.data_covariance.diagonal().setOnes();
+            return result;
         }
-        beta_in_previous_iter = result.beta_mdpde;
-    }
 
-    result.data_covariance = CalculateDataCovariance(result.sigma_square, result.data_weight);
-    if (!converged)
-    {
-        result.status = RHBMEstimationStatus::MAX_ITERATIONS_REACHED;
-    }
-    if (result.sigma_square == std::numeric_limits<double>::max())
-    {
-        result.status = RHBMEstimationStatus::NUMERICAL_FALLBACK;
-    }
-    return result;
+        result.beta_ols = CalculateBetaByOLS(design_matrix, response_vector);
+        result.beta_mdpde = result.beta_ols;
+        result.sigma_square =
+            (response_vector - (design_matrix * result.beta_mdpde)).squaredNorm() /
+            static_cast<double>(data_size - 1);
+        result.data_weight = RHBMResponseVector::Ones(data_size).asDiagonal();
+
+        auto beta_in_previous_iter{ result.beta_mdpde };
+        bool converged{ false };
+        for (int t = 0; t < options.max_iterations; t++)
+        {
+            result.data_weight = CalculateDataWeight(
+                alpha_r,
+                design_matrix,
+                response_vector,
+                result.beta_mdpde,
+                result.sigma_square,
+                options.data_weight_min
+            );
+            result.beta_mdpde = CalculateBetaByMDPDE(
+                design_matrix,
+                response_vector,
+                result.data_weight);
+            result.sigma_square = CalculateDataVarianceSquare(
+                alpha_r,
+                design_matrix,
+                response_vector,
+                result.data_weight,
+                result.beta_mdpde
+            );
+            if ((result.beta_mdpde - beta_in_previous_iter).squaredNorm() < options.tolerance)
+            {
+                converged = true;
+                break;
+            }
+            beta_in_previous_iter = result.beta_mdpde;
+        }
+
+        result.data_covariance = CalculateDataCovariance(result.sigma_square, result.data_weight);
+        if (!converged)
+        {
+            result.status = RHBMEstimationStatus::MAX_ITERATIONS_REACHED;
+        }
+        if (result.sigma_square == std::numeric_limits<double>::max())
+        {
+            result.status = RHBMEstimationStatus::NUMERICAL_FALLBACK;
+        }
+        return result;
+    });
 }
 
 RHBMMuEstimateResult rhbm_helper::EstimateMuMDPDE(
@@ -560,75 +597,75 @@ RHBMMuEstimateResult rhbm_helper::EstimateMuMDPDE(
     numeric_validation::RequireFinitePositive(options.member_weight_min, "member_weight_min");
     eigen_validation::RequireNonEmpty(beta_matrix, "beta_matrix");
 
-    detail::ScopedEigenThreadCount thread_guard(options.thread_size);
-    (void)thread_guard;
-
-    RHBMMuEstimateResult result;
-    const auto basis_size{ static_cast<int>(beta_matrix.rows()) };
-    const auto member_size{ static_cast<int>(beta_matrix.cols()) };
-    if (member_size == 1)
+    return RunWithTemporaryEigenThreadCount(options.thread_size, [&]()
     {
-        result.status = RHBMEstimationStatus::SINGLE_MEMBER;
-        result.mu_mean = beta_matrix.rowwise().mean();
-        result.mu_mdpde = result.mu_mean;
-        result.omega_array = Eigen::ArrayXd::Ones(member_size);
-        result.omega_sum = result.omega_array.sum();
-        result.capital_lambda = RHBMGroupCovarianceMatrix::Identity(basis_size, basis_size);
-        result.member_capital_lambda_list.assign(
-            static_cast<std::size_t>(member_size),
-            RHBMMemberCovarianceMatrix::Identity(basis_size, basis_size)
-        );
-        return result;
-    }
-
-    result.mu_mean = beta_matrix.rowwise().mean();
-    result.mu_mdpde = CalculateMuByMedian(beta_matrix);
-    result.capital_lambda = RHBMGroupCovarianceMatrix::Identity(basis_size, basis_size);
-    auto mu_in_previous_iter{ result.mu_mdpde };
-    bool converged{ false };
-    for (int t = 0; t < options.max_iterations; t++)
-    {
-        result.omega_array = CalculateMemberWeight(
-            alpha_g,
-            beta_matrix,
-            result.mu_mdpde,
-            result.capital_lambda,
-            options.member_weight_min
-        );
-        result.omega_sum = result.omega_array.sum();
-        result.mu_mdpde = CalculateMuByMDPDE(beta_matrix, result.omega_array, result.omega_sum);
-        result.capital_lambda = CalculateMemberCovariance(
-            alpha_g,
-            beta_matrix,
-            result.mu_mdpde,
-            result.omega_array,
-            result.omega_sum
-        );
-        if ((result.mu_mdpde - mu_in_previous_iter).squaredNorm() < options.tolerance)
+        RHBMMuEstimateResult result;
+        const auto basis_size{ static_cast<int>(beta_matrix.rows()) };
+        const auto member_size{ static_cast<int>(beta_matrix.cols()) };
+        if (member_size == 1)
         {
-            converged = true;
-            break;
+            result.status = RHBMEstimationStatus::SINGLE_MEMBER;
+            result.mu_mean = beta_matrix.rowwise().mean();
+            result.mu_mdpde = result.mu_mean;
+            result.omega_array = Eigen::ArrayXd::Ones(member_size);
+            result.omega_sum = result.omega_array.sum();
+            result.capital_lambda = RHBMGroupCovarianceMatrix::Identity(basis_size, basis_size);
+            result.member_capital_lambda_list.assign(
+                static_cast<std::size_t>(member_size),
+                RHBMMemberCovarianceMatrix::Identity(basis_size, basis_size)
+            );
+            return result;
         }
-        mu_in_previous_iter = result.mu_mdpde;
-    }
 
-    result.member_capital_lambda_list = CalculateWeightedMemberCovariance(
-        result.capital_lambda,
-        result.omega_array
-    );
-    if (!converged)
-    {
-        result.status = RHBMEstimationStatus::MAX_ITERATIONS_REACHED;
-    }
-    try
-    {
-        eigen_validation::RequireFinite(result.capital_lambda, "capital_lambda");
-    }
-    catch (const std::invalid_argument &)
-    {
-        result.status = RHBMEstimationStatus::NUMERICAL_FALLBACK;
-    }
-    return result;
+        result.mu_mean = beta_matrix.rowwise().mean();
+        result.mu_mdpde = CalculateMuByMedian(beta_matrix);
+        result.capital_lambda = RHBMGroupCovarianceMatrix::Identity(basis_size, basis_size);
+        auto mu_in_previous_iter{ result.mu_mdpde };
+        bool converged{ false };
+        for (int t = 0; t < options.max_iterations; t++)
+        {
+            result.omega_array = CalculateMemberWeight(
+                alpha_g,
+                beta_matrix,
+                result.mu_mdpde,
+                result.capital_lambda,
+                options.member_weight_min
+            );
+            result.omega_sum = result.omega_array.sum();
+            result.mu_mdpde = CalculateMuByMDPDE(beta_matrix, result.omega_array, result.omega_sum);
+            result.capital_lambda = CalculateMemberCovariance(
+                alpha_g,
+                beta_matrix,
+                result.mu_mdpde,
+                result.omega_array,
+                result.omega_sum
+            );
+            if ((result.mu_mdpde - mu_in_previous_iter).squaredNorm() < options.tolerance)
+            {
+                converged = true;
+                break;
+            }
+            mu_in_previous_iter = result.mu_mdpde;
+        }
+
+        result.member_capital_lambda_list = CalculateWeightedMemberCovariance(
+            result.capital_lambda,
+            result.omega_array
+        );
+        if (!converged)
+        {
+            result.status = RHBMEstimationStatus::MAX_ITERATIONS_REACHED;
+        }
+        try
+        {
+            eigen_validation::RequireFinite(result.capital_lambda, "capital_lambda");
+        }
+        catch (const std::invalid_argument &)
+        {
+            result.status = RHBMEstimationStatus::NUMERICAL_FALLBACK;
+        }
+        return result;
+    });
 }
 
 RHBMWebEstimateResult rhbm_helper::EstimateWEB(
@@ -649,63 +686,63 @@ RHBMWebEstimateResult rhbm_helper::EstimateWEB(
     }
     eigen_validation::RequireNonEmpty(mu_mdpde, "mu_mdpde");
 
-    detail::ScopedEigenThreadCount thread_guard(options.thread_size);
-    (void)thread_guard;
-
-    RHBMWebEstimateResult result;
-    const auto basis_size{ static_cast<int>(mu_mdpde.rows()) };
-    const auto member_size{ static_cast<int>(member_datasets.size()) };
-    result.mu_prior = RHBMParameterVector::Zero(basis_size);
-    result.beta_posterior_matrix = RHBMBetaPosteriorMatrix::Zero(basis_size, member_size);
-    result.capital_sigma_posterior_list.clear();
-    result.capital_sigma_posterior_list.reserve(static_cast<std::size_t>(member_size));
-    if (member_size == 1)
+    return RunWithTemporaryEigenThreadCount(options.thread_size, [&]()
     {
-        result.status = RHBMEstimationStatus::SINGLE_MEMBER;
+        RHBMWebEstimateResult result;
+        const auto basis_size{ static_cast<int>(mu_mdpde.rows()) };
+        const auto member_size{ static_cast<int>(member_datasets.size()) };
+        result.mu_prior = RHBMParameterVector::Zero(basis_size);
+        result.beta_posterior_matrix = RHBMBetaPosteriorMatrix::Zero(basis_size, member_size);
+        result.capital_sigma_posterior_list.clear();
+        result.capital_sigma_posterior_list.reserve(static_cast<std::size_t>(member_size));
+        if (member_size == 1)
+        {
+            result.status = RHBMEstimationStatus::SINGLE_MEMBER;
+            return result;
+        }
+
+        RHBMParameterVector numerator{ RHBMParameterVector::Zero(basis_size) };
+        RHBMGroupCovarianceMatrix denominator{ RHBMGroupCovarianceMatrix::Zero(basis_size, basis_size) };
+        for (std::size_t i = 0; i < static_cast<std::size_t>(member_size); i++)
+        {
+            const auto & dataset{ member_datasets.at(i) };
+            const auto & capital_sigma{ capital_sigma_list.at(i) };
+            const auto & member_capital_lambda{ member_capital_lambda_list.at(i) };
+            ValidateDatasetShape(dataset.X, dataset.y, "EstimateWEB dataset is invalid.");
+            ValidateDiagonalAgainstSize(capital_sigma, dataset.y.size(), "capital_sigma",
+                "EstimateWEB covariance input is invalid.");
+            ValidateSquareBasisMatrix(member_capital_lambda, basis_size, "member_capital_lambda",
+                "EstimateWEB member covariance input is invalid.");
+
+            const auto inv_capital_sigma{ eigen_helper::GetInverseDiagonalMatrix(capital_sigma) };
+            const auto inv_member_capital_lambda{ eigen_helper::GetInverseMatrix(member_capital_lambda) };
+            const RHBMGroupCovarianceMatrix gram_matrix{
+                dataset.X.transpose() * inv_capital_sigma * dataset.X
+            };
+            const RHBMParameterVector moment_matrix{
+                dataset.X.transpose() * inv_capital_sigma * dataset.y
+            };
+            const RHBMGroupCovarianceMatrix inv_capital_sigma_posterior{
+                gram_matrix + inv_member_capital_lambda
+            };
+            const RHBMPosteriorCovarianceMatrix capital_sigma_posterior{
+                eigen_helper::GetInverseMatrix(inv_capital_sigma_posterior)
+            };
+
+            result.capital_sigma_posterior_list.emplace_back(capital_sigma_posterior);
+            result.beta_posterior_matrix.col(static_cast<Eigen::Index>(i)) =
+                capital_sigma_posterior * (moment_matrix + inv_member_capital_lambda * mu_mdpde);
+            numerator += inv_member_capital_lambda * capital_sigma_posterior * moment_matrix;
+            denominator += inv_member_capital_lambda * capital_sigma_posterior * gram_matrix;
+        }
+
+        result.mu_prior = eigen_helper::GetInverseMatrix(denominator) * numerator;
+        if (member_size == 2)
+        {
+            result.mu_prior = mu_mdpde;
+        }
         return result;
-    }
-
-    RHBMParameterVector numerator{ RHBMParameterVector::Zero(basis_size) };
-    RHBMGroupCovarianceMatrix denominator{ RHBMGroupCovarianceMatrix::Zero(basis_size, basis_size) };
-    for (std::size_t i = 0; i < static_cast<std::size_t>(member_size); i++)
-    {
-        const auto & dataset{ member_datasets.at(i) };
-        const auto & capital_sigma{ capital_sigma_list.at(i) };
-        const auto & member_capital_lambda{ member_capital_lambda_list.at(i) };
-        ValidateDatasetShape(dataset.X, dataset.y, "EstimateWEB dataset is invalid.");
-        ValidateDiagonalAgainstSize(capital_sigma, dataset.y.size(), "capital_sigma",
-            "EstimateWEB covariance input is invalid.");
-        ValidateSquareBasisMatrix(member_capital_lambda, basis_size, "member_capital_lambda",
-            "EstimateWEB member covariance input is invalid.");
-
-        const auto inv_capital_sigma{ eigen_helper::GetInverseDiagonalMatrix(capital_sigma) };
-        const auto inv_member_capital_lambda{ eigen_helper::GetInverseMatrix(member_capital_lambda) };
-        const RHBMGroupCovarianceMatrix gram_matrix{
-            dataset.X.transpose() * inv_capital_sigma * dataset.X
-        };
-        const RHBMParameterVector moment_matrix{
-            dataset.X.transpose() * inv_capital_sigma * dataset.y
-        };
-        const RHBMGroupCovarianceMatrix inv_capital_sigma_posterior{
-            gram_matrix + inv_member_capital_lambda
-        };
-        const RHBMPosteriorCovarianceMatrix capital_sigma_posterior{
-            eigen_helper::GetInverseMatrix(inv_capital_sigma_posterior)
-        };
-
-        result.capital_sigma_posterior_list.emplace_back(capital_sigma_posterior);
-        result.beta_posterior_matrix.col(static_cast<Eigen::Index>(i)) =
-            capital_sigma_posterior * (moment_matrix + inv_member_capital_lambda * mu_mdpde);
-        numerator += inv_member_capital_lambda * capital_sigma_posterior * moment_matrix;
-        denominator += inv_member_capital_lambda * capital_sigma_posterior * gram_matrix;
-    }
-
-    result.mu_prior = eigen_helper::GetInverseMatrix(denominator) * numerator;
-    if (member_size == 2)
-    {
-        result.mu_prior = mu_mdpde;
-    }
-    return result;
+    });
 }
 
 RHBMGroupEstimationResult rhbm_helper::EstimateGroup(

@@ -155,7 +155,6 @@ set(UTILS_HRL_TEST_SOURCES
     utils/hrl/RHBMHelper_test.cpp
     utils/hrl/TestDataFactory_test.cpp
     utils/hrl/RHBMTester_test.cpp
-    utils/hrl/ScopedEigenThreadCount_test.cpp
 )
 
 set(INTEGRATION_COMMAND_TEST_SOURCES

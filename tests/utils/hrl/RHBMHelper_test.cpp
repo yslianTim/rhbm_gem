@@ -98,6 +98,11 @@ rg::RHBMBetaEstimateResult MakeFitResult(
     fit_result.data_covariance = MakeDiagonal(covariance_values);
     return fit_result;
 }
+
+int AlternateThreadCount(int thread_count)
+{
+    return (thread_count == 1) ? 2 : 1;
+}
 } // namespace
 
 TEST(RHBMHelperTest, BuildMemberDatasetTransformsSamplesToLogQuadraticDataset)
@@ -444,6 +449,39 @@ TEST(RHBMHelperTest, EstimateBetaMDPDESingleDatumReturnsInsufficientData)
     EXPECT_DOUBLE_EQ(std::numeric_limits<double>::max(), result.sigma_square);
 }
 
+TEST(RHBMHelperTest, EstimateBetaMDPDERestoresEigenThreadCountAfterEarlyReturn)
+{
+    const int original_thread_count{ Eigen::nbThreads() };
+    const int requested_thread_count{ AlternateThreadCount(original_thread_count) };
+    const Eigen::MatrixXd X{ MakeVector({ 1.0, 2.0 }).transpose() };
+    const Eigen::VectorXd y{ MakeVector({ 3.0 }) };
+    rg::RHBMExecutionOptions options;
+    options.thread_size = requested_thread_count;
+
+    const auto result{ rhbm_gem::rhbm_helper::EstimateBetaMDPDE(0.2, MakeDataset(X, y), options) };
+
+    EXPECT_EQ(rg::RHBMEstimationStatus::INSUFFICIENT_DATA, result.status);
+    EXPECT_EQ(original_thread_count, Eigen::nbThreads());
+    Eigen::setNbThreads(original_thread_count);
+}
+
+TEST(RHBMHelperTest, EstimateBetaMDPDERestoresEigenThreadCountAfterNonPositiveRequest)
+{
+    const int original_thread_count{ Eigen::nbThreads() };
+    constexpr int test_thread_count{ 2 };
+    Eigen::setNbThreads(test_thread_count);
+    const Eigen::MatrixXd X{ MakeVector({ 1.0, 2.0 }).transpose() };
+    const Eigen::VectorXd y{ MakeVector({ 3.0 }) };
+    rg::RHBMExecutionOptions options;
+    options.thread_size = 0;
+
+    const auto result{ rhbm_gem::rhbm_helper::EstimateBetaMDPDE(0.2, MakeDataset(X, y), options) };
+
+    EXPECT_EQ(rg::RHBMEstimationStatus::INSUFFICIENT_DATA, result.status);
+    EXPECT_EQ(test_thread_count, Eigen::nbThreads());
+    Eigen::setNbThreads(original_thread_count);
+}
+
 TEST(RHBMHelperTest, EstimateBetaMDPDERejectsInvalidParameters)
 {
     const Eigen::MatrixXd X{ Eigen::MatrixXd::Identity(2, 2) };
@@ -582,6 +620,31 @@ TEST(RHBMHelperTest, EstimateWEBReturnsSingleMemberStatus)
     };
 
     EXPECT_EQ(rg::RHBMEstimationStatus::SINGLE_MEMBER, result.status);
+}
+
+TEST(RHBMHelperTest, EstimateWEBRestoresEigenThreadCountAfterValidationException)
+{
+    const int original_thread_count{ Eigen::nbThreads() };
+    const int requested_thread_count{ AlternateThreadCount(original_thread_count) };
+    const std::vector<rg::RHBMMemberDataset> member_datasets{
+        { Eigen::MatrixXd::Identity(2, 2), MakeVector({ 1.0, 2.0 }) },
+        { Eigen::MatrixXd::Identity(2, 2), MakeVector({ 3.0, 4.0 }) }
+    };
+    rg::RHBMExecutionOptions options;
+    options.thread_size = requested_thread_count;
+
+    EXPECT_THROW(
+        rhbm_gem::rhbm_helper::EstimateWEB(
+            member_datasets,
+            { MakeDiagonal({ 1.0, 1.0 }), MakeDiagonal({ 1.0, 1.0 }) },
+            MakeVector({ 1.0, 2.0 }),
+            { Eigen::MatrixXd::Identity(1, 1), Eigen::MatrixXd::Identity(2, 2) },
+            options
+        ),
+        std::invalid_argument
+    );
+    EXPECT_EQ(original_thread_count, Eigen::nbThreads());
+    Eigen::setNbThreads(original_thread_count);
 }
 
 TEST(RHBMHelperTest, EstimateWEBForTwoMembersPinsMuPriorToMuMDPDE)
