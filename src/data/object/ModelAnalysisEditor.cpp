@@ -12,72 +12,24 @@
 
 namespace rhbm_gem {
 
-namespace {
-template <typename EntryT>
-const EntryT & RequireGroupEntry(const EntryT * entry, const char * context)
-{
-    if (entry == nullptr)
-    {
-        throw std::runtime_error(std::string(context) + " is not available.");
-    }
-    return *entry;
-}
-
-LocalPotentialAnnotation ToDetailAnnotation(const LocalGaussianResult & value)
-{
-    return LocalPotentialAnnotation{
-        value.mdpde,
-        value.is_outlier,
-        value.statistical_distance
-    };
-}
-
-void ValidateGroupGaussianResult(
-    const std::vector<LocalGaussianResult> & member_results,
-    std::size_t member_count,
-    const char * context)
-{
-    if (member_results.size() != member_count)
-    {
-        throw std::invalid_argument(
-            std::string(context) + " member result count is inconsistent.");
-    }
-}
-
-void ApplyAtomGroupGaussianResultToEntry(
-    ModelAnalysisData & analysis_data,
-    GroupKey group_key,
-    const std::string & class_key,
-    const GroupGaussianResult & result)
-{
-    analysis_data.EnsureAtomGroupEntry(class_key).SetGaussianResult(group_key, result);
-}
-
-} // namespace
-
 AtomLocalPotentialEditor::AtomLocalPotentialEditor(LocalPotentialEntry & entry) :
     m_entry{ &entry }
 {
 }
 
-LocalPotentialEntry & AtomLocalPotentialEditor::Entry() const
-{
-    return *m_entry;
-}
-
 void AtomLocalPotentialEditor::SetSamplingEntries(LocalPotentialSampleList value)
 {
-    Entry().SetSamplingEntries(std::move(value));
+    m_entry->SetSamplingEntries(std::move(value));
 }
 
 void AtomLocalPotentialEditor::SetGaussianResult(LocalGaussianResult value)
 {
-    Entry().SetGaussianResult(std::move(value));
+    m_entry->SetGaussianResult(std::move(value));
 }
 
 void AtomLocalPotentialEditor::SetAlphaR(double value)
 {
-    Entry().SetAlphaR(value);
+    m_entry->SetAlphaR(value);
 }
 
 ModelAnalysisEditor::ModelAnalysisEditor(ModelObject & model_object) :
@@ -112,19 +64,29 @@ void ModelAnalysisEditor::ApplyAtomGroupGaussianResult(
     const GroupGaussianResult & group_result)
 {
     auto & analysis_data{ ModelAnalysisData::Of(m_model_object) };
-    const auto & group_entry{
-        RequireGroupEntry(analysis_data.FindAtomGroupEntry(class_key), "Atom group entry")
-    };
-    const auto & atom_list{ group_entry.GetMembers(group_key) };
-    ValidateGroupGaussianResult(group_result.member_results, atom_list.size(), "Atom group result");
+    auto group_entry{ analysis_data.FindAtomGroupEntry(class_key) };
+    if (group_entry == nullptr)
+    {
+        throw std::runtime_error("Atom group entry is not available.");
+    }
+    const auto & atom_list{ group_entry->GetMembers(group_key) };
+    if (group_result.member_results.size() != atom_list.size())
+    {
+        throw std::invalid_argument("Atom group result member result count is inconsistent.");
+    }
 
     for (std::size_t i = 0; i < atom_list.size(); i++)
     {
         auto & atom_entry{ analysis_data.EnsureAtomLocalEntry(*atom_list.at(i)) };
-        atom_entry.SetAnnotation(class_key, ToDetailAnnotation(group_result.member_results.at(i)));
+        atom_entry.SetAnnotation(class_key,
+            LocalPotentialAnnotation{
+                group_result.member_results.at(i).mdpde,
+                group_result.member_results.at(i).is_outlier,
+                group_result.member_results.at(i).statistical_distance
+            }
+        );
     }
-
-    ApplyAtomGroupGaussianResultToEntry(analysis_data, group_key, class_key, group_result);
+    analysis_data.EnsureAtomGroupEntry(class_key).SetGaussianResult(group_key, group_result);
 }
 
 void ModelAnalysisEditor::SetAtomGroupAlphaG(

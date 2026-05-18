@@ -23,7 +23,6 @@ public:
 
 private:
     explicit AtomLocalPotentialEditor(LocalPotentialEntry & entry);
-    LocalPotentialEntry & Entry() const;
     friend class ModelAnalysisEditor;
 
 };
