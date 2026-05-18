@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
-#include <initializer_list>
+#include <array>
 #include <limits>
 #include <vector>
 
@@ -10,17 +10,6 @@
 namespace rg = rhbm_gem;
 
 namespace {
-
-Eigen::VectorXd MakeVector(std::initializer_list<double> values)
-{
-    Eigen::VectorXd result(static_cast<Eigen::Index>(values.size()));
-    Eigen::Index index{ 0 };
-    for (double value : values)
-    {
-        result(index++) = value;
-    }
-    return result;
-}
 
 SamplingPointList MakePointList()
 {
@@ -34,11 +23,14 @@ SamplingPointList MakePointList()
 
 } // namespace
 
-TEST(PotentialSampleSelectionTest, EmptyRejectDirectionsSelectAllSamplingPoints)
+TEST(PotentialSampleSelectionTest, EmptyRejectPositionsSelectAllSamplingPoints)
 {
     const auto point_list{ MakePointList() };
     const auto selected_indices{
-        rg::BuildSelectedLocalPotentialSampleIndexList(point_list, {})
+        rg::BuildSelectedLocalPotentialSampleIndexList(
+            point_list,
+            { 0.0f, 0.0f, 0.0f },
+            {})
     };
 
     EXPECT_EQ(selected_indices, std::vector<std::size_t>({ 0u, 1u, 2u, 3u }));
@@ -50,19 +42,21 @@ TEST(PotentialSampleSelectionTest, ZeroAngleSelectsAllSamplingPoints)
     const auto selected_indices{
         rg::BuildSelectedLocalPotentialSampleIndexList(
             point_list,
-            { MakeVector({ 1.0, 0.0, 0.0 }) },
+            { 0.0f, 0.0f, 0.0f },
+            { std::array<float, 3>{ 1.0f, 0.0f, 0.0f } },
             0.0)
     };
 
     EXPECT_EQ(selected_indices, std::vector<std::size_t>({ 0u, 1u, 2u, 3u }));
 }
 
-TEST(PotentialSampleSelectionTest, RejectsPointsWithinAngleThresholdOfRejectDirections)
+TEST(PotentialSampleSelectionTest, RejectsPointsWithinAngleThresholdOfRejectPositions)
 {
     const auto selected_indices{
         rg::BuildSelectedLocalPotentialSampleIndexList(
             MakePointList(),
-            { MakeVector({ 1.0, 0.0, 0.0 }) },
+            { 0.0f, 0.0f, 0.0f },
+            { std::array<float, 3>{ 1.0f, 0.0f, 0.0f } },
             30.0)
     };
 
@@ -74,20 +68,22 @@ TEST(PotentialSampleSelectionTest, KeepsPerpendicularAndOppositeDirections)
     const auto selected_indices{
         rg::BuildSelectedLocalPotentialSampleIndexList(
             MakePointList(),
-            { MakeVector({ 1.0, 0.0, 0.0 }) },
+            { 0.0f, 0.0f, 0.0f },
+            { std::array<float, 3>{ 1.0f, 0.0f, 0.0f } },
             89.0)
     };
 
     EXPECT_EQ(selected_indices, std::vector<std::size_t>({ 0u, 2u, 3u }));
 }
 
-TEST(PotentialSampleSelectionTest, IgnoresZeroLengthRejectDirections)
+TEST(PotentialSampleSelectionTest, IgnoresRejectPositionsAtReferencePosition)
 {
     const auto point_list{ MakePointList() };
     const auto selected_indices{
         rg::BuildSelectedLocalPotentialSampleIndexList(
             point_list,
-            { MakeVector({ 0.0, 0.0, 0.0 }) },
+            { 0.0f, 0.0f, 0.0f },
+            { std::array<float, 3>{ 0.0f, 0.0f, 0.0f } },
             45.0)
     };
 
@@ -99,7 +95,8 @@ TEST(PotentialSampleSelectionTest, KeepsOriginSamplingPointEvenWhenFilteringEnab
     const auto selected_indices{
         rg::BuildSelectedLocalPotentialSampleIndexList(
             MakePointList(),
-            { MakeVector({ 1.0, 0.0, 0.0 }) },
+            { 0.0f, 0.0f, 0.0f },
+            { std::array<float, 3>{ 1.0f, 0.0f, 0.0f } },
             45.0)
     };
 
@@ -112,41 +109,65 @@ TEST(PotentialSampleSelectionTest, RejectsInvalidAngles)
     const auto point_list{ MakePointList() };
 
     EXPECT_THROW(
-        (void)rg::BuildSelectedLocalPotentialSampleIndexList(point_list, {}, -1.0),
+        (void)rg::BuildSelectedLocalPotentialSampleIndexList(
+            point_list,
+            { 0.0f, 0.0f, 0.0f },
+            {},
+            -1.0),
         std::invalid_argument);
     EXPECT_THROW(
         (void)rg::BuildSelectedLocalPotentialSampleIndexList(
             point_list,
+            { 0.0f, 0.0f, 0.0f },
             {},
             std::numeric_limits<double>::infinity()),
         std::invalid_argument);
     EXPECT_THROW(
-        (void)rg::BuildSelectedLocalPotentialSampleIndexList(point_list, {}, 181.0),
+        (void)rg::BuildSelectedLocalPotentialSampleIndexList(
+            point_list,
+            { 0.0f, 0.0f, 0.0f },
+            {},
+            181.0),
         std::invalid_argument);
     EXPECT_THROW(
         (void)rg::BuildSelectedLocalPotentialSampleIndexList(
             point_list,
+            { 0.0f, 0.0f, 0.0f },
             {},
             std::numeric_limits<double>::quiet_NaN()),
         std::invalid_argument);
 }
 
-TEST(PotentialSampleSelectionTest, RejectsRejectDirectionsWithUnexpectedDimension)
+TEST(PotentialSampleSelectionTest, RejectsRejectPositionsWithNonFiniteValues)
 {
     EXPECT_THROW(
         (void)rg::BuildSelectedLocalPotentialSampleIndexList(
             MakePointList(),
-            { MakeVector({ 1.0, 0.0 }) },
+            { 0.0f, 0.0f, 0.0f },
+            { std::array<float, 3>{
+                1.0f,
+                0.0f,
+                std::numeric_limits<float>::quiet_NaN()
+            } },
             45.0),
         std::invalid_argument);
 }
 
-TEST(PotentialSampleSelectionTest, RejectsRejectDirectionsWithNonFiniteValues)
+TEST(PotentialSampleSelectionTest, UsesReferencePositionForWorldSpaceSamplingPoints)
 {
-    EXPECT_THROW(
-        (void)rg::BuildSelectedLocalPotentialSampleIndexList(
-            MakePointList(),
-            { MakeVector({ 1.0, 0.0, std::numeric_limits<double>::quiet_NaN() }) },
-            45.0),
-        std::invalid_argument);
+    const SamplingPointList point_list{
+        SamplingPoint{ 1.0f, { 10.0f, 0.0f, 0.0f } },
+        SamplingPoint{ 1.0f, { 11.0f, 0.0f, 0.0f } },
+        SamplingPoint{ 1.0f, { 10.0f, 1.0f, 0.0f } }
+    };
+
+    const auto selected_indices{
+        rg::BuildSelectedLocalPotentialSampleIndexList(
+            point_list,
+            { 10.0f, 0.0f, 0.0f },
+            { std::array<float, 3>{ 11.0f, 0.0f, 0.0f } },
+            30.0)
+    };
+
+    EXPECT_EQ(selected_indices, std::vector<std::size_t>({ 0u, 2u }));
 }

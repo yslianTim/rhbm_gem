@@ -6,14 +6,12 @@
 #include <cstddef>
 #include <iterator>
 #include <map>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
 #include <Eigen/Dense>
 
 #include <rhbm_gem/utils/domain/Constants.hpp>
-#include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
@@ -29,49 +27,27 @@ inline Eigen::Vector3d ToVector3d(const std::array<float, 3> & position)
     };
 }
 
-inline Eigen::Vector3d ValidateAndConvertLocalPotentialRejectDirection(
-    const Eigen::VectorXd & reject_direction)
+inline Eigen::Vector3d BuildLocalPotentialDirection(
+    const std::array<float, 3> & position,
+    const std::array<float, 3> & reference_position)
 {
-    try
-    {
-        return eigen_validation::RequireVector3d(
-            reject_direction,
-            "PotentialSampleSelection reject directions");
-    }
-    catch (const std::invalid_argument &)
-    {
-        throw std::invalid_argument(
-            reject_direction.size() != 3 ?
-                "PotentialSampleSelection reject directions must have dimension 3." :
-                "PotentialSampleSelection reject directions must contain finite values.");
-    }
-}
-
-inline std::vector<Eigen::Vector3d> BuildLocalPotentialRejectPositionList(
-    const std::vector<Eigen::VectorXd> & reject_direction_list)
-{
-    std::vector<Eigen::Vector3d> reject_position_list;
-    reject_position_list.reserve(reject_direction_list.size());
-
-    for (const auto & reject_direction : reject_direction_list)
-    {
-        reject_position_list.emplace_back(
-            ValidateAndConvertLocalPotentialRejectDirection(reject_direction));
-    }
-
-    return reject_position_list;
+    return ToVector3d(position) - ToVector3d(reference_position);
 }
 
 inline std::vector<Eigen::Vector3d> BuildLocalPotentialNormalizedRejectDirectionList(
-    const std::vector<Eigen::VectorXd> & reject_direction_list)
+    const std::vector<std::array<float, 3>> & reject_position_list,
+    const std::array<float, 3> & reference_position)
 {
     std::vector<Eigen::Vector3d> normalized_reject_direction_list;
-    normalized_reject_direction_list.reserve(reject_direction_list.size());
+    normalized_reject_direction_list.reserve(reject_position_list.size());
 
-    for (const auto & reject_direction : reject_direction_list)
+    for (const auto & reject_position : reject_position_list)
     {
+        numeric_validation::RequireAllFinite(
+            reject_position,
+            "PotentialSampleSelection reject positions");
         const auto direction{
-            ValidateAndConvertLocalPotentialRejectDirection(reject_direction)
+            BuildLocalPotentialDirection(reject_position, reference_position)
         };
         const auto norm{ direction.norm() };
         if (norm <= 0.0)
@@ -87,10 +63,13 @@ inline std::vector<Eigen::Vector3d> BuildLocalPotentialNormalizedRejectDirection
 
 inline bool ShouldRejectLocalPotentialSamplingPoint(
     const SamplingPoint & point,
+    const std::array<float, 3> & reference_position,
     const std::vector<Eigen::Vector3d> & normalized_reject_direction_list,
     double cos_threshold)
 {
-    const Eigen::Vector3d sampling_vector{ ToVector3d(point.position) };
+    const Eigen::Vector3d sampling_vector{
+        BuildLocalPotentialDirection(point.position, reference_position)
+    };
     const auto sampling_norm{ sampling_vector.norm() };
     if (sampling_norm <= 0.0)
     {
@@ -124,7 +103,8 @@ inline std::vector<std::size_t> BuildAllLocalPotentialSampleIndexList(std::size_
 
 inline std::vector<std::size_t> BuildSelectedLocalPotentialSampleIndexList(
     const SamplingPointList & point_list,
-    const std::vector<Eigen::VectorXd> & reject_direction_list,
+    const std::array<float, 3> & reference_position,
+    const std::vector<std::array<float, 3>> & reject_position_list,
     double angle = 0.0)
 {
     numeric_validation::RequireFiniteInclusiveRange(angle, 0.0, 180.0, "angle");
@@ -135,7 +115,9 @@ inline std::vector<std::size_t> BuildSelectedLocalPotentialSampleIndexList(
     }
 
     const auto normalized_reject_direction_list{
-        detail::BuildLocalPotentialNormalizedRejectDirectionList(reject_direction_list)
+        detail::BuildLocalPotentialNormalizedRejectDirectionList(
+            reject_position_list,
+            reference_position)
     };
     if (normalized_reject_direction_list.empty())
     {
@@ -149,6 +131,7 @@ inline std::vector<std::size_t> BuildSelectedLocalPotentialSampleIndexList(
     {
         if (!detail::ShouldRejectLocalPotentialSamplingPoint(
             point_list.at(i),
+            reference_position,
             normalized_reject_direction_list,
             cos_threshold))
         {

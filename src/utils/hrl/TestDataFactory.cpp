@@ -8,6 +8,7 @@
 #include <rhbm_gem/utils/math/PotentialSampleSelection.hpp>
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
 
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <random>
@@ -204,9 +205,22 @@ LocalPotentialSampleList GenerateAtomNeighborhoodSamples(
         )
     );
     const auto sampling_points{ sampler.GenerateSamplingPoints({ 0.0f, 0.0f, 0.0f }) };
+    std::vector<std::array<float, 3>> reject_position_list;
+    reject_position_list.reserve(neighbor_center_list.size());
+    for (const auto & neighbor_center : neighbor_center_list)
+    {
+        reject_position_list.emplace_back(std::array<float, 3>{
+            static_cast<float>(neighbor_center(0)),
+            static_cast<float>(neighbor_center(1)),
+            static_cast<float>(neighbor_center(2))
+        });
+    }
     const auto selected_indices{
         BuildSelectedLocalPotentialSampleIndexList(
-            sampling_points, neighbor_center_list, options.reject_angle_deg)
+            sampling_points,
+            { 0.0f, 0.0f, 0.0f },
+            reject_position_list,
+            options.reject_angle_deg)
     };
     LocalPotentialSampleList sample_list;
     sample_list.reserve(selected_indices.size());

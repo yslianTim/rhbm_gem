@@ -4,8 +4,6 @@
 #include <array>
 #include <vector>
 
-#include <Eigen/Dense>
-
 #include <rhbm_gem/core/command/CommandTypes.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
@@ -95,49 +93,6 @@ inline float MakeInterpolationInMapObject(
     return cubic_interpolate(temp_z[0], temp_z[1], temp_z[2], temp_z[3], local.at(2));
 }
 
-inline std::vector<Eigen::VectorXd> BuildAtomRejectDirectionList(
-    const AtomObject & atom,
-    const std::vector<AtomObject *> & neighbor_atom_list)
-{
-    std::vector<Eigen::VectorXd> reject_direction_list;
-    reject_direction_list.reserve(neighbor_atom_list.size());
-
-    const auto center_position{ atom.GetPosition() };
-    for (const auto * neighbor_atom : neighbor_atom_list)
-    {
-        const auto neighbor_position{ neighbor_atom->GetPosition() };
-        Eigen::VectorXd direction{ Eigen::VectorXd::Zero(3) };
-        direction(0) = static_cast<double>(neighbor_position[0] - center_position[0]);
-        direction(1) = static_cast<double>(neighbor_position[1] - center_position[1]);
-        direction(2) = static_cast<double>(neighbor_position[2] - center_position[2]);
-        reject_direction_list.emplace_back(direction);
-    }
-
-    return reject_direction_list;
-}
-
-inline SamplingPointList BuildAtomCenteredSamplingPointList(
-    const SamplingPointList & sampling_points,
-    const std::array<float, 3> & atom_position)
-{
-    SamplingPointList local_sampling_points;
-    local_sampling_points.reserve(sampling_points.size());
-
-    for (const auto & point : sampling_points)
-    {
-        local_sampling_points.emplace_back(SamplingPoint{
-            point.distance,
-            {
-                point.position[0] - atom_position[0],
-                point.position[1] - atom_position[1],
-                point.position[2] - atom_position[2]
-            }
-        });
-    }
-
-    return local_sampling_points;
-}
-
 inline LocalPotentialSampleList BuildLocalPotentialSampleList(
     const MapObject & map_object,
     const SamplingPointList & sampling_points,
@@ -169,7 +124,7 @@ LocalPotentialSampleList SampleMapValues(
 {
     const auto sampling_points{ sampler.GenerateSamplingPoints(position, direction_like_input) };
     const auto selected_indices{
-        BuildSelectedLocalPotentialSampleIndexList(sampling_points, {})
+        BuildSelectedLocalPotentialSampleIndexList(sampling_points, position, {})
     };
     return detail::BuildLocalPotentialSampleList(map_object, sampling_points, selected_indices);
 }
@@ -192,15 +147,15 @@ inline LocalPotentialSampleList SampleAtomMapValues(
     const auto position{ atom.GetPosition() };
     const auto sampling_points{ sampler.GenerateSamplingPoints(position) };
     const auto neighbor_atom_list{ atom.FindNeighborAtoms(kNeighborSearchRadius, false) };
-    const auto reject_direction_list{
-        detail::BuildAtomRejectDirectionList(atom, neighbor_atom_list)
-    };
-    const auto local_sampling_points{
-        detail::BuildAtomCenteredSamplingPointList(sampling_points, position)
-    };
+    std::vector<std::array<float, 3>> reject_position_list;
+    reject_position_list.reserve(neighbor_atom_list.size());
+    for (const auto * neighbor_atom : neighbor_atom_list)
+    {
+        reject_position_list.emplace_back(neighbor_atom->GetPosition());
+    }
     const auto selected_indices{
         BuildSelectedLocalPotentialSampleIndexList(
-            local_sampling_points, reject_direction_list, kRejectAngle)
+            sampling_points, position, reject_position_list, kRejectAngle)
     };
     auto sample_list{
         detail::BuildLocalPotentialSampleList(map_object, sampling_points, selected_indices)
