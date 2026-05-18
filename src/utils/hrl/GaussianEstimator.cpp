@@ -37,19 +37,6 @@ RHBMExecutionOptions MakeExecutionOptions(const TrainingOptions & options)
     return execution_options;
 }
 
-void ValidateTrainingAlphaGridOptions(const TrainingOptions & options)
-{
-    numeric_validation::RequireFiniteNonNegativeRange(
-        options.alpha_min, options.alpha_max, "alpha training range");
-    numeric_validation::RequireFinitePositive(options.alpha_step, "alpha training step");
-}
-
-void ValidateFitRange(const TrainingOptions & options)
-{
-    numeric_validation::RequireFiniteNonNegativeRange(
-        options.fit_range_min, options.fit_range_max, "fit range");
-}
-
 bool EmitTrainingReportIfRequested(
     const Eigen::MatrixXd & gaus_bias_matrix,
     const std::vector<double> & alpha_list,
@@ -185,16 +172,6 @@ void ValidateStudyBatch(
     numeric_validation::RequireAllFinite(alpha_list, "alpha_list");
 }
 
-void ValidateStudyMemberDataset(const RHBMMemberDataset & dataset)
-{
-    eigen_validation::RequireVectorSize(
-        dataset.y, dataset.X.rows(), "dataset.y", "dataset shape is inconsistent.");
-    eigen_validation::RequireNonEmpty(dataset.X, "dataset.X");
-    numeric_validation::RequirePositive(dataset.X.cols(), "dataset.X column count");
-    eigen_validation::RequireFinite(dataset.X, "dataset.X");
-    eigen_validation::RequireFinite(dataset.y, "dataset.y");
-}
-
 Eigen::MatrixXd StudyAlphaRBias(
     const std::vector<double> & alpha_grid,
     const std::vector<RHBMMemberDataset> & dataset_list,
@@ -203,7 +180,12 @@ Eigen::MatrixXd StudyAlphaRBias(
     ValidateStudyBatch(dataset_list.size(), alpha_grid);
     for (const auto & dataset : dataset_list)
     {
-        ValidateStudyMemberDataset(dataset);
+        eigen_validation::RequireVectorSize(
+            dataset.y, dataset.X.rows(), "dataset.y", "dataset shape is inconsistent.");
+        eigen_validation::RequireNonEmpty(dataset.X, "dataset.X");
+        numeric_validation::RequirePositive(dataset.X.cols(), "dataset.X column count");
+        eigen_validation::RequireFinite(dataset.X, "dataset.X");
+        eigen_validation::RequireFinite(dataset.y, "dataset.y");
     }
 
     const auto dataset_size{ dataset_list.size() };
@@ -413,8 +395,11 @@ double TrainAlphaR(
     const TrainingOptions & options,
     bool output_study_plot)
 {
-    ValidateTrainingAlphaGridOptions(options);
-    ValidateFitRange(options);
+    numeric_validation::RequireFiniteNonNegativeRange(
+        options.alpha_min, options.alpha_max, "alpha training range");
+    numeric_validation::RequireFinitePositive(options.alpha_step, "alpha training step");
+    numeric_validation::RequireFiniteNonNegativeRange(
+        options.fit_range_min, options.fit_range_max, "fit range");
 
     const auto dataset_list{ BuildMemberDatasetList(sample_entries_list, options) };
     const auto training_result{
@@ -445,7 +430,9 @@ double TrainAlphaG(
     const TrainingOptions & options,
     bool output_study_plot)
 {
-    ValidateTrainingAlphaGridOptions(options);
+    numeric_validation::RequireFiniteNonNegativeRange(
+        options.alpha_min, options.alpha_max, "alpha training range");
+    numeric_validation::RequireFinitePositive(options.alpha_step, "alpha training step");
 
     if (sample_group_list.size() != member_result_list.size())
     {
@@ -524,7 +511,8 @@ LocalGaussianResult EstimateLocalGaussian(
     double alpha_r,
     const TrainingOptions & options)
 {
-    ValidateFitRange(options);
+    numeric_validation::RequireFiniteNonNegativeRange(
+        options.fit_range_min, options.fit_range_max, "fit range");
     numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
 
     auto dataset{
@@ -541,7 +529,8 @@ GroupGaussianResult EstimateGroupGaussian(
     double alpha_g,
     const TrainingOptions & options)
 {
-    ValidateFitRange(options);
+    numeric_validation::RequireFiniteNonNegativeRange(
+        options.fit_range_min, options.fit_range_max, "fit range");
     numeric_validation::RequireFiniteNonNegative(alpha_g, "alpha_g");
 
     if (sample_entries_list.size() != member_result_list.size())
