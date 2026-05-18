@@ -39,7 +39,7 @@ inline void RequireSelectedAtomsHaveLocalEntries(
 
     for (const auto * atom : model_object.GetSelectedAtoms())
     {
-        if (!LocalPotentialView::For(*atom).IsAvailable())
+        if (!AtomLocalPotentialView::For(*atom).IsAvailable())
         {
             throw std::runtime_error(
                 std::string(painter_name)

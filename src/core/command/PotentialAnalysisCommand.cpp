@@ -84,11 +84,11 @@ std::optional<PotentialAnalysisInputs> LoadPotentialAnalysisInputs(
     }
 }
 
-std::vector<LocalPotentialEditor> BuildSelectedAtomLocalEditors(ModelObject & model_object)
+std::vector<AtomLocalPotentialEditor> BuildSelectedAtomLocalEditors(ModelObject & model_object)
 {
     auto analysis{ model_object.EditAnalysis() };
     const auto & atom_list{ model_object.GetSelectedAtoms() };
-    std::vector<LocalPotentialEditor> local_editor_list;
+    std::vector<AtomLocalPotentialEditor> local_editor_list;
     local_editor_list.reserve(atom_list.size());
     for (auto * atom : atom_list)
     {
@@ -189,7 +189,7 @@ void RunLocalPotentialFitting(
     for (size_t i = 0; i < selected_atom_size; i++)
     {
         auto local_editor{ local_editor_list[i] };
-        const auto local_view{ LocalPotentialView::RequireFor(*atom_list[i]) };
+        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
         const auto result{
             gaussian_estimator::EstimateLocalGaussian(
                 local_view.GetSamplingEntries(),
@@ -227,7 +227,7 @@ void RunAtomAlphaTraining(ModelObject & model_object, const PotentialAnalysisReq
         for (auto & atom : group_atom_list)
         {
             analysis.EnsureAtomLocalPotential(*atom);
-            const auto local_view{ LocalPotentialView::RequireFor(*atom) };
+            const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
             const auto & sample_entries{ local_view.GetSamplingEntries() };
             if (!HasEnoughSamplesInFitRange(
                 sample_entries, request.fit_range_min, request.fit_range_max, 10)) continue;
@@ -269,7 +269,7 @@ void RunAtomAlphaTraining(ModelObject & model_object, const PotentialAnalysisReq
         for (auto * atom : group_atom_list)
         {
             analysis.EnsureAtomLocalPotential(*atom);
-            const auto local_view{ LocalPotentialView::RequireFor(*atom) };
+            const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
             group_samples.emplace_back(local_view.GetSamplingEntries());
             group_member_results.emplace_back(local_view.GetGaussianResult());
         }
@@ -334,7 +334,7 @@ void RunAtomPotentialFittingWorkflow(ModelObject & model_object, const Potential
             member_result_list.reserve(atom_list.size());
             for (const auto & atom : atom_list)
             {
-                const auto local_view{ LocalPotentialView::RequireFor(*atom) };
+                const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
                 member_sample_list.emplace_back(local_view.GetSamplingEntries());
                 member_result_list.emplace_back(local_view.GetGaussianResult());
             }

@@ -27,7 +27,7 @@ int main()
     static_assert(kHeaderExposesCompleteType<rhbm_gem::GaussianModel3DWithUncertainty>);
     static_assert(kHeaderExposesCompleteType<rhbm_gem::MapObject>);
     static_assert(kHeaderExposesCompleteType<rhbm_gem::ModelAnalysisEditor>);
-    static_assert(kHeaderExposesCompleteType<rhbm_gem::LocalPotentialView>);
+    static_assert(kHeaderExposesCompleteType<rhbm_gem::AtomLocalPotentialView>);
     static_assert(kHeaderExposesCompleteType<rhbm_gem::ModelObject>);
 
     rhbm_gem::ModelObject model_object;

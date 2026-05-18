@@ -32,11 +32,11 @@ public:
 
     static ModelObject * OwnerOf(const AtomObject & atom_object);
 
-    static const LocalPotentialEntry * FindLocalEntry(const AtomObject & atom_object);
-    static const LocalPotentialEntry & RequireLocalEntry(
+    static const LocalPotentialEntry * FindAtomLocalEntryFor(const AtomObject & atom_object);
+    static const LocalPotentialEntry & RequireAtomLocalEntry(
         const LocalPotentialEntry * entry,
         const char * context);
-    static const LocalPotentialEntry & RequireLocalEntry(const AtomObject & atom_object);
+    static const LocalPotentialEntry & RequireAtomLocalEntry(const AtomObject & atom_object);
 
     void Clear();
     void ClearTransientFitStates();

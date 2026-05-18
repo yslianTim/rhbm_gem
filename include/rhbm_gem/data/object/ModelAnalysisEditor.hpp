@@ -12,21 +12,18 @@ class AtomObject;
 class LocalPotentialEntry;
 class ModelObject;
 
-class LocalPotentialEditor
+class AtomLocalPotentialEditor
 {
-    AtomObject * m_atom_object{ nullptr };
-    LocalPotentialEntry * m_entry{ nullptr };
+    LocalPotentialEntry * m_entry;
     
 public:
-    LocalPotentialEditor() = default;
     void SetSamplingEntries(LocalPotentialSampleList value);
     void SetGaussianResult(LocalGaussianResult value);
     void SetAlphaR(double value);
 
 private:
-    explicit LocalPotentialEditor(AtomObject * atom_object);
-    ModelObject * GetOwner() const;
-    LocalPotentialEntry & EnsureEntry() const;
+    explicit AtomLocalPotentialEditor(LocalPotentialEntry & entry);
+    LocalPotentialEntry & Entry() const;
     friend class ModelAnalysisEditor;
 
 };
@@ -39,7 +36,7 @@ public:
     explicit ModelAnalysisEditor(ModelObject & model_object);
     void Clear();
     void ClearTransientFitStates();
-    LocalPotentialEditor EnsureAtomLocalPotential(const AtomObject & atom_object);
+    AtomLocalPotentialEditor EnsureAtomLocalPotential(const AtomObject & atom_object);
     void RebuildAtomGroupsFromSelection();
     void ApplyAtomGroupGaussianResult(
         GroupKey group_key,

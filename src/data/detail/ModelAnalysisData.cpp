@@ -31,13 +31,13 @@ ModelObject * ModelAnalysisData::OwnerOf(const AtomObject & atom_object)
     return atom_object.m_owner_model;
 }
 
-const LocalPotentialEntry * ModelAnalysisData::FindLocalEntry(const AtomObject & atom_object)
+const LocalPotentialEntry * ModelAnalysisData::FindAtomLocalEntryFor(const AtomObject & atom_object)
 {
     auto * owner{ OwnerOf(atom_object) };
     return owner == nullptr ? nullptr : Of(*owner).FindAtomLocalEntry(atom_object);
 }
 
-const LocalPotentialEntry & ModelAnalysisData::RequireLocalEntry(
+const LocalPotentialEntry & ModelAnalysisData::RequireAtomLocalEntry(
     const LocalPotentialEntry * entry,
     const char * context)
 {
@@ -48,9 +48,9 @@ const LocalPotentialEntry & ModelAnalysisData::RequireLocalEntry(
     return *entry;
 }
 
-const LocalPotentialEntry & ModelAnalysisData::RequireLocalEntry(const AtomObject & atom_object)
+const LocalPotentialEntry & ModelAnalysisData::RequireAtomLocalEntry(const AtomObject & atom_object)
 {
-    return RequireLocalEntry(FindLocalEntry(atom_object), "Atom local entry");
+    return RequireAtomLocalEntry(FindAtomLocalEntryFor(atom_object), "Atom local entry");
 }
 
 void ModelAnalysisData::Clear()

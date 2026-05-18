@@ -242,7 +242,7 @@ void GausPainter::PaintAtomLocalGausSummary(
                 auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
                 auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
                 const auto annotation{
-                    LocalPotentialView::RequireFor(*atom).FindAnnotation(class_key) };
+                    AtomLocalPotentialView::RequireFor(*atom).FindAnnotation(class_key) };
                 auto is_outlier{ annotation.has_value() && annotation->is_outlier };
                 auto line_color{ kAzure-7 };
                 if (show_outlier == true && is_outlier == true) line_color = kRed+1;
@@ -894,7 +894,7 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
                 auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
                 auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
                 const auto annotation{
-                    LocalPotentialView::RequireFor(*atom).FindAnnotation(class_key) };
+                    AtomLocalPotentialView::RequireFor(*atom).FindAnnotation(class_key) };
                 auto is_outlier{ annotation.has_value() && annotation->is_outlier };
                 auto line_color{ kAzure-7 };
                 if (show_outlier == true && is_outlier == true) line_color = kRed+1;

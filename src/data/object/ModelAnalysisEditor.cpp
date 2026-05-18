@@ -61,52 +61,29 @@ void ApplyAtomGroupGaussianResultToEntry(
 
 } // namespace
 
-LocalPotentialEditor::LocalPotentialEditor(AtomObject * atom_object) :
-    m_atom_object{ atom_object }
+AtomLocalPotentialEditor::AtomLocalPotentialEditor(LocalPotentialEntry & entry) :
+    m_entry{ &entry }
 {
 }
 
-ModelObject * LocalPotentialEditor::GetOwner() const
+LocalPotentialEntry & AtomLocalPotentialEditor::Entry() const
 {
-    if (m_atom_object != nullptr)
-    {
-        return ModelAnalysisData::OwnerOf(*m_atom_object);
-    }
-    return nullptr;
+    return *m_entry;
 }
 
-LocalPotentialEntry & LocalPotentialEditor::EnsureEntry() const
+void AtomLocalPotentialEditor::SetSamplingEntries(LocalPotentialSampleList value)
 {
-    if (m_entry != nullptr)
-    {
-        return *m_entry;
-    }
-    auto * owner{ GetOwner() };
-    if (owner == nullptr)
-    {
-        throw std::runtime_error("Local analysis owner model is not available.");
-    }
-    auto & analysis_data{ ModelAnalysisData::Of(*owner) };
-    if (m_atom_object != nullptr)
-    {
-        return analysis_data.EnsureAtomLocalEntry(*m_atom_object);
-    }
-    throw std::runtime_error("Local potential edit target is not available.");
+    Entry().SetSamplingEntries(std::move(value));
 }
 
-void LocalPotentialEditor::SetSamplingEntries(LocalPotentialSampleList value)
+void AtomLocalPotentialEditor::SetGaussianResult(LocalGaussianResult value)
 {
-    EnsureEntry().SetSamplingEntries(std::move(value));
+    Entry().SetGaussianResult(std::move(value));
 }
 
-void LocalPotentialEditor::SetGaussianResult(LocalGaussianResult value)
+void AtomLocalPotentialEditor::SetAlphaR(double value)
 {
-    EnsureEntry().SetGaussianResult(std::move(value));
-}
-
-void LocalPotentialEditor::SetAlphaR(double value)
-{
-    EnsureEntry().SetAlphaR(value);
+    Entry().SetAlphaR(value);
 }
 
 ModelAnalysisEditor::ModelAnalysisEditor(ModelObject & model_object) :
@@ -124,13 +101,10 @@ void ModelAnalysisEditor::ClearTransientFitStates()
     ModelAnalysisData::Of(m_model_object).ClearTransientFitStates();
 }
 
-LocalPotentialEditor ModelAnalysisEditor::EnsureAtomLocalPotential(const AtomObject & atom_object)
+AtomLocalPotentialEditor ModelAnalysisEditor::EnsureAtomLocalPotential(const AtomObject & atom_object)
 {
-    auto & mutable_atom{ const_cast<AtomObject &>(atom_object) };
-    auto & entry{ ModelAnalysisData::Of(m_model_object).EnsureAtomLocalEntry(mutable_atom) };
-    auto editor{ LocalPotentialEditor(&mutable_atom) };
-    editor.m_entry = &entry;
-    return editor;
+    auto & entry{ ModelAnalysisData::Of(m_model_object).EnsureAtomLocalEntry(atom_object) };
+    return AtomLocalPotentialEditor(entry);
 }
 
 void ModelAnalysisEditor::RebuildAtomGroupsFromSelection()

@@ -56,73 +56,73 @@ std::string DescribeGrouping(
 
 } // namespace
 
-LocalPotentialView::LocalPotentialView(const AtomObject * atom_object) :
+AtomLocalPotentialView::AtomLocalPotentialView(const AtomObject * atom_object) :
     m_atom_object{ atom_object }
 {
 }
 
-LocalPotentialView LocalPotentialView::For(const AtomObject & atom_object)
+AtomLocalPotentialView AtomLocalPotentialView::For(const AtomObject & atom_object)
 {
-    return LocalPotentialView(&atom_object);
+    return AtomLocalPotentialView(&atom_object);
 }
 
-LocalPotentialView LocalPotentialView::RequireFor(const AtomObject & atom_object)
+AtomLocalPotentialView AtomLocalPotentialView::RequireFor(const AtomObject & atom_object)
 {
-    auto view{ LocalPotentialView::For(atom_object) };
+    auto view{ AtomLocalPotentialView::For(atom_object) };
     (void)view.RequireEntry("Atom local analysis");
     return view;
 }
 
-bool LocalPotentialView::IsAvailable() const
+bool AtomLocalPotentialView::IsAvailable() const
 {
     return FindEntry() != nullptr;
 }
 
-const LocalPotentialEntry * LocalPotentialView::FindEntry() const
+const LocalPotentialEntry * AtomLocalPotentialView::FindEntry() const
 {
     if (m_atom_object != nullptr)
     {
-        return ModelAnalysisData::FindLocalEntry(*m_atom_object);
+        return ModelAnalysisData::FindAtomLocalEntryFor(*m_atom_object);
     }
     return nullptr;
 }
 
-const LocalPotentialEntry & LocalPotentialView::RequireEntry(const char * context) const
+const LocalPotentialEntry & AtomLocalPotentialView::RequireEntry(const char * context) const
 {
-    return ModelAnalysisData::RequireLocalEntry(FindEntry(), context);
+    return ModelAnalysisData::RequireAtomLocalEntry(FindEntry(), context);
 }
 
-const LocalGaussianResult & LocalPotentialView::GetGaussianResult() const
+const LocalGaussianResult & AtomLocalPotentialView::GetGaussianResult() const
 {
     return RequireEntry("Local Gaussian result").GetGaussianResult();
 }
 
-const GaussianModel3D & LocalPotentialView::GetEstimateOLS() const
+const GaussianModel3D & AtomLocalPotentialView::GetEstimateOLS() const
 {
     return RequireEntry("Local estimate OLS").GetEstimateOLS();
 }
 
-const GaussianModel3D & LocalPotentialView::GetEstimateMDPDE() const
+const GaussianModel3D & AtomLocalPotentialView::GetEstimateMDPDE() const
 {
     return RequireEntry("Local estimate MDPDE").GetEstimateMDPDE();
 }
 
-const LocalPotentialSampleList & LocalPotentialView::GetSamplingEntries() const
+const LocalPotentialSampleList & AtomLocalPotentialView::GetSamplingEntries() const
 {
     return RequireEntry("Local sampling entries").GetSamplingEntries();
 }
 
-std::tuple<float, float> LocalPotentialView::GetDistanceRange(double margin_rate) const
+std::tuple<float, float> AtomLocalPotentialView::GetDistanceRange(double margin_rate) const
 {
     return RequireEntry("Local distance range").GetDistanceRange(margin_rate);
 }
 
-std::tuple<float, float> LocalPotentialView::GetResponseRange(double margin_rate) const
+std::tuple<float, float> AtomLocalPotentialView::GetResponseRange(double margin_rate) const
 {
     return RequireEntry("Local response range").GetResponseRange(margin_rate);
 }
 
-SeriesPointList LocalPotentialView::GetBinnedDistanceResponseSeries(
+SeriesPointList AtomLocalPotentialView::GetBinnedDistanceResponseSeries(
     int bin_size,
     double x_min,
     double x_max) const
@@ -131,12 +131,12 @@ SeriesPointList LocalPotentialView::GetBinnedDistanceResponseSeries(
         .GetBinnedDistanceResponseSeries(bin_size, x_min, x_max);
 }
 
-double LocalPotentialView::GetAlphaR() const
+double AtomLocalPotentialView::GetAlphaR() const
 {
     return RequireEntry("Local alpha-r").GetAlphaR();
 }
 
-std::optional<LocalPotentialAnnotation> LocalPotentialView::FindAnnotation(
+std::optional<LocalPotentialAnnotation> AtomLocalPotentialView::FindAnnotation(
     const std::string & key) const
 {
     const auto * annotation{ RequireEntry("Local annotation").FindAnnotation(key) };
@@ -151,12 +151,12 @@ std::optional<LocalPotentialAnnotation> LocalPotentialView::FindAnnotation(
     };
 }
 
-double LocalPotentialView::GetMapValueNearCenter() const
+double AtomLocalPotentialView::GetMapValueNearCenter() const
 {
     return RequireEntry("Local center map value").GetMapValueNearCenter();
 }
 
-double LocalPotentialView::CalculateQScore(int par_choice) const
+double AtomLocalPotentialView::CalculateQScore(int par_choice) const
 {
     return RequireEntry("Local q-score").CalculateQScore(par_choice);
 }
@@ -192,7 +192,7 @@ double ModelAnalysisView::GetAtomGausEstimateMinimum(int par_id, Element element
     {
         if (atom->GetElement() != element) continue;
         gaus_estimate_list.emplace_back(
-            LocalPotentialView::RequireFor(*atom).GetEstimateMDPDE().GetDisplayParameter(par_id));
+            AtomLocalPotentialView::RequireFor(*atom).GetEstimateMDPDE().GetDisplayParameter(par_id));
     }
     return array_helper::ComputeMin(gaus_estimate_list.data(), gaus_estimate_list.size());
 }
@@ -326,7 +326,7 @@ std::vector<AtomObject *> ModelAnalysisView::GetOutlierAtomObjectList(
     outlier_atom_list.reserve(atom_list.size());
     for (auto * atom : atom_list)
     {
-        const auto annotation{ LocalPotentialView::RequireFor(*atom).FindAnnotation(class_key) };
+        const auto annotation{ AtomLocalPotentialView::RequireFor(*atom).FindAnnotation(class_key) };
         if (annotation.has_value() && annotation->is_outlier)
         {
             outlier_atom_list.emplace_back(atom);
@@ -356,7 +356,7 @@ double ModelAnalysisView::GetAtomAlphaR(
     {
         throw std::runtime_error("Atom group has no members.");
     }
-    return LocalPotentialView::RequireFor(*atom_list.front()).GetAlphaR();
+    return AtomLocalPotentialView::RequireFor(*atom_list.front()).GetAlphaR();
 }
 
 double ModelAnalysisView::GetAtomAlphaG(

@@ -120,7 +120,7 @@ TEST(LocalPotentialSeriesTest, ViewForwardsSeriesDerivationsFromResolvedEntry)
         {0.8f, 6.0f},
     });
 
-    const auto view{ rg::LocalPotentialView::RequireFor(*atom) };
+    const auto view{ rg::AtomLocalPotentialView::RequireFor(*atom) };
     const auto map_value_range{ view.GetResponseRange(0.0) };
     const auto binned{ view.GetBinnedDistanceResponseSeries(2, 0.0, 1.0) };
 

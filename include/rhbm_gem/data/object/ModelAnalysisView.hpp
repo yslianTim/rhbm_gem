@@ -17,14 +17,14 @@ class AtomObject;
 class LocalPotentialEntry;
 class ModelObject;
 
-class LocalPotentialView
+class AtomLocalPotentialView
 {
     const AtomObject * m_atom_object{ nullptr };
 
 public:
-    LocalPotentialView() = default;
-    static LocalPotentialView For(const AtomObject & atom_object);
-    static LocalPotentialView RequireFor(const AtomObject & atom_object);
+    AtomLocalPotentialView() = default;
+    static AtomLocalPotentialView For(const AtomObject & atom_object);
+    static AtomLocalPotentialView RequireFor(const AtomObject & atom_object);
     bool IsAvailable() const;
     const LocalGaussianResult & GetGaussianResult() const;
     const GaussianModel3D & GetEstimateOLS() const;
@@ -42,7 +42,7 @@ public:
     double CalculateQScore(int par_choice) const;
 
 private:
-    explicit LocalPotentialView(const AtomObject * atom_object);
+    explicit AtomLocalPotentialView(const AtomObject * atom_object);
     const LocalPotentialEntry * FindEntry() const;
     const LocalPotentialEntry & RequireEntry(const char * context) const;
 

@@ -69,7 +69,7 @@ public:
 
 private:
     ModelAnalysisView GetModelView() const;
-    LocalPotentialView GetLocalEntry() const;
+    AtomLocalPotentialView GetLocalEntry() const;
     bool IsModelObjectAvailable() const;
     bool IsAtomLocalEntryAvailable() const;
     size_t GetAtomResidueCount(const std::string & class_key, Residue residue, Structure structure=static_cast<Structure>(0)) const;

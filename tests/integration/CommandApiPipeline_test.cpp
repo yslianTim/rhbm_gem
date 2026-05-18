@@ -45,7 +45,7 @@ void ExpectSelectedAtomsHaveAlphaR(const rg::ModelObject & model, double alpha_r
     ASSERT_GT(atom_list.size(), 0u);
     for (const auto * atom : atom_list)
     {
-        EXPECT_DOUBLE_EQ(alpha_r, rg::LocalPotentialView::RequireFor(*atom).GetAlphaR());
+        EXPECT_DOUBLE_EQ(alpha_r, rg::AtomLocalPotentialView::RequireFor(*atom).GetAlphaR());
     }
 }
 

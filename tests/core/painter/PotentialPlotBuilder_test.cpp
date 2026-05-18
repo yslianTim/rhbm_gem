@@ -32,7 +32,7 @@ void EnsureLocalPotentialEntries(rg::ModelObject & model)
     auto analysis{ model.EditAnalysis() };
     for (auto & atom : model.GetAtomList())
     {
-        if (!rg::LocalPotentialView::For(*atom).IsAvailable())
+        if (!rg::AtomLocalPotentialView::For(*atom).IsAvailable())
         {
             analysis.EnsureAtomLocalPotential(*atom);
         }

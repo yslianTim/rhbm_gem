@@ -113,7 +113,7 @@ void ApplyModelSelection(rhbm_gem::ModelObject & model_object, AtomSelector & se
                        atom.GetChainID(),
                        atom.GetResidue(),
                        atom.GetElement())
-                && rhbm_gem::LocalPotentialView::For(atom).IsAvailable();
+                && rhbm_gem::AtomLocalPotentialView::For(atom).IsAvailable();
         });
 }
 

@@ -35,7 +35,7 @@ TEST(DataObjectModelAnalysisTest, SelectedModelEntriesCanBeInitializedForTypedWo
     for (const auto * atom : model->GetSelectedAtoms())
     {
         ASSERT_NE(atom, nullptr);
-        EXPECT_NE(rg::ModelAnalysisData::FindLocalEntry(*atom), nullptr);
+        EXPECT_NE(rg::ModelAnalysisData::FindAtomLocalEntryFor(*atom), nullptr);
     }
 }
 
@@ -78,7 +78,7 @@ TEST(DataObjectModelAnalysisTest, ModelSelectionAndLocalEntriesRemainDirectlyQue
     std::vector<rg::AtomObject *> require_entry_atoms;
     for (auto & atom : model->GetAtomList())
     {
-        if (rg::ModelAnalysisData::FindLocalEntry(*atom) != nullptr)
+        if (rg::ModelAnalysisData::FindAtomLocalEntryFor(*atom) != nullptr)
         {
             require_entry_atoms.emplace_back(atom.get());
         }
@@ -170,7 +170,7 @@ TEST(DataObjectModelAnalysisTest, LocalPotentialEntryStoresGaussianResult)
     EXPECT_DOUBLE_EQ(1.5, entry.GetEstimateMDPDE().GetAmplitude());
 }
 
-TEST(DataObjectModelAnalysisTest, LocalPotentialEditorCanSetAlphaR)
+TEST(DataObjectModelAnalysisTest, AtomLocalPotentialEditorCanSetAlphaR)
 {
     auto model{ data_test::MakeModelWithBond() };
     auto * atom{ model->GetAtomList().at(0).get() };
@@ -179,10 +179,10 @@ TEST(DataObjectModelAnalysisTest, LocalPotentialEditorCanSetAlphaR)
 
     editor.SetAlphaR(0.37);
 
-    EXPECT_DOUBLE_EQ(0.37, rg::LocalPotentialView::RequireFor(*atom).GetAlphaR());
+    EXPECT_DOUBLE_EQ(0.37, rg::AtomLocalPotentialView::RequireFor(*atom).GetAlphaR());
 }
 
-TEST(DataObjectModelAnalysisTest, LocalPotentialEditorSetGaussianResultUpdatesViewEstimates)
+TEST(DataObjectModelAnalysisTest, AtomLocalPotentialEditorSetGaussianResultUpdatesViewEstimates)
 {
     auto model{ data_test::MakeModelWithBond() };
     auto * atom{ model->GetAtomList().at(0).get() };
@@ -209,9 +209,9 @@ TEST(DataObjectModelAnalysisTest, LocalPotentialEditorSetGaussianResultUpdatesVi
 
     editor.SetGaussianResult(gaussian_result);
 
-    EXPECT_DOUBLE_EQ(0.6, rg::LocalPotentialView::RequireFor(*atom).GetGaussianResult().alpha_r);
-    EXPECT_DOUBLE_EQ(0.0, rg::LocalPotentialView::RequireFor(*atom).GetEstimateOLS().GetWidth());
-    EXPECT_DOUBLE_EQ(0.0, rg::LocalPotentialView::RequireFor(*atom).GetEstimateMDPDE().GetWidth());
+    EXPECT_DOUBLE_EQ(0.6, rg::AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult().alpha_r);
+    EXPECT_DOUBLE_EQ(0.0, rg::AtomLocalPotentialView::RequireFor(*atom).GetEstimateOLS().GetWidth());
+    EXPECT_DOUBLE_EQ(0.0, rg::AtomLocalPotentialView::RequireFor(*atom).GetEstimateMDPDE().GetWidth());
 }
 
 TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupGaussianResultToStatisticsAndAnnotations)
@@ -264,7 +264,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupGaussianRes
     EXPECT_NEAR(result.prior.GetStandardDeviationModel().GetWidth(), analysis_view.GetAtomGroupPriorWithUncertainty(group_key, class_key).GetStandardDeviationModel().GetWidth(), 1e-12);
     EXPECT_DOUBLE_EQ(alpha_g, analysis_view.GetAtomAlphaG(group_key, class_key));
 
-    const auto annotation{ rg::LocalPotentialView::RequireFor(*atom_list.front()).FindAnnotation(class_key) };
+    const auto annotation{ rg::AtomLocalPotentialView::RequireFor(*atom_list.front()).FindAnnotation(class_key) };
     ASSERT_TRUE(annotation.has_value());
     const auto expected_gaussian{ result.member_results.front().mdpde };
     EXPECT_NEAR(expected_gaussian.GetModel().GetAmplitude(), annotation->gaussian.GetModel().GetAmplitude(), 1e-12);
