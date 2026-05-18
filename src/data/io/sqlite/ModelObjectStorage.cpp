@@ -27,8 +27,9 @@
 #include <unordered_set>
 #include <utility>
 
-namespace {
+namespace rhbm_gem {
 
+namespace {
 using namespace std::literals;
 
 inline constexpr std::string_view kCreateModelObjectTableSql = R"sql(
@@ -424,11 +425,11 @@ inline constexpr auto kSelectModelAtomGroupSql = R"sql(
 
 class SQLiteStatementBatch
 {
-    rhbm_gem::SQLiteWrapper & m_database;
-    rhbm_gem::SQLiteWrapper::StatementGuard m_guard;
+    SQLiteWrapper & m_database;
+    SQLiteWrapper::StatementGuard m_guard;
 
 public:
-    SQLiteStatementBatch(rhbm_gem::SQLiteWrapper & database, const std::string & sql) :
+    SQLiteStatementBatch(SQLiteWrapper & database, const std::string & sql) :
         m_database{ database },
         m_guard{ database }
     {
@@ -445,24 +446,24 @@ public:
 };
 
 void DeleteRowsForKey(
-    rhbm_gem::SQLiteWrapper & database,
+    SQLiteWrapper & database,
     const std::string & table_name,
     const std::string & key_tag)
 {
     database.Prepare(
         std::string(kDeleteRowsForKeySqlPrefix) + table_name + std::string(kDeleteRowsForKeySqlSuffix));
-    rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
+    SQLiteWrapper::StatementGuard guard(database);
     database.Bind<std::string>(1, key_tag);
     database.StepOnce();
 }
 
 void SaveModelObjectRow(
-    rhbm_gem::SQLiteWrapper & database,
-    const rhbm_gem::ModelObject & model_obj,
+    SQLiteWrapper & database,
+    const ModelObject & model_obj,
     const std::string & key_tag)
 {
     SQLiteStatementBatch batch{ database, std::string(kUpsertModelObjectSql) };
-    batch.Execute([&](rhbm_gem::SQLiteWrapper & statement_db)
+    batch.Execute([&](SQLiteWrapper & statement_db)
     {
         statement_db.Bind<std::string>(1, key_tag);
         statement_db.Bind<int>(2, static_cast<int>(model_obj.GetNumberOfAtom()));
@@ -474,8 +475,8 @@ void SaveModelObjectRow(
 }
 
 void SaveChainMap(
-    rhbm_gem::SQLiteWrapper & database,
-    const rhbm_gem::ModelObject & model_obj,
+    SQLiteWrapper & database,
+    const ModelObject & model_obj,
     const std::string & key_tag)
 {
     SQLiteStatementBatch batch{ database, std::string(kInsertModelChainMapSql) };
@@ -485,7 +486,7 @@ void SaveChainMap(
         const auto & chain_id_list{ chain_entry.second };
         for (size_t ordinal = 0; ordinal < chain_id_list.size(); ordinal++)
         {
-            batch.Execute([&](rhbm_gem::SQLiteWrapper & statement_db)
+            batch.Execute([&](SQLiteWrapper & statement_db)
             {
                 statement_db.Bind<std::string>(1, key_tag);
                 statement_db.Bind<std::string>(2, entity_id);
@@ -497,8 +498,8 @@ void SaveChainMap(
 }
 
 void SaveChemicalComponentEntryList(
-    rhbm_gem::SQLiteWrapper & database,
-    const rhbm_gem::ModelObject & model_obj,
+    SQLiteWrapper & database,
+    const ModelObject & model_obj,
     const std::string & key_tag)
 {
     SQLiteStatementBatch batch{ database, std::string(kInsertModelComponentSql) };
@@ -506,7 +507,7 @@ void SaveChemicalComponentEntryList(
     {
         const auto * component_entry{ model_obj.FindChemicalComponentEntry(component_key) };
         if (component_entry == nullptr) continue;
-        batch.Execute([&](rhbm_gem::SQLiteWrapper & statement_db)
+        batch.Execute([&](SQLiteWrapper & statement_db)
         {
             statement_db.Bind<std::string>(1, key_tag);
             statement_db.Bind<ComponentKey>(2, component_key);
@@ -522,8 +523,8 @@ void SaveChemicalComponentEntryList(
 }
 
 void SaveComponentAtomEntryList(
-    rhbm_gem::SQLiteWrapper & database,
-    const rhbm_gem::ModelObject & model_obj,
+    SQLiteWrapper & database,
+    const ModelObject & model_obj,
     const std::string & key_tag)
 {
     SQLiteStatementBatch batch{ database, std::string(kInsertModelComponentAtomSql) };
@@ -535,7 +536,7 @@ void SaveComponentAtomEntryList(
         {
             const auto & atom_key{ atom_map_entry.first };
             const auto & atom_entry{ atom_map_entry.second };
-            batch.Execute([&](rhbm_gem::SQLiteWrapper & statement_db)
+            batch.Execute([&](SQLiteWrapper & statement_db)
             {
                 statement_db.Bind<std::string>(1, key_tag);
                 statement_db.Bind<ComponentKey>(2, component_key);
@@ -550,8 +551,8 @@ void SaveComponentAtomEntryList(
 }
 
 void SaveComponentBondEntryList(
-    rhbm_gem::SQLiteWrapper & database,
-    const rhbm_gem::ModelObject & model_obj,
+    SQLiteWrapper & database,
+    const ModelObject & model_obj,
     const std::string & key_tag)
 {
     SQLiteStatementBatch batch{ database, std::string(kInsertModelComponentBondSql) };
@@ -563,7 +564,7 @@ void SaveComponentBondEntryList(
         {
             const auto & bond_key{ bond_map_entry.first };
             const auto & bond_entry{ bond_map_entry.second };
-            batch.Execute([&](rhbm_gem::SQLiteWrapper & statement_db)
+            batch.Execute([&](SQLiteWrapper & statement_db)
             {
                 statement_db.Bind<std::string>(1, key_tag);
                 statement_db.Bind<ComponentKey>(2, component_key);
@@ -579,14 +580,14 @@ void SaveComponentBondEntryList(
 }
 
 void SaveAtomObjectList(
-    rhbm_gem::SQLiteWrapper & database,
-    const rhbm_gem::ModelObject & model_obj,
+    SQLiteWrapper & database,
+    const ModelObject & model_obj,
     const std::string & key_tag)
 {
     SQLiteStatementBatch batch{ database, std::string(kInsertModelAtomSql) };
     for (const auto & atom_object : model_obj.GetAtomList())
     {
-        batch.Execute([&](rhbm_gem::SQLiteWrapper & statement_db)
+        batch.Execute([&](SQLiteWrapper & statement_db)
         {
             statement_db.Bind<std::string>(1, key_tag);
             statement_db.Bind<int>(2, atom_object->GetSerialID());
@@ -610,14 +611,14 @@ void SaveAtomObjectList(
 }
 
 void SaveBondObjectList(
-    rhbm_gem::SQLiteWrapper & database,
-    const rhbm_gem::ModelObject & model_obj,
+    SQLiteWrapper & database,
+    const ModelObject & model_obj,
     const std::string & key_tag)
 {
     SQLiteStatementBatch batch{ database, std::string(kInsertModelBondSql) };
     for (const auto & bond_object : model_obj.GetBondList())
     {
-        batch.Execute([&](rhbm_gem::SQLiteWrapper & statement_db)
+        batch.Execute([&](SQLiteWrapper & statement_db)
         {
             statement_db.Bind<std::string>(1, key_tag);
             statement_db.Bind<int>(2, bond_object->GetAtomSerialID1());
@@ -631,19 +632,19 @@ void SaveBondObjectList(
 }
 
 void LoadModelObjectRow(
-    rhbm_gem::SQLiteWrapper & database,
-    rhbm_gem::ModelObject & model_obj,
+    SQLiteWrapper & database,
+    ModelObject & model_obj,
     const std::string & key_tag)
 {
     database.Prepare(std::string(kSelectModelObjectSql));
-    rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
+    SQLiteWrapper::StatementGuard guard(database);
     database.Bind<std::string>(1, key_tag);
     const auto rc{ database.StepNext() };
-    if (rc == rhbm_gem::SQLiteWrapper::StepDone())
+    if (rc == SQLiteWrapper::StepDone())
     {
         throw std::runtime_error("Cannot find the row with key_tag = " + key_tag);
     }
-    if (rc != rhbm_gem::SQLiteWrapper::StepRow())
+    if (rc != SQLiteWrapper::StepRow())
     {
         throw std::runtime_error("Step failed: " + database.ErrorMessage());
     }
@@ -662,22 +663,22 @@ void LoadModelObjectRow(
 }
 
 void LoadChainMap(
-    rhbm_gem::SQLiteWrapper & database,
-    rhbm_gem::ModelObjectParts & parts,
+    SQLiteWrapper & database,
+    ModelObjectParts & parts,
     const std::string & key_tag)
 {
     std::unordered_map<std::string, std::vector<std::string>> chain_map;
     database.Prepare(std::string(kSelectModelChainMapSql));
-    rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
+    SQLiteWrapper::StatementGuard guard(database);
     database.Bind<std::string>(1, key_tag);
     while (true)
     {
         const auto rc{ database.StepNext() };
-        if (rc == rhbm_gem::SQLiteWrapper::StepDone())
+        if (rc == SQLiteWrapper::StepDone())
         {
             break;
         }
-        if (rc != rhbm_gem::SQLiteWrapper::StepRow())
+        if (rc != SQLiteWrapper::StepRow())
         {
             throw std::runtime_error("Step failed: " + database.ErrorMessage());
         }
@@ -693,26 +694,26 @@ void LoadChainMap(
 }
 
 void LoadChemicalComponentEntryList(
-    rhbm_gem::SQLiteWrapper & database,
-    rhbm_gem::ModelObjectParts & parts,
+    SQLiteWrapper & database,
+    ModelObjectParts & parts,
     const std::string & key_tag)
 {
     database.Prepare(std::string(kSelectModelComponentSql));
-    rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
+    SQLiteWrapper::StatementGuard guard(database);
     database.Bind<std::string>(1, key_tag);
     while (true)
     {
         const auto rc{ database.StepNext() };
-        if (rc == rhbm_gem::SQLiteWrapper::StepDone())
+        if (rc == SQLiteWrapper::StepDone())
         {
             break;
         }
-        if (rc != rhbm_gem::SQLiteWrapper::StepRow())
+        if (rc != SQLiteWrapper::StepRow())
         {
             throw std::runtime_error("Step failed: " + database.ErrorMessage());
         }
 
-        auto component_entry{ std::make_unique<rhbm_gem::ChemicalComponentEntry>() };
+        auto component_entry{ std::make_unique<ChemicalComponentEntry>() };
         const auto component_key{ database.GetColumn<ComponentKey>(0) };
         const auto component_id{ database.GetColumn<std::string>(1) };
         component_entry->SetComponentId(component_id);
@@ -728,21 +729,21 @@ void LoadChemicalComponentEntryList(
 }
 
 void LoadComponentAtomEntryList(
-    rhbm_gem::SQLiteWrapper & database,
-    rhbm_gem::ModelObjectParts & parts,
+    SQLiteWrapper & database,
+    ModelObjectParts & parts,
     const std::string & key_tag)
 {
     database.Prepare(std::string(kSelectModelComponentAtomSql));
-    rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
+    SQLiteWrapper::StatementGuard guard(database);
     database.Bind<std::string>(1, key_tag);
     while (true)
     {
         const auto rc{ database.StepNext() };
-        if (rc == rhbm_gem::SQLiteWrapper::StepDone())
+        if (rc == SQLiteWrapper::StepDone())
         {
             break;
         }
-        if (rc != rhbm_gem::SQLiteWrapper::StepRow())
+        if (rc != SQLiteWrapper::StepRow())
         {
             throw std::runtime_error("Step failed: " + database.ErrorMessage());
         }
@@ -756,7 +757,7 @@ void LoadComponentAtomEntryList(
         }
 
         auto * component_entry{ component_iter->second.get() };
-        const rhbm_gem::ComponentAtomEntry atom_entry{
+        const ComponentAtomEntry atom_entry{
             database.GetColumn<std::string>(2),
             static_cast<Element>(database.GetColumn<int>(3)),
             static_cast<bool>(database.GetColumn<int>(4)),
@@ -769,21 +770,21 @@ void LoadComponentAtomEntryList(
 }
 
 void LoadComponentBondEntryList(
-    rhbm_gem::SQLiteWrapper & database,
-    rhbm_gem::ModelObjectParts & parts,
+    SQLiteWrapper & database,
+    ModelObjectParts & parts,
     const std::string & key_tag)
 {
     database.Prepare(std::string(kSelectModelComponentBondSql));
-    rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
+    SQLiteWrapper::StatementGuard guard(database);
     database.Bind<std::string>(1, key_tag);
     while (true)
     {
         const auto rc{ database.StepNext() };
-        if (rc == rhbm_gem::SQLiteWrapper::StepDone())
+        if (rc == SQLiteWrapper::StepDone())
         {
             break;
         }
-        if (rc != rhbm_gem::SQLiteWrapper::StepRow())
+        if (rc != SQLiteWrapper::StepRow())
         {
             throw std::runtime_error("Step failed: " + database.ErrorMessage());
         }
@@ -797,7 +798,7 @@ void LoadComponentBondEntryList(
         }
 
         auto * component_entry{ component_iter->second.get() };
-        rhbm_gem::ComponentBondEntry bond_entry;
+        ComponentBondEntry bond_entry;
         const auto bond_key{ database.GetColumn<BondKey>(1) };
         bond_entry.bond_id = database.GetColumn<std::string>(2);
         bond_entry.bond_type = static_cast<BondType>(database.GetColumn<int>(3));
@@ -810,28 +811,28 @@ void LoadComponentBondEntryList(
     }
 }
 
-std::vector<std::unique_ptr<rhbm_gem::AtomObject>> LoadAtomObjectList(
-    rhbm_gem::SQLiteWrapper & database,
+std::vector<std::unique_ptr<AtomObject>> LoadAtomObjectList(
+    SQLiteWrapper & database,
     const std::string & key_tag)
 {
-    std::vector<std::unique_ptr<rhbm_gem::AtomObject>> atom_object_list;
+    std::vector<std::unique_ptr<AtomObject>> atom_object_list;
 
     database.Prepare(std::string(kSelectModelAtomSql));
-    rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
+    SQLiteWrapper::StatementGuard guard(database);
     database.Bind<std::string>(1, key_tag);
     while (true)
     {
         const auto rc{ database.StepNext() };
-        if (rc == rhbm_gem::SQLiteWrapper::StepDone())
+        if (rc == SQLiteWrapper::StepDone())
         {
             break;
         }
-        if (rc != rhbm_gem::SQLiteWrapper::StepRow())
+        if (rc != SQLiteWrapper::StepRow())
         {
             throw std::runtime_error("Step failed: " + database.ErrorMessage());
         }
 
-        auto atom_object{ std::make_unique<rhbm_gem::AtomObject>() };
+        auto atom_object{ std::make_unique<AtomObject>() };
         atom_object->SetSerialID(database.GetColumn<int>(0));
         atom_object->SetSequenceID(database.GetColumn<int>(1));
         atom_object->SetComponentID(database.GetColumn<std::string>(2));
@@ -854,13 +855,13 @@ std::vector<std::unique_ptr<rhbm_gem::AtomObject>> LoadAtomObjectList(
     return atom_object_list;
 }
 
-std::vector<std::unique_ptr<rhbm_gem::BondObject>> LoadBondObjectList(
-    rhbm_gem::SQLiteWrapper & database,
+std::vector<std::unique_ptr<BondObject>> LoadBondObjectList(
+    SQLiteWrapper & database,
     const std::string & key_tag,
-    const std::vector<std::unique_ptr<rhbm_gem::AtomObject>> & atom_list)
+    const std::vector<std::unique_ptr<AtomObject>> & atom_list)
 {
-    std::vector<std::unique_ptr<rhbm_gem::BondObject>> bond_object_list;
-    std::unordered_map<int, rhbm_gem::AtomObject *> atom_map;
+    std::vector<std::unique_ptr<BondObject>> bond_object_list;
+    std::unordered_map<int, AtomObject *> atom_map;
     atom_map.reserve(atom_list.size());
     for (const auto & atom_object : atom_list)
     {
@@ -868,23 +869,23 @@ std::vector<std::unique_ptr<rhbm_gem::BondObject>> LoadBondObjectList(
     }
 
     database.Prepare(std::string(kSelectModelBondSql));
-    rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
+    SQLiteWrapper::StatementGuard guard(database);
     database.Bind<std::string>(1, key_tag);
     while (true)
     {
         const auto rc{ database.StepNext() };
-        if (rc == rhbm_gem::SQLiteWrapper::StepDone())
+        if (rc == SQLiteWrapper::StepDone())
         {
             break;
         }
-        if (rc != rhbm_gem::SQLiteWrapper::StepRow())
+        if (rc != SQLiteWrapper::StepRow())
         {
             throw std::runtime_error("Step failed: " + database.ErrorMessage());
         }
 
         auto atom_object_1{ atom_map.at(database.GetColumn<int>(0)) };
         auto atom_object_2{ atom_map.at(database.GetColumn<int>(1)) };
-        auto bond_object{ std::make_unique<rhbm_gem::BondObject>(atom_object_1, atom_object_2) };
+        auto bond_object{ std::make_unique<BondObject>(atom_object_1, atom_object_2) };
         bond_object->SetBondKey(database.GetColumn<BondKey>(2));
         bond_object->SetBondType(static_cast<BondType>(database.GetColumn<int>(3)));
         bond_object->SetBondOrder(static_cast<BondOrder>(database.GetColumn<int>(4)));
@@ -895,8 +896,8 @@ std::vector<std::unique_ptr<rhbm_gem::BondObject>> LoadBondObjectList(
 }
 
 void SaveStructure(
-    rhbm_gem::SQLiteWrapper & database,
-    const rhbm_gem::ModelObject & model_obj,
+    SQLiteWrapper & database,
+    const ModelObject & model_obj,
     const std::string & key_tag)
 {
     SaveModelObjectRow(database, model_obj, key_tag);
@@ -908,11 +909,11 @@ void SaveStructure(
     SaveBondObjectList(database, model_obj, key_tag);
 }
 
-rhbm_gem::ModelObjectParts LoadStructure(
-    rhbm_gem::SQLiteWrapper & database,
+ModelObjectParts LoadStructure(
+    SQLiteWrapper & database,
     const std::string & key_tag)
 {
-    rhbm_gem::ModelObjectParts parts;
+    ModelObjectParts parts;
     LoadChemicalComponentEntryList(database, parts, key_tag);
     LoadComponentAtomEntryList(database, parts, key_tag);
     LoadComponentBondEntryList(database, parts, key_tag);
@@ -923,17 +924,17 @@ rhbm_gem::ModelObjectParts LoadStructure(
 }
 
 void SaveAtomLocalPotentialEntryList(
-    rhbm_gem::SQLiteWrapper & database,
-    const rhbm_gem::ModelObject & model_obj,
+    SQLiteWrapper & database,
+    const ModelObject & model_obj,
     const std::string & key_tag)
 {
     SQLiteStatementBatch batch{ database, std::string(kInsertModelAtomLocalSql) };
     for (const auto & atom_object : model_obj.GetAtomList())
     {
-        auto * entry{ rhbm_gem::ModelAnalysisData::Of(model_obj).FindAtomLocalEntry(*atom_object) };
+        auto * entry{ ModelAnalysisData::Of(model_obj).FindAtomLocalEntry(*atom_object) };
         if (entry == nullptr) continue;
 
-        batch.Execute([&](rhbm_gem::SQLiteWrapper & statement_db)
+        batch.Execute([&](SQLiteWrapper & statement_db)
         {
             const auto & gaussian_result{ entry->GetGaussianResult() };
             statement_db.Bind<std::string>(1, key_tag);
@@ -951,20 +952,20 @@ void SaveAtomLocalPotentialEntryList(
 }
 
 void SaveAtomLocalPotentialEntrySubList(
-    rhbm_gem::SQLiteWrapper & database,
-    const rhbm_gem::ModelObject & model_obj,
+    SQLiteWrapper & database,
+    const ModelObject & model_obj,
     const std::string & key_tag,
     const std::string & class_key)
 {
     SQLiteStatementBatch batch{ database, std::string(kInsertModelAtomPosteriorSql) };
     for (const auto & atom_object : model_obj.GetAtomList())
     {
-        auto * entry{ rhbm_gem::ModelAnalysisData::Of(model_obj).FindAtomLocalEntry(*atom_object) };
+        auto * entry{ ModelAnalysisData::Of(model_obj).FindAtomLocalEntry(*atom_object) };
         if (entry == nullptr) continue;
         const auto * annotation{ entry->FindAnnotation(class_key) };
         if (annotation == nullptr) continue;
 
-        batch.Execute([&](rhbm_gem::SQLiteWrapper & statement_db)
+        batch.Execute([&](SQLiteWrapper & statement_db)
         {
             statement_db.Bind<std::string>(1, key_tag);
             statement_db.Bind<std::string>(2, class_key);
@@ -984,15 +985,15 @@ void SaveAtomLocalPotentialEntrySubList(
 }
 
 void SaveAtomGroupPotentialEntryList(
-    rhbm_gem::SQLiteWrapper & database,
-    const rhbm_gem::AtomGroupPotentialEntry & group_entry,
+    SQLiteWrapper & database,
+    const AtomGroupPotentialEntry & group_entry,
     const std::string & key_tag,
     const std::string & class_key)
 {
     SQLiteStatementBatch batch{ database, std::string(kInsertModelAtomGroupSql) };
     for (const auto group_key : group_entry.CollectGroupKeys())
     {
-        batch.Execute([&](rhbm_gem::SQLiteWrapper & statement_db)
+        batch.Execute([&](SQLiteWrapper & statement_db)
         {
             const auto & mean{ group_entry.GetMean(group_key) };
             const auto & mdpde{ group_entry.GetMDPDE(group_key) };
@@ -1018,23 +1019,23 @@ void SaveAtomGroupPotentialEntryList(
 }
 
 void LoadAtomLocalPotentialEntrySubList(
-    rhbm_gem::SQLiteWrapper & database,
+    SQLiteWrapper & database,
     const std::string & key_tag,
     const std::string & class_key,
-    std::unordered_map<int, std::unique_ptr<rhbm_gem::LocalPotentialEntry>> & entry_map)
+    std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>> & entry_map)
 {
     database.Prepare(std::string(kSelectModelAtomPosteriorSql));
-    rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
+    SQLiteWrapper::StatementGuard guard(database);
     database.Bind<std::string>(1, key_tag);
     database.Bind<std::string>(2, class_key);
     while (true)
     {
         const auto rc{ database.StepNext() };
-        if (rc == rhbm_gem::SQLiteWrapper::StepDone())
+        if (rc == SQLiteWrapper::StepDone())
         {
             break;
         }
-        if (rc != rhbm_gem::SQLiteWrapper::StepRow())
+        if (rc != SQLiteWrapper::StepRow())
         {
             throw std::runtime_error("Step failed: " + database.ErrorMessage());
         }
@@ -1043,15 +1044,15 @@ void LoadAtomLocalPotentialEntrySubList(
         auto iter{ entry_map.find(serial_id) };
         if (iter == entry_map.end()) continue;
         auto & entry{ iter->second };
-        rhbm_gem::GaussianModel3DWithUncertainty gaussian{
-            rhbm_gem::GaussianModel3D{
+        GaussianModel3DWithUncertainty gaussian{
+            GaussianModel3D{
                 database.GetColumn<double>(1), database.GetColumn<double>(2) },
-            rhbm_gem::GaussianModel3DUncertainty{
+            GaussianModel3DUncertainty{
                 database.GetColumn<double>(3), database.GetColumn<double>(4) }
         };
         entry->SetAnnotation(
             class_key,
-            rhbm_gem::LocalPotentialAnnotation{
+            LocalPotentialAnnotation{
                 gaussian,
                 static_cast<bool>(database.GetColumn<int>(5)),
                 database.GetColumn<double>(6)
@@ -1059,40 +1060,40 @@ void LoadAtomLocalPotentialEntrySubList(
     }
 }
 
-std::unordered_map<int, std::unique_ptr<rhbm_gem::LocalPotentialEntry>> LoadAtomLocalPotentialEntryMap(
-    rhbm_gem::SQLiteWrapper & database,
+std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>> LoadAtomLocalPotentialEntryMap(
+    SQLiteWrapper & database,
     const std::string & key_tag)
 {
-    std::unordered_map<int, std::unique_ptr<rhbm_gem::LocalPotentialEntry>> entry_map;
+    std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>> entry_map;
     database.Prepare(std::string(kSelectModelAtomLocalSql));
-    rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
+    SQLiteWrapper::StatementGuard guard(database);
     database.Bind<std::string>(1, key_tag);
     while (true)
     {
         const auto rc{ database.StepNext() };
-        if (rc == rhbm_gem::SQLiteWrapper::StepDone())
+        if (rc == SQLiteWrapper::StepDone())
         {
             break;
         }
-        if (rc != rhbm_gem::SQLiteWrapper::StepRow())
+        if (rc != SQLiteWrapper::StepRow())
         {
             throw std::runtime_error("Step failed: " + database.ErrorMessage());
         }
 
-        auto entry{ std::make_unique<rhbm_gem::LocalPotentialEntry>() };
+        auto entry{ std::make_unique<LocalPotentialEntry>() };
         const auto serial_id{ database.GetColumn<int>(0) };
         entry->SetSamplingEntries(
             database.GetColumn<LocalPotentialSampleList>(2));
-        rhbm_gem::LocalGaussianResult gaussian_result;
-        gaussian_result.ols = rhbm_gem::GaussianModel3DWithUncertainty{
-            rhbm_gem::GaussianModel3D{
+        LocalGaussianResult gaussian_result;
+        gaussian_result.ols = GaussianModel3DWithUncertainty{
+            GaussianModel3D{
                 database.GetColumn<double>(3), database.GetColumn<double>(4) },
-            rhbm_gem::GaussianModel3DUncertainty{}
+            GaussianModel3DUncertainty{}
         };
-        gaussian_result.mdpde = rhbm_gem::GaussianModel3DWithUncertainty{
-            rhbm_gem::GaussianModel3D{
+        gaussian_result.mdpde = GaussianModel3DWithUncertainty{
+            GaussianModel3D{
                 database.GetColumn<double>(5), database.GetColumn<double>(6) },
-            rhbm_gem::GaussianModel3DUncertainty{}
+            GaussianModel3DUncertainty{}
         };
         gaussian_result.alpha_r = database.GetColumn<double>(7);
         entry->SetGaussianResult(gaussian_result);
@@ -1108,40 +1109,40 @@ std::unordered_map<int, std::unique_ptr<rhbm_gem::LocalPotentialEntry>> LoadAtom
 }
 
 void LoadAtomGroupPotentialEntryList(
-    rhbm_gem::SQLiteWrapper & database,
-    rhbm_gem::ModelObject & model_obj,
+    SQLiteWrapper & database,
+    ModelObject & model_obj,
     const std::string & key_tag,
     const std::string & class_key)
 {
     auto & group_entry{
-        rhbm_gem::ModelAnalysisData::Of(model_obj).EnsureAtomGroupEntry(class_key) };
+        ModelAnalysisData::Of(model_obj).EnsureAtomGroupEntry(class_key) };
     database.Prepare(std::string(kSelectModelAtomGroupSql));
-    rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
+    SQLiteWrapper::StatementGuard guard(database);
     database.Bind<std::string>(1, key_tag);
     database.Bind<std::string>(2, class_key);
     while (true)
     {
         const auto rc{ database.StepNext() };
-        if (rc == rhbm_gem::SQLiteWrapper::StepDone())
+        if (rc == SQLiteWrapper::StepDone())
         {
             break;
         }
-        if (rc != rhbm_gem::SQLiteWrapper::StepRow())
+        if (rc != SQLiteWrapper::StepRow())
         {
             throw std::runtime_error("Step failed: " + database.ErrorMessage());
         }
 
         const auto group_key{ database.GetColumn<GroupKey>(0) };
         group_entry.ReserveMembers(group_key, static_cast<size_t>(database.GetColumn<int>(1)));
-        rhbm_gem::GroupGaussianResult group_result;
-        group_result.mean = rhbm_gem::GaussianModel3D{
+        GroupGaussianResult group_result;
+        group_result.mean = GaussianModel3D{
             database.GetColumn<double>(2), database.GetColumn<double>(3) };
-        group_result.mdpde = rhbm_gem::GaussianModel3D{
+        group_result.mdpde = GaussianModel3D{
             database.GetColumn<double>(4), database.GetColumn<double>(5) };
-        group_result.prior = rhbm_gem::GaussianModel3DWithUncertainty{
-            rhbm_gem::GaussianModel3D{
+        group_result.prior = GaussianModel3DWithUncertainty{
+            GaussianModel3D{
                 database.GetColumn<double>(6), database.GetColumn<double>(7) },
-            rhbm_gem::GaussianModel3DUncertainty{
+            GaussianModel3DUncertainty{
                 database.GetColumn<double>(8), database.GetColumn<double>(9) }
         };
         group_result.alpha_g = database.GetColumn<double>(10);
@@ -1150,18 +1151,18 @@ void LoadAtomGroupPotentialEntryList(
 
     for (auto & atom : model_obj.GetSelectedAtoms())
     {
-        const auto group_key{ rhbm_gem::AtomClassifier::GetGroupKeyInClass(atom, class_key) };
+        const auto group_key{ AtomClassifier::GetGroupKeyInClass(atom, class_key) };
         group_entry.AddMember(group_key, *atom);
     }
 }
 
 void SaveAnalysis(
-    rhbm_gem::SQLiteWrapper & database,
-    const rhbm_gem::ModelObject & model_obj,
+    SQLiteWrapper & database,
+    const ModelObject & model_obj,
     const std::string & key_tag)
 {
     SaveAtomLocalPotentialEntryList(database, model_obj, key_tag);
-    const auto & analysis_data{ rhbm_gem::ModelAnalysisData::Of(model_obj) };
+    const auto & analysis_data{ ModelAnalysisData::Of(model_obj) };
 
     for (const auto & [class_key, group_entry] : analysis_data.AtomGroupEntries())
     {
@@ -1175,12 +1176,12 @@ void SaveAnalysis(
 }
 
 void LoadAnalysis(
-    rhbm_gem::SQLiteWrapper & database,
-    rhbm_gem::ModelObject & model_obj,
+    SQLiteWrapper & database,
+    ModelObject & model_obj,
     const std::string & key_tag)
 {
     ScopeTimer timer{ "model_storage::LoadAnalysis" };
-    rhbm_gem::ModelAnalysisData::Of(model_obj).Clear();
+    ModelAnalysisData::Of(model_obj).Clear();
 
     auto atom_entry_map{ LoadAtomLocalPotentialEntryMap(database, key_tag) };
     std::unordered_set<int> selected_serial_ids;
@@ -1194,11 +1195,11 @@ void LoadAnalysis(
             continue;
         }
 
-        rhbm_gem::ModelAnalysisData::Of(model_obj).SetAtomLocalEntry(
+        ModelAnalysisData::Of(model_obj).SetAtomLocalEntry(
             *atom_object, std::move(iter->second));
         selected_serial_ids.insert(serial_id);
     }
-    model_obj.SelectAtoms([&selected_serial_ids](const rhbm_gem::AtomObject & atom)
+    model_obj.SelectAtoms([&selected_serial_ids](const AtomObject & atom)
     {
         return selected_serial_ids.find(atom.GetSerialID()) != selected_serial_ids.end();
     });
@@ -1206,14 +1207,14 @@ void LoadAnalysis(
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {
         auto class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        rhbm_gem::ModelAnalysisData::Of(model_obj).EnsureAtomGroupEntry(class_key);
+        ModelAnalysisData::Of(model_obj).EnsureAtomGroupEntry(class_key);
         LoadAtomGroupPotentialEntryList(database, model_obj, key_tag, class_key);
     }
 }
 
 } // namespace
 
-namespace rhbm_gem::model_storage {
+namespace model_storage {
 
 void CreateTables(SQLiteWrapper & database)
 {
@@ -1249,4 +1250,5 @@ std::unique_ptr<ModelObject> Load(
     return model_object;
 }
 
-} // namespace rhbm_gem::model_storage
+} // namespace model_storage
+} // namespace rhbm_gem
