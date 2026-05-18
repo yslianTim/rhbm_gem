@@ -131,7 +131,7 @@ std::tuple<float, float> AtomLocalPotentialView::GetDistanceRange(double margin_
     distance_array.reserve(sampling_entries.size());
     for (const auto & sample : sampling_entries)
     {
-        distance_array.emplace_back(sample.distance);
+        distance_array.emplace_back(sample.point.distance);
     }
     return array_helper::ComputeScalingRangeTuple(
         distance_array, static_cast<float>(margin_rate));
@@ -161,7 +161,7 @@ SeriesPointList AtomLocalPotentialView::GetBinnedDistanceResponseSeries(
     std::vector<std::vector<float>> bin_map(static_cast<size_t>(bin_size));
     for (const auto & sample : sampling_entries)
     {
-        const auto distance{ sample.distance };
+        const auto distance{ sample.point.distance };
         if (distance < x_min || distance >= x_max)
         {
             continue;
@@ -215,7 +215,7 @@ double AtomLocalPotentialView::GetMapValueNearCenter() const
     double sum{ 0.0 };
     for (const auto & sample : data_list)
     {
-        if (sample.distance > 0.05f) continue;
+        if (sample.point.distance > 0.05f) continue;
         sum += sample.response;
         count++;
     }
@@ -264,7 +264,7 @@ double AtomLocalPotentialView::CalculateQScore(int par_choice) const
     {
         map_value_list.emplace_back(sample.response);
         reference_value_list.emplace_back(
-            amplitude * std::exp(-0.5 * std::pow(sample.distance / width, 2)) + intersect);
+            amplitude * std::exp(-0.5 * std::pow(sample.point.distance / width, 2)) + intersect);
     }
     if (map_value_list.empty())
     {

@@ -151,7 +151,7 @@ struct SQLiteBinder<LocalPotentialSampleList>
         contiguous.reserve(value.size() * 2);
         for(const auto & sample : value)
         {
-            contiguous.push_back(sample.distance);
+            contiguous.push_back(sample.point.distance);
             contiguous.push_back(sample.response);
         }
 

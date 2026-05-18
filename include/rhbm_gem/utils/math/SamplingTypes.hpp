@@ -3,7 +3,6 @@
 #include <array>
 #include <cstddef>
 #include <initializer_list>
-#include <optional>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -18,11 +17,8 @@ using SamplingPointList = std::vector<SamplingPoint>;
 
 struct LocalPotentialSample
 {
-    float distance{ 0.0f };
     float response{ 0.0f };
-    std::optional<std::array<float, 3>> position{};
-
-    bool HasPosition() const noexcept { return position.has_value(); }
+    SamplingPoint point{};
 };
 
 using LocalPotentialSampleList = std::vector<LocalPotentialSample>;

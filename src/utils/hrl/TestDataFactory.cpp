@@ -171,8 +171,8 @@ LocalPotentialSampleList GenerateRadialSamples(
         const auto distance{ dist_distance(generator) };
         const auto response{ model.ResponseAtDistance(distance) };
         sample_list.emplace_back(LocalPotentialSample{
-            static_cast<float>(distance),
-            static_cast<float>(response)
+            static_cast<float>(response),
+            SamplingPoint{ static_cast<float>(distance) }
         });
     }
 
@@ -231,9 +231,8 @@ LocalPotentialSampleList GenerateAtomNeighborhoodSamples(
             model.GetIntercept()
         };
         sample_list.emplace_back(LocalPotentialSample{
-            sampling_point.distance,
             static_cast<float>(response),
-            sampling_point.position
+            sampling_point
         });
     }
 

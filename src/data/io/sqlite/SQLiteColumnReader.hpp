@@ -167,9 +167,8 @@ struct SQLiteColumnReader<LocalPotentialSampleList>
             float first = blob_floats[2 * i];
             float second = blob_floats[2 * i + 1];
             result.emplace_back(LocalPotentialSample{
-                first,
                 second,
-                std::nullopt
+                SamplingPoint{ first }
             });
         }
         return result;

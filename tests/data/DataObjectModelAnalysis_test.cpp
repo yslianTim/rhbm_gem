@@ -190,9 +190,9 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialEditorSetGaussianResultUpdat
     auto editor{ analysis.EnsureAtomLocalPotential(*atom) };
 
     LocalPotentialSampleList sampling_entries{
-        LocalPotentialSample{ 0.0f, 6.0f },
-        LocalPotentialSample{ 0.5f, 4.0f },
-        LocalPotentialSample{ 0.9f, 2.0f }
+        LocalPotentialSample{ 6.0f, SamplingPoint{ 0.0f } },
+        LocalPotentialSample{ 4.0f, SamplingPoint{ 0.5f } },
+        LocalPotentialSample{ 2.0f, SamplingPoint{ 0.9f } }
     };
     editor.SetSamplingEntries(sampling_entries);
 

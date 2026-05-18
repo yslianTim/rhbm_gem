@@ -36,6 +36,14 @@ double ComputeExpectedGaussianResponseAtDistance3D(double distance, double width
         std::exp(-0.5 * distance * distance / width_square);
 }
 
+double ComputeDistanceFromOrigin(const std::array<float, 3> & position)
+{
+    return std::sqrt(
+        static_cast<double>(position[0]) * static_cast<double>(position[0]) +
+        static_cast<double>(position[1]) * static_cast<double>(position[1]) +
+        static_cast<double>(position[2]) * static_cast<double>(position[2]));
+}
+
 void ExpectDatasetEquals(
     const rg::RHBMMemberDataset & lhs,
     const rg::RHBMMemberDataset & rhs)
@@ -73,13 +81,9 @@ void ExpectSamplingEntriesEquals(
     ASSERT_EQ(lhs.size(), rhs.size());
     for (size_t i = 0; i < lhs.size(); i++)
     {
-        EXPECT_FLOAT_EQ(lhs.at(i).distance, rhs.at(i).distance);
+        EXPECT_FLOAT_EQ(lhs.at(i).point.distance, rhs.at(i).point.distance);
         EXPECT_FLOAT_EQ(lhs.at(i).response, rhs.at(i).response);
-        EXPECT_EQ(lhs.at(i).position.has_value(), rhs.at(i).position.has_value());
-        if (lhs.at(i).position.has_value() && rhs.at(i).position.has_value())
-        {
-            EXPECT_EQ(lhs.at(i).position.value(), rhs.at(i).position.value());
-        }
+        EXPECT_EQ(lhs.at(i).point.position, rhs.at(i).point.position);
     }
 }
 
@@ -314,7 +318,10 @@ TEST(TestDataFactoryTest, BuildAtomNeighborhoodTestInputProvidesPairedDatasetsAn
     ASSERT_FALSE(input.sampling_summaries.front().empty());
     for (const auto & sample : input.sampling_summaries.front())
     {
-        EXPECT_TRUE(sample.position.has_value());
+        EXPECT_NEAR(
+            sample.point.distance,
+            ComputeDistanceFromOrigin(sample.point.position),
+            1.0e-5);
     }
 
     for (size_t i = 0; i < input.no_cut_input.replica_datasets.size(); i++)

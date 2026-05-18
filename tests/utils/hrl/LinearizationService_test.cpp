@@ -28,11 +28,11 @@ Eigen::VectorXd MakeVector(std::initializer_list<double> values)
 TEST(LinearizationServiceTest, BuildDatasetSeriesTransformsPositiveResponsesWithinRange)
 {
     const LocalPotentialSampleList sampling_entries{
-        {0.1f, 4.0f},
-        {0.2f, -2.0f},
-        {0.3f, 8.0f},
-        {0.4f, 9.0f},
-        {0.8f, 16.0f},
+        {4.0f, SamplingPoint{ 0.1f }},
+        {-2.0f, SamplingPoint{ 0.2f }},
+        {8.0f, SamplingPoint{ 0.3f }},
+        {9.0f, SamplingPoint{ 0.4f }},
+        {16.0f, SamplingPoint{ 0.8f }},
     };
 
     const auto series{
@@ -54,7 +54,7 @@ TEST(LinearizationServiceTest, BuildDatasetSeriesTransformsPositiveResponsesWith
 TEST(LinearizationServiceTest, BuildDatasetSeriesRejectsInvalidRange)
 {
     const LocalPotentialSampleList sampling_entries{
-        {0.1f, 4.0f},
+        {4.0f, SamplingPoint{ 0.1f }},
     };
 
     EXPECT_THROW(

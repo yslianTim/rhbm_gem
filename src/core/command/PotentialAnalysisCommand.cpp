@@ -122,7 +122,7 @@ bool HasEnoughSamplesInFitRange(
     std::size_t count{ 0 };
     for (const auto & sample : sample_entries)
     {
-        if (sample.distance < fit_range_min || sample.distance > fit_range_max) continue;
+        if (sample.point.distance < fit_range_min || sample.point.distance > fit_range_max) continue;
         count++;
         if (count >= minimum_sample_count) return true;
     }

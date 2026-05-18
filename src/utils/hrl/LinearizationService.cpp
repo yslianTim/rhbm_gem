@@ -26,7 +26,7 @@ SeriesPointList BuildDatasetSeries(
     basis_and_response_entry_list.reserve(sampling_entries.size());
     for (const auto & sample : sampling_entries)
     {
-        const auto distance{ sample.distance };
+        const auto distance{ sample.point.distance };
         const auto gaussian_response{ static_cast<double>(sample.response) };
         if (distance < static_cast<float>(range_min)) continue;
         if (distance > static_cast<float>(range_max)) continue;

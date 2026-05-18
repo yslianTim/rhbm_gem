@@ -165,7 +165,7 @@ inline LocalPotentialSampleList KeepLowestResponseDecileByDistance(
     std::map<float, LocalPotentialSampleList> samples_by_distance;
     for (auto & sample : sample_list)
     {
-        samples_by_distance[sample.distance].emplace_back(std::move(sample));
+        samples_by_distance[sample.point.distance].emplace_back(std::move(sample));
     }
 
     LocalPotentialSampleList retained_samples;

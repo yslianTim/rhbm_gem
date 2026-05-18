@@ -151,9 +151,8 @@ inline LocalPotentialSampleList BuildLocalPotentialSampleList(
 
         auto map_value{ MakeInterpolationInMapObject(map_object, sampling_point.position) };
         sampling_data_list.emplace_back(LocalPotentialSample{
-            sampling_point.distance,
             map_value,
-            sampling_point.position
+            sampling_point
         });
     }
     return sampling_data_list;

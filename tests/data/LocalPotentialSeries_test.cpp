@@ -54,10 +54,10 @@ LocalPotentialViewFixture MakeLocalPotentialViewFixture(
 TEST(LocalPotentialSeriesTest, ViewComputesRangeAndBinningForDistanceMapSeries)
 {
     auto fixture{ MakeLocalPotentialViewFixture({
-        {0.0f, 2.0f},
-        {0.2f, 4.0f},
-        {0.7f, 8.0f},
-        {1.0f, -1.0f},
+        {2.0f, SamplingPoint{ 0.0f }},
+        {4.0f, SamplingPoint{ 0.2f }},
+        {8.0f, SamplingPoint{ 0.7f }},
+        {-1.0f, SamplingPoint{ 1.0f }},
     }) };
     const auto view{ rg::AtomLocalPotentialView::RequireFor(*fixture.atom) };
 
@@ -77,11 +77,11 @@ TEST(LocalPotentialSeriesTest, ViewComputesRangeAndBinningForDistanceMapSeries)
 TEST(LocalPotentialSeriesTest, FitDatasetSeriesKeepsFullBasisWithinFitRange)
 {
     const LocalPotentialSampleList sampling_entries{
-        {0.1f, 4.0f},
-        {0.2f, -2.0f},
-        {0.25f, 9.0f},
-        {0.3f, 8.0f},
-        {1.1f, 16.0f},
+        {4.0f, SamplingPoint{ 0.1f }},
+        {-2.0f, SamplingPoint{ 0.2f }},
+        {9.0f, SamplingPoint{ 0.25f }},
+        {8.0f, SamplingPoint{ 0.3f }},
+        {16.0f, SamplingPoint{ 1.1f }},
     };
 
     const auto transformed{ BuildExpectedDatasetSeries(sampling_entries, 0.1, 0.3) };
@@ -104,10 +104,10 @@ TEST(LocalPotentialSeriesTest, FitDatasetSeriesKeepsFullBasisWithinFitRange)
 TEST(LocalPotentialSeriesTest, ViewBinningRespectsNonZeroMinimum)
 {
     auto fixture{ MakeLocalPotentialViewFixture({
-        {0.20f, 1.0f},
-        {0.60f, 4.0f},
-        {0.90f, 6.0f},
-        {1.20f, 8.0f},
+        {1.0f, SamplingPoint{ 0.20f }},
+        {4.0f, SamplingPoint{ 0.60f }},
+        {6.0f, SamplingPoint{ 0.90f }},
+        {8.0f, SamplingPoint{ 1.20f }},
     }) };
     const auto view{ rg::AtomLocalPotentialView::RequireFor(*fixture.atom) };
 
@@ -130,9 +130,9 @@ TEST(LocalPotentialSeriesTest, ViewForwardsSeriesDerivationsFromResolvedEntry)
     auto analysis{ model->EditAnalysis() };
     auto editor{ analysis.EnsureAtomLocalPotential(*atom) };
     editor.SetSamplingEntries({
-        {0.1f, 2.0f},
-        {0.4f, 4.0f},
-        {0.8f, 6.0f},
+        {2.0f, SamplingPoint{ 0.1f }},
+        {4.0f, SamplingPoint{ 0.4f }},
+        {6.0f, SamplingPoint{ 0.8f }},
     });
 
     const auto view{ rg::AtomLocalPotentialView::RequireFor(*atom) };
@@ -155,7 +155,7 @@ TEST(LocalPotentialSeriesTest, ViewForwardsSeriesDerivationsFromResolvedEntry)
 TEST(LocalPotentialSeriesTest, ViewBinningReturnsZeroResponseForEmptyBins)
 {
     auto fixture{ MakeLocalPotentialViewFixture({
-        {0.10f, 2.0f},
+        {2.0f, SamplingPoint{ 0.10f }},
     }) };
     const auto view{ rg::AtomLocalPotentialView::RequireFor(*fixture.atom) };
 

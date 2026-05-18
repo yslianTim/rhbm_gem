@@ -4,7 +4,6 @@
 #include <cstddef>
 #include <filesystem>
 #include <limits>
-#include <optional>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -32,7 +31,7 @@ LocalPotentialSampleList MakeSampleEntries(double log_response_shift = 0.0)
         const auto response{
             static_cast<float>(std::exp(1.0 + log_response_shift - 0.5 * distance * distance))
         };
-        sample_entries.emplace_back(LocalPotentialSample{ distance, response, std::nullopt });
+        sample_entries.emplace_back(LocalPotentialSample{ response, SamplingPoint{ distance } });
     }
     return sample_entries;
 }
