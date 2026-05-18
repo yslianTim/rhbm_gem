@@ -37,7 +37,7 @@ BetaReplicaBias EstimateBetaReplicaBias(
     const LocalPotentialSampleList & sample_entries,
     const GaussianModel3D & truth,
     double alpha_r,
-    const gaussian_estimator::TrainingOptions & options)
+    const gaussian_estimator::FitOptions & options)
 {
     const auto estimate{
         gaussian_estimator::EstimateLocalGaussian(sample_entries, alpha_r, options)
@@ -53,7 +53,7 @@ MuReplicaBias EstimateMuReplicaBias(
     const std::vector<LocalGaussianResult> & member_results,
     const GaussianModel3D & truth,
     double alpha_g,
-    const gaussian_estimator::TrainingOptions & options)
+    const gaussian_estimator::FitOptions & options)
 {
     const auto baseline_result{
         gaussian_estimator::EstimateGroupGaussian(sample_entries_list, member_results, 0.0, options)
@@ -115,7 +115,7 @@ BetaMDPDETestBias RunBetaMDPDETest(
         trained_alpha_list.assign(static_cast<size_t>(replica_size), 0.0);
     }
 
-    const gaussian_estimator::TrainingOptions estimator_options;
+    const gaussian_estimator::FitOptions estimator_options;
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
@@ -216,7 +216,7 @@ MuMDPDETestBias RunMuMDPDETest(
         trained_alpha_list.assign(static_cast<size_t>(replica_size), 0.0);
     }
 
-    const gaussian_estimator::TrainingOptions estimator_options;
+    const gaussian_estimator::FitOptions estimator_options;
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(thread_size)

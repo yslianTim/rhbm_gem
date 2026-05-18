@@ -29,7 +29,7 @@ struct AlphaStudyOptions
     rhbm_trainer::ProgressCallback progress_callback{};
 };
 
-RHBMExecutionOptions MakeExecutionOptions(const TrainingOptions & options)
+RHBMExecutionOptions MakeExecutionOptions(const FitOptions & options)
 {
     RHBMExecutionOptions execution_options;
     execution_options.quiet_mode = true;
@@ -109,7 +109,7 @@ bool EmitTrainingReportIfRequested(
 
 bool ShouldOutputStudyPlot(
     bool output_study_plot,
-    const TrainingOptions & options)
+    const FitOptions & options)
 {
     if (!output_study_plot) return false;
     if (!options.study_plot_dir.empty()) return true;
@@ -121,7 +121,7 @@ bool ShouldOutputStudyPlot(
 
 rhbm_trainer::RHBMTrainingOptions MakeTrainingOptions(
     std::size_t subset_size,
-    const TrainingOptions & options)
+    const FitOptions & options)
 {
     rhbm_trainer::RHBMTrainingOptions training_options;
     training_options.subset_size = subset_size;
@@ -138,7 +138,7 @@ rhbm_trainer::RHBMTrainingOptions MakeTrainingOptions(
 }
 
 AlphaStudyOptions MakeStudyOptions(
-    const TrainingOptions & options)
+    const FitOptions & options)
 {
     AlphaStudyOptions study_options;
     study_options.execution_options = MakeExecutionOptions(options);
@@ -291,14 +291,14 @@ Eigen::MatrixXd StudyAlphaGBias(
 
 std::vector<RHBMMemberDataset> BuildMemberDatasetList(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
-    const TrainingOptions & options)
+    const FitOptions & options)
 {
     std::vector<RHBMMemberDataset> dataset_list;
     dataset_list.reserve(sample_entries_list.size());
     for (const auto & sample_entries : sample_entries_list)
     {
         dataset_list.emplace_back(
-            rhbm_helper::BuildMemberDataset(sample_entries, options.fit_range_min, options.fit_range_max)
+            rhbm_helper::BuildMemberDataset(sample_entries, options.distance_min, options.distance_max)
         );
     }
     return dataset_list;
@@ -392,14 +392,14 @@ std::vector<RHBMBetaEstimateResult> BuildMemberFitResultList(
 
 double TrainAlphaR(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
-    const TrainingOptions & options,
+    const FitOptions & options,
     bool output_study_plot)
 {
     numeric_validation::RequireFiniteNonNegativeRange(
         options.alpha_min, options.alpha_max, "alpha training range");
     numeric_validation::RequireFinitePositive(options.alpha_step, "alpha training step");
     numeric_validation::RequireFiniteNonNegativeRange(
-        options.fit_range_min, options.fit_range_max, "fit range");
+        options.distance_min, options.distance_max, "fit range");
 
     const auto dataset_list{ BuildMemberDatasetList(sample_entries_list, options) };
     const auto training_result{
@@ -427,7 +427,7 @@ double TrainAlphaR(
 double TrainAlphaG(
     const std::vector<std::vector<LocalPotentialSampleList>> & sample_group_list,
     const std::vector<std::vector<LocalGaussianResult>> & member_result_list,
-    const TrainingOptions & options,
+    const FitOptions & options,
     bool output_study_plot)
 {
     numeric_validation::RequireFiniteNonNegativeRange(
@@ -509,14 +509,14 @@ double TrainAlphaG(
 LocalGaussianResult EstimateLocalGaussian(
     const LocalPotentialSampleList & sample_entries,
     double alpha_r,
-    const TrainingOptions & options)
+    const FitOptions & options)
 {
     numeric_validation::RequireFiniteNonNegativeRange(
-        options.fit_range_min, options.fit_range_max, "fit range");
+        options.distance_min, options.distance_max, "fit range");
     numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
 
     auto dataset{
-        rhbm_helper::BuildMemberDataset(sample_entries, options.fit_range_min, options.fit_range_max)
+        rhbm_helper::BuildMemberDataset(sample_entries, options.distance_min, options.distance_max)
     };
     auto execution_options{ MakeExecutionOptions(options) };
     auto result{ rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset, execution_options) };
@@ -527,10 +527,10 @@ GroupGaussianResult EstimateGroupGaussian(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
     const std::vector<LocalGaussianResult> & member_result_list,
     double alpha_g,
-    const TrainingOptions & options)
+    const FitOptions & options)
 {
     numeric_validation::RequireFiniteNonNegativeRange(
-        options.fit_range_min, options.fit_range_max, "fit range");
+        options.distance_min, options.distance_max, "fit range");
     numeric_validation::RequireFiniteNonNegative(alpha_g, "alpha_g");
 
     if (sample_entries_list.size() != member_result_list.size())

@@ -97,15 +97,15 @@ std::vector<AtomLocalPotentialEditor> BuildSelectedAtomLocalEditors(ModelObject 
     return local_editor_list;
 }
 
-gaussian_estimator::TrainingOptions MakeGaussianEstimatorOptions(
+gaussian_estimator::FitOptions MakeGaussianEstimatorOptions(
     const PotentialAnalysisRequest & request)
 {
-    gaussian_estimator::TrainingOptions options;
+    gaussian_estimator::FitOptions options;
     options.alpha_min = request.training_alpha_min;
     options.alpha_max = request.training_alpha_max;
     options.alpha_step = request.training_alpha_step;
-    options.fit_range_min = request.fit_range_min;
-    options.fit_range_max = request.fit_range_max;
+    options.distance_min = request.fit_range_min;
+    options.distance_max = request.fit_range_max;
     options.thread_size = request.job_count;
     options.output_progress = true;
     options.output_summary_log = true;
@@ -174,7 +174,7 @@ void RunModelObjectPreprocessing(
 
 void RunLocalPotentialFitting(
     ModelObject & model_object,
-    const gaussian_estimator::TrainingOptions & options)
+    const gaussian_estimator::FitOptions & options)
 {
     const auto selected_atom_size{ model_object.GetSelectedAtomCount() };
     const auto & atom_list{ model_object.GetSelectedAtoms() };
