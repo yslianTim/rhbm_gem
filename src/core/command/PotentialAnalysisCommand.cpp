@@ -188,7 +188,6 @@ void RunLocalPotentialFitting(
 #endif
     for (size_t i = 0; i < selected_atom_size; i++)
     {
-        auto local_editor{ local_editor_list[i] };
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
         const auto result{
             gaussian_estimator::EstimateLocalGaussian(
@@ -197,7 +196,7 @@ void RunLocalPotentialFitting(
                 options)
         };
 
-        local_editor.SetGaussianResult(result);
+        local_editor_list[i].SetGaussianResult(result);
 
 #ifdef USE_OPENMP
         #pragma omp critical
@@ -365,27 +364,24 @@ void RunPotentialSamplingWorkflow(
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunPotentialSamplingWorkflow");
     const auto & atom_list{ model_object.GetSelectedAtoms() };
-    const auto atom_size{ atom_list.size() };
     size_t atom_count{ 0 };
     auto local_editor_list{ BuildSelectedAtomLocalEditors(model_object) };
 #ifdef USE_OPENMP
     #pragma omp parallel for num_threads(request.job_count)
 #endif
-    for (size_t i = 0; i < atom_size; i++)
+    for (size_t i = 0; i < atom_list.size(); i++)
     {
-        auto atom{ atom_list[i] };
-        auto editor{ local_editor_list[i] };
         auto sampling_entries{
-            SampleAtomMapValues(map_object, *atom, request.sampling_profile_choice)
+            SampleAtomMapValues(map_object, *atom_list[i], request.sampling_profile_choice)
         };
-        editor.SetSamplingEntries(std::move(sampling_entries));
+        local_editor_list[i].SetSamplingEntries(std::move(sampling_entries));
 
 #ifdef USE_OPENMP
         #pragma omp critical
 #endif
         {
             atom_count++;
-            Logger::ProgressPercent(atom_count, atom_size);
+            Logger::ProgressPercent(atom_count, atom_list.size());
         }
     }
 }
