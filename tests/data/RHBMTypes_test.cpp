@@ -34,10 +34,10 @@ TEST(RHBMTypesTest, LocalAndGroupIntensityStayEquivalent)
     const auto group_gaussian{ group_entry.GetPriorWithUncertainty(42) };
 
     EXPECT_DOUBLE_EQ(
-        local_entry.GetGaussianResult().mdpde.GetModel().Intensity(),
+        local_entry.GaussianResult().mdpde.GetModel().Intensity(),
         estimate.Intensity());
     EXPECT_DOUBLE_EQ(
-        local_entry.GetGaussianResult().mdpde.GetModel().GetDisplayParameter(2),
+        local_entry.GaussianResult().mdpde.GetModel().GetDisplayParameter(2),
         estimate.Intensity());
     EXPECT_DOUBLE_EQ(group_entry.GetPrior(42).Intensity(), estimate.Intensity());
     EXPECT_DOUBLE_EQ(group_entry.GetPrior(42).GetDisplayParameter(2), estimate.Intensity());

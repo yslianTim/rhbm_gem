@@ -1,10 +1,8 @@
 #pragma once
 
 #include <string>
-#include <tuple>
 #include <unordered_map>
-
-#include <Eigen/Dense>
+#include <utility>
 
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
@@ -18,29 +16,43 @@ class LocalPotentialEntry
     std::unordered_map<std::string, LocalPotentialAnnotation> m_annotation_map;
 
 public:
-    LocalPotentialEntry();
-    ~LocalPotentialEntry();
+    LocalPotentialEntry() = default;
+    ~LocalPotentialEntry() = default;
 
     void SetAlphaR(double value) { m_gaussian_result.alpha_r = value; }
-    void SetSamplingEntries(LocalPotentialSampleList value);
-    void SetGaussianResult(LocalGaussianResult value);
-    void SetAnnotation(const std::string & key, LocalPotentialAnnotation annotation);
-    void ClearTransientFitState();
+    void SetSamplingEntries(LocalPotentialSampleList value)
+    {
+        m_sampling_entries = std::move(value);
+    }
+    void SetGaussianResult(LocalGaussianResult value)
+    {
+        m_gaussian_result = std::move(value);
+    }
+    void SetAnnotation(const std::string & key, LocalPotentialAnnotation annotation)
+    {
+        m_annotation_map[key] = std::move(annotation);
+    }
+    void ClearTransientFitState()
+    {
+        m_gaussian_result.fit_result.reset();
+    }
 
-    int GetSamplingEntryCount() const;
-    const LocalGaussianResult & GetGaussianResult() const { return m_gaussian_result; }
-    LocalPotentialAnnotation * FindAnnotation(const std::string & key);
-    const LocalPotentialAnnotation * FindAnnotation(const std::string & key) const;
-    const std::unordered_map<std::string, LocalPotentialAnnotation> & Annotations() const;
-    const LocalPotentialSampleList & GetSamplingEntries() const;
-    std::tuple<float, float> GetDistanceRange(double margin_rate = 0.0) const;
-    std::tuple<float, float> GetResponseRange(double margin_rate = 0.0) const;
-    SeriesPointList GetBinnedDistanceResponseSeries(
-        int bin_size = 15,
-        double x_min = 0.0,
-        double x_max = 1.5) const;
-    double GetMapValueNearCenter() const;
-    double CalculateQScore(int par_choice) const;
+    int SamplingEntryCount() const
+    {
+        return static_cast<int>(m_sampling_entries.size());
+    }
+    const LocalGaussianResult & GaussianResult() const { return m_gaussian_result; }
+    LocalPotentialAnnotation * FindAnnotation(const std::string & key)
+    {
+        const auto iter{ m_annotation_map.find(key) };
+        return (iter == m_annotation_map.end()) ? nullptr : &iter->second;
+    }
+    const LocalPotentialAnnotation * FindAnnotation(const std::string & key) const
+    {
+        const auto iter{ m_annotation_map.find(key) };
+        return (iter == m_annotation_map.end()) ? nullptr : &iter->second;
+    }
+    const LocalPotentialSampleList & SamplingEntries() const { return m_sampling_entries; }
 };
 
 } // namespace rhbm_gem

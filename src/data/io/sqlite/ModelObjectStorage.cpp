@@ -936,12 +936,12 @@ void SaveAtomLocalPotentialEntryList(
 
         batch.Execute([&](SQLiteWrapper & statement_db)
         {
-            const auto & gaussian_result{ entry->GetGaussianResult() };
+            const auto & gaussian_result{ entry->GaussianResult() };
             statement_db.Bind<std::string>(1, key_tag);
             statement_db.Bind<int>(2, atom_object->GetSerialID());
-            statement_db.Bind<int>(3, entry->GetSamplingEntryCount());
+            statement_db.Bind<int>(3, entry->SamplingEntryCount());
             statement_db.Bind<LocalPotentialSampleList>(
-                4, entry->GetSamplingEntries());
+                4, entry->SamplingEntries());
             statement_db.Bind<double>(5, gaussian_result.ols.GetModel().GetAmplitude());
             statement_db.Bind<double>(6, gaussian_result.ols.GetModel().GetWidth());
             statement_db.Bind<double>(7, gaussian_result.mdpde.GetModel().GetAmplitude());
