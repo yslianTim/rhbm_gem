@@ -131,6 +131,11 @@ bool LocalPotentialView::IsAvailable() const
     return FindResolvedLocalEntry(*this) != nullptr;
 }
 
+const LocalGaussianResult & LocalPotentialView::GetGaussianResult() const
+{
+    return RequireResolvedLocalEntry(*this, "Local Gaussian result").GetGaussianResult();
+}
+
 const GaussianModel3D & LocalPotentialView::GetEstimateOLS() const
 {
     return RequireResolvedLocalEntry(*this, "Local estimate OLS").GetEstimateOLS();
@@ -175,7 +180,7 @@ double LocalPotentialView::GetAlphaR() const
     return RequireResolvedLocalEntry(*this, "Local alpha-r").GetAlphaR();
 }
 
-std::optional<LocalPotentialAnnotationView> LocalPotentialView::FindAnnotation(
+std::optional<LocalPotentialAnnotation> LocalPotentialView::FindAnnotation(
     const std::string & key) const
 {
     const auto * annotation{ RequireResolvedLocalEntry(*this, "Local annotation").FindAnnotation(key) };
@@ -183,7 +188,7 @@ std::optional<LocalPotentialAnnotationView> LocalPotentialView::FindAnnotation(
     {
         return std::nullopt;
     }
-    return LocalPotentialAnnotationView{
+    return LocalPotentialAnnotation{
         annotation->gaussian,
         annotation->is_outlier,
         annotation->statistical_distance

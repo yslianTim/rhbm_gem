@@ -202,32 +202,31 @@ TEST(DataObjectModelAnalysisTest, LocalPotentialEntryStoresGaussianResult)
     EXPECT_DOUBLE_EQ(1.5, entry.GetEstimateMDPDE().GetAmplitude());
 }
 
-TEST(DataObjectModelAnalysisTest, MutableLocalPotentialViewCanSetAndReadAlphaR)
+TEST(DataObjectModelAnalysisTest, LocalPotentialEditorCanSetAlphaR)
 {
     auto model{ data_test::MakeModelWithBond() };
     auto * atom{ model->GetAtomList().at(0).get() };
     auto analysis{ model->EditAnalysis() };
-    auto entry{ analysis.EnsureAtomLocalPotential(*atom) };
+    auto editor{ analysis.EnsureAtomLocalPotential(*atom) };
 
-    entry.SetAlphaR(0.37);
+    editor.SetAlphaR(0.37);
 
-    EXPECT_DOUBLE_EQ(0.37, entry.GetAlphaR());
     EXPECT_DOUBLE_EQ(0.37, rg::LocalPotentialView::RequireFor(*atom).GetAlphaR());
 }
 
-TEST(DataObjectModelAnalysisTest, MutableLocalPotentialViewSetGaussianResultUpdatesEstimates)
+TEST(DataObjectModelAnalysisTest, LocalPotentialEditorSetGaussianResultUpdatesViewEstimates)
 {
     auto model{ data_test::MakeModelWithBond() };
     auto * atom{ model->GetAtomList().at(0).get() };
     auto analysis{ model->EditAnalysis() };
-    auto entry{ analysis.EnsureAtomLocalPotential(*atom) };
+    auto editor{ analysis.EnsureAtomLocalPotential(*atom) };
 
     LocalPotentialSampleList sampling_entries{
         LocalPotentialSample{ 0.0f, 6.0f },
         LocalPotentialSample{ 0.5f, 4.0f },
         LocalPotentialSample{ 0.9f, 2.0f }
     };
-    entry.SetSamplingEntries(sampling_entries);
+    editor.SetSamplingEntries(sampling_entries);
 
     rg::LocalGaussianResult gaussian_result;
     gaussian_result.alpha_r = 0.6;
@@ -240,9 +239,9 @@ TEST(DataObjectModelAnalysisTest, MutableLocalPotentialViewSetGaussianResultUpda
         rg::GaussianModel3DUncertainty{}
     };
 
-    entry.SetGaussianResult(gaussian_result);
+    editor.SetGaussianResult(gaussian_result);
 
-    EXPECT_DOUBLE_EQ(0.6, entry.GetGaussianResult().alpha_r);
+    EXPECT_DOUBLE_EQ(0.6, rg::LocalPotentialView::RequireFor(*atom).GetGaussianResult().alpha_r);
     EXPECT_DOUBLE_EQ(0.0, rg::LocalPotentialView::RequireFor(*atom).GetEstimateOLS().GetWidth());
     EXPECT_DOUBLE_EQ(0.0, rg::LocalPotentialView::RequireFor(*atom).GetEstimateMDPDE().GetWidth());
 }

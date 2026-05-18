@@ -24,86 +24,6 @@ const EntryT & RequireGroupEntry(const EntryT * entry, const char * context)
     return *entry;
 }
 
-ModelObject * OwnerOf(const MutableLocalPotentialView & view)
-{
-    if (view.GetAtomObjectPtr() != nullptr)
-    {
-        return ModelAnalysisData::OwnerOf(*view.GetAtomObjectPtr());
-    }
-    if (view.GetBondObjectPtr() != nullptr)
-    {
-        return ModelAnalysisData::OwnerOf(*view.GetBondObjectPtr());
-    }
-    return nullptr;
-}
-
-LocalPotentialEntry * FindResolvedLocalEntry(const MutableLocalPotentialView & view)
-{
-    if (view.GetEntryHandle() != nullptr)
-    {
-        return static_cast<LocalPotentialEntry *>(const_cast<void *>(view.GetEntryHandle()));
-    }
-    auto * owner{ OwnerOf(view) };
-    if (owner == nullptr)
-    {
-        return nullptr;
-    }
-    auto & analysis_data{ ModelAnalysisData::Of(*owner) };
-    if (view.GetAtomObjectPtr() != nullptr)
-    {
-        return analysis_data.FindAtomLocalEntry(*view.GetAtomObjectPtr());
-    }
-    if (view.GetBondObjectPtr() != nullptr)
-    {
-        return analysis_data.FindBondLocalEntry(*view.GetBondObjectPtr());
-    }
-    return nullptr;
-}
-
-LocalPotentialEntry & EnsureResolvedLocalEntry(const MutableLocalPotentialView & view)
-{
-    if (view.GetEntryHandle() != nullptr)
-    {
-        return *static_cast<LocalPotentialEntry *>(const_cast<void *>(view.GetEntryHandle()));
-    }
-    auto * owner{ OwnerOf(view) };
-    if (owner == nullptr)
-    {
-        throw std::runtime_error("Local analysis owner model is not available.");
-    }
-    auto & analysis_data{ ModelAnalysisData::Of(*owner) };
-    if (view.GetAtomObjectPtr() != nullptr)
-    {
-        return analysis_data.EnsureAtomLocalEntry(*view.GetAtomObjectPtr());
-    }
-    if (view.GetBondObjectPtr() != nullptr)
-    {
-        return analysis_data.EnsureBondLocalEntry(*view.GetBondObjectPtr());
-    }
-    throw std::runtime_error("Mutable local potential target is not available.");
-}
-
-const LocalPotentialEntry & RequireResolvedLocalEntry(
-    const MutableLocalPotentialView & view,
-    const char * context)
-{
-    const auto * entry{ FindResolvedLocalEntry(view) };
-    if (entry == nullptr)
-    {
-        throw std::runtime_error(std::string(context) + " is not available.");
-    }
-    return *entry;
-}
-
-LocalPotentialAnnotation ToDetailAnnotation(const LocalPotentialAnnotationData & value)
-{
-    return LocalPotentialAnnotation{
-        value.gaussian,
-        value.is_outlier,
-        value.statistical_distance
-    };
-}
-
 LocalPotentialAnnotation ToDetailAnnotation(const LocalGaussianResult & value)
 {
     return LocalPotentialAnnotation{
@@ -142,56 +62,72 @@ void ApplyAtomGroupGaussianResultToEntry(
 
 } // namespace
 
-MutableLocalPotentialView::MutableLocalPotentialView(AtomObject * atom_object) :
+LocalPotentialEditor::LocalPotentialEditor(AtomObject * atom_object) :
     m_atom_object{ atom_object }
 {
 }
 
-MutableLocalPotentialView::MutableLocalPotentialView(BondObject * bond_object) :
+LocalPotentialEditor::LocalPotentialEditor(BondObject * bond_object) :
     m_bond_object{ bond_object }
 {
 }
 
-void MutableLocalPotentialView::SetSamplingEntries(LocalPotentialSampleList value)
+ModelObject * LocalPotentialEditor::GetOwner() const
 {
-    EnsureResolvedLocalEntry(*this).SetSamplingEntries(std::move(value));
+    if (m_atom_object != nullptr)
+    {
+        return ModelAnalysisData::OwnerOf(*m_atom_object);
+    }
+    if (m_bond_object != nullptr)
+    {
+        return ModelAnalysisData::OwnerOf(*m_bond_object);
+    }
+    return nullptr;
 }
 
-void MutableLocalPotentialView::SetGaussianResult(LocalGaussianResult value)
+LocalPotentialEntry & LocalPotentialEditor::EnsureEntry() const
 {
-    EnsureResolvedLocalEntry(*this).SetGaussianResult(std::move(value));
+    if (m_entry != nullptr)
+    {
+        return *m_entry;
+    }
+    auto * owner{ GetOwner() };
+    if (owner == nullptr)
+    {
+        throw std::runtime_error("Local analysis owner model is not available.");
+    }
+    auto & analysis_data{ ModelAnalysisData::Of(*owner) };
+    if (m_atom_object != nullptr)
+    {
+        return analysis_data.EnsureAtomLocalEntry(*m_atom_object);
+    }
+    if (m_bond_object != nullptr)
+    {
+        return analysis_data.EnsureBondLocalEntry(*m_bond_object);
+    }
+    throw std::runtime_error("Local potential edit target is not available.");
 }
 
-void MutableLocalPotentialView::SetAlphaR(double value)
+void LocalPotentialEditor::SetSamplingEntries(LocalPotentialSampleList value)
 {
-    EnsureResolvedLocalEntry(*this).SetAlphaR(value);
+    EnsureEntry().SetSamplingEntries(std::move(value));
 }
 
-double MutableLocalPotentialView::GetAlphaR() const
+void LocalPotentialEditor::SetGaussianResult(LocalGaussianResult value)
 {
-    return RequireResolvedLocalEntry(*this, "Local alpha-r").GetAlphaR();
+    EnsureEntry().SetGaussianResult(std::move(value));
 }
 
-void MutableLocalPotentialView::SetAnnotation(
+void LocalPotentialEditor::SetAlphaR(double value)
+{
+    EnsureEntry().SetAlphaR(value);
+}
+
+void LocalPotentialEditor::SetAnnotation(
     const std::string & key,
-    const LocalPotentialAnnotationData & value)
+    const LocalPotentialAnnotation & value)
 {
-    EnsureResolvedLocalEntry(*this).SetAnnotation(key, ToDetailAnnotation(value));
-}
-
-const LocalGaussianResult & MutableLocalPotentialView::GetGaussianResult() const
-{
-    return RequireResolvedLocalEntry(*this, "Local Gaussian result").GetGaussianResult();
-}
-
-const LocalPotentialSampleList & MutableLocalPotentialView::GetSamplingEntries() const
-{
-    return RequireResolvedLocalEntry(*this, "Local sampling entries").GetSamplingEntries();
-}
-
-int MutableLocalPotentialView::GetSamplingEntryCount() const
-{
-    return RequireResolvedLocalEntry(*this, "Local sampling entry count").GetSamplingEntryCount();
+    EnsureEntry().SetAnnotation(key, value);
 }
 
 ModelAnalysisEditor::ModelAnalysisEditor(ModelObject & model_object) :
@@ -214,22 +150,22 @@ void ModelAnalysisEditor::ClearTransientFitStates()
     ModelAnalysisData::Of(m_model_object).ClearTransientFitStates();
 }
 
-MutableLocalPotentialView ModelAnalysisEditor::EnsureAtomLocalPotential(const AtomObject & atom_object)
+LocalPotentialEditor ModelAnalysisEditor::EnsureAtomLocalPotential(const AtomObject & atom_object)
 {
     auto & mutable_atom{ const_cast<AtomObject &>(atom_object) };
     auto & entry{ ModelAnalysisData::Of(m_model_object).EnsureAtomLocalEntry(mutable_atom) };
-    auto view{ MutableLocalPotentialView(&mutable_atom) };
-    view.m_entry_ptr = &entry;
-    return view;
+    auto editor{ LocalPotentialEditor(&mutable_atom) };
+    editor.m_entry = &entry;
+    return editor;
 }
 
-MutableLocalPotentialView ModelAnalysisEditor::EnsureBondLocalPotential(const BondObject & bond_object)
+LocalPotentialEditor ModelAnalysisEditor::EnsureBondLocalPotential(const BondObject & bond_object)
 {
     auto & mutable_bond{ const_cast<BondObject &>(bond_object) };
     auto & entry{ ModelAnalysisData::Of(m_model_object).EnsureBondLocalEntry(mutable_bond) };
-    auto view{ MutableLocalPotentialView(&mutable_bond) };
-    view.m_entry_ptr = &entry;
-    return view;
+    auto editor{ LocalPotentialEditor(&mutable_bond) };
+    editor.m_entry = &entry;
+    return editor;
 }
 
 void ModelAnalysisEditor::RebuildAtomGroupsFromSelection()

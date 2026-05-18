@@ -2,8 +2,6 @@
 
 #include <string>
 
-#include <Eigen/Dense>
-
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
@@ -12,41 +10,27 @@ namespace rhbm_gem {
 
 class AtomObject;
 class BondObject;
+class LocalPotentialEntry;
 class ModelObject;
 
-struct LocalPotentialAnnotationData
-{
-    GaussianModel3DWithUncertainty gaussian{
-        GaussianModel3D{ 0.0, 0.0 },
-        GaussianModel3DUncertainty{}
-    };
-    bool is_outlier{ false };
-    double statistical_distance{ 0.0 };
-};
-
-class MutableLocalPotentialView
+class LocalPotentialEditor
 {
     AtomObject * m_atom_object{ nullptr };
     BondObject * m_bond_object{ nullptr };
-    void * m_entry_ptr{ nullptr };
+    LocalPotentialEntry * m_entry{ nullptr };
     
 public:
-    MutableLocalPotentialView() = default;
+    LocalPotentialEditor() = default;
     void SetSamplingEntries(LocalPotentialSampleList value);
     void SetGaussianResult(LocalGaussianResult value);
     void SetAlphaR(double value);
-    void SetAnnotation(const std::string & key, const LocalPotentialAnnotationData & value);
-    double GetAlphaR() const;
-    const LocalGaussianResult & GetGaussianResult() const;
-    const LocalPotentialSampleList & GetSamplingEntries() const;
-    int GetSamplingEntryCount() const;
-    const AtomObject * GetAtomObjectPtr() const { return m_atom_object; }
-    const BondObject * GetBondObjectPtr() const { return m_bond_object; }
-    const void * GetEntryHandle() const { return m_entry_ptr; }
+    void SetAnnotation(const std::string & key, const LocalPotentialAnnotation & value);
 
 private:
-    explicit MutableLocalPotentialView(AtomObject * atom_object);
-    explicit MutableLocalPotentialView(BondObject * bond_object);
+    explicit LocalPotentialEditor(AtomObject * atom_object);
+    explicit LocalPotentialEditor(BondObject * bond_object);
+    ModelObject * GetOwner() const;
+    LocalPotentialEntry & EnsureEntry() const;
     friend class ModelAnalysisEditor;
 
 };
@@ -60,8 +44,8 @@ public:
     static ModelAnalysisEditor Of(ModelObject & model_object);
     void Clear();
     void ClearTransientFitStates();
-    MutableLocalPotentialView EnsureAtomLocalPotential(const AtomObject & atom_object);
-    MutableLocalPotentialView EnsureBondLocalPotential(const BondObject & bond_object);
+    LocalPotentialEditor EnsureAtomLocalPotential(const AtomObject & atom_object);
+    LocalPotentialEditor EnsureBondLocalPotential(const BondObject & bond_object);
     void RebuildAtomGroupsFromSelection();
     void RebuildBondGroupsFromSelection();
     void ApplyAtomGroupGaussianResult(

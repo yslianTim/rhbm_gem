@@ -113,8 +113,8 @@ TEST(LocalPotentialSeriesTest, ViewForwardsSeriesDerivationsFromResolvedEntry)
 
     auto * atom{ model->GetAtomList().front().get() };
     auto analysis{ model->EditAnalysis() };
-    auto mutable_view{ analysis.EnsureAtomLocalPotential(*atom) };
-    mutable_view.SetSamplingEntries({
+    auto editor{ analysis.EnsureAtomLocalPotential(*atom) };
+    editor.SetSamplingEntries({
         {0.1f, 2.0f},
         {0.4f, 4.0f},
         {0.8f, 6.0f},

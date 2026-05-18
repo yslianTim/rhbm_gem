@@ -11,16 +11,6 @@
 
 namespace rhbm_gem {
 
-struct LocalPotentialAnnotation
-{
-    GaussianModel3DWithUncertainty gaussian{
-        GaussianModel3D{ 0.0, 0.0 },
-        GaussianModel3DUncertainty{}
-    };
-    bool is_outlier{ false };
-    double statistical_distance{ 0.0 };
-};
-
 class LocalPotentialEntry
 {
     LocalPotentialSampleList m_sampling_entries;

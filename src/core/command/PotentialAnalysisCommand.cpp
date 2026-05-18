@@ -86,17 +86,17 @@ std::optional<PotentialAnalysisInputs> LoadPotentialAnalysisInputs(
     }
 }
 
-std::vector<MutableLocalPotentialView> BuildSelectedAtomLocalEntryViews(ModelObject & model_object)
+std::vector<LocalPotentialEditor> BuildSelectedAtomLocalEditors(ModelObject & model_object)
 {
     auto analysis{ model_object.EditAnalysis() };
     const auto & atom_list{ model_object.GetSelectedAtoms() };
-    std::vector<MutableLocalPotentialView> local_entry_list;
-    local_entry_list.reserve(atom_list.size());
+    std::vector<LocalPotentialEditor> local_editor_list;
+    local_editor_list.reserve(atom_list.size());
     for (auto * atom : atom_list)
     {
-        local_entry_list.emplace_back(analysis.EnsureAtomLocalPotential(*atom));
+        local_editor_list.emplace_back(analysis.EnsureAtomLocalPotential(*atom));
     }
-    return local_entry_list;
+    return local_editor_list;
 }
 
 gaussian_estimator::TrainingOptions MakeGaussianEstimatorOptions(
@@ -186,7 +186,8 @@ void RunLocalPotentialFitting(
     const gaussian_estimator::TrainingOptions & options)
 {
     const auto selected_atom_size{ model_object.GetSelectedAtomCount() };
-    auto local_entry_list{ BuildSelectedAtomLocalEntryViews(model_object) };
+    const auto & atom_list{ model_object.GetSelectedAtoms() };
+    auto local_editor_list{ BuildSelectedAtomLocalEditors(model_object) };
     std::atomic<size_t> atom_count{ 0 };
     Logger::Log(LogLevel::Info,
         "Run Local atom fitting for " + std::to_string(selected_atom_size) + " atoms.");
@@ -196,15 +197,16 @@ void RunLocalPotentialFitting(
 #endif
     for (size_t i = 0; i < selected_atom_size; i++)
     {
-        auto local_entry{ local_entry_list[i] };
+        auto local_editor{ local_editor_list[i] };
+        const auto local_view{ LocalPotentialView::RequireFor(*atom_list[i]) };
         const auto result{
             gaussian_estimator::EstimateLocalGaussian(
-                local_entry.GetSamplingEntries(),
-                local_entry.GetAlphaR(),
+                local_view.GetSamplingEntries(),
+                local_view.GetAlphaR(),
                 options)
         };
 
-        local_entry.SetGaussianResult(result);
+        local_editor.SetGaussianResult(result);
 
 #ifdef USE_OPENMP
         #pragma omp critical
@@ -233,8 +235,9 @@ void RunAtomAlphaTraining(ModelObject & model_object, const PotentialAnalysisReq
         selected_sample_entries_list.reserve(group_atom_list.size());
         for (auto & atom : group_atom_list)
         {
-            const auto local_entry{ analysis.EnsureAtomLocalPotential(*atom) };
-            const auto & sample_entries{ local_entry.GetSamplingEntries() };
+            analysis.EnsureAtomLocalPotential(*atom);
+            const auto local_view{ LocalPotentialView::RequireFor(*atom) };
+            const auto & sample_entries{ local_view.GetSamplingEntries() };
             if (!HasEnoughSamplesInFitRange(
                 sample_entries, request.fit_range_min, request.fit_range_max, 10)) continue;
             selected_sample_entries_list.emplace_back(sample_entries);
@@ -274,9 +277,10 @@ void RunAtomAlphaTraining(ModelObject & model_object, const PotentialAnalysisReq
         group_member_results.reserve(group_atom_list.size());
         for (auto * atom : group_atom_list)
         {
-            const auto local_entry{ analysis.EnsureAtomLocalPotential(*atom) };
-            group_samples.emplace_back(local_entry.GetSamplingEntries());
-            group_member_results.emplace_back(local_entry.GetGaussianResult());
+            analysis.EnsureAtomLocalPotential(*atom);
+            const auto local_view{ LocalPotentialView::RequireFor(*atom) };
+            group_samples.emplace_back(local_view.GetSamplingEntries());
+            group_member_results.emplace_back(local_view.GetGaussianResult());
         }
         sample_group_list.emplace_back(std::move(group_samples));
         member_result_list.emplace_back(std::move(group_member_results));
@@ -312,11 +316,9 @@ void RunAtomPotentialFittingWorkflow(ModelObject & model_object, const Potential
 
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
-    std::unordered_map<const AtomObject *, MutableLocalPotentialView> local_entry_map;
-    local_entry_map.reserve(model_object.GetSelectedAtomCount());
     for (auto * atom : model_object.GetSelectedAtoms())
     {
-        local_entry_map.emplace(atom, analysis.EnsureAtomLocalPotential(*atom));
+        analysis.EnsureAtomLocalPotential(*atom);
     }
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {
@@ -341,9 +343,9 @@ void RunAtomPotentialFittingWorkflow(ModelObject & model_object, const Potential
             member_result_list.reserve(atom_list.size());
             for (const auto & atom : atom_list)
             {
-                const auto local_entry{ local_entry_map.at(atom) };
-                member_sample_list.emplace_back(local_entry.GetSamplingEntries());
-                member_result_list.emplace_back(local_entry.GetGaussianResult());
+                const auto local_view{ LocalPotentialView::RequireFor(*atom) };
+                member_sample_list.emplace_back(local_view.GetSamplingEntries());
+                member_result_list.emplace_back(local_view.GetGaussianResult());
             }
             const auto result{
                 gaussian_estimator::EstimateGroupGaussian(
@@ -374,18 +376,18 @@ void RunPotentialSamplingWorkflow(
     const auto & atom_list{ model_object.GetSelectedAtoms() };
     const auto atom_size{ atom_list.size() };
     size_t atom_count{ 0 };
-    auto local_entry_list{ BuildSelectedAtomLocalEntryViews(model_object) };
+    auto local_editor_list{ BuildSelectedAtomLocalEditors(model_object) };
 #ifdef USE_OPENMP
     #pragma omp parallel for num_threads(request.job_count)
 #endif
     for (size_t i = 0; i < atom_size; i++)
     {
         auto atom{ atom_list[i] };
-        auto entry{ local_entry_list[i] };
+        auto editor{ local_editor_list[i] };
         auto sampling_entries{
             SampleAtomMapValues(map_object, *atom, request.sampling_profile_choice)
         };
-        entry.SetSamplingEntries(std::move(sampling_entries));
+        editor.SetSamplingEntries(std::move(sampling_entries));
 
 #ifdef USE_OPENMP
         #pragma omp critical

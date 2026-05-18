@@ -8,6 +8,7 @@
 #include <vector>
 
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
+#include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
@@ -16,16 +17,6 @@ namespace rhbm_gem {
 class AtomObject;
 class BondObject;
 class ModelObject;
-
-struct LocalPotentialAnnotationView
-{
-    GaussianModel3DWithUncertainty gaussian{
-        GaussianModel3D{ 0.0, 0.0 },
-        GaussianModel3DUncertainty{}
-    };
-    bool is_outlier{ false };
-    double statistical_distance{ 0.0 };
-};
 
 struct GroupingSummaryItem
 {
@@ -51,6 +42,7 @@ public:
     static LocalPotentialView RequireFor(const AtomObject & atom_object);
     static LocalPotentialView RequireFor(const BondObject & bond_object);
     bool IsAvailable() const;
+    const LocalGaussianResult & GetGaussianResult() const;
     const GaussianModel3D & GetEstimateOLS() const;
     const GaussianModel3D & GetEstimateMDPDE() const;
     const LocalPotentialSampleList & GetSamplingEntries() const;
@@ -62,7 +54,7 @@ public:
         double x_max = 1.5) const;
     int GetSamplingEntryCount() const;
     double GetAlphaR() const;
-    std::optional<LocalPotentialAnnotationView> FindAnnotation(const std::string & key) const;
+    std::optional<LocalPotentialAnnotation> FindAnnotation(const std::string & key) const;
     double GetMapValueNearCenter() const;
     double GetMomentZeroEstimate() const;
     double GetMomentTwoEstimate() const;
