@@ -5,7 +5,6 @@
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
-#include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
@@ -136,16 +135,11 @@ void RunModelObjectPreprocessing(
     auto analysis{ model_object.EditAnalysis() };
     analysis.Clear();
     model_object.SelectAllAtoms();
-    model_object.SelectAllBonds();
     model_object.ApplySymmetrySelection(asymmetry_flag);
 
     for (auto * atom : model_object.GetSelectedAtoms())
     {
         analysis.EnsureAtomLocalPotential(*atom);
-    }
-    for (auto * bond : model_object.GetSelectedBonds())
-    {
-        analysis.EnsureBondLocalPotential(*bond);
     }
 
     // Establish the model-analysis preprocessing invariant for downstream steps:
@@ -168,8 +162,6 @@ void RunModelObjectPreprocessing(
 
     Logger::Log(LogLevel::Info,
         "Number of selected atom = " + std::to_string(model_object.GetSelectedAtomCount()));
-    Logger::Log(LogLevel::Info,
-        "Number of selected bond = " + std::to_string(model_object.GetSelectedBondCount()));
     Logger::Log(LogLevel::Info, model_object.GetAnalysisView().DescribeAtomGrouping());
     if (model_object.GetNumberOfAtom() > 0 && model_object.GetSelectedAtomCount() == 0)
     {

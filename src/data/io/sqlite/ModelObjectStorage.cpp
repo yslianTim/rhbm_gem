@@ -2,7 +2,6 @@
 
 #include "SQLiteWrapper.hpp"
 #include "data/detail/AtomClassifier.hpp"
-#include "data/detail/BondClassifier.hpp"
 #include "data/detail/GroupPotentialEntry.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
@@ -20,7 +19,6 @@
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 
 #include <array>
-#include <map>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -336,14 +334,6 @@ inline constexpr auto kInsertModelAtomLocalSql = R"sql(
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 )sql"sv;
 
-inline constexpr auto kInsertModelBondLocalSql = R"sql(
-    INSERT OR REPLACE INTO model_bond_local_potential (
-        key_tag, atom_serial_id_1, atom_serial_id_2, sampling_size,
-        distance_and_map_value_list, amplitude_estimate_ols, width_estimate_ols,
-        amplitude_estimate_mdpde, width_estimate_mdpde, alpha_r
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-)sql"sv;
-
 inline constexpr auto kInsertModelAtomPosteriorSql = R"sql(
     INSERT OR REPLACE INTO model_atom_posterior (
         key_tag, class_key, serial_id, amplitude_estimate_posterior, width_estimate_posterior,
@@ -351,26 +341,8 @@ inline constexpr auto kInsertModelAtomPosteriorSql = R"sql(
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 )sql"sv;
 
-inline constexpr auto kInsertModelBondPosteriorSql = R"sql(
-    INSERT OR REPLACE INTO model_bond_posterior (
-        key_tag, class_key, atom_serial_id_1, atom_serial_id_2,
-        amplitude_estimate_posterior, width_estimate_posterior,
-        amplitude_variance_posterior, width_variance_posterior, outlier_tag, statistical_distance
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-)sql"sv;
-
 inline constexpr auto kInsertModelAtomGroupSql = R"sql(
     INSERT OR REPLACE INTO model_atom_group_potential (
-        key_tag, class_key, group_key, member_size,
-        amplitude_estimate_mean, width_estimate_mean,
-        amplitude_estimate_mdpde, width_estimate_mdpde,
-        amplitude_estimate_prior, width_estimate_prior,
-        amplitude_variance_prior, width_variance_prior, alpha_g
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-)sql"sv;
-
-inline constexpr auto kInsertModelBondGroupSql = R"sql(
-    INSERT OR REPLACE INTO model_bond_group_potential (
         key_tag, class_key, group_key, member_size,
         amplitude_estimate_mean, width_estimate_mean,
         amplitude_estimate_mdpde, width_estimate_mdpde,
@@ -434,26 +406,11 @@ inline constexpr auto kSelectModelAtomLocalSql = R"sql(
     FROM model_atom_local_potential WHERE key_tag = ?;
 )sql"sv;
 
-inline constexpr auto kSelectModelBondLocalSql = R"sql(
-    SELECT
-        atom_serial_id_1, atom_serial_id_2, sampling_size, distance_and_map_value_list,
-        amplitude_estimate_ols, width_estimate_ols,
-        amplitude_estimate_mdpde, width_estimate_mdpde, alpha_r
-    FROM model_bond_local_potential WHERE key_tag = ?;
-)sql"sv;
-
 inline constexpr auto kSelectModelAtomPosteriorSql = R"sql(
     SELECT
         serial_id, amplitude_estimate_posterior, width_estimate_posterior,
         amplitude_variance_posterior, width_variance_posterior, outlier_tag, statistical_distance
     FROM model_atom_posterior WHERE key_tag = ? AND class_key = ?;
-)sql"sv;
-
-inline constexpr auto kSelectModelBondPosteriorSql = R"sql(
-    SELECT
-        atom_serial_id_1, atom_serial_id_2, amplitude_estimate_posterior, width_estimate_posterior,
-        amplitude_variance_posterior, width_variance_posterior, outlier_tag, statistical_distance
-    FROM model_bond_posterior WHERE key_tag = ? AND class_key = ?;
 )sql"sv;
 
 inline constexpr auto kSelectModelAtomGroupSql = R"sql(
@@ -463,15 +420,6 @@ inline constexpr auto kSelectModelAtomGroupSql = R"sql(
         amplitude_estimate_prior, width_estimate_prior,
         amplitude_variance_prior, width_variance_prior, alpha_g
     FROM model_atom_group_potential WHERE key_tag = ? AND class_key = ?;
-)sql"sv;
-
-inline constexpr auto kSelectModelBondGroupSql = R"sql(
-    SELECT
-        group_key, member_size, amplitude_estimate_mean, width_estimate_mean,
-        amplitude_estimate_mdpde, width_estimate_mdpde,
-        amplitude_estimate_prior, width_estimate_prior,
-        amplitude_variance_prior, width_variance_prior, alpha_g
-    FROM model_bond_group_potential WHERE key_tag = ? AND class_key = ?;
 )sql"sv;
 
 class SQLiteStatementBatch
@@ -1001,34 +949,6 @@ void SaveAtomLocalPotentialEntryList(
     }
 }
 
-void SaveBondLocalPotentialEntryList(
-    rhbm_gem::SQLiteWrapper & database,
-    const rhbm_gem::ModelObject & model_obj,
-    const std::string & key_tag)
-{
-    SQLiteStatementBatch batch{ database, std::string(kInsertModelBondLocalSql) };
-    for (const auto & bond_object : model_obj.GetBondList())
-    {
-        auto * entry{ rhbm_gem::ModelAnalysisData::Of(model_obj).FindBondLocalEntry(*bond_object) };
-        if (entry == nullptr) continue;
-
-        batch.Execute([&](rhbm_gem::SQLiteWrapper & statement_db)
-        {
-            statement_db.Bind<std::string>(1, key_tag);
-            statement_db.Bind<int>(2, bond_object->GetAtomSerialID1());
-            statement_db.Bind<int>(3, bond_object->GetAtomSerialID2());
-            statement_db.Bind<int>(4, entry->GetSamplingEntryCount());
-            statement_db.Bind<LocalPotentialSampleList>(
-                5, entry->GetSamplingEntries());
-            statement_db.Bind<double>(6, entry->GetEstimateOLS().GetAmplitude());
-            statement_db.Bind<double>(7, entry->GetEstimateOLS().GetWidth());
-            statement_db.Bind<double>(8, entry->GetEstimateMDPDE().GetAmplitude());
-            statement_db.Bind<double>(9, entry->GetEstimateMDPDE().GetWidth());
-            statement_db.Bind<double>(10, entry->GetAlphaR());
-        });
-    }
-}
-
 void SaveAtomLocalPotentialEntrySubList(
     rhbm_gem::SQLiteWrapper & database,
     const rhbm_gem::ModelObject & model_obj,
@@ -1062,40 +982,6 @@ void SaveAtomLocalPotentialEntrySubList(
     }
 }
 
-void SaveBondLocalPotentialEntrySubList(
-    rhbm_gem::SQLiteWrapper & database,
-    const rhbm_gem::ModelObject & model_obj,
-    const std::string & key_tag,
-    const std::string & class_key)
-{
-    SQLiteStatementBatch batch{ database, std::string(kInsertModelBondPosteriorSql) };
-    for (const auto & bond_object : model_obj.GetBondList())
-    {
-        auto * entry{ rhbm_gem::ModelAnalysisData::Of(model_obj).FindBondLocalEntry(*bond_object) };
-        if (entry == nullptr) continue;
-        const auto * annotation{ entry->FindAnnotation(class_key) };
-        if (annotation == nullptr) continue;
-
-        batch.Execute([&](rhbm_gem::SQLiteWrapper & statement_db)
-        {
-            statement_db.Bind<std::string>(1, key_tag);
-            statement_db.Bind<std::string>(2, class_key);
-            statement_db.Bind<int>(3, bond_object->GetAtomSerialID1());
-            statement_db.Bind<int>(4, bond_object->GetAtomSerialID2());
-            statement_db.Bind<double>(5, annotation->gaussian.GetModel().GetAmplitude());
-            statement_db.Bind<double>(6, annotation->gaussian.GetModel().GetWidth());
-            statement_db.Bind<double>(
-                7,
-                annotation->gaussian.GetStandardDeviationModel().GetAmplitude());
-            statement_db.Bind<double>(
-                8,
-                annotation->gaussian.GetStandardDeviationModel().GetWidth());
-            statement_db.Bind<int>(9, static_cast<int>(annotation->is_outlier));
-            statement_db.Bind<double>(10, annotation->statistical_distance);
-        });
-    }
-}
-
 void SaveAtomGroupPotentialEntryList(
     rhbm_gem::SQLiteWrapper & database,
     const rhbm_gem::AtomGroupPotentialEntry & group_entry,
@@ -1103,40 +989,6 @@ void SaveAtomGroupPotentialEntryList(
     const std::string & class_key)
 {
     SQLiteStatementBatch batch{ database, std::string(kInsertModelAtomGroupSql) };
-    for (const auto group_key : group_entry.CollectGroupKeys())
-    {
-        batch.Execute([&](rhbm_gem::SQLiteWrapper & statement_db)
-        {
-            const auto & mean{ group_entry.GetMean(group_key) };
-            const auto & mdpde{ group_entry.GetMDPDE(group_key) };
-            const auto & prior{ group_entry.GetPrior(group_key) };
-            const auto & prior_standard_deviation{
-                group_entry.GetPriorStandardDeviation(group_key)
-            };
-            statement_db.Bind<std::string>(1, key_tag);
-            statement_db.Bind<std::string>(2, class_key);
-            statement_db.Bind<GroupKey>(3, group_key);
-            statement_db.Bind<int>(4, static_cast<int>(group_entry.GetMemberCount(group_key)));
-            statement_db.Bind<double>(5, mean.GetAmplitude());
-            statement_db.Bind<double>(6, mean.GetWidth());
-            statement_db.Bind<double>(7, mdpde.GetAmplitude());
-            statement_db.Bind<double>(8, mdpde.GetWidth());
-            statement_db.Bind<double>(9, prior.GetAmplitude());
-            statement_db.Bind<double>(10, prior.GetWidth());
-            statement_db.Bind<double>(11, prior_standard_deviation.GetAmplitude());
-            statement_db.Bind<double>(12, prior_standard_deviation.GetWidth());
-            statement_db.Bind<double>(13, group_entry.GetAlphaG(group_key));
-        });
-    }
-}
-
-void SaveBondGroupPotentialEntryList(
-    rhbm_gem::SQLiteWrapper & database,
-    const rhbm_gem::BondGroupPotentialEntry & group_entry,
-    const std::string & key_tag,
-    const std::string & class_key)
-{
-    SQLiteStatementBatch batch{ database, std::string(kInsertModelBondGroupSql) };
     for (const auto group_key : group_entry.CollectGroupKeys())
     {
         batch.Execute([&](rhbm_gem::SQLiteWrapper & statement_db)
@@ -1206,49 +1058,6 @@ void LoadAtomLocalPotentialEntrySubList(
     }
 }
 
-void LoadBondLocalPotentialEntrySubList(
-    rhbm_gem::SQLiteWrapper & database,
-    const std::string & key_tag,
-    const std::string & class_key,
-    std::map<std::pair<int, int>, std::unique_ptr<rhbm_gem::LocalPotentialEntry>> & entry_map)
-{
-    database.Prepare(std::string(kSelectModelBondPosteriorSql));
-    rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
-    database.Bind<std::string>(1, key_tag);
-    database.Bind<std::string>(2, class_key);
-    while (true)
-    {
-        const auto rc{ database.StepNext() };
-        if (rc == rhbm_gem::SQLiteWrapper::StepDone())
-        {
-            break;
-        }
-        if (rc != rhbm_gem::SQLiteWrapper::StepRow())
-        {
-            throw std::runtime_error("Step failed: " + database.ErrorMessage());
-        }
-
-        const auto atom_pair{
-            std::make_pair(database.GetColumn<int>(0), database.GetColumn<int>(1)) };
-        auto iter{ entry_map.find(atom_pair) };
-        if (iter == entry_map.end()) continue;
-        auto & entry{ iter->second };
-        rhbm_gem::GaussianModel3DWithUncertainty gaussian{
-            rhbm_gem::GaussianModel3D{
-                database.GetColumn<double>(2), database.GetColumn<double>(3) },
-            rhbm_gem::GaussianModel3DUncertainty{
-                database.GetColumn<double>(4), database.GetColumn<double>(5) }
-        };
-        entry->SetAnnotation(
-            class_key,
-            rhbm_gem::LocalPotentialAnnotation{
-                gaussian,
-                static_cast<bool>(database.GetColumn<int>(6)),
-                database.GetColumn<double>(7)
-            });
-    }
-}
-
 std::unordered_map<int, std::unique_ptr<rhbm_gem::LocalPotentialEntry>> LoadAtomLocalPotentialEntryMap(
     rhbm_gem::SQLiteWrapper & database,
     const std::string & key_tag)
@@ -1287,48 +1096,6 @@ std::unordered_map<int, std::unique_ptr<rhbm_gem::LocalPotentialEntry>> LoadAtom
     {
         LoadAtomLocalPotentialEntrySubList(
             database, key_tag, ChemicalDataHelper::GetGroupAtomClassKey(i), entry_map);
-    }
-    return entry_map;
-}
-
-std::map<std::pair<int, int>, std::unique_ptr<rhbm_gem::LocalPotentialEntry>> LoadBondLocalPotentialEntryMap(
-    rhbm_gem::SQLiteWrapper & database,
-    const std::string & key_tag)
-{
-    std::map<std::pair<int, int>, std::unique_ptr<rhbm_gem::LocalPotentialEntry>> entry_map;
-    database.Prepare(std::string(kSelectModelBondLocalSql));
-    rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
-    database.Bind<std::string>(1, key_tag);
-    while (true)
-    {
-        const auto rc{ database.StepNext() };
-        if (rc == rhbm_gem::SQLiteWrapper::StepDone())
-        {
-            break;
-        }
-        if (rc != rhbm_gem::SQLiteWrapper::StepRow())
-        {
-            throw std::runtime_error("Step failed: " + database.ErrorMessage());
-        }
-
-        auto entry{ std::make_unique<rhbm_gem::LocalPotentialEntry>() };
-        const auto key{ std::make_pair(database.GetColumn<int>(0), database.GetColumn<int>(1)) };
-        entry->SetSamplingEntries(
-            database.GetColumn<LocalPotentialSampleList>(3));
-        entry->SetEstimateOLS(
-            rhbm_gem::GaussianModel3D{
-                database.GetColumn<double>(4), database.GetColumn<double>(5) });
-        entry->SetEstimateMDPDE(
-            rhbm_gem::GaussianModel3D{
-                database.GetColumn<double>(6), database.GetColumn<double>(7) });
-        entry->SetAlphaR(database.GetColumn<double>(8));
-        entry_map[key] = std::move(entry);
-    }
-
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupBondClassCount(); i++)
-    {
-        LoadBondLocalPotentialEntrySubList(
-            database, key_tag, ChemicalDataHelper::GetGroupBondClassKey(i), entry_map);
     }
     return entry_map;
 }
@@ -1379,59 +1146,12 @@ void LoadAtomGroupPotentialEntryList(
     }
 }
 
-void LoadBondGroupPotentialEntryList(
-    rhbm_gem::SQLiteWrapper & database,
-    rhbm_gem::ModelObject & model_obj,
-    const std::string & key_tag,
-    const std::string & class_key)
-{
-    auto & group_entry{
-        rhbm_gem::ModelAnalysisData::Of(model_obj).EnsureBondGroupEntry(class_key) };
-    database.Prepare(std::string(kSelectModelBondGroupSql));
-    rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
-    database.Bind<std::string>(1, key_tag);
-    database.Bind<std::string>(2, class_key);
-    while (true)
-    {
-        const auto rc{ database.StepNext() };
-        if (rc == rhbm_gem::SQLiteWrapper::StepDone())
-        {
-            break;
-        }
-        if (rc != rhbm_gem::SQLiteWrapper::StepRow())
-        {
-            throw std::runtime_error("Step failed: " + database.ErrorMessage());
-        }
-
-        const auto group_key{ database.GetColumn<GroupKey>(0) };
-        group_entry.ReserveMembers(group_key, static_cast<size_t>(database.GetColumn<int>(1)));
-        group_entry.SetGroupStatistics(
-            group_key,
-            rhbm_gem::GaussianModel3D{
-                database.GetColumn<double>(2), database.GetColumn<double>(3) },
-            rhbm_gem::GaussianModel3D{
-                database.GetColumn<double>(4), database.GetColumn<double>(5) },
-            rhbm_gem::GaussianModel3D{
-                database.GetColumn<double>(6), database.GetColumn<double>(7) },
-            rhbm_gem::GaussianModel3DUncertainty{
-                database.GetColumn<double>(8), database.GetColumn<double>(9) },
-            database.GetColumn<double>(10));
-    }
-
-    for (auto & bond : model_obj.GetSelectedBonds())
-    {
-        const auto group_key{ rhbm_gem::BondClassifier::GetGroupKeyInClass(bond, class_key) };
-        group_entry.AddMember(group_key, *bond);
-    }
-}
-
 void SaveAnalysis(
     rhbm_gem::SQLiteWrapper & database,
     const rhbm_gem::ModelObject & model_obj,
     const std::string & key_tag)
 {
     SaveAtomLocalPotentialEntryList(database, model_obj, key_tag);
-    SaveBondLocalPotentialEntryList(database, model_obj, key_tag);
     const auto & analysis_data{ rhbm_gem::ModelAnalysisData::Of(model_obj) };
 
     for (const auto & [class_key, group_entry] : analysis_data.AtomGroupEntries())
@@ -1442,15 +1162,6 @@ void SaveAnalysis(
         }
         SaveAtomLocalPotentialEntrySubList(database, model_obj, key_tag, class_key);
         SaveAtomGroupPotentialEntryList(database, group_entry, key_tag, class_key);
-    }
-    for (const auto & [class_key, group_entry] : analysis_data.BondGroupEntries())
-    {
-        if (group_entry.GroupCount() == 0)
-        {
-            continue;
-        }
-        SaveBondLocalPotentialEntrySubList(database, model_obj, key_tag, class_key);
-        SaveBondGroupPotentialEntryList(database, group_entry, key_tag, class_key);
     }
 }
 
@@ -1505,35 +1216,11 @@ void ModelObjectStorage::LoadAnalysis(
     }
     model_obj.RestoreAtomSelectionBulk(selected_serial_ids);
 
-    auto bond_entry_map{ LoadBondLocalPotentialEntryMap(database, key_tag) };
-    std::set<std::pair<int, int>> selected_serial_pairs;
-    for (const auto & bond_object : model_obj.GetBondList())
-    {
-        const auto serial_id_pair{
-            std::make_pair(bond_object->GetAtomSerialID1(), bond_object->GetAtomSerialID2()) };
-        auto iter{ bond_entry_map.find(serial_id_pair) };
-        if (iter == bond_entry_map.end())
-        {
-            continue;
-        }
-
-        ModelAnalysisData::Of(model_obj).SetBondLocalEntry(*bond_object, std::move(iter->second));
-        selected_serial_pairs.insert(serial_id_pair);
-    }
-    model_obj.RestoreBondSelectionBulk(selected_serial_pairs);
-
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {
         auto class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
         ModelAnalysisData::Of(model_obj).EnsureAtomGroupEntry(class_key);
         LoadAtomGroupPotentialEntryList(database, model_obj, key_tag, class_key);
-    }
-
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupBondClassCount(); i++)
-    {
-        auto class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
-        ModelAnalysisData::Of(model_obj).EnsureBondGroupEntry(class_key);
-        LoadBondGroupPotentialEntryList(database, model_obj, key_tag, class_key);
     }
 }
 

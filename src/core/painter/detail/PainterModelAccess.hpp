@@ -48,21 +48,6 @@ inline void RequireSelectedAtomsHaveLocalEntries(
     }
 }
 
-inline void RequireSelectedBondsHaveLocalEntries(
-    const ModelObject & model_object,
-    std::string_view painter_name)
-{
-    for (const auto * bond : model_object.GetSelectedBonds())
-    {
-        if (!LocalPotentialView::For(*bond).IsAvailable())
-        {
-            throw std::runtime_error(
-                std::string(painter_name)
-                + " requires analysis-ready selected bonds with local potential entries.");
-        }
-    }
-}
-
 inline void RequireGroupedAnalysisData(
     const ModelObject & model_object,
     std::string_view painter_name)
@@ -82,7 +67,6 @@ inline LocalAnalyzedModelRef RequireLocalAnalyzedModel(
     std::string_view painter_name)
 {
     RequireSelectedAtomsHaveLocalEntries(model_object, painter_name);
-    RequireSelectedBondsHaveLocalEntries(model_object, painter_name);
     return LocalAnalyzedModelRef{ model_object };
 }
 

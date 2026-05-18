@@ -3,8 +3,6 @@
 #include "data/detail/ModelDerivedState.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
-#include "data/detail/BondClassifier.hpp"
-#include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -54,11 +52,6 @@ PotentialPlotBuilder::PotentialPlotBuilder(AtomObject * atom_object) :
 {
 }
 
-PotentialPlotBuilder::PotentialPlotBuilder(BondObject * bond_object) :
-    m_bond_object{ bond_object }
-{
-}
-
 ModelAnalysisView PotentialPlotBuilder::GetModelView() const
 {
     if (m_model_object == nullptr)
@@ -73,10 +66,6 @@ LocalPotentialView PotentialPlotBuilder::GetLocalEntry() const
     if (m_atom_object != nullptr)
     {
         return LocalPotentialView::RequireFor(*m_atom_object);
-    }
-    if (m_bond_object != nullptr)
-    {
-        return LocalPotentialView::RequireFor(*m_bond_object);
     }
     throw std::runtime_error("Local entry is not available.");
 }
@@ -115,31 +104,10 @@ size_t PotentialPlotBuilder::GetAtomResidueCount(
     return GetModelView().GetAtomObjectList(group_key, class_key).size();
 }
 
-size_t PotentialPlotBuilder::GetBondResidueCount(
-    const std::string & class_key, Residue residue) const
-{
-    GroupKey group_key{ 0 };
-        if (class_key == ChemicalDataHelper::GetComponentBondClassKey())
-    {
-        group_key = BondClassifier::GetMainChainComponentBondClassGroupKey(0, residue);
-    }
-    if (IsAvailableBondGroupKey(group_key, class_key) == false)
-    {
-        return 0;
-    }
-    return GetModelView().GetBondObjectList(group_key, class_key).size();
-}
-
 bool PotentialPlotBuilder::IsAvailableAtomGroupKey(
     GroupKey group_key, const std::string & class_key, bool varbose) const
 {
     return GetModelView().HasAtomGroup(group_key, class_key, varbose);
-}
-
-bool PotentialPlotBuilder::IsAvailableBondGroupKey(
-    GroupKey group_key, const std::string & class_key, bool varbose) const
-{
-    return GetModelView().HasBondGroup(group_key, class_key, varbose);
 }
 
 #ifdef HAVE_ROOT
@@ -196,22 +164,6 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateAtomResidueCountHistogram(
     for (auto & residue : ChemicalDataHelper::GetStandardAminoAcidList())
     {
         auto count{ GetAtomResidueCount(class_key, residue, structure) };
-        hist->SetBinContent(static_cast<int>(residue), static_cast<double>(count));
-    }
-    return hist;
-}
-
-std::unique_ptr<TH1D> PotentialPlotBuilder::CreateBondResidueCountHistogram(
-    const std::string & class_key)
-{
-    if (IsModelObjectAvailable() == false)
-    {
-        return nullptr;
-    }
-    auto hist{ root_helper::CreateHist1D("hist", "Residue Count", 20, -0.5, 19.5) };
-    for (auto & residue : ChemicalDataHelper::GetStandardAminoAcidList())
-    {
-        auto count{ GetBondResidueCount(class_key, residue) };
         hist->SetBinContent(static_cast<int>(residue), static_cast<double>(count));
     }
     return hist;
@@ -425,33 +377,6 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToResi
     return graph;
 }
 
-std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBondGausEstimateToResidueGraph(
-    std::vector<GroupKey> & group_key_list, const std::string & class_key, const int par_id)
-{
-    if (IsModelObjectAvailable() == false)
-    {
-        return nullptr;
-    }
-    auto graph{ root_helper::CreateGraphErrors() };
-    const auto model_view{ GetModelView() };
-
-    auto count{ 0 };
-    for (auto & group_key : group_key_list)
-    {
-        if (IsAvailableBondGroupKey(group_key, class_key) == false)
-        {
-            continue;
-        }
-        auto x_value{ static_cast<int>(model_view.GetResidueFromBondGroupKey(group_key, class_key)) - 1 };
-        auto y_value{ model_view.GetBondGroupPrior(group_key, class_key).GetDisplayParameter(par_id) };
-        auto y_error{ model_view.GetBondGroupPriorWithUncertainty(group_key, class_key).GetDisplayStandardDeviation(par_id) };
-        graph->SetPoint(count, x_value, y_value);
-        graph->SetPointError(count, 0.0, y_error);
-        count++;
-    }
-    return graph;
-}
-
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToSpotGraph(
     std::vector<GroupKey> & group_key_list, const std::string & class_key, const int par_id)
 {
@@ -572,36 +497,6 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatte
     return graph;
 }
 
-std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBondGausEstimateScatterGraph(
-    std::vector<GroupKey> & group_key_list, const std::string & class_key,
-    int par1_id, int par2_id)
-{
-    if (IsModelObjectAvailable() == false)
-    {
-        return nullptr;
-    }
-    auto graph{ root_helper::CreateGraphErrors() };
-
-    auto count{ 0 };
-    for (auto & group_key : group_key_list)
-    {
-        if (IsAvailableBondGroupKey(group_key, class_key) == false)
-        {
-            continue;
-        }
-        graph->SetPoint(
-            count,
-            GetModelView().GetBondGausEstimatePrior(group_key, class_key, par1_id),
-            GetModelView().GetBondGausEstimatePrior(group_key, class_key, par2_id));
-        graph->SetPointError(
-            count,
-            GetModelView().GetBondGausPriorStandardDeviation(group_key, class_key, par1_id),
-            GetModelView().GetBondGausPriorStandardDeviation(group_key, class_key, par2_id));
-        count++;
-    }
-    return graph;
-}
-
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatterGraph(
     Element element, bool reverse)
 {
@@ -620,37 +515,6 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatte
             continue;
         }
         const auto entry{ LocalPotentialView::RequireFor(*atom) };
-        if (reverse == false)
-        {
-            graph->SetPoint(count, entry.GetEstimateMDPDE().GetAmplitude(), entry.GetEstimateMDPDE().GetWidth());
-        }
-        else
-        {
-            graph->SetPoint(count, entry.GetEstimateMDPDE().GetWidth(), entry.GetEstimateMDPDE().GetAmplitude());
-        }
-        count++;
-    }
-    return graph;
-}
-
-std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBondGausEstimateScatterGraph(
-    Element element, bool reverse)
-{
-    if (IsModelObjectAvailable() == false)
-    {
-        return nullptr;
-    }
-
-    auto model_object{ m_model_object };
-    auto graph{ root_helper::CreateGraphErrors() };
-    auto count{ 0 };
-    for (auto & bond : model_object->GetSelectedBonds())
-    {
-        if (bond->GetAtomObject1()->GetElement() != element)
-        {
-            continue;
-        }
-        const auto entry{ LocalPotentialView::RequireFor(*bond) };
         if (reverse == false)
         {
             graph->SetPoint(count, entry.GetEstimateMDPDE().GetAmplitude(), entry.GetEstimateMDPDE().GetWidth());
@@ -930,19 +794,6 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionPrior(
     return root_helper::CreateGaus3DFunctionIn1D("group_gaus_prior", amplitude, width);
 }
 
-std::unique_ptr<TF1> PotentialPlotBuilder::CreateBondGroupGausFunctionPrior(
-    GroupKey group_key, const std::string & class_key) const
-{
-    if (IsModelObjectAvailable() == false)
-    {
-        return nullptr;
-    }
-    const auto & prior{ GetModelView().GetBondGroupPrior(group_key, class_key) };
-    auto amplitude{ prior.GetAmplitude() };
-    auto width{ prior.GetWidth() };
-    return root_helper::CreateGaus2DFunctionIn1D("group_gaus_prior", amplitude, width);
-}
-
 #endif
 
 } // namespace rhbm_gem
@@ -978,50 +829,6 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateNormalizedAtomGausEsti
         if (atom->GetElement() != element) continue;
         auto sequence_id{ atom->GetSequenceID() };
         const auto entry{ LocalPotentialView::RequireFor(*atom) };
-        auto normalized_amplitude{ entry.GetEstimateMDPDE().GetAmplitude() };
-        if (amplitude_diff_to_carbonyl_oxygen_map.find(sequence_id) != amplitude_diff_to_carbonyl_oxygen_map.end())
-        {
-            normalized_amplitude -= amplitude_diff_to_carbonyl_oxygen_map.at(sequence_id);
-        }
-        if (reverse == false)
-        {
-            graph->SetPoint(count, normalized_amplitude, entry.GetEstimateMDPDE().GetWidth());
-        }
-        else
-        {
-            graph->SetPoint(count, entry.GetEstimateMDPDE().GetWidth(), normalized_amplitude);
-        }
-        count++;
-    }
-    return graph;
-}
-
-std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateNormalizedBondGausEstimateScatterGraph(
-    Element element, double reference_amplitude, bool reverse)
-{
-    if (IsModelObjectAvailable() == false)
-    {
-        return nullptr;
-    }
-    auto model_object{ m_model_object };
-    auto graph{ root_helper::CreateGraphErrors() };
-    std::unordered_map<int, double> amplitude_diff_to_carbonyl_oxygen_map;
-    for (auto & bond : model_object->GetSelectedBonds())
-    {
-        if (bond->GetSpecialBondFlag() == false)
-        {
-            const auto entry{ LocalPotentialView::RequireFor(*bond) };
-            auto sequence_id{ bond->GetAtomObject1()->GetSequenceID() };
-            auto amplitude_estimate{ entry.GetEstimateMDPDE().GetAmplitude() };
-            amplitude_diff_to_carbonyl_oxygen_map[sequence_id] = amplitude_estimate - reference_amplitude;
-        }
-    }
-    auto count{ 0 };
-    for (auto & bond : model_object->GetSelectedBonds())
-    {
-        if (bond->GetAtomObject1()->GetElement() != element) continue;
-        auto sequence_id{ bond->GetAtomObject1()->GetSequenceID() };
-        const auto entry{ LocalPotentialView::RequireFor(*bond) };
         auto normalized_amplitude{ entry.GetEstimateMDPDE().GetAmplitude() };
         if (amplitude_diff_to_carbonyl_oxygen_map.find(sequence_id) != amplitude_diff_to_carbonyl_oxygen_map.end())
         {
@@ -1149,44 +956,6 @@ PotentialPlotBuilder::CreateAtomGausEstimateToSequenceIDGraphMap(
         graph_map[chain_id]->SetPoint(
             count_map[chain_id], x_value, entry.GetEstimateMDPDE().GetDisplayParameter(par_id));
         count_map[chain_id]++;
-    }
-    return graph_map;
-}
-
-std::unordered_map<std::string, std::unique_ptr<TGraphErrors>>
-PotentialPlotBuilder::CreateBondGausEstimateToSequenceIDGraphMap(
-    size_t main_chain_element_id, const int par_id, Residue residue)
-{
-    if (IsModelObjectAvailable() == false)
-    {
-        return {};
-    }
-
-    std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> graph_map;
-    std::unordered_map<std::string, int> count_map;
-    auto class_key{ ChemicalDataHelper::GetSimpleBondClassKey() };
-    auto group_key{ BondClassifier::GetMainChainSimpleBondClassGroupKey(main_chain_element_id) };
-    for (auto & bond : GetModelView().GetBondObjectList(group_key, class_key))
-    {
-        if (residue != Residue::UNK && bond->GetAtomObject1()->GetResidue() != residue) continue;
-        const auto entry{ LocalPotentialView::RequireFor(*bond) };
-        auto sequence_id{ bond->GetAtomObject1()->GetSequenceID() };
-        auto chain_id{ bond->GetAtomObject1()->GetChainID() };
-        if (sequence_id < 0) continue;
-        if (graph_map.find(chain_id) == graph_map.end())
-        {
-            graph_map[chain_id] = root_helper::CreateGraphErrors();
-            count_map[chain_id] = 0;
-        }
-        auto x_value{ static_cast<double>(sequence_id) };
-        auto y_value{ entry.GetEstimateMDPDE().GetDisplayParameter(par_id) };
-        graph_map[chain_id]->SetPoint(count_map[chain_id], x_value, y_value);
-        count_map[chain_id]++;
-    }
-
-    for (auto & [chain, graph] : graph_map)
-    {
-        graph->Sort(); // sort points along x axis
     }
     return graph_map;
 }

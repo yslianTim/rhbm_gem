@@ -14,21 +14,17 @@
 namespace rhbm_gem {
 
 class AtomObject;
-class BondObject;
 class LocalPotentialEntry;
 class ModelObject;
 
 class LocalPotentialView
 {
     const AtomObject * m_atom_object{ nullptr };
-    const BondObject * m_bond_object{ nullptr };
 
 public:
     LocalPotentialView() = default;
     static LocalPotentialView For(const AtomObject & atom_object);
-    static LocalPotentialView For(const BondObject & bond_object);
     static LocalPotentialView RequireFor(const AtomObject & atom_object);
-    static LocalPotentialView RequireFor(const BondObject & bond_object);
     bool IsAvailable() const;
     const LocalGaussianResult & GetGaussianResult() const;
     const GaussianModel3D & GetEstimateOLS() const;
@@ -47,7 +43,6 @@ public:
 
 private:
     explicit LocalPotentialView(const AtomObject * atom_object);
-    explicit LocalPotentialView(const BondObject * bond_object);
     const LocalPotentialEntry * FindEntry() const;
     const LocalPotentialEntry & RequireEntry(const char * context) const;
 
@@ -62,34 +57,21 @@ public:
     bool HasGroupedAnalysisData() const;
     std::string DescribeAtomGrouping() const;
     double GetAtomGausEstimateMinimum(int par_id, Element element) const;
-    double GetBondGausEstimateMinimum(int par_id) const;
     bool HasAtomGroup(GroupKey group_key, const std::string & class_key, bool verbose=false) const;
-    bool HasBondGroup(GroupKey group_key, const std::string & class_key, bool verbose=false) const;
     const GaussianModel3D & GetAtomGroupMean(GroupKey group_key, const std::string & class_key) const;
-    const GaussianModel3D & GetBondGroupMean(GroupKey group_key, const std::string & class_key) const;
     const GaussianModel3D & GetAtomGroupMDPDE(GroupKey group_key, const std::string & class_key) const;
-    const GaussianModel3D & GetBondGroupMDPDE(GroupKey group_key, const std::string & class_key) const;
     const GaussianModel3D & GetAtomGroupPrior(GroupKey group_key, const std::string & class_key) const;
-    const GaussianModel3D & GetBondGroupPrior(GroupKey group_key, const std::string & class_key) const;
     GaussianModel3DWithUncertainty GetAtomGroupPriorWithUncertainty(GroupKey group_key, const std::string & class_key) const;
-    GaussianModel3DWithUncertainty GetBondGroupPriorWithUncertainty(GroupKey group_key, const std::string & class_key) const;
     double GetAtomGausEstimatePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
-    double GetBondGausEstimatePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
     double GetAtomGausPriorStandardDeviation(GroupKey group_key, const std::string & class_key, int par_id) const;
-    double GetBondGausPriorStandardDeviation(GroupKey group_key, const std::string & class_key, int par_id) const;
     const std::vector<AtomObject *> & GetAtomObjectList(GroupKey group_key, const std::string & class_key) const;
-    const std::vector<BondObject *> & GetBondObjectList(GroupKey group_key, const std::string & class_key) const;
     std::vector<AtomObject *> GetOutlierAtomObjectList(GroupKey group_key, const std::string & class_key) const;
     std::unordered_map<int, AtomObject *> GetAtomObjectMap(GroupKey group_key, const std::string & class_key) const;
     double GetAtomAlphaR(GroupKey group_key, const std::string & class_key) const;
     double GetAtomAlphaG(GroupKey group_key, const std::string & class_key) const;
-    double GetBondAlphaG(GroupKey group_key, const std::string & class_key) const;
     Residue DecodeResidueFromAtomGroupKey(GroupKey group_key, const std::string & class_key) const;
-    Residue DecodeResidueFromBondGroupKey(GroupKey group_key, const std::string & class_key) const;
     Residue GetResidueFromAtomGroupKey(GroupKey group_key, const std::string & class_key) const;
-    Residue GetResidueFromBondGroupKey(GroupKey group_key, const std::string & class_key) const;
     std::vector<GroupKey> CollectAtomGroupKeys(const std::string & class_key) const;
-    std::vector<GroupKey> CollectBondGroupKeys(const std::string & class_key) const;
     
 };
 

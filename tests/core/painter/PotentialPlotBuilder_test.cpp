@@ -7,7 +7,6 @@
 #include "painter/PotentialPlotBuilder.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
-#include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -38,13 +37,6 @@ void EnsureLocalPotentialEntries(rg::ModelObject & model)
             analysis.EnsureAtomLocalPotential(*atom);
         }
     }
-    for (auto & bond : model.GetBondList())
-    {
-        if (!rg::LocalPotentialView::For(*bond).IsAvailable())
-        {
-            analysis.EnsureBondLocalPotential(*bond);
-        }
-    }
 }
 
 } // namespace
@@ -56,18 +48,14 @@ TEST(PotentialPlotBuilderTest, ConstructorsKeepQueryObjectsReachable)
     EnsureLocalPotentialEntries(*model);
 
     ASSERT_FALSE(model->GetAtomList().empty());
-    ASSERT_FALSE(model->GetBondList().empty());
 
     auto * atom{ model->GetAtomList().front().get() };
-    auto * bond{ model->GetBondList().front().get() };
 
     rg::PotentialPlotBuilder model_builder{ model.get() };
     rg::PotentialPlotBuilder atom_builder{ atom };
-    rg::PotentialPlotBuilder bond_builder{ bond };
 
     (void)model_builder;
     (void)atom_builder;
-    (void)bond_builder;
     SUCCEED();
 }
 
@@ -83,16 +71,13 @@ TEST(PotentialPlotBuilderTest, RepresentativeBuildersProduceRootObjects)
 
     rg::PotentialPlotBuilder model_builder{ model.get() };
     rg::PotentialPlotBuilder atom_builder{ atom };
-    rg::PotentialPlotBuilder bond_builder{ model->GetBondList().front().get() };
 
     auto tomography_graph{ model_builder.CreateAtomXYPositionTomographyGraph() };
     auto distance_graph{ atom_builder.CreateDistanceToMapValueGraph() };
-    auto bond_distance_graph{ bond_builder.CreateDistanceToMapValueGraph() };
     auto gaus_function{ atom_builder.CreateAtomLocalGausFunctionMDPDE() };
 
     EXPECT_NE(tomography_graph, nullptr);
     EXPECT_NE(distance_graph, nullptr);
-    EXPECT_NE(bond_distance_graph, nullptr);
     EXPECT_NE(gaus_function, nullptr);
 }
 #endif

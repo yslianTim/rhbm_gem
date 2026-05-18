@@ -9,14 +9,12 @@
 namespace rhbm_gem {
 
 class AtomObject;
-class BondObject;
 class LocalPotentialEntry;
 class ModelObject;
 
 class LocalPotentialEditor
 {
     AtomObject * m_atom_object{ nullptr };
-    BondObject * m_bond_object{ nullptr };
     LocalPotentialEntry * m_entry{ nullptr };
     
 public:
@@ -27,7 +25,6 @@ public:
 
 private:
     explicit LocalPotentialEditor(AtomObject * atom_object);
-    explicit LocalPotentialEditor(BondObject * bond_object);
     ModelObject * GetOwner() const;
     LocalPotentialEntry & EnsureEntry() const;
     friend class ModelAnalysisEditor;
@@ -43,15 +40,12 @@ public:
     void Clear();
     void ClearTransientFitStates();
     LocalPotentialEditor EnsureAtomLocalPotential(const AtomObject & atom_object);
-    LocalPotentialEditor EnsureBondLocalPotential(const BondObject & bond_object);
     void RebuildAtomGroupsFromSelection();
-    void RebuildBondGroupsFromSelection();
     void ApplyAtomGroupGaussianResult(
         GroupKey group_key,
         const std::string & class_key,
         const GroupGaussianResult & group_result);
     void SetAtomGroupAlphaG(GroupKey group_key, const std::string & class_key, double alpha_g);
-    void SetBondGroupAlphaG(GroupKey group_key, const std::string & class_key, double alpha_g);
     
 };
 

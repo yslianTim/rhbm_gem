@@ -156,7 +156,6 @@ ModelObject::ModelObject(const ModelObject & other) :
     m_analysis_data{ std::make_unique<ModelAnalysisData>() }
 {
     std::unordered_map<const AtomObject *, AtomObject *> atom_ptr_map;
-    std::unordered_map<const BondObject *, BondObject *> bond_ptr_map;
     if (other.m_parts != nullptr)
     {
         m_parts->chain_id_list_map = other.m_parts->chain_id_list_map;
@@ -183,7 +182,6 @@ ModelObject::ModelObject(const ModelObject & other) :
         }
 
         m_parts->bond_list.reserve(other.m_parts->bond_list.size());
-        bond_ptr_map.reserve(other.m_parts->bond_list.size());
         for (const auto & bond : other.m_parts->bond_list)
         {
             auto * atom_1{ atom_ptr_map.at(bond->GetAtomObject1()) };
@@ -194,7 +192,6 @@ ModelObject::ModelObject(const ModelObject & other) :
             cloned_bond->SetBondKey(bond->GetBondKey());
             cloned_bond->SetBondType(bond->GetBondType());
             cloned_bond->SetBondOrder(bond->GetBondOrder());
-            bond_ptr_map[bond.get()] = cloned_bond.get();
             m_parts->bond_list.emplace_back(std::move(cloned_bond));
         }
 
@@ -246,20 +243,6 @@ ModelObject::ModelObject(const ModelObject & other) :
         {
             m_analysis_data->EnsureAtomGroupEntry(class_key) = std::move(*entry);
         });
-    copy_group_entries(
-        source_analysis_data.BondGroupEntries(),
-        [&bond_ptr_map](const auto & entry, GroupKey group_key, auto & cloned_entry)
-        {
-            cloned_entry.ReserveMembers(group_key, entry.GetMemberCount(group_key));
-            for (auto * bond : entry.GetMembers(group_key))
-            {
-                cloned_entry.AddMember(group_key, *bond_ptr_map.at(bond));
-            }
-        },
-        [this](const std::string & class_key, auto entry)
-        {
-            m_analysis_data->EnsureBondGroupEntry(class_key) = std::move(*entry);
-        });
 
     for (const auto & atom : m_parts->atom_list)
     {
@@ -268,16 +251,6 @@ ModelObject::ModelObject(const ModelObject & other) :
         {
             m_analysis_data->SetAtomLocalEntry(
                 *atom,
-                std::make_unique<LocalPotentialEntry>(*local_entry));
-        }
-    }
-    for (const auto & bond : m_parts->bond_list)
-    {
-        if (const auto * local_entry{ source_analysis_data.FindBondLocalEntry(*bond) };
-            local_entry != nullptr)
-        {
-            m_analysis_data->SetBondLocalEntry(
-                *bond,
                 std::make_unique<LocalPotentialEntry>(*local_entry));
         }
     }

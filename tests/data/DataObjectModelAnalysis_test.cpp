@@ -23,31 +23,19 @@ TEST(DataObjectModelAnalysisTest, SelectedModelEntriesCanBeInitializedForTypedWo
     model->SelectAllAtoms(false);
     model->SelectAllBonds(false);
     ASSERT_EQ(model->GetSelectedAtomCount(), 0);
-    ASSERT_EQ(model->GetSelectedBondCount(), 0);
 
     model->SelectAllAtoms();
-    model->SelectAllBonds();
     model->ApplySymmetrySelection(false);
     for (auto * atom : model->GetSelectedAtoms())
     {
         rg::ModelAnalysisData::Of(*model).EnsureAtomLocalEntry(*atom);
     }
-    for (auto * bond : model->GetSelectedBonds())
-    {
-        rg::ModelAnalysisData::Of(*model).EnsureBondLocalEntry(*bond);
-    }
 
     EXPECT_EQ(model->GetSelectedAtomCount(), model->GetNumberOfAtom());
-    EXPECT_EQ(model->GetSelectedBondCount(), model->GetNumberOfBond());
     for (const auto * atom : model->GetSelectedAtoms())
     {
         ASSERT_NE(atom, nullptr);
         EXPECT_NE(rg::ModelAnalysisData::FindLocalEntry(*atom), nullptr);
-    }
-    for (const auto * bond : model->GetSelectedBonds())
-    {
-        ASSERT_NE(bond, nullptr);
-        EXPECT_NE(rg::ModelAnalysisData::FindLocalEntry(*bond), nullptr);
     }
 }
 
@@ -103,61 +91,41 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisDataCanClearTransientFitStatesWit
 {
     auto model{ data_test::MakeModelWithBond() };
     auto * atom{ model->GetAtomList().at(0).get() };
-    auto * bond{ model->GetBondList().at(0).get() };
     auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
 
     auto & atom_entry{ analysis_data.EnsureAtomLocalEntry(*atom) };
-    auto & bond_entry{ analysis_data.EnsureBondLocalEntry(*bond) };
     analysis_data.EnsureAtomGroupEntry("atom_class");
-    analysis_data.EnsureBondGroupEntry("bond_class");
     rg::LocalGaussianResult atom_result;
     atom_result.alpha_r = 0.2;
     atom_result.fit_result = rg::RHBMBetaEstimateResult{};
-    rg::LocalGaussianResult bond_result;
-    bond_result.alpha_r = 0.3;
-    bond_result.fit_result = rg::RHBMBetaEstimateResult{};
     atom_entry.SetGaussianResult(atom_result);
-    bond_entry.SetGaussianResult(bond_result);
 
     ASSERT_NE(analysis_data.FindAtomLocalEntry(*atom), nullptr);
-    ASSERT_NE(analysis_data.FindBondLocalEntry(*bond), nullptr);
     ASSERT_NE(analysis_data.FindAtomGroupEntry("atom_class"), nullptr);
-    ASSERT_NE(analysis_data.FindBondGroupEntry("bond_class"), nullptr);
 
     analysis_data.ClearTransientFitStates();
 
     const auto * cleared_atom_entry{ analysis_data.FindAtomLocalEntry(*atom) };
-    const auto * cleared_bond_entry{ analysis_data.FindBondLocalEntry(*bond) };
     ASSERT_NE(cleared_atom_entry, nullptr);
-    ASSERT_NE(cleared_bond_entry, nullptr);
     EXPECT_NE(analysis_data.FindAtomGroupEntry("atom_class"), nullptr);
-    EXPECT_NE(analysis_data.FindBondGroupEntry("bond_class"), nullptr);
     EXPECT_DOUBLE_EQ(0.2, cleared_atom_entry->GetAlphaR());
-    EXPECT_DOUBLE_EQ(0.3, cleared_bond_entry->GetAlphaR());
     EXPECT_FALSE(cleared_atom_entry->GetGaussianResult().fit_result.has_value());
-    EXPECT_FALSE(cleared_bond_entry->GetGaussianResult().fit_result.has_value());
 }
 
 TEST(DataObjectModelAnalysisTest, ModelAnalysisDataClearDropsEntriesAndFitStates)
 {
     auto model{ data_test::MakeModelWithBond() };
     auto * atom{ model->GetAtomList().at(0).get() };
-    auto * bond{ model->GetBondList().at(0).get() };
     auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
 
     auto & atom_entry{ analysis_data.EnsureAtomLocalEntry(*atom) };
-    auto & bond_entry{ analysis_data.EnsureBondLocalEntry(*bond) };
     analysis_data.EnsureAtomGroupEntry("atom_class");
-    analysis_data.EnsureBondGroupEntry("bond_class");
     atom_entry.SetAlphaR(0.2);
-    bond_entry.SetAlphaR(0.3);
 
     analysis_data.Clear();
 
     EXPECT_EQ(analysis_data.FindAtomLocalEntry(*atom), nullptr);
-    EXPECT_EQ(analysis_data.FindBondLocalEntry(*bond), nullptr);
     EXPECT_EQ(analysis_data.FindAtomGroupEntry("atom_class"), nullptr);
-    EXPECT_EQ(analysis_data.FindBondGroupEntry("bond_class"), nullptr);
 }
 
 TEST(DataObjectModelAnalysisTest, LocalPotentialEntryClearTransientFitStateKeepsGaussianResult)
@@ -380,48 +348,6 @@ TEST(DataObjectModelAnalysisTest, RebuildAtomGroupEntriesFromSelectionTracksOnly
     EXPECT_EQ(member_count, 1U);
 }
 
-TEST(DataObjectModelAnalysisTest, RebuildBondGroupEntriesFromSelectionTracksOnlySelectedBonds)
-{
-    auto model{ data_test::MakeModelWithBond() };
-    auto * bond{ model->GetBondList().at(0).get() };
-    auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
-    const auto & simple_class_key{ ChemicalDataHelper::GetSimpleBondClassKey() };
-
-    model->SelectAllBonds(false);
-    analysis_data.EnsureBondGroupEntry("stale_bond_class").AddMember(888, *bond);
-    analysis_data.RebuildBondGroupEntriesFromSelection(*model);
-
-    EXPECT_EQ(analysis_data.FindBondGroupEntry("stale_bond_class"), nullptr);
-    const auto * simple_group_entry{ analysis_data.FindBondGroupEntry(simple_class_key) };
-    ASSERT_NE(simple_group_entry, nullptr);
-    size_t member_count{ 0 };
-    for (const auto group_key : simple_group_entry->CollectGroupKeys())
-    {
-        member_count += simple_group_entry->GetMemberCount(group_key);
-    }
-    EXPECT_EQ(member_count, 0U);
-
-    model->SetBondSelected(
-        bond->GetAtomSerialID1(),
-        bond->GetAtomSerialID2(),
-        true);
-    analysis_data.RebuildBondGroupEntriesFromSelection(*model);
-
-    simple_group_entry = analysis_data.FindBondGroupEntry(simple_class_key);
-    ASSERT_NE(simple_group_entry, nullptr);
-    member_count = 0;
-    for (const auto group_key : simple_group_entry->CollectGroupKeys())
-    {
-        member_count += simple_group_entry->GetMemberCount(group_key);
-        for (const auto * group_bond : simple_group_entry->GetMembers(group_key))
-        {
-            ASSERT_NE(group_bond, nullptr);
-            EXPECT_EQ(group_bond, bond);
-        }
-    }
-    EXPECT_EQ(member_count, 1U);
-}
-
 TEST(DataObjectModelAnalysisTest, CollectAtomGroupKeysReturnsRebuiltGroupKeySet)
 {
     auto model{ data_test::MakeModelWithBond() };
@@ -431,37 +357,16 @@ TEST(DataObjectModelAnalysisTest, CollectAtomGroupKeysReturnsRebuiltGroupKeySet)
     model->SelectAllAtoms();
     analysis_data.RebuildAtomGroupEntriesFromSelection(*model);
 
-    const auto group_keys{ analysis_data.CollectAtomGroupKeys(simple_class_key) };
     const auto * group_entry{ analysis_data.FindAtomGroupEntry(simple_class_key) };
     ASSERT_NE(group_entry, nullptr);
+    const auto group_keys{ group_entry->CollectGroupKeys() };
     EXPECT_EQ(group_keys.size(), group_entry->GroupCount());
     for (const auto & group_key : group_keys)
     {
         EXPECT_TRUE(group_entry->HasGroup(group_key));
     }
 
-    EXPECT_TRUE(analysis_data.CollectAtomGroupKeys("missing_atom_class").empty());
-}
-
-TEST(DataObjectModelAnalysisTest, CollectBondGroupKeysReturnsRebuiltGroupKeySet)
-{
-    auto model{ data_test::MakeModelWithBond() };
-    auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
-    const auto & simple_class_key{ ChemicalDataHelper::GetSimpleBondClassKey() };
-
-    model->SelectAllBonds();
-    analysis_data.RebuildBondGroupEntriesFromSelection(*model);
-
-    const auto group_keys{ analysis_data.CollectBondGroupKeys(simple_class_key) };
-    const auto * group_entry{ analysis_data.FindBondGroupEntry(simple_class_key) };
-    ASSERT_NE(group_entry, nullptr);
-    EXPECT_EQ(group_keys.size(), group_entry->GroupCount());
-    for (const auto & group_key : group_keys)
-    {
-        EXPECT_TRUE(group_entry->HasGroup(group_key));
-    }
-
-    EXPECT_TRUE(analysis_data.CollectBondGroupKeys("missing_bond_class").empty());
+    EXPECT_EQ(analysis_data.FindAtomGroupEntry("missing_atom_class"), nullptr);
 }
 
 TEST(DataObjectModelAnalysisTest, AtomGroupKeyCollectionCoversConfiguredClasses)
@@ -485,42 +390,16 @@ TEST(DataObjectModelAnalysisTest, AtomGroupKeyCollectionCoversConfiguredClasses)
     }
 }
 
-TEST(DataObjectModelAnalysisTest, BondGroupKeyCollectionCoversConfiguredClasses)
-{
-    auto model{ data_test::MakeModelWithBond() };
-    model->SelectAllBonds();
-    auto analysis{ model->EditAnalysis() };
-    analysis.RebuildBondGroupsFromSelection();
-    const auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
-    const auto analysis_view{ model->GetAnalysisView() };
-
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupBondClassCount(); i++)
-    {
-        const auto & expected_class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
-        const auto * group_entry{ analysis_data.FindBondGroupEntry(expected_class_key) };
-        const auto expected_count{ group_entry == nullptr ? 0U : group_entry->GroupCount() };
-        EXPECT_EQ(
-            analysis_view.CollectBondGroupKeys(expected_class_key).size(),
-            expected_count);
-    }
-}
-
 TEST(DataObjectModelAnalysisTest, GroupKeyCollectionsAreSafeBeforeRebuildAndEmpty)
 {
     auto model{ data_test::MakeModelWithBond() };
     model->SelectAllAtoms(false);
-    model->SelectAllBonds(false);
 
     const auto analysis_view{ model->GetAnalysisView() };
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {
         EXPECT_TRUE(
             analysis_view.CollectAtomGroupKeys(ChemicalDataHelper::GetGroupAtomClassKey(i)).empty());
-    }
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupBondClassCount(); i++)
-    {
-        EXPECT_TRUE(
-            analysis_view.CollectBondGroupKeys(ChemicalDataHelper::GetGroupBondClassKey(i)).empty());
     }
 }
 

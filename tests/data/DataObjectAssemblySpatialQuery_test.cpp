@@ -128,7 +128,6 @@ TEST(DataObjectAssemblySpatialQueryTest, AssemblyInitializesOwnersSelectionAndDe
     ASSERT_EQ(model.GetNumberOfBond(), 1);
     EXPECT_EQ(model.GetBondList().at(0).get(), bond_ptr);
     EXPECT_EQ(rg::ModelAnalysisData::OwnerOf(*model.GetAtomList().at(0)), &model);
-    EXPECT_EQ(rg::ModelAnalysisData::OwnerOf(*model.GetBondList().at(0)), &model);
     EXPECT_FLOAT_EQ(model.GetCenterOfMassPosition().at(0), 0.5f);
     const auto x_range{ model.GetModelPositionRange(0) };
     EXPECT_DOUBLE_EQ(std::get<0>(x_range), 0.0);
