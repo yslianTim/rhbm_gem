@@ -9,7 +9,6 @@
 #include <string>
 #include <tuple>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
@@ -26,7 +25,6 @@ class ModelDerivedState;
 class ModelAnalysisData;
 class ModelAnalysisEditor;
 class ModelAnalysisView;
-class ModelObjectStorage;
 struct ModelObjectParts;
 
 class ModelObject
@@ -110,7 +108,6 @@ private:
     friend class ModelDerivedState;
     friend class ModelAnalysisData;
     friend class AtomObject;
-    friend class ModelObjectStorage;
     friend ModelObject AssembleModelObject(ModelObjectParts parts);
 
     // Object graph and derived-state maintenance.
@@ -124,7 +121,6 @@ private:
     void FilterSelectionFromSymmetry(bool is_asymmetry);
 
     // Persistence hydration.
-    void RestoreAtomSelectionBulk(const std::unordered_set<int> & selected_serial_ids);
     void RestoreBondSelectionBulk(const std::set<std::pair<int, int>> & selected_serial_pairs);
 };
 

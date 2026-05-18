@@ -550,7 +550,7 @@ void ValidateCurrentSchema(rhbm_gem::SQLiteWrapper & database)
 void CreateCurrentSchema(rhbm_gem::SQLiteWrapper & database)
 {
     database.Execute(std::string(kCreateCatalogTableSql));
-    rhbm_gem::ModelObjectStorage::CreateTables(database);
+    rhbm_gem::model_storage::CreateTables(database);
     database.Execute(std::string(kCreateMapTableSql));
     SetSchemaVersion(database);
     ValidateCurrentSchema(database);
@@ -725,7 +725,7 @@ void SQLitePersistence::SaveModel(const ModelObject & model_object, const std::s
     std::lock_guard<std::mutex> lock(m_db_mutex);
     SQLiteWrapper::TransactionGuard transaction(*m_database);
     UpsertCatalogRow(*m_database, key_tag, CatalogObjectType::Model);
-    ModelObjectStorage::Save(*m_database, model_object, key_tag);
+    model_storage::Save(*m_database, model_object, key_tag);
 }
 
 void SQLitePersistence::SaveMap(const MapObject & map_object, const std::string & key_tag)
@@ -742,7 +742,7 @@ std::unique_ptr<ModelObject> SQLitePersistence::LoadModel(const std::string & ke
     SQLiteWrapper::TransactionGuard transaction(*m_database);
     RequireCatalogObjectType(
         *m_database, key_tag, CatalogObjectType::Model, "SQLitePersistence::LoadModel()");
-    return ModelObjectStorage::Load(*m_database, key_tag);
+    return model_storage::Load(*m_database, key_tag);
 }
 
 std::unique_ptr<MapObject> SQLitePersistence::LoadMap(const std::string & key_tag)

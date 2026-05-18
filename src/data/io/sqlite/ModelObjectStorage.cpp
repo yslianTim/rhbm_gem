@@ -1174,39 +1174,13 @@ void SaveAnalysis(
     }
 }
 
-} // namespace
-
-namespace rhbm_gem {
-
-void ModelObjectStorage::CreateTables(SQLiteWrapper & database)
-{
-    for (const auto create_sql : kCreateModelTableSqlList)
-    {
-        database.Execute(std::string(create_sql));
-    }
-}
-
-void ModelObjectStorage::Save(
-    SQLiteWrapper & database,
-    const ModelObject & model_obj,
+void LoadAnalysis(
+    rhbm_gem::SQLiteWrapper & database,
+    rhbm_gem::ModelObject & model_obj,
     const std::string & key_tag)
 {
-    for (const auto table_name : kModelTablesScopedByKey)
-    {
-        DeleteRowsForKey(database, std::string(table_name), key_tag);
-    }
-
-    SaveStructure(database, model_obj, key_tag);
-    SaveAnalysis(database, model_obj, key_tag);
-}
-
-void ModelObjectStorage::LoadAnalysis(
-    SQLiteWrapper & database,
-    ModelObject & model_obj,
-    const std::string & key_tag)
-{
-    ScopeTimer timer{ "ModelObjectStorage::LoadAnalysis" };
-    ModelAnalysisData::Of(model_obj).Clear();
+    ScopeTimer timer{ "model_storage::LoadAnalysis" };
+    rhbm_gem::ModelAnalysisData::Of(model_obj).Clear();
 
     auto atom_entry_map{ LoadAtomLocalPotentialEntryMap(database, key_tag) };
     std::unordered_set<int> selected_serial_ids;
@@ -1220,24 +1194,54 @@ void ModelObjectStorage::LoadAnalysis(
             continue;
         }
 
-        ModelAnalysisData::Of(model_obj).SetAtomLocalEntry(*atom_object, std::move(iter->second));
+        rhbm_gem::ModelAnalysisData::Of(model_obj).SetAtomLocalEntry(
+            *atom_object, std::move(iter->second));
         selected_serial_ids.insert(serial_id);
     }
-    model_obj.RestoreAtomSelectionBulk(selected_serial_ids);
+    model_obj.SelectAtoms([&selected_serial_ids](const rhbm_gem::AtomObject & atom)
+    {
+        return selected_serial_ids.find(atom.GetSerialID()) != selected_serial_ids.end();
+    });
 
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {
         auto class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        ModelAnalysisData::Of(model_obj).EnsureAtomGroupEntry(class_key);
+        rhbm_gem::ModelAnalysisData::Of(model_obj).EnsureAtomGroupEntry(class_key);
         LoadAtomGroupPotentialEntryList(database, model_obj, key_tag, class_key);
     }
 }
 
-std::unique_ptr<ModelObject> ModelObjectStorage::Load(
+} // namespace
+
+namespace rhbm_gem::model_storage {
+
+void CreateTables(SQLiteWrapper & database)
+{
+    for (const auto create_sql : kCreateModelTableSqlList)
+    {
+        database.Execute(std::string(create_sql));
+    }
+}
+
+void Save(
+    SQLiteWrapper & database,
+    const ModelObject & model_obj,
+    const std::string & key_tag)
+{
+    for (const auto table_name : kModelTablesScopedByKey)
+    {
+        DeleteRowsForKey(database, std::string(table_name), key_tag);
+    }
+
+    SaveStructure(database, model_obj, key_tag);
+    SaveAnalysis(database, model_obj, key_tag);
+}
+
+std::unique_ptr<ModelObject> Load(
     SQLiteWrapper & database,
     const std::string & key_tag)
 {
-    ScopeTimer timer{ "ModelObjectStorage::Load" };
+    ScopeTimer timer{ "model_storage::Load" };
     auto parts{ LoadStructure(database, key_tag) };
     auto model_object{ std::make_unique<ModelObject>(AssembleModelObject(std::move(parts))) };
     LoadModelObjectRow(database, *model_object, key_tag);
@@ -1245,4 +1249,4 @@ std::unique_ptr<ModelObject> ModelObjectStorage::Load(
     return model_object;
 }
 
-} // namespace rhbm_gem
+} // namespace rhbm_gem::model_storage
