@@ -29,11 +29,19 @@ class ModelAnalysisView;
 class ModelObjectStorage;
 struct ModelObjectParts;
 
-ModelObject AssembleModelObject(ModelObjectParts parts);
-
 class ModelObject
 {
-    std::unique_ptr<ModelObjectParts> m_parts;
+    std::vector<std::unique_ptr<AtomObject>> m_atom_list;
+    std::vector<std::unique_ptr<BondObject>> m_bond_list;
+    std::unordered_map<std::string, std::vector<std::string>> m_chain_id_list_map;
+    std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>>
+        m_chemical_component_entry_map;
+    std::unique_ptr<ComponentKeySystem> m_component_key_system{
+        std::make_unique<ComponentKeySystem>() };
+    std::unique_ptr<AtomKeySystem> m_atom_key_system{
+        std::make_unique<AtomKeySystem>() };
+    std::unique_ptr<BondKeySystem> m_bond_key_system{
+        std::make_unique<BondKeySystem>() };
     std::vector<AtomObject *> m_selected_atom_list;
     std::vector<BondObject *> m_selected_bond_list;
     std::string m_key_tag, m_pdb_id, m_emd_id;

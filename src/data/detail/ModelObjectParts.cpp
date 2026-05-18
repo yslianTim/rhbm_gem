@@ -28,7 +28,13 @@ ModelObject AssembleModelObject(ModelObjectParts parts)
     }
 
     ModelObject model;
-    model.m_parts = std::make_unique<ModelObjectParts>(std::move(parts));
+    model.m_atom_list = std::move(parts.atom_list);
+    model.m_bond_list = std::move(parts.bond_list);
+    model.m_chain_id_list_map = std::move(parts.chain_id_list_map);
+    model.m_chemical_component_entry_map = std::move(parts.chemical_component_entry_map);
+    model.m_component_key_system = std::move(parts.component_key_system);
+    model.m_atom_key_system = std::move(parts.atom_key_system);
+    model.m_bond_key_system = std::move(parts.bond_key_system);
     model.AttachOwnedObjects();
     model.InvalidateDerivedState();
     model.RebuildObjectIndex();
