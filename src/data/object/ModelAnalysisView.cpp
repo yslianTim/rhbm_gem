@@ -110,12 +110,12 @@ const LocalGaussianResult & AtomLocalPotentialView::GetGaussianResult() const
 
 const GaussianModel3D & AtomLocalPotentialView::GetEstimateOLS() const
 {
-    return RequireEntry("Local estimate OLS").GetEstimateOLS();
+    return RequireEntry("Local estimate OLS").GetGaussianResult().ols.GetModel();
 }
 
 const GaussianModel3D & AtomLocalPotentialView::GetEstimateMDPDE() const
 {
-    return RequireEntry("Local estimate MDPDE").GetEstimateMDPDE();
+    return RequireEntry("Local estimate MDPDE").GetGaussianResult().mdpde.GetModel();
 }
 
 const LocalPotentialSampleList & AtomLocalPotentialView::GetSamplingEntries() const
@@ -144,7 +144,7 @@ SeriesPointList AtomLocalPotentialView::GetBinnedDistanceResponseSeries(
 
 double AtomLocalPotentialView::GetAlphaR() const
 {
-    return RequireEntry("Local alpha-r").GetAlphaR();
+    return RequireEntry("Local alpha-r").GetGaussianResult().alpha_r;
 }
 
 std::optional<LocalPotentialAnnotation> AtomLocalPotentialView::FindAnnotation(

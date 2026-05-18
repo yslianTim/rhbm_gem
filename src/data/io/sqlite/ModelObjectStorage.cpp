@@ -935,16 +935,17 @@ void SaveAtomLocalPotentialEntryList(
 
         batch.Execute([&](rhbm_gem::SQLiteWrapper & statement_db)
         {
+            const auto & gaussian_result{ entry->GetGaussianResult() };
             statement_db.Bind<std::string>(1, key_tag);
             statement_db.Bind<int>(2, atom_object->GetSerialID());
             statement_db.Bind<int>(3, entry->GetSamplingEntryCount());
             statement_db.Bind<LocalPotentialSampleList>(
                 4, entry->GetSamplingEntries());
-            statement_db.Bind<double>(5, entry->GetEstimateOLS().GetAmplitude());
-            statement_db.Bind<double>(6, entry->GetEstimateOLS().GetWidth());
-            statement_db.Bind<double>(7, entry->GetEstimateMDPDE().GetAmplitude());
-            statement_db.Bind<double>(8, entry->GetEstimateMDPDE().GetWidth());
-            statement_db.Bind<double>(9, entry->GetAlphaR());
+            statement_db.Bind<double>(5, gaussian_result.ols.GetModel().GetAmplitude());
+            statement_db.Bind<double>(6, gaussian_result.ols.GetModel().GetWidth());
+            statement_db.Bind<double>(7, gaussian_result.mdpde.GetModel().GetAmplitude());
+            statement_db.Bind<double>(8, gaussian_result.mdpde.GetModel().GetWidth());
+            statement_db.Bind<double>(9, gaussian_result.alpha_r);
         });
     }
 }
@@ -1082,13 +1083,19 @@ std::unordered_map<int, std::unique_ptr<rhbm_gem::LocalPotentialEntry>> LoadAtom
         const auto serial_id{ database.GetColumn<int>(0) };
         entry->SetSamplingEntries(
             database.GetColumn<LocalPotentialSampleList>(2));
-        entry->SetEstimateOLS(
+        rhbm_gem::LocalGaussianResult gaussian_result;
+        gaussian_result.ols = rhbm_gem::GaussianModel3DWithUncertainty{
             rhbm_gem::GaussianModel3D{
-                database.GetColumn<double>(3), database.GetColumn<double>(4) });
-        entry->SetEstimateMDPDE(
+                database.GetColumn<double>(3), database.GetColumn<double>(4) },
+            rhbm_gem::GaussianModel3DUncertainty{}
+        };
+        gaussian_result.mdpde = rhbm_gem::GaussianModel3DWithUncertainty{
             rhbm_gem::GaussianModel3D{
-                database.GetColumn<double>(5), database.GetColumn<double>(6) });
-        entry->SetAlphaR(database.GetColumn<double>(7));
+                database.GetColumn<double>(5), database.GetColumn<double>(6) },
+            rhbm_gem::GaussianModel3DUncertainty{}
+        };
+        gaussian_result.alpha_r = database.GetColumn<double>(7);
+        entry->SetGaussianResult(gaussian_result);
         entry_map[serial_id] = std::move(entry);
     }
 
@@ -1126,17 +1133,19 @@ void LoadAtomGroupPotentialEntryList(
 
         const auto group_key{ database.GetColumn<GroupKey>(0) };
         group_entry.ReserveMembers(group_key, static_cast<size_t>(database.GetColumn<int>(1)));
-        group_entry.SetGroupStatistics(
-            group_key,
-            rhbm_gem::GaussianModel3D{
-                database.GetColumn<double>(2), database.GetColumn<double>(3) },
-            rhbm_gem::GaussianModel3D{
-                database.GetColumn<double>(4), database.GetColumn<double>(5) },
+        rhbm_gem::GroupGaussianResult group_result;
+        group_result.mean = rhbm_gem::GaussianModel3D{
+            database.GetColumn<double>(2), database.GetColumn<double>(3) };
+        group_result.mdpde = rhbm_gem::GaussianModel3D{
+            database.GetColumn<double>(4), database.GetColumn<double>(5) };
+        group_result.prior = rhbm_gem::GaussianModel3DWithUncertainty{
             rhbm_gem::GaussianModel3D{
                 database.GetColumn<double>(6), database.GetColumn<double>(7) },
             rhbm_gem::GaussianModel3DUncertainty{
-                database.GetColumn<double>(8), database.GetColumn<double>(9) },
-            database.GetColumn<double>(10));
+                database.GetColumn<double>(8), database.GetColumn<double>(9) }
+        };
+        group_result.alpha_g = database.GetColumn<double>(10);
+        group_entry.SetGaussianResult(group_key, group_result);
     }
 
     for (auto & atom : model_obj.GetSelectedAtoms())

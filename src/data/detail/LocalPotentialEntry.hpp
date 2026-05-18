@@ -23,16 +23,11 @@ public:
 
     void SetAlphaR(double value) { m_gaussian_result.alpha_r = value; }
     void SetSamplingEntries(LocalPotentialSampleList value);
-    void SetEstimateOLS(const GaussianModel3D & estimate);
-    void SetEstimateMDPDE(const GaussianModel3D & estimate);
     void SetGaussianResult(LocalGaussianResult value);
     void SetAnnotation(const std::string & key, LocalPotentialAnnotation annotation);
     void ClearTransientFitState();
 
     int GetSamplingEntryCount() const;
-    double GetAlphaR() const { return m_gaussian_result.alpha_r; }
-    const GaussianModel3D & GetEstimateOLS() const { return m_gaussian_result.ols.GetModel(); }
-    const GaussianModel3D & GetEstimateMDPDE() const { return m_gaussian_result.mdpde.GetModel(); }
     const LocalGaussianResult & GetGaussianResult() const { return m_gaussian_result; }
     LocalPotentialAnnotation * FindAnnotation(const std::string & key);
     const LocalPotentialAnnotation * FindAnnotation(const std::string & key) const;
@@ -45,8 +40,6 @@ public:
         double x_min = 0.0,
         double x_max = 1.5) const;
     double GetMapValueNearCenter() const;
-    double GetMomentZeroEstimate() const;
-    double GetMomentTwoEstimate() const;
     double CalculateQScore(int par_choice) const;
 };
 

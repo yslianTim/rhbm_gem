@@ -215,13 +215,12 @@ ModelObject::ModelObject(const ModelObject & other) :
                 auto cloned_entry{ std::make_unique<std::decay_t<decltype(entry)>>() };
                 for (const auto group_key : entry.CollectGroupKeys())
                 {
-                    cloned_entry->SetGroupStatistics(
-                        group_key,
-                        entry.GetMean(group_key),
-                        entry.GetMDPDE(group_key),
-                        entry.GetPrior(group_key),
-                        entry.GetPriorStandardDeviation(group_key),
-                        entry.GetAlphaG(group_key));
+                    GroupGaussianResult result;
+                    result.mean = entry.GetMean(group_key);
+                    result.mdpde = entry.GetMDPDE(group_key);
+                    result.prior = entry.GetPriorWithUncertainty(group_key);
+                    result.alpha_g = entry.GetAlphaG(group_key);
+                    cloned_entry->SetGaussianResult(group_key, result);
                     copy_members(entry, group_key, *cloned_entry);
                 }
                 set_entry(class_key, std::move(cloned_entry));

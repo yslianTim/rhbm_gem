@@ -108,7 +108,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisDataCanClearTransientFitStatesWit
     const auto * cleared_atom_entry{ analysis_data.FindAtomLocalEntry(*atom) };
     ASSERT_NE(cleared_atom_entry, nullptr);
     EXPECT_NE(analysis_data.FindAtomGroupEntry("atom_class"), nullptr);
-    EXPECT_DOUBLE_EQ(0.2, cleared_atom_entry->GetAlphaR());
+    EXPECT_DOUBLE_EQ(0.2, cleared_atom_entry->GetGaussianResult().alpha_r);
     EXPECT_FALSE(cleared_atom_entry->GetGaussianResult().fit_result.has_value());
 }
 
@@ -143,9 +143,9 @@ TEST(DataObjectModelAnalysisTest, LocalPotentialEntryClearTransientFitStateKeeps
 
     entry.ClearTransientFitState();
 
-    EXPECT_DOUBLE_EQ(0.4, entry.GetAlphaR());
-    EXPECT_DOUBLE_EQ(2.0, entry.GetEstimateMDPDE().GetAmplitude());
-    EXPECT_DOUBLE_EQ(0.7, entry.GetEstimateMDPDE().GetWidth());
+    EXPECT_DOUBLE_EQ(0.4, entry.GetGaussianResult().alpha_r);
+    EXPECT_DOUBLE_EQ(2.0, entry.GetGaussianResult().mdpde.GetModel().GetAmplitude());
+    EXPECT_DOUBLE_EQ(0.7, entry.GetGaussianResult().mdpde.GetModel().GetWidth());
     EXPECT_FALSE(entry.GetGaussianResult().fit_result.has_value());
 }
 
@@ -166,8 +166,8 @@ TEST(DataObjectModelAnalysisTest, LocalPotentialEntryStoresGaussianResult)
     entry.SetGaussianResult(result);
 
     EXPECT_DOUBLE_EQ(0.5, entry.GetGaussianResult().alpha_r);
-    EXPECT_DOUBLE_EQ(1.0, entry.GetEstimateOLS().GetAmplitude());
-    EXPECT_DOUBLE_EQ(1.5, entry.GetEstimateMDPDE().GetAmplitude());
+    EXPECT_DOUBLE_EQ(1.0, entry.GetGaussianResult().ols.GetModel().GetAmplitude());
+    EXPECT_DOUBLE_EQ(1.5, entry.GetGaussianResult().mdpde.GetModel().GetAmplitude());
 }
 
 TEST(DataObjectModelAnalysisTest, AtomLocalPotentialEditorCanSetAlphaR)

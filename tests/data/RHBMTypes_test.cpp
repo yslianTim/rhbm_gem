@@ -16,18 +16,29 @@ TEST(RHBMTypesTest, LocalAndGroupIntensityStayEquivalent)
     const rg::GaussianModel3DUncertainty standard_deviation{ 0.5, 0.2 };
 
     rg::LocalPotentialEntry local_entry;
-    local_entry.SetEstimateMDPDE(estimate);
+    rg::LocalGaussianResult local_result;
+    local_result.mdpde = rg::GaussianModel3DWithUncertainty{
+        estimate,
+        rg::GaussianModel3DUncertainty{}
+    };
+    local_entry.SetGaussianResult(local_result);
     local_entry.SetAnnotation(
         "component",
         rg::LocalPotentialAnnotation{
             rg::GaussianModel3DWithUncertainty{ estimate, standard_deviation }, false, 0.0 });
 
     rg::AtomGroupPotentialEntry group_entry;
-    group_entry.SetGroupStatistics(42, {}, {}, estimate, standard_deviation, 0.0);
+    rg::GroupGaussianResult group_result;
+    group_result.prior = rg::GaussianModel3DWithUncertainty{ estimate, standard_deviation };
+    group_entry.SetGaussianResult(42, group_result);
     const auto group_gaussian{ group_entry.GetPriorWithUncertainty(42) };
 
-    EXPECT_DOUBLE_EQ(local_entry.GetEstimateMDPDE().Intensity(), estimate.Intensity());
-    EXPECT_DOUBLE_EQ(local_entry.GetEstimateMDPDE().GetDisplayParameter(2), estimate.Intensity());
+    EXPECT_DOUBLE_EQ(
+        local_entry.GetGaussianResult().mdpde.GetModel().Intensity(),
+        estimate.Intensity());
+    EXPECT_DOUBLE_EQ(
+        local_entry.GetGaussianResult().mdpde.GetModel().GetDisplayParameter(2),
+        estimate.Intensity());
     EXPECT_DOUBLE_EQ(group_entry.GetPrior(42).Intensity(), estimate.Intensity());
     EXPECT_DOUBLE_EQ(group_entry.GetPrior(42).GetDisplayParameter(2), estimate.Intensity());
     EXPECT_DOUBLE_EQ(

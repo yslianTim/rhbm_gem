@@ -75,21 +75,6 @@ public:
         return GetMembers(group_key).size();
     }
 
-    void SetGroupStatistics(
-        GroupKey group_key,
-        const GaussianModel3D & mean,
-        const GaussianModel3D & mdpde,
-        const GaussianModel3D & prior,
-        const GaussianModel3DUncertainty & prior_standard_deviation,
-        double alpha_g)
-    {
-        auto & group{ EnsureGroup(group_key) };
-        group.mean = mean;
-        group.mdpde = mdpde;
-        group.prior = GaussianModel3DWithUncertainty{ prior, prior_standard_deviation };
-        group.alpha_g = alpha_g;
-    }
-
     void SetGaussianResult(GroupKey group_key, const GroupGaussianResult & result)
     {
         auto & group{ EnsureGroup(group_key) };

@@ -50,13 +50,7 @@ void ApplyAtomGroupGaussianResultToEntry(
     const std::string & class_key,
     const GroupGaussianResult & result)
 {
-    analysis_data.EnsureAtomGroupEntry(class_key).SetGroupStatistics(
-        group_key,
-        result.mean,
-        result.mdpde,
-        result.prior.GetModel(),
-        result.prior.GetStandardDeviationModel(),
-        result.alpha_g);
+    analysis_data.EnsureAtomGroupEntry(class_key).SetGaussianResult(group_key, result);
 }
 
 } // namespace

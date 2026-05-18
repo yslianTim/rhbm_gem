@@ -22,22 +22,6 @@ void LocalPotentialEntry::SetSamplingEntries(LocalPotentialSampleList value)
     m_sampling_entries = std::move(value);
 }
 
-void LocalPotentialEntry::SetEstimateOLS(const GaussianModel3D & estimate)
-{
-    m_gaussian_result.ols = GaussianModel3DWithUncertainty{
-        estimate,
-        GaussianModel3DUncertainty{}
-    };
-}
-
-void LocalPotentialEntry::SetEstimateMDPDE(const GaussianModel3D & estimate)
-{
-    m_gaussian_result.mdpde = GaussianModel3DWithUncertainty{
-        estimate,
-        GaussianModel3DUncertainty{}
-    };
-}
-
 void LocalPotentialEntry::SetGaussianResult(LocalGaussianResult value)
 {
     m_gaussian_result = std::move(value);
@@ -158,44 +142,6 @@ double LocalPotentialEntry::GetMapValueNearCenter() const
     return sum/static_cast<double>(count);
 }
 
-double LocalPotentialEntry::GetMomentZeroEstimate() const
-{
-    auto data_size{ GetSamplingEntryCount() };
-    if (data_size == 0) return 0.0;
-    auto y_sum{ 0.0 };
-    auto count{ 0 };
-    for (const auto & sample : m_sampling_entries)
-    {
-        auto y_value{ static_cast<double>(sample.response) };
-        if (y_value <= 0.0) continue;
-        if (sample.distance > 1.0f) continue;
-        y_sum += y_value;
-        count++;
-    }
-    if (count == 0) return 0.0;
-    return y_sum/static_cast<double>(count);
-}
-
-double LocalPotentialEntry::GetMomentTwoEstimate() const
-{
-    auto data_size{ GetSamplingEntryCount() };
-    if (data_size == 0) return 0.0;
-    auto m_0{ GetMomentZeroEstimate() };
-    auto y_sum{ 0.0 };
-    auto count{ 0 };
-    for (const auto & sample : m_sampling_entries)
-    {
-        auto y_value{ static_cast<double>(sample.response) };
-        if (y_value <= 0.0) continue;
-        if (sample.distance > 1.0f) continue;
-        y_sum += y_value * sample.distance * sample.distance;
-        count++;
-    }
-    if (count == 0 || m_0 == 0.0) return 0.0;
-    y_sum /= static_cast<double>(count);
-    return std::sqrt(y_sum/m_0/3.0);
-}
-
 double LocalPotentialEntry::CalculateQScore(int par_choice) const
 {
     if (m_sampling_entries.empty())
@@ -215,7 +161,7 @@ double LocalPotentialEntry::CalculateQScore(int par_choice) const
     }
     else if (par_choice == 1)
     {
-        const auto & estimate{ GetEstimateMDPDE() };
+        const auto & estimate{ m_gaussian_result.mdpde.GetModel() };
         amplitude = estimate.Intensity();
         width = estimate.GetWidth();
         intersect = 0.0;
