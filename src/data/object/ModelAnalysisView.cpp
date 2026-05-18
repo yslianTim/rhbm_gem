@@ -18,26 +18,6 @@ namespace rhbm_gem {
 
 namespace {
 
-const LocalPotentialEntry * FindResolvedLocalEntry(const LocalPotentialView & view)
-{
-    if (view.GetAtomObjectPtr() != nullptr)
-    {
-        return ModelAnalysisData::FindLocalEntry(*view.GetAtomObjectPtr());
-    }
-    if (view.GetBondObjectPtr() != nullptr)
-    {
-        return ModelAnalysisData::FindLocalEntry(*view.GetBondObjectPtr());
-    }
-    return nullptr;
-}
-
-const LocalPotentialEntry & RequireResolvedLocalEntry(
-    const LocalPotentialView & view,
-    const char * context)
-{
-    return ModelAnalysisData::RequireLocalEntry(FindResolvedLocalEntry(view), context);
-}
-
 template <typename EntryT>
 std::vector<GroupKey> CollectGroupKeys(const EntryT * entry)
 {
@@ -57,35 +37,20 @@ const EntryT * RequireGroupEntry(
 }
 
 template <typename ClassKeyFn, typename GroupCountFn>
-GroupingSummary BuildGroupingSummary(
-    std::string title,
+std::string DescribeGrouping(
+    const std::string & title,
     size_t class_count,
     ClassKeyFn get_class_key,
     GroupCountFn get_group_count)
 {
-    GroupingSummary summary;
-    summary.title = std::move(title);
-    summary.items.reserve(class_count);
+    std::ostringstream oss;
+    oss << title;
     for (size_t i = 0; i < class_count; i++)
     {
         const auto & class_key{ get_class_key(i) };
-        summary.items.push_back(GroupingSummaryItem{
-            class_key,
-            get_group_count(class_key)
-        });
-    }
-    return summary;
-}
-
-std::string DescribeGroupingSummary(const GroupingSummary & summary)
-{
-    std::ostringstream oss;
-    oss << summary.title;
-    for (const auto & item : summary.items)
-    {
         oss << '\n'
-            << " - Class type: " << item.class_key
-            << " include " << item.group_count << " groups.";
+            << " - Class type: " << class_key
+            << " include " << get_group_count(class_key) << " groups.";
     }
     return oss.str();
 }
@@ -115,50 +80,68 @@ LocalPotentialView LocalPotentialView::For(const BondObject & bond_object)
 LocalPotentialView LocalPotentialView::RequireFor(const AtomObject & atom_object)
 {
     auto view{ LocalPotentialView::For(atom_object) };
-    (void)RequireResolvedLocalEntry(view, "Atom local analysis");
+    (void)view.RequireEntry("Atom local analysis");
     return view;
 }
 
 LocalPotentialView LocalPotentialView::RequireFor(const BondObject & bond_object)
 {
     auto view{ LocalPotentialView::For(bond_object) };
-    (void)RequireResolvedLocalEntry(view, "Bond local analysis");
+    (void)view.RequireEntry("Bond local analysis");
     return view;
 }
 
 bool LocalPotentialView::IsAvailable() const
 {
-    return FindResolvedLocalEntry(*this) != nullptr;
+    return FindEntry() != nullptr;
+}
+
+const LocalPotentialEntry * LocalPotentialView::FindEntry() const
+{
+    if (m_atom_object != nullptr)
+    {
+        return ModelAnalysisData::FindLocalEntry(*m_atom_object);
+    }
+    if (m_bond_object != nullptr)
+    {
+        return ModelAnalysisData::FindLocalEntry(*m_bond_object);
+    }
+    return nullptr;
+}
+
+const LocalPotentialEntry & LocalPotentialView::RequireEntry(const char * context) const
+{
+    return ModelAnalysisData::RequireLocalEntry(FindEntry(), context);
 }
 
 const LocalGaussianResult & LocalPotentialView::GetGaussianResult() const
 {
-    return RequireResolvedLocalEntry(*this, "Local Gaussian result").GetGaussianResult();
+    return RequireEntry("Local Gaussian result").GetGaussianResult();
 }
 
 const GaussianModel3D & LocalPotentialView::GetEstimateOLS() const
 {
-    return RequireResolvedLocalEntry(*this, "Local estimate OLS").GetEstimateOLS();
+    return RequireEntry("Local estimate OLS").GetEstimateOLS();
 }
 
 const GaussianModel3D & LocalPotentialView::GetEstimateMDPDE() const
 {
-    return RequireResolvedLocalEntry(*this, "Local estimate MDPDE").GetEstimateMDPDE();
+    return RequireEntry("Local estimate MDPDE").GetEstimateMDPDE();
 }
 
 const LocalPotentialSampleList & LocalPotentialView::GetSamplingEntries() const
 {
-    return RequireResolvedLocalEntry(*this, "Local sampling entries").GetSamplingEntries();
+    return RequireEntry("Local sampling entries").GetSamplingEntries();
 }
 
 std::tuple<float, float> LocalPotentialView::GetDistanceRange(double margin_rate) const
 {
-    return RequireResolvedLocalEntry(*this, "Local distance range").GetDistanceRange(margin_rate);
+    return RequireEntry("Local distance range").GetDistanceRange(margin_rate);
 }
 
 std::tuple<float, float> LocalPotentialView::GetResponseRange(double margin_rate) const
 {
-    return RequireResolvedLocalEntry(*this, "Local response range").GetResponseRange(margin_rate);
+    return RequireEntry("Local response range").GetResponseRange(margin_rate);
 }
 
 SeriesPointList LocalPotentialView::GetBinnedDistanceResponseSeries(
@@ -166,24 +149,19 @@ SeriesPointList LocalPotentialView::GetBinnedDistanceResponseSeries(
     double x_min,
     double x_max) const
 {
-    return RequireResolvedLocalEntry(*this, "Local binned distance-response series")
+    return RequireEntry("Local binned distance-response series")
         .GetBinnedDistanceResponseSeries(bin_size, x_min, x_max);
-}
-
-int LocalPotentialView::GetSamplingEntryCount() const
-{
-    return RequireResolvedLocalEntry(*this, "Local sampling-entry count").GetSamplingEntryCount();
 }
 
 double LocalPotentialView::GetAlphaR() const
 {
-    return RequireResolvedLocalEntry(*this, "Local alpha-r").GetAlphaR();
+    return RequireEntry("Local alpha-r").GetAlphaR();
 }
 
 std::optional<LocalPotentialAnnotation> LocalPotentialView::FindAnnotation(
     const std::string & key) const
 {
-    const auto * annotation{ RequireResolvedLocalEntry(*this, "Local annotation").FindAnnotation(key) };
+    const auto * annotation{ RequireEntry("Local annotation").FindAnnotation(key) };
     if (annotation == nullptr)
     {
         return std::nullopt;
@@ -197,32 +175,17 @@ std::optional<LocalPotentialAnnotation> LocalPotentialView::FindAnnotation(
 
 double LocalPotentialView::GetMapValueNearCenter() const
 {
-    return RequireResolvedLocalEntry(*this, "Local center map value").GetMapValueNearCenter();
-}
-
-double LocalPotentialView::GetMomentZeroEstimate() const
-{
-    return RequireResolvedLocalEntry(*this, "Local moment-zero estimate").GetMomentZeroEstimate();
-}
-
-double LocalPotentialView::GetMomentTwoEstimate() const
-{
-    return RequireResolvedLocalEntry(*this, "Local moment-two estimate").GetMomentTwoEstimate();
+    return RequireEntry("Local center map value").GetMapValueNearCenter();
 }
 
 double LocalPotentialView::CalculateQScore(int par_choice) const
 {
-    return RequireResolvedLocalEntry(*this, "Local q-score").CalculateQScore(par_choice);
+    return RequireEntry("Local q-score").CalculateQScore(par_choice);
 }
 
 ModelAnalysisView::ModelAnalysisView(const ModelObject & model_object) :
     m_model_object(model_object)
 {
-}
-
-ModelAnalysisView ModelAnalysisView::Of(const ModelObject & model_object)
-{
-    return ModelAnalysisView(model_object);
 }
 
 bool ModelAnalysisView::HasGroupedAnalysisData() const
@@ -231,9 +194,9 @@ bool ModelAnalysisView::HasGroupedAnalysisData() const
     return !analysis_data.AtomGroupEntries().empty() || !analysis_data.BondGroupEntries().empty();
 }
 
-GroupingSummary ModelAnalysisView::CollectAtomGroupingSummary() const
+std::string ModelAnalysisView::DescribeAtomGrouping() const
 {
-    return BuildGroupingSummary(
+    return DescribeGrouping(
         "Atom Grouping Summary:",
         ChemicalDataHelper::GetGroupAtomClassCount(),
         ChemicalDataHelper::GetGroupAtomClassKey,
@@ -241,28 +204,6 @@ GroupingSummary ModelAnalysisView::CollectAtomGroupingSummary() const
         {
             return CollectAtomGroupKeys(class_key).size();
         });
-}
-
-GroupingSummary ModelAnalysisView::CollectBondGroupingSummary() const
-{
-    return BuildGroupingSummary(
-        "Bond Classification Summary:",
-        ChemicalDataHelper::GetGroupBondClassCount(),
-        ChemicalDataHelper::GetGroupBondClassKey,
-        [this](const std::string & class_key)
-        {
-            return CollectBondGroupKeys(class_key).size();
-        });
-}
-
-std::string ModelAnalysisView::DescribeAtomGrouping() const
-{
-    return DescribeGroupingSummary(CollectAtomGroupingSummary());
-}
-
-std::string ModelAnalysisView::DescribeBondGrouping() const
-{
-    return DescribeGroupingSummary(CollectBondGroupingSummary());
 }
 
 double ModelAnalysisView::GetAtomGausEstimateMinimum(int par_id, Element element) const

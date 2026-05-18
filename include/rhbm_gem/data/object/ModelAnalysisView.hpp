@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstddef>
 #include <optional>
 #include <string>
 #include <tuple>
@@ -16,19 +15,8 @@ namespace rhbm_gem {
 
 class AtomObject;
 class BondObject;
+class LocalPotentialEntry;
 class ModelObject;
-
-struct GroupingSummaryItem
-{
-    std::string class_key{};
-    size_t group_count{ 0 };
-};
-
-struct GroupingSummary
-{
-    std::string title{};
-    std::vector<GroupingSummaryItem> items{};
-};
 
 class LocalPotentialView
 {
@@ -52,19 +40,16 @@ public:
         int bin_size = 15,
         double x_min = 0.0,
         double x_max = 1.5) const;
-    int GetSamplingEntryCount() const;
     double GetAlphaR() const;
     std::optional<LocalPotentialAnnotation> FindAnnotation(const std::string & key) const;
     double GetMapValueNearCenter() const;
-    double GetMomentZeroEstimate() const;
-    double GetMomentTwoEstimate() const;
     double CalculateQScore(int par_choice) const;
-    const AtomObject * GetAtomObjectPtr() const { return m_atom_object; }
-    const BondObject * GetBondObjectPtr() const { return m_bond_object; }
 
 private:
     explicit LocalPotentialView(const AtomObject * atom_object);
     explicit LocalPotentialView(const BondObject * bond_object);
+    const LocalPotentialEntry * FindEntry() const;
+    const LocalPotentialEntry & RequireEntry(const char * context) const;
 
 };
 
@@ -74,12 +59,8 @@ class ModelAnalysisView
 
 public:
     explicit ModelAnalysisView(const ModelObject & model_object);
-    static ModelAnalysisView Of(const ModelObject & model_object);
     bool HasGroupedAnalysisData() const;
-    GroupingSummary CollectAtomGroupingSummary() const;
-    GroupingSummary CollectBondGroupingSummary() const;
     std::string DescribeAtomGrouping() const;
-    std::string DescribeBondGrouping() const;
     double GetAtomGausEstimateMinimum(int par_id, Element element) const;
     double GetBondGausEstimateMinimum(int par_id) const;
     bool HasAtomGroup(GroupKey group_key, const std::string & class_key, bool verbose=false) const;

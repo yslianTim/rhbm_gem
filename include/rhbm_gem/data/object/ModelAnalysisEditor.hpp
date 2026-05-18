@@ -24,7 +24,6 @@ public:
     void SetSamplingEntries(LocalPotentialSampleList value);
     void SetGaussianResult(LocalGaussianResult value);
     void SetAlphaR(double value);
-    void SetAnnotation(const std::string & key, const LocalPotentialAnnotation & value);
 
 private:
     explicit LocalPotentialEditor(AtomObject * atom_object);
@@ -41,7 +40,6 @@ class ModelAnalysisEditor
 
 public:
     explicit ModelAnalysisEditor(ModelObject & model_object);
-    static ModelAnalysisEditor Of(ModelObject & model_object);
     void Clear();
     void ClearTransientFitStates();
     LocalPotentialEditor EnsureAtomLocalPotential(const AtomObject & atom_object);

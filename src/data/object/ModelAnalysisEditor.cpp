@@ -123,21 +123,9 @@ void LocalPotentialEditor::SetAlphaR(double value)
     EnsureEntry().SetAlphaR(value);
 }
 
-void LocalPotentialEditor::SetAnnotation(
-    const std::string & key,
-    const LocalPotentialAnnotation & value)
-{
-    EnsureEntry().SetAnnotation(key, value);
-}
-
 ModelAnalysisEditor::ModelAnalysisEditor(ModelObject & model_object) :
     m_model_object{ model_object }
 {
-}
-
-ModelAnalysisEditor ModelAnalysisEditor::Of(ModelObject & model_object)
-{
-    return ModelAnalysisEditor(model_object);
 }
 
 void ModelAnalysisEditor::Clear()
