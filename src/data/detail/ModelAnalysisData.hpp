@@ -30,14 +30,6 @@ public:
     static ModelAnalysisData & Of(ModelObject & model_object);
     static const ModelAnalysisData & Of(const ModelObject & model_object);
 
-    static ModelObject * OwnerOf(const AtomObject & atom_object);
-
-    static const LocalPotentialEntry * FindAtomLocalEntryFor(const AtomObject & atom_object);
-    static const LocalPotentialEntry & RequireAtomLocalEntry(
-        const LocalPotentialEntry * entry,
-        const char * context);
-    static const LocalPotentialEntry & RequireAtomLocalEntry(const AtomObject & atom_object);
-
     void Clear();
     void ClearTransientFitStates();
     void RebuildAtomGroupEntriesFromSelection(const ModelObject & model_object);

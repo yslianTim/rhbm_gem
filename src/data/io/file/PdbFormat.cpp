@@ -1,12 +1,12 @@
 #define _CRT_SECURE_NO_WARNINGS // To disable deprecation warnings for sscanf
 #include "PdbFormat.hpp"
-#include "data/detail/LocalPotentialEntry.hpp"
-#include <rhbm_gem/data/object/AtomObject.hpp>
-#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
-#include "data/detail/ModelAnalysisData.hpp"
-#include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/utils/domain/StringHelper.hpp>
+
 #include "ModelImportState.hpp"
+#include <rhbm_gem/data/object/AtomObject.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
+#include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
+#include <rhbm_gem/utils/domain/StringHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <algorithm>
@@ -127,9 +127,12 @@ void PdbFormat::WriteModel(const ModelObject& model_object, std::ostream& stream
         const auto position{atom->GetPosition()};
         const auto occupancy{atom->GetOccupancy()};
         float b_factor{atom->GetTemperature()};
-        if (ModelAnalysisData::FindAtomLocalEntryFor(*atom) != nullptr) {
+        if (AtomLocalPotentialView::For(*atom).IsAvailable())
+        {
             b_factor = static_cast<float>(
-                ModelAnalysisData::RequireAtomLocalEntry(*atom).GetEstimateMDPDE().GetDisplayParameter(par));
+                AtomLocalPotentialView::RequireFor(*atom)
+                    .GetEstimateMDPDE()
+                    .GetDisplayParameter(par));
         }
 
         char line[128];

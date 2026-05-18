@@ -35,6 +35,17 @@ const EntryT * RequireGroupEntry(
     return entry;
 }
 
+const LocalPotentialEntry & RequireLocalEntry(
+    const LocalPotentialEntry * entry,
+    const char * context)
+{
+    if (entry == nullptr)
+    {
+        throw std::runtime_error(std::string(context) + " is not available.");
+    }
+    return *entry;
+}
+
 template <typename ClassKeyFn, typename GroupCountFn>
 std::string DescribeGrouping(
     const std::string & title,
@@ -80,16 +91,16 @@ bool AtomLocalPotentialView::IsAvailable() const
 
 const LocalPotentialEntry * AtomLocalPotentialView::FindEntry() const
 {
-    if (m_atom_object != nullptr)
+    if (m_atom_object != nullptr && m_atom_object->m_owner_model != nullptr)
     {
-        return ModelAnalysisData::FindAtomLocalEntryFor(*m_atom_object);
+        return ModelAnalysisData::Of(*m_atom_object->m_owner_model).FindAtomLocalEntry(*m_atom_object);
     }
     return nullptr;
 }
 
 const LocalPotentialEntry & AtomLocalPotentialView::RequireEntry(const char * context) const
 {
-    return ModelAnalysisData::RequireAtomLocalEntry(FindEntry(), context);
+    return RequireLocalEntry(FindEntry(), context);
 }
 
 const LocalGaussianResult & AtomLocalPotentialView::GetGaussianResult() const

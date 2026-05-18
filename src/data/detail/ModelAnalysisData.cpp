@@ -7,13 +7,11 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 
-#include <stdexcept>
 #include <string>
 
 namespace rhbm_gem {
 
 ModelAnalysisData::ModelAnalysisData() = default;
-
 ModelAnalysisData::~ModelAnalysisData() = default;
 
 ModelAnalysisData & ModelAnalysisData::Of(ModelObject & model_object)
@@ -24,33 +22,6 @@ ModelAnalysisData & ModelAnalysisData::Of(ModelObject & model_object)
 const ModelAnalysisData & ModelAnalysisData::Of(const ModelObject & model_object)
 {
     return *model_object.m_analysis_data;
-}
-
-ModelObject * ModelAnalysisData::OwnerOf(const AtomObject & atom_object)
-{
-    return atom_object.m_owner_model;
-}
-
-const LocalPotentialEntry * ModelAnalysisData::FindAtomLocalEntryFor(const AtomObject & atom_object)
-{
-    auto * owner{ OwnerOf(atom_object) };
-    return owner == nullptr ? nullptr : Of(*owner).FindAtomLocalEntry(atom_object);
-}
-
-const LocalPotentialEntry & ModelAnalysisData::RequireAtomLocalEntry(
-    const LocalPotentialEntry * entry,
-    const char * context)
-{
-    if (entry == nullptr)
-    {
-        throw std::runtime_error(std::string(context) + " is not available.");
-    }
-    return *entry;
-}
-
-const LocalPotentialEntry & ModelAnalysisData::RequireAtomLocalEntry(const AtomObject & atom_object)
-{
-    return RequireAtomLocalEntry(FindAtomLocalEntryFor(atom_object), "Atom local entry");
 }
 
 void ModelAnalysisData::Clear()

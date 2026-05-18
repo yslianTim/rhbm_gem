@@ -12,6 +12,7 @@
 namespace rhbm_gem {
 
 class AtomObject;
+class AtomLocalPotentialView;
 class ModelAnalysisData;
 class ModelObject;
 
@@ -85,7 +86,7 @@ public:
     std::vector<AtomObject *> FindNeighborAtoms(double radius, bool include_self = false) const;
 
 private:
-    friend class ModelAnalysisData;
+    friend class AtomLocalPotentialView;
     friend class ModelObject;
 
     void SetSelectedFlag(bool value) { m_is_selected = value; }

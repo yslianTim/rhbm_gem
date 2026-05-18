@@ -35,7 +35,7 @@ TEST(DataObjectModelAnalysisTest, SelectedModelEntriesCanBeInitializedForTypedWo
     for (const auto * atom : model->GetSelectedAtoms())
     {
         ASSERT_NE(atom, nullptr);
-        EXPECT_NE(rg::ModelAnalysisData::FindAtomLocalEntryFor(*atom), nullptr);
+        EXPECT_TRUE(rg::AtomLocalPotentialView::For(*atom).IsAvailable());
     }
 }
 
@@ -78,7 +78,7 @@ TEST(DataObjectModelAnalysisTest, ModelSelectionAndLocalEntriesRemainDirectlyQue
     std::vector<rg::AtomObject *> require_entry_atoms;
     for (auto & atom : model->GetAtomList())
     {
-        if (rg::ModelAnalysisData::FindAtomLocalEntryFor(*atom) != nullptr)
+        if (rg::AtomLocalPotentialView::For(*atom).IsAvailable())
         {
             require_entry_atoms.emplace_back(atom.get());
         }

@@ -1,11 +1,10 @@
 #include "CifFormat.hpp"
 
 #include "ModelImportState.hpp"
-#include "data/detail/LocalPotentialEntry.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
-#include "data/detail/ModelAnalysisData.hpp"
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/ComponentHelper.hpp>
@@ -1582,9 +1581,8 @@ void WriteAtomSiteBlock(
     const int model_number{1};
     for (const auto& atom_ptr : model_object.GetAtomList()) {
         const AtomObject* atom{atom_ptr.get()};
-        if (ModelAnalysisData::FindAtomLocalEntryFor(*atom) == nullptr)
-            continue;
-        const auto & model_entry{ModelAnalysisData::RequireAtomLocalEntry(*atom)};
+        if (!AtomLocalPotentialView::For(*atom).IsAvailable()) continue;
+        const auto model_entry{AtomLocalPotentialView::RequireFor(*atom)};
         auto gaus_estimate{model_entry.GetEstimateMDPDE().GetDisplayParameter(model_par)};
         auto position{atom->GetPosition()};
         WriteAtomSiteBlockEntry(
