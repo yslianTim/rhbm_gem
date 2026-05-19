@@ -89,6 +89,8 @@ struct AtomNeighborhoodScenario
     double summary_radius_max{ 1.0 };
     int replica_size{ 1 };
     std::optional<std::uint32_t> random_seed{};
+    std::vector<double> requested_alpha_r_list{};
+    bool alpha_training{ true };
 };
 
 RHBMBetaTestInput BuildBetaTestInput(

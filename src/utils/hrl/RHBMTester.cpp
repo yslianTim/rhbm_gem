@@ -115,7 +115,8 @@ BetaMDPDETestBias RunBetaMDPDETest(
         trained_alpha_list.assign(static_cast<size_t>(replica_size), 0.0);
     }
 
-    const gaussian_estimator::FitOptions estimator_options;
+    gaussian_estimator::FitOptions estimator_options;
+    estimator_options.local_fit_model = LocalGaussianFitModel::LogQuadratic;
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(thread_size)

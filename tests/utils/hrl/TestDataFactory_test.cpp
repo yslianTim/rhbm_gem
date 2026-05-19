@@ -300,7 +300,9 @@ TEST(TestDataFactoryTest, BuildAtomNeighborhoodTestInputProvidesPairedDatasetsAn
         0.0,
         4.0,
         2,
-        11
+        11,
+        { 0.25 },
+        false
     } };
 
     const auto input{ tdf::BuildAtomNeighborhoodTestInput(scenario) };
@@ -312,8 +314,10 @@ TEST(TestDataFactoryTest, BuildAtomNeighborhoodTestInputProvidesPairedDatasetsAn
     ASSERT_EQ(input.cut_input.replica_sampling_entries.size(), 2u);
     EXPECT_TRUE(input.no_cut_input.gaus_true.ToVector().isApprox(MakeVector({ 1.0, 0.5, 0.0 })));
     EXPECT_TRUE(input.cut_input.gaus_true.ToVector().isApprox(MakeVector({ 1.0, 0.5, 0.0 })));
-    EXPECT_TRUE(input.no_cut_input.alpha_training);
-    EXPECT_TRUE(input.cut_input.alpha_training);
+    EXPECT_EQ(input.no_cut_input.requested_alpha_r_list, std::vector<double>{ 0.25 });
+    EXPECT_EQ(input.cut_input.requested_alpha_r_list, std::vector<double>{ 0.25 });
+    EXPECT_FALSE(input.no_cut_input.alpha_training);
+    EXPECT_FALSE(input.cut_input.alpha_training);
     ASSERT_EQ(input.sampling_summaries.size(), 1u);
     ASSERT_FALSE(input.sampling_summaries.front().empty());
     for (const auto & sample : input.sampling_summaries.front())

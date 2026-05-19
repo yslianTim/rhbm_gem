@@ -7,6 +7,7 @@
 #include <rhbm_gem/utils/hrl/RHBMTester.hpp>
 
 #include <iomanip>
+#include <stdexcept>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -76,6 +77,32 @@ test_data_factory::TestDataBuildOptions BuildTestDataOptions(const RHBMTestReque
     };
 }
 
+const rhbm_tester::BiasStatistics & SelectBenchmarkMdpdeBias(
+    const rhbm_tester::BetaMDPDETestBias & bias)
+{
+    if (bias.mdpde.trained_alpha.has_value())
+    {
+        return bias.mdpde.trained_alpha.value();
+    }
+    if (!bias.mdpde.requested_alpha.empty())
+    {
+        return bias.mdpde.requested_alpha.front();
+    }
+    throw std::invalid_argument(
+        "Benchmark MDPDE output requires trained alpha or at least one requested alpha.");
+}
+
+double SelectBenchmarkAlphaR(
+    const rhbm_tester::BetaMDPDETestBias & bias,
+    double requested_alpha_r)
+{
+    if (bias.mdpde.trained_alpha_average.has_value())
+    {
+        return bias.mdpde.trained_alpha_average.value();
+    }
+    return requested_alpha_r;
+}
+
 } // namespace
 
 void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
@@ -119,6 +146,7 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
         base_scenario.summary_radius_min = 0.0;
         base_scenario.summary_radius_max = 4.0;
         base_scenario.replica_size = 10;
+        base_scenario.requested_alpha_r_list = { request.alpha_r };
 
         const auto test_input{
             test_data_factory::BuildAtomNeighborhoodTestInput(base_scenario, test_data_options)
@@ -135,17 +163,19 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
             test_input.no_cut_input.replica_datasets.front(),
             test_input.cut_input.replica_datasets.front());
 
+        const auto & no_cut_mdpde_bias{ SelectBenchmarkMdpdeBias(no_cut_result) };
+        const auto & cut_mdpde_bias{ SelectBenchmarkMdpdeBias(cut_result) };
         std::ostringstream stream;
         stream  << " OLS   (No Cut): " << std::setprecision(3) << std::fixed
                 << no_cut_result.ols.mean(0) << " , "
                 << no_cut_result.ols.mean(1)
                 << " , MDPDE (No Cut): "
-                << no_cut_result.mdpde.trained_alpha.value().mean(0) << " , "
-                << no_cut_result.mdpde.trained_alpha.value().mean(1)
+                << no_cut_mdpde_bias.mean(0) << " , "
+                << no_cut_mdpde_bias.mean(1)
                 << " , MDPDE (Cut):    "
-                << cut_result.mdpde.trained_alpha.value().mean(0) << " , "
-                << cut_result.mdpde.trained_alpha.value().mean(1)
-                << " (Alpha-R = " << cut_result.mdpde.trained_alpha_average.value() << ")";
+                << cut_mdpde_bias.mean(0) << " , "
+                << cut_mdpde_bias.mean(1)
+                << " (Alpha-R = " << SelectBenchmarkAlphaR(cut_result, request.alpha_r) << ")";
         Logger::Log(LogLevel::Info, stream.str());
 
         const auto neighbor_type_value{ static_cast<double>(neighbor_type) };
@@ -156,11 +186,11 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
         AppendBiasCurvePoint(
             panel.curves.at(1),
             neighbor_type_value,
-            no_cut_result.mdpde.trained_alpha.value());
+            no_cut_mdpde_bias);
         AppendBiasCurvePoint(
             panel.curves.at(2),
             neighbor_type_value,
-            cut_result.mdpde.trained_alpha.value());
+            cut_mdpde_bias);
         
     }
     plot_request.panels.emplace_back(std::move(panel));

@@ -511,9 +511,11 @@ RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
 
     RHBMNeighborhoodTestInput input;
     input.no_cut_input.gaus_true = scenario.gaus_true;
-    input.no_cut_input.alpha_training = true;
+    input.no_cut_input.requested_alpha_r_list = scenario.requested_alpha_r_list;
+    input.no_cut_input.alpha_training = scenario.alpha_training;
     input.cut_input.gaus_true = scenario.gaus_true;
-    input.cut_input.alpha_training = true;
+    input.cut_input.requested_alpha_r_list = scenario.requested_alpha_r_list;
+    input.cut_input.alpha_training = scenario.alpha_training;
     input.no_cut_input.replica_sampling_entries.reserve(static_cast<size_t>(scenario.replica_size));
     input.cut_input.replica_sampling_entries.reserve(static_cast<size_t>(scenario.replica_size));
     input.no_cut_input.replica_datasets.reserve(static_cast<size_t>(scenario.replica_size));
