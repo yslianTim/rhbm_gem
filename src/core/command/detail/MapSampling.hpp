@@ -135,7 +135,7 @@ inline LocalPotentialSampleList SampleAtomMapValues(
     SphereSamplingProfileChoice sampling_profile_choice)
 {
     constexpr unsigned int kAtomSamplingSize{ 50 };
-    constexpr double kRejectAngle{ 15.0 };
+    constexpr double kRejectAngle{ 0.0 };
     constexpr double kNeighborSearchRadius{ 2.0 };
 
     SphereSampler sampler;

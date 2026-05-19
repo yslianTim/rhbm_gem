@@ -261,34 +261,45 @@ void RunLocalPotentialFitting(
     }
 
     // Iterate
-    const auto fitted_gaussian_snapshot{ BuildFittedGaussianSnapshot(atom_list) };
-    atom_count = 0;
+    std::vector<LocalPotentialSampleList> updated_sample_entries_list(selected_atom_size);
+    for (int iter = 0; iter < 10; iter++)
+    {
+        Logger::Log(LogLevel::Info, "Run Local atom fitting iteration " + std::to_string(iter + 1));
+        const auto fitted_gaussian_snapshot{ BuildFittedGaussianSnapshot(atom_list) };
+        atom_count = 0;
 #ifdef USE_OPENMP
-    #pragma omp parallel for num_threads(options.thread_size)
+        #pragma omp parallel for num_threads(options.thread_size)
 #endif
+        for (size_t i = 0; i < selected_atom_size; i++)
+        {
+            const auto & atom{ *atom_list[i] };
+            const auto local_view{ AtomLocalPotentialView::RequireFor(atom) };
+            auto updated_sample_entries{
+                UpdateSampleListWithFittedGaussian(atom, fitted_gaussian_snapshot)
+            };
+            const auto result{
+                gaussian_estimator::EstimateLocalGaussian(
+                    updated_sample_entries,
+                    local_view.GetAlphaR(),
+                    options)
+            };
+
+            updated_sample_entries_list[i] = std::move(updated_sample_entries);
+            local_editor_list[i].SetGaussianResult(result);
+
+#ifdef USE_OPENMP
+            #pragma omp critical
+#endif
+            {
+                atom_count++;
+                Logger::ProgressPercent(atom_count, selected_atom_size);
+            }
+        }
+    }
+
     for (size_t i = 0; i < selected_atom_size; i++)
     {
-        const auto & atom{ *atom_list[i] };
-        const auto local_view{ AtomLocalPotentialView::RequireFor(atom) };
-        auto updated_sample_entries{
-            UpdateSampleListWithFittedGaussian(atom, fitted_gaussian_snapshot)
-        };
-        const auto result{
-            gaussian_estimator::EstimateLocalGaussian(
-                updated_sample_entries,
-                local_view.GetAlphaR(),
-                options)
-        };
-
-        local_editor_list[i].SetGaussianResult(result);
-
-#ifdef USE_OPENMP
-        #pragma omp critical
-#endif
-        {
-            atom_count++;
-            Logger::ProgressPercent(atom_count, selected_atom_size);
-        }
+        local_editor_list[i].SetSamplingEntries(std::move(updated_sample_entries_list[i]));
     }
 }
 
