@@ -6,6 +6,7 @@
 
 #include <Eigen/Dense>
 
+#include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
@@ -25,6 +26,7 @@ struct RHBMBetaTestInput
     std::vector<RHBMMemberDataset> replica_datasets;
     std::vector<double> requested_alpha_r_list;
     bool alpha_training{ true };
+    LocalGaussianFitModel local_fit_model{ LocalGaussianFitModel::LogQuadratic };
 };
 
 struct RHBMMuTestInput
@@ -59,6 +61,7 @@ struct BetaScenario
     std::optional<std::uint32_t> random_seed{};
     std::vector<double> requested_alpha_r_list{};
     bool alpha_training{ true };
+    LocalGaussianFitModel local_fit_model{ LocalGaussianFitModel::LogQuadratic };
 };
 
 struct MuScenario
@@ -91,6 +94,7 @@ struct AtomNeighborhoodScenario
     std::optional<std::uint32_t> random_seed{};
     std::vector<double> requested_alpha_r_list{};
     bool alpha_training{ true };
+    LocalGaussianFitModel local_fit_model{ LocalGaussianFitModel::LogQuadratic };
 };
 
 RHBMBetaTestInput BuildBetaTestInput(

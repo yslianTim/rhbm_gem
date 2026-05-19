@@ -147,6 +147,8 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
         base_scenario.summary_radius_max = 4.0;
         base_scenario.replica_size = 10;
         base_scenario.requested_alpha_r_list = { request.alpha_r };
+        base_scenario.alpha_training = true;
+        base_scenario.local_fit_model = LocalGaussianFitModel::LogQuadratic;
 
         const auto test_input{
             test_data_factory::BuildAtomNeighborhoodTestInput(base_scenario, test_data_options)

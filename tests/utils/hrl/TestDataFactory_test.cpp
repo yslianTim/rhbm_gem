@@ -202,6 +202,49 @@ TEST(TestDataFactoryTest, BuildBetaTestInputChangesWhenNoisePolicyChanges)
     );
 }
 
+TEST(TestDataFactoryTest, BuildBetaTestInputUsesRealSpaceNoiseForOffsetTauGrid)
+{
+    auto noiseless_scenario{ tdf::BetaScenario{
+        rg::GaussianModel3D{ 1.0, 0.5, -0.1 },
+        8,
+        0.0,
+        0.0,
+        1,
+        42
+    } };
+    auto log_noise_scenario{ noiseless_scenario };
+    log_noise_scenario.data_error_sigma = 0.1;
+    log_noise_scenario.local_fit_model = rg::LocalGaussianFitModel::LogQuadratic;
+    auto real_noise_scenario{ log_noise_scenario };
+    real_noise_scenario.local_fit_model = rg::LocalGaussianFitModel::OffsetTauGrid;
+
+    const auto noiseless_input{ tdf::BuildBetaTestInput(noiseless_scenario) };
+    const auto log_noise_input{ tdf::BuildBetaTestInput(log_noise_scenario) };
+    const auto real_noise_input{ tdf::BuildBetaTestInput(real_noise_scenario) };
+
+    ASSERT_EQ(noiseless_input.replica_sampling_entries.size(), 1u);
+    ASSERT_EQ(log_noise_input.replica_sampling_entries.size(), 1u);
+    ASSERT_EQ(real_noise_input.replica_sampling_entries.size(), 1u);
+    ASSERT_FALSE(noiseless_input.replica_sampling_entries.front().empty());
+    ASSERT_FALSE(log_noise_input.replica_sampling_entries.front().empty());
+    ASSERT_FALSE(real_noise_input.replica_sampling_entries.front().empty());
+    EXPECT_EQ(rg::LocalGaussianFitModel::OffsetTauGrid, real_noise_input.local_fit_model);
+
+    const auto base_response{
+        static_cast<double>(noiseless_input.replica_sampling_entries.front().front().response)
+    };
+    const auto log_noise_response{
+        static_cast<double>(log_noise_input.replica_sampling_entries.front().front().response)
+    };
+    const auto real_noise_response{
+        static_cast<double>(real_noise_input.replica_sampling_entries.front().front().response)
+    };
+    const auto shared_error{ std::log(log_noise_response / base_response) };
+
+    EXPECT_NE(log_noise_response, real_noise_response);
+    EXPECT_NEAR(base_response + shared_error, real_noise_response, 1.0e-6);
+}
+
 TEST(TestDataFactoryTest, BuildBetaTestInputUsesExpectedZeroDistanceGaussianResponse)
 {
     const auto options{ tdf::TestDataBuildOptions{
@@ -318,6 +361,8 @@ TEST(TestDataFactoryTest, BuildAtomNeighborhoodTestInputProvidesPairedDatasetsAn
     EXPECT_EQ(input.cut_input.requested_alpha_r_list, std::vector<double>{ 0.25 });
     EXPECT_FALSE(input.no_cut_input.alpha_training);
     EXPECT_FALSE(input.cut_input.alpha_training);
+    EXPECT_EQ(rg::LocalGaussianFitModel::LogQuadratic, input.no_cut_input.local_fit_model);
+    EXPECT_EQ(rg::LocalGaussianFitModel::LogQuadratic, input.cut_input.local_fit_model);
     ASSERT_EQ(input.sampling_summaries.size(), 1u);
     ASSERT_FALSE(input.sampling_summaries.front().empty());
     for (const auto & sample : input.sampling_summaries.front())
@@ -359,6 +404,75 @@ TEST(TestDataFactoryTest, BuildAtomNeighborhoodTestInputProvidesPairedDatasetsAn
             input.sampling_summaries.at(i),
             repeated_input.sampling_summaries.at(i));
     }
+}
+
+TEST(TestDataFactoryTest, BuildAtomNeighborhoodTestInputUsesRealSpaceNoiseForOffsetTauGrid)
+{
+    auto noiseless_scenario{ tdf::AtomNeighborhoodScenario{
+        tdf::AtomNeighborType::O,
+        rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
+        8,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        false,
+        0.0,
+        4.0,
+        1,
+        42
+    } };
+    auto log_noise_scenario{ noiseless_scenario };
+    log_noise_scenario.data_error_sigma = 0.1;
+    log_noise_scenario.local_fit_model = rg::LocalGaussianFitModel::LogQuadratic;
+    auto real_noise_scenario{ log_noise_scenario };
+    real_noise_scenario.local_fit_model = rg::LocalGaussianFitModel::OffsetTauGrid;
+
+    const auto noiseless_input{ tdf::BuildAtomNeighborhoodTestInput(noiseless_scenario) };
+    const auto log_noise_input{ tdf::BuildAtomNeighborhoodTestInput(log_noise_scenario) };
+    const auto real_noise_input{ tdf::BuildAtomNeighborhoodTestInput(real_noise_scenario) };
+
+    ASSERT_EQ(noiseless_input.no_cut_input.replica_sampling_entries.size(), 1u);
+    ASSERT_EQ(log_noise_input.no_cut_input.replica_sampling_entries.size(), 1u);
+    ASSERT_EQ(real_noise_input.no_cut_input.replica_sampling_entries.size(), 1u);
+    ASSERT_EQ(noiseless_input.cut_input.replica_sampling_entries.size(), 1u);
+    ASSERT_EQ(log_noise_input.cut_input.replica_sampling_entries.size(), 1u);
+    ASSERT_EQ(real_noise_input.cut_input.replica_sampling_entries.size(), 1u);
+    ASSERT_FALSE(noiseless_input.no_cut_input.replica_sampling_entries.front().empty());
+    ASSERT_FALSE(log_noise_input.no_cut_input.replica_sampling_entries.front().empty());
+    ASSERT_FALSE(real_noise_input.no_cut_input.replica_sampling_entries.front().empty());
+    ASSERT_FALSE(noiseless_input.cut_input.replica_sampling_entries.front().empty());
+    ASSERT_FALSE(log_noise_input.cut_input.replica_sampling_entries.front().empty());
+    ASSERT_FALSE(real_noise_input.cut_input.replica_sampling_entries.front().empty());
+    EXPECT_EQ(
+        rg::LocalGaussianFitModel::OffsetTauGrid,
+        real_noise_input.no_cut_input.local_fit_model);
+    EXPECT_EQ(
+        rg::LocalGaussianFitModel::OffsetTauGrid,
+        real_noise_input.cut_input.local_fit_model);
+
+    const auto expect_real_space_noise{
+        [](const LocalPotentialSampleList & noiseless_samples,
+           const LocalPotentialSampleList & log_noise_samples,
+           const LocalPotentialSampleList & real_noise_samples)
+        {
+            const auto base_response{ static_cast<double>(noiseless_samples.front().response) };
+            const auto log_noise_response{ static_cast<double>(log_noise_samples.front().response) };
+            const auto real_noise_response{ static_cast<double>(real_noise_samples.front().response) };
+            const auto shared_error{ std::log(log_noise_response / base_response) };
+
+            EXPECT_NE(log_noise_response, real_noise_response);
+            EXPECT_NEAR(base_response + shared_error, real_noise_response, 1.0e-6);
+        }
+    };
+    expect_real_space_noise(
+        noiseless_input.no_cut_input.replica_sampling_entries.front(),
+        log_noise_input.no_cut_input.replica_sampling_entries.front(),
+        real_noise_input.no_cut_input.replica_sampling_entries.front());
+    expect_real_space_noise(
+        noiseless_input.cut_input.replica_sampling_entries.front(),
+        log_noise_input.cut_input.replica_sampling_entries.front(),
+        real_noise_input.cut_input.replica_sampling_entries.front());
 }
 
 TEST(TestDataFactoryTest, BuildTestInputsRejectNonPositiveGaussianWidth)

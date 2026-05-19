@@ -116,7 +116,7 @@ BetaMDPDETestBias RunBetaMDPDETest(
     }
 
     gaussian_estimator::FitOptions estimator_options;
-    estimator_options.local_fit_model = LocalGaussianFitModel::LogQuadratic;
+    estimator_options.local_fit_model = input.local_fit_model;
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(thread_size)

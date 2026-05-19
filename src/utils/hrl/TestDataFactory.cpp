@@ -12,6 +12,7 @@
 #include <cmath>
 #include <cstddef>
 #include <random>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -302,6 +303,39 @@ LocalPotentialSampleList AddLogSpaceNoise(
     return sampling_entries;
 }
 
+LocalPotentialSampleList AddRealSpaceNoise(
+    LocalPotentialSampleList sampling_entries,
+    const GaussianModel3D & model,
+    double error_sigma,
+    std::mt19937 & generator)
+{
+    std::normal_distribution<> dist_error(0.0, error_sigma * model.Intensity());
+    for (auto & sampling_entry : sampling_entries)
+    {
+        sampling_entry.response =
+            static_cast<float>(static_cast<double>(sampling_entry.response)
+                + dist_error(generator));
+    }
+    return sampling_entries;
+}
+
+LocalPotentialSampleList AddNoise(
+    LocalPotentialSampleList sampling_entries,
+    const GaussianModel3D & model,
+    double error_sigma,
+    LocalGaussianFitModel fit_model,
+    std::mt19937 & generator)
+{
+    switch (fit_model)
+    {
+    case LocalGaussianFitModel::LogQuadratic:
+        return AddLogSpaceNoise(std::move(sampling_entries), model, error_sigma, generator);
+    case LocalGaussianFitModel::OffsetTauGrid:
+        return AddRealSpaceNoise(std::move(sampling_entries), model, error_sigma, generator);
+    }
+    throw std::invalid_argument("Unsupported local Gaussian fit model for beta test noise.");
+}
+
 Eigen::MatrixXd BuildRandomGausParameters(
     int member_size,
     const Eigen::VectorXd & gaus_prior,
@@ -400,6 +434,7 @@ RHBMBetaTestInput BuildBetaTestInput(const BetaScenario & scenario, const TestDa
     input.gaus_true = scenario.gaus_true;
     input.requested_alpha_r_list = scenario.requested_alpha_r_list;
     input.alpha_training = scenario.alpha_training;
+    input.local_fit_model = scenario.local_fit_model;
     input.replica_sampling_entries.reserve(static_cast<size_t>(scenario.replica_size));
     input.replica_datasets.reserve(static_cast<size_t>(scenario.replica_size));
 
@@ -416,10 +451,11 @@ RHBMBetaTestInput BuildBetaTestInput(const BetaScenario & scenario, const TestDa
                 generator)
         };
         auto noisy_sampling_entries{
-            AddLogSpaceNoise(
+            AddNoise(
                 std::move(sampling_entries),
                 scenario.gaus_true,
                 scenario.data_error_sigma,
+                scenario.local_fit_model,
                 generator)
         };
         auto dataset{
@@ -513,9 +549,11 @@ RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
     input.no_cut_input.gaus_true = scenario.gaus_true;
     input.no_cut_input.requested_alpha_r_list = scenario.requested_alpha_r_list;
     input.no_cut_input.alpha_training = scenario.alpha_training;
+    input.no_cut_input.local_fit_model = scenario.local_fit_model;
     input.cut_input.gaus_true = scenario.gaus_true;
     input.cut_input.requested_alpha_r_list = scenario.requested_alpha_r_list;
     input.cut_input.alpha_training = scenario.alpha_training;
+    input.cut_input.local_fit_model = scenario.local_fit_model;
     input.no_cut_input.replica_sampling_entries.reserve(static_cast<size_t>(scenario.replica_size));
     input.cut_input.replica_sampling_entries.reserve(static_cast<size_t>(scenario.replica_size));
     input.no_cut_input.replica_datasets.reserve(static_cast<size_t>(scenario.replica_size));
@@ -548,15 +586,17 @@ RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
             GenerateAtomNeighborhoodSamples(
                 static_cast<size_t>(scenario.sampling_entry_size), scenario.gaus_true, cut_options)
         };
-        no_cut_sampling_entries = AddLogSpaceNoise(
+        no_cut_sampling_entries = AddNoise(
             std::move(no_cut_sampling_entries),
             scenario.gaus_true,
             scenario.data_error_sigma,
+            scenario.local_fit_model,
             generator);
-        cut_sampling_entries = AddLogSpaceNoise(
+        cut_sampling_entries = AddNoise(
             std::move(cut_sampling_entries),
             scenario.gaus_true,
             scenario.data_error_sigma,
+            scenario.local_fit_model,
             generator);
         auto no_cut_dataset{
             rhbm_helper::BuildMemberDataset(
