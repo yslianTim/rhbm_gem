@@ -135,7 +135,7 @@ inline LocalPotentialSampleList SampleAtomMapValues(
     SphereSamplingProfileChoice sampling_profile_choice)
 {
     constexpr unsigned int kAtomSamplingSize{ 50 };
-    constexpr double kRejectAngle{ 0.0 };
+    constexpr double kRejectAngle{ 15.0 };
     constexpr double kNeighborSearchRadius{ 2.0 };
 
     SphereSampler sampler;
@@ -160,8 +160,8 @@ inline LocalPotentialSampleList SampleAtomMapValues(
     auto sample_list{
         detail::BuildLocalPotentialSampleList(map_object, sampling_points, selected_indices)
     };
-    //return KeepLowestResponseDecileByDistance(std::move(sample_list));
-    return sample_list;
+    return KeepLowestResponseDecileByDistance(std::move(sample_list));
+    //return sample_list;
 }
 
 } // namespace rhbm_gem

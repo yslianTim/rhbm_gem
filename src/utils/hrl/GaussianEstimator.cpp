@@ -9,7 +9,9 @@
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <atomic>
+#include <cmath>
 #include <filesystem>
+#include <limits>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -27,6 +29,13 @@ struct AlphaStudyOptions
 {
     RHBMExecutionOptions execution_options{};
     rhbm_trainer::ProgressCallback progress_callback{};
+};
+
+struct OffsetTauFitCandidate
+{
+    double tau{ 0.0 };
+    double residual_score{ std::numeric_limits<double>::max() };
+    RHBMBetaEstimateResult fit_result{};
 };
 
 RHBMExecutionOptions MakeExecutionOptions(const FitOptions & options)
@@ -304,6 +313,41 @@ std::vector<RHBMMemberDataset> BuildMemberDatasetList(
     return dataset_list;
 }
 
+std::vector<double> BuildTauGrid(const FitOptions & options)
+{
+    numeric_validation::RequireFinitePositive(options.tau_min, "tau_min");
+    numeric_validation::RequireFinitePositive(options.tau_max, "tau_max");
+    numeric_validation::RequireFinitePositive(options.tau_step, "tau_step");
+    if (options.tau_max < options.tau_min)
+    {
+        throw std::invalid_argument("tau range must satisfy tau_min <= tau_max.");
+    }
+
+    std::vector<double> tau_grid;
+    const auto tolerance{ options.tau_step * 1.0e-9 };
+    for (double tau{ options.tau_min };
+         tau <= options.tau_max + tolerance;
+         tau += options.tau_step)
+    {
+        if (std::abs(tau - options.tau_max) <= tolerance)
+        {
+            tau = options.tau_max;
+        }
+        if (tau > options.tau_max) break;
+        tau_grid.emplace_back(tau);
+        if (tau == options.tau_max) break;
+    }
+    return tau_grid;
+}
+
+double CalculateWeightedResidualScore(
+    const RHBMMemberDataset & dataset,
+    const RHBMBetaEstimateResult & fit_result)
+{
+    const RHBMResponseVector residual{ dataset.y - dataset.X * fit_result.beta_mdpde };
+    return (residual.transpose() * fit_result.data_weight * residual)(0, 0);
+}
+
 LocalGaussianResult DecodeLocalGaussianResult(
     double alpha_r,
     const RHBMBetaEstimateResult & fit_result)
@@ -320,6 +364,31 @@ LocalGaussianResult DecodeLocalGaussianResult(
         },
         false,
         0.0,
+        LocalGaussianFitModel::LogQuadratic,
+        fit_result
+    };
+}
+
+LocalGaussianResult DecodeOffsetTauGaussianResult(
+    double alpha_r,
+    double tau,
+    const RHBMBetaEstimateResult & fit_result)
+{
+    eigen_validation::RequireVectorSize(fit_result.beta_ols, 2, "beta_ols");
+    eigen_validation::RequireVectorSize(fit_result.beta_mdpde, 2, "beta_mdpde");
+    return LocalGaussianResult{
+        alpha_r,
+        GaussianModel3DWithUncertainty{
+            GaussianModel3D{ fit_result.beta_ols(1), tau, fit_result.beta_ols(0) },
+            GaussianModel3DUncertainty{}
+        },
+        GaussianModel3DWithUncertainty{
+            GaussianModel3D{ fit_result.beta_mdpde(1), tau, fit_result.beta_mdpde(0) },
+            GaussianModel3DUncertainty{}
+        },
+        false,
+        0.0,
+        LocalGaussianFitModel::OffsetTauGrid,
         fit_result
     };
 }
@@ -365,7 +434,8 @@ std::vector<LocalGaussianResult> DecodeMemberGaussianResults(
             gaussian,
             gaussian,
             static_cast<bool>(result.outlier_flag_array(i)),
-            result.statistical_distance_array(i)
+            result.statistical_distance_array(i),
+            LocalGaussianFitModel::LogQuadratic
         });
     }
     return member_results;
@@ -383,9 +453,45 @@ std::vector<RHBMBetaEstimateResult> BuildMemberFitResultList(
             throw std::invalid_argument(
                 "member_result_list contains a result without transient fit state.");
         }
+        if (member_result.fit_model != LocalGaussianFitModel::LogQuadratic)
+        {
+            throw std::invalid_argument(
+                "group Gaussian estimation only supports log-quadratic local fit results.");
+        }
         fit_result_list.emplace_back(*member_result.fit_result);
     }
     return fit_result_list;
+}
+
+LocalGaussianResult EstimateOffsetTauGridLocalGaussian(
+    const LocalPotentialSampleList & sample_entries,
+    double alpha_r,
+    const FitOptions & options)
+{
+    auto execution_options{ MakeExecutionOptions(options) };
+    std::optional<OffsetTauFitCandidate> best_candidate;
+    for (const auto tau : BuildTauGrid(options))
+    {
+        const auto dataset{
+            rhbm_helper::BuildMemberDataset(
+                linearization_service::BuildOffsetGaussianDatasetSeries(
+                    sample_entries, options.distance_min, options.distance_max, tau))
+        };
+        auto fit_result{ rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset, execution_options) };
+        const auto residual_score{ CalculateWeightedResidualScore(dataset, fit_result) };
+        if (!std::isfinite(residual_score)) continue;
+        if (!best_candidate.has_value() || residual_score < best_candidate->residual_score)
+        {
+            best_candidate = OffsetTauFitCandidate{ tau, residual_score, std::move(fit_result) };
+        }
+    }
+
+    if (!best_candidate.has_value())
+    {
+        throw std::invalid_argument("No valid tau candidate for offset Gaussian estimation.");
+    }
+    return DecodeOffsetTauGaussianResult(
+        alpha_r, best_candidate->tau, best_candidate->fit_result);
 }
 
 } // namespace
@@ -452,6 +558,11 @@ double TrainAlphaG(
         beta_list.reserve(member_result_list.at(i).size());
         for (const auto & member_result : member_result_list.at(i))
         {
+            if (member_result.fit_model != LocalGaussianFitModel::LogQuadratic)
+            {
+                throw std::invalid_argument(
+                    "Alpha_G training only supports log-quadratic local fit results.");
+            }
             beta_list.emplace_back(
                 linearization_service::EncodeGaussianToParameterVector(
                     member_result.mdpde.GetModel()));
@@ -514,6 +625,11 @@ LocalGaussianResult EstimateLocalGaussian(
     numeric_validation::RequireFiniteNonNegativeRange(
         options.distance_min, options.distance_max, "fit range");
     numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
+
+    if (options.local_fit_model == LocalGaussianFitModel::OffsetTauGrid)
+    {
+        return EstimateOffsetTauGridLocalGaussian(sample_entries, alpha_r, options);
+    }
 
     auto dataset{
         rhbm_helper::BuildMemberDataset(sample_entries, options.distance_min, options.distance_max)

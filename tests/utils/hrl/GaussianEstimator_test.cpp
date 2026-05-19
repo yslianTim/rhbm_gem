@@ -57,6 +57,69 @@ std::vector<LocalPotentialSampleList> MakeSampleGroup(std::size_t member_size)
     return sample_group;
 }
 
+rg::gaussian_estimator::FitOptions MakeOffsetOptions()
+{
+    auto options{ MakeOptions() };
+    options.local_fit_model = rg::LocalGaussianFitModel::OffsetTauGrid;
+    options.distance_max = 1.0;
+    options.tau_min = 0.3;
+    options.tau_max = 0.7;
+    options.tau_step = 0.1;
+    return options;
+}
+
+LocalPotentialSampleList MakeOffsetSampleEntries(const rg::GaussianModel3D & model)
+{
+    LocalPotentialSampleList sample_entries;
+    sample_entries.reserve(7);
+    for (int i = 0; i < 7; i++)
+    {
+        const auto distance{ 0.15 * static_cast<double>(i) };
+        sample_entries.emplace_back(LocalPotentialSample{
+            static_cast<float>(model.ResponseAtDistance(distance)),
+            SamplingPoint{ static_cast<float>(distance) }
+        });
+    }
+    return sample_entries;
+}
+
+double CalculateWeightedScore(
+    const rg::RHBMMemberDataset & dataset,
+    const rg::RHBMBetaEstimateResult & fit_result)
+{
+    const rg::RHBMResponseVector residual{
+        dataset.y - dataset.X * fit_result.beta_mdpde
+    };
+    return (residual.transpose() * fit_result.data_weight * residual)(0, 0);
+}
+
+double FindExpectedWeightedTau(
+    const LocalPotentialSampleList & sample_entries,
+    double alpha_r,
+    const rg::gaussian_estimator::FitOptions & options)
+{
+    auto best_tau{ options.tau_min };
+    auto best_score{ std::numeric_limits<double>::max() };
+    for (double tau{ options.tau_min };
+         tau <= options.tau_max + options.tau_step * 1.0e-9;
+         tau += options.tau_step)
+    {
+        const auto dataset{
+            rg::rhbm_helper::BuildMemberDataset(
+                ls::BuildOffsetGaussianDatasetSeries(
+                    sample_entries, options.distance_min, options.distance_max, tau))
+        };
+        const auto fit_result{ rg::rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset) };
+        const auto score{ CalculateWeightedScore(dataset, fit_result) };
+        if (score < best_score)
+        {
+            best_score = score;
+            best_tau = tau;
+        }
+    }
+    return best_tau;
+}
+
 std::vector<LocalPotentialSampleList> MakeIdenticalSampleGroup(std::size_t member_size)
 {
     std::vector<LocalPotentialSampleList> sample_group;
@@ -389,6 +452,45 @@ TEST(GaussianEstimatorTest, EstimateLocalGaussianMatchesHelperPath)
     EXPECT_TRUE(actual.fit_result->beta_mdpde.isApprox(expected_fit.beta_mdpde, 1e-12));
 }
 
+TEST(GaussianEstimatorTest, OffsetTauGridEstimateLocalGaussianRecoversExactGridModel)
+{
+    const auto model{ rg::GaussianModel3D{ 2.0, 0.5, -0.2 } };
+    const auto sample_entries{ MakeOffsetSampleEntries(model) };
+    const auto options{ MakeOffsetOptions() };
+
+    const auto actual{
+        rg::gaussian_estimator::EstimateLocalGaussian(sample_entries, 0.0, options)
+    };
+
+    EXPECT_EQ(rg::LocalGaussianFitModel::OffsetTauGrid, actual.fit_model);
+    EXPECT_NEAR(model.GetAmplitude(), actual.mdpde.GetModel().GetAmplitude(), 1.0e-8);
+    EXPECT_NEAR(model.GetWidth(), actual.mdpde.GetModel().GetWidth(), 1.0e-12);
+    EXPECT_NEAR(model.GetIntercept(), actual.mdpde.GetModel().GetIntercept(), 1.0e-8);
+    ASSERT_TRUE(actual.fit_result.has_value());
+    ASSERT_EQ(actual.fit_result->beta_mdpde.size(), 2);
+}
+
+TEST(GaussianEstimatorTest, OffsetTauGridUsesWeightedResidualScoreWithNegativeResponses)
+{
+    const auto model{ rg::GaussianModel3D{ 1.5, 0.4, -0.3 } };
+    auto sample_entries{ MakeOffsetSampleEntries(model) };
+    sample_entries.at(2).response = -5.0f;
+    auto options{ MakeOffsetOptions() };
+    options.tau_min = 0.3;
+    options.tau_max = 0.5;
+    options.tau_step = 0.1;
+    constexpr double alpha_r{ 1.0 };
+    const auto expected_tau{ FindExpectedWeightedTau(sample_entries, alpha_r, options) };
+
+    const auto actual{
+        rg::gaussian_estimator::EstimateLocalGaussian(sample_entries, alpha_r, options)
+    };
+
+    EXPECT_TRUE(std::isfinite(actual.mdpde.GetModel().GetAmplitude()));
+    EXPECT_TRUE(std::isfinite(actual.mdpde.GetModel().GetIntercept()));
+    EXPECT_NEAR(expected_tau, actual.mdpde.GetModel().GetWidth(), 1.0e-12);
+}
+
 TEST(GaussianEstimatorTest, EstimateGroupGaussianMatchesHelperPath)
 {
     const auto options{ MakeOptions() };
@@ -444,6 +546,51 @@ TEST(GaussianEstimatorTest, EstimateGroupGaussianMatchesHelperPath)
     EXPECT_NEAR(expected_prior.GetModel().GetAmplitude(), actual.prior.GetModel().GetAmplitude(), 1e-12);
     EXPECT_NEAR(expected_prior.GetModel().GetWidth(), actual.prior.GetModel().GetWidth(), 1e-12);
     ASSERT_EQ(sample_entries_list.size(), actual.member_results.size());
+}
+
+TEST(GaussianEstimatorTest, EstimateGroupGaussianRejectsOffsetTauGridMemberResults)
+{
+    const auto options{ MakeOptions() };
+    const auto offset_options{ MakeOffsetOptions() };
+    const std::vector<LocalPotentialSampleList> sample_entries_list{
+        MakeOffsetSampleEntries(rg::GaussianModel3D{ 1.0, 0.5, -0.1 }),
+        MakeOffsetSampleEntries(rg::GaussianModel3D{ 1.1, 0.5, -0.1 })
+    };
+    const std::vector<rg::LocalGaussianResult> member_result_list{
+        rg::gaussian_estimator::EstimateLocalGaussian(
+            sample_entries_list.at(0), 0.0, offset_options),
+        rg::gaussian_estimator::EstimateLocalGaussian(
+            sample_entries_list.at(1), 0.0, offset_options)
+    };
+
+    EXPECT_THROW(
+        rg::gaussian_estimator::EstimateGroupGaussian(
+            sample_entries_list, member_result_list, 0.0, options),
+        std::invalid_argument);
+}
+
+TEST(GaussianEstimatorTest, TrainAlphaGRejectsOffsetTauGridMemberResults)
+{
+    const auto offset_options{ MakeOffsetOptions() };
+    const std::vector<std::vector<LocalPotentialSampleList>> sample_group_list{
+        {
+            MakeOffsetSampleEntries(rg::GaussianModel3D{ 1.0, 0.5, -0.1 }),
+            MakeOffsetSampleEntries(rg::GaussianModel3D{ 1.1, 0.5, -0.1 })
+        }
+    };
+    const std::vector<std::vector<rg::LocalGaussianResult>> member_result_list{
+        {
+            rg::gaussian_estimator::EstimateLocalGaussian(
+                sample_group_list.front().at(0), 0.0, offset_options),
+            rg::gaussian_estimator::EstimateLocalGaussian(
+                sample_group_list.front().at(1), 0.0, offset_options)
+        }
+    };
+
+    EXPECT_THROW(
+        rg::gaussian_estimator::TrainAlphaG(
+            sample_group_list, member_result_list, MakeOptions()),
+        std::invalid_argument);
 }
 
 TEST(GaussianEstimatorTest, EstimateGroupGaussianRejectsInconsistentMemberCount)

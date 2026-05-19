@@ -68,6 +68,45 @@ TEST(LinearizationServiceTest, BuildDatasetSeriesRejectsInvalidRange)
         std::invalid_argument);
 }
 
+TEST(LinearizationServiceTest, BuildOffsetGaussianDatasetSeriesKeepsNonPositiveResponses)
+{
+    const LocalPotentialSampleList sampling_entries{
+        {2.0f, SamplingPoint{ 0.1f }},
+        {0.0f, SamplingPoint{ 0.2f }},
+        {-1.0f, SamplingPoint{ 0.3f }},
+        {4.0f, SamplingPoint{ 0.8f }},
+    };
+    constexpr double tau{ 0.5 };
+
+    const auto series{
+        ls::BuildOffsetGaussianDatasetSeries(sampling_entries, 0.0, 0.5, tau)
+    };
+
+    ASSERT_EQ(series.size(), 3U);
+    for (const auto & point : series)
+    {
+        EXPECT_NEAR(1.0, point.GetBasisValue(0), 1.0e-12);
+    }
+    EXPECT_NEAR(2.0, series.at(0).response, 1.0e-12);
+    EXPECT_NEAR(0.0, series.at(1).response, 1.0e-12);
+    EXPECT_NEAR(-1.0, series.at(2).response, 1.0e-12);
+}
+
+TEST(LinearizationServiceTest, BuildOffsetGaussianDatasetSeriesRejectsInvalidTau)
+{
+    const LocalPotentialSampleList sampling_entries{
+        {2.0f, SamplingPoint{ 0.1f }},
+    };
+
+    EXPECT_THROW(
+        ls::BuildOffsetGaussianDatasetSeries(sampling_entries, 0.0, 1.0, 0.0),
+        std::invalid_argument);
+    EXPECT_THROW(
+        ls::BuildOffsetGaussianDatasetSeries(
+            sampling_entries, 0.0, 1.0, std::numeric_limits<double>::quiet_NaN()),
+        std::invalid_argument);
+}
+
 TEST(LinearizationServiceTest, EncodeGaussianToParameterVectorMatchesClosedForm)
 {
     const rhbm_gem::GaussianModel3D model{ 2.0, 0.5, 0.25 };

@@ -9,6 +9,8 @@
 
 namespace rhbm_gem::rhbm_helper
 {
+RHBMMemberDataset BuildMemberDataset(const SeriesPointList & series_point_list);
+
 RHBMMemberDataset BuildMemberDataset(
     const LocalPotentialSampleList & sampling_entries,
     double range_min,

@@ -104,6 +104,7 @@ gaussian_estimator::FitOptions MakeGaussianEstimatorOptions(
     const PotentialAnalysisRequest & request)
 {
     gaussian_estimator::FitOptions options;
+    options.local_fit_model = LocalGaussianFitModel::LogQuadratic;
     options.alpha_min = request.training_alpha_min;
     options.alpha_max = request.training_alpha_max;
     options.alpha_step = request.training_alpha_step;
@@ -174,7 +175,7 @@ void RunModelObjectPreprocessing(
             "Try '--asymmetry true' to bypass symmetry filtering.");
     }
 }
-
+/*
 using FittedGaussianSnapshot = std::unordered_map<const AtomObject *, GaussianModel3D>;
 
 FittedGaussianSnapshot BuildFittedGaussianSnapshot(const std::vector<AtomObject *> & atom_list)
@@ -223,7 +224,7 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
         updated_list.emplace_back(LocalPotentialSample{response_value, sample.point });
     }
     return updated_list;
-}
+}*/
 
 void RunLocalPotentialFitting(
     ModelObject & model_object,
@@ -259,7 +260,7 @@ void RunLocalPotentialFitting(
             Logger::ProgressPercent(atom_count, selected_atom_size);
         }
     }
-
+/*
     // Iterate
     std::vector<LocalPotentialSampleList> updated_sample_entries_list(selected_atom_size);
     for (int iter = 0; iter < 10; iter++)
@@ -300,7 +301,7 @@ void RunLocalPotentialFitting(
     for (size_t i = 0; i < selected_atom_size; i++)
     {
         local_editor_list[i].SetSamplingEntries(std::move(updated_sample_entries_list[i]));
-    }
+    }*/
 }
 
 void RunAtomAlphaTraining(ModelObject & model_object, const PotentialAnalysisRequest & request)
