@@ -143,8 +143,12 @@ inline std::vector<std::size_t> BuildSelectedLocalPotentialSampleIndexList(
 }
 
 inline LocalPotentialSampleList KeepLowestResponseDecileByDistance(
-    LocalPotentialSampleList sample_list)
+    LocalPotentialSampleList sample_list,
+    double retained_ratio = 0.1)
 {
+    numeric_validation::RequireFiniteExclusiveInclusiveRange(
+        retained_ratio, 0.0, 1.0, "retained_ratio");
+
     std::map<float, LocalPotentialSampleList> samples_by_distance;
     for (auto & sample : sample_list)
     {
@@ -167,7 +171,7 @@ inline LocalPotentialSampleList KeepLowestResponseDecileByDistance(
             std::max<std::size_t>(
                 1,
                 static_cast<std::size_t>(
-                    std::ceil(static_cast<double>(distance_samples.size()) * 0.1)))
+                    std::ceil(static_cast<double>(distance_samples.size()) * retained_ratio)))
         };
         retained_samples.insert(
             retained_samples.end(),

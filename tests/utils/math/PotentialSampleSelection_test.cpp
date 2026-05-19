@@ -172,6 +172,104 @@ TEST(PotentialSampleSelectionTest, UsesReferencePositionForWorldSpaceSamplingPoi
     EXPECT_EQ(selected_indices, std::vector<std::size_t>({ 0u, 2u }));
 }
 
+TEST(PotentialSampleSelectionTest, LowestResponseDecileUsesDefaultRatio)
+{
+    LocalPotentialSampleList sample_list;
+    for (std::size_t i = 0; i < 11u; i++)
+    {
+        sample_list.emplace_back(LocalPotentialSample{
+            static_cast<float>(10u - i),
+            SamplingPoint{ 1.0f }
+        });
+    }
+
+    const auto retained_samples{
+        rg::KeepLowestResponseDecileByDistance(std::move(sample_list))
+    };
+
+    ASSERT_EQ(retained_samples.size(), 2u);
+    EXPECT_FLOAT_EQ(retained_samples.at(0).response, 0.0f);
+    EXPECT_FLOAT_EQ(retained_samples.at(1).response, 1.0f);
+}
+
+TEST(PotentialSampleSelectionTest, LowestResponseDecileUsesCustomRatioByDistance)
+{
+    const LocalPotentialSampleList sample_list{
+        LocalPotentialSample{ 9.0f, SamplingPoint{ 2.0f } },
+        LocalPotentialSample{ 4.0f, SamplingPoint{ 1.0f } },
+        LocalPotentialSample{ 1.0f, SamplingPoint{ 2.0f } },
+        LocalPotentialSample{ 2.0f, SamplingPoint{ 1.0f } },
+        LocalPotentialSample{ 3.0f, SamplingPoint{ 2.0f } },
+        LocalPotentialSample{ 8.0f, SamplingPoint{ 1.0f } },
+        LocalPotentialSample{ 5.0f, SamplingPoint{ 2.0f } }
+    };
+
+    const auto retained_samples{
+        rg::KeepLowestResponseDecileByDistance(sample_list, 0.5)
+    };
+
+    ASSERT_EQ(retained_samples.size(), 4u);
+    EXPECT_FLOAT_EQ(retained_samples.at(0).point.distance, 1.0f);
+    EXPECT_FLOAT_EQ(retained_samples.at(0).response, 2.0f);
+    EXPECT_FLOAT_EQ(retained_samples.at(1).point.distance, 1.0f);
+    EXPECT_FLOAT_EQ(retained_samples.at(1).response, 4.0f);
+    EXPECT_FLOAT_EQ(retained_samples.at(2).point.distance, 2.0f);
+    EXPECT_FLOAT_EQ(retained_samples.at(2).response, 1.0f);
+    EXPECT_FLOAT_EQ(retained_samples.at(3).point.distance, 2.0f);
+    EXPECT_FLOAT_EQ(retained_samples.at(3).response, 3.0f);
+}
+
+TEST(PotentialSampleSelectionTest, LowestResponseDecileAllowsKeepingAllSamples)
+{
+    const LocalPotentialSampleList sample_list{
+        LocalPotentialSample{ 9.0f, SamplingPoint{ 2.0f } },
+        LocalPotentialSample{ 4.0f, SamplingPoint{ 1.0f } },
+        LocalPotentialSample{ 1.0f, SamplingPoint{ 2.0f } },
+        LocalPotentialSample{ 2.0f, SamplingPoint{ 1.0f } }
+    };
+
+    const auto retained_samples{
+        rg::KeepLowestResponseDecileByDistance(sample_list, 1.0)
+    };
+
+    ASSERT_EQ(retained_samples.size(), 4u);
+    EXPECT_FLOAT_EQ(retained_samples.at(0).point.distance, 1.0f);
+    EXPECT_FLOAT_EQ(retained_samples.at(0).response, 2.0f);
+    EXPECT_FLOAT_EQ(retained_samples.at(1).point.distance, 1.0f);
+    EXPECT_FLOAT_EQ(retained_samples.at(1).response, 4.0f);
+    EXPECT_FLOAT_EQ(retained_samples.at(2).point.distance, 2.0f);
+    EXPECT_FLOAT_EQ(retained_samples.at(2).response, 1.0f);
+    EXPECT_FLOAT_EQ(retained_samples.at(3).point.distance, 2.0f);
+    EXPECT_FLOAT_EQ(retained_samples.at(3).response, 9.0f);
+}
+
+TEST(PotentialSampleSelectionTest, LowestResponseDecileRejectsInvalidRatios)
+{
+    const LocalPotentialSampleList sample_list{
+        LocalPotentialSample{ 1.0f, SamplingPoint{ 1.0f } }
+    };
+
+    EXPECT_THROW(
+        (void)rg::KeepLowestResponseDecileByDistance(sample_list, 0.0),
+        std::invalid_argument);
+    EXPECT_THROW(
+        (void)rg::KeepLowestResponseDecileByDistance(sample_list, -0.1),
+        std::invalid_argument);
+    EXPECT_THROW(
+        (void)rg::KeepLowestResponseDecileByDistance(sample_list, 1.1),
+        std::invalid_argument);
+    EXPECT_THROW(
+        (void)rg::KeepLowestResponseDecileByDistance(
+            sample_list,
+            std::numeric_limits<double>::quiet_NaN()),
+        std::invalid_argument);
+    EXPECT_THROW(
+        (void)rg::KeepLowestResponseDecileByDistance(
+            sample_list,
+            std::numeric_limits<double>::infinity()),
+        std::invalid_argument);
+}
+
 TEST(PotentialSampleSelectionTest, MedianResponseByDistanceHandlesEmptySampleList)
 {
     EXPECT_TRUE(rg::GetMedianResponseByDistance({}).empty());
