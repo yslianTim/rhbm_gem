@@ -1,6 +1,7 @@
 #include "detail/CommandBase.hpp"
 
 #include "detail/MapSampling.hpp"
+#include "rhbm_gem/utils/math/SamplingTypes.hpp"
 
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
@@ -13,12 +14,14 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/hrl/GaussianEstimator.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 #include <atomic>
 #include <filesystem>
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -172,6 +175,56 @@ void RunModelObjectPreprocessing(
     }
 }
 
+using FittedGaussianSnapshot = std::unordered_map<const AtomObject *, GaussianModel3D>;
+
+FittedGaussianSnapshot BuildFittedGaussianSnapshot(const std::vector<AtomObject *> & atom_list)
+{
+    FittedGaussianSnapshot snapshot;
+    snapshot.reserve(atom_list.size());
+    for (const auto * atom : atom_list)
+    {
+        const auto local_view{ AtomLocalPotentialView::For(*atom) };
+        if (!local_view.IsAvailable()) continue;
+
+        const auto & gaussian_result{ local_view.GetGaussianResult() };
+        if (!gaussian_result.fit_result.has_value()) continue;
+
+        snapshot.emplace(atom, gaussian_result.mdpde.GetModel());
+    }
+    return snapshot;
+}
+
+LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
+    const AtomObject & atom,
+    const FittedGaussianSnapshot & fitted_gaussian_snapshot)
+{
+    constexpr double kNeighborSearchRadius{ 2.0 };
+    const auto local_view{ AtomLocalPotentialView::RequireFor(atom) };
+    const auto & sample_entries{ local_view.GetSamplingEntries() };
+    const auto & neighbor_atom_list{ atom.FindNeighborAtoms(kNeighborSearchRadius, false) };
+    LocalPotentialSampleList updated_list;
+    updated_list.reserve(sample_entries.size());
+    for (const auto & sample : sample_entries)
+    {
+        auto sample_position{ sample.point.position };
+        auto response_value{ sample.response };
+        for (const auto * neighbor_atom : neighbor_atom_list)
+        {
+            const auto gaussian_iter{ fitted_gaussian_snapshot.find(neighbor_atom) };
+            if (gaussian_iter == fitted_gaussian_snapshot.end()) continue;
+
+            auto neighbor_position{ neighbor_atom->GetPosition() };
+            auto distance{
+                static_cast<double>(
+                    array_helper::ComputeNorm<float>(sample_position, neighbor_position))
+            };
+            response_value -= static_cast<float>(gaussian_iter->second.ResponseAtDistance(distance));
+        }
+        updated_list.emplace_back(LocalPotentialSample{response_value, sample.point });
+    }
+    return updated_list;
+}
+
 void RunLocalPotentialFitting(
     ModelObject & model_object,
     const gaussian_estimator::FitOptions & options)
@@ -192,6 +245,37 @@ void RunLocalPotentialFitting(
         const auto result{
             gaussian_estimator::EstimateLocalGaussian(
                 local_view.GetSamplingEntries(),
+                local_view.GetAlphaR(),
+                options)
+        };
+
+        local_editor_list[i].SetGaussianResult(result);
+
+#ifdef USE_OPENMP
+        #pragma omp critical
+#endif
+        {
+            atom_count++;
+            Logger::ProgressPercent(atom_count, selected_atom_size);
+        }
+    }
+
+    // Iterate
+    const auto fitted_gaussian_snapshot{ BuildFittedGaussianSnapshot(atom_list) };
+    atom_count = 0;
+#ifdef USE_OPENMP
+    #pragma omp parallel for num_threads(options.thread_size)
+#endif
+    for (size_t i = 0; i < selected_atom_size; i++)
+    {
+        const auto & atom{ *atom_list[i] };
+        const auto local_view{ AtomLocalPotentialView::RequireFor(atom) };
+        auto updated_sample_entries{
+            UpdateSampleListWithFittedGaussian(atom, fitted_gaussian_snapshot)
+        };
+        const auto result{
+            gaussian_estimator::EstimateLocalGaussian(
+                updated_sample_entries,
                 local_view.GetAlphaR(),
                 options)
         };
