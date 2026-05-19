@@ -16,6 +16,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <Eigen/Dense>
@@ -36,6 +37,13 @@ struct OffsetTauFitCandidate
     double tau{ 0.0 };
     double residual_score{ std::numeric_limits<double>::max() };
     RHBMBetaEstimateResult fit_result{};
+};
+
+struct AlphaTrainingResult
+{
+    double best_alpha{ 0.0 };
+    Eigen::VectorXd error_sum_list{};
+    std::vector<double> alpha_grid{};
 };
 
 RHBMExecutionOptions MakeExecutionOptions(const FitOptions & options)
@@ -73,12 +81,18 @@ bool EmitTrainingReportIfRequested(
 
     std::vector<double> amplitude_values;
     std::vector<double> width_values;
+    std::vector<double> intercept_values;
     amplitude_values.reserve(alpha_list.size());
     width_values.reserve(alpha_list.size());
+    intercept_values.reserve(alpha_list.size());
     for (Eigen::Index column = 0; column < gaus_bias_matrix.cols(); ++column)
     {
         amplitude_values.emplace_back(gaus_bias_matrix(0, column));
         width_values.emplace_back(gaus_bias_matrix(1, column));
+        if (gaus_bias_matrix.rows() >= GaussianModel3D::ParameterSize())
+        {
+            intercept_values.emplace_back(gaus_bias_matrix(2, column));
+        }
     }
 
     LinePlotRequest report_request;
@@ -97,6 +111,14 @@ bool EmitTrainingReportIfRequested(
             { LineSeries{ "Width", alpha_list, width_values, std::nullopt } }
         }
     };
+    if (gaus_bias_matrix.rows() >= GaussianModel3D::ParameterSize())
+    {
+        report_request.panels.emplace_back(LinePlotPanel{
+            "Intercept #font[2]{C}",
+            AxisSpec{},
+            { LineSeries{ "Intercept", alpha_list, intercept_values, std::nullopt } }
+        });
+    }
 
     const auto plot_result{ local_painter::SaveLinePlot(report_request) };
     if (!plot_result.Succeeded())
@@ -170,6 +192,14 @@ Eigen::VectorXd CalculateAbsoluteGaussianDifference(
     const auto gaussian_b{ linearization_service::DecodeParameterVector(linear_b).ToVector() };
     eigen_validation::RequireSameSize(gaussian_a, gaussian_b, "gaussian");
     return (gaussian_a - gaussian_b).array().abs().matrix();
+}
+
+Eigen::VectorXd CalculateAbsoluteModelVectorDifference(
+    const RHBMParameterVector & model_a,
+    const RHBMParameterVector & model_b)
+{
+    eigen_validation::RequireSameSize(model_a, model_b, "gaussian");
+    return (model_a - model_b).array().abs().matrix();
 }
 
 void ValidateStudyBatch(
@@ -246,7 +276,8 @@ Eigen::MatrixXd StudyAlphaRBias(
 Eigen::MatrixXd StudyAlphaGBias(
     const std::vector<double> & alpha_grid,
     const std::vector<std::vector<RHBMParameterVector>> & beta_group_list,
-    const AlphaStudyOptions & options)
+    const AlphaStudyOptions & options,
+    LocalGaussianFitModel fit_model = LocalGaussianFitModel::LogQuadratic)
 {
     ValidateStudyBatch(beta_group_list.size(), alpha_grid);
     for (const auto & beta_list : beta_group_list)
@@ -275,10 +306,9 @@ Eigen::MatrixXd StudyAlphaGBias(
             const auto result{
                 rhbm_helper::EstimateMuMDPDE(alpha_g, beta_matrix, algorithm_options)
             };
-            local_bias_array.col(j) = CalculateAbsoluteGaussianDifference(
-                result.mu_mdpde,
-                result.mu_mean
-            );
+            local_bias_array.col(j) = (fit_model == LocalGaussianFitModel::OffsetTauGrid) ?
+                CalculateAbsoluteModelVectorDifference(result.mu_mdpde, result.mu_mean) :
+                CalculateAbsoluteGaussianDifference(result.mu_mdpde, result.mu_mean);
         }
 
 #ifdef USE_OPENMP
@@ -311,6 +341,45 @@ std::vector<RHBMMemberDataset> BuildMemberDatasetList(
         );
     }
     return dataset_list;
+}
+
+std::vector<double> BuildAlphaGrid(const FitOptions & options)
+{
+    numeric_validation::RequireFiniteNonNegativeRange(
+        options.alpha_min, options.alpha_max, "alpha training range");
+    numeric_validation::RequireFinitePositive(options.alpha_step, "alpha training step");
+
+    static constexpr double kAlphaGridTolerance{ 1.0e-12 };
+    std::vector<double> alpha_grid;
+    for (double alpha{ options.alpha_min };
+         alpha <= options.alpha_max + kAlphaGridTolerance;
+         alpha += options.alpha_step)
+    {
+        auto alpha_value{ alpha };
+        if (std::abs(alpha_value - options.alpha_max) <= kAlphaGridTolerance)
+        {
+            alpha_value = options.alpha_max;
+        }
+        if (alpha_value > options.alpha_max) break;
+
+        alpha_grid.emplace_back(alpha_value);
+        if (alpha_value == options.alpha_max) break;
+    }
+    return alpha_grid;
+}
+
+AlphaTrainingResult BuildAlphaTrainingResult(
+    std::vector<double> alpha_grid,
+    Eigen::VectorXd error_sum_list)
+{
+    int error_min_id{ 0 };
+    error_sum_list.minCoeff(&error_min_id);
+
+    AlphaTrainingResult result;
+    result.best_alpha = alpha_grid.at(static_cast<std::size_t>(error_min_id));
+    result.error_sum_list = std::move(error_sum_list);
+    result.alpha_grid = std::move(alpha_grid);
+    return result;
 }
 
 std::vector<double> BuildTauGrid(const FitOptions & options)
@@ -346,6 +415,67 @@ double CalculateWeightedResidualScore(
 {
     const RHBMResponseVector residual{ dataset.y - dataset.X * fit_result.beta_mdpde };
     return (residual.transpose() * fit_result.data_weight * residual)(0, 0);
+}
+
+RHBMParameterVector EncodeOffsetGaussianToParameterVector(const GaussianModel3D & model)
+{
+    GaussianModel3D::RequireFiniteModel(model, "offset Gaussian model");
+    return model.ToVector();
+}
+
+GaussianModel3D DecodeOffsetGaussianParameterVector(const RHBMParameterVector & parameter_vector)
+{
+    GaussianModel3D::RequireParameterVector(parameter_vector, "offset Gaussian parameter vector");
+    return GaussianModel3D::FromVector(parameter_vector);
+}
+
+GaussianModel3DWithUncertainty DecodeOffsetGaussianParameterVector(
+    const RHBMParameterVector & parameter_vector,
+    const RHBMPosteriorCovarianceMatrix & covariance_matrix)
+{
+    const auto model{ DecodeOffsetGaussianParameterVector(parameter_vector) };
+    try
+    {
+        eigen_validation::RequireShape(
+            covariance_matrix,
+            GaussianModel3D::ParameterSize(),
+            GaussianModel3D::ParameterSize(),
+            "offset Gaussian covariance_matrix");
+        eigen_validation::RequireFinite(covariance_matrix, "offset Gaussian covariance_matrix");
+
+        const auto var_amplitude{
+            covariance_matrix(
+                GaussianModel3D::AmplitudeIndex(),
+                GaussianModel3D::AmplitudeIndex())
+        };
+        const auto var_width{
+            covariance_matrix(
+                GaussianModel3D::WidthIndex(),
+                GaussianModel3D::WidthIndex())
+        };
+        const auto var_intercept{
+            covariance_matrix(
+                GaussianModel3D::InterceptIndex(),
+                GaussianModel3D::InterceptIndex())
+        };
+        if (var_amplitude < 0.0 || var_width < 0.0 || var_intercept < 0.0)
+        {
+            return GaussianModel3DWithUncertainty{ model, GaussianModel3DUncertainty{} };
+        }
+
+        return GaussianModel3DWithUncertainty{
+            model,
+            GaussianModel3DUncertainty{
+                std::sqrt(var_amplitude),
+                std::sqrt(var_width),
+                std::sqrt(var_intercept)
+            }
+        };
+    }
+    catch (const std::invalid_argument &)
+    {
+        return GaussianModel3DWithUncertainty{ model, GaussianModel3DUncertainty{} };
+    }
 }
 
 LocalGaussianResult DecodeLocalGaussianResult(
@@ -441,6 +571,101 @@ std::vector<LocalGaussianResult> DecodeMemberGaussianResults(
     return member_results;
 }
 
+LocalPotentialSampleList BuildOffsetTrainingSampleList(
+    const LocalPotentialSampleList & sample_entries,
+    const FitOptions & options)
+{
+    LocalPotentialSampleList training_samples;
+    training_samples.reserve(sample_entries.size());
+    for (const auto & sample : sample_entries)
+    {
+        const auto distance{ sample.point.distance };
+        const auto response{ sample.response };
+        if (!numeric_validation::IsFinite(distance)) continue;
+        if (!numeric_validation::IsFinite(response)) continue;
+        if (distance < static_cast<float>(options.distance_min)) continue;
+        if (distance > static_cast<float>(options.distance_max)) continue;
+        training_samples.emplace_back(sample);
+    }
+    return training_samples;
+}
+
+LocalPotentialSampleList BuildSampleSlice(
+    const LocalPotentialSampleList & sample_entries,
+    const std::vector<std::size_t> & indices)
+{
+    numeric_validation::RequirePositive(indices.size(), "sample slice size");
+    LocalPotentialSampleList sample_slice;
+    sample_slice.reserve(indices.size());
+    for (const auto index : indices)
+    {
+        sample_slice.emplace_back(sample_entries.at(index));
+    }
+    return sample_slice;
+}
+
+AlphaTrainingResult TrainOffsetAlphaR(
+    const std::vector<LocalPotentialSampleList> & sample_entries_list,
+    const FitOptions & options)
+{
+    const auto alpha_grid{ BuildAlphaGrid(options) };
+    ValidateStudyBatch(sample_entries_list.size(), alpha_grid);
+
+    Eigen::VectorXd error_sum_list{
+        Eigen::VectorXd::Zero(static_cast<Eigen::Index>(alpha_grid.size()))
+    };
+    for (const auto & sample_entries : sample_entries_list)
+    {
+        const auto training_samples{ BuildOffsetTrainingSampleList(sample_entries, options) };
+        numeric_validation::RequireAtLeast(
+            training_samples.size(), kAlphaRSubsetSize, "training data size");
+
+        std::vector<std::vector<std::size_t>> data_subset_rows(kAlphaRSubsetSize);
+        for (std::size_t row = 0; row < training_samples.size(); row++)
+        {
+            data_subset_rows[row % kAlphaRSubsetSize].emplace_back(row);
+        }
+
+        for (Eigen::Index alpha_index = 0; alpha_index < error_sum_list.size(); alpha_index++)
+        {
+            const auto alpha_r{ alpha_grid.at(static_cast<std::size_t>(alpha_index)) };
+            auto alpha_error_sum{ 0.0 };
+            for (std::size_t fold = 0; fold < kAlphaRSubsetSize; fold++)
+            {
+                std::vector<std::size_t> training_indices;
+                training_indices.reserve(training_samples.size() - data_subset_rows.at(fold).size());
+                for (std::size_t i = 0; i < kAlphaRSubsetSize; i++)
+                {
+                    if (i == fold) continue;
+                    training_indices.insert(
+                        training_indices.end(),
+                        data_subset_rows.at(i).begin(),
+                        data_subset_rows.at(i).end());
+                }
+
+                const auto test_result{
+                    EstimateLocalGaussian(
+                        BuildSampleSlice(training_samples, data_subset_rows.at(fold)),
+                        alpha_r,
+                        options)
+                };
+                const auto training_result{
+                    EstimateLocalGaussian(
+                        BuildSampleSlice(training_samples, training_indices),
+                        alpha_r,
+                        options)
+                };
+                alpha_error_sum +=
+                    (EncodeOffsetGaussianToParameterVector(test_result.mdpde.GetModel()) -
+                     EncodeOffsetGaussianToParameterVector(training_result.mdpde.GetModel())).norm();
+            }
+            error_sum_list(alpha_index) += alpha_error_sum;
+        }
+    }
+
+    return BuildAlphaTrainingResult(alpha_grid, error_sum_list);
+}
+
 std::vector<RHBMBetaEstimateResult> BuildMemberFitResultList(
     const std::vector<LocalGaussianResult> & member_result_list)
 {
@@ -461,6 +686,30 @@ std::vector<RHBMBetaEstimateResult> BuildMemberFitResultList(
         fit_result_list.emplace_back(*member_result.fit_result);
     }
     return fit_result_list;
+}
+
+std::vector<std::vector<RHBMParameterVector>> BuildOffsetBetaGroupList(
+    const std::vector<std::vector<LocalGaussianResult>> & member_result_list)
+{
+    std::vector<std::vector<RHBMParameterVector>> beta_group_list;
+    beta_group_list.reserve(member_result_list.size());
+    for (const auto & group_results : member_result_list)
+    {
+        std::vector<RHBMParameterVector> beta_list;
+        beta_list.reserve(group_results.size());
+        for (const auto & member_result : group_results)
+        {
+            if (member_result.fit_model != LocalGaussianFitModel::OffsetTauGrid)
+            {
+                throw std::invalid_argument(
+                    "OffsetTauGrid alpha/group estimation requires offset local fit results.");
+            }
+            beta_list.emplace_back(
+                EncodeOffsetGaussianToParameterVector(member_result.mdpde.GetModel()));
+        }
+        beta_group_list.emplace_back(std::move(beta_list));
+    }
+    return beta_group_list;
 }
 
 LocalGaussianResult EstimateOffsetTauGridLocalGaussian(
@@ -494,6 +743,53 @@ LocalGaussianResult EstimateOffsetTauGridLocalGaussian(
         alpha_r, best_candidate->tau, best_candidate->fit_result);
 }
 
+GroupGaussianResult EstimateOffsetGroupGaussian(
+    const std::vector<LocalPotentialSampleList> & sample_entries_list,
+    const std::vector<LocalGaussianResult> & member_result_list,
+    double alpha_g,
+    const FitOptions & options)
+{
+    if (sample_entries_list.size() != member_result_list.size())
+    {
+        throw std::invalid_argument("sample_entries_list and member_result_list sizes are inconsistent.");
+    }
+
+    auto execution_options{ MakeExecutionOptions(options) };
+    const auto beta_group_list{
+        BuildOffsetBetaGroupList(std::vector<std::vector<LocalGaussianResult>>{ member_result_list })
+    };
+    const auto beta_matrix{ rhbm_helper::BuildBetaMatrix(beta_group_list.front()) };
+    const auto mu_result{ rhbm_helper::EstimateMuMDPDE(alpha_g, beta_matrix, execution_options) };
+    const auto statistical_distance_array{
+        rhbm_helper::CalculateMemberStatisticalDistance(
+            mu_result.mu_mdpde,
+            mu_result.capital_lambda,
+            beta_matrix)
+    };
+    const auto outlier_flag_array{
+        rhbm_helper::CalculateOutlierMemberFlag(
+            GaussianModel3D::ParameterSize(),
+            statistical_distance_array)
+    };
+
+    GroupGaussianResult result;
+    result.alpha_g = alpha_g;
+    result.mean = DecodeOffsetGaussianParameterVector(mu_result.mu_mean);
+    result.mdpde = DecodeOffsetGaussianParameterVector(mu_result.mu_mdpde);
+    result.prior = DecodeOffsetGaussianParameterVector(mu_result.mu_mdpde, mu_result.capital_lambda);
+    result.member_results.reserve(member_result_list.size());
+    for (std::size_t i = 0; i < member_result_list.size(); i++)
+    {
+        auto member_result{ member_result_list.at(i) };
+        member_result.is_outlier = static_cast<bool>(
+            outlier_flag_array(static_cast<Eigen::Index>(i)));
+        member_result.statistical_distance =
+            statistical_distance_array(static_cast<Eigen::Index>(i));
+        result.member_results.emplace_back(std::move(member_result));
+    }
+    return result;
+}
+
 } // namespace
 
 double TrainAlphaR(
@@ -506,6 +802,12 @@ double TrainAlphaR(
     numeric_validation::RequireFinitePositive(options.alpha_step, "alpha training step");
     numeric_validation::RequireFiniteNonNegativeRange(
         options.distance_min, options.distance_max, "fit range");
+
+    if (options.local_fit_model == LocalGaussianFitModel::OffsetTauGrid)
+    {
+        const auto training_result{ TrainOffsetAlphaR(sample_entries_list, options) };
+        return training_result.best_alpha;
+    }
 
     const auto dataset_list{ BuildMemberDatasetList(sample_entries_list, options) };
     const auto training_result{
@@ -543,6 +845,64 @@ double TrainAlphaG(
     if (sample_group_list.size() != member_result_list.size())
     {
         throw std::invalid_argument("sample_group_list and member_result_list sizes are inconsistent.");
+    }
+
+    if (options.local_fit_model == LocalGaussianFitModel::OffsetTauGrid)
+    {
+        for (std::size_t i = 0; i < sample_group_list.size(); i++)
+        {
+            if (sample_group_list.at(i).size() != member_result_list.at(i).size())
+            {
+                throw std::invalid_argument("sample group and member result group sizes are inconsistent.");
+            }
+        }
+        const auto beta_group_list{ BuildOffsetBetaGroupList(member_result_list) };
+        if (options.output_summary_log)
+        {
+            Logger::Log(LogLevel::Info,
+                "Run Alpha_G Training with " + std::to_string(beta_group_list.size()) + " groups.");
+        }
+        if (beta_group_list.empty())
+        {
+            if (options.output_summary_log)
+            {
+                Logger::Log(LogLevel::Warning,
+                    "Skip Alpha_G Training because no eligible groups were selected.");
+                Logger::Log(LogLevel::Info,
+                    "Alpha_G Training Results Summary: minimum mu error sum alpha_g = "
+                    + std::to_string(options.alpha_min));
+            }
+            return options.alpha_min;
+        }
+
+        const auto training_result{
+            rhbm_trainer::CrossValidationAlphaG(
+                beta_group_list,
+                options.alpha_min,
+                options.alpha_max,
+                options.alpha_step,
+                MakeTrainingOptions(kAlphaGSubsetSize, options))
+        };
+        if (ShouldOutputStudyPlot(output_study_plot, options))
+        {
+            const auto bias_matrix{
+                StudyAlphaGBias(
+                    training_result.alpha_grid,
+                    beta_group_list,
+                    MakeStudyOptions(options),
+                    LocalGaussianFitModel::OffsetTauGrid)
+            };
+            (void)EmitTrainingReportIfRequested(
+                bias_matrix, training_result.alpha_grid, "#alpha_{g}", "Deviation with Mean",
+                options.study_plot_dir, "alpha_g_bias.pdf");
+        }
+        if (options.output_summary_log)
+        {
+            Logger::Log(LogLevel::Info,
+                "Alpha_G Training Results Summary: minimum mu error sum alpha_g = "
+                + std::to_string(training_result.best_alpha));
+        }
+        return training_result.best_alpha;
     }
 
     std::vector<std::vector<RHBMParameterVector>> beta_group_list;
@@ -652,6 +1012,15 @@ GroupGaussianResult EstimateGroupGaussian(
     if (sample_entries_list.size() != member_result_list.size())
     {
         throw std::invalid_argument("sample_entries_list and member_result_list sizes are inconsistent.");
+    }
+
+    if (options.local_fit_model == LocalGaussianFitModel::OffsetTauGrid)
+    {
+        return EstimateOffsetGroupGaussian(
+            sample_entries_list,
+            member_result_list,
+            alpha_g,
+            options);
     }
 
     auto execution_options{ MakeExecutionOptions(options) };
