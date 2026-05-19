@@ -179,4 +179,42 @@ inline LocalPotentialSampleList KeepLowestResponseDecileByDistance(
     return retained_samples;
 }
 
+inline LocalPotentialSampleList GetMedianResponseByDistance(
+    LocalPotentialSampleList sample_list)
+{
+    std::map<float, LocalPotentialSampleList> samples_by_distance;
+    for (auto & sample : sample_list)
+    {
+        samples_by_distance[sample.point.distance].emplace_back(std::move(sample));
+    }
+
+    LocalPotentialSampleList median_samples;
+    median_samples.reserve(samples_by_distance.size());
+    for (auto & distance_entry : samples_by_distance)
+    {
+        auto & distance_samples{ distance_entry.second };
+        std::stable_sort(
+            distance_samples.begin(),
+            distance_samples.end(),
+            [](const LocalPotentialSample & lhs, const LocalPotentialSample & rhs)
+            {
+                return lhs.response < rhs.response;
+            });
+
+        const auto lower_index{ (distance_samples.size() - 1) / 2 };
+        const auto upper_index{ distance_samples.size() / 2 };
+        const auto median_response{
+            lower_index == upper_index
+                ? distance_samples.at(lower_index).response
+                : (distance_samples.at(lower_index).response
+                    + distance_samples.at(upper_index).response) / 2.0f
+        };
+        auto median_sample{ std::move(distance_samples.at(lower_index)) };
+        median_sample.response = median_response;
+        median_samples.emplace_back(std::move(median_sample));
+    }
+
+    return median_samples;
+}
+
 } // namespace rhbm_gem

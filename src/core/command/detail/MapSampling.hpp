@@ -161,6 +161,7 @@ inline LocalPotentialSampleList SampleAtomMapValues(
         detail::BuildLocalPotentialSampleList(map_object, sampling_points, selected_indices)
     };
     return KeepLowestResponseDecileByDistance(std::move(sample_list));
+    //return GetMedianResponseByDistance(std::move(sample_list));
     //return sample_list;
 }
 

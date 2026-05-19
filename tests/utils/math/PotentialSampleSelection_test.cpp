@@ -171,3 +171,29 @@ TEST(PotentialSampleSelectionTest, UsesReferencePositionForWorldSpaceSamplingPoi
 
     EXPECT_EQ(selected_indices, std::vector<std::size_t>({ 0u, 2u }));
 }
+
+TEST(PotentialSampleSelectionTest, MedianResponseByDistanceHandlesEmptySampleList)
+{
+    EXPECT_TRUE(rg::GetMedianResponseByDistance({}).empty());
+}
+
+TEST(PotentialSampleSelectionTest, MedianResponseByDistanceReturnsOneSamplePerDistance)
+{
+    const LocalPotentialSampleList sample_list{
+        LocalPotentialSample{ 10.0f, SamplingPoint{ 2.0f, { 20.0f, 0.0f, 0.0f } } },
+        LocalPotentialSample{ 3.0f, SamplingPoint{ 1.0f, { 10.0f, 0.0f, 0.0f } } },
+        LocalPotentialSample{ 7.0f, SamplingPoint{ 1.0f, { 11.0f, 0.0f, 0.0f } } },
+        LocalPotentialSample{ 5.0f, SamplingPoint{ 1.0f, { 12.0f, 0.0f, 0.0f } } },
+        LocalPotentialSample{ 2.0f, SamplingPoint{ 2.0f, { 21.0f, 0.0f, 0.0f } } }
+    };
+
+    const auto median_samples{ rg::GetMedianResponseByDistance(sample_list) };
+
+    ASSERT_EQ(median_samples.size(), 2u);
+    EXPECT_FLOAT_EQ(median_samples.at(0).point.distance, 1.0f);
+    EXPECT_FLOAT_EQ(median_samples.at(0).response, 5.0f);
+    EXPECT_EQ(median_samples.at(0).point.position, (std::array<float, 3>{ 12.0f, 0.0f, 0.0f }));
+    EXPECT_FLOAT_EQ(median_samples.at(1).point.distance, 2.0f);
+    EXPECT_FLOAT_EQ(median_samples.at(1).response, 6.0f);
+    EXPECT_EQ(median_samples.at(1).point.position, (std::array<float, 3>{ 21.0f, 0.0f, 0.0f }));
+}
