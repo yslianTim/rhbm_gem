@@ -10,8 +10,7 @@ namespace rhbm_gem {
 
 enum class LocalGaussianFitModel
 {
-    LogQuadratic,
-    OffsetTauGrid
+    LogQuadratic
 };
 
 struct LocalPotentialAnnotation

@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 
-#include <cmath>
 #include <initializer_list>
 #include <limits>
 #include <stdexcept>
@@ -29,15 +28,6 @@ void ExpectBiasStatisticSize(const rt::BiasStatistics & bias)
 {
     EXPECT_EQ(bias.mean.size(), rhbm_gem::GaussianModel3D::ParameterSize());
     EXPECT_EQ(bias.sigma.size(), rhbm_gem::GaussianModel3D::ParameterSize());
-}
-
-void ExpectBiasStatisticFinite(const rt::BiasStatistics & bias)
-{
-    for (Eigen::Index i = 0; i < bias.mean.size(); i++)
-    {
-        EXPECT_TRUE(std::isfinite(bias.mean(i)));
-        EXPECT_TRUE(std::isfinite(bias.sigma(i)));
-    }
 }
 
 } // namespace
@@ -131,32 +121,6 @@ TEST(RHBMTesterTest, RunBetaMDPDETestSkipsTrainedAlphaWhenDisabled)
     ASSERT_EQ(bias.mdpde.requested_alpha.size(), alpha_r_list.size());
     ExpectBiasStatisticSize(bias.ols);
     ExpectBiasStatisticSize(bias.mdpde.requested_alpha.front());
-    EXPECT_FALSE(bias.mdpde.trained_alpha.has_value());
-    EXPECT_FALSE(bias.mdpde.trained_alpha_average.has_value());
-}
-
-TEST(RHBMTesterTest, RunBetaMDPDETestUsesOffsetTauGridFitModel)
-{
-    auto scenario{ tdf::BetaScenario{
-        rhbm_gem::GaussianModel3D{ 1.0, 0.5, -0.1 },
-        8,
-        0.0,
-        0.0,
-        1,
-        42,
-        { 0.0 },
-        false
-    } };
-    scenario.local_fit_model = rhbm_gem::LocalGaussianFitModel::OffsetTauGrid;
-    const auto test_input{ tdf::BuildBetaTestInput(scenario) };
-
-    const auto bias{ rt::RunBetaMDPDETest(test_input, 1) };
-
-    ASSERT_EQ(bias.mdpde.requested_alpha.size(), 1u);
-    ExpectBiasStatisticSize(bias.ols);
-    ExpectBiasStatisticSize(bias.mdpde.requested_alpha.front());
-    ExpectBiasStatisticFinite(bias.ols);
-    ExpectBiasStatisticFinite(bias.mdpde.requested_alpha.front());
     EXPECT_FALSE(bias.mdpde.trained_alpha.has_value());
     EXPECT_FALSE(bias.mdpde.trained_alpha_average.has_value());
 }

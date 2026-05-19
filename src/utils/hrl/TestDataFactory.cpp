@@ -330,7 +330,7 @@ LocalPotentialSampleList AddNoise(
     {
     case LocalGaussianFitModel::LogQuadratic:
         return AddLogSpaceNoise(std::move(sampling_entries), model, error_sigma, generator);
-    case LocalGaussianFitModel::OffsetTauGrid:
+    default:
         return AddRealSpaceNoise(std::move(sampling_entries), model, error_sigma, generator);
     }
     throw std::invalid_argument("Unsupported local Gaussian fit model for beta test noise.");

@@ -14,12 +14,6 @@ SeriesPointList BuildDatasetSeries(
     double range_min,
     double range_max);
 
-SeriesPointList BuildOffsetGaussianDatasetSeries(
-    const LocalPotentialSampleList & sampling_entries,
-    double range_min,
-    double range_max,
-    double tau);
-
 RHBMParameterVector EncodeGaussianToParameterVector(const GaussianModel3D & gaussian_model);
 GaussianModel3D DecodeParameterVector(const RHBMParameterVector & parameter_vector);
 GaussianModel3DWithUncertainty DecodeParameterVector(

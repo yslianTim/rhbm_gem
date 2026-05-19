@@ -52,54 +52,6 @@ SeriesPointList BuildDatasetSeries(
     return basis_and_response_entry_list;
 }
 
-SeriesPointList BuildOffsetGaussianDatasetSeries(
-    const LocalPotentialSampleList & sampling_entries,
-    double range_min,
-    double range_max,
-    double tau)
-{
-    numeric_validation::RequireFiniteNonNegativeRange(range_min, range_max, "data range");
-    numeric_validation::RequireFinitePositive(tau, "tau");
-
-    const auto tau_square{ tau * tau };
-    const auto normalization{ std::pow(Constants::two_pi * tau_square, -1.5) };
-
-    SeriesPointList basis_and_response_entry_list;
-    basis_and_response_entry_list.reserve(sampling_entries.size());
-    for (const auto & sample : sampling_entries)
-    {
-        const auto distance{ sample.point.distance };
-        const auto response{ static_cast<double>(sample.response) };
-        if (!numeric_validation::IsFinite(distance)) continue;
-        if (!numeric_validation::IsFinite(response)) continue;
-        if (distance < static_cast<float>(range_min)) continue;
-        if (distance > static_cast<float>(range_max)) continue;
-
-        const auto distance_square{ static_cast<double>(distance) * static_cast<double>(distance) };
-        auto basis_vector{
-            std::vector<double>{
-                1.0,
-                normalization * std::exp(-0.5 * distance_square / tau_square)
-            }
-        };
-        basis_and_response_entry_list.emplace_back(
-            SeriesPoint{ std::move(basis_vector), response }
-        );
-    }
-
-    if (basis_and_response_entry_list.empty())
-    {
-        Logger::Log(LogLevel::Warning,
-            "linearization_service::BuildOffsetGaussianDatasetSeries : "
-            "No valid gaus data entry in the specified range.");
-        basis_and_response_entry_list.emplace_back(
-            SeriesPoint{ std::vector<double>(kLogQuadraticBasisSize, 0.0), 0.0 }
-        );
-    }
-    basis_and_response_entry_list.shrink_to_fit();
-    return basis_and_response_entry_list;
-}
-
 RHBMParameterVector EncodeGaussianToParameterVector(const GaussianModel3D & gaussian_model)
 {
     RHBMParameterVector parameter_vector{ RHBMParameterVector::Zero(kLogQuadraticBasisSize) };

@@ -16,9 +16,6 @@ struct FitOptions
     double alpha_step{ 0.1 };
     double distance_min{ 0.0 };
     double distance_max{ 1.0 };
-    double tau_min{ 0.1 };
-    double tau_max{ 1.0 };
-    double tau_step{ 0.05 };
     int thread_size{ 1 };
     bool output_progress{ false };
     bool output_summary_log{ false };
