@@ -208,13 +208,14 @@ void RunSimulationTestOnDataOutlier(const RHBMTestRequest & request)
     test_data_factory::BetaScenario base_scenario;
     base_scenario.gaus_true = GaussianModel3D::FromVector(model_par_prior);
     base_scenario.sampling_entry_size = 50;
-    base_scenario.data_error_sigma = 1.0;
+    base_scenario.data_error_sigma = 0.0;
     base_scenario.outlier_ratio = 0.0;
     base_scenario.replica_size = 10;
     base_scenario.requested_alpha_r_list = { request.alpha_r };
     base_scenario.alpha_training = true;
+    base_scenario.local_fit_model = LocalGaussianFitModel::LogQuadratic;
     const auto test_data_options{ BuildTestDataOptions(request) };
-    std::vector<double> error_list{ 0.1, 0.2, 0.3 };
+    std::vector<double> error_list{ 0.0, 0.05, 0.1 };
     const auto outlier_list{ BuildLinearSweep(9, 0.025) };
     BiasPlotRequest plot_request;
     plot_request.output_name = "bias_outlier_in_data.pdf";
