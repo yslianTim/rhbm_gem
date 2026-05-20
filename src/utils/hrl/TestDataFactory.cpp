@@ -256,10 +256,10 @@ LocalPotentialSampleList GenerateAtomNeighborhoodSamples(
         return sample_list;
     }
 
-    //auto filtered_sample_list{
-    //    KeepLowestResponseDecileByDistance(std::move(sample_list), 0.1)
-    //};
     return KeepLowestResponseDecileByDistance(std::move(sample_list));
+    //auto filtered_sample_list{
+    //    KeepLowestResponseDecileByDistance(std::move(sample_list))
+    //};
     //return GetMedianResponseByDistance(std::move(filtered_sample_list));
 }
 
