@@ -35,20 +35,15 @@ inline Eigen::Vector3d BuildLocalPotentialDirection(
 }
 
 inline std::vector<Eigen::Vector3d> BuildLocalPotentialNormalizedRejectDirectionList(
-    const std::vector<std::array<float, 3>> & reject_position_list,
-    const std::array<float, 3> & reference_position)
+    const std::vector<Eigen::Vector3d> & reject_position_list,
+    const Eigen::Vector3d & reference_position)
 {
     std::vector<Eigen::Vector3d> normalized_reject_direction_list;
     normalized_reject_direction_list.reserve(reject_position_list.size());
 
     for (const auto & reject_position : reject_position_list)
     {
-        numeric_validation::RequireAllFinite(
-            reject_position,
-            "PotentialSampleSelection reject positions");
-        const auto direction{
-            BuildLocalPotentialDirection(reject_position, reference_position)
-        };
+        const auto direction{ reject_position - reference_position };
         const auto norm{ direction.norm() };
         if (norm <= 0.0)
         {
@@ -59,6 +54,75 @@ inline std::vector<Eigen::Vector3d> BuildLocalPotentialNormalizedRejectDirection
     }
 
     return normalized_reject_direction_list;
+}
+
+inline std::vector<Eigen::Vector3d> BuildLocalPotentialNeighborPositionList(
+    const std::vector<std::array<float, 3>> & reject_position_list,
+    const std::array<float, 3> & reference_position)
+{
+    const auto reference_vector{ ToVector3d(reference_position) };
+
+    std::vector<Eigen::Vector3d> neighbor_position_list;
+    neighbor_position_list.reserve(reject_position_list.size());
+    for (const auto & reject_position : reject_position_list)
+    {
+        numeric_validation::RequireAllFinite(
+            reject_position,
+            "PotentialSampleSelection reject positions");
+        const auto neighbor_position{ ToVector3d(reject_position) };
+        if ((neighbor_position - reference_vector).squaredNorm() <= 0.0)
+        {
+            continue;
+        }
+
+        neighbor_position_list.emplace_back(neighbor_position);
+    }
+
+    return neighbor_position_list;
+}
+
+inline bool IsLocalPotentialSamplingPointOwnedByReference(
+    const SamplingPoint & point,
+    const Eigen::Vector3d & reference_position,
+    const std::vector<Eigen::Vector3d> & neighbor_position_list)
+{
+    const auto sampling_position{ ToVector3d(point.position) };
+    const auto reference_distance_squared{
+        (sampling_position - reference_position).squaredNorm()
+    };
+
+    for (const auto & neighbor_position : neighbor_position_list)
+    {
+        if (!(reference_distance_squared
+            < (sampling_position - neighbor_position).squaredNorm()))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+inline bool ShouldRejectLocalPotentialSamplingPointByNeighborDistance(
+    const SamplingPoint & point,
+    const Eigen::Vector3d & reference_position,
+    const std::vector<Eigen::Vector3d> & neighbor_position_list)
+{
+    const auto sampling_position{ ToVector3d(point.position) };
+    const auto reference_distance_squared{
+        (sampling_position - reference_position).squaredNorm()
+    };
+
+    for (const auto & neighbor_position : neighbor_position_list)
+    {
+        if ((sampling_position - neighbor_position).squaredNorm()
+            < reference_distance_squared)
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 inline bool ShouldRejectLocalPotentialSamplingPoint(
@@ -109,31 +173,53 @@ inline std::vector<std::size_t> BuildSelectedLocalPotentialSampleIndexList(
 {
     numeric_validation::RequireFiniteInclusiveRange(angle, 0.0, 180.0, "angle");
 
-    if (angle == 0.0)
+    const auto reference_vector{ detail::ToVector3d(reference_position) };
+    const auto neighbor_position_list{
+        detail::BuildLocalPotentialNeighborPositionList(
+            reject_position_list,
+            reference_position)
+    };
+    if (neighbor_position_list.empty())
     {
         return detail::BuildAllLocalPotentialSampleIndexList(point_list.size());
     }
 
     const auto normalized_reject_direction_list{
-        detail::BuildLocalPotentialNormalizedRejectDirectionList(
-            reject_position_list,
-            reference_position)
+        angle == 0.0
+            ? std::vector<Eigen::Vector3d>{}
+            : detail::BuildLocalPotentialNormalizedRejectDirectionList(
+                neighbor_position_list,
+                reference_vector)
     };
-    if (normalized_reject_direction_list.empty())
-    {
-        return detail::BuildAllLocalPotentialSampleIndexList(point_list.size());
-    }
 
     std::vector<std::size_t> selected_indices;
     selected_indices.reserve(point_list.size());
     const auto cos_threshold{ std::cos(angle * Constants::pi / 180.0) };
     for (std::size_t i = 0; i < point_list.size(); i++)
     {
-        if (!detail::ShouldRejectLocalPotentialSamplingPoint(
-            point_list.at(i),
-            reference_position,
-            normalized_reject_direction_list,
-            cos_threshold))
+        const auto & point{ point_list.at(i) };
+        if (detail::ShouldRejectLocalPotentialSamplingPointByNeighborDistance(
+            point,
+            reference_vector,
+            neighbor_position_list))
+        {
+            continue;
+        }
+
+        if (!detail::IsLocalPotentialSamplingPointOwnedByReference(
+            point,
+            reference_vector,
+            neighbor_position_list))
+        {
+            continue;
+        }
+
+        if (angle == 0.0
+            || !detail::ShouldRejectLocalPotentialSamplingPoint(
+                point,
+                reference_position,
+                normalized_reject_direction_list,
+                cos_threshold))
         {
             selected_indices.emplace_back(i);
         }
