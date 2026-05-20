@@ -121,6 +121,31 @@ TEST(RHBMHelperTest, BuildMemberDatasetTransformsSamplesToLogQuadraticDataset)
     EXPECT_TRUE(dataset.y.isApprox(MakeVector({ std::log(2.0), std::log(4.0) }), 1e-12));
 }
 
+TEST(RHBMHelperTest, BuildMemberDatasetTransformsSamplesToDifferentialDataset)
+{
+    const LocalPotentialSampleList sampling_entries{
+        LocalPotentialSample{ 2.0F, SamplingPoint{ 0.5F } },
+        LocalPotentialSample{ 4.0F, SamplingPoint{ 1.0F } },
+        LocalPotentialSample{ 6.0F, SamplingPoint{ 1.0F } },
+        LocalPotentialSample{ 8.0F, SamplingPoint{ 2.0F } }
+    };
+
+    const auto dataset{
+        rhbm_gem::rhbm_helper::BuildMemberDataset(
+            sampling_entries,
+            1.0,
+            2.0,
+            rhbm_gem::LocalGaussianFitModel::DifferentialMethod)
+    };
+
+    Eigen::MatrixXd expected_X(3, 3);
+    expected_X << 1.0, -1.75, 1.0,
+                  1.0, -1.75, 1.0,
+                  1.0, -12.25, 4.0;
+    EXPECT_TRUE(dataset.X.isApprox(expected_X, 1e-12));
+    EXPECT_TRUE(dataset.y.isApprox(MakeVector({ 4.0, 6.0, 8.0 }), 1e-12));
+}
+
 TEST(RHBMHelperTest, BuildMemberDatasetTransformsSeriesPoints)
 {
     const SeriesPointList series_point_list{

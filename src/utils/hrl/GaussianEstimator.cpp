@@ -44,11 +44,12 @@ void RequireSupportedLocalFitModel(
     switch (fit_model)
     {
     case LocalGaussianFitModel::LogQuadratic:
+    case LocalGaussianFitModel::DifferentialMethod:
         return;
     }
 
     throw std::invalid_argument(
-        std::string(context) + " only supports log-quadratic local fit model.");
+        std::string(context) + " received an unsupported local fit model.");
 }
 
 bool EmitTrainingReportIfRequested(
@@ -183,10 +184,11 @@ AlphaStudyOptions MakeStudyOptions(
 
 Eigen::VectorXd CalculateAbsoluteGaussianDifference(
     const RHBMParameterVector & linear_a,
-    const RHBMParameterVector & linear_b)
+    const RHBMParameterVector & linear_b,
+    LocalGaussianFitModel fit_model)
 {
-    const auto gaussian_a{ linearization_service::DecodeParameterVector(linear_a).ToVector() };
-    const auto gaussian_b{ linearization_service::DecodeParameterVector(linear_b).ToVector() };
+    const auto gaussian_a{ linearization_service::DecodeParameterVector(linear_a, fit_model).ToVector() };
+    const auto gaussian_b{ linearization_service::DecodeParameterVector(linear_b, fit_model).ToVector() };
     eigen_validation::RequireSameSize(gaussian_a, gaussian_b, "gaussian");
     return (gaussian_a - gaussian_b).array().abs().matrix();
 }
@@ -203,6 +205,7 @@ void ValidateStudyBatch(
 Eigen::MatrixXd StudyAlphaRBias(
     const std::vector<double> & alpha_grid,
     const std::vector<RHBMMemberDataset> & dataset_list,
+    LocalGaussianFitModel fit_model,
     const AlphaStudyOptions & options)
 {
     ValidateStudyBatch(dataset_list.size(), alpha_grid);
@@ -241,7 +244,8 @@ Eigen::MatrixXd StudyAlphaRBias(
             };
             local_bias_array.col(j) = CalculateAbsoluteGaussianDifference(
                 result.beta_mdpde,
-                result.beta_ols
+                result.beta_ols,
+                fit_model
             );
         }
 
@@ -265,6 +269,7 @@ Eigen::MatrixXd StudyAlphaRBias(
 Eigen::MatrixXd StudyAlphaGBias(
     const std::vector<double> & alpha_grid,
     const std::vector<std::vector<RHBMParameterVector>> & beta_group_list,
+    LocalGaussianFitModel fit_model,
     const AlphaStudyOptions & options)
 {
     ValidateStudyBatch(beta_group_list.size(), alpha_grid);
@@ -295,7 +300,7 @@ Eigen::MatrixXd StudyAlphaGBias(
                 rhbm_helper::EstimateMuMDPDE(alpha_g, beta_matrix, algorithm_options)
             };
             local_bias_array.col(j) = CalculateAbsoluteGaussianDifference(
-                result.mu_mdpde, result.mu_mean);
+                result.mu_mdpde, result.mu_mean, fit_model);
         }
 
 #ifdef USE_OPENMP
@@ -324,7 +329,11 @@ std::vector<RHBMMemberDataset> BuildMemberDatasetList(
     for (const auto & sample_entries : sample_entries_list)
     {
         dataset_list.emplace_back(
-            rhbm_helper::BuildMemberDataset(sample_entries, options.distance_min, options.distance_max)
+            rhbm_helper::BuildMemberDataset(
+                sample_entries,
+                options.distance_min,
+                options.distance_max,
+                options.local_fit_model)
         );
     }
     return dataset_list;
@@ -332,39 +341,43 @@ std::vector<RHBMMemberDataset> BuildMemberDatasetList(
 
 LocalGaussianResult DecodeLocalGaussianResult(
     double alpha_r,
-    const RHBMBetaEstimateResult & fit_result)
+    const RHBMBetaEstimateResult & fit_result,
+    LocalGaussianFitModel fit_model)
 {
     return LocalGaussianResult{
         alpha_r,
         GaussianModel3DWithUncertainty{
-            linearization_service::DecodeParameterVector(fit_result.beta_ols),
+            linearization_service::DecodeParameterVector(fit_result.beta_ols, fit_model),
             GaussianModel3DUncertainty{}
         },
         GaussianModel3DWithUncertainty{
-            linearization_service::DecodeParameterVector(fit_result.beta_mdpde),
+            linearization_service::DecodeParameterVector(fit_result.beta_mdpde, fit_model),
             GaussianModel3DUncertainty{}
         },
         false,
         0.0,
-        LocalGaussianFitModel::LogQuadratic,
+        fit_model,
         fit_result
     };
 }
 
 GroupGaussianResult DecodeGroupGaussianResult(
     double alpha_g,
-    const RHBMGroupEstimationResult & result)
+    const RHBMGroupEstimationResult & result,
+    LocalGaussianFitModel fit_model)
 {
     return GroupGaussianResult{
         alpha_g,
-        linearization_service::DecodeParameterVector(result.mu_mean),
-        linearization_service::DecodeParameterVector(result.mu_mdpde),
-        linearization_service::DecodeParameterVector(result.mu_prior, result.capital_lambda)
+        linearization_service::DecodeParameterVector(result.mu_mean, fit_model),
+        linearization_service::DecodeParameterVector(result.mu_mdpde, fit_model),
+        linearization_service::DecodeParameterVector(
+            result.mu_prior, result.capital_lambda, fit_model)
     };
 }
 
 std::vector<LocalGaussianResult> DecodeMemberGaussianResults(
-    const RHBMGroupEstimationResult & result)
+    const RHBMGroupEstimationResult & result,
+    LocalGaussianFitModel fit_model)
 {
     const auto member_count{ static_cast<std::size_t>(result.beta_posterior_matrix.cols()) };
     if (result.capital_sigma_posterior_list.size() != member_count)
@@ -385,7 +398,8 @@ std::vector<LocalGaussianResult> DecodeMemberGaussianResults(
         const auto gaussian{
             linearization_service::DecodeParameterVector(
                 result.beta_posterior_matrix.col(i),
-                result.capital_sigma_posterior_list.at(static_cast<std::size_t>(i)))
+                result.capital_sigma_posterior_list.at(static_cast<std::size_t>(i)),
+                fit_model)
         };
         member_results.emplace_back(LocalGaussianResult{
             0.0,
@@ -393,14 +407,15 @@ std::vector<LocalGaussianResult> DecodeMemberGaussianResults(
             gaussian,
             static_cast<bool>(result.outlier_flag_array(i)),
             result.statistical_distance_array(i),
-            LocalGaussianFitModel::LogQuadratic
+            fit_model
         });
     }
     return member_results;
 }
 
 std::vector<RHBMBetaEstimateResult> BuildMemberFitResultList(
-    const std::vector<LocalGaussianResult> & member_result_list)
+    const std::vector<LocalGaussianResult> & member_result_list,
+    LocalGaussianFitModel fit_model)
 {
     std::vector<RHBMBetaEstimateResult> fit_result_list;
     fit_result_list.reserve(member_result_list.size());
@@ -411,10 +426,10 @@ std::vector<RHBMBetaEstimateResult> BuildMemberFitResultList(
             throw std::invalid_argument(
                 "member_result_list contains a result without transient fit state.");
         }
-        if (member_result.fit_model != LocalGaussianFitModel::LogQuadratic)
+        if (member_result.fit_model != fit_model)
         {
             throw std::invalid_argument(
-                "group Gaussian estimation only supports log-quadratic local fit results.");
+                "group Gaussian estimation requires member results to match the requested local fit model.");
         }
         fit_result_list.emplace_back(*member_result.fit_result);
     }
@@ -448,7 +463,11 @@ double TrainAlphaR(
     if (ShouldOutputStudyPlot(output_study_plot, options))
     {
         const auto bias_matrix{
-            StudyAlphaRBias(training_result.alpha_grid, dataset_list, MakeStudyOptions(options))
+            StudyAlphaRBias(
+                training_result.alpha_grid,
+                dataset_list,
+                options.local_fit_model,
+                MakeStudyOptions(options))
         };
         (void)EmitTrainingReportIfRequested(
             bias_matrix, training_result.alpha_grid, "#alpha_{r}", "Deviation with OLS",
@@ -487,14 +506,15 @@ double TrainAlphaG(
         beta_list.reserve(member_result_list.at(i).size());
         for (const auto & member_result : member_result_list.at(i))
         {
-            if (member_result.fit_model != LocalGaussianFitModel::LogQuadratic)
+            if (member_result.fit_model != options.local_fit_model)
             {
                 throw std::invalid_argument(
-                    "Alpha_G training only supports log-quadratic local fit results.");
+                    "Alpha_G training requires member results to match the requested local fit model.");
             }
             beta_list.emplace_back(
                 linearization_service::EncodeGaussianToParameterVector(
-                    member_result.mdpde.GetModel()));
+                    member_result.mdpde.GetModel(),
+                    member_result.fit_model));
         }
         beta_group_list.emplace_back(std::move(beta_list));
     }
@@ -530,7 +550,11 @@ double TrainAlphaG(
     if (ShouldOutputStudyPlot(output_study_plot, options))
     {
         const auto bias_matrix{
-            StudyAlphaGBias(training_result.alpha_grid, beta_group_list, MakeStudyOptions(options))
+            StudyAlphaGBias(
+                training_result.alpha_grid,
+                beta_group_list,
+                options.local_fit_model,
+                MakeStudyOptions(options))
         };
         (void)EmitTrainingReportIfRequested(
             bias_matrix, training_result.alpha_grid, "#alpha_{g}", "Deviation with Mean",
@@ -557,11 +581,15 @@ LocalGaussianResult EstimateLocalGaussian(
     RequireSupportedLocalFitModel(options.local_fit_model, "EstimateLocalGaussian");
 
     auto dataset{
-        rhbm_helper::BuildMemberDataset(sample_entries, options.distance_min, options.distance_max)
+        rhbm_helper::BuildMemberDataset(
+            sample_entries,
+            options.distance_min,
+            options.distance_max,
+            options.local_fit_model)
     };
     auto execution_options{ MakeExecutionOptions(options) };
     auto result{ rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset, execution_options) };
-    return DecodeLocalGaussianResult(alpha_r, result);
+    return DecodeLocalGaussianResult(alpha_r, result, options.local_fit_model);
 }
 
 GroupGaussianResult EstimateGroupGaussian(
@@ -582,11 +610,13 @@ GroupGaussianResult EstimateGroupGaussian(
 
     auto execution_options{ MakeExecutionOptions(options) };
     const auto dataset_list{ BuildMemberDatasetList(sample_entries_list, options) };
-    const auto fit_result_list{ BuildMemberFitResultList(member_result_list) };
+    const auto fit_result_list{ BuildMemberFitResultList(
+        member_result_list,
+        options.local_fit_model) };
     const auto group_input{ rhbm_helper::BuildGroupInput(dataset_list, fit_result_list) };
     const auto raw_result{ rhbm_helper::EstimateGroup(alpha_g, group_input, execution_options) };
-    auto result{ DecodeGroupGaussianResult(alpha_g, raw_result) };
-    result.member_results = DecodeMemberGaussianResults(raw_result);
+    auto result{ DecodeGroupGaussianResult(alpha_g, raw_result, options.local_fit_model) };
+    result.member_results = DecodeMemberGaussianResults(raw_result, options.local_fit_model);
     return result;
 }
 

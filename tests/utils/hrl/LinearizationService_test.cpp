@@ -51,6 +51,35 @@ TEST(LinearizationServiceTest, BuildDatasetSeriesTransformsPositiveResponsesWith
     EXPECT_NEAR(std::log(9.0), series.at(2).response, 1.0e-7);
 }
 
+TEST(LinearizationServiceTest, BuildDatasetSeriesTransformsDifferentialMethodWithAveragedIntegral)
+{
+    const LocalPotentialSampleList sampling_entries{
+        {2.0f, SamplingPoint{ 0.5f }},
+        {4.0f, SamplingPoint{ 1.0f }},
+        {6.0f, SamplingPoint{ 1.0f }},
+        {8.0f, SamplingPoint{ 2.0f }},
+    };
+
+    const auto series{
+        ls::BuildDatasetSeries(
+            sampling_entries,
+            1.0,
+            2.0,
+            rhbm_gem::LocalGaussianFitModel::DifferentialMethod)
+    };
+
+    ASSERT_EQ(series.size(), 3U);
+    EXPECT_NEAR(1.0, series.at(0).GetBasisValue(0), 1.0e-12);
+    EXPECT_NEAR(-1.75, series.at(0).GetBasisValue(1), 1.0e-12);
+    EXPECT_NEAR(1.0, series.at(0).GetBasisValue(2), 1.0e-12);
+    EXPECT_NEAR(4.0, series.at(0).response, 1.0e-12);
+    EXPECT_NEAR(-1.75, series.at(1).GetBasisValue(1), 1.0e-12);
+    EXPECT_NEAR(6.0, series.at(1).response, 1.0e-12);
+    EXPECT_NEAR(-12.25, series.at(2).GetBasisValue(1), 1.0e-12);
+    EXPECT_NEAR(4.0, series.at(2).GetBasisValue(2), 1.0e-12);
+    EXPECT_NEAR(8.0, series.at(2).response, 1.0e-12);
+}
+
 TEST(LinearizationServiceTest, BuildDatasetSeriesRejectsInvalidRange)
 {
     const LocalPotentialSampleList sampling_entries{
@@ -66,6 +95,51 @@ TEST(LinearizationServiceTest, BuildDatasetSeriesRejectsInvalidRange)
             std::numeric_limits<double>::quiet_NaN(),
             1.0),
         std::invalid_argument);
+}
+
+TEST(LinearizationServiceTest, EncodeAndDecodeDifferentialParameterVectorRoundTripsOffsetModel)
+{
+    const rhbm_gem::GaussianModel3D model{ 2.0, 0.5, 0.25 };
+
+    const auto beta{
+        ls::EncodeGaussianToParameterVector(
+            model,
+            rhbm_gem::LocalGaussianFitModel::DifferentialMethod)
+    };
+    const auto estimate{
+        ls::DecodeParameterVector(
+            beta,
+            rhbm_gem::LocalGaussianFitModel::DifferentialMethod)
+    };
+
+    ASSERT_EQ(beta.size(), 3);
+    EXPECT_NEAR(2.0, estimate.GetAmplitude(), 1.0e-12);
+    EXPECT_NEAR(0.5, estimate.GetWidth(), 1.0e-12);
+    EXPECT_NEAR(0.25, estimate.GetIntercept(), 1.0e-12);
+}
+
+TEST(LinearizationServiceTest, DecodeDifferentialParameterVectorReturnsStandardDeviation)
+{
+    const auto beta{
+        ls::EncodeGaussianToParameterVector(
+            rhbm_gem::GaussianModel3D{ 2.0, 0.5, 0.25 },
+            rhbm_gem::LocalGaussianFitModel::DifferentialMethod)
+    };
+    const Eigen::MatrixXd covariance_matrix{ 0.01 * Eigen::MatrixXd::Identity(3, 3) };
+
+    const auto gaussian{
+        ls::DecodeParameterVector(
+            beta,
+            covariance_matrix,
+            rhbm_gem::LocalGaussianFitModel::DifferentialMethod)
+    };
+
+    EXPECT_NEAR(2.0, gaussian.GetModel().GetAmplitude(), 1.0e-12);
+    EXPECT_NEAR(0.5, gaussian.GetModel().GetWidth(), 1.0e-12);
+    EXPECT_NEAR(0.25, gaussian.GetModel().GetIntercept(), 1.0e-12);
+    EXPECT_TRUE(std::isfinite(gaussian.GetStandardDeviationModel().GetAmplitude()));
+    EXPECT_TRUE(std::isfinite(gaussian.GetStandardDeviationModel().GetWidth()));
+    EXPECT_TRUE(std::isfinite(gaussian.GetStandardDeviationModel().GetIntercept()));
 }
 
 TEST(LinearizationServiceTest, EncodeGaussianToParameterVectorMatchesClosedForm)

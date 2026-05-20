@@ -430,7 +430,17 @@ RHBMMemberDataset rhbm_helper::BuildMemberDataset(
     double range_max)
 {
     return rhbm_helper::BuildMemberDataset(
-        linearization_service::BuildDatasetSeries(sampling_entries, range_min, range_max));
+        sampling_entries, range_min, range_max, LocalGaussianFitModel::LogQuadratic);
+}
+
+RHBMMemberDataset rhbm_helper::BuildMemberDataset(
+    const LocalPotentialSampleList & sampling_entries,
+    double range_min,
+    double range_max,
+    LocalGaussianFitModel fit_model)
+{
+    return rhbm_helper::BuildMemberDataset(
+        linearization_service::BuildDatasetSeries(sampling_entries, range_min, range_max, fit_model));
 }
 
 RHBMBetaMatrix rhbm_helper::BuildBetaMatrix(const std::vector<RHBMParameterVector> & beta_list)

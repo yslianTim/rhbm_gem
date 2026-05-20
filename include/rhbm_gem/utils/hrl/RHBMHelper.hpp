@@ -4,6 +4,7 @@
 
 #include <Eigen/Dense>
 
+#include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
@@ -15,6 +16,11 @@ RHBMMemberDataset BuildMemberDataset(
     const LocalPotentialSampleList & sampling_entries,
     double range_min,
     double range_max);
+RHBMMemberDataset BuildMemberDataset(
+    const LocalPotentialSampleList & sampling_entries,
+    double range_min,
+    double range_max,
+    LocalGaussianFitModel fit_model);
 
 RHBMBetaMatrix BuildBetaMatrix(const std::vector<RHBMParameterVector> & beta_list);
 
