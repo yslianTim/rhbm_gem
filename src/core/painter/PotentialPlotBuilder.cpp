@@ -37,7 +37,8 @@ SeriesPointList BuildLocalDatasetSeries(const AtomLocalPotentialView & view)
     return ls::BuildDatasetSeries(
         view.GetSamplingEntries(),
         -std::numeric_limits<double>::infinity(),
-        std::numeric_limits<double>::infinity());
+        std::numeric_limits<double>::infinity(),
+        LocalGaussianFitModel::LogQuadratic);
 }
 
 } // namespace

@@ -387,8 +387,15 @@ RHBMGroupEstimationResult BuildGroupFallbackResult(
 }
 } // namespace
 
-RHBMMemberDataset rhbm_helper::BuildMemberDataset(const SeriesPointList & series_point_list)
+RHBMMemberDataset rhbm_helper::BuildMemberDataset(
+    const LocalPotentialSampleList & sampling_entries,
+    double range_min,
+    double range_max,
+    LocalGaussianFitModel fit_model)
 {
+    auto series_point_list{
+        linearization_service::BuildDatasetSeries(sampling_entries, range_min, range_max, fit_model)
+    };
     if (series_point_list.empty())
     {
         throw std::invalid_argument("series_point_list must not be empty.");
@@ -422,25 +429,6 @@ RHBMMemberDataset rhbm_helper::BuildMemberDataset(const SeriesPointList & series
     }
 
     return dataset;
-}
-
-RHBMMemberDataset rhbm_helper::BuildMemberDataset(
-    const LocalPotentialSampleList & sampling_entries,
-    double range_min,
-    double range_max)
-{
-    return rhbm_helper::BuildMemberDataset(
-        sampling_entries, range_min, range_max, LocalGaussianFitModel::LogQuadratic);
-}
-
-RHBMMemberDataset rhbm_helper::BuildMemberDataset(
-    const LocalPotentialSampleList & sampling_entries,
-    double range_min,
-    double range_max,
-    LocalGaussianFitModel fit_model)
-{
-    return rhbm_helper::BuildMemberDataset(
-        linearization_service::BuildDatasetSeries(sampling_entries, range_min, range_max, fit_model));
 }
 
 RHBMBetaMatrix rhbm_helper::BuildBetaMatrix(const std::vector<RHBMParameterVector> & beta_list)

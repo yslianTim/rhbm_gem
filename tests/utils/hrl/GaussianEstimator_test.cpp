@@ -178,9 +178,15 @@ TEST(GaussianEstimatorTest, AlphaRMatchesTrainingFunctionBestAlpha)
     };
     const std::vector<rg::RHBMMemberDataset> dataset_list{
         rg::rhbm_helper::BuildMemberDataset(
-            sample_entries_list.at(0), options.distance_min, options.distance_max),
+            sample_entries_list.at(0),
+            options.distance_min,
+            options.distance_max,
+            options.local_fit_model),
         rg::rhbm_helper::BuildMemberDataset(
-            sample_entries_list.at(1), options.distance_min, options.distance_max)
+            sample_entries_list.at(1),
+            options.distance_min,
+            options.distance_max,
+            options.local_fit_model)
     };
     rg::rhbm_trainer::RHBMTrainingOptions trainer_options;
     trainer_options.subset_size = 5;
@@ -471,7 +477,10 @@ TEST(GaussianEstimatorTest, EstimateLocalGaussianMatchesHelperPath)
     constexpr double alpha_r{ 0.2 };
     const auto dataset{
         rg::rhbm_helper::BuildMemberDataset(
-            sample_entries, options.distance_min, options.distance_max)
+            sample_entries,
+            options.distance_min,
+            options.distance_max,
+            options.local_fit_model)
     };
     const auto expected_fit{
         rg::rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset)
@@ -541,7 +550,10 @@ TEST(GaussianEstimatorTest, EstimateGroupGaussianMatchesHelperPath)
     {
         auto dataset{
             rg::rhbm_helper::BuildMemberDataset(
-                sample_entries_list.at(i), options.distance_min, options.distance_max)
+                sample_entries_list.at(i),
+                options.distance_min,
+                options.distance_max,
+                options.local_fit_model)
         };
         auto member_result{
             rg::gaussian_estimator::EstimateLocalGaussian(

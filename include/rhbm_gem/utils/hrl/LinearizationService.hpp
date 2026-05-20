@@ -13,10 +13,6 @@ namespace rhbm_gem::linearization_service
 SeriesPointList BuildDatasetSeries(
     const LocalPotentialSampleList & sampling_entries,
     double range_min,
-    double range_max);
-SeriesPointList BuildDatasetSeries(
-    const LocalPotentialSampleList & sampling_entries,
-    double range_min,
     double range_max,
     LocalGaussianFitModel fit_model);
 

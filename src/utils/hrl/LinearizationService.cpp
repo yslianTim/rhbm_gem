@@ -198,15 +198,6 @@ double CalculateVariance(
 SeriesPointList BuildDatasetSeries(
     const LocalPotentialSampleList & sampling_entries,
     double range_min,
-    double range_max)
-{
-    return BuildDatasetSeries(
-        sampling_entries, range_min, range_max, LocalGaussianFitModel::LogQuadratic);
-}
-
-SeriesPointList BuildDatasetSeries(
-    const LocalPotentialSampleList & sampling_entries,
-    double range_min,
     double range_max,
     LocalGaussianFitModel fit_model)
 {

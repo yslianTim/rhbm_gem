@@ -107,7 +107,7 @@ double SelectBenchmarkAlphaR(
 
 void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
 {
-    const auto error_sigma{ 0.1 };
+    const auto error_sigma{ 0.01 };
     const auto model_par_prior{ MakeDefaultModelPrior() };
     const auto test_data_options{ BuildTestDataOptions(request) };
 

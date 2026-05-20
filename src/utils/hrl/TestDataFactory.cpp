@@ -335,7 +335,7 @@ LocalPotentialSampleList AddNoise(
     {
     case LocalGaussianFitModel::LogQuadratic:
         return AddLogSpaceNoise(std::move(sampling_entries), model, error_sigma, generator);
-    default:
+    case LocalGaussianFitModel::DifferentialMethod:
         return AddRealSpaceNoise(std::move(sampling_entries), model, error_sigma, generator);
     }
     throw std::invalid_argument("Unsupported local Gaussian fit model for beta test noise.");
@@ -465,7 +465,10 @@ RHBMBetaTestInput BuildBetaTestInput(const BetaScenario & scenario, const TestDa
         };
         auto dataset{
             rhbm_helper::BuildMemberDataset(
-                noisy_sampling_entries, options.fit_range_min, options.fit_range_max)
+                noisy_sampling_entries,
+                options.fit_range_min,
+                options.fit_range_max,
+                scenario.local_fit_model)
         };
         input.replica_sampling_entries.emplace_back(std::move(noisy_sampling_entries));
         input.replica_datasets.emplace_back(std::move(dataset));
@@ -605,11 +608,17 @@ RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
             generator);
         auto no_cut_dataset{
             rhbm_helper::BuildMemberDataset(
-                no_cut_sampling_entries, options.fit_range_min, options.fit_range_max)
+                no_cut_sampling_entries,
+                options.fit_range_min,
+                options.fit_range_max,
+                scenario.local_fit_model)
         };
         auto cut_dataset{
             rhbm_helper::BuildMemberDataset(
-                cut_sampling_entries, options.fit_range_min, options.fit_range_max)
+                cut_sampling_entries,
+                options.fit_range_min,
+                options.fit_range_max,
+                scenario.local_fit_model)
         };
         input.no_cut_input.replica_sampling_entries.emplace_back(std::move(no_cut_sampling_entries));
         input.cut_input.replica_sampling_entries.emplace_back(std::move(cut_sampling_entries));

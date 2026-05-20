@@ -112,7 +112,13 @@ TEST(RHBMHelperTest, BuildMemberDatasetTransformsSamplesToLogQuadraticDataset)
         LocalPotentialSample{ 4.0F, SamplingPoint{ 2.0F } }
     };
 
-    const auto dataset{ rhbm_gem::rhbm_helper::BuildMemberDataset(sampling_entries, 0.0, 3.0) };
+    const auto dataset{
+        rhbm_gem::rhbm_helper::BuildMemberDataset(
+            sampling_entries,
+            0.0,
+            3.0,
+            rhbm_gem::LocalGaussianFitModel::LogQuadratic)
+    };
 
     Eigen::MatrixXd expected_X(2, 2);
     expected_X << 1.0, -0.5,
@@ -146,22 +152,6 @@ TEST(RHBMHelperTest, BuildMemberDatasetTransformsSamplesToDifferentialDataset)
     EXPECT_TRUE(dataset.y.isApprox(MakeVector({ 4.0, 6.0, 8.0 }), 1e-12));
 }
 
-TEST(RHBMHelperTest, BuildMemberDatasetTransformsSeriesPoints)
-{
-    const SeriesPointList series_point_list{
-        SeriesPoint{ std::vector<double>{ 1.0, 0.25 }, 2.0 },
-        SeriesPoint{ std::vector<double>{ 1.0, 0.50 }, -1.0 }
-    };
-
-    const auto dataset{ rhbm_gem::rhbm_helper::BuildMemberDataset(series_point_list) };
-
-    Eigen::MatrixXd expected_X(2, 2);
-    expected_X << 1.0, 0.25,
-                  1.0, 0.50;
-    EXPECT_TRUE(dataset.X.isApprox(expected_X, 1e-12));
-    EXPECT_TRUE(dataset.y.isApprox(MakeVector({ 2.0, -1.0 }), 1e-12));
-}
-
 TEST(RHBMHelperTest, BuildMemberDatasetFiltersByRangeAndPositiveResponse)
 {
     const LocalPotentialSampleList sampling_entries{
@@ -172,7 +162,13 @@ TEST(RHBMHelperTest, BuildMemberDatasetFiltersByRangeAndPositiveResponse)
         LocalPotentialSample{ 7.0F, SamplingPoint{ 3.5F } }
     };
 
-    const auto dataset{ rhbm_gem::rhbm_helper::BuildMemberDataset(sampling_entries, 1.0, 3.0) };
+    const auto dataset{
+        rhbm_gem::rhbm_helper::BuildMemberDataset(
+            sampling_entries,
+            1.0,
+            3.0,
+            rhbm_gem::LocalGaussianFitModel::LogQuadratic)
+    };
 
     Eigen::MatrixXd expected_X(2, 2);
     expected_X << 1.0, -0.5,
@@ -188,7 +184,13 @@ TEST(RHBMHelperTest, BuildMemberDatasetReturnsZeroFallbackWhenNoSampleIsValid)
         LocalPotentialSample{ 0.0F, SamplingPoint{ 1.5F } }
     };
 
-    const auto dataset{ rhbm_gem::rhbm_helper::BuildMemberDataset(sampling_entries, 1.0, 2.0) };
+    const auto dataset{
+        rhbm_gem::rhbm_helper::BuildMemberDataset(
+            sampling_entries,
+            1.0,
+            2.0,
+            rhbm_gem::LocalGaussianFitModel::LogQuadratic)
+    };
 
     Eigen::MatrixXd expected_X{ Eigen::MatrixXd::Zero(1, 2) };
     EXPECT_TRUE(dataset.X.isApprox(expected_X, 1e-12));
@@ -202,7 +204,11 @@ TEST(RHBMHelperTest, BuildMemberDatasetRejectsInvalidRange)
     };
 
     EXPECT_THROW(
-        rhbm_gem::rhbm_helper::BuildMemberDataset(sampling_entries, 2.0, 1.0),
+        rhbm_gem::rhbm_helper::BuildMemberDataset(
+            sampling_entries,
+            2.0,
+            1.0,
+            rhbm_gem::LocalGaussianFitModel::LogQuadratic),
         std::invalid_argument);
 }
 
@@ -216,10 +222,18 @@ TEST(RHBMHelperTest, BuildMemberDatasetRejectsNonFiniteValues)
     };
 
     EXPECT_THROW(
-        rhbm_gem::rhbm_helper::BuildMemberDataset(distance_nan, 0.0, 2.0),
+        rhbm_gem::rhbm_helper::BuildMemberDataset(
+            distance_nan,
+            0.0,
+            2.0,
+            rhbm_gem::LocalGaussianFitModel::LogQuadratic),
         std::invalid_argument);
     EXPECT_THROW(
-        rhbm_gem::rhbm_helper::BuildMemberDataset(response_nan, 0.0, 2.0),
+        rhbm_gem::rhbm_helper::BuildMemberDataset(
+            response_nan,
+            0.0,
+            2.0,
+            rhbm_gem::LocalGaussianFitModel::LogQuadratic),
         std::invalid_argument);
 }
 

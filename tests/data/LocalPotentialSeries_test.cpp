@@ -29,7 +29,11 @@ SeriesPointList BuildExpectedDatasetSeries(
     double x_min,
     double x_max)
 {
-    return ls::BuildDatasetSeries(sampling_entries, x_min, x_max);
+    return ls::BuildDatasetSeries(
+        sampling_entries,
+        x_min,
+        x_max,
+        rg::LocalGaussianFitModel::LogQuadratic);
 }
 
 struct LocalPotentialViewFixture
@@ -146,7 +150,11 @@ TEST(LocalPotentialSeriesTest, ViewForwardsSeriesDerivationsFromResolvedEntry)
     EXPECT_FLOAT_EQ(binned.at(1).response, 6.0f);
 
     const auto fit_dataset_series{
-        ls::BuildDatasetSeries(view.GetSamplingEntries(), 0.0, 0.5)
+        ls::BuildDatasetSeries(
+            view.GetSamplingEntries(),
+            0.0,
+            0.5,
+            rg::LocalGaussianFitModel::LogQuadratic)
     };
     ASSERT_EQ(fit_dataset_series.size(), 2U);
     EXPECT_EQ(fit_dataset_series.at(0).GetBasisSize(), 2U);

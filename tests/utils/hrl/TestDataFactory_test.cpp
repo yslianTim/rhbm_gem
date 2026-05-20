@@ -93,7 +93,11 @@ void ExpectDatasetMatchesSamplingEntries(
     double fit_range_max = 1.0)
 {
     const auto expected_dataset{
-        rg::rhbm_helper::BuildMemberDataset(sampling_entries, fit_range_min, fit_range_max)
+        rg::rhbm_helper::BuildMemberDataset(
+            sampling_entries,
+            fit_range_min,
+            fit_range_max,
+            rg::LocalGaussianFitModel::LogQuadratic)
     };
     ExpectDatasetEquals(dataset, expected_dataset);
 }
