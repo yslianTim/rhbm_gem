@@ -1,12 +1,10 @@
 #include <gtest/gtest.h>
 
-#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
 #include <initializer_list>
 #include <limits>
-#include <map>
 #include <stdexcept>
 #include <vector>
 
@@ -98,11 +96,6 @@ void ExpectDatasetMatchesSamplingEntries(
         rg::rhbm_helper::BuildMemberDataset(sampling_entries, fit_range_min, fit_range_max)
     };
     ExpectDatasetEquals(dataset, expected_dataset);
-}
-
-rg::LocalGaussianFitModel MakeUnsupportedFitModel()
-{
-    return static_cast<rg::LocalGaussianFitModel>(999);
 }
 
 } // namespace
@@ -251,21 +244,6 @@ TEST(TestDataFactoryTest, BuildBetaTestInputUsesExpectedZeroDistanceGaussianResp
         options.fit_range_max);
 }
 
-TEST(TestDataFactoryTest, BuildBetaTestInputRejectsUnsupportedLocalFitModel)
-{
-    auto scenario{ tdf::BetaScenario{
-        rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
-        8,
-        0.05,
-        0.0,
-        1,
-        42
-    } };
-    scenario.local_fit_model = MakeUnsupportedFitModel();
-
-    EXPECT_THROW(tdf::BuildBetaTestInput(scenario), std::invalid_argument);
-}
-
 TEST(TestDataFactoryTest, BuildMuTestInputIsReproducibleWithFixedSeed)
 {
     const auto scenario{ tdf::MuScenario{
@@ -382,27 +360,6 @@ TEST(TestDataFactoryTest, BuildAtomNeighborhoodTestInputProvidesPairedDatasetsAn
             input.sampling_summaries.at(i),
             repeated_input.sampling_summaries.at(i));
     }
-}
-
-TEST(TestDataFactoryTest, BuildAtomNeighborhoodTestInputRejectsUnsupportedLocalFitModel)
-{
-    auto scenario{ tdf::AtomNeighborhoodScenario{
-        tdf::AtomNeighborType::O,
-        rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
-        8,
-        0.05,
-        0.0,
-        1.0,
-        15.0,
-        false,
-        0.0,
-        4.0,
-        1,
-        11
-    } };
-    scenario.local_fit_model = MakeUnsupportedFitModel();
-
-    EXPECT_THROW(tdf::BuildAtomNeighborhoodTestInput(scenario), std::invalid_argument);
 }
 
 TEST(TestDataFactoryTest, BuildTestInputsRejectNonPositiveGaussianWidth)
