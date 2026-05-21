@@ -12,26 +12,19 @@
 #include <Eigen/Dense>
 
 #include <rhbm_gem/utils/domain/Constants.hpp>
+#include <rhbm_gem/utils/math/EigenHelper.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace rhbm_gem {
 namespace detail {
 
-inline Eigen::Vector3d ToVector3d(const std::array<float, 3> & position)
-{
-    return Eigen::Vector3d{
-        static_cast<double>(position[0]),
-        static_cast<double>(position[1]),
-        static_cast<double>(position[2])
-    };
-}
-
 inline Eigen::Vector3d BuildLocalPotentialDirection(
     const std::array<float, 3> & position,
     const std::array<float, 3> & reference_position)
 {
-    return ToVector3d(position) - ToVector3d(reference_position);
+    return Eigen::Vector3d{ eigen_helper::ToEigenVector(position) } -
+        Eigen::Vector3d{ eigen_helper::ToEigenVector(reference_position) };
 }
 
 inline std::vector<Eigen::Vector3d> BuildLocalPotentialNormalizedRejectDirectionList(
@@ -60,7 +53,9 @@ inline std::vector<Eigen::Vector3d> BuildLocalPotentialNeighborPositionList(
     const std::vector<std::array<float, 3>> & reject_position_list,
     const std::array<float, 3> & reference_position)
 {
-    const auto reference_vector{ ToVector3d(reference_position) };
+    const Eigen::Vector3d reference_vector{
+        eigen_helper::ToEigenVector(reference_position)
+    };
 
     std::vector<Eigen::Vector3d> neighbor_position_list;
     neighbor_position_list.reserve(reject_position_list.size());
@@ -69,7 +64,9 @@ inline std::vector<Eigen::Vector3d> BuildLocalPotentialNeighborPositionList(
         numeric_validation::RequireAllFinite(
             reject_position,
             "PotentialSampleSelection reject positions");
-        const auto neighbor_position{ ToVector3d(reject_position) };
+        const Eigen::Vector3d neighbor_position{
+            eigen_helper::ToEigenVector(reject_position)
+        };
         if ((neighbor_position - reference_vector).squaredNorm() <= 0.0)
         {
             continue;
@@ -86,7 +83,9 @@ inline bool IsLocalPotentialSamplingPointOwnedByReference(
     const Eigen::Vector3d & reference_position,
     const std::vector<Eigen::Vector3d> & neighbor_position_list)
 {
-    const auto sampling_position{ ToVector3d(point.position) };
+    const Eigen::Vector3d sampling_position{
+        eigen_helper::ToEigenVector(point.position)
+    };
     const auto reference_distance_squared{
         (sampling_position - reference_position).squaredNorm()
     };
@@ -108,7 +107,9 @@ inline bool ShouldRejectLocalPotentialSamplingPointByNeighborDistance(
     const Eigen::Vector3d & reference_position,
     const std::vector<Eigen::Vector3d> & neighbor_position_list)
 {
-    const auto sampling_position{ ToVector3d(point.position) };
+    const Eigen::Vector3d sampling_position{
+        eigen_helper::ToEigenVector(point.position)
+    };
     const auto reference_distance_squared{
         (sampling_position - reference_position).squaredNorm()
     };
@@ -252,7 +253,9 @@ inline std::vector<std::size_t> BuildSelectedLocalPotentialSampleIndexList(
 {
     numeric_validation::RequireFiniteInclusiveRange(angle, 0.0, 180.0, "angle");
 
-    const auto reference_vector{ detail::ToVector3d(reference_position) };
+    const Eigen::Vector3d reference_vector{
+        eigen_helper::ToEigenVector(reference_position)
+    };
     const auto neighbor_position_list{
         detail::BuildLocalPotentialNeighborPositionList(
             reject_position_list,

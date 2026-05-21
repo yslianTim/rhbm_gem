@@ -5,13 +5,27 @@
 #undef __ARM_NEON__
 #endif
 
-#include <algorithm>
 #include <Eigen/Dense>
+
+#include <algorithm>
+#include <array>
+#include <cstddef>
 
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 namespace rhbm_gem {
 namespace eigen_helper {
+
+template <typename Type, std::size_t N>
+inline Eigen::VectorXd ToEigenVector(const std::array<Type, N> & value)
+{
+    Eigen::VectorXd vector(static_cast<Eigen::Index>(N));
+    for (std::size_t i = 0; i < N; i++)
+    {
+        vector(static_cast<Eigen::Index>(i)) = static_cast<double>(value[i]);
+    }
+    return vector;
+}
 
 template <typename Derived>
 typename Derived::Scalar GetMedian(Eigen::DenseBase<Derived>& d)

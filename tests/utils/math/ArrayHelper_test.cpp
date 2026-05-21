@@ -15,28 +15,12 @@ TEST(ArrayHelperTest, ComputeMin)
     EXPECT_TRUE(std::isnan(rhbm_gem::array_helper::ComputeMin(data.data(), 0)));
 }
 
-TEST(ArrayHelperTest, ComputeMinWithThreadSize)
-{
-    const std::vector<double> data{ 1.0, 2.0, 3.0, 4.0 };
-    auto min_single{ rhbm_gem::array_helper::ComputeMin(data.data(), data.size(), 1) };
-    auto min_multi{ rhbm_gem::array_helper::ComputeMin(data.data(), data.size(), 4) };
-    EXPECT_DOUBLE_EQ(min_single, min_multi);
-}
-
 TEST(ArrayHelperTest, ComputeMax)
 {
     const std::array<double, 5> data{ 1.0, 2.0, 3.0, 4.0, 5.0 };
     EXPECT_DOUBLE_EQ(5.0, rhbm_gem::array_helper::ComputeMax(data.data(), data.size()));
     EXPECT_TRUE(std::isnan(rhbm_gem::array_helper::ComputeMax<double>(nullptr, 0)));
     EXPECT_TRUE(std::isnan(rhbm_gem::array_helper::ComputeMax(data.data(), 0)));
-}
-
-TEST(ArrayHelperTest, ComputeMaxWithThreadSize)
-{
-    const std::vector<double> data{ 1.0, 2.0, 3.0, 4.0 };
-    auto max_single{ rhbm_gem::array_helper::ComputeMax(data.data(), data.size(), 1) };
-    auto max_multi{ rhbm_gem::array_helper::ComputeMax(data.data(), data.size(), 4) };
-    EXPECT_DOUBLE_EQ(max_single, max_multi);
 }
 
 TEST(ArrayHelperTest, ComputeMinMaxNegativeValues)
@@ -53,14 +37,6 @@ TEST(ArrayHelperTest, ComputeMean)
     EXPECT_DOUBLE_EQ(0.0, rhbm_gem::array_helper::ComputeMean<double>(nullptr, 0));
 }
 
-TEST(ArrayHelperTest, ComputeMeanWithThreadSize)
-{
-    const std::vector<double> data{ 1.0, 2.0, 3.0, 4.0 };
-    auto mean_single{ rhbm_gem::array_helper::ComputeMean(data.data(), data.size(), 1) };
-    auto mean_multi{ rhbm_gem::array_helper::ComputeMean(data.data(), data.size(), 4) };
-    EXPECT_DOUBLE_EQ(mean_single, mean_multi);
-}
-
 TEST(ArrayHelperTest, ComputeStandardDeviation)
 {
     const std::array<double, 5> data{ 1.0, 2.0, 3.0, 4.0, 5.0 };
@@ -72,20 +48,6 @@ TEST(ArrayHelperTest, ComputeStandardDeviation)
     const double single_value{ 2.0 };
     EXPECT_DOUBLE_EQ(0.0, rhbm_gem::array_helper::ComputeStandardDeviation(&single_value, 1, single_value));
     EXPECT_DOUBLE_EQ(0.0, rhbm_gem::array_helper::ComputeStandardDeviation<double>(nullptr, 0, 0.0));
-}
-
-TEST(ArrayHelperTest, ComputeStandardDeviationWithThreadSize)
-{
-    const std::vector<double> data{ 1.0, 2.0, 3.0, 4.0 };
-    auto mean_single{ rhbm_gem::array_helper::ComputeMean(data.data(), data.size(), 1) };
-    auto mean_multi{ rhbm_gem::array_helper::ComputeMean(data.data(), data.size(), 4) };
-    auto std_single{ rhbm_gem::array_helper::ComputeStandardDeviation(
-        data.data(), data.size(), mean_single, 1)
-    };
-    auto std_multi{ rhbm_gem::array_helper::ComputeStandardDeviation(
-        data.data(), data.size(), mean_multi, 4)
-    };
-    EXPECT_DOUBLE_EQ(std_single, std_multi);
 }
 
 TEST(ArrayHelperTest, ComputePercentileBounds)
@@ -191,15 +153,6 @@ TEST(ArrayHelperTest, ComputeRangeTupleReturnsExpectedMinMax)
     auto range{ rhbm_gem::array_helper::ComputeRangeTuple(data) };
     EXPECT_DOUBLE_EQ(-1.0, std::get<0>(range));
     EXPECT_DOUBLE_EQ(5.0, std::get<1>(range));
-}
-
-TEST(ArrayHelperTest, ComputeRangeTupleWithThreadSize)
-{
-    const std::vector<double> data{ 1.0, 2.0, 3.0, 4.0 };
-    auto range_single{ rhbm_gem::array_helper::ComputeRangeTuple(data, 1) };
-    auto range_multi{ rhbm_gem::array_helper::ComputeRangeTuple(data, 4) };
-    EXPECT_DOUBLE_EQ(std::get<0>(range_single), std::get<0>(range_multi));
-    EXPECT_DOUBLE_EQ(std::get<1>(range_single), std::get<1>(range_multi));
 }
 
 TEST(ArrayHelperTest, ComputeScalingRangeTupleExtendsRangeSymmetrically)
@@ -329,6 +282,21 @@ TEST(ArrayHelperTest, ComputeNormZeroDistanceForIdenticalVectors)
     EXPECT_DOUBLE_EQ(0.0, distance);
 }
 
+TEST(ArrayHelperTest, ComputeNormSupportsTwoDimensionalVector)
+{
+    std::array<double, 2> vector{ 3.0, 4.0 };
+    auto norm{ rhbm_gem::array_helper::ComputeNorm(vector) };
+    EXPECT_DOUBLE_EQ(5.0, norm);
+}
+
+TEST(ArrayHelperTest, ComputeNormSupportsFourDimensionalDistance)
+{
+    std::array<double, 4> v1{ 0.0, 0.0, 0.0, 0.0 };
+    std::array<double, 4> v2{ 1.0, 2.0, 2.0, 0.0 };
+    auto distance{ rhbm_gem::array_helper::ComputeNorm(v1, v2) };
+    EXPECT_DOUBLE_EQ(3.0, distance);
+}
+
 TEST(ArrayHelperTest, ComputeVectorReturnsP1ToP2Vector)
 {
     std::array<double, 3> p1{ 1.0, 2.0, 3.0 };
@@ -370,6 +338,28 @@ TEST(ArrayHelperTest, ComputeVectorSupportsFloatCoordinates)
     EXPECT_NEAR(0.0f, vector[0], 1e-6f);
     EXPECT_NEAR(0.6f, vector[1], 1e-6f);
     EXPECT_NEAR(0.8f, vector[2], 1e-6f);
+}
+
+TEST(ArrayHelperTest, ComputeVectorSupportsTwoDimensionalCoordinates)
+{
+    std::array<double, 2> p1{ 1.0, 2.0 };
+    std::array<double, 2> p2{ 4.0, -1.0 };
+    auto vector{ rhbm_gem::array_helper::ComputeVector(p1, p2, false) };
+
+    EXPECT_DOUBLE_EQ(3.0, vector[0]);
+    EXPECT_DOUBLE_EQ(-3.0, vector[1]);
+}
+
+TEST(ArrayHelperTest, ComputeVectorNormalizesFourDimensionalCoordinates)
+{
+    std::array<double, 4> p1{ 0.0, 0.0, 0.0, 0.0 };
+    std::array<double, 4> p2{ 1.0, 2.0, 2.0, 0.0 };
+    auto vector{ rhbm_gem::array_helper::ComputeVector(p1, p2, true) };
+
+    EXPECT_DOUBLE_EQ(1.0 / 3.0, vector[0]);
+    EXPECT_DOUBLE_EQ(2.0 / 3.0, vector[1]);
+    EXPECT_DOUBLE_EQ(2.0 / 3.0, vector[2]);
+    EXPECT_DOUBLE_EQ(0.0, vector[3]);
 }
 
 TEST(ArrayHelperTest, ComputeRankReturnsExpectedPosition)

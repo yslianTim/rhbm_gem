@@ -10,21 +10,14 @@
 #include <stdexcept>
 #include <type_traits>
 
-#ifdef USE_OPENMP
-#include <omp.h>
-#endif
-
 namespace rhbm_gem {
 namespace array_helper {
 
 template <typename Type>
-Type ComputeMin(const Type * data, size_t size, [[maybe_unused]] int thread_size = 1)
+Type ComputeMin(const Type * data, size_t size)
 {
     if (size <= 0) return std::numeric_limits<Type>::quiet_NaN();
     Type min_value{ std::numeric_limits<Type>::max() };
-    #ifdef USE_OPENMP
-    #pragma omp parallel for reduction(min:min_value) num_threads(thread_size)
-    #endif
     for (size_t i = 0; i < size; i++)
     {
         min_value = std::min(min_value, data[i]);
@@ -33,13 +26,10 @@ Type ComputeMin(const Type * data, size_t size, [[maybe_unused]] int thread_size
 }
 
 template <typename Type>
-Type ComputeMax(const Type * data, size_t size, [[maybe_unused]] int thread_size = 1)
+Type ComputeMax(const Type * data, size_t size)
 {
     if (size <= 0) return std::numeric_limits<Type>::quiet_NaN();
     Type max_value{ std::numeric_limits<Type>::lowest() };
-    #ifdef USE_OPENMP
-    #pragma omp parallel for reduction(max:max_value) num_threads(thread_size)
-    #endif
     for (size_t i = 0; i < size; i++)
     {
         max_value = std::max(max_value, data[i]);
@@ -85,14 +75,11 @@ Type ComputePercentile(const std::vector<Type> & data, double percentile)
 }
 
 template <typename Type>
-Type ComputeMean(const Type * data, size_t size, [[maybe_unused]] int thread_size = 1)
+Type ComputeMean(const Type * data, size_t size)
 {
     if (size <= 0) return static_cast<Type>(0.0);
 
     auto sum{ static_cast<Type>(0.0) };
-    #ifdef USE_OPENMP
-    #pragma omp parallel for reduction(+:sum) num_threads(thread_size)
-    #endif
     for (size_t i = 0; i < size; i++)
     {
         sum += data[i];
@@ -101,15 +88,11 @@ Type ComputeMean(const Type * data, size_t size, [[maybe_unused]] int thread_siz
 }
 
 template <typename Type>
-Type ComputeStandardDeviation(
-    const Type * data, size_t size, Type mean, [[maybe_unused]] int thread_size = 1)
+Type ComputeStandardDeviation(const Type * data, size_t size, Type mean)
 {
     if (size <= 1) return static_cast<Type>(0.0);
 
     auto sum_sq_diff{ static_cast<Type>(0.0) };
-    #ifdef USE_OPENMP
-    #pragma omp parallel for reduction(+:sum_sq_diff) num_threads(thread_size)
-    #endif
     for (size_t i = 0; i < size; i++)
     {
         auto diff{ static_cast<Type>(data[i]) - static_cast<Type>(mean) };
@@ -172,11 +155,11 @@ std::tuple<Type, Type> ComputeScalingPercentileRangeTuple(
 }
 
 template <typename Type>
-std::tuple<Type, Type> ComputeRangeTuple(const std::vector<Type> & data, int thread_size = 1)
+std::tuple<Type, Type> ComputeRangeTuple(const std::vector<Type> & data)
 {
     if (data.empty()) return std::make_tuple(static_cast<Type>(0.0), static_cast<Type>(0.0));
-    auto min_value{ ComputeMin(data.data(), data.size(), thread_size) };
-    auto max_value{ ComputeMax(data.data(), data.size(), thread_size) };
+    auto min_value{ ComputeMin(data.data(), data.size()) };
+    auto max_value{ ComputeMax(data.data(), data.size()) };
     return std::make_tuple(min_value, max_value);
 }
 
@@ -184,11 +167,10 @@ template <typename Type>
 std::tuple<Type, Type> ComputeScalingRangeTuple(
     const std::vector<Type> & data,
     Type scaling,
-    Type min_range = static_cast<Type>(0.1),
-    int thread_size = 1)
+    Type min_range = static_cast<Type>(0.1))
 {
     if (data.empty()) return std::make_tuple(static_cast<Type>(0.0), static_cast<Type>(0.0));
-    auto range_tuple{ ComputeRangeTuple(data, thread_size) };
+    auto range_tuple{ ComputeRangeTuple(data) };
     auto range{ std::get<1>(range_tuple) - std::get<0>(range_tuple) };
     auto min_value{ std::get<0>(range_tuple) - scaling * range };
     auto max_value{ std::get<1>(range_tuple) + scaling * range };
@@ -202,46 +184,54 @@ std::tuple<Type, Type> ComputeScalingRangeTuple(
     return std::make_tuple(min_value, max_value);
 }
 
-template <typename Type>
-Type ComputeNorm(const std::array<Type, 3> & vec)
+template <typename Type, std::size_t N>
+Type ComputeNorm(const std::array<Type, N> & vec)
 {
-    return static_cast<Type>(std::sqrt(vec[0] * vec[0] + vec[1] * vec[1] + vec[2] * vec[2]));
+    Type norm_square{ static_cast<Type>(0.0) };
+    for (const auto value : vec)
+    {
+        norm_square += value * value;
+    }
+    return static_cast<Type>(std::sqrt(norm_square));
 }
 
-template <typename Type>
-Type ComputeNorm(const std::array<Type, 3> & v1, const std::array<Type, 3> & v2)
+template <typename Type, std::size_t N>
+Type ComputeNorm(const std::array<Type, N> & v1, const std::array<Type, N> & v2)
 {
-    auto diff_x{ static_cast<Type>(v1[0] - v2[0]) };
-    auto diff_y{ static_cast<Type>(v1[1] - v2[1]) };
-    auto diff_z{ static_cast<Type>(v1[2] - v2[2]) };
-    return static_cast<Type>(std::sqrt(diff_x * diff_x + diff_y * diff_y + diff_z * diff_z));
+    Type norm_square{ static_cast<Type>(0.0) };
+    for (std::size_t i = 0; i < N; i++)
+    {
+        const auto diff{ static_cast<Type>(v1[i] - v2[i]) };
+        norm_square += diff * diff;
+    }
+    return static_cast<Type>(std::sqrt(norm_square));
 }
 
-template <typename Type>
-std::array<Type, 3> ComputeVector(
-    const std::array<Type, 3> & p1,
-    const std::array<Type, 3> & p2,
+template <typename Type, std::size_t N>
+std::array<Type, N> ComputeVector(
+    const std::array<Type, N> & p1,
+    const std::array<Type, N> & p2,
     bool normalize)
 {
     static_assert(
         std::is_floating_point<Type>::value,
         "array_helper::ComputeVector requires a floating point Type.");
 
-    std::array<Type, 3> vector{
-        static_cast<Type>(p2[0] - p1[0]),
-        static_cast<Type>(p2[1] - p1[1]),
-        static_cast<Type>(p2[2] - p1[2])
-    };
+    std::array<Type, N> vector{};
+    for (std::size_t i = 0; i < N; i++)
+    {
+        vector[i] = static_cast<Type>(p2[i] - p1[i]);
+    }
     if (!normalize) return vector;
 
     const auto norm{ ComputeNorm(vector) };
     if (norm == static_cast<Type>(0.0)) return vector;
 
-    return {
-        static_cast<Type>(vector[0] / norm),
-        static_cast<Type>(vector[1] / norm),
-        static_cast<Type>(vector[2] / norm)
-    };
+    for (auto & value : vector)
+    {
+        value = static_cast<Type>(value / norm);
+    }
+    return vector;
 }
 
 template <typename Type, std::size_t N>

@@ -1,6 +1,31 @@
 #include <gtest/gtest.h>
 
+#include <array>
+
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
+
+TEST(EigenHelperTest, ToEigenVectorConvertsFloatArray3D)
+{
+    const std::array<float, 3> value{ 1.0f, -2.5f, 3.25f };
+    const auto vector{ rhbm_gem::eigen_helper::ToEigenVector(value) };
+
+    ASSERT_EQ(vector.size(), 3);
+    EXPECT_DOUBLE_EQ(vector(0), 1.0);
+    EXPECT_DOUBLE_EQ(vector(1), -2.5);
+    EXPECT_DOUBLE_EQ(vector(2), 3.25);
+}
+
+TEST(EigenHelperTest, ToEigenVectorConvertsDoubleArray4D)
+{
+    const std::array<double, 4> value{ 1.0, 2.0, -3.0, 4.5 };
+    const auto vector{ rhbm_gem::eigen_helper::ToEigenVector(value) };
+
+    ASSERT_EQ(vector.size(), 4);
+    EXPECT_DOUBLE_EQ(vector(0), 1.0);
+    EXPECT_DOUBLE_EQ(vector(1), 2.0);
+    EXPECT_DOUBLE_EQ(vector(2), -3.0);
+    EXPECT_DOUBLE_EQ(vector(3), 4.5);
+}
 
 TEST(EigenHelperTest, GetMedianOddNumberOfElements)
 {
