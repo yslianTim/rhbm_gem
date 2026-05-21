@@ -102,13 +102,10 @@ LocalPotentialSampleList SampleMapValues(
     const MapObject & map_object,
     const Sampler & sampler,
     const std::array<float, 3> & position,
-    const std::array<float, 3> & direction_like_input)
+    const std::array<float, 3> & direction)
 {
-    const auto sample_point_list{ sampler.GenerateSamplingPoints(position, direction_like_input) };
-    const auto filtered_sample_point_list{
-        sample_filter::FilterSamplingPointList(sample_point_list, position, {})
-    };
-    return BuildLocalPotentialSampleList(map_object, filtered_sample_point_list);
+    const auto sample_point_list{ sampler.GenerateSamplingPoints(position, direction) };
+    return BuildLocalPotentialSampleList(map_object, sample_point_list);
 }
 
 inline LocalPotentialSampleList SampleAtomMapValues(
