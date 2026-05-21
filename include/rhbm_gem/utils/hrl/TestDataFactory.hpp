@@ -83,12 +83,8 @@ struct AtomNeighborhoodScenario
     GaussianModel3D gaus_true;
     int sampling_entry_size{ 1 };
     double data_error_sigma{ 1.0 };
-    double radius_min{ 0.0 };
-    double radius_max{ 1.0 };
     double rejected_angle{ 0.0 };
     bool include_sampling_summary{ false };
-    double summary_radius_min{ 0.0 };
-    double summary_radius_max{ 1.0 };
     int replica_size{ 1 };
     std::optional<std::uint32_t> random_seed{};
     std::vector<double> requested_alpha_r_list{};

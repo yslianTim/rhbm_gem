@@ -1,36 +1,17 @@
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 #include <rhbm_gem/utils/domain/Constants.hpp>
-#include <rhbm_gem/utils/domain/StringHelper.hpp>
-#include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <algorithm>
 #include <cmath>
 #include <random>
-#include <string_view>
 #include <stdexcept>
-#include <sstream>
 #include <vector>
 
 namespace {
 
 constexpr SphereDistanceRange kAnalysisDistanceRange{ 0.0, 1.5 };
 constexpr double kAnalysisFibonacciRadiusBinSize{ 0.1 };
-
-std::string_view GetSphereSamplingMethodName(SphereSamplingMethod method)
-{
-    switch (method)
-    {
-        case SphereSamplingMethod::RadiusUniformRandom:
-            return "RadiusUniformRandom";
-        case SphereSamplingMethod::VolumeUniformRandom:
-            return "VolumeUniformRandom";
-        case SphereSamplingMethod::FibonacciDeterministic:
-            return "FibonacciDeterministic";
-    }
-
-    return "Unknown";
-}
 
 std::vector<double> BuildFibonacciShellCenters(
     const SphereDistanceRange & distance_range,
@@ -65,13 +46,14 @@ std::vector<double> BuildFibonacciShellCenters(
 std::size_t GetFibonacciSampleCountForRadius(
     double radius,
     const SphereDistanceRange & distance_range,
-    const SphereDeterministicSamplingConfig & config)
+    unsigned int samples_per_radius,
+    bool vary_with_radius)
 {
     constexpr double epsilon{ 1e-9 };
 
-    if (!config.vary_with_radius)
+    if (!vary_with_radius)
     {
-        return config.samples_per_radius;
+        return samples_per_radius;
     }
 
     if (distance_range.max <= epsilon)
@@ -81,100 +63,143 @@ std::size_t GetFibonacciSampleCountForRadius(
 
     const double normalized_radius{ radius / distance_range.max };
     const double scaled_sample_count{
-        static_cast<double>(config.samples_per_radius) * normalized_radius * normalized_radius
+        static_cast<double>(samples_per_radius) * normalized_radius * normalized_radius
     };
     return std::max<std::size_t>(1, static_cast<std::size_t>(std::llround(scaled_sample_count)));
 }
 
+std::array<float, 3> GenerateRandomUnitDirection(
+    std::mt19937 & engine,
+    std::uniform_real_distribution<float> & dist_phi,
+    std::uniform_real_distribution<float> & dist_cos_theta)
+{
+    const float phi{ dist_phi(engine) };
+    const float cos_theta{ dist_cos_theta(engine) };
+    const float sin_theta{ std::sqrt(1.0f - cos_theta * cos_theta) };
+
+    return {
+        sin_theta * std::cos(phi),
+        sin_theta * std::sin(phi),
+        cos_theta
+    };
+}
+
+SamplingPoint MakeSamplingPoint(
+    const std::array<float, 3> & center_position,
+    float radius,
+    const std::array<float, 3> & unit_vector)
+{
+    return SamplingPoint{
+        radius,
+        {
+            center_position.at(0) + radius * unit_vector[0],
+            center_position.at(1) + radius * unit_vector[1],
+            center_position.at(2) + radius * unit_vector[2]
+        }
+    };
+}
+
 } // namespace
 
-SphereSamplingProfile::SphereSamplingProfile(
+SphereSampler::SphereSampler() :
+    SphereSampler{
+        SphereSamplingMethod::RadiusUniformRandom,
+        SphereDistanceRange{ 0.0, 1.0 },
+        10,
+        1.0,
+        10,
+        false
+    }
+{
+}
+
+SphereSampler::SphereSampler(
     SphereSamplingMethod method,
     SphereDistanceRange range,
-    SphereRandomSamplingConfig random_config) :
+    unsigned int sample_count,
+    double radius_bin_size,
+    unsigned int samples_per_radius,
+    bool vary_with_radius) :
     m_method{ method },
     m_distance_range{ range },
-    m_method_config{ random_config }
+    m_sample_count{ sample_count },
+    m_radius_bin_size{ radius_bin_size },
+    m_samples_per_radius{ samples_per_radius },
+    m_vary_with_radius{ vary_with_radius }
 {
     rhbm_gem::numeric_validation::RequireFiniteNonNegativeRange(
         range.min,
         range.max,
         "SphereSampler distance range");
-    (void)random_config;
+
+    if (method == SphereSamplingMethod::FibonacciDeterministic)
+    {
+        rhbm_gem::numeric_validation::RequireFinitePositive(
+            radius_bin_size,
+            "SphereSampler Fibonacci radius bin size");
+        rhbm_gem::numeric_validation::RequirePositive(
+            samples_per_radius,
+            "SphereSampler Fibonacci samples per radius");
+    }
 }
 
-SphereSamplingProfile::SphereSamplingProfile(
-    SphereSamplingMethod method,
-    SphereDistanceRange range,
-    SphereDeterministicSamplingConfig fibonacci_config) :
-    m_method{ method },
-    m_distance_range{ range },
-    m_method_config{ fibonacci_config }
-{
-    rhbm_gem::numeric_validation::RequireFiniteNonNegativeRange(
-        range.min,
-        range.max,
-        "SphereSampler distance range");
-    rhbm_gem::numeric_validation::RequireFinitePositive(
-        fibonacci_config.radius_bin_size,
-        "SphereSampler Fibonacci radius bin size");
-    rhbm_gem::numeric_validation::RequirePositive(
-        fibonacci_config.samples_per_radius,
-        "SphereSampler Fibonacci samples per radius");
-}
-
-SphereSamplingProfile SphereSamplingProfile::RadiusUniformRandom(
+SphereSampler SphereSampler::RadiusUniformRandom(
     SphereDistanceRange range,
     unsigned int sample_count)
 {
-    return SphereSamplingProfile(
+    return SphereSampler(
         SphereSamplingMethod::RadiusUniformRandom,
         range,
-        SphereRandomSamplingConfig{ sample_count });
+        sample_count,
+        1.0,
+        10,
+        false);
 }
 
-SphereSamplingProfile SphereSamplingProfile::VolumeUniformRandom(
+SphereSampler SphereSampler::VolumeUniformRandom(
     SphereDistanceRange range,
     unsigned int sample_count)
 {
-    return SphereSamplingProfile(
+    return SphereSampler(
         SphereSamplingMethod::VolumeUniformRandom,
         range,
-        SphereRandomSamplingConfig{ sample_count });
+        sample_count,
+        1.0,
+        10,
+        false);
 }
 
-SphereSamplingProfile SphereSamplingProfile::FibonacciDeterministic(
+SphereSampler SphereSampler::FibonacciDeterministic(
     SphereDistanceRange range,
     double radius_bin_size,
     unsigned int samples_per_radius,
     bool vary_with_radius)
 {
-    return SphereSamplingProfile(
+    return SphereSampler(
         SphereSamplingMethod::FibonacciDeterministic,
         range,
-        SphereDeterministicSamplingConfig{
-            radius_bin_size,
-            samples_per_radius,
-            vary_with_radius
-        });
+        0,
+        radius_bin_size,
+        samples_per_radius,
+        vary_with_radius);
 }
 
-SphereSamplingProfile SphereSamplingProfile::AnalysisDefault(
+SphereSampler SphereSampler::AnalysisDefault(
     SphereSamplingMethod method,
     unsigned int sampling_size)
 {
     switch (method)
     {
         case SphereSamplingMethod::RadiusUniformRandom:
-            return SphereSamplingProfile::RadiusUniformRandom(
+            return SphereSampler::RadiusUniformRandom(
                 kAnalysisDistanceRange,
                 sampling_size);
         case SphereSamplingMethod::VolumeUniformRandom:
-            return SphereSamplingProfile::VolumeUniformRandom(
+            return SphereSampler::VolumeUniformRandom(
                 kAnalysisDistanceRange,
                 sampling_size);
         case SphereSamplingMethod::FibonacciDeterministic:
-            return SphereSamplingProfile::FibonacciDeterministic(
+            return SphereSampler::FibonacciDeterministic(
                 kAnalysisDistanceRange,
                 kAnalysisFibonacciRadiusBinSize,
                 sampling_size);
@@ -183,122 +208,20 @@ SphereSamplingProfile SphereSamplingProfile::AnalysisDefault(
     throw std::invalid_argument("Unsupported SphereSamplingMethod.");
 }
 
-const SphereRandomSamplingConfig & SphereSamplingProfile::GetRandomConfig() const
-{
-    return std::get<SphereRandomSamplingConfig>(m_method_config);
-}
-
-const SphereDeterministicSamplingConfig & SphereSamplingProfile::GetFibonacciConfig() const
-{
-    return std::get<SphereDeterministicSamplingConfig>(m_method_config);
-}
-
-SphereSampler::SphereSampler() :
-    m_profile{ SphereSamplingProfile::RadiusUniformRandom(SphereDistanceRange{ 0.0, 1.0 }, 10) }
-{
-}
-
-void SphereSampler::Print() const
-{
-    const auto & distance_range{ m_profile.GetDistanceRange() };
-
-    std::ostringstream oss;
-    oss << "SphereSampler Configuration:\n"
-        << " - Sampling method: " << GetSphereSamplingMethodName(m_profile.GetMethod()) << '\n'
-        << " - Distance range: ["
-        << rhbm_gem::string_helper::ToStringWithPrecision<double>(distance_range.min, 1) << ", "
-        << rhbm_gem::string_helper::ToStringWithPrecision<double>(distance_range.max, 1)
-        << "] Angstrom.\n";
-
-    switch (m_profile.GetMethod())
-    {
-        case SphereSamplingMethod::RadiusUniformRandom:
-        case SphereSamplingMethod::VolumeUniformRandom:
-        {
-            const auto & config{ m_profile.GetRandomConfig() };
-            oss << " - Sample count: " << config.sample_count;
-            break;
-        }
-        case SphereSamplingMethod::FibonacciDeterministic:
-        {
-            const auto & config{ m_profile.GetFibonacciConfig() };
-            oss << " - Radius bin size: "
-                << rhbm_gem::string_helper::ToStringWithPrecision<double>(config.radius_bin_size, 2)
-                << " Angstrom.\n"
-                << " - Samples per radius: " << config.samples_per_radius << '\n'
-                << " - Vary with radius: " << std::boolalpha << config.vary_with_radius << '\n'
-                << " - Expected point count: " << GetExpectedPointCount();
-            break;
-        }
-    }
-
-    Logger::Log(LogLevel::Info, oss.str());
-}
-
-void SphereSampler::SetSamplingProfile(const SphereSamplingProfile & profile)
-{
-    m_profile = profile;
-}
-
-std::size_t SphereSampler::GetExpectedPointCount() const
-{
-    switch (m_profile.GetMethod())
-    {
-        case SphereSamplingMethod::RadiusUniformRandom:
-        case SphereSamplingMethod::VolumeUniformRandom:
-            return m_profile.GetRandomConfig().sample_count;
-        case SphereSamplingMethod::FibonacciDeterministic:
-        {
-            const auto & config{ m_profile.GetFibonacciConfig() };
-            const auto shell_radii{
-                BuildFibonacciShellCenters(
-                    m_profile.GetDistanceRange(),
-                    config.radius_bin_size)
-            };
-
-            std::size_t expected_point_count{ 0 };
-            for (const double radius : shell_radii)
-            {
-                expected_point_count += GetFibonacciSampleCountForRadius(
-                    radius,
-                    m_profile.GetDistanceRange(),
-                    config);
-            }
-
-            return expected_point_count;
-        }
-    }
-
-    return 0;
-}
-
 SamplingPointList SphereSampler::GenerateSamplingPoints(
-    const std::array<float, 3> & reference_position) const
+    const std::array<float, 3> & center_position) const
 {
     SamplingPointList out;
-    const auto & distance_range{ m_profile.GetDistanceRange() };
-    switch (m_profile.GetMethod())
+    switch (m_method)
     {
         case SphereSamplingMethod::RadiusUniformRandom:
-            GenerateRadiusUniformRandom(
-                reference_position,
-                distance_range,
-                m_profile.GetRandomConfig(),
-                out);
+            GenerateRadiusUniformRandom(center_position, out);
             break;
         case SphereSamplingMethod::VolumeUniformRandom:
-            GenerateVolumeUniformRandom(
-                reference_position,
-                distance_range,
-                m_profile.GetRandomConfig(),
-                out);
+            GenerateVolumeUniformRandom(center_position, out);
             break;
         case SphereSamplingMethod::FibonacciDeterministic:
-            GenerateFibonacciDeterministic(
-                reference_position,
-                distance_range,
-                m_profile.GetFibonacciConfig(),
-                out);
+            GenerateFibonacciDeterministic(center_position, out);
             break;
     }
 
@@ -306,63 +229,53 @@ SamplingPointList SphereSampler::GenerateSamplingPoints(
 }
 
 void SphereSampler::GenerateVolumeUniformRandom(
-    const std::array<float, 3> & reference_position,
-    const SphereDistanceRange & distance_range,
-    const SphereRandomSamplingConfig & config,
+    const std::array<float, 3> & center_position,
     SamplingPointList & out) const
 {
-    out.resize(config.sample_count);
-    
+    out.resize(m_sample_count);
+
     static thread_local std::mt19937 engine{ std::random_device{}() };
     std::uniform_real_distribution<float> dist_unit(0.0f, 1.0f);
     std::uniform_real_distribution<float> dist_phi(0.0f, static_cast<float>(Constants::two_pi));
     std::uniform_real_distribution<float> dist_cos_theta(-1.0f, 1.0f);
     const float min_radius_cube{
-        static_cast<float>(distance_range.min * distance_range.min * distance_range.min)
+        static_cast<float>(m_distance_range.min * m_distance_range.min * m_distance_range.min)
     };
     const float max_radius_cube{
-        static_cast<float>(distance_range.max * distance_range.max * distance_range.max)
+        static_cast<float>(m_distance_range.max * m_distance_range.max * m_distance_range.max)
     };
 
-    for (unsigned int i = 0; i < config.sample_count; i++)
+    for (unsigned int i = 0; i < m_sample_count; i++)
     {
         const float radius_unit{ dist_unit(engine) };
         const float radius{
             std::cbrt(min_radius_cube + radius_unit * (max_radius_cube - min_radius_cube))
         };
-        float phi{ dist_phi(engine) };
-        float cos_theta{ dist_cos_theta(engine) };
-        float sin_theta{ std::sqrt(1.0f - cos_theta * cos_theta) };
 
-        std::array<float, 3> direction_vector{
-            sin_theta * std::cos(phi),
-            sin_theta * std::sin(phi),
-            cos_theta
-        };
-
-        std::array<float, 3> sampling_position{
-            reference_position.at(0) + radius * direction_vector[0],
-            reference_position.at(1) + radius * direction_vector[1],
-            reference_position.at(2) + radius * direction_vector[2]
-        };
-
-        out[i] = SamplingPoint{ radius, sampling_position };
+        out[i] = MakeSamplingPoint(
+            center_position,
+            radius,
+            GenerateRandomUnitDirection(engine, dist_phi, dist_cos_theta));
     }
 }
 
 void SphereSampler::GenerateFibonacciDeterministic(
-    const std::array<float, 3> & reference_position,
-    const SphereDistanceRange & distance_range,
-    const SphereDeterministicSamplingConfig & config,
+    const std::array<float, 3> & center_position,
     SamplingPointList & out) const
 {
-    const auto shell_radii{ BuildFibonacciShellCenters(distance_range, config.radius_bin_size) };
+    const auto shell_radii{
+        BuildFibonacciShellCenters(m_distance_range, m_radius_bin_size)
+    };
     out.clear();
 
     std::size_t total_point_count{ 0 };
     for (const double radius : shell_radii)
     {
-        total_point_count += GetFibonacciSampleCountForRadius(radius, distance_range, config);
+        total_point_count += GetFibonacciSampleCountForRadius(
+            radius,
+            m_distance_range,
+            m_samples_per_radius,
+            m_vary_with_radius);
     }
     out.reserve(total_point_count);
 
@@ -373,7 +286,11 @@ void SphereSampler::GenerateFibonacciDeterministic(
     for (const double radius : shell_radii)
     {
         const std::size_t shell_sample_count{
-            GetFibonacciSampleCountForRadius(radius, distance_range, config)
+            GetFibonacciSampleCountForRadius(
+                radius,
+                m_distance_range,
+                m_samples_per_radius,
+                m_vary_with_radius)
         };
 
         for (std::size_t i = 0; i < shell_sample_count; i++)
@@ -387,54 +304,38 @@ void SphereSampler::GenerateFibonacciDeterministic(
             const double x{ radial_xy * std::cos(theta) };
             const double y{ radial_xy * std::sin(theta) };
 
-            std::array<float, 3> sampling_position{
-                reference_position.at(0) + static_cast<float>(radius * x),
-                reference_position.at(1) + static_cast<float>(radius * y),
-                reference_position.at(2) + static_cast<float>(radius * z)
+            const std::array<float, 3> unit_vector{
+                static_cast<float>(x),
+                static_cast<float>(y),
+                static_cast<float>(z)
             };
-
-            out.emplace_back(SamplingPoint{
+            out.emplace_back(MakeSamplingPoint(
+                center_position,
                 static_cast<float>(radius),
-                sampling_position
-            });
+                unit_vector));
         }
     }
 }
 
 void SphereSampler::GenerateRadiusUniformRandom(
-    const std::array<float, 3> & reference_position,
-    const SphereDistanceRange & distance_range,
-    const SphereRandomSamplingConfig & config,
+    const std::array<float, 3> & center_position,
     SamplingPointList & out) const
 {
-    out.resize(config.sample_count);
-    
+    out.resize(m_sample_count);
+
     static thread_local std::mt19937 engine{ std::random_device{}() };
     std::uniform_real_distribution<float> dist_radius(
-        static_cast<float>(distance_range.min), static_cast<float>(distance_range.max)
+        static_cast<float>(m_distance_range.min), static_cast<float>(m_distance_range.max)
     );
     std::uniform_real_distribution<float> dist_phi(0.0f, static_cast<float>(Constants::two_pi));
     std::uniform_real_distribution<float> dist_cos_theta(-1.0f, 1.0f);
 
-    for (unsigned int i = 0; i < config.sample_count; i++)
+    for (unsigned int i = 0; i < m_sample_count; i++)
     {
         const float radius{ dist_radius(engine) };
-        float phi{ dist_phi(engine) };
-        float cos_theta{ dist_cos_theta(engine) };
-        float sin_theta{ std::sqrt(1.0f - cos_theta * cos_theta) };
-
-        std::array<float, 3> direction_vector{
-            sin_theta * std::cos(phi),
-            sin_theta * std::sin(phi),
-            cos_theta
-        };
-
-        std::array<float, 3> sampling_position{
-            reference_position.at(0) + radius * direction_vector[0],
-            reference_position.at(1) + radius * direction_vector[1],
-            reference_position.at(2) + radius * direction_vector[2]
-        };
-
-        out[i] = SamplingPoint{ radius, sampling_position };
+        out[i] = MakeSamplingPoint(
+            center_position,
+            radius,
+            GenerateRandomUnitDirection(engine, dist_phi, dist_cos_theta));
     }
 }

@@ -117,9 +117,9 @@ inline LocalPotentialSampleList SampleAtomMapValues(
     constexpr double kRejectAngle{ 15.0 };
     constexpr double kNeighborSearchRadius{ 2.0 };
 
-    SphereSampler sampler;
-    sampler.SetSamplingProfile(
-        SphereSamplingProfile::AnalysisDefault(sampling_method, kAtomSamplingSize));
+    const auto sampler{
+        SphereSampler::AnalysisDefault(sampling_method, kAtomSamplingSize)
+    };
 
     const auto local_position{ atom.GetPosition() };
     const auto sample_point_list{ sampler.GenerateSamplingPoints(local_position) };

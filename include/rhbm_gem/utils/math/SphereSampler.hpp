@@ -1,7 +1,6 @@
 #pragma once
 
-#include <cstddef>
-#include <variant>
+#include <array>
 
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 
@@ -11,94 +10,53 @@ struct SphereDistanceRange
     double max{ 1.0 };
 };
 
-struct SphereRandomSamplingConfig
-{
-    unsigned int sample_count{ 10 };
-};
-
-struct SphereDeterministicSamplingConfig
-{
-    double radius_bin_size{ 1.0 };
-    unsigned int samples_per_radius{ 10 };
-    bool vary_with_radius{ false };
-};
-
-class SphereSamplingProfile
-{
-    SphereSamplingMethod m_method;
-    SphereDistanceRange m_distance_range;
-    std::variant<SphereRandomSamplingConfig, SphereDeterministicSamplingConfig> m_method_config;
-
-public:
-    static SphereSamplingProfile RadiusUniformRandom(
-        SphereDistanceRange range,
-        unsigned int sample_count);
-    static SphereSamplingProfile VolumeUniformRandom(
-        SphereDistanceRange range,
-        unsigned int sample_count);
-    static SphereSamplingProfile FibonacciDeterministic(
-        SphereDistanceRange range,
-        double radius_bin_size,
-        unsigned int samples_per_radius,
-        bool vary_with_radius = false);
-    static SphereSamplingProfile AnalysisDefault(
-        SphereSamplingMethod method,
-        unsigned int sampling_size);
-
-    SphereSamplingProfile(const SphereSamplingProfile &) = default;
-    SphereSamplingProfile(SphereSamplingProfile &&) noexcept = default;
-    SphereSamplingProfile & operator=(const SphereSamplingProfile &) = default;
-    SphereSamplingProfile & operator=(SphereSamplingProfile &&) noexcept = default;
-
-    SphereSamplingMethod GetMethod() const { return m_method; }
-    const SphereDistanceRange & GetDistanceRange() const { return m_distance_range; }
-    const SphereRandomSamplingConfig & GetRandomConfig() const;
-    const SphereDeterministicSamplingConfig & GetFibonacciConfig() const;
-
-private:
-    SphereSamplingProfile(
-        SphereSamplingMethod method,
-        SphereDistanceRange range,
-        SphereRandomSamplingConfig random_config);
-    SphereSamplingProfile(
-        SphereSamplingMethod method,
-        SphereDistanceRange range,
-        SphereDeterministicSamplingConfig fibonacci_config);
-    
-};
-
-// SphereSampler keeps GenerateSamplingPoints() as the stable public entry point.
-// Sampling behavior is selected through SphereSamplingProfile
 class SphereSampler
 {
-    SphereSamplingProfile m_profile;
+    SphereSamplingMethod m_method{ SphereSamplingMethod::RadiusUniformRandom };
+    SphereDistanceRange m_distance_range{ 0.0, 1.0 };
+    unsigned int m_sample_count{ 10 };
+    double m_radius_bin_size{ 1.0 };
+    unsigned int m_samples_per_radius{ 10 };
+    bool m_vary_with_radius{ false };
 
 public:
     SphereSampler();
     ~SphereSampler() = default;
 
-    void Print() const;
-    void SetSamplingProfile(const SphereSamplingProfile & profile);
-    const SphereSamplingProfile & GetSamplingProfile() const { return m_profile; }
-    std::size_t GetExpectedPointCount() const;
+    static SphereSampler RadiusUniformRandom(
+        SphereDistanceRange range,
+        unsigned int sample_count);
+    static SphereSampler VolumeUniformRandom(
+        SphereDistanceRange range,
+        unsigned int sample_count);
+    static SphereSampler FibonacciDeterministic(
+        SphereDistanceRange range,
+        double radius_bin_size,
+        unsigned int samples_per_radius,
+        bool vary_with_radius = false);
+    static SphereSampler AnalysisDefault(
+        SphereSamplingMethod method,
+        unsigned int sampling_size);
 
-    SamplingPointList GenerateSamplingPoints(const std::array<float, 3> & reference_position) const;
+    SamplingPointList GenerateSamplingPoints(const std::array<float, 3> & center_position) const;
 
 private:
+    SphereSampler(
+        SphereSamplingMethod method,
+        SphereDistanceRange range,
+        unsigned int sample_count,
+        double radius_bin_size,
+        unsigned int samples_per_radius,
+        bool vary_with_radius);
+
     void GenerateVolumeUniformRandom(
-        const std::array<float, 3> & reference_position,
-        const SphereDistanceRange & distance_range,
-        const SphereRandomSamplingConfig & config,
+        const std::array<float, 3> & center_position,
         SamplingPointList & out) const;
     void GenerateRadiusUniformRandom(
-        const std::array<float, 3> & reference_position,
-        const SphereDistanceRange & distance_range,
-        const SphereRandomSamplingConfig & config,
+        const std::array<float, 3> & center_position,
         SamplingPointList & out) const;
     void GenerateFibonacciDeterministic(
-        const std::array<float, 3> & reference_position,
-        const SphereDistanceRange & distance_range,
-        const SphereDeterministicSamplingConfig & config,
+        const std::array<float, 3> & center_position,
         SamplingPointList & out) const;
 
 };

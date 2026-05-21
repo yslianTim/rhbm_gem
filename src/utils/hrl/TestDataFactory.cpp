@@ -22,8 +22,6 @@ using namespace rhbm_gem;
 
 struct AtomNeighborhoodSamplingOptions
 {
-    double radius_min{ 0.0 };
-    double radius_max{ 1.0 };
     test_data_factory::AtomNeighborType neighbor_type{ test_data_factory::AtomNeighborType::None };
     double reject_angle_deg{ 0.0 };
 };
@@ -177,23 +175,15 @@ LocalPotentialSampleList GenerateAtomNeighborhoodSamples(
 {
     numeric_validation::RequirePositive(samples_per_radius, "samples_per_radius");
     GaussianModel3D::RequireFinitePositiveWidthModel(model);
-    numeric_validation::RequireFiniteNonNegativeRange(
-        options.radius_min,
-        options.radius_max,
-        "radius range");
 
     const auto neighbor_list{ BuildAtomNeighborList(options) };
     const Eigen::VectorXd atom_center{ Eigen::VectorXd::Zero(3) };
 
-    SphereSampler sampler;
-    sampler.SetSamplingProfile(
-        SphereSamplingProfile::FibonacciDeterministic(
-            SphereDistanceRange{ options.radius_min, options.radius_max },
-            0.1,
-            static_cast<unsigned int>(samples_per_radius),
-            false
-        )
-    );
+    const auto sampler{
+        SphereSampler::AnalysisDefault(
+            SphereSamplingMethod::FibonacciDeterministic,
+            static_cast<unsigned int>(samples_per_radius))
+    };
     const auto sample_point_list{ sampler.GenerateSamplingPoints({ 0.0f, 0.0f, 0.0f }) };
     std::vector<std::array<float, 3>> reject_position_list;
     reject_position_list.reserve(neighbor_list.size());
@@ -498,15 +488,8 @@ RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
     GaussianModel3D::RequireFinitePositiveWidthModel(scenario.gaus_true, "scenario.gaus_true");
 
-    const AtomNeighborhoodSamplingOptions no_cut_options{
-        scenario.radius_min,
-        scenario.radius_max,
-        scenario.neighbor_type,
-        0.0
-    };
+    const AtomNeighborhoodSamplingOptions no_cut_options{ scenario.neighbor_type, 0.0 };
     const AtomNeighborhoodSamplingOptions cut_options{
-        scenario.radius_min,
-        scenario.radius_max,
         scenario.neighbor_type,
         scenario.rejected_angle
     };
@@ -532,8 +515,6 @@ RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
                 static_cast<size_t>(scenario.sampling_entry_size),
                 scenario.gaus_true,
                 AtomNeighborhoodSamplingOptions{
-                    scenario.summary_radius_min,
-                    scenario.summary_radius_max,
                     scenario.neighbor_type,
                     scenario.rejected_angle
                 }

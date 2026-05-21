@@ -278,12 +278,8 @@ TEST(TestDataFactoryTest, BuildAtomNeighborhoodTestInputProvidesPairedDatasetsAn
         rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
         8,
         0.05,
-        0.0,
-        1.0,
         15.0,
         true,
-        0.0,
-        4.0,
         2,
         11,
         { 0.25 },
@@ -307,13 +303,21 @@ TEST(TestDataFactoryTest, BuildAtomNeighborhoodTestInputProvidesPairedDatasetsAn
     EXPECT_EQ(rg::LocalGaussianFitModel::LogQuadratic, input.cut_input.local_fit_model);
     ASSERT_EQ(input.sampling_summaries.size(), 1u);
     ASSERT_FALSE(input.sampling_summaries.front().empty());
+    bool has_sample_beyond_default_fit_range{ false };
     for (const auto & sample : input.sampling_summaries.front())
     {
+        EXPECT_GE(sample.point.distance, 0.0f);
+        EXPECT_LE(sample.point.distance, 1.5f);
+        if (sample.point.distance > 1.0f)
+        {
+            has_sample_beyond_default_fit_range = true;
+        }
         EXPECT_NEAR(
             sample.point.distance,
             ComputeDistanceFromOrigin(sample.point.position),
             1.0e-5);
     }
+    EXPECT_TRUE(has_sample_beyond_default_fit_range);
 
     for (size_t i = 0; i < input.no_cut_input.replica_datasets.size(); i++)
     {
@@ -366,12 +370,8 @@ TEST(TestDataFactoryTest, BuildTestInputsRejectNonPositiveGaussianWidth)
             rg::GaussianModel3D{ 1.0, -0.5, 0.0 },
             8,
             0.05,
-            0.0,
-            1.0,
             15.0,
             false,
-            0.0,
-            4.0,
             1,
             11
         }),

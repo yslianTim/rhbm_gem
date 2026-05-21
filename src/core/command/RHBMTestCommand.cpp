@@ -138,13 +138,9 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
         base_scenario.gaus_true = GaussianModel3D::FromVector(model_par_prior);
         base_scenario.sampling_entry_size = 50;
         base_scenario.data_error_sigma = error_sigma;
-        base_scenario.radius_min = test_data_options.fit_range_min;
-        base_scenario.radius_max = test_data_options.fit_range_max;
         base_scenario.neighbor_type = neighbor_type;
         base_scenario.rejected_angle = 15.0;
         base_scenario.include_sampling_summary = false;
-        base_scenario.summary_radius_min = 0.0;
-        base_scenario.summary_radius_max = 4.0;
         base_scenario.replica_size = 10;
         base_scenario.requested_alpha_r_list = { request.alpha_r };
         base_scenario.alpha_training = true;
