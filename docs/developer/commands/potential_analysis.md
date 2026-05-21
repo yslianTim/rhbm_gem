@@ -45,11 +45,14 @@ Command-specific fields:
 - `training_alpha_max`
 - `training_alpha_step`
 - `asymmetry_flag`
-- `sampling_profile_choice`
+- `sampling_method`
 - `fit_range_min`
 - `fit_range_max`
 - `alpha_r`
 - `alpha_g`
+
+`sampling_method` uses the shared `SphereSamplingMethod` enum and is exposed
+through the `--sampling-method` CLI flag.
 
 ## Execution Contract
 

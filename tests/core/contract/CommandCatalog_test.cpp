@@ -119,14 +119,14 @@ struct EnumMappingTraits<TesterType>
 };
 
 template <>
-struct EnumMappingTraits<SphereSamplingProfileChoice>
+struct EnumMappingTraits<SphereSamplingMethod>
 {
     static constexpr std::string_view kFirstBindingToken{ "RADIUS_UNIFORM_RANDOM" };
-    static constexpr std::array<EnumMappingExpectation<SphereSamplingProfileChoice>, 4> kExpectations{{
-        { "radius_uniform", SphereSamplingProfileChoice::RADIUS_UNIFORM_RANDOM },
-        { "0", SphereSamplingProfileChoice::RADIUS_UNIFORM_RANDOM },
-        { "fibonacci", SphereSamplingProfileChoice::FIBONACCI_DETERMINISTIC },
-        { "2", SphereSamplingProfileChoice::FIBONACCI_DETERMINISTIC },
+    static constexpr std::array<EnumMappingExpectation<SphereSamplingMethod>, 4> kExpectations{{
+        { "radius_uniform", SphereSamplingMethod::RadiusUniformRandom },
+        { "0", SphereSamplingMethod::RadiusUniformRandom },
+        { "fibonacci", SphereSamplingMethod::FibonacciDeterministic },
+        { "2", SphereSamplingMethod::FibonacciDeterministic },
     }};
 };
 
@@ -154,7 +154,7 @@ using CommandEnumTypes = testing::Types<
     PotentialModel,
     PartialCharge,
     TesterType,
-    SphereSamplingProfileChoice>;
+    SphereSamplingMethod>;
 
 TYPED_TEST_SUITE(CommandEnumMappingTest, CommandEnumTypes, );
 

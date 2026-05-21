@@ -15,21 +15,6 @@
 namespace rhbm_gem {
 namespace {
 
-inline SphereSamplingMethod ResolveSphereSamplingMethod(SphereSamplingProfileChoice choice)
-{
-    switch (choice)
-    {
-        case SphereSamplingProfileChoice::RADIUS_UNIFORM_RANDOM:
-            return SphereSamplingMethod::RadiusUniformRandom;
-        case SphereSamplingProfileChoice::VOLUME_UNIFORM_RANDOM:
-            return SphereSamplingMethod::VolumeUniformRandom;
-        case SphereSamplingProfileChoice::FIBONACCI_DETERMINISTIC:
-            return SphereSamplingMethod::FibonacciDeterministic;
-    }
-
-    return SphereSamplingMethod::FibonacciDeterministic;
-}
-
 inline float MakeInterpolationInMapObject(
     const MapObject & data_object, const std::array<float, 3> & position)
 {
@@ -129,7 +114,7 @@ LocalPotentialSampleList SampleMapValues(
 inline LocalPotentialSampleList SampleAtomMapValues(
     const MapObject & map_object,
     const AtomObject & atom,
-    SphereSamplingProfileChoice sampling_profile_choice)
+    SphereSamplingMethod sampling_method)
 {
     constexpr unsigned int kAtomSamplingSize{ 50 };
     constexpr double kRejectAngle{ 15.0 };
@@ -137,9 +122,7 @@ inline LocalPotentialSampleList SampleAtomMapValues(
 
     SphereSampler sampler;
     sampler.SetSamplingProfile(
-        SphereSamplingProfile::AnalysisDefault(
-            ResolveSphereSamplingMethod(sampling_profile_choice),
-            kAtomSamplingSize));
+        SphereSamplingProfile::AnalysisDefault(sampling_method, kAtomSamplingSize));
 
     const auto local_position{ atom.GetPosition() };
     const auto sample_point_list{ sampler.GenerateSamplingPoints(local_position) };

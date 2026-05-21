@@ -75,17 +75,17 @@ struct CommandEnumTraits<TesterType>
 };
 
 template <>
-struct CommandEnumTraits<SphereSamplingProfileChoice>
+struct CommandEnumTraits<SphereSamplingMethod>
 {
     inline static constexpr std::array<
-        CommandEnumDefinition<SphereSamplingProfileChoice, 2>, 3> kOptions{{
-        { SphereSamplingProfileChoice::RADIUS_UNIFORM_RANDOM,
+        CommandEnumDefinition<SphereSamplingMethod, 2>, 3> kOptions{{
+        { SphereSamplingMethod::RadiusUniformRandom,
             "RADIUS_UNIFORM_RANDOM",
             { "0", "radius_uniform" } },
-        { SphereSamplingProfileChoice::VOLUME_UNIFORM_RANDOM,
+        { SphereSamplingMethod::VolumeUniformRandom,
             "VOLUME_UNIFORM_RANDOM",
             { "1", "volume_uniform" } },
-        { SphereSamplingProfileChoice::FIBONACCI_DETERMINISTIC,
+        { SphereSamplingMethod::FibonacciDeterministic,
             "FIBONACCI_DETERMINISTIC",
             { "2", "fibonacci" } }
     }};

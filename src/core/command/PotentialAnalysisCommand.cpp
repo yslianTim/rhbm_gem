@@ -468,7 +468,7 @@ void RunPotentialSamplingWorkflow(
     for (size_t i = 0; i < atom_list.size(); i++)
     {
         auto sampling_entries{
-            SampleAtomMapValues(map_object, *atom_list[i], request.sampling_profile_choice)
+            SampleAtomMapValues(map_object, *atom_list[i], request.sampling_method)
         };
         local_editor_list[i].SetSamplingEntries(std::move(sampling_entries));
 
@@ -494,7 +494,7 @@ void PotentialAnalysisCommand::NormalizeAndValidateRequest(PotentialAnalysisRequ
     RequireExistingPath(request, &PotentialAnalysisRequest::map_file_path);
     RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::simulated_map_resolution);
     RequireNonEmptyList(request, &PotentialAnalysisRequest::saved_key_tag);
-    RequireEnum(request, &PotentialAnalysisRequest::sampling_profile_choice);
+    RequireEnum(request, &PotentialAnalysisRequest::sampling_method);
     RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::fit_range_min);
     RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::fit_range_max);
     RequireFinitePositiveScalar(request, &PotentialAnalysisRequest::alpha_r);

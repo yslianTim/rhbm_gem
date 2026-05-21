@@ -84,7 +84,7 @@ TEST(MapSamplingTest, OrientedSamplerUsesDirectionLikeInput)
     EXPECT_FLOAT_EQ(1.0f, sampling_data.front().point.position.at(0));
 }
 
-TEST(MapSamplingTest, CommandAtomSamplerBuildsSphereSamplerFromProfileChoice)
+TEST(MapSamplingTest, CommandAtomSamplerBuildsSphereSamplerFromSamplingMethod)
 {
     auto map{ MakeMapObject() };
     auto model{ MakeLinearNeighborModel() };
@@ -94,7 +94,7 @@ TEST(MapSamplingTest, CommandAtomSamplerBuildsSphereSamplerFromProfileChoice)
         SampleAtomMapValues(
             map,
             *atom,
-            SphereSamplingProfileChoice::FIBONACCI_DETERMINISTIC)
+            SphereSamplingMethod::FibonacciDeterministic)
     };
 
     EXPECT_FALSE(sampling_data.empty());
@@ -110,6 +110,6 @@ TEST(MapSamplingTest, AtomSamplerRequiresAttachedAtomBeforeSampling)
         (void)SampleAtomMapValues(
             map,
             detached_atom,
-            SphereSamplingProfileChoice::FIBONACCI_DETERMINISTIC),
+            SphereSamplingMethod::FibonacciDeterministic),
         std::runtime_error);
 }

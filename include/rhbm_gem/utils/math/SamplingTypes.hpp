@@ -7,6 +7,13 @@
 #include <utility>
 #include <vector>
 
+enum class SphereSamplingMethod
+{
+    RadiusUniformRandom,
+    VolumeUniformRandom,
+    FibonacciDeterministic
+};
+
 struct SamplingPoint
 {
     float distance{ 0.0f };

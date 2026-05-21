@@ -134,26 +134,26 @@ TEST(CommandScenariosTest, PotentialAnalysisDefaultsMapNormalizationOn)
     EXPECT_TRUE(request.map_normalization_flag);
 }
 
-TEST(CommandScenariosTest, PotentialAnalysisDefaultsToFibonacciSamplingProfile)
+TEST(CommandScenariosTest, PotentialAnalysisDefaultsToFibonacciSamplingMethod)
 {
     PotentialAnalysisRequest request{};
 
     EXPECT_EQ(
-        SphereSamplingProfileChoice::FIBONACCI_DETERMINISTIC,
-        request.sampling_profile_choice);
+        SphereSamplingMethod::FibonacciDeterministic,
+        request.sampling_method);
 }
 
-TEST(CommandScenariosTest, PotentialAnalysisRejectsInvalidSamplingProfileAtParse)
+TEST(CommandScenariosTest, PotentialAnalysisRejectsInvalidSamplingMethodAtParse)
 {
     PotentialAnalysisRequest request{};
     request.model_file_path = command_test::TestDataPath("test_model.cif");
     request.map_file_path = command_test::TestDataPath("test_model.cif");
-    request.sampling_profile_choice = static_cast<SphereSamplingProfileChoice>(99);
+    request.sampling_method = static_cast<SphereSamplingMethod>(99);
 
     const auto result{ RunCommand(request) };
 
     EXPECT_FALSE(result.succeeded);
-    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "--sampling-profile"));
+    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "--sampling-method"));
 }
 
 TEST(CommandScenariosTest, PotentialAnalysisRejectsInvertedTrainingAlphaRangeAtPrepare)

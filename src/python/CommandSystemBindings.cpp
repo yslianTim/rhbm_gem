@@ -53,11 +53,11 @@ void BindCommandTypes(py::module_ & module)
     BindEnumEntries(tester_type);
     py::implicitly_convertible<int, TesterType>();
 
-    auto sphere_sampling_profile_choice{
-        py::enum_<SphereSamplingProfileChoice>(module, "SphereSamplingProfileChoice")
+    auto sphere_sampling_method{
+        py::enum_<SphereSamplingMethod>(module, "SphereSamplingMethod")
     };
-    BindEnumEntries(sphere_sampling_profile_choice);
-    py::implicitly_convertible<int, SphereSamplingProfileChoice>();
+    BindEnumEntries(sphere_sampling_method);
+    py::implicitly_convertible<int, SphereSamplingMethod>();
 }
 
 void BindCommandSystem(py::module_ & module)

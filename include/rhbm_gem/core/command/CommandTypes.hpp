@@ -6,6 +6,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include <rhbm_gem/utils/math/SamplingTypes.hpp>
+
 namespace rhbm_gem {
 
 enum class PainterType : int
@@ -48,13 +50,6 @@ enum class TesterType : int
     MODEL_ALPHA_MEMBER = 4
 };
 
-enum class SphereSamplingProfileChoice : int
-{
-    RADIUS_UNIFORM_RANDOM   = 0,
-    VOLUME_UNIFORM_RANDOM   = 1,
-    FIBONACCI_DETERMINISTIC = 2
-};
-
 std::filesystem::path GetDefaultDataRootPath();
 std::filesystem::path GetDefaultDatabasePath();
 
@@ -92,8 +87,8 @@ struct PotentialAnalysisRequest : public CommandRequestBase
     double training_alpha_max{ 2.0 };
     double training_alpha_step{ 0.1 };
     bool asymmetry_flag{ false };
-    SphereSamplingProfileChoice sampling_profile_choice{
-        SphereSamplingProfileChoice::FIBONACCI_DETERMINISTIC
+    SphereSamplingMethod sampling_method{
+        SphereSamplingMethod::FibonacciDeterministic
     };
     double fit_range_min{ 0.0 };
     double fit_range_max{ 1.0 };

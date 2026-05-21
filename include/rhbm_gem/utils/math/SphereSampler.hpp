@@ -5,13 +5,6 @@
 
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
-enum class SphereSamplingMethod
-{
-    RadiusUniformRandom,
-    VolumeUniformRandom,
-    FibonacciDeterministic
-};
-
 struct SphereDistanceRange
 {
     double min{ 0.0 };
