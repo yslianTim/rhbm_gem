@@ -59,11 +59,9 @@ void ExpectAnalysisSampleDistances(
 
 } // namespace
 
-TEST(SphereSamplerTest, AnalysisDefaultRadiusUniformProducesFixedAnalysisSamples)
+TEST(SphereSamplerTest, ConstructorRadiusUniformProducesFixedAnalysisSamples)
 {
-    const auto sampler{
-        SphereSampler::AnalysisDefault(SphereSamplingMethod::RadiusUniformRandom)
-    };
+    const SphereSampler sampler{ SphereSamplingMethod::RadiusUniformRandom };
     const std::array<float, 3> center{ 1.f, 2.f, 3.f };
     const auto samples{ sampler.GenerateSamplingPoints(center) };
 
@@ -71,11 +69,9 @@ TEST(SphereSamplerTest, AnalysisDefaultRadiusUniformProducesFixedAnalysisSamples
     ExpectAnalysisSampleDistances(samples, center);
 }
 
-TEST(SphereSamplerTest, AnalysisDefaultVolumeUniformProducesFixedAnalysisSamples)
+TEST(SphereSamplerTest, ConstructorVolumeUniformProducesFixedAnalysisSamples)
 {
-    const auto sampler{
-        SphereSampler::AnalysisDefault(SphereSamplingMethod::VolumeUniformRandom)
-    };
+    const SphereSampler sampler{ SphereSamplingMethod::VolumeUniformRandom };
     const std::array<float, 3> center{ 1.f, 2.f, 3.f };
     const auto samples{ sampler.GenerateSamplingPoints(center) };
 
@@ -83,11 +79,9 @@ TEST(SphereSamplerTest, AnalysisDefaultVolumeUniformProducesFixedAnalysisSamples
     ExpectAnalysisSampleDistances(samples, center);
 }
 
-TEST(SphereSamplerTest, AnalysisDefaultFibonacciProducesFixedDeterministicShells)
+TEST(SphereSamplerTest, ConstructorFibonacciProducesFixedDeterministicShells)
 {
-    const auto sampler{
-        SphereSampler::AnalysisDefault(SphereSamplingMethod::FibonacciDeterministic)
-    };
+    const SphereSampler sampler{ SphereSamplingMethod::FibonacciDeterministic };
     const std::array<float, 3> center{ 1.f, 2.f, 3.f };
 
     const auto first_samples{ sampler.GenerateSamplingPoints(center) };
@@ -101,9 +95,9 @@ TEST(SphereSamplerTest, AnalysisDefaultFibonacciProducesFixedDeterministicShells
     ExpectSamplesEqual(first_samples, second_samples);
 }
 
-TEST(SphereSamplerTest, AnalysisDefaultThrowsForUnsupportedMethod)
+TEST(SphereSamplerTest, ConstructorThrowsForUnsupportedMethod)
 {
     EXPECT_THROW(
-        SphereSampler::AnalysisDefault(static_cast<SphereSamplingMethod>(99)),
+        SphereSampler{ static_cast<SphereSamplingMethod>(99) },
         std::invalid_argument);
 }
