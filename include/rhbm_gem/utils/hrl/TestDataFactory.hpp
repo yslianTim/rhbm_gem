@@ -33,7 +33,6 @@ struct RHBMMuTestInput
 {
     GaussianModel3D gaus_true;
     std::vector<std::vector<LocalPotentialSampleList>> replica_member_sampling_entries;
-    std::vector<Eigen::MatrixXd> replica_beta_matrices;
     std::vector<double> requested_alpha_g_list;
     bool alpha_training{ true };
 };

@@ -60,19 +60,6 @@ void ExpectDatasetEquals(
     }
 }
 
-void ExpectMatrixEquals(const Eigen::MatrixXd & lhs, const Eigen::MatrixXd & rhs)
-{
-    ASSERT_EQ(lhs.rows(), rhs.rows());
-    ASSERT_EQ(lhs.cols(), rhs.cols());
-    for (Eigen::Index row = 0; row < lhs.rows(); row++)
-    {
-        for (Eigen::Index col = 0; col < lhs.cols(); col++)
-        {
-            EXPECT_DOUBLE_EQ(lhs(row, col), rhs(row, col));
-        }
-    }
-}
-
 void ExpectSamplingEntriesEquals(
     const LocalPotentialSampleList & lhs,
     const LocalPotentialSampleList & rhs)
@@ -267,25 +254,20 @@ TEST(TestDataFactoryTest, BuildMuTestInputIsReproducibleWithFixedSeed)
     ASSERT_EQ(
         first_input.replica_member_sampling_entries.size(),
         second_input.replica_member_sampling_entries.size());
-    ASSERT_EQ(first_input.replica_beta_matrices.size(), second_input.replica_beta_matrices.size());
-    for (size_t i = 0; i < first_input.replica_beta_matrices.size(); i++)
+    for (size_t i = 0; i < first_input.replica_member_sampling_entries.size(); i++)
     {
         ASSERT_EQ(
             first_input.replica_member_sampling_entries.at(i).size(),
-            static_cast<size_t>(first_input.replica_beta_matrices.at(i).cols()));
+            static_cast<size_t>(scenario.member_size));
         ASSERT_EQ(
             second_input.replica_member_sampling_entries.at(i).size(),
-            static_cast<size_t>(second_input.replica_beta_matrices.at(i).cols()));
+            static_cast<size_t>(scenario.member_size));
         for (size_t j = 0; j < first_input.replica_member_sampling_entries.at(i).size(); j++)
         {
             ExpectSamplingEntriesEquals(
                 first_input.replica_member_sampling_entries.at(i).at(j),
                 second_input.replica_member_sampling_entries.at(i).at(j));
         }
-        ExpectMatrixEquals(
-            first_input.replica_beta_matrices.at(i),
-            second_input.replica_beta_matrices.at(i)
-        );
     }
 }
 

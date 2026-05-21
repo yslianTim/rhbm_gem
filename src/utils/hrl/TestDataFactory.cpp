@@ -2,7 +2,6 @@
 
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/SampleFilter.hpp>
-#include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
@@ -27,6 +26,12 @@ struct AtomNeighborhoodSamplingOptions
     double radius_max{ 1.0 };
     test_data_factory::AtomNeighborType neighbor_type{ test_data_factory::AtomNeighborType::None };
     double reject_angle_deg{ 0.0 };
+};
+
+struct AtomNeighborContribution
+{
+    Eigen::VectorXd center;
+    double amplitude{ 0.0 };
 };
 
 std::mt19937 BuildReplicaGenerator(int replica_index, const std::optional<std::uint32_t> & random_seed)
@@ -60,99 +65,82 @@ double ComputeGaussianResponseAtPoint3D(
 double ComputeGaussianResponseWithAtomNeighborhood3D(
     const Eigen::VectorXd & point,
     const Eigen::VectorXd & center,
-    const std::vector<Eigen::VectorXd> & neighbor_center_list,
-    const std::vector<double> & neighbor_amplitude_list,
+    const std::vector<AtomNeighborContribution> & neighbor_list,
     double width)
 {
     auto response{ ComputeGaussianResponseAtPoint3D(point, center, width) };
-    for (size_t i = 0; i < neighbor_center_list.size(); i++)
+    for (const auto & neighbor : neighbor_list)
     {
-        response += neighbor_amplitude_list[i] *
-            ComputeGaussianResponseAtPoint3D(point, neighbor_center_list[i], width);
+        response += neighbor.amplitude *
+            ComputeGaussianResponseAtPoint3D(point, neighbor.center, width);
     }
     return response;
 }
 
-std::tuple<std::vector<Eigen::VectorXd>, std::vector<double>>
-BuildAtomNeighborCenterList(const AtomNeighborhoodSamplingOptions & options)
+AtomNeighborContribution MakeAtomNeighborContribution(
+    const Eigen::Vector3d & direction,
+    double distance,
+    double amplitude)
 {
-    std::vector<Eigen::VectorXd> neighbor_center_list;
-    std::vector<double> neighbor_amplitude_list;
-    neighbor_center_list.reserve(4);
-    neighbor_amplitude_list.reserve(4);
+    return AtomNeighborContribution{
+        distance * direction,
+        amplitude
+    };
+}
 
-    Eigen::VectorXd neighbor_center[4];
-    for (size_t i = 0; i < 4; i++) neighbor_center[i] = Eigen::VectorXd::Zero(3);
+std::vector<AtomNeighborContribution> BuildAtomNeighborList(
+    const AtomNeighborhoodSamplingOptions & options)
+{
+    std::vector<AtomNeighborContribution> neighbor_list;
+    neighbor_list.reserve(4);
 
     if (options.neighbor_type == test_data_factory::AtomNeighborType::None)
     {
-        return std::make_tuple(neighbor_center_list, neighbor_amplitude_list);
+        return neighbor_list;
     }
 
     if (options.neighbor_type == test_data_factory::AtomNeighborType::O)
     {
-        neighbor_center[0] << 1.0, 0.0, 0.0;
-        neighbor_center[0] *= 1.23; // C=O bond length
-        neighbor_center_list.emplace_back(neighbor_center[0]);
-        neighbor_amplitude_list.emplace_back(6.0/8.0);
-        return std::make_tuple(neighbor_center_list, neighbor_amplitude_list);
+        neighbor_list.emplace_back(MakeAtomNeighborContribution(
+            Eigen::Vector3d{ 1.0, 0.0, 0.0 }, 1.23, 6.0 / 8.0));
+        return neighbor_list;
     }
 
     if (options.neighbor_type == test_data_factory::AtomNeighborType::N)
     {
-        neighbor_center[0] << 1.0, 0.0, 0.0;
-        neighbor_center[1] << -0.5, std::sqrt(3) / 2.0, 0.0;
-        neighbor_center[2] << -0.5, -std::sqrt(3) / 2.0, 0.0;
-        neighbor_center[0] *= 1.02; // N-H bond length
-        neighbor_center[1] *= 1.48; // N-C bond length
-        neighbor_center[2] *= 1.48; // N-C bond length
-        neighbor_center_list.emplace_back(neighbor_center[0]);
-        neighbor_center_list.emplace_back(neighbor_center[1]);
-        neighbor_center_list.emplace_back(neighbor_center[2]);
-        neighbor_amplitude_list.emplace_back(1.0/7.0);
-        neighbor_amplitude_list.emplace_back(6.0/7.0);
-        neighbor_amplitude_list.emplace_back(6.0/7.0);
-        return std::make_tuple(neighbor_center_list, neighbor_amplitude_list);
+        neighbor_list.emplace_back(MakeAtomNeighborContribution(
+            Eigen::Vector3d{ 1.0, 0.0, 0.0 }, 1.02, 1.0 / 7.0));
+        neighbor_list.emplace_back(MakeAtomNeighborContribution(
+            Eigen::Vector3d{ -0.5, std::sqrt(3) / 2.0, 0.0 }, 1.48, 6.0 / 7.0));
+        neighbor_list.emplace_back(MakeAtomNeighborContribution(
+            Eigen::Vector3d{ -0.5, -std::sqrt(3) / 2.0, 0.0 }, 1.48, 6.0 / 7.0));
+        return neighbor_list;
     }
 
     if (options.neighbor_type == test_data_factory::AtomNeighborType::C)
     {
-        neighbor_center[0] << 1.0, 0.0, 0.0;
-        neighbor_center[1] << -0.5, std::sqrt(3) / 2.0, 0.0;
-        neighbor_center[2] << -0.5, -std::sqrt(3) / 2.0, 0.0;
-        neighbor_center[0] *= 1.23; // C=O bond length
-        neighbor_center[1] *= 1.48; // C-N bond length
-        neighbor_center[2] *= 1.54; // C-C bond length
-        neighbor_center_list.emplace_back(neighbor_center[0]);
-        neighbor_center_list.emplace_back(neighbor_center[1]);
-        neighbor_center_list.emplace_back(neighbor_center[2]);
-        neighbor_amplitude_list.emplace_back(8.0/6.0);
-        neighbor_amplitude_list.emplace_back(7.0/6.0);
-        neighbor_amplitude_list.emplace_back(1.0);
-        return std::make_tuple(neighbor_center_list, neighbor_amplitude_list);
+        neighbor_list.emplace_back(MakeAtomNeighborContribution(
+            Eigen::Vector3d{ 1.0, 0.0, 0.0 }, 1.23, 8.0 / 6.0));
+        neighbor_list.emplace_back(MakeAtomNeighborContribution(
+            Eigen::Vector3d{ -0.5, std::sqrt(3) / 2.0, 0.0 }, 1.48, 7.0 / 6.0));
+        neighbor_list.emplace_back(MakeAtomNeighborContribution(
+            Eigen::Vector3d{ -0.5, -std::sqrt(3) / 2.0, 0.0 }, 1.54, 1.0));
+        return neighbor_list;
     }
 
     if (options.neighbor_type == test_data_factory::AtomNeighborType::CA)
     {
-        neighbor_center[0] << 0.0, 0.0, 1.0;
-        neighbor_center[1] << 0.0, 2.0 * std::sqrt(2) / 3.0, -1.0 / 3.0;
-        neighbor_center[2] << -std::sqrt(6) / 3.0, -std::sqrt(2) / 3.0, -1.0 / 3.0;
-        neighbor_center[3] << std::sqrt(6) / 3.0, -std::sqrt(2) / 3.0, -1.0 / 3.0;
-        neighbor_center[0] *= 1.06; // C-H bond length
-        neighbor_center[1] *= 1.48; // C-N bond length
-        neighbor_center[2] *= 1.54; // C-C bond length
-        neighbor_center[3] *= 1.54; // C-C bond length
-        neighbor_center_list.emplace_back(neighbor_center[0]);
-        neighbor_center_list.emplace_back(neighbor_center[1]);
-        neighbor_center_list.emplace_back(neighbor_center[2]);
-        neighbor_center_list.emplace_back(neighbor_center[3]);
-        neighbor_amplitude_list.emplace_back(1.0/6.0);
-        neighbor_amplitude_list.emplace_back(7.0/6.0);
-        neighbor_amplitude_list.emplace_back(1.0);
-        neighbor_amplitude_list.emplace_back(1.0);
-        return std::make_tuple(neighbor_center_list, neighbor_amplitude_list);
+        neighbor_list.emplace_back(MakeAtomNeighborContribution(
+            Eigen::Vector3d{ 0.0, 0.0, 1.0 }, 1.06, 1.0 / 6.0));
+        neighbor_list.emplace_back(MakeAtomNeighborContribution(
+            Eigen::Vector3d{ 0.0, 2.0 * std::sqrt(2) / 3.0, -1.0 / 3.0 }, 1.48, 7.0 / 6.0));
+        neighbor_list.emplace_back(MakeAtomNeighborContribution(
+            Eigen::Vector3d{ -std::sqrt(6) / 3.0, -std::sqrt(2) / 3.0, -1.0 / 3.0 }, 1.54, 1.0));
+        neighbor_list.emplace_back(MakeAtomNeighborContribution(
+            Eigen::Vector3d{ std::sqrt(6) / 3.0, -std::sqrt(2) / 3.0, -1.0 / 3.0 }, 1.54, 1.0));
+        return neighbor_list;
     }
-    return std::make_tuple(neighbor_center_list, neighbor_amplitude_list);
+    return neighbor_list;
 }
 
 LocalPotentialSampleList GenerateRadialSamples(
@@ -194,7 +182,7 @@ LocalPotentialSampleList GenerateAtomNeighborhoodSamples(
         options.radius_max,
         "radius range");
 
-    auto [neighbor_center_list, neighbor_amplitude_list]{ BuildAtomNeighborCenterList(options) };
+    const auto neighbor_list{ BuildAtomNeighborList(options) };
     const Eigen::VectorXd atom_center{ Eigen::VectorXd::Zero(3) };
 
     SphereSampler sampler;
@@ -208,13 +196,13 @@ LocalPotentialSampleList GenerateAtomNeighborhoodSamples(
     );
     const auto sample_point_list{ sampler.GenerateSamplingPoints({ 0.0f, 0.0f, 0.0f }) };
     std::vector<std::array<float, 3>> reject_position_list;
-    reject_position_list.reserve(neighbor_center_list.size());
-    for (const auto & neighbor_center : neighbor_center_list)
+    reject_position_list.reserve(neighbor_list.size());
+    for (const auto & neighbor : neighbor_list)
     {
         reject_position_list.emplace_back(std::array<float, 3>{
-            static_cast<float>(neighbor_center(0)),
-            static_cast<float>(neighbor_center(1)),
-            static_cast<float>(neighbor_center(2))
+            static_cast<float>(neighbor.center(0)),
+            static_cast<float>(neighbor.center(1)),
+            static_cast<float>(neighbor.center(2))
         });
     }
     const auto filtered_sample_point_list{
@@ -233,8 +221,7 @@ LocalPotentialSampleList GenerateAtomNeighborhoodSamples(
             model.GetAmplitude() * ComputeGaussianResponseWithAtomNeighborhood3D(
                 eigen_helper::ToEigenVector(sampling_point.position),
                 atom_center,
-                neighbor_center_list,
-                neighbor_amplitude_list,
+                neighbor_list,
                 model.GetWidth()
             ) +
             model.GetIntercept()
@@ -279,7 +266,7 @@ LocalPotentialSampleList BuildGaussianSampling(
     return sampling_entries;
 }
 
-LocalPotentialSampleList AddLogSpaceNoise(
+LocalPotentialSampleList AddLogQuadraticNoise(
     LocalPotentialSampleList sampling_entries,
     const GaussianModel3D & model,
     double error_sigma,
@@ -302,12 +289,11 @@ LocalPotentialSampleList AddNoise(
     LocalGaussianFitModel fit_model,
     std::mt19937 & generator)
 {
-    switch (fit_model)
+    if (fit_model != LocalGaussianFitModel::LogQuadratic)
     {
-    case LocalGaussianFitModel::LogQuadratic:
-        return AddLogSpaceNoise(std::move(sampling_entries), model, error_sigma, generator);
+        throw std::invalid_argument("Unsupported local Gaussian fit model for beta test noise.");
     }
-    throw std::invalid_argument("Unsupported local Gaussian fit model for beta test noise.");
+    return AddLogQuadraticNoise(std::move(sampling_entries), model, error_sigma, generator);
 }
 
 Eigen::MatrixXd BuildRandomGausParameters(
@@ -352,26 +338,6 @@ Eigen::MatrixXd BuildRandomGausParameters(
     return gaus_par_matrix;
 }
 
-Eigen::MatrixXd BuildBetaMatrix(const Eigen::MatrixXd & gaus_array)
-{
-    const auto member_size{ static_cast<int>(gaus_array.cols()) };
-    if (member_size == 0)
-    {
-        return Eigen::MatrixXd{};
-    }
-
-    const auto first_beta{ linearization_service::EncodeGaussianToParameterVector(
-        GaussianModel3D::FromVector(gaus_array.col(0))) };
-    Eigen::MatrixXd beta_matrix{ Eigen::MatrixXd::Zero(first_beta.rows(), member_size) };
-    beta_matrix.col(0) = first_beta;
-    for (int i = 1; i < member_size; i++)
-    {
-        beta_matrix.col(i) = linearization_service::EncodeGaussianToParameterVector(
-            GaussianModel3D::FromVector(gaus_array.col(i)));
-    }
-    return beta_matrix;
-}
-
 std::vector<LocalPotentialSampleList> BuildMuMemberSamplingEntries(
     const Eigen::MatrixXd & gaus_array,
     std::mt19937 & generator)
@@ -391,6 +357,39 @@ std::vector<LocalPotentialSampleList> BuildMuMemberSamplingEntries(
     }
     return member_sampling_entries;
 }
+
+test_data_factory::RHBMBetaTestInput MakeBetaTestInputShell(
+    const GaussianModel3D & gaus_true,
+    const std::vector<double> & requested_alpha_r_list,
+    bool alpha_training,
+    LocalGaussianFitModel local_fit_model,
+    int replica_size)
+{
+    test_data_factory::RHBMBetaTestInput input;
+    input.gaus_true = gaus_true;
+    input.requested_alpha_r_list = requested_alpha_r_list;
+    input.alpha_training = alpha_training;
+    input.local_fit_model = local_fit_model;
+    input.replica_sampling_entries.reserve(static_cast<size_t>(replica_size));
+    input.replica_datasets.reserve(static_cast<size_t>(replica_size));
+    return input;
+}
+
+void AppendBetaReplica(
+    test_data_factory::RHBMBetaTestInput & input,
+    LocalPotentialSampleList sampling_entries,
+    const test_data_factory::TestDataBuildOptions & options)
+{
+    auto dataset{
+        rhbm_helper::BuildMemberDataset(
+            sampling_entries,
+            options.fit_range_min,
+            options.fit_range_max,
+            input.local_fit_model)
+    };
+    input.replica_sampling_entries.emplace_back(std::move(sampling_entries));
+    input.replica_datasets.emplace_back(std::move(dataset));
+}
 } // namespace
 
 namespace rhbm_gem::test_data_factory
@@ -404,13 +403,14 @@ RHBMBetaTestInput BuildBetaTestInput(const BetaScenario & scenario, const TestDa
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
     GaussianModel3D::RequireFinitePositiveWidthModel(scenario.gaus_true, "scenario.gaus_true");
 
-    RHBMBetaTestInput input;
-    input.gaus_true = scenario.gaus_true;
-    input.requested_alpha_r_list = scenario.requested_alpha_r_list;
-    input.alpha_training = scenario.alpha_training;
-    input.local_fit_model = scenario.local_fit_model;
-    input.replica_sampling_entries.reserve(static_cast<size_t>(scenario.replica_size));
-    input.replica_datasets.reserve(static_cast<size_t>(scenario.replica_size));
+    auto input{
+        MakeBetaTestInputShell(
+            scenario.gaus_true,
+            scenario.requested_alpha_r_list,
+            scenario.alpha_training,
+            scenario.local_fit_model,
+            scenario.replica_size)
+    };
 
     for (int i = 0; i < scenario.replica_size; i++)
     {
@@ -432,15 +432,7 @@ RHBMBetaTestInput BuildBetaTestInput(const BetaScenario & scenario, const TestDa
                 scenario.local_fit_model,
                 generator)
         };
-        auto dataset{
-            rhbm_helper::BuildMemberDataset(
-                noisy_sampling_entries,
-                options.fit_range_min,
-                options.fit_range_max,
-                scenario.local_fit_model)
-        };
-        input.replica_sampling_entries.emplace_back(std::move(noisy_sampling_entries));
-        input.replica_datasets.emplace_back(std::move(dataset));
+        AppendBetaReplica(input, std::move(noisy_sampling_entries), options);
     }
 
     return input;
@@ -472,7 +464,6 @@ RHBMMuTestInput BuildMuTestInput(const MuScenario & scenario)
     input.requested_alpha_g_list = scenario.requested_alpha_g_list;
     input.alpha_training = scenario.alpha_training;
     input.replica_member_sampling_entries.reserve(static_cast<size_t>(scenario.replica_size));
-    input.replica_beta_matrices.reserve(static_cast<size_t>(scenario.replica_size));
 
     for (int i = 0; i < scenario.replica_size; i++)
     {
@@ -490,8 +481,6 @@ RHBMMuTestInput BuildMuTestInput(const MuScenario & scenario)
         };
         input.replica_member_sampling_entries.emplace_back(
             BuildMuMemberSamplingEntries(random_gaus_array, generator));
-        input.replica_beta_matrices.emplace_back(
-            BuildBetaMatrix(random_gaus_array));
     }
 
     return input;
@@ -523,18 +512,18 @@ RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
     };
 
     RHBMNeighborhoodTestInput input;
-    input.no_cut_input.gaus_true = scenario.gaus_true;
-    input.no_cut_input.requested_alpha_r_list = scenario.requested_alpha_r_list;
-    input.no_cut_input.alpha_training = scenario.alpha_training;
-    input.no_cut_input.local_fit_model = scenario.local_fit_model;
-    input.cut_input.gaus_true = scenario.gaus_true;
-    input.cut_input.requested_alpha_r_list = scenario.requested_alpha_r_list;
-    input.cut_input.alpha_training = scenario.alpha_training;
-    input.cut_input.local_fit_model = scenario.local_fit_model;
-    input.no_cut_input.replica_sampling_entries.reserve(static_cast<size_t>(scenario.replica_size));
-    input.cut_input.replica_sampling_entries.reserve(static_cast<size_t>(scenario.replica_size));
-    input.no_cut_input.replica_datasets.reserve(static_cast<size_t>(scenario.replica_size));
-    input.cut_input.replica_datasets.reserve(static_cast<size_t>(scenario.replica_size));
+    input.no_cut_input = MakeBetaTestInputShell(
+        scenario.gaus_true,
+        scenario.requested_alpha_r_list,
+        scenario.alpha_training,
+        scenario.local_fit_model,
+        scenario.replica_size);
+    input.cut_input = MakeBetaTestInputShell(
+        scenario.gaus_true,
+        scenario.requested_alpha_r_list,
+        scenario.alpha_training,
+        scenario.local_fit_model,
+        scenario.replica_size);
     if (scenario.include_sampling_summary)
     {
         input.sampling_summaries.reserve(1);
@@ -575,24 +564,8 @@ RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
             scenario.data_error_sigma,
             scenario.local_fit_model,
             generator);
-        auto no_cut_dataset{
-            rhbm_helper::BuildMemberDataset(
-                no_cut_sampling_entries,
-                options.fit_range_min,
-                options.fit_range_max,
-                scenario.local_fit_model)
-        };
-        auto cut_dataset{
-            rhbm_helper::BuildMemberDataset(
-                cut_sampling_entries,
-                options.fit_range_min,
-                options.fit_range_max,
-                scenario.local_fit_model)
-        };
-        input.no_cut_input.replica_sampling_entries.emplace_back(std::move(no_cut_sampling_entries));
-        input.cut_input.replica_sampling_entries.emplace_back(std::move(cut_sampling_entries));
-        input.no_cut_input.replica_datasets.emplace_back(std::move(no_cut_dataset));
-        input.cut_input.replica_datasets.emplace_back(std::move(cut_dataset));
+        AppendBetaReplica(input.no_cut_input, std::move(no_cut_sampling_entries), options);
+        AppendBetaReplica(input.cut_input, std::move(cut_sampling_entries), options);
     }
 
     return input;
