@@ -7,6 +7,7 @@
 #include <tuple>
 #include <array>
 #include <algorithm>
+#include <numeric>
 #include <stdexcept>
 #include <type_traits>
 
@@ -79,11 +80,7 @@ Type ComputeMean(const Type * data, size_t size)
 {
     if (size <= 0) return static_cast<Type>(0.0);
 
-    auto sum{ static_cast<Type>(0.0) };
-    for (size_t i = 0; i < size; i++)
-    {
-        sum += data[i];
-    }
+    const auto sum{ std::accumulate(data, data + size, static_cast<Type>(0.0)) };
     return sum / static_cast<Type>(size);
 }
 
@@ -92,12 +89,17 @@ Type ComputeStandardDeviation(const Type * data, size_t size, Type mean)
 {
     if (size <= 1) return static_cast<Type>(0.0);
 
-    auto sum_sq_diff{ static_cast<Type>(0.0) };
-    for (size_t i = 0; i < size; i++)
-    {
-        auto diff{ static_cast<Type>(data[i]) - static_cast<Type>(mean) };
-        sum_sq_diff += diff * diff;
-    }
+    const auto sum_sq_diff{
+        std::accumulate(
+            data,
+            data + size,
+            static_cast<Type>(0.0),
+            [mean](Type sum, Type value)
+            {
+                const auto diff{ static_cast<Type>(value - mean) };
+                return static_cast<Type>(sum + diff * diff);
+            })
+    };
     return std::sqrt(sum_sq_diff / static_cast<Type>(size - 1));
 }
 
@@ -185,14 +187,15 @@ std::tuple<Type, Type> ComputeScalingRangeTuple(
 }
 
 template <typename Type, std::size_t N>
+Type ComputeDotProduct(const std::array<Type, N> & v1, const std::array<Type, N> & v2)
+{
+    return std::inner_product(v1.begin(), v1.end(), v2.begin(), static_cast<Type>(0.0));
+}
+
+template <typename Type, std::size_t N>
 Type ComputeNorm(const std::array<Type, N> & vec)
 {
-    Type norm_square{ static_cast<Type>(0.0) };
-    for (const auto value : vec)
-    {
-        norm_square += value * value;
-    }
-    return static_cast<Type>(std::sqrt(norm_square));
+    return static_cast<Type>(std::sqrt(ComputeDotProduct(vec, vec)));
 }
 
 template <typename Type, std::size_t N>
