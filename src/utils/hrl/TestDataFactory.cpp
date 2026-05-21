@@ -217,20 +217,18 @@ LocalPotentialSampleList GenerateAtomNeighborhoodSamples(
             static_cast<float>(neighbor_center(2))
         });
     }
-    const auto selected_indices{
-        BuildSelectedSamplePointIndexList(
+    const auto filtered_sampling_points{
+        FilterSamplingPointList(
             sampling_points,
             { 0.0f, 0.0f, 0.0f },
             reject_position_list,
             options.reject_angle_deg)
     };
     LocalPotentialSampleList sample_list;
-    sample_list.reserve(selected_indices.size());
+    sample_list.reserve(filtered_sampling_points.size());
 
-    for (const auto selected_index : selected_indices)
+    for (const auto & sampling_point : filtered_sampling_points)
     {
-        const auto & sampling_point{ sampling_points.at(selected_index) };
-
         const auto point{ eigen_helper::ToEigenVector(sampling_point.position) };
 
         const auto response{

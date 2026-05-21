@@ -20,19 +20,30 @@ SamplingPointList MakePointList()
     };
 }
 
+std::vector<std::array<float, 3>> GetPositions(const SamplingPointList & point_list)
+{
+    std::vector<std::array<float, 3>> positions;
+    positions.reserve(point_list.size());
+    for (const auto & point : point_list)
+    {
+        positions.emplace_back(point.position);
+    }
+    return positions;
+}
+
 } // namespace
 
 TEST(PotentialSampleSelectionTest, EmptyRejectPositionsSelectAllSamplingPoints)
 {
     const auto point_list{ MakePointList() };
-    const auto selected_indices{
-        rg::BuildSelectedSamplePointIndexList(
+    const auto filtered_points{
+        rg::FilterSamplingPointList(
             point_list,
             { 0.0f, 0.0f, 0.0f },
             {})
     };
 
-    EXPECT_EQ(selected_indices, std::vector<std::size_t>({ 0u, 1u, 2u, 3u }));
+    EXPECT_EQ(GetPositions(filtered_points), GetPositions(point_list));
 }
 
 TEST(PotentialSampleSelectionTest, RejectsPointsCloserToNearestNeighborThanReference)
@@ -43,8 +54,8 @@ TEST(PotentialSampleSelectionTest, RejectsPointsCloserToNearestNeighborThanRefer
         SamplingPoint{ 0.25f, { 0.25f, 0.0f, 0.0f } }
     };
 
-    const auto selected_indices{
-        rg::BuildSelectedSamplePointIndexList(
+    const auto filtered_points{
+        rg::FilterSamplingPointList(
             point_list,
             { 0.0f, 0.0f, 0.0f },
             {
@@ -54,75 +65,88 @@ TEST(PotentialSampleSelectionTest, RejectsPointsCloserToNearestNeighborThanRefer
             0.0)
     };
 
-    EXPECT_EQ(selected_indices, std::vector<std::size_t>({ 0u }));
+    const std::vector<std::array<float, 3>> expected_positions{
+        { 0.05f, 0.0f, 0.0f }
+    };
+    EXPECT_EQ(GetPositions(filtered_points), expected_positions);
 }
 
 TEST(PotentialSampleSelectionTest, RejectsPointsWithinAngleThresholdOfRejectPositions)
 {
-    const auto selected_indices{
-        rg::BuildSelectedSamplePointIndexList(
+    const auto filtered_points{
+        rg::FilterSamplingPointList(
             MakePointList(),
             { 0.0f, 0.0f, 0.0f },
             { std::array<float, 3>{ 1.0f, 0.0f, 0.0f } },
             30.0)
     };
 
-    EXPECT_EQ(selected_indices, std::vector<std::size_t>({ 0u, 2u, 3u }));
+    const std::vector<std::array<float, 3>> expected_positions{
+        { 0.0f, 0.0f, 0.0f },
+        { 0.0f, 1.0f, 0.0f },
+        { -1.0f, 0.0f, 0.0f }
+    };
+    EXPECT_EQ(GetPositions(filtered_points), expected_positions);
 }
 
 TEST(PotentialSampleSelectionTest, KeepsPerpendicularAndOppositeDirections)
 {
-    const auto selected_indices{
-        rg::BuildSelectedSamplePointIndexList(
+    const auto filtered_points{
+        rg::FilterSamplingPointList(
             MakePointList(),
             { 0.0f, 0.0f, 0.0f },
             { std::array<float, 3>{ 1.0f, 0.0f, 0.0f } },
             89.0)
     };
 
-    EXPECT_EQ(selected_indices, std::vector<std::size_t>({ 0u, 2u, 3u }));
+    const std::vector<std::array<float, 3>> expected_positions{
+        { 0.0f, 0.0f, 0.0f },
+        { 0.0f, 1.0f, 0.0f },
+        { -1.0f, 0.0f, 0.0f }
+    };
+    EXPECT_EQ(GetPositions(filtered_points), expected_positions);
 }
 
 TEST(PotentialSampleSelectionTest, IgnoresRejectPositionsAtReferencePosition)
 {
     const auto point_list{ MakePointList() };
-    const auto selected_indices{
-        rg::BuildSelectedSamplePointIndexList(
+    const auto filtered_points{
+        rg::FilterSamplingPointList(
             point_list,
             { 0.0f, 0.0f, 0.0f },
             { std::array<float, 3>{ 0.0f, 0.0f, 0.0f } },
             45.0)
     };
 
-    EXPECT_EQ(selected_indices, std::vector<std::size_t>({ 0u, 1u, 2u, 3u }));
+    EXPECT_EQ(GetPositions(filtered_points), GetPositions(point_list));
 }
 
 TEST(PotentialSampleSelectionTest, IgnoresRejectPositionsAtReferencePositionWithZeroAngle)
 {
     const auto point_list{ MakePointList() };
-    const auto selected_indices{
-        rg::BuildSelectedSamplePointIndexList(
+    const auto filtered_points{
+        rg::FilterSamplingPointList(
             point_list,
             { 0.0f, 0.0f, 0.0f },
             { std::array<float, 3>{ 0.0f, 0.0f, 0.0f } },
             0.0)
     };
 
-    EXPECT_EQ(selected_indices, std::vector<std::size_t>({ 0u, 1u, 2u, 3u }));
+    EXPECT_EQ(GetPositions(filtered_points), GetPositions(point_list));
 }
 
 TEST(PotentialSampleSelectionTest, KeepsOriginSamplingPointEvenWhenFilteringEnabled)
 {
-    const auto selected_indices{
-        rg::BuildSelectedSamplePointIndexList(
+    const auto filtered_points{
+        rg::FilterSamplingPointList(
             MakePointList(),
             { 0.0f, 0.0f, 0.0f },
             { std::array<float, 3>{ 1.0f, 0.0f, 0.0f } },
             45.0)
     };
 
-    ASSERT_FALSE(selected_indices.empty());
-    EXPECT_EQ(selected_indices.front(), 0u);
+    ASSERT_FALSE(filtered_points.empty());
+    EXPECT_EQ(filtered_points.front().position, (std::array<float, 3>{ 0.0f, 0.0f, 0.0f }));
 }
 
 TEST(PotentialSampleSelectionTest, RejectsInvalidAngles)
@@ -130,28 +154,28 @@ TEST(PotentialSampleSelectionTest, RejectsInvalidAngles)
     const auto point_list{ MakePointList() };
 
     EXPECT_THROW(
-        (void)rg::BuildSelectedSamplePointIndexList(
+        (void)rg::FilterSamplingPointList(
             point_list,
             { 0.0f, 0.0f, 0.0f },
             {},
             -1.0),
         std::invalid_argument);
     EXPECT_THROW(
-        (void)rg::BuildSelectedSamplePointIndexList(
+        (void)rg::FilterSamplingPointList(
             point_list,
             { 0.0f, 0.0f, 0.0f },
             {},
             std::numeric_limits<double>::infinity()),
         std::invalid_argument);
     EXPECT_THROW(
-        (void)rg::BuildSelectedSamplePointIndexList(
+        (void)rg::FilterSamplingPointList(
             point_list,
             { 0.0f, 0.0f, 0.0f },
             {},
             181.0),
         std::invalid_argument);
     EXPECT_THROW(
-        (void)rg::BuildSelectedSamplePointIndexList(
+        (void)rg::FilterSamplingPointList(
             point_list,
             { 0.0f, 0.0f, 0.0f },
             {},
@@ -162,7 +186,7 @@ TEST(PotentialSampleSelectionTest, RejectsInvalidAngles)
 TEST(PotentialSampleSelectionTest, RejectsRejectPositionsWithNonFiniteValues)
 {
     EXPECT_THROW(
-        (void)rg::BuildSelectedSamplePointIndexList(
+        (void)rg::FilterSamplingPointList(
             MakePointList(),
             { 0.0f, 0.0f, 0.0f },
             { std::array<float, 3>{
@@ -177,7 +201,7 @@ TEST(PotentialSampleSelectionTest, RejectsRejectPositionsWithNonFiniteValues)
 TEST(PotentialSampleSelectionTest, RejectsRejectPositionsWithNonFiniteValuesAtZeroAngle)
 {
     EXPECT_THROW(
-        (void)rg::BuildSelectedSamplePointIndexList(
+        (void)rg::FilterSamplingPointList(
             MakePointList(),
             { 0.0f, 0.0f, 0.0f },
             { std::array<float, 3>{
@@ -197,15 +221,19 @@ TEST(PotentialSampleSelectionTest, UsesReferencePositionForWorldSpaceSamplingPoi
         SamplingPoint{ 1.0f, { 10.0f, 1.0f, 0.0f } }
     };
 
-    const auto selected_indices{
-        rg::BuildSelectedSamplePointIndexList(
+    const auto filtered_points{
+        rg::FilterSamplingPointList(
             point_list,
             { 10.0f, 0.0f, 0.0f },
             { std::array<float, 3>{ 11.0f, 0.0f, 0.0f } },
             30.0)
     };
 
-    EXPECT_EQ(selected_indices, std::vector<std::size_t>({ 0u, 2u }));
+    const std::vector<std::array<float, 3>> expected_positions{
+        { 10.0f, 0.0f, 0.0f },
+        { 10.0f, 1.0f, 0.0f }
+    };
+    EXPECT_EQ(GetPositions(filtered_points), expected_positions);
 }
 
 TEST(PotentialSampleSelectionTest, FilterLocalPotentialSampleListHandlesEmptySampleList)

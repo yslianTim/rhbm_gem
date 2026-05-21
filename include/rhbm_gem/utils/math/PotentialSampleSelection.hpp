@@ -6,7 +6,6 @@
 #include <cstddef>
 #include <iterator>
 #include <map>
-#include <numeric>
 #include <utility>
 #include <vector>
 
@@ -101,7 +100,7 @@ inline LocalPotentialSampleList KeepLowestResponseDecileByDistance(LocalPotentia
 
 } // namespace
 
-inline std::vector<std::size_t> BuildSelectedSamplePointIndexList(
+inline SamplingPointList FilterSamplingPointList(
     const SamplingPointList & sample_point_list,
     const std::array<float, 3> & local_position,
     const std::vector<std::array<float, 3>> & reject_position_list,
@@ -111,10 +110,7 @@ inline std::vector<std::size_t> BuildSelectedSamplePointIndexList(
 
     if (reject_position_list.empty())
     {
-        std::vector<std::size_t> selected_indices;
-        selected_indices.resize(sample_point_list.size());
-        std::iota(selected_indices.begin(), selected_indices.end(), std::size_t{ 0 });
-        return selected_indices;
+        return sample_point_list;
     }
 
     std::vector<std::array<float, 3>> valid_neighbor_list;
@@ -126,20 +122,20 @@ inline std::vector<std::size_t> BuildSelectedSamplePointIndexList(
         valid_neighbor_list.emplace_back(reject_position);
     }
 
-    std::vector<std::size_t> selected_indices;
-    selected_indices.reserve(sample_point_list.size());
-    for (std::size_t i = 0; i < sample_point_list.size(); i++)
+    SamplingPointList filtered_sample_point_list;
+    filtered_sample_point_list.reserve(sample_point_list.size());
+    for (const auto & sample_point : sample_point_list)
     {
-        const auto & sample_position{ sample_point_list.at(i).position };
+        const auto & sample_position{ sample_point.position };
         if (IsOwnedByNeighbor(sample_position, local_position, valid_neighbor_list) ||
             IsInsideNeighborCone(sample_position, local_position, valid_neighbor_list, angle))
         {
             continue;
         }
-        selected_indices.emplace_back(i);
+        filtered_sample_point_list.emplace_back(sample_point);
     }
 
-    return selected_indices;
+    return filtered_sample_point_list;
 }
 
 inline LocalPotentialSampleList FilterLocalPotentialSampleList(LocalPotentialSampleList sample_list)
