@@ -60,10 +60,10 @@ inline bool IsInsideNeighborCone(
     return false;
 }
 
-inline LocalPotentialSampleList KeepLowestResponseDecileByDistance(LocalPotentialSampleList sample_list)
+inline LocalPotentialSampleList KeepLowestResponseRatioByDistance(
+    LocalPotentialSampleList sample_list,
+    double retained_ratio)
 {
-    constexpr double kRetainedRatio{ 0.1 };
-
     std::map<float, LocalPotentialSampleList> samples_by_distance;
     for (auto & sample : sample_list)
     {
@@ -86,7 +86,7 @@ inline LocalPotentialSampleList KeepLowestResponseDecileByDistance(LocalPotentia
             std::max<std::size_t>(
                 1,
                 static_cast<std::size_t>(
-                    std::ceil(static_cast<double>(distance_samples.size()) * kRetainedRatio)))
+                    std::ceil(static_cast<double>(distance_samples.size()) * retained_ratio)))
         };
         retained_samples.insert(
             retained_samples.end(),
@@ -140,7 +140,8 @@ inline SamplingPointList FilterSamplingPointList(
 
 inline LocalPotentialSampleList FilterLocalPotentialSampleList(LocalPotentialSampleList sample_list)
 {
-    return KeepLowestResponseDecileByDistance(std::move(sample_list));
+    constexpr double kRetainedRatio{ 0.1 };
+    return KeepLowestResponseRatioByDistance(std::move(sample_list), kRetainedRatio);
 }
 
 } // namespace rhbm_gem

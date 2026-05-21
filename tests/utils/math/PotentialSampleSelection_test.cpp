@@ -241,7 +241,7 @@ TEST(PotentialSampleSelectionTest, FilterLocalPotentialSampleListHandlesEmptySam
     EXPECT_TRUE(rg::FilterLocalPotentialSampleList({}).empty());
 }
 
-TEST(PotentialSampleSelectionTest, FilterLocalPotentialSampleListUsesDefaultLowestResponseDecile)
+TEST(PotentialSampleSelectionTest, FilterLocalPotentialSampleListUsesDefaultRetainedRatio)
 {
     LocalPotentialSampleList sample_list;
     for (std::size_t i = 0; i < 11u; i++)

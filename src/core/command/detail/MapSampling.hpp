@@ -13,7 +13,7 @@
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
 
 namespace rhbm_gem {
-namespace detail {
+namespace {
 
 inline SphereSamplingMethod ResolveSphereSamplingMethod(SphereSamplingProfileChoice choice)
 {
@@ -110,7 +110,7 @@ inline LocalPotentialSampleList BuildLocalPotentialSampleList(
     return sampling_data_list;
 }
 
-} // namespace detail
+} // namespace
 
 template <typename Sampler>
 LocalPotentialSampleList SampleMapValues(
@@ -123,7 +123,7 @@ LocalPotentialSampleList SampleMapValues(
     const auto filtered_sample_point_list{
         FilterSamplingPointList(sample_point_list, position, {})
     };
-    return detail::BuildLocalPotentialSampleList(map_object, filtered_sample_point_list);
+    return BuildLocalPotentialSampleList(map_object, filtered_sample_point_list);
 }
 
 inline LocalPotentialSampleList SampleAtomMapValues(
@@ -138,7 +138,7 @@ inline LocalPotentialSampleList SampleAtomMapValues(
     SphereSampler sampler;
     sampler.SetSamplingProfile(
         SphereSamplingProfile::AnalysisDefault(
-            detail::ResolveSphereSamplingMethod(sampling_profile_choice),
+            ResolveSphereSamplingMethod(sampling_profile_choice),
             kAtomSamplingSize));
 
     const auto local_position{ atom.GetPosition() };
@@ -155,7 +155,7 @@ inline LocalPotentialSampleList SampleAtomMapValues(
             sample_point_list, local_position, reject_position_list, kRejectAngle)
     };
     auto sample_list{
-        detail::BuildLocalPotentialSampleList(map_object, filtered_sample_point_list)
+        BuildLocalPotentialSampleList(map_object, filtered_sample_point_list)
     };
     return FilterLocalPotentialSampleList(std::move(sample_list));
 }

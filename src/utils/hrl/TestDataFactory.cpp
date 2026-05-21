@@ -206,7 +206,7 @@ LocalPotentialSampleList GenerateAtomNeighborhoodSamples(
             false
         )
     );
-    const auto sampling_points{ sampler.GenerateSamplingPoints({ 0.0f, 0.0f, 0.0f }) };
+    const auto sample_point_list{ sampler.GenerateSamplingPoints({ 0.0f, 0.0f, 0.0f }) };
     std::vector<std::array<float, 3>> reject_position_list;
     reject_position_list.reserve(neighbor_center_list.size());
     for (const auto & neighbor_center : neighbor_center_list)
@@ -217,23 +217,21 @@ LocalPotentialSampleList GenerateAtomNeighborhoodSamples(
             static_cast<float>(neighbor_center(2))
         });
     }
-    const auto filtered_sampling_points{
+    const auto filtered_sample_point_list{
         FilterSamplingPointList(
-            sampling_points,
+            sample_point_list,
             { 0.0f, 0.0f, 0.0f },
             reject_position_list,
             options.reject_angle_deg)
     };
+
     LocalPotentialSampleList sample_list;
-    sample_list.reserve(filtered_sampling_points.size());
-
-    for (const auto & sampling_point : filtered_sampling_points)
+    sample_list.reserve(filtered_sample_point_list.size());
+    for (const auto & sampling_point : filtered_sample_point_list)
     {
-        const auto point{ eigen_helper::ToEigenVector(sampling_point.position) };
-
         const auto response{
             model.GetAmplitude() * ComputeGaussianResponseWithAtomNeighborhood3D(
-                point,
+                eigen_helper::ToEigenVector(sampling_point.position),
                 atom_center,
                 neighbor_center_list,
                 neighbor_amplitude_list,
@@ -247,10 +245,7 @@ LocalPotentialSampleList GenerateAtomNeighborhoodSamples(
         });
     }
 
-    if (options.reject_angle_deg == 0.0)
-    {
-        return sample_list;
-    }
+    if (options.reject_angle_deg == 0.0) return sample_list;
 
     return FilterLocalPotentialSampleList(std::move(sample_list));
 }
