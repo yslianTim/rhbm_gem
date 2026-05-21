@@ -26,7 +26,7 @@ TEST(PotentialSampleSelectionTest, EmptyRejectPositionsSelectAllSamplingPoints)
 {
     const auto point_list{ MakePointList() };
     const auto selected_indices{
-        rg::BuildSelectedLocalPotentialSampleIndexList(
+        rg::BuildSelectedSamplePointIndexList(
             point_list,
             { 0.0f, 0.0f, 0.0f },
             {})
@@ -44,7 +44,7 @@ TEST(PotentialSampleSelectionTest, RejectsPointsCloserToNearestNeighborThanRefer
     };
 
     const auto selected_indices{
-        rg::BuildSelectedLocalPotentialSampleIndexList(
+        rg::BuildSelectedSamplePointIndexList(
             point_list,
             { 0.0f, 0.0f, 0.0f },
             {
@@ -60,7 +60,7 @@ TEST(PotentialSampleSelectionTest, RejectsPointsCloserToNearestNeighborThanRefer
 TEST(PotentialSampleSelectionTest, RejectsPointsWithinAngleThresholdOfRejectPositions)
 {
     const auto selected_indices{
-        rg::BuildSelectedLocalPotentialSampleIndexList(
+        rg::BuildSelectedSamplePointIndexList(
             MakePointList(),
             { 0.0f, 0.0f, 0.0f },
             { std::array<float, 3>{ 1.0f, 0.0f, 0.0f } },
@@ -73,7 +73,7 @@ TEST(PotentialSampleSelectionTest, RejectsPointsWithinAngleThresholdOfRejectPosi
 TEST(PotentialSampleSelectionTest, KeepsPerpendicularAndOppositeDirections)
 {
     const auto selected_indices{
-        rg::BuildSelectedLocalPotentialSampleIndexList(
+        rg::BuildSelectedSamplePointIndexList(
             MakePointList(),
             { 0.0f, 0.0f, 0.0f },
             { std::array<float, 3>{ 1.0f, 0.0f, 0.0f } },
@@ -87,7 +87,7 @@ TEST(PotentialSampleSelectionTest, IgnoresRejectPositionsAtReferencePosition)
 {
     const auto point_list{ MakePointList() };
     const auto selected_indices{
-        rg::BuildSelectedLocalPotentialSampleIndexList(
+        rg::BuildSelectedSamplePointIndexList(
             point_list,
             { 0.0f, 0.0f, 0.0f },
             { std::array<float, 3>{ 0.0f, 0.0f, 0.0f } },
@@ -101,7 +101,7 @@ TEST(PotentialSampleSelectionTest, IgnoresRejectPositionsAtReferencePositionWith
 {
     const auto point_list{ MakePointList() };
     const auto selected_indices{
-        rg::BuildSelectedLocalPotentialSampleIndexList(
+        rg::BuildSelectedSamplePointIndexList(
             point_list,
             { 0.0f, 0.0f, 0.0f },
             { std::array<float, 3>{ 0.0f, 0.0f, 0.0f } },
@@ -114,7 +114,7 @@ TEST(PotentialSampleSelectionTest, IgnoresRejectPositionsAtReferencePositionWith
 TEST(PotentialSampleSelectionTest, KeepsOriginSamplingPointEvenWhenFilteringEnabled)
 {
     const auto selected_indices{
-        rg::BuildSelectedLocalPotentialSampleIndexList(
+        rg::BuildSelectedSamplePointIndexList(
             MakePointList(),
             { 0.0f, 0.0f, 0.0f },
             { std::array<float, 3>{ 1.0f, 0.0f, 0.0f } },
@@ -130,28 +130,28 @@ TEST(PotentialSampleSelectionTest, RejectsInvalidAngles)
     const auto point_list{ MakePointList() };
 
     EXPECT_THROW(
-        (void)rg::BuildSelectedLocalPotentialSampleIndexList(
+        (void)rg::BuildSelectedSamplePointIndexList(
             point_list,
             { 0.0f, 0.0f, 0.0f },
             {},
             -1.0),
         std::invalid_argument);
     EXPECT_THROW(
-        (void)rg::BuildSelectedLocalPotentialSampleIndexList(
+        (void)rg::BuildSelectedSamplePointIndexList(
             point_list,
             { 0.0f, 0.0f, 0.0f },
             {},
             std::numeric_limits<double>::infinity()),
         std::invalid_argument);
     EXPECT_THROW(
-        (void)rg::BuildSelectedLocalPotentialSampleIndexList(
+        (void)rg::BuildSelectedSamplePointIndexList(
             point_list,
             { 0.0f, 0.0f, 0.0f },
             {},
             181.0),
         std::invalid_argument);
     EXPECT_THROW(
-        (void)rg::BuildSelectedLocalPotentialSampleIndexList(
+        (void)rg::BuildSelectedSamplePointIndexList(
             point_list,
             { 0.0f, 0.0f, 0.0f },
             {},
@@ -162,7 +162,7 @@ TEST(PotentialSampleSelectionTest, RejectsInvalidAngles)
 TEST(PotentialSampleSelectionTest, RejectsRejectPositionsWithNonFiniteValues)
 {
     EXPECT_THROW(
-        (void)rg::BuildSelectedLocalPotentialSampleIndexList(
+        (void)rg::BuildSelectedSamplePointIndexList(
             MakePointList(),
             { 0.0f, 0.0f, 0.0f },
             { std::array<float, 3>{
@@ -177,7 +177,7 @@ TEST(PotentialSampleSelectionTest, RejectsRejectPositionsWithNonFiniteValues)
 TEST(PotentialSampleSelectionTest, RejectsRejectPositionsWithNonFiniteValuesAtZeroAngle)
 {
     EXPECT_THROW(
-        (void)rg::BuildSelectedLocalPotentialSampleIndexList(
+        (void)rg::BuildSelectedSamplePointIndexList(
             MakePointList(),
             { 0.0f, 0.0f, 0.0f },
             { std::array<float, 3>{
@@ -198,7 +198,7 @@ TEST(PotentialSampleSelectionTest, UsesReferencePositionForWorldSpaceSamplingPoi
     };
 
     const auto selected_indices{
-        rg::BuildSelectedLocalPotentialSampleIndexList(
+        rg::BuildSelectedSamplePointIndexList(
             point_list,
             { 10.0f, 0.0f, 0.0f },
             { std::array<float, 3>{ 11.0f, 0.0f, 0.0f } },

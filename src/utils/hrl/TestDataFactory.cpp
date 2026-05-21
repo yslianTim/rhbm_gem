@@ -218,7 +218,7 @@ LocalPotentialSampleList GenerateAtomNeighborhoodSamples(
         });
     }
     const auto selected_indices{
-        BuildSelectedLocalPotentialSampleIndexList(
+        BuildSelectedSamplePointIndexList(
             sampling_points,
             { 0.0f, 0.0f, 0.0f },
             reject_position_list,

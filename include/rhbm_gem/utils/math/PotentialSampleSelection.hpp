@@ -101,7 +101,7 @@ inline LocalPotentialSampleList KeepLowestResponseDecileByDistance(LocalPotentia
 
 } // namespace
 
-inline std::vector<std::size_t> BuildSelectedLocalPotentialSampleIndexList(
+inline std::vector<std::size_t> BuildSelectedSamplePointIndexList(
     const SamplingPointList & sample_point_list,
     const std::array<float, 3> & local_position,
     const std::vector<std::array<float, 3>> & reject_position_list,

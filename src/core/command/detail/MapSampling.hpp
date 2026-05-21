@@ -124,7 +124,7 @@ LocalPotentialSampleList SampleMapValues(
 {
     const auto sample_point_list{ sampler.GenerateSamplingPoints(position, direction_like_input) };
     const auto selected_indices{
-        BuildSelectedLocalPotentialSampleIndexList(sample_point_list, position, {})
+        BuildSelectedSamplePointIndexList(sample_point_list, position, {})
     };
     return detail::BuildLocalPotentialSampleList(map_object, sample_point_list, selected_indices);
 }
@@ -154,7 +154,7 @@ inline LocalPotentialSampleList SampleAtomMapValues(
         reject_position_list.emplace_back(neighbor_atom->GetPosition());
     }
     const auto selected_indices{
-        BuildSelectedLocalPotentialSampleIndexList(
+        BuildSelectedSamplePointIndexList(
             sample_point_list, position, reject_position_list, kRejectAngle)
     };
     auto sample_list{
