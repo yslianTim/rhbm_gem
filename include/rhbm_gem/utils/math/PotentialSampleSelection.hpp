@@ -19,14 +19,6 @@
 namespace rhbm_gem {
 namespace detail {
 
-inline Eigen::Vector3d BuildLocalPotentialDirection(
-    const std::array<float, 3> & position,
-    const std::array<float, 3> & reference_position)
-{
-    return Eigen::Vector3d{ eigen_helper::ToEigenVector(position) } -
-        Eigen::Vector3d{ eigen_helper::ToEigenVector(reference_position) };
-}
-
 inline std::vector<Eigen::Vector3d> BuildLocalPotentialNormalizedRejectDirectionList(
     const std::vector<Eigen::Vector3d> & reject_position_list,
     const Eigen::Vector3d & reference_position)
@@ -133,7 +125,7 @@ inline bool ShouldRejectLocalPotentialSamplingPoint(
     double cos_threshold)
 {
     const Eigen::Vector3d sampling_vector{
-        BuildLocalPotentialDirection(point.position, reference_position)
+        eigen_helper::ToEigenVector(point.position) - eigen_helper::ToEigenVector(reference_position)
     };
     const auto sampling_norm{ sampling_vector.norm() };
     if (sampling_norm <= 0.0)
