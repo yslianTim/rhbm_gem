@@ -177,8 +177,11 @@ LocalPotentialSampleList GenerateAtomNeighborhoodSamples(
     const auto neighbor_list{ BuildAtomNeighborList(options) };
     const Eigen::VectorXd atom_center{ Eigen::VectorXd::Zero(3) };
 
-    const SphereSampler sampler{ SphereSamplingMethod::FibonacciDeterministic };
-    const auto sample_point_list{ sampler.GenerateSamplingPoints({ 0.0f, 0.0f, 0.0f }) };
+    const auto sample_point_list{
+        sphere_sampler::GenerateSamplingPointList(
+            { 0.0f, 0.0f, 0.0f },
+            SphereSamplingMethod::FibonacciDeterministic)
+    };
     std::vector<std::array<float, 3>> reject_position_list;
     reject_position_list.reserve(neighbor_list.size());
     for (const auto & neighbor : neighbor_list)

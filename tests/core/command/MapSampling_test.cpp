@@ -84,7 +84,7 @@ TEST(MapSamplingTest, OrientedSamplerUsesDirectionLikeInput)
     EXPECT_FLOAT_EQ(1.0f, sampling_data.front().point.position.at(0));
 }
 
-TEST(MapSamplingTest, CommandAtomSamplerBuildsSphereSamplerFromSamplingMethod)
+TEST(MapSamplingTest, CommandAtomSamplerUsesSamplingMethod)
 {
     auto map{ MakeMapObject() };
     auto model{ MakeLinearNeighborModel() };

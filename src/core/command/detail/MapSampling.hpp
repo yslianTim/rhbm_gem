@@ -116,10 +116,10 @@ inline LocalPotentialSampleList SampleAtomMapValues(
     constexpr double kRejectAngle{ 15.0 };
     constexpr double kNeighborSearchRadius{ 2.0 };
 
-    const SphereSampler sampler{ sampling_method };
-
     const auto local_position{ atom.GetPosition() };
-    const auto sample_point_list{ sampler.GenerateSamplingPoints(local_position) };
+    const auto sample_point_list{
+        sphere_sampler::GenerateSamplingPointList(local_position, sampling_method)
+    };
     const auto neighbor_atom_list{ atom.FindNeighborAtoms(kNeighborSearchRadius, false) };
     std::vector<std::array<float, 3>> reject_position_list;
     reject_position_list.reserve(neighbor_atom_list.size());

@@ -59,33 +59,30 @@ void ExpectAnalysisSampleDistances(
 
 } // namespace
 
-TEST(SphereSamplerTest, ConstructorRadiusUniformProducesFixedAnalysisSamples)
+TEST(SphereSamplerTest, RadiusUniformProducesFixedAnalysisSamples)
 {
-    const SphereSampler sampler{ SphereSamplingMethod::RadiusUniformRandom };
     const std::array<float, 3> center{ 1.f, 2.f, 3.f };
-    const auto samples{ sampler.GenerateSamplingPoints(center) };
+    const auto samples{ rhbm_gem::sphere_sampler::GenerateRadiusUniformRandom(center) };
 
     ASSERT_EQ(50u, samples.size());
     ExpectAnalysisSampleDistances(samples, center);
 }
 
-TEST(SphereSamplerTest, ConstructorVolumeUniformProducesFixedAnalysisSamples)
+TEST(SphereSamplerTest, VolumeUniformProducesFixedAnalysisSamples)
 {
-    const SphereSampler sampler{ SphereSamplingMethod::VolumeUniformRandom };
     const std::array<float, 3> center{ 1.f, 2.f, 3.f };
-    const auto samples{ sampler.GenerateSamplingPoints(center) };
+    const auto samples{ rhbm_gem::sphere_sampler::GenerateVolumeUniformRandom(center) };
 
     ASSERT_EQ(50u, samples.size());
     ExpectAnalysisSampleDistances(samples, center);
 }
 
-TEST(SphereSamplerTest, ConstructorFibonacciProducesFixedDeterministicShells)
+TEST(SphereSamplerTest, FibonacciProducesFixedDeterministicShells)
 {
-    const SphereSampler sampler{ SphereSamplingMethod::FibonacciDeterministic };
     const std::array<float, 3> center{ 1.f, 2.f, 3.f };
 
-    const auto first_samples{ sampler.GenerateSamplingPoints(center) };
-    const auto second_samples{ sampler.GenerateSamplingPoints(center) };
+    const auto first_samples{ rhbm_gem::sphere_sampler::GenerateFibonacciDeterministic(center) };
+    const auto second_samples{ rhbm_gem::sphere_sampler::GenerateFibonacciDeterministic(center) };
 
     ASSERT_EQ(750u, first_samples.size());
     EXPECT_EQ(0u, CountSamplesAtRadius(first_samples, 0.0f));
@@ -95,9 +92,25 @@ TEST(SphereSamplerTest, ConstructorFibonacciProducesFixedDeterministicShells)
     ExpectSamplesEqual(first_samples, second_samples);
 }
 
-TEST(SphereSamplerTest, ConstructorThrowsForUnsupportedMethod)
+TEST(SphereSamplerTest, DispatchThrowsForUnsupportedMethod)
 {
     EXPECT_THROW(
-        SphereSampler{ static_cast<SphereSamplingMethod>(99) },
+        rhbm_gem::sphere_sampler::GenerateSamplingPointList(
+            { 0.f, 0.f, 0.f },
+            static_cast<SphereSamplingMethod>(99)),
         std::invalid_argument);
+}
+
+TEST(SphereSamplerTest, DispatchUsesRequestedMethod)
+{
+    const std::array<float, 3> center{ 1.f, 2.f, 3.f };
+    const auto samples{
+        rhbm_gem::sphere_sampler::GenerateSamplingPointList(
+            center,
+            SphereSamplingMethod::FibonacciDeterministic)
+    };
+
+    ASSERT_EQ(750u, samples.size());
+    EXPECT_EQ(50u, CountSamplesAtRadius(samples, 0.05f));
+    ExpectAnalysisSampleDistances(samples, center);
 }

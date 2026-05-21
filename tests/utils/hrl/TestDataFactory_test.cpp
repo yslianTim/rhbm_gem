@@ -11,7 +11,6 @@
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/hrl/TestDataFactory.hpp>
-#include <rhbm_gem/utils/math/SphereSampler.hpp>
 
 namespace {
 namespace tdf = rhbm_gem::test_data_factory;

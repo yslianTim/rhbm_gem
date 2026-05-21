@@ -4,25 +4,14 @@
 
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 
-class SphereSampler
-{
-    SphereSamplingMethod m_method;
+namespace rhbm_gem::sphere_sampler {
 
-public:
-    explicit SphereSampler(SphereSamplingMethod method);
-    ~SphereSampler() = default;
+SamplingPointList GenerateSamplingPointList(
+    const std::array<float, 3> & center_position,
+    SphereSamplingMethod method);
 
-    SamplingPointList GenerateSamplingPoints(const std::array<float, 3> & center_position) const;
+SamplingPointList GenerateVolumeUniformRandom(const std::array<float, 3> & center_position);
+SamplingPointList GenerateRadiusUniformRandom(const std::array<float, 3> & center_position);
+SamplingPointList GenerateFibonacciDeterministic(const std::array<float, 3> & center_position);
 
-private:
-    void GenerateVolumeUniformRandom(
-        const std::array<float, 3> & center_position,
-        SamplingPointList & out) const;
-    void GenerateRadiusUniformRandom(
-        const std::array<float, 3> & center_position,
-        SamplingPointList & out) const;
-    void GenerateFibonacciDeterministic(
-        const std::array<float, 3> & center_position,
-        SamplingPointList & out) const;
-
-};
+} // namespace rhbm_gem::sphere_sampler
