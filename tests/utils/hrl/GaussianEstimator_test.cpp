@@ -36,20 +36,6 @@ LocalPotentialSampleList MakeSampleEntries(double log_response_shift = 0.0)
     return sample_entries;
 }
 
-LocalPotentialSampleList MakeDifferentialSampleEntries(double amplitude_shift = 0.0)
-{
-    const rg::GaussianModel3D model{ 2.0 + amplitude_shift, 0.7, 0.25 };
-    LocalPotentialSampleList sample_entries;
-    sample_entries.reserve(8);
-    for (int i = 0; i < 8; i++)
-    {
-        const auto distance{ static_cast<float>(0.1 * static_cast<double>(i)) };
-        const auto response{ static_cast<float>(model.ResponseAtDistance(distance)) };
-        sample_entries.emplace_back(LocalPotentialSample{ response, SamplingPoint{ distance } });
-    }
-    return sample_entries;
-}
-
 rg::gaussian_estimator::FitOptions MakeOptions()
 {
     rg::gaussian_estimator::FitOptions options;
@@ -57,13 +43,6 @@ rg::gaussian_estimator::FitOptions MakeOptions()
     options.alpha_max = 0.5;
     options.alpha_step = 0.5;
     options.thread_size = 1;
-    return options;
-}
-
-rg::gaussian_estimator::FitOptions MakeDifferentialOptions()
-{
-    auto options{ MakeOptions() };
-    options.local_fit_model = rg::LocalGaussianFitModel::DifferentialMethod;
     return options;
 }
 
@@ -90,17 +69,6 @@ std::vector<LocalPotentialSampleList> MakeIdenticalSampleGroup(std::size_t membe
     for (std::size_t i = 0; i < member_size; i++)
     {
         sample_group.emplace_back(MakeSampleEntries());
-    }
-    return sample_group;
-}
-
-std::vector<LocalPotentialSampleList> MakeDifferentialSampleGroup(std::size_t member_size)
-{
-    std::vector<LocalPotentialSampleList> sample_group;
-    sample_group.reserve(member_size);
-    for (std::size_t i = 0; i < member_size; i++)
-    {
-        sample_group.emplace_back(MakeDifferentialSampleEntries(0.01 * static_cast<double>(i)));
     }
     return sample_group;
 }
@@ -144,22 +112,6 @@ TEST(GaussianEstimatorTest, SampleListAlphaRReturnsFiniteAlpha)
 {
     const auto options{ MakeOptions() };
     const std::vector<LocalPotentialSampleList> sample_entries_list{ MakeSampleEntries() };
-    const auto alpha_r{
-        rg::gaussian_estimator::TrainAlphaR(sample_entries_list, options)
-    };
-
-    EXPECT_TRUE(std::isfinite(alpha_r));
-    EXPECT_GE(alpha_r, options.alpha_min);
-    EXPECT_LE(alpha_r, options.alpha_max);
-}
-
-TEST(GaussianEstimatorTest, DifferentialMethodAlphaRReturnsFiniteAlpha)
-{
-    const auto options{ MakeDifferentialOptions() };
-    const std::vector<LocalPotentialSampleList> sample_entries_list{
-        MakeDifferentialSampleEntries()
-    };
-
     const auto alpha_r{
         rg::gaussian_estimator::TrainAlphaR(sample_entries_list, options)
     };
@@ -237,28 +189,6 @@ TEST(GaussianEstimatorTest, AlphaGMatchesTrainingFunctionBestAlpha)
     };
 
     EXPECT_DOUBLE_EQ(actual, expected);
-}
-
-TEST(GaussianEstimatorTest, DifferentialMethodAlphaGAcceptsMatchingMemberResults)
-{
-    const auto options{ MakeDifferentialOptions() };
-    const std::vector<std::vector<LocalPotentialSampleList>> sample_group_list{
-        MakeDifferentialSampleGroup(10)
-    };
-    const std::vector<std::vector<rg::LocalGaussianResult>> member_result_list{
-        EstimateMemberResults(sample_group_list.front(), options)
-    };
-
-    const auto alpha_g{
-        rg::gaussian_estimator::TrainAlphaG(
-            sample_group_list,
-            member_result_list,
-            options)
-    };
-
-    EXPECT_TRUE(std::isfinite(alpha_g));
-    EXPECT_GE(alpha_g, options.alpha_min);
-    EXPECT_LE(alpha_g, options.alpha_max);
 }
 
 TEST(GaussianEstimatorTest, QuietAlphaGOptionsDoNotChangeBestAlpha)
@@ -501,23 +431,6 @@ TEST(GaussianEstimatorTest, EstimateLocalGaussianMatchesHelperPath)
     EXPECT_TRUE(actual.fit_result->beta_mdpde.isApprox(expected_fit.beta_mdpde, 1e-12));
 }
 
-TEST(GaussianEstimatorTest, EstimateLocalGaussianAcceptsDifferentialMethod)
-{
-    const auto options{ MakeDifferentialOptions() };
-    const auto sample_entries{ MakeDifferentialSampleEntries() };
-
-    const auto actual{
-        rg::gaussian_estimator::EstimateLocalGaussian(sample_entries, 0.0, options)
-    };
-
-    EXPECT_EQ(rg::LocalGaussianFitModel::DifferentialMethod, actual.fit_model);
-    ASSERT_TRUE(actual.fit_result.has_value());
-    EXPECT_EQ(3, actual.fit_result->beta_mdpde.size());
-    EXPECT_TRUE(std::isfinite(actual.mdpde.GetModel().GetAmplitude()));
-    EXPECT_TRUE(std::isfinite(actual.mdpde.GetModel().GetWidth()));
-    EXPECT_TRUE(std::isfinite(actual.mdpde.GetModel().GetIntercept()));
-}
-
 TEST(GaussianEstimatorTest, EstimateLocalGaussianRejectsUnsupportedLocalFitModel)
 {
     auto options{ MakeOptions() };
@@ -624,30 +537,6 @@ TEST(GaussianEstimatorTest, EstimateGroupGaussianRejectsUnsupportedMemberResults
     EXPECT_THROW(
         rg::gaussian_estimator::EstimateGroupGaussian(
             sample_entries_list, member_result_list, 0.0, options),
-        std::invalid_argument);
-}
-
-TEST(GaussianEstimatorTest, EstimateGroupGaussianRejectsMixedFitModels)
-{
-    const auto differential_options{ MakeDifferentialOptions() };
-    const auto log_options{ MakeOptions() };
-    const std::vector<LocalPotentialSampleList> sample_entries_list{
-        MakeDifferentialSampleEntries(),
-        MakeDifferentialSampleEntries(0.1)
-    };
-    const std::vector<rg::LocalGaussianResult> member_result_list{
-        rg::gaussian_estimator::EstimateLocalGaussian(
-            sample_entries_list.at(0), 0.0, differential_options),
-        rg::gaussian_estimator::EstimateLocalGaussian(
-            MakeSampleEntries(), 0.0, log_options)
-    };
-
-    EXPECT_THROW(
-        rg::gaussian_estimator::EstimateGroupGaussian(
-            sample_entries_list,
-            member_result_list,
-            0.0,
-            differential_options),
         std::invalid_argument);
 }
 

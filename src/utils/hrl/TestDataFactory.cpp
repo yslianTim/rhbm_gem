@@ -308,22 +308,6 @@ LocalPotentialSampleList AddLogSpaceNoise(
     return sampling_entries;
 }
 
-LocalPotentialSampleList AddRealSpaceNoise(
-    LocalPotentialSampleList sampling_entries,
-    const GaussianModel3D & model,
-    double error_sigma,
-    std::mt19937 & generator)
-{
-    std::normal_distribution<> dist_error(0.0, error_sigma * model.Intensity());
-    for (auto & sampling_entry : sampling_entries)
-    {
-        sampling_entry.response =
-            static_cast<float>(static_cast<double>(sampling_entry.response)
-                + dist_error(generator));
-    }
-    return sampling_entries;
-}
-
 LocalPotentialSampleList AddNoise(
     LocalPotentialSampleList sampling_entries,
     const GaussianModel3D & model,
@@ -335,8 +319,6 @@ LocalPotentialSampleList AddNoise(
     {
     case LocalGaussianFitModel::LogQuadratic:
         return AddLogSpaceNoise(std::move(sampling_entries), model, error_sigma, generator);
-    case LocalGaussianFitModel::DifferentialMethod:
-        return AddRealSpaceNoise(std::move(sampling_entries), model, error_sigma, generator);
     }
     throw std::invalid_argument("Unsupported local Gaussian fit model for beta test noise.");
 }

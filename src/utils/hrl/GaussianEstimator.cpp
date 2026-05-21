@@ -44,7 +44,6 @@ void RequireSupportedLocalFitModel(
     switch (fit_model)
     {
     case LocalGaussianFitModel::LogQuadratic:
-    case LocalGaussianFitModel::DifferentialMethod:
         return;
     }
 
