@@ -3,6 +3,7 @@
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
+#include <rhbm_gem/utils/math/EigenHelper.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 #include <rhbm_gem/utils/math/PotentialSampleSelection.hpp>
@@ -230,10 +231,7 @@ LocalPotentialSampleList GenerateAtomNeighborhoodSamples(
     {
         const auto & sampling_point{ sampling_points.at(selected_index) };
 
-        Eigen::VectorXd point{ Eigen::VectorXd::Zero(3) };
-        point(0) = sampling_point.position[0];
-        point(1) = sampling_point.position[1];
-        point(2) = sampling_point.position[2];
+        const auto point{ eigen_helper::ToEigenVector(sampling_point.position) };
 
         const auto response{
             model.GetAmplitude() * ComputeGaussianResponseWithAtomNeighborhood3D(
