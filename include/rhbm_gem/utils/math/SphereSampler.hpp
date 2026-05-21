@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <variant>
 
-#include <rhbm_gem/utils/math/SamplingTypes.hpp>
+#include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 
 struct SphereDistanceRange
 {

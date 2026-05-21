@@ -9,7 +9,7 @@
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
-#include <rhbm_gem/utils/math/SamplingTypes.hpp>
+#include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 
 namespace rhbm_gem {
 

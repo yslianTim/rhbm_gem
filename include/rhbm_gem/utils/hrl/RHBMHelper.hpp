@@ -6,7 +6,7 @@
 
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
-#include <rhbm_gem/utils/math/SamplingTypes.hpp>
+#include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 
 namespace rhbm_gem::rhbm_helper
 {

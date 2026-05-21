@@ -1,6 +1,6 @@
 #pragma once
 
-#include <rhbm_gem/utils/math/SamplingTypes.hpp>
+#include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 
 class GridSampler
 {

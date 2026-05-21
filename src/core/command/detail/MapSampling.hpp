@@ -9,7 +9,7 @@
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/utils/domain/SampleFilter.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
-#include <rhbm_gem/utils/math/SamplingTypes.hpp>
+#include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
 
 namespace rhbm_gem {

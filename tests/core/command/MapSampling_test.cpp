@@ -8,7 +8,7 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/utils/math/SamplingTypes.hpp>
+#include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 
 using namespace rhbm_gem;
 

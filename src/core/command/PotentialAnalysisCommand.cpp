@@ -1,7 +1,7 @@
 #include "detail/CommandBase.hpp"
 
 #include "detail/MapSampling.hpp"
-#include "rhbm_gem/utils/math/SamplingTypes.hpp"
+#include "rhbm_gem/utils/domain/SamplingTypes.hpp"
 
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>

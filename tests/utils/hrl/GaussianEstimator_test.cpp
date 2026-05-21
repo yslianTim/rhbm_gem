@@ -13,7 +13,7 @@
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
-#include <rhbm_gem/utils/math/SamplingTypes.hpp>
+#include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 
 namespace rg = rhbm_gem;
 namespace ls = rhbm_gem::linearization_service;

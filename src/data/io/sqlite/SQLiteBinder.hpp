@@ -1,7 +1,7 @@
 #pragma once
 
 #include <sqlite3.h>
-#include <rhbm_gem/utils/math/SamplingTypes.hpp>
+#include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 #include <string>
 #include <string_view>
 #include <tuple>
