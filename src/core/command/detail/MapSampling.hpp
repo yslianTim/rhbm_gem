@@ -7,8 +7,8 @@
 #include <rhbm_gem/core/command/CommandTypes.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
+#include <rhbm_gem/utils/domain/SampleFilter.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
-#include <rhbm_gem/utils/math/PotentialSampleSelection.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
 
@@ -106,7 +106,7 @@ LocalPotentialSampleList SampleMapValues(
 {
     const auto sample_point_list{ sampler.GenerateSamplingPoints(position, direction_like_input) };
     const auto filtered_sample_point_list{
-        FilterSamplingPointList(sample_point_list, position, {})
+        sample_filter::FilterSamplingPointList(sample_point_list, position, {})
     };
     return BuildLocalPotentialSampleList(map_object, filtered_sample_point_list);
 }
@@ -134,13 +134,13 @@ inline LocalPotentialSampleList SampleAtomMapValues(
         reject_position_list.emplace_back(neighbor_atom->GetPosition());
     }
     const auto filtered_sample_point_list{
-        FilterSamplingPointList(
+        sample_filter::FilterSamplingPointList(
             sample_point_list, local_position, reject_position_list, kRejectAngle)
     };
     auto sample_list{
         BuildLocalPotentialSampleList(map_object, filtered_sample_point_list)
     };
-    return FilterLocalPotentialSampleList(std::move(sample_list));
+    return sample_filter::FilterLocalPotentialSampleList(std::move(sample_list));
 }
 
 } // namespace rhbm_gem

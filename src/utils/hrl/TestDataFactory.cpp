@@ -1,12 +1,12 @@
 #include <rhbm_gem/utils/hrl/TestDataFactory.hpp>
 
 #include <rhbm_gem/utils/domain/Constants.hpp>
+#include <rhbm_gem/utils/domain/SampleFilter.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
-#include <rhbm_gem/utils/math/PotentialSampleSelection.hpp>
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
 
 #include <array>
@@ -218,7 +218,7 @@ LocalPotentialSampleList GenerateAtomNeighborhoodSamples(
         });
     }
     const auto filtered_sample_point_list{
-        FilterSamplingPointList(
+        sample_filter::FilterSamplingPointList(
             sample_point_list,
             { 0.0f, 0.0f, 0.0f },
             reject_position_list,
@@ -247,7 +247,7 @@ LocalPotentialSampleList GenerateAtomNeighborhoodSamples(
 
     if (options.reject_angle_deg == 0.0) return sample_list;
 
-    return FilterLocalPotentialSampleList(std::move(sample_list));
+    return sample_filter::FilterLocalPotentialSampleList(std::move(sample_list));
 }
 
 LocalPotentialSampleList BuildGaussianSampling(

@@ -65,6 +65,7 @@ target_sources(rhbm_gem PRIVATE
     utils/domain/LocalPainter.cpp
     utils/domain/Logger.cpp
     utils/domain/ROOTHelper.cpp
+    utils/domain/SampleFilter.cpp
     utils/math/ElectricPotential.cpp
     utils/math/GaussianModel3D.cpp
     utils/math/GridSampler.cpp

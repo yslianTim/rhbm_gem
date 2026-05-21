@@ -1,23 +1,20 @@
-#pragma once
+#include <rhbm_gem/utils/domain/SampleFilter.hpp>
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <cstddef>
 #include <iterator>
 #include <map>
 #include <utility>
-#include <vector>
 
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
-#include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
-namespace rhbm_gem {
+namespace rhbm_gem::sample_filter {
 namespace {
 
-inline bool IsOwnedByNeighbor(
+bool IsOwnedByNeighbor(
     const std::array<float, 3> & sample_position,
     const std::array<float, 3> & local_position,
     const std::vector<std::array<float, 3>> & valid_neighbor_list)
@@ -36,7 +33,7 @@ inline bool IsOwnedByNeighbor(
     return is_bad_point;
 }
 
-inline bool IsInsideNeighborCone(
+bool IsInsideNeighborCone(
     const std::array<float, 3> & sample_position,
     const std::array<float, 3> & local_position,
     const std::vector<std::array<float, 3>> & valid_neighbor_list,
@@ -60,7 +57,7 @@ inline bool IsInsideNeighborCone(
     return false;
 }
 
-inline LocalPotentialSampleList KeepLowestResponseRatioByDistance(
+LocalPotentialSampleList KeepLowestResponseRatioByDistance(
     LocalPotentialSampleList sample_list,
     double retained_ratio)
 {
@@ -100,11 +97,11 @@ inline LocalPotentialSampleList KeepLowestResponseRatioByDistance(
 
 } // namespace
 
-inline SamplingPointList FilterSamplingPointList(
+SamplingPointList FilterSamplingPointList(
     const SamplingPointList & sample_point_list,
     const std::array<float, 3> & local_position,
     const std::vector<std::array<float, 3>> & reject_position_list,
-    double angle = 0.0)
+    double angle)
 {
     numeric_validation::RequireFiniteInclusiveRange(angle, 0.0, 180.0, "angle");
 
@@ -138,10 +135,10 @@ inline SamplingPointList FilterSamplingPointList(
     return filtered_sample_point_list;
 }
 
-inline LocalPotentialSampleList FilterLocalPotentialSampleList(LocalPotentialSampleList sample_list)
+LocalPotentialSampleList FilterLocalPotentialSampleList(LocalPotentialSampleList sample_list)
 {
     constexpr double kRetainedRatio{ 0.1 };
     return KeepLowestResponseRatioByDistance(std::move(sample_list), kRetainedRatio);
 }
 
-} // namespace rhbm_gem
+} // namespace rhbm_gem::sample_filter
