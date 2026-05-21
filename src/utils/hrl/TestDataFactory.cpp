@@ -169,20 +169,16 @@ LocalPotentialSampleList GenerateRadialSamples(
 }
 
 LocalPotentialSampleList GenerateAtomNeighborhoodSamples(
-    size_t samples_per_radius,
     const GaussianModel3D & model,
     const AtomNeighborhoodSamplingOptions & options)
 {
-    numeric_validation::RequirePositive(samples_per_radius, "samples_per_radius");
     GaussianModel3D::RequireFinitePositiveWidthModel(model);
 
     const auto neighbor_list{ BuildAtomNeighborList(options) };
     const Eigen::VectorXd atom_center{ Eigen::VectorXd::Zero(3) };
 
     const auto sampler{
-        SphereSampler::AnalysisDefault(
-            SphereSamplingMethod::FibonacciDeterministic,
-            static_cast<unsigned int>(samples_per_radius))
+        SphereSampler::AnalysisDefault(SphereSamplingMethod::FibonacciDeterministic)
     };
     const auto sample_point_list{ sampler.GenerateSamplingPoints({ 0.0f, 0.0f, 0.0f }) };
     std::vector<std::array<float, 3>> reject_position_list;
@@ -484,7 +480,6 @@ RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
         options.fit_range_min,
         options.fit_range_max,
         "fitting range");
-    numeric_validation::RequirePositive(scenario.sampling_entry_size, "sampling_entry_size");
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
     GaussianModel3D::RequireFinitePositiveWidthModel(scenario.gaus_true, "scenario.gaus_true");
 
@@ -512,7 +507,6 @@ RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
         input.sampling_summaries.reserve(1);
         input.sampling_summaries.emplace_back(
             GenerateAtomNeighborhoodSamples(
-                static_cast<size_t>(scenario.sampling_entry_size),
                 scenario.gaus_true,
                 AtomNeighborhoodSamplingOptions{
                     scenario.neighbor_type,
@@ -526,12 +520,10 @@ RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
     {
         auto generator{ BuildReplicaGenerator(i, scenario.random_seed) };
         auto no_cut_sampling_entries{
-            GenerateAtomNeighborhoodSamples(
-                static_cast<size_t>(scenario.sampling_entry_size), scenario.gaus_true, no_cut_options)
+            GenerateAtomNeighborhoodSamples(scenario.gaus_true, no_cut_options)
         };
         auto cut_sampling_entries{
-            GenerateAtomNeighborhoodSamples(
-                static_cast<size_t>(scenario.sampling_entry_size), scenario.gaus_true, cut_options)
+            GenerateAtomNeighborhoodSamples(scenario.gaus_true, cut_options)
         };
         no_cut_sampling_entries = AddNoise(
             std::move(no_cut_sampling_entries),

@@ -276,7 +276,6 @@ TEST(TestDataFactoryTest, BuildAtomNeighborhoodTestInputProvidesPairedDatasetsAn
     const auto scenario{ tdf::AtomNeighborhoodScenario{
         tdf::AtomNeighborType::O,
         rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
-        8,
         0.05,
         15.0,
         true,
@@ -368,7 +367,6 @@ TEST(TestDataFactoryTest, BuildTestInputsRejectNonPositiveGaussianWidth)
         tdf::BuildAtomNeighborhoodTestInput(tdf::AtomNeighborhoodScenario{
             tdf::AtomNeighborType::O,
             rg::GaussianModel3D{ 1.0, -0.5, 0.0 },
-            8,
             0.05,
             15.0,
             false,

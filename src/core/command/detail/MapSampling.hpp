@@ -113,12 +113,11 @@ inline LocalPotentialSampleList SampleAtomMapValues(
     const AtomObject & atom,
     SphereSamplingMethod sampling_method)
 {
-    constexpr unsigned int kAtomSamplingSize{ 50 };
     constexpr double kRejectAngle{ 15.0 };
     constexpr double kNeighborSearchRadius{ 2.0 };
 
     const auto sampler{
-        SphereSampler::AnalysisDefault(sampling_method, kAtomSamplingSize)
+        SphereSampler::AnalysisDefault(sampling_method)
     };
 
     const auto local_position{ atom.GetPosition() };

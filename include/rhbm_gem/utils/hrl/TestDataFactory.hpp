@@ -81,7 +81,6 @@ struct AtomNeighborhoodScenario
 {
     AtomNeighborType neighbor_type{ AtomNeighborType::None };
     GaussianModel3D gaus_true;
-    int sampling_entry_size{ 1 };
     double data_error_sigma{ 1.0 };
     double rejected_angle{ 0.0 };
     bool include_sampling_summary{ false };

@@ -136,7 +136,6 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
     {
         test_data_factory::AtomNeighborhoodScenario base_scenario;
         base_scenario.gaus_true = GaussianModel3D::FromVector(model_par_prior);
-        base_scenario.sampling_entry_size = 50;
         base_scenario.data_error_sigma = error_sigma;
         base_scenario.neighbor_type = neighbor_type;
         base_scenario.rejected_angle = 15.0;
