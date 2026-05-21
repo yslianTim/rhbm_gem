@@ -329,6 +329,49 @@ TEST(ArrayHelperTest, ComputeNormZeroDistanceForIdenticalVectors)
     EXPECT_DOUBLE_EQ(0.0, distance);
 }
 
+TEST(ArrayHelperTest, ComputeVectorReturnsP1ToP2Vector)
+{
+    std::array<double, 3> p1{ 1.0, 2.0, 3.0 };
+    std::array<double, 3> p2{ 4.0, 0.0, 8.0 };
+    auto vector{ rhbm_gem::array_helper::ComputeVector(p1, p2, false) };
+
+    EXPECT_DOUBLE_EQ(3.0, vector[0]);
+    EXPECT_DOUBLE_EQ(-2.0, vector[1]);
+    EXPECT_DOUBLE_EQ(5.0, vector[2]);
+}
+
+TEST(ArrayHelperTest, ComputeVectorNormalizesWhenRequested)
+{
+    std::array<double, 3> p1{ 0.0, 0.0, 0.0 };
+    std::array<double, 3> p2{ 3.0, 4.0, 0.0 };
+    auto vector{ rhbm_gem::array_helper::ComputeVector(p1, p2, true) };
+
+    EXPECT_DOUBLE_EQ(0.6, vector[0]);
+    EXPECT_DOUBLE_EQ(0.8, vector[1]);
+    EXPECT_DOUBLE_EQ(0.0, vector[2]);
+}
+
+TEST(ArrayHelperTest, ComputeVectorReturnsZeroVectorWhenNormalizingZeroVector)
+{
+    std::array<double, 3> p1{ 1.0, 2.0, 3.0 };
+    auto vector{ rhbm_gem::array_helper::ComputeVector(p1, p1, true) };
+
+    EXPECT_DOUBLE_EQ(0.0, vector[0]);
+    EXPECT_DOUBLE_EQ(0.0, vector[1]);
+    EXPECT_DOUBLE_EQ(0.0, vector[2]);
+}
+
+TEST(ArrayHelperTest, ComputeVectorSupportsFloatCoordinates)
+{
+    std::array<float, 3> p1{ 1.0f, 1.0f, 1.0f };
+    std::array<float, 3> p2{ 1.0f, 4.0f, 5.0f };
+    auto vector{ rhbm_gem::array_helper::ComputeVector(p1, p2, true) };
+
+    EXPECT_NEAR(0.0f, vector[0], 1e-6f);
+    EXPECT_NEAR(0.6f, vector[1], 1e-6f);
+    EXPECT_NEAR(0.8f, vector[2], 1e-6f);
+}
+
 TEST(ArrayHelperTest, ComputeRankReturnsExpectedPosition)
 {
     std::array<double, 3> values{ 3.0, 1.0, 2.0 };

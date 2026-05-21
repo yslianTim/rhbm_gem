@@ -163,71 +163,6 @@ inline std::vector<std::size_t> BuildAllLocalPotentialSampleIndexList(std::size_
     return selected_indices;
 }
 
-} // namespace detail
-
-inline std::vector<std::size_t> BuildSelectedLocalPotentialSampleIndexList(
-    const SamplingPointList & point_list,
-    const std::array<float, 3> & reference_position,
-    const std::vector<std::array<float, 3>> & reject_position_list,
-    double angle = 0.0)
-{
-    numeric_validation::RequireFiniteInclusiveRange(angle, 0.0, 180.0, "angle");
-
-    const auto reference_vector{ detail::ToVector3d(reference_position) };
-    const auto neighbor_position_list{
-        detail::BuildLocalPotentialNeighborPositionList(
-            reject_position_list,
-            reference_position)
-    };
-    if (neighbor_position_list.empty())
-    {
-        return detail::BuildAllLocalPotentialSampleIndexList(point_list.size());
-    }
-
-    const auto normalized_reject_direction_list{
-        angle == 0.0
-            ? std::vector<Eigen::Vector3d>{}
-            : detail::BuildLocalPotentialNormalizedRejectDirectionList(
-                neighbor_position_list,
-                reference_vector)
-    };
-
-    std::vector<std::size_t> selected_indices;
-    selected_indices.reserve(point_list.size());
-    const auto cos_threshold{ std::cos(angle * Constants::pi / 180.0) };
-    for (std::size_t i = 0; i < point_list.size(); i++)
-    {
-        const auto & point{ point_list.at(i) };
-        if (detail::ShouldRejectLocalPotentialSamplingPointByNeighborDistance(
-            point,
-            reference_vector,
-            neighbor_position_list))
-        {
-            continue;
-        }
-
-        if (!detail::IsLocalPotentialSamplingPointOwnedByReference(
-            point,
-            reference_vector,
-            neighbor_position_list))
-        {
-            continue;
-        }
-
-        if (angle == 0.0
-            || !detail::ShouldRejectLocalPotentialSamplingPoint(
-                point,
-                reference_position,
-                normalized_reject_direction_list,
-                cos_threshold))
-        {
-            selected_indices.emplace_back(i);
-        }
-    }
-
-    return selected_indices;
-}
-
 inline LocalPotentialSampleList KeepLowestResponseDecileByDistance(
     LocalPotentialSampleList sample_list,
     double retained_ratio = 0.1)
@@ -305,6 +240,77 @@ inline LocalPotentialSampleList GetMedianResponseByDistance(
     }
 
     return median_samples;
+}
+
+} // namespace detail
+
+inline std::vector<std::size_t> BuildSelectedLocalPotentialSampleIndexList(
+    const SamplingPointList & point_list,
+    const std::array<float, 3> & reference_position,
+    const std::vector<std::array<float, 3>> & reject_position_list,
+    double angle = 0.0)
+{
+    numeric_validation::RequireFiniteInclusiveRange(angle, 0.0, 180.0, "angle");
+
+    const auto reference_vector{ detail::ToVector3d(reference_position) };
+    const auto neighbor_position_list{
+        detail::BuildLocalPotentialNeighborPositionList(
+            reject_position_list,
+            reference_position)
+    };
+    if (neighbor_position_list.empty())
+    {
+        return detail::BuildAllLocalPotentialSampleIndexList(point_list.size());
+    }
+
+    const auto normalized_reject_direction_list{
+        angle == 0.0
+            ? std::vector<Eigen::Vector3d>{}
+            : detail::BuildLocalPotentialNormalizedRejectDirectionList(
+                neighbor_position_list,
+                reference_vector)
+    };
+
+    std::vector<std::size_t> selected_indices;
+    selected_indices.reserve(point_list.size());
+    const auto cos_threshold{ std::cos(angle * Constants::pi / 180.0) };
+    for (std::size_t i = 0; i < point_list.size(); i++)
+    {
+        const auto & point{ point_list.at(i) };
+        if (detail::ShouldRejectLocalPotentialSamplingPointByNeighborDistance(
+            point,
+            reference_vector,
+            neighbor_position_list))
+        {
+            continue;
+        }
+
+        if (!detail::IsLocalPotentialSamplingPointOwnedByReference(
+            point,
+            reference_vector,
+            neighbor_position_list))
+        {
+            continue;
+        }
+
+        if (angle == 0.0
+            || !detail::ShouldRejectLocalPotentialSamplingPoint(
+                point,
+                reference_position,
+                normalized_reject_direction_list,
+                cos_threshold))
+        {
+            selected_indices.emplace_back(i);
+        }
+    }
+
+    return selected_indices;
+}
+
+inline LocalPotentialSampleList FilterLocalPotentialSampleList(
+    LocalPotentialSampleList sample_list)
+{
+    return detail::KeepLowestResponseDecileByDistance(std::move(sample_list));
 }
 
 } // namespace rhbm_gem

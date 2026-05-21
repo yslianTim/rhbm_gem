@@ -261,7 +261,12 @@ TEST(PotentialSampleSelectionTest, UsesReferencePositionForWorldSpaceSamplingPoi
     EXPECT_EQ(selected_indices, std::vector<std::size_t>({ 0u, 2u }));
 }
 
-TEST(PotentialSampleSelectionTest, LowestResponseDecileUsesDefaultRatio)
+TEST(PotentialSampleSelectionTest, FilterLocalPotentialSampleListHandlesEmptySampleList)
+{
+    EXPECT_TRUE(rg::FilterLocalPotentialSampleList({}).empty());
+}
+
+TEST(PotentialSampleSelectionTest, FilterLocalPotentialSampleListUsesDefaultLowestResponseDecile)
 {
     LocalPotentialSampleList sample_list;
     for (std::size_t i = 0; i < 11u; i++)
@@ -273,7 +278,7 @@ TEST(PotentialSampleSelectionTest, LowestResponseDecileUsesDefaultRatio)
     }
 
     const auto retained_samples{
-        rg::KeepLowestResponseDecileByDistance(std::move(sample_list))
+        rg::FilterLocalPotentialSampleList(std::move(sample_list))
     };
 
     ASSERT_EQ(retained_samples.size(), 2u);
@@ -281,106 +286,32 @@ TEST(PotentialSampleSelectionTest, LowestResponseDecileUsesDefaultRatio)
     EXPECT_FLOAT_EQ(retained_samples.at(1).response, 1.0f);
 }
 
-TEST(PotentialSampleSelectionTest, LowestResponseDecileUsesCustomRatioByDistance)
+TEST(PotentialSampleSelectionTest, FilterLocalPotentialSampleListFiltersByDistance)
 {
-    const LocalPotentialSampleList sample_list{
-        LocalPotentialSample{ 9.0f, SamplingPoint{ 2.0f } },
-        LocalPotentialSample{ 4.0f, SamplingPoint{ 1.0f } },
-        LocalPotentialSample{ 1.0f, SamplingPoint{ 2.0f } },
-        LocalPotentialSample{ 2.0f, SamplingPoint{ 1.0f } },
-        LocalPotentialSample{ 3.0f, SamplingPoint{ 2.0f } },
-        LocalPotentialSample{ 8.0f, SamplingPoint{ 1.0f } },
-        LocalPotentialSample{ 5.0f, SamplingPoint{ 2.0f } }
-    };
+    LocalPotentialSampleList sample_list;
+    for (std::size_t i = 0; i < 11u; i++)
+    {
+        sample_list.emplace_back(LocalPotentialSample{
+            static_cast<float>(10u - i),
+            SamplingPoint{ 1.0f }
+        });
+        sample_list.emplace_back(LocalPotentialSample{
+            static_cast<float>(20u - i),
+            SamplingPoint{ 2.0f }
+        });
+    }
 
     const auto retained_samples{
-        rg::KeepLowestResponseDecileByDistance(sample_list, 0.5)
+        rg::FilterLocalPotentialSampleList(std::move(sample_list))
     };
 
     ASSERT_EQ(retained_samples.size(), 4u);
     EXPECT_FLOAT_EQ(retained_samples.at(0).point.distance, 1.0f);
-    EXPECT_FLOAT_EQ(retained_samples.at(0).response, 2.0f);
+    EXPECT_FLOAT_EQ(retained_samples.at(0).response, 0.0f);
     EXPECT_FLOAT_EQ(retained_samples.at(1).point.distance, 1.0f);
-    EXPECT_FLOAT_EQ(retained_samples.at(1).response, 4.0f);
+    EXPECT_FLOAT_EQ(retained_samples.at(1).response, 1.0f);
     EXPECT_FLOAT_EQ(retained_samples.at(2).point.distance, 2.0f);
-    EXPECT_FLOAT_EQ(retained_samples.at(2).response, 1.0f);
+    EXPECT_FLOAT_EQ(retained_samples.at(2).response, 10.0f);
     EXPECT_FLOAT_EQ(retained_samples.at(3).point.distance, 2.0f);
-    EXPECT_FLOAT_EQ(retained_samples.at(3).response, 3.0f);
-}
-
-TEST(PotentialSampleSelectionTest, LowestResponseDecileAllowsKeepingAllSamples)
-{
-    const LocalPotentialSampleList sample_list{
-        LocalPotentialSample{ 9.0f, SamplingPoint{ 2.0f } },
-        LocalPotentialSample{ 4.0f, SamplingPoint{ 1.0f } },
-        LocalPotentialSample{ 1.0f, SamplingPoint{ 2.0f } },
-        LocalPotentialSample{ 2.0f, SamplingPoint{ 1.0f } }
-    };
-
-    const auto retained_samples{
-        rg::KeepLowestResponseDecileByDistance(sample_list, 1.0)
-    };
-
-    ASSERT_EQ(retained_samples.size(), 4u);
-    EXPECT_FLOAT_EQ(retained_samples.at(0).point.distance, 1.0f);
-    EXPECT_FLOAT_EQ(retained_samples.at(0).response, 2.0f);
-    EXPECT_FLOAT_EQ(retained_samples.at(1).point.distance, 1.0f);
-    EXPECT_FLOAT_EQ(retained_samples.at(1).response, 4.0f);
-    EXPECT_FLOAT_EQ(retained_samples.at(2).point.distance, 2.0f);
-    EXPECT_FLOAT_EQ(retained_samples.at(2).response, 1.0f);
-    EXPECT_FLOAT_EQ(retained_samples.at(3).point.distance, 2.0f);
-    EXPECT_FLOAT_EQ(retained_samples.at(3).response, 9.0f);
-}
-
-TEST(PotentialSampleSelectionTest, LowestResponseDecileRejectsInvalidRatios)
-{
-    const LocalPotentialSampleList sample_list{
-        LocalPotentialSample{ 1.0f, SamplingPoint{ 1.0f } }
-    };
-
-    EXPECT_THROW(
-        (void)rg::KeepLowestResponseDecileByDistance(sample_list, 0.0),
-        std::invalid_argument);
-    EXPECT_THROW(
-        (void)rg::KeepLowestResponseDecileByDistance(sample_list, -0.1),
-        std::invalid_argument);
-    EXPECT_THROW(
-        (void)rg::KeepLowestResponseDecileByDistance(sample_list, 1.1),
-        std::invalid_argument);
-    EXPECT_THROW(
-        (void)rg::KeepLowestResponseDecileByDistance(
-            sample_list,
-            std::numeric_limits<double>::quiet_NaN()),
-        std::invalid_argument);
-    EXPECT_THROW(
-        (void)rg::KeepLowestResponseDecileByDistance(
-            sample_list,
-            std::numeric_limits<double>::infinity()),
-        std::invalid_argument);
-}
-
-TEST(PotentialSampleSelectionTest, MedianResponseByDistanceHandlesEmptySampleList)
-{
-    EXPECT_TRUE(rg::GetMedianResponseByDistance({}).empty());
-}
-
-TEST(PotentialSampleSelectionTest, MedianResponseByDistanceReturnsOneSamplePerDistance)
-{
-    const LocalPotentialSampleList sample_list{
-        LocalPotentialSample{ 10.0f, SamplingPoint{ 2.0f, { 20.0f, 0.0f, 0.0f } } },
-        LocalPotentialSample{ 3.0f, SamplingPoint{ 1.0f, { 10.0f, 0.0f, 0.0f } } },
-        LocalPotentialSample{ 7.0f, SamplingPoint{ 1.0f, { 11.0f, 0.0f, 0.0f } } },
-        LocalPotentialSample{ 5.0f, SamplingPoint{ 1.0f, { 12.0f, 0.0f, 0.0f } } },
-        LocalPotentialSample{ 2.0f, SamplingPoint{ 2.0f, { 21.0f, 0.0f, 0.0f } } }
-    };
-
-    const auto median_samples{ rg::GetMedianResponseByDistance(sample_list) };
-
-    ASSERT_EQ(median_samples.size(), 2u);
-    EXPECT_FLOAT_EQ(median_samples.at(0).point.distance, 1.0f);
-    EXPECT_FLOAT_EQ(median_samples.at(0).response, 5.0f);
-    EXPECT_EQ(median_samples.at(0).point.position, (std::array<float, 3>{ 12.0f, 0.0f, 0.0f }));
-    EXPECT_FLOAT_EQ(median_samples.at(1).point.distance, 2.0f);
-    EXPECT_FLOAT_EQ(median_samples.at(1).response, 6.0f);
-    EXPECT_EQ(median_samples.at(1).point.position, (std::array<float, 3>{ 21.0f, 0.0f, 0.0f }));
+    EXPECT_FLOAT_EQ(retained_samples.at(3).response, 11.0f);
 }

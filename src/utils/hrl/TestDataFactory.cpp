@@ -256,11 +256,7 @@ LocalPotentialSampleList GenerateAtomNeighborhoodSamples(
         return sample_list;
     }
 
-    return KeepLowestResponseDecileByDistance(std::move(sample_list));
-    //auto filtered_sample_list{
-    //    KeepLowestResponseDecileByDistance(std::move(sample_list))
-    //};
-    //return GetMedianResponseByDistance(std::move(filtered_sample_list));
+    return FilterLocalPotentialSampleList(std::move(sample_list));
 }
 
 LocalPotentialSampleList BuildGaussianSampling(

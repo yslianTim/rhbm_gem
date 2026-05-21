@@ -8,6 +8,7 @@
 #include <array>
 #include <algorithm>
 #include <stdexcept>
+#include <type_traits>
 
 #ifdef USE_OPENMP
 #include <omp.h>
@@ -17,187 +18,167 @@ namespace rhbm_gem {
 namespace array_helper {
 
 template <typename Type>
-Type ComputeMin(
-    const Type * data, size_t size, [[maybe_unused]] int thread_size = 1)
+Type ComputeMin(const Type * data, size_t size, [[maybe_unused]] int thread_size = 1)
+{
+    if (size <= 0) return std::numeric_limits<Type>::quiet_NaN();
+    Type min_value{ std::numeric_limits<Type>::max() };
+    #ifdef USE_OPENMP
+    #pragma omp parallel for reduction(min:min_value) num_threads(thread_size)
+    #endif
+    for (size_t i = 0; i < size; i++)
     {
-        if (size <= 0) return std::numeric_limits<Type>::quiet_NaN();
-        Type min_value{ std::numeric_limits<Type>::max() };
-        #ifdef USE_OPENMP
-        #pragma omp parallel for reduction(min:min_value) num_threads(thread_size)
-        #endif
-        for (size_t i = 0; i < size; i++)
-        {
-            min_value = std::min(min_value, data[i]);
-        }
-        return min_value;
+        min_value = std::min(min_value, data[i]);
     }
+    return min_value;
+}
 
 template <typename Type>
-Type ComputeMax(
-    const Type * data, size_t size, [[maybe_unused]] int thread_size = 1)
+Type ComputeMax(const Type * data, size_t size, [[maybe_unused]] int thread_size = 1)
+{
+    if (size <= 0) return std::numeric_limits<Type>::quiet_NaN();
+    Type max_value{ std::numeric_limits<Type>::lowest() };
+    #ifdef USE_OPENMP
+    #pragma omp parallel for reduction(max:max_value) num_threads(thread_size)
+    #endif
+    for (size_t i = 0; i < size; i++)
     {
-        if (size <= 0) return std::numeric_limits<Type>::quiet_NaN();
-        Type max_value{ std::numeric_limits<Type>::lowest() };
-        #ifdef USE_OPENMP
-        #pragma omp parallel for reduction(max:max_value) num_threads(thread_size)
-        #endif
-        for (size_t i = 0; i < size; i++)
-        {
-            max_value = std::max(max_value, data[i]);
-        }
-        return max_value;
+        max_value = std::max(max_value, data[i]);
     }
+    return max_value;
+}
 
 template <typename Type>
 Type ComputePercentile(const std::vector<Type> & data, double percentile)
-    {
-        if (data.empty() || percentile <= 0.0)
-        {
-            return static_cast<Type>(0.0);
-        }
-        if (percentile >= 1.0)
-        {
-            return data.empty() ? static_cast<Type>(0.0) :
-                   *std::max_element(data.begin(), data.end());
-        }
-        std::vector<Type> buffer(data);
-        auto n{ buffer.size() };
-        auto pos{ percentile * static_cast<double>(n - 1) };
-        auto idx{ static_cast<size_t>(std::floor(pos)) };
-        double frac{ pos - static_cast<double>(idx) };
+{
+    if (data.empty() || percentile <= 0.0) return static_cast<Type>(0.0);
 
+    if (percentile >= 1.0)
+    {
+        return data.empty() ? static_cast<Type>(0.0) : *std::max_element(data.begin(), data.end());
+    }
+    std::vector<Type> buffer(data);
+    auto n{ buffer.size() };
+    auto pos{ percentile * static_cast<double>(n - 1) };
+    auto idx{ static_cast<size_t>(std::floor(pos)) };
+    double frac{ pos - static_cast<double>(idx) };
+
+    std::nth_element(
+        buffer.begin(),
+        buffer.begin() + static_cast<typename std::vector<Type>::difference_type>(idx),
+        buffer.end()
+    );
+    Type lower{ buffer[idx] };
+    if (idx + 1 < n)
+    {
         std::nth_element(
             buffer.begin(),
-            buffer.begin() + static_cast<typename std::vector<Type>::difference_type>(idx),
+            buffer.begin() + static_cast<typename std::vector<Type>::difference_type>(idx + 1),
             buffer.end()
         );
-        Type lower{ buffer[idx] };
-        if (idx + 1 < n)
-        {
-            std::nth_element(
-                buffer.begin(),
-                buffer.begin() + static_cast<typename std::vector<Type>::difference_type>(idx + 1),
-                buffer.end()
-            );
-            Type upper{ buffer[idx + 1] };
-            return static_cast<Type>(lower * (1 - frac) + upper * frac);
-        }
-        else
-        {
-            return lower;
-        }
+        Type upper{ buffer[idx + 1] };
+        return static_cast<Type>(lower * (1 - frac) + upper * frac);
     }
+    else
+    {
+        return lower;
+    }
+}
 
 template <typename Type>
-Type ComputeMean(
-    const Type * data, size_t size, [[maybe_unused]] int thread_size = 1)
+Type ComputeMean(const Type * data, size_t size, [[maybe_unused]] int thread_size = 1)
+{
+    if (size <= 0) return static_cast<Type>(0.0);
+
+    auto sum{ static_cast<Type>(0.0) };
+    #ifdef USE_OPENMP
+    #pragma omp parallel for reduction(+:sum) num_threads(thread_size)
+    #endif
+    for (size_t i = 0; i < size; i++)
     {
-        if (size <= 0)
-        {
-            return static_cast<Type>(0.0);
-        }
-        auto sum{ static_cast<Type>(0.0) };
-        #ifdef USE_OPENMP
-        #pragma omp parallel for reduction(+:sum) num_threads(thread_size)
-        #endif
-        for (size_t i = 0; i < size; i++)
-        {
-            sum += data[i];
-        }
-        return sum / static_cast<Type>(size);
+        sum += data[i];
     }
+    return sum / static_cast<Type>(size);
+}
 
 template <typename Type>
 Type ComputeStandardDeviation(
     const Type * data, size_t size, Type mean, [[maybe_unused]] int thread_size = 1)
+{
+    if (size <= 1) return static_cast<Type>(0.0);
+
+    auto sum_sq_diff{ static_cast<Type>(0.0) };
+    #ifdef USE_OPENMP
+    #pragma omp parallel for reduction(+:sum_sq_diff) num_threads(thread_size)
+    #endif
+    for (size_t i = 0; i < size; i++)
     {
-        if (size <= 1)
-        {
-            return static_cast<Type>(0.0);
-        }
-        auto sum_sq_diff{ static_cast<Type>(0.0) };
-        #ifdef USE_OPENMP
-        #pragma omp parallel for reduction(+:sum_sq_diff) num_threads(thread_size)
-        #endif
-        for (size_t i = 0; i < size; i++)
-        {
-            auto diff{ static_cast<Type>(data[i]) - static_cast<Type>(mean) };
-            sum_sq_diff += diff * diff;
-        }
-        return std::sqrt(sum_sq_diff / static_cast<Type>(size - 1));
+        auto diff{ static_cast<Type>(data[i]) - static_cast<Type>(mean) };
+        sum_sq_diff += diff * diff;
     }
+    return std::sqrt(sum_sq_diff / static_cast<Type>(size - 1));
+}
 
 template <typename Type>
 Type ComputeMedian(const std::vector<Type> & data)
+{
+    if (data.empty()) return static_cast<Type>(0.0);
+
+    std::vector<Type> buffer(data);
+    size_t n{ buffer.size() };
+    size_t mid{ n / 2 };
+
+    std::nth_element(
+        buffer.begin(),
+        buffer.begin() + static_cast<typename std::vector<Type>::difference_type>(mid),
+        buffer.end()
+    );
+    Type upper_mid{ buffer[mid] };
+    if (n % 2 == 1)
     {
-        if (data.empty())
-        {
-            return static_cast<Type>(0.0);
-        }
-
-        std::vector<Type> buffer(data);
-        size_t n{ buffer.size() };
-        size_t mid{ n / 2 };
-
+        return upper_mid;
+    }
+    else
+    {
         std::nth_element(
             buffer.begin(),
-            buffer.begin() + static_cast<typename std::vector<Type>::difference_type>(mid),
-            buffer.end()
+            buffer.begin() + static_cast<typename std::vector<Type>::difference_type>(mid - 1),
+            buffer.begin() + static_cast<typename std::vector<Type>::difference_type>(mid)
         );
-        Type upper_mid{ buffer[mid] };
-        if (n % 2 == 1)
-        {
-            return upper_mid;
-        }
-        else
-        {
-            std::nth_element(
-                buffer.begin(),
-                buffer.begin() + static_cast<typename std::vector<Type>::difference_type>(mid - 1),
-                buffer.begin() + static_cast<typename std::vector<Type>::difference_type>(mid)
-            );
-            Type lower_mid{ buffer[mid - 1] };
-            return static_cast<Type>((lower_mid + upper_mid) / 2.0);
-        }
+        Type lower_mid{ buffer[mid - 1] };
+        return static_cast<Type>((lower_mid + upper_mid) / 2.0);
     }
+}
 
 template <typename Type>
 std::tuple<Type, Type> ComputePercentileRangeTuple(
     const std::vector<Type> & data, double percentile_min=0.01, double percentile_max=0.99)
-    {
-        if (data.empty())
-        {
-            return std::make_tuple(static_cast<Type>(0.0), static_cast<Type>(0.0));
-        }
-        auto min_value{ ComputePercentile(data, percentile_min) };
-        auto max_value{ ComputePercentile(data, percentile_max) };
-        return std::make_tuple(min_value, max_value);
-    }
+{
+    if (data.empty()) return std::make_tuple(static_cast<Type>(0.0), static_cast<Type>(0.0));
+    auto min_value{ ComputePercentile(data, percentile_min) };
+    auto max_value{ ComputePercentile(data, percentile_max) };
+    return std::make_tuple(min_value, max_value);
+}
 
 template <typename Type>
 std::tuple<Type, Type> ComputeScalingPercentileRangeTuple(
     const std::vector<Type> & data, Type scaling,
     double percentile_min=0.01, double percentile_max=0.99)
-    {
-        auto range_tuple{ ComputePercentileRangeTuple(data, percentile_min, percentile_max) };
-        auto range{ std::get<1>(range_tuple) - std::get<0>(range_tuple) };
-        auto min_value{ std::get<0>(range_tuple) - scaling * range };
-        auto max_value{ std::get<1>(range_tuple) + scaling * range };
-        return std::make_tuple(min_value, max_value);
-    }
+{
+    auto range_tuple{ ComputePercentileRangeTuple(data, percentile_min, percentile_max) };
+    auto range{ std::get<1>(range_tuple) - std::get<0>(range_tuple) };
+    auto min_value{ std::get<0>(range_tuple) - scaling * range };
+    auto max_value{ std::get<1>(range_tuple) + scaling * range };
+    return std::make_tuple(min_value, max_value);
+}
 
 template <typename Type>
-std::tuple<Type, Type> ComputeRangeTuple(
-    const std::vector<Type> & data, int thread_size = 1)
-    {
-        if (data.empty())
-        {
-            return std::make_tuple(static_cast<Type>(0.0), static_cast<Type>(0.0));
-        }
-        auto min_value{ ComputeMin(data.data(), data.size(), thread_size) };
-        auto max_value{ ComputeMax(data.data(), data.size(), thread_size) };
-        return std::make_tuple(min_value, max_value);
-    }
+std::tuple<Type, Type> ComputeRangeTuple(const std::vector<Type> & data, int thread_size = 1)
+{
+    if (data.empty()) return std::make_tuple(static_cast<Type>(0.0), static_cast<Type>(0.0));
+    auto min_value{ ComputeMin(data.data(), data.size(), thread_size) };
+    auto max_value{ ComputeMax(data.data(), data.size(), thread_size) };
+    return std::make_tuple(min_value, max_value);
+}
 
 template <typename Type>
 std::tuple<Type, Type> ComputeScalingRangeTuple(
@@ -205,54 +186,78 @@ std::tuple<Type, Type> ComputeScalingRangeTuple(
     Type scaling,
     Type min_range = static_cast<Type>(0.1),
     int thread_size = 1)
+{
+    if (data.empty()) return std::make_tuple(static_cast<Type>(0.0), static_cast<Type>(0.0));
+    auto range_tuple{ ComputeRangeTuple(data, thread_size) };
+    auto range{ std::get<1>(range_tuple) - std::get<0>(range_tuple) };
+    auto min_value{ std::get<0>(range_tuple) - scaling * range };
+    auto max_value{ std::get<1>(range_tuple) + scaling * range };
+    auto range_mean{ (min_value + max_value) / static_cast<Type>(2.0) };
+    auto half_range{ (max_value - min_value) / static_cast<Type>(2.0) };
+    if (half_range < min_range)
     {
-        if (data.empty())
-        {
-            return std::make_tuple(static_cast<Type>(0.0), static_cast<Type>(0.0));
-        }
-        auto range_tuple{ ComputeRangeTuple(data, thread_size) };
-        auto range{ std::get<1>(range_tuple) - std::get<0>(range_tuple) };
-        auto min_value{ std::get<0>(range_tuple) - scaling * range };
-        auto max_value{ std::get<1>(range_tuple) + scaling * range };
-        auto range_mean{ (min_value + max_value) / static_cast<Type>(2.0) };
-        auto half_range{ (max_value - min_value) / static_cast<Type>(2.0) };
-        if (half_range < min_range)
-        {
-            min_value = range_mean - min_range;
-            max_value = range_mean + min_range;
-        }
-        return std::make_tuple(min_value, max_value);
+        min_value = range_mean - min_range;
+        max_value = range_mean + min_range;
     }
+    return std::make_tuple(min_value, max_value);
+}
 
 template <typename Type>
 Type ComputeNorm(const std::array<Type, 3> & vec)
-    {
-        return static_cast<Type>(std::sqrt(vec[0] * vec[0] + vec[1] * vec[1] + vec[2] * vec[2]));
-    }
+{
+    return static_cast<Type>(std::sqrt(vec[0] * vec[0] + vec[1] * vec[1] + vec[2] * vec[2]));
+}
 
 template <typename Type>
 Type ComputeNorm(const std::array<Type, 3> & v1, const std::array<Type, 3> & v2)
-    {
-        auto diff_x{ static_cast<Type>(v1[0] - v2[0]) };
-        auto diff_y{ static_cast<Type>(v1[1] - v2[1]) };
-        auto diff_z{ static_cast<Type>(v1[2] - v2[2]) };
-        return static_cast<Type>(std::sqrt(diff_x * diff_x + diff_y * diff_y + diff_z * diff_z));
-    }
+{
+    auto diff_x{ static_cast<Type>(v1[0] - v2[0]) };
+    auto diff_y{ static_cast<Type>(v1[1] - v2[1]) };
+    auto diff_z{ static_cast<Type>(v1[2] - v2[2]) };
+    return static_cast<Type>(std::sqrt(diff_x * diff_x + diff_y * diff_y + diff_z * diff_z));
+}
+
+template <typename Type>
+std::array<Type, 3> ComputeVector(
+    const std::array<Type, 3> & p1,
+    const std::array<Type, 3> & p2,
+    bool normalize)
+{
+    static_assert(
+        std::is_floating_point<Type>::value,
+        "array_helper::ComputeVector requires a floating point Type.");
+
+    std::array<Type, 3> vector{
+        static_cast<Type>(p2[0] - p1[0]),
+        static_cast<Type>(p2[1] - p1[1]),
+        static_cast<Type>(p2[2] - p1[2])
+    };
+    if (!normalize) return vector;
+
+    const auto norm{ ComputeNorm(vector) };
+    if (norm == static_cast<Type>(0.0)) return vector;
+
+    return {
+        static_cast<Type>(vector[0] / norm),
+        static_cast<Type>(vector[1] / norm),
+        static_cast<Type>(vector[2] / norm)
+    };
+}
 
 template <typename Type, std::size_t N>
 int ComputeRank(const std::array<Type, N> & values, std::size_t index_to_rank)
+{
+    if (index_to_rank >= N)
     {
-        if (index_to_rank >= N)
-        {
-            throw std::out_of_range("GetRank index_to_rank out of range");
-        }
-
-        std::array<Type, N> sorted_values{ values };
-        std::sort(sorted_values.begin(), sorted_values.end());
-
-        auto it{ std::find(sorted_values.begin(), sorted_values.end(), values[index_to_rank]) };
-        return static_cast<int>(std::distance(sorted_values.begin(), it)) + 1;
+        throw std::out_of_range("GetRank index_to_rank out of range");
     }
+
+    std::array<Type, N> sorted_values{ values };
+    std::sort(sorted_values.begin(), sorted_values.end());
+
+    auto it{ std::find(sorted_values.begin(), sorted_values.end(), values[index_to_rank]) };
+    return static_cast<int>(std::distance(sorted_values.begin(), it)) + 1;
+}
 
 } // namespace array_helper
 } // namespace rhbm_gem
