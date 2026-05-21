@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <array>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -140,6 +141,38 @@ TEST(NumericValidationTest, RequireFiniteNonNegativeAcceptsZeroAndRejectsNegativ
             (void)rg::numeric_validation::RequireFiniteNonNegative(-0.1, "alpha");
         },
         "alpha must be finite and non-negative.");
+}
+
+TEST(NumericValidationTest, IsNonEqualRejectsEqualScalarValues)
+{
+    EXPECT_FALSE(rg::numeric_validation::IsNonEqual(1.0, 1.0));
+}
+
+TEST(NumericValidationTest, IsNonEqualRejectsScalarValuesWithinThreshold)
+{
+    EXPECT_FALSE(rg::numeric_validation::IsNonEqual(1.0, 1.5, 0.5));
+    EXPECT_FALSE(rg::numeric_validation::IsNonEqual(1.0, 1.25, 0.5));
+}
+
+TEST(NumericValidationTest, IsNonEqualAcceptsScalarValuesAboveThreshold)
+{
+    EXPECT_TRUE(rg::numeric_validation::IsNonEqual(1.0, 1.75, 0.5));
+}
+
+TEST(NumericValidationTest, IsNonEqualAcceptsArrayWhenAnyAxisExceedsThreshold)
+{
+    const std::array<double, 3> lhs{ 1.0, 2.0, 3.0 };
+    const std::array<double, 3> rhs{ 1.0, 2.2, 3.0 };
+
+    EXPECT_TRUE(rg::numeric_validation::IsNonEqual(lhs, rhs, 0.1));
+}
+
+TEST(NumericValidationTest, IsNonEqualRejectsArrayWhenEveryAxisIsWithinThreshold)
+{
+    const std::array<double, 3> lhs{ 1.0, 2.0, 3.0 };
+    const std::array<double, 3> rhs{ 1.5, 2.25, 2.5 };
+
+    EXPECT_FALSE(rg::numeric_validation::IsNonEqual(lhs, rhs, 0.5));
 }
 
 TEST(NumericValidationTest, RequireFiniteNonNegativeRangeAcceptsBoundaryValues)

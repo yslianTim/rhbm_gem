@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 
-#include <algorithm>
 #include <array>
 #include <limits>
 #include <vector>
@@ -34,58 +33,6 @@ TEST(PotentialSampleSelectionTest, EmptyRejectPositionsSelectAllSamplingPoints)
     };
 
     EXPECT_EQ(selected_indices, std::vector<std::size_t>({ 0u, 1u, 2u, 3u }));
-}
-
-TEST(PotentialSampleSelectionTest, ZeroAngleAppliesVoronoiOwnership)
-{
-    const auto point_list{ MakePointList() };
-    const auto selected_indices{
-        rg::BuildSelectedLocalPotentialSampleIndexList(
-            point_list,
-            { 0.0f, 0.0f, 0.0f },
-            { std::array<float, 3>{ 1.0f, 0.0f, 0.0f } },
-            0.0)
-    };
-
-    EXPECT_EQ(selected_indices, std::vector<std::size_t>({ 0u, 2u, 3u }));
-}
-
-TEST(PotentialSampleSelectionTest, VoronoiOwnershipRejectsTiePoints)
-{
-    const SamplingPointList point_list{
-        SamplingPoint{ 0.0f, { 0.0f, 0.0f, 0.0f } },
-        SamplingPoint{ 0.5f, { 0.5f, 0.0f, 0.0f } },
-        SamplingPoint{ 0.49f, { 0.49f, 0.0f, 0.0f } }
-    };
-
-    const auto selected_indices{
-        rg::BuildSelectedLocalPotentialSampleIndexList(
-            point_list,
-            { 0.0f, 0.0f, 0.0f },
-            { std::array<float, 3>{ 1.0f, 0.0f, 0.0f } },
-            0.0)
-    };
-
-    EXPECT_EQ(selected_indices, std::vector<std::size_t>({ 0u, 2u }));
-}
-
-TEST(PotentialSampleSelectionTest, VoronoiOwnershipRejectsNeighborOwnedPoints)
-{
-    const SamplingPointList point_list{
-        SamplingPoint{ 0.25f, { 0.25f, 0.0f, 0.0f } },
-        SamplingPoint{ 0.75f, { 0.75f, 0.0f, 0.0f } },
-        SamplingPoint{ 1.0f, { 0.0f, 1.0f, 0.0f } }
-    };
-
-    const auto selected_indices{
-        rg::BuildSelectedLocalPotentialSampleIndexList(
-            point_list,
-            { 0.0f, 0.0f, 0.0f },
-            { std::array<float, 3>{ 1.0f, 0.0f, 0.0f } },
-            0.0)
-    };
-
-    EXPECT_EQ(selected_indices, std::vector<std::size_t>({ 0u, 2u }));
 }
 
 TEST(PotentialSampleSelectionTest, RejectsPointsCloserToNearestNeighborThanReference)

@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cmath>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -92,6 +93,32 @@ template <typename Type>
 inline bool IsFiniteNonNegative(Type value)
 {
     return IsFinite(value) && IsNonNegative(value);
+}
+
+template <typename Type>
+inline bool IsNonEqual(
+    Type lhs,
+    Type rhs,
+    Type min_difference = std::numeric_limits<Type>::epsilon())
+{
+    const auto difference{ lhs > rhs ? lhs - rhs : rhs - lhs };
+    return difference > min_difference;
+}
+
+template <typename Type, std::size_t Size>
+inline bool IsNonEqual(
+    const std::array<Type, Size> & lhs,
+    const std::array<Type, Size> & rhs,
+    Type min_difference = std::numeric_limits<Type>::epsilon())
+{
+    for (std::size_t i = 0; i < Size; i++)
+    {
+        if (IsNonEqual(lhs[i], rhs[i], min_difference))
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 template <typename Type, typename LowerType>

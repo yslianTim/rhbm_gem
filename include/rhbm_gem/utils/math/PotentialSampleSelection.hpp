@@ -10,95 +10,54 @@
 #include <utility>
 #include <vector>
 
-#include <Eigen/Dense>
-
 #include <rhbm_gem/utils/domain/Constants.hpp>
-#include <rhbm_gem/utils/math/EigenHelper.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 #include <rhbm_gem/utils/math/SamplingTypes.hpp>
 
 namespace rhbm_gem {
-namespace detail {
+namespace {
 
-struct LocalPotentialRejectContext
+inline bool IsOwnedByNeighbor(
+    const std::array<float, 3> & sample_position,
+    const std::array<float, 3> & local_position,
+    const std::vector<std::array<float, 3>> & valid_neighbor_list)
 {
-    std::vector<Eigen::VectorXd> neighbor_position_list;
-    std::vector<Eigen::VectorXd> normalized_reject_direction_list;
-};
-
-inline LocalPotentialRejectContext BuildLocalPotentialRejectContext(
-    const std::vector<std::array<float, 3>> & reject_position_list,
-    const Eigen::VectorXd & reference_position,
-    bool build_normalized_directions)
-{
-    LocalPotentialRejectContext context;
-    context.neighbor_position_list.reserve(reject_position_list.size());
-    if (build_normalized_directions)
+    bool is_bad_point{ false };
+    const auto to_local_distance{
+        array_helper::ComputeNorm(sample_position, local_position)
+    };
+    for (const auto & neighbor_position : valid_neighbor_list)
     {
-        context.normalized_reject_direction_list.reserve(reject_position_list.size());
+        const auto to_neighbor_distance{
+            array_helper::ComputeNorm(sample_position, neighbor_position)
+        };
+        if (to_local_distance > to_neighbor_distance) is_bad_point = true;
     }
-
-    for (const auto & reject_position : reject_position_list)
-    {
-        numeric_validation::RequireAllFinite(reject_position, "PotentialSampleSelection reject positions");
-        const Eigen::VectorXd neighbor_position{ eigen_helper::ToEigenVector(reject_position) };
-        const auto direction{ neighbor_position - reference_position };
-        const auto direction_norm{ direction.norm() };
-        if (direction_norm <= 0.0)
-        {
-            continue;
-        }
-
-        context.neighbor_position_list.emplace_back(neighbor_position);
-        if (build_normalized_directions)
-        {
-            context.normalized_reject_direction_list.emplace_back(direction / direction_norm);
-        }
-    }
-
-    return context;
+    return is_bad_point;
 }
 
-inline bool IsLocalPotentialSamplingPointOwnedByReference(
-    const Eigen::VectorXd & sampling_position,
-    const Eigen::VectorXd & reference_position,
-    const std::vector<Eigen::VectorXd> & neighbor_position_list)
+inline bool IsInsideNeighborCone(
+    const std::array<float, 3> & sample_position,
+    const std::array<float, 3> & local_position,
+    const std::vector<std::array<float, 3>> & valid_neighbor_list,
+    double angle)
 {
-    const auto distance_squared{ (sampling_position - reference_position).squaredNorm() };
+    const auto cos_threshold{ std::cos(angle * Constants::pi / 180.0) };
+    const auto sampling_unit_vector{
+        array_helper::ComputeVector(local_position, sample_position, true)
+    };
 
-    for (const auto & neighbor_position : neighbor_position_list)
+    for (const auto & neighbor_position : valid_neighbor_list)
     {
-        if (!(distance_squared < (sampling_position - neighbor_position).squaredNorm()))
-        {
-            return false;
-        }
+        const auto neighbor_unit_vector{
+            array_helper::ComputeVector(local_position, neighbor_position, true)
+        };
+        const auto cos_theta{
+            array_helper::ComputeDotProduct(sampling_unit_vector, neighbor_unit_vector)
+        };
+        if (cos_theta > cos_threshold) return true;
     }
-
-    return true;
-}
-
-inline bool ShouldRejectLocalPotentialSamplingPoint(
-    const Eigen::VectorXd & sampling_position,
-    const Eigen::VectorXd & reference_position,
-    const std::vector<Eigen::VectorXd> & normalized_reject_direction_list,
-    double cos_threshold)
-{
-    const auto sampling_vector{ sampling_position - reference_position };
-    const auto sampling_norm{ sampling_vector.norm() };
-    if (sampling_norm <= 0.0)
-    {
-        return false;
-    }
-
-    const Eigen::VectorXd normalized_sampling_direction{ sampling_vector / sampling_norm };
-    for (const auto & reject_direction : normalized_reject_direction_list)
-    {
-        if (normalized_sampling_direction.dot(reject_direction) > cos_threshold)
-        {
-            return true;
-        }
-    }
-
     return false;
 }
 
@@ -140,55 +99,43 @@ inline LocalPotentialSampleList KeepLowestResponseDecileByDistance(LocalPotentia
     return retained_samples;
 }
 
-} // namespace detail
+} // namespace
 
 inline std::vector<std::size_t> BuildSelectedLocalPotentialSampleIndexList(
-    const SamplingPointList & point_list,
-    const std::array<float, 3> & reference_position,
+    const SamplingPointList & sample_point_list,
+    const std::array<float, 3> & local_position,
     const std::vector<std::array<float, 3>> & reject_position_list,
     double angle = 0.0)
 {
     numeric_validation::RequireFiniteInclusiveRange(angle, 0.0, 180.0, "angle");
 
-    const Eigen::VectorXd reference_vector{ eigen_helper::ToEigenVector(reference_position) };
-    const auto reject_context{
-        detail::BuildLocalPotentialRejectContext(
-            reject_position_list, reference_vector, angle > 0.0)
-    };
-    if (reject_context.neighbor_position_list.empty())
+    if (reject_position_list.empty())
     {
         std::vector<std::size_t> selected_indices;
-        selected_indices.resize(point_list.size());
+        selected_indices.resize(sample_point_list.size());
         std::iota(selected_indices.begin(), selected_indices.end(), std::size_t{ 0 });
         return selected_indices;
     }
 
-    std::vector<std::size_t> selected_indices;
-    selected_indices.reserve(point_list.size());
-    const auto cos_threshold{ std::cos(angle * Constants::pi / 180.0) };
-    for (std::size_t i = 0; i < point_list.size(); i++)
+    std::vector<std::array<float, 3>> valid_neighbor_list;
+    valid_neighbor_list.reserve(reject_position_list.size());
+    for (const auto & reject_position : reject_position_list)
     {
-        const Eigen::VectorXd sampling_position{
-            eigen_helper::ToEigenVector(point_list.at(i).position)
-        };
-        if (!detail::IsLocalPotentialSamplingPointOwnedByReference(
-            sampling_position,
-            reference_vector,
-            reject_context.neighbor_position_list))
+        numeric_validation::RequireAllFinite(reject_position, "reject positions");
+        if (!numeric_validation::IsNonEqual(local_position, reject_position)) continue;
+        valid_neighbor_list.emplace_back(reject_position);
+    }
+
+    std::vector<std::size_t> selected_indices;
+    selected_indices.reserve(sample_point_list.size());
+    for (std::size_t i = 0; i < sample_point_list.size(); i++)
+    {
+        const auto & sample_position{ sample_point_list.at(i).position };
+        if (IsOwnedByNeighbor(sample_position, local_position, valid_neighbor_list) ||
+            IsInsideNeighborCone(sample_position, local_position, valid_neighbor_list, angle))
         {
             continue;
         }
-
-        if (angle > 0.0
-            && detail::ShouldRejectLocalPotentialSamplingPoint(
-                sampling_position,
-                reference_vector,
-                reject_context.normalized_reject_direction_list,
-                cos_threshold))
-        {
-            continue;
-        }
-
         selected_indices.emplace_back(i);
     }
 
@@ -197,7 +144,7 @@ inline std::vector<std::size_t> BuildSelectedLocalPotentialSampleIndexList(
 
 inline LocalPotentialSampleList FilterLocalPotentialSampleList(LocalPotentialSampleList sample_list)
 {
-    return detail::KeepLowestResponseDecileByDistance(std::move(sample_list));
+    return KeepLowestResponseDecileByDistance(std::move(sample_list));
 }
 
 } // namespace rhbm_gem

@@ -95,14 +95,14 @@ inline float MakeInterpolationInMapObject(
 
 inline LocalPotentialSampleList BuildLocalPotentialSampleList(
     const MapObject & map_object,
-    const SamplingPointList & sampling_points,
+    const SamplingPointList & sample_point_list,
     const std::vector<std::size_t> & selected_indices)
 {
     LocalPotentialSampleList sampling_data_list;
     sampling_data_list.reserve(selected_indices.size());
     for (const auto selected_index : selected_indices)
     {
-        const auto & sampling_point{ sampling_points.at(selected_index) };
+        const auto & sampling_point{ sample_point_list.at(selected_index) };
 
         auto map_value{ MakeInterpolationInMapObject(map_object, sampling_point.position) };
         sampling_data_list.emplace_back(LocalPotentialSample{
@@ -122,11 +122,11 @@ LocalPotentialSampleList SampleMapValues(
     const std::array<float, 3> & position,
     const std::array<float, 3> & direction_like_input)
 {
-    const auto sampling_points{ sampler.GenerateSamplingPoints(position, direction_like_input) };
+    const auto sample_point_list{ sampler.GenerateSamplingPoints(position, direction_like_input) };
     const auto selected_indices{
-        BuildSelectedLocalPotentialSampleIndexList(sampling_points, position, {})
+        BuildSelectedLocalPotentialSampleIndexList(sample_point_list, position, {})
     };
-    return detail::BuildLocalPotentialSampleList(map_object, sampling_points, selected_indices);
+    return detail::BuildLocalPotentialSampleList(map_object, sample_point_list, selected_indices);
 }
 
 inline LocalPotentialSampleList SampleAtomMapValues(
@@ -145,7 +145,7 @@ inline LocalPotentialSampleList SampleAtomMapValues(
             kAtomSamplingSize));
 
     const auto position{ atom.GetPosition() };
-    const auto sampling_points{ sampler.GenerateSamplingPoints(position) };
+    const auto sample_point_list{ sampler.GenerateSamplingPoints(position) };
     const auto neighbor_atom_list{ atom.FindNeighborAtoms(kNeighborSearchRadius, false) };
     std::vector<std::array<float, 3>> reject_position_list;
     reject_position_list.reserve(neighbor_atom_list.size());
@@ -155,10 +155,10 @@ inline LocalPotentialSampleList SampleAtomMapValues(
     }
     const auto selected_indices{
         BuildSelectedLocalPotentialSampleIndexList(
-            sampling_points, position, reject_position_list, kRejectAngle)
+            sample_point_list, position, reject_position_list, kRejectAngle)
     };
     auto sample_list{
-        detail::BuildLocalPotentialSampleList(map_object, sampling_points, selected_indices)
+        detail::BuildLocalPotentialSampleList(map_object, sample_point_list, selected_indices)
     };
     return FilterLocalPotentialSampleList(std::move(sample_list));
 }
