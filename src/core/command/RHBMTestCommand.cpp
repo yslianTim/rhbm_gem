@@ -90,8 +90,7 @@ std::vector<RHBMMemberDataset> BuildReplicaDatasets(
     return replica_datasets;
 }
 
-const rhbm_tester::BiasStatistics & SelectBenchmarkMdpdeBias(
-    const rhbm_tester::BetaMDPDETestBias & bias)
+const rhbm_tester::BiasStatistics & SelectBenchmarkMdpdeBias(const rhbm_tester::BetaMDPDETestBias & bias)
 {
     if (bias.mdpde.trained_alpha.has_value())
     {
@@ -123,12 +122,7 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
     const auto error_sigma{ 0.01 };
     const auto model_par_prior{ MakeDefaultModelPrior() };
 
-    std::vector<Spot> spot_list{
-        Spot::O,
-        Spot::N,
-        Spot::C,
-        Spot::CA
-    };
+    std::vector<Spot> spot_list{ Spot::O, Spot::N, Spot::C, Spot::CA };
 
     BiasPlotRequest plot_request;
     plot_request.output_name = "bias_from_neighbor_atom.pdf";
@@ -151,7 +145,6 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
         base_scenario.data_error_sigma = error_sigma;
         base_scenario.spot = spot_list.at(i);
         base_scenario.rejected_angle = 15.0;
-        base_scenario.include_sampling_summary = false;
         base_scenario.replica_size = 10;
         base_scenario.requested_alpha_r_list = { request.alpha_r };
         base_scenario.alpha_training = true;
@@ -200,19 +193,9 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
         Logger::Log(LogLevel::Info, stream.str());
 
         const auto spot_axis_value{ static_cast<double>(i + 1) };
-        AppendBiasCurvePoint(
-            panel.curves.at(0),
-            spot_axis_value,
-            no_cut_result.ols);
-        AppendBiasCurvePoint(
-            panel.curves.at(1),
-            spot_axis_value,
-            no_cut_mdpde_bias);
-        AppendBiasCurvePoint(
-            panel.curves.at(2),
-            spot_axis_value,
-            cut_mdpde_bias);
-        
+        AppendBiasCurvePoint(panel.curves.at(0), spot_axis_value, no_cut_result.ols);
+        AppendBiasCurvePoint(panel.curves.at(1), spot_axis_value, no_cut_mdpde_bias);
+        AppendBiasCurvePoint(panel.curves.at(2), spot_axis_value, cut_mdpde_bias);
     }
     plot_request.panels.emplace_back(std::move(panel));
     rhbm_test_plotting::SaveBenchmarkLinearizedDatasetReport(request, error_sigma, linearized_panels);

@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 
-#include <array>
 #include <cmath>
 #include <cstddef>
 #include <initializer_list>
@@ -30,14 +29,6 @@ double ComputeExpectedGaussianResponseAtDistance3D(double distance, double width
     const auto width_square{ width * width };
     return 1.0 / std::pow(Constants::two_pi * width_square, 1.5) *
         std::exp(-0.5 * distance * distance / width_square);
-}
-
-double ComputeDistanceFromOrigin(const std::array<float, 3> & position)
-{
-    return std::sqrt(
-        static_cast<double>(position[0]) * static_cast<double>(position[0]) +
-        static_cast<double>(position[1]) * static_cast<double>(position[1]) +
-        static_cast<double>(position[2]) * static_cast<double>(position[2]));
 }
 
 void ExpectSamplingEntriesEquals(
@@ -200,72 +191,6 @@ TEST(TestDataFactoryTest, BuildGroupTestDataIsReproducibleWithFixedSeed)
     }
 }
 
-TEST(TestDataFactoryTest, BuildAtomModelTestDataProvidesPairedSamplesAndIsReproducible)
-{
-    const auto scenario{ tdf::AtomModelScenario{
-        Spot::O,
-        rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
-        0.05,
-        15.0,
-        true,
-        2,
-        11,
-        { 0.25 },
-        false
-    } };
-
-    const auto input{ tdf::BuildAtomModelTestData(scenario) };
-    const auto repeated_input{ tdf::BuildAtomModelTestData(scenario) };
-
-    ASSERT_EQ(input.no_cut_input.replica_sampling_entries.size(), 2u);
-    ASSERT_EQ(input.cut_input.replica_sampling_entries.size(), 2u);
-    EXPECT_TRUE(input.no_cut_input.gaus_true.ToVector().isApprox(MakeVector({ 1.0, 0.5, 0.0 })));
-    EXPECT_TRUE(input.cut_input.gaus_true.ToVector().isApprox(MakeVector({ 1.0, 0.5, 0.0 })));
-    EXPECT_EQ(input.no_cut_input.requested_alpha_r_list, std::vector<double>{ 0.25 });
-    EXPECT_EQ(input.cut_input.requested_alpha_r_list, std::vector<double>{ 0.25 });
-    EXPECT_FALSE(input.no_cut_input.alpha_training);
-    EXPECT_FALSE(input.cut_input.alpha_training);
-    EXPECT_EQ(rg::LocalGaussianFitModel::LogQuadratic, input.no_cut_input.local_fit_model);
-    EXPECT_EQ(rg::LocalGaussianFitModel::LogQuadratic, input.cut_input.local_fit_model);
-    ASSERT_EQ(input.sampling_summaries.size(), 1u);
-    ASSERT_FALSE(input.sampling_summaries.front().empty());
-    bool has_sample_beyond_default_fit_range{ false };
-    for (const auto & sample : input.sampling_summaries.front())
-    {
-        EXPECT_GE(sample.point.distance, 0.0f);
-        EXPECT_LE(sample.point.distance, 1.5f);
-        if (sample.point.distance > 1.0f)
-        {
-            has_sample_beyond_default_fit_range = true;
-        }
-        EXPECT_NEAR(
-            sample.point.distance,
-            ComputeDistanceFromOrigin(sample.point.position),
-            1.0e-5);
-    }
-    EXPECT_TRUE(has_sample_beyond_default_fit_range);
-
-    for (size_t i = 0; i < input.no_cut_input.replica_sampling_entries.size(); i++)
-    {
-        EXPECT_LE(
-            input.cut_input.replica_sampling_entries.at(i).size(),
-            input.no_cut_input.replica_sampling_entries.at(i).size()
-        );
-        ExpectSamplingEntriesEquals(
-            input.no_cut_input.replica_sampling_entries.at(i),
-            repeated_input.no_cut_input.replica_sampling_entries.at(i));
-        ExpectSamplingEntriesEquals(
-            input.cut_input.replica_sampling_entries.at(i),
-            repeated_input.cut_input.replica_sampling_entries.at(i));
-    }
-    for (size_t i = 0; i < input.sampling_summaries.size(); i++)
-    {
-        ExpectSamplingEntriesEquals(
-            input.sampling_summaries.at(i),
-            repeated_input.sampling_summaries.at(i));
-    }
-}
-
 TEST(TestDataFactoryTest, BuildTestDataRejectNonPositiveGaussianWidth)
 {
     EXPECT_THROW(
@@ -284,7 +209,6 @@ TEST(TestDataFactoryTest, BuildTestDataRejectNonPositiveGaussianWidth)
             rg::GaussianModel3D{ 1.0, -0.5, 0.0 },
             0.05,
             15.0,
-            false,
             1,
             11
         }),

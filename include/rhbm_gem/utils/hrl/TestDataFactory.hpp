@@ -34,7 +34,6 @@ struct AtomModelTestData
 {
     LocalTestData no_cut_input;
     LocalTestData cut_input;
-    std::vector<LocalPotentialSampleList> sampling_summaries;
 };
 
 struct LocalScenario
@@ -70,7 +69,6 @@ struct AtomModelScenario
     GaussianModel3D gaus_true;
     double data_error_sigma{ 1.0 };
     double rejected_angle{ 0.0 };
-    bool include_sampling_summary{ false };
     int replica_size{ 1 };
     std::optional<std::uint32_t> random_seed{};
     std::vector<double> requested_alpha_r_list{};

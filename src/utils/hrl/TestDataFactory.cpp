@@ -446,17 +446,6 @@ AtomModelTestData BuildAtomModelTestData(const AtomModelScenario & scenario)
         scenario.alpha_training,
         scenario.local_fit_model,
         scenario.replica_size);
-    if (scenario.include_sampling_summary)
-    {
-        input.sampling_summaries.reserve(1);
-        input.sampling_summaries.emplace_back(
-            GenerateAtomModelSamples(
-                scenario.gaus_true,
-                scenario.spot,
-                scenario.rejected_angle
-            )
-        );
-    }
 
     for (int i = 0; i < scenario.replica_size; i++)
     {
