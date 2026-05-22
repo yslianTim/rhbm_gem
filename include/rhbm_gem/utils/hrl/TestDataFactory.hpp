@@ -6,19 +6,14 @@
 
 #include <Eigen/Dense>
 
+#include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 
 namespace rhbm_gem::test_data_factory
 {
-
-enum class AtomNeighborType : int
-{
-    None = 0, O = 1, N = 2, C = 3, CA = 4
-};
-
-struct RHBMBetaTestInput
+struct LocalTestInput
 {
     GaussianModel3D gaus_true;
     std::vector<LocalPotentialSampleList> replica_sampling_entries;
@@ -27,7 +22,7 @@ struct RHBMBetaTestInput
     LocalGaussianFitModel local_fit_model{ LocalGaussianFitModel::LogQuadratic };
 };
 
-struct RHBMMuTestInput
+struct GroupTestInput
 {
     GaussianModel3D gaus_true;
     std::vector<std::vector<LocalPotentialSampleList>> replica_member_sampling_entries;
@@ -35,14 +30,14 @@ struct RHBMMuTestInput
     bool alpha_training{ true };
 };
 
-struct RHBMNeighborhoodTestInput
+struct AtomModelTestInput
 {
-    RHBMBetaTestInput no_cut_input;
-    RHBMBetaTestInput cut_input;
+    LocalTestInput no_cut_input;
+    LocalTestInput cut_input;
     std::vector<LocalPotentialSampleList> sampling_summaries;
 };
 
-struct BetaScenario
+struct LocalScenario
 {
     GaussianModel3D gaus_true;
     int sampling_entry_size{ 1 };
@@ -55,7 +50,7 @@ struct BetaScenario
     LocalGaussianFitModel local_fit_model{ LocalGaussianFitModel::LogQuadratic };
 };
 
-struct MuScenario
+struct GroupScenario
 {
     int member_size{ 1 };
     Eigen::VectorXd gaus_prior;
@@ -69,9 +64,9 @@ struct MuScenario
     bool alpha_training{ true };
 };
 
-struct AtomNeighborhoodScenario
+struct AtomModelScenario
 {
-    AtomNeighborType neighbor_type{ AtomNeighborType::None };
+    Spot spot{ Spot::UNK };
     GaussianModel3D gaus_true;
     double data_error_sigma{ 1.0 };
     double rejected_angle{ 0.0 };
@@ -83,8 +78,8 @@ struct AtomNeighborhoodScenario
     LocalGaussianFitModel local_fit_model{ LocalGaussianFitModel::LogQuadratic };
 };
 
-RHBMBetaTestInput BuildBetaTestInput(const BetaScenario & scenario);
-RHBMMuTestInput BuildMuTestInput(const MuScenario & scenario);
-RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(const AtomNeighborhoodScenario & scenario);
+LocalTestInput BuildLocalTestInput(const LocalScenario & scenario);
+GroupTestInput BuildGroupTestInput(const GroupScenario & scenario);
+AtomModelTestInput BuildAtomModelTestInput(const AtomModelScenario & scenario);
 
 } // namespace rhbm_gem::test_data_factory

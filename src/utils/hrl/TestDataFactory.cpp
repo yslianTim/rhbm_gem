@@ -15,16 +15,15 @@
 #include <utility>
 #include <vector>
 
-namespace
-{
-using namespace rhbm_gem;
+namespace rhbm_gem::test_data_factory {
 
+namespace {
 constexpr double kDefaultSamplingDistanceMin{ 0.0 };
 constexpr double kDefaultSamplingDistanceMax{ 1.0 };
 
-struct AtomNeighborhoodSamplingOptions
+struct AtomModelSamplingOptions
 {
-    test_data_factory::AtomNeighborType neighbor_type{ test_data_factory::AtomNeighborType::None };
+    Spot spot{ Spot::UNK };
     double reject_angle_deg{ 0.0 };
 };
 
@@ -82,31 +81,27 @@ AtomNeighborContribution MakeAtomNeighborContribution(
     double distance,
     double amplitude)
 {
-    return AtomNeighborContribution{
-        distance * direction,
-        amplitude
-    };
+    return AtomNeighborContribution{ distance * direction, amplitude };
 }
 
-std::vector<AtomNeighborContribution> BuildAtomNeighborList(
-    const AtomNeighborhoodSamplingOptions & options)
+std::vector<AtomNeighborContribution> BuildAtomNeighborList(const AtomModelSamplingOptions & options)
 {
     std::vector<AtomNeighborContribution> neighbor_list;
     neighbor_list.reserve(4);
 
-    if (options.neighbor_type == test_data_factory::AtomNeighborType::None)
+    if (options.spot == Spot::UNK)
     {
         return neighbor_list;
     }
 
-    if (options.neighbor_type == test_data_factory::AtomNeighborType::O)
+    if (options.spot == Spot::O)
     {
         neighbor_list.emplace_back(MakeAtomNeighborContribution(
             Eigen::Vector3d{ 1.0, 0.0, 0.0 }, 1.23, 6.0 / 8.0));
         return neighbor_list;
     }
 
-    if (options.neighbor_type == test_data_factory::AtomNeighborType::N)
+    if (options.spot == Spot::N)
     {
         neighbor_list.emplace_back(MakeAtomNeighborContribution(
             Eigen::Vector3d{ 1.0, 0.0, 0.0 }, 1.02, 1.0 / 7.0));
@@ -117,7 +112,7 @@ std::vector<AtomNeighborContribution> BuildAtomNeighborList(
         return neighbor_list;
     }
 
-    if (options.neighbor_type == test_data_factory::AtomNeighborType::C)
+    if (options.spot == Spot::C)
     {
         neighbor_list.emplace_back(MakeAtomNeighborContribution(
             Eigen::Vector3d{ 1.0, 0.0, 0.0 }, 1.23, 8.0 / 6.0));
@@ -128,7 +123,7 @@ std::vector<AtomNeighborContribution> BuildAtomNeighborList(
         return neighbor_list;
     }
 
-    if (options.neighbor_type == test_data_factory::AtomNeighborType::CA)
+    if (options.spot == Spot::CA)
     {
         neighbor_list.emplace_back(MakeAtomNeighborContribution(
             Eigen::Vector3d{ 0.0, 0.0, 1.0 }, 1.06, 1.0 / 6.0));
@@ -146,15 +141,12 @@ std::vector<AtomNeighborContribution> BuildAtomNeighborList(
 LocalPotentialSampleList GenerateRadialSamples(
     size_t sample_count,
     const GaussianModel3D & model,
-    double distance_min,
-    double distance_max,
     std::mt19937 & generator)
 {
     numeric_validation::RequirePositive(sample_count, "sample_count");
     GaussianModel3D::RequireFinitePositiveWidthModel(model);
-    numeric_validation::RequireFiniteNonNegativeRange(distance_min, distance_max, "distance range");
 
-    std::uniform_real_distribution<> dist_distance(distance_min, distance_max);
+    std::uniform_real_distribution<> dist_distance(kDefaultSamplingDistanceMin, kDefaultSamplingDistanceMax);
     LocalPotentialSampleList sample_list;
     sample_list.reserve(sample_count);
     for (size_t i = 0; i < sample_count; i++)
@@ -170,9 +162,9 @@ LocalPotentialSampleList GenerateRadialSamples(
     return sample_list;
 }
 
-LocalPotentialSampleList GenerateAtomNeighborhoodSamples(
+LocalPotentialSampleList GenerateAtomModelSamples(
     const GaussianModel3D & model,
-    const AtomNeighborhoodSamplingOptions & options)
+    const AtomModelSamplingOptions & options)
 {
     GaussianModel3D::RequireFinitePositiveWidthModel(model);
 
@@ -230,18 +222,10 @@ LocalPotentialSampleList BuildGaussianSampling(
     size_t sampling_entry_size,
     const GaussianModel3D & model,
     double outlier_ratio,
-    double fit_range_min,
-    double fit_range_max,
     std::mt19937 & generator)
 {
     auto sampling_entries{
-        GenerateRadialSamples(
-            sampling_entry_size,
-            model,
-            fit_range_min,
-            fit_range_max,
-            generator
-        )
+        GenerateRadialSamples(sampling_entry_size, model, generator)
     };
     std::uniform_real_distribution<> dist_outlier(0.0, 1.0);
     const auto outlier_response{ 0.5 * model.Intensity() };
@@ -340,21 +324,19 @@ std::vector<LocalPotentialSampleList> BuildMuMemberSamplingEntries(
             GenerateRadialSamples(
                 kMuMemberSamplingEntrySize,
                 GaussianModel3D::FromVector(gaus_array.col(i)),
-                0.0,
-                1.0,
                 generator));
     }
     return member_sampling_entries;
 }
 
-test_data_factory::RHBMBetaTestInput MakeBetaTestInputShell(
+test_data_factory::LocalTestInput MakeLocalTestInputShell(
     const GaussianModel3D & gaus_true,
     const std::vector<double> & requested_alpha_r_list,
     bool alpha_training,
     LocalGaussianFitModel local_fit_model,
     int replica_size)
 {
-    test_data_factory::RHBMBetaTestInput input;
+    test_data_factory::LocalTestInput input;
     input.gaus_true = gaus_true;
     input.requested_alpha_r_list = requested_alpha_r_list;
     input.alpha_training = alpha_training;
@@ -364,17 +346,14 @@ test_data_factory::RHBMBetaTestInput MakeBetaTestInputShell(
 }
 } // namespace
 
-namespace rhbm_gem::test_data_factory
-{
-
-RHBMBetaTestInput BuildBetaTestInput(const BetaScenario & scenario)
+LocalTestInput BuildLocalTestInput(const LocalScenario & scenario)
 {
     numeric_validation::RequirePositive(scenario.sampling_entry_size, "sampling_entry_size");
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
     GaussianModel3D::RequireFinitePositiveWidthModel(scenario.gaus_true, "scenario.gaus_true");
 
     auto input{
-        MakeBetaTestInputShell(
+        MakeLocalTestInputShell(
             scenario.gaus_true,
             scenario.requested_alpha_r_list,
             scenario.alpha_training,
@@ -390,8 +369,6 @@ RHBMBetaTestInput BuildBetaTestInput(const BetaScenario & scenario)
                 static_cast<size_t>(scenario.sampling_entry_size),
                 scenario.gaus_true,
                 scenario.outlier_ratio,
-                kDefaultSamplingDistanceMin,
-                kDefaultSamplingDistanceMax,
                 generator)
         };
         auto noisy_sampling_entries{
@@ -408,7 +385,7 @@ RHBMBetaTestInput BuildBetaTestInput(const BetaScenario & scenario)
     return input;
 }
 
-RHBMMuTestInput BuildMuTestInput(const MuScenario & scenario)
+GroupTestInput BuildGroupTestInput(const GroupScenario & scenario)
 {
     numeric_validation::RequirePositive(scenario.member_size, "member_size");
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
@@ -429,7 +406,7 @@ RHBMMuTestInput BuildMuTestInput(const MuScenario & scenario)
         GaussianModel3D::ParameterSize(),
         "scenario.outlier_sigma");
 
-    RHBMMuTestInput input;
+    GroupTestInput input;
     input.gaus_true = GaussianModel3D::FromVector(scenario.gaus_prior);
     input.requested_alpha_g_list = scenario.requested_alpha_g_list;
     input.alpha_training = scenario.alpha_training;
@@ -456,25 +433,22 @@ RHBMMuTestInput BuildMuTestInput(const MuScenario & scenario)
     return input;
 }
 
-RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(const AtomNeighborhoodScenario & scenario)
+AtomModelTestInput BuildAtomModelTestInput(const AtomModelScenario & scenario)
 {
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
     GaussianModel3D::RequireFinitePositiveWidthModel(scenario.gaus_true, "scenario.gaus_true");
 
-    const AtomNeighborhoodSamplingOptions no_cut_options{ scenario.neighbor_type, 0.0 };
-    const AtomNeighborhoodSamplingOptions cut_options{
-        scenario.neighbor_type,
-        scenario.rejected_angle
-    };
+    const AtomModelSamplingOptions no_cut_options{ scenario.spot, 0.0 };
+    const AtomModelSamplingOptions cut_options{ scenario.spot, scenario.rejected_angle };
 
-    RHBMNeighborhoodTestInput input;
-    input.no_cut_input = MakeBetaTestInputShell(
+    AtomModelTestInput input;
+    input.no_cut_input = MakeLocalTestInputShell(
         scenario.gaus_true,
         scenario.requested_alpha_r_list,
         scenario.alpha_training,
         scenario.local_fit_model,
         scenario.replica_size);
-    input.cut_input = MakeBetaTestInputShell(
+    input.cut_input = MakeLocalTestInputShell(
         scenario.gaus_true,
         scenario.requested_alpha_r_list,
         scenario.alpha_training,
@@ -484,12 +458,9 @@ RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(const AtomNeighborhoodS
     {
         input.sampling_summaries.reserve(1);
         input.sampling_summaries.emplace_back(
-            GenerateAtomNeighborhoodSamples(
+            GenerateAtomModelSamples(
                 scenario.gaus_true,
-                AtomNeighborhoodSamplingOptions{
-                    scenario.neighbor_type,
-                    scenario.rejected_angle
-                }
+                AtomModelSamplingOptions{ scenario.spot, scenario.rejected_angle }
             )
         );
     }
@@ -498,10 +469,10 @@ RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(const AtomNeighborhoodS
     {
         auto generator{ BuildReplicaGenerator(i, scenario.random_seed) };
         auto no_cut_sampling_entries{
-            GenerateAtomNeighborhoodSamples(scenario.gaus_true, no_cut_options)
+            GenerateAtomModelSamples(scenario.gaus_true, no_cut_options)
         };
         auto cut_sampling_entries{
-            GenerateAtomNeighborhoodSamples(scenario.gaus_true, cut_options)
+            GenerateAtomModelSamples(scenario.gaus_true, cut_options)
         };
         no_cut_sampling_entries = AddNoise(
             std::move(no_cut_sampling_entries),
