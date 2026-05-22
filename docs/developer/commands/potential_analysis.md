@@ -37,6 +37,7 @@ Command-specific fields:
 - `map_file_path`
 - `simulation_flag`
 - `map_normalization_flag`
+- `exclude_hydrogen`
 - `simulated_map_resolution`
 - `saved_key_tag`
 - `training_report_dir`

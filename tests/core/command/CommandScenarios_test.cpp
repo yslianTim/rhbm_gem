@@ -4,6 +4,7 @@
 #include <array>
 #include <cstddef>
 #include <filesystem>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -11,6 +12,7 @@
 
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/CommandSystem.hpp>
+#include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 
@@ -63,6 +65,40 @@ std::filesystem::path WriteConstantMapFixture(const std::filesystem::path & outp
     auto map_object{ MakeConstantMapObject() };
     WriteMap(map_path, map_object);
     return map_path;
+}
+
+std::filesystem::path WriteCarbonHydrogenModelFixture(const std::filesystem::path & output_dir)
+{
+    std::filesystem::create_directories(output_dir);
+    const auto model_path{ output_dir / "carbon_hydrogen.cif" };
+    std::ofstream outfile{ model_path };
+    outfile
+        << "data_carbon_hydrogen\n"
+        << "#\n"
+        << "loop_\n"
+        << "_atom_type.symbol\n"
+        << "C\n"
+        << "H\n"
+        << "#\n"
+        << "loop_\n"
+        << "_atom_site.group_PDB\n"
+        << "_atom_site.id\n"
+        << "_atom_site.type_symbol\n"
+        << "_atom_site.label_atom_id\n"
+        << "_atom_site.label_alt_id\n"
+        << "_atom_site.label_comp_id\n"
+        << "_atom_site.label_asym_id\n"
+        << "_atom_site.label_seq_id\n"
+        << "_atom_site.Cartn_x\n"
+        << "_atom_site.Cartn_y\n"
+        << "_atom_site.Cartn_z\n"
+        << "_atom_site.occupancy\n"
+        << "_atom_site.B_iso_or_equiv\n"
+        << "_atom_site.pdbx_PDB_model_num\n"
+        << "ATOM 1 C CA . ALA A 1 0.0 0.0 0.0 1.0 0.0 1\n"
+        << "ATOM 2 H H . ALA A 1 1.0 0.0 0.0 1.0 0.0 1\n"
+        << "#\n";
+    return model_path;
 }
 
 PotentialAnalysisRequest MakeNormalizationScenarioRequest(
@@ -132,6 +168,13 @@ TEST(CommandScenariosTest, PotentialAnalysisDefaultsMapNormalizationOn)
     PotentialAnalysisRequest request{};
 
     EXPECT_TRUE(request.map_normalization_flag);
+}
+
+TEST(CommandScenariosTest, PotentialAnalysisDefaultsToIncludingHydrogen)
+{
+    PotentialAnalysisRequest request{};
+
+    EXPECT_FALSE(request.exclude_hydrogen);
 }
 
 TEST(CommandScenariosTest, PotentialAnalysisDefaultsToFibonacciSamplingMethod)
@@ -264,6 +307,73 @@ TEST(CommandScenariosTest, PotentialAnalysisCliMapNormalizationFalseSkipsNormali
     };
 
     EXPECT_EQ(error_output.find(kMapNormalizationWarning), std::string::npos);
+}
+
+TEST(CommandScenariosTest, PotentialAnalysisCliAcceptsExcludeHydrogen)
+{
+    command_test::ScopedTempDir temp_dir{ "potential_analysis_exclude_hydrogen_cli" };
+    const auto model_path{ WriteCarbonHydrogenModelFixture(temp_dir.path() / "models") };
+    const auto map_path{
+        command_test::GenerateMapFile(temp_dir.path() / "maps", model_path)
+    };
+
+    std::vector<std::string> args{
+        "RHBM-GEM",
+        "potential_analysis",
+        "--database",
+        (temp_dir.path() / "analysis.sqlite").string(),
+        "--model",
+        model_path.string(),
+        "--map",
+        map_path.string(),
+        "--save-key",
+        "exclude_hydrogen_cli",
+        "--exclude-hydrogen",
+        "true",
+    };
+    std::vector<char *> argv;
+    argv.reserve(args.size());
+    for (auto & arg : args)
+    {
+        argv.push_back(arg.data());
+    }
+
+    const auto result{ RunCommandCLI(static_cast<int>(argv.size()), argv.data()) };
+
+    EXPECT_EQ(result, 0);
+}
+
+TEST(CommandScenariosTest, PotentialAnalysisExcludeHydrogenFiltersOnlyHydrogenAtoms)
+{
+    command_test::ScopedTempDir temp_dir{ "potential_analysis_exclude_hydrogen_behavior" };
+    const auto model_path{ WriteCarbonHydrogenModelFixture(temp_dir.path() / "models") };
+    const auto map_path{
+        command_test::GenerateMapFile(temp_dir.path() / "maps", model_path)
+    };
+    const auto database_path{ temp_dir.path() / "analysis.sqlite" };
+
+    PotentialAnalysisRequest include_request{};
+    include_request.database_path = database_path;
+    include_request.model_file_path = model_path;
+    include_request.map_file_path = map_path;
+    include_request.saved_key_tag = "include_hydrogen";
+    include_request.exclude_hydrogen = false;
+    ASSERT_TRUE(RunCommand(include_request).succeeded);
+
+    PotentialAnalysisRequest exclude_request{ include_request };
+    exclude_request.saved_key_tag = "exclude_hydrogen";
+    exclude_request.exclude_hydrogen = true;
+    ASSERT_TRUE(RunCommand(exclude_request).succeeded);
+
+    DataRepository repository{ database_path };
+    auto include_model{ repository.LoadModel("include_hydrogen") };
+    auto exclude_model{ repository.LoadModel("exclude_hydrogen") };
+    ASSERT_NE(include_model, nullptr);
+    ASSERT_NE(exclude_model, nullptr);
+
+    EXPECT_EQ(include_model->GetSelectedAtomCount(), 2u);
+    ASSERT_EQ(exclude_model->GetSelectedAtomCount(), 1u);
+    EXPECT_EQ(exclude_model->GetSelectedAtoms().front()->GetElement(), Element::CARBON);
 }
 
 TEST(CommandScenariosTest, RHBMTestRejectsInvertedFitRangeAtPrepare)

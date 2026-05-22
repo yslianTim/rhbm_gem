@@ -22,6 +22,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -134,12 +135,30 @@ bool HasEnoughSamplesInFitRange(
 }
 
 void RunModelObjectPreprocessing(
-    ModelObject & model_object, bool asymmetry_flag, double alpha_r, double alpha_g)
+    ModelObject & model_object,
+    bool asymmetry_flag,
+    bool exclude_hydrogen,
+    double alpha_r,
+    double alpha_g)
 {
     auto analysis{ model_object.EditAnalysis() };
     analysis.Clear();
     model_object.SelectAllAtoms();
     model_object.ApplySymmetrySelection(asymmetry_flag);
+    if (exclude_hydrogen)
+    {
+        const auto selected_atoms{ model_object.GetSelectedAtoms() };
+        std::unordered_set<const AtomObject *> selected_atom_set{
+            selected_atoms.begin(),
+            selected_atoms.end()
+        };
+        model_object.SelectAtoms(
+            [&selected_atom_set](const AtomObject & atom)
+            {
+                return selected_atom_set.find(&atom) != selected_atom_set.end()
+                    && atom.GetElement() != Element::HYDROGEN;
+            });
+    }
 
     for (auto * atom : model_object.GetSelectedAtoms())
     {
@@ -507,7 +526,12 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
     {
         map_object.MapValueArrayNormalization();
     }
-    RunModelObjectPreprocessing(model_object, request.asymmetry_flag, request.alpha_r, request.alpha_g);
+    RunModelObjectPreprocessing(
+        model_object,
+        request.asymmetry_flag,
+        request.exclude_hydrogen,
+        request.alpha_r,
+        request.alpha_g);
     RunPotentialSamplingWorkflow(map_object, model_object, request);
     RunAtomPotentialFittingWorkflow(model_object, request);
 
