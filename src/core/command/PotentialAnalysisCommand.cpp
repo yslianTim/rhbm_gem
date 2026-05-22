@@ -175,7 +175,7 @@ void RunModelObjectPreprocessing(
             "Try '--asymmetry true' to bypass symmetry filtering.");
     }
 }
-/*
+
 using FittedGaussianSnapshot = std::unordered_map<const AtomObject *, GaussianModel3D>;
 
 FittedGaussianSnapshot BuildFittedGaussianSnapshot(const std::vector<AtomObject *> & atom_list)
@@ -224,7 +224,7 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
         updated_list.emplace_back(LocalPotentialSample{response_value, sample.point });
     }
     return updated_list;
-}*/
+}
 
 void RunLocalPotentialFitting(
     ModelObject & model_object,
@@ -260,14 +260,13 @@ void RunLocalPotentialFitting(
             Logger::ProgressPercent(atom_count, selected_atom_size);
         }
     }
-/*
+
     // Iterate
     std::vector<LocalPotentialSampleList> updated_sample_entries_list(selected_atom_size);
-    for (int iter = 0; iter < 10; iter++)
+    Logger::Log(LogLevel::Info, "Run updated local atom fitting with iterations...");
+    for (size_t iter = 0; iter < 10; iter++)
     {
-        Logger::Log(LogLevel::Info, "Run Local atom fitting iteration " + std::to_string(iter + 1));
         const auto fitted_gaussian_snapshot{ BuildFittedGaussianSnapshot(atom_list) };
-        atom_count = 0;
 #ifdef USE_OPENMP
         #pragma omp parallel for num_threads(options.thread_size)
 #endif
@@ -287,21 +286,14 @@ void RunLocalPotentialFitting(
 
             updated_sample_entries_list[i] = std::move(updated_sample_entries);
             local_editor_list[i].SetGaussianResult(result);
-
-#ifdef USE_OPENMP
-            #pragma omp critical
-#endif
-            {
-                atom_count++;
-                Logger::ProgressPercent(atom_count, selected_atom_size);
-            }
         }
+        Logger::ProgressBar(iter+1, 10);
     }
 
     for (size_t i = 0; i < selected_atom_size; i++)
     {
         local_editor_list[i].SetSamplingEntries(std::move(updated_sample_entries_list[i]));
-    }*/
+    }
 }
 
 void RunAtomAlphaTraining(ModelObject & model_object, const PotentialAnalysisRequest & request)
