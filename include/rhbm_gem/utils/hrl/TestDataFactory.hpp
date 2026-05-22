@@ -42,12 +42,6 @@ struct RHBMNeighborhoodTestInput
     std::vector<LocalPotentialSampleList> sampling_summaries;
 };
 
-struct TestDataBuildOptions
-{
-    double fit_range_min{ 0.0 };
-    double fit_range_max{ 1.0 };
-};
-
 struct BetaScenario
 {
     GaussianModel3D gaus_true;
@@ -89,12 +83,8 @@ struct AtomNeighborhoodScenario
     LocalGaussianFitModel local_fit_model{ LocalGaussianFitModel::LogQuadratic };
 };
 
-RHBMBetaTestInput BuildBetaTestInput(
-    const BetaScenario & scenario,
-    const TestDataBuildOptions & options = {});
-
+RHBMBetaTestInput BuildBetaTestInput(const BetaScenario & scenario);
 RHBMMuTestInput BuildMuTestInput(const MuScenario & scenario);
-
 RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(const AtomNeighborhoodScenario & scenario);
 
 } // namespace rhbm_gem::test_data_factory

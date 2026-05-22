@@ -70,17 +70,10 @@ std::vector<double> BuildLinearSweep(int count, double step, double start = 0.0)
     return values;
 }
 
-test_data_factory::TestDataBuildOptions BuildTestDataOptions(const RHBMTestRequest & request)
-{
-    return test_data_factory::TestDataBuildOptions{
-        request.fit_range_min,
-        request.fit_range_max
-    };
-}
-
 std::vector<RHBMMemberDataset> BuildReplicaDatasets(
     const std::vector<LocalPotentialSampleList> & replica_sampling_entries,
-    const test_data_factory::TestDataBuildOptions & options,
+    double fit_range_min,
+    double fit_range_max,
     LocalGaussianFitModel local_fit_model)
 {
     std::vector<RHBMMemberDataset> replica_datasets;
@@ -90,8 +83,8 @@ std::vector<RHBMMemberDataset> BuildReplicaDatasets(
         replica_datasets.emplace_back(
             rhbm_helper::BuildMemberDataset(
                 sampling_entries,
-                options.fit_range_min,
-                options.fit_range_max,
+                fit_range_min,
+                fit_range_max,
                 local_fit_model));
     }
     return replica_datasets;
@@ -129,7 +122,6 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
 {
     const auto error_sigma{ 0.01 };
     const auto model_par_prior{ MakeDefaultModelPrior() };
-    const auto test_data_options{ BuildTestDataOptions(request) };
 
     std::vector<test_data_factory::AtomNeighborType> neighbor_type_list{
         test_data_factory::AtomNeighborType::O,
@@ -175,13 +167,15 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
         const auto no_cut_datasets{
             BuildReplicaDatasets(
                 test_input.no_cut_input.replica_sampling_entries,
-                test_data_options,
+                request.fit_range_min,
+                request.fit_range_max,
                 test_input.no_cut_input.local_fit_model)
         };
         const auto cut_datasets{
             BuildReplicaDatasets(
                 test_input.cut_input.replica_sampling_entries,
-                test_data_options,
+                request.fit_range_min,
+                request.fit_range_max,
                 test_input.cut_input.local_fit_model)
         };
         rhbm_test_plotting::TryAppendBenchmarkLinearizedPanel(
@@ -239,7 +233,6 @@ void RunSimulationTestOnDataOutlier(const RHBMTestRequest & request)
     base_scenario.requested_alpha_r_list = { request.alpha_r };
     base_scenario.alpha_training = true;
     base_scenario.local_fit_model = LocalGaussianFitModel::LogQuadratic;
-    const auto test_data_options{ BuildTestDataOptions(request) };
     std::vector<double> error_list{ 0.0, 0.05, 0.1 };
     const auto outlier_list{ BuildLinearSweep(9, 0.025) };
     BiasPlotRequest plot_request;
@@ -261,9 +254,7 @@ void RunSimulationTestOnDataOutlier(const RHBMTestRequest & request)
             auto beta_scenario{ base_scenario };
             beta_scenario.data_error_sigma = error_sigma;
             beta_scenario.outlier_ratio = outlier_list.at(i);
-            const auto test_input{
-                test_data_factory::BuildBetaTestInput(beta_scenario, test_data_options)
-            };
+            const auto test_input{ test_data_factory::BuildBetaTestInput(beta_scenario) };
             const auto bias{ rhbm_tester::RunBetaMDPDETest(test_input, request.job_count) };
 
             AppendBiasCurvePoint(panel.curves.at(0), outlier_list.at(i), bias.ols);
@@ -369,7 +360,6 @@ void RunSimulationTestOnModelAlphaData(const RHBMTestRequest & request)
     base_scenario.replica_size = 10;
     base_scenario.requested_alpha_r_list = { request.alpha_r };
     base_scenario.alpha_training = true;
-    const auto test_data_options{ BuildTestDataOptions(request) };
     std::vector<double> error_list{ 0.1, 0.2, 0.3 };
     const auto outlier_list{ BuildLinearSweep(10, 0.05) };
     BiasPlotRequest plot_request;
@@ -390,9 +380,7 @@ void RunSimulationTestOnModelAlphaData(const RHBMTestRequest & request)
             auto beta_scenario{ base_scenario };
             beta_scenario.data_error_sigma = error_sigma;
             beta_scenario.outlier_ratio = outlier_list.at(i);
-            const auto test_input{
-                test_data_factory::BuildBetaTestInput(beta_scenario, test_data_options)
-            };
+            const auto test_input{ test_data_factory::BuildBetaTestInput(beta_scenario) };
             const auto bias{ rhbm_tester::RunBetaMDPDETest(test_input, request.job_count) };
 
             AppendBiasCurvePoint(

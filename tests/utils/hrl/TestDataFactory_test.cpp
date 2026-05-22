@@ -4,7 +4,6 @@
 #include <cmath>
 #include <cstddef>
 #include <initializer_list>
-#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -136,13 +135,8 @@ TEST(TestDataFactoryTest, BuildBetaTestInputChangesWhenNoisePolicyChanges)
     );
 }
 
-TEST(TestDataFactoryTest, BuildBetaTestInputUsesExpectedZeroDistanceGaussianResponse)
+TEST(TestDataFactoryTest, BuildBetaTestInputUsesDefaultSamplingDistanceRange)
 {
-    const auto options{ tdf::TestDataBuildOptions{
-        0.0,
-        0.0
-    } };
-
     constexpr double amplitude{ 2.0 };
     constexpr double width{ 0.5 };
     constexpr double intercept{ 0.0 };
@@ -154,17 +148,20 @@ TEST(TestDataFactoryTest, BuildBetaTestInputUsesExpectedZeroDistanceGaussianResp
             0.0,
             1,
             42
-        }, options)
+        })
     };
 
     ASSERT_EQ(input.replica_sampling_entries.size(), 1u);
     ASSERT_EQ(input.replica_sampling_entries.front().size(), 1u);
-    EXPECT_FLOAT_EQ(0.0f, input.replica_sampling_entries.front().front().point.distance);
+    const auto & sample{ input.replica_sampling_entries.front().front() };
+    EXPECT_GE(sample.point.distance, 0.0f);
+    EXPECT_LE(sample.point.distance, 1.0f);
 
     const auto expected_response{
-        amplitude * ComputeExpectedGaussianResponseAtDistance3D(0.0, width) + intercept
+        amplitude * ComputeExpectedGaussianResponseAtDistance3D(sample.point.distance, width) +
+            intercept
     };
-    EXPECT_NEAR(expected_response, input.replica_sampling_entries.front().front().response, 1.0e-7);
+    EXPECT_NEAR(expected_response, sample.response, 1.0e-7);
 }
 
 TEST(TestDataFactoryTest, BuildMuTestInputIsReproducibleWithFixedSeed)
@@ -307,43 +304,6 @@ TEST(TestDataFactoryTest, BuildMuTestInputRejectsInvalidGaussianVectorSize)
             1,
             77
         }),
-        std::invalid_argument);
-}
-
-TEST(TestDataFactoryTest, BuildBetaTestInputRejectsInvalidFittingRange)
-{
-    const auto scenario{ tdf::BetaScenario{
-        rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
-        8,
-        0.05,
-        0.1,
-        1,
-        42
-    } };
-
-    EXPECT_THROW(
-        tdf::BuildBetaTestInput(
-            scenario,
-            tdf::TestDataBuildOptions{
-                -1.0,
-                1.0
-            }),
-        std::invalid_argument);
-    EXPECT_THROW(
-        tdf::BuildBetaTestInput(
-            scenario,
-            tdf::TestDataBuildOptions{
-                2.0,
-                1.0
-            }),
-        std::invalid_argument);
-    EXPECT_THROW(
-        tdf::BuildBetaTestInput(
-            scenario,
-            tdf::TestDataBuildOptions{
-                0.0,
-                std::numeric_limits<double>::infinity()
-            }),
         std::invalid_argument);
 }
 

@@ -19,6 +19,9 @@ namespace
 {
 using namespace rhbm_gem;
 
+constexpr double kDefaultSamplingDistanceMin{ 0.0 };
+constexpr double kDefaultSamplingDistanceMax{ 1.0 };
+
 struct AtomNeighborhoodSamplingOptions
 {
     test_data_factory::AtomNeighborType neighbor_type{ test_data_factory::AtomNeighborType::None };
@@ -364,10 +367,8 @@ test_data_factory::RHBMBetaTestInput MakeBetaTestInputShell(
 namespace rhbm_gem::test_data_factory
 {
 
-RHBMBetaTestInput BuildBetaTestInput(const BetaScenario & scenario, const TestDataBuildOptions & options)
+RHBMBetaTestInput BuildBetaTestInput(const BetaScenario & scenario)
 {
-    numeric_validation::RequireFiniteNonNegativeRange(
-        options.fit_range_min, options.fit_range_max, "fitting range");
     numeric_validation::RequirePositive(scenario.sampling_entry_size, "sampling_entry_size");
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
     GaussianModel3D::RequireFinitePositiveWidthModel(scenario.gaus_true, "scenario.gaus_true");
@@ -389,8 +390,8 @@ RHBMBetaTestInput BuildBetaTestInput(const BetaScenario & scenario, const TestDa
                 static_cast<size_t>(scenario.sampling_entry_size),
                 scenario.gaus_true,
                 scenario.outlier_ratio,
-                options.fit_range_min,
-                options.fit_range_max,
+                kDefaultSamplingDistanceMin,
+                kDefaultSamplingDistanceMax,
                 generator)
         };
         auto noisy_sampling_entries{
@@ -455,8 +456,7 @@ RHBMMuTestInput BuildMuTestInput(const MuScenario & scenario)
     return input;
 }
 
-RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
-    const AtomNeighborhoodScenario & scenario)
+RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(const AtomNeighborhoodScenario & scenario)
 {
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
     GaussianModel3D::RequireFinitePositiveWidthModel(scenario.gaus_true, "scenario.gaus_true");
