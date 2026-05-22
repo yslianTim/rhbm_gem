@@ -36,12 +36,12 @@ struct MuMDPDETestBias
 };
 
 BetaMDPDETestBias RunBetaMDPDETest(
-    const test_data_factory::LocalTestInput & test_input,
+    const test_data_factory::LocalTestData & test_input,
     int thread_size
 );
 
 MuMDPDETestBias RunMuMDPDETest(
-    const test_data_factory::GroupTestInput & test_input,
+    const test_data_factory::GroupTestData & test_input,
     int thread_size
 );
 

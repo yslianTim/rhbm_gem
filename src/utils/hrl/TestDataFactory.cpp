@@ -324,14 +324,14 @@ std::vector<LocalPotentialSampleList> BuildMuMemberSamplingEntries(
     return member_sampling_entries;
 }
 
-test_data_factory::LocalTestInput MakeLocalTestInputShell(
+test_data_factory::LocalTestData MakeLocalTestDataShell(
     const GaussianModel3D & gaus_true,
     const std::vector<double> & requested_alpha_r_list,
     bool alpha_training,
     LocalGaussianFitModel local_fit_model,
     int replica_size)
 {
-    test_data_factory::LocalTestInput input;
+    test_data_factory::LocalTestData input;
     input.gaus_true = gaus_true;
     input.requested_alpha_r_list = requested_alpha_r_list;
     input.alpha_training = alpha_training;
@@ -341,14 +341,14 @@ test_data_factory::LocalTestInput MakeLocalTestInputShell(
 }
 } // namespace
 
-LocalTestInput BuildLocalTestInput(const LocalScenario & scenario)
+LocalTestData BuildLocalTestData(const LocalScenario & scenario)
 {
     numeric_validation::RequirePositive(scenario.sampling_entry_size, "sampling_entry_size");
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
     GaussianModel3D::RequireFinitePositiveWidthModel(scenario.gaus_true, "scenario.gaus_true");
 
     auto input{
-        MakeLocalTestInputShell(
+        MakeLocalTestDataShell(
             scenario.gaus_true,
             scenario.requested_alpha_r_list,
             scenario.alpha_training,
@@ -380,7 +380,7 @@ LocalTestInput BuildLocalTestInput(const LocalScenario & scenario)
     return input;
 }
 
-GroupTestInput BuildGroupTestInput(const GroupScenario & scenario)
+GroupTestData BuildGroupTestData(const GroupScenario & scenario)
 {
     numeric_validation::RequirePositive(scenario.member_size, "member_size");
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
@@ -401,7 +401,7 @@ GroupTestInput BuildGroupTestInput(const GroupScenario & scenario)
         GaussianModel3D::ParameterSize(),
         "scenario.outlier_sigma");
 
-    GroupTestInput input;
+    GroupTestData input;
     input.gaus_true = GaussianModel3D::FromVector(scenario.gaus_prior);
     input.requested_alpha_g_list = scenario.requested_alpha_g_list;
     input.alpha_training = scenario.alpha_training;
@@ -428,19 +428,19 @@ GroupTestInput BuildGroupTestInput(const GroupScenario & scenario)
     return input;
 }
 
-AtomModelTestInput BuildAtomModelTestInput(const AtomModelScenario & scenario)
+AtomModelTestData BuildAtomModelTestData(const AtomModelScenario & scenario)
 {
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
     GaussianModel3D::RequireFinitePositiveWidthModel(scenario.gaus_true, "scenario.gaus_true");
 
-    AtomModelTestInput input;
-    input.no_cut_input = MakeLocalTestInputShell(
+    AtomModelTestData input;
+    input.no_cut_input = MakeLocalTestDataShell(
         scenario.gaus_true,
         scenario.requested_alpha_r_list,
         scenario.alpha_training,
         scenario.local_fit_model,
         scenario.replica_size);
-    input.cut_input = MakeLocalTestInputShell(
+    input.cut_input = MakeLocalTestDataShell(
         scenario.gaus_true,
         scenario.requested_alpha_r_list,
         scenario.alpha_training,

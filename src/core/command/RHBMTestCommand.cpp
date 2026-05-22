@@ -157,7 +157,7 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
         base_scenario.alpha_training = true;
         base_scenario.local_fit_model = LocalGaussianFitModel::LogQuadratic;
 
-        const auto test_input{ test_data_factory::BuildAtomModelTestInput(base_scenario) };
+        const auto test_input{ test_data_factory::BuildAtomModelTestData(base_scenario) };
         const auto no_cut_result{
             rhbm_tester::RunBetaMDPDETest(test_input.no_cut_input, request.job_count)
         };
@@ -254,7 +254,7 @@ void RunSimulationTestOnDataOutlier(const RHBMTestRequest & request)
             auto beta_scenario{ base_scenario };
             beta_scenario.data_error_sigma = error_sigma;
             beta_scenario.outlier_ratio = outlier_list.at(i);
-            const auto test_input{ test_data_factory::BuildLocalTestInput(beta_scenario) };
+            const auto test_input{ test_data_factory::BuildLocalTestData(beta_scenario) };
             const auto bias{ rhbm_tester::RunBetaMDPDETest(test_input, request.job_count) };
 
             AppendBiasCurvePoint(panel.curves.at(0), outlier_list.at(i), bias.ols);
@@ -324,7 +324,7 @@ void RunSimulationTestOnMemberOutlier(const RHBMTestRequest & request)
             mu_scenario.outlier_prior = outlier_prior;
             mu_scenario.outlier_ratio = outlier_list.at(i);
             const auto test_input{
-                test_data_factory::BuildGroupTestInput(mu_scenario)
+                test_data_factory::BuildGroupTestData(mu_scenario)
             };
             const auto bias{ rhbm_tester::RunMuMDPDETest(test_input, request.job_count) };
 
@@ -380,7 +380,7 @@ void RunSimulationTestOnModelAlphaData(const RHBMTestRequest & request)
             auto beta_scenario{ base_scenario };
             beta_scenario.data_error_sigma = error_sigma;
             beta_scenario.outlier_ratio = outlier_list.at(i);
-            const auto test_input{ test_data_factory::BuildLocalTestInput(beta_scenario) };
+            const auto test_input{ test_data_factory::BuildLocalTestData(beta_scenario) };
             const auto bias{ rhbm_tester::RunBetaMDPDETest(test_input, request.job_count) };
 
             AppendBiasCurvePoint(
@@ -448,7 +448,7 @@ void RunSimulationTestOnModelAlphaMember(const RHBMTestRequest & request)
             mu_scenario.outlier_prior = outlier_prior;
             mu_scenario.outlier_ratio = outlier_list.at(i);
             const auto test_input{
-                test_data_factory::BuildGroupTestInput(mu_scenario)
+                test_data_factory::BuildGroupTestData(mu_scenario)
             };
             const auto bias{ rhbm_tester::RunMuMDPDETest(test_input, request.job_count) };
 

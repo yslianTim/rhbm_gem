@@ -13,7 +13,7 @@
 
 namespace rhbm_gem::test_data_factory
 {
-struct LocalTestInput
+struct LocalTestData
 {
     GaussianModel3D gaus_true;
     std::vector<LocalPotentialSampleList> replica_sampling_entries;
@@ -22,7 +22,7 @@ struct LocalTestInput
     LocalGaussianFitModel local_fit_model{ LocalGaussianFitModel::LogQuadratic };
 };
 
-struct GroupTestInput
+struct GroupTestData
 {
     GaussianModel3D gaus_true;
     std::vector<std::vector<LocalPotentialSampleList>> replica_member_sampling_entries;
@@ -30,10 +30,10 @@ struct GroupTestInput
     bool alpha_training{ true };
 };
 
-struct AtomModelTestInput
+struct AtomModelTestData
 {
-    LocalTestInput no_cut_input;
-    LocalTestInput cut_input;
+    LocalTestData no_cut_input;
+    LocalTestData cut_input;
     std::vector<LocalPotentialSampleList> sampling_summaries;
 };
 
@@ -78,8 +78,8 @@ struct AtomModelScenario
     LocalGaussianFitModel local_fit_model{ LocalGaussianFitModel::LogQuadratic };
 };
 
-LocalTestInput BuildLocalTestInput(const LocalScenario & scenario);
-GroupTestInput BuildGroupTestInput(const GroupScenario & scenario);
-AtomModelTestInput BuildAtomModelTestInput(const AtomModelScenario & scenario);
+LocalTestData BuildLocalTestData(const LocalScenario & scenario);
+GroupTestData BuildGroupTestData(const GroupScenario & scenario);
+AtomModelTestData BuildAtomModelTestData(const AtomModelScenario & scenario);
 
 } // namespace rhbm_gem::test_data_factory

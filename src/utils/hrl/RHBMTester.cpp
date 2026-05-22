@@ -85,7 +85,7 @@ BiasStatistics FinalizeBiasStatistics(const Eigen::MatrixXd & bias_matrix)
 } // namespace
 
 BetaMDPDETestBias RunBetaMDPDETest(
-    const test_data_factory::LocalTestInput & input,
+    const test_data_factory::LocalTestData & input,
     int thread_size)
 {
 #ifndef USE_OPENMP
@@ -186,7 +186,7 @@ BetaMDPDETestBias RunBetaMDPDETest(
 }
 
 MuMDPDETestBias RunMuMDPDETest(
-    const test_data_factory::GroupTestInput & input,
+    const test_data_factory::GroupTestData & input,
     int thread_size)
 {
 #ifndef USE_OPENMP

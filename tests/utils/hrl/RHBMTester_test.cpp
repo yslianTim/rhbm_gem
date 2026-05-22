@@ -36,7 +36,7 @@ TEST(RHBMTesterTest, RunBetaMDPDETestPopulatesBiasOutputs)
 {
     const std::vector<double> alpha_r_list{ 0.0, 0.5 };
     const auto test_input{
-        tdf::BuildLocalTestInput(tdf::LocalScenario{
+        tdf::BuildLocalTestData(tdf::LocalScenario{
             rhbm_gem::GaussianModel3D{ 1.0, 0.5, 0.0 },
             10,
             0.01,
@@ -68,7 +68,7 @@ TEST(RHBMTesterTest, RunMuMDPDETestPopulatesBiasOutputs)
 {
     const std::vector<double> alpha_g_list{ 0.2 };
     const auto test_input{
-        tdf::BuildGroupTestInput(tdf::GroupScenario{
+        tdf::BuildGroupTestData(tdf::GroupScenario{
             12,
             MakeVector({ 1.0, 0.5, 0.1 }),
             MakeVector({ 0.05, 0.025, 0.01 }),
@@ -102,7 +102,7 @@ TEST(RHBMTesterTest, RunBetaMDPDETestSkipsTrainedAlphaWhenDisabled)
 {
     const std::vector<double> alpha_r_list{ 0.5 };
     const auto test_input{
-        tdf::BuildLocalTestInput(tdf::LocalScenario{
+        tdf::BuildLocalTestData(tdf::LocalScenario{
             rhbm_gem::GaussianModel3D{ 1.0, 0.5, 0.0 },
             10,
             0.01,
@@ -129,7 +129,7 @@ TEST(RHBMTesterTest, RunMuMDPDETestSkipsTrainedAlphaWhenDisabled)
 {
     const std::vector<double> alpha_g_list{ 0.2 };
     const auto test_input{
-        tdf::BuildGroupTestInput(tdf::GroupScenario{
+        tdf::BuildGroupTestData(tdf::GroupScenario{
             12,
             MakeVector({ 1.0, 0.5, 0.1 }),
             MakeVector({ 0.05, 0.025, 0.01 }),
@@ -157,7 +157,7 @@ TEST(RHBMTesterTest, RunMuMDPDETestSkipsTrainedAlphaWhenDisabled)
 TEST(RHBMTesterTest, RunBetaMDPDETestAllowsEmptyAlphaListWithoutTraining)
 {
     const auto test_input{
-        tdf::BuildLocalTestInput(tdf::LocalScenario{
+        tdf::BuildLocalTestData(tdf::LocalScenario{
             rhbm_gem::GaussianModel3D{ 1.0, 0.5, 0.0 },
             10,
             0.01,
@@ -182,7 +182,7 @@ TEST(RHBMTesterTest, RunBetaMDPDETestAllowsEmptyAlphaListWithoutTraining)
 TEST(RHBMTesterTest, RunBetaMDPDETestAllowsEmptyAlphaListWithTraining)
 {
     const auto test_input{
-        tdf::BuildLocalTestInput(tdf::LocalScenario{
+        tdf::BuildLocalTestData(tdf::LocalScenario{
             rhbm_gem::GaussianModel3D{ 1.0, 0.5, 0.0 },
             10,
             0.01,
@@ -209,7 +209,7 @@ TEST(RHBMTesterTest, RunBetaMDPDETestAllowsEmptyAlphaListWithTraining)
 TEST(RHBMTesterTest, RunBetaMDPDETestRejectsNonFiniteTruth)
 {
     auto test_input{
-        tdf::BuildLocalTestInput(tdf::LocalScenario{
+        tdf::BuildLocalTestData(tdf::LocalScenario{
             rhbm_gem::GaussianModel3D{ 1.0, 0.5, 0.0 },
             10,
             0.01,

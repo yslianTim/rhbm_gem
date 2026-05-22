@@ -55,7 +55,7 @@ void ExpectSamplingEntriesEquals(
 
 } // namespace
 
-TEST(TestDataFactoryTest, BuildLocalTestInputIsReproducibleWithFixedSeed)
+TEST(TestDataFactoryTest, BuildLocalTestDataIsReproducibleWithFixedSeed)
 {
     const auto scenario{ tdf::LocalScenario{
         rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
@@ -66,8 +66,8 @@ TEST(TestDataFactoryTest, BuildLocalTestInputIsReproducibleWithFixedSeed)
         42
     } };
 
-    const auto first_input{ tdf::BuildLocalTestInput(scenario) };
-    const auto second_input{ tdf::BuildLocalTestInput(scenario) };
+    const auto first_input{ tdf::BuildLocalTestData(scenario) };
+    const auto second_input{ tdf::BuildLocalTestData(scenario) };
 
     ASSERT_EQ(
         first_input.replica_sampling_entries.size(),
@@ -81,7 +81,7 @@ TEST(TestDataFactoryTest, BuildLocalTestInputIsReproducibleWithFixedSeed)
     }
 }
 
-TEST(TestDataFactoryTest, BuildLocalTestInputChangesWhenOutlierPolicyChanges)
+TEST(TestDataFactoryTest, BuildLocalTestDataChangesWhenOutlierPolicyChanges)
 {
     const auto base_scenario{ tdf::LocalScenario{
         rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
@@ -95,8 +95,8 @@ TEST(TestDataFactoryTest, BuildLocalTestInputChangesWhenOutlierPolicyChanges)
     auto outlier_scenario{ base_scenario };
     outlier_scenario.outlier_ratio = 1.0;
 
-    const auto baseline_input{ tdf::BuildLocalTestInput(base_scenario) };
-    const auto outlier_input{ tdf::BuildLocalTestInput(outlier_scenario) };
+    const auto baseline_input{ tdf::BuildLocalTestData(base_scenario) };
+    const auto outlier_input{ tdf::BuildLocalTestData(outlier_scenario) };
 
     ASSERT_EQ(baseline_input.replica_sampling_entries.size(), 1u);
     ASSERT_EQ(outlier_input.replica_sampling_entries.size(), 1u);
@@ -108,7 +108,7 @@ TEST(TestDataFactoryTest, BuildLocalTestInputChangesWhenOutlierPolicyChanges)
     );
 }
 
-TEST(TestDataFactoryTest, BuildLocalTestInputChangesWhenNoisePolicyChanges)
+TEST(TestDataFactoryTest, BuildLocalTestDataChangesWhenNoisePolicyChanges)
 {
     const auto noiseless_scenario{ tdf::LocalScenario{
         rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
@@ -122,8 +122,8 @@ TEST(TestDataFactoryTest, BuildLocalTestInputChangesWhenNoisePolicyChanges)
     auto noisy_scenario{ noiseless_scenario };
     noisy_scenario.data_error_sigma = 0.1;
 
-    const auto noiseless_input{ tdf::BuildLocalTestInput(noiseless_scenario) };
-    const auto noisy_input{ tdf::BuildLocalTestInput(noisy_scenario) };
+    const auto noiseless_input{ tdf::BuildLocalTestData(noiseless_scenario) };
+    const auto noisy_input{ tdf::BuildLocalTestData(noisy_scenario) };
 
     ASSERT_EQ(noiseless_input.replica_sampling_entries.size(), 1u);
     ASSERT_EQ(noisy_input.replica_sampling_entries.size(), 1u);
@@ -135,13 +135,13 @@ TEST(TestDataFactoryTest, BuildLocalTestInputChangesWhenNoisePolicyChanges)
     );
 }
 
-TEST(TestDataFactoryTest, BuildLocalTestInputUsesDefaultSamplingDistanceRange)
+TEST(TestDataFactoryTest, BuildLocalTestDataUsesDefaultSamplingDistanceRange)
 {
     constexpr double amplitude{ 2.0 };
     constexpr double width{ 0.5 };
     constexpr double intercept{ 0.0 };
     const auto input{
-        tdf::BuildLocalTestInput(tdf::LocalScenario{
+        tdf::BuildLocalTestData(tdf::LocalScenario{
             rg::GaussianModel3D{ amplitude, width, intercept },
             1,
             0.0,
@@ -164,7 +164,7 @@ TEST(TestDataFactoryTest, BuildLocalTestInputUsesDefaultSamplingDistanceRange)
     EXPECT_NEAR(expected_response, sample.response, 1.0e-7);
 }
 
-TEST(TestDataFactoryTest, BuildGroupTestInputIsReproducibleWithFixedSeed)
+TEST(TestDataFactoryTest, BuildGroupTestDataIsReproducibleWithFixedSeed)
 {
     const auto scenario{ tdf::GroupScenario{
         4,
@@ -177,8 +177,8 @@ TEST(TestDataFactoryTest, BuildGroupTestInputIsReproducibleWithFixedSeed)
         77
     } };
 
-    const auto first_input{ tdf::BuildGroupTestInput(scenario) };
-    const auto second_input{ tdf::BuildGroupTestInput(scenario) };
+    const auto first_input{ tdf::BuildGroupTestData(scenario) };
+    const auto second_input{ tdf::BuildGroupTestData(scenario) };
 
     ASSERT_EQ(
         first_input.replica_member_sampling_entries.size(),
@@ -200,7 +200,7 @@ TEST(TestDataFactoryTest, BuildGroupTestInputIsReproducibleWithFixedSeed)
     }
 }
 
-TEST(TestDataFactoryTest, BuildAtomModelTestInputProvidesPairedSamplesAndIsReproducible)
+TEST(TestDataFactoryTest, BuildAtomModelTestDataProvidesPairedSamplesAndIsReproducible)
 {
     const auto scenario{ tdf::AtomModelScenario{
         Spot::O,
@@ -214,8 +214,8 @@ TEST(TestDataFactoryTest, BuildAtomModelTestInputProvidesPairedSamplesAndIsRepro
         false
     } };
 
-    const auto input{ tdf::BuildAtomModelTestInput(scenario) };
-    const auto repeated_input{ tdf::BuildAtomModelTestInput(scenario) };
+    const auto input{ tdf::BuildAtomModelTestData(scenario) };
+    const auto repeated_input{ tdf::BuildAtomModelTestData(scenario) };
 
     ASSERT_EQ(input.no_cut_input.replica_sampling_entries.size(), 2u);
     ASSERT_EQ(input.cut_input.replica_sampling_entries.size(), 2u);
@@ -266,10 +266,10 @@ TEST(TestDataFactoryTest, BuildAtomModelTestInputProvidesPairedSamplesAndIsRepro
     }
 }
 
-TEST(TestDataFactoryTest, BuildTestInputsRejectNonPositiveGaussianWidth)
+TEST(TestDataFactoryTest, BuildTestDataRejectNonPositiveGaussianWidth)
 {
     EXPECT_THROW(
-        tdf::BuildLocalTestInput(tdf::LocalScenario{
+        tdf::BuildLocalTestData(tdf::LocalScenario{
             rg::GaussianModel3D{ 1.0, 0.0, 0.0 },
             8,
             0.05,
@@ -279,7 +279,7 @@ TEST(TestDataFactoryTest, BuildTestInputsRejectNonPositiveGaussianWidth)
         }),
         std::invalid_argument);
     EXPECT_THROW(
-        tdf::BuildAtomModelTestInput(tdf::AtomModelScenario{
+        tdf::BuildAtomModelTestData(tdf::AtomModelScenario{
             Spot::O,
             rg::GaussianModel3D{ 1.0, -0.5, 0.0 },
             0.05,
@@ -291,10 +291,10 @@ TEST(TestDataFactoryTest, BuildTestInputsRejectNonPositiveGaussianWidth)
         std::invalid_argument);
 }
 
-TEST(TestDataFactoryTest, BuildGroupTestInputRejectsInvalidGaussianVectorSize)
+TEST(TestDataFactoryTest, BuildGroupTestDataRejectsInvalidGaussianVectorSize)
 {
     EXPECT_THROW(
-        tdf::BuildGroupTestInput(tdf::GroupScenario{
+        tdf::BuildGroupTestData(tdf::GroupScenario{
             4,
             MakeVector({ 1.0, 0.5 }),
             MakeVector({ 0.05, 0.025, 0.01 }),
@@ -307,10 +307,10 @@ TEST(TestDataFactoryTest, BuildGroupTestInputRejectsInvalidGaussianVectorSize)
         std::invalid_argument);
 }
 
-TEST(TestDataFactoryTest, BuildLocalTestInputRejectsNonPositiveScenarioSizes)
+TEST(TestDataFactoryTest, BuildLocalTestDataRejectsNonPositiveScenarioSizes)
 {
     EXPECT_THROW(
-        tdf::BuildLocalTestInput(tdf::LocalScenario{
+        tdf::BuildLocalTestData(tdf::LocalScenario{
             rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
             0,
             0.05,
@@ -320,7 +320,7 @@ TEST(TestDataFactoryTest, BuildLocalTestInputRejectsNonPositiveScenarioSizes)
         }),
         std::invalid_argument);
     EXPECT_THROW(
-        tdf::BuildLocalTestInput(tdf::LocalScenario{
+        tdf::BuildLocalTestData(tdf::LocalScenario{
             rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
             8,
             0.05,
