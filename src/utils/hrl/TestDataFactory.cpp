@@ -21,12 +21,6 @@ namespace {
 constexpr double kDefaultSamplingDistanceMin{ 0.0 };
 constexpr double kDefaultSamplingDistanceMax{ 1.0 };
 
-struct AtomModelSamplingOptions
-{
-    Spot spot{ Spot::UNK };
-    double reject_angle_deg{ 0.0 };
-};
-
 struct AtomNeighborContribution
 {
     Eigen::VectorXd center;
@@ -84,24 +78,24 @@ AtomNeighborContribution MakeAtomNeighborContribution(
     return AtomNeighborContribution{ distance * direction, amplitude };
 }
 
-std::vector<AtomNeighborContribution> BuildAtomNeighborList(const AtomModelSamplingOptions & options)
+std::vector<AtomNeighborContribution> BuildAtomNeighborList(const Spot & spot)
 {
     std::vector<AtomNeighborContribution> neighbor_list;
     neighbor_list.reserve(4);
 
-    if (options.spot == Spot::UNK)
+    if (spot == Spot::UNK)
     {
         return neighbor_list;
     }
 
-    if (options.spot == Spot::O)
+    if (spot == Spot::O)
     {
         neighbor_list.emplace_back(MakeAtomNeighborContribution(
             Eigen::Vector3d{ 1.0, 0.0, 0.0 }, 1.23, 6.0 / 8.0));
         return neighbor_list;
     }
 
-    if (options.spot == Spot::N)
+    if (spot == Spot::N)
     {
         neighbor_list.emplace_back(MakeAtomNeighborContribution(
             Eigen::Vector3d{ 1.0, 0.0, 0.0 }, 1.02, 1.0 / 7.0));
@@ -112,7 +106,7 @@ std::vector<AtomNeighborContribution> BuildAtomNeighborList(const AtomModelSampl
         return neighbor_list;
     }
 
-    if (options.spot == Spot::C)
+    if (spot == Spot::C)
     {
         neighbor_list.emplace_back(MakeAtomNeighborContribution(
             Eigen::Vector3d{ 1.0, 0.0, 0.0 }, 1.23, 8.0 / 6.0));
@@ -123,7 +117,7 @@ std::vector<AtomNeighborContribution> BuildAtomNeighborList(const AtomModelSampl
         return neighbor_list;
     }
 
-    if (options.spot == Spot::CA)
+    if (spot == Spot::CA)
     {
         neighbor_list.emplace_back(MakeAtomNeighborContribution(
             Eigen::Vector3d{ 0.0, 0.0, 1.0 }, 1.06, 1.0 / 6.0));
@@ -164,11 +158,12 @@ LocalPotentialSampleList GenerateRadialSamples(
 
 LocalPotentialSampleList GenerateAtomModelSamples(
     const GaussianModel3D & model,
-    const AtomModelSamplingOptions & options)
+    const Spot & spot,
+    double reject_angle_deg)
 {
     GaussianModel3D::RequireFinitePositiveWidthModel(model);
 
-    const auto neighbor_list{ BuildAtomNeighborList(options) };
+    const auto neighbor_list{ BuildAtomNeighborList(spot) };
     const Eigen::VectorXd atom_center{ Eigen::VectorXd::Zero(3) };
 
     const auto sample_point_list{
@@ -191,7 +186,7 @@ LocalPotentialSampleList GenerateAtomModelSamples(
             sample_point_list,
             { 0.0f, 0.0f, 0.0f },
             reject_position_list,
-            options.reject_angle_deg)
+            reject_angle_deg)
     };
 
     LocalPotentialSampleList sample_list;
@@ -213,7 +208,7 @@ LocalPotentialSampleList GenerateAtomModelSamples(
         });
     }
 
-    if (options.reject_angle_deg == 0.0) return sample_list;
+    if (reject_angle_deg == 0.0) return sample_list;
 
     return sample_filter::FilterLocalPotentialSampleList(std::move(sample_list));
 }
@@ -438,9 +433,6 @@ AtomModelTestInput BuildAtomModelTestInput(const AtomModelScenario & scenario)
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
     GaussianModel3D::RequireFinitePositiveWidthModel(scenario.gaus_true, "scenario.gaus_true");
 
-    const AtomModelSamplingOptions no_cut_options{ scenario.spot, 0.0 };
-    const AtomModelSamplingOptions cut_options{ scenario.spot, scenario.rejected_angle };
-
     AtomModelTestInput input;
     input.no_cut_input = MakeLocalTestInputShell(
         scenario.gaus_true,
@@ -460,7 +452,8 @@ AtomModelTestInput BuildAtomModelTestInput(const AtomModelScenario & scenario)
         input.sampling_summaries.emplace_back(
             GenerateAtomModelSamples(
                 scenario.gaus_true,
-                AtomModelSamplingOptions{ scenario.spot, scenario.rejected_angle }
+                scenario.spot,
+                scenario.rejected_angle
             )
         );
     }
@@ -469,10 +462,10 @@ AtomModelTestInput BuildAtomModelTestInput(const AtomModelScenario & scenario)
     {
         auto generator{ BuildReplicaGenerator(i, scenario.random_seed) };
         auto no_cut_sampling_entries{
-            GenerateAtomModelSamples(scenario.gaus_true, no_cut_options)
+            GenerateAtomModelSamples(scenario.gaus_true, scenario.spot, 0.0)
         };
         auto cut_sampling_entries{
-            GenerateAtomModelSamples(scenario.gaus_true, cut_options)
+            GenerateAtomModelSamples(scenario.gaus_true, scenario.spot, scenario.rejected_angle)
         };
         no_cut_sampling_entries = AddNoise(
             std::move(no_cut_sampling_entries),
