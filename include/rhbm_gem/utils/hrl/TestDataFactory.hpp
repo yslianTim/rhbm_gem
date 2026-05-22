@@ -7,7 +7,6 @@
 #include <Eigen/Dense>
 
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
-#include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 
@@ -23,7 +22,6 @@ struct RHBMBetaTestInput
 {
     GaussianModel3D gaus_true;
     std::vector<LocalPotentialSampleList> replica_sampling_entries;
-    std::vector<RHBMMemberDataset> replica_datasets;
     std::vector<double> requested_alpha_r_list;
     bool alpha_training{ true };
     LocalGaussianFitModel local_fit_model{ LocalGaussianFitModel::LogQuadratic };
@@ -97,8 +95,6 @@ RHBMBetaTestInput BuildBetaTestInput(
 
 RHBMMuTestInput BuildMuTestInput(const MuScenario & scenario);
 
-RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
-    const AtomNeighborhoodScenario & scenario,
-    const TestDataBuildOptions & options = {});
+RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(const AtomNeighborhoodScenario & scenario);
 
 } // namespace rhbm_gem::test_data_factory

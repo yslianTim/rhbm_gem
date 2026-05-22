@@ -3,6 +3,7 @@
 
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
+#include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/hrl/TestDataFactory.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTester.hpp>
 
@@ -77,6 +78,25 @@ test_data_factory::TestDataBuildOptions BuildTestDataOptions(const RHBMTestReque
     };
 }
 
+std::vector<RHBMMemberDataset> BuildReplicaDatasets(
+    const std::vector<LocalPotentialSampleList> & replica_sampling_entries,
+    const test_data_factory::TestDataBuildOptions & options,
+    LocalGaussianFitModel local_fit_model)
+{
+    std::vector<RHBMMemberDataset> replica_datasets;
+    replica_datasets.reserve(replica_sampling_entries.size());
+    for (const auto & sampling_entries : replica_sampling_entries)
+    {
+        replica_datasets.emplace_back(
+            rhbm_helper::BuildMemberDataset(
+                sampling_entries,
+                options.fit_range_min,
+                options.fit_range_max,
+                local_fit_model));
+    }
+    return replica_datasets;
+}
+
 const rhbm_tester::BiasStatistics & SelectBenchmarkMdpdeBias(
     const rhbm_tester::BetaMDPDETestBias & bias)
 {
@@ -145,20 +165,30 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
         base_scenario.alpha_training = true;
         base_scenario.local_fit_model = LocalGaussianFitModel::LogQuadratic;
 
-        const auto test_input{
-            test_data_factory::BuildAtomNeighborhoodTestInput(base_scenario, test_data_options)
-        };
+        const auto test_input{ test_data_factory::BuildAtomNeighborhoodTestInput(base_scenario) };
         const auto no_cut_result{
             rhbm_tester::RunBetaMDPDETest(test_input.no_cut_input, request.job_count)
         };
         const auto cut_result{
             rhbm_tester::RunBetaMDPDETest(test_input.cut_input, request.job_count)
         };
+        const auto no_cut_datasets{
+            BuildReplicaDatasets(
+                test_input.no_cut_input.replica_sampling_entries,
+                test_data_options,
+                test_input.no_cut_input.local_fit_model)
+        };
+        const auto cut_datasets{
+            BuildReplicaDatasets(
+                test_input.cut_input.replica_sampling_entries,
+                test_data_options,
+                test_input.cut_input.local_fit_model)
+        };
         rhbm_test_plotting::TryAppendBenchmarkLinearizedPanel(
             linearized_panels,
             0.0,
-            test_input.no_cut_input.replica_datasets.front(),
-            test_input.cut_input.replica_datasets.front());
+            no_cut_datasets.front(),
+            cut_datasets.front());
 
         const auto & no_cut_mdpde_bias{ SelectBenchmarkMdpdeBias(no_cut_result) };
         const auto & cut_mdpde_bias{ SelectBenchmarkMdpdeBias(cut_result) };

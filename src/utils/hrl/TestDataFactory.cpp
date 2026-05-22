@@ -2,7 +2,6 @@
 
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/SampleFilter.hpp>
-#include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
@@ -358,24 +357,7 @@ test_data_factory::RHBMBetaTestInput MakeBetaTestInputShell(
     input.alpha_training = alpha_training;
     input.local_fit_model = local_fit_model;
     input.replica_sampling_entries.reserve(static_cast<size_t>(replica_size));
-    input.replica_datasets.reserve(static_cast<size_t>(replica_size));
     return input;
-}
-
-void AppendBetaReplica(
-    test_data_factory::RHBMBetaTestInput & input,
-    LocalPotentialSampleList sampling_entries,
-    const test_data_factory::TestDataBuildOptions & options)
-{
-    auto dataset{
-        rhbm_helper::BuildMemberDataset(
-            sampling_entries,
-            options.fit_range_min,
-            options.fit_range_max,
-            input.local_fit_model)
-    };
-    input.replica_sampling_entries.emplace_back(std::move(sampling_entries));
-    input.replica_datasets.emplace_back(std::move(dataset));
 }
 } // namespace
 
@@ -419,7 +401,7 @@ RHBMBetaTestInput BuildBetaTestInput(const BetaScenario & scenario, const TestDa
                 scenario.local_fit_model,
                 generator)
         };
-        AppendBetaReplica(input, std::move(noisy_sampling_entries), options);
+        input.replica_sampling_entries.emplace_back(std::move(noisy_sampling_entries));
     }
 
     return input;
@@ -474,13 +456,8 @@ RHBMMuTestInput BuildMuTestInput(const MuScenario & scenario)
 }
 
 RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
-    const AtomNeighborhoodScenario & scenario,
-    const TestDataBuildOptions & options)
+    const AtomNeighborhoodScenario & scenario)
 {
-    numeric_validation::RequireFiniteNonNegativeRange(
-        options.fit_range_min,
-        options.fit_range_max,
-        "fitting range");
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
     GaussianModel3D::RequireFinitePositiveWidthModel(scenario.gaus_true, "scenario.gaus_true");
 
@@ -538,8 +515,8 @@ RHBMNeighborhoodTestInput BuildAtomNeighborhoodTestInput(
             scenario.data_error_sigma,
             scenario.local_fit_model,
             generator);
-        AppendBetaReplica(input.no_cut_input, std::move(no_cut_sampling_entries), options);
-        AppendBetaReplica(input.cut_input, std::move(cut_sampling_entries), options);
+        input.no_cut_input.replica_sampling_entries.emplace_back(std::move(no_cut_sampling_entries));
+        input.cut_input.replica_sampling_entries.emplace_back(std::move(cut_sampling_entries));
     }
 
     return input;

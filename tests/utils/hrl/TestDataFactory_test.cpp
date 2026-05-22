@@ -9,7 +9,6 @@
 #include <vector>
 
 #include <rhbm_gem/utils/domain/Constants.hpp>
-#include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/hrl/TestDataFactory.hpp>
 
 namespace {
@@ -42,23 +41,6 @@ double ComputeDistanceFromOrigin(const std::array<float, 3> & position)
         static_cast<double>(position[2]) * static_cast<double>(position[2]));
 }
 
-void ExpectDatasetEquals(
-    const rg::RHBMMemberDataset & lhs,
-    const rg::RHBMMemberDataset & rhs)
-{
-    ASSERT_EQ(lhs.X.rows(), rhs.X.rows());
-    ASSERT_EQ(lhs.X.cols(), rhs.X.cols());
-    ASSERT_EQ(lhs.y.rows(), rhs.y.rows());
-    for (Eigen::Index row = 0; row < lhs.X.rows(); row++)
-    {
-        for (Eigen::Index col = 0; col < lhs.X.cols(); col++)
-        {
-            EXPECT_DOUBLE_EQ(lhs.X(row, col), rhs.X(row, col));
-        }
-        EXPECT_DOUBLE_EQ(lhs.y(row), rhs.y(row));
-    }
-}
-
 void ExpectSamplingEntriesEquals(
     const LocalPotentialSampleList & lhs,
     const LocalPotentialSampleList & rhs)
@@ -70,22 +52,6 @@ void ExpectSamplingEntriesEquals(
         EXPECT_FLOAT_EQ(lhs.at(i).response, rhs.at(i).response);
         EXPECT_EQ(lhs.at(i).point.position, rhs.at(i).point.position);
     }
-}
-
-void ExpectDatasetMatchesSamplingEntries(
-    const rg::RHBMMemberDataset & dataset,
-    const LocalPotentialSampleList & sampling_entries,
-    double fit_range_min = 0.0,
-    double fit_range_max = 1.0)
-{
-    const auto expected_dataset{
-        rg::rhbm_helper::BuildMemberDataset(
-            sampling_entries,
-            fit_range_min,
-            fit_range_max,
-            rg::LocalGaussianFitModel::LogQuadratic)
-    };
-    ExpectDatasetEquals(dataset, expected_dataset);
 }
 
 } // namespace
@@ -107,20 +73,11 @@ TEST(TestDataFactoryTest, BuildBetaTestInputIsReproducibleWithFixedSeed)
     ASSERT_EQ(
         first_input.replica_sampling_entries.size(),
         second_input.replica_sampling_entries.size());
-    ASSERT_EQ(first_input.replica_datasets.size(), second_input.replica_datasets.size());
-    for (size_t i = 0; i < first_input.replica_datasets.size(); i++)
+    for (size_t i = 0; i < first_input.replica_sampling_entries.size(); i++)
     {
         ExpectSamplingEntriesEquals(
             first_input.replica_sampling_entries.at(i),
             second_input.replica_sampling_entries.at(i)
-        );
-        ExpectDatasetEquals(
-            first_input.replica_datasets.at(i),
-            second_input.replica_datasets.at(i)
-        );
-        ExpectDatasetMatchesSamplingEntries(
-            first_input.replica_datasets.at(i),
-            first_input.replica_sampling_entries.at(i)
         );
     }
 }
@@ -142,8 +99,6 @@ TEST(TestDataFactoryTest, BuildBetaTestInputChangesWhenOutlierPolicyChanges)
     const auto baseline_input{ tdf::BuildBetaTestInput(base_scenario) };
     const auto outlier_input{ tdf::BuildBetaTestInput(outlier_scenario) };
 
-    ASSERT_EQ(baseline_input.replica_datasets.size(), 1u);
-    ASSERT_EQ(outlier_input.replica_datasets.size(), 1u);
     ASSERT_EQ(baseline_input.replica_sampling_entries.size(), 1u);
     ASSERT_EQ(outlier_input.replica_sampling_entries.size(), 1u);
     ASSERT_FALSE(baseline_input.replica_sampling_entries.front().empty());
@@ -151,10 +106,6 @@ TEST(TestDataFactoryTest, BuildBetaTestInputChangesWhenOutlierPolicyChanges)
     EXPECT_NE(
         baseline_input.replica_sampling_entries.front().front().response,
         outlier_input.replica_sampling_entries.front().front().response
-    );
-    EXPECT_NE(
-        baseline_input.replica_datasets.front().y(0),
-        outlier_input.replica_datasets.front().y(0)
     );
 }
 
@@ -175,8 +126,6 @@ TEST(TestDataFactoryTest, BuildBetaTestInputChangesWhenNoisePolicyChanges)
     const auto noiseless_input{ tdf::BuildBetaTestInput(noiseless_scenario) };
     const auto noisy_input{ tdf::BuildBetaTestInput(noisy_scenario) };
 
-    ASSERT_EQ(noiseless_input.replica_datasets.size(), 1u);
-    ASSERT_EQ(noisy_input.replica_datasets.size(), 1u);
     ASSERT_EQ(noiseless_input.replica_sampling_entries.size(), 1u);
     ASSERT_EQ(noisy_input.replica_sampling_entries.size(), 1u);
     ASSERT_FALSE(noiseless_input.replica_sampling_entries.front().empty());
@@ -184,10 +133,6 @@ TEST(TestDataFactoryTest, BuildBetaTestInputChangesWhenNoisePolicyChanges)
     EXPECT_NE(
         noiseless_input.replica_sampling_entries.front().front().response,
         noisy_input.replica_sampling_entries.front().front().response
-    );
-    EXPECT_NE(
-        noiseless_input.replica_datasets.front().y(0),
-        noisy_input.replica_datasets.front().y(0)
     );
 }
 
@@ -212,26 +157,14 @@ TEST(TestDataFactoryTest, BuildBetaTestInputUsesExpectedZeroDistanceGaussianResp
         }, options)
     };
 
-    ASSERT_EQ(input.replica_datasets.size(), 1u);
     ASSERT_EQ(input.replica_sampling_entries.size(), 1u);
     ASSERT_EQ(input.replica_sampling_entries.front().size(), 1u);
-    const auto & dataset{ input.replica_datasets.front() };
-    ASSERT_EQ(dataset.X.rows(), 1);
-    ASSERT_EQ(dataset.X.cols(), 2);
-    ASSERT_EQ(dataset.y.rows(), 1);
-    EXPECT_DOUBLE_EQ(dataset.X(0, 0), 1.0);
-    EXPECT_DOUBLE_EQ(dataset.X(0, 1), 0.0);
+    EXPECT_FLOAT_EQ(0.0f, input.replica_sampling_entries.front().front().point.distance);
 
     const auto expected_response{
         amplitude * ComputeExpectedGaussianResponseAtDistance3D(0.0, width) + intercept
     };
     EXPECT_NEAR(expected_response, input.replica_sampling_entries.front().front().response, 1.0e-7);
-    EXPECT_NEAR(std::log(static_cast<float>(expected_response)), dataset.y(0), 1.0e-7);
-    ExpectDatasetMatchesSamplingEntries(
-        dataset,
-        input.replica_sampling_entries.front(),
-        options.fit_range_min,
-        options.fit_range_max);
 }
 
 TEST(TestDataFactoryTest, BuildMuTestInputIsReproducibleWithFixedSeed)
@@ -270,7 +203,7 @@ TEST(TestDataFactoryTest, BuildMuTestInputIsReproducibleWithFixedSeed)
     }
 }
 
-TEST(TestDataFactoryTest, BuildAtomNeighborhoodTestInputProvidesPairedDatasetsAndIsReproducible)
+TEST(TestDataFactoryTest, BuildAtomNeighborhoodTestInputProvidesPairedSamplesAndIsReproducible)
 {
     const auto scenario{ tdf::AtomNeighborhoodScenario{
         tdf::AtomNeighborType::O,
@@ -287,8 +220,6 @@ TEST(TestDataFactoryTest, BuildAtomNeighborhoodTestInputProvidesPairedDatasetsAn
     const auto input{ tdf::BuildAtomNeighborhoodTestInput(scenario) };
     const auto repeated_input{ tdf::BuildAtomNeighborhoodTestInput(scenario) };
 
-    ASSERT_EQ(input.no_cut_input.replica_datasets.size(), 2u);
-    ASSERT_EQ(input.cut_input.replica_datasets.size(), 2u);
     ASSERT_EQ(input.no_cut_input.replica_sampling_entries.size(), 2u);
     ASSERT_EQ(input.cut_input.replica_sampling_entries.size(), 2u);
     EXPECT_TRUE(input.no_cut_input.gaus_true.ToVector().isApprox(MakeVector({ 1.0, 0.5, 0.0 })));
@@ -317,30 +248,18 @@ TEST(TestDataFactoryTest, BuildAtomNeighborhoodTestInputProvidesPairedDatasetsAn
     }
     EXPECT_TRUE(has_sample_beyond_default_fit_range);
 
-    for (size_t i = 0; i < input.no_cut_input.replica_datasets.size(); i++)
+    for (size_t i = 0; i < input.no_cut_input.replica_sampling_entries.size(); i++)
     {
         EXPECT_LE(
-            input.cut_input.replica_datasets.at(i).y.rows(),
-            input.no_cut_input.replica_datasets.at(i).y.rows()
+            input.cut_input.replica_sampling_entries.at(i).size(),
+            input.no_cut_input.replica_sampling_entries.at(i).size()
         );
-        ExpectDatasetMatchesSamplingEntries(
-            input.no_cut_input.replica_datasets.at(i),
-            input.no_cut_input.replica_sampling_entries.at(i));
-        ExpectDatasetMatchesSamplingEntries(
-            input.cut_input.replica_datasets.at(i),
-            input.cut_input.replica_sampling_entries.at(i));
         ExpectSamplingEntriesEquals(
             input.no_cut_input.replica_sampling_entries.at(i),
             repeated_input.no_cut_input.replica_sampling_entries.at(i));
         ExpectSamplingEntriesEquals(
             input.cut_input.replica_sampling_entries.at(i),
             repeated_input.cut_input.replica_sampling_entries.at(i));
-        ExpectDatasetEquals(
-            input.no_cut_input.replica_datasets.at(i),
-            repeated_input.no_cut_input.replica_datasets.at(i));
-        ExpectDatasetEquals(
-            input.cut_input.replica_datasets.at(i),
-            repeated_input.cut_input.replica_datasets.at(i));
     }
     for (size_t i = 0; i < input.sampling_summaries.size(); i++)
     {
