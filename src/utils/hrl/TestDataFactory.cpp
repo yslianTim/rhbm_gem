@@ -3,7 +3,6 @@
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/SampleFilter.hpp>
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
-#include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
 
@@ -11,7 +10,6 @@
 #include <cmath>
 #include <cstddef>
 #include <random>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -80,56 +78,41 @@ AtomNeighborContribution MakeAtomNeighborContribution(
 
 std::vector<AtomNeighborContribution> BuildAtomNeighborList(const Spot & spot)
 {
-    std::vector<AtomNeighborContribution> neighbor_list;
-    neighbor_list.reserve(4);
-
-    if (spot == Spot::UNK)
+    switch (spot)
     {
-        return neighbor_list;
+    case Spot::O:
+        return {
+            MakeAtomNeighborContribution(Eigen::Vector3d{ 1.0, 0.0, 0.0 }, 1.23, 6.0 / 8.0)
+        };
+    case Spot::N:
+        return {
+            MakeAtomNeighborContribution(Eigen::Vector3d{ 1.0, 0.0, 0.0 }, 1.02, 1.0 / 7.0),
+            MakeAtomNeighborContribution(
+                Eigen::Vector3d{ -0.5, std::sqrt(3) / 2.0, 0.0 }, 1.48, 6.0 / 7.0),
+            MakeAtomNeighborContribution(
+                Eigen::Vector3d{ -0.5, -std::sqrt(3) / 2.0, 0.0 }, 1.48, 6.0 / 7.0)
+        };
+    case Spot::C:
+        return {
+            MakeAtomNeighborContribution(Eigen::Vector3d{ 1.0, 0.0, 0.0 }, 1.23, 8.0 / 6.0),
+            MakeAtomNeighborContribution(
+                Eigen::Vector3d{ -0.5, std::sqrt(3) / 2.0, 0.0 }, 1.48, 7.0 / 6.0),
+            MakeAtomNeighborContribution(
+                Eigen::Vector3d{ -0.5, -std::sqrt(3) / 2.0, 0.0 }, 1.54, 1.0)
+        };
+    case Spot::CA:
+        return {
+            MakeAtomNeighborContribution(Eigen::Vector3d{ 0.0, 0.0, 1.0 }, 1.06, 1.0 / 6.0),
+            MakeAtomNeighborContribution(
+                Eigen::Vector3d{ 0.0, 2.0 * std::sqrt(2) / 3.0, -1.0 / 3.0 }, 1.48, 7.0 / 6.0),
+            MakeAtomNeighborContribution(
+                Eigen::Vector3d{ -std::sqrt(6) / 3.0, -std::sqrt(2) / 3.0, -1.0 / 3.0 }, 1.54, 1.0),
+            MakeAtomNeighborContribution(
+                Eigen::Vector3d{ std::sqrt(6) / 3.0, -std::sqrt(2) / 3.0, -1.0 / 3.0 }, 1.54, 1.0)
+        };
+    default:
+        return {};
     }
-
-    if (spot == Spot::O)
-    {
-        neighbor_list.emplace_back(MakeAtomNeighborContribution(
-            Eigen::Vector3d{ 1.0, 0.0, 0.0 }, 1.23, 6.0 / 8.0));
-        return neighbor_list;
-    }
-
-    if (spot == Spot::N)
-    {
-        neighbor_list.emplace_back(MakeAtomNeighborContribution(
-            Eigen::Vector3d{ 1.0, 0.0, 0.0 }, 1.02, 1.0 / 7.0));
-        neighbor_list.emplace_back(MakeAtomNeighborContribution(
-            Eigen::Vector3d{ -0.5, std::sqrt(3) / 2.0, 0.0 }, 1.48, 6.0 / 7.0));
-        neighbor_list.emplace_back(MakeAtomNeighborContribution(
-            Eigen::Vector3d{ -0.5, -std::sqrt(3) / 2.0, 0.0 }, 1.48, 6.0 / 7.0));
-        return neighbor_list;
-    }
-
-    if (spot == Spot::C)
-    {
-        neighbor_list.emplace_back(MakeAtomNeighborContribution(
-            Eigen::Vector3d{ 1.0, 0.0, 0.0 }, 1.23, 8.0 / 6.0));
-        neighbor_list.emplace_back(MakeAtomNeighborContribution(
-            Eigen::Vector3d{ -0.5, std::sqrt(3) / 2.0, 0.0 }, 1.48, 7.0 / 6.0));
-        neighbor_list.emplace_back(MakeAtomNeighborContribution(
-            Eigen::Vector3d{ -0.5, -std::sqrt(3) / 2.0, 0.0 }, 1.54, 1.0));
-        return neighbor_list;
-    }
-
-    if (spot == Spot::CA)
-    {
-        neighbor_list.emplace_back(MakeAtomNeighborContribution(
-            Eigen::Vector3d{ 0.0, 0.0, 1.0 }, 1.06, 1.0 / 6.0));
-        neighbor_list.emplace_back(MakeAtomNeighborContribution(
-            Eigen::Vector3d{ 0.0, 2.0 * std::sqrt(2) / 3.0, -1.0 / 3.0 }, 1.48, 7.0 / 6.0));
-        neighbor_list.emplace_back(MakeAtomNeighborContribution(
-            Eigen::Vector3d{ -std::sqrt(6) / 3.0, -std::sqrt(2) / 3.0, -1.0 / 3.0 }, 1.54, 1.0));
-        neighbor_list.emplace_back(MakeAtomNeighborContribution(
-            Eigen::Vector3d{ std::sqrt(6) / 3.0, -std::sqrt(2) / 3.0, -1.0 / 3.0 }, 1.54, 1.0));
-        return neighbor_list;
-    }
-    return neighbor_list;
 }
 
 LocalPotentialSampleList GenerateRadialSamples(
@@ -234,7 +217,7 @@ LocalPotentialSampleList BuildGaussianSampling(
     return sampling_entries;
 }
 
-LocalPotentialSampleList AddLogQuadraticNoise(
+LocalPotentialSampleList ApplyLogQuadraticNoise(
     LocalPotentialSampleList sampling_entries,
     const GaussianModel3D & model,
     double error_sigma,
@@ -250,56 +233,31 @@ LocalPotentialSampleList AddLogQuadraticNoise(
     return sampling_entries;
 }
 
-LocalPotentialSampleList AddNoise(
-    LocalPotentialSampleList sampling_entries,
-    const GaussianModel3D & model,
-    double error_sigma,
-    LocalGaussianFitModel fit_model,
-    std::mt19937 & generator)
-{
-    if (fit_model != LocalGaussianFitModel::LogQuadratic)
-    {
-        throw std::invalid_argument("Unsupported local Gaussian fit model for beta test noise.");
-    }
-    return AddLogQuadraticNoise(std::move(sampling_entries), model, error_sigma, generator);
-}
-
 Eigen::MatrixXd BuildRandomGausParameters(
     int member_size,
-    const Eigen::VectorXd & gaus_prior,
-    const Eigen::VectorXd & gaus_sigma,
-    const Eigen::VectorXd & outlier_prior,
-    const Eigen::VectorXd & outlier_sigma,
+    const GaussianParameterDistribution & inlier_distribution,
+    const GaussianParameterDistribution & outlier_distribution,
     double outlier_ratio,
     std::mt19937 & generator)
 {
     std::uniform_real_distribution<> dist_outlier(0.0, 1.0);
-    std::vector<std::normal_distribution<>> dist_gaus_list;
-    std::vector<std::normal_distribution<>> dist_outlier_list;
-    for (int p = 0; p < GaussianModel3D::ParameterSize(); p++)
-    {
-        std::normal_distribution<> dist_gaus_par(gaus_prior(p), gaus_sigma(p));
-        std::normal_distribution<> dist_outlier_par(outlier_prior(p), outlier_sigma(p));
-        dist_gaus_list.emplace_back(dist_gaus_par);
-        dist_outlier_list.emplace_back(dist_outlier_par);
-    }
-
     Eigen::MatrixXd gaus_par_matrix{
         Eigen::MatrixXd::Zero(GaussianModel3D::ParameterSize(), member_size)
     };
     for (int i = 0; i < member_size; i++)
     {
-        Eigen::VectorXd gaus_par{ Eigen::VectorXd::Zero(GaussianModel3D::ParameterSize()) };
-        Eigen::VectorXd outlier_par{ Eigen::VectorXd::Zero(GaussianModel3D::ParameterSize()) };
-        const bool outlier_flag{ dist_outlier(generator) < outlier_ratio };
+        const auto & distribution{
+            dist_outlier(generator) < outlier_ratio ? outlier_distribution : inlier_distribution
+        };
+        Eigen::VectorXd gaus_par{
+            Eigen::VectorXd::Zero(GaussianModel3D::ParameterSize())
+        };
         for (int p = 0; p < GaussianModel3D::ParameterSize(); p++)
         {
-            gaus_par(p) = dist_gaus_list.at(static_cast<size_t>(p))(generator);
-            outlier_par(p) = dist_outlier_list.at(static_cast<size_t>(p))(generator);
-            if (outlier_flag)
-            {
-                gaus_par(p) = outlier_par(p);
-            }
+            std::normal_distribution<> dist_par(
+                distribution.mean.GetModelParameter(p),
+                distribution.sigma.GetModelParameter(p));
+            gaus_par(p) = dist_par(generator);
         }
         gaus_par_matrix.col(i) = gaus_par;
     }
@@ -308,36 +266,20 @@ Eigen::MatrixXd BuildRandomGausParameters(
 
 std::vector<LocalPotentialSampleList> BuildMuMemberSamplingEntries(
     const Eigen::MatrixXd & gaus_array,
+    size_t sampling_entry_size,
     std::mt19937 & generator)
 {
-    static constexpr size_t kMuMemberSamplingEntrySize{ 10 };
     std::vector<LocalPotentialSampleList> member_sampling_entries;
     member_sampling_entries.reserve(static_cast<std::size_t>(gaus_array.cols()));
     for (Eigen::Index i = 0; i < gaus_array.cols(); i++)
     {
         member_sampling_entries.emplace_back(
             GenerateRadialSamples(
-                kMuMemberSamplingEntrySize,
+                sampling_entry_size,
                 GaussianModel3D::FromVector(gaus_array.col(i)),
                 generator));
     }
     return member_sampling_entries;
-}
-
-test_data_factory::LocalTestData MakeLocalTestDataShell(
-    const GaussianModel3D & gaus_true,
-    const std::vector<double> & requested_alpha_r_list,
-    bool alpha_training,
-    LocalGaussianFitModel local_fit_model,
-    int replica_size)
-{
-    test_data_factory::LocalTestData input;
-    input.gaus_true = gaus_true;
-    input.requested_alpha_r_list = requested_alpha_r_list;
-    input.alpha_training = alpha_training;
-    input.local_fit_model = local_fit_model;
-    input.replica_sampling_entries.reserve(static_cast<size_t>(replica_size));
-    return input;
 }
 } // namespace
 
@@ -347,14 +289,9 @@ LocalTestData BuildLocalTestData(const LocalScenario & scenario)
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
     GaussianModel3D::RequireFinitePositiveWidthModel(scenario.gaus_true, "scenario.gaus_true");
 
-    auto input{
-        MakeLocalTestDataShell(
-            scenario.gaus_true,
-            scenario.requested_alpha_r_list,
-            scenario.alpha_training,
-            scenario.local_fit_model,
-            scenario.replica_size)
-    };
+    LocalTestData input;
+    input.gaus_true = scenario.gaus_true;
+    input.replica_sampling_entries.reserve(static_cast<size_t>(scenario.replica_size));
 
     for (int i = 0; i < scenario.replica_size; i++)
     {
@@ -367,11 +304,10 @@ LocalTestData BuildLocalTestData(const LocalScenario & scenario)
                 generator)
         };
         auto noisy_sampling_entries{
-            AddNoise(
+            ApplyLogQuadraticNoise(
                 std::move(sampling_entries),
                 scenario.gaus_true,
                 scenario.data_error_sigma,
-                scenario.local_fit_model,
                 generator)
         };
         input.replica_sampling_entries.emplace_back(std::move(noisy_sampling_entries));
@@ -383,28 +319,23 @@ LocalTestData BuildLocalTestData(const LocalScenario & scenario)
 GroupTestData BuildGroupTestData(const GroupScenario & scenario)
 {
     numeric_validation::RequirePositive(scenario.member_size, "member_size");
+    numeric_validation::RequirePositive(scenario.sampling_entry_size, "sampling_entry_size");
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
-    eigen_validation::RequireVectorSize(
-        scenario.gaus_prior,
-        GaussianModel3D::ParameterSize(),
-        "scenario.gaus_prior");
-    eigen_validation::RequireVectorSize(
-        scenario.gaus_sigma,
-        GaussianModel3D::ParameterSize(),
-        "scenario.gaus_sigma");
-    eigen_validation::RequireVectorSize(
-        scenario.outlier_prior,
-        GaussianModel3D::ParameterSize(),
-        "scenario.outlier_prior");
-    eigen_validation::RequireVectorSize(
-        scenario.outlier_sigma,
-        GaussianModel3D::ParameterSize(),
-        "scenario.outlier_sigma");
+    GaussianModel3D::RequireFinitePositiveWidthModel(
+        scenario.inlier_distribution.mean,
+        "scenario.inlier_distribution.mean");
+    GaussianModel3D::RequireFinitePositiveWidthModel(
+        scenario.outlier_distribution.mean,
+        "scenario.outlier_distribution.mean");
+    GaussianModel3DUncertainty::RequireFiniteNonNegativeUncertainty(
+        scenario.inlier_distribution.sigma,
+        "scenario.inlier_distribution.sigma");
+    GaussianModel3DUncertainty::RequireFiniteNonNegativeUncertainty(
+        scenario.outlier_distribution.sigma,
+        "scenario.outlier_distribution.sigma");
 
     GroupTestData input;
-    input.gaus_true = GaussianModel3D::FromVector(scenario.gaus_prior);
-    input.requested_alpha_g_list = scenario.requested_alpha_g_list;
-    input.alpha_training = scenario.alpha_training;
+    input.gaus_true = scenario.inlier_distribution.mean;
     input.replica_member_sampling_entries.reserve(static_cast<size_t>(scenario.replica_size));
 
     for (int i = 0; i < scenario.replica_size; i++)
@@ -413,16 +344,17 @@ GroupTestData BuildGroupTestData(const GroupScenario & scenario)
         const auto random_gaus_array{
             BuildRandomGausParameters(
                 scenario.member_size,
-                scenario.gaus_prior,
-                scenario.gaus_sigma,
-                scenario.outlier_prior,
-                scenario.outlier_sigma,
+                scenario.inlier_distribution,
+                scenario.outlier_distribution,
                 scenario.outlier_ratio,
                 generator
             )
         };
         input.replica_member_sampling_entries.emplace_back(
-            BuildMuMemberSamplingEntries(random_gaus_array, generator));
+            BuildMuMemberSamplingEntries(
+                random_gaus_array,
+                static_cast<size_t>(scenario.sampling_entry_size),
+                generator));
     }
 
     return input;
@@ -434,18 +366,10 @@ AtomModelTestData BuildAtomModelTestData(const AtomModelScenario & scenario)
     GaussianModel3D::RequireFinitePositiveWidthModel(scenario.gaus_true, "scenario.gaus_true");
 
     AtomModelTestData input;
-    input.no_cut_input = MakeLocalTestDataShell(
-        scenario.gaus_true,
-        scenario.requested_alpha_r_list,
-        scenario.alpha_training,
-        scenario.local_fit_model,
-        scenario.replica_size);
-    input.cut_input = MakeLocalTestDataShell(
-        scenario.gaus_true,
-        scenario.requested_alpha_r_list,
-        scenario.alpha_training,
-        scenario.local_fit_model,
-        scenario.replica_size);
+    input.no_cut_input.gaus_true = scenario.gaus_true;
+    input.no_cut_input.replica_sampling_entries.reserve(static_cast<size_t>(scenario.replica_size));
+    input.cut_input.gaus_true = scenario.gaus_true;
+    input.cut_input.replica_sampling_entries.reserve(static_cast<size_t>(scenario.replica_size));
 
     for (int i = 0; i < scenario.replica_size; i++)
     {
@@ -456,17 +380,15 @@ AtomModelTestData BuildAtomModelTestData(const AtomModelScenario & scenario)
         auto cut_sampling_entries{
             GenerateAtomModelSamples(scenario.gaus_true, scenario.spot, scenario.rejected_angle)
         };
-        no_cut_sampling_entries = AddNoise(
+        no_cut_sampling_entries = ApplyLogQuadraticNoise(
             std::move(no_cut_sampling_entries),
             scenario.gaus_true,
             scenario.data_error_sigma,
-            scenario.local_fit_model,
             generator);
-        cut_sampling_entries = AddNoise(
+        cut_sampling_entries = ApplyLogQuadraticNoise(
             std::move(cut_sampling_entries),
             scenario.gaus_true,
             scenario.data_error_sigma,
-            scenario.local_fit_model,
             generator);
         input.no_cut_input.replica_sampling_entries.emplace_back(std::move(no_cut_sampling_entries));
         input.cut_input.replica_sampling_entries.emplace_back(std::move(cut_sampling_entries));

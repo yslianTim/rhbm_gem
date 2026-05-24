@@ -2,7 +2,6 @@
 
 #include <cmath>
 #include <cstddef>
-#include <initializer_list>
 #include <stdexcept>
 #include <vector>
 
@@ -13,15 +12,11 @@ namespace {
 namespace tdf = rhbm_gem::test_data_factory;
 namespace rg = rhbm_gem;
 
-Eigen::VectorXd MakeVector(std::initializer_list<double> values)
+tdf::GaussianParameterDistribution MakeDistribution(
+    const rg::GaussianModel3D & mean,
+    const rg::GaussianModel3DUncertainty & sigma = rg::GaussianModel3DUncertainty{ 0.05, 0.025, 0.01 })
 {
-    Eigen::VectorXd result(static_cast<Eigen::Index>(values.size()));
-    Eigen::Index index{ 0 };
-    for (double value : values)
-    {
-        result(index++) = value;
-    }
-    return result;
+    return tdf::GaussianParameterDistribution{ mean, sigma };
 }
 
 double ComputeExpectedGaussianResponseAtDistance3D(double distance, double width)
@@ -159,10 +154,9 @@ TEST(TestDataFactoryTest, BuildGroupTestDataIsReproducibleWithFixedSeed)
 {
     const auto scenario{ tdf::GroupScenario{
         4,
-        MakeVector({ 1.0, 0.5, 0.1 }),
-        MakeVector({ 0.05, 0.025, 0.01 }),
-        MakeVector({ 1.5, 0.5, 0.1 }),
-        MakeVector({ 0.05, 0.025, 0.01 }),
+        10,
+        MakeDistribution(rg::GaussianModel3D{ 1.0, 0.5, 0.1 }),
+        MakeDistribution(rg::GaussianModel3D{ 1.5, 0.5, 0.1 }),
         0.2,
         3,
         77
@@ -191,6 +185,25 @@ TEST(TestDataFactoryTest, BuildGroupTestDataIsReproducibleWithFixedSeed)
     }
 }
 
+TEST(TestDataFactoryTest, BuildGroupTestDataUsesDefaultSamplingEntrySize)
+{
+    tdf::GroupScenario scenario;
+    scenario.member_size = 2;
+    scenario.inlier_distribution = MakeDistribution(rg::GaussianModel3D{ 1.0, 0.5, 0.1 });
+    scenario.outlier_distribution = MakeDistribution(rg::GaussianModel3D{ 1.5, 0.5, 0.1 });
+    scenario.replica_size = 1;
+    scenario.random_seed = 77;
+
+    const auto input{ tdf::BuildGroupTestData(scenario) };
+
+    ASSERT_EQ(input.replica_member_sampling_entries.size(), 1u);
+    ASSERT_EQ(input.replica_member_sampling_entries.front().size(), 2u);
+    for (const auto & member_samples : input.replica_member_sampling_entries.front())
+    {
+        EXPECT_EQ(member_samples.size(), 10u);
+    }
+}
+
 TEST(TestDataFactoryTest, BuildTestDataRejectNonPositiveGaussianWidth)
 {
     EXPECT_THROW(
@@ -215,15 +228,27 @@ TEST(TestDataFactoryTest, BuildTestDataRejectNonPositiveGaussianWidth)
         std::invalid_argument);
 }
 
-TEST(TestDataFactoryTest, BuildGroupTestDataRejectsInvalidGaussianVectorSize)
+TEST(TestDataFactoryTest, BuildGroupTestDataRejectsInvalidGaussianDistribution)
 {
     EXPECT_THROW(
         tdf::BuildGroupTestData(tdf::GroupScenario{
             4,
-            MakeVector({ 1.0, 0.5 }),
-            MakeVector({ 0.05, 0.025, 0.01 }),
-            MakeVector({ 1.5, 0.5, 0.1 }),
-            MakeVector({ 0.05, 0.025, 0.01 }),
+            10,
+            MakeDistribution(rg::GaussianModel3D{ 1.0, 0.0, 0.1 }),
+            MakeDistribution(rg::GaussianModel3D{ 1.5, 0.5, 0.1 }),
+            0.2,
+            1,
+            77
+        }),
+        std::invalid_argument);
+    EXPECT_THROW(
+        tdf::BuildGroupTestData(tdf::GroupScenario{
+            4,
+            10,
+            MakeDistribution(
+                rg::GaussianModel3D{ 1.0, 0.5, 0.1 },
+                rg::GaussianModel3DUncertainty{ 0.05, -0.025, 0.01 }),
+            MakeDistribution(rg::GaussianModel3D{ 1.5, 0.5, 0.1 }),
             0.2,
             1,
             77

@@ -86,12 +86,8 @@ BiasStatistics FinalizeBiasStatistics(const Eigen::MatrixXd & bias_matrix)
 
 BetaMDPDETestBias RunBetaMDPDETest(
     const test_data_factory::LocalTestData & input,
-    int thread_size)
+    const BetaMDPDETestOptions & options)
 {
-#ifndef USE_OPENMP
-    (void)thread_size;
-#endif
-
     GaussianModel3D::RequireFiniteModel(input.gaus_true, "input.gaus_true");
     const auto replica_size{ static_cast<int>(input.replica_sampling_entries.size()) };
     if (replica_size <= 0)
@@ -99,7 +95,7 @@ BetaMDPDETestBias RunBetaMDPDETest(
         throw std::invalid_argument("input.replica_sampling_entries must not be empty");
     }
 
-    const auto local_alpha_r_list{ input.requested_alpha_r_list };
+    const auto local_alpha_r_list{ options.requested_alpha_r_list };
     Eigen::MatrixXd bias_matrix_ols{
         Eigen::MatrixXd::Zero(GaussianModel3D::ParameterSize(), replica_size)
     };
@@ -109,17 +105,17 @@ BetaMDPDETestBias RunBetaMDPDETest(
     );
     Eigen::MatrixXd bias_matrix_mdpde_trained;
     std::vector<double> trained_alpha_list;
-    if (input.alpha_training)
+    if (options.alpha_training)
     {
         bias_matrix_mdpde_trained = Eigen::MatrixXd::Zero(GaussianModel3D::ParameterSize(), replica_size);
         trained_alpha_list.assign(static_cast<size_t>(replica_size), 0.0);
     }
 
     gaussian_estimator::FitOptions estimator_options;
-    estimator_options.local_fit_model = input.local_fit_model;
+    estimator_options.local_fit_model = LocalGaussianFitModel::LogQuadratic;
 
 #ifdef USE_OPENMP
-    #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
+    #pragma omp parallel for schedule(dynamic) num_threads(options.thread_size)
 #endif
     for (int i = 0; i < replica_size; i++)
     {
@@ -141,7 +137,7 @@ BetaMDPDETestBias RunBetaMDPDETest(
             bias_matrix_mdpde_requested_list.at(j).col(i) = replica_result.mdpde_bias;
         }
 
-        if (input.alpha_training)
+        if (options.alpha_training)
         {
             const auto trained_alpha_r{
                 gaussian_estimator::TrainAlphaR(
@@ -157,7 +153,7 @@ BetaMDPDETestBias RunBetaMDPDETest(
     }
 
     double trained_alpha_average{ 0.0 };
-    if (input.alpha_training)
+    if (options.alpha_training)
     {
         for (const auto trained_alpha : trained_alpha_list)
         {
@@ -176,7 +172,7 @@ BetaMDPDETestBias RunBetaMDPDETest(
     }
     result.mdpde.trained_alpha.reset();
     result.mdpde.trained_alpha_average.reset();
-    if (input.alpha_training)
+    if (options.alpha_training)
     {
         result.mdpde.trained_alpha = FinalizeBiasStatistics(bias_matrix_mdpde_trained);
         result.mdpde.trained_alpha_average = trained_alpha_average;
@@ -187,12 +183,8 @@ BetaMDPDETestBias RunBetaMDPDETest(
 
 MuMDPDETestBias RunMuMDPDETest(
     const test_data_factory::GroupTestData & input,
-    int thread_size)
+    const MuMDPDETestOptions & options)
 {
-#ifndef USE_OPENMP
-    (void)thread_size;
-#endif
-
     GaussianModel3D::RequireFiniteModel(input.gaus_true, "input.gaus_true");
     const auto replica_size{ static_cast<int>(input.replica_member_sampling_entries.size()) };
     if (replica_size <= 0)
@@ -200,7 +192,7 @@ MuMDPDETestBias RunMuMDPDETest(
         throw std::invalid_argument("input.replica_member_sampling_entries must not be empty");
     }
 
-    const auto local_alpha_g_list{ input.requested_alpha_g_list };
+    const auto local_alpha_g_list{ options.requested_alpha_g_list };
     Eigen::MatrixXd bias_matrix_median{
         Eigen::MatrixXd::Zero(GaussianModel3D::ParameterSize(), replica_size)
     };
@@ -210,7 +202,7 @@ MuMDPDETestBias RunMuMDPDETest(
     );
     Eigen::MatrixXd bias_matrix_mdpde_trained;
     std::vector<double> trained_alpha_list;
-    if (input.alpha_training)
+    if (options.alpha_training)
     {
         bias_matrix_mdpde_trained =
             Eigen::MatrixXd::Zero(GaussianModel3D::ParameterSize(), replica_size);
@@ -220,7 +212,7 @@ MuMDPDETestBias RunMuMDPDETest(
     const gaussian_estimator::FitOptions estimator_options;
 
 #ifdef USE_OPENMP
-    #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
+    #pragma omp parallel for schedule(dynamic) num_threads(options.thread_size)
 #endif
     for (int i = 0; i < replica_size; i++)
     {
@@ -253,7 +245,7 @@ MuMDPDETestBias RunMuMDPDETest(
             bias_matrix_mdpde_requested_list.at(j).col(i) = replica_result.mdpde_bias;
         }
 
-        if (input.alpha_training)
+        if (options.alpha_training)
         {
             const auto trained_alpha_g{
                 gaussian_estimator::TrainAlphaG(
@@ -275,7 +267,7 @@ MuMDPDETestBias RunMuMDPDETest(
     }
 
     double trained_alpha_average{ 0.0 };
-    if (input.alpha_training)
+    if (options.alpha_training)
     {
         for (const auto trained_alpha : trained_alpha_list)
         {
@@ -294,7 +286,7 @@ MuMDPDETestBias RunMuMDPDETest(
     }
     result.mdpde.trained_alpha.reset();
     result.mdpde.trained_alpha_average.reset();
-    if (input.alpha_training)
+    if (options.alpha_training)
     {
         result.mdpde.trained_alpha = FinalizeBiasStatistics(bias_matrix_mdpde_trained);
         result.mdpde.trained_alpha_average = trained_alpha_average;
