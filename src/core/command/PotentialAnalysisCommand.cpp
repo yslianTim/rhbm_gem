@@ -279,7 +279,7 @@ void RunLocalPotentialFitting(ModelObject & model_object, const gaussian_estimat
     }
 
     // Iterate
-    const size_t iter_size{ 10 };
+    const size_t iter_size{ 5 };
     std::vector<LocalPotentialSampleList> updated_sample_entries_list(selected_atom_size);
     Logger::Log(LogLevel::Info, "Run updated local atom fitting with iterations...");
     for (size_t iter = 0; iter < iter_size; iter++)
@@ -335,7 +335,10 @@ void RunAtomAlphaTraining(ModelObject & model_object, const PotentialAnalysisReq
             const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
             const auto & sample_entries{ local_view.GetSamplingEntries() };
             if (!HasEnoughSamplesInFitRange(
-                sample_entries, request.fit_range_min, request.fit_range_max, 10)) continue;
+                    sample_entries,
+                    request.fit_range_min,
+                    request.fit_range_max,
+                    10)) continue;
             selected_sample_entries_list.emplace_back(sample_entries);
         }
         selected_sample_entries_list.shrink_to_fit();
