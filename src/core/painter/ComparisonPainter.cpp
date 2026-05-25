@@ -769,10 +769,18 @@ void ComparisonPainter::BuildGausRatioToResolutionGraph(
         if (!entry_view.HasAtomGroup(group_key, class_key)) continue;
         if (!entry_view.HasAtomGroup(ref_group_key, class_key)) continue;
         auto x_value{ model_object->GetResolution() };
-        auto y_value{ entry_view.GetAtomGausEstimatePrior(group_key, class_key, par_id) };
-        auto y_error{ entry_view.GetAtomGausPriorStandardDeviation(group_key, class_key, par_id) };
-        auto ref_y_value{ entry_view.GetAtomGausEstimatePrior(ref_group_key, class_key, par_id) };
-        auto ref_y_error{ entry_view.GetAtomGausPriorStandardDeviation(ref_group_key, class_key, par_id) };
+        auto y_value{ entry_view.GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(par_id) };
+        auto y_error{
+            entry_view.GetAtomGroupPriorWithUncertainty(group_key, class_key)
+                .GetDisplayStandardDeviation(par_id)
+        };
+        auto ref_y_value{
+            entry_view.GetAtomGroupPrior(ref_group_key, class_key).GetDisplayParameter(par_id)
+        };
+        auto ref_y_error{
+            entry_view.GetAtomGroupPriorWithUncertainty(ref_group_key, class_key)
+                .GetDisplayStandardDeviation(par_id)
+        };
         if (x_value == 0.0 || ref_y_value == 0.0) continue;
         auto ratio{ y_value/ref_y_value };
         auto error{ ratio * std::sqrt(std::pow(y_error/y_value, 2) + std::pow(ref_y_error/ref_y_value, 2)) };
@@ -808,12 +816,23 @@ void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
         const ModelAnalysisView entry_view{ *model_object };
         if (!entry_view.HasAtomGroup(group_key, class_key)) continue;
         if (!entry_view.HasAtomGroup(ref_group_key, class_key)) continue;
-        auto x_value{ entry_view.GetAtomGausEstimatePrior(group_key, class_key, 1) };
-        auto y_value{ entry_view.GetAtomGausEstimatePrior(group_key, class_key, 0) };
-        auto x_error{ entry_view.GetAtomGausPriorStandardDeviation(group_key, class_key, 1) };
-        auto y_error{ entry_view.GetAtomGausPriorStandardDeviation(group_key, class_key, 0) };
-        auto ref_y_value{ entry_view.GetAtomGausEstimatePrior(ref_group_key, class_key, 0) };
-        auto ref_y_error{ entry_view.GetAtomGausPriorStandardDeviation(ref_group_key, class_key, 0) };
+        auto x_value{ entry_view.GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(1) };
+        auto y_value{ entry_view.GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(0) };
+        auto x_error{
+            entry_view.GetAtomGroupPriorWithUncertainty(group_key, class_key)
+                .GetDisplayStandardDeviation(1)
+        };
+        auto y_error{
+            entry_view.GetAtomGroupPriorWithUncertainty(group_key, class_key)
+                .GetDisplayStandardDeviation(0)
+        };
+        auto ref_y_value{
+            entry_view.GetAtomGroupPrior(ref_group_key, class_key).GetDisplayParameter(0)
+        };
+        auto ref_y_error{
+            entry_view.GetAtomGroupPriorWithUncertainty(ref_group_key, class_key)
+                .GetDisplayStandardDeviation(0)
+        };
         if (x_value == 0.0 || ref_y_value == 0.0) continue;
         auto ratio{ y_value/ref_y_value };
         auto error{ ratio * std::sqrt(std::pow(y_error/y_value, 2) + std::pow(ref_y_error/ref_y_value, 2)) };

@@ -6,6 +6,7 @@
 #include "detail/PainterModelAccess.hpp"
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
+#include <rhbm_gem/utils/hrl/LocalPotentialSeries.hpp>
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
@@ -77,8 +78,12 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
 
     const auto atom_entry{ AtomLocalPotentialView::RequireFor(*atom_object) };
     auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom_object) };
-    auto map_value_range{ atom_entry.GetResponseRange(0.3) };
-    auto distance_range{ atom_entry.GetDistanceRange(0.0) };
+    auto map_value_range{
+        local_potential_series::ComputeResponseRange(atom_entry.GetSamplingEntries(), 0.3)
+    };
+    auto distance_range{
+        local_potential_series::ComputeDistanceRange(atom_entry.GetSamplingEntries(), 0.0)
+    };
 
     auto map_value_graph{ atom_plot_builder->CreateDistanceToMapValueGraph() };
     auto map_value_ref_graph{ atom_plot_builder->CreateDistanceToMapValueGraph() };
@@ -235,7 +240,9 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         frame->GetYaxis()->CenterTitle();
         frame->GetXaxis()->SetTitle("Radial Distance #[]{#AA}");
         frame->GetYaxis()->SetTitle("Map Value");
-        auto y_range{ entry_view.GetResponseRange(0.1) };
+        auto y_range{
+            local_potential_series::ComputeResponseRange(entry_view.GetSamplingEntries(), 0.1)
+        };
         auto x_min{ 0.01 };
         auto x_max{ 1.49 };
         auto y_min{ std::get<0>(y_range) };

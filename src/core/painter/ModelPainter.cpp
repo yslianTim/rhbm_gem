@@ -13,6 +13,7 @@
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
+#include <rhbm_gem/utils/hrl/LocalPotentialSeries.hpp>
 #include "detail/PainterModelAccess.hpp"
 #include "detail/PainterSupport.hpp"
 
@@ -39,6 +40,26 @@
 #include <tuple>
 
 namespace rhbm_gem {
+
+namespace {
+
+double ComputeAtomGausEstimateMinimum(
+    const ModelObject & model_object,
+    int par_id,
+    Element element)
+{
+    std::vector<double> gaus_estimate_list;
+    gaus_estimate_list.reserve(model_object.GetSelectedAtomCount());
+    for (const auto * atom : model_object.GetSelectedAtoms())
+    {
+        if (atom->GetElement() != element) continue;
+        gaus_estimate_list.emplace_back(
+            AtomLocalPotentialView::RequireFor(*atom).GetEstimateMDPDE().GetDisplayParameter(par_id));
+    }
+    return array_helper::ComputeMin(gaus_estimate_list.data(), gaus_estimate_list.size());
+}
+
+} // namespace
 
 ModelPainter::ModelPainter() = default;
 
@@ -568,13 +589,16 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
             auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
             root_helper::SetLineAttribute(graph.get(), 1, 2, static_cast<short>(kAzure-7), 0.3f);
             map_value_graph_list[k].emplace_back(std::move(graph));
-            auto map_value_range{ AtomLocalPotentialView::RequireFor(*atom).GetResponseRange(0.0) };
+            const auto atom_view{ AtomLocalPotentialView::RequireFor(*atom) };
+            auto map_value_range{
+                local_potential_series::ComputeResponseRange(atom_view.GetSamplingEntries(), 0.0)
+            };
             y_array.emplace_back(std::get<0>(map_value_range));
             y_array.emplace_back(std::get<1>(map_value_range));
         }
         gaus_function[k] = plot_builder->CreateAtomGroupGausFunctionPrior(group_key, class_key);
-        amplitude_prior[k] = entry_iter->GetAtomGausEstimatePrior(group_key, class_key, 0);
-        width_prior[k] = entry_iter->GetAtomGausEstimatePrior(group_key, class_key, 1);
+        amplitude_prior[k] = entry_iter->GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(0);
+        width_prior[k] = entry_iter->GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(1);
     }
 
     auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.15) };
@@ -936,7 +960,7 @@ void ModelPainter::PaintAtomGausScatterPlot(
     #ifdef HAVE_ROOT
     auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
-    auto amplitude_min{ entry_iter->GetAtomGausEstimateMinimum(0, Element::OXYGEN) };
+    auto amplitude_min{ ComputeAtomGausEstimateMinimum(*model_object, 0, Element::OXYGEN) };
 
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);

@@ -29,6 +29,7 @@ public:
     static GroupKey GetGroupKeyInClass(const AtomObject * atom_object, const std::string & class_key);
     static GroupKey GetGroupKeyInClass(ComponentKey component_key, AtomKey atom_key);
     static GroupKey GetGroupKeyInClass(Structure structure, ComponentKey component_key, AtomKey atom_key);
+    static Residue GetResidueFromGroupKey(GroupKey group_key, const std::string & class_key);
 
     static GroupKey GetMainChainSimpleAtomClassGroupKey(size_t member_id);
     static GroupKey GetMainChainComponentAtomClassGroupKey(size_t member_id, Residue residue);

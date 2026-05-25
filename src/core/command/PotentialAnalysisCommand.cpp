@@ -134,6 +134,19 @@ bool HasEnoughSamplesInFitRange(
     return false;
 }
 
+std::string DescribeAtomGrouping(const ModelAnalysisView & analysis_view)
+{
+    std::string description{ "Atom Grouping Summary:" };
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
+    {
+        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
+        description +=
+            "\n - Class type: " + class_key + " include "
+            + std::to_string(analysis_view.CollectAtomGroupKeys(class_key).size()) + " groups.";
+    }
+    return description;
+}
+
 void RunModelObjectPreprocessing(
     ModelObject & model_object,
     bool asymmetry_flag,
@@ -185,7 +198,7 @@ void RunModelObjectPreprocessing(
 
     Logger::Log(LogLevel::Info,
         "Number of selected atom = " + std::to_string(model_object.GetSelectedAtomCount()));
-    Logger::Log(LogLevel::Info, model_object.GetAnalysisView().DescribeAtomGrouping());
+    Logger::Log(LogLevel::Info, DescribeAtomGrouping(model_object.GetAnalysisView()));
     if (model_object.GetNumberOfAtom() > 0 && model_object.GetSelectedAtomCount() == 0)
     {
         Logger::Log(LogLevel::Warning,

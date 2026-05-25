@@ -243,7 +243,7 @@ Design rules enforced by the current codebase:
 
 - public data headers do not expose mutable analysis internals
 - owner lookup and local/group entry reads go through `ModelAnalysisData`
-- transient dataset / fit-result cleanup goes through `ModelAnalysisData::ClearTransientFitStates()`
+- transient dataset / fit-result cleanup and group rebuild workflows go through `ModelAnalysisEditor`
 - new public forwarding wrappers for analysis data should not be added
 
 ## 9. Spatial Access
@@ -405,5 +405,5 @@ Use this as a quick routing guide when modifying the object system.
 - `BondObject` identity and analysis keys depend on the ordered serial-id pair of its endpoint atoms.
 - `GetSelectedAtoms()` and `GetSelectedBonds()` are cached projections, not the fundamental selection flags.
 - loaded analysis data can change selection state because selection is reconstructed from persisted local entries.
-- `ModelAnalysisData` owns analysis entries, while `ModelDerivedState` owns spatial/cache queries.
+- `ModelAnalysisData` only owns analysis entries; edit workflows stay in `ModelAnalysisEditor`, while `ModelDerivedState` owns spatial/cache queries.
 - `MapSpatialIndex` is external to `MapObject`; do not add map KD-tree state to the public map object unless the architecture intentionally changes.

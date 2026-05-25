@@ -341,8 +341,8 @@ void RunGroupGausEstimatesDumping(
                 const auto atom_id{ model_object->FindAtomID(atom_key) };
                 if (!entry_view.HasAtomGroup(group_key, class_key)) continue;
                 outfile << residue_name << ',' << atom_id << ','
-                        << entry_view.GetAtomGausEstimatePrior(group_key, class_key, 0) << ','
-                        << entry_view.GetAtomGausEstimatePrior(group_key, class_key, 1) << '\n';
+                        << entry_view.GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(0) << ','
+                        << entry_view.GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(1) << '\n';
             }
         }
 

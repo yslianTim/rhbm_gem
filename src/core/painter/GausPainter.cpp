@@ -41,6 +41,27 @@
 
 namespace rhbm_gem {
 
+namespace {
+
+size_t CountOutlierAtoms(
+    const ModelAnalysisView & analysis_view,
+    GroupKey group_key,
+    const std::string & class_key)
+{
+    size_t outlier_count{ 0 };
+    for (auto * atom : analysis_view.GetAtomObjectList(group_key, class_key))
+    {
+        const auto annotation{ AtomLocalPotentialView::RequireFor(*atom).FindAnnotation(class_key) };
+        if (annotation.has_value() && annotation->is_outlier)
+        {
+            outlier_count++;
+        }
+    }
+    return outlier_count;
+}
+
+} // namespace
+
 GausPainter::GausPainter() = default;
 
 GausPainter::~GausPainter()
@@ -120,7 +141,7 @@ void GausPainter::PaintAtomLocalGausSummary(
             if (atom_entry.atom_id == "OXT") continue;
             auto group_key{ AtomClassifier::GetGroupKeyInClass(component_key, atom_key) };
             if (!entry_iter->HasAtomGroup(group_key, class_key)) continue;
-            if (entry_iter->GetAtomObjectMap(group_key, class_key).size() < 1) continue;
+            if (entry_iter->GetAtomObjectList(group_key, class_key).empty()) continue;
 
             auto amplitude_hist{ plot_builder->CreateAtomGausEstimateHistogram(group_key, class_key, 0) };
             auto width_hist{ plot_builder->CreateAtomGausEstimateHistogram(group_key, class_key, 1) };
@@ -155,10 +176,20 @@ void GausPainter::PaintAtomLocalGausSummary(
             root_helper::SetPaveTextDefaultStyle(result_text.get());
             root_helper::SetTextAttribute(result_text.get(), 50.0f, 133, 12, 0.0, kRed);
             root_helper::SetFillAttribute(result_text.get(), 4000);
-            auto amplitude_prior{ entry_iter->GetAtomGausEstimatePrior(group_key, class_key, 0) };
-            auto amplitude_error{ entry_iter->GetAtomGausPriorStandardDeviation(group_key, class_key, 0) };
-            auto width_prior{ entry_iter->GetAtomGausEstimatePrior(group_key, class_key, 1) };
-            auto width_error{ entry_iter->GetAtomGausPriorStandardDeviation(group_key, class_key, 1) };
+            auto amplitude_prior{
+                entry_iter->GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(0)
+            };
+            auto amplitude_error{
+                entry_iter->GetAtomGroupPriorWithUncertainty(group_key, class_key)
+                    .GetDisplayStandardDeviation(0)
+            };
+            auto width_prior{
+                entry_iter->GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(1)
+            };
+            auto width_error{
+                entry_iter->GetAtomGroupPriorWithUncertainty(group_key, class_key)
+                    .GetDisplayStandardDeviation(1)
+            };
             result_text->AddText(Form("#font[2]{#hat{A}} = %.2f #pm %.2f", amplitude_prior, amplitude_error));
             result_text->AddText(Form("#hat{#tau} = %.2f #pm %.2f", width_prior, width_error));
             result_text->Draw();
@@ -232,7 +263,7 @@ void GausPainter::PaintAtomLocalGausSummary(
             pad[1]->cd();
             root_helper::SetPadMarginInCanvas(gPad, 0.10, 0.00, 0.12, 0.10);
             auto member_size{ entry_iter->GetAtomObjectList(group_key, class_key).size() };
-            auto outlier_size{ entry_iter->GetOutlierAtomObjectList(group_key, class_key).size() };
+            auto outlier_size{ CountOutlierAtoms(*entry_iter, group_key, class_key) };
             std::vector<std::unique_ptr<TGraphErrors>> map_value_graph_list;
             std::vector<double> y_array;
             map_value_graph_list.reserve(member_size);
@@ -872,7 +903,7 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
         std::vector<double> global_y_array;
         for (auto & group_key : group_key_list)
         {
-            auto residue{ entry_iter->GetResidueFromAtomGroupKey(group_key, class_key) };
+            auto residue{ AtomClassifier::GetResidueFromGroupKey(group_key, class_key) };
             auto component_key{ static_cast<ComponentKey>(residue) };
             const auto * component_entry{ model_object->FindChemicalComponentEntry(component_key) };
             if (component_entry == nullptr) continue;
@@ -1118,7 +1149,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponentSimple(
     component_id_list.reserve(ChemicalDataHelper::GetStandardAminoAcidCount());
     for (auto & group_key : group_key_list_map.at(Spot::CA))
     {
-        auto residue{ entry_iter->GetResidueFromAtomGroupKey(group_key, class_key) };
+        auto residue{ AtomClassifier::GetResidueFromGroupKey(group_key, class_key) };
         auto component_key{ static_cast<ComponentKey>(residue) };
         const auto * component_entry{ model_object->FindChemicalComponentEntry(component_key) };
         if (component_entry == nullptr) continue;
@@ -1856,7 +1887,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent(
     component_id_list.reserve(ChemicalDataHelper::GetStandardAminoAcidCount());
     for (auto & group_key : group_key_list_map.at(Spot::CA))
     {
-        auto residue{ entry_iter->GetResidueFromAtomGroupKey(group_key, class_key) };
+        auto residue{ AtomClassifier::GetResidueFromGroupKey(group_key, class_key) };
         auto component_key{ static_cast<ComponentKey>(residue) };
         const auto * component_entry{ model_object->FindChemicalComponentEntry(component_key) };
         if (component_entry == nullptr) continue;

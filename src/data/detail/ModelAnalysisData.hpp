@@ -31,18 +31,18 @@ public:
     static const ModelAnalysisData & Of(const ModelObject & model_object);
 
     void Clear();
-    void ClearTransientFitStates();
-    void RebuildAtomGroupEntriesFromSelection(const ModelObject & model_object);
-
     AtomGroupPotentialEntry & EnsureAtomGroupEntry(const std::string & class_key);
     AtomGroupPotentialEntry * FindAtomGroupEntry(const std::string & class_key);
     const AtomGroupPotentialEntry * FindAtomGroupEntry(const std::string & class_key) const;
+    AtomGroupEntryMap & AtomGroupEntries();
     const AtomGroupEntryMap & AtomGroupEntries() const;
 
     LocalPotentialEntry & EnsureAtomLocalEntry(const AtomObject & atom_object);
     void SetAtomLocalEntry(const AtomObject & atom_object, std::unique_ptr<LocalPotentialEntry> entry);
     LocalPotentialEntry * FindAtomLocalEntry(const AtomObject & atom_object);
     const LocalPotentialEntry * FindAtomLocalEntry(const AtomObject & atom_object) const;
+    AtomLocalEntryMap & AtomLocalEntries();
+    const AtomLocalEntryMap & AtomLocalEntries() const;
 
 private:
     static int BuildAtomFitStateKey(const AtomObject & atom_object);

@@ -11,6 +11,7 @@
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/core/painter/GausPainter.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
+#include <rhbm_gem/utils/hrl/LocalPotentialSeries.hpp>
 #include "detail/PainterModelAccess.hpp"
 #include "detail/PainterSupport.hpp"
 
@@ -340,13 +341,16 @@ void DemoPainter::PaintAtomMapValueExample(
         auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
         root_helper::SetLineAttribute(graph.get(), 1, 5, static_cast<short>(kAzure-7), 0.3f);
         map_value_graph_list.emplace_back(std::move(graph));
-        auto map_value_range{ AtomLocalPotentialView::RequireFor(*atom).GetResponseRange(0.0) };
+        const auto atom_view{ AtomLocalPotentialView::RequireFor(*atom) };
+        auto map_value_range{
+            local_potential_series::ComputeResponseRange(atom_view.GetSamplingEntries(), 0.0)
+        };
         y_array.emplace_back(std::get<0>(map_value_range));
         y_array.emplace_back(std::get<1>(map_value_range));
     }
     gaus_function = plot_builder->CreateAtomGroupGausFunctionPrior(group_key, class_key);
-    amplitude_prior = entry_iter->GetAtomGausEstimatePrior(group_key, class_key, 0);
-    width_prior = entry_iter->GetAtomGausEstimatePrior(group_key, class_key, 1);
+    amplitude_prior = entry_iter->GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(0);
+    width_prior = entry_iter->GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(1);
 
 
     auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.15) };
@@ -769,8 +773,16 @@ void DemoPainter::PaintGroupGausToFSC(
         {
             auto entry_iter{ std::make_unique<ModelAnalysisView>(*model) };
             auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model) };
-            auto width_value{ entry_iter->GetAtomGausEstimatePrior(group_key, ChemicalDataHelper::GetSimpleAtomClassKey(), 1) };
-            auto width_error{ entry_iter->GetAtomGausPriorStandardDeviation(group_key, ChemicalDataHelper::GetSimpleAtomClassKey(), 1) };
+            auto width_value{
+                entry_iter->GetAtomGroupPrior(
+                    group_key,
+                    ChemicalDataHelper::GetSimpleAtomClassKey()).GetDisplayParameter(1)
+            };
+            auto width_error{
+                entry_iter->GetAtomGroupPriorWithUncertainty(
+                    group_key,
+                    ChemicalDataHelper::GetSimpleAtomClassKey()).GetDisplayStandardDeviation(1)
+            };
             graph[i]->SetPoint(count, model->GetResolution(), width_value);
             graph[i]->SetPointError(count, 0.0, width_error);
             count++;

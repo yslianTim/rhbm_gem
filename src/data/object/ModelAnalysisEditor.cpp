@@ -1,11 +1,13 @@
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 
 #include "data/detail/GroupPotentialEntry.hpp"
+#include "data/detail/AtomClassifier.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
 
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 
 #include <stdexcept>
 #include <string>
@@ -44,7 +46,14 @@ void ModelAnalysisEditor::Clear()
 
 void ModelAnalysisEditor::ClearTransientFitStates()
 {
-    ModelAnalysisData::Of(m_model_object).ClearTransientFitStates();
+    for (auto & [serial_id, entry] : ModelAnalysisData::Of(m_model_object).AtomLocalEntries())
+    {
+        (void)serial_id;
+        if (entry != nullptr)
+        {
+            entry->ClearTransientFitState();
+        }
+    }
 }
 
 AtomLocalPotentialEditor ModelAnalysisEditor::EnsureAtomLocalPotential(const AtomObject & atom_object)
@@ -55,7 +64,18 @@ AtomLocalPotentialEditor ModelAnalysisEditor::EnsureAtomLocalPotential(const Ato
 
 void ModelAnalysisEditor::RebuildAtomGroupsFromSelection()
 {
-    ModelAnalysisData::Of(m_model_object).RebuildAtomGroupEntriesFromSelection(m_model_object);
+    auto & analysis_data{ ModelAnalysisData::Of(m_model_object) };
+    analysis_data.AtomGroupEntries().clear();
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
+    {
+        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
+        auto & group_entry{ analysis_data.EnsureAtomGroupEntry(class_key) };
+        for (auto * atom : m_model_object.GetSelectedAtoms())
+        {
+            const auto group_key{ AtomClassifier::GetGroupKeyInClass(atom, class_key) };
+            group_entry.AddMember(group_key, *atom);
+        }
+    }
 }
 
 void ModelAnalysisEditor::ApplyAtomGroupGaussianResult(

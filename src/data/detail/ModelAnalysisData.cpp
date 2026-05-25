@@ -1,11 +1,9 @@
 #include "data/detail/ModelAnalysisData.hpp"
 
-#include "data/detail/AtomClassifier.hpp"
 #include "data/detail/GroupPotentialEntry.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 
 #include <string>
 
@@ -26,36 +24,8 @@ const ModelAnalysisData & ModelAnalysisData::Of(const ModelObject & model_object
 
 void ModelAnalysisData::Clear()
 {
-    ClearTransientFitStates();
     m_atom_group_entry_map.clear();
     m_atom_local_entry_map.clear();
-}
-
-void ModelAnalysisData::ClearTransientFitStates()
-{
-    for (auto & [serial_id, entry] : m_atom_local_entry_map)
-    {
-        (void)serial_id;
-        if (entry != nullptr)
-        {
-            entry->ClearTransientFitState();
-        }
-    }
-}
-
-void ModelAnalysisData::RebuildAtomGroupEntriesFromSelection(const ModelObject & model_object)
-{
-    m_atom_group_entry_map.clear();
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
-    {
-        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        auto & group_entry{ EnsureAtomGroupEntry(class_key) };
-        for (auto * atom : model_object.GetSelectedAtoms())
-        {
-            const auto group_key{ AtomClassifier::GetGroupKeyInClass(atom, class_key) };
-            group_entry.AddMember(group_key, *atom);
-        }
-    }
 }
 
 AtomGroupPotentialEntry & ModelAnalysisData::EnsureAtomGroupEntry(const std::string & class_key)
@@ -76,6 +46,11 @@ const AtomGroupPotentialEntry * ModelAnalysisData::FindAtomGroupEntry(
 {
     const auto iter{ m_atom_group_entry_map.find(class_key) };
     return iter == m_atom_group_entry_map.end() ? nullptr : &iter->second;
+}
+
+ModelAnalysisData::AtomGroupEntryMap & ModelAnalysisData::AtomGroupEntries()
+{
+    return m_atom_group_entry_map;
 }
 
 const ModelAnalysisData::AtomGroupEntryMap & ModelAnalysisData::AtomGroupEntries() const
@@ -110,6 +85,16 @@ const LocalPotentialEntry * ModelAnalysisData::FindAtomLocalEntry(const AtomObje
 {
     const auto iter{ m_atom_local_entry_map.find(BuildAtomFitStateKey(atom_object)) };
     return iter == m_atom_local_entry_map.end() || iter->second == nullptr ? nullptr : iter->second.get();
+}
+
+ModelAnalysisData::AtomLocalEntryMap & ModelAnalysisData::AtomLocalEntries()
+{
+    return m_atom_local_entry_map;
+}
+
+const ModelAnalysisData::AtomLocalEntryMap & ModelAnalysisData::AtomLocalEntries() const
+{
+    return m_atom_local_entry_map;
 }
 
 int ModelAnalysisData::BuildAtomFitStateKey(const AtomObject & atom_object)

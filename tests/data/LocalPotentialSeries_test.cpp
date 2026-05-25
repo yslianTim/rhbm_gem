@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <memory>
 #include <string>
 #include <tuple>
@@ -11,9 +12,11 @@
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
+#include <rhbm_gem/utils/hrl/LocalPotentialSeries.hpp>
 
 namespace rg = rhbm_gem;
 namespace ls = rhbm_gem::linearization_service;
+namespace lps = rhbm_gem::local_potential_series;
 
 namespace {
 
@@ -36,38 +39,20 @@ SeriesPointList BuildExpectedDatasetSeries(
         rg::LocalGaussianFitModel::LogQuadratic);
 }
 
-struct LocalPotentialViewFixture
-{
-    std::shared_ptr<rg::ModelObject> model;
-    rg::AtomObject * atom;
-};
-
-LocalPotentialViewFixture MakeLocalPotentialViewFixture(
-    LocalPotentialSampleList sampling_entries)
-{
-    auto model{ LoadModelFixture("test_model_auth_seq_alnum_struct_conn.cif") };
-    auto * atom{ model->GetAtomList().front().get() };
-    auto analysis{ model->EditAnalysis() };
-    auto editor{ analysis.EnsureAtomLocalPotential(*atom) };
-    editor.SetSamplingEntries(std::move(sampling_entries));
-    return LocalPotentialViewFixture{ std::move(model), atom };
-}
-
 } // namespace
 
-TEST(LocalPotentialSeriesTest, ViewComputesRangeAndBinningForDistanceMapSeries)
+TEST(LocalPotentialSeriesTest, ComputesRangeAndBinningForDistanceMapSeries)
 {
-    auto fixture{ MakeLocalPotentialViewFixture({
+    const LocalPotentialSampleList sampling_entries{
         {2.0f, SamplingPoint{ 0.0f }},
         {4.0f, SamplingPoint{ 0.2f }},
         {8.0f, SamplingPoint{ 0.7f }},
         {-1.0f, SamplingPoint{ 1.0f }},
-    }) };
-    const auto view{ rg::AtomLocalPotentialView::RequireFor(*fixture.atom) };
+    };
 
-    const auto distance_range{ view.GetDistanceRange(0.0) };
-    const auto map_value_range{ view.GetResponseRange(0.0) };
-    const auto binned{ view.GetBinnedDistanceResponseSeries(2, 0.0, 1.0) };
+    const auto distance_range{ lps::ComputeDistanceRange(sampling_entries, 0.0) };
+    const auto map_value_range{ lps::ComputeResponseRange(sampling_entries, 0.0) };
+    const auto binned{ lps::BuildBinnedDistanceResponseSeries(sampling_entries, 2, 0.0, 1.0) };
 
     EXPECT_FLOAT_EQ(std::get<0>(distance_range), 0.0f);
     EXPECT_FLOAT_EQ(std::get<1>(distance_range), 1.0f);
@@ -105,17 +90,16 @@ TEST(LocalPotentialSeriesTest, FitDatasetSeriesKeepsFullBasisWithinFitRange)
     EXPECT_NEAR(transformed.at(2).response, std::log(8.0), 1e-6);
 }
 
-TEST(LocalPotentialSeriesTest, ViewBinningRespectsNonZeroMinimum)
+TEST(LocalPotentialSeriesTest, BinningRespectsNonZeroMinimum)
 {
-    auto fixture{ MakeLocalPotentialViewFixture({
+    const LocalPotentialSampleList sampling_entries{
         {1.0f, SamplingPoint{ 0.20f }},
         {4.0f, SamplingPoint{ 0.60f }},
         {6.0f, SamplingPoint{ 0.90f }},
         {8.0f, SamplingPoint{ 1.20f }},
-    }) };
-    const auto view{ rg::AtomLocalPotentialView::RequireFor(*fixture.atom) };
+    };
 
-    const auto binned{ view.GetBinnedDistanceResponseSeries(2, 0.5, 1.5) };
+    const auto binned{ lps::BuildBinnedDistanceResponseSeries(sampling_entries, 2, 0.5, 1.5) };
 
     ASSERT_EQ(binned.size(), 2U);
     EXPECT_FLOAT_EQ(binned.at(0).GetBasisValue(0), 0.75f);
@@ -124,7 +108,7 @@ TEST(LocalPotentialSeriesTest, ViewBinningRespectsNonZeroMinimum)
     EXPECT_FLOAT_EQ(binned.at(1).response, 8.0f);
 }
 
-TEST(LocalPotentialSeriesTest, ViewForwardsSeriesDerivationsFromResolvedEntry)
+TEST(LocalPotentialSeriesTest, PureHelpersWorkWithResolvedEntrySamples)
 {
     auto model{ LoadModelFixture("test_model_auth_seq_alnum_struct_conn.cif") };
     ASSERT_NE(model, nullptr);
@@ -140,8 +124,9 @@ TEST(LocalPotentialSeriesTest, ViewForwardsSeriesDerivationsFromResolvedEntry)
     });
 
     const auto view{ rg::AtomLocalPotentialView::RequireFor(*atom) };
-    const auto map_value_range{ view.GetResponseRange(0.0) };
-    const auto binned{ view.GetBinnedDistanceResponseSeries(2, 0.0, 1.0) };
+    const auto & sampling_entries{ view.GetSamplingEntries() };
+    const auto map_value_range{ lps::ComputeResponseRange(sampling_entries, 0.0) };
+    const auto binned{ lps::BuildBinnedDistanceResponseSeries(sampling_entries, 2, 0.0, 1.0) };
 
     EXPECT_FLOAT_EQ(std::get<0>(map_value_range), 2.0f);
     EXPECT_FLOAT_EQ(std::get<1>(map_value_range), 6.0f);
@@ -160,14 +145,13 @@ TEST(LocalPotentialSeriesTest, ViewForwardsSeriesDerivationsFromResolvedEntry)
     EXPECT_EQ(fit_dataset_series.at(0).GetBasisSize(), 2U);
 }
 
-TEST(LocalPotentialSeriesTest, ViewBinningReturnsZeroResponseForEmptyBins)
+TEST(LocalPotentialSeriesTest, BinningReturnsZeroResponseForEmptyBins)
 {
-    auto fixture{ MakeLocalPotentialViewFixture({
+    const LocalPotentialSampleList sampling_entries{
         {2.0f, SamplingPoint{ 0.10f }},
-    }) };
-    const auto view{ rg::AtomLocalPotentialView::RequireFor(*fixture.atom) };
+    };
 
-    const auto binned{ view.GetBinnedDistanceResponseSeries(2, 0.0, 1.0) };
+    const auto binned{ lps::BuildBinnedDistanceResponseSeries(sampling_entries, 2, 0.0, 1.0) };
 
     ASSERT_EQ(binned.size(), 2U);
     EXPECT_FLOAT_EQ(binned.at(0).response, 2.0f);

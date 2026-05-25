@@ -9,6 +9,7 @@
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
+#include <rhbm_gem/utils/hrl/LocalPotentialSeries.hpp>
 
 #ifdef HAVE_ROOT
 #include <TAxis.h>
@@ -132,12 +133,18 @@ inline void BuildMapValueScatterGraph(
         }
         auto * atom_object2{ model2_atom_map.at(atom_id) };
         auto data1_array{
-            AtomLocalPotentialView::RequireFor(*atom_object1)
-                .GetBinnedDistanceResponseSeries(bin_size, x_min, x_max)
+            local_potential_series::BuildBinnedDistanceResponseSeries(
+                AtomLocalPotentialView::RequireFor(*atom_object1).GetSamplingEntries(),
+                bin_size,
+                x_min,
+                x_max)
         };
         auto data2_array{
-            AtomLocalPotentialView::RequireFor(*atom_object2)
-                .GetBinnedDistanceResponseSeries(bin_size, x_min, x_max)
+            local_potential_series::BuildBinnedDistanceResponseSeries(
+                AtomLocalPotentialView::RequireFor(*atom_object2).GetSamplingEntries(),
+                bin_size,
+                x_min,
+                x_max)
         };
         for (size_t i = 0; i < static_cast<size_t>(bin_size); i++)
         {

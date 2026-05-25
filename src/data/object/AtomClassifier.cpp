@@ -114,6 +114,23 @@ GroupKey AtomClassifier::GetGroupKeyInClass(
     return KeyPackerStructureAtomClass::Pack(structure, component_key, atom_key);
 }
 
+Residue AtomClassifier::GetResidueFromGroupKey(
+    GroupKey group_key,
+    const std::string & class_key)
+{
+    if (class_key == ChemicalDataHelper::GetComponentAtomClassKey())
+    {
+        auto unpack_key{ KeyPackerComponentAtomClass::Unpack(group_key) };
+        return static_cast<Residue>(std::get<0>(unpack_key));
+    }
+    if (class_key == ChemicalDataHelper::GetStructureAtomClassKey())
+    {
+        auto unpack_key{ KeyPackerStructureAtomClass::Unpack(group_key) };
+        return static_cast<Residue>(std::get<1>(unpack_key));
+    }
+    return Residue::UNK;
+}
+
 GroupKey AtomClassifier::GetMainChainSimpleAtomClassGroupKey(size_t id)
 {
     if (IsValidMainChainMemberID(id) == false)
