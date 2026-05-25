@@ -245,9 +245,7 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
     return updated_list;
 }
 
-void RunLocalPotentialFitting(
-    ModelObject & model_object,
-    const gaussian_estimator::FitOptions & options)
+void RunLocalPotentialFitting(ModelObject & model_object, const gaussian_estimator::FitOptions & options)
 {
     const auto selected_atom_size{ model_object.GetSelectedAtomCount() };
     const auto & atom_list{ model_object.GetSelectedAtoms() };
@@ -281,9 +279,10 @@ void RunLocalPotentialFitting(
     }
 
     // Iterate
+    const size_t iter_size{ 10 };
     std::vector<LocalPotentialSampleList> updated_sample_entries_list(selected_atom_size);
     Logger::Log(LogLevel::Info, "Run updated local atom fitting with iterations...");
-    for (size_t iter = 0; iter < 10; iter++)
+    for (size_t iter = 0; iter < iter_size; iter++)
     {
         const auto fitted_gaussian_snapshot{ BuildFittedGaussianSnapshot(atom_list) };
 #ifdef USE_OPENMP
@@ -302,13 +301,13 @@ void RunLocalPotentialFitting(
                     local_view.GetAlphaR(),
                     options)
             };
-
             updated_sample_entries_list[i] = std::move(updated_sample_entries);
             local_editor_list[i].SetGaussianResult(result);
         }
-        Logger::ProgressBar(iter+1, 10);
+        Logger::ProgressBar(iter+1, iter_size);
     }
 
+    // Update the local editor with the final corrected sample entries after iteration.
     for (size_t i = 0; i < selected_atom_size; i++)
     {
         local_editor_list[i].SetSamplingEntries(std::move(updated_sample_entries_list[i]));
