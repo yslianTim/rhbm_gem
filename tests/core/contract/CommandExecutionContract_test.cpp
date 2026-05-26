@@ -5,9 +5,10 @@
 #include <vector>
 
 #include "command/detail/CommandBase.hpp"
-#include <rhbm_gem/core/command/CommandSystem.hpp>
+#include <rhbm_gem/core/CommandSystem.hpp>
 
 using namespace rhbm_gem;
+using namespace rhbm_gem::core;
 
 namespace {
 

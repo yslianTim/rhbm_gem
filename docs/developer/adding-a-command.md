@@ -9,7 +9,7 @@ Related references:
 
 Public API:
 
-- [`include/rhbm_gem/core/command/CommandTypes.hpp`](/include/rhbm_gem/core/command/CommandTypes.hpp)
+- [`include/rhbm_gem/core/CommandTypes.hpp`](/include/rhbm_gem/core/CommandTypes.hpp)
 
 Internal wiring:
 
@@ -48,7 +48,7 @@ The command catalog drives:
 ## Public Request DTO
 
 Add `<YourCommand>Request` to
-[`include/rhbm_gem/core/command/CommandTypes.hpp`](/include/rhbm_gem/core/command/CommandTypes.hpp).
+[`include/rhbm_gem/core/CommandTypes.hpp`](/include/rhbm_gem/core/CommandTypes.hpp).
 
 Requests are plain DTOs. Shared options come from `CommandRequestBase`:
 
@@ -61,7 +61,7 @@ Command-specific fields live directly on the request type.
 Shared default path helper declarations such as `GetDefaultDatabasePath()` also live in
 `CommandTypes.hpp`.
 
-Public execution goes through the typed `RunCommand(request)` API in `CommandSystem.hpp`.
+Public C++ execution goes through the typed `rhbm_gem::core::RunCommand(request)` API in `CommandSystem.hpp`.
 Each request type is associated with its executor through the internal
 `CommandEntry<XxxRequest>` catalog entry.
 

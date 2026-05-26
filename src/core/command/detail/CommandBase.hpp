@@ -10,7 +10,7 @@
 #include <type_traits>
 #include <vector>
 
-#include <rhbm_gem/core/command/CommandTypes.hpp>
+#include <rhbm_gem/core/CommandTypes.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
@@ -19,7 +19,7 @@
 #include "CommandCatalog.hpp"
 #include "CommandEnumCatalog.hpp"
 
-namespace rhbm_gem {
+namespace rhbm_gem::core {
 
 template <typename Request>
 class CommandBase
@@ -359,4 +359,4 @@ private:
 
 };
 
-} // namespace rhbm_gem
+} // namespace rhbm_gem::core

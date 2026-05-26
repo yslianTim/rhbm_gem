@@ -4,12 +4,12 @@
 #include <string>
 #include <vector>
 
-#include <rhbm_gem/core/command/CommandSystem.hpp>
+#include <rhbm_gem/core/CommandSystem.hpp>
 #include <rhbm_gem/utils/domain/LocalPainter.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTester.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 
-namespace rhbm_gem::command_detail::rhbm_test_plotting {
+namespace rhbm_gem::core::command_detail::rhbm_test_plotting {
 
 enum class BiasCurveKind
 {
@@ -92,4 +92,4 @@ void SaveMemberOutlierBiasPlot(
     const RHBMTestRequest & request,
     const BiasPlotRequest & plot_request);
 
-} // namespace rhbm_gem::command_detail::rhbm_test_plotting
+} // namespace rhbm_gem::core::command_detail::rhbm_test_plotting

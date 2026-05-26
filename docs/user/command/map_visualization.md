@@ -5,7 +5,7 @@ The command is registered only when `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` is en
 
 Related implementation files:
 
-- [`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp)
+- [`include/rhbm_gem/core/CommandSystem.hpp`](/include/rhbm_gem/core/CommandSystem.hpp)
 - [`src/core/command/detail/CommandCatalog.hpp`](/src/core/command/detail/CommandCatalog.hpp)
 - [`src/core/command/MapVisualizationCommand.cpp`](/src/core/command/MapVisualizationCommand.cpp)
 - [`include/rhbm_gem/utils/math/GridSampler.hpp`](/include/rhbm_gem/utils/math/GridSampler.hpp)
@@ -30,7 +30,7 @@ CLI options are wired in [`src/core/command/detail/CommandCatalog.hpp`](/src/cor
 - `-s, --sampling`
 - `--window-size`
 
-Current defaults from [`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp):
+Current defaults from [`include/rhbm_gem/core/CommandSystem.hpp`](/include/rhbm_gem/core/CommandSystem.hpp):
 
 - `atom_serial_id = 1`
 - `sampling_size = 100`

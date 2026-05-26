@@ -27,7 +27,7 @@
 #include <omp.h>
 #endif
 
-namespace rhbm_gem {
+namespace rhbm_gem::core {
 
 class MapVisualizationCommand final : public CommandBase<MapVisualizationRequest>
 {
@@ -87,7 +87,7 @@ std::filesystem::path BuildMapVisualizationOutputPath(
 }
 
 std::optional<MapVisualizationInputs> LoadMapVisualizationInputs(
-    const rhbm_gem::MapVisualizationRequest & request)
+    const MapVisualizationRequest & request)
 {
     ScopeTimer timer("MapVisualizationCommand::BuildDataObject");
     try
@@ -119,7 +119,7 @@ void RunModelObjectPreprocessing(rhbm_gem::ModelObject & model_object)
 }
 
 std::filesystem::path BuildOutputFilePath(
-    const rhbm_gem::MapVisualizationRequest & request,
+    const MapVisualizationRequest & request,
     const rhbm_gem::ModelObject & model_object,
     const std::filesystem::path & output_dir)
 {
@@ -144,7 +144,7 @@ std::filesystem::path BuildOutputFilePath(
 }
 
 bool RunAtomMapValueSampling(
-    const rhbm_gem::MapVisualizationRequest & request,
+    const MapVisualizationRequest & request,
     rhbm_gem::MapObject & map_object,
     rhbm_gem::ModelObject & model_object,
     const std::filesystem::path & output_dir)
@@ -216,7 +216,7 @@ bool RunAtomMapValueSampling(
     sampler.SetReferenceUVector({u_vector(0), u_vector(1), u_vector(2)});
 
     auto sampling_data_list{
-        rhbm_gem::SampleMapValues(
+        SampleMapValues(
             map_object, sampler, target_atom_position, {n_vector(0), n_vector(1), n_vector(2)})
     };
     if (sampling_data_list.empty())
@@ -301,4 +301,4 @@ CommandResult ExecuteMapVisualizationCommand(const MapVisualizationRequest & req
 
 } // namespace command_internal
 
-} // namespace rhbm_gem
+} // namespace rhbm_gem::core

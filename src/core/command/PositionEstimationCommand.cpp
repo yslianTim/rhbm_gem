@@ -25,7 +25,7 @@
 #include <omp.h>
 #endif
 
-namespace rhbm_gem {
+namespace rhbm_gem::core {
 
 class PositionEstimationCommand final : public CommandBase<PositionEstimationRequest>
 {
@@ -91,7 +91,7 @@ std::filesystem::path BuildPositionEstimationOutputPath(
 }
 
 std::optional<std::unique_ptr<rhbm_gem::MapObject>> LoadPositionEstimationMap(
-    const rhbm_gem::PositionEstimationRequest & request)
+    const PositionEstimationRequest & request)
 {
     ScopeTimer timer("PositionEstimationCommand::BuildDataObject");
     try
@@ -111,7 +111,7 @@ std::optional<std::unique_ptr<rhbm_gem::MapObject>> LoadPositionEstimationMap(
 }
 
 bool BuildVoxelList(
-    const rhbm_gem::PositionEstimationRequest & request,
+    const PositionEstimationRequest & request,
     rhbm_gem::MapObject & map_object,
     PositionEstimationState & state,
     int thread_size)
@@ -235,7 +235,7 @@ void UpdatePointPosition(
 }
 
 void RunMapValueConvergence(
-    const rhbm_gem::PositionEstimationRequest & request,
+    const PositionEstimationRequest & request,
     PositionEstimationState & state,
     int thread_size)
 {
@@ -329,7 +329,7 @@ void RunUniquePointList(PositionEstimationState & state, float tolerance)
 }
 
 void OutputPointList(
-    const rhbm_gem::PositionEstimationRequest & request,
+    const PositionEstimationRequest & request,
     const PositionEstimationState & state,
     const std::filesystem::path & output_dir)
 {
@@ -389,4 +389,4 @@ CommandResult ExecutePositionEstimationCommand(const PositionEstimationRequest &
 
 } // namespace command_internal
 
-} // namespace rhbm_gem
+} // namespace rhbm_gem::core

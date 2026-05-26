@@ -27,7 +27,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace rhbm_gem {
+namespace rhbm_gem::core {
 
 class ResultDumpCommand final : public CommandBase<ResultDumpRequest>
 {
@@ -440,4 +440,4 @@ CommandResult ExecuteResultDumpCommand(const ResultDumpRequest & request)
 
 } // namespace command_internal
 
-} // namespace rhbm_gem
+} // namespace rhbm_gem::core

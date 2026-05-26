@@ -11,7 +11,7 @@
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
-#include <rhbm_gem/core/command/CommandSystem.hpp>
+#include <rhbm_gem/core/CommandSystem.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 
@@ -88,13 +88,13 @@ inline std::filesystem::path GenerateMapFile(
     const std::string & map_name = "sim_map",
     const std::string & blurring_widths = "1.0")
 {
-    rhbm_gem::MapSimulationRequest request{};
+    rhbm_gem::core::MapSimulationRequest request{};
     request.output_dir = output_dir;
     request.model_file_path = model_path;
     request.map_file_name = map_name;
     request.blurring_width_list = rhbm_gem::string_helper::ParseListOption<double>(blurring_widths);
 
-    const auto result{ rhbm_gem::RunCommand(request) };
+    const auto result{ rhbm_gem::core::RunCommand(request) };
     if (!result.succeeded)
     {
         throw std::runtime_error("Failed to generate map fixture.");

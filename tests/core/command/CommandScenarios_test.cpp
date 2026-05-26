@@ -11,12 +11,13 @@
 #include <vector>
 
 #include "support/CommandTestHelpers.hpp"
-#include <rhbm_gem/core/command/CommandSystem.hpp>
+#include <rhbm_gem/core/CommandSystem.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 
 using namespace rhbm_gem;
+using namespace rhbm_gem::core;
 
 namespace {
 

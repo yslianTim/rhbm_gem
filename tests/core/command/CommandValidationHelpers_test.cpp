@@ -13,11 +13,12 @@
 
 #include "command/detail/CommandBase.hpp"
 #include "support/CommandTestHelpers.hpp"
-#include <rhbm_gem/core/command/CommandTypes.hpp>
+#include <rhbm_gem/core/CommandTypes.hpp>
 
 using namespace rhbm_gem;
+using namespace rhbm_gem::core;
 
-namespace rhbm_gem {
+namespace rhbm_gem::core {
 
 struct ValidationHelperRequest : CommandRequestBase
 {
@@ -35,9 +36,9 @@ struct ValidationHelperRequest : CommandRequestBase
     int uncataloged_value{ 1 };
 };
 
-} // namespace rhbm_gem
+} // namespace rhbm_gem::core
 
-namespace rhbm_gem::command_internal {
+namespace rhbm_gem::core::command_internal {
 
 template <>
 struct RequestFieldCatalog<ValidationHelperRequest>
@@ -73,7 +74,7 @@ struct RequestFieldCatalog<ValidationHelperRequest>
     }
 };
 
-} // namespace rhbm_gem::command_internal
+} // namespace rhbm_gem::core::command_internal
 
 namespace {
 

@@ -3,12 +3,13 @@
 #include <filesystem>
 
 #include "support/CommandTestHelpers.hpp"
-#include <rhbm_gem/core/command/CommandSystem.hpp>
+#include <rhbm_gem/core/CommandSystem.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 
 namespace rg = rhbm_gem;
+namespace rgc = rhbm_gem::core;
 
 namespace {
 
@@ -63,14 +64,14 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     std::filesystem::create_directories(analysis_output_dir);
     std::filesystem::create_directories(dump_output_dir);
 
-    rg::MapSimulationRequest simulation_request;
+    rgc::MapSimulationRequest simulation_request;
     simulation_request.output_dir = maps_dir;
     simulation_request.model_file_path = command_test::TestDataPath("test_model.cif");
     simulation_request.map_file_name = "sim_map";
     simulation_request.blurring_width_list = { 1.50 };
 
     const auto simulation_result{
-        rg::RunCommand(simulation_request)
+        rgc::RunCommand(simulation_request)
     };
     ASSERT_TRUE(simulation_result.succeeded);
 
@@ -78,7 +79,7 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     ASSERT_FALSE(generated_map_file.empty());
     ASSERT_TRUE(std::filesystem::exists(generated_map_file));
 
-    rg::PotentialAnalysisRequest analysis_request;
+    rgc::PotentialAnalysisRequest analysis_request;
     analysis_request.database_path = database_path;
     analysis_request.output_dir = analysis_output_dir;
     analysis_request.model_file_path = command_test::TestDataPath("test_model.cif");
@@ -87,7 +88,7 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     analysis_request.alpha_r = 0.37;
 
     const auto analysis_result{
-        rg::RunCommand(analysis_request)
+        rgc::RunCommand(analysis_request)
     };
     ASSERT_TRUE(analysis_result.succeeded);
 
@@ -96,14 +97,14 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     ASSERT_NE(model, nullptr);
     ExpectSelectedAtomsHaveAlphaR(*model, analysis_request.alpha_r);
 
-    rg::ResultDumpRequest dump_request;
+    rgc::ResultDumpRequest dump_request;
     dump_request.database_path = database_path;
     dump_request.output_dir = dump_output_dir;
-    dump_request.printer_choice = rg::PrinterType::GAUS_ESTIMATES;
+    dump_request.printer_choice = rgc::PrinterType::GAUS_ESTIMATES;
     dump_request.model_key_tag_list = { "pipeline_model" };
 
     const auto dump_result{
-        rg::RunCommand(dump_request)
+        rgc::RunCommand(dump_request)
     };
     ASSERT_TRUE(dump_result.succeeded);
     EXPECT_GT(CountRegularFiles(dump_output_dir), 0u);

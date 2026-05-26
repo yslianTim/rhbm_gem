@@ -1,4 +1,4 @@
-#include <rhbm_gem/core/command/CommandSystem.hpp>
+#include <rhbm_gem/core/CommandSystem.hpp>
 
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
@@ -18,7 +18,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace rhbm_gem {
+namespace rhbm_gem::core {
 
 std::filesystem::path GetDefaultDataRootPath()
 {
@@ -329,7 +329,7 @@ int RunCommandCLI(int argc, char * argv[])
         command.callback([request]()
         {
             ScopeTimer timer("Command CLI callback");
-            const auto result{ rhbm_gem::RunCommand(*request) };
+            const auto result{ rhbm_gem::core::RunCommand(*request) };
             if (!result.succeeded) throw CLI::RuntimeError(1);
         });
     });
@@ -345,4 +345,4 @@ int RunCommandCLI(int argc, char * argv[])
     return 0;
 }
 
-} // namespace rhbm_gem
+} // namespace rhbm_gem::core

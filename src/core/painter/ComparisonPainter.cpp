@@ -1,4 +1,4 @@
-#include "PainterFunctions.hpp"
+#include <rhbm_gem/core/PainterFunctions.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -46,8 +46,8 @@ class ComparisonPainter
 
 public:
     ComparisonPainter(
-        const painter_internal::ModelObjectList & model_objects,
-        const painter_internal::ReferenceModelGroupMap & reference_model_groups,
+        const core::ModelObjectList & model_objects,
+        const core::ReferenceModelGroupMap & reference_model_groups,
         const std::string & output_folder);
     void Run();
 
@@ -82,8 +82,8 @@ private:
 };
 
 ComparisonPainter::ComparisonPainter(
-    const painter_internal::ModelObjectList & model_objects,
-    const painter_internal::ReferenceModelGroupMap & reference_model_groups,
+    const core::ModelObjectList & model_objects,
+    const core::ReferenceModelGroupMap & reference_model_groups,
     const std::string & output_folder) :
     m_folder_path{ path_helper::EnsureTrailingSlash(output_folder) }
 {
@@ -924,7 +924,7 @@ void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
 
 } // namespace
 
-namespace painter_internal {
+namespace core {
 
 void PaintComparison(
     const ModelObjectList & model_objects,
@@ -935,6 +935,6 @@ void PaintComparison(
     painter.Run();
 }
 
-} // namespace painter_internal
+} // namespace core
 
 } // namespace rhbm_gem

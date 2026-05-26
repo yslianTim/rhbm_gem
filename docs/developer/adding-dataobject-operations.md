@@ -106,7 +106,7 @@ Typical command flow:
 5. wrap failures with command-specific context near the orchestration boundary
 6. keep `ExecuteImpl()` and local workflow helpers focused on typed orchestration
 
-Repository-backed command request structs default `database_path` through `GetDefaultDatabasePath()` in `/include/rhbm_gem/core/command/CommandTypes.hpp`, so command changes should preserve that behavior unless the command contract is intentionally changing.
+Repository-backed command request structs default `database_path` through `GetDefaultDatabasePath()` in `/include/rhbm_gem/core/CommandTypes.hpp`, so command changes should preserve that behavior unless the command contract is intentionally changing.
 
 ## 6. Test Checklist
 

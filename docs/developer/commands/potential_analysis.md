@@ -8,7 +8,7 @@ the internal command catalog in
 
 Public request and entrypoint:
 
-- [`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp)
+- [`include/rhbm_gem/core/CommandSystem.hpp`](/include/rhbm_gem/core/CommandSystem.hpp)
 
 Internal schema and wiring:
 
@@ -57,7 +57,7 @@ through the `--sampling-method` CLI flag.
 
 ## Execution Contract
 
-`RunCommand(PotentialAnalysisRequest{...})` returns `CommandResult`.
+`rhbm_gem::core::RunCommand(PotentialAnalysisRequest{...})` returns `CommandResult`.
 
 Expected result contract:
 

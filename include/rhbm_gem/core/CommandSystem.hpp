@@ -3,9 +3,9 @@
 #include <typeinfo>
 #include <type_traits>
 
-#include <rhbm_gem/core/command/CommandTypes.hpp>
+#include <rhbm_gem/core/CommandTypes.hpp>
 
-namespace rhbm_gem {
+namespace rhbm_gem::core {
 
 int RunCommandCLI(int argc, char * argv[]);
 
@@ -26,4 +26,4 @@ CommandResult RunCommand(const RequestType & request)
     return command_internal::RunCommandByRequestType(typeid(RequestType), request);
 }
 
-} // namespace rhbm_gem
+} // namespace rhbm_gem::core

@@ -3,7 +3,7 @@
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include "core/painter/PainterFunctions.hpp"
+#include <rhbm_gem/core/PainterFunctions.hpp>
 #include <rhbm_gem/utils/domain/AtomSelector.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
@@ -16,7 +16,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace rhbm_gem {
+namespace rhbm_gem::core {
 
 class PotentialDisplayCommand final : public CommandBase<PotentialDisplayRequest>
 {
@@ -39,7 +39,7 @@ struct PotentialDisplayInputs
 };
 
 std::optional<PotentialDisplayInputs> LoadPotentialDisplayInputs(
-    const rhbm_gem::PotentialDisplayRequest & request)
+    const PotentialDisplayRequest & request)
 {
     ScopeTimer timer{ "PotentialDisplayCommand::BuildDataObject" };
     try
@@ -87,7 +87,7 @@ std::optional<PotentialDisplayInputs> LoadPotentialDisplayInputs(
     }
 }
 
-AtomSelector BuildAtomSelector(const rhbm_gem::PotentialDisplayRequest & request)
+AtomSelector BuildAtomSelector(const PotentialDisplayRequest & request)
 {
     AtomSelector selector;
     selector.PickChainID(request.pick_chain_id);
@@ -123,10 +123,10 @@ void ApplyDataObjectSelection(
     }
 }
 
-painter_internal::ModelObjectList BuildModelObjectList(
+ModelObjectList BuildModelObjectList(
     const std::vector<std::unique_ptr<rhbm_gem::ModelObject>> & model_objects)
 {
-    painter_internal::ModelObjectList model_list;
+    ModelObjectList model_list;
     model_list.reserve(model_objects.size());
     for (const auto & model_object : model_objects)
     {
@@ -135,12 +135,12 @@ painter_internal::ModelObjectList BuildModelObjectList(
     return model_list;
 }
 
-painter_internal::ReferenceModelGroupMap BuildReferenceModelGroupMap(
+ReferenceModelGroupMap BuildReferenceModelGroupMap(
     const std::unordered_map<
         std::string,
         std::vector<std::unique_ptr<rhbm_gem::ModelObject>>> & reference_model_groups)
 {
-    painter_internal::ReferenceModelGroupMap reference_model_group_map;
+    ReferenceModelGroupMap reference_model_group_map;
     for (const auto & [class_key, ref_model_list] : reference_model_groups)
     {
         auto & model_list{ reference_model_group_map[class_key] };
@@ -194,12 +194,12 @@ bool PotentialDisplayCommand::ExecuteImpl(const PotentialDisplayRequest & reques
     {
         case PainterType::GAUS:
         {
-            painter_internal::PaintGaus(model_objects, output_folder);
+            PaintGaus(model_objects, output_folder);
             break;
         }
         case PainterType::MODEL:
         {
-            painter_internal::PaintModel(model_objects, output_folder);
+            PaintModel(model_objects, output_folder);
             break;
         }
         case PainterType::COMPARISON:
@@ -207,7 +207,7 @@ bool PotentialDisplayCommand::ExecuteImpl(const PotentialDisplayRequest & reques
             const auto reference_model_groups{
                 BuildReferenceModelGroupMap(inputs->reference_model_groups)
             };
-            painter_internal::PaintComparison(model_objects, reference_model_groups, output_folder);
+            PaintComparison(model_objects, reference_model_groups, output_folder);
             break;
         }
         case PainterType::DEMO:
@@ -215,13 +215,13 @@ bool PotentialDisplayCommand::ExecuteImpl(const PotentialDisplayRequest & reques
             const auto reference_model_groups{
                 BuildReferenceModelGroupMap(inputs->reference_model_groups)
             };
-            painter_internal::PaintDemo(model_objects, reference_model_groups, output_folder);
+            PaintDemo(model_objects, reference_model_groups, output_folder);
             break;
         }
         case PainterType::ATOM:
         {
             selector.Print();
-            painter_internal::PaintAtom(model_objects, output_folder);
+            PaintAtom(model_objects, output_folder);
             break;
         }
         default:
@@ -249,4 +249,4 @@ CommandResult ExecutePotentialDisplayCommand(const PotentialDisplayRequest & req
 
 } // namespace command_internal
 
-} // namespace rhbm_gem
+} // namespace rhbm_gem::core

@@ -11,6 +11,7 @@
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 
 using namespace rhbm_gem;
+using namespace rhbm_gem::core;
 
 namespace {
 

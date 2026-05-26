@@ -283,15 +283,16 @@ function(rhbm_guard_check_structure)
             "Move these headers into src/core/command/, src/core/painter/, a subsystem detail/ directory, src/core/workflow/, or remove them.")
     endif()
 
-    file(GLOB PUBLIC_CORE_FLAT_HPP
+    file(GLOB_RECURSE PUBLIC_CORE_SUBFOLDER_HPP
         RELATIVE "${PROJECT_SOURCE_DIR}"
-        "${PROJECT_SOURCE_DIR}/include/rhbm_gem/core/*.hpp")
-    if(PUBLIC_CORE_FLAT_HPP)
-        list(JOIN PUBLIC_CORE_FLAT_HPP "\n  - " PUBLIC_CORE_FLAT_HPP_TEXT)
+        "${PROJECT_SOURCE_DIR}/include/rhbm_gem/core/*/*.hpp")
+    if(PUBLIC_CORE_SUBFOLDER_HPP)
+        list(JOIN PUBLIC_CORE_SUBFOLDER_HPP "\n  - " PUBLIC_CORE_SUBFOLDER_HPP_TEXT)
         message(FATAL_ERROR
             "Structure guard failed.\n"
-            "  - include/rhbm_gem/core must use subfolders (command/ or painter/).\n"
-            "  - ${PUBLIC_CORE_FLAT_HPP_TEXT}")
+            "  - include/rhbm_gem/core public headers must stay flat.\n"
+            "  - ${PUBLIC_CORE_SUBFOLDER_HPP_TEXT}\n"
+            "Move these headers into include/rhbm_gem/core/ or make them src-private.")
     endif()
 
     file(GLOB PUBLIC_DATA_FLAT_HPP

@@ -7,6 +7,7 @@
 #include "support/CommandTestHelpers.hpp"
 
 using namespace rhbm_gem;
+using namespace rhbm_gem::core;
 
 namespace {
 

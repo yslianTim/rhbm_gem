@@ -1,4 +1,4 @@
-#include <rhbm_gem/core/command/CommandSystem.hpp>
+#include <rhbm_gem/core/CommandSystem.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -39,7 +39,7 @@ int main()
         static_cast<int>(sizeof(rhbm_gem::ChemicalComponentEntry)) };
 
     const std::string extension{ rhbm_gem::path_helper::GetExtension("sample.cif") };
-    const auto default_database_path{ rhbm_gem::GetDefaultDatabasePath() };
+    const auto default_database_path{ rhbm_gem::core::GetDefaultDatabasePath() };
     return extension == ".cif"
             && compile_only_sizes.front() > 0
             && default_database_path.filename() == "database.sqlite"

@@ -14,7 +14,7 @@
 #include <utility>
 #include <vector>
 
-namespace rhbm_gem {
+namespace rhbm_gem::core {
 
 class RHBMTestCommand final : public CommandBase<RHBMTestRequest>
 {
@@ -497,4 +497,4 @@ CommandResult ExecuteRHBMTestCommand(const RHBMTestRequest & request)
 
 } // namespace command_internal
 
-} // namespace rhbm_gem
+} // namespace rhbm_gem::core

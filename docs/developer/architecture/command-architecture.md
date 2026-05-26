@@ -21,9 +21,9 @@ execution path without exposing concrete command classes or per-command headers.
 
 Public command headers separate concerns:
 
-- [`include/rhbm_gem/core/command/CommandSystem.hpp`](/include/rhbm_gem/core/command/CommandSystem.hpp)
-  - typed `RunCommand(request)` execution API
-- [`include/rhbm_gem/core/command/CommandTypes.hpp`](/include/rhbm_gem/core/command/CommandTypes.hpp)
+- [`include/rhbm_gem/core/CommandSystem.hpp`](/include/rhbm_gem/core/CommandSystem.hpp)
+  - typed `rhbm_gem::core::RunCommand(request)` execution API
+- [`include/rhbm_gem/core/CommandTypes.hpp`](/include/rhbm_gem/core/CommandTypes.hpp)
   - shared public enums
   - `CommandRequestBase`
   - one plain request DTO per command
@@ -31,7 +31,7 @@ Public command headers separate concerns:
   - `CommandDiagnostic`
   - `CommandResult`
 
-The public API is centered on typed requests, `RunCommand(request)`, shared enums, and path helpers.
+The public C++ API is centered on `rhbm_gem::core` typed requests, `RunCommand(request)`, shared enums, and path helpers.
 CLI wiring and request binding schema stay internal.
 The private command catalog owns request-to-command routing, so concrete command headers do not
 become public includes.
@@ -60,7 +60,7 @@ under `rhbm_gem::command_internal`.
 ### CLI
 
 [`src/main.cpp`](/src/main.cpp) delegates to the public
-[`RunCommandCLI(...)`](/include/rhbm_gem/core/command/CommandSystem.hpp), so the executable entrypoint
+[`RunCommandCLI(...)`](/include/rhbm_gem/core/CommandSystem.hpp), so the executable entrypoint
 does not expose CLI11 setup or parsing details.
 
 [`src/core/command/CommandSystem.cpp`](/src/core/command/CommandSystem.cpp):
@@ -70,7 +70,7 @@ does not expose CLI11 setup or parsing details.
 3. creates one subcommand per command entry
 4. binds shared `CommandRequestBase` fields
 5. binds command-specific fields from `RequestFieldCatalog`
-6. routes the callback to `RunCommand(request)`
+6. routes the callback to `rhbm_gem::core::RunCommand(request)`
 7. wraps CLI11 parsing and exit-code handling in `RunCommandCLI(...)`
 
 ### Python
@@ -92,7 +92,7 @@ All public execution entrypoints converge on the same flow:
 
 ```mermaid
 flowchart LR
-    A["CLI callback or Python call"] --> B["RunCommand(request)"]
+    A["CLI callback or Python call"] --> B["rhbm_gem::core::RunCommand(request)"]
     B --> C["Catalog executor"]
     C --> D["Construct local command"]
     D --> E["ExecuteRequest(request)"]
@@ -102,7 +102,7 @@ flowchart LR
     H --> I["CommandResult"]
 ```
 
-`RunCommand(request)` returns `CommandResult` with:
+`rhbm_gem::core::RunCommand(request)` returns `CommandResult` with:
 
 - `succeeded == true` when execution completes
 - `succeeded == false` when validation, preflight, or execution stops the command

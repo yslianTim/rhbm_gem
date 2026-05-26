@@ -176,7 +176,7 @@ def _update_file(
 def _source_template(spec: ScaffoldSpec) -> str:
     return f"""#include "detail/CommandBase.hpp"
 
-namespace rhbm_gem {{
+namespace rhbm_gem::core {{
 
 class {spec.command_type} final : public CommandBase<{spec.command_id}Request>
 {{
@@ -221,7 +221,7 @@ CommandResult Execute{spec.command_type}(const {spec.command_id}Request & reques
 
 }} // namespace command_internal
 
-}} // namespace rhbm_gem
+}} // namespace rhbm_gem::core
 """
 
 
@@ -232,7 +232,7 @@ Scaffold generated for CLI command `{spec.cli_name}`.
 
 ## Registration Checklist
 
-1. Add the `{spec.command_id}Request` struct in `include/rhbm_gem/core/command/CommandTypes.hpp`.
+1. Add the `{spec.command_id}Request` struct in `include/rhbm_gem/core/CommandTypes.hpp`.
    If it is experimental, keep it inside the `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` block.
 2. Add the internal request field catalog specialization in `src/core/command/detail/CommandCatalog.hpp`.
 3. Add `Execute{spec.command_type}` declaration and `CommandEntry<{spec.command_id}Request>` to `src/core/command/detail/CommandCatalog.hpp`.

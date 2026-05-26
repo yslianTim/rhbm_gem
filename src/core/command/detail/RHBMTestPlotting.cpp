@@ -23,7 +23,7 @@
 #include <TStyle.h>
 #endif
 
-namespace rhbm_gem::command_detail::rhbm_test_plotting {
+namespace rhbm_gem::core::command_detail::rhbm_test_plotting {
 namespace {
 
 std::string FormatSigmaToken(double value)
@@ -827,4 +827,4 @@ void SaveMemberOutlierBiasPlot(
     #endif
 }
 
-} // namespace rhbm_gem::command_detail::rhbm_test_plotting
+} // namespace rhbm_gem::core::command_detail::rhbm_test_plotting

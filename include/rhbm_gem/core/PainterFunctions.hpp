@@ -8,7 +8,7 @@ namespace rhbm_gem {
 
 class ModelObject;
 
-namespace painter_internal {
+namespace core {
 
 using ModelObjectList = std::vector<ModelObject *>;
 using ReferenceModelGroupMap = std::unordered_map<std::string, std::vector<ModelObject *>>;
@@ -25,5 +25,5 @@ void PaintDemo(
     const ReferenceModelGroupMap & reference_model_groups,
     const std::string & output_folder);
 
-} // namespace painter_internal
+} // namespace core
 } // namespace rhbm_gem

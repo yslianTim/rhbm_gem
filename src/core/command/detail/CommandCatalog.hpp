@@ -1,11 +1,11 @@
 #pragma once
 
-#include <rhbm_gem/core/command/CommandTypes.hpp>
+#include <rhbm_gem/core/CommandTypes.hpp>
 
 #include <string_view>
 #include <tuple>
 
-namespace rhbm_gem::command_internal {
+namespace rhbm_gem::core::command_internal {
 
 template <typename Owner, typename ValueType>
 struct RequestField
@@ -385,4 +385,4 @@ void VisitCommandCatalog(Visitor && visitor)
 #endif
 }
 
-} // namespace rhbm_gem::command_internal
+} // namespace rhbm_gem::core::command_internal

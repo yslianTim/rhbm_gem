@@ -23,7 +23,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace rhbm_gem {
+namespace rhbm_gem::core {
 
 class MapSimulationCommand final : public CommandBase<MapSimulationRequest>
 {
@@ -298,4 +298,4 @@ CommandResult ExecuteMapSimulationCommand(const MapSimulationRequest & request)
 
 } // namespace command_internal
 
-} // namespace rhbm_gem
+} // namespace rhbm_gem::core

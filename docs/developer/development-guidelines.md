@@ -26,7 +26,7 @@ The goal is stable, maintainable, and diagnosable software.
 - `[Required]` Treat any header outside `/include/` as internal implementation detail; use subsystem-local `detail/` directories for shared private helpers instead of broad cross-domain `internal/` buckets.
 - `[Required]` For workflow code, keep implementation units (`*.cpp`) in `/src/core/workflow/`; place shared workflow-private headers in `/src/core/workflow/detail/` when they are not part of workflow-facing contracts.
 - `[Required]` Keep reusable automation tools under `/resources/tools/`; do not add scripts at repository root.
-- `[Required]` Project-owned public types in `core` and `data` must use namespace `rhbm_gem`.
+- `[Required]` Project-owned public types in `core` must use namespace `rhbm_gem::core`; project-owned public types in `data` and `utils` use namespace `rhbm_gem` or an established nested utility namespace.
 - `[Required]` Do not use `using namespace` in headers.
 - `[Recommended]` Keep header/source pairing clear and predictable for new modules.
 

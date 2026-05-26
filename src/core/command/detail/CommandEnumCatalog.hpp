@@ -1,12 +1,12 @@
 #pragma once
 
-#include <rhbm_gem/core/command/CommandTypes.hpp>
+#include <rhbm_gem/core/CommandTypes.hpp>
 
 #include <array>
 #include <cstddef>
 #include <string_view>
 
-namespace rhbm_gem::command_internal {
+namespace rhbm_gem::core::command_internal {
 
 template <typename EnumType, std::size_t AliasCount>
 struct CommandEnumDefinition
@@ -91,4 +91,4 @@ struct CommandEnumTraits<SphereSamplingMethod>
     }};
 };
 
-} // namespace rhbm_gem::command_internal
+} // namespace rhbm_gem::core::command_internal

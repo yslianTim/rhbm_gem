@@ -4,7 +4,7 @@
 #include <array>
 #include <vector>
 
-#include <rhbm_gem/core/command/CommandTypes.hpp>
+#include <rhbm_gem/core/CommandTypes.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/utils/domain/SampleFilter.hpp>
@@ -12,7 +12,7 @@
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
 
-namespace rhbm_gem {
+namespace rhbm_gem::core {
 namespace {
 
 inline float MakeInterpolationInMapObject(
@@ -137,4 +137,4 @@ inline LocalPotentialSampleList SampleAtomMapValues(
     return sample_filter::FilterLocalPotentialSampleList(std::move(sample_list));
 }
 
-} // namespace rhbm_gem
+} // namespace rhbm_gem::core

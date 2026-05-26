@@ -30,7 +30,7 @@
 #include <omp.h>
 #endif
 
-namespace rhbm_gem {
+namespace rhbm_gem::core {
 
 class PotentialAnalysisCommand final : public CommandBase<PotentialAnalysisRequest>
 {
@@ -579,4 +579,4 @@ CommandResult ExecutePotentialAnalysisCommand(const PotentialAnalysisRequest & r
 
 } // namespace command_internal
 
-} // namespace rhbm_gem
+} // namespace rhbm_gem::core

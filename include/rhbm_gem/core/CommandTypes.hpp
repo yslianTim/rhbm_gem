@@ -8,7 +8,7 @@
 
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 
-namespace rhbm_gem {
+namespace rhbm_gem::core {
 
 enum class PainterType : int
 {
@@ -158,4 +158,4 @@ struct PositionEstimationRequest : public CommandRequestBase
 };
 #endif
 
-} // namespace rhbm_gem
+} // namespace rhbm_gem::core

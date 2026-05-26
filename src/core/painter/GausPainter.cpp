@@ -1,4 +1,4 @@
-#include "PainterFunctions.hpp"
+#include <rhbm_gem/core/PainterFunctions.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -70,7 +70,7 @@ class GausPainter
 
 public:
     GausPainter(
-        const painter_internal::ModelObjectList & model_objects,
+        const core::ModelObjectList & model_objects,
         const std::string & output_folder);
     void Run();
 
@@ -93,7 +93,7 @@ private:
 };
 
 GausPainter::GausPainter(
-    const painter_internal::ModelObjectList & model_objects,
+    const core::ModelObjectList & model_objects,
     const std::string & output_folder) :
     m_folder_path{ path_helper::EnsureTrailingSlash(output_folder) }
 {
@@ -1119,7 +1119,7 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
     #endif
 }
 
-namespace painter_internal {
+namespace core {
 
 void PaintGaus(const ModelObjectList & model_objects, const std::string & output_folder)
 {
@@ -1127,7 +1127,7 @@ void PaintGaus(const ModelObjectList & model_objects, const std::string & output
     painter.Run();
 }
 
-} // namespace painter_internal
+} // namespace core
 
 } // namespace rhbm_gem
 

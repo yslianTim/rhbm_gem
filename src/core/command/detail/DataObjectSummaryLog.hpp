@@ -10,7 +10,7 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 
-namespace rhbm_gem::command_detail {
+namespace rhbm_gem::core::command_detail {
 
 inline void LogModelSummary(const ModelObject & model_object)
 {
@@ -76,4 +76,4 @@ inline void LogMapSummary(const MapObject & map_object)
     Logger::Log(LogLevel::Info, oss.str());
 }
 
-} // namespace rhbm_gem::command_detail
+} // namespace rhbm_gem::core::command_detail

@@ -2,7 +2,7 @@
 #include <pybind11/stl.h>
 #include <pybind11/stl/filesystem.h>
 
-#include <rhbm_gem/core/command/CommandSystem.hpp>
+#include <rhbm_gem/core/CommandSystem.hpp>
 
 #include "command/detail/CommandCatalog.hpp"
 #include "command/detail/CommandEnumCatalog.hpp"
@@ -12,6 +12,9 @@
 namespace py = pybind11;
 
 namespace rhbm_gem::bindings {
+
+using namespace rhbm_gem::core;
+namespace command_internal = rhbm_gem::core::command_internal;
 
 namespace {
 
