@@ -79,8 +79,11 @@ set(RHBM_GEM_CORE_COMMAND_TEST_SOURCES
 set(CORE_COMMAND_TEST_SOURCES
     core/command/CommandBaseLifecycle_test.cpp
     core/command/CommandValidationHelpers_test.cpp
-    core/command/MapSampling_test.cpp
     ${RHBM_GEM_CORE_COMMAND_TEST_SOURCES}
+)
+
+set(CORE_SAMPLER_TEST_SOURCES
+    core/MapSampler_test.cpp
 )
 
 set(RHBM_GEM_EXPERIMENTAL_TEST_SOURCES)
@@ -163,6 +166,7 @@ set(INTEGRATION_COMMAND_TEST_SOURCES
 
 set(RHBM_GEM_ALL_GTEST_SOURCES
     ${CORE_COMMAND_TEST_SOURCES}
+    ${CORE_SAMPLER_TEST_SOURCES}
     ${CORE_CONTRACT_TEST_SOURCES}
     ${CORE_PAINTER_TEST_SOURCES}
     ${DATA_RUNTIME_TEST_SOURCES}
@@ -196,6 +200,12 @@ add_rhbm_gtest_group(rhbm_tests_core_command
     DOMAIN core
     INTENTS command validation
     SOURCES ${CORE_COMMAND_TEST_SOURCES}
+)
+
+add_rhbm_gtest_group(rhbm_tests_core_sampler
+    DOMAIN core
+    INTENTS sampling
+    SOURCES ${CORE_SAMPLER_TEST_SOURCES}
 )
 
 add_rhbm_gtest_group(rhbm_tests_core_contract

@@ -17,6 +17,7 @@ set(RHBM_GEM_EXPERIMENTAL_SOURCES
 
 target_sources(rhbm_gem PRIVATE
     # core
+    core/MapSampler.cpp
     core/command/CommandSystem.cpp
     core/painter/AtomPainter.cpp
     core/painter/ComparisonPainter.cpp

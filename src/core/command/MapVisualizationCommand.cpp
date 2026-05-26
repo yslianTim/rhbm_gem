@@ -1,5 +1,5 @@
 #include "detail/CommandBase.hpp"
-#include "detail/MapSampling.hpp"
+#include <rhbm_gem/core/MapSampler.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>

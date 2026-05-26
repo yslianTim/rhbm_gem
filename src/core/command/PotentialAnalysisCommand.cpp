@@ -1,6 +1,6 @@
 #include "detail/CommandBase.hpp"
 
-#include "detail/MapSampling.hpp"
+#include <rhbm_gem/core/MapSampler.hpp>
 #include "rhbm_gem/utils/domain/SamplingTypes.hpp"
 
 #include <rhbm_gem/data/io/DataRepository.hpp>

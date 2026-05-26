@@ -1,22 +1,21 @@
-#pragma once
+#include <rhbm_gem/core/MapSampler.hpp>
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
+#include <utility>
 #include <vector>
 
-#include <rhbm_gem/core/CommandTypes.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/utils/domain/SampleFilter.hpp>
-#include <rhbm_gem/utils/domain/SamplingTypes.hpp>
-#include <rhbm_gem/utils/math/NumericValidation.hpp>
+#include <rhbm_gem/utils/math/GridSampler.hpp>
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
 
 namespace rhbm_gem::core {
 namespace {
 
-inline float MakeInterpolationInMapObject(
-    const MapObject & data_object, const std::array<float, 3> & position)
+float InterpolateMapValue(const MapObject & data_object, const std::array<float, 3> & position)
 {
     auto index{ data_object.GetIndexFromPosition(position) };
     auto origin{ data_object.GetOrigin() };
@@ -78,7 +77,7 @@ inline float MakeInterpolationInMapObject(
     return cubic_interpolate(temp_z[0], temp_z[1], temp_z[2], temp_z[3], local.at(2));
 }
 
-inline LocalPotentialSampleList BuildLocalPotentialSampleList(
+LocalPotentialSampleList BuildLocalPotentialSampleList(
     const MapObject & map_object,
     const SamplingPointList & sample_point_list)
 {
@@ -86,7 +85,9 @@ inline LocalPotentialSampleList BuildLocalPotentialSampleList(
     sampling_data_list.reserve(sample_point_list.size());
     for (const auto & sampling_point : sample_point_list)
     {
-        auto map_value{ MakeInterpolationInMapObject(map_object, sampling_point.position) };
+        auto map_value{
+            InterpolateMapValue(map_object, sampling_point.position)
+        };
         sampling_data_list.emplace_back(LocalPotentialSample{
             map_value,
             sampling_point
@@ -97,10 +98,9 @@ inline LocalPotentialSampleList BuildLocalPotentialSampleList(
 
 } // namespace
 
-template <typename Sampler>
 LocalPotentialSampleList SampleMapValues(
     const MapObject & map_object,
-    const Sampler & sampler,
+    const GridSampler & sampler,
     const std::array<float, 3> & position,
     const std::array<float, 3> & direction)
 {
@@ -108,7 +108,7 @@ LocalPotentialSampleList SampleMapValues(
     return BuildLocalPotentialSampleList(map_object, sample_point_list);
 }
 
-inline LocalPotentialSampleList SampleAtomMapValues(
+LocalPotentialSampleList SampleAtomMapValues(
     const MapObject & map_object,
     const AtomObject & atom,
     SphereSamplingMethod sampling_method)

@@ -10,7 +10,8 @@ Related implementation files:
 - [`src/core/command/MapVisualizationCommand.cpp`](/src/core/command/MapVisualizationCommand.cpp)
 - [`include/rhbm_gem/utils/math/GridSampler.hpp`](/include/rhbm_gem/utils/math/GridSampler.hpp)
 - [`src/utils/math/GridSampler.cpp`](/src/utils/math/GridSampler.cpp)
-- [`src/core/command/detail/MapSampling.hpp`](/src/core/command/detail/MapSampling.hpp)
+- [`include/rhbm_gem/core/MapSampler.hpp`](/include/rhbm_gem/core/MapSampler.hpp)
+- [`src/core/MapSampler.cpp`](/src/core/MapSampler.cpp)
 
 ## Request Surface
 
@@ -298,7 +299,7 @@ The sampler returns:
 - the 3D sample position
 
 `SampleMapValues()` then interpolates the map value at each 3D position in
-[`src/core/command/detail/MapSampling.hpp`](/src/core/command/detail/MapSampling.hpp).
+[`src/core/MapSampler.cpp`](/src/core/MapSampler.cpp).
 
 ## Important Interpretation Notes
 

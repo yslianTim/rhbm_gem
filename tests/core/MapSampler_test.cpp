@@ -1,37 +1,22 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <cstddef>
 #include <memory>
+#include <utility>
 #include <vector>
 
-#include "command/detail/MapSampling.hpp"
+#include <rhbm_gem/core/MapSampler.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
+#include <rhbm_gem/utils/math/GridSampler.hpp>
 
 using namespace rhbm_gem;
 using namespace rhbm_gem::core;
 
 namespace {
-
-class ShiftedPointSampler
-{
-public:
-    SamplingPointList GenerateSamplingPoints(
-        const std::array<float, 3> & position,
-        const std::array<float, 3> & direction_like_input) const
-    {
-        return { SamplingPoint{
-            1.0f,
-            std::array<float, 3>{
-                position[0] + direction_like_input[0],
-                position[1] + direction_like_input[1],
-                position[2] + direction_like_input[2]
-            }
-        } };
-    }
-};
 
 MapObject MakeMapObject()
 {
@@ -66,26 +51,30 @@ std::unique_ptr<ModelObject> MakeLinearNeighborModel()
 
 } // namespace
 
-TEST(MapSamplingTest, OrientedSamplerUsesDirectionLikeInput)
+TEST(MapSamplerTest, GridSamplerProducesMapSamples)
 {
     auto map{ MakeMapObject() };
-    ShiftedPointSampler sampler;
+    GridSampler sampler;
+    sampler.SetGridResolution(2);
+    sampler.SetWindowSize(1.0f);
+    sampler.SetReferenceUVector({ 1.0f, 0.0f, 0.0f });
 
     const auto sampling_data{
         SampleMapValues(
             map,
             sampler,
-            { 0.0f, 0.0f, 0.0f },
-            { 1.0f, 1.0f, 1.0f })
+            { 0.5f, 0.5f, 0.5f },
+            { 0.0f, 0.0f, 1.0f })
     };
 
-    ASSERT_EQ(1u, sampling_data.size());
-    EXPECT_FLOAT_EQ(1.0f, sampling_data.front().point.distance);
-    EXPECT_FLOAT_EQ(map.GetMapValue(1, 1, 1), sampling_data.front().response);
-    EXPECT_FLOAT_EQ(1.0f, sampling_data.front().point.position.at(0));
+    ASSERT_EQ(4u, sampling_data.size());
+    EXPECT_NEAR(0.70710677f, sampling_data.front().point.distance, 1.0e-6f);
+    EXPECT_FLOAT_EQ(0.0f, sampling_data.front().point.position.at(0));
+    EXPECT_FLOAT_EQ(0.0f, sampling_data.front().point.position.at(1));
+    EXPECT_FLOAT_EQ(0.5f, sampling_data.front().point.position.at(2));
 }
 
-TEST(MapSamplingTest, CommandAtomSamplerUsesSamplingMethod)
+TEST(MapSamplerTest, AtomSamplerUsesSamplingMethod)
 {
     auto map{ MakeMapObject() };
     auto model{ MakeLinearNeighborModel() };
@@ -101,7 +90,7 @@ TEST(MapSamplingTest, CommandAtomSamplerUsesSamplingMethod)
     EXPECT_FALSE(sampling_data.empty());
 }
 
-TEST(MapSamplingTest, AtomSamplerRequiresAttachedAtomBeforeSampling)
+TEST(MapSamplerTest, AtomSamplerRequiresAttachedAtomBeforeSampling)
 {
     auto map{ MakeMapObject() };
     AtomObject detached_atom;
