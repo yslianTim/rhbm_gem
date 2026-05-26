@@ -1,5 +1,4 @@
 #include "detail/CommandBase.hpp"
-#include "detail/DataObjectSummaryLog.hpp"
 #include "data/detail/MapSpatialIndex.hpp"
 
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
@@ -52,6 +51,44 @@ struct SimulationAtomPreparationResult
         std::numeric_limits<float>::lowest() };
     bool has_atom{ false };
 };
+
+void LogMapSummary(const MapObject & map_object)
+{
+    std::ostringstream oss;
+    oss << "MapObject Summary:\n";
+    oss << " o=====================================================o\n";
+    oss << " |  Map Object  |   X-axis   |   Y-axis   |   Z-axis   |\n";
+    oss << " o=====================================================o\n";
+    oss << " | Grid size    | ";
+    oss << std::setw(10) << map_object.GetGridSize().at(0) << " | "
+        << std::setw(10) << map_object.GetGridSize().at(1) << " | "
+        << std::setw(10) << map_object.GetGridSize().at(2) << " |\n";
+    oss << " | Grid Spacing | ";
+    oss << std::setw(10) << map_object.GetGridSpacing().at(0) << " | "
+        << std::setw(10) << map_object.GetGridSpacing().at(1) << " | "
+        << std::setw(10) << map_object.GetGridSpacing().at(2) << " |\n";
+    oss << " | Origin (A)   | ";
+    oss << std::setw(10) << map_object.GetOrigin().at(0) << " | "
+        << std::setw(10) << map_object.GetOrigin().at(1) << " | "
+        << std::setw(10) << map_object.GetOrigin().at(2) << " |\n";
+    oss << " | Map Length(A)| ";
+    oss << std::setw(10)
+        << static_cast<float>(map_object.GetGridSize().at(0)) * map_object.GetGridSpacing().at(0)
+        << " | "
+        << std::setw(10)
+        << static_cast<float>(map_object.GetGridSize().at(1)) * map_object.GetGridSpacing().at(1)
+        << " | "
+        << std::setw(10)
+        << static_cast<float>(map_object.GetGridSize().at(2)) * map_object.GetGridSpacing().at(2)
+        << " |\n";
+    oss << " |-----------------------------------------------------|\n";
+    oss << " | Map value min  | " << std::setw(34) << map_object.GetMapValueMin() << " |\n";
+    oss << " | Map value max  | " << std::setw(34) << map_object.GetMapValueMax() << " |\n";
+    oss << " | Map value mean | " << std::setw(34) << map_object.GetMapValueMean() << " |\n";
+    oss << " | Map value s.d. | " << std::setw(34) << map_object.GetMapValueSD() << " |\n";
+    oss << " o=====================================================o\n";
+    Logger::Log(LogLevel::Info, oss.str());
+}
 
 double CalculateAtomChargeForSimulation(
     const AtomObject & atom,
@@ -211,7 +248,7 @@ void PopulateMapValueArray(
 
     map_object->ClearMapValueArray();
     map_object->SetMapValueArray(std::move(map_value_array));
-    command_detail::LogMapSummary(*map_object);
+    LogMapSummary(*map_object);
 }
 } // namespace
 
