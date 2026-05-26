@@ -1,4 +1,4 @@
-#include <rhbm_gem/core/painter/GausPainter.hpp>
+#include "GausPainter.hpp"
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -15,6 +15,7 @@
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
+#include "detail/PainterAxisLabels.hpp"
 #include "detail/PainterModelValidation.hpp"
 #include "detail/PainterOutputLabel.hpp"
 
@@ -649,7 +650,7 @@ void GausPainter::PaintAtomGroupGausSummary(
         root_helper::SetPadMarginInCanvas(gPad, 0.10, 0.00, 0.11, 0.02);
         root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
         RemodelFrameInPad(frame[0].get(), pad[1].get(), 0.0, 0.015);
-        RemodelAxisLabels(frame[0]->GetXaxis(), atom_id_list, 90.0, 12);
+        painter_internal::RemodelAxisLabels(frame[0]->GetXaxis(), atom_id_list, 90.0, 12);
         root_helper::SetAxisTitleAttribute(frame[0]->GetXaxis(), 0.0f);
         root_helper::SetAxisTitleAttribute(frame[0]->GetYaxis(), 50.0f, 1.5f);
         root_helper::SetAxisLabelAttribute(frame[0]->GetXaxis(), 40.0f, 0.11f, 103, kCyan+3);
@@ -664,7 +665,7 @@ void GausPainter::PaintAtomGroupGausSummary(
         root_helper::SetPadMarginInCanvas(gPad, 0.10, 0.00, 0.02, 0.01);
         root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
         RemodelFrameInPad(frame[1].get(), pad[2].get(), 0.0, 0.015);
-        RemodelAxisLabels(frame[1]->GetXaxis(), atom_id_list, 90.0, 12);
+        painter_internal::RemodelAxisLabels(frame[1]->GetXaxis(), atom_id_list, 90.0, 12);
         root_helper::SetAxisTitleAttribute(frame[1]->GetXaxis(), 0.0f);
         root_helper::SetAxisTitleAttribute(frame[1]->GetYaxis(), 50.0f, 1.5f);
         root_helper::SetAxisLabelAttribute(frame[1]->GetXaxis(), 0.0f);
@@ -696,7 +697,7 @@ void GausPainter::PaintAtomGroupGausSummary(
         root_helper::SetPadMarginInCanvas(gPad, 0.09, 0.01, 0.02, 0.02);
         root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
         RemodelFrameInPad(frame[3].get(), pad[4].get(), 0.0, 0.0);
-        RemodelAxisLabels(frame[3]->GetYaxis(), element_label_list, 0.0, -1);
+        painter_internal::RemodelAxisLabels(frame[3]->GetYaxis(), element_label_list, 0.0, -1);
         root_helper::SetAxisTitleAttribute(frame[3]->GetXaxis(), 0.0f);
         root_helper::SetAxisTitleAttribute(frame[3]->GetYaxis(), 40.0f, 1.2f);
         root_helper::SetAxisLabelAttribute(frame[3]->GetXaxis(), 0.0f);
@@ -709,7 +710,7 @@ void GausPainter::PaintAtomGroupGausSummary(
         root_helper::SetPadMarginInCanvas(gPad, 0.01, 0.01, 0.12, 0.02);
         root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
         RemodelFrameInPad(frame[2].get(), pad[5].get(), 0.0, 0.0);
-        RemodelAxisLabels(frame[2]->GetXaxis(), element_label_list, 0.0, -1);
+        painter_internal::RemodelAxisLabels(frame[2]->GetXaxis(), element_label_list, 0.0, -1);
         root_helper::SetAxisTitleAttribute(frame[2]->GetXaxis(), 40.0f, 1.0f);
         root_helper::SetAxisTitleAttribute(frame[2]->GetYaxis(), 0.0f);
         root_helper::SetAxisLabelAttribute(frame[2]->GetXaxis(), 35.0f, 0.005f, 103);
@@ -1217,7 +1218,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponentSimple(
     root_helper::SetPadMarginInCanvas(gPad, 0.15, 0.02, 0.11, 0.02);
     root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
     RemodelFrameInPad(frame[0].get(), pad[0].get(), 0.0, 0.015);
-    RemodelAxisLabels(frame[0]->GetXaxis(), component_id_list, 90.0, 12);
+    painter_internal::RemodelAxisLabels(frame[0]->GetXaxis(), component_id_list, 90.0, 12);
     root_helper::SetAxisTitleAttribute(frame[0]->GetXaxis(), 0.0f);
     root_helper::SetAxisTitleAttribute(frame[0]->GetYaxis(), 50.0f, 1.5f);
     root_helper::SetAxisLabelAttribute(frame[0]->GetXaxis(), 50.0f, 0.13f, 103, kCyan+3);
@@ -1230,7 +1231,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponentSimple(
     root_helper::SetPadMarginInCanvas(gPad, 0.15, 0.02, 0.02, 0.01);
     root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
     RemodelFrameInPad(frame[1].get(), pad[1].get(), 0.0, 0.015);
-    RemodelAxisLabels(frame[1]->GetXaxis(), component_id_list, 90.0, 12);
+    painter_internal::RemodelAxisLabels(frame[1]->GetXaxis(), component_id_list, 90.0, 12);
     root_helper::SetAxisTitleAttribute(frame[1]->GetXaxis(), 0.0f);
     root_helper::SetAxisTitleAttribute(frame[1]->GetYaxis(), 50.0f, 1.5f);
     root_helper::SetAxisLabelAttribute(frame[1]->GetXaxis(), 0.0f);
@@ -1243,7 +1244,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponentSimple(
     root_helper::SetPadMarginInCanvas(gPad, 0.15, 0.02, 0.2, 0.003);
     root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
     RemodelFrameInPad(frame[2].get(), pad[2].get(), 0.0, 0.015);
-    RemodelAxisLabels(frame[2]->GetXaxis(), component_id_list, 90.0, 12);
+    painter_internal::RemodelAxisLabels(frame[2]->GetXaxis(), component_id_list, 90.0, 12);
     root_helper::SetAxisTitleAttribute(frame[2]->GetXaxis(), 0.0f);
     root_helper::SetAxisTitleAttribute(frame[2]->GetYaxis(), 40.0f, 1.2f);
     root_helper::SetAxisLabelAttribute(frame[2]->GetXaxis(), 0.0f);
@@ -1476,7 +1477,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainStructure(
         root_helper::SetPadMarginInCanvas(gPad, 0.10, 0.00, 0.11, 0.02);
         root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
         RemodelFrameInPad(frame[0].get(), pad[1].get(), 0.0, 0.015);
-        RemodelAxisLabels(frame[0]->GetXaxis(), component_id_list, 90.0, 12);
+        painter_internal::RemodelAxisLabels(frame[0]->GetXaxis(), component_id_list, 90.0, 12);
         root_helper::SetAxisTitleAttribute(frame[0]->GetXaxis(), 0.0f);
         root_helper::SetAxisTitleAttribute(frame[0]->GetYaxis(), 50.0f, 1.5f);
         root_helper::SetAxisLabelAttribute(frame[0]->GetXaxis(), 40.0f, 0.13f, 103, kCyan+3);
@@ -1499,7 +1500,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainStructure(
         root_helper::SetPadMarginInCanvas(gPad, 0.10, 0.00, 0.02, 0.01);
         root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
         RemodelFrameInPad(frame[1].get(), pad[2].get(), 0.0, 0.015);
-        RemodelAxisLabels(frame[1]->GetXaxis(), component_id_list, 90.0, 12);
+        painter_internal::RemodelAxisLabels(frame[1]->GetXaxis(), component_id_list, 90.0, 12);
         root_helper::SetAxisTitleAttribute(frame[1]->GetXaxis(), 0.0f);
         root_helper::SetAxisTitleAttribute(frame[1]->GetYaxis(), 50.0f, 1.5f);
         root_helper::SetAxisLabelAttribute(frame[1]->GetXaxis(), 0.0f);
@@ -1529,7 +1530,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainStructure(
         root_helper::SetPadMarginInCanvas(gPad, 0.09, 0.01, 0.02, 0.02);
         root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
         RemodelFrameInPad(frame[3].get(), pad[4].get(), 0.0, 0.0);
-        RemodelAxisLabels(frame[3]->GetYaxis(), structure_label_list, 0.0, 22);
+        painter_internal::RemodelAxisLabels(frame[3]->GetYaxis(), structure_label_list, 0.0, 22);
         root_helper::SetAxisTitleAttribute(frame[3]->GetXaxis(), 0.0f);
         root_helper::SetAxisTitleAttribute(frame[3]->GetYaxis(), 40.0f, 1.2f);
         root_helper::SetAxisLabelAttribute(frame[3]->GetXaxis(), 0.0f);
@@ -1542,7 +1543,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainStructure(
         root_helper::SetPadMarginInCanvas(gPad, 0.01, 0.01, 0.12, 0.02);
         root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
         RemodelFrameInPad(frame[2].get(), pad[5].get(), 0.0, 0.0);
-        RemodelAxisLabels(frame[2]->GetXaxis(), structure_label_list, 0.0, -1);
+        painter_internal::RemodelAxisLabels(frame[2]->GetXaxis(), structure_label_list, 0.0, -1);
         root_helper::SetAxisTitleAttribute(frame[2]->GetXaxis(), 40.0f, 1.0f);
         root_helper::SetAxisTitleAttribute(frame[2]->GetYaxis(), 0.0f);
         root_helper::SetAxisLabelAttribute(frame[2]->GetXaxis(), 35.0f, 0.005f);
@@ -1573,8 +1574,8 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainStructure(
         root_helper::SetPadMarginInCanvas(gPad, 0.10, 0.00, 0.02, 0.01);
         root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
         RemodelFrameInPad(frame[6].get(), pad[7].get(), 0.0, 0.015);
-        RemodelAxisLabels(frame[6]->GetXaxis(), component_id_list, 90.0, 12);
-        RemodelAxisLabels(frame[6]->GetYaxis(), structure_label_list, 0.0, 22);
+        painter_internal::RemodelAxisLabels(frame[6]->GetXaxis(), component_id_list, 90.0, 12);
+        painter_internal::RemodelAxisLabels(frame[6]->GetYaxis(), structure_label_list, 0.0, 22);
         root_helper::SetAxisTitleAttribute(frame[6]->GetXaxis(), 0.0f);
         root_helper::SetAxisTitleAttribute(frame[6]->GetYaxis(), 40.0f, 1.7f);
         root_helper::SetAxisLabelAttribute(frame[6]->GetXaxis(), 0.0f);
@@ -1765,20 +1766,6 @@ void GausPainter::RemodelFrameInPad(
     frame->SetStats(0);
     frame->GetXaxis()->CenterTitle();
     frame->GetYaxis()->CenterTitle();
-}
-
-void GausPainter::RemodelAxisLabels(
-    TAxis * axis, const std::vector<std::string> & label_list, double angle, int align)
-{
-    auto label_size{ static_cast<int>(label_list.size()) };
-    root_helper::SetAxisTickAttribute(axis, 0.0, label_size + 1);
-    axis->SetLimits(-0.75, static_cast<float>(label_size) - 0.5f);
-    //axis->ChangeLabel(1, -1.0, 0.0);
-    for (size_t i = 0; i < label_list.size(); i++)
-    {
-        auto label_index{ static_cast<int>(i) + 1 };
-        axis->ChangeLabel(label_index, angle, -1, align, -1, -1, label_list.at(i).data());
-    }
 }
 
 std::unique_ptr<TPaveText> GausPainter::CreateDataInfoPaveText(
@@ -2012,7 +1999,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent(
     root_helper::SetPadMarginInCanvas(gPad, 0.10, 0.00, 0.11, 0.02);
     root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
     RemodelFrameInPad(frame[0].get(), pad[1].get(), 0.0, 0.015);
-    RemodelAxisLabels(frame[0]->GetXaxis(), component_id_list, 90.0, 12);
+    painter_internal::RemodelAxisLabels(frame[0]->GetXaxis(), component_id_list, 90.0, 12);
     root_helper::SetAxisTitleAttribute(frame[0]->GetXaxis(), 0.0f);
     root_helper::SetAxisTitleAttribute(frame[0]->GetYaxis(), 50.0f, 1.5f);
     root_helper::SetAxisLabelAttribute(frame[0]->GetXaxis(), 40.0f, 0.13f, 103, kCyan+3);
@@ -2025,7 +2012,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent(
     root_helper::SetPadMarginInCanvas(gPad, 0.10, 0.00, 0.02, 0.01);
     root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
     RemodelFrameInPad(frame[1].get(), pad[2].get(), 0.0, 0.015);
-    RemodelAxisLabels(frame[1]->GetXaxis(), component_id_list, 90.0, 12);
+    painter_internal::RemodelAxisLabels(frame[1]->GetXaxis(), component_id_list, 90.0, 12);
     root_helper::SetAxisTitleAttribute(frame[1]->GetXaxis(), 0.0f);
     root_helper::SetAxisTitleAttribute(frame[1]->GetYaxis(), 50.0f, 1.5f);
     root_helper::SetAxisLabelAttribute(frame[1]->GetXaxis(), 0.0f);
@@ -2055,7 +2042,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent(
     root_helper::SetPadMarginInCanvas(gPad, 0.09, 0.01, 0.02, 0.02);
     root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
     RemodelFrameInPad(frame[3].get(), pad[4].get(), 0.0, 0.0);
-    RemodelAxisLabels(frame[3]->GetYaxis(), spot_label_list, 0.0, 22);
+    painter_internal::RemodelAxisLabels(frame[3]->GetYaxis(), spot_label_list, 0.0, 22);
     root_helper::SetAxisTitleAttribute(frame[3]->GetXaxis(), 0.0f);
     root_helper::SetAxisTitleAttribute(frame[3]->GetYaxis(), 40.0f, 1.2f);
     root_helper::SetAxisLabelAttribute(frame[3]->GetXaxis(), 0.0f);
@@ -2068,7 +2055,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent(
     root_helper::SetPadMarginInCanvas(gPad, 0.01, 0.01, 0.12, 0.02);
     root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
     RemodelFrameInPad(frame[2].get(), pad[5].get(), 0.0, 0.0);
-    RemodelAxisLabels(frame[2]->GetXaxis(), spot_label_list, 0.0, -1);
+    painter_internal::RemodelAxisLabels(frame[2]->GetXaxis(), spot_label_list, 0.0, -1);
     root_helper::SetAxisTitleAttribute(frame[2]->GetXaxis(), 40.0f, 1.0f);
     root_helper::SetAxisTitleAttribute(frame[2]->GetYaxis(), 0.0f);
     root_helper::SetAxisLabelAttribute(frame[2]->GetXaxis(), 35.0f, 0.005f, 103);
@@ -2099,7 +2086,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent(
     root_helper::SetPadMarginInCanvas(gPad, 0.10, 0.00, 0.02, 0.01);
     root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
     RemodelFrameInPad(frame[6].get(), pad[7].get(), 0.0, 0.015);
-    RemodelAxisLabels(frame[6]->GetXaxis(), component_id_list, 90.0, 12);
+    painter_internal::RemodelAxisLabels(frame[6]->GetXaxis(), component_id_list, 90.0, 12);
     root_helper::SetAxisTitleAttribute(frame[6]->GetXaxis(), 0.0f);
     root_helper::SetAxisTitleAttribute(frame[6]->GetYaxis(), 40.0f, 1.2f);
     root_helper::SetAxisLabelAttribute(frame[6]->GetXaxis(), 0.0f);

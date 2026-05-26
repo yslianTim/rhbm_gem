@@ -6,11 +6,11 @@
 
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/CommandSystem.hpp>
-#include <rhbm_gem/core/painter/AtomPainter.hpp>
-#include <rhbm_gem/core/painter/ComparisonPainter.hpp>
-#include <rhbm_gem/core/painter/DemoPainter.hpp>
-#include <rhbm_gem/core/painter/GausPainter.hpp>
-#include <rhbm_gem/core/painter/ModelPainter.hpp>
+#include "core/painter/AtomPainter.hpp"
+#include "core/painter/ComparisonPainter.hpp"
+#include "core/painter/DemoPainter.hpp"
+#include "core/painter/GausPainter.hpp"
+#include "core/painter/ModelPainter.hpp"
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include "support/DataObjectTestSupport.hpp"
 

@@ -7,7 +7,7 @@
 #include <vector>
 
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
-#include <rhbm_gem/core/painter/PainterBase.hpp>
+#include "PainterBase.hpp"
 
 #ifdef HAVE_ROOT
 class TPad;

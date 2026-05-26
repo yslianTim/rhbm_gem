@@ -1,4 +1,4 @@
-#include <rhbm_gem/core/painter/ComparisonPainter.hpp>
+#include "ComparisonPainter.hpp"
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>

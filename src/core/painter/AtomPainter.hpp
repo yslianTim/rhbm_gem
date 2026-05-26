@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#include <rhbm_gem/core/painter/PainterBase.hpp>
+#include "PainterBase.hpp"
 
 #ifdef HAVE_ROOT
 class TPad;

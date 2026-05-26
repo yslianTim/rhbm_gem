@@ -98,6 +98,7 @@ set(CORE_CONTRACT_TEST_SOURCES
 )
 
 set(CORE_PAINTER_TEST_SOURCES
+    core/painter/DataObjectPainterIngestion_test.cpp
     core/painter/PotentialPlotBuilder_test.cpp
 )
 
@@ -106,7 +107,6 @@ set(DATA_RUNTIME_TEST_SOURCES
     data/DataObjectFileIO_test.cpp
     data/DataObjectMapBehavior_test.cpp
     data/DataObjectModelAnalysis_test.cpp
-    data/DataObjectPainterIngestion_test.cpp
     data/DataObjectImportRegression_test.cpp
     data/RHBMTypes_test.cpp
     data/LocalPotentialSeries_test.cpp

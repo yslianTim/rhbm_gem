@@ -1,4 +1,4 @@
-#include <rhbm_gem/core/painter/ModelPainter.hpp>
+#include "ModelPainter.hpp"
 
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>

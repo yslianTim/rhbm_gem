@@ -1,4 +1,4 @@
-#include <rhbm_gem/core/painter/AtomPainter.hpp>
+#include "AtomPainter.hpp"
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>

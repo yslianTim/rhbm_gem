@@ -1,4 +1,4 @@
-#include <rhbm_gem/core/painter/DemoPainter.hpp>
+#include "DemoPainter.hpp"
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -9,9 +9,9 @@
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
-#include <rhbm_gem/core/painter/GausPainter.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/LocalPotentialSeries.hpp>
+#include "detail/PainterAxisLabels.hpp"
 #include "detail/PainterModelValidation.hpp"
 
 #ifdef HAVE_ROOT
@@ -1906,7 +1906,7 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
             frame[i][j]->SetStats(0);
             frame[i][j]->GetXaxis()->SetLimits(0.0, 3.0);
             frame[i][j]->GetYaxis()->SetLimits(std::get<0>(range_tmp), std::get<1>(range_tmp));
-            GausPainter::RemodelAxisLabels(frame[i][j]->GetXaxis(), spot_label_list, 0.0, -1);
+            painter_internal::RemodelAxisLabels(frame[i][j]->GetXaxis(), spot_label_list, 0.0, -1);
             frame[i][j]->Draw((i == col_size - 1) ? "Y+" : "");
             for (auto & [spot, hist] : hist_map[i][j])
             {

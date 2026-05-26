@@ -5,12 +5,11 @@
 #include <vector>
 
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
-#include <rhbm_gem/core/painter/PainterBase.hpp>
+#include "PainterBase.hpp"
 
 #ifdef HAVE_ROOT
 class TPad;
 class TH2;
-class TAxis;
 class TPaveText;
 #endif
 
@@ -27,9 +26,6 @@ public:
     ~GausPainter();
     void AddModel(ModelObject & data_object);
     void Painting() override;
-#ifdef HAVE_ROOT
-    static void RemodelAxisLabels(::TAxis * axis, const std::vector<std::string> & label_list, double angle, int align);
-#endif
 
 private:
     void PaintAtomLocalGausSummary(ModelObject * model_object, const std::string & name);

@@ -3,11 +3,11 @@
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/core/painter/GausPainter.hpp>
-#include <rhbm_gem/core/painter/AtomPainter.hpp>
-#include <rhbm_gem/core/painter/ModelPainter.hpp>
-#include <rhbm_gem/core/painter/ComparisonPainter.hpp>
-#include <rhbm_gem/core/painter/DemoPainter.hpp>
+#include "core/painter/GausPainter.hpp"
+#include "core/painter/AtomPainter.hpp"
+#include "core/painter/ModelPainter.hpp"
+#include "core/painter/ComparisonPainter.hpp"
+#include "core/painter/DemoPainter.hpp"
 #include <rhbm_gem/utils/domain/AtomSelector.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
