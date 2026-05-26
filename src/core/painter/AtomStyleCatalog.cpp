@@ -3,11 +3,21 @@
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
+#include <string>
 #include <vector>
 
 namespace rhbm_gem {
 
 namespace {
+
+struct StyleSpec
+{
+    short color{ 1 };
+    short solid_marker{ 1 };
+    short open_marker{ 1 };
+    short line_style{ 1 };
+    std::string label{ "UNK" };
+};
 
 const std::vector<StyleSpec> kMainChainElementStyleList
 {
@@ -43,15 +53,13 @@ bool IsValidMainChainMemberID(size_t member_id)
     return true;
 }
 
-} // namespace
-
-StyleSpec AtomStyleCatalog::GetMainChainElementStyle(size_t member_id)
+StyleSpec GetMainChainElementStyle(size_t member_id)
 {
     if (IsValidMainChainMemberID(member_id) == false) return kUnknownStyle;
     return kMainChainElementStyleList.at(member_id);
 }
 
-StyleSpec AtomStyleCatalog::GetMainChainSpotStyle(Spot spot)
+StyleSpec GetMainChainSpotStyle(Spot spot)
 {
     switch (spot)
     {
@@ -68,7 +76,7 @@ StyleSpec AtomStyleCatalog::GetMainChainSpotStyle(Spot spot)
     }
 }
 
-StyleSpec AtomStyleCatalog::GetMainChainStructureStyle(Structure structure)
+StyleSpec GetMainChainStructureStyle(Structure structure)
 {
     switch (structure)
     {
@@ -81,6 +89,73 @@ StyleSpec AtomStyleCatalog::GetMainChainStructureStyle(Structure structure)
     default:
         return kUnknownStyle;
     }
+}
+
+} // namespace
+
+short AtomStyleCatalog::GetMainChainElementColor(size_t member_id)
+{
+    return GetMainChainElementStyle(member_id).color;
+}
+
+short AtomStyleCatalog::GetMainChainSpotColor(Spot spot)
+{
+    return GetMainChainSpotStyle(spot).color;
+}
+
+short AtomStyleCatalog::GetMainChainStructureColor(Structure structure)
+{
+    return GetMainChainStructureStyle(structure).color;
+}
+
+short AtomStyleCatalog::GetMainChainElementSolidMarker(size_t member_id)
+{
+    return GetMainChainElementStyle(member_id).solid_marker;
+}
+
+short AtomStyleCatalog::GetMainChainSpotSolidMarker(Spot spot)
+{
+    return GetMainChainSpotStyle(spot).solid_marker;
+}
+
+short AtomStyleCatalog::GetMainChainStructureMarker(Structure structure)
+{
+    return GetMainChainStructureStyle(structure).solid_marker;
+}
+
+short AtomStyleCatalog::GetMainChainElementOpenMarker(size_t member_id)
+{
+    return GetMainChainElementStyle(member_id).open_marker;
+}
+
+short AtomStyleCatalog::GetMainChainSpotOpenMarker(Spot spot)
+{
+    return GetMainChainSpotStyle(spot).open_marker;
+}
+
+short AtomStyleCatalog::GetMainChainSpotLineStyle(Spot spot)
+{
+    return GetMainChainSpotStyle(spot).line_style;
+}
+
+short AtomStyleCatalog::GetMainChainStructureLineStyle(Structure structure)
+{
+    return GetMainChainStructureStyle(structure).line_style;
+}
+
+std::string AtomStyleCatalog::GetMainChainElementLabel(size_t member_id)
+{
+    return GetMainChainElementStyle(member_id).label;
+}
+
+std::string AtomStyleCatalog::GetMainChainSpotLabel(Spot spot)
+{
+    return GetMainChainSpotStyle(spot).label;
+}
+
+std::string AtomStyleCatalog::GetMainChainStructureLabel(Structure structure)
+{
+    return GetMainChainStructureStyle(structure).label;
 }
 
 } // namespace rhbm_gem

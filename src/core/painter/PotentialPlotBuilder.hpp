@@ -57,6 +57,13 @@ public:
     std::unique_ptr<::TGraphErrors> CreateInRangeAtomsToGausEstimateGraph(GroupKey group_key, const std::string & class_key, double range=5.0, int par_id=0);
     std::unique_ptr<::TGraphErrors> CreateCOMDistanceToGausEstimateGraph(GroupKey group_key, const std::string & class_key, int par_id=0);
     std::unique_ptr<::TGraphErrors> CreateAtomXYPositionTomographyGraph(double normalized_z_pos=0.5, double z_ratio_window=0.1, bool com_center=false);
+    static std::unique_ptr<::TGraphErrors> CreateMapValueScatterGraph(
+        GroupKey group_key,
+        ModelObject * model1,
+        ModelObject * model2,
+        int bin_size=15,
+        double x_min=0.0,
+        double x_max=1.5);
     std::unique_ptr<::TF1> CreateAtomLocalLinearModelFunctionOLS() const;
     std::unique_ptr<::TF1> CreateAtomLocalLinearModelFunctionMDPDE() const;
     std::unique_ptr<::TF1> CreateAtomLocalGausFunctionOLS() const;

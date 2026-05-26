@@ -2,14 +2,14 @@
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
+#include "PotentialPlotBuilder.hpp"
 #include "core/painter/AtomStyleCatalog.hpp"
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include "detail/PainterModelAccess.hpp"
-#include "detail/PainterSupport.hpp"
+#include "detail/PainterModelValidation.hpp"
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
@@ -39,17 +39,15 @@ ComparisonPainter::~ComparisonPainter()
 
 void ComparisonPainter::AddModel(ModelObject & data_object)
 {
-    painter_internal::PainterModelIngress::AddModel(
-        *this,
-        painter_internal::RequireGroupedAnalyzedModel(data_object, "ComparisonPainter"));
+    painter_internal::RequireGroupedAnalyzedModel(data_object, "ComparisonPainter");
+    m_model_object_list.emplace_back(&data_object);
+    m_resolution_list.emplace_back(data_object.GetResolution());
 }
 
 void ComparisonPainter::AddReferenceModel(ModelObject & data_object, std::string_view label)
 {
-    painter_internal::PainterModelIngress::AddReferenceModel(
-        *this,
-        painter_internal::RequireGroupedAnalyzedModel(data_object, "ComparisonPainter"),
-        label);
+    painter_internal::RequireGroupedAnalyzedModel(data_object, "ComparisonPainter");
+    m_ref_model_object_list_map[std::string(label)].push_back(&data_object);
 }
 
 void ComparisonPainter::Painting()
@@ -634,9 +632,10 @@ void ComparisonPainter::PainMapValueComparison(
         for (size_t i = 0; i < col_size; i++)
         {
             auto group_key{ AtomClassifier::GetMainChainSimpleAtomClassGroupKey(i) };
-            auto graph{ root_helper::CreateGraphErrors() };
-            painter_internal::BuildMapValueScatterGraph(
-                group_key, graph.get(), ref_model_object, model_object, 15, 0.0, 1.5);
+            auto graph{
+                PotentialPlotBuilder::CreateMapValueScatterGraph(
+                    group_key, ref_model_object, model_object, 15, 0.0, 1.5)
+            };
             r_square[i] = root_helper::PerformLinearRegression(graph.get(), slope[i], intercept[i]);
             auto function{ root_helper::CreateFunction1D(Form("fit_%d", static_cast<int>(i)), "x*[1]+[0]") };
             function->SetParameters(intercept[i], slope[i]);

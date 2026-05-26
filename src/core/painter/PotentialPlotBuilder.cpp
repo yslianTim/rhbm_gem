@@ -22,6 +22,7 @@
 #include <cmath>
 #include <limits>
 #include <stdexcept>
+#include <unordered_map>
 
 namespace rhbm_gem {
 
@@ -694,6 +695,71 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomXYPositionTomograp
         }
         graph->SetPoint(count, position.at(0) - com_pos.at(0), position.at(1) - com_pos.at(1));
         count++;
+    }
+    return graph;
+}
+
+std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateMapValueScatterGraph(
+    GroupKey group_key,
+    ModelObject * model1,
+    ModelObject * model2,
+    int bin_size,
+    double x_min,
+    double x_max)
+{
+    auto graph{ root_helper::CreateGraphErrors() };
+    const ModelAnalysisView entry1_view{ *model1 };
+    const ModelAnalysisView entry2_view{ *model2 };
+    const auto & class_key{ ChemicalDataHelper::GetSimpleAtomClassKey() };
+    if (!entry1_view.HasAtomGroup(group_key, class_key) ||
+        !entry2_view.HasAtomGroup(group_key, class_key))
+    {
+        return graph;
+    }
+    const auto & group1{ entry1_view.GetAtomObjectList(group_key, class_key) };
+    const auto & group2{ entry2_view.GetAtomObjectList(group_key, class_key) };
+
+    std::unordered_map<int, AtomObject *> model1_atom_map;
+    model1_atom_map.reserve(group1.size());
+    for (auto * atom_object : group1)
+    {
+        model1_atom_map[atom_object->GetSerialID()] = atom_object;
+    }
+
+    std::unordered_map<int, AtomObject *> model2_atom_map;
+    model2_atom_map.reserve(group2.size());
+    for (auto * atom_object : group2)
+    {
+        model2_atom_map[atom_object->GetSerialID()] = atom_object;
+    }
+
+    auto count{ 0 };
+    for (auto & [atom_id, atom_object1] : model1_atom_map)
+    {
+        if (model2_atom_map.find(atom_id) == model2_atom_map.end())
+        {
+            continue;
+        }
+        auto * atom_object2{ model2_atom_map.at(atom_id) };
+        auto data1_array{
+            local_potential_series::BuildBinnedDistanceResponseSeries(
+                AtomLocalPotentialView::RequireFor(*atom_object1).GetSamplingEntries(),
+                bin_size,
+                x_min,
+                x_max)
+        };
+        auto data2_array{
+            local_potential_series::BuildBinnedDistanceResponseSeries(
+                AtomLocalPotentialView::RequireFor(*atom_object2).GetSamplingEntries(),
+                bin_size,
+                x_min,
+                x_max)
+        };
+        for (size_t i = 0; i < static_cast<size_t>(bin_size); i++)
+        {
+            graph->SetPoint(count, data1_array.at(i).response, data2_array.at(i).response);
+            count++;
+        }
     }
     return graph;
 }

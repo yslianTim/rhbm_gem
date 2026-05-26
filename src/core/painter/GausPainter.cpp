@@ -15,8 +15,8 @@
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include "detail/PainterModelAccess.hpp"
-#include "detail/PainterSupport.hpp"
+#include "detail/PainterModelValidation.hpp"
+#include "detail/PainterOutputLabel.hpp"
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
@@ -71,9 +71,8 @@ GausPainter::~GausPainter()
 
 void GausPainter::AddModel(ModelObject & data_object)
 {
-    painter_internal::PainterModelIngress::AddModel(
-        *this,
-        painter_internal::RequireGroupedAnalyzedModel(data_object, "GausPainter"));
+    painter_internal::RequireGroupedAnalyzedModel(data_object, "GausPainter");
+    m_model_object_list.push_back(&data_object);
 }
 
 void GausPainter::Painting()

@@ -12,8 +12,7 @@
 #include <rhbm_gem/core/painter/GausPainter.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/LocalPotentialSeries.hpp>
-#include "detail/PainterModelAccess.hpp"
-#include "detail/PainterSupport.hpp"
+#include "detail/PainterModelValidation.hpp"
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
@@ -44,6 +43,67 @@
 
 namespace rhbm_gem {
 
+namespace {
+
+#ifdef HAVE_ROOT
+void PrintGausTitlePad(
+    ::TPad * pad,
+    ::TPaveText * text,
+    const std::string & title,
+    float text_size)
+{
+    pad->cd();
+    auto left_margin{ 0.001 + pad->GetLeftMargin() * pad->GetAbsWNDC() };
+    auto right_margin{ 0.001 + pad->GetRightMargin() * pad->GetAbsWNDC() };
+    auto bottom_margin{ 0.005 + (1.0 - pad->GetTopMargin()) * pad->GetAbsHNDC() };
+    root_helper::SetPaveTextMarginInCanvas(pad, text, left_margin, right_margin, bottom_margin, 0.005);
+    root_helper::SetPaveTextDefaultStyle(text);
+    root_helper::SetPaveAttribute(text, 0, 0.2);
+    root_helper::SetFillAttribute(text, 1001, kAzure - 7);
+    root_helper::SetTextAttribute(text, text_size, 23, 22, 0.0, kYellow - 10);
+    root_helper::SetLineAttribute(text, 1, 0);
+    text->AddText(title.data());
+    pad->Update();
+}
+
+void PrintGausResultGlobalPad(
+    ::TPad * pad,
+    ::TH2 * hist,
+    double left_margin,
+    double right_margin,
+    double bottom_margin,
+    double top_margin,
+    bool is_right_side_pad)
+{
+    pad->cd();
+    root_helper::SetPadMarginInCanvas(pad, left_margin, right_margin, bottom_margin, top_margin);
+    root_helper::SetPadLayout(pad, 1, 1, 0, 0);
+    root_helper::SetAxisTitleAttribute(hist->GetXaxis(), 0.0f);
+    root_helper::SetAxisTitleAttribute(hist->GetYaxis(), 0.0f);
+    root_helper::SetAxisLabelAttribute(hist->GetXaxis(), 55.0f, 0.11f, 103, kCyan + 3);
+    root_helper::SetAxisLabelAttribute(hist->GetYaxis(), 50.0f, 0.01f);
+
+    auto x_tick_length{ root_helper::ConvertGlobalTickLengthToPadTickLength(pad, 0.0, 0) };
+    auto y_tick_length{ root_helper::ConvertGlobalTickLengthToPadTickLength(pad, 0.008, 1) };
+    root_helper::SetAxisTickAttribute(hist->GetXaxis(), static_cast<float>(x_tick_length), 21);
+    root_helper::SetAxisTickAttribute(hist->GetYaxis(), static_cast<float>(y_tick_length), 505);
+    hist->GetXaxis()->SetLimits(-1.0, 20.0);
+    hist->GetXaxis()->ChangeLabel(1, -1.0, 0.0);
+    hist->GetXaxis()->ChangeLabel(-1, -1.0, 0.0);
+    for (size_t i = 0; i < ChemicalDataHelper::GetStandardAminoAcidCount(); i++)
+    {
+        auto residue{ ChemicalDataHelper::GetStandardAminoAcidList().at(i) };
+        auto label{ ChemicalDataHelper::GetLabel(residue) };
+        auto label_index{ static_cast<int>(i) + 2 };
+        hist->GetXaxis()->ChangeLabel(label_index, 90.0, -1, 12, -1, -1, label.data());
+    }
+    hist->SetStats(0);
+    hist->Draw((is_right_side_pad) ? "Y+" : "");
+}
+#endif
+
+} // namespace
+
 DemoPainter::DemoPainter() = default;
 
 DemoPainter::~DemoPainter()
@@ -53,17 +113,14 @@ DemoPainter::~DemoPainter()
 
 void DemoPainter::AddModel(ModelObject & data_object)
 {
-    painter_internal::PainterModelIngress::AddModel(
-        *this,
-        painter_internal::RequireGroupedAnalyzedModel(data_object, "DemoPainter"));
+    painter_internal::RequireGroupedAnalyzedModel(data_object, "DemoPainter");
+    m_model_object_list.push_back(&data_object);
 }
 
 void DemoPainter::AddReferenceModel(ModelObject & data_object, std::string_view label)
 {
-    painter_internal::PainterModelIngress::AddReferenceModel(
-        *this,
-        painter_internal::RequireGroupedAnalyzedModel(data_object, "DemoPainter"),
-        label);
+    painter_internal::RequireGroupedAnalyzedModel(data_object, "DemoPainter");
+    m_ref_model_object_list_map[std::string(label)].push_back(&data_object);
 }
 
 void DemoPainter::Painting()
@@ -197,9 +254,10 @@ void DemoPainter::PainMapValueComparisonSingle(
     for (size_t i = 0; i < col_size; i++)
     {
         auto group_key{ AtomClassifier::GetMainChainSimpleAtomClassGroupKey(i) };
-        auto graph{ root_helper::CreateGraphErrors() };
-        painter_internal::BuildMapValueScatterGraph(
-            group_key, graph.get(), ref_model_object, model_object, 15, 0.0, 1.5);
+        auto graph{
+            PotentialPlotBuilder::CreateMapValueScatterGraph(
+                group_key, ref_model_object, model_object, 15, 0.0, 1.5)
+        };
         r_square[i] = root_helper::PerformLinearRegression(graph.get(), slope[i], intercept[i]);
         auto function{ root_helper::CreateFunction1D(Form("fit_%d", static_cast<int>(i)), "x*[1]+[0]") };
         function->SetParameters(intercept[i], slope[i]);
@@ -544,19 +602,19 @@ void DemoPainter::PaintGroupGausMainChainSummary(
         pad[1][j]->cd();
         PrintGausResultPad(pad[1][j].get(), frame[0][j].get(), draw_axis_flag, draw_title_flag, false);
         for (int k = 0; k < main_chain_element_count; k++) amplitude_graph[j][k]->Draw("PL X0");
-        if (j == pad_size_y - 1) painter_internal::PrintGausTitlePad(
+        if (j == pad_size_y - 1) PrintGausTitlePad(
             pad[1][j].get(), amplitude_title_text.get(), "Amplitude #font[2]{A}", 80.0f);
 
         pad[2][j]->cd();
         PrintGausCorrelationPad(pad[2][j].get(), frame[1][j].get(), draw_axis_flag, draw_title_flag);
         for (int k = 0; k < main_chain_element_count; k++) correlation_graph[j][k]->Draw("P X0");
-        if (j == pad_size_y - 1) painter_internal::PrintGausTitlePad(
+        if (j == pad_size_y - 1) PrintGausTitlePad(
             pad[2][j].get(), correlation_title_text.get(), "#tau#minus#font[2]{A} Plot", 80.0f);
 
         pad[3][j]->cd();
         PrintGausResultPad(pad[3][j].get(), frame[2][j].get(), draw_axis_flag, draw_title_flag, true);
         for (int k = 0; k < main_chain_element_count; k++) width_graph[j][k]->Draw("PL X0");
-        if (j == pad_size_y - 1) painter_internal::PrintGausTitlePad(
+        if (j == pad_size_y - 1) PrintGausTitlePad(
             pad[3][j].get(), width_title_text.get(), "Width #font[2]{#tau}", 80.0f);
     }
 
@@ -691,10 +749,10 @@ void DemoPainter::PaintGroupGausMainChainSingle(
     //legend->Draw();
 
     pad[1]->cd();
-    painter_internal::PrintGausResultGlobalPad(
+    PrintGausResultGlobalPad(
         pad[1].get(), frame[0].get(), 0.030, 0.005, 0.205, 0.205, false);
     for (int k = 0; k < main_chain_element_count; k++) amplitude_graph[k]->Draw("PL X0");
-    painter_internal::PrintGausTitlePad(
+    PrintGausTitlePad(
         pad[1].get(), amplitude_title_text.get(), "Amplitude #font[2]{A}", 80.0f);
 
     pad[2]->cd();
@@ -713,14 +771,14 @@ void DemoPainter::PaintGroupGausMainChainSingle(
     frame[1]->GetXaxis()->CenterTitle();
     frame[1]->Draw("");
     for (int k = 0; k < main_chain_element_count; k++) correlation_graph[k]->Draw("P X0");
-    painter_internal::PrintGausTitlePad(
+    PrintGausTitlePad(
         pad[2].get(), correlation_title_text.get(), "#tau#minus#font[2]{A} Plot", 80.0f);
 
     pad[3]->cd();
-    painter_internal::PrintGausResultGlobalPad(
+    PrintGausResultGlobalPad(
         pad[3].get(), frame[2].get(), 0.005, 0.030, 0.205, 0.205, true);
     for (int k = 0; k < main_chain_element_count; k++) width_graph[k]->Draw("PL X0");
-    painter_internal::PrintGausTitlePad(
+    PrintGausTitlePad(
         pad[3].get(), width_title_text.get(), "Width #font[2]{#tau}", 80.0f);
 
     root_helper::PrintCanvasPad(canvas.get(), file_path);

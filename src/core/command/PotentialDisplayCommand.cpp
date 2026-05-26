@@ -1,5 +1,4 @@
 #include "detail/CommandBase.hpp"
-#include "core/painter/detail/PainterModelAccess.hpp"
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -171,9 +170,7 @@ bool PotentialDisplayCommand::ExecuteImpl(const PotentialDisplayRequest & reques
             GausPainter painter;
             for (const auto & model_object : inputs->model_objects)
             {
-                painter_internal::PainterModelIngress::AddModel(
-                    painter,
-                    painter_internal::RequireGroupedAnalyzedModel(*model_object, "GausPainter"));
+                painter.AddModel(*model_object);
             }
             painter.SetFolder(output_folder);
             painter.Painting();
@@ -184,9 +181,7 @@ bool PotentialDisplayCommand::ExecuteImpl(const PotentialDisplayRequest & reques
             ModelPainter painter;
             for (const auto & model_object : inputs->model_objects)
             {
-                painter_internal::PainterModelIngress::AddModel(
-                    painter,
-                    painter_internal::RequireGroupedAnalyzedModel(*model_object, "ModelPainter"));
+                painter.AddModel(*model_object);
             }
             painter.SetFolder(output_folder);
             painter.Painting();
@@ -197,18 +192,13 @@ bool PotentialDisplayCommand::ExecuteImpl(const PotentialDisplayRequest & reques
             ComparisonPainter painter;
             for (const auto & model_object : inputs->model_objects)
             {
-                painter_internal::PainterModelIngress::AddModel(
-                    painter,
-                    painter_internal::RequireGroupedAnalyzedModel(*model_object, "ComparisonPainter"));
+                painter.AddModel(*model_object);
             }
             for (const auto & [class_key, ref_model_list] : inputs->reference_model_groups)
             {
                 for (const auto & model_object : ref_model_list)
                 {
-                    painter_internal::PainterModelIngress::AddReferenceModel(
-                        painter,
-                        painter_internal::RequireGroupedAnalyzedModel(*model_object, "ComparisonPainter"),
-                        class_key);
+                    painter.AddReferenceModel(*model_object, class_key);
                 }
             }
             painter.SetFolder(output_folder);
@@ -220,18 +210,13 @@ bool PotentialDisplayCommand::ExecuteImpl(const PotentialDisplayRequest & reques
             DemoPainter painter;
             for (const auto & model_object : inputs->model_objects)
             {
-                painter_internal::PainterModelIngress::AddModel(
-                    painter,
-                    painter_internal::RequireGroupedAnalyzedModel(*model_object, "DemoPainter"));
+                painter.AddModel(*model_object);
             }
             for (const auto & [class_key, ref_model_list] : inputs->reference_model_groups)
             {
                 for (const auto & model_object : ref_model_list)
                 {
-                    painter_internal::PainterModelIngress::AddReferenceModel(
-                        painter,
-                        painter_internal::RequireGroupedAnalyzedModel(*model_object, "DemoPainter"),
-                        class_key);
+                    painter.AddReferenceModel(*model_object, class_key);
                 }
             }
             painter.SetFolder(output_folder);
@@ -243,9 +228,7 @@ bool PotentialDisplayCommand::ExecuteImpl(const PotentialDisplayRequest & reques
             AtomPainter painter;
             for (const auto & model_object : inputs->model_objects)
             {
-                painter_internal::PainterModelIngress::AddModel(
-                    painter,
-                    painter_internal::RequireLocalAnalyzedModel(*model_object, "AtomPainter"));
+                painter.AddModel(*model_object);
             }
             selector.Print();
             painter.SetFolder(output_folder);

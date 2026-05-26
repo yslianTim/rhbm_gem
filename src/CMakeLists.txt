@@ -24,7 +24,6 @@ target_sources(rhbm_gem PRIVATE
     core/painter/GausPainter.cpp
     core/painter/ModelPainter.cpp
     core/painter/PotentialPlotBuilder.cpp
-    core/painter/detail/PainterModelAccess.cpp
     ${RHBM_GEM_COMMAND_SOURCES}
 
     # data
@@ -34,7 +33,6 @@ target_sources(rhbm_gem PRIVATE
     data/io/DataRepository.cpp
     data/io/file/ModelImportState.cpp
     data/object/BondClassifier.cpp
-    core/painter/BondStyleCatalog.cpp
     data/object/BondObject.cpp
     data/object/ChemicalComponentEntry.cpp
     data/object/ModelAnalysisEditor.cpp
