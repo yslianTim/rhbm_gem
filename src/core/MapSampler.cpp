@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
-#include <utility>
 #include <vector>
 
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -134,7 +133,8 @@ LocalPotentialSampleList SampleAtomMapValues(
     auto sample_list{
         BuildLocalPotentialSampleList(map_object, filtered_sample_point_list)
     };
-    return sample_filter::FilterLocalPotentialSampleList(std::move(sample_list));
+    //return sample_filter::FilterLocalPotentialSampleList(std::move(sample_list));
+    return sample_list;
 }
 
 } // namespace rhbm_gem::core
