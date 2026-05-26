@@ -1,7 +1,8 @@
 #include "PotentialPlotBuilder.hpp"
 
-#include "data/detail/ModelDerivedState.hpp"
 #include "data/detail/AtomClassifier.hpp"
+#include "data/detail/ModelDerivedState.hpp"
+
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
@@ -27,17 +28,10 @@
 namespace rhbm_gem {
 
 namespace {
-namespace ls = rhbm_gem::linearization_service;
-namespace lps = rhbm_gem::local_potential_series;
-
-RHBMParameterVector EncodeAtomGaussianToParameterVector(const GaussianModel3D & estimate)
-{
-    return ls::EncodeGaussianToParameterVector(estimate);
-}
 
 SeriesPointList BuildLocalDatasetSeries(const AtomLocalPotentialView & view)
 {
-    return ls::BuildDatasetSeries(
+    return linearization_service::BuildDatasetSeries(
         view.GetSamplingEntries(),
         -std::numeric_limits<double>::infinity(),
         std::numeric_limits<double>::infinity(),
@@ -275,8 +269,8 @@ std::unique_ptr<TH2D> PotentialPlotBuilder::CreateDistanceToMapValueHistogram(
     int x_bin_size, int y_bin_size) const
 {
     const auto local_entry{ GetLocalEntry() };
-    auto distance_range{ lps::ComputeDistanceRange(local_entry.GetSamplingEntries(), 0.0) };
-    auto map_value_range{ lps::ComputeResponseRange(local_entry.GetSamplingEntries(), 0.1) };
+    auto distance_range{ local_potential_series::ComputeDistanceRange(local_entry.GetSamplingEntries(), 0.0) };
+    auto map_value_range{ local_potential_series::ComputeResponseRange(local_entry.GetSamplingEntries(), 0.1) };
     auto hist{
         root_helper::CreateHist2D(
             "hist_distance_mapvalue", "Distance vs Map Value",
@@ -604,7 +598,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToMapVal
     int bin_size, double x_min, double x_max)
 {
     auto data_array{
-        lps::BuildBinnedDistanceResponseSeries(
+        local_potential_series::BuildBinnedDistanceResponseSeries(
             GetLocalEntry().GetSamplingEntries(), bin_size, x_min, x_max)
     };
     auto graph{ root_helper::CreateGraphErrors(bin_size) };
@@ -771,7 +765,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalLinearModelFunctionOLS
         return nullptr;
     }
     const auto atom_local_entry{ AtomLocalPotentialView::RequireFor(*m_atom_object) };
-    const auto beta{ EncodeAtomGaussianToParameterVector(atom_local_entry.GetEstimateOLS()) };
+    const auto beta{ linearization_service::EncodeGaussianToParameterVector(atom_local_entry.GetEstimateOLS()) };
     auto beta_0{ beta(0) };
     auto beta_1{ beta(1) };
     return root_helper::CreateLinearModelFunction("linear", beta_0, beta_1);
@@ -784,7 +778,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalLinearModelFunctionMDP
         return nullptr;
     }
     const auto atom_local_entry{ AtomLocalPotentialView::RequireFor(*m_atom_object) };
-    const auto beta{ EncodeAtomGaussianToParameterVector(atom_local_entry.GetEstimateMDPDE()) };
+    const auto beta{ linearization_service::EncodeGaussianToParameterVector(atom_local_entry.GetEstimateMDPDE()) };
     auto beta_0{ beta(0) };
     auto beta_1{ beta(1) };
     return root_helper::CreateLinearModelFunction("linear", beta_0, beta_1);
@@ -822,7 +816,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupLinearModelFunctionMea
         return nullptr;
     }
     const auto beta{
-        EncodeAtomGaussianToParameterVector(GetModelView().GetAtomGroupMean(group_key, class_key))
+        linearization_service::EncodeGaussianToParameterVector(GetModelView().GetAtomGroupMean(group_key, class_key))
     };
     auto mu_0{ beta(0) };
     auto mu_1{ beta(1) };
@@ -837,7 +831,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupLinearModelFunctionPri
         return nullptr;
     }
     const auto beta{
-        EncodeAtomGaussianToParameterVector(GetModelView().GetAtomGroupPrior(group_key, class_key))
+        linearization_service::EncodeGaussianToParameterVector(GetModelView().GetAtomGroupPrior(group_key, class_key))
     };
     auto mu_0{ beta(0) };
     auto mu_1{ beta(1) };
@@ -954,7 +948,7 @@ PotentialPlotBuilder::CreateAtomMapValueToSequenceIDGraphMap(
         graph_map[chain_id]->SetPoint(
             count_map[chain_id],
             x_value,
-            lps::ComputeMapValueNearCenter(entry.GetSamplingEntries()));
+            local_potential_series::ComputeMapValueNearCenter(entry.GetSamplingEntries()));
         count_map[chain_id]++;
     }
     return graph_map;
@@ -989,10 +983,10 @@ PotentialPlotBuilder::CreateAtomQScoreToSequenceIDGraphMap(
         }
         auto x_value{ static_cast<double>(sequence_id) };
         auto q_score{
-            lps::ComputeQScore(
+            local_potential_series::ComputeQScore(
                 entry.GetSamplingEntries(),
                 entry.GetGaussianResult(),
-                static_cast<lps::QScoreReference>(par_choice))
+                static_cast<local_potential_series::QScoreReference>(par_choice))
         };
         // tmp
         if (sequence_id == 20 || sequence_id == 40 || sequence_id == 60 || sequence_id == 80 || sequence_id == 100)

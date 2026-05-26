@@ -1,16 +1,33 @@
 #pragma once
 
+#include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/domain/StringHelper.hpp>
+
 #include <cstddef>
 #include <string>
 #include <vector>
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
-
 #include <TAxis.h>
+#endif
 
 namespace rhbm_gem::painter_internal {
 
+inline std::string BuildPainterOutputLabel(const ModelObject & model_object)
+{
+    auto is_simulation{ model_object.GetEmdID().find("Simulation") != std::string::npos };
+    auto label{ model_object.GetPdbID() };
+    if (is_simulation)
+    {
+        label += "_" + model_object.GetEmdID()
+                 + "_bw" + string_helper::ToStringWithPrecision(model_object.GetResolution(), 2);
+    }
+    label += ".pdf";
+    return label;
+}
+
+#ifdef HAVE_ROOT
 inline void RemodelAxisLabels(
     ::TAxis * axis,
     const std::vector<std::string> & label_list,
@@ -26,6 +43,6 @@ inline void RemodelAxisLabels(
         axis->ChangeLabel(label_index, angle, -1, align, -1, -1, label_list.at(i).data());
     }
 }
+#endif
 
 } // namespace rhbm_gem::painter_internal
-#endif

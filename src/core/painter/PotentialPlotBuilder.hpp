@@ -7,7 +7,6 @@
 #include <vector>
 
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
-
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 
 #ifdef HAVE_ROOT

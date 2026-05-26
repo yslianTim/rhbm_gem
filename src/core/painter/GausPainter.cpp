@@ -1,23 +1,25 @@
 #include <rhbm_gem/core/PainterFunctions.hpp>
+
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
-#include "PotentialPlotBuilder.hpp"
-#include "core/painter/AtomStyleCatalog.hpp"
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/ComponentHelper.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
-#include "data/detail/AtomClassifier.hpp"
-#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include "detail/PainterAxisLabels.hpp"
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
+
+#include "PotentialPlotBuilder.hpp"
+#include "core/painter/AtomStyleCatalog.hpp"
+#include "data/detail/AtomClassifier.hpp"
+#include "detail/PainterLabels.hpp"
 #include "detail/PainterModelValidation.hpp"
-#include "detail/PainterOutputLabel.hpp"
+#include "detail/PainterLabels.hpp"
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>

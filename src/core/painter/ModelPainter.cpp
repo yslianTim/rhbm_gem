@@ -17,7 +17,7 @@
 #include "core/painter/AtomStyleCatalog.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include "detail/PainterModelValidation.hpp"
-#include "detail/PainterOutputLabel.hpp"
+#include "detail/PainterLabels.hpp"
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>

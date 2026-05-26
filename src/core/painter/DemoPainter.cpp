@@ -11,7 +11,7 @@
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/LocalPotentialSeries.hpp>
-#include "detail/PainterAxisLabels.hpp"
+#include "detail/PainterLabels.hpp"
 #include "detail/PainterModelValidation.hpp"
 
 #ifdef HAVE_ROOT

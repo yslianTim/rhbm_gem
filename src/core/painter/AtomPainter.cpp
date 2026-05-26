@@ -1,13 +1,15 @@
 #include <rhbm_gem/core/PainterFunctions.hpp>
+
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include "PotentialPlotBuilder.hpp"
-#include "detail/PainterModelValidation.hpp"
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/LocalPotentialSeries.hpp>
+
+#include "PotentialPlotBuilder.hpp"
+#include "detail/PainterModelValidation.hpp"
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>

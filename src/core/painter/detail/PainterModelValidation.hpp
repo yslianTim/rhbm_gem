@@ -9,7 +9,7 @@
 
 namespace rhbm_gem::painter_internal {
 
-inline void RequireSelectedAtomsHaveLocalEntries(
+inline void RequireLocalAnalyzedModel(
     const ModelObject & model_object,
     std::string_view painter_name)
 {
@@ -28,13 +28,6 @@ inline void RequireSelectedAtomsHaveLocalEntries(
                 + " requires analysis-ready selected atoms with local potential entries.");
         }
     }
-}
-
-inline void RequireLocalAnalyzedModel(
-    const ModelObject & model_object,
-    std::string_view painter_name)
-{
-    RequireSelectedAtomsHaveLocalEntries(model_object, painter_name);
 }
 
 inline void RequireGroupedAnalyzedModel(
