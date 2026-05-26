@@ -1,4 +1,4 @@
-#include "ModelPainter.hpp"
+#include "PainterFunctions.hpp"
 
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -62,11 +62,59 @@ double ComputeAtomGausEstimateMinimum(
 
 } // namespace
 
-ModelPainter::ModelPainter() = default;
-
-ModelPainter::~ModelPainter()
+class ModelPainter
 {
+    std::vector<ModelObject *> m_model_object_list;
+    std::string m_folder_path{ "./" };
 
+public:
+    ModelPainter(
+        const painter_internal::ModelObjectList & model_objects,
+        const std::string & output_folder);
+    void Run();
+
+private:
+    void AddModel(ModelObject & data_object);
+    void PaintAtomGroupGausMainChain(ModelObject * model_object, const std::string & name);
+    void PaintAtomGroupGausNucleotideMainChain(ModelObject * model_object, const std::string & name);
+    void PaintAtomMapValueMainChain(ModelObject * model_object, const std::string & name);
+    void PaintGroupWidthScatterPlot(
+        ModelObject * model_object,
+        const std::string & name,
+        int par_id=0,
+        bool draw_box_plot=false);
+    void PaintAtomXYPosition(ModelObject * model_object, const std::string & name);
+    void PaintAtomGausScatterPlot(
+        ModelObject * model_object,
+        const std::string & name,
+        bool do_normalize=false);
+    void PaintAtomGausMainChain(ModelObject * model_object, const std::string & name);
+    void PaintAtomRankMainChain(ModelObject * model_object, const std::string & name);
+
+#ifdef HAVE_ROOT
+    void PrintAmplitudePad(::TPad * pad, ::TH2 * hist);
+    void PrintWidthPad(::TPad * pad, ::TH2 * hist);
+    void PrintAmplitudeSummaryPad(::TPad * pad, ::TH2 * hist);
+    void PrintAtomWidthSummaryPad(::TPad * pad, ::TH2 * hist);
+    void PrintGausSummaryPad(::TPad * pad, ::TH2 * hist);
+
+    void ModifyAxisLabelSideChain(
+        ::TPad * pad,
+        ::TH2 * hist,
+        Residue residue,
+        const std::vector<std::string> & label_list);
+#endif
+};
+
+ModelPainter::ModelPainter(
+    const painter_internal::ModelObjectList & model_objects,
+    const std::string & output_folder) :
+    m_folder_path{ path_helper::EnsureTrailingSlash(output_folder) }
+{
+    for (auto * model_object : model_objects)
+    {
+        AddModel(*model_object);
+    }
 }
 
 void ModelPainter::AddModel(ModelObject & data_object)
@@ -75,9 +123,9 @@ void ModelPainter::AddModel(ModelObject & data_object)
     m_model_object_list.push_back(&data_object);
 }
 
-void ModelPainter::Painting()
+void ModelPainter::Run()
 {
-    Logger::Log(LogLevel::Info, "ModelPainter::Painting() called.");
+    Logger::Log(LogLevel::Info, "ModelPainter::Run() called.");
     Logger::Log(LogLevel::Info, "Folder path: " + m_folder_path);
     Logger::Log(LogLevel::Info, "Number of atom objects to be painted: "
                 + std::to_string(m_model_object_list.size()));
@@ -756,5 +804,14 @@ void ModelPainter::ModifyAxisLabelSideChain(
 
 #endif
 
+namespace painter_internal {
+
+void PaintModel(const ModelObjectList & model_objects, const std::string & output_folder)
+{
+    ModelPainter painter{ model_objects, output_folder };
+    painter.Run();
+}
+
+} // namespace painter_internal
 
 } // namespace rhbm_gem

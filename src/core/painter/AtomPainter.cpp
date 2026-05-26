@@ -1,9 +1,10 @@
-#include "AtomPainter.hpp"
+#include "PainterFunctions.hpp"
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include "PotentialPlotBuilder.hpp"
 #include "detail/PainterModelValidation.hpp"
+#include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/LocalPotentialSeries.hpp>
@@ -28,11 +29,36 @@
 
 namespace rhbm_gem {
 
-AtomPainter::AtomPainter() = default;
+namespace {
 
-AtomPainter::~AtomPainter()
+class AtomPainter
 {
+    std::vector<AtomObject *> m_atom_object_list;
+    std::string m_output_label;
+    std::string m_folder_path{ "./" };
 
+public:
+    AtomPainter(
+        const painter_internal::ModelObjectList & model_objects,
+        const std::string & output_folder);
+    void Run();
+
+private:
+    void AddModel(ModelObject & data_object);
+    void AppendAtomObject(AtomObject & data_object);
+    void PaintDemoPlot(const std::string & name);
+    void PaintAtomSamplingDataSummary(const std::string & name);
+};
+
+AtomPainter::AtomPainter(
+    const painter_internal::ModelObjectList & model_objects,
+    const std::string & output_folder) :
+    m_folder_path{ path_helper::EnsureTrailingSlash(output_folder) }
+{
+    for (auto * model_object : model_objects)
+    {
+        AddModel(*model_object);
+    }
 }
 
 void AtomPainter::AddModel(ModelObject & data_object)
@@ -54,9 +80,9 @@ void AtomPainter::AppendAtomObject(AtomObject & data_object)
     m_atom_object_list.push_back(&data_object);
 }
 
-void AtomPainter::Painting()
+void AtomPainter::Run()
 {
-    Logger::Log(LogLevel::Info, "AtomPainter::Painting() called.");
+    Logger::Log(LogLevel::Info, "AtomPainter::Run() called.");
     Logger::Log(LogLevel::Info, "Folder path: " + m_folder_path);
     Logger::Log(LogLevel::Info, "Number of atom objects to be painted: "
                 + std::to_string(m_atom_object_list.size()));
@@ -367,5 +393,17 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
     root_helper::PrintCanvasClose(canvas.get(), file_path);
     #endif
 }
+
+} // namespace
+
+namespace painter_internal {
+
+void PaintAtom(const ModelObjectList & model_objects, const std::string & output_folder)
+{
+    AtomPainter painter{ model_objects, output_folder };
+    painter.Run();
+}
+
+} // namespace painter_internal
 
 } // namespace rhbm_gem

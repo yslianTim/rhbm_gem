@@ -1,4 +1,4 @@
-#include "GausPainter.hpp"
+#include "PainterFunctions.hpp"
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -63,11 +63,44 @@ size_t CountOutlierAtoms(
 
 } // namespace
 
-GausPainter::GausPainter() = default;
-
-GausPainter::~GausPainter()
+class GausPainter
 {
+    std::vector<ModelObject *> m_model_object_list;
+    std::string m_folder_path{ "./" };
 
+public:
+    GausPainter(
+        const painter_internal::ModelObjectList & model_objects,
+        const std::string & output_folder);
+    void Run();
+
+private:
+    void AddModel(ModelObject & data_object);
+    void PaintAtomLocalGausSummary(ModelObject * model_object, const std::string & name);
+    void PaintAtomGroupGausSummary(ModelObject * model_object, const std::string & name);
+    void PaintAtomQScoreAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);
+    void PaintAtomGroupMapValueAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);
+    void PaintAtomGroupGausAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);
+    void PaintAtomGroupGausAminoAcidMainChainComponentSimple(ModelObject * model_object, const std::string & name);
+    void PaintAtomGroupGausAminoAcidMainChainStructure(ModelObject * model_object, const std::string & name);
+    void PaintAtomLocalGausToSequenceAminoAcidMainChain(ModelObject * model_object, const std::string & name);
+
+#ifdef HAVE_ROOT
+    void RemodelFrameInPad(::TH2 * frame, ::TPad * pad, double x_tick_length, double y_tick_length);
+    std::unique_ptr<::TPaveText> CreateDataInfoPaveText(ModelObject * model_object) const;
+    std::unique_ptr<::TPaveText> CreateResolutionPaveText(ModelObject * model_object) const;
+#endif
+};
+
+GausPainter::GausPainter(
+    const painter_internal::ModelObjectList & model_objects,
+    const std::string & output_folder) :
+    m_folder_path{ path_helper::EnsureTrailingSlash(output_folder) }
+{
+    for (auto * model_object : model_objects)
+    {
+        AddModel(*model_object);
+    }
 }
 
 void GausPainter::AddModel(ModelObject & data_object)
@@ -76,9 +109,9 @@ void GausPainter::AddModel(ModelObject & data_object)
     m_model_object_list.push_back(&data_object);
 }
 
-void GausPainter::Painting()
+void GausPainter::Run()
 {
-    Logger::Log(LogLevel::Info, "GausPainter::Painting() called.");
+    Logger::Log(LogLevel::Info, "GausPainter::Run() called.");
     Logger::Log(LogLevel::Info, "Folder path: " + m_folder_path);
     Logger::Log(LogLevel::Info, "Number of atom objects to be painted: "
                 + std::to_string(m_model_object_list.size()));
@@ -1085,6 +1118,16 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
     Logger::Log(LogLevel::Info, " Output file: " + file_path);
     #endif
 }
+
+namespace painter_internal {
+
+void PaintGaus(const ModelObjectList & model_objects, const std::string & output_folder)
+{
+    GausPainter painter{ model_objects, output_folder };
+    painter.Run();
+}
+
+} // namespace painter_internal
 
 } // namespace rhbm_gem
 

@@ -1,4 +1,4 @@
-#include "ComparisonPainter.hpp"
+#include "PainterFunctions.hpp"
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -7,6 +7,7 @@
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
+#include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include "detail/PainterModelValidation.hpp"
@@ -28,13 +29,75 @@
 #include <TLine.h>
 #endif
 
+#include <string_view>
+#include <unordered_map>
+#include <vector>
+
 namespace rhbm_gem {
 
-ComparisonPainter::ComparisonPainter() = default;
+namespace {
 
-ComparisonPainter::~ComparisonPainter()
+class ComparisonPainter
 {
+    std::vector<ModelObject *> m_model_object_list;
+    std::vector<double> m_resolution_list;
+    std::unordered_map<std::string, std::vector<ModelObject *>> m_ref_model_object_list_map;
+    std::string m_folder_path{ "./" };
 
+public:
+    ComparisonPainter(
+        const painter_internal::ModelObjectList & model_objects,
+        const painter_internal::ReferenceModelGroupMap & reference_model_groups,
+        const std::string & output_folder);
+    void Run();
+
+private:
+    void AddModel(ModelObject & data_object);
+    void AddReferenceModel(ModelObject & data_object, std::string_view label);
+    void PaintGroupGausEstimateComparison(const std::string & name);
+    void PaintGausEstimateResidueClassDenseComparison(const std::string & name);
+    void PainMapValueComparison(
+        const std::string & name,
+        ModelObject * model_object,
+        const std::vector<ModelObject *> & ref_model_object_list);
+
+#ifdef HAVE_ROOT
+    void BuildGausRatioToResolutionGraph(
+        int par_id,
+        size_t target_id,
+        size_t reference_id,
+        ::TGraphErrors * graph,
+        const std::vector<ModelObject *> & model_list,
+        const std::string & class_key,
+        Residue residue=Residue::UNK);
+    void BuildAmplitudeRatioToWidthGraph(
+        size_t target_id,
+        size_t reference_id,
+        ::TGraphErrors * graph,
+        const std::vector<ModelObject *> & model_list,
+        const std::string & class_key,
+        bool draw_index=false,
+        Residue residue=Residue::UNK);
+#endif
+};
+
+ComparisonPainter::ComparisonPainter(
+    const painter_internal::ModelObjectList & model_objects,
+    const painter_internal::ReferenceModelGroupMap & reference_model_groups,
+    const std::string & output_folder) :
+    m_folder_path{ path_helper::EnsureTrailingSlash(output_folder) }
+{
+    for (auto * model_object : model_objects)
+    {
+        AddModel(*model_object);
+    }
+    for (const auto & [class_key, ref_model_list] : reference_model_groups)
+    {
+        for (auto * model_object : ref_model_list)
+        {
+            AddReferenceModel(*model_object, class_key);
+        }
+    }
 }
 
 void ComparisonPainter::AddModel(ModelObject & data_object)
@@ -50,9 +113,9 @@ void ComparisonPainter::AddReferenceModel(ModelObject & data_object, std::string
     m_ref_model_object_list_map[std::string(label)].push_back(&data_object);
 }
 
-void ComparisonPainter::Painting()
+void ComparisonPainter::Run()
 {
-    Logger::Log(LogLevel::Info, "ComparisonPainter::Painting() called.");
+    Logger::Log(LogLevel::Info, "ComparisonPainter::Run() called.");
     Logger::Log(LogLevel::Info, "Folder path: " + m_folder_path);
     Logger::Log(LogLevel::Info, "Number of atom objects to be painted: "
                 + std::to_string(m_model_object_list.size()));
@@ -858,5 +921,20 @@ void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
 }
 
 #endif
+
+} // namespace
+
+namespace painter_internal {
+
+void PaintComparison(
+    const ModelObjectList & model_objects,
+    const ReferenceModelGroupMap & reference_model_groups,
+    const std::string & output_folder)
+{
+    ComparisonPainter painter{ model_objects, reference_model_groups, output_folder };
+    painter.Run();
+}
+
+} // namespace painter_internal
 
 } // namespace rhbm_gem

@@ -3,11 +3,7 @@
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include "core/painter/GausPainter.hpp"
-#include "core/painter/AtomPainter.hpp"
-#include "core/painter/ModelPainter.hpp"
-#include "core/painter/ComparisonPainter.hpp"
-#include "core/painter/DemoPainter.hpp"
+#include "core/painter/PainterFunctions.hpp"
 #include <rhbm_gem/utils/domain/AtomSelector.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
@@ -127,6 +123,36 @@ void ApplyDataObjectSelection(
     }
 }
 
+painter_internal::ModelObjectList BuildModelObjectList(
+    const std::vector<std::unique_ptr<rhbm_gem::ModelObject>> & model_objects)
+{
+    painter_internal::ModelObjectList model_list;
+    model_list.reserve(model_objects.size());
+    for (const auto & model_object : model_objects)
+    {
+        model_list.emplace_back(model_object.get());
+    }
+    return model_list;
+}
+
+painter_internal::ReferenceModelGroupMap BuildReferenceModelGroupMap(
+    const std::unordered_map<
+        std::string,
+        std::vector<std::unique_ptr<rhbm_gem::ModelObject>>> & reference_model_groups)
+{
+    painter_internal::ReferenceModelGroupMap reference_model_group_map;
+    for (const auto & [class_key, ref_model_list] : reference_model_groups)
+    {
+        auto & model_list{ reference_model_group_map[class_key] };
+        model_list.reserve(ref_model_list.size());
+        for (const auto & model_object : ref_model_list)
+        {
+            model_list.emplace_back(model_object.get());
+        }
+    }
+    return reference_model_group_map;
+}
+
 } // namespace
 
 PotentialDisplayCommand::PotentialDisplayCommand() : CommandBase<PotentialDisplayRequest>{}
@@ -163,76 +189,39 @@ bool PotentialDisplayCommand::ExecuteImpl(const PotentialDisplayRequest & reques
 
     ScopeTimer timer{ "PotentialDisplayCommand::RunDisplay" };
     const auto output_folder{ request.output_dir.string() };
+    const auto model_objects{ BuildModelObjectList(inputs->model_objects) };
     switch (request.painter_choice)
     {
         case PainterType::GAUS:
         {
-            GausPainter painter;
-            for (const auto & model_object : inputs->model_objects)
-            {
-                painter.AddModel(*model_object);
-            }
-            painter.SetFolder(output_folder);
-            painter.Painting();
+            painter_internal::PaintGaus(model_objects, output_folder);
             break;
         }
         case PainterType::MODEL:
         {
-            ModelPainter painter;
-            for (const auto & model_object : inputs->model_objects)
-            {
-                painter.AddModel(*model_object);
-            }
-            painter.SetFolder(output_folder);
-            painter.Painting();
+            painter_internal::PaintModel(model_objects, output_folder);
             break;
         }
         case PainterType::COMPARISON:
         {
-            ComparisonPainter painter;
-            for (const auto & model_object : inputs->model_objects)
-            {
-                painter.AddModel(*model_object);
-            }
-            for (const auto & [class_key, ref_model_list] : inputs->reference_model_groups)
-            {
-                for (const auto & model_object : ref_model_list)
-                {
-                    painter.AddReferenceModel(*model_object, class_key);
-                }
-            }
-            painter.SetFolder(output_folder);
-            painter.Painting();
+            const auto reference_model_groups{
+                BuildReferenceModelGroupMap(inputs->reference_model_groups)
+            };
+            painter_internal::PaintComparison(model_objects, reference_model_groups, output_folder);
             break;
         }
         case PainterType::DEMO:
         {
-            DemoPainter painter;
-            for (const auto & model_object : inputs->model_objects)
-            {
-                painter.AddModel(*model_object);
-            }
-            for (const auto & [class_key, ref_model_list] : inputs->reference_model_groups)
-            {
-                for (const auto & model_object : ref_model_list)
-                {
-                    painter.AddReferenceModel(*model_object, class_key);
-                }
-            }
-            painter.SetFolder(output_folder);
-            painter.Painting();
+            const auto reference_model_groups{
+                BuildReferenceModelGroupMap(inputs->reference_model_groups)
+            };
+            painter_internal::PaintDemo(model_objects, reference_model_groups, output_folder);
             break;
         }
         case PainterType::ATOM:
         {
-            AtomPainter painter;
-            for (const auto & model_object : inputs->model_objects)
-            {
-                painter.AddModel(*model_object);
-            }
             selector.Print();
-            painter.SetFolder(output_folder);
-            painter.Painting();
+            painter_internal::PaintAtom(model_objects, output_folder);
             break;
         }
         default:

@@ -1,4 +1,4 @@
-#include "DemoPainter.hpp"
+#include "PainterFunctions.hpp"
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -38,6 +38,8 @@
 #include <limits>
 #include <map>
 #include <sstream>
+#include <string_view>
+#include <unordered_map>
 
 #include <boost/math/distributions/students_t.hpp>
 
@@ -104,11 +106,89 @@ void PrintGausResultGlobalPad(
 
 } // namespace
 
-DemoPainter::DemoPainter() = default;
-
-DemoPainter::~DemoPainter()
+class DemoPainter
 {
+    std::vector<ModelObject *> m_model_object_list;
+    std::unordered_map<std::string, std::vector<ModelObject *>> m_ref_model_object_list_map;
+    std::string m_folder_path{ "./" };
 
+public:
+    DemoPainter(
+        const painter_internal::ModelObjectList & model_objects,
+        const painter_internal::ReferenceModelGroupMap & reference_model_groups,
+        const std::string & output_folder);
+    void Run();
+
+private:
+    void AddModel(ModelObject & data_object);
+    void AddReferenceModel(ModelObject & data_object, std::string_view label);
+    void PainMapValueComparisonSingle(
+        const std::string & name,
+        ModelObject * model_object,
+        ModelObject * ref_model_object);
+    void PaintAtomMapValueExample(ModelObject * model_object, const std::string & name);
+    void PaintGroupGausMainChainSummary(
+        const std::vector<ModelObject *> & model_list,
+        const std::string & name);
+    void PaintGroupGausMainChainSingle(ModelObject * model_object, const std::string & name);
+    void PaintAtomWidthScatterPlotSingle(
+        ModelObject * model_object,
+        const std::string & name,
+        bool draw_box_plot=false);
+    void PaintGroupGausToFSC(const std::vector<ModelObject *> & model_list, const std::string & name);
+    void PaintGroupWidthScatterPlot(
+        const std::vector<ModelObject *> & model_list,
+        const std::string & name,
+        int par_id=0,
+        bool draw_box_plot=false);
+    void PaintAtomGausMainChainDemo(
+        ModelObject * model_object1,
+        ModelObject * model_object2,
+        const std::string & name,
+        int par_id=0);
+    void PaintAtomGausMainChainDemoSingle(
+        ModelObject * model_object,
+        const std::string & name,
+        int par_id=0);
+    void PaintGroupWidthAlphaCarbonDemo(
+        const std::vector<ModelObject *> & model_list,
+        const std::string & name);
+    void PaintGroupGausMergeResidueDemo(
+        const std::vector<ModelObject *> & model_list,
+        const std::string & name);
+
+#ifdef HAVE_ROOT
+    void PrintGausResultPad(
+        ::TPad * pad,
+        ::TH2 * hist,
+        bool draw_x_axis,
+        bool draw_title_label,
+        bool is_right_side_pad);
+    void PrintGausCorrelationPad(
+        ::TPad * pad,
+        ::TH2 * hist,
+        bool draw_x_axis,
+        bool draw_title_label);
+#endif
+};
+
+DemoPainter::DemoPainter(
+    const painter_internal::ModelObjectList & model_objects,
+    const painter_internal::ReferenceModelGroupMap & reference_model_groups,
+    const std::string & output_folder) :
+    m_folder_path{ path_helper::EnsureTrailingSlash(output_folder) }
+{
+    for (auto * model_object : model_objects)
+    {
+        AddModel(*model_object);
+    }
+    for (const auto & [class_key, ref_model_list] : reference_model_groups)
+    {
+        for (auto * model_object : ref_model_list)
+        {
+            AddReferenceModel(*model_object, class_key);
+        }
+    }
 }
 
 void DemoPainter::AddModel(ModelObject & data_object)
@@ -123,9 +203,9 @@ void DemoPainter::AddReferenceModel(ModelObject & data_object, std::string_view 
     m_ref_model_object_list_map[std::string(label)].push_back(&data_object);
 }
 
-void DemoPainter::Painting()
+void DemoPainter::Run()
 {
-    Logger::Log(LogLevel::Info, "DemoPainter::Painting() called.");
+    Logger::Log(LogLevel::Info, "DemoPainter::Run() called.");
     Logger::Log(LogLevel::Info, "Folder path: " + m_folder_path);
 
     ModelObject * demo_model_object{ nullptr };
@@ -2084,5 +2164,17 @@ void DemoPainter::PrintGausCorrelationPad(TPad * pad, TH2 * hist, bool draw_x_ax
 
 #endif
 
+namespace painter_internal {
+
+void PaintDemo(
+    const ModelObjectList & model_objects,
+    const ReferenceModelGroupMap & reference_model_groups,
+    const std::string & output_folder)
+{
+    DemoPainter painter{ model_objects, reference_model_groups, output_folder };
+    painter.Run();
+}
+
+} // namespace painter_internal
 
 } // namespace rhbm_gem

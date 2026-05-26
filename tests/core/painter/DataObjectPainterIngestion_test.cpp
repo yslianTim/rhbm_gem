@@ -6,11 +6,8 @@
 
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/CommandSystem.hpp>
-#include "core/painter/AtomPainter.hpp"
-#include "core/painter/ComparisonPainter.hpp"
-#include "core/painter/DemoPainter.hpp"
-#include "core/painter/GausPainter.hpp"
-#include "core/painter/ModelPainter.hpp"
+#include "core/painter/PainterFunctions.hpp"
+#include "core/painter/detail/PainterModelValidation.hpp"
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include "support/DataObjectTestSupport.hpp"
 
@@ -47,52 +44,50 @@ std::shared_ptr<rg::ModelObject> LoadAnalyzedModelFixture(
 
 } // namespace
 
-TEST(DataObjectPainterIngestionTest, PainterTypedIngestionUsesAnalysisReadyModelApis)
+TEST(DataObjectPainterIngestionTest, PainterValidationAcceptsAnalysisReadyModels)
 {
     command_test::ScopedTempDir temp_dir{ "painter_ingestion_analyzed" };
     auto model{ LoadAnalyzedModelFixture(temp_dir.path()) };
     ASSERT_NE(model, nullptr);
 
-    rg::AtomPainter atom_painter;
-    EXPECT_NO_THROW(atom_painter.AddModel(*model));
-
-    rg::ModelPainter model_painter;
-    EXPECT_NO_THROW(model_painter.AddModel(*model));
-
-    rg::GausPainter gaus_painter;
-    EXPECT_NO_THROW(gaus_painter.AddModel(*model));
-
-    rg::ComparisonPainter comparison_painter;
-    EXPECT_NO_THROW(comparison_painter.AddModel(*model));
-    EXPECT_NO_THROW(comparison_painter.AddReferenceModel(*model, "ref"));
-
-    rg::DemoPainter demo_painter;
-    EXPECT_NO_THROW(demo_painter.AddModel(*model));
-    EXPECT_NO_THROW(demo_painter.AddReferenceModel(*model, "ref"));
+    EXPECT_NO_THROW(rg::painter_internal::RequireLocalAnalyzedModel(*model, "AtomPainter"));
+    EXPECT_NO_THROW(rg::painter_internal::RequireGroupedAnalyzedModel(*model, "ModelPainter"));
+    EXPECT_NO_THROW(rg::painter_internal::RequireGroupedAnalyzedModel(*model, "GausPainter"));
+    EXPECT_NO_THROW(rg::painter_internal::RequireGroupedAnalyzedModel(*model, "ComparisonPainter"));
+    EXPECT_NO_THROW(rg::painter_internal::RequireGroupedAnalyzedModel(*model, "DemoPainter"));
 }
 
-TEST(DataObjectPainterIngestionTest, PainterContractsRejectModelsWithoutAnalysisData)
+TEST(DataObjectPainterIngestionTest, PainterFunctionEntrypointsRejectModelsWithoutAnalysisData)
 {
+    command_test::ScopedTempDir temp_dir{ "painter_ingestion_invalid" };
     auto model{ data_test::MakeModelWithBond() };
     ASSERT_NE(model, nullptr);
     model->SetKeyTag("raw_model");
     model->SelectAllAtoms();
     model->SelectAllBonds();
 
-    rg::AtomPainter atom_painter;
-    EXPECT_THROW(atom_painter.AddModel(*model), std::runtime_error);
+    const rg::painter_internal::ModelObjectList model_objects{ model.get() };
+    const rg::painter_internal::ReferenceModelGroupMap reference_model_groups{
+        { "ref", { model.get() } }
+    };
+    const auto output_folder{ temp_dir.path().string() };
 
-    rg::ModelPainter model_painter;
-    EXPECT_THROW(model_painter.AddModel(*model), std::runtime_error);
-
-    rg::GausPainter gaus_painter;
-    EXPECT_THROW(gaus_painter.AddModel(*model), std::runtime_error);
-
-    rg::ComparisonPainter comparison_painter;
-    EXPECT_THROW(comparison_painter.AddModel(*model), std::runtime_error);
-    EXPECT_THROW(comparison_painter.AddReferenceModel(*model, "ref"), std::runtime_error);
-
-    rg::DemoPainter demo_painter;
-    EXPECT_THROW(demo_painter.AddModel(*model), std::runtime_error);
-    EXPECT_THROW(demo_painter.AddReferenceModel(*model, "ref"), std::runtime_error);
+    EXPECT_THROW(
+        rg::painter_internal::PaintAtom(model_objects, output_folder),
+        std::runtime_error);
+    EXPECT_THROW(
+        rg::painter_internal::PaintModel(model_objects, output_folder),
+        std::runtime_error);
+    EXPECT_THROW(
+        rg::painter_internal::PaintGaus(model_objects, output_folder),
+        std::runtime_error);
+    EXPECT_THROW(
+        rg::painter_internal::PaintComparison(
+            model_objects,
+            reference_model_groups,
+            output_folder),
+        std::runtime_error);
+    EXPECT_THROW(
+        rg::painter_internal::PaintDemo(model_objects, reference_model_groups, output_folder),
+        std::runtime_error);
 }
