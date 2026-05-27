@@ -52,7 +52,6 @@ TEST(DataObjectPainterIngestionTest, PainterValidationAcceptsAnalysisReadyModels
     ASSERT_NE(model, nullptr);
 
     EXPECT_NO_THROW(rg::painter_internal::RequireLocalAnalyzedModel(*model, "AtomPainter"));
-    EXPECT_NO_THROW(rg::painter_internal::RequireGroupedAnalyzedModel(*model, "ModelPainter"));
     EXPECT_NO_THROW(rg::painter_internal::RequireGroupedAnalyzedModel(*model, "GausPainter"));
     EXPECT_NO_THROW(rg::painter_internal::RequireGroupedAnalyzedModel(*model, "ComparisonPainter"));
     EXPECT_NO_THROW(rg::painter_internal::RequireGroupedAnalyzedModel(*model, "DemoPainter"));
@@ -75,9 +74,6 @@ TEST(DataObjectPainterIngestionTest, PainterFunctionEntrypointsRejectModelsWitho
 
     EXPECT_THROW(
         rgc::PaintAtom(model_objects, output_folder),
-        std::runtime_error);
-    EXPECT_THROW(
-        rgc::PaintModel(model_objects, output_folder),
         std::runtime_error);
     EXPECT_THROW(
         rgc::PaintGaus(model_objects, output_folder),

@@ -192,6 +192,14 @@ TEST(CommandCatalogTest, CommandCatalogKeepsExpectedOrder)
     EXPECT_EQ(BuildExpectedCommandNames(), BuildCommandNames());
 }
 
+TEST(CommandCatalogTest, PainterTypeDoesNotExposeRemovedModelAliases)
+{
+    const auto cli_map{ BuildCliMapFromTraits<PainterType>() };
+
+    EXPECT_EQ(cli_map.find("model"), cli_map.end());
+    EXPECT_EQ(cli_map.find("1"), cli_map.end());
+}
+
 TYPED_TEST(CommandEnumMappingTest, CliAndBindingMappingsStayInSync)
 {
     AssertEnumMappingsStayInSync<TypeParam>();

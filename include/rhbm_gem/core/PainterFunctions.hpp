@@ -14,7 +14,6 @@ using ModelObjectList = std::vector<ModelObject *>;
 using ReferenceModelGroupMap = std::unordered_map<std::string, std::vector<ModelObject *>>;
 
 void PaintAtom(const ModelObjectList & model_objects, const std::string & output_folder);
-void PaintModel(const ModelObjectList & model_objects, const std::string & output_folder);
 void PaintGaus(const ModelObjectList & model_objects, const std::string & output_folder);
 void PaintComparison(
     const ModelObjectList & model_objects,

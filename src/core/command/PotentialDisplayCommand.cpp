@@ -197,11 +197,6 @@ bool PotentialDisplayCommand::ExecuteImpl(const PotentialDisplayRequest & reques
             PaintGaus(model_objects, output_folder);
             break;
         }
-        case PainterType::MODEL:
-        {
-            PaintModel(model_objects, output_folder);
-            break;
-        }
         case PainterType::COMPARISON:
         {
             const auto reference_model_groups{
@@ -230,10 +225,10 @@ bool PotentialDisplayCommand::ExecuteImpl(const PotentialDisplayRequest & reques
                         + std::to_string(static_cast<int>(request.painter_choice)) + "]");
             Logger::Log(LogLevel::Warning,
                         "Available Painter Choices:\n"
-                        "  [0] AtomPainter\n"
-                        "  [1] ModelPainter\n"
+                        "  [0] GausPainter\n"
                         "  [2] ComparisonPainter\n"
-                        "  [3] DemoPainter");
+                        "  [3] DemoPainter\n"
+                        "  [4] AtomPainter");
             break;
     }
     return true;

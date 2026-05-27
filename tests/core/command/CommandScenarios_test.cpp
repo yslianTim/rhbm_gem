@@ -392,7 +392,7 @@ TEST(CommandScenariosTest, RHBMTestRejectsInvertedFitRangeAtPrepare)
 TEST(CommandScenariosTest, PotentialDisplayRejectsMalformedReferenceGroups)
 {
     PotentialDisplayRequest request{};
-    request.painter_choice = PainterType::MODEL;
+    request.painter_choice = PainterType::GAUS;
     request.model_key_tag_list = { "model_key" };
     request.reference_model_groups[""] = { "invalid" };
 
@@ -405,7 +405,7 @@ TEST(CommandScenariosTest, PotentialDisplayRejectsMalformedReferenceGroups)
 TEST(CommandScenariosTest, PotentialDisplayAllowsWellFormedReferenceGroupsPastPrepare)
 {
     PotentialDisplayRequest request{};
-    request.painter_choice = PainterType::MODEL;
+    request.painter_choice = PainterType::GAUS;
     request.model_key_tag_list = { "model_key" };
     request.reference_model_groups = {
         { "with_charge", { "ref_a", "ref_b" } },

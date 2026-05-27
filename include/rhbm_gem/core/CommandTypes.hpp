@@ -13,7 +13,6 @@ namespace rhbm_gem::core {
 enum class PainterType : int
 {
     GAUS       = 0,
-    MODEL      = 1,
     COMPARISON = 2,
     DEMO       = 3,
     ATOM       = 4
@@ -98,7 +97,7 @@ struct PotentialAnalysisRequest : public CommandRequestBase
 struct PotentialDisplayRequest : public CommandRequestBase
 {
     std::filesystem::path database_path{ GetDefaultDatabasePath() };
-    PainterType painter_choice{ PainterType::MODEL };
+    PainterType painter_choice{ PainterType::GAUS };
     std::vector<std::string> model_key_tag_list{};
     std::unordered_map<std::string, std::vector<std::string>> reference_model_groups{};
     std::string pick_chain_id{};
