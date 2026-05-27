@@ -227,10 +227,9 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
     const AtomObject & atom,
     const FittedGaussianSnapshot & fitted_gaussian_snapshot)
 {
-    constexpr double kNeighborSearchRadius{ 2.0 };
     const auto local_view{ AtomLocalPotentialView::RequireFor(atom) };
     const auto sample_entries{ local_view.GetSamplingEntries(false) };
-    const auto & neighbor_atom_list{ atom.FindNeighborAtoms(kNeighborSearchRadius, false) };
+    const auto & neighbor_atom_list{ atom.FindNeighborAtoms() };
     LocalPotentialSampleList updated_list;
     updated_list.reserve(sample_entries.size());
     for (const auto & sample : sample_entries)

@@ -83,7 +83,7 @@ public:
     const std::unordered_map<std::string, std::array<float, 3>> & GetAlternatePositions() const;
     const std::unordered_map<std::string, float> & GetAlternateOccupancies() const;
     const std::unordered_map<std::string, float> & GetAlternateTemperatures() const;
-    std::vector<AtomObject *> FindNeighborAtoms(double radius, bool include_self = false) const;
+    std::vector<AtomObject *> FindNeighborAtoms(double radius = 2.5, bool include_self = false) const;
 
 private:
     friend class AtomLocalPotentialView;
