@@ -131,7 +131,6 @@ LocalPotentialSampleList SampleAtomMapValues(
     auto sample_list{
         BuildLocalPotentialSampleList(map_object, sample_point_list)
     };
-    //return sample_filter::FilterLocalPotentialSampleList(std::move(sample_list));
     return sample_list;
 }
 
