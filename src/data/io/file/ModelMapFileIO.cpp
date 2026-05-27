@@ -7,7 +7,6 @@
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
-#include <rhbm_gem/utils/domain/StringHelper.hpp>
 
 #include <array>
 #include <fstream>
@@ -38,102 +37,102 @@ struct MapCodec
     MapWriteFn write;
 };
 
-std::unique_ptr<ModelObject> ReadPdbModel(std::istream & file, const std::string & filename)
-{
-    PdbFormat codec;
-    return codec.ReadModel(file, filename);
-}
-
-void WritePdbModel(std::ostream & outfile, const ModelObject & model_object, int model_parameter)
-{
-    PdbFormat codec;
-    codec.WriteModel(model_object, outfile, model_parameter);
-}
-
-std::unique_ptr<ModelObject> ReadCifModel(std::istream & file, const std::string & filename)
-{
-    CifFormat codec;
-    return codec.ReadModel(file, filename);
-}
-
-void WriteCifModel(std::ostream & outfile, const ModelObject & model_object, int model_parameter)
-{
-    CifFormat codec;
-    codec.WriteModel(model_object, outfile, model_parameter);
-}
-
-std::unique_ptr<MapObject> ReadMrcMap(std::istream & file, const std::string & filename)
-{
-    MrcFormat codec;
-    return codec.ReadMap(file, filename);
-}
-
-void WriteMrcMap(std::ostream & outfile, const MapObject & map_object)
-{
-    MrcFormat codec;
-    codec.WriteMap(map_object, outfile);
-}
-
-std::unique_ptr<MapObject> ReadCcp4Map(std::istream & file, const std::string & filename)
-{
-    CCP4Format codec;
-    return codec.ReadMap(file, filename);
-}
-
-void WriteCcp4Map(std::ostream & outfile, const MapObject & map_object)
-{
-    CCP4Format codec;
-    codec.WriteMap(map_object, outfile);
-}
-
 const auto & GetModelCodecs()
 {
     static const std::array<ModelCodec, 4> codecs{
-        ModelCodec{ ".pdb", ReadPdbModel, WritePdbModel },
-        ModelCodec{ ".cif", ReadCifModel, WriteCifModel },
-        ModelCodec{ ".mmcif", ReadCifModel, nullptr },
-        ModelCodec{ ".mcif", ReadCifModel, nullptr } };
+        ModelCodec{
+            ".pdb",
+            [](std::istream & file, const std::string & filename)
+            {
+                PdbFormat codec;
+                return codec.ReadModel(file, filename);
+            },
+            [](std::ostream & outfile, const ModelObject & model_object, int model_parameter)
+            {
+                PdbFormat codec;
+                codec.WriteModel(model_object, outfile, model_parameter);
+            } },
+        ModelCodec{
+            ".cif",
+            [](std::istream & file, const std::string & filename)
+            {
+                CifFormat codec;
+                return codec.ReadModel(file, filename);
+            },
+            [](std::ostream & outfile, const ModelObject & model_object, int model_parameter)
+            {
+                CifFormat codec;
+                codec.WriteModel(model_object, outfile, model_parameter);
+            } },
+        ModelCodec{
+            ".mmcif",
+            [](std::istream & file, const std::string & filename)
+            {
+                CifFormat codec;
+                return codec.ReadModel(file, filename);
+            },
+            nullptr },
+        ModelCodec{
+            ".mcif",
+            [](std::istream & file, const std::string & filename)
+            {
+                CifFormat codec;
+                return codec.ReadModel(file, filename);
+            },
+            nullptr } };
     return codecs;
 }
 
 const auto & GetMapCodecs()
 {
     static const std::array<MapCodec, 3> codecs{
-        MapCodec{ ".mrc", ReadMrcMap, WriteMrcMap },
-        MapCodec{ ".map", ReadCcp4Map, WriteCcp4Map },
-        MapCodec{ ".ccp4", ReadCcp4Map, WriteCcp4Map } };
+        MapCodec{
+            ".mrc",
+            [](std::istream & file, const std::string & filename)
+            {
+                MrcFormat codec;
+                return codec.ReadMap(file, filename);
+            },
+            [](std::ostream & outfile, const MapObject & map_object)
+            {
+                MrcFormat codec;
+                codec.WriteMap(map_object, outfile);
+            } },
+        MapCodec{
+            ".map",
+            [](std::istream & file, const std::string & filename)
+            {
+                CCP4Format codec;
+                return codec.ReadMap(file, filename);
+            },
+            [](std::ostream & outfile, const MapObject & map_object)
+            {
+                CCP4Format codec;
+                codec.WriteMap(map_object, outfile);
+            } },
+        MapCodec{
+            ".ccp4",
+            [](std::istream & file, const std::string & filename)
+            {
+                CCP4Format codec;
+                return codec.ReadMap(file, filename);
+            },
+            [](std::ostream & outfile, const MapObject & map_object)
+            {
+                CCP4Format codec;
+                codec.WriteMap(map_object, outfile);
+            } } };
     return codecs;
 }
 
-std::string NormalizeExtension(const std::filesystem::path & filename)
+template <typename CodecList>
+const typename CodecList::value_type & ResolveCodec(
+    const CodecList & codecs,
+    const std::filesystem::path & filename,
+    bool for_write)
 {
-    auto extension{ path_helper::GetExtension(filename) };
-    string_helper::ToLowerCase(extension);
-    return extension;
-}
-
-const ModelCodec & ResolveModelCodec(const std::filesystem::path & filename, bool for_write)
-{
-    const auto extension{ NormalizeExtension(filename) };
-    for (const auto & codec : GetModelCodecs())
-    {
-        if (codec.extension != extension)
-        {
-            continue;
-        }
-        if (for_write && codec.write == nullptr)
-        {
-            throw std::runtime_error("Unsupported file format for write: " + extension);
-        }
-        return codec;
-    }
-    throw std::runtime_error("Unsupported file format: " + extension);
-}
-
-const MapCodec & ResolveMapCodec(const std::filesystem::path & filename, bool for_write)
-{
-    const auto extension{ NormalizeExtension(filename) };
-    for (const auto & codec : GetMapCodecs())
+    const auto extension{ path_helper::GetExtension(filename) };
+    for (const auto & codec : codecs)
     {
         if (codec.extension != extension)
         {
@@ -165,7 +164,7 @@ std::unique_ptr<ModelObject> ReadModel(const std::filesystem::path & filename)
 {
     try
     {
-        const auto & codec{ ResolveModelCodec(filename, false) };
+        const auto & codec{ ResolveCodec(GetModelCodecs(), filename, false) };
         auto file{ OpenBinaryFile<std::ifstream>(filename, std::ios::binary) };
         return codec.read(file, filename.string());
     }
@@ -183,7 +182,7 @@ void WriteModel(
 {
     try
     {
-        const auto & codec{ ResolveModelCodec(filename, true) };
+        const auto & codec{ ResolveCodec(GetModelCodecs(), filename, true) };
         auto outfile{ OpenBinaryFile<std::ofstream>(filename, std::ios::binary) };
         codec.write(outfile, model_object, model_parameter);
     }
@@ -198,7 +197,7 @@ std::unique_ptr<MapObject> ReadMap(const std::filesystem::path & filename)
 {
     try
     {
-        const auto & codec{ ResolveMapCodec(filename, false) };
+        const auto & codec{ ResolveCodec(GetMapCodecs(), filename, false) };
         auto file{ OpenBinaryFile<std::ifstream>(filename, std::ios::binary) };
         return codec.read(file, filename.string());
     }
@@ -213,7 +212,7 @@ void WriteMap(const std::filesystem::path & filename, const MapObject & map_obje
 {
     try
     {
-        const auto & codec{ ResolveMapCodec(filename, true) };
+        const auto & codec{ ResolveCodec(GetMapCodecs(), filename, true) };
         auto outfile{ OpenBinaryFile<std::ofstream>(filename, std::ios::binary | std::ios::trunc) };
         codec.write(outfile, map_object);
     }

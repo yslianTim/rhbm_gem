@@ -205,6 +205,7 @@ TEST(DataObjectFileIOTest, ReadAndWriteFailuresSurfaceAsTypedRuntimeErrors)
         { "MalformedModel", [&]() { (void)rg::ReadModel(malformed_model_path); } },
         { "MissingModel", [&]() { (void)rg::ReadModel(missing_model_path); } },
         { "MalformedMap", [&]() { (void)rg::ReadMap(malformed_map_path); } },
+        { "UnsupportedMapExtension", [&]() { (void)rg::ReadMap(temp_dir.path() / "map.unknown"); } },
         { "UnopenableWriteTarget", [&]() { rg::WriteModel(bad_output_path, *model); } },
     };
 
