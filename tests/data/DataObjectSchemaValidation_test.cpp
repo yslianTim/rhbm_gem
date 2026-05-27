@@ -24,7 +24,7 @@ void ExpectNormalizedSchemaValidationFailure(
 
     {
         rg::SQLitePersistence database_manager{ database_path };
-        EXPECT_EQ(data_test::GetUserVersion(database_path), 2);
+        EXPECT_EQ(data_test::GetUserVersion(database_path), 3);
     }
 
     mutate_database(database_path);

@@ -116,7 +116,7 @@ LocalPotentialSampleList SampleAtomMapValues(
     constexpr double kNeighborSearchRadius{ 2.0 };
 
     const auto local_position{ atom.GetPosition() };
-    const auto sample_point_list{
+    auto sample_point_list{
         sphere_sampler::GenerateSamplingPointList(local_position, sampling_method)
     };
     const auto neighbor_atom_list{ atom.FindNeighborAtoms(kNeighborSearchRadius, false) };
@@ -126,12 +126,10 @@ LocalPotentialSampleList SampleAtomMapValues(
     {
         reject_position_list.emplace_back(neighbor_atom->GetPosition());
     }
-    const auto filtered_sample_point_list{
-        sample_filter::FilterSamplingPointList(
-            sample_point_list, local_position, reject_position_list, kRejectAngle)
-    };
+    sample_filter::FilterSamplingPointList(
+        sample_point_list, local_position, reject_position_list, kRejectAngle);
     auto sample_list{
-        BuildLocalPotentialSampleList(map_object, filtered_sample_point_list)
+        BuildLocalPotentialSampleList(map_object, sample_point_list)
     };
     //return sample_filter::FilterLocalPotentialSampleList(std::move(sample_list));
     return sample_list;

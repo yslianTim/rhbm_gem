@@ -7,6 +7,8 @@
 #include "data/detail/ModelAnalysisData.hpp"
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include "io/sqlite/SQLitePersistence.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include "support/DataObjectTestSupport.hpp"
@@ -140,6 +142,93 @@ TEST(DataObjectPersistenceTest, FinalV2CatalogDatabaseRemainsLoadable)
     rg::DataRepository repository{ database_path };
     EXPECT_NE(repository.LoadModel("model"), nullptr);
     EXPECT_NE(repository.LoadMap("map"), nullptr);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 3);
+}
+
+TEST(DataObjectPersistenceTest, SamplingSelectionRoundTripPreservesUnselectedSamples)
+{
+    const command_test::ScopedTempDir temp_dir{ "data_schema_sampling_selection_roundtrip" };
+    const auto database_path{ temp_dir.path() / "sampling_selection.sqlite" };
+
+    {
+        rg::DataRepository repository{ database_path };
+        auto model{ data_test::MakeModelWithBond() };
+        model->SetKeyTag("model");
+        auto editor{ model->EditAnalysis().EnsureAtomLocalPotential(*model->GetAtomList().at(0)) };
+        editor.SetSamplingEntries({
+            LocalPotentialSample{ 6.0f, SamplingPoint{ 0.1f, { 0.0f, 0.0f, 0.0f }, true } },
+            LocalPotentialSample{ 4.0f, SamplingPoint{ 0.2f, { 0.0f, 0.0f, 0.0f }, false } }
+        });
+
+        repository.SaveModel(*model, "model");
+    }
+
+    rg::DataRepository repository{ database_path };
+    auto loaded_model{ repository.LoadModel("model") };
+    ASSERT_NE(loaded_model, nullptr);
+    const auto all_entries{
+        rg::AtomLocalPotentialView::RequireFor(*loaded_model->GetAtomList().at(0)).GetSamplingEntries(false)
+    };
+    const auto selected_entries{
+        rg::AtomLocalPotentialView::RequireFor(*loaded_model->GetAtomList().at(0)).GetSamplingEntries()
+    };
+
+    ASSERT_EQ(all_entries.size(), 2u);
+    EXPECT_TRUE(all_entries.at(0).point.is_selected);
+    EXPECT_FALSE(all_entries.at(1).point.is_selected);
+    ASSERT_EQ(selected_entries.size(), 1u);
+    EXPECT_FLOAT_EQ(selected_entries.at(0).response, 6.0f);
+}
+
+TEST(DataObjectPersistenceTest, LegacyV2SamplingBlobLoadsAsSelectedAndMigratesVersion)
+{
+    const command_test::ScopedTempDir temp_dir{ "data_schema_legacy_sampling_blob" };
+    const auto database_path{ temp_dir.path() / "legacy_sampling.sqlite" };
+
+    {
+        rg::DataRepository repository{ database_path };
+        auto model{ data_test::MakeModelWithBond() };
+        model->SetKeyTag("model");
+        repository.SaveModel(*model, "model");
+    }
+
+    {
+        rg::SQLiteWrapper database{ database_path };
+        database.Prepare(
+            "INSERT OR REPLACE INTO model_atom_local_potential ("
+            "key_tag, serial_id, sampling_size, distance_and_map_value_list, "
+            "amplitude_estimate_ols, width_estimate_ols, "
+            "amplitude_estimate_mdpde, width_estimate_mdpde, alpha_r"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);");
+        rg::SQLiteWrapper::StatementGuard guard(database);
+        const std::vector<float> legacy_samples{
+            0.1f, 6.0f,
+            0.2f, 4.0f
+        };
+        database.Bind<std::string>(1, "model");
+        database.Bind<int>(2, 1);
+        database.Bind<int>(3, 2);
+        database.Bind<std::vector<float>>(4, legacy_samples);
+        database.Bind<double>(5, 0.0);
+        database.Bind<double>(6, 0.0);
+        database.Bind<double>(7, 0.0);
+        database.Bind<double>(8, 0.0);
+        database.Bind<double>(9, 0.0);
+        database.StepOnce();
+    }
+    data_test::SetUserVersion(database_path, 2);
+
+    rg::DataRepository repository{ database_path };
+    auto loaded_model{ repository.LoadModel("model") };
+    ASSERT_NE(loaded_model, nullptr);
+    const auto entries{
+        rg::AtomLocalPotentialView::RequireFor(*loaded_model->GetAtomList().at(0)).GetSamplingEntries(false)
+    };
+
+    ASSERT_EQ(entries.size(), 2u);
+    EXPECT_TRUE(entries.at(0).point.is_selected);
+    EXPECT_TRUE(entries.at(1).point.is_selected);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 3);
 }
 
 TEST(DataObjectPersistenceTest, DatabaseRoundTripPreservesChainMetadataAndSymmetryFiltering)

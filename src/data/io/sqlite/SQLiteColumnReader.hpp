@@ -4,6 +4,7 @@
 #include <sqlite3.h>
 #include <string>
 #include <cstring>
+#include <stdexcept>
 #include <tuple>
 #include <vector>
 
@@ -158,22 +159,83 @@ struct SQLiteColumnReader<LocalPotentialSampleList>
         {
             return {};
         }
-        int count{ blob_size / (2 * static_cast<int>(sizeof(float))) };
+        if (blob_size % (3 * static_cast<int>(sizeof(float))) != 0)
+        {
+            throw std::runtime_error("Local potential sample blob requires sampling size for legacy decoding.");
+        }
+        int count{ blob_size / (3 * static_cast<int>(sizeof(float))) };
         LocalPotentialSampleList result;
         result.reserve(static_cast<size_t>(count));
         const float * blob_floats{ reinterpret_cast<const float *>(blob_data) };
         for (int i = 0; i < count; ++i)
         {
-            float first = blob_floats[2 * i];
-            float second = blob_floats[2 * i + 1];
+            const int offset{ 3 * i };
             result.emplace_back(LocalPotentialSample{
-                second,
-                SamplingPoint{ first }
+                blob_floats[offset + 1],
+                SamplingPoint{
+                    blob_floats[offset],
+                    { 0.0f, 0.0f, 0.0f },
+                    blob_floats[offset + 2] != 0.0f
+                }
             });
         }
         return result;
     }
 };
+
+inline LocalPotentialSampleList ReadLocalPotentialSampleListColumn(
+    sqlite3_stmt * stmt,
+    int index,
+    int sampling_size)
+{
+    const void * blob_data = sqlite3_column_blob(stmt, index);
+    const int blob_size{ sqlite3_column_bytes(stmt, index) };
+    if (!blob_data || blob_size <= 0)
+    {
+        return {};
+    }
+    if (blob_size % static_cast<int>(sizeof(float)) != 0)
+    {
+        throw std::runtime_error("Invalid local potential sample blob size.");
+    }
+
+    const int float_count{ blob_size / static_cast<int>(sizeof(float)) };
+    const int legacy_float_count{ sampling_size * 2 };
+    const int current_float_count{ sampling_size * 3 };
+    int stride{ 0 };
+    if (float_count == current_float_count)
+    {
+        stride = 3;
+    }
+    else if (float_count == legacy_float_count)
+    {
+        stride = 2;
+    }
+    else
+    {
+        throw std::runtime_error("Local potential sample blob size is inconsistent with sampling size.");
+    }
+
+    LocalPotentialSampleList result;
+    result.reserve(static_cast<size_t>(sampling_size));
+    const float * blob_floats{ reinterpret_cast<const float *>(blob_data) };
+    for (int i = 0; i < sampling_size; ++i)
+    {
+        const int offset{ stride * i };
+        const auto is_selected{
+            stride == 2 ? true : blob_floats[offset + 2] != 0.0f
+        };
+        result.emplace_back(LocalPotentialSample{
+            blob_floats[offset + 1],
+            SamplingPoint{
+                blob_floats[offset],
+                { 0.0f, 0.0f, 0.0f },
+                is_selected
+            }
+        });
+    }
+    return result;
+}
 
 // std::vector<std::tuple<double, double>> specialization
 template <>

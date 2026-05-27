@@ -215,6 +215,30 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialEditorSetGaussianResultUpdat
     EXPECT_DOUBLE_EQ(0.0, rg::AtomLocalPotentialView::RequireFor(*atom).GetEstimateMDPDE().GetWidth());
 }
 
+TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewCanApplySamplingSelection)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto * atom{ model->GetAtomList().at(0).get() };
+    auto analysis{ model->EditAnalysis() };
+    auto editor{ analysis.EnsureAtomLocalPotential(*atom) };
+
+    editor.SetSamplingEntries({
+        LocalPotentialSample{ 6.0f, SamplingPoint{ 0.0f, { 0.0f, 0.0f, 0.0f }, true } },
+        LocalPotentialSample{ 4.0f, SamplingPoint{ 0.5f, { 0.0f, 0.0f, 0.0f }, false } },
+        LocalPotentialSample{ 2.0f, SamplingPoint{ 0.9f, { 0.0f, 0.0f, 0.0f }, true } }
+    });
+
+    const auto view{ rg::AtomLocalPotentialView::RequireFor(*atom) };
+    const auto selected_entries{ view.GetSamplingEntries() };
+    const auto all_entries{ view.GetSamplingEntries(false) };
+
+    ASSERT_EQ(selected_entries.size(), 2u);
+    EXPECT_FLOAT_EQ(selected_entries.at(0).response, 6.0f);
+    EXPECT_FLOAT_EQ(selected_entries.at(1).response, 2.0f);
+    ASSERT_EQ(all_entries.size(), 3u);
+    EXPECT_FALSE(all_entries.at(1).point.is_selected);
+}
+
 TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupGaussianResultToStatisticsAndAnnotations)
 {
     auto model{ data_test::MakeModelWithBond() };

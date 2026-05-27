@@ -92,9 +92,24 @@ const GaussianModel3D & AtomLocalPotentialView::GetEstimateMDPDE() const
     return RequireEntry("Local estimate MDPDE").GaussianResult().mdpde.GetModel();
 }
 
-const LocalPotentialSampleList & AtomLocalPotentialView::GetSamplingEntries() const
+LocalPotentialSampleList AtomLocalPotentialView::GetSamplingEntries(bool apply_selection) const
 {
-    return RequireEntry("Local sampling entries").SamplingEntries();
+    const auto & sampling_entries{ RequireEntry("Local sampling entries").SamplingEntries() };
+    if (!apply_selection)
+    {
+        return sampling_entries;
+    }
+
+    LocalPotentialSampleList selected_entries;
+    selected_entries.reserve(sampling_entries.size());
+    for (const auto & sample : sampling_entries)
+    {
+        if (sample.point.is_selected)
+        {
+            selected_entries.emplace_back(sample);
+        }
+    }
+    return selected_entries;
 }
 
 double AtomLocalPotentialView::GetAlphaR() const

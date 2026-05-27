@@ -212,6 +212,15 @@ public:
         }
         return SQLiteColumnReader<T>::Get(m_statement_ptr, index);
     }
+
+    LocalPotentialSampleList GetLocalPotentialSampleListColumn(int index, int sampling_size)
+    {
+        if (!m_statement_ptr)
+        {
+            throw std::runtime_error("Statement pointer is null!");
+        }
+        return ReadLocalPotentialSampleListColumn(m_statement_ptr, index, sampling_size);
+    }
 };
 
 } // namespace rhbm_gem

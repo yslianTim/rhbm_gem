@@ -20,7 +20,7 @@ namespace {
 
 using namespace std::literals;
 
-constexpr int kCurrentSchemaVersion = 2;
+constexpr int kCurrentSchemaVersion = 3;
 constexpr std::string_view kCatalogTableName = "object_catalog";
 constexpr std::string_view kMapTableName = "map_list";
 constexpr std::string_view kUnsupportedMetadataTableName = "object_metadata";
@@ -562,6 +562,12 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
     if (raw_version == kCurrentSchemaVersion)
     {
         ValidateCurrentSchema(database);
+        return;
+    }
+    if (raw_version == 2)
+    {
+        ValidateCurrentSchema(database);
+        SetSchemaVersion(database);
         return;
     }
     if (raw_version == 0 && IsDatabaseEmpty(database))

@@ -18,6 +18,7 @@ struct SamplingPoint
 {
     float distance{ 0.0f };
     std::array<float, 3> position{ 0.0f, 0.0f, 0.0f };
+    bool is_selected{ true };
 };
 
 using SamplingPointList = std::vector<SamplingPoint>;

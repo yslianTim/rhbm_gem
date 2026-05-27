@@ -27,7 +27,7 @@ public:
     const LocalGaussianResult & GetGaussianResult() const;
     const GaussianModel3D & GetEstimateOLS() const;
     const GaussianModel3D & GetEstimateMDPDE() const;
-    const LocalPotentialSampleList & GetSamplingEntries() const;
+    LocalPotentialSampleList GetSamplingEntries(bool apply_selection = true) const;
     double GetAlphaR() const;
     std::optional<LocalPotentialAnnotation> FindAnnotation(const std::string & key) const;
 

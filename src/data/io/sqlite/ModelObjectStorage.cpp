@@ -1082,8 +1082,9 @@ std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>> LoadAtomLocalPoten
 
         auto entry{ std::make_unique<LocalPotentialEntry>() };
         const auto serial_id{ database.GetColumn<int>(0) };
+        const auto sampling_size{ database.GetColumn<int>(1) };
         entry->SetSamplingEntries(
-            database.GetColumn<LocalPotentialSampleList>(2));
+            database.GetLocalPotentialSampleListColumn(2, sampling_size));
         LocalGaussianResult gaussian_result;
         gaussian_result.ols = GaussianModel3DWithUncertainty{
             GaussianModel3D{

@@ -222,13 +222,27 @@ FittedGaussianSnapshot BuildFittedGaussianSnapshot(const std::vector<AtomObject 
     return snapshot;
 }
 
+LocalPotentialSampleList SelectSamplingEntries(const LocalPotentialSampleList & sample_entries)
+{
+    LocalPotentialSampleList selected_entries;
+    selected_entries.reserve(sample_entries.size());
+    for (const auto & sample : sample_entries)
+    {
+        if (sample.point.is_selected)
+        {
+            selected_entries.emplace_back(sample);
+        }
+    }
+    return selected_entries;
+}
+
 LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
     const AtomObject & atom,
     const FittedGaussianSnapshot & fitted_gaussian_snapshot)
 {
     constexpr double kNeighborSearchRadius{ 2.0 };
     const auto local_view{ AtomLocalPotentialView::RequireFor(atom) };
-    const auto & sample_entries{ local_view.GetSamplingEntries() };
+    const auto sample_entries{ local_view.GetSamplingEntries(false) };
     const auto & neighbor_atom_list{ atom.FindNeighborAtoms(kNeighborSearchRadius, false) };
     LocalPotentialSampleList updated_list;
     updated_list.reserve(sample_entries.size());
@@ -303,9 +317,10 @@ void RunLocalPotentialFitting(ModelObject & model_object, const gaussian_estimat
             auto updated_sample_entries{
                 UpdateSampleListWithFittedGaussian(atom, fitted_gaussian_snapshot)
             };
+            const auto selected_sample_entries{ SelectSamplingEntries(updated_sample_entries) };
             const auto result{
                 gaussian_estimator::EstimateLocalGaussian(
-                    updated_sample_entries,
+                    selected_sample_entries,
                     local_view.GetAlphaR(),
                     options)
             };

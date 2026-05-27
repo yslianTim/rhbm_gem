@@ -49,6 +49,19 @@ std::unique_ptr<ModelObject> MakeLinearNeighborModel()
     return std::make_unique<ModelObject>(std::move(atom_list));
 }
 
+std::size_t CountSelectedSamples(const LocalPotentialSampleList & sampling_data)
+{
+    std::size_t count{ 0 };
+    for (const auto & sample : sampling_data)
+    {
+        if (sample.point.is_selected)
+        {
+            count++;
+        }
+    }
+    return count;
+}
+
 } // namespace
 
 TEST(MapSamplerTest, GridSamplerProducesMapSamples)
@@ -88,6 +101,25 @@ TEST(MapSamplerTest, AtomSamplerUsesSamplingMethod)
     };
 
     EXPECT_FALSE(sampling_data.empty());
+}
+
+TEST(MapSamplerTest, AtomSamplerKeepsRejectedSamplesAsUnselected)
+{
+    auto map{ MakeMapObject() };
+    auto model{ MakeLinearNeighborModel() };
+    const auto * atom{ model->GetAtomList().at(0).get() };
+
+    const auto sampling_data{
+        SampleAtomMapValues(
+            map,
+            *atom,
+            SphereSamplingMethod::FibonacciDeterministic)
+    };
+
+    const auto selected_count{ CountSelectedSamples(sampling_data) };
+    ASSERT_FALSE(sampling_data.empty());
+    EXPECT_GT(selected_count, 0u);
+    EXPECT_LT(selected_count, sampling_data.size());
 }
 
 TEST(MapSamplerTest, AtomSamplerRequiresAttachedAtomBeforeSampling)

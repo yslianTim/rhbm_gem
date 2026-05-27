@@ -149,7 +149,7 @@ LocalPotentialSampleList GenerateAtomModelSamples(
     const auto neighbor_list{ BuildAtomNeighborList(spot) };
     const Eigen::VectorXd atom_center{ Eigen::VectorXd::Zero(3) };
 
-    const auto sample_point_list{
+    auto sample_point_list{
         sphere_sampler::GenerateSamplingPointList(
             { 0.0f, 0.0f, 0.0f },
             SphereSamplingMethod::FibonacciDeterministic)
@@ -164,18 +164,18 @@ LocalPotentialSampleList GenerateAtomModelSamples(
             static_cast<float>(neighbor.center(2))
         });
     }
-    const auto filtered_sample_point_list{
-        sample_filter::FilterSamplingPointList(
-            sample_point_list,
-            { 0.0f, 0.0f, 0.0f },
-            reject_position_list,
-            reject_angle_deg)
-    };
+    sample_filter::FilterSamplingPointList(
+        sample_point_list,
+        { 0.0f, 0.0f, 0.0f },
+        reject_position_list,
+        reject_angle_deg);
 
     LocalPotentialSampleList sample_list;
-    sample_list.reserve(filtered_sample_point_list.size());
-    for (const auto & sampling_point : filtered_sample_point_list)
+    sample_list.reserve(sample_point_list.size());
+    for (const auto & sampling_point : sample_point_list)
     {
+        if (!sampling_point.is_selected) continue;
+
         const auto response{
             model.GetAmplitude() * ComputeGaussianResponseWithAtomNeighborhood3D(
                 eigen_helper::ToEigenVector(sampling_point.position),

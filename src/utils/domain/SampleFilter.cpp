@@ -97,17 +97,22 @@ LocalPotentialSampleList KeepLowestResponseRatioByDistance(
 
 } // namespace
 
-SamplingPointList FilterSamplingPointList(
-    const SamplingPointList & sample_point_list,
+void FilterSamplingPointList(
+    SamplingPointList & sample_point_list,
     const std::array<float, 3> & local_position,
     const std::vector<std::array<float, 3>> & reject_position_list,
     double angle)
 {
     numeric_validation::RequireFiniteInclusiveRange(angle, 0.0, 180.0, "angle");
 
+    for (auto & sample_point : sample_point_list)
+    {
+        sample_point.is_selected = true;
+    }
+
     if (reject_position_list.empty())
     {
-        return sample_point_list;
+        return;
     }
 
     std::vector<std::array<float, 3>> valid_neighbor_list;
@@ -119,20 +124,15 @@ SamplingPointList FilterSamplingPointList(
         valid_neighbor_list.emplace_back(reject_position);
     }
 
-    SamplingPointList filtered_sample_point_list;
-    filtered_sample_point_list.reserve(sample_point_list.size());
-    for (const auto & sample_point : sample_point_list)
+    for (auto & sample_point : sample_point_list)
     {
         const auto & sample_position{ sample_point.position };
         if (IsOwnedByNeighbor(sample_position, local_position, valid_neighbor_list) ||
             IsInsideNeighborCone(sample_position, local_position, valid_neighbor_list, angle))
         {
-            continue;
+            sample_point.is_selected = false;
         }
-        filtered_sample_point_list.emplace_back(sample_point);
     }
-
-    return filtered_sample_point_list;
 }
 
 LocalPotentialSampleList FilterLocalPotentialSampleList(LocalPotentialSampleList sample_list)
