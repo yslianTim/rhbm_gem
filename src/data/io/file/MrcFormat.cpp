@@ -1,9 +1,8 @@
 #include "MrcFormat.hpp"
-#include "MapGridValidation.hpp"
+#include "MapHelper.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
-#include "MapAxisOrderHelper.hpp"
 
 #include <cstring>
 #include <stdexcept>
@@ -180,7 +179,7 @@ void MrcFormat::LoadDataArray(std::istream& stream) {
         m_header.axis[0],
         m_header.axis[1],
         m_header.axis[2]};
-    const size_t num_voxels{map_io::CountVoxelCount(array_size)};
+    const size_t num_voxels{data_internal::CountVoxelCount(array_size)};
 
     size_t element_size{GetElementSize()};
     size_t total_bytes{num_voxels * element_size};
@@ -200,7 +199,7 @@ void MrcFormat::LoadDataArray(std::istream& stream) {
     }
 
     auto reordered_array{
-        map_io::ReorderToCanonicalXYZ(std::move(raw_data), array_size, axis_order)};
+        data_internal::ReorderToCanonicalXYZ(std::move(raw_data), array_size, axis_order)};
 
     // Update header to reflect canonical axis order and dimensions
     ReorderedAxisRelatedParameters();
@@ -213,7 +212,7 @@ void MrcFormat::SaveDataArray(const float* data, size_t size, std::ostream& stre
         m_header.array_size[0],
         m_header.array_size[1],
         m_header.array_size[2]};
-    size_t expected_voxels{map_io::CountVoxelCount(array_size)};
+    size_t expected_voxels{data_internal::CountVoxelCount(array_size)};
     if (size != expected_voxels) {
         throw std::runtime_error("SaveDataArray: voxel count does not match header");
     }

@@ -11,7 +11,7 @@
 
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
-#include "io/file/MapAxisOrderHelper.hpp"
+#include "io/file/MapHelper.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include "support/DataObjectTestSupport.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -75,7 +75,7 @@ TEST(DataObjectFileIOTest, MapAxisOrderCanonicalOrderReturnsOriginalBufferAndPre
     const auto * original_ptr{ raw_data.get() };
 
     auto reordered{
-        rg::map_io::ReorderToCanonicalXYZ(std::move(raw_data), array_size, axis_order) };
+        rg::data_internal::ReorderToCanonicalXYZ(std::move(raw_data), array_size, axis_order) };
 
     ASSERT_NE(reordered, nullptr);
     EXPECT_EQ(reordered.get(), original_ptr);
@@ -97,7 +97,7 @@ TEST(DataObjectFileIOTest, MapAxisOrderNonCanonicalOrderReordersToXYZ)
     }
 
     auto reordered{
-        rg::map_io::ReorderToCanonicalXYZ(std::move(raw_data), array_size, axis_order) };
+        rg::data_internal::ReorderToCanonicalXYZ(std::move(raw_data), array_size, axis_order) };
 
     ASSERT_NE(reordered, nullptr);
     EXPECT_FLOAT_EQ(reordered[0], 0.0f);
@@ -116,14 +116,14 @@ TEST(DataObjectFileIOTest, MapAxisOrderRejectsInvalidDimensionsAndAxisMappings)
     auto valid_data{ std::make_unique<float[]>(1) };
     valid_data[0] = 1.0f;
     EXPECT_THROW(
-        (void)rg::map_io::ReorderToCanonicalXYZ(
+        (void)rg::data_internal::ReorderToCanonicalXYZ(
             std::move(valid_data), std::array<int, 3>{ 0, 1, 1 }, std::array<int, 3>{ 1, 2, 3 }),
         std::runtime_error);
 
     auto invalid_axis_data{ std::make_unique<float[]>(1) };
     invalid_axis_data[0] = 1.0f;
     EXPECT_THROW(
-        (void)rg::map_io::ReorderToCanonicalXYZ(
+        (void)rg::data_internal::ReorderToCanonicalXYZ(
             std::move(invalid_axis_data),
             std::array<int, 3>{ 1, 1, 1 },
             std::array<int, 3>{ 1, 1, 3 }),

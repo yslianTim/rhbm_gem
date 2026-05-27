@@ -2,11 +2,12 @@
 
 #include <array>
 #include <cstddef>
+#include <memory>
 #include <stdexcept>
 
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
-namespace rhbm_gem::map_io {
+namespace rhbm_gem::data_internal {
 
 inline size_t CountVoxelCount(const std::array<int, 3> & array_size)
 {
@@ -23,4 +24,9 @@ inline size_t CountVoxelCount(const std::array<int, 3> & array_size)
            static_cast<size_t>(array_size[2]);
 }
 
-} // namespace rhbm_gem::map_io
+std::unique_ptr<float[]> ReorderToCanonicalXYZ(
+    std::unique_ptr<float[]> raw_data,
+    const std::array<int, 3> & array_size,
+    const std::array<int, 3> & axis_order);
+
+} // namespace rhbm_gem::data_internal

@@ -1,9 +1,9 @@
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 
-#include "CCP4Format.hpp"
-#include "CifFormat.hpp"
-#include "MrcFormat.hpp"
-#include "PdbFormat.hpp"
+#include "file/CCP4Format.hpp"
+#include "file/CifFormat.hpp"
+#include "file/MrcFormat.hpp"
+#include "file/PdbFormat.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>

@@ -386,11 +386,11 @@ Use this as a quick routing guide when modifying the object system.
   [`/src/data/object/**`](/src/data/object/ModelObject.cpp)
 - Change model import assembly:
   [`/src/data/io/file/ModelImportState.*`](/src/data/io/file/ModelImportState.hpp),
-  format parsers under [`/src/data/io/file/`](/src/data/io/file/ModelMapFileIO.cpp)
+  format parsers under [`/src/data/io/file/`](/src/data/io/ModelMapFileIO.cpp)
 - Change model persistence:
   [`/src/data/io/sqlite/ModelObjectStorage.*`](/src/data/io/sqlite/ModelObjectStorage.hpp)
 - Change object I/O routing:
-  [`/src/data/io/file/ModelMapFileIO.cpp`](/src/data/io/file/ModelMapFileIO.cpp),
+  [`/src/data/io/ModelMapFileIO.cpp`](/src/data/io/ModelMapFileIO.cpp),
   [`/src/data/io/sqlite/SQLitePersistence.cpp`](/src/data/io/sqlite/SQLitePersistence.cpp)
 - Change analysis-owned state:
   [`/src/data/detail/ModelAnalysisData.*`](/src/data/detail/ModelAnalysisData.hpp),

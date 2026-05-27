@@ -1,10 +1,9 @@
-#include "MapAxisOrderHelper.hpp"
-#include "MapGridValidation.hpp"
+#include "MapHelper.hpp"
 
 #include <cstddef>
 #include <stdexcept>
 
-namespace rhbm_gem::map_io {
+namespace rhbm_gem::data_internal {
 
 namespace {
 
@@ -66,4 +65,4 @@ std::unique_ptr<float[]> ReorderToCanonicalXYZ(
     return reordered_array;
 }
 
-} // namespace rhbm_gem::map_io
+} // namespace rhbm_gem::data_internal

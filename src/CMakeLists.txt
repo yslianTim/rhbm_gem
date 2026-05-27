@@ -32,6 +32,7 @@ target_sources(rhbm_gem PRIVATE
     data/object/AtomLocalPotentialView.cpp
     data/object/AtomObject.cpp
     data/io/DataRepository.cpp
+    data/io/ModelMapFileIO.cpp
     data/io/file/ModelImportState.cpp
     data/object/BondObject.cpp
     data/object/ChemicalComponentEntry.cpp
@@ -44,8 +45,7 @@ target_sources(rhbm_gem PRIVATE
     data/object/ModelObject.cpp
     data/io/file/CCP4Format.cpp
     data/io/file/CifFormat.cpp
-    data/io/file/ModelMapFileIO.cpp
-    data/io/file/MapAxisOrderHelper.cpp
+    data/io/file/MapHelper.cpp
     data/io/file/MrcFormat.cpp
     data/io/file/PdbFormat.cpp
     data/io/sqlite/ModelObjectStorage.cpp
