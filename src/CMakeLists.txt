@@ -23,7 +23,7 @@ target_sources(rhbm_gem PRIVATE
     core/painter/ComparisonPainter.cpp
     core/painter/DemoPainter.cpp
     core/painter/GausPainter.cpp
-    core/painter/PotentialPlotBuilder.cpp
+    core/painter/detail/PotentialPlotBuilder.cpp
     ${RHBM_GEM_COMMAND_SOURCES}
 
     # data

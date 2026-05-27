@@ -8,7 +8,7 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/LocalPotentialSeries.hpp>
 
-#include "PotentialPlotBuilder.hpp"
+#include "detail/PotentialPlotBuilder.hpp"
 #include "detail/PainterModelValidation.hpp"
 
 #ifdef HAVE_ROOT

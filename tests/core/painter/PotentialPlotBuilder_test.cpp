@@ -4,7 +4,7 @@
 #include <string>
 
 #include "support/CommandTestHelpers.hpp"
-#include "painter/PotentialPlotBuilder.hpp"
+#include "painter/detail/PotentialPlotBuilder.hpp"
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>

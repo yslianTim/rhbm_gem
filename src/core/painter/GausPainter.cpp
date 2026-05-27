@@ -15,8 +15,8 @@
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/hrl/LocalPotentialSeries.hpp>
 
-#include "PotentialPlotBuilder.hpp"
 #include "data/detail/AtomClassifier.hpp"
+#include "detail/PotentialPlotBuilder.hpp"
 #include "detail/PainterModelValidation.hpp"
 #include "detail/PainterStyle.hpp"
 

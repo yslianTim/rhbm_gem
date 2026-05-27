@@ -1,15 +1,17 @@
 #include <rhbm_gem/core/PainterFunctions.hpp>
+
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
-#include "PotentialPlotBuilder.hpp"
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
-#include "data/detail/AtomClassifier.hpp"
-#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/hrl/LocalPotentialSeries.hpp>
+
+#include "data/detail/AtomClassifier.hpp"
+#include "detail/PotentialPlotBuilder.hpp"
 #include "detail/PainterModelValidation.hpp"
 #include "detail/PainterStyle.hpp"
 

@@ -9,8 +9,8 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
-#include "PotentialPlotBuilder.hpp"
 #include "data/detail/AtomClassifier.hpp"
+#include "detail/PotentialPlotBuilder.hpp"
 #include "detail/PainterModelValidation.hpp"
 #include "detail/PainterStyle.hpp"
 

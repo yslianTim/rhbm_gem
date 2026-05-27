@@ -1,4 +1,4 @@
-#include "PotentialPlotBuilder.hpp"
+#include "painter/detail/PotentialPlotBuilder.hpp"
 
 #include "data/detail/AtomClassifier.hpp"
 #include "data/detail/ModelDerivedState.hpp"
