@@ -148,7 +148,7 @@ bool AtomObject::IsUnknownAtom() const
 bool AtomObject::IsMainChainAtom() const
 {
     size_t dummy_id;
-    return AtomClassifier::IsMainChainMember(m_spot, dummy_id);
+    return data_internal::IsMainChainMember(m_spot, dummy_id);
 }
 
 } // namespace rhbm_gem

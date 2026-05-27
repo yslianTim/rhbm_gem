@@ -187,7 +187,7 @@ void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::
     y_array.reserve(model_object->GetSelectedAtomCount());
     for (size_t k = 0; k < main_chain_element_size; k++)
     {
-        auto group_key{ AtomClassifier::GetMainChainSimpleAtomClassGroupKey(k) };
+        auto group_key{ data_internal::GetMainChainSimpleAtomClassGroupKey(k) };
         if (!entry_iter->HasAtomGroup(group_key, class_key)) continue;
         for (auto atom : entry_iter->GetAtomObjectList(group_key, class_key))
         {
@@ -705,7 +705,7 @@ void GausPainter::PaintLocalGausSummary(
         {
             if (atom_entry.element_type == Element::HYDROGEN) continue;
             if (atom_entry.atom_id == "OXT") continue;
-            auto group_key{ AtomClassifier::GetGroupKeyInClass(component_key, atom_key) };
+            auto group_key{ data_internal::GetGroupKeyInClass(component_key, atom_key) };
             if (!entry_iter->HasAtomGroup(group_key, class_key)) continue;
             if (entry_iter->GetAtomObjectList(group_key, class_key).empty()) continue;
 
@@ -995,16 +995,16 @@ void GausPainter::PaintGroupGausSummary(
             if (atom_entry.element_type == Element::HYDROGEN) continue;
             if (atom_entry.atom_id == "OXT") continue;
             if (atom_entry.atom_id == "OP3") continue;
-            auto group_key{ AtomClassifier::GetGroupKeyInClass(component_key, atom_key) };
+            auto group_key{ data_internal::GetGroupKeyInClass(component_key, atom_key) };
             group_key_list_map[atom_entry.element_type].emplace(atom_entry.atom_id, group_key);
             if (group_key_tmp == 0) group_key_tmp = group_key;
             auto helix_group_key{
-                AtomClassifier::GetGroupKeyInClass(Structure::HELX_P, component_key, atom_key)
+                data_internal::GetGroupKeyInClass(Structure::HELX_P, component_key, atom_key)
             };
             helix_group_key_list_map[atom_entry.element_type].emplace(atom_entry.atom_id, helix_group_key);
             if (helix_group_key_tmp == 0) helix_group_key_tmp = helix_group_key;
             auto sheet_group_key{
-                AtomClassifier::GetGroupKeyInClass(Structure::SHEET, component_key, atom_key)
+                data_internal::GetGroupKeyInClass(Structure::SHEET, component_key, atom_key)
             };
             sheet_group_key_list_map[atom_entry.element_type].emplace(atom_entry.atom_id, sheet_group_key);
             if (sheet_group_key_tmp == 0) sheet_group_key_tmp = sheet_group_key;
@@ -1449,7 +1449,7 @@ void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
     root_helper::PrintCanvasOpen(canvas.get(), file_path);
     for (size_t k = 0; k < spot_list.size(); k++)
     {
-        auto group_key_list{ AtomClassifier::GetMainChainComponentAtomClassGroupKeyList(k) };
+        auto group_key_list{ data_internal::GetMainChainComponentAtomClassGroupKeyList(k) };
         for (auto it = group_key_list.begin(); it != group_key_list.end(); )
         {
             if (!entry_iter->HasAtomGroup(*it, class_key))
@@ -1469,7 +1469,7 @@ void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
         std::vector<double> global_y_array;
         for (auto & group_key : group_key_list)
         {
-            auto residue{ AtomClassifier::GetResidueFromGroupKey(group_key, class_key) };
+            auto residue{ data_internal::GetResidueFromGroupKey(group_key, class_key) };
             auto component_key{ static_cast<ComponentKey>(residue) };
             const auto * component_entry{ model_object->FindChemicalComponentEntry(component_key) };
             if (component_entry == nullptr) continue;
@@ -1715,7 +1715,7 @@ void GausPainter::PaintGroupGausAminoAcidMainChainStructure(
         {
             auto structure{ structure_list.at(j) };
             group_key_list_map.emplace(
-                structure, AtomClassifier::GetMainChainStructureAtomClassGroupKeyList(i, structure));
+                structure, data_internal::GetMainChainStructureAtomClassGroupKeyList(i, structure));
             auto & group_key_list{ group_key_list_map.at(structure) };
             for (auto it = group_key_list.begin(); it != group_key_list.end(); )
             {
@@ -2073,7 +2073,7 @@ void GausPainter::PaintLocalGausToSequenceAminoAcidMainChain(
                 for (size_t k = 0; k < main_chain_element_count; k++)
                 {
                     if (gaus_graph_map[j][k].find(chain_id) == gaus_graph_map[j][k].end()) continue;
-                    auto spot{ AtomClassifier::GetMainChainSpot(k) };
+                    auto spot{ data_internal::GetMainChainSpot(k) };
                     auto element_color{ painter_internal::GetMainChainSpotColor(spot) };
                     auto element_marker{ painter_internal::GetMainChainSpotOpenMarker(spot) };
                     //auto element_line{ painter_internal::GetMainChainSpotLineStyle(spot) };
@@ -2234,7 +2234,7 @@ void GausPainter::PaintGroupGausAminoAcidMainChainComponent(
     {
         auto spot{ spot_list.at(i) };
         group_key_list_map.emplace(
-            spot, AtomClassifier::GetMainChainComponentAtomClassGroupKeyList(i));
+            spot, data_internal::GetMainChainComponentAtomClassGroupKeyList(i));
         auto & group_key_list{ group_key_list_map.at(spot) };
         for (auto it = group_key_list.begin(); it != group_key_list.end(); )
         {
@@ -2253,7 +2253,7 @@ void GausPainter::PaintGroupGausAminoAcidMainChainComponent(
     component_id_list.reserve(ChemicalDataHelper::GetStandardAminoAcidCount());
     for (auto & group_key : group_key_list_map.at(Spot::CA))
     {
-        auto residue{ AtomClassifier::GetResidueFromGroupKey(group_key, class_key) };
+        auto residue{ data_internal::GetResidueFromGroupKey(group_key, class_key) };
         auto component_key{ static_cast<ComponentKey>(residue) };
         const auto * component_entry{ model_object->FindChemicalComponentEntry(component_key) };
         if (component_entry == nullptr) continue;

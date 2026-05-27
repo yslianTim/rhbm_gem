@@ -52,7 +52,7 @@ void ModelAnalysisEditor::RebuildAtomGroupsFromSelection()
         auto & group_entry{ analysis_data.EnsureAtomGroupEntry(class_key) };
         for (auto * atom : m_model_object.GetSelectedAtoms())
         {
-            const auto group_key{ AtomClassifier::GetGroupKeyInClass(atom, class_key) };
+            const auto group_key{ data_internal::GetGroupKeyInClass(atom, class_key) };
             group_entry.AddMember(group_key, *atom);
         }
     }

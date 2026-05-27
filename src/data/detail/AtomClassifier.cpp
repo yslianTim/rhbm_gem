@@ -4,12 +4,15 @@
 #include <rhbm_gem/utils/domain/KeyPacker.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
+#include <array>
 #include <stdexcept>
 
-namespace rhbm_gem {
+namespace rhbm_gem::data_internal {
 
-const std::vector<Element> AtomClassifier::m_main_chain_member_element_list
-{
+namespace {
+
+constexpr std::size_t k_main_chain_member_count{ 16 };
+constexpr std::array<Element, k_main_chain_member_count> k_main_chain_member_element_list{
     Element::CARBON, Element::CARBON, Element::NITROGEN, Element::OXYGEN,
     Element::PHOSPHORUS, Element::OXYGEN, Element::OXYGEN,
     Element::OXYGEN, Element::OXYGEN, Element::OXYGEN, Element::OXYGEN,
@@ -17,8 +20,7 @@ const std::vector<Element> AtomClassifier::m_main_chain_member_element_list
     Element::CARBON, Element::CARBON
 };
 
-const std::vector<Spot> AtomClassifier::m_main_chain_member_spot_list
-{
+constexpr std::array<Spot, k_main_chain_member_count> k_main_chain_member_spot_list{
     Spot::CA, Spot::C, Spot::N, Spot::O,
     Spot::P, Spot::OP1, Spot::OP2,
     Spot::O5p, Spot::O4p, Spot::O3p, Spot::O2p,
@@ -26,27 +28,9 @@ const std::vector<Spot> AtomClassifier::m_main_chain_member_spot_list
     Spot::C2p, Spot::C1p
 };
 
-bool AtomClassifier::IsMainChainMember(Spot spot, size_t & main_chain_member_id)
+bool IsValidMainChainMemberID(size_t member_id)
 {
-    for (size_t i = 0; i < m_main_chain_member_count; i++)
-    {
-        if (m_main_chain_member_spot_list.at(i) == spot)
-        {
-            main_chain_member_id = i;
-            return true;
-        }
-    }
-    return false;
-}
-
-size_t AtomClassifier::GetMainChainMemberCount()
-{
-    return m_main_chain_member_count;
-}
-
-bool AtomClassifier::IsValidMainChainMemberID(size_t member_id)
-{
-    if (member_id >= m_main_chain_member_count)
+    if (member_id >= k_main_chain_member_count)
     {
         Logger::Log(
             LogLevel::Error,
@@ -56,26 +40,39 @@ bool AtomClassifier::IsValidMainChainMemberID(size_t member_id)
     return true;
 }
 
-Element AtomClassifier::GetMainChainElement(size_t id)
+} // namespace
+
+bool IsMainChainMember(Spot spot, size_t & main_chain_member_id)
+{
+    for (size_t i = 0; i < k_main_chain_member_count; i++)
+    {
+        if (k_main_chain_member_spot_list.at(i) == spot)
+        {
+            main_chain_member_id = i;
+            return true;
+        }
+    }
+    return false;
+}
+
+size_t GetMainChainMemberCount()
+{
+    return k_main_chain_member_count;
+}
+
+Element GetMainChainElement(size_t id)
 {
     if (IsValidMainChainMemberID(id) == false) return Element::UNK;
-    return m_main_chain_member_element_list.at(id);
+    return k_main_chain_member_element_list.at(id);
 }
 
-Spot AtomClassifier::GetMainChainSpot(size_t id)
+Spot GetMainChainSpot(size_t id)
 {
     if (IsValidMainChainMemberID(id) == false) return Spot::UNK;
-    return m_main_chain_member_spot_list.at(id);
+    return k_main_chain_member_spot_list.at(id);
 }
 
-Spot AtomClassifier::GetNucleotideMainChainSpot(size_t id)
-{
-    id += m_nucleotide_main_chain_member_start_id;
-    if (IsValidMainChainMemberID(id) == false) return Spot::UNK;
-    return m_main_chain_member_spot_list.at(id);
-}
-
-GroupKey AtomClassifier::GetGroupKeyInClass(
+GroupKey GetGroupKeyInClass(
     const AtomObject * atom_object,
     const std::string & class_key)
 {
@@ -101,12 +98,12 @@ GroupKey AtomClassifier::GetGroupKeyInClass(
     throw std::runtime_error("Unsupported class key." + class_key);
 }
 
-GroupKey AtomClassifier::GetGroupKeyInClass(ComponentKey component_key, AtomKey atom_key)
+GroupKey GetGroupKeyInClass(ComponentKey component_key, AtomKey atom_key)
 {
     return KeyPackerComponentAtomClass::Pack(component_key, atom_key);
 }
 
-GroupKey AtomClassifier::GetGroupKeyInClass(
+GroupKey GetGroupKeyInClass(
     Structure structure,
     ComponentKey component_key,
     AtomKey atom_key)
@@ -114,7 +111,7 @@ GroupKey AtomClassifier::GetGroupKeyInClass(
     return KeyPackerStructureAtomClass::Pack(structure, component_key, atom_key);
 }
 
-Residue AtomClassifier::GetResidueFromGroupKey(
+Residue GetResidueFromGroupKey(
     GroupKey group_key,
     const std::string & class_key)
 {
@@ -131,7 +128,7 @@ Residue AtomClassifier::GetResidueFromGroupKey(
     return Residue::UNK;
 }
 
-GroupKey AtomClassifier::GetMainChainSimpleAtomClassGroupKey(size_t id)
+GroupKey GetMainChainSimpleAtomClassGroupKey(size_t id)
 {
     if (IsValidMainChainMemberID(id) == false)
     {
@@ -139,11 +136,11 @@ GroupKey AtomClassifier::GetMainChainSimpleAtomClassGroupKey(size_t id)
         return 0;
     }
     return KeyPackerSimpleAtomClass::Pack(
-        static_cast<AtomKey>(m_main_chain_member_spot_list.at(id)),
+        static_cast<AtomKey>(k_main_chain_member_spot_list.at(id)),
         false);
 }
 
-GroupKey AtomClassifier::GetMainChainComponentAtomClassGroupKey(size_t id, Residue residue)
+GroupKey GetMainChainComponentAtomClassGroupKey(size_t id, Residue residue)
 {
     if (IsValidMainChainMemberID(id) == false)
     {
@@ -153,10 +150,10 @@ GroupKey AtomClassifier::GetMainChainComponentAtomClassGroupKey(size_t id, Resid
     const auto component_key{ static_cast<ComponentKey>(residue) };
     return KeyPackerComponentAtomClass::Pack(
         component_key,
-        static_cast<AtomKey>(m_main_chain_member_spot_list.at(id)));
+        static_cast<AtomKey>(k_main_chain_member_spot_list.at(id)));
 }
 
-GroupKey AtomClassifier::GetMainChainStructureAtomClassGroupKey(
+GroupKey GetMainChainStructureAtomClassGroupKey(
     size_t id,
     Structure structure,
     Residue residue)
@@ -170,10 +167,10 @@ GroupKey AtomClassifier::GetMainChainStructureAtomClassGroupKey(
     return KeyPackerStructureAtomClass::Pack(
         structure,
         component_key,
-        static_cast<AtomKey>(m_main_chain_member_spot_list.at(id)));
+        static_cast<AtomKey>(k_main_chain_member_spot_list.at(id)));
 }
 
-std::vector<GroupKey> AtomClassifier::GetMainChainComponentAtomClassGroupKeyList(size_t id)
+std::vector<GroupKey> GetMainChainComponentAtomClassGroupKeyList(size_t id)
 {
     if (IsValidMainChainMemberID(id) == false) return {};
     std::vector<GroupKey> group_key_list;
@@ -189,7 +186,7 @@ std::vector<GroupKey> AtomClassifier::GetMainChainComponentAtomClassGroupKeyList
     return group_key_list;
 }
 
-std::vector<GroupKey> AtomClassifier::GetMainChainStructureAtomClassGroupKeyList(
+std::vector<GroupKey> GetMainChainStructureAtomClassGroupKeyList(
     size_t id,
     Structure structure)
 {
@@ -209,24 +206,4 @@ std::vector<GroupKey> AtomClassifier::GetMainChainStructureAtomClassGroupKeyList
     return group_key_list;
 }
 
-GroupKey AtomClassifier::GetNucleotideMainChainComponentAtomClassGroupKey(
-    size_t id,
-    Residue residue)
-{
-    id += m_nucleotide_main_chain_member_start_id;
-    return GetMainChainComponentAtomClassGroupKey(id, residue);
-}
-
-std::vector<GroupKey> AtomClassifier::GetNucleotideMainChainComponentAtomClassGroupKeyList(
-    Residue residue)
-{
-    std::vector<GroupKey> group_key_list;
-    group_key_list.reserve(m_nucleotide_main_chain_member_count);
-    for (size_t i = 0; i < m_nucleotide_main_chain_member_count; i++)
-    {
-        group_key_list.emplace_back(GetNucleotideMainChainComponentAtomClassGroupKey(i, residue));
-    }
-    return group_key_list;
-}
-
-} // namespace rhbm_gem
+} // namespace rhbm_gem::data_internal

@@ -89,11 +89,11 @@ size_t PotentialPlotBuilder::GetAtomResidueCount(
     GroupKey group_key{ 0 };
         if (class_key == ChemicalDataHelper::GetComponentAtomClassKey())
     {
-        group_key = AtomClassifier::GetMainChainComponentAtomClassGroupKey(0, residue);
+        group_key = data_internal::GetMainChainComponentAtomClassGroupKey(0, residue);
     }
     else if (class_key == ChemicalDataHelper::GetStructureAtomClassKey())
     {
-        group_key = AtomClassifier::GetMainChainStructureAtomClassGroupKey(0, structure, residue);
+        group_key = data_internal::GetMainChainStructureAtomClassGroupKey(0, structure, residue);
     }
     if (IsAvailableAtomGroupKey(group_key, class_key) == false)
     {
@@ -298,7 +298,7 @@ std::vector<std::unique_ptr<TH1D>> PotentialPlotBuilder::CreateMainChainAtomGaus
     for (auto & atom : model_object->GetSelectedAtoms())
     {
         size_t id;
-        if (AtomClassifier::IsMainChainMember(atom->GetSpot(), id) == false)
+        if (data_internal::IsMainChainMember(atom->GetSpot(), id) == false)
         {
             continue;
         }
@@ -367,7 +367,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToResi
         {
             continue;
         }
-        auto x_value{ static_cast<int>(AtomClassifier::GetResidueFromGroupKey(group_key, class_key)) - 1 };
+        auto x_value{ static_cast<int>(data_internal::GetResidueFromGroupKey(group_key, class_key)) - 1 };
         auto y_value{ model_view.GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(par_id) };
         auto y_error{ model_view.GetAtomGroupPriorWithUncertainty(group_key, class_key).GetDisplayStandardDeviation(par_id) };
         graph->SetPoint(count, x_value, y_value);
@@ -932,8 +932,8 @@ PotentialPlotBuilder::CreateAtomMapValueToSequenceIDGraphMap(
 
     for (auto & atom : model_object->GetSelectedAtoms())
     {
-        if (atom->GetElement() != AtomClassifier::GetMainChainElement(main_chain_element_id)) continue;
-        if (atom->GetSpot() != AtomClassifier::GetMainChainSpot(main_chain_element_id)) continue;
+        if (atom->GetElement() != data_internal::GetMainChainElement(main_chain_element_id)) continue;
+        if (atom->GetSpot() != data_internal::GetMainChainSpot(main_chain_element_id)) continue;
         if (residue != Residue::UNK && atom->GetResidue() != residue) continue;
         const auto entry{ AtomLocalPotentialView::RequireFor(*atom) };
         auto sequence_id{ atom->GetSequenceID() };
@@ -969,8 +969,8 @@ PotentialPlotBuilder::CreateAtomQScoreToSequenceIDGraphMap(
 
     for (auto & atom : model_object->GetSelectedAtoms())
     {
-        if (atom->GetElement() != AtomClassifier::GetMainChainElement(main_chain_element_id)) continue;
-        if (atom->GetSpot() != AtomClassifier::GetMainChainSpot(main_chain_element_id)) continue;
+        if (atom->GetElement() != data_internal::GetMainChainElement(main_chain_element_id)) continue;
+        if (atom->GetSpot() != data_internal::GetMainChainSpot(main_chain_element_id)) continue;
         const auto entry{ AtomLocalPotentialView::For(*atom) };
         if (!entry.IsAvailable()) continue;
         auto sequence_id{ atom->GetSequenceID() };
@@ -1018,8 +1018,8 @@ PotentialPlotBuilder::CreateAtomGausEstimateToSequenceIDGraphMap(
 
     for (auto & atom : model_object->GetSelectedAtoms())
     {
-        if (atom->GetElement() != AtomClassifier::GetMainChainElement(main_chain_element_id)) continue;
-        if (atom->GetSpot() != AtomClassifier::GetMainChainSpot(main_chain_element_id)) continue;
+        if (atom->GetElement() != data_internal::GetMainChainElement(main_chain_element_id)) continue;
+        if (atom->GetSpot() != data_internal::GetMainChainSpot(main_chain_element_id)) continue;
         if (residue != Residue::UNK && atom->GetResidue() != residue) continue;
         const auto entry{ AtomLocalPotentialView::RequireFor(*atom) };
         auto sequence_id{ atom->GetSequenceID() };
@@ -1053,8 +1053,8 @@ PotentialPlotBuilder::CreateAtomGausEstimatePosteriorToSequenceIDGraphMap(
 
     for (auto & atom : model_object->GetSelectedAtoms())
     {
-        if (atom->GetElement() != AtomClassifier::GetMainChainElement(main_chain_element_id)) continue;
-        if (atom->GetSpot() != AtomClassifier::GetMainChainSpot(main_chain_element_id)) continue;
+        if (atom->GetElement() != data_internal::GetMainChainElement(main_chain_element_id)) continue;
+        if (atom->GetSpot() != data_internal::GetMainChainSpot(main_chain_element_id)) continue;
         if (residue != Residue::UNK && atom->GetResidue() != residue) continue;
         const auto entry{ AtomLocalPotentialView::RequireFor(*atom) };
         auto sequence_id{ atom->GetSequenceID() };

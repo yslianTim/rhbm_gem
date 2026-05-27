@@ -696,7 +696,7 @@ void ComparisonPainter::PainMapValueComparison(
         std::vector<double> x_array, y_array;
         for (size_t i = 0; i < col_size; i++)
         {
-            auto group_key{ AtomClassifier::GetMainChainSimpleAtomClassGroupKey(i) };
+            auto group_key{ data_internal::GetMainChainSimpleAtomClassGroupKey(i) };
             auto graph{
                 PotentialPlotBuilder::CreateMapValueScatterGraph(
                     group_key, ref_model_object, model_object, 15, 0.0, 1.5)
@@ -817,14 +817,14 @@ void ComparisonPainter::BuildGausRatioToResolutionGraph(
     auto group_key
     {
         (class_key == ChemicalDataHelper::GetSimpleAtomClassKey()) ?
-        AtomClassifier::GetMainChainSimpleAtomClassGroupKey(target_id) :
-        AtomClassifier::GetMainChainComponentAtomClassGroupKey(target_id, residue)
+        data_internal::GetMainChainSimpleAtomClassGroupKey(target_id) :
+        data_internal::GetMainChainComponentAtomClassGroupKey(target_id, residue)
     };
     auto ref_group_key
     {
         (class_key == ChemicalDataHelper::GetSimpleAtomClassKey()) ?
-        AtomClassifier::GetMainChainSimpleAtomClassGroupKey(reference_id) :
-        AtomClassifier::GetMainChainComponentAtomClassGroupKey(reference_id, residue)
+        data_internal::GetMainChainSimpleAtomClassGroupKey(reference_id) :
+        data_internal::GetMainChainComponentAtomClassGroupKey(reference_id, residue)
     };
     auto count{ 0 };
     for (auto model_object : model_list)
@@ -863,14 +863,14 @@ void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
     auto group_key
     {
         (class_key == ChemicalDataHelper::GetSimpleAtomClassKey()) ?
-        AtomClassifier::GetMainChainSimpleAtomClassGroupKey(target_id) :
-        AtomClassifier::GetMainChainComponentAtomClassGroupKey(target_id, residue)
+        data_internal::GetMainChainSimpleAtomClassGroupKey(target_id) :
+        data_internal::GetMainChainComponentAtomClassGroupKey(target_id, residue)
     };
     auto ref_group_key
     {
         (class_key == ChemicalDataHelper::GetSimpleAtomClassKey()) ?
-        AtomClassifier::GetMainChainSimpleAtomClassGroupKey(reference_id) :
-        AtomClassifier::GetMainChainComponentAtomClassGroupKey(reference_id, residue)
+        data_internal::GetMainChainSimpleAtomClassGroupKey(reference_id) :
+        data_internal::GetMainChainComponentAtomClassGroupKey(reference_id, residue)
     };
     auto count{ 0 };
     auto model_count{ 0 };

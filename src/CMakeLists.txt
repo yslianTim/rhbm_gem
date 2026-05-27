@@ -27,7 +27,7 @@ target_sources(rhbm_gem PRIVATE
     ${RHBM_GEM_COMMAND_SOURCES}
 
     # data
-    data/object/AtomClassifier.cpp
+    data/detail/AtomClassifier.cpp
     data/object/AtomLocalPotentialEditor.cpp
     data/object/AtomLocalPotentialView.cpp
     data/object/AtomObject.cpp

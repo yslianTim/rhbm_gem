@@ -53,7 +53,7 @@ inline const StyleSpec kUnknownStyle{};
 
 inline bool IsValidMainChainMemberID(size_t member_id)
 {
-    if (member_id >= AtomClassifier::GetMainChainMemberCount())
+    if (member_id >= data_internal::GetMainChainMemberCount())
     {
         Logger::Log(
             LogLevel::Error,
