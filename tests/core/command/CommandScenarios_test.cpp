@@ -21,18 +21,6 @@ using namespace rhbm_gem::core;
 
 namespace {
 
-std::size_t CountSubstring(const std::string & text, const std::string & target)
-{
-    std::size_t count{ 0 };
-    std::size_t position{ 0 };
-    while ((position = text.find(target, position)) != std::string::npos)
-    {
-        ++count;
-        position += target.size();
-    }
-    return count;
-}
-
 bool HasDiagnosticForOption(
     const std::vector<CommandDiagnostic> & issues,
     std::string_view option_name)
@@ -444,14 +432,38 @@ TEST(CommandScenariosTest, MapSimulationGeneratesMapForEachValidBlurringWidth)
     testing::internal::CaptureStderr();
     const auto result{ RunCommand(request) };
     const std::string error_output{ testing::internal::GetCapturedStderr() };
-    const std::string standard_output{ testing::internal::GetCapturedStdout() };
+    static_cast<void>(testing::internal::GetCapturedStdout());
 
     ASSERT_TRUE(result.succeeded);
     EXPECT_EQ(command_test::CountFilesWithExtension(temp_dir.path(), ".map"), 2);
-    EXPECT_EQ(CountSubstring(standard_output, "Building KD-Tree from"), 1);
     EXPECT_EQ(
         error_output.find("MapObject::SetMapValueArray - MapObject already has a map value array"),
         std::string::npos);
+
+    std::filesystem::path generated_map_path;
+    for (const auto & entry : std::filesystem::directory_iterator(temp_dir.path()))
+    {
+        if (entry.is_regular_file() && entry.path().extension() == ".map")
+        {
+            generated_map_path = entry.path();
+            break;
+        }
+    }
+    ASSERT_FALSE(generated_map_path.empty());
+
+    auto loaded_map{ ReadMap(generated_map_path) };
+    ASSERT_NE(loaded_map, nullptr);
+    ASSERT_NE(loaded_map->GetMapValueArray(), nullptr);
+    bool has_non_zero_value{ false };
+    for (size_t i = 0; i < loaded_map->GetMapValueArraySize(); i++)
+    {
+        if (loaded_map->GetMapValue(i) != 0.0f)
+        {
+            has_non_zero_value = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(has_non_zero_value);
 }
 
 TEST(CommandScenariosTest, MapSimulationEmptyModelUsesZeroOrigin)

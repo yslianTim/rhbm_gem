@@ -260,11 +260,11 @@ There are two different spatial mechanisms in the current object system.
 
 This cache is used through `ModelDerivedState::FindAtomsInRange(...)`.
 
-### 9.2 Map spatial index
+### 9.2 Map grid access
 
-`MapObject` does not own a persistent KD-tree.
+`MapObject` does not own a persistent spatial index.
 
-Instead, callers build an external [`MapSpatialIndex`](/src/data/detail/MapSpatialIndex.hpp) around a `MapObject` when spatial voxel queries are needed. This keeps `MapObject` itself closer to a self-contained value object.
+For regular-grid voxel range queries, command code should derive bounded grid index ranges directly from `MapObject` geometry (`grid size`, `grid spacing`, and `origin`) and then filter by distance. This keeps `MapObject` itself closer to a self-contained value object and avoids shared KD-tree lifetime concerns for dense regular maps.
 
 ## 10. MapObject Architecture
 
@@ -284,7 +284,7 @@ Key behavior:
 - constructors compute geometry-derived bounds
 - replacing the value array through `SetMapValueArray(...)` recomputes statistics
 - `MapValueArrayNormalization()` divides all values by the current standard deviation, then recomputes statistics
-- spatial index data is not stored inside the object
+- spatial query/index data is not stored inside the object
 
 Unlike `ModelObject`, `MapObject` does not have a builder, analysis store, or command-private friend access layers.
 
@@ -406,4 +406,4 @@ Use this as a quick routing guide when modifying the object system.
 - `GetSelectedAtoms()` and `GetSelectedBonds()` are cached projections, not the fundamental selection flags.
 - loaded analysis data can change selection state because selection is reconstructed from persisted local entries.
 - `ModelAnalysisData` only owns analysis entries; edit workflows stay in `ModelAnalysisEditor`, while `ModelDerivedState` owns spatial/cache queries.
-- `MapSpatialIndex` is external to `MapObject`; do not add map KD-tree state to the public map object unless the architecture intentionally changes.
+- map spatial query helpers stay outside `MapObject`; do not add map KD-tree state to the public map object unless the architecture intentionally changes.

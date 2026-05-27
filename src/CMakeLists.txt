@@ -40,7 +40,6 @@ target_sources(rhbm_gem PRIVATE
     data/detail/ModelDerivedState.cpp
     data/detail/ModelObjectParts.cpp
     data/object/MapObject.cpp
-    data/detail/MapSpatialIndex.cpp
     data/detail/ModelAnalysisData.cpp
     data/object/ModelObject.cpp
     data/io/file/CCP4Format.cpp

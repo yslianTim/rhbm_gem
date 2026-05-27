@@ -1,5 +1,4 @@
 #include "detail/CommandBase.hpp"
-#include "data/detail/MapSpatialIndex.hpp"
 
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -186,9 +185,56 @@ std::unique_ptr<MapObject> CreateMapObject(
     return map_object;
 }
 
+void CollectGridIndicesInRange(
+    const MapObject & map_object,
+    const std::array<float, 3> & center,
+    float radius,
+    std::vector<size_t> & grid_index_list)
+{
+    grid_index_list.clear();
+    if (radius < 0.0f) return;
+
+    const auto grid_size{ map_object.GetGridSize() };
+    const auto grid_spacing{ map_object.GetGridSpacing() };
+    const auto origin{ map_object.GetOrigin() };
+    std::array<int, 3> lower_bound{};
+    std::array<int, 3> upper_bound{};
+    for (size_t axis = 0; axis < 3; axis++)
+    {
+        const auto lower_position{ (center[axis] - radius - origin[axis]) / grid_spacing[axis] };
+        const auto upper_position{ (center[axis] + radius - origin[axis]) / grid_spacing[axis] };
+        lower_bound[axis] = std::max(0, static_cast<int>(std::floor(lower_position)));
+        upper_bound[axis] = std::min(grid_size[axis] - 1, static_cast<int>(std::floor(upper_position)));
+        if (lower_bound[axis] > upper_bound[axis]) return;
+    }
+
+    const auto radius_square{ radius * radius };
+    for (int z = lower_bound[2]; z <= upper_bound[2]; z++)
+    {
+        for (int y = lower_bound[1]; y <= upper_bound[1]; y++)
+        {
+            for (int x = lower_bound[0]; x <= upper_bound[0]; x++)
+            {
+                const std::array<float, 3> grid_position{
+                    origin[0] + static_cast<float>(x) * grid_spacing[0],
+                    origin[1] + static_cast<float>(y) * grid_spacing[1],
+                    origin[2] + static_cast<float>(z) * grid_spacing[2]
+                };
+                const auto dx{ grid_position[0] - center[0] };
+                const auto dy{ grid_position[1] - center[1] };
+                const auto dz{ grid_position[2] - center[2] };
+                const auto distance_square{ dx * dx + dy * dy + dz * dz };
+                if (distance_square > radius_square) continue;
+
+                grid_index_list.emplace_back(static_cast<size_t>(
+                    x + grid_size[0] * (y + grid_size[1] * z)));
+            }
+        }
+    }
+}
+
 void PopulateMapValueArray(
     MapObject * map_object,
-    const MapSpatialIndex & spatial_index,
     const SimulationAtomPreparationResult & atom_list,
     const MapSimulationRequest & request,
     double blurring_width,
@@ -224,8 +270,11 @@ void PopulateMapValueArray(
         auto charge{ atom_list.atom_charge_map.at(atom->GetSerialID()) };
         auto element{ atom->GetElement() };
         auto atom_position{ atom->GetPosition() };
-        spatial_index.CollectGridIndicesInRange(
-            atom_position, static_cast<float>(request.cutoff_distance), in_range_grid_index_list);
+        CollectGridIndicesInRange(
+            *map_object,
+            atom_position,
+            static_cast<float>(request.cutoff_distance),
+            in_range_grid_index_list);
 
         for (const auto grid_index : in_range_grid_index_list)
         {
@@ -302,8 +351,6 @@ bool MapSimulationCommand::ExecuteImpl(const MapSimulationRequest & request)
         + std::to_string(request.blurring_width_list.size()));
 
     auto map_object{ CreateMapObject(request, atom_list) };
-    MapSpatialIndex spatial_index(*map_object, request.job_count);
-    spatial_index.Build();
     for (auto & blurring_width : request.blurring_width_list)
     {
         auto map_key_tag{
@@ -311,7 +358,7 @@ bool MapSimulationCommand::ExecuteImpl(const MapSimulationRequest & request)
             string_helper::ToStringWithPrecision<double>(blurring_width, 2)
         };
         PopulateMapValueArray(
-            map_object.get(), spatial_index, atom_list, request, blurring_width, request.job_count);
+            map_object.get(), atom_list, request, blurring_width, request.job_count);
         auto output{ request.output_dir / (request.map_file_name + "_" + map_key_tag + ".map") };
         WriteMap(output, *map_object);
     }
