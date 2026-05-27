@@ -33,7 +33,6 @@ target_sources(rhbm_gem PRIVATE
     data/object/AtomObject.cpp
     data/io/DataRepository.cpp
     data/io/file/ModelImportState.cpp
-    data/object/BondClassifier.cpp
     data/object/BondObject.cpp
     data/object/ChemicalComponentEntry.cpp
     data/object/ModelAnalysisEditor.cpp
