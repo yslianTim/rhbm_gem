@@ -95,21 +95,20 @@ public:
 
 private:
     void AddModel(ModelObject & data_object);
-    void PaintAtomMapValueMainChain(ModelObject * model_object, const std::string & name);
+    void PaintMapValueMainChain(ModelObject * model_object, const std::string & name);
     void PaintAtomXYPosition(ModelObject * model_object, const std::string & name);
-    void PaintAtomGausScatterPlot(
+    void PaintGausScatterPlot(
         ModelObject * model_object,
         const std::string & name,
         bool do_normalize=false);
-    void PaintAtomRankMainChain(ModelObject * model_object, const std::string & name);
-    void PaintAtomLocalGausSummary(ModelObject * model_object, const std::string & name);
-    void PaintAtomGroupGausSummary(ModelObject * model_object, const std::string & name);
-    void PaintAtomQScoreAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);
-    void PaintAtomGroupMapValueAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);
-    void PaintAtomGroupGausAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);
-    void PaintAtomGroupGausAminoAcidMainChainComponentSimple(ModelObject * model_object, const std::string & name);
-    void PaintAtomGroupGausAminoAcidMainChainStructure(ModelObject * model_object, const std::string & name);
-    void PaintAtomLocalGausToSequenceAminoAcidMainChain(ModelObject * model_object, const std::string & name);
+    void PaintGausRankMainChain(ModelObject * model_object, const std::string & name);
+    void PaintLocalGausSummary(ModelObject * model_object, const std::string & name);
+    void PaintGroupGausSummary(ModelObject * model_object, const std::string & name);
+    void PaintQScoreAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);
+    void PaintGroupMapValueAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);
+    void PaintGroupGausAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);
+    void PaintGroupGausAminoAcidMainChainStructure(ModelObject * model_object, const std::string & name);
+    void PaintLocalGausToSequenceAminoAcidMainChain(ModelObject * model_object, const std::string & name);
 
 #ifdef HAVE_ROOT
     void RemodelFrameInPad(::TH2 * frame, ::TPad * pad, double x_tick_length, double y_tick_length);
@@ -147,25 +146,23 @@ void GausPainter::Run()
         auto label{ painter_internal::BuildPainterOutputLabel(*model_object) };
 
         PaintAtomXYPosition(model_object, "atom_position_"+ label);
-        PaintAtomGausScatterPlot(model_object, "atom_gaus_scatter_"+ label, false);
-        PaintAtomMapValueMainChain(model_object, "atom_map_value_main_chain_"+ label);
-        PaintAtomRankMainChain(model_object, "atom_rank_main_chain_"+ label);
-        PaintAtomGroupGausAminoAcidMainChainComponentSimple(model_object, "atom_group_gaus_amino_acid_main_chain_component_simple_"+ label);
-        PaintAtomLocalGausSummary(model_object, "atom_local_gaus_summary_"+ label);
-        PaintAtomGroupGausSummary(model_object, "atom_group_gaus_summary_"+ label);
-        PaintAtomQScoreAminoAcidMainChainComponent(model_object, "atom_qscore_amino_acid_main_chain_component_"+ label);
-        PaintAtomGroupMapValueAminoAcidMainChainComponent(model_object, "atom_group_map_value_amino_acid_main_chain_component_"+ label);
-        PaintAtomGroupGausAminoAcidMainChainComponent(model_object, "atom_group_gaus_amino_acid_main_chain_component_"+ label);
-        PaintAtomGroupGausAminoAcidMainChainStructure(model_object, "atom_group_gaus_amino_acid_main_chain_structure_"+ label);
-        PaintAtomLocalGausToSequenceAminoAcidMainChain(model_object, "atom_local_gaus_to_sequence_amino_acid_main_chain_"+ label);
+        PaintGausScatterPlot(model_object, "gaus_scatter_"+ label, false);
+        PaintMapValueMainChain(model_object, "map_value_main_chain_"+ label);
+        PaintGausRankMainChain(model_object, "gaus_rank_main_chain_"+ label);
+        PaintLocalGausSummary(model_object, "local_gaus_summary_"+ label);
+        PaintGroupGausSummary(model_object, "group_gaus_summary_"+ label);
+        PaintQScoreAminoAcidMainChainComponent(model_object, "qscore_amino_acid_main_chain_component_"+ label);
+        PaintGroupMapValueAminoAcidMainChainComponent(model_object, "group_map_value_amino_acid_main_chain_component_"+ label);
+        PaintGroupGausAminoAcidMainChainComponent(model_object, "group_gaus_amino_acid_main_chain_component_"+ label);
+        PaintGroupGausAminoAcidMainChainStructure(model_object, "group_gaus_amino_acid_main_chain_structure_"+ label);
+        PaintLocalGausToSequenceAminoAcidMainChain(model_object, "local_gaus_to_sequence_amino_acid_main_chain_"+ label);
     }
 }
 
-void GausPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const std::string & name)
+void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    Logger::Log(LogLevel::Info, "GausPainter::PaintAtomMapValueMainChain");
-    (void)model_object;
+    Logger::Log(LogLevel::Info, "GausPainter::PaintMapValueMainChain");
 
     #ifdef HAVE_ROOT
     const auto & class_key{ ChemicalDataHelper::GetSimpleAtomClassKey() };
@@ -420,11 +417,11 @@ void GausPainter::PaintAtomXYPosition(
     #endif
 }
 
-void GausPainter::PaintAtomGausScatterPlot(
+void GausPainter::PaintGausScatterPlot(
     ModelObject * model_object, const std::string & name, bool do_normalize)
 {
     auto file_path{ m_folder_path + name };
-    Logger::Log(LogLevel::Info, "GausPainter::PaintAtomGausScatterPlot");
+    Logger::Log(LogLevel::Info, "GausPainter::PaintGausScatterPlot");
     (void)model_object;
     (void)do_normalize;
 
@@ -527,11 +524,11 @@ void GausPainter::PaintAtomGausScatterPlot(
     #endif
 }
 
-void GausPainter::PaintAtomRankMainChain(
+void GausPainter::PaintGausRankMainChain(
     ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    Logger::Log(LogLevel::Info, "GausPainter::PaintAtomRankMainChain");
+    Logger::Log(LogLevel::Info, "GausPainter::PaintGausRankMainChain");
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
 
     #ifdef HAVE_ROOT
@@ -668,11 +665,11 @@ void GausPainter::PaintAtomRankMainChain(
     #endif
 }
 
-void GausPainter::PaintAtomLocalGausSummary(
+void GausPainter::PaintLocalGausSummary(
     ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    Logger::Log(LogLevel::Info, "GausPainter::PaintAtomLocalGausSummary");
+    Logger::Log(LogLevel::Info, "GausPainter::PaintLocalGausSummary");
 
     auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
@@ -936,11 +933,11 @@ void GausPainter::PaintAtomLocalGausSummary(
     #endif
 }
 
-void GausPainter::PaintAtomGroupGausSummary(
+void GausPainter::PaintGroupGausSummary(
     ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    Logger::Log(LogLevel::Info, "GausPainter::PaintAtomGroupGausSummary");
+    Logger::Log(LogLevel::Info, "GausPainter::PaintGroupGausSummary");
 
     auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
@@ -1315,11 +1312,11 @@ void GausPainter::PaintAtomGroupGausSummary(
     #endif
 }
 
-void GausPainter::PaintAtomQScoreAminoAcidMainChainComponent(
+void GausPainter::PaintQScoreAminoAcidMainChainComponent(
     ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    Logger::Log(LogLevel::Info, "GausPainter::PaintAtomQScoreAminoAcidMainChainComponent");
+    Logger::Log(LogLevel::Info, "GausPainter::PaintQScoreAminoAcidMainChainComponent");
 
     auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
@@ -1420,11 +1417,11 @@ void GausPainter::PaintAtomQScoreAminoAcidMainChainComponent(
     #endif
 }
 
-void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
+void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
     ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    Logger::Log(LogLevel::Info, "GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent");
+    Logger::Log(LogLevel::Info, "GausPainter::PaintGroupMapValueAminoAcidMainChainComponent");
 
     auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
@@ -1666,207 +1663,11 @@ void PaintGaus(const ModelObjectList & model_objects, const std::string & output
 
 } // namespace core
 
-} // namespace rhbm_gem
-
-namespace rhbm_gem {
-void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponentSimple(
+void GausPainter::PaintGroupGausAminoAcidMainChainStructure(
     ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    Logger::Log(LogLevel::Info, "GausPainter::PaintAtomGroupGausAminoAcidMainChainComponentSimple");
-
-    auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
-    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
-    const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
-
-    #ifdef HAVE_ROOT
-
-    gStyle->SetLineScalePS(2.0);
-    gStyle->SetGridColor(kGray);
-    gStyle->SetEndErrorSize(5.0f);
-
-    auto canvas{ root_helper::CreateCanvas("test","", 1000, 1000) };
-    root_helper::SetCanvasDefaultStyle(canvas.get());
-    root_helper::PrintCanvasOpen(canvas.get(), file_path);
-    const int pad_size{ 4 };
-    
-    std::unique_ptr<TPad> pad[pad_size];
-    std::unique_ptr<TH2> frame[pad_size];
-
-    
-    pad[0] = root_helper::CreatePad("pad0","", 0.00, 0.00, 1.00, 0.45);
-    pad[1] = root_helper::CreatePad("pad1","", 0.00, 0.45, 1.00, 0.80);
-    pad[2] = root_helper::CreatePad("pad2","", 0.00, 0.80, 1.00, 0.95);
-    pad[3] = root_helper::CreatePad("pad3","", 0.00, 0.95, 1.00, 1.00);
-
-    frame[0] = root_helper::CreateHist2D("hist_0","", 100, 0.0, 1.0, 100, 0.0, 1.0);
-    frame[1] = root_helper::CreateHist2D("hist_1","", 100, 0.0, 1.0, 100, 0.0, 1.0);
-    frame[2] = root_helper::CreateHist2D("hist_2","", 100, 0.0, 1.0, 100, 0.0, 1.0);
-    frame[3] = root_helper::CreateHist2D("hist_3","", 100, 0.0, 1.0, 100, 0.0, 1.0);
-
-    auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
-    std::map<Spot, std::vector<GroupKey>> group_key_list_map;
-    for (size_t i = 0; i < spot_list.size(); i++)
-    {
-        auto spot{ spot_list.at(i) };
-        group_key_list_map.emplace(
-            spot, AtomClassifier::GetMainChainComponentAtomClassGroupKeyList(i));
-        auto & group_key_list{ group_key_list_map.at(spot) };
-        for (auto it = group_key_list.begin(); it != group_key_list.end(); )
-        {
-            if (!entry_iter->HasAtomGroup(*it, class_key))
-            {
-                it = group_key_list.erase(it);
-            }
-            else
-            {
-                ++it;
-            }
-        }
-    }
-
-    std::vector<std::string> component_id_list;
-    component_id_list.reserve(ChemicalDataHelper::GetStandardAminoAcidCount());
-    for (auto & group_key : group_key_list_map.at(Spot::CA))
-    {
-        auto residue{ AtomClassifier::GetResidueFromGroupKey(group_key, class_key) };
-        auto component_key{ static_cast<ComponentKey>(residue) };
-        const auto * component_entry{ model_object->FindChemicalComponentEntry(component_key) };
-        if (component_entry == nullptr) continue;
-        auto component_id{ component_entry->GetComponentId() };
-        component_id_list.emplace_back(component_id);
-    }
-
-    std::map<Spot, std::unique_ptr<TGraphErrors>> amplitude_graph_map;
-    std::map<Spot, std::unique_ptr<TGraphErrors>> width_graph_map;
-    std::vector<double> amplitude_array, width_array;
-    amplitude_array.reserve(group_key_list_map.at(Spot::CA).size()*4);
-    width_array.reserve(group_key_list_map.at(Spot::CA).size()*4);
-    std::map<Spot, short> color_list{
-        { Spot::CA,kRed }, { Spot::C, kBlue }, { Spot::N, kGreen+2 }, { Spot::O, kAzure-7 }
-    };
-    std::map<Spot, short> marker_list{
-        { Spot::CA, 72 }, { Spot::C, 71 }, { Spot::N, 73 }, { Spot::O, 74 }
-    };
-    std::map<Spot, short> line_list{
-        { Spot::CA, 1 }, { Spot::C, 2 }, { Spot::N, 3 }, { Spot::O, 4 }
-    };
-    
-    for (auto & [spot, group_key_list] : group_key_list_map)
-    {
-        auto amplitude_graph{
-            plot_builder->CreateAtomGausEstimateToResidueGraph(
-                group_key_list, class_key, 0)
-        };
-        auto width_graph{
-            plot_builder->CreateAtomGausEstimateToResidueGraph(
-                group_key_list, class_key, 1)
-        };
-        for (int p = 0; p < amplitude_graph->GetN(); p++)
-        {
-            amplitude_array.push_back(amplitude_graph->GetPointY(p));
-            width_array.push_back(width_graph->GetPointY(p));
-        }
-        root_helper::SetMarkerAttribute(amplitude_graph.get(), marker_list[spot], 1.5f, color_list[spot]);
-        root_helper::SetMarkerAttribute(width_graph.get(), marker_list[spot], 1.5f, color_list[spot]);
-        root_helper::SetLineAttribute(amplitude_graph.get(), line_list[spot], 2, color_list[spot]);
-        root_helper::SetLineAttribute(width_graph.get(), line_list[spot], 2, color_list[spot]);
-
-        amplitude_graph_map[spot] = std::move(amplitude_graph);
-        width_graph_map[spot] = std::move(width_graph);
-    }
-
-    auto scaling{ 0.3 };
-    auto amplitude_range{ array_helper::ComputeScalingRangeTuple(amplitude_array, scaling) };
-    auto width_range{ array_helper::ComputeScalingRangeTuple(width_array, scaling) };
-
-    auto count_hist{
-        plot_builder->CreateComponentCountHistogram(group_key_list_map.at(Spot::CA), class_key)
-    };
-
-    canvas->cd();
-    for (int i = 0; i < pad_size; i++)
-    {
-        root_helper::SetPadDefaultStyle(pad[i].get());
-        pad[i]->Draw();
-    }
-
-    frame[0]->GetYaxis()->SetLimits(std::get<0>(width_range), std::get<1>(width_range));
-    frame[1]->GetYaxis()->SetLimits(std::get<0>(amplitude_range), std::get<1>(amplitude_range));
-
-    pad[0]->cd();
-    root_helper::SetPadMarginInCanvas(gPad, 0.15, 0.02, 0.11, 0.02);
-    root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-    RemodelFrameInPad(frame[0].get(), pad[0].get(), 0.0, 0.015);
-    painter_internal::RemodelAxisLabels(frame[0]->GetXaxis(), component_id_list, 90.0, 12);
-    root_helper::SetAxisTitleAttribute(frame[0]->GetXaxis(), 0.0f);
-    root_helper::SetAxisTitleAttribute(frame[0]->GetYaxis(), 50.0f, 1.5f);
-    root_helper::SetAxisLabelAttribute(frame[0]->GetXaxis(), 50.0f, 0.13f, 103, kCyan+3);
-    root_helper::SetAxisLabelAttribute(frame[0]->GetYaxis(), 45.0f, 0.01f);
-    frame[0]->GetYaxis()->SetTitle("Width");
-    frame[0]->Draw();
-    for (auto & [element, graph] : width_graph_map) graph->Draw("PL X0");
-
-    pad[1]->cd();
-    root_helper::SetPadMarginInCanvas(gPad, 0.15, 0.02, 0.02, 0.01);
-    root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-    RemodelFrameInPad(frame[1].get(), pad[1].get(), 0.0, 0.015);
-    painter_internal::RemodelAxisLabels(frame[1]->GetXaxis(), component_id_list, 90.0, 12);
-    root_helper::SetAxisTitleAttribute(frame[1]->GetXaxis(), 0.0f);
-    root_helper::SetAxisTitleAttribute(frame[1]->GetYaxis(), 50.0f, 1.5f);
-    root_helper::SetAxisLabelAttribute(frame[1]->GetXaxis(), 0.0f);
-    root_helper::SetAxisLabelAttribute(frame[1]->GetYaxis(), 45.0f, 0.01f);
-    frame[1]->GetYaxis()->SetTitle("Amplitude");
-    frame[1]->Draw();
-    for (auto & [element, graph] : amplitude_graph_map) graph->Draw("PL X0");
-
-    pad[2]->cd();
-    root_helper::SetPadMarginInCanvas(gPad, 0.15, 0.02, 0.2, 0.003);
-    root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-    RemodelFrameInPad(frame[2].get(), pad[2].get(), 0.0, 0.015);
-    painter_internal::RemodelAxisLabels(frame[2]->GetXaxis(), component_id_list, 90.0, 12);
-    root_helper::SetAxisTitleAttribute(frame[2]->GetXaxis(), 0.0f);
-    root_helper::SetAxisTitleAttribute(frame[2]->GetYaxis(), 40.0f, 1.2f);
-    root_helper::SetAxisLabelAttribute(frame[2]->GetXaxis(), 0.0f);
-    root_helper::SetAxisLabelAttribute(frame[2]->GetYaxis(), 0.0f);
-    root_helper::SetAxisTickAttribute(frame[2]->GetYaxis(), 0.0f, 504);
-    frame[2]->GetYaxis()->SetTitle("#splitline{Member}{Counts}");
-    frame[2]->GetYaxis()->SetLimits(0.5, count_hist->GetMaximum()*1.1);
-    frame[2]->GetYaxis()->CenterTitle();
-    frame[2]->Draw();
-    gStyle->SetTextFont(132);
-    root_helper::SetFillAttribute(count_hist.get(), 1001, kAzure-7, 0.5f);
-    root_helper::SetLineAttribute(count_hist.get(), 0, 0);
-    root_helper::SetMarkerAttribute(count_hist.get(), 20, 8.0f, kAzure);
-    count_hist->Draw("BAR TEXT0 SAME");
-
-    pad[3]->cd();
-    root_helper::SetPadMarginInCanvas(gPad, 0.0, 0.0, 0.0, 0.0);
-    root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-    auto legend{
-        root_helper::CreateLegend(0.05, 0.00, 1.00, 1.00, false)
-    };
-    root_helper::SetLegendDefaultStyle(legend.get());
-    root_helper::SetTextAttribute(legend.get(), 35.0f, 133, 12);
-    legend->AddEntry(amplitude_graph_map.at(Spot::CA).get(), "Alpha Carbon", "lp");
-    legend->AddEntry(amplitude_graph_map.at(Spot::C).get(), "Carbon", "lp");
-    legend->AddEntry(amplitude_graph_map.at(Spot::N).get(), "Nitrogen", "lp");
-    legend->SetNColumns(3);
-    legend->SetMargin(0.50f);
-    legend->Draw();
-
-    root_helper::PrintCanvasPad(canvas.get(), file_path);
-
-    root_helper::PrintCanvasClose(canvas.get(), file_path);
-    Logger::Log(LogLevel::Info, " Output file: " + file_path);
-    #endif
-}
-
-void GausPainter::PaintAtomGroupGausAminoAcidMainChainStructure(
-    ModelObject * model_object, const std::string & name)
-{
-    auto file_path{ m_folder_path + name };
-    Logger::Log(LogLevel::Info, "GausPainter::PaintAtomGroupGausAminoAcidMainChainStructure");
+    Logger::Log(LogLevel::Info, "GausPainter::PaintGroupGausAminoAcidMainChainStructure");
 
     auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
@@ -2177,11 +1978,11 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainStructure(
     #endif
 }
 
-void GausPainter::PaintAtomLocalGausToSequenceAminoAcidMainChain(
+void GausPainter::PaintLocalGausToSequenceAminoAcidMainChain(
     ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    Logger::Log(LogLevel::Info, "GausPainter::PaintAtomLocalGausToSequenceAminoAcidMainChain");
+    Logger::Log(LogLevel::Info, "GausPainter::PaintLocalGausToSequenceAminoAcidMainChain");
     auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
 
@@ -2387,11 +2188,11 @@ std::unique_ptr<TPaveText> GausPainter::CreateResolutionPaveText(
 
 namespace rhbm_gem {
 
-void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent(
+void GausPainter::PaintGroupGausAminoAcidMainChainComponent(
     ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    Logger::Log(LogLevel::Info, "GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent");
+    Logger::Log(LogLevel::Info, "GausPainter::PaintGroupGausAminoAcidMainChainComponent");
 
     auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
