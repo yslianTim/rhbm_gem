@@ -16,10 +16,9 @@
 #include <rhbm_gem/utils/hrl/LocalPotentialSeries.hpp>
 
 #include "PotentialPlotBuilder.hpp"
-#include "core/painter/AtomStyleCatalog.hpp"
 #include "data/detail/AtomClassifier.hpp"
-#include "detail/PainterLabels.hpp"
 #include "detail/PainterModelValidation.hpp"
+#include "detail/PainterStyle.hpp"
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
@@ -255,8 +254,8 @@ void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::
             root_helper::SetPaveTextDefaultStyle(element_text[i].get());
             root_helper::SetPaveAttribute(element_text[i].get(), 0, 0.2);
             root_helper::SetTextAttribute(element_text[i].get(), 40.0f, 103, 22);
-            root_helper::SetFillAttribute(element_text[i].get(), 1001, AtomStyleCatalog::GetMainChainElementColor(static_cast<size_t>(i)), 0.5f);
-            element_text[i]->AddText(AtomStyleCatalog::GetMainChainElementLabel(static_cast<size_t>(i)).data());
+            root_helper::SetFillAttribute(element_text[i].get(), 1001, painter_internal::GetMainChainElementColor(static_cast<size_t>(i)), 0.5f);
+            element_text[i]->AddText(painter_internal::GetMainChainElementLabel(static_cast<size_t>(i)).data());
             element_text[i]->Draw();
 
             result_text[i] = root_helper::CreatePaveText(0.05, 0.08, 0.95, 0.25, "nbNDC", true);
@@ -584,7 +583,7 @@ void GausPainter::PaintGausRankMainChain(
     std::unique_ptr<TLegend> legend;
     for (int i = 0; i < col_size; i++)
     {
-        auto element_color{ AtomStyleCatalog::GetMainChainElementColor(static_cast<size_t>(i)) };
+        auto element_color{ painter_internal::GetMainChainElementColor(static_cast<size_t>(i)) };
         for (int j = 0; j < row_size; j++)
         {
             root_helper::FindPadInCanvasPartition(canvas.get(), i, j);
@@ -641,7 +640,7 @@ void GausPainter::PaintGausRankMainChain(
                 root_helper::SetPaveAttribute(element_text[i].get(), 0, 0.2);
                 root_helper::SetTextAttribute(element_text[i].get(), 30.0f, 133, 22);
                 root_helper::SetFillAttribute(element_text[i].get(), 1001, element_color, 0.5f);
-                element_text[i]->AddText(AtomStyleCatalog::GetMainChainElementLabel(static_cast<size_t>(i)).data());
+                element_text[i]->AddText(painter_internal::GetMainChainElementLabel(static_cast<size_t>(i)).data());
                 element_text[i]->Draw();
             }
             if (i == col_size - 1)
@@ -1582,14 +1581,14 @@ void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
         root_helper::SetPadMarginInCanvas(gPad, 0.01, 0.01, 0.01, 0.01);
 
         auto spot{ spot_list.at(k) };
-        auto spot_color{ AtomStyleCatalog::GetMainChainSpotColor(spot) };
+        auto spot_color{ painter_internal::GetMainChainSpotColor(spot) };
         auto spot_text{ root_helper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC ARC", false) };
         root_helper::SetPaveTextMarginInCanvas(gPad, spot_text.get(), 0.01, 0.91, 0.02, 0.01);
         root_helper::SetPaveTextDefaultStyle(spot_text.get());
         root_helper::SetFillAttribute(spot_text.get(), 1001, spot_color, 0.3f);
         root_helper::SetLineAttribute(spot_text.get(), 1, 3, spot_color);
         root_helper::SetTextAttribute(spot_text.get(), 90.0f, 133, 22);
-        spot_text->AddText(AtomStyleCatalog::GetMainChainSpotLabel(spot).data());
+        spot_text->AddText(painter_internal::GetMainChainSpotLabel(spot).data());
         spot_text->Draw();
 
         auto resolution_text{ CreateResolutionPaveText(model_object) };
@@ -1769,9 +1768,9 @@ void GausPainter::PaintGroupGausAminoAcidMainChainStructure(
                 amplitude_array.push_back(amplitude_graph->GetPointY(p));
                 width_array.push_back(width_graph->GetPointY(p));
             }
-            auto structure_color{ AtomStyleCatalog::GetMainChainStructureColor(structure) };
-            auto structure_marker{ AtomStyleCatalog::GetMainChainStructureMarker(structure) };
-            auto structure_line{ AtomStyleCatalog::GetMainChainStructureLineStyle(structure) };
+            auto structure_color{ painter_internal::GetMainChainStructureColor(structure) };
+            auto structure_marker{ painter_internal::GetMainChainStructureMarker(structure) };
+            auto structure_line{ painter_internal::GetMainChainStructureLineStyle(structure) };
             root_helper::SetMarkerAttribute(amplitude_graph.get(), structure_marker, 1.5f, structure_color);
             root_helper::SetMarkerAttribute(width_graph.get(), structure_marker, 1.5f, structure_color);
             root_helper::SetMarkerAttribute(correlation_graph.get(), structure_marker, 1.5f, structure_color);
@@ -1793,7 +1792,7 @@ void GausPainter::PaintGroupGausAminoAcidMainChainStructure(
         for (size_t j = 0; j < structure_count; j++)
         {
             auto structure{ structure_list.at(j) };
-            auto structure_label{ AtomStyleCatalog::GetMainChainStructureLabel(structure) };
+            auto structure_label{ painter_internal::GetMainChainStructureLabel(structure) };
             auto x_value{ static_cast<double>(j) };
             structure_label_list.emplace_back(structure_label);
             std::string name_amplitude{ "amplitude_hist_"+ structure_label };
@@ -1818,7 +1817,7 @@ void GausPainter::PaintGroupGausAminoAcidMainChainStructure(
             {
                 width_hist->Fill(x_value, width_graph_map.at(structure)->GetPointY(p));
             }
-            auto structure_color{ AtomStyleCatalog::GetMainChainStructureColor(structure) };
+            auto structure_color{ painter_internal::GetMainChainStructureColor(structure) };
             root_helper::SetLineAttribute(amplitude_hist.get(), 1, 1, structure_color);
             root_helper::SetLineAttribute(width_hist.get(), 1, 1, structure_color);
             root_helper::SetFillAttribute(amplitude_hist.get(), 1001, structure_color, 0.3f);
@@ -1873,7 +1872,7 @@ void GausPainter::PaintGroupGausAminoAcidMainChainStructure(
         root_helper::SetPaveAttribute(spot_text.get(), 0, 0.1);
         root_helper::SetFillAttribute(spot_text.get(), 1001, kAzure-7);
         root_helper::SetTextAttribute(spot_text.get(), 60.0f, 103, 22, 0.0, kYellow-10);
-        auto spot_label{ AtomStyleCatalog::GetMainChainSpotLabel(spot) };
+        auto spot_label{ painter_internal::GetMainChainSpotLabel(spot) };
         spot_text->AddText(spot_label.data());
         spot_text->Draw();
 
@@ -1943,7 +1942,7 @@ void GausPainter::PaintGroupGausAminoAcidMainChainStructure(
         root_helper::SetTextAttribute(legend.get(), 35.0f, 133, 12);
         for (auto & structure : structure_list)
         {
-            auto structure_label{ AtomStyleCatalog::GetMainChainStructureLabel(structure) };
+            auto structure_label{ painter_internal::GetMainChainStructureLabel(structure) };
             legend->AddEntry(
                 amplitude_graph_map.at(structure).get(), structure_label.data(), "lp");
         }
@@ -2075,9 +2074,9 @@ void GausPainter::PaintLocalGausToSequenceAminoAcidMainChain(
                 {
                     if (gaus_graph_map[j][k].find(chain_id) == gaus_graph_map[j][k].end()) continue;
                     auto spot{ AtomClassifier::GetMainChainSpot(k) };
-                    auto element_color{ AtomStyleCatalog::GetMainChainSpotColor(spot) };
-                    auto element_marker{ AtomStyleCatalog::GetMainChainSpotOpenMarker(spot) };
-                    //auto element_line{ AtomStyleCatalog::GetMainChainSpotLineStyle(spot) };
+                    auto element_color{ painter_internal::GetMainChainSpotColor(spot) };
+                    auto element_marker{ painter_internal::GetMainChainSpotOpenMarker(spot) };
+                    //auto element_line{ painter_internal::GetMainChainSpotLineStyle(spot) };
                     root_helper::SetMarkerAttribute(gaus_graph_map[j][k].at(chain_id).get(), element_marker, 0.7f, element_color);
                     root_helper::SetLineAttribute(gaus_graph_map[j][k].at(chain_id).get(), 1, 1, element_color);
                     gaus_graph_map[j][k].at(chain_id)->Draw("PL X0");
@@ -2117,8 +2116,8 @@ void GausPainter::PaintLocalGausToSequenceAminoAcidMainChain(
                     for (size_t k = 0; k < main_chain_element_count; k++)
                     {
                         if (gaus_graph_map[j][k].find(chain_id) == gaus_graph_map[j][k].end()) continue;
-                        auto label{ "#font[102]{" + AtomStyleCatalog::GetMainChainElementLabel(k) +"}" };
-                        auto color{ AtomStyleCatalog::GetMainChainElementColor(k) };
+                        auto label{ "#font[102]{" + painter_internal::GetMainChainElementLabel(k) +"}" };
+                        auto color{ painter_internal::GetMainChainElementColor(k) };
                         auto result{ Form("#color[%d]{%s}", color, label.data()) };
                         legend->AddEntry(gaus_graph_map[j][k].at(chain_id).get(), result, "pl");
                     }
@@ -2289,9 +2288,9 @@ void GausPainter::PaintGroupGausAminoAcidMainChainComponent(
             amplitude_array.push_back(amplitude_graph->GetPointY(p));
             width_array.push_back(width_graph->GetPointY(p));
         }
-        auto spot_color{ AtomStyleCatalog::GetMainChainSpotColor(spot) };
-        auto spot_marker{ AtomStyleCatalog::GetMainChainSpotOpenMarker(spot) };
-        auto spot_line{ AtomStyleCatalog::GetMainChainSpotLineStyle(spot) };
+        auto spot_color{ painter_internal::GetMainChainSpotColor(spot) };
+        auto spot_marker{ painter_internal::GetMainChainSpotOpenMarker(spot) };
+        auto spot_line{ painter_internal::GetMainChainSpotLineStyle(spot) };
         root_helper::SetMarkerAttribute(amplitude_graph.get(), spot_marker, 1.5f, spot_color);
         root_helper::SetMarkerAttribute(width_graph.get(), spot_marker, 1.5f, spot_color);
         root_helper::SetMarkerAttribute(correlation_graph.get(), spot_marker, 1.5f, spot_color);
@@ -2313,7 +2312,7 @@ void GausPainter::PaintGroupGausAminoAcidMainChainComponent(
     for (size_t i = 0; i < spot_count; i++)
     {
         auto spot{ spot_list.at(i) };
-        auto spot_label{ AtomStyleCatalog::GetMainChainSpotLabel(spot) };
+        auto spot_label{ painter_internal::GetMainChainSpotLabel(spot) };
         auto x_value{ static_cast<double>(i) };
         spot_label_list.emplace_back(spot_label);
         std::string name_amplitude{ "amplitude_hist_"+ spot_label };
@@ -2338,7 +2337,7 @@ void GausPainter::PaintGroupGausAminoAcidMainChainComponent(
         {
             width_hist->Fill(width_graph_map.at(spot)->GetPointY(p), x_value);
         }
-        auto spot_color{ AtomStyleCatalog::GetMainChainSpotColor(spot) };
+        auto spot_color{ painter_internal::GetMainChainSpotColor(spot) };
         root_helper::SetLineAttribute(amplitude_hist.get(), 1, 1, spot_color);
         root_helper::SetLineAttribute(width_hist.get(), 1, 1, spot_color);
         root_helper::SetFillAttribute(amplitude_hist.get(), 1001, spot_color, 0.3f);
@@ -2455,7 +2454,7 @@ void GausPainter::PaintGroupGausAminoAcidMainChainComponent(
     root_helper::SetTextAttribute(legend.get(), 35.0f, 103, 12);
     for (auto & spot : spot_list)
     {
-        auto spot_label{ AtomStyleCatalog::GetMainChainSpotLabel(spot) };
+        auto spot_label{ painter_internal::GetMainChainSpotLabel(spot) };
         legend->AddEntry(
             amplitude_graph_map.at(spot).get(), spot_label.data(), "lp");
     }

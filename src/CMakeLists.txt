@@ -30,7 +30,6 @@ target_sources(rhbm_gem PRIVATE
     data/object/AtomClassifier.cpp
     data/object/AtomLocalPotentialEditor.cpp
     data/object/AtomLocalPotentialView.cpp
-    core/painter/AtomStyleCatalog.cpp
     data/object/AtomObject.cpp
     data/io/DataRepository.cpp
     data/io/file/ModelImportState.cpp

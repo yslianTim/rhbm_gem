@@ -10,9 +10,9 @@
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 #include "PotentialPlotBuilder.hpp"
-#include "core/painter/AtomStyleCatalog.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include "detail/PainterModelValidation.hpp"
+#include "detail/PainterStyle.hpp"
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
@@ -280,16 +280,16 @@ void ComparisonPainter::PaintGroupGausEstimateComparison(const std::string & nam
             frame[i][j]->GetXaxis()->CenterTitle();
             frame[i][j]->GetYaxis()->CenterTitle();
             frame[i][j]->SetStats(0);
-            auto element_label_x{ AtomStyleCatalog::GetMainChainElementLabel(i) };
-            auto ref_element_label_x{ AtomStyleCatalog::GetMainChainElementLabel(ref_id[i]) };
-            auto element_color_x{  AtomStyleCatalog::GetMainChainElementColor(i)};
-            auto element_label_y{ AtomStyleCatalog::GetMainChainElementLabel(j) };
-            auto ref_element_label_y{ AtomStyleCatalog::GetMainChainElementLabel(3) };
+            auto element_label_x{ painter_internal::GetMainChainElementLabel(i) };
+            auto ref_element_label_x{ painter_internal::GetMainChainElementLabel(ref_id[i]) };
+            auto element_color_x{  painter_internal::GetMainChainElementColor(i)};
+            auto element_label_y{ painter_internal::GetMainChainElementLabel(j) };
+            auto ref_element_label_y{ painter_internal::GetMainChainElementLabel(3) };
             frame[i][j]->GetXaxis()->SetTitle("");
             frame[i][j]->GetYaxis()->SetTitle("");
             frame[i][j]->Draw();
 
-            auto element_marker{ AtomStyleCatalog::GetMainChainElementSolidMarker(i) };
+            auto element_marker{ painter_internal::GetMainChainElementSolidMarker(i) };
             root_helper::SetMarkerAttribute(data_graph[i][j].get(), element_marker, 2.0f, element_color_x);
             root_helper::SetLineAttribute(sim_with_charge_graph[i][j].get(), 1, 3, kRed);
             root_helper::SetLineAttribute(sim_no_charge_graph[i][j].get(),   2, 3, kGray+2);
@@ -344,15 +344,15 @@ void ComparisonPainter::PaintGroupGausEstimateComparison(const std::string & nam
     const std::string y_axis_title[2]
     {
         Form("#tau_{#color[%d]{#font[102]{%s}}} / #tau_{#color[%d]{#font[102]{%s}}}",
-            AtomStyleCatalog::GetMainChainElementColor(0),
-            AtomStyleCatalog::GetMainChainElementLabel(0).data(),
-            AtomStyleCatalog::GetMainChainElementColor(1),
-            AtomStyleCatalog::GetMainChainElementLabel(1).data()),
+            painter_internal::GetMainChainElementColor(0),
+            painter_internal::GetMainChainElementLabel(0).data(),
+            painter_internal::GetMainChainElementColor(1),
+            painter_internal::GetMainChainElementLabel(1).data()),
         Form("#font[2]{A}_{#color[%d]{#font[102]{%s}}} / #font[2]{A}_{#color[%d]{#font[102]{%s}}}",
-            AtomStyleCatalog::GetMainChainElementColor(0),
-            AtomStyleCatalog::GetMainChainElementLabel(0).data(),
-            AtomStyleCatalog::GetMainChainElementColor(1),
-            AtomStyleCatalog::GetMainChainElementLabel(1).data())
+            painter_internal::GetMainChainElementColor(0),
+            painter_internal::GetMainChainElementLabel(0).data(),
+            painter_internal::GetMainChainElementColor(1),
+            painter_internal::GetMainChainElementLabel(1).data())
     };
 
     pad_extra[0]->cd(); // right bottom
@@ -458,7 +458,7 @@ void ComparisonPainter::PaintGroupGausEstimateComparison(const std::string & nam
     root_helper::SetFillAttribute(left_title_text.get(), 4000);
     root_helper::SetTextAttribute(left_title_text.get(), 80.0f, 133, 22);
     left_title_text->AddText(Form("Amplitude Ratio #font[1]{A}_{#font[2]{t_{i}}} / #font[2]{A}_{#color[%d]{#font[102]{%s}}}",
-                    AtomStyleCatalog::GetMainChainElementColor(3), AtomStyleCatalog::GetMainChainElementLabel(3).data()));
+                    painter_internal::GetMainChainElementColor(3), painter_internal::GetMainChainElementLabel(3).data()));
     left_title_text->Draw();
     auto text{ left_title_text->GetLineWith("Amplitude") };
     text->SetTextAngle(90.0f);
@@ -503,11 +503,11 @@ void ComparisonPainter::PaintGausEstimateResidueClassDenseComparison(const std::
     std::unordered_map<Residue, std::unique_ptr<TGraphErrors>> sim_additional_graph_map[primary_element_size];
     for (size_t k = 0; k < primary_element_size; k++)
     {
-        auto element_marker{ AtomStyleCatalog::GetMainChainElementSolidMarker(k) };
-        auto element_color{ AtomStyleCatalog::GetMainChainElementColor(k) };
-        auto element_label{ AtomStyleCatalog::GetMainChainElementLabel(k) };
-        auto ref_element_color{ AtomStyleCatalog::GetMainChainElementColor(ref_id[k]) };
-        auto ref_element_label{ AtomStyleCatalog::GetMainChainElementLabel(ref_id[k]) };
+        auto element_marker{ painter_internal::GetMainChainElementSolidMarker(k) };
+        auto element_color{ painter_internal::GetMainChainElementColor(k) };
+        auto element_label{ painter_internal::GetMainChainElementLabel(k) };
+        auto ref_element_color{ painter_internal::GetMainChainElementColor(ref_id[k]) };
+        auto ref_element_label{ painter_internal::GetMainChainElementLabel(ref_id[k]) };
 
         std::vector<double> x_array, y_array;
         for (int i = 0; i < standard_residue_size; i++)
@@ -730,9 +730,9 @@ void ComparisonPainter::PainMapValueComparison(
         std::unique_ptr<TPaveText> fit_info_text[col_size];
         for (size_t i = 0; i < col_size; i++)
         {
-            auto element_color{ AtomStyleCatalog::GetMainChainElementColor(i) };
-            auto element_marker{ AtomStyleCatalog::GetMainChainElementOpenMarker(i) };
-            auto element_label{ AtomStyleCatalog::GetMainChainElementLabel(i) };
+            auto element_color{ painter_internal::GetMainChainElementColor(i) };
+            auto element_marker{ painter_internal::GetMainChainElementOpenMarker(i) };
+            auto element_label{ painter_internal::GetMainChainElementLabel(i) };
             for (int j = 0; j < row_size; j++)
             {
                 root_helper::FindPadInCanvasPartition(canvas.get(), static_cast<int>(i), j);
