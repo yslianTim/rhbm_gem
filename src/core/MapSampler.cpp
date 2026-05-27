@@ -112,8 +112,6 @@ LocalPotentialSampleList SampleAtomMapValues(
     const AtomObject & atom,
     SphereSamplingMethod sampling_method)
 {
-    constexpr double kRejectAngle{ 15.0 };
-
     const auto local_position{ atom.GetPosition() };
     auto sample_point_list{
         sphere_sampler::GenerateSamplingPointList(local_position, sampling_method)
@@ -125,12 +123,8 @@ LocalPotentialSampleList SampleAtomMapValues(
     {
         reject_position_list.emplace_back(neighbor_atom->GetPosition());
     }
-    sample_filter::FilterSamplingPointList(
-        sample_point_list, local_position, reject_position_list, kRejectAngle);
-    auto sample_list{
-        BuildLocalPotentialSampleList(map_object, sample_point_list)
-    };
-    return sample_list;
+    sample_filter::FilterSamplingPointList(sample_point_list, local_position, reject_position_list);
+    return BuildLocalPotentialSampleList(map_object, sample_point_list);
 }
 
 } // namespace rhbm_gem::core

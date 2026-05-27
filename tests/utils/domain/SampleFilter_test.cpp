@@ -97,6 +97,28 @@ TEST(SampleFilterTest, RejectsPointsCloserToNearestNeighborThanReference)
     EXPECT_FALSE(point_list.at(2).is_selected);
 }
 
+TEST(SampleFilterTest, UsesFifteenDegreeDefaultRejectAngle)
+{
+    SamplingPointList point_list{
+        SamplingPoint{ 0.0f, { 0.0f, 0.0f, 0.0f } },
+        SamplingPoint{ 1.0f, { 1.0f, 0.2f, 0.0f } },
+        SamplingPoint{ 1.0f, { 1.0f, 0.3f, 0.0f } }
+    };
+
+    sf::FilterSamplingPointList(
+        point_list,
+        { 0.0f, 0.0f, 0.0f },
+        { std::array<float, 3>{ 2.0f, 0.0f, 0.0f } });
+
+    const std::vector<std::array<float, 3>> expected_positions{
+        { 0.0f, 0.0f, 0.0f },
+        { 1.0f, 0.3f, 0.0f }
+    };
+    EXPECT_EQ(GetSelectedPositions(point_list), expected_positions);
+    EXPECT_FALSE(point_list.at(1).is_selected);
+    EXPECT_TRUE(point_list.at(2).is_selected);
+}
+
 TEST(SampleFilterTest, RejectsPointsWithinAngleThresholdOfRejectPositions)
 {
     auto point_list{ MakePointList() };
