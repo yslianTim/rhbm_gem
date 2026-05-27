@@ -1,6 +1,8 @@
 #include <rhbm_gem/core/CommandSystem.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
+#include <rhbm_gem/data/object/AtomLocalPotentialEditor.hpp>
+#include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
@@ -26,8 +28,9 @@ int main()
     static_assert(kHeaderExposesCompleteType<rhbm_gem::GaussianModel3D>);
     static_assert(kHeaderExposesCompleteType<rhbm_gem::GaussianModel3DWithUncertainty>);
     static_assert(kHeaderExposesCompleteType<rhbm_gem::MapObject>);
-    static_assert(kHeaderExposesCompleteType<rhbm_gem::ModelAnalysisEditor>);
+    static_assert(kHeaderExposesCompleteType<rhbm_gem::AtomLocalPotentialEditor>);
     static_assert(kHeaderExposesCompleteType<rhbm_gem::AtomLocalPotentialView>);
+    static_assert(kHeaderExposesCompleteType<rhbm_gem::ModelAnalysisEditor>);
     static_assert(kHeaderExposesCompleteType<rhbm_gem::ModelObject>);
 
     rhbm_gem::ModelObject model_object;

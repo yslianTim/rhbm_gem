@@ -1,6 +1,6 @@
 #include "detail/CommandBase.hpp"
 #include <rhbm_gem/data/io/DataRepository.hpp>
-#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
+#include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/core/PainterFunctions.hpp>

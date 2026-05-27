@@ -14,26 +14,6 @@
 
 namespace rhbm_gem {
 
-AtomLocalPotentialEditor::AtomLocalPotentialEditor(LocalPotentialEntry & entry) :
-    m_entry{ &entry }
-{
-}
-
-void AtomLocalPotentialEditor::SetSamplingEntries(LocalPotentialSampleList value)
-{
-    m_entry->SetSamplingEntries(std::move(value));
-}
-
-void AtomLocalPotentialEditor::SetGaussianResult(LocalGaussianResult value)
-{
-    m_entry->SetGaussianResult(std::move(value));
-}
-
-void AtomLocalPotentialEditor::SetAlphaR(double value)
-{
-    m_entry->SetAlphaR(value);
-}
-
 ModelAnalysisEditor::ModelAnalysisEditor(ModelObject & model_object) :
     m_model_object{ model_object }
 {
