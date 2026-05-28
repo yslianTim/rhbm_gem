@@ -37,20 +37,6 @@ RHBMExecutionOptions MakeExecutionOptions(const FitOptions & options)
     return execution_options;
 }
 
-void RequireSupportedLocalFitModel(
-    LocalGaussianFitModel fit_model,
-    std::string_view context)
-{
-    switch (fit_model)
-    {
-    case LocalGaussianFitModel::LogQuadratic:
-        return;
-    }
-
-    throw std::invalid_argument(
-        std::string(context) + " received an unsupported local fit model.");
-}
-
 bool EmitTrainingReportIfRequested(
     const Eigen::MatrixXd & gaus_bias_matrix,
     const std::vector<double> & alpha_list,
@@ -447,7 +433,6 @@ double TrainAlphaR(
     numeric_validation::RequireFinitePositive(options.alpha_step, "alpha training step");
     numeric_validation::RequireFiniteNonNegativeRange(
         options.distance_min, options.distance_max, "fit range");
-    RequireSupportedLocalFitModel(options.local_fit_model, "TrainAlphaR");
 
     const auto dataset_list{ BuildMemberDatasetList(sample_entries_list, options) };
     const auto training_result{
@@ -490,7 +475,6 @@ double TrainAlphaG(
     {
         throw std::invalid_argument("sample_group_list and member_result_list sizes are inconsistent.");
     }
-    RequireSupportedLocalFitModel(options.local_fit_model, "TrainAlphaG");
 
     std::vector<std::vector<RHBMParameterVector>> beta_group_list;
     beta_group_list.reserve(sample_group_list.size());
@@ -577,7 +561,6 @@ LocalGaussianResult EstimateLocalGaussian(
     numeric_validation::RequireFiniteNonNegativeRange(
         options.distance_min, options.distance_max, "fit range");
     numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
-    RequireSupportedLocalFitModel(options.local_fit_model, "EstimateLocalGaussian");
 
     auto dataset{
         rhbm_helper::BuildMemberDataset(
@@ -605,7 +588,6 @@ GroupGaussianResult EstimateGroupGaussian(
     {
         throw std::invalid_argument("sample_entries_list and member_result_list sizes are inconsistent.");
     }
-    RequireSupportedLocalFitModel(options.local_fit_model, "EstimateGroupGaussian");
 
     auto execution_options{ MakeExecutionOptions(options) };
     const auto dataset_list{ BuildMemberDatasetList(sample_entries_list, options) };
