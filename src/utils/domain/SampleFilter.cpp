@@ -1,9 +1,7 @@
 #include <rhbm_gem/utils/domain/SampleFilter.hpp>
 
-#include <algorithm>
 #include <cmath>
 #include <cstddef>
-#include <iterator>
 #include <map>
 #include <utility>
 
@@ -13,6 +11,21 @@
 
 namespace rhbm_gem::sample_filter {
 namespace {
+
+struct ResponseRankedLocalPotentialSample
+{
+    LocalPotentialSample sample{};
+    std::size_t sequence{ 0 };
+
+    bool operator<(const ResponseRankedLocalPotentialSample & other) const
+    {
+        if (sample.response != other.sample.response)
+        {
+            return sample.response < other.sample.response;
+        }
+        return sequence < other.sequence;
+    }
+};
 
 bool IsOwnedByNeighbor(
     const std::array<float, 3> & sample_position,
@@ -61,35 +74,26 @@ LocalPotentialSampleList KeepLowestResponseRatioByDistance(
     LocalPotentialSampleList sample_list,
     double retained_ratio)
 {
-    std::map<float, LocalPotentialSampleList> samples_by_distance;
+    using ResponseRankedLocalPotentialSampleList = std::vector<ResponseRankedLocalPotentialSample>;
+
+    std::map<float, ResponseRankedLocalPotentialSampleList> samples_by_distance;
     for (auto & sample : sample_list)
     {
-        samples_by_distance[sample.point.distance].emplace_back(std::move(sample));
+        auto & distance_samples{ samples_by_distance[sample.point.distance] };
+        distance_samples.emplace_back(
+            ResponseRankedLocalPotentialSample{ std::move(sample), distance_samples.size() });
     }
 
     LocalPotentialSampleList retained_samples;
     for (auto & distance_entry : samples_by_distance)
     {
-        auto & distance_samples{ distance_entry.second };
-        std::stable_sort(
-            distance_samples.begin(),
-            distance_samples.end(),
-            [](const LocalPotentialSample & lhs, const LocalPotentialSample & rhs)
-            {
-                return lhs.response < rhs.response;
-            });
-
-        const auto keep_count{
-            std::max<std::size_t>(
-                1,
-                static_cast<std::size_t>(
-                    std::ceil(static_cast<double>(distance_samples.size()) * retained_ratio)))
+        auto retained_distance_samples{
+            array_helper::ComputeSmallestProportionValues(distance_entry.second, retained_ratio)
         };
-        retained_samples.insert(
-            retained_samples.end(),
-            std::make_move_iterator(distance_samples.begin()),
-            std::make_move_iterator(
-                distance_samples.begin() + static_cast<std::ptrdiff_t>(keep_count)));
+        for (auto & retained_sample : retained_distance_samples)
+        {
+            retained_samples.emplace_back(std::move(retained_sample.sample));
+        }
     }
 
     return retained_samples;

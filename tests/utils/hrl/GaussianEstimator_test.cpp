@@ -36,6 +36,24 @@ LocalPotentialSampleList MakeSampleEntries(double log_response_shift = 0.0)
     return sample_entries;
 }
 
+LocalPotentialSampleList BuildShiftedSampleEntries(
+    const LocalPotentialSampleList & sample_entries,
+    double intercept)
+{
+    LocalPotentialSampleList shifted_sample_entries;
+    shifted_sample_entries.reserve(sample_entries.size());
+    for (const auto & sample : sample_entries)
+    {
+        shifted_sample_entries.emplace_back(
+            LocalPotentialSample{
+                static_cast<float>(static_cast<double>(sample.response) - intercept),
+                sample.point
+            }
+        );
+    }
+    return shifted_sample_entries;
+}
+
 rg::gaussian_estimator::FitOptions MakeOptions()
 {
     rg::gaussian_estimator::FitOptions options;
@@ -405,9 +423,14 @@ TEST(GaussianEstimatorTest, EstimateLocalGaussianMatchesHelperPath)
     const auto options{ MakeOptions() };
     const auto sample_entries{ MakeSampleEntries() };
     constexpr double alpha_r{ 0.2 };
+    const auto actual{
+        rg::gaussian_estimator::EstimateLocalGaussian(sample_entries, alpha_r, options)
+    };
+    const auto intercept{ actual.mdpde.GetModel().GetIntercept() };
+    const auto shifted_sample_entries{ BuildShiftedSampleEntries(sample_entries, intercept) };
     const auto dataset{
         rg::rhbm_helper::BuildMemberDataset(
-            sample_entries,
+            shifted_sample_entries,
             options.distance_min,
             options.distance_max,
             options.local_fit_model)
@@ -416,16 +439,14 @@ TEST(GaussianEstimatorTest, EstimateLocalGaussianMatchesHelperPath)
         rg::rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset)
     };
 
-    const auto actual{
-        rg::gaussian_estimator::EstimateLocalGaussian(sample_entries, alpha_r, options)
-    };
-
-    const auto expected_ols{ ls::DecodeParameterVector(expected_fit.beta_ols) };
-    const auto expected_mdpde{ ls::DecodeParameterVector(expected_fit.beta_mdpde) };
+    const auto expected_ols{ ls::DecodeParameterVector(expected_fit.beta_ols).WithIntercept(intercept) };
+    const auto expected_mdpde{ ls::DecodeParameterVector(expected_fit.beta_mdpde).WithIntercept(intercept) };
     EXPECT_NEAR(expected_ols.GetAmplitude(), actual.ols.GetModel().GetAmplitude(), 1e-12);
     EXPECT_NEAR(expected_ols.GetWidth(), actual.ols.GetModel().GetWidth(), 1e-12);
+    EXPECT_NEAR(expected_ols.GetIntercept(), actual.ols.GetModel().GetIntercept(), 1e-12);
     EXPECT_NEAR(expected_mdpde.GetAmplitude(), actual.mdpde.GetModel().GetAmplitude(), 1e-12);
     EXPECT_NEAR(expected_mdpde.GetWidth(), actual.mdpde.GetModel().GetWidth(), 1e-12);
+    EXPECT_NEAR(expected_mdpde.GetIntercept(), actual.mdpde.GetModel().GetIntercept(), 1e-12);
     EXPECT_DOUBLE_EQ(alpha_r, actual.alpha_r);
     ASSERT_TRUE(actual.fit_result.has_value());
     EXPECT_TRUE(actual.fit_result->beta_mdpde.isApprox(expected_fit.beta_mdpde, 1e-12));
@@ -461,18 +482,22 @@ TEST(GaussianEstimatorTest, EstimateGroupGaussianMatchesHelperPath)
     member_result_list.reserve(sample_entries_list.size());
     for (std::size_t i = 0; i < sample_entries_list.size(); i++)
     {
-        auto dataset{
-            rg::rhbm_helper::BuildMemberDataset(
-                sample_entries_list.at(i),
-                options.distance_min,
-                options.distance_max,
-                options.local_fit_model)
-        };
         auto member_result{
             rg::gaussian_estimator::EstimateLocalGaussian(
                 sample_entries_list.at(i), alpha_r_list.at(i), options)
         };
         ASSERT_TRUE(member_result.fit_result.has_value());
+        const auto intercept{ member_result.mdpde.GetModel().GetIntercept() };
+        const auto shifted_sample_entries{
+            BuildShiftedSampleEntries(sample_entries_list.at(i), intercept)
+        };
+        auto dataset{
+            rg::rhbm_helper::BuildMemberDataset(
+                shifted_sample_entries,
+                options.distance_min,
+                options.distance_max,
+                options.local_fit_model)
+        };
         fit_result_list.emplace_back(*member_result.fit_result);
         member_result_list.emplace_back(std::move(member_result));
         dataset_list.emplace_back(std::move(dataset));

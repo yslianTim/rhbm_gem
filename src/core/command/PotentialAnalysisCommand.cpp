@@ -272,12 +272,8 @@ void RunLocalPotentialFitting(ModelObject & model_object, const gaussian_estimat
             sample_filter::FilterLocalPotentialSampleList(local_view.GetSamplingEntries())
         };
         const auto result{
-            gaussian_estimator::EstimateLocalGaussian(
-                sample_entries,
-                local_view.GetAlphaR(),
-                options)
+            gaussian_estimator::EstimateLocalGaussian(sample_entries, local_view.GetAlphaR(), options)
         };
-
         local_editor_list[i].SetGaussianResult(result);
 
 #ifdef USE_OPENMP

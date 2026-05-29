@@ -135,17 +135,12 @@ LocalPotentialSampleList GenerateRadialSamples(
             SamplingPoint{ static_cast<float>(distance) }
         });
     }
-
     return sample_list;
 }
 
-LocalPotentialSampleList GenerateAtomModelSamples(
-    const GaussianModel3D & model,
-    const Spot & spot,
-    double reject_angle_deg)
+LocalPotentialSampleList GenerateAtomModelSamples(const GaussianModel3D & model, const Spot & spot)
 {
     GaussianModel3D::RequireFinitePositiveWidthModel(model);
-
     const auto neighbor_list{ BuildAtomNeighborList(spot) };
     const Eigen::VectorXd atom_center{ Eigen::VectorXd::Zero(3) };
 
@@ -167,15 +162,12 @@ LocalPotentialSampleList GenerateAtomModelSamples(
     sample_filter::FilterSamplingPointList(
         sample_point_list,
         { 0.0f, 0.0f, 0.0f },
-        reject_position_list,
-        reject_angle_deg);
+        reject_position_list);
 
     LocalPotentialSampleList sample_list;
     sample_list.reserve(sample_point_list.size());
     for (const auto & sampling_point : sample_point_list)
     {
-        if (!sampling_point.is_selected) continue;
-
         const auto response{
             model.GetAmplitude() * ComputeGaussianResponseWithAtomNeighborhood3D(
                 eigen_helper::ToEigenVector(sampling_point.position),
@@ -191,9 +183,7 @@ LocalPotentialSampleList GenerateAtomModelSamples(
         });
     }
 
-    if (reject_angle_deg == 0.0) return sample_list;
-
-    return sample_filter::FilterLocalPotentialSampleList(std::move(sample_list));
+    return sample_list;
 }
 
 LocalPotentialSampleList BuildGaussianSampling(
@@ -360,38 +350,27 @@ GroupTestData BuildGroupTestData(const GroupScenario & scenario)
     return input;
 }
 
-AtomModelTestData BuildAtomModelTestData(const AtomModelScenario & scenario)
+LocalTestData BuildLocalTestData(const AtomModelScenario & scenario)
 {
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
     GaussianModel3D::RequireFinitePositiveWidthModel(scenario.gaus_true, "scenario.gaus_true");
 
-    AtomModelTestData input;
-    input.no_cut_input.gaus_true = scenario.gaus_true;
-    input.no_cut_input.replica_sampling_entries.reserve(static_cast<size_t>(scenario.replica_size));
-    input.cut_input.gaus_true = scenario.gaus_true;
-    input.cut_input.replica_sampling_entries.reserve(static_cast<size_t>(scenario.replica_size));
+    LocalTestData input;
+    input.gaus_true = scenario.gaus_true;
+    input.replica_sampling_entries.reserve(static_cast<size_t>(scenario.replica_size));
 
     for (int i = 0; i < scenario.replica_size; i++)
     {
         auto generator{ BuildReplicaGenerator(i, scenario.random_seed) };
-        auto no_cut_sampling_entries{
-            GenerateAtomModelSamples(scenario.gaus_true, scenario.spot, 0.0)
+        auto sampling_entries{
+            GenerateAtomModelSamples(scenario.gaus_true, scenario.spot)
         };
-        auto cut_sampling_entries{
-            GenerateAtomModelSamples(scenario.gaus_true, scenario.spot, scenario.rejected_angle)
-        };
-        no_cut_sampling_entries = ApplyLogQuadraticNoise(
-            std::move(no_cut_sampling_entries),
+        sampling_entries = ApplyLogQuadraticNoise(
+            std::move(sampling_entries),
             scenario.gaus_true,
             scenario.data_error_sigma,
             generator);
-        cut_sampling_entries = ApplyLogQuadraticNoise(
-            std::move(cut_sampling_entries),
-            scenario.gaus_true,
-            scenario.data_error_sigma,
-            generator);
-        input.no_cut_input.replica_sampling_entries.emplace_back(std::move(no_cut_sampling_entries));
-        input.cut_input.replica_sampling_entries.emplace_back(std::move(cut_sampling_entries));
+        input.replica_sampling_entries.emplace_back(std::move(sampling_entries));
     }
 
     return input;

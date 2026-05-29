@@ -1,7 +1,6 @@
 #pragma once
 
 #include <optional>
-#include <vector>
 
 #include <Eigen/Dense>
 
@@ -18,9 +17,9 @@ struct BiasStatistics
 
 struct BiasStatisticsSeries
 {
-    std::vector<BiasStatistics> requested_alpha;
+    BiasStatistics requested_alpha;
     std::optional<BiasStatistics> trained_alpha;
-    std::optional<double> trained_alpha_average;
+    std::optional<double> trained_alpha_median;
 };
 
 struct BetaMDPDETestBias
@@ -37,25 +36,25 @@ struct MuMDPDETestBias
 
 struct BetaMDPDETestOptions
 {
-    std::vector<double> requested_alpha_r_list{};
+    double requested_alpha_r{ 0.0 };
     bool alpha_training{ true };
     int thread_size{ 1 };
 };
 
 struct MuMDPDETestOptions
 {
-    std::vector<double> requested_alpha_g_list{};
+    double requested_alpha_g{ 0.0 };
     bool alpha_training{ true };
     int thread_size{ 1 };
 };
 
 BetaMDPDETestBias RunBetaMDPDETest(
-    const test_data_factory::LocalTestData & test_input,
+    const test_data_factory::LocalTestData & input,
     const BetaMDPDETestOptions & options
 );
 
 MuMDPDETestBias RunMuMDPDETest(
-    const test_data_factory::GroupTestData & test_input,
+    const test_data_factory::GroupTestData & input,
     const MuMDPDETestOptions & options
 );
 

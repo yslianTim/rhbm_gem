@@ -3,6 +3,7 @@
 #include <tuple>
 #include <array>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
@@ -112,6 +113,68 @@ TEST(ArrayHelperTest, ComputeMedianEmptyInput)
 {
     std::vector<double> data{};
     EXPECT_DOUBLE_EQ(0.0, rhbm_gem::array_helper::ComputeMedian(data));
+}
+
+TEST(ArrayHelperTest, ComputeSmallestProportionValuesReturnsSortedSubset)
+{
+    const std::vector<double> data{ 4.0, 1.0, 5.0, 2.0, 3.0 };
+    const std::vector<double> expected{ 1.0, 2.0 };
+
+    const auto actual{ rhbm_gem::array_helper::ComputeSmallestProportionValues(data, 0.4) };
+
+    EXPECT_EQ(expected, actual);
+    EXPECT_EQ((std::vector<double>{ 4.0, 1.0, 5.0, 2.0, 3.0 }), data);
+}
+
+TEST(ArrayHelperTest, ComputeLargestProportionValuesReturnsSortedSubset)
+{
+    const std::vector<double> data{ 4.0, 1.0, 5.0, 2.0, 3.0 };
+    const std::vector<double> expected{ 5.0, 4.0 };
+
+    const auto actual{ rhbm_gem::array_helper::ComputeLargestProportionValues(data, 0.4) };
+
+    EXPECT_EQ(expected, actual);
+    EXPECT_EQ((std::vector<double>{ 4.0, 1.0, 5.0, 2.0, 3.0 }), data);
+}
+
+TEST(ArrayHelperTest, ComputeProportionValuesReturnEmptyForInvalidRatioOrInput)
+{
+    const std::vector<double> data{ 1.0, 2.0, 3.0 };
+    const std::vector<double> empty_data{};
+
+    EXPECT_TRUE(rhbm_gem::array_helper::ComputeSmallestProportionValues(data, 0.0).empty());
+    EXPECT_TRUE(rhbm_gem::array_helper::ComputeLargestProportionValues(data, -0.1).empty());
+    EXPECT_TRUE(rhbm_gem::array_helper::ComputeSmallestProportionValues(
+        data, std::numeric_limits<double>::quiet_NaN()).empty());
+    EXPECT_TRUE(rhbm_gem::array_helper::ComputeLargestProportionValues(empty_data, 0.5).empty());
+}
+
+TEST(ArrayHelperTest, ComputeProportionValuesClampRatioAboveOne)
+{
+    const std::vector<double> data{ 4.0, 1.0, 3.0 };
+    const std::vector<double> expected_smallest{ 1.0, 3.0, 4.0 };
+    const std::vector<double> expected_largest{ 4.0, 3.0, 1.0 };
+
+    EXPECT_EQ(
+        expected_smallest,
+        rhbm_gem::array_helper::ComputeSmallestProportionValues(data, 1.5));
+    EXPECT_EQ(
+        expected_largest,
+        rhbm_gem::array_helper::ComputeLargestProportionValues(data, 1.5));
+}
+
+TEST(ArrayHelperTest, ComputeProportionValuesPreserveDuplicateCount)
+{
+    const std::vector<double> data{ 2.0, 4.0, 4.0, 1.0, 3.0 };
+    const std::vector<double> expected_smallest{ 1.0, 2.0, 3.0 };
+    const std::vector<double> expected_largest{ 4.0, 4.0, 3.0 };
+
+    EXPECT_EQ(
+        expected_smallest,
+        rhbm_gem::array_helper::ComputeSmallestProportionValues(data, 0.6));
+    EXPECT_EQ(
+        expected_largest,
+        rhbm_gem::array_helper::ComputeLargestProportionValues(data, 0.6));
 }
 
 TEST(ArrayHelperTest, ComputePercentileRangeTupleReturnsExpectedPercentiles)

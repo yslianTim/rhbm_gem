@@ -5,6 +5,7 @@
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
@@ -35,6 +36,88 @@ RHBMExecutionOptions MakeExecutionOptions(const FitOptions & options)
     execution_options.quiet_mode = true;
     execution_options.thread_size = options.thread_size;
     return execution_options;
+}
+
+double EstimateInitialIntercept(const LocalPotentialSampleList & sample_entries)
+{
+    float maximum_distance{ 0.0f };
+    for (const auto & sample : sample_entries)
+    {
+        if (sample.point.distance > maximum_distance) maximum_distance = sample.point.distance;
+    }
+
+    std::vector<double> response_list;
+    response_list.reserve(sample_entries.size());
+    for (const auto & sample : sample_entries)
+    {
+        if (sample.point.distance != maximum_distance) continue;
+        const auto response{ static_cast<double>(sample.response) };
+        numeric_validation::RequireFinite(response, "maximum distance shell response");
+        response_list.emplace_back(response);
+    }
+    if (response_list.empty()) return 0.0;
+
+    const auto lowest_response_list{
+        array_helper::ComputeSmallestProportionValues(response_list, 0.10)
+    };
+    return array_helper::ComputeMedian(lowest_response_list);
+}
+
+double EstimateResidualIntercept(const LocalPotentialSampleList & residual_sample_entries)
+{
+    std::vector<double> response_list;
+    response_list.reserve(residual_sample_entries.size());
+    for (const auto & sample : residual_sample_entries)
+    {
+        response_list.emplace_back(static_cast<double>(sample.response));
+    }
+    if (response_list.empty()) return 0.0;
+    return array_helper::ComputeMean(response_list.data(), response_list.size());
+}
+
+LocalPotentialSampleList BuildShiftedSampleEntries(
+    const LocalPotentialSampleList & sample_entries,
+    double intercept)
+{
+    LocalPotentialSampleList shifted_sample_entries;
+    shifted_sample_entries.reserve(sample_entries.size());
+    for (const auto & sample : sample_entries)
+    {
+        shifted_sample_entries.emplace_back(
+            LocalPotentialSample{
+                static_cast<float>(static_cast<double>(sample.response) - intercept),
+                sample.point
+            }
+        );
+    }
+    return shifted_sample_entries;
+}
+
+LocalPotentialSampleList BuildResidualSampleEntries(
+    const LocalPotentialSampleList & sample_entries,
+    const RHBMParameterVector & beta,
+    LocalGaussianFitModel fit_model,
+    double range_min,
+    double range_max)
+{
+    const auto signal_model{ linearization_service::DecodeParameterVector(beta, fit_model) };
+    LocalPotentialSampleList residual_sample_entries;
+    residual_sample_entries.reserve(sample_entries.size());
+    for (const auto & sample : sample_entries)
+    {
+        const auto distance{ sample.point.distance };
+        if (distance < static_cast<float>(range_min)) continue;
+        if (distance > static_cast<float>(range_max)) continue;
+
+        const auto residual{
+            static_cast<double>(sample.response) -
+                signal_model.ResponseAtDistance(static_cast<double>(distance))
+        };
+        residual_sample_entries.emplace_back(
+            LocalPotentialSample{ static_cast<float>(residual), sample.point }
+        );
+    }
+    return residual_sample_entries;
 }
 
 bool EmitTrainingReportIfRequested(
@@ -324,21 +407,53 @@ std::vector<RHBMMemberDataset> BuildMemberDatasetList(
     return dataset_list;
 }
 
+std::vector<RHBMMemberDataset> BuildMemberDatasetList(
+    const std::vector<LocalPotentialSampleList> & sample_entries_list,
+    const std::vector<LocalGaussianResult> & member_result_list,
+    const FitOptions & options)
+{
+    if (sample_entries_list.size() != member_result_list.size())
+    {
+        throw std::invalid_argument("sample_entries_list and member_result_list sizes are inconsistent.");
+    }
+
+    std::vector<RHBMMemberDataset> dataset_list;
+    dataset_list.reserve(sample_entries_list.size());
+    for (std::size_t i = 0; i < sample_entries_list.size(); i++)
+    {
+        const auto intercept{ member_result_list.at(i).mdpde.GetModel().GetIntercept() };
+        const auto shifted_sample_entries{
+            BuildShiftedSampleEntries(sample_entries_list.at(i), intercept)
+        };
+        dataset_list.emplace_back(
+            rhbm_helper::BuildMemberDataset(
+                shifted_sample_entries,
+                options.distance_min,
+                options.distance_max,
+                options.local_fit_model)
+        );
+    }
+    return dataset_list;
+}
+
 LocalGaussianResult DecodeLocalGaussianResult(
     double alpha_r,
     const RHBMBetaEstimateResult & fit_result,
-    LocalGaussianFitModel fit_model)
+    LocalGaussianFitModel fit_model,
+    double intercept = 0.0)
 {
+    const auto ols_model{
+        linearization_service::DecodeParameterVector(fit_result.beta_ols, fit_model)
+            .WithIntercept(intercept)
+    };
+    const auto mdpde_model{
+        linearization_service::DecodeParameterVector(fit_result.beta_mdpde, fit_model)
+            .WithIntercept(intercept)
+    };
     return LocalGaussianResult{
         alpha_r,
-        GaussianModel3DWithUncertainty{
-            linearization_service::DecodeParameterVector(fit_result.beta_ols, fit_model),
-            GaussianModel3DUncertainty{}
-        },
-        GaussianModel3DWithUncertainty{
-            linearization_service::DecodeParameterVector(fit_result.beta_mdpde, fit_model),
-            GaussianModel3DUncertainty{}
-        },
+        GaussianModel3DWithUncertainty{ ols_model, GaussianModel3DUncertainty{} },
+        GaussianModel3DWithUncertainty{ mdpde_model, GaussianModel3DUncertainty{} },
         false,
         0.0,
         fit_model,
@@ -562,16 +677,44 @@ LocalGaussianResult EstimateLocalGaussian(
         options.distance_min, options.distance_max, "fit range");
     numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
 
-    auto dataset{
-        rhbm_helper::BuildMemberDataset(
-            sample_entries,
-            options.distance_min,
-            options.distance_max,
-            options.local_fit_model)
-    };
     auto execution_options{ MakeExecutionOptions(options) };
-    auto result{ rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset, execution_options) };
-    return DecodeLocalGaussianResult(alpha_r, result, options.local_fit_model);
+    double intercept{ EstimateInitialIntercept(sample_entries) };
+    RHBMBetaEstimateResult result;
+    RHBMParameterVector beta_in_previous_iter;
+    bool has_previous_beta{ false };
+
+    for (int t = 0; t < execution_options.max_iterations; t++)
+    {
+        auto shifted_sample_entries{ BuildShiftedSampleEntries(sample_entries, intercept) };
+        auto dataset{
+            rhbm_helper::BuildMemberDataset(
+                shifted_sample_entries,
+                options.distance_min,
+                options.distance_max,
+                options.local_fit_model)
+        };
+        result = rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset, execution_options);
+        const auto residual_sample_entries{
+            BuildResidualSampleEntries(
+                sample_entries,
+                result.beta_mdpde,
+                options.local_fit_model,
+                options.distance_min,
+                options.distance_max)
+        };
+        const auto next_intercept{ EstimateResidualIntercept(residual_sample_entries) };
+        if (has_previous_beta && std::fabs(next_intercept - intercept) < execution_options.tolerance)
+        {
+            break;
+        }
+        beta_in_previous_iter = result.beta_mdpde;
+        has_previous_beta = true;
+        if (t + 1 < execution_options.max_iterations)
+        {
+            intercept = next_intercept;
+        }
+    }
+    return DecodeLocalGaussianResult(alpha_r, result, options.local_fit_model, intercept);
 }
 
 GroupGaussianResult EstimateGroupGaussian(
@@ -590,7 +733,7 @@ GroupGaussianResult EstimateGroupGaussian(
     }
 
     auto execution_options{ MakeExecutionOptions(options) };
-    const auto dataset_list{ BuildMemberDatasetList(sample_entries_list, options) };
+    const auto dataset_list{ BuildMemberDatasetList(sample_entries_list, member_result_list, options) };
     const auto fit_result_list{ BuildMemberFitResultList(
         member_result_list,
         options.local_fit_model) };

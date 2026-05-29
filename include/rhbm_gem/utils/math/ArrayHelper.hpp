@@ -134,6 +134,46 @@ Type ComputeMedian(const std::vector<Type> & data)
     }
 }
 
+inline std::size_t ComputeProportionValueCount(std::size_t data_size, double ratio)
+{
+    if (data_size == 0 || !std::isfinite(ratio) || ratio <= 0.0) return 0;
+
+    const auto clamped_ratio{ std::min(ratio, 1.0) };
+    return std::max<std::size_t>(
+        1,
+        static_cast<std::size_t>(std::ceil(static_cast<double>(data_size) * clamped_ratio)));
+}
+
+template <typename Type>
+std::vector<Type> ComputeSmallestProportionValues(const std::vector<Type> & data, double ratio)
+{
+    const auto value_count{ ComputeProportionValueCount(data.size(), ratio) };
+    if (value_count == 0) return {};
+
+    std::vector<Type> buffer(data);
+    std::sort(buffer.begin(), buffer.end());
+    buffer.resize(value_count);
+    return buffer;
+}
+
+template <typename Type>
+std::vector<Type> ComputeLargestProportionValues(const std::vector<Type> & data, double ratio)
+{
+    const auto value_count{ ComputeProportionValueCount(data.size(), ratio) };
+    if (value_count == 0) return {};
+
+    std::vector<Type> buffer(data);
+    std::sort(
+        buffer.begin(),
+        buffer.end(),
+        [](const Type & lhs, const Type & rhs)
+        {
+            return lhs > rhs;
+        });
+    buffer.resize(value_count);
+    return buffer;
+}
+
 template <typename Type>
 std::tuple<Type, Type> ComputePercentileRangeTuple(
     const std::vector<Type> & data, double percentile_min=0.01, double percentile_max=0.99)

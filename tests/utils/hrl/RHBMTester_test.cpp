@@ -2,7 +2,6 @@
 
 #include <limits>
 #include <stdexcept>
-#include <vector>
 
 #include <rhbm_gem/utils/hrl/TestDataFactory.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTester.hpp>
@@ -20,22 +19,22 @@ tdf::GaussianParameterDistribution MakeDistribution(
 }
 
 rt::BetaMDPDETestOptions MakeBetaOptions(
-    const std::vector<double> & alpha_r_list,
+    double alpha_r,
     bool alpha_training)
 {
     rt::BetaMDPDETestOptions options;
-    options.requested_alpha_r_list = alpha_r_list;
+    options.requested_alpha_r = alpha_r;
     options.alpha_training = alpha_training;
     options.thread_size = 1;
     return options;
 }
 
 rt::MuMDPDETestOptions MakeMuOptions(
-    const std::vector<double> & alpha_g_list,
+    double alpha_g,
     bool alpha_training)
 {
     rt::MuMDPDETestOptions options;
-    options.requested_alpha_g_list = alpha_g_list;
+    options.requested_alpha_g = alpha_g;
     options.alpha_training = alpha_training;
     options.thread_size = 1;
     return options;
@@ -51,7 +50,7 @@ void ExpectBiasStatisticSize(const rt::BiasStatistics & bias)
 
 TEST(RHBMTesterTest, RunBetaMDPDETestPopulatesBiasOutputs)
 {
-    const std::vector<double> alpha_r_list{ 0.0, 0.5 };
+    constexpr double alpha_r{ 0.5 };
     const auto test_input{
         tdf::BuildLocalTestData(tdf::LocalScenario{
             rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
@@ -64,24 +63,20 @@ TEST(RHBMTesterTest, RunBetaMDPDETestPopulatesBiasOutputs)
     };
 
     const auto bias{
-        rt::RunBetaMDPDETest(test_input, MakeBetaOptions(alpha_r_list, true))
+        rt::RunBetaMDPDETest(test_input, MakeBetaOptions(alpha_r, true))
     };
 
-    ASSERT_EQ(bias.mdpde.requested_alpha.size(), alpha_r_list.size());
     ExpectBiasStatisticSize(bias.ols);
-    for (const auto & requested_alpha_bias : bias.mdpde.requested_alpha)
-    {
-        ExpectBiasStatisticSize(requested_alpha_bias);
-    }
+    ExpectBiasStatisticSize(bias.mdpde.requested_alpha);
     ASSERT_TRUE(bias.mdpde.trained_alpha.has_value());
     ExpectBiasStatisticSize(bias.mdpde.trained_alpha.value());
-    ASSERT_TRUE(bias.mdpde.trained_alpha_average.has_value());
-    EXPECT_GE(bias.mdpde.trained_alpha_average.value(), 0.0);
+    ASSERT_TRUE(bias.mdpde.trained_alpha_median.has_value());
+    EXPECT_GE(bias.mdpde.trained_alpha_median.value(), 0.0);
 }
 
 TEST(RHBMTesterTest, RunMuMDPDETestPopulatesBiasOutputs)
 {
-    const std::vector<double> alpha_g_list{ 0.2 };
+    constexpr double alpha_g{ 0.2 };
     const auto test_input{
         tdf::BuildGroupTestData(tdf::GroupScenario{
             12,
@@ -95,24 +90,20 @@ TEST(RHBMTesterTest, RunMuMDPDETestPopulatesBiasOutputs)
     };
 
     const auto bias{
-        rt::RunMuMDPDETest(test_input, MakeMuOptions(alpha_g_list, true))
+        rt::RunMuMDPDETest(test_input, MakeMuOptions(alpha_g, true))
     };
 
-    ASSERT_EQ(bias.mdpde.requested_alpha.size(), alpha_g_list.size());
     ExpectBiasStatisticSize(bias.median);
-    for (const auto & requested_alpha_bias : bias.mdpde.requested_alpha)
-    {
-        ExpectBiasStatisticSize(requested_alpha_bias);
-    }
+    ExpectBiasStatisticSize(bias.mdpde.requested_alpha);
     ASSERT_TRUE(bias.mdpde.trained_alpha.has_value());
     ExpectBiasStatisticSize(bias.mdpde.trained_alpha.value());
-    ASSERT_TRUE(bias.mdpde.trained_alpha_average.has_value());
-    EXPECT_GE(bias.mdpde.trained_alpha_average.value(), 0.0);
+    ASSERT_TRUE(bias.mdpde.trained_alpha_median.has_value());
+    EXPECT_GE(bias.mdpde.trained_alpha_median.value(), 0.0);
 }
 
 TEST(RHBMTesterTest, RunBetaMDPDETestSkipsTrainedAlphaWhenDisabled)
 {
-    const std::vector<double> alpha_r_list{ 0.5 };
+    constexpr double alpha_r{ 0.5 };
     const auto test_input{
         tdf::BuildLocalTestData(tdf::LocalScenario{
             rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
@@ -125,19 +116,18 @@ TEST(RHBMTesterTest, RunBetaMDPDETestSkipsTrainedAlphaWhenDisabled)
     };
 
     const auto bias{
-        rt::RunBetaMDPDETest(test_input, MakeBetaOptions(alpha_r_list, false))
+        rt::RunBetaMDPDETest(test_input, MakeBetaOptions(alpha_r, false))
     };
 
-    ASSERT_EQ(bias.mdpde.requested_alpha.size(), alpha_r_list.size());
     ExpectBiasStatisticSize(bias.ols);
-    ExpectBiasStatisticSize(bias.mdpde.requested_alpha.front());
+    ExpectBiasStatisticSize(bias.mdpde.requested_alpha);
     EXPECT_FALSE(bias.mdpde.trained_alpha.has_value());
-    EXPECT_FALSE(bias.mdpde.trained_alpha_average.has_value());
+    EXPECT_FALSE(bias.mdpde.trained_alpha_median.has_value());
 }
 
 TEST(RHBMTesterTest, RunMuMDPDETestSkipsTrainedAlphaWhenDisabled)
 {
-    const std::vector<double> alpha_g_list{ 0.2 };
+    constexpr double alpha_g{ 0.2 };
     const auto test_input{
         tdf::BuildGroupTestData(tdf::GroupScenario{
             12,
@@ -151,62 +141,13 @@ TEST(RHBMTesterTest, RunMuMDPDETestSkipsTrainedAlphaWhenDisabled)
     };
 
     const auto bias{
-        rt::RunMuMDPDETest(test_input, MakeMuOptions(alpha_g_list, false))
+        rt::RunMuMDPDETest(test_input, MakeMuOptions(alpha_g, false))
     };
 
-    ASSERT_EQ(bias.mdpde.requested_alpha.size(), alpha_g_list.size());
     ExpectBiasStatisticSize(bias.median);
-    ExpectBiasStatisticSize(bias.mdpde.requested_alpha.front());
+    ExpectBiasStatisticSize(bias.mdpde.requested_alpha);
     EXPECT_FALSE(bias.mdpde.trained_alpha.has_value());
-    EXPECT_FALSE(bias.mdpde.trained_alpha_average.has_value());
-}
-
-TEST(RHBMTesterTest, RunBetaMDPDETestAllowsEmptyAlphaListWithoutTraining)
-{
-    const auto test_input{
-        tdf::BuildLocalTestData(tdf::LocalScenario{
-            rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
-            10,
-            0.01,
-            0.0,
-            2,
-            42
-        })
-    };
-
-    const auto bias{
-        rt::RunBetaMDPDETest(test_input, MakeBetaOptions({}, false))
-    };
-
-    EXPECT_TRUE(bias.mdpde.requested_alpha.empty());
-    ExpectBiasStatisticSize(bias.ols);
-    EXPECT_FALSE(bias.mdpde.trained_alpha.has_value());
-    EXPECT_FALSE(bias.mdpde.trained_alpha_average.has_value());
-}
-
-TEST(RHBMTesterTest, RunBetaMDPDETestAllowsEmptyAlphaListWithTraining)
-{
-    const auto test_input{
-        tdf::BuildLocalTestData(tdf::LocalScenario{
-            rg::GaussianModel3D{ 1.0, 0.5, 0.0 },
-            10,
-            0.01,
-            0.0,
-            2,
-            42
-        })
-    };
-
-    const auto bias{
-        rt::RunBetaMDPDETest(test_input, MakeBetaOptions({}, true))
-    };
-
-    EXPECT_TRUE(bias.mdpde.requested_alpha.empty());
-    ExpectBiasStatisticSize(bias.ols);
-    ASSERT_TRUE(bias.mdpde.trained_alpha.has_value());
-    ExpectBiasStatisticSize(bias.mdpde.trained_alpha.value());
-    ASSERT_TRUE(bias.mdpde.trained_alpha_average.has_value());
-    EXPECT_GE(bias.mdpde.trained_alpha_average.value(), 0.0);
+    EXPECT_FALSE(bias.mdpde.trained_alpha_median.has_value());
 }
 
 TEST(RHBMTesterTest, RunBetaMDPDETestRejectsNonFiniteTruth)
@@ -228,7 +169,7 @@ TEST(RHBMTesterTest, RunBetaMDPDETestRejectsNonFiniteTruth)
     };
 
     EXPECT_THROW(
-        rt::RunBetaMDPDETest(test_input, MakeBetaOptions({}, true)),
+        rt::RunBetaMDPDETest(test_input, MakeBetaOptions(0.5, true)),
         std::invalid_argument
     );
 }

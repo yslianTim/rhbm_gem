@@ -22,12 +22,6 @@ struct GroupTestData
     std::vector<std::vector<LocalPotentialSampleList>> replica_member_sampling_entries;
 };
 
-struct AtomModelTestData
-{
-    LocalTestData no_cut_input;
-    LocalTestData cut_input;
-};
-
 struct LocalScenario
 {
     GaussianModel3D gaus_true;
@@ -60,13 +54,12 @@ struct AtomModelScenario
     Spot spot{ Spot::UNK };
     GaussianModel3D gaus_true;
     double data_error_sigma{ 1.0 };
-    double rejected_angle{ 0.0 };
     int replica_size{ 1 };
     std::optional<std::uint32_t> random_seed{};
 };
 
 LocalTestData BuildLocalTestData(const LocalScenario & scenario);
+LocalTestData BuildLocalTestData(const AtomModelScenario & scenario);
 GroupTestData BuildGroupTestData(const GroupScenario & scenario);
-AtomModelTestData BuildAtomModelTestData(const AtomModelScenario & scenario);
 
 } // namespace rhbm_gem::test_data_factory

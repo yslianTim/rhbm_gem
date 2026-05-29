@@ -1,5 +1,6 @@
 #include <rhbm_gem/utils/hrl/RHBMTester.hpp>
 #include <rhbm_gem/utils/hrl/GaussianEstimator.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
 
 #include <cmath>
@@ -55,15 +56,12 @@ MuReplicaBias EstimateMuReplicaBias(
     double alpha_g,
     const gaussian_estimator::FitOptions & options)
 {
-    const auto baseline_result{
-        gaussian_estimator::EstimateGroupGaussian(sample_entries_list, member_results, 0.0, options)
-    };
-    const auto mdpde_result{
+    const auto estimate{
         gaussian_estimator::EstimateGroupGaussian(sample_entries_list, member_results, alpha_g, options)
     };
     return MuReplicaBias{
-        CalculateNormalizedBias(baseline_result.mdpde, truth),
-        CalculateNormalizedBias(mdpde_result.mdpde, truth)
+        CalculateNormalizedBias(estimate.mean, truth),
+        CalculateNormalizedBias(estimate.mdpde, truth)
     };
 }
 
@@ -95,21 +93,17 @@ BetaMDPDETestBias RunBetaMDPDETest(
         throw std::invalid_argument("input.replica_sampling_entries must not be empty");
     }
 
-    const auto local_alpha_r_list{ options.requested_alpha_r_list };
     Eigen::MatrixXd bias_matrix_ols{
         Eigen::MatrixXd::Zero(GaussianModel3D::ParameterSize(), replica_size)
     };
-    std::vector<Eigen::MatrixXd> bias_matrix_mdpde_requested_list(
-        local_alpha_r_list.size(),
+    Eigen::MatrixXd bias_matrix_mdpde_requested{
         Eigen::MatrixXd::Zero(GaussianModel3D::ParameterSize(), replica_size)
-    );
-    Eigen::MatrixXd bias_matrix_mdpde_trained;
+    };
+    Eigen::MatrixXd bias_matrix_mdpde_trained{
+        Eigen::MatrixXd::Zero(GaussianModel3D::ParameterSize(), replica_size)
+    };
     std::vector<double> trained_alpha_list;
-    if (options.alpha_training)
-    {
-        bias_matrix_mdpde_trained = Eigen::MatrixXd::Zero(GaussianModel3D::ParameterSize(), replica_size);
-        trained_alpha_list.assign(static_cast<size_t>(replica_size), 0.0);
-    }
+    trained_alpha_list.assign(static_cast<size_t>(replica_size), 0.0);
 
     gaussian_estimator::FitOptions estimator_options;
     estimator_options.local_fit_model = LocalGaussianFitModel::LogQuadratic;
@@ -120,22 +114,15 @@ BetaMDPDETestBias RunBetaMDPDETest(
     for (int i = 0; i < replica_size; i++)
     {
         const auto & sample_entries{ input.replica_sampling_entries.at(static_cast<size_t>(i)) };
-        const auto baseline_result{
-            EstimateBetaReplicaBias(sample_entries, input.gaus_true, 0.0, estimator_options)
+        const auto requested_result{
+            EstimateBetaReplicaBias(
+                sample_entries,
+                input.gaus_true,
+                options.requested_alpha_r,
+                estimator_options)
         };
-        bias_matrix_ols.col(i) = baseline_result.ols_bias;
-
-        for (size_t j = 0; j < local_alpha_r_list.size(); j++)
-        {
-            const auto replica_result{
-                EstimateBetaReplicaBias(
-                    sample_entries,
-                    input.gaus_true,
-                    local_alpha_r_list.at(j),
-                    estimator_options)
-            };
-            bias_matrix_mdpde_requested_list.at(j).col(i) = replica_result.mdpde_bias;
-        }
+        bias_matrix_ols.col(i) = requested_result.ols_bias;
+        bias_matrix_mdpde_requested.col(i) = requested_result.mdpde_bias;
 
         if (options.alpha_training)
         {
@@ -152,30 +139,21 @@ BetaMDPDETestBias RunBetaMDPDETest(
         }
     }
 
-    double trained_alpha_average{ 0.0 };
+    double trained_alpha_median{ 0.0 };
     if (options.alpha_training)
     {
-        for (const auto trained_alpha : trained_alpha_list)
-        {
-            trained_alpha_average += trained_alpha;
-        }
-        trained_alpha_average /= static_cast<double>(replica_size);
+        trained_alpha_median = array_helper::ComputeMedian(trained_alpha_list);
     }
 
     BetaMDPDETestBias result;
     result.ols = FinalizeBiasStatistics(bias_matrix_ols);
-    result.mdpde.requested_alpha.assign(local_alpha_r_list.size(), BiasStatistics{});
-    for (size_t i = 0; i < local_alpha_r_list.size(); i++)
-    {
-        result.mdpde.requested_alpha.at(i) =
-            FinalizeBiasStatistics(bias_matrix_mdpde_requested_list.at(i));
-    }
+    result.mdpde.requested_alpha = FinalizeBiasStatistics(bias_matrix_mdpde_requested);
     result.mdpde.trained_alpha.reset();
-    result.mdpde.trained_alpha_average.reset();
+    result.mdpde.trained_alpha_median.reset();
     if (options.alpha_training)
     {
         result.mdpde.trained_alpha = FinalizeBiasStatistics(bias_matrix_mdpde_trained);
-        result.mdpde.trained_alpha_average = trained_alpha_average;
+        result.mdpde.trained_alpha_median = trained_alpha_median;
     }
 
     return result;
@@ -192,22 +170,17 @@ MuMDPDETestBias RunMuMDPDETest(
         throw std::invalid_argument("input.replica_member_sampling_entries must not be empty");
     }
 
-    const auto local_alpha_g_list{ options.requested_alpha_g_list };
     Eigen::MatrixXd bias_matrix_median{
         Eigen::MatrixXd::Zero(GaussianModel3D::ParameterSize(), replica_size)
     };
-    std::vector<Eigen::MatrixXd> bias_matrix_mdpde_requested_list(
-        local_alpha_g_list.size(),
+    Eigen::MatrixXd bias_matrix_mdpde_requested{
         Eigen::MatrixXd::Zero(GaussianModel3D::ParameterSize(), replica_size)
-    );
-    Eigen::MatrixXd bias_matrix_mdpde_trained;
+    };
+    Eigen::MatrixXd bias_matrix_mdpde_trained{
+        Eigen::MatrixXd::Zero(GaussianModel3D::ParameterSize(), replica_size)
+    };
     std::vector<double> trained_alpha_list;
-    if (options.alpha_training)
-    {
-        bias_matrix_mdpde_trained =
-            Eigen::MatrixXd::Zero(GaussianModel3D::ParameterSize(), replica_size);
-        trained_alpha_list.assign(static_cast<size_t>(replica_size), 0.0);
-    }
+    trained_alpha_list.assign(static_cast<size_t>(replica_size), 0.0);
 
     const gaussian_estimator::FitOptions estimator_options;
 
@@ -226,24 +199,17 @@ MuMDPDETestBias RunMuMDPDETest(
             member_results.emplace_back(
                 gaussian_estimator::EstimateLocalGaussian(sample_entries, 0.0, estimator_options));
         }
-        const auto baseline_result{
-            EstimateMuReplicaBias(
-                sample_entries_list, member_results, input.gaus_true, 0.0, estimator_options)
-        };
-        bias_matrix_median.col(i) = baseline_result.median_bias;
 
-        for (size_t j = 0; j < local_alpha_g_list.size(); j++)
-        {
-            const auto replica_result{
-                EstimateMuReplicaBias(
-                    sample_entries_list,
-                    member_results,
-                    input.gaus_true,
-                    local_alpha_g_list.at(j),
-                    estimator_options)
-            };
-            bias_matrix_mdpde_requested_list.at(j).col(i) = replica_result.mdpde_bias;
-        }
+        const auto requested_result{
+            EstimateMuReplicaBias(
+                sample_entries_list,
+                member_results,
+                input.gaus_true,
+                options.requested_alpha_g,
+                estimator_options)
+        };
+        bias_matrix_median.col(i) = requested_result.median_bias;
+        bias_matrix_mdpde_requested.col(i) = requested_result.mdpde_bias;
 
         if (options.alpha_training)
         {
@@ -266,30 +232,21 @@ MuMDPDETestBias RunMuMDPDETest(
         }
     }
 
-    double trained_alpha_average{ 0.0 };
+    double trained_alpha_median{ 0.0 };
     if (options.alpha_training)
     {
-        for (const auto trained_alpha : trained_alpha_list)
-        {
-            trained_alpha_average += trained_alpha;
-        }
-        trained_alpha_average /= static_cast<double>(replica_size);
+        trained_alpha_median = array_helper::ComputeMedian(trained_alpha_list);
     }
 
     MuMDPDETestBias result;
     result.median = FinalizeBiasStatistics(bias_matrix_median);
-    result.mdpde.requested_alpha.assign(local_alpha_g_list.size(), BiasStatistics{});
-    for (size_t i = 0; i < local_alpha_g_list.size(); i++)
-    {
-        result.mdpde.requested_alpha.at(i) =
-            FinalizeBiasStatistics(bias_matrix_mdpde_requested_list.at(i));
-    }
+    result.mdpde.requested_alpha = FinalizeBiasStatistics(bias_matrix_mdpde_requested);
     result.mdpde.trained_alpha.reset();
-    result.mdpde.trained_alpha_average.reset();
+    result.mdpde.trained_alpha_median.reset();
     if (options.alpha_training)
     {
         result.mdpde.trained_alpha = FinalizeBiasStatistics(bias_matrix_mdpde_trained);
-        result.mdpde.trained_alpha_average = trained_alpha_average;
+        result.mdpde.trained_alpha_median = trained_alpha_median;
     }
 
     return result;

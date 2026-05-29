@@ -217,11 +217,10 @@ TEST(TestDataFactoryTest, BuildTestDataRejectNonPositiveGaussianWidth)
         }),
         std::invalid_argument);
     EXPECT_THROW(
-        tdf::BuildAtomModelTestData(tdf::AtomModelScenario{
+        tdf::BuildLocalTestData(tdf::AtomModelScenario{
             Spot::O,
             rg::GaussianModel3D{ 1.0, -0.5, 0.0 },
             0.05,
-            15.0,
             1,
             11
         }),
