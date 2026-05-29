@@ -11,13 +11,13 @@ namespace rhbm_gem::core {
 
 namespace {
 
-struct BetaReplicaBias
+struct LocalReplicaBias
 {
     Eigen::VectorXd ols_bias;
     Eigen::VectorXd mdpde_bias;
 };
 
-struct MuReplicaBias
+struct GroupReplicaBias
 {
     Eigen::VectorXd median_bias;
     Eigen::VectorXd mdpde_bias;
@@ -32,7 +32,7 @@ Eigen::VectorXd CalculateNormalizedBias(const GaussianModel3D & estimate, const 
     return ((estimate_vector - truth_vector).array() / truth_vector.array()).matrix();
 }
 
-BetaReplicaBias EstimateBetaReplicaBias(
+LocalReplicaBias EstimateLocalReplicaBias(
     const LocalPotentialSampleList & sample_entries,
     const GaussianModel3D & truth,
     double alpha_r,
@@ -41,13 +41,13 @@ BetaReplicaBias EstimateBetaReplicaBias(
     const auto estimate{
         EstimateLocalGaussian(sample_entries, alpha_r, options)
     };
-    return BetaReplicaBias{
+    return LocalReplicaBias{
         CalculateNormalizedBias(estimate.ols.GetModel(), truth),
         CalculateNormalizedBias(estimate.mdpde.GetModel(), truth)
     };
 }
 
-MuReplicaBias EstimateMuReplicaBias(
+GroupReplicaBias EstimateGroupReplicaBias(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
     const std::vector<LocalGaussianResult> & member_results,
     const GaussianModel3D & truth,
@@ -57,7 +57,7 @@ MuReplicaBias EstimateMuReplicaBias(
     const auto estimate{
         EstimateGroupGaussian(sample_entries_list, member_results, alpha_g, options)
     };
-    return MuReplicaBias{
+    return GroupReplicaBias{
         CalculateNormalizedBias(estimate.mean, truth),
         CalculateNormalizedBias(estimate.mdpde, truth)
     };
@@ -80,9 +80,9 @@ BiasStatistics FinalizeBiasStatistics(const Eigen::MatrixXd & bias_matrix)
 
 } // namespace
 
-BetaMDPDETestBias RunBetaMDPDETest(
+LocalTestBias RunLocalEstimationTest(
     const LocalTestData & input,
-    const BetaMDPDETestOptions & options)
+    const LocalTestOptions & options)
 {
     GaussianModel3D::RequireFiniteModel(input.gaus_true, "input.gaus_true");
     const auto replica_size{ static_cast<int>(input.replica_sampling_entries.size()) };
@@ -113,7 +113,7 @@ BetaMDPDETestBias RunBetaMDPDETest(
     {
         const auto & sample_entries{ input.replica_sampling_entries.at(static_cast<size_t>(i)) };
         const auto requested_result{
-            EstimateBetaReplicaBias(
+            EstimateLocalReplicaBias(
                 sample_entries,
                 input.gaus_true,
                 options.requested_alpha_r,
@@ -130,7 +130,7 @@ BetaMDPDETestBias RunBetaMDPDETest(
             };
             trained_alpha_list.at(static_cast<size_t>(i)) = trained_alpha_r;
             const auto replica_result{
-                EstimateBetaReplicaBias(
+                EstimateLocalReplicaBias(
                     sample_entries, input.gaus_true, trained_alpha_r, estimator_options)
             };
             bias_matrix_mdpde_trained.col(i) = replica_result.mdpde_bias;
@@ -143,7 +143,7 @@ BetaMDPDETestBias RunBetaMDPDETest(
         trained_alpha_median = array_helper::ComputeMedian(trained_alpha_list);
     }
 
-    BetaMDPDETestBias result;
+    LocalTestBias result;
     result.ols = FinalizeBiasStatistics(bias_matrix_ols);
     result.mdpde.requested_alpha = FinalizeBiasStatistics(bias_matrix_mdpde_requested);
     result.mdpde.trained_alpha.reset();
@@ -157,9 +157,9 @@ BetaMDPDETestBias RunBetaMDPDETest(
     return result;
 }
 
-MuMDPDETestBias RunMuMDPDETest(
+GroupTestBias RunGroupEstimationTest(
     const GroupTestData & input,
-    const MuMDPDETestOptions & options)
+    const GroupTestOptions & options)
 {
     GaussianModel3D::RequireFiniteModel(input.gaus_true, "input.gaus_true");
     const auto replica_size{ static_cast<int>(input.replica_member_sampling_entries.size()) };
@@ -199,7 +199,7 @@ MuMDPDETestBias RunMuMDPDETest(
         }
 
         const auto requested_result{
-            EstimateMuReplicaBias(
+            EstimateGroupReplicaBias(
                 sample_entries_list,
                 member_results,
                 input.gaus_true,
@@ -219,7 +219,7 @@ MuMDPDETestBias RunMuMDPDETest(
             };
             trained_alpha_list.at(static_cast<size_t>(i)) = trained_alpha_g;
             const auto replica_result{
-                EstimateMuReplicaBias(
+                EstimateGroupReplicaBias(
                     sample_entries_list,
                     member_results,
                     input.gaus_true,
@@ -236,7 +236,7 @@ MuMDPDETestBias RunMuMDPDETest(
         trained_alpha_median = array_helper::ComputeMedian(trained_alpha_list);
     }
 
-    MuMDPDETestBias result;
+    GroupTestBias result;
     result.median = FinalizeBiasStatistics(bias_matrix_median);
     result.mdpde.requested_alpha = FinalizeBiasStatistics(bias_matrix_mdpde_requested);
     result.mdpde.trained_alpha.reset();

@@ -5,8 +5,8 @@
 #include <vector>
 
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
-#include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
+#include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
 namespace rhbm_gem::core {
 struct LocalTestData

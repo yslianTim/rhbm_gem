@@ -18,22 +18,22 @@ tdf::GaussianParameterDistribution MakeDistribution(
     return tdf::GaussianParameterDistribution{ mean, sigma };
 }
 
-rt::BetaMDPDETestOptions MakeBetaOptions(
+rt::LocalTestOptions MakeLocalOptions(
     double alpha_r,
     bool alpha_training)
 {
-    rt::BetaMDPDETestOptions options;
+    rt::LocalTestOptions options;
     options.requested_alpha_r = alpha_r;
     options.alpha_training = alpha_training;
     options.thread_size = 1;
     return options;
 }
 
-rt::MuMDPDETestOptions MakeMuOptions(
+rt::GroupTestOptions MakeGroupOptions(
     double alpha_g,
     bool alpha_training)
 {
-    rt::MuMDPDETestOptions options;
+    rt::GroupTestOptions options;
     options.requested_alpha_g = alpha_g;
     options.alpha_training = alpha_training;
     options.thread_size = 1;
@@ -48,7 +48,7 @@ void ExpectBiasStatisticSize(const rt::BiasStatistics & bias)
 
 } // namespace
 
-TEST(EstimatorTesterTest, RunBetaMDPDETestPopulatesBiasOutputs)
+TEST(EstimatorTesterTest, RunLocalEstimationTestPopulatesBiasOutputs)
 {
     constexpr double alpha_r{ 0.5 };
     const auto test_input{
@@ -63,7 +63,7 @@ TEST(EstimatorTesterTest, RunBetaMDPDETestPopulatesBiasOutputs)
     };
 
     const auto bias{
-        rt::RunBetaMDPDETest(test_input, MakeBetaOptions(alpha_r, true))
+        rt::RunLocalEstimationTest(test_input, MakeLocalOptions(alpha_r, true))
     };
 
     ExpectBiasStatisticSize(bias.ols);
@@ -74,7 +74,7 @@ TEST(EstimatorTesterTest, RunBetaMDPDETestPopulatesBiasOutputs)
     EXPECT_GE(bias.mdpde.trained_alpha_median.value(), 0.0);
 }
 
-TEST(EstimatorTesterTest, RunMuMDPDETestPopulatesBiasOutputs)
+TEST(EstimatorTesterTest, RunGroupEstimationTestPopulatesBiasOutputs)
 {
     constexpr double alpha_g{ 0.2 };
     const auto test_input{
@@ -90,7 +90,7 @@ TEST(EstimatorTesterTest, RunMuMDPDETestPopulatesBiasOutputs)
     };
 
     const auto bias{
-        rt::RunMuMDPDETest(test_input, MakeMuOptions(alpha_g, true))
+        rt::RunGroupEstimationTest(test_input, MakeGroupOptions(alpha_g, true))
     };
 
     ExpectBiasStatisticSize(bias.median);
@@ -101,7 +101,7 @@ TEST(EstimatorTesterTest, RunMuMDPDETestPopulatesBiasOutputs)
     EXPECT_GE(bias.mdpde.trained_alpha_median.value(), 0.0);
 }
 
-TEST(EstimatorTesterTest, RunBetaMDPDETestSkipsTrainedAlphaWhenDisabled)
+TEST(EstimatorTesterTest, RunLocalEstimationTestSkipsTrainedAlphaWhenDisabled)
 {
     constexpr double alpha_r{ 0.5 };
     const auto test_input{
@@ -116,7 +116,7 @@ TEST(EstimatorTesterTest, RunBetaMDPDETestSkipsTrainedAlphaWhenDisabled)
     };
 
     const auto bias{
-        rt::RunBetaMDPDETest(test_input, MakeBetaOptions(alpha_r, false))
+        rt::RunLocalEstimationTest(test_input, MakeLocalOptions(alpha_r, false))
     };
 
     ExpectBiasStatisticSize(bias.ols);
@@ -125,7 +125,7 @@ TEST(EstimatorTesterTest, RunBetaMDPDETestSkipsTrainedAlphaWhenDisabled)
     EXPECT_FALSE(bias.mdpde.trained_alpha_median.has_value());
 }
 
-TEST(EstimatorTesterTest, RunMuMDPDETestSkipsTrainedAlphaWhenDisabled)
+TEST(EstimatorTesterTest, RunGroupEstimationTestSkipsTrainedAlphaWhenDisabled)
 {
     constexpr double alpha_g{ 0.2 };
     const auto test_input{
@@ -141,7 +141,7 @@ TEST(EstimatorTesterTest, RunMuMDPDETestSkipsTrainedAlphaWhenDisabled)
     };
 
     const auto bias{
-        rt::RunMuMDPDETest(test_input, MakeMuOptions(alpha_g, false))
+        rt::RunGroupEstimationTest(test_input, MakeGroupOptions(alpha_g, false))
     };
 
     ExpectBiasStatisticSize(bias.median);
@@ -150,7 +150,7 @@ TEST(EstimatorTesterTest, RunMuMDPDETestSkipsTrainedAlphaWhenDisabled)
     EXPECT_FALSE(bias.mdpde.trained_alpha_median.has_value());
 }
 
-TEST(EstimatorTesterTest, RunBetaMDPDETestRejectsNonFiniteTruth)
+TEST(EstimatorTesterTest, RunLocalEstimationTestRejectsNonFiniteTruth)
 {
     auto test_input{
         tdf::BuildLocalTestData(tdf::LocalScenario{
@@ -169,7 +169,7 @@ TEST(EstimatorTesterTest, RunBetaMDPDETestRejectsNonFiniteTruth)
     };
 
     EXPECT_THROW(
-        rt::RunBetaMDPDETest(test_input, MakeBetaOptions(0.5, true)),
+        rt::RunLocalEstimationTest(test_input, MakeLocalOptions(0.5, true)),
         std::invalid_argument
     );
 }
