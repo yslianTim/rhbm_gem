@@ -1,4 +1,4 @@
-#include <rhbm_gem/utils/hrl/GaussianEstimator.hpp>
+#include <rhbm_gem/core/GaussianEstimator.hpp>
 
 #include <rhbm_gem/utils/domain/LocalPainter.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -19,7 +19,7 @@
 
 #include <Eigen/Dense>
 
-namespace rhbm_gem::gaussian_estimator {
+namespace rhbm_gem::core {
 namespace {
 constexpr std::size_t kAlphaRSubsetSize{ 5 };
 constexpr std::size_t kAlphaGSubsetSize{ 10 };
@@ -744,4 +744,4 @@ GroupGaussianResult EstimateGroupGaussian(
     return result;
 }
 
-} // namespace rhbm_gem::gaussian_estimator
+} // namespace rhbm_gem::core

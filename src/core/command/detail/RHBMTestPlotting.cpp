@@ -317,7 +317,7 @@ BiasCurve MakeBiasCurve(BiasCurveKind kind, size_t point_capacity)
 void AppendBiasCurvePoint(
     BiasCurve & curve,
     double x,
-    const rhbm_tester::BiasStatistics & bias)
+    const BiasStatistics & bias)
 {
     curve.points.emplace_back(BiasCurvePoint{ x, bias });
 }

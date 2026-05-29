@@ -14,7 +14,7 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/SampleFilter.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
-#include <rhbm_gem/utils/hrl/GaussianEstimator.hpp>
+#include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 #include <atomic>
@@ -102,10 +102,10 @@ std::vector<AtomLocalPotentialEditor> BuildSelectedAtomLocalEditors(ModelObject 
     return local_editor_list;
 }
 
-gaussian_estimator::FitOptions MakeGaussianEstimatorOptions(
+FitOptions MakeGaussianEstimatorOptions(
     const PotentialAnalysisRequest & request)
 {
-    gaussian_estimator::FitOptions options;
+    FitOptions options;
     options.local_fit_model = LocalGaussianFitModel::LogQuadratic;
     options.alpha_min = request.training_alpha_min;
     options.alpha_max = request.training_alpha_max;
@@ -253,7 +253,7 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
     return updated_list;
 }
 
-void RunLocalPotentialFitting(ModelObject & model_object, const gaussian_estimator::FitOptions & options)
+void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & options)
 {
     const auto selected_atom_size{ model_object.GetSelectedAtomCount() };
     const auto & atom_list{ model_object.GetSelectedAtoms() };
@@ -272,7 +272,7 @@ void RunLocalPotentialFitting(ModelObject & model_object, const gaussian_estimat
             sample_filter::FilterLocalPotentialSampleList(local_view.GetSamplingEntries())
         };
         const auto result{
-            gaussian_estimator::EstimateLocalGaussian(sample_entries, local_view.GetAlphaR(), options)
+            EstimateLocalGaussian(sample_entries, local_view.GetAlphaR(), options)
         };
         local_editor_list[i].SetGaussianResult(result);
 
@@ -303,7 +303,7 @@ void RunLocalPotentialFitting(ModelObject & model_object, const gaussian_estimat
                 UpdateSampleListWithFittedGaussian(atom, fitted_gaussian_snapshot)
             };
             const auto result{
-                gaussian_estimator::EstimateLocalGaussian(
+                EstimateLocalGaussian(
                     updated_sample_entries,
                     local_view.GetAlphaR(),
                     options)
@@ -354,7 +354,7 @@ void RunAtomAlphaTraining(ModelObject & model_object, const PotentialAnalysisReq
             auto alpha_r_options{ alpha_options };
             alpha_r_options.output_progress = false;
             const auto alpha_r{
-                gaussian_estimator::TrainAlphaR(selected_sample_entries_list, alpha_r_options)
+                TrainAlphaR(selected_sample_entries_list, alpha_r_options)
             };
             for (auto * atom : group_atom_list)
             {
@@ -393,7 +393,7 @@ void RunAtomAlphaTraining(ModelObject & model_object, const PotentialAnalysisReq
     }
 
     const auto alpha_g{
-        gaussian_estimator::TrainAlphaG(
+        TrainAlphaG(
             sample_group_list, member_result_list, alpha_options, !request.training_report_dir.empty())
     };
 
@@ -454,7 +454,7 @@ void RunAtomPotentialFittingWorkflow(ModelObject & model_object, const Potential
                 member_result_list.emplace_back(local_view.GetGaussianResult());
             }
             const auto result{
-                gaussian_estimator::EstimateGroupGaussian(
+                EstimateGroupGaussian(
                     member_sample_list,
                     member_result_list,
                     analysis_view.GetAtomAlphaG(group_key, class_key),

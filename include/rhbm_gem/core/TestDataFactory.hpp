@@ -8,8 +8,7 @@
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 
-namespace rhbm_gem::test_data_factory
-{
+namespace rhbm_gem::core {
 struct LocalTestData
 {
     GaussianModel3D gaus_true;
@@ -62,4 +61,4 @@ LocalTestData BuildLocalTestData(const LocalScenario & scenario);
 LocalTestData BuildLocalTestData(const AtomModelScenario & scenario);
 GroupTestData BuildGroupTestData(const GroupScenario & scenario);
 
-} // namespace rhbm_gem::test_data_factory
+} // namespace rhbm_gem::core

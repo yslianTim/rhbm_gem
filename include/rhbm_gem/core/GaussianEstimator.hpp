@@ -6,7 +6,7 @@
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 
-namespace rhbm_gem::gaussian_estimator {
+namespace rhbm_gem::core {
 
 struct FitOptions
 {
@@ -44,4 +44,4 @@ GroupGaussianResult EstimateGroupGaussian(
     double alpha_g,
     const FitOptions & options);
 
-} // namespace rhbm_gem::gaussian_estimator
+} // namespace rhbm_gem::core

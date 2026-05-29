@@ -1,5 +1,5 @@
-#include <rhbm_gem/utils/hrl/RHBMTester.hpp>
-#include <rhbm_gem/utils/hrl/GaussianEstimator.hpp>
+#include <rhbm_gem/core/EstimatorTester.hpp>
+#include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
 
@@ -7,11 +7,9 @@
 #include <cstddef>
 #include <stdexcept>
 
-namespace rhbm_gem::rhbm_tester
-{
+namespace rhbm_gem::core {
 
-namespace
-{
+namespace {
 
 struct BetaReplicaBias
 {
@@ -38,10 +36,10 @@ BetaReplicaBias EstimateBetaReplicaBias(
     const LocalPotentialSampleList & sample_entries,
     const GaussianModel3D & truth,
     double alpha_r,
-    const gaussian_estimator::FitOptions & options)
+    const FitOptions & options)
 {
     const auto estimate{
-        gaussian_estimator::EstimateLocalGaussian(sample_entries, alpha_r, options)
+        EstimateLocalGaussian(sample_entries, alpha_r, options)
     };
     return BetaReplicaBias{
         CalculateNormalizedBias(estimate.ols.GetModel(), truth),
@@ -54,10 +52,10 @@ MuReplicaBias EstimateMuReplicaBias(
     const std::vector<LocalGaussianResult> & member_results,
     const GaussianModel3D & truth,
     double alpha_g,
-    const gaussian_estimator::FitOptions & options)
+    const FitOptions & options)
 {
     const auto estimate{
-        gaussian_estimator::EstimateGroupGaussian(sample_entries_list, member_results, alpha_g, options)
+        EstimateGroupGaussian(sample_entries_list, member_results, alpha_g, options)
     };
     return MuReplicaBias{
         CalculateNormalizedBias(estimate.mean, truth),
@@ -83,7 +81,7 @@ BiasStatistics FinalizeBiasStatistics(const Eigen::MatrixXd & bias_matrix)
 } // namespace
 
 BetaMDPDETestBias RunBetaMDPDETest(
-    const test_data_factory::LocalTestData & input,
+    const LocalTestData & input,
     const BetaMDPDETestOptions & options)
 {
     GaussianModel3D::RequireFiniteModel(input.gaus_true, "input.gaus_true");
@@ -105,7 +103,7 @@ BetaMDPDETestBias RunBetaMDPDETest(
     std::vector<double> trained_alpha_list;
     trained_alpha_list.assign(static_cast<size_t>(replica_size), 0.0);
 
-    gaussian_estimator::FitOptions estimator_options;
+    FitOptions estimator_options;
     estimator_options.local_fit_model = LocalGaussianFitModel::LogQuadratic;
 
 #ifdef USE_OPENMP
@@ -127,7 +125,7 @@ BetaMDPDETestBias RunBetaMDPDETest(
         if (options.alpha_training)
         {
             const auto trained_alpha_r{
-                gaussian_estimator::TrainAlphaR(
+                TrainAlphaR(
                     std::vector<LocalPotentialSampleList>{ sample_entries }, estimator_options)
             };
             trained_alpha_list.at(static_cast<size_t>(i)) = trained_alpha_r;
@@ -160,7 +158,7 @@ BetaMDPDETestBias RunBetaMDPDETest(
 }
 
 MuMDPDETestBias RunMuMDPDETest(
-    const test_data_factory::GroupTestData & input,
+    const GroupTestData & input,
     const MuMDPDETestOptions & options)
 {
     GaussianModel3D::RequireFiniteModel(input.gaus_true, "input.gaus_true");
@@ -182,7 +180,7 @@ MuMDPDETestBias RunMuMDPDETest(
     std::vector<double> trained_alpha_list;
     trained_alpha_list.assign(static_cast<size_t>(replica_size), 0.0);
 
-    const gaussian_estimator::FitOptions estimator_options;
+    const FitOptions estimator_options;
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(options.thread_size)
@@ -197,7 +195,7 @@ MuMDPDETestBias RunMuMDPDETest(
         for (const auto & sample_entries : sample_entries_list)
         {
             member_results.emplace_back(
-                gaussian_estimator::EstimateLocalGaussian(sample_entries, 0.0, estimator_options));
+                EstimateLocalGaussian(sample_entries, 0.0, estimator_options));
         }
 
         const auto requested_result{
@@ -214,7 +212,7 @@ MuMDPDETestBias RunMuMDPDETest(
         if (options.alpha_training)
         {
             const auto trained_alpha_g{
-                gaussian_estimator::TrainAlphaG(
+                TrainAlphaG(
                     std::vector<std::vector<LocalPotentialSampleList>>{ sample_entries_list },
                     std::vector<std::vector<LocalGaussianResult>>{ member_results },
                     estimator_options)
@@ -252,4 +250,4 @@ MuMDPDETestBias RunMuMDPDETest(
     return result;
 }
 
-} // namespace rhbm_gem::rhbm_tester
+} // namespace rhbm_gem::core

@@ -17,7 +17,10 @@ set(RHBM_GEM_EXPERIMENTAL_SOURCES
 
 target_sources(rhbm_gem PRIVATE
     # core
+    core/EstimatorTester.cpp
+    core/GaussianEstimator.cpp
     core/MapSampler.cpp
+    core/TestDataFactory.cpp
     core/command/CommandSystem.cpp
     core/painter/AtomPainter.cpp
     core/painter/ComparisonPainter.cpp
@@ -67,13 +70,10 @@ target_sources(rhbm_gem PRIVATE
     utils/math/GaussianModel3D.cpp
     utils/math/GridSampler.cpp
     utils/math/SphereSampler.cpp
-    utils/hrl/GaussianEstimator.cpp
     utils/hrl/LocalPotentialSeries.cpp
     utils/hrl/RHBMTrainer.cpp
     utils/hrl/RHBMHelper.cpp
     utils/hrl/LinearizationService.cpp
-    utils/hrl/TestDataFactory.cpp
-    utils/hrl/RHBMTester.cpp
 )
 
 if(RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE)

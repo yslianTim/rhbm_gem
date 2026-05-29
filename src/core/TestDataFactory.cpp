@@ -1,4 +1,4 @@
-#include <rhbm_gem/utils/hrl/TestDataFactory.hpp>
+#include <rhbm_gem/core/TestDataFactory.hpp>
 
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/SampleFilter.hpp>
@@ -13,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-namespace rhbm_gem::test_data_factory {
+namespace rhbm_gem::core {
 
 namespace {
 constexpr double kDefaultSamplingDistanceMin{ 0.0 };
@@ -376,4 +376,4 @@ LocalTestData BuildLocalTestData(const AtomModelScenario & scenario)
     return input;
 }
 
-} // namespace rhbm_gem::test_data_factory
+} // namespace rhbm_gem::core

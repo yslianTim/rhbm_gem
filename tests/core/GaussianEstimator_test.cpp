@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-#include <rhbm_gem/utils/hrl/GaussianEstimator.hpp>
+#include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
@@ -16,6 +16,7 @@
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 
 namespace rg = rhbm_gem;
+namespace ge = rhbm_gem::core;
 namespace ls = rhbm_gem::linearization_service;
 
 namespace
@@ -54,9 +55,9 @@ LocalPotentialSampleList BuildShiftedSampleEntries(
     return shifted_sample_entries;
 }
 
-rg::gaussian_estimator::FitOptions MakeOptions()
+ge::FitOptions MakeOptions()
 {
-    rg::gaussian_estimator::FitOptions options;
+    ge::FitOptions options;
     options.alpha_min = 0.0;
     options.alpha_max = 0.5;
     options.alpha_step = 0.5;
@@ -93,14 +94,14 @@ std::vector<LocalPotentialSampleList> MakeIdenticalSampleGroup(std::size_t membe
 
 std::vector<rg::LocalGaussianResult> EstimateMemberResults(
     const std::vector<LocalPotentialSampleList> & sample_group,
-    const rg::gaussian_estimator::FitOptions & options)
+    const ge::FitOptions & options)
 {
     std::vector<rg::LocalGaussianResult> member_results;
     member_results.reserve(sample_group.size());
     for (const auto & sample_entries : sample_group)
     {
         member_results.emplace_back(
-            rg::gaussian_estimator::EstimateLocalGaussian(sample_entries, 0.0, options));
+            ge::EstimateLocalGaussian(sample_entries, 0.0, options));
     }
     return member_results;
 }
@@ -131,7 +132,7 @@ TEST(GaussianEstimatorTest, SampleListAlphaRReturnsFiniteAlpha)
     const auto options{ MakeOptions() };
     const std::vector<LocalPotentialSampleList> sample_entries_list{ MakeSampleEntries() };
     const auto alpha_r{
-        rg::gaussian_estimator::TrainAlphaR(sample_entries_list, options)
+        ge::TrainAlphaR(sample_entries_list, options)
     };
 
     EXPECT_TRUE(std::isfinite(alpha_r));
@@ -172,7 +173,7 @@ TEST(GaussianEstimatorTest, AlphaRMatchesTrainingFunctionBestAlpha)
             trainer_options).best_alpha
     };
     const auto actual{
-        rg::gaussian_estimator::TrainAlphaR(sample_entries_list, options)
+        ge::TrainAlphaR(sample_entries_list, options)
     };
 
     EXPECT_DOUBLE_EQ(actual, expected);
@@ -202,7 +203,7 @@ TEST(GaussianEstimatorTest, AlphaGMatchesTrainingFunctionBestAlpha)
             trainer_options).best_alpha
     };
     const auto actual{
-        rg::gaussian_estimator::TrainAlphaG(
+        ge::TrainAlphaG(
             sample_group_list, member_result_list, options)
     };
 
@@ -225,11 +226,11 @@ TEST(GaussianEstimatorTest, QuietAlphaGOptionsDoNotChangeBestAlpha)
     };
 
     const auto quiet_alpha{
-        rg::gaussian_estimator::TrainAlphaG(
+        ge::TrainAlphaG(
             sample_group_list, member_result_list, quiet_options)
     };
     const auto verbose_alpha{
-        rg::gaussian_estimator::TrainAlphaG(
+        ge::TrainAlphaG(
             sample_group_list, member_result_list, verbose_options)
     };
 
@@ -247,10 +248,10 @@ TEST(GaussianEstimatorTest, AlphaRStudyPlotPathDoesNotChangeBestAlpha)
     };
 
     const auto expected{
-        rg::gaussian_estimator::TrainAlphaR(sample_entries_list, options)
+        ge::TrainAlphaR(sample_entries_list, options)
     };
     const auto actual{
-        rg::gaussian_estimator::TrainAlphaR(sample_entries_list, options, true)
+        ge::TrainAlphaR(sample_entries_list, options, true)
     };
 
     EXPECT_TRUE(std::isfinite(actual));
@@ -270,11 +271,11 @@ TEST(GaussianEstimatorTest, AlphaGStudyPlotPathDoesNotChangeBestAlpha)
     };
 
     const auto expected{
-        rg::gaussian_estimator::TrainAlphaG(
+        ge::TrainAlphaG(
             sample_group_list, member_result_list, options)
     };
     const auto actual{
-        rg::gaussian_estimator::TrainAlphaG(
+        ge::TrainAlphaG(
             sample_group_list, member_result_list, options, true)
     };
 
@@ -288,7 +289,7 @@ TEST(GaussianEstimatorTest, RejectsEmptyAlphaRTrainingInputs)
     const std::vector<LocalPotentialSampleList> empty_sample_entries_list;
 
     EXPECT_THROW(
-        rg::gaussian_estimator::TrainAlphaR(empty_sample_entries_list, options),
+        ge::TrainAlphaR(empty_sample_entries_list, options),
         std::invalid_argument);
 }
 
@@ -301,7 +302,7 @@ TEST(GaussianEstimatorTest, EmptyAlphaGTrainingInputReturnsFallbackAlpha)
     const std::vector<std::vector<rg::LocalGaussianResult>> empty_member_result_list;
 
     const auto alpha_g{
-        rg::gaussian_estimator::TrainAlphaG(
+        ge::TrainAlphaG(
             empty_sample_group_list, empty_member_result_list, options)
     };
 
@@ -317,7 +318,7 @@ TEST(GaussianEstimatorTest, EmptyAlphaGTrainingInputRejectsInvalidAlphaRange)
     const std::vector<std::vector<rg::LocalGaussianResult>> empty_member_result_list;
 
     EXPECT_THROW(
-        rg::gaussian_estimator::TrainAlphaG(
+        ge::TrainAlphaG(
             empty_sample_group_list, empty_member_result_list, options),
         std::invalid_argument);
 }
@@ -330,7 +331,7 @@ TEST(GaussianEstimatorTest, EmptyAlphaGTrainingInputRejectsNonFiniteFallbackAlph
     const std::vector<std::vector<rg::LocalGaussianResult>> empty_member_result_list;
 
     EXPECT_THROW(
-        rg::gaussian_estimator::TrainAlphaG(
+        ge::TrainAlphaG(
             empty_sample_group_list, empty_member_result_list, options),
         std::invalid_argument);
 }
@@ -341,7 +342,7 @@ TEST(GaussianEstimatorTest, EstimateLocalGaussianRejectsInvalidAlphaR)
     const auto sample_entries{ MakeSampleEntries() };
 
     EXPECT_THROW(
-        rg::gaussian_estimator::EstimateLocalGaussian(
+        ge::EstimateLocalGaussian(
             sample_entries, -std::numeric_limits<double>::min(), options),
         std::invalid_argument);
 }
@@ -353,7 +354,7 @@ TEST(GaussianEstimatorTest, EstimateGroupGaussianRejectsInvalidAlphaG)
     const std::vector<rg::LocalGaussianResult> member_result_list;
 
     EXPECT_THROW(
-        rg::gaussian_estimator::EstimateGroupGaussian(
+        ge::EstimateGroupGaussian(
             sample_entries_list, member_result_list,
             std::numeric_limits<double>::quiet_NaN(), options),
         std::invalid_argument);
@@ -367,7 +368,7 @@ TEST(GaussianEstimatorTest, TrainAlphaRRejectsInvalidFitRange)
     const std::vector<LocalPotentialSampleList> sample_entries_list{ MakeSampleEntries() };
 
     EXPECT_THROW(
-        rg::gaussian_estimator::TrainAlphaR(sample_entries_list, options),
+        ge::TrainAlphaR(sample_entries_list, options),
         std::invalid_argument);
 }
 
@@ -378,7 +379,7 @@ TEST(GaussianEstimatorTest, TrainAlphaRRejectsUnsupportedLocalFitModel)
     const std::vector<LocalPotentialSampleList> sample_entries_list{ MakeSampleEntries() };
 
     EXPECT_THROW(
-        rg::gaussian_estimator::TrainAlphaR(sample_entries_list, options),
+        ge::TrainAlphaR(sample_entries_list, options),
         std::invalid_argument);
 }
 
@@ -394,7 +395,7 @@ TEST(GaussianEstimatorTest, TrainAlphaGRejectsUnsupportedLocalFitModel)
     };
 
     EXPECT_THROW(
-        rg::gaussian_estimator::TrainAlphaG(
+        ge::TrainAlphaG(
             sample_group_list, member_result_list, options),
         std::invalid_argument);
 }
@@ -411,7 +412,7 @@ TEST(GaussianEstimatorTest, PlotRequestWithEmptyDirectoryDoesNotRequireRoot)
 
     EXPECT_NO_THROW({
         const auto alpha_g{
-            rg::gaussian_estimator::TrainAlphaG(
+            ge::TrainAlphaG(
                 sample_group_list, member_result_list, options, true)
         };
         EXPECT_TRUE(std::isfinite(alpha_g));
@@ -424,7 +425,7 @@ TEST(GaussianEstimatorTest, EstimateLocalGaussianMatchesHelperPath)
     const auto sample_entries{ MakeSampleEntries() };
     constexpr double alpha_r{ 0.2 };
     const auto actual{
-        rg::gaussian_estimator::EstimateLocalGaussian(sample_entries, alpha_r, options)
+        ge::EstimateLocalGaussian(sample_entries, alpha_r, options)
     };
     const auto intercept{ actual.mdpde.GetModel().GetIntercept() };
     const auto shifted_sample_entries{ BuildShiftedSampleEntries(sample_entries, intercept) };
@@ -459,7 +460,7 @@ TEST(GaussianEstimatorTest, EstimateLocalGaussianRejectsUnsupportedLocalFitModel
     const auto sample_entries{ MakeSampleEntries() };
 
     EXPECT_THROW(
-        rg::gaussian_estimator::EstimateLocalGaussian(sample_entries, 0.0, options),
+        ge::EstimateLocalGaussian(sample_entries, 0.0, options),
         std::invalid_argument);
 }
 
@@ -483,7 +484,7 @@ TEST(GaussianEstimatorTest, EstimateGroupGaussianMatchesHelperPath)
     for (std::size_t i = 0; i < sample_entries_list.size(); i++)
     {
         auto member_result{
-            rg::gaussian_estimator::EstimateLocalGaussian(
+            ge::EstimateLocalGaussian(
                 sample_entries_list.at(i), alpha_r_list.at(i), options)
         };
         ASSERT_TRUE(member_result.fit_result.has_value());
@@ -509,7 +510,7 @@ TEST(GaussianEstimatorTest, EstimateGroupGaussianMatchesHelperPath)
     };
 
     const auto actual{
-        rg::gaussian_estimator::EstimateGroupGaussian(
+        ge::EstimateGroupGaussian(
             sample_entries_list, member_result_list, alpha_g, options)
     };
 
@@ -536,12 +537,12 @@ TEST(GaussianEstimatorTest, EstimateGroupGaussianRejectsUnsupportedLocalFitModel
         MakeSampleEntries()
     };
     const std::vector<rg::LocalGaussianResult> member_result_list{
-        rg::gaussian_estimator::EstimateLocalGaussian(sample_entries_list.at(0), 0.0, MakeOptions()),
-        rg::gaussian_estimator::EstimateLocalGaussian(sample_entries_list.at(1), 0.0, MakeOptions())
+        ge::EstimateLocalGaussian(sample_entries_list.at(0), 0.0, MakeOptions()),
+        ge::EstimateLocalGaussian(sample_entries_list.at(1), 0.0, MakeOptions())
     };
 
     EXPECT_THROW(
-        rg::gaussian_estimator::EstimateGroupGaussian(
+        ge::EstimateGroupGaussian(
             sample_entries_list, member_result_list, 0.0, options),
         std::invalid_argument);
 }
@@ -554,13 +555,13 @@ TEST(GaussianEstimatorTest, EstimateGroupGaussianRejectsUnsupportedMemberResults
         MakeSampleEntries()
     };
     std::vector<rg::LocalGaussianResult> member_result_list{
-        rg::gaussian_estimator::EstimateLocalGaussian(sample_entries_list.at(0), 0.0, options),
-        rg::gaussian_estimator::EstimateLocalGaussian(sample_entries_list.at(1), 0.0, options)
+        ge::EstimateLocalGaussian(sample_entries_list.at(0), 0.0, options),
+        ge::EstimateLocalGaussian(sample_entries_list.at(1), 0.0, options)
     };
     member_result_list.front().fit_model = MakeUnsupportedFitModel();
 
     EXPECT_THROW(
-        rg::gaussian_estimator::EstimateGroupGaussian(
+        ge::EstimateGroupGaussian(
             sample_entries_list, member_result_list, 0.0, options),
         std::invalid_argument);
 }
@@ -578,7 +579,7 @@ TEST(GaussianEstimatorTest, TrainAlphaGRejectsUnsupportedMemberResults)
     };
 
     EXPECT_THROW(
-        rg::gaussian_estimator::TrainAlphaG(
+        ge::TrainAlphaG(
             sample_group_list, member_result_list, options),
         std::invalid_argument);
 }
@@ -591,11 +592,11 @@ TEST(GaussianEstimatorTest, EstimateGroupGaussianRejectsInconsistentMemberCount)
         MakeSampleEntries()
     };
     const std::vector<rg::LocalGaussianResult> member_result_list{
-        rg::gaussian_estimator::EstimateLocalGaussian(sample_entries_list.front(), 0.0, options)
+        ge::EstimateLocalGaussian(sample_entries_list.front(), 0.0, options)
     };
 
     EXPECT_THROW(
-        rg::gaussian_estimator::EstimateGroupGaussian(
+        ge::EstimateGroupGaussian(
             sample_entries_list, member_result_list, 0.0, options),
         std::invalid_argument);
 }
@@ -610,7 +611,7 @@ TEST(GaussianEstimatorTest, EstimateGroupGaussianRejectsMissingTransientFitState
     const std::vector<rg::LocalGaussianResult> member_result_list(sample_entries_list.size());
 
     EXPECT_THROW(
-        rg::gaussian_estimator::EstimateGroupGaussian(
+        ge::EstimateGroupGaussian(
             sample_entries_list, member_result_list, 0.0, options),
         std::invalid_argument);
 }

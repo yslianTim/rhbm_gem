@@ -6,7 +6,7 @@
 
 #include <rhbm_gem/core/CommandSystem.hpp>
 #include <rhbm_gem/utils/domain/LocalPainter.hpp>
-#include <rhbm_gem/utils/hrl/RHBMTester.hpp>
+#include <rhbm_gem/core/EstimatorTester.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 
 namespace rhbm_gem::core::command_detail::rhbm_test_plotting {
@@ -39,7 +39,7 @@ enum class BiasXAxisMode
 struct BiasCurvePoint
 {
     double x{ 0.0 };
-    rhbm_tester::BiasStatistics bias;
+    BiasStatistics bias;
 };
 
 struct BiasCurve
@@ -67,7 +67,7 @@ BiasCurve MakeBiasCurve(BiasCurveKind kind, size_t point_capacity);
 void AppendBiasCurvePoint(
     BiasCurve & curve,
     double x,
-    const rhbm_tester::BiasStatistics & bias);
+    const BiasStatistics & bias);
 
 std::string FormatDataBiasPanelLabel(size_t panel_index);
 

@@ -4,10 +4,9 @@
 
 #include <Eigen/Dense>
 
-#include <rhbm_gem/utils/hrl/TestDataFactory.hpp>
+#include <rhbm_gem/core/TestDataFactory.hpp>
 
-namespace rhbm_gem::rhbm_tester
-{
+namespace rhbm_gem::core {
 
 struct BiasStatistics
 {
@@ -49,13 +48,13 @@ struct MuMDPDETestOptions
 };
 
 BetaMDPDETestBias RunBetaMDPDETest(
-    const test_data_factory::LocalTestData & input,
+    const LocalTestData & input,
     const BetaMDPDETestOptions & options
 );
 
 MuMDPDETestBias RunMuMDPDETest(
-    const test_data_factory::GroupTestData & input,
+    const GroupTestData & input,
     const MuMDPDETestOptions & options
 );
 
-} // namespace rhbm_gem::rhbm_tester
+} // namespace rhbm_gem::core

@@ -3,12 +3,12 @@
 #include <limits>
 #include <stdexcept>
 
-#include <rhbm_gem/utils/hrl/TestDataFactory.hpp>
-#include <rhbm_gem/utils/hrl/RHBMTester.hpp>
+#include <rhbm_gem/core/TestDataFactory.hpp>
+#include <rhbm_gem/core/EstimatorTester.hpp>
 
 namespace {
-namespace rt = rhbm_gem::rhbm_tester;
-namespace tdf = rhbm_gem::test_data_factory;
+namespace rt = rhbm_gem::core;
+namespace tdf = rhbm_gem::core;
 namespace rg = rhbm_gem;
 
 tdf::GaussianParameterDistribution MakeDistribution(
@@ -48,7 +48,7 @@ void ExpectBiasStatisticSize(const rt::BiasStatistics & bias)
 
 } // namespace
 
-TEST(RHBMTesterTest, RunBetaMDPDETestPopulatesBiasOutputs)
+TEST(EstimatorTesterTest, RunBetaMDPDETestPopulatesBiasOutputs)
 {
     constexpr double alpha_r{ 0.5 };
     const auto test_input{
@@ -74,7 +74,7 @@ TEST(RHBMTesterTest, RunBetaMDPDETestPopulatesBiasOutputs)
     EXPECT_GE(bias.mdpde.trained_alpha_median.value(), 0.0);
 }
 
-TEST(RHBMTesterTest, RunMuMDPDETestPopulatesBiasOutputs)
+TEST(EstimatorTesterTest, RunMuMDPDETestPopulatesBiasOutputs)
 {
     constexpr double alpha_g{ 0.2 };
     const auto test_input{
@@ -101,7 +101,7 @@ TEST(RHBMTesterTest, RunMuMDPDETestPopulatesBiasOutputs)
     EXPECT_GE(bias.mdpde.trained_alpha_median.value(), 0.0);
 }
 
-TEST(RHBMTesterTest, RunBetaMDPDETestSkipsTrainedAlphaWhenDisabled)
+TEST(EstimatorTesterTest, RunBetaMDPDETestSkipsTrainedAlphaWhenDisabled)
 {
     constexpr double alpha_r{ 0.5 };
     const auto test_input{
@@ -125,7 +125,7 @@ TEST(RHBMTesterTest, RunBetaMDPDETestSkipsTrainedAlphaWhenDisabled)
     EXPECT_FALSE(bias.mdpde.trained_alpha_median.has_value());
 }
 
-TEST(RHBMTesterTest, RunMuMDPDETestSkipsTrainedAlphaWhenDisabled)
+TEST(EstimatorTesterTest, RunMuMDPDETestSkipsTrainedAlphaWhenDisabled)
 {
     constexpr double alpha_g{ 0.2 };
     const auto test_input{
@@ -150,7 +150,7 @@ TEST(RHBMTesterTest, RunMuMDPDETestSkipsTrainedAlphaWhenDisabled)
     EXPECT_FALSE(bias.mdpde.trained_alpha_median.has_value());
 }
 
-TEST(RHBMTesterTest, RunBetaMDPDETestRejectsNonFiniteTruth)
+TEST(EstimatorTesterTest, RunBetaMDPDETestRejectsNonFiniteTruth)
 {
     auto test_input{
         tdf::BuildLocalTestData(tdf::LocalScenario{

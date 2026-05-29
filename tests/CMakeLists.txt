@@ -86,6 +86,12 @@ set(CORE_SAMPLER_TEST_SOURCES
     core/MapSampler_test.cpp
 )
 
+set(CORE_ESTIMATOR_TEST_SOURCES
+    core/EstimatorTester_test.cpp
+    core/GaussianEstimator_test.cpp
+    core/TestDataFactory_test.cpp
+)
+
 set(RHBM_GEM_EXPERIMENTAL_TEST_SOURCES)
 
 if(RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE)
@@ -152,12 +158,9 @@ set(UTILS_DOMAIN_TEST_SOURCES
 
 set(UTILS_HRL_TEST_SOURCES
     utils/hrl/GaussianEstimationTypes_test.cpp
-    utils/hrl/GaussianEstimator_test.cpp
     utils/hrl/LinearizationService_test.cpp
     utils/hrl/RHBMTrainer_test.cpp
     utils/hrl/RHBMHelper_test.cpp
-    utils/hrl/TestDataFactory_test.cpp
-    utils/hrl/RHBMTester_test.cpp
 )
 
 set(INTEGRATION_COMMAND_TEST_SOURCES
@@ -166,6 +169,7 @@ set(INTEGRATION_COMMAND_TEST_SOURCES
 
 set(RHBM_GEM_ALL_GTEST_SOURCES
     ${CORE_COMMAND_TEST_SOURCES}
+    ${CORE_ESTIMATOR_TEST_SOURCES}
     ${CORE_SAMPLER_TEST_SOURCES}
     ${CORE_CONTRACT_TEST_SOURCES}
     ${CORE_PAINTER_TEST_SOURCES}
@@ -206,6 +210,12 @@ add_rhbm_gtest_group(rhbm_tests_core_sampler
     DOMAIN core
     INTENTS sampling
     SOURCES ${CORE_SAMPLER_TEST_SOURCES}
+)
+
+add_rhbm_gtest_group(rhbm_tests_core_estimator
+    DOMAIN core
+    INTENTS algorithm
+    SOURCES ${CORE_ESTIMATOR_TEST_SOURCES}
 )
 
 add_rhbm_gtest_group(rhbm_tests_core_contract
