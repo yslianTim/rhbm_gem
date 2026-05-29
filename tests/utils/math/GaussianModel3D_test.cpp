@@ -111,13 +111,17 @@ TEST(GaussianModel3DTest, IntensityAndResponseMatchClosedForm)
     const auto expected_intensity{
         model.GetAmplitude()
         * std::pow(Constants::two_pi * model.GetWidth() * model.GetWidth(), -1.5) };
-    const auto expected_response{
+    const auto expected_signal{
         expected_intensity
-            * std::exp(-0.5 * distance * distance / (model.GetWidth() * model.GetWidth())) +
-        model.GetIntercept() };
+            * std::exp(-0.5 * distance * distance / (model.GetWidth() * model.GetWidth())) };
+    const auto expected_response{ expected_signal + model.GetIntercept() };
 
     EXPECT_DOUBLE_EQ(model.Intensity(), expected_intensity);
+    EXPECT_DOUBLE_EQ(model.SignalAtDistance(distance), expected_signal);
     EXPECT_DOUBLE_EQ(model.ResponseAtDistance(distance), expected_response);
+    EXPECT_DOUBLE_EQ(
+        model.SignalAtDistance(distance),
+        model.ResponseAtDistance(distance) - model.GetIntercept());
 }
 
 TEST(GaussianModel3DTest, ZeroWidthKeepsExistingFallbackBehavior)
@@ -125,6 +129,7 @@ TEST(GaussianModel3DTest, ZeroWidthKeepsExistingFallbackBehavior)
     const rg::GaussianModel3D model{ 9.0, 0.0, 0.25 };
 
     EXPECT_DOUBLE_EQ(model.Intensity(), 0.0);
+    EXPECT_DOUBLE_EQ(model.SignalAtDistance(0.75), 0.0);
     EXPECT_DOUBLE_EQ(model.ResponseAtDistance(0.75), model.GetIntercept());
 }
 

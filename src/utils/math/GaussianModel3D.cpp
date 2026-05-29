@@ -145,14 +145,18 @@ double GaussianModel3D::Intensity() const
     return m_amplitude * std::pow(Constants::two_pi * m_width * m_width, -1.5);
 }
 
-double GaussianModel3D::ResponseAtDistance(double distance) const
+double GaussianModel3D::SignalAtDistance(double distance) const
 {
     if (m_width == 0.0)
     {
-        return m_intercept;
+        return 0.0;
     }
-    return Intensity() * std::exp(-0.5 * distance * distance / (m_width * m_width))
-        + m_intercept;
+    return Intensity() * std::exp(-0.5 * distance * distance / (m_width * m_width));
+}
+
+double GaussianModel3D::ResponseAtDistance(double distance) const
+{
+    return SignalAtDistance(distance) + m_intercept;
 }
 
 GaussianModel3DUncertainty::GaussianModel3DUncertainty(

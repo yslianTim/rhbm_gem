@@ -246,7 +246,7 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
                 static_cast<double>(
                     array_helper::ComputeNorm<float>(sample_position, neighbor_position))
             };
-            response_value -= static_cast<float>(gaussian_iter->second.ResponseAtDistance(distance));
+            response_value -= static_cast<float>(gaussian_iter->second.SignalAtDistance(distance));
         }
         updated_list.emplace_back(LocalPotentialSample{response_value, sample.point });
     }

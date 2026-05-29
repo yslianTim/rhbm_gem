@@ -52,6 +52,7 @@ public:
     double GetModelParameter(int par_id) const;
     double GetDisplayParameter(int par_id) const;
     double Intensity() const;
+    double SignalAtDistance(double distance) const;
     double ResponseAtDistance(double distance) const;
 };
 
