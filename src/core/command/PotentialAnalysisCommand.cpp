@@ -302,6 +302,7 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
             auto updated_sample_entries{
                 UpdateSampleListWithFittedGaussian(atom, fitted_gaussian_snapshot)
             };
+            // TODO: consider exclude intercept correction in iteration to avoid overfitting to noise.
             const auto result{
                 EstimateLocalGaussian(
                     updated_sample_entries,
