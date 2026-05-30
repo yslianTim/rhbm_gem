@@ -678,10 +678,30 @@ LocalGaussianResult EstimateLocalGaussian(
     numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
 
     auto execution_options{ MakeExecutionOptions(options) };
+    auto dataset{
+        rhbm_helper::BuildMemberDataset(
+            sample_entries,
+            options.distance_min,
+            options.distance_max,
+            options.local_fit_model)
+    };
+    const auto result{ rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset, execution_options) };
+    return DecodeLocalGaussianResult(alpha_r, result, options.local_fit_model);
+}
+
+LocalGaussianResult EstimateLocalGaussianWithIntercept(
+    const LocalPotentialSampleList & sample_entries,
+    double alpha_r,
+    const FitOptions & options)
+{
+    numeric_validation::RequireFiniteNonNegativeRange(
+        options.distance_min, options.distance_max, "fit range");
+    numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
+
+    auto execution_options{ MakeExecutionOptions(options) };
     double intercept{ EstimateInitialIntercept(sample_entries) };
     RHBMBetaEstimateResult result;
-    RHBMParameterVector beta_in_previous_iter;
-    bool has_previous_beta{ false };
+    bool has_previous_intercept{ false };
 
     for (int t = 0; t < execution_options.max_iterations; t++)
     {
@@ -703,12 +723,11 @@ LocalGaussianResult EstimateLocalGaussian(
                 options.distance_max)
         };
         const auto next_intercept{ EstimateResidualIntercept(residual_sample_entries) };
-        if (has_previous_beta && std::fabs(next_intercept - intercept) < execution_options.tolerance)
+        if (has_previous_intercept && std::fabs(next_intercept - intercept) < execution_options.tolerance)
         {
             break;
         }
-        beta_in_previous_iter = result.beta_mdpde;
-        has_previous_beta = true;
+        has_previous_intercept = true;
         if (t + 1 < execution_options.max_iterations)
         {
             intercept = next_intercept;

@@ -39,7 +39,7 @@ LocalReplicaBias EstimateLocalReplicaBias(
     const FitOptions & options)
 {
     const auto estimate{
-        EstimateLocalGaussian(sample_entries, alpha_r, options)
+        EstimateLocalGaussianWithIntercept(sample_entries, alpha_r, options)
     };
     return LocalReplicaBias{
         CalculateNormalizedBias(estimate.ols.GetModel(), truth),
@@ -195,7 +195,7 @@ GroupTestBias RunGroupEstimationTest(
         for (const auto & sample_entries : sample_entries_list)
         {
             member_results.emplace_back(
-                EstimateLocalGaussian(sample_entries, 0.0, estimator_options));
+                EstimateLocalGaussianWithIntercept(sample_entries, 0.0, estimator_options));
         }
 
         const auto requested_result{

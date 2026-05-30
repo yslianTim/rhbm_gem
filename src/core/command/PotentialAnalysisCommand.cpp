@@ -1,8 +1,7 @@
 #include "detail/CommandBase.hpp"
 
+#include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/MapSampler.hpp>
-#include "rhbm_gem/utils/domain/SamplingTypes.hpp"
-
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -13,8 +12,8 @@
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/SampleFilter.hpp>
+#include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
-#include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 #include <atomic>
@@ -272,7 +271,7 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
             sample_filter::FilterLocalPotentialSampleList(local_view.GetSamplingEntries())
         };
         const auto result{
-            EstimateLocalGaussian(sample_entries, local_view.GetAlphaR(), options)
+            EstimateLocalGaussianWithIntercept(sample_entries, local_view.GetAlphaR(), options)
         };
         local_editor_list[i].SetGaussianResult(result);
 
@@ -302,7 +301,6 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
             auto updated_sample_entries{
                 UpdateSampleListWithFittedGaussian(atom, fitted_gaussian_snapshot)
             };
-            // TODO: consider exclude intercept correction in iteration to avoid overfitting to noise.
             const auto result{
                 EstimateLocalGaussian(
                     updated_sample_entries,
