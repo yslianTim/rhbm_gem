@@ -234,8 +234,7 @@ rhbm_trainer::RHBMTrainingOptions MakeTrainingOptions(
     return training_options;
 }
 
-AlphaStudyOptions MakeStudyOptions(
-    const FitOptions & options)
+AlphaStudyOptions MakeStudyOptions(const FitOptions & options)
 {
     AlphaStudyOptions study_options;
     study_options.execution_options = MakeExecutionOptions(options);
@@ -577,7 +576,6 @@ double TrainAlphaR(
 }
 
 double TrainAlphaG(
-    const std::vector<std::vector<LocalPotentialSampleList>> & sample_group_list,
     const std::vector<std::vector<LocalGaussianResult>> & member_result_list,
     const FitOptions & options,
     bool output_study_plot)
@@ -586,23 +584,13 @@ double TrainAlphaG(
         options.alpha_min, options.alpha_max, "alpha training range");
     numeric_validation::RequireFinitePositive(options.alpha_step, "alpha training step");
 
-    if (sample_group_list.size() != member_result_list.size())
-    {
-        throw std::invalid_argument("sample_group_list and member_result_list sizes are inconsistent.");
-    }
-
     std::vector<std::vector<RHBMParameterVector>> beta_group_list;
-    beta_group_list.reserve(sample_group_list.size());
-    for (std::size_t i = 0; i < sample_group_list.size(); i++)
+    beta_group_list.reserve(member_result_list.size());
+    for (const auto & member_results : member_result_list)
     {
-        if (sample_group_list.at(i).size() != member_result_list.at(i).size())
-        {
-            throw std::invalid_argument("sample group and member result group sizes are inconsistent.");
-        }
-
         std::vector<RHBMParameterVector> beta_list;
-        beta_list.reserve(member_result_list.at(i).size());
-        for (const auto & member_result : member_result_list.at(i))
+        beta_list.reserve(member_results.size());
+        for (const auto & member_result : member_results)
         {
             if (member_result.fit_model != options.local_fit_model)
             {

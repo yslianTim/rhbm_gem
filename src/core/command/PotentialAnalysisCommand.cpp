@@ -367,9 +367,7 @@ void RunAtomAlphaTraining(ModelObject & model_object, const PotentialAnalysisReq
     // Alpha_G Training
     RunLocalPotentialFitting(model_object, options);
 
-    std::vector<std::vector<LocalPotentialSampleList>> sample_group_list;
     std::vector<std::vector<LocalGaussianResult>> member_result_list;
-    sample_group_list.reserve(component_group_keys.size());
     member_result_list.reserve(component_group_keys.size());
     for (const auto group_key : component_group_keys)
     {
@@ -377,23 +375,19 @@ void RunAtomAlphaTraining(ModelObject & model_object, const PotentialAnalysisReq
         if (group_atom_list.size() < 10) continue;
         if (group_atom_list.front()->IsMainChainAtom() == false) continue;
 
-        std::vector<LocalPotentialSampleList> group_samples;
         std::vector<LocalGaussianResult> group_member_results;
-        group_samples.reserve(group_atom_list.size());
         group_member_results.reserve(group_atom_list.size());
         for (auto * atom : group_atom_list)
         {
             analysis.EnsureAtomLocalPotential(*atom);
             const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
-            group_samples.emplace_back(local_view.GetSamplingEntries(false));
             group_member_results.emplace_back(local_view.GetGaussianResult());
         }
-        sample_group_list.emplace_back(std::move(group_samples));
         member_result_list.emplace_back(std::move(group_member_results));
     }
 
     const auto alpha_g{
-        TrainAlphaG(sample_group_list, member_result_list, options, !request.training_report_dir.empty())
+        TrainAlphaG(member_result_list, options, !request.training_report_dir.empty())
     };
 
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)

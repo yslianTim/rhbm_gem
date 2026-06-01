@@ -28,7 +28,6 @@ double TrainAlphaR(
     bool output_study_plot = false);
 
 double TrainAlphaG(
-    const std::vector<std::vector<LocalPotentialSampleList>> & sample_group_list,
     const std::vector<std::vector<LocalGaussianResult>> & member_result_list,
     const FitOptions & options,
     bool output_study_plot = false);

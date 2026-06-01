@@ -213,7 +213,6 @@ GroupTestBias RunGroupEstimationTest(
         {
             const auto trained_alpha_g{
                 TrainAlphaG(
-                    std::vector<std::vector<LocalPotentialSampleList>>{ sample_entries_list },
                     std::vector<std::vector<LocalGaussianResult>>{ member_results },
                     estimator_options)
             };
