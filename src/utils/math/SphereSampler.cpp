@@ -14,7 +14,7 @@ namespace {
 constexpr double kAnalysisDistanceMin{ 0.0 };
 constexpr double kAnalysisDistanceMax{ 1.5 };
 constexpr double kAnalysisFibonacciRadiusBinSize{ 0.1 };
-constexpr unsigned int kAnalysisSampleCount{ 50 };
+constexpr unsigned int kAnalysisSampleCount{ 10 };
 
 static_assert(kAnalysisDistanceMin >= 0.0);
 static_assert(kAnalysisDistanceMax >= kAnalysisDistanceMin);

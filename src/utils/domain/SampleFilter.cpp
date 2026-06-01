@@ -141,7 +141,7 @@ void FilterSamplingPointList(
 
 LocalPotentialSampleList FilterLocalPotentialSampleList(LocalPotentialSampleList sample_list)
 {
-    constexpr double kRetainedRatio{ 0.1 };
+    constexpr double kRetainedRatio{ 0.5 };
     return KeepLowestResponseRatioByDistance(std::move(sample_list), kRetainedRatio);
 }
 

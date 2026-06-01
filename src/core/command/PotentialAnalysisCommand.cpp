@@ -268,7 +268,8 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
     {
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
         auto sample_entries{
-            sample_filter::FilterLocalPotentialSampleList(local_view.GetSamplingEntries())
+            //sample_filter::FilterLocalPotentialSampleList(local_view.GetSamplingEntries())
+            local_view.GetSamplingEntries()
         };
         const auto result{
             EstimateLocalGaussianWithIntercept(sample_entries, local_view.GetAlphaR(), options)
@@ -324,7 +325,7 @@ void RunAtomAlphaTraining(ModelObject & model_object, const PotentialAnalysisReq
 {
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
-    auto alpha_options{ MakeGaussianEstimatorOptions(request) };
+    auto options{ MakeGaussianEstimatorOptions(request) };
     const auto component_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     const auto component_group_keys{ analysis_view.CollectAtomGroupKeys(component_class_key) };
 
@@ -350,7 +351,7 @@ void RunAtomAlphaTraining(ModelObject & model_object, const PotentialAnalysisReq
         selected_sample_entries_list.shrink_to_fit();
         if (!selected_sample_entries_list.empty())
         {
-            auto alpha_r_options{ alpha_options };
+            auto alpha_r_options{ options };
             alpha_r_options.output_progress = false;
             const auto alpha_r{
                 TrainAlphaR(selected_sample_entries_list, alpha_r_options)
@@ -364,7 +365,7 @@ void RunAtomAlphaTraining(ModelObject & model_object, const PotentialAnalysisReq
     }
     
     // Alpha_G Training
-    RunLocalPotentialFitting(model_object, alpha_options);
+    RunLocalPotentialFitting(model_object, options);
 
     std::vector<std::vector<LocalPotentialSampleList>> sample_group_list;
     std::vector<std::vector<LocalGaussianResult>> member_result_list;
@@ -392,8 +393,7 @@ void RunAtomAlphaTraining(ModelObject & model_object, const PotentialAnalysisReq
     }
 
     const auto alpha_g{
-        TrainAlphaG(
-            sample_group_list, member_result_list, alpha_options, !request.training_report_dir.empty())
+        TrainAlphaG(sample_group_list, member_result_list, options, !request.training_report_dir.empty())
     };
 
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)

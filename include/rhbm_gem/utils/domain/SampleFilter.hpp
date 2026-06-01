@@ -11,7 +11,7 @@ void FilterSamplingPointList(
     SamplingPointList & sample_point_list,
     const std::array<float, 3> & local_position,
     const std::vector<std::array<float, 3>> & reject_position_list,
-    double angle = 15.0);
+    double angle = 30.0);
 
 LocalPotentialSampleList FilterLocalPotentialSampleList(LocalPotentialSampleList sample_list);
 
