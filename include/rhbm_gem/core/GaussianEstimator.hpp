@@ -11,9 +11,6 @@ namespace rhbm_gem::core {
 struct FitOptions
 {
     LocalGaussianFitModel local_fit_model{ LocalGaussianFitModel::LogQuadratic };
-    double alpha_min{ 0.0 };
-    double alpha_max{ 2.0 };
-    double alpha_step{ 0.1 };
     double distance_min{ 0.0 };
     double distance_max{ 1.0 };
     int thread_size{ 1 };

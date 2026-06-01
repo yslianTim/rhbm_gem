@@ -98,9 +98,6 @@ def assert_request_objects_are_usable() -> None:
     for field_name in (
         "map_normalization_flag",
         "exclude_hydrogen",
-        "training_alpha_min",
-        "training_alpha_max",
-        "training_alpha_step",
         "sampling_method",
     ):
         assert hasattr(analysis, field_name), f"PotentialAnalysisRequest missing {field_name}"
@@ -110,6 +107,9 @@ def assert_request_objects_are_usable() -> None:
         "sampling_range_min",
         "sampling_range_max",
         "sampling_height",
+        "training_alpha_min",
+        "training_alpha_max",
+        "training_alpha_step",
     ):
         assert not hasattr(analysis, removed_field_name), (
             f"PotentialAnalysisRequest still exposes {removed_field_name}"
@@ -123,12 +123,6 @@ def assert_request_objects_are_usable() -> None:
         analysis.sampling_method
         == m.SphereSamplingMethod.VOLUME_UNIFORM_RANDOM
     )
-    analysis.training_alpha_min = 0.2
-    analysis.training_alpha_max = 0.8
-    analysis.training_alpha_step = 0.2
-    assert analysis.training_alpha_min == 0.2
-    assert analysis.training_alpha_max == 0.8
-    assert analysis.training_alpha_step == 0.2
 
 
 def has_issue(report, option_name: str) -> bool:

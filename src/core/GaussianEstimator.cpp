@@ -22,7 +22,7 @@
 namespace rhbm_gem::core {
 namespace {
 constexpr std::size_t kAlphaRSubsetSize{ 5 };
-constexpr std::size_t kAlphaGSubsetSize{ 10 };
+constexpr std::size_t kAlphaGSubsetSize{ 5 };
 
 struct AlphaStudyOptions
 {
@@ -543,19 +543,12 @@ double TrainAlphaR(
     bool output_study_plot)
 {
     numeric_validation::RequireFiniteNonNegativeRange(
-        options.alpha_min, options.alpha_max, "alpha training range");
-    numeric_validation::RequireFinitePositive(options.alpha_step, "alpha training step");
-    numeric_validation::RequireFiniteNonNegativeRange(
         options.distance_min, options.distance_max, "fit range");
 
     const auto dataset_list{ BuildMemberDatasetList(sample_entries_list, options) };
+    const auto training_options{ MakeTrainingOptions(kAlphaRSubsetSize, options) };
     const auto training_result{
-        rhbm_trainer::CrossValidationAlphaR(
-            dataset_list,
-            options.alpha_min,
-            options.alpha_max,
-            options.alpha_step,
-            MakeTrainingOptions(kAlphaRSubsetSize, options))
+        rhbm_trainer::CrossValidationAlphaR(dataset_list, training_options)
     };
 
     if (ShouldOutputStudyPlot(output_study_plot, options))
@@ -580,10 +573,6 @@ double TrainAlphaG(
     const FitOptions & options,
     bool output_study_plot)
 {
-    numeric_validation::RequireFiniteNonNegativeRange(
-        options.alpha_min, options.alpha_max, "alpha training range");
-    numeric_validation::RequireFinitePositive(options.alpha_step, "alpha training step");
-
     std::vector<std::vector<RHBMParameterVector>> beta_group_list;
     beta_group_list.reserve(member_result_list.size());
     for (const auto & member_results : member_result_list)
@@ -611,6 +600,7 @@ double TrainAlphaG(
             "Run Alpha_G Training with " + std::to_string(beta_group_list.size()) + " groups.");
     }
 
+    const auto training_options{ MakeTrainingOptions(kAlphaGSubsetSize, options) };
     if (beta_group_list.empty())
     {
         if (options.output_summary_log)
@@ -619,18 +609,13 @@ double TrainAlphaG(
                 "Skip Alpha_G Training because no eligible groups were selected.");
             Logger::Log(LogLevel::Info,
                 "Alpha_G Training Results Summary: minimum mu error sum alpha_g = "
-                + std::to_string(options.alpha_min));
+                + std::to_string(training_options.alpha_min));
         }
-        return options.alpha_min;
+        return training_options.alpha_min;
     }
 
     const auto training_result{
-        rhbm_trainer::CrossValidationAlphaG(
-            beta_group_list,
-            options.alpha_min,
-            options.alpha_max,
-            options.alpha_step,
-            MakeTrainingOptions(kAlphaGSubsetSize, options))
+        rhbm_trainer::CrossValidationAlphaG(beta_group_list, training_options)
     };
 
     if (ShouldOutputStudyPlot(output_study_plot, options))

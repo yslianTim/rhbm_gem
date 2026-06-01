@@ -42,9 +42,6 @@ Command-specific fields:
 - `saved_key_tag`
 - `training_report_dir`
 - `training_alpha_flag`
-- `training_alpha_min`
-- `training_alpha_max`
-- `training_alpha_step`
 - `asymmetry_flag`
 - `sampling_method`
 - `fit_range_min`
@@ -73,14 +70,12 @@ Expected result contract:
 - leaves map normalization as an execution-time choice: simulation requests always skip it,
   and non-simulation requests use `map_normalization_flag`
 - coerces invalid scalar inputs back to command defaults when the command is designed to recover
-- coerces invalid training alpha grid scalar values back to `0.0..1.0` with step `0.1`
 - resets empty `saved_key_tag` values back to `"model"` and records a validation issue
 
 `PotentialAnalysisCommand::ValidatePreparedRequest()` performs semantic checks after normalization:
 
 - `--simulation` requires positive simulated resolution
 - fit ranges must be ordered correctly
-- training alpha ranges must satisfy `--training-alpha-min <= --training-alpha-max`
 
 `PotentialAnalysisCommand::ExecuteImpl()`:
 

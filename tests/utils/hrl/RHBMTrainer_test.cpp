@@ -49,16 +49,29 @@ double BestAlphaForErrors(
     error_sum_list.minCoeff(&error_min_id);
     return alpha_list.at(static_cast<std::size_t>(error_min_id));
 }
+
+rg::rhbm_trainer::RHBMTrainingOptions MakeTrainingOptions(
+    std::size_t subset_size,
+    double alpha_min = kAlphaMin,
+    double alpha_max = kAlphaMax,
+    double alpha_step = kAlphaStep)
+{
+    rg::rhbm_trainer::RHBMTrainingOptions options;
+    options.alpha_min = alpha_min;
+    options.alpha_max = alpha_max;
+    options.alpha_step = alpha_step;
+    options.subset_size = subset_size;
+    return options;
+}
 } // namespace
 
 TEST(RHBMTrainerTest, CrossValidationAlphaRBuildsAlphaGridWithExactMax)
 {
     const auto dataset{ MakeLinearDataset(2.0) };
-    rg::rhbm_trainer::RHBMTrainingOptions options;
-    options.subset_size = 3;
+    const auto options{ MakeTrainingOptions(3, 0.2, 0.8, 0.2) };
 
     const auto result{
-        rg::rhbm_trainer::CrossValidationAlphaR({ dataset }, 0.2, 0.8, 0.2, options)
+        rg::rhbm_trainer::CrossValidationAlphaR({ dataset }, options)
     };
 
     ASSERT_EQ(result.alpha_grid.size(), 4U);
@@ -71,11 +84,10 @@ TEST(RHBMTrainerTest, CrossValidationAlphaRBuildsAlphaGridWithExactMax)
 TEST(RHBMTrainerTest, CrossValidationAlphaRBuildsAlphaGridWithoutExceedingMax)
 {
     const auto dataset{ MakeLinearDataset(2.0) };
-    rg::rhbm_trainer::RHBMTrainingOptions options;
-    options.subset_size = 3;
+    const auto options{ MakeTrainingOptions(3, 0.0, 1.0, 0.3) };
 
     const auto result{
-        rg::rhbm_trainer::CrossValidationAlphaR({ dataset }, 0.0, 1.0, 0.3, options)
+        rg::rhbm_trainer::CrossValidationAlphaR({ dataset }, options)
     };
 
     ASSERT_EQ(result.alpha_grid.size(), 4U);
@@ -88,28 +100,28 @@ TEST(RHBMTrainerTest, CrossValidationAlphaRBuildsAlphaGridWithoutExceedingMax)
 TEST(RHBMTrainerTest, CrossValidationRejectsInvalidAlphaGrid)
 {
     const auto dataset{ MakeLinearDataset(1.0) };
-    rg::rhbm_trainer::RHBMTrainingOptions options;
-    options.subset_size = 3;
+    const auto negative_min_options{ MakeTrainingOptions(3, -0.1, 1.0, 0.1) };
+    const auto inverted_range_options{ MakeTrainingOptions(3, 1.0, 0.0, 0.1) };
+    const auto zero_step_options{ MakeTrainingOptions(3, 0.0, 1.0, 0.0) };
 
     EXPECT_THROW(
-        rg::rhbm_trainer::CrossValidationAlphaR({ dataset }, -0.1, 1.0, 0.1, options),
+        rg::rhbm_trainer::CrossValidationAlphaR({ dataset }, negative_min_options),
         std::invalid_argument);
     EXPECT_THROW(
-        rg::rhbm_trainer::CrossValidationAlphaR({ dataset }, 1.0, 0.0, 0.1, options),
+        rg::rhbm_trainer::CrossValidationAlphaR({ dataset }, inverted_range_options),
         std::invalid_argument);
     EXPECT_THROW(
-        rg::rhbm_trainer::CrossValidationAlphaR({ dataset }, 0.0, 1.0, 0.0, options),
+        rg::rhbm_trainer::CrossValidationAlphaR({ dataset }, zero_step_options),
         std::invalid_argument);
 }
 
 TEST(RHBMTrainerTest, CrossValidationAlphaRSingleDatasetWithExactLinearDataReturnsZeroError)
 {
     const auto dataset{ MakeLinearDataset(2.0) };
-    rg::rhbm_trainer::RHBMTrainingOptions options;
-    options.subset_size = 3;
+    const auto options{ MakeTrainingOptions(3, 0.0, 0.5, 0.5) };
 
     const auto result{
-        rg::rhbm_trainer::CrossValidationAlphaR({ dataset }, 0.0, 0.5, 0.5, options)
+        rg::rhbm_trainer::CrossValidationAlphaR({ dataset }, options)
     };
 
     ASSERT_EQ(result.error_sum_list.size(), 2);
@@ -121,11 +133,10 @@ TEST(RHBMTrainerTest, CrossValidationAlphaRSingleDatasetWithExactLinearDataRetur
 TEST(RHBMTrainerTest, CrossValidationAlphaGSingleGroupWithIdenticalBetasReturnsZeroError)
 {
     const std::vector<Eigen::VectorXd> beta_list(6, MakeVector({ 1.5, -0.5 }));
-    rg::rhbm_trainer::RHBMTrainingOptions options;
-    options.subset_size = 4;
+    const auto options{ MakeTrainingOptions(4) };
 
     const auto result{
-        rg::rhbm_trainer::CrossValidationAlphaG({ beta_list }, kAlphaMin, kAlphaMax, kAlphaStep, options)
+        rg::rhbm_trainer::CrossValidationAlphaG({ beta_list }, options)
     };
 
     ASSERT_EQ(result.error_sum_list.size(), 3);
@@ -142,16 +153,15 @@ TEST(RHBMTrainerTest, CrossValidationAlphaRAggregatesSingleBatchResultsAndSelect
         MakeLinearDataset(-0.5)
     };
 
-    rg::rhbm_trainer::RHBMTrainingOptions options;
-    options.subset_size = 3;
+    const auto options{ MakeTrainingOptions(3) };
     const auto result{
-        rg::rhbm_trainer::CrossValidationAlphaR(dataset_list, kAlphaMin, kAlphaMax, kAlphaStep, options)
+        rg::rhbm_trainer::CrossValidationAlphaR(dataset_list, options)
     };
     const auto first_single{
-        rg::rhbm_trainer::CrossValidationAlphaR({ dataset_list.at(0) }, kAlphaMin, kAlphaMax, kAlphaStep, options)
+        rg::rhbm_trainer::CrossValidationAlphaR({ dataset_list.at(0) }, options)
     };
     const auto second_single{
-        rg::rhbm_trainer::CrossValidationAlphaR({ dataset_list.at(1) }, kAlphaMin, kAlphaMax, kAlphaStep, options)
+        rg::rhbm_trainer::CrossValidationAlphaR({ dataset_list.at(1) }, options)
     };
     const auto expected_error_sum{ (first_single.error_sum_list + second_single.error_sum_list).eval() };
 
@@ -179,18 +189,17 @@ TEST(RHBMTrainerTest, CrossValidationAlphaGAggregatesSingleBatchResultsAndSelect
             MakeVector({ -3.5, 3.0 })
         }
     };
-    rg::rhbm_trainer::RHBMTrainingOptions options;
-    options.subset_size = 3;
+    auto options{ MakeTrainingOptions(3) };
     options.execution_options.random_seed = 11U;
 
     const auto result{
-        rg::rhbm_trainer::CrossValidationAlphaG(beta_group_list, kAlphaMin, kAlphaMax, kAlphaStep, options)
+        rg::rhbm_trainer::CrossValidationAlphaG(beta_group_list, options)
     };
     const auto first_single{
-        rg::rhbm_trainer::CrossValidationAlphaG({ beta_group_list.at(0) }, kAlphaMin, kAlphaMax, kAlphaStep, options)
+        rg::rhbm_trainer::CrossValidationAlphaG({ beta_group_list.at(0) }, options)
     };
     const auto second_single{
-        rg::rhbm_trainer::CrossValidationAlphaG({ beta_group_list.at(1) }, kAlphaMin, kAlphaMax, kAlphaStep, options)
+        rg::rhbm_trainer::CrossValidationAlphaG({ beta_group_list.at(1) }, options)
     };
     const auto expected_error_sum{ (first_single.error_sum_list + second_single.error_sum_list).eval() };
 
@@ -218,21 +227,20 @@ TEST(RHBMTrainerTest, CrossValidationAlphaGWithSeedIsDeterministic)
             MakeVector({ -3.5, 3.0 })
         }
     };
-    rg::rhbm_trainer::RHBMTrainingOptions options;
-    options.subset_size = 3;
+    auto options{ MakeTrainingOptions(3) };
     options.execution_options.random_seed = 7U;
 
     const auto first{
-        rg::rhbm_trainer::CrossValidationAlphaG(beta_group_list, kAlphaMin, kAlphaMax, kAlphaStep, options)
+        rg::rhbm_trainer::CrossValidationAlphaG(beta_group_list, options)
     };
     const auto second{
-        rg::rhbm_trainer::CrossValidationAlphaG(beta_group_list, kAlphaMin, kAlphaMax, kAlphaStep, options)
+        rg::rhbm_trainer::CrossValidationAlphaG(beta_group_list, options)
     };
     const auto single_first{
-        rg::rhbm_trainer::CrossValidationAlphaG({ beta_group_list.at(0) }, kAlphaMin, kAlphaMax, kAlphaStep, options)
+        rg::rhbm_trainer::CrossValidationAlphaG({ beta_group_list.at(0) }, options)
     };
     const auto single_second{
-        rg::rhbm_trainer::CrossValidationAlphaG({ beta_group_list.at(0) }, kAlphaMin, kAlphaMax, kAlphaStep, options)
+        rg::rhbm_trainer::CrossValidationAlphaG({ beta_group_list.at(0) }, options)
     };
 
     EXPECT_TRUE(first.error_sum_list.isApprox(second.error_sum_list, 1e-12));
@@ -250,25 +258,21 @@ TEST(RHBMTrainerTest, CrossValidationRequiresExplicitSubsetSizeAndRejectsInvalid
     rg::rhbm_trainer::RHBMTrainingOptions default_options;
 
     EXPECT_THROW(
-        rg::rhbm_trainer::CrossValidationAlphaR(dataset_list, kAlphaMin, kAlphaMax, kAlphaStep, default_options),
+        rg::rhbm_trainer::CrossValidationAlphaR(dataset_list, default_options),
         std::invalid_argument);
 
-    rg::rhbm_trainer::RHBMTrainingOptions alpha_r_empty_options;
-    alpha_r_empty_options.subset_size = 3;
+    const auto alpha_r_empty_options{ MakeTrainingOptions(3) };
 
     EXPECT_THROW(
-        rg::rhbm_trainer::CrossValidationAlphaR(
-            empty_dataset_list, kAlphaMin, kAlphaMax, kAlphaStep, alpha_r_empty_options),
+        rg::rhbm_trainer::CrossValidationAlphaR(empty_dataset_list, alpha_r_empty_options),
         std::invalid_argument);
 
-    rg::rhbm_trainer::RHBMTrainingOptions alpha_r_options;
-    alpha_r_options.subset_size = 7;
+    const auto alpha_r_options{ MakeTrainingOptions(7) };
     EXPECT_THROW(
-        rg::rhbm_trainer::CrossValidationAlphaR(dataset_list, kAlphaMin, kAlphaMax, kAlphaStep, alpha_r_options),
+        rg::rhbm_trainer::CrossValidationAlphaR(dataset_list, alpha_r_options),
         std::invalid_argument);
 
-    rg::rhbm_trainer::RHBMTrainingOptions alpha_g_options;
-    alpha_g_options.subset_size = 3;
+    const auto alpha_g_options{ MakeTrainingOptions(3) };
     const std::vector<std::vector<Eigen::VectorXd>> beta_group_list{
         {
             MakeVector({ 1.0, 2.0 }),
@@ -276,8 +280,7 @@ TEST(RHBMTrainerTest, CrossValidationRequiresExplicitSubsetSizeAndRejectsInvalid
         }
     };
     EXPECT_THROW(
-        rg::rhbm_trainer::CrossValidationAlphaG(
-            beta_group_list, kAlphaMin, kAlphaMax, kAlphaStep, alpha_g_options),
+        rg::rhbm_trainer::CrossValidationAlphaG(beta_group_list, alpha_g_options),
         std::invalid_argument);
 }
 
@@ -285,10 +288,9 @@ TEST(RHBMTrainerTest, CrossValidationAlphaRRejectsInconsistentDatasetShape)
 {
     auto dataset{ MakeLinearDataset(1.0) };
     dataset.y = rg::RHBMResponseVector::Zero(dataset.X.rows() - 1);
-    rg::rhbm_trainer::RHBMTrainingOptions options;
-    options.subset_size = 3;
+    const auto options{ MakeTrainingOptions(3) };
 
     EXPECT_THROW(
-        rg::rhbm_trainer::CrossValidationAlphaR({ dataset }, kAlphaMin, kAlphaMax, kAlphaStep, options),
+        rg::rhbm_trainer::CrossValidationAlphaR({ dataset }, options),
         std::invalid_argument);
 }

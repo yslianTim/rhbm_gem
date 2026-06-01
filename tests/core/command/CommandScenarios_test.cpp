@@ -188,31 +188,6 @@ TEST(CommandScenariosTest, PotentialAnalysisRejectsInvalidSamplingMethodAtParse)
     EXPECT_TRUE(HasDiagnosticForOption(result.issues, "--sampling-method"));
 }
 
-TEST(CommandScenariosTest, PotentialAnalysisRejectsInvertedTrainingAlphaRangeAtPrepare)
-{
-    PotentialAnalysisRequest request{};
-    request.model_file_path = command_test::TestDataPath("test_model.cif");
-    request.map_file_path = command_test::TestDataPath("test_model.cif");
-    request.training_alpha_min = 1.0;
-    request.training_alpha_max = 0.5;
-
-    const auto result{ RunCommand(request) };
-
-    EXPECT_FALSE(result.succeeded);
-    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "request"));
-}
-
-TEST(CommandScenariosTest, PotentialAnalysisValidatesInvalidTrainingAlphaStepAtParse)
-{
-    PotentialAnalysisRequest request{};
-    request.training_alpha_step = 0.0;
-
-    const auto result{ RunCommand(request) };
-
-    EXPECT_FALSE(result.succeeded);
-    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "--training-alpha-step"));
-}
-
 TEST(CommandScenariosTest, PotentialAnalysisRejectsEmptySavedKeyAtParse)
 {
     PotentialAnalysisRequest request{};

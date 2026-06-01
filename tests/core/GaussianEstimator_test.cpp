@@ -58,9 +58,6 @@ LocalPotentialSampleList BuildShiftedSampleEntries(
 ge::FitOptions MakeOptions()
 {
     ge::FitOptions options;
-    options.alpha_min = 0.0;
-    options.alpha_max = 0.5;
-    options.alpha_step = 0.5;
     options.thread_size = 1;
     return options;
 }
@@ -134,10 +131,11 @@ TEST(GaussianEstimatorTest, SampleListAlphaRReturnsFiniteAlpha)
     const auto alpha_r{
         ge::TrainAlphaR(sample_entries_list, options)
     };
+    const rg::rhbm_trainer::RHBMTrainingOptions trainer_options;
 
     EXPECT_TRUE(std::isfinite(alpha_r));
-    EXPECT_GE(alpha_r, options.alpha_min);
-    EXPECT_LE(alpha_r, options.alpha_max);
+    EXPECT_GE(alpha_r, trainer_options.alpha_min);
+    EXPECT_LE(alpha_r, trainer_options.alpha_max);
 }
 
 TEST(GaussianEstimatorTest, AlphaRMatchesTrainingFunctionBestAlpha)
@@ -167,9 +165,6 @@ TEST(GaussianEstimatorTest, AlphaRMatchesTrainingFunctionBestAlpha)
     const auto expected{
         rg::rhbm_trainer::CrossValidationAlphaR(
             dataset_list,
-            options.alpha_min,
-            options.alpha_max,
-            options.alpha_step,
             trainer_options).best_alpha
     };
     const auto actual{
@@ -195,9 +190,6 @@ TEST(GaussianEstimatorTest, AlphaGMatchesTrainingFunctionBestAlpha)
     const auto expected{
         rg::rhbm_trainer::CrossValidationAlphaG(
             beta_group_list,
-            options.alpha_min,
-            options.alpha_max,
-            options.alpha_step,
             trainer_options).best_alpha
     };
     const auto actual{
@@ -292,31 +284,9 @@ TEST(GaussianEstimatorTest, EmptyAlphaGTrainingInputReturnsFallbackAlpha)
     const auto alpha_g{
         ge::TrainAlphaG(empty_member_result_list, options)
     };
+    const rg::rhbm_trainer::RHBMTrainingOptions trainer_options;
 
-    EXPECT_DOUBLE_EQ(alpha_g, options.alpha_min);
-}
-
-TEST(GaussianEstimatorTest, EmptyAlphaGTrainingInputRejectsInvalidAlphaRange)
-{
-    auto options{ MakeOptions() };
-    options.alpha_min = 1.0;
-    options.alpha_max = 0.5;
-    const std::vector<std::vector<rg::LocalGaussianResult>> empty_member_result_list;
-
-    EXPECT_THROW(
-        ge::TrainAlphaG(empty_member_result_list, options),
-        std::invalid_argument);
-}
-
-TEST(GaussianEstimatorTest, EmptyAlphaGTrainingInputRejectsNonFiniteFallbackAlpha)
-{
-    auto options{ MakeOptions() };
-    options.alpha_min = std::numeric_limits<double>::infinity();
-    const std::vector<std::vector<rg::LocalGaussianResult>> empty_member_result_list;
-
-    EXPECT_THROW(
-        ge::TrainAlphaG(empty_member_result_list, options),
-        std::invalid_argument);
+    EXPECT_DOUBLE_EQ(alpha_g, trainer_options.alpha_min);
 }
 
 TEST(GaussianEstimatorTest, EstimateLocalGaussianRejectsInvalidAlphaR)

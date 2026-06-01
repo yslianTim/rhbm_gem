@@ -15,6 +15,9 @@ using ProgressCallback = std::function<void(std::size_t completed, std::size_t t
 
 struct RHBMTrainingOptions
 {
+    double alpha_min{ 0.0 };
+    double alpha_max{ 2.0 };
+    double alpha_step{ 0.1 };
     RHBMExecutionOptions execution_options{};
     ProgressCallback progress_callback{};
     std::size_t subset_size{ 0 };
@@ -29,17 +32,11 @@ struct RHBMTrainingResult
 
 RHBMTrainingResult CrossValidationAlphaR(
     const std::vector<RHBMMemberDataset> & dataset_list,
-    double alpha_min,
-    double alpha_max,
-    double alpha_step,
     const RHBMTrainingOptions & options
 );
 
 RHBMTrainingResult CrossValidationAlphaG(
     const std::vector<std::vector<RHBMParameterVector>> & beta_group_list,
-    double alpha_min,
-    double alpha_max,
-    double alpha_step,
     const RHBMTrainingOptions & options
 );
 

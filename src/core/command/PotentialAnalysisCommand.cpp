@@ -101,14 +101,10 @@ std::vector<AtomLocalPotentialEditor> BuildSelectedAtomLocalEditors(ModelObject 
     return local_editor_list;
 }
 
-FitOptions MakeGaussianEstimatorOptions(
-    const PotentialAnalysisRequest & request)
+FitOptions MakeGaussianEstimatorOptions(const PotentialAnalysisRequest & request)
 {
     FitOptions options;
     options.local_fit_model = LocalGaussianFitModel::LogQuadratic;
-    options.alpha_min = request.training_alpha_min;
-    options.alpha_max = request.training_alpha_max;
-    options.alpha_step = request.training_alpha_step;
     options.distance_min = request.fit_range_min;
     options.distance_max = request.fit_range_max;
     options.thread_size = request.job_count;
@@ -512,9 +508,6 @@ void PotentialAnalysisCommand::NormalizeAndValidateRequest(PotentialAnalysisRequ
     RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::fit_range_max);
     RequireFinitePositiveScalar(request, &PotentialAnalysisRequest::alpha_r);
     RequireFinitePositiveScalar(request, &PotentialAnalysisRequest::alpha_g);
-    RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::training_alpha_min);
-    RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::training_alpha_max);
-    RequireFinitePositiveScalar(request, &PotentialAnalysisRequest::training_alpha_step);
 }
 
 bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & request)
@@ -551,9 +544,6 @@ void PotentialAnalysisCommand::ValidatePreparedRequest(const PotentialAnalysisRe
     RequirePrepareCondition(
         request.fit_range_min <= request.fit_range_max,
         "Expected --fit-min <= --fit-max.");
-    RequirePrepareCondition(
-        request.training_alpha_min <= request.training_alpha_max,
-        "Expected --training-alpha-min <= --training-alpha-max.");
 }
 
 namespace command_internal {

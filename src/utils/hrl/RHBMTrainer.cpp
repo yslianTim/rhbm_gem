@@ -242,12 +242,9 @@ Eigen::VectorXd EvaluateAlphaGForGroup(
 
 RHBMTrainingResult CrossValidationAlphaR(
     const std::vector<RHBMMemberDataset> & dataset_list,
-    double alpha_min,
-    double alpha_max,
-    double alpha_step,
     const RHBMTrainingOptions & options)
 {
-    const auto alpha_grid{ BuildAlphaGrid(alpha_min, alpha_max, alpha_step) };
+    const auto alpha_grid{ BuildAlphaGrid(options.alpha_min, options.alpha_max, options.alpha_step) };
     ValidateTrainingBatch(dataset_list.size(), options.subset_size, alpha_grid);
     for (const auto & dataset : dataset_list)
     {
@@ -288,12 +285,9 @@ RHBMTrainingResult CrossValidationAlphaR(
 
 RHBMTrainingResult CrossValidationAlphaG(
     const std::vector<std::vector<RHBMParameterVector>> & beta_group_list,
-    double alpha_min,
-    double alpha_max,
-    double alpha_step,
     const RHBMTrainingOptions & options)
 {
-    const auto alpha_grid{ BuildAlphaGrid(alpha_min, alpha_max, alpha_step) };
+    const auto alpha_grid{ BuildAlphaGrid(options.alpha_min, options.alpha_max, options.alpha_step) };
     ValidateTrainingBatch(beta_group_list.size(), options.subset_size, alpha_grid);
     for (const auto & beta_list : beta_group_list)
     {
