@@ -393,9 +393,7 @@ GroupGaussianResult EstimateGroupGaussian(
 
     auto execution_options{ MakeExecutionOptions(options) };
     const auto dataset_list{ BuildMemberDatasetList(sample_entries_list, member_result_list, options) };
-    const auto fit_result_list{ BuildMemberFitResultList(
-        member_result_list,
-        options.local_fit_model) };
+    const auto fit_result_list{ BuildMemberFitResultList(member_result_list, options.local_fit_model) };
     const auto group_input{ rhbm_helper::BuildGroupInput(dataset_list, fit_result_list) };
     const auto raw_result{ rhbm_helper::EstimateGroup(alpha_g, group_input, execution_options) };
     auto result{ DecodeGroupGaussianResult(alpha_g, raw_result, options.local_fit_model) };
