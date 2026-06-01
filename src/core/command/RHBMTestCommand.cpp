@@ -80,8 +80,7 @@ std::vector<RHBMMemberDataset> BuildReplicaDatasets(
     return replica_datasets;
 }
 
-LocalTestData BuildSelectedLocalTestData(
-    const LocalTestData & input)
+LocalTestData BuildSelectedLocalTestData(const LocalTestData & input)
 {
     LocalTestData selected_input;
     selected_input.gaus_true = input.gaus_true;
