@@ -81,7 +81,6 @@ struct PotentialAnalysisRequest : public CommandRequestBase
     bool exclude_hydrogen{ false };
     double simulated_map_resolution{ 0.0 };
     std::string saved_key_tag{ "model" };
-    std::filesystem::path training_report_dir{};
     bool training_alpha_flag{ false };
     bool asymmetry_flag{ false };
     SphereSamplingMethod sampling_method{ SphereSamplingMethod::FibonacciDeterministic };

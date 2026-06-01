@@ -110,6 +110,7 @@ def assert_request_objects_are_usable() -> None:
         "training_alpha_min",
         "training_alpha_max",
         "training_alpha_step",
+        "training_report_dir",
     ):
         assert not hasattr(analysis, removed_field_name), (
             f"PotentialAnalysisRequest still exposes {removed_field_name}"

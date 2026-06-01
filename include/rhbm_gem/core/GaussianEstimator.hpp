@@ -1,6 +1,5 @@
 #pragma once
 
-#include <filesystem>
 #include <vector>
 
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
@@ -14,19 +13,15 @@ struct FitOptions
     double distance_min{ 0.0 };
     double distance_max{ 1.0 };
     int thread_size{ 1 };
-    bool output_summary_log{ false };
-    std::filesystem::path study_plot_dir{};
 };
 
 double TrainAlphaR(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
-    const FitOptions & options,
-    bool output_study_plot = false);
+    const FitOptions & options);
 
 double TrainAlphaG(
     const std::vector<std::vector<LocalGaussianResult>> & member_result_list,
-    const FitOptions & options,
-    bool output_study_plot = false);
+    const FitOptions & options);
 
 LocalGaussianResult EstimateLocalGaussian(
     const LocalPotentialSampleList & sample_entries,

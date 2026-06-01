@@ -17,7 +17,6 @@
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 #include <atomic>
-#include <filesystem>
 #include <memory>
 #include <optional>
 #include <string>
@@ -108,8 +107,6 @@ FitOptions MakeGaussianEstimatorOptions(const PotentialAnalysisRequest & request
     options.distance_min = request.fit_range_min;
     options.distance_max = request.fit_range_max;
     options.thread_size = request.job_count;
-    options.output_summary_log = true;
-    options.study_plot_dir = request.training_report_dir;
     return options;
 }
 
@@ -377,9 +374,7 @@ void RunAtomAlphaTraining(ModelObject & model_object, const PotentialAnalysisReq
         member_result_list.emplace_back(std::move(group_member_results));
     }
 
-    const auto alpha_g{
-        TrainAlphaG(member_result_list, options, !request.training_report_dir.empty())
-    };
+    const auto alpha_g{ TrainAlphaG(member_result_list, options) };
 
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {

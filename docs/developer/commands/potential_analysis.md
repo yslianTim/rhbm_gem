@@ -40,7 +40,6 @@ Command-specific fields:
 - `exclude_hydrogen`
 - `simulated_map_resolution`
 - `saved_key_tag`
-- `training_report_dir`
 - `training_alpha_flag`
 - `asymmetry_flag`
 - `sampling_method`
