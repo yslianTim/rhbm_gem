@@ -158,7 +158,6 @@ TEST(GaussianEstimatorTest, AlphaRMatchesTrainingFunctionBestAlpha)
             options.local_fit_model)
     };
     rg::rhbm_trainer::RHBMTrainingOptions trainer_options;
-    trainer_options.subset_size = 5;
     trainer_options.execution_options.quiet_mode = true;
     trainer_options.execution_options.thread_size = options.thread_size;
 
@@ -183,7 +182,6 @@ TEST(GaussianEstimatorTest, AlphaGMatchesTrainingFunctionBestAlpha)
     };
     const auto beta_group_list{ BuildBetaGroupList(member_result_list) };
     rg::rhbm_trainer::RHBMTrainingOptions trainer_options;
-    trainer_options.subset_size = 10;
     trainer_options.execution_options.quiet_mode = true;
     trainer_options.execution_options.thread_size = options.thread_size;
 
@@ -199,14 +197,12 @@ TEST(GaussianEstimatorTest, AlphaGMatchesTrainingFunctionBestAlpha)
     EXPECT_DOUBLE_EQ(actual, expected);
 }
 
-TEST(GaussianEstimatorTest, QuietAlphaGOptionsDoNotChangeBestAlpha)
+TEST(GaussianEstimatorTest, SummaryLogOptionsDoNotChangeBestAlpha)
 {
     auto quiet_options{ MakeOptions() };
     quiet_options.output_summary_log = false;
-    quiet_options.output_progress = false;
     auto verbose_options{ quiet_options };
     verbose_options.output_summary_log = true;
-    verbose_options.output_progress = true;
     const auto sample_group{ MakeIdenticalSampleGroup(10) };
     const std::vector<std::vector<rg::LocalGaussianResult>> member_result_list{
         EstimateMemberResults(sample_group, quiet_options)
@@ -278,7 +274,6 @@ TEST(GaussianEstimatorTest, EmptyAlphaGTrainingInputReturnsFallbackAlpha)
 {
     auto options{ MakeOptions() };
     options.output_summary_log = false;
-    options.output_progress = false;
     const std::vector<std::vector<rg::LocalGaussianResult>> empty_member_result_list;
 
     const auto alpha_g{

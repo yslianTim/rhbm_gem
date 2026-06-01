@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstddef>
-#include <functional>
 #include <vector>
 
 #include <Eigen/Dense>
@@ -11,16 +10,13 @@
 namespace rhbm_gem::rhbm_trainer
 {
 
-using ProgressCallback = std::function<void(std::size_t completed, std::size_t total)>;
-
 struct RHBMTrainingOptions
 {
     double alpha_min{ 0.0 };
     double alpha_max{ 2.0 };
     double alpha_step{ 0.1 };
     RHBMExecutionOptions execution_options{};
-    ProgressCallback progress_callback{};
-    std::size_t subset_size{ 0 };
+    std::size_t subset_size{ 5 };
 };
 
 struct RHBMTrainingResult

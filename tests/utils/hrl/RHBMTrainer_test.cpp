@@ -51,10 +51,10 @@ double BestAlphaForErrors(
 }
 
 rg::rhbm_trainer::RHBMTrainingOptions MakeTrainingOptions(
-    std::size_t subset_size,
     double alpha_min = kAlphaMin,
     double alpha_max = kAlphaMax,
-    double alpha_step = kAlphaStep)
+    double alpha_step = kAlphaStep,
+    std::size_t subset_size = 5)
 {
     rg::rhbm_trainer::RHBMTrainingOptions options;
     options.alpha_min = alpha_min;
@@ -68,7 +68,7 @@ rg::rhbm_trainer::RHBMTrainingOptions MakeTrainingOptions(
 TEST(RHBMTrainerTest, CrossValidationAlphaRBuildsAlphaGridWithExactMax)
 {
     const auto dataset{ MakeLinearDataset(2.0) };
-    const auto options{ MakeTrainingOptions(3, 0.2, 0.8, 0.2) };
+    const auto options{ MakeTrainingOptions(0.2, 0.8, 0.2, 3) };
 
     const auto result{
         rg::rhbm_trainer::CrossValidationAlphaR({ dataset }, options)
@@ -84,7 +84,7 @@ TEST(RHBMTrainerTest, CrossValidationAlphaRBuildsAlphaGridWithExactMax)
 TEST(RHBMTrainerTest, CrossValidationAlphaRBuildsAlphaGridWithoutExceedingMax)
 {
     const auto dataset{ MakeLinearDataset(2.0) };
-    const auto options{ MakeTrainingOptions(3, 0.0, 1.0, 0.3) };
+    const auto options{ MakeTrainingOptions(0.0, 1.0, 0.3, 3) };
 
     const auto result{
         rg::rhbm_trainer::CrossValidationAlphaR({ dataset }, options)
@@ -100,9 +100,9 @@ TEST(RHBMTrainerTest, CrossValidationAlphaRBuildsAlphaGridWithoutExceedingMax)
 TEST(RHBMTrainerTest, CrossValidationRejectsInvalidAlphaGrid)
 {
     const auto dataset{ MakeLinearDataset(1.0) };
-    const auto negative_min_options{ MakeTrainingOptions(3, -0.1, 1.0, 0.1) };
-    const auto inverted_range_options{ MakeTrainingOptions(3, 1.0, 0.0, 0.1) };
-    const auto zero_step_options{ MakeTrainingOptions(3, 0.0, 1.0, 0.0) };
+    const auto negative_min_options{ MakeTrainingOptions(-0.1, 1.0, 0.1, 3) };
+    const auto inverted_range_options{ MakeTrainingOptions(1.0, 0.0, 0.1, 3) };
+    const auto zero_step_options{ MakeTrainingOptions(0.0, 1.0, 0.0, 3) };
 
     EXPECT_THROW(
         rg::rhbm_trainer::CrossValidationAlphaR({ dataset }, negative_min_options),
@@ -118,7 +118,7 @@ TEST(RHBMTrainerTest, CrossValidationRejectsInvalidAlphaGrid)
 TEST(RHBMTrainerTest, CrossValidationAlphaRSingleDatasetWithExactLinearDataReturnsZeroError)
 {
     const auto dataset{ MakeLinearDataset(2.0) };
-    const auto options{ MakeTrainingOptions(3, 0.0, 0.5, 0.5) };
+    const auto options{ MakeTrainingOptions(0.0, 0.5, 0.5, 3) };
 
     const auto result{
         rg::rhbm_trainer::CrossValidationAlphaR({ dataset }, options)
@@ -133,7 +133,7 @@ TEST(RHBMTrainerTest, CrossValidationAlphaRSingleDatasetWithExactLinearDataRetur
 TEST(RHBMTrainerTest, CrossValidationAlphaGSingleGroupWithIdenticalBetasReturnsZeroError)
 {
     const std::vector<Eigen::VectorXd> beta_list(6, MakeVector({ 1.5, -0.5 }));
-    const auto options{ MakeTrainingOptions(4) };
+    const auto options{ MakeTrainingOptions(kAlphaMin, kAlphaMax, kAlphaStep, 4) };
 
     const auto result{
         rg::rhbm_trainer::CrossValidationAlphaG({ beta_list }, options)
@@ -153,7 +153,7 @@ TEST(RHBMTrainerTest, CrossValidationAlphaRAggregatesSingleBatchResultsAndSelect
         MakeLinearDataset(-0.5)
     };
 
-    const auto options{ MakeTrainingOptions(3) };
+    const auto options{ MakeTrainingOptions(kAlphaMin, kAlphaMax, kAlphaStep, 3) };
     const auto result{
         rg::rhbm_trainer::CrossValidationAlphaR(dataset_list, options)
     };
@@ -189,7 +189,7 @@ TEST(RHBMTrainerTest, CrossValidationAlphaGAggregatesSingleBatchResultsAndSelect
             MakeVector({ -3.5, 3.0 })
         }
     };
-    auto options{ MakeTrainingOptions(3) };
+    auto options{ MakeTrainingOptions(kAlphaMin, kAlphaMax, kAlphaStep, 3) };
     options.execution_options.random_seed = 11U;
 
     const auto result{
@@ -227,7 +227,7 @@ TEST(RHBMTrainerTest, CrossValidationAlphaGWithSeedIsDeterministic)
             MakeVector({ -3.5, 3.0 })
         }
     };
-    auto options{ MakeTrainingOptions(3) };
+    auto options{ MakeTrainingOptions(kAlphaMin, kAlphaMax, kAlphaStep, 3) };
     options.execution_options.random_seed = 7U;
 
     const auto first{
@@ -250,29 +250,30 @@ TEST(RHBMTrainerTest, CrossValidationAlphaGWithSeedIsDeterministic)
     EXPECT_DOUBLE_EQ(first.best_alpha, BestAlphaForErrors(first.alpha_grid, first.error_sum_list));
 }
 
-TEST(RHBMTrainerTest, CrossValidationRequiresExplicitSubsetSizeAndRejectsInvalidInputs)
+TEST(RHBMTrainerTest, CrossValidationRejectsInvalidInputs)
 {
     const auto dataset{ MakeLinearDataset(1.0) };
     const std::vector<rg::RHBMMemberDataset> empty_dataset_list;
     const std::vector<rg::RHBMMemberDataset> dataset_list{ dataset };
-    rg::rhbm_trainer::RHBMTrainingOptions default_options;
+    rg::rhbm_trainer::RHBMTrainingOptions zero_subset_options;
+    zero_subset_options.subset_size = 0;
 
     EXPECT_THROW(
-        rg::rhbm_trainer::CrossValidationAlphaR(dataset_list, default_options),
+        rg::rhbm_trainer::CrossValidationAlphaR(dataset_list, zero_subset_options),
         std::invalid_argument);
 
-    const auto alpha_r_empty_options{ MakeTrainingOptions(3) };
+    const auto alpha_r_empty_options{ MakeTrainingOptions(kAlphaMin, kAlphaMax, kAlphaStep, 3) };
 
     EXPECT_THROW(
         rg::rhbm_trainer::CrossValidationAlphaR(empty_dataset_list, alpha_r_empty_options),
         std::invalid_argument);
 
-    const auto alpha_r_options{ MakeTrainingOptions(7) };
+    const auto alpha_r_options{ MakeTrainingOptions(kAlphaMin, kAlphaMax, kAlphaStep, 7) };
     EXPECT_THROW(
         rg::rhbm_trainer::CrossValidationAlphaR(dataset_list, alpha_r_options),
         std::invalid_argument);
 
-    const auto alpha_g_options{ MakeTrainingOptions(3) };
+    const auto alpha_g_options{ MakeTrainingOptions(kAlphaMin, kAlphaMax, kAlphaStep, 3) };
     const std::vector<std::vector<Eigen::VectorXd>> beta_group_list{
         {
             MakeVector({ 1.0, 2.0 }),
@@ -288,7 +289,7 @@ TEST(RHBMTrainerTest, CrossValidationAlphaRRejectsInconsistentDatasetShape)
 {
     auto dataset{ MakeLinearDataset(1.0) };
     dataset.y = rg::RHBMResponseVector::Zero(dataset.X.rows() - 1);
-    const auto options{ MakeTrainingOptions(3) };
+    const auto options{ MakeTrainingOptions(kAlphaMin, kAlphaMax, kAlphaStep, 3) };
 
     EXPECT_THROW(
         rg::rhbm_trainer::CrossValidationAlphaR({ dataset }, options),

@@ -108,7 +108,6 @@ FitOptions MakeGaussianEstimatorOptions(const PotentialAnalysisRequest & request
     options.distance_min = request.fit_range_min;
     options.distance_max = request.fit_range_max;
     options.thread_size = request.job_count;
-    options.output_progress = true;
     options.output_summary_log = true;
     options.study_plot_dir = request.training_report_dir;
     return options;
@@ -330,8 +329,8 @@ void RunAtomAlphaTraining(ModelObject & model_object, const PotentialAnalysisReq
     for (const auto group_key : component_group_keys)
     {
         const auto & group_atom_list{ analysis_view.GetAtomObjectList(group_key, component_class_key) };
-        std::vector<LocalPotentialSampleList> selected_sample_entries_list;
-        selected_sample_entries_list.reserve(group_atom_list.size());
+        std::vector<LocalPotentialSampleList> sample_entries_list;
+        sample_entries_list.reserve(group_atom_list.size());
         for (auto & atom : group_atom_list)
         {
             analysis.EnsureAtomLocalPotential(*atom);
@@ -342,16 +341,12 @@ void RunAtomAlphaTraining(ModelObject & model_object, const PotentialAnalysisReq
                     request.fit_range_min,
                     request.fit_range_max,
                     10)) continue;
-            selected_sample_entries_list.emplace_back(sample_entries);
+            sample_entries_list.emplace_back(sample_entries);
         }
-        selected_sample_entries_list.shrink_to_fit();
-        if (!selected_sample_entries_list.empty())
+        sample_entries_list.shrink_to_fit();
+        if (!sample_entries_list.empty())
         {
-            auto alpha_r_options{ options };
-            alpha_r_options.output_progress = false;
-            const auto alpha_r{
-                TrainAlphaR(selected_sample_entries_list, alpha_r_options)
-            };
+            const auto alpha_r{ TrainAlphaR(sample_entries_list, options) };
             for (auto * atom : group_atom_list)
             {
                 analysis.EnsureAtomLocalPotential(*atom).SetAlphaR(alpha_r);

@@ -5,7 +5,6 @@
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <algorithm>
-#include <atomic>
 #include <cmath>
 #include <random>
 #include <stdexcept>
@@ -69,9 +68,7 @@ RHBMMemberDataset BuildDatasetSlice(
     return slice;
 }
 
-std::mt19937 BuildGenerator(
-    const std::optional<std::uint32_t> & seed,
-    std::size_t offset)
+std::mt19937 BuildGenerator(const std::optional<std::uint32_t> & seed, std::size_t offset)
 {
     if (seed.has_value())
     {
@@ -254,7 +251,6 @@ RHBMTrainingResult CrossValidationAlphaR(
     }
 
     const auto dataset_size{ dataset_list.size() };
-    std::atomic<std::size_t> completed_count{ 0 };
     Eigen::ArrayXd error_sum_array{ Eigen::ArrayXd::Zero(static_cast<Eigen::Index>(alpha_grid.size())) };
 
 #ifdef USE_OPENMP
@@ -272,11 +268,6 @@ RHBMTrainingResult CrossValidationAlphaR(
 #endif
         {
             error_sum_array += error_array.array();
-            const auto completed{ ++completed_count };
-            if (options.progress_callback)
-            {
-                options.progress_callback(completed, dataset_size);
-            }
         }
     }
 
@@ -295,7 +286,6 @@ RHBMTrainingResult CrossValidationAlphaG(
     }
 
     const auto group_size{ beta_group_list.size() };
-    std::atomic<std::size_t> completed_count{ 0 };
     Eigen::ArrayXd error_sum_array{ Eigen::ArrayXd::Zero(static_cast<Eigen::Index>(alpha_grid.size())) };
 
 #ifdef USE_OPENMP
@@ -313,11 +303,6 @@ RHBMTrainingResult CrossValidationAlphaG(
 #endif
         {
             error_sum_array += error_array.array();
-            const auto completed{ ++completed_count };
-            if (options.progress_callback)
-            {
-                options.progress_callback(completed, group_size);
-            }
         }
     }
 

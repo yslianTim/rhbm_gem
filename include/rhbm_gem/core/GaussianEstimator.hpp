@@ -14,7 +14,6 @@ struct FitOptions
     double distance_min{ 0.0 };
     double distance_max{ 1.0 };
     int thread_size{ 1 };
-    bool output_progress{ false };
     bool output_summary_log{ false };
     std::filesystem::path study_plot_dir{};
 };

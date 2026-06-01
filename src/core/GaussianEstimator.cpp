@@ -9,7 +9,6 @@
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
-#include <atomic>
 #include <filesystem>
 #include <stdexcept>
 #include <string>
@@ -21,15 +20,6 @@
 
 namespace rhbm_gem::core {
 namespace {
-constexpr std::size_t kAlphaRSubsetSize{ 5 };
-constexpr std::size_t kAlphaGSubsetSize{ 5 };
-
-struct AlphaStudyOptions
-{
-    RHBMExecutionOptions execution_options{};
-    rhbm_trainer::ProgressCallback progress_callback{};
-};
-
 RHBMExecutionOptions MakeExecutionOptions(const FitOptions & options)
 {
     RHBMExecutionOptions execution_options;
@@ -216,37 +206,11 @@ bool ShouldOutputStudyPlot(
     return false;
 }
 
-rhbm_trainer::RHBMTrainingOptions MakeTrainingOptions(
-    std::size_t subset_size,
-    const FitOptions & options)
+rhbm_trainer::RHBMTrainingOptions MakeTrainingOptions(const FitOptions & options)
 {
     rhbm_trainer::RHBMTrainingOptions training_options;
-    training_options.subset_size = subset_size;
     training_options.execution_options = MakeExecutionOptions(options);
-    if (options.output_progress)
-    {
-        training_options.progress_callback =
-            [](std::size_t completed, std::size_t total)
-            {
-                Logger::ProgressPercent(completed, total);
-            };
-    }
     return training_options;
-}
-
-AlphaStudyOptions MakeStudyOptions(const FitOptions & options)
-{
-    AlphaStudyOptions study_options;
-    study_options.execution_options = MakeExecutionOptions(options);
-    if (options.output_progress)
-    {
-        study_options.progress_callback =
-            [](std::size_t completed, std::size_t total)
-            {
-                Logger::ProgressPercent(completed, total);
-            };
-    }
-    return study_options;
 }
 
 Eigen::VectorXd CalculateAbsoluteGaussianDifference(
@@ -273,7 +237,7 @@ Eigen::MatrixXd StudyAlphaRBias(
     const std::vector<double> & alpha_grid,
     const std::vector<RHBMMemberDataset> & dataset_list,
     LocalGaussianFitModel fit_model,
-    const AlphaStudyOptions & options)
+    const RHBMExecutionOptions & execution_options)
 {
     ValidateStudyBatch(dataset_list.size(), alpha_grid);
     for (const auto & dataset : dataset_list)
@@ -288,15 +252,14 @@ Eigen::MatrixXd StudyAlphaRBias(
 
     const auto dataset_size{ dataset_list.size() };
     const auto alpha_size{ static_cast<int>(alpha_grid.size()) };
-    std::atomic<std::size_t> completed_count{ 0 };
     Eigen::MatrixXd gaus_bias_matrix{ Eigen::MatrixXd::Zero(3, alpha_size) };
 
 #ifdef USE_OPENMP
-    #pragma omp parallel for schedule(dynamic) num_threads(options.execution_options.thread_size)
+    #pragma omp parallel for schedule(dynamic) num_threads(execution_options.thread_size)
 #endif
     for (std::size_t i = 0; i < dataset_size; i++)
     {
-        auto algorithm_options{ options.execution_options };
+        auto algorithm_options{ execution_options };
         algorithm_options.quiet_mode = true;
 
         Eigen::MatrixXd local_bias_array{ Eigen::MatrixXd::Zero(3, alpha_size) };
@@ -321,11 +284,6 @@ Eigen::MatrixXd StudyAlphaRBias(
 #endif
         {
             gaus_bias_matrix += local_bias_array;
-            const auto completed{ ++completed_count };
-            if (options.progress_callback)
-            {
-                options.progress_callback(completed, dataset_size);
-            }
         }
     }
 
@@ -337,7 +295,7 @@ Eigen::MatrixXd StudyAlphaGBias(
     const std::vector<double> & alpha_grid,
     const std::vector<std::vector<RHBMParameterVector>> & beta_group_list,
     LocalGaussianFitModel fit_model,
-    const AlphaStudyOptions & options)
+    const RHBMExecutionOptions & execution_options)
 {
     ValidateStudyBatch(beta_group_list.size(), alpha_grid);
     for (const auto & beta_list : beta_group_list)
@@ -347,15 +305,14 @@ Eigen::MatrixXd StudyAlphaGBias(
 
     const auto group_size{ beta_group_list.size() };
     const auto alpha_size{ static_cast<int>(alpha_grid.size()) };
-    std::atomic<std::size_t> completed_count{ 0 };
     Eigen::MatrixXd gaus_bias_matrix{ Eigen::MatrixXd::Zero(3, alpha_size) };
 
 #ifdef USE_OPENMP
-    #pragma omp parallel for schedule(dynamic) num_threads(options.execution_options.thread_size)
+    #pragma omp parallel for schedule(dynamic) num_threads(execution_options.thread_size)
 #endif
     for (std::size_t i = 0; i < group_size; i++)
     {
-        auto algorithm_options{ options.execution_options };
+        auto algorithm_options{ execution_options };
         algorithm_options.quiet_mode = true;
         const auto beta_matrix{ rhbm_helper::BuildBetaMatrix(beta_group_list.at(i)) };
 
@@ -375,11 +332,6 @@ Eigen::MatrixXd StudyAlphaGBias(
 #endif
         {
             gaus_bias_matrix += local_bias_array;
-            const auto completed{ ++completed_count };
-            if (options.progress_callback)
-            {
-                options.progress_callback(completed, group_size);
-            }
         }
     }
 
@@ -546,7 +498,7 @@ double TrainAlphaR(
         options.distance_min, options.distance_max, "fit range");
 
     const auto dataset_list{ BuildMemberDatasetList(sample_entries_list, options) };
-    const auto training_options{ MakeTrainingOptions(kAlphaRSubsetSize, options) };
+    const auto training_options{ MakeTrainingOptions(options) };
     const auto training_result{
         rhbm_trainer::CrossValidationAlphaR(dataset_list, training_options)
     };
@@ -558,7 +510,7 @@ double TrainAlphaR(
                 training_result.alpha_grid,
                 dataset_list,
                 options.local_fit_model,
-                MakeStudyOptions(options))
+                MakeExecutionOptions(options))
         };
         (void)EmitTrainingReportIfRequested(
             bias_matrix, training_result.alpha_grid, "#alpha_{r}", "Deviation with OLS",
@@ -600,7 +552,7 @@ double TrainAlphaG(
             "Run Alpha_G Training with " + std::to_string(beta_group_list.size()) + " groups.");
     }
 
-    const auto training_options{ MakeTrainingOptions(kAlphaGSubsetSize, options) };
+    const auto training_options{ MakeTrainingOptions(options) };
     if (beta_group_list.empty())
     {
         if (options.output_summary_log)
@@ -625,7 +577,7 @@ double TrainAlphaG(
                 training_result.alpha_grid,
                 beta_group_list,
                 options.local_fit_model,
-                MakeStudyOptions(options))
+                MakeExecutionOptions(options))
         };
         (void)EmitTrainingReportIfRequested(
             bias_matrix, training_result.alpha_grid, "#alpha_{g}", "Deviation with Mean",
