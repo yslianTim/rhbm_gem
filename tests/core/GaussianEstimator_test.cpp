@@ -3,11 +3,18 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <memory>
 #include <stdexcept>
 #include <utility>
 #include <vector>
 
 #include <rhbm_gem/core/GaussianEstimator.hpp>
+#include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
+#include <rhbm_gem/data/object/AtomObject.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
+#include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
@@ -28,6 +35,23 @@ LocalPotentialSampleList MakeSampleEntries(double log_response_shift = 0.0)
     for (int i = 0; i < 6; i++)
     {
         const auto distance{ static_cast<float>(0.1 * static_cast<double>(i)) };
+        const auto response{
+            static_cast<float>(std::exp(1.0 + log_response_shift - 0.5 * distance * distance))
+        };
+        sample_entries.emplace_back(LocalPotentialSample{ response, SamplingPoint{ distance } });
+    }
+    return sample_entries;
+}
+
+LocalPotentialSampleList MakeAlphaTrainingSampleEntries(
+    std::size_t sample_size,
+    double log_response_shift = 0.0)
+{
+    LocalPotentialSampleList sample_entries;
+    sample_entries.reserve(sample_size);
+    for (std::size_t i = 0; i < sample_size; i++)
+    {
+        const auto distance{ static_cast<float>(0.05 * static_cast<double>(i)) };
         const auto response{
             static_cast<float>(std::exp(1.0 + log_response_shift - 0.5 * distance * distance))
         };
@@ -110,6 +134,180 @@ std::vector<std::vector<rg::RHBMParameterVector>> BuildBetaGroupList(
     return beta_group_list;
 }
 
+std::unique_ptr<rg::ModelObject> MakeLocalFittingModel()
+{
+    std::vector<std::unique_ptr<rg::AtomObject>> atom_list;
+    atom_list.reserve(2);
+    for (int i = 0; i < 2; i++)
+    {
+        auto atom{ std::make_unique<rg::AtomObject>() };
+        atom->SetSerialID(i + 1);
+        atom->SetPosition(static_cast<float>(10 * i), 0.0f, 0.0f);
+        atom_list.emplace_back(std::move(atom));
+    }
+
+    auto model{ std::make_unique<rg::ModelObject>(std::move(atom_list)) };
+    model->SelectAllAtoms();
+
+    auto analysis{ model->EditAnalysis() };
+    for (std::size_t i = 0; i < model->GetSelectedAtoms().size(); i++)
+    {
+        auto local_editor{ analysis.EnsureAtomLocalPotential(*model->GetSelectedAtoms().at(i)) };
+        local_editor.SetSamplingEntries(MakeSampleEntries(0.1 * static_cast<double>(i)));
+        local_editor.SetAlphaR(0.2);
+    }
+    return model;
+}
+
+std::unique_ptr<rg::ModelObject> MakeLocalAlphaTrainingModel(
+    const std::vector<LocalPotentialSampleList> & sample_entries_list,
+    double initial_alpha_r)
+{
+    std::vector<std::unique_ptr<rg::AtomObject>> atom_list;
+    atom_list.reserve(sample_entries_list.size());
+    for (std::size_t i = 0; i < sample_entries_list.size(); i++)
+    {
+        auto atom{ std::make_unique<rg::AtomObject>() };
+        atom->SetSerialID(static_cast<int>(i + 1));
+        atom->SetComponentKey(7);
+        atom->SetAtomKey(3);
+        atom->SetPosition(static_cast<float>(10 * i), 0.0f, 0.0f);
+        atom_list.emplace_back(std::move(atom));
+    }
+
+    auto model{ std::make_unique<rg::ModelObject>(std::move(atom_list)) };
+    model->SelectAllAtoms();
+
+    auto analysis{ model->EditAnalysis() };
+    analysis.RebuildAtomGroupsFromSelection();
+    for (std::size_t i = 0; i < model->GetSelectedAtoms().size(); i++)
+    {
+        auto local_editor{ analysis.EnsureAtomLocalPotential(*model->GetSelectedAtoms().at(i)) };
+        local_editor.SetSamplingEntries(sample_entries_list.at(i));
+        local_editor.SetAlphaR(initial_alpha_r);
+    }
+    return model;
+}
+
+std::unique_ptr<rg::ModelObject> MakeGroupAlphaTrainingModel(std::size_t member_size)
+{
+    std::vector<std::unique_ptr<rg::AtomObject>> atom_list;
+    atom_list.reserve(member_size);
+    for (std::size_t i = 0; i < member_size; i++)
+    {
+        auto atom{ std::make_unique<rg::AtomObject>() };
+        atom->SetSerialID(static_cast<int>(i + 1));
+        atom->SetComponentKey(7);
+        atom->SetAtomID("CA");
+        atom->SetAtomKey(static_cast<AtomKey>(Spot::CA));
+        atom->SetPosition(static_cast<float>(10 * i), 0.0f, 0.0f);
+        atom_list.emplace_back(std::move(atom));
+    }
+
+    auto model{ std::make_unique<rg::ModelObject>(std::move(atom_list)) };
+    model->SelectAllAtoms();
+
+    auto analysis{ model->EditAnalysis() };
+    analysis.RebuildAtomGroupsFromSelection();
+    for (std::size_t i = 0; i < model->GetSelectedAtoms().size(); i++)
+    {
+        auto local_editor{ analysis.EnsureAtomLocalPotential(*model->GetSelectedAtoms().at(i)) };
+        local_editor.SetSamplingEntries(MakeSampleEntries(0.02 * static_cast<double>(i)));
+        local_editor.SetAlphaR(0.2);
+    }
+    return model;
+}
+
+std::vector<std::vector<rg::LocalGaussianResult>> CollectMainChainComponentMemberResults(
+    const rg::ModelObject & model)
+{
+    const auto analysis_view{ model.GetAnalysisView() };
+    const auto component_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
+    std::vector<std::vector<rg::LocalGaussianResult>> member_result_list;
+    for (const auto group_key : analysis_view.CollectAtomGroupKeys(component_class_key))
+    {
+        const auto & atom_list{ analysis_view.GetAtomObjectList(group_key, component_class_key) };
+        if (atom_list.size() < 10) continue;
+        if (atom_list.front()->IsMainChainAtom() == false) continue;
+
+        std::vector<rg::LocalGaussianResult> group_member_results;
+        group_member_results.reserve(atom_list.size());
+        for (const auto * atom : atom_list)
+        {
+            group_member_results.emplace_back(
+                rg::AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult());
+        }
+        member_result_list.emplace_back(std::move(group_member_results));
+    }
+    return member_result_list;
+}
+
+void ExpectAllAtomGroupsHaveAlphaG(const rg::ModelObject & model, double expected_alpha_g)
+{
+    const auto analysis_view{ model.GetAnalysisView() };
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
+    {
+        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
+        for (const auto group_key : analysis_view.CollectAtomGroupKeys(class_key))
+        {
+            EXPECT_DOUBLE_EQ(expected_alpha_g, analysis_view.GetAtomAlphaG(group_key, class_key));
+        }
+    }
+}
+
+double GetFirstAtomGroupAlphaG(const rg::ModelObject & model)
+{
+    const auto analysis_view{ model.GetAnalysisView() };
+    const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(0) };
+    const auto group_keys{ analysis_view.CollectAtomGroupKeys(class_key) };
+    if (group_keys.empty())
+    {
+        throw std::runtime_error("Test model has no atom groups.");
+    }
+    return analysis_view.GetAtomAlphaG(group_keys.front(), class_key);
+}
+
+void SetAllAtomGroupsAlphaG(rg::ModelObject & model, double alpha_g)
+{
+    auto analysis{ model.EditAnalysis() };
+    const auto analysis_view{ model.GetAnalysisView() };
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
+    {
+        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
+        for (const auto group_key : analysis_view.CollectAtomGroupKeys(class_key))
+        {
+            analysis.SetAtomGroupAlphaG(group_key, class_key, alpha_g);
+        }
+    }
+}
+
+void ExpectAllAtomGroupsHavePotentialFittingOutput(const rg::ModelObject & model)
+{
+    const auto analysis_view{ model.GetAnalysisView() };
+    std::size_t group_count{ 0 };
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
+    {
+        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
+        for (const auto group_key : analysis_view.CollectAtomGroupKeys(class_key))
+        {
+            (void)analysis_view.GetAtomGroupMean(group_key, class_key);
+            (void)analysis_view.GetAtomGroupMDPDE(group_key, class_key);
+            (void)analysis_view.GetAtomGroupPriorWithUncertainty(group_key, class_key);
+
+            const auto & atom_list{ analysis_view.GetAtomObjectList(group_key, class_key) };
+            ASSERT_FALSE(atom_list.empty());
+            for (const auto * atom : atom_list)
+            {
+                const auto local_view{ rg::AtomLocalPotentialView::RequireFor(*atom) };
+                EXPECT_TRUE(local_view.FindAnnotation(class_key).has_value());
+                EXPECT_TRUE(local_view.GetGaussianResult().fit_result.has_value());
+            }
+            group_count++;
+        }
+    }
+    EXPECT_GT(group_count, 0U);
+}
+
 } // namespace
 
 TEST(GaussianEstimatorTest, SampleListAlphaRReturnsFiniteAlpha)
@@ -183,6 +381,128 @@ TEST(GaussianEstimatorTest, AlphaGMatchesTrainingFunctionBestAlpha)
     };
 
     EXPECT_DOUBLE_EQ(actual, expected);
+}
+
+TEST(GaussianEstimatorTest, RunLocalPotentialFittingUpdatesSelectedAtomLocalEntries)
+{
+    auto model{ MakeLocalFittingModel() };
+    const auto options{ MakeOptions() };
+    const auto expected_sample_size{ MakeSampleEntries().size() };
+
+    ge::RunLocalPotentialFitting(*model, options);
+
+    for (const auto * atom : model->GetSelectedAtoms())
+    {
+        const auto local_view{ rg::AtomLocalPotentialView::RequireFor(*atom) };
+        const auto & result{ local_view.GetGaussianResult() };
+
+        EXPECT_DOUBLE_EQ(0.2, result.alpha_r);
+        EXPECT_TRUE(result.fit_result.has_value());
+        EXPECT_EQ(expected_sample_size, local_view.GetSamplingEntries(false).size());
+    }
+}
+
+TEST(GaussianEstimatorTest, RunLocalAlphaTrainingUpdatesComponentGroupAlphaR)
+{
+    const auto options{ MakeOptions() };
+    const std::vector<LocalPotentialSampleList> sample_entries_list{
+        MakeAlphaTrainingSampleEntries(12),
+        MakeAlphaTrainingSampleEntries(12, 0.2)
+    };
+    const auto expected_alpha_r{ ge::TrainAlphaR(sample_entries_list, options) };
+    auto model{ MakeLocalAlphaTrainingModel(sample_entries_list, 0.2) };
+
+    ge::RunLocalAlphaTraining(*model, options);
+
+    for (const auto * atom : model->GetSelectedAtoms())
+    {
+        EXPECT_DOUBLE_EQ(
+            expected_alpha_r,
+            rg::AtomLocalPotentialView::RequireFor(*atom).GetAlphaR());
+    }
+}
+
+TEST(GaussianEstimatorTest, RunLocalAlphaTrainingSkipsGroupsWithoutEnoughSamples)
+{
+    const auto options{ MakeOptions() };
+    constexpr double initial_alpha_r{ 0.2 };
+    const std::vector<LocalPotentialSampleList> sample_entries_list{
+        MakeAlphaTrainingSampleEntries(6),
+        MakeAlphaTrainingSampleEntries(6, 0.2)
+    };
+    auto model{ MakeLocalAlphaTrainingModel(sample_entries_list, initial_alpha_r) };
+
+    ge::RunLocalAlphaTraining(*model, options);
+
+    for (const auto * atom : model->GetSelectedAtoms())
+    {
+        EXPECT_DOUBLE_EQ(
+            initial_alpha_r,
+            rg::AtomLocalPotentialView::RequireFor(*atom).GetAlphaR());
+    }
+}
+
+TEST(GaussianEstimatorTest, RunGroupAlphaTrainingUpdatesAllAtomGroupAlphaG)
+{
+    const auto options{ MakeOptions() };
+    auto model{ MakeGroupAlphaTrainingModel(10) };
+
+    ge::RunGroupAlphaTraining(*model, options);
+
+    const auto member_result_list{ CollectMainChainComponentMemberResults(*model) };
+    const rg::rhbm_trainer::RHBMTrainingOptions trainer_options;
+    const auto alpha_g{ GetFirstAtomGroupAlphaG(*model) };
+    ASSERT_FALSE(member_result_list.empty());
+    EXPECT_GE(alpha_g, trainer_options.alpha_min);
+    EXPECT_LE(alpha_g, trainer_options.alpha_max);
+    ExpectAllAtomGroupsHaveAlphaG(*model, alpha_g);
+}
+
+TEST(GaussianEstimatorTest, RunGroupAlphaTrainingUsesFallbackAlphaGWithoutEnoughMembers)
+{
+    const auto options{ MakeOptions() };
+    const std::vector<std::vector<rg::LocalGaussianResult>> empty_member_result_list;
+    const auto expected_alpha_g{ ge::TrainAlphaG(empty_member_result_list, options) };
+    auto model{ MakeGroupAlphaTrainingModel(6) };
+
+    ge::RunGroupAlphaTraining(*model, options);
+
+    ExpectAllAtomGroupsHaveAlphaG(*model, expected_alpha_g);
+}
+
+TEST(GaussianEstimatorTest, RunGroupPotentialFittingWritesGroupResultsAndMemberAnnotations)
+{
+    const auto options{ MakeOptions() };
+    auto model{ MakeGroupAlphaTrainingModel(10) };
+    SetAllAtomGroupsAlphaG(*model, 0.3);
+    ge::RunLocalPotentialFitting(*model, options);
+
+    ge::RunGroupPotentialFitting(*model, options);
+
+    ExpectAllAtomGroupsHavePotentialFittingOutput(*model);
+}
+
+TEST(GaussianEstimatorTest, RunGroupPotentialFittingPreservesCorrectedLocalSamplingEntries)
+{
+    const auto options{ MakeOptions() };
+    auto model{ MakeGroupAlphaTrainingModel(10) };
+    SetAllAtomGroupsAlphaG(*model, 0.3);
+    ge::RunLocalPotentialFitting(*model, options);
+    const auto expected_sample_size{
+        rg::AtomLocalPotentialView::RequireFor(*model->GetSelectedAtoms().front())
+            .GetSamplingEntries(false)
+            .size()
+    };
+
+    ge::RunGroupPotentialFitting(*model, options);
+
+    for (const auto * atom : model->GetSelectedAtoms())
+    {
+        EXPECT_EQ(
+            expected_sample_size,
+            rg::AtomLocalPotentialView::RequireFor(*atom).GetSamplingEntries(false).size());
+    }
+    ExpectAllAtomGroupsHavePotentialFittingOutput(*model);
 }
 
 TEST(GaussianEstimatorTest, RejectsEmptyAlphaRTrainingInputs)

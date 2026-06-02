@@ -1,5 +1,12 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 
+#include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
+#include <rhbm_gem/data/object/AtomObject.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
+#include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
@@ -7,14 +14,53 @@
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
+#include <atomic>
 #include <stdexcept>
+#include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include <Eigen/Dense>
 
+#ifdef USE_OPENMP
+#include <omp.h>
+#endif
+
 namespace rhbm_gem::core {
 namespace {
+constexpr std::size_t kMinimumAlphaRTrainingSampleCount{ 10 };
+constexpr std::size_t kMinimumAlphaGTrainingMemberCount{ 10 };
+
+std::vector<AtomLocalPotentialEditor> BuildSelectedAtomLocalEditors(ModelObject & model_object)
+{
+    auto analysis{ model_object.EditAnalysis() };
+    const auto & atom_list{ model_object.GetSelectedAtoms() };
+    std::vector<AtomLocalPotentialEditor> local_editor_list;
+    local_editor_list.reserve(atom_list.size());
+    for (auto * atom : atom_list)
+    {
+        local_editor_list.emplace_back(analysis.EnsureAtomLocalPotential(*atom));
+    }
+    return local_editor_list;
+}
+
+bool HasEnoughSamplesInFitRange(
+    const LocalPotentialSampleList & sample_entries,
+    double fit_range_min,
+    double fit_range_max,
+    std::size_t minimum_sample_count)
+{
+    std::size_t count{ 0 };
+    for (const auto & sample : sample_entries)
+    {
+        if (sample.point.distance < fit_range_min || sample.point.distance > fit_range_max) continue;
+        count++;
+        if (count >= minimum_sample_count) return true;
+    }
+    return false;
+}
+
 RHBMExecutionOptions MakeExecutionOptions(const FitOptions & options)
 {
     RHBMExecutionOptions execution_options;
@@ -260,6 +306,55 @@ std::vector<RHBMBetaEstimateResult> BuildMemberFitResultList(
     return fit_result_list;
 }
 
+using FittedGaussianSnapshot = std::unordered_map<const AtomObject *, GaussianModel3D>;
+
+FittedGaussianSnapshot BuildFittedGaussianSnapshot(const std::vector<AtomObject *> & atom_list)
+{
+    FittedGaussianSnapshot snapshot;
+    snapshot.reserve(atom_list.size());
+    for (const auto * atom : atom_list)
+    {
+        const auto local_view{ AtomLocalPotentialView::For(*atom) };
+        if (!local_view.IsAvailable()) continue;
+
+        const auto & gaussian_result{ local_view.GetGaussianResult() };
+        if (!gaussian_result.fit_result.has_value()) continue;
+
+        snapshot.emplace(atom, gaussian_result.mdpde.GetModel());
+    }
+    return snapshot;
+}
+
+LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
+    const AtomObject & atom,
+    const FittedGaussianSnapshot & fitted_gaussian_snapshot)
+{
+    const auto local_view{ AtomLocalPotentialView::RequireFor(atom) };
+    const auto sample_entries{ local_view.GetSamplingEntries(false) };
+    const auto & neighbor_atom_list{ atom.FindNeighborAtoms() };
+    LocalPotentialSampleList updated_list;
+    updated_list.reserve(sample_entries.size());
+    for (const auto & sample : sample_entries)
+    {
+        auto sample_position{ sample.point.position };
+        auto response_value{ sample.response };
+        for (const auto * neighbor_atom : neighbor_atom_list)
+        {
+            const auto gaussian_iter{ fitted_gaussian_snapshot.find(neighbor_atom) };
+            if (gaussian_iter == fitted_gaussian_snapshot.end()) continue;
+
+            auto neighbor_position{ neighbor_atom->GetPosition() };
+            auto distance{
+                static_cast<double>(
+                    array_helper::ComputeNorm<float>(sample_position, neighbor_position))
+            };
+            response_value -= static_cast<float>(gaussian_iter->second.SignalAtDistance(distance));
+        }
+        updated_list.emplace_back(LocalPotentialSample{response_value, sample.point });
+    }
+    return updated_list;
+}
+
 } // namespace
 
 double TrainAlphaR(
@@ -399,6 +494,206 @@ GroupGaussianResult EstimateGroupGaussian(
     auto result{ DecodeGroupGaussianResult(alpha_g, raw_result, options.local_fit_model) };
     result.member_results = DecodeMemberGaussianResults(raw_result, options.local_fit_model);
     return result;
+}
+
+void RunLocalAlphaTraining(ModelObject & model_object, const FitOptions & options)
+{
+    auto analysis{ model_object.EditAnalysis() };
+    const auto analysis_view{ model_object.GetAnalysisView() };
+    const auto component_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
+    const auto component_group_keys{ analysis_view.CollectAtomGroupKeys(component_class_key) };
+
+    size_t count{ 0 };
+    for (const auto group_key : component_group_keys)
+    {
+        const auto & group_atom_list{
+            analysis_view.GetAtomObjectList(group_key, component_class_key)
+        };
+        std::vector<LocalPotentialSampleList> sample_entries_list;
+        sample_entries_list.reserve(group_atom_list.size());
+        for (auto * atom : group_atom_list)
+        {
+            analysis.EnsureAtomLocalPotential(*atom);
+            const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
+            const auto & sample_entries{ local_view.GetSamplingEntries() };
+            if (!HasEnoughSamplesInFitRange(
+                    sample_entries,
+                    options.distance_min,
+                    options.distance_max,
+                    kMinimumAlphaRTrainingSampleCount)) continue;
+            sample_entries_list.emplace_back(sample_entries);
+        }
+        sample_entries_list.shrink_to_fit();
+        if (!sample_entries_list.empty())
+        {
+            const auto alpha_r{ TrainAlphaR(sample_entries_list, options) };
+            for (auto * atom : group_atom_list)
+            {
+                analysis.EnsureAtomLocalPotential(*atom).SetAlphaR(alpha_r);
+            }
+        }
+        Logger::ProgressPercent(++count, component_group_keys.size());
+    }
+}
+
+void RunGroupAlphaTraining(ModelObject & model_object, const FitOptions & options)
+{
+    auto analysis{ model_object.EditAnalysis() };
+    const auto analysis_view{ model_object.GetAnalysisView() };
+    const auto component_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
+    const auto component_group_keys{ analysis_view.CollectAtomGroupKeys(component_class_key) };
+
+    RunLocalPotentialFitting(model_object, options);
+
+    std::vector<std::vector<LocalGaussianResult>> member_result_list;
+    member_result_list.reserve(component_group_keys.size());
+    for (const auto group_key : component_group_keys)
+    {
+        const auto & group_atom_list{
+            analysis_view.GetAtomObjectList(group_key, component_class_key)
+        };
+        if (group_atom_list.size() < kMinimumAlphaGTrainingMemberCount) continue;
+        if (group_atom_list.front()->IsMainChainAtom() == false) continue;
+
+        std::vector<LocalGaussianResult> group_member_results;
+        group_member_results.reserve(group_atom_list.size());
+        for (auto * atom : group_atom_list)
+        {
+            analysis.EnsureAtomLocalPotential(*atom);
+            const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
+            group_member_results.emplace_back(local_view.GetGaussianResult());
+        }
+        member_result_list.emplace_back(std::move(group_member_results));
+    }
+
+    const auto alpha_g{ TrainAlphaG(member_result_list, options) };
+
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
+    {
+        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
+        for (const auto group_key : analysis_view.CollectAtomGroupKeys(class_key))
+        {
+            analysis.SetAtomGroupAlphaG(group_key, class_key, alpha_g);
+        }
+    }
+}
+
+void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & options)
+{
+    const auto selected_atom_size{ model_object.GetSelectedAtomCount() };
+    const auto & atom_list{ model_object.GetSelectedAtoms() };
+    auto local_editor_list{ BuildSelectedAtomLocalEditors(model_object) };
+    std::atomic<size_t> atom_count{ 0 };
+    Logger::Log(LogLevel::Info,
+        "Run Local atom fitting for " + std::to_string(selected_atom_size) + " atoms.");
+
+#ifdef USE_OPENMP
+    #pragma omp parallel for num_threads(options.thread_size)
+#endif
+    for (size_t i = 0; i < selected_atom_size; i++)
+    {
+        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
+        auto sample_entries{ local_view.GetSamplingEntries() };
+        const auto result{
+            EstimateLocalGaussianWithIntercept(sample_entries, local_view.GetAlphaR(), options)
+        };
+        local_editor_list[i].SetGaussianResult(result);
+
+#ifdef USE_OPENMP
+        #pragma omp critical
+#endif
+        {
+            atom_count++;
+            Logger::ProgressPercent(atom_count, selected_atom_size);
+        }
+    }
+
+    const size_t iter_size{ 10 };
+    std::vector<LocalPotentialSampleList> updated_sample_entries_list(selected_atom_size);
+    Logger::Log(LogLevel::Info, "Run updated local atom fitting with iterations...");
+    for (size_t iter = 0; iter < iter_size; iter++)
+    {
+        const auto fitted_gaussian_snapshot{ BuildFittedGaussianSnapshot(atom_list) };
+#ifdef USE_OPENMP
+        #pragma omp parallel for num_threads(options.thread_size)
+#endif
+        for (size_t i = 0; i < selected_atom_size; i++)
+        {
+            const auto & atom{ *atom_list[i] };
+            const auto local_view{ AtomLocalPotentialView::RequireFor(atom) };
+            auto updated_sample_entries{
+                UpdateSampleListWithFittedGaussian(atom, fitted_gaussian_snapshot)
+            };
+            const auto result{
+                EstimateLocalGaussian(
+                    updated_sample_entries,
+                    local_view.GetAlphaR(),
+                    options)
+            };
+            updated_sample_entries_list[i] = std::move(updated_sample_entries);
+            local_editor_list[i].SetGaussianResult(result);
+        }
+        Logger::ProgressBar(iter+1, iter_size);
+    }
+
+    for (size_t i = 0; i < selected_atom_size; i++)
+    {
+        local_editor_list[i].SetSamplingEntries(std::move(updated_sample_entries_list[i]));
+    }
+}
+
+void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & options)
+{
+    auto analysis{ model_object.EditAnalysis() };
+    const auto analysis_view{ model_object.GetAnalysisView() };
+    for (auto * atom : model_object.GetSelectedAtoms())
+    {
+        analysis.EnsureAtomLocalPotential(*atom);
+    }
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
+    {
+        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
+        Logger::Log(LogLevel::Info, "Class type: " + class_key);
+
+        auto group_key_list{ analysis_view.CollectAtomGroupKeys(class_key) };
+        auto group_key_size{ group_key_list.size() };
+        std::atomic<size_t> key_count{ 0 };
+
+#ifdef USE_OPENMP
+        #pragma omp parallel for num_threads(options.thread_size)
+#endif
+        for (size_t k = 0; k < group_key_size; k++)
+        {
+            auto group_key{ group_key_list[k] };
+            const auto & atom_list{ analysis_view.GetAtomObjectList(group_key, class_key) };
+            std::vector<LocalPotentialSampleList> member_sample_list;
+            std::vector<LocalGaussianResult> member_result_list;
+            member_sample_list.reserve(atom_list.size());
+            member_result_list.reserve(atom_list.size());
+            for (const auto & atom : atom_list)
+            {
+                const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
+                member_sample_list.emplace_back(local_view.GetSamplingEntries(false));
+                member_result_list.emplace_back(local_view.GetGaussianResult());
+            }
+            const auto result{
+                EstimateGroupGaussian(
+                    member_sample_list,
+                    member_result_list,
+                    analysis_view.GetAtomAlphaG(group_key, class_key),
+                    options)
+            };
+
+#ifdef USE_OPENMP
+            #pragma omp critical
+#endif
+            {
+                analysis.ApplyAtomGroupGaussianResult(group_key, class_key, result);
+                key_count++;
+                Logger::ProgressBar(key_count, group_key_size);
+            }
+        }
+    }
 }
 
 } // namespace rhbm_gem::core

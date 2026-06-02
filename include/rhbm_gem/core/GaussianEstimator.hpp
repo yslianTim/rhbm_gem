@@ -5,7 +5,10 @@
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 
-namespace rhbm_gem::core {
+namespace rhbm_gem {
+class ModelObject;
+
+namespace core {
 
 struct FitOptions
 {
@@ -39,4 +42,11 @@ GroupGaussianResult EstimateGroupGaussian(
     double alpha_g,
     const FitOptions & options);
 
-} // namespace rhbm_gem::core
+void RunLocalAlphaTraining(ModelObject & model_object, const FitOptions & options);
+void RunGroupAlphaTraining(ModelObject & model_object, const FitOptions & options);
+void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & options);
+void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & options);
+
+} // namespace core
+
+} // namespace rhbm_gem
