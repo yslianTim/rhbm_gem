@@ -3,11 +3,17 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <utility>
 #include <vector>
 
+#include <rhbm_gem/data/object/AtomLocalPotentialEditor.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
+#include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/SampleFilter.hpp>
+#include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/math/GridSampler.hpp>
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
 
@@ -95,6 +101,19 @@ LocalPotentialSampleList BuildLocalPotentialSampleList(
     return sampling_data_list;
 }
 
+std::vector<AtomLocalPotentialEditor> BuildSelectedAtomLocalEditors(ModelObject & model_object)
+{
+    auto analysis{ model_object.EditAnalysis() };
+    const auto & atom_list{ model_object.GetSelectedAtoms() };
+    std::vector<AtomLocalPotentialEditor> local_editor_list;
+    local_editor_list.reserve(atom_list.size());
+    for (auto * atom : atom_list)
+    {
+        local_editor_list.emplace_back(analysis.EnsureAtomLocalPotential(*atom));
+    }
+    return local_editor_list;
+}
+
 } // namespace
 
 LocalPotentialSampleList SampleMapValues(
@@ -125,6 +144,36 @@ LocalPotentialSampleList SampleAtomMapValues(
     }
     sample_filter::FilterSamplingPointList(sample_point_list, local_position, reject_position_list);
     return BuildLocalPotentialSampleList(map_object, sample_point_list);
+}
+
+void RunPotentialSamplingWorkflow(
+    MapObject & map_object,
+    ModelObject & model_object,
+    SphereSamplingMethod sampling_method,
+    int thread_count)
+{
+    ScopeTimer timer("MapSampler::RunPotentialSamplingWorkflow");
+    const auto & atom_list{ model_object.GetSelectedAtoms() };
+    size_t atom_count{ 0 };
+    auto local_editor_list{ BuildSelectedAtomLocalEditors(model_object) };
+#ifdef USE_OPENMP
+    #pragma omp parallel for num_threads(thread_count)
+#endif
+    for (size_t i = 0; i < atom_list.size(); i++)
+    {
+        auto sampling_entries{
+            SampleAtomMapValues(map_object, *atom_list[i], sampling_method)
+        };
+        local_editor_list[i].SetSamplingEntries(std::move(sampling_entries));
+
+#ifdef USE_OPENMP
+        #pragma omp critical
+#endif
+        {
+            atom_count++;
+            Logger::ProgressPercent(atom_count, atom_list.size());
+        }
+    }
 }
 
 } // namespace rhbm_gem::core

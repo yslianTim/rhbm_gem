@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <rhbm_gem/core/MapSampler.hpp>
+#include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -27,6 +28,22 @@ MapObject MakeMapObject()
     for (size_t i = 0; i < 8; ++i)
     {
         values[i] = static_cast<float>(i + 1);
+    }
+    return MapObject{ grid_size, grid_spacing, origin, std::move(values) };
+}
+
+MapObject MakeWorkflowMapObject()
+{
+    std::array<int, 3> grid_size{ 8, 8, 8 };
+    std::array<float, 3> grid_spacing{ 1.0f, 1.0f, 1.0f };
+    std::array<float, 3> origin{ -3.0f, -3.0f, -3.0f };
+    const size_t voxel_size{
+        static_cast<size_t>(grid_size.at(0) * grid_size.at(1) * grid_size.at(2))
+    };
+    auto values{ std::make_unique<float[]>(voxel_size) };
+    for (size_t i = 0; i < voxel_size; ++i)
+    {
+        values[i] = 1.0f;
     }
     return MapObject{ grid_size, grid_spacing, origin, std::move(values) };
 }
@@ -120,6 +137,26 @@ TEST(MapSamplerTest, AtomSamplerKeepsRejectedSamplesAsUnselected)
     ASSERT_FALSE(sampling_data.empty());
     EXPECT_GT(selected_count, 0u);
     EXPECT_LT(selected_count, sampling_data.size());
+}
+
+TEST(MapSamplerTest, PotentialSamplingWorkflowWritesSamplesToSelectedAtoms)
+{
+    auto map{ MakeWorkflowMapObject() };
+    auto model{ MakeLinearNeighborModel() };
+    model->SelectAllAtoms();
+
+    RunPotentialSamplingWorkflow(
+        map,
+        *model,
+        SphereSamplingMethod::FibonacciDeterministic,
+        1);
+
+    ASSERT_EQ(2u, model->GetSelectedAtomCount());
+    for (const auto * atom : model->GetSelectedAtoms())
+    {
+        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
+        EXPECT_FALSE(local_view.GetSamplingEntries(false).empty());
+    }
 }
 
 TEST(MapSamplerTest, AtomSamplerRequiresAttachedAtomBeforeSampling)

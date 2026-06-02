@@ -19,6 +19,7 @@ Internal schema and wiring:
 Concrete implementation:
 
 - [`src/core/command/PotentialAnalysisCommand.cpp`](/src/core/command/PotentialAnalysisCommand.cpp)
+- [`src/core/MapSampler.cpp`](/src/core/MapSampler.cpp)
 
 ## Request Surface
 
@@ -81,7 +82,7 @@ Expected result contract:
 - builds command-owned data objects through `BuildDataObject()`
 - optionally switches the model object into simulation mode
 - optionally runs map normalization, then runs model preprocessing
-- performs atom sampling, classification, fitting, and optional alpha training
+- delegates atom sampling to `MapSampler`, then performs fitting and optional alpha training
 - saves the prepared model through `SavePreparedModel()`
 
 `PotentialAnalysisCommand::BuildDataObject()`:

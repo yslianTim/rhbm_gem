@@ -330,6 +330,8 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
     const FittedGaussianSnapshot & fitted_gaussian_snapshot)
 {
     const auto local_view{ AtomLocalPotentialView::RequireFor(atom) };
+    const auto gaussian_local{ fitted_gaussian_snapshot.find(&atom) };
+    const auto intercept{ static_cast<float>(gaussian_local->second.GetIntercept())};
     const auto sample_entries{ local_view.GetSamplingEntries(false) };
     const auto & neighbor_atom_list{ atom.FindNeighborAtoms() };
     LocalPotentialSampleList updated_list;
@@ -337,7 +339,7 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
     for (const auto & sample : sample_entries)
     {
         auto sample_position{ sample.point.position };
-        auto response_value{ sample.response };
+        auto response_value{ sample.response - intercept };
         for (const auto * neighbor_atom : neighbor_atom_list)
         {
             const auto gaussian_iter{ fitted_gaussian_snapshot.find(neighbor_atom) };
@@ -608,7 +610,7 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
         }
     }
 
-    const size_t iter_size{ 10 };
+    const size_t iter_size{ 20 };
     std::vector<LocalPotentialSampleList> updated_sample_entries_list(selected_atom_size);
     Logger::Log(LogLevel::Info, "Run updated local atom fitting with iterations...");
     for (size_t iter = 0; iter < iter_size; iter++)

@@ -18,7 +18,6 @@
 #include <string>
 #include <unordered_set>
 #include <utility>
-#include <vector>
 
 namespace rhbm_gem::core {
 
@@ -76,29 +75,6 @@ std::optional<PotentialAnalysisInputs> LoadPotentialAnalysisInputs(
         Logger::Log(LogLevel::Error, "LoadPotentialAnalysisInputs : " + std::string(e.what()));
         return std::nullopt;
     }
-}
-
-std::vector<AtomLocalPotentialEditor> BuildSelectedAtomLocalEditors(ModelObject & model_object)
-{
-    auto analysis{ model_object.EditAnalysis() };
-    const auto & atom_list{ model_object.GetSelectedAtoms() };
-    std::vector<AtomLocalPotentialEditor> local_editor_list;
-    local_editor_list.reserve(atom_list.size());
-    for (auto * atom : atom_list)
-    {
-        local_editor_list.emplace_back(analysis.EnsureAtomLocalPotential(*atom));
-    }
-    return local_editor_list;
-}
-
-FitOptions MakeGaussianEstimatorOptions(const PotentialAnalysisRequest & request)
-{
-    FitOptions options;
-    options.local_fit_model = LocalGaussianFitModel::LogQuadratic;
-    options.distance_min = request.fit_range_min;
-    options.distance_max = request.fit_range_max;
-    options.thread_size = request.job_count;
-    return options;
 }
 
 void RunModelObjectPreprocessing(
@@ -170,51 +146,6 @@ void RunModelObjectPreprocessing(
     }
 }
 
-void RunAtomPotentialFittingWorkflow(ModelObject & model_object, const PotentialAnalysisRequest & request)
-{
-    ScopeTimer timer("PotentialAnalysisCommand::RunAtomPotentialFittingWorkflow");
-    const auto options{ MakeGaussianEstimatorOptions(request) };
-    if (request.training_alpha_flag)
-    {
-        RunLocalAlphaTraining(model_object, options);
-        RunGroupAlphaTraining(model_object, options);
-    }
-    else
-    {
-        RunLocalPotentialFitting(model_object, options);
-    }
-    RunGroupPotentialFitting(model_object, options);
-}
-
-void RunPotentialSamplingWorkflow(
-    MapObject & map_object,
-    ModelObject & model_object,
-    const PotentialAnalysisRequest & request)
-{
-    ScopeTimer timer("PotentialAnalysisCommand::RunPotentialSamplingWorkflow");
-    const auto & atom_list{ model_object.GetSelectedAtoms() };
-    size_t atom_count{ 0 };
-    auto local_editor_list{ BuildSelectedAtomLocalEditors(model_object) };
-#ifdef USE_OPENMP
-    #pragma omp parallel for num_threads(request.job_count)
-#endif
-    for (size_t i = 0; i < atom_list.size(); i++)
-    {
-        auto sampling_entries{
-            SampleAtomMapValues(map_object, *atom_list[i], request.sampling_method)
-        };
-        local_editor_list[i].SetSamplingEntries(std::move(sampling_entries));
-
-#ifdef USE_OPENMP
-        #pragma omp critical
-#endif
-        {
-            atom_count++;
-            Logger::ProgressPercent(atom_count, atom_list.size());
-        }
-    }
-}
-
 } // namespace
 
 PotentialAnalysisCommand::PotentialAnalysisCommand() : CommandBase<PotentialAnalysisRequest>{}
@@ -251,8 +182,23 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
         request.exclude_hydrogen,
         request.alpha_r,
         request.alpha_g);
-    RunPotentialSamplingWorkflow(map_object, model_object, request);
-    RunAtomPotentialFittingWorkflow(model_object, request);
+    RunPotentialSamplingWorkflow(map_object, model_object, request.sampling_method, request.job_count);
+
+    FitOptions options;
+    options.local_fit_model = LocalGaussianFitModel::LogQuadratic;
+    options.distance_min = request.fit_range_min;
+    options.distance_max = request.fit_range_max;
+    options.thread_size = request.job_count;
+    if (request.training_alpha_flag)
+    {
+        RunLocalAlphaTraining(model_object, options);
+        RunGroupAlphaTraining(model_object, options);
+    }
+    else
+    {
+        RunLocalPotentialFitting(model_object, options);
+    }
+    RunGroupPotentialFitting(model_object, options);
 
     DataRepository repository{ request.database_path };
     repository.SaveModel(model_object, request.saved_key_tag);

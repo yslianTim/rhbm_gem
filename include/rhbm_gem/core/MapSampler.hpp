@@ -10,6 +10,7 @@ namespace rhbm_gem {
 
 class AtomObject;
 class MapObject;
+class ModelObject;
 
 namespace core {
 
@@ -23,6 +24,12 @@ LocalPotentialSampleList SampleAtomMapValues(
     const MapObject & map_object,
     const AtomObject & atom,
     SphereSamplingMethod sampling_method);
+
+void RunPotentialSamplingWorkflow(
+    MapObject & map_object,
+    ModelObject & model_object,
+    SphereSamplingMethod sampling_method,
+    int thread_count);
 
 } // namespace core
 
