@@ -259,10 +259,7 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
     for (size_t i = 0; i < selected_atom_size; i++)
     {
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
-        auto sample_entries{
-            //sample_filter::FilterLocalPotentialSampleList(local_view.GetSamplingEntries())
-            local_view.GetSamplingEntries()
-        };
+        auto sample_entries{ local_view.GetSamplingEntries() };
         const auto result{
             EstimateLocalGaussianWithIntercept(sample_entries, local_view.GetAlphaR(), options)
         };
@@ -278,7 +275,7 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
     }
 
     // Iterate
-    const size_t iter_size{ 5 };
+    const size_t iter_size{ 10 };
     std::vector<LocalPotentialSampleList> updated_sample_entries_list(selected_atom_size);
     Logger::Log(LogLevel::Info, "Run updated local atom fitting with iterations...");
     for (size_t iter = 0; iter < iter_size; iter++)
