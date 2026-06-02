@@ -610,13 +610,22 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
         }
     }
 
-    const size_t iter_size{ 20 };
+    const size_t maximum_iter_size{ 100 };
+    constexpr double convergence_tolerance{ 1.0e-4 };
     std::vector<LocalPotentialSampleList> sample_entries_list(selected_atom_size);
-    std::vector<Eigen::VectorXd> estimation_list(selected_atom_size);
+    std::vector<Eigen::VectorXd> previous_estimation_list(selected_atom_size);
+    double previous_residual_median{ std::numeric_limits<double>::max() };
+    for (size_t i = 0; i < selected_atom_size; i++)
+    {
+        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
+        previous_estimation_list[i] = local_view.GetGaussianResult().mdpde.GetModel().ToVector();
+    }
+
     Logger::Log(LogLevel::Info, "Run updated local atom fitting with iterations...");
-    for (size_t iter = 0; iter < iter_size; iter++)
+    for (size_t iter = 0; iter < maximum_iter_size; iter++)
     {
         const auto snapshot{ BuildFittedGaussianSnapshot(atom_list) };
+        std::vector<Eigen::VectorXd> current_estimation_list(selected_atom_size);
 #ifdef USE_OPENMP
         #pragma omp parallel for num_threads(options.thread_size)
 #endif
@@ -631,10 +640,20 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
                 EstimateLocalGaussian(sample_entries, local_view.GetAlphaR(), options)
             };
             sample_entries_list[i] = std::move(sample_entries);
-            estimation_list[i] = result.mdpde.GetModel().ToVector();
+            current_estimation_list[i] = result.mdpde.GetModel().ToVector();
             local_editor_list[i].SetGaussianResult(result);
         }
-        Logger::ProgressBar(iter+1, iter_size);
+        std::vector<double> residual_list(selected_atom_size);
+        for (size_t i = 0; i < selected_atom_size; i++)
+        {
+            residual_list[i] = (current_estimation_list[i] - previous_estimation_list[i]).norm();
+        }
+        double residual_median{ array_helper::ComputeMedian(residual_list) };
+
+        Logger::ProgressBar(iter + 1, maximum_iter_size);
+        if (std::fabs(residual_median - previous_residual_median) < convergence_tolerance) break;
+        previous_estimation_list = std::move(current_estimation_list);
+        previous_residual_median = residual_median;
     }
 
     for (size_t i = 0; i < selected_atom_size; i++)

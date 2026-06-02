@@ -5,6 +5,7 @@
 #include <limits>
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -15,6 +16,7 @@
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
@@ -398,6 +400,28 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingUpdatesSelectedAtomLocalEntr
 
         EXPECT_DOUBLE_EQ(0.2, result.alpha_r);
         EXPECT_TRUE(result.fit_result.has_value());
+        EXPECT_EQ(expected_sample_size, local_view.GetSamplingEntries(false).size());
+    }
+}
+
+TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAfterConvergence)
+{
+    auto model{ MakeLocalFittingModel() };
+    const auto options{ MakeOptions() };
+    const auto expected_sample_size{ MakeSampleEntries().size() };
+    const auto previous_log_level{ Logger::GetLogLevel() };
+
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    ge::RunLocalPotentialFitting(*model, options);
+    const auto output{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_EQ(std::string::npos, output.find("(20/20)"));
+    for (const auto * atom : model->GetSelectedAtoms())
+    {
+        const auto local_view{ rg::AtomLocalPotentialView::RequireFor(*atom) };
+        EXPECT_TRUE(local_view.GetGaussianResult().fit_result.has_value());
         EXPECT_EQ(expected_sample_size, local_view.GetSamplingEntries(false).size());
     }
 }
