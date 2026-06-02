@@ -327,10 +327,10 @@ FittedGaussianSnapshot BuildFittedGaussianSnapshot(const std::vector<AtomObject 
 
 LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
     const AtomObject & atom,
-    const FittedGaussianSnapshot & fitted_gaussian_snapshot)
+    const FittedGaussianSnapshot & snapshot)
 {
     const auto local_view{ AtomLocalPotentialView::RequireFor(atom) };
-    const auto gaussian_local{ fitted_gaussian_snapshot.find(&atom) };
+    const auto gaussian_local{ snapshot.find(&atom) };
     const auto intercept{ static_cast<float>(gaussian_local->second.GetIntercept())};
     const auto sample_entries{ local_view.GetSamplingEntries(false) };
     const auto & neighbor_atom_list{ atom.FindNeighborAtoms() };
@@ -342,8 +342,8 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
         auto response_value{ sample.response - intercept };
         for (const auto * neighbor_atom : neighbor_atom_list)
         {
-            const auto gaussian_iter{ fitted_gaussian_snapshot.find(neighbor_atom) };
-            if (gaussian_iter == fitted_gaussian_snapshot.end()) continue;
+            const auto gaussian_iter{ snapshot.find(neighbor_atom) };
+            if (gaussian_iter == snapshot.end()) continue;
 
             auto neighbor_position{ neighbor_atom->GetPosition() };
             auto distance{
@@ -611,11 +611,12 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
     }
 
     const size_t iter_size{ 20 };
-    std::vector<LocalPotentialSampleList> updated_sample_entries_list(selected_atom_size);
+    std::vector<LocalPotentialSampleList> sample_entries_list(selected_atom_size);
+    std::vector<Eigen::VectorXd> estimation_list(selected_atom_size);
     Logger::Log(LogLevel::Info, "Run updated local atom fitting with iterations...");
     for (size_t iter = 0; iter < iter_size; iter++)
     {
-        const auto fitted_gaussian_snapshot{ BuildFittedGaussianSnapshot(atom_list) };
+        const auto snapshot{ BuildFittedGaussianSnapshot(atom_list) };
 #ifdef USE_OPENMP
         #pragma omp parallel for num_threads(options.thread_size)
 #endif
@@ -623,16 +624,14 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
         {
             const auto & atom{ *atom_list[i] };
             const auto local_view{ AtomLocalPotentialView::RequireFor(atom) };
-            auto updated_sample_entries{
-                UpdateSampleListWithFittedGaussian(atom, fitted_gaussian_snapshot)
+            auto sample_entries{
+                UpdateSampleListWithFittedGaussian(atom, snapshot)
             };
             const auto result{
-                EstimateLocalGaussian(
-                    updated_sample_entries,
-                    local_view.GetAlphaR(),
-                    options)
+                EstimateLocalGaussian(sample_entries, local_view.GetAlphaR(), options)
             };
-            updated_sample_entries_list[i] = std::move(updated_sample_entries);
+            sample_entries_list[i] = std::move(sample_entries);
+            estimation_list[i] = result.mdpde.GetModel().ToVector();
             local_editor_list[i].SetGaussianResult(result);
         }
         Logger::ProgressBar(iter+1, iter_size);
@@ -640,7 +639,7 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
 
     for (size_t i = 0; i < selected_atom_size; i++)
     {
-        local_editor_list[i].SetSamplingEntries(std::move(updated_sample_entries_list[i]));
+        local_editor_list[i].SetSamplingEntries(std::move(sample_entries_list[i]));
     }
 }
 
