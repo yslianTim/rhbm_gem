@@ -10,13 +10,10 @@
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 
 #include <memory>
-#include <optional>
 #include <string>
 #include <unordered_set>
-#include <utility>
 
 namespace rhbm_gem::core {
 
@@ -36,46 +33,20 @@ namespace {
 constexpr double kInitialAlphaR{ 0.0 };
 constexpr double kInitialAlphaG{ 0.0 };
 
-struct PotentialAnalysisInputs
+void ApplySimulationMetadata(ModelObject & model_object, const PotentialAnalysisRequest & request)
 {
-    std::unique_ptr<ModelObject> model_object;
-    std::unique_ptr<MapObject> map_object;
-};
+    if (!request.simulation_flag) return;
 
-std::optional<PotentialAnalysisInputs> LoadPotentialAnalysisInputs(const PotentialAnalysisRequest & request)
-{
-    try
+    if (request.simulated_map_resolution == 0.0)
     {
-        auto model_object{ ReadModel(request.model_file_path) };
-        model_object->SetKeyTag("model");
-        auto map_object{ ReadMap(request.map_file_path) };
-        map_object->SetKeyTag("map");
-        if (model_object == nullptr || map_object == nullptr)
-        {
-            Logger::Log(LogLevel::Error,
-                "LoadPotentialAnalysisInputs : model/map object missing after load.");
-            return std::nullopt;
-        }
-        if (request.simulation_flag)
-        {
-            if (request.simulated_map_resolution == 0.0)
-            {
-                Logger::Log(LogLevel::Warning,
-                    "[Warning] The resolution of input simulated map hasn't been set.\n"
-                    "          Please give the corresponding resolution value for this map.\n"
-                    "          (-r, --sim-resolution)");
-            }
-            model_object->SetEmdID("Simulation");
-            model_object->SetResolution(request.simulated_map_resolution);
-            model_object->SetResolutionMethod("Blurring Width");
-        }
-        return PotentialAnalysisInputs{ std::move(model_object), std::move(map_object) };
+        Logger::Log(LogLevel::Warning,
+            "[Warning] The resolution of input simulated map hasn't been set.\n"
+            "          Please give the corresponding resolution value for this map.\n"
+            "          (-r, --sim-resolution)");
     }
-    catch (const std::exception & e)
-    {
-        Logger::Log(LogLevel::Error, "LoadPotentialAnalysisInputs : " + std::string(e.what()));
-        return std::nullopt;
-    }
+    model_object.SetEmdID("Simulation");
+    model_object.SetResolution(request.simulated_map_resolution);
+    model_object.SetResolutionMethod("Blurring Width");
 }
 
 void RunModelObjectPreprocessing(ModelObject & model_object, bool asymmetry_flag, bool exclude_hydrogen)
@@ -130,31 +101,48 @@ void PotentialAnalysisCommand::NormalizeAndValidateRequest(PotentialAnalysisRequ
 
 bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & request)
 {
-    auto inputs{ LoadPotentialAnalysisInputs(request) };
-    if (!inputs.has_value()) return false;
+    std::unique_ptr<ModelObject> model_object;
+    std::unique_ptr<MapObject> map_object;
+    try
+    {
+        model_object = ReadModel(request.model_file_path);
+        map_object = ReadMap(request.map_file_path);
+    }
+    catch (const std::exception & e)
+    {
+        Logger::Log(LogLevel::Error, "PotentialAnalysisCommand::LoadInputs : " + std::string(e.what()));
+        return false;
+    }
+    if (model_object == nullptr || map_object == nullptr)
+    {
+        Logger::Log(LogLevel::Error,
+            "PotentialAnalysisCommand::LoadInputs : model/map object missing after load.");
+        return false;
+    }
+    model_object->SetKeyTag("model");
+    map_object->SetKeyTag("map");
 
-    auto & model_object{ *inputs->model_object };
-    auto & map_object{ *inputs->map_object };
+    ApplySimulationMetadata(*model_object, request);
     if (!request.simulation_flag && request.map_normalization_flag)
     {
-        map_object.MapValueArrayNormalization();
+        map_object->MapValueArrayNormalization();
     }
-    RunModelObjectPreprocessing(model_object, request.asymmetry_flag, request.exclude_hydrogen);
-    RunPotentialSamplingWorkflow(map_object, model_object, request.sampling_method, request.job_count);
+    RunModelObjectPreprocessing(*model_object, request.asymmetry_flag, request.exclude_hydrogen);
+    RunPotentialSamplingWorkflow(*map_object, *model_object, request.sampling_method, request.job_count);
 
     FitOptions options;
     options.local_fit_model = LocalGaussianFitModel::LogQuadratic;
     options.distance_min = request.fit_range_min;
     options.distance_max = request.fit_range_max;
     options.thread_size = request.job_count;
-    RunLocalAlphaTraining(model_object, options);
-    RunLocalPotentialFitting(model_object, options);
-    RunGroupAlphaTraining(model_object, options);
-    RunGroupPotentialFitting(model_object, options);
+    RunLocalAlphaTraining(*model_object, options);
+    RunLocalPotentialFitting(*model_object, options);
+    RunGroupAlphaTraining(*model_object, options);
+    RunGroupPotentialFitting(*model_object, options);
 
     DataRepository repository{ request.database_path };
-    repository.SaveModel(model_object, request.saved_key_tag);
-    model_object.EditAnalysis().ClearTransientFitStates();
+    repository.SaveModel(*model_object, request.saved_key_tag);
+    model_object->EditAnalysis().ClearTransientFitStates();
     return true;
 }
 
