@@ -29,6 +29,7 @@ public:
     double GetAtomAlphaR(GroupKey group_key, const std::string & class_key) const;
     double GetAtomAlphaG(GroupKey group_key, const std::string & class_key) const;
     std::vector<GroupKey> CollectAtomGroupKeys(const std::string & class_key) const;
+    std::string GetAtomCountingSummary() const;
     std::string GetAtomGroupingSummary() const;
     
 };

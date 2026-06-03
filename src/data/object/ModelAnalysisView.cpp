@@ -2,9 +2,11 @@
 
 #include "data/detail/ModelAnalysisData.hpp"
 
+#include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 
+#include <map>
 #include <stdexcept>
 #include <string>
 
@@ -134,6 +136,26 @@ double ModelAnalysisView::GetAtomAlphaG(GroupKey group_key, const std::string & 
 std::vector<GroupKey> ModelAnalysisView::CollectAtomGroupKeys(const std::string & class_key) const
 {
     return CollectGroupKeys(ModelAnalysisData::Of(m_model_object).FindAtomGroupEntry(class_key));
+}
+
+std::string ModelAnalysisView::GetAtomCountingSummary() const
+{
+    std::map<Element, std::size_t> element_counts;
+    for (const auto * atom : m_model_object.GetSelectedAtoms())
+    {
+        element_counts[atom->GetElement()]++;
+    }
+
+    std::string description{
+        "Number of selected atom = " + std::to_string(m_model_object.GetSelectedAtomCount())
+    };
+    for (const auto & [element, count] : element_counts)
+    {
+        description +=
+            "\n - Element type: " + ChemicalDataHelper::GetLabel(element) + " include "
+            + std::to_string(count) + " atoms.";
+    }
+    return description;
 }
 
 std::string ModelAnalysisView::GetAtomGroupingSummary() const

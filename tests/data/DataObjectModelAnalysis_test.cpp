@@ -116,6 +116,37 @@ TEST(DataObjectModelAnalysisTest, ModelObjectElementExclusionDoesNotWidenSelecti
     EXPECT_EQ(model->GetSelectedAtomCount(), 0u);
 }
 
+TEST(DataObjectModelAnalysisTest, AtomCountingSummaryReportsSelectedElementCounts)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto & atoms{ model->GetAtomList() };
+    atoms.at(0)->SetElement(Element::CARBON);
+    atoms.at(1)->SetElement(Element::HYDROGEN);
+    model->SelectAllAtoms();
+
+    const auto summary{ model->GetAnalysisView().GetAtomCountingSummary() };
+
+    EXPECT_NE(summary.find("Number of selected atom = 2"), std::string::npos);
+    EXPECT_NE(summary.find(" - Element type: H include 1 atoms."), std::string::npos);
+    EXPECT_NE(summary.find(" - Element type: C include 1 atoms."), std::string::npos);
+}
+
+TEST(DataObjectModelAnalysisTest, AtomCountingSummaryOmitsUnselectedElements)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto & atoms{ model->GetAtomList() };
+    atoms.at(0)->SetElement(Element::CARBON);
+    atoms.at(1)->SetElement(Element::HYDROGEN);
+    model->SelectAllAtoms(false);
+    model->SetAtomSelected(atoms.at(0)->GetSerialID(), true);
+
+    const auto summary{ model->GetAnalysisView().GetAtomCountingSummary() };
+
+    EXPECT_NE(summary.find("Number of selected atom = 1"), std::string::npos);
+    EXPECT_NE(summary.find(" - Element type: C include 1 atoms."), std::string::npos);
+    EXPECT_EQ(summary.find(" - Element type: H include"), std::string::npos);
+}
+
 TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorCanClearTransientFitStatesWithoutDroppingEntries)
 {
     auto model{ data_test::MakeModelWithBond() };

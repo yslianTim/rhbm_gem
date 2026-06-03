@@ -58,8 +58,7 @@ void RunModelObjectPreprocessing(ModelObject & model_object, bool asymmetry_flag
     analysis.InitializeLocalAlpha(kInitialAlphaR);
     analysis.InitializeGroupAlpha(kInitialAlphaG);
 
-    Logger::Log(LogLevel::Info,
-        "Number of selected atom = " + std::to_string(model_object.GetSelectedAtomCount()));
+    Logger::Log(LogLevel::Info, model_object.GetAnalysisView().GetAtomCountingSummary());
     Logger::Log(LogLevel::Info, model_object.GetAnalysisView().GetAtomGroupingSummary());
 }
 
