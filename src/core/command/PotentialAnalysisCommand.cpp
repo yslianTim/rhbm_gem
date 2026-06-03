@@ -60,9 +60,6 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
             "PotentialAnalysisCommand : model/map object missing after load.");
         return false;
     }
-    model_object->SetKeyTag("model");
-    map_object->SetKeyTag("map");
-
     if (request.simulation_flag)
     {
         model_object->ApplySimulationMetadata(request.simulated_map_resolution);
