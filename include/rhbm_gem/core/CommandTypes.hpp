@@ -81,13 +81,10 @@ struct PotentialAnalysisRequest : public CommandRequestBase
     bool exclude_hydrogen{ false };
     double simulated_map_resolution{ 0.0 };
     std::string saved_key_tag{ "model" };
-    bool training_alpha_flag{ false };
     bool asymmetry_flag{ false };
     SphereSamplingMethod sampling_method{ SphereSamplingMethod::FibonacciDeterministic };
     double fit_range_min{ 0.0 };
     double fit_range_max{ 1.0 };
-    double alpha_r{ 0.1 };
-    double alpha_g{ 0.2 };
 };
 
 struct PotentialDisplayRequest : public CommandRequestBase

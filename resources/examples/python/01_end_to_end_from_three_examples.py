@@ -234,7 +234,6 @@ def main() -> int:
         analysis_request.model_file_path = str(model_path)
         analysis_request.map_file_path = str(map_path)
         analysis_request.saved_key_tag = spec.key_tag
-        analysis_request.training_alpha_flag = False
         ensure_execute(rgm.RunCommand(analysis_request), "RunCommand(PotentialAnalysisRequest)")
         key_tags.append(spec.key_tag)
         print(f"  key tag:  {spec.key_tag}")

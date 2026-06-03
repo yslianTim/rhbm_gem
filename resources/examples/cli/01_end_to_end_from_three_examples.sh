@@ -122,7 +122,6 @@ echo "Downloading data files under $data_dir"
 )
 
 database="$data_dir/database.sqlite"
-alpha_train=false
 jobs=4
 
 key_tag_params=("6z6u" "6drv" "9gxm")
@@ -137,8 +136,7 @@ for i in "${!model_params[@]}"; do
         -m "$map_name" \
         -a "$model_name" \
         -k "${key_tag_params[i]}" \
-        -j "$jobs" \
-        --training-alpha "$alpha_train"
+        -j "$jobs"
 done
 
 key_tag_list="$(IFS=,; echo "${key_tag_params[*]}")"

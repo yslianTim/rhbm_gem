@@ -8,12 +8,10 @@ set -euo pipefail
 : "${RHBM_GEM_MAP_PATH:?set RHBM_GEM_MAP_PATH to a map file (.map/.mrc/.ccp4)}"
 : "${RHBM_GEM_KEY_TAG:=model}"
 : "${RHBM_GEM_JOBS:=4}"
-: "${RHBM_GEM_TRAINING_ALPHA:=false}"
 
 "${RHBM_GEM_EXECUTABLE}" potential_analysis \
   -d "${RHBM_GEM_DATABASE_PATH}" \
   -m "${RHBM_GEM_MAP_PATH}" \
   -a "${RHBM_GEM_MODEL_PATH}" \
   -k "${RHBM_GEM_KEY_TAG}" \
-  -j "${RHBM_GEM_JOBS}" \
-  --training-alpha "${RHBM_GEM_TRAINING_ALPHA}"
+  -j "${RHBM_GEM_JOBS}"

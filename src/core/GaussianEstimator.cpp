@@ -502,14 +502,14 @@ void RunLocalAlphaTraining(ModelObject & model_object, const FitOptions & option
 {
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
-    const auto component_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
-    const auto component_group_keys{ analysis_view.CollectAtomGroupKeys(component_class_key) };
+    const auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
+    const auto group_key_list{ analysis_view.CollectAtomGroupKeys(class_key) };
 
     size_t count{ 0 };
-    for (const auto group_key : component_group_keys)
+    for (const auto group_key : group_key_list)
     {
         const auto & group_atom_list{
-            analysis_view.GetAtomObjectList(group_key, component_class_key)
+            analysis_view.GetAtomObjectList(group_key, class_key)
         };
         std::vector<LocalPotentialSampleList> sample_entries_list;
         sample_entries_list.reserve(group_atom_list.size());
@@ -534,7 +534,7 @@ void RunLocalAlphaTraining(ModelObject & model_object, const FitOptions & option
                 analysis.EnsureAtomLocalPotential(*atom).SetAlphaR(alpha_r);
             }
         }
-        Logger::ProgressPercent(++count, component_group_keys.size());
+        Logger::ProgressPercent(++count, group_key_list.size());
     }
 }
 
@@ -542,17 +542,15 @@ void RunGroupAlphaTraining(ModelObject & model_object, const FitOptions & option
 {
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
-    const auto component_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
-    const auto component_group_keys{ analysis_view.CollectAtomGroupKeys(component_class_key) };
-
-    RunLocalPotentialFitting(model_object, options);
+    const auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
+    const auto group_key_list{ analysis_view.CollectAtomGroupKeys(class_key) };
 
     std::vector<std::vector<LocalGaussianResult>> member_result_list;
-    member_result_list.reserve(component_group_keys.size());
-    for (const auto group_key : component_group_keys)
+    member_result_list.reserve(group_key_list.size());
+    for (const auto group_key : group_key_list)
     {
         const auto & group_atom_list{
-            analysis_view.GetAtomObjectList(group_key, component_class_key)
+            analysis_view.GetAtomObjectList(group_key, class_key)
         };
         if (group_atom_list.size() < kMinimumAlphaGTrainingMemberCount) continue;
         if (group_atom_list.front()->IsMainChainAtom() == false) continue;
@@ -569,13 +567,12 @@ void RunGroupAlphaTraining(ModelObject & model_object, const FitOptions & option
     }
 
     const auto alpha_g{ TrainAlphaG(member_result_list, options) };
-
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {
-        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        for (const auto group_key : analysis_view.CollectAtomGroupKeys(class_key))
+        const auto & class_key_tmp{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
+        for (const auto group_key : analysis_view.CollectAtomGroupKeys(class_key_tmp))
         {
-            analysis.SetAtomGroupAlphaG(group_key, class_key, alpha_g);
+            analysis.SetAtomGroupAlphaG(group_key, class_key_tmp, alpha_g);
         }
     }
 }

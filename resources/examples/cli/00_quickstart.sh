@@ -145,7 +145,6 @@ require_file "$model_name"
 require_file "$map_name"
 
 database="$data_dir/database.sqlite"
-alpha_train=false
 jobs=4
 key_tag="6z6u"
 
@@ -154,8 +153,7 @@ key_tag="6z6u"
     -m "$map_name" \
     -a "$model_name" \
     -k "$key_tag" \
-    -j "$jobs" \
-    --training-alpha "$alpha_train"
+    -j "$jobs"
 
 echo "Output gaussian estimation results of following model: $key_tag"
 "$executable" result_dump \

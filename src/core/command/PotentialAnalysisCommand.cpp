@@ -34,14 +34,16 @@ private:
 
 namespace {
 
+constexpr double kInitialAlphaR{ 0.0 };
+constexpr double kInitialAlphaG{ 0.0 };
+
 struct PotentialAnalysisInputs
 {
     std::unique_ptr<ModelObject> model_object;
     std::unique_ptr<MapObject> map_object;
 };
 
-std::optional<PotentialAnalysisInputs> LoadPotentialAnalysisInputs(
-    const PotentialAnalysisRequest & request)
+std::optional<PotentialAnalysisInputs> LoadPotentialAnalysisInputs(const PotentialAnalysisRequest & request)
 {
     try
     {
@@ -77,12 +79,7 @@ std::optional<PotentialAnalysisInputs> LoadPotentialAnalysisInputs(
     }
 }
 
-void RunModelObjectPreprocessing(
-    ModelObject & model_object,
-    bool asymmetry_flag,
-    bool exclude_hydrogen,
-    double alpha_r,
-    double alpha_g)
+void RunModelObjectPreprocessing(ModelObject & model_object, bool asymmetry_flag, bool exclude_hydrogen)
 {
     auto analysis{ model_object.EditAnalysis() };
     analysis.Clear();
@@ -110,11 +107,11 @@ void RunModelObjectPreprocessing(
 
     // Establish the model-analysis preprocessing invariant for downstream steps:
     // selection is finalized, local entries exist, atom groups are materialized,
-    // and selected atoms carry the initial alpha-r and alpha_g.
+    // and selected atoms carry internal initial alpha defaults.
     analysis.RebuildAtomGroupsFromSelection();
     for (auto * atom : model_object.GetSelectedAtoms())
     {
-        analysis.EnsureAtomLocalPotential(*atom).SetAlphaR(alpha_r);
+        analysis.EnsureAtomLocalPotential(*atom).SetAlphaR(kInitialAlphaR);
     }
     const auto analysis_view{ model_object.GetAnalysisView() };
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
@@ -122,7 +119,7 @@ void RunModelObjectPreprocessing(
         const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
         for (const auto group_key : analysis_view.CollectAtomGroupKeys(class_key))
         {
-            analysis.SetAtomGroupAlphaG(group_key, class_key, alpha_g);
+            analysis.SetAtomGroupAlphaG(group_key, class_key, kInitialAlphaG);
         }
     }
 
@@ -161,8 +158,6 @@ void PotentialAnalysisCommand::NormalizeAndValidateRequest(PotentialAnalysisRequ
     RequireEnum(request, &PotentialAnalysisRequest::sampling_method);
     RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::fit_range_min);
     RequireFiniteNonNegativeScalar(request, &PotentialAnalysisRequest::fit_range_max);
-    RequireFinitePositiveScalar(request, &PotentialAnalysisRequest::alpha_r);
-    RequireFinitePositiveScalar(request, &PotentialAnalysisRequest::alpha_g);
 }
 
 bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & request)
@@ -176,12 +171,7 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
     {
         map_object.MapValueArrayNormalization();
     }
-    RunModelObjectPreprocessing(
-        model_object,
-        request.asymmetry_flag,
-        request.exclude_hydrogen,
-        request.alpha_r,
-        request.alpha_g);
+    RunModelObjectPreprocessing(model_object, request.asymmetry_flag, request.exclude_hydrogen);
     RunPotentialSamplingWorkflow(map_object, model_object, request.sampling_method, request.job_count);
 
     FitOptions options;
@@ -189,15 +179,9 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
     options.distance_min = request.fit_range_min;
     options.distance_max = request.fit_range_max;
     options.thread_size = request.job_count;
-    if (request.training_alpha_flag)
-    {
-        RunLocalAlphaTraining(model_object, options);
-        RunGroupAlphaTraining(model_object, options);
-    }
-    else
-    {
-        RunLocalPotentialFitting(model_object, options);
-    }
+    RunLocalAlphaTraining(model_object, options);
+    RunLocalPotentialFitting(model_object, options);
+    RunGroupAlphaTraining(model_object, options);
     RunGroupPotentialFitting(model_object, options);
 
     DataRepository repository{ request.database_path };

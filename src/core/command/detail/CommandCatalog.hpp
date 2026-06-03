@@ -83,9 +83,6 @@ struct RequestFieldCatalog<PotentialAnalysisRequest>
             RequestField{ "saved_key_tag", "-k,--save-key",
                 "New key tag for saving ModelObject results into database",
                 &Self::saved_key_tag },
-            RequestField{ "training_alpha_flag", "--training-alpha",
-                "Turn On/Off alpha training flag",
-                &Self::training_alpha_flag },
             RequestField{ "asymmetry_flag", "--asymmetry",
                 "Turn On/Off asymmetry flag",
                 &Self::asymmetry_flag },
@@ -97,13 +94,7 @@ struct RequestFieldCatalog<PotentialAnalysisRequest>
                 &Self::fit_range_min },
             RequestField{ "fit_range_max", "--fit-max",
                 "Maximum fitting range",
-                &Self::fit_range_max },
-            RequestField{ "alpha_r", "--alpha-r",
-                "Alpha value for R",
-                &Self::alpha_r },
-            RequestField{ "alpha_g", "--alpha-g",
-                "Alpha value for G",
-                &Self::alpha_g });
+                &Self::fit_range_max });
     }
 };
 

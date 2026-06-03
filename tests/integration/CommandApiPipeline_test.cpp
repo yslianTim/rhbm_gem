@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <filesystem>
 
 #include "support/CommandTestHelpers.hpp"
@@ -40,13 +41,15 @@ std::size_t CountRegularFiles(const std::filesystem::path & directory)
     return count;
 }
 
-void ExpectSelectedAtomsHaveAlphaR(const rg::ModelObject & model, double alpha_r)
+void ExpectSelectedAtomsHaveFiniteNonNegativeAlphaR(const rg::ModelObject & model)
 {
     const auto & atom_list{ model.GetSelectedAtoms() };
     ASSERT_GT(atom_list.size(), 0u);
     for (const auto * atom : atom_list)
     {
-        EXPECT_DOUBLE_EQ(alpha_r, rg::AtomLocalPotentialView::RequireFor(*atom).GetAlphaR());
+        const auto alpha_r{ rg::AtomLocalPotentialView::RequireFor(*atom).GetAlphaR() };
+        EXPECT_TRUE(std::isfinite(alpha_r));
+        EXPECT_GE(alpha_r, 0.0);
     }
 }
 
@@ -85,7 +88,6 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     analysis_request.model_file_path = command_test::TestDataPath("test_model.cif");
     analysis_request.map_file_path = generated_map_file;
     analysis_request.saved_key_tag = "pipeline_model";
-    analysis_request.alpha_r = 0.37;
 
     const auto analysis_result{
         rgc::RunCommand(analysis_request)
@@ -95,7 +97,7 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     rg::DataRepository repository{ database_path };
     auto model{ repository.LoadModel("pipeline_model") };
     ASSERT_NE(model, nullptr);
-    ExpectSelectedAtomsHaveAlphaR(*model, analysis_request.alpha_r);
+    ExpectSelectedAtomsHaveFiniteNonNegativeAlphaR(*model);
 
     rgc::ResultDumpRequest dump_request;
     dump_request.database_path = database_path;

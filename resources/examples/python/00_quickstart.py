@@ -166,7 +166,6 @@ def main() -> int:
     analysis_request.model_file_path = str(model_path)
     analysis_request.map_file_path = str(map_path)
     analysis_request.saved_key_tag = KEY_TAG
-    analysis_request.training_alpha_flag = False
     ensure_execute(rgm.RunCommand(analysis_request), "RunCommand(PotentialAnalysisRequest)")
     print(f"  database: {database_path}")
     print(f"  key tag:  {KEY_TAG}")

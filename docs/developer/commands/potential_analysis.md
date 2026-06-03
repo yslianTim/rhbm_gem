@@ -41,16 +41,16 @@ Command-specific fields:
 - `exclude_hydrogen`
 - `simulated_map_resolution`
 - `saved_key_tag`
-- `training_alpha_flag`
 - `asymmetry_flag`
 - `sampling_method`
 - `fit_range_min`
 - `fit_range_max`
-- `alpha_r`
-- `alpha_g`
 
 `sampling_method` uses the shared `SphereSamplingMethod` enum and is exposed
 through the `--sampling-method` CLI flag.
+Alpha training is always enabled for potential analysis. Initial local/group
+alpha values are internal command defaults set to `0.0` and are not exposed as
+request fields or CLI options.
 
 ## Execution Contract
 
@@ -82,7 +82,7 @@ Expected result contract:
 - builds command-owned data objects through `BuildDataObject()`
 - optionally switches the model object into simulation mode
 - optionally runs map normalization, then runs model preprocessing
-- delegates atom sampling to `MapSampler`, then performs fitting and optional alpha training
+- delegates atom sampling to `MapSampler`, then performs alpha training and fitting
 - saves the prepared model through `SavePreparedModel()`
 
 `PotentialAnalysisCommand::BuildDataObject()`:
