@@ -88,6 +88,34 @@ TEST(DataObjectModelAnalysisTest, ModelSelectionAndLocalEntriesRemainDirectlyQue
     EXPECT_EQ(require_entry_atoms.front(), atoms[0].get());
 }
 
+TEST(DataObjectModelAnalysisTest, ModelObjectCanExcludeSelectedAtomsByElement)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto & atoms{ model->GetAtomList() };
+    atoms.at(0)->SetElement(Element::CARBON);
+    atoms.at(1)->SetElement(Element::HYDROGEN);
+    model->SelectAllAtoms();
+
+    model->ApplyElementExclusion(Element::HYDROGEN);
+
+    ASSERT_EQ(model->GetSelectedAtomCount(), 1u);
+    EXPECT_EQ(model->GetSelectedAtoms().front(), atoms.at(0).get());
+}
+
+TEST(DataObjectModelAnalysisTest, ModelObjectElementExclusionDoesNotWidenSelection)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto & atoms{ model->GetAtomList() };
+    atoms.at(0)->SetElement(Element::CARBON);
+    atoms.at(1)->SetElement(Element::HYDROGEN);
+    model->SelectAllAtoms(false);
+    model->SetAtomSelected(atoms.at(1)->GetSerialID(), true);
+
+    model->ApplyElementExclusion(Element::HYDROGEN);
+
+    EXPECT_EQ(model->GetSelectedAtomCount(), 0u);
+}
+
 TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorCanClearTransientFitStatesWithoutDroppingEntries)
 {
     auto model{ data_test::MakeModelWithBond() };

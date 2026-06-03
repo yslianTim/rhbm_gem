@@ -466,6 +466,18 @@ void ModelObject::SelectBonds(const std::function<bool(const BondObject &)> & pr
     RebuildSelection();
 }
 
+void ModelObject::ApplyElementExclusion(Element element)
+{
+    for (auto & atom : m_atom_list)
+    {
+        if (atom->GetElement() == element)
+        {
+            atom->SetSelectedFlag(false);
+        }
+    }
+    RebuildSelection();
+}
+
 void ModelObject::SetAtomSelected(int serial_id, bool selected)
 {
     FindAtomPtr(serial_id)->SetSelectedFlag(selected);

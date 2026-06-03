@@ -4,7 +4,6 @@
 #include <rhbm_gem/core/MapSampler.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
-#include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
@@ -13,7 +12,6 @@
 
 #include <memory>
 #include <string>
-#include <unordered_set>
 
 namespace rhbm_gem::core {
 
@@ -55,17 +53,7 @@ void RunModelObjectPreprocessing(ModelObject & model_object, bool asymmetry_flag
     model_object.ApplySymmetrySelection(asymmetry_flag);
     if (exclude_hydrogen)
     {
-        const auto selected_atoms{ model_object.GetSelectedAtoms() };
-        std::unordered_set<const AtomObject *> selected_atom_set{
-            selected_atoms.begin(),
-            selected_atoms.end()
-        };
-        model_object.SelectAtoms(
-            [&selected_atom_set](const AtomObject & atom)
-            {
-                return selected_atom_set.find(&atom) != selected_atom_set.end()
-                    && atom.GetElement() != Element::HYDROGEN;
-            });
+        model_object.ApplyElementExclusion(Element::HYDROGEN);
     }
 
     // Establish the model-analysis preprocessing invariant for downstream steps:
