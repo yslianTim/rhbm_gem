@@ -88,7 +88,7 @@ TEST(DataObjectModelAnalysisTest, ModelSelectionAndLocalEntriesRemainDirectlyQue
     EXPECT_EQ(require_entry_atoms.front(), atoms[0].get());
 }
 
-TEST(DataObjectModelAnalysisTest, ModelObjectCanExcludeSelectedAtomsByElement)
+TEST(DataObjectModelAnalysisTest, ModelObjectCanApplyElementSelectionAsExclusion)
 {
     auto model{ data_test::MakeModelWithBond() };
     auto & atoms{ model->GetAtomList() };
@@ -96,13 +96,13 @@ TEST(DataObjectModelAnalysisTest, ModelObjectCanExcludeSelectedAtomsByElement)
     atoms.at(1)->SetElement(Element::HYDROGEN);
     model->SelectAllAtoms();
 
-    model->ApplyElementExclusion(Element::HYDROGEN);
+    model->ApplyElementSelection(Element::HYDROGEN, true);
 
     ASSERT_EQ(model->GetSelectedAtomCount(), 1u);
     EXPECT_EQ(model->GetSelectedAtoms().front(), atoms.at(0).get());
 }
 
-TEST(DataObjectModelAnalysisTest, ModelObjectElementExclusionDoesNotWidenSelection)
+TEST(DataObjectModelAnalysisTest, ModelObjectElementSelectionExclusionDoesNotWidenSelection)
 {
     auto model{ data_test::MakeModelWithBond() };
     auto & atoms{ model->GetAtomList() };
@@ -111,9 +111,24 @@ TEST(DataObjectModelAnalysisTest, ModelObjectElementExclusionDoesNotWidenSelecti
     model->SelectAllAtoms(false);
     model->SetAtomSelected(atoms.at(1)->GetSerialID(), true);
 
-    model->ApplyElementExclusion(Element::HYDROGEN);
+    model->ApplyElementSelection(Element::HYDROGEN, true);
 
     EXPECT_EQ(model->GetSelectedAtomCount(), 0u);
+}
+
+TEST(DataObjectModelAnalysisTest, ModelObjectElementSelectionNoOpKeepsSelection)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto & atoms{ model->GetAtomList() };
+    atoms.at(0)->SetElement(Element::CARBON);
+    atoms.at(1)->SetElement(Element::HYDROGEN);
+    model->SelectAllAtoms(false);
+    model->SetAtomSelected(atoms.at(0)->GetSerialID(), true);
+
+    model->ApplyElementSelection(Element::HYDROGEN, false);
+
+    ASSERT_EQ(model->GetSelectedAtomCount(), 1u);
+    EXPECT_EQ(model->GetSelectedAtoms().front(), atoms.at(0).get());
 }
 
 TEST(DataObjectModelAnalysisTest, AtomCountingSummaryReportsSelectedElementCounts)

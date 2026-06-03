@@ -102,7 +102,7 @@ public:
     void SetBondSelected(int atom_serial_id_1, int atom_serial_id_2, bool selected);
     void RebuildSelection();
     void ApplySymmetrySelection(bool is_asymmetry);
-    void ApplyElementExclusion(Element element);
+    void ApplyElementSelection(Element element, bool is_exclusion);
     void ApplySimulationMetadata(double simulated_map_resolution);
     void LocalPotentialInitialization();
     void ClearTransientFitStates();

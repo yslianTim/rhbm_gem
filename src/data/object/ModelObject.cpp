@@ -469,8 +469,13 @@ void ModelObject::SelectBonds(const std::function<bool(const BondObject &)> & pr
     RebuildSelection();
 }
 
-void ModelObject::ApplyElementExclusion(Element element)
+void ModelObject::ApplyElementSelection(Element element, bool is_exclusion)
 {
+    if (!is_exclusion)
+    {
+        return;
+    }
+
     for (auto & atom : m_atom_list)
     {
         if (atom->GetElement() == element)

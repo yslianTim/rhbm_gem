@@ -71,7 +71,7 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
 
     model_object->SelectAllAtoms();
     model_object->ApplySymmetrySelection(request.asymmetry_flag);
-    if (request.exclude_hydrogen) model_object->ApplyElementExclusion(Element::HYDROGEN);
+    model_object->ApplyElementSelection(Element::HYDROGEN, request.exclude_hydrogen);
     model_object->LocalPotentialInitialization();
     Logger::Log(LogLevel::Info, model_object->GetAnalysisView().GetAtomCountingSummary());
     Logger::Log(LogLevel::Info, model_object->GetAnalysisView().GetAtomGroupingSummary());
