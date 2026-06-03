@@ -39,8 +39,7 @@ TEST(LinearizationServiceTest, BuildDatasetSeriesTransformsPositiveResponsesWith
         ls::BuildDatasetSeries(
             sampling_entries,
             0.0,
-            0.5,
-            rhbm_gem::LocalGaussianFitModel::LogQuadratic)
+            0.5)
     };
 
     ASSERT_EQ(series.size(), 3U);
@@ -65,15 +64,13 @@ TEST(LinearizationServiceTest, BuildDatasetSeriesRejectsInvalidRange)
         ls::BuildDatasetSeries(
             sampling_entries,
             1.0,
-            0.0,
-            rhbm_gem::LocalGaussianFitModel::LogQuadratic),
+            0.0),
         std::invalid_argument);
     EXPECT_THROW(
         ls::BuildDatasetSeries(
             sampling_entries,
             std::numeric_limits<double>::quiet_NaN(),
-            1.0,
-            rhbm_gem::LocalGaussianFitModel::LogQuadratic),
+            1.0),
         std::invalid_argument);
 }
 

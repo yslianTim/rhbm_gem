@@ -8,11 +8,6 @@
 
 namespace rhbm_gem {
 
-enum class LocalGaussianFitModel
-{
-    LogQuadratic
-};
-
 struct LocalPotentialAnnotation
 {
     GaussianModel3DWithUncertainty gaussian{
@@ -36,7 +31,6 @@ struct LocalGaussianResult
     };
     bool is_outlier{ false };
     double statistical_distance{ 0.0 };
-    LocalGaussianFitModel fit_model{ LocalGaussianFitModel::LogQuadratic };
     std::optional<RHBMBetaEstimateResult> fit_result{};
 };
 

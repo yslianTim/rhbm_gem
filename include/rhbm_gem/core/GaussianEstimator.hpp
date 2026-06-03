@@ -12,7 +12,6 @@ namespace core {
 
 struct FitOptions
 {
-    LocalGaussianFitModel local_fit_model{ LocalGaussianFitModel::LogQuadratic };
     double distance_min{ 0.0 };
     double distance_max{ 1.0 };
     int thread_size{ 1 };

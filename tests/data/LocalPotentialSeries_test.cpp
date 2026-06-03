@@ -35,8 +35,7 @@ SeriesPointList BuildExpectedDatasetSeries(
     return ls::BuildDatasetSeries(
         sampling_entries,
         x_min,
-        x_max,
-        rg::LocalGaussianFitModel::LogQuadratic);
+        x_max);
 }
 
 } // namespace
@@ -138,8 +137,7 @@ TEST(LocalPotentialSeriesTest, PureHelpersWorkWithResolvedEntrySamples)
         ls::BuildDatasetSeries(
             view.GetSamplingEntries(),
             0.0,
-            0.5,
-            rg::LocalGaussianFitModel::LogQuadratic)
+            0.5)
     };
     ASSERT_EQ(fit_dataset_series.size(), 2U);
     EXPECT_EQ(fit_dataset_series.at(0).GetBasisSize(), 2U);

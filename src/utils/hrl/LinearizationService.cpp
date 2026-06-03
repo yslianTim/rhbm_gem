@@ -6,7 +6,6 @@
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <cmath>
-#include <stdexcept>
 #include <utility>
 
 namespace rhbm_gem::linearization_service
@@ -81,72 +80,29 @@ GaussianModel3D DecodeLogQuadraticParameterVector(const RHBMParameterVector & pa
 SeriesPointList BuildDatasetSeries(
     const LocalPotentialSampleList & sampling_entries,
     double range_min,
-    double range_max,
-    LocalGaussianFitModel fit_model)
+    double range_max)
 {
     numeric_validation::RequireFiniteNonNegativeRange(range_min, range_max, "data range");
-
-    switch (fit_model)
-    {
-    case LocalGaussianFitModel::LogQuadratic:
-        return BuildLogQuadraticDatasetSeries(sampling_entries, range_min, range_max);
-    }
-
-    throw std::invalid_argument("Unsupported local Gaussian fit model for linearized dataset.");
+    return BuildLogQuadraticDatasetSeries(sampling_entries, range_min, range_max);
 }
 
 RHBMParameterVector EncodeGaussianToParameterVector(const GaussianModel3D & gaussian_model)
 {
-    return EncodeGaussianToParameterVector(gaussian_model, LocalGaussianFitModel::LogQuadratic);
-}
-
-RHBMParameterVector EncodeGaussianToParameterVector(
-    const GaussianModel3D & gaussian_model,
-    LocalGaussianFitModel fit_model)
-{
-    switch (fit_model)
-    {
-    case LocalGaussianFitModel::LogQuadratic:
-        return EncodeLogQuadraticGaussianToParameterVector(gaussian_model);
-    }
-
-    throw std::invalid_argument("Unsupported local Gaussian fit model for parameter encoding.");
+    return EncodeLogQuadraticGaussianToParameterVector(gaussian_model);
 }
 
 GaussianModel3D DecodeParameterVector(const RHBMParameterVector & parameter_vector)
 {
-    return DecodeParameterVector(parameter_vector, LocalGaussianFitModel::LogQuadratic);
-}
-
-GaussianModel3D DecodeParameterVector(
-    const RHBMParameterVector & parameter_vector,
-    LocalGaussianFitModel fit_model)
-{
-    switch (fit_model)
-    {
-    case LocalGaussianFitModel::LogQuadratic:
-        return DecodeLogQuadraticParameterVector(parameter_vector);
-    }
-
-    throw std::invalid_argument("Unsupported local Gaussian fit model for parameter decoding.");
+    return DecodeLogQuadraticParameterVector(parameter_vector);
 }
 
 GaussianModel3DWithUncertainty DecodeParameterVector(
     const RHBMParameterVector & parameter_vector,
     const RHBMPosteriorCovarianceMatrix & covariance_matrix)
 {
-    return DecodeParameterVector(
-        parameter_vector, covariance_matrix, LocalGaussianFitModel::LogQuadratic);
-}
-
-GaussianModel3DWithUncertainty DecodeParameterVector(
-    const RHBMParameterVector & parameter_vector,
-    const RHBMPosteriorCovarianceMatrix & covariance_matrix,
-    LocalGaussianFitModel fit_model)
-{
     eigen_validation::RequireShape(
         covariance_matrix, kLogQuadraticBasisSize, kLogQuadraticBasisSize, "covariance_matrix");
-    const auto model{ DecodeParameterVector(parameter_vector, fit_model) };
+    const auto model{ DecodeParameterVector(parameter_vector) };
     const auto beta1{ parameter_vector(1) };
     if (beta1 <= 0.0)
     {

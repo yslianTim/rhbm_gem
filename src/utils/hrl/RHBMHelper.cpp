@@ -390,11 +390,10 @@ RHBMGroupEstimationResult BuildGroupFallbackResult(
 RHBMMemberDataset rhbm_helper::BuildMemberDataset(
     const LocalPotentialSampleList & sampling_entries,
     double range_min,
-    double range_max,
-    LocalGaussianFitModel fit_model)
+    double range_max)
 {
     auto series_point_list{
-        linearization_service::BuildDatasetSeries(sampling_entries, range_min, range_max, fit_model)
+        linearization_service::BuildDatasetSeries(sampling_entries, range_min, range_max)
     };
     if (series_point_list.empty())
     {

@@ -63,8 +63,7 @@ std::vector<double> BuildLinearSweep(int count, double step, double start = 0.0)
 std::vector<RHBMMemberDataset> BuildReplicaDatasets(
     const std::vector<LocalPotentialSampleList> & replica_sampling_entries,
     double fit_range_min,
-    double fit_range_max,
-    LocalGaussianFitModel local_fit_model)
+    double fit_range_max)
 {
     std::vector<RHBMMemberDataset> replica_datasets;
     replica_datasets.reserve(replica_sampling_entries.size());
@@ -74,8 +73,7 @@ std::vector<RHBMMemberDataset> BuildReplicaDatasets(
             rhbm_helper::BuildMemberDataset(
                 sampling_entries,
                 fit_range_min,
-                fit_range_max,
-                local_fit_model));
+                fit_range_max));
     }
     return replica_datasets;
 }
@@ -179,15 +177,13 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
             BuildReplicaDatasets(
                 input.replica_sampling_entries,
                 request.fit_range_min,
-                request.fit_range_max,
-                LocalGaussianFitModel::LogQuadratic)
+                request.fit_range_max)
         };
         const auto cut_datasets{
             BuildReplicaDatasets(
                 cut_input.replica_sampling_entries,
                 request.fit_range_min,
-                request.fit_range_max,
-                LocalGaussianFitModel::LogQuadratic)
+                request.fit_range_max)
         };
         rhbm_test_plotting::TryAppendBenchmarkLinearizedPanel(
             linearized_panels,

@@ -87,11 +87,6 @@ ge::FitOptions MakeOptions()
     return options;
 }
 
-rg::LocalGaussianFitModel MakeUnsupportedFitModel()
-{
-    return static_cast<rg::LocalGaussianFitModel>(999);
-}
-
 std::vector<LocalPotentialSampleList> MakeIdenticalSampleGroup(std::size_t member_size)
 {
     std::vector<LocalPotentialSampleList> sample_group;
@@ -337,13 +332,11 @@ TEST(GaussianEstimatorTest, AlphaRMatchesTrainingFunctionBestAlpha)
         rg::rhbm_helper::BuildMemberDataset(
             sample_entries_list.at(0),
             options.distance_min,
-            options.distance_max,
-            options.local_fit_model),
+            options.distance_max),
         rg::rhbm_helper::BuildMemberDataset(
             sample_entries_list.at(1),
             options.distance_min,
-            options.distance_max,
-            options.local_fit_model)
+            options.distance_max)
     };
     rg::rhbm_trainer::RHBMTrainingOptions trainer_options;
     trainer_options.execution_options.quiet_mode = true;
@@ -599,31 +592,6 @@ TEST(GaussianEstimatorTest, TrainAlphaRRejectsInvalidFitRange)
         std::invalid_argument);
 }
 
-TEST(GaussianEstimatorTest, TrainAlphaRRejectsUnsupportedLocalFitModel)
-{
-    auto options{ MakeOptions() };
-    options.local_fit_model = MakeUnsupportedFitModel();
-    const std::vector<LocalPotentialSampleList> sample_entries_list{ MakeSampleEntries() };
-
-    EXPECT_THROW(
-        ge::TrainAlphaR(sample_entries_list, options),
-        std::invalid_argument);
-}
-
-TEST(GaussianEstimatorTest, TrainAlphaGRejectsUnsupportedLocalFitModel)
-{
-    auto options{ MakeOptions() };
-    options.local_fit_model = MakeUnsupportedFitModel();
-    const auto sample_group{ MakeIdenticalSampleGroup(10) };
-    const std::vector<std::vector<rg::LocalGaussianResult>> member_result_list{
-        EstimateMemberResults(sample_group, MakeOptions())
-    };
-
-    EXPECT_THROW(
-        ge::TrainAlphaG(member_result_list, options),
-        std::invalid_argument);
-}
-
 TEST(GaussianEstimatorTest, EstimateLocalGaussianMatchesDirectHelperPath)
 {
     const auto options{ MakeOptions() };
@@ -636,8 +604,7 @@ TEST(GaussianEstimatorTest, EstimateLocalGaussianMatchesDirectHelperPath)
         rg::rhbm_helper::BuildMemberDataset(
             sample_entries,
             options.distance_min,
-            options.distance_max,
-            options.local_fit_model)
+            options.distance_max)
     };
     const auto expected_fit{
         rg::rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset)
@@ -671,8 +638,7 @@ TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptMatchesHelperPath)
         rg::rhbm_helper::BuildMemberDataset(
             shifted_sample_entries,
             options.distance_min,
-            options.distance_max,
-            options.local_fit_model)
+            options.distance_max)
     };
     const auto expected_fit{
         rg::rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset)
@@ -690,28 +656,6 @@ TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptMatchesHelperPath)
     ASSERT_TRUE(actual.fit_result.has_value());
     EXPECT_TRUE(actual.fit_result->beta_ols.isApprox(expected_fit.beta_ols, 1e-12));
     EXPECT_TRUE(actual.fit_result->beta_mdpde.isApprox(expected_fit.beta_mdpde, 1e-12));
-}
-
-TEST(GaussianEstimatorTest, EstimateLocalGaussianRejectsUnsupportedLocalFitModel)
-{
-    auto options{ MakeOptions() };
-    options.local_fit_model = MakeUnsupportedFitModel();
-    const auto sample_entries{ MakeSampleEntries() };
-
-    EXPECT_THROW(
-        ge::EstimateLocalGaussian(sample_entries, 0.0, options),
-        std::invalid_argument);
-}
-
-TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptRejectsUnsupportedLocalFitModel)
-{
-    auto options{ MakeOptions() };
-    options.local_fit_model = MakeUnsupportedFitModel();
-    const auto sample_entries{ MakeSampleEntries() };
-
-    EXPECT_THROW(
-        ge::EstimateLocalGaussianWithIntercept(sample_entries, 0.0, options),
-        std::invalid_argument);
 }
 
 TEST(GaussianEstimatorTest, EstimateGroupGaussianMatchesHelperPath)
@@ -746,8 +690,7 @@ TEST(GaussianEstimatorTest, EstimateGroupGaussianMatchesHelperPath)
             rg::rhbm_helper::BuildMemberDataset(
                 shifted_sample_entries,
                 options.distance_min,
-                options.distance_max,
-                options.local_fit_model)
+                options.distance_max)
         };
         fit_result_list.emplace_back(*member_result.fit_result);
         member_result_list.emplace_back(std::move(member_result));
@@ -776,59 +719,6 @@ TEST(GaussianEstimatorTest, EstimateGroupGaussianMatchesHelperPath)
     EXPECT_NEAR(expected_prior.GetModel().GetAmplitude(), actual.prior.GetModel().GetAmplitude(), 1e-12);
     EXPECT_NEAR(expected_prior.GetModel().GetWidth(), actual.prior.GetModel().GetWidth(), 1e-12);
     ASSERT_EQ(sample_entries_list.size(), actual.member_results.size());
-}
-
-TEST(GaussianEstimatorTest, EstimateGroupGaussianRejectsUnsupportedLocalFitModel)
-{
-    auto options{ MakeOptions() };
-    options.local_fit_model = MakeUnsupportedFitModel();
-    const std::vector<LocalPotentialSampleList> sample_entries_list{
-        MakeSampleEntries(),
-        MakeSampleEntries()
-    };
-    const std::vector<rg::LocalGaussianResult> member_result_list{
-        ge::EstimateLocalGaussianWithIntercept(sample_entries_list.at(0), 0.0, MakeOptions()),
-        ge::EstimateLocalGaussianWithIntercept(sample_entries_list.at(1), 0.0, MakeOptions())
-    };
-
-    EXPECT_THROW(
-        ge::EstimateGroupGaussian(
-            sample_entries_list, member_result_list, 0.0, options),
-        std::invalid_argument);
-}
-
-TEST(GaussianEstimatorTest, EstimateGroupGaussianRejectsUnsupportedMemberResults)
-{
-    const auto options{ MakeOptions() };
-    const std::vector<LocalPotentialSampleList> sample_entries_list{
-        MakeSampleEntries(),
-        MakeSampleEntries()
-    };
-    std::vector<rg::LocalGaussianResult> member_result_list{
-        ge::EstimateLocalGaussianWithIntercept(sample_entries_list.at(0), 0.0, options),
-        ge::EstimateLocalGaussianWithIntercept(sample_entries_list.at(1), 0.0, options)
-    };
-    member_result_list.front().fit_model = MakeUnsupportedFitModel();
-
-    EXPECT_THROW(
-        ge::EstimateGroupGaussian(
-            sample_entries_list, member_result_list, 0.0, options),
-        std::invalid_argument);
-}
-
-TEST(GaussianEstimatorTest, TrainAlphaGRejectsUnsupportedMemberResults)
-{
-    const auto options{ MakeOptions() };
-    const auto sample_group{ MakeIdenticalSampleGroup(10) };
-    auto member_results{ EstimateMemberResults(sample_group, options) };
-    member_results.front().fit_model = MakeUnsupportedFitModel();
-    const std::vector<std::vector<rg::LocalGaussianResult>> member_result_list{
-        member_results
-    };
-
-    EXPECT_THROW(
-        ge::TrainAlphaG(member_result_list, options),
-        std::invalid_argument);
 }
 
 TEST(GaussianEstimatorTest, EstimateGroupGaussianRejectsInconsistentMemberCount)

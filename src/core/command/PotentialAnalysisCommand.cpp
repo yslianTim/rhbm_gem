@@ -78,7 +78,6 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
     RunPotentialSamplingWorkflow(*map_object, *model_object, request.sampling_method, request.job_count);
 
     FitOptions options;
-    options.local_fit_model = LocalGaussianFitModel::LogQuadratic;
     options.distance_min = request.fit_range_min;
     options.distance_max = request.fit_range_max;
     options.thread_size = request.job_count;

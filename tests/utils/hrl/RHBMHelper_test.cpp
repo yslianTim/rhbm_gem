@@ -116,8 +116,7 @@ TEST(RHBMHelperTest, BuildMemberDatasetTransformsSamplesToLogQuadraticDataset)
         rhbm_gem::rhbm_helper::BuildMemberDataset(
             sampling_entries,
             0.0,
-            3.0,
-            rhbm_gem::LocalGaussianFitModel::LogQuadratic)
+            3.0)
     };
 
     Eigen::MatrixXd expected_X(2, 2);
@@ -141,8 +140,7 @@ TEST(RHBMHelperTest, BuildMemberDatasetFiltersByRangeAndPositiveResponse)
         rhbm_gem::rhbm_helper::BuildMemberDataset(
             sampling_entries,
             1.0,
-            3.0,
-            rhbm_gem::LocalGaussianFitModel::LogQuadratic)
+            3.0)
     };
 
     Eigen::MatrixXd expected_X(2, 2);
@@ -163,8 +161,7 @@ TEST(RHBMHelperTest, BuildMemberDatasetReturnsZeroFallbackWhenNoSampleIsValid)
         rhbm_gem::rhbm_helper::BuildMemberDataset(
             sampling_entries,
             1.0,
-            2.0,
-            rhbm_gem::LocalGaussianFitModel::LogQuadratic)
+            2.0)
     };
 
     Eigen::MatrixXd expected_X{ Eigen::MatrixXd::Zero(1, 2) };
@@ -182,8 +179,7 @@ TEST(RHBMHelperTest, BuildMemberDatasetRejectsInvalidRange)
         rhbm_gem::rhbm_helper::BuildMemberDataset(
             sampling_entries,
             2.0,
-            1.0,
-            rhbm_gem::LocalGaussianFitModel::LogQuadratic),
+            1.0),
         std::invalid_argument);
 }
 
@@ -200,15 +196,13 @@ TEST(RHBMHelperTest, BuildMemberDatasetRejectsNonFiniteValues)
         rhbm_gem::rhbm_helper::BuildMemberDataset(
             distance_nan,
             0.0,
-            2.0,
-            rhbm_gem::LocalGaussianFitModel::LogQuadratic),
+            2.0),
         std::invalid_argument);
     EXPECT_THROW(
         rhbm_gem::rhbm_helper::BuildMemberDataset(
             response_nan,
             0.0,
-            2.0,
-            rhbm_gem::LocalGaussianFitModel::LogQuadratic),
+            2.0),
         std::invalid_argument);
 }
 
