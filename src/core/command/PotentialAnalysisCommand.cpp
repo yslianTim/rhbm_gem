@@ -34,7 +34,6 @@ constexpr double kInitialAlphaG{ 0.0 };
 void ApplySimulationMetadata(ModelObject & model_object, const PotentialAnalysisRequest & request)
 {
     if (!request.simulation_flag) return;
-
     if (request.simulated_map_resolution == 0.0)
     {
         Logger::Log(LogLevel::Warning,
@@ -51,14 +50,8 @@ void RunModelObjectPreprocessing(ModelObject & model_object, bool asymmetry_flag
 {
     model_object.SelectAllAtoms();
     model_object.ApplySymmetrySelection(asymmetry_flag);
-    if (exclude_hydrogen)
-    {
-        model_object.ApplyElementExclusion(Element::HYDROGEN);
-    }
+    if (exclude_hydrogen) model_object.ApplyElementExclusion(Element::HYDROGEN);
 
-    // Establish the model-analysis preprocessing invariant for downstream steps:
-    // selection is finalized, local entries exist, atom groups are materialized,
-    // and selected atoms carry internal initial alpha defaults.
     auto analysis{ model_object.EditAnalysis() };
     analysis.Clear();
     analysis.RebuildAtomGroupsFromSelection();
@@ -98,13 +91,13 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
     }
     catch (const std::exception & e)
     {
-        Logger::Log(LogLevel::Error, "PotentialAnalysisCommand::LoadInputs : " + std::string(e.what()));
+        Logger::Log(LogLevel::Error, "PotentialAnalysisCommand : " + std::string(e.what()));
         return false;
     }
     if (model_object == nullptr || map_object == nullptr)
     {
         Logger::Log(LogLevel::Error,
-            "PotentialAnalysisCommand::LoadInputs : model/map object missing after load.");
+            "PotentialAnalysisCommand : model/map object missing after load.");
         return false;
     }
     model_object->SetKeyTag("model");
