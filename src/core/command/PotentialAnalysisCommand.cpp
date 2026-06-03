@@ -80,8 +80,6 @@ std::optional<PotentialAnalysisInputs> LoadPotentialAnalysisInputs(const Potenti
 
 void RunModelObjectPreprocessing(ModelObject & model_object, bool asymmetry_flag, bool exclude_hydrogen)
 {
-    auto analysis{ model_object.EditAnalysis() };
-    analysis.Clear();
     model_object.SelectAllAtoms();
     model_object.ApplySymmetrySelection(asymmetry_flag);
     if (exclude_hydrogen)
@@ -102,6 +100,8 @@ void RunModelObjectPreprocessing(ModelObject & model_object, bool asymmetry_flag
     // Establish the model-analysis preprocessing invariant for downstream steps:
     // selection is finalized, local entries exist, atom groups are materialized,
     // and selected atoms carry internal initial alpha defaults.
+    auto analysis{ model_object.EditAnalysis() };
+    analysis.Clear();
     analysis.RebuildAtomGroupsFromSelection();
     analysis.InitializeLocalAlpha(kInitialAlphaR);
     analysis.InitializeGroupAlpha(kInitialAlphaG);
@@ -109,13 +109,6 @@ void RunModelObjectPreprocessing(ModelObject & model_object, bool asymmetry_flag
     Logger::Log(LogLevel::Info,
         "Number of selected atom = " + std::to_string(model_object.GetSelectedAtomCount()));
     Logger::Log(LogLevel::Info, model_object.GetAnalysisView().GetAtomGroupingSummary());
-    if (model_object.GetNumberOfAtom() > 0 && model_object.GetSelectedAtomCount() == 0)
-    {
-        Logger::Log(LogLevel::Warning,
-            "No atoms are selected after symmetry filtering. "
-            "The input CIF may miss usable _entity/_struct_asym metadata. "
-            "Try '--asymmetry true' to bypass symmetry filtering.");
-    }
 }
 
 } // namespace
