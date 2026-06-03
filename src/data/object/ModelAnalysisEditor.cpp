@@ -58,6 +58,26 @@ void ModelAnalysisEditor::RebuildAtomGroupsFromSelection()
     }
 }
 
+void ModelAnalysisEditor::InitializeLocalAlpha(double alpha_r)
+{
+    for (auto * atom : m_model_object.GetSelectedAtoms())
+    {
+        EnsureAtomLocalPotential(*atom).SetAlphaR(alpha_r);
+    }
+}
+
+void ModelAnalysisEditor::InitializeGroupAlpha(double alpha_g)
+{
+    for (auto & [class_key, group_entry] : ModelAnalysisData::Of(m_model_object).AtomGroupEntries())
+    {
+        (void)class_key;
+        for (const auto group_key : group_entry.CollectGroupKeys())
+        {
+            group_entry.SetAlphaG(group_key, alpha_g);
+        }
+    }
+}
+
 void ModelAnalysisEditor::ApplyAtomGroupGaussianResult(
     GroupKey group_key,
     const std::string & class_key,

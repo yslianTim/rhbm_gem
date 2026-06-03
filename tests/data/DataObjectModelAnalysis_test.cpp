@@ -3,6 +3,7 @@
 #include <array>
 #include <limits>
 #include <memory>
+#include <string>
 #include <tuple>
 #include <unordered_map>
 #include <vector>
@@ -374,6 +375,46 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorRebuildsAtomGroupsFromSelec
     EXPECT_EQ(member_count, 1U);
 }
 
+TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorInitializesLocalAlphaForSelectedAtoms)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto * first_atom{ model->GetAtomList().at(0).get() };
+    auto * second_atom{ model->GetAtomList().at(1).get() };
+    auto analysis{ model->EditAnalysis() };
+
+    model->SelectAllAtoms(false);
+    model->SetAtomSelected(first_atom->GetSerialID(), true);
+    model->SetAtomSelected(second_atom->GetSerialID(), false);
+    analysis.EnsureAtomLocalPotential(*second_atom).SetAlphaR(0.9);
+
+    analysis.InitializeLocalAlpha(0.4);
+
+    EXPECT_DOUBLE_EQ(0.4, rg::AtomLocalPotentialView::RequireFor(*first_atom).GetAlphaR());
+    EXPECT_DOUBLE_EQ(0.9, rg::AtomLocalPotentialView::RequireFor(*second_atom).GetAlphaR());
+}
+
+TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorInitializesGroupAlphaForExistingGroups)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    model->SelectAllAtoms();
+    model->ApplySymmetrySelection(false);
+    auto analysis{ model->EditAnalysis() };
+
+    EXPECT_NO_THROW(analysis.InitializeGroupAlpha(0.3));
+
+    analysis.RebuildAtomGroupsFromSelection();
+    analysis.InitializeGroupAlpha(0.3);
+    const auto analysis_view{ model->GetAnalysisView() };
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
+    {
+        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
+        for (const auto group_key : analysis_view.CollectAtomGroupKeys(class_key))
+        {
+            EXPECT_DOUBLE_EQ(0.3, analysis_view.GetAtomAlphaG(group_key, class_key));
+        }
+    }
+}
+
 TEST(DataObjectModelAnalysisTest, CollectAtomGroupKeysReturnsRebuiltGroupKeySet)
 {
     auto model{ data_test::MakeModelWithBond() };
@@ -394,6 +435,29 @@ TEST(DataObjectModelAnalysisTest, CollectAtomGroupKeysReturnsRebuiltGroupKeySet)
     }
 
     EXPECT_EQ(analysis_data.FindAtomGroupEntry("missing_atom_class"), nullptr);
+}
+
+TEST(DataObjectModelAnalysisTest, AtomGroupingSummaryReportsConfiguredClassCounts)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    model->SelectAllAtoms();
+    model->ApplySymmetrySelection(false);
+    auto analysis{ model->EditAnalysis() };
+    analysis.RebuildAtomGroupsFromSelection();
+    const auto analysis_view{ model->GetAnalysisView() };
+
+    const auto summary{ analysis_view.GetAtomGroupingSummary() };
+
+    EXPECT_NE(summary.find("Atom Grouping Summary:"), std::string::npos);
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
+    {
+        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
+        const std::string expected_line{
+            " - Class type: " + class_key + " include "
+            + std::to_string(analysis_view.CollectAtomGroupKeys(class_key).size()) + " groups."
+        };
+        EXPECT_NE(summary.find(expected_line), std::string::npos);
+    }
 }
 
 TEST(DataObjectModelAnalysisTest, AtomGroupKeyCollectionCoversConfiguredClasses)

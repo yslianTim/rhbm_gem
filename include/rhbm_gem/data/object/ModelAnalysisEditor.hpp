@@ -21,6 +21,8 @@ public:
     void ClearTransientFitStates();
     AtomLocalPotentialEditor EnsureAtomLocalPotential(const AtomObject & atom_object);
     void RebuildAtomGroupsFromSelection();
+    void InitializeLocalAlpha(double alpha_r);
+    void InitializeGroupAlpha(double alpha_g);
     void ApplyAtomGroupGaussianResult(
         GroupKey group_key,
         const std::string & class_key,

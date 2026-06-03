@@ -9,7 +9,6 @@
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 
@@ -100,40 +99,16 @@ void RunModelObjectPreprocessing(ModelObject & model_object, bool asymmetry_flag
             });
     }
 
-    for (auto * atom : model_object.GetSelectedAtoms())
-    {
-        analysis.EnsureAtomLocalPotential(*atom);
-    }
-
     // Establish the model-analysis preprocessing invariant for downstream steps:
     // selection is finalized, local entries exist, atom groups are materialized,
     // and selected atoms carry internal initial alpha defaults.
     analysis.RebuildAtomGroupsFromSelection();
-    for (auto * atom : model_object.GetSelectedAtoms())
-    {
-        analysis.EnsureAtomLocalPotential(*atom).SetAlphaR(kInitialAlphaR);
-    }
-    const auto analysis_view{ model_object.GetAnalysisView() };
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
-    {
-        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        for (const auto group_key : analysis_view.CollectAtomGroupKeys(class_key))
-        {
-            analysis.SetAtomGroupAlphaG(group_key, class_key, kInitialAlphaG);
-        }
-    }
+    analysis.InitializeLocalAlpha(kInitialAlphaR);
+    analysis.InitializeGroupAlpha(kInitialAlphaG);
 
     Logger::Log(LogLevel::Info,
         "Number of selected atom = " + std::to_string(model_object.GetSelectedAtomCount()));
-    std::string description{ "Atom Grouping Summary:" };
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
-    {
-        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        description +=
-            "\n - Class type: " + class_key + " include "
-            + std::to_string(analysis_view.CollectAtomGroupKeys(class_key).size()) + " groups.";
-    }
-    Logger::Log(LogLevel::Info, description);
+    Logger::Log(LogLevel::Info, model_object.GetAnalysisView().GetAtomGroupingSummary());
     if (model_object.GetNumberOfAtom() > 0 && model_object.GetSelectedAtomCount() == 0)
     {
         Logger::Log(LogLevel::Warning,

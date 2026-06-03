@@ -3,8 +3,10 @@
 #include "data/detail/ModelAnalysisData.hpp"
 
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 
 #include <stdexcept>
+#include <string>
 
 namespace rhbm_gem {
 
@@ -132,6 +134,19 @@ double ModelAnalysisView::GetAtomAlphaG(GroupKey group_key, const std::string & 
 std::vector<GroupKey> ModelAnalysisView::CollectAtomGroupKeys(const std::string & class_key) const
 {
     return CollectGroupKeys(ModelAnalysisData::Of(m_model_object).FindAtomGroupEntry(class_key));
+}
+
+std::string ModelAnalysisView::GetAtomGroupingSummary() const
+{
+    std::string description{ "Atom Grouping Summary:" };
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
+    {
+        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
+        description +=
+            "\n - Class type: " + class_key + " include "
+            + std::to_string(CollectAtomGroupKeys(class_key).size()) + " groups.";
+    }
+    return description;
 }
 
 } // namespace rhbm_gem
