@@ -5,7 +5,6 @@
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
-#include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -25,44 +24,6 @@ private:
     void ValidatePreparedRequest(const PotentialAnalysisRequest & request) override;
     bool ExecuteImpl(const PotentialAnalysisRequest & request) override;
 };
-
-namespace {
-
-constexpr double kInitialAlphaR{ 0.0 };
-constexpr double kInitialAlphaG{ 0.0 };
-
-void ApplySimulationMetadata(ModelObject & model_object, const PotentialAnalysisRequest & request)
-{
-    if (!request.simulation_flag) return;
-    if (request.simulated_map_resolution == 0.0)
-    {
-        Logger::Log(LogLevel::Warning,
-            "[Warning] The resolution of input simulated map hasn't been set.\n"
-            "          Please give the corresponding resolution value for this map.\n"
-            "          (-r, --sim-resolution)");
-    }
-    model_object.SetEmdID("Simulation");
-    model_object.SetResolution(request.simulated_map_resolution);
-    model_object.SetResolutionMethod("Blurring Width");
-}
-
-void RunModelObjectPreprocessing(ModelObject & model_object, bool asymmetry_flag, bool exclude_hydrogen)
-{
-    model_object.SelectAllAtoms();
-    model_object.ApplySymmetrySelection(asymmetry_flag);
-    if (exclude_hydrogen) model_object.ApplyElementExclusion(Element::HYDROGEN);
-
-    auto analysis{ model_object.EditAnalysis() };
-    analysis.Clear();
-    analysis.RebuildAtomGroupsFromSelection();
-    analysis.InitializeLocalAlpha(kInitialAlphaR);
-    analysis.InitializeGroupAlpha(kInitialAlphaG);
-
-    Logger::Log(LogLevel::Info, model_object.GetAnalysisView().GetAtomCountingSummary());
-    Logger::Log(LogLevel::Info, model_object.GetAnalysisView().GetAtomGroupingSummary());
-}
-
-} // namespace
 
 PotentialAnalysisCommand::PotentialAnalysisCommand() : CommandBase<PotentialAnalysisRequest>{}
 {
@@ -102,12 +63,21 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
     model_object->SetKeyTag("model");
     map_object->SetKeyTag("map");
 
-    ApplySimulationMetadata(*model_object, request);
+    if (request.simulation_flag)
+    {
+        model_object->ApplySimulationMetadata(request.simulated_map_resolution);
+    }
     if (!request.simulation_flag && request.map_normalization_flag)
     {
         map_object->MapValueArrayNormalization();
     }
-    RunModelObjectPreprocessing(*model_object, request.asymmetry_flag, request.exclude_hydrogen);
+
+    model_object->SelectAllAtoms();
+    model_object->ApplySymmetrySelection(request.asymmetry_flag);
+    if (request.exclude_hydrogen) model_object->ApplyElementExclusion(Element::HYDROGEN);
+    model_object->LocalPotentialInitialization();
+    Logger::Log(LogLevel::Info, model_object->GetAnalysisView().GetAtomCountingSummary());
+    Logger::Log(LogLevel::Info, model_object->GetAnalysisView().GetAtomGroupingSummary());
     RunPotentialSamplingWorkflow(*map_object, *model_object, request.sampling_method, request.job_count);
 
     FitOptions options;
@@ -122,7 +92,7 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
 
     DataRepository repository{ request.database_path };
     repository.SaveModel(*model_object, request.saved_key_tag);
-    model_object->EditAnalysis().ClearTransientFitStates();
+    model_object->ClearTransientFitStates();
     return true;
 }
 

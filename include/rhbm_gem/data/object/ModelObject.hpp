@@ -103,6 +103,9 @@ public:
     void RebuildSelection();
     void ApplySymmetrySelection(bool is_asymmetry);
     void ApplyElementExclusion(Element element);
+    void ApplySimulationMetadata(double simulated_map_resolution);
+    void LocalPotentialInitialization();
+    void ClearTransientFitStates();
     ModelAnalysisEditor EditAnalysis();
     ModelAnalysisView GetAnalysisView() const;
 

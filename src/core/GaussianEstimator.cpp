@@ -645,12 +645,22 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
         {
             residual_list[i] = (current_estimation_list[i] - previous_estimation_list[i]).norm();
         }
-        double residual_median{ array_helper::ComputeMedian(residual_list) };
 
-        Logger::ProgressBar(iter + 1, maximum_iter_size);
-        if (std::fabs(residual_median - previous_residual_median) < convergence_tolerance) break;
+        double residual_median{ array_helper::ComputeMedian(residual_list) };
+        if (std::fabs(residual_median - previous_residual_median) < convergence_tolerance)
+        {
+            Logger::Log(LogLevel::Info,
+                "Converged after " + std::to_string(iter + 1) + " iterations.");
+            break;
+        }
         previous_estimation_list = std::move(current_estimation_list);
         previous_residual_median = residual_median;
+        if (iter == maximum_iter_size - 1)
+        {
+            Logger::Log(LogLevel::Info,
+                "Reached maximum iteration size with residual median = " +
+                std::to_string(residual_median));
+        }
     }
 
     for (size_t i = 0; i < selected_atom_size; i++)

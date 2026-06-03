@@ -147,6 +147,45 @@ TEST(DataObjectModelAnalysisTest, AtomCountingSummaryOmitsUnselectedElements)
     EXPECT_EQ(summary.find(" - Element type: H include"), std::string::npos);
 }
 
+TEST(DataObjectModelAnalysisTest, ModelObjectAppliesSimulationMetadata)
+{
+    auto model{ data_test::MakeModelWithBond() };
+
+    model->ApplySimulationMetadata(1.5);
+
+    EXPECT_EQ(model->GetEmdID(), "Simulation");
+    EXPECT_DOUBLE_EQ(model->GetResolution(), 1.5);
+    EXPECT_EQ(model->GetResolutionMethod(), "Blurring Width");
+}
+
+TEST(DataObjectModelAnalysisTest, ModelObjectInitializesLocalPotentialAnalysis)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto * first_atom{ model->GetAtomList().at(0).get() };
+    auto * second_atom{ model->GetAtomList().at(1).get() };
+    auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
+    model->SelectAllAtoms(false);
+    model->SetAtomSelected(first_atom->GetSerialID(), true);
+    analysis_data.EnsureAtomLocalEntry(*second_atom).SetAlphaR(0.7);
+    analysis_data.EnsureAtomGroupEntry("stale_atom_class").AddMember(999, *second_atom);
+
+    model->LocalPotentialInitialization();
+
+    EXPECT_EQ(analysis_data.FindAtomGroupEntry("stale_atom_class"), nullptr);
+    EXPECT_DOUBLE_EQ(0.0, rg::AtomLocalPotentialView::RequireFor(*first_atom).GetAlphaR());
+    EXPECT_EQ(analysis_data.FindAtomLocalEntry(*second_atom), nullptr);
+
+    const auto analysis_view{ model->GetAnalysisView() };
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
+    {
+        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
+        for (const auto group_key : analysis_view.CollectAtomGroupKeys(class_key))
+        {
+            EXPECT_DOUBLE_EQ(0.0, analysis_view.GetAtomAlphaG(group_key, class_key));
+        }
+    }
+}
+
 TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorCanClearTransientFitStatesWithoutDroppingEntries)
 {
     auto model{ data_test::MakeModelWithBond() };

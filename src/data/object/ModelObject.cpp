@@ -18,6 +18,9 @@
 
 namespace {
 
+constexpr double kInitialLocalAlpha{ 0.0 };
+constexpr double kInitialGroupAlpha{ 0.0 };
+
 double ComputeDistanceSquare(
     const rhbm_gem::AtomObject & atom_1,
     const rhbm_gem::AtomObject & atom_2)
@@ -476,6 +479,27 @@ void ModelObject::ApplyElementExclusion(Element element)
         }
     }
     RebuildSelection();
+}
+
+void ModelObject::ApplySimulationMetadata(double simulated_map_resolution)
+{
+    SetEmdID("Simulation");
+    SetResolution(simulated_map_resolution);
+    SetResolutionMethod("Blurring Width");
+}
+
+void ModelObject::LocalPotentialInitialization()
+{
+    auto analysis{ EditAnalysis() };
+    analysis.Clear();
+    analysis.RebuildAtomGroupsFromSelection();
+    analysis.InitializeLocalAlpha(kInitialLocalAlpha);
+    analysis.InitializeGroupAlpha(kInitialGroupAlpha);
+}
+
+void ModelObject::ClearTransientFitStates()
+{
+    EditAnalysis().ClearTransientFitStates();
 }
 
 void ModelObject::SetAtomSelected(int serial_id, bool selected)
