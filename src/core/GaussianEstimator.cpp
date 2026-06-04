@@ -314,8 +314,6 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
     const FittedGaussianSnapshot & snapshot)
 {
     const auto local_view{ AtomLocalPotentialView::RequireFor(atom) };
-    const auto gaussian_local{ snapshot.find(&atom) };
-    const auto intercept{ static_cast<float>(gaussian_local->second.GetIntercept())};
     const auto sample_entries{ local_view.GetSamplingEntries(false) };
     const auto & neighbor_atom_list{ atom.FindNeighborAtoms() };
     LocalPotentialSampleList updated_list;
@@ -323,7 +321,7 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
     for (const auto & sample : sample_entries)
     {
         auto sample_position{ sample.point.position };
-        auto response_value{ sample.response - intercept };
+        auto response_value{ sample.response };
         for (const auto * neighbor_atom : neighbor_atom_list)
         {
             const auto gaussian_iter{ snapshot.find(neighbor_atom) };
