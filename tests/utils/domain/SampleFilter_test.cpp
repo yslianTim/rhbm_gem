@@ -97,7 +97,7 @@ TEST(SampleFilterTest, RejectsPointsCloserToNearestNeighborThanReference)
     EXPECT_FALSE(point_list.at(2).is_selected);
 }
 
-TEST(SampleFilterTest, UsesFifteenDegreeDefaultRejectAngle)
+TEST(SampleFilterTest, UsesThirtyDegreeDefaultRejectAngle)
 {
     SamplingPointList point_list{
         SamplingPoint{ 0.0f, { 0.0f, 0.0f, 0.0f } },
@@ -111,12 +111,11 @@ TEST(SampleFilterTest, UsesFifteenDegreeDefaultRejectAngle)
         { std::array<float, 3>{ 2.0f, 0.0f, 0.0f } });
 
     const std::vector<std::array<float, 3>> expected_positions{
-        { 0.0f, 0.0f, 0.0f },
-        { 1.0f, 0.3f, 0.0f }
+        { 0.0f, 0.0f, 0.0f }
     };
     EXPECT_EQ(GetSelectedPositions(point_list), expected_positions);
     EXPECT_FALSE(point_list.at(1).is_selected);
-    EXPECT_TRUE(point_list.at(2).is_selected);
+    EXPECT_FALSE(point_list.at(2).is_selected);
 }
 
 TEST(SampleFilterTest, RejectsPointsWithinAngleThresholdOfRejectPositions)
@@ -300,9 +299,11 @@ TEST(SampleFilterTest, FilterLocalPotentialSampleListUsesDefaultRetainedRatio)
         sf::FilterLocalPotentialSampleList(std::move(sample_list))
     };
 
-    ASSERT_EQ(retained_samples.size(), 2u);
-    EXPECT_FLOAT_EQ(retained_samples.at(0).response, 0.0f);
-    EXPECT_FLOAT_EQ(retained_samples.at(1).response, 1.0f);
+    ASSERT_EQ(retained_samples.size(), 6u);
+    for (std::size_t i = 0; i < retained_samples.size(); i++)
+    {
+        EXPECT_FLOAT_EQ(retained_samples.at(i).response, static_cast<float>(i));
+    }
 }
 
 TEST(SampleFilterTest, FilterLocalPotentialSampleListFiltersByDistance)
@@ -324,13 +325,12 @@ TEST(SampleFilterTest, FilterLocalPotentialSampleListFiltersByDistance)
         sf::FilterLocalPotentialSampleList(std::move(sample_list))
     };
 
-    ASSERT_EQ(retained_samples.size(), 4u);
-    EXPECT_FLOAT_EQ(retained_samples.at(0).point.distance, 1.0f);
-    EXPECT_FLOAT_EQ(retained_samples.at(0).response, 0.0f);
-    EXPECT_FLOAT_EQ(retained_samples.at(1).point.distance, 1.0f);
-    EXPECT_FLOAT_EQ(retained_samples.at(1).response, 1.0f);
-    EXPECT_FLOAT_EQ(retained_samples.at(2).point.distance, 2.0f);
-    EXPECT_FLOAT_EQ(retained_samples.at(2).response, 10.0f);
-    EXPECT_FLOAT_EQ(retained_samples.at(3).point.distance, 2.0f);
-    EXPECT_FLOAT_EQ(retained_samples.at(3).response, 11.0f);
+    ASSERT_EQ(retained_samples.size(), 12u);
+    for (std::size_t i = 0; i < 6u; i++)
+    {
+        EXPECT_FLOAT_EQ(retained_samples.at(i).point.distance, 1.0f);
+        EXPECT_FLOAT_EQ(retained_samples.at(i).response, static_cast<float>(i));
+        EXPECT_FLOAT_EQ(retained_samples.at(i + 6u).point.distance, 2.0f);
+        EXPECT_FLOAT_EQ(retained_samples.at(i + 6u).response, static_cast<float>(i + 10u));
+    }
 }

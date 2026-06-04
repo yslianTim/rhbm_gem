@@ -91,8 +91,8 @@ LocalTestData BuildSelectedLocalTestData(const LocalTestData & input)
         {
             if (sample.point.is_selected) selected_entries.emplace_back(sample);
         }
-        auto filtered_entries{ sample_filter::FilterLocalPotentialSampleList(std::move(selected_entries)) };
-        selected_input.replica_sampling_entries.emplace_back(std::move(filtered_entries));
+        //auto filtered_entries{ sample_filter::FilterLocalPotentialSampleList(std::move(selected_entries)) };
+        selected_input.replica_sampling_entries.emplace_back(std::move(selected_entries));
     }
     return selected_input;
 }

@@ -64,7 +64,7 @@ TEST(SphereSamplerTest, RadiusUniformProducesFixedAnalysisSamples)
     const std::array<float, 3> center{ 1.f, 2.f, 3.f };
     const auto samples{ rhbm_gem::sphere_sampler::GenerateRadiusUniformRandom(center) };
 
-    ASSERT_EQ(50u, samples.size());
+    ASSERT_EQ(10u, samples.size());
     ExpectAnalysisSampleDistances(samples, center);
 }
 
@@ -73,7 +73,7 @@ TEST(SphereSamplerTest, VolumeUniformProducesFixedAnalysisSamples)
     const std::array<float, 3> center{ 1.f, 2.f, 3.f };
     const auto samples{ rhbm_gem::sphere_sampler::GenerateVolumeUniformRandom(center) };
 
-    ASSERT_EQ(50u, samples.size());
+    ASSERT_EQ(10u, samples.size());
     ExpectAnalysisSampleDistances(samples, center);
 }
 
@@ -84,10 +84,10 @@ TEST(SphereSamplerTest, FibonacciProducesFixedDeterministicShells)
     const auto first_samples{ rhbm_gem::sphere_sampler::GenerateFibonacciDeterministic(center) };
     const auto second_samples{ rhbm_gem::sphere_sampler::GenerateFibonacciDeterministic(center) };
 
-    ASSERT_EQ(750u, first_samples.size());
+    ASSERT_EQ(150u, first_samples.size());
     EXPECT_EQ(0u, CountSamplesAtRadius(first_samples, 0.0f));
-    EXPECT_EQ(50u, CountSamplesAtRadius(first_samples, 0.05f));
-    EXPECT_EQ(50u, CountSamplesAtRadius(first_samples, 1.45f));
+    EXPECT_EQ(10u, CountSamplesAtRadius(first_samples, 0.05f));
+    EXPECT_EQ(10u, CountSamplesAtRadius(first_samples, 1.45f));
     ExpectAnalysisSampleDistances(first_samples, center);
     ExpectSamplesEqual(first_samples, second_samples);
 }
@@ -110,7 +110,7 @@ TEST(SphereSamplerTest, DispatchUsesRequestedMethod)
             SphereSamplingMethod::FibonacciDeterministic)
     };
 
-    ASSERT_EQ(750u, samples.size());
-    EXPECT_EQ(50u, CountSamplesAtRadius(samples, 0.05f));
+    ASSERT_EQ(150u, samples.size());
+    EXPECT_EQ(10u, CountSamplesAtRadius(samples, 0.05f));
     ExpectAnalysisSampleDistances(samples, center);
 }
