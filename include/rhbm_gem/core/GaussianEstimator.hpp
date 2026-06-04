@@ -28,7 +28,8 @@ double TrainAlphaG(
 LocalGaussianResult EstimateLocalGaussian(
     const LocalPotentialSampleList & sample_entries,
     double alpha_r,
-    const FitOptions & options);
+    const FitOptions & options,
+    double intercept);
 
 LocalGaussianResult EstimateLocalGaussianWithIntercept(
     const LocalPotentialSampleList & sample_entries,

@@ -397,6 +397,43 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingUpdatesSelectedAtomLocalEntr
     }
 }
 
+TEST(GaussianEstimatorTest, RunLocalPotentialFittingPreservesInitialIntercepts)
+{
+    auto model{ MakeLocalFittingModel() };
+    const auto options{ MakeOptions() };
+    std::vector<double> expected_intercepts;
+    expected_intercepts.reserve(model->GetSelectedAtoms().size());
+    for (const auto * atom : model->GetSelectedAtoms())
+    {
+        const auto local_view{ rg::AtomLocalPotentialView::RequireFor(*atom) };
+        const auto expected_result{
+            ge::EstimateLocalGaussianWithIntercept(
+                local_view.GetSamplingEntries(),
+                local_view.GetAlphaR(),
+                options)
+        };
+        expected_intercepts.emplace_back(expected_result.mdpde.GetModel().GetIntercept());
+    }
+
+    ge::RunLocalPotentialFitting(*model, options);
+
+    for (std::size_t i = 0; i < model->GetSelectedAtoms().size(); i++)
+    {
+        const auto local_view{
+            rg::AtomLocalPotentialView::RequireFor(*model->GetSelectedAtoms().at(i))
+        };
+        const auto & result{ local_view.GetGaussianResult() };
+        EXPECT_NEAR(
+            expected_intercepts.at(i),
+            result.ols.GetModel().GetIntercept(),
+            1e-12);
+        EXPECT_NEAR(
+            expected_intercepts.at(i),
+            result.mdpde.GetModel().GetIntercept(),
+            1e-12);
+    }
+}
+
 TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAfterConvergence)
 {
     auto model{ MakeLocalFittingModel() };
@@ -552,7 +589,21 @@ TEST(GaussianEstimatorTest, EstimateLocalGaussianRejectsInvalidAlphaR)
 
     EXPECT_THROW(
         ge::EstimateLocalGaussian(
-            sample_entries, -std::numeric_limits<double>::min(), options),
+            sample_entries, -std::numeric_limits<double>::min(), options, 0.0),
+        std::invalid_argument);
+}
+
+TEST(GaussianEstimatorTest, EstimateLocalGaussianRejectsInvalidIntercept)
+{
+    const auto options{ MakeOptions() };
+    const auto sample_entries{ MakeSampleEntries() };
+
+    EXPECT_THROW(
+        ge::EstimateLocalGaussian(
+            sample_entries,
+            0.2,
+            options,
+            std::numeric_limits<double>::quiet_NaN()),
         std::invalid_argument);
 }
 
@@ -598,7 +649,7 @@ TEST(GaussianEstimatorTest, EstimateLocalGaussianMatchesDirectHelperPath)
     const auto sample_entries{ MakeSampleEntries() };
     constexpr double alpha_r{ 0.2 };
     const auto actual{
-        ge::EstimateLocalGaussian(sample_entries, alpha_r, options)
+        ge::EstimateLocalGaussian(sample_entries, alpha_r, options, 0.0)
     };
     const auto dataset{
         rg::rhbm_helper::BuildMemberDataset(
@@ -618,6 +669,40 @@ TEST(GaussianEstimatorTest, EstimateLocalGaussianMatchesDirectHelperPath)
     EXPECT_NEAR(expected_mdpde.GetAmplitude(), actual.mdpde.GetModel().GetAmplitude(), 1e-12);
     EXPECT_NEAR(expected_mdpde.GetWidth(), actual.mdpde.GetModel().GetWidth(), 1e-12);
     EXPECT_DOUBLE_EQ(0.0, actual.mdpde.GetModel().GetIntercept());
+    EXPECT_DOUBLE_EQ(alpha_r, actual.alpha_r);
+    ASSERT_TRUE(actual.fit_result.has_value());
+    EXPECT_TRUE(actual.fit_result->beta_ols.isApprox(expected_fit.beta_ols, 1e-12));
+    EXPECT_TRUE(actual.fit_result->beta_mdpde.isApprox(expected_fit.beta_mdpde, 1e-12));
+}
+
+TEST(GaussianEstimatorTest, EstimateLocalGaussianAppliesProvidedIntercept)
+{
+    const auto options{ MakeOptions() };
+    const auto sample_entries{ MakeSampleEntries() };
+    constexpr double alpha_r{ 0.2 };
+    constexpr double intercept{ 0.25 };
+    const auto actual{
+        ge::EstimateLocalGaussian(sample_entries, alpha_r, options, intercept)
+    };
+    const auto shifted_sample_entries{ BuildShiftedSampleEntries(sample_entries, intercept) };
+    const auto dataset{
+        rg::rhbm_helper::BuildMemberDataset(
+            shifted_sample_entries,
+            options.distance_min,
+            options.distance_max)
+    };
+    const auto expected_fit{
+        rg::rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset)
+    };
+
+    const auto expected_ols{ ls::DecodeParameterVector(expected_fit.beta_ols).WithIntercept(intercept) };
+    const auto expected_mdpde{ ls::DecodeParameterVector(expected_fit.beta_mdpde).WithIntercept(intercept) };
+    EXPECT_NEAR(expected_ols.GetAmplitude(), actual.ols.GetModel().GetAmplitude(), 1e-12);
+    EXPECT_NEAR(expected_ols.GetWidth(), actual.ols.GetModel().GetWidth(), 1e-12);
+    EXPECT_NEAR(expected_ols.GetIntercept(), actual.ols.GetModel().GetIntercept(), 1e-12);
+    EXPECT_NEAR(expected_mdpde.GetAmplitude(), actual.mdpde.GetModel().GetAmplitude(), 1e-12);
+    EXPECT_NEAR(expected_mdpde.GetWidth(), actual.mdpde.GetModel().GetWidth(), 1e-12);
+    EXPECT_NEAR(expected_mdpde.GetIntercept(), actual.mdpde.GetModel().GetIntercept(), 1e-12);
     EXPECT_DOUBLE_EQ(alpha_r, actual.alpha_r);
     ASSERT_TRUE(actual.fit_result.has_value());
     EXPECT_TRUE(actual.fit_result->beta_ols.isApprox(expected_fit.beta_ols, 1e-12));
