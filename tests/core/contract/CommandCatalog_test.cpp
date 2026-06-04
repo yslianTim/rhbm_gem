@@ -113,9 +113,11 @@ template <>
 struct EnumMappingTraits<TesterType>
 {
     static constexpr std::string_view kFirstBindingToken{ "BENCHMARK" };
-    static constexpr std::array<EnumMappingExpectation<TesterType>, 2> kExpectations{{
+    static constexpr std::array<EnumMappingExpectation<TesterType>, 4> kExpectations{{
         { "benchmark", TesterType::BENCHMARK },
         { "0", TesterType::BENCHMARK },
+        { "atomic_model", TesterType::ATOMIC_MODEL },
+        { "5", TesterType::ATOMIC_MODEL },
     }};
 };
 

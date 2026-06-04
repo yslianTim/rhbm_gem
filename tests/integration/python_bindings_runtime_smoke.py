@@ -32,6 +32,7 @@ def assert_module_surface() -> None:
     assert hasattr(m.PrinterType, "ATOM_OUTLIER")
     assert hasattr(m, "TesterType")
     assert hasattr(m.TesterType, "BENCHMARK")
+    assert hasattr(m.TesterType, "ATOMIC_MODEL")
     assert hasattr(m, "SphereSamplingMethod")
     assert hasattr(m.SphereSamplingMethod, "FIBONACCI_DETERMINISTIC")
 

@@ -1,8 +1,10 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <atomic>
 #include <memory>
 #include <stdexcept>
+#include <thread>
 #include <tuple>
 #include <vector>
 
@@ -174,6 +176,55 @@ TEST(DataObjectAssemblySpatialQueryTest, DerivedStateCachesGeometryQueriesAcross
     }
     std::sort(repeated_serials_again.begin(), repeated_serials_again.end());
     EXPECT_EQ(repeated_serials, repeated_serials_again);
+}
+
+TEST(DataObjectAssemblySpatialQueryTest, DerivedStateBuildsKDTreeOnceForConcurrentQueries)
+{
+    auto model{ MakeSpatialQueryModel() };
+    const auto & atoms{ model->GetAtomList() };
+    ASSERT_EQ(atoms.size(), 4);
+
+    constexpr int thread_count{ 16 };
+    constexpr int query_count{ 50 };
+    std::atomic<int> ready_count{ 0 };
+    std::atomic<bool> start{ false };
+    std::atomic<bool> mismatch_found{ false };
+    std::vector<std::thread> threads;
+    threads.reserve(thread_count);
+
+    for (int i = 0; i < thread_count; i++)
+    {
+        threads.emplace_back([&]()
+        {
+            ready_count++;
+            while (!start.load())
+            {
+                std::this_thread::yield();
+            }
+
+            for (int query_index = 0; query_index < query_count; query_index++)
+            {
+                const auto neighbor_atoms{ model->FindNeighborAtoms(*atoms.at(0), 1.1) };
+                if (CollectSerialIds(neighbor_atoms) != std::vector<int>{ 2, 3 })
+                {
+                    mismatch_found = true;
+                }
+            }
+        });
+    }
+
+    while (ready_count.load() < thread_count)
+    {
+        std::this_thread::yield();
+    }
+    start = true;
+
+    for (auto & thread : threads)
+    {
+        thread.join();
+    }
+
+    EXPECT_FALSE(mismatch_found.load());
 }
 
 TEST(DataObjectAssemblySpatialQueryTest, DerivedStateSpatialQueriesRemainAvailableAfterAssemblyCopyAndMove)

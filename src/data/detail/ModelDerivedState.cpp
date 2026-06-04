@@ -90,7 +90,10 @@ std::vector<AtomObject *> ModelDerivedState::FindAtomsInRange(
 
 void ModelDerivedState::Clear()
 {
-    m_kd_tree_root.reset();
+    {
+        std::lock_guard<std::mutex> lock(m_kd_tree_mutex);
+        m_kd_tree_root.reset();
+    }
     m_center_of_mass_position.reset();
     for (auto & axis_range : m_model_position_range)
     {
@@ -100,6 +103,7 @@ void ModelDerivedState::Clear()
 
 void ModelDerivedState::EnsureKDTreeRoot(ModelObject & model_object)
 {
+    std::lock_guard<std::mutex> lock(m_kd_tree_mutex);
     if (m_kd_tree_root != nullptr)
     {
         return;

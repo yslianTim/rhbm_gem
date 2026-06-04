@@ -1,5 +1,6 @@
 #include <rhbm_gem/core/EstimatorTester.hpp>
 #include <rhbm_gem/core/GaussianEstimator.hpp>
+#include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
 
@@ -246,6 +247,46 @@ GroupTestBias RunGroupEstimationTest(
     }
 
     return result;
+}
+
+AtomicModelTestBias RunAtomicModelEstimationTest(
+    const AtomicModelTestData & input,
+    const FitOptions & options)
+{
+    GaussianModel3D::RequireFiniteModel(input.gaus_true, "input.gaus_true");
+    const auto replica_size{ static_cast<int>(input.replica_model_objects.size()) };
+    if (replica_size <= 0)
+    {
+        throw std::invalid_argument("input.replica_model_objects must not be empty");
+    }
+
+    Eigen::MatrixXd bias_matrix_ols{
+        Eigen::MatrixXd::Zero(GaussianModel3D::ParameterSize(), replica_size)
+    };
+    Eigen::MatrixXd bias_matrix_mdpde{
+        Eigen::MatrixXd::Zero(GaussianModel3D::ParameterSize(), replica_size)
+    };
+
+    for (int i = 0; i < replica_size; i++)
+    {
+        ModelObject model_object{ *input.replica_model_objects.at(static_cast<size_t>(i)) };
+        RunLocalAlphaTraining(model_object, options);
+        RunLocalPotentialFitting(model_object, options);
+
+        const auto local_view{
+            AtomLocalPotentialView::RequireFor(*model_object.GetSelectedAtoms().front())
+        };
+        const auto & gaussian_result{ local_view.GetGaussianResult() };
+        bias_matrix_ols.col(i) =
+            CalculateNormalizedBias(gaussian_result.ols.GetModel(), input.gaus_true);
+        bias_matrix_mdpde.col(i) =
+            CalculateNormalizedBias(gaussian_result.mdpde.GetModel(), input.gaus_true);
+    }
+
+    return AtomicModelTestBias{
+        FinalizeBiasStatistics(bias_matrix_ols),
+        FinalizeBiasStatistics(bias_matrix_mdpde)
+    };
 }
 
 } // namespace rhbm_gem::core

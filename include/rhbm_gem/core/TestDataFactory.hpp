@@ -1,9 +1,11 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <vector>
 
+#include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
@@ -19,6 +21,12 @@ struct GroupTestData
 {
     GaussianModel3D gaus_true;
     std::vector<std::vector<LocalPotentialSampleList>> replica_member_sampling_entries;
+};
+
+struct AtomicModelTestData
+{
+    GaussianModel3D gaus_true;
+    std::vector<std::unique_ptr<ModelObject>> replica_model_objects;
 };
 
 struct LocalScenario
@@ -59,6 +67,7 @@ struct AtomModelScenario
 
 LocalTestData BuildLocalTestData(const LocalScenario & scenario);
 LocalTestData BuildLocalTestData(const AtomModelScenario & scenario);
+AtomicModelTestData BuildAtomicModelTestData(const AtomModelScenario & scenario);
 GroupTestData BuildGroupTestData(const GroupScenario & scenario);
 
 } // namespace rhbm_gem::core

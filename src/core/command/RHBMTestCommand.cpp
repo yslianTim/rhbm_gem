@@ -214,6 +214,59 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
     rhbm_test_plotting::SaveDataOutlierBiasPlot(request, plot_request);
 }
 
+void RunSimulationTestOnAtomicModel(const RHBMTestRequest & request)
+{
+    ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnAtomicModel");
+
+    const auto error_sigma{ 0.01 };
+    const auto model_prior{ MakeDefaultModelPrior() };
+    FitOptions options;
+    options.distance_min = request.fit_range_min;
+    options.distance_max = request.fit_range_max;
+    options.thread_size = request.job_count;
+
+    std::vector<Spot> spot_list{ Spot::O, Spot::N, Spot::C, Spot::CA };
+
+    BiasPlotRequest plot_request;
+    plot_request.output_name = "bias_from_neighbor_atom_atomic_model.pdf";
+    plot_request.flavor = BiasPlotFlavor::NeighborType;
+    plot_request.x_axis_mode = BiasXAxisMode::NeighborType;
+    plot_request.panels.reserve(1);
+
+    BiasPlotPanel panel;
+    panel.label = "Neighbor Atom Type";
+    panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Ols, spot_list.size()));
+    panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Mdpde, spot_list.size()));
+
+    for (size_t i = 0; i < spot_list.size(); i++)
+    {
+        AtomModelScenario scenario;
+        scenario.gaus_true = model_prior;
+        scenario.data_error_sigma = error_sigma;
+        scenario.spot = spot_list.at(i);
+        scenario.replica_size = 10;
+
+        const auto input{ BuildAtomicModelTestData(scenario) };
+        const auto result{ RunAtomicModelEstimationTest(input, options) };
+
+        std::ostringstream stream;
+        stream  << " OLS: " << std::setprecision(3) << std::fixed
+                << result.ols.mean(0) << " , "
+                << result.ols.mean(1)
+                << " , MDPDE: "
+                << result.mdpde.mean(0) << " , "
+                << result.mdpde.mean(1);
+        Logger::Log(LogLevel::Info, stream.str());
+
+        const auto spot_axis_value{ static_cast<double>(i + 1) };
+        AppendBiasCurvePoint(panel.curves.at(0), spot_axis_value, result.ols);
+        AppendBiasCurvePoint(panel.curves.at(1), spot_axis_value, result.mdpde);
+    }
+
+    plot_request.panels.emplace_back(std::move(panel));
+    rhbm_test_plotting::SaveDataOutlierBiasPlot(request, plot_request);
+}
+
 void RunSimulationTestOnDataOutlier(const RHBMTestRequest & request)
 {
     ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnDataOutlier");
@@ -470,6 +523,9 @@ bool RHBMTestCommand::ExecuteImpl(const RHBMTestRequest & request)
     {
     case TesterType::BENCHMARK:
         RunSimulationTestOnBenchMark(request);
+        return true;
+    case TesterType::ATOMIC_MODEL:
+        RunSimulationTestOnAtomicModel(request);
         return true;
     case TesterType::DATA_OUTLIER:
         RunSimulationTestOnDataOutlier(request);

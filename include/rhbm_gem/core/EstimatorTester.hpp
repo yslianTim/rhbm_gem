@@ -4,6 +4,7 @@
 
 #include <Eigen/Dense>
 
+#include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/TestDataFactory.hpp>
 
 namespace rhbm_gem::core {
@@ -33,6 +34,12 @@ struct GroupTestBias
     BiasStatisticsSeries mdpde;
 };
 
+struct AtomicModelTestBias
+{
+    BiasStatistics ols;
+    BiasStatistics mdpde;
+};
+
 struct LocalTestOptions
 {
     double requested_alpha_r{ 0.0 };
@@ -55,6 +62,11 @@ LocalTestBias RunLocalEstimationTest(
 GroupTestBias RunGroupEstimationTest(
     const GroupTestData & input,
     const GroupTestOptions & options
+);
+
+AtomicModelTestBias RunAtomicModelEstimationTest(
+    const AtomicModelTestData & input,
+    const FitOptions & options
 );
 
 } // namespace rhbm_gem::core

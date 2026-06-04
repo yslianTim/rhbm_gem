@@ -2,6 +2,7 @@
 
 #include <array>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <tuple>
 #include <vector>
@@ -16,6 +17,7 @@ class ModelObject;
 class ModelDerivedState
 {
     std::unique_ptr<::KDNode<AtomObject>> m_kd_tree_root;
+    std::mutex m_kd_tree_mutex;
     std::optional<std::array<float, 3>> m_center_of_mass_position;
     std::array<std::optional<std::tuple<double, double>>, 3> m_model_position_range;
 
