@@ -2,7 +2,6 @@
 #include "detail/RHBMTestPlotting.hpp"
 
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include <rhbm_gem/utils/domain/SampleFilter.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/core/TestDataFactory.hpp>
@@ -91,7 +90,6 @@ LocalTestData BuildSelectedLocalTestData(const LocalTestData & input)
         {
             if (sample.point.is_selected) selected_entries.emplace_back(sample);
         }
-        //auto filtered_entries{ sample_filter::FilterLocalPotentialSampleList(std::move(selected_entries)) };
         selected_input.replica_sampling_entries.emplace_back(std::move(selected_entries));
     }
     return selected_input;

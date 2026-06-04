@@ -1,9 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <array>
-#include <cstddef>
 #include <limits>
-#include <utility>
 #include <vector>
 
 #include <rhbm_gem/utils/domain/SampleFilter.hpp>
@@ -277,60 +275,4 @@ TEST(SampleFilterTest, UsesReferencePositionForWorldSpaceSamplingPoints)
         { 10.0f, 1.0f, 0.0f }
     };
     EXPECT_EQ(GetSelectedPositions(point_list), expected_positions);
-}
-
-TEST(SampleFilterTest, FilterLocalPotentialSampleListHandlesEmptySampleList)
-{
-    EXPECT_TRUE(sf::FilterLocalPotentialSampleList({}).empty());
-}
-
-TEST(SampleFilterTest, FilterLocalPotentialSampleListUsesDefaultRetainedRatio)
-{
-    LocalPotentialSampleList sample_list;
-    for (std::size_t i = 0; i < 11u; i++)
-    {
-        sample_list.emplace_back(LocalPotentialSample{
-            static_cast<float>(10u - i),
-            SamplingPoint{ 1.0f }
-        });
-    }
-
-    const auto retained_samples{
-        sf::FilterLocalPotentialSampleList(std::move(sample_list))
-    };
-
-    ASSERT_EQ(retained_samples.size(), 6u);
-    for (std::size_t i = 0; i < retained_samples.size(); i++)
-    {
-        EXPECT_FLOAT_EQ(retained_samples.at(i).response, static_cast<float>(i));
-    }
-}
-
-TEST(SampleFilterTest, FilterLocalPotentialSampleListFiltersByDistance)
-{
-    LocalPotentialSampleList sample_list;
-    for (std::size_t i = 0; i < 11u; i++)
-    {
-        sample_list.emplace_back(LocalPotentialSample{
-            static_cast<float>(10u - i),
-            SamplingPoint{ 1.0f }
-        });
-        sample_list.emplace_back(LocalPotentialSample{
-            static_cast<float>(20u - i),
-            SamplingPoint{ 2.0f }
-        });
-    }
-
-    const auto retained_samples{
-        sf::FilterLocalPotentialSampleList(std::move(sample_list))
-    };
-
-    ASSERT_EQ(retained_samples.size(), 12u);
-    for (std::size_t i = 0; i < 6u; i++)
-    {
-        EXPECT_FLOAT_EQ(retained_samples.at(i).point.distance, 1.0f);
-        EXPECT_FLOAT_EQ(retained_samples.at(i).response, static_cast<float>(i));
-        EXPECT_FLOAT_EQ(retained_samples.at(i + 6u).point.distance, 2.0f);
-        EXPECT_FLOAT_EQ(retained_samples.at(i + 6u).response, static_cast<float>(i + 10u));
-    }
 }

@@ -13,6 +13,4 @@ void FilterSamplingPointList(
     const std::vector<std::array<float, 3>> & reject_position_list,
     double angle = 30.0);
 
-LocalPotentialSampleList FilterLocalPotentialSampleList(LocalPotentialSampleList sample_list);
-
 } // namespace rhbm_gem::sample_filter

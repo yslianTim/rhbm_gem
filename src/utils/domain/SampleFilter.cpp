@@ -1,9 +1,6 @@
 #include <rhbm_gem/utils/domain/SampleFilter.hpp>
 
 #include <cmath>
-#include <cstddef>
-#include <map>
-#include <utility>
 
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
@@ -11,21 +8,6 @@
 
 namespace rhbm_gem::sample_filter {
 namespace {
-
-struct ResponseRankedLocalPotentialSample
-{
-    LocalPotentialSample sample{};
-    std::size_t sequence{ 0 };
-
-    bool operator<(const ResponseRankedLocalPotentialSample & other) const
-    {
-        if (sample.response != other.sample.response)
-        {
-            return sample.response < other.sample.response;
-        }
-        return sequence < other.sequence;
-    }
-};
 
 bool IsOwnedByNeighbor(
     const std::array<float, 3> & sample_position,
@@ -70,35 +52,6 @@ bool IsInsideNeighborCone(
     return false;
 }
 
-LocalPotentialSampleList KeepLowestResponseRatioByDistance(
-    LocalPotentialSampleList sample_list,
-    double retained_ratio)
-{
-    using ResponseRankedLocalPotentialSampleList = std::vector<ResponseRankedLocalPotentialSample>;
-
-    std::map<float, ResponseRankedLocalPotentialSampleList> samples_by_distance;
-    for (auto & sample : sample_list)
-    {
-        auto & distance_samples{ samples_by_distance[sample.point.distance] };
-        distance_samples.emplace_back(
-            ResponseRankedLocalPotentialSample{ std::move(sample), distance_samples.size() });
-    }
-
-    LocalPotentialSampleList retained_samples;
-    for (auto & distance_entry : samples_by_distance)
-    {
-        auto retained_distance_samples{
-            array_helper::ComputeSmallestProportionValues(distance_entry.second, retained_ratio)
-        };
-        for (auto & retained_sample : retained_distance_samples)
-        {
-            retained_samples.emplace_back(std::move(retained_sample.sample));
-        }
-    }
-
-    return retained_samples;
-}
-
 } // namespace
 
 void FilterSamplingPointList(
@@ -137,12 +90,6 @@ void FilterSamplingPointList(
             sample_point.is_selected = false;
         }
     }
-}
-
-LocalPotentialSampleList FilterLocalPotentialSampleList(LocalPotentialSampleList sample_list)
-{
-    constexpr double kRetainedRatio{ 0.5 };
-    return KeepLowestResponseRatioByDistance(std::move(sample_list), kRetainedRatio);
 }
 
 } // namespace rhbm_gem::sample_filter
