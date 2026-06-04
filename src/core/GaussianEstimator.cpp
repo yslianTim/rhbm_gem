@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
@@ -13,6 +14,7 @@
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <atomic>
 #include <stdexcept>
@@ -76,6 +78,7 @@ double EstimateInitialIntercept(const LocalPotentialSampleList & sample_entries)
     {
         if (sample.point.distance > maximum_distance) maximum_distance = sample.point.distance;
     }
+    //Logger::Log(LogLevel::Info, "Estimated maximum distance: "+ std::to_string(maximum_distance));
 
     std::vector<double> response_list;
     response_list.reserve(sample_entries.size());
@@ -384,16 +387,14 @@ LocalGaussianResult EstimateLocalGaussian(
     double alpha_r,
     const FitOptions & options)
 {
-    numeric_validation::RequireFiniteNonNegativeRange(
-        options.distance_min, options.distance_max, "fit range");
+    auto range_min{ options.distance_min };
+    auto range_max{ options.distance_max };
+    numeric_validation::RequireFiniteNonNegativeRange(range_min, range_max, "fit range");
     numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
 
     auto execution_options{ MakeExecutionOptions(options) };
     auto dataset{
-        rhbm_helper::BuildMemberDataset(
-            sample_entries,
-            options.distance_min,
-            options.distance_max)
+        rhbm_helper::BuildMemberDataset(sample_entries, range_min, range_max)
     };
     const auto result{ rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset, execution_options) };
     return DecodeLocalGaussianResult(alpha_r, result);
@@ -404,8 +405,9 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
     double alpha_r,
     const FitOptions & options)
 {
-    numeric_validation::RequireFiniteNonNegativeRange(
-        options.distance_min, options.distance_max, "fit range");
+    auto range_min{ options.distance_min };
+    auto range_max{ options.distance_max };
+    numeric_validation::RequireFiniteNonNegativeRange(range_min, range_max, "fit range");
     numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
 
     auto execution_options{ MakeExecutionOptions(options) };
@@ -417,18 +419,11 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
     {
         auto shifted_sample_entries{ BuildShiftedSampleEntries(sample_entries, intercept) };
         auto dataset{
-            rhbm_helper::BuildMemberDataset(
-                shifted_sample_entries,
-                options.distance_min,
-                options.distance_max)
+            rhbm_helper::BuildMemberDataset(shifted_sample_entries, range_min, range_max)
         };
         result = rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset, execution_options);
         const auto residual_sample_entries{
-            BuildResidualSampleEntries(
-                sample_entries,
-                result.beta_mdpde,
-                options.distance_min,
-                options.distance_max)
+            BuildResidualSampleEntries(sample_entries, result.beta_mdpde, range_min, range_max)
         };
         const auto next_intercept{ EstimateResidualIntercept(residual_sample_entries) };
         if (has_previous_intercept && std::fabs(next_intercept - intercept) < execution_options.tolerance)
@@ -477,6 +472,7 @@ void RunLocalAlphaTraining(ModelObject & model_object, const FitOptions & option
     const auto group_key_list{ analysis_view.CollectAtomGroupKeys(class_key) };
 
     size_t count{ 0 };
+    Logger::Log(LogLevel::Info, "Run local alpha training for " + std::to_string(group_key_list.size()) + " groups.");
     for (const auto group_key : group_key_list)
     {
         const auto & group_atom_list{
@@ -555,7 +551,7 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
     auto local_editor_list{ BuildSelectedAtomLocalEditors(model_object) };
     std::atomic<size_t> atom_count{ 0 };
     Logger::Log(LogLevel::Info,
-        "Run Local atom fitting for " + std::to_string(selected_atom_size) + " atoms.");
+        "Run local atom fitting for " + std::to_string(selected_atom_size) + " atoms.");
 
 #ifdef USE_OPENMP
     #pragma omp parallel for num_threads(options.thread_size)
@@ -578,8 +574,8 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
         }
     }
 
-    const size_t maximum_iter_size{ 100 };
-    constexpr double convergence_tolerance{ 1.0e-4 };
+    const size_t maximum_iter_size{ 500 };
+    constexpr double convergence_tolerance{ 1.0e-5 };
     std::vector<LocalPotentialSampleList> sample_entries_list(selected_atom_size);
     std::vector<Eigen::VectorXd> previous_estimation_list(selected_atom_size);
     double previous_residual_median{ std::numeric_limits<double>::max() };

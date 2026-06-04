@@ -246,15 +246,14 @@ ElectricPotential::ModelChoice ElectricPotential::CheckModelChoice(int value) co
     }
 }
 
-double ElectricPotential::CalculateSingleGausModel(
-    Element element, double distance) const
+double ElectricPotential::CalculateSingleGausModel(Element element, double distance) const
 {
     auto atomic_number{ ChemicalDataHelper::GetAtomicNumber(element) };
     auto width_square{ m_blurring_width * m_blurring_width };
     auto distance_square{ distance * distance };
     auto exp_index{ -distance_square/(2.0 * width_square) };
     auto intercept{ 0.0 };
-    if (element == Element::OXYGEN) intercept = -0.5; // TEST
+    if (element == Element::OXYGEN) intercept = -0.1; // TEST
     return atomic_number * std::pow(2.0 * M_PI * width_square, -1.5) * std::exp(exp_index) + intercept;
 }
 
@@ -305,8 +304,7 @@ double ElectricPotential::CalculateFiveGausChargeIntrinsicTerm(
     return potential_total;
 }
 
-double ElectricPotential::CalculateFiveGausChargeDeltaTerm(
-    double distance, double charge) const
+double ElectricPotential::CalculateFiveGausChargeDeltaTerm(double distance, double charge) const
 {
     auto blurring_width{ m_blurring_width };
     if (blurring_width == 0.00) return F_1 * charge/distance;
