@@ -253,7 +253,9 @@ double ElectricPotential::CalculateSingleGausModel(
     auto width_square{ m_blurring_width * m_blurring_width };
     auto distance_square{ distance * distance };
     auto exp_index{ -distance_square/(2.0 * width_square) };
-    return atomic_number * std::pow(2.0 * M_PI * width_square, -1.5) * std::exp(exp_index);
+    auto intercept{ 0.0 };
+    if (element == Element::OXYGEN) intercept = -0.5; // TEST
+    return atomic_number * std::pow(2.0 * M_PI * width_square, -1.5) * std::exp(exp_index) + intercept;
 }
 
 double ElectricPotential::CalculateSingleGausUserModel(
