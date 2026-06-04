@@ -121,10 +121,10 @@ SimulationAtomPreparationResult PrepareSimulationAtomList(
     const MapSimulationRequest & request)
 {
     SimulationAtomPreparationResult result;
-    result.atom_list.reserve(model_object.GetNumberOfAtom());
-    for (auto & atom : model_object.GetAtomList())
+    result.atom_list.reserve(model_object.GetSelectedAtomCount());
+    for (auto * atom : model_object.GetSelectedAtoms())
     {
-        result.atom_list.emplace_back(atom.get());
+        result.atom_list.emplace_back(atom);
         result.atom_charge_map.emplace(
             atom->GetSerialID(),
             CalculateAtomChargeForSimulation(*atom, request.partial_charge_choice));
@@ -345,6 +345,8 @@ bool MapSimulationCommand::ExecuteImpl(const MapSimulationRequest & request)
         return false;
     }
 
+    model_object->SelectAllAtoms();
+    model_object->ApplyElementSelection(Element::HYDROGEN, request.exclude_hydrogen);
     auto atom_list{ PrepareSimulationAtomList(*model_object, request) };
     Logger::Log(LogLevel::Info,
         "Total number of blurring width sets to be simulated: "

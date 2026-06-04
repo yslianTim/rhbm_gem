@@ -87,6 +87,9 @@ def assert_request_objects_are_usable() -> None:
     assert Path(simulation.model_file_path).name == "test_model.cif"
     assert Path(simulation.output_dir) == Path("runtime_smoke_output")
     assert simulation.blurring_width_list == [1.50]
+    assert simulation.exclude_hydrogen is False
+    simulation.exclude_hydrogen = True
+    assert simulation.exclude_hydrogen is True
 
     analysis = m.PotentialAnalysisRequest()
     assert analysis.map_normalization_flag is True

@@ -90,6 +90,18 @@ std::filesystem::path WriteCarbonHydrogenModelFixture(const std::filesystem::pat
     return model_path;
 }
 
+std::filesystem::path FindGeneratedMapPath(const std::filesystem::path & output_dir)
+{
+    for (const auto & entry : std::filesystem::directory_iterator(output_dir))
+    {
+        if (entry.is_regular_file() && entry.path().extension() == ".map")
+        {
+            return entry.path();
+        }
+    }
+    return {};
+}
+
 PotentialAnalysisRequest MakeNormalizationScenarioRequest(
     const std::filesystem::path & temp_dir,
     const std::filesystem::path & map_path)
@@ -162,6 +174,13 @@ TEST(CommandScenariosTest, PotentialAnalysisDefaultsMapNormalizationOn)
 TEST(CommandScenariosTest, PotentialAnalysisDefaultsToIncludingHydrogen)
 {
     PotentialAnalysisRequest request{};
+
+    EXPECT_FALSE(request.exclude_hydrogen);
+}
+
+TEST(CommandScenariosTest, MapSimulationDefaultsToIncludingHydrogen)
+{
+    MapSimulationRequest request{};
 
     EXPECT_FALSE(request.exclude_hydrogen);
 }
@@ -439,6 +458,80 @@ TEST(CommandScenariosTest, MapSimulationGeneratesMapForEachValidBlurringWidth)
         }
     }
     EXPECT_TRUE(has_non_zero_value);
+}
+
+TEST(CommandScenariosTest, MapSimulationCliAcceptsExcludeHydrogen)
+{
+    command_test::ScopedTempDir temp_dir{ "map_simulation_exclude_hydrogen_cli" };
+    const auto model_path{ WriteCarbonHydrogenModelFixture(temp_dir.path() / "models") };
+    const auto output_dir{ temp_dir.path() / "maps" };
+
+    std::vector<std::string> args{
+        "RHBM-GEM",
+        "map_simulation",
+        "--folder",
+        output_dir.string(),
+        "--model",
+        model_path.string(),
+        "--name",
+        "exclude_hydrogen_cli",
+        "--cut-off",
+        "2.0",
+        "--grid-spacing",
+        "1.0",
+        "--blurring-width",
+        "1.0",
+        "--exclude-hydrogen",
+        "true",
+    };
+    std::vector<char *> argv;
+    argv.reserve(args.size());
+    for (auto & arg : args)
+    {
+        argv.push_back(arg.data());
+    }
+
+    const auto result{ RunCommandCLI(static_cast<int>(argv.size()), argv.data()) };
+
+    EXPECT_EQ(result, 0);
+    EXPECT_EQ(command_test::CountFilesWithExtension(output_dir, ".map"), 1);
+}
+
+TEST(CommandScenariosTest, MapSimulationExcludeHydrogenFiltersSimulationBounds)
+{
+    command_test::ScopedTempDir temp_dir{ "map_simulation_exclude_hydrogen_behavior" };
+    const auto model_path{ WriteCarbonHydrogenModelFixture(temp_dir.path() / "models") };
+
+    MapSimulationRequest include_request{};
+    include_request.output_dir = temp_dir.path() / "include";
+    include_request.map_file_name = "include_hydrogen";
+    include_request.model_file_path = model_path;
+    include_request.cutoff_distance = 2.0;
+    include_request.grid_spacing = 1.0;
+    include_request.blurring_width_list = { 1.0 };
+    include_request.exclude_hydrogen = false;
+    ASSERT_TRUE(RunCommand(include_request).succeeded);
+
+    MapSimulationRequest exclude_request{ include_request };
+    exclude_request.output_dir = temp_dir.path() / "exclude";
+    exclude_request.map_file_name = "exclude_hydrogen";
+    exclude_request.exclude_hydrogen = true;
+    ASSERT_TRUE(RunCommand(exclude_request).succeeded);
+
+    const auto include_map_path{ FindGeneratedMapPath(include_request.output_dir) };
+    const auto exclude_map_path{ FindGeneratedMapPath(exclude_request.output_dir) };
+    ASSERT_FALSE(include_map_path.empty());
+    ASSERT_FALSE(exclude_map_path.empty());
+
+    auto include_map{ ReadMap(include_map_path) };
+    auto exclude_map{ ReadMap(exclude_map_path) };
+    ASSERT_NE(include_map, nullptr);
+    ASSERT_NE(exclude_map, nullptr);
+
+    EXPECT_EQ(include_map->GetGridSize(), (std::array<int, 3>{ 5, 4, 4 }));
+    EXPECT_EQ(exclude_map->GetGridSize(), (std::array<int, 3>{ 4, 4, 4 }));
+    EXPECT_EQ(include_map->GetOrigin(), (std::array<float, 3>{ -2.0f, -2.0f, -2.0f }));
+    EXPECT_EQ(exclude_map->GetOrigin(), (std::array<float, 3>{ -2.0f, -2.0f, -2.0f }));
 }
 
 TEST(CommandScenariosTest, MapSimulationEmptyModelUsesZeroOrigin)

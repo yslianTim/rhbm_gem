@@ -115,6 +115,7 @@ struct MapSimulationRequest : public CommandRequestBase
     std::string map_file_name{ "sim_map" };
     PotentialModel potential_model_choice{ PotentialModel::FIVE_GAUS_CHARGE };
     PartialCharge partial_charge_choice{ PartialCharge::PARTIAL };
+    bool exclude_hydrogen{ false };
     double cutoff_distance{ 5.0 };
     double grid_spacing{ 0.5 };
     std::vector<double> blurring_width_list{ 1.50 };
