@@ -15,7 +15,6 @@
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
-#include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <atomic>
 #include <limits>
