@@ -18,6 +18,7 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <atomic>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -36,6 +37,8 @@ constexpr std::size_t kMinimumAlphaRTrainingSampleCount{ 10 };
 constexpr std::size_t kMinimumAlphaGTrainingMemberCount{ 10 };
 constexpr double kResidualInterceptRangeMin{ 1.0 };
 constexpr double kResidualInterceptRangeMax{ 1.5 };
+constexpr double kInterceptDampingWeight{ 0.5 };
+constexpr std::size_t kInterceptCycleHistorySize{ 64 };
 
 std::vector<AtomLocalPotentialEditor> BuildSelectedAtomLocalEditors(ModelObject & model_object)
 {
@@ -453,29 +456,67 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
     auto execution_options{ MakeExecutionOptions(options) };
     double intercept{ intercept_initial };
     LocalGaussianResult result;
-    Eigen::VectorXd previous_estimation;
-    bool has_previous_estimation{ false };
+    std::vector<double> intercept_history;
+    intercept_history.reserve(kInterceptCycleHistorySize);
+    double best_intercept{ intercept };
+    double best_defect{ std::numeric_limits<double>::infinity() };
     auto max_iterations{ execution_options.max_iterations };
-    //auto tolerance{ execution_options.tolerance };
-    auto tolerance{ 1.0e-2 };
+    auto tolerance{ execution_options.tolerance };
     for (int t = 0; t < max_iterations; t++)
     {
         result = EstimateLocalGaussian(sample_entries, alpha_r, options, intercept);
-        auto current_estimation{ result.mdpde.GetModel().ToVector() };
-        if (has_previous_estimation && (current_estimation - previous_estimation).norm() < tolerance)
+        if (!intercept_history.empty() &&
+            std::abs(intercept - intercept_history.back()) < tolerance)
         {
             break;
         }
-        has_previous_estimation = true;
-        previous_estimation = std::move(current_estimation);
-        if (t + 1 < max_iterations)
+
+        bool cycle_detected{ false };
+        for (std::size_t period = 2; period <= intercept_history.size(); period++)
         {
-            intercept = EstimateResidualIntercept(sample_entries, *result.fit_result);
+            const auto cycle_begin{ intercept_history.size() - period };
+            if (std::abs(intercept - intercept_history[cycle_begin]) >= tolerance) continue;
+
+            double final_intercept{ 0.0 };
+            for (std::size_t i = cycle_begin; i < intercept_history.size(); i++)
+            {
+                final_intercept += intercept_history[i];
+            }
+            final_intercept /= static_cast<double>(period);
+            result = EstimateLocalGaussian(sample_entries, alpha_r, options, final_intercept);
+            Logger::Log(LogLevel::Debug,
+                "Cycle detected in local Gaussian intercept estimation with period " +
+                std::to_string(period) + "; refitting at cycle mean.");
+            cycle_detected = true;
+            break;
+        }
+        if (cycle_detected) break;
+
+        const auto raw_intercept{
+            EstimateResidualIntercept(sample_entries, *result.fit_result)
+        };
+        const auto defect{ std::abs(raw_intercept - intercept) };
+        if (defect < best_defect)
+        {
+            best_intercept = intercept;
+            best_defect = defect;
         }
         if (t + 1 == max_iterations)
         {
-            Logger::Log(LogLevel::Warning, "Maximum iterations reached in local Gaussian estimation with intercept.");
+            result = EstimateLocalGaussian(sample_entries, alpha_r, options, best_intercept);
+            Logger::Log(LogLevel::Warning,
+                "Maximum iterations reached in local Gaussian estimation with intercept; "
+                "refitting at best fixed-point candidate with defect = " +
+                std::to_string(best_defect) + ".");
+            break;
         }
+
+        if (intercept_history.size() == kInterceptCycleHistorySize)
+        {
+            intercept_history.erase(intercept_history.begin());
+        }
+        intercept_history.emplace_back(intercept);
+        intercept += kInterceptDampingWeight * (raw_intercept - intercept);
     }
     //Logger::Log(LogLevel::Info, "Estimated intercept: " + std::to_string(intercept));
     return result;
