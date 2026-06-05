@@ -389,7 +389,6 @@ LocalGaussianResult EstimateLocalGaussian(
     numeric_validation::RequireFiniteNonNegativeRange(range_min, range_max, "fit range");
     numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
     numeric_validation::RequireFinite(intercept, "intercept");
-    //intercept = 0.0;
     auto execution_options{ MakeExecutionOptions(options) };
     auto shifted_sample_entries{
         sample_filter::BuildResponseShiftedSampleEntries(sample_entries, intercept)

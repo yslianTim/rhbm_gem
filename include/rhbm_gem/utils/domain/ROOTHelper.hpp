@@ -45,7 +45,8 @@ namespace root_helper {
     std::unique_ptr<TF1> CreateFunction1D(const std::string & name, const std::string & form);
     std::unique_ptr<TF1> CreateLinearModelFunction(const std::string & name, double beta_0, double beta_1, double x_min=-2.0, double x_max=1.0);
     std::unique_ptr<TF1> CreateGaus2DFunctionIn1D(const std::string & name, double amplitude, double width, double x_min=0.0, double x_max=1.5);
-    std::unique_ptr<TF1> CreateGaus3DFunctionIn1D(const std::string & name, double amplitude, double width, double x_min=0.0, double x_max=1.5);
+    std::unique_ptr<TF1> CreateGaus3DFunctionIn1D(
+        const std::string & name, double amplitude, double width, double intercept=0.0, double x_min=0.0, double x_max=1.5);
     std::unique_ptr<TLine> CreateLine(double x1, double y1, double x2, double y2);
     void PrintCanvasOpen(TCanvas * canvas, const std::string & name);
     void PrintCanvasPad(TCanvas * canvas, const std::string & name);

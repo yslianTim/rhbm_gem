@@ -3,11 +3,28 @@
 #include <stdexcept>
 
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
+#include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
 #ifdef HAVE_ROOT
+#include <TF1.h>
 #include <TLegend.h>
 #include <TPaveText.h>
 #include <TROOT.h>
+
+TEST(ROOTHelperTest, CreateGaus3DFunctionIn1DIncludesIntercept)
+{
+    gROOT->SetBatch(kTRUE);
+    const rhbm_gem::GaussianModel3D model{ 1.25, 0.55, -0.15 };
+    auto function{
+        rhbm_gem::root_helper::CreateGaus3DFunctionIn1D(
+            "gaus", model.GetAmplitude(), model.GetWidth(), model.GetIntercept())
+    };
+
+    ASSERT_NE(function, nullptr);
+    EXPECT_EQ(function->GetNpar(), 3);
+    EXPECT_DOUBLE_EQ(function->GetParameter(2), model.GetIntercept());
+    EXPECT_NEAR(function->Eval(0.75), model.ResponseAtDistance(0.75), 1e-12);
+}
 
 TEST(ROOTHelperTest, SetPadMarginInCanvasThrowsForNullPad)
 {

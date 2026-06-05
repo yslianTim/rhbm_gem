@@ -183,6 +183,7 @@ void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::
     std::unique_ptr<TF1> gaus_function[main_chain_element_size];
     double amplitude_prior[main_chain_element_size];
     double width_prior[main_chain_element_size];
+    double intercept_prior[main_chain_element_size];
     std::vector<double> y_array;
     y_array.reserve(model_object->GetSelectedAtomCount());
     for (size_t k = 0; k < main_chain_element_size; k++)
@@ -205,6 +206,7 @@ void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::
         gaus_function[k] = plot_builder->CreateAtomGroupGausFunctionPrior(group_key, class_key);
         amplitude_prior[k] = entry_iter->GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(0);
         width_prior[k] = entry_iter->GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(1);
+        intercept_prior[k] = entry_iter->GetAtomGroupPrior(group_key, class_key).GetIntercept();
     }
 
     auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.15) };
@@ -262,7 +264,9 @@ void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::
             root_helper::SetPaveTextDefaultStyle(result_text[i].get());
             root_helper::SetTextAttribute(result_text[i].get(), 20.0f, 133, 22, 0.0, kRed);
             root_helper::SetFillAttribute(result_text[i].get(), 4000);
-            result_text[i]->AddText(Form("#font[2]{A} = %.2f  ;  #tau = %.2f", amplitude_prior[i], width_prior[i]));
+            result_text[i]->AddText(
+                Form("#font[2]{A} = %.2f  ;  #tau = %.2f  ;  c = %.2f",
+                    amplitude_prior[i], width_prior[i], intercept_prior[i]));
             result_text[i]->Draw();
         }
     }
@@ -303,7 +307,7 @@ void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::
     root_helper::SetTextAttribute(legend.get(), 25.0f, 133, 12, 0.0);
     legend->SetMargin(0.15f);
     legend->AddEntry(gaus_function[0].get(),
-        "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})}", "l");
+        "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau},#font[1]{c})}", "l");
     legend->AddEntry(map_value_graph_list[0].at(0).get(),
         "Map Value", "l");
     legend->Draw();
@@ -756,8 +760,16 @@ void GausPainter::PaintLocalGausSummary(
                 entry_iter->GetAtomGroupPriorWithUncertainty(group_key, class_key)
                     .GetDisplayStandardDeviation(1)
             };
+            auto intercept_prior{
+                entry_iter->GetAtomGroupPrior(group_key, class_key).GetIntercept()
+            };
+            auto intercept_error{
+                entry_iter->GetAtomGroupPriorWithUncertainty(group_key, class_key)
+                    .GetStandardDeviationModel().GetIntercept()
+            };
             result_text->AddText(Form("#font[2]{#hat{A}} = %.2f #pm %.2f", amplitude_prior, amplitude_error));
             result_text->AddText(Form("#hat{#tau} = %.2f #pm %.2f", width_prior, width_error));
+            result_text->AddText(Form("#hat{c} = %.2f #pm %.2f", intercept_prior, intercept_error));
             result_text->Draw();
 
             pad[2]->cd();
@@ -1566,7 +1578,8 @@ void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
                 root_helper::SetTextAttribute(result_text[i][j].get(), 30.0f, 133, 22, 0.0f, kRed);
                 root_helper::SetFillAttribute(result_text[i][j].get(), 4000);
                 result_text[i][j]->AddText(
-                    Form("A = %.2f,   #tau = %.2f", gaus_prior->GetParameter(0), gaus_prior->GetParameter(1))
+                    Form("A = %.2f,   #tau = %.2f,   c = %.2f",
+                        gaus_prior->GetParameter(0), gaus_prior->GetParameter(1), gaus_prior->GetParameter(2))
                 );
                 result_text[i][j]->Draw();
             }
@@ -1607,11 +1620,11 @@ void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
         root_helper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
         legend->SetMargin(0.25f);
         legend->AddEntry(gaus_prior_map.at(Residue::ALA).get(),
-            "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})} with selected #alpha_{r} and #alpha_{g}", "l");
+            "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau},#font[1]{c})} with selected #alpha_{r} and #alpha_{g}", "l");
             //Form("Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})} with #alpha_{r} = %.1f, #alpha_{g} = %.1f",
             //entry_iter->GetAtomAlphaR(group_key_list.at(0), class_key), entry_iter->GetAtomAlphaG(group_key_list.at(0), class_key)), "l");
         legend->AddEntry(gaus_mean_map.at(Residue::ALA).get(),
-            "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})} with #alpha_{r} = #alpha_{g} = 0", "l");
+            "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau},#font[1]{c})} with #alpha_{r} = #alpha_{g} = 0", "l");
         legend->AddEntry(map_value_graph_list_map.at(Residue::ALA).front().get(),
             "Members of Map Value", "l");
         legend->Draw();

@@ -790,9 +790,11 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalGausFunctionOLS() cons
         return nullptr;
     }
     const auto atom_local_entry{ AtomLocalPotentialView::RequireFor(*m_atom_object) };
-    auto amplitude{ atom_local_entry.GetEstimateOLS().GetAmplitude() };
-    auto width{ atom_local_entry.GetEstimateOLS().GetWidth() };
-    return root_helper::CreateGaus3DFunctionIn1D("gaus", amplitude, width);
+    const auto & model{ atom_local_entry.GetEstimateOLS() };
+    auto amplitude{ model.GetAmplitude() };
+    auto width{ model.GetWidth() };
+    auto intercept{ model.GetIntercept() };
+    return root_helper::CreateGaus3DFunctionIn1D("gaus", amplitude, width, intercept);
 }
 
 std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalGausFunctionMDPDE() const
@@ -802,9 +804,11 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalGausFunctionMDPDE() co
         return nullptr;
     }
     const auto atom_local_entry{ AtomLocalPotentialView::RequireFor(*m_atom_object) };
-    auto amplitude{ atom_local_entry.GetEstimateMDPDE().GetAmplitude() };
-    auto width{ atom_local_entry.GetEstimateMDPDE().GetWidth() };
-    return root_helper::CreateGaus3DFunctionIn1D("gaus", amplitude, width);
+    const auto & model{ atom_local_entry.GetEstimateMDPDE() };
+    auto amplitude{ model.GetAmplitude() };
+    auto width{ model.GetWidth() };
+    auto intercept{ model.GetIntercept() };
+    return root_helper::CreateGaus3DFunctionIn1D("gaus", amplitude, width, intercept);
 }
 
 std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupLinearModelFunctionMean(
@@ -847,7 +851,8 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionMean(
     const auto & mean{ GetModelView().GetAtomGroupMean(group_key, class_key) };
     auto amplitude{ mean.GetAmplitude() };
     auto width{ mean.GetWidth() };
-    return root_helper::CreateGaus3DFunctionIn1D("group_gaus_mean", amplitude, width);
+    auto intercept{ mean.GetIntercept() };
+    return root_helper::CreateGaus3DFunctionIn1D("group_gaus_mean", amplitude, width, intercept);
 }
 
 std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionPrior(
@@ -860,7 +865,8 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionPrior(
     const auto & prior{ GetModelView().GetAtomGroupPrior(group_key, class_key) };
     auto amplitude{ prior.GetAmplitude() };
     auto width{ prior.GetWidth() };
-    return root_helper::CreateGaus3DFunctionIn1D("group_gaus_prior", amplitude, width);
+    auto intercept{ prior.GetIntercept() };
+    return root_helper::CreateGaus3DFunctionIn1D("group_gaus_prior", amplitude, width, intercept);
 }
 
 #endif

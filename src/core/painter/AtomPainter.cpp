@@ -170,7 +170,8 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
     const auto & estimate{ atom_entry.GetEstimateMDPDE() };
     auto amplitude{ estimate.GetAmplitude() };
     auto width{ estimate.GetWidth() };
-    auto gaus_func{ root_helper::CreateGaus3DFunctionIn1D("gaus", amplitude, width) };
+    auto intercept{ estimate.GetIntercept() };
+    auto gaus_func{ root_helper::CreateGaus3DFunctionIn1D("gaus", amplitude, width, intercept) };
     root_helper::SetLineAttribute(gaus_func.get(), 9, 4, kRed+1);
     gaus_func->Draw("SAME");
 
