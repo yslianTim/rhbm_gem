@@ -23,6 +23,7 @@
 #include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 namespace rg = rhbm_gem;
 namespace ge = rhbm_gem::core;
@@ -277,12 +278,36 @@ void ExpectAllAtomGroupsHavePotentialFittingOutput(const rg::ModelObject & model
 
             const auto & atom_list{ analysis_view.GetAtomObjectList(group_key, class_key) };
             ASSERT_FALSE(atom_list.empty());
+            std::vector<double> member_intercepts;
+            member_intercepts.reserve(atom_list.size());
             for (const auto * atom : atom_list)
             {
                 const auto local_view{ rg::AtomLocalPotentialView::RequireFor(*atom) };
-                EXPECT_TRUE(local_view.FindAnnotation(class_key).has_value());
+                const auto local_intercept{
+                    local_view.GetGaussianResult().mdpde.GetModel().GetIntercept()
+                };
+                member_intercepts.emplace_back(local_intercept);
+                const auto annotation{ local_view.FindAnnotation(class_key) };
+                ASSERT_TRUE(annotation.has_value());
+                EXPECT_NEAR(
+                    local_intercept,
+                    annotation->gaussian.GetModel().GetIntercept(),
+                    1e-12);
                 EXPECT_TRUE(local_view.GetGaussianResult().fit_result.has_value());
             }
+            const auto group_intercept{ rg::array_helper::ComputeMedian(member_intercepts) };
+            EXPECT_NEAR(
+                group_intercept,
+                analysis_view.GetAtomGroupMean(group_key, class_key).GetIntercept(),
+                1e-12);
+            EXPECT_NEAR(
+                group_intercept,
+                analysis_view.GetAtomGroupMDPDE(group_key, class_key).GetIntercept(),
+                1e-12);
+            EXPECT_NEAR(
+                group_intercept,
+                analysis_view.GetAtomGroupPrior(group_key, class_key).GetIntercept(),
+                1e-12);
             group_count++;
         }
     }
@@ -836,13 +861,33 @@ TEST(GaussianEstimatorTest, EstimateGroupGaussianMatchesHelperPath)
     const auto expected_prior{
         ls::DecodeParameterVector(expected_raw.mu_prior, expected_raw.capital_lambda)
     };
+    std::vector<double> member_intercepts;
+    member_intercepts.reserve(member_result_list.size());
+    for (const auto & member_result : member_result_list)
+    {
+        member_intercepts.emplace_back(member_result.mdpde.GetModel().GetIntercept());
+    }
+    const auto expected_group_intercept{ rg::array_helper::ComputeMedian(member_intercepts) };
     EXPECT_NEAR(expected_mean.GetAmplitude(), actual.mean.GetAmplitude(), 1e-12);
     EXPECT_NEAR(expected_mean.GetWidth(), actual.mean.GetWidth(), 1e-12);
+    EXPECT_NEAR(expected_group_intercept, actual.mean.GetIntercept(), 1e-12);
     EXPECT_NEAR(expected_mdpde.GetAmplitude(), actual.mdpde.GetAmplitude(), 1e-12);
     EXPECT_NEAR(expected_mdpde.GetWidth(), actual.mdpde.GetWidth(), 1e-12);
+    EXPECT_NEAR(expected_group_intercept, actual.mdpde.GetIntercept(), 1e-12);
     EXPECT_NEAR(expected_prior.GetModel().GetAmplitude(), actual.prior.GetModel().GetAmplitude(), 1e-12);
     EXPECT_NEAR(expected_prior.GetModel().GetWidth(), actual.prior.GetModel().GetWidth(), 1e-12);
+    EXPECT_NEAR(
+        expected_group_intercept,
+        actual.prior.GetModel().GetIntercept(),
+        1e-12);
     ASSERT_EQ(sample_entries_list.size(), actual.member_results.size());
+    for (std::size_t i = 0; i < actual.member_results.size(); i++)
+    {
+        EXPECT_NEAR(
+            member_result_list.at(i).mdpde.GetModel().GetIntercept(),
+            actual.member_results.at(i).mdpde.GetModel().GetIntercept(),
+            1e-12);
+    }
 }
 
 TEST(GaussianEstimatorTest, EstimateGroupGaussianRejectsInconsistentMemberCount)

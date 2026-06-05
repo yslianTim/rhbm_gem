@@ -227,19 +227,52 @@ LocalGaussianResult DecodeLocalGaussianResult(
     };
 }
 
-GroupGaussianResult DecodeGroupGaussianResult(double alpha_g, const RHBMGroupEstimationResult & result)
+GaussianModel3DWithUncertainty WithModelIntercept(
+    const GaussianModel3DWithUncertainty & gaussian,
+    double intercept)
 {
-    return GroupGaussianResult{
-        alpha_g,
-        linearization_service::DecodeParameterVector(result.mu_mean),
-        linearization_service::DecodeParameterVector(result.mu_mdpde),
-        linearization_service::DecodeParameterVector(result.mu_prior, result.capital_lambda)
+    return GaussianModel3DWithUncertainty{
+        gaussian.GetModel().WithIntercept(intercept),
+        gaussian.GetStandardDeviationModel()
     };
 }
 
-std::vector<LocalGaussianResult> DecodeMemberGaussianResults(const RHBMGroupEstimationResult & result)
+std::vector<double> ExtractMemberInterceptList(
+    const std::vector<LocalGaussianResult> & member_result_list)
+{
+    std::vector<double> intercept_list;
+    intercept_list.reserve(member_result_list.size());
+    for (const auto & member_result : member_result_list)
+    {
+        intercept_list.emplace_back(member_result.mdpde.GetModel().GetIntercept());
+    }
+    return intercept_list;
+}
+
+GroupGaussianResult DecodeGroupGaussianResult(
+    double alpha_g,
+    const RHBMGroupEstimationResult & result,
+    double intercept)
+{
+    return GroupGaussianResult{
+        alpha_g,
+        linearization_service::DecodeParameterVector(result.mu_mean).WithIntercept(intercept),
+        linearization_service::DecodeParameterVector(result.mu_mdpde).WithIntercept(intercept),
+        WithModelIntercept(
+            linearization_service::DecodeParameterVector(result.mu_prior, result.capital_lambda),
+            intercept)
+    };
+}
+
+std::vector<LocalGaussianResult> DecodeMemberGaussianResults(
+    const RHBMGroupEstimationResult & result,
+    const std::vector<LocalGaussianResult> & member_result_list)
 {
     const auto member_count{ static_cast<std::size_t>(result.beta_posterior_matrix.cols()) };
+    if (member_result_list.size() != member_count)
+    {
+        throw std::invalid_argument("Group Gaussian member result count is inconsistent.");
+    }
     if (result.capital_sigma_posterior_list.size() != member_count)
     {
         throw std::invalid_argument("Group Gaussian member result count is inconsistent.");
@@ -255,10 +288,16 @@ std::vector<LocalGaussianResult> DecodeMemberGaussianResults(const RHBMGroupEsti
     member_results.reserve(member_count);
     for (Eigen::Index i = 0; i < result.beta_posterior_matrix.cols(); i++)
     {
+        const auto member_index{ static_cast<std::size_t>(i) };
+        const auto intercept{
+            member_result_list.at(member_index).mdpde.GetModel().GetIntercept()
+        };
         const auto gaussian{
-            linearization_service::DecodeParameterVector(
-                result.beta_posterior_matrix.col(i),
-                result.capital_sigma_posterior_list.at(static_cast<std::size_t>(i)))
+            WithModelIntercept(
+                linearization_service::DecodeParameterVector(
+                    result.beta_posterior_matrix.col(i),
+                    result.capital_sigma_posterior_list.at(member_index)),
+                intercept)
         };
         member_results.emplace_back(LocalGaussianResult{
             0.0,
@@ -403,7 +442,8 @@ LocalGaussianResult EstimateLocalGaussian(
 LocalGaussianResult EstimateLocalGaussianWithIntercept(
     const LocalPotentialSampleList & sample_entries,
     double alpha_r,
-    const FitOptions & options)
+    const FitOptions & options,
+    double intercept_initial)
 {
     auto range_min{ options.distance_min };
     auto range_max{ options.distance_max };
@@ -411,26 +451,28 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
     numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
 
     auto execution_options{ MakeExecutionOptions(options) };
-    double intercept{ EstimateInitialIntercept(sample_entries) };
+    double intercept{ intercept_initial };
     LocalGaussianResult result;
     Eigen::VectorXd previous_estimation;
     bool has_previous_estimation{ false };
-    for (int t = 0; t < execution_options.max_iterations; t++)
+    auto max_iterations{ execution_options.max_iterations };
+    //auto tolerance{ execution_options.tolerance };
+    auto tolerance{ 1.0e-2 };
+    for (int t = 0; t < max_iterations; t++)
     {
         result = EstimateLocalGaussian(sample_entries, alpha_r, options, intercept);
         auto current_estimation{ result.mdpde.GetModel().ToVector() };
-        if (has_previous_estimation &&
-            (current_estimation - previous_estimation).norm() < execution_options.tolerance)
+        if (has_previous_estimation && (current_estimation - previous_estimation).norm() < tolerance)
         {
             break;
         }
         has_previous_estimation = true;
         previous_estimation = std::move(current_estimation);
-        if (t + 1 < execution_options.max_iterations)
+        if (t + 1 < max_iterations)
         {
             intercept = EstimateResidualIntercept(sample_entries, *result.fit_result);
         }
-        if (t + 1 == execution_options.max_iterations)
+        if (t + 1 == max_iterations)
         {
             Logger::Log(LogLevel::Warning, "Maximum iterations reached in local Gaussian estimation with intercept.");
         }
@@ -459,8 +501,10 @@ GroupGaussianResult EstimateGroupGaussian(
     const auto fit_result_list{ BuildMemberFitResultList(member_result_list) };
     const auto group_input{ rhbm_helper::BuildGroupInput(dataset_list, fit_result_list) };
     const auto raw_result{ rhbm_helper::EstimateGroup(alpha_g, group_input, execution_options) };
-    auto result{ DecodeGroupGaussianResult(alpha_g, raw_result) };
-    result.member_results = DecodeMemberGaussianResults(raw_result);
+    const auto member_intercept_list{ ExtractMemberInterceptList(member_result_list) };
+    const auto group_intercept{ array_helper::ComputeMedian(member_intercept_list) };
+    auto result{ DecodeGroupGaussianResult(alpha_g, raw_result, group_intercept) };
+    result.member_results = DecodeMemberGaussianResults(raw_result, member_result_list);
     return result;
 }
 
@@ -560,8 +604,10 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
     {
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
         auto sample_entries{ local_view.GetSamplingEntries() };
+        auto intercept_initial{ EstimateInitialIntercept(sample_entries) };
         const auto result{
-            EstimateLocalGaussianWithIntercept(sample_entries, local_view.GetAlphaR(), options)
+            EstimateLocalGaussianWithIntercept(
+                sample_entries, local_view.GetAlphaR(), options, intercept_initial)
         };
         local_editor_list[i].SetGaussianResult(result);
 
@@ -602,7 +648,7 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
             };
             const auto intercept{ snapshot.at(&atom).GetIntercept() };
             const auto result{
-                EstimateLocalGaussian(sample_entries, local_view.GetAlphaR(), options, intercept)
+                EstimateLocalGaussianWithIntercept(sample_entries, local_view.GetAlphaR(), options, intercept)
             };
             sample_entries_list[i] = std::move(sample_entries);
             current_estimation_list[i] = result.mdpde.GetModel().ToVector();

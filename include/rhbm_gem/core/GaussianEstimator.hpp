@@ -34,7 +34,8 @@ LocalGaussianResult EstimateLocalGaussian(
 LocalGaussianResult EstimateLocalGaussianWithIntercept(
     const LocalPotentialSampleList & sample_entries,
     double alpha_r,
-    const FitOptions & options);
+    const FitOptions & options,
+    double intercept_initial = 0.0);
 
 GroupGaussianResult EstimateGroupGaussian(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
