@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <cstddef>
 #include <filesystem>
 #include <stdexcept>
 #include <string>
@@ -9,6 +10,7 @@
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
+#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include "io/sqlite/SQLitePersistence.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include "support/DataObjectTestSupport.hpp"
@@ -142,7 +144,7 @@ TEST(DataObjectPersistenceTest, FinalV2CatalogDatabaseRemainsLoadable)
     rg::DataRepository repository{ database_path };
     EXPECT_NE(repository.LoadModel("model"), nullptr);
     EXPECT_NE(repository.LoadMap("map"), nullptr);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 3);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 4);
 }
 
 TEST(DataObjectPersistenceTest, SamplingSelectionRoundTripPreservesUnselectedSamples)
@@ -180,6 +182,113 @@ TEST(DataObjectPersistenceTest, SamplingSelectionRoundTripPreservesUnselectedSam
     EXPECT_FLOAT_EQ(selected_entries.at(0).response, 6.0f);
 }
 
+TEST(DataObjectPersistenceTest, GaussianInterceptRoundTripPreservesAnalysisResults)
+{
+    const command_test::ScopedTempDir temp_dir{ "data_schema_gaussian_intercept_roundtrip" };
+    const auto database_path{ temp_dir.path() / "gaussian_intercept_roundtrip.sqlite" };
+
+    int annotated_serial_id{ 0 };
+    GroupKey group_key{};
+    const auto class_key{ ChemicalDataHelper::GetSimpleAtomClassKey() };
+    {
+        rg::DataRepository repository{ database_path };
+        auto model{ data_test::MakeModelWithBond() };
+        model->SetKeyTag("model");
+        model->SelectAllAtoms();
+        model->ApplySymmetrySelection(false);
+
+        auto analysis{ model->EditAnalysis() };
+        auto local_editor{ analysis.EnsureAtomLocalPotential(*model->GetAtomList().at(0)) };
+        rg::LocalGaussianResult local_result;
+        local_result.alpha_r = 0.5;
+        local_result.ols = rg::GaussianModel3DWithUncertainty{
+            rg::GaussianModel3D{ 1.0, 0.6, 0.11 },
+            rg::GaussianModel3DUncertainty{}
+        };
+        local_result.mdpde = rg::GaussianModel3DWithUncertainty{
+            rg::GaussianModel3D{ 1.5, 0.8, 0.22 },
+            rg::GaussianModel3DUncertainty{}
+        };
+        local_editor.SetGaussianResult(local_result);
+
+        analysis.RebuildAtomGroupsFromSelection();
+        const auto analysis_view{ model->GetAnalysisView() };
+        const auto group_keys{ analysis_view.CollectAtomGroupKeys(class_key) };
+        ASSERT_FALSE(group_keys.empty());
+        group_key = group_keys.front();
+        const auto & atom_list{ analysis_view.GetAtomObjectList(group_key, class_key) };
+        ASSERT_FALSE(atom_list.empty());
+        annotated_serial_id = atom_list.front()->GetSerialID();
+
+        rg::GroupGaussianResult group_result;
+        group_result.alpha_g = 0.25;
+        group_result.mean = rg::GaussianModel3D{ 1.1, 1.2, 0.33 };
+        group_result.mdpde = rg::GaussianModel3D{ 1.2, 1.1, 0.44 };
+        group_result.prior = rg::GaussianModel3DWithUncertainty{
+            rg::GaussianModel3D{ 1.3, 1.0, 0.55 },
+            rg::GaussianModel3DUncertainty{ 0.1, 0.2, 0.03 }
+        };
+        group_result.member_results.reserve(atom_list.size());
+        for (std::size_t i = 0; i < atom_list.size(); i++)
+        {
+            rg::LocalGaussianResult member_result;
+            member_result.mdpde = rg::GaussianModel3DWithUncertainty{
+                rg::GaussianModel3D{ 0.4 + 0.1 * static_cast<double>(i), 0.9, 0.66 },
+                rg::GaussianModel3DUncertainty{ 0.01, 0.02, 0.04 }
+            };
+            member_result.is_outlier = (i == 0);
+            member_result.statistical_distance = 1.5 + static_cast<double>(i);
+            group_result.member_results.emplace_back(member_result);
+        }
+        analysis.ApplyAtomGroupGaussianResult(group_key, class_key, group_result);
+
+        repository.SaveModel(*model, "model");
+    }
+
+    rg::DataRepository repository{ database_path };
+    auto loaded_model{ repository.LoadModel("model") };
+    ASSERT_NE(loaded_model, nullptr);
+
+    const auto local_view{
+        rg::AtomLocalPotentialView::RequireFor(*loaded_model->GetAtomList().at(0))
+    };
+    EXPECT_DOUBLE_EQ(local_view.GetGaussianResult().ols.GetModel().GetIntercept(), 0.11);
+    EXPECT_DOUBLE_EQ(local_view.GetGaussianResult().mdpde.GetModel().GetIntercept(), 0.22);
+
+    const auto loaded_analysis_view{ loaded_model->GetAnalysisView() };
+    EXPECT_DOUBLE_EQ(
+        loaded_analysis_view.GetAtomGroupMean(group_key, class_key).GetIntercept(),
+        0.33);
+    EXPECT_DOUBLE_EQ(
+        loaded_analysis_view.GetAtomGroupMDPDE(group_key, class_key).GetIntercept(),
+        0.44);
+    EXPECT_DOUBLE_EQ(
+        loaded_analysis_view.GetAtomGroupPrior(group_key, class_key).GetIntercept(),
+        0.55);
+    EXPECT_DOUBLE_EQ(
+        loaded_analysis_view.GetAtomGroupPriorWithUncertainty(group_key, class_key)
+            .GetStandardDeviationModel()
+            .GetIntercept(),
+        0.03);
+
+    rg::AtomObject * annotated_atom{ nullptr };
+    for (const auto & atom : loaded_model->GetAtomList())
+    {
+        if (atom->GetSerialID() == annotated_serial_id)
+        {
+            annotated_atom = atom.get();
+            break;
+        }
+    }
+    ASSERT_NE(annotated_atom, nullptr);
+    const auto annotation{
+        rg::AtomLocalPotentialView::RequireFor(*annotated_atom).FindAnnotation(class_key)
+    };
+    ASSERT_TRUE(annotation.has_value());
+    EXPECT_DOUBLE_EQ(annotation->gaussian.GetModel().GetIntercept(), 0.66);
+    EXPECT_DOUBLE_EQ(annotation->gaussian.GetStandardDeviationModel().GetIntercept(), 0.04);
+}
+
 TEST(DataObjectPersistenceTest, LegacyV2SamplingBlobLoadsAsSelectedAndMigratesVersion)
 {
     const command_test::ScopedTempDir temp_dir{ "data_schema_legacy_sampling_blob" };
@@ -197,9 +306,9 @@ TEST(DataObjectPersistenceTest, LegacyV2SamplingBlobLoadsAsSelectedAndMigratesVe
         database.Prepare(
             "INSERT OR REPLACE INTO model_atom_local_potential ("
             "key_tag, serial_id, sampling_size, distance_and_map_value_list, "
-            "amplitude_estimate_ols, width_estimate_ols, "
-            "amplitude_estimate_mdpde, width_estimate_mdpde, alpha_r"
-            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);");
+            "amplitude_estimate_ols, width_estimate_ols, intercept_estimate_ols, "
+            "amplitude_estimate_mdpde, width_estimate_mdpde, intercept_estimate_mdpde, alpha_r"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
         rg::SQLiteWrapper::StatementGuard guard(database);
         const std::vector<float> legacy_samples{
             0.1f, 6.0f,
@@ -214,6 +323,8 @@ TEST(DataObjectPersistenceTest, LegacyV2SamplingBlobLoadsAsSelectedAndMigratesVe
         database.Bind<double>(7, 0.0);
         database.Bind<double>(8, 0.0);
         database.Bind<double>(9, 0.0);
+        database.Bind<double>(10, 0.0);
+        database.Bind<double>(11, 0.0);
         database.StepOnce();
     }
     data_test::SetUserVersion(database_path, 2);
@@ -228,7 +339,7 @@ TEST(DataObjectPersistenceTest, LegacyV2SamplingBlobLoadsAsSelectedAndMigratesVe
     ASSERT_EQ(entries.size(), 2u);
     EXPECT_TRUE(entries.at(0).point.is_selected);
     EXPECT_TRUE(entries.at(1).point.is_selected);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 3);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 4);
 }
 
 TEST(DataObjectPersistenceTest, DatabaseRoundTripPreservesChainMetadataAndSymmetryFiltering)

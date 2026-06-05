@@ -144,8 +144,10 @@ inline constexpr std::string_view kCreateModelAtomLocalTableSql = R"sql(
         distance_and_map_value_list BLOB,
         amplitude_estimate_ols DOUBLE,
         width_estimate_ols DOUBLE,
+        intercept_estimate_ols DOUBLE,
         amplitude_estimate_mdpde DOUBLE,
         width_estimate_mdpde DOUBLE,
+        intercept_estimate_mdpde DOUBLE,
         alpha_r DOUBLE,
         PRIMARY KEY (key_tag, serial_id),
         FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
@@ -161,8 +163,10 @@ inline constexpr std::string_view kCreateModelBondLocalTableSql = R"sql(
         distance_and_map_value_list BLOB,
         amplitude_estimate_ols DOUBLE,
         width_estimate_ols DOUBLE,
+        intercept_estimate_ols DOUBLE,
         amplitude_estimate_mdpde DOUBLE,
         width_estimate_mdpde DOUBLE,
+        intercept_estimate_mdpde DOUBLE,
         alpha_r DOUBLE,
         PRIMARY KEY (key_tag, atom_serial_id_1, atom_serial_id_2),
         FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
@@ -176,8 +180,10 @@ inline constexpr std::string_view kCreateModelAtomPosteriorTableSql = R"sql(
         serial_id INTEGER,
         amplitude_estimate_posterior DOUBLE,
         width_estimate_posterior DOUBLE,
+        intercept_estimate_posterior DOUBLE,
         amplitude_variance_posterior DOUBLE,
         width_variance_posterior DOUBLE,
+        intercept_variance_posterior DOUBLE,
         outlier_tag INTEGER,
         statistical_distance DOUBLE,
         PRIMARY KEY (key_tag, class_key, serial_id),
@@ -193,8 +199,10 @@ inline constexpr std::string_view kCreateModelBondPosteriorTableSql = R"sql(
         atom_serial_id_2 INTEGER,
         amplitude_estimate_posterior DOUBLE,
         width_estimate_posterior DOUBLE,
+        intercept_estimate_posterior DOUBLE,
         amplitude_variance_posterior DOUBLE,
         width_variance_posterior DOUBLE,
+        intercept_variance_posterior DOUBLE,
         outlier_tag INTEGER,
         statistical_distance DOUBLE,
         PRIMARY KEY (key_tag, class_key, atom_serial_id_1, atom_serial_id_2),
@@ -210,12 +218,16 @@ inline constexpr std::string_view kCreateModelAtomGroupTableSql = R"sql(
         member_size INTEGER,
         amplitude_estimate_mean DOUBLE,
         width_estimate_mean DOUBLE,
+        intercept_estimate_mean DOUBLE,
         amplitude_estimate_mdpde DOUBLE,
         width_estimate_mdpde DOUBLE,
+        intercept_estimate_mdpde DOUBLE,
         amplitude_estimate_prior DOUBLE,
         width_estimate_prior DOUBLE,
+        intercept_estimate_prior DOUBLE,
         amplitude_variance_prior DOUBLE,
         width_variance_prior DOUBLE,
+        intercept_variance_prior DOUBLE,
         alpha_g DOUBLE,
         PRIMARY KEY (key_tag, class_key, group_key),
         FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
@@ -230,12 +242,16 @@ inline constexpr std::string_view kCreateModelBondGroupTableSql = R"sql(
         member_size INTEGER,
         amplitude_estimate_mean DOUBLE,
         width_estimate_mean DOUBLE,
+        intercept_estimate_mean DOUBLE,
         amplitude_estimate_mdpde DOUBLE,
         width_estimate_mdpde DOUBLE,
+        intercept_estimate_mdpde DOUBLE,
         amplitude_estimate_prior DOUBLE,
         width_estimate_prior DOUBLE,
+        intercept_estimate_prior DOUBLE,
         amplitude_variance_prior DOUBLE,
         width_variance_prior DOUBLE,
+        intercept_variance_prior DOUBLE,
         alpha_g DOUBLE,
         PRIMARY KEY (key_tag, class_key, group_key),
         FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
@@ -330,26 +346,28 @@ inline constexpr auto kInsertModelBondSql = R"sql(
 inline constexpr auto kInsertModelAtomLocalSql = R"sql(
     INSERT OR REPLACE INTO model_atom_local_potential (
         key_tag, serial_id, sampling_size, distance_and_map_value_list,
-        amplitude_estimate_ols, width_estimate_ols,
-        amplitude_estimate_mdpde, width_estimate_mdpde, alpha_r
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        amplitude_estimate_ols, width_estimate_ols, intercept_estimate_ols,
+        amplitude_estimate_mdpde, width_estimate_mdpde, intercept_estimate_mdpde, alpha_r
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 )sql"sv;
 
 inline constexpr auto kInsertModelAtomPosteriorSql = R"sql(
     INSERT OR REPLACE INTO model_atom_posterior (
-        key_tag, class_key, serial_id, amplitude_estimate_posterior, width_estimate_posterior,
-        amplitude_variance_posterior, width_variance_posterior, outlier_tag, statistical_distance
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        key_tag, class_key, serial_id,
+        amplitude_estimate_posterior, width_estimate_posterior, intercept_estimate_posterior,
+        amplitude_variance_posterior, width_variance_posterior, intercept_variance_posterior,
+        outlier_tag, statistical_distance
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 )sql"sv;
 
 inline constexpr auto kInsertModelAtomGroupSql = R"sql(
     INSERT OR REPLACE INTO model_atom_group_potential (
         key_tag, class_key, group_key, member_size,
-        amplitude_estimate_mean, width_estimate_mean,
-        amplitude_estimate_mdpde, width_estimate_mdpde,
-        amplitude_estimate_prior, width_estimate_prior,
-        amplitude_variance_prior, width_variance_prior, alpha_g
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        amplitude_estimate_mean, width_estimate_mean, intercept_estimate_mean,
+        amplitude_estimate_mdpde, width_estimate_mdpde, intercept_estimate_mdpde,
+        amplitude_estimate_prior, width_estimate_prior, intercept_estimate_prior,
+        amplitude_variance_prior, width_variance_prior, intercept_variance_prior, alpha_g
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 )sql"sv;
 
 inline constexpr auto kDeleteRowsForKeySqlPrefix = "DELETE FROM "sv;
@@ -402,24 +420,27 @@ inline constexpr auto kSelectModelBondSql = R"sql(
 inline constexpr auto kSelectModelAtomLocalSql = R"sql(
     SELECT
         serial_id, sampling_size, distance_and_map_value_list,
-        amplitude_estimate_ols, width_estimate_ols,
-        amplitude_estimate_mdpde, width_estimate_mdpde, alpha_r
+        amplitude_estimate_ols, width_estimate_ols, intercept_estimate_ols,
+        amplitude_estimate_mdpde, width_estimate_mdpde, intercept_estimate_mdpde, alpha_r
     FROM model_atom_local_potential WHERE key_tag = ?;
 )sql"sv;
 
 inline constexpr auto kSelectModelAtomPosteriorSql = R"sql(
     SELECT
-        serial_id, amplitude_estimate_posterior, width_estimate_posterior,
-        amplitude_variance_posterior, width_variance_posterior, outlier_tag, statistical_distance
+        serial_id,
+        amplitude_estimate_posterior, width_estimate_posterior, intercept_estimate_posterior,
+        amplitude_variance_posterior, width_variance_posterior, intercept_variance_posterior,
+        outlier_tag, statistical_distance
     FROM model_atom_posterior WHERE key_tag = ? AND class_key = ?;
 )sql"sv;
 
 inline constexpr auto kSelectModelAtomGroupSql = R"sql(
     SELECT
-        group_key, member_size, amplitude_estimate_mean, width_estimate_mean,
-        amplitude_estimate_mdpde, width_estimate_mdpde,
-        amplitude_estimate_prior, width_estimate_prior,
-        amplitude_variance_prior, width_variance_prior, alpha_g
+        group_key, member_size,
+        amplitude_estimate_mean, width_estimate_mean, intercept_estimate_mean,
+        amplitude_estimate_mdpde, width_estimate_mdpde, intercept_estimate_mdpde,
+        amplitude_estimate_prior, width_estimate_prior, intercept_estimate_prior,
+        amplitude_variance_prior, width_variance_prior, intercept_variance_prior, alpha_g
     FROM model_atom_group_potential WHERE key_tag = ? AND class_key = ?;
 )sql"sv;
 
@@ -944,9 +965,11 @@ void SaveAtomLocalPotentialEntryList(
                 4, entry->SamplingEntries());
             statement_db.Bind<double>(5, gaussian_result.ols.GetModel().GetAmplitude());
             statement_db.Bind<double>(6, gaussian_result.ols.GetModel().GetWidth());
-            statement_db.Bind<double>(7, gaussian_result.mdpde.GetModel().GetAmplitude());
-            statement_db.Bind<double>(8, gaussian_result.mdpde.GetModel().GetWidth());
-            statement_db.Bind<double>(9, gaussian_result.alpha_r);
+            statement_db.Bind<double>(7, gaussian_result.ols.GetModel().GetIntercept());
+            statement_db.Bind<double>(8, gaussian_result.mdpde.GetModel().GetAmplitude());
+            statement_db.Bind<double>(9, gaussian_result.mdpde.GetModel().GetWidth());
+            statement_db.Bind<double>(10, gaussian_result.mdpde.GetModel().GetIntercept());
+            statement_db.Bind<double>(11, gaussian_result.alpha_r);
         });
     }
 }
@@ -972,14 +995,18 @@ void SaveAtomLocalPotentialEntrySubList(
             statement_db.Bind<int>(3, atom_object->GetSerialID());
             statement_db.Bind<double>(4, annotation->gaussian.GetModel().GetAmplitude());
             statement_db.Bind<double>(5, annotation->gaussian.GetModel().GetWidth());
-            statement_db.Bind<double>(
-                6,
-                annotation->gaussian.GetStandardDeviationModel().GetAmplitude());
+            statement_db.Bind<double>(6, annotation->gaussian.GetModel().GetIntercept());
             statement_db.Bind<double>(
                 7,
+                annotation->gaussian.GetStandardDeviationModel().GetAmplitude());
+            statement_db.Bind<double>(
+                8,
                 annotation->gaussian.GetStandardDeviationModel().GetWidth());
-            statement_db.Bind<int>(8, static_cast<int>(annotation->is_outlier));
-            statement_db.Bind<double>(9, annotation->statistical_distance);
+            statement_db.Bind<double>(
+                9,
+                annotation->gaussian.GetStandardDeviationModel().GetIntercept());
+            statement_db.Bind<int>(10, static_cast<int>(annotation->is_outlier));
+            statement_db.Bind<double>(11, annotation->statistical_distance);
         });
     }
 }
@@ -1007,13 +1034,17 @@ void SaveAtomGroupPotentialEntryList(
             statement_db.Bind<int>(4, static_cast<int>(group_entry.GetMemberCount(group_key)));
             statement_db.Bind<double>(5, mean.GetAmplitude());
             statement_db.Bind<double>(6, mean.GetWidth());
-            statement_db.Bind<double>(7, mdpde.GetAmplitude());
-            statement_db.Bind<double>(8, mdpde.GetWidth());
-            statement_db.Bind<double>(9, prior.GetAmplitude());
-            statement_db.Bind<double>(10, prior.GetWidth());
-            statement_db.Bind<double>(11, prior_standard_deviation.GetAmplitude());
-            statement_db.Bind<double>(12, prior_standard_deviation.GetWidth());
-            statement_db.Bind<double>(13, group_entry.GetAlphaG(group_key));
+            statement_db.Bind<double>(7, mean.GetIntercept());
+            statement_db.Bind<double>(8, mdpde.GetAmplitude());
+            statement_db.Bind<double>(9, mdpde.GetWidth());
+            statement_db.Bind<double>(10, mdpde.GetIntercept());
+            statement_db.Bind<double>(11, prior.GetAmplitude());
+            statement_db.Bind<double>(12, prior.GetWidth());
+            statement_db.Bind<double>(13, prior.GetIntercept());
+            statement_db.Bind<double>(14, prior_standard_deviation.GetAmplitude());
+            statement_db.Bind<double>(15, prior_standard_deviation.GetWidth());
+            statement_db.Bind<double>(16, prior_standard_deviation.GetIntercept());
+            statement_db.Bind<double>(17, group_entry.GetAlphaG(group_key));
         });
     }
 }
@@ -1046,16 +1077,20 @@ void LoadAtomLocalPotentialEntrySubList(
         auto & entry{ iter->second };
         GaussianModel3DWithUncertainty gaussian{
             GaussianModel3D{
-                database.GetColumn<double>(1), database.GetColumn<double>(2) },
+                database.GetColumn<double>(1),
+                database.GetColumn<double>(2),
+                database.GetColumn<double>(3) },
             GaussianModel3DUncertainty{
-                database.GetColumn<double>(3), database.GetColumn<double>(4) }
+                database.GetColumn<double>(4),
+                database.GetColumn<double>(5),
+                database.GetColumn<double>(6) }
         };
         entry->SetAnnotation(
             class_key,
             LocalPotentialAnnotation{
                 gaussian,
-                static_cast<bool>(database.GetColumn<int>(5)),
-                database.GetColumn<double>(6)
+                static_cast<bool>(database.GetColumn<int>(7)),
+                database.GetColumn<double>(8)
             });
     }
 }
@@ -1088,15 +1123,19 @@ std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>> LoadAtomLocalPoten
         LocalGaussianResult gaussian_result;
         gaussian_result.ols = GaussianModel3DWithUncertainty{
             GaussianModel3D{
-                database.GetColumn<double>(3), database.GetColumn<double>(4) },
+                database.GetColumn<double>(3),
+                database.GetColumn<double>(4),
+                database.GetColumn<double>(5) },
             GaussianModel3DUncertainty{}
         };
         gaussian_result.mdpde = GaussianModel3DWithUncertainty{
             GaussianModel3D{
-                database.GetColumn<double>(5), database.GetColumn<double>(6) },
+                database.GetColumn<double>(6),
+                database.GetColumn<double>(7),
+                database.GetColumn<double>(8) },
             GaussianModel3DUncertainty{}
         };
-        gaussian_result.alpha_r = database.GetColumn<double>(7);
+        gaussian_result.alpha_r = database.GetColumn<double>(9);
         entry->SetGaussianResult(gaussian_result);
         entry_map[serial_id] = std::move(entry);
     }
@@ -1137,16 +1176,24 @@ void LoadAtomGroupPotentialEntryList(
         group_entry.ReserveMembers(group_key, static_cast<size_t>(database.GetColumn<int>(1)));
         GroupGaussianResult group_result;
         group_result.mean = GaussianModel3D{
-            database.GetColumn<double>(2), database.GetColumn<double>(3) };
+            database.GetColumn<double>(2),
+            database.GetColumn<double>(3),
+            database.GetColumn<double>(4) };
         group_result.mdpde = GaussianModel3D{
-            database.GetColumn<double>(4), database.GetColumn<double>(5) };
+            database.GetColumn<double>(5),
+            database.GetColumn<double>(6),
+            database.GetColumn<double>(7) };
         group_result.prior = GaussianModel3DWithUncertainty{
             GaussianModel3D{
-                database.GetColumn<double>(6), database.GetColumn<double>(7) },
+                database.GetColumn<double>(8),
+                database.GetColumn<double>(9),
+                database.GetColumn<double>(10) },
             GaussianModel3DUncertainty{
-                database.GetColumn<double>(8), database.GetColumn<double>(9) }
+                database.GetColumn<double>(11),
+                database.GetColumn<double>(12),
+                database.GetColumn<double>(13) }
         };
-        group_result.alpha_g = database.GetColumn<double>(10);
+        group_result.alpha_g = database.GetColumn<double>(14);
         group_entry.SetGaussianResult(group_key, group_result);
     }
 

@@ -239,6 +239,32 @@ inline int CountRows(
     return database.GetColumn<int>(0);
 }
 
+inline bool HasColumn(
+    const std::filesystem::path & database_path,
+    const std::string & table_name,
+    const std::string & column_name)
+{
+    rg::SQLiteWrapper database{ database_path };
+    database.Prepare("PRAGMA table_info(" + table_name + ");");
+    rg::SQLiteWrapper::StatementGuard guard(database);
+    while (true)
+    {
+        const auto rc{ database.StepNext() };
+        if (rc == rg::SQLiteWrapper::StepDone())
+        {
+            return false;
+        }
+        if (rc != rg::SQLiteWrapper::StepRow())
+        {
+            throw std::runtime_error("Failed to inspect table_info for " + table_name);
+        }
+        if (database.GetColumn<std::string>(1) == column_name)
+        {
+            return true;
+        }
+    }
+}
+
 inline bool HasForeignKey(
     const std::filesystem::path & database_path,
     const std::string & table_name,

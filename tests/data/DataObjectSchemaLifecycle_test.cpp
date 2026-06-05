@@ -34,11 +34,69 @@ TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsNormalizedSchema)
 
     rg::SQLitePersistence database_manager{ database_path };
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 3);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 4);
     EXPECT_TRUE(data_test::HasTable(database_path, "object_catalog"));
     EXPECT_FALSE(data_test::HasTable(database_path, "object_metadata"));
     EXPECT_TRUE(data_test::HasTable(database_path, "model_object"));
     EXPECT_TRUE(data_test::HasTable(database_path, "map_list"));
+}
+
+TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsGaussianInterceptColumns)
+{
+    const command_test::ScopedTempDir temp_dir{ "data_schema_gaussian_intercept_columns" };
+    const auto database_path{ temp_dir.path() / "gaussian_intercept_columns.sqlite" };
+
+    rg::SQLitePersistence database_manager{ database_path };
+
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_local_potential", "intercept_estimate_ols"));
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_local_potential", "intercept_estimate_mdpde"));
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_local_potential", "intercept_estimate_ols"));
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_local_potential", "intercept_estimate_mdpde"));
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_posterior", "intercept_estimate_posterior"));
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_posterior", "intercept_variance_posterior"));
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_posterior", "intercept_estimate_posterior"));
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_posterior", "intercept_variance_posterior"));
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_group_potential", "intercept_estimate_mean"));
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_group_potential", "intercept_estimate_mdpde"));
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_group_potential", "intercept_estimate_prior"));
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_group_potential", "intercept_variance_prior"));
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_group_potential", "intercept_estimate_mean"));
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_group_potential", "intercept_estimate_mdpde"));
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_group_potential", "intercept_estimate_prior"));
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_group_potential", "intercept_variance_prior"));
+}
+
+TEST(DataObjectSchemaLifecycleTest, VersionThreeSchemaMigratesGaussianInterceptColumns)
+{
+    const command_test::ScopedTempDir temp_dir{ "data_schema_v3_gaussian_intercept_migration" };
+    const auto database_path{ temp_dir.path() / "v3_gaussian_intercept.sqlite" };
+
+    {
+        rg::SQLitePersistence database_manager{ database_path };
+    }
+    data_test::ExecuteSqlWithForeignKeysOff(database_path, "DROP TABLE model_atom_local_potential;");
+    data_test::ExecuteSqlWithForeignKeysOff(
+        database_path,
+        "CREATE TABLE model_atom_local_potential ("
+        "key_tag TEXT, "
+        "serial_id INTEGER, "
+        "sampling_size INTEGER, "
+        "distance_and_map_value_list BLOB, "
+        "amplitude_estimate_ols DOUBLE, "
+        "width_estimate_ols DOUBLE, "
+        "amplitude_estimate_mdpde DOUBLE, "
+        "width_estimate_mdpde DOUBLE, "
+        "alpha_r DOUBLE, "
+        "PRIMARY KEY (key_tag, serial_id), "
+        "FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE"
+        ");");
+    data_test::SetUserVersion(database_path, 3);
+
+    rg::SQLitePersistence database_manager{ database_path };
+
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 4);
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_local_potential", "intercept_estimate_ols"));
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_local_potential", "intercept_estimate_mdpde"));
 }
 
 TEST(DataObjectSchemaLifecycleTest, UnknownSchemaVersionThrows)

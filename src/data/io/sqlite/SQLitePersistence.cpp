@@ -20,7 +20,7 @@ namespace {
 
 using namespace std::literals;
 
-constexpr int kCurrentSchemaVersion = 3;
+constexpr int kCurrentSchemaVersion = 4;
 constexpr std::string_view kCatalogTableName = "object_catalog";
 constexpr std::string_view kMapTableName = "map_list";
 constexpr std::string_view kUnsupportedMetadataTableName = "object_metadata";
@@ -245,6 +245,35 @@ std::vector<TableColumnInfo> QueryTableInfo(
     return column_info_list;
 }
 
+bool HasColumn(
+    rhbm_gem::SQLiteWrapper & database,
+    const std::string & table_name,
+    std::string_view column_name)
+{
+    for (const auto & column_info : QueryTableInfo(database, table_name))
+    {
+        if (column_info.name == column_name)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void AddColumnIfMissing(
+    rhbm_gem::SQLiteWrapper & database,
+    const std::string & table_name,
+    std::string_view column_name)
+{
+    if (HasColumn(database, table_name, column_name))
+    {
+        return;
+    }
+    database.Execute(
+        "ALTER TABLE " + table_name + " ADD COLUMN " + std::string(column_name)
+        + " DOUBLE DEFAULT 0.0;");
+}
+
 std::vector<ForeignKeyInfo> QueryForeignKeyList(
     rhbm_gem::SQLiteWrapper & database,
     const std::string & table_name)
@@ -353,6 +382,19 @@ void ValidateForeignKey(
     throw std::runtime_error("Current schema is missing required foreign key on table: " + table_name);
 }
 
+void ValidateRequiredColumn(
+    rhbm_gem::SQLiteWrapper & database,
+    const std::string & table_name,
+    std::string_view column_name)
+{
+    if (!HasColumn(database, table_name, column_name))
+    {
+        throw std::runtime_error(
+            "Current schema is missing required column " + std::string(column_name)
+            + " on table: " + table_name);
+    }
+}
+
 template <std::size_t N>
 void ValidateRequiredTables(
     rhbm_gem::SQLiteWrapper & database,
@@ -366,6 +408,64 @@ void ValidateRequiredTables(
             throw std::runtime_error(
                 "Current schema is missing required " + object_type + " table: " + std::string(table_name));
         }
+    }
+}
+
+void ValidateGaussianInterceptColumns(rhbm_gem::SQLiteWrapper & database)
+{
+    for (const auto table_name : {
+             "model_atom_local_potential"sv,
+             "model_bond_local_potential"sv })
+    {
+        ValidateRequiredColumn(database, std::string(table_name), "intercept_estimate_ols");
+        ValidateRequiredColumn(database, std::string(table_name), "intercept_estimate_mdpde");
+    }
+
+    for (const auto table_name : {
+             "model_atom_posterior"sv,
+             "model_bond_posterior"sv })
+    {
+        ValidateRequiredColumn(database, std::string(table_name), "intercept_estimate_posterior");
+        ValidateRequiredColumn(database, std::string(table_name), "intercept_variance_posterior");
+    }
+
+    for (const auto table_name : {
+             "model_atom_group_potential"sv,
+             "model_bond_group_potential"sv })
+    {
+        ValidateRequiredColumn(database, std::string(table_name), "intercept_estimate_mean");
+        ValidateRequiredColumn(database, std::string(table_name), "intercept_estimate_mdpde");
+        ValidateRequiredColumn(database, std::string(table_name), "intercept_estimate_prior");
+        ValidateRequiredColumn(database, std::string(table_name), "intercept_variance_prior");
+    }
+}
+
+void MigrateGaussianInterceptColumns(rhbm_gem::SQLiteWrapper & database)
+{
+    for (const auto table_name : {
+             "model_atom_local_potential"sv,
+             "model_bond_local_potential"sv })
+    {
+        AddColumnIfMissing(database, std::string(table_name), "intercept_estimate_ols");
+        AddColumnIfMissing(database, std::string(table_name), "intercept_estimate_mdpde");
+    }
+
+    for (const auto table_name : {
+             "model_atom_posterior"sv,
+             "model_bond_posterior"sv })
+    {
+        AddColumnIfMissing(database, std::string(table_name), "intercept_estimate_posterior");
+        AddColumnIfMissing(database, std::string(table_name), "intercept_variance_posterior");
+    }
+
+    for (const auto table_name : {
+             "model_atom_group_potential"sv,
+             "model_bond_group_potential"sv })
+    {
+        AddColumnIfMissing(database, std::string(table_name), "intercept_estimate_mean");
+        AddColumnIfMissing(database, std::string(table_name), "intercept_estimate_mdpde");
+        AddColumnIfMissing(database, std::string(table_name), "intercept_estimate_prior");
+        AddColumnIfMissing(database, std::string(table_name), "intercept_variance_prior");
     }
 }
 
@@ -487,7 +587,9 @@ void ValidateCatalogConsistency(
     }
 }
 
-void ValidateModelSchema(rhbm_gem::SQLiteWrapper & database)
+void ValidateModelSchema(
+    rhbm_gem::SQLiteWrapper & database,
+    bool require_gaussian_intercept_columns)
 {
     ValidateRequiredTables(database, kModelCanonicalTableNames, "model");
 
@@ -520,6 +622,11 @@ void ValidateModelSchema(rhbm_gem::SQLiteWrapper & database)
         }
         ValidateForeignKey(database, std::string(table_name), "key_tag", "model_object", "key_tag", "CASCADE");
     }
+
+    if (require_gaussian_intercept_columns)
+    {
+        ValidateGaussianInterceptColumns(database);
+    }
 }
 
 void ValidateMapSchema(rhbm_gem::SQLiteWrapper & database)
@@ -529,7 +636,9 @@ void ValidateMapSchema(rhbm_gem::SQLiteWrapper & database)
     ValidateForeignKey(database, "map_list", "key_tag", "object_catalog", "key_tag", "CASCADE");
 }
 
-void ValidateCurrentSchema(rhbm_gem::SQLiteWrapper & database)
+void ValidateCurrentSchema(
+    rhbm_gem::SQLiteWrapper & database,
+    bool require_gaussian_intercept_columns = true)
 {
     if (!HasTable(database, std::string(kCatalogTableName)))
     {
@@ -541,7 +650,7 @@ void ValidateCurrentSchema(rhbm_gem::SQLiteWrapper & database)
     }
 
     ValidateObjectCatalogShape(database);
-    ValidateModelSchema(database);
+    ValidateModelSchema(database, require_gaussian_intercept_columns);
     ValidateMapSchema(database);
     ValidateCatalogConsistency(database, "model", ListModelKeys(database));
     ValidateCatalogConsistency(database, "map", ListMapKeys(database));
@@ -564,10 +673,12 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
         ValidateCurrentSchema(database);
         return;
     }
-    if (raw_version == 2)
+    if (raw_version == 2 || raw_version == 3)
     {
-        ValidateCurrentSchema(database);
+        ValidateCurrentSchema(database, false);
+        MigrateGaussianInterceptColumns(database);
         SetSchemaVersion(database);
+        ValidateCurrentSchema(database);
         return;
     }
     if (raw_version == 0 && IsDatabaseEmpty(database))
