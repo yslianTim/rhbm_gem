@@ -8,6 +8,7 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
+#include <rhbm_gem/utils/domain/SampleFilter.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
@@ -99,24 +100,6 @@ double EstimateInitialIntercept(const LocalPotentialSampleList & sample_entries)
     return array_helper::ComputeMedian(lowest_response_list);
 }
 
-LocalPotentialSampleList BuildShiftedSampleEntries(
-    const LocalPotentialSampleList & sample_entries,
-    double intercept)
-{
-    LocalPotentialSampleList shifted_sample_entries;
-    shifted_sample_entries.reserve(sample_entries.size());
-    for (const auto & sample : sample_entries)
-    {
-        shifted_sample_entries.emplace_back(
-            LocalPotentialSample{
-                static_cast<float>(static_cast<double>(sample.response) - intercept),
-                sample.point
-            }
-        );
-    }
-    return shifted_sample_entries;
-}
-
 LocalPotentialSampleList BuildResidualSampleEntries(
     const LocalPotentialSampleList & sample_entries,
     const RHBMParameterVector & beta,
@@ -124,9 +107,12 @@ LocalPotentialSampleList BuildResidualSampleEntries(
     double range_max)
 {
     const auto signal_model{ linearization_service::DecodeParameterVector(beta) };
+    const auto median_sample_entries{
+        sample_filter::BuildMedianResponseSampleEntriesByRadius(sample_entries)
+    };
     LocalPotentialSampleList residual_sample_entries;
-    residual_sample_entries.reserve(sample_entries.size());
-    for (const auto & sample : sample_entries)
+    residual_sample_entries.reserve(median_sample_entries.size());
+    for (const auto & sample : median_sample_entries)
     {
         const auto distance{ sample.point.distance };
         if (distance < static_cast<float>(range_min)) continue;
@@ -206,7 +192,7 @@ std::vector<RHBMMemberDataset> BuildMemberDatasetList(
     {
         const auto intercept{ member_result_list.at(i).mdpde.GetModel().GetIntercept() };
         const auto shifted_sample_entries{
-            BuildShiftedSampleEntries(sample_entries_list.at(i), intercept)
+            sample_filter::BuildResponseShiftedSampleEntries(sample_entries_list.at(i), intercept)
         };
         dataset_list.emplace_back(
             rhbm_helper::BuildMemberDataset(
@@ -405,7 +391,9 @@ LocalGaussianResult EstimateLocalGaussian(
     numeric_validation::RequireFinite(intercept, "intercept");
     //intercept = 0.0;
     auto execution_options{ MakeExecutionOptions(options) };
-    auto shifted_sample_entries{ BuildShiftedSampleEntries(sample_entries, intercept) };
+    auto shifted_sample_entries{
+        sample_filter::BuildResponseShiftedSampleEntries(sample_entries, intercept)
+    };
     auto dataset{
         rhbm_helper::BuildMemberDataset(shifted_sample_entries, range_min, range_max)
     };
@@ -425,23 +413,27 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
 
     auto execution_options{ MakeExecutionOptions(options) };
     double intercept{ EstimateInitialIntercept(sample_entries) };
-    //double intercept{ 0.0 };
     LocalGaussianResult result;
-    bool has_previous_intercept{ false };
-
+    Eigen::VectorXd previous_estimation;
+    bool has_previous_estimation{ false };
     for (int t = 0; t < execution_options.max_iterations; t++)
     {
         result = EstimateLocalGaussian(sample_entries, alpha_r, options, intercept);
-        auto next_intercept{ EstimateResidualIntercept(sample_entries, *result.fit_result) };
-        // TODO: consider all parameters for convergence check instead of only intercept
-        if (has_previous_intercept && std::fabs(next_intercept - intercept) < execution_options.tolerance)
+        auto current_estimation{ result.mdpde.GetModel().ToVector() };
+        if (has_previous_estimation &&
+            (current_estimation - previous_estimation).norm() < execution_options.tolerance)
         {
             break;
         }
-        has_previous_intercept = true;
+        has_previous_estimation = true;
+        previous_estimation = std::move(current_estimation);
         if (t + 1 < execution_options.max_iterations)
         {
-            intercept = next_intercept;
+            intercept = EstimateResidualIntercept(sample_entries, *result.fit_result);
+        }
+        if (t + 1 == execution_options.max_iterations)
+        {
+            Logger::Log(LogLevel::Warning, "Maximum iterations reached in local Gaussian estimation with intercept.");
         }
     }
     //Logger::Log(LogLevel::Info, "Estimated intercept: " + std::to_string(intercept));

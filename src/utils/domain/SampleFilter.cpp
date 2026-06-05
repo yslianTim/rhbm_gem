@@ -1,6 +1,7 @@
 #include <rhbm_gem/utils/domain/SampleFilter.hpp>
 
 #include <cmath>
+#include <map>
 
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
@@ -90,6 +91,48 @@ void FilterSamplingPointList(
             sample_point.is_selected = false;
         }
     }
+}
+
+LocalPotentialSampleList BuildMedianResponseSampleEntriesByRadius(
+    const LocalPotentialSampleList & sample_entries)
+{
+    std::map<float, std::vector<double>> response_by_radius;
+    for (const auto & sample : sample_entries)
+    {
+        response_by_radius[sample.point.distance].emplace_back(
+            static_cast<double>(sample.response));
+    }
+
+    LocalPotentialSampleList median_sample_entries;
+    median_sample_entries.reserve(response_by_radius.size());
+    for (const auto & [radius, response_list] : response_by_radius)
+    {
+        median_sample_entries.emplace_back(
+            LocalPotentialSample{
+                static_cast<float>(array_helper::ComputeMedian(response_list)),
+                SamplingPoint{ radius }
+            }
+        );
+    }
+    return median_sample_entries;
+}
+
+LocalPotentialSampleList BuildResponseShiftedSampleEntries(
+    const LocalPotentialSampleList & sample_entries,
+    double response_shift)
+{
+    LocalPotentialSampleList shifted_sample_entries;
+    shifted_sample_entries.reserve(sample_entries.size());
+    for (const auto & sample : sample_entries)
+    {
+        shifted_sample_entries.emplace_back(
+            LocalPotentialSample{
+                static_cast<float>(static_cast<double>(sample.response) - response_shift),
+                sample.point
+            }
+        );
+    }
+    return shifted_sample_entries;
 }
 
 } // namespace rhbm_gem::sample_filter

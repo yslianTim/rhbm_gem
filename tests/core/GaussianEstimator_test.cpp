@@ -17,6 +17,7 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
+#include <rhbm_gem/utils/domain/SampleFilter.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
@@ -26,6 +27,7 @@
 namespace rg = rhbm_gem;
 namespace ge = rhbm_gem::core;
 namespace ls = rhbm_gem::linearization_service;
+namespace sf = rhbm_gem::sample_filter;
 
 namespace
 {
@@ -60,24 +62,6 @@ LocalPotentialSampleList MakeAlphaTrainingSampleEntries(
         sample_entries.emplace_back(LocalPotentialSample{ response, SamplingPoint{ distance } });
     }
     return sample_entries;
-}
-
-LocalPotentialSampleList BuildShiftedSampleEntries(
-    const LocalPotentialSampleList & sample_entries,
-    double intercept)
-{
-    LocalPotentialSampleList shifted_sample_entries;
-    shifted_sample_entries.reserve(sample_entries.size());
-    for (const auto & sample : sample_entries)
-    {
-        shifted_sample_entries.emplace_back(
-            LocalPotentialSample{
-                static_cast<float>(static_cast<double>(sample.response) - intercept),
-                sample.point
-            }
-        );
-    }
-    return shifted_sample_entries;
 }
 
 ge::FitOptions MakeOptions()
@@ -684,7 +668,9 @@ TEST(GaussianEstimatorTest, EstimateLocalGaussianAppliesProvidedIntercept)
     const auto actual{
         ge::EstimateLocalGaussian(sample_entries, alpha_r, options, intercept)
     };
-    const auto shifted_sample_entries{ BuildShiftedSampleEntries(sample_entries, intercept) };
+    const auto shifted_sample_entries{
+        sf::BuildResponseShiftedSampleEntries(sample_entries, intercept)
+    };
     const auto dataset{
         rg::rhbm_helper::BuildMemberDataset(
             shifted_sample_entries,
@@ -718,7 +704,9 @@ TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptMatchesHelperPath)
         ge::EstimateLocalGaussianWithIntercept(sample_entries, alpha_r, options)
     };
     const auto intercept{ actual.mdpde.GetModel().GetIntercept() };
-    const auto shifted_sample_entries{ BuildShiftedSampleEntries(sample_entries, intercept) };
+    const auto shifted_sample_entries{
+        sf::BuildResponseShiftedSampleEntries(sample_entries, intercept)
+    };
     const auto dataset{
         rg::rhbm_helper::BuildMemberDataset(
             shifted_sample_entries,
@@ -741,6 +729,57 @@ TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptMatchesHelperPath)
     ASSERT_TRUE(actual.fit_result.has_value());
     EXPECT_TRUE(actual.fit_result->beta_ols.isApprox(expected_fit.beta_ols, 1e-12));
     EXPECT_TRUE(actual.fit_result->beta_mdpde.isApprox(expected_fit.beta_mdpde, 1e-12));
+}
+
+TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptUsesRadiusMedianResiduals)
+{
+    const auto options{ MakeOptions() };
+    constexpr double alpha_r{ 0.0 };
+    const rg::GaussianModel3D signal_model{ 1.0, 0.5, 0.0 };
+    const LocalPotentialSampleList sample_entries{
+        {
+            static_cast<float>(signal_model.SignalAtDistance(1.0) + 0.20),
+            SamplingPoint{ 1.0f }
+        },
+        {
+            static_cast<float>(signal_model.SignalAtDistance(1.0) + 0.30),
+            SamplingPoint{ 1.0f }
+        },
+        {
+            static_cast<float>(signal_model.SignalAtDistance(1.0) + 50.0),
+            SamplingPoint{ 1.0f }
+        },
+        {
+            static_cast<float>(signal_model.SignalAtDistance(1.2) + 0.50),
+            SamplingPoint{ 1.2f }
+        },
+        {
+            static_cast<float>(signal_model.SignalAtDistance(1.2) + 0.60),
+            SamplingPoint{ 1.2f }
+        },
+        {
+            static_cast<float>(signal_model.SignalAtDistance(1.2) - 40.0),
+            SamplingPoint{ 1.2f }
+        },
+        {
+            static_cast<float>(signal_model.SignalAtDistance(1.4) + 0.80),
+            SamplingPoint{ 1.4f }
+        },
+        {
+            static_cast<float>(signal_model.SignalAtDistance(1.4) + 0.90),
+            SamplingPoint{ 1.4f }
+        },
+        {
+            static_cast<float>(signal_model.SignalAtDistance(1.4) + 60.0),
+            SamplingPoint{ 1.4f }
+        }
+    };
+
+    const auto actual{
+        ge::EstimateLocalGaussianWithIntercept(sample_entries, alpha_r, options)
+    };
+
+    EXPECT_NEAR(actual.mdpde.GetModel().GetIntercept(), 0.60, 0.10);
 }
 
 TEST(GaussianEstimatorTest, EstimateGroupGaussianMatchesHelperPath)
@@ -769,7 +808,7 @@ TEST(GaussianEstimatorTest, EstimateGroupGaussianMatchesHelperPath)
         ASSERT_TRUE(member_result.fit_result.has_value());
         const auto intercept{ member_result.mdpde.GetModel().GetIntercept() };
         const auto shifted_sample_entries{
-            BuildShiftedSampleEntries(sample_entries_list.at(i), intercept)
+            sf::BuildResponseShiftedSampleEntries(sample_entries_list.at(i), intercept)
         };
         auto dataset{
             rg::rhbm_helper::BuildMemberDataset(

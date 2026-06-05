@@ -13,4 +13,11 @@ void FilterSamplingPointList(
     const std::vector<std::array<float, 3>> & reject_position_list,
     double angle = 30.0);
 
+LocalPotentialSampleList BuildMedianResponseSampleEntriesByRadius(
+    const LocalPotentialSampleList & sample_entries);
+
+LocalPotentialSampleList BuildResponseShiftedSampleEntries(
+    const LocalPotentialSampleList & sample_entries,
+    double response_shift);
+
 } // namespace rhbm_gem::sample_filter
