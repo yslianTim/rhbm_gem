@@ -665,10 +665,8 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
     const size_t maximum_iter_size{ 100 };
     constexpr double convergence_tolerance{ 1.0e-5 };
     constexpr double convergence_percentile{ 0.90 };
-    constexpr std::size_t required_consecutive_convergence_count{ 2 };
     std::vector<LocalPotentialSampleList> sample_entries_list(selected_atom_size);
     std::vector<Eigen::VectorXd> previous_estimation_list(selected_atom_size);
-    std::size_t consecutive_convergence_count{ 0 };
     for (size_t i = 0; i < selected_atom_size; i++)
     {
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
@@ -718,26 +716,16 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
         const auto parameter_change_percentile90{
             array_helper::ComputePercentile(parameter_change_list, convergence_percentile)
         };
-        if (maximum_parameter_change * maximum_parameter_change < convergence_tolerance)
-        {
-            consecutive_convergence_count++;
-        }
-        else
-        {
-            consecutive_convergence_count = 0;
-        }
 
         std::ostringstream progress_message;
         progress_message << "Local fitting iteration " << iter + 1 << '/'
             << maximum_iter_size << ", max parameter change = "
             << std::fixed << std::setprecision(6) << maximum_parameter_change
             << ", 90th percentile parameter change = "
-            << parameter_change_percentile90
-            << ", stable streak = " << consecutive_convergence_count << '/'
-            << required_consecutive_convergence_count;
+            << parameter_change_percentile90;
         Logger::ProgressLine(progress_message.str());
 
-        if (consecutive_convergence_count >= required_consecutive_convergence_count)
+        if (maximum_parameter_change * maximum_parameter_change < convergence_tolerance)
         {
             Logger::FinishProgressLine();
             Logger::Log(LogLevel::Info,

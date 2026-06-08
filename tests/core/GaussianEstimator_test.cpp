@@ -847,13 +847,12 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAfterConvergence)
     Logger::SetLogLevel(previous_log_level);
 
     EXPECT_NE(std::string::npos, output.find("\rLocal fitting iteration "));
-    EXPECT_NE(
+    EXPECT_EQ(
         std::string::npos,
         output.find("stable streak = "));
     EXPECT_NE(
         std::string::npos,
         output.find("\nConverged after "));
-    EXPECT_EQ(std::string::npos, output.find("Converged after 1 iterations"));
     EXPECT_NE(
         std::string::npos,
         output.find("max parameter change"));
