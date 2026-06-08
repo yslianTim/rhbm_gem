@@ -41,6 +41,37 @@ TEST(LoggerProgressTimerTest, ProgressPercentOnlyUpdatesOnChange)
     EXPECT_EQ(static_cast<std::size_t>(1), newline_count);
 }
 
+TEST(LoggerProgressTimerTest, ProgressLineUpdatesSingleLineAndFinishes)
+{
+    const auto previous_log_level{ Logger::GetLogLevel() };
+
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    Logger::ProgressLine("iteration 1");
+    Logger::ProgressLine("iteration 2");
+    Logger::FinishProgressLine();
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_EQ(static_cast<std::size_t>(2), std::count(out.begin(), out.end(), '\r'));
+    EXPECT_EQ(static_cast<std::size_t>(1), std::count(out.begin(), out.end(), '\n'));
+    EXPECT_NE(out.find("\riteration 1\riteration 2\n"), std::string::npos);
+}
+
+TEST(LoggerProgressTimerTest, ProgressLineSuppressedBelowInfo)
+{
+    const auto previous_log_level{ Logger::GetLogLevel() };
+
+    Logger::SetLogLevel(LogLevel::Notice);
+    testing::internal::CaptureStdout();
+    Logger::ProgressLine("iteration 1");
+    Logger::FinishProgressLine();
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_TRUE(out.empty());
+}
+
 TEST(LoggerProgressTimerTest, ScopeTimerDefaultIsSuppressedAtInfo)
 {
     Logger::SetLogLevel(LogLevel::Info);

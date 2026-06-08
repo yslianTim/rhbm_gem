@@ -7,6 +7,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -242,7 +243,7 @@ void VerifyInterceptCycleRefit(
     ASSERT_EQ(expected_period, simulation.cycle_period);
     const auto previous_log_level{ Logger::GetLogLevel() };
 
-    Logger::SetLogLevel(LogLevel::Info);
+    Logger::SetLogLevel(LogLevel::Debug);
     testing::internal::CaptureStdout();
     testing::internal::CaptureStderr();
     const auto actual{
@@ -372,6 +373,157 @@ std::unique_ptr<rg::ModelObject> MakeLocalFittingModel()
         local_editor.SetAlphaR(0.2);
     }
     return model;
+}
+
+double Distance(
+    const std::array<float, 3> & lhs,
+    const std::array<float, 3> & rhs)
+{
+    return static_cast<double>(rg::array_helper::ComputeNorm<float>(lhs, rhs));
+}
+
+LocalPotentialSampleList MakeCoupledSampleEntries(
+    const rg::AtomObject & atom,
+    const std::vector<rg::AtomObject *> & atom_list)
+{
+    const std::vector<std::array<float, 3>> direction_list{
+        { 1.0f, 0.0f, 0.0f },
+        { -1.0f, 0.0f, 0.0f },
+        { 0.0f, 1.0f, 0.0f },
+        { 0.0f, -1.0f, 0.0f },
+        { 0.0f, 0.0f, 1.0f },
+        { 0.0f, 0.0f, -1.0f }
+    };
+    const auto center{ atom.GetPosition() };
+    constexpr double background{ 0.015 };
+    constexpr double width{ 0.50 };
+    LocalPotentialSampleList sample_entries;
+    for (int shell = 0; shell <= 15; shell++)
+    {
+        const auto radius{ static_cast<float>(0.1 * static_cast<double>(shell)) };
+        for (const auto & direction : direction_list)
+        {
+            SamplingPoint point{ radius };
+            point.position = {
+                center[0] + radius * direction[0],
+                center[1] + radius * direction[1],
+                center[2] + radius * direction[2]
+            };
+
+            double response{ background };
+            for (const auto * source_atom : atom_list)
+            {
+                const rg::GaussianModel3D source_model{
+                    1.0 + 0.02 * static_cast<double>(source_atom->GetSerialID()),
+                    width,
+                    0.0
+                };
+                response += source_model.SignalAtDistance(
+                    Distance(point.position, source_atom->GetPosition()));
+            }
+            sample_entries.emplace_back(
+                LocalPotentialSample{ static_cast<float>(response), point });
+        }
+    }
+    return sample_entries;
+}
+
+std::unique_ptr<rg::ModelObject> MakeCoupledLocalFittingModel()
+{
+    std::vector<std::unique_ptr<rg::AtomObject>> atom_list;
+    atom_list.reserve(10);
+    for (int i = 0; i < 10; i++)
+    {
+        auto atom{ std::make_unique<rg::AtomObject>() };
+        atom->SetSerialID(i + 1);
+        atom->SetPosition(1.2f * static_cast<float>(i), 0.0f, 0.0f);
+        atom_list.emplace_back(std::move(atom));
+    }
+
+    auto model{ std::make_unique<rg::ModelObject>(std::move(atom_list)) };
+    model->SelectAllAtoms();
+
+    auto analysis{ model->EditAnalysis() };
+    const auto selected_atoms{ model->GetSelectedAtoms() };
+    for (auto * atom : selected_atoms)
+    {
+        auto local_editor{ analysis.EnsureAtomLocalPotential(*atom) };
+        local_editor.SetSamplingEntries(MakeCoupledSampleEntries(*atom, selected_atoms));
+        local_editor.SetAlphaR(0.2);
+    }
+    return model;
+}
+
+using GaussianSnapshotForTest = std::unordered_map<const rg::AtomObject *, rg::GaussianModel3D>;
+
+GaussianSnapshotForTest BuildGaussianSnapshotForTest(
+    const std::vector<rg::AtomObject *> & atom_list)
+{
+    GaussianSnapshotForTest snapshot;
+    snapshot.reserve(atom_list.size());
+    for (const auto * atom : atom_list)
+    {
+        const auto local_view{ rg::AtomLocalPotentialView::RequireFor(*atom) };
+        snapshot.emplace(atom, local_view.GetGaussianResult().mdpde.GetModel());
+    }
+    return snapshot;
+}
+
+LocalPotentialSampleList UpdateSampleListWithFittedGaussianForTest(
+    const rg::AtomObject & atom,
+    const LocalPotentialSampleList & sample_entries,
+    const GaussianSnapshotForTest & snapshot)
+{
+    LocalPotentialSampleList updated_list;
+    updated_list.reserve(sample_entries.size());
+    for (const auto & sample : sample_entries)
+    {
+        auto response_value{ sample.response };
+        for (const auto * neighbor_atom : atom.FindNeighborAtoms())
+        {
+            const auto gaussian_iter{ snapshot.find(neighbor_atom) };
+            if (gaussian_iter == snapshot.end()) continue;
+
+            response_value -= static_cast<float>(
+                gaussian_iter->second.SignalAtDistance(
+                    Distance(sample.point.position, neighbor_atom->GetPosition())));
+        }
+        updated_list.emplace_back(LocalPotentialSample{ response_value, sample.point });
+    }
+    return updated_list;
+}
+
+double EstimateNextLocalFittingP90Step(
+    const rg::ModelObject & model,
+    const std::vector<LocalPotentialSampleList> & original_sample_entries_list,
+    const ge::FitOptions & options)
+{
+    const auto atom_list{ model.GetSelectedAtoms() };
+    const auto snapshot{ BuildGaussianSnapshotForTest(atom_list) };
+    std::vector<double> step_list;
+    step_list.reserve(atom_list.size());
+    for (std::size_t i = 0; i < atom_list.size(); i++)
+    {
+        const auto & atom{ *atom_list.at(i) };
+        const auto local_view{ rg::AtomLocalPotentialView::RequireFor(atom) };
+        const auto sample_entries{
+            UpdateSampleListWithFittedGaussianForTest(
+                atom,
+                original_sample_entries_list.at(i),
+                snapshot)
+        };
+        const auto current_model{ local_view.GetGaussianResult().mdpde.GetModel() };
+        const auto next_result{
+            ge::EstimateLocalGaussianWithIntercept(
+                sample_entries,
+                local_view.GetAlphaR(),
+                options,
+                current_model.GetIntercept())
+        };
+        step_list.emplace_back(
+            (next_result.mdpde.GetModel().ToVector() - current_model.ToVector()).norm());
+    }
+    return rg::array_helper::ComputePercentile(step_list, 0.90);
 }
 
 std::unique_ptr<rg::ModelObject> MakeLocalAlphaTrainingModel(
@@ -690,6 +842,18 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAfterConvergence)
     const auto output{ testing::internal::GetCapturedStdout() };
     Logger::SetLogLevel(previous_log_level);
 
+    EXPECT_NE(std::string::npos, output.find("\rLocal fitting iteration "));
+    EXPECT_NE(
+        std::string::npos,
+        output.find("stable streak = "));
+    EXPECT_NE(
+        std::string::npos,
+        output.find("\nConverged after "));
+    EXPECT_EQ(std::string::npos, output.find("Converged after 1 iterations"));
+    EXPECT_NE(
+        std::string::npos,
+        output.find("90th percentile parameter change"));
+    EXPECT_EQ(std::string::npos, output.find("Reached maximum iteration size"));
     EXPECT_EQ(std::string::npos, output.find("(20/20)"));
     for (const auto * atom : model->GetSelectedAtoms())
     {
@@ -697,6 +861,39 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAfterConvergence)
         EXPECT_TRUE(local_view.GetGaussianResult().fit_result.has_value());
         EXPECT_EQ(expected_sample_size, local_view.GetSamplingEntries(false).size());
     }
+}
+
+TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAfterCoupledP90Convergence)
+{
+    auto model{ MakeCoupledLocalFittingModel() };
+    const auto options{ MakeOptions() };
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    std::vector<LocalPotentialSampleList> original_sample_entries_list;
+    original_sample_entries_list.reserve(model->GetSelectedAtoms().size());
+    for (const auto * atom : model->GetSelectedAtoms())
+    {
+        original_sample_entries_list.emplace_back(
+            rg::AtomLocalPotentialView::RequireFor(*atom).GetSamplingEntries(false));
+    }
+
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    ge::RunLocalPotentialFitting(*model, options);
+    const auto error_output{ testing::internal::GetCapturedStderr() };
+    const auto output{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_NE(
+        std::string::npos,
+        output.find("90th percentile parameter change"));
+    EXPECT_EQ(std::string::npos, error_output.find("Reached maximum iteration size"));
+    EXPECT_LT(
+        EstimateNextLocalFittingP90Step(
+            *model,
+            original_sample_entries_list,
+            options),
+        rg::RHBMExecutionOptions{}.tolerance);
 }
 
 TEST(GaussianEstimatorTest, RunLocalAlphaTrainingUpdatesComponentGroupAlphaR)

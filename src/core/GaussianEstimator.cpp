@@ -17,7 +17,9 @@
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <atomic>
+#include <iomanip>
 #include <limits>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -660,11 +662,13 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
         }
     }
 
-    const size_t maximum_iter_size{ 500 };
+    const size_t maximum_iter_size{ 100 };
     constexpr double convergence_tolerance{ 1.0e-5 };
+    constexpr double convergence_percentile{ 0.90 };
+    constexpr std::size_t required_consecutive_convergence_count{ 2 };
     std::vector<LocalPotentialSampleList> sample_entries_list(selected_atom_size);
     std::vector<Eigen::VectorXd> previous_estimation_list(selected_atom_size);
-    double previous_residual_median{ std::numeric_limits<double>::max() };
+    std::size_t consecutive_convergence_count{ 0 };
     for (size_t i = 0; i < selected_atom_size; i++)
     {
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
@@ -700,20 +704,42 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
             residual_list[i] = (current_estimation_list[i] - previous_estimation_list[i]).norm();
         }
 
-        double residual_median{ array_helper::ComputeMedian(residual_list) };
-        if (std::fabs(residual_median - previous_residual_median) < convergence_tolerance)
+        double residual_percentile90{
+            array_helper::ComputePercentile(residual_list, convergence_percentile)
+        };
+        if (residual_percentile90 < convergence_tolerance)
         {
+            consecutive_convergence_count++;
+        }
+        else
+        {
+            consecutive_convergence_count = 0;
+        }
+
+        std::ostringstream progress_message;
+        progress_message << "Local fitting iteration " << iter + 1 << '/'
+            << maximum_iter_size << ", p90 parameter change = "
+            << std::fixed << std::setprecision(6) << residual_percentile90
+            << ", stable streak = " << consecutive_convergence_count << '/'
+            << required_consecutive_convergence_count;
+        Logger::ProgressLine(progress_message.str());
+
+        if (consecutive_convergence_count >= required_consecutive_convergence_count)
+        {
+            Logger::FinishProgressLine();
             Logger::Log(LogLevel::Info,
-                "Converged after " + std::to_string(iter + 1) + " iterations.");
+                "Converged after " + std::to_string(iter + 1) +
+                " iterations with 90th percentile parameter change = " +
+                std::to_string(residual_percentile90) + ".");
             break;
         }
         previous_estimation_list = std::move(current_estimation_list);
-        previous_residual_median = residual_median;
         if (iter == maximum_iter_size - 1)
         {
-            Logger::Log(LogLevel::Info,
-                "Reached maximum iteration size with residual median = " +
-                std::to_string(residual_median));
+            Logger::FinishProgressLine();
+            Logger::Log(LogLevel::Warning,
+                "Reached maximum iteration size with 90th percentile parameter change = " +
+                std::to_string(residual_percentile90));
         }
     }
 

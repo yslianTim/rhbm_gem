@@ -124,3 +124,17 @@ void Logger::ProgressPercent(
     }
     std::cout << std::flush;
 }
+
+void Logger::ProgressLine(std::string_view message)
+{
+    if (m_current_level.load() < LogLevel::Info) return;
+    std::lock_guard<std::mutex> lock(m_stream_mutex);
+    std::cout << '\r' << message << std::flush;
+}
+
+void Logger::FinishProgressLine()
+{
+    if (m_current_level.load() < LogLevel::Info) return;
+    std::lock_guard<std::mutex> lock(m_stream_mutex);
+    std::cout << '\n' << std::flush;
+}

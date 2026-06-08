@@ -29,6 +29,8 @@ public:
     static void ProgressBar(size_t current, size_t total, size_t bar_width = 50);
     static void ProgressPercent(
         size_t current, size_t total, size_t bar_width = 50, const std::string & message = "");
+    static void ProgressLine(std::string_view message);
+    static void FinishProgressLine();
 
 private:
     static LogLevel NormalizeLevel(LogLevel level);
