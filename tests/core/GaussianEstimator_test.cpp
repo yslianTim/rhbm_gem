@@ -430,12 +430,26 @@ LocalPotentialSampleList MakeCoupledSampleEntries(
 
 std::unique_ptr<rg::ModelObject> MakeCoupledLocalFittingModel()
 {
+    const std::vector<std::pair<int, Spot>> atom_order{
+        { 2, Spot::CA },
+        { 1, Spot::CB },
+        { 1, Spot::N },
+        { 2, Spot::O },
+        { 1, Spot::O },
+        { 2, Spot::N },
+        { 1, Spot::C },
+        { 2, Spot::C },
+        { 1, Spot::CA },
+        { 2, Spot::CB }
+    };
     std::vector<std::unique_ptr<rg::AtomObject>> atom_list;
-    atom_list.reserve(10);
-    for (int i = 0; i < 10; i++)
+    atom_list.reserve(atom_order.size());
+    for (std::size_t i = 0; i < atom_order.size(); i++)
     {
         auto atom{ std::make_unique<rg::AtomObject>() };
-        atom->SetSerialID(i + 1);
+        atom->SetSerialID(static_cast<int>(i + 1));
+        atom->SetSequenceID(atom_order.at(i).first);
+        atom->SetSpot(atom_order.at(i).second);
         atom->SetPosition(1.2f * static_cast<float>(i), 0.0f, 0.0f);
         atom_list.emplace_back(std::move(atom));
     }
@@ -469,6 +483,68 @@ GaussianSnapshotForTest BuildGaussianSnapshotForTest(
     return snapshot;
 }
 
+int GetLocalFittingSpotSortGroupForTest(Spot spot)
+{
+    switch (spot)
+    {
+    case Spot::O:
+        return 0;
+    case Spot::C:
+        return 1;
+    case Spot::CA:
+        return 2;
+    case Spot::N:
+        return 3;
+    default:
+        return 4;
+    }
+}
+
+int GetLocalFittingSpotSortValueForTest(Spot spot)
+{
+    if (GetLocalFittingSpotSortGroupForTest(spot) < 4)
+    {
+        return 0;
+    }
+    return static_cast<int>(spot);
+}
+
+std::vector<std::size_t> BuildLocalFittingUpdateOrderForTest(
+    const std::vector<rg::AtomObject *> & atom_list)
+{
+    std::vector<std::size_t> update_order;
+    update_order.reserve(atom_list.size());
+    for (std::size_t i = 0; i < atom_list.size(); i++)
+    {
+        update_order.emplace_back(i);
+    }
+
+    std::stable_sort(
+        update_order.begin(),
+        update_order.end(),
+        [&](std::size_t lhs, std::size_t rhs)
+        {
+            const auto * lhs_atom{ atom_list.at(lhs) };
+            const auto * rhs_atom{ atom_list.at(rhs) };
+            if (lhs_atom->GetSequenceID() != rhs_atom->GetSequenceID())
+            {
+                return lhs_atom->GetSequenceID() < rhs_atom->GetSequenceID();
+            }
+
+            const auto lhs_spot{ lhs_atom->GetSpot() };
+            const auto rhs_spot{ rhs_atom->GetSpot() };
+            const auto lhs_group{ GetLocalFittingSpotSortGroupForTest(lhs_spot) };
+            const auto rhs_group{ GetLocalFittingSpotSortGroupForTest(rhs_spot) };
+            if (lhs_group != rhs_group)
+            {
+                return lhs_group < rhs_group;
+            }
+            return GetLocalFittingSpotSortValueForTest(lhs_spot) <
+                GetLocalFittingSpotSortValueForTest(rhs_spot);
+        });
+    return update_order;
+}
+
 LocalPotentialSampleList UpdateSampleListWithFittedGaussianForTest(
     const rg::AtomObject & atom,
     const LocalPotentialSampleList & sample_entries,
@@ -499,9 +575,10 @@ double EstimateNextLocalFittingMaxStep(
     const ge::FitOptions & options)
 {
     const auto atom_list{ model.GetSelectedAtoms() };
-    const auto snapshot{ BuildGaussianSnapshotForTest(atom_list) };
+    auto snapshot{ BuildGaussianSnapshotForTest(atom_list) };
+    const auto update_order{ BuildLocalFittingUpdateOrderForTest(atom_list) };
     double max_step{ 0.0 };
-    for (std::size_t i = 0; i < atom_list.size(); i++)
+    for (const auto i : update_order)
     {
         const auto & atom{ *atom_list.at(i) };
         const auto local_view{ rg::AtomLocalPotentialView::RequireFor(atom) };
@@ -526,6 +603,7 @@ double EstimateNextLocalFittingMaxStep(
         {
             max_step = step;
         }
+        snapshot.at(&atom) = next_result.mdpde.GetModel();
     }
     return max_step;
 }

@@ -16,6 +16,7 @@
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <iomanip>
 #include <limits>
@@ -350,6 +351,67 @@ FittedGaussianSnapshot BuildFittedGaussianSnapshot(const std::vector<AtomObject 
     return snapshot;
 }
 
+int GetLocalFittingSpotSortGroup(Spot spot)
+{
+    switch (spot)
+    {
+    case Spot::O:
+        return 0;
+    case Spot::C:
+        return 1;
+    case Spot::CA:
+        return 2;
+    case Spot::N:
+        return 3;
+    default:
+        return 4;
+    }
+}
+
+int GetLocalFittingSpotSortValue(Spot spot)
+{
+    if (GetLocalFittingSpotSortGroup(spot) < 4)
+    {
+        return 0;
+    }
+    return static_cast<int>(spot);
+}
+
+std::vector<size_t> BuildLocalFittingUpdateOrder(const std::vector<AtomObject *> & atom_list)
+{
+    std::vector<size_t> update_order;
+    update_order.reserve(atom_list.size());
+    for (size_t i = 0; i < atom_list.size(); i++)
+    {
+        update_order.emplace_back(i);
+    }
+
+    std::stable_sort(
+        update_order.begin(),
+        update_order.end(),
+        [&](size_t lhs, size_t rhs)
+        {
+            const auto * lhs_atom{ atom_list.at(lhs) };
+            const auto * rhs_atom{ atom_list.at(rhs) };
+            if (lhs_atom->GetSequenceID() != rhs_atom->GetSequenceID())
+            {
+                return lhs_atom->GetSequenceID() < rhs_atom->GetSequenceID();
+            }
+
+            const auto lhs_spot{ lhs_atom->GetSpot() };
+            const auto rhs_spot{ rhs_atom->GetSpot() };
+            const auto lhs_group{ GetLocalFittingSpotSortGroup(lhs_spot) };
+            const auto rhs_group{ GetLocalFittingSpotSortGroup(rhs_spot) };
+            if (lhs_group != rhs_group)
+            {
+                return lhs_group < rhs_group;
+            }
+            return GetLocalFittingSpotSortValue(lhs_spot) <
+                GetLocalFittingSpotSortValue(rhs_spot);
+        });
+    return update_order;
+}
+
 LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
     const AtomObject & atom,
     const FittedGaussianSnapshot & snapshot)
@@ -666,6 +728,7 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
     constexpr double convergence_tolerance{ 1.0e-5 };
     constexpr double convergence_percentile{ 0.90 };
     constexpr std::size_t required_consecutive_convergence_count{ 2 };
+    const auto update_order{ BuildLocalFittingUpdateOrder(atom_list) };
     std::vector<LocalPotentialSampleList> sample_entries_list(selected_atom_size);
     std::vector<Eigen::VectorXd> previous_estimation_list(selected_atom_size);
     std::size_t consecutive_convergence_count{ 0 };
@@ -676,14 +739,11 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
     }
 
     Logger::Log(LogLevel::Info, "Run updated local atom fitting with iterations...");
+    auto snapshot{ BuildFittedGaussianSnapshot(atom_list) };
     for (size_t iter = 0; iter < maximum_iter_size; iter++)
     {
-        const auto snapshot{ BuildFittedGaussianSnapshot(atom_list) };
         std::vector<Eigen::VectorXd> current_estimation_list(selected_atom_size);
-#ifdef USE_OPENMP
-        #pragma omp parallel for num_threads(options.thread_size)
-#endif
-        for (size_t i = 0; i < selected_atom_size; i++)
+        for (const auto i : update_order)
         {
             const auto & atom{ *atom_list[i] };
             const auto local_view{ AtomLocalPotentialView::RequireFor(atom) };
@@ -697,6 +757,7 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
             sample_entries_list[i] = std::move(sample_entries);
             current_estimation_list[i] = result.mdpde.GetModel().ToVector();
             local_editor_list[i].SetGaussianResult(result);
+            snapshot.at(&atom) = result.mdpde.GetModel();
         }
         std::vector<double> parameter_change_list(selected_atom_size);
         double maximum_parameter_change{ 0.0 };
