@@ -493,15 +493,14 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussianForTest(
     return updated_list;
 }
 
-double EstimateNextLocalFittingP90Step(
+double EstimateNextLocalFittingMaxStep(
     const rg::ModelObject & model,
     const std::vector<LocalPotentialSampleList> & original_sample_entries_list,
     const ge::FitOptions & options)
 {
     const auto atom_list{ model.GetSelectedAtoms() };
     const auto snapshot{ BuildGaussianSnapshotForTest(atom_list) };
-    std::vector<double> step_list;
-    step_list.reserve(atom_list.size());
+    double max_step{ 0.0 };
     for (std::size_t i = 0; i < atom_list.size(); i++)
     {
         const auto & atom{ *atom_list.at(i) };
@@ -520,10 +519,15 @@ double EstimateNextLocalFittingP90Step(
                 options,
                 current_model.GetIntercept())
         };
-        step_list.emplace_back(
-            (next_result.mdpde.GetModel().ToVector() - current_model.ToVector()).norm());
+        const auto step{
+            (next_result.mdpde.GetModel().ToVector() - current_model.ToVector()).norm()
+        };
+        if (step > max_step)
+        {
+            max_step = step;
+        }
     }
-    return rg::array_helper::ComputePercentile(step_list, 0.90);
+    return max_step;
 }
 
 std::unique_ptr<rg::ModelObject> MakeLocalAlphaTrainingModel(
@@ -852,6 +856,9 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAfterConvergence)
     EXPECT_EQ(std::string::npos, output.find("Converged after 1 iterations"));
     EXPECT_NE(
         std::string::npos,
+        output.find("max parameter change"));
+    EXPECT_NE(
+        std::string::npos,
         output.find("90th percentile parameter change"));
     EXPECT_EQ(std::string::npos, output.find("Reached maximum iteration size"));
     EXPECT_EQ(std::string::npos, output.find("(20/20)"));
@@ -863,7 +870,7 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAfterConvergence)
     }
 }
 
-TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAfterCoupledP90Convergence)
+TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAfterCoupledMaxConvergence)
 {
     auto model{ MakeCoupledLocalFittingModel() };
     const auto options{ MakeOptions() };
@@ -886,14 +893,18 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAfterCoupledP90Converge
 
     EXPECT_NE(
         std::string::npos,
+        output.find("max parameter change"));
+    EXPECT_NE(
+        std::string::npos,
         output.find("90th percentile parameter change"));
     EXPECT_EQ(std::string::npos, error_output.find("Reached maximum iteration size"));
-    EXPECT_LT(
-        EstimateNextLocalFittingP90Step(
+    const auto next_max_step{
+        EstimateNextLocalFittingMaxStep(
             *model,
             original_sample_entries_list,
-            options),
-        rg::RHBMExecutionOptions{}.tolerance);
+            options)
+    };
+    EXPECT_LT(next_max_step * next_max_step, rg::RHBMExecutionOptions{}.tolerance);
 }
 
 TEST(GaussianEstimatorTest, RunLocalAlphaTrainingUpdatesComponentGroupAlphaR)

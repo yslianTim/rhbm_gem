@@ -698,16 +698,24 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
             current_estimation_list[i] = result.mdpde.GetModel().ToVector();
             local_editor_list[i].SetGaussianResult(result);
         }
-        std::vector<double> residual_list(selected_atom_size);
+        std::vector<double> parameter_change_list(selected_atom_size);
+        double maximum_parameter_change{ 0.0 };
         for (size_t i = 0; i < selected_atom_size; i++)
         {
-            residual_list[i] = (current_estimation_list[i] - previous_estimation_list[i]).norm();
+            const auto parameter_change{
+                (current_estimation_list[i] - previous_estimation_list[i]).norm()
+            };
+            parameter_change_list[i] = parameter_change;
+            if (parameter_change > maximum_parameter_change)
+            {
+                maximum_parameter_change = parameter_change;
+            }
         }
 
-        double residual_percentile90{
-            array_helper::ComputePercentile(residual_list, convergence_percentile)
+        const auto parameter_change_percentile90{
+            array_helper::ComputePercentile(parameter_change_list, convergence_percentile)
         };
-        if (residual_percentile90 < convergence_tolerance)
+        if (maximum_parameter_change * maximum_parameter_change < convergence_tolerance)
         {
             consecutive_convergence_count++;
         }
@@ -718,8 +726,10 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
 
         std::ostringstream progress_message;
         progress_message << "Local fitting iteration " << iter + 1 << '/'
-            << maximum_iter_size << ", p90 parameter change = "
-            << std::fixed << std::setprecision(6) << residual_percentile90
+            << maximum_iter_size << ", max parameter change = "
+            << std::fixed << std::setprecision(6) << maximum_parameter_change
+            << ", 90th percentile parameter change = "
+            << parameter_change_percentile90
             << ", stable streak = " << consecutive_convergence_count << '/'
             << required_consecutive_convergence_count;
         Logger::ProgressLine(progress_message.str());
@@ -729,8 +739,10 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
             Logger::FinishProgressLine();
             Logger::Log(LogLevel::Info,
                 "Converged after " + std::to_string(iter + 1) +
-                " iterations with 90th percentile parameter change = " +
-                std::to_string(residual_percentile90) + ".");
+                " iterations with max parameter change = " +
+                std::to_string(maximum_parameter_change) +
+                " and 90th percentile parameter change = " +
+                std::to_string(parameter_change_percentile90) + ".");
             break;
         }
         previous_estimation_list = std::move(current_estimation_list);
@@ -738,8 +750,10 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
         {
             Logger::FinishProgressLine();
             Logger::Log(LogLevel::Warning,
-                "Reached maximum iteration size with 90th percentile parameter change = " +
-                std::to_string(residual_percentile90));
+                "Reached maximum iteration size with max parameter change = " +
+                std::to_string(maximum_parameter_change) +
+                " and 90th percentile parameter change = " +
+                std::to_string(parameter_change_percentile90));
         }
     }
 
