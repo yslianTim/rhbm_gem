@@ -456,6 +456,13 @@ std::unique_ptr<rg::ModelObject> MakeCoupledLocalFittingModel()
 
 using GaussianSnapshotForTest = std::unordered_map<const rg::AtomObject *, rg::GaussianModel3D>;
 
+struct LocalFittingStepStatsForTest
+{
+    double max_amplitude_change{ 0.0 };
+    double max_width_change{ 0.0 };
+    double max_intercept_change{ 0.0 };
+};
+
 GaussianSnapshotForTest BuildGaussianSnapshotForTest(
     const std::vector<rg::AtomObject *> & atom_list)
 {
@@ -493,14 +500,14 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussianForTest(
     return updated_list;
 }
 
-double EstimateNextLocalFittingMaxStep(
+LocalFittingStepStatsForTest EstimateNextLocalFittingStepStats(
     const rg::ModelObject & model,
     const std::vector<LocalPotentialSampleList> & original_sample_entries_list,
     const ge::FitOptions & options)
 {
     const auto atom_list{ model.GetSelectedAtoms() };
     const auto snapshot{ BuildGaussianSnapshotForTest(atom_list) };
-    double max_step{ 0.0 };
+    LocalFittingStepStatsForTest stats;
     for (std::size_t i = 0; i < atom_list.size(); i++)
     {
         const auto & atom{ *atom_list.at(i) };
@@ -519,15 +526,30 @@ double EstimateNextLocalFittingMaxStep(
                 options,
                 current_model.GetIntercept())
         };
-        const auto step{
-            (next_result.mdpde.GetModel().ToVector() - current_model.ToVector()).norm()
+        const auto next_model{ next_result.mdpde.GetModel() };
+        const auto amplitude_change{
+            std::abs(next_model.GetAmplitude() - current_model.GetAmplitude())
         };
-        if (step > max_step)
+        const auto width_change{
+            std::abs(next_model.GetWidth() - current_model.GetWidth())
+        };
+        const auto intercept_change{
+            std::abs(next_model.GetIntercept() - current_model.GetIntercept())
+        };
+        if (amplitude_change > stats.max_amplitude_change)
         {
-            max_step = step;
+            stats.max_amplitude_change = amplitude_change;
+        }
+        if (width_change > stats.max_width_change)
+        {
+            stats.max_width_change = width_change;
+        }
+        if (intercept_change > stats.max_intercept_change)
+        {
+            stats.max_intercept_change = intercept_change;
         }
     }
-    return max_step;
+    return stats;
 }
 
 std::unique_ptr<rg::ModelObject> MakeLocalAlphaTrainingModel(
@@ -859,6 +881,15 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAfterConvergence)
     EXPECT_NE(
         std::string::npos,
         output.find("90th percentile parameter change"));
+    EXPECT_NE(
+        std::string::npos,
+        output.find("max amplitude change"));
+    EXPECT_NE(
+        std::string::npos,
+        output.find("max width change"));
+    EXPECT_NE(
+        std::string::npos,
+        output.find("max intercept change"));
     EXPECT_EQ(std::string::npos, output.find("Reached maximum iteration size"));
     EXPECT_EQ(std::string::npos, output.find("(20/20)"));
     for (const auto * atom : model->GetSelectedAtoms())
@@ -896,14 +927,31 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAfterCoupledMaxConverge
     EXPECT_NE(
         std::string::npos,
         output.find("90th percentile parameter change"));
+    EXPECT_NE(
+        std::string::npos,
+        output.find("max amplitude change"));
+    EXPECT_NE(
+        std::string::npos,
+        output.find("max width change"));
+    EXPECT_NE(
+        std::string::npos,
+        output.find("max intercept change"));
     EXPECT_EQ(std::string::npos, error_output.find("Reached maximum iteration size"));
-    const auto next_max_step{
-        EstimateNextLocalFittingMaxStep(
+    const auto next_step_stats{
+        EstimateNextLocalFittingStepStats(
             *model,
             original_sample_entries_list,
             options)
     };
-    EXPECT_LT(next_max_step * next_max_step, rg::RHBMExecutionOptions{}.tolerance);
+    EXPECT_LT(
+        next_step_stats.max_amplitude_change * next_step_stats.max_amplitude_change,
+        rg::RHBMExecutionOptions{}.tolerance);
+    EXPECT_LT(
+        next_step_stats.max_width_change * next_step_stats.max_width_change,
+        rg::RHBMExecutionOptions{}.tolerance);
+    EXPECT_LT(
+        next_step_stats.max_intercept_change * next_step_stats.max_intercept_change,
+        rg::RHBMExecutionOptions{}.tolerance);
 }
 
 TEST(GaussianEstimatorTest, RunLocalAlphaTrainingUpdatesComponentGroupAlphaR)

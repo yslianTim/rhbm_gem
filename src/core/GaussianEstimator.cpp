@@ -17,6 +17,7 @@
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <atomic>
+#include <cmath>
 #include <iomanip>
 #include <limits>
 #include <sstream>
@@ -40,6 +41,23 @@ constexpr double kResidualInterceptRangeMin{ 1.0 };
 constexpr double kResidualInterceptRangeMax{ 1.5 };
 constexpr double kInterceptDampingWeight{ 0.5 };
 constexpr std::size_t kInterceptCycleHistorySize{ 64 };
+constexpr std::size_t kLocalFittingMaximumIterations{ 100 };
+constexpr double kLocalFittingParameterChangeTolerance{ 1.0e-5 };
+constexpr double kLocalFittingChangePercentile{ 0.90 };
+
+struct LocalFittingParameterChangeStats
+{
+    double max_parameter_change{ 0.0 };
+    double parameter_change_percentile90{ 0.0 };
+    double max_amplitude_change{ 0.0 };
+    double max_width_change{ 0.0 };
+    double max_intercept_change{ 0.0 };
+};
+
+bool IsSquaredChangeBelowTolerance(double change, double tolerance)
+{
+    return change * change < tolerance;
+}
 
 std::vector<AtomLocalPotentialEditor> BuildSelectedAtomLocalEditors(ModelObject & model_object)
 {
@@ -380,6 +398,65 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
     return updated_list;
 }
 
+LocalFittingParameterChangeStats CalculateLocalFittingParameterChangeStats(
+    const std::vector<Eigen::VectorXd> & current_estimation_list,
+    const std::vector<Eigen::VectorXd> & previous_estimation_list)
+{
+    LocalFittingParameterChangeStats stats;
+    std::vector<double> parameter_change_list(current_estimation_list.size());
+    for (size_t i = 0; i < current_estimation_list.size(); i++)
+    {
+        const auto parameter_delta{ current_estimation_list[i] - previous_estimation_list[i] };
+        const auto parameter_change{ parameter_delta.norm() };
+        parameter_change_list[i] = parameter_change;
+        if (parameter_change > stats.max_parameter_change)
+        {
+            stats.max_parameter_change = parameter_change;
+        }
+
+        const auto amplitude_change{
+            std::abs(parameter_delta(GaussianModel3D::AmplitudeIndex()))
+        };
+        const auto width_change{
+            std::abs(parameter_delta(GaussianModel3D::WidthIndex()))
+        };
+        const auto intercept_change{
+            std::abs(parameter_delta(GaussianModel3D::InterceptIndex()))
+        };
+        if (amplitude_change > stats.max_amplitude_change)
+        {
+            stats.max_amplitude_change = amplitude_change;
+        }
+        if (width_change > stats.max_width_change)
+        {
+            stats.max_width_change = width_change;
+        }
+        if (intercept_change > stats.max_intercept_change)
+        {
+            stats.max_intercept_change = intercept_change;
+        }
+    }
+
+    stats.parameter_change_percentile90 = array_helper::ComputePercentile(
+        parameter_change_list,
+        kLocalFittingChangePercentile);
+    return stats;
+}
+
+bool IsLocalFittingParameterChangeConverged(const LocalFittingParameterChangeStats & stats)
+{
+    return
+        //IsSquaredChangeBelowTolerance(
+        //    stats.max_amplitude_change,
+        //    kLocalFittingParameterChangeTolerance) &&
+        //IsSquaredChangeBelowTolerance(
+        //    stats.max_width_change,
+        //    kLocalFittingParameterChangeTolerance) &&
+        IsSquaredChangeBelowTolerance(
+            stats.max_intercept_change,
+            kLocalFittingParameterChangeTolerance);
+}
+
 } // namespace
 
 double TrainAlphaR(
@@ -662,9 +739,6 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
         }
     }
 
-    const size_t maximum_iter_size{ 100 };
-    constexpr double convergence_tolerance{ 1.0e-5 };
-    constexpr double convergence_percentile{ 0.90 };
     std::vector<LocalPotentialSampleList> sample_entries_list(selected_atom_size);
     std::vector<Eigen::VectorXd> previous_estimation_list(selected_atom_size);
     for (size_t i = 0; i < selected_atom_size; i++)
@@ -674,7 +748,7 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
     }
 
     Logger::Log(LogLevel::Info, "Run updated local atom fitting with iterations...");
-    for (size_t iter = 0; iter < maximum_iter_size; iter++)
+    for (size_t iter = 0; iter < kLocalFittingMaximumIterations; iter++)
     {
         const auto snapshot{ BuildFittedGaussianSnapshot(atom_list) };
         std::vector<Eigen::VectorXd> current_estimation_list(selected_atom_size);
@@ -699,52 +773,58 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
             current_estimation_list[i] = result.mdpde.GetModel().ToVector();
             local_editor_list[i].SetGaussianResult(result);
         }
-        std::vector<double> parameter_change_list(selected_atom_size);
-        double maximum_parameter_change{ 0.0 };
-        for (size_t i = 0; i < selected_atom_size; i++)
-        {
-            const auto parameter_change{
-                (current_estimation_list[i] - previous_estimation_list[i]).norm()
-            };
-            parameter_change_list[i] = parameter_change;
-            if (parameter_change > maximum_parameter_change)
-            {
-                maximum_parameter_change = parameter_change;
-            }
-        }
-
-        const auto parameter_change_percentile90{
-            array_helper::ComputePercentile(parameter_change_list, convergence_percentile)
+        const auto change_stats{
+            CalculateLocalFittingParameterChangeStats(
+                current_estimation_list,
+                previous_estimation_list)
         };
 
         std::ostringstream progress_message;
         progress_message << "Local fitting iteration " << iter + 1 << '/'
-            << maximum_iter_size << ", max parameter change = "
-            << std::fixed << std::setprecision(6) << maximum_parameter_change
+            << kLocalFittingMaximumIterations << ", max parameter change = "
+            << std::fixed << std::setprecision(6) << change_stats.max_parameter_change
             << ", 90th percentile parameter change = "
-            << parameter_change_percentile90;
+            << change_stats.parameter_change_percentile90
+            << ", max amplitude change = "
+            << change_stats.max_amplitude_change
+            << ", max width change = "
+            << change_stats.max_width_change
+            << ", max intercept change = "
+            << change_stats.max_intercept_change;
         Logger::ProgressLine(progress_message.str());
 
-        if (maximum_parameter_change * maximum_parameter_change < convergence_tolerance)
+        if (IsLocalFittingParameterChangeConverged(change_stats))
         {
             Logger::FinishProgressLine();
             Logger::Log(LogLevel::Info,
                 "Converged after " + std::to_string(iter + 1) +
                 " iterations with max parameter change = " +
-                std::to_string(maximum_parameter_change) +
+                std::to_string(change_stats.max_parameter_change) +
                 " and 90th percentile parameter change = " +
-                std::to_string(parameter_change_percentile90) + ".");
+                std::to_string(change_stats.parameter_change_percentile90) +
+                ", max amplitude change = " +
+                std::to_string(change_stats.max_amplitude_change) +
+                ", max width change = " +
+                std::to_string(change_stats.max_width_change) +
+                ", and max intercept change = " +
+                std::to_string(change_stats.max_intercept_change) + ".");
             break;
         }
         previous_estimation_list = std::move(current_estimation_list);
-        if (iter == maximum_iter_size - 1)
+        if (iter == kLocalFittingMaximumIterations - 1)
         {
             Logger::FinishProgressLine();
             Logger::Log(LogLevel::Warning,
                 "Reached maximum iteration size with max parameter change = " +
-                std::to_string(maximum_parameter_change) +
+                std::to_string(change_stats.max_parameter_change) +
                 " and 90th percentile parameter change = " +
-                std::to_string(parameter_change_percentile90));
+                std::to_string(change_stats.parameter_change_percentile90) +
+                ", max amplitude change = " +
+                std::to_string(change_stats.max_amplitude_change) +
+                ", max width change = " +
+                std::to_string(change_stats.max_width_change) +
+                ", and max intercept change = " +
+                std::to_string(change_stats.max_intercept_change));
         }
     }
 
