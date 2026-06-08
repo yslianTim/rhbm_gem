@@ -676,7 +676,6 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
     }
 
     Logger::Log(LogLevel::Info, "Run updated local atom fitting with iterations...");
-    
     for (size_t iter = 0; iter < maximum_iter_size; iter++)
     {
         const auto snapshot{ BuildFittedGaussianSnapshot(atom_list) };
@@ -691,9 +690,12 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
             auto sample_entries{
                 UpdateSampleListWithFittedGaussian(atom, snapshot)
             };
-            const auto intercept{ snapshot.at(&atom).GetIntercept() };
             const auto result{
-                EstimateLocalGaussianWithIntercept(sample_entries, local_view.GetAlphaR(), options, intercept)
+                EstimateLocalGaussianWithIntercept(
+                    sample_entries,
+                    local_view.GetAlphaR(),
+                    options,
+                    snapshot.at(&atom).GetIntercept())
             };
             sample_entries_list[i] = std::move(sample_entries);
             current_estimation_list[i] = result.mdpde.GetModel().ToVector();
