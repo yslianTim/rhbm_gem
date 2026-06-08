@@ -39,7 +39,6 @@ constexpr std::size_t kMinimumAlphaRTrainingSampleCount{ 10 };
 constexpr std::size_t kMinimumAlphaGTrainingMemberCount{ 10 };
 constexpr double kResidualInterceptRangeMin{ 1.0 };
 constexpr double kResidualInterceptRangeMax{ 1.5 };
-constexpr double kInterceptDampingWeight{ 0.5 };
 constexpr std::size_t kInterceptCycleHistorySize{ 64 };
 constexpr std::size_t kLocalFittingMaximumIterations{ 100 };
 constexpr double kLocalFittingParameterChangeTolerance{ 1.0e-5 };
@@ -543,8 +542,16 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
     for (int t = 0; t < max_iterations; t++)
     {
         result = EstimateLocalGaussian(sample_entries, alpha_r, options, intercept);
-        if (!intercept_history.empty() &&
-            std::abs(intercept - intercept_history.back()) < tolerance)
+        const auto raw_intercept{
+            EstimateResidualIntercept(sample_entries, *result.fit_result)
+        };
+        const auto defect{ std::abs(raw_intercept - intercept) };
+        if (defect < best_defect)
+        {
+            best_intercept = intercept;
+            best_defect = defect;
+        }
+        if (defect < tolerance)
         {
             break;
         }
@@ -561,24 +568,40 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
                 final_intercept += intercept_history[i];
             }
             final_intercept /= static_cast<double>(period);
-            result = EstimateLocalGaussian(sample_entries, alpha_r, options, final_intercept);
-            Logger::Log(LogLevel::Debug,
-                "Cycle detected in local Gaussian intercept estimation with period " +
-                std::to_string(period) + "; refitting at cycle mean.");
+            auto cycle_result{
+                EstimateLocalGaussian(sample_entries, alpha_r, options, final_intercept)
+            };
+            const auto cycle_raw_intercept{
+                EstimateResidualIntercept(sample_entries, *cycle_result.fit_result)
+            };
+            const auto cycle_defect{ std::abs(cycle_raw_intercept - final_intercept) };
+            if (cycle_defect < best_defect)
+            {
+                best_intercept = final_intercept;
+                best_defect = cycle_defect;
+            }
+            if (cycle_defect < tolerance)
+            {
+                result = std::move(cycle_result);
+                Logger::Log(LogLevel::Debug,
+                    "Cycle detected in local Gaussian intercept estimation with period " +
+                    std::to_string(period) + "; refitting at cycle mean with defect = " +
+                    std::to_string(cycle_defect) + ".");
+            }
+            else
+            {
+                result = EstimateLocalGaussian(sample_entries, alpha_r, options, best_intercept);
+                Logger::Log(LogLevel::Warning,
+                    "Cycle mean fixed-point defect = " + std::to_string(cycle_defect) +
+                    " did not satisfy local Gaussian intercept tolerance; "
+                    "refitting at best fixed-point candidate with defect = " +
+                    std::to_string(best_defect) + ".");
+            }
             cycle_detected = true;
             break;
         }
         if (cycle_detected) break;
 
-        const auto raw_intercept{
-            EstimateResidualIntercept(sample_entries, *result.fit_result)
-        };
-        const auto defect{ std::abs(raw_intercept - intercept) };
-        if (defect < best_defect)
-        {
-            best_intercept = intercept;
-            best_defect = defect;
-        }
         if (t + 1 == max_iterations)
         {
             result = EstimateLocalGaussian(sample_entries, alpha_r, options, best_intercept);
@@ -594,7 +617,7 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
             intercept_history.erase(intercept_history.begin());
         }
         intercept_history.emplace_back(intercept);
-        intercept += kInterceptDampingWeight * (raw_intercept - intercept);
+        intercept = raw_intercept;
     }
     //Logger::Log(LogLevel::Info, "Estimated intercept: " + std::to_string(intercept));
     return result;

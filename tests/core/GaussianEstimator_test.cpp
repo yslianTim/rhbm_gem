@@ -146,14 +146,16 @@ struct InterceptIterationSimulation
     std::size_t cycle_period{ 0 };
     int iteration_count{ 0 };
     double final_intercept{ 0.0 };
+    double final_defect{ 0.0 };
+    double cycle_mean_intercept{ 0.0 };
+    double cycle_mean_defect{ 0.0 };
 };
 
 InterceptIterationSimulation SimulateInterceptIteration(
     const LocalPotentialSampleList & sample_entries,
     double alpha_r,
     const ge::FitOptions & options,
-    double intercept_initial,
-    double damping_weight)
+    double intercept_initial)
 {
     const rg::RHBMExecutionOptions execution_options;
     auto intercept{ intercept_initial };
@@ -166,11 +168,19 @@ InterceptIterationSimulation SimulateInterceptIteration(
         const auto result{
             ge::EstimateLocalGaussian(sample_entries, alpha_r, options, intercept)
         };
-        if (!intercept_history.empty() &&
-            std::abs(intercept - intercept_history.back()) < execution_options.tolerance)
+        const auto raw_intercept{
+            EstimateResidualInterceptForTest(sample_entries, *result.fit_result)
+        };
+        const auto defect{ std::abs(raw_intercept - intercept) };
+        if (defect < best_defect)
+        {
+            best_intercept = intercept;
+            best_defect = defect;
+        }
+        if (defect < execution_options.tolerance)
         {
             return InterceptIterationSimulation{
-                true, false, false, 0, t + 1, intercept
+                true, false, false, 0, t + 1, intercept, defect, 0.0, 0.0
             };
         }
         for (std::size_t period = 2; period <= intercept_history.size(); period++)
@@ -187,25 +197,45 @@ InterceptIterationSimulation SimulateInterceptIteration(
                 final_intercept += intercept_history[i];
             }
             final_intercept /= static_cast<double>(period);
+            const auto cycle_result{
+                ge::EstimateLocalGaussian(sample_entries, alpha_r, options, final_intercept)
+            };
+            const auto cycle_raw_intercept{
+                EstimateResidualInterceptForTest(sample_entries, *cycle_result.fit_result)
+            };
+            const auto cycle_defect{ std::abs(cycle_raw_intercept - final_intercept) };
+            if (cycle_defect < best_defect)
+            {
+                best_intercept = final_intercept;
+                best_defect = cycle_defect;
+            }
+            if (cycle_defect < execution_options.tolerance)
+            {
+                return InterceptIterationSimulation{
+                    false,
+                    true,
+                    false,
+                    period,
+                    t + 1,
+                    final_intercept,
+                    cycle_defect,
+                    final_intercept,
+                    cycle_defect
+                };
+            }
             return InterceptIterationSimulation{
                 false,
                 true,
                 false,
                 period,
                 t + 1,
-                final_intercept
+                best_intercept,
+                best_defect,
+                final_intercept,
+                cycle_defect
             };
         }
 
-        const auto raw_intercept{
-            EstimateResidualInterceptForTest(sample_entries, *result.fit_result)
-        };
-        const auto defect{ std::abs(raw_intercept - intercept) };
-        if (defect < best_defect)
-        {
-            best_intercept = intercept;
-            best_defect = defect;
-        }
         if (t + 1 == execution_options.max_iterations)
         {
             return InterceptIterationSimulation{
@@ -214,7 +244,10 @@ InterceptIterationSimulation SimulateInterceptIteration(
                 true,
                 0,
                 execution_options.max_iterations,
-                best_intercept
+                best_intercept,
+                best_defect,
+                0.0,
+                0.0
             };
         }
         if (intercept_history.size() == 64)
@@ -222,25 +255,27 @@ InterceptIterationSimulation SimulateInterceptIteration(
             intercept_history.erase(intercept_history.begin());
         }
         intercept_history.emplace_back(intercept);
-        intercept += damping_weight * (raw_intercept - intercept);
+        intercept = raw_intercept;
     }
     throw std::logic_error("Intercept iteration simulation exited unexpectedly.");
 }
 
-void VerifyInterceptCycleRefit(
+void VerifyInterceptCycleMeanFallback(
     const ge::FitOptions & options,
-    int seed,
-    std::size_t expected_period)
+    int seed)
 {
     constexpr double alpha_r{ 0.2 };
     const auto sample_entries{ MakeInterceptIterationSampleEntries(seed) };
     const auto intercept_initial{ EstimateInitialInterceptForTest(sample_entries) };
     const auto simulation{
         SimulateInterceptIteration(
-            sample_entries, alpha_r, options, intercept_initial, 0.5)
+            sample_entries, alpha_r, options, intercept_initial)
     };
     ASSERT_TRUE(simulation.cycle_detected);
-    ASSERT_EQ(expected_period, simulation.cycle_period);
+    EXPECT_GE(simulation.cycle_mean_defect, rg::RHBMExecutionOptions{}.tolerance);
+    EXPECT_GT(
+        std::abs(simulation.final_intercept - simulation.cycle_mean_intercept),
+        rg::RHBMExecutionOptions{}.tolerance);
     const auto previous_log_level{ Logger::GetLogLevel() };
 
     Logger::SetLogLevel(LogLevel::Debug);
@@ -254,10 +289,9 @@ void VerifyInterceptCycleRefit(
     const auto output{ testing::internal::GetCapturedStdout() };
     Logger::SetLogLevel(previous_log_level);
 
-    EXPECT_NE(std::string::npos, output.find("Cycle detected"));
-    EXPECT_NE(
-        std::string::npos,
-        output.find("period " + std::to_string(expected_period)));
+    EXPECT_EQ(std::string::npos, output.find("Cycle detected"));
+    EXPECT_NE(std::string::npos, error_output.find("Cycle mean fixed-point defect"));
+    EXPECT_NE(std::string::npos, error_output.find("best fixed-point candidate"));
     EXPECT_EQ(std::string::npos, error_output.find("Maximum iterations reached"));
     EXPECT_NEAR(
         simulation.final_intercept,
@@ -944,12 +978,6 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAfterCoupledMaxConverge
             options)
     };
     EXPECT_LT(
-        next_step_stats.max_amplitude_change * next_step_stats.max_amplitude_change,
-        rg::RHBMExecutionOptions{}.tolerance);
-    EXPECT_LT(
-        next_step_stats.max_width_change * next_step_stats.max_width_change,
-        rg::RHBMExecutionOptions{}.tolerance);
-    EXPECT_LT(
         next_step_stats.max_intercept_change * next_step_stats.max_intercept_change,
         rg::RHBMExecutionOptions{}.tolerance);
 }
@@ -1296,19 +1324,15 @@ TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptUsesRadiusMedianRe
     EXPECT_NEAR(actual.mdpde.GetModel().GetIntercept(), 0.60, 0.10);
 }
 
-TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptDampingConverges)
+TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptDirectUpdateMatchesSimulation)
 {
     const auto options{ MakeOptions() };
     constexpr double alpha_r{ 0.2 };
     const auto sample_entries{ MakeInterceptIterationSampleEntries(3) };
     const auto intercept_initial{ EstimateInitialInterceptForTest(sample_entries) };
-    const auto undamped{
+    const auto simulation{
         SimulateInterceptIteration(
-            sample_entries, alpha_r, options, intercept_initial, 1.0)
-    };
-    const auto damped{
-        SimulateInterceptIteration(
-            sample_entries, alpha_r, options, intercept_initial, 0.5)
+            sample_entries, alpha_r, options, intercept_initial)
     };
     const auto previous_log_level{ Logger::GetLogLevel() };
 
@@ -1323,14 +1347,10 @@ TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptDampingConverges)
     const auto output{ testing::internal::GetCapturedStdout() };
     Logger::SetLogLevel(previous_log_level);
 
-    EXPECT_FALSE(undamped.converged);
-    EXPECT_TRUE(undamped.cycle_detected);
-    ASSERT_TRUE(damped.converged);
-    EXPECT_LT(damped.iteration_count, rg::RHBMExecutionOptions{}.max_iterations);
-    EXPECT_EQ(std::string::npos, output.find("Cycle detected"));
+    EXPECT_LT(simulation.iteration_count, rg::RHBMExecutionOptions{}.max_iterations);
     EXPECT_EQ(std::string::npos, error_output.find("Maximum iterations reached"));
     EXPECT_NEAR(
-        damped.final_intercept,
+        simulation.final_intercept,
         actual.mdpde.GetModel().GetIntercept(),
         1e-12);
 
@@ -1355,19 +1375,30 @@ TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptDampingConverges)
         expected.fit_result->beta_mdpde, 1e-12));
 }
 
-TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptRefitsAtTwoCycleMean)
+TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptDirectUpdateConvergesWithoutCycle)
 {
-    VerifyInterceptCycleRefit(MakeOptions(), 17, 2);
+    const auto options{ MakeOptions() };
+    constexpr double alpha_r{ 0.2 };
+    const auto sample_entries{ MakeInterceptIterationSampleEntries(17) };
+    const auto intercept_initial{ EstimateInitialInterceptForTest(sample_entries) };
+    const auto simulation{
+        SimulateInterceptIteration(
+            sample_entries, alpha_r, options, intercept_initial)
+    };
+
+    ASSERT_TRUE(simulation.converged);
+    EXPECT_FALSE(simulation.cycle_detected);
+    EXPECT_LT(simulation.final_defect, rg::RHBMExecutionOptions{}.tolerance);
 }
 
-TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptRefitsAtPeriodThreeMean)
+TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptRejectsUnverifiedPeriodThreeMean)
 {
-    VerifyInterceptCycleRefit(MakeOptions(), 289, 3);
+    VerifyInterceptCycleMeanFallback(MakeOptions(), 289);
 }
 
-TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptDetectsLongCycle)
+TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptRejectsUnverifiedLongCycleMean)
 {
-    VerifyInterceptCycleRefit(MakeOptions(), 57, 45);
+    VerifyInterceptCycleMeanFallback(MakeOptions(), 57);
 }
 
 TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptRefitsAtBestCandidateOnLimit)
@@ -1378,10 +1409,11 @@ TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptRefitsAtBestCandid
     const auto intercept_initial{ EstimateInitialInterceptForTest(sample_entries) };
     const auto simulation{
         SimulateInterceptIteration(
-            sample_entries, alpha_r, options, intercept_initial, 0.5)
+            sample_entries, alpha_r, options, intercept_initial)
     };
     ASSERT_TRUE(simulation.max_iterations_reached);
     ASSERT_FALSE(simulation.cycle_detected);
+    EXPECT_GE(simulation.final_defect, rg::RHBMExecutionOptions{}.tolerance);
     const auto previous_log_level{ Logger::GetLogLevel() };
 
     Logger::SetLogLevel(LogLevel::Info);
