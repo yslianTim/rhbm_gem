@@ -709,8 +709,7 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussianForTest(
 LocalFittingStepStatsForTest EstimateNextLocalFittingStepStats(
     const rg::ModelObject & model,
     const std::vector<LocalPotentialSampleList> & original_sample_entries_list,
-    const ge::FitOptions & options,
-    bool fixed_intercepts = false)
+    const ge::FitOptions & options)
 {
     const auto atom_list{ model.GetSelectedAtoms() };
     const auto snapshot{ BuildGaussianSnapshotForTest(atom_list) };
@@ -730,17 +729,11 @@ LocalFittingStepStatsForTest EstimateNextLocalFittingStepStats(
         };
         const auto current_model{ local_view.GetGaussianResult().mdpde.GetModel() };
         const auto next_result{
-            fixed_intercepts ?
-                ge::EstimateLocalGaussian(
-                    sample_entries,
-                    local_view.GetAlphaR(),
-                    options,
-                    current_model.GetIntercept()) :
-                ge::EstimateLocalGaussianWithIntercept(
-                    sample_entries,
-                    local_view.GetAlphaR(),
-                    options,
-                    current_model.GetIntercept())
+            ge::EstimateLocalGaussianWithIntercept(
+                sample_entries,
+                local_view.GetAlphaR(),
+                options,
+                current_model.GetIntercept())
         };
         const auto next_model{ next_result.mdpde.GetModel() };
         const auto amplitude_change{
@@ -1045,7 +1038,7 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingUpdatesSelectedAtomLocalEntr
     }
 }
 
-TEST(GaussianEstimatorTest, RunLocalPotentialFittingKeepsInterceptsFixedAfterFreeze)
+TEST(GaussianEstimatorTest, RunLocalPotentialFittingConvergesAllParametersTogether)
 {
     auto model{ MakeLocalFittingModel() };
     const auto options{ MakeOptions() };
@@ -1068,17 +1061,15 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingKeepsInterceptsFixedAfterFre
     Logger::SetLogLevel(previous_log_level);
     const auto log_output{ output + error_output };
 
-    EXPECT_NE(
+    EXPECT_EQ(
         std::string::npos,
         log_output.find("Local fitting intercepts fixed after "));
     const auto next_step_stats{
         EstimateNextLocalFittingStepStats(
             *model,
             original_sample_entries_list,
-            options,
-            true)
+            options)
     };
-    EXPECT_DOUBLE_EQ(0.0, next_step_stats.max_intercept_change);
     EXPECT_LT(
         next_step_stats.amplitude_change_percentile90 *
             next_step_stats.amplitude_change_percentile90,
@@ -1086,6 +1077,10 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingKeepsInterceptsFixedAfterFre
     EXPECT_LT(
         next_step_stats.width_change_percentile90 *
             next_step_stats.width_change_percentile90,
+        tolerance);
+    EXPECT_LT(
+        next_step_stats.intercept_change_percentile90 *
+            next_step_stats.intercept_change_percentile90,
         tolerance);
 }
 
@@ -1117,12 +1112,6 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAfterConvergence)
         log_output.find("Cycle detected in local fitting"));
     EXPECT_NE(
         std::string::npos,
-        output.find("max parameter change"));
-    EXPECT_NE(
-        std::string::npos,
-        output.find("90th percentile parameter change"));
-    EXPECT_NE(
-        std::string::npos,
         output.find("max amplitude change"));
     EXPECT_NE(
         std::string::npos,
@@ -1132,14 +1121,14 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAfterConvergence)
         output.find("max intercept change"));
     EXPECT_NE(
         std::string::npos,
-        output.find("90th percentile amplitude change"));
+        output.find("percentile amplitude change"));
     EXPECT_NE(
         std::string::npos,
-        output.find("90th percentile width change"));
+        output.find("percentile width change"));
     EXPECT_NE(
         std::string::npos,
-        output.find("90th percentile intercept change"));
-    EXPECT_NE(
+        output.find("percentile intercept change"));
+    EXPECT_EQ(
         std::string::npos,
         output.find("Local fitting intercepts fixed after "));
     EXPECT_EQ(std::string::npos, output.find("Reached maximum iteration size"));
@@ -1175,12 +1164,6 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAfterCoupledMaxConverge
 
     EXPECT_NE(
         std::string::npos,
-        output.find("max parameter change"));
-    EXPECT_NE(
-        std::string::npos,
-        output.find("90th percentile parameter change"));
-    EXPECT_NE(
-        std::string::npos,
         output.find("max amplitude change"));
     EXPECT_NE(
         std::string::npos,
@@ -1193,10 +1176,8 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAfterCoupledMaxConverge
         EstimateNextLocalFittingStepStats(
             *model,
             original_sample_entries_list,
-            options,
-            true)
+            options)
     };
-    EXPECT_DOUBLE_EQ(0.0, next_step_stats.max_intercept_change);
     EXPECT_LT(
         next_step_stats.amplitude_change_percentile90 *
             next_step_stats.amplitude_change_percentile90,
@@ -1204,6 +1185,10 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAfterCoupledMaxConverge
     EXPECT_LT(
         next_step_stats.width_change_percentile90 *
             next_step_stats.width_change_percentile90,
+        rg::RHBMExecutionOptions{}.tolerance);
+    EXPECT_LT(
+        next_step_stats.intercept_change_percentile90 *
+            next_step_stats.intercept_change_percentile90,
         rg::RHBMExecutionOptions{}.tolerance);
 }
 
@@ -1255,7 +1240,7 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingConvergesWithPercentileOutli
 
     EXPECT_NE(std::string::npos, output.find("Converged after "));
     EXPECT_NE(std::string::npos, output.find("max amplitude change"));
-    EXPECT_NE(std::string::npos, output.find("90th percentile amplitude change"));
+    EXPECT_NE(std::string::npos, output.find("percentile amplitude change"));
     EXPECT_EQ(std::string::npos, error_output.find("Reached maximum iteration size"));
 }
 
@@ -1281,7 +1266,7 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAtDetectedCycle)
 
     EXPECT_TRUE(
         log_output.find("Cycle detected in local fitting") != std::string::npos ||
-        log_output.find("Local fitting intercepts fixed after ") != std::string::npos);
+        log_output.find("\nConverged after ") != std::string::npos);
     EXPECT_EQ(
         std::string::npos,
         log_output.find("Reached maximum iteration size"));
