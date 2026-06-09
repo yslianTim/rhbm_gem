@@ -81,6 +81,16 @@ const std::vector<std::unique_ptr<BondObject>> & ModelObject::GetBondList() cons
     return m_bond_list;
 }
 
+const std::vector<AtomObject *> & ModelObject::GetSelectedAtomList(int residue_id) const
+{
+    static const std::vector<AtomObject *> empty_atom_list{};
+
+    const auto iter{ m_selected_residue_id_atom_list_map.find(residue_id) };
+    return iter == m_selected_residue_id_atom_list_map.end() ?
+        empty_atom_list :
+        iter->second;
+}
+
 const std::unordered_map<std::string, std::vector<std::string>> &
 ModelObject::GetChainIDListMap() const
 {
@@ -543,11 +553,14 @@ void ModelObject::RestoreBondSelectionBulk(
 void ModelObject::BuildSelectedAtomList()
 {
     m_selected_atom_list.clear();
+    m_selected_residue_id_atom_list_map.clear();
     m_selected_atom_list.reserve(m_atom_list.size());
+    m_selected_residue_id_atom_list_map.reserve(m_atom_list.size());
     for (auto & atom : m_atom_list)
     {
         if (atom->m_is_selected == false) continue;
         m_selected_atom_list.emplace_back(atom.get());
+        m_selected_residue_id_atom_list_map[atom->GetSequenceID()].emplace_back(atom.get());
     }
 }
 

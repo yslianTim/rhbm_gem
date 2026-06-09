@@ -88,6 +88,50 @@ TEST(DataObjectModelAnalysisTest, ModelSelectionAndLocalEntriesRemainDirectlyQue
     EXPECT_EQ(require_entry_atoms.front(), atoms[0].get());
 }
 
+TEST(DataObjectModelAnalysisTest, SelectedAtomListCanBeQueriedByResidueId)
+{
+    std::vector<std::unique_ptr<rg::AtomObject>> atom_list;
+    atom_list.reserve(4);
+
+    auto make_atom =
+        [](int serial_id, int sequence_id, const std::string & chain_id)
+        {
+            auto atom{ std::make_unique<rg::AtomObject>() };
+            atom->SetSerialID(serial_id);
+            atom->SetSequenceID(sequence_id);
+            atom->SetChainID(chain_id);
+            return atom;
+        };
+    atom_list.emplace_back(make_atom(1, 10, "A"));
+    atom_list.emplace_back(make_atom(2, 10, "A"));
+    atom_list.emplace_back(make_atom(3, 20, "A"));
+    atom_list.emplace_back(make_atom(4, 10, "B"));
+
+    rg::ModelObject model(std::move(atom_list));
+    const auto & atoms{ model.GetAtomList() };
+    model.SetAtomSelected(1, true);
+    model.SetAtomSelected(2, false);
+    model.SetAtomSelected(3, true);
+    model.SetAtomSelected(4, true);
+
+    const auto & residue_10_atoms{ model.GetSelectedAtomList(10) };
+    ASSERT_EQ(residue_10_atoms.size(), 2u);
+    EXPECT_EQ(residue_10_atoms.at(0), atoms.at(0).get());
+    EXPECT_EQ(residue_10_atoms.at(1), atoms.at(3).get());
+
+    const auto & residue_20_atoms{ model.GetSelectedAtomList(20) };
+    ASSERT_EQ(residue_20_atoms.size(), 1u);
+    EXPECT_EQ(residue_20_atoms.front(), atoms.at(2).get());
+    EXPECT_TRUE(model.GetSelectedAtomList(999).empty());
+
+    model.SetAtomSelected(1, false);
+    model.SetAtomSelected(4, false);
+    EXPECT_TRUE(model.GetSelectedAtomList(10).empty());
+
+    model.SelectAllAtoms(false);
+    EXPECT_TRUE(model.GetSelectedAtomList(20).empty());
+}
+
 TEST(DataObjectModelAnalysisTest, ModelObjectCanApplyElementSelectionAsExclusion)
 {
     auto model{ data_test::MakeModelWithBond() };

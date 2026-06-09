@@ -42,6 +42,7 @@ class ModelObject
     std::unique_ptr<BondKeySystem> m_bond_key_system{
         std::make_unique<BondKeySystem>() };
     std::vector<AtomObject *> m_selected_atom_list;
+    std::unordered_map<int, std::vector<AtomObject *>> m_selected_residue_id_atom_list_map;
     std::vector<BondObject *> m_selected_bond_list;
     std::string m_key_tag, m_pdb_id, m_emd_id;
     std::string m_resolution_method;
@@ -71,6 +72,7 @@ public:
     const std::vector<std::unique_ptr<AtomObject>> & GetAtomList() const;
     const std::vector<std::unique_ptr<BondObject>> & GetBondList() const;
     const std::vector<AtomObject *> & GetSelectedAtoms() const { return m_selected_atom_list; }
+    const std::vector<AtomObject *> & GetSelectedAtomList(int residue_id) const;
     const std::vector<BondObject *> & GetSelectedBonds() const { return m_selected_bond_list; }
     size_t GetSelectedAtomCount() const { return m_selected_atom_list.size(); }
     size_t GetSelectedBondCount() const { return m_selected_bond_list.size(); }
