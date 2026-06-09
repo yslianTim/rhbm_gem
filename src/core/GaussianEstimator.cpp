@@ -916,56 +916,28 @@ void RunFirstStageLocalFitting(ModelObject & model_object, const FitOptions & op
     }
 }
 
-void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & options)
+void RunSecondStageLocalFitting(
+    ModelObject & model_object,
+    const std::vector<AtomObject *> & atom_list,
+    const FitOptions & options)
 {
-    const auto selected_atom_size{ model_object.GetSelectedAtomCount() };
-    const auto & atom_list{ model_object.GetSelectedAtoms() };
-    auto local_editor_list{ BuildSelectedAtomLocalEditors(model_object) };
-    std::atomic<size_t> atom_count{ 0 };
-    if (!options.quiet_mode)
+    auto analysis{ model_object.EditAnalysis() };
+    const auto atom_size{ atom_list.size() };
+    std::vector<AtomLocalPotentialEditor> local_editor_list;
+    local_editor_list.reserve(atom_list.size());
+    for (auto * atom : atom_list)
     {
-        Logger::Log(LogLevel::Info,
-            "Run local atom fitting for " + std::to_string(selected_atom_size) + " atoms.");
+        local_editor_list.emplace_back(analysis.EnsureAtomLocalPotential(*atom));
     }
 
-#ifdef USE_OPENMP
-    #pragma omp parallel for num_threads(options.thread_size)
-#endif
-    for (size_t i = 0; i < selected_atom_size; i++)
-    {
-        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
-        auto sample_entries{ local_view.GetSamplingEntries() };
-        auto intercept_initial{ EstimateInitialIntercept(sample_entries) };
-        const auto result{
-            EstimateLocalGaussianWithIntercept(
-                sample_entries, local_view.GetAlphaR(), options, intercept_initial)
-        };
-        local_editor_list[i].SetGaussianResult(result);
-
-#ifdef USE_OPENMP
-        #pragma omp critical
-#endif
-        {
-            atom_count++;
-            if (!options.quiet_mode)
-            {
-                Logger::ProgressPercent(atom_count, selected_atom_size);
-            }
-        }
-    }
-
-    std::vector<LocalPotentialSampleList> sample_entries_list(selected_atom_size);
-    std::vector<Eigen::VectorXd> previous_estimation_list(selected_atom_size);
-    for (size_t i = 0; i < selected_atom_size; i++)
+    std::vector<LocalPotentialSampleList> sample_entries_list(atom_size);
+    std::vector<Eigen::VectorXd> previous_estimation_list(atom_size);
+    for (size_t i = 0; i < atom_size; i++)
     {
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
         previous_estimation_list[i] = local_view.GetGaussianResult().mdpde.GetModel().ToVector();
     }
 
-    if (!options.quiet_mode)
-    {
-        Logger::Log(LogLevel::Info, "Run updated local atom fitting with iterations...");
-    }
     std::vector<std::vector<Eigen::VectorXd>> estimation_history;
     estimation_history.reserve(kLocalFittingCycleHistorySize);
     LocalFittingIterationResult best_iteration_result;
@@ -1194,10 +1166,22 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
         previous_estimation_list = std::move(iteration_result.estimation_list);
     }
 
-    for (size_t i = 0; i < selected_atom_size; i++)
+    for (size_t i = 0; i < atom_size; i++)
     {
         local_editor_list[i].SetSamplingEntries(std::move(sample_entries_list[i]));
     }
+}
+
+void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & options)
+{
+    RunFirstStageLocalFitting(model_object, options);
+
+    if (!options.quiet_mode)
+    {
+        Logger::Log(LogLevel::Info, "Run updated local atom fitting with iterations...");
+    }
+    const auto & atom_list{ model_object.GetSelectedAtoms() };
+    RunSecondStageLocalFitting(model_object, atom_list, options);
 }
 
 void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & options)
