@@ -409,9 +409,7 @@ void SaveBenchmarkLinearizedDatasetReport(
     }
 }
 
-void SaveDataOutlierBiasPlot(
-    const RHBMTestRequest & request,
-    const BiasPlotRequest & plot_request)
+void SaveDataOutlierBiasPlot(const RHBMTestRequest & request, const BiasPlotRequest & plot_request)
 {
     Logger::Log(LogLevel::Info, " RHBMTestCommand::SaveDataOutlierBiasPlot");
     if (plot_request.panels.empty())
@@ -492,7 +490,7 @@ void SaveDataOutlierBiasPlot(
     }
     for (size_t j = 0; j < row_size; j++)
     {
-        auto y_range{ array_helper::ComputeScalingPercentileRangeTuple(global_y_array.at(j), 0.2, 0.005, 0.995) };
+        auto y_range{ array_helper::ComputeScalingRangeTuple(global_y_array.at(j), 0.2, 0.1) };
         y_min.at(j) = std::get<0>(y_range);
         y_max.at(j) = std::get<1>(y_range);
     }

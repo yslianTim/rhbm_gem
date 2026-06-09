@@ -218,7 +218,7 @@ void RunSimulationTestOnAtomicModel(const RHBMTestRequest & request)
 {
     ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnAtomicModel");
 
-    const auto error_sigma{ 0.01 };
+    const auto error_sigma{ 0.00 };
     const auto model_prior{ MakeDefaultModelPrior() };
     FitOptions options;
     options.distance_min = request.fit_range_min;
@@ -252,10 +252,12 @@ void RunSimulationTestOnAtomicModel(const RHBMTestRequest & request)
         std::ostringstream stream;
         stream  << " OLS: " << std::setprecision(3) << std::fixed
                 << result.ols.mean(0) << " , "
-                << result.ols.mean(1)
+                << result.ols.mean(1) << " , "
+                << result.ols.mean(2)
                 << " , MDPDE: "
                 << result.mdpde.mean(0) << " , "
-                << result.mdpde.mean(1);
+                << result.mdpde.mean(1) << " , "
+                << result.mdpde.mean(2);
         Logger::Log(LogLevel::Info, stream.str());
 
         const auto spot_axis_value{ static_cast<double>(i + 1) };
