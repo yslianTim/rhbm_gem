@@ -55,11 +55,18 @@ struct LocalFittingParameterChangeStats
     double intercept_change_percentile{ 0.0 };
 };
 
+struct LocalFittingAtomChangeStats
+{
+    double max_atom_change{ 0.0 };
+    double atom_change_percentile{ 0.0 };
+};
+
 struct LocalFittingIterationResult
 {
     std::vector<LocalPotentialSampleList> sample_entries_list;
     std::vector<LocalGaussianResult> result_list;
     std::vector<Eigen::VectorXd> estimation_list;
+    std::vector<double> atom_change_list;
 };
 
 bool IsSquaredChangeBelowTolerance(double change, double tolerance)
@@ -407,6 +414,53 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
     return updated_list;
 }
 
+double CalculateLocalFittingAtomChange(
+    const Eigen::VectorXd & current_estimation,
+    const Eigen::VectorXd & previous_estimation)
+{
+    const auto parameter_delta{ current_estimation - previous_estimation };
+    const auto amplitude_change{
+        std::abs(parameter_delta(GaussianModel3D::AmplitudeIndex()))
+    };
+    const auto width_change{
+        std::abs(parameter_delta(GaussianModel3D::WidthIndex()))
+    };
+    const auto shape_change{
+        amplitude_change > width_change ? amplitude_change : width_change
+    };
+    const auto intercept_change{
+        std::abs(parameter_delta(GaussianModel3D::InterceptIndex()))
+    };
+    return shape_change > intercept_change ? shape_change : intercept_change;
+}
+
+LocalFittingAtomChangeStats CalculateLocalFittingAtomChangeStats(
+    const std::vector<double> & atom_change_list)
+{
+    LocalFittingAtomChangeStats stats;
+    for (const auto atom_change : atom_change_list)
+    {
+        if (atom_change > stats.max_atom_change)
+        {
+            stats.max_atom_change = atom_change;
+        }
+    }
+    stats.atom_change_percentile = array_helper::ComputePercentile(
+        atom_change_list,
+        kLocalFittingChangePercentile);
+    return stats;
+}
+
+std::size_t CountFrozenLocalFittingAtoms(const std::vector<bool> & frozen_atom_list)
+{
+    std::size_t frozen_count{ 0 };
+    for (const auto frozen : frozen_atom_list)
+    {
+        if (frozen) frozen_count++;
+    }
+    return frozen_count;
+}
+
 LocalFittingParameterChangeStats CalculateLocalFittingParameterChangeStats(
     const std::vector<Eigen::VectorXd> & current_estimation_list,
     const std::vector<Eigen::VectorXd> & previous_estimation_list)
@@ -456,27 +510,18 @@ LocalFittingParameterChangeStats CalculateLocalFittingParameterChangeStats(
     return stats;
 }
 
-bool IsLocalFittingInterceptConverged(const LocalFittingParameterChangeStats & stats)
-{
-    return IsSquaredChangeBelowTolerance(
-        stats.intercept_change_percentile,
-        kLocalFittingParameterChangeTolerance);
-}
-
-bool IsLocalFittingShapeConverged(const LocalFittingParameterChangeStats & stats)
+bool IsLocalFittingParameterChangeConverged(const LocalFittingParameterChangeStats & stats)
 {
     return
         IsSquaredChangeBelowTolerance(
-            stats.amplitude_change_percentile,
+            stats.max_amplitude_change,
             kLocalFittingParameterChangeTolerance) &&
         IsSquaredChangeBelowTolerance(
-            stats.width_change_percentile,
+            stats.max_width_change,
+            kLocalFittingParameterChangeTolerance) &&
+        IsSquaredChangeBelowTolerance(
+            stats.max_intercept_change,
             kLocalFittingParameterChangeTolerance);
-}
-
-bool IsLocalFittingParameterChangeConverged(const LocalFittingParameterChangeStats & stats)
-{
-    return IsLocalFittingShapeConverged(stats) && IsLocalFittingInterceptConverged(stats);
 }
 
 double GetLocalFittingParameterChange(const LocalFittingParameterChangeStats & stats)
@@ -531,14 +576,22 @@ std::vector<Eigen::VectorXd> ComputeLocalFittingCycleMean(
 LocalFittingIterationResult RunLocalFittingIteration(
     const std::vector<AtomObject *> & atom_list,
     const std::vector<Eigen::VectorXd> & input_estimation_list,
+    const std::vector<LocalGaussianResult> & input_result_list,
+    const std::vector<bool> & frozen_atom_list,
     const FitOptions & options)
 {
     const auto selected_atom_size{ atom_list.size() };
+    if (input_result_list.size() != selected_atom_size ||
+        frozen_atom_list.size() != selected_atom_size)
+    {
+        throw std::invalid_argument("Local fitting iteration input sizes are inconsistent.");
+    }
     const auto snapshot{ BuildFittedGaussianSnapshot(atom_list, input_estimation_list) };
     LocalFittingIterationResult iteration_result{
         std::vector<LocalPotentialSampleList>(selected_atom_size),
         std::vector<LocalGaussianResult>(selected_atom_size),
-        std::vector<Eigen::VectorXd>(selected_atom_size)
+        std::vector<Eigen::VectorXd>(selected_atom_size),
+        std::vector<double>(selected_atom_size)
     };
 
 #ifdef USE_OPENMP
@@ -551,19 +604,37 @@ LocalFittingIterationResult RunLocalFittingIteration(
         auto sample_entries{
             UpdateSampleListWithFittedGaussian(atom, snapshot)
         };
-        const auto intercept{ snapshot.at(&atom).GetIntercept() };
-        const auto result{
-            EstimateLocalGaussianWithIntercept(
+        auto result{ input_result_list.at(i) };
+        if (!frozen_atom_list.at(i))
+        {
+            const auto intercept{ snapshot.at(&atom).GetIntercept() };
+            result = EstimateLocalGaussianWithIntercept(
                 sample_entries,
                 local_view.GetAlphaR(),
                 options,
-                intercept)
-        };
+                intercept);
+        }
+        const auto fitted_model{ result.mdpde.GetModel() };
         iteration_result.sample_entries_list[i] = std::move(sample_entries);
-        iteration_result.estimation_list[i] = result.mdpde.GetModel().ToVector();
+        iteration_result.estimation_list[i] = fitted_model.ToVector();
+        iteration_result.atom_change_list[i] = CalculateLocalFittingAtomChange(
+            iteration_result.estimation_list[i],
+            input_estimation_list.at(i));
         iteration_result.result_list[i] = std::move(result);
     }
     return iteration_result;
+}
+
+void RefreshLocalFittingIterationSampleEntries(
+    LocalFittingIterationResult & iteration_result,
+    const std::vector<AtomObject *> & atom_list)
+{
+    const auto snapshot{ BuildFittedGaussianSnapshot(atom_list, iteration_result.estimation_list) };
+    for (std::size_t i = 0; i < atom_list.size(); i++)
+    {
+        iteration_result.sample_entries_list.at(i) =
+            UpdateSampleListWithFittedGaussian(*atom_list.at(i), snapshot);
+    }
 }
 
 void ApplyLocalFittingIterationResult(
@@ -924,10 +995,12 @@ void RunSecondStageLocalFitting(
 
     std::vector<LocalPotentialSampleList> sample_entries_list(atom_size);
     std::vector<Eigen::VectorXd> previous_estimation_list(atom_size);
+    std::vector<LocalGaussianResult> previous_result_list(atom_size);
     for (size_t i = 0; i < atom_size; i++)
     {
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
-        previous_estimation_list[i] = local_view.GetGaussianResult().mdpde.GetModel().ToVector();
+        previous_result_list[i] = local_view.GetGaussianResult();
+        previous_estimation_list[i] = previous_result_list[i].mdpde.GetModel().ToVector();
     }
 
     std::vector<std::vector<Eigen::VectorXd>> estimation_history;
@@ -935,12 +1008,15 @@ void RunSecondStageLocalFitting(
     LocalFittingIterationResult best_iteration_result;
     LocalFittingParameterChangeStats best_change_stats;
     bool has_best_iteration_result{ false };
+    std::vector<bool> frozen_atom_list(atom_size, false);
     for (size_t iter = 0; iter < kLocalFittingMaximumIterations; iter++)
     {
         auto iteration_result{
             RunLocalFittingIteration(
                 atom_list,
                 previous_estimation_list,
+                previous_result_list,
+                frozen_atom_list,
                 options)
         };
         const auto change_stats{
@@ -948,6 +1024,18 @@ void RunSecondStageLocalFitting(
                 iteration_result.estimation_list,
                 previous_estimation_list)
         };
+        const auto atom_change_stats{
+            CalculateLocalFittingAtomChangeStats(iteration_result.atom_change_list)
+        };
+        for (std::size_t i = 0; i < atom_size; i++)
+        {
+            if (!frozen_atom_list.at(i) &&
+                iteration_result.atom_change_list.at(i) < kLocalFittingParameterChangeTolerance)
+            {
+                frozen_atom_list.at(i) = true;
+            }
+        }
+        const auto frozen_atom_count{ CountFrozenLocalFittingAtoms(frozen_atom_list) };
         if (!has_best_iteration_result ||
             IsBetterLocalFittingCandidate(change_stats, best_change_stats))
         {
@@ -973,13 +1061,38 @@ void RunSecondStageLocalFitting(
                 //<< ", max intercept change = "
                 //<< change_stats.max_intercept_change
                 << ", percentile intercept change = "
-                << change_stats.intercept_change_percentile;
+                << change_stats.intercept_change_percentile
+                << ", percentile atom change = "
+                << atom_change_stats.atom_change_percentile
+                << ", frozen atoms = "
+                << frozen_atom_count << '/' << atom_size;
             Logger::ProgressLine(progress_message.str());
+        }
+
+        if (frozen_atom_count == atom_size)
+        {
+            RefreshLocalFittingIterationSampleEntries(iteration_result, atom_list);
+            ApplyLocalFittingIterationResult(
+                iteration_result,
+                local_editor_list,
+                sample_entries_list);
+            if (!options.quiet_mode)
+            {
+                Logger::FinishProgressLine();
+                Logger::Log(LogLevel::Info,
+                    "All local fitting atoms frozen after " + std::to_string(iter + 1) +
+                    " iterations with max atom change = " +
+                    std::to_string(atom_change_stats.max_atom_change) +
+                    " and percentile atom change = " +
+                    std::to_string(atom_change_stats.atom_change_percentile) + ".");
+            }
+            break;
         }
 
         const auto converged{ IsLocalFittingParameterChangeConverged(change_stats) };
         if (converged)
         {
+            RefreshLocalFittingIterationSampleEntries(iteration_result, atom_list);
             ApplyLocalFittingIterationResult(
                 iteration_result,
                 local_editor_list,
@@ -1023,6 +1136,8 @@ void RunSecondStageLocalFitting(
                 RunLocalFittingIteration(
                     atom_list,
                     cycle_mean_estimation_list,
+                    previous_result_list,
+                    frozen_atom_list,
                     options)
             };
             const auto cycle_change_stats{
@@ -1042,6 +1157,7 @@ void RunSecondStageLocalFitting(
             };
             if (cycle_converged)
             {
+                RefreshLocalFittingIterationSampleEntries(cycle_iteration_result, atom_list);
                 ApplyLocalFittingIterationResult(
                     cycle_iteration_result,
                     local_editor_list,
@@ -1062,6 +1178,7 @@ void RunSecondStageLocalFitting(
             }
             else
             {
+                RefreshLocalFittingIterationSampleEntries(best_iteration_result, atom_list);
                 ApplyLocalFittingIterationResult(
                     best_iteration_result,
                     local_editor_list,
@@ -1088,6 +1205,7 @@ void RunSecondStageLocalFitting(
 
         if (iter + 1 == kLocalFittingMaximumIterations)
         {
+            RefreshLocalFittingIterationSampleEntries(best_iteration_result, atom_list);
             ApplyLocalFittingIterationResult(
                 best_iteration_result,
                 local_editor_list,
@@ -1117,6 +1235,7 @@ void RunSecondStageLocalFitting(
         }
         estimation_history.emplace_back(std::move(previous_estimation_list));
         previous_estimation_list = std::move(iteration_result.estimation_list);
+        previous_result_list = std::move(iteration_result.result_list);
     }
 
     for (size_t i = 0; i < atom_size; i++)

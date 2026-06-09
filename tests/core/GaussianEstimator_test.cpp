@@ -497,6 +497,39 @@ LocalPotentialSampleList MakeGaussianSampleEntriesForAtom(
     return sample_entries;
 }
 
+std::unique_ptr<rg::ModelObject> MakeMixedParameterChangeFreezeModel()
+{
+    std::vector<std::unique_ptr<rg::AtomObject>> atom_list;
+    atom_list.reserve(3);
+    for (int i = 0; i < 3; i++)
+    {
+        auto atom{ std::make_unique<rg::AtomObject>() };
+        atom->SetSerialID(i + 1);
+        if (i == 0)
+        {
+            atom->SetPosition(100.0f, 0.0f, 0.0f);
+        }
+        else
+        {
+            atom->SetPosition(1.2f * static_cast<float>(i - 1), 0.0f, 0.0f);
+        }
+        atom_list.emplace_back(std::move(atom));
+    }
+
+    auto model{ std::make_unique<rg::ModelObject>(std::move(atom_list)) };
+    model->SelectAllAtoms();
+
+    auto analysis{ model->EditAnalysis() };
+    const auto selected_atoms{ model->GetSelectedAtoms() };
+    for (auto * atom : selected_atoms)
+    {
+        auto local_editor{ analysis.EnsureAtomLocalPotential(*atom) };
+        local_editor.SetSamplingEntries(MakeCoupledSampleEntries(*atom, selected_atoms));
+        local_editor.SetAlphaR(0.2);
+    }
+    return model;
+}
+
 std::unique_ptr<rg::ModelObject> MakeCoupledLocalFittingModel()
 {
     std::vector<std::unique_ptr<rg::AtomObject>> atom_list;
@@ -771,6 +804,35 @@ LocalFittingStepStatsForTest EstimateNextLocalFittingStepStats(
         intercept_change_list,
         0.90);
     return stats;
+}
+
+void ExpectSamplingEntriesMatchFinalSnapshot(
+    const rg::ModelObject & model,
+    const std::vector<LocalPotentialSampleList> & original_sample_entries_list)
+{
+    const auto atom_list{ model.GetSelectedAtoms() };
+    const auto snapshot{ BuildGaussianSnapshotForTest(atom_list) };
+    ASSERT_EQ(atom_list.size(), original_sample_entries_list.size());
+    for (std::size_t i = 0; i < atom_list.size(); i++)
+    {
+        const auto expected_sample_entries{
+            UpdateSampleListWithFittedGaussianForTest(
+                *atom_list.at(i),
+                original_sample_entries_list.at(i),
+                snapshot)
+        };
+        const auto actual_sample_entries{
+            rg::AtomLocalPotentialView::RequireFor(*atom_list.at(i)).GetSamplingEntries(false)
+        };
+        ASSERT_EQ(expected_sample_entries.size(), actual_sample_entries.size());
+        for (std::size_t j = 0; j < expected_sample_entries.size(); j++)
+        {
+            EXPECT_NEAR(
+                expected_sample_entries.at(j).response,
+                actual_sample_entries.at(j).response,
+                1.0e-6f);
+        }
+    }
 }
 
 std::unique_ptr<rg::ModelObject> MakeLocalAlphaTrainingModel(
@@ -1082,6 +1144,71 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingConvergesAllParametersTogeth
         next_step_stats.intercept_change_percentile90 *
             next_step_stats.intercept_change_percentile90,
         tolerance);
+    EXPECT_NE(
+        std::string::npos,
+        output.find("percentile atom change"));
+    EXPECT_NE(
+        std::string::npos,
+        output.find("frozen atoms = "));
+    EXPECT_NE(
+        std::string::npos,
+        output.find("All local fitting atoms frozen after "));
+    ExpectSamplingEntriesMatchFinalSnapshot(*model, original_sample_entries_list);
+}
+
+TEST(GaussianEstimatorTest, RunLocalPotentialFittingFreezesOnlyLowChangeAtoms)
+{
+    auto model{ MakeMixedParameterChangeFreezeModel() };
+    const auto options{ MakeOptions() };
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    std::vector<LocalPotentialSampleList> original_sample_entries_list;
+    original_sample_entries_list.reserve(model->GetSelectedAtoms().size());
+    for (const auto * atom : model->GetSelectedAtoms())
+    {
+        original_sample_entries_list.emplace_back(
+            rg::AtomLocalPotentialView::RequireFor(*atom).GetSamplingEntries(false));
+    }
+
+    ge::RunFirstStageLocalFitting(*model, options);
+    const auto selected_atoms{ model->GetSelectedAtoms() };
+    const auto isolated_model_after_first_stage{
+        rg::AtomLocalPotentialView::RequireFor(*selected_atoms.at(0))
+            .GetGaussianResult()
+            .mdpde
+            .GetModel()
+    };
+
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    ge::RunSecondStageLocalFitting(*model, selected_atoms, options);
+    const auto error_output{ testing::internal::GetCapturedStderr() };
+    const auto output{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_log_level);
+    const auto log_output{ output + error_output };
+
+    EXPECT_NE(
+        std::string::npos,
+        log_output.find("frozen atoms = 1/3"));
+    EXPECT_EQ(
+        std::string::npos,
+        log_output.find("Local fitting intercepts fixed after "));
+    const auto isolated_model_after_second_stage{
+        rg::AtomLocalPotentialView::RequireFor(*selected_atoms.at(0))
+            .GetGaussianResult()
+            .mdpde
+            .GetModel()
+    };
+    EXPECT_DOUBLE_EQ(
+        isolated_model_after_first_stage.GetAmplitude(),
+        isolated_model_after_second_stage.GetAmplitude());
+    EXPECT_DOUBLE_EQ(
+        isolated_model_after_first_stage.GetWidth(),
+        isolated_model_after_second_stage.GetWidth());
+    EXPECT_DOUBLE_EQ(
+        isolated_model_after_first_stage.GetIntercept(),
+        isolated_model_after_second_stage.GetIntercept());
+    ExpectSamplingEntriesMatchFinalSnapshot(*model, original_sample_entries_list);
 }
 
 TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAfterConvergence)
@@ -1104,21 +1231,12 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAfterConvergence)
     EXPECT_EQ(
         std::string::npos,
         output.find("stable streak = "));
-    EXPECT_NE(
-        std::string::npos,
-        output.find("\nConverged after "));
+    EXPECT_TRUE(
+        output.find("\nConverged after ") != std::string::npos ||
+        output.find("\nAll local fitting atoms frozen after ") != std::string::npos);
     EXPECT_EQ(
         std::string::npos,
         log_output.find("Cycle detected in local fitting"));
-    EXPECT_NE(
-        std::string::npos,
-        output.find("max amplitude change"));
-    EXPECT_NE(
-        std::string::npos,
-        output.find("max width change"));
-    EXPECT_NE(
-        std::string::npos,
-        output.find("max intercept change"));
     EXPECT_NE(
         std::string::npos,
         output.find("percentile amplitude change"));
@@ -1128,6 +1246,12 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAfterConvergence)
     EXPECT_NE(
         std::string::npos,
         output.find("percentile intercept change"));
+    EXPECT_NE(
+        std::string::npos,
+        output.find("percentile atom change"));
+    EXPECT_NE(
+        std::string::npos,
+        output.find("frozen atoms = "));
     EXPECT_EQ(
         std::string::npos,
         output.find("Local fitting intercepts fixed after "));
@@ -1266,7 +1390,8 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAtDetectedCycle)
 
     EXPECT_TRUE(
         log_output.find("Cycle detected in local fitting") != std::string::npos ||
-        log_output.find("\nConverged after ") != std::string::npos);
+        log_output.find("\nConverged after ") != std::string::npos ||
+        log_output.find("\nAll local fitting atoms frozen after ") != std::string::npos);
     EXPECT_EQ(
         std::string::npos,
         log_output.find("Reached maximum iteration size"));
