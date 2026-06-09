@@ -421,14 +421,14 @@ void SaveDataOutlierBiasPlot(const RHBMTestRequest & request, const BiasPlotRequ
     #ifdef HAVE_ROOT
     auto file_path{ request.output_dir / plot_request.output_name };
     std::vector<std::string> title_y_list{
-        "Amplitude #font[2]{A}", "Width #tau"
+        "Amplitude #font[2]{A}", "Width #tau", "Intercept #font[2]{C}"
     };
 
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);
     const size_t col_count{ plot_request.panels.size() };
     const int col_size{ static_cast<int>(col_count) };
-    const int row_size{ 2 };
+    const int row_size{ 3 };
     const int canvas_width{ (col_size == 1) ? 900 : 1500 };
     auto canvas{ root_helper::CreateCanvas("test","", canvas_width, 750) };
     root_helper::SetCanvasDefaultStyle(canvas.get());

@@ -41,7 +41,7 @@ namespace {
 
 GaussianModel3D MakeDefaultModelPrior()
 {
-    return GaussianModel3D{ 1.0, 0.5, 0.0 };
+    return GaussianModel3D{ 1.0, 0.5, 0.1 };
 }
 
 GaussianModel3DUncertainty MakeDefaultModelSigma()
@@ -218,7 +218,7 @@ void RunSimulationTestOnAtomicModel(const RHBMTestRequest & request)
 {
     ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnAtomicModel");
 
-    const auto error_sigma{ 0.00 };
+    const auto error_sigma{ 0.01 };
     const auto model_prior{ MakeDefaultModelPrior() };
     FitOptions options;
     options.distance_min = request.fit_range_min;

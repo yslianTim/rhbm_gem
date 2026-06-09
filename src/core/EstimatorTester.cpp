@@ -30,7 +30,16 @@ Eigen::VectorXd CalculateNormalizedBias(const GaussianModel3D & estimate, const 
     const auto truth_vector{ truth.ToVector() };
     const auto estimate_vector{ estimate.ToVector() };
     eigen_validation::RequireVectorSize(estimate_vector, truth_vector.rows(), "gaussian");
-    return ((estimate_vector - truth_vector).array() / truth_vector.array()).matrix();
+
+    Eigen::VectorXd bias{ estimate_vector - truth_vector };
+    for (Eigen::Index i = 0; i < truth_vector.rows(); i++)
+    {
+        if (truth_vector(i) != 0.0)
+        {
+            bias(i) /= truth_vector(i);
+        }
+    }
+    return bias;
 }
 
 LocalReplicaBias EstimateLocalReplicaBias(
