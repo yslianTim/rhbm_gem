@@ -39,6 +39,7 @@ struct LocalTestOptions
     double requested_alpha_r{ 0.0 };
     bool alpha_training{ true };
     int thread_size{ 1 };
+    bool quiet_mode{ false };
 };
 
 struct GroupTestOptions
@@ -46,6 +47,7 @@ struct GroupTestOptions
     double requested_alpha_g{ 0.0 };
     bool alpha_training{ true };
     int thread_size{ 1 };
+    bool quiet_mode{ false };
 };
 
 LocalTestBias RunLocalEstimationTest(

@@ -454,12 +454,12 @@ LocalFittingParameterChangeStats CalculateLocalFittingParameterChangeStats(
 bool IsLocalFittingParameterChangeConverged(const LocalFittingParameterChangeStats & stats)
 {
     return
-        //IsSquaredChangeBelowTolerance(
-        //    stats.max_amplitude_change,
-        //    kLocalFittingParameterChangeTolerance) &&
-        //IsSquaredChangeBelowTolerance(
-        //    stats.max_width_change,
-        //    kLocalFittingParameterChangeTolerance) &&
+        IsSquaredChangeBelowTolerance(
+            stats.max_amplitude_change,
+            kLocalFittingParameterChangeTolerance) &&
+        IsSquaredChangeBelowTolerance(
+            stats.max_width_change,
+            kLocalFittingParameterChangeTolerance) &&
         IsSquaredChangeBelowTolerance(
             stats.max_intercept_change,
             kLocalFittingParameterChangeTolerance);
@@ -677,19 +677,25 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
             if (cycle_defect < tolerance)
             {
                 result = std::move(cycle_result);
-                Logger::Log(LogLevel::Debug,
-                    "Cycle detected in local Gaussian intercept estimation with period " +
-                    std::to_string(period) + "; refitting at cycle mean with defect = " +
-                    std::to_string(cycle_defect) + ".");
+                if (!options.quiet_mode)
+                {
+                    Logger::Log(LogLevel::Debug,
+                        "Cycle detected in local Gaussian intercept estimation with period " +
+                        std::to_string(period) + "; refitting at cycle mean with defect = " +
+                        std::to_string(cycle_defect) + ".");
+                }
             }
             else
             {
                 result = EstimateLocalGaussian(sample_entries, alpha_r, options, best_intercept);
-                Logger::Log(LogLevel::Debug,
-                    "Cycle mean fixed-point defect = " + std::to_string(cycle_defect) +
-                    " did not satisfy local Gaussian intercept tolerance; "
-                    "refitting at best fixed-point candidate with defect = " +
-                    std::to_string(best_defect) + ".");
+                if (!options.quiet_mode)
+                {
+                    Logger::Log(LogLevel::Debug,
+                        "Cycle mean fixed-point defect = " + std::to_string(cycle_defect) +
+                        " did not satisfy local Gaussian intercept tolerance; "
+                        "refitting at best fixed-point candidate with defect = " +
+                        std::to_string(best_defect) + ".");
+                }
             }
             cycle_detected = true;
             break;
@@ -699,10 +705,13 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
         if (t + 1 == max_iterations)
         {
             result = EstimateLocalGaussian(sample_entries, alpha_r, options, best_intercept);
-            Logger::Log(LogLevel::Warning,
-                "Maximum iterations reached in local Gaussian estimation with intercept; "
-                "refitting at best fixed-point candidate with defect = " +
-                std::to_string(best_defect) + ".");
+            if (!options.quiet_mode)
+            {
+                Logger::Log(LogLevel::Warning,
+                    "Maximum iterations reached in local Gaussian estimation with intercept; "
+                    "refitting at best fixed-point candidate with defect = " +
+                    std::to_string(best_defect) + ".");
+            }
             break;
         }
 
@@ -752,7 +761,10 @@ void RunLocalAlphaTraining(ModelObject & model_object, const FitOptions & option
     const auto group_key_list{ analysis_view.CollectAtomGroupKeys(class_key) };
 
     size_t count{ 0 };
-    Logger::Log(LogLevel::Info, "Run local alpha training for " + std::to_string(group_key_list.size()) + " groups.");
+    if (!options.quiet_mode)
+    {
+        Logger::Log(LogLevel::Info, "Run local alpha training for " + std::to_string(group_key_list.size()) + " groups.");
+    }
     for (const auto group_key : group_key_list)
     {
         const auto & group_atom_list{
@@ -781,7 +793,11 @@ void RunLocalAlphaTraining(ModelObject & model_object, const FitOptions & option
                 analysis.EnsureAtomLocalPotential(*atom).SetAlphaR(alpha_r);
             }
         }
-        Logger::ProgressPercent(++count, group_key_list.size());
+        count++;
+        if (!options.quiet_mode)
+        {
+            Logger::ProgressPercent(count, group_key_list.size());
+        }
     }
 }
 
@@ -850,7 +866,10 @@ void RunFirstStageLocalFitting(ModelObject & model_object, const FitOptions & op
 #endif
         {
             atom_count++;
-            Logger::ProgressPercent(atom_count, selected_atom_size);
+            if (!options.quiet_mode)
+            {
+                Logger::ProgressPercent(atom_count, selected_atom_size);
+            }
         }
     }
 }
@@ -861,8 +880,11 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
     const auto & atom_list{ model_object.GetSelectedAtoms() };
     auto local_editor_list{ BuildSelectedAtomLocalEditors(model_object) };
     std::atomic<size_t> atom_count{ 0 };
-    Logger::Log(LogLevel::Info,
-        "Run local atom fitting for " + std::to_string(selected_atom_size) + " atoms.");
+    if (!options.quiet_mode)
+    {
+        Logger::Log(LogLevel::Info,
+            "Run local atom fitting for " + std::to_string(selected_atom_size) + " atoms.");
+    }
 
 #ifdef USE_OPENMP
     #pragma omp parallel for num_threads(options.thread_size)
@@ -883,7 +905,10 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
 #endif
         {
             atom_count++;
-            Logger::ProgressPercent(atom_count, selected_atom_size);
+            if (!options.quiet_mode)
+            {
+                Logger::ProgressPercent(atom_count, selected_atom_size);
+            }
         }
     }
 
@@ -895,7 +920,10 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
         previous_estimation_list[i] = local_view.GetGaussianResult().mdpde.GetModel().ToVector();
     }
 
-    Logger::Log(LogLevel::Info, "Run updated local atom fitting with iterations...");
+    if (!options.quiet_mode)
+    {
+        Logger::Log(LogLevel::Info, "Run updated local atom fitting with iterations...");
+    }
     std::vector<std::vector<Eigen::VectorXd>> estimation_history;
     estimation_history.reserve(kLocalFittingCycleHistorySize);
     LocalFittingIterationResult best_iteration_result;
@@ -919,19 +947,22 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
             has_best_iteration_result = true;
         }
 
-        std::ostringstream progress_message;
-        progress_message << "Local fitting iteration " << iter + 1 << '/'
-            << kLocalFittingMaximumIterations << ", max parameter change = "
-            << std::fixed << std::setprecision(6) << change_stats.max_parameter_change
-            << ", 90th percentile parameter change = "
-            << change_stats.parameter_change_percentile90
-            << ", max amplitude change = "
-            << change_stats.max_amplitude_change
-            << ", max width change = "
-            << change_stats.max_width_change
-            << ", max intercept change = "
-            << change_stats.max_intercept_change;
-        Logger::ProgressLine(progress_message.str());
+        if (!options.quiet_mode)
+        {
+            std::ostringstream progress_message;
+            progress_message << "Local fitting iteration " << iter + 1 << '/'
+                << kLocalFittingMaximumIterations << ", max parameter change = "
+                << std::fixed << std::setprecision(6) << change_stats.max_parameter_change
+                << ", 90th percentile parameter change = "
+                << change_stats.parameter_change_percentile90
+                << ", max amplitude change = "
+                << change_stats.max_amplitude_change
+                << ", max width change = "
+                << change_stats.max_width_change
+                << ", max intercept change = "
+                << change_stats.max_intercept_change;
+            Logger::ProgressLine(progress_message.str());
+        }
 
         if (IsLocalFittingParameterChangeConverged(change_stats))
         {
@@ -939,19 +970,22 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
                 iteration_result,
                 local_editor_list,
                 sample_entries_list);
-            Logger::FinishProgressLine();
-            Logger::Log(LogLevel::Info,
-                "Converged after " + std::to_string(iter + 1) +
-                " iterations with max parameter change = " +
-                std::to_string(change_stats.max_parameter_change) +
-                " and 90th percentile parameter change = " +
-                std::to_string(change_stats.parameter_change_percentile90) +
-                ", max amplitude change = " +
-                std::to_string(change_stats.max_amplitude_change) +
-                ", max width change = " +
-                std::to_string(change_stats.max_width_change) +
-                ", and max intercept change = " +
-                std::to_string(change_stats.max_intercept_change) + ".");
+            if (!options.quiet_mode)
+            {
+                Logger::FinishProgressLine();
+                Logger::Log(LogLevel::Info,
+                    "Converged after " + std::to_string(iter + 1) +
+                    " iterations with max parameter change = " +
+                    std::to_string(change_stats.max_parameter_change) +
+                    " and 90th percentile parameter change = " +
+                    std::to_string(change_stats.parameter_change_percentile90) +
+                    ", max amplitude change = " +
+                    std::to_string(change_stats.max_amplitude_change) +
+                    ", max width change = " +
+                    std::to_string(change_stats.max_width_change) +
+                    ", and max intercept change = " +
+                    std::to_string(change_stats.max_intercept_change) + ".");
+            }
             break;
         }
 
@@ -989,12 +1023,15 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
                     cycle_iteration_result,
                     local_editor_list,
                     sample_entries_list);
-                Logger::FinishProgressLine();
-                Logger::Log(LogLevel::Debug,
-                    "Cycle detected in local fitting with period " +
-                    std::to_string(period) +
-                    "; refitting at cycle mean with max intercept change = " +
-                    std::to_string(cycle_change_stats.max_intercept_change) + ".");
+                if (!options.quiet_mode)
+                {
+                    Logger::FinishProgressLine();
+                    Logger::Log(LogLevel::Debug,
+                        "Cycle detected in local fitting with period " +
+                        std::to_string(period) +
+                        "; refitting at cycle mean with max intercept change = " +
+                        std::to_string(cycle_change_stats.max_intercept_change) + ".");
+                }
             }
             else
             {
@@ -1002,13 +1039,16 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
                     best_iteration_result,
                     local_editor_list,
                     sample_entries_list);
-                Logger::FinishProgressLine();
-                Logger::Log(LogLevel::Debug,
-                    "Cycle mean max intercept change = " +
-                    std::to_string(cycle_change_stats.max_intercept_change) +
-                    " did not satisfy local fitting tolerance; "
-                    "refitting at best fixed-point candidate with max intercept change = " +
-                    std::to_string(best_change_stats.max_intercept_change) + ".");
+                if (!options.quiet_mode)
+                {
+                    Logger::FinishProgressLine();
+                    Logger::Log(LogLevel::Debug,
+                        "Cycle mean max intercept change = " +
+                        std::to_string(cycle_change_stats.max_intercept_change) +
+                        " did not satisfy local fitting tolerance; "
+                        "refitting at best fixed-point candidate with max intercept change = " +
+                        std::to_string(best_change_stats.max_intercept_change) + ".");
+                }
             }
             cycle_detected = true;
             break;
@@ -1021,19 +1061,22 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
                 best_iteration_result,
                 local_editor_list,
                 sample_entries_list);
-            Logger::FinishProgressLine();
-            Logger::Log(LogLevel::Warning,
-                "Reached maximum iteration size; refitting at best fixed-point candidate "
-                "with max parameter change = " +
-                std::to_string(best_change_stats.max_parameter_change) +
-                " and 90th percentile parameter change = " +
-                std::to_string(best_change_stats.parameter_change_percentile90) +
-                ", max amplitude change = " +
-                std::to_string(best_change_stats.max_amplitude_change) +
-                ", max width change = " +
-                std::to_string(best_change_stats.max_width_change) +
-                ", and max intercept change = " +
-                std::to_string(best_change_stats.max_intercept_change));
+            if (!options.quiet_mode)
+            {
+                Logger::FinishProgressLine();
+                Logger::Log(LogLevel::Warning,
+                    "Reached maximum iteration size; refitting at best fixed-point candidate "
+                    "with max parameter change = " +
+                    std::to_string(best_change_stats.max_parameter_change) +
+                    " and 90th percentile parameter change = " +
+                    std::to_string(best_change_stats.parameter_change_percentile90) +
+                    ", max amplitude change = " +
+                    std::to_string(best_change_stats.max_amplitude_change) +
+                    ", max width change = " +
+                    std::to_string(best_change_stats.max_width_change) +
+                    ", and max intercept change = " +
+                    std::to_string(best_change_stats.max_intercept_change));
+            }
         }
         if (estimation_history.size() == kLocalFittingCycleHistorySize)
         {
@@ -1060,7 +1103,10 @@ void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & opt
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {
         const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        Logger::Log(LogLevel::Info, "Class type: " + class_key);
+        if (!options.quiet_mode)
+        {
+            Logger::Log(LogLevel::Info, "Class type: " + class_key);
+        }
 
         auto group_key_list{ analysis_view.CollectAtomGroupKeys(class_key) };
         auto group_key_size{ group_key_list.size() };
@@ -1097,7 +1143,10 @@ void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & opt
             {
                 analysis.ApplyAtomGroupGaussianResult(group_key, class_key, result);
                 key_count++;
-                Logger::ProgressBar(key_count, group_key_size);
+                if (!options.quiet_mode)
+                {
+                    Logger::ProgressBar(key_count, group_key_size);
+                }
             }
         }
     }

@@ -119,6 +119,7 @@ LocalTestOptions MakeLocalTestOptions(const RHBMTestRequest & request)
     options.requested_alpha_r = request.alpha_r;
     options.alpha_training = true;
     options.thread_size = request.job_count;
+    options.quiet_mode = true;
     return options;
 }
 
@@ -128,6 +129,7 @@ GroupTestOptions MakeGroupTestOptions(const RHBMTestRequest & request)
     options.requested_alpha_g = request.alpha_g;
     options.alpha_training = true;
     options.thread_size = request.job_count;
+    options.quiet_mode = true;
     return options;
 }
 
@@ -224,6 +226,7 @@ void RunSimulationTestOnAtomicModel(const RHBMTestRequest & request)
     options.distance_min = request.fit_range_min;
     options.distance_max = request.fit_range_max;
     options.thread_size = request.job_count;
+    options.quiet_mode = true;
 
     std::vector<Spot> spot_list{ Spot::UNK, Spot::O, Spot::N, Spot::C, Spot::CA };
 

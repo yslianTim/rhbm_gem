@@ -114,6 +114,7 @@ LocalTestBias RunLocalEstimationTest(
     trained_alpha_list.assign(static_cast<size_t>(replica_size), 0.0);
 
     FitOptions estimator_options;
+    estimator_options.quiet_mode = options.quiet_mode;
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(options.thread_size)
@@ -189,7 +190,8 @@ GroupTestBias RunGroupEstimationTest(
     std::vector<double> trained_alpha_list;
     trained_alpha_list.assign(static_cast<size_t>(replica_size), 0.0);
 
-    const FitOptions estimator_options;
+    FitOptions estimator_options;
+    estimator_options.quiet_mode = options.quiet_mode;
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(options.thread_size)
