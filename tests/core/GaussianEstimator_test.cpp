@@ -288,10 +288,11 @@ void VerifyInterceptCycleMeanFallback(
     const auto error_output{ testing::internal::GetCapturedStderr() };
     const auto output{ testing::internal::GetCapturedStdout() };
     Logger::SetLogLevel(previous_log_level);
+    const auto log_output{ output + error_output };
 
     EXPECT_EQ(std::string::npos, output.find("Cycle detected"));
-    EXPECT_NE(std::string::npos, error_output.find("Cycle mean fixed-point defect"));
-    EXPECT_NE(std::string::npos, error_output.find("best fixed-point candidate"));
+    EXPECT_NE(std::string::npos, log_output.find("Cycle mean fixed-point defect"));
+    EXPECT_NE(std::string::npos, log_output.find("best fixed-point candidate"));
     EXPECT_EQ(std::string::npos, error_output.find("Maximum iterations reached"));
     EXPECT_NEAR(
         simulation.final_intercept,
@@ -484,6 +485,96 @@ std::unique_ptr<rg::ModelObject> MakeCoupledLocalFittingModel()
         auto local_editor{ analysis.EnsureAtomLocalPotential(*atom) };
         local_editor.SetSamplingEntries(MakeCoupledSampleEntries(*atom, selected_atoms));
         local_editor.SetAlphaR(0.2);
+    }
+    return model;
+}
+
+LocalPotentialSampleList MakeLocalFittingCycleSampleEntries(
+    const rg::AtomObject & atom,
+    const std::vector<rg::AtomObject *> & atom_list)
+{
+    constexpr double background{ -0.1 };
+    constexpr double width{ 0.25 };
+    constexpr double amplitude_scale{ 0.5 };
+    constexpr int seed{ 5 };
+    const std::vector<std::array<float, 3>> direction_list{
+        { 1.0f, 0.0f, 0.0f },
+        { -1.0f, 0.0f, 0.0f },
+        { 0.0f, 1.0f, 0.0f },
+        { 0.0f, -1.0f, 0.0f },
+        { 0.0f, 0.0f, 1.0f },
+        { 0.0f, 0.0f, -1.0f }
+    };
+    const auto center{ atom.GetPosition() };
+    LocalPotentialSampleList sample_entries;
+    for (int shell = 0; shell <= 15; shell++)
+    {
+        const auto radius{ static_cast<float>(0.1 * static_cast<double>(shell)) };
+        for (std::size_t direction_index = 0;
+            direction_index < direction_list.size();
+            direction_index++)
+        {
+            const auto & direction{ direction_list.at(direction_index) };
+            SamplingPoint point{ radius };
+            point.position = {
+                center[0] + radius * direction[0],
+                center[1] + radius * direction[1],
+                center[2] + radius * direction[2]
+            };
+
+            double response{ background };
+            for (const auto * source_atom : atom_list)
+            {
+                const rg::GaussianModel3D source_model{
+                    amplitude_scale *
+                        (0.7 + 0.1 * static_cast<double>(source_atom->GetSerialID())),
+                    width,
+                    0.0
+                };
+                response += source_model.SignalAtDistance(
+                    Distance(point.position, source_atom->GetPosition()));
+            }
+            response += 0.01 * std::sin(
+                static_cast<double>(seed) +
+                0.7 * static_cast<double>(shell) +
+                1.3 * static_cast<double>(direction_index) +
+                0.2 * static_cast<double>(atom.GetSerialID()));
+            sample_entries.emplace_back(
+                LocalPotentialSample{ static_cast<float>(response), point });
+        }
+    }
+    return sample_entries;
+}
+
+std::unique_ptr<rg::ModelObject> MakeLocalFittingCycleModel()
+{
+    constexpr std::size_t atom_count{ 2 };
+    constexpr double spacing{ 0.5 };
+    constexpr double alpha_r{ 0.0 };
+    std::vector<std::unique_ptr<rg::AtomObject>> atom_list;
+    atom_list.reserve(atom_count);
+    for (std::size_t i = 0; i < atom_count; i++)
+    {
+        auto atom{ std::make_unique<rg::AtomObject>() };
+        atom->SetSerialID(static_cast<int>(i + 1));
+        atom->SetPosition(
+            static_cast<float>(spacing * static_cast<double>(i)),
+            0.0f,
+            0.0f);
+        atom_list.emplace_back(std::move(atom));
+    }
+
+    auto model{ std::make_unique<rg::ModelObject>(std::move(atom_list)) };
+    model->SelectAllAtoms();
+
+    auto analysis{ model->EditAnalysis() };
+    const auto selected_atoms{ model->GetSelectedAtoms() };
+    for (auto * atom : selected_atoms)
+    {
+        auto local_editor{ analysis.EnsureAtomLocalPotential(*atom) };
+        local_editor.SetSamplingEntries(
+            MakeLocalFittingCycleSampleEntries(*atom, selected_atoms));
+        local_editor.SetAlphaR(alpha_r);
     }
     return model;
 }
@@ -896,11 +987,14 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAfterConvergence)
     const auto expected_sample_size{ MakeSampleEntries().size() };
     const auto previous_log_level{ Logger::GetLogLevel() };
 
-    Logger::SetLogLevel(LogLevel::Info);
+    Logger::SetLogLevel(LogLevel::Debug);
     testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
     ge::RunLocalPotentialFitting(*model, options);
+    const auto error_output{ testing::internal::GetCapturedStderr() };
     const auto output{ testing::internal::GetCapturedStdout() };
     Logger::SetLogLevel(previous_log_level);
+    const auto log_output{ output + error_output };
 
     EXPECT_NE(std::string::npos, output.find("\rLocal fitting iteration "));
     EXPECT_EQ(
@@ -909,6 +1003,9 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAfterConvergence)
     EXPECT_NE(
         std::string::npos,
         output.find("\nConverged after "));
+    EXPECT_EQ(
+        std::string::npos,
+        log_output.find("Cycle detected in local fitting"));
     EXPECT_NE(
         std::string::npos,
         output.find("max parameter change"));
@@ -980,6 +1077,43 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAfterCoupledMaxConverge
     EXPECT_LT(
         next_step_stats.max_intercept_change * next_step_stats.max_intercept_change,
         rg::RHBMExecutionOptions{}.tolerance);
+}
+
+TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAtDetectedCycle)
+{
+    auto model{ MakeLocalFittingCycleModel() };
+    const auto options{ MakeOptions() };
+    const auto expected_sample_size{
+        rg::AtomLocalPotentialView::RequireFor(*model->GetSelectedAtoms().front())
+            .GetSamplingEntries(false)
+            .size()
+    };
+    const auto previous_log_level{ Logger::GetLogLevel() };
+
+    Logger::SetLogLevel(LogLevel::Debug);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    ge::RunLocalPotentialFitting(*model, options);
+    const auto error_output{ testing::internal::GetCapturedStderr() };
+    const auto output{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_log_level);
+    const auto log_output{ output + error_output };
+
+    EXPECT_NE(
+        std::string::npos,
+        log_output.find("Cycle detected in local fitting"));
+    EXPECT_EQ(
+        std::string::npos,
+        log_output.find("Reached maximum iteration size"));
+    EXPECT_EQ(
+        std::string::npos,
+        log_output.find("Local fitting iteration 100/100"));
+    for (const auto * atom : model->GetSelectedAtoms())
+    {
+        const auto local_view{ rg::AtomLocalPotentialView::RequireFor(*atom) };
+        EXPECT_TRUE(local_view.GetGaussianResult().fit_result.has_value());
+        EXPECT_EQ(expected_sample_size, local_view.GetSamplingEntries(false).size());
+    }
 }
 
 TEST(GaussianEstimatorTest, RunLocalAlphaTrainingUpdatesComponentGroupAlphaR)
