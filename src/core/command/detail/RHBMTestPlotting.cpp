@@ -293,13 +293,14 @@ TGraphErrors * FindBiasGraph(
 
 void ApplyNeighborTypeAxisLabels(TAxis * axis)
 {
-    axis->SetNdivisions(5, false);
+    axis->SetNdivisions(6, false);
     const auto label_color{ kCyan+3 };
     axis->ChangeLabel(1, -1, 0, -1, -1, -1, "");
-    axis->ChangeLabel(2, -90.0, -1, -1, label_color, 103, "O");
-    axis->ChangeLabel(3, -90.0, -1, -1, label_color, 103, "N");
-    axis->ChangeLabel(4, -90.0, -1, -1, label_color, 103, "C");
-    axis->ChangeLabel(5, -90.0, -1, -1, label_color, 103, "C_{#alpha}");
+    axis->ChangeLabel(2, -90.0, -1, -1, label_color, 103, "Free");
+    axis->ChangeLabel(3, -90.0, -1, -1, label_color, 103, "O");
+    axis->ChangeLabel(4, -90.0, -1, -1, label_color, 103, "N");
+    axis->ChangeLabel(5, -90.0, -1, -1, label_color, 103, "C");
+    axis->ChangeLabel(6, -90.0, -1, -1, label_color, 103, "C_{#alpha}");
     axis->ChangeLabel(-1, -1, 0, -1, -1, -1, "");
 }
 
@@ -485,7 +486,7 @@ void SaveDataOutlierBiasPlot(const RHBMTestRequest & request, const BiasPlotRequ
         if (plot_request.x_axis_mode == BiasXAxisMode::NeighborType)
         {
             x_min.at(i) = 0.0;
-            x_max.at(i) = 5.0;
+            x_max.at(i) = static_cast<double>(plot_request.panels.at(i).curves.at(0).points.size()) + 1.0;
         }
     }
     for (size_t j = 0; j < row_size; j++)

@@ -41,7 +41,7 @@ namespace {
 
 GaussianModel3D MakeDefaultModelPrior()
 {
-    return GaussianModel3D{ 1.0, 0.5, 0.1 };
+    return GaussianModel3D{ 1.0, 0.5, -0.1 };
 }
 
 GaussianModel3DUncertainty MakeDefaultModelSigma()
@@ -139,7 +139,7 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
     const auto model_prior{ MakeDefaultModelPrior() };
     const auto local_options{ MakeLocalTestOptions(request) };
 
-    std::vector<Spot> spot_list{ Spot::O, Spot::N, Spot::C, Spot::CA };
+    std::vector<Spot> spot_list{ Spot::UNK, Spot::O, Spot::N, Spot::C, Spot::CA };
 
     BiasPlotRequest plot_request;
     plot_request.output_name = "bias_from_neighbor_atom.pdf";
@@ -225,7 +225,7 @@ void RunSimulationTestOnAtomicModel(const RHBMTestRequest & request)
     options.distance_max = request.fit_range_max;
     options.thread_size = request.job_count;
 
-    std::vector<Spot> spot_list{ Spot::O, Spot::N, Spot::C, Spot::CA };
+    std::vector<Spot> spot_list{ Spot::UNK, Spot::O, Spot::N, Spot::C, Spot::CA };
 
     BiasPlotRequest plot_request;
     plot_request.output_name = "bias_from_neighbor_atom_atomic_model.pdf";
@@ -247,22 +247,23 @@ void RunSimulationTestOnAtomicModel(const RHBMTestRequest & request)
         scenario.replica_size = 10;
 
         const auto input{ BuildAtomicModelTestData(scenario) };
-        const auto result{ RunAtomicModelEstimationTest(input, options) };
+        const auto result_1{ RunAtomicModelFirstStageEstimationTest(input, options) };
+        const auto result_2{ RunAtomicModelFullEstimationTest(input, options) };
 
         std::ostringstream stream;
         stream  << " OLS: " << std::setprecision(3) << std::fixed
-                << result.ols.mean(0) << " , "
-                << result.ols.mean(1) << " , "
-                << result.ols.mean(2)
+                << result_1.mean(0) << " , "
+                << result_1.mean(1) << " , "
+                << result_1.mean(2)
                 << " , MDPDE: "
-                << result.mdpde.mean(0) << " , "
-                << result.mdpde.mean(1) << " , "
-                << result.mdpde.mean(2);
+                << result_2.mean(0) << " , "
+                << result_2.mean(1) << " , "
+                << result_2.mean(2);
         Logger::Log(LogLevel::Info, stream.str());
 
         const auto spot_axis_value{ static_cast<double>(i + 1) };
-        AppendBiasCurvePoint(panel.curves.at(0), spot_axis_value, result.ols);
-        AppendBiasCurvePoint(panel.curves.at(1), spot_axis_value, result.mdpde);
+        AppendBiasCurvePoint(panel.curves.at(0), spot_axis_value, result_1);
+        AppendBiasCurvePoint(panel.curves.at(1), spot_axis_value, result_2);
     }
 
     plot_request.panels.emplace_back(std::move(panel));

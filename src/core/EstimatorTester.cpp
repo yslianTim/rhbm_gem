@@ -258,7 +258,7 @@ GroupTestBias RunGroupEstimationTest(
     return result;
 }
 
-AtomicModelTestBias RunAtomicModelEstimationTest(
+BiasStatistics RunAtomicModelFirstStageEstimationTest(
     const AtomicModelTestData & input,
     const FitOptions & options)
 {
@@ -269,10 +269,39 @@ AtomicModelTestBias RunAtomicModelEstimationTest(
         throw std::invalid_argument("input.replica_model_objects must not be empty");
     }
 
-    Eigen::MatrixXd bias_matrix_ols{
+    Eigen::MatrixXd bias_matrix{
         Eigen::MatrixXd::Zero(GaussianModel3D::ParameterSize(), replica_size)
     };
-    Eigen::MatrixXd bias_matrix_mdpde{
+
+    for (int i = 0; i < replica_size; i++)
+    {
+        ModelObject model_object{ *input.replica_model_objects.at(static_cast<size_t>(i)) };
+        RunLocalAlphaTraining(model_object, options);
+        RunFirstStageLocalFitting(model_object, options);
+
+        const auto local_view{
+            AtomLocalPotentialView::RequireFor(*model_object.GetSelectedAtoms().front())
+        };
+        const auto & gaussian_result{ local_view.GetGaussianResult() };
+        bias_matrix.col(i) =
+            CalculateNormalizedBias(gaussian_result.mdpde.GetModel(), input.gaus_true);
+    }
+
+    return FinalizeBiasStatistics(bias_matrix);
+}
+
+BiasStatistics RunAtomicModelFullEstimationTest(
+    const AtomicModelTestData & input,
+    const FitOptions & options)
+{
+    GaussianModel3D::RequireFiniteModel(input.gaus_true, "input.gaus_true");
+    const auto replica_size{ static_cast<int>(input.replica_model_objects.size()) };
+    if (replica_size <= 0)
+    {
+        throw std::invalid_argument("input.replica_model_objects must not be empty");
+    }
+
+    Eigen::MatrixXd bias_matrix{
         Eigen::MatrixXd::Zero(GaussianModel3D::ParameterSize(), replica_size)
     };
 
@@ -286,16 +315,11 @@ AtomicModelTestBias RunAtomicModelEstimationTest(
             AtomLocalPotentialView::RequireFor(*model_object.GetSelectedAtoms().front())
         };
         const auto & gaussian_result{ local_view.GetGaussianResult() };
-        bias_matrix_ols.col(i) =
-            CalculateNormalizedBias(gaussian_result.ols.GetModel(), input.gaus_true);
-        bias_matrix_mdpde.col(i) =
+        bias_matrix.col(i) =
             CalculateNormalizedBias(gaussian_result.mdpde.GetModel(), input.gaus_true);
     }
 
-    return AtomicModelTestBias{
-        FinalizeBiasStatistics(bias_matrix_ols),
-        FinalizeBiasStatistics(bias_matrix_mdpde)
-    };
+    return FinalizeBiasStatistics(bias_matrix);
 }
 
 } // namespace rhbm_gem::core

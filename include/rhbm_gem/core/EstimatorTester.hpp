@@ -34,12 +34,6 @@ struct GroupTestBias
     BiasStatisticsSeries mdpde;
 };
 
-struct AtomicModelTestBias
-{
-    BiasStatistics ols;
-    BiasStatistics mdpde;
-};
-
 struct LocalTestOptions
 {
     double requested_alpha_r{ 0.0 };
@@ -64,7 +58,12 @@ GroupTestBias RunGroupEstimationTest(
     const GroupTestOptions & options
 );
 
-AtomicModelTestBias RunAtomicModelEstimationTest(
+BiasStatistics RunAtomicModelFirstStageEstimationTest(
+    const AtomicModelTestData & input,
+    const FitOptions & options
+);
+
+BiasStatistics RunAtomicModelFullEstimationTest(
     const AtomicModelTestData & input,
     const FitOptions & options
 );

@@ -824,6 +824,37 @@ void RunGroupAlphaTraining(ModelObject & model_object, const FitOptions & option
     }
 }
 
+void RunFirstStageLocalFitting(ModelObject & model_object, const FitOptions & options)
+{
+    const auto selected_atom_size{ model_object.GetSelectedAtomCount() };
+    const auto & atom_list{ model_object.GetSelectedAtoms() };
+    auto local_editor_list{ BuildSelectedAtomLocalEditors(model_object) };
+    std::atomic<size_t> atom_count{ 0 };
+
+#ifdef USE_OPENMP
+    #pragma omp parallel for num_threads(options.thread_size)
+#endif
+    for (size_t i = 0; i < selected_atom_size; i++)
+    {
+        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
+        auto sample_entries{ local_view.GetSamplingEntries() };
+        auto intercept_initial{ EstimateInitialIntercept(sample_entries) };
+        const auto result{
+            EstimateLocalGaussianWithIntercept(
+                sample_entries, local_view.GetAlphaR(), options, intercept_initial)
+        };
+        local_editor_list[i].SetGaussianResult(result);
+
+#ifdef USE_OPENMP
+        #pragma omp critical
+#endif
+        {
+            atom_count++;
+            Logger::ProgressPercent(atom_count, selected_atom_size);
+        }
+    }
+}
+
 void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & options)
 {
     const auto selected_atom_size{ model_object.GetSelectedAtomCount() };
