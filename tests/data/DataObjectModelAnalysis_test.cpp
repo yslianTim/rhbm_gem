@@ -132,6 +132,40 @@ TEST(DataObjectModelAnalysisTest, SelectedAtomListCanBeQueriedByResidueId)
     EXPECT_TRUE(model.GetSelectedAtomList(20).empty());
 }
 
+TEST(DataObjectModelAnalysisTest, SequenceIDListReportsSortedUniqueModelResidues)
+{
+    std::vector<std::unique_ptr<rg::AtomObject>> atom_list;
+    atom_list.reserve(4);
+
+    auto make_atom =
+        [](int serial_id, int sequence_id)
+        {
+            auto atom{ std::make_unique<rg::AtomObject>() };
+            atom->SetSerialID(serial_id);
+            atom->SetSequenceID(sequence_id);
+            return atom;
+        };
+    atom_list.emplace_back(make_atom(1, 20));
+    atom_list.emplace_back(make_atom(2, 10));
+    atom_list.emplace_back(make_atom(3, 10));
+    atom_list.emplace_back(make_atom(4, 30));
+
+    rg::ModelObject model(std::move(atom_list));
+    model.SelectAllAtoms(false);
+
+    EXPECT_EQ(model.GetSequenceIDList(), (std::vector<int>{ 10, 20, 30 }));
+
+    model.GetAtomList().at(0)->SetSequenceID(5);
+    EXPECT_EQ(model.GetSequenceIDList(), (std::vector<int>{ 5, 10, 30 }));
+}
+
+TEST(DataObjectModelAnalysisTest, SequenceIDListIsEmptyForEmptyModel)
+{
+    const rg::ModelObject model;
+
+    EXPECT_TRUE(model.GetSequenceIDList().empty());
+}
+
 TEST(DataObjectModelAnalysisTest, ModelObjectCanApplyElementSelectionAsExclusion)
 {
     auto model{ data_test::MakeModelWithBond() };

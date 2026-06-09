@@ -81,6 +81,21 @@ const std::vector<std::unique_ptr<BondObject>> & ModelObject::GetBondList() cons
     return m_bond_list;
 }
 
+const std::vector<int> & ModelObject::GetSequenceIDList() const
+{
+    m_sequence_id_list.clear();
+    m_sequence_id_list.reserve(m_atom_list.size());
+    for (const auto & atom : m_atom_list)
+    {
+        m_sequence_id_list.emplace_back(atom->GetSequenceID());
+    }
+
+    std::sort(m_sequence_id_list.begin(), m_sequence_id_list.end());
+    const auto unique_end{ std::unique(m_sequence_id_list.begin(), m_sequence_id_list.end()) };
+    m_sequence_id_list.erase(unique_end, m_sequence_id_list.end());
+    return m_sequence_id_list;
+}
+
 const std::vector<AtomObject *> & ModelObject::GetSelectedAtomList(int residue_id) const
 {
     static const std::vector<AtomObject *> empty_atom_list{};

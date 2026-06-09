@@ -1180,8 +1180,19 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
     {
         Logger::Log(LogLevel::Info, "Run updated local atom fitting with iterations...");
     }
+
     const auto & atom_list{ model_object.GetSelectedAtoms() };
     RunSecondStageLocalFitting(model_object, atom_list, options);
+
+    size_t iteration{ 0 };
+    const auto & sequence_id_list{ model_object.GetSequenceIDList() };
+    for (const auto & sequence_id : sequence_id_list)
+    {
+        const auto & selected_atom_list{ model_object.GetSelectedAtomList(sequence_id) };
+        if (selected_atom_list.empty()) continue;
+        RunSecondStageLocalFitting(model_object, selected_atom_list, options);
+        Logger::ProgressBar(++iteration, sequence_id_list.size());
+    }
 }
 
 void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & options)
