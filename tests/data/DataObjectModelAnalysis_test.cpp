@@ -252,6 +252,49 @@ TEST(DataObjectModelAnalysisTest, ModelObjectSpotSelectionNoOpKeepsSelection)
     EXPECT_EQ(model->GetSelectedAtoms().front(), atoms.at(0).get());
 }
 
+TEST(DataObjectModelAnalysisTest, ModelObjectCanApplyComponentIDSelectionAsExclusion)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto & atoms{ model->GetAtomList() };
+    atoms.at(0)->SetComponentID("ALA");
+    atoms.at(1)->SetComponentID("HOH");
+    model->SelectAllAtoms();
+
+    model->ApplyComponentIDSelection("HOH", true);
+
+    ASSERT_EQ(model->GetSelectedAtomCount(), 1u);
+    EXPECT_EQ(model->GetSelectedAtoms().front(), atoms.at(0).get());
+}
+
+TEST(DataObjectModelAnalysisTest, ModelObjectComponentIDSelectionExclusionDoesNotWidenSelection)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto & atoms{ model->GetAtomList() };
+    atoms.at(0)->SetComponentID("ALA");
+    atoms.at(1)->SetComponentID("HOH");
+    model->SelectAllAtoms(false);
+    model->SetAtomSelected(atoms.at(1)->GetSerialID(), true);
+
+    model->ApplyComponentIDSelection("HOH", true);
+
+    EXPECT_EQ(model->GetSelectedAtomCount(), 0u);
+}
+
+TEST(DataObjectModelAnalysisTest, ModelObjectComponentIDSelectionNoOpKeepsSelection)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto & atoms{ model->GetAtomList() };
+    atoms.at(0)->SetComponentID("ALA");
+    atoms.at(1)->SetComponentID("HOH");
+    model->SelectAllAtoms(false);
+    model->SetAtomSelected(atoms.at(0)->GetSerialID(), true);
+
+    model->ApplyComponentIDSelection("HOH", false);
+
+    ASSERT_EQ(model->GetSelectedAtomCount(), 1u);
+    EXPECT_EQ(model->GetSelectedAtoms().front(), atoms.at(0).get());
+}
+
 TEST(DataObjectModelAnalysisTest, AtomCountingSummaryReportsSelectedElementCounts)
 {
     auto model{ data_test::MakeModelWithBond() };

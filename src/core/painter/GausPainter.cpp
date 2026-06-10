@@ -151,7 +151,7 @@ void GausPainter::Run()
         PaintLocalGausSummary(model_object, "local_gaus_summary_"+ label);
         PaintGroupGausSummary(model_object, "group_gaus_summary_"+ label);
         PaintQScoreAminoAcidMainChainComponent(model_object, "qscore_amino_acid_main_chain_component_"+ label);
-        PaintGroupMapValueAminoAcidMainChainComponent(model_object, "group_map_value_amino_acid_main_chain_component_"+ label);
+        //PaintGroupMapValueAminoAcidMainChainComponent(model_object, "group_map_value_amino_acid_main_chain_component_"+ label);
         PaintGroupGausAminoAcidMainChainComponent(model_object, "group_gaus_amino_acid_main_chain_component_"+ label);
         PaintGroupGausAminoAcidMainChainStructure(model_object, "group_gaus_amino_acid_main_chain_structure_"+ label);
         PaintLocalGausToSequenceAminoAcidMainChain(model_object, "local_gaus_to_sequence_amino_acid_main_chain_"+ label);

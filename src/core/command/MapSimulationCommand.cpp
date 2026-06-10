@@ -347,6 +347,7 @@ bool MapSimulationCommand::ExecuteImpl(const MapSimulationRequest & request)
 
     model_object->SelectAllAtoms();
     model_object->ApplyElementSelection(Element::HYDROGEN, request.exclude_hydrogen);
+    //model_object->ApplyComponentIDSelection("HOH", true);
     auto atom_list{ PrepareSimulationAtomList(*model_object, request) };
     Logger::Log(LogLevel::Info,
         "Total number of blurring width sets to be simulated: "
