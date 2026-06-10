@@ -107,6 +107,7 @@ public:
     void RebuildSelection();
     void ApplySymmetrySelection(bool is_asymmetry);
     void ApplyElementSelection(Element element, bool is_exclusion);
+    void ApplySpotSelection(Spot spot, bool is_exclusion);
     void ApplySimulationMetadata(double simulated_map_resolution);
     void LocalPotentialInitialization();
     void ClearTransientFitStates();

@@ -511,6 +511,23 @@ void ModelObject::ApplyElementSelection(Element element, bool is_exclusion)
     RebuildSelection();
 }
 
+void ModelObject::ApplySpotSelection(Spot spot, bool is_exclusion)
+{
+    if (!is_exclusion)
+    {
+        return;
+    }
+
+    for (auto & atom : m_atom_list)
+    {
+        if (atom->GetSpot() == spot)
+        {
+            atom->SetSelectedFlag(false);
+        }
+    }
+    RebuildSelection();
+}
+
 void ModelObject::ApplySimulationMetadata(double simulated_map_resolution)
 {
     SetEmdID("Simulation");

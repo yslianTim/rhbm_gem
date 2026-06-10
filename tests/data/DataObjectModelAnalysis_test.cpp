@@ -209,6 +209,49 @@ TEST(DataObjectModelAnalysisTest, ModelObjectElementSelectionNoOpKeepsSelection)
     EXPECT_EQ(model->GetSelectedAtoms().front(), atoms.at(0).get());
 }
 
+TEST(DataObjectModelAnalysisTest, ModelObjectCanApplySpotSelectionAsExclusion)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto & atoms{ model->GetAtomList() };
+    atoms.at(0)->SetSpot(Spot::CA);
+    atoms.at(1)->SetSpot(Spot::H);
+    model->SelectAllAtoms();
+
+    model->ApplySpotSelection(Spot::H, true);
+
+    ASSERT_EQ(model->GetSelectedAtomCount(), 1u);
+    EXPECT_EQ(model->GetSelectedAtoms().front(), atoms.at(0).get());
+}
+
+TEST(DataObjectModelAnalysisTest, ModelObjectSpotSelectionExclusionDoesNotWidenSelection)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto & atoms{ model->GetAtomList() };
+    atoms.at(0)->SetSpot(Spot::CA);
+    atoms.at(1)->SetSpot(Spot::H);
+    model->SelectAllAtoms(false);
+    model->SetAtomSelected(atoms.at(1)->GetSerialID(), true);
+
+    model->ApplySpotSelection(Spot::H, true);
+
+    EXPECT_EQ(model->GetSelectedAtomCount(), 0u);
+}
+
+TEST(DataObjectModelAnalysisTest, ModelObjectSpotSelectionNoOpKeepsSelection)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto & atoms{ model->GetAtomList() };
+    atoms.at(0)->SetSpot(Spot::CA);
+    atoms.at(1)->SetSpot(Spot::H);
+    model->SelectAllAtoms(false);
+    model->SetAtomSelected(atoms.at(0)->GetSerialID(), true);
+
+    model->ApplySpotSelection(Spot::H, false);
+
+    ASSERT_EQ(model->GetSelectedAtomCount(), 1u);
+    EXPECT_EQ(model->GetSelectedAtoms().front(), atoms.at(0).get());
+}
+
 TEST(DataObjectModelAnalysisTest, AtomCountingSummaryReportsSelectedElementCounts)
 {
     auto model{ data_test::MakeModelWithBond() };

@@ -255,7 +255,7 @@ double ElectricPotential::CalculateSingleGausModel(Element element, double dista
     auto intercept{ 0.0 };
     if (element == Element::OXYGEN)
     {
-        if (distance <= 2.0) intercept = -0.1; // TEST
+        if (distance <= 1.5) intercept = -0.1; // TEST
         else intercept = 0.0; // Remove intercept contribution at long distance
     }
     return atomic_number * std::pow(2.0 * M_PI * width_square, -1.5) * std::exp(exp_index) + intercept;
