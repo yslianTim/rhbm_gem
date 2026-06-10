@@ -40,7 +40,6 @@ constexpr std::size_t kMinimumAlphaGTrainingMemberCount{ 10 };
 constexpr double kResidualInterceptRangeMin{ 1.0 };
 constexpr double kResidualInterceptRangeMax{ 1.5 };
 constexpr std::size_t kInterceptCycleHistorySize{ 64 };
-constexpr std::size_t kLocalFittingCycleHistorySize{ 64 };
 constexpr std::size_t kLocalFittingMaximumIterations{ 100 };
 constexpr double kLocalFittingParameterChangeTolerance{ 1.0e-5 };
 constexpr double kLocalFittingChangePercentile{ 0.95 };
@@ -407,8 +406,15 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
                 static_cast<double>(
                     array_helper::ComputeNorm<float>(sample_position, neighbor_position))
             };
-            if (distance > 2.5) continue; // Skip long distance contribution
-            response_value -= static_cast<float>(gaussian_iter->second.SignalAtDistance(distance));
+            if (distance > 2.0) continue; // TEST : Skip long distance contribution
+            if (neighbor_atom->GetElement() == Element::OXYGEN)
+            {
+                response_value -= static_cast<float>(gaussian_iter->second.ResponseAtDistance(distance));
+            }
+            else
+            {
+                response_value -= static_cast<float>(gaussian_iter->second.SignalAtDistance(distance));
+            }
         }
         updated_list.emplace_back(LocalPotentialSample{response_value, sample.point });
     }
@@ -542,36 +548,6 @@ bool IsBetterLocalFittingCandidate(
     const LocalFittingParameterChangeStats & best_stats)
 {
     return GetLocalFittingParameterChange(stats) < GetLocalFittingParameterChange(best_stats);
-}
-
-bool IsLocalFittingStateConverged(
-    const std::vector<Eigen::VectorXd> & current_estimation_list,
-    const std::vector<Eigen::VectorXd> & previous_estimation_list)
-{
-    const auto stats{
-        CalculateLocalFittingParameterChangeStats(current_estimation_list, previous_estimation_list)
-    };
-    return IsLocalFittingParameterChangeConverged(stats);
-}
-
-std::vector<Eigen::VectorXd> ComputeLocalFittingCycleMean(
-    const std::vector<std::vector<Eigen::VectorXd>> & estimation_history,
-    std::size_t cycle_begin)
-{
-    const auto period{ estimation_history.size() - cycle_begin };
-    std::vector<Eigen::VectorXd> mean_estimation_list{ estimation_history.at(cycle_begin) };
-    for (std::size_t i = cycle_begin + 1; i < estimation_history.size(); i++)
-    {
-        for (std::size_t atom_index = 0; atom_index < mean_estimation_list.size(); atom_index++)
-        {
-            mean_estimation_list.at(atom_index) += estimation_history.at(i).at(atom_index);
-        }
-    }
-    for (auto & estimation : mean_estimation_list)
-    {
-        estimation /= static_cast<double>(period);
-    }
-    return mean_estimation_list;
 }
 
 LocalFittingIterationResult RunLocalFittingIteration(
@@ -1004,8 +980,6 @@ void RunSecondStageLocalFitting(
         previous_estimation_list[i] = previous_result_list[i].mdpde.GetModel().ToVector();
     }
 
-    std::vector<std::vector<Eigen::VectorXd>> estimation_history;
-    estimation_history.reserve(kLocalFittingCycleHistorySize);
     LocalFittingIterationResult best_iteration_result;
     LocalFittingParameterChangeStats best_change_stats;
     bool has_best_iteration_result{ false };
@@ -1119,91 +1093,6 @@ void RunSecondStageLocalFitting(
             break;
         }
 
-        bool cycle_detected{ false };
-        for (std::size_t period = 2; period <= estimation_history.size(); period++)
-        {
-            const auto cycle_begin{ estimation_history.size() - period };
-            if (!IsLocalFittingStateConverged(
-                    previous_estimation_list,
-                    estimation_history.at(cycle_begin)))
-            {
-                continue;
-            }
-
-            const auto cycle_mean_estimation_list{
-                ComputeLocalFittingCycleMean(estimation_history, cycle_begin)
-            };
-            auto cycle_iteration_result{
-                RunLocalFittingIteration(
-                    atom_list,
-                    cycle_mean_estimation_list,
-                    previous_result_list,
-                    frozen_atom_list,
-                    options)
-            };
-            const auto cycle_change_stats{
-                CalculateLocalFittingParameterChangeStats(
-                    cycle_iteration_result.estimation_list,
-                    cycle_mean_estimation_list)
-            };
-            if (IsBetterLocalFittingCandidate(
-                    cycle_change_stats,
-                    best_change_stats))
-            {
-                best_iteration_result = cycle_iteration_result;
-                best_change_stats = cycle_change_stats;
-            }
-            const auto cycle_converged{
-                IsLocalFittingParameterChangeConverged(cycle_change_stats)
-            };
-            if (cycle_converged)
-            {
-                RefreshLocalFittingIterationSampleEntries(cycle_iteration_result, atom_list);
-                ApplyLocalFittingIterationResult(
-                    cycle_iteration_result,
-                    local_editor_list,
-                    sample_entries_list);
-                if (!options.quiet_mode)
-                {
-                    Logger::FinishProgressLine();
-                    Logger::Log(LogLevel::Info,
-                        "Cycle detected in local fitting with period " +
-                        std::to_string(period) +
-                        "; refitting at cycle mean with percentile amplitude change = " +
-                        std::to_string(cycle_change_stats.amplitude_change_percentile) +
-                        ", percentile width change = " +
-                        std::to_string(cycle_change_stats.width_change_percentile) +
-                        ", percentile intercept change = " +
-                        std::to_string(cycle_change_stats.intercept_change_percentile) + ".");
-                }
-            }
-            else
-            {
-                RefreshLocalFittingIterationSampleEntries(best_iteration_result, atom_list);
-                ApplyLocalFittingIterationResult(
-                    best_iteration_result,
-                    local_editor_list,
-                    sample_entries_list);
-                if (!options.quiet_mode)
-                {
-                    Logger::FinishProgressLine();
-                    Logger::Log(LogLevel::Debug,
-                        "Cycle detected in local fitting with period " +
-                        std::to_string(period) +
-                        "; cycle mean percentile amplitude change = " +
-                        std::to_string(cycle_change_stats.amplitude_change_percentile) +
-                        ", percentile width change = " +
-                        std::to_string(cycle_change_stats.width_change_percentile) +
-                        ", percentile intercept change = " +
-                        std::to_string(cycle_change_stats.intercept_change_percentile) +
-                        " did not satisfy local fitting tolerance; refitting at best fixed-point candidate.");
-                }
-            }
-            cycle_detected = true;
-            break;
-        }
-        if (cycle_detected) break;
-
         if (iter + 1 == kLocalFittingMaximumIterations)
         {
             RefreshLocalFittingIterationSampleEntries(best_iteration_result, atom_list);
@@ -1230,11 +1119,6 @@ void RunSecondStageLocalFitting(
                     std::to_string(best_change_stats.intercept_change_percentile));
             }
         }
-        if (estimation_history.size() == kLocalFittingCycleHistorySize)
-        {
-            estimation_history.erase(estimation_history.begin());
-        }
-        estimation_history.emplace_back(std::move(previous_estimation_list));
         previous_estimation_list = std::move(iteration_result.estimation_list);
         previous_result_list = std::move(iteration_result.result_list);
     }
