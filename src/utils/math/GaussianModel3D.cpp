@@ -138,25 +138,24 @@ double GaussianModel3D::GetDisplayParameter(int par_id) const
 
 double GaussianModel3D::Intensity() const
 {
-    if (m_width == 0.0)
-    {
-        return 0.0;
-    }
-    return m_amplitude * std::pow(Constants::two_pi * m_width * m_width, -1.5);
+    return WithIntercept(0.0).ResponseAtDistance(0.0);
 }
 
 double GaussianModel3D::SignalAtDistance(double distance) const
 {
-    if (m_width == 0.0)
-    {
-        return 0.0;
-    }
-    return Intensity() * std::exp(-0.5 * distance * distance / (m_width * m_width));
+    return WithIntercept(0.0).ResponseAtDistance(distance);
 }
 
 double GaussianModel3D::ResponseAtDistance(double distance) const
 {
-    return SignalAtDistance(distance) + m_intercept;
+    if (m_width == 0.0)
+    {
+        return m_intercept;
+    }
+    return m_amplitude *
+        std::pow(Constants::two_pi * m_width * m_width, -1.5) *
+        std::exp(-0.5 * distance * distance / (m_width * m_width)) +
+        m_intercept;
 }
 
 GaussianModel3DUncertainty::GaussianModel3DUncertainty(

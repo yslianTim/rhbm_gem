@@ -1,6 +1,7 @@
 #include <rhbm_gem/utils/hrl/LocalPotentialSeries.hpp>
 
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
+#include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
 #include <cmath>
 #include <vector>
@@ -97,25 +98,38 @@ double ComputeQScore(
         return 0.0;
     }
 
-    auto amplitude{ 0.0 };
-    auto width{ 0.0 };
-    auto intersect{ 0.0 };
+    GaussianModel3D reference_model;
+    bool has_reference_model{ false };
     if (reference == QScoreReference::Fixed)
     {
-        amplitude = 0.05;
-        width = 0.6;
-        intersect = -0.005;
+        constexpr double peak_intensity{ 0.05 };
+        constexpr double width{ 0.6 };
+        constexpr double intercept{ -0.005 };
+        const auto unit_peak_response{
+            GaussianModel3D{ 1.0, width, 0.0 }.ResponseAtDistance(0.0)
+        };
+        if (std::isfinite(unit_peak_response) && unit_peak_response != 0.0)
+        {
+            reference_model = GaussianModel3D{
+                peak_intensity / unit_peak_response,
+                width,
+                intercept
+            };
+            has_reference_model = true;
+        }
     }
     else if (reference == QScoreReference::MDPDE)
     {
         const auto & estimate{ gaussian_result.mdpde.GetModel() };
-        amplitude = estimate.Intensity();
-        width = estimate.GetWidth();
-        intersect = 0.0;
+        reference_model = estimate.WithIntercept(0.0);
+        has_reference_model = true;
     }
 
-    if (std::isfinite(amplitude) == false || std::isfinite(width) == false ||
-        std::isfinite(intersect) == false || width <= 0.0)
+    if (!has_reference_model ||
+        std::isfinite(reference_model.GetAmplitude()) == false ||
+        std::isfinite(reference_model.GetWidth()) == false ||
+        std::isfinite(reference_model.GetIntercept()) == false ||
+        reference_model.GetWidth() <= 0.0)
     {
         return 0.0;
     }
@@ -128,7 +142,9 @@ double ComputeQScore(
     {
         map_value_list.emplace_back(sample.response);
         reference_value_list.emplace_back(
-            amplitude * std::exp(-0.5 * std::pow(sample.point.distance / width, 2)) + intersect);
+            static_cast<float>(
+                reference_model.ResponseAtDistance(
+                    static_cast<double>(sample.point.distance))));
     }
     if (map_value_list.empty())
     {

@@ -2,7 +2,6 @@
 
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
-#include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/SampleFilter.hpp>
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
@@ -59,9 +58,8 @@ double ComputeGaussianResponseAtPoint3D(
     const Eigen::VectorXd & center,
     double width)
 {
-    const auto width_square{ width * width };
-    return 1.0 / std::pow(Constants::two_pi * width_square, 1.5) *
-        std::exp(-0.5 * (point - center).squaredNorm() / width_square);
+    const auto distance{ (point - center).norm() };
+    return GaussianModel3D{ 1.0, width, 0.0 }.ResponseAtDistance(distance);
 }
 
 double ComputeGaussianResponseWithAtomNeighborhood3D(

@@ -104,24 +104,33 @@ TEST(GaussianModel3DTest, WithMethodsReturnAdjustedCopies)
     EXPECT_DOUBLE_EQ(model.GetIntercept(), 0.25);
 }
 
-TEST(GaussianModel3DTest, IntensityAndResponseMatchClosedForm)
+TEST(GaussianModel3DTest, ResponseMatchesClosedForm)
 {
     const rg::GaussianModel3D model{ 9.0, 1.5, 0.25 };
     constexpr double distance{ 0.75 };
-    const auto expected_intensity{
-        model.GetAmplitude()
-        * std::pow(Constants::two_pi * model.GetWidth() * model.GetWidth(), -1.5) };
-    const auto expected_signal{
-        expected_intensity
-            * std::exp(-0.5 * distance * distance / (model.GetWidth() * model.GetWidth())) };
-    const auto expected_response{ expected_signal + model.GetIntercept() };
+    const auto width_square{ model.GetWidth() * model.GetWidth() };
+    const auto expected_response{
+        model.GetAmplitude() *
+            std::pow(Constants::two_pi * width_square, -1.5) *
+            std::exp(-0.5 * distance * distance / width_square) +
+            model.GetIntercept()
+    };
 
-    EXPECT_DOUBLE_EQ(model.Intensity(), expected_intensity);
-    EXPECT_DOUBLE_EQ(model.SignalAtDistance(distance), expected_signal);
     EXPECT_DOUBLE_EQ(model.ResponseAtDistance(distance), expected_response);
+}
+
+TEST(GaussianModel3DTest, SignalAndIntensityDeriveFromZeroInterceptResponse)
+{
+    const rg::GaussianModel3D model{ 9.0, 1.5, 0.25 };
+    const auto zero_intercept_model{ model.WithIntercept(0.0) };
+    constexpr double distance{ 0.75 };
+
+    EXPECT_DOUBLE_EQ(
+        model.Intensity(),
+        zero_intercept_model.ResponseAtDistance(0.0));
     EXPECT_DOUBLE_EQ(
         model.SignalAtDistance(distance),
-        model.ResponseAtDistance(distance) - model.GetIntercept());
+        zero_intercept_model.ResponseAtDistance(distance));
 }
 
 TEST(GaussianModel3DTest, ZeroWidthKeepsExistingFallbackBehavior)

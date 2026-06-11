@@ -1,11 +1,9 @@
 #include <gtest/gtest.h>
 
-#include <cmath>
 #include <cstddef>
 #include <stdexcept>
 #include <vector>
 
-#include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/core/TestDataFactory.hpp>
 
 namespace {
@@ -21,9 +19,7 @@ tdf::GaussianParameterDistribution MakeDistribution(
 
 double ComputeExpectedGaussianResponseAtDistance3D(double distance, double width)
 {
-    const auto width_square{ width * width };
-    return 1.0 / std::pow(Constants::two_pi * width_square, 1.5) *
-        std::exp(-0.5 * distance * distance / width_square);
+    return rg::GaussianModel3D{ 1.0, width, 0.0 }.ResponseAtDistance(distance);
 }
 
 void ExpectSamplingEntriesEquals(

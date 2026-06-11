@@ -1,5 +1,7 @@
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
 
+#include <rhbm_gem/utils/math/GaussianModel3D.hpp>
+
 #ifdef HAVE_ROOT
 
 #include <TAxis.h>
@@ -623,9 +625,7 @@ double Gaus2DModelFunction(double * x, double * par)
 
 double Gaus3DModelFunction(double * x, double * par)
 {
-    double tau_square{ par[1]*par[1] };
-    double y{ par[0] * std::pow(2.0*TMath::Pi()*tau_square, -1.5) * std::exp(-x[0]*x[0]/(2.0*tau_square)) + par[2] };
-    return y;
+    return GaussianModel3D{ par[0], par[1], par[2] }.ResponseAtDistance(x[0]);
 }
 
 } // namespace

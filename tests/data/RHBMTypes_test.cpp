@@ -53,8 +53,8 @@ TEST(RHBMTypesTest, PublicRHBMTypesHeaderExposesStableGaussianValueMath)
     const rg::GaussianModel3DWithUncertainty gaussian{ estimate, standard_deviation };
 
     const auto expected_intensity{
-        estimate.GetAmplitude()
-        * std::pow(Constants::two_pi * estimate.GetWidth() * estimate.GetWidth(), -1.5) };
+        estimate.WithIntercept(0.0).ResponseAtDistance(0.0)
+    };
 
     EXPECT_DOUBLE_EQ(estimate.GetDisplayParameter(2), expected_intensity);
     EXPECT_DOUBLE_EQ(estimate.GetModelParameter(2), 0.0);
