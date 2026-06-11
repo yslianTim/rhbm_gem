@@ -41,7 +41,7 @@ namespace {
 
 GaussianModel3D MakeDefaultModelPrior()
 {
-    return GaussianModel3D{ 1.0, 0.5, -0.1 };
+    return GaussianModel3D{ 1.0, 0.5, -0.01 };
 }
 
 GaussianModel3DUncertainty MakeDefaultModelSigma()

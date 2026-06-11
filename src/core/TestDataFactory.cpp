@@ -53,42 +53,52 @@ std::mt19937 BuildReplicaGenerator(int replica_index, const std::optional<std::u
     return std::mt19937(seed_sequence);
 }
 
-double ComputeGaussianResponseAtPoint3D(
+double EvaluateZeroInterceptModelAtPoint3D(
+    const GaussianModel3D & zero_intercept_model,
     const Eigen::VectorXd & point,
-    const Eigen::VectorXd & center,
-    double width)
+    const Eigen::VectorXd & center)
 {
     const auto distance{ (point - center).norm() };
-    return GaussianModel3D{ 1.0, width, 0.0 }.ResponseAtDistance(distance);
+    return zero_intercept_model.ResponseAtDistance(distance);
 }
 
-double ComputeGaussianResponseWithAtomNeighborhood3D(
+double EvaluateModelOffsetAtDistance(const GaussianModel3D & model, double distance)
+{
+    return model.ResponseAtDistance(distance) -
+        model.WithIntercept(0.0).ResponseAtDistance(distance);
+}
+
+double EvaluateAtomNeighborhoodModelResponse(
+    const GaussianModel3D & model,
     const Eigen::VectorXd & point,
     const Eigen::VectorXd & center,
     const std::vector<AtomNeighborContribution> & neighbor_list,
-    double width)
+    double sample_distance)
 {
-    auto response{ ComputeGaussianResponseAtPoint3D(point, center, width) };
+    const auto zero_intercept_model{ model.WithIntercept(0.0) };
+    auto response{ EvaluateZeroInterceptModelAtPoint3D(zero_intercept_model, point, center) };
     for (const auto & neighbor : neighbor_list)
     {
         response += neighbor.amplitude *
-            ComputeGaussianResponseAtPoint3D(point, neighbor.center, width);
+            EvaluateZeroInterceptModelAtPoint3D(zero_intercept_model, point, neighbor.center);
     }
-    return response;
+    return response + EvaluateModelOffsetAtDistance(model, sample_distance);
 }
 
-double ComputeGaussianResponseFromAtomField3D(
+double EvaluateAtomicFieldModelResponse(
+    const GaussianModel3D & model,
     const Eigen::VectorXd & point,
     const std::vector<AtomicModelContribution> & atom_field,
-    double width)
+    double sample_distance)
 {
+    const auto zero_intercept_model{ model.WithIntercept(0.0) };
     double response{ 0.0 };
     for (const auto & atom : atom_field)
     {
         response += atom.amplitude_scale *
-            ComputeGaussianResponseAtPoint3D(point, atom.center, width);
+            EvaluateZeroInterceptModelAtPoint3D(zero_intercept_model, point, atom.center);
     }
-    return response;
+    return response + EvaluateModelOffsetAtDistance(model, sample_distance);
 }
 
 AtomNeighborContribution MakeAtomNeighborContribution(
@@ -220,14 +230,15 @@ LocalPotentialSampleList GenerateAtomModelSamples(const GaussianModel3D & model,
     sample_list.reserve(sample_point_list.size());
     for (const auto & sampling_point : sample_point_list)
     {
+        const auto point{ eigen_helper::ToEigenVector(sampling_point.position) };
         const auto response{
-            model.GetAmplitude() * ComputeGaussianResponseWithAtomNeighborhood3D(
-                eigen_helper::ToEigenVector(sampling_point.position),
+            EvaluateAtomNeighborhoodModelResponse(
+                model,
+                point,
                 atom_center,
                 neighbor_list,
-                model.GetWidth()
-            ) +
-            model.GetIntercept()
+                sampling_point.distance
+            )
         };
         sample_list.emplace_back(LocalPotentialSample{
             static_cast<float>(response),
@@ -266,13 +277,14 @@ LocalPotentialSampleList GenerateAtomicModelSamples(
     sample_list.reserve(sample_point_list.size());
     for (const auto & sampling_point : sample_point_list)
     {
+        const auto point{ eigen_helper::ToEigenVector(sampling_point.position) };
         const auto response{
-            model.GetAmplitude() * ComputeGaussianResponseFromAtomField3D(
-                eigen_helper::ToEigenVector(sampling_point.position),
+            EvaluateAtomicFieldModelResponse(
+                model,
+                point,
                 atom_field,
-                model.GetWidth()
-            ) +
-            model.GetIntercept()
+                sampling_point.distance
+            )
         };
         sample_list.emplace_back(LocalPotentialSample{
             static_cast<float>(response),

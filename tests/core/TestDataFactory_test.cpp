@@ -1,10 +1,13 @@
 #include <gtest/gtest.h>
 
+#include <array>
+#include <cmath>
 #include <cstddef>
 #include <stdexcept>
 #include <vector>
 
 #include <rhbm_gem/core/TestDataFactory.hpp>
+#include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 
 namespace {
 namespace tdf = rhbm_gem::core;
@@ -20,6 +23,16 @@ tdf::GaussianParameterDistribution MakeDistribution(
 double ComputeExpectedGaussianResponseAtDistance3D(double distance, double width)
 {
     return rg::GaussianModel3D{ 1.0, width, 0.0 }.ResponseAtDistance(distance);
+}
+
+double DistanceToPosition(
+    const std::array<float, 3> & position,
+    const std::array<float, 3> & center)
+{
+    const auto dx{ static_cast<double>(position.at(0) - center.at(0)) };
+    const auto dy{ static_cast<double>(position.at(1) - center.at(1)) };
+    const auto dz{ static_cast<double>(position.at(2) - center.at(2)) };
+    return std::sqrt(dx * dx + dy * dy + dz * dz);
 }
 
 void ExpectSamplingEntriesEquals(
@@ -144,6 +157,59 @@ TEST(TestDataFactoryTest, BuildLocalTestDataUsesDefaultSamplingDistanceRange)
             intercept
     };
     EXPECT_NEAR(expected_response, sample.response, 1.0e-7);
+}
+
+TEST(TestDataFactoryTest, BuildAtomModelLocalTestDataUsesModelResponseForUnknownSpot)
+{
+    const auto model{ rg::GaussianModel3D{ 2.0, 0.5, 0.1 } };
+    const auto input{
+        tdf::BuildLocalTestData(tdf::AtomModelScenario{
+            Spot::UNK,
+            model,
+            0.0,
+            1,
+            42
+        })
+    };
+
+    ASSERT_EQ(input.replica_sampling_entries.size(), 1u);
+    ASSERT_FALSE(input.replica_sampling_entries.front().empty());
+    const auto & sample{ input.replica_sampling_entries.front().front() };
+    EXPECT_NEAR(model.ResponseAtDistance(sample.point.distance), sample.response, 1.0e-6);
+}
+
+TEST(TestDataFactoryTest, BuildAtomicModelTestDataUsesModelResponseForAtomField)
+{
+    const auto model{ rg::GaussianModel3D{ 2.0, 0.5, 0.1 } };
+    const auto input{
+        tdf::BuildAtomicModelTestData(tdf::AtomModelScenario{
+            Spot::O,
+            model,
+            0.0,
+            1,
+            42
+        })
+    };
+
+    ASSERT_EQ(input.replica_model_objects.size(), 1u);
+    const auto & selected_atoms{ input.replica_model_objects.front()->GetSelectedAtoms() };
+    ASSERT_EQ(selected_atoms.size(), 2u);
+
+    const auto samples{
+        rg::AtomLocalPotentialView::RequireFor(*selected_atoms.front()).GetSamplingEntries(false)
+    };
+    ASSERT_FALSE(samples.empty());
+
+    const auto zero_intercept_model{ model.WithIntercept(0.0) };
+    const std::array<float, 3> neighbor_center{ 1.23f, 0.0f, 0.0f };
+    constexpr double neighbor_amplitude_scale{ 6.0 / 8.0 };
+    const auto & sample{ samples.front() };
+    const auto neighbor_distance{ DistanceToPosition(sample.point.position, neighbor_center) };
+    const auto expected_response{
+        model.ResponseAtDistance(sample.point.distance) +
+        neighbor_amplitude_scale * zero_intercept_model.ResponseAtDistance(neighbor_distance)
+    };
+    EXPECT_NEAR(expected_response, sample.response, 1.0e-6);
 }
 
 TEST(TestDataFactoryTest, BuildGroupTestDataIsReproducibleWithFixedSeed)

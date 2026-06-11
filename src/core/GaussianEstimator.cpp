@@ -432,7 +432,7 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
                 static_cast<double>(
                     array_helper::ComputeNorm<float>(sample_position, neighbor_position))
             };
-            if (distance > 2.0) continue; // TEST : Skip long distance contribution
+            //if (distance > 2.0) continue; // TEST : Skip long distance contribution
             if (neighbor_atom->GetElement() == Element::OXYGEN)
             {
                 response_value -= static_cast<float>(gaussian_iter->second.ResponseAtDistance(distance));
