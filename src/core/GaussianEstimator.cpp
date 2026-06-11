@@ -43,6 +43,8 @@ constexpr std::size_t kInterceptCycleHistorySize{ 64 };
 constexpr std::size_t kLocalFittingMaximumIterations{ 100 };
 constexpr double kLocalFittingParameterChangeTolerance{ 1.0e-5 };
 constexpr double kLocalFittingChangePercentile{ 0.95 };
+// Source-only switch for comparing second-stage fitting with and without per-atom freezing.
+constexpr bool kEnableLocalFittingFrozenAtoms{ false };
 
 struct LocalFittingParameterChangeStats
 {
@@ -608,7 +610,7 @@ LocalFittingIterationResult RunLocalFittingIteration(
             UpdateSampleListWithFittedGaussian(atom, snapshot)
         };
         auto result{ input_result_list.at(i) };
-        if (!frozen_atom_list.at(i))
+        if (!kEnableLocalFittingFrozenAtoms || !frozen_atom_list.at(i))
         {
             const auto intercept{ snapshot.at(&atom).GetIntercept() };
             result = EstimateLocalGaussianWithIntercept(
@@ -1030,15 +1032,20 @@ void RunSecondStageLocalFitting(
         const auto atom_change_stats{
             CalculateLocalFittingAtomChangeStats(iteration_result.atom_change_list)
         };
-        for (std::size_t i = 0; i < atom_size; i++)
+        if (kEnableLocalFittingFrozenAtoms)
         {
-            if (!frozen_atom_list.at(i) &&
-                iteration_result.atom_change_list.at(i) < kLocalFittingParameterChangeTolerance)
+            for (std::size_t i = 0; i < atom_size; i++)
             {
-                frozen_atom_list.at(i) = true;
+                if (!frozen_atom_list.at(i) &&
+                    iteration_result.atom_change_list.at(i) < kLocalFittingParameterChangeTolerance)
+                {
+                    frozen_atom_list.at(i) = true;
+                }
             }
         }
-        const auto frozen_atom_count{ CountFrozenLocalFittingAtoms(frozen_atom_list) };
+        const auto frozen_atom_count{
+            kEnableLocalFittingFrozenAtoms ? CountFrozenLocalFittingAtoms(frozen_atom_list) : 0
+        };
         if (!has_best_iteration_result ||
             IsBetterLocalFittingCandidate(change_stats, best_change_stats))
         {
@@ -1064,15 +1071,19 @@ void RunSecondStageLocalFitting(
                 //<< ", max intercept change = "
                 //<< change_stats.max_intercept_change
                 << ", percentile intercept change = "
-                << change_stats.intercept_change_percentile
-                << ", percentile atom change = "
-                << atom_change_stats.atom_change_percentile
-                << ", frozen atoms = "
-                << frozen_atom_count << '/' << atom_size;
+                << change_stats.intercept_change_percentile;
+            if (kEnableLocalFittingFrozenAtoms)
+            {
+                progress_message
+                    << ", percentile atom change = "
+                    << atom_change_stats.atom_change_percentile
+                    << ", frozen atoms = "
+                    << frozen_atom_count << '/' << atom_size;
+            }
             Logger::ProgressLine(progress_message.str());
         }
 
-        if (frozen_atom_count == atom_size)
+        if (kEnableLocalFittingFrozenAtoms && frozen_atom_count == atom_size)
         {
             RefreshLocalFittingIterationSampleEntries(iteration_result, atom_list);
             ApplyLocalFittingIterationResult(
