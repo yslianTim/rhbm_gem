@@ -35,6 +35,8 @@ namespace sf = rhbm_gem::sample_filter;
 namespace
 {
 
+constexpr double kNeighborContributionDistanceMax{ 2.0 };
+
 LocalPotentialSampleList MakeSampleEntries(double log_response_shift = 0.0)
 {
     LocalPotentialSampleList sample_entries;
@@ -745,6 +747,7 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussianForTest(
             const auto distance{
                 Distance(sample.point.position, neighbor_atom->GetPosition())
             };
+            if (distance > kNeighborContributionDistanceMax) continue;
             if (neighbor_atom->GetElement() == Element::OXYGEN)
             {
                 response_value -= static_cast<float>(
@@ -1166,23 +1169,13 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingConvergesAllParametersTogeth
         next_step_stats.intercept_change_percentile90 *
             next_step_stats.intercept_change_percentile90,
         tolerance);
-    EXPECT_EQ(
-        std::string::npos,
-        output.find("percentile atom change"));
-    EXPECT_EQ(
-        std::string::npos,
-        output.find("frozen atoms = "));
-    EXPECT_EQ(
-        std::string::npos,
-        output.find("All local fitting atoms frozen after "));
     ExpectSamplingEntriesMatchFinalSnapshot(*model, original_sample_entries_list);
 }
 
-TEST(GaussianEstimatorTest, RunLocalPotentialFittingKeepsLowChangeAtomsActiveWhenFrozenDisabled)
+TEST(GaussianEstimatorTest, RunSecondStageLocalFittingRefreshesFinalSamplingEntries)
 {
     auto model{ MakeMixedParameterChangeFreezeModel() };
     const auto options{ MakeOptions() };
-    const auto previous_log_level{ Logger::GetLogLevel() };
     std::vector<LocalPotentialSampleList> original_sample_entries_list;
     original_sample_entries_list.reserve(model->GetSelectedAtoms().size());
     for (const auto * atom : model->GetSelectedAtoms())
@@ -1193,21 +1186,8 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingKeepsLowChangeAtomsActiveWhe
 
     ge::RunFirstStageLocalFitting(*model, options);
     const auto selected_atoms{ model->GetSelectedAtoms() };
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
     ge::RunSecondStageLocalFitting(*model, selected_atoms, options);
-    const auto error_output{ testing::internal::GetCapturedStderr() };
-    const auto output{ testing::internal::GetCapturedStdout() };
-    Logger::SetLogLevel(previous_log_level);
-    const auto log_output{ output + error_output };
 
-    EXPECT_EQ(
-        std::string::npos,
-        log_output.find("frozen atoms = 1/3"));
-    EXPECT_EQ(
-        std::string::npos,
-        log_output.find("Local fitting intercepts fixed after "));
     ExpectSamplingEntriesMatchFinalSnapshot(*model, original_sample_entries_list);
 }
 
@@ -1231,9 +1211,7 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAfterConvergence)
     EXPECT_EQ(
         std::string::npos,
         output.find("stable streak = "));
-    EXPECT_TRUE(
-        output.find("\nConverged after ") != std::string::npos ||
-        output.find("\nAll local fitting atoms frozen after ") != std::string::npos);
+    EXPECT_NE(std::string::npos, output.find("\nConverged after "));
     EXPECT_EQ(
         std::string::npos,
         log_output.find("Cycle detected in local fitting"));
@@ -1246,12 +1224,6 @@ TEST(GaussianEstimatorTest, RunLocalPotentialFittingStopsAfterConvergence)
     EXPECT_NE(
         std::string::npos,
         output.find("percentile intercept change"));
-    EXPECT_EQ(
-        std::string::npos,
-        output.find("percentile atom change"));
-    EXPECT_EQ(
-        std::string::npos,
-        output.find("frozen atoms = "));
     EXPECT_EQ(
         std::string::npos,
         output.find("Local fitting intercepts fixed after "));

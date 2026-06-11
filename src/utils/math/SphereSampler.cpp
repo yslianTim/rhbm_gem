@@ -12,7 +12,7 @@ namespace rhbm_gem::sphere_sampler {
 namespace {
 
 constexpr double kAnalysisDistanceMin{ 0.0 };
-constexpr double kAnalysisDistanceMax{ 1.5 };
+constexpr double kAnalysisDistanceMax{ 2.0 };
 constexpr double kAnalysisFibonacciRadiusBinSize{ 0.1 };
 constexpr unsigned int kAnalysisSampleCount{ 10 };
 
