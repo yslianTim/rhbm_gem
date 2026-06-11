@@ -212,6 +212,31 @@ std::vector<RHBMMemberDataset> BuildMemberDatasetList(
     return dataset_list;
 }
 
+LocalPotentialSampleList BuildSamplesForZeroInterceptGaussianFit(
+    const LocalPotentialSampleList & sample_entries,
+    const GaussianModel3D & model)
+{
+    const auto zero_intercept_model{ model.WithIntercept(0.0) };
+    LocalPotentialSampleList zero_intercept_sample_entries;
+    zero_intercept_sample_entries.reserve(sample_entries.size());
+    for (const auto & sample : sample_entries)
+    {
+        const auto distance{ static_cast<double>(sample.point.distance) };
+        const auto model_offset{
+            model.ResponseAtDistance(distance) -
+                zero_intercept_model.ResponseAtDistance(distance)
+        };
+        zero_intercept_sample_entries.emplace_back(
+            LocalPotentialSample{
+                static_cast<float>(
+                    static_cast<double>(sample.response) - model_offset),
+                sample.point
+            }
+        );
+    }
+    return zero_intercept_sample_entries;
+}
+
 std::vector<RHBMMemberDataset> BuildMemberDatasetList(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
     const std::vector<LocalGaussianResult> & member_result_list,
@@ -226,13 +251,14 @@ std::vector<RHBMMemberDataset> BuildMemberDatasetList(
     dataset_list.reserve(sample_entries_list.size());
     for (std::size_t i = 0; i < sample_entries_list.size(); i++)
     {
-        const auto intercept{ member_result_list.at(i).mdpde.GetModel().GetIntercept() };
-        const auto shifted_sample_entries{
-            sample_filter::BuildResponseShiftedSampleEntries(sample_entries_list.at(i), intercept)
+        const auto zero_intercept_sample_entries{
+            BuildSamplesForZeroInterceptGaussianFit(
+                sample_entries_list.at(i),
+                member_result_list.at(i).mdpde.GetModel())
         };
         dataset_list.emplace_back(
             rhbm_helper::BuildMemberDataset(
-                shifted_sample_entries,
+                zero_intercept_sample_entries,
                 options.distance_min,
                 options.distance_max)
         );
@@ -685,11 +711,13 @@ LocalGaussianResult EstimateLocalGaussian(
     numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
     numeric_validation::RequireFinite(intercept, "intercept");
     auto execution_options{ MakeExecutionOptions(options) };
-    auto shifted_sample_entries{
-        sample_filter::BuildResponseShiftedSampleEntries(sample_entries, intercept)
+    const auto zero_intercept_sample_entries{
+        BuildSamplesForZeroInterceptGaussianFit(
+            sample_entries,
+            GaussianModel3D{ 0.0, 1.0, intercept })
     };
     auto dataset{
-        rhbm_helper::BuildMemberDataset(shifted_sample_entries, range_min, range_max)
+        rhbm_helper::BuildMemberDataset(zero_intercept_sample_entries, range_min, range_max)
     };
     const auto result{ rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset, execution_options) };
     return DecodeLocalGaussianResult(alpha_r, result, intercept);

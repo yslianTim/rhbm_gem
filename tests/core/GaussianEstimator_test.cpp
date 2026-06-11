@@ -50,6 +50,30 @@ LocalPotentialSampleList MakeSampleEntries(double log_response_shift = 0.0)
     return sample_entries;
 }
 
+LocalPotentialSampleList BuildSamplesForZeroInterceptGaussianFitForTest(
+    const LocalPotentialSampleList & sample_entries,
+    const rg::GaussianModel3D & model)
+{
+    const auto zero_intercept_model{ model.WithIntercept(0.0) };
+    LocalPotentialSampleList zero_intercept_sample_entries;
+    zero_intercept_sample_entries.reserve(sample_entries.size());
+    for (const auto & sample : sample_entries)
+    {
+        const auto distance{ static_cast<double>(sample.point.distance) };
+        const auto model_offset{
+            model.ResponseAtDistance(distance) -
+                zero_intercept_model.ResponseAtDistance(distance)
+        };
+        zero_intercept_sample_entries.emplace_back(
+            LocalPotentialSample{
+                static_cast<float>(
+                    static_cast<double>(sample.response) - model_offset),
+                sample.point
+            });
+    }
+    return zero_intercept_sample_entries;
+}
+
 LocalPotentialSampleList MakeInterceptIterationSampleEntries(int seed)
 {
     const auto phase{ 0.173 * static_cast<double>(seed) };
@@ -1517,12 +1541,14 @@ TEST(GaussianEstimatorTest, EstimateLocalGaussianAppliesProvidedIntercept)
     const auto actual{
         ge::EstimateLocalGaussian(sample_entries, alpha_r, options, intercept)
     };
-    const auto shifted_sample_entries{
-        sf::BuildResponseShiftedSampleEntries(sample_entries, intercept)
+    const auto zero_intercept_sample_entries{
+        BuildSamplesForZeroInterceptGaussianFitForTest(
+            sample_entries,
+            rg::GaussianModel3D{ 0.0, 1.0, intercept })
     };
     const auto dataset{
         rg::rhbm_helper::BuildMemberDataset(
-            shifted_sample_entries,
+            zero_intercept_sample_entries,
             options.distance_min,
             options.distance_max)
     };
@@ -1553,12 +1579,14 @@ TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptMatchesHelperPath)
         ge::EstimateLocalGaussianWithIntercept(sample_entries, alpha_r, options)
     };
     const auto intercept{ actual.mdpde.GetModel().GetIntercept() };
-    const auto shifted_sample_entries{
-        sf::BuildResponseShiftedSampleEntries(sample_entries, intercept)
+    const auto zero_intercept_sample_entries{
+        BuildSamplesForZeroInterceptGaussianFitForTest(
+            sample_entries,
+            rg::GaussianModel3D{ 0.0, 1.0, intercept })
     };
     const auto dataset{
         rg::rhbm_helper::BuildMemberDataset(
-            shifted_sample_entries,
+            zero_intercept_sample_entries,
             options.distance_min,
             options.distance_max)
     };
@@ -1784,13 +1812,14 @@ TEST(GaussianEstimatorTest, EstimateGroupGaussianMatchesHelperPath)
                 sample_entries_list.at(i), alpha_r_list.at(i), options)
         };
         ASSERT_TRUE(member_result.fit_result.has_value());
-        const auto intercept{ member_result.mdpde.GetModel().GetIntercept() };
-        const auto shifted_sample_entries{
-            sf::BuildResponseShiftedSampleEntries(sample_entries_list.at(i), intercept)
+        const auto zero_intercept_sample_entries{
+            BuildSamplesForZeroInterceptGaussianFitForTest(
+                sample_entries_list.at(i),
+                member_result.mdpde.GetModel())
         };
         auto dataset{
             rg::rhbm_helper::BuildMemberDataset(
-                shifted_sample_entries,
+                zero_intercept_sample_entries,
                 options.distance_min,
                 options.distance_max)
         };

@@ -16,8 +16,4 @@ void FilterSamplingPointList(
 LocalPotentialSampleList BuildMedianResponseSampleEntriesByRadius(
     const LocalPotentialSampleList & sample_entries);
 
-LocalPotentialSampleList BuildResponseShiftedSampleEntries(
-    const LocalPotentialSampleList & sample_entries,
-    double response_shift);
-
 } // namespace rhbm_gem::sample_filter

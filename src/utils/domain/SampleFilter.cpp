@@ -117,22 +117,4 @@ LocalPotentialSampleList BuildMedianResponseSampleEntriesByRadius(
     return median_sample_entries;
 }
 
-LocalPotentialSampleList BuildResponseShiftedSampleEntries(
-    const LocalPotentialSampleList & sample_entries,
-    double response_shift)
-{
-    LocalPotentialSampleList shifted_sample_entries;
-    shifted_sample_entries.reserve(sample_entries.size());
-    for (const auto & sample : sample_entries)
-    {
-        shifted_sample_entries.emplace_back(
-            LocalPotentialSample{
-                static_cast<float>(static_cast<double>(sample.response) - response_shift),
-                sample.point
-            }
-        );
-    }
-    return shifted_sample_entries;
-}
-
 } // namespace rhbm_gem::sample_filter

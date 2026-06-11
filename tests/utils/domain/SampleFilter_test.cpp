@@ -84,30 +84,6 @@ TEST(SampleFilterTest, BuildsEmptyMedianResponseSampleEntriesByRadius)
     EXPECT_TRUE(actual.empty());
 }
 
-TEST(SampleFilterTest, BuildsResponseShiftedSampleEntries)
-{
-    const LocalPotentialSampleList sample_entries{
-        LocalPotentialSample{
-            3.5f,
-            SamplingPoint{ 1.0f, { 1.0f, 2.0f, 3.0f }, false }
-        },
-        LocalPotentialSample{
-            -1.0f,
-            SamplingPoint{ 2.0f, { 4.0f, 5.0f, 6.0f }, true }
-        }
-    };
-
-    const auto actual{ sf::BuildResponseShiftedSampleEntries(sample_entries, 0.5) };
-
-    ASSERT_EQ(actual.size(), 2u);
-    EXPECT_FLOAT_EQ(actual.at(0).response, 3.0f);
-    EXPECT_FLOAT_EQ(actual.at(1).response, -1.5f);
-    EXPECT_EQ(actual.at(0).point.position, sample_entries.at(0).point.position);
-    EXPECT_EQ(actual.at(1).point.position, sample_entries.at(1).point.position);
-    EXPECT_EQ(actual.at(0).point.is_selected, sample_entries.at(0).point.is_selected);
-    EXPECT_EQ(actual.at(1).point.is_selected, sample_entries.at(1).point.is_selected);
-}
-
 TEST(SampleFilterTest, EmptyRejectPositionsSelectAllSamplingPoints)
 {
     auto point_list{ MakePointList() };
