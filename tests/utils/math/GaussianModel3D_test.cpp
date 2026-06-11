@@ -113,7 +113,8 @@ TEST(GaussianModel3DTest, ResponseMatchesClosedForm)
         model.GetAmplitude() *
             std::pow(Constants::two_pi * width_square, -1.5) *
             std::exp(-0.5 * distance * distance / width_square) +
-            model.GetIntercept()
+            model.GetIntercept() / distance *
+                std::erf(distance / model.GetWidth() / std::sqrt(2.0))
     };
 
     EXPECT_DOUBLE_EQ(model.ResponseAtDistance(distance), expected_response);

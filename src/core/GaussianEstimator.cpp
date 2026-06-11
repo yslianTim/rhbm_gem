@@ -138,55 +138,80 @@ double EstimateInitialIntercept(const LocalPotentialSampleList & sample_entries)
     return array_helper::ComputeMedian(lowest_response_list);
 }
 
-LocalPotentialSampleList BuildResidualSampleEntries(
-    const LocalPotentialSampleList & sample_entries,
-    const RHBMParameterVector & beta,
-    double range_min,
-    double range_max)
+GaussianModel3D BuildZeroSignalModelForInterceptBasis(double width, double intercept)
 {
-    const auto signal_model{ linearization_service::DecodeParameterVector(beta) };
+    return GaussianModel3D{ 0.0, width, intercept };
+}
+
+double EvaluateModelOffsetAtDistance(const GaussianModel3D & model, double distance)
+{
+    return model.ResponseAtDistance(distance) -
+        model.WithIntercept(0.0).ResponseAtDistance(distance);
+}
+
+bool CanBuildFiniteZeroInterceptSamples(
+    const LocalPotentialSampleList & sample_entries,
+    const GaussianModel3D & model)
+{
+    for (const auto & sample : sample_entries)
+    {
+        const auto distance{ static_cast<double>(sample.point.distance) };
+        const auto model_offset{ EvaluateModelOffsetAtDistance(model, distance) };
+        const auto response{ static_cast<double>(sample.response) - model_offset };
+        if (!std::isfinite(response)) return false;
+        if (std::abs(response) > static_cast<double>(std::numeric_limits<float>::max()))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+double EstimateResidualInterceptParameter(
+    const LocalPotentialSampleList & sample_entries,
+    const RHBMBetaEstimateResult & fit_result,
+    double current_intercept)
+{
+    const auto signal_model{ linearization_service::DecodeParameterVector(fit_result.beta_mdpde) };
+    const auto width{ signal_model.GetWidth() };
+    if (!std::isfinite(width) || width <= 0.0)
+    {
+        return current_intercept;
+    }
+    const auto unit_intercept_model{ BuildZeroSignalModelForInterceptBasis(width, 1.0) };
     const auto median_sample_entries{
         sample_filter::BuildMedianResponseSampleEntriesByRadius(sample_entries)
     };
-    LocalPotentialSampleList residual_sample_entries;
-    residual_sample_entries.reserve(median_sample_entries.size());
+    std::vector<double> intercept_list;
+    intercept_list.reserve(median_sample_entries.size());
     for (const auto & sample : median_sample_entries)
     {
-        const auto distance{ sample.point.distance };
-        if (distance < static_cast<float>(range_min)) continue;
-        if (distance > static_cast<float>(range_max)) continue;
+        const auto distance{ static_cast<double>(sample.point.distance) };
+        if (distance < kResidualInterceptRangeMin) continue;
+        if (distance > kResidualInterceptRangeMax) continue;
 
+        const auto basis{ unit_intercept_model.ResponseAtDistance(distance) };
+        if (!std::isfinite(basis) || std::abs(basis) <= std::numeric_limits<double>::epsilon())
+        {
+            continue;
+        }
         const auto residual{
             static_cast<double>(sample.response) -
-                signal_model.ResponseAtDistance(static_cast<double>(distance))
+                signal_model.SignalAtDistance(distance)
         };
-        residual_sample_entries.emplace_back(
-            LocalPotentialSample{ static_cast<float>(residual), sample.point }
-        );
+        intercept_list.emplace_back(residual / basis);
     }
-    return residual_sample_entries;
-}
-
-double EstimateResidualIntercept(
-    const LocalPotentialSampleList & sample_entries,
-    const RHBMBetaEstimateResult & fit_result)
-{
-    const auto residual_sample_entries{
-        BuildResidualSampleEntries(
-            sample_entries,
-            fit_result.beta_mdpde,
-            kResidualInterceptRangeMin,
-            kResidualInterceptRangeMax)
-    };
-    std::vector<double> residual_list;
-    residual_list.reserve(residual_sample_entries.size());
-    for (const auto & sample : residual_sample_entries)
+    if (intercept_list.empty())
     {
-        residual_list.emplace_back(static_cast<double>(sample.response));
+        return current_intercept;
     }
-    if (residual_list.empty()) return 0.0;
-    //return array_helper::ComputeMean(residual_list.data(), residual_list.size());
-    return array_helper::ComputeMedian(residual_list);
+    const auto candidate_intercept{ array_helper::ComputeMedian(intercept_list) };
+    const auto candidate_model{ signal_model.WithIntercept(candidate_intercept) };
+    if (!CanBuildFiniteZeroInterceptSamples(sample_entries, candidate_model))
+    {
+        return current_intercept;
+    }
+    return candidate_intercept;
 }
 
 rhbm_trainer::RHBMTrainingOptions MakeTrainingOptions(const FitOptions & options)
@@ -218,16 +243,12 @@ LocalPotentialSampleList BuildSamplesForZeroInterceptGaussianFit(
     const LocalPotentialSampleList & sample_entries,
     const GaussianModel3D & model)
 {
-    const auto zero_intercept_model{ model.WithIntercept(0.0) };
     LocalPotentialSampleList zero_intercept_sample_entries;
     zero_intercept_sample_entries.reserve(sample_entries.size());
     for (const auto & sample : sample_entries)
     {
         const auto distance{ static_cast<double>(sample.point.distance) };
-        const auto model_offset{
-            model.ResponseAtDistance(distance) -
-                zero_intercept_model.ResponseAtDistance(distance)
-        };
+        const auto model_offset{ EvaluateModelOffsetAtDistance(model, distance) };
         zero_intercept_sample_entries.emplace_back(
             LocalPotentialSample{
                 static_cast<float>(
@@ -375,18 +396,24 @@ std::vector<LocalGaussianResult> DecodeMemberGaussianResults(
 }
 
 std::vector<RHBMBetaEstimateResult> BuildMemberFitResultList(
-    const std::vector<LocalGaussianResult> & member_result_list)
+    const std::vector<RHBMMemberDataset> & dataset_list,
+    const std::vector<LocalGaussianResult> & member_result_list,
+    const FitOptions & options)
 {
+    if (dataset_list.size() != member_result_list.size())
+    {
+        throw std::invalid_argument("dataset_list and member_result_list sizes are inconsistent.");
+    }
+    const auto execution_options{ MakeExecutionOptions(options) };
     std::vector<RHBMBetaEstimateResult> fit_result_list;
     fit_result_list.reserve(member_result_list.size());
-    for (const auto & member_result : member_result_list)
+    for (std::size_t i = 0; i < member_result_list.size(); i++)
     {
-        if (!member_result.fit_result.has_value())
-        {
-            throw std::invalid_argument(
-                "member_result_list contains a result without transient fit state.");
-        }
-        fit_result_list.emplace_back(*member_result.fit_result);
+        fit_result_list.emplace_back(
+            rhbm_helper::EstimateBetaMDPDE(
+                member_result_list.at(i).alpha_r,
+                dataset_list.at(i),
+                execution_options));
     }
     return fit_result_list;
 }
@@ -434,7 +461,7 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
                 static_cast<double>(
                     array_helper::ComputeNorm<float>(sample_position, neighbor_position))
             };
-            //if (distance > 2.0) continue; // TEST : Skip long distance contribution
+            if (distance > 2.0) continue; // TEST : Skip long distance contribution
             if (neighbor_atom->GetElement() == Element::OXYGEN)
             {
                 response_value -= static_cast<float>(gaussian_iter->second.ResponseAtDistance(distance));
@@ -447,6 +474,44 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
         updated_list.emplace_back(LocalPotentialSample{response_value, sample.point });
     }
     return updated_list;
+}
+
+bool HasFiniteSampleResponses(const LocalPotentialSampleList & sample_entries)
+{
+    for (const auto & sample : sample_entries)
+    {
+        if (!std::isfinite(static_cast<double>(sample.response))) return false;
+    }
+    return true;
+}
+
+bool CanRefreshLocalFittingSampleEntries(
+    const std::vector<AtomObject *> & atom_list,
+    const std::vector<Eigen::VectorXd> & estimation_list)
+{
+    try
+    {
+        const auto snapshot{ BuildFittedGaussianSnapshot(atom_list, estimation_list) };
+        for (const auto * atom : atom_list)
+        {
+            const auto sample_entries{ UpdateSampleListWithFittedGaussian(*atom, snapshot) };
+            if (!HasFiniteSampleResponses(sample_entries))
+            {
+                return false;
+            }
+            const auto model_iter{ snapshot.find(atom) };
+            if (model_iter == snapshot.end()) return false;
+            if (!CanBuildFiniteZeroInterceptSamples(sample_entries, model_iter->second))
+            {
+                return false;
+            }
+        }
+    }
+    catch (const std::exception &)
+    {
+        return false;
+    }
+    return true;
 }
 
 double CalculateLocalFittingAtomChange(
@@ -578,6 +643,29 @@ bool IsBetterLocalFittingCandidate(
     return GetLocalFittingParameterChange(stats) < GetLocalFittingParameterChange(best_stats);
 }
 
+LocalGaussianResult EstimateLocalGaussianWithOffsetModel(
+    const LocalPotentialSampleList & sample_entries,
+    double alpha_r,
+    const FitOptions & options,
+    const GaussianModel3D & offset_model)
+{
+    auto range_min{ options.distance_min };
+    auto range_max{ options.distance_max };
+    numeric_validation::RequireFiniteNonNegativeRange(range_min, range_max, "fit range");
+    numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
+    numeric_validation::RequireFinite(offset_model.GetIntercept(), "intercept");
+
+    auto execution_options{ MakeExecutionOptions(options) };
+    const auto zero_intercept_sample_entries{
+        BuildSamplesForZeroInterceptGaussianFit(sample_entries, offset_model)
+    };
+    auto dataset{
+        rhbm_helper::BuildMemberDataset(zero_intercept_sample_entries, range_min, range_max)
+    };
+    const auto result{ rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset, execution_options) };
+    return DecodeLocalGaussianResult(alpha_r, result, offset_model.GetIntercept());
+}
+
 LocalFittingIterationResult RunLocalFittingIteration(
     const std::vector<AtomObject *> & atom_list,
     const std::vector<Eigen::VectorXd> & input_estimation_list,
@@ -613,11 +701,26 @@ LocalFittingIterationResult RunLocalFittingIteration(
         if (!kEnableLocalFittingFrozenAtoms || !frozen_atom_list.at(i))
         {
             const auto intercept{ snapshot.at(&atom).GetIntercept() };
-            result = EstimateLocalGaussianWithIntercept(
-                sample_entries,
-                local_view.GetAlphaR(),
-                options,
-                intercept);
+            try
+            {
+                auto candidate_result{
+                    EstimateLocalGaussianWithIntercept(
+                        sample_entries,
+                        local_view.GetAlphaR(),
+                        options,
+                        intercept)
+                };
+                if (CanBuildFiniteZeroInterceptSamples(
+                        sample_entries,
+                        candidate_result.mdpde.GetModel()))
+                {
+                    result = std::move(candidate_result);
+                }
+            }
+            catch (const std::exception &)
+            {
+                result = input_result_list.at(i);
+            }
         }
         const auto fitted_model{ result.mdpde.GetModel() };
         iteration_result.sample_entries_list[i] = std::move(sample_entries);
@@ -626,6 +729,18 @@ LocalFittingIterationResult RunLocalFittingIteration(
             iteration_result.estimation_list[i],
             input_estimation_list.at(i));
         iteration_result.result_list[i] = std::move(result);
+    }
+    if (!CanRefreshLocalFittingSampleEntries(atom_list, iteration_result.estimation_list))
+    {
+        const auto input_snapshot{ BuildFittedGaussianSnapshot(atom_list, input_estimation_list) };
+        for (size_t i = 0; i < selected_atom_size; i++)
+        {
+            iteration_result.sample_entries_list[i] =
+                UpdateSampleListWithFittedGaussian(*atom_list.at(i), input_snapshot);
+            iteration_result.result_list[i] = input_result_list.at(i);
+            iteration_result.estimation_list[i] = input_estimation_list.at(i);
+            iteration_result.atom_change_list[i] = 0.0;
+        }
     }
     return iteration_result;
 }
@@ -707,22 +822,16 @@ LocalGaussianResult EstimateLocalGaussian(
     const FitOptions & options,
     double intercept)
 {
-    auto range_min{ options.distance_min };
-    auto range_max{ options.distance_max };
-    numeric_validation::RequireFiniteNonNegativeRange(range_min, range_max, "fit range");
-    numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
     numeric_validation::RequireFinite(intercept, "intercept");
-    auto execution_options{ MakeExecutionOptions(options) };
-    const auto zero_intercept_sample_entries{
-        BuildSamplesForZeroInterceptGaussianFit(
+    const auto zero_intercept_result{
+        EstimateLocalGaussianWithOffsetModel(
             sample_entries,
-            GaussianModel3D{ 0.0, 1.0, intercept })
+            alpha_r,
+            options,
+            GaussianModel3D{ 0.0, 1.0, 0.0 })
     };
-    auto dataset{
-        rhbm_helper::BuildMemberDataset(zero_intercept_sample_entries, range_min, range_max)
-    };
-    const auto result{ rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset, execution_options) };
-    return DecodeLocalGaussianResult(alpha_r, result, intercept);
+    const auto offset_model{ zero_intercept_result.mdpde.GetModel().WithIntercept(intercept) };
+    return EstimateLocalGaussianWithOffsetModel(sample_entries, alpha_r, options, offset_model);
 }
 
 LocalGaussianResult EstimateLocalGaussianWithIntercept(
@@ -737,25 +846,36 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
     numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
 
     auto execution_options{ MakeExecutionOptions(options) };
-    double intercept{ intercept_initial };
-    LocalGaussianResult result;
+    auto result{
+        EstimateLocalGaussianWithOffsetModel(
+            sample_entries,
+            alpha_r,
+            options,
+            GaussianModel3D{ 0.0, 1.0, 0.0 })
+    };
+    auto current_model{ result.mdpde.GetModel().WithIntercept(intercept_initial) };
     std::vector<double> intercept_history;
     intercept_history.reserve(kInterceptCycleHistorySize);
-    double best_intercept{ intercept };
+    double best_intercept{ current_model.GetIntercept() };
     double best_defect{ std::numeric_limits<double>::infinity() };
+    auto best_result{ result };
+    bool has_best_result{ false };
     auto max_iterations{ execution_options.max_iterations };
     auto tolerance{ execution_options.tolerance };
     for (int t = 0; t < max_iterations; t++)
     {
-        result = EstimateLocalGaussian(sample_entries, alpha_r, options, intercept);
+        const auto intercept{ current_model.GetIntercept() };
+        result = EstimateLocalGaussianWithOffsetModel(sample_entries, alpha_r, options, current_model);
         const auto raw_intercept{
-            EstimateResidualIntercept(sample_entries, *result.fit_result)
+            EstimateResidualInterceptParameter(sample_entries, *result.fit_result, intercept)
         };
         const auto defect{ std::abs(raw_intercept - intercept) };
         if (defect < best_defect)
         {
             best_intercept = intercept;
             best_defect = defect;
+            best_result = result;
+            has_best_result = true;
         }
         if (defect < tolerance)
         {
@@ -775,16 +895,25 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
             }
             final_intercept /= static_cast<double>(period);
             auto cycle_result{
-                EstimateLocalGaussian(sample_entries, alpha_r, options, final_intercept)
+                EstimateLocalGaussianWithOffsetModel(
+                    sample_entries,
+                    alpha_r,
+                    options,
+                    current_model.WithIntercept(final_intercept))
             };
             const auto cycle_raw_intercept{
-                EstimateResidualIntercept(sample_entries, *cycle_result.fit_result)
+                EstimateResidualInterceptParameter(
+                    sample_entries,
+                    *cycle_result.fit_result,
+                    final_intercept)
             };
             const auto cycle_defect{ std::abs(cycle_raw_intercept - final_intercept) };
             if (cycle_defect < best_defect)
             {
                 best_intercept = final_intercept;
                 best_defect = cycle_defect;
+                best_result = cycle_result;
+                has_best_result = true;
             }
             if (cycle_defect < tolerance)
             {
@@ -799,7 +928,9 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
             }
             else
             {
-                result = EstimateLocalGaussian(sample_entries, alpha_r, options, best_intercept);
+                result = has_best_result ?
+                    best_result :
+                    EstimateLocalGaussian(sample_entries, alpha_r, options, best_intercept);
                 if (!options.quiet_mode)
                 {
                     Logger::Log(LogLevel::Debug,
@@ -816,7 +947,9 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
 
         if (t + 1 == max_iterations)
         {
-            result = EstimateLocalGaussian(sample_entries, alpha_r, options, best_intercept);
+            result = has_best_result ?
+                best_result :
+                EstimateLocalGaussian(sample_entries, alpha_r, options, best_intercept);
             if (!options.quiet_mode)
             {
                 Logger::Log(LogLevel::Warning,
@@ -832,7 +965,7 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
             intercept_history.erase(intercept_history.begin());
         }
         intercept_history.emplace_back(intercept);
-        intercept = raw_intercept;
+        current_model = result.mdpde.GetModel().WithIntercept(raw_intercept);
     }
     //Logger::Log(LogLevel::Info, "Estimated intercept: " + std::to_string(intercept));
     return result;
@@ -855,7 +988,7 @@ GroupGaussianResult EstimateGroupGaussian(
 
     auto execution_options{ MakeExecutionOptions(options) };
     const auto dataset_list{ BuildMemberDatasetList(sample_entries_list, member_result_list, options) };
-    const auto fit_result_list{ BuildMemberFitResultList(member_result_list) };
+    const auto fit_result_list{ BuildMemberFitResultList(dataset_list, member_result_list, options) };
     const auto group_input{ rhbm_helper::BuildGroupInput(dataset_list, fit_result_list) };
     const auto raw_result{ rhbm_helper::EstimateGroup(alpha_g, group_input, execution_options) };
     const auto member_intercept_list{ ExtractMemberInterceptList(member_result_list) };
