@@ -39,6 +39,8 @@ constexpr std::size_t kMinimumAlphaRTrainingSampleCount{ 10 };
 constexpr std::size_t kMinimumAlphaGTrainingMemberCount{ 10 };
 constexpr double kResidualInterceptRangeMin{ 1.0 };
 constexpr double kResidualInterceptRangeMax{ 2.0 };
+constexpr double kEstimatedInterceptMin{ -0.5 };
+constexpr double kEstimatedInterceptMax{ 0.5 };
 constexpr std::size_t kInterceptCycleHistorySize{ 64 };
 constexpr double kNeighborContributionDistanceMax{ 2.0 };
 constexpr std::size_t kLocalFittingMaximumIterations{ 100 };
@@ -65,6 +67,13 @@ struct LocalFittingIterationResult
 bool IsSquaredChangeBelowTolerance(double change, double tolerance)
 {
     return change * change < tolerance;
+}
+
+double ClampEstimatedIntercept(double intercept)
+{
+    if (intercept < kEstimatedInterceptMin) return kEstimatedInterceptMin;
+    if (intercept > kEstimatedInterceptMax) return kEstimatedInterceptMax;
+    return intercept;
 }
 
 std::vector<AtomLocalPotentialEditor> BuildSelectedAtomLocalEditors(ModelObject & model_object)
@@ -811,6 +820,7 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
     auto range_max{ options.distance_max };
     numeric_validation::RequireFiniteNonNegativeRange(range_min, range_max, "fit range");
     numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
+    numeric_validation::RequireFinite(intercept_initial, "intercept_initial");
 
     auto execution_options{ MakeExecutionOptions(options) };
     auto result{
@@ -820,7 +830,10 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
             options,
             GaussianModel3D{ 0.0, 1.0, 0.0 })
     };
-    auto current_model{ result.mdpde.GetModel().WithIntercept(intercept_initial) };
+    auto current_model{
+        result.mdpde.GetModel().WithIntercept(
+            ClampEstimatedIntercept(intercept_initial))
+    };
     std::vector<double> intercept_history;
     intercept_history.reserve(kInterceptCycleHistorySize);
     double best_intercept{ current_model.GetIntercept() };
@@ -834,7 +847,8 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
         const auto intercept{ current_model.GetIntercept() };
         result = EstimateLocalGaussianWithOffsetModel(sample_entries, alpha_r, options, current_model);
         const auto raw_intercept{
-            EstimateResidualInterceptParameter(sample_entries, *result.fit_result, intercept)
+            ClampEstimatedIntercept(
+                EstimateResidualInterceptParameter(sample_entries, *result.fit_result, intercept))
         };
         const auto defect{ std::abs(raw_intercept - intercept) };
         if (defect < best_defect)
@@ -860,7 +874,8 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
             {
                 final_intercept += intercept_history[i];
             }
-            final_intercept /= static_cast<double>(period);
+            final_intercept = ClampEstimatedIntercept(
+                final_intercept / static_cast<double>(period));
             auto cycle_result{
                 EstimateLocalGaussianWithOffsetModel(
                     sample_entries,
@@ -869,10 +884,11 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
                     current_model.WithIntercept(final_intercept))
             };
             const auto cycle_raw_intercept{
-                EstimateResidualInterceptParameter(
-                    sample_entries,
-                    *cycle_result.fit_result,
-                    final_intercept)
+                ClampEstimatedIntercept(
+                    EstimateResidualInterceptParameter(
+                        sample_entries,
+                        *cycle_result.fit_result,
+                        final_intercept))
             };
             const auto cycle_defect{ std::abs(cycle_raw_intercept - final_intercept) };
             if (cycle_defect < best_defect)

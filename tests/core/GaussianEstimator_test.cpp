@@ -36,6 +36,23 @@ namespace
 {
 
 constexpr double kNeighborContributionDistanceMax{ 2.0 };
+constexpr double kEstimatedInterceptMin{ -1.0 };
+constexpr double kEstimatedInterceptMax{ 1.0 };
+
+double ClampEstimatedInterceptForTest(double intercept)
+{
+    if (intercept < kEstimatedInterceptMin) return kEstimatedInterceptMin;
+    if (intercept > kEstimatedInterceptMax) return kEstimatedInterceptMax;
+    return intercept;
+}
+
+void ExpectLocalGaussianInterceptsInEstimatedRange(const rg::LocalGaussianResult & result)
+{
+    EXPECT_GE(result.ols.GetModel().GetIntercept(), kEstimatedInterceptMin);
+    EXPECT_LE(result.ols.GetModel().GetIntercept(), kEstimatedInterceptMax);
+    EXPECT_GE(result.mdpde.GetModel().GetIntercept(), kEstimatedInterceptMin);
+    EXPECT_LE(result.mdpde.GetModel().GetIntercept(), kEstimatedInterceptMax);
+}
 
 LocalPotentialSampleList MakeSampleEntries(double log_response_shift = 0.0)
 {
@@ -253,7 +270,10 @@ InterceptIterationSimulation SimulateInterceptIteration(
             options,
             rg::GaussianModel3D{ 0.0, 1.0, 0.0 })
     };
-    auto current_model{ estimate.model.WithIntercept(intercept_initial) };
+    auto current_model{
+        estimate.model.WithIntercept(
+            ClampEstimatedInterceptForTest(intercept_initial))
+    };
     std::vector<double> intercept_history;
     intercept_history.reserve(64);
     auto best_intercept{ current_model.GetIntercept() };
@@ -269,7 +289,8 @@ InterceptIterationSimulation SimulateInterceptIteration(
             options,
             current_model);
         const auto raw_intercept{
-            EstimateResidualInterceptForTest(sample_entries, estimate.fit_result, intercept)
+            ClampEstimatedInterceptForTest(
+                EstimateResidualInterceptForTest(sample_entries, estimate.fit_result, intercept))
         };
         const auto defect{ std::abs(raw_intercept - intercept) };
         if (defect < best_defect)
@@ -298,7 +319,8 @@ InterceptIterationSimulation SimulateInterceptIteration(
             {
                 final_intercept += intercept_history[i];
             }
-            final_intercept /= static_cast<double>(period);
+            final_intercept = ClampEstimatedInterceptForTest(
+                final_intercept / static_cast<double>(period));
             const auto cycle_estimate{
                 EstimateLocalGaussianWithOffsetModelForTest(
                     sample_entries,
@@ -307,10 +329,11 @@ InterceptIterationSimulation SimulateInterceptIteration(
                     current_model.WithIntercept(final_intercept))
             };
             const auto cycle_raw_intercept{
-                EstimateResidualInterceptForTest(
-                    sample_entries,
-                    cycle_estimate.fit_result,
-                    final_intercept)
+                ClampEstimatedInterceptForTest(
+                    EstimateResidualInterceptForTest(
+                        sample_entries,
+                        cycle_estimate.fit_result,
+                        final_intercept))
             };
             const auto cycle_defect{ std::abs(cycle_raw_intercept - final_intercept) };
             if (cycle_defect < best_defect)
@@ -1549,6 +1572,20 @@ TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptRejectsInvalidAlph
         std::invalid_argument);
 }
 
+TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptRejectsInvalidInitialIntercept)
+{
+    const auto options{ MakeOptions() };
+    const auto sample_entries{ MakeSampleEntries() };
+
+    EXPECT_THROW(
+        ge::EstimateLocalGaussianWithIntercept(
+            sample_entries,
+            0.2,
+            options,
+            std::numeric_limits<double>::quiet_NaN()),
+        std::invalid_argument);
+}
+
 TEST(GaussianEstimatorTest, EstimateGroupGaussianRejectsInvalidAlphaG)
 {
     const auto options{ MakeOptions() };
@@ -1666,15 +1703,14 @@ TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptMatchesHelperPath)
     EXPECT_TRUE(actual.fit_result->beta_mdpde.isApprox(expected_fit.beta_mdpde, 1e-12));
 }
 
-TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptUsesRadiusMedianResiduals)
+TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptBoundsRadiusMedianResiduals)
 {
     auto options{ MakeOptions() };
     options.distance_max = 1.5;
     options.quiet_mode = true;
     constexpr double alpha_r{ 0.2 };
     const rg::GaussianModel3D signal_model{ 1.0, 0.5, 0.0 };
-    constexpr double expected_intercept{ 0.60 };
-    const auto true_model{ signal_model.WithIntercept(expected_intercept) };
+    const auto true_model{ signal_model.WithIntercept(0.60) };
     LocalPotentialSampleList sample_entries;
     for (int shell = 0; shell <= 15; shell++)
     {
@@ -1698,7 +1734,63 @@ TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptUsesRadiusMedianRe
         ge::EstimateLocalGaussianWithIntercept(sample_entries, alpha_r, options, 0.5)
     };
 
-    EXPECT_NEAR(actual.mdpde.GetModel().GetIntercept(), expected_intercept, 0.20);
+    ExpectLocalGaussianInterceptsInEstimatedRange(actual);
+}
+
+TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptClampsHighInitialIntercept)
+{
+    const auto options{ MakeOptions() };
+    const auto sample_entries{ MakeSampleEntries() };
+    constexpr double alpha_r{ 0.2 };
+
+    const auto actual{
+        ge::EstimateLocalGaussianWithIntercept(sample_entries, alpha_r, options, 5.0)
+    };
+
+    ExpectLocalGaussianInterceptsInEstimatedRange(actual);
+}
+
+TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptClampsLowInitialIntercept)
+{
+    const auto options{ MakeOptions() };
+    const auto sample_entries{ MakeSampleEntries() };
+    constexpr double alpha_r{ 0.2 };
+
+    const auto actual{
+        ge::EstimateLocalGaussianWithIntercept(sample_entries, alpha_r, options, -5.0)
+    };
+
+    ExpectLocalGaussianInterceptsInEstimatedRange(actual);
+}
+
+TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptClampsResidualEstimate)
+{
+    auto options{ MakeOptions() };
+    options.distance_max = 1.5;
+    options.quiet_mode = true;
+    constexpr double alpha_r{ 0.2 };
+    const rg::GaussianModel3D signal_model{ 1.0, 0.5, 0.0 };
+    const auto true_model{ signal_model.WithIntercept(2.0) };
+    LocalPotentialSampleList sample_entries;
+    for (int shell = 0; shell <= 15; shell++)
+    {
+        const auto distance{ static_cast<float>(0.1 * static_cast<double>(shell)) };
+        const auto true_response{ true_model.ResponseAtDistance(distance) };
+        sample_entries.emplace_back(LocalPotentialSample{
+            static_cast<float>(true_response),
+            SamplingPoint{ distance }
+        });
+        sample_entries.emplace_back(LocalPotentialSample{
+            static_cast<float>(true_response),
+            SamplingPoint{ distance }
+        });
+    }
+
+    const auto actual{
+        ge::EstimateLocalGaussianWithIntercept(sample_entries, alpha_r, options, 0.5)
+    };
+
+    ExpectLocalGaussianInterceptsInEstimatedRange(actual);
 }
 
 TEST(GaussianEstimatorTest, EstimateLocalGaussianWithInterceptDirectUpdateMatchesSimulation)
