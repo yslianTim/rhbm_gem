@@ -38,7 +38,7 @@ SeriesPointList BuildLogQuadraticDatasetSeries(
 
     if (basis_and_response_entry_list.empty())
     {
-        Logger::Log(LogLevel::Warning,
+        Logger::Log(LogLevel::Debug,
             "linearization_service::BuildDatasetSeries : "
             "No valid gaus data entry in the specified range.");
         basis_and_response_entry_list.emplace_back(
