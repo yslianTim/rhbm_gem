@@ -1049,6 +1049,53 @@ TEST(GaussianEstimatorTest, SampleListAlphaRReturnsFiniteAlpha)
     EXPECT_LE(alpha_r, trainer_options.alpha_max);
 }
 
+TEST(GaussianEstimatorTest, TrainAlphaRReturnsFallbackAlphaWithSingleValidSample)
+{
+    auto options{ MakeOptions() };
+    options.distance_min = 0.0;
+    options.distance_max = 0.0;
+    const std::vector<LocalPotentialSampleList> sample_entries_list{
+        MakeAlphaTrainingSampleEntries(3)
+    };
+    const rg::rhbm_trainer::RHBMTrainingOptions trainer_options;
+
+    const auto alpha_r{ ge::TrainAlphaR(sample_entries_list, options) };
+
+    EXPECT_DOUBLE_EQ(trainer_options.alpha_min, alpha_r);
+}
+
+TEST(GaussianEstimatorTest, TrainAlphaRClampsSubsetSizeToValidSampleCount)
+{
+    const auto options{ MakeOptions() };
+    const std::vector<LocalPotentialSampleList> sample_entries_list{
+        MakeAlphaTrainingSampleEntries(3),
+        MakeAlphaTrainingSampleEntries(4, 0.2)
+    };
+    const std::vector<rg::RHBMMemberDataset> dataset_list{
+        rg::rhbm_helper::BuildMemberDataset(
+            sample_entries_list.at(0),
+            options.distance_min,
+            options.distance_max),
+        rg::rhbm_helper::BuildMemberDataset(
+            sample_entries_list.at(1),
+            options.distance_min,
+            options.distance_max)
+    };
+    rg::rhbm_trainer::RHBMTrainingOptions trainer_options;
+    trainer_options.execution_options.quiet_mode = true;
+    trainer_options.execution_options.thread_size = options.thread_size;
+    trainer_options.subset_size = 3;
+
+    const auto expected{
+        rg::rhbm_trainer::CrossValidationAlphaR(
+            dataset_list,
+            trainer_options).best_alpha
+    };
+    const auto actual{ ge::TrainAlphaR(sample_entries_list, options) };
+
+    EXPECT_DOUBLE_EQ(expected, actual);
+}
+
 TEST(GaussianEstimatorTest, AlphaRMatchesTrainingFunctionBestAlpha)
 {
     const auto options{ MakeOptions() };

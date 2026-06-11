@@ -229,6 +229,20 @@ std::vector<RHBMMemberDataset> BuildMemberDatasetList(
     return dataset_list;
 }
 
+std::size_t GetMinimumDatasetResponseCount(const std::vector<RHBMMemberDataset> & dataset_list)
+{
+    std::size_t minimum_response_count{ std::numeric_limits<std::size_t>::max() };
+    for (const auto & dataset : dataset_list)
+    {
+        const auto response_count{ static_cast<std::size_t>(dataset.y.size()) };
+        if (response_count < minimum_response_count)
+        {
+            minimum_response_count = response_count;
+        }
+    }
+    return minimum_response_count;
+}
+
 LocalPotentialSampleList BuildSamplesForZeroInterceptGaussianFit(
     const LocalPotentialSampleList & sample_entries,
     const GaussianModel3D & model)
@@ -722,7 +736,19 @@ double TrainAlphaR(
         options.distance_min, options.distance_max, "fit range");
 
     const auto dataset_list{ BuildMemberDatasetList(sample_entries_list, options) };
-    const auto training_options{ MakeTrainingOptions(options) };
+    auto training_options{ MakeTrainingOptions(options) };
+    if (!dataset_list.empty())
+    {
+        const auto minimum_response_count{ GetMinimumDatasetResponseCount(dataset_list) };
+        if (minimum_response_count < 2)
+        {
+            return training_options.alpha_min;
+        }
+        if (training_options.subset_size > minimum_response_count)
+        {
+            training_options.subset_size = minimum_response_count;
+        }
+    }
     return rhbm_trainer::CrossValidationAlphaR(dataset_list, training_options).best_alpha;
 }
 
