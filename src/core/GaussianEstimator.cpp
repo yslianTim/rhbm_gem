@@ -41,6 +41,7 @@ constexpr double kResidualInterceptRangeMin{ 1.0 };
 constexpr double kResidualInterceptRangeMax{ 2.0 };
 constexpr double kEstimatedInterceptMin{ -0.5 };
 constexpr double kEstimatedInterceptMax{ 0.5 };
+constexpr double kInterceptDampingFactor{ 0.5 };
 constexpr std::size_t kInterceptCycleHistorySize{ 64 };
 constexpr double kNeighborContributionDistanceMax{ 2.0 };
 constexpr std::size_t kLocalFittingMaximumIterations{ 100 };
@@ -948,7 +949,10 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
             intercept_history.erase(intercept_history.begin());
         }
         intercept_history.emplace_back(intercept);
-        current_model = result.mdpde.GetModel().WithIntercept(raw_intercept);
+        const auto damped_intercept{
+            ClampEstimatedIntercept(intercept + kInterceptDampingFactor * (raw_intercept - intercept))
+        };
+        current_model = result.mdpde.GetModel().WithIntercept(damped_intercept);
     }
     return result;
 }
