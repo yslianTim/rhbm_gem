@@ -43,7 +43,6 @@ constexpr double kResidualInterceptRangeMax{ 2.0 };
 constexpr double kEstimatedInterceptMin{ -0.5 };
 constexpr double kEstimatedInterceptMax{ 0.5 };
 constexpr double kInterceptDampingFactor{ 0.5 };
-constexpr std::size_t kInterceptCycleHistorySize{ 64 };
 constexpr double kNeighborContributionDistanceMax{ 2.0 };
 constexpr std::size_t kLocalFittingMaximumIterations{ 100 };
 constexpr double kLocalFittingParameterChangeTolerance{ 1.0e-6 };
@@ -876,8 +875,6 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
     auto current_model{
         result.mdpde.GetModel().WithIntercept(ClampEstimatedIntercept(intercept_initial))
     };
-    std::vector<double> intercept_history;
-    intercept_history.reserve(kInterceptCycleHistorySize);
     double best_intercept{ current_model.GetIntercept() };
     double best_error{ std::numeric_limits<double>::infinity() };
     auto best_result{ result };
@@ -905,71 +902,6 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
             break;
         }
 
-        bool cycle_detected{ false };
-        for (std::size_t period = 2; period <= intercept_history.size(); period++)
-        {
-            const auto cycle_begin{ intercept_history.size() - period };
-            if (std::abs(intercept - intercept_history[cycle_begin]) >= tolerance) continue;
-
-            double final_intercept{ 0.0 };
-            for (std::size_t i = cycle_begin; i < intercept_history.size(); i++)
-            {
-                final_intercept += intercept_history[i];
-            }
-            final_intercept = ClampEstimatedIntercept(
-                final_intercept / static_cast<double>(period));
-            auto cycle_result{
-                EstimateLocalGaussianWithOffsetModel(
-                    sample_entries,
-                    alpha_r,
-                    options,
-                    current_model.WithIntercept(final_intercept))
-            };
-            const auto cycle_raw_intercept{
-                ClampEstimatedIntercept(
-                    EstimateResidualInterceptParameter(
-                        sample_entries,
-                        *cycle_result.fit_result,
-                        final_intercept))
-            };
-            const auto cycle_error{ std::abs(cycle_raw_intercept - final_intercept) };
-            if (cycle_error < best_error)
-            {
-                best_intercept = final_intercept;
-                best_error = cycle_error;
-                best_result = cycle_result;
-                has_best_result = true;
-            }
-            if (cycle_error < tolerance)
-            {
-                result = std::move(cycle_result);
-                if (!options.quiet_mode)
-                {
-                    Logger::Log(LogLevel::Debug,
-                        "Cycle detected in local Gaussian intercept estimation with period " +
-                        std::to_string(period) + "; refitting at cycle mean with error = " +
-                        std::to_string(cycle_error) + ".");
-                }
-            }
-            else
-            {
-                result = has_best_result ?
-                    best_result :
-                    EstimateLocalGaussian(sample_entries, alpha_r, options, best_intercept);
-                if (!options.quiet_mode)
-                {
-                    Logger::Log(LogLevel::Debug,
-                        "Cycle mean fixed-point error = " + std::to_string(cycle_error) +
-                        " did not satisfy local Gaussian intercept tolerance; "
-                        "refitting at best fixed-point candidate with error = " +
-                        std::to_string(best_error) + ".");
-                }
-            }
-            cycle_detected = true;
-            break;
-        }
-        if (cycle_detected) break;
-
         if (t + 1 == max_iterations)
         {
             result = has_best_result ?
@@ -985,11 +917,6 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
             break;
         }
 
-        if (intercept_history.size() == kInterceptCycleHistorySize)
-        {
-            intercept_history.erase(intercept_history.begin());
-        }
-        intercept_history.emplace_back(intercept);
         const auto damped_intercept{
             ClampEstimatedIntercept(intercept + kInterceptDampingFactor * (raw_intercept - intercept))
         };
