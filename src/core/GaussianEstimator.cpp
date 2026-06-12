@@ -130,17 +130,6 @@ double EstimateInitialIntercept(const LocalPotentialSampleList & sample_entries)
     return array_helper::ComputeMedian(lowest_response_list);
 }
 
-GaussianModel3D BuildZeroSignalModelForInterceptBasis(double width, double intercept)
-{
-    return GaussianModel3D{ 0.0, width, intercept };
-}
-
-double EvaluateModelOffsetAtDistance(const GaussianModel3D & model, double distance)
-{
-    return model.ResponseAtDistance(distance) -
-        model.WithIntercept(0.0).ResponseAtDistance(distance);
-}
-
 bool CanBuildFiniteZeroInterceptSamples(
     const LocalPotentialSampleList & sample_entries,
     const GaussianModel3D & model)
@@ -148,7 +137,9 @@ bool CanBuildFiniteZeroInterceptSamples(
     for (const auto & sample : sample_entries)
     {
         const auto distance{ static_cast<double>(sample.point.distance) };
-        const auto model_offset{ EvaluateModelOffsetAtDistance(model, distance) };
+        const auto model_offset{
+            model.ResponseAtDistance(distance) - model.WithIntercept(0.0).ResponseAtDistance(distance)
+        };
         const auto response{ static_cast<double>(sample.response) - model_offset };
         if (!std::isfinite(response)) return false;
         if (std::abs(response) > static_cast<double>(std::numeric_limits<float>::max()))
@@ -170,7 +161,7 @@ double EstimateResidualInterceptParameter(
     {
         return current_intercept;
     }
-    const auto unit_intercept_model{ BuildZeroSignalModelForInterceptBasis(width, 1.0) };
+    const auto unit_intercept_model{ GaussianModel3D{ 0.0, width, 1.0 } };
     const auto median_sample_entries{
         sample_filter::BuildMedianResponseSampleEntriesByRadius(sample_entries)
     };
@@ -188,8 +179,7 @@ double EstimateResidualInterceptParameter(
             continue;
         }
         const auto residual{
-            static_cast<double>(sample.response) -
-                signal_model.SignalAtDistance(distance)
+            static_cast<double>(sample.response) - signal_model.SignalAtDistance(distance)
         };
         intercept_list.emplace_back(residual / basis);
     }
@@ -254,11 +244,12 @@ LocalPotentialSampleList BuildSamplesForZeroInterceptGaussianFit(
     for (const auto & sample : sample_entries)
     {
         const auto distance{ static_cast<double>(sample.point.distance) };
-        const auto model_offset{ EvaluateModelOffsetAtDistance(model, distance) };
+        const auto model_offset{
+            model.ResponseAtDistance(distance) - model.WithIntercept(0.0).ResponseAtDistance(distance)
+        };
         zero_intercept_sample_entries.emplace_back(
             LocalPotentialSample{
-                static_cast<float>(
-                    static_cast<double>(sample.response) - model_offset),
+                static_cast<float>(static_cast<double>(sample.response) - model_offset),
                 sample.point
             }
         );
