@@ -117,30 +117,6 @@ RHBMExecutionOptions MakeExecutionOptions(const FitOptions & options)
     return execution_options;
 }
 
-double EstimateInitialIntercept(const LocalPotentialSampleList & sample_entries)
-{
-    float maximum_distance{ 0.0f };
-    for (const auto & sample : sample_entries)
-    {
-        if (sample.point.distance > maximum_distance) maximum_distance = sample.point.distance;
-    }
-    std::vector<double> response_list;
-    response_list.reserve(sample_entries.size());
-    for (const auto & sample : sample_entries)
-    {
-        if (sample.point.distance != maximum_distance) continue;
-        const auto response{ static_cast<double>(sample.response) };
-        numeric_validation::RequireFinite(response, "maximum distance shell response");
-        response_list.emplace_back(response);
-    }
-    if (response_list.empty()) return 0.0;
-
-    const auto lowest_response_list{
-        array_helper::ComputeSmallestProportionValues(response_list, 0.10)
-    };
-    return array_helper::ComputeMedian(lowest_response_list);
-}
-
 bool CanBuildFiniteZeroInterceptSamples(
     const LocalPotentialSampleList & sample_entries,
     const GaussianModel3D & model)
@@ -1064,10 +1040,9 @@ void RunFirstStageLocalFitting(ModelObject & model_object, const FitOptions & op
     {
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
         auto sample_entries{ local_view.GetSamplingEntries() };
-        auto intercept_initial{ EstimateInitialIntercept(sample_entries) };
         const auto result{
             EstimateLocalGaussianWithIntercept(
-                sample_entries, local_view.GetAlphaR(), options, intercept_initial)
+                sample_entries, local_view.GetAlphaR(), options, 0.0)
         };
         local_editor_list[i].SetGaussianResult(result);
 
