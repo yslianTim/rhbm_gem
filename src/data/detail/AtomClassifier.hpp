@@ -21,19 +21,11 @@ Spot GetMainChainSpot(size_t member_id);
 
 GroupKey GetGroupKeyInClass(const AtomObject * atom_object, const std::string & class_key);
 GroupKey GetGroupKeyInClass(ComponentKey component_key, AtomKey atom_key);
-GroupKey GetGroupKeyInClass(Structure structure, ComponentKey component_key, AtomKey atom_key);
 Residue GetResidueFromGroupKey(GroupKey group_key, const std::string & class_key);
 
 GroupKey GetMainChainSimpleAtomClassGroupKey(size_t member_id);
 GroupKey GetMainChainComponentAtomClassGroupKey(size_t member_id, Residue residue);
-GroupKey GetMainChainStructureAtomClassGroupKey(
-    size_t member_id,
-    Structure structure,
-    Residue residue);
 std::vector<GroupKey> GetMainChainComponentAtomClassGroupKeyList(size_t member_id);
-std::vector<GroupKey> GetMainChainStructureAtomClassGroupKeyList(
-    size_t member_id,
-    Structure structure);
 
 } // namespace data_internal
 

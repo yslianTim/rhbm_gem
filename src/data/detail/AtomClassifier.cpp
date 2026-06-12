@@ -88,27 +88,12 @@ GroupKey GetGroupKeyInClass(
             atom_object->GetComponentKey(),
             atom_object->GetAtomKey());
     }
-    if (class_key == ChemicalDataHelper::GetStructureAtomClassKey())
-    {
-        return KeyPackerStructureAtomClass::Pack(
-            atom_object->GetStructure(),
-            atom_object->GetComponentKey(),
-            atom_object->GetAtomKey());
-    }
     throw std::runtime_error("Unsupported class key." + class_key);
 }
 
 GroupKey GetGroupKeyInClass(ComponentKey component_key, AtomKey atom_key)
 {
     return KeyPackerComponentAtomClass::Pack(component_key, atom_key);
-}
-
-GroupKey GetGroupKeyInClass(
-    Structure structure,
-    ComponentKey component_key,
-    AtomKey atom_key)
-{
-    return KeyPackerStructureAtomClass::Pack(structure, component_key, atom_key);
 }
 
 Residue GetResidueFromGroupKey(
@@ -119,11 +104,6 @@ Residue GetResidueFromGroupKey(
     {
         auto unpack_key{ KeyPackerComponentAtomClass::Unpack(group_key) };
         return static_cast<Residue>(std::get<0>(unpack_key));
-    }
-    if (class_key == ChemicalDataHelper::GetStructureAtomClassKey())
-    {
-        auto unpack_key{ KeyPackerStructureAtomClass::Unpack(group_key) };
-        return static_cast<Residue>(std::get<1>(unpack_key));
     }
     return Residue::UNK;
 }
@@ -153,23 +133,6 @@ GroupKey GetMainChainComponentAtomClassGroupKey(size_t id, Residue residue)
         static_cast<AtomKey>(k_main_chain_member_spot_list.at(id)));
 }
 
-GroupKey GetMainChainStructureAtomClassGroupKey(
-    size_t id,
-    Structure structure,
-    Residue residue)
-{
-    if (IsValidMainChainMemberID(id) == false)
-    {
-        Logger::Log(LogLevel::Warning, "Invalid main chain member ID: " + std::to_string(id));
-        return 0;
-    }
-    const auto component_key{ static_cast<ComponentKey>(residue) };
-    return KeyPackerStructureAtomClass::Pack(
-        structure,
-        component_key,
-        static_cast<AtomKey>(k_main_chain_member_spot_list.at(id)));
-}
-
 std::vector<GroupKey> GetMainChainComponentAtomClassGroupKeyList(size_t id)
 {
     if (IsValidMainChainMemberID(id) == false) return {};
@@ -182,26 +145,6 @@ std::vector<GroupKey> GetMainChainComponentAtomClassGroupKeyList(size_t id)
     for (const auto residue_id : ChemicalDataHelper::GetStandardNucleotideList())
     {
         group_key_list.emplace_back(GetMainChainComponentAtomClassGroupKey(id, residue_id));
-    }
-    return group_key_list;
-}
-
-std::vector<GroupKey> GetMainChainStructureAtomClassGroupKeyList(
-    size_t id,
-    Structure structure)
-{
-    if (IsValidMainChainMemberID(id) == false) return {};
-    std::vector<GroupKey> group_key_list;
-    group_key_list.reserve(ChemicalDataHelper::GetStandardResidueCount());
-    for (const auto residue_id : ChemicalDataHelper::GetStandardAminoAcidList())
-    {
-        group_key_list.emplace_back(
-            GetMainChainStructureAtomClassGroupKey(id, structure, residue_id));
-    }
-    for (const auto residue_id : ChemicalDataHelper::GetStandardNucleotideList())
-    {
-        group_key_list.emplace_back(
-            GetMainChainStructureAtomClassGroupKey(id, structure, residue_id));
     }
     return group_key_list;
 }

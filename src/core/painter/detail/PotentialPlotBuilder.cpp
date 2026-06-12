@@ -85,14 +85,11 @@ bool PotentialPlotBuilder::IsAtomLocalEntryAvailable() const
 size_t PotentialPlotBuilder::GetAtomResidueCount(
     const std::string & class_key, Residue residue, Structure structure) const
 {
+    (void)structure;
     GroupKey group_key{ 0 };
-        if (class_key == ChemicalDataHelper::GetComponentAtomClassKey())
+    if (class_key == ChemicalDataHelper::GetComponentAtomClassKey())
     {
         group_key = data_internal::GetMainChainComponentAtomClassGroupKey(0, residue);
-    }
-    else if (class_key == ChemicalDataHelper::GetStructureAtomClassKey())
-    {
-        group_key = data_internal::GetMainChainStructureAtomClassGroupKey(0, structure, residue);
     }
     if (IsAvailableAtomGroupKey(group_key, class_key) == false)
     {

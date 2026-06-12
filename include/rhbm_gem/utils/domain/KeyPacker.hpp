@@ -9,7 +9,6 @@
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
 #include <rhbm_gem/utils/domain/BondKeySystem.hpp>
 
-static_assert(std::is_same_v<std::underlying_type_t<Structure>,  uint8_t>);
 static_assert(std::is_same_v<GroupKey, uint64_t>);
 static_assert(std::is_same_v<ComponentKey, uint8_t>);
 static_assert(std::is_same_v<AtomKey, uint16_t>);
@@ -124,36 +123,5 @@ struct KeyPackerComponentBondClass
         auto [component_key, bond_key]{ Unpack(key) };
         return "<" + std::to_string(static_cast<int>(component_key)) + ", "
                    + std::to_string(static_cast<int>(bond_key)) + ">";
-    }
-};
-
-struct KeyPackerStructureAtomClass
-{
-    // Bits allocation
-    // ┌─0~7─Struc.─┐┌─8~15─ComponentKey─┐┌─16~31─AtomKey─┐
-    // | 8 bits     || 8 bits            || 16 bits       |
-    static GroupKey Pack(Structure structure, ComponentKey component_key, AtomKey atom_key)
-    {
-        return static_cast<GroupKey>(structure)
-            | (static_cast<GroupKey>(component_key) <<  8)
-            | (static_cast<GroupKey>(atom_key)      << 16);
-    }
-
-    static std::tuple<Structure, ComponentKey, AtomKey> Unpack(GroupKey key)
-    {
-        constexpr GroupKey mask_8bit { 0xFF };    //  8 bits mask
-        constexpr GroupKey mask_16bit{ 0xFFFF };
-        auto structure{ static_cast<Structure>(       (key      ) & mask_8bit)  };
-        auto component_key{ static_cast<ComponentKey>((key >> 8)  & mask_8bit)  };
-        auto atom_key{ static_cast<AtomKey>(          (key >> 16) & mask_16bit) };
-        return { structure, component_key, atom_key };
-    }
-
-    static std::string GetKeyString(GroupKey key)
-    {
-        auto [structure, component_key, atom_key]{ Unpack(key) };
-        return "<" + std::to_string(static_cast<int>(structure)) + ", "
-                   + std::to_string(static_cast<int>(component_key)) + ", "
-                   + std::to_string(static_cast<int>(atom_key)) + ">";
     }
 };

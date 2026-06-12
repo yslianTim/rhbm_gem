@@ -714,6 +714,18 @@ TEST(DataObjectModelAnalysisTest, CollectAtomGroupKeysReturnsRebuiltGroupKeySet)
     EXPECT_EQ(analysis_data.FindAtomGroupEntry("missing_atom_class"), nullptr);
 }
 
+TEST(DataObjectModelAnalysisTest, RebuildAtomGroupsDoesNotCreateStructureAtomClass)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
+    auto analysis{ model->EditAnalysis() };
+
+    model->SelectAllAtoms();
+    analysis.RebuildAtomGroupsFromSelection();
+
+    EXPECT_EQ(analysis_data.FindAtomGroupEntry("structure_atom_class"), nullptr);
+}
+
 TEST(DataObjectModelAnalysisTest, AtomGroupingSummaryReportsConfiguredClassCounts)
 {
     auto model{ data_test::MakeModelWithBond() };
