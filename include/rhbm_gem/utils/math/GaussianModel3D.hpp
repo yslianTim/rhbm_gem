@@ -53,6 +53,7 @@ public:
     double GetDisplayParameter(int par_id) const;
     double Intensity() const;
     double SignalAtDistance(double distance) const;
+    double InterceptBasisAtDistance(double distance) const;
     double ResponseAtDistance(double distance) const;
 };
 

@@ -31,7 +31,7 @@ struct RHBMExecutionOptions
 {
     bool quiet_mode{ false };
     int thread_size{ 1 };
-    int max_iterations{ 1000 };
+    int max_iterations{ 100 };
     double tolerance{ 1.0e-5 };
     double data_weight_min{ 1.0e-8 };
     double member_weight_min{ 1.0e-2 };

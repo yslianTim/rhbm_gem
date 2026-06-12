@@ -146,29 +146,32 @@ double GaussianModel3D::SignalAtDistance(double distance) const
     return WithIntercept(0.0).ResponseAtDistance(distance);
 }
 
+double GaussianModel3D::InterceptBasisAtDistance(double distance) const
+{
+    if (distance < 1.0e-5)
+    {
+        return std::sqrt(2.0/M_PI) / m_width;
+    }
+    else if (distance > 2.0)
+    {
+        return 0.0; // Skip long distance contribution
+    }
+    else
+    {
+        return std::erf(distance/m_width/std::sqrt(2.0)) / distance;
+    }
+}
+
 double GaussianModel3D::ResponseAtDistance(double distance) const
 {
     if (m_width == 0.0)
     {
         return m_intercept;
     }
-    auto charge_term{ 0.0 };
-    if (distance < 1.0e-5)
-    {
-        charge_term = m_intercept * std::sqrt(2.0/M_PI) / m_width;
-    }
-    else if (distance > 2.0)
-    {
-        charge_term = 0.0; // TEST : Skip long distance contribution
-    }
-    else
-    {
-        charge_term = m_intercept/distance * std::erf(distance/m_width/std::sqrt(2.0));
-    }
     return m_amplitude *
         std::pow(Constants::two_pi * m_width * m_width, -1.5) *
         std::exp(-0.5 * distance * distance / (m_width * m_width)) +
-        charge_term;
+        m_intercept * InterceptBasisAtDistance(distance);
 }
 
 GaussianModel3DUncertainty::GaussianModel3DUncertainty(

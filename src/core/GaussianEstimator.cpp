@@ -154,37 +154,23 @@ double EstimateResidualInterceptParameter(
     double current_intercept)
 {
     const auto signal_model{ linearization_service::DecodeParameterVector(fit_result.beta_mdpde) };
-    const auto width{ signal_model.GetWidth() };
-    if (!std::isfinite(width) || width <= 0.0)
-    {
-        return current_intercept;
-    }
-    const auto unit_intercept_model{ GaussianModel3D{ 0.0, width, 1.0 } };
-    const auto median_sample_entries{
-        sample_filter::BuildMedianResponseSampleEntriesByRadius(sample_entries)
-    };
+    if (signal_model.GetWidth()<= 0.0) return current_intercept;
+
     std::vector<double> intercept_list;
-    intercept_list.reserve(median_sample_entries.size());
-    for (const auto & sample : median_sample_entries)
+    intercept_list.reserve(sample_entries.size());
+    for (const auto & sample : sample_entries)
     {
         const auto distance{ static_cast<double>(sample.point.distance) };
         if (distance < kResidualInterceptRangeMin) continue;
         if (distance > kResidualInterceptRangeMax) continue;
 
-        const auto basis{ unit_intercept_model.ResponseAtDistance(distance) };
-        if (!std::isfinite(basis) || std::abs(basis) <= std::numeric_limits<double>::epsilon())
-        {
-            continue;
-        }
+        const auto basis{ signal_model.InterceptBasisAtDistance(distance) };
         const auto residual{
             static_cast<double>(sample.response) - signal_model.SignalAtDistance(distance)
         };
         intercept_list.emplace_back(residual / basis);
     }
-    if (intercept_list.empty())
-    {
-        return current_intercept;
-    }
+    if (intercept_list.empty()) return current_intercept;
     const auto candidate_intercept{ array_helper::ComputeMedian(intercept_list) };
     const auto candidate_model{ signal_model.WithIntercept(candidate_intercept) };
     if (!CanBuildFiniteZeroInterceptSamples(sample_entries, candidate_model))
