@@ -50,9 +50,6 @@ constexpr double kLocalFittingChangePercentile{ 0.95 };
 
 struct LocalFittingParameterChangeStats
 {
-    double max_amplitude_change{ 0.0 };
-    double max_width_change{ 0.0 };
-    double max_intercept_change{ 0.0 };
     double amplitude_change_percentile{ 0.0 };
     double width_change_percentile{ 0.0 };
     double intercept_change_percentile{ 0.0 };
@@ -64,11 +61,6 @@ struct LocalFittingIterationResult
     std::vector<LocalGaussianResult> result_list;
     std::vector<Eigen::VectorXd> estimation_list;
 };
-
-bool IsSquaredChangeBelowTolerance(double change, double tolerance)
-{
-    return change * change < tolerance;
-}
 
 double ClampEstimatedIntercept(double intercept)
 {
@@ -551,18 +543,6 @@ LocalFittingParameterChangeStats CalculateLocalFittingParameterChangeStats(
         amplitude_change_list[i] = amplitude_change;
         width_change_list[i] = width_change;
         intercept_change_list[i] = intercept_change;
-        if (amplitude_change > stats.max_amplitude_change)
-        {
-            stats.max_amplitude_change = amplitude_change;
-        }
-        if (width_change > stats.max_width_change)
-        {
-            stats.max_width_change = width_change;
-        }
-        if (intercept_change > stats.max_intercept_change)
-        {
-            stats.max_intercept_change = intercept_change;
-        }
     }
 
     stats.amplitude_change_percentile = array_helper::ComputePercentile(
@@ -580,15 +560,9 @@ LocalFittingParameterChangeStats CalculateLocalFittingParameterChangeStats(
 bool IsLocalFittingParameterChangeConverged(const LocalFittingParameterChangeStats & stats)
 {
     return
-        IsSquaredChangeBelowTolerance(
-            stats.max_amplitude_change,
-            kLocalFittingParameterChangeTolerance) &&
-        IsSquaredChangeBelowTolerance(
-            stats.max_width_change,
-            kLocalFittingParameterChangeTolerance) &&
-        IsSquaredChangeBelowTolerance(
-            stats.max_intercept_change,
-            kLocalFittingParameterChangeTolerance);
+        (std::pow(stats.amplitude_change_percentile, 2) < kLocalFittingParameterChangeTolerance) &&
+        (std::pow(stats.width_change_percentile, 2) < kLocalFittingParameterChangeTolerance) &&
+        (std::pow(stats.intercept_change_percentile, 2) < kLocalFittingParameterChangeTolerance);
 }
 
 double GetLocalFittingParameterChange(const LocalFittingParameterChangeStats & stats)
@@ -1180,16 +1154,10 @@ void RunSecondStageLocalFitting(
                 Logger::FinishProgressLine();
                 Logger::Log(LogLevel::Info,
                     "Converged after " + std::to_string(iter + 1) +
-                    " iterations with max amplitude change = " +
-                    std::to_string(change_stats.max_amplitude_change) +
-                    ", percentile amplitude change = " +
+                    " iterations with percentile amplitude change = " +
                     std::to_string(change_stats.amplitude_change_percentile) +
-                    ", max width change = " +
-                    std::to_string(change_stats.max_width_change) +
                     ", percentile width change = " +
                     std::to_string(change_stats.width_change_percentile) +
-                    ", max intercept change = " +
-                    std::to_string(change_stats.max_intercept_change) +
                     ", and percentile intercept change = " +
                     std::to_string(change_stats.intercept_change_percentile) + ".");
             }
@@ -1207,16 +1175,10 @@ void RunSecondStageLocalFitting(
                 Logger::FinishProgressLine();
                 Logger::Log(LogLevel::Warning,
                     "Reached maximum iteration size; refitting at best fixed-point candidate "
-                    "with max amplitude change = " +
-                    std::to_string(best_change_stats.max_amplitude_change) +
-                    ", percentile amplitude change = " +
+                    "with percentile amplitude change = " +
                     std::to_string(best_change_stats.amplitude_change_percentile) +
-                    ", max width change = " +
-                    std::to_string(best_change_stats.max_width_change) +
                     ", percentile width change = " +
                     std::to_string(best_change_stats.width_change_percentile) +
-                    ", max intercept change = " +
-                    std::to_string(best_change_stats.max_intercept_change) +
                     ", and percentile intercept change = " +
                     std::to_string(best_change_stats.intercept_change_percentile));
             }
