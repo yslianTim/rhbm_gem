@@ -16,6 +16,7 @@
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <iomanip>
@@ -45,8 +46,19 @@ constexpr double kInterceptDampingFactor{ 0.5 };
 constexpr std::size_t kInterceptCycleHistorySize{ 64 };
 constexpr double kNeighborContributionDistanceMax{ 2.0 };
 constexpr std::size_t kLocalFittingMaximumIterations{ 100 };
-constexpr double kLocalFittingParameterChangeTolerance{ 1.0e-5 };
+constexpr double kLocalFittingParameterChangeTolerance{ 1.0e-6 };
 constexpr double kLocalFittingChangePercentile{ 0.95 };
+constexpr int kHuberSlopeMaximumIterations{ 50 };
+constexpr double kHuberSlopeTolerance{ 1.0e-8 };
+constexpr double kHuberScaleMultiplier{ 1.4826 };
+constexpr double kHuberScaleMin{ 1.0e-12 };
+constexpr double kHuberCutoffMultiplier{ 1.345 };
+
+struct ResidualInterceptSample
+{
+    double basis{ 0.0 };
+    double residual{ 0.0 };
+};
 
 struct LocalFittingParameterChangeStats
 {
@@ -148,16 +160,111 @@ bool CanBuildFiniteZeroInterceptSamples(
     return true;
 }
 
+bool EstimateOrdinarySlopeThroughOrigin(
+    const std::vector<ResidualInterceptSample> & sample_list,
+    double & slope)
+{
+    double numerator{ 0.0 };
+    double denominator{ 0.0 };
+    for (const auto & sample : sample_list)
+    {
+        numerator += sample.basis * sample.residual;
+        denominator += sample.basis * sample.basis;
+    }
+    if (!std::isfinite(numerator) ||
+        !std::isfinite(denominator) ||
+        denominator <= std::numeric_limits<double>::epsilon())
+    {
+        return false;
+    }
+    slope = numerator / denominator;
+    return std::isfinite(slope);
+}
+
+double ComputeHuberResidualScale(
+    const std::vector<ResidualInterceptSample> & sample_list,
+    double slope)
+{
+    std::vector<double> residual_list;
+    residual_list.reserve(sample_list.size());
+    for (const auto & sample : sample_list)
+    {
+        residual_list.emplace_back(sample.residual - slope * sample.basis);
+    }
+
+    const auto median_residual{ array_helper::ComputeMedian(residual_list) };
+    std::vector<double> deviation_list;
+    deviation_list.reserve(residual_list.size());
+    for (const auto residual : residual_list)
+    {
+        deviation_list.emplace_back(std::abs(residual - median_residual));
+    }
+
+    return std::max(
+        kHuberScaleMultiplier * array_helper::ComputeMedian(deviation_list),
+        kHuberScaleMin);
+}
+
+bool EstimateHuberSlopeThroughOrigin(
+    const std::vector<ResidualInterceptSample> & sample_list,
+    double & slope)
+{
+    if (sample_list.empty())
+    {
+        return false;
+    }
+    if (!EstimateOrdinarySlopeThroughOrigin(sample_list, slope))
+    {
+        return false;
+    }
+
+    for (int t = 0; t < kHuberSlopeMaximumIterations; t++)
+    {
+        const auto scale{ ComputeHuberResidualScale(sample_list, slope) };
+        const auto cutoff{ kHuberCutoffMultiplier * scale };
+        double numerator{ 0.0 };
+        double denominator{ 0.0 };
+        for (const auto & sample : sample_list)
+        {
+            const auto error{ sample.residual - slope * sample.basis };
+            const auto abs_error{ std::abs(error) };
+            const auto weight{ abs_error <= cutoff ? 1.0 : cutoff / abs_error };
+            numerator += weight * sample.basis * sample.residual;
+            denominator += weight * sample.basis * sample.basis;
+        }
+        if (!std::isfinite(numerator) ||
+            !std::isfinite(denominator) ||
+            denominator <= std::numeric_limits<double>::epsilon())
+        {
+            return false;
+        }
+
+        const auto updated_slope{ numerator / denominator };
+        if (!std::isfinite(updated_slope))
+        {
+            return false;
+        }
+        if (std::abs(updated_slope - slope) < kHuberSlopeTolerance)
+        {
+            slope = updated_slope;
+            return true;
+        }
+        slope = updated_slope;
+    }
+    return true;
+}
+
 double EstimateResidualInterceptParameter(
     const LocalPotentialSampleList & sample_entries,
     const RHBMBetaEstimateResult & fit_result,
     double current_intercept)
 {
     const auto signal_model{ linearization_service::DecodeParameterVector(fit_result.beta_mdpde) };
-    if (signal_model.GetWidth()<= 0.0) return current_intercept;
+    const auto width{ signal_model.GetWidth() };
+    if (!std::isfinite(width) || width <= 0.0) return current_intercept;
 
-    std::vector<double> intercept_list;
-    intercept_list.reserve(sample_entries.size());
+    std::vector<ResidualInterceptSample> residual_sample_list;
+    residual_sample_list.reserve(sample_entries.size());
     for (const auto & sample : sample_entries)
     {
         const auto distance{ static_cast<double>(sample.point.distance) };
@@ -165,13 +272,24 @@ double EstimateResidualInterceptParameter(
         if (distance > kResidualInterceptRangeMax) continue;
 
         const auto basis{ signal_model.InterceptBasisAtDistance(distance) };
+        if (!std::isfinite(basis) || std::abs(basis) <= std::numeric_limits<double>::epsilon())
+        {
+            continue;
+        }
         const auto residual{
             static_cast<double>(sample.response) - signal_model.SignalAtDistance(distance)
         };
-        intercept_list.emplace_back(residual / basis);
+        if (!std::isfinite(residual))
+        {
+            continue;
+        }
+        residual_sample_list.emplace_back(ResidualInterceptSample{ basis, residual });
     }
-    if (intercept_list.empty()) return current_intercept;
-    const auto candidate_intercept{ array_helper::ComputeMedian(intercept_list) };
+    double candidate_intercept{ current_intercept };
+    if (!EstimateHuberSlopeThroughOrigin(residual_sample_list, candidate_intercept))
+    {
+        return current_intercept;
+    }
     const auto candidate_model{ signal_model.WithIntercept(candidate_intercept) };
     if (!CanBuildFiniteZeroInterceptSamples(sample_entries, candidate_model))
     {
@@ -1005,9 +1123,12 @@ void RunFirstStageLocalFitting(ModelObject & model_object, const FitOptions & op
     const auto & atom_list{ model_object.GetSelectedAtoms() };
     auto local_editor_list{ BuildSelectedAtomLocalEditors(model_object) };
     std::atomic<size_t> atom_count{ 0 };
-    Logger::Log(LogLevel::Info,
-        "Run first-stage local atom fitting for " +
-        std::to_string(selected_atom_size) + " atoms.");
+    if (!options.quiet_mode)
+    {
+        Logger::Log(LogLevel::Info,
+            "Run first-stage local atom fitting for " +
+            std::to_string(selected_atom_size) + " atoms.");
+    }
 
 #ifdef USE_OPENMP
     #pragma omp parallel for num_threads(options.thread_size)
