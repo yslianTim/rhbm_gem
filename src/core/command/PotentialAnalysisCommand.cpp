@@ -81,10 +81,7 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
     options.distance_min = request.fit_range_min;
     options.distance_max = request.fit_range_max;
     options.thread_size = request.job_count;
-    RunLocalAlphaTraining(*model_object, options);
-    RunLocalPotentialFitting(*model_object, options);
-    RunGroupAlphaTraining(*model_object, options);
-    RunGroupPotentialFitting(*model_object, options);
+    RunPotentialFittingWorkflow(*model_object, options);
 
     DataRepository repository{ request.database_path };
     repository.SaveModel(*model_object, request.saved_key_tag);

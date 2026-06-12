@@ -1241,4 +1241,12 @@ void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & opt
     }
 }
 
+void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & options)
+{
+    RunLocalAlphaTraining(model_object, options);
+    RunLocalPotentialFitting(model_object, options);
+    RunGroupAlphaTraining(model_object, options);
+    RunGroupPotentialFitting(model_object, options);
+}
+
 } // namespace rhbm_gem::core
