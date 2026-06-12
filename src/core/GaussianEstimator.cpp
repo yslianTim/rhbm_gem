@@ -475,14 +475,14 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
                     array_helper::ComputeNorm<float>(sample_position, neighbor_position))
             };
             if (distance > kNeighborContributionDistanceMax) continue;
-            //if (neighbor_atom->GetElement() == Element::OXYGEN)
-            //{
-            //    response_value -= static_cast<float>(gaussian_iter->second.ResponseAtDistance(distance));
-            //}
-            //else
-            //{
+            if (neighbor_atom->GetElement() == Element::OXYGEN)
+            {
+                response_value -= static_cast<float>(gaussian_iter->second.ResponseAtDistance(distance));
+            }
+            else
+            {
                 response_value -= static_cast<float>(gaussian_iter->second.SignalAtDistance(distance));
-            //}
+            }
         }
         updated_list.emplace_back(LocalPotentialSample{response_value, sample.point });
     }

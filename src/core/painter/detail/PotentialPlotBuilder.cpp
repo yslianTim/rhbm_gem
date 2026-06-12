@@ -598,7 +598,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToMapVal
 {
     auto data_array{
         local_potential_series::BuildBinnedDistanceResponseSeries(
-            GetLocalEntry().GetSamplingEntries(), bin_size, x_min, x_max)
+            GetLocalEntry().GetSamplingEntries(false), bin_size, x_min, x_max)
     };
     auto graph{ root_helper::CreateGraphErrors(bin_size) };
     auto count{ 0 };

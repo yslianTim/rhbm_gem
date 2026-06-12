@@ -106,6 +106,7 @@ TEST(PotentialPlotBuilderTest, GaussianFunctionsPreserveModelIntercept)
     EXPECT_EQ(local_function->GetNpar(), 3);
     EXPECT_DOUBLE_EQ(local_function->GetParameter(2), local_model.GetIntercept());
     EXPECT_NEAR(local_function->Eval(0.75), local_model.ResponseAtDistance(0.75), 1e-12);
+    EXPECT_NE(local_function->Eval(0.75), local_model.SignalAtDistance(0.75));
 
     analysis.RebuildAtomGroupsFromSelection();
     const auto analysis_view{ model->GetAnalysisView() };
@@ -135,10 +136,12 @@ TEST(PotentialPlotBuilderTest, GaussianFunctionsPreserveModelIntercept)
     EXPECT_EQ(mean_function->GetNpar(), 3);
     EXPECT_DOUBLE_EQ(mean_function->GetParameter(2), mean_model.GetIntercept());
     EXPECT_NEAR(mean_function->Eval(0.75), mean_model.ResponseAtDistance(0.75), 1e-12);
+    EXPECT_NE(mean_function->Eval(0.75), mean_model.SignalAtDistance(0.75));
 
     ASSERT_NE(prior_function, nullptr);
     EXPECT_EQ(prior_function->GetNpar(), 3);
     EXPECT_DOUBLE_EQ(prior_function->GetParameter(2), prior_model.GetIntercept());
     EXPECT_NEAR(prior_function->Eval(0.75), prior_model.ResponseAtDistance(0.75), 1e-12);
+    EXPECT_NE(prior_function->Eval(0.75), prior_model.SignalAtDistance(0.75));
 }
 #endif

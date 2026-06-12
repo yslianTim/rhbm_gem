@@ -1539,7 +1539,7 @@ void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
                 root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
                 auto x_factor{ root_helper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
                 auto y_factor{ root_helper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
-                frame[i][j] = root_helper::CreateHist2D(Form("frame_%d_%d", i, j),"", 500, 0.01, 1.49, 500, y_min, y_max);
+                frame[i][j] = root_helper::CreateHist2D(Form("frame_%d_%d", i, j),"", 500, 0.01, 1.99, 500, y_min, y_max);
                 root_helper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 60.0f, 0.01f, 133);
                 root_helper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.08/x_factor), 505);
                 root_helper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 60.0f, 0.01f, 133);

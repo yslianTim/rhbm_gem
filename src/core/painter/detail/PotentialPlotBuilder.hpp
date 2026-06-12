@@ -52,7 +52,7 @@ public:
     std::unique_ptr<::TGraphErrors> CreateGausEstimateScatterGraph(GroupKey group_key1, GroupKey group_key2, const std::string & class_key, const int par_id=0);
     std::unique_ptr<::TGraphErrors> CreateDistanceToMapValueGraph();
     std::unique_ptr<::TGraphErrors> CreateLinearModelDistanceToMapValueGraph();
-    std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToMapValueGraph(int bin_size=15, double x_min=0.0, double x_max=1.5);
+    std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToMapValueGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
     std::unique_ptr<::TGraphErrors> CreateInRangeAtomsToGausEstimateGraph(GroupKey group_key, const std::string & class_key, double range=5.0, int par_id=0);
     std::unique_ptr<::TGraphErrors> CreateCOMDistanceToGausEstimateGraph(GroupKey group_key, const std::string & class_key, int par_id=0);
     std::unique_ptr<::TGraphErrors> CreateAtomXYPositionTomographyGraph(double normalized_z_pos=0.5, double z_ratio_window=0.1, bool com_center=false);
