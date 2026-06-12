@@ -20,7 +20,7 @@ class ChemicalDataHelperTest : public ::testing::Test {
 };
 
 TEST_F(ChemicalDataHelperTest, BasicChecks) {
-    EXPECT_EQ(2U, ChemicalDataHelper::GetGroupAtomClassCount());
+    EXPECT_EQ(1U, ChemicalDataHelper::GetGroupAtomClassCount());
     EXPECT_EQ(ChemicalDataHelper::GetStandardAminoAcidList().size(),
               ChemicalDataHelper::GetStandardAminoAcidCount());
     EXPECT_EQ(90U, ChemicalDataHelper::GetElementCount());
@@ -76,7 +76,6 @@ TEST_F(ChemicalDataHelperTest, InvalidElementReturnsZero) {
 }
 
 TEST_F(ChemicalDataHelperTest, ExplicitClassKeyGetters) {
-    EXPECT_EQ("simple_atom_class", ChemicalDataHelper::GetSimpleAtomClassKey());
     EXPECT_EQ("component_atom_class", ChemicalDataHelper::GetComponentAtomClassKey());
 }
 
@@ -165,7 +164,7 @@ TEST_F(ChemicalDataHelperTest, ResidueDisplayAttributes) {
 }
 
 TEST_F(ChemicalDataHelperTest, GetGroupAtomClassKeyThrowsOnOutOfRange) {
-    EXPECT_THROW(ChemicalDataHelper::GetGroupAtomClassKey(2), std::out_of_range);
+    EXPECT_THROW(ChemicalDataHelper::GetGroupAtomClassKey(1), std::out_of_range);
 }
 
 TEST_F(ChemicalDataHelperTest, ConversionHelpersReturnUnkForUnknownStrings) {

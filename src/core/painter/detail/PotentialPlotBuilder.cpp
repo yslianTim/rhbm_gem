@@ -6,6 +6,7 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
+#include <rhbm_gem/utils/domain/KeyPacker.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/LocalPotentialSeries.hpp>
@@ -22,7 +23,9 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <optional>
 #include <stdexcept>
+#include <tuple>
 #include <unordered_map>
 
 namespace rhbm_gem {
@@ -690,7 +693,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomXYPositionTomograp
 }
 
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateMapValueScatterGraph(
-    GroupKey group_key,
+    AtomKey atom_key,
     ModelObject * model1,
     ModelObject * model2,
     int bin_size,
@@ -700,14 +703,12 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateMapValueScatterGraph(
     auto graph{ root_helper::CreateGraphErrors() };
     const ModelAnalysisView entry1_view{ *model1 };
     const ModelAnalysisView entry2_view{ *model2 };
-    const auto & class_key{ ChemicalDataHelper::GetSimpleAtomClassKey() };
-    if (!entry1_view.HasAtomGroup(group_key, class_key) ||
-        !entry2_view.HasAtomGroup(group_key, class_key))
+    const auto group1{ CollectComponentAtomMembers(entry1_view, atom_key) };
+    const auto group2{ CollectComponentAtomMembers(entry2_view, atom_key) };
+    if (group1.empty() || group2.empty())
     {
         return graph;
     }
-    const auto & group1{ entry1_view.GetAtomObjectList(group_key, class_key) };
-    const auto & group2{ entry2_view.GetAtomObjectList(group_key, class_key) };
 
     std::unordered_map<int, AtomObject *> model1_atom_map;
     model1_atom_map.reserve(group1.size());
@@ -752,6 +753,73 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateMapValueScatterGraph(
         }
     }
     return graph;
+}
+
+std::vector<GroupKey> PotentialPlotBuilder::CollectComponentAtomGroupKeys(
+    const ModelAnalysisView & model_view,
+    AtomKey atom_key)
+{
+    const auto & class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
+    std::vector<GroupKey> result;
+    for (const auto group_key : model_view.CollectAtomGroupKeys(class_key))
+    {
+        const auto unpacked_key{ KeyPackerComponentAtomClass::Unpack(group_key) };
+        if (std::get<1>(unpacked_key) == atom_key)
+        {
+            result.emplace_back(group_key);
+        }
+    }
+    return result;
+}
+
+std::vector<AtomObject *> PotentialPlotBuilder::CollectComponentAtomMembers(
+    const ModelAnalysisView & model_view,
+    AtomKey atom_key)
+{
+    const auto & class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
+    std::vector<AtomObject *> result;
+    for (const auto group_key : CollectComponentAtomGroupKeys(model_view, atom_key))
+    {
+        const auto & members{ model_view.GetAtomObjectList(group_key, class_key) };
+        result.insert(result.end(), members.begin(), members.end());
+    }
+    return result;
+}
+
+std::optional<GaussianModel3DWithUncertainty> PotentialPlotBuilder::ComputeComponentAtomAveragePrior(
+    const ModelAnalysisView & model_view,
+    AtomKey atom_key)
+{
+    const auto & class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
+    double amplitude{ 0.0 };
+    double width{ 0.0 };
+    double intercept{ 0.0 };
+    double amplitude_sd{ 0.0 };
+    double width_sd{ 0.0 };
+    double intercept_sd{ 0.0 };
+    std::size_t count{ 0 };
+    for (const auto group_key : CollectComponentAtomGroupKeys(model_view, atom_key))
+    {
+        const auto prior{ model_view.GetAtomGroupPriorWithUncertainty(group_key, class_key) };
+        const auto & model{ prior.GetModel() };
+        const auto & uncertainty{ prior.GetStandardDeviationModel() };
+        amplitude += model.GetAmplitude();
+        width += model.GetWidth();
+        intercept += model.GetIntercept();
+        amplitude_sd += uncertainty.GetAmplitude();
+        width_sd += uncertainty.GetWidth();
+        intercept_sd += uncertainty.GetIntercept();
+        count++;
+    }
+    if (count == 0)
+    {
+        return std::nullopt;
+    }
+    const auto scale{ 1.0 / static_cast<double>(count) };
+    return GaussianModel3DWithUncertainty{
+        GaussianModel3D{ amplitude * scale, width * scale, intercept * scale },
+        GaussianModel3DUncertainty{ amplitude_sd * scale, width_sd * scale, intercept_sd * scale }
+    };
 }
 
 std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalLinearModelFunctionOLS() const
@@ -864,6 +932,26 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionPrior(
     auto width{ prior.GetWidth() };
     auto intercept{ prior.GetIntercept() };
     return root_helper::CreateGaus3DFunctionIn1D("group_gaus_prior", amplitude, width, intercept);
+}
+
+std::unique_ptr<TF1> PotentialPlotBuilder::CreateComponentAtomAverageGausFunctionPrior(
+    AtomKey atom_key) const
+{
+    if (IsModelObjectAvailable() == false)
+    {
+        return nullptr;
+    }
+    const auto prior{ ComputeComponentAtomAveragePrior(GetModelView(), atom_key) };
+    if (!prior.has_value())
+    {
+        return nullptr;
+    }
+    const auto & model{ prior->GetModel() };
+    return root_helper::CreateGaus3DFunctionIn1D(
+        "component_atom_average_gaus_prior",
+        model.GetAmplitude(),
+        model.GetWidth(),
+        model.GetIntercept());
 }
 
 #endif

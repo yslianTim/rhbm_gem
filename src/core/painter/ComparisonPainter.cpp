@@ -70,14 +70,14 @@ private:
         size_t reference_id,
         ::TGraphErrors * graph,
         const std::vector<ModelObject *> & model_list,
-        const std::string & class_key,
+        bool use_component_average,
         Residue residue=Residue::UNK);
     void BuildAmplitudeRatioToWidthGraph(
         size_t target_id,
         size_t reference_id,
         ::TGraphErrors * graph,
         const std::vector<ModelObject *> & model_list,
-        const std::string & class_key,
+        bool use_component_average,
         bool draw_index=false,
         Residue residue=Residue::UNK);
 #endif
@@ -191,11 +191,11 @@ void ComparisonPainter::PaintGroupGausEstimateComparison(const std::string & nam
             sim_no_charge_graph[i][j] = root_helper::CreateGraphErrors();
             sim_additional_graph[i][j] = root_helper::CreateGraphErrors();
 
-            auto class_key{ (j == row_size - 1) ? ChemicalDataHelper::GetSimpleAtomClassKey() : ChemicalDataHelper::GetComponentAtomClassKey() };
-            BuildAmplitudeRatioToWidthGraph(i, ref_id[i], data_graph[i][j].get(), m_model_object_list, class_key, true, residue_id[j]);
-            BuildAmplitudeRatioToWidthGraph(i, ref_id[i], sim_with_charge_graph[i][j].get(), sim_with_charge_model_object_list, class_key, false, residue_id[j]);
-            BuildAmplitudeRatioToWidthGraph(i, ref_id[i], sim_no_charge_graph[i][j].get(), sim_no_charge_model_object_list, class_key, false, residue_id[j]);
-            BuildAmplitudeRatioToWidthGraph(i, ref_id[i], sim_additional_graph[i][j].get(), sim_amber95_model_object_list, class_key, false, residue_id[j]);
+            const bool use_component_average{ j == row_size - 1 };
+            BuildAmplitudeRatioToWidthGraph(i, ref_id[i], data_graph[i][j].get(), m_model_object_list, use_component_average, true, residue_id[j]);
+            BuildAmplitudeRatioToWidthGraph(i, ref_id[i], sim_with_charge_graph[i][j].get(), sim_with_charge_model_object_list, use_component_average, false, residue_id[j]);
+            BuildAmplitudeRatioToWidthGraph(i, ref_id[i], sim_no_charge_graph[i][j].get(), sim_no_charge_model_object_list, use_component_average, false, residue_id[j]);
+            BuildAmplitudeRatioToWidthGraph(i, ref_id[i], sim_additional_graph[i][j].get(), sim_amber95_model_object_list, use_component_average, false, residue_id[j]);
 
             for (int p = 0; p < data_graph[i][j]->GetN(); p++)
             {
@@ -231,9 +231,9 @@ void ComparisonPainter::PaintGroupGausEstimateComparison(const std::string & nam
         simulation1_graph[i] = root_helper::CreateGraphErrors();
         simulation2_graph[i] = root_helper::CreateGraphErrors();
         simulation3_graph[i] = root_helper::CreateGraphErrors();
-        BuildGausRatioToResolutionGraph(par_id[i], target_id, reference_id, simulation1_graph[i].get(), sim_with_charge_model_object_list, ChemicalDataHelper::GetSimpleAtomClassKey());
-        BuildGausRatioToResolutionGraph(par_id[i], target_id, reference_id, simulation2_graph[i].get(), sim_amber95_model_object_list, ChemicalDataHelper::GetSimpleAtomClassKey());
-        BuildGausRatioToResolutionGraph(par_id[i], target_id, reference_id, simulation3_graph[i].get(), sim_no_charge_model_object_list, ChemicalDataHelper::GetSimpleAtomClassKey());
+        BuildGausRatioToResolutionGraph(par_id[i], target_id, reference_id, simulation1_graph[i].get(), sim_with_charge_model_object_list, true);
+        BuildGausRatioToResolutionGraph(par_id[i], target_id, reference_id, simulation2_graph[i].get(), sim_amber95_model_object_list, true);
+        BuildGausRatioToResolutionGraph(par_id[i], target_id, reference_id, simulation3_graph[i].get(), sim_no_charge_model_object_list, true);
         for (int p = 0; p < simulation1_graph[i]->GetN(); p++)
         {
             x_array_sim.push_back(simulation1_graph[i]->GetPointX(p));
@@ -476,8 +476,6 @@ void ComparisonPainter::PaintGausEstimateResidueClassDenseComparison(const std::
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ComparisonPainter::PaintGausEstimateResidueClassDenseComparison");
 
-    auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
-    
     auto sim_with_charge_model_object_list{ m_ref_model_object_list_map.at("with_charge")};
     auto sim_no_charge_model_object_list{ m_ref_model_object_list_map.at("no_charge")};
     auto sim_amber95_model_object_list{ m_ref_model_object_list_map.at("amber95")};
@@ -517,10 +515,10 @@ void ComparisonPainter::PaintGausEstimateResidueClassDenseComparison(const std::
             auto sim_with_charge_graph{ root_helper::CreateGraphErrors() };
             auto sim_no_charge_graph{ root_helper::CreateGraphErrors() };
             auto sim_additional_graph{ root_helper::CreateGraphErrors() };
-            BuildAmplitudeRatioToWidthGraph(k, ref_id[k], data_graph.get(), m_model_object_list, class_key, true, residue);
-            BuildAmplitudeRatioToWidthGraph(k, ref_id[k], sim_with_charge_graph.get(), sim_with_charge_model_object_list, class_key, false, residue);
-            BuildAmplitudeRatioToWidthGraph(k, ref_id[k], sim_no_charge_graph.get(), sim_no_charge_model_object_list, class_key, false, residue);
-            BuildAmplitudeRatioToWidthGraph(k, ref_id[k], sim_additional_graph.get(), sim_amber95_model_object_list, class_key, false, residue);
+            BuildAmplitudeRatioToWidthGraph(k, ref_id[k], data_graph.get(), m_model_object_list, false, true, residue);
+            BuildAmplitudeRatioToWidthGraph(k, ref_id[k], sim_with_charge_graph.get(), sim_with_charge_model_object_list, false, false, residue);
+            BuildAmplitudeRatioToWidthGraph(k, ref_id[k], sim_no_charge_graph.get(), sim_no_charge_model_object_list, false, false, residue);
+            BuildAmplitudeRatioToWidthGraph(k, ref_id[k], sim_additional_graph.get(), sim_amber95_model_object_list, false, false, residue);
 
             for (int p = 0; p < data_graph->GetN(); p++)
             {
@@ -696,10 +694,10 @@ void ComparisonPainter::PainMapValueComparison(
         std::vector<double> x_array, y_array;
         for (size_t i = 0; i < col_size; i++)
         {
-            auto group_key{ data_internal::GetMainChainSimpleAtomClassGroupKey(i) };
+            const auto atom_key{ static_cast<AtomKey>(data_internal::GetMainChainSpot(i)) };
             auto graph{
                 PotentialPlotBuilder::CreateMapValueScatterGraph(
-                    group_key, ref_model_object, model_object, 15, 0.0, 1.5)
+                    atom_key, ref_model_object, model_object, 15, 0.0, 1.5)
             };
             r_square[i] = root_helper::PerformLinearRegression(graph.get(), slope[i], intercept[i]);
             auto function{ root_helper::CreateFunction1D(Form("fit_%d", static_cast<int>(i)), "x*[1]+[0]") };
@@ -812,39 +810,43 @@ void ComparisonPainter::PainMapValueComparison(
 #ifdef HAVE_ROOT
 void ComparisonPainter::BuildGausRatioToResolutionGraph(
     int par_id, size_t target_id, size_t reference_id, TGraphErrors * graph,
-    const std::vector<ModelObject *> & model_list, const std::string & class_key, Residue residue)
+    const std::vector<ModelObject *> & model_list, bool use_component_average, Residue residue)
 {
-    auto group_key
-    {
-        (class_key == ChemicalDataHelper::GetSimpleAtomClassKey()) ?
-        data_internal::GetMainChainSimpleAtomClassGroupKey(target_id) :
-        data_internal::GetMainChainComponentAtomClassGroupKey(target_id, residue)
-    };
-    auto ref_group_key
-    {
-        (class_key == ChemicalDataHelper::GetSimpleAtomClassKey()) ?
-        data_internal::GetMainChainSimpleAtomClassGroupKey(reference_id) :
-        data_internal::GetMainChainComponentAtomClassGroupKey(reference_id, residue)
-    };
+    const auto & class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
+    const auto group_key{ data_internal::GetMainChainComponentAtomClassGroupKey(target_id, residue) };
+    const auto ref_group_key{ data_internal::GetMainChainComponentAtomClassGroupKey(reference_id, residue) };
+    const auto atom_key{ static_cast<AtomKey>(data_internal::GetMainChainSpot(target_id)) };
+    const auto ref_atom_key{ static_cast<AtomKey>(data_internal::GetMainChainSpot(reference_id)) };
     auto count{ 0 };
     for (auto model_object : model_list)
     {
         const ModelAnalysisView entry_view{ *model_object };
-        if (!entry_view.HasAtomGroup(group_key, class_key)) continue;
-        if (!entry_view.HasAtomGroup(ref_group_key, class_key)) continue;
+        double y_value{ 0.0 };
+        double y_error{ 0.0 };
+        double ref_y_value{ 0.0 };
+        double ref_y_error{ 0.0 };
+        if (use_component_average)
+        {
+            const auto prior{ PotentialPlotBuilder::ComputeComponentAtomAveragePrior(entry_view, atom_key) };
+            const auto ref_prior{ PotentialPlotBuilder::ComputeComponentAtomAveragePrior(entry_view, ref_atom_key) };
+            if (!prior.has_value() || !ref_prior.has_value()) continue;
+            y_value = prior->GetDisplayParameter(par_id);
+            y_error = prior->GetDisplayStandardDeviation(par_id);
+            ref_y_value = ref_prior->GetDisplayParameter(par_id);
+            ref_y_error = ref_prior->GetDisplayStandardDeviation(par_id);
+        }
+        else
+        {
+            if (!entry_view.HasAtomGroup(group_key, class_key)) continue;
+            if (!entry_view.HasAtomGroup(ref_group_key, class_key)) continue;
+            y_value = entry_view.GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(par_id);
+            y_error = entry_view.GetAtomGroupPriorWithUncertainty(group_key, class_key)
+                .GetDisplayStandardDeviation(par_id);
+            ref_y_value = entry_view.GetAtomGroupPrior(ref_group_key, class_key).GetDisplayParameter(par_id);
+            ref_y_error = entry_view.GetAtomGroupPriorWithUncertainty(ref_group_key, class_key)
+                .GetDisplayStandardDeviation(par_id);
+        }
         auto x_value{ model_object->GetResolution() };
-        auto y_value{ entry_view.GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(par_id) };
-        auto y_error{
-            entry_view.GetAtomGroupPriorWithUncertainty(group_key, class_key)
-                .GetDisplayStandardDeviation(par_id)
-        };
-        auto ref_y_value{
-            entry_view.GetAtomGroupPrior(ref_group_key, class_key).GetDisplayParameter(par_id)
-        };
-        auto ref_y_error{
-            entry_view.GetAtomGroupPriorWithUncertainty(ref_group_key, class_key)
-                .GetDisplayStandardDeviation(par_id)
-        };
         if (x_value == 0.0 || ref_y_value == 0.0) continue;
         auto ratio{ y_value/ref_y_value };
         auto error{ ratio * std::sqrt(std::pow(y_error/y_value, 2) + std::pow(ref_y_error/ref_y_value, 2)) };
@@ -856,47 +858,53 @@ void ComparisonPainter::BuildGausRatioToResolutionGraph(
 
 void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
     size_t target_id, size_t reference_id, TGraphErrors * graph,
-    const std::vector<ModelObject *> & model_list, const std::string & class_key,
+    const std::vector<ModelObject *> & model_list, bool use_component_average,
     bool draw_index, Residue residue)
 {
     const char * data_index[11]{"A","B","C","D","E","F","G","H","I","J","K"};
-    auto group_key
-    {
-        (class_key == ChemicalDataHelper::GetSimpleAtomClassKey()) ?
-        data_internal::GetMainChainSimpleAtomClassGroupKey(target_id) :
-        data_internal::GetMainChainComponentAtomClassGroupKey(target_id, residue)
-    };
-    auto ref_group_key
-    {
-        (class_key == ChemicalDataHelper::GetSimpleAtomClassKey()) ?
-        data_internal::GetMainChainSimpleAtomClassGroupKey(reference_id) :
-        data_internal::GetMainChainComponentAtomClassGroupKey(reference_id, residue)
-    };
+    const auto & class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
+    const auto group_key{ data_internal::GetMainChainComponentAtomClassGroupKey(target_id, residue) };
+    const auto ref_group_key{ data_internal::GetMainChainComponentAtomClassGroupKey(reference_id, residue) };
+    const auto atom_key{ static_cast<AtomKey>(data_internal::GetMainChainSpot(target_id)) };
+    const auto ref_atom_key{ static_cast<AtomKey>(data_internal::GetMainChainSpot(reference_id)) };
     auto count{ 0 };
     auto model_count{ 0 };
     for (auto model_object : model_list)
     {
         model_count++;
         const ModelAnalysisView entry_view{ *model_object };
-        if (!entry_view.HasAtomGroup(group_key, class_key)) continue;
-        if (!entry_view.HasAtomGroup(ref_group_key, class_key)) continue;
-        auto x_value{ entry_view.GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(1) };
-        auto y_value{ entry_view.GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(0) };
-        auto x_error{
-            entry_view.GetAtomGroupPriorWithUncertainty(group_key, class_key)
-                .GetDisplayStandardDeviation(1)
-        };
-        auto y_error{
-            entry_view.GetAtomGroupPriorWithUncertainty(group_key, class_key)
-                .GetDisplayStandardDeviation(0)
-        };
-        auto ref_y_value{
-            entry_view.GetAtomGroupPrior(ref_group_key, class_key).GetDisplayParameter(0)
-        };
-        auto ref_y_error{
-            entry_view.GetAtomGroupPriorWithUncertainty(ref_group_key, class_key)
-                .GetDisplayStandardDeviation(0)
-        };
+        double x_value{ 0.0 };
+        double y_value{ 0.0 };
+        double x_error{ 0.0 };
+        double y_error{ 0.0 };
+        double ref_y_value{ 0.0 };
+        double ref_y_error{ 0.0 };
+        if (use_component_average)
+        {
+            const auto prior{ PotentialPlotBuilder::ComputeComponentAtomAveragePrior(entry_view, atom_key) };
+            const auto ref_prior{ PotentialPlotBuilder::ComputeComponentAtomAveragePrior(entry_view, ref_atom_key) };
+            if (!prior.has_value() || !ref_prior.has_value()) continue;
+            x_value = prior->GetDisplayParameter(1);
+            y_value = prior->GetDisplayParameter(0);
+            x_error = prior->GetDisplayStandardDeviation(1);
+            y_error = prior->GetDisplayStandardDeviation(0);
+            ref_y_value = ref_prior->GetDisplayParameter(0);
+            ref_y_error = ref_prior->GetDisplayStandardDeviation(0);
+        }
+        else
+        {
+            if (!entry_view.HasAtomGroup(group_key, class_key)) continue;
+            if (!entry_view.HasAtomGroup(ref_group_key, class_key)) continue;
+            x_value = entry_view.GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(1);
+            y_value = entry_view.GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(0);
+            x_error = entry_view.GetAtomGroupPriorWithUncertainty(group_key, class_key)
+                .GetDisplayStandardDeviation(1);
+            y_error = entry_view.GetAtomGroupPriorWithUncertainty(group_key, class_key)
+                .GetDisplayStandardDeviation(0);
+            ref_y_value = entry_view.GetAtomGroupPrior(ref_group_key, class_key).GetDisplayParameter(0);
+            ref_y_error = entry_view.GetAtomGroupPriorWithUncertainty(ref_group_key, class_key)
+                .GetDisplayStandardDeviation(0);
+        }
         if (x_value == 0.0 || ref_y_value == 0.0) continue;
         auto ratio{ y_value/ref_y_value };
         auto error{ ratio * std::sqrt(std::pow(y_error/y_value, 2) + std::pow(ref_y_error/ref_y_value, 2)) };

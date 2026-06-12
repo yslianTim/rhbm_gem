@@ -14,33 +14,6 @@ static_assert(std::is_same_v<ComponentKey, uint8_t>);
 static_assert(std::is_same_v<AtomKey, uint16_t>);
 static_assert(std::is_same_v<BondKey, uint16_t>);
 
-struct KeyPackerSimpleAtomClass
-{
-    // Bits allocation
-    // ┌─0~15─AtomKey─┐┌─16─Flag─┐
-    // | 16 bits      || 1 bit   |
-    static GroupKey Pack(AtomKey atom_key, bool flag)
-    {
-        return static_cast<GroupKey>(atom_key)
-            | (static_cast<GroupKey>(flag ? 1 : 0) << 16);
-    }
-
-    static std::tuple<AtomKey, bool> Unpack(GroupKey key)
-    {
-        constexpr GroupKey mask_16bit{ 0xFFFF };
-        AtomKey atom_key{ static_cast<AtomKey>((key      ) & mask_16bit) };
-        bool flag{        static_cast<bool>(   (key >> 16) & 0x1)        };
-        return { atom_key, flag };
-    }
-
-    static std::string GetKeyString(GroupKey key)
-    {
-        auto [atom_key, flag]{ Unpack(key) };
-        return "<" + std::to_string(static_cast<int>(atom_key)) + ", "
-                   + std::to_string(flag) + ">";
-    }
-};
-
 struct KeyPackerSimpleBondClass
 {
     // Bits allocation

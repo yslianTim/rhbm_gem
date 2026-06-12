@@ -334,10 +334,10 @@ void DemoPainter::PainMapValueComparisonSingle(
     std::vector<double> x_array, y_array;
     for (size_t i = 0; i < col_size; i++)
     {
-        auto group_key{ data_internal::GetMainChainSimpleAtomClassGroupKey(i) };
+        const auto atom_key{ static_cast<AtomKey>(data_internal::GetMainChainSpot(i)) };
         auto graph{
             PotentialPlotBuilder::CreateMapValueScatterGraph(
-                group_key, ref_model_object, model_object, 15, 0.0, 1.5)
+                atom_key, ref_model_object, model_object, 15, 0.0, 1.5)
         };
         r_square[i] = root_helper::PerformLinearRegression(graph.get(), slope[i], intercept[i]);
         auto function{ root_helper::CreateFunction1D(Form("fit_%d", static_cast<int>(i)), "x*[1]+[0]") };
@@ -905,23 +905,18 @@ void DemoPainter::PaintGroupGausToFSC(
     for (size_t i = 0; i < data_internal::GetMainChainMemberCount(); i++)
     {
         if (i >= col_size) continue;
-        auto group_key{ data_internal::GetMainChainSimpleAtomClassGroupKey(i) };
+        const auto atom_key{ static_cast<AtomKey>(data_internal::GetMainChainSpot(i)) };
         graph[i] = root_helper::CreateGraphErrors();
         auto count{ 0 };
         for (auto model : model_list)
         {
             auto entry_iter{ std::make_unique<ModelAnalysisView>(*model) };
-            auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model) };
-            auto width_value{
-                entry_iter->GetAtomGroupPrior(
-                    group_key,
-                    ChemicalDataHelper::GetSimpleAtomClassKey()).GetDisplayParameter(1)
+            const auto average_prior{
+                PotentialPlotBuilder::ComputeComponentAtomAveragePrior(*entry_iter, atom_key)
             };
-            auto width_error{
-                entry_iter->GetAtomGroupPriorWithUncertainty(
-                    group_key,
-                    ChemicalDataHelper::GetSimpleAtomClassKey()).GetDisplayStandardDeviation(1)
-            };
+            if (!average_prior.has_value()) continue;
+            auto width_value{ average_prior->GetDisplayParameter(1) };
+            auto width_error{ average_prior->GetDisplayStandardDeviation(1) };
             graph[i]->SetPoint(count, model->GetResolution(), width_value);
             graph[i]->SetPointError(count, 0.0, width_error);
             count++;

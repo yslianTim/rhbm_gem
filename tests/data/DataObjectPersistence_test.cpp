@@ -189,7 +189,7 @@ TEST(DataObjectPersistenceTest, GaussianInterceptRoundTripPreservesAnalysisResul
 
     int annotated_serial_id{ 0 };
     GroupKey group_key{};
-    const auto class_key{ ChemicalDataHelper::GetSimpleAtomClassKey() };
+    const auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     {
         rg::DataRepository repository{ database_path };
         auto model{ data_test::MakeModelWithBond() };

@@ -525,7 +525,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupGaussianRes
     auto analysis{ model->EditAnalysis() };
     analysis.RebuildAtomGroupsFromSelection();
     const auto analysis_view{ model->GetAnalysisView() };
-    const auto & class_key{ ChemicalDataHelper::GetSimpleAtomClassKey() };
+    const auto & class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     const auto group_keys{ analysis_view.CollectAtomGroupKeys(class_key) };
     ASSERT_FALSE(group_keys.empty());
 
@@ -592,7 +592,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorRejectsAtomGroupGaussianRes
     auto analysis{ model->EditAnalysis() };
     analysis.RebuildAtomGroupsFromSelection();
     const auto analysis_view{ model->GetAnalysisView() };
-    const auto & class_key{ ChemicalDataHelper::GetSimpleAtomClassKey() };
+    const auto & class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     const auto group_key{ analysis_view.CollectAtomGroupKeys(class_key).front() };
 
     rg::GroupGaussianResult result;
@@ -609,7 +609,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorRebuildsAtomGroupsFromSelec
     auto * second_atom{ model->GetAtomList().at(1).get() };
     auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
     auto analysis{ model->EditAnalysis() };
-    const auto & simple_class_key{ ChemicalDataHelper::GetSimpleAtomClassKey() };
+    const auto & component_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
 
     model->SelectAllAtoms(false);
     model->SetAtomSelected(first_atom->GetSerialID(), true);
@@ -618,14 +618,14 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorRebuildsAtomGroupsFromSelec
     analysis.RebuildAtomGroupsFromSelection();
 
     EXPECT_EQ(analysis_data.FindAtomGroupEntry("stale_atom_class"), nullptr);
-    const auto * simple_group_entry{ analysis_data.FindAtomGroupEntry(simple_class_key) };
-    ASSERT_NE(simple_group_entry, nullptr);
+    const auto * component_group_entry{ analysis_data.FindAtomGroupEntry(component_class_key) };
+    ASSERT_NE(component_group_entry, nullptr);
 
     size_t member_count{ 0 };
-    for (const auto group_key : simple_group_entry->CollectGroupKeys())
+    for (const auto group_key : component_group_entry->CollectGroupKeys())
     {
-        member_count += simple_group_entry->GetMemberCount(group_key);
-        for (const auto * atom : simple_group_entry->GetMembers(group_key))
+        member_count += component_group_entry->GetMemberCount(group_key);
+        for (const auto * atom : component_group_entry->GetMembers(group_key))
         {
             ASSERT_NE(atom, nullptr);
             EXPECT_EQ(atom, first_atom);
@@ -637,13 +637,13 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorRebuildsAtomGroupsFromSelec
     model->SetAtomSelected(second_atom->GetSerialID(), true);
     analysis.RebuildAtomGroupsFromSelection();
 
-    simple_group_entry = analysis_data.FindAtomGroupEntry(simple_class_key);
-    ASSERT_NE(simple_group_entry, nullptr);
+    component_group_entry = analysis_data.FindAtomGroupEntry(component_class_key);
+    ASSERT_NE(component_group_entry, nullptr);
     member_count = 0;
-    for (const auto group_key : simple_group_entry->CollectGroupKeys())
+    for (const auto group_key : component_group_entry->CollectGroupKeys())
     {
-        member_count += simple_group_entry->GetMemberCount(group_key);
-        for (const auto * atom : simple_group_entry->GetMembers(group_key))
+        member_count += component_group_entry->GetMemberCount(group_key);
+        for (const auto * atom : component_group_entry->GetMembers(group_key))
         {
             ASSERT_NE(atom, nullptr);
             EXPECT_EQ(atom, second_atom);
@@ -697,12 +697,12 @@ TEST(DataObjectModelAnalysisTest, CollectAtomGroupKeysReturnsRebuiltGroupKeySet)
     auto model{ data_test::MakeModelWithBond() };
     auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
     auto analysis{ model->EditAnalysis() };
-    const auto & simple_class_key{ ChemicalDataHelper::GetSimpleAtomClassKey() };
+    const auto & component_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
 
     model->SelectAllAtoms();
     analysis.RebuildAtomGroupsFromSelection();
 
-    const auto * group_entry{ analysis_data.FindAtomGroupEntry(simple_class_key) };
+    const auto * group_entry{ analysis_data.FindAtomGroupEntry(component_class_key) };
     ASSERT_NE(group_entry, nullptr);
     const auto group_keys{ group_entry->CollectGroupKeys() };
     EXPECT_EQ(group_keys.size(), group_entry->GroupCount());
@@ -714,7 +714,7 @@ TEST(DataObjectModelAnalysisTest, CollectAtomGroupKeysReturnsRebuiltGroupKeySet)
     EXPECT_EQ(analysis_data.FindAtomGroupEntry("missing_atom_class"), nullptr);
 }
 
-TEST(DataObjectModelAnalysisTest, RebuildAtomGroupsDoesNotCreateStructureAtomClass)
+TEST(DataObjectModelAnalysisTest, RebuildAtomGroupsDoesNotCreateRemovedAtomClasses)
 {
     auto model{ data_test::MakeModelWithBond() };
     auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
@@ -723,6 +723,7 @@ TEST(DataObjectModelAnalysisTest, RebuildAtomGroupsDoesNotCreateStructureAtomCla
     model->SelectAllAtoms();
     analysis.RebuildAtomGroupsFromSelection();
 
+    EXPECT_EQ(analysis_data.FindAtomGroupEntry("simple_atom_class"), nullptr);
     EXPECT_EQ(analysis_data.FindAtomGroupEntry("structure_atom_class"), nullptr);
 }
 

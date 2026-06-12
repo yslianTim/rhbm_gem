@@ -23,7 +23,6 @@ GroupKey GetGroupKeyInClass(const AtomObject * atom_object, const std::string & 
 GroupKey GetGroupKeyInClass(ComponentKey component_key, AtomKey atom_key);
 Residue GetResidueFromGroupKey(GroupKey group_key, const std::string & class_key);
 
-GroupKey GetMainChainSimpleAtomClassGroupKey(size_t member_id);
 GroupKey GetMainChainComponentAtomClassGroupKey(size_t member_id, Residue residue);
 std::vector<GroupKey> GetMainChainComponentAtomClassGroupKeyList(size_t member_id);
 

@@ -2,11 +2,14 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
+#include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
+#include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 
 #ifdef HAVE_ROOT
@@ -57,12 +60,21 @@ public:
     std::unique_ptr<::TGraphErrors> CreateCOMDistanceToGausEstimateGraph(GroupKey group_key, const std::string & class_key, int par_id=0);
     std::unique_ptr<::TGraphErrors> CreateAtomXYPositionTomographyGraph(double normalized_z_pos=0.5, double z_ratio_window=0.1, bool com_center=false);
     static std::unique_ptr<::TGraphErrors> CreateMapValueScatterGraph(
-        GroupKey group_key,
+        AtomKey atom_key,
         ModelObject * model1,
         ModelObject * model2,
         int bin_size=15,
         double x_min=0.0,
         double x_max=1.5);
+    static std::vector<GroupKey> CollectComponentAtomGroupKeys(
+        const ModelAnalysisView & model_view,
+        AtomKey atom_key);
+    static std::vector<AtomObject *> CollectComponentAtomMembers(
+        const ModelAnalysisView & model_view,
+        AtomKey atom_key);
+    static std::optional<GaussianModel3DWithUncertainty> ComputeComponentAtomAveragePrior(
+        const ModelAnalysisView & model_view,
+        AtomKey atom_key);
     std::unique_ptr<::TF1> CreateAtomLocalLinearModelFunctionOLS() const;
     std::unique_ptr<::TF1> CreateAtomLocalLinearModelFunctionMDPDE() const;
     std::unique_ptr<::TF1> CreateAtomLocalGausFunctionOLS() const;
@@ -71,6 +83,7 @@ public:
     std::unique_ptr<::TF1> CreateAtomGroupLinearModelFunctionPrior(GroupKey group_key, const std::string & class_key, double x_min, double x_max) const;
     std::unique_ptr<::TF1> CreateAtomGroupGausFunctionMean(GroupKey group_key, const std::string & class_key) const;
     std::unique_ptr<::TF1> CreateAtomGroupGausFunctionPrior(GroupKey group_key, const std::string & class_key) const;
+    std::unique_ptr<::TF1> CreateComponentAtomAverageGausFunctionPrior(AtomKey atom_key) const;
 #endif
 
 private:

@@ -7,7 +7,7 @@
 
 const std::vector<std::string> ChemicalDataHelper::m_group_atom_class_key_list
 {
-    "simple_atom_class", "component_atom_class"
+    "component_atom_class"
 };
 
 const std::vector<std::string> ChemicalDataHelper::m_group_bond_class_key_list
@@ -579,14 +579,9 @@ const std::string & ChemicalDataHelper::GetGroupBondClassKey(size_t class_id)
     return m_group_bond_class_key_list.at(class_id);
 }
 
-const std::string & ChemicalDataHelper::GetSimpleAtomClassKey()
-{
-    return m_group_atom_class_key_list.at(0);
-}
-
 const std::string & ChemicalDataHelper::GetComponentAtomClassKey()
 {
-    return m_group_atom_class_key_list.at(1);
+    return m_group_atom_class_key_list.at(0);
 }
 
 const std::string & ChemicalDataHelper::GetSimpleBondClassKey()

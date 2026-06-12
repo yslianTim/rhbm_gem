@@ -76,12 +76,6 @@ GroupKey GetGroupKeyInClass(
     const AtomObject * atom_object,
     const std::string & class_key)
 {
-    if (class_key == ChemicalDataHelper::GetSimpleAtomClassKey())
-    {
-        return KeyPackerSimpleAtomClass::Pack(
-            atom_object->GetAtomKey(),
-            atom_object->GetSpecialAtomFlag());
-    }
     if (class_key == ChemicalDataHelper::GetComponentAtomClassKey())
     {
         return KeyPackerComponentAtomClass::Pack(
@@ -106,18 +100,6 @@ Residue GetResidueFromGroupKey(
         return static_cast<Residue>(std::get<0>(unpack_key));
     }
     return Residue::UNK;
-}
-
-GroupKey GetMainChainSimpleAtomClassGroupKey(size_t id)
-{
-    if (IsValidMainChainMemberID(id) == false)
-    {
-        Logger::Log(LogLevel::Warning, "Invalid main chain member ID: " + std::to_string(id));
-        return 0;
-    }
-    return KeyPackerSimpleAtomClass::Pack(
-        static_cast<AtomKey>(k_main_chain_member_spot_list.at(id)),
-        false);
 }
 
 GroupKey GetMainChainComponentAtomClassGroupKey(size_t id, Residue residue)

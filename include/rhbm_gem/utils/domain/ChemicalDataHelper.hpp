@@ -49,7 +49,6 @@ public:
     static size_t GetElementCount();
     static const std::string & GetGroupAtomClassKey(size_t class_id);
     static const std::string & GetGroupBondClassKey(size_t class_id);
-    static const std::string & GetSimpleAtomClassKey();
     static const std::string & GetComponentAtomClassKey();
     static const std::string & GetSimpleBondClassKey();
     static const std::string & GetComponentBondClassKey();

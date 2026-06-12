@@ -162,7 +162,6 @@ void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::
     Logger::Log(LogLevel::Info, "GausPainter::PaintMapValueMainChain");
 
     #ifdef HAVE_ROOT
-    const auto & class_key{ ChemicalDataHelper::GetSimpleAtomClassKey() };
     auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     const int col_size{ 4 };
@@ -186,9 +185,13 @@ void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::
     y_array.reserve(model_object->GetSelectedAtomCount());
     for (size_t k = 0; k < main_chain_element_size; k++)
     {
-        auto group_key{ data_internal::GetMainChainSimpleAtomClassGroupKey(k) };
-        if (!entry_iter->HasAtomGroup(group_key, class_key)) continue;
-        for (auto atom : entry_iter->GetAtomObjectList(group_key, class_key))
+        const auto atom_key{ static_cast<AtomKey>(data_internal::GetMainChainSpot(k)) };
+        const auto atom_list{ PotentialPlotBuilder::CollectComponentAtomMembers(*entry_iter, atom_key) };
+        const auto average_prior{
+            PotentialPlotBuilder::ComputeComponentAtomAveragePrior(*entry_iter, atom_key)
+        };
+        if (atom_list.empty() || !average_prior.has_value()) continue;
+        for (auto atom : atom_list)
         {
             auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
             auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
@@ -201,10 +204,10 @@ void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::
             y_array.emplace_back(std::get<0>(map_value_range));
             y_array.emplace_back(std::get<1>(map_value_range));
         }
-        gaus_function[k] = plot_builder->CreateAtomGroupGausFunctionPrior(group_key, class_key);
-        amplitude_prior[k] = entry_iter->GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(0);
-        width_prior[k] = entry_iter->GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(1);
-        intercept_prior[k] = entry_iter->GetAtomGroupPrior(group_key, class_key).GetIntercept();
+        gaus_function[k] = plot_builder->CreateComponentAtomAverageGausFunctionPrior(atom_key);
+        amplitude_prior[k] = average_prior->GetDisplayParameter(0);
+        width_prior[k] = average_prior->GetDisplayParameter(1);
+        intercept_prior[k] = average_prior->GetModel().GetIntercept();
     }
 
     auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.15) };
