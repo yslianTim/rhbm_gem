@@ -106,7 +106,6 @@ private:
     void PaintQScoreAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);
     void PaintGroupMapValueAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);
     void PaintGroupGausAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);
-    void PaintGroupGausAminoAcidMainChainStructure(ModelObject * model_object, const std::string & name);
     void PaintLocalGausToSequenceAminoAcidMainChain(ModelObject * model_object, const std::string & name);
 
 #ifdef HAVE_ROOT
@@ -153,7 +152,6 @@ void GausPainter::Run()
         PaintQScoreAminoAcidMainChainComponent(model_object, "qscore_amino_acid_main_chain_component_"+ label);
         PaintGroupMapValueAminoAcidMainChainComponent(model_object, "group_map_value_amino_acid_main_chain_component_"+ label);
         PaintGroupGausAminoAcidMainChainComponent(model_object, "group_gaus_amino_acid_main_chain_component_"+ label);
-        PaintGroupGausAminoAcidMainChainStructure(model_object, "group_gaus_amino_acid_main_chain_structure_"+ label);
         PaintLocalGausToSequenceAminoAcidMainChain(model_object, "local_gaus_to_sequence_amino_acid_main_chain_"+ label);
     }
 }
@@ -679,7 +677,6 @@ void GausPainter::PaintLocalGausSummary(
     const auto component_key_list{ model_object->GetComponentKeyList() };
     auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     auto show_outlier{ false };
-    (void)component_key_list;
     (void)show_outlier;
 
     #ifdef HAVE_ROOT
@@ -944,8 +941,7 @@ void GausPainter::PaintLocalGausSummary(
     #endif
 }
 
-void GausPainter::PaintGroupGausSummary(
-    ModelObject * model_object, const std::string & name)
+void GausPainter::PaintGroupGausSummary(ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, "GausPainter::PaintGroupGausSummary");
@@ -953,9 +949,8 @@ void GausPainter::PaintGroupGausSummary(
     auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     const auto component_key_list{ model_object->GetComponentKeyList() };
-    (void)component_key_list;
-    #ifdef HAVE_ROOT
 
+    #ifdef HAVE_ROOT
     gStyle->SetLineScalePS(2.0);
     gStyle->SetGridColor(kGray);
     gStyle->SetEndErrorSize(5.0f);
@@ -963,7 +958,7 @@ void GausPainter::PaintGroupGausSummary(
     auto canvas{ root_helper::CreateCanvas("test","", 1500, 750) };
     root_helper::SetCanvasDefaultStyle(canvas.get());
     root_helper::PrintCanvasOpen(canvas.get(), file_path);
-    const int pad_size{ 7 };
+    const int pad_size{ 6 };
     
     std::unique_ptr<TPad> pad[pad_size];
     std::unique_ptr<TH2> frame[pad_size];
@@ -974,7 +969,6 @@ void GausPainter::PaintGroupGausSummary(
     pad[3] = root_helper::CreatePad("pad3","", 0.55, 0.00, 0.90, 0.60); // The bottom-middle pad
     pad[4] = root_helper::CreatePad("pad4","", 0.55, 0.60, 0.90, 0.80); // The top-middle pad
     pad[5] = root_helper::CreatePad("pad5","", 0.90, 0.00, 1.00, 0.60); // The bottom-right pad
-    pad[6] = root_helper::CreatePad("pad6","", 0.90, 0.60, 1.00, 0.80); // The top-right pad
 
     frame[0] = root_helper::CreateHist2D("hist_0","", 100, 0.0, 1.0, 100, 0.0, 1.0);
     frame[1] = root_helper::CreateHist2D("hist_1","", 100, 0.0, 1.0, 100, 0.0, 1.0);
@@ -984,7 +978,6 @@ void GausPainter::PaintGroupGausSummary(
     frame[5] = root_helper::CreateHist2D("hist_5","", 100, 0.0, 1.0, 100, 0.0, 1.0);
 
     auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
-    auto struct_class_key{ ChemicalDataHelper::GetStructureAtomClassKey() };
     for (const auto component_key : component_key_list)
     {
         const auto * component_entry{ model_object->FindChemicalComponentEntry(component_key) };
@@ -998,10 +991,6 @@ void GausPainter::PaintGroupGausSummary(
         std::vector<std::string> atom_id_list;
         atom_id_list.reserve(component_atom_map.size());
         GroupKey group_key_tmp{ 0 };
-        GroupKey helix_group_key_tmp{ 0 };
-        GroupKey sheet_group_key_tmp{ 0 };
-        bool has_helix_component{ false };
-        bool has_sheet_component{ false };
         for (auto & [atom_key, atom_entry] : component_atom_map)
         {
             if (atom_entry.element_type == Element::HYDROGEN) continue;
@@ -1010,35 +999,13 @@ void GausPainter::PaintGroupGausSummary(
             auto group_key{ data_internal::GetGroupKeyInClass(component_key, atom_key) };
             group_key_list_map[atom_entry.element_type].emplace(atom_entry.atom_id, group_key);
             if (group_key_tmp == 0) group_key_tmp = group_key;
-            auto helix_group_key{
-                data_internal::GetGroupKeyInClass(Structure::HELX_P, component_key, atom_key)
-            };
-            helix_group_key_list_map[atom_entry.element_type].emplace(atom_entry.atom_id, helix_group_key);
-            if (helix_group_key_tmp == 0) helix_group_key_tmp = helix_group_key;
-            auto sheet_group_key{
-                data_internal::GetGroupKeyInClass(Structure::SHEET, component_key, atom_key)
-            };
-            sheet_group_key_list_map[atom_entry.element_type].emplace(atom_entry.atom_id, sheet_group_key);
-            if (sheet_group_key_tmp == 0) sheet_group_key_tmp = sheet_group_key;
             atom_id_list.emplace_back(atom_entry.atom_id);
         }
         if (!entry_iter->HasAtomGroup(group_key_tmp, class_key)) continue;
-        if (entry_iter->HasAtomGroup(helix_group_key_tmp, struct_class_key))
-        {
-            has_helix_component = true;
-        }
-        if (entry_iter->HasAtomGroup(sheet_group_key_tmp, struct_class_key))
-        {
-            has_sheet_component = true;
-        }
 
         std::map<Element, std::unique_ptr<TGraphErrors>> amplitude_graph_map;
         std::map<Element, std::unique_ptr<TGraphErrors>> width_graph_map;
         std::map<Element, std::unique_ptr<TGraphErrors>> correlation_graph_map;
-        std::map<Element, std::unique_ptr<TGraphErrors>> helix_amplitude_graph_map;
-        std::map<Element, std::unique_ptr<TGraphErrors>> sheet_amplitude_graph_map;
-        std::map<Element, std::unique_ptr<TGraphErrors>> helix_width_graph_map;
-        std::map<Element, std::unique_ptr<TGraphErrors>> sheet_width_graph_map;
         std::map<Element, std::unique_ptr<TH2D>> amplitude_hist_map;
         std::map<Element, std::unique_ptr<TH2D>> width_hist_map;
         std::vector<Element> element_list;
@@ -1047,12 +1014,6 @@ void GausPainter::PaintGroupGausSummary(
         width_array.reserve(component_atom_map.size());
         
         auto component_size{ entry_iter->GetAtomObjectList(group_key_tmp, class_key).size() };
-        auto helix_component_size{ (has_helix_component == true) ?
-            entry_iter->GetAtomObjectList(helix_group_key_tmp, struct_class_key).size() : 0
-        };
-        auto sheet_component_size{ (has_sheet_component == true) ?
-            entry_iter->GetAtomObjectList(sheet_group_key_tmp, struct_class_key).size() : 0
-        };
         for (auto & [element, group_key_list] : group_key_list_map)
         {
             auto amplitude_graph{
@@ -1090,48 +1051,6 @@ void GausPainter::PaintGroupGausSummary(
             width_graph_map[element] = std::move(width_graph);
             correlation_graph_map[element] = std::move(correlation_graph);
             element_list.emplace_back(element);
-
-            if (has_helix_component == true)
-            {
-                auto helix_amplitude_graph{
-                    plot_builder->CreateAtomGausEstimateToAtomIdGraph(
-                        helix_group_key_list_map[element], atom_id_list, struct_class_key, 0)
-                };
-                auto helix_width_graph{
-                    plot_builder->CreateAtomGausEstimateToAtomIdGraph(
-                        helix_group_key_list_map[element], atom_id_list, struct_class_key, 1)
-                };
-                
-                short helix_marker{ 20 };
-                root_helper::SetMarkerAttribute(helix_amplitude_graph.get(), helix_marker, 1.5f, component_color, 0.5f);
-                root_helper::SetMarkerAttribute(helix_width_graph.get(), helix_marker, 1.5f, component_color, 0.5f);
-                root_helper::SetLineAttribute(helix_amplitude_graph.get(), 1, 1, component_color, 0.5f);
-                root_helper::SetLineAttribute(helix_width_graph.get(), 1, 1, component_color, 0.5f);
-
-                helix_amplitude_graph_map[element] = std::move(helix_amplitude_graph);
-                helix_width_graph_map[element] = std::move(helix_width_graph);
-            }
-
-            if (has_sheet_component == true)
-            {
-                auto sheet_amplitude_graph{
-                    plot_builder->CreateAtomGausEstimateToAtomIdGraph(
-                        sheet_group_key_list_map[element], atom_id_list, struct_class_key, 0)
-                };
-                auto sheet_width_graph{
-                    plot_builder->CreateAtomGausEstimateToAtomIdGraph(
-                        sheet_group_key_list_map[element], atom_id_list, struct_class_key, 1)
-                };
-                
-                short sheet_marker{ 52 };
-                root_helper::SetMarkerAttribute(sheet_amplitude_graph.get(), sheet_marker, 1.5f, component_color);
-                root_helper::SetMarkerAttribute(sheet_width_graph.get(), sheet_marker, 1.5f, component_color);
-                root_helper::SetLineAttribute(sheet_amplitude_graph.get(), 1, 1, component_color);
-                root_helper::SetLineAttribute(sheet_width_graph.get(), 1, 1, component_color);
-
-                sheet_amplitude_graph_map[element] = std::move(sheet_amplitude_graph);
-                sheet_width_graph_map[element] = std::move(sheet_width_graph);
-            }
         }
 
         auto scaling{ 0.3 };
@@ -1206,7 +1125,7 @@ void GausPainter::PaintGroupGausSummary(
         string_helper::EraseCharFromString(component_name, '\"');
         component_info_text->AddText(component_name.data());
         component_info_text->AddText(("Formula: " + component_entry->GetComponentFormula()).data());
-        component_info_text->AddText(Form("Number of members: %zu (#alpha-helix: %zu, #beta-sheet: %zu)", component_size, helix_component_size, sheet_component_size));
+        component_info_text->AddText(Form("Number of members: %zu", component_size));
         component_info_text->Draw();
 
         auto info_text{ CreateDataInfoPaveText(model_object) };
@@ -1236,8 +1155,6 @@ void GausPainter::PaintGroupGausSummary(
         frame[0]->GetYaxis()->SetTitle("Width");
         frame[0]->Draw();
         for (auto & [element, graph] : width_graph_map) graph->Draw("P");
-        for (auto & [element, graph] : helix_width_graph_map) graph->Draw("P X0");
-        for (auto & [element, graph] : sheet_width_graph_map) graph->Draw("P X0");
 
         pad[2]->cd();
         root_helper::SetPadMarginInCanvas(gPad, 0.10, 0.00, 0.02, 0.01);
@@ -1251,8 +1168,6 @@ void GausPainter::PaintGroupGausSummary(
         frame[1]->GetYaxis()->SetTitle("Amplitude");
         frame[1]->Draw();
         for (auto & [element, graph] : amplitude_graph_map) graph->Draw("P");
-        for (auto & [element, graph] : helix_amplitude_graph_map) graph->Draw("P X0");
-        for (auto & [element, graph] : sheet_amplitude_graph_map) graph->Draw("P X0");
 
         pad[3]->cd();
         root_helper::SetPadMarginInCanvas(gPad, 0.09, 0.01, 0.12, 0.02);
@@ -1296,25 +1211,6 @@ void GausPainter::PaintGroupGausSummary(
         frame[2]->GetXaxis()->SetTitle("Element");
         frame[2]->Draw();
         for (auto & [element, hist] : width_hist_map) hist->Draw("CANDLE3 SAME");
-
-        pad[6]->cd();
-        root_helper::SetPadMarginInCanvas(gPad, 0.02, 0.02, 0.20, 0.20);
-        root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-        auto legend{ root_helper::CreateLegend(0.00, 0.00, 1.00, 1.00, false) };
-        root_helper::SetLegendDefaultStyle(legend.get());
-        root_helper::SetTextAttribute(legend.get(), 30.0f, 133, 12);
-        short general_color{ kGray+2 };
-        auto merge_marker{ std::make_unique<TMarker>(0.0, 0.0, 1) };
-        auto helix_marker{ std::make_unique<TMarker>(0.0, 0.0, 1) };
-        auto sheet_marker{ std::make_unique<TMarker>(0.0, 0.0, 1) };
-        root_helper::SetMarkerAttribute(merge_marker.get(), 53, 1.5f, general_color);
-        root_helper::SetMarkerAttribute(helix_marker.get(), 20, 1.5f, general_color);
-        root_helper::SetMarkerAttribute(sheet_marker.get(), 52, 1.5f, general_color);
-        legend->AddEntry(merge_marker.get(), "Merge", "pe");
-        if (has_helix_component == true) legend->AddEntry(helix_marker.get(), "#alpha-helix", "p");
-        if (has_sheet_component == true) legend->AddEntry(sheet_marker.get(), "#beta-sheet", "p");
-        legend->SetMargin(0.30f);
-        legend->Draw();
         
         root_helper::PrintCanvasPad(canvas.get(), file_path);
     }
@@ -1674,321 +1570,6 @@ void PaintGaus(const ModelObjectList & model_objects, const std::string & output
 }
 
 } // namespace core
-
-void GausPainter::PaintGroupGausAminoAcidMainChainStructure(
-    ModelObject * model_object, const std::string & name)
-{
-    auto file_path{ m_folder_path + name };
-    Logger::Log(LogLevel::Info, "GausPainter::PaintGroupGausAminoAcidMainChainStructure");
-
-    auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
-    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
-    const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
-    const std::vector<Structure> structure_list{ Structure::FREE, Structure::HELX_P, Structure::SHEET };
-    
-    #ifdef HAVE_ROOT
-
-    gStyle->SetLineScalePS(2.0);
-    gStyle->SetGridColor(kGray);
-    gStyle->SetEndErrorSize(5.0f);
-
-    auto canvas{ root_helper::CreateCanvas("test","", 1500, 750) };
-    root_helper::SetCanvasDefaultStyle(canvas.get());
-    root_helper::PrintCanvasOpen(canvas.get(), file_path);
-    const int pad_size{ 8 };
-    
-    std::unique_ptr<TPad> pad[pad_size];
-    std::unique_ptr<TH2> frame[pad_size];
-
-    pad[0] = root_helper::CreatePad("pad0","", 0.55, 0.80, 1.00, 1.00); // The title pad
-    pad[1] = root_helper::CreatePad("pad1","", 0.00, 0.00, 0.55, 0.45); // The bottom-left pad
-    pad[2] = root_helper::CreatePad("pad2","", 0.00, 0.45, 0.55, 0.80); // The top-left pad
-    pad[3] = root_helper::CreatePad("pad3","", 0.55, 0.00, 0.90, 0.60); // The bottom-middle pad
-    pad[4] = root_helper::CreatePad("pad4","", 0.55, 0.60, 0.90, 0.80); // The top-middle pad
-    pad[5] = root_helper::CreatePad("pad5","", 0.90, 0.00, 1.00, 0.60); // The bottom-right pad
-    pad[6] = root_helper::CreatePad("pad6","", 0.90, 0.60, 1.00, 0.80); // The top-right pad
-    pad[7] = root_helper::CreatePad("pad7","", 0.00, 0.80, 0.55, 1.00); // The left-title pad
-
-    frame[0] = root_helper::CreateHist2D("hist_0","", 100, 0.0, 1.0, 100, 0.0, 1.0);
-    frame[1] = root_helper::CreateHist2D("hist_1","", 100, 0.0, 1.0, 100, 0.0, 1.0);
-    frame[2] = root_helper::CreateHist2D("hist_2","", 100, 0.0, 1.0, 100, 0.0, 1.0);
-    frame[3] = root_helper::CreateHist2D("hist_3","", 100, 0.0, 1.0, 100, 0.0, 1.0);
-    frame[4] = root_helper::CreateHist2D("hist_4","", 100, 0.0, 1.0, 100, 0.0, 1.0);
-    frame[5] = root_helper::CreateHist2D("hist_5","", 100, 0.0, 1.0, 100, 0.0, 1.0);
-    frame[6] = root_helper::CreateHist2D("hist_6","", 100, 0.0, 1.0, 100, 0.0, 1.0);
-
-    auto class_key{ ChemicalDataHelper::GetStructureAtomClassKey() };
-    
-    for (size_t i = 0; i < spot_list.size(); i++)
-    {
-        auto spot{ spot_list.at(i) };
-        std::map<Structure, std::vector<GroupKey>> group_key_list_map;
-        
-        for (size_t j = 0; j < structure_list.size(); j++)
-        {
-            auto structure{ structure_list.at(j) };
-            group_key_list_map.emplace(
-                structure, data_internal::GetMainChainStructureAtomClassGroupKeyList(i, structure));
-            auto & group_key_list{ group_key_list_map.at(structure) };
-            for (auto it = group_key_list.begin(); it != group_key_list.end(); )
-            {
-                if (!entry_iter->HasAtomGroup(*it, class_key))
-                {
-                    it = group_key_list.erase(it);
-                }
-                else
-                {
-                    ++it;
-                }
-            }
-        }
-
-        std::vector<std::string> component_id_list;
-        component_id_list.reserve(ChemicalDataHelper::GetStandardAminoAcidCount());
-        for (auto & residue : ChemicalDataHelper::GetStandardAminoAcidList())
-        {
-            auto component_key{ static_cast<ComponentKey>(residue) };
-            const auto * component_entry{ model_object->FindChemicalComponentEntry(component_key) };
-            if (component_entry == nullptr) continue;
-            auto component_id{ component_entry->GetComponentId() };
-            component_id_list.emplace_back(component_id);
-        }
-
-        std::map<Structure, std::unique_ptr<TGraphErrors>> amplitude_graph_map;
-        std::map<Structure, std::unique_ptr<TGraphErrors>> width_graph_map;
-        std::map<Structure, std::unique_ptr<TGraphErrors>> correlation_graph_map;
-        std::map<Structure, std::unique_ptr<TH2D>> amplitude_hist_map;
-        std::map<Structure, std::unique_ptr<TH2D>> width_hist_map;
-        std::vector<double> amplitude_array, width_array;
-        amplitude_array.reserve(80);
-        width_array.reserve(80);
-        
-        for (auto & [structure, group_key_list] : group_key_list_map)
-        {
-            auto amplitude_graph{
-                plot_builder->CreateAtomGausEstimateToResidueGraph(
-                    group_key_list, class_key, 0)
-            };
-            auto width_graph{
-                plot_builder->CreateAtomGausEstimateToResidueGraph(
-                    group_key_list, class_key, 1)
-            };
-            auto correlation_graph{
-                plot_builder->CreateAtomGausEstimateScatterGraph(group_key_list, class_key, 0, 1)
-            };
-            for (int p = 0; p < amplitude_graph->GetN(); p++)
-            {
-                amplitude_array.push_back(amplitude_graph->GetPointY(p));
-                width_array.push_back(width_graph->GetPointY(p));
-            }
-            auto structure_color{ painter_internal::GetMainChainStructureColor(structure) };
-            auto structure_marker{ painter_internal::GetMainChainStructureMarker(structure) };
-            auto structure_line{ painter_internal::GetMainChainStructureLineStyle(structure) };
-            root_helper::SetMarkerAttribute(amplitude_graph.get(), structure_marker, 1.5f, structure_color);
-            root_helper::SetMarkerAttribute(width_graph.get(), structure_marker, 1.5f, structure_color);
-            root_helper::SetMarkerAttribute(correlation_graph.get(), structure_marker, 1.5f, structure_color);
-            root_helper::SetLineAttribute(amplitude_graph.get(), structure_line, 1, structure_color);
-            root_helper::SetLineAttribute(width_graph.get(), structure_line, 1, structure_color);
-            root_helper::SetLineAttribute(correlation_graph.get(), structure_line, 1, structure_color);
-
-            amplitude_graph_map[structure] = std::move(amplitude_graph);
-            width_graph_map[structure] = std::move(width_graph);
-            correlation_graph_map[structure] = std::move(correlation_graph);
-        }
-
-        auto scaling{ 0.3 };
-        auto amplitude_range{ array_helper::ComputeScalingRangeTuple(amplitude_array, scaling) };
-        auto width_range{ array_helper::ComputeScalingRangeTuple(width_array, scaling) };
-        auto structure_count{ structure_list.size() };
-        std::vector<std::string> structure_label_list;
-        structure_label_list.reserve(structure_count);
-        for (size_t j = 0; j < structure_count; j++)
-        {
-            auto structure{ structure_list.at(j) };
-            auto structure_label{ painter_internal::GetMainChainStructureLabel(structure) };
-            auto x_value{ static_cast<double>(j) };
-            structure_label_list.emplace_back(structure_label);
-            std::string name_amplitude{ "amplitude_hist_"+ structure_label };
-            std::string name_width{ "width_hist_"+ structure_label };
-            auto amplitude_hist{
-                root_helper::CreateHist2D(
-                    name_amplitude.data(),"",
-                    100, std::get<0>(amplitude_range), std::get<1>(amplitude_range),
-                    static_cast<int>(structure_count), -0.5, static_cast<int>(structure_count)-0.5)
-            };
-            auto width_hist{
-                root_helper::CreateHist2D(
-                    name_width.data(),"",
-                    static_cast<int>(structure_count), -0.5, static_cast<int>(structure_count)-0.5,
-                    100, std::get<0>(width_range), std::get<1>(width_range))
-            };
-            for (int p = 0; p < amplitude_graph_map.at(structure)->GetN(); p++)
-            {
-                amplitude_hist->Fill(amplitude_graph_map.at(structure)->GetPointY(p), x_value);
-            }
-            for (int p = 0; p < width_graph_map.at(structure)->GetN(); p++)
-            {
-                width_hist->Fill(x_value, width_graph_map.at(structure)->GetPointY(p));
-            }
-            auto structure_color{ painter_internal::GetMainChainStructureColor(structure) };
-            root_helper::SetLineAttribute(amplitude_hist.get(), 1, 1, structure_color);
-            root_helper::SetLineAttribute(width_hist.get(), 1, 1, structure_color);
-            root_helper::SetFillAttribute(amplitude_hist.get(), 1001, structure_color, 0.3f);
-            root_helper::SetFillAttribute(width_hist.get(), 1001, structure_color, 0.3f);
-            amplitude_hist->SetBarWidth(0.6f);
-            width_hist->SetBarWidth(0.6f);
-            amplitude_hist_map[structure] = std::move(amplitude_hist);
-            width_hist_map[structure] = std::move(width_hist);
-        }
-
-        auto count_hist{ plot_builder->CreateAtomResidueCountHistogram2D(class_key) };
-
-        canvas->cd();
-        for (int j = 0; j < pad_size; j++)
-        {
-            root_helper::SetPadDefaultStyle(pad[j].get());
-            pad[j]->Draw();
-        }
-
-        pad[0]->cd();
-        auto info_text{ CreateDataInfoPaveText(model_object) };
-        root_helper::SetPaveTextMarginInCanvas(gPad, info_text.get(), 0.04, 0.18, 0.02, 0.02);
-        info_text->Draw();
-
-        auto resolution_text{ CreateResolutionPaveText(model_object) };
-        root_helper::SetPaveTextMarginInCanvas(gPad, resolution_text.get(), 0.28, 0.01, 0.02, 0.02);
-        resolution_text->Draw();
-
-        frame[0]->GetYaxis()->SetLimits(std::get<0>(width_range), std::get<1>(width_range));
-        frame[1]->GetYaxis()->SetLimits(std::get<0>(amplitude_range), std::get<1>(amplitude_range));
-        frame[2]->GetYaxis()->SetLimits(std::get<0>(width_range), std::get<1>(width_range));
-        frame[3]->GetXaxis()->SetLimits(std::get<0>(amplitude_range), std::get<1>(amplitude_range));
-        frame[4]->GetXaxis()->SetLimits(std::get<0>(amplitude_range), std::get<1>(amplitude_range));
-        frame[4]->GetYaxis()->SetLimits(std::get<0>(width_range), std::get<1>(width_range));
-
-        pad[1]->cd();
-        root_helper::SetPadMarginInCanvas(gPad, 0.10, 0.00, 0.11, 0.02);
-        root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-        RemodelFrameInPad(frame[0].get(), pad[1].get(), 0.0, 0.015);
-        painter_internal::RemodelAxisLabels(frame[0]->GetXaxis(), component_id_list, 90.0, 12);
-        root_helper::SetAxisTitleAttribute(frame[0]->GetXaxis(), 0.0f);
-        root_helper::SetAxisTitleAttribute(frame[0]->GetYaxis(), 50.0f, 1.5f);
-        root_helper::SetAxisLabelAttribute(frame[0]->GetXaxis(), 40.0f, 0.13f, 103, kCyan+3);
-        root_helper::SetAxisLabelAttribute(frame[0]->GetYaxis(), 45.0f, 0.01f);
-        frame[0]->GetYaxis()->SetTitle("Width");
-        frame[0]->Draw();
-        for (auto & [element, graph] : width_graph_map) graph->Draw("PL X0");
-
-        auto spot_text{ root_helper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
-        root_helper::SetPaveTextMarginInCanvas(gPad, spot_text.get(), 0.005, 0.50, 0.01, 0.35);
-        root_helper::SetPaveTextDefaultStyle(spot_text.get());
-        root_helper::SetPaveAttribute(spot_text.get(), 0, 0.1);
-        root_helper::SetFillAttribute(spot_text.get(), 1001, kAzure-7);
-        root_helper::SetTextAttribute(spot_text.get(), 60.0f, 103, 22, 0.0, kYellow-10);
-        auto spot_label{ painter_internal::GetMainChainSpotLabel(spot) };
-        spot_text->AddText(spot_label.data());
-        spot_text->Draw();
-
-        pad[2]->cd();
-        root_helper::SetPadMarginInCanvas(gPad, 0.10, 0.00, 0.02, 0.01);
-        root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-        RemodelFrameInPad(frame[1].get(), pad[2].get(), 0.0, 0.015);
-        painter_internal::RemodelAxisLabels(frame[1]->GetXaxis(), component_id_list, 90.0, 12);
-        root_helper::SetAxisTitleAttribute(frame[1]->GetXaxis(), 0.0f);
-        root_helper::SetAxisTitleAttribute(frame[1]->GetYaxis(), 50.0f, 1.5f);
-        root_helper::SetAxisLabelAttribute(frame[1]->GetXaxis(), 0.0f);
-        root_helper::SetAxisLabelAttribute(frame[1]->GetYaxis(), 45.0f, 0.01f);
-        frame[1]->GetYaxis()->SetTitle("Amplitude");
-        frame[1]->Draw();
-        for (auto & [element, graph] : amplitude_graph_map) graph->Draw("PL X0");
-
-        pad[3]->cd();
-        root_helper::SetPadMarginInCanvas(gPad, 0.09, 0.01, 0.12, 0.02);
-        root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-        RemodelFrameInPad(frame[4].get(), pad[3].get(), 0.03, 0.015);
-        root_helper::SetAxisTitleAttribute(frame[4]->GetXaxis(), 40.0f, 1.1f);
-        root_helper::SetAxisTitleAttribute(frame[4]->GetYaxis(), 40.0f, 1.2f);
-        root_helper::SetAxisLabelAttribute(frame[4]->GetXaxis(), 40.0f, 0.01f);
-        root_helper::SetAxisLabelAttribute(frame[4]->GetYaxis(), 40.0f, 0.01f);
-        auto x_tick_length{ root_helper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.03, 0) };
-        auto y_tick_length{ root_helper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.015, 1) };
-        root_helper::SetAxisTickAttribute(frame[4]->GetXaxis(), static_cast<float>(x_tick_length), 505);
-        root_helper::SetAxisTickAttribute(frame[4]->GetYaxis(), static_cast<float>(y_tick_length), 505);
-        frame[4]->GetXaxis()->SetTitle("Group Amplitude");
-        frame[4]->GetYaxis()->SetTitle("Group Width");
-        frame[4]->Draw("");
-        for (auto & [element, graph] : correlation_graph_map) graph->Draw("P X0");
-
-        pad[4]->cd();
-        root_helper::SetPadMarginInCanvas(gPad, 0.09, 0.01, 0.02, 0.02);
-        root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-        RemodelFrameInPad(frame[3].get(), pad[4].get(), 0.0, 0.0);
-        painter_internal::RemodelAxisLabels(frame[3]->GetYaxis(), structure_label_list, 0.0, 22);
-        root_helper::SetAxisTitleAttribute(frame[3]->GetXaxis(), 0.0f);
-        root_helper::SetAxisTitleAttribute(frame[3]->GetYaxis(), 40.0f, 1.2f);
-        root_helper::SetAxisLabelAttribute(frame[3]->GetXaxis(), 0.0f);
-        root_helper::SetAxisLabelAttribute(frame[3]->GetYaxis(), 35.0f, 0.04f);
-        frame[3]->GetYaxis()->SetTitle("Element");
-        frame[3]->Draw();
-        for (auto & [element, hist] : amplitude_hist_map) hist->Draw("CANDLEY3 SAME");
-
-        pad[5]->cd();
-        root_helper::SetPadMarginInCanvas(gPad, 0.01, 0.01, 0.12, 0.02);
-        root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-        RemodelFrameInPad(frame[2].get(), pad[5].get(), 0.0, 0.0);
-        painter_internal::RemodelAxisLabels(frame[2]->GetXaxis(), structure_label_list, 0.0, -1);
-        root_helper::SetAxisTitleAttribute(frame[2]->GetXaxis(), 40.0f, 1.0f);
-        root_helper::SetAxisTitleAttribute(frame[2]->GetYaxis(), 0.0f);
-        root_helper::SetAxisLabelAttribute(frame[2]->GetXaxis(), 35.0f, 0.005f);
-        root_helper::SetAxisLabelAttribute(frame[2]->GetYaxis(), 0.0f);
-        frame[2]->GetXaxis()->SetTitle("Element");
-        frame[2]->Draw();
-        for (auto & [element, hist] : width_hist_map) hist->Draw("CANDLE3 SAME");
-
-        pad[6]->cd();
-        root_helper::SetPadMarginInCanvas(gPad, 0.02, 0.02, 0.20, 0.20);
-        root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-        auto legend{
-            root_helper::CreateLegend(0.00, 0.00, 1.00, 1.00, false)
-        };
-        root_helper::SetLegendDefaultStyle(legend.get());
-        root_helper::SetTextAttribute(legend.get(), 35.0f, 133, 12);
-        for (auto & structure : structure_list)
-        {
-            auto structure_label{ painter_internal::GetMainChainStructureLabel(structure) };
-            legend->AddEntry(
-                amplitude_graph_map.at(structure).get(), structure_label.data(), "lp");
-        }
-        legend->SetNColumns(1);
-        legend->SetMargin(0.50f);
-        legend->Draw();
-
-        pad[7]->cd();
-        root_helper::SetPadMarginInCanvas(gPad, 0.10, 0.00, 0.02, 0.01);
-        root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-        RemodelFrameInPad(frame[6].get(), pad[7].get(), 0.0, 0.015);
-        painter_internal::RemodelAxisLabels(frame[6]->GetXaxis(), component_id_list, 90.0, 12);
-        painter_internal::RemodelAxisLabels(frame[6]->GetYaxis(), structure_label_list, 0.0, 22);
-        root_helper::SetAxisTitleAttribute(frame[6]->GetXaxis(), 0.0f);
-        root_helper::SetAxisTitleAttribute(frame[6]->GetYaxis(), 40.0f, 1.7f);
-        root_helper::SetAxisLabelAttribute(frame[6]->GetXaxis(), 0.0f);
-        root_helper::SetAxisLabelAttribute(frame[6]->GetYaxis(), 40.0f, 0.03f);
-        root_helper::SetAxisTickAttribute(frame[6]->GetYaxis(), 0.0f, 504);
-        frame[6]->GetYaxis()->SetTitle("#splitline{Member}{Counts}");
-        frame[6]->GetYaxis()->CenterTitle();
-        frame[6]->Draw();
-        gStyle->SetTextFont(132);
-        gStyle->SetPalette(kLightTemperature);
-        root_helper::SetFillAttribute(count_hist.get(), 1001, kAzure-7, 0.5f);
-        root_helper::SetLineAttribute(count_hist.get(), 0, 0);
-        root_helper::SetMarkerAttribute(count_hist.get(), 20, 7.0f, kBlack);
-        count_hist->Draw("COL TEXT SAME");
-        root_helper::PrintCanvasPad(canvas.get(), file_path);
-    }
-    root_helper::PrintCanvasClose(canvas.get(), file_path);
-    Logger::Log(LogLevel::Info, " Output file: " + file_path);
-    #endif
-}
 
 void GausPainter::PaintLocalGausToSequenceAminoAcidMainChain(
     ModelObject * model_object, const std::string & name)
