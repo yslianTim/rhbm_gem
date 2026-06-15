@@ -100,18 +100,4 @@ double AtomLocalPotentialView::GetAlphaR() const
     return RequireEntry("Local alpha-r").GaussianResult().alpha_r;
 }
 
-std::optional<LocalPotentialAnnotation> AtomLocalPotentialView::FindAnnotation() const
-{
-    const auto * annotation{ RequireEntry("Local annotation").FindAnnotation() };
-    if (annotation == nullptr)
-    {
-        return std::nullopt;
-    }
-    return LocalPotentialAnnotation{
-        annotation->gaussian,
-        annotation->is_outlier,
-        annotation->statistical_distance
-    };
-}
-
 } // namespace rhbm_gem

@@ -86,14 +86,12 @@ void ModelAnalysisEditor::ApplyAtomGroupGaussianResult(
 
     for (std::size_t i = 0; i < atom_list.size(); i++)
     {
+        const auto & member_result{ group_result.member_results.at(i) };
         auto & atom_entry{ analysis_data.EnsureAtomLocalEntry(*atom_list.at(i)) };
-        atom_entry.SetAnnotation(
-            LocalPotentialAnnotation{
-                group_result.member_results.at(i).mdpde,
-                group_result.member_results.at(i).is_outlier,
-                group_result.member_results.at(i).statistical_distance
-            }
-        );
+        atom_entry.SetPosteriorResult(
+            member_result.mdpde,
+            member_result.is_outlier,
+            member_result.statistical_distance);
     }
     group_entry.SetGaussianResult(group_key, group_result);
 }

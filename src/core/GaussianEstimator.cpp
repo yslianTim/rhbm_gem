@@ -21,6 +21,7 @@
 #include <cmath>
 #include <iomanip>
 #include <limits>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -370,6 +371,7 @@ LocalGaussianResult DecodeLocalGaussianResult(
         alpha_r,
         GaussianModel3DWithUncertainty{ ols_model, GaussianModel3DUncertainty{} },
         GaussianModel3DWithUncertainty{ mdpde_model, GaussianModel3DUncertainty{} },
+        std::nullopt,
         false,
         0.0,
         fit_result
@@ -438,6 +440,7 @@ std::vector<LocalGaussianResult> DecodeMemberGaussianResults(
         };
         member_results.emplace_back(LocalGaussianResult{
             0.0,
+            gaussian,
             gaussian,
             gaussian,
             static_cast<bool>(result.outlier_flag_array(i)),

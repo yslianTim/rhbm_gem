@@ -982,27 +982,28 @@ void SaveAtomLocalPotentialEntrySubList(
     {
         auto * entry{ ModelAnalysisData::Of(model_obj).FindAtomLocalEntry(*atom_object) };
         if (entry == nullptr) continue;
-        const auto * annotation{ entry->FindAnnotation() };
-        if (annotation == nullptr) continue;
+        const auto & gaussian_result{ entry->GaussianResult() };
+        if (!gaussian_result.posterior.has_value()) continue;
+        const auto & posterior{ gaussian_result.posterior.value() };
 
         batch.Execute([&](SQLiteWrapper & statement_db)
         {
             statement_db.Bind<std::string>(1, key_tag);
             statement_db.Bind<int>(2, atom_object->GetSerialID());
-            statement_db.Bind<double>(3, annotation->gaussian.GetModel().GetAmplitude());
-            statement_db.Bind<double>(4, annotation->gaussian.GetModel().GetWidth());
-            statement_db.Bind<double>(5, annotation->gaussian.GetModel().GetIntercept());
+            statement_db.Bind<double>(3, posterior.GetModel().GetAmplitude());
+            statement_db.Bind<double>(4, posterior.GetModel().GetWidth());
+            statement_db.Bind<double>(5, posterior.GetModel().GetIntercept());
             statement_db.Bind<double>(
                 6,
-                annotation->gaussian.GetStandardDeviationModel().GetAmplitude());
+                posterior.GetStandardDeviationModel().GetAmplitude());
             statement_db.Bind<double>(
                 7,
-                annotation->gaussian.GetStandardDeviationModel().GetWidth());
+                posterior.GetStandardDeviationModel().GetWidth());
             statement_db.Bind<double>(
                 8,
-                annotation->gaussian.GetStandardDeviationModel().GetIntercept());
-            statement_db.Bind<int>(9, static_cast<int>(annotation->is_outlier));
-            statement_db.Bind<double>(10, annotation->statistical_distance);
+                posterior.GetStandardDeviationModel().GetIntercept());
+            statement_db.Bind<int>(9, static_cast<int>(gaussian_result.is_outlier));
+            statement_db.Bind<double>(10, gaussian_result.statistical_distance);
         });
     }
 }
@@ -1067,7 +1068,7 @@ void LoadAtomLocalPotentialEntrySubList(
         auto iter{ entry_map.find(serial_id) };
         if (iter == entry_map.end()) continue;
         auto & entry{ iter->second };
-        GaussianModel3DWithUncertainty gaussian{
+        GaussianModel3DWithUncertainty posterior{
             GaussianModel3D{
                 database.GetColumn<double>(1),
                 database.GetColumn<double>(2),
@@ -1077,11 +1078,10 @@ void LoadAtomLocalPotentialEntrySubList(
                 database.GetColumn<double>(5),
                 database.GetColumn<double>(6) }
         };
-        entry->SetAnnotation(LocalPotentialAnnotation{
-            gaussian,
+        entry->SetPosteriorResult(
+            posterior,
             static_cast<bool>(database.GetColumn<int>(7)),
-            database.GetColumn<double>(8)
-        });
+            database.GetColumn<double>(8));
     }
 }
 

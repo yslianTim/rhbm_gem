@@ -54,8 +54,8 @@ size_t CountOutlierAtoms(
     size_t outlier_count{ 0 };
     for (auto * atom : analysis_view.GetAtomObjectList(group_key))
     {
-        const auto annotation{ AtomLocalPotentialView::RequireFor(*atom).FindAnnotation() };
-        if (annotation.has_value() && annotation->is_outlier)
+        const auto & result{ AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult() };
+        if (result.posterior.has_value() && result.is_outlier)
         {
             outlier_count++;
         }
@@ -849,9 +849,8 @@ void GausPainter::PaintLocalGausSummary(
             {
                 auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
                 auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
-                const auto annotation{
-                    AtomLocalPotentialView::RequireFor(*atom).FindAnnotation() };
-                auto is_outlier{ annotation.has_value() && annotation->is_outlier };
+                const auto & result{ AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult() };
+                auto is_outlier{ result.posterior.has_value() && result.is_outlier };
                 auto line_color{ kAzure-7 };
                 if (show_outlier == true && is_outlier == true) line_color = kRed+1;
                 root_helper::SetLineAttribute(graph.get(), 1, 3, static_cast<short>(line_color), 0.3f);
@@ -1397,9 +1396,8 @@ void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
             {
                 auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
                 auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
-                const auto annotation{
-                    AtomLocalPotentialView::RequireFor(*atom).FindAnnotation() };
-                auto is_outlier{ annotation.has_value() && annotation->is_outlier };
+                const auto & result{ AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult() };
+                auto is_outlier{ result.posterior.has_value() && result.is_outlier };
                 auto line_color{ kAzure-7 };
                 if (show_outlier == true && is_outlier == true) line_color = kRed+1;
                 root_helper::SetLineAttribute(graph.get(), 1, 3, static_cast<short>(line_color), 0.3f);

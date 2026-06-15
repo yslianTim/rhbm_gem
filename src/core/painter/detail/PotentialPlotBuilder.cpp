@@ -381,8 +381,8 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatte
     for (auto atom : atom_list)
     {
         const auto entry{ AtomLocalPotentialView::RequireFor(*atom) };
-        const auto annotation{ entry.FindAnnotation() };
-        auto is_outlier{ annotation.has_value() && annotation->is_outlier };
+        const auto & result{ entry.GetGaussianResult() };
+        auto is_outlier{ result.posterior.has_value() && result.is_outlier };
         if (select_outliers == true && is_outlier == false)
         {
             continue;

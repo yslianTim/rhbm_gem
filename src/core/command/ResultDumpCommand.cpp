@@ -117,8 +117,8 @@ void RunAtomOutlierDumping(
         outfile << "SerialID,Residue,Element,Spot\n";
         for (auto * atom : model_object->GetSelectedAtoms())
         {
-            const auto annotation{ AtomLocalPotentialView::RequireFor(*atom).FindAnnotation() };
-            if (!annotation.has_value() || !annotation->is_outlier) continue;
+            const auto & result{ AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult() };
+            if (!result.posterior.has_value() || !result.is_outlier) continue;
             outfile << atom->GetSerialID() << ','
                     << ChemicalDataHelper::GetLabel(atom->GetResidue()) << ','
                     << ChemicalDataHelper::GetLabel(atom->GetElement()) << ','

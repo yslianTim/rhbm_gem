@@ -280,12 +280,14 @@ TEST(DataObjectPersistenceTest, GaussianInterceptRoundTripPreservesAnalysisResul
         }
     }
     ASSERT_NE(annotated_atom, nullptr);
-    const auto annotation{
-        rg::AtomLocalPotentialView::RequireFor(*annotated_atom).FindAnnotation()
+    const auto & gaussian_result{
+        rg::AtomLocalPotentialView::RequireFor(*annotated_atom).GetGaussianResult()
     };
-    ASSERT_TRUE(annotation.has_value());
-    EXPECT_DOUBLE_EQ(annotation->gaussian.GetModel().GetIntercept(), 0.66);
-    EXPECT_DOUBLE_EQ(annotation->gaussian.GetStandardDeviationModel().GetIntercept(), 0.04);
+    ASSERT_TRUE(gaussian_result.posterior.has_value());
+    EXPECT_DOUBLE_EQ(gaussian_result.posterior->GetModel().GetIntercept(), 0.66);
+    EXPECT_DOUBLE_EQ(
+        gaussian_result.posterior->GetStandardDeviationModel().GetIntercept(),
+        0.04);
 }
 
 TEST(DataObjectPersistenceTest, LegacyV2SamplingBlobLoadsAsSelectedAndMigratesVersion)

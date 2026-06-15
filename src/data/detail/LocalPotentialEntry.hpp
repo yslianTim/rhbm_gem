@@ -1,6 +1,5 @@
 #pragma once
 
-#include <optional>
 #include <utility>
 
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
@@ -12,7 +11,6 @@ class LocalPotentialEntry
 {
     LocalPotentialSampleList m_sampling_entries;
     LocalGaussianResult m_gaussian_result;
-    std::optional<LocalPotentialAnnotation> m_annotation;
 
 public:
     LocalPotentialEntry() = default;
@@ -27,9 +25,14 @@ public:
     {
         m_gaussian_result = std::move(value);
     }
-    void SetAnnotation(LocalPotentialAnnotation annotation)
+    void SetPosteriorResult(
+        GaussianModel3DWithUncertainty posterior,
+        bool is_outlier,
+        double statistical_distance)
     {
-        m_annotation = std::move(annotation);
+        m_gaussian_result.posterior = std::move(posterior);
+        m_gaussian_result.is_outlier = is_outlier;
+        m_gaussian_result.statistical_distance = statistical_distance;
     }
     void ClearTransientFitState()
     {
@@ -41,14 +44,6 @@ public:
         return static_cast<int>(m_sampling_entries.size());
     }
     const LocalGaussianResult & GaussianResult() const { return m_gaussian_result; }
-    LocalPotentialAnnotation * FindAnnotation()
-    {
-        return m_annotation.has_value() ? &m_annotation.value() : nullptr;
-    }
-    const LocalPotentialAnnotation * FindAnnotation() const
-    {
-        return m_annotation.has_value() ? &m_annotation.value() : nullptr;
-    }
     const LocalPotentialSampleList & SamplingEntries() const { return m_sampling_entries; }
 };
 

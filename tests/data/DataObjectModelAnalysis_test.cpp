@@ -522,7 +522,7 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewCanApplySamplingSelectio
     EXPECT_FALSE(all_entries.at(1).point.is_selected);
 }
 
-TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupGaussianResultToStatisticsAndAnnotations)
+TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupGaussianResultToStatisticsAndPosterior)
 {
     auto model{ data_test::MakeModelWithBond() };
     model->SelectAllAtoms();
@@ -536,6 +536,13 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupGaussianRes
     const auto group_key{ group_keys.front() };
     const auto & atom_list{ analysis_view.GetAtomObjectList(group_key) };
     ASSERT_FALSE(atom_list.empty());
+
+    rg::LocalGaussianResult first_atom_local_result;
+    first_atom_local_result.mdpde = rg::GaussianModel3DWithUncertainty{
+        rg::GaussianModel3D{ 9.0, 0.5 },
+        rg::GaussianModel3DUncertainty{}
+    };
+    analysis.EnsureAtomLocalPotential(*atom_list.front()).SetGaussianResult(first_atom_local_result);
 
     constexpr double alpha_g{ 0.25 };
     rg::GroupGaussianResult result;
@@ -571,21 +578,37 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupGaussianRes
     EXPECT_NEAR(result.prior.GetStandardDeviationModel().GetWidth(), analysis_view.GetAtomGroupPriorWithUncertainty(group_key).GetStandardDeviationModel().GetWidth(), 1e-12);
     EXPECT_DOUBLE_EQ(alpha_g, analysis_view.GetAtomAlphaG(group_key));
 
-    const auto annotation{ rg::AtomLocalPotentialView::RequireFor(*atom_list.front()).FindAnnotation() };
-    ASSERT_TRUE(annotation.has_value());
+    const auto & gaussian_result{
+        rg::AtomLocalPotentialView::RequireFor(*atom_list.front()).GetGaussianResult()
+    };
+    EXPECT_NEAR(
+        first_atom_local_result.mdpde.GetModel().GetAmplitude(),
+        gaussian_result.mdpde.GetModel().GetAmplitude(),
+        1e-12);
+    EXPECT_NEAR(
+        first_atom_local_result.mdpde.GetModel().GetWidth(),
+        gaussian_result.mdpde.GetModel().GetWidth(),
+        1e-12);
+    ASSERT_TRUE(gaussian_result.posterior.has_value());
     const auto expected_gaussian{ result.member_results.front().mdpde };
-    EXPECT_NEAR(expected_gaussian.GetModel().GetAmplitude(), annotation->gaussian.GetModel().GetAmplitude(), 1e-12);
-    EXPECT_NEAR(expected_gaussian.GetModel().GetWidth(), annotation->gaussian.GetModel().GetWidth(), 1e-12);
+    EXPECT_NEAR(
+        expected_gaussian.GetModel().GetAmplitude(),
+        gaussian_result.posterior->GetModel().GetAmplitude(),
+        1e-12);
+    EXPECT_NEAR(
+        expected_gaussian.GetModel().GetWidth(),
+        gaussian_result.posterior->GetModel().GetWidth(),
+        1e-12);
     EXPECT_NEAR(
         expected_gaussian.GetStandardDeviationModel().GetAmplitude(),
-        annotation->gaussian.GetStandardDeviationModel().GetAmplitude(),
+        gaussian_result.posterior->GetStandardDeviationModel().GetAmplitude(),
         1e-12);
     EXPECT_NEAR(
         expected_gaussian.GetStandardDeviationModel().GetWidth(),
-        annotation->gaussian.GetStandardDeviationModel().GetWidth(),
+        gaussian_result.posterior->GetStandardDeviationModel().GetWidth(),
         1e-12);
-    EXPECT_TRUE(annotation->is_outlier);
-    EXPECT_DOUBLE_EQ(1.5, annotation->statistical_distance);
+    EXPECT_TRUE(gaussian_result.is_outlier);
+    EXPECT_DOUBLE_EQ(1.5, gaussian_result.statistical_distance);
 }
 
 TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorRejectsAtomGroupGaussianResultWithMismatchedMemberCount)
@@ -719,7 +742,7 @@ TEST(DataObjectModelAnalysisTest, RebuildAtomGroupsUsesComponentAtomGroupKeys)
     }
 }
 
-TEST(DataObjectModelAnalysisTest, AtomGroupingSummaryReportsConfiguredClassCounts)
+TEST(DataObjectModelAnalysisTest, AtomGroupingSummaryReportsAtomGroupCount)
 {
     auto model{ data_test::MakeModelWithBond() };
     model->SelectAllAtoms();
@@ -730,10 +753,9 @@ TEST(DataObjectModelAnalysisTest, AtomGroupingSummaryReportsConfiguredClassCount
 
     const auto summary{ analysis_view.GetAtomGroupingSummary() };
 
-    EXPECT_NE(summary.find("Atom Grouping Summary:"), std::string::npos);
     const std::string expected_line{
-        " - Component atom group include "
-        + std::to_string(analysis_view.CollectAtomGroupKeys().size()) + " groups."
+        "Atomic model includes "
+        + std::to_string(analysis_view.CollectAtomGroupKeys().size()) + " atom groups."
     };
     EXPECT_NE(summary.find(expected_line), std::string::npos);
 }

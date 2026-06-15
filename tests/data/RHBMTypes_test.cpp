@@ -21,9 +21,9 @@ TEST(RHBMTypesTest, LocalAndGroupIntensityStayEquivalent)
         estimate,
         rg::GaussianModel3DUncertainty{}
     };
+    local_result.posterior =
+        rg::GaussianModel3DWithUncertainty{ estimate, standard_deviation };
     local_entry.SetGaussianResult(local_result);
-    local_entry.SetAnnotation(rg::LocalPotentialAnnotation{
-        rg::GaussianModel3DWithUncertainty{ estimate, standard_deviation }, false, 0.0 });
 
     rg::AtomGroupPotentialEntry group_entry;
     rg::GroupGaussianResult group_result;
@@ -39,8 +39,9 @@ TEST(RHBMTypesTest, LocalAndGroupIntensityStayEquivalent)
         estimate.Intensity());
     EXPECT_DOUBLE_EQ(group_entry.GetPrior(42).Intensity(), estimate.Intensity());
     EXPECT_DOUBLE_EQ(group_entry.GetPrior(42).GetDisplayParameter(2), estimate.Intensity());
+    ASSERT_TRUE(local_entry.GaussianResult().posterior.has_value());
     EXPECT_DOUBLE_EQ(
-        local_entry.FindAnnotation()->gaussian.GetDisplayStandardDeviation(2),
+        local_entry.GaussianResult().posterior->GetDisplayStandardDeviation(2),
         group_gaussian.GetDisplayStandardDeviation(2));
 }
 
