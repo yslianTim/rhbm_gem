@@ -8,6 +8,7 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
+#include <rhbm_gem/utils/math/ElectricPotential.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
 namespace rhbm_gem::core {
@@ -26,6 +27,7 @@ struct GroupTestData
 struct AtomicModelTestData
 {
     GaussianModel3D gaus_true;
+    ElectricPotential potential_model;
     std::vector<std::unique_ptr<ModelObject>> replica_model_objects;
 };
 
@@ -56,18 +58,20 @@ struct GroupScenario
     std::optional<std::uint32_t> random_seed{};
 };
 
-struct AtomModelScenario
+struct PotentialModelScenario
 {
     Spot spot{ Spot::UNK };
+    Element element{ Element::CARBON };
+    double charge{ 0.0 };
     GaussianModel3D gaus_true;
+    ElectricPotential potential_model;
     double data_error_sigma{ 1.0 };
     int replica_size{ 1 };
     std::optional<std::uint32_t> random_seed{};
 };
 
 LocalTestData BuildLocalTestData(const LocalScenario & scenario);
-AtomicModelTestData BuildAtomicModelTestData(const AtomModelScenario & scenario);
-AtomicModelTestData BuildFiveGausAtomicModelTestData(const AtomModelScenario & scenario);
+AtomicModelTestData BuildPotentialModelTestData(const PotentialModelScenario & scenario);
 GroupTestData BuildGroupTestData(const GroupScenario & scenario);
 
 } // namespace rhbm_gem::core

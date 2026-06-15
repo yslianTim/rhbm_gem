@@ -4,7 +4,6 @@
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/utils/domain/SampleFilter.hpp>
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
-#include <rhbm_gem/utils/math/ElectricPotential.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
 
@@ -22,18 +21,12 @@ namespace {
 constexpr double kDefaultSamplingDistanceMin{ 0.0 };
 constexpr double kDefaultSamplingDistanceMax{ 1.0 };
 
-struct AtomNeighborContribution
-{
-    Spot spot;
-    Eigen::VectorXd center;
-    double amplitude{ 0.0 };
-};
-
 struct AtomicModelContribution
 {
     Spot spot;
+    Element element;
+    double charge{ 0.0 };
     Eigen::VectorXd center;
-    double amplitude_scale{ 1.0 };
 };
 
 std::mt19937 BuildReplicaGenerator(int replica_index, const std::optional<std::uint32_t> & random_seed)
@@ -54,61 +47,31 @@ std::mt19937 BuildReplicaGenerator(int replica_index, const std::optional<std::u
     return std::mt19937(seed_sequence);
 }
 
-double EvaluateZeroInterceptModelAtPoint3D(
-    const GaussianModel3D & zero_intercept_model,
-    const Eigen::VectorXd & point,
-    const Eigen::VectorXd & center)
-{
-    const auto distance{ (point - center).norm() };
-    return zero_intercept_model.ResponseAtDistance(distance);
-}
-
-double EvaluateModelOffsetAtDistance(const GaussianModel3D & model, double distance)
-{
-    return model.ResponseAtDistance(distance) -
-        model.WithIntercept(0.0).ResponseAtDistance(distance);
-}
-
-double EvaluateAtomicFieldModelResponse(
-    const GaussianModel3D & model,
-    const Eigen::VectorXd & point,
-    const std::vector<AtomicModelContribution> & atom_field,
-    double sample_distance)
-{
-    const auto zero_intercept_model{ model.WithIntercept(0.0) };
-    double response{ 0.0 };
-    for (const auto & atom : atom_field)
-    {
-        response += atom.amplitude_scale *
-            EvaluateZeroInterceptModelAtPoint3D(zero_intercept_model, point, atom.center);
-    }
-    return response + EvaluateModelOffsetAtDistance(model, sample_distance);
-}
-/*
-double EvaluateFiveGausModelResponse(
+double EvaluatePotentialModelResponse(
     const ElectricPotential & model,
-    const Eigen::VectorXd & point,
-    const std::vector<AtomicModelContribution> & atom_field,
-    double sample_distance)
+    const Eigen::VectorXd & sample_point,
+    const std::vector<AtomicModelContribution> & atom_field)
 {
     double response{ 0.0 };
     for (const auto & atom : atom_field)
     {
-        response += model.GetPotentialValue(Element::CARBON, sample_distance, 0.0);
+        auto distance{ (sample_point - atom.center).norm() };
+        response += model.GetPotentialValue(atom.element, distance, atom.charge);
     }
     return response;
-}*/
-
-AtomNeighborContribution MakeAtomNeighborContribution(
-    Spot spot,
-    const Eigen::Vector3d & direction,
-    double distance,
-    double amplitude)
-{
-    return AtomNeighborContribution{ spot, distance * direction, amplitude };
 }
 
-std::vector<AtomNeighborContribution> BuildAtomNeighborList(const Spot & spot)
+AtomicModelContribution MakeAtomNeighborContribution(
+    Spot spot,
+    Element element,
+    double charge,
+    const Eigen::Vector3d & direction,
+    double distance)
+{
+    return AtomicModelContribution{ spot, element, charge, distance * direction };
+}
+
+std::vector<AtomicModelContribution> BuildAtomNeighborList(const Spot & spot)
 {
     switch (spot)
     {
@@ -116,37 +79,37 @@ std::vector<AtomNeighborContribution> BuildAtomNeighborList(const Spot & spot)
         return {};
     case Spot::O:
         return {
-            MakeAtomNeighborContribution(Spot::C,
-                Eigen::Vector3d{ 1.0, 0.0, 0.0 }, 1.23, 6.0 / 8.0)
+            MakeAtomNeighborContribution(Spot::C, Element::CARBON, 0.0,
+                Eigen::Vector3d{ 1.0, 0.0, 0.0 }, 1.23)
         };
     case Spot::N:
         return {
-            MakeAtomNeighborContribution(Spot::H,
-                Eigen::Vector3d{ 1.0, 0.0, 0.0 }, 1.02, 1.0 / 7.0),
-            MakeAtomNeighborContribution(Spot::C,
-                Eigen::Vector3d{ -0.5, std::sqrt(3) / 2.0, 0.0 }, 1.48, 6.0 / 7.0),
-            MakeAtomNeighborContribution(Spot::CA,
-                Eigen::Vector3d{ -0.5, -std::sqrt(3) / 2.0, 0.0 }, 1.48, 6.0 / 7.0)
+            MakeAtomNeighborContribution(Spot::H, Element::HYDROGEN, 0.0,
+                Eigen::Vector3d{ 1.0, 0.0, 0.0 }, 1.02),
+            MakeAtomNeighborContribution(Spot::C, Element::CARBON, 0.0,
+                Eigen::Vector3d{ -0.5, std::sqrt(3) / 2.0, 0.0 }, 1.48),
+            MakeAtomNeighborContribution(Spot::CA, Element::CARBON, 0.0,
+                Eigen::Vector3d{ -0.5, -std::sqrt(3) / 2.0, 0.0 }, 1.48)
         };
     case Spot::C:
         return {
-            MakeAtomNeighborContribution(Spot::O,
-                Eigen::Vector3d{ 1.0, 0.0, 0.0 }, 1.23, 8.0 / 6.0),
-            MakeAtomNeighborContribution(Spot::N,
-                Eigen::Vector3d{ -0.5, std::sqrt(3) / 2.0, 0.0 }, 1.48, 7.0 / 6.0),
-            MakeAtomNeighborContribution(Spot::CA,
-                Eigen::Vector3d{ -0.5, -std::sqrt(3) / 2.0, 0.0 }, 1.54, 1.0)
+            MakeAtomNeighborContribution(Spot::O, Element::OXYGEN, 0.0,
+                Eigen::Vector3d{ 1.0, 0.0, 0.0 }, 1.23),
+            MakeAtomNeighborContribution(Spot::N, Element::NITROGEN, 0.0,
+                Eigen::Vector3d{ -0.5, std::sqrt(3) / 2.0, 0.0 }, 1.48),
+            MakeAtomNeighborContribution(Spot::CA, Element::CARBON, 0.0,
+                Eigen::Vector3d{ -0.5, -std::sqrt(3) / 2.0, 0.0 }, 1.54)
         };
     case Spot::CA:
         return {
-            MakeAtomNeighborContribution(Spot::H,
-                Eigen::Vector3d{ 0.0, 0.0, 1.0 }, 1.06, 1.0 / 6.0),
-            MakeAtomNeighborContribution(Spot::N,
-                Eigen::Vector3d{ 0.0, 2.0 * std::sqrt(2) / 3.0, -1.0 / 3.0 }, 1.48, 7.0 / 6.0),
-            MakeAtomNeighborContribution(Spot::C,
-                Eigen::Vector3d{ -std::sqrt(6) / 3.0, -std::sqrt(2) / 3.0, -1.0 / 3.0 }, 1.54, 1.0),
-            MakeAtomNeighborContribution(Spot::CB,
-                Eigen::Vector3d{ std::sqrt(6) / 3.0, -std::sqrt(2) / 3.0, -1.0 / 3.0 }, 1.54, 1.0)
+            MakeAtomNeighborContribution(Spot::H, Element::HYDROGEN, 0.0,
+                Eigen::Vector3d{ 0.0, 0.0, 1.0 }, 1.06),
+            MakeAtomNeighborContribution(Spot::N, Element::NITROGEN, 0.0,
+                Eigen::Vector3d{ 0.0, 2.0 * std::sqrt(2) / 3.0, -1.0 / 3.0 }, 1.48),
+            MakeAtomNeighborContribution(Spot::C, Element::CARBON, 0.0,
+                Eigen::Vector3d{ -std::sqrt(6) / 3.0, -std::sqrt(2) / 3.0, -1.0 / 3.0 }, 1.54),
+            MakeAtomNeighborContribution(Spot::CB, Element::CARBON, 0.0,
+                Eigen::Vector3d{ std::sqrt(6) / 3.0, -std::sqrt(2) / 3.0, -1.0 / 3.0 }, 1.54)
         };
     default:
         return {};
@@ -160,19 +123,6 @@ std::array<float, 3> ToArray3f(const Eigen::VectorXd & vector)
         static_cast<float>(vector(1)),
         static_cast<float>(vector(2))
     };
-}
-
-std::vector<AtomicModelContribution> BuildAtomicModelContributionList(const Spot & spot)
-{
-    std::vector<AtomicModelContribution> atom_field;
-    const auto neighbor_list{ BuildAtomNeighborList(spot) };
-    atom_field.reserve(neighbor_list.size() + 1);
-    atom_field.emplace_back(AtomicModelContribution{ spot, Eigen::VectorXd::Zero(3), 1.0 });
-    for (const auto & neighbor : neighbor_list)
-    {
-        atom_field.emplace_back(AtomicModelContribution{ neighbor.spot, neighbor.center, neighbor.amplitude });
-    }
-    return atom_field;
 }
 
 LocalPotentialSampleList GenerateRadialSamples(
@@ -199,12 +149,10 @@ LocalPotentialSampleList GenerateRadialSamples(
 }
 
 LocalPotentialSampleList GenerateAtomicModelSampleList(
-    const GaussianModel3D & model,
+    const ElectricPotential & model,
     const AtomicModelContribution & local_atom,
     const std::vector<AtomicModelContribution> & atom_field)
 {
-    GaussianModel3D::RequireFinitePositiveWidthModel(model);
-
     const auto local_position{ ToArray3f(local_atom.center) };
     auto sample_point_list{
         sphere_sampler::GenerateSamplingPointList(
@@ -225,7 +173,7 @@ LocalPotentialSampleList GenerateAtomicModelSampleList(
     {
         const auto point{ eigen_helper::ToEigenVector(sampling_point.position) };
         const auto response{
-            EvaluateAtomicFieldModelResponse(model, point, atom_field, sampling_point.distance)
+            EvaluatePotentialModelResponse(model, point, atom_field)
         };
         sample_list.emplace_back(LocalPotentialSample{
             static_cast<float>(response),
@@ -258,11 +206,11 @@ LocalPotentialSampleList BuildGaussianSampling(
 
 LocalPotentialSampleList ApplyLogQuadraticNoise(
     LocalPotentialSampleList sampling_entries,
-    const GaussianModel3D & model,
+    double model_response_max,
     double error_sigma,
     std::mt19937 & generator)
 {
-    std::normal_distribution<> dist_error(0.0, error_sigma * model.Intensity());
+    std::normal_distribution<> dist_error(0.0, error_sigma * model_response_max);
     for (auto & sampling_entry : sampling_entries)
     {
         sampling_entry.response =
@@ -333,7 +281,7 @@ std::unique_ptr<AtomObject> MakeAtomicModelAtom(int serial_id, const AtomicModel
 }
 
 std::unique_ptr<ModelObject> BuildAtomicModelObject(
-    const GaussianModel3D & model,
+    const ElectricPotential & model,
     const std::vector<AtomicModelContribution> & atom_field,
     double error_sigma,
     std::mt19937 & generator)
@@ -352,14 +300,11 @@ std::unique_ptr<ModelObject> BuildAtomicModelObject(
     analysis.RebuildAtomGroupsFromSelection();
     for (std::size_t i = 0; i < atom_field.size(); i++)
     {
+        const auto & atom_object{ *model_object->GetSelectedAtoms().at(i) };
         auto sampling_entries{ GenerateAtomicModelSampleList(model, atom_field.at(i), atom_field) };
-        sampling_entries = ApplyLogQuadraticNoise(
-            std::move(sampling_entries),
-            model,
-            error_sigma,
-            generator);
-        analysis.EnsureAtomLocalPotential(*model_object->GetSelectedAtoms().at(i))
-            .SetSamplingEntries(std::move(sampling_entries));
+        auto model_response_max{ model.GetPotentialValue(atom_field.at(i).element, 0.0, atom_field.at(i).charge) };
+        sampling_entries = ApplyLogQuadraticNoise(std::move(sampling_entries), model_response_max, error_sigma, generator);
+        analysis.EnsureAtomLocalPotential(atom_object).SetSamplingEntries(std::move(sampling_entries));
     }
     return model_object;
 }
@@ -388,7 +333,7 @@ LocalTestData BuildLocalTestData(const LocalScenario & scenario)
         auto noisy_sampling_entries{
             ApplyLogQuadraticNoise(
                 std::move(sampling_entries),
-                scenario.gaus_true,
+                scenario.gaus_true.Intensity(),
                 scenario.data_error_sigma,
                 generator)
         };
@@ -442,46 +387,35 @@ GroupTestData BuildGroupTestData(const GroupScenario & scenario)
     return input;
 }
 
-AtomicModelTestData BuildAtomicModelTestData(const AtomModelScenario & scenario)
+AtomicModelTestData BuildPotentialModelTestData(const PotentialModelScenario & scenario)
 {
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
-    GaussianModel3D::RequireFinitePositiveWidthModel(scenario.gaus_true, "scenario.gaus_true");
 
     AtomicModelTestData input;
     input.gaus_true = scenario.gaus_true;
+    input.potential_model = scenario.potential_model;
     input.replica_model_objects.reserve(static_cast<size_t>(scenario.replica_size));
-    const auto atom_field{ BuildAtomicModelContributionList(scenario.spot) };
 
-    for (int i = 0; i < scenario.replica_size; i++)
+    std::vector<AtomicModelContribution> atom_field;
+    const auto neighbor_list{ BuildAtomNeighborList(scenario.spot) };
+    atom_field.reserve(neighbor_list.size() + 1);
+    atom_field.emplace_back(AtomicModelContribution{
+        scenario.spot,
+        scenario.element,
+        scenario.charge,
+        Eigen::VectorXd::Zero(3) }
+    );
+    for (const auto & neighbor : neighbor_list)
     {
-        auto generator{ BuildReplicaGenerator(i, scenario.random_seed) };
-        input.replica_model_objects.emplace_back(
-            BuildAtomicModelObject(
-                scenario.gaus_true,
-                atom_field,
-                scenario.data_error_sigma,
-                generator));
+        atom_field.emplace_back(neighbor);
     }
 
-    return input;
-}
-
-AtomicModelTestData BuildFiveGausAtomicModelTestData(const AtomModelScenario & scenario)
-{
-    numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
-    GaussianModel3D::RequireFinitePositiveWidthModel(scenario.gaus_true, "scenario.gaus_true");
-
-    AtomicModelTestData input;
-    input.gaus_true = scenario.gaus_true;
-    input.replica_model_objects.reserve(static_cast<size_t>(scenario.replica_size));
-    const auto atom_field{ BuildAtomicModelContributionList(scenario.spot) };
-
     for (int i = 0; i < scenario.replica_size; i++)
     {
         auto generator{ BuildReplicaGenerator(i, scenario.random_seed) };
         input.replica_model_objects.emplace_back(
             BuildAtomicModelObject(
-                scenario.gaus_true,
+                scenario.potential_model,
                 atom_field,
                 scenario.data_error_sigma,
                 generator));

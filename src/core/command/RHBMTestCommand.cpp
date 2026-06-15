@@ -103,13 +103,13 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
 
     for (size_t i = 0; i < spot_list.size(); i++)
     {
-        AtomModelScenario scenario;
+        PotentialModelScenario scenario;
         scenario.gaus_true = model_prior;
         scenario.data_error_sigma = error_sigma;
         scenario.spot = spot_list.at(i);
         scenario.replica_size = 10;
 
-        const auto input{ BuildFiveGausAtomicModelTestData(scenario) };
+        const auto input{ BuildPotentialModelTestData(scenario) };
         const auto result{ RunAtomicModelFullEstimationTest(input, options) };
 
         std::ostringstream stream;
@@ -130,7 +130,7 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
 void RunSimulationTestOnAtomicModel(const RHBMTestRequest & request)
 {
     const auto error_sigma{ 0.01 };
-    const auto model_prior{ MakeDefaultModelPrior() };
+    const auto width_prior{ 0.5 };
     FitOptions options;
     options.distance_min = request.fit_range_min;
     options.distance_max = request.fit_range_max;
@@ -138,6 +138,13 @@ void RunSimulationTestOnAtomicModel(const RHBMTestRequest & request)
     options.quiet_mode = true;
 
     std::vector<Spot> spot_list{ Spot::UNK, Spot::O, Spot::N, Spot::C, Spot::CA };
+    std::vector<Element> element_list{ Element::CARBON, Element::OXYGEN, Element::NITROGEN, Element::CARBON, Element::CARBON };
+    std::vector<double> amplitude_prior_list{ 6.0, 8.0, 7.0, 6.0, 6.0 };
+    std::vector<double> charge_list{ 0.0, 0.0, 0.0, 0.0, 0.0 };
+
+    ElectricPotential potential_model;
+    potential_model.SetModelChoice(0);
+    potential_model.SetBlurringWidth(width_prior);
 
     BiasPlotRequest plot_request;
     plot_request.output_name = "bias_from_neighbor_atom_atomic_model.pdf";
@@ -152,13 +159,16 @@ void RunSimulationTestOnAtomicModel(const RHBMTestRequest & request)
 
     for (size_t i = 0; i < spot_list.size(); i++)
     {
-        AtomModelScenario scenario;
-        scenario.gaus_true = model_prior;
+        PotentialModelScenario scenario;
+        scenario.gaus_true = GaussianModel3D{amplitude_prior_list.at(i), width_prior, charge_list.at(i) };
+        scenario.potential_model = potential_model;
         scenario.data_error_sigma = error_sigma;
         scenario.spot = spot_list.at(i);
+        scenario.element = element_list.at(i);
+        scenario.charge = charge_list.at(i);
         scenario.replica_size = 10;
 
-        const auto input{ BuildAtomicModelTestData(scenario) };
+        const auto input{ BuildPotentialModelTestData(scenario) };
         const auto result_1{ RunAtomicModelFirstStageEstimationTest(input, options) };
         const auto result_2{ RunAtomicModelFullEstimationTest(input, options) };
 
