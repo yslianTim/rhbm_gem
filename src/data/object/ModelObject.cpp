@@ -14,7 +14,6 @@
 
 #include <algorithm>
 #include <stdexcept>
-#include <type_traits>
 
 namespace {
 
@@ -701,6 +700,12 @@ bool ModelObject::HasStandardDNAComponent() const
         }
     }
     return false;
+}
+
+void ModelObject::PrintSummary() const
+{
+    Logger::Log(LogLevel::Info, this->GetAnalysisView().GetAtomCountingSummary());
+    Logger::Log(LogLevel::Info, this->GetAnalysisView().GetAtomGroupingSummary());
 }
 
 } // namespace rhbm_gem

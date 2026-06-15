@@ -114,6 +114,7 @@ public:
     void ClearTransientFitStates();
     ModelAnalysisEditor EditAnalysis();
     ModelAnalysisView GetAnalysisView() const;
+    void PrintSummary() const;
 
 private:
     friend class ModelDerivedState;

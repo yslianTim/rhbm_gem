@@ -5,7 +5,6 @@
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
-#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
@@ -73,8 +72,7 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
     model_object->ApplySymmetrySelection(request.asymmetry_flag);
     model_object->ApplyElementSelection(Element::HYDROGEN, request.exclude_hydrogen);
     model_object->LocalPotentialInitialization();
-    Logger::Log(LogLevel::Info, model_object->GetAnalysisView().GetAtomCountingSummary());
-    Logger::Log(LogLevel::Info, model_object->GetAnalysisView().GetAtomGroupingSummary());
+    model_object->PrintSummary();
     RunPotentialSamplingWorkflow(*map_object, *model_object, request.sampling_method, request.job_count);
 
     FitOptions options;

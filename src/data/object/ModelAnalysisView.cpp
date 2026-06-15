@@ -98,9 +98,8 @@ std::string ModelAnalysisView::GetAtomCountingSummary() const
 
 std::string ModelAnalysisView::GetAtomGroupingSummary() const
 {
-    std::string description{ "Atom Grouping Summary:" };
-    description += "\n - Component atom group include "
-        + std::to_string(CollectAtomGroupKeys().size()) + " groups.";
+    std::string description{ "Atomic model includes " };
+    description += std::to_string(CollectAtomGroupKeys().size()) + " atom groups.";
     return description;
 }
 
