@@ -3,12 +3,6 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <algorithm>
-#include <stdexcept>
-
-const std::vector<std::string> ChemicalDataHelper::m_group_bond_class_key_list
-{
-    "simple_bond_class", "component_bond_class"
-};
 
 const std::vector<Residue> ChemicalDataHelper::m_standard_amino_acid_list
 {
@@ -526,11 +520,6 @@ int ChemicalDataHelper::GetAtomicNumber(Element element)
     return static_cast<int>(element);
 }
 
-size_t ChemicalDataHelper::GetGroupBondClassCount()
-{
-    return m_group_bond_class_key_list.size();
-}
-
 size_t ChemicalDataHelper::GetStandardResidueCount()
 {
     return m_standard_amino_acid_list.size() + m_standard_nucleotide_list.size();
@@ -549,25 +538,6 @@ size_t ChemicalDataHelper::GetStandardNucleotideCount()
 size_t ChemicalDataHelper::GetElementCount()
 {
     return m_element_map.size();
-}
-
-const std::string & ChemicalDataHelper::GetGroupBondClassKey(size_t class_id)
-{
-    if (class_id >= m_group_bond_class_key_list.size())
-    {
-        throw std::out_of_range("class_id out of range");
-    }
-    return m_group_bond_class_key_list.at(class_id);
-}
-
-const std::string & ChemicalDataHelper::GetSimpleBondClassKey()
-{
-    return m_group_bond_class_key_list.at(0);
-}
-
-const std::string & ChemicalDataHelper::GetComponentBondClassKey()
-{
-    return m_group_bond_class_key_list.at(1);
 }
 
 const std::vector<Residue> & ChemicalDataHelper::GetStandardAminoAcidList()
