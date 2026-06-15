@@ -238,9 +238,6 @@ TEST(PotentialPlotBuilderTest, MissingComponentAtomAverageReturnsEmptyOutputs)
     const auto missing_atom_key{ static_cast<AtomKey>(65535) };
     const auto analysis_view{ model->GetAnalysisView() };
 
-    EXPECT_TRUE(
-        rg::PotentialPlotBuilder::CollectComponentAtomGroupKeys(
-            analysis_view, missing_atom_key).empty());
     EXPECT_FALSE(
         rg::PotentialPlotBuilder::ComputeComponentAtomAveragePrior(
             analysis_view, missing_atom_key).has_value());

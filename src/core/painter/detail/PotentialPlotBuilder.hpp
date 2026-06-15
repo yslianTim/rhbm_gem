@@ -34,9 +34,7 @@ public:
     explicit PotentialPlotBuilder(AtomObject * atom_object);
 
 #ifdef HAVE_ROOT
-    std::unique_ptr<::TH1D> CreateComponentCountHistogram(std::vector<GroupKey> & group_key_list) const;
-    std::unique_ptr<::TH2D> CreateAtomResidueCountHistogram2D();
-    std::unique_ptr<::TH1D> CreateAtomResidueCountHistogram(Structure structure=static_cast<Structure>(0));
+    std::unique_ptr<::TH1D> CreateComponentCountHistogram(const std::vector<GroupKey> & group_key_list) const;
     std::unique_ptr<::TH1D> CreateAtomGausEstimateHistogram(GroupKey group_key, int par_id) const;
     std::unique_ptr<::TH1D> CreateLinearModelDataHistogram(int dimension_id) const;
     std::unique_ptr<::TH2D> CreateDistanceToMapValueHistogram(int x_bin_size=15, int y_bin_size=1000) const;
@@ -45,14 +43,11 @@ public:
     std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAtomMapValueToSequenceIDGraphMap(size_t main_chain_element_id, Residue residue=Residue::UNK);
     std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAtomGausEstimateToSequenceIDGraphMap(size_t main_chain_element_id, const int par_id=0, Residue residue=Residue::UNK);
     std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAtomQScoreToSequenceIDGraphMap(size_t main_chain_element_id, const int par_choice=0);
-    std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAtomGausEstimatePosteriorToSequenceIDGraphMap(size_t main_chain_element_id, const int par_id=0, Residue residue=Residue::UNK);
-    std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateToResidueGraph(std::vector<GroupKey> & group_key_list, const int par_id=0);
-    std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateToSpotGraph(std::vector<GroupKey> & group_key_list, const int par_id=0);
+    std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateToResidueGraph(const std::vector<GroupKey> & group_key_list, const int par_id=0);
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateToAtomIdGraph(const std::map<std::string, GroupKey> & group_key_map, const std::vector<std::string> & atom_id_list, const int par_id=0);
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateScatterGraph(GroupKey group_key, int par1_id=0, int par2_id=1, bool select_outliers=false);
-    std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateScatterGraph(std::vector<GroupKey> & group_key_list, int par1_id=0, int par2_id=1);
+    std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateScatterGraph(const std::vector<GroupKey> & group_key_list, int par1_id=0, int par2_id=1);
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateScatterGraph(Element element, bool reverse=false);
-    std::unique_ptr<::TGraphErrors> CreateGausEstimateScatterGraph(GroupKey group_key1, GroupKey group_key2, const int par_id=0);
     std::unique_ptr<::TGraphErrors> CreateDistanceToMapValueGraph();
     std::unique_ptr<::TGraphErrors> CreateLinearModelDistanceToMapValueGraph();
     std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToMapValueGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
@@ -66,9 +61,6 @@ public:
         int bin_size=15,
         double x_min=0.0,
         double x_max=1.5);
-    static std::vector<GroupKey> CollectComponentAtomGroupKeys(
-        const ModelAnalysisView & model_view,
-        AtomKey atom_key);
     static std::vector<AtomObject *> CollectComponentAtomMembers(
         const ModelAnalysisView & model_view,
         AtomKey atom_key);
@@ -79,8 +71,6 @@ public:
     std::unique_ptr<::TF1> CreateAtomLocalLinearModelFunctionMDPDE() const;
     std::unique_ptr<::TF1> CreateAtomLocalGausFunctionOLS() const;
     std::unique_ptr<::TF1> CreateAtomLocalGausFunctionMDPDE() const;
-    std::unique_ptr<::TF1> CreateAtomGroupLinearModelFunctionMean(GroupKey group_key, double x_min, double x_max) const;
-    std::unique_ptr<::TF1> CreateAtomGroupLinearModelFunctionPrior(GroupKey group_key, double x_min, double x_max) const;
     std::unique_ptr<::TF1> CreateAtomGroupGausFunctionMean(GroupKey group_key) const;
     std::unique_ptr<::TF1> CreateAtomGroupGausFunctionPrior(GroupKey group_key) const;
     std::unique_ptr<::TF1> CreateComponentAtomAverageGausFunctionPrior(AtomKey atom_key) const;
@@ -91,8 +81,7 @@ private:
     AtomLocalPotentialView GetLocalEntry() const;
     bool IsModelObjectAvailable() const;
     bool IsAtomLocalEntryAvailable() const;
-    size_t GetAtomResidueCount(Residue residue, Structure structure=static_cast<Structure>(0)) const;
-    bool IsAvailableAtomGroupKey(GroupKey group_key, bool varbose=false) const;
+    bool IsAvailableAtomGroupKey(GroupKey group_key) const;
 };
 
 } // namespace rhbm_gem
