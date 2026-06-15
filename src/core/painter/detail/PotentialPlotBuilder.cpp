@@ -85,32 +85,27 @@ bool PotentialPlotBuilder::IsAtomLocalEntryAvailable() const
     return m_atom_object != nullptr && AtomLocalPotentialView::For(*m_atom_object).IsAvailable();
 }
 
-size_t PotentialPlotBuilder::GetAtomResidueCount(
-    const std::string & class_key, Residue residue, Structure structure) const
+size_t PotentialPlotBuilder::GetAtomResidueCount(Residue residue, Structure structure) const
 {
     (void)structure;
-    GroupKey group_key{ 0 };
-    if (class_key == ChemicalDataHelper::GetComponentAtomClassKey())
-    {
-        group_key = data_internal::GetMainChainComponentAtomClassGroupKey(0, residue);
-    }
-    if (IsAvailableAtomGroupKey(group_key, class_key) == false)
+    GroupKey group_key{ data_internal::GetMainChainGroupKey(0, residue) };
+    if (IsAvailableAtomGroupKey(group_key) == false)
     {
         return 0;
     }
-    return GetModelView().GetAtomObjectList(group_key, class_key).size();
+    return GetModelView().GetAtomObjectList(group_key).size();
 }
 
 bool PotentialPlotBuilder::IsAvailableAtomGroupKey(
-    GroupKey group_key, const std::string & class_key, bool varbose) const
+    GroupKey group_key, bool varbose) const
 {
     (void)varbose;
-    return GetModelView().HasAtomGroup(group_key, class_key);
+    return GetModelView().HasAtomGroup(group_key);
 }
 
 #ifdef HAVE_ROOT
 std::unique_ptr<TH1D> PotentialPlotBuilder::CreateComponentCountHistogram(
-    std::vector<GroupKey> & group_key_list, const std::string & class_key) const
+    std::vector<GroupKey> & group_key_list) const
 {
     if (IsModelObjectAvailable() == false)
     {
@@ -119,18 +114,17 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateComponentCountHistogram(
     auto component_size{ static_cast<int>(group_key_list.size()) };
     auto hist{
         root_helper::CreateHist1D(
-            "hist_" + class_key, "Component Count", component_size, -0.5, component_size - 0.5)
+            "hist_component", "Component Count", component_size, -0.5, component_size - 0.5)
     };
     for (size_t i = 0; i < group_key_list.size(); i++)
     {
-        auto count{ GetModelView().GetAtomObjectList(group_key_list.at(i), class_key).size() };
+        auto count{ GetModelView().GetAtomObjectList(group_key_list.at(i)).size() };
         hist->SetBinContent(static_cast<int>(i + 1), static_cast<double>(count));
     }
     return hist;
 }
 
-std::unique_ptr<TH2D> PotentialPlotBuilder::CreateAtomResidueCountHistogram2D(
-    const std::string & class_key)
+std::unique_ptr<TH2D> PotentialPlotBuilder::CreateAtomResidueCountHistogram2D()
 {
     if (IsModelObjectAvailable() == false)
     {
@@ -143,7 +137,7 @@ std::unique_ptr<TH2D> PotentialPlotBuilder::CreateAtomResidueCountHistogram2D(
         auto structure{ structure_list.at(i) };
         for (auto & residue : ChemicalDataHelper::GetStandardAminoAcidList())
         {
-            auto count{ GetAtomResidueCount(class_key, residue, structure) };
+            auto count{ GetAtomResidueCount(residue, structure) };
             hist->SetBinContent(
                 static_cast<int>(residue), static_cast<int>(i + 1), static_cast<double>(count));
         }
@@ -152,7 +146,7 @@ std::unique_ptr<TH2D> PotentialPlotBuilder::CreateAtomResidueCountHistogram2D(
 }
 
 std::unique_ptr<TH1D> PotentialPlotBuilder::CreateAtomResidueCountHistogram(
-    const std::string & class_key, Structure structure)
+    Structure structure)
 {
     if (IsModelObjectAvailable() == false)
     {
@@ -161,26 +155,26 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateAtomResidueCountHistogram(
     auto hist{ root_helper::CreateHist1D("hist", "Residue Count", 20, -0.5, 19.5) };
     for (auto & residue : ChemicalDataHelper::GetStandardAminoAcidList())
     {
-        auto count{ GetAtomResidueCount(class_key, residue, structure) };
+        auto count{ GetAtomResidueCount(residue, structure) };
         hist->SetBinContent(static_cast<int>(residue), static_cast<double>(count));
     }
     return hist;
 }
 
 std::unique_ptr<TH1D> PotentialPlotBuilder::CreateAtomGausEstimateHistogram(
-    GroupKey group_key, const std::string & class_key, int par_id) const
+    GroupKey group_key, int par_id) const
 {
     if (IsModelObjectAvailable() == false)
     {
         return nullptr;
     }
-    if (IsAvailableAtomGroupKey(group_key, class_key) == false)
+    if (IsAvailableAtomGroupKey(group_key) == false)
     {
         Logger::Log(LogLevel::Error, "Group key is not available.");
         return nullptr;
     }
 
-    const auto & atom_list{ GetModelView().GetAtomObjectList(group_key, class_key) };
+    const auto & atom_list{ GetModelView().GetAtomObjectList(group_key) };
     std::vector<double> gaus_estimate_list;
     gaus_estimate_list.reserve(atom_list.size());
     for (auto atom : atom_list)
@@ -222,7 +216,7 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateAtomGausEstimateHistogram(
         x_min = estimate_average - 0.05;
     }
 
-    auto hist_name{ std::to_string(group_key) + "_" + class_key + "_par" + std::to_string(par_id) };
+    auto hist_name{ std::to_string(group_key) + "_par" + std::to_string(par_id) };
     auto hist{ root_helper::CreateHist1D(hist_name.data(), "", 25, x_min, x_max) };
     for (auto & value : gaus_estimate_list)
     {
@@ -350,7 +344,7 @@ std::vector<std::unique_ptr<TH1D>> PotentialPlotBuilder::CreateMainChainAtomGaus
 }
 
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToResidueGraph(
-    std::vector<GroupKey> & group_key_list, const std::string & class_key, const int par_id)
+    std::vector<GroupKey> & group_key_list, const int par_id)
 {
     if (IsModelObjectAvailable() == false)
     {
@@ -362,13 +356,13 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToResi
     auto count{ 0 };
     for (auto & group_key : group_key_list)
     {
-        if (IsAvailableAtomGroupKey(group_key, class_key) == false)
+        if (IsAvailableAtomGroupKey(group_key) == false)
         {
             continue;
         }
-        auto x_value{ static_cast<int>(data_internal::GetResidueFromGroupKey(group_key, class_key)) - 1 };
-        auto y_value{ model_view.GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(par_id) };
-        auto y_error{ model_view.GetAtomGroupPriorWithUncertainty(group_key, class_key).GetDisplayStandardDeviation(par_id) };
+        auto x_value{ static_cast<int>(data_internal::GetResidueFromGroupKey(group_key)) - 1 };
+        auto y_value{ model_view.GetAtomGroupPrior(group_key).GetDisplayParameter(par_id) };
+        auto y_error{ model_view.GetAtomGroupPriorWithUncertainty(group_key).GetDisplayStandardDeviation(par_id) };
         graph->SetPoint(count, x_value, y_value);
         graph->SetPointError(count, 0.0, y_error);
         count++;
@@ -377,7 +371,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToResi
 }
 
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToSpotGraph(
-    std::vector<GroupKey> & group_key_list, const std::string & class_key, const int par_id)
+    std::vector<GroupKey> & group_key_list, const int par_id)
 {
     if (IsModelObjectAvailable() == false)
     {
@@ -390,13 +384,13 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToSpot
     for (size_t i = 0; i < group_key_list.size(); i++)
     {
         auto & group_key{ group_key_list[i] };
-        if (IsAvailableAtomGroupKey(group_key, class_key) == false)
+        if (IsAvailableAtomGroupKey(group_key) == false)
         {
             continue;
         }
         auto x_value{ static_cast<double>(i) };
-        auto y_value{ model_view.GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(par_id) };
-        auto y_error{ model_view.GetAtomGroupPriorWithUncertainty(group_key, class_key).GetDisplayStandardDeviation(par_id) };
+        auto y_value{ model_view.GetAtomGroupPrior(group_key).GetDisplayParameter(par_id) };
+        auto y_error{ model_view.GetAtomGroupPriorWithUncertainty(group_key).GetDisplayStandardDeviation(par_id) };
         graph->SetPoint(count, x_value, y_value);
         graph->SetPointError(count, 0.0, y_error);
         count++;
@@ -407,7 +401,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToSpot
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToAtomIdGraph(
     const std::map<std::string, GroupKey> & group_key_map,
     const std::vector<std::string> & atom_id_list,
-    const std::string & class_key, const int par_id)
+    const int par_id)
 {
     if (IsModelObjectAvailable() == false)
     {
@@ -424,13 +418,13 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToAtom
             continue;
         }
         auto & group_key{ group_key_map.at(atom_id) };
-        if (IsAvailableAtomGroupKey(group_key, class_key) == false)
+        if (IsAvailableAtomGroupKey(group_key) == false)
         {
             continue;
         }
         auto x_value{ static_cast<double>(i) };
-        auto y_value{ model_view.GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(par_id) };
-        auto y_error{ model_view.GetAtomGroupPriorWithUncertainty(group_key, class_key).GetDisplayStandardDeviation(par_id) };
+        auto y_value{ model_view.GetAtomGroupPrior(group_key).GetDisplayParameter(par_id) };
+        auto y_error{ model_view.GetAtomGroupPriorWithUncertainty(group_key).GetDisplayStandardDeviation(par_id) };
         graph->SetPoint(count, x_value, y_value);
         graph->SetPointError(count, 0.0, y_error);
         count++;
@@ -439,19 +433,19 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToAtom
 }
 
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatterGraph(
-    GroupKey group_key, const std::string & class_key, int par1_id, int par2_id, bool select_outliers)
+    GroupKey group_key, int par1_id, int par2_id, bool select_outliers)
 {
     if (IsModelObjectAvailable() == false)
     {
         return nullptr;
     }
-    auto atom_list{ GetModelView().GetAtomObjectList(group_key, class_key) };
+    auto atom_list{ GetModelView().GetAtomObjectList(group_key) };
     auto graph{ root_helper::CreateGraphErrors() };
     auto count{ 0 };
     for (auto atom : atom_list)
     {
         const auto entry{ AtomLocalPotentialView::RequireFor(*atom) };
-        const auto annotation{ entry.FindAnnotation(class_key) };
+        const auto annotation{ entry.FindAnnotation() };
         auto is_outlier{ annotation.has_value() && annotation->is_outlier };
         if (select_outliers == true && is_outlier == false)
         {
@@ -467,7 +461,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatte
 }
 
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatterGraph(
-    std::vector<GroupKey> & group_key_list, const std::string & class_key,
+    std::vector<GroupKey> & group_key_list,
     int par1_id, int par2_id)
 {
     if (IsModelObjectAvailable() == false)
@@ -479,19 +473,19 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatte
     auto count{ 0 };
     for (auto & group_key : group_key_list)
     {
-        if (IsAvailableAtomGroupKey(group_key, class_key) == false)
+        if (IsAvailableAtomGroupKey(group_key) == false)
         {
             continue;
         }
         graph->SetPoint(
             count,
-            GetModelView().GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(par1_id),
-            GetModelView().GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(par2_id));
+            GetModelView().GetAtomGroupPrior(group_key).GetDisplayParameter(par1_id),
+            GetModelView().GetAtomGroupPrior(group_key).GetDisplayParameter(par2_id));
         graph->SetPointError(
             count,
-            GetModelView().GetAtomGroupPriorWithUncertainty(group_key, class_key)
+            GetModelView().GetAtomGroupPriorWithUncertainty(group_key)
                 .GetDisplayStandardDeviation(par1_id),
-            GetModelView().GetAtomGroupPriorWithUncertainty(group_key, class_key)
+            GetModelView().GetAtomGroupPriorWithUncertainty(group_key)
                 .GetDisplayStandardDeviation(par2_id));
         count++;
     }
@@ -530,22 +524,22 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatte
 }
 
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateGausEstimateScatterGraph(
-    GroupKey group_key1, GroupKey group_key2, const std::string & class_key, const int par_id)
+    GroupKey group_key1, GroupKey group_key2, const int par_id)
 {
     if (IsModelObjectAvailable() == false)
     {
         return nullptr;
     }
-    if (IsAvailableAtomGroupKey(group_key1, class_key) == false ||
-        IsAvailableAtomGroupKey(group_key2, class_key) == false)
+    if (IsAvailableAtomGroupKey(group_key1) == false ||
+        IsAvailableAtomGroupKey(group_key2) == false)
     {
         Logger::Log(LogLevel::Error, "Group key is not available.");
         return nullptr;
     }
     auto graph{ root_helper::CreateGraphErrors() };
 
-    const auto & atom_list1{ GetModelView().GetAtomObjectList(group_key1, class_key) };
-    const auto & atom_list2{ GetModelView().GetAtomObjectList(group_key2, class_key) };
+    const auto & atom_list1{ GetModelView().GetAtomObjectList(group_key1) };
+    const auto & atom_list2{ GetModelView().GetAtomObjectList(group_key2) };
 
     auto count{ 0 };
     for (auto atom1 : atom_list1)
@@ -611,7 +605,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToMapVal
 }
 
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateInRangeAtomsToGausEstimateGraph(
-    GroupKey group_key, const std::string & class_key, double range, int par_id)
+    GroupKey group_key, double range, int par_id)
 {
     if (IsModelObjectAvailable() == false)
     {
@@ -621,7 +615,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateInRangeAtomsToGausEsti
     auto graph{ root_helper::CreateGraphErrors() };
 
     auto count{ 0 };
-    for (auto & atom : GetModelView().GetAtomObjectList(group_key, class_key))
+    for (auto & atom : GetModelView().GetAtomObjectList(group_key))
     {
         auto in_range_atom_list{
             ModelDerivedState::Of(*model_object).FindAtomsInRange(*model_object, *atom, range) };
@@ -636,7 +630,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateInRangeAtomsToGausEsti
 }
 
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateCOMDistanceToGausEstimateGraph(
-    GroupKey group_key, const std::string & class_key, int par_id)
+    GroupKey group_key, int par_id)
 {
     if (IsModelObjectAvailable() == false)
     {
@@ -647,7 +641,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateCOMDistanceToGausEstim
     auto center_of_mass_pos{ model_object->GetCenterOfMassPosition() };
 
     auto count{ 0 };
-    for (auto & atom : GetModelView().GetAtomObjectList(group_key, class_key))
+    for (auto & atom : GetModelView().GetAtomObjectList(group_key))
     {
         const auto & atom_pos{ atom->GetPositionRef() };
         auto distance{ array_helper::ComputeNorm(atom_pos, center_of_mass_pos) };
@@ -759,9 +753,8 @@ std::vector<GroupKey> PotentialPlotBuilder::CollectComponentAtomGroupKeys(
     const ModelAnalysisView & model_view,
     AtomKey atom_key)
 {
-    const auto & class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     std::vector<GroupKey> result;
-    for (const auto group_key : model_view.CollectAtomGroupKeys(class_key))
+    for (const auto group_key : model_view.CollectAtomGroupKeys())
     {
         const auto unpacked_key{ KeyPackerComponentAtomClass::Unpack(group_key) };
         if (std::get<1>(unpacked_key) == atom_key)
@@ -776,11 +769,10 @@ std::vector<AtomObject *> PotentialPlotBuilder::CollectComponentAtomMembers(
     const ModelAnalysisView & model_view,
     AtomKey atom_key)
 {
-    const auto & class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     std::vector<AtomObject *> result;
     for (const auto group_key : CollectComponentAtomGroupKeys(model_view, atom_key))
     {
-        const auto & members{ model_view.GetAtomObjectList(group_key, class_key) };
+        const auto & members{ model_view.GetAtomObjectList(group_key) };
         result.insert(result.end(), members.begin(), members.end());
     }
     return result;
@@ -790,7 +782,6 @@ std::optional<GaussianModel3DWithUncertainty> PotentialPlotBuilder::ComputeCompo
     const ModelAnalysisView & model_view,
     AtomKey atom_key)
 {
-    const auto & class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     double amplitude{ 0.0 };
     double width{ 0.0 };
     double intercept{ 0.0 };
@@ -800,7 +791,7 @@ std::optional<GaussianModel3DWithUncertainty> PotentialPlotBuilder::ComputeCompo
     std::size_t count{ 0 };
     for (const auto group_key : CollectComponentAtomGroupKeys(model_view, atom_key))
     {
-        const auto prior{ model_view.GetAtomGroupPriorWithUncertainty(group_key, class_key) };
+        const auto prior{ model_view.GetAtomGroupPriorWithUncertainty(group_key) };
         const auto & model{ prior.GetModel() };
         const auto & uncertainty{ prior.GetStandardDeviationModel() };
         amplitude += model.GetAmplitude();
@@ -877,14 +868,14 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalGausFunctionMDPDE() co
 }
 
 std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupLinearModelFunctionMean(
-    GroupKey group_key, const std::string & class_key, double x_min, double x_max) const
+    GroupKey group_key, double x_min, double x_max) const
 {
     if (IsModelObjectAvailable() == false)
     {
         return nullptr;
     }
     const auto beta{
-        linearization_service::EncodeGaussianToParameterVector(GetModelView().GetAtomGroupMean(group_key, class_key))
+        linearization_service::EncodeGaussianToParameterVector(GetModelView().GetAtomGroupMean(group_key))
     };
     auto mu_0{ beta(0) };
     auto mu_1{ beta(1) };
@@ -892,14 +883,14 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupLinearModelFunctionMea
 }
 
 std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupLinearModelFunctionPrior(
-    GroupKey group_key, const std::string & class_key, double x_min, double x_max) const
+    GroupKey group_key, double x_min, double x_max) const
 {
     if (IsModelObjectAvailable() == false)
     {
         return nullptr;
     }
     const auto beta{
-        linearization_service::EncodeGaussianToParameterVector(GetModelView().GetAtomGroupPrior(group_key, class_key))
+        linearization_service::EncodeGaussianToParameterVector(GetModelView().GetAtomGroupPrior(group_key))
     };
     auto mu_0{ beta(0) };
     auto mu_1{ beta(1) };
@@ -907,13 +898,13 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupLinearModelFunctionPri
 }
 
 std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionMean(
-    GroupKey group_key, const std::string & class_key) const
+    GroupKey group_key) const
 {
     if (IsModelObjectAvailable() == false)
     {
         return nullptr;
     }
-    const auto & mean{ GetModelView().GetAtomGroupMean(group_key, class_key) };
+    const auto & mean{ GetModelView().GetAtomGroupMean(group_key) };
     auto amplitude{ mean.GetAmplitude() };
     auto width{ mean.GetWidth() };
     auto intercept{ mean.GetIntercept() };
@@ -921,13 +912,13 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionMean(
 }
 
 std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionPrior(
-    GroupKey group_key, const std::string & class_key) const
+    GroupKey group_key) const
 {
     if (IsModelObjectAvailable() == false)
     {
         return nullptr;
     }
-    const auto & prior{ GetModelView().GetAtomGroupPrior(group_key, class_key) };
+    const auto & prior{ GetModelView().GetAtomGroupPrior(group_key) };
     auto amplitude{ prior.GetAmplitude() };
     auto width{ prior.GetWidth() };
     auto intercept{ prior.GetIntercept() };
@@ -1130,7 +1121,7 @@ PotentialPlotBuilder::CreateAtomGausEstimateToSequenceIDGraphMap(
 
 std::unordered_map<std::string, std::unique_ptr<TGraphErrors>>
 PotentialPlotBuilder::CreateAtomGausEstimatePosteriorToSequenceIDGraphMap(
-    size_t main_chain_element_id, const std::string & class_key, const int par_id, Residue residue)
+    size_t main_chain_element_id, const int par_id, Residue residue)
 {
     if (IsModelObjectAvailable() == false)
     {
@@ -1156,7 +1147,7 @@ PotentialPlotBuilder::CreateAtomGausEstimatePosteriorToSequenceIDGraphMap(
             count_map[chain_id] = 0;
         }
         auto x_value{ static_cast<double>(sequence_id) };
-        const auto annotation{ entry.FindAnnotation(class_key) };
+        const auto annotation{ entry.FindAnnotation() };
         if (!annotation.has_value())
         {
             continue;

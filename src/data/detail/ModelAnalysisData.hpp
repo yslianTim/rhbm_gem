@@ -1,7 +1,6 @@
 #pragma once
 
 #include <memory>
-#include <string>
 #include <unordered_map>
 
 #include "data/detail/GroupPotentialEntry.hpp"
@@ -16,11 +15,10 @@ class ModelObject;
 class ModelAnalysisData
 {
 public:
-    using AtomGroupEntryMap = std::unordered_map<std::string, AtomGroupPotentialEntry>;
     using AtomLocalEntryMap = std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>>;
 
 private:
-    AtomGroupEntryMap m_atom_group_entry_map;
+    AtomGroupPotentialEntry m_atom_group_entry;
     AtomLocalEntryMap m_atom_local_entry_map;
 
 public:
@@ -31,11 +29,8 @@ public:
     static const ModelAnalysisData & Of(const ModelObject & model_object);
 
     void Clear();
-    AtomGroupPotentialEntry & EnsureAtomGroupEntry(const std::string & class_key);
-    AtomGroupPotentialEntry * FindAtomGroupEntry(const std::string & class_key);
-    const AtomGroupPotentialEntry * FindAtomGroupEntry(const std::string & class_key) const;
-    AtomGroupEntryMap & AtomGroupEntries();
-    const AtomGroupEntryMap & AtomGroupEntries() const;
+    AtomGroupPotentialEntry & AtomGroupEntry();
+    const AtomGroupPotentialEntry & AtomGroupEntry() const;
 
     LocalPotentialEntry & EnsureAtomLocalEntry(const AtomObject & atom_object);
     void SetAtomLocalEntry(const AtomObject & atom_object, std::unique_ptr<LocalPotentialEntry> entry);

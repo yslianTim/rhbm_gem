@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstddef>
-#include <string>
 #include <vector>
 
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
@@ -19,12 +18,11 @@ size_t GetMainChainMemberCount();
 Element GetMainChainElement(size_t member_id);
 Spot GetMainChainSpot(size_t member_id);
 
-GroupKey GetGroupKeyInClass(const AtomObject * atom_object, const std::string & class_key);
-GroupKey GetGroupKeyInClass(ComponentKey component_key, AtomKey atom_key);
-Residue GetResidueFromGroupKey(GroupKey group_key, const std::string & class_key);
+GroupKey GetGroupKey(const AtomObject * atom_object);
+Residue GetResidueFromGroupKey(GroupKey group_key);
 
-GroupKey GetMainChainComponentAtomClassGroupKey(size_t member_id, Residue residue);
-std::vector<GroupKey> GetMainChainComponentAtomClassGroupKeyList(size_t member_id);
+GroupKey GetMainChainGroupKey(size_t member_id, Residue residue);
+std::vector<GroupKey> GetMainChainGroupKeyList(size_t member_id);
 
 } // namespace data_internal
 

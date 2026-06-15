@@ -812,9 +812,8 @@ void ComparisonPainter::BuildGausRatioToResolutionGraph(
     int par_id, size_t target_id, size_t reference_id, TGraphErrors * graph,
     const std::vector<ModelObject *> & model_list, bool use_component_average, Residue residue)
 {
-    const auto & class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
-    const auto group_key{ data_internal::GetMainChainComponentAtomClassGroupKey(target_id, residue) };
-    const auto ref_group_key{ data_internal::GetMainChainComponentAtomClassGroupKey(reference_id, residue) };
+    const auto group_key{ data_internal::GetMainChainGroupKey(target_id, residue) };
+    const auto ref_group_key{ data_internal::GetMainChainGroupKey(reference_id, residue) };
     const auto atom_key{ static_cast<AtomKey>(data_internal::GetMainChainSpot(target_id)) };
     const auto ref_atom_key{ static_cast<AtomKey>(data_internal::GetMainChainSpot(reference_id)) };
     auto count{ 0 };
@@ -837,13 +836,13 @@ void ComparisonPainter::BuildGausRatioToResolutionGraph(
         }
         else
         {
-            if (!entry_view.HasAtomGroup(group_key, class_key)) continue;
-            if (!entry_view.HasAtomGroup(ref_group_key, class_key)) continue;
-            y_value = entry_view.GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(par_id);
-            y_error = entry_view.GetAtomGroupPriorWithUncertainty(group_key, class_key)
+            if (!entry_view.HasAtomGroup(group_key)) continue;
+            if (!entry_view.HasAtomGroup(ref_group_key)) continue;
+            y_value = entry_view.GetAtomGroupPrior(group_key).GetDisplayParameter(par_id);
+            y_error = entry_view.GetAtomGroupPriorWithUncertainty(group_key)
                 .GetDisplayStandardDeviation(par_id);
-            ref_y_value = entry_view.GetAtomGroupPrior(ref_group_key, class_key).GetDisplayParameter(par_id);
-            ref_y_error = entry_view.GetAtomGroupPriorWithUncertainty(ref_group_key, class_key)
+            ref_y_value = entry_view.GetAtomGroupPrior(ref_group_key).GetDisplayParameter(par_id);
+            ref_y_error = entry_view.GetAtomGroupPriorWithUncertainty(ref_group_key)
                 .GetDisplayStandardDeviation(par_id);
         }
         auto x_value{ model_object->GetResolution() };
@@ -862,9 +861,8 @@ void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
     bool draw_index, Residue residue)
 {
     const char * data_index[11]{"A","B","C","D","E","F","G","H","I","J","K"};
-    const auto & class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
-    const auto group_key{ data_internal::GetMainChainComponentAtomClassGroupKey(target_id, residue) };
-    const auto ref_group_key{ data_internal::GetMainChainComponentAtomClassGroupKey(reference_id, residue) };
+    const auto group_key{ data_internal::GetMainChainGroupKey(target_id, residue) };
+    const auto ref_group_key{ data_internal::GetMainChainGroupKey(reference_id, residue) };
     const auto atom_key{ static_cast<AtomKey>(data_internal::GetMainChainSpot(target_id)) };
     const auto ref_atom_key{ static_cast<AtomKey>(data_internal::GetMainChainSpot(reference_id)) };
     auto count{ 0 };
@@ -893,16 +891,16 @@ void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
         }
         else
         {
-            if (!entry_view.HasAtomGroup(group_key, class_key)) continue;
-            if (!entry_view.HasAtomGroup(ref_group_key, class_key)) continue;
-            x_value = entry_view.GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(1);
-            y_value = entry_view.GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(0);
-            x_error = entry_view.GetAtomGroupPriorWithUncertainty(group_key, class_key)
+            if (!entry_view.HasAtomGroup(group_key)) continue;
+            if (!entry_view.HasAtomGroup(ref_group_key)) continue;
+            x_value = entry_view.GetAtomGroupPrior(group_key).GetDisplayParameter(1);
+            y_value = entry_view.GetAtomGroupPrior(group_key).GetDisplayParameter(0);
+            x_error = entry_view.GetAtomGroupPriorWithUncertainty(group_key)
                 .GetDisplayStandardDeviation(1);
-            y_error = entry_view.GetAtomGroupPriorWithUncertainty(group_key, class_key)
+            y_error = entry_view.GetAtomGroupPriorWithUncertainty(group_key)
                 .GetDisplayStandardDeviation(0);
-            ref_y_value = entry_view.GetAtomGroupPrior(ref_group_key, class_key).GetDisplayParameter(0);
-            ref_y_error = entry_view.GetAtomGroupPriorWithUncertainty(ref_group_key, class_key)
+            ref_y_value = entry_view.GetAtomGroupPrior(ref_group_key).GetDisplayParameter(0);
+            ref_y_error = entry_view.GetAtomGroupPriorWithUncertainty(ref_group_key)
                 .GetDisplayStandardDeviation(0);
         }
         if (x_value == 0.0 || ref_y_value == 0.0) continue;

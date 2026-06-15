@@ -20,7 +20,7 @@ namespace {
 
 using namespace std::literals;
 
-constexpr int kCurrentSchemaVersion = 4;
+constexpr int kCurrentSchemaVersion = 5;
 constexpr std::string_view kCatalogTableName = "object_catalog";
 constexpr std::string_view kMapTableName = "map_list";
 constexpr std::string_view kUnsupportedMetadataTableName = "object_metadata";
@@ -469,6 +469,95 @@ void MigrateGaussianInterceptColumns(rhbm_gem::SQLiteWrapper & database)
     }
 }
 
+void MigrateAtomClassKeyColumns(rhbm_gem::SQLiteWrapper & database)
+{
+    database.Execute("BEGIN TRANSACTION;");
+    try
+    {
+        database.Execute("ALTER TABLE model_atom_posterior RENAME TO model_atom_posterior_v4;");
+        database.Execute(R"sql(
+            CREATE TABLE model_atom_posterior (
+                key_tag TEXT,
+                serial_id INTEGER,
+                amplitude_estimate_posterior DOUBLE,
+                width_estimate_posterior DOUBLE,
+                intercept_estimate_posterior DOUBLE,
+                amplitude_variance_posterior DOUBLE,
+                width_variance_posterior DOUBLE,
+                intercept_variance_posterior DOUBLE,
+                outlier_tag INTEGER,
+                statistical_distance DOUBLE,
+                PRIMARY KEY (key_tag, serial_id),
+                FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
+            );
+        )sql");
+        database.Execute(R"sql(
+            INSERT OR REPLACE INTO model_atom_posterior (
+                key_tag, serial_id,
+                amplitude_estimate_posterior, width_estimate_posterior, intercept_estimate_posterior,
+                amplitude_variance_posterior, width_variance_posterior, intercept_variance_posterior,
+                outlier_tag, statistical_distance
+            )
+            SELECT
+                key_tag, serial_id,
+                amplitude_estimate_posterior, width_estimate_posterior, intercept_estimate_posterior,
+                amplitude_variance_posterior, width_variance_posterior, intercept_variance_posterior,
+                outlier_tag, statistical_distance
+            FROM model_atom_posterior_v4
+            WHERE class_key = 'component_atom_class';
+        )sql");
+        database.Execute("DROP TABLE model_atom_posterior_v4;");
+
+        database.Execute("ALTER TABLE model_atom_group_potential RENAME TO model_atom_group_potential_v4;");
+        database.Execute(R"sql(
+            CREATE TABLE model_atom_group_potential (
+                key_tag TEXT,
+                group_key INTEGER,
+                member_size INTEGER,
+                amplitude_estimate_mean DOUBLE,
+                width_estimate_mean DOUBLE,
+                intercept_estimate_mean DOUBLE,
+                amplitude_estimate_mdpde DOUBLE,
+                width_estimate_mdpde DOUBLE,
+                intercept_estimate_mdpde DOUBLE,
+                amplitude_estimate_prior DOUBLE,
+                width_estimate_prior DOUBLE,
+                intercept_estimate_prior DOUBLE,
+                amplitude_variance_prior DOUBLE,
+                width_variance_prior DOUBLE,
+                intercept_variance_prior DOUBLE,
+                alpha_g DOUBLE,
+                PRIMARY KEY (key_tag, group_key),
+                FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
+            );
+        )sql");
+        database.Execute(R"sql(
+            INSERT OR REPLACE INTO model_atom_group_potential (
+                key_tag, group_key, member_size,
+                amplitude_estimate_mean, width_estimate_mean, intercept_estimate_mean,
+                amplitude_estimate_mdpde, width_estimate_mdpde, intercept_estimate_mdpde,
+                amplitude_estimate_prior, width_estimate_prior, intercept_estimate_prior,
+                amplitude_variance_prior, width_variance_prior, intercept_variance_prior, alpha_g
+            )
+            SELECT
+                key_tag, group_key, member_size,
+                amplitude_estimate_mean, width_estimate_mean, intercept_estimate_mean,
+                amplitude_estimate_mdpde, width_estimate_mdpde, intercept_estimate_mdpde,
+                amplitude_estimate_prior, width_estimate_prior, intercept_estimate_prior,
+                amplitude_variance_prior, width_variance_prior, intercept_variance_prior, alpha_g
+            FROM model_atom_group_potential_v4
+            WHERE class_key = 'component_atom_class';
+        )sql");
+        database.Execute("DROP TABLE model_atom_group_potential_v4;");
+        database.Execute("COMMIT;");
+    }
+    catch (...)
+    {
+        database.Execute("ROLLBACK;");
+        throw;
+    }
+}
+
 void ValidateObjectCatalogShape(rhbm_gem::SQLiteWrapper & database)
 {
     const auto columns{ QueryTableInfo(database, std::string(kCatalogTableName)) };
@@ -589,7 +678,8 @@ void ValidateCatalogConsistency(
 
 void ValidateModelSchema(
     rhbm_gem::SQLiteWrapper & database,
-    bool require_gaussian_intercept_columns)
+    bool require_gaussian_intercept_columns,
+    bool atom_tables_have_class_key)
 {
     ValidateRequiredTables(database, kModelCanonicalTableNames, "model");
 
@@ -605,12 +695,26 @@ void ValidateModelSchema(
         database,
         "model_bond_local_potential",
         {"key_tag", "atom_serial_id_1", "atom_serial_id_2"});
-    ValidatePrimaryKeyShape(database, "model_atom_posterior", {"key_tag", "class_key", "serial_id"});
+    if (atom_tables_have_class_key)
+    {
+        ValidatePrimaryKeyShape(database, "model_atom_posterior", {"key_tag", "class_key", "serial_id"});
+    }
+    else
+    {
+        ValidatePrimaryKeyShape(database, "model_atom_posterior", {"key_tag", "serial_id"});
+    }
     ValidatePrimaryKeyShape(
         database,
         "model_bond_posterior",
         {"key_tag", "class_key", "atom_serial_id_1", "atom_serial_id_2"});
-    ValidatePrimaryKeyShape(database, "model_atom_group_potential", {"key_tag", "class_key", "group_key"});
+    if (atom_tables_have_class_key)
+    {
+        ValidatePrimaryKeyShape(database, "model_atom_group_potential", {"key_tag", "class_key", "group_key"});
+    }
+    else
+    {
+        ValidatePrimaryKeyShape(database, "model_atom_group_potential", {"key_tag", "group_key"});
+    }
     ValidatePrimaryKeyShape(database, "model_bond_group_potential", {"key_tag", "class_key", "group_key"});
 
     ValidateForeignKey(database, "model_object", "key_tag", "object_catalog", "key_tag", "CASCADE");
@@ -638,7 +742,8 @@ void ValidateMapSchema(rhbm_gem::SQLiteWrapper & database)
 
 void ValidateCurrentSchema(
     rhbm_gem::SQLiteWrapper & database,
-    bool require_gaussian_intercept_columns = true)
+    bool require_gaussian_intercept_columns = true,
+    bool atom_tables_have_class_key = false)
 {
     if (!HasTable(database, std::string(kCatalogTableName)))
     {
@@ -650,7 +755,7 @@ void ValidateCurrentSchema(
     }
 
     ValidateObjectCatalogShape(database);
-    ValidateModelSchema(database, require_gaussian_intercept_columns);
+    ValidateModelSchema(database, require_gaussian_intercept_columns, atom_tables_have_class_key);
     ValidateMapSchema(database);
     ValidateCatalogConsistency(database, "model", ListModelKeys(database));
     ValidateCatalogConsistency(database, "map", ListMapKeys(database));
@@ -675,8 +780,17 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
     }
     if (raw_version == 2 || raw_version == 3)
     {
-        ValidateCurrentSchema(database, false);
+        ValidateCurrentSchema(database, false, true);
         MigrateGaussianInterceptColumns(database);
+        MigrateAtomClassKeyColumns(database);
+        SetSchemaVersion(database);
+        ValidateCurrentSchema(database);
+        return;
+    }
+    if (raw_version == 4)
+    {
+        ValidateCurrentSchema(database, true, true);
+        MigrateAtomClassKeyColumns(database);
         SetSchemaVersion(database);
         ValidateCurrentSchema(database);
         return;

@@ -5,7 +5,6 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <array>
-#include <stdexcept>
 
 namespace rhbm_gem::data_internal {
 
@@ -72,37 +71,20 @@ Spot GetMainChainSpot(size_t id)
     return k_main_chain_member_spot_list.at(id);
 }
 
-GroupKey GetGroupKeyInClass(
-    const AtomObject * atom_object,
-    const std::string & class_key)
+GroupKey GetGroupKey(const AtomObject * atom_object)
 {
-    if (class_key == ChemicalDataHelper::GetComponentAtomClassKey())
-    {
-        return KeyPackerComponentAtomClass::Pack(
-            atom_object->GetComponentKey(),
-            atom_object->GetAtomKey());
-    }
-    throw std::runtime_error("Unsupported class key." + class_key);
+    return KeyPackerComponentAtomClass::Pack(
+        atom_object->GetComponentKey(),
+        atom_object->GetAtomKey());
 }
 
-GroupKey GetGroupKeyInClass(ComponentKey component_key, AtomKey atom_key)
+Residue GetResidueFromGroupKey(GroupKey group_key)
 {
-    return KeyPackerComponentAtomClass::Pack(component_key, atom_key);
+    auto unpack_key{ KeyPackerComponentAtomClass::Unpack(group_key) };
+    return static_cast<Residue>(std::get<0>(unpack_key));
 }
 
-Residue GetResidueFromGroupKey(
-    GroupKey group_key,
-    const std::string & class_key)
-{
-    if (class_key == ChemicalDataHelper::GetComponentAtomClassKey())
-    {
-        auto unpack_key{ KeyPackerComponentAtomClass::Unpack(group_key) };
-        return static_cast<Residue>(std::get<0>(unpack_key));
-    }
-    return Residue::UNK;
-}
-
-GroupKey GetMainChainComponentAtomClassGroupKey(size_t id, Residue residue)
+GroupKey GetMainChainGroupKey(size_t id, Residue residue)
 {
     if (IsValidMainChainMemberID(id) == false)
     {
@@ -115,18 +97,18 @@ GroupKey GetMainChainComponentAtomClassGroupKey(size_t id, Residue residue)
         static_cast<AtomKey>(k_main_chain_member_spot_list.at(id)));
 }
 
-std::vector<GroupKey> GetMainChainComponentAtomClassGroupKeyList(size_t id)
+std::vector<GroupKey> GetMainChainGroupKeyList(size_t id)
 {
     if (IsValidMainChainMemberID(id) == false) return {};
     std::vector<GroupKey> group_key_list;
     group_key_list.reserve(ChemicalDataHelper::GetStandardResidueCount());
     for (const auto residue_id : ChemicalDataHelper::GetStandardAminoAcidList())
     {
-        group_key_list.emplace_back(GetMainChainComponentAtomClassGroupKey(id, residue_id));
+        group_key_list.emplace_back(GetMainChainGroupKey(id, residue_id));
     }
     for (const auto residue_id : ChemicalDataHelper::GetStandardNucleotideList())
     {
-        group_key_list.emplace_back(GetMainChainComponentAtomClassGroupKey(id, residue_id));
+        group_key_list.emplace_back(GetMainChainGroupKey(id, residue_id));
     }
     return group_key_list;
 }

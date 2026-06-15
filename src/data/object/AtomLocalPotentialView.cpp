@@ -100,10 +100,9 @@ double AtomLocalPotentialView::GetAlphaR() const
     return RequireEntry("Local alpha-r").GaussianResult().alpha_r;
 }
 
-std::optional<LocalPotentialAnnotation> AtomLocalPotentialView::FindAnnotation(
-    const std::string & key) const
+std::optional<LocalPotentialAnnotation> AtomLocalPotentialView::FindAnnotation() const
 {
-    const auto * annotation{ RequireEntry("Local annotation").FindAnnotation(key) };
+    const auto * annotation{ RequireEntry("Local annotation").FindAnnotation() };
     if (annotation == nullptr)
     {
         return std::nullopt;

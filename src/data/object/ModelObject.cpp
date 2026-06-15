@@ -253,44 +253,25 @@ ModelObject::ModelObject(const ModelObject & other) :
 
     AttachOwnedObjects();
 
-    auto copy_group_entries =
-        [](
-            const auto & source_map,
-            auto copy_members,
-            auto set_entry)
-        {
-            for (const auto & [class_key, entry] : source_map)
-            {
-                auto cloned_entry{ std::make_unique<std::decay_t<decltype(entry)>>() };
-                for (const auto group_key : entry.CollectGroupKeys())
-                {
-                    GroupGaussianResult result;
-                    result.mean = entry.GetMean(group_key);
-                    result.mdpde = entry.GetMDPDE(group_key);
-                    result.prior = entry.GetPriorWithUncertainty(group_key);
-                    result.alpha_g = entry.GetAlphaG(group_key);
-                    cloned_entry->SetGaussianResult(group_key, result);
-                    copy_members(entry, group_key, *cloned_entry);
-                }
-                set_entry(class_key, std::move(cloned_entry));
-            }
-        };
-
     const auto & source_analysis_data{ ModelAnalysisData::Of(other) };
-    copy_group_entries(
-        source_analysis_data.AtomGroupEntries(),
-        [&atom_ptr_map](const auto & entry, GroupKey group_key, auto & cloned_entry)
+    {
+        const auto & source_entry{ source_analysis_data.AtomGroupEntry() };
+        auto & cloned_entry{ m_analysis_data->AtomGroupEntry() };
+        for (const auto group_key : source_entry.CollectGroupKeys())
         {
-            cloned_entry.ReserveMembers(group_key, entry.GetMemberCount(group_key));
-            for (auto * atom : entry.GetMembers(group_key))
+            GroupGaussianResult result;
+            result.mean = source_entry.GetMean(group_key);
+            result.mdpde = source_entry.GetMDPDE(group_key);
+            result.prior = source_entry.GetPriorWithUncertainty(group_key);
+            result.alpha_g = source_entry.GetAlphaG(group_key);
+            cloned_entry.SetGaussianResult(group_key, result);
+            cloned_entry.ReserveMembers(group_key, source_entry.GetMemberCount(group_key));
+            for (auto * atom : source_entry.GetMembers(group_key))
             {
                 cloned_entry.AddMember(group_key, *atom_ptr_map.at(atom));
             }
-        },
-        [this](const std::string & class_key, auto entry)
-        {
-            m_analysis_data->EnsureAtomGroupEntry(class_key) = std::move(*entry);
-        });
+        }
+    }
 
     for (const auto & atom : m_atom_list)
     {

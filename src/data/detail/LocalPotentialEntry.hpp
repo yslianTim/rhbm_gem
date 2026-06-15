@@ -1,7 +1,6 @@
 #pragma once
 
-#include <string>
-#include <unordered_map>
+#include <optional>
 #include <utility>
 
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
@@ -13,7 +12,7 @@ class LocalPotentialEntry
 {
     LocalPotentialSampleList m_sampling_entries;
     LocalGaussianResult m_gaussian_result;
-    std::unordered_map<std::string, LocalPotentialAnnotation> m_annotation_map;
+    std::optional<LocalPotentialAnnotation> m_annotation;
 
 public:
     LocalPotentialEntry() = default;
@@ -28,9 +27,9 @@ public:
     {
         m_gaussian_result = std::move(value);
     }
-    void SetAnnotation(const std::string & key, LocalPotentialAnnotation annotation)
+    void SetAnnotation(LocalPotentialAnnotation annotation)
     {
-        m_annotation_map[key] = std::move(annotation);
+        m_annotation = std::move(annotation);
     }
     void ClearTransientFitState()
     {
@@ -42,15 +41,13 @@ public:
         return static_cast<int>(m_sampling_entries.size());
     }
     const LocalGaussianResult & GaussianResult() const { return m_gaussian_result; }
-    LocalPotentialAnnotation * FindAnnotation(const std::string & key)
+    LocalPotentialAnnotation * FindAnnotation()
     {
-        const auto iter{ m_annotation_map.find(key) };
-        return (iter == m_annotation_map.end()) ? nullptr : &iter->second;
+        return m_annotation.has_value() ? &m_annotation.value() : nullptr;
     }
-    const LocalPotentialAnnotation * FindAnnotation(const std::string & key) const
+    const LocalPotentialAnnotation * FindAnnotation() const
     {
-        const auto iter{ m_annotation_map.find(key) };
-        return (iter == m_annotation_map.end()) ? nullptr : &iter->second;
+        return m_annotation.has_value() ? &m_annotation.value() : nullptr;
     }
     const LocalPotentialSampleList & SamplingEntries() const { return m_sampling_entries; }
 };

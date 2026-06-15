@@ -139,12 +139,12 @@ TEST(DataObjectPersistenceTest, FinalV2CatalogDatabaseRemainsLoadable)
         data_test::SaveTinyMapThroughRepository(repository, "map", 3.0f);
     }
 
-    data_test::SetUserVersion(database_path, 2);
+    data_test::SetUserVersion(database_path, 5);
 
     rg::DataRepository repository{ database_path };
     EXPECT_NE(repository.LoadModel("model"), nullptr);
     EXPECT_NE(repository.LoadMap("map"), nullptr);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 4);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 5);
 }
 
 TEST(DataObjectPersistenceTest, SamplingSelectionRoundTripPreservesUnselectedSamples)
@@ -189,7 +189,6 @@ TEST(DataObjectPersistenceTest, GaussianInterceptRoundTripPreservesAnalysisResul
 
     int annotated_serial_id{ 0 };
     GroupKey group_key{};
-    const auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     {
         rg::DataRepository repository{ database_path };
         auto model{ data_test::MakeModelWithBond() };
@@ -213,10 +212,10 @@ TEST(DataObjectPersistenceTest, GaussianInterceptRoundTripPreservesAnalysisResul
 
         analysis.RebuildAtomGroupsFromSelection();
         const auto analysis_view{ model->GetAnalysisView() };
-        const auto group_keys{ analysis_view.CollectAtomGroupKeys(class_key) };
+        const auto group_keys{ analysis_view.CollectAtomGroupKeys() };
         ASSERT_FALSE(group_keys.empty());
         group_key = group_keys.front();
-        const auto & atom_list{ analysis_view.GetAtomObjectList(group_key, class_key) };
+        const auto & atom_list{ analysis_view.GetAtomObjectList(group_key) };
         ASSERT_FALSE(atom_list.empty());
         annotated_serial_id = atom_list.front()->GetSerialID();
 
@@ -240,7 +239,7 @@ TEST(DataObjectPersistenceTest, GaussianInterceptRoundTripPreservesAnalysisResul
             member_result.statistical_distance = 1.5 + static_cast<double>(i);
             group_result.member_results.emplace_back(member_result);
         }
-        analysis.ApplyAtomGroupGaussianResult(group_key, class_key, group_result);
+        analysis.ApplyAtomGroupGaussianResult(group_key, group_result);
 
         repository.SaveModel(*model, "model");
     }
@@ -257,16 +256,16 @@ TEST(DataObjectPersistenceTest, GaussianInterceptRoundTripPreservesAnalysisResul
 
     const auto loaded_analysis_view{ loaded_model->GetAnalysisView() };
     EXPECT_DOUBLE_EQ(
-        loaded_analysis_view.GetAtomGroupMean(group_key, class_key).GetIntercept(),
+        loaded_analysis_view.GetAtomGroupMean(group_key).GetIntercept(),
         0.33);
     EXPECT_DOUBLE_EQ(
-        loaded_analysis_view.GetAtomGroupMDPDE(group_key, class_key).GetIntercept(),
+        loaded_analysis_view.GetAtomGroupMDPDE(group_key).GetIntercept(),
         0.44);
     EXPECT_DOUBLE_EQ(
-        loaded_analysis_view.GetAtomGroupPrior(group_key, class_key).GetIntercept(),
+        loaded_analysis_view.GetAtomGroupPrior(group_key).GetIntercept(),
         0.55);
     EXPECT_DOUBLE_EQ(
-        loaded_analysis_view.GetAtomGroupPriorWithUncertainty(group_key, class_key)
+        loaded_analysis_view.GetAtomGroupPriorWithUncertainty(group_key)
             .GetStandardDeviationModel()
             .GetIntercept(),
         0.03);
@@ -282,7 +281,7 @@ TEST(DataObjectPersistenceTest, GaussianInterceptRoundTripPreservesAnalysisResul
     }
     ASSERT_NE(annotated_atom, nullptr);
     const auto annotation{
-        rg::AtomLocalPotentialView::RequireFor(*annotated_atom).FindAnnotation(class_key)
+        rg::AtomLocalPotentialView::RequireFor(*annotated_atom).FindAnnotation()
     };
     ASSERT_TRUE(annotation.has_value());
     EXPECT_DOUBLE_EQ(annotation->gaussian.GetModel().GetIntercept(), 0.66);
@@ -327,7 +326,7 @@ TEST(DataObjectPersistenceTest, LegacyV2SamplingBlobLoadsAsSelectedAndMigratesVe
         database.Bind<double>(11, 0.0);
         database.StepOnce();
     }
-    data_test::SetUserVersion(database_path, 2);
+    data_test::SetUserVersion(database_path, 5);
 
     rg::DataRepository repository{ database_path };
     auto loaded_model{ repository.LoadModel("model") };
@@ -339,7 +338,7 @@ TEST(DataObjectPersistenceTest, LegacyV2SamplingBlobLoadsAsSelectedAndMigratesVe
     ASSERT_EQ(entries.size(), 2u);
     EXPECT_TRUE(entries.at(0).point.is_selected);
     EXPECT_TRUE(entries.at(1).point.is_selected);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 4);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 5);
 }
 
 TEST(DataObjectPersistenceTest, DatabaseRoundTripPreservesChainMetadataAndSymmetryFiltering)

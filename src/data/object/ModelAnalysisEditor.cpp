@@ -7,10 +7,7 @@
 
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
-
 #include <stdexcept>
-#include <string>
 
 namespace rhbm_gem {
 
@@ -45,16 +42,12 @@ AtomLocalPotentialEditor ModelAnalysisEditor::EnsureAtomLocalPotential(const Ato
 void ModelAnalysisEditor::RebuildAtomGroupsFromSelection()
 {
     auto & analysis_data{ ModelAnalysisData::Of(m_model_object) };
-    analysis_data.AtomGroupEntries().clear();
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
+    auto & group_entry{ analysis_data.AtomGroupEntry() };
+    group_entry = AtomGroupPotentialEntry{};
+    for (auto * atom : m_model_object.GetSelectedAtoms())
     {
-        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        auto & group_entry{ analysis_data.EnsureAtomGroupEntry(class_key) };
-        for (auto * atom : m_model_object.GetSelectedAtoms())
-        {
-            const auto group_key{ data_internal::GetGroupKeyInClass(atom, class_key) };
-            group_entry.AddMember(group_key, *atom);
-        }
+        const auto group_key{ data_internal::GetGroupKey(atom) };
+        group_entry.AddMember(group_key, *atom);
     }
 }
 
@@ -68,28 +61,24 @@ void ModelAnalysisEditor::InitializeLocalAlpha(double alpha_r)
 
 void ModelAnalysisEditor::InitializeGroupAlpha(double alpha_g)
 {
-    for (auto & [class_key, group_entry] : ModelAnalysisData::Of(m_model_object).AtomGroupEntries())
+    auto & group_entry{ ModelAnalysisData::Of(m_model_object).AtomGroupEntry() };
+    for (const auto group_key : group_entry.CollectGroupKeys())
     {
-        (void)class_key;
-        for (const auto group_key : group_entry.CollectGroupKeys())
-        {
-            group_entry.SetAlphaG(group_key, alpha_g);
-        }
+        group_entry.SetAlphaG(group_key, alpha_g);
     }
 }
 
 void ModelAnalysisEditor::ApplyAtomGroupGaussianResult(
     GroupKey group_key,
-    const std::string & class_key,
     const GroupGaussianResult & group_result)
 {
     auto & analysis_data{ ModelAnalysisData::Of(m_model_object) };
-    auto group_entry{ analysis_data.FindAtomGroupEntry(class_key) };
-    if (group_entry == nullptr)
+    auto & group_entry{ analysis_data.AtomGroupEntry() };
+    if (!group_entry.HasGroup(group_key))
     {
         throw std::runtime_error("Atom group entry is not available.");
     }
-    const auto & atom_list{ group_entry->GetMembers(group_key) };
+    const auto & atom_list{ group_entry.GetMembers(group_key) };
     if (group_result.member_results.size() != atom_list.size())
     {
         throw std::invalid_argument("Atom group result member result count is inconsistent.");
@@ -98,7 +87,7 @@ void ModelAnalysisEditor::ApplyAtomGroupGaussianResult(
     for (std::size_t i = 0; i < atom_list.size(); i++)
     {
         auto & atom_entry{ analysis_data.EnsureAtomLocalEntry(*atom_list.at(i)) };
-        atom_entry.SetAnnotation(class_key,
+        atom_entry.SetAnnotation(
             LocalPotentialAnnotation{
                 group_result.member_results.at(i).mdpde,
                 group_result.member_results.at(i).is_outlier,
@@ -106,15 +95,14 @@ void ModelAnalysisEditor::ApplyAtomGroupGaussianResult(
             }
         );
     }
-    analysis_data.EnsureAtomGroupEntry(class_key).SetGaussianResult(group_key, group_result);
+    group_entry.SetGaussianResult(group_key, group_result);
 }
 
 void ModelAnalysisEditor::SetAtomGroupAlphaG(
     GroupKey group_key,
-    const std::string & class_key,
     double alpha_g)
 {
-    ModelAnalysisData::Of(m_model_object).EnsureAtomGroupEntry(class_key).SetAlphaG(group_key, alpha_g);
+    ModelAnalysisData::Of(m_model_object).AtomGroupEntry().SetAlphaG(group_key, alpha_g);
 }
 
 } // namespace rhbm_gem

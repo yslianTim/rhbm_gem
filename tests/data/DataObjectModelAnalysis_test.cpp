@@ -346,22 +346,27 @@ TEST(DataObjectModelAnalysisTest, ModelObjectInitializesLocalPotentialAnalysis)
     model->SelectAllAtoms(false);
     model->SetAtomSelected(first_atom->GetSerialID(), true);
     analysis_data.EnsureAtomLocalEntry(*second_atom).SetAlphaR(0.7);
-    analysis_data.EnsureAtomGroupEntry("stale_atom_class").AddMember(999, *second_atom);
+    analysis_data.AtomGroupEntry().AddMember(999, *second_atom);
 
     model->LocalPotentialInitialization();
 
-    EXPECT_EQ(analysis_data.FindAtomGroupEntry("stale_atom_class"), nullptr);
+    size_t member_count{ 0 };
+    for (const auto group_key : analysis_data.AtomGroupEntry().CollectGroupKeys())
+    {
+        member_count += analysis_data.AtomGroupEntry().GetMemberCount(group_key);
+        for (const auto * atom : analysis_data.AtomGroupEntry().GetMembers(group_key))
+        {
+            EXPECT_EQ(atom, first_atom);
+        }
+    }
+    EXPECT_EQ(member_count, 1U);
     EXPECT_DOUBLE_EQ(0.0, rg::AtomLocalPotentialView::RequireFor(*first_atom).GetAlphaR());
     EXPECT_EQ(analysis_data.FindAtomLocalEntry(*second_atom), nullptr);
 
     const auto analysis_view{ model->GetAnalysisView() };
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
+    for (const auto group_key : analysis_view.CollectAtomGroupKeys())
     {
-        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        for (const auto group_key : analysis_view.CollectAtomGroupKeys(class_key))
-        {
-            EXPECT_DOUBLE_EQ(0.0, analysis_view.GetAtomAlphaG(group_key, class_key));
-        }
+        EXPECT_DOUBLE_EQ(0.0, analysis_view.GetAtomAlphaG(group_key));
     }
 }
 
@@ -373,20 +378,20 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorCanClearTransientFitStatesW
     auto analysis{ model->EditAnalysis() };
 
     auto & atom_entry{ analysis_data.EnsureAtomLocalEntry(*atom) };
-    analysis_data.EnsureAtomGroupEntry("atom_class");
+    analysis_data.AtomGroupEntry().AddMember(999, *atom);
     rg::LocalGaussianResult atom_result;
     atom_result.alpha_r = 0.2;
     atom_result.fit_result = rg::RHBMBetaEstimateResult{};
     atom_entry.SetGaussianResult(atom_result);
 
     ASSERT_NE(analysis_data.FindAtomLocalEntry(*atom), nullptr);
-    ASSERT_NE(analysis_data.FindAtomGroupEntry("atom_class"), nullptr);
+    ASSERT_FALSE(analysis_data.AtomGroupEntry().CollectGroupKeys().empty());
 
     analysis.ClearTransientFitStates();
 
     const auto * cleared_atom_entry{ analysis_data.FindAtomLocalEntry(*atom) };
     ASSERT_NE(cleared_atom_entry, nullptr);
-    EXPECT_NE(analysis_data.FindAtomGroupEntry("atom_class"), nullptr);
+    EXPECT_FALSE(analysis_data.AtomGroupEntry().CollectGroupKeys().empty());
     EXPECT_DOUBLE_EQ(0.2, cleared_atom_entry->GaussianResult().alpha_r);
     EXPECT_FALSE(cleared_atom_entry->GaussianResult().fit_result.has_value());
 }
@@ -398,13 +403,13 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisDataClearDropsEntriesAndFitStates
     auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
 
     auto & atom_entry{ analysis_data.EnsureAtomLocalEntry(*atom) };
-    analysis_data.EnsureAtomGroupEntry("atom_class");
+    analysis_data.AtomGroupEntry().AddMember(999, *atom);
     atom_entry.SetAlphaR(0.2);
 
     analysis_data.Clear();
 
     EXPECT_EQ(analysis_data.FindAtomLocalEntry(*atom), nullptr);
-    EXPECT_EQ(analysis_data.FindAtomGroupEntry("atom_class"), nullptr);
+    EXPECT_TRUE(analysis_data.AtomGroupEntry().CollectGroupKeys().empty());
 }
 
 TEST(DataObjectModelAnalysisTest, LocalPotentialEntryClearTransientFitStateKeepsGaussianResult)
@@ -525,12 +530,11 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupGaussianRes
     auto analysis{ model->EditAnalysis() };
     analysis.RebuildAtomGroupsFromSelection();
     const auto analysis_view{ model->GetAnalysisView() };
-    const auto & class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
-    const auto group_keys{ analysis_view.CollectAtomGroupKeys(class_key) };
+    const auto group_keys{ analysis_view.CollectAtomGroupKeys() };
     ASSERT_FALSE(group_keys.empty());
 
     const auto group_key{ group_keys.front() };
-    const auto & atom_list{ analysis_view.GetAtomObjectList(group_key, class_key) };
+    const auto & atom_list{ analysis_view.GetAtomObjectList(group_key) };
     ASSERT_FALSE(atom_list.empty());
 
     constexpr double alpha_g{ 0.25 };
@@ -555,19 +559,19 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupGaussianRes
         result.member_results.emplace_back(member_result);
     }
 
-    analysis.ApplyAtomGroupGaussianResult(group_key, class_key, result);
+    analysis.ApplyAtomGroupGaussianResult(group_key, result);
 
-    EXPECT_NEAR(result.mean.GetAmplitude(), analysis_view.GetAtomGroupMean(group_key, class_key).GetAmplitude(), 1e-12);
-    EXPECT_NEAR(result.mean.GetWidth(), analysis_view.GetAtomGroupMean(group_key, class_key).GetWidth(), 1e-12);
-    EXPECT_NEAR(result.mdpde.GetAmplitude(), analysis_view.GetAtomGroupMDPDE(group_key, class_key).GetAmplitude(), 1e-12);
-    EXPECT_NEAR(result.mdpde.GetWidth(), analysis_view.GetAtomGroupMDPDE(group_key, class_key).GetWidth(), 1e-12);
-    EXPECT_NEAR(result.prior.GetModel().GetAmplitude(), analysis_view.GetAtomGroupPrior(group_key, class_key).GetAmplitude(), 1e-12);
-    EXPECT_NEAR(result.prior.GetModel().GetWidth(), analysis_view.GetAtomGroupPrior(group_key, class_key).GetWidth(), 1e-12);
-    EXPECT_NEAR(result.prior.GetStandardDeviationModel().GetAmplitude(), analysis_view.GetAtomGroupPriorWithUncertainty(group_key, class_key).GetStandardDeviationModel().GetAmplitude(), 1e-12);
-    EXPECT_NEAR(result.prior.GetStandardDeviationModel().GetWidth(), analysis_view.GetAtomGroupPriorWithUncertainty(group_key, class_key).GetStandardDeviationModel().GetWidth(), 1e-12);
-    EXPECT_DOUBLE_EQ(alpha_g, analysis_view.GetAtomAlphaG(group_key, class_key));
+    EXPECT_NEAR(result.mean.GetAmplitude(), analysis_view.GetAtomGroupMean(group_key).GetAmplitude(), 1e-12);
+    EXPECT_NEAR(result.mean.GetWidth(), analysis_view.GetAtomGroupMean(group_key).GetWidth(), 1e-12);
+    EXPECT_NEAR(result.mdpde.GetAmplitude(), analysis_view.GetAtomGroupMDPDE(group_key).GetAmplitude(), 1e-12);
+    EXPECT_NEAR(result.mdpde.GetWidth(), analysis_view.GetAtomGroupMDPDE(group_key).GetWidth(), 1e-12);
+    EXPECT_NEAR(result.prior.GetModel().GetAmplitude(), analysis_view.GetAtomGroupPrior(group_key).GetAmplitude(), 1e-12);
+    EXPECT_NEAR(result.prior.GetModel().GetWidth(), analysis_view.GetAtomGroupPrior(group_key).GetWidth(), 1e-12);
+    EXPECT_NEAR(result.prior.GetStandardDeviationModel().GetAmplitude(), analysis_view.GetAtomGroupPriorWithUncertainty(group_key).GetStandardDeviationModel().GetAmplitude(), 1e-12);
+    EXPECT_NEAR(result.prior.GetStandardDeviationModel().GetWidth(), analysis_view.GetAtomGroupPriorWithUncertainty(group_key).GetStandardDeviationModel().GetWidth(), 1e-12);
+    EXPECT_DOUBLE_EQ(alpha_g, analysis_view.GetAtomAlphaG(group_key));
 
-    const auto annotation{ rg::AtomLocalPotentialView::RequireFor(*atom_list.front()).FindAnnotation(class_key) };
+    const auto annotation{ rg::AtomLocalPotentialView::RequireFor(*atom_list.front()).FindAnnotation() };
     ASSERT_TRUE(annotation.has_value());
     const auto expected_gaussian{ result.member_results.front().mdpde };
     EXPECT_NEAR(expected_gaussian.GetModel().GetAmplitude(), annotation->gaussian.GetModel().GetAmplitude(), 1e-12);
@@ -592,13 +596,12 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorRejectsAtomGroupGaussianRes
     auto analysis{ model->EditAnalysis() };
     analysis.RebuildAtomGroupsFromSelection();
     const auto analysis_view{ model->GetAnalysisView() };
-    const auto & class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
-    const auto group_key{ analysis_view.CollectAtomGroupKeys(class_key).front() };
+    const auto group_key{ analysis_view.CollectAtomGroupKeys().front() };
 
     rg::GroupGaussianResult result;
 
     EXPECT_THROW(
-        analysis.ApplyAtomGroupGaussianResult(group_key, class_key, result),
+        analysis.ApplyAtomGroupGaussianResult(group_key, result),
         std::invalid_argument);
 }
 
@@ -609,23 +612,20 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorRebuildsAtomGroupsFromSelec
     auto * second_atom{ model->GetAtomList().at(1).get() };
     auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
     auto analysis{ model->EditAnalysis() };
-    const auto & component_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
 
     model->SelectAllAtoms(false);
     model->SetAtomSelected(first_atom->GetSerialID(), true);
-    analysis_data.EnsureAtomGroupEntry("stale_atom_class").AddMember(999, *second_atom);
+    analysis_data.AtomGroupEntry().AddMember(999, *second_atom);
 
     analysis.RebuildAtomGroupsFromSelection();
 
-    EXPECT_EQ(analysis_data.FindAtomGroupEntry("stale_atom_class"), nullptr);
-    const auto * component_group_entry{ analysis_data.FindAtomGroupEntry(component_class_key) };
-    ASSERT_NE(component_group_entry, nullptr);
+    const auto & component_group_entry{ analysis_data.AtomGroupEntry() };
 
     size_t member_count{ 0 };
-    for (const auto group_key : component_group_entry->CollectGroupKeys())
+    for (const auto group_key : component_group_entry.CollectGroupKeys())
     {
-        member_count += component_group_entry->GetMemberCount(group_key);
-        for (const auto * atom : component_group_entry->GetMembers(group_key))
+        member_count += component_group_entry.GetMemberCount(group_key);
+        for (const auto * atom : component_group_entry.GetMembers(group_key))
         {
             ASSERT_NE(atom, nullptr);
             EXPECT_EQ(atom, first_atom);
@@ -637,13 +637,11 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorRebuildsAtomGroupsFromSelec
     model->SetAtomSelected(second_atom->GetSerialID(), true);
     analysis.RebuildAtomGroupsFromSelection();
 
-    component_group_entry = analysis_data.FindAtomGroupEntry(component_class_key);
-    ASSERT_NE(component_group_entry, nullptr);
     member_count = 0;
-    for (const auto group_key : component_group_entry->CollectGroupKeys())
+    for (const auto group_key : component_group_entry.CollectGroupKeys())
     {
-        member_count += component_group_entry->GetMemberCount(group_key);
-        for (const auto * atom : component_group_entry->GetMembers(group_key))
+        member_count += component_group_entry.GetMemberCount(group_key);
+        for (const auto * atom : component_group_entry.GetMembers(group_key))
         {
             ASSERT_NE(atom, nullptr);
             EXPECT_EQ(atom, second_atom);
@@ -682,13 +680,9 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorInitializesGroupAlphaForExi
     analysis.RebuildAtomGroupsFromSelection();
     analysis.InitializeGroupAlpha(0.3);
     const auto analysis_view{ model->GetAnalysisView() };
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
+    for (const auto group_key : analysis_view.CollectAtomGroupKeys())
     {
-        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        for (const auto group_key : analysis_view.CollectAtomGroupKeys(class_key))
-        {
-            EXPECT_DOUBLE_EQ(0.3, analysis_view.GetAtomAlphaG(group_key, class_key));
-        }
+        EXPECT_DOUBLE_EQ(0.3, analysis_view.GetAtomAlphaG(group_key));
     }
 }
 
@@ -697,34 +691,32 @@ TEST(DataObjectModelAnalysisTest, CollectAtomGroupKeysReturnsRebuiltGroupKeySet)
     auto model{ data_test::MakeModelWithBond() };
     auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
     auto analysis{ model->EditAnalysis() };
-    const auto & component_class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
 
     model->SelectAllAtoms();
     analysis.RebuildAtomGroupsFromSelection();
 
-    const auto * group_entry{ analysis_data.FindAtomGroupEntry(component_class_key) };
-    ASSERT_NE(group_entry, nullptr);
-    const auto group_keys{ group_entry->CollectGroupKeys() };
-    EXPECT_EQ(group_keys.size(), group_entry->GroupCount());
+    const auto & group_entry{ analysis_data.AtomGroupEntry() };
+    const auto group_keys{ group_entry.CollectGroupKeys() };
+    EXPECT_EQ(group_keys.size(), group_entry.GroupCount());
     for (const auto & group_key : group_keys)
     {
-        EXPECT_TRUE(group_entry->HasGroup(group_key));
+        EXPECT_TRUE(group_entry.HasGroup(group_key));
     }
-
-    EXPECT_EQ(analysis_data.FindAtomGroupEntry("missing_atom_class"), nullptr);
 }
 
-TEST(DataObjectModelAnalysisTest, RebuildAtomGroupsDoesNotCreateRemovedAtomClasses)
+TEST(DataObjectModelAnalysisTest, RebuildAtomGroupsUsesComponentAtomGroupKeys)
 {
     auto model{ data_test::MakeModelWithBond() };
-    auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
     auto analysis{ model->EditAnalysis() };
 
     model->SelectAllAtoms();
     analysis.RebuildAtomGroupsFromSelection();
 
-    EXPECT_EQ(analysis_data.FindAtomGroupEntry("simple_atom_class"), nullptr);
-    EXPECT_EQ(analysis_data.FindAtomGroupEntry("structure_atom_class"), nullptr);
+    const auto analysis_view{ model->GetAnalysisView() };
+    for (const auto group_key : analysis_view.CollectAtomGroupKeys())
+    {
+        EXPECT_TRUE(analysis_view.HasAtomGroup(group_key));
+    }
 }
 
 TEST(DataObjectModelAnalysisTest, AtomGroupingSummaryReportsConfiguredClassCounts)
@@ -739,18 +731,14 @@ TEST(DataObjectModelAnalysisTest, AtomGroupingSummaryReportsConfiguredClassCount
     const auto summary{ analysis_view.GetAtomGroupingSummary() };
 
     EXPECT_NE(summary.find("Atom Grouping Summary:"), std::string::npos);
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
-    {
-        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        const std::string expected_line{
-            " - Class type: " + class_key + " include "
-            + std::to_string(analysis_view.CollectAtomGroupKeys(class_key).size()) + " groups."
-        };
-        EXPECT_NE(summary.find(expected_line), std::string::npos);
-    }
+    const std::string expected_line{
+        " - Component atom group include "
+        + std::to_string(analysis_view.CollectAtomGroupKeys().size()) + " groups."
+    };
+    EXPECT_NE(summary.find(expected_line), std::string::npos);
 }
 
-TEST(DataObjectModelAnalysisTest, AtomGroupKeyCollectionCoversConfiguredClasses)
+TEST(DataObjectModelAnalysisTest, AtomGroupKeyCollectionCoversSingleGroupEntry)
 {
     auto model{ data_test::MakeModelWithBond() };
     model->SelectAllAtoms();
@@ -760,15 +748,9 @@ TEST(DataObjectModelAnalysisTest, AtomGroupKeyCollectionCoversConfiguredClasses)
     const auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
     const auto analysis_view{ model->GetAnalysisView() };
 
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
-    {
-        const auto & expected_class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        const auto * group_entry{ analysis_data.FindAtomGroupEntry(expected_class_key) };
-        const auto expected_count{ group_entry == nullptr ? 0U : group_entry->GroupCount() };
-        EXPECT_EQ(
-            analysis_view.CollectAtomGroupKeys(expected_class_key).size(),
-            expected_count);
-    }
+    EXPECT_EQ(
+        analysis_view.CollectAtomGroupKeys().size(),
+        analysis_data.AtomGroupEntry().GroupCount());
 }
 
 TEST(DataObjectModelAnalysisTest, GroupKeyCollectionsAreSafeBeforeRebuildAndEmpty)
@@ -777,11 +759,7 @@ TEST(DataObjectModelAnalysisTest, GroupKeyCollectionsAreSafeBeforeRebuildAndEmpt
     model->SelectAllAtoms(false);
 
     const auto analysis_view{ model->GetAnalysisView() };
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
-    {
-        EXPECT_TRUE(
-            analysis_view.CollectAtomGroupKeys(ChemicalDataHelper::GetGroupAtomClassKey(i)).empty());
-    }
+    EXPECT_TRUE(analysis_view.CollectAtomGroupKeys().empty());
 }
 
 TEST(DataObjectModelAnalysisTest, ModelAtomsExposeStableSerialAndPositionInputsForTypedWorkflows)

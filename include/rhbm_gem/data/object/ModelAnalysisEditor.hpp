@@ -1,7 +1,5 @@
 #pragma once
 
-#include <string>
-
 #include <rhbm_gem/data/object/AtomLocalPotentialEditor.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
@@ -25,9 +23,8 @@ public:
     void InitializeGroupAlpha(double alpha_g);
     void ApplyAtomGroupGaussianResult(
         GroupKey group_key,
-        const std::string & class_key,
         const GroupGaussianResult & group_result);
-    void SetAtomGroupAlphaG(GroupKey group_key, const std::string & class_key, double alpha_g);
+    void SetAtomGroupAlphaG(GroupKey group_key, double alpha_g);
     
 };
 

@@ -20,7 +20,6 @@ class ChemicalDataHelperTest : public ::testing::Test {
 };
 
 TEST_F(ChemicalDataHelperTest, BasicChecks) {
-    EXPECT_EQ(1U, ChemicalDataHelper::GetGroupAtomClassCount());
     EXPECT_EQ(ChemicalDataHelper::GetStandardAminoAcidList().size(),
               ChemicalDataHelper::GetStandardAminoAcidCount());
     EXPECT_EQ(90U, ChemicalDataHelper::GetElementCount());
@@ -73,10 +72,6 @@ INSTANTIATE_TEST_SUITE_P(AtomicNumberPairs, ChemicalDataHelperAtomicNumberTest,
 TEST_F(ChemicalDataHelperTest, InvalidElementReturnsZero) {
     EXPECT_EQ(0, ChemicalDataHelper::GetAtomicNumber(static_cast<Element>(0)));
     EXPECT_EQ(0, ChemicalDataHelper::GetAtomicNumber(Element::UNK));
-}
-
-TEST_F(ChemicalDataHelperTest, ExplicitClassKeyGetters) {
-    EXPECT_EQ("component_atom_class", ChemicalDataHelper::GetComponentAtomClassKey());
 }
 
 TEST_F(ChemicalDataHelperTest, StandardResidueList) {
@@ -161,10 +156,6 @@ TEST_F(ChemicalDataHelperTest, ResidueDisplayAttributes) {
     EXPECT_NE(1, ChemicalDataHelper::GetDisplayMarker(Residue::ALA));
     EXPECT_EQ(1, ChemicalDataHelper::GetDisplayColor(Residue::UNK));
     EXPECT_EQ(1, ChemicalDataHelper::GetDisplayMarker(Residue::UNK));
-}
-
-TEST_F(ChemicalDataHelperTest, GetGroupAtomClassKeyThrowsOnOutOfRange) {
-    EXPECT_THROW(ChemicalDataHelper::GetGroupAtomClassKey(1), std::out_of_range);
 }
 
 TEST_F(ChemicalDataHelperTest, ConversionHelpersReturnUnkForUnknownStrings) {

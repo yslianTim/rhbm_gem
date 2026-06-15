@@ -1,7 +1,6 @@
 #pragma once
 
 #include <optional>
-#include <string>
 
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
@@ -26,7 +25,7 @@ public:
     const GaussianModel3D & GetEstimateMDPDE() const;
     LocalPotentialSampleList GetSamplingEntries(bool apply_selection = true) const;
     double GetAlphaR() const;
-    std::optional<LocalPotentialAnnotation> FindAnnotation(const std::string & key) const;
+    std::optional<LocalPotentialAnnotation> FindAnnotation() const;
 
 private:
     explicit AtomLocalPotentialView(const AtomObject * atom_object);

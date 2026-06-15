@@ -176,7 +176,6 @@ inline constexpr std::string_view kCreateModelBondLocalTableSql = R"sql(
 inline constexpr std::string_view kCreateModelAtomPosteriorTableSql = R"sql(
     CREATE TABLE IF NOT EXISTS model_atom_posterior (
         key_tag TEXT,
-        class_key TEXT,
         serial_id INTEGER,
         amplitude_estimate_posterior DOUBLE,
         width_estimate_posterior DOUBLE,
@@ -186,7 +185,7 @@ inline constexpr std::string_view kCreateModelAtomPosteriorTableSql = R"sql(
         intercept_variance_posterior DOUBLE,
         outlier_tag INTEGER,
         statistical_distance DOUBLE,
-        PRIMARY KEY (key_tag, class_key, serial_id),
+        PRIMARY KEY (key_tag, serial_id),
         FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
     )
 )sql";
@@ -213,7 +212,6 @@ inline constexpr std::string_view kCreateModelBondPosteriorTableSql = R"sql(
 inline constexpr std::string_view kCreateModelAtomGroupTableSql = R"sql(
     CREATE TABLE IF NOT EXISTS model_atom_group_potential (
         key_tag TEXT,
-        class_key TEXT,
         group_key INTEGER,
         member_size INTEGER,
         amplitude_estimate_mean DOUBLE,
@@ -229,7 +227,7 @@ inline constexpr std::string_view kCreateModelAtomGroupTableSql = R"sql(
         width_variance_prior DOUBLE,
         intercept_variance_prior DOUBLE,
         alpha_g DOUBLE,
-        PRIMARY KEY (key_tag, class_key, group_key),
+        PRIMARY KEY (key_tag, group_key),
         FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
     )
 )sql";
@@ -353,21 +351,21 @@ inline constexpr auto kInsertModelAtomLocalSql = R"sql(
 
 inline constexpr auto kInsertModelAtomPosteriorSql = R"sql(
     INSERT OR REPLACE INTO model_atom_posterior (
-        key_tag, class_key, serial_id,
+        key_tag, serial_id,
         amplitude_estimate_posterior, width_estimate_posterior, intercept_estimate_posterior,
         amplitude_variance_posterior, width_variance_posterior, intercept_variance_posterior,
         outlier_tag, statistical_distance
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 )sql"sv;
 
 inline constexpr auto kInsertModelAtomGroupSql = R"sql(
     INSERT OR REPLACE INTO model_atom_group_potential (
-        key_tag, class_key, group_key, member_size,
+        key_tag, group_key, member_size,
         amplitude_estimate_mean, width_estimate_mean, intercept_estimate_mean,
         amplitude_estimate_mdpde, width_estimate_mdpde, intercept_estimate_mdpde,
         amplitude_estimate_prior, width_estimate_prior, intercept_estimate_prior,
         amplitude_variance_prior, width_variance_prior, intercept_variance_prior, alpha_g
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 )sql"sv;
 
 inline constexpr auto kDeleteRowsForKeySqlPrefix = "DELETE FROM "sv;
@@ -431,7 +429,7 @@ inline constexpr auto kSelectModelAtomPosteriorSql = R"sql(
         amplitude_estimate_posterior, width_estimate_posterior, intercept_estimate_posterior,
         amplitude_variance_posterior, width_variance_posterior, intercept_variance_posterior,
         outlier_tag, statistical_distance
-    FROM model_atom_posterior WHERE key_tag = ? AND class_key = ?;
+    FROM model_atom_posterior WHERE key_tag = ?;
 )sql"sv;
 
 inline constexpr auto kSelectModelAtomGroupSql = R"sql(
@@ -441,7 +439,7 @@ inline constexpr auto kSelectModelAtomGroupSql = R"sql(
         amplitude_estimate_mdpde, width_estimate_mdpde, intercept_estimate_mdpde,
         amplitude_estimate_prior, width_estimate_prior, intercept_estimate_prior,
         amplitude_variance_prior, width_variance_prior, intercept_variance_prior, alpha_g
-    FROM model_atom_group_potential WHERE key_tag = ? AND class_key = ?;
+    FROM model_atom_group_potential WHERE key_tag = ?;
 )sql"sv;
 
 class SQLiteStatementBatch
@@ -977,36 +975,34 @@ void SaveAtomLocalPotentialEntryList(
 void SaveAtomLocalPotentialEntrySubList(
     SQLiteWrapper & database,
     const ModelObject & model_obj,
-    const std::string & key_tag,
-    const std::string & class_key)
+    const std::string & key_tag)
 {
     SQLiteStatementBatch batch{ database, std::string(kInsertModelAtomPosteriorSql) };
     for (const auto & atom_object : model_obj.GetAtomList())
     {
         auto * entry{ ModelAnalysisData::Of(model_obj).FindAtomLocalEntry(*atom_object) };
         if (entry == nullptr) continue;
-        const auto * annotation{ entry->FindAnnotation(class_key) };
+        const auto * annotation{ entry->FindAnnotation() };
         if (annotation == nullptr) continue;
 
         batch.Execute([&](SQLiteWrapper & statement_db)
         {
             statement_db.Bind<std::string>(1, key_tag);
-            statement_db.Bind<std::string>(2, class_key);
-            statement_db.Bind<int>(3, atom_object->GetSerialID());
-            statement_db.Bind<double>(4, annotation->gaussian.GetModel().GetAmplitude());
-            statement_db.Bind<double>(5, annotation->gaussian.GetModel().GetWidth());
-            statement_db.Bind<double>(6, annotation->gaussian.GetModel().GetIntercept());
+            statement_db.Bind<int>(2, atom_object->GetSerialID());
+            statement_db.Bind<double>(3, annotation->gaussian.GetModel().GetAmplitude());
+            statement_db.Bind<double>(4, annotation->gaussian.GetModel().GetWidth());
+            statement_db.Bind<double>(5, annotation->gaussian.GetModel().GetIntercept());
             statement_db.Bind<double>(
-                7,
+                6,
                 annotation->gaussian.GetStandardDeviationModel().GetAmplitude());
             statement_db.Bind<double>(
-                8,
+                7,
                 annotation->gaussian.GetStandardDeviationModel().GetWidth());
             statement_db.Bind<double>(
-                9,
+                8,
                 annotation->gaussian.GetStandardDeviationModel().GetIntercept());
-            statement_db.Bind<int>(10, static_cast<int>(annotation->is_outlier));
-            statement_db.Bind<double>(11, annotation->statistical_distance);
+            statement_db.Bind<int>(9, static_cast<int>(annotation->is_outlier));
+            statement_db.Bind<double>(10, annotation->statistical_distance);
         });
     }
 }
@@ -1014,8 +1010,7 @@ void SaveAtomLocalPotentialEntrySubList(
 void SaveAtomGroupPotentialEntryList(
     SQLiteWrapper & database,
     const AtomGroupPotentialEntry & group_entry,
-    const std::string & key_tag,
-    const std::string & class_key)
+    const std::string & key_tag)
 {
     SQLiteStatementBatch batch{ database, std::string(kInsertModelAtomGroupSql) };
     for (const auto group_key : group_entry.CollectGroupKeys())
@@ -1029,22 +1024,21 @@ void SaveAtomGroupPotentialEntryList(
                 group_entry.GetPriorStandardDeviation(group_key)
             };
             statement_db.Bind<std::string>(1, key_tag);
-            statement_db.Bind<std::string>(2, class_key);
-            statement_db.Bind<GroupKey>(3, group_key);
-            statement_db.Bind<int>(4, static_cast<int>(group_entry.GetMemberCount(group_key)));
-            statement_db.Bind<double>(5, mean.GetAmplitude());
-            statement_db.Bind<double>(6, mean.GetWidth());
-            statement_db.Bind<double>(7, mean.GetIntercept());
-            statement_db.Bind<double>(8, mdpde.GetAmplitude());
-            statement_db.Bind<double>(9, mdpde.GetWidth());
-            statement_db.Bind<double>(10, mdpde.GetIntercept());
-            statement_db.Bind<double>(11, prior.GetAmplitude());
-            statement_db.Bind<double>(12, prior.GetWidth());
-            statement_db.Bind<double>(13, prior.GetIntercept());
-            statement_db.Bind<double>(14, prior_standard_deviation.GetAmplitude());
-            statement_db.Bind<double>(15, prior_standard_deviation.GetWidth());
-            statement_db.Bind<double>(16, prior_standard_deviation.GetIntercept());
-            statement_db.Bind<double>(17, group_entry.GetAlphaG(group_key));
+            statement_db.Bind<GroupKey>(2, group_key);
+            statement_db.Bind<int>(3, static_cast<int>(group_entry.GetMemberCount(group_key)));
+            statement_db.Bind<double>(4, mean.GetAmplitude());
+            statement_db.Bind<double>(5, mean.GetWidth());
+            statement_db.Bind<double>(6, mean.GetIntercept());
+            statement_db.Bind<double>(7, mdpde.GetAmplitude());
+            statement_db.Bind<double>(8, mdpde.GetWidth());
+            statement_db.Bind<double>(9, mdpde.GetIntercept());
+            statement_db.Bind<double>(10, prior.GetAmplitude());
+            statement_db.Bind<double>(11, prior.GetWidth());
+            statement_db.Bind<double>(12, prior.GetIntercept());
+            statement_db.Bind<double>(13, prior_standard_deviation.GetAmplitude());
+            statement_db.Bind<double>(14, prior_standard_deviation.GetWidth());
+            statement_db.Bind<double>(15, prior_standard_deviation.GetIntercept());
+            statement_db.Bind<double>(16, group_entry.GetAlphaG(group_key));
         });
     }
 }
@@ -1052,13 +1046,11 @@ void SaveAtomGroupPotentialEntryList(
 void LoadAtomLocalPotentialEntrySubList(
     SQLiteWrapper & database,
     const std::string & key_tag,
-    const std::string & class_key,
     std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>> & entry_map)
 {
     database.Prepare(std::string(kSelectModelAtomPosteriorSql));
     SQLiteWrapper::StatementGuard guard(database);
     database.Bind<std::string>(1, key_tag);
-    database.Bind<std::string>(2, class_key);
     while (true)
     {
         const auto rc{ database.StepNext() };
@@ -1085,13 +1077,11 @@ void LoadAtomLocalPotentialEntrySubList(
                 database.GetColumn<double>(5),
                 database.GetColumn<double>(6) }
         };
-        entry->SetAnnotation(
-            class_key,
-            LocalPotentialAnnotation{
-                gaussian,
-                static_cast<bool>(database.GetColumn<int>(7)),
-                database.GetColumn<double>(8)
-            });
+        entry->SetAnnotation(LocalPotentialAnnotation{
+            gaussian,
+            static_cast<bool>(database.GetColumn<int>(7)),
+            database.GetColumn<double>(8)
+        });
     }
 }
 
@@ -1140,26 +1130,19 @@ std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>> LoadAtomLocalPoten
         entry_map[serial_id] = std::move(entry);
     }
 
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
-    {
-        LoadAtomLocalPotentialEntrySubList(
-            database, key_tag, ChemicalDataHelper::GetGroupAtomClassKey(i), entry_map);
-    }
+    LoadAtomLocalPotentialEntrySubList(database, key_tag, entry_map);
     return entry_map;
 }
 
 void LoadAtomGroupPotentialEntryList(
     SQLiteWrapper & database,
     ModelObject & model_obj,
-    const std::string & key_tag,
-    const std::string & class_key)
+    const std::string & key_tag)
 {
-    auto & group_entry{
-        ModelAnalysisData::Of(model_obj).EnsureAtomGroupEntry(class_key) };
+    auto & group_entry{ ModelAnalysisData::Of(model_obj).AtomGroupEntry() };
     database.Prepare(std::string(kSelectModelAtomGroupSql));
     SQLiteWrapper::StatementGuard guard(database);
     database.Bind<std::string>(1, key_tag);
-    database.Bind<std::string>(2, class_key);
     while (true)
     {
         const auto rc{ database.StepNext() };
@@ -1199,7 +1182,7 @@ void LoadAtomGroupPotentialEntryList(
 
     for (auto & atom : model_obj.GetSelectedAtoms())
     {
-        const auto group_key{ data_internal::GetGroupKeyInClass(atom, class_key) };
+        const auto group_key{ data_internal::GetGroupKey(atom) };
         group_entry.AddMember(group_key, *atom);
     }
 }
@@ -1212,14 +1195,11 @@ void SaveAnalysis(
     SaveAtomLocalPotentialEntryList(database, model_obj, key_tag);
     const auto & analysis_data{ ModelAnalysisData::Of(model_obj) };
 
-    for (const auto & [class_key, group_entry] : analysis_data.AtomGroupEntries())
+    const auto & group_entry{ analysis_data.AtomGroupEntry() };
+    if (group_entry.GroupCount() > 0)
     {
-        if (group_entry.GroupCount() == 0)
-        {
-            continue;
-        }
-        SaveAtomLocalPotentialEntrySubList(database, model_obj, key_tag, class_key);
-        SaveAtomGroupPotentialEntryList(database, group_entry, key_tag, class_key);
+        SaveAtomLocalPotentialEntrySubList(database, model_obj, key_tag);
+        SaveAtomGroupPotentialEntryList(database, group_entry, key_tag);
     }
 }
 
@@ -1252,12 +1232,7 @@ void LoadAnalysis(
         return selected_serial_ids.find(atom.GetSerialID()) != selected_serial_ids.end();
     });
 
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
-    {
-        auto class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        ModelAnalysisData::Of(model_obj).EnsureAtomGroupEntry(class_key);
-        LoadAtomGroupPotentialEntryList(database, model_obj, key_tag, class_key);
-    }
+    LoadAtomGroupPotentialEntryList(database, model_obj, key_tag);
 }
 
 } // namespace

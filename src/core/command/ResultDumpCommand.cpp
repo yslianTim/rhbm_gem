@@ -104,7 +104,7 @@ void RunAtomOutlierDumping(
 {
     for (const auto & model_object : model_object_list)
     {
-        std::unordered_map<std::string, std::vector<std::array<float, 3>>> outlier_position_map;
+        std::vector<std::array<float, 3>> outlier_positions;
         const std::string file_name{ "atom_outlier_list_" + model_object->GetPdbID() };
         const auto output_path{ BuildResultDumpOutputPath(output_dir, file_name, ".csv") };
         std::ofstream outfile(output_path);
@@ -114,47 +114,42 @@ void RunAtomOutlierDumping(
                 "Could not open file " + output_path.string() + " for writing.\n");
             return;
         }
-        outfile << "SerialID,ClassType,Residue,Element,Spot\n";
+        outfile << "SerialID,Residue,Element,Spot\n";
         for (auto * atom : model_object->GetSelectedAtoms())
         {
-            for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
+            const auto annotation{ AtomLocalPotentialView::RequireFor(*atom).FindAnnotation() };
+            if (!annotation.has_value() || !annotation->is_outlier) continue;
+            outfile << atom->GetSerialID() << ','
+                    << ChemicalDataHelper::GetLabel(atom->GetResidue()) << ','
+                    << ChemicalDataHelper::GetLabel(atom->GetElement()) << ','
+                    << atom->GetAtomID() << '\n';
+            if (atom->IsMainChainAtom())
             {
-                const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-                const auto annotation{ AtomLocalPotentialView::RequireFor(*atom).FindAnnotation(class_key) };
-                if (!annotation.has_value() || !annotation->is_outlier) continue;
-                outfile << atom->GetSerialID() << ',' << class_key << ','
-                        << ChemicalDataHelper::GetLabel(atom->GetResidue()) << ','
-                        << ChemicalDataHelper::GetLabel(atom->GetElement()) << ','
-                        << atom->GetAtomID() << '\n';
-                if (atom->IsMainChainAtom())
-                {
-                    if (atom->GetElement() == Element::OXYGEN) continue;
-                    outlier_position_map[class_key].emplace_back(atom->GetPosition());
-                }
+                if (atom->GetElement() == Element::OXYGEN) continue;
+                outlier_positions.emplace_back(atom->GetPosition());
             }
         }
         outfile.close();
         Logger::Log(LogLevel::Info, "Output file: " + output_path.string());
 
-        for (const auto & [class_key, position_list] : outlier_position_map)
+        if (!outlier_positions.empty())
         {
-            const std::string class_file_name{
-                "atom_outlier_position_" + class_key + "_" + model_object->GetPdbID()
+            const std::string position_file_name{
+                "atom_outlier_position_" + model_object->GetPdbID()
             };
-            const auto class_output_path{ BuildResultDumpOutputPath(output_dir, class_file_name, ".cmm") };
-            const std::string marker_set_name{ class_key + "_" + model_object->GetPdbID() };
+            const auto position_output_path{ BuildResultDumpOutputPath(output_dir, position_file_name, ".cmm") };
+            const std::string marker_set_name{ model_object->GetPdbID() };
             if (!ChimeraXHelper::WriteCMMPoints(
-                    position_list,
-                    class_output_path.string(),
+                    outlier_positions,
+                    position_output_path.string(),
                     1.0f,
                     {},
                     marker_set_name))
             {
                 Logger::Log(LogLevel::Error,
-                    "Could not open file " + class_output_path.string() + " for writing.\n");
-                continue;
+                    "Could not open file " + position_output_path.string() + " for writing.\n");
             }
-            Logger::Log(LogLevel::Info, "Output file: " + class_output_path.string());
+            Logger::Log(LogLevel::Info, "Output file: " + position_output_path.string());
         }
     }
 }
@@ -316,7 +311,6 @@ void RunGroupGausEstimatesDumping(
     const std::vector<std::unique_ptr<ModelObject>> & model_object_list,
     const std::filesystem::path & output_dir)
 {
-    const auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     for (const auto & model_object : model_object_list)
     {
         const ModelAnalysisView entry_view{ *model_object };
@@ -339,10 +333,10 @@ void RunGroupGausEstimatesDumping(
                 const auto atom_key{ static_cast<uint16_t>(spot) };
                 const auto group_key{ KeyPackerComponentAtomClass::Pack(component_key, atom_key) };
                 const auto atom_id{ model_object->FindAtomID(atom_key) };
-                if (!entry_view.HasAtomGroup(group_key, class_key)) continue;
+                if (!entry_view.HasAtomGroup(group_key)) continue;
                 outfile << residue_name << ',' << atom_id << ','
-                        << entry_view.GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(0) << ','
-                        << entry_view.GetAtomGroupPrior(group_key, class_key).GetDisplayParameter(1) << '\n';
+                        << entry_view.GetAtomGroupPrior(group_key).GetDisplayParameter(0) << ','
+                        << entry_view.GetAtomGroupPrior(group_key).GetDisplayParameter(1) << '\n';
             }
         }
 

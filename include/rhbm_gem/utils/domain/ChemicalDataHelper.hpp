@@ -10,7 +10,6 @@
 
 class ChemicalDataHelper
 {
-    static const std::vector<std::string> m_group_atom_class_key_list;
     static const std::vector<std::string> m_group_bond_class_key_list;
     static const std::vector<Residue> m_standard_amino_acid_list;
     static const std::vector<Residue> m_standard_nucleotide_list;
@@ -41,15 +40,12 @@ public:
     ChemicalDataHelper() = default;
     ~ChemicalDataHelper() = default;
     static int GetAtomicNumber(Element element);
-    static size_t GetGroupAtomClassCount();
     static size_t GetGroupBondClassCount();
     static size_t GetStandardResidueCount();
     static size_t GetStandardAminoAcidCount();
     static size_t GetStandardNucleotideCount();
     static size_t GetElementCount();
-    static const std::string & GetGroupAtomClassKey(size_t class_id);
     static const std::string & GetGroupBondClassKey(size_t class_id);
-    static const std::string & GetComponentAtomClassKey();
     static const std::string & GetSimpleBondClassKey();
     static const std::string & GetComponentBondClassKey();
     static const std::vector<Residue> & GetStandardAminoAcidList();

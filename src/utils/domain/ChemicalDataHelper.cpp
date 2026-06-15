@@ -5,11 +5,6 @@
 #include <algorithm>
 #include <stdexcept>
 
-const std::vector<std::string> ChemicalDataHelper::m_group_atom_class_key_list
-{
-    "component_atom_class"
-};
-
 const std::vector<std::string> ChemicalDataHelper::m_group_bond_class_key_list
 {
     "simple_bond_class", "component_bond_class"
@@ -531,11 +526,6 @@ int ChemicalDataHelper::GetAtomicNumber(Element element)
     return static_cast<int>(element);
 }
 
-size_t ChemicalDataHelper::GetGroupAtomClassCount()
-{
-    return m_group_atom_class_key_list.size();
-}
-
 size_t ChemicalDataHelper::GetGroupBondClassCount()
 {
     return m_group_bond_class_key_list.size();
@@ -561,15 +551,6 @@ size_t ChemicalDataHelper::GetElementCount()
     return m_element_map.size();
 }
 
-const std::string & ChemicalDataHelper::GetGroupAtomClassKey(size_t class_id)
-{
-    if (class_id >= m_group_atom_class_key_list.size())
-    {
-        throw std::out_of_range("class_id out of range");
-    }
-    return m_group_atom_class_key_list.at(class_id);
-}
-
 const std::string & ChemicalDataHelper::GetGroupBondClassKey(size_t class_id)
 {
     if (class_id >= m_group_bond_class_key_list.size())
@@ -577,11 +558,6 @@ const std::string & ChemicalDataHelper::GetGroupBondClassKey(size_t class_id)
         throw std::out_of_range("class_id out of range");
     }
     return m_group_bond_class_key_list.at(class_id);
-}
-
-const std::string & ChemicalDataHelper::GetComponentAtomClassKey()
-{
-    return m_group_atom_class_key_list.at(0);
 }
 
 const std::string & ChemicalDataHelper::GetSimpleBondClassKey()

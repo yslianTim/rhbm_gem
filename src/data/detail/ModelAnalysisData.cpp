@@ -5,8 +5,6 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 
-#include <string>
-
 namespace rhbm_gem {
 
 ModelAnalysisData::ModelAnalysisData() = default;
@@ -24,38 +22,18 @@ const ModelAnalysisData & ModelAnalysisData::Of(const ModelObject & model_object
 
 void ModelAnalysisData::Clear()
 {
-    m_atom_group_entry_map.clear();
+    m_atom_group_entry = AtomGroupPotentialEntry{};
     m_atom_local_entry_map.clear();
 }
 
-AtomGroupPotentialEntry & ModelAnalysisData::EnsureAtomGroupEntry(const std::string & class_key)
+AtomGroupPotentialEntry & ModelAnalysisData::AtomGroupEntry()
 {
-    auto [iter, inserted]{ m_atom_group_entry_map.try_emplace(class_key) };
-    (void)inserted;
-    return iter->second;
+    return m_atom_group_entry;
 }
 
-AtomGroupPotentialEntry * ModelAnalysisData::FindAtomGroupEntry(const std::string & class_key)
+const AtomGroupPotentialEntry & ModelAnalysisData::AtomGroupEntry() const
 {
-    const auto iter{ m_atom_group_entry_map.find(class_key) };
-    return iter == m_atom_group_entry_map.end() ? nullptr : &iter->second;
-}
-
-const AtomGroupPotentialEntry * ModelAnalysisData::FindAtomGroupEntry(
-    const std::string & class_key) const
-{
-    const auto iter{ m_atom_group_entry_map.find(class_key) };
-    return iter == m_atom_group_entry_map.end() ? nullptr : &iter->second;
-}
-
-ModelAnalysisData::AtomGroupEntryMap & ModelAnalysisData::AtomGroupEntries()
-{
-    return m_atom_group_entry_map;
-}
-
-const ModelAnalysisData::AtomGroupEntryMap & ModelAnalysisData::AtomGroupEntries() const
-{
-    return m_atom_group_entry_map;
+    return m_atom_group_entry;
 }
 
 LocalPotentialEntry & ModelAnalysisData::EnsureAtomLocalEntry(const AtomObject & atom_object)

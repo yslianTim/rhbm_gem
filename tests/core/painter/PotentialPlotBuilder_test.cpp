@@ -113,11 +113,10 @@ TEST(PotentialPlotBuilderTest, GaussianFunctionsPreserveModelIntercept)
 
     analysis.RebuildAtomGroupsFromSelection();
     const auto analysis_view{ model->GetAnalysisView() };
-    const auto & class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
-    const auto group_keys{ analysis_view.CollectAtomGroupKeys(class_key) };
+    const auto group_keys{ analysis_view.CollectAtomGroupKeys() };
     ASSERT_FALSE(group_keys.empty());
     const auto group_key{ group_keys.front() };
-    const auto & atom_list{ analysis_view.GetAtomObjectList(group_key, class_key) };
+    const auto & atom_list{ analysis_view.GetAtomObjectList(group_key) };
     ASSERT_FALSE(atom_list.empty());
 
     const rg::GaussianModel3D mean_model{ 1.10, 0.70, 0.21 };
@@ -129,11 +128,11 @@ TEST(PotentialPlotBuilderTest, GaussianFunctionsPreserveModelIntercept)
         rg::GaussianModel3DUncertainty{}
     };
     group_result.member_results.resize(atom_list.size());
-    analysis.ApplyAtomGroupGaussianResult(group_key, class_key, group_result);
+    analysis.ApplyAtomGroupGaussianResult(group_key, group_result);
 
     rg::PotentialPlotBuilder model_builder{ model.get() };
-    auto mean_function{ model_builder.CreateAtomGroupGausFunctionMean(group_key, class_key) };
-    auto prior_function{ model_builder.CreateAtomGroupGausFunctionPrior(group_key, class_key) };
+    auto mean_function{ model_builder.CreateAtomGroupGausFunctionMean(group_key) };
+    auto prior_function{ model_builder.CreateAtomGroupGausFunctionPrior(group_key) };
 
     ASSERT_NE(mean_function, nullptr);
     EXPECT_EQ(mean_function->GetNpar(), 3);
@@ -165,10 +164,9 @@ TEST(PotentialPlotBuilderTest, ComponentAtomAveragePriorUsesEqualComponentWeight
     auto analysis{ model->EditAnalysis() };
     analysis.RebuildAtomGroupsFromSelection();
     const auto analysis_view{ model->GetAnalysisView() };
-    const auto & class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
 
     std::map<AtomKey, std::vector<GroupKey>> groups_by_atom_key;
-    for (const auto group_key : analysis_view.CollectAtomGroupKeys(class_key))
+    for (const auto group_key : analysis_view.CollectAtomGroupKeys())
     {
         const auto unpacked_key{ KeyPackerComponentAtomClass::Unpack(group_key) };
         groups_by_atom_key[std::get<1>(unpacked_key)].emplace_back(group_key);
@@ -195,8 +193,8 @@ TEST(PotentialPlotBuilderTest, ComponentAtomAveragePriorUsesEqualComponentWeight
         rg::GaussianModel3DUncertainty{ 0.2, 0.4, 0.06 }
     };
     first_result.member_results.resize(
-        analysis_view.GetAtomObjectList(first_group_key, class_key).size());
-    analysis.ApplyAtomGroupGaussianResult(first_group_key, class_key, first_result);
+        analysis_view.GetAtomObjectList(first_group_key).size());
+    analysis.ApplyAtomGroupGaussianResult(first_group_key, first_result);
 
     rg::GroupGaussianResult second_result;
     second_result.prior = rg::GaussianModel3DWithUncertainty{
@@ -204,8 +202,8 @@ TEST(PotentialPlotBuilderTest, ComponentAtomAveragePriorUsesEqualComponentWeight
         rg::GaussianModel3DUncertainty{ 0.6, 0.8, 0.10 }
     };
     second_result.member_results.resize(
-        analysis_view.GetAtomObjectList(second_group_key, class_key).size());
-    analysis.ApplyAtomGroupGaussianResult(second_group_key, class_key, second_result);
+        analysis_view.GetAtomObjectList(second_group_key).size());
+    analysis.ApplyAtomGroupGaussianResult(second_group_key, second_result);
 
     const auto average_prior{
         rg::PotentialPlotBuilder::ComputeComponentAtomAveragePrior(analysis_view, atom_key)

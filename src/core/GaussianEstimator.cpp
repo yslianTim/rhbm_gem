@@ -937,8 +937,7 @@ void RunLocalAlphaTraining(ModelObject & model_object, const FitOptions & option
 {
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
-    const auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
-    const auto group_key_list{ analysis_view.CollectAtomGroupKeys(class_key) };
+    const auto group_key_list{ analysis_view.CollectAtomGroupKeys() };
 
     size_t count{ 0 };
     if (!options.quiet_mode)
@@ -948,7 +947,7 @@ void RunLocalAlphaTraining(ModelObject & model_object, const FitOptions & option
     for (const auto group_key : group_key_list)
     {
         const auto & group_atom_list{
-            analysis_view.GetAtomObjectList(group_key, class_key)
+            analysis_view.GetAtomObjectList(group_key)
         };
         std::vector<LocalPotentialSampleList> sample_entries_list;
         sample_entries_list.reserve(group_atom_list.size());
@@ -985,15 +984,14 @@ void RunGroupAlphaTraining(ModelObject & model_object, const FitOptions & option
 {
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
-    const auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
-    const auto group_key_list{ analysis_view.CollectAtomGroupKeys(class_key) };
+    const auto group_key_list{ analysis_view.CollectAtomGroupKeys() };
 
     std::vector<std::vector<LocalGaussianResult>> member_result_list;
     member_result_list.reserve(group_key_list.size());
     for (const auto group_key : group_key_list)
     {
         const auto & group_atom_list{
-            analysis_view.GetAtomObjectList(group_key, class_key)
+            analysis_view.GetAtomObjectList(group_key)
         };
         if (group_atom_list.size() < kMinimumAlphaGTrainingMemberCount) continue;
         if (group_atom_list.front()->IsMainChainAtom() == false) continue;
@@ -1010,13 +1008,9 @@ void RunGroupAlphaTraining(ModelObject & model_object, const FitOptions & option
     }
 
     const auto alpha_g{ TrainAlphaG(member_result_list, options) };
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
+    for (const auto group_key : analysis_view.CollectAtomGroupKeys())
     {
-        const auto & class_key_tmp{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        for (const auto group_key : analysis_view.CollectAtomGroupKeys(class_key_tmp))
-        {
-            analysis.SetAtomGroupAlphaG(group_key, class_key_tmp, alpha_g);
-        }
+        analysis.SetAtomGroupAlphaG(group_key, alpha_g);
     }
 }
 
@@ -1189,53 +1183,49 @@ void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & opt
     {
         analysis.EnsureAtomLocalPotential(*atom);
     }
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
+    if (!options.quiet_mode)
     {
-        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        if (!options.quiet_mode)
+        Logger::Log(LogLevel::Info, "Run component atom group fitting.");
+    }
+
+    auto group_key_list{ analysis_view.CollectAtomGroupKeys() };
+    auto group_key_size{ group_key_list.size() };
+    std::atomic<size_t> key_count{ 0 };
+
+#ifdef USE_OPENMP
+    #pragma omp parallel for num_threads(options.thread_size)
+#endif
+    for (size_t k = 0; k < group_key_size; k++)
+    {
+        auto group_key{ group_key_list[k] };
+        const auto & atom_list{ analysis_view.GetAtomObjectList(group_key) };
+        std::vector<LocalPotentialSampleList> member_sample_list;
+        std::vector<LocalGaussianResult> member_result_list;
+        member_sample_list.reserve(atom_list.size());
+        member_result_list.reserve(atom_list.size());
+        for (const auto & atom : atom_list)
         {
-            Logger::Log(LogLevel::Info, "Class type: " + class_key);
+            const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
+            member_sample_list.emplace_back(local_view.GetSamplingEntries(false));
+            member_result_list.emplace_back(local_view.GetGaussianResult());
         }
-
-        auto group_key_list{ analysis_view.CollectAtomGroupKeys(class_key) };
-        auto group_key_size{ group_key_list.size() };
-        std::atomic<size_t> key_count{ 0 };
+        const auto result{
+            EstimateGroupGaussian(
+                member_sample_list,
+                member_result_list,
+                analysis_view.GetAtomAlphaG(group_key),
+                options)
+        };
 
 #ifdef USE_OPENMP
-        #pragma omp parallel for num_threads(options.thread_size)
+        #pragma omp critical
 #endif
-        for (size_t k = 0; k < group_key_size; k++)
         {
-            auto group_key{ group_key_list[k] };
-            const auto & atom_list{ analysis_view.GetAtomObjectList(group_key, class_key) };
-            std::vector<LocalPotentialSampleList> member_sample_list;
-            std::vector<LocalGaussianResult> member_result_list;
-            member_sample_list.reserve(atom_list.size());
-            member_result_list.reserve(atom_list.size());
-            for (const auto & atom : atom_list)
+            analysis.ApplyAtomGroupGaussianResult(group_key, result);
+            key_count++;
+            if (!options.quiet_mode)
             {
-                const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
-                member_sample_list.emplace_back(local_view.GetSamplingEntries(false));
-                member_result_list.emplace_back(local_view.GetGaussianResult());
-            }
-            const auto result{
-                EstimateGroupGaussian(
-                    member_sample_list,
-                    member_result_list,
-                    analysis_view.GetAtomAlphaG(group_key, class_key),
-                    options)
-            };
-
-#ifdef USE_OPENMP
-            #pragma omp critical
-#endif
-            {
-                analysis.ApplyAtomGroupGaussianResult(group_key, class_key, result);
-                key_count++;
-                if (!options.quiet_mode)
-                {
-                    Logger::ProgressBar(key_count, group_key_size);
-                }
+                Logger::ProgressBar(key_count, group_key_size);
             }
         }
     }
