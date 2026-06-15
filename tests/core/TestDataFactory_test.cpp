@@ -159,25 +159,6 @@ TEST(TestDataFactoryTest, BuildLocalTestDataUsesDefaultSamplingDistanceRange)
     EXPECT_NEAR(expected_response, sample.response, 1.0e-7);
 }
 
-TEST(TestDataFactoryTest, BuildAtomModelLocalTestDataUsesModelResponseForUnknownSpot)
-{
-    const auto model{ rg::GaussianModel3D{ 2.0, 0.5, 0.1 } };
-    const auto input{
-        tdf::BuildLocalTestData(tdf::AtomModelScenario{
-            Spot::UNK,
-            model,
-            0.0,
-            1,
-            42
-        })
-    };
-
-    ASSERT_EQ(input.replica_sampling_entries.size(), 1u);
-    ASSERT_FALSE(input.replica_sampling_entries.front().empty());
-    const auto & sample{ input.replica_sampling_entries.front().front() };
-    EXPECT_NEAR(model.ResponseAtDistance(sample.point.distance), sample.response, 1.0e-6);
-}
-
 TEST(TestDataFactoryTest, BuildAtomicModelTestDataUsesModelResponseForAtomField)
 {
     const auto model{ rg::GaussianModel3D{ 2.0, 0.5, 0.1 } };
@@ -276,15 +257,6 @@ TEST(TestDataFactoryTest, BuildTestDataRejectNonPositiveGaussianWidth)
             0.1,
             1,
             42
-        }),
-        std::invalid_argument);
-    EXPECT_THROW(
-        tdf::BuildLocalTestData(tdf::AtomModelScenario{
-            Spot::O,
-            rg::GaussianModel3D{ 1.0, -0.5, 0.0 },
-            0.05,
-            1,
-            11
         }),
         std::invalid_argument);
 }

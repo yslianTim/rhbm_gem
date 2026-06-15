@@ -2,7 +2,6 @@
 #include "detail/RHBMTestPlotting.hpp"
 
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/core/TestDataFactory.hpp>
 #include <rhbm_gem/core/EstimatorTester.hpp>
 
@@ -56,60 +55,6 @@ std::vector<double> BuildLinearSweep(int count, double step, double start = 0.0)
         values[static_cast<size_t>(i)] = start + static_cast<double>(i) * step;
     }
     return values;
-}
-
-std::vector<RHBMMemberDataset> BuildReplicaDatasets(
-    const std::vector<LocalPotentialSampleList> & replica_sampling_entries,
-    double fit_range_min,
-    double fit_range_max)
-{
-    std::vector<RHBMMemberDataset> replica_datasets;
-    replica_datasets.reserve(replica_sampling_entries.size());
-    for (const auto & sampling_entries : replica_sampling_entries)
-    {
-        replica_datasets.emplace_back(
-            rhbm_helper::BuildMemberDataset(
-                sampling_entries,
-                fit_range_min,
-                fit_range_max));
-    }
-    return replica_datasets;
-}
-
-LocalTestData BuildSelectedLocalTestData(const LocalTestData & input)
-{
-    LocalTestData selected_input;
-    selected_input.gaus_true = input.gaus_true;
-    selected_input.replica_sampling_entries.reserve(input.replica_sampling_entries.size());
-    for (const auto & sampling_entries : input.replica_sampling_entries)
-    {
-        LocalPotentialSampleList selected_entries;
-        selected_entries.reserve(sampling_entries.size());
-        for (const auto & sample : sampling_entries)
-        {
-            if (sample.point.is_selected) selected_entries.emplace_back(sample);
-        }
-        selected_input.replica_sampling_entries.emplace_back(std::move(selected_entries));
-    }
-    return selected_input;
-}
-
-const BiasStatistics & SelectBenchmarkMdpdeBias(const LocalTestBias & bias)
-{
-    if (bias.mdpde.trained_alpha.has_value())
-    {
-        return bias.mdpde.trained_alpha.value();
-    }
-    return bias.mdpde.requested_alpha;
-}
-
-double SelectBenchmarkAlphaR(const LocalTestBias & bias, double requested_alpha_r)
-{
-    if (bias.mdpde.trained_alpha_median.has_value())
-    {
-        return bias.mdpde.trained_alpha_median.value();
-    }
-    return requested_alpha_r;
 }
 
 LocalTestOptions MakeLocalTestOptions(const RHBMTestRequest & request)
@@ -179,87 +124,6 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
     }
 
     plot_request.panels.emplace_back(std::move(panel));
-    rhbm_test_plotting::SaveDataOutlierBiasPlot(request, plot_request);
-}
-
-void RunSimulationTestOnSimpleModel(const RHBMTestRequest & request)
-{
-    const auto error_sigma{ 0.01 };
-    const auto model_prior{ MakeDefaultModelPrior() };
-    const auto local_options{ MakeLocalTestOptions(request) };
-
-    std::vector<Spot> spot_list{ Spot::UNK, Spot::O, Spot::N, Spot::C, Spot::CA };
-
-    BiasPlotRequest plot_request;
-    plot_request.output_name = "bias_from_neighbor_atom.pdf";
-    plot_request.flavor = BiasPlotFlavor::NeighborType;
-    plot_request.x_axis_mode = BiasXAxisMode::NeighborType;
-    plot_request.panels.reserve(1);
-
-    BiasPlotPanel panel;
-    panel.label = "Neighbor Atom Type";
-    panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Ols, spot_list.size()));
-    panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Mdpde, spot_list.size()));
-    panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::TrainedMdpde, spot_list.size()));
-
-    std::vector<LinePlotPanel> linearized_panels;
-    linearized_panels.reserve(spot_list.size());
-    for (size_t i = 0; i < spot_list.size(); i++)
-    {
-        AtomModelScenario base_scenario;
-        base_scenario.gaus_true = model_prior;
-        base_scenario.data_error_sigma = error_sigma;
-        base_scenario.spot = spot_list.at(i);
-        base_scenario.replica_size = 10;
-
-        const auto input{ BuildLocalTestData(base_scenario) };
-        const auto cut_input{ BuildSelectedLocalTestData(input) };
-        const auto no_cut_result{
-            RunLocalEstimationTest(input, local_options)
-        };
-        const auto cut_result{
-            RunLocalEstimationTest(cut_input, local_options)
-        };
-        const auto datasets{
-            BuildReplicaDatasets(
-                input.replica_sampling_entries,
-                request.fit_range_min,
-                request.fit_range_max)
-        };
-        const auto cut_datasets{
-            BuildReplicaDatasets(
-                cut_input.replica_sampling_entries,
-                request.fit_range_min,
-                request.fit_range_max)
-        };
-        rhbm_test_plotting::TryAppendBenchmarkLinearizedPanel(
-            linearized_panels,
-            0.0,
-            datasets.front(),
-            cut_datasets.front());
-
-        const auto & no_cut_mdpde_bias{ SelectBenchmarkMdpdeBias(no_cut_result) };
-        const auto & cut_mdpde_bias{ SelectBenchmarkMdpdeBias(cut_result) };
-        std::ostringstream stream;
-        stream  << " OLS   (No Cut): " << std::setprecision(3) << std::fixed
-                << no_cut_result.ols.mean(0) << " , "
-                << no_cut_result.ols.mean(1)
-                << " , MDPDE (No Cut): "
-                << no_cut_mdpde_bias.mean(0) << " , "
-                << no_cut_mdpde_bias.mean(1)
-                << " , MDPDE (Cut):    "
-                << cut_mdpde_bias.mean(0) << " , "
-                << cut_mdpde_bias.mean(1)
-                << " (Alpha-R = " << SelectBenchmarkAlphaR(cut_result, request.alpha_r) << ")";
-        Logger::Log(LogLevel::Info, stream.str());
-
-        const auto spot_axis_value{ static_cast<double>(i + 1) };
-        AppendBiasCurvePoint(panel.curves.at(0), spot_axis_value, no_cut_result.ols);
-        AppendBiasCurvePoint(panel.curves.at(1), spot_axis_value, no_cut_mdpde_bias);
-        AppendBiasCurvePoint(panel.curves.at(2), spot_axis_value, cut_mdpde_bias);
-    }
-    plot_request.panels.emplace_back(std::move(panel));
-    rhbm_test_plotting::SaveBenchmarkLinearizedDatasetReport(request, error_sigma, linearized_panels);
     rhbm_test_plotting::SaveDataOutlierBiasPlot(request, plot_request);
 }
 
@@ -568,7 +432,6 @@ bool RHBMTestCommand::ExecuteImpl(const RHBMTestRequest & request)
         RunSimulationTestOnBenchMark(request);
         return true;
     case TesterType::ATOMIC_MODEL:
-        RunSimulationTestOnSimpleModel(request);
         RunSimulationTestOnAtomicModel(request);
         return true;
     case TesterType::DATA_OUTLIER:

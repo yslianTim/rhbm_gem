@@ -5,7 +5,6 @@
 #include <vector>
 
 #include <rhbm_gem/core/CommandSystem.hpp>
-#include <rhbm_gem/utils/domain/LocalPainter.hpp>
 #include <rhbm_gem/core/EstimatorTester.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 
@@ -72,17 +71,6 @@ void AppendBiasCurvePoint(
 std::string FormatDataBiasPanelLabel(size_t panel_index);
 
 std::string FormatMemberBiasPanelLabel(size_t panel_index);
-
-bool TryAppendBenchmarkLinearizedPanel(
-    std::vector<LinePlotPanel> & panels,
-    double distance,
-    const RHBMMemberDataset & no_cut_dataset,
-    const RHBMMemberDataset & cut_dataset);
-
-void SaveBenchmarkLinearizedDatasetReport(
-    const RHBMTestRequest & request,
-    double error_sigma,
-    const std::vector<LinePlotPanel> & panels);
 
 void SaveDataOutlierBiasPlot(
     const RHBMTestRequest & request,

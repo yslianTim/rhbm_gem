@@ -69,23 +69,6 @@ double EvaluateModelOffsetAtDistance(const GaussianModel3D & model, double dista
         model.WithIntercept(0.0).ResponseAtDistance(distance);
 }
 
-double EvaluateAtomNeighborhoodModelResponse(
-    const GaussianModel3D & model,
-    const Eigen::VectorXd & point,
-    const Eigen::VectorXd & center,
-    const std::vector<AtomNeighborContribution> & neighbor_list,
-    double sample_distance)
-{
-    const auto zero_intercept_model{ model.WithIntercept(0.0) };
-    auto response{ EvaluateZeroInterceptModelAtPoint3D(zero_intercept_model, point, center) };
-    for (const auto & neighbor : neighbor_list)
-    {
-        response += neighbor.amplitude *
-            EvaluateZeroInterceptModelAtPoint3D(zero_intercept_model, point, neighbor.center);
-    }
-    return response + EvaluateModelOffsetAtDistance(model, sample_distance);
-}
-
 double EvaluateAtomicFieldModelResponse(
     const GaussianModel3D & model,
     const Eigen::VectorXd & point,
@@ -212,55 +195,6 @@ LocalPotentialSampleList GenerateRadialSamples(
             SamplingPoint{ static_cast<float>(distance) }
         });
     }
-    return sample_list;
-}
-
-LocalPotentialSampleList GenerateAtomModelSamples(const GaussianModel3D & model, const Spot & spot)
-{
-    GaussianModel3D::RequireFinitePositiveWidthModel(model);
-    const auto neighbor_list{ BuildAtomNeighborList(spot) };
-    const Eigen::VectorXd atom_center{ Eigen::VectorXd::Zero(3) };
-
-    auto sample_point_list{
-        sphere_sampler::GenerateSamplingPointList(
-            { 0.0f, 0.0f, 0.0f },
-            SphereSamplingMethod::FibonacciDeterministic)
-    };
-    std::vector<std::array<float, 3>> reject_position_list;
-    reject_position_list.reserve(neighbor_list.size());
-    for (const auto & neighbor : neighbor_list)
-    {
-        reject_position_list.emplace_back(std::array<float, 3>{
-            static_cast<float>(neighbor.center(0)),
-            static_cast<float>(neighbor.center(1)),
-            static_cast<float>(neighbor.center(2))
-        });
-    }
-    sample_filter::FilterSamplingPointList(
-        sample_point_list,
-        { 0.0f, 0.0f, 0.0f },
-        reject_position_list);
-
-    LocalPotentialSampleList sample_list;
-    sample_list.reserve(sample_point_list.size());
-    for (const auto & sampling_point : sample_point_list)
-    {
-        const auto point{ eigen_helper::ToEigenVector(sampling_point.position) };
-        const auto response{
-            EvaluateAtomNeighborhoodModelResponse(
-                model,
-                point,
-                atom_center,
-                neighbor_list,
-                sampling_point.distance
-            )
-        };
-        sample_list.emplace_back(LocalPotentialSample{
-            static_cast<float>(response),
-            sampling_point
-        });
-    }
-
     return sample_list;
 }
 
@@ -503,32 +437,6 @@ GroupTestData BuildGroupTestData(const GroupScenario & scenario)
                 random_gaus_array,
                 static_cast<size_t>(scenario.sampling_entry_size),
                 generator));
-    }
-
-    return input;
-}
-
-LocalTestData BuildLocalTestData(const AtomModelScenario & scenario)
-{
-    numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
-    GaussianModel3D::RequireFinitePositiveWidthModel(scenario.gaus_true, "scenario.gaus_true");
-
-    LocalTestData input;
-    input.gaus_true = scenario.gaus_true;
-    input.replica_sampling_entries.reserve(static_cast<size_t>(scenario.replica_size));
-
-    for (int i = 0; i < scenario.replica_size; i++)
-    {
-        auto generator{ BuildReplicaGenerator(i, scenario.random_seed) };
-        auto sampling_entries{
-            GenerateAtomModelSamples(scenario.gaus_true, scenario.spot)
-        };
-        sampling_entries = ApplyLogQuadraticNoise(
-            std::move(sampling_entries),
-            scenario.gaus_true,
-            scenario.data_error_sigma,
-            generator);
-        input.replica_sampling_entries.emplace_back(std::move(sampling_entries));
     }
 
     return input;

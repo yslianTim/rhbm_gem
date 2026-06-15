@@ -66,7 +66,6 @@ struct AtomModelScenario
 };
 
 LocalTestData BuildLocalTestData(const LocalScenario & scenario);
-LocalTestData BuildLocalTestData(const AtomModelScenario & scenario);
 AtomicModelTestData BuildAtomicModelTestData(const AtomModelScenario & scenario);
 AtomicModelTestData BuildFiveGausAtomicModelTestData(const AtomModelScenario & scenario);
 GroupTestData BuildGroupTestData(const GroupScenario & scenario);

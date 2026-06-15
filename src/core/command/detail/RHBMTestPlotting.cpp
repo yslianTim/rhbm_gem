@@ -3,8 +3,6 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
-#include <algorithm>
-#include <cmath>
 #include <iomanip>
 #include <memory>
 #include <sstream>
@@ -25,82 +23,6 @@
 
 namespace rhbm_gem::core::command_detail::rhbm_test_plotting {
 namespace {
-
-std::string FormatSigmaToken(double value)
-{
-    std::ostringstream stream;
-    stream << std::fixed << std::setprecision(3) << value;
-    auto token{ stream.str() };
-    std::replace(token.begin(), token.end(), '.', '_');
-    std::replace(token.begin(), token.end(), '-', 'm');
-    return token;
-}
-
-std::string FormatDistanceLabel(double distance)
-{
-    std::ostringstream stream;
-    stream << std::fixed << std::setprecision(1)
-           << "Distance = " << distance << " Angstrom";
-    return stream.str();
-}
-
-bool ValidateLinearizedDataset(
-    const RHBMMemberDataset & dataset,
-    std::string_view dataset_label)
-{
-    if (dataset.X.rows() != dataset.y.size())
-    {
-        Logger::Log(
-            LogLevel::Warning,
-            std::string("Skip linearized benchmark plot for ") + std::string(dataset_label)
-                + " because X rows do not match y size.");
-        return false;
-    }
-    if (dataset.X.cols() < 2)
-    {
-        Logger::Log(
-            LogLevel::Warning,
-            std::string("Skip linearized benchmark plot for ") + std::string(dataset_label)
-                + " because the dataset has fewer than 2 basis columns.");
-        return false;
-    }
-    return true;
-}
-
-LineSeries BuildLinearizedDatasetSeries(
-    const RHBMMemberDataset & dataset,
-    std::string_view dataset_label,
-    std::string series_name)
-{
-    std::vector<std::pair<double, double>> points;
-    points.reserve(static_cast<std::size_t>(dataset.y.size()));
-    for (Eigen::Index row = 0; row < dataset.y.size(); ++row)
-    {
-        const double x_value{ dataset.X(row, 1) };
-        const double y_value{ dataset.y(row) };
-        if (!std::isfinite(x_value) || !std::isfinite(y_value))
-        {
-            Logger::Log(
-                LogLevel::Warning,
-                std::string("Drop non-finite linearized benchmark point for ")
-                    + std::string(dataset_label) + ".");
-            continue;
-        }
-        points.emplace_back(x_value, y_value);
-    }
-    std::sort(points.begin(), points.end());
-
-    LineSeries series;
-    series.name = std::move(series_name);
-    series.x_values.reserve(points.size());
-    series.y_values.reserve(points.size());
-    for (const auto & point : points)
-    {
-        series.x_values.emplace_back(point.first);
-        series.y_values.emplace_back(point.second);
-    }
-    return series;
-}
 
 #ifdef HAVE_ROOT
 double ScaleBiasPlotX(double x, BiasXAxisMode x_axis_mode)
@@ -339,75 +261,6 @@ std::string FormatMemberBiasPanelLabel(size_t panel_index)
         "#font[2]{A}", "#tau"
     };
     return "Outlier in " + outlier_type_list[panel_index];
-}
-
-bool TryAppendBenchmarkLinearizedPanel(
-    std::vector<LinePlotPanel> & panels,
-    double distance,
-    const RHBMMemberDataset & no_cut_dataset,
-    const RHBMMemberDataset & cut_dataset)
-{
-    const auto label{ FormatDistanceLabel(distance) };
-    if (!ValidateLinearizedDataset(no_cut_dataset, label + " (No Cut)") ||
-        !ValidateLinearizedDataset(cut_dataset, label + " (Cut)"))
-    {
-        return false;
-    }
-
-    auto no_cut_series{
-        BuildLinearizedDatasetSeries(no_cut_dataset, label + " (No Cut)", "No Cut")
-    };
-    auto cut_series{
-        BuildLinearizedDatasetSeries(cut_dataset, label + " (Cut)", "Cut")
-    };
-    if (no_cut_series.x_values.empty() || cut_series.x_values.empty())
-    {
-        Logger::Log(
-            LogLevel::Warning,
-            "Skip linearized benchmark panel for " + label
-                + " because at least one series has no plottable points.");
-        return false;
-    }
-
-    panels.emplace_back(LinePlotPanel{
-        label,
-        AxisSpec{ "Linearized Response" },
-        { std::move(no_cut_series), std::move(cut_series) }
-    });
-    return true;
-}
-
-void SaveBenchmarkLinearizedDatasetReport(
-    const RHBMTestRequest & request,
-    double error_sigma,
-    const std::vector<LinePlotPanel> & panels)
-{
-    if (panels.empty())
-    {
-        Logger::Log(
-            LogLevel::Warning,
-            "Skip benchmark linearized dataset report because no valid panels were collected.");
-        return;
-    }
-
-    LinePlotRequest line_plot_request;
-    line_plot_request.output_path = request.output_dir /
-        std::string("benchmark_cut_vs_no_cut_sigma_" + FormatSigmaToken(error_sigma) + ".pdf");
-    line_plot_request.title = "";
-    line_plot_request.x_axis.title = "Linearized Basis";
-    line_plot_request.shared_y_axis_title = "Linearized Response";
-    line_plot_request.panels = panels;
-    line_plot_request.canvas_width = 2000;
-    line_plot_request.canvas_height_per_panel = 200;
-
-    const auto plot_result{ local_painter::SaveLinePlot(line_plot_request) };
-    if (!plot_result.Succeeded())
-    {
-        Logger::Log(
-            LogLevel::Warning,
-            "Failed to emit benchmark linearized dataset report '"
-                + line_plot_request.output_path.string() + "': " + plot_result.message);
-    }
 }
 
 void SaveDataOutlierBiasPlot(const RHBMTestRequest & request, const BiasPlotRequest & plot_request)
