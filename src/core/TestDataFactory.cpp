@@ -4,6 +4,7 @@
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/utils/domain/SampleFilter.hpp>
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
+#include <rhbm_gem/utils/math/ElectricPotential.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
 
@@ -100,6 +101,20 @@ double EvaluateAtomicFieldModelResponse(
     }
     return response + EvaluateModelOffsetAtDistance(model, sample_distance);
 }
+/*
+double EvaluateFiveGausModelResponse(
+    const ElectricPotential & model,
+    const Eigen::VectorXd & point,
+    const std::vector<AtomicModelContribution> & atom_field,
+    double sample_distance)
+{
+    double response{ 0.0 };
+    for (const auto & atom : atom_field)
+    {
+        response += model.GetPotentialValue(Element::CARBON, sample_distance, 0.0);
+    }
+    return response;
+}*/
 
 AtomNeighborContribution MakeAtomNeighborContribution(
     Spot spot,
@@ -249,7 +264,7 @@ LocalPotentialSampleList GenerateAtomModelSamples(const GaussianModel3D & model,
     return sample_list;
 }
 
-LocalPotentialSampleList GenerateAtomicModelSamples(
+LocalPotentialSampleList GenerateAtomicModelSampleList(
     const GaussianModel3D & model,
     const AtomicModelContribution & local_atom,
     const std::vector<AtomicModelContribution> & atom_field)
@@ -268,10 +283,7 @@ LocalPotentialSampleList GenerateAtomicModelSamples(
     {
         reject_position_list.emplace_back(ToArray3f(atom.center));
     }
-    sample_filter::FilterSamplingPointList(
-        sample_point_list,
-        local_position,
-        reject_position_list);
+    sample_filter::FilterSamplingPointList(sample_point_list, local_position, reject_position_list);
 
     LocalPotentialSampleList sample_list;
     sample_list.reserve(sample_point_list.size());
@@ -279,12 +291,7 @@ LocalPotentialSampleList GenerateAtomicModelSamples(
     {
         const auto point{ eigen_helper::ToEigenVector(sampling_point.position) };
         const auto response{
-            EvaluateAtomicFieldModelResponse(
-                model,
-                point,
-                atom_field,
-                sampling_point.distance
-            )
+            EvaluateAtomicFieldModelResponse(model, point, atom_field, sampling_point.distance)
         };
         sample_list.emplace_back(LocalPotentialSample{
             static_cast<float>(response),
@@ -411,7 +418,7 @@ std::unique_ptr<ModelObject> BuildAtomicModelObject(
     analysis.RebuildAtomGroupsFromSelection();
     for (std::size_t i = 0; i < atom_field.size(); i++)
     {
-        auto sampling_entries{ GenerateAtomicModelSamples(model, atom_field.at(i), atom_field) };
+        auto sampling_entries{ GenerateAtomicModelSampleList(model, atom_field.at(i), atom_field) };
         sampling_entries = ApplyLogQuadraticNoise(
             std::move(sampling_entries),
             model,
@@ -528,6 +535,30 @@ LocalTestData BuildLocalTestData(const AtomModelScenario & scenario)
 }
 
 AtomicModelTestData BuildAtomicModelTestData(const AtomModelScenario & scenario)
+{
+    numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
+    GaussianModel3D::RequireFinitePositiveWidthModel(scenario.gaus_true, "scenario.gaus_true");
+
+    AtomicModelTestData input;
+    input.gaus_true = scenario.gaus_true;
+    input.replica_model_objects.reserve(static_cast<size_t>(scenario.replica_size));
+    const auto atom_field{ BuildAtomicModelContributionList(scenario.spot) };
+
+    for (int i = 0; i < scenario.replica_size; i++)
+    {
+        auto generator{ BuildReplicaGenerator(i, scenario.random_seed) };
+        input.replica_model_objects.emplace_back(
+            BuildAtomicModelObject(
+                scenario.gaus_true,
+                atom_field,
+                scenario.data_error_sigma,
+                generator));
+    }
+
+    return input;
+}
+
+AtomicModelTestData BuildFiveGausAtomicModelTestData(const AtomModelScenario & scenario)
 {
     numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
     GaussianModel3D::RequireFinitePositiveWidthModel(scenario.gaus_true, "scenario.gaus_true");

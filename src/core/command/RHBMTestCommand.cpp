@@ -2,7 +2,6 @@
 #include "detail/RHBMTestPlotting.hpp"
 
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/core/TestDataFactory.hpp>
 #include <rhbm_gem/core/EstimatorTester.hpp>
@@ -139,6 +138,54 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
 {
     const auto error_sigma{ 0.01 };
     const auto model_prior{ MakeDefaultModelPrior() };
+    FitOptions options;
+    options.distance_min = request.fit_range_min;
+    options.distance_max = request.fit_range_max;
+    options.thread_size = request.job_count;
+    options.quiet_mode = true;
+
+    std::vector<Spot> spot_list{ Spot::UNK, Spot::O, Spot::N, Spot::C, Spot::CA };
+
+    BiasPlotRequest plot_request;
+    plot_request.output_name = "bias_from_benchmark.pdf";
+    plot_request.flavor = BiasPlotFlavor::NeighborType;
+    plot_request.x_axis_mode = BiasXAxisMode::NeighborType;
+    plot_request.panels.reserve(1);
+
+    BiasPlotPanel panel;
+    panel.label = "Neighbor Atom Type";
+    panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Mdpde, spot_list.size()));
+
+    for (size_t i = 0; i < spot_list.size(); i++)
+    {
+        AtomModelScenario scenario;
+        scenario.gaus_true = model_prior;
+        scenario.data_error_sigma = error_sigma;
+        scenario.spot = spot_list.at(i);
+        scenario.replica_size = 10;
+
+        const auto input{ BuildFiveGausAtomicModelTestData(scenario) };
+        const auto result{ RunAtomicModelFullEstimationTest(input, options) };
+
+        std::ostringstream stream;
+        stream  << " MDPDE: " << std::setprecision(3) << std::fixed
+                << result.mean(0) << " , "
+                << result.mean(1) << " , "
+                << result.mean(2);
+        Logger::Log(LogLevel::Info, stream.str());
+
+        const auto spot_axis_value{ static_cast<double>(i + 1) };
+        AppendBiasCurvePoint(panel.curves.at(0), spot_axis_value, result);
+    }
+
+    plot_request.panels.emplace_back(std::move(panel));
+    rhbm_test_plotting::SaveDataOutlierBiasPlot(request, plot_request);
+}
+
+void RunSimulationTestOnSimpleModel(const RHBMTestRequest & request)
+{
+    const auto error_sigma{ 0.01 };
+    const auto model_prior{ MakeDefaultModelPrior() };
     const auto local_options{ MakeLocalTestOptions(request) };
 
     std::vector<Spot> spot_list{ Spot::UNK, Spot::O, Spot::N, Spot::C, Spot::CA };
@@ -218,8 +265,6 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
 
 void RunSimulationTestOnAtomicModel(const RHBMTestRequest & request)
 {
-    ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnAtomicModel");
-
     const auto error_sigma{ 0.01 };
     const auto model_prior{ MakeDefaultModelPrior() };
     FitOptions options;
@@ -275,8 +320,6 @@ void RunSimulationTestOnAtomicModel(const RHBMTestRequest & request)
 
 void RunSimulationTestOnDataOutlier(const RHBMTestRequest & request)
 {
-    ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnDataOutlier");
-
     const auto model_prior{ MakeDefaultModelPrior() };
     const auto local_options{ MakeLocalTestOptions(request) };
     LocalScenario base_scenario;
@@ -330,8 +373,6 @@ void RunSimulationTestOnDataOutlier(const RHBMTestRequest & request)
 
 void RunSimulationTestOnMemberOutlier(const RHBMTestRequest & request)
 {
-    ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnMemberOutlier");
-
     const std::vector<GaussianModel3D> outlier_prior_list{
         GaussianModel3D{ 1.50, 0.50, 0.10 },
         GaussianModel3D{ 1.00, 1.00, 0.10 }
@@ -392,8 +433,6 @@ void RunSimulationTestOnMemberOutlier(const RHBMTestRequest & request)
 
 void RunSimulationTestOnModelAlphaData(const RHBMTestRequest & request)
 {
-    ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnModelAlphaData");
-
     const auto model_prior{ MakeDefaultModelPrior() };
     const auto local_options{ MakeLocalTestOptions(request) };
     LocalScenario base_scenario;
@@ -445,8 +484,6 @@ void RunSimulationTestOnModelAlphaData(const RHBMTestRequest & request)
 
 void RunSimulationTestOnModelAlphaMember(const RHBMTestRequest & request)
 {
-    ScopeTimer timer("RHBMTestCommand::RunSimulationTestOnModelAlphaMember");
-
     const std::vector<GaussianModel3D> outlier_prior_list{
         GaussianModel3D{ 1.50, 0.50, 0.10 },
         GaussianModel3D{ 1.00, 1.00, 0.10 }
@@ -531,6 +568,7 @@ bool RHBMTestCommand::ExecuteImpl(const RHBMTestRequest & request)
         RunSimulationTestOnBenchMark(request);
         return true;
     case TesterType::ATOMIC_MODEL:
+        RunSimulationTestOnSimpleModel(request);
         RunSimulationTestOnAtomicModel(request);
         return true;
     case TesterType::DATA_OUTLIER:
