@@ -146,17 +146,23 @@ void RunSimulationTestOnAtomicModel(const RHBMTestRequest & request)
     options.thread_size = request.job_count;
     options.quiet_mode = true;
 
+    ElectricPotential potential_model;
+    potential_model.SetModelChoice(1);
+    potential_model.SetBlurringWidth(width_prior);
+
+    const std::array<AtomicModelTestCase, 5> benchmark_cases{{
+        { Spot::UNK, Element::CARBON, 0.0, GaussianModel3D{ 1.0, width_prior, 0.0 } },
+        { Spot::UNK, Element::NITROGEN, 0.0, GaussianModel3D{ 1.0, width_prior, 0.0 } },
+        { Spot::UNK, Element::OXYGEN, 0.0, GaussianModel3D{ 1.0, width_prior, 0.0 } }
+    }};
+
     const std::array<AtomicModelTestCase, 5> test_cases{{
         { Spot::UNK, Element::CARBON, 0.0, GaussianModel3D{ 6.0, width_prior, 0.0 } },
-        { Spot::O, Element::OXYGEN, -0.1, GaussianModel3D{ 8.0, width_prior, -0.1 } },
+        { Spot::O, Element::OXYGEN, 0.0, GaussianModel3D{ 8.0, width_prior, 0.0 } },
         { Spot::N, Element::NITROGEN, 0.0, GaussianModel3D{ 7.0, width_prior, 0.0 } },
         { Spot::C, Element::CARBON, 0.0, GaussianModel3D{ 6.0, width_prior, 0.0 } },
         { Spot::CA, Element::CARBON, 0.0, GaussianModel3D{ 6.0, width_prior, 0.0 } }
     }};
-
-    ElectricPotential potential_model;
-    potential_model.SetModelChoice(0);
-    potential_model.SetBlurringWidth(width_prior);
 
     BiasPlotRequest plot_request;
     plot_request.output_name = "bias_from_neighbor_atom_atomic_model.pdf";
