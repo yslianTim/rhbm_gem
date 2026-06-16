@@ -517,14 +517,7 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
                     array_helper::ComputeNorm<float>(sample_position, neighbor_position))
             };
             if (distance > kNeighborContributionDistanceMax) continue;
-            if (neighbor_atom->GetElement() == Element::OXYGEN)
-            {
-                response_value -= static_cast<float>(gaussian_iter->second.ResponseAtDistance(distance));
-            }
-            else
-            {
-                response_value -= static_cast<float>(gaussian_iter->second.SignalAtDistance(distance));
-            }
+            response_value -= static_cast<float>(gaussian_iter->second.ResponseAtDistance(distance));
         }
         updated_list.emplace_back(LocalPotentialSample{response_value, sample.point });
     }
@@ -631,6 +624,32 @@ bool IsBetterLocalFittingCandidate(
     const LocalFittingParameterChangeStats & best_stats)
 {
     return GetLocalFittingParameterChange(stats) < GetLocalFittingParameterChange(best_stats);
+}
+
+void ApplyLocalFittingUnderRelaxation(
+    LocalFittingIterationResult & iteration_result,
+    const std::vector<Eigen::VectorXd> & previous_estimation_list,
+    double beta)
+{
+    if (iteration_result.estimation_list.size() != previous_estimation_list.size() ||
+        iteration_result.result_list.size() != previous_estimation_list.size())
+    {
+        throw std::invalid_argument("Local fitting relaxation input sizes are inconsistent.");
+    }
+    for (std::size_t i = 0; i < iteration_result.estimation_list.size(); i++)
+    {
+        const auto relaxed_estimation{
+            beta * iteration_result.estimation_list.at(i) +
+            (1.0 - beta) * previous_estimation_list.at(i)
+        };
+        const auto relaxed_model{ GaussianModel3D::FromVector(relaxed_estimation) };
+        auto & result{ iteration_result.result_list.at(i) };
+        result.mdpde = GaussianModel3DWithUncertainty{
+            relaxed_model,
+            result.mdpde.GetStandardDeviationModel()
+        };
+        iteration_result.estimation_list.at(i) = relaxed_estimation;
+    }
 }
 
 LocalGaussianResult EstimateLocalGaussianWithOffsetModel(
@@ -1061,6 +1080,13 @@ void RunSecondStageLocalFitting(
     const std::vector<AtomObject *> & atom_list,
     const FitOptions & options)
 {
+    const auto under_relaxation_factor{
+        numeric_validation::RequireFiniteExclusiveInclusiveRange(
+            options.local_fitting_under_relaxation_factor,
+            0.0,
+            1.0,
+            "local_fitting_under_relaxation_factor")
+    };
     auto analysis{ model_object.EditAnalysis() };
     const auto atom_size{ atom_list.size() };
     std::vector<AtomLocalPotentialEditor> local_editor_list;
@@ -1091,6 +1117,10 @@ void RunSecondStageLocalFitting(
                 previous_result_list,
                 options)
         };
+        ApplyLocalFittingUnderRelaxation(
+            iteration_result,
+            previous_estimation_list,
+            under_relaxation_factor);
         const auto change_stats{
             CalculateLocalFittingParameterChangeStats(
                 iteration_result.estimation_list,
