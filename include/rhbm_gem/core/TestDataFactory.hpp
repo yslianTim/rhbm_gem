@@ -27,7 +27,6 @@ struct GroupTestData
 struct AtomicModelTestData
 {
     GaussianModel3D gaus_true;
-    ElectricPotential potential_model;
     std::vector<std::unique_ptr<ModelObject>> replica_model_objects;
 };
 

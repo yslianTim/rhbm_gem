@@ -5,6 +5,7 @@
 #include <rhbm_gem/core/TestDataFactory.hpp>
 #include <rhbm_gem/core/EstimatorTester.hpp>
 
+#include <array>
 #include <iomanip>
 #include <sstream>
 #include <string>
@@ -77,6 +78,14 @@ GroupTestOptions MakeGroupTestOptions(const RHBMTestRequest & request)
     return options;
 }
 
+struct AtomicModelTestCase
+{
+    Spot spot;
+    Element element;
+    double charge{ 0.0 };
+    GaussianModel3D gaus_true;
+};
+
 } // namespace
 
 void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
@@ -137,10 +146,13 @@ void RunSimulationTestOnAtomicModel(const RHBMTestRequest & request)
     options.thread_size = request.job_count;
     options.quiet_mode = true;
 
-    std::vector<Spot> spot_list{ Spot::UNK, Spot::O, Spot::N, Spot::C, Spot::CA };
-    std::vector<Element> element_list{ Element::CARBON, Element::OXYGEN, Element::NITROGEN, Element::CARBON, Element::CARBON };
-    std::vector<double> amplitude_prior_list{ 6.0, 8.0, 7.0, 6.0, 6.0 };
-    std::vector<double> charge_list{ 0.0, 0.0, 0.0, 0.0, 0.0 };
+    const std::array<AtomicModelTestCase, 5> test_cases{{
+        { Spot::UNK, Element::CARBON, 0.0, GaussianModel3D{ 6.0, width_prior, 0.0 } },
+        { Spot::O, Element::OXYGEN, -0.1, GaussianModel3D{ 8.0, width_prior, -0.1 } },
+        { Spot::N, Element::NITROGEN, 0.0, GaussianModel3D{ 7.0, width_prior, 0.0 } },
+        { Spot::C, Element::CARBON, 0.0, GaussianModel3D{ 6.0, width_prior, 0.0 } },
+        { Spot::CA, Element::CARBON, 0.0, GaussianModel3D{ 6.0, width_prior, 0.0 } }
+    }};
 
     ElectricPotential potential_model;
     potential_model.SetModelChoice(0);
@@ -154,18 +166,19 @@ void RunSimulationTestOnAtomicModel(const RHBMTestRequest & request)
 
     BiasPlotPanel panel;
     panel.label = "Neighbor Atom Type";
-    panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Ols, spot_list.size()));
-    panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Mdpde, spot_list.size()));
+    panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Ols, test_cases.size()));
+    panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Mdpde, test_cases.size()));
 
-    for (size_t i = 0; i < spot_list.size(); i++)
+    for (size_t i = 0; i < test_cases.size(); i++)
     {
+        const auto & test_case{ test_cases.at(i) };
         PotentialModelScenario scenario;
-        scenario.gaus_true = GaussianModel3D{amplitude_prior_list.at(i), width_prior, charge_list.at(i) };
+        scenario.gaus_true = test_case.gaus_true;
         scenario.potential_model = potential_model;
         scenario.data_error_sigma = error_sigma;
-        scenario.spot = spot_list.at(i);
-        scenario.element = element_list.at(i);
-        scenario.charge = charge_list.at(i);
+        scenario.spot = test_case.spot;
+        scenario.element = test_case.element;
+        scenario.charge = test_case.charge;
         scenario.replica_size = 10;
 
         const auto input{ BuildPotentialModelTestData(scenario) };
@@ -173,11 +186,11 @@ void RunSimulationTestOnAtomicModel(const RHBMTestRequest & request)
         const auto result_2{ RunAtomicModelFullEstimationTest(input, options) };
 
         std::ostringstream stream;
-        stream  << " OLS: " << std::setprecision(3) << std::fixed
+        stream  << " Method 1: " << std::setprecision(3) << std::fixed
                 << result_1.mean(0) << " , "
                 << result_1.mean(1) << " , "
                 << result_1.mean(2)
-                << " , MDPDE: "
+                << " , Method 2: "
                 << result_2.mean(0) << " , "
                 << result_2.mean(1) << " , "
                 << result_2.mean(2);

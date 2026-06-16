@@ -275,6 +275,7 @@ std::unique_ptr<AtomObject> MakeAtomicModelAtom(int serial_id, const AtomicModel
     atom_object->SetSerialID(serial_id);
     atom_object->SetComponentKey(1);
     atom_object->SetAtomKey(static_cast<AtomKey>(atom.spot));
+    atom_object->SetElement(atom.element);
     atom_object->SetSpot(atom.spot);
     atom_object->SetPosition(ToArray3f(atom.center));
     return atom_object;
@@ -389,26 +390,17 @@ GroupTestData BuildGroupTestData(const GroupScenario & scenario)
 
 AtomicModelTestData BuildPotentialModelTestData(const PotentialModelScenario & scenario)
 {
-    numeric_validation::RequirePositive(scenario.replica_size, "replica_size");
-
     AtomicModelTestData input;
     input.gaus_true = scenario.gaus_true;
-    input.potential_model = scenario.potential_model;
     input.replica_model_objects.reserve(static_cast<size_t>(scenario.replica_size));
 
-    std::vector<AtomicModelContribution> atom_field;
-    const auto neighbor_list{ BuildAtomNeighborList(scenario.spot) };
-    atom_field.reserve(neighbor_list.size() + 1);
-    atom_field.emplace_back(AtomicModelContribution{
+    auto atom_field{ BuildAtomNeighborList(scenario.spot) };
+    atom_field.insert(atom_field.begin(), AtomicModelContribution{
         scenario.spot,
         scenario.element,
         scenario.charge,
         Eigen::VectorXd::Zero(3) }
     );
-    for (const auto & neighbor : neighbor_list)
-    {
-        atom_field.emplace_back(neighbor);
-    }
 
     for (int i = 0; i < scenario.replica_size; i++)
     {
