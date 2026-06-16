@@ -9,6 +9,7 @@
 #include <iomanip>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -83,7 +84,6 @@ struct AtomicModelTestCase
     Spot spot;
     Element element;
     double charge{ 0.0 };
-    GaussianModel3D gaus_true;
 };
 
 } // namespace
@@ -150,19 +150,44 @@ void RunSimulationTestOnAtomicModel(const RHBMTestRequest & request)
     potential_model.SetModelChoice(1);
     potential_model.SetBlurringWidth(width_prior);
 
-    const std::array<AtomicModelTestCase, 5> benchmark_cases{{
-        { Spot::UNK, Element::CARBON, 0.0, GaussianModel3D{ 1.0, width_prior, 0.0 } },
-        { Spot::UNK, Element::NITROGEN, 0.0, GaussianModel3D{ 1.0, width_prior, 0.0 } },
-        { Spot::UNK, Element::OXYGEN, 0.0, GaussianModel3D{ 1.0, width_prior, 0.0 } }
+    const std::array<AtomicModelTestCase, 3> benchmark_cases{{
+        { Spot::UNK, Element::CARBON, 0.0 },
+        { Spot::UNK, Element::NITROGEN, 0.0 },
+        { Spot::UNK, Element::OXYGEN, 0.0 }
     }};
 
     const std::array<AtomicModelTestCase, 5> test_cases{{
-        { Spot::UNK, Element::CARBON, 0.0, GaussianModel3D{ 6.0, width_prior, 0.0 } },
-        { Spot::O, Element::OXYGEN, 0.0, GaussianModel3D{ 8.0, width_prior, 0.0 } },
-        { Spot::N, Element::NITROGEN, 0.0, GaussianModel3D{ 7.0, width_prior, 0.0 } },
-        { Spot::C, Element::CARBON, 0.0, GaussianModel3D{ 6.0, width_prior, 0.0 } },
-        { Spot::CA, Element::CARBON, 0.0, GaussianModel3D{ 6.0, width_prior, 0.0 } }
+        { Spot::UNK, Element::CARBON, 0.0 },
+        { Spot::O, Element::OXYGEN, 0.0 },
+        { Spot::N, Element::NITROGEN, 0.0 },
+        { Spot::C, Element::CARBON, 0.0 },
+        { Spot::CA, Element::CARBON, 0.0 }
     }};
+
+    std::unordered_map<Element, GaussianModel3D> reference_gaus_by_element;
+    reference_gaus_by_element.reserve(benchmark_cases.size());
+    for (const auto & benchmark_case : benchmark_cases)
+    {
+        PotentialModelScenario scenario;
+        scenario.potential_model = potential_model;
+        scenario.data_error_sigma = 0.0;
+        scenario.spot = benchmark_case.spot;
+        scenario.element = benchmark_case.element;
+        scenario.charge = benchmark_case.charge;
+        scenario.replica_size = 1;
+
+        const auto input{ BuildPotentialModelTestData(scenario) };
+        const auto reference_gaus{ EstimateAtomicModelFirstStageMean(input, options) };
+        reference_gaus_by_element.emplace(benchmark_case.element, reference_gaus);
+
+        std::ostringstream stream;
+        stream  << " Benchmark: " << static_cast<int>(benchmark_case.element)
+                << " one-gaussian reference: " << std::setprecision(3) << std::fixed
+                << reference_gaus.GetAmplitude() << " , "
+                << reference_gaus.GetWidth() << " , "
+                << reference_gaus.GetIntercept();
+        Logger::Log(LogLevel::Info, stream.str());
+    }
 
     BiasPlotRequest plot_request;
     plot_request.output_name = "bias_from_neighbor_atom_atomic_model.pdf";
@@ -179,7 +204,7 @@ void RunSimulationTestOnAtomicModel(const RHBMTestRequest & request)
     {
         const auto & test_case{ test_cases.at(i) };
         PotentialModelScenario scenario;
-        scenario.gaus_true = test_case.gaus_true;
+        scenario.gaus_true = reference_gaus_by_element.at(test_case.element);
         scenario.potential_model = potential_model;
         scenario.data_error_sigma = error_sigma;
         scenario.spot = test_case.spot;

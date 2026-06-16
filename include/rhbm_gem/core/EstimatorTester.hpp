@@ -65,6 +65,11 @@ BiasStatistics RunAtomicModelFirstStageEstimationTest(
     const FitOptions & options
 );
 
+GaussianModel3D EstimateAtomicModelFirstStageMean(
+    const AtomicModelTestData & input,
+    const FitOptions & options
+);
+
 BiasStatistics RunAtomicModelFullEstimationTest(
     const AtomicModelTestData & input,
     const FitOptions & options

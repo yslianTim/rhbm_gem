@@ -215,7 +215,8 @@ LocalPotentialSampleList ApplyLogQuadraticNoise(
     {
         sampling_entry.response =
             static_cast<float>(static_cast<double>(sampling_entry.response)
-                * std::exp(dist_error(generator)));
+            //    * std::exp(dist_error(generator)));
+            + dist_error(generator));
     }
     return sampling_entries;
 }

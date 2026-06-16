@@ -155,11 +155,11 @@ std::string GetBiasLegendLabel(BiasPlotFlavor flavor, BiasCurveKind kind)
     {
         if (kind == BiasCurveKind::Ols)
         {
-            return "OLS";
+            return "First-Stage Estimation";
         }
         if (kind == BiasCurveKind::Mdpde)
         {
-            return "MDPDE";
+            return "Full Estimation";
         }
         return "MDPDE (Sampling Scheme)";
     }
