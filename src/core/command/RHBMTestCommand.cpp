@@ -1,9 +1,9 @@
 #include "detail/CommandBase.hpp"
 #include "detail/RHBMTestPlotting.hpp"
 
-#include <rhbm_gem/utils/domain/Logger.hpp>
-#include <rhbm_gem/core/TestDataFactory.hpp>
 #include <rhbm_gem/core/EstimatorTester.hpp>
+#include <rhbm_gem/core/TestDataFactory.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <array>
 #include <iomanip>
@@ -90,46 +90,61 @@ struct AtomicModelTestCase
 
 void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
 {
-    const auto error_sigma{ 0.01 };
-    const auto model_prior{ MakeDefaultModelPrior() };
+    const std::vector<double> error_list{ 0.0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1 };
+    const auto width_prior{ 0.5 };
+    const GaussianModel3D gaus_truth{ 8.0, width_prior, -0.1 };
+
     FitOptions options;
     options.distance_min = request.fit_range_min;
     options.distance_max = request.fit_range_max;
     options.thread_size = request.job_count;
     options.quiet_mode = true;
 
-    std::vector<Spot> spot_list{ Spot::UNK, Spot::O, Spot::N, Spot::C, Spot::CA };
+    ElectricPotential potential_model;
+    potential_model.SetModelChoice(0);
+    potential_model.SetBlurringWidth(width_prior);
+
+    PotentialModelScenario base_scenario;
+    base_scenario.gaus_true = gaus_truth;
+    base_scenario.potential_model = potential_model;
+    base_scenario.spot = Spot::UNK;
+    base_scenario.element = Element::OXYGEN;
+    base_scenario.charge = -0.1;
+    base_scenario.replica_size = 100;
 
     BiasPlotRequest plot_request;
     plot_request.output_name = "bias_from_benchmark.pdf";
-    plot_request.flavor = BiasPlotFlavor::NeighborType;
-    plot_request.x_axis_mode = BiasXAxisMode::NeighborType;
+    plot_request.flavor = BiasPlotFlavor::DataOutlier;
+    plot_request.x_axis_mode = BiasXAxisMode::ErrorSigma;
     plot_request.panels.reserve(1);
 
     BiasPlotPanel panel;
-    panel.label = "Neighbor Atom Type";
-    panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Mdpde, spot_list.size()));
+    panel.label = "Independent Atom";
+    panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Ols, error_list.size()));
+    panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Mdpde, error_list.size()));
 
-    for (size_t i = 0; i < spot_list.size(); i++)
+    for (const auto error_sigma : error_list)
     {
-        PotentialModelScenario scenario;
-        scenario.gaus_true = model_prior;
+        auto scenario{ base_scenario };
         scenario.data_error_sigma = error_sigma;
-        scenario.spot = spot_list.at(i);
-        scenario.replica_size = 10;
 
         const auto input{ BuildPotentialModelTestData(scenario) };
-        const auto result{ RunAtomicModelFullEstimationTest(input, options) };
+        const auto bias{ RunAtomicModelLocalEstimationTest(input, request.alpha_r, options) };
 
         std::ostringstream stream;
-        stream  << " MDPDE: " << std::setprecision(3) << std::fixed
-                << result.mean(0) << " , "
-                << result.mean(1) << " , "
-                << result.mean(2);
+        stream  << " error_sigma = " << std::setprecision(2) << std::fixed << error_sigma
+                << ", OLS: " << std::setprecision(3)
+                << bias.ols.mean(0) << " , "
+                << bias.ols.mean(1) << " , "
+                << bias.ols.mean(2)
+                << " , MDPDE: "
+                << bias.mdpde.mean(0) << " , "
+                << bias.mdpde.mean(1) << " , "
+                << bias.mdpde.mean(2);
         Logger::Log(LogLevel::Info, stream.str());
 
-        const auto spot_axis_value{ static_cast<double>(i + 1) };
-        AppendBiasCurvePoint(panel.curves.at(0), spot_axis_value, result);
+        AppendBiasCurvePoint(panel.curves.at(0), error_sigma, bias.ols);
+        AppendBiasCurvePoint(panel.curves.at(1), error_sigma, bias.mdpde);
     }
 
     plot_request.panels.emplace_back(std::move(panel));

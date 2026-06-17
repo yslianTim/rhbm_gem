@@ -32,6 +32,7 @@ enum class BiasPlotFlavor
 enum class BiasXAxisMode
 {
     ContaminationRatio,
+    ErrorSigma,
     NeighborType
 };
 

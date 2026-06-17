@@ -312,6 +312,47 @@ BiasStatistics RunAtomicModelFirstStageEstimationTest(
     return FinalizeBiasStatistics(bias_matrix);
 }
 
+LocalGaussianEstimateBias RunAtomicModelLocalEstimationTest(
+    const AtomicModelTestData & input,
+    double alpha_r,
+    const FitOptions & options)
+{
+    GaussianModel3D::RequireFiniteModel(input.gaus_true, "input.gaus_true");
+    const auto replica_size{ static_cast<int>(input.replica_model_objects.size()) };
+    if (replica_size <= 0)
+    {
+        throw std::invalid_argument("input.replica_model_objects must not be empty");
+    }
+
+    Eigen::MatrixXd ols_bias{
+        Eigen::MatrixXd::Zero(GaussianModel3D::ParameterSize(), replica_size)
+    };
+    Eigen::MatrixXd mdpde_bias{
+        Eigen::MatrixXd::Zero(GaussianModel3D::ParameterSize(), replica_size)
+    };
+
+    for (int i = 0; i < replica_size; i++)
+    {
+        const auto & model_object{ *input.replica_model_objects.at(static_cast<size_t>(i)) };
+        const auto local_view{
+            AtomLocalPotentialView::RequireFor(*model_object.GetSelectedAtoms().front())
+        };
+        const auto estimate{
+            EstimateLocalGaussianWithIntercept(
+                local_view.GetSamplingEntries(false),
+                alpha_r,
+                options)
+        };
+        ols_bias.col(i) = CalculateNormalizedBias(estimate.ols.GetModel(), input.gaus_true);
+        mdpde_bias.col(i) = CalculateNormalizedBias(estimate.mdpde.GetModel(), input.gaus_true);
+    }
+
+    return LocalGaussianEstimateBias{
+        FinalizeBiasStatistics(ols_bias),
+        FinalizeBiasStatistics(mdpde_bias)
+    };
+}
+
 GaussianModel3D EstimateAtomicModelFirstStageMean(
     const AtomicModelTestData & input,
     const FitOptions & options)

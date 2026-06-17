@@ -28,6 +28,12 @@ struct LocalTestBias
     BiasStatisticsSeries mdpde;
 };
 
+struct LocalGaussianEstimateBias
+{
+    BiasStatistics ols;
+    BiasStatistics mdpde;
+};
+
 struct GroupTestBias
 {
     BiasStatistics median;
@@ -62,6 +68,12 @@ GroupTestBias RunGroupEstimationTest(
 
 BiasStatistics RunAtomicModelFirstStageEstimationTest(
     const AtomicModelTestData & input,
+    const FitOptions & options
+);
+
+LocalGaussianEstimateBias RunAtomicModelLocalEstimationTest(
+    const AtomicModelTestData & input,
+    double alpha_r,
     const FitOptions & options
 );
 

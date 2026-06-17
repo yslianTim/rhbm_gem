@@ -336,6 +336,10 @@ void SaveDataOutlierBiasPlot(const RHBMTestRequest & request, const BiasPlotRequ
     {
         x_min.at(i) = (plot_request.flavor == BiasPlotFlavor::ModelAlphaData) ? -2.0 : -0.7;
         x_max.at(i) = (plot_request.flavor == BiasPlotFlavor::ModelAlphaData) ? 47.0 : 22.0;
+        if (plot_request.x_axis_mode == BiasXAxisMode::ErrorSigma)
+        {
+            x_max.at(i) = 12.0;
+        }
         if (plot_request.x_axis_mode == BiasXAxisMode::NeighborType)
         {
             x_min.at(i) = 0.0;
@@ -463,6 +467,10 @@ void SaveDataOutlierBiasPlot(const RHBMTestRequest & request, const BiasPlotRequ
     if (plot_request.x_axis_mode == BiasXAxisMode::NeighborType)
     {
         bottom_title_text->AddText("Atom Type");
+    }
+    else if (plot_request.x_axis_mode == BiasXAxisMode::ErrorSigma)
+    {
+        bottom_title_text->AddText("#sigma_{#epsilon} (% D_{max})");
     }
     else
     {
