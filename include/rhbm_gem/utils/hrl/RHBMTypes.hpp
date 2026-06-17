@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <limits>
 #include <optional>
 #include <vector>
 
@@ -51,7 +50,6 @@ struct RHBMBetaEstimateResult
     RHBMParameterVector beta_ols;
     RHBMParameterVector beta_mdpde;
     double sigma_square{ 0.0 };
-    double mdpde_objective{ std::numeric_limits<double>::infinity() };
     RHBMDiagonalMatrix data_weight;
     RHBMDiagonalMatrix data_covariance;
 };
