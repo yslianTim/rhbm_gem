@@ -177,6 +177,43 @@ RHBMDiagonalMatrix CalculateDataWeight(
     return W.matrix().asDiagonal();
 }
 
+double CalculateMDPDEObjective(
+    double alpha,
+    const RHBMDesignMatrix & design_matrix,
+    const RHBMResponseVector & response_vector,
+    const RHBMParameterVector & beta,
+    double sigma_square)
+{
+    if (design_matrix.rows() == 0 ||
+        response_vector.size() == 0 ||
+        beta.rows() != design_matrix.cols() ||
+        !numeric_validation::IsFinitePositive(sigma_square) ||
+        sigma_square == std::numeric_limits<double>::max())
+    {
+        return std::numeric_limits<double>::infinity();
+    }
+
+    const Eigen::ArrayXd normalized_residual_square{
+        (response_vector - (design_matrix * beta)).array().square() / sigma_square
+    };
+    if (!normalized_residual_square.allFinite())
+    {
+        return std::numeric_limits<double>::infinity();
+    }
+    if (alpha == 0.0)
+    {
+        return 0.5 * normalized_residual_square.mean();
+    }
+
+    const Eigen::ArrayXd weight{
+        (-0.5 * alpha * normalized_residual_square).exp()
+    };
+    const auto objective{ ((1.0 - weight) / alpha).mean() };
+    return numeric_validation::IsFinite(objective) ?
+        objective :
+        std::numeric_limits<double>::infinity();
+}
+
 double CalculateDataVarianceSquare(
     double alpha,
     const RHBMDesignMatrix & design_matrix,
@@ -574,6 +611,12 @@ RHBMBetaEstimateResult rhbm_helper::EstimateBetaMDPDE(
         }
 
         result.data_covariance = CalculateDataCovariance(result.sigma_square, result.data_weight);
+        result.mdpde_objective = CalculateMDPDEObjective(
+            alpha_r,
+            design_matrix,
+            response_vector,
+            result.beta_mdpde,
+            result.sigma_square);
         if (!converged)
         {
             result.status = RHBMEstimationStatus::MAX_ITERATIONS_REACHED;

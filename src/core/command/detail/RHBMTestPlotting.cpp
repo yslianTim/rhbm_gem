@@ -348,7 +348,7 @@ void SaveDataOutlierBiasPlot(const RHBMTestRequest & request, const BiasPlotRequ
     }
     for (size_t j = 0; j < row_size; j++)
     {
-        auto y_range{ array_helper::ComputeScalingRangeTuple(global_y_array.at(j), 0.2, 0.1) };
+        auto y_range{ array_helper::ComputeScalingRangeTuple(global_y_array.at(j), 1.0, 0.2) };
         y_min.at(j) = std::get<0>(y_range);
         y_max.at(j) = std::get<1>(y_range);
     }

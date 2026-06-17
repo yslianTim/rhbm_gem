@@ -150,6 +150,39 @@ bool CanBuildFiniteZeroInterceptSamples(
     return true;
 }
 
+double CalculateRelativeScalarChange(double previous_value, double current_value)
+{
+    if (!std::isfinite(previous_value) || !std::isfinite(current_value))
+    {
+        return std::numeric_limits<double>::infinity();
+    }
+    const auto scale{
+        std::max({ 1.0, std::abs(previous_value), std::abs(current_value) })
+    };
+    return std::abs(current_value - previous_value) / scale;
+}
+
+double CalculateMaxRelativeParameterChange(
+    const GaussianModel3D & previous_model,
+    const GaussianModel3D & current_model)
+{
+    double max_change{ 0.0 };
+    for (int i = 0; i < GaussianModel3D::ParameterSize(); i++)
+    {
+        const auto parameter_change{
+            CalculateRelativeScalarChange(
+                previous_model.GetModelParameter(i),
+                current_model.GetModelParameter(i))
+        };
+        if (!std::isfinite(parameter_change))
+        {
+            return std::numeric_limits<double>::infinity();
+        }
+        max_change = std::max(max_change, parameter_change);
+    }
+    return max_change;
+}
+
 bool EstimateOrdinarySlopeThroughOrigin(
     const std::vector<ResidualInterceptSample> & sample_list,
     double & slope)
@@ -872,9 +905,8 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
     const FitOptions & options,
     double intercept_initial)
 {
-    auto range_min{ options.distance_min };
-    auto range_max{ options.distance_max };
-    numeric_validation::RequireFiniteNonNegativeRange(range_min, range_max, "fit range");
+    numeric_validation::RequireFiniteNonNegativeRange(
+        options.distance_min, options.distance_max, "fit range");
     numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
     numeric_validation::RequireFinite(intercept_initial, "intercept_initial");
 
@@ -889,8 +921,10 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
     auto current_model{
         result.mdpde.GetModel().WithIntercept(ClampEstimatedIntercept(intercept_initial))
     };
-    double best_intercept{ current_model.GetIntercept() };
-    double best_error{ std::numeric_limits<double>::infinity() };
+    auto previous_convergence_model{ current_model };
+    double previous_robust_objective{ std::numeric_limits<double>::infinity() };
+    bool has_previous_convergence_state{ false };
+    double best_robust_objective{ std::numeric_limits<double>::infinity() };
     auto best_result{ result };
     bool has_best_result{ false };
     auto max_iterations{ execution_options.max_iterations };
@@ -899,42 +933,63 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
     {
         const auto intercept{ current_model.GetIntercept() };
         result = EstimateLocalGaussianWithOffsetModel(sample_entries, alpha_r, options, current_model);
-        const auto raw_intercept{
-            ClampEstimatedIntercept(
-                EstimateResidualInterceptParameter(sample_entries, *result.fit_result, intercept))
+        const auto fitted_model{ result.mdpde.GetModel() };
+        const auto robust_objective{
+            result.fit_result.has_value() ?
+                result.fit_result->mdpde_objective :
+                std::numeric_limits<double>::infinity()
         };
-        const auto error{ std::abs(raw_intercept - intercept) };
-        if (error < best_error)
+        if (std::isfinite(robust_objective) && robust_objective < best_robust_objective)
         {
-            best_intercept = intercept;
-            best_error = error;
+            best_robust_objective = robust_objective;
             best_result = result;
             has_best_result = true;
         }
-        if (error < tolerance)
+        double parameter_change{ std::numeric_limits<double>::infinity() };
+        double robust_objective_change{ std::numeric_limits<double>::infinity() };
+        if (has_previous_convergence_state)
         {
-            break;
+            parameter_change =
+                CalculateMaxRelativeParameterChange(previous_convergence_model, fitted_model);
+            robust_objective_change =
+                CalculateRelativeScalarChange(previous_robust_objective, robust_objective);
+            if (parameter_change < tolerance ||
+                robust_objective_change < tolerance)
+            {
+                break;
+            }
         }
 
         if (t + 1 == max_iterations)
         {
             result = has_best_result ?
                 best_result :
-                EstimateLocalGaussian(sample_entries, alpha_r, options, best_intercept);
+                result;
             if (!options.quiet_mode)
             {
                 Logger::Log(LogLevel::Debug,
                     "Maximum iterations reached in local Gaussian estimation with intercept; "
-                    "refitting at best fixed-point candidate with error = " +
-                    std::to_string(best_error) + ".");
+                    "returning best robust-objective candidate with objective = " +
+                    std::to_string(best_robust_objective) +
+                    " and latest parameter relative change = " +
+                    std::to_string(parameter_change) +
+                    ", robust objective relative change = " +
+                    std::to_string(robust_objective_change) + ".");
             }
             break;
         }
 
+        const auto raw_intercept{
+            ClampEstimatedIntercept(
+                EstimateResidualInterceptParameter(sample_entries, *result.fit_result, intercept))
+        };
         const auto damped_intercept{
             ClampEstimatedIntercept(intercept + kInterceptDampingFactor * (raw_intercept - intercept))
         };
         current_model = result.mdpde.GetModel().WithIntercept(damped_intercept);
+        previous_convergence_model = fitted_model;
+        previous_robust_objective = robust_objective;
+        has_previous_convergence_state = true;
     }
     return result;
 }

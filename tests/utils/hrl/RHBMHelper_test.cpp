@@ -459,6 +459,8 @@ TEST(RHBMHelperTest, EstimateBetaMDPDEAlphaZeroMatchesOLS)
     EXPECT_EQ(rg::RHBMEstimationStatus::SUCCESS, result.status);
     EXPECT_TRUE(result.beta_ols.isApprox(expected_beta, 1e-12));
     EXPECT_TRUE(result.beta_mdpde.isApprox(expected_beta, 1e-12));
+    EXPECT_TRUE(std::isfinite(result.mdpde_objective));
+    EXPECT_GE(result.mdpde_objective, 0.0);
 }
 
 TEST(RHBMHelperTest, EstimateBetaMDPDESingleDatumReturnsInsufficientData)
@@ -471,6 +473,7 @@ TEST(RHBMHelperTest, EstimateBetaMDPDESingleDatumReturnsInsufficientData)
     EXPECT_EQ(rg::RHBMEstimationStatus::INSUFFICIENT_DATA, result.status);
     EXPECT_TRUE(result.beta_mdpde.isApprox(Eigen::VectorXd::Zero(2), 1e-12));
     EXPECT_DOUBLE_EQ(std::numeric_limits<double>::max(), result.sigma_square);
+    EXPECT_TRUE(std::isinf(result.mdpde_objective));
 }
 
 TEST(RHBMHelperTest, EstimateBetaMDPDERestoresEigenThreadCountAfterEarlyReturn)
