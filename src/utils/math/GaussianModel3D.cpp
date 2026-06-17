@@ -152,10 +152,6 @@ double GaussianModel3D::InterceptBasisAtDistance(double distance) const
     {
         return std::sqrt(2.0/M_PI) / m_width;
     }
-    else if (distance > 2.0)
-    {
-        return 0.0; // Skip long distance contribution
-    }
     else
     {
         return std::erf(distance/m_width/std::sqrt(2.0)) / distance;

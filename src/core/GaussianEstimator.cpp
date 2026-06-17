@@ -7,6 +7,7 @@
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
+#include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/SampleFilter.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
@@ -44,7 +45,8 @@ constexpr double kResidualInterceptRangeMax{ 2.0 };
 constexpr double kEstimatedInterceptMin{ -1.0 };
 constexpr double kEstimatedInterceptMax{ 1.0 };
 constexpr double kInterceptDampingFactor{ 0.5 };
-constexpr double kNeighborContributionDistanceMax{ 2.0 };
+constexpr double kNeighborContributionCutoffStart{ 2.0 };
+constexpr double kNeighborContributionDistanceMax{ 2.5 };
 constexpr std::size_t kLocalFittingMaximumIterations{ 100 };
 constexpr double kLocalFittingParameterChangeTolerance{ 1.0e-6 };
 constexpr double kLocalFittingChangePercentile{ 0.95 };
@@ -79,6 +81,18 @@ double ClampEstimatedIntercept(double intercept)
     if (intercept < kEstimatedInterceptMin) return kEstimatedInterceptMin;
     if (intercept > kEstimatedInterceptMax) return kEstimatedInterceptMax;
     return intercept;
+}
+
+double CalculateNeighborContributionCutoffWeight(double distance)
+{
+    if (distance <= kNeighborContributionCutoffStart) return 1.0;
+    if (distance >= kNeighborContributionDistanceMax) return 0.0;
+
+    const auto transition_fraction{
+        (distance - kNeighborContributionCutoffStart) /
+        (kNeighborContributionDistanceMax - kNeighborContributionCutoffStart)
+    };
+    return 0.5 * (1.0 + std::cos(Constants::pi * transition_fraction));
 }
 
 std::vector<AtomLocalPotentialEditor> BuildSelectedAtomLocalEditors(ModelObject & model_object)
@@ -516,8 +530,10 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
                 static_cast<double>(
                     array_helper::ComputeNorm<float>(sample_position, neighbor_position))
             };
-            if (distance > kNeighborContributionDistanceMax) continue;
-            response_value -= static_cast<float>(gaussian_iter->second.ResponseAtDistance(distance));
+            const auto cutoff_weight{ CalculateNeighborContributionCutoffWeight(distance) };
+            if (cutoff_weight == 0.0) continue;
+            response_value -= static_cast<float>(
+                cutoff_weight * gaussian_iter->second.ResponseAtDistance(distance));
         }
         updated_list.emplace_back(LocalPotentialSample{response_value, sample.point });
     }
@@ -907,7 +923,7 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
                 EstimateLocalGaussian(sample_entries, alpha_r, options, best_intercept);
             if (!options.quiet_mode)
             {
-                Logger::Log(LogLevel::Warning,
+                Logger::Log(LogLevel::Debug,
                     "Maximum iterations reached in local Gaussian estimation with intercept; "
                     "refitting at best fixed-point candidate with error = " +
                     std::to_string(best_error) + ".");

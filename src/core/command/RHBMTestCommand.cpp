@@ -147,18 +147,18 @@ void RunSimulationTestOnAtomicModel(const RHBMTestRequest & request)
     options.quiet_mode = true;
 
     ElectricPotential potential_model;
-    potential_model.SetModelChoice(1);
+    potential_model.SetModelChoice(0);
     potential_model.SetBlurringWidth(width_prior);
 
     const std::array<AtomicModelTestCase, 3> benchmark_cases{{
         { Spot::UNK, Element::CARBON, 0.0 },
         { Spot::UNK, Element::NITROGEN, 0.0 },
-        { Spot::UNK, Element::OXYGEN, 0.0 }
+        { Spot::UNK, Element::OXYGEN, -0.1 }
     }};
 
     const std::array<AtomicModelTestCase, 5> test_cases{{
         { Spot::UNK, Element::CARBON, 0.0 },
-        { Spot::O, Element::OXYGEN, 0.0 },
+        { Spot::O, Element::OXYGEN, -0.1 },
         { Spot::N, Element::NITROGEN, 0.0 },
         { Spot::C, Element::CARBON, 0.0 },
         { Spot::CA, Element::CARBON, 0.0 }
