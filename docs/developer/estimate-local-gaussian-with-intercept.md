@@ -48,29 +48,24 @@ The high-level flow is:
    `intercept_initial`.
 3. For each outer iteration:
    - fit the signal with `current_model` as the fixed intercept offset;
-   - read the fitted MDPDE robust objective from `RHBMBetaEstimateResult`;
-   - check convergence with MDPDE parameter relative change or robust objective
-     relative change;
-   - estimate a raw intercept from residuals only when another iteration is
-     needed;
-   - damp and clamp that intercept update for the next iteration.
+   - estimate a raw intercept from the residuals of that fixed-intercept fit;
+   - clamp the raw intercept into the allowed intercept range;
+   - measure fixed-point error as the absolute difference between the raw
+     intercept and the intercept used for the current fit;
+   - record the fitted result when it has the lowest fixed-point error so far;
+   - damp and clamp the raw intercept update before building the next
+     `current_model`.
 
-The first fixed-intercept iteration seeds the previous convergence state. The
-combined convergence check is applied from the second fixed-intercept iteration
-onward.
+The loop uses the `max_iterations` and `tolerance` values from
+`RHBMExecutionOptions` produced by `MakeExecutionOptions`. At the time of this
+note, those values are the execution defaults: `100` iterations and `1.0e-5`
+tolerance.
 
-The outer loop converges when either value is below
+The outer loop converges when the fixed-point error is below
 `RHBMExecutionOptions::tolerance`:
 
 ```text
-max_relative_change(amplitude, width, intercept)
-OR relative_change(MDPDE robust objective)
-```
-
-Relative scalar change is measured as:
-
-```text
-abs(current - previous) / max(1.0, abs(previous), abs(current))
+fixed_point_error = abs(raw_intercept - current_intercept)
 ```
 
 The damped update is:
@@ -106,34 +101,23 @@ the slope change is below tolerance or the Huber iteration limit is reached.
 ## Max-Iteration Fallback
 
 If the outer loop reaches the maximum iteration count before convergence, the
-fallback result is the recorded iteration with the lowest finite MDPDE robust
-objective.
-
-The objective is computed in `RHBMMemberDataset` regression space, matching the
-beta fit. For residual
+fallback result is the recorded fixed-intercept fit with the lowest
+fixed-point error:
 
 ```text
-r = y - X * beta_mdpde
+best_error = min(abs(raw_intercept - current_intercept))
 ```
 
-and final variance `sigma_square`, the weight is:
+If no best candidate is recorded, the function calls `EstimateLocalGaussian`
+with the best known intercept as a last-resort fallback. In normal finite-data
+paths, the first iteration records a candidate because residual intercept
+estimation falls back to the current intercept when it cannot estimate a better
+one.
 
-```text
-w = exp(-0.5 * alpha * r^2 / sigma_square)
-```
-
-The minimized bounded objective is:
-
-```text
-alpha > 0: mean((1 - w) / alpha)
-alpha = 0: mean(0.5 * r^2 / sigma_square)
-```
-
-If no finite-objective candidate is ever recorded, the function returns the
-latest fitted result as a last-resort fallback.
-
-The intercept update is only used to build the next fixed-intercept candidate;
-it is not used for convergence or fallback ranking.
+The raw intercept update is only used for convergence, fallback ranking, and
+building the next fixed-intercept candidate. The result returned from a
+successful iteration is the fixed-intercept fit for that iteration, with the
+current intercept attached to the decoded OLS and MDPDE models.
 
 ## Discussion Points
 
@@ -142,5 +126,5 @@ Items worth revisiting before changing the algorithm further:
 - The intercept clamp `[-1.0, 1.0]` is hard-coded and independent of data scale.
 - Residual intercept estimation uses `[1.0, 2.0]`, independent of the configured
   fit range.
-- The robust objective is measured in log-quadratic beta-fit space, not original
-  electric-potential response space.
+- The fixed-point convergence and fallback ranking use only intercept update
+  error, not MDPDE objective value or amplitude/width parameter movement.
