@@ -13,7 +13,7 @@ namespace rhbm_gem::rhbm_trainer
 struct RHBMTrainingOptions
 {
     double alpha_min{ 0.0 };
-    double alpha_max{ 2.0 };
+    double alpha_max{ 1.0 };
     double alpha_step{ 0.1 };
     RHBMExecutionOptions execution_options{};
     std::size_t subset_size{ 5 };
