@@ -30,17 +30,25 @@ The inner fixed-intercept path is implemented by
 `EstimateLocalGaussianWithOffsetModel`.
 
 For each sample, it builds a zero-intercept response by subtracting the offset
-part of the supplied model. The offset basis depends on the width of the
-supplied model:
+part of the supplied model:
 
 ```text
 model_offset(distance) = offset_model.ResponseAtDistance(distance)
                        - offset_model.SignalAtDistance(distance)
-                       = offset_model.intercept
-                         * offset_model.InterceptBasisAtDistance(distance)
 
 updated_response = sample.response - model_offset(distance)
 ```
+
+When `offset_model.width != 0`, the offset is:
+
+```text
+model_offset(distance) = offset_model.intercept
+                       * offset_model.InterceptBasisAtDistance(distance)
+```
+
+The intercept basis depends on the supplied model width. When
+`offset_model.width == 0`, `GaussianModel3D::ResponseAtDistance` returns the
+intercept directly, so `model_offset(distance) = offset_model.intercept`.
 
 The updated samples are passed to `rhbm_helper::BuildMemberDataset`. The current
 linearization keeps samples in the inclusive requested fit range only when
@@ -55,10 +63,12 @@ If no sample survives those filters, `BuildDatasetSeries` supplies one
 all-zero basis/response row rather than leaving the dataset empty.
 
 `rhbm_helper::EstimateBetaMDPDE` estimates the two zero-intercept beta
-parameters. `DecodeLocalGaussianResult` decodes both the OLS and MDPDE beta
-vectors, attaches `offset_model.intercept`, leaves their standard-deviation
-models at zero, and preserves the `RHBMBetaEstimateResult` in
-`LocalGaussianResult::fit_result`.
+parameters. It receives the `RHBMExecutionOptions` produced by
+`MakeExecutionOptions`, which copies `FitOptions::thread_size`, forces
+`quiet_mode = true`, and leaves the other execution settings at their defaults.
+`DecodeLocalGaussianResult` decodes both the OLS and MDPDE beta vectors, attaches
+`offset_model.intercept`, leaves their standard-deviation models at zero, and
+preserves the `RHBMBetaEstimateResult` in `LocalGaussianResult::fit_result`.
 
 ## Outer Fixed-Point Loop
 
@@ -77,10 +87,14 @@ The high-level flow is:
    - damp and clamp the raw intercept update before building the next
      `current_model`.
 
-The loop uses the `max_iterations` and `tolerance` values from
-`RHBMExecutionOptions` produced by `MakeExecutionOptions`. At the time of this
-note, `FitOptions` does not expose either setting, so the outer loop uses the
-`RHBMExecutionOptions` defaults: `100` iterations and `1.0e-5` tolerance.
+The outer loop uses the `max_iterations` and `tolerance` values from the same
+`RHBMExecutionOptions` shape produced by `MakeExecutionOptions` for the inner
+MDPDE fits. At the time of this note, `FitOptions` does not expose either
+setting, so both the inner MDPDE iterations and the outer fixed-point loop use
+the `RHBMExecutionOptions` defaults: `100` iterations and `1.0e-5` tolerance.
+The outer loop's maximum-iteration diagnostic is controlled separately by
+`FitOptions::quiet_mode`; `MakeExecutionOptions` forces only the inner estimator
+calls into quiet mode.
 
 The raw intercept is clamped before error calculation. The outer loop converges
 when the fixed-point error is below
@@ -143,15 +157,16 @@ fixed-point error:
 best_error = min(abs(raw_intercept - current_intercept))
 ```
 
-If no best candidate is recorded, the function calls `EstimateLocalGaussian`
-with the best known intercept as a last-resort fallback. In normal finite-data
-paths, the first iteration records a candidate because residual intercept
-estimation falls back to the current intercept when it cannot estimate a better
-one.
+The function normally returns the already-recorded `best_result`; it does not
+refit that candidate despite the wording of the current debug message. Only if
+no best candidate was recorded does it call `EstimateLocalGaussian` with
+`best_intercept` as a last-resort fallback. In normal finite-data paths, the
+first iteration records a candidate because residual intercept estimation falls
+back to the current intercept when it cannot estimate a better one.
 
 The raw intercept update is only used for convergence, fallback ranking, and
 building the next fixed-intercept candidate. The result returned from a
-successful iteration is the fixed-intercept fit for that iteration, with the
+converged iteration is the fixed-intercept fit for that iteration, with the
 current intercept attached to the decoded OLS and MDPDE models.
 
 ## Discussion Points
