@@ -111,41 +111,44 @@ next_intercept = current_intercept
                + 0.5 * (raw_intercept - current_intercept)
 ```
 
-## Residual Intercept Estimation
+## MDPDE Intercept Estimation
 
 The raw intercept is estimated by `EstimateResidualInterceptParameter`.
 
-It decodes the current MDPDE beta result into a signal model and builds residual
-samples only for distances in `[1.0, 2.0]`:
+It decodes the current inner MDPDE beta result into a signal model, thereby
+fixing the amplitude and width for the intercept fit. It then builds a
+one-parameter linear regression dataset from samples whose distances are in
+`[1.0, 2.0]`:
 
 ```text
-basis(distance) = signal_model.InterceptBasisAtDistance(distance)
-residual        = sample.response - signal_model.SignalAtDistance(distance)
+X(distance) = [signal_model.InterceptBasisAtDistance(distance)]
+y(distance) = sample.response - signal_model.SignalAtDistance(distance)
 ```
 
-The intercept candidate is then estimated as a robust slope-through-origin
-problem:
+Samples with a non-finite residual or a non-finite or effectively zero basis are
+omitted. The resulting model is linear in its only beta parameter:
 
 ```text
-residual ~= intercept * basis
+y = X * intercept
 ```
 
-The Huber slope solver starts from ordinary least squares, computes residual
-scale from median absolute deviation, applies Huber weights, and iterates until
-the slope change is below `1.0e-8` or the 50-iteration Huber limit is reached.
-The scale and cutoff are:
-
-```text
-scale  = max(1.4826 * MAD, 1.0e-12)
-cutoff = 1.345 * scale
-```
+`rhbm_helper::EstimateBetaMDPDE` estimates this one-element beta vector using
+the same `alpha_r` value and `RHBMExecutionOptions` as the inner amplitude/width
+fit. The MDPDE beta value is used as the raw intercept; the corresponding OLS
+beta is not attached to the returned OLS model.
 
 Residual intercept estimation returns `current_intercept` unchanged when:
 
 - the decoded MDPDE width is non-finite or non-positive;
-- no usable residual slope can be estimated;
+- fewer than two usable regression rows remain;
+- the estimated MDPDE beta does not contain exactly one finite value;
 - a candidate would make any zero-intercept sample response non-finite or too
   large for the stored `float` response type.
+
+An `EstimateBetaMDPDE` status such as `MAX_ITERATIONS_REACHED` or
+`NUMERICAL_FALLBACK` does not by itself reject the intercept. The candidate is
+accepted when its beta vector has the required finite one-parameter shape and
+passes the zero-intercept sample safety check.
 
 ## Max-Iteration Fallback
 
@@ -180,5 +183,7 @@ Items worth revisiting before changing the algorithm further:
   changes the response offset subtracted on the next iteration.
 - Samples whose offset-adjusted response is not positive are omitted from the
   log-quadratic beta fit.
+- The same `alpha_r` controls robustness for both the inner amplitude/width fit
+  and the outer intercept fit.
 - The fixed-point convergence and fallback ranking use only intercept update
   error, not MDPDE objective value or amplitude/width parameter movement.
