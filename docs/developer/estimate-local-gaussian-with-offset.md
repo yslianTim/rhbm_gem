@@ -98,15 +98,22 @@ This is a one-parameter regression through the origin:
 y = X * offset
 ```
 
-The same `alpha_r` and execution options used by the signal fit are passed to
-`rhbm_helper::EstimateBetaMDPDE`. Its one-element MDPDE beta vector is the
-offset candidate.
+The offset is estimated with a Huber M-estimator. The solver starts from the
+ordinary least-squares slope, computes a robust residual scale from median
+absolute deviation, and iteratively applies Huber weights:
+
+```text
+scale  = max(1.4826 * MAD, 1.0e-12)
+cutoff = 1.345 * scale
+```
+
+Iteration stops when the slope change is below `1.0e-8` or after 50
+iterations. This outer offset fit does not use `alpha_r`.
 
 The current offset is retained when:
 
 - the fitted width is non-finite or non-positive;
-- fewer than two finite, non-zero-basis residual samples are available;
-- the estimated beta is not one finite value; or
+- no finite Huber slope can be estimated from the usable residual samples; or
 - subtracting the candidate offset would produce a non-finite value or
   exceed the `float` response range for any sample.
 
@@ -148,6 +155,7 @@ this path does not decode parameter uncertainty.
 - Non-positive adjusted responses do not participate in the logarithmic signal
   fit.
 - Width changes also change the offset basis used in the next iteration.
-- `alpha_r` controls robustness in both the signal and offset MDPDE fits.
+- `alpha_r` controls only the inner amplitude/width MDPDE fit; the outer offset
+  fit uses the fixed Huber constants above.
 - Convergence and fallback ranking consider the unnormalized L2 movement of
   amplitude, width, and offset, but not the MDPDE objective.

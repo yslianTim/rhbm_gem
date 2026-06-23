@@ -17,6 +17,7 @@
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <iomanip>
@@ -43,11 +44,21 @@ constexpr double kResidualOffsetRangeMin{ 1.0 };
 constexpr double kResidualOffsetRangeMax{ 2.0 };
 constexpr double kEstimatedOffsetAmplitudeRatio{ 0.1 };
 constexpr double kOffsetDampingFactor{ 0.5 };
-constexpr double kNeighborContributionCutoffStart{ 2.0 };
 constexpr double kNeighborContributionDistanceMax{ 2.5 };
 constexpr std::size_t kLocalFittingMaximumIterations{ 100 };
 constexpr double kLocalFittingParameterChangeTolerance{ 1.0e-6 };
 constexpr double kLocalFittingChangePercentile{ 0.95 };
+constexpr int kHuberSlopeMaximumIterations{ 50 };
+constexpr double kHuberSlopeTolerance{ 1.0e-8 };
+constexpr double kHuberScaleMultiplier{ 1.4826 };
+constexpr double kHuberScaleMin{ 1.0e-12 };
+constexpr double kHuberCutoffMultiplier{ 1.345 };
+
+struct ResidualOffsetSample
+{
+    double basis{ 0.0 };
+    double residual{ 0.0 };
+};
 
 struct LocalFittingParameterChangeStats
 {
@@ -69,18 +80,6 @@ double ClampEstimatedOffset(double offset, double amplitude)
     if (offset < offset_min) return offset_min;
     if (offset > offset_max) return offset_max;
     return offset;
-}
-
-double CalculateNeighborContributionCutoffWeight(double distance)
-{
-    if (distance <= kNeighborContributionCutoffStart) return 1.0;
-    if (distance >= kNeighborContributionDistanceMax) return 0.0;
-
-    const auto transition_fraction{
-        (distance - kNeighborContributionCutoffStart) /
-        (kNeighborContributionDistanceMax - kNeighborContributionCutoffStart)
-    };
-    return 0.5 * (1.0 + std::cos(Constants::pi * transition_fraction));
 }
 
 std::vector<AtomLocalPotentialEditor> BuildSelectedAtomLocalEditors(ModelObject & model_object)
@@ -138,21 +137,111 @@ bool CanBuildFiniteZeroOffsetSamples(
     return true;
 }
 
+bool EstimateOrdinarySlopeThroughOrigin(
+    const std::vector<ResidualOffsetSample> & sample_list,
+    double & slope)
+{
+    double numerator{ 0.0 };
+    double denominator{ 0.0 };
+    for (const auto & sample : sample_list)
+    {
+        numerator += sample.basis * sample.residual;
+        denominator += sample.basis * sample.basis;
+    }
+    if (!std::isfinite(numerator) ||
+        !std::isfinite(denominator) ||
+        denominator <= std::numeric_limits<double>::epsilon())
+    {
+        return false;
+    }
+    slope = numerator / denominator;
+    return std::isfinite(slope);
+}
+
+double ComputeHuberResidualScale(
+    const std::vector<ResidualOffsetSample> & sample_list,
+    double slope)
+{
+    std::vector<double> residual_list;
+    residual_list.reserve(sample_list.size());
+    for (const auto & sample : sample_list)
+    {
+        residual_list.emplace_back(sample.residual - slope * sample.basis);
+    }
+
+    const auto median_residual{ array_helper::ComputeMedian(residual_list) };
+    std::vector<double> deviation_list;
+    deviation_list.reserve(residual_list.size());
+    for (const auto residual : residual_list)
+    {
+        deviation_list.emplace_back(std::abs(residual - median_residual));
+    }
+
+    return std::max(
+        kHuberScaleMultiplier * array_helper::ComputeMedian(deviation_list),
+        kHuberScaleMin);
+}
+
+bool EstimateHuberSlopeThroughOrigin(
+    const std::vector<ResidualOffsetSample> & sample_list,
+    double & slope)
+{
+    if (sample_list.empty())
+    {
+        return false;
+    }
+    if (!EstimateOrdinarySlopeThroughOrigin(sample_list, slope))
+    {
+        return false;
+    }
+
+    for (int t = 0; t < kHuberSlopeMaximumIterations; t++)
+    {
+        const auto scale{ ComputeHuberResidualScale(sample_list, slope) };
+        const auto cutoff{ kHuberCutoffMultiplier * scale };
+        double numerator{ 0.0 };
+        double denominator{ 0.0 };
+        for (const auto & sample : sample_list)
+        {
+            const auto error{ sample.residual - slope * sample.basis };
+            const auto abs_error{ std::abs(error) };
+            const auto weight{ abs_error <= cutoff ? 1.0 : cutoff / abs_error };
+            numerator += weight * sample.basis * sample.residual;
+            denominator += weight * sample.basis * sample.basis;
+        }
+        if (!std::isfinite(numerator) ||
+            !std::isfinite(denominator) ||
+            denominator <= std::numeric_limits<double>::epsilon())
+        {
+            return false;
+        }
+
+        const auto updated_slope{ numerator / denominator };
+        if (!std::isfinite(updated_slope))
+        {
+            return false;
+        }
+        if (std::abs(updated_slope - slope) < kHuberSlopeTolerance)
+        {
+            slope = updated_slope;
+            return true;
+        }
+        slope = updated_slope;
+    }
+    return true;
+}
+
 double EstimateResidualOffsetParameter(
     const LocalPotentialSampleList & sample_entries,
     const RHBMBetaEstimateResult & fit_result,
-    double alpha_r,
-    const RHBMExecutionOptions & execution_options,
     double current_offset)
 {
     const auto signal_model{ linearization_service::DecodeParameterVector(fit_result.beta_mdpde) };
     const auto width{ signal_model.GetWidth() };
     if (!std::isfinite(width) || width <= 0.0) return current_offset;
 
-    std::vector<double> basis_list;
-    std::vector<double> residual_list;
-    basis_list.reserve(sample_entries.size());
-    residual_list.reserve(sample_entries.size());
+    std::vector<ResidualOffsetSample> residual_sample_list;
+    residual_sample_list.reserve(sample_entries.size());
     for (const auto & sample : sample_entries)
     {
         const auto distance{ static_cast<double>(sample.point.distance) };
@@ -171,34 +260,10 @@ double EstimateResidualOffsetParameter(
         {
             continue;
         }
-        basis_list.emplace_back(basis);
-        residual_list.emplace_back(residual);
+        residual_sample_list.emplace_back(ResidualOffsetSample{ basis, residual });
     }
-    if (basis_list.size() < 2)
-    {
-        return current_offset;
-    }
-
-    const auto data_size{ static_cast<Eigen::Index>(basis_list.size()) };
-    RHBMMemberDataset dataset;
-    dataset.X = RHBMDesignMatrix::Zero(data_size, 1);
-    dataset.y = RHBMResponseVector::Zero(data_size);
-    for (Eigen::Index i = 0; i < data_size; i++)
-    {
-        const auto index{ static_cast<std::size_t>(i) };
-        dataset.X(i, 0) = basis_list.at(index);
-        dataset.y(i) = residual_list.at(index);
-    }
-
-    const auto offset_result{
-        rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset, execution_options)
-    };
-    if (offset_result.beta_mdpde.size() != 1)
-    {
-        return current_offset;
-    }
-    const auto candidate_offset{ offset_result.beta_mdpde(0) };
-    if (!std::isfinite(candidate_offset))
+    double candidate_offset{ current_offset };
+    if (!EstimateHuberSlopeThroughOrigin(residual_sample_list, candidate_offset))
     {
         return current_offset;
     }
@@ -452,10 +517,10 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
                 static_cast<double>(
                     array_helper::ComputeNorm<float>(sample_position, neighbor_position))
             };
-            const auto cutoff_weight{ CalculateNeighborContributionCutoffWeight(distance) };
-            if (cutoff_weight == 0.0) continue;
+            if (distance > kNeighborContributionDistanceMax) continue;
             response_value -= static_cast<float>(
-                cutoff_weight * gaussian_iter->second.ResponseAtDistance(distance));
+                //gaussian_iter->second.ResponseAtDistance(distance));
+                gaussian_iter->second.SignalAtDistance(distance));
         }
         updated_list.emplace_back(LocalPotentialSample{response_value, sample.point });
     }
@@ -755,8 +820,6 @@ LocalGaussianResult EstimateLocalGaussianWithOffset(
                 EstimateResidualOffsetParameter(
                     sample_entries,
                     *result.fit_result,
-                    alpha_r,
-                    execution_options,
                     offset),
                 amplitude)
         };
