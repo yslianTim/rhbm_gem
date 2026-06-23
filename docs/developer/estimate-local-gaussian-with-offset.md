@@ -38,10 +38,13 @@ fitting the offset.
    2. keep the new amplitude and width fixed and estimate an offset from
       residual samples at distances in `[1.0, 2.0]`;
    3. clamp the estimated offset to ±10% of the latest MDPDE amplitude;
-   4. stop when the offset change is below `1.0e-5`;
+   4. combine the new amplitude and width with the clamped offset candidate,
+      then stop when its three-parameter L2 distance from the current model is
+      below `1.0e-5`;
    5. otherwise update the offset with damping factor `0.5` and continue.
 5. Return the converged fixed-offset fit. If the loop reaches 100
-   iterations, return the iteration with the smallest offset change.
+   iterations, return the iteration with the smallest three-parameter L2
+   distance.
 
 The loop uses the default `RHBMExecutionOptions` iteration limit and tolerance.
 `FitOptions` currently controls only the fit range, thread count, and outer-loop
@@ -107,23 +110,27 @@ The current offset is retained when:
 - subtracting the candidate offset would produce a non-finite value or
   exceed the `float` response range for any sample.
 
-When the current offset is retained, the offset change is zero and the
-outer loop converges immediately.
+When the current offset is retained, its contribution to the L2 distance is
+zero. The outer loop still continues if the fitted amplitude or width changed
+by enough to exceed the convergence tolerance.
 
 ## Iteration and Result Selection
 
-For current offset `c`, latest MDPDE amplitude `a`, and clamped candidate
-`c_raw`:
+For current model `m_current`, latest MDPDE signal model `m_fit`, latest
+amplitude `a`, and clamped candidate offset `c_raw`:
 
 ```text
-lower  = -0.1 * a
-upper  =  0.1 * a
-c_raw  = clamp(offset_candidate, lower, upper)
-error  = abs(c_raw - c)
-c_next = clamp(c + 0.5 * (c_raw - c), lower, upper)
+lower     = -0.1 * a
+upper     =  0.1 * a
+c_raw     = clamp(offset_candidate, lower, upper)
+m_raw     = m_fit.WithOffset(c_raw)
+error     = norm(m_raw.ToVector() - m_current.ToVector())
+c_next    = clamp(c + 0.5 * (c_raw - c), lower, upper)
 ```
 
-Each iteration records the fixed-offset signal fit and its `error`.
+The norm is the unnormalized Euclidean distance across amplitude, width, and
+offset. It uses the raw clamped offset candidate before damping. Each iteration
+records the fixed-offset signal fit and its `error`.
 Convergence returns the current iteration, whose models still contain `c`.
 Maximum-iteration fallback returns the recorded fit with the lowest `error`;
 it does not perform another fit in the normal fallback path.
@@ -142,5 +149,5 @@ this path does not decode parameter uncertainty.
   fit.
 - Width changes also change the offset basis used in the next iteration.
 - `alpha_r` controls robustness in both the signal and offset MDPDE fits.
-- Convergence and fallback ranking consider only offset change, not
-  amplitude/width movement or the MDPDE objective.
+- Convergence and fallback ranking consider the unnormalized L2 movement of
+  amplitude, width, and offset, but not the MDPDE objective.
