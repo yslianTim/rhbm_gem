@@ -262,7 +262,7 @@ double ElectricPotential::CalculateSingleGausModel(Element element, double dista
     {
         charge_term = offset * std::sqrt(2.0/M_PI) / m_blurring_width;
     }
-    else if (distance > 2.0)
+    else if (distance > 2.5)
     {
         charge_term = 0.0; // TEST : Skip long distance contribution
     }

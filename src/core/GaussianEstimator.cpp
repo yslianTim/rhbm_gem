@@ -494,9 +494,10 @@ FittedGaussianSnapshot BuildFittedGaussianSnapshot(
     return snapshot;
 }
 
-LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
+template <typename GaussianLookup>
+LocalPotentialSampleList UpdateSampleListWithGaussianLookup(
     const AtomObject & atom,
-    const FittedGaussianSnapshot & snapshot)
+    GaussianLookup lookup_gaussian)
 {
     const auto local_view{ AtomLocalPotentialView::RequireFor(atom) };
     const auto sample_entries{ local_view.GetSamplingEntries(false) };
@@ -509,8 +510,8 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
         auto response_value{ sample.response };
         for (const auto * neighbor_atom : neighbor_atom_list)
         {
-            const auto gaussian_iter{ snapshot.find(neighbor_atom) };
-            if (gaussian_iter == snapshot.end()) continue;
+            const auto * gaussian{ lookup_gaussian(*neighbor_atom) };
+            if (gaussian == nullptr) continue;
 
             auto neighbor_position{ neighbor_atom->GetPosition() };
             auto distance{
@@ -518,13 +519,36 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
                     array_helper::ComputeNorm<float>(sample_position, neighbor_position))
             };
             if (distance > kNeighborContributionDistanceMax) continue;
-            response_value -= static_cast<float>(
-                //gaussian_iter->second.ResponseAtDistance(distance));
-                gaussian_iter->second.SignalAtDistance(distance));
+            //response_value -= static_cast<float>(gaussian->ResponseAtDistance(distance));
+            response_value -= static_cast<float>(gaussian->SignalAtDistance(distance));
         }
         updated_list.emplace_back(LocalPotentialSample{response_value, sample.point });
     }
     return updated_list;
+}
+
+LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
+    const AtomObject & atom,
+    const FittedGaussianSnapshot & snapshot)
+{
+    return UpdateSampleListWithGaussianLookup(
+        atom,
+        [&snapshot](const AtomObject & neighbor_atom) -> const GaussianModel3D *
+        {
+            const auto gaussian_iter{ snapshot.find(&neighbor_atom) };
+            return gaussian_iter == snapshot.end() ? nullptr : &gaussian_iter->second;
+        });
+}
+
+LocalPotentialSampleList UpdateSampleListWithFittedGaussian(const AtomObject & atom)
+{
+    return UpdateSampleListWithGaussianLookup(
+        atom,
+        [](const AtomObject & neighbor_atom) -> const GaussianModel3D *
+        {
+            const auto local_view{ AtomLocalPotentialView::For(neighbor_atom) };
+            return local_view.IsAvailable() ? &local_view.GetEstimateMDPDE() : nullptr;
+        });
 }
 
 LocalFittingParameterChangeStats CalculateLocalFittingParameterChangeStats(
@@ -1137,24 +1161,13 @@ void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & opt
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
     const auto & selected_atom_list{ model_object.GetSelectedAtoms() };
-    std::vector<Eigen::VectorXd> local_estimation_list;
-    local_estimation_list.reserve(selected_atom_list.size());
     for (auto * atom : selected_atom_list)
     {
         analysis.EnsureAtomLocalPotential(*atom);
-        local_estimation_list.emplace_back(
-            AtomLocalPotentialView::RequireFor(*atom)
-                .GetGaussianResult()
-                .mdpde
-                .GetModel()
-                .ToVector());
     }
-    const auto local_fitting_snapshot{
-        BuildFittedGaussianSnapshot(selected_atom_list, local_estimation_list)
-    };
     if (!options.quiet_mode)
     {
-        Logger::Log(LogLevel::Info, "Run component atom group fitting.");
+        Logger::Log(LogLevel::Info, "Run atom group fitting.");
     }
 
     auto group_key_list{ analysis_view.CollectAtomGroupKeys() };
@@ -1176,8 +1189,7 @@ void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & opt
         for (const auto & atom : atom_list)
         {
             const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
-            sample_entries_list.emplace_back(
-                UpdateSampleListWithFittedGaussian(*atom, local_fitting_snapshot));
+            sample_entries_list.emplace_back(UpdateSampleListWithFittedGaussian(*atom));
             member_result_list.emplace_back(local_view.GetGaussianResult());
         }
         const auto result{
