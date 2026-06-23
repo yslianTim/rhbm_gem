@@ -84,7 +84,7 @@ TEST(PotentialPlotBuilderTest, RepresentativeBuildersProduceRootObjects)
     EXPECT_NE(gaus_function, nullptr);
 }
 
-TEST(PotentialPlotBuilderTest, GaussianFunctionsPreserveModelIntercept)
+TEST(PotentialPlotBuilderTest, GaussianFunctionsPreserveModelOffset)
 {
     auto model{ LoadModelFixture("test_model_auth_seq_alnum_struct_conn.cif") };
     ASSERT_NE(model, nullptr);
@@ -107,7 +107,7 @@ TEST(PotentialPlotBuilderTest, GaussianFunctionsPreserveModelIntercept)
     auto local_function{ atom_builder.CreateAtomLocalGausFunctionMDPDE() };
     ASSERT_NE(local_function, nullptr);
     EXPECT_EQ(local_function->GetNpar(), 3);
-    EXPECT_DOUBLE_EQ(local_function->GetParameter(2), local_model.GetIntercept());
+    EXPECT_DOUBLE_EQ(local_function->GetParameter(2), local_model.GetOffset());
     EXPECT_NEAR(local_function->Eval(0.75), local_model.ResponseAtDistance(0.75), 1e-12);
     EXPECT_NE(local_function->Eval(0.75), local_model.SignalAtDistance(0.75));
 
@@ -136,13 +136,13 @@ TEST(PotentialPlotBuilderTest, GaussianFunctionsPreserveModelIntercept)
 
     ASSERT_NE(mean_function, nullptr);
     EXPECT_EQ(mean_function->GetNpar(), 3);
-    EXPECT_DOUBLE_EQ(mean_function->GetParameter(2), mean_model.GetIntercept());
+    EXPECT_DOUBLE_EQ(mean_function->GetParameter(2), mean_model.GetOffset());
     EXPECT_NEAR(mean_function->Eval(0.75), mean_model.ResponseAtDistance(0.75), 1e-12);
     EXPECT_NE(mean_function->Eval(0.75), mean_model.SignalAtDistance(0.75));
 
     ASSERT_NE(prior_function, nullptr);
     EXPECT_EQ(prior_function->GetNpar(), 3);
-    EXPECT_DOUBLE_EQ(prior_function->GetParameter(2), prior_model.GetIntercept());
+    EXPECT_DOUBLE_EQ(prior_function->GetParameter(2), prior_model.GetOffset());
     EXPECT_NEAR(prior_function->Eval(0.75), prior_model.ResponseAtDistance(0.75), 1e-12);
     EXPECT_NE(prior_function->Eval(0.75), prior_model.SignalAtDistance(0.75));
 }
@@ -211,10 +211,10 @@ TEST(PotentialPlotBuilderTest, ComponentAtomAveragePriorUsesEqualComponentWeight
     ASSERT_TRUE(average_prior.has_value());
     EXPECT_DOUBLE_EQ(2.0, average_prior->GetModel().GetAmplitude());
     EXPECT_DOUBLE_EQ(3.0, average_prior->GetModel().GetWidth());
-    EXPECT_DOUBLE_EQ(0.2, average_prior->GetModel().GetIntercept());
+    EXPECT_DOUBLE_EQ(0.2, average_prior->GetModel().GetOffset());
     EXPECT_DOUBLE_EQ(0.4, average_prior->GetStandardDeviationModel().GetAmplitude());
     EXPECT_DOUBLE_EQ(0.6, average_prior->GetStandardDeviationModel().GetWidth());
-    EXPECT_DOUBLE_EQ(0.08, average_prior->GetStandardDeviationModel().GetIntercept());
+    EXPECT_DOUBLE_EQ(0.08, average_prior->GetStandardDeviationModel().GetOffset());
 
     rg::PotentialPlotBuilder model_builder{ model.get() };
     auto prior_function{ model_builder.CreateComponentAtomAverageGausFunctionPrior(atom_key) };

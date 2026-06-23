@@ -104,7 +104,7 @@ double ComputeQScore(
     {
         constexpr double peak_intensity{ 0.05 };
         constexpr double width{ 0.6 };
-        constexpr double intercept{ -0.005 };
+        constexpr double offset{ -0.005 };
         const auto unit_peak_response{
             GaussianModel3D{ 1.0, width, 0.0 }.ResponseAtDistance(0.0)
         };
@@ -113,7 +113,7 @@ double ComputeQScore(
             reference_model = GaussianModel3D{
                 peak_intensity / unit_peak_response,
                 width,
-                intercept
+                offset
             };
             has_reference_model = true;
         }
@@ -121,14 +121,14 @@ double ComputeQScore(
     else if (reference == QScoreReference::MDPDE)
     {
         const auto & estimate{ gaussian_result.mdpde.GetModel() };
-        reference_model = estimate.WithIntercept(0.0);
+        reference_model = estimate.WithOffset(0.0);
         has_reference_model = true;
     }
 
     if (!has_reference_model ||
         std::isfinite(reference_model.GetAmplitude()) == false ||
         std::isfinite(reference_model.GetWidth()) == false ||
-        std::isfinite(reference_model.GetIntercept()) == false ||
+        std::isfinite(reference_model.GetOffset()) == false ||
         reference_model.GetWidth() <= 0.0)
     {
         return 0.0;

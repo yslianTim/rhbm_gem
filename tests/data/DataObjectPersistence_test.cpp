@@ -182,10 +182,10 @@ TEST(DataObjectPersistenceTest, SamplingSelectionRoundTripPreservesUnselectedSam
     EXPECT_FLOAT_EQ(selected_entries.at(0).response, 6.0f);
 }
 
-TEST(DataObjectPersistenceTest, GaussianInterceptRoundTripPreservesAnalysisResults)
+TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
 {
-    const command_test::ScopedTempDir temp_dir{ "data_schema_gaussian_intercept_roundtrip" };
-    const auto database_path{ temp_dir.path() / "gaussian_intercept_roundtrip.sqlite" };
+    const command_test::ScopedTempDir temp_dir{ "data_schema_gaussian_offset_roundtrip" };
+    const auto database_path{ temp_dir.path() / "gaussian_offset_roundtrip.sqlite" };
 
     int annotated_serial_id{ 0 };
     GroupKey group_key{};
@@ -251,23 +251,23 @@ TEST(DataObjectPersistenceTest, GaussianInterceptRoundTripPreservesAnalysisResul
     const auto local_view{
         rg::AtomLocalPotentialView::RequireFor(*loaded_model->GetAtomList().at(0))
     };
-    EXPECT_DOUBLE_EQ(local_view.GetGaussianResult().ols.GetModel().GetIntercept(), 0.11);
-    EXPECT_DOUBLE_EQ(local_view.GetGaussianResult().mdpde.GetModel().GetIntercept(), 0.22);
+    EXPECT_DOUBLE_EQ(local_view.GetGaussianResult().ols.GetModel().GetOffset(), 0.11);
+    EXPECT_DOUBLE_EQ(local_view.GetGaussianResult().mdpde.GetModel().GetOffset(), 0.22);
 
     const auto loaded_analysis_view{ loaded_model->GetAnalysisView() };
     EXPECT_DOUBLE_EQ(
-        loaded_analysis_view.GetAtomGroupMean(group_key).GetIntercept(),
+        loaded_analysis_view.GetAtomGroupMean(group_key).GetOffset(),
         0.33);
     EXPECT_DOUBLE_EQ(
-        loaded_analysis_view.GetAtomGroupMDPDE(group_key).GetIntercept(),
+        loaded_analysis_view.GetAtomGroupMDPDE(group_key).GetOffset(),
         0.44);
     EXPECT_DOUBLE_EQ(
-        loaded_analysis_view.GetAtomGroupPrior(group_key).GetIntercept(),
+        loaded_analysis_view.GetAtomGroupPrior(group_key).GetOffset(),
         0.55);
     EXPECT_DOUBLE_EQ(
         loaded_analysis_view.GetAtomGroupPriorWithUncertainty(group_key)
             .GetStandardDeviationModel()
-            .GetIntercept(),
+            .GetOffset(),
         0.03);
 
     rg::AtomObject * annotated_atom{ nullptr };
@@ -284,9 +284,9 @@ TEST(DataObjectPersistenceTest, GaussianInterceptRoundTripPreservesAnalysisResul
         rg::AtomLocalPotentialView::RequireFor(*annotated_atom).GetGaussianResult()
     };
     ASSERT_TRUE(gaussian_result.posterior.has_value());
-    EXPECT_DOUBLE_EQ(gaussian_result.posterior->GetModel().GetIntercept(), 0.66);
+    EXPECT_DOUBLE_EQ(gaussian_result.posterior->GetModel().GetOffset(), 0.66);
     EXPECT_DOUBLE_EQ(
-        gaussian_result.posterior->GetStandardDeviationModel().GetIntercept(),
+        gaussian_result.posterior->GetStandardDeviationModel().GetOffset(),
         0.04);
 }
 

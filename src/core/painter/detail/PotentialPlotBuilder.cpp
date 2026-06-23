@@ -664,10 +664,10 @@ std::optional<GaussianModel3DWithUncertainty> PotentialPlotBuilder::ComputeCompo
 {
     double amplitude{ 0.0 };
     double width{ 0.0 };
-    double intercept{ 0.0 };
+    double offset{ 0.0 };
     double amplitude_sd{ 0.0 };
     double width_sd{ 0.0 };
-    double intercept_sd{ 0.0 };
+    double offset_sd{ 0.0 };
     std::size_t count{ 0 };
     for (const auto group_key : CollectComponentAtomGroupKeys(model_view, atom_key))
     {
@@ -676,10 +676,10 @@ std::optional<GaussianModel3DWithUncertainty> PotentialPlotBuilder::ComputeCompo
         const auto & uncertainty{ prior.GetStandardDeviationModel() };
         amplitude += model.GetAmplitude();
         width += model.GetWidth();
-        intercept += model.GetIntercept();
+        offset += model.GetOffset();
         amplitude_sd += uncertainty.GetAmplitude();
         width_sd += uncertainty.GetWidth();
-        intercept_sd += uncertainty.GetIntercept();
+        offset_sd += uncertainty.GetOffset();
         count++;
     }
     if (count == 0)
@@ -688,8 +688,8 @@ std::optional<GaussianModel3DWithUncertainty> PotentialPlotBuilder::ComputeCompo
     }
     const auto scale{ 1.0 / static_cast<double>(count) };
     return GaussianModel3DWithUncertainty{
-        GaussianModel3D{ amplitude * scale, width * scale, intercept * scale },
-        GaussianModel3DUncertainty{ amplitude_sd * scale, width_sd * scale, intercept_sd * scale }
+        GaussianModel3D{ amplitude * scale, width * scale, offset * scale },
+        GaussianModel3DUncertainty{ amplitude_sd * scale, width_sd * scale, offset_sd * scale }
     };
 }
 
@@ -729,8 +729,8 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalGausFunctionOLS() cons
     const auto & model{ atom_local_entry.GetEstimateOLS() };
     auto amplitude{ model.GetAmplitude() };
     auto width{ model.GetWidth() };
-    auto intercept{ model.GetIntercept() };
-    return root_helper::CreateGaus3DFunctionIn1D("gaus", amplitude, width, intercept);
+    auto offset{ model.GetOffset() };
+    return root_helper::CreateGaus3DFunctionIn1D("gaus", amplitude, width, offset);
 }
 
 std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalGausFunctionMDPDE() const
@@ -743,8 +743,8 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalGausFunctionMDPDE() co
     const auto & model{ atom_local_entry.GetEstimateMDPDE() };
     auto amplitude{ model.GetAmplitude() };
     auto width{ model.GetWidth() };
-    auto intercept{ model.GetIntercept() };
-    return root_helper::CreateGaus3DFunctionIn1D("gaus", amplitude, width, intercept);
+    auto offset{ model.GetOffset() };
+    return root_helper::CreateGaus3DFunctionIn1D("gaus", amplitude, width, offset);
 }
 
 std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionMean(
@@ -757,8 +757,8 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionMean(
     const auto & mean{ GetModelView().GetAtomGroupMean(group_key) };
     auto amplitude{ mean.GetAmplitude() };
     auto width{ mean.GetWidth() };
-    auto intercept{ mean.GetIntercept() };
-    return root_helper::CreateGaus3DFunctionIn1D("group_gaus_mean", amplitude, width, intercept);
+    auto offset{ mean.GetOffset() };
+    return root_helper::CreateGaus3DFunctionIn1D("group_gaus_mean", amplitude, width, offset);
 }
 
 std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionPrior(
@@ -771,8 +771,8 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionPrior(
     const auto & prior{ GetModelView().GetAtomGroupPrior(group_key) };
     auto amplitude{ prior.GetAmplitude() };
     auto width{ prior.GetWidth() };
-    auto intercept{ prior.GetIntercept() };
-    return root_helper::CreateGaus3DFunctionIn1D("group_gaus_prior", amplitude, width, intercept);
+    auto offset{ prior.GetOffset() };
+    return root_helper::CreateGaus3DFunctionIn1D("group_gaus_prior", amplitude, width, offset);
 }
 
 std::unique_ptr<TF1> PotentialPlotBuilder::CreateComponentAtomAverageGausFunctionPrior(
@@ -792,7 +792,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateComponentAtomAverageGausFunctio
         "component_atom_average_gaus_prior",
         model.GetAmplitude(),
         model.GetWidth(),
-        model.GetIntercept());
+        model.GetOffset());
 }
 
 #endif

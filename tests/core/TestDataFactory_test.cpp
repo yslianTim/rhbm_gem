@@ -122,10 +122,10 @@ TEST(TestDataFactoryTest, BuildLocalTestDataUsesDefaultSamplingDistanceRange)
 {
     constexpr double amplitude{ 2.0 };
     constexpr double width{ 0.5 };
-    constexpr double intercept{ 0.0 };
+    constexpr double offset{ 0.0 };
     const auto input{
         tdf::BuildLocalTestData(tdf::LocalScenario{
-            rg::GaussianModel3D{ amplitude, width, intercept },
+            rg::GaussianModel3D{ amplitude, width, offset },
             1,
             0.0,
             0.0,
@@ -142,7 +142,7 @@ TEST(TestDataFactoryTest, BuildLocalTestDataUsesDefaultSamplingDistanceRange)
 
     const auto expected_response{
         amplitude * ComputeExpectedGaussianResponseAtDistance3D(sample.point.distance, width) +
-            intercept
+            offset
     };
     EXPECT_NEAR(expected_response, sample.response, 1.0e-7);
 }

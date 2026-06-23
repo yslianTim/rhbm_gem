@@ -11,21 +11,21 @@ class GaussianModel3D
 {
     double m_amplitude{ 0.0 };
     double m_width{ 1.0 };
-    double m_intercept{ 0.0 };
+    double m_offset{ 0.0 };
 
     static constexpr int kParameterSize{ 3 };
     static constexpr int kAmplitudeIndex{ 0 };
     static constexpr int kWidthIndex{ 1 };
-    static constexpr int kInterceptIndex{ 2 };
+    static constexpr int kOffsetIndex{ 2 };
 
 public:
     GaussianModel3D() = default;
-    GaussianModel3D(double amplitude, double width, double intercept = 0.0);
+    GaussianModel3D(double amplitude, double width, double offset = 0.0);
 
     static constexpr int ParameterSize() { return kParameterSize; }
     static constexpr int AmplitudeIndex() { return kAmplitudeIndex; }
     static constexpr int WidthIndex() { return kWidthIndex; }
-    static constexpr int InterceptIndex() { return kInterceptIndex; }
+    static constexpr int OffsetIndex() { return kOffsetIndex; }
 
     static void RequireParameterVector(
         const Eigen::VectorXd & parameters,
@@ -43,17 +43,17 @@ public:
 
     GaussianModel3D WithAmplitude(double value) const;
     GaussianModel3D WithWidth(double value) const;
-    GaussianModel3D WithIntercept(double value) const;
+    GaussianModel3D WithOffset(double value) const;
 
     double GetAmplitude() const { return m_amplitude; }
     double GetWidth() const { return m_width; }
-    double GetIntercept() const { return m_intercept; }
+    double GetOffset() const { return m_offset; }
     Eigen::VectorXd ToVector() const;
     double GetModelParameter(int par_id) const;
     double GetDisplayParameter(int par_id) const;
     double Intensity() const;
     double SignalAtDistance(double distance) const;
-    double InterceptBasisAtDistance(double distance) const;
+    double OffsetBasisAtDistance(double distance) const;
     double ResponseAtDistance(double distance) const;
 };
 
@@ -61,11 +61,11 @@ class GaussianModel3DUncertainty
 {
     double m_amplitude{ 0.0 };
     double m_width{ 0.0 };
-    double m_intercept{ 0.0 };
+    double m_offset{ 0.0 };
 
 public:
     GaussianModel3DUncertainty() = default;
-    GaussianModel3DUncertainty(double amplitude, double width, double intercept = 0.0);
+    GaussianModel3DUncertainty(double amplitude, double width, double offset = 0.0);
 
     static void RequireFiniteNonNegativeUncertainty(
         const GaussianModel3DUncertainty & uncertainty,
@@ -73,7 +73,7 @@ public:
 
     double GetAmplitude() const { return m_amplitude; }
     double GetWidth() const { return m_width; }
-    double GetIntercept() const { return m_intercept; }
+    double GetOffset() const { return m_offset; }
     Eigen::VectorXd ToVector() const;
     double GetModelParameter(int par_id) const;
 };

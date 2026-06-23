@@ -275,7 +275,7 @@ void SaveDataOutlierBiasPlot(const RHBMTestRequest & request, const BiasPlotRequ
     #ifdef HAVE_ROOT
     auto file_path{ request.output_dir / plot_request.output_name };
     std::vector<std::string> title_y_list{
-        "Amplitude #font[2]{A}", "Width #tau", "Intercept #font[2]{C}"
+        "Amplitude #font[2]{A}", "Width #tau", "Offset #font[2]{C}"
     };
 
     gStyle->SetLineScalePS(1.5);

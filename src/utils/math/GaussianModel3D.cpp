@@ -19,13 +19,13 @@ void RequireFiniteParameterValues(const Eigen::VectorXd & parameters, std::strin
     const auto name{ std::string(value_name) };
     numeric_validation::RequireFinite(parameters(GaussianModel3D::AmplitudeIndex()), name + " amplitude");
     numeric_validation::RequireFinite(parameters(GaussianModel3D::WidthIndex()), name + " width");
-    numeric_validation::RequireFinite(parameters(GaussianModel3D::InterceptIndex()), name + " intercept");
+    numeric_validation::RequireFinite(parameters(GaussianModel3D::OffsetIndex()), name + " offset");
 }
 
 } // namespace
 
-GaussianModel3D::GaussianModel3D(double amplitude, double width, double intercept) :
-    m_amplitude{ amplitude }, m_width{ width }, m_intercept{ intercept }
+GaussianModel3D::GaussianModel3D(double amplitude, double width, double offset) :
+    m_amplitude{ amplitude }, m_width{ width }, m_offset{ offset }
 {
 }
 
@@ -43,7 +43,7 @@ GaussianModel3D GaussianModel3D::FromVector(const Eigen::VectorXd & parameters)
     return GaussianModel3D{
         parameters(kAmplitudeIndex),
         parameters(kWidthIndex),
-        parameters(kInterceptIndex)
+        parameters(kOffsetIndex)
     };
 }
 
@@ -58,7 +58,7 @@ GaussianModel3D GaussianModel3D::FromVectorPrefix(const Eigen::VectorXd & parame
     return GaussianModel3D{
         parameters(kAmplitudeIndex),
         parameters(kWidthIndex),
-        parameters(kInterceptIndex)
+        parameters(kOffsetIndex)
     };
 }
 
@@ -69,7 +69,7 @@ void GaussianModel3D::RequireFiniteModel(
     const auto name{ std::string(value_name) };
     numeric_validation::RequireFinite(model.GetAmplitude(), name + " amplitude");
     numeric_validation::RequireFinite(model.GetWidth(), name + " width");
-    numeric_validation::RequireFinite(model.GetIntercept(), name + " intercept");
+    numeric_validation::RequireFinite(model.GetOffset(), name + " offset");
 }
 
 void GaussianModel3D::RequireFinitePositiveWidthModel(
@@ -79,20 +79,20 @@ void GaussianModel3D::RequireFinitePositiveWidthModel(
     const auto name{ std::string(value_name) };
     numeric_validation::RequireFinite(model.GetAmplitude(), name + " amplitude");
     numeric_validation::RequireFinitePositive(model.GetWidth(), name + " width");
-    numeric_validation::RequireFinite(model.GetIntercept(), name + " intercept");
+    numeric_validation::RequireFinite(model.GetOffset(), name + " offset");
 }
 
 GaussianModel3D GaussianModel3D::WithAmplitude(double value) const
 {
-    return GaussianModel3D{ value, m_width, m_intercept };
+    return GaussianModel3D{ value, m_width, m_offset };
 }
 
 GaussianModel3D GaussianModel3D::WithWidth(double value) const
 {
-    return GaussianModel3D{ m_amplitude, value, m_intercept };
+    return GaussianModel3D{ m_amplitude, value, m_offset };
 }
 
-GaussianModel3D GaussianModel3D::WithIntercept(double value) const
+GaussianModel3D GaussianModel3D::WithOffset(double value) const
 {
     return GaussianModel3D{ m_amplitude, m_width, value };
 }
@@ -102,7 +102,7 @@ Eigen::VectorXd GaussianModel3D::ToVector() const
     Eigen::VectorXd parameters{ Eigen::VectorXd::Zero(kParameterSize) };
     parameters(kAmplitudeIndex) = m_amplitude;
     parameters(kWidthIndex) = m_width;
-    parameters(kInterceptIndex) = m_intercept;
+    parameters(kOffsetIndex) = m_offset;
     return parameters;
 }
 
@@ -114,8 +114,8 @@ double GaussianModel3D::GetModelParameter(int par_id) const
         return m_amplitude;
     case kWidthIndex:
         return m_width;
-    case kInterceptIndex:
-        return m_intercept;
+    case kOffsetIndex:
+        return m_offset;
     default:
         throw std::out_of_range("GaussianModel3D parameter index is out of range.");
     }
@@ -129,7 +129,7 @@ double GaussianModel3D::GetDisplayParameter(int par_id) const
         return m_amplitude;
     case kWidthIndex:
         return m_width;
-    case kInterceptIndex:
+    case kOffsetIndex:
         return Intensity();
     default:
         throw std::out_of_range("GaussianModel3D display parameter index is out of range.");
@@ -138,15 +138,15 @@ double GaussianModel3D::GetDisplayParameter(int par_id) const
 
 double GaussianModel3D::Intensity() const
 {
-    return WithIntercept(0.0).ResponseAtDistance(0.0);
+    return WithOffset(0.0).ResponseAtDistance(0.0);
 }
 
 double GaussianModel3D::SignalAtDistance(double distance) const
 {
-    return WithIntercept(0.0).ResponseAtDistance(distance);
+    return WithOffset(0.0).ResponseAtDistance(distance);
 }
 
-double GaussianModel3D::InterceptBasisAtDistance(double distance) const
+double GaussianModel3D::OffsetBasisAtDistance(double distance) const
 {
     if (distance < 1.0e-5)
     {
@@ -162,21 +162,21 @@ double GaussianModel3D::ResponseAtDistance(double distance) const
 {
     if (m_width == 0.0)
     {
-        return m_intercept;
+        return m_offset;
     }
     return m_amplitude *
         std::pow(Constants::two_pi * m_width * m_width, -1.5) *
         std::exp(-0.5 * distance * distance / (m_width * m_width)) +
-        m_intercept * InterceptBasisAtDistance(distance);
+        m_offset * OffsetBasisAtDistance(distance);
 }
 
 GaussianModel3DUncertainty::GaussianModel3DUncertainty(
     double amplitude,
     double width,
-    double intercept) :
+    double offset) :
     m_amplitude{ amplitude },
     m_width{ width },
-    m_intercept{ intercept }
+    m_offset{ offset }
 {
 }
 
@@ -192,8 +192,8 @@ void GaussianModel3DUncertainty::RequireFiniteNonNegativeUncertainty(
         uncertainty.GetWidth(),
         name + " width");
     numeric_validation::RequireFiniteNonNegative(
-        uncertainty.GetIntercept(),
-        name + " intercept");
+        uncertainty.GetOffset(),
+        name + " offset");
 }
 
 Eigen::VectorXd GaussianModel3DUncertainty::ToVector() const
@@ -201,7 +201,7 @@ Eigen::VectorXd GaussianModel3DUncertainty::ToVector() const
     Eigen::VectorXd parameters{ Eigen::VectorXd::Zero(GaussianModel3D::ParameterSize()) };
     parameters(GaussianModel3D::AmplitudeIndex()) = m_amplitude;
     parameters(GaussianModel3D::WidthIndex()) = m_width;
-    parameters(GaussianModel3D::InterceptIndex()) = m_intercept;
+    parameters(GaussianModel3D::OffsetIndex()) = m_offset;
     return parameters;
 }
 
@@ -213,8 +213,8 @@ double GaussianModel3DUncertainty::GetModelParameter(int par_id) const
         return m_amplitude;
     case GaussianModel3D::WidthIndex():
         return m_width;
-    case GaussianModel3D::InterceptIndex():
-        return m_intercept;
+    case GaussianModel3D::OffsetIndex():
+        return m_offset;
     default:
         throw std::out_of_range(
             "GaussianModel3DUncertainty parameter index is out of range.");
@@ -242,7 +242,7 @@ double GaussianModel3DWithUncertainty::GetDisplayStandardDeviation(int par_id) c
         return m_standard_deviation.GetAmplitude();
     case GaussianModel3D::WidthIndex():
         return m_standard_deviation.GetWidth();
-    case GaussianModel3D::InterceptIndex():
+    case GaussianModel3D::OffsetIndex():
         return IntensityStandardDeviation();
     default:
         throw std::out_of_range(

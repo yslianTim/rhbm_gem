@@ -180,7 +180,7 @@ void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::
     std::unique_ptr<TF1> gaus_function[main_chain_element_size];
     double amplitude_prior[main_chain_element_size];
     double width_prior[main_chain_element_size];
-    double intercept_prior[main_chain_element_size];
+    double offset_prior[main_chain_element_size];
     std::vector<double> y_array;
     y_array.reserve(model_object->GetSelectedAtomCount());
     for (size_t k = 0; k < main_chain_element_size; k++)
@@ -207,7 +207,7 @@ void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::
         gaus_function[k] = plot_builder->CreateComponentAtomAverageGausFunctionPrior(atom_key);
         amplitude_prior[k] = average_prior->GetDisplayParameter(0);
         width_prior[k] = average_prior->GetDisplayParameter(1);
-        intercept_prior[k] = average_prior->GetModel().GetIntercept();
+        offset_prior[k] = average_prior->GetModel().GetOffset();
     }
 
     auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.15) };
@@ -267,7 +267,7 @@ void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::
             root_helper::SetFillAttribute(result_text[i].get(), 4000);
             result_text[i]->AddText(
                 Form("#font[2]{A} = %.2f  ;  #tau = %.2f  ;  c = %.2f",
-                    amplitude_prior[i], width_prior[i], intercept_prior[i]));
+                    amplitude_prior[i], width_prior[i], offset_prior[i]));
             result_text[i]->Draw();
         }
     }
@@ -759,16 +759,16 @@ void GausPainter::PaintLocalGausSummary(
                 entry_iter->GetAtomGroupPriorWithUncertainty(group_key)
                     .GetDisplayStandardDeviation(1)
             };
-            auto intercept_prior{
-                entry_iter->GetAtomGroupPrior(group_key).GetIntercept()
+            auto offset_prior{
+                entry_iter->GetAtomGroupPrior(group_key).GetOffset()
             };
-            auto intercept_error{
+            auto offset_error{
                 entry_iter->GetAtomGroupPriorWithUncertainty(group_key)
-                    .GetStandardDeviationModel().GetIntercept()
+                    .GetStandardDeviationModel().GetOffset()
             };
             result_text->AddText(Form("#font[2]{#hat{A}} = %.2f #pm %.2f", amplitude_prior, amplitude_error));
             result_text->AddText(Form("#hat{#tau} = %.2f #pm %.2f", width_prior, width_error));
-            result_text->AddText(Form("#hat{c} = %.2f #pm %.2f", intercept_prior, intercept_error));
+            result_text->AddText(Form("#hat{c} = %.2f #pm %.2f", offset_prior, offset_error));
             result_text->Draw();
 
             pad[2]->cd();

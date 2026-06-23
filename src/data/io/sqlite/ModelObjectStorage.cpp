@@ -963,10 +963,10 @@ void SaveAtomLocalPotentialEntryList(
                 4, entry->SamplingEntries());
             statement_db.Bind<double>(5, gaussian_result.ols.GetModel().GetAmplitude());
             statement_db.Bind<double>(6, gaussian_result.ols.GetModel().GetWidth());
-            statement_db.Bind<double>(7, gaussian_result.ols.GetModel().GetIntercept());
+            statement_db.Bind<double>(7, gaussian_result.ols.GetModel().GetOffset());
             statement_db.Bind<double>(8, gaussian_result.mdpde.GetModel().GetAmplitude());
             statement_db.Bind<double>(9, gaussian_result.mdpde.GetModel().GetWidth());
-            statement_db.Bind<double>(10, gaussian_result.mdpde.GetModel().GetIntercept());
+            statement_db.Bind<double>(10, gaussian_result.mdpde.GetModel().GetOffset());
             statement_db.Bind<double>(11, gaussian_result.alpha_r);
         });
     }
@@ -992,7 +992,7 @@ void SaveAtomLocalPotentialEntrySubList(
             statement_db.Bind<int>(2, atom_object->GetSerialID());
             statement_db.Bind<double>(3, posterior.GetModel().GetAmplitude());
             statement_db.Bind<double>(4, posterior.GetModel().GetWidth());
-            statement_db.Bind<double>(5, posterior.GetModel().GetIntercept());
+            statement_db.Bind<double>(5, posterior.GetModel().GetOffset());
             statement_db.Bind<double>(
                 6,
                 posterior.GetStandardDeviationModel().GetAmplitude());
@@ -1001,7 +1001,7 @@ void SaveAtomLocalPotentialEntrySubList(
                 posterior.GetStandardDeviationModel().GetWidth());
             statement_db.Bind<double>(
                 8,
-                posterior.GetStandardDeviationModel().GetIntercept());
+                posterior.GetStandardDeviationModel().GetOffset());
             statement_db.Bind<int>(9, static_cast<int>(gaussian_result.is_outlier));
             statement_db.Bind<double>(10, gaussian_result.statistical_distance);
         });
@@ -1029,16 +1029,16 @@ void SaveAtomGroupPotentialEntryList(
             statement_db.Bind<int>(3, static_cast<int>(group_entry.GetMemberCount(group_key)));
             statement_db.Bind<double>(4, mean.GetAmplitude());
             statement_db.Bind<double>(5, mean.GetWidth());
-            statement_db.Bind<double>(6, mean.GetIntercept());
+            statement_db.Bind<double>(6, mean.GetOffset());
             statement_db.Bind<double>(7, mdpde.GetAmplitude());
             statement_db.Bind<double>(8, mdpde.GetWidth());
-            statement_db.Bind<double>(9, mdpde.GetIntercept());
+            statement_db.Bind<double>(9, mdpde.GetOffset());
             statement_db.Bind<double>(10, prior.GetAmplitude());
             statement_db.Bind<double>(11, prior.GetWidth());
-            statement_db.Bind<double>(12, prior.GetIntercept());
+            statement_db.Bind<double>(12, prior.GetOffset());
             statement_db.Bind<double>(13, prior_standard_deviation.GetAmplitude());
             statement_db.Bind<double>(14, prior_standard_deviation.GetWidth());
-            statement_db.Bind<double>(15, prior_standard_deviation.GetIntercept());
+            statement_db.Bind<double>(15, prior_standard_deviation.GetOffset());
             statement_db.Bind<double>(16, group_entry.GetAlphaG(group_key));
         });
     }

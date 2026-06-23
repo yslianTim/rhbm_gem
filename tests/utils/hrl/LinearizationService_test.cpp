@@ -98,7 +98,7 @@ TEST(LinearizationServiceTest, DecodeParameterVectorMatchesClosedForm)
 
     EXPECT_NEAR(expected_amplitude, estimate.GetAmplitude(), 1.0e-12);
     EXPECT_NEAR(expected_width, estimate.GetWidth(), 1.0e-12);
-    EXPECT_NEAR(0.0, estimate.GetIntercept(), 1.0e-12);
+    EXPECT_NEAR(0.0, estimate.GetOffset(), 1.0e-12);
 }
 
 TEST(LinearizationServiceTest, DecodeParameterVectorReturnsStandardDeviation)
@@ -125,7 +125,7 @@ TEST(LinearizationServiceTest, DecodeParameterVectorReturnsStandardDeviation)
     EXPECT_NEAR(expected_width, gaussian.GetModel().GetWidth(), 1.0e-12);
     EXPECT_NEAR(std::sqrt(expected_var_amplitude), gaussian.GetStandardDeviationModel().GetAmplitude(), 1.0e-12);
     EXPECT_NEAR(std::sqrt(expected_var_width), gaussian.GetStandardDeviationModel().GetWidth(), 1.0e-12);
-    EXPECT_NEAR(0.0, gaussian.GetStandardDeviationModel().GetIntercept(), 1.0e-12);
+    EXPECT_NEAR(0.0, gaussian.GetStandardDeviationModel().GetOffset(), 1.0e-12);
 }
 
 TEST(LinearizationServiceTest, DecodeParameterVectorRejectsMismatchedBasisSize)

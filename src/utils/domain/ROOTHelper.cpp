@@ -152,12 +152,12 @@ std::unique_ptr<TF1> CreateGaus2DFunctionIn1D(
 }
 
 std::unique_ptr<TF1> CreateGaus3DFunctionIn1D(
-    const std::string & name, double amplitude, double width, double intercept, double x_min, double x_max)
+    const std::string & name, double amplitude, double width, double offset, double x_min, double x_max)
 {
     auto function{ std::make_unique<TF1>(name.data(), Gaus3DModelFunction, x_min, x_max, 3) };
     function->SetParameter(0, amplitude);
     function->SetParameter(1, width);
-    function->SetParameter(2, intercept);
+    function->SetParameter(2, offset);
     return function;
 }
 

@@ -200,7 +200,7 @@ void RunSimulationTestOnAtomicModel(const RHBMTestRequest & request)
                 << " one-gaussian reference: " << std::setprecision(3) << std::fixed
                 << reference_gaus.GetAmplitude() << " , "
                 << reference_gaus.GetWidth() << " , "
-                << reference_gaus.GetIntercept();
+                << reference_gaus.GetOffset();
         Logger::Log(LogLevel::Info, stream.str());
     }
 
