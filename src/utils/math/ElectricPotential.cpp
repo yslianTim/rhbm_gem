@@ -252,15 +252,15 @@ double ElectricPotential::CalculateSingleGausModel(Element element, double dista
     auto width_square{ m_blurring_width * m_blurring_width };
     auto distance_square{ distance * distance };
     auto exp_index{ -distance_square/(2.0 * width_square) };
-    auto intercept{ 0.0 };
+    auto offset{ 0.0 };
     if (element == Element::OXYGEN)
     {
-        intercept = -0.1; // TEST
+        offset = -0.1; // TEST
     }
     auto charge_term{ 0.0 };
     if (distance < 1.0e-5)
     {
-        charge_term = intercept * std::sqrt(2.0/M_PI) / m_blurring_width;
+        charge_term = offset * std::sqrt(2.0/M_PI) / m_blurring_width;
     }
     else if (distance > 2.0)
     {
@@ -268,7 +268,7 @@ double ElectricPotential::CalculateSingleGausModel(Element element, double dista
     }
     else
     {
-        charge_term = intercept/distance * std::erf(distance/m_blurring_width/std::sqrt(2.0));
+        charge_term = offset/distance * std::erf(distance/m_blurring_width/std::sqrt(2.0));
     }
     
     return atomic_number * std::pow(2.0 * M_PI * width_square, -1.5) * std::exp(exp_index) + charge_term;
