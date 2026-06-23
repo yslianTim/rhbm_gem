@@ -31,13 +31,13 @@ fitting the intercept.
 
 1. Validate the fit range, `alpha_r`, and `intercept_initial`.
 2. Fit a zero-intercept Gaussian to initialize amplitude and width.
-3. Clamp `intercept_initial` to `[-1.0, 1.0]`.
+3. Clamp `intercept_initial` to ±10% of the initial MDPDE amplitude.
 4. Repeat:
    1. keep the current width and intercept fixed, subtract their intercept
       contribution from every sample, and fit amplitude and width;
    2. keep the new amplitude and width fixed and estimate an intercept from
       residual samples at distances in `[1.0, 2.0]`;
-   3. clamp the estimated intercept to `[-1.0, 1.0]`;
+   3. clamp the estimated intercept to ±10% of the latest MDPDE amplitude;
    4. stop when the intercept change is below `1.0e-5`;
    5. otherwise update the intercept with damping factor `0.5` and continue.
 5. Return the converged fixed-intercept fit. If the loop reaches 100
@@ -112,11 +112,15 @@ outer loop converges immediately.
 
 ## Iteration and Result Selection
 
-For current intercept `c` and clamped candidate `c_raw`:
+For current intercept `c`, latest MDPDE amplitude `a`, and clamped candidate
+`c_raw`:
 
 ```text
+lower  = -0.1 * a
+upper  =  0.1 * a
+c_raw  = clamp(intercept_candidate, lower, upper)
 error  = abs(c_raw - c)
-c_next = clamp(c + 0.5 * (c_raw - c), -1.0, 1.0)
+c_next = clamp(c + 0.5 * (c_raw - c), lower, upper)
 ```
 
 Each iteration records the fixed-intercept signal fit and its `error`.
@@ -132,8 +136,8 @@ this path does not decode parameter uncertainty.
 
 - Signal fitting uses `FitOptions::distance_min` and `distance_max`; intercept
   fitting always uses `[1.0, 2.0]`.
-- The intercept is always constrained to `[-1.0, 1.0]`, independent of sample
-  scale.
+- The intercept range is recalculated from the latest MDPDE amplitude on every
+  iteration. A zero amplitude constrains the intercept to zero.
 - Non-positive adjusted responses do not participate in the logarithmic signal
   fit.
 - Width changes also change the intercept basis used in the next iteration.

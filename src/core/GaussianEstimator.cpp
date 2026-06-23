@@ -41,8 +41,7 @@ constexpr std::size_t kMinimumAlphaRTrainingSampleCount{ 10 };
 constexpr std::size_t kMinimumAlphaGTrainingMemberCount{ 10 };
 constexpr double kResidualInterceptRangeMin{ 1.0 };
 constexpr double kResidualInterceptRangeMax{ 2.0 };
-constexpr double kEstimatedInterceptMin{ -1.0 };
-constexpr double kEstimatedInterceptMax{ 1.0 };
+constexpr double kEstimatedInterceptAmplitudeRatio{ 0.1 };
 constexpr double kInterceptDampingFactor{ 0.5 };
 constexpr double kNeighborContributionCutoffStart{ 2.0 };
 constexpr double kNeighborContributionDistanceMax{ 2.5 };
@@ -64,10 +63,12 @@ struct LocalFittingIterationResult
     std::vector<Eigen::VectorXd> estimation_list;
 };
 
-double ClampEstimatedIntercept(double intercept)
+double ClampEstimatedIntercept(double intercept, double amplitude)
 {
-    if (intercept < kEstimatedInterceptMin) return kEstimatedInterceptMin;
-    if (intercept > kEstimatedInterceptMax) return kEstimatedInterceptMax;
+    const auto intercept_min{ -kEstimatedInterceptAmplitudeRatio * amplitude };
+    const auto intercept_max{ kEstimatedInterceptAmplitudeRatio * amplitude };
+    if (intercept < intercept_min) return intercept_min;
+    if (intercept > intercept_max) return intercept_max;
     return intercept;
 }
 
@@ -807,8 +808,10 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
             options,
             GaussianModel3D{ 0.0, 1.0, 0.0 })
     };
+    const auto initial_amplitude{ result.mdpde.GetModel().GetAmplitude() };
     auto current_model{
-        result.mdpde.GetModel().WithIntercept(ClampEstimatedIntercept(intercept_initial))
+        result.mdpde.GetModel().WithIntercept(
+            ClampEstimatedIntercept(intercept_initial, initial_amplitude))
     };
     double best_intercept{ current_model.GetIntercept() };
     double best_error{ std::numeric_limits<double>::infinity() };
@@ -820,6 +823,7 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
     {
         const auto intercept{ current_model.GetIntercept() };
         result = EstimateLocalGaussianWithOffsetModel(sample_entries, alpha_r, options, current_model);
+        const auto amplitude{ result.mdpde.GetModel().GetAmplitude() };
         const auto raw_intercept{
             ClampEstimatedIntercept(
                 EstimateResidualInterceptParameter(
@@ -827,7 +831,8 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
                     *result.fit_result,
                     alpha_r,
                     execution_options,
-                    intercept))
+                    intercept),
+                amplitude)
         };
         const auto error{ std::abs(raw_intercept - intercept) };
         if (error < best_error)
@@ -858,7 +863,9 @@ LocalGaussianResult EstimateLocalGaussianWithIntercept(
         }
 
         const auto damped_intercept{
-            ClampEstimatedIntercept(intercept + kInterceptDampingFactor * (raw_intercept - intercept))
+            ClampEstimatedIntercept(
+                intercept + kInterceptDampingFactor * (raw_intercept - intercept),
+                amplitude)
         };
         current_model = result.mdpde.GetModel().WithIntercept(damped_intercept);
     }
