@@ -133,7 +133,7 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
 
         std::ostringstream stream;
         stream  << " error_sigma = " << std::setprecision(2) << std::fixed << error_sigma
-                << ", OLS: " << std::setprecision(3)
+                << ", OLS: " << std::setprecision(2)
                 << bias.ols.mean(0) << " , "
                 << bias.ols.mean(1) << " , "
                 << bias.ols.mean(2)
@@ -232,7 +232,7 @@ void RunSimulationTestOnAtomicModel(const RHBMTestRequest & request)
         const auto result_2{ RunAtomicModelFullEstimationTest(input, options) };
 
         std::ostringstream stream;
-        stream  << " Method 1: " << std::setprecision(3) << std::fixed
+        stream  << " Method 1: " << std::setprecision(2) << std::fixed
                 << result_1.mean(0) << " , "
                 << result_1.mean(1) << " , "
                 << result_1.mean(2)

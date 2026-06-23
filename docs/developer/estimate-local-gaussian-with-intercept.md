@@ -1,189 +1,142 @@
-# EstimateLocalGaussianWithIntercept Algorithm Notes
+# Local Gaussian Estimation with Intercept
 
-This note documents the current implementation of
-`rhbm_gem::core::EstimateLocalGaussianWithIntercept` in
-`src/core/GaussianEstimator.cpp`. It is intended as a discussion aid for future
-algorithm changes.
+`rhbm_gem::core::EstimateLocalGaussianWithIntercept` estimates the amplitude,
+width, and intercept of a local `GaussianModel3D`. The implementation is in
+[`src/core/GaussianEstimator.cpp`](/src/core/GaussianEstimator.cpp); the public
+interface and `FitOptions` are in
+[`include/rhbm_gem/core/GaussianEstimator.hpp`](/include/rhbm_gem/core/GaussianEstimator.hpp).
 
-## Purpose
+## Model
 
-`EstimateLocalGaussianWithIntercept` estimates a local three-parameter
-`GaussianModel3D`:
-
-- amplitude
-- width
-- intercept
-
-The underlying beta fit is performed on a zero-intercept response after
-subtracting a fixed intercept offset. The function wraps that fixed-intercept
-fit in an outer fixed-point loop that repeatedly re-estimates the intercept from
-the residuals.
-
-The public inputs are the local samples, `alpha_r`, `FitOptions`, and an optional
-`intercept_initial` whose default is `0.0`. The function requires finite,
-non-negative, ordered fit-range endpoints, a finite non-negative `alpha_r`, and
-a finite initial intercept.
-
-## Fixed-Intercept Fit
-
-The inner fixed-intercept path is implemented by
-`EstimateLocalGaussianWithOffsetModel`.
-
-For each sample, it builds a zero-intercept response by subtracting the offset
-part of the supplied model:
+For distance `r`, the fitted response is:
 
 ```text
-model_offset(distance) = offset_model.ResponseAtDistance(distance)
-                       - offset_model.SignalAtDistance(distance)
-
-updated_response = sample.response - model_offset(distance)
+response(r) = signal(r; amplitude, width)
+            + intercept * intercept_basis(r; width)
 ```
 
-When `offset_model.width != 0`, the offset is:
+The intercept is not a constant vertical offset. Its basis depends on the
+current width:
 
 ```text
-model_offset(distance) = offset_model.intercept
-                       * offset_model.InterceptBasisAtDistance(distance)
+intercept_basis(r; width) =
+    sqrt(2 / pi) / width                              when r < 1.0e-5
+    erf(r / (width * sqrt(2))) / r                    otherwise
 ```
 
-The intercept basis depends on the supplied model width. When
-`offset_model.width == 0`, `GaussianModel3D::ResponseAtDistance` returns the
-intercept directly, so `model_offset(distance) = offset_model.intercept`.
+The estimator therefore alternates between fitting the signal parameters and
+fitting the intercept.
 
-The updated samples are passed to `rhbm_helper::BuildMemberDataset`. The current
-linearization keeps samples in the inclusive requested fit range only when
-`updated_response > 0`, then builds the log-quadratic regression:
+## Algorithm
+
+1. Validate the fit range, `alpha_r`, and `intercept_initial`.
+2. Fit a zero-intercept Gaussian to initialize amplitude and width.
+3. Clamp `intercept_initial` to `[-1.0, 1.0]`.
+4. Repeat:
+   1. keep the current width and intercept fixed, subtract their intercept
+      contribution from every sample, and fit amplitude and width;
+   2. keep the new amplitude and width fixed and estimate an intercept from
+      residual samples at distances in `[1.0, 2.0]`;
+   3. clamp the estimated intercept to `[-1.0, 1.0]`;
+   4. stop when the intercept change is below `1.0e-5`;
+   5. otherwise update the intercept with damping factor `0.5` and continue.
+5. Return the converged fixed-intercept fit. If the loop reaches 100
+   iterations, return the iteration with the smallest intercept change.
+
+The loop uses the default `RHBMExecutionOptions` iteration limit and tolerance.
+`FitOptions` currently controls only the fit range, thread count, and outer-loop
+diagnostic logging.
+
+## Signal Fit with a Fixed Intercept
+
+`EstimateLocalGaussianWithOffsetModel` removes the intercept contribution using
+the supplied model:
 
 ```text
-X(distance) = [1, -0.5 * distance^2]
-y(distance) = log(updated_response)
+adjusted_response(r) =
+    sample_response(r)
+    - (offset_model.ResponseAtDistance(r)
+       - offset_model.SignalAtDistance(r))
 ```
 
-If no sample survives those filters, `BuildDatasetSeries` supplies one
-all-zero basis/response row rather than leaving the dataset empty.
+`rhbm_helper::BuildMemberDataset` then keeps samples that:
 
-`rhbm_helper::EstimateBetaMDPDE` estimates the two zero-intercept beta
-parameters. It receives the `RHBMExecutionOptions` produced by
-`MakeExecutionOptions`, which copies `FitOptions::thread_size`, forces
-`quiet_mode = true`, and leaves the other execution settings at their defaults.
-`DecodeLocalGaussianResult` decodes both the OLS and MDPDE beta vectors, attaches
-`offset_model.intercept`, leaves their standard-deviation models at zero, and
-preserves the `RHBMBetaEstimateResult` in `LocalGaussianResult::fit_result`.
+- are inside the inclusive `FitOptions` distance range; and
+- have a positive adjusted response.
 
-## Outer Fixed-Point Loop
-
-The high-level flow is:
-
-1. Run an initial zero-offset fit.
-2. Build `current_model` from the initial MDPDE model and the clamped
-   `intercept_initial`.
-3. For each outer iteration:
-   - fit the signal with `current_model` as the fixed intercept offset;
-   - estimate a raw intercept from the residuals of that fixed-intercept fit;
-   - clamp the raw intercept into the allowed intercept range;
-   - measure fixed-point error as the absolute difference between the raw
-     intercept and the intercept used for the current fit;
-   - record the fitted result when it has the lowest fixed-point error so far;
-   - damp and clamp the raw intercept update before building the next
-     `current_model`.
-
-The outer loop uses the `max_iterations` and `tolerance` values from the same
-`RHBMExecutionOptions` shape produced by `MakeExecutionOptions` for the inner
-MDPDE fits. At the time of this note, `FitOptions` does not expose either
-setting, so both the inner MDPDE iterations and the outer fixed-point loop use
-the `RHBMExecutionOptions` defaults: `100` iterations and `1.0e-5` tolerance.
-The outer loop's maximum-iteration diagnostic is controlled separately by
-`FitOptions::quiet_mode`; `MakeExecutionOptions` forces only the inner estimator
-calls into quiet mode.
-
-The raw intercept is clamped before error calculation. The outer loop converges
-when the fixed-point error is below
-`RHBMExecutionOptions::tolerance`:
+The retained samples are transformed into a two-parameter log-quadratic
+regression:
 
 ```text
-fixed_point_error = abs(raw_intercept - current_intercept)
+X(r) = [1, -0.5 * r^2]
+y(r) = log(adjusted_response(r))
 ```
 
-The damped update is:
+`rhbm_helper::EstimateBetaMDPDE` fits this dataset with `alpha_r`. The decoded
+MDPDE parameters provide the next amplitude and width; the fixed intercept is
+attached to both the decoded OLS and MDPDE models.
+
+If no sample survives the range and positivity filters, the dataset builder
+uses one zero-valued fallback row.
+
+## Intercept Fit from Residuals
+
+`EstimateResidualInterceptParameter` decodes the current MDPDE signal model and
+uses only samples in the fixed distance range `[1.0, 2.0]`:
 
 ```text
-next_intercept = current_intercept
-               + 0.5 * (raw_intercept - current_intercept)
+X(r) = [signal_model.InterceptBasisAtDistance(r)]
+y(r) = sample_response(r) - signal_model.SignalAtDistance(r)
 ```
 
-## MDPDE Intercept Estimation
-
-The raw intercept is estimated by `EstimateResidualInterceptParameter`.
-
-It decodes the current inner MDPDE beta result into a signal model, thereby
-fixing the amplitude and width for the intercept fit. It then builds a
-one-parameter linear regression dataset from samples whose distances are in
-`[1.0, 2.0]`:
-
-```text
-X(distance) = [signal_model.InterceptBasisAtDistance(distance)]
-y(distance) = sample.response - signal_model.SignalAtDistance(distance)
-```
-
-Samples with a non-finite residual or a non-finite or effectively zero basis are
-omitted. The resulting model is linear in its only beta parameter:
+This is a one-parameter regression through the origin:
 
 ```text
 y = X * intercept
 ```
 
-`rhbm_helper::EstimateBetaMDPDE` estimates this one-element beta vector using
-the same `alpha_r` value and `RHBMExecutionOptions` as the inner amplitude/width
-fit. The MDPDE beta value is used as the raw intercept; the corresponding OLS
-beta is not attached to the returned OLS model.
+The same `alpha_r` and execution options used by the signal fit are passed to
+`rhbm_helper::EstimateBetaMDPDE`. Its one-element MDPDE beta vector is the
+intercept candidate.
 
-Residual intercept estimation returns `current_intercept` unchanged when:
+The current intercept is retained when:
 
-- the decoded MDPDE width is non-finite or non-positive;
-- fewer than two usable regression rows remain;
-- the estimated MDPDE beta does not contain exactly one finite value;
-- a candidate would make any zero-intercept sample response non-finite or too
-  large for the stored `float` response type.
+- the fitted width is non-finite or non-positive;
+- fewer than two finite, non-zero-basis residual samples are available;
+- the estimated beta is not one finite value; or
+- subtracting the candidate intercept would produce a non-finite value or
+  exceed the `float` response range for any sample.
 
-An `EstimateBetaMDPDE` status such as `MAX_ITERATIONS_REACHED` or
-`NUMERICAL_FALLBACK` does not by itself reject the intercept. The candidate is
-accepted when its beta vector has the required finite one-parameter shape and
-passes the zero-intercept sample safety check.
+When the current intercept is retained, the intercept change is zero and the
+outer loop converges immediately.
 
-## Max-Iteration Fallback
+## Iteration and Result Selection
 
-If the outer loop reaches the maximum iteration count before convergence, the
-fallback result is the recorded fixed-intercept fit with the lowest
-fixed-point error:
+For current intercept `c` and clamped candidate `c_raw`:
 
 ```text
-best_error = min(abs(raw_intercept - current_intercept))
+error  = abs(c_raw - c)
+c_next = clamp(c + 0.5 * (c_raw - c), -1.0, 1.0)
 ```
 
-The function normally returns the already-recorded `best_result`; it does not
-refit that candidate despite the wording of the current debug message. Only if
-no best candidate was recorded does it call `EstimateLocalGaussian` with
-`best_intercept` as a last-resort fallback. In normal finite-data paths, the
-first iteration records a candidate because residual intercept estimation falls
-back to the current intercept when it cannot estimate a better one.
+Each iteration records the fixed-intercept signal fit and its `error`.
+Convergence returns the current iteration, whose models still contain `c`.
+Maximum-iteration fallback returns the recorded fit with the lowest `error`;
+it does not perform another fit in the normal fallback path.
 
-The raw intercept update is only used for convergence, fallback ranking, and
-building the next fixed-intercept candidate. The result returned from a
-converged iteration is the fixed-intercept fit for that iteration, with the
-current intercept attached to the decoded OLS and MDPDE models.
+The returned `LocalGaussianResult` preserves the signal fit's
+`RHBMBetaEstimateResult`. Gaussian standard-deviation models remain zero because
+this path does not decode parameter uncertainty.
 
-## Discussion Points
+## Important Implementation Constraints
 
-Items worth revisiting before changing the algorithm further:
-
-- The intercept clamp `[-1.0, 1.0]` is hard-coded and independent of data scale.
-- Residual intercept estimation uses `[1.0, 2.0]`, independent of the configured
-  fit range.
-- The intercept basis changes with the fitted width, so changing the width also
-  changes the response offset subtracted on the next iteration.
-- Samples whose offset-adjusted response is not positive are omitted from the
-  log-quadratic beta fit.
-- The same `alpha_r` controls robustness for both the inner amplitude/width fit
-  and the outer intercept fit.
-- The fixed-point convergence and fallback ranking use only intercept update
-  error, not MDPDE objective value or amplitude/width parameter movement.
+- Signal fitting uses `FitOptions::distance_min` and `distance_max`; intercept
+  fitting always uses `[1.0, 2.0]`.
+- The intercept is always constrained to `[-1.0, 1.0]`, independent of sample
+  scale.
+- Non-positive adjusted responses do not participate in the logarithmic signal
+  fit.
+- Width changes also change the intercept basis used in the next iteration.
+- `alpha_r` controls robustness in both the signal and intercept MDPDE fits.
+- Convergence and fallback ranking consider only intercept change, not
+  amplitude/width movement or the MDPDE objective.

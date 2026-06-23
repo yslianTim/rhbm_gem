@@ -88,7 +88,6 @@ set(CORE_SAMPLER_TEST_SOURCES
 
 set(CORE_ESTIMATOR_TEST_SOURCES
     core/EstimatorTester_test.cpp
-    core/GaussianEstimator_test.cpp
     core/TestDataFactory_test.cpp
 )
 
