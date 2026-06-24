@@ -63,6 +63,8 @@ constexpr double kAdaptiveRelaxationGrowth{ 1.2 };
 constexpr double kAdaptiveRelaxationShrink{ 0.5 };
 constexpr double kAdaptiveRelaxationImprovementRatio{ 0.01 };
 constexpr int kAdaptiveRelaxationIncreaseStreak{ 2 };
+constexpr double kLocalFittingFreezeChangeRatio{ 0.1 };
+constexpr int kLocalFittingFreezeStableIterations{ 3 };
 
 struct ResidualOffsetSample
 {
@@ -75,6 +77,13 @@ struct LocalFittingParameterChangeStats
     double amplitude_change_percentile{ 0.0 };
     double width_change_percentile{ 0.0 };
     double offset_change_percentile{ 0.0 };
+};
+
+struct LocalFittingParameterChange
+{
+    double amplitude_change{ 0.0 };
+    double width_change{ 0.0 };
+    double offset_change{ 0.0 };
 };
 
 struct JointOffsetSystem
@@ -579,8 +588,6 @@ JointOffsetSystem BuildJointOffsetSystem(
 
             for (const auto * neighbor_atom : neighbor_atom_list)
             {
-                const auto column_iter{ atom_column_map.find(neighbor_atom) };
-                if (column_iter == atom_column_map.end()) continue;
                 const auto neighbor_model_iter{ snapshot.find(neighbor_atom) };
                 if (neighbor_model_iter == snapshot.end()) continue;
 
@@ -598,6 +605,8 @@ JointOffsetSystem BuildJointOffsetSystem(
                         "Joint offset neighbor model evaluation is not finite.");
                 }
                 residual -= signal;
+                const auto column_iter{ atom_column_map.find(neighbor_atom) };
+                if (column_iter == atom_column_map.end()) continue;
                 if (std::abs(basis) > std::numeric_limits<double>::epsilon())
                 {
                     row.basis_entries.emplace_back(column_iter->second, basis);
@@ -848,29 +857,50 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(const AtomObject & a
         });
 }
 
-LocalFittingParameterChangeStats CalculateLocalFittingParameterChangeStats(
+std::vector<LocalFittingParameterChange> CalculateLocalFittingParameterChanges(
     const std::vector<Eigen::VectorXd> & current_estimation_list,
     const std::vector<Eigen::VectorXd> & previous_estimation_list)
 {
-    LocalFittingParameterChangeStats stats;
-    std::vector<double> amplitude_change_list(current_estimation_list.size());
-    std::vector<double> width_change_list(current_estimation_list.size());
-    std::vector<double> offset_change_list(current_estimation_list.size());
+    if (current_estimation_list.size() != previous_estimation_list.size())
+    {
+        throw std::invalid_argument("Local fitting parameter change input sizes are inconsistent.");
+    }
+
+    std::vector<LocalFittingParameterChange> change_list(current_estimation_list.size());
     for (size_t i = 0; i < current_estimation_list.size(); i++)
     {
         const auto parameter_delta{ current_estimation_list[i] - previous_estimation_list[i] };
-        const auto amplitude_change{
-            std::abs(parameter_delta(GaussianModel3D::AmplitudeIndex()))
-        };
-        const auto width_change{
-            std::abs(parameter_delta(GaussianModel3D::WidthIndex()))
-        };
-        const auto offset_change{
-            std::abs(parameter_delta(GaussianModel3D::OffsetIndex()))
-        };
-        amplitude_change_list[i] = amplitude_change;
-        width_change_list[i] = width_change;
-        offset_change_list[i] = offset_change;
+        change_list[i].amplitude_change =
+            std::abs(parameter_delta(GaussianModel3D::AmplitudeIndex()));
+        change_list[i].width_change =
+            std::abs(parameter_delta(GaussianModel3D::WidthIndex()));
+        change_list[i].offset_change =
+            std::abs(parameter_delta(GaussianModel3D::OffsetIndex()));
+    }
+    return change_list;
+}
+
+LocalFittingParameterChangeStats SummarizeLocalFittingParameterChangeStats(
+    const std::vector<LocalFittingParameterChange> & change_list,
+    const std::vector<std::size_t> & index_list)
+{
+    LocalFittingParameterChangeStats stats;
+    std::vector<double> amplitude_change_list;
+    std::vector<double> width_change_list;
+    std::vector<double> offset_change_list;
+    amplitude_change_list.reserve(index_list.size());
+    width_change_list.reserve(index_list.size());
+    offset_change_list.reserve(index_list.size());
+    for (const auto index : index_list)
+    {
+        if (index >= change_list.size())
+        {
+            throw std::invalid_argument("Local fitting parameter change index is out of range.");
+        }
+        const auto & change{ change_list.at(index) };
+        amplitude_change_list.emplace_back(change.amplitude_change);
+        width_change_list.emplace_back(change.width_change);
+        offset_change_list.emplace_back(change.offset_change);
     }
 
     stats.amplitude_change_percentile = array_helper::ComputePercentile(
@@ -884,6 +914,92 @@ LocalFittingParameterChangeStats CalculateLocalFittingParameterChangeStats(
         kLocalFittingChangePercentile);
     return stats;
 }
+
+double GetLocalFittingParameterChange(const LocalFittingParameterChange & change)
+{
+    const auto shape_change{
+        change.amplitude_change > change.width_change ?
+            change.amplitude_change :
+            change.width_change
+    };
+    return shape_change > change.offset_change ?
+        shape_change :
+        change.offset_change;
+}
+
+class LocalFittingFreezeTracker
+{
+public:
+    explicit LocalFittingFreezeTracker(std::size_t atom_size)
+        : frozen_list_(atom_size, false),
+          stable_count_list_(atom_size, 0)
+    {
+    }
+
+    std::vector<std::size_t> BuildActiveIndexList() const
+    {
+        std::vector<std::size_t> active_index_list;
+        active_index_list.reserve(frozen_list_.size() - GetFrozenCount());
+        for (std::size_t i = 0; i < frozen_list_.size(); i++)
+        {
+            if (!frozen_list_.at(i))
+            {
+                active_index_list.emplace_back(i);
+            }
+        }
+        return active_index_list;
+    }
+
+    void Update(
+        const std::vector<LocalFittingParameterChange> & change_list,
+        const std::vector<std::size_t> & active_index_list)
+    {
+        if (change_list.size() != frozen_list_.size())
+        {
+            throw std::invalid_argument("Local fitting freeze tracker input size is inconsistent.");
+        }
+
+        const auto freeze_threshold{
+            std::sqrt(kLocalFittingParameterChangeTolerance) * kLocalFittingFreezeChangeRatio
+        };
+        for (const auto index : active_index_list)
+        {
+            if (index >= frozen_list_.size())
+            {
+                throw std::invalid_argument("Local fitting active index is out of range.");
+            }
+            if (frozen_list_.at(index)) continue;
+
+            if (GetLocalFittingParameterChange(change_list.at(index)) < freeze_threshold)
+            {
+                stable_count_list_.at(index)++;
+                if (stable_count_list_.at(index) >= kLocalFittingFreezeStableIterations)
+                {
+                    frozen_list_.at(index) = true;
+                }
+            }
+            else
+            {
+                stable_count_list_.at(index) = 0;
+            }
+        }
+    }
+
+    std::size_t GetFrozenCount() const
+    {
+        return static_cast<std::size_t>(
+            std::count(frozen_list_.begin(), frozen_list_.end(), true));
+    }
+
+    std::size_t GetActiveCount() const
+    {
+        return frozen_list_.size() - GetFrozenCount();
+    }
+
+private:
+    std::vector<bool> frozen_list_;
+    std::vector<int> stable_count_list_;
+};
 
 bool IsLocalFittingParameterChangeConverged(const LocalFittingParameterChangeStats & stats)
 {
@@ -1046,8 +1162,26 @@ LocalGaussianResult FitAtomWithJointOffsetFallback(
     return result;
 }
 
+std::vector<AtomObject *> BuildActiveAtomList(
+    const std::vector<AtomObject *> & atom_list,
+    const std::vector<std::size_t> & active_index_list)
+{
+    std::vector<AtomObject *> active_atom_list;
+    active_atom_list.reserve(active_index_list.size());
+    for (const auto index : active_index_list)
+    {
+        if (index >= atom_list.size())
+        {
+            throw std::invalid_argument("Local fitting active atom index is out of range.");
+        }
+        active_atom_list.emplace_back(atom_list.at(index));
+    }
+    return active_atom_list;
+}
+
 LocalFittingState RunLocalFittingIteration(
     const std::vector<AtomObject *> & atom_list,
+    const std::vector<std::size_t> & active_index_list,
     const LocalFittingState & previous_state,
     const FitOptions & options)
 {
@@ -1060,31 +1194,30 @@ LocalFittingState RunLocalFittingIteration(
     auto current_snapshot{
         BuildFittedGaussianSnapshot(atom_list, previous_state.estimation_list)
     };
+    const auto active_atom_list{ BuildActiveAtomList(atom_list, active_index_list) };
     const auto joint_offset{
-        EstimateJointOffsets(atom_list, current_snapshot)
+        EstimateJointOffsets(active_atom_list, current_snapshot)
     };
-    ApplyJointOffsetsToSnapshot(atom_list, joint_offset, current_snapshot);
-    LocalFittingState iteration_state{
-        std::vector<LocalGaussianResult>(selected_atom_size),
-        std::vector<Eigen::VectorXd>(selected_atom_size)
-    };
+    ApplyJointOffsetsToSnapshot(active_atom_list, joint_offset, current_snapshot);
+    auto iteration_state{ previous_state };
 
 #ifdef USE_OPENMP
     #pragma omp parallel for num_threads(options.thread_size)
 #endif
-    for (size_t i = 0; i < selected_atom_size; i++)
+    for (size_t i = 0; i < active_index_list.size(); i++)
     {
-        const auto & atom{ *atom_list[i] };
+        const auto state_index{ active_index_list.at(i) };
+        const auto & atom{ *atom_list.at(state_index) };
         auto result{
             FitAtomWithJointOffsetFallback(
                 atom,
-                previous_state.result_list.at(i),
+                previous_state.result_list.at(state_index),
                 current_snapshot,
                 options)
         };
         const auto fitted_model{ result.mdpde.GetModel() };
-        iteration_state.estimation_list[i] = fitted_model.ToVector();
-        iteration_state.result_list[i] = std::move(result);
+        iteration_state.estimation_list.at(state_index) = fitted_model.ToVector();
+        iteration_state.result_list.at(state_index) = std::move(result);
     }
     return iteration_state;
 }
@@ -1423,20 +1556,39 @@ void RunSecondStageLocalFitting(
     LocalFittingParameterChangeStats best_change_stats;
     bool has_best_iteration_result{ false };
     LocalFittingRelaxationController relaxation_controller{ options.relaxation_factor };
+    LocalFittingFreezeTracker freeze_tracker{ atom_size };
     for (size_t iter = 0; iter < kLocalFittingMaximumIterations; iter++)
     {
+        const auto active_index_list{ freeze_tracker.BuildActiveIndexList() };
+        if (active_index_list.empty())
+        {
+            ApplyLocalFittingState(previous_state, local_editor_list);
+            if (!options.quiet_mode)
+            {
+                Logger::FinishProgressLine();
+                Logger::Log(LogLevel::Info,
+                    "Converged after " + std::to_string(iter) +
+                    " iterations because all local atoms are frozen.");
+            }
+            break;
+        }
+
         auto current_state{
             RunLocalFittingIteration(
                 atom_list,
+                active_index_list,
                 previous_state,
                 options)
         };
         const auto beta{ relaxation_controller.GetBeta() };
         ApplyLocalFittingUnderRelaxation(current_state, previous_state, beta);
-        const auto change_stats{
-            CalculateLocalFittingParameterChangeStats(
+        const auto change_list{
+            CalculateLocalFittingParameterChanges(
                 current_state.estimation_list,
                 previous_state.estimation_list)
+        };
+        const auto change_stats{
+            SummarizeLocalFittingParameterChangeStats(change_list, active_index_list)
         };
         relaxation_controller.Update(change_stats);
         if (!has_best_iteration_result ||
@@ -1446,6 +1598,7 @@ void RunSecondStageLocalFitting(
             best_change_stats = change_stats;
             has_best_iteration_result = true;
         }
+        freeze_tracker.Update(change_list, active_index_list);
 
         if (!options.quiet_mode)
         {
@@ -1460,8 +1613,25 @@ void RunSecondStageLocalFitting(
                 << ", percentile offset change = "
                 << change_stats.offset_change_percentile
                 << ", beta = "
-                << beta;
+                << beta
+                << ", active atoms = "
+                << freeze_tracker.GetActiveCount()
+                << ", frozen atoms = "
+                << freeze_tracker.GetFrozenCount();
             Logger::ProgressLine(progress_message.str());
+        }
+
+        if (freeze_tracker.GetActiveCount() == 0)
+        {
+            ApplyLocalFittingState(current_state, local_editor_list);
+            if (!options.quiet_mode)
+            {
+                Logger::FinishProgressLine();
+                Logger::Log(LogLevel::Info,
+                    "Converged after " + std::to_string(iter + 1) +
+                    " iterations because all local atoms are frozen.");
+            }
+            break;
         }
 
         const auto converged{ IsLocalFittingParameterChangeConverged(change_stats) };

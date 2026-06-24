@@ -5,9 +5,9 @@ Gaussian estimates after the first-stage per-atom fit. The implementation is in
 [`src/core/GaussianEstimator.cpp`](/src/core/GaussianEstimator.cpp).
 
 This stage is a fixed-point iteration across atoms. Each iteration estimates a
-joint offset update, refits every atom with neighbor contributions removed, then
-uses percentile parameter movement to decide whether the whole selected set has
-converged.
+joint offset update for the active atoms, refits those atoms with neighbor
+contributions removed, then uses percentile parameter movement to decide whether
+the active set has converged.
 
 ## Inputs and State
 
@@ -38,10 +38,12 @@ updated model vectors are stable enough.
 ```text
 previous state
     -> build fitted Gaussian snapshot
-    -> estimate joint offsets
-    -> refit each atom with neighbor contributions removed
+    -> build active atom set
+    -> estimate joint offsets for active atoms
+    -> refit active atoms with neighbor contributions removed
     -> apply under-relaxation
-    -> compute p95 parameter changes
+    -> compute active-atom p95 parameter changes
+    -> freeze stable atoms
     -> converge, fallback, or continue
 ```
 
@@ -49,17 +51,18 @@ The maximum iteration count is `kLocalFittingMaximumIterations` (`100`).
 
 ## Joint Offset Step
 
-`RunLocalFittingIteration` first converts the previous per-atom vectors into a
-snapshot keyed by atom pointer. `EstimateJointOffsets` then solves one sparse
-linear system for all selected atom offsets.
+`RunLocalFittingIteration` first converts the full previous per-atom vectors
+into a snapshot keyed by atom pointer. `EstimateJointOffsets` then solves one
+sparse linear system for active atom offsets. Frozen atoms remain in the
+snapshot, but they do not become columns in the linear system.
 
-For each sample on each selected atom:
+For each sample on each active atom:
 
 1. subtract the target atom's current zero-offset signal;
 2. add the target atom's offset basis as the row entry for that atom;
 3. subtract selected neighbors' current zero-offset signals when their distance
    is within `kNeighborContributionDistanceMax`; and
-4. add each selected neighbor's offset basis as another row entry.
+4. add each active selected neighbor's offset basis as another row entry.
 
 The resulting system is solved with weighted ridge regression. The ridge term is
 relative to the previous offsets, so weakly constrained columns stay close to
@@ -73,8 +76,9 @@ runs.
 
 ## Per-Atom Refit
 
-After joint offsets are attached to the snapshot, each selected atom is refit.
-This loop may run under OpenMP using `FitOptions::thread_size`.
+After joint offsets are attached to the snapshot, each active atom is refit.
+Frozen atoms are copied from the previous state without a new fit. The active
+loop may run under OpenMP using `FitOptions::thread_size`.
 
 For each atom:
 
@@ -109,9 +113,15 @@ relaxed vector replaces the candidate MDPDE model while preserving its
 standard-deviation model.
 
 The stage then computes absolute parameter movement for amplitude, width, and
-offset for every selected atom. Each component is summarized by the 95th
-percentile. The candidate is considered converged only when all three squared
-percentile changes are below `kLocalFittingParameterChangeTolerance`.
+offset for every selected atom. Active atoms are summarized by the 95th
+percentile. The candidate is considered converged only when all three active-set
+squared percentile changes are below `kLocalFittingParameterChangeTolerance`.
+
+Atoms are frozen when their maximum absolute parameter movement stays below
+`sqrt(kLocalFittingParameterChangeTolerance) * 0.1` for three consecutive active
+iterations. Frozen atoms are not thawed. They no longer participate in the joint
+offset solve or per-atom refit, but their fitted Gaussian remains in the
+snapshot so active neighbors can subtract them as fixed signal contributions.
 
 The best fixed-point candidate is tracked separately. A candidate is better when
 the maximum of its three percentile changes is lower than the previous best.
@@ -126,7 +136,8 @@ There are two exit paths:
   far and log a warning when logging is enabled.
 
 On non-terminal iterations, the relaxed estimation and result vectors become the
-previous state for the next loop iteration.
+previous state for the next loop iteration. If every atom becomes frozen, the
+current state is applied and the stage exits.
 
 ## Related Notes
 
