@@ -79,6 +79,12 @@ struct JointOffsetSystem
     Eigen::VectorXd ridge_diagonal;
 };
 
+struct JointOffsetNormalEquation
+{
+    Eigen::SparseMatrix<double> normal_matrix;
+    Eigen::VectorXd right_hand_side;
+};
+
 struct JointOffsetRow
 {
     std::vector<std::pair<Eigen::Index, double>> basis_entries;
@@ -634,10 +640,9 @@ JointOffsetSystem BuildJointOffsetSystem(
     return system;
 }
 
-bool SolveJointOffsetWeightedRidge(
+JointOffsetNormalEquation BuildJointOffsetNormalEquation(
     const JointOffsetSystem & system,
-    const Eigen::VectorXd & weight,
-    Eigen::VectorXd & offset)
+    const Eigen::VectorXd & weight)
 {
     auto weighted_design{ system.design_matrix };
     for (Eigen::Index column = 0; column < weighted_design.outerSize(); column++)
@@ -659,17 +664,43 @@ bool SolveJointOffsetWeightedRidge(
         normal_matrix.coeffRef(i, i) += system.ridge_diagonal(i);
     }
     normal_matrix.makeCompressed();
-    const Eigen::VectorXd right_hand_side{
+    Eigen::VectorXd right_hand_side{
         weighted_design.transpose() * weighted_response +
         system.ridge_diagonal.cwiseProduct(system.previous_offset)
     };
 
-    Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> solver;
-    solver.compute(normal_matrix);
-    if (solver.info() != Eigen::Success) return false;
-    offset = solver.solve(right_hand_side);
-    return solver.info() == Eigen::Success && offset.allFinite();
+    return { std::move(normal_matrix), std::move(right_hand_side) };
 }
+
+class JointOffsetWeightedRidgeSolver
+{
+public:
+    explicit JointOffsetWeightedRidgeSolver(const JointOffsetSystem & system)
+    {
+        const Eigen::VectorXd weight{ Eigen::VectorXd::Ones(system.response.size()) };
+        auto equation{ BuildJointOffsetNormalEquation(system, weight) };
+        solver_.analyzePattern(equation.normal_matrix);
+        analysis_success_ = solver_.info() == Eigen::Success;
+    }
+
+    bool Solve(
+        const JointOffsetSystem & system,
+        const Eigen::VectorXd & weight,
+        Eigen::VectorXd & offset)
+    {
+        if (!analysis_success_) return false;
+
+        auto equation{ BuildJointOffsetNormalEquation(system, weight) };
+        solver_.factorize(equation.normal_matrix);
+        if (solver_.info() != Eigen::Success) return false;
+        offset = solver_.solve(equation.right_hand_side);
+        return solver_.info() == Eigen::Success && offset.allFinite();
+    }
+
+private:
+    Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> solver_;
+    bool analysis_success_{ false };
+};
 
 Eigen::VectorXd EstimateJointOffsets(
     const std::vector<AtomObject *> & atom_list,
@@ -697,8 +728,9 @@ Eigen::VectorXd EstimateJointOffsets(
     }
 
     Eigen::VectorXd weight{ Eigen::VectorXd::Ones(system.response.size()) };
+    JointOffsetWeightedRidgeSolver solver{ system };
     Eigen::VectorXd offset;
-    if (!SolveJointOffsetWeightedRidge(system, weight, offset))
+    if (!solver.Solve(system, weight, offset))
     {
         return previous_offset;
     }
@@ -726,7 +758,7 @@ Eigen::VectorXd EstimateJointOffsets(
         }
 
         Eigen::VectorXd updated_offset;
-        if (!SolveJointOffsetWeightedRidge(system, weight, updated_offset))
+        if (!solver.Solve(system, weight, updated_offset))
         {
             return system.previous_offset;
         }
