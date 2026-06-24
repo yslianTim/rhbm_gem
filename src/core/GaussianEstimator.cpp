@@ -1185,17 +1185,6 @@ GroupGaussianResult EstimateGroupGaussian(
     return result;
 }
 
-LocalGaussianResult FitFirstStageLocalAtom(const AtomObject & atom, const FitOptions & options)
-{
-    const auto local_view{ AtomLocalPotentialView::RequireFor(atom) };
-    auto sample_entries{ local_view.GetSamplingEntries() };
-    return EstimateLocalGaussianWithOffset(
-        sample_entries,
-        local_view.GetAlphaR(),
-        options,
-        0.0);
-}
-
 void RunLocalAlphaTraining(ModelObject & model_object, const FitOptions & options)
 {
     auto analysis{ model_object.EditAnalysis() };
@@ -1295,7 +1284,13 @@ void RunFirstStageLocalFitting(ModelObject & model_object, const FitOptions & op
 #endif
     for (size_t i = 0; i < selected_atom_size; i++)
     {
-        local_editor_list[i].SetGaussianResult(FitFirstStageLocalAtom(*atom_list[i], options));
+        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
+        auto sample_entries{ local_view.GetSamplingEntries() };
+        auto result{
+            EstimateLocalGaussianWithOffset(
+                sample_entries, local_view.GetAlphaR(), options, 0.0)
+        };
+        local_editor_list[i].SetGaussianResult(result);
 
 #ifdef USE_OPENMP
         #pragma omp critical
