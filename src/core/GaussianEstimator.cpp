@@ -57,6 +57,12 @@ constexpr double kHuberCutoffMultiplier{ 1.345 };
 constexpr double kOffsetRegularizationAmplitudeRatio{ 0.1 };
 constexpr double kOffsetRegularizationPriorScaleMin{ 1.0e-12 };
 constexpr double kJointOffsetRidgeRatio{ 1.0e-3 };
+constexpr double kAdaptiveRelaxationMin{ 0.05 };
+constexpr double kAdaptiveRelaxationMax{ 1.0 };
+constexpr double kAdaptiveRelaxationGrowth{ 1.2 };
+constexpr double kAdaptiveRelaxationShrink{ 0.5 };
+constexpr double kAdaptiveRelaxationImprovementRatio{ 0.01 };
+constexpr int kAdaptiveRelaxationIncreaseStreak{ 2 };
 
 struct ResidualOffsetSample
 {
@@ -899,6 +905,57 @@ double GetLocalFittingParameterChange(const LocalFittingParameterChangeStats & s
         stats.offset_change_percentile;
 }
 
+class LocalFittingRelaxationController
+{
+public:
+    explicit LocalFittingRelaxationController(double initial_beta)
+        : beta_{ std::clamp(initial_beta, kAdaptiveRelaxationMin, kAdaptiveRelaxationMax) }
+    {
+    }
+
+    double GetBeta() const
+    {
+        return beta_;
+    }
+
+    void Update(const LocalFittingParameterChangeStats & stats)
+    {
+        const auto change{ GetLocalFittingParameterChange(stats) };
+        if (!has_previous_change_)
+        {
+            previous_change_ = change;
+            has_previous_change_ = true;
+            return;
+        }
+
+        if (change > previous_change_ * (1.0 + kAdaptiveRelaxationImprovementRatio))
+        {
+            beta_ = std::max(kAdaptiveRelaxationMin, beta_ * kAdaptiveRelaxationShrink);
+            improvement_streak_ = 0;
+        }
+        else if (change < previous_change_ * (1.0 - kAdaptiveRelaxationImprovementRatio))
+        {
+            improvement_streak_++;
+            if (improvement_streak_ >= kAdaptiveRelaxationIncreaseStreak)
+            {
+                beta_ = std::min(kAdaptiveRelaxationMax, beta_ * kAdaptiveRelaxationGrowth);
+                improvement_streak_ = 0;
+            }
+        }
+        else
+        {
+            improvement_streak_ = 0;
+        }
+        previous_change_ = change;
+    }
+
+private:
+    double beta_;
+    double previous_change_{ 0.0 };
+    int improvement_streak_{ 0 };
+    bool has_previous_change_{ false };
+};
+
 bool IsBetterLocalFittingCandidate(
     const LocalFittingParameterChangeStats & stats,
     const LocalFittingParameterChangeStats & best_stats)
@@ -1365,6 +1422,7 @@ void RunSecondStageLocalFitting(
     LocalFittingState best_state;
     LocalFittingParameterChangeStats best_change_stats;
     bool has_best_iteration_result{ false };
+    LocalFittingRelaxationController relaxation_controller{ options.relaxation_factor };
     for (size_t iter = 0; iter < kLocalFittingMaximumIterations; iter++)
     {
         auto current_state{
@@ -1373,12 +1431,14 @@ void RunSecondStageLocalFitting(
                 previous_state,
                 options)
         };
-        ApplyLocalFittingUnderRelaxation(current_state, previous_state, options.relaxation_factor);
+        const auto beta{ relaxation_controller.GetBeta() };
+        ApplyLocalFittingUnderRelaxation(current_state, previous_state, beta);
         const auto change_stats{
             CalculateLocalFittingParameterChangeStats(
                 current_state.estimation_list,
                 previous_state.estimation_list)
         };
+        relaxation_controller.Update(change_stats);
         if (!has_best_iteration_result ||
             IsBetterLocalFittingCandidate(change_stats, best_change_stats))
         {
@@ -1398,7 +1458,9 @@ void RunSecondStageLocalFitting(
                 << ", percentile width change = "
                 << change_stats.width_change_percentile
                 << ", percentile offset change = "
-                << change_stats.offset_change_percentile;
+                << change_stats.offset_change_percentile
+                << ", beta = "
+                << beta;
             Logger::ProgressLine(progress_message.str());
         }
 

@@ -100,8 +100,13 @@ The raw iteration result is under-relaxed before convergence is checked:
 relaxed = beta * current + (1 - beta) * previous
 ```
 
-`beta` is `FitOptions::relaxation_factor`. The relaxed vector replaces the
-candidate MDPDE model while preserving its standard-deviation model.
+`beta` starts from `FitOptions::relaxation_factor` and is clamped to the
+source-local adaptive relaxation range. After each iteration, the controller
+looks at the maximum of the three 95th-percentile parameter changes. Sustained
+decrease allows `beta` to grow toward `1.0`; an increase immediately shrinks it.
+This is a trend-based adaptive relaxation rule, not Anderson acceleration. The
+relaxed vector replaces the candidate MDPDE model while preserving its
+standard-deviation model.
 
 The stage then computes absolute parameter movement for amplitude, width, and
 offset for every selected atom. Each component is summarized by the 95th
