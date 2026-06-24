@@ -31,6 +31,8 @@
 #include <vector>
 
 #include <Eigen/Dense>
+#include <Eigen/Sparse>
+#include <Eigen/SparseCholesky>
 
 #ifdef USE_OPENMP
 #include <omp.h>
@@ -42,7 +44,6 @@ constexpr std::size_t kMinimumAlphaRTrainingSampleCount{ 10 };
 constexpr std::size_t kMinimumAlphaGTrainingMemberCount{ 10 };
 constexpr double kResidualOffsetRangeMin{ 1.0 };
 constexpr double kResidualOffsetRangeMax{ 2.0 };
-constexpr double kEstimatedOffsetAmplitudeRatio{ 0.1 };
 constexpr double kOffsetDampingFactor{ 0.5 };
 constexpr double kNeighborContributionDistanceMax{ 2.5 };
 constexpr std::size_t kLocalFittingMaximumIterations{ 100 };
@@ -53,6 +54,9 @@ constexpr double kHuberSlopeTolerance{ 1.0e-8 };
 constexpr double kHuberScaleMultiplier{ 1.4826 };
 constexpr double kHuberScaleMin{ 1.0e-12 };
 constexpr double kHuberCutoffMultiplier{ 1.345 };
+constexpr double kOffsetRegularizationAmplitudeRatio{ 0.1 };
+constexpr double kOffsetRegularizationPriorScaleMin{ 1.0e-12 };
+constexpr double kJointOffsetRidgeRatio{ 1.0e-3 };
 
 struct ResidualOffsetSample
 {
@@ -67,20 +71,25 @@ struct LocalFittingParameterChangeStats
     double offset_change_percentile{ 0.0 };
 };
 
+struct JointOffsetSystem
+{
+    Eigen::SparseMatrix<double> design_matrix;
+    Eigen::VectorXd response;
+    Eigen::VectorXd previous_offset;
+    Eigen::VectorXd ridge_diagonal;
+};
+
+struct JointOffsetRow
+{
+    std::vector<std::pair<Eigen::Index, double>> basis_entries;
+    double response{ 0.0 };
+};
+
 struct LocalFittingIterationResult
 {
     std::vector<LocalGaussianResult> result_list;
     std::vector<Eigen::VectorXd> estimation_list;
 };
-
-double ClampEstimatedOffset(double offset, double amplitude)
-{
-    const auto offset_min{ -kEstimatedOffsetAmplitudeRatio * amplitude };
-    const auto offset_max{ kEstimatedOffsetAmplitudeRatio * amplitude };
-    if (offset < offset_min) return offset_min;
-    if (offset > offset_max) return offset_max;
-    return offset;
-}
 
 std::vector<AtomLocalPotentialEditor> BuildSelectedAtomLocalEditors(ModelObject & model_object)
 {
@@ -182,8 +191,20 @@ double ComputeHuberResidualScale(
         kHuberScaleMin);
 }
 
+double ComputeOffsetRegularizationLambda(double residual_scale, double amplitude)
+{
+    const auto prior_scale{
+        std::max(
+            std::abs(amplitude) * kOffsetRegularizationAmplitudeRatio,
+            kOffsetRegularizationPriorScaleMin)
+    };
+    const auto lambda{ residual_scale / prior_scale };
+    return lambda * lambda;
+}
+
 bool EstimateHuberSlopeThroughOrigin(
     const std::vector<ResidualOffsetSample> & sample_list,
+    double amplitude,
     double & slope)
 {
     if (sample_list.empty())
@@ -199,6 +220,7 @@ bool EstimateHuberSlopeThroughOrigin(
     {
         const auto scale{ ComputeHuberResidualScale(sample_list, slope) };
         const auto cutoff{ kHuberCutoffMultiplier * scale };
+        const auto lambda{ ComputeOffsetRegularizationLambda(scale, amplitude) };
         double numerator{ 0.0 };
         double denominator{ 0.0 };
         for (const auto & sample : sample_list)
@@ -209,6 +231,7 @@ bool EstimateHuberSlopeThroughOrigin(
             numerator += weight * sample.basis * sample.residual;
             denominator += weight * sample.basis * sample.basis;
         }
+        denominator += lambda;
         if (!std::isfinite(numerator) ||
             !std::isfinite(denominator) ||
             denominator <= std::numeric_limits<double>::epsilon())
@@ -263,7 +286,10 @@ double EstimateResidualOffsetParameter(
         residual_sample_list.emplace_back(ResidualOffsetSample{ basis, residual });
     }
     double candidate_offset{ current_offset };
-    if (!EstimateHuberSlopeThroughOrigin(residual_sample_list, candidate_offset))
+    if (!EstimateHuberSlopeThroughOrigin(
+            residual_sample_list,
+            signal_model.GetAmplitude(),
+            candidate_offset))
     {
         return current_offset;
     }
@@ -494,6 +520,243 @@ FittedGaussianSnapshot BuildFittedGaussianSnapshot(
     return snapshot;
 }
 
+JointOffsetSystem BuildJointOffsetSystem(
+    const std::vector<AtomObject *> & atom_list,
+    const FittedGaussianSnapshot & snapshot)
+{
+    std::unordered_map<const AtomObject *, Eigen::Index> atom_column_map;
+    atom_column_map.reserve(atom_list.size());
+    for (std::size_t i = 0; i < atom_list.size(); i++)
+    {
+        atom_column_map.emplace(atom_list.at(i), static_cast<Eigen::Index>(i));
+    }
+
+    std::vector<JointOffsetRow> row_list;
+    for (const auto * atom : atom_list)
+    {
+        const auto model_iter{ snapshot.find(atom) };
+        if (model_iter == snapshot.end())
+        {
+            throw std::invalid_argument("Joint offset snapshot is missing an atom.");
+        }
+        const auto target_column{ atom_column_map.at(atom) };
+        const auto & target_model{ model_iter->second };
+        const auto sample_entries{
+            AtomLocalPotentialView::RequireFor(*atom).GetSamplingEntries(false)
+        };
+        const auto neighbor_atom_list{ atom->FindNeighborAtoms() };
+        for (const auto & sample : sample_entries)
+        {
+            if (!std::isfinite(static_cast<double>(sample.response)))
+            {
+                throw std::runtime_error("Joint offset sample response is not finite.");
+            }
+            const auto target_distance{ static_cast<double>(sample.point.distance) };
+            const auto target_signal{ target_model.SignalAtDistance(target_distance) };
+            const auto target_basis{ target_model.OffsetBasisAtDistance(target_distance) };
+            if (!std::isfinite(target_signal) || !std::isfinite(target_basis))
+            {
+                throw std::runtime_error("Joint offset target model evaluation is not finite.");
+            }
+            auto residual{ static_cast<double>(sample.response) - target_signal };
+            JointOffsetRow row;
+            if (std::abs(target_basis) > std::numeric_limits<double>::epsilon())
+            {
+                row.basis_entries.emplace_back(target_column, target_basis);
+            }
+
+            for (const auto * neighbor_atom : neighbor_atom_list)
+            {
+                const auto column_iter{ atom_column_map.find(neighbor_atom) };
+                if (column_iter == atom_column_map.end()) continue;
+                const auto neighbor_model_iter{ snapshot.find(neighbor_atom) };
+                if (neighbor_model_iter == snapshot.end()) continue;
+
+                const auto distance{
+                    static_cast<double>(
+                        array_helper::ComputeNorm<float>(sample.point.position, neighbor_atom->GetPosition()))
+                };
+                if (distance > kNeighborContributionDistanceMax) continue;
+                const auto & neighbor_model{ neighbor_model_iter->second };
+                const auto signal{ neighbor_model.SignalAtDistance(distance) };
+                const auto basis{ neighbor_model.OffsetBasisAtDistance(distance) };
+                if (!std::isfinite(signal) || !std::isfinite(basis))
+                {
+                    throw std::runtime_error(
+                        "Joint offset neighbor model evaluation is not finite.");
+                }
+                residual -= signal;
+                if (std::abs(basis) > std::numeric_limits<double>::epsilon())
+                {
+                    row.basis_entries.emplace_back(column_iter->second, basis);
+                }
+            }
+            if (!std::isfinite(residual))
+            {
+                throw std::runtime_error("Joint offset residual is not finite.");
+            }
+            if (row.basis_entries.empty()) continue;
+            row.response = residual;
+            row_list.emplace_back(std::move(row));
+        }
+    }
+
+    const auto row_count{ static_cast<Eigen::Index>(row_list.size()) };
+    const auto column_count{ static_cast<Eigen::Index>(atom_list.size()) };
+    std::vector<Eigen::Triplet<double>> triplet_list;
+    Eigen::VectorXd response{ Eigen::VectorXd::Zero(row_count) };
+    Eigen::VectorXd column_square_sum{ Eigen::VectorXd::Zero(column_count) };
+    for (Eigen::Index row_index = 0; row_index < row_count; row_index++)
+    {
+        const auto & row{ row_list.at(static_cast<std::size_t>(row_index)) };
+        response(row_index) = row.response;
+        for (const auto & [column_index, basis] : row.basis_entries)
+        {
+            triplet_list.emplace_back(row_index, column_index, basis);
+            column_square_sum(column_index) += basis * basis;
+        }
+    }
+
+    JointOffsetSystem system;
+    system.design_matrix.resize(row_count, column_count);
+    system.design_matrix.setFromTriplets(triplet_list.begin(), triplet_list.end());
+    system.response = std::move(response);
+    system.previous_offset = Eigen::VectorXd::Zero(column_count);
+    system.ridge_diagonal = Eigen::VectorXd::Zero(column_count);
+    for (Eigen::Index column_index = 0; column_index < column_count; column_index++)
+    {
+        const auto & model{ snapshot.at(atom_list.at(static_cast<std::size_t>(column_index))) };
+        system.previous_offset(column_index) = model.GetOffset();
+        const auto square_sum{ column_square_sum(column_index) };
+        system.ridge_diagonal(column_index) =
+            square_sum > std::numeric_limits<double>::epsilon() ? kJointOffsetRidgeRatio * square_sum : 1.0;
+    }
+    return system;
+}
+
+bool SolveJointOffsetWeightedRidge(
+    const JointOffsetSystem & system,
+    const Eigen::VectorXd & weight,
+    Eigen::VectorXd & offset)
+{
+    auto weighted_design{ system.design_matrix };
+    for (Eigen::Index column = 0; column < weighted_design.outerSize(); column++)
+    {
+        for (Eigen::SparseMatrix<double>::InnerIterator iter(weighted_design, column);
+             iter;
+             ++iter)
+        {
+            iter.valueRef() *= std::sqrt(weight(iter.row()));
+        }
+    }
+    const auto weighted_response{ weight.array().sqrt().matrix().cwiseProduct(system.response) };
+    Eigen::SparseMatrix<double> normal_matrix{
+        weighted_design.transpose() * weighted_design
+    };
+    const auto column_count{ normal_matrix.cols() };
+    for (Eigen::Index i = 0; i < column_count; i++)
+    {
+        normal_matrix.coeffRef(i, i) += system.ridge_diagonal(i);
+    }
+    normal_matrix.makeCompressed();
+    const Eigen::VectorXd right_hand_side{
+        weighted_design.transpose() * weighted_response +
+        system.ridge_diagonal.cwiseProduct(system.previous_offset)
+    };
+
+    Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> solver;
+    solver.compute(normal_matrix);
+    if (solver.info() != Eigen::Success) return false;
+    offset = solver.solve(right_hand_side);
+    return solver.info() == Eigen::Success && offset.allFinite();
+}
+
+Eigen::VectorXd EstimateJointOffsets(
+    const std::vector<AtomObject *> & atom_list,
+    const FittedGaussianSnapshot & snapshot)
+{
+    Eigen::VectorXd previous_offset{
+        Eigen::VectorXd::Zero(static_cast<Eigen::Index>(atom_list.size()))
+    };
+    for (std::size_t i = 0; i < atom_list.size(); i++)
+    {
+        previous_offset(static_cast<Eigen::Index>(i)) = snapshot.at(atom_list.at(i)).GetOffset();
+    }
+    JointOffsetSystem system;
+    try
+    {
+        system = BuildJointOffsetSystem(atom_list, snapshot);
+    }
+    catch (const std::exception &)
+    {
+        return previous_offset;
+    }
+    if (system.response.size() == 0 || system.previous_offset.size() == 0)
+    {
+        return previous_offset;
+    }
+
+    Eigen::VectorXd weight{ Eigen::VectorXd::Ones(system.response.size()) };
+    Eigen::VectorXd offset;
+    if (!SolveJointOffsetWeightedRidge(system, weight, offset))
+    {
+        return previous_offset;
+    }
+
+    for (int iteration = 0; iteration < kHuberSlopeMaximumIterations; iteration++)
+    {
+        const Eigen::VectorXd residual{ system.response - system.design_matrix * offset };
+        std::vector<double> residual_list(residual.data(), residual.data() + residual.size());
+        const auto median_residual{ array_helper::ComputeMedian(residual_list) };
+        std::vector<double> deviation_list;
+        deviation_list.reserve(residual_list.size());
+        for (const auto value : residual_list)
+        {
+            deviation_list.emplace_back(std::abs(value - median_residual));
+        }
+        const auto residual_scale{ std::max(
+            kHuberScaleMultiplier * array_helper::ComputeMedian(deviation_list),
+            kHuberScaleMin)
+        };
+        const auto cutoff{ kHuberCutoffMultiplier * residual_scale };
+        for (Eigen::Index i = 0; i < residual.size(); i++)
+        {
+            const auto absolute_residual{ std::abs(residual(i)) };
+            weight(i) = absolute_residual <= cutoff ? 1.0 : cutoff / absolute_residual;
+        }
+
+        Eigen::VectorXd updated_offset;
+        if (!SolveJointOffsetWeightedRidge(system, weight, updated_offset))
+        {
+            return system.previous_offset;
+        }
+        const auto maximum_change{ (updated_offset - offset).cwiseAbs().maxCoeff() };
+        offset = std::move(updated_offset);
+        if (maximum_change < kHuberSlopeTolerance) break;
+    }
+
+    return offset;
+}
+
+FittedGaussianSnapshot WithJointOffsets(
+    const std::vector<AtomObject *> & atom_list,
+    const FittedGaussianSnapshot & snapshot,
+    const Eigen::VectorXd & offset)
+{
+    if (atom_list.size() != static_cast<std::size_t>(offset.size()))
+    {
+        throw std::invalid_argument("Joint offset result size is inconsistent.");
+    }
+    auto updated_snapshot{ snapshot };
+    for (std::size_t i = 0; i < atom_list.size(); i++)
+    {
+        updated_snapshot.at(atom_list.at(i)) =
+            updated_snapshot.at(atom_list.at(i)).WithOffset(
+                offset(static_cast<Eigen::Index>(i)));
+    }
+    return updated_snapshot;
+}
+
 template <typename GaussianLookup>
 LocalPotentialSampleList UpdateSampleListWithGaussianLookup(
     const AtomObject & atom,
@@ -519,8 +782,7 @@ LocalPotentialSampleList UpdateSampleListWithGaussianLookup(
                     array_helper::ComputeNorm<float>(sample_position, neighbor_position))
             };
             if (distance > kNeighborContributionDistanceMax) continue;
-            //response_value -= static_cast<float>(gaussian->ResponseAtDistance(distance));
-            response_value -= static_cast<float>(gaussian->SignalAtDistance(distance));
+            response_value -= static_cast<float>(gaussian->ResponseAtDistance(distance));
         }
         updated_list.emplace_back(LocalPotentialSample{response_value, sample.point });
     }
@@ -627,9 +889,9 @@ void ApplyLocalFittingUnderRelaxation(
     }
     for (std::size_t i = 0; i < iteration_result.estimation_list.size(); i++)
     {
-        const auto relaxed_estimation{
-            beta * iteration_result.estimation_list.at(i) +
-            (1.0 - beta) * previous_estimation_list.at(i)
+        auto relaxed_estimation{
+            (beta * iteration_result.estimation_list.at(i) +
+            (1.0 - beta) * previous_estimation_list.at(i)).eval()
         };
         const auto relaxed_model{ GaussianModel3D::FromVector(relaxed_estimation) };
         auto & result{ iteration_result.result_list.at(i) };
@@ -675,7 +937,15 @@ LocalFittingIterationResult RunLocalFittingIteration(
     {
         throw std::invalid_argument("Local fitting iteration input sizes are inconsistent.");
     }
-    const auto snapshot{ BuildFittedGaussianSnapshot(atom_list, input_estimation_list) };
+    const auto current_snapshot{
+        BuildFittedGaussianSnapshot(atom_list, input_estimation_list)
+    };
+    const auto joint_offset{
+        EstimateJointOffsets(atom_list, current_snapshot)
+    };
+    const auto offset_snapshot{
+        WithJointOffsets(atom_list, current_snapshot, joint_offset)
+    };
     LocalFittingIterationResult iteration_result{
         std::vector<LocalGaussianResult>(selected_atom_size),
         std::vector<Eigen::VectorXd>(selected_atom_size)
@@ -688,23 +958,34 @@ LocalFittingIterationResult RunLocalFittingIteration(
     {
         const auto & atom{ *atom_list[i] };
         const auto local_view{ AtomLocalPotentialView::RequireFor(atom) };
-        auto sample_entries{ UpdateSampleListWithFittedGaussian(atom, snapshot) };
+        auto sample_entries{
+            UpdateSampleListWithFittedGaussian(atom, offset_snapshot)
+        };
         auto result{ input_result_list.at(i) };
-        const auto offset{ snapshot.at(&atom).GetOffset() };
+        const auto & offset_model{ offset_snapshot.at(&atom) };
+        bool candidate_accepted{ false };
         try
         {
             auto candidate_result{
-                EstimateLocalGaussianWithOffset(
-                    sample_entries, local_view.GetAlphaR(), options, offset)
+                EstimateLocalGaussianWithOffsetModel(
+                    sample_entries,
+                    local_view.GetAlphaR(),
+                    options,
+                    offset_model)
             };
             if (CanBuildFiniteZeroOffsetSamples(sample_entries, candidate_result.mdpde.GetModel()))
             {
                 result = std::move(candidate_result);
+                candidate_accepted = true;
             }
         }
         catch (const std::exception &)
         {
-            result = input_result_list.at(i);
+        }
+        if (!candidate_accepted)
+        {
+            result.ols = WithModelOffset(result.ols, offset_model.GetOffset());
+            result.mdpde = WithModelOffset(result.mdpde, offset_model.GetOffset());
         }
         const auto fitted_model{ result.mdpde.GetModel() };
         iteration_result.estimation_list[i] = fitted_model.ToVector();
@@ -823,11 +1104,7 @@ LocalGaussianResult EstimateLocalGaussianWithOffset(
             options,
             GaussianModel3D{ 0.0, 1.0, 0.0 })
     };
-    const auto initial_amplitude{ result.mdpde.GetModel().GetAmplitude() };
-    auto current_model{
-        result.mdpde.GetModel().WithOffset(
-            ClampEstimatedOffset(offset_initial, initial_amplitude))
-    };
+    auto current_model{ result.mdpde.GetModel().WithOffset(offset_initial) };
     double best_offset{ current_model.GetOffset() };
     double best_error{ std::numeric_limits<double>::infinity() };
     auto best_result{ result };
@@ -838,14 +1115,8 @@ LocalGaussianResult EstimateLocalGaussianWithOffset(
     {
         const auto offset{ current_model.GetOffset() };
         result = EstimateLocalGaussianWithOffsetModel(sample_entries, alpha_r, options, current_model);
-        const auto amplitude{ result.mdpde.GetModel().GetAmplitude() };
         const auto raw_offset{
-            ClampEstimatedOffset(
-                EstimateResidualOffsetParameter(
-                    sample_entries,
-                    *result.fit_result,
-                    offset),
-                amplitude)
+            EstimateResidualOffsetParameter(sample_entries, *result.fit_result, offset)
         };
         const auto candidate_model{ result.mdpde.GetModel().WithOffset(raw_offset) };
         const auto error{
@@ -878,11 +1149,7 @@ LocalGaussianResult EstimateLocalGaussianWithOffset(
             break;
         }
 
-        const auto damped_offset{
-            ClampEstimatedOffset(
-                offset + kOffsetDampingFactor * (raw_offset - offset),
-                amplitude)
-        };
+        const auto damped_offset{ offset + kOffsetDampingFactor * (raw_offset - offset) };
         current_model = result.mdpde.GetModel().WithOffset(damped_offset);
     }
     return result;

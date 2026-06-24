@@ -31,17 +31,16 @@ fitting the offset.
 
 1. Validate the fit range, `alpha_r`, and `offset_initial`.
 2. Fit a zero-offset Gaussian to initialize amplitude and width.
-3. Clamp `offset_initial` to ±10% of the initial MDPDE amplitude.
+3. Combine the initial amplitude and width with `offset_initial`.
 4. Repeat:
    1. keep the current width and offset fixed, subtract their offset
       contribution from every sample, and fit amplitude and width;
    2. keep the new amplitude and width fixed and estimate an offset from
       residual samples at distances in `[1.0, 2.0]`;
-   3. clamp the estimated offset to ±10% of the latest MDPDE amplitude;
-   4. combine the new amplitude and width with the clamped offset candidate,
+   3. combine the new amplitude and width with the regularized offset candidate,
       then stop when its three-parameter L2 distance from the current model is
       below `1.0e-5`;
-   5. otherwise update the offset with damping factor `0.5` and continue.
+   4. otherwise update the offset with damping factor `0.5` and continue.
 5. Return the converged fixed-offset fit. If the loop reaches 100
    iterations, return the iteration with the smallest three-parameter L2
    distance.
@@ -92,20 +91,29 @@ X(r) = [signal_model.OffsetBasisAtDistance(r)]
 y(r) = sample_response(r) - signal_model.SignalAtDistance(r)
 ```
 
-This is a one-parameter regression through the origin:
+This is a one-parameter regression through the origin with a zero-centered
+ridge prior:
 
 ```text
-y = X * offset
+minimize sum Huber(y_i - X_i * offset) + 0.5 * lambda * offset^2
 ```
 
 The offset is estimated with a Huber M-estimator. The solver starts from the
 ordinary least-squares slope, computes a robust residual scale from median
-absolute deviation, and iteratively applies Huber weights:
+absolute deviation, and iteratively applies Huber weights with the ridge term
+added to the weighted normal-equation denominator:
 
 ```text
-scale  = max(1.4826 * MAD, 1.0e-12)
-cutoff = 1.345 * scale
+scale       = max(1.4826 * MAD, 1.0e-12)
+cutoff      = 1.345 * scale
+prior_scale = max(abs(amplitude) * 0.1, 1.0e-12)
+lambda      = (scale / prior_scale)^2
+offset_next = sum(w_i * X_i * y_i) / (sum(w_i * X_i^2) + lambda)
 ```
+
+The `0.1` amplitude ratio is a soft prior scale, not a hard bound. The
+regularization shrinks weak or noisy residual-offset estimates toward zero, but
+it does not guarantee an absolute offset range.
 
 Iteration stops when the slope change is below `1.0e-8` or after 50
 iterations. This outer offset fit does not use `alpha_r`.
@@ -123,20 +131,18 @@ by enough to exceed the convergence tolerance.
 
 ## Iteration and Result Selection
 
-For current model `m_current`, latest MDPDE signal model `m_fit`, latest
-amplitude `a`, and clamped candidate offset `c_raw`:
+For current model `m_current`, latest MDPDE signal model `m_fit`, and
+regularized candidate offset `c_raw`:
 
 ```text
-lower     = -0.1 * a
-upper     =  0.1 * a
-c_raw     = clamp(offset_candidate, lower, upper)
+c_raw     = regularized_offset_candidate
 m_raw     = m_fit.WithOffset(c_raw)
 error     = norm(m_raw.ToVector() - m_current.ToVector())
-c_next    = clamp(c + 0.5 * (c_raw - c), lower, upper)
+c_next    = c + 0.5 * (c_raw - c)
 ```
 
 The norm is the unnormalized Euclidean distance across amplitude, width, and
-offset. It uses the raw clamped offset candidate before damping. Each iteration
+offset. It uses the regularized offset candidate before damping. Each iteration
 records the fixed-offset signal fit and its `error`.
 Convergence returns the current iteration, whose models still contain `c`.
 Maximum-iteration fallback returns the recorded fit with the lowest `error`;
@@ -150,8 +156,9 @@ this path does not decode parameter uncertainty.
 
 - Signal fitting uses `FitOptions::distance_min` and `distance_max`; offset
   fitting always uses `[1.0, 2.0]`.
-- The offset range is recalculated from the latest MDPDE amplitude on every
-  iteration. A zero amplitude constrains the offset to zero.
+- The offset prior scale is recalculated from the latest MDPDE amplitude on
+  every iteration. A zero amplitude uses the minimum prior scale and strongly
+  regularizes the offset toward zero.
 - Non-positive adjusted responses do not participate in the logarithmic signal
   fit.
 - Width changes also change the offset basis used in the next iteration.
