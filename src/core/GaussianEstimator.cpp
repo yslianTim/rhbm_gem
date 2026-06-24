@@ -85,7 +85,7 @@ struct JointOffsetRow
     double response{ 0.0 };
 };
 
-struct LocalFittingIterationResult
+struct LocalFittingState
 {
     std::vector<LocalGaussianResult> result_list;
     std::vector<Eigen::VectorXd> estimation_list;
@@ -738,23 +738,20 @@ Eigen::VectorXd EstimateJointOffsets(
     return offset;
 }
 
-FittedGaussianSnapshot WithJointOffsets(
+void ApplyJointOffsetsToSnapshot(
     const std::vector<AtomObject *> & atom_list,
-    const FittedGaussianSnapshot & snapshot,
-    const Eigen::VectorXd & offset)
+    const Eigen::VectorXd & offset,
+    FittedGaussianSnapshot & snapshot)
 {
     if (atom_list.size() != static_cast<std::size_t>(offset.size()))
     {
         throw std::invalid_argument("Joint offset result size is inconsistent.");
     }
-    auto updated_snapshot{ snapshot };
     for (std::size_t i = 0; i < atom_list.size(); i++)
     {
-        updated_snapshot.at(atom_list.at(i)) =
-            updated_snapshot.at(atom_list.at(i)).WithOffset(
-                offset(static_cast<Eigen::Index>(i)));
+        snapshot.at(atom_list.at(i)) =
+            snapshot.at(atom_list.at(i)).WithOffset(offset(static_cast<Eigen::Index>(i)));
     }
-    return updated_snapshot;
 }
 
 template <typename GaussianLookup>
@@ -878,28 +875,29 @@ bool IsBetterLocalFittingCandidate(
 }
 
 void ApplyLocalFittingUnderRelaxation(
-    LocalFittingIterationResult & iteration_result,
-    const std::vector<Eigen::VectorXd> & previous_estimation_list,
+    LocalFittingState & current_state,
+    const LocalFittingState & previous_state,
     double beta)
 {
-    if (iteration_result.estimation_list.size() != previous_estimation_list.size() ||
-        iteration_result.result_list.size() != previous_estimation_list.size())
+    if (current_state.estimation_list.size() != previous_state.estimation_list.size() ||
+        current_state.result_list.size() != previous_state.result_list.size() ||
+        current_state.result_list.size() != previous_state.estimation_list.size())
     {
         throw std::invalid_argument("Local fitting relaxation input sizes are inconsistent.");
     }
-    for (std::size_t i = 0; i < iteration_result.estimation_list.size(); i++)
+    for (std::size_t i = 0; i < current_state.estimation_list.size(); i++)
     {
         auto relaxed_estimation{
-            (beta * iteration_result.estimation_list.at(i) +
-            (1.0 - beta) * previous_estimation_list.at(i)).eval()
+            (beta * current_state.estimation_list.at(i) +
+            (1.0 - beta) * previous_state.estimation_list.at(i)).eval()
         };
         const auto relaxed_model{ GaussianModel3D::FromVector(relaxed_estimation) };
-        auto & result{ iteration_result.result_list.at(i) };
+        auto & result{ current_state.result_list.at(i) };
         result.mdpde = GaussianModel3DWithUncertainty{
             relaxed_model,
             result.mdpde.GetStandardDeviationModel()
         };
-        iteration_result.estimation_list.at(i) = relaxed_estimation;
+        current_state.estimation_list.at(i) = relaxed_estimation;
     }
 }
 
@@ -926,27 +924,58 @@ LocalGaussianResult EstimateLocalGaussianWithOffsetModel(
     return DecodeLocalGaussianResult(alpha_r, result, offset_model.GetOffset());
 }
 
-LocalFittingIterationResult RunLocalFittingIteration(
+LocalGaussianResult FitAtomWithJointOffsetFallback(
+    const AtomObject & atom,
+    const LocalGaussianResult & previous_result,
+    const FittedGaussianSnapshot & offset_snapshot,
+    const FitOptions & options)
+{
+    const auto local_view{ AtomLocalPotentialView::RequireFor(atom) };
+    auto sample_entries{ UpdateSampleListWithFittedGaussian(atom, offset_snapshot) };
+    const auto & offset_model{ offset_snapshot.at(&atom) };
+    try
+    {
+        auto candidate_result{
+            EstimateLocalGaussianWithOffsetModel(
+                sample_entries,
+                local_view.GetAlphaR(),
+                options,
+                offset_model)
+        };
+        if (CanBuildFiniteZeroOffsetSamples(sample_entries, candidate_result.mdpde.GetModel()))
+        {
+            return candidate_result;
+        }
+    }
+    catch (const std::exception &)
+    {
+    }
+
+    auto result{ previous_result };
+    result.ols = WithModelOffset(result.ols, offset_model.GetOffset());
+    result.mdpde = WithModelOffset(result.mdpde, offset_model.GetOffset());
+    return result;
+}
+
+LocalFittingState RunLocalFittingIteration(
     const std::vector<AtomObject *> & atom_list,
-    const std::vector<Eigen::VectorXd> & input_estimation_list,
-    const std::vector<LocalGaussianResult> & input_result_list,
+    const LocalFittingState & previous_state,
     const FitOptions & options)
 {
     const auto selected_atom_size{ atom_list.size() };
-    if (input_result_list.size() != selected_atom_size)
+    if (previous_state.result_list.size() != selected_atom_size ||
+        previous_state.estimation_list.size() != selected_atom_size)
     {
         throw std::invalid_argument("Local fitting iteration input sizes are inconsistent.");
     }
-    const auto current_snapshot{
-        BuildFittedGaussianSnapshot(atom_list, input_estimation_list)
+    auto current_snapshot{
+        BuildFittedGaussianSnapshot(atom_list, previous_state.estimation_list)
     };
     const auto joint_offset{
         EstimateJointOffsets(atom_list, current_snapshot)
     };
-    const auto offset_snapshot{
-        WithJointOffsets(atom_list, current_snapshot, joint_offset)
-    };
-    LocalFittingIterationResult iteration_result{
+    ApplyJointOffsetsToSnapshot(atom_list, joint_offset, current_snapshot);
+    LocalFittingState iteration_state{
         std::vector<LocalGaussianResult>(selected_atom_size),
         std::vector<Eigen::VectorXd>(selected_atom_size)
     };
@@ -957,56 +986,33 @@ LocalFittingIterationResult RunLocalFittingIteration(
     for (size_t i = 0; i < selected_atom_size; i++)
     {
         const auto & atom{ *atom_list[i] };
-        const auto local_view{ AtomLocalPotentialView::RequireFor(atom) };
-        auto sample_entries{
-            UpdateSampleListWithFittedGaussian(atom, offset_snapshot)
+        auto result{
+            FitAtomWithJointOffsetFallback(
+                atom,
+                previous_state.result_list.at(i),
+                current_snapshot,
+                options)
         };
-        auto result{ input_result_list.at(i) };
-        const auto & offset_model{ offset_snapshot.at(&atom) };
-        bool candidate_accepted{ false };
-        try
-        {
-            auto candidate_result{
-                EstimateLocalGaussianWithOffsetModel(
-                    sample_entries,
-                    local_view.GetAlphaR(),
-                    options,
-                    offset_model)
-            };
-            if (CanBuildFiniteZeroOffsetSamples(sample_entries, candidate_result.mdpde.GetModel()))
-            {
-                result = std::move(candidate_result);
-                candidate_accepted = true;
-            }
-        }
-        catch (const std::exception &)
-        {
-        }
-        if (!candidate_accepted)
-        {
-            result.ols = WithModelOffset(result.ols, offset_model.GetOffset());
-            result.mdpde = WithModelOffset(result.mdpde, offset_model.GetOffset());
-        }
         const auto fitted_model{ result.mdpde.GetModel() };
-        iteration_result.estimation_list[i] = fitted_model.ToVector();
-        iteration_result.result_list[i] = std::move(result);
+        iteration_state.estimation_list[i] = fitted_model.ToVector();
+        iteration_state.result_list[i] = std::move(result);
     }
-    return iteration_result;
+    return iteration_state;
 }
 
-void ApplyLocalFittingIterationResult(
-    const LocalFittingIterationResult & iteration_result,
+void ApplyLocalFittingState(
+    const LocalFittingState & iteration_state,
     std::vector<AtomLocalPotentialEditor> & local_editor_list)
 {
-    if (local_editor_list.size() != iteration_result.result_list.size())
+    if (local_editor_list.size() != iteration_state.result_list.size())
     {
         throw std::invalid_argument(
-            "local_editor_list and iteration_result sizes are inconsistent.");
+            "local_editor_list and local fitting state sizes are inconsistent.");
     }
 
     for (std::size_t i = 0; i < local_editor_list.size(); i++)
     {
-        local_editor_list.at(i).SetGaussianResult(iteration_result.result_list.at(i));
+        local_editor_list.at(i).SetGaussianResult(iteration_state.result_list.at(i));
     }
 }
 
@@ -1105,10 +1111,8 @@ LocalGaussianResult EstimateLocalGaussianWithOffset(
             GaussianModel3D{ 0.0, 1.0, 0.0 })
     };
     auto current_model{ result.mdpde.GetModel().WithOffset(offset_initial) };
-    double best_offset{ current_model.GetOffset() };
     double best_error{ std::numeric_limits<double>::infinity() };
     auto best_result{ result };
-    bool has_best_result{ false };
     auto max_iterations{ execution_options.max_iterations };
     auto tolerance{ execution_options.tolerance };
     for (int t = 0; t < max_iterations; t++)
@@ -1119,15 +1123,11 @@ LocalGaussianResult EstimateLocalGaussianWithOffset(
             EstimateResidualOffsetParameter(sample_entries, *result.fit_result, offset)
         };
         const auto candidate_model{ result.mdpde.GetModel().WithOffset(raw_offset) };
-        const auto error{
-            (candidate_model.ToVector() - current_model.ToVector()).norm()
-        };
+        const auto error{ (candidate_model.ToVector() - current_model.ToVector()).norm() };
         if (error < best_error)
         {
-            best_offset = offset;
             best_error = error;
             best_result = result;
-            has_best_result = true;
         }
         if (error < tolerance)
         {
@@ -1136,9 +1136,7 @@ LocalGaussianResult EstimateLocalGaussianWithOffset(
 
         if (t + 1 == max_iterations)
         {
-            result = has_best_result ?
-                best_result :
-                EstimateLocalGaussian(sample_entries, alpha_r, options, best_offset);
+            result = best_result;
             if (!options.quiet_mode)
             {
                 Logger::Log(LogLevel::Debug,
@@ -1185,6 +1183,17 @@ GroupGaussianResult EstimateGroupGaussian(
     auto result{ DecodeGroupGaussianResult(alpha_g, raw_result, group_offset) };
     result.member_results = DecodeMemberGaussianResults(raw_result, member_result_list);
     return result;
+}
+
+LocalGaussianResult FitFirstStageLocalAtom(const AtomObject & atom, const FitOptions & options)
+{
+    const auto local_view{ AtomLocalPotentialView::RequireFor(atom) };
+    auto sample_entries{ local_view.GetSamplingEntries() };
+    return EstimateLocalGaussianWithOffset(
+        sample_entries,
+        local_view.GetAlphaR(),
+        options,
+        0.0);
 }
 
 void RunLocalAlphaTraining(ModelObject & model_object, const FitOptions & options)
@@ -1270,8 +1279,8 @@ void RunGroupAlphaTraining(ModelObject & model_object, const FitOptions & option
 
 void RunFirstStageLocalFitting(ModelObject & model_object, const FitOptions & options)
 {
-    const auto selected_atom_size{ model_object.GetSelectedAtomCount() };
     const auto & atom_list{ model_object.GetSelectedAtoms() };
+    const auto selected_atom_size{ atom_list.size() };
     auto local_editor_list{ BuildSelectedAtomLocalEditors(model_object) };
     std::atomic<size_t> atom_count{ 0 };
     if (!options.quiet_mode)
@@ -1286,13 +1295,7 @@ void RunFirstStageLocalFitting(ModelObject & model_object, const FitOptions & op
 #endif
     for (size_t i = 0; i < selected_atom_size; i++)
     {
-        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
-        auto sample_entries{ local_view.GetSamplingEntries() };
-        const auto result{
-            EstimateLocalGaussianWithOffset(
-                sample_entries, local_view.GetAlphaR(), options, 0.0)
-        };
-        local_editor_list[i].SetGaussianResult(result);
+        local_editor_list[i].SetGaussianResult(FitFirstStageLocalAtom(*atom_list[i], options));
 
 #ifdef USE_OPENMP
         #pragma omp critical
@@ -1321,36 +1324,38 @@ void RunSecondStageLocalFitting(
         local_editor_list.emplace_back(analysis.EnsureAtomLocalPotential(*atom));
     }
 
-    std::vector<Eigen::VectorXd> previous_estimation_list(atom_size);
-    std::vector<LocalGaussianResult> previous_result_list(atom_size);
+    LocalFittingState previous_state{
+        std::vector<LocalGaussianResult>(atom_size),
+        std::vector<Eigen::VectorXd>(atom_size)
+    };
     for (size_t i = 0; i < atom_size; i++)
     {
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
-        previous_result_list[i] = local_view.GetGaussianResult();
-        previous_estimation_list[i] = previous_result_list[i].mdpde.GetModel().ToVector();
+        previous_state.result_list[i] = local_view.GetGaussianResult();
+        previous_state.estimation_list[i] = previous_state.result_list[i].mdpde.GetModel().ToVector();
     }
 
-    LocalFittingIterationResult best_iteration_result;
+    LocalFittingState best_state;
     LocalFittingParameterChangeStats best_change_stats;
     bool has_best_iteration_result{ false };
     for (size_t iter = 0; iter < kLocalFittingMaximumIterations; iter++)
     {
-        auto iteration_result{
+        auto current_state{
             RunLocalFittingIteration(
                 atom_list,
-                previous_estimation_list,
-                previous_result_list,
+                previous_state,
                 options)
         };
-        ApplyLocalFittingUnderRelaxation(iteration_result, previous_estimation_list, options.relaxation_factor);
+        ApplyLocalFittingUnderRelaxation(current_state, previous_state, options.relaxation_factor);
         const auto change_stats{
             CalculateLocalFittingParameterChangeStats(
-                iteration_result.estimation_list, previous_estimation_list)
+                current_state.estimation_list,
+                previous_state.estimation_list)
         };
         if (!has_best_iteration_result ||
             IsBetterLocalFittingCandidate(change_stats, best_change_stats))
         {
-            best_iteration_result = iteration_result;
+            best_state = current_state;
             best_change_stats = change_stats;
             has_best_iteration_result = true;
         }
@@ -1373,7 +1378,7 @@ void RunSecondStageLocalFitting(
         const auto converged{ IsLocalFittingParameterChangeConverged(change_stats) };
         if (converged)
         {
-            ApplyLocalFittingIterationResult(iteration_result, local_editor_list);
+            ApplyLocalFittingState(current_state, local_editor_list);
             if (!options.quiet_mode)
             {
                 Logger::FinishProgressLine();
@@ -1391,7 +1396,7 @@ void RunSecondStageLocalFitting(
 
         if (iter + 1 == kLocalFittingMaximumIterations)
         {
-            ApplyLocalFittingIterationResult(best_iteration_result, local_editor_list);
+            ApplyLocalFittingState(best_state, local_editor_list);
             if (!options.quiet_mode)
             {
                 Logger::FinishProgressLine();
@@ -1405,8 +1410,7 @@ void RunSecondStageLocalFitting(
                     std::to_string(best_change_stats.offset_change_percentile));
             }
         }
-        previous_estimation_list = std::move(iteration_result.estimation_list);
-        previous_result_list = std::move(iteration_result.result_list);
+        previous_state = std::move(current_state);
     }
 }
 

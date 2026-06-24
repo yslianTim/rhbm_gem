@@ -20,7 +20,7 @@ The function receives:
 
 At entry, it builds one `AtomLocalPotentialEditor` per selected atom and reads
 the current `LocalGaussianResult` from each atom. The previous iteration state is
-stored in two parallel vectors:
+stored as a `LocalFittingState` with two aligned vectors:
 
 ```text
 previous_result_list      = current per-atom LocalGaussianResult
