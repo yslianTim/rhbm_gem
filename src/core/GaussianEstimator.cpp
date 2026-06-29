@@ -1048,6 +1048,59 @@ std::vector<AtomObject *> BuildActiveAtomList(
     return active_atom_list;
 }
 
+std::unordered_map<const AtomObject *, std::size_t> BuildSelectedAtomIndexMap(
+    const std::vector<AtomObject *> & atom_list)
+{
+    std::unordered_map<const AtomObject *, std::size_t> atom_index_map;
+    atom_index_map.reserve(atom_list.size());
+    for (std::size_t i = 0; i < atom_list.size(); i++)
+    {
+        atom_index_map.emplace(atom_list.at(i), i);
+    }
+    return atom_index_map;
+}
+
+std::size_t ThawChangedActiveAtomNeighbors(
+    const std::vector<AtomObject *> & atom_list,
+    const std::unordered_map<const AtomObject *, std::size_t> & atom_index_map,
+    const std::vector<algorithm::ParameterChange> & change_list,
+    const std::vector<std::size_t> & active_index_list,
+    algorithm::ConvergenceFreezeTracker & freeze_tracker)
+{
+    if (change_list.size() != atom_list.size())
+    {
+        throw std::invalid_argument("Local fitting dependency thaw input size is inconsistent.");
+    }
+
+    const double thaw_threshold{ std::sqrt(kLocalFittingParameterChangeTolerance) };
+    std::size_t thaw_count{ 0 };
+    for (const auto active_index : active_index_list)
+    {
+        if (active_index >= atom_list.size())
+        {
+            throw std::invalid_argument("Local fitting dependency thaw active index is out of range.");
+        }
+        if (algorithm::GetMaximumParameterChange(change_list.at(active_index)) < thaw_threshold)
+        {
+            continue;
+        }
+
+        for (const auto * neighbor_atom : atom_list.at(active_index)->FindNeighborAtoms())
+        {
+            const auto neighbor_iter{ atom_index_map.find(neighbor_atom) };
+            if (neighbor_iter == atom_index_map.end()) continue;
+
+            const auto neighbor_index{ neighbor_iter->second };
+            if (!freeze_tracker.IsFrozen(neighbor_index)) continue;
+            if (freeze_tracker.Thaw(neighbor_index))
+            {
+                thaw_count++;
+            }
+        }
+    }
+    return thaw_count;
+}
+
 GaussianFittingState RunLocalFittingIteration(
     const std::vector<AtomObject *> & atom_list,
     const std::vector<std::size_t> & active_index_list,
@@ -1457,6 +1510,7 @@ void RunSecondStageLocalFitting(
         kLocalFittingFreezeChangeRatio,
         kLocalFittingFreezeStableIterations
     };
+    const auto atom_index_map{ BuildSelectedAtomIndexMap(atom_list) };
     for (size_t iter = 0; iter < kLocalFittingMaximumIterations; iter++)
     {
         const auto active_index_list{ freeze_tracker.BuildActiveIndexList() };
@@ -1515,6 +1569,14 @@ void RunSecondStageLocalFitting(
             has_best_candidate = true;
         }
         freeze_tracker.Update(change_list, active_index_list);
+        const auto thaw_count{
+            ThawChangedActiveAtomNeighbors(
+                atom_list,
+                atom_index_map,
+                change_list,
+                active_index_list,
+                freeze_tracker)
+        };
 
         if (!options.quiet_mode)
         {
@@ -1535,7 +1597,9 @@ void RunSecondStageLocalFitting(
                 << ", active atoms = "
                 << freeze_tracker.GetActiveCount()
                 << ", frozen atoms = "
-                << freeze_tracker.GetFrozenCount();
+                << freeze_tracker.GetFrozenCount()
+                << ", thawed atoms = "
+                << thaw_count;
             Logger::ProgressLine(progress_message.str());
         }
 

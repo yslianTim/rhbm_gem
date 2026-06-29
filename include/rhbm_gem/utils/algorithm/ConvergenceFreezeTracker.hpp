@@ -76,6 +76,27 @@ public:
         }
     }
 
+    bool IsFrozen(std::size_t index) const
+    {
+        if (index >= m_frozen_list.size())
+        {
+            throw std::invalid_argument("Convergence freeze tracker index is out of range.");
+        }
+        return m_frozen_list.at(index);
+    }
+
+    bool Thaw(std::size_t index)
+    {
+        if (index >= m_frozen_list.size())
+        {
+            throw std::invalid_argument("Convergence freeze tracker index is out of range.");
+        }
+        const bool was_frozen{ m_frozen_list.at(index) };
+        m_frozen_list.at(index) = false;
+        m_stable_count_list.at(index) = 0;
+        return was_frozen;
+    }
+
     std::size_t GetFrozenCount() const
     {
         return static_cast<std::size_t>(
