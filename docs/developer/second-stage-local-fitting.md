@@ -18,9 +18,9 @@ The function receives:
 - `FitOptions`, which supplies fit distance range, relaxation factor, thread
   count, and logging mode.
 
-At entry, it builds one `AtomLocalPotentialEditor` per selected atom and reads
-the current `LocalGaussianResult` from each atom. The previous iteration state is
-stored as a `LocalFittingState` with two aligned vectors:
+At entry, it builds one `AtomLocalPotentialEditor` per atom in the input list and
+reads the current `LocalGaussianResult` from each atom. The previous iteration
+state is stored as a `GaussianFittingState` with two aligned vectors:
 
 ```text
 previous_result_list      = current per-atom LocalGaussianResult
@@ -46,11 +46,12 @@ previous state
     -> refit active atoms with neighbor contributions removed
     -> apply under-relaxation
     -> compute active-atom p95 parameter changes
-    -> freeze stable atoms
+    -> update candidate ranking and adaptive relaxation
+    -> freeze stable atoms and thaw changed selected neighbors
     -> exit, fallback, or continue
 ```
 
-The maximum iteration count is `kLocalFittingMaximumIterations` (`100`).
+The maximum iteration count is `kLocalFittingMaximumIterations` (`1000`).
 
 ## Joint Offset Step
 
@@ -63,20 +64,24 @@ For each unfiltered sampling entry on each active atom:
 
 1. subtract the target atom's current zero-offset signal;
 2. add the target atom's offset basis as the row entry for that atom;
-3. subtract selected neighbors' current zero-offset signals when those neighbors
-   are present in the snapshot and their distance is within
-   `kNeighborContributionDistanceMax`; and
-4. add each active selected neighbor's offset basis as another row entry.
+3. for selected neighbors present in the snapshot and within
+   `kNeighborContributionDistanceMax`, subtract the full fitted response when
+   the neighbor is not in the active solve; and
+4. for active selected neighbors, subtract the current zero-offset signal and add
+   the neighbor's offset basis as another row entry.
 
 The resulting system is solved with weighted ridge regression. The ridge term is
 relative to the previous offsets, so weakly constrained columns stay close to
 their prior values. Huber weights are then updated from residual median absolute
-deviation until the maximum offset movement is below `kHuberSlopeTolerance` or
-the Huber iteration limit is reached.
+deviation. The IRLS loop stops when the weighted-ridge surrogate objective would
+deteriorate, when the maximum normalized offset movement drops below
+`kJointOffsetIrlsNormalizedChangeTolerance`, or when the Huber iteration limit is
+reached.
 
-If the joint system cannot be built, is empty, or cannot be solved, the step
-falls back to the previous offsets. The rest of the local fitting iteration still
-runs.
+If the joint system cannot be built, is empty, or cannot be solved during the
+initial or robust solve, the step falls back to the previous offsets. The rest of
+the local fitting iteration still runs, and the fallback is counted for the final
+diagnostic summary.
 
 ## Per-Atom Refit
 
@@ -118,15 +123,18 @@ rule, not Anderson acceleration. The relaxed vector replaces the candidate MDPDE
 model while preserving its standard-deviation model.
 
 The stage then computes absolute parameter movement for amplitude, width, and
-offset for every selected atom. Active atoms are summarized by the 95th
-percentile. The candidate is considered converged only when all three active-set
-squared percentile changes are below `kLocalFittingParameterChangeTolerance`.
+offset for every input atom. Active atoms are summarized by the 95th percentile.
+Parameter convergence requires all three active-set squared percentile changes
+to be below `kLocalFittingParameterChangeTolerance`. The candidate must also pass
+the quality gate described below before the loop applies it as converged.
 
 Atoms are frozen when their maximum absolute parameter movement stays below
 `sqrt(kLocalFittingParameterChangeTolerance) * 0.1` for three consecutive active
-iterations. Frozen atoms are not thawed. They no longer participate in the joint
-offset solve or per-atom refit, but their fitted Gaussian remains in the
-snapshot so active neighbors can subtract them as fixed signal contributions.
+iterations. A frozen atom can be thawed again when a currently active selected
+neighbor changes by at least `sqrt(kLocalFittingParameterChangeTolerance)`.
+Frozen atoms do not participate in the joint offset solve or per-atom refit while
+they remain frozen, but their fitted Gaussian remains in the snapshot so active
+neighbors can subtract them as fixed signal contributions.
 
 The best fixed-point candidate is tracked separately. At second-stage entry,
 the initial residuals define one fixed Huber scale and cutoff for this fitting
@@ -134,23 +142,33 @@ run. Every previous, current, and best candidate is scored with that same cutoff
 so objective values are comparable across iterations. A candidate is better when
 its fixed-scale robust objective improves beyond the tie tolerance; objective
 ties are broken by the maximum of the three percentile parameter changes.
+Convergence is accepted only if the current objective is not worse than both the
+previous candidate and the best candidate by more than
+`kLocalFittingConvergenceObjectiveRelativeTolerance`, when those objective values
+are available.
 
 ## Exit Paths
 
 The loop has three terminal cases:
 
 - **All atoms frozen:** apply the previous state if the loop starts with no
-  active atoms, or the current relaxed iteration result if the last update froze
-  the remaining active atoms, then log an info message when logging is enabled.
+  active atoms. If the last update froze the remaining active atoms, apply the
+  current relaxed result when it passes the quality gate, otherwise apply the
+  best tracked candidate. Then log an info message when logging is enabled.
 - **Parameter convergence:** apply the current relaxed iteration result when all
   three active-set squared percentile changes are below
-  `kLocalFittingParameterChangeTolerance`, then log an info message when logging
-  is enabled.
+  `kLocalFittingParameterChangeTolerance` and the quality gate accepts the
+  candidate, then log an info message when logging is enabled.
 - **Maximum iterations reached:** apply the best fixed-point candidate found so
   far and log a warning when logging is enabled.
 
 On non-terminal iterations, the relaxed estimation and result vectors become the
 previous state for the next loop iteration.
+
+When logging is enabled, the function also emits a warning summary after the
+loop if any iteration used the joint-offset fallback or any atom refit fallback.
+The summary reports joint-offset fallback iterations, refit fallback atom-events,
+and distinct atoms that used the refit fallback.
 
 ## Related Notes
 
