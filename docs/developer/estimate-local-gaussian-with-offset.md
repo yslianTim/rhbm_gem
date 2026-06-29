@@ -115,8 +115,10 @@ The `0.1` amplitude ratio is a soft prior scale, not a hard bound. The
 regularization shrinks weak or noisy residual-offset estimates toward zero, but
 it does not guarantee an absolute offset range.
 
-Iteration stops when the slope change is below `1.0e-8` or after 50
-iterations. This outer offset fit does not use `alpha_r`.
+Iteration stops when the normalized slope change is below `1.0e-8` or after 50
+iterations. The normalized-change scale floor is the offset prior scale when it
+is available; generic robust-slope callers without a prior use `1.0`. This
+outer offset fit does not use `alpha_r`.
 
 The current offset is retained when:
 

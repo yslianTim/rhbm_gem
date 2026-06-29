@@ -6,6 +6,7 @@
 #include <vector>
 
 #include <rhbm_gem/utils/algorithm/LinearRegressionSample.hpp>
+#include <rhbm_gem/utils/algorithm/NormalizedChange.hpp>
 #include <rhbm_gem/utils/algorithm/RobustSlopeOptions.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
@@ -77,7 +78,13 @@ public:
             {
                 return false;
             }
-            if (std::abs(updated_slope - slope) < options.tolerance)
+            const auto normalized_change{
+                CalculateNormalizedChange(
+                    updated_slope,
+                    slope,
+                    ComputeSlopeChangeScaleFloor(options))
+            };
+            if (normalized_change < options.tolerance)
             {
                 slope = updated_slope;
                 return true;
@@ -124,6 +131,16 @@ private:
         }
         const auto lambda{ residual_scale / options.regularization_prior_scale };
         return lambda * lambda;
+    }
+
+    static double ComputeSlopeChangeScaleFloor(const RobustSlopeOptions & options)
+    {
+        if (!std::isfinite(options.regularization_prior_scale) ||
+            options.regularization_prior_scale <= 0.0)
+        {
+            return 1.0;
+        }
+        return options.regularization_prior_scale;
     }
 };
 

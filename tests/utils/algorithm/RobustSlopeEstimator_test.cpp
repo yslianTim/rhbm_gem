@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <vector>
 
 #include <rhbm_gem/utils/algorithm/LinearRegressionSample.hpp>
@@ -18,6 +19,34 @@ alg::RobustSlopeOptions MakeOptions()
     options.scale_min = 1.0e-12;
     options.cutoff_multiplier = 1.345;
     return options;
+}
+
+std::vector<alg::LinearRegressionSample> ScaleResponses(
+    const std::vector<alg::LinearRegressionSample> & samples,
+    double scale)
+{
+    std::vector<alg::LinearRegressionSample> scaled_samples;
+    scaled_samples.reserve(samples.size());
+    for (const auto & sample : samples)
+    {
+        scaled_samples.emplace_back(alg::LinearRegressionSample{
+            sample.basis,
+            sample.response * scale
+        });
+    }
+    return scaled_samples;
+}
+
+double EstimateHuberSlope(
+    const std::vector<alg::LinearRegressionSample> & samples,
+    alg::RobustSlopeOptions options)
+{
+    double slope{ 0.0 };
+    EXPECT_TRUE(alg::RobustSlopeEstimator::EstimateHuberSlopeThroughOrigin(
+        samples,
+        options,
+        slope));
+    return slope;
 }
 
 } // namespace
@@ -57,6 +86,56 @@ TEST(RobustSlopeEstimatorTest, HuberSlopeDownweightsLargeOutlier)
 
     EXPECT_LT(robust_slope, ordinary_slope);
     EXPECT_NEAR(2.0, robust_slope, 5.0);
+}
+
+TEST(RobustSlopeEstimatorTest, HuberSlopeScalesWithResponseAndPriorScale)
+{
+    const std::vector<alg::LinearRegressionSample> samples{
+        { 1.0, 2.0 },
+        { 2.0, 4.0 },
+        { 3.0, 6.0 },
+        { 4.0, 100.0 }
+    };
+    auto options{ MakeOptions() };
+    options.regularization_prior_scale = 2.0;
+    const auto base_slope{ EstimateHuberSlope(samples, options) };
+
+    constexpr double scale{ 1.0e6 };
+    auto scaled_options{ options };
+    scaled_options.regularization_prior_scale *= scale;
+    const auto scaled_slope{
+        EstimateHuberSlope(ScaleResponses(samples, scale), scaled_options)
+    };
+
+    EXPECT_NEAR(
+        base_slope * scale,
+        scaled_slope,
+        std::abs(base_slope * scale) * 1.0e-10);
+}
+
+TEST(RobustSlopeEstimatorTest, HuberSlopeHandlesSmallResponseAndPriorScale)
+{
+    const std::vector<alg::LinearRegressionSample> samples{
+        { 1.0, 2.0 },
+        { 2.0, 4.0 },
+        { 3.0, 6.0 },
+        { 4.0, 100.0 }
+    };
+    auto options{ MakeOptions() };
+    options.regularization_prior_scale = 2.0;
+    const auto base_slope{ EstimateHuberSlope(samples, options) };
+
+    constexpr double scale{ 1.0e-6 };
+    auto scaled_options{ options };
+    scaled_options.regularization_prior_scale *= scale;
+    const auto scaled_slope{
+        EstimateHuberSlope(ScaleResponses(samples, scale), scaled_options)
+    };
+
+    EXPECT_NEAR(
+        base_slope * scale,
+        scaled_slope,
+        std::abs(base_slope * scale) * 1.0e-6);
 }
 
 TEST(RobustSlopeEstimatorTest, RejectsEmptyAndDegenerateSamples)
