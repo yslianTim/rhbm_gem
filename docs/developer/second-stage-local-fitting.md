@@ -32,19 +32,22 @@ non-terminal iteration.
 
 ## Per-Iteration Flow
 
-Each iteration runs `RunLocalFittingIteration` and then evaluates whether the
-updated model vectors are stable enough.
+Each loop first asks the freeze tracker for the active atom indexes. If no atom
+is active, the previous state is applied and the stage exits. Otherwise the
+active indexes are passed to `RunLocalFittingIteration`, and the updated model
+vectors are checked for freezing and convergence.
 
 ```text
 previous state
-    -> build fitted Gaussian snapshot
     -> build active atom set
+    -> exit if active set is empty
+    -> build fitted Gaussian snapshot
     -> estimate joint offsets for active atoms
     -> refit active atoms with neighbor contributions removed
     -> apply under-relaxation
     -> compute active-atom p95 parameter changes
     -> freeze stable atoms
-    -> converge, fallback, or continue
+    -> exit, fallback, or continue
 ```
 
 The maximum iteration count is `kLocalFittingMaximumIterations` (`100`).
@@ -56,12 +59,13 @@ into a snapshot keyed by atom pointer. `EstimateJointOffsets` then solves one
 sparse linear system for active atom offsets. Frozen atoms remain in the
 snapshot, but they do not become columns in the linear system.
 
-For each sample on each active atom:
+For each unfiltered sampling entry on each active atom:
 
 1. subtract the target atom's current zero-offset signal;
 2. add the target atom's offset basis as the row entry for that atom;
-3. subtract selected neighbors' current zero-offset signals when their distance
-   is within `kNeighborContributionDistanceMax`; and
+3. subtract selected neighbors' current zero-offset signals when those neighbors
+   are present in the snapshot and their distance is within
+   `kNeighborContributionDistanceMax`; and
 4. add each active selected neighbor's offset basis as another row entry.
 
 The resulting system is solved with weighted ridge regression. The ridge term is
@@ -77,16 +81,16 @@ runs.
 ## Per-Atom Refit
 
 After joint offsets are attached to the snapshot, each active atom is refit.
-Frozen atoms are copied from the previous state without a new fit. The active
-loop may run under OpenMP using `FitOptions::thread_size`.
+Frozen atoms are left in the iteration state copied from the previous state. The
+active loop may run under OpenMP using `FitOptions::thread_size`.
 
 For each atom:
 
 1. build a sample list by subtracting fitted neighbor responses from the atom's
-   local samples;
+   unfiltered local sampling entries;
 2. use the joint-offset snapshot model as the fixed offset model;
 3. call `EstimateLocalGaussianWithOffsetModel` to fit amplitude and width with
-   that fixed offset; and
+   that fixed offset and `FitOptions` distance limits; and
 4. accept the candidate only if `CanBuildFiniteZeroOffsetSamples` confirms that
    subtracting the candidate offset remains finite and inside the `float`
    response range.
@@ -104,13 +108,14 @@ The raw iteration result is under-relaxed before convergence is checked:
 relaxed = beta * current + (1 - beta) * previous
 ```
 
-`beta` starts from `FitOptions::relaxation_factor` and is clamped to the
-source-local adaptive relaxation range. After each iteration, the controller
-looks at the maximum of the three 95th-percentile parameter changes. Sustained
-decrease allows `beta` to grow toward `1.0`; an increase immediately shrinks it.
-This is a trend-based adaptive relaxation rule, not Anderson acceleration. The
-relaxed vector replaces the candidate MDPDE model while preserving its
-standard-deviation model.
+`beta` starts from `FitOptions::relaxation_factor` and is clamped to the local
+adaptive relaxation range `[0.05, 1.0]`. After each iteration, the controller
+looks at the maximum of the three 95th-percentile parameter changes. A change
+more than 1% larger than the previous iteration immediately halves `beta`.
+Two consecutive changes more than 1% smaller than the previous iteration allow
+`beta` to grow by `1.2x`, up to `1.0`. This is a trend-based adaptive relaxation
+rule, not Anderson acceleration. The relaxed vector replaces the candidate MDPDE
+model while preserving its standard-deviation model.
 
 The stage then computes absolute parameter movement for amplitude, width, and
 offset for every selected atom. Active atoms are summarized by the 95th
@@ -128,16 +133,20 @@ the maximum of its three percentile changes is lower than the previous best.
 
 ## Exit Paths
 
-There are two exit paths:
+The loop has three terminal cases:
 
-- **Converged:** apply the current relaxed iteration result to the atom local
-  editors and log an info message when logging is enabled.
+- **All atoms frozen:** apply the previous state if the loop starts with no
+  active atoms, or the current relaxed iteration result if the last update froze
+  the remaining active atoms, then log an info message when logging is enabled.
+- **Parameter convergence:** apply the current relaxed iteration result when all
+  three active-set squared percentile changes are below
+  `kLocalFittingParameterChangeTolerance`, then log an info message when logging
+  is enabled.
 - **Maximum iterations reached:** apply the best fixed-point candidate found so
   far and log a warning when logging is enabled.
 
 On non-terminal iterations, the relaxed estimation and result vectors become the
-previous state for the next loop iteration. If every atom becomes frozen, the
-current state is applied and the stage exits.
+previous state for the next loop iteration.
 
 ## Related Notes
 
