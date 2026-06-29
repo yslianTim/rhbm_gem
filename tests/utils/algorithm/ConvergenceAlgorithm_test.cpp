@@ -16,6 +16,18 @@ alg::ParameterChange MakeChange(double value)
     return alg::ParameterChange{ std::vector<double>{ value } };
 }
 
+alg::FittingQualityCandidateStats MakeQualityCandidate(
+    bool has_quality_objective,
+    double quality_objective,
+    double change = 0.1)
+{
+    return alg::FittingQualityCandidateStats{
+        has_quality_objective,
+        quality_objective,
+        alg::ParameterChangeStats{ std::vector<double>{ change } }
+    };
+}
+
 } // namespace
 
 TEST(ConvergenceAlgorithmTest, SummarizesParameterChangePercentiles)
@@ -110,6 +122,27 @@ TEST(ConvergenceAlgorithmTest, AdaptiveRelaxationGrowsShrinksAndClamps)
     EXPECT_DOUBLE_EQ(0.5, controller.GetBeta());
 }
 
+TEST(ConvergenceAlgorithmTest, AdaptiveRelaxationManualShrinkClampsAtMinimum)
+{
+    alg::AdaptiveRelaxationController controller{
+        0.8,
+        0.1,
+        1.0,
+        2.0,
+        0.5,
+        0.01,
+        2
+    };
+
+    EXPECT_FALSE(controller.IsAtMinimum());
+    EXPECT_DOUBLE_EQ(0.4, controller.Shrink());
+    EXPECT_FALSE(controller.IsAtMinimum());
+    EXPECT_DOUBLE_EQ(0.2, controller.Shrink());
+    EXPECT_DOUBLE_EQ(0.1, controller.Shrink());
+    EXPECT_TRUE(controller.IsAtMinimum());
+    EXPECT_DOUBLE_EQ(0.1, controller.Shrink());
+}
+
 TEST(ConvergenceAlgorithmTest, NormalizedVectorChangeHandlesLargeScaleParameters)
 {
     Eigen::VectorXd previous{ Eigen::VectorXd::Constant(1, 1000.0) };
@@ -169,4 +202,124 @@ TEST(ConvergenceAlgorithmTest, FittingQualityCandidateRankingUsesChangeAsTieBrea
         tied_quality_higher_change,
         lower_change,
         1.0e-8));
+}
+
+TEST(ConvergenceAlgorithmTest, FittingQualityBacktrackingAcceptsNonDeterioratedCandidate)
+{
+    const auto candidate{ MakeQualityCandidate(true, 9.5) };
+    const auto previous{ MakeQualityCandidate(true, 10.0) };
+    const auto best{ MakeQualityCandidate(true, 9.6) };
+
+    const auto decision{ alg::EvaluateFittingQualityBacktracking(
+        candidate,
+        previous,
+        true,
+        best,
+        1.0e-3,
+        0,
+        3) };
+
+    EXPECT_TRUE(decision.accepted);
+    EXPECT_FALSE(decision.should_shrink_beta);
+    EXPECT_FALSE(decision.reached_retry_limit);
+}
+
+TEST(ConvergenceAlgorithmTest, FittingQualityBacktrackingRejectsPreviousDeterioration)
+{
+    const auto candidate{ MakeQualityCandidate(true, 10.2) };
+    const auto previous{ MakeQualityCandidate(true, 10.0) };
+    const auto best{ MakeQualityCandidate(true, 9.5) };
+
+    const auto decision{ alg::EvaluateFittingQualityBacktracking(
+        candidate,
+        previous,
+        true,
+        best,
+        1.0e-3,
+        0,
+        3) };
+
+    EXPECT_FALSE(decision.accepted);
+    EXPECT_TRUE(decision.should_shrink_beta);
+    EXPECT_FALSE(decision.reached_retry_limit);
+}
+
+TEST(ConvergenceAlgorithmTest, FittingQualityBacktrackingRejectsBestDeterioration)
+{
+    const auto candidate{ MakeQualityCandidate(true, 9.5) };
+    const auto previous{ MakeQualityCandidate(true, 10.0) };
+    const auto best{ MakeQualityCandidate(true, 9.0) };
+
+    const auto decision{ alg::EvaluateFittingQualityBacktracking(
+        candidate,
+        previous,
+        true,
+        best,
+        1.0e-3,
+        0,
+        3) };
+
+    EXPECT_FALSE(decision.accepted);
+    EXPECT_TRUE(decision.should_shrink_beta);
+    EXPECT_FALSE(decision.reached_retry_limit);
+}
+
+TEST(ConvergenceAlgorithmTest, FittingQualityBacktrackingReportsRetryLimit)
+{
+    const auto candidate{ MakeQualityCandidate(true, 10.2) };
+    const auto previous{ MakeQualityCandidate(true, 10.0) };
+    const auto best{ MakeQualityCandidate(true, 9.5) };
+
+    const auto decision{ alg::EvaluateFittingQualityBacktracking(
+        candidate,
+        previous,
+        true,
+        best,
+        1.0e-3,
+        2,
+        3) };
+
+    EXPECT_FALSE(decision.accepted);
+    EXPECT_FALSE(decision.should_shrink_beta);
+    EXPECT_TRUE(decision.reached_retry_limit);
+}
+
+TEST(ConvergenceAlgorithmTest, FittingQualityBacktrackingAcceptsWhenNoObjectiveReferenceExists)
+{
+    const auto candidate{ MakeQualityCandidate(false, 0.0) };
+    const auto previous{ MakeQualityCandidate(false, 0.0) };
+    const auto best{ MakeQualityCandidate(false, 0.0) };
+
+    const auto decision{ alg::EvaluateFittingQualityBacktracking(
+        candidate,
+        previous,
+        false,
+        best,
+        1.0e-3,
+        0,
+        3) };
+
+    EXPECT_TRUE(decision.accepted);
+    EXPECT_FALSE(decision.should_shrink_beta);
+    EXPECT_FALSE(decision.reached_retry_limit);
+}
+
+TEST(ConvergenceAlgorithmTest, FittingQualityBacktrackingRejectsMissingCandidateObjective)
+{
+    const auto candidate{ MakeQualityCandidate(false, 0.0) };
+    const auto previous{ MakeQualityCandidate(true, 10.0) };
+    const auto best{ MakeQualityCandidate(true, 9.5) };
+
+    const auto decision{ alg::EvaluateFittingQualityBacktracking(
+        candidate,
+        previous,
+        true,
+        best,
+        1.0e-3,
+        0,
+        3) };
+
+    EXPECT_FALSE(decision.accepted);
+    EXPECT_TRUE(decision.should_shrink_beta);
+    EXPECT_FALSE(decision.reached_retry_limit);
 }

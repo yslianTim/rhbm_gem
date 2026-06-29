@@ -25,6 +25,13 @@ struct FittingQualityCandidateStats
     ParameterChangeStats parameter_change_stats{};
 };
 
+struct FittingQualityBacktrackingDecision
+{
+    bool accepted{ false };
+    bool should_shrink_beta{ false };
+    bool reached_retry_limit{ false };
+};
+
 inline ParameterChangeStats SummarizeParameterChangeStats(
     const std::vector<ParameterChange> & change_list,
     const std::vector<std::size_t> & index_list,
@@ -117,6 +124,82 @@ inline bool IsBetterFittingQualityCandidate(
 
     return GetMaximumParameterChange(stats.parameter_change_stats) <
         GetMaximumParameterChange(best_stats.parameter_change_stats);
+}
+
+inline bool IsFittingQualityObjectiveDeteriorated(
+    const FittingQualityCandidateStats & stats,
+    const FittingQualityCandidateStats & reference_stats,
+    double objective_relative_tolerance)
+{
+    if (!reference_stats.has_quality_objective)
+    {
+        return false;
+    }
+    if (!stats.has_quality_objective)
+    {
+        return true;
+    }
+
+    const auto scale{ std::max(std::abs(reference_stats.quality_objective), 1.0) };
+    return stats.quality_objective >
+        reference_stats.quality_objective + objective_relative_tolerance * scale;
+}
+
+inline bool IsFittingQualityAcceptableForProgress(
+    const FittingQualityCandidateStats & stats,
+    const FittingQualityCandidateStats & previous_stats,
+    bool has_best_candidate,
+    const FittingQualityCandidateStats & best_stats,
+    double objective_relative_tolerance)
+{
+    if (IsFittingQualityObjectiveDeteriorated(
+            stats,
+            previous_stats,
+            objective_relative_tolerance))
+    {
+        return false;
+    }
+    return !has_best_candidate ||
+        !IsFittingQualityObjectiveDeteriorated(
+            stats,
+            best_stats,
+            objective_relative_tolerance);
+}
+
+inline FittingQualityBacktrackingDecision EvaluateFittingQualityBacktracking(
+    const FittingQualityCandidateStats & stats,
+    const FittingQualityCandidateStats & previous_stats,
+    bool has_best_candidate,
+    const FittingQualityCandidateStats & best_stats,
+    double objective_relative_tolerance,
+    int attempt_index,
+    int maximum_attempts)
+{
+    if (maximum_attempts <= 0)
+    {
+        throw std::invalid_argument("Fitting quality backtracking maximum attempts must be positive.");
+    }
+    if (attempt_index < 0 || attempt_index >= maximum_attempts)
+    {
+        throw std::invalid_argument("Fitting quality backtracking attempt index is out of range.");
+    }
+
+    if (IsFittingQualityAcceptableForProgress(
+            stats,
+            previous_stats,
+            has_best_candidate,
+            best_stats,
+            objective_relative_tolerance))
+    {
+        return FittingQualityBacktrackingDecision{ true, false, false };
+    }
+
+    const auto reached_retry_limit{ attempt_index + 1 >= maximum_attempts };
+    return FittingQualityBacktrackingDecision{
+        false,
+        !reached_retry_limit,
+        reached_retry_limit
+    };
 }
 
 } // namespace rhbm_gem::algorithm

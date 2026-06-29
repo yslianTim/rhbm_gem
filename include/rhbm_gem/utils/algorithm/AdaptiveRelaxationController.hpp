@@ -43,6 +43,18 @@ public:
         return m_beta;
     }
 
+    bool IsAtMinimum() const
+    {
+        return m_beta <= m_beta_min;
+    }
+
+    double Shrink()
+    {
+        m_beta = std::max(m_beta_min, m_beta * m_shrink_factor);
+        m_improvement_streak = 0;
+        return m_beta;
+    }
+
     void Update(const ParameterChangeStats & stats)
     {
         Update(GetMaximumParameterChange(stats));
@@ -59,8 +71,7 @@ public:
 
         if (change > m_previous_change * (1.0 + m_improvement_ratio))
         {
-            m_beta = std::max(m_beta_min, m_beta * m_shrink_factor);
-            m_improvement_streak = 0;
+            Shrink();
         }
         else if (change < m_previous_change * (1.0 - m_improvement_ratio))
         {

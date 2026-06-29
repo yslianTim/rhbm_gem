@@ -70,7 +70,7 @@ constexpr double kJointOffsetRidgeRatio{ 1.0e-3 };
 constexpr double kJointOffsetIrlsScaleFloor{ 1.0e-2 };
 constexpr double kJointOffsetIrlsNormalizedChangeTolerance{ 1.0e-6 };
 constexpr double kJointOffsetIrlsObjectiveRelativeTolerance{ 1.0e-10 };
-constexpr double kAdaptiveRelaxationMin{ 0.05 };
+constexpr double kAdaptiveRelaxationMin{ 0.1 };
 constexpr double kAdaptiveRelaxationMax{ 1.0 };
 constexpr double kAdaptiveRelaxationGrowth{ 1.2 };
 constexpr double kAdaptiveRelaxationShrink{ 0.5 };
@@ -80,6 +80,7 @@ constexpr double kLocalFittingFreezeChangeRatio{ 0.1 };
 constexpr int kLocalFittingFreezeStableIterations{ 3 };
 constexpr double kLocalFittingObjectiveTieRelativeTolerance{ 1.0e-8 };
 constexpr double kLocalFittingConvergenceObjectiveRelativeTolerance{ 1.0e-3 };
+constexpr int kLocalFittingObjectiveBacktrackingMaximumAttempts{ 3 };
 constexpr std::size_t kAmplitudeChangeIndex{ 0 };
 constexpr std::size_t kWidthChangeIndex{ 1 };
 constexpr std::size_t kOffsetChangeIndex{ 2 };
@@ -1003,45 +1004,6 @@ algorithm::FittingQualityCandidateStats BuildLocalFittingCandidateStats(
     };
 }
 
-bool IsQualityObjectiveDeteriorated(
-    const algorithm::FittingQualityCandidateStats & candidate_stats,
-    const algorithm::FittingQualityCandidateStats & reference_stats,
-    double objective_relative_tolerance)
-{
-    if (!reference_stats.has_quality_objective)
-    {
-        return false;
-    }
-    if (!candidate_stats.has_quality_objective)
-    {
-        return true;
-    }
-
-    const auto scale{ std::max(std::abs(reference_stats.quality_objective), 1.0) };
-    return candidate_stats.quality_objective >
-        reference_stats.quality_objective + objective_relative_tolerance * scale;
-}
-
-bool IsLocalFittingQualityAcceptableForConvergence(
-    const algorithm::FittingQualityCandidateStats & candidate_stats,
-    const algorithm::FittingQualityCandidateStats & previous_stats,
-    bool has_best_candidate,
-    const algorithm::FittingQualityCandidateStats & best_stats)
-{
-    if (IsQualityObjectiveDeteriorated(
-            candidate_stats,
-            previous_stats,
-            kLocalFittingConvergenceObjectiveRelativeTolerance))
-    {
-        return false;
-    }
-    return !has_best_candidate ||
-        !IsQualityObjectiveDeteriorated(
-            candidate_stats,
-            best_stats,
-            kLocalFittingConvergenceObjectiveRelativeTolerance);
-}
-
 ParameterSummaryStats SummarizeParameterValues(const std::vector<double> & value_list)
 {
     if (value_list.empty())
@@ -1804,33 +1766,104 @@ void RunSecondStageLocalFitting(
                 options)
         };
         fallback_stats.Accumulate(iteration_result.diagnostics);
-        auto current_state{ std::move(iteration_result.state) };
-        const auto beta{ relaxation_controller.GetBeta() };
-        ApplyLocalFittingUnderRelaxation(current_state, previous_state, beta);
-        const auto change_list{
-            CalculateLocalFittingParameterChanges(
-                current_state.estimation_list,
-                previous_state.estimation_list)
-        };
-        const auto change_stats{
-            SummarizeLocalFittingParameterChangeStats(change_list, active_index_list)
-        };
-        const auto current_objective_stats{
-            CalculateLocalFittingObjectiveStats(
-                atom_list,
-                current_state,
-                objective_reference)
-        };
-        const auto current_candidate_stats{
-            BuildLocalFittingCandidateStats(current_objective_stats, change_stats)
-        };
-        const auto quality_allows_convergence{
-            IsLocalFittingQualityAcceptableForConvergence(
-                current_candidate_stats,
-                previous_candidate_stats,
-                has_best_candidate,
-                best_candidate_stats)
-        };
+        const auto raw_state{ std::move(iteration_result.state) };
+        GaussianFittingState current_state;
+        std::vector<algorithm::ParameterChange> change_list;
+        algorithm::ParameterChangeStats change_stats;
+        algorithm::FittingQualityCandidateStats current_candidate_stats;
+        double beta{ relaxation_controller.GetBeta() };
+        bool has_current_candidate{ false };
+        for (int attempt = 0; attempt < kLocalFittingObjectiveBacktrackingMaximumAttempts; attempt++)
+        {
+            beta = relaxation_controller.GetBeta();
+            auto attempt_state{ raw_state };
+            ApplyLocalFittingUnderRelaxation(attempt_state, previous_state, beta);
+            auto attempt_change_list{
+                CalculateLocalFittingParameterChanges(
+                    attempt_state.estimation_list,
+                    previous_state.estimation_list)
+            };
+            auto attempt_change_stats{
+                SummarizeLocalFittingParameterChangeStats(attempt_change_list, active_index_list)
+            };
+            const auto attempt_objective_stats{
+                CalculateLocalFittingObjectiveStats(
+                    atom_list,
+                    attempt_state,
+                    objective_reference)
+            };
+            auto attempt_candidate_stats{
+                BuildLocalFittingCandidateStats(attempt_objective_stats, attempt_change_stats)
+            };
+            algorithm::FittingQualityBacktrackingDecision backtracking_decision{
+                true,
+                false,
+                false
+            };
+            if (objective_reference.has_reference)
+            {
+                backtracking_decision = algorithm::EvaluateFittingQualityBacktracking(
+                    attempt_candidate_stats,
+                    previous_candidate_stats,
+                    has_best_candidate,
+                    best_candidate_stats,
+                    kLocalFittingConvergenceObjectiveRelativeTolerance,
+                    attempt,
+                    kLocalFittingObjectiveBacktrackingMaximumAttempts);
+            }
+
+            if (backtracking_decision.accepted)
+            {
+                current_state = std::move(attempt_state);
+                change_list = std::move(attempt_change_list);
+                change_stats = std::move(attempt_change_stats);
+                current_candidate_stats = std::move(attempt_candidate_stats);
+                has_current_candidate = true;
+                break;
+            }
+            if (backtracking_decision.should_shrink_beta && !relaxation_controller.IsAtMinimum())
+            {
+                relaxation_controller.Shrink();
+                continue;
+            }
+            break;
+        }
+
+        if (!has_current_candidate)
+        {
+            if (!relaxation_controller.IsAtMinimum() && iter + 1 < kLocalFittingMaximumIterations)
+            {
+                const auto next_beta{ relaxation_controller.Shrink() };
+                if (!options.quiet_mode)
+                {
+                    std::ostringstream progress_message;
+                    progress_message << "Local fitting iteration " << iter + 1 << '/'
+                        << kLocalFittingMaximumIterations
+                        << " rejected by objective backtracking; retry with beta = "
+                        << std::fixed << std::setprecision(5)
+                        << next_beta;
+                    Logger::ProgressLine(progress_message.str());
+                }
+                continue;
+            }
+
+            ApplyLocalFittingState(
+                has_best_candidate ? best_state : previous_state,
+                local_editor_list);
+            if (!options.quiet_mode)
+            {
+                Logger::FinishProgressLine();
+                std::ostringstream warning_message;
+                warning_message
+                    << "Stopped local fitting because objective backtracking rejected the candidate at "
+                    << (relaxation_controller.IsAtMinimum() ? "minimum beta" : "the maximum iteration limit")
+                    << "; applying "
+                    << (has_best_candidate ? "best fixed-point candidate." : "previous state.");
+                Logger::Log(LogLevel::Warning, warning_message.str());
+            }
+            break;
+        }
+
         relaxation_controller.Update(change_stats);
         if (!has_best_candidate ||
             algorithm::IsBetterFittingQualityCandidate(
@@ -1879,9 +1912,7 @@ void RunSecondStageLocalFitting(
 
         if (freeze_tracker.GetActiveCount() == 0)
         {
-            ApplyLocalFittingState(
-                quality_allows_convergence || !has_best_candidate ? current_state : best_state,
-                local_editor_list);
+            ApplyLocalFittingState(current_state, local_editor_list);
             if (!options.quiet_mode)
             {
                 Logger::FinishProgressLine();
@@ -1897,7 +1928,7 @@ void RunSecondStageLocalFitting(
                 change_stats,
                 kLocalFittingParameterChangeTolerance)
         };
-        if (converged && quality_allows_convergence)
+        if (converged)
         {
             ApplyLocalFittingState(current_state, local_editor_list);
             if (!options.quiet_mode)
