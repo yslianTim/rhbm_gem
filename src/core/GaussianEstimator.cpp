@@ -6,6 +6,15 @@
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/algorithm/AdaptiveRelaxationController.hpp>
+#include <rhbm_gem/utils/algorithm/ConvergenceFreezeTracker.hpp>
+#include <rhbm_gem/utils/algorithm/IterationState.hpp>
+#include <rhbm_gem/utils/algorithm/LinearRegressionSample.hpp>
+#include <rhbm_gem/utils/algorithm/ParameterChangeStats.hpp>
+#include <rhbm_gem/utils/algorithm/RobustSlopeEstimator.hpp>
+#include <rhbm_gem/utils/algorithm/SparseRegressionRow.hpp>
+#include <rhbm_gem/utils/algorithm/WeightedRidgeSolver.hpp>
+#include <rhbm_gem/utils/algorithm/WeightedRidgeSystem.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -32,7 +41,6 @@
 
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
-#include <Eigen/SparseCholesky>
 
 #ifdef USE_OPENMP
 #include <omp.h>
@@ -65,52 +73,11 @@ constexpr double kAdaptiveRelaxationImprovementRatio{ 0.01 };
 constexpr int kAdaptiveRelaxationIncreaseStreak{ 2 };
 constexpr double kLocalFittingFreezeChangeRatio{ 0.1 };
 constexpr int kLocalFittingFreezeStableIterations{ 3 };
+constexpr std::size_t kAmplitudeChangeIndex{ 0 };
+constexpr std::size_t kWidthChangeIndex{ 1 };
+constexpr std::size_t kOffsetChangeIndex{ 2 };
 
-struct ResidualOffsetSample
-{
-    double basis{ 0.0 };
-    double residual{ 0.0 };
-};
-
-struct LocalFittingParameterChangeStats
-{
-    double amplitude_change_percentile{ 0.0 };
-    double width_change_percentile{ 0.0 };
-    double offset_change_percentile{ 0.0 };
-};
-
-struct LocalFittingParameterChange
-{
-    double amplitude_change{ 0.0 };
-    double width_change{ 0.0 };
-    double offset_change{ 0.0 };
-};
-
-struct JointOffsetSystem
-{
-    Eigen::SparseMatrix<double> design_matrix;
-    Eigen::VectorXd response;
-    Eigen::VectorXd previous_offset;
-    Eigen::VectorXd ridge_diagonal;
-};
-
-struct JointOffsetNormalEquation
-{
-    Eigen::SparseMatrix<double> normal_matrix;
-    Eigen::VectorXd right_hand_side;
-};
-
-struct JointOffsetRow
-{
-    std::vector<std::pair<Eigen::Index, double>> basis_entries;
-    double response{ 0.0 };
-};
-
-struct LocalFittingState
-{
-    std::vector<LocalGaussianResult> result_list;
-    std::vector<Eigen::VectorXd> estimation_list;
-};
+using GaussianFittingState = algorithm::IterationState<LocalGaussianResult, Eigen::VectorXd>;
 
 std::vector<AtomLocalPotentialEditor> BuildSelectedAtomLocalEditors(ModelObject & model_object)
 {
@@ -167,112 +134,11 @@ bool CanBuildFiniteZeroOffsetSamples(
     return true;
 }
 
-bool EstimateOrdinarySlopeThroughOrigin(
-    const std::vector<ResidualOffsetSample> & sample_list,
-    double & slope)
+double ComputeOffsetRegularizationPriorScale(double amplitude)
 {
-    double numerator{ 0.0 };
-    double denominator{ 0.0 };
-    for (const auto & sample : sample_list)
-    {
-        numerator += sample.basis * sample.residual;
-        denominator += sample.basis * sample.basis;
-    }
-    if (!std::isfinite(numerator) ||
-        !std::isfinite(denominator) ||
-        denominator <= std::numeric_limits<double>::epsilon())
-    {
-        return false;
-    }
-    slope = numerator / denominator;
-    return std::isfinite(slope);
-}
-
-double ComputeHuberResidualScale(
-    const std::vector<ResidualOffsetSample> & sample_list,
-    double slope)
-{
-    std::vector<double> residual_list;
-    residual_list.reserve(sample_list.size());
-    for (const auto & sample : sample_list)
-    {
-        residual_list.emplace_back(sample.residual - slope * sample.basis);
-    }
-
-    const auto median_residual{ array_helper::ComputeMedian(residual_list) };
-    std::vector<double> deviation_list;
-    deviation_list.reserve(residual_list.size());
-    for (const auto residual : residual_list)
-    {
-        deviation_list.emplace_back(std::abs(residual - median_residual));
-    }
-
     return std::max(
-        kHuberScaleMultiplier * array_helper::ComputeMedian(deviation_list),
-        kHuberScaleMin);
-}
-
-double ComputeOffsetRegularizationLambda(double residual_scale, double amplitude)
-{
-    const auto prior_scale{
-        std::max(
-            std::abs(amplitude) * kOffsetRegularizationAmplitudeRatio,
-            kOffsetRegularizationPriorScaleMin)
-    };
-    const auto lambda{ residual_scale / prior_scale };
-    return lambda * lambda;
-}
-
-bool EstimateHuberSlopeThroughOrigin(
-    const std::vector<ResidualOffsetSample> & sample_list,
-    double amplitude,
-    double & slope)
-{
-    if (sample_list.empty())
-    {
-        return false;
-    }
-    if (!EstimateOrdinarySlopeThroughOrigin(sample_list, slope))
-    {
-        return false;
-    }
-
-    for (int t = 0; t < kHuberSlopeMaximumIterations; t++)
-    {
-        const auto scale{ ComputeHuberResidualScale(sample_list, slope) };
-        const auto cutoff{ kHuberCutoffMultiplier * scale };
-        const auto lambda{ ComputeOffsetRegularizationLambda(scale, amplitude) };
-        double numerator{ 0.0 };
-        double denominator{ 0.0 };
-        for (const auto & sample : sample_list)
-        {
-            const auto error{ sample.residual - slope * sample.basis };
-            const auto abs_error{ std::abs(error) };
-            const auto weight{ abs_error <= cutoff ? 1.0 : cutoff / abs_error };
-            numerator += weight * sample.basis * sample.residual;
-            denominator += weight * sample.basis * sample.basis;
-        }
-        denominator += lambda;
-        if (!std::isfinite(numerator) ||
-            !std::isfinite(denominator) ||
-            denominator <= std::numeric_limits<double>::epsilon())
-        {
-            return false;
-        }
-
-        const auto updated_slope{ numerator / denominator };
-        if (!std::isfinite(updated_slope))
-        {
-            return false;
-        }
-        if (std::abs(updated_slope - slope) < kHuberSlopeTolerance)
-        {
-            slope = updated_slope;
-            return true;
-        }
-        slope = updated_slope;
-    }
-    return true;
+        std::abs(amplitude) * kOffsetRegularizationAmplitudeRatio,
+        kOffsetRegularizationPriorScaleMin);
 }
 
 double EstimateResidualOffsetParameter(
@@ -284,7 +150,7 @@ double EstimateResidualOffsetParameter(
     const auto width{ signal_model.GetWidth() };
     if (!std::isfinite(width) || width <= 0.0) return current_offset;
 
-    std::vector<ResidualOffsetSample> residual_sample_list;
+    std::vector<algorithm::LinearRegressionSample> residual_sample_list;
     residual_sample_list.reserve(sample_entries.size());
     for (const auto & sample : sample_entries)
     {
@@ -304,12 +170,20 @@ double EstimateResidualOffsetParameter(
         {
             continue;
         }
-        residual_sample_list.emplace_back(ResidualOffsetSample{ basis, residual });
+        residual_sample_list.emplace_back(algorithm::LinearRegressionSample{ basis, residual });
     }
     double candidate_offset{ current_offset };
-    if (!EstimateHuberSlopeThroughOrigin(
+    algorithm::RobustSlopeOptions slope_options;
+    slope_options.maximum_iterations = kHuberSlopeMaximumIterations;
+    slope_options.tolerance = kHuberSlopeTolerance;
+    slope_options.scale_multiplier = kHuberScaleMultiplier;
+    slope_options.scale_min = kHuberScaleMin;
+    slope_options.cutoff_multiplier = kHuberCutoffMultiplier;
+    slope_options.regularization_prior_scale =
+        ComputeOffsetRegularizationPriorScale(signal_model.GetAmplitude());
+    if (!algorithm::RobustSlopeEstimator::EstimateHuberSlopeThroughOrigin(
             residual_sample_list,
-            signal_model.GetAmplitude(),
+            slope_options,
             candidate_offset))
     {
         return current_offset;
@@ -541,7 +415,7 @@ FittedGaussianSnapshot BuildFittedGaussianSnapshot(
     return snapshot;
 }
 
-JointOffsetSystem BuildJointOffsetSystem(
+algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
     const std::vector<AtomObject *> & atom_list,
     const FittedGaussianSnapshot & snapshot)
 {
@@ -552,7 +426,7 @@ JointOffsetSystem BuildJointOffsetSystem(
         atom_column_map.emplace(atom_list.at(i), static_cast<Eigen::Index>(i));
     }
 
-    std::vector<JointOffsetRow> row_list;
+    std::vector<algorithm::SparseRegressionRow> row_list;
     for (const auto * atom : atom_list)
     {
         const auto model_iter{ snapshot.find(atom) };
@@ -580,7 +454,7 @@ JointOffsetSystem BuildJointOffsetSystem(
                 throw std::runtime_error("Joint offset target model evaluation is not finite.");
             }
             auto residual{ static_cast<double>(sample.response) - target_signal };
-            JointOffsetRow row;
+            algorithm::SparseRegressionRow row;
             if (std::abs(target_basis) > std::numeric_limits<double>::epsilon())
             {
                 row.basis_entries.emplace_back(target_column, target_basis);
@@ -638,84 +512,22 @@ JointOffsetSystem BuildJointOffsetSystem(
         }
     }
 
-    JointOffsetSystem system;
+    algorithm::WeightedRidgeSystem system;
     system.design_matrix.resize(row_count, column_count);
     system.design_matrix.setFromTriplets(triplet_list.begin(), triplet_list.end());
     system.response = std::move(response);
-    system.previous_offset = Eigen::VectorXd::Zero(column_count);
+    system.previous_parameter = Eigen::VectorXd::Zero(column_count);
     system.ridge_diagonal = Eigen::VectorXd::Zero(column_count);
     for (Eigen::Index column_index = 0; column_index < column_count; column_index++)
     {
         const auto & model{ snapshot.at(atom_list.at(static_cast<std::size_t>(column_index))) };
-        system.previous_offset(column_index) = model.GetOffset();
+        system.previous_parameter(column_index) = model.GetOffset();
         const auto square_sum{ column_square_sum(column_index) };
         system.ridge_diagonal(column_index) =
             square_sum > std::numeric_limits<double>::epsilon() ? kJointOffsetRidgeRatio * square_sum : 1.0;
     }
     return system;
 }
-
-JointOffsetNormalEquation BuildJointOffsetNormalEquation(
-    const JointOffsetSystem & system,
-    const Eigen::VectorXd & weight)
-{
-    auto weighted_design{ system.design_matrix };
-    for (Eigen::Index column = 0; column < weighted_design.outerSize(); column++)
-    {
-        for (Eigen::SparseMatrix<double>::InnerIterator iter(weighted_design, column);
-             iter;
-             ++iter)
-        {
-            iter.valueRef() *= std::sqrt(weight(iter.row()));
-        }
-    }
-    const auto weighted_response{ weight.array().sqrt().matrix().cwiseProduct(system.response) };
-    Eigen::SparseMatrix<double> normal_matrix{
-        weighted_design.transpose() * weighted_design
-    };
-    const auto column_count{ normal_matrix.cols() };
-    for (Eigen::Index i = 0; i < column_count; i++)
-    {
-        normal_matrix.coeffRef(i, i) += system.ridge_diagonal(i);
-    }
-    normal_matrix.makeCompressed();
-    Eigen::VectorXd right_hand_side{
-        weighted_design.transpose() * weighted_response +
-        system.ridge_diagonal.cwiseProduct(system.previous_offset)
-    };
-
-    return { std::move(normal_matrix), std::move(right_hand_side) };
-}
-
-class JointOffsetWeightedRidgeSolver
-{
-public:
-    explicit JointOffsetWeightedRidgeSolver(const JointOffsetSystem & system)
-    {
-        const Eigen::VectorXd weight{ Eigen::VectorXd::Ones(system.response.size()) };
-        auto equation{ BuildJointOffsetNormalEquation(system, weight) };
-        solver_.analyzePattern(equation.normal_matrix);
-        analysis_success_ = solver_.info() == Eigen::Success;
-    }
-
-    bool Solve(
-        const JointOffsetSystem & system,
-        const Eigen::VectorXd & weight,
-        Eigen::VectorXd & offset)
-    {
-        if (!analysis_success_) return false;
-
-        auto equation{ BuildJointOffsetNormalEquation(system, weight) };
-        solver_.factorize(equation.normal_matrix);
-        if (solver_.info() != Eigen::Success) return false;
-        offset = solver_.solve(equation.right_hand_side);
-        return solver_.info() == Eigen::Success && offset.allFinite();
-    }
-
-private:
-    Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> solver_;
-    bool analysis_success_{ false };
-};
 
 Eigen::VectorXd EstimateJointOffsets(
     const std::vector<AtomObject *> & atom_list,
@@ -728,7 +540,7 @@ Eigen::VectorXd EstimateJointOffsets(
     {
         previous_offset(static_cast<Eigen::Index>(i)) = snapshot.at(atom_list.at(i)).GetOffset();
     }
-    JointOffsetSystem system;
+    algorithm::WeightedRidgeSystem system;
     try
     {
         system = BuildJointOffsetSystem(atom_list, snapshot);
@@ -737,13 +549,13 @@ Eigen::VectorXd EstimateJointOffsets(
     {
         return previous_offset;
     }
-    if (system.response.size() == 0 || system.previous_offset.size() == 0)
+    if (system.response.size() == 0 || system.previous_parameter.size() == 0)
     {
         return previous_offset;
     }
 
     Eigen::VectorXd weight{ Eigen::VectorXd::Ones(system.response.size()) };
-    JointOffsetWeightedRidgeSolver solver{ system };
+    algorithm::WeightedRidgeSolver solver{ system };
     Eigen::VectorXd offset;
     if (!solver.Solve(system, weight, offset))
     {
@@ -775,7 +587,7 @@ Eigen::VectorXd EstimateJointOffsets(
         Eigen::VectorXd updated_offset;
         if (!solver.Solve(system, weight, updated_offset))
         {
-            return system.previous_offset;
+            return system.previous_parameter;
         }
         const auto maximum_change{ (updated_offset - offset).cwiseAbs().maxCoeff() };
         offset = std::move(updated_offset);
@@ -857,7 +669,7 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(const AtomObject & a
         });
 }
 
-std::vector<LocalFittingParameterChange> CalculateLocalFittingParameterChanges(
+std::vector<algorithm::ParameterChange> CalculateLocalFittingParameterChanges(
     const std::vector<Eigen::VectorXd> & current_estimation_list,
     const std::vector<Eigen::VectorXd> & previous_estimation_list)
 {
@@ -866,222 +678,39 @@ std::vector<LocalFittingParameterChange> CalculateLocalFittingParameterChanges(
         throw std::invalid_argument("Local fitting parameter change input sizes are inconsistent.");
     }
 
-    std::vector<LocalFittingParameterChange> change_list(current_estimation_list.size());
+    std::vector<algorithm::ParameterChange> change_list(current_estimation_list.size());
     for (size_t i = 0; i < current_estimation_list.size(); i++)
     {
         const auto parameter_delta{ current_estimation_list[i] - previous_estimation_list[i] };
-        change_list[i].amplitude_change =
-            std::abs(parameter_delta(GaussianModel3D::AmplitudeIndex()));
-        change_list[i].width_change =
-            std::abs(parameter_delta(GaussianModel3D::WidthIndex()));
-        change_list[i].offset_change =
-            std::abs(parameter_delta(GaussianModel3D::OffsetIndex()));
+        change_list.at(i).value_list = {
+            std::abs(parameter_delta(GaussianModel3D::AmplitudeIndex())),
+            std::abs(parameter_delta(GaussianModel3D::WidthIndex())),
+            std::abs(parameter_delta(GaussianModel3D::OffsetIndex()))
+        };
     }
     return change_list;
 }
 
-LocalFittingParameterChangeStats SummarizeLocalFittingParameterChangeStats(
-    const std::vector<LocalFittingParameterChange> & change_list,
+algorithm::ParameterChangeStats SummarizeLocalFittingParameterChangeStats(
+    const std::vector<algorithm::ParameterChange> & change_list,
     const std::vector<std::size_t> & index_list)
 {
-    LocalFittingParameterChangeStats stats;
-    std::vector<double> amplitude_change_list;
-    std::vector<double> width_change_list;
-    std::vector<double> offset_change_list;
-    amplitude_change_list.reserve(index_list.size());
-    width_change_list.reserve(index_list.size());
-    offset_change_list.reserve(index_list.size());
-    for (const auto index : index_list)
-    {
-        if (index >= change_list.size())
-        {
-            throw std::invalid_argument("Local fitting parameter change index is out of range.");
-        }
-        const auto & change{ change_list.at(index) };
-        amplitude_change_list.emplace_back(change.amplitude_change);
-        width_change_list.emplace_back(change.width_change);
-        offset_change_list.emplace_back(change.offset_change);
-    }
-
-    stats.amplitude_change_percentile = array_helper::ComputePercentile(
-        amplitude_change_list,
+    return algorithm::SummarizeParameterChangeStats(
+        change_list,
+        index_list,
         kLocalFittingChangePercentile);
-    stats.width_change_percentile = array_helper::ComputePercentile(
-        width_change_list,
-        kLocalFittingChangePercentile);
-    stats.offset_change_percentile = array_helper::ComputePercentile(
-        offset_change_list,
-        kLocalFittingChangePercentile);
-    return stats;
 }
 
-double GetLocalFittingParameterChange(const LocalFittingParameterChange & change)
+double GetLocalFittingParameterChangePercentile(
+    const algorithm::ParameterChangeStats & stats,
+    std::size_t index)
 {
-    const auto shape_change{
-        change.amplitude_change > change.width_change ?
-            change.amplitude_change :
-            change.width_change
-    };
-    return shape_change > change.offset_change ?
-        shape_change :
-        change.offset_change;
-}
-
-class LocalFittingFreezeTracker
-{
-public:
-    explicit LocalFittingFreezeTracker(std::size_t atom_size)
-        : frozen_list_(atom_size, false),
-          stable_count_list_(atom_size, 0)
-    {
-    }
-
-    std::vector<std::size_t> BuildActiveIndexList() const
-    {
-        std::vector<std::size_t> active_index_list;
-        active_index_list.reserve(frozen_list_.size() - GetFrozenCount());
-        for (std::size_t i = 0; i < frozen_list_.size(); i++)
-        {
-            if (!frozen_list_.at(i))
-            {
-                active_index_list.emplace_back(i);
-            }
-        }
-        return active_index_list;
-    }
-
-    void Update(
-        const std::vector<LocalFittingParameterChange> & change_list,
-        const std::vector<std::size_t> & active_index_list)
-    {
-        if (change_list.size() != frozen_list_.size())
-        {
-            throw std::invalid_argument("Local fitting freeze tracker input size is inconsistent.");
-        }
-
-        const auto freeze_threshold{
-            std::sqrt(kLocalFittingParameterChangeTolerance) * kLocalFittingFreezeChangeRatio
-        };
-        for (const auto index : active_index_list)
-        {
-            if (index >= frozen_list_.size())
-            {
-                throw std::invalid_argument("Local fitting active index is out of range.");
-            }
-            if (frozen_list_.at(index)) continue;
-
-            if (GetLocalFittingParameterChange(change_list.at(index)) < freeze_threshold)
-            {
-                stable_count_list_.at(index)++;
-                if (stable_count_list_.at(index) >= kLocalFittingFreezeStableIterations)
-                {
-                    frozen_list_.at(index) = true;
-                }
-            }
-            else
-            {
-                stable_count_list_.at(index) = 0;
-            }
-        }
-    }
-
-    std::size_t GetFrozenCount() const
-    {
-        return static_cast<std::size_t>(
-            std::count(frozen_list_.begin(), frozen_list_.end(), true));
-    }
-
-    std::size_t GetActiveCount() const
-    {
-        return frozen_list_.size() - GetFrozenCount();
-    }
-
-private:
-    std::vector<bool> frozen_list_;
-    std::vector<int> stable_count_list_;
-};
-
-bool IsLocalFittingParameterChangeConverged(const LocalFittingParameterChangeStats & stats)
-{
-    return
-        (std::pow(stats.amplitude_change_percentile, 2) < kLocalFittingParameterChangeTolerance) &&
-        (std::pow(stats.width_change_percentile, 2) < kLocalFittingParameterChangeTolerance) &&
-        (std::pow(stats.offset_change_percentile, 2) < kLocalFittingParameterChangeTolerance);
-}
-
-double GetLocalFittingParameterChange(const LocalFittingParameterChangeStats & stats)
-{
-    const auto shape_change{
-        stats.amplitude_change_percentile > stats.width_change_percentile ?
-            stats.amplitude_change_percentile :
-            stats.width_change_percentile
-    };
-    return shape_change > stats.offset_change_percentile ?
-        shape_change :
-        stats.offset_change_percentile;
-}
-
-class LocalFittingRelaxationController
-{
-public:
-    explicit LocalFittingRelaxationController(double initial_beta)
-        : beta_{ std::clamp(initial_beta, kAdaptiveRelaxationMin, kAdaptiveRelaxationMax) }
-    {
-    }
-
-    double GetBeta() const
-    {
-        return beta_;
-    }
-
-    void Update(const LocalFittingParameterChangeStats & stats)
-    {
-        const auto change{ GetLocalFittingParameterChange(stats) };
-        if (!has_previous_change_)
-        {
-            previous_change_ = change;
-            has_previous_change_ = true;
-            return;
-        }
-
-        if (change > previous_change_ * (1.0 + kAdaptiveRelaxationImprovementRatio))
-        {
-            beta_ = std::max(kAdaptiveRelaxationMin, beta_ * kAdaptiveRelaxationShrink);
-            improvement_streak_ = 0;
-        }
-        else if (change < previous_change_ * (1.0 - kAdaptiveRelaxationImprovementRatio))
-        {
-            improvement_streak_++;
-            if (improvement_streak_ >= kAdaptiveRelaxationIncreaseStreak)
-            {
-                beta_ = std::min(kAdaptiveRelaxationMax, beta_ * kAdaptiveRelaxationGrowth);
-                improvement_streak_ = 0;
-            }
-        }
-        else
-        {
-            improvement_streak_ = 0;
-        }
-        previous_change_ = change;
-    }
-
-private:
-    double beta_;
-    double previous_change_{ 0.0 };
-    int improvement_streak_{ 0 };
-    bool has_previous_change_{ false };
-};
-
-bool IsBetterLocalFittingCandidate(
-    const LocalFittingParameterChangeStats & stats,
-    const LocalFittingParameterChangeStats & best_stats)
-{
-    return GetLocalFittingParameterChange(stats) < GetLocalFittingParameterChange(best_stats);
+    return stats.percentile_list.at(index);
 }
 
 void ApplyLocalFittingUnderRelaxation(
-    LocalFittingState & current_state,
-    const LocalFittingState & previous_state,
+    GaussianFittingState & current_state,
+    const GaussianFittingState & previous_state,
     double beta)
 {
     if (current_state.estimation_list.size() != previous_state.estimation_list.size() ||
@@ -1179,10 +808,10 @@ std::vector<AtomObject *> BuildActiveAtomList(
     return active_atom_list;
 }
 
-LocalFittingState RunLocalFittingIteration(
+GaussianFittingState RunLocalFittingIteration(
     const std::vector<AtomObject *> & atom_list,
     const std::vector<std::size_t> & active_index_list,
-    const LocalFittingState & previous_state,
+    const GaussianFittingState & previous_state,
     const FitOptions & options)
 {
     const auto selected_atom_size{ atom_list.size() };
@@ -1223,7 +852,7 @@ LocalFittingState RunLocalFittingIteration(
 }
 
 void ApplyLocalFittingState(
-    const LocalFittingState & iteration_state,
+    const GaussianFittingState & iteration_state,
     std::vector<AtomLocalPotentialEditor> & local_editor_list)
 {
     if (local_editor_list.size() != iteration_state.result_list.size())
@@ -1541,7 +1170,7 @@ void RunSecondStageLocalFitting(
         local_editor_list.emplace_back(analysis.EnsureAtomLocalPotential(*atom));
     }
 
-    LocalFittingState previous_state{
+    GaussianFittingState previous_state{
         std::vector<LocalGaussianResult>(atom_size),
         std::vector<Eigen::VectorXd>(atom_size)
     };
@@ -1552,11 +1181,24 @@ void RunSecondStageLocalFitting(
         previous_state.estimation_list[i] = previous_state.result_list[i].mdpde.GetModel().ToVector();
     }
 
-    LocalFittingState best_state;
-    LocalFittingParameterChangeStats best_change_stats;
+    GaussianFittingState best_state;
+    algorithm::ParameterChangeStats best_change_stats;
     bool has_best_iteration_result{ false };
-    LocalFittingRelaxationController relaxation_controller{ options.relaxation_factor };
-    LocalFittingFreezeTracker freeze_tracker{ atom_size };
+    algorithm::AdaptiveRelaxationController relaxation_controller{
+        options.relaxation_factor,
+        kAdaptiveRelaxationMin,
+        kAdaptiveRelaxationMax,
+        kAdaptiveRelaxationGrowth,
+        kAdaptiveRelaxationShrink,
+        kAdaptiveRelaxationImprovementRatio,
+        kAdaptiveRelaxationIncreaseStreak
+    };
+    algorithm::ConvergenceFreezeTracker freeze_tracker{
+        atom_size,
+        kLocalFittingParameterChangeTolerance,
+        kLocalFittingFreezeChangeRatio,
+        kLocalFittingFreezeStableIterations
+    };
     for (size_t iter = 0; iter < kLocalFittingMaximumIterations; iter++)
     {
         const auto active_index_list{ freeze_tracker.BuildActiveIndexList() };
@@ -1592,7 +1234,7 @@ void RunSecondStageLocalFitting(
         };
         relaxation_controller.Update(change_stats);
         if (!has_best_iteration_result ||
-            IsBetterLocalFittingCandidate(change_stats, best_change_stats))
+            algorithm::IsBetterParameterChangeCandidate(change_stats, best_change_stats))
         {
             best_state = current_state;
             best_change_stats = change_stats;
@@ -1607,11 +1249,11 @@ void RunSecondStageLocalFitting(
                 << kLocalFittingMaximumIterations
                 << std::fixed << std::setprecision(5)
                 << ", percentile amplitude change = "
-                << change_stats.amplitude_change_percentile
+                << GetLocalFittingParameterChangePercentile(change_stats, kAmplitudeChangeIndex)
                 << ", percentile width change = "
-                << change_stats.width_change_percentile
+                << GetLocalFittingParameterChangePercentile(change_stats, kWidthChangeIndex)
                 << ", percentile offset change = "
-                << change_stats.offset_change_percentile
+                << GetLocalFittingParameterChangePercentile(change_stats, kOffsetChangeIndex)
                 << ", beta = "
                 << beta
                 << ", active atoms = "
@@ -1634,7 +1276,11 @@ void RunSecondStageLocalFitting(
             break;
         }
 
-        const auto converged{ IsLocalFittingParameterChangeConverged(change_stats) };
+        const auto converged{
+            algorithm::IsParameterChangeConverged(
+                change_stats,
+                kLocalFittingParameterChangeTolerance)
+        };
         if (converged)
         {
             ApplyLocalFittingState(current_state, local_editor_list);
@@ -1644,11 +1290,14 @@ void RunSecondStageLocalFitting(
                 Logger::Log(LogLevel::Info,
                     "Converged after " + std::to_string(iter + 1) +
                     " iterations with percentile amplitude change = " +
-                    std::to_string(change_stats.amplitude_change_percentile) +
+                    std::to_string(
+                        GetLocalFittingParameterChangePercentile(change_stats, kAmplitudeChangeIndex)) +
                     ", percentile width change = " +
-                    std::to_string(change_stats.width_change_percentile) +
+                    std::to_string(
+                        GetLocalFittingParameterChangePercentile(change_stats, kWidthChangeIndex)) +
                     ", and percentile offset change = " +
-                    std::to_string(change_stats.offset_change_percentile) + ".");
+                    std::to_string(
+                        GetLocalFittingParameterChangePercentile(change_stats, kOffsetChangeIndex)) + ".");
             }
             break;
         }
@@ -1662,11 +1311,14 @@ void RunSecondStageLocalFitting(
                 Logger::Log(LogLevel::Warning,
                     "Reached maximum iteration size; refitting at best fixed-point candidate "
                     "with percentile amplitude change = " +
-                    std::to_string(best_change_stats.amplitude_change_percentile) +
+                    std::to_string(
+                        GetLocalFittingParameterChangePercentile(best_change_stats, kAmplitudeChangeIndex)) +
                     ", percentile width change = " +
-                    std::to_string(best_change_stats.width_change_percentile) +
+                    std::to_string(
+                        GetLocalFittingParameterChangePercentile(best_change_stats, kWidthChangeIndex)) +
                     ", and percentile offset change = " +
-                    std::to_string(best_change_stats.offset_change_percentile));
+                    std::to_string(
+                        GetLocalFittingParameterChangePercentile(best_change_stats, kOffsetChangeIndex)));
             }
         }
         previous_state = std::move(current_state);

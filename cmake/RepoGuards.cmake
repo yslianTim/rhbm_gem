@@ -313,7 +313,7 @@ function(rhbm_guard_check_structure)
         list(JOIN PUBLIC_UTILS_FLAT_HPP "\n  - " PUBLIC_UTILS_FLAT_HPP_TEXT)
         message(FATAL_ERROR
             "Structure guard failed.\n"
-            "  - include/rhbm_gem/utils must use subfolders (domain/, math/, hrl/).\n"
+            "  - include/rhbm_gem/utils must use subfolders (algorithm/, domain/, math/, hrl/).\n"
             "  - ${PUBLIC_UTILS_FLAT_HPP_TEXT}")
     endif()
 

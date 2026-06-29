@@ -126,6 +126,12 @@ set(DATA_SCHEMA_TEST_SOURCES
     data/DataObjectSchemaValidation_test.cpp
 )
 
+set(UTILS_ALGORITHM_TEST_SOURCES
+    utils/algorithm/ConvergenceAlgorithm_test.cpp
+    utils/algorithm/RobustSlopeEstimator_test.cpp
+    utils/algorithm/WeightedRidgeSolver_test.cpp
+)
+
 set(UTILS_MATH_TEST_SOURCES
     utils/math/ArrayHelper_test.cpp
     utils/math/EigenValidation_test.cpp
@@ -174,6 +180,7 @@ set(RHBM_GEM_ALL_GTEST_SOURCES
     ${CORE_PAINTER_TEST_SOURCES}
     ${DATA_RUNTIME_TEST_SOURCES}
     ${DATA_SCHEMA_TEST_SOURCES}
+    ${UTILS_ALGORITHM_TEST_SOURCES}
     ${UTILS_MATH_TEST_SOURCES}
     ${UTILS_DOMAIN_TEST_SOURCES}
     ${UTILS_HRL_TEST_SOURCES}
@@ -239,6 +246,12 @@ add_rhbm_gtest_group(rhbm_tests_data_schema
     DOMAIN data
     INTENTS schema
     SOURCES ${DATA_SCHEMA_TEST_SOURCES}
+)
+
+add_rhbm_gtest_group(rhbm_tests_utils_algorithm
+    DOMAIN utils
+    INTENTS algorithm
+    SOURCES ${UTILS_ALGORITHM_TEST_SOURCES}
 )
 
 add_rhbm_gtest_group(rhbm_tests_utils_math
