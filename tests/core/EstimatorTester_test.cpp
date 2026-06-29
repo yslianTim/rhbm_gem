@@ -339,6 +339,43 @@ TEST(EstimatorTesterTest, RunLocalPotentialFittingHandlesCoupledNonzeroOffsetNei
     EXPECT_LE(full_error, first_stage_error + tolerance);
 }
 
+TEST(EstimatorTesterTest, RunLocalPotentialFittingCoupledNonzeroOffsetDoesNotWarnFallback)
+{
+    ElectricPotential potential_model;
+    potential_model.SetModelChoice(0);
+    potential_model.SetBlurringWidth(0.5);
+    const auto input{
+        tdf::BuildPotentialModelTestData(tdf::PotentialModelScenario{
+            Spot::C,
+            Element::CARBON,
+            0.15,
+            rg::GaussianModel3D{ 6.0, 0.55, -0.2 },
+            potential_model,
+            0.0,
+            1,
+            77
+        })
+    };
+    rt::FitOptions options;
+    options.distance_min = 0.0;
+    options.distance_max = 1.0;
+    options.thread_size = 1;
+    options.quiet_mode = false;
+
+    rg::ModelObject model{ *input.replica_model_objects.front() };
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Warning);
+    testing::internal::CaptureStderr();
+    rt::RunLocalAlphaTraining(model, options);
+    rt::RunLocalPotentialFitting(model, options);
+    const std::string error_output{ testing::internal::GetCapturedStderr() };
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_EQ(
+        error_output.find("Second-stage local fitting fallback summary:"),
+        std::string::npos);
+}
+
 TEST(EstimatorTesterTest, RunSecondStageLocalFittingLogsFallbackSummary)
 {
     auto model{ BuildSecondStageFallbackDiagnosticModel() };

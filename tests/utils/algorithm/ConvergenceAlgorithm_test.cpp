@@ -5,6 +5,7 @@
 
 #include <rhbm_gem/utils/algorithm/AdaptiveRelaxationController.hpp>
 #include <rhbm_gem/utils/algorithm/ConvergenceFreezeTracker.hpp>
+#include <rhbm_gem/utils/algorithm/NormalizedChange.hpp>
 #include <rhbm_gem/utils/algorithm/ParameterChangeStats.hpp>
 
 namespace {
@@ -107,6 +108,39 @@ TEST(ConvergenceAlgorithmTest, AdaptiveRelaxationGrowsShrinksAndClamps)
     controller.Update(20.0);
 
     EXPECT_DOUBLE_EQ(0.5, controller.GetBeta());
+}
+
+TEST(ConvergenceAlgorithmTest, NormalizedVectorChangeHandlesLargeScaleParameters)
+{
+    Eigen::VectorXd previous{ Eigen::VectorXd::Constant(1, 1000.0) };
+    Eigen::VectorXd current{ Eigen::VectorXd::Constant(1, 1001.0) };
+
+    EXPECT_NEAR(
+        alg::CalculateMaximumNormalizedVectorChange(current, previous, 1.0e-2),
+        1.0 / 1001.0,
+        1.0e-12);
+}
+
+TEST(ConvergenceAlgorithmTest, NormalizedVectorChangeKeepsSmallScaleMovementVisible)
+{
+    Eigen::VectorXd previous{ Eigen::VectorXd::Constant(1, 0.01) };
+    Eigen::VectorXd current{ Eigen::VectorXd::Constant(1, 0.011) };
+
+    EXPECT_NEAR(
+        alg::CalculateMaximumNormalizedVectorChange(current, previous, 1.0e-2),
+        0.001 / 0.011,
+        1.0e-12);
+}
+
+TEST(ConvergenceAlgorithmTest, NormalizedVectorChangeUsesFloorNearZero)
+{
+    Eigen::VectorXd previous{ Eigen::VectorXd::Zero(1) };
+    Eigen::VectorXd current{ Eigen::VectorXd::Constant(1, 1.0e-5) };
+
+    EXPECT_NEAR(
+        alg::CalculateMaximumNormalizedVectorChange(current, previous, 1.0e-2),
+        1.0e-3,
+        1.0e-12);
 }
 
 TEST(ConvergenceAlgorithmTest, FittingQualityCandidateRankingUsesChangeAsTieBreaker)

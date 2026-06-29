@@ -10,6 +10,7 @@
 #include <rhbm_gem/utils/algorithm/ConvergenceFreezeTracker.hpp>
 #include <rhbm_gem/utils/algorithm/IterationState.hpp>
 #include <rhbm_gem/utils/algorithm/LinearRegressionSample.hpp>
+#include <rhbm_gem/utils/algorithm/NormalizedChange.hpp>
 #include <rhbm_gem/utils/algorithm/ParameterChangeStats.hpp>
 #include <rhbm_gem/utils/algorithm/RobustSlopeEstimator.hpp>
 #include <rhbm_gem/utils/algorithm/SparseRegressionRow.hpp>
@@ -66,6 +67,9 @@ constexpr double kHuberCutoffMultiplier{ 1.345 };
 constexpr double kOffsetRegularizationAmplitudeRatio{ 0.1 };
 constexpr double kOffsetRegularizationPriorScaleMin{ 1.0e-12 };
 constexpr double kJointOffsetRidgeRatio{ 1.0e-3 };
+constexpr double kJointOffsetIrlsScaleFloor{ 1.0e-2 };
+constexpr double kJointOffsetIrlsNormalizedChangeTolerance{ 1.0e-6 };
+constexpr double kJointOffsetIrlsObjectiveRelativeTolerance{ 1.0e-10 };
 constexpr double kAdaptiveRelaxationMin{ 0.05 };
 constexpr double kAdaptiveRelaxationMax{ 1.0 };
 constexpr double kAdaptiveRelaxationGrowth{ 1.2 };
@@ -640,6 +644,59 @@ algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
     return system;
 }
 
+double CalculateWeightedRidgeSurrogateObjective(
+    const algorithm::WeightedRidgeSystem & system,
+    const Eigen::VectorXd & weight,
+    const Eigen::VectorXd & offset)
+{
+    if (system.response.size() != weight.size())
+    {
+        throw std::invalid_argument("Weighted ridge objective input sizes are inconsistent.");
+    }
+    if (system.previous_parameter.size() != offset.size() ||
+        system.ridge_diagonal.size() != offset.size())
+    {
+        throw std::invalid_argument("Weighted ridge objective parameter sizes are inconsistent.");
+    }
+    if (system.response.size() == 0)
+    {
+        return std::numeric_limits<double>::infinity();
+    }
+
+    const Eigen::VectorXd residual{ system.response - system.design_matrix * offset };
+    const auto weighted_residual_loss{
+        weight.cwiseProduct(residual.cwiseAbs2()).sum()
+    };
+    const Eigen::VectorXd offset_delta{ offset - system.previous_parameter };
+    const auto ridge_loss{
+        system.ridge_diagonal.cwiseProduct(offset_delta.cwiseAbs2()).sum()
+    };
+    const auto objective{
+        (weighted_residual_loss + ridge_loss) /
+        static_cast<double>(system.response.size())
+    };
+    return std::isfinite(objective) ? objective : std::numeric_limits<double>::infinity();
+}
+
+bool IsJointOffsetObjectiveDeteriorated(
+    double updated_objective,
+    double current_objective)
+{
+    if (!std::isfinite(updated_objective))
+    {
+        return true;
+    }
+    if (!std::isfinite(current_objective))
+    {
+        return false;
+    }
+    const auto scale{
+        std::max({ std::abs(updated_objective), std::abs(current_objective), 1.0 })
+    };
+    return updated_objective >
+        current_objective + kJointOffsetIrlsObjectiveRelativeTolerance * scale;
+}
+
 JointOffsetSolveResult EstimateJointOffsets(
     const std::vector<AtomObject *> & atom_list,
     const FittedGaussianSnapshot & snapshot)
@@ -716,9 +773,24 @@ JointOffsetSolveResult EstimateJointOffsets(
                 JointOffsetFallbackReason::RobustSolveFailed
             };
         }
-        const auto maximum_change{ (updated_offset - offset).cwiseAbs().maxCoeff() };
+        const auto current_objective{
+            CalculateWeightedRidgeSurrogateObjective(system, weight, offset)
+        };
+        const auto updated_objective{
+            CalculateWeightedRidgeSurrogateObjective(system, weight, updated_offset)
+        };
+        if (IsJointOffsetObjectiveDeteriorated(updated_objective, current_objective))
+        {
+            break;
+        }
+        const auto maximum_change{
+            algorithm::CalculateMaximumNormalizedVectorChange(
+                updated_offset,
+                offset,
+                kJointOffsetIrlsScaleFloor)
+        };
         offset = std::move(updated_offset);
-        if (maximum_change < kHuberSlopeTolerance) break;
+        if (maximum_change < kJointOffsetIrlsNormalizedChangeTolerance) break;
     }
 
     return JointOffsetSolveResult{
