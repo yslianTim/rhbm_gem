@@ -571,16 +571,27 @@ algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
                 };
                 if (distance > kNeighborContributionDistanceMax) continue;
                 const auto & neighbor_model{ neighbor_model_iter->second };
+                const auto column_iter{ atom_column_map.find(neighbor_atom) };
+                if (column_iter == atom_column_map.end())
+                {
+                    const auto response{ neighbor_model.ResponseAtDistance(distance) };
+                    if (!std::isfinite(response))
+                    {
+                        throw std::runtime_error(
+                            "Joint offset fixed neighbor model evaluation is not finite.");
+                    }
+                    residual -= response;
+                    continue;
+                }
+
                 const auto signal{ neighbor_model.SignalAtDistance(distance) };
                 const auto basis{ neighbor_model.OffsetBasisAtDistance(distance) };
                 if (!std::isfinite(signal) || !std::isfinite(basis))
                 {
                     throw std::runtime_error(
-                        "Joint offset neighbor model evaluation is not finite.");
+                        "Joint offset active neighbor model evaluation is not finite.");
                 }
                 residual -= signal;
-                const auto column_iter{ atom_column_map.find(neighbor_atom) };
-                if (column_iter == atom_column_map.end()) continue;
                 if (std::abs(basis) > std::numeric_limits<double>::epsilon())
                 {
                     row.basis_entries.emplace_back(column_iter->second, basis);

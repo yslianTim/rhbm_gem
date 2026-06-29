@@ -298,6 +298,47 @@ TEST(EstimatorTesterTest, RunLocalPotentialFittingDoesNotWorsenCoupledResponseRe
     EXPECT_LE(full_error, first_stage_error + tolerance);
 }
 
+TEST(EstimatorTesterTest, RunLocalPotentialFittingHandlesCoupledNonzeroOffsetNeighbors)
+{
+    ElectricPotential potential_model;
+    potential_model.SetModelChoice(0);
+    potential_model.SetBlurringWidth(0.5);
+    const auto input{
+        tdf::BuildPotentialModelTestData(tdf::PotentialModelScenario{
+            Spot::C,
+            Element::CARBON,
+            0.15,
+            rg::GaussianModel3D{ 6.0, 0.55, -0.2 },
+            potential_model,
+            0.0,
+            1,
+            77
+        })
+    };
+    rt::FitOptions options;
+    options.distance_min = 0.0;
+    options.distance_max = 1.0;
+    options.thread_size = 1;
+    options.quiet_mode = true;
+
+    rg::ModelObject first_stage_model{ *input.replica_model_objects.front() };
+    rt::RunLocalAlphaTraining(first_stage_model, options);
+    rt::RunFirstStageLocalFitting(first_stage_model, options);
+    const auto first_stage_error{
+        CalculateSelectedAtomResponseMeanSquaredError(first_stage_model)
+    };
+
+    rg::ModelObject full_model{ *input.replica_model_objects.front() };
+    rt::RunLocalAlphaTraining(full_model, options);
+    rt::RunLocalPotentialFitting(full_model, options);
+    const auto full_error{
+        CalculateSelectedAtomResponseMeanSquaredError(full_model)
+    };
+
+    const auto tolerance{ 1.0e-3 * std::max(first_stage_error, 1.0) };
+    EXPECT_LE(full_error, first_stage_error + tolerance);
+}
+
 TEST(EstimatorTesterTest, RunSecondStageLocalFittingLogsFallbackSummary)
 {
     auto model{ BuildSecondStageFallbackDiagnosticModel() };
