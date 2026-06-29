@@ -31,6 +31,7 @@
 #include <cmath>
 #include <iomanip>
 #include <limits>
+#include <map>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -86,6 +87,19 @@ struct LocalFittingObjectiveStats
     bool has_quality_objective{ false };
     double quality_objective{ std::numeric_limits<double>::infinity() };
     std::size_t sample_count{ 0 };
+};
+
+struct ParameterSummaryStats
+{
+    double mean{ 0.0 };
+    double standard_deviation{ 0.0 };
+};
+
+struct GroupPriorSpotSampleList
+{
+    std::vector<double> amplitude_list{};
+    std::vector<double> width_list{};
+    std::vector<double> offset_list{};
 };
 
 std::vector<AtomLocalPotentialEditor> BuildSelectedAtomLocalEditors(ModelObject & model_object)
@@ -803,6 +817,96 @@ bool IsLocalFittingQualityAcceptableForConvergence(
             candidate_stats,
             best_stats,
             kLocalFittingConvergenceObjectiveRelativeTolerance);
+}
+
+ParameterSummaryStats SummarizeParameterValues(const std::vector<double> & value_list)
+{
+    if (value_list.empty())
+    {
+        return {};
+    }
+
+    double sum{ 0.0 };
+    for (const auto value : value_list)
+    {
+        sum += value;
+    }
+    const auto mean{ sum / static_cast<double>(value_list.size()) };
+    if (value_list.size() < 2)
+    {
+        return ParameterSummaryStats{ mean, 0.0 };
+    }
+
+    double squared_error_sum{ 0.0 };
+    for (const auto value : value_list)
+    {
+        const auto error{ value - mean };
+        squared_error_sum += error * error;
+    }
+    return ParameterSummaryStats{
+        mean,
+        std::sqrt(squared_error_sum / static_cast<double>(value_list.size() - 1))
+    };
+}
+
+std::vector<std::string> BuildGroupPriorSpotSummaryLines(const ModelObject & model_object)
+{
+    const auto analysis_view{ model_object.GetAnalysisView() };
+    std::map<std::string, GroupPriorSpotSampleList> spot_sample_map;
+    for (const auto group_key : analysis_view.CollectAtomGroupKeys())
+    {
+        const auto & atom_list{ analysis_view.GetAtomObjectList(group_key) };
+        if (atom_list.empty()) continue;
+
+        const auto & prior{ analysis_view.GetAtomGroupPrior(group_key) };
+        auto & sample_list{
+            spot_sample_map["Spot::" + ChemicalDataHelper::GetLabel(atom_list.front()->GetSpot())]
+        };
+        sample_list.amplitude_list.emplace_back(prior.GetAmplitude());
+        sample_list.width_list.emplace_back(prior.GetWidth());
+        sample_list.offset_list.emplace_back(prior.GetOffset());
+    }
+
+    std::vector<std::string> summary_lines;
+    summary_lines.reserve(spot_sample_map.size());
+    for (const auto & [spot_label, sample_list] : spot_sample_map)
+    {
+        if (spot_label != "Spot::CA" && spot_label != "Spot::C" && spot_label != "Spot::N" && spot_label != "Spot::O")
+        {
+            continue;
+        }
+        const auto amplitude_stats{ SummarizeParameterValues(sample_list.amplitude_list) };
+        const auto width_stats{ SummarizeParameterValues(sample_list.width_list) };
+        const auto offset_stats{ SummarizeParameterValues(sample_list.offset_list) };
+
+        std::ostringstream stream;
+        stream << spot_label << std::fixed << std::setprecision(2)
+            << " , amplitude mean = " << amplitude_stats.mean
+            << ", amplitude s.d. = " << amplitude_stats.standard_deviation
+            << ", width mean = " << width_stats.mean
+            << ", width s.d. = " << width_stats.standard_deviation
+            << ", offset mean = " << offset_stats.mean
+            << ", offset s.d. = " << offset_stats.standard_deviation;
+        summary_lines.emplace_back(stream.str());
+    }
+    return summary_lines;
+}
+
+void LogGroupPriorSpotSummary(const ModelObject & model_object)
+{
+    const auto summary_lines{ BuildGroupPriorSpotSummaryLines(model_object) };
+    if (summary_lines.empty())
+    {
+        Logger::Log(LogLevel::Info,
+            "Group fitting prior summary by Spot: no atom groups available.");
+        return;
+    }
+
+    Logger::Log(LogLevel::Info, "Group fitting prior summary by Spot:");
+    for (const auto & line : summary_lines)
+    {
+        Logger::Log(LogLevel::Info, line);
+    }
 }
 
 std::vector<algorithm::ParameterChange> CalculateLocalFittingParameterChanges(
@@ -1583,6 +1687,10 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
     RunLocalPotentialFitting(model_object, options);
     RunGroupAlphaTraining(model_object, options);
     RunGroupPotentialFitting(model_object, options);
+    if (!options.quiet_mode)
+    {
+        LogGroupPriorSpotSummary(model_object);
+    }
 }
 
 } // namespace rhbm_gem::core
