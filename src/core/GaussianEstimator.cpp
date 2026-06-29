@@ -82,6 +82,83 @@ constexpr std::size_t kOffsetChangeIndex{ 2 };
 
 using GaussianFittingState = algorithm::IterationState<LocalGaussianResult, Eigen::VectorXd>;
 
+enum class JointOffsetFallbackReason
+{
+    None,
+    BuildSystemFailed,
+    EmptySystem,
+    InitialSolveFailed,
+    RobustSolveFailed
+};
+
+struct JointOffsetSolveResult
+{
+    Eigen::VectorXd offset{};
+    bool used_fallback{ false };
+    JointOffsetFallbackReason fallback_reason{ JointOffsetFallbackReason::None };
+};
+
+struct LocalRefitResult
+{
+    LocalGaussianResult result{};
+    bool used_fallback{ false };
+};
+
+struct LocalFittingIterationDiagnostics
+{
+    bool joint_offset_used_fallback{ false };
+    std::vector<std::size_t> refit_fallback_state_index_list{};
+};
+
+struct LocalFittingIterationResult
+{
+    GaussianFittingState state{};
+    LocalFittingIterationDiagnostics diagnostics{};
+};
+
+struct LocalFittingFallbackStats
+{
+    std::size_t joint_offset_fallback_iterations{ 0 };
+    std::size_t refit_fallback_atom_events{ 0 };
+    std::vector<bool> refit_fallback_atom_seen{};
+
+    explicit LocalFittingFallbackStats(std::size_t atom_size)
+        : refit_fallback_atom_seen(atom_size, false)
+    {
+    }
+
+    void Accumulate(const LocalFittingIterationDiagnostics & diagnostics)
+    {
+        if (diagnostics.joint_offset_used_fallback)
+        {
+            joint_offset_fallback_iterations++;
+        }
+        refit_fallback_atom_events += diagnostics.refit_fallback_state_index_list.size();
+        for (const auto state_index : diagnostics.refit_fallback_state_index_list)
+        {
+            if (state_index >= refit_fallback_atom_seen.size())
+            {
+                throw std::invalid_argument("Local fitting fallback atom index is out of range.");
+            }
+            refit_fallback_atom_seen.at(state_index) = true;
+        }
+    }
+
+    std::size_t GetDistinctRefitFallbackAtomCount() const
+    {
+        return static_cast<std::size_t>(
+            std::count(
+                refit_fallback_atom_seen.begin(),
+                refit_fallback_atom_seen.end(),
+                true));
+    }
+
+    bool HasFallback() const
+    {
+        return joint_offset_fallback_iterations > 0 || refit_fallback_atom_events > 0;
+    }
+};
+
 struct LocalFittingObjectiveStats
 {
     bool has_quality_objective{ false };
@@ -134,7 +211,7 @@ bool HasEnoughSamplesInFitRange(
 RHBMExecutionOptions MakeExecutionOptions(const FitOptions & options)
 {
     RHBMExecutionOptions execution_options;
-    execution_options.quiet_mode = true;
+    execution_options.quiet_mode = false;
     execution_options.thread_size = options.thread_size;
     return execution_options;
 }
@@ -552,7 +629,7 @@ algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
     return system;
 }
 
-Eigen::VectorXd EstimateJointOffsets(
+JointOffsetSolveResult EstimateJointOffsets(
     const std::vector<AtomObject *> & atom_list,
     const FittedGaussianSnapshot & snapshot)
 {
@@ -570,11 +647,19 @@ Eigen::VectorXd EstimateJointOffsets(
     }
     catch (const std::exception &)
     {
-        return previous_offset;
+        return JointOffsetSolveResult{
+            previous_offset,
+            true,
+            JointOffsetFallbackReason::BuildSystemFailed
+        };
     }
     if (system.response.size() == 0 || system.previous_parameter.size() == 0)
     {
-        return previous_offset;
+        return JointOffsetSolveResult{
+            previous_offset,
+            true,
+            JointOffsetFallbackReason::EmptySystem
+        };
     }
 
     Eigen::VectorXd weight{ Eigen::VectorXd::Ones(system.response.size()) };
@@ -582,7 +667,11 @@ Eigen::VectorXd EstimateJointOffsets(
     Eigen::VectorXd offset;
     if (!solver.Solve(system, weight, offset))
     {
-        return previous_offset;
+        return JointOffsetSolveResult{
+            previous_offset,
+            true,
+            JointOffsetFallbackReason::InitialSolveFailed
+        };
     }
 
     for (int iteration = 0; iteration < kHuberSlopeMaximumIterations; iteration++)
@@ -610,14 +699,22 @@ Eigen::VectorXd EstimateJointOffsets(
         Eigen::VectorXd updated_offset;
         if (!solver.Solve(system, weight, updated_offset))
         {
-            return system.previous_parameter;
+            return JointOffsetSolveResult{
+                system.previous_parameter,
+                true,
+                JointOffsetFallbackReason::RobustSolveFailed
+            };
         }
         const auto maximum_change{ (updated_offset - offset).cwiseAbs().maxCoeff() };
         offset = std::move(updated_offset);
         if (maximum_change < kHuberSlopeTolerance) break;
     }
 
-    return offset;
+    return JointOffsetSolveResult{
+        offset,
+        false,
+        JointOffsetFallbackReason::None
+    };
 }
 
 void ApplyJointOffsetsToSnapshot(
@@ -998,7 +1095,7 @@ LocalGaussianResult EstimateLocalGaussianWithOffsetModel(
     return DecodeLocalGaussianResult(alpha_r, result, offset_model.GetOffset());
 }
 
-LocalGaussianResult FitAtomWithJointOffsetFallback(
+LocalRefitResult FitAtomWithJointOffsetFallback(
     const AtomObject & atom,
     const LocalGaussianResult & previous_result,
     const FittedGaussianSnapshot & offset_snapshot,
@@ -1018,7 +1115,10 @@ LocalGaussianResult FitAtomWithJointOffsetFallback(
         };
         if (CanBuildFiniteZeroOffsetSamples(sample_entries, candidate_result.mdpde.GetModel()))
         {
-            return candidate_result;
+            return LocalRefitResult{
+                candidate_result,
+                false
+            };
         }
     }
     catch (const std::exception &)
@@ -1028,7 +1128,10 @@ LocalGaussianResult FitAtomWithJointOffsetFallback(
     auto result{ previous_result };
     result.ols = WithModelOffset(result.ols, offset_model.GetOffset());
     result.mdpde = WithModelOffset(result.mdpde, offset_model.GetOffset());
-    return result;
+    return LocalRefitResult{
+        result,
+        true
+    };
 }
 
 std::vector<AtomObject *> BuildActiveAtomList(
@@ -1101,7 +1204,7 @@ std::size_t ThawChangedActiveAtomNeighbors(
     return thaw_count;
 }
 
-GaussianFittingState RunLocalFittingIteration(
+LocalFittingIterationResult RunLocalFittingIteration(
     const std::vector<AtomObject *> & atom_list,
     const std::vector<std::size_t> & active_index_list,
     const GaussianFittingState & previous_state,
@@ -1117,11 +1220,12 @@ GaussianFittingState RunLocalFittingIteration(
         BuildFittedGaussianSnapshot(atom_list, previous_state.estimation_list)
     };
     const auto active_atom_list{ BuildActiveAtomList(atom_list, active_index_list) };
-    const auto joint_offset{
+    const auto joint_offset_result{
         EstimateJointOffsets(active_atom_list, current_snapshot)
     };
-    ApplyJointOffsetsToSnapshot(active_atom_list, joint_offset, current_snapshot);
+    ApplyJointOffsetsToSnapshot(active_atom_list, joint_offset_result.offset, current_snapshot);
     auto iteration_state{ previous_state };
+    std::vector<int> refit_fallback_flag_list(active_index_list.size(), 0);
 
 #ifdef USE_OPENMP
     #pragma omp parallel for num_threads(options.thread_size)
@@ -1130,18 +1234,34 @@ GaussianFittingState RunLocalFittingIteration(
     {
         const auto state_index{ active_index_list.at(i) };
         const auto & atom{ *atom_list.at(state_index) };
-        auto result{
+        auto refit_result{
             FitAtomWithJointOffsetFallback(
                 atom,
                 previous_state.result_list.at(state_index),
                 current_snapshot,
                 options)
         };
+        if (refit_result.used_fallback)
+        {
+            refit_fallback_flag_list.at(i) = 1;
+        }
+        auto result{ std::move(refit_result.result) };
         const auto fitted_model{ result.mdpde.GetModel() };
         iteration_state.estimation_list.at(state_index) = fitted_model.ToVector();
         iteration_state.result_list.at(state_index) = std::move(result);
     }
-    return iteration_state;
+
+    LocalFittingIterationDiagnostics diagnostics;
+    diagnostics.joint_offset_used_fallback = joint_offset_result.used_fallback;
+    for (std::size_t i = 0; i < refit_fallback_flag_list.size(); i++)
+    {
+        if (refit_fallback_flag_list.at(i) == 0) continue;
+        diagnostics.refit_fallback_state_index_list.emplace_back(active_index_list.at(i));
+    }
+    return LocalFittingIterationResult{
+        std::move(iteration_state),
+        std::move(diagnostics)
+    };
 }
 
 void ApplyLocalFittingState(
@@ -1158,6 +1278,22 @@ void ApplyLocalFittingState(
     {
         local_editor_list.at(i).SetGaussianResult(iteration_state.result_list.at(i));
     }
+}
+
+void LogLocalFittingFallbackSummary(const LocalFittingFallbackStats & fallback_stats)
+{
+    if (!fallback_stats.HasFallback()) return;
+
+    std::ostringstream message;
+    message << "Second-stage local fitting fallback summary: "
+        << "joint offset fallback iterations = "
+        << fallback_stats.joint_offset_fallback_iterations
+        << ", refit fallback atom-events = "
+        << fallback_stats.refit_fallback_atom_events
+        << ", refit fallback distinct atoms = "
+        << fallback_stats.GetDistinctRefitFallbackAtomCount()
+        << ".";
+    Logger::Log(LogLevel::Warning, message.str());
 }
 
 } // namespace
@@ -1510,6 +1646,7 @@ void RunSecondStageLocalFitting(
         kLocalFittingFreezeChangeRatio,
         kLocalFittingFreezeStableIterations
     };
+    LocalFittingFallbackStats fallback_stats{ atom_size };
     const auto atom_index_map{ BuildSelectedAtomIndexMap(atom_list) };
     for (size_t iter = 0; iter < kLocalFittingMaximumIterations; iter++)
     {
@@ -1527,13 +1664,15 @@ void RunSecondStageLocalFitting(
             break;
         }
 
-        auto current_state{
+        auto iteration_result{
             RunLocalFittingIteration(
                 atom_list,
                 active_index_list,
                 previous_state,
                 options)
         };
+        fallback_stats.Accumulate(iteration_result.diagnostics);
+        auto current_state{ std::move(iteration_result.state) };
         const auto beta{ relaxation_controller.GetBeta() };
         ApplyLocalFittingUnderRelaxation(current_state, previous_state, beta);
         const auto change_list{
@@ -1675,6 +1814,10 @@ void RunSecondStageLocalFitting(
         }
         previous_state = std::move(current_state);
         previous_candidate_stats = current_candidate_stats;
+    }
+    if (!options.quiet_mode)
+    {
+        LogLocalFittingFallbackSummary(fallback_stats);
     }
 }
 

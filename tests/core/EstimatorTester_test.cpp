@@ -4,13 +4,18 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <memory>
 #include <stdexcept>
+#include <string>
+#include <utility>
 
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/TestDataFactory.hpp>
 #include <rhbm_gem/core/EstimatorTester.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 namespace {
 namespace rt = rhbm_gem::core;
@@ -85,6 +90,43 @@ double CalculateSelectedAtomResponseMeanSquaredError(const rg::ModelObject & mod
         }
     }
     return squared_error_sum / static_cast<double>(sample_count);
+}
+
+std::unique_ptr<rg::ModelObject> BuildSecondStageFallbackDiagnosticModel()
+{
+    ElectricPotential potential_model;
+    potential_model.SetModelChoice(0);
+    potential_model.SetBlurringWidth(0.5);
+    auto input{
+        tdf::BuildPotentialModelTestData(tdf::PotentialModelScenario{
+            Spot::UNK,
+            Element::OXYGEN,
+            -0.1,
+            rg::GaussianModel3D{ 8.0, 0.5, -0.1 },
+            potential_model,
+            0.0,
+            1,
+            42
+        })
+    };
+    auto model{ std::move(input.replica_model_objects.front()) };
+
+    rt::FitOptions options;
+    options.distance_min = 0.0;
+    options.distance_max = 1.0;
+    options.thread_size = 1;
+    options.quiet_mode = true;
+    rt::RunLocalAlphaTraining(*model, options);
+    rt::RunFirstStageLocalFitting(*model, options);
+
+    auto analysis{ model->EditAnalysis() };
+    auto * atom{ model->GetSelectedAtoms().front() };
+    auto sampling_entries{
+        rg::AtomLocalPotentialView::RequireFor(*atom).GetSamplingEntries(false)
+    };
+    sampling_entries.front().response = std::numeric_limits<float>::quiet_NaN();
+    analysis.EnsureAtomLocalPotential(*atom).SetSamplingEntries(std::move(sampling_entries));
+    return model;
 }
 
 } // namespace
@@ -254,4 +296,55 @@ TEST(EstimatorTesterTest, RunLocalPotentialFittingDoesNotWorsenCoupledResponseRe
 
     const auto tolerance{ 1.0e-3 * std::max(first_stage_error, 1.0) };
     EXPECT_LE(full_error, first_stage_error + tolerance);
+}
+
+TEST(EstimatorTesterTest, RunSecondStageLocalFittingLogsFallbackSummary)
+{
+    auto model{ BuildSecondStageFallbackDiagnosticModel() };
+    rt::FitOptions options;
+    options.distance_min = 0.0;
+    options.distance_max = 1.0;
+    options.thread_size = 1;
+    options.quiet_mode = false;
+
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Warning);
+    testing::internal::CaptureStderr();
+    rt::RunSecondStageLocalFitting(*model, model->GetSelectedAtoms(), options);
+    const std::string error_output{ testing::internal::GetCapturedStderr() };
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_NE(
+        error_output.find("Second-stage local fitting fallback summary:"),
+        std::string::npos);
+    EXPECT_NE(
+        error_output.find("joint offset fallback iterations = 1"),
+        std::string::npos);
+    EXPECT_NE(
+        error_output.find("refit fallback atom-events = 1"),
+        std::string::npos);
+    EXPECT_NE(
+        error_output.find("refit fallback distinct atoms = 1"),
+        std::string::npos);
+}
+
+TEST(EstimatorTesterTest, RunSecondStageLocalFittingQuietModeSuppressesFallbackSummary)
+{
+    auto model{ BuildSecondStageFallbackDiagnosticModel() };
+    rt::FitOptions options;
+    options.distance_min = 0.0;
+    options.distance_max = 1.0;
+    options.thread_size = 1;
+    options.quiet_mode = true;
+
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Warning);
+    testing::internal::CaptureStderr();
+    rt::RunSecondStageLocalFitting(*model, model->GetSelectedAtoms(), options);
+    const std::string error_output{ testing::internal::GetCapturedStderr() };
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_EQ(
+        error_output.find("Second-stage local fitting fallback summary:"),
+        std::string::npos);
 }
