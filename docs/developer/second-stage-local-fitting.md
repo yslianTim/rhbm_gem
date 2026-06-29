@@ -150,11 +150,13 @@ they remain frozen, but their fitted Gaussian remains in the snapshot so active
 neighbors can subtract them as fixed signal contributions.
 
 The best fixed-point candidate is tracked separately. At second-stage entry,
-the initial residuals define one fixed Huber scale and cutoff for this fitting
-run. Every previous, current, and best candidate is scored with that same cutoff,
-so objective values are comparable across iterations. A candidate is better when
-its fixed-scale robust objective improves beyond the tie tolerance; objective
-ties are broken by the maximum of the three percentile parameter changes.
+the initial residuals define one fixed residual scale for this fitting run.
+Every previous, current, and best candidate is scored by first normalizing its
+residuals by that entry-time scale, then applying the same dimensionless Huber
+cutoff. This keeps objective values comparable across iterations and across map
+value scales. A candidate is better when its normalized robust objective
+improves beyond the tie tolerance; objective ties are broken by the maximum of
+the three percentile parameter changes.
 Convergence is accepted only if the current objective is not worse than both the
 previous candidate and the best candidate by more than
 `kLocalFittingConvergenceObjectiveRelativeTolerance`, when those objective values

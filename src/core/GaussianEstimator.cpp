@@ -175,7 +175,6 @@ struct LocalFittingObjectiveReference
 {
     bool has_reference{ false };
     double residual_scale{ std::numeric_limits<double>::infinity() };
-    double huber_cutoff{ std::numeric_limits<double>::infinity() };
 };
 
 struct ParameterSummaryStats
@@ -945,15 +944,13 @@ LocalFittingObjectiveReference BuildLocalFittingObjectiveReference(
         kHuberScaleMultiplier * array_helper::ComputeMedian(deviation_list),
         kHuberScaleMin)
     };
-    const auto huber_cutoff{ kHuberCutoffMultiplier * residual_scale };
-    if (!std::isfinite(residual_scale) || !std::isfinite(huber_cutoff))
+    if (!std::isfinite(residual_scale))
     {
         return reference;
     }
 
     reference.has_reference = true;
     reference.residual_scale = residual_scale;
-    reference.huber_cutoff = huber_cutoff;
     return reference;
 }
 
@@ -977,7 +974,8 @@ LocalFittingObjectiveStats CalculateLocalFittingObjectiveStats(
     double loss_sum{ 0.0 };
     for (const auto residual : *residual_list)
     {
-        loss_sum += CalculateHuberLoss(residual, objective_reference.huber_cutoff);
+        const auto normalized_residual{ residual / objective_reference.residual_scale };
+        loss_sum += CalculateHuberLoss(normalized_residual, kHuberCutoffMultiplier);
     }
     const auto quality_objective{
         loss_sum / static_cast<double>(residual_list->size())
