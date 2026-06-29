@@ -128,8 +128,12 @@ iterations. Frozen atoms are not thawed. They no longer participate in the joint
 offset solve or per-atom refit, but their fitted Gaussian remains in the
 snapshot so active neighbors can subtract them as fixed signal contributions.
 
-The best fixed-point candidate is tracked separately. A candidate is better when
-the maximum of its three percentile changes is lower than the previous best.
+The best fixed-point candidate is tracked separately. At second-stage entry,
+the initial residuals define one fixed Huber scale and cutoff for this fitting
+run. Every previous, current, and best candidate is scored with that same cutoff,
+so objective values are comparable across iterations. A candidate is better when
+its fixed-scale robust objective improves beyond the tie tolerance; objective
+ties are broken by the maximum of the three percentile parameter changes.
 
 ## Exit Paths
 

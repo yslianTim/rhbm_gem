@@ -56,7 +56,7 @@ constexpr double kResidualOffsetRangeMin{ 1.0 };
 constexpr double kResidualOffsetRangeMax{ 2.0 };
 constexpr double kOffsetDampingFactor{ 0.5 };
 constexpr double kNeighborContributionDistanceMax{ 2.5 };
-constexpr std::size_t kLocalFittingMaximumIterations{ 100 };
+constexpr std::size_t kLocalFittingMaximumIterations{ 1000 };
 constexpr double kLocalFittingParameterChangeTolerance{ 1.0e-6 };
 constexpr double kLocalFittingChangePercentile{ 0.95 };
 constexpr int kHuberSlopeMaximumIterations{ 50 };
@@ -168,6 +168,13 @@ struct LocalFittingObjectiveStats
     bool has_quality_objective{ false };
     double quality_objective{ std::numeric_limits<double>::infinity() };
     std::size_t sample_count{ 0 };
+};
+
+struct LocalFittingObjectiveReference
+{
+    bool has_reference{ false };
+    double residual_scale{ std::numeric_limits<double>::infinity() };
+    double huber_cutoff{ std::numeric_limits<double>::infinity() };
 };
 
 struct ParameterSummaryStats
@@ -882,11 +889,10 @@ double CalculateHuberLoss(double residual, double cutoff)
     return cutoff * (absolute_residual - 0.5 * cutoff);
 }
 
-LocalFittingObjectiveStats CalculateLocalFittingObjectiveStats(
+std::optional<std::vector<double>> CollectLocalFittingResiduals(
     const std::vector<AtomObject *> & atom_list,
     const GaussianFittingState & fitting_state)
 {
-    LocalFittingObjectiveStats stats;
     const auto snapshot{
         BuildFittedGaussianSnapshot(atom_list, fitting_state.estimation_list)
     };
@@ -908,20 +914,29 @@ LocalFittingObjectiveStats CalculateLocalFittingObjectiveStats(
             const auto residual{ static_cast<double>(sample.response) - expected_response };
             if (!std::isfinite(residual))
             {
-                return stats;
+                return std::nullopt;
             }
             residual_list.emplace_back(residual);
         }
     }
-    if (residual_list.empty())
+    return residual_list;
+}
+
+LocalFittingObjectiveReference BuildLocalFittingObjectiveReference(
+    const std::vector<AtomObject *> & atom_list,
+    const GaussianFittingState & fitting_state)
+{
+    LocalFittingObjectiveReference reference;
+    const auto residual_list{ CollectLocalFittingResiduals(atom_list, fitting_state) };
+    if (!residual_list.has_value() || residual_list->empty())
     {
-        return stats;
+        return reference;
     }
 
-    const auto median_residual{ array_helper::ComputeMedian(residual_list) };
+    const auto median_residual{ array_helper::ComputeMedian(*residual_list) };
     std::vector<double> deviation_list;
-    deviation_list.reserve(residual_list.size());
-    for (const auto residual : residual_list)
+    deviation_list.reserve(residual_list->size());
+    for (const auto residual : *residual_list)
     {
         deviation_list.emplace_back(std::abs(residual - median_residual));
     }
@@ -929,14 +944,42 @@ LocalFittingObjectiveStats CalculateLocalFittingObjectiveStats(
         kHuberScaleMultiplier * array_helper::ComputeMedian(deviation_list),
         kHuberScaleMin)
     };
-    const auto cutoff{ kHuberCutoffMultiplier * residual_scale };
-    double loss_sum{ 0.0 };
-    for (const auto residual : residual_list)
+    const auto huber_cutoff{ kHuberCutoffMultiplier * residual_scale };
+    if (!std::isfinite(residual_scale) || !std::isfinite(huber_cutoff))
     {
-        loss_sum += CalculateHuberLoss(residual, cutoff);
+        return reference;
+    }
+
+    reference.has_reference = true;
+    reference.residual_scale = residual_scale;
+    reference.huber_cutoff = huber_cutoff;
+    return reference;
+}
+
+LocalFittingObjectiveStats CalculateLocalFittingObjectiveStats(
+    const std::vector<AtomObject *> & atom_list,
+    const GaussianFittingState & fitting_state,
+    const LocalFittingObjectiveReference & objective_reference)
+{
+    LocalFittingObjectiveStats stats;
+    if (!objective_reference.has_reference)
+    {
+        return stats;
+    }
+
+    const auto residual_list{ CollectLocalFittingResiduals(atom_list, fitting_state) };
+    if (!residual_list.has_value() || residual_list->empty())
+    {
+        return stats;
+    }
+
+    double loss_sum{ 0.0 };
+    for (const auto residual : *residual_list)
+    {
+        loss_sum += CalculateHuberLoss(residual, objective_reference.huber_cutoff);
     }
     const auto quality_objective{
-        loss_sum / static_cast<double>(residual_list.size())
+        loss_sum / static_cast<double>(residual_list->size())
     };
     if (!std::isfinite(quality_objective))
     {
@@ -945,7 +988,7 @@ LocalFittingObjectiveStats CalculateLocalFittingObjectiveStats(
 
     stats.has_quality_objective = true;
     stats.quality_objective = quality_objective;
-    stats.sample_count = residual_list.size();
+    stats.sample_count = residual_list->size();
     return stats;
 }
 
@@ -1693,8 +1736,14 @@ void RunSecondStageLocalFitting(
         previous_state.estimation_list[i] = previous_state.result_list[i].mdpde.GetModel().ToVector();
     }
 
+    const auto objective_reference{
+        BuildLocalFittingObjectiveReference(atom_list, previous_state)
+    };
     const auto previous_objective_stats{
-        CalculateLocalFittingObjectiveStats(atom_list, previous_state)
+        CalculateLocalFittingObjectiveStats(
+            atom_list,
+            previous_state,
+            objective_reference)
     };
     algorithm::FittingQualityCandidateStats previous_candidate_stats{
         previous_objective_stats.has_quality_objective,
@@ -1767,7 +1816,10 @@ void RunSecondStageLocalFitting(
             SummarizeLocalFittingParameterChangeStats(change_list, active_index_list)
         };
         const auto current_objective_stats{
-            CalculateLocalFittingObjectiveStats(atom_list, current_state)
+            CalculateLocalFittingObjectiveStats(
+                atom_list,
+                current_state,
+                objective_reference)
         };
         const auto current_candidate_stats{
             BuildLocalFittingCandidateStats(current_objective_stats, change_stats)
