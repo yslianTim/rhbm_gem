@@ -73,11 +73,20 @@ constexpr double kAdaptiveRelaxationImprovementRatio{ 0.01 };
 constexpr int kAdaptiveRelaxationIncreaseStreak{ 2 };
 constexpr double kLocalFittingFreezeChangeRatio{ 0.1 };
 constexpr int kLocalFittingFreezeStableIterations{ 3 };
+constexpr double kLocalFittingObjectiveTieRelativeTolerance{ 1.0e-8 };
+constexpr double kLocalFittingConvergenceObjectiveRelativeTolerance{ 1.0e-3 };
 constexpr std::size_t kAmplitudeChangeIndex{ 0 };
 constexpr std::size_t kWidthChangeIndex{ 1 };
 constexpr std::size_t kOffsetChangeIndex{ 2 };
 
 using GaussianFittingState = algorithm::IterationState<LocalGaussianResult, Eigen::VectorXd>;
+
+struct LocalFittingObjectiveStats
+{
+    bool has_quality_objective{ false };
+    double quality_objective{ std::numeric_limits<double>::infinity() };
+    std::size_t sample_count{ 0 };
+};
 
 std::vector<AtomLocalPotentialEditor> BuildSelectedAtomLocalEditors(ModelObject & model_object)
 {
@@ -669,6 +678,133 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(const AtomObject & a
         });
 }
 
+double CalculateHuberLoss(double residual, double cutoff)
+{
+    const auto absolute_residual{ std::abs(residual) };
+    if (absolute_residual <= cutoff)
+    {
+        return 0.5 * residual * residual;
+    }
+    return cutoff * (absolute_residual - 0.5 * cutoff);
+}
+
+LocalFittingObjectiveStats CalculateLocalFittingObjectiveStats(
+    const std::vector<AtomObject *> & atom_list,
+    const GaussianFittingState & fitting_state)
+{
+    LocalFittingObjectiveStats stats;
+    const auto snapshot{
+        BuildFittedGaussianSnapshot(atom_list, fitting_state.estimation_list)
+    };
+    std::vector<double> residual_list;
+    for (const auto * atom : atom_list)
+    {
+        const auto model_iter{ snapshot.find(atom) };
+        if (model_iter == snapshot.end())
+        {
+            throw std::invalid_argument("Local fitting objective snapshot is missing an atom.");
+        }
+        const auto sample_entries{ UpdateSampleListWithFittedGaussian(*atom, snapshot) };
+        residual_list.reserve(residual_list.size() + sample_entries.size());
+        const auto & target_model{ model_iter->second };
+        for (const auto & sample : sample_entries)
+        {
+            const auto distance{ static_cast<double>(sample.point.distance) };
+            const auto expected_response{ target_model.ResponseAtDistance(distance) };
+            const auto residual{ static_cast<double>(sample.response) - expected_response };
+            if (!std::isfinite(residual))
+            {
+                return stats;
+            }
+            residual_list.emplace_back(residual);
+        }
+    }
+    if (residual_list.empty())
+    {
+        return stats;
+    }
+
+    const auto median_residual{ array_helper::ComputeMedian(residual_list) };
+    std::vector<double> deviation_list;
+    deviation_list.reserve(residual_list.size());
+    for (const auto residual : residual_list)
+    {
+        deviation_list.emplace_back(std::abs(residual - median_residual));
+    }
+    const auto residual_scale{ std::max(
+        kHuberScaleMultiplier * array_helper::ComputeMedian(deviation_list),
+        kHuberScaleMin)
+    };
+    const auto cutoff{ kHuberCutoffMultiplier * residual_scale };
+    double loss_sum{ 0.0 };
+    for (const auto residual : residual_list)
+    {
+        loss_sum += CalculateHuberLoss(residual, cutoff);
+    }
+    const auto quality_objective{
+        loss_sum / static_cast<double>(residual_list.size())
+    };
+    if (!std::isfinite(quality_objective))
+    {
+        return stats;
+    }
+
+    stats.has_quality_objective = true;
+    stats.quality_objective = quality_objective;
+    stats.sample_count = residual_list.size();
+    return stats;
+}
+
+algorithm::FittingQualityCandidateStats BuildLocalFittingCandidateStats(
+    const LocalFittingObjectiveStats & objective_stats,
+    const algorithm::ParameterChangeStats & change_stats)
+{
+    return algorithm::FittingQualityCandidateStats{
+        objective_stats.has_quality_objective,
+        objective_stats.quality_objective,
+        change_stats
+    };
+}
+
+bool IsQualityObjectiveDeteriorated(
+    const algorithm::FittingQualityCandidateStats & candidate_stats,
+    const algorithm::FittingQualityCandidateStats & reference_stats,
+    double objective_relative_tolerance)
+{
+    if (!reference_stats.has_quality_objective)
+    {
+        return false;
+    }
+    if (!candidate_stats.has_quality_objective)
+    {
+        return true;
+    }
+
+    const auto scale{ std::max(std::abs(reference_stats.quality_objective), 1.0) };
+    return candidate_stats.quality_objective >
+        reference_stats.quality_objective + objective_relative_tolerance * scale;
+}
+
+bool IsLocalFittingQualityAcceptableForConvergence(
+    const algorithm::FittingQualityCandidateStats & candidate_stats,
+    const algorithm::FittingQualityCandidateStats & previous_stats,
+    bool has_best_candidate,
+    const algorithm::FittingQualityCandidateStats & best_stats)
+{
+    if (IsQualityObjectiveDeteriorated(
+            candidate_stats,
+            previous_stats,
+            kLocalFittingConvergenceObjectiveRelativeTolerance))
+    {
+        return false;
+    }
+    return !has_best_candidate ||
+        !IsQualityObjectiveDeteriorated(
+            candidate_stats,
+            best_stats,
+            kLocalFittingConvergenceObjectiveRelativeTolerance);
+}
+
 std::vector<algorithm::ParameterChange> CalculateLocalFittingParameterChanges(
     const std::vector<Eigen::VectorXd> & current_estimation_list,
     const std::vector<Eigen::VectorXd> & previous_estimation_list)
@@ -1181,9 +1317,27 @@ void RunSecondStageLocalFitting(
         previous_state.estimation_list[i] = previous_state.result_list[i].mdpde.GetModel().ToVector();
     }
 
+    const auto previous_objective_stats{
+        CalculateLocalFittingObjectiveStats(atom_list, previous_state)
+    };
+    algorithm::FittingQualityCandidateStats previous_candidate_stats{
+        previous_objective_stats.has_quality_objective,
+        previous_objective_stats.quality_objective,
+        algorithm::ParameterChangeStats{ std::vector<double>{
+            0.0,
+            0.0,
+            0.0
+        } }
+    };
     GaussianFittingState best_state;
-    algorithm::ParameterChangeStats best_change_stats;
-    bool has_best_iteration_result{ false };
+    algorithm::FittingQualityCandidateStats best_candidate_stats;
+    bool has_best_candidate{ false };
+    if (previous_objective_stats.has_quality_objective)
+    {
+        best_state = previous_state;
+        best_candidate_stats = previous_candidate_stats;
+        has_best_candidate = true;
+    }
     algorithm::AdaptiveRelaxationController relaxation_controller{
         options.relaxation_factor,
         kAdaptiveRelaxationMin,
@@ -1232,13 +1386,29 @@ void RunSecondStageLocalFitting(
         const auto change_stats{
             SummarizeLocalFittingParameterChangeStats(change_list, active_index_list)
         };
+        const auto current_objective_stats{
+            CalculateLocalFittingObjectiveStats(atom_list, current_state)
+        };
+        const auto current_candidate_stats{
+            BuildLocalFittingCandidateStats(current_objective_stats, change_stats)
+        };
+        const auto quality_allows_convergence{
+            IsLocalFittingQualityAcceptableForConvergence(
+                current_candidate_stats,
+                previous_candidate_stats,
+                has_best_candidate,
+                best_candidate_stats)
+        };
         relaxation_controller.Update(change_stats);
-        if (!has_best_iteration_result ||
-            algorithm::IsBetterParameterChangeCandidate(change_stats, best_change_stats))
+        if (!has_best_candidate ||
+            algorithm::IsBetterFittingQualityCandidate(
+                current_candidate_stats,
+                best_candidate_stats,
+                kLocalFittingObjectiveTieRelativeTolerance))
         {
             best_state = current_state;
-            best_change_stats = change_stats;
-            has_best_iteration_result = true;
+            best_candidate_stats = current_candidate_stats;
+            has_best_candidate = true;
         }
         freeze_tracker.Update(change_list, active_index_list);
 
@@ -1254,6 +1424,8 @@ void RunSecondStageLocalFitting(
                 << GetLocalFittingParameterChangePercentile(change_stats, kWidthChangeIndex)
                 << ", percentile offset change = "
                 << GetLocalFittingParameterChangePercentile(change_stats, kOffsetChangeIndex)
+                << ", objective = "
+                << current_candidate_stats.quality_objective
                 << ", beta = "
                 << beta
                 << ", active atoms = "
@@ -1265,7 +1437,9 @@ void RunSecondStageLocalFitting(
 
         if (freeze_tracker.GetActiveCount() == 0)
         {
-            ApplyLocalFittingState(current_state, local_editor_list);
+            ApplyLocalFittingState(
+                quality_allows_convergence || !has_best_candidate ? current_state : best_state,
+                local_editor_list);
             if (!options.quiet_mode)
             {
                 Logger::FinishProgressLine();
@@ -1281,7 +1455,7 @@ void RunSecondStageLocalFitting(
                 change_stats,
                 kLocalFittingParameterChangeTolerance)
         };
-        if (converged)
+        if (converged && quality_allows_convergence)
         {
             ApplyLocalFittingState(current_state, local_editor_list);
             if (!options.quiet_mode)
@@ -1297,7 +1471,9 @@ void RunSecondStageLocalFitting(
                         GetLocalFittingParameterChangePercentile(change_stats, kWidthChangeIndex)) +
                     ", and percentile offset change = " +
                     std::to_string(
-                        GetLocalFittingParameterChangePercentile(change_stats, kOffsetChangeIndex)) + ".");
+                        GetLocalFittingParameterChangePercentile(change_stats, kOffsetChangeIndex)) +
+                    ", objective = " +
+                    std::to_string(current_candidate_stats.quality_objective) + ".");
             }
             break;
         }
@@ -1312,16 +1488,25 @@ void RunSecondStageLocalFitting(
                     "Reached maximum iteration size; refitting at best fixed-point candidate "
                     "with percentile amplitude change = " +
                     std::to_string(
-                        GetLocalFittingParameterChangePercentile(best_change_stats, kAmplitudeChangeIndex)) +
+                        GetLocalFittingParameterChangePercentile(
+                            best_candidate_stats.parameter_change_stats,
+                            kAmplitudeChangeIndex)) +
                     ", percentile width change = " +
                     std::to_string(
-                        GetLocalFittingParameterChangePercentile(best_change_stats, kWidthChangeIndex)) +
+                        GetLocalFittingParameterChangePercentile(
+                            best_candidate_stats.parameter_change_stats,
+                            kWidthChangeIndex)) +
                     ", and percentile offset change = " +
                     std::to_string(
-                        GetLocalFittingParameterChangePercentile(best_change_stats, kOffsetChangeIndex)));
+                        GetLocalFittingParameterChangePercentile(
+                            best_candidate_stats.parameter_change_stats,
+                            kOffsetChangeIndex)) +
+                    ", objective = " +
+                    std::to_string(best_candidate_stats.quality_objective));
             }
         }
         previous_state = std::move(current_state);
+        previous_candidate_stats = current_candidate_stats;
     }
 }
 

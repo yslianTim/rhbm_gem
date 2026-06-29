@@ -79,3 +79,31 @@ TEST(ConvergenceAlgorithmTest, AdaptiveRelaxationGrowsShrinksAndClamps)
 
     EXPECT_DOUBLE_EQ(0.5, controller.GetBeta());
 }
+
+TEST(ConvergenceAlgorithmTest, FittingQualityCandidateRankingUsesChangeAsTieBreaker)
+{
+    alg::FittingQualityCandidateStats lower_change{
+        true,
+        10.0,
+        alg::ParameterChangeStats{ std::vector<double>{ 0.1 } }
+    };
+    alg::FittingQualityCandidateStats better_quality{
+        true,
+        9.0,
+        alg::ParameterChangeStats{ std::vector<double>{ 1.0 } }
+    };
+    alg::FittingQualityCandidateStats tied_quality_higher_change{
+        true,
+        10.0 + 1.0e-10,
+        alg::ParameterChangeStats{ std::vector<double>{ 0.2 } }
+    };
+
+    EXPECT_TRUE(alg::IsBetterFittingQualityCandidate(
+        better_quality,
+        lower_change,
+        1.0e-8));
+    EXPECT_FALSE(alg::IsBetterFittingQualityCandidate(
+        tied_quality_higher_change,
+        lower_change,
+        1.0e-8));
+}

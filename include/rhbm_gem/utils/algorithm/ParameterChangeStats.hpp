@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <initializer_list>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -14,6 +16,13 @@ namespace rhbm_gem::algorithm {
 struct ParameterChangeStats
 {
     std::vector<double> percentile_list{};
+};
+
+struct FittingQualityCandidateStats
+{
+    bool has_quality_objective{ false };
+    double quality_objective{ std::numeric_limits<double>::infinity() };
+    ParameterChangeStats parameter_change_stats{};
 };
 
 inline ParameterChangeStats SummarizeParameterChangeStats(
@@ -78,6 +87,36 @@ inline bool IsBetterParameterChangeCandidate(
     const ParameterChangeStats & best_stats)
 {
     return GetMaximumParameterChange(stats) < GetMaximumParameterChange(best_stats);
+}
+
+inline bool IsBetterFittingQualityCandidate(
+    const FittingQualityCandidateStats & stats,
+    const FittingQualityCandidateStats & best_stats,
+    double objective_relative_tolerance)
+{
+    if (stats.has_quality_objective != best_stats.has_quality_objective)
+    {
+        return stats.has_quality_objective;
+    }
+
+    if (stats.has_quality_objective)
+    {
+        const auto scale{
+            std::max({ std::abs(stats.quality_objective), std::abs(best_stats.quality_objective), 1.0 })
+        };
+        const auto tolerance{ objective_relative_tolerance * scale };
+        if (stats.quality_objective < best_stats.quality_objective - tolerance)
+        {
+            return true;
+        }
+        if (stats.quality_objective > best_stats.quality_objective + tolerance)
+        {
+            return false;
+        }
+    }
+
+    return GetMaximumParameterChange(stats.parameter_change_stats) <
+        GetMaximumParameterChange(best_stats.parameter_change_stats);
 }
 
 } // namespace rhbm_gem::algorithm

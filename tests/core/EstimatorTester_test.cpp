@@ -1,10 +1,16 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <array>
+#include <cmath>
 #include <limits>
 #include <stdexcept>
 
+#include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/TestDataFactory.hpp>
 #include <rhbm_gem/core/EstimatorTester.hpp>
+#include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
+#include <rhbm_gem/data/object/AtomObject.hpp>
 
 namespace {
 namespace rt = rhbm_gem::core;
@@ -44,6 +50,41 @@ void ExpectBiasStatisticSize(const rt::BiasStatistics & bias)
 {
     EXPECT_EQ(bias.mean.size(), rg::GaussianModel3D::ParameterSize());
     EXPECT_EQ(bias.sigma.size(), rg::GaussianModel3D::ParameterSize());
+}
+
+double Distance(
+    const std::array<float, 3> & lhs,
+    const std::array<float, 3> & rhs)
+{
+    const auto dx{ static_cast<double>(lhs.at(0) - rhs.at(0)) };
+    const auto dy{ static_cast<double>(lhs.at(1) - rhs.at(1)) };
+    const auto dz{ static_cast<double>(lhs.at(2) - rhs.at(2)) };
+    return std::sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+double CalculateSelectedAtomResponseMeanSquaredError(const rg::ModelObject & model_object)
+{
+    double squared_error_sum{ 0.0 };
+    std::size_t sample_count{ 0 };
+    const auto & selected_atoms{ model_object.GetSelectedAtoms() };
+    for (const auto * atom : selected_atoms)
+    {
+        const auto local_view{ rg::AtomLocalPotentialView::RequireFor(*atom) };
+        for (const auto & sample : local_view.GetSamplingEntries(false))
+        {
+            double fitted_response{ 0.0 };
+            for (const auto * fitted_atom : selected_atoms)
+            {
+                const auto fitted_view{ rg::AtomLocalPotentialView::RequireFor(*fitted_atom) };
+                fitted_response += fitted_view.GetEstimateMDPDE().ResponseAtDistance(
+                    Distance(sample.point.position, fitted_atom->GetPosition()));
+            }
+            const auto residual{ static_cast<double>(sample.response) - fitted_response };
+            squared_error_sum += residual * residual;
+            sample_count++;
+        }
+    }
+    return squared_error_sum / static_cast<double>(sample_count);
 }
 
 } // namespace
@@ -172,4 +213,45 @@ TEST(EstimatorTesterTest, RunLocalEstimationTestRejectsNonFiniteTruth)
         rt::RunLocalEstimationTest(test_input, MakeLocalOptions(0.5, true)),
         std::invalid_argument
     );
+}
+
+TEST(EstimatorTesterTest, RunLocalPotentialFittingDoesNotWorsenCoupledResponseResidual)
+{
+    ElectricPotential potential_model;
+    potential_model.SetModelChoice(0);
+    potential_model.SetBlurringWidth(0.5);
+    const auto input{
+        tdf::BuildPotentialModelTestData(tdf::PotentialModelScenario{
+            Spot::UNK,
+            Element::OXYGEN,
+            -0.1,
+            rg::GaussianModel3D{ 8.0, 0.5, -0.1 },
+            potential_model,
+            0.0,
+            1,
+            42
+        })
+    };
+    rt::FitOptions options;
+    options.distance_min = 0.0;
+    options.distance_max = 1.0;
+    options.thread_size = 1;
+    options.quiet_mode = true;
+
+    rg::ModelObject first_stage_model{ *input.replica_model_objects.front() };
+    rt::RunLocalAlphaTraining(first_stage_model, options);
+    rt::RunFirstStageLocalFitting(first_stage_model, options);
+    const auto first_stage_error{
+        CalculateSelectedAtomResponseMeanSquaredError(first_stage_model)
+    };
+
+    rg::ModelObject full_model{ *input.replica_model_objects.front() };
+    rt::RunLocalAlphaTraining(full_model, options);
+    rt::RunLocalPotentialFitting(full_model, options);
+    const auto full_error{
+        CalculateSelectedAtomResponseMeanSquaredError(full_model)
+    };
+
+    const auto tolerance{ 1.0e-3 * std::max(first_stage_error, 1.0) };
+    EXPECT_LE(full_error, first_stage_error + tolerance);
 }
