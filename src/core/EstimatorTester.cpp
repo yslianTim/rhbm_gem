@@ -48,9 +48,7 @@ LocalReplicaBias EstimateLocalReplicaBias(
     double alpha_r,
     const FitOptions & options)
 {
-    const auto estimate{
-        EstimateLocalGaussianWithOffset(sample_entries, alpha_r, options)
-    };
+    const auto estimate{ EstimateLocalGaussian(sample_entries, alpha_r, options) };
     return LocalReplicaBias{
         CalculateNormalizedBias(estimate.ols.GetModel(), truth),
         CalculateNormalizedBias(estimate.mdpde.GetModel(), truth)
@@ -236,7 +234,7 @@ GroupTestBias RunGroupEstimationTest(
         for (const auto & sample_entries : sample_entries_list)
         {
             member_results.emplace_back(
-                EstimateLocalGaussianWithOffset(sample_entries, 0.0, estimator_options));
+                EstimateLocalGaussian(sample_entries, 0.0, estimator_options));
         }
 
         const auto requested_result{
@@ -338,10 +336,8 @@ LocalGaussianEstimateBias RunAtomicModelLocalEstimationTest(
             AtomLocalPotentialView::RequireFor(*model_object.GetSelectedAtoms().front())
         };
         const auto estimate{
-            EstimateLocalGaussianWithOffset(
-                local_view.GetSamplingEntries(false),
-                alpha_r,
-                options)
+            EstimateLocalGaussian(
+                local_view.GetSamplingEntries(false), alpha_r, options)
         };
         ols_bias.col(i) = CalculateNormalizedBias(estimate.ols.GetModel(), input.gaus_true);
         mdpde_bias.col(i) = CalculateNormalizedBias(estimate.mdpde.GetModel(), input.gaus_true);
