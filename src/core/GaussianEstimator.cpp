@@ -102,20 +102,10 @@ constexpr double kLocalFittingObjectiveResidualScaleFloorRatio{ 1.0e-6 };
 
 using GaussianFittingState = algorithm::IterationState<LocalGaussianResult, Eigen::VectorXd>;
 
-enum class JointOffsetFallbackReason
-{
-    None,
-    BuildSystemFailed,
-    EmptySystem,
-    InitialSolveFailed,
-    RobustSolveFailed
-};
-
 struct JointOffsetSolveResult
 {
     Eigen::VectorXd offset{};
     bool used_fallback{ false };
-    JointOffsetFallbackReason fallback_reason{ JointOffsetFallbackReason::None };
     std::vector<std::vector<std::size_t>> active_coupling_adjacency{};
 };
 
@@ -125,28 +115,15 @@ struct JointOffsetBuildResult
     std::vector<std::vector<std::size_t>> active_coupling_adjacency{};
 };
 
-class DynamicRidgeController
+double IncreaseLocalFittingRidgeRatio(double ridge_ratio)
 {
-    double m_ratio{ kJointOffsetRidgeRatio };
+    return std::min(kJointOffsetRidgeRatioMax, ridge_ratio * kJointOffsetRidgeGrowth);
+}
 
-public:
-    double GetRatio() const
-    {
-        return m_ratio;
-    }
-
-    double Increase()
-    {
-        m_ratio = std::min(kJointOffsetRidgeRatioMax, m_ratio * kJointOffsetRidgeGrowth);
-        return m_ratio;
-    }
-
-    double Decrease()
-    {
-        m_ratio = std::max(kJointOffsetRidgeRatioMin, m_ratio * kJointOffsetRidgeShrink);
-        return m_ratio;
-    }
-};
+double DecreaseLocalFittingRidgeRatio(double ridge_ratio)
+{
+    return std::max(kJointOffsetRidgeRatioMin, ridge_ratio * kJointOffsetRidgeShrink);
+}
 
 struct LocalRefitResult
 {
@@ -234,7 +211,6 @@ struct LocalFittingObjectiveStats
 {
     bool has_quality_objective{ false };
     double quality_objective{ std::numeric_limits<double>::infinity() };
-    std::size_t sample_count{ 0 };
     double residual_scale_sample{ std::numeric_limits<double>::infinity() };
 };
 
@@ -611,6 +587,7 @@ FittedGaussianSnapshot BuildFittedGaussianSnapshot(
 
 JointOffsetBuildResult BuildJointOffsetSystem(
     const std::vector<AtomObject *> & atom_list,
+    const std::vector<std::size_t> & active_index_list,
     const FittedGaussianSnapshot & snapshot,
     double ridge_ratio,
     const std::vector<double> & ridge_multiplier_list)
@@ -621,15 +598,25 @@ JointOffsetBuildResult BuildJointOffsetSystem(
     }
 
     std::unordered_map<const AtomObject *, Eigen::Index> atom_column_map;
-    atom_column_map.reserve(atom_list.size());
-    for (std::size_t i = 0; i < atom_list.size(); i++)
+    atom_column_map.reserve(active_index_list.size());
+    for (std::size_t i = 0; i < active_index_list.size(); i++)
     {
-        atom_column_map.emplace(atom_list.at(i), static_cast<Eigen::Index>(i));
+        const auto atom_index{ active_index_list.at(i) };
+        if (atom_index >= atom_list.size())
+        {
+            throw std::invalid_argument("Joint offset active atom index is out of range.");
+        }
+        atom_column_map.emplace(atom_list.at(atom_index), static_cast<Eigen::Index>(i));
     }
 
     std::vector<algorithm::SparseRegressionRow> row_list;
-    for (const auto * atom : atom_list)
+    for (const auto active_index : active_index_list)
     {
+        if (active_index >= atom_list.size())
+        {
+            throw std::invalid_argument("Joint offset active atom index is out of range.");
+        }
+        const auto * atom{ atom_list.at(active_index) };
         const auto model_iter{ snapshot.find(atom) };
         if (model_iter == snapshot.end())
         {
@@ -709,12 +696,12 @@ JointOffsetBuildResult BuildJointOffsetSystem(
     }
 
     const auto row_count{ static_cast<Eigen::Index>(row_list.size()) };
-    const auto column_count{ static_cast<Eigen::Index>(atom_list.size()) };
+    const auto column_count{ static_cast<Eigen::Index>(active_index_list.size()) };
     std::vector<Eigen::Triplet<double>> triplet_list;
     Eigen::VectorXd response{ Eigen::VectorXd::Zero(row_count) };
     Eigen::VectorXd column_square_sum{ Eigen::VectorXd::Zero(column_count) };
     std::map<std::pair<Eigen::Index, Eigen::Index>, double> column_cross_sum_map;
-    std::vector<std::vector<std::size_t>> active_coupling_adjacency(atom_list.size());
+    std::vector<std::vector<std::size_t>> active_coupling_adjacency(active_index_list.size());
     for (Eigen::Index row_index = 0; row_index < row_count; row_index++)
     {
         const auto & row{ row_list.at(static_cast<std::size_t>(row_index)) };
@@ -788,11 +775,12 @@ JointOffsetBuildResult BuildJointOffsetSystem(
     system.ridge_diagonal = Eigen::VectorXd::Zero(column_count);
     for (Eigen::Index column_index = 0; column_index < column_count; column_index++)
     {
-        const auto & model{ snapshot.at(atom_list.at(static_cast<std::size_t>(column_index))) };
+        const auto atom_index{ active_index_list.at(static_cast<std::size_t>(column_index)) };
+        const auto & model{ snapshot.at(atom_list.at(atom_index)) };
         system.previous_parameter(column_index) = model.GetOffset();
         const auto square_sum{ column_square_sum(column_index) };
         const auto multiplier{
-            ridge_multiplier_list.at(static_cast<std::size_t>(column_index))
+            ridge_multiplier_list.at(atom_index)
         };
         if (!std::isfinite(multiplier) || multiplier <= 0.0)
         {
@@ -869,22 +857,30 @@ bool IsJointOffsetObjectiveDeteriorated(
 
 JointOffsetSolveResult EstimateJointOffsets(
     const std::vector<AtomObject *> & atom_list,
+    const std::vector<std::size_t> & active_index_list,
     const FittedGaussianSnapshot & snapshot,
     double ridge_ratio,
     const std::vector<double> & ridge_multiplier_list)
 {
     Eigen::VectorXd previous_offset{
-        Eigen::VectorXd::Zero(static_cast<Eigen::Index>(atom_list.size()))
+        Eigen::VectorXd::Zero(static_cast<Eigen::Index>(active_index_list.size()))
     };
-    for (std::size_t i = 0; i < atom_list.size(); i++)
+    for (std::size_t i = 0; i < active_index_list.size(); i++)
     {
-        previous_offset(static_cast<Eigen::Index>(i)) = snapshot.at(atom_list.at(i)).GetOffset();
+        const auto atom_index{ active_index_list.at(i) };
+        if (atom_index >= atom_list.size())
+        {
+            throw std::invalid_argument("Joint offset active atom index is out of range.");
+        }
+        previous_offset(static_cast<Eigen::Index>(i)) =
+            snapshot.at(atom_list.at(atom_index)).GetOffset();
     }
     JointOffsetBuildResult build_result;
     try
     {
         build_result = BuildJointOffsetSystem(
             atom_list,
+            active_index_list,
             snapshot,
             ridge_ratio,
             ridge_multiplier_list);
@@ -894,7 +890,6 @@ JointOffsetSolveResult EstimateJointOffsets(
         return JointOffsetSolveResult{
             previous_offset,
             true,
-            JointOffsetFallbackReason::BuildSystemFailed,
             {}
         };
     }
@@ -905,7 +900,6 @@ JointOffsetSolveResult EstimateJointOffsets(
         return JointOffsetSolveResult{
             previous_offset,
             true,
-            JointOffsetFallbackReason::EmptySystem,
             std::move(active_coupling_adjacency)
         };
     }
@@ -918,7 +912,6 @@ JointOffsetSolveResult EstimateJointOffsets(
         return JointOffsetSolveResult{
             previous_offset,
             true,
-            JointOffsetFallbackReason::InitialSolveFailed,
             std::move(active_coupling_adjacency)
         };
     }
@@ -951,7 +944,6 @@ JointOffsetSolveResult EstimateJointOffsets(
             return JointOffsetSolveResult{
                 system.previous_parameter,
                 true,
-                JointOffsetFallbackReason::RobustSolveFailed,
                 std::move(active_coupling_adjacency)
             };
         }
@@ -978,24 +970,29 @@ JointOffsetSolveResult EstimateJointOffsets(
     return JointOffsetSolveResult{
         offset,
         false,
-        JointOffsetFallbackReason::None,
         std::move(active_coupling_adjacency)
     };
 }
 
 void ApplyJointOffsetsToSnapshot(
     const std::vector<AtomObject *> & atom_list,
+    const std::vector<std::size_t> & active_index_list,
     const Eigen::VectorXd & offset,
     FittedGaussianSnapshot & snapshot)
 {
-    if (atom_list.size() != static_cast<std::size_t>(offset.size()))
+    if (active_index_list.size() != static_cast<std::size_t>(offset.size()))
     {
         throw std::invalid_argument("Joint offset result size is inconsistent.");
     }
-    for (std::size_t i = 0; i < atom_list.size(); i++)
+    for (std::size_t i = 0; i < active_index_list.size(); i++)
     {
-        snapshot.at(atom_list.at(i)) =
-            snapshot.at(atom_list.at(i)).WithOffset(offset(static_cast<Eigen::Index>(i)));
+        const auto atom_index{ active_index_list.at(i) };
+        if (atom_index >= atom_list.size())
+        {
+            throw std::invalid_argument("Joint offset active atom index is out of range.");
+        }
+        snapshot.at(atom_list.at(atom_index)) =
+            snapshot.at(atom_list.at(atom_index)).WithOffset(offset(static_cast<Eigen::Index>(i)));
     }
 }
 
@@ -1180,7 +1177,6 @@ LocalFittingObjectiveStats CalculateLocalFittingObjectiveStats(
 
     stats.has_quality_objective = true;
     stats.quality_objective = quality_objective;
-    stats.sample_count = objective_samples.residual_list.size();
     stats.residual_scale_sample = *residual_scale_sample;
     return stats;
 }
@@ -1483,6 +1479,121 @@ void ApplyLocalFittingUnderRelaxation(
     }
 }
 
+struct LocalFittingAttemptResult
+{
+    GaussianFittingState state{};
+    std::vector<algorithm::ParameterChange> change_list{};
+    algorithm::ParameterChangeStats change_stats{};
+    algorithm::ParameterChangeStats normalized_change_stats{};
+    algorithm::FittingQualityCandidateStats candidate_stats{};
+    algorithm::FittingQualityCandidateStats previous_candidate_stats{};
+    algorithm::FittingQualityCandidateStats best_candidate_stats{};
+    double objective_scale_sample{ std::numeric_limits<double>::infinity() };
+    algorithm::FittingQualityBacktrackingDecision backtracking_decision{ true, false, false };
+};
+
+LocalFittingAttemptResult EvaluateLocalFittingAttempt(
+    const std::vector<AtomObject *> & atom_list,
+    const std::vector<std::size_t> & active_index_list,
+    const GaussianFittingState & raw_state,
+    const GaussianFittingState & previous_state,
+    const GaussianFittingState & best_state,
+    const algorithm::FittingQualityCandidateStats & previous_candidate_stats,
+    const algorithm::FittingQualityCandidateStats & best_candidate_stats,
+    bool has_best_candidate,
+    const LocalFittingObjectiveScaleTracker & objective_scale_tracker,
+    double beta,
+    int attempt)
+{
+    LocalFittingAttemptResult result;
+    result.state = raw_state;
+    ApplyLocalFittingUnderRelaxation(result.state, previous_state, beta);
+    result.change_list = CalculateLocalFittingParameterChanges(
+        result.state.estimation_list,
+        previous_state.estimation_list);
+    result.change_stats = algorithm::SummarizeParameterChangeStats(
+        result.change_list,
+        active_index_list,
+        kLocalFittingChangePercentile);
+
+    const auto normalized_change_list{
+        CalculateLocalFittingNormalizedParameterChanges(
+            result.state.estimation_list,
+            previous_state.estimation_list)
+    };
+    result.normalized_change_stats = algorithm::SummarizeParameterChangeStats(
+        normalized_change_list,
+        active_index_list,
+        kLocalFittingChangePercentile);
+
+    auto objective_reference{ objective_scale_tracker.GetCommittedReference() };
+    auto objective_stats{ LocalFittingObjectiveStats{} };
+    result.previous_candidate_stats = previous_candidate_stats;
+    result.best_candidate_stats = best_candidate_stats;
+
+    const auto objective_samples{
+        CollectLocalFittingObjectiveSamples(atom_list, result.state)
+    };
+    if (objective_scale_tracker.HasReference() && objective_samples.has_value())
+    {
+        const auto scale_sample{
+            CalculateLocalFittingResidualScaleSample(*objective_samples)
+        };
+        if (scale_sample.has_value())
+        {
+            objective_reference = objective_scale_tracker.GetProvisionalReference(*scale_sample);
+            objective_stats = CalculateLocalFittingObjectiveStats(
+                *objective_samples,
+                objective_reference);
+            if (objective_stats.has_quality_objective)
+            {
+                const auto recalculated_previous_objective_stats{
+                    CalculateLocalFittingObjectiveStats(
+                        atom_list,
+                        previous_state,
+                        objective_reference)
+                };
+                result.previous_candidate_stats.has_quality_objective =
+                    recalculated_previous_objective_stats.has_quality_objective;
+                result.previous_candidate_stats.quality_objective =
+                    recalculated_previous_objective_stats.quality_objective;
+                if (has_best_candidate)
+                {
+                    const auto recalculated_best_objective_stats{
+                        CalculateLocalFittingObjectiveStats(
+                            atom_list,
+                            best_state,
+                            objective_reference)
+                    };
+                    result.best_candidate_stats.has_quality_objective =
+                        recalculated_best_objective_stats.has_quality_objective;
+                    result.best_candidate_stats.quality_objective =
+                        recalculated_best_objective_stats.quality_objective;
+                }
+            }
+        }
+    }
+
+    result.candidate_stats = algorithm::FittingQualityCandidateStats{
+        objective_stats.has_quality_objective,
+        objective_stats.quality_objective,
+        result.normalized_change_stats
+    };
+    result.objective_scale_sample = objective_stats.residual_scale_sample;
+    if (objective_reference.has_reference)
+    {
+        result.backtracking_decision = algorithm::EvaluateFittingQualityBacktracking(
+            result.candidate_stats,
+            result.previous_candidate_stats,
+            has_best_candidate,
+            result.best_candidate_stats,
+            kLocalFittingConvergenceObjectiveRelativeTolerance,
+            attempt,
+            kLocalFittingObjectiveBacktrackingMaximumAttempts);
+    }
+    return result;
+}
+
 LocalGaussianResult EstimateLocalGaussianWithOffsetModel(
     const LocalPotentialSampleList & sample_entries,
     double alpha_r,
@@ -1556,40 +1667,6 @@ LocalRefitResult FitAtomWithJointOffsetFallback(
         true,
         false
     };
-}
-
-std::vector<AtomObject *> BuildActiveAtomList(
-    const std::vector<AtomObject *> & atom_list,
-    const std::vector<std::size_t> & active_index_list)
-{
-    std::vector<AtomObject *> active_atom_list;
-    active_atom_list.reserve(active_index_list.size());
-    for (const auto index : active_index_list)
-    {
-        if (index >= atom_list.size())
-        {
-            throw std::invalid_argument("Local fitting active atom index is out of range.");
-        }
-        active_atom_list.emplace_back(atom_list.at(index));
-    }
-    return active_atom_list;
-}
-
-std::vector<double> BuildActiveRidgeMultiplierList(
-    const std::vector<double> & ridge_multiplier_list,
-    const std::vector<std::size_t> & active_index_list)
-{
-    std::vector<double> active_ridge_multiplier_list;
-    active_ridge_multiplier_list.reserve(active_index_list.size());
-    for (const auto index : active_index_list)
-    {
-        if (index >= ridge_multiplier_list.size())
-        {
-            throw std::invalid_argument("Local fitting ridge multiplier index is out of range.");
-        }
-        active_ridge_multiplier_list.emplace_back(ridge_multiplier_list.at(index));
-    }
-    return active_ridge_multiplier_list;
 }
 
 std::unordered_map<const AtomObject *, std::size_t> BuildSelectedAtomIndexMap(
@@ -1751,18 +1828,19 @@ LocalFittingIterationResult RunLocalFittingIteration(
     auto current_snapshot{
         BuildFittedGaussianSnapshot(atom_list, previous_state.estimation_list)
     };
-    const auto active_atom_list{ BuildActiveAtomList(atom_list, active_index_list) };
-    const auto active_ridge_multiplier_list{
-        BuildActiveRidgeMultiplierList(ridge_multiplier_list, active_index_list)
-    };
     const auto joint_offset_result{
         EstimateJointOffsets(
-            active_atom_list,
+            atom_list,
+            active_index_list,
             current_snapshot,
             ridge_ratio,
-            active_ridge_multiplier_list)
+            ridge_multiplier_list)
     };
-    ApplyJointOffsetsToSnapshot(active_atom_list, joint_offset_result.offset, current_snapshot);
+    ApplyJointOffsetsToSnapshot(
+        atom_list,
+        active_index_list,
+        joint_offset_result.offset,
+        current_snapshot);
     auto iteration_state{ previous_state };
     std::vector<int> refit_fallback_flag_list(active_index_list.size(), 0);
     std::vector<int> suspicious_offset_flag_list(active_index_list.size(), 0);
@@ -2259,7 +2337,7 @@ void RunSecondStageLocalFitting(
         kLocalFittingDependencyThawHysteresisMax,
         kLocalFittingDependencyThawHysteresisFrozenDecay
     };
-    DynamicRidgeController ridge_controller;
+    double ridge_ratio{ kJointOffsetRidgeRatio };
     std::vector<double> joint_offset_ridge_multiplier_list(atom_size, 1.0);
     for (size_t iter = 0; iter < kLocalFittingMaximumIterations; iter++)
     {
@@ -2277,14 +2355,14 @@ void RunSecondStageLocalFitting(
             break;
         }
 
-        const auto ridge_ratio{ ridge_controller.GetRatio() };
+        const auto iteration_ridge_ratio{ ridge_ratio };
         auto iteration_result{
             RunLocalFittingIteration(
                 atom_list,
                 active_index_list,
                 previous_state,
                 options,
-                ridge_ratio,
+                iteration_ridge_ratio,
                 joint_offset_ridge_multiplier_list)
         };
         fallback_stats.Accumulate(iteration_result);
@@ -2319,120 +2397,41 @@ void RunSecondStageLocalFitting(
         for (int attempt = 0; attempt < kLocalFittingObjectiveBacktrackingMaximumAttempts; attempt++)
         {
             beta = relaxation_controller.GetBeta();
-            auto attempt_state{ raw_state };
-            ApplyLocalFittingUnderRelaxation(attempt_state, previous_state, beta);
-            auto attempt_change_list{
-                CalculateLocalFittingParameterChanges(
-                    attempt_state.estimation_list,
-                    previous_state.estimation_list)
-            };
-            auto attempt_change_stats{
-                algorithm::SummarizeParameterChangeStats(
-                    attempt_change_list,
+            auto attempt_result{
+                EvaluateLocalFittingAttempt(
+                    atom_list,
                     active_index_list,
-                    kLocalFittingChangePercentile)
-            };
-            auto attempt_normalized_change_list{
-                CalculateLocalFittingNormalizedParameterChanges(
-                    attempt_state.estimation_list,
-                    previous_state.estimation_list)
-            };
-            auto attempt_normalized_change_stats{
-                algorithm::SummarizeParameterChangeStats(
-                    attempt_normalized_change_list,
-                    active_index_list,
-                    kLocalFittingChangePercentile)
-            };
-            auto attempt_objective_reference{ objective_scale_tracker.GetCommittedReference() };
-            auto attempt_objective_stats{ LocalFittingObjectiveStats{} };
-            auto attempt_previous_candidate_stats{ previous_candidate_stats };
-            auto attempt_best_candidate_stats{ best_candidate_stats };
-            const auto attempt_objective_samples{
-                CollectLocalFittingObjectiveSamples(atom_list, attempt_state)
-            };
-            if (objective_scale_tracker.HasReference() && attempt_objective_samples.has_value())
-            {
-                const auto attempt_scale_sample{
-                    CalculateLocalFittingResidualScaleSample(*attempt_objective_samples)
-                };
-                if (attempt_scale_sample.has_value())
-                {
-                    attempt_objective_reference =
-                        objective_scale_tracker.GetProvisionalReference(*attempt_scale_sample);
-                    attempt_objective_stats = CalculateLocalFittingObjectiveStats(
-                        *attempt_objective_samples,
-                        attempt_objective_reference);
-                    if (attempt_objective_stats.has_quality_objective)
-                    {
-                        const auto recalculated_previous_objective_stats{
-                            CalculateLocalFittingObjectiveStats(
-                                atom_list,
-                                previous_state,
-                                attempt_objective_reference)
-                        };
-                        attempt_previous_candidate_stats.has_quality_objective =
-                            recalculated_previous_objective_stats.has_quality_objective;
-                        attempt_previous_candidate_stats.quality_objective =
-                            recalculated_previous_objective_stats.quality_objective;
-                        if (has_best_candidate)
-                        {
-                            const auto recalculated_best_objective_stats{
-                                CalculateLocalFittingObjectiveStats(
-                                    atom_list,
-                                    best_state,
-                                    attempt_objective_reference)
-                            };
-                            attempt_best_candidate_stats.has_quality_objective =
-                                recalculated_best_objective_stats.has_quality_objective;
-                            attempt_best_candidate_stats.quality_objective =
-                                recalculated_best_objective_stats.quality_objective;
-                        }
-                    }
-                }
-            }
-            auto attempt_candidate_stats{
-                algorithm::FittingQualityCandidateStats{
-                    attempt_objective_stats.has_quality_objective,
-                    attempt_objective_stats.quality_objective,
-                    attempt_normalized_change_stats
-                }
-            };
-            algorithm::FittingQualityBacktrackingDecision backtracking_decision{
-                true,
-                false,
-                false
-            };
-            if (attempt_objective_reference.has_reference)
-            {
-                backtracking_decision = algorithm::EvaluateFittingQualityBacktracking(
-                    attempt_candidate_stats,
-                    attempt_previous_candidate_stats,
+                    raw_state,
+                    previous_state,
+                    best_state,
+                    previous_candidate_stats,
+                    best_candidate_stats,
                     has_best_candidate,
-                    attempt_best_candidate_stats,
-                    kLocalFittingConvergenceObjectiveRelativeTolerance,
-                    attempt,
-                    kLocalFittingObjectiveBacktrackingMaximumAttempts);
-            }
+                    objective_scale_tracker,
+                    beta,
+                    attempt)
+            };
 
-            if (backtracking_decision.accepted)
+            if (attempt_result.backtracking_decision.accepted)
             {
-                current_state = std::move(attempt_state);
-                change_list = std::move(attempt_change_list);
-                change_stats = std::move(attempt_change_stats);
-                normalized_change_stats = std::move(attempt_normalized_change_stats);
-                current_candidate_stats = std::move(attempt_candidate_stats);
-                previous_candidate_stats = std::move(attempt_previous_candidate_stats);
+                current_state = std::move(attempt_result.state);
+                change_list = std::move(attempt_result.change_list);
+                change_stats = std::move(attempt_result.change_stats);
+                normalized_change_stats = std::move(attempt_result.normalized_change_stats);
+                current_candidate_stats = std::move(attempt_result.candidate_stats);
+                previous_candidate_stats = std::move(attempt_result.previous_candidate_stats);
                 if (has_best_candidate)
                 {
-                    best_candidate_stats = std::move(attempt_best_candidate_stats);
+                    best_candidate_stats = std::move(attempt_result.best_candidate_stats);
                 }
-                current_objective_scale_sample = attempt_objective_stats.residual_scale_sample;
+                current_objective_scale_sample = attempt_result.objective_scale_sample;
                 has_current_candidate = true;
                 break;
             }
             has_backtracking_rejection = true;
-            ridge_controller.Increase();
-            if (backtracking_decision.should_shrink_beta && !relaxation_controller.IsAtMinimum())
+            ridge_ratio = IncreaseLocalFittingRidgeRatio(ridge_ratio);
+            if (attempt_result.backtracking_decision.should_shrink_beta &&
+                !relaxation_controller.IsAtMinimum())
             {
                 relaxation_controller.Shrink();
                 continue;
@@ -2454,7 +2453,7 @@ void RunSecondStageLocalFitting(
                         << std::fixed << std::setprecision(5)
                         << next_beta
                         << ", next ridge ratio = "
-                        << ridge_controller.GetRatio();
+                        << ridge_ratio;
                     Logger::ProgressLine(progress_message.str());
                 }
                 continue;
@@ -2490,7 +2489,7 @@ void RunSecondStageLocalFitting(
         }
         if (!has_backtracking_rejection)
         {
-            ridge_controller.Decrease();
+            ridge_ratio = DecreaseLocalFittingRidgeRatio(ridge_ratio);
         }
         relaxation_controller.Update(normalized_change_stats);
         if (!has_best_candidate ||
@@ -2538,8 +2537,8 @@ void RunSecondStageLocalFitting(
                 << ", d_offset = "<< change_stats.percentile_list.at(GaussianModel3D::OffsetIndex())
                 << ", objective = "<< current_candidate_stats.quality_objective
                 << ", beta = "<< beta
-                << ", ridge ratio = "<< ridge_ratio
-                << ", next ridge ratio = "<< ridge_controller.GetRatio()
+                << ", ridge ratio = "<< iteration_ridge_ratio
+                << ", next ridge ratio = "<< ridge_ratio
                 << ", active/frozen/thawed atoms = "<< freeze_tracker.GetActiveCount()
                 << "/" << freeze_tracker.GetFrozenCount() << "/" << thaw_count;
             Logger::ProgressLine(progress_message.str());

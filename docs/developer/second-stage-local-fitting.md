@@ -52,7 +52,7 @@ previous state
     -> exit, fallback, or continue
 ```
 
-The maximum iteration count is `kLocalFittingMaximumIterations` (`1000`).
+The maximum iteration count is `kLocalFittingMaximumIterations` (`200`).
 
 ## Joint Offset Step
 
