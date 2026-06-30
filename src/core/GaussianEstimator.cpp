@@ -1767,9 +1767,6 @@ LocalFittingIterationResult RunLocalFittingIteration(
         current_snapshot,
         iteration_state);
 
-#ifdef USE_OPENMP
-    #pragma omp parallel for num_threads(options.thread_size)
-#endif
     for (size_t i = 0; i < active_index_list.size(); i++)
     {
         if (suspicious_offset_flag_list.at(i) != 0) continue;
