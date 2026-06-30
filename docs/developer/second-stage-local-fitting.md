@@ -175,6 +175,9 @@ Atoms are frozen when their maximum absolute parameter movement stays below
 `sqrt(kLocalFittingParameterChangeTolerance) * 0.1` for three consecutive active
 iterations. A frozen atom can be thawed again when a currently active selected
 neighbor changes by at least `sqrt(kLocalFittingParameterChangeTolerance)`.
+Dependency thawing applies per-atom hysteresis: each dependency thaw raises that
+atom's next dependency-thaw threshold, up to a capped multiplier, and the
+multiplier decays back toward the base threshold while the atom remains frozen.
 Frozen atoms do not participate in the joint offset solve or per-atom refit while
 they remain frozen, but their fitted Gaussian remains in the snapshot so active
 neighbors can subtract them as fixed signal contributions.

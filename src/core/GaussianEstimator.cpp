@@ -1,6 +1,8 @@
 #include <cstddef>
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 
+#include "detail/LocalFittingThawHysteresisTracker.hpp"
+
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
@@ -89,6 +91,9 @@ constexpr int kAdaptiveRelaxationIncreaseStreak{ 2 };
 constexpr int kAdaptiveRelaxationShrinkStreak{ 3 };
 constexpr double kLocalFittingFreezeChangeRatio{ 0.1 };
 constexpr int kLocalFittingFreezeStableIterations{ 3 };
+constexpr double kLocalFittingDependencyThawHysteresisGrowth{ 2.0 };
+constexpr double kLocalFittingDependencyThawHysteresisMax{ 8.0 };
+constexpr double kLocalFittingDependencyThawHysteresisFrozenDecay{ 0.9 };
 constexpr double kLocalFittingObjectiveTieRelativeTolerance{ 1.0e-8 };
 constexpr double kLocalFittingConvergenceObjectiveRelativeTolerance{ 1.0e-3 };
 constexpr int kLocalFittingObjectiveBacktrackingMaximumAttempts{ 3 };
@@ -1575,7 +1580,8 @@ std::size_t ThawChangedActiveAtomNeighbors(
     const std::unordered_map<const AtomObject *, std::size_t> & atom_index_map,
     const std::vector<algorithm::ParameterChange> & change_list,
     const std::vector<std::size_t> & active_index_list,
-    algorithm::ConvergenceFreezeTracker & freeze_tracker)
+    algorithm::ConvergenceFreezeTracker & freeze_tracker,
+    detail::LocalFittingThawHysteresisTracker & thaw_hysteresis_tracker)
 {
     if (change_list.size() != atom_list.size())
     {
@@ -1590,10 +1596,9 @@ std::size_t ThawChangedActiveAtomNeighbors(
         {
             throw std::invalid_argument("Local fitting dependency thaw active index is out of range.");
         }
-        if (algorithm::GetMaximumParameterChange(change_list.at(active_index)) < thaw_threshold)
-        {
-            continue;
-        }
+        const auto active_change{
+            algorithm::GetMaximumParameterChange(change_list.at(active_index))
+        };
 
         for (const auto * neighbor_atom : atom_list.at(active_index)->FindNeighborAtoms())
         {
@@ -1602,8 +1607,16 @@ std::size_t ThawChangedActiveAtomNeighbors(
 
             const auto neighbor_index{ neighbor_iter->second };
             if (!freeze_tracker.IsFrozen(neighbor_index)) continue;
+            if (!thaw_hysteresis_tracker.ShouldThaw(
+                    neighbor_index,
+                    active_change,
+                    thaw_threshold))
+            {
+                continue;
+            }
             if (freeze_tracker.Thaw(neighbor_index))
             {
+                thaw_hysteresis_tracker.RecordDependencyThaw(neighbor_index);
                 thaw_count++;
             }
         }
@@ -2111,6 +2124,12 @@ void RunSecondStageLocalFitting(
     };
     LocalFittingFallbackStats fallback_stats{ atom_size };
     const auto atom_index_map{ BuildSelectedAtomIndexMap(atom_list) };
+    detail::LocalFittingThawHysteresisTracker thaw_hysteresis_tracker{
+        atom_size,
+        kLocalFittingDependencyThawHysteresisGrowth,
+        kLocalFittingDependencyThawHysteresisMax,
+        kLocalFittingDependencyThawHysteresisFrozenDecay
+    };
     DynamicRidgeController ridge_controller;
     std::vector<double> joint_offset_ridge_multiplier_list(atom_size, 1.0);
     for (size_t iter = 0; iter < kLocalFittingMaximumIterations; iter++)
@@ -2362,13 +2381,21 @@ void RunSecondStageLocalFitting(
                 atom_index_map,
                 change_list,
                 active_index_list,
-                freeze_tracker)
+                freeze_tracker,
+                thaw_hysteresis_tracker)
         };
         for (const auto state_index : suspicious_offset_state_index_list)
         {
             if (freeze_tracker.Thaw(state_index))
             {
                 thaw_count++;
+            }
+        }
+        for (std::size_t state_index = 0; state_index < atom_size; state_index++)
+        {
+            if (freeze_tracker.IsFrozen(state_index))
+            {
+                thaw_hysteresis_tracker.DecayFrozen(state_index);
             }
         }
 
