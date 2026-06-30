@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <vector>
 
 #include <Eigen/Dense>
@@ -14,7 +15,8 @@ namespace alg = rhbm_gem::algorithm;
 alg::WeightedRidgeSystem MakeSingleParameterSystem(
     const std::vector<double> & basis_list,
     const std::vector<double> & response_list,
-    double ridge)
+    double ridge,
+    double previous_parameter = 0.0)
 {
     alg::WeightedRidgeSystem system;
     system.design_matrix.resize(
@@ -32,7 +34,7 @@ alg::WeightedRidgeSystem MakeSingleParameterSystem(
     {
         system.response(static_cast<Eigen::Index>(i)) = response_list.at(i);
     }
-    system.previous_parameter = Eigen::VectorXd::Zero(1);
+    system.previous_parameter = Eigen::VectorXd::Constant(1, previous_parameter);
     system.ridge_diagonal = Eigen::VectorXd::Constant(1, ridge);
     return system;
 }
@@ -68,6 +70,25 @@ TEST(WeightedRidgeSolverTest, WeightChangesSolution)
 
     EXPECT_NEAR(10.0 / 11.0, first_parameter(0), 1.0e-12);
     EXPECT_NEAR(100.0 / 11.0, second_parameter(0), 1.0e-12);
+}
+
+TEST(WeightedRidgeSolverTest, LargerRidgeKeepsSolutionCloserToPreviousParameter)
+{
+    const auto weak_ridge_system{ MakeSingleParameterSystem({ 1.0 }, { 10.0 }, 0.1, 2.0) };
+    const auto strong_ridge_system{ MakeSingleParameterSystem({ 1.0 }, { 10.0 }, 10.0, 2.0) };
+    const Eigen::VectorXd weight{ Eigen::VectorXd::Ones(1) };
+    alg::WeightedRidgeSolver solver{ weak_ridge_system };
+    Eigen::VectorXd weak_ridge_parameter;
+    Eigen::VectorXd strong_ridge_parameter;
+
+    ASSERT_TRUE(solver.Solve(weak_ridge_system, weight, weak_ridge_parameter));
+    ASSERT_TRUE(solver.Solve(strong_ridge_system, weight, strong_ridge_parameter));
+
+    EXPECT_LT(
+        std::abs(strong_ridge_parameter(0) - 2.0),
+        std::abs(weak_ridge_parameter(0) - 2.0));
+    EXPECT_NEAR((10.0 + 0.1 * 2.0) / 1.1, weak_ridge_parameter(0), 1.0e-12);
+    EXPECT_NEAR((10.0 + 10.0 * 2.0) / 11.0, strong_ridge_parameter(0), 1.0e-12);
 }
 
 TEST(WeightedRidgeSolverTest, ReturnsFalseForSingularSystem)

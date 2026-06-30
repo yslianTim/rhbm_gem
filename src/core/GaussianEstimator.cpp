@@ -50,7 +50,7 @@
 
 namespace rhbm_gem::core {
 namespace {
-constexpr double kLocalFittingNormalizedChangeTolerance{ 1.0e-5 };
+constexpr double kLocalFittingNormalizedChangeTolerance{ 1.0e-4 };
 constexpr double kLocalFittingNormalizedChangeScaleFloor{ 1.0 };
 constexpr std::size_t kMinimumAlphaRTrainingSampleCount{ 10 };
 constexpr std::size_t kMinimumAlphaGTrainingMemberCount{ 10 };
@@ -58,7 +58,7 @@ constexpr double kResidualOffsetRangeMin{ 1.0 };
 constexpr double kResidualOffsetRangeMax{ 2.0 };
 constexpr double kOffsetDampingFactor{ 0.5 };
 constexpr double kNeighborContributionDistanceMax{ 2.5 };
-constexpr std::size_t kLocalFittingMaximumIterations{ 1000 };
+constexpr std::size_t kLocalFittingMaximumIterations{ 200 };
 constexpr double kLocalFittingParameterChangeTolerance{ 1.0e-6 };
 constexpr double kLocalFittingChangePercentile{ 0.95 };
 constexpr int kHuberSlopeMaximumIterations{ 50 };
@@ -69,6 +69,10 @@ constexpr double kHuberCutoffMultiplier{ 1.345 };
 constexpr double kOffsetRegularizationAmplitudeRatio{ 0.1 };
 constexpr double kOffsetRegularizationPriorScaleMin{ 1.0e-12 };
 constexpr double kJointOffsetRidgeRatio{ 1.0e-3 };
+constexpr double kJointOffsetRidgeRatioMin{ 1.0e-5 };
+constexpr double kJointOffsetRidgeRatioMax{ 1.0 };
+constexpr double kJointOffsetRidgeGrowth{ 2.0 };
+constexpr double kJointOffsetRidgeShrink{ 0.8 };
 constexpr double kJointOffsetIrlsScaleFloor{ 1.0e-2 };
 constexpr double kJointOffsetIrlsNormalizedChangeTolerance{ 1.0e-6 };
 constexpr double kJointOffsetIrlsObjectiveRelativeTolerance{ 1.0e-10 };
@@ -101,6 +105,29 @@ struct JointOffsetSolveResult
     Eigen::VectorXd offset{};
     bool used_fallback{ false };
     JointOffsetFallbackReason fallback_reason{ JointOffsetFallbackReason::None };
+};
+
+class DynamicRidgeController
+{
+    double m_ratio{ kJointOffsetRidgeRatio };
+
+public:
+    double GetRatio() const
+    {
+        return m_ratio;
+    }
+
+    double Increase()
+    {
+        m_ratio = std::min(kJointOffsetRidgeRatioMax, m_ratio * kJointOffsetRidgeGrowth);
+        return m_ratio;
+    }
+
+    double Decrease()
+    {
+        m_ratio = std::max(kJointOffsetRidgeRatioMin, m_ratio * kJointOffsetRidgeShrink);
+        return m_ratio;
+    }
 };
 
 struct LocalRefitResult
@@ -524,7 +551,8 @@ FittedGaussianSnapshot BuildFittedGaussianSnapshot(
 
 algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
     const std::vector<AtomObject *> & atom_list,
-    const FittedGaussianSnapshot & snapshot)
+    const FittedGaussianSnapshot & snapshot,
+    double ridge_ratio)
 {
     std::unordered_map<const AtomObject *, Eigen::Index> atom_column_map;
     atom_column_map.reserve(atom_list.size());
@@ -642,7 +670,9 @@ algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
         system.previous_parameter(column_index) = model.GetOffset();
         const auto square_sum{ column_square_sum(column_index) };
         system.ridge_diagonal(column_index) =
-            square_sum > std::numeric_limits<double>::epsilon() ? kJointOffsetRidgeRatio * square_sum : 1.0;
+            square_sum > std::numeric_limits<double>::epsilon()
+                ? ridge_ratio * square_sum
+                : ridge_ratio / kJointOffsetRidgeRatio;
     }
     return system;
 }
@@ -702,7 +732,8 @@ bool IsJointOffsetObjectiveDeteriorated(
 
 JointOffsetSolveResult EstimateJointOffsets(
     const std::vector<AtomObject *> & atom_list,
-    const FittedGaussianSnapshot & snapshot)
+    const FittedGaussianSnapshot & snapshot,
+    double ridge_ratio)
 {
     Eigen::VectorXd previous_offset{
         Eigen::VectorXd::Zero(static_cast<Eigen::Index>(atom_list.size()))
@@ -714,7 +745,7 @@ JointOffsetSolveResult EstimateJointOffsets(
     algorithm::WeightedRidgeSystem system;
     try
     {
-        system = BuildJointOffsetSystem(atom_list, snapshot);
+        system = BuildJointOffsetSystem(atom_list, snapshot, ridge_ratio);
     }
     catch (const std::exception &)
     {
@@ -1312,7 +1343,8 @@ LocalFittingIterationResult RunLocalFittingIteration(
     const std::vector<AtomObject *> & atom_list,
     const std::vector<std::size_t> & active_index_list,
     const GaussianFittingState & previous_state,
-    const FitOptions & options)
+    const FitOptions & options,
+    double ridge_ratio)
 {
     const auto selected_atom_size{ atom_list.size() };
     if (previous_state.result_list.size() != selected_atom_size ||
@@ -1325,7 +1357,7 @@ LocalFittingIterationResult RunLocalFittingIteration(
     };
     const auto active_atom_list{ BuildActiveAtomList(atom_list, active_index_list) };
     const auto joint_offset_result{
-        EstimateJointOffsets(active_atom_list, current_snapshot)
+        EstimateJointOffsets(active_atom_list, current_snapshot, ridge_ratio)
     };
     ApplyJointOffsetsToSnapshot(active_atom_list, joint_offset_result.offset, current_snapshot);
     auto iteration_state{ previous_state };
@@ -1751,6 +1783,7 @@ void RunSecondStageLocalFitting(
     };
     LocalFittingFallbackStats fallback_stats{ atom_size };
     const auto atom_index_map{ BuildSelectedAtomIndexMap(atom_list) };
+    DynamicRidgeController ridge_controller;
     for (size_t iter = 0; iter < kLocalFittingMaximumIterations; iter++)
     {
         const auto active_index_list{ freeze_tracker.BuildActiveIndexList() };
@@ -1767,12 +1800,14 @@ void RunSecondStageLocalFitting(
             break;
         }
 
+        const auto ridge_ratio{ ridge_controller.GetRatio() };
         auto iteration_result{
             RunLocalFittingIteration(
                 atom_list,
                 active_index_list,
                 previous_state,
-                options)
+                options,
+                ridge_ratio)
         };
         fallback_stats.Accumulate(iteration_result);
         const auto raw_state{ std::move(iteration_result.state) };
@@ -1783,6 +1818,7 @@ void RunSecondStageLocalFitting(
         algorithm::FittingQualityCandidateStats current_candidate_stats;
         double beta{ relaxation_controller.GetBeta() };
         bool has_current_candidate{ false };
+        bool has_backtracking_rejection{ false };
         for (int attempt = 0; attempt < kLocalFittingObjectiveBacktrackingMaximumAttempts; attempt++)
         {
             beta = relaxation_controller.GetBeta();
@@ -1850,6 +1886,8 @@ void RunSecondStageLocalFitting(
                 has_current_candidate = true;
                 break;
             }
+            has_backtracking_rejection = true;
+            ridge_controller.Increase();
             if (backtracking_decision.should_shrink_beta && !relaxation_controller.IsAtMinimum())
             {
                 relaxation_controller.Shrink();
@@ -1870,7 +1908,9 @@ void RunSecondStageLocalFitting(
                         << kLocalFittingMaximumIterations
                         << " rejected by objective backtracking; retry with beta = "
                         << std::fixed << std::setprecision(5)
-                        << next_beta;
+                        << next_beta
+                        << ", next ridge ratio = "
+                        << ridge_controller.GetRatio();
                     Logger::ProgressLine(progress_message.str());
                 }
                 continue;
@@ -1893,6 +1933,10 @@ void RunSecondStageLocalFitting(
             break;
         }
 
+        if (!has_backtracking_rejection)
+        {
+            ridge_controller.Decrease();
+        }
         relaxation_controller.Update(normalized_change_stats);
         if (!has_best_candidate ||
             algorithm::IsBetterFittingQualityCandidate(
@@ -1917,25 +1961,17 @@ void RunSecondStageLocalFitting(
         if (!options.quiet_mode)
         {
             std::ostringstream progress_message;
-            progress_message << "Local fitting iteration " << iter + 1 << '/'
-                << kLocalFittingMaximumIterations
-                << std::fixed << std::setprecision(5)
-                << ", percentile amplitude change = "
-                << change_stats.percentile_list.at(GaussianModel3D::AmplitudeIndex())
-                << ", percentile width change = "
-                << change_stats.percentile_list.at(GaussianModel3D::WidthIndex())
-                << ", percentile offset change = "
-                << change_stats.percentile_list.at(GaussianModel3D::OffsetIndex())
-                << ", objective = "
-                << current_candidate_stats.quality_objective
-                << ", beta = "
-                << beta
-                << ", active atoms = "
-                << freeze_tracker.GetActiveCount()
-                << ", frozen atoms = "
-                << freeze_tracker.GetFrozenCount()
-                << ", thawed atoms = "
-                << thaw_count;
+            progress_message << "Iter. " << iter + 1 << '/' << kLocalFittingMaximumIterations
+                << std::fixed << std::setprecision(4)
+                << ", d_amplitude = "<< change_stats.percentile_list.at(GaussianModel3D::AmplitudeIndex())
+                << ", d_width = "<< change_stats.percentile_list.at(GaussianModel3D::WidthIndex())
+                << ", d_offset = "<< change_stats.percentile_list.at(GaussianModel3D::OffsetIndex())
+                << ", objective = "<< current_candidate_stats.quality_objective
+                << ", beta = "<< beta
+                << ", ridge ratio = "<< ridge_ratio
+                << ", next ridge ratio = "<< ridge_controller.GetRatio()
+                << ", active/frozen/thawed atoms = "<< freeze_tracker.GetActiveCount()
+                << "/" << freeze_tracker.GetFrozenCount() << "/" << thaw_count;
             Logger::ProgressLine(progress_message.str());
         }
 

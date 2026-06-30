@@ -73,9 +73,13 @@ For each unfiltered sampling entry on each active atom:
 
 The resulting system is solved with weighted ridge regression. The ridge term is
 relative to the previous offsets, so weakly constrained columns stay close to
-their prior values. Huber weights are then updated from residual median absolute
-deviation. The IRLS loop stops when the weighted-ridge surrogate objective would
-deteriorate, when the maximum normalized offset movement drops below
+their prior values. Its ratio starts at `kJointOffsetRidgeRatio` (`1.0e-3`) and
+is adjusted across outer fixed-point iterations: objective-backtracking
+rejections increase the ratio for the next recomputed joint solve, while
+accepted iterations without backtracking gradually decrease it. Huber weights are
+then updated from residual median absolute deviation. The IRLS loop stops when
+the weighted-ridge surrogate objective would deteriorate, when the maximum
+normalized offset movement drops below
 `kJointOffsetIrlsNormalizedChangeTolerance`, or when the Huber iteration limit is
 reached.
 
@@ -133,7 +137,9 @@ and rebuilds the relaxed candidate from the same raw iteration result. Each
 outer iteration tries at most three relaxation candidates. If all attempts fail
 and `beta` is still above the local minimum, the raw iteration is rejected and
 the next outer iteration retries from the unchanged previous state with the
-smaller `beta`.
+smaller `beta`. Any rejected relaxation attempt also increases the dynamic joint
+offset ridge ratio, but that ridge change does not trigger an immediate refit;
+it applies when the next outer iteration rebuilds the joint-offset system.
 
 The stage then computes absolute and normalized parameter movement for
 amplitude, width, and offset for every input atom. Active atoms are summarized
