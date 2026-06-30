@@ -88,8 +88,8 @@ atoms before they can produce an extreme offset update; it is independent from
 the global objective-backtracking ridge controller and is recomputed each time
 the active set changes.
 
-Individual atoms that previously produced a suspicious joint offset can also
-receive a temporary per-atom ridge multiplier, which keeps their next joint
+Atoms that previously participated in a suspicious joint offset rollback can
+also receive a temporary per-atom ridge multiplier, which keeps their next joint
 offset solve closer to the previous offset without changing public fitting
 options. Huber weights are then updated from residual median absolute deviation.
 The IRLS loop stops when the weighted-ridge surrogate objective would
@@ -111,9 +111,13 @@ active loop may run under OpenMP using `FitOptions::thread_size`.
 Before the per-atom refit loop runs, each active atom's joint-offset snapshot
 model is checked against the atom's raw sampling entries. If the previous model
 can build finite zero-offset samples but the joint-offset model cannot, the atom
-is marked as suspicious, its snapshot entry is rolled back to the previous
-model, and its refit is skipped for that iteration. Neighboring active atoms then
-see the rolled-back snapshot contribution instead of the bad joint offset.
+seeds a suspicious offset cluster. The cluster is the connected component in the
+joint-offset active coupling graph, where edges come from active columns that
+co-occur in the sparse joint-offset system. This is narrower than all spatial
+neighbors: frozen or unselected neighbors remain fixed snapshot contributors.
+Every atom in the suspicious cluster has its snapshot entry rolled back to the
+previous model and skips refit for that iteration, so coupled active atoms see a
+synchronous rollback rather than a one-sided update.
 
 For each atom:
 
@@ -181,8 +185,8 @@ multiplier decays back toward the base threshold while the atom remains frozen.
 Frozen atoms do not participate in the joint offset solve or per-atom refit while
 they remain frozen, but their fitted Gaussian remains in the snapshot so active
 neighbors can subtract them as fixed signal contributions.
-Suspicious offset atoms are thawed after freeze tracking so the next iteration
-can retry them with the temporary per-atom ridge multiplier.
+Suspicious offset cluster members are thawed after freeze tracking so the next
+iteration can retry them with the temporary per-atom ridge multiplier.
 
 The best fixed-point candidate is tracked separately. At second-stage entry,
 the initial residuals seed the residual normalization scale. During warm-up,

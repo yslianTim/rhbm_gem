@@ -116,6 +116,13 @@ struct JointOffsetSolveResult
     Eigen::VectorXd offset{};
     bool used_fallback{ false };
     JointOffsetFallbackReason fallback_reason{ JointOffsetFallbackReason::None };
+    std::vector<std::vector<std::size_t>> active_coupling_adjacency{};
+};
+
+struct JointOffsetBuildResult
+{
+    algorithm::WeightedRidgeSystem system{};
+    std::vector<std::vector<std::size_t>> active_coupling_adjacency{};
 };
 
 class DynamicRidgeController
@@ -602,7 +609,7 @@ FittedGaussianSnapshot BuildFittedGaussianSnapshot(
     return snapshot;
 }
 
-algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
+JointOffsetBuildResult BuildJointOffsetSystem(
     const std::vector<AtomObject *> & atom_list,
     const FittedGaussianSnapshot & snapshot,
     double ridge_ratio,
@@ -707,6 +714,7 @@ algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
     Eigen::VectorXd response{ Eigen::VectorXd::Zero(row_count) };
     Eigen::VectorXd column_square_sum{ Eigen::VectorXd::Zero(column_count) };
     std::map<std::pair<Eigen::Index, Eigen::Index>, double> column_cross_sum_map;
+    std::vector<std::vector<std::size_t>> active_coupling_adjacency(atom_list.size());
     for (Eigen::Index row_index = 0; row_index < row_count; row_index++)
     {
         const auto & row{ row_list.at(static_cast<std::size_t>(row_index)) };
@@ -727,8 +735,19 @@ algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
                     std::minmax(left_column, right_column)
                 };
                 column_cross_sum_map[column_pair] += left_basis * right_basis;
+                const auto left_index{ static_cast<std::size_t>(column_pair.first) };
+                const auto right_index{ static_cast<std::size_t>(column_pair.second) };
+                active_coupling_adjacency.at(left_index).emplace_back(right_index);
+                active_coupling_adjacency.at(right_index).emplace_back(left_index);
             }
         }
+    }
+    for (auto & neighbor_list : active_coupling_adjacency)
+    {
+        std::sort(neighbor_list.begin(), neighbor_list.end());
+        neighbor_list.erase(
+            std::unique(neighbor_list.begin(), neighbor_list.end()),
+            neighbor_list.end());
     }
 
     Eigen::VectorXd proactive_ridge_multiplier{
@@ -789,7 +808,10 @@ algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
         };
         system.ridge_diagonal(column_index) = combined_multiplier * base_ridge;
     }
-    return system;
+    return JointOffsetBuildResult{
+        std::move(system),
+        std::move(active_coupling_adjacency)
+    };
 }
 
 double CalculateWeightedRidgeSurrogateObjective(
@@ -858,10 +880,10 @@ JointOffsetSolveResult EstimateJointOffsets(
     {
         previous_offset(static_cast<Eigen::Index>(i)) = snapshot.at(atom_list.at(i)).GetOffset();
     }
-    algorithm::WeightedRidgeSystem system;
+    JointOffsetBuildResult build_result;
     try
     {
-        system = BuildJointOffsetSystem(
+        build_result = BuildJointOffsetSystem(
             atom_list,
             snapshot,
             ridge_ratio,
@@ -872,15 +894,19 @@ JointOffsetSolveResult EstimateJointOffsets(
         return JointOffsetSolveResult{
             previous_offset,
             true,
-            JointOffsetFallbackReason::BuildSystemFailed
+            JointOffsetFallbackReason::BuildSystemFailed,
+            {}
         };
     }
+    auto system{ std::move(build_result.system) };
+    auto active_coupling_adjacency{ std::move(build_result.active_coupling_adjacency) };
     if (system.response.size() == 0 || system.previous_parameter.size() == 0)
     {
         return JointOffsetSolveResult{
             previous_offset,
             true,
-            JointOffsetFallbackReason::EmptySystem
+            JointOffsetFallbackReason::EmptySystem,
+            std::move(active_coupling_adjacency)
         };
     }
 
@@ -892,7 +918,8 @@ JointOffsetSolveResult EstimateJointOffsets(
         return JointOffsetSolveResult{
             previous_offset,
             true,
-            JointOffsetFallbackReason::InitialSolveFailed
+            JointOffsetFallbackReason::InitialSolveFailed,
+            std::move(active_coupling_adjacency)
         };
     }
 
@@ -924,7 +951,8 @@ JointOffsetSolveResult EstimateJointOffsets(
             return JointOffsetSolveResult{
                 system.previous_parameter,
                 true,
-                JointOffsetFallbackReason::RobustSolveFailed
+                JointOffsetFallbackReason::RobustSolveFailed,
+                std::move(active_coupling_adjacency)
             };
         }
         const auto current_objective{
@@ -950,7 +978,8 @@ JointOffsetSolveResult EstimateJointOffsets(
     return JointOffsetSolveResult{
         offset,
         false,
-        JointOffsetFallbackReason::None
+        JointOffsetFallbackReason::None,
+        std::move(active_coupling_adjacency)
     };
 }
 
@@ -1624,6 +1653,86 @@ std::size_t ThawChangedActiveAtomNeighbors(
     return thaw_count;
 }
 
+void ExpandSuspiciousOffsetClusters(
+    const std::vector<std::vector<std::size_t>> & active_coupling_adjacency,
+    std::vector<int> & suspicious_offset_flag_list,
+    std::vector<int> & refit_fallback_flag_list)
+{
+    if (active_coupling_adjacency.empty()) return;
+    if (active_coupling_adjacency.size() != suspicious_offset_flag_list.size() ||
+        refit_fallback_flag_list.size() != suspicious_offset_flag_list.size())
+    {
+        throw std::invalid_argument("Suspicious offset cluster input sizes are inconsistent.");
+    }
+
+    std::vector<char> visited(suspicious_offset_flag_list.size(), 0);
+    for (std::size_t seed_index = 0; seed_index < suspicious_offset_flag_list.size(); seed_index++)
+    {
+        if (suspicious_offset_flag_list.at(seed_index) == 0 || visited.at(seed_index) != 0)
+        {
+            continue;
+        }
+
+        std::vector<std::size_t> stack{ seed_index };
+        visited.at(seed_index) = 1;
+        while (!stack.empty())
+        {
+            const auto active_index{ stack.back() };
+            stack.pop_back();
+            suspicious_offset_flag_list.at(active_index) = 1;
+            refit_fallback_flag_list.at(active_index) = 1;
+
+            for (const auto neighbor_index : active_coupling_adjacency.at(active_index))
+            {
+                if (neighbor_index >= active_coupling_adjacency.size())
+                {
+                    throw std::invalid_argument(
+                        "Suspicious offset cluster adjacency index is out of range.");
+                }
+                if (visited.at(neighbor_index) != 0) continue;
+                visited.at(neighbor_index) = 1;
+                stack.emplace_back(neighbor_index);
+            }
+        }
+    }
+}
+
+void RollBackSuspiciousOffsetClusters(
+    const std::vector<AtomObject *> & atom_list,
+    const std::vector<std::size_t> & active_index_list,
+    const GaussianFittingState & previous_state,
+    const std::vector<int> & suspicious_offset_flag_list,
+    FittedGaussianSnapshot & current_snapshot,
+    GaussianFittingState & iteration_state)
+{
+    if (active_index_list.size() != suspicious_offset_flag_list.size())
+    {
+        throw std::invalid_argument("Suspicious offset rollback input sizes are inconsistent.");
+    }
+    for (std::size_t i = 0; i < active_index_list.size(); i++)
+    {
+        if (suspicious_offset_flag_list.at(i) == 0) continue;
+
+        const auto state_index{ active_index_list.at(i) };
+        if (state_index >= atom_list.size() ||
+            state_index >= previous_state.estimation_list.size() ||
+            state_index >= previous_state.result_list.size() ||
+            state_index >= iteration_state.estimation_list.size() ||
+            state_index >= iteration_state.result_list.size())
+        {
+            throw std::invalid_argument("Suspicious offset rollback state index is out of range.");
+        }
+        const auto previous_model{
+            GaussianModel3D::FromVector(previous_state.estimation_list.at(state_index))
+        };
+        current_snapshot.at(atom_list.at(state_index)) = previous_model;
+        iteration_state.estimation_list.at(state_index) =
+            previous_state.estimation_list.at(state_index);
+        iteration_state.result_list.at(state_index) =
+            previous_state.result_list.at(state_index);
+    }
+}
+
 LocalFittingIterationResult RunLocalFittingIteration(
     const std::vector<AtomObject *> & atom_list,
     const std::vector<std::size_t> & active_index_list,
@@ -1673,10 +1782,19 @@ LocalFittingIterationResult RunLocalFittingIteration(
         {
             continue;
         }
-        current_snapshot.at(atom) = previous_model;
-        refit_fallback_flag_list.at(i) = 1;
         suspicious_offset_flag_list.at(i) = 1;
     }
+    ExpandSuspiciousOffsetClusters(
+        joint_offset_result.active_coupling_adjacency,
+        suspicious_offset_flag_list,
+        refit_fallback_flag_list);
+    RollBackSuspiciousOffsetClusters(
+        atom_list,
+        active_index_list,
+        previous_state,
+        suspicious_offset_flag_list,
+        current_snapshot,
+        iteration_state);
 
 #ifdef USE_OPENMP
     #pragma omp parallel for num_threads(options.thread_size)
@@ -1707,6 +1825,17 @@ LocalFittingIterationResult RunLocalFittingIteration(
         iteration_state.estimation_list.at(state_index) = fitted_model.ToVector();
         iteration_state.result_list.at(state_index) = std::move(result);
     }
+    ExpandSuspiciousOffsetClusters(
+        joint_offset_result.active_coupling_adjacency,
+        suspicious_offset_flag_list,
+        refit_fallback_flag_list);
+    RollBackSuspiciousOffsetClusters(
+        atom_list,
+        active_index_list,
+        previous_state,
+        suspicious_offset_flag_list,
+        current_snapshot,
+        iteration_state);
 
     LocalFittingIterationResult iteration_result;
     iteration_result.state = std::move(iteration_state);
