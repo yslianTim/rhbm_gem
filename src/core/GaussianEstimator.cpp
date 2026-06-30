@@ -1884,6 +1884,38 @@ void InitializeLocalFittingSeedModels(ModelObject & model_object)
 
 } // namespace
 
+void ApplySpotMedianMDPDEOffsets(
+    ModelObject & model_object,
+    const std::vector<AtomObject *> & atom_list)
+{
+    std::unordered_map<Spot, std::vector<double>> offset_list_by_spot;
+    offset_list_by_spot.reserve(atom_list.size());
+    for (const auto * atom : atom_list)
+    {
+        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
+        offset_list_by_spot[atom->GetSpot()].emplace_back(
+            local_view.GetGaussianResult().mdpde.GetModel().GetOffset());
+    }
+
+    std::unordered_map<Spot, double> median_offset_by_spot;
+    median_offset_by_spot.reserve(offset_list_by_spot.size());
+    for (const auto & [spot, offset_list] : offset_list_by_spot)
+    {
+        median_offset_by_spot.emplace(spot, array_helper::ComputeMedian(offset_list));
+    }
+
+    auto local_editor_list{ BuildAtomLocalEditors(model_object, atom_list) };
+    for (std::size_t i = 0; i < atom_list.size(); i++)
+    {
+        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list.at(i)) };
+        auto result{ local_view.GetGaussianResult() };
+        result.mdpde = WithModelOffset(
+            result.mdpde,
+            median_offset_by_spot.at(atom_list.at(i)->GetSpot()));
+        local_editor_list.at(i).SetGaussianResult(std::move(result));
+    }
+}
+
 double TrainAlphaR(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
     const FitOptions & options)
@@ -2391,8 +2423,8 @@ void RunSecondStageLocalFitting(
                 << ", d_offset = "<< change_stats.percentile_list.at(GaussianModel3D::OffsetIndex())
                 << ", objective = "<< current_candidate_stats.quality_objective
                 << ", beta = "<< beta
-                << ", ridge ratio = "<< iteration_ridge_ratio
-                << ", next ridge ratio = "<< ridge_ratio
+                //<< ", ridge ratio = "<< iteration_ridge_ratio
+                //<< ", next ridge ratio = "<< ridge_ratio
                 << ", active/frozen/thawed atoms = "<< freeze_tracker.GetActiveCount()
                 << "/" << freeze_tracker.GetFrozenCount() << "/" << thaw_count;
             Logger::ProgressLine(progress_message.str());
@@ -2487,8 +2519,10 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
 
     const auto & atom_list{ model_object.GetSelectedAtoms() };
     RunSecondStageLocalFitting(model_object, atom_list, options);
-    RunFirstStageLocalFitting(model_object, options);
-    RunSecondStageLocalFitting(model_object, atom_list, options);
+
+    //ApplySpotMedianMDPDEOffsets(model_object, atom_list);
+    //RunFirstStageLocalFitting(model_object, options);
+    //RunSecondStageLocalFitting(model_object, atom_list, options);
 }
 
 void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & options)
