@@ -154,10 +154,12 @@ trend-based adaptive relaxation rule, not Anderson acceleration. The relaxed
 vector replaces the candidate MDPDE model while preserving its
 standard-deviation model.
 
-When a fixed objective reference is available, the relaxed candidate must pass
-the objective quality gate before it can update ranking, freezing, thawing, or
-the next iteration's previous state. If the candidate is worse than the previous
-state or the best tracked state by more than
+When an objective reference is available, the relaxed candidate must pass the
+objective quality gate before it can update ranking, freezing, thawing, or the
+next iteration's previous state. During residual-scale warm-up this reference is
+provisional and can include the candidate's own scale sample; after warm-up it is
+locked. If the candidate is worse than the previous state or the best tracked
+state by more than
 `kLocalFittingConvergenceObjectiveRelativeTolerance`, the stage shrinks `beta`
 and rebuilds the relaxed candidate from the same raw iteration result. Each
 outer iteration tries at most three relaxation candidates. If all attempts fail
@@ -215,9 +217,10 @@ The loop has four terminal cases:
   active atoms. If the last accepted update froze the remaining active atoms,
   apply the current relaxed result, then log an info message when logging is
   enabled.
-- **Parameter convergence:** apply the current relaxed iteration result when all
-  three active-set normalized percentile changes are below
-  `kLocalFittingNormalizedChangeTolerance`, then log an info message when
+- **Parameter convergence:** apply the current relaxed iteration result when the
+  iteration had no suspicious offset rollback, all three active-set normalized
+  percentile changes are below `kLocalFittingNormalizedChangeTolerance`, and any
+  available objective scale has finished warm-up, then log an info message when
   logging is enabled.
 - **Objective backtracking failure:** if a candidate is still rejected after the
   retry limit and `beta` is already at the local minimum, or the maximum
@@ -232,9 +235,11 @@ become the previous state for the next loop iteration. A rejected iteration does
 not update the fixed-point state or the freeze tracker.
 
 When logging is enabled, the function also emits a warning summary after the
-loop if any iteration used the joint-offset fallback or any atom refit fallback.
-The summary reports joint-offset fallback iterations, refit fallback atom-events,
-and distinct atoms that used the refit fallback.
+loop if any iteration used the joint-offset fallback, any atom refit fallback, or
+any suspicious offset rollback. The summary reports joint-offset fallback
+iterations, refit fallback atom-events, distinct atoms that used the refit
+fallback, suspicious offset atom-events, and distinct atoms that were marked for
+suspicious offset rollback.
 
 ## Related Notes
 
