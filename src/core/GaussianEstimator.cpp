@@ -28,6 +28,7 @@
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cmath>
 #include <iomanip>
@@ -50,6 +51,16 @@
 
 namespace rhbm_gem::core {
 namespace {
+constexpr std::array<double, 3> kLocalFittingNormalizedChangeToleranceList{
+    1.0e-5,
+    1.0e-5,
+    1.0e-5
+};
+constexpr std::array<double, 3> kLocalFittingNormalizedChangeScaleFloorList{
+    1.0,
+    1.0,
+    1.0
+};
 constexpr std::size_t kMinimumAlphaRTrainingSampleCount{ 10 };
 constexpr std::size_t kMinimumAlphaGTrainingMemberCount{ 10 };
 constexpr double kResidualOffsetRangeMin{ 1.0 };
@@ -1114,6 +1125,37 @@ std::vector<algorithm::ParameterChange> CalculateLocalFittingParameterChanges(
     return change_list;
 }
 
+std::vector<algorithm::ParameterChange> CalculateLocalFittingNormalizedParameterChanges(
+    const std::vector<Eigen::VectorXd> & current_estimation_list,
+    const std::vector<Eigen::VectorXd> & previous_estimation_list)
+{
+    if (current_estimation_list.size() != previous_estimation_list.size())
+    {
+        throw std::invalid_argument(
+            "Local fitting normalized parameter change input sizes are inconsistent.");
+    }
+
+    std::vector<algorithm::ParameterChange> change_list(current_estimation_list.size());
+    for (size_t i = 0; i < current_estimation_list.size(); i++)
+    {
+        change_list.at(i).value_list = {
+            algorithm::CalculateNormalizedChange(
+                current_estimation_list[i](GaussianModel3D::AmplitudeIndex()),
+                previous_estimation_list[i](GaussianModel3D::AmplitudeIndex()),
+                kLocalFittingNormalizedChangeScaleFloorList.at(kAmplitudeChangeIndex)),
+            algorithm::CalculateNormalizedChange(
+                current_estimation_list[i](GaussianModel3D::WidthIndex()),
+                previous_estimation_list[i](GaussianModel3D::WidthIndex()),
+                kLocalFittingNormalizedChangeScaleFloorList.at(kWidthChangeIndex)),
+            algorithm::CalculateNormalizedChange(
+                current_estimation_list[i](GaussianModel3D::OffsetIndex()),
+                previous_estimation_list[i](GaussianModel3D::OffsetIndex()),
+                kLocalFittingNormalizedChangeScaleFloorList.at(kOffsetChangeIndex))
+        };
+    }
+    return change_list;
+}
+
 algorithm::ParameterChangeStats SummarizeLocalFittingParameterChangeStats(
     const std::vector<algorithm::ParameterChange> & change_list,
     const std::vector<std::size_t> & index_list)
@@ -1129,6 +1171,24 @@ double GetLocalFittingParameterChangePercentile(
     std::size_t index)
 {
     return stats.percentile_list.at(index);
+}
+
+bool IsLocalFittingNormalizedParameterChangeConverged(
+    const algorithm::ParameterChangeStats & stats)
+{
+    if (stats.percentile_list.size() != kLocalFittingNormalizedChangeToleranceList.size())
+    {
+        throw std::invalid_argument(
+            "Local fitting normalized parameter change stats size is inconsistent.");
+    }
+    for (std::size_t i = 0; i < stats.percentile_list.size(); i++)
+    {
+        if (stats.percentile_list.at(i) >= kLocalFittingNormalizedChangeToleranceList.at(i))
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 void ApplyLocalFittingUnderRelaxation(
@@ -1768,6 +1828,7 @@ void RunSecondStageLocalFitting(
         GaussianFittingState current_state;
         std::vector<algorithm::ParameterChange> change_list;
         algorithm::ParameterChangeStats change_stats;
+        algorithm::ParameterChangeStats normalized_change_stats;
         algorithm::FittingQualityCandidateStats current_candidate_stats;
         double beta{ relaxation_controller.GetBeta() };
         bool has_current_candidate{ false };
@@ -1784,6 +1845,16 @@ void RunSecondStageLocalFitting(
             auto attempt_change_stats{
                 SummarizeLocalFittingParameterChangeStats(attempt_change_list, active_index_list)
             };
+            auto attempt_normalized_change_list{
+                CalculateLocalFittingNormalizedParameterChanges(
+                    attempt_state.estimation_list,
+                    previous_state.estimation_list)
+            };
+            auto attempt_normalized_change_stats{
+                SummarizeLocalFittingParameterChangeStats(
+                    attempt_normalized_change_list,
+                    active_index_list)
+            };
             const auto attempt_objective_stats{
                 CalculateLocalFittingObjectiveStats(
                     atom_list,
@@ -1791,7 +1862,9 @@ void RunSecondStageLocalFitting(
                     objective_reference)
             };
             auto attempt_candidate_stats{
-                BuildLocalFittingCandidateStats(attempt_objective_stats, attempt_change_stats)
+                BuildLocalFittingCandidateStats(
+                    attempt_objective_stats,
+                    attempt_normalized_change_stats)
             };
             algorithm::FittingQualityBacktrackingDecision backtracking_decision{
                 true,
@@ -1815,6 +1888,7 @@ void RunSecondStageLocalFitting(
                 current_state = std::move(attempt_state);
                 change_list = std::move(attempt_change_list);
                 change_stats = std::move(attempt_change_stats);
+                normalized_change_stats = std::move(attempt_normalized_change_stats);
                 current_candidate_stats = std::move(attempt_candidate_stats);
                 has_current_candidate = true;
                 break;
@@ -1862,7 +1936,7 @@ void RunSecondStageLocalFitting(
             break;
         }
 
-        relaxation_controller.Update(change_stats);
+        relaxation_controller.Update(normalized_change_stats);
         if (!has_best_candidate ||
             algorithm::IsBetterFittingQualityCandidate(
                 current_candidate_stats,
@@ -1922,9 +1996,7 @@ void RunSecondStageLocalFitting(
         }
 
         const auto converged{
-            algorithm::IsParameterChangeConverged(
-                change_stats,
-                kLocalFittingParameterChangeTolerance)
+            IsLocalFittingNormalizedParameterChangeConverged(normalized_change_stats)
         };
         if (converged)
         {
@@ -1934,15 +2006,21 @@ void RunSecondStageLocalFitting(
                 Logger::FinishProgressLine();
                 Logger::Log(LogLevel::Info,
                     "Converged after " + std::to_string(iter + 1) +
-                    " iterations with percentile amplitude change = " +
+                    " iterations with normalized percentile amplitude change = " +
                     std::to_string(
-                        GetLocalFittingParameterChangePercentile(change_stats, kAmplitudeChangeIndex)) +
-                    ", percentile width change = " +
+                        GetLocalFittingParameterChangePercentile(
+                            normalized_change_stats,
+                            kAmplitudeChangeIndex)) +
+                    ", normalized percentile width change = " +
                     std::to_string(
-                        GetLocalFittingParameterChangePercentile(change_stats, kWidthChangeIndex)) +
-                    ", and percentile offset change = " +
+                        GetLocalFittingParameterChangePercentile(
+                            normalized_change_stats,
+                            kWidthChangeIndex)) +
+                    ", and normalized percentile offset change = " +
                     std::to_string(
-                        GetLocalFittingParameterChangePercentile(change_stats, kOffsetChangeIndex)) +
+                        GetLocalFittingParameterChangePercentile(
+                            normalized_change_stats,
+                            kOffsetChangeIndex)) +
                     ", objective = " +
                     std::to_string(current_candidate_stats.quality_objective) + ".");
             }
@@ -1957,17 +2035,17 @@ void RunSecondStageLocalFitting(
                 Logger::FinishProgressLine();
                 Logger::Log(LogLevel::Warning,
                     "Reached maximum iteration size; refitting at best fixed-point candidate "
-                    "with percentile amplitude change = " +
+                    "with normalized percentile amplitude change = " +
                     std::to_string(
                         GetLocalFittingParameterChangePercentile(
                             best_candidate_stats.parameter_change_stats,
                             kAmplitudeChangeIndex)) +
-                    ", percentile width change = " +
+                    ", normalized percentile width change = " +
                     std::to_string(
                         GetLocalFittingParameterChangePercentile(
                             best_candidate_stats.parameter_change_stats,
                             kWidthChangeIndex)) +
-                    ", and percentile offset change = " +
+                    ", and normalized percentile offset change = " +
                     std::to_string(
                         GetLocalFittingParameterChangePercentile(
                             best_candidate_stats.parameter_change_stats,

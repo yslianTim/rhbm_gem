@@ -154,6 +154,32 @@ TEST(ConvergenceAlgorithmTest, NormalizedVectorChangeHandlesLargeScaleParameters
         1.0e-12);
 }
 
+TEST(ConvergenceAlgorithmTest, NormalizedChangeKeepsLargeAbsoluteMovementScaleRelative)
+{
+    EXPECT_LT(
+        alg::CalculateNormalizedChange(1001.0, 1000.0, 1.0),
+        1.0e-3);
+    EXPECT_GE(
+        alg::CalculateNormalizedChange(2.0, 1.0, 1.0),
+        1.0e-3);
+}
+
+TEST(ConvergenceAlgorithmTest, SummarizesPerParameterNormalizedChangePercentiles)
+{
+    const std::vector<alg::ParameterChange> change_list{
+        alg::ParameterChange{ std::vector<double>{ 0.0005, 0.0004, 0.0003 } },
+        alg::ParameterChange{ std::vector<double>{ 0.0007, 0.0015, 0.0004 } },
+        alg::ParameterChange{ std::vector<double>{ 0.0006, 0.0005, 0.0020 } }
+    };
+
+    const auto stats{ alg::SummarizeParameterChangeStats(change_list, { 0, 1, 2 }, 0.5) };
+
+    ASSERT_EQ(3, stats.percentile_list.size());
+    EXPECT_LT(stats.percentile_list.at(0), 1.0e-3);
+    EXPECT_LT(stats.percentile_list.at(1), 1.0e-3);
+    EXPECT_LT(stats.percentile_list.at(2), 1.0e-3);
+}
+
 TEST(ConvergenceAlgorithmTest, NormalizedVectorChangeKeepsSmallScaleMovementVisible)
 {
     Eigen::VectorXd previous{ Eigen::VectorXd::Constant(1, 0.01) };
