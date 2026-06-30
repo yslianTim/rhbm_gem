@@ -16,7 +16,9 @@ class AdaptiveRelaxationController
     double m_improvement_ratio{ 0.0 };
     double m_previous_change{ 0.0 };
     int m_improvement_streak{ 0 };
+    int m_deterioration_streak{ 0 };
     int m_increase_streak_size{ 0 };
+    int m_shrink_streak_size{ 0 };
     bool m_has_previous_change{ false };
 
 public:
@@ -27,14 +29,16 @@ public:
         double growth_factor,
         double shrink_factor,
         double improvement_ratio,
-        int increase_streak_size)
+        int increase_streak_size,
+        int shrink_streak_size = 1)
         : m_beta{ std::clamp(initial_beta, beta_min, beta_max) },
           m_beta_min{ beta_min },
           m_beta_max{ beta_max },
           m_growth_factor{ growth_factor },
           m_shrink_factor{ shrink_factor },
           m_improvement_ratio{ improvement_ratio },
-          m_increase_streak_size{ increase_streak_size }
+          m_increase_streak_size{ increase_streak_size },
+          m_shrink_streak_size{ shrink_streak_size }
     {
     }
 
@@ -52,6 +56,7 @@ public:
     {
         m_beta = std::max(m_beta_min, m_beta * m_shrink_factor);
         m_improvement_streak = 0;
+        m_deterioration_streak = 0;
         return m_beta;
     }
 
@@ -71,10 +76,16 @@ public:
 
         if (change > m_previous_change * (1.0 + m_improvement_ratio))
         {
-            Shrink();
+            m_improvement_streak = 0;
+            m_deterioration_streak++;
+            if (m_deterioration_streak >= m_shrink_streak_size)
+            {
+                Shrink();
+            }
         }
         else if (change < m_previous_change * (1.0 - m_improvement_ratio))
         {
+            m_deterioration_streak = 0;
             m_improvement_streak++;
             if (m_improvement_streak >= m_increase_streak_size)
             {
@@ -85,6 +96,7 @@ public:
         else
         {
             m_improvement_streak = 0;
+            m_deterioration_streak = 0;
         }
         m_previous_change = change;
     }

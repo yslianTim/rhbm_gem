@@ -78,6 +78,7 @@ constexpr double kAdaptiveRelaxationGrowth{ 1.2 };
 constexpr double kAdaptiveRelaxationShrink{ 0.5 };
 constexpr double kAdaptiveRelaxationImprovementRatio{ 0.01 };
 constexpr int kAdaptiveRelaxationIncreaseStreak{ 2 };
+constexpr int kAdaptiveRelaxationShrinkStreak{ 3 };
 constexpr double kLocalFittingFreezeChangeRatio{ 0.1 };
 constexpr int kLocalFittingFreezeStableIterations{ 3 };
 constexpr double kLocalFittingObjectiveTieRelativeTolerance{ 1.0e-8 };
@@ -1739,7 +1740,8 @@ void RunSecondStageLocalFitting(
         kAdaptiveRelaxationGrowth,
         kAdaptiveRelaxationShrink,
         kAdaptiveRelaxationImprovementRatio,
-        kAdaptiveRelaxationIncreaseStreak
+        kAdaptiveRelaxationIncreaseStreak,
+        kAdaptiveRelaxationShrinkStreak
     };
     algorithm::ConvergenceFreezeTracker freeze_tracker{
         atom_size,

@@ -117,11 +117,12 @@ relaxed = beta * current + (1 - beta) * previous
 `beta` starts from `FitOptions::relaxation_factor` and is clamped to the local
 adaptive relaxation range `[0.05, 1.0]`. After each iteration, the controller
 looks at the maximum of the three 95th-percentile parameter changes. A change
-more than 1% larger than the previous iteration immediately halves `beta`.
-Two consecutive changes more than 1% smaller than the previous iteration allow
-`beta` to grow by `1.2x`, up to `1.0`. This is a trend-based adaptive relaxation
-rule, not Anderson acceleration. The relaxed vector replaces the candidate MDPDE
-model while preserving its standard-deviation model.
+more than 1% larger than the previous iteration for three consecutive accepted
+iterations halves `beta`. Two consecutive changes more than 1% smaller than the
+previous iteration allow `beta` to grow by `1.2x`, up to `1.0`. This is a
+trend-based adaptive relaxation rule, not Anderson acceleration. The relaxed
+vector replaces the candidate MDPDE model while preserving its
+standard-deviation model.
 
 When a fixed objective reference is available, the relaxed candidate must pass
 the objective quality gate before it can update ranking, freezing, thawing, or
