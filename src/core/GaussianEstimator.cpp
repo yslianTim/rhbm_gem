@@ -108,16 +108,11 @@ struct LocalRefitResult
     bool used_fallback{ false };
 };
 
-struct LocalFittingIterationDiagnostics
-{
-    bool joint_offset_used_fallback{ false };
-    std::vector<std::size_t> refit_fallback_state_index_list{};
-};
-
 struct LocalFittingIterationResult
 {
     GaussianFittingState state{};
-    LocalFittingIterationDiagnostics diagnostics{};
+    bool joint_offset_used_fallback{ false };
+    std::vector<std::size_t> refit_fallback_state_index_list{};
 };
 
 struct LocalFittingFallbackStats
@@ -131,14 +126,14 @@ struct LocalFittingFallbackStats
     {
     }
 
-    void Accumulate(const LocalFittingIterationDiagnostics & diagnostics)
+    void Accumulate(const LocalFittingIterationResult & iteration_result)
     {
-        if (diagnostics.joint_offset_used_fallback)
+        if (iteration_result.joint_offset_used_fallback)
         {
             joint_offset_fallback_iterations++;
         }
-        refit_fallback_atom_events += diagnostics.refit_fallback_state_index_list.size();
-        for (const auto state_index : diagnostics.refit_fallback_state_index_list)
+        refit_fallback_atom_events += iteration_result.refit_fallback_state_index_list.size();
+        for (const auto state_index : iteration_result.refit_fallback_state_index_list)
         {
             if (state_index >= refit_fallback_atom_seen.size())
             {
@@ -189,10 +184,11 @@ struct GroupPriorSpotSampleList
     std::vector<double> offset_list{};
 };
 
-std::vector<AtomLocalPotentialEditor> BuildSelectedAtomLocalEditors(ModelObject & model_object)
+std::vector<AtomLocalPotentialEditor> BuildAtomLocalEditors(
+    ModelObject & model_object,
+    const std::vector<AtomObject *> & atom_list)
 {
     auto analysis{ model_object.EditAnalysis() };
-    const auto & atom_list{ model_object.GetSelectedAtoms() };
     std::vector<AtomLocalPotentialEditor> local_editor_list;
     local_editor_list.reserve(atom_list.size());
     for (auto * atom : atom_list)
@@ -990,17 +986,6 @@ LocalFittingObjectiveStats CalculateLocalFittingObjectiveStats(
     return stats;
 }
 
-algorithm::FittingQualityCandidateStats BuildLocalFittingCandidateStats(
-    const LocalFittingObjectiveStats & objective_stats,
-    const algorithm::ParameterChangeStats & change_stats)
-{
-    return algorithm::FittingQualityCandidateStats{
-        objective_stats.has_quality_objective,
-        objective_stats.quality_objective,
-        change_stats
-    };
-}
-
 ParameterSummaryStats SummarizeParameterValues(const std::vector<double> & value_list)
 {
     if (value_list.empty())
@@ -1142,16 +1127,6 @@ std::vector<algorithm::ParameterChange> CalculateLocalFittingNormalizedParameter
         };
     }
     return change_list;
-}
-
-algorithm::ParameterChangeStats SummarizeLocalFittingParameterChangeStats(
-    const std::vector<algorithm::ParameterChange> & change_list,
-    const std::vector<std::size_t> & index_list)
-{
-    return algorithm::SummarizeParameterChangeStats(
-        change_list,
-        index_list,
-        kLocalFittingChangePercentile);
 }
 
 bool IsLocalFittingNormalizedParameterChangeConverged(
@@ -1379,17 +1354,15 @@ LocalFittingIterationResult RunLocalFittingIteration(
         iteration_state.result_list.at(state_index) = std::move(result);
     }
 
-    LocalFittingIterationDiagnostics diagnostics;
-    diagnostics.joint_offset_used_fallback = joint_offset_result.used_fallback;
+    LocalFittingIterationResult iteration_result;
+    iteration_result.state = std::move(iteration_state);
+    iteration_result.joint_offset_used_fallback = joint_offset_result.used_fallback;
     for (std::size_t i = 0; i < refit_fallback_flag_list.size(); i++)
     {
         if (refit_fallback_flag_list.at(i) == 0) continue;
-        diagnostics.refit_fallback_state_index_list.emplace_back(active_index_list.at(i));
+        iteration_result.refit_fallback_state_index_list.emplace_back(active_index_list.at(i));
     }
-    return LocalFittingIterationResult{
-        std::move(iteration_state),
-        std::move(diagnostics)
-    };
+    return iteration_result;
 }
 
 void ApplyLocalFittingState(
@@ -1678,7 +1651,7 @@ void RunFirstStageLocalFitting(ModelObject & model_object, const FitOptions & op
 {
     const auto & atom_list{ model_object.GetSelectedAtoms() };
     const auto selected_atom_size{ atom_list.size() };
-    auto local_editor_list{ BuildSelectedAtomLocalEditors(model_object) };
+    auto local_editor_list{ BuildAtomLocalEditors(model_object, atom_list) };
     std::atomic<size_t> atom_count{ 0 };
     if (!options.quiet_mode)
     {
@@ -1718,14 +1691,8 @@ void RunSecondStageLocalFitting(
     const std::vector<AtomObject *> & atom_list,
     const FitOptions & options)
 {
-    auto analysis{ model_object.EditAnalysis() };
     const auto atom_size{ atom_list.size() };
-    std::vector<AtomLocalPotentialEditor> local_editor_list;
-    local_editor_list.reserve(atom_list.size());
-    for (auto * atom : atom_list)
-    {
-        local_editor_list.emplace_back(analysis.EnsureAtomLocalPotential(*atom));
-    }
+    auto local_editor_list{ BuildAtomLocalEditors(model_object, atom_list) };
 
     GaussianFittingState previous_state{
         std::vector<LocalGaussianResult>(atom_size),
@@ -1805,7 +1772,7 @@ void RunSecondStageLocalFitting(
                 previous_state,
                 options)
         };
-        fallback_stats.Accumulate(iteration_result.diagnostics);
+        fallback_stats.Accumulate(iteration_result);
         const auto raw_state{ std::move(iteration_result.state) };
         GaussianFittingState current_state;
         std::vector<algorithm::ParameterChange> change_list;
@@ -1825,7 +1792,10 @@ void RunSecondStageLocalFitting(
                     previous_state.estimation_list)
             };
             auto attempt_change_stats{
-                SummarizeLocalFittingParameterChangeStats(attempt_change_list, active_index_list)
+                algorithm::SummarizeParameterChangeStats(
+                    attempt_change_list,
+                    active_index_list,
+                    kLocalFittingChangePercentile)
             };
             auto attempt_normalized_change_list{
                 CalculateLocalFittingNormalizedParameterChanges(
@@ -1833,9 +1803,10 @@ void RunSecondStageLocalFitting(
                     previous_state.estimation_list)
             };
             auto attempt_normalized_change_stats{
-                SummarizeLocalFittingParameterChangeStats(
+                algorithm::SummarizeParameterChangeStats(
                     attempt_normalized_change_list,
-                    active_index_list)
+                    active_index_list,
+                    kLocalFittingChangePercentile)
             };
             const auto attempt_objective_stats{
                 CalculateLocalFittingObjectiveStats(
@@ -1844,9 +1815,11 @@ void RunSecondStageLocalFitting(
                     objective_reference)
             };
             auto attempt_candidate_stats{
-                BuildLocalFittingCandidateStats(
-                    attempt_objective_stats,
-                    attempt_normalized_change_stats)
+                algorithm::FittingQualityCandidateStats{
+                    attempt_objective_stats.has_quality_objective,
+                    attempt_objective_stats.quality_objective,
+                    attempt_normalized_change_stats
+                }
             };
             algorithm::FittingQualityBacktrackingDecision backtracking_decision{
                 true,

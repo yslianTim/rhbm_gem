@@ -134,12 +134,13 @@ and `beta` is still above the local minimum, the raw iteration is rejected and
 the next outer iteration retries from the unchanged previous state with the
 smaller `beta`.
 
-The stage then computes absolute parameter movement for amplitude, width, and
-offset for every input atom. Active atoms are summarized by the 95th percentile.
-Parameter convergence requires all three active-set squared percentile changes
-to be below `kLocalFittingParameterChangeTolerance`. Because only candidates
-accepted by objective backtracking reach this point, convergence never applies a
-rejected candidate.
+The stage then computes absolute and normalized parameter movement for
+amplitude, width, and offset for every input atom. Active atoms are summarized
+by the 95th percentile. Parameter convergence requires all three active-set
+normalized percentile changes to be below
+`kLocalFittingNormalizedChangeTolerance`. Because only candidates accepted by
+objective backtracking reach this point, convergence never applies a rejected
+candidate.
 
 Atoms are frozen when their maximum absolute parameter movement stays below
 `sqrt(kLocalFittingParameterChangeTolerance) * 0.1` for three consecutive active
@@ -171,9 +172,9 @@ The loop has four terminal cases:
   apply the current relaxed result, then log an info message when logging is
   enabled.
 - **Parameter convergence:** apply the current relaxed iteration result when all
-  three active-set squared percentile changes are below
-  `kLocalFittingParameterChangeTolerance`, then log an info message when logging
-  is enabled.
+  three active-set normalized percentile changes are below
+  `kLocalFittingNormalizedChangeTolerance`, then log an info message when
+  logging is enabled.
 - **Objective backtracking failure:** if a candidate is still rejected after the
   retry limit and `beta` is already at the local minimum, or the maximum
   iteration limit prevents retrying, apply the best tracked candidate when
