@@ -171,17 +171,23 @@ Suspicious offset atoms are thawed after freeze tracking so the next iteration
 can retry them with the temporary per-atom ridge multiplier.
 
 The best fixed-point candidate is tracked separately. At second-stage entry,
-the initial residuals define one fixed residual scale for this fitting run.
-Every previous, current, and best candidate is scored by first normalizing its
-residuals by that entry-time scale, then applying the same dimensionless Huber
-cutoff. This keeps objective values comparable across iterations and across map
-value scales. A candidate is better when its normalized robust objective
-improves beyond the tie tolerance; objective ties are broken by the maximum of
-the three percentile parameter changes.
+the initial residuals seed the residual normalization scale. During warm-up,
+each accepted candidate contributes its residual median absolute deviation to a
+moving-average scale; after five accepted candidates, that average is locked for
+the rest of the fitting run. Each residual scale sample is floored by a small
+fraction of the robust response scale from the same objective samples, then by
+the absolute Huber scale minimum, so a near-perfect entry fit cannot create an
+overly sensitive denominator. During warm-up, every previous, current, and best
+candidate involved in a quality comparison is re-scored with the same
+provisional scale before backtracking or ranking uses the objective values.
+A candidate is better when its normalized robust objective improves beyond the
+tie tolerance; objective ties are broken by the maximum of the three percentile
+parameter changes.
 Convergence is accepted only if the current objective is not worse than both the
 previous candidate and the best candidate by more than
 `kLocalFittingConvergenceObjectiveRelativeTolerance`, when those objective values
-are available.
+are available. Parameter convergence is not allowed to terminate the stage while
+an available objective scale is still in warm-up.
 
 ## Exit Paths
 

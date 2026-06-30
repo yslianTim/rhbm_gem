@@ -33,6 +33,7 @@
 #include <iomanip>
 #include <limits>
 #include <map>
+#include <numeric>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -89,6 +90,8 @@ constexpr int kLocalFittingFreezeStableIterations{ 3 };
 constexpr double kLocalFittingObjectiveTieRelativeTolerance{ 1.0e-8 };
 constexpr double kLocalFittingConvergenceObjectiveRelativeTolerance{ 1.0e-3 };
 constexpr int kLocalFittingObjectiveBacktrackingMaximumAttempts{ 3 };
+constexpr std::size_t kLocalFittingObjectiveScaleWarmupCount{ 5 };
+constexpr double kLocalFittingObjectiveResidualScaleFloorRatio{ 1.0e-6 };
 
 using GaussianFittingState = algorithm::IterationState<LocalGaussianResult, Eigen::VectorXd>;
 
@@ -218,12 +221,19 @@ struct LocalFittingObjectiveStats
     bool has_quality_objective{ false };
     double quality_objective{ std::numeric_limits<double>::infinity() };
     std::size_t sample_count{ 0 };
+    double residual_scale_sample{ std::numeric_limits<double>::infinity() };
 };
 
 struct LocalFittingObjectiveReference
 {
     bool has_reference{ false };
     double residual_scale{ std::numeric_limits<double>::infinity() };
+};
+
+struct LocalFittingObjectiveSamples
+{
+    std::vector<double> residual_list{};
+    std::vector<double> response_list{};
 };
 
 struct ParameterSummaryStats
@@ -972,14 +982,14 @@ double CalculateHuberLoss(double residual, double cutoff)
     return cutoff * (absolute_residual - 0.5 * cutoff);
 }
 
-std::optional<std::vector<double>> CollectLocalFittingResiduals(
+std::optional<LocalFittingObjectiveSamples> CollectLocalFittingObjectiveSamples(
     const std::vector<AtomObject *> & atom_list,
     const GaussianFittingState & fitting_state)
 {
     const auto snapshot{
         BuildFittedGaussianSnapshot(atom_list, fitting_state.estimation_list)
     };
-    std::vector<double> residual_list;
+    LocalFittingObjectiveSamples objective_samples;
     for (const auto * atom : atom_list)
     {
         const auto model_iter{ snapshot.find(atom) };
@@ -988,58 +998,73 @@ std::optional<std::vector<double>> CollectLocalFittingResiduals(
             throw std::invalid_argument("Local fitting objective snapshot is missing an atom.");
         }
         const auto sample_entries{ UpdateSampleListWithFittedGaussian(*atom, snapshot) };
-        residual_list.reserve(residual_list.size() + sample_entries.size());
+        objective_samples.residual_list.reserve(
+            objective_samples.residual_list.size() + sample_entries.size());
+        objective_samples.response_list.reserve(
+            objective_samples.response_list.size() + sample_entries.size());
         const auto & target_model{ model_iter->second };
         for (const auto & sample : sample_entries)
         {
             const auto distance{ static_cast<double>(sample.point.distance) };
             const auto expected_response{ target_model.ResponseAtDistance(distance) };
-            const auto residual{ static_cast<double>(sample.response) - expected_response };
-            if (!std::isfinite(residual))
+            const auto response{ static_cast<double>(sample.response) };
+            const auto residual{ response - expected_response };
+            if (!std::isfinite(response) || !std::isfinite(residual))
             {
                 return std::nullopt;
             }
-            residual_list.emplace_back(residual);
+            objective_samples.residual_list.emplace_back(residual);
+            objective_samples.response_list.emplace_back(response);
         }
     }
-    return residual_list;
+    return objective_samples;
 }
 
-LocalFittingObjectiveReference BuildLocalFittingObjectiveReference(
-    const std::vector<AtomObject *> & atom_list,
-    const GaussianFittingState & fitting_state)
+double CalculateMedianAbsoluteDeviationScale(const std::vector<double> & value_list)
 {
-    LocalFittingObjectiveReference reference;
-    const auto residual_list{ CollectLocalFittingResiduals(atom_list, fitting_state) };
-    if (!residual_list.has_value() || residual_list->empty())
+    if (value_list.empty())
     {
-        return reference;
+        return std::numeric_limits<double>::infinity();
     }
 
-    const auto median_residual{ array_helper::ComputeMedian(*residual_list) };
+    const auto median_value{ array_helper::ComputeMedian(value_list) };
     std::vector<double> deviation_list;
-    deviation_list.reserve(residual_list->size());
-    for (const auto residual : *residual_list)
+    deviation_list.reserve(value_list.size());
+    for (const auto value : value_list)
     {
-        deviation_list.emplace_back(std::abs(residual - median_residual));
+        deviation_list.emplace_back(std::abs(value - median_value));
     }
-    const auto residual_scale{ std::max(
-        kHuberScaleMultiplier * array_helper::ComputeMedian(deviation_list),
-        kHuberScaleMin)
-    };
-    if (!std::isfinite(residual_scale))
+    return kHuberScaleMultiplier * array_helper::ComputeMedian(deviation_list);
+}
+
+std::optional<double> CalculateLocalFittingResidualScaleSample(
+    const LocalFittingObjectiveSamples & objective_samples)
+{
+    if (objective_samples.residual_list.empty() ||
+        objective_samples.residual_list.size() != objective_samples.response_list.size())
     {
-        return reference;
+        return std::nullopt;
     }
 
-    reference.has_reference = true;
-    reference.residual_scale = residual_scale;
-    return reference;
+    const auto residual_scale{
+        CalculateMedianAbsoluteDeviationScale(objective_samples.residual_list)
+    };
+    const auto response_scale_floor{
+        kLocalFittingObjectiveResidualScaleFloorRatio *
+        CalculateMedianAbsoluteDeviationScale(objective_samples.response_list)
+    };
+    const auto scale_sample{
+        std::max({ residual_scale, response_scale_floor, kHuberScaleMin })
+    };
+    if (!std::isfinite(scale_sample))
+    {
+        return std::nullopt;
+    }
+    return scale_sample;
 }
 
 LocalFittingObjectiveStats CalculateLocalFittingObjectiveStats(
-    const std::vector<AtomObject *> & atom_list,
-    const GaussianFittingState & fitting_state,
+    const LocalFittingObjectiveSamples & objective_samples,
     const LocalFittingObjectiveReference & objective_reference)
 {
     LocalFittingObjectiveStats stats;
@@ -1048,20 +1073,22 @@ LocalFittingObjectiveStats CalculateLocalFittingObjectiveStats(
         return stats;
     }
 
-    const auto residual_list{ CollectLocalFittingResiduals(atom_list, fitting_state) };
-    if (!residual_list.has_value() || residual_list->empty())
+    const auto residual_scale_sample{
+        CalculateLocalFittingResidualScaleSample(objective_samples)
+    };
+    if (!residual_scale_sample.has_value())
     {
         return stats;
     }
 
     double loss_sum{ 0.0 };
-    for (const auto residual : *residual_list)
+    for (const auto residual : objective_samples.residual_list)
     {
         const auto normalized_residual{ residual / objective_reference.residual_scale };
         loss_sum += CalculateHuberLoss(normalized_residual, kHuberCutoffMultiplier);
     }
     const auto quality_objective{
-        loss_sum / static_cast<double>(residual_list->size())
+        loss_sum / static_cast<double>(objective_samples.residual_list.size())
     };
     if (!std::isfinite(quality_objective))
     {
@@ -1070,9 +1097,119 @@ LocalFittingObjectiveStats CalculateLocalFittingObjectiveStats(
 
     stats.has_quality_objective = true;
     stats.quality_objective = quality_objective;
-    stats.sample_count = residual_list->size();
+    stats.sample_count = objective_samples.residual_list.size();
+    stats.residual_scale_sample = *residual_scale_sample;
     return stats;
 }
+
+LocalFittingObjectiveStats CalculateLocalFittingObjectiveStats(
+    const std::vector<AtomObject *> & atom_list,
+    const GaussianFittingState & fitting_state,
+    const LocalFittingObjectiveReference & objective_reference)
+{
+    const auto objective_samples{
+        CollectLocalFittingObjectiveSamples(atom_list, fitting_state)
+    };
+    if (!objective_samples.has_value())
+    {
+        return LocalFittingObjectiveStats{};
+    }
+    return CalculateLocalFittingObjectiveStats(*objective_samples, objective_reference);
+}
+
+class LocalFittingObjectiveScaleTracker
+{
+    std::vector<double> m_scale_sample_list{};
+    std::size_t m_accepted_scale_sample_count{ 0 };
+    bool m_locked{ false };
+
+    static void AddScaleSample(
+        std::vector<double> & scale_sample_list,
+        double scale_sample)
+    {
+        if (!std::isfinite(scale_sample)) return;
+
+        scale_sample_list.emplace_back(scale_sample);
+        while (scale_sample_list.size() > kLocalFittingObjectiveScaleWarmupCount)
+        {
+            scale_sample_list.erase(scale_sample_list.begin());
+        }
+    }
+
+    static LocalFittingObjectiveReference BuildReference(
+        const std::vector<double> & scale_sample_list)
+    {
+        LocalFittingObjectiveReference reference;
+        if (scale_sample_list.empty())
+        {
+            return reference;
+        }
+
+        const auto scale_sum{
+            std::accumulate(scale_sample_list.begin(), scale_sample_list.end(), 0.0)
+        };
+        const auto residual_scale{
+            scale_sum / static_cast<double>(scale_sample_list.size())
+        };
+        if (!std::isfinite(residual_scale))
+        {
+            return reference;
+        }
+
+        reference.has_reference = true;
+        reference.residual_scale = residual_scale;
+        return reference;
+    }
+
+public:
+    explicit LocalFittingObjectiveScaleTracker(
+        std::optional<double> initial_scale_sample)
+    {
+        if (initial_scale_sample.has_value())
+        {
+            AddScaleSample(m_scale_sample_list, *initial_scale_sample);
+        }
+    }
+
+    bool HasReference() const
+    {
+        return !m_scale_sample_list.empty();
+    }
+
+    bool IsLocked() const
+    {
+        return m_locked;
+    }
+
+    LocalFittingObjectiveReference GetCommittedReference() const
+    {
+        return BuildReference(m_scale_sample_list);
+    }
+
+    LocalFittingObjectiveReference GetProvisionalReference(double scale_sample) const
+    {
+        if (m_locked)
+        {
+            return GetCommittedReference();
+        }
+
+        auto scale_sample_list{ m_scale_sample_list };
+        AddScaleSample(scale_sample_list, scale_sample);
+        return BuildReference(scale_sample_list);
+    }
+
+    void CommitScaleSample(double scale_sample)
+    {
+        if (m_locked) return;
+
+        AddScaleSample(m_scale_sample_list, scale_sample);
+        m_accepted_scale_sample_count++;
+        if (m_accepted_scale_sample_count >= kLocalFittingObjectiveScaleWarmupCount)
+        {
+            m_locked = true;
+        }
+    }
+};
 
 ParameterSummaryStats SummarizeParameterValues(const std::vector<double> & value_list)
 {
@@ -1869,15 +2006,26 @@ void RunSecondStageLocalFitting(
         previous_state.estimation_list[i] = previous_state.result_list[i].mdpde.GetModel().ToVector();
     }
 
-    const auto objective_reference{
-        BuildLocalFittingObjectiveReference(atom_list, previous_state)
+    std::optional<double> initial_objective_scale_sample;
+    const auto initial_objective_samples{
+        CollectLocalFittingObjectiveSamples(atom_list, previous_state)
     };
-    const auto previous_objective_stats{
-        CalculateLocalFittingObjectiveStats(
-            atom_list,
-            previous_state,
-            objective_reference)
+    if (initial_objective_samples.has_value())
+    {
+        initial_objective_scale_sample =
+            CalculateLocalFittingResidualScaleSample(*initial_objective_samples);
+    }
+    LocalFittingObjectiveScaleTracker objective_scale_tracker{
+        initial_objective_scale_sample
     };
+    const auto objective_reference{ objective_scale_tracker.GetCommittedReference() };
+    LocalFittingObjectiveStats previous_objective_stats;
+    if (initial_objective_samples.has_value())
+    {
+        previous_objective_stats = CalculateLocalFittingObjectiveStats(
+            *initial_objective_samples,
+            objective_reference);
+    }
     algorithm::FittingQualityCandidateStats previous_candidate_stats{
         previous_objective_stats.has_quality_objective,
         previous_objective_stats.quality_objective,
@@ -1970,6 +2118,7 @@ void RunSecondStageLocalFitting(
         double beta{ relaxation_controller.GetBeta() };
         bool has_current_candidate{ false };
         bool has_backtracking_rejection{ false };
+        double current_objective_scale_sample{ std::numeric_limits<double>::infinity() };
         for (int attempt = 0; attempt < kLocalFittingObjectiveBacktrackingMaximumAttempts; attempt++)
         {
             beta = relaxation_controller.GetBeta();
@@ -1997,12 +2146,53 @@ void RunSecondStageLocalFitting(
                     active_index_list,
                     kLocalFittingChangePercentile)
             };
-            const auto attempt_objective_stats{
-                CalculateLocalFittingObjectiveStats(
-                    atom_list,
-                    attempt_state,
-                    objective_reference)
+            auto attempt_objective_reference{ objective_scale_tracker.GetCommittedReference() };
+            auto attempt_objective_stats{ LocalFittingObjectiveStats{} };
+            auto attempt_previous_candidate_stats{ previous_candidate_stats };
+            auto attempt_best_candidate_stats{ best_candidate_stats };
+            const auto attempt_objective_samples{
+                CollectLocalFittingObjectiveSamples(atom_list, attempt_state)
             };
+            if (objective_scale_tracker.HasReference() && attempt_objective_samples.has_value())
+            {
+                const auto attempt_scale_sample{
+                    CalculateLocalFittingResidualScaleSample(*attempt_objective_samples)
+                };
+                if (attempt_scale_sample.has_value())
+                {
+                    attempt_objective_reference =
+                        objective_scale_tracker.GetProvisionalReference(*attempt_scale_sample);
+                    attempt_objective_stats = CalculateLocalFittingObjectiveStats(
+                        *attempt_objective_samples,
+                        attempt_objective_reference);
+                    if (attempt_objective_stats.has_quality_objective)
+                    {
+                        const auto recalculated_previous_objective_stats{
+                            CalculateLocalFittingObjectiveStats(
+                                atom_list,
+                                previous_state,
+                                attempt_objective_reference)
+                        };
+                        attempt_previous_candidate_stats.has_quality_objective =
+                            recalculated_previous_objective_stats.has_quality_objective;
+                        attempt_previous_candidate_stats.quality_objective =
+                            recalculated_previous_objective_stats.quality_objective;
+                        if (has_best_candidate)
+                        {
+                            const auto recalculated_best_objective_stats{
+                                CalculateLocalFittingObjectiveStats(
+                                    atom_list,
+                                    best_state,
+                                    attempt_objective_reference)
+                            };
+                            attempt_best_candidate_stats.has_quality_objective =
+                                recalculated_best_objective_stats.has_quality_objective;
+                            attempt_best_candidate_stats.quality_objective =
+                                recalculated_best_objective_stats.quality_objective;
+                        }
+                    }
+                }
+            }
             auto attempt_candidate_stats{
                 algorithm::FittingQualityCandidateStats{
                     attempt_objective_stats.has_quality_objective,
@@ -2015,13 +2205,13 @@ void RunSecondStageLocalFitting(
                 false,
                 false
             };
-            if (objective_reference.has_reference)
+            if (attempt_objective_reference.has_reference)
             {
                 backtracking_decision = algorithm::EvaluateFittingQualityBacktracking(
                     attempt_candidate_stats,
-                    previous_candidate_stats,
+                    attempt_previous_candidate_stats,
                     has_best_candidate,
-                    best_candidate_stats,
+                    attempt_best_candidate_stats,
                     kLocalFittingConvergenceObjectiveRelativeTolerance,
                     attempt,
                     kLocalFittingObjectiveBacktrackingMaximumAttempts);
@@ -2034,6 +2224,12 @@ void RunSecondStageLocalFitting(
                 change_stats = std::move(attempt_change_stats);
                 normalized_change_stats = std::move(attempt_normalized_change_stats);
                 current_candidate_stats = std::move(attempt_candidate_stats);
+                previous_candidate_stats = std::move(attempt_previous_candidate_stats);
+                if (has_best_candidate)
+                {
+                    best_candidate_stats = std::move(attempt_best_candidate_stats);
+                }
+                current_objective_scale_sample = attempt_objective_stats.residual_scale_sample;
                 has_current_candidate = true;
                 break;
             }
@@ -2084,6 +2280,10 @@ void RunSecondStageLocalFitting(
             break;
         }
 
+        if (current_candidate_stats.has_quality_objective)
+        {
+            objective_scale_tracker.CommitScaleSample(current_objective_scale_sample);
+        }
         for (const auto active_index : active_index_list)
         {
             if (!suspicious_offset_atom_seen.at(active_index))
@@ -2155,6 +2355,7 @@ void RunSecondStageLocalFitting(
 
         const auto converged{
             !has_suspicious_offset_fallback &&
+            (!objective_scale_tracker.HasReference() || objective_scale_tracker.IsLocked()) &&
             IsLocalFittingNormalizedParameterChangeConverged(normalized_change_stats)
         };
         if (converged)

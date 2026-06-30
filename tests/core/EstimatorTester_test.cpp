@@ -51,6 +51,16 @@ rt::GroupTestOptions MakeGroupOptions(
     return options;
 }
 
+rt::FitOptions MakeSecondStageOptions()
+{
+    rt::FitOptions options;
+    options.distance_min = 0.0;
+    options.distance_max = 1.0;
+    options.thread_size = 1;
+    options.quiet_mode = true;
+    return options;
+}
+
 void ExpectBiasStatisticSize(const rt::BiasStatistics & bias)
 {
     EXPECT_EQ(bias.mean.size(), rg::GaussianModel3D::ParameterSize());
@@ -127,6 +137,79 @@ std::unique_ptr<rg::ModelObject> BuildSecondStageFallbackDiagnosticModel()
     sampling_entries.front().response = std::numeric_limits<float>::quiet_NaN();
     analysis.EnsureAtomLocalPotential(*atom).SetSamplingEntries(std::move(sampling_entries));
     return model;
+}
+
+std::unique_ptr<rg::ModelObject> BuildSecondStageScaleDiagnosticModel()
+{
+    ElectricPotential potential_model;
+    potential_model.SetModelChoice(0);
+    potential_model.SetBlurringWidth(0.5);
+    auto input{
+        tdf::BuildPotentialModelTestData(tdf::PotentialModelScenario{
+            Spot::UNK,
+            Element::OXYGEN,
+            -0.1,
+            rg::GaussianModel3D{ 8.0, 0.5, -0.1 },
+            potential_model,
+            0.0,
+            1,
+            42
+        })
+    };
+    auto model{ std::move(input.replica_model_objects.front()) };
+    const auto options{ MakeSecondStageOptions() };
+    rt::RunLocalAlphaTraining(*model, options);
+    rt::RunFirstStageLocalFitting(*model, options);
+    return model;
+}
+
+void SetSelectedAtomEstimateModel(
+    rg::ModelObject & model_object,
+    const rg::GaussianModel3D & model)
+{
+    auto analysis{ model_object.EditAnalysis() };
+    for (auto * atom : model_object.GetSelectedAtoms())
+    {
+        auto result{
+            rg::AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult()
+        };
+        result.ols = rg::GaussianModel3DWithUncertainty{
+            model,
+            result.ols.GetStandardDeviationModel()
+        };
+        result.mdpde = rg::GaussianModel3DWithUncertainty{
+            model,
+            result.mdpde.GetStandardDeviationModel()
+        };
+        analysis.EnsureAtomLocalPotential(*atom).SetGaussianResult(std::move(result));
+    }
+}
+
+void RewriteSamplingResponsesFromSelectedAtomEstimates(rg::ModelObject & model_object)
+{
+    auto analysis{ model_object.EditAnalysis() };
+    const auto & selected_atoms{ model_object.GetSelectedAtoms() };
+    for (auto * atom : selected_atoms)
+    {
+        auto sampling_entries{
+            rg::AtomLocalPotentialView::RequireFor(*atom).GetSamplingEntries(false)
+        };
+        for (auto & sample : sampling_entries)
+        {
+            double response{ 0.0 };
+            for (const auto * fitted_atom : selected_atoms)
+            {
+                const auto fitted_view{
+                    rg::AtomLocalPotentialView::RequireFor(*fitted_atom)
+                };
+                response += fitted_view.GetEstimateMDPDE().ResponseAtDistance(
+                    Distance(sample.point.position, fitted_atom->GetPosition()));
+            }
+            sample.response = static_cast<float>(response);
+        }
+        analysis.EnsureAtomLocalPotential(*atom).SetSamplingEntries(
+            std::move(sampling_entries));
+    }
 }
 
 std::unique_ptr<rg::ModelObject> BuildSecondStageSuspiciousOffsetDiagnosticModel()
@@ -443,6 +526,48 @@ TEST(EstimatorTesterTest, RunLocalPotentialFittingCoupledNonzeroOffsetDoesNotWar
     EXPECT_EQ(
         error_output.find("Second-stage local fitting fallback summary:"),
         std::string::npos);
+}
+
+TEST(EstimatorTesterTest, RunSecondStageLocalFittingImprovesBadFiniteEntryScale)
+{
+    auto model{ BuildSecondStageScaleDiagnosticModel() };
+    SetSelectedAtomEstimateModel(
+        *model,
+        rg::GaussianModel3D{ 1.0e4, 0.25, 1.0e3 });
+    const auto entry_error{
+        CalculateSelectedAtomResponseMeanSquaredError(*model)
+    };
+
+    rt::RunSecondStageLocalFitting(
+        *model,
+        model->GetSelectedAtoms(),
+        MakeSecondStageOptions());
+
+    const auto fitted_error{
+        CalculateSelectedAtomResponseMeanSquaredError(*model)
+    };
+    ExpectSelectedAtomEstimatesAreFinite(*model);
+    EXPECT_LT(fitted_error, entry_error);
+}
+
+TEST(EstimatorTesterTest, RunSecondStageLocalFittingHandlesNearPerfectEntryScale)
+{
+    auto model{ BuildSecondStageScaleDiagnosticModel() };
+    RewriteSamplingResponsesFromSelectedAtomEstimates(*model);
+    const auto entry_error{
+        CalculateSelectedAtomResponseMeanSquaredError(*model)
+    };
+
+    rt::RunSecondStageLocalFitting(
+        *model,
+        model->GetSelectedAtoms(),
+        MakeSecondStageOptions());
+
+    const auto fitted_error{
+        CalculateSelectedAtomResponseMeanSquaredError(*model)
+    };
+    ExpectSelectedAtomEstimatesAreFinite(*model);
+    EXPECT_LE(fitted_error, entry_error + 1.0e-8);
 }
 
 TEST(EstimatorTesterTest, RunSecondStageLocalFittingLogsFallbackSummary)
