@@ -75,6 +75,8 @@ constexpr double kJointOffsetRidgeRatioMax{ 1.0 };
 constexpr double kJointOffsetRidgeGrowth{ 2.0 };
 constexpr double kJointOffsetRidgeShrink{ 0.8 };
 constexpr double kSuspiciousJointOffsetRidgeMultiplier{ 10.0 };
+constexpr double kJointOffsetCollinearityOverlapThreshold{ 0.98 };
+constexpr double kCollinearJointOffsetRidgeMultiplier{ 10.0 };
 constexpr double kJointOffsetIrlsScaleFloor{ 1.0e-2 };
 constexpr double kJointOffsetIrlsNormalizedChangeTolerance{ 1.0e-6 };
 constexpr double kJointOffsetIrlsObjectiveRelativeTolerance{ 1.0e-10 };
@@ -699,6 +701,7 @@ algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
     std::vector<Eigen::Triplet<double>> triplet_list;
     Eigen::VectorXd response{ Eigen::VectorXd::Zero(row_count) };
     Eigen::VectorXd column_square_sum{ Eigen::VectorXd::Zero(column_count) };
+    std::map<std::pair<Eigen::Index, Eigen::Index>, double> column_cross_sum_map;
     for (Eigen::Index row_index = 0; row_index < row_count; row_index++)
     {
         const auto & row{ row_list.at(static_cast<std::size_t>(row_index)) };
@@ -708,6 +711,49 @@ algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
             triplet_list.emplace_back(row_index, column_index, basis);
             column_square_sum(column_index) += basis * basis;
         }
+        for (std::size_t i = 0; i < row.basis_entries.size(); i++)
+        {
+            const auto [left_column, left_basis]{ row.basis_entries.at(i) };
+            for (std::size_t j = i + 1; j < row.basis_entries.size(); j++)
+            {
+                const auto [right_column, right_basis]{ row.basis_entries.at(j) };
+                if (left_column == right_column) continue;
+                const auto column_pair{
+                    std::minmax(left_column, right_column)
+                };
+                column_cross_sum_map[column_pair] += left_basis * right_basis;
+            }
+        }
+    }
+
+    Eigen::VectorXd proactive_ridge_multiplier{
+        Eigen::VectorXd::Ones(column_count)
+    };
+    for (const auto & [column_pair, cross_sum] : column_cross_sum_map)
+    {
+        const auto left_column{ column_pair.first };
+        const auto right_column{ column_pair.second };
+        const auto left_square_sum{ column_square_sum(left_column) };
+        const auto right_square_sum{ column_square_sum(right_column) };
+        if (left_square_sum <= std::numeric_limits<double>::epsilon() ||
+            right_square_sum <= std::numeric_limits<double>::epsilon())
+        {
+            continue;
+        }
+        const auto overlap{
+            std::abs(cross_sum) / std::sqrt(left_square_sum * right_square_sum)
+        };
+        if (!std::isfinite(overlap) ||
+            overlap < kJointOffsetCollinearityOverlapThreshold)
+        {
+            continue;
+        }
+        proactive_ridge_multiplier(left_column) = std::max(
+            proactive_ridge_multiplier(left_column),
+            kCollinearJointOffsetRidgeMultiplier);
+        proactive_ridge_multiplier(right_column) = std::max(
+            proactive_ridge_multiplier(right_column),
+            kCollinearJointOffsetRidgeMultiplier);
     }
 
     algorithm::WeightedRidgeSystem system;
@@ -728,12 +774,15 @@ algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
         {
             throw std::invalid_argument("Joint offset ridge multiplier must be positive and finite.");
         }
+        const auto combined_multiplier{
+            std::max(multiplier, proactive_ridge_multiplier(column_index))
+        };
         const auto base_ridge{
             square_sum > std::numeric_limits<double>::epsilon()
                 ? ridge_ratio * square_sum
                 : ridge_ratio / kJointOffsetRidgeRatio
         };
-        system.ridge_diagonal(column_index) = multiplier * base_ridge;
+        system.ridge_diagonal(column_index) = combined_multiplier * base_ridge;
     }
     return system;
 }

@@ -212,6 +212,115 @@ void RewriteSamplingResponsesFromSelectedAtomEstimates(rg::ModelObject & model_o
     }
 }
 
+std::unique_ptr<rg::AtomObject> MakeSecondStageAtom(
+    int serial_id,
+    Spot spot,
+    Element element,
+    const std::array<float, 3> & position)
+{
+    auto atom{ std::make_unique<rg::AtomObject>() };
+    atom->SetSerialID(serial_id);
+    atom->SetComponentKey(1);
+    atom->SetAtomKey(static_cast<AtomKey>(spot));
+    atom->SetElement(element);
+    atom->SetSpot(spot);
+    atom->SetPosition(position);
+    return atom;
+}
+
+rg::LocalGaussianResult MakeSecondStageGaussianResult(const rg::GaussianModel3D & model)
+{
+    rg::LocalGaussianResult result;
+    result.ols = rg::GaussianModel3DWithUncertainty{
+        model,
+        rg::GaussianModel3DUncertainty{}
+    };
+    result.mdpde = rg::GaussianModel3DWithUncertainty{
+        model,
+        rg::GaussianModel3DUncertainty{}
+    };
+    return result;
+}
+
+LocalPotentialSampleList BuildNearCollinearSamples(
+    const rg::AtomObject & target_atom,
+    const std::vector<rg::AtomObject *> & atom_list,
+    const std::vector<rg::GaussianModel3D> & truth_model_list)
+{
+    const std::array<std::array<float, 3>, 6> direction_list{
+        std::array<float, 3>{ 1.0F, 0.0F, 0.0F },
+        std::array<float, 3>{ -1.0F, 0.0F, 0.0F },
+        std::array<float, 3>{ 0.0F, 1.0F, 0.0F },
+        std::array<float, 3>{ 0.0F, -1.0F, 0.0F },
+        std::array<float, 3>{ 0.0F, 0.0F, 1.0F },
+        std::array<float, 3>{ 0.0F, 0.0F, -1.0F }
+    };
+    const std::array<float, 4> radius_list{ 0.15F, 0.35F, 0.65F, 0.95F };
+
+    LocalPotentialSampleList sample_list;
+    const auto target_position{ target_atom.GetPosition() };
+    sample_list.reserve(direction_list.size() * radius_list.size());
+    for (const auto radius : radius_list)
+    {
+        for (const auto & direction : direction_list)
+        {
+            SamplingPoint point;
+            point.distance = radius;
+            for (std::size_t axis = 0; axis < point.position.size(); axis++)
+            {
+                point.position.at(axis) =
+                    target_position.at(axis) + radius * direction.at(axis);
+            }
+
+            double response{ 0.0 };
+            for (std::size_t i = 0; i < atom_list.size(); i++)
+            {
+                response += truth_model_list.at(i).ResponseAtDistance(
+                    Distance(point.position, atom_list.at(i)->GetPosition()));
+            }
+            sample_list.emplace_back(LocalPotentialSample{
+                static_cast<float>(response),
+                point
+            });
+        }
+    }
+    return sample_list;
+}
+
+std::unique_ptr<rg::ModelObject> BuildNearCollinearSecondStageModel()
+{
+    std::vector<std::unique_ptr<rg::AtomObject>> atom_list;
+    atom_list.emplace_back(MakeSecondStageAtom(
+        1,
+        Spot::C,
+        Element::CARBON,
+        std::array<float, 3>{ 0.0F, 0.0F, 0.0F }));
+    atom_list.emplace_back(MakeSecondStageAtom(
+        2,
+        Spot::O,
+        Element::OXYGEN,
+        std::array<float, 3>{ 1.0e-4F, 0.0F, 0.0F }));
+
+    auto model{ std::make_unique<rg::ModelObject>(std::move(atom_list)) };
+    model->SelectAllAtoms();
+    auto analysis{ model->EditAnalysis() };
+    const std::vector<rg::GaussianModel3D> truth_model_list{
+        rg::GaussianModel3D{ 6.0, 0.55, 0.20 },
+        rg::GaussianModel3D{ 5.5, 0.55, -0.15 }
+    };
+    const rg::GaussianModel3D initial_model{ 5.75, 0.55, 0.0 };
+    const auto & selected_atoms{ model->GetSelectedAtoms() };
+    for (auto * atom : selected_atoms)
+    {
+        auto local_editor{ analysis.EnsureAtomLocalPotential(*atom) };
+        local_editor.SetAlphaR(0.0);
+        local_editor.SetGaussianResult(MakeSecondStageGaussianResult(initial_model));
+        local_editor.SetSamplingEntries(
+            BuildNearCollinearSamples(*atom, selected_atoms, truth_model_list));
+    }
+    return model;
+}
+
 std::unique_ptr<rg::ModelObject> BuildSecondStageSuspiciousOffsetDiagnosticModel()
 {
     ElectricPotential potential_model;
@@ -526,6 +635,24 @@ TEST(EstimatorTesterTest, RunLocalPotentialFittingCoupledNonzeroOffsetDoesNotWar
     EXPECT_EQ(
         error_output.find("Second-stage local fitting fallback summary:"),
         std::string::npos);
+}
+
+TEST(EstimatorTesterTest, RunSecondStageLocalFittingHandlesNearCollinearAtoms)
+{
+    auto model{ BuildNearCollinearSecondStageModel() };
+    const auto initial_error{
+        CalculateSelectedAtomResponseMeanSquaredError(*model)
+    };
+    const auto options{ MakeSecondStageOptions() };
+
+    rt::RunSecondStageLocalFitting(*model, model->GetSelectedAtoms(), options);
+
+    const auto fitted_error{
+        CalculateSelectedAtomResponseMeanSquaredError(*model)
+    };
+    const auto tolerance{ 1.0e-3 * std::max(initial_error, 1.0) };
+    EXPECT_LE(fitted_error, initial_error + tolerance);
+    ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
 TEST(EstimatorTesterTest, RunSecondStageLocalFittingImprovesBadFiniteEntryScale)

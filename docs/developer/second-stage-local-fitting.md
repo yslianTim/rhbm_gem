@@ -77,7 +77,18 @@ their prior values. Its global ratio starts at `kJointOffsetRidgeRatio`
 (`1.0e-3`) and is adjusted across outer fixed-point iterations:
 objective-backtracking rejections increase the ratio for the next recomputed
 joint solve, while accepted iterations without backtracking gradually decrease
-it. Individual atoms that previously produced a suspicious joint offset can also
+it.
+
+The joint offset builder also applies a proactive local ridge guard before the
+solve. While assembling the sparse design matrix, it accumulates active-column
+cross products and converts each pair to a normalized overlap. If two active
+offset-basis columns overlap by at least `0.98`, both atoms receive a local
+ridge multiplier for that solve only. This catches near-collinear neighboring
+atoms before they can produce an extreme offset update; it is independent from
+the global objective-backtracking ridge controller and is recomputed each time
+the active set changes.
+
+Individual atoms that previously produced a suspicious joint offset can also
 receive a temporary per-atom ridge multiplier, which keeps their next joint
 offset solve closer to the previous offset without changing public fitting
 options. Huber weights are then updated from residual median absolute deviation.

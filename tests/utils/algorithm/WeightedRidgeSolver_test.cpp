@@ -39,6 +39,26 @@ alg::WeightedRidgeSystem MakeSingleParameterSystem(
     return system;
 }
 
+alg::WeightedRidgeSystem MakeTwoParameterSystem(
+    double second_column_delta,
+    double ridge)
+{
+    alg::WeightedRidgeSystem system;
+    system.design_matrix.resize(2, 2);
+    std::vector<Eigen::Triplet<double>> triplet_list{
+        { 0, 0, 1.0 },
+        { 0, 1, 1.0 },
+        { 1, 0, 1.0 },
+        { 1, 1, 1.0 + second_column_delta }
+    };
+    system.design_matrix.setFromTriplets(triplet_list.begin(), triplet_list.end());
+    system.response.resize(2);
+    system.response << 0.0, 1.0;
+    system.previous_parameter = Eigen::VectorXd::Zero(2);
+    system.ridge_diagonal = Eigen::VectorXd::Constant(2, ridge);
+    return system;
+}
+
 } // namespace
 
 TEST(WeightedRidgeSolverTest, SolvesSingleParameterLeastSquares)
@@ -89,6 +109,22 @@ TEST(WeightedRidgeSolverTest, LargerRidgeKeepsSolutionCloserToPreviousParameter)
         std::abs(weak_ridge_parameter(0) - 2.0));
     EXPECT_NEAR((10.0 + 0.1 * 2.0) / 1.1, weak_ridge_parameter(0), 1.0e-12);
     EXPECT_NEAR((10.0 + 10.0 * 2.0) / 11.0, strong_ridge_parameter(0), 1.0e-12);
+}
+
+TEST(WeightedRidgeSolverTest, LargerRidgeSuppressesNearCollinearParameterMovement)
+{
+    const auto weak_ridge_system{ MakeTwoParameterSystem(1.0e-6, 1.0e-12) };
+    const auto strong_ridge_system{ MakeTwoParameterSystem(1.0e-6, 10.0) };
+    const Eigen::VectorXd weight{ Eigen::VectorXd::Ones(2) };
+    alg::WeightedRidgeSolver solver{ weak_ridge_system };
+    Eigen::VectorXd weak_ridge_parameter;
+    Eigen::VectorXd strong_ridge_parameter;
+
+    ASSERT_TRUE(solver.Solve(weak_ridge_system, weight, weak_ridge_parameter));
+    ASSERT_TRUE(solver.Solve(strong_ridge_system, weight, strong_ridge_parameter));
+
+    EXPECT_GT(weak_ridge_parameter.norm(), 1.0e5);
+    EXPECT_LT(strong_ridge_parameter.norm(), 0.2);
 }
 
 TEST(WeightedRidgeSolverTest, ReturnsFalseForSingularSystem)
