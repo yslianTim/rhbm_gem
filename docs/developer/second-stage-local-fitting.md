@@ -73,13 +73,16 @@ For each unfiltered sampling entry on each active atom:
 
 The resulting system is solved with weighted ridge regression. The ridge term is
 relative to the previous offsets, so weakly constrained columns stay close to
-their prior values. Its ratio starts at `kJointOffsetRidgeRatio` (`1.0e-3`) and
-is adjusted across outer fixed-point iterations: objective-backtracking
-rejections increase the ratio for the next recomputed joint solve, while
-accepted iterations without backtracking gradually decrease it. Huber weights are
-then updated from residual median absolute deviation. The IRLS loop stops when
-the weighted-ridge surrogate objective would deteriorate, when the maximum
-normalized offset movement drops below
+their prior values. Its global ratio starts at `kJointOffsetRidgeRatio`
+(`1.0e-3`) and is adjusted across outer fixed-point iterations:
+objective-backtracking rejections increase the ratio for the next recomputed
+joint solve, while accepted iterations without backtracking gradually decrease
+it. Individual atoms that previously produced a suspicious joint offset can also
+receive a temporary per-atom ridge multiplier, which keeps their next joint
+offset solve closer to the previous offset without changing public fitting
+options. Huber weights are then updated from residual median absolute deviation.
+The IRLS loop stops when the weighted-ridge surrogate objective would
+deteriorate, when the maximum normalized offset movement drops below
 `kJointOffsetIrlsNormalizedChangeTolerance`, or when the Huber iteration limit is
 reached.
 
@@ -94,6 +97,13 @@ After joint offsets are attached to the snapshot, each active atom is refit.
 Frozen atoms are left in the iteration state copied from the previous state. The
 active loop may run under OpenMP using `FitOptions::thread_size`.
 
+Before the per-atom refit loop runs, each active atom's joint-offset snapshot
+model is checked against the atom's raw sampling entries. If the previous model
+can build finite zero-offset samples but the joint-offset model cannot, the atom
+is marked as suspicious, its snapshot entry is rolled back to the previous
+model, and its refit is skipped for that iteration. Neighboring active atoms then
+see the rolled-back snapshot contribution instead of the bad joint offset.
+
 For each atom:
 
 1. build a sample list by subtracting fitted neighbor responses from the atom's
@@ -106,9 +116,10 @@ For each atom:
    response range.
 
 If fitting throws or the finite-sample check fails, the previous atom result is
-kept, but its OLS and MDPDE models are rewritten with the joint offset. This
-keeps the iteration state aligned with the joint offset update even when a local
-shape refit cannot be accepted.
+kept, but its OLS and MDPDE models are rewritten with the joint offset when that
+fallback model still builds finite zero-offset samples. If the forced-sync
+fallback itself would become invalid while the previous model was valid, the atom
+is marked as suspicious and the previous result is kept unchanged.
 
 ## Relaxation, Ranking, and Convergence
 
@@ -145,9 +156,9 @@ The stage then computes absolute and normalized parameter movement for
 amplitude, width, and offset for every input atom. Active atoms are summarized
 by the 95th percentile. Parameter convergence requires all three active-set
 normalized percentile changes to be below
-`kLocalFittingNormalizedChangeTolerance`. Because only candidates accepted by
-objective backtracking reach this point, convergence never applies a rejected
-candidate.
+`kLocalFittingNormalizedChangeTolerance`, and no suspicious offset rollback may
+have occurred in that iteration. Because only candidates accepted by objective
+backtracking reach this point, convergence never applies a rejected candidate.
 
 Atoms are frozen when their maximum absolute parameter movement stays below
 `sqrt(kLocalFittingParameterChangeTolerance) * 0.1` for three consecutive active
@@ -156,6 +167,8 @@ neighbor changes by at least `sqrt(kLocalFittingParameterChangeTolerance)`.
 Frozen atoms do not participate in the joint offset solve or per-atom refit while
 they remain frozen, but their fitted Gaussian remains in the snapshot so active
 neighbors can subtract them as fixed signal contributions.
+Suspicious offset atoms are thawed after freeze tracking so the next iteration
+can retry them with the temporary per-atom ridge multiplier.
 
 The best fixed-point candidate is tracked separately. At second-stage entry,
 the initial residuals define one fixed residual scale for this fitting run.

@@ -69,10 +69,11 @@ constexpr double kHuberCutoffMultiplier{ 1.345 };
 constexpr double kOffsetRegularizationAmplitudeRatio{ 0.1 };
 constexpr double kOffsetRegularizationPriorScaleMin{ 1.0e-12 };
 constexpr double kJointOffsetRidgeRatio{ 1.0e-3 };
-constexpr double kJointOffsetRidgeRatioMin{ 1.0e-5 };
+constexpr double kJointOffsetRidgeRatioMin{ 1.0e-4 };
 constexpr double kJointOffsetRidgeRatioMax{ 1.0 };
 constexpr double kJointOffsetRidgeGrowth{ 2.0 };
 constexpr double kJointOffsetRidgeShrink{ 0.8 };
+constexpr double kSuspiciousJointOffsetRidgeMultiplier{ 10.0 };
 constexpr double kJointOffsetIrlsScaleFloor{ 1.0e-2 };
 constexpr double kJointOffsetIrlsNormalizedChangeTolerance{ 1.0e-6 };
 constexpr double kJointOffsetIrlsObjectiveRelativeTolerance{ 1.0e-10 };
@@ -134,6 +135,7 @@ struct LocalRefitResult
 {
     LocalGaussianResult result{};
     bool used_fallback{ false };
+    bool suspicious_offset_fallback{ false };
 };
 
 struct LocalFittingIterationResult
@@ -141,16 +143,20 @@ struct LocalFittingIterationResult
     GaussianFittingState state{};
     bool joint_offset_used_fallback{ false };
     std::vector<std::size_t> refit_fallback_state_index_list{};
+    std::vector<std::size_t> suspicious_offset_state_index_list{};
 };
 
 struct LocalFittingFallbackStats
 {
     std::size_t joint_offset_fallback_iterations{ 0 };
     std::size_t refit_fallback_atom_events{ 0 };
+    std::size_t suspicious_offset_atom_events{ 0 };
     std::vector<bool> refit_fallback_atom_seen{};
+    std::vector<bool> suspicious_offset_atom_seen{};
 
     explicit LocalFittingFallbackStats(std::size_t atom_size)
-        : refit_fallback_atom_seen(atom_size, false)
+        : refit_fallback_atom_seen(atom_size, false),
+          suspicious_offset_atom_seen(atom_size, false)
     {
     }
 
@@ -169,6 +175,16 @@ struct LocalFittingFallbackStats
             }
             refit_fallback_atom_seen.at(state_index) = true;
         }
+        suspicious_offset_atom_events += iteration_result.suspicious_offset_state_index_list.size();
+        for (const auto state_index : iteration_result.suspicious_offset_state_index_list)
+        {
+            if (state_index >= suspicious_offset_atom_seen.size())
+            {
+                throw std::invalid_argument(
+                    "Local fitting suspicious offset atom index is out of range.");
+            }
+            suspicious_offset_atom_seen.at(state_index) = true;
+        }
     }
 
     std::size_t GetDistinctRefitFallbackAtomCount() const
@@ -180,9 +196,20 @@ struct LocalFittingFallbackStats
                 true));
     }
 
+    std::size_t GetDistinctSuspiciousOffsetAtomCount() const
+    {
+        return static_cast<std::size_t>(
+            std::count(
+                suspicious_offset_atom_seen.begin(),
+                suspicious_offset_atom_seen.end(),
+                true));
+    }
+
     bool HasFallback() const
     {
-        return joint_offset_fallback_iterations > 0 || refit_fallback_atom_events > 0;
+        return joint_offset_fallback_iterations > 0 ||
+            refit_fallback_atom_events > 0 ||
+            suspicious_offset_atom_events > 0;
     }
 };
 
@@ -266,6 +293,15 @@ bool CanBuildFiniteZeroOffsetSamples(
         }
     }
     return true;
+}
+
+bool IsSuspiciousJointOffset(
+    const LocalPotentialSampleList & sample_entries,
+    const GaussianModel3D & previous_model,
+    const GaussianModel3D & offset_model)
+{
+    return CanBuildFiniteZeroOffsetSamples(sample_entries, previous_model) &&
+        !CanBuildFiniteZeroOffsetSamples(sample_entries, offset_model);
 }
 
 double ComputeOffsetRegularizationPriorScale(double amplitude)
@@ -552,8 +588,14 @@ FittedGaussianSnapshot BuildFittedGaussianSnapshot(
 algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
     const std::vector<AtomObject *> & atom_list,
     const FittedGaussianSnapshot & snapshot,
-    double ridge_ratio)
+    double ridge_ratio,
+    const std::vector<double> & ridge_multiplier_list)
 {
+    if (atom_list.size() != ridge_multiplier_list.size())
+    {
+        throw std::invalid_argument("Joint offset ridge multiplier size is inconsistent.");
+    }
+
     std::unordered_map<const AtomObject *, Eigen::Index> atom_column_map;
     atom_column_map.reserve(atom_list.size());
     for (std::size_t i = 0; i < atom_list.size(); i++)
@@ -669,10 +711,19 @@ algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
         const auto & model{ snapshot.at(atom_list.at(static_cast<std::size_t>(column_index))) };
         system.previous_parameter(column_index) = model.GetOffset();
         const auto square_sum{ column_square_sum(column_index) };
-        system.ridge_diagonal(column_index) =
+        const auto multiplier{
+            ridge_multiplier_list.at(static_cast<std::size_t>(column_index))
+        };
+        if (!std::isfinite(multiplier) || multiplier <= 0.0)
+        {
+            throw std::invalid_argument("Joint offset ridge multiplier must be positive and finite.");
+        }
+        const auto base_ridge{
             square_sum > std::numeric_limits<double>::epsilon()
                 ? ridge_ratio * square_sum
-                : ridge_ratio / kJointOffsetRidgeRatio;
+                : ridge_ratio / kJointOffsetRidgeRatio
+        };
+        system.ridge_diagonal(column_index) = multiplier * base_ridge;
     }
     return system;
 }
@@ -733,7 +784,8 @@ bool IsJointOffsetObjectiveDeteriorated(
 JointOffsetSolveResult EstimateJointOffsets(
     const std::vector<AtomObject *> & atom_list,
     const FittedGaussianSnapshot & snapshot,
-    double ridge_ratio)
+    double ridge_ratio,
+    const std::vector<double> & ridge_multiplier_list)
 {
     Eigen::VectorXd previous_offset{
         Eigen::VectorXd::Zero(static_cast<Eigen::Index>(atom_list.size()))
@@ -745,7 +797,11 @@ JointOffsetSolveResult EstimateJointOffsets(
     algorithm::WeightedRidgeSystem system;
     try
     {
-        system = BuildJointOffsetSystem(atom_list, snapshot, ridge_ratio);
+        system = BuildJointOffsetSystem(
+            atom_list,
+            snapshot,
+            ridge_ratio,
+            ridge_multiplier_list);
     }
     catch (const std::exception &)
     {
@@ -1252,6 +1308,7 @@ LocalRefitResult FitAtomWithJointOffsetFallback(
         {
             return LocalRefitResult{
                 candidate_result,
+                false,
                 false
             };
         }
@@ -1263,9 +1320,21 @@ LocalRefitResult FitAtomWithJointOffsetFallback(
     auto result{ previous_result };
     result.ols = WithModelOffset(result.ols, offset_model.GetOffset());
     result.mdpde = WithModelOffset(result.mdpde, offset_model.GetOffset());
+    if (IsSuspiciousJointOffset(
+            sample_entries,
+            previous_result.mdpde.GetModel(),
+            result.mdpde.GetModel()))
+    {
+        return LocalRefitResult{
+            previous_result,
+            true,
+            true
+        };
+    }
     return LocalRefitResult{
         result,
-        true
+        true,
+        false
     };
 }
 
@@ -1284,6 +1353,23 @@ std::vector<AtomObject *> BuildActiveAtomList(
         active_atom_list.emplace_back(atom_list.at(index));
     }
     return active_atom_list;
+}
+
+std::vector<double> BuildActiveRidgeMultiplierList(
+    const std::vector<double> & ridge_multiplier_list,
+    const std::vector<std::size_t> & active_index_list)
+{
+    std::vector<double> active_ridge_multiplier_list;
+    active_ridge_multiplier_list.reserve(active_index_list.size());
+    for (const auto index : active_index_list)
+    {
+        if (index >= ridge_multiplier_list.size())
+        {
+            throw std::invalid_argument("Local fitting ridge multiplier index is out of range.");
+        }
+        active_ridge_multiplier_list.emplace_back(ridge_multiplier_list.at(index));
+    }
+    return active_ridge_multiplier_list;
 }
 
 std::unordered_map<const AtomObject *, std::size_t> BuildSelectedAtomIndexMap(
@@ -1344,11 +1430,13 @@ LocalFittingIterationResult RunLocalFittingIteration(
     const std::vector<std::size_t> & active_index_list,
     const GaussianFittingState & previous_state,
     const FitOptions & options,
-    double ridge_ratio)
+    double ridge_ratio,
+    const std::vector<double> & ridge_multiplier_list)
 {
     const auto selected_atom_size{ atom_list.size() };
     if (previous_state.result_list.size() != selected_atom_size ||
-        previous_state.estimation_list.size() != selected_atom_size)
+        previous_state.estimation_list.size() != selected_atom_size ||
+        ridge_multiplier_list.size() != selected_atom_size)
     {
         throw std::invalid_argument("Local fitting iteration input sizes are inconsistent.");
     }
@@ -1356,18 +1444,48 @@ LocalFittingIterationResult RunLocalFittingIteration(
         BuildFittedGaussianSnapshot(atom_list, previous_state.estimation_list)
     };
     const auto active_atom_list{ BuildActiveAtomList(atom_list, active_index_list) };
+    const auto active_ridge_multiplier_list{
+        BuildActiveRidgeMultiplierList(ridge_multiplier_list, active_index_list)
+    };
     const auto joint_offset_result{
-        EstimateJointOffsets(active_atom_list, current_snapshot, ridge_ratio)
+        EstimateJointOffsets(
+            active_atom_list,
+            current_snapshot,
+            ridge_ratio,
+            active_ridge_multiplier_list)
     };
     ApplyJointOffsetsToSnapshot(active_atom_list, joint_offset_result.offset, current_snapshot);
     auto iteration_state{ previous_state };
     std::vector<int> refit_fallback_flag_list(active_index_list.size(), 0);
+    std::vector<int> suspicious_offset_flag_list(active_index_list.size(), 0);
+
+    for (std::size_t i = 0; i < active_index_list.size(); i++)
+    {
+        const auto state_index{ active_index_list.at(i) };
+        const auto * atom{ atom_list.at(state_index) };
+        const auto sample_entries{
+            AtomLocalPotentialView::RequireFor(*atom).GetSamplingEntries(false)
+        };
+        const auto previous_model{
+            GaussianModel3D::FromVector(previous_state.estimation_list.at(state_index))
+        };
+        const auto & offset_model{ current_snapshot.at(atom) };
+        if (!IsSuspiciousJointOffset(sample_entries, previous_model, offset_model))
+        {
+            continue;
+        }
+        current_snapshot.at(atom) = previous_model;
+        refit_fallback_flag_list.at(i) = 1;
+        suspicious_offset_flag_list.at(i) = 1;
+    }
 
 #ifdef USE_OPENMP
     #pragma omp parallel for num_threads(options.thread_size)
 #endif
     for (size_t i = 0; i < active_index_list.size(); i++)
     {
+        if (suspicious_offset_flag_list.at(i) != 0) continue;
+
         const auto state_index{ active_index_list.at(i) };
         const auto & atom{ *atom_list.at(state_index) };
         auto refit_result{
@@ -1380,6 +1498,10 @@ LocalFittingIterationResult RunLocalFittingIteration(
         if (refit_result.used_fallback)
         {
             refit_fallback_flag_list.at(i) = 1;
+        }
+        if (refit_result.suspicious_offset_fallback)
+        {
+            suspicious_offset_flag_list.at(i) = 1;
         }
         auto result{ std::move(refit_result.result) };
         const auto fitted_model{ result.mdpde.GetModel() };
@@ -1394,6 +1516,11 @@ LocalFittingIterationResult RunLocalFittingIteration(
     {
         if (refit_fallback_flag_list.at(i) == 0) continue;
         iteration_result.refit_fallback_state_index_list.emplace_back(active_index_list.at(i));
+    }
+    for (std::size_t i = 0; i < suspicious_offset_flag_list.size(); i++)
+    {
+        if (suspicious_offset_flag_list.at(i) == 0) continue;
+        iteration_result.suspicious_offset_state_index_list.emplace_back(active_index_list.at(i));
     }
     return iteration_result;
 }
@@ -1426,6 +1553,10 @@ void LogLocalFittingFallbackSummary(const LocalFittingFallbackStats & fallback_s
         << fallback_stats.refit_fallback_atom_events
         << ", refit fallback distinct atoms = "
         << fallback_stats.GetDistinctRefitFallbackAtomCount()
+        << ", suspicious offset atom-events = "
+        << fallback_stats.suspicious_offset_atom_events
+        << ", suspicious offset distinct atoms = "
+        << fallback_stats.GetDistinctSuspiciousOffsetAtomCount()
         << ".";
     Logger::Log(LogLevel::Warning, message.str());
 }
@@ -1784,6 +1915,7 @@ void RunSecondStageLocalFitting(
     LocalFittingFallbackStats fallback_stats{ atom_size };
     const auto atom_index_map{ BuildSelectedAtomIndexMap(atom_list) };
     DynamicRidgeController ridge_controller;
+    std::vector<double> joint_offset_ridge_multiplier_list(atom_size, 1.0);
     for (size_t iter = 0; iter < kLocalFittingMaximumIterations; iter++)
     {
         const auto active_index_list{ freeze_tracker.BuildActiveIndexList() };
@@ -1807,9 +1939,28 @@ void RunSecondStageLocalFitting(
                 active_index_list,
                 previous_state,
                 options,
-                ridge_ratio)
+                ridge_ratio,
+                joint_offset_ridge_multiplier_list)
         };
         fallback_stats.Accumulate(iteration_result);
+        const auto suspicious_offset_state_index_list{
+            iteration_result.suspicious_offset_state_index_list
+        };
+        const auto has_suspicious_offset_fallback{
+            !suspicious_offset_state_index_list.empty()
+        };
+        std::vector<bool> suspicious_offset_atom_seen(atom_size, false);
+        for (const auto state_index : suspicious_offset_state_index_list)
+        {
+            if (state_index >= suspicious_offset_atom_seen.size())
+            {
+                throw std::invalid_argument(
+                    "Local fitting suspicious offset atom index is out of range.");
+            }
+            suspicious_offset_atom_seen.at(state_index) = true;
+            joint_offset_ridge_multiplier_list.at(state_index) =
+                kSuspiciousJointOffsetRidgeMultiplier;
+        }
         const auto raw_state{ std::move(iteration_result.state) };
         GaussianFittingState current_state;
         std::vector<algorithm::ParameterChange> change_list;
@@ -1933,6 +2084,13 @@ void RunSecondStageLocalFitting(
             break;
         }
 
+        for (const auto active_index : active_index_list)
+        {
+            if (!suspicious_offset_atom_seen.at(active_index))
+            {
+                joint_offset_ridge_multiplier_list.at(active_index) = 1.0;
+            }
+        }
         if (!has_backtracking_rejection)
         {
             ridge_controller.Decrease();
@@ -1949,7 +2107,7 @@ void RunSecondStageLocalFitting(
             has_best_candidate = true;
         }
         freeze_tracker.Update(change_list, active_index_list);
-        const auto thaw_count{
+        auto thaw_count{
             ThawChangedActiveAtomNeighbors(
                 atom_list,
                 atom_index_map,
@@ -1957,6 +2115,13 @@ void RunSecondStageLocalFitting(
                 active_index_list,
                 freeze_tracker)
         };
+        for (const auto state_index : suspicious_offset_state_index_list)
+        {
+            if (freeze_tracker.Thaw(state_index))
+            {
+                thaw_count++;
+            }
+        }
 
         if (!options.quiet_mode)
         {
@@ -1989,6 +2154,7 @@ void RunSecondStageLocalFitting(
         }
 
         const auto converged{
+            !has_suspicious_offset_fallback &&
             IsLocalFittingNormalizedParameterChangeConverged(normalized_change_stats)
         };
         if (converged)

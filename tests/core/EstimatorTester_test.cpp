@@ -129,6 +129,75 @@ std::unique_ptr<rg::ModelObject> BuildSecondStageFallbackDiagnosticModel()
     return model;
 }
 
+std::unique_ptr<rg::ModelObject> BuildSecondStageSuspiciousOffsetDiagnosticModel()
+{
+    ElectricPotential potential_model;
+    potential_model.SetModelChoice(0);
+    potential_model.SetBlurringWidth(0.5);
+    auto input{
+        tdf::BuildPotentialModelTestData(tdf::PotentialModelScenario{
+            Spot::UNK,
+            Element::OXYGEN,
+            -0.1,
+            rg::GaussianModel3D{ 8.0, 0.5, -0.1 },
+            potential_model,
+            0.0,
+            1,
+            42
+        })
+    };
+    auto model{ std::move(input.replica_model_objects.front()) };
+
+    rt::FitOptions options;
+    options.distance_min = 0.0;
+    options.distance_max = 1.0;
+    options.thread_size = 1;
+    options.quiet_mode = true;
+    rt::RunLocalAlphaTraining(*model, options);
+    rt::RunFirstStageLocalFitting(*model, options);
+
+    const auto & atom_list{ model->GetSelectedAtoms() };
+    auto * target_atom{ atom_list.at(0) };
+    auto target_position{ target_atom->GetPosition() };
+
+    auto analysis{ model->EditAnalysis() };
+    auto target_sampling_entries{
+        rg::AtomLocalPotentialView::RequireFor(*target_atom).GetSamplingEntries(false)
+    };
+    target_sampling_entries.resize(256);
+    target_sampling_entries.front().response = 0.0F;
+    target_sampling_entries.front().point.distance = 0.0F;
+    target_sampling_entries.front().point.position = target_position;
+    for (std::size_t i = 1; i < target_sampling_entries.size(); i++)
+    {
+        auto & sample{ target_sampling_entries.at(i) };
+        const auto response_scale{
+            0.5F + 0.5F * static_cast<float>(i) /
+                static_cast<float>(target_sampling_entries.size())
+        };
+        sample.response = std::numeric_limits<float>::max() * response_scale;
+        sample.point.position = target_position;
+        sample.point.position.at(0) += 100.0F;
+        sample.point.distance = 100.0F;
+    }
+    analysis.EnsureAtomLocalPotential(*target_atom).SetSamplingEntries(
+        std::move(target_sampling_entries));
+    return model;
+}
+
+void ExpectSelectedAtomEstimatesAreFinite(const rg::ModelObject & model_object)
+{
+    for (const auto * atom : model_object.GetSelectedAtoms())
+    {
+        const auto model{
+            rg::AtomLocalPotentialView::RequireFor(*atom).GetEstimateMDPDE()
+        };
+        EXPECT_TRUE(std::isfinite(model.GetAmplitude()));
+        EXPECT_TRUE(std::isfinite(model.GetWidth()));
+        EXPECT_TRUE(std::isfinite(model.GetOffset()));
+    }
+}
+
 } // namespace
 
 TEST(EstimatorTesterTest, RunLocalEstimationTestPopulatesBiasOutputs)
@@ -404,6 +473,9 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingLogsFallbackSummary)
     EXPECT_NE(
         error_output.find("refit fallback distinct atoms = 1"),
         std::string::npos);
+    EXPECT_NE(
+        error_output.find("suspicious offset atom-events = "),
+        std::string::npos);
 }
 
 TEST(EstimatorTesterTest, RunSecondStageLocalFittingQuietModeSuppressesFallbackSummary)
@@ -424,5 +496,55 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingQuietModeSuppressesFallbackS
 
     EXPECT_EQ(
         error_output.find("Second-stage local fitting fallback summary:"),
+        std::string::npos);
+}
+
+TEST(EstimatorTesterTest, RunSecondStageLocalFittingRollsBackSuspiciousJointOffset)
+{
+    auto model{ BuildSecondStageSuspiciousOffsetDiagnosticModel() };
+    auto * target_atom{ model->GetSelectedAtoms().front() };
+    const auto previous_offset{
+        rg::AtomLocalPotentialView::RequireFor(*target_atom).GetEstimateMDPDE().GetOffset()
+    };
+
+    rt::FitOptions options;
+    options.distance_min = 0.0;
+    options.distance_max = 1.0;
+    options.thread_size = 1;
+    options.quiet_mode = true;
+
+    rt::RunSecondStageLocalFitting(*model, model->GetSelectedAtoms(), options);
+
+    const auto fitted_offset{
+        rg::AtomLocalPotentialView::RequireFor(*target_atom).GetEstimateMDPDE().GetOffset()
+    };
+    EXPECT_NEAR(fitted_offset, previous_offset, 1.0e-12);
+    ExpectSelectedAtomEstimatesAreFinite(*model);
+}
+
+TEST(EstimatorTesterTest, RunSecondStageLocalFittingLogsSuspiciousOffsetSummary)
+{
+    auto model{ BuildSecondStageSuspiciousOffsetDiagnosticModel() };
+    rt::FitOptions options;
+    options.distance_min = 0.0;
+    options.distance_max = 1.0;
+    options.thread_size = 1;
+    options.quiet_mode = false;
+
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Warning);
+    testing::internal::CaptureStderr();
+    rt::RunSecondStageLocalFitting(*model, model->GetSelectedAtoms(), options);
+    const std::string error_output{ testing::internal::GetCapturedStderr() };
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_NE(
+        error_output.find("Second-stage local fitting fallback summary:"),
+        std::string::npos);
+    EXPECT_NE(
+        error_output.find("suspicious offset atom-events = "),
+        std::string::npos);
+    EXPECT_NE(
+        error_output.find("suspicious offset distinct atoms = "),
         std::string::npos);
 }
