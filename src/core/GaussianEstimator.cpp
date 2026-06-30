@@ -81,7 +81,7 @@ constexpr double kJointOffsetRidgeRatio{ 1.0e-3 };
 constexpr double kJointOffsetIrlsScaleFloor{ 1.0e-2 };
 constexpr double kJointOffsetIrlsNormalizedChangeTolerance{ 1.0e-6 };
 constexpr double kJointOffsetIrlsObjectiveRelativeTolerance{ 1.0e-10 };
-constexpr double kAdaptiveRelaxationMin{ 0.1 };
+constexpr double kAdaptiveRelaxationMin{ 0.05 };
 constexpr double kAdaptiveRelaxationMax{ 1.0 };
 constexpr double kAdaptiveRelaxationGrowth{ 1.2 };
 constexpr double kAdaptiveRelaxationShrink{ 0.5 };
