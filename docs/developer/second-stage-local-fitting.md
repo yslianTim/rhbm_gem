@@ -124,8 +124,8 @@ For each atom:
 1. build a sample list by subtracting fitted neighbor responses from the atom's
    unfiltered local sampling entries;
 2. use the joint-offset snapshot model as the fixed offset model;
-3. call `EstimateLocalGaussianWithOffsetModel` to fit amplitude and width with
-   that fixed offset and `FitOptions` distance limits; and
+3. call `EstimateLocalGaussian` to fit amplitude and width with that fixed
+   offset model and `FitOptions` distance limits; and
 4. accept the candidate only if `CanBuildFiniteZeroOffsetSamples` confirms that
    subtracting the candidate offset remains finite and inside the `float`
    response range.

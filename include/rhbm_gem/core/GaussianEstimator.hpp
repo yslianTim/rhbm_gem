@@ -4,6 +4,7 @@
 
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
+#include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
 namespace rhbm_gem {
 class ModelObject;
@@ -32,7 +33,7 @@ LocalGaussianResult EstimateLocalGaussian(
     const LocalPotentialSampleList & sample_entries,
     double alpha_r,
     const FitOptions & options,
-    double offset = 0.0);
+    const GaussianModel3D & offset_model = GaussianModel3D{ 0.0, 1.0, 0.0 });
 
 GroupGaussianResult EstimateGroupGaussian(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,

@@ -1526,29 +1526,6 @@ LocalFittingAttemptResult EvaluateLocalFittingAttempt(
     return result;
 }
 
-LocalGaussianResult EstimateLocalGaussianWithOffsetModel(
-    const LocalPotentialSampleList & sample_entries,
-    double alpha_r,
-    const FitOptions & options,
-    const GaussianModel3D & offset_model)
-{
-    auto range_min{ options.distance_min };
-    auto range_max{ options.distance_max };
-    numeric_validation::RequireFiniteNonNegativeRange(range_min, range_max, "fit range");
-    numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
-    numeric_validation::RequireFinite(offset_model.GetOffset(), "offset");
-
-    auto execution_options{ MakeExecutionOptions(options) };
-    const auto updated_sample_entries{
-        BuildSamplesForZeroOffsetGaussianFit(sample_entries, offset_model)
-    };
-    auto dataset{
-        rhbm_helper::BuildMemberDataset(updated_sample_entries, range_min, range_max)
-    };
-    const auto result{ rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset, execution_options) };
-    return DecodeLocalGaussianResult(alpha_r, result, offset_model.GetOffset());
-}
-
 LocalRefitResult FitAtomWithJointOffsetFallback(
     const AtomObject & atom,
     const LocalGaussianResult & previous_result,
@@ -1561,19 +1538,11 @@ LocalRefitResult FitAtomWithJointOffsetFallback(
     try
     {
         auto candidate_result{
-            EstimateLocalGaussianWithOffsetModel(
-                sample_entries,
-                local_view.GetAlphaR(),
-                options,
-                offset_model)
+            EstimateLocalGaussian(sample_entries, local_view.GetAlphaR(), options, offset_model)
         };
         if (CanBuildFiniteZeroOffsetSamples(sample_entries, candidate_result.mdpde.GetModel()))
         {
-            return LocalRefitResult{
-                candidate_result,
-                false,
-                false
-            };
+            return LocalRefitResult{ candidate_result, false, false };
         }
     }
     catch (const std::exception &)
@@ -1588,17 +1557,9 @@ LocalRefitResult FitAtomWithJointOffsetFallback(
             previous_result.mdpde.GetModel(),
             result.mdpde.GetModel()))
     {
-        return LocalRefitResult{
-            previous_result,
-            true,
-            true
-        };
+        return LocalRefitResult{ previous_result, true, true };
     }
-    return LocalRefitResult{
-        result,
-        true,
-        false
-    };
+    return LocalRefitResult{ result, true, false };
 }
 
 std::unordered_map<const AtomObject *, std::size_t> BuildSelectedAtomIndexMap(
@@ -1956,22 +1917,23 @@ LocalGaussianResult EstimateLocalGaussian(
     const LocalPotentialSampleList & sample_entries,
     double alpha_r,
     const FitOptions & options,
-    double offset)
+    const GaussianModel3D & offset_model)
 {
-    numeric_validation::RequireFinite(offset, "offset");
-    const auto zero_offset_result{
-        EstimateLocalGaussianWithOffsetModel(
-            sample_entries,
-            alpha_r,
-            options,
-            GaussianModel3D{ 0.0, 1.0, 0.0 })
+    auto range_min{ options.distance_min };
+    auto range_max{ options.distance_max };
+    numeric_validation::RequireFiniteNonNegativeRange(range_min, range_max, "fit range");
+    numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
+    numeric_validation::RequireFinite(offset_model.GetOffset(), "offset");
+
+    auto execution_options{ MakeExecutionOptions(options) };
+    const auto updated_sample_entries{
+        BuildSamplesForZeroOffsetGaussianFit(sample_entries, offset_model)
     };
-    if (offset == 0.0)
-    {
-        return zero_offset_result;
-    }
-    const auto offset_model{ zero_offset_result.mdpde.GetModel().WithOffset(offset) };
-    return EstimateLocalGaussianWithOffsetModel(sample_entries, alpha_r, options, offset_model);
+    auto dataset{
+        rhbm_helper::BuildMemberDataset(updated_sample_entries, range_min, range_max)
+    };
+    const auto result{ rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset, execution_options) };
+    return DecodeLocalGaussianResult(alpha_r, result, offset_model.GetOffset());
 }
 
 GroupGaussianResult EstimateGroupGaussian(
@@ -2108,7 +2070,7 @@ void RunFirstStageLocalFitting(ModelObject & model_object, const FitOptions & op
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
         auto sample_entries{ local_view.GetSamplingEntries() };
         auto result{
-            EstimateLocalGaussian(sample_entries, local_view.GetAlphaR(), options, 0.0)
+            EstimateLocalGaussian(sample_entries, local_view.GetAlphaR(), options)
         };
         local_editor_list[i].SetGaussianResult(result);
 
