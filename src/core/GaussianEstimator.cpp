@@ -28,7 +28,6 @@
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <algorithm>
-#include <array>
 #include <atomic>
 #include <cmath>
 #include <iomanip>
@@ -51,16 +50,8 @@
 
 namespace rhbm_gem::core {
 namespace {
-constexpr std::array<double, 3> kLocalFittingNormalizedChangeToleranceList{
-    1.0e-5,
-    1.0e-5,
-    1.0e-5
-};
-constexpr std::array<double, 3> kLocalFittingNormalizedChangeScaleFloorList{
-    1.0,
-    1.0,
-    1.0
-};
+constexpr double kLocalFittingNormalizedChangeTolerance{ 1.0e-5 };
+constexpr double kLocalFittingNormalizedChangeScaleFloor{ 1.0 };
 constexpr std::size_t kMinimumAlphaRTrainingSampleCount{ 10 };
 constexpr std::size_t kMinimumAlphaGTrainingMemberCount{ 10 };
 constexpr double kResidualOffsetRangeMin{ 1.0 };
@@ -92,9 +83,6 @@ constexpr int kLocalFittingFreezeStableIterations{ 3 };
 constexpr double kLocalFittingObjectiveTieRelativeTolerance{ 1.0e-8 };
 constexpr double kLocalFittingConvergenceObjectiveRelativeTolerance{ 1.0e-3 };
 constexpr int kLocalFittingObjectiveBacktrackingMaximumAttempts{ 3 };
-constexpr std::size_t kAmplitudeChangeIndex{ 0 };
-constexpr std::size_t kWidthChangeIndex{ 1 };
-constexpr std::size_t kOffsetChangeIndex{ 2 };
 
 using GaussianFittingState = algorithm::IterationState<LocalGaussianResult, Eigen::VectorXd>;
 
@@ -1142,15 +1130,15 @@ std::vector<algorithm::ParameterChange> CalculateLocalFittingNormalizedParameter
             algorithm::CalculateNormalizedChange(
                 current_estimation_list[i](GaussianModel3D::AmplitudeIndex()),
                 previous_estimation_list[i](GaussianModel3D::AmplitudeIndex()),
-                kLocalFittingNormalizedChangeScaleFloorList.at(kAmplitudeChangeIndex)),
+                kLocalFittingNormalizedChangeScaleFloor),
             algorithm::CalculateNormalizedChange(
                 current_estimation_list[i](GaussianModel3D::WidthIndex()),
                 previous_estimation_list[i](GaussianModel3D::WidthIndex()),
-                kLocalFittingNormalizedChangeScaleFloorList.at(kWidthChangeIndex)),
+                kLocalFittingNormalizedChangeScaleFloor),
             algorithm::CalculateNormalizedChange(
                 current_estimation_list[i](GaussianModel3D::OffsetIndex()),
                 previous_estimation_list[i](GaussianModel3D::OffsetIndex()),
-                kLocalFittingNormalizedChangeScaleFloorList.at(kOffsetChangeIndex))
+                kLocalFittingNormalizedChangeScaleFloor)
         };
     }
     return change_list;
@@ -1166,24 +1154,18 @@ algorithm::ParameterChangeStats SummarizeLocalFittingParameterChangeStats(
         kLocalFittingChangePercentile);
 }
 
-double GetLocalFittingParameterChangePercentile(
-    const algorithm::ParameterChangeStats & stats,
-    std::size_t index)
-{
-    return stats.percentile_list.at(index);
-}
-
 bool IsLocalFittingNormalizedParameterChangeConverged(
     const algorithm::ParameterChangeStats & stats)
 {
-    if (stats.percentile_list.size() != kLocalFittingNormalizedChangeToleranceList.size())
+    if (stats.percentile_list.size() !=
+        static_cast<std::size_t>(GaussianModel3D::ParameterSize()))
     {
         throw std::invalid_argument(
             "Local fitting normalized parameter change stats size is inconsistent.");
     }
     for (std::size_t i = 0; i < stats.percentile_list.size(); i++)
     {
-        if (stats.percentile_list.at(i) >= kLocalFittingNormalizedChangeToleranceList.at(i))
+        if (stats.percentile_list.at(i) >= kLocalFittingNormalizedChangeTolerance)
         {
             return false;
         }
@@ -1768,11 +1750,11 @@ void RunSecondStageLocalFitting(
     algorithm::FittingQualityCandidateStats previous_candidate_stats{
         previous_objective_stats.has_quality_objective,
         previous_objective_stats.quality_objective,
-        algorithm::ParameterChangeStats{ std::vector<double>{
-            0.0,
-            0.0,
-            0.0
-        } }
+        algorithm::ParameterChangeStats{
+            std::vector<double>(
+                static_cast<std::size_t>(GaussianModel3D::ParameterSize()),
+                0.0)
+        }
     };
     GaussianFittingState best_state;
     algorithm::FittingQualityCandidateStats best_candidate_stats;
@@ -1964,11 +1946,11 @@ void RunSecondStageLocalFitting(
                 << kLocalFittingMaximumIterations
                 << std::fixed << std::setprecision(5)
                 << ", percentile amplitude change = "
-                << GetLocalFittingParameterChangePercentile(change_stats, kAmplitudeChangeIndex)
+                << change_stats.percentile_list.at(GaussianModel3D::AmplitudeIndex())
                 << ", percentile width change = "
-                << GetLocalFittingParameterChangePercentile(change_stats, kWidthChangeIndex)
+                << change_stats.percentile_list.at(GaussianModel3D::WidthIndex())
                 << ", percentile offset change = "
-                << GetLocalFittingParameterChangePercentile(change_stats, kOffsetChangeIndex)
+                << change_stats.percentile_list.at(GaussianModel3D::OffsetIndex())
                 << ", objective = "
                 << current_candidate_stats.quality_objective
                 << ", beta = "
@@ -2008,19 +1990,16 @@ void RunSecondStageLocalFitting(
                     "Converged after " + std::to_string(iter + 1) +
                     " iterations with normalized percentile amplitude change = " +
                     std::to_string(
-                        GetLocalFittingParameterChangePercentile(
-                            normalized_change_stats,
-                            kAmplitudeChangeIndex)) +
+                        normalized_change_stats.percentile_list.at(
+                            GaussianModel3D::AmplitudeIndex())) +
                     ", normalized percentile width change = " +
                     std::to_string(
-                        GetLocalFittingParameterChangePercentile(
-                            normalized_change_stats,
-                            kWidthChangeIndex)) +
+                        normalized_change_stats.percentile_list.at(
+                            GaussianModel3D::WidthIndex())) +
                     ", and normalized percentile offset change = " +
                     std::to_string(
-                        GetLocalFittingParameterChangePercentile(
-                            normalized_change_stats,
-                            kOffsetChangeIndex)) +
+                        normalized_change_stats.percentile_list.at(
+                            GaussianModel3D::OffsetIndex())) +
                     ", objective = " +
                     std::to_string(current_candidate_stats.quality_objective) + ".");
             }
@@ -2037,19 +2016,16 @@ void RunSecondStageLocalFitting(
                     "Reached maximum iteration size; refitting at best fixed-point candidate "
                     "with normalized percentile amplitude change = " +
                     std::to_string(
-                        GetLocalFittingParameterChangePercentile(
-                            best_candidate_stats.parameter_change_stats,
-                            kAmplitudeChangeIndex)) +
+                        best_candidate_stats.parameter_change_stats.percentile_list.at(
+                            GaussianModel3D::AmplitudeIndex())) +
                     ", normalized percentile width change = " +
                     std::to_string(
-                        GetLocalFittingParameterChangePercentile(
-                            best_candidate_stats.parameter_change_stats,
-                            kWidthChangeIndex)) +
+                        best_candidate_stats.parameter_change_stats.percentile_list.at(
+                            GaussianModel3D::WidthIndex())) +
                     ", and normalized percentile offset change = " +
                     std::to_string(
-                        GetLocalFittingParameterChangePercentile(
-                            best_candidate_stats.parameter_change_stats,
-                            kOffsetChangeIndex)) +
+                        best_candidate_stats.parameter_change_stats.percentile_list.at(
+                            GaussianModel3D::OffsetIndex())) +
                     ", objective = " +
                     std::to_string(best_candidate_stats.quality_objective));
             }
