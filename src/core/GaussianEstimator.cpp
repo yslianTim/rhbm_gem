@@ -1857,6 +1857,31 @@ void LogLocalFittingFallbackSummary(const LocalFittingFallbackStats & fallback_s
     Logger::Log(LogLevel::Warning, message.str());
 }
 
+void InitializeLocalFittingSeedModels(ModelObject & model_object)
+{
+    const auto & atom_list{ model_object.GetSelectedAtoms() };
+    auto local_editor_list{ BuildAtomLocalEditors(model_object, atom_list) };
+    const auto seed_model{ GaussianModel3D{ 0.0, 1.0, 0.0 } };
+    for (size_t i = 0; i < atom_list.size(); i++)
+    {
+        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
+        auto result{ local_view.GetGaussianResult() };
+        result.ols = GaussianModel3DWithUncertainty{
+            seed_model,
+            GaussianModel3DUncertainty{}
+        };
+        result.mdpde = GaussianModel3DWithUncertainty{
+            seed_model,
+            GaussianModel3DUncertainty{}
+        };
+        result.posterior.reset();
+        result.is_outlier = false;
+        result.statistical_distance = 0.0;
+        result.fit_result.reset();
+        local_editor_list[i].SetGaussianResult(result);
+    }
+}
+
 } // namespace
 
 double TrainAlphaR(
@@ -2066,8 +2091,9 @@ void RunFirstStageLocalFitting(ModelObject & model_object, const FitOptions & op
     {
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
         auto sample_entries{ local_view.GetSamplingEntries() };
+        const auto offset_model{ local_view.GetGaussianResult().mdpde.GetModel() };
         auto result{
-            EstimateLocalGaussian(sample_entries, local_view.GetAlphaR(), options)
+            EstimateLocalGaussian(sample_entries, local_view.GetAlphaR(), options, offset_model)
         };
         local_editor_list[i].SetGaussianResult(result);
 
@@ -2451,6 +2477,7 @@ void RunSecondStageLocalFitting(
 
 void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & options)
 {
+    InitializeLocalFittingSeedModels(model_object);
     RunFirstStageLocalFitting(model_object, options);
 
     if (!options.quiet_mode)
@@ -2459,6 +2486,8 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
     }
 
     const auto & atom_list{ model_object.GetSelectedAtoms() };
+    RunSecondStageLocalFitting(model_object, atom_list, options);
+    RunFirstStageLocalFitting(model_object, options);
     RunSecondStageLocalFitting(model_object, atom_list, options);
 }
 
