@@ -572,6 +572,14 @@ std::vector<RHBMBetaEstimateResult> BuildMemberFitResultList(
 }
 
 using FittedGaussianSnapshot = std::unordered_map<const AtomObject *, GaussianModel3D>;
+using SpotMedianModelMap = std::unordered_map<Spot, GaussianModel3D>;
+
+struct GaussianModelParameterSamples
+{
+    std::vector<double> amplitude_list{};
+    std::vector<double> width_list{};
+    std::vector<double> offset_list{};
+};
 
 FittedGaussianSnapshot BuildFittedGaussianSnapshot(
     const std::vector<AtomObject *> & atom_list,
@@ -589,6 +597,39 @@ FittedGaussianSnapshot BuildFittedGaussianSnapshot(
         snapshot.emplace(atom_list.at(i), GaussianModel3D::FromVector(estimation_list.at(i)));
     }
     return snapshot;
+}
+
+SpotMedianModelMap BuildSpotMedianMDPDEModelMap(const std::vector<AtomObject *> & atom_list)
+{
+    std::unordered_map<Spot, GaussianModelParameterSamples> parameter_samples_by_spot;
+    parameter_samples_by_spot.reserve(atom_list.size());
+    for (const auto * atom : atom_list)
+    {
+        const auto local_view{ AtomLocalPotentialView::For(*atom) };
+        if (!local_view.IsAvailable()) continue;
+
+        const auto & model{ local_view.GetEstimateMDPDE() };
+        auto & parameter_samples{ parameter_samples_by_spot[atom->GetSpot()] };
+        parameter_samples.amplitude_list.emplace_back(model.GetAmplitude());
+        parameter_samples.width_list.emplace_back(model.GetWidth());
+        parameter_samples.offset_list.emplace_back(model.GetOffset());
+    }
+
+    SpotMedianModelMap median_model_by_spot;
+    median_model_by_spot.reserve(parameter_samples_by_spot.size());
+    for (const auto & [spot, parameter_samples] : parameter_samples_by_spot)
+    {
+        if (parameter_samples.amplitude_list.empty()) continue;
+
+        median_model_by_spot.emplace(
+            spot,
+            GaussianModel3D{
+                array_helper::ComputeMedian(parameter_samples.amplitude_list),
+                array_helper::ComputeMedian(parameter_samples.width_list),
+                array_helper::ComputeMedian(parameter_samples.offset_list)
+            });
+    }
+    return median_model_by_spot;
 }
 
 JointOffsetBuildResult BuildJointOffsetSystem(
@@ -1053,6 +1094,25 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(const AtomObject & a
         atom,
         [](const AtomObject & neighbor_atom) -> const GaussianModel3D *
         {
+            const auto local_view{ AtomLocalPotentialView::For(neighbor_atom) };
+            return local_view.IsAvailable() ? &local_view.GetEstimateMDPDE() : nullptr;
+        });
+}
+
+LocalPotentialSampleList UpdateSampleListWithSpotMedianGaussian(
+    const AtomObject & atom,
+    const SpotMedianModelMap & median_model_by_spot)
+{
+    return UpdateSampleListWithGaussianLookup(
+        atom,
+        [&median_model_by_spot](const AtomObject & neighbor_atom) -> const GaussianModel3D *
+        {
+            const auto median_model_iter{ median_model_by_spot.find(neighbor_atom.GetSpot()) };
+            if (median_model_iter != median_model_by_spot.end())
+            {
+                return &median_model_iter->second;
+            }
+
             const auto local_view{ AtomLocalPotentialView::For(neighbor_atom) };
             return local_view.IsAvailable() ? &local_view.GetEstimateMDPDE() : nullptr;
         });
@@ -2649,6 +2709,7 @@ void RunThirdStageLocalFitting(ModelObject & model_object, const FitOptions & op
     const auto & atom_list{ model_object.GetSelectedAtoms() };
     const auto selected_atom_size{ atom_list.size() };
     auto local_editor_list{ BuildAtomLocalEditors(model_object, atom_list) };
+    const auto median_model_by_spot{ BuildSpotMedianMDPDEModelMap(atom_list) };
     std::atomic<size_t> atom_count{ 0 };
     if (!options.quiet_mode)
     {
@@ -2663,11 +2724,12 @@ void RunThirdStageLocalFitting(ModelObject & model_object, const FitOptions & op
     for (size_t i = 0; i < selected_atom_size; i++)
     {
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
-        auto sample_entries{ local_view.GetSamplingEntries(false) };
-        auto updated_sample_entries{ UpdateSampleListWithFittedGaussian(*atom_list[i]) };
-        auto offset{ local_view.GetGaussianResult().mdpde.GetModel().GetOffset() };
+        auto sample_entries{
+            UpdateSampleListWithSpotMedianGaussian(*atom_list[i], median_model_by_spot)
+        };
         auto result{
-            EstimateLocalGaussianWithOffset(updated_sample_entries, local_view.GetAlphaR(), options, offset)
+            EstimateLocalGaussian(sample_entries, local_view.GetAlphaR(), options,
+                median_model_by_spot.at(atom_list[i]->GetSpot()))
         };
         local_editor_list[i].SetGaussianResult(result);
 
