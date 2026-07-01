@@ -116,6 +116,22 @@ double CalculateAtomChargeForSimulation(
     }
 }
 
+bool IsBackboneSimulationAtom(Spot spot)
+{
+    switch (spot)
+    {
+    case Spot::C:
+    case Spot::CA:
+    case Spot::N:
+    case Spot::O:
+    case Spot::H:
+    case Spot::HA:
+        return true;
+    default:
+        return false;
+    }
+}
+
 SimulationAtomPreparationResult PrepareSimulationAtomList(
     ModelObject & model_object,
     const MapSimulationRequest & request)
@@ -124,6 +140,8 @@ SimulationAtomPreparationResult PrepareSimulationAtomList(
     result.atom_list.reserve(model_object.GetSelectedAtomCount());
     for (auto * atom : model_object.GetSelectedAtoms())
     {
+        if (request.only_backbone && !IsBackboneSimulationAtom(atom->GetSpot())) continue;
+
         result.atom_list.emplace_back(atom);
         result.atom_charge_map.emplace(
             atom->GetSerialID(),

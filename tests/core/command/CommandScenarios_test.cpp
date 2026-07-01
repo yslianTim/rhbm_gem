@@ -90,6 +90,39 @@ std::filesystem::path WriteCarbonHydrogenModelFixture(const std::filesystem::pat
     return model_path;
 }
 
+std::filesystem::path WriteBackboneSideChainModelFixture(const std::filesystem::path & output_dir)
+{
+    std::filesystem::create_directories(output_dir);
+    const auto model_path{ output_dir / "backbone_side_chain.cif" };
+    std::ofstream outfile{ model_path };
+    outfile
+        << "data_backbone_side_chain\n"
+        << "#\n"
+        << "loop_\n"
+        << "_atom_type.symbol\n"
+        << "C\n"
+        << "#\n"
+        << "loop_\n"
+        << "_atom_site.group_PDB\n"
+        << "_atom_site.id\n"
+        << "_atom_site.type_symbol\n"
+        << "_atom_site.label_atom_id\n"
+        << "_atom_site.label_alt_id\n"
+        << "_atom_site.label_comp_id\n"
+        << "_atom_site.label_asym_id\n"
+        << "_atom_site.label_seq_id\n"
+        << "_atom_site.Cartn_x\n"
+        << "_atom_site.Cartn_y\n"
+        << "_atom_site.Cartn_z\n"
+        << "_atom_site.occupancy\n"
+        << "_atom_site.B_iso_or_equiv\n"
+        << "_atom_site.pdbx_PDB_model_num\n"
+        << "ATOM 1 C CA . ALA A 1 0.0 0.0 0.0 1.0 0.0 1\n"
+        << "ATOM 2 C CB . ALA A 1 3.0 0.0 0.0 1.0 0.0 1\n"
+        << "#\n";
+    return model_path;
+}
+
 std::filesystem::path FindGeneratedMapPath(const std::filesystem::path & output_dir)
 {
     for (const auto & entry : std::filesystem::directory_iterator(output_dir))
@@ -183,6 +216,13 @@ TEST(CommandScenariosTest, MapSimulationDefaultsToIncludingHydrogen)
     MapSimulationRequest request{};
 
     EXPECT_FALSE(request.exclude_hydrogen);
+}
+
+TEST(CommandScenariosTest, MapSimulationDefaultsToAllAtoms)
+{
+    MapSimulationRequest request{};
+
+    EXPECT_FALSE(request.only_backbone);
 }
 
 TEST(CommandScenariosTest, PotentialAnalysisDefaultsToFibonacciSamplingMethod)
@@ -497,6 +537,43 @@ TEST(CommandScenariosTest, MapSimulationCliAcceptsExcludeHydrogen)
     EXPECT_EQ(command_test::CountFilesWithExtension(output_dir, ".map"), 1);
 }
 
+TEST(CommandScenariosTest, MapSimulationCliAcceptsOnlyBackbone)
+{
+    command_test::ScopedTempDir temp_dir{ "map_simulation_only_backbone_cli" };
+    const auto model_path{ WriteBackboneSideChainModelFixture(temp_dir.path() / "models") };
+    const auto output_dir{ temp_dir.path() / "maps" };
+
+    std::vector<std::string> args{
+        "RHBM-GEM",
+        "map_simulation",
+        "--folder",
+        output_dir.string(),
+        "--model",
+        model_path.string(),
+        "--name",
+        "only_backbone_cli",
+        "--cut-off",
+        "2.0",
+        "--grid-spacing",
+        "1.0",
+        "--blurring-width",
+        "1.0",
+        "--only-backbone",
+        "true",
+    };
+    std::vector<char *> argv;
+    argv.reserve(args.size());
+    for (auto & arg : args)
+    {
+        argv.push_back(arg.data());
+    }
+
+    const auto result{ RunCommandCLI(static_cast<int>(argv.size()), argv.data()) };
+
+    EXPECT_EQ(result, 0);
+    EXPECT_EQ(command_test::CountFilesWithExtension(output_dir, ".map"), 1);
+}
+
 TEST(CommandScenariosTest, MapSimulationExcludeHydrogenFiltersSimulationBounds)
 {
     command_test::ScopedTempDir temp_dir{ "map_simulation_exclude_hydrogen_behavior" };
@@ -532,6 +609,43 @@ TEST(CommandScenariosTest, MapSimulationExcludeHydrogenFiltersSimulationBounds)
     EXPECT_EQ(exclude_map->GetGridSize(), (std::array<int, 3>{ 4, 4, 4 }));
     EXPECT_EQ(include_map->GetOrigin(), (std::array<float, 3>{ -2.0f, -2.0f, -2.0f }));
     EXPECT_EQ(exclude_map->GetOrigin(), (std::array<float, 3>{ -2.0f, -2.0f, -2.0f }));
+}
+
+TEST(CommandScenariosTest, MapSimulationOnlyBackboneFiltersSimulationBounds)
+{
+    command_test::ScopedTempDir temp_dir{ "map_simulation_only_backbone_behavior" };
+    const auto model_path{ WriteBackboneSideChainModelFixture(temp_dir.path() / "models") };
+
+    MapSimulationRequest all_atom_request{};
+    all_atom_request.output_dir = temp_dir.path() / "all";
+    all_atom_request.map_file_name = "all_atoms";
+    all_atom_request.model_file_path = model_path;
+    all_atom_request.cutoff_distance = 2.0;
+    all_atom_request.grid_spacing = 1.0;
+    all_atom_request.blurring_width_list = { 1.0 };
+    all_atom_request.only_backbone = false;
+    ASSERT_TRUE(RunCommand(all_atom_request).succeeded);
+
+    MapSimulationRequest backbone_request{ all_atom_request };
+    backbone_request.output_dir = temp_dir.path() / "backbone";
+    backbone_request.map_file_name = "only_backbone";
+    backbone_request.only_backbone = true;
+    ASSERT_TRUE(RunCommand(backbone_request).succeeded);
+
+    const auto all_atom_map_path{ FindGeneratedMapPath(all_atom_request.output_dir) };
+    const auto backbone_map_path{ FindGeneratedMapPath(backbone_request.output_dir) };
+    ASSERT_FALSE(all_atom_map_path.empty());
+    ASSERT_FALSE(backbone_map_path.empty());
+
+    auto all_atom_map{ ReadMap(all_atom_map_path) };
+    auto backbone_map{ ReadMap(backbone_map_path) };
+    ASSERT_NE(all_atom_map, nullptr);
+    ASSERT_NE(backbone_map, nullptr);
+
+    EXPECT_EQ(all_atom_map->GetGridSize(), (std::array<int, 3>{ 7, 4, 4 }));
+    EXPECT_EQ(backbone_map->GetGridSize(), (std::array<int, 3>{ 4, 4, 4 }));
+    EXPECT_EQ(all_atom_map->GetOrigin(), (std::array<float, 3>{ -2.0f, -2.0f, -2.0f }));
+    EXPECT_EQ(backbone_map->GetOrigin(), (std::array<float, 3>{ -2.0f, -2.0f, -2.0f }));
 }
 
 TEST(CommandScenariosTest, MapSimulationEmptyModelUsesZeroOrigin)

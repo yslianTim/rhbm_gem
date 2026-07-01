@@ -89,8 +89,11 @@ def assert_request_objects_are_usable() -> None:
     assert Path(simulation.output_dir) == Path("runtime_smoke_output")
     assert simulation.blurring_width_list == [1.50]
     assert simulation.exclude_hydrogen is False
+    assert simulation.only_backbone is False
     simulation.exclude_hydrogen = True
+    simulation.only_backbone = True
     assert simulation.exclude_hydrogen is True
+    assert simulation.only_backbone is True
 
     analysis = m.PotentialAnalysisRequest()
     assert analysis.map_normalization_flag is True
