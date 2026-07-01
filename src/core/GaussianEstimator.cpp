@@ -1956,7 +1956,7 @@ void InitializeLocalFittingSeedModels(ModelObject & model_object)
     }
 }
 
-[[maybe_unused]] LocalGaussianResult EstimateLocalGaussianWithOffset(
+LocalGaussianResult EstimateLocalGaussianWithOffset(
     const LocalPotentialSampleList & sample_entries,
     double alpha_r,
     const FitOptions & options,
@@ -2247,7 +2247,7 @@ void RunFirstStageLocalFitting(ModelObject & model_object, const FitOptions & op
     if (!options.quiet_mode)
     {
         Logger::Log(LogLevel::Info,
-            "Run first-stage local atom fitting for " +
+            "Run 1st-stage local atom fitting for " +
             std::to_string(selected_atom_size) + " atoms.");
     }
 
@@ -2282,6 +2282,10 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
     const auto & atom_list{ model_object.GetSelectedAtoms() };
     const auto atom_size{ atom_list.size() };
     auto local_editor_list{ BuildAtomLocalEditors(model_object, atom_list) };
+    if (!options.quiet_mode)
+    {
+        Logger::Log(LogLevel::Info, "Run 2nd-stage local atom fitting with iterations...");
+    }
 
     GaussianFittingState previous_state{
         std::vector<LocalGaussianResult>(atom_size),
@@ -2640,17 +2644,52 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
     }
 }
 
+void RunThirdStageLocalFitting(ModelObject & model_object, const FitOptions & options)
+{
+    const auto & atom_list{ model_object.GetSelectedAtoms() };
+    const auto selected_atom_size{ atom_list.size() };
+    auto local_editor_list{ BuildAtomLocalEditors(model_object, atom_list) };
+    std::atomic<size_t> atom_count{ 0 };
+    if (!options.quiet_mode)
+    {
+        Logger::Log(LogLevel::Info,
+            "Run 3rd-stage local atom fitting for " +
+            std::to_string(selected_atom_size) + " atoms.");
+    }
+
+#ifdef USE_OPENMP
+    #pragma omp parallel for num_threads(options.thread_size)
+#endif
+    for (size_t i = 0; i < selected_atom_size; i++)
+    {
+        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
+        auto sample_entries{ local_view.GetSamplingEntries(false) };
+        auto updated_sample_entries{ UpdateSampleListWithFittedGaussian(*atom_list[i]) };
+        auto offset{ local_view.GetGaussianResult().mdpde.GetModel().GetOffset() };
+        auto result{
+            EstimateLocalGaussianWithOffset(updated_sample_entries, local_view.GetAlphaR(), options, offset)
+        };
+        local_editor_list[i].SetGaussianResult(result);
+
+#ifdef USE_OPENMP
+        #pragma omp critical
+#endif
+        {
+            atom_count++;
+            if (!options.quiet_mode)
+            {
+                Logger::ProgressPercent(atom_count, selected_atom_size);
+            }
+        }
+    }
+}
+
 void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & options)
 {
     InitializeLocalFittingSeedModels(model_object);
     RunFirstStageLocalFitting(model_object, options);
-
-    if (!options.quiet_mode)
-    {
-        Logger::Log(LogLevel::Info, "Run updated local atom fitting with iterations...");
-    }
-
     RunSecondStageLocalFitting(model_object, options);
+    RunThirdStageLocalFitting(model_object, options);
 }
 
 void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & options)

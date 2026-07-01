@@ -43,6 +43,7 @@ void RunLocalAlphaTraining(ModelObject & model_object, const FitOptions & option
 void RunGroupAlphaTraining(ModelObject & model_object, const FitOptions & options);
 void RunFirstStageLocalFitting(ModelObject & model_object, const FitOptions & options);
 void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & options);
+void RunThirdStageLocalFitting(ModelObject & model_object, const FitOptions & options);
 void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & options);
 void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & options);
 void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & options);
