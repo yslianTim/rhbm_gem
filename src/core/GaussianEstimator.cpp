@@ -62,7 +62,7 @@ constexpr double kResidualOffsetRangeMin{ 1.0 };
 constexpr double kResidualOffsetRangeMax{ 2.0 };
 constexpr double kOffsetDampingFactor{ 0.5 };
 constexpr double kNeighborContributionDistanceMax{ 2.5 };
-constexpr std::size_t kLocalFittingMaximumIterations{ 200 };
+constexpr std::size_t kLocalFittingMaximumIterations{ 100 };
 constexpr double kLocalFittingParameterChangeTolerance{ 1.0e-6 };
 constexpr double kLocalFittingChangePercentile{ 0.95 };
 constexpr int kHuberSlopeMaximumIterations{ 50 };
@@ -115,6 +115,7 @@ struct JointOffsetBuildResult
 {
     algorithm::WeightedRidgeSystem system{};
     std::vector<std::vector<std::size_t>> active_coupling_adjacency{};
+    std::vector<std::size_t> estimated_active_position_list{};
 };
 
 double IncreaseLocalFittingRidgeRatio(double ridge_ratio)
@@ -486,6 +487,45 @@ GaussianModel3DWithUncertainty WithModelOffset(
     };
 }
 
+bool UsesFixedZeroSecondStageOffset(const AtomObject & atom)
+{
+    return atom.GetSpot() == Spot::CA || atom.GetSpot() == Spot::C;
+}
+
+GaussianModel3D ApplySecondStageOffsetPolicy(
+    const AtomObject & atom,
+    const GaussianModel3D & model)
+{
+    return UsesFixedZeroSecondStageOffset(atom) ? model.WithOffset(0.0) : model;
+}
+
+GaussianModel3DWithUncertainty ApplySecondStageOffsetPolicy(
+    const AtomObject & atom,
+    const GaussianModel3DWithUncertainty & gaussian)
+{
+    return UsesFixedZeroSecondStageOffset(atom) ?
+        WithModelOffset(gaussian, 0.0) :
+        gaussian;
+}
+
+LocalGaussianResult ApplySecondStageOffsetPolicy(
+    const AtomObject & atom,
+    LocalGaussianResult result)
+{
+    if (!UsesFixedZeroSecondStageOffset(atom))
+    {
+        return result;
+    }
+
+    result.ols = ApplySecondStageOffsetPolicy(atom, result.ols);
+    result.mdpde = ApplySecondStageOffsetPolicy(atom, result.mdpde);
+    if (result.posterior.has_value())
+    {
+        result.posterior = ApplySecondStageOffsetPolicy(atom, *result.posterior);
+    }
+    return result;
+}
+
 GroupGaussianResult DecodeGroupGaussianResult(
     double alpha_g,
     const RHBMGroupEstimationResult & result,
@@ -594,7 +634,11 @@ FittedGaussianSnapshot BuildFittedGaussianSnapshot(
     snapshot.reserve(atom_list.size());
     for (std::size_t i = 0; i < atom_list.size(); i++)
     {
-        snapshot.emplace(atom_list.at(i), GaussianModel3D::FromVector(estimation_list.at(i)));
+        snapshot.emplace(
+            atom_list.at(i),
+            ApplySecondStageOffsetPolicy(
+                *atom_list.at(i),
+                GaussianModel3D::FromVector(estimation_list.at(i))));
     }
     return snapshot;
 }
@@ -646,6 +690,8 @@ JointOffsetBuildResult BuildJointOffsetSystem(
 
     std::unordered_map<const AtomObject *, Eigen::Index> atom_column_map;
     atom_column_map.reserve(active_index_list.size());
+    std::vector<std::size_t> estimated_active_position_list;
+    estimated_active_position_list.reserve(active_index_list.size());
     for (std::size_t i = 0; i < active_index_list.size(); i++)
     {
         const auto atom_index{ active_index_list.at(i) };
@@ -653,7 +699,14 @@ JointOffsetBuildResult BuildJointOffsetSystem(
         {
             throw std::invalid_argument("Joint offset active atom index is out of range.");
         }
-        atom_column_map.emplace(atom_list.at(atom_index), static_cast<Eigen::Index>(i));
+        if (UsesFixedZeroSecondStageOffset(*atom_list.at(atom_index)))
+        {
+            continue;
+        }
+        atom_column_map.emplace(
+            atom_list.at(atom_index),
+            static_cast<Eigen::Index>(estimated_active_position_list.size()));
+        estimated_active_position_list.emplace_back(i);
     }
 
     std::vector<algorithm::SparseRegressionRow> row_list;
@@ -669,7 +722,7 @@ JointOffsetBuildResult BuildJointOffsetSystem(
         {
             throw std::invalid_argument("Joint offset snapshot is missing an atom.");
         }
-        const auto target_column{ atom_column_map.at(atom) };
+        const auto target_column_iter{ atom_column_map.find(atom) };
         const auto & target_model{ model_iter->second };
         const auto sample_entries{
             AtomLocalPotentialView::RequireFor(*atom).GetSamplingEntries(false)
@@ -682,18 +735,27 @@ JointOffsetBuildResult BuildJointOffsetSystem(
                 throw std::runtime_error("Joint offset sample response is not finite.");
             }
             const auto target_distance{ static_cast<double>(sample.point.distance) };
-            const auto target_signal{ target_model.SignalAtDistance(target_distance) };
-            const auto target_basis{ target_model.OffsetBasisAtDistance(target_distance) };
-            if (!std::isfinite(target_signal) || !std::isfinite(target_basis))
+            auto target_response{ target_model.ResponseAtDistance(target_distance) };
+            algorithm::SparseRegressionRow row;
+            if (target_column_iter != atom_column_map.end())
+            {
+                const auto target_signal{ target_model.SignalAtDistance(target_distance) };
+                const auto target_basis{ target_model.OffsetBasisAtDistance(target_distance) };
+                if (!std::isfinite(target_signal) || !std::isfinite(target_basis))
+                {
+                    throw std::runtime_error("Joint offset target model evaluation is not finite.");
+                }
+                target_response = target_signal;
+                if (std::abs(target_basis) > std::numeric_limits<double>::epsilon())
+                {
+                    row.basis_entries.emplace_back(target_column_iter->second, target_basis);
+                }
+            }
+            if (!std::isfinite(target_response))
             {
                 throw std::runtime_error("Joint offset target model evaluation is not finite.");
             }
-            auto residual{ static_cast<double>(sample.response) - target_signal };
-            algorithm::SparseRegressionRow row;
-            if (std::abs(target_basis) > std::numeric_limits<double>::epsilon())
-            {
-                row.basis_entries.emplace_back(target_column, target_basis);
-            }
+            auto residual{ static_cast<double>(sample.response) - target_response };
 
             for (const auto * neighbor_atom : neighbor_atom_list)
             {
@@ -743,7 +805,7 @@ JointOffsetBuildResult BuildJointOffsetSystem(
     }
 
     const auto row_count{ static_cast<Eigen::Index>(row_list.size()) };
-    const auto column_count{ static_cast<Eigen::Index>(active_index_list.size()) };
+    const auto column_count{ static_cast<Eigen::Index>(estimated_active_position_list.size()) };
     std::vector<Eigen::Triplet<double>> triplet_list;
     Eigen::VectorXd response{ Eigen::VectorXd::Zero(row_count) };
     Eigen::VectorXd column_square_sum{ Eigen::VectorXd::Zero(column_count) };
@@ -769,8 +831,12 @@ JointOffsetBuildResult BuildJointOffsetSystem(
                     std::minmax(left_column, right_column)
                 };
                 column_cross_sum_map[column_pair] += left_basis * right_basis;
-                const auto left_index{ static_cast<std::size_t>(column_pair.first) };
-                const auto right_index{ static_cast<std::size_t>(column_pair.second) };
+                const auto left_index{
+                    estimated_active_position_list.at(static_cast<std::size_t>(column_pair.first))
+                };
+                const auto right_index{
+                    estimated_active_position_list.at(static_cast<std::size_t>(column_pair.second))
+                };
                 active_coupling_adjacency.at(left_index).emplace_back(right_index);
                 active_coupling_adjacency.at(right_index).emplace_back(left_index);
             }
@@ -822,7 +888,10 @@ JointOffsetBuildResult BuildJointOffsetSystem(
     system.ridge_diagonal = Eigen::VectorXd::Zero(column_count);
     for (Eigen::Index column_index = 0; column_index < column_count; column_index++)
     {
-        const auto atom_index{ active_index_list.at(static_cast<std::size_t>(column_index)) };
+        const auto active_position{
+            estimated_active_position_list.at(static_cast<std::size_t>(column_index))
+        };
+        const auto atom_index{ active_index_list.at(active_position) };
         const auto & model{ snapshot.at(atom_list.at(atom_index)) };
         system.previous_parameter(column_index) = model.GetOffset();
         const auto square_sum{ column_square_sum(column_index) };
@@ -845,7 +914,8 @@ JointOffsetBuildResult BuildJointOffsetSystem(
     }
     return JointOffsetBuildResult{
         std::move(system),
-        std::move(active_coupling_adjacency)
+        std::move(active_coupling_adjacency),
+        std::move(estimated_active_position_list)
     };
 }
 
@@ -902,6 +972,30 @@ bool IsJointOffsetObjectiveDeteriorated(
         current_objective + kJointOffsetIrlsObjectiveRelativeTolerance * scale;
 }
 
+Eigen::VectorXd ExpandEstimatedJointOffsets(
+    const Eigen::VectorXd & base_offset,
+    const std::vector<std::size_t> & estimated_active_position_list,
+    const Eigen::VectorXd & estimated_offset)
+{
+    if (estimated_active_position_list.size() != static_cast<std::size_t>(estimated_offset.size()))
+    {
+        throw std::invalid_argument("Joint offset expansion input sizes are inconsistent.");
+    }
+
+    auto offset{ base_offset };
+    for (std::size_t i = 0; i < estimated_active_position_list.size(); i++)
+    {
+        const auto active_position{ estimated_active_position_list.at(i) };
+        if (active_position >= static_cast<std::size_t>(offset.size()))
+        {
+            throw std::invalid_argument("Joint offset expansion active position is out of range.");
+        }
+        offset(static_cast<Eigen::Index>(active_position)) =
+            estimated_offset(static_cast<Eigen::Index>(i));
+    }
+    return offset;
+}
+
 JointOffsetSolveResult EstimateJointOffsets(
     const std::vector<AtomObject *> & atom_list,
     const std::vector<std::size_t> & active_index_list,
@@ -920,7 +1014,9 @@ JointOffsetSolveResult EstimateJointOffsets(
             throw std::invalid_argument("Joint offset active atom index is out of range.");
         }
         previous_offset(static_cast<Eigen::Index>(i)) =
-            snapshot.at(atom_list.at(atom_index)).GetOffset();
+            UsesFixedZeroSecondStageOffset(*atom_list.at(atom_index)) ?
+                0.0 :
+                snapshot.at(atom_list.at(atom_index)).GetOffset();
     }
     JointOffsetBuildResult build_result;
     try
@@ -942,6 +1038,17 @@ JointOffsetSolveResult EstimateJointOffsets(
     }
     auto system{ std::move(build_result.system) };
     auto active_coupling_adjacency{ std::move(build_result.active_coupling_adjacency) };
+    auto estimated_active_position_list{
+        std::move(build_result.estimated_active_position_list)
+    };
+    if (estimated_active_position_list.empty())
+    {
+        return JointOffsetSolveResult{
+            previous_offset,
+            false,
+            std::move(active_coupling_adjacency)
+        };
+    }
     if (system.response.size() == 0 || system.previous_parameter.size() == 0)
     {
         return JointOffsetSolveResult{
@@ -989,7 +1096,7 @@ JointOffsetSolveResult EstimateJointOffsets(
         if (!solver.Solve(system, weight, updated_offset))
         {
             return JointOffsetSolveResult{
-                system.previous_parameter,
+                previous_offset,
                 true,
                 std::move(active_coupling_adjacency)
             };
@@ -1015,7 +1122,10 @@ JointOffsetSolveResult EstimateJointOffsets(
     }
 
     return JointOffsetSolveResult{
-        offset,
+        ExpandEstimatedJointOffsets(
+            previous_offset,
+            estimated_active_position_list,
+            offset),
         false,
         std::move(active_coupling_adjacency)
     };
@@ -1038,8 +1148,13 @@ void ApplyJointOffsetsToSnapshot(
         {
             throw std::invalid_argument("Joint offset active atom index is out of range.");
         }
+        const auto next_offset{
+            UsesFixedZeroSecondStageOffset(*atom_list.at(atom_index)) ?
+                0.0 :
+                offset(static_cast<Eigen::Index>(i))
+        };
         snapshot.at(atom_list.at(atom_index)) =
-            snapshot.at(atom_list.at(atom_index)).WithOffset(offset(static_cast<Eigen::Index>(i)));
+            snapshot.at(atom_list.at(atom_index)).WithOffset(next_offset);
     }
 }
 
@@ -1672,7 +1787,9 @@ LocalRefitResult FitAtomWithJointOffsetFallback(
     try
     {
         auto candidate_result{
-            EstimateLocalGaussian(sample_entries, local_view.GetAlphaR(), options, offset_model)
+            ApplySecondStageOffsetPolicy(
+                atom,
+                EstimateLocalGaussian(sample_entries, local_view.GetAlphaR(), options, offset_model))
         };
         if (CanBuildFiniteZeroOffsetSamples(sample_entries, candidate_result.mdpde.GetModel()))
         {
@@ -1686,6 +1803,7 @@ LocalRefitResult FitAtomWithJointOffsetFallback(
     auto result{ previous_result };
     result.ols = WithModelOffset(result.ols, offset_model.GetOffset());
     result.mdpde = WithModelOffset(result.mdpde, offset_model.GetOffset());
+    result = ApplySecondStageOffsetPolicy(atom, std::move(result));
     if (IsSuspiciousJointOffset(
             sample_entries,
             previous_result.mdpde.GetModel(),
@@ -2016,7 +2134,7 @@ void InitializeLocalFittingSeedModels(ModelObject & model_object)
     }
 }
 
-LocalGaussianResult EstimateLocalGaussianWithOffset(
+[[maybe_unused]] LocalGaussianResult EstimateLocalGaussianWithOffset(
     const LocalPotentialSampleList & sample_entries,
     double alpha_r,
     const FitOptions & options,
@@ -2354,7 +2472,9 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
     for (size_t i = 0; i < atom_size; i++)
     {
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
-        previous_state.result_list[i] = local_view.GetGaussianResult();
+        previous_state.result_list[i] = ApplySecondStageOffsetPolicy(
+            *atom_list[i],
+            local_view.GetGaussianResult());
         previous_state.estimation_list[i] = previous_state.result_list[i].mdpde.GetModel().ToVector();
     }
 

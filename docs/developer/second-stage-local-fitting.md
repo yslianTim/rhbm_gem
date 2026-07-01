@@ -62,6 +62,8 @@ The maximum iteration count is `kLocalFittingMaximumIterations` (`200`).
 into a snapshot keyed by atom pointer. `EstimateJointOffsets` then solves one
 sparse linear system for active atom offsets. Frozen atoms remain in the
 snapshot, but they do not become columns in the linear system.
+Carbon atoms are also excluded from the offset solve: their second-stage offset
+is fixed to `0.0`, so they do not become columns even when they are active.
 
 For each unfiltered sampling entry on each active atom:
 
@@ -72,6 +74,11 @@ For each unfiltered sampling entry on each active atom:
    the neighbor is not in the active solve; and
 4. for active selected neighbors, subtract the current zero-offset signal and add
    the neighbor's offset basis as another row entry.
+
+For carbon target atoms and carbon active neighbors, the full zero-offset
+response is subtracted instead of adding an offset basis entry. These atoms still
+provide sampling rows that can constrain nearby non-carbon offsets, but their
+own offsets remain fixed at `0.0`.
 
 The resulting system is solved with weighted ridge regression. The ridge term is
 relative to the previous offsets, so weakly constrained columns stay close to
@@ -111,6 +118,8 @@ Frozen atoms are left in the iteration state copied from the previous state. The
 second-stage active-atom loop itself is sequential in `RunLocalFittingIteration`;
 `FitOptions::thread_size` is passed through to the lower-level fixed-offset
 Gaussian estimator.
+Carbon atoms still enter this refit loop, but their fixed offset model always
+has offset `0.0`; only amplitude and width are refit for them.
 
 Before the per-atom refit loop runs, each active atom's joint-offset snapshot
 model is checked against the atom's raw sampling entries. If the previous model
