@@ -2277,11 +2277,9 @@ void RunFirstStageLocalFitting(ModelObject & model_object, const FitOptions & op
     }
 }
 
-void RunSecondStageLocalFitting(
-    ModelObject & model_object,
-    const std::vector<AtomObject *> & atom_list,
-    const FitOptions & options)
+void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & options)
 {
+    const auto & atom_list{ model_object.GetSelectedAtoms() };
     const auto atom_size{ atom_list.size() };
     auto local_editor_list{ BuildAtomLocalEditors(model_object, atom_list) };
 
@@ -2652,12 +2650,7 @@ void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & opt
         Logger::Log(LogLevel::Info, "Run updated local atom fitting with iterations...");
     }
 
-    const auto & atom_list{ model_object.GetSelectedAtoms() };
-    RunSecondStageLocalFitting(model_object, atom_list, options);
-
-    //ApplySpotMedianMDPDEOffsets(model_object, atom_list);
-    //RunFirstStageLocalFitting(model_object, options);
-    //RunSecondStageLocalFitting(model_object, atom_list, options);
+    RunSecondStageLocalFitting(model_object, options);
 }
 
 void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & options)

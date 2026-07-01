@@ -677,7 +677,7 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingHandlesNearCollinearAtoms)
     };
     const auto options{ MakeSecondStageOptions() };
 
-    rt::RunSecondStageLocalFitting(*model, model->GetSelectedAtoms(), options);
+    rt::RunSecondStageLocalFitting(*model, options);
 
     const auto fitted_error{
         CalculateSelectedAtomResponseMeanSquaredError(*model)
@@ -697,10 +697,7 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingImprovesBadFiniteEntryScale)
         CalculateSelectedAtomResponseMeanSquaredError(*model)
     };
 
-    rt::RunSecondStageLocalFitting(
-        *model,
-        model->GetSelectedAtoms(),
-        MakeSecondStageOptions());
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
 
     const auto fitted_error{
         CalculateSelectedAtomResponseMeanSquaredError(*model)
@@ -717,10 +714,7 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingHandlesNearPerfectEntryScale
         CalculateSelectedAtomResponseMeanSquaredError(*model)
     };
 
-    rt::RunSecondStageLocalFitting(
-        *model,
-        model->GetSelectedAtoms(),
-        MakeSecondStageOptions());
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
 
     const auto fitted_error{
         CalculateSelectedAtomResponseMeanSquaredError(*model)
@@ -741,7 +735,7 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingLogsFallbackSummary)
     const auto previous_log_level{ Logger::GetLogLevel() };
     Logger::SetLogLevel(LogLevel::Warning);
     testing::internal::CaptureStderr();
-    rt::RunSecondStageLocalFitting(*model, model->GetSelectedAtoms(), options);
+    rt::RunSecondStageLocalFitting(*model, options);
     const std::string error_output{ testing::internal::GetCapturedStderr() };
     Logger::SetLogLevel(previous_log_level);
 
@@ -774,7 +768,7 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingQuietModeSuppressesFallbackS
     const auto previous_log_level{ Logger::GetLogLevel() };
     Logger::SetLogLevel(LogLevel::Warning);
     testing::internal::CaptureStderr();
-    rt::RunSecondStageLocalFitting(*model, model->GetSelectedAtoms(), options);
+    rt::RunSecondStageLocalFitting(*model, options);
     const std::string error_output{ testing::internal::GetCapturedStderr() };
     Logger::SetLogLevel(previous_log_level);
 
@@ -797,7 +791,7 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingRollsBackSuspiciousJointOffs
     options.thread_size = 1;
     options.quiet_mode = true;
 
-    rt::RunSecondStageLocalFitting(*model, model->GetSelectedAtoms(), options);
+    rt::RunSecondStageLocalFitting(*model, options);
 
     const auto fitted_offset{
         rg::AtomLocalPotentialView::RequireFor(*target_atom).GetEstimateMDPDE().GetOffset()
@@ -824,7 +818,7 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingRollsBackSuspiciousJointOffs
     const auto previous_log_level{ Logger::GetLogLevel() };
     Logger::SetLogLevel(LogLevel::Warning);
     testing::internal::CaptureStderr();
-    rt::RunSecondStageLocalFitting(*model, atom_list, options);
+    rt::RunSecondStageLocalFitting(*model, options);
     const std::string error_output{ testing::internal::GetCapturedStderr() };
     Logger::SetLogLevel(previous_log_level);
 
@@ -853,7 +847,7 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingLogsSuspiciousOffsetSummary)
     const auto previous_log_level{ Logger::GetLogLevel() };
     Logger::SetLogLevel(LogLevel::Warning);
     testing::internal::CaptureStderr();
-    rt::RunSecondStageLocalFitting(*model, model->GetSelectedAtoms(), options);
+    rt::RunSecondStageLocalFitting(*model, options);
     const std::string error_output{ testing::internal::GetCapturedStderr() };
     Logger::SetLogLevel(previous_log_level);
 

@@ -8,7 +8,6 @@
 
 namespace rhbm_gem {
 class ModelObject;
-class AtomObject;
 
 namespace core {
 
@@ -43,7 +42,7 @@ GroupGaussianResult EstimateGroupGaussian(
 void RunLocalAlphaTraining(ModelObject & model_object, const FitOptions & options);
 void RunGroupAlphaTraining(ModelObject & model_object, const FitOptions & options);
 void RunFirstStageLocalFitting(ModelObject & model_object, const FitOptions & options);
-void RunSecondStageLocalFitting(ModelObject & model_object, const std::vector<AtomObject *> & atom_list, const FitOptions & options);
+void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & options);
 void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & options);
 void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & options);
 void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & options);

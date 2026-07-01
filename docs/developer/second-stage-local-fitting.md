@@ -13,13 +13,14 @@ the active set has converged.
 
 The function receives:
 
-- a `ModelObject`, used to edit each atom's local analysis entry;
-- the selected `AtomObject` list to refit; and
+- a `ModelObject`, used to read the selected atom list and edit each atom's
+  local analysis entry; and
 - `FitOptions`, which supplies fit distance range, thread
   count for the lower-level Gaussian estimator, and logging mode.
 
-At entry, it builds one `AtomLocalPotentialEditor` per atom in the input list and
-reads the current `LocalGaussianResult` from each atom. The previous iteration
+At entry, it reads `model_object.GetSelectedAtoms()`, builds one
+`AtomLocalPotentialEditor` per selected atom, and reads the current
+`LocalGaussianResult` from each atom. The previous iteration
 state is stored as a `GaussianFittingState` with two aligned vectors:
 
 ```text
@@ -177,7 +178,7 @@ offset ridge ratio, but that ridge change does not trigger an immediate refit;
 it applies when the next outer iteration rebuilds the joint-offset system.
 
 The stage then computes absolute and normalized parameter movement for
-amplitude, width, and offset for every input atom. Active atoms are summarized
+amplitude, width, and offset for every selected atom. Active atoms are summarized
 by the 95th percentile. Parameter convergence requires all three active-set
 normalized percentile changes to be below
 `kLocalFittingNormalizedChangeTolerance`, and no suspicious offset rollback may
