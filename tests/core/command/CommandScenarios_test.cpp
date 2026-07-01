@@ -211,6 +211,13 @@ TEST(CommandScenariosTest, PotentialAnalysisDefaultsToIncludingHydrogen)
     EXPECT_FALSE(request.exclude_hydrogen);
 }
 
+TEST(CommandScenariosTest, PotentialAnalysisDefaultsToAllAtoms)
+{
+    PotentialAnalysisRequest request{};
+
+    EXPECT_FALSE(request.only_backbone);
+}
+
 TEST(CommandScenariosTest, MapSimulationDefaultsToIncludingHydrogen)
 {
     MapSimulationRequest request{};
@@ -366,6 +373,40 @@ TEST(CommandScenariosTest, PotentialAnalysisCliAcceptsExcludeHydrogen)
     EXPECT_EQ(result, 0);
 }
 
+TEST(CommandScenariosTest, PotentialAnalysisCliAcceptsOnlyBackbone)
+{
+    command_test::ScopedTempDir temp_dir{ "potential_analysis_only_backbone_cli" };
+    const auto model_path{ WriteBackboneSideChainModelFixture(temp_dir.path() / "models") };
+    const auto map_path{
+        command_test::GenerateMapFile(temp_dir.path() / "maps", model_path)
+    };
+
+    std::vector<std::string> args{
+        "RHBM-GEM",
+        "potential_analysis",
+        "--database",
+        (temp_dir.path() / "analysis.sqlite").string(),
+        "--model",
+        model_path.string(),
+        "--map",
+        map_path.string(),
+        "--save-key",
+        "only_backbone_cli",
+        "--only-backbone",
+        "true",
+    };
+    std::vector<char *> argv;
+    argv.reserve(args.size());
+    for (auto & arg : args)
+    {
+        argv.push_back(arg.data());
+    }
+
+    const auto result{ RunCommandCLI(static_cast<int>(argv.size()), argv.data()) };
+
+    EXPECT_EQ(result, 0);
+}
+
 TEST(CommandScenariosTest, PotentialAnalysisExcludeHydrogenFiltersOnlyHydrogenAtoms)
 {
     command_test::ScopedTempDir temp_dir{ "potential_analysis_exclude_hydrogen_behavior" };
@@ -397,6 +438,39 @@ TEST(CommandScenariosTest, PotentialAnalysisExcludeHydrogenFiltersOnlyHydrogenAt
     EXPECT_EQ(include_model->GetSelectedAtomCount(), 2u);
     ASSERT_EQ(exclude_model->GetSelectedAtomCount(), 1u);
     EXPECT_EQ(exclude_model->GetSelectedAtoms().front()->GetElement(), Element::CARBON);
+}
+
+TEST(CommandScenariosTest, PotentialAnalysisOnlyBackboneFiltersOnlyBackboneAtoms)
+{
+    command_test::ScopedTempDir temp_dir{ "potential_analysis_only_backbone_behavior" };
+    const auto model_path{ WriteBackboneSideChainModelFixture(temp_dir.path() / "models") };
+    const auto map_path{
+        command_test::GenerateMapFile(temp_dir.path() / "maps", model_path)
+    };
+    const auto database_path{ temp_dir.path() / "analysis.sqlite" };
+
+    PotentialAnalysisRequest all_atom_request{};
+    all_atom_request.database_path = database_path;
+    all_atom_request.model_file_path = model_path;
+    all_atom_request.map_file_path = map_path;
+    all_atom_request.saved_key_tag = "all_atoms";
+    all_atom_request.only_backbone = false;
+    ASSERT_TRUE(RunCommand(all_atom_request).succeeded);
+
+    PotentialAnalysisRequest backbone_request{ all_atom_request };
+    backbone_request.saved_key_tag = "only_backbone";
+    backbone_request.only_backbone = true;
+    ASSERT_TRUE(RunCommand(backbone_request).succeeded);
+
+    DataRepository repository{ database_path };
+    auto all_atom_model{ repository.LoadModel("all_atoms") };
+    auto backbone_model{ repository.LoadModel("only_backbone") };
+    ASSERT_NE(all_atom_model, nullptr);
+    ASSERT_NE(backbone_model, nullptr);
+
+    EXPECT_EQ(all_atom_model->GetSelectedAtomCount(), 2u);
+    ASSERT_EQ(backbone_model->GetSelectedAtomCount(), 1u);
+    EXPECT_EQ(backbone_model->GetSelectedAtoms().front()->GetSpot(), Spot::CA);
 }
 
 TEST(CommandScenariosTest, RHBMTestRejectsInvertedFitRangeAtPrepare)

@@ -98,13 +98,17 @@ def assert_request_objects_are_usable() -> None:
     analysis = m.PotentialAnalysisRequest()
     assert analysis.map_normalization_flag is True
     assert analysis.exclude_hydrogen is False
+    assert analysis.only_backbone is False
     analysis.map_normalization_flag = False
     analysis.exclude_hydrogen = True
+    analysis.only_backbone = True
     assert analysis.map_normalization_flag is False
     assert analysis.exclude_hydrogen is True
+    assert analysis.only_backbone is True
     for field_name in (
         "map_normalization_flag",
         "exclude_hydrogen",
+        "only_backbone",
         "sampling_method",
     ):
         assert hasattr(analysis, field_name), f"PotentialAnalysisRequest missing {field_name}"

@@ -71,6 +71,7 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
     model_object->SelectAllAtoms();
     model_object->ApplySymmetrySelection(request.asymmetry_flag);
     model_object->ApplyElementSelection(Element::HYDROGEN, request.exclude_hydrogen);
+    model_object->ApplyBackboneSelection(request.only_backbone);
     model_object->LocalPotentialInitialization();
     model_object->PrintSummary();
     RunPotentialSamplingWorkflow(*map_object, *model_object, request.sampling_method, request.job_count);

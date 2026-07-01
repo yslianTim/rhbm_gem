@@ -80,6 +80,7 @@ struct PotentialAnalysisRequest : public CommandRequestBase
     bool simulation_flag{ false };
     bool map_normalization_flag{ true };
     bool exclude_hydrogen{ false };
+    bool only_backbone{ false };
     double simulated_map_resolution{ 0.0 };
     std::string saved_key_tag{ "model" };
     bool asymmetry_flag{ false };

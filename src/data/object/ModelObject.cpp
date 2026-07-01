@@ -32,6 +32,22 @@ double ComputeDistanceSquare(
     return dx * dx + dy * dy + dz * dz;
 }
 
+bool IsBackboneSelectionSpot(Spot spot)
+{
+    switch (spot)
+    {
+    case Spot::C:
+    case Spot::CA:
+    case Spot::N:
+    case Spot::O:
+    case Spot::H:
+    case Spot::HA:
+        return true;
+    default:
+        return false;
+    }
+}
+
 } // namespace
 
 namespace rhbm_gem {
@@ -501,6 +517,23 @@ void ModelObject::ApplySpotSelection(Spot spot, bool is_exclusion)
     for (auto & atom : m_atom_list)
     {
         if (atom->GetSpot() == spot)
+        {
+            atom->SetSelectedFlag(false);
+        }
+    }
+    RebuildSelection();
+}
+
+void ModelObject::ApplyBackboneSelection(bool is_exclusion)
+{
+    if (!is_exclusion)
+    {
+        return;
+    }
+
+    for (auto * atom : m_selected_atom_list)
+    {
+        if (!IsBackboneSelectionSpot(atom->GetSpot()))
         {
             atom->SetSelectedFlag(false);
         }

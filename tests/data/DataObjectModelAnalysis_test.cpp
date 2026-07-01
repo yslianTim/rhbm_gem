@@ -252,6 +252,60 @@ TEST(DataObjectModelAnalysisTest, ModelObjectSpotSelectionNoOpKeepsSelection)
     EXPECT_EQ(model->GetSelectedAtoms().front(), atoms.at(0).get());
 }
 
+TEST(DataObjectModelAnalysisTest, ModelObjectCanApplyBackboneSelectionAsExclusion)
+{
+    std::vector<std::unique_ptr<rg::AtomObject>> atom_list;
+    const std::vector<Spot> spots{
+        Spot::C, Spot::CA, Spot::N, Spot::O, Spot::H, Spot::HA, Spot::CB
+    };
+    for (size_t i = 0; i < spots.size(); ++i)
+    {
+        auto atom{ std::make_unique<rg::AtomObject>() };
+        atom->SetSerialID(static_cast<int>(i + 1));
+        atom->SetSpot(spots.at(i));
+        atom_list.emplace_back(std::move(atom));
+    }
+    rg::ModelObject model{ std::move(atom_list) };
+    model.SelectAllAtoms();
+
+    model.ApplyBackboneSelection(true);
+
+    ASSERT_EQ(model.GetSelectedAtomCount(), 6u);
+    for (auto * atom : model.GetSelectedAtoms())
+    {
+        EXPECT_NE(atom->GetSpot(), Spot::CB);
+    }
+}
+
+TEST(DataObjectModelAnalysisTest, ModelObjectBackboneSelectionDoesNotWidenSelection)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto & atoms{ model->GetAtomList() };
+    atoms.at(0)->SetSpot(Spot::CA);
+    atoms.at(1)->SetSpot(Spot::CB);
+    model->SelectAllAtoms(false);
+    model->SetAtomSelected(atoms.at(1)->GetSerialID(), true);
+
+    model->ApplyBackboneSelection(true);
+
+    EXPECT_EQ(model->GetSelectedAtomCount(), 0u);
+}
+
+TEST(DataObjectModelAnalysisTest, ModelObjectBackboneSelectionNoOpKeepsSelection)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto & atoms{ model->GetAtomList() };
+    atoms.at(0)->SetSpot(Spot::CA);
+    atoms.at(1)->SetSpot(Spot::CB);
+    model->SelectAllAtoms(false);
+    model->SetAtomSelected(atoms.at(1)->GetSerialID(), true);
+
+    model->ApplyBackboneSelection(false);
+
+    ASSERT_EQ(model->GetSelectedAtomCount(), 1u);
+    EXPECT_EQ(model->GetSelectedAtoms().front(), atoms.at(1).get());
+}
+
 TEST(DataObjectModelAnalysisTest, ModelObjectCanApplyComponentIDSelectionAsExclusion)
 {
     auto model{ data_test::MakeModelWithBond() };

@@ -116,22 +116,6 @@ double CalculateAtomChargeForSimulation(
     }
 }
 
-bool IsBackboneSimulationAtom(Spot spot)
-{
-    switch (spot)
-    {
-    case Spot::C:
-    case Spot::CA:
-    case Spot::N:
-    case Spot::O:
-    case Spot::H:
-    case Spot::HA:
-        return true;
-    default:
-        return false;
-    }
-}
-
 SimulationAtomPreparationResult PrepareSimulationAtomList(
     ModelObject & model_object,
     const MapSimulationRequest & request)
@@ -140,8 +124,6 @@ SimulationAtomPreparationResult PrepareSimulationAtomList(
     result.atom_list.reserve(model_object.GetSelectedAtomCount());
     for (auto * atom : model_object.GetSelectedAtoms())
     {
-        if (request.only_backbone && !IsBackboneSimulationAtom(atom->GetSpot())) continue;
-
         result.atom_list.emplace_back(atom);
         result.atom_charge_map.emplace(
             atom->GetSerialID(),
@@ -365,6 +347,7 @@ bool MapSimulationCommand::ExecuteImpl(const MapSimulationRequest & request)
 
     model_object->SelectAllAtoms();
     model_object->ApplyElementSelection(Element::HYDROGEN, request.exclude_hydrogen);
+    model_object->ApplyBackboneSelection(request.only_backbone);
     //model_object->ApplyComponentIDSelection("HOH", true);
     auto atom_list{ PrepareSimulationAtomList(*model_object, request) };
     Logger::Log(LogLevel::Info,
