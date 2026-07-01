@@ -76,6 +76,7 @@ constexpr double kCollinearJointOffsetRidgeMultiplier{ 10.0 };
 constexpr double kJointOffsetIrlsScaleFloor{ 1.0e-2 };
 constexpr double kJointOffsetIrlsNormalizedChangeTolerance{ 1.0e-6 };
 constexpr double kJointOffsetIrlsObjectiveRelativeTolerance{ 1.0e-10 };
+constexpr double kAdaptiveRelaxationInitialBeta{ 0.5 };
 constexpr double kAdaptiveRelaxationMin{ 0.05 };
 constexpr double kAdaptiveRelaxationMax{ 1.0 };
 constexpr double kAdaptiveRelaxationGrowth{ 1.2 };
@@ -2200,7 +2201,7 @@ void RunSecondStageLocalFitting(
         has_best_candidate = true;
     }
     algorithm::AdaptiveRelaxationController relaxation_controller{
-        options.relaxation_factor,
+        kAdaptiveRelaxationInitialBeta,
         kAdaptiveRelaxationMin,
         kAdaptiveRelaxationMax,
         kAdaptiveRelaxationGrowth,

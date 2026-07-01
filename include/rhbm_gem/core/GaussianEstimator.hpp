@@ -16,7 +16,6 @@ struct FitOptions
 {
     double distance_min{ 0.0 };
     double distance_max{ 1.0 };
-    double relaxation_factor{ 0.5 };
     int thread_size{ 1 };
     bool quiet_mode{ false };
 };

@@ -15,8 +15,8 @@ The function receives:
 
 - a `ModelObject`, used to edit each atom's local analysis entry;
 - the selected `AtomObject` list to refit; and
-- `FitOptions`, which supplies fit distance range, relaxation factor, thread
-  count, and logging mode.
+- `FitOptions`, which supplies fit distance range, thread
+  count for the lower-level Gaussian estimator, and logging mode.
 
 At entry, it builds one `AtomLocalPotentialEditor` per atom in the input list and
 reads the current `LocalGaussianResult` from each atom. The previous iteration
@@ -44,6 +44,7 @@ previous state
     -> build fitted Gaussian snapshot
     -> estimate joint offsets for active atoms
     -> refit active atoms with neighbor contributions removed
+    -> roll back any suspicious offset clusters found before or during refit
     -> apply under-relaxation
     -> compute active-atom p95 parameter changes
     -> reject, shrink beta, and retry if the objective deteriorates
@@ -106,7 +107,9 @@ diagnostic summary.
 
 After joint offsets are attached to the snapshot, each active atom is refit.
 Frozen atoms are left in the iteration state copied from the previous state. The
-active loop may run under OpenMP using `FitOptions::thread_size`.
+second-stage active-atom loop itself is sequential in `RunLocalFittingIteration`;
+`FitOptions::thread_size` is passed through to the lower-level fixed-offset
+Gaussian estimator.
 
 Before the per-atom refit loop runs, each active atom's joint-offset snapshot
 model is checked against the atom's raw sampling entries. If the previous model
@@ -134,7 +137,11 @@ If fitting throws or the finite-sample check fails, the previous atom result is
 kept, but its OLS and MDPDE models are rewritten with the joint offset when that
 fallback model still builds finite zero-offset samples. If the forced-sync
 fallback itself would become invalid while the previous model was valid, the atom
-is marked as suspicious and the previous result is kept unchanged.
+is marked as suspicious and the previous result is kept unchanged. After the
+refit loop, any suspicious atom found this way is expanded through the same
+active coupling graph, and every atom in the resulting cluster is rolled back to
+the previous iteration state. This keeps post-refit suspicious-offset handling
+synchronous with the pre-refit joint-offset check.
 
 ## Relaxation, Ranking, and Convergence
 
@@ -144,15 +151,15 @@ The raw iteration result is under-relaxed before convergence is checked:
 relaxed = beta * current + (1 - beta) * previous
 ```
 
-`beta` starts from `FitOptions::relaxation_factor` and is clamped to the local
-adaptive relaxation range `[0.05, 1.0]`. After each iteration, the controller
-looks at the maximum of the three 95th-percentile parameter changes. A change
-more than 1% larger than the previous iteration for three consecutive accepted
-iterations halves `beta`. Two consecutive changes more than 1% smaller than the
-previous iteration allow `beta` to grow by `1.2x`, up to `1.0`. This is a
-trend-based adaptive relaxation rule, not Anderson acceleration. The relaxed
-vector replaces the candidate MDPDE model while preserving its
-standard-deviation model.
+`beta` starts from the internal `kAdaptiveRelaxationInitialBeta` value (`0.5`)
+and is clamped to the local adaptive relaxation range `[0.05, 1.0]`. After each
+iteration, the controller looks at the maximum of the three 95th-percentile
+parameter changes. A change more than 1% larger than the previous iteration for
+three consecutive accepted iterations halves `beta`. Two consecutive changes
+more than 1% smaller than the previous iteration allow `beta` to grow by `1.2x`,
+up to `1.0`. This is a trend-based adaptive relaxation rule, not Anderson
+acceleration. The relaxed vector replaces the candidate MDPDE model while
+preserving its standard-deviation model.
 
 When an objective reference is available, the relaxed candidate must pass the
 objective quality gate before it can update ranking, freezing, thawing, or the
