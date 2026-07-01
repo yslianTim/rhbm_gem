@@ -62,9 +62,29 @@ y(r) = log(adjusted_response(r))
 `alpha_r` controls the MDPDE fit. `FitOptions` controls the fit range and thread
 count used by the execution options.
 
+## Internal Fixed-Point Offset Estimator
+
+`GaussianEstimator.cpp` also keeps an internal
+`EstimateLocalGaussianWithOffset` helper for future workflows. It is not declared
+in the public header and is not used by the current first-stage, second-stage, or
+group fitting paths.
+
+This helper alternates between two steps for a single atom:
+
+1. hold the current offset model fixed and reuse `EstimateLocalGaussian` to fit
+   amplitude and width with MDPDE; and
+2. hold the fitted amplitude and width fixed, build residual offset-basis
+   samples for distances in `[1.0, 2.0]`, and estimate the offset with the shared
+   Huber M-estimator through origin.
+
+The offset M-estimator uses an amplitude-scaled regularization prior scale
+`max(abs(amplitude) * 0.1, 1.0e-12)`. The offset update is damped before the next
+fixed-point iteration. If the loop reaches its iteration limit, the helper
+returns the best fixed-point candidate tracked during the loop.
+
 ## Important Implementation Constraints
 
-- `EstimateLocalGaussian` is the only local Gaussian fitting entry point.
+- `EstimateLocalGaussian` is the only public local Gaussian fitting entry point.
 - The default offset model is `GaussianModel3D{ 0.0, 1.0, 0.0 }`.
 - Second-stage local fitting passes the joint-offset snapshot model directly so
   the fixed offset basis uses that model's width.

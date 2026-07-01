@@ -15,6 +15,7 @@
 #include <rhbm_gem/utils/algorithm/NormalizedChange.hpp>
 #include <rhbm_gem/utils/algorithm/ParameterChangeStats.hpp>
 #include <rhbm_gem/utils/algorithm/RobustSlopeEstimator.hpp>
+#include <rhbm_gem/utils/algorithm/RobustSlopeOptions.hpp>
 #include <rhbm_gem/utils/algorithm/SparseRegressionRow.hpp>
 #include <rhbm_gem/utils/algorithm/WeightedRidgeSolver.hpp>
 #include <rhbm_gem/utils/algorithm/WeightedRidgeSystem.hpp>
@@ -57,14 +58,20 @@ constexpr double kLocalFittingNormalizedChangeTolerance{ 1.0e-4 };
 constexpr double kLocalFittingNormalizedChangeScaleFloor{ 1.0 };
 constexpr std::size_t kMinimumAlphaRTrainingSampleCount{ 10 };
 constexpr std::size_t kMinimumAlphaGTrainingMemberCount{ 10 };
+constexpr double kResidualOffsetRangeMin{ 1.0 };
+constexpr double kResidualOffsetRangeMax{ 2.0 };
+constexpr double kOffsetDampingFactor{ 0.5 };
 constexpr double kNeighborContributionDistanceMax{ 2.5 };
 constexpr std::size_t kLocalFittingMaximumIterations{ 200 };
 constexpr double kLocalFittingParameterChangeTolerance{ 1.0e-6 };
 constexpr double kLocalFittingChangePercentile{ 0.95 };
 constexpr int kHuberSlopeMaximumIterations{ 50 };
+constexpr double kHuberSlopeTolerance{ 1.0e-8 };
 constexpr double kHuberScaleMultiplier{ 1.4826 };
 constexpr double kHuberScaleMin{ 1.0e-12 };
 constexpr double kHuberCutoffMultiplier{ 1.345 };
+constexpr double kOffsetRegularizationAmplitudeRatio{ 0.1 };
+constexpr double kOffsetRegularizationPriorScaleMin{ 1.0e-12 };
 constexpr double kJointOffsetRidgeRatio{ 1.0e-3 };
 constexpr double kJointOffsetRidgeRatioMin{ 1.0e-4 };
 constexpr double kJointOffsetRidgeRatioMax{ 1.0 };
@@ -288,6 +295,72 @@ bool CanBuildFiniteZeroOffsetSamples(
         }
     }
     return true;
+}
+
+algorithm::RobustSlopeOptions MakeResidualOffsetSlopeOptions(double amplitude)
+{
+    algorithm::RobustSlopeOptions options;
+    options.maximum_iterations = kHuberSlopeMaximumIterations;
+    options.tolerance = kHuberSlopeTolerance;
+    options.scale_multiplier = kHuberScaleMultiplier;
+    options.scale_min = kHuberScaleMin;
+    options.cutoff_multiplier = kHuberCutoffMultiplier;
+    options.regularization_prior_scale =
+        std::max(
+            std::abs(amplitude) * kOffsetRegularizationAmplitudeRatio,
+            kOffsetRegularizationPriorScaleMin);
+    return options;
+}
+
+double EstimateResidualOffsetParameter(
+    const LocalPotentialSampleList & sample_entries,
+    const RHBMBetaEstimateResult & fit_result,
+    double current_offset)
+{
+    const auto signal_model{
+        linearization_service::DecodeParameterVector(fit_result.beta_mdpde)
+    };
+    const auto width{ signal_model.GetWidth() };
+    if (!std::isfinite(width) || width <= 0.0) return current_offset;
+
+    std::vector<algorithm::LinearRegressionSample> residual_sample_list;
+    residual_sample_list.reserve(sample_entries.size());
+    for (const auto & sample : sample_entries)
+    {
+        const auto distance{ static_cast<double>(sample.point.distance) };
+        if (distance < kResidualOffsetRangeMin || distance > kResidualOffsetRangeMax)
+        {
+            continue;
+        }
+
+        const auto basis{ signal_model.OffsetBasisAtDistance(distance) };
+        if (!std::isfinite(basis) ||
+            std::abs(basis) <= std::numeric_limits<double>::epsilon())
+        {
+            continue;
+        }
+        const auto residual{
+            static_cast<double>(sample.response) -
+            signal_model.SignalAtDistance(distance)
+        };
+        if (!std::isfinite(residual)) continue;
+        residual_sample_list.emplace_back(algorithm::LinearRegressionSample{ basis, residual });
+    }
+
+    double candidate_offset{ current_offset };
+    if (!algorithm::RobustSlopeEstimator::EstimateHuberSlopeThroughOrigin(
+            residual_sample_list,
+            MakeResidualOffsetSlopeOptions(signal_model.GetAmplitude()),
+            candidate_offset))
+    {
+        return current_offset;
+    }
+    const auto candidate_model{ signal_model.WithOffset(candidate_offset) };
+    if (!CanBuildFiniteZeroOffsetSamples(sample_entries, candidate_model))
+    {
+        return current_offset;
+    }
+    return candidate_offset;
 }
 
 bool IsSuspiciousJointOffset(
@@ -1881,6 +1954,67 @@ void InitializeLocalFittingSeedModels(ModelObject & model_object)
         result.fit_result.reset();
         local_editor_list[i].SetGaussianResult(result);
     }
+}
+
+[[maybe_unused]] LocalGaussianResult EstimateLocalGaussianWithOffset(
+    const LocalPotentialSampleList & sample_entries,
+    double alpha_r,
+    const FitOptions & options,
+    double offset_initial)
+{
+    numeric_validation::RequireFiniteNonNegativeRange(
+        options.distance_min,
+        options.distance_max,
+        "fit range");
+    numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
+    numeric_validation::RequireFinite(offset_initial, "offset_initial");
+
+    const auto execution_options{ MakeExecutionOptions(options) };
+    auto result{ EstimateLocalGaussian(sample_entries, alpha_r, options) };
+    auto current_model{ result.mdpde.GetModel().WithOffset(offset_initial) };
+    double best_error{ std::numeric_limits<double>::infinity() };
+    auto best_result{ result };
+    for (int iteration = 0; iteration < execution_options.max_iterations; iteration++)
+    {
+        const auto offset{ current_model.GetOffset() };
+        result = EstimateLocalGaussian(sample_entries, alpha_r, options, current_model);
+        const auto raw_offset{
+            EstimateResidualOffsetParameter(
+                sample_entries,
+                *result.fit_result,
+                offset)
+        };
+        const auto candidate_model{ result.mdpde.GetModel().WithOffset(raw_offset) };
+        const auto error{ (candidate_model.ToVector() - current_model.ToVector()).norm() };
+        if (error < best_error)
+        {
+            best_error = error;
+            best_result = result;
+        }
+        if (error < execution_options.tolerance)
+        {
+            break;
+        }
+
+        if (iteration + 1 == execution_options.max_iterations)
+        {
+            result = best_result;
+            if (!options.quiet_mode)
+            {
+                Logger::Log(LogLevel::Debug,
+                    "Maximum iterations reached in local Gaussian estimation with offset; "
+                    "refitting at best fixed-point candidate with error = " +
+                    std::to_string(best_error) + ".");
+            }
+            break;
+        }
+
+        const auto damped_offset{
+            offset + kOffsetDampingFactor * (raw_offset - offset)
+        };
+        current_model = result.mdpde.GetModel().WithOffset(damped_offset);
+    }
+    return result;
 }
 
 } // namespace
