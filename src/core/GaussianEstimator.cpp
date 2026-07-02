@@ -1,8 +1,6 @@
 #include <cstddef>
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 
-#include "detail/LocalFittingThawHysteresisTracker.hpp"
-
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
@@ -227,6 +225,65 @@ struct LocalFittingObjectiveSamples
 {
     std::vector<double> residual_list{};
     std::vector<double> response_list{};
+};
+
+class LocalFittingThawHysteresisTracker
+{
+    std::vector<double> m_multiplier_list;
+    double m_growth_multiplier{ 1.0 };
+    double m_max_multiplier{ 1.0 };
+    double m_frozen_decay{ 1.0 };
+
+    void ValidateIndex(std::size_t index) const
+    {
+        if (index >= m_multiplier_list.size())
+        {
+            throw std::invalid_argument("Local fitting thaw hysteresis index is out of range.");
+        }
+    }
+
+public:
+    LocalFittingThawHysteresisTracker(
+        std::size_t value_size,
+        double growth_multiplier,
+        double max_multiplier,
+        double frozen_decay)
+        : m_multiplier_list(value_size, 1.0),
+          m_growth_multiplier{ growth_multiplier },
+          m_max_multiplier{ max_multiplier },
+          m_frozen_decay{ frozen_decay }
+    {
+        if (m_growth_multiplier < 1.0 || m_max_multiplier < 1.0 ||
+            m_frozen_decay < 0.0 || m_frozen_decay > 1.0)
+        {
+            throw std::invalid_argument("Local fitting thaw hysteresis settings are invalid.");
+        }
+    }
+
+    double GetThreshold(std::size_t index, double base_threshold) const
+    {
+        ValidateIndex(index);
+        return base_threshold * m_multiplier_list.at(index);
+    }
+
+    bool ShouldThaw(std::size_t index, double change, double base_threshold) const
+    {
+        return change >= GetThreshold(index, base_threshold);
+    }
+
+    void RecordDependencyThaw(std::size_t index)
+    {
+        ValidateIndex(index);
+        m_multiplier_list.at(index) = std::min(
+            m_max_multiplier,
+            m_multiplier_list.at(index) * m_growth_multiplier);
+    }
+
+    void DecayFrozen(std::size_t index)
+    {
+        ValidateIndex(index);
+        m_multiplier_list.at(index) = std::max(1.0, m_multiplier_list.at(index) * m_frozen_decay);
+    }
 };
 
 struct ParameterSummaryStats
@@ -1546,121 +1603,6 @@ void ApplyLocalFittingUnderRelaxation(
     }
 }
 
-struct LocalFittingAttemptResult
-{
-    GaussianFittingState state{};
-    std::vector<algorithm::ParameterChange> change_list{};
-    algorithm::ParameterChangeStats change_stats{};
-    algorithm::ParameterChangeStats normalized_change_stats{};
-    algorithm::FittingQualityCandidateStats candidate_stats{};
-    algorithm::FittingQualityCandidateStats previous_candidate_stats{};
-    algorithm::FittingQualityCandidateStats best_candidate_stats{};
-    double objective_scale_sample{ std::numeric_limits<double>::infinity() };
-    algorithm::FittingQualityBacktrackingDecision backtracking_decision{ true, false, false };
-};
-
-LocalFittingAttemptResult EvaluateLocalFittingAttempt(
-    const std::vector<AtomObject *> & atom_list,
-    const std::vector<std::size_t> & active_index_list,
-    const GaussianFittingState & raw_state,
-    const GaussianFittingState & previous_state,
-    const GaussianFittingState & best_state,
-    const algorithm::FittingQualityCandidateStats & previous_candidate_stats,
-    const algorithm::FittingQualityCandidateStats & best_candidate_stats,
-    bool has_best_candidate,
-    const LocalFittingObjectiveScaleTracker & objective_scale_tracker,
-    double beta,
-    int attempt)
-{
-    LocalFittingAttemptResult result;
-    result.state = raw_state;
-    ApplyLocalFittingUnderRelaxation(result.state, previous_state, beta);
-    result.change_list = CalculateLocalFittingParameterChanges(
-        result.state.estimation_list,
-        previous_state.estimation_list);
-    result.change_stats = algorithm::SummarizeParameterChangeStats(
-        result.change_list,
-        active_index_list,
-        kLocalFittingChangePercentile);
-
-    const auto normalized_change_list{
-        CalculateLocalFittingNormalizedParameterChanges(
-            result.state.estimation_list,
-            previous_state.estimation_list)
-    };
-    result.normalized_change_stats = algorithm::SummarizeParameterChangeStats(
-        normalized_change_list,
-        active_index_list,
-        kLocalFittingChangePercentile);
-
-    auto objective_reference{ objective_scale_tracker.GetCommittedReference() };
-    auto objective_stats{ LocalFittingObjectiveStats{} };
-    result.previous_candidate_stats = previous_candidate_stats;
-    result.best_candidate_stats = best_candidate_stats;
-
-    const auto objective_samples{
-        CollectLocalFittingObjectiveSamples(atom_list, result.state)
-    };
-    if (objective_scale_tracker.HasReference() && objective_samples.has_value())
-    {
-        const auto scale_sample{
-            CalculateLocalFittingResidualScaleSample(*objective_samples)
-        };
-        if (scale_sample.has_value())
-        {
-            objective_reference = objective_scale_tracker.GetProvisionalReference(*scale_sample);
-            objective_stats = CalculateLocalFittingObjectiveStats(
-                *objective_samples,
-                objective_reference);
-            if (objective_stats.has_quality_objective)
-            {
-                const auto recalculated_previous_objective_stats{
-                    CalculateLocalFittingObjectiveStats(
-                        atom_list,
-                        previous_state,
-                        objective_reference)
-                };
-                result.previous_candidate_stats.has_quality_objective =
-                    recalculated_previous_objective_stats.has_quality_objective;
-                result.previous_candidate_stats.quality_objective =
-                    recalculated_previous_objective_stats.quality_objective;
-                if (has_best_candidate)
-                {
-                    const auto recalculated_best_objective_stats{
-                        CalculateLocalFittingObjectiveStats(
-                            atom_list,
-                            best_state,
-                            objective_reference)
-                    };
-                    result.best_candidate_stats.has_quality_objective =
-                        recalculated_best_objective_stats.has_quality_objective;
-                    result.best_candidate_stats.quality_objective =
-                        recalculated_best_objective_stats.quality_objective;
-                }
-            }
-        }
-    }
-
-    result.candidate_stats = algorithm::FittingQualityCandidateStats{
-        objective_stats.has_quality_objective,
-        objective_stats.quality_objective,
-        result.normalized_change_stats
-    };
-    result.objective_scale_sample = objective_stats.residual_scale_sample;
-    if (objective_reference.has_reference)
-    {
-        result.backtracking_decision = algorithm::EvaluateFittingQualityBacktracking(
-            result.candidate_stats,
-            result.previous_candidate_stats,
-            has_best_candidate,
-            result.best_candidate_stats,
-            kLocalFittingConvergenceObjectiveRelativeTolerance,
-            attempt,
-            kLocalFittingObjectiveBacktrackingMaximumAttempts);
-    }
-    return result;
-}
-
 LocalRefitResult FitAtomWithJointOffsetFallback(
     const AtomObject & atom,
     const LocalGaussianResult & previous_result,
@@ -1715,7 +1657,7 @@ std::size_t ThawChangedActiveAtomNeighbors(
     const std::vector<algorithm::ParameterChange> & change_list,
     const std::vector<std::size_t> & active_index_list,
     algorithm::ConvergenceFreezeTracker & freeze_tracker,
-    detail::LocalFittingThawHysteresisTracker & thaw_hysteresis_tracker)
+    LocalFittingThawHysteresisTracker & thaw_hysteresis_tracker)
 {
     if (change_list.size() != atom_list.size())
     {
@@ -2380,7 +2322,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
     };
     LocalFittingFallbackStats fallback_stats{ atom_size };
     const auto atom_index_map{ BuildSelectedAtomIndexMap(atom_list) };
-    detail::LocalFittingThawHysteresisTracker thaw_hysteresis_tracker{
+    LocalFittingThawHysteresisTracker thaw_hysteresis_tracker{
         atom_size,
         kLocalFittingDependencyThawHysteresisGrowth,
         kLocalFittingDependencyThawHysteresisMax,
@@ -2404,14 +2346,13 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             break;
         }
 
-        const auto iteration_ridge_ratio{ ridge_ratio };
         auto iteration_result{
             RunLocalFittingIteration(
                 atom_list,
                 active_index_list,
                 previous_state,
                 options,
-                iteration_ridge_ratio,
+                ridge_ratio,
                 joint_offset_ridge_multiplier_list)
         };
         fallback_stats.Accumulate(iteration_result);
@@ -2446,40 +2387,120 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         for (int attempt = 0; attempt < kLocalFittingObjectiveBacktrackingMaximumAttempts; attempt++)
         {
             beta = relaxation_controller.GetBeta();
-            auto attempt_result{
-                EvaluateLocalFittingAttempt(
-                    atom_list,
+            auto attempt_state{ raw_state };
+            ApplyLocalFittingUnderRelaxation(attempt_state, previous_state, beta);
+            auto attempt_change_list{
+                CalculateLocalFittingParameterChanges(
+                    attempt_state.estimation_list,
+                    previous_state.estimation_list)
+            };
+            auto attempt_change_stats{
+                algorithm::SummarizeParameterChangeStats(
+                    attempt_change_list,
                     active_index_list,
-                    raw_state,
-                    previous_state,
-                    best_state,
-                    previous_candidate_stats,
-                    best_candidate_stats,
-                    has_best_candidate,
-                    objective_scale_tracker,
-                    beta,
-                    attempt)
+                    kLocalFittingChangePercentile)
+            };
+            const auto attempt_normalized_change_list{
+                CalculateLocalFittingNormalizedParameterChanges(
+                    attempt_state.estimation_list,
+                    previous_state.estimation_list)
+            };
+            auto attempt_normalized_change_stats{
+                algorithm::SummarizeParameterChangeStats(
+                    attempt_normalized_change_list,
+                    active_index_list,
+                    kLocalFittingChangePercentile)
             };
 
-            if (attempt_result.backtracking_decision.accepted)
+            auto attempt_objective_reference{ objective_scale_tracker.GetCommittedReference() };
+            auto objective_stats{ LocalFittingObjectiveStats{} };
+            auto attempt_previous_candidate_stats{ previous_candidate_stats };
+            auto attempt_best_candidate_stats{ best_candidate_stats };
+            const auto objective_samples{
+                CollectLocalFittingObjectiveSamples(atom_list, attempt_state)
+            };
+            if (objective_scale_tracker.HasReference() && objective_samples.has_value())
             {
-                current_state = std::move(attempt_result.state);
-                change_list = std::move(attempt_result.change_list);
-                change_stats = std::move(attempt_result.change_stats);
-                normalized_change_stats = std::move(attempt_result.normalized_change_stats);
-                current_candidate_stats = std::move(attempt_result.candidate_stats);
-                previous_candidate_stats = std::move(attempt_result.previous_candidate_stats);
+                const auto scale_sample{
+                    CalculateLocalFittingResidualScaleSample(*objective_samples)
+                };
+                if (scale_sample.has_value())
+                {
+                    attempt_objective_reference =
+                        objective_scale_tracker.GetProvisionalReference(*scale_sample);
+                    objective_stats = CalculateLocalFittingObjectiveStats(
+                        *objective_samples,
+                        attempt_objective_reference);
+                    if (objective_stats.has_quality_objective)
+                    {
+                        const auto recalculated_previous_objective_stats{
+                            CalculateLocalFittingObjectiveStats(
+                                atom_list,
+                                previous_state,
+                                attempt_objective_reference)
+                        };
+                        attempt_previous_candidate_stats.has_quality_objective =
+                            recalculated_previous_objective_stats.has_quality_objective;
+                        attempt_previous_candidate_stats.quality_objective =
+                            recalculated_previous_objective_stats.quality_objective;
+                        if (has_best_candidate)
+                        {
+                            const auto recalculated_best_objective_stats{
+                                CalculateLocalFittingObjectiveStats(
+                                    atom_list,
+                                    best_state,
+                                    attempt_objective_reference)
+                            };
+                            attempt_best_candidate_stats.has_quality_objective =
+                                recalculated_best_objective_stats.has_quality_objective;
+                            attempt_best_candidate_stats.quality_objective =
+                                recalculated_best_objective_stats.quality_objective;
+                        }
+                    }
+                }
+            }
+
+            const auto attempt_candidate_stats{
+                algorithm::FittingQualityCandidateStats{
+                    objective_stats.has_quality_objective,
+                    objective_stats.quality_objective,
+                    attempt_normalized_change_stats
+                }
+            };
+            auto backtracking_decision{
+                algorithm::FittingQualityBacktrackingDecision{ true, false, false }
+            };
+            if (attempt_objective_reference.has_reference)
+            {
+                backtracking_decision = algorithm::EvaluateFittingQualityBacktracking(
+                    attempt_candidate_stats,
+                    attempt_previous_candidate_stats,
+                    has_best_candidate,
+                    attempt_best_candidate_stats,
+                    kLocalFittingConvergenceObjectiveRelativeTolerance,
+                    attempt,
+                    kLocalFittingObjectiveBacktrackingMaximumAttempts);
+            }
+
+            if (backtracking_decision.accepted)
+            {
+                current_state = std::move(attempt_state);
+                change_list = std::move(attempt_change_list);
+                change_stats = std::move(attempt_change_stats);
+                normalized_change_stats = std::move(attempt_normalized_change_stats);
+                current_candidate_stats = attempt_candidate_stats;
+                previous_candidate_stats = std::move(attempt_previous_candidate_stats);
                 if (has_best_candidate)
                 {
-                    best_candidate_stats = std::move(attempt_result.best_candidate_stats);
+                    best_candidate_stats = std::move(attempt_best_candidate_stats);
                 }
-                current_objective_scale_sample = attempt_result.objective_scale_sample;
+                current_objective_scale_sample = objective_stats.residual_scale_sample;
                 has_current_candidate = true;
                 break;
             }
             has_backtracking_rejection = true;
             ridge_ratio = IncreaseLocalFittingRidgeRatio(ridge_ratio);
-            if (attempt_result.backtracking_decision.should_shrink_beta &&
+            if (backtracking_decision.should_shrink_beta &&
                 !relaxation_controller.IsAtMinimum())
             {
                 relaxation_controller.Shrink();
@@ -2586,8 +2607,6 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 << ", d_offset = "<< change_stats.percentile_list.at(GaussianModel3D::OffsetIndex())
                 << ", objective = "<< current_candidate_stats.quality_objective
                 << ", beta = "<< beta
-                //<< ", ridge ratio = "<< iteration_ridge_ratio
-                //<< ", next ridge ratio = "<< ridge_ratio
                 << ", active/frozen/thawed atoms = "<< freeze_tracker.GetActiveCount()
                 << "/" << freeze_tracker.GetFrozenCount() << "/" << thaw_count;
             Logger::ProgressLine(progress_message.str());
