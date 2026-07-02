@@ -115,12 +115,15 @@ Gaussian estimator.
 Before the per-atom refit loop runs, each active atom's joint-offset snapshot
 model is checked against the atom's raw sampling entries. If the previous model
 can build finite zero-offset samples but the joint-offset model cannot, the atom
-seeds a suspicious offset cluster. The cluster is the connected component in the
-joint-offset active coupling graph, where edges come from active columns that
-co-occur in the sparse joint-offset system. This is narrower than all spatial
-neighbors: frozen or unselected neighbors remain fixed snapshot contributors.
-Every atom in the suspicious cluster has its snapshot entry rolled back to the
-previous model and skips refit for that iteration, so coupled active atoms see a
+seeds suspicious offset rollback propagation. The propagation graph comes from
+active columns that co-occur in the sparse joint-offset system, with each edge
+weighted by normalized joint-offset column overlap. Rollback expands only across
+finite edges whose overlap is at least `0.05`, and only within two topological
+steps from the original suspicious atom. This is narrower than all spatial
+neighbors and avoids rolling back a large connected component through distant
+weak links. Frozen or unselected neighbors remain fixed snapshot contributors.
+Every reached atom has its snapshot entry rolled back to the previous model and
+skips refit for that iteration, so strongly coupled nearby active atoms see a
 synchronous rollback rather than a one-sided update.
 
 For each atom:
@@ -140,9 +143,10 @@ fallback model still builds finite zero-offset samples. If the forced-sync
 fallback itself would become invalid while the previous model was valid, the atom
 is marked as suspicious and the previous result is kept unchanged. After the
 refit loop, any suspicious atom found this way is expanded through the same
-active coupling graph, and every atom in the resulting cluster is rolled back to
+bounded weighted active coupling graph, and every reached atom is rolled back to
 the previous iteration state. This keeps post-refit suspicious-offset handling
-synchronous with the pre-refit joint-offset check.
+synchronous with the pre-refit joint-offset check without letting atoms reached
+only by propagation become new expansion seeds.
 
 ## Relaxation, Ranking, and Convergence
 

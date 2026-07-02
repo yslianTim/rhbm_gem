@@ -100,20 +100,30 @@ constexpr double kLocalFittingConvergenceObjectiveRelativeTolerance{ 1.0e-3 };
 constexpr int kLocalFittingObjectiveBacktrackingMaximumAttempts{ 3 };
 constexpr std::size_t kLocalFittingObjectiveScaleWarmupCount{ 5 };
 constexpr double kLocalFittingObjectiveResidualScaleFloorRatio{ 1.0e-6 };
+constexpr std::size_t kSuspiciousOffsetClusterMaxDepth{ 2 };
+constexpr double kSuspiciousOffsetClusterMinimumOverlap{ 0.05 };
 
 using GaussianFittingState = algorithm::IterationState<LocalGaussianResult, Eigen::VectorXd>;
+
+struct ActiveCouplingEdge
+{
+    std::size_t neighbor_index{ 0 };
+    double overlap{ 0.0 };
+};
+
+using ActiveCouplingGraph = std::vector<std::vector<ActiveCouplingEdge>>;
 
 struct JointOffsetSolveResult
 {
     Eigen::VectorXd offset{};
     bool used_fallback{ false };
-    std::vector<std::vector<std::size_t>> active_coupling_adjacency{};
+    ActiveCouplingGraph active_coupling_graph{};
 };
 
 struct JointOffsetBuildResult
 {
     algorithm::WeightedRidgeSystem system{};
-    std::vector<std::vector<std::size_t>> active_coupling_adjacency{};
+    ActiveCouplingGraph active_coupling_graph{};
 };
 
 double IncreaseLocalFittingRidgeRatio(double ridge_ratio)
@@ -806,7 +816,7 @@ JointOffsetBuildResult BuildJointOffsetSystem(
     Eigen::VectorXd response{ Eigen::VectorXd::Zero(row_count) };
     Eigen::VectorXd column_square_sum{ Eigen::VectorXd::Zero(column_count) };
     std::map<std::pair<Eigen::Index, Eigen::Index>, double> column_cross_sum_map;
-    std::vector<std::vector<std::size_t>> active_coupling_adjacency(active_index_list.size());
+    ActiveCouplingGraph active_coupling_graph(active_index_list.size());
     for (Eigen::Index row_index = 0; row_index < row_count; row_index++)
     {
         const auto & row{ row_list.at(static_cast<std::size_t>(row_index)) };
@@ -827,19 +837,8 @@ JointOffsetBuildResult BuildJointOffsetSystem(
                     std::minmax(left_column, right_column)
                 };
                 column_cross_sum_map[column_pair] += left_basis * right_basis;
-                const auto left_index{ static_cast<std::size_t>(column_pair.first) };
-                const auto right_index{ static_cast<std::size_t>(column_pair.second) };
-                active_coupling_adjacency.at(left_index).emplace_back(right_index);
-                active_coupling_adjacency.at(right_index).emplace_back(left_index);
             }
         }
-    }
-    for (auto & neighbor_list : active_coupling_adjacency)
-    {
-        std::sort(neighbor_list.begin(), neighbor_list.end());
-        neighbor_list.erase(
-            std::unique(neighbor_list.begin(), neighbor_list.end()),
-            neighbor_list.end());
     }
 
     Eigen::VectorXd proactive_ridge_multiplier{
@@ -859,11 +858,16 @@ JointOffsetBuildResult BuildJointOffsetSystem(
         const auto overlap{
             std::abs(cross_sum) / std::sqrt(left_square_sum * right_square_sum)
         };
-        if (!std::isfinite(overlap) ||
-            overlap < kJointOffsetCollinearityOverlapThreshold)
+        if (!std::isfinite(overlap))
         {
             continue;
         }
+        active_coupling_graph.at(static_cast<std::size_t>(left_column)).emplace_back(
+            ActiveCouplingEdge{ static_cast<std::size_t>(right_column), overlap });
+        active_coupling_graph.at(static_cast<std::size_t>(right_column)).emplace_back(
+            ActiveCouplingEdge{ static_cast<std::size_t>(left_column), overlap });
+        if (overlap < kJointOffsetCollinearityOverlapThreshold) continue;
+
         proactive_ridge_multiplier(left_column) = std::max(
             proactive_ridge_multiplier(left_column),
             kCollinearJointOffsetRidgeMultiplier);
@@ -903,7 +907,7 @@ JointOffsetBuildResult BuildJointOffsetSystem(
     }
     return JointOffsetBuildResult{
         std::move(system),
-        std::move(active_coupling_adjacency)
+        std::move(active_coupling_graph)
     };
 }
 
@@ -999,13 +1003,13 @@ JointOffsetSolveResult EstimateJointOffsets(
         };
     }
     auto system{ std::move(build_result.system) };
-    auto active_coupling_adjacency{ std::move(build_result.active_coupling_adjacency) };
+    auto active_coupling_graph{ std::move(build_result.active_coupling_graph) };
     if (system.response.size() == 0 || system.previous_parameter.size() == 0)
     {
         return JointOffsetSolveResult{
             previous_offset,
             true,
-            std::move(active_coupling_adjacency)
+            std::move(active_coupling_graph)
         };
     }
 
@@ -1017,7 +1021,7 @@ JointOffsetSolveResult EstimateJointOffsets(
         return JointOffsetSolveResult{
             previous_offset,
             true,
-            std::move(active_coupling_adjacency)
+            std::move(active_coupling_graph)
         };
     }
 
@@ -1049,7 +1053,7 @@ JointOffsetSolveResult EstimateJointOffsets(
             return JointOffsetSolveResult{
                 system.previous_parameter,
                 true,
-                std::move(active_coupling_adjacency)
+                std::move(active_coupling_graph)
             };
         }
         const auto current_objective{
@@ -1075,7 +1079,7 @@ JointOffsetSolveResult EstimateJointOffsets(
     return JointOffsetSolveResult{
         offset,
         false,
-        std::move(active_coupling_adjacency)
+        std::move(active_coupling_graph)
     };
 }
 
@@ -1701,44 +1705,60 @@ std::size_t ThawChangedActiveAtomNeighbors(
 }
 
 void ExpandSuspiciousOffsetClusters(
-    const std::vector<std::vector<std::size_t>> & active_coupling_adjacency,
+    const ActiveCouplingGraph & active_coupling_graph,
+    const std::vector<int> & suspicious_offset_seed_flag_list,
     std::vector<int> & suspicious_offset_flag_list,
     std::vector<int> & refit_fallback_flag_list)
 {
-    if (active_coupling_adjacency.empty()) return;
-    if (active_coupling_adjacency.size() != suspicious_offset_flag_list.size() ||
+    if (suspicious_offset_seed_flag_list.size() != suspicious_offset_flag_list.size() ||
         refit_fallback_flag_list.size() != suspicious_offset_flag_list.size())
     {
         throw std::invalid_argument("Suspicious offset cluster input sizes are inconsistent.");
     }
-
-    std::vector<char> visited(suspicious_offset_flag_list.size(), 0);
-    for (std::size_t seed_index = 0; seed_index < suspicious_offset_flag_list.size(); seed_index++)
+    if (!active_coupling_graph.empty() &&
+        active_coupling_graph.size() != suspicious_offset_flag_list.size())
     {
-        if (suspicious_offset_flag_list.at(seed_index) == 0 || visited.at(seed_index) != 0)
+        throw std::invalid_argument("Suspicious offset cluster graph size is inconsistent.");
+    }
+
+    for (std::size_t seed_index = 0; seed_index < suspicious_offset_seed_flag_list.size(); seed_index++)
+    {
+        if (suspicious_offset_seed_flag_list.at(seed_index) == 0)
         {
             continue;
         }
 
-        std::vector<std::size_t> stack{ seed_index };
+        std::vector<char> visited(suspicious_offset_seed_flag_list.size(), 0);
+        std::vector<std::pair<std::size_t, std::size_t>> queue{
+            std::pair<std::size_t, std::size_t>{ seed_index, 0 }
+        };
         visited.at(seed_index) = 1;
-        while (!stack.empty())
+        for (std::size_t queue_index = 0; queue_index < queue.size(); queue_index++)
         {
-            const auto active_index{ stack.back() };
-            stack.pop_back();
+            const auto [active_index, depth]{ queue.at(queue_index) };
             suspicious_offset_flag_list.at(active_index) = 1;
             refit_fallback_flag_list.at(active_index) = 1;
-
-            for (const auto neighbor_index : active_coupling_adjacency.at(active_index))
+            if (active_coupling_graph.empty() ||
+                depth >= kSuspiciousOffsetClusterMaxDepth)
             {
-                if (neighbor_index >= active_coupling_adjacency.size())
+                continue;
+            }
+
+            for (const auto & edge : active_coupling_graph.at(active_index))
+            {
+                if (edge.neighbor_index >= active_coupling_graph.size())
                 {
                     throw std::invalid_argument(
                         "Suspicious offset cluster adjacency index is out of range.");
                 }
-                if (visited.at(neighbor_index) != 0) continue;
-                visited.at(neighbor_index) = 1;
-                stack.emplace_back(neighbor_index);
+                if (!std::isfinite(edge.overlap) ||
+                    edge.overlap < kSuspiciousOffsetClusterMinimumOverlap)
+                {
+                    continue;
+                }
+                if (visited.at(edge.neighbor_index) != 0) continue;
+                visited.at(edge.neighbor_index) = 1;
+                queue.emplace_back(edge.neighbor_index, depth + 1);
             }
         }
     }
@@ -1814,6 +1834,7 @@ LocalFittingIterationResult RunLocalFittingIteration(
     auto iteration_state{ previous_state };
     std::vector<int> refit_fallback_flag_list(active_index_list.size(), 0);
     std::vector<int> suspicious_offset_flag_list(active_index_list.size(), 0);
+    std::vector<int> pre_refit_suspicious_seed_flag_list(active_index_list.size(), 0);
 
     for (std::size_t i = 0; i < active_index_list.size(); i++)
     {
@@ -1830,10 +1851,11 @@ LocalFittingIterationResult RunLocalFittingIteration(
         {
             continue;
         }
-        suspicious_offset_flag_list.at(i) = 1;
+        pre_refit_suspicious_seed_flag_list.at(i) = 1;
     }
     ExpandSuspiciousOffsetClusters(
-        joint_offset_result.active_coupling_adjacency,
+        joint_offset_result.active_coupling_graph,
+        pre_refit_suspicious_seed_flag_list,
         suspicious_offset_flag_list,
         refit_fallback_flag_list);
     RollBackSuspiciousOffsetClusters(
@@ -1844,6 +1866,7 @@ LocalFittingIterationResult RunLocalFittingIteration(
         current_snapshot,
         iteration_state);
 
+    std::vector<int> post_refit_suspicious_seed_flag_list(active_index_list.size(), 0);
     for (size_t i = 0; i < active_index_list.size(); i++)
     {
         if (suspicious_offset_flag_list.at(i) != 0) continue;
@@ -1863,7 +1886,7 @@ LocalFittingIterationResult RunLocalFittingIteration(
         }
         if (refit_result.suspicious_offset_fallback)
         {
-            suspicious_offset_flag_list.at(i) = 1;
+            post_refit_suspicious_seed_flag_list.at(i) = 1;
         }
         auto result{ std::move(refit_result.result) };
         const auto fitted_model{ result.mdpde.GetModel() };
@@ -1871,7 +1894,8 @@ LocalFittingIterationResult RunLocalFittingIteration(
         iteration_state.result_list.at(state_index) = std::move(result);
     }
     ExpandSuspiciousOffsetClusters(
-        joint_offset_result.active_coupling_adjacency,
+        joint_offset_result.active_coupling_graph,
+        post_refit_suspicious_seed_flag_list,
         suspicious_offset_flag_list,
         refit_fallback_flag_list);
     RollBackSuspiciousOffsetClusters(
