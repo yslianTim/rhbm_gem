@@ -95,6 +95,7 @@ constexpr int kLocalFittingFreezeStableIterations{ 3 };
 constexpr double kLocalFittingDependencyThawHysteresisGrowth{ 2.0 };
 constexpr double kLocalFittingDependencyThawHysteresisMax{ 8.0 };
 constexpr double kLocalFittingDependencyThawHysteresisFrozenDecay{ 0.9 };
+constexpr int kLocalFittingDependencyThawMaximumCount{ 5 };
 constexpr double kLocalFittingObjectiveTieRelativeTolerance{ 1.0e-8 };
 constexpr double kLocalFittingConvergenceObjectiveRelativeTolerance{ 1.0e-3 };
 constexpr int kLocalFittingObjectiveBacktrackingMaximumAttempts{ 3 };
@@ -240,9 +241,12 @@ struct LocalFittingObjectiveSamples
 class LocalFittingThawHysteresisTracker
 {
     std::vector<double> m_multiplier_list;
+    std::vector<int> m_dependency_thaw_count_list;
+    std::vector<bool> m_dependency_thaw_locked_list;
     double m_growth_multiplier{ 1.0 };
     double m_max_multiplier{ 1.0 };
     double m_frozen_decay{ 1.0 };
+    int m_dependency_thaw_maximum_count{ 0 };
 
     void ValidateIndex(std::size_t index) const
     {
@@ -257,14 +261,19 @@ public:
         std::size_t value_size,
         double growth_multiplier,
         double max_multiplier,
-        double frozen_decay)
+        double frozen_decay,
+        int dependency_thaw_maximum_count)
         : m_multiplier_list(value_size, 1.0),
+          m_dependency_thaw_count_list(value_size, 0),
+          m_dependency_thaw_locked_list(value_size, false),
           m_growth_multiplier{ growth_multiplier },
           m_max_multiplier{ max_multiplier },
-          m_frozen_decay{ frozen_decay }
+          m_frozen_decay{ frozen_decay },
+          m_dependency_thaw_maximum_count{ dependency_thaw_maximum_count }
     {
         if (m_growth_multiplier < 1.0 || m_max_multiplier < 1.0 ||
-            m_frozen_decay < 0.0 || m_frozen_decay > 1.0)
+            m_frozen_decay < 0.0 || m_frozen_decay > 1.0 ||
+            m_dependency_thaw_maximum_count < 0)
         {
             throw std::invalid_argument("Local fitting thaw hysteresis settings are invalid.");
         }
@@ -281,9 +290,25 @@ public:
         return change >= GetThreshold(index, base_threshold);
     }
 
+    bool CanDependencyThaw(std::size_t index)
+    {
+        ValidateIndex(index);
+        if (m_dependency_thaw_locked_list.at(index))
+        {
+            return false;
+        }
+        if (m_dependency_thaw_count_list.at(index) >= m_dependency_thaw_maximum_count)
+        {
+            m_dependency_thaw_locked_list.at(index) = true;
+            return false;
+        }
+        return true;
+    }
+
     void RecordDependencyThaw(std::size_t index)
     {
         ValidateIndex(index);
+        m_dependency_thaw_count_list.at(index)++;
         m_multiplier_list.at(index) = std::min(
             m_max_multiplier,
             m_multiplier_list.at(index) * m_growth_multiplier);
@@ -1694,6 +1719,10 @@ std::size_t ThawChangedActiveAtomNeighbors(
             {
                 continue;
             }
+            if (!thaw_hysteresis_tracker.CanDependencyThaw(neighbor_index))
+            {
+                continue;
+            }
             if (freeze_tracker.Thaw(neighbor_index))
             {
                 thaw_hysteresis_tracker.RecordDependencyThaw(neighbor_index);
@@ -2350,7 +2379,8 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         atom_size,
         kLocalFittingDependencyThawHysteresisGrowth,
         kLocalFittingDependencyThawHysteresisMax,
-        kLocalFittingDependencyThawHysteresisFrozenDecay
+        kLocalFittingDependencyThawHysteresisFrozenDecay,
+        kLocalFittingDependencyThawMaximumCount
     };
     double ridge_ratio{ kJointOffsetRidgeRatio };
     std::vector<double> joint_offset_ridge_multiplier_list(atom_size, 1.0);

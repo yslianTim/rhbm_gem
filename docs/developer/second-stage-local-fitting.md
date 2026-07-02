@@ -199,11 +199,16 @@ neighbor changes by at least `sqrt(kLocalFittingParameterChangeTolerance)`.
 Dependency thawing applies per-atom hysteresis: each dependency thaw raises that
 atom's next dependency-thaw threshold, up to a capped multiplier, and the
 multiplier decays back toward the base threshold while the atom remains frozen.
+To prevent flat-region freeze/thaw thrashing from consuming the full iteration
+budget, dependency thawing is also capped per atom within one second-stage run:
+after five successful neighbor-triggered thaws, later dependency-thaw requests
+for that atom are denied and the atom stays frozen at its current local state.
 Frozen atoms do not participate in the joint offset solve or per-atom refit while
 they remain frozen, but their fitted Gaussian remains in the snapshot so active
 neighbors can subtract them as fixed signal contributions.
 Suspicious offset cluster members are thawed after freeze tracking so the next
-iteration can retry them with the temporary per-atom ridge multiplier.
+iteration can retry them with the temporary per-atom ridge multiplier; those
+forced retry thaws are not counted against the dependency thaw cap.
 
 The best fixed-point candidate is tracked separately. At second-stage entry,
 the initial residuals seed the residual normalization scale when they are finite.
