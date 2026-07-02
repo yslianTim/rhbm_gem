@@ -197,7 +197,7 @@ void RunSimulationTestOnAtomicModel(const RHBMTestRequest & request)
 
         std::ostringstream stream;
         stream  << " Benchmark: " << static_cast<int>(benchmark_case.element)
-                << " one-gaussian reference: " << std::setprecision(3) << std::fixed
+                << " one-gaussian reference: " << std::setprecision(2) << std::fixed
                 << reference_gaus.GetAmplitude() << " , "
                 << reference_gaus.GetWidth() << " , "
                 << reference_gaus.GetOffset();

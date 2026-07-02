@@ -2259,7 +2259,7 @@ void RunGroupAlphaTraining(ModelObject & model_object, const FitOptions & option
     }
 }
 
-void RunFirstStageLocalFitting(ModelObject & model_object, const FitOptions & options)
+void RunFirstStageLocalFitting(ModelObject & model_object, const FitOptions & options, bool fit_offset)
 {
     const auto & atom_list{ model_object.GetSelectedAtoms() };
     const auto selected_atom_size{ atom_list.size() };
@@ -2280,7 +2280,8 @@ void RunFirstStageLocalFitting(ModelObject & model_object, const FitOptions & op
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
         auto sample_entries{ local_view.GetSamplingEntries() };
         const auto offset_model{ local_view.GetGaussianResult().mdpde.GetModel() };
-        auto result{
+        auto result{ fit_offset ?
+            EstimateLocalGaussianWithOffset(sample_entries, local_view.GetAlphaR(), options, 0.0) :
             EstimateLocalGaussian(sample_entries, local_view.GetAlphaR(), options, offset_model)
         };
         local_editor_list[i].SetGaussianResult(result);
