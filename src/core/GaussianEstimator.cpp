@@ -62,6 +62,7 @@ constexpr double kResidualOffsetRangeMin{ 1.0 };
 constexpr double kResidualOffsetRangeMax{ 2.0 };
 constexpr double kOffsetDampingFactor{ 0.5 };
 constexpr double kNeighborContributionDistanceMax{ 2.5 };
+constexpr double kNeighborAtomSearchRange{ 2.0 * kNeighborContributionDistanceMax };
 constexpr std::size_t kLocalFittingMaximumIterations{ 200 };
 constexpr double kLocalFittingParameterChangeTolerance{ 1.0e-6 };
 constexpr double kLocalFittingChangePercentile{ 0.95 };
@@ -674,7 +675,7 @@ JointOffsetBuildResult BuildJointOffsetSystem(
         const auto sample_entries{
             AtomLocalPotentialView::RequireFor(*atom).GetSamplingEntries(false)
         };
-        const auto neighbor_atom_list{ atom->FindNeighborAtoms() };
+        const auto neighbor_atom_list{ atom->FindNeighborAtoms(kNeighborAtomSearchRange) };
         for (const auto & sample : sample_entries)
         {
             if (!std::isfinite(static_cast<double>(sample.response)))
@@ -1050,7 +1051,7 @@ LocalPotentialSampleList UpdateSampleListWithGaussianLookup(
 {
     const auto local_view{ AtomLocalPotentialView::RequireFor(atom) };
     const auto sample_entries{ local_view.GetSamplingEntries(false) };
-    const auto & neighbor_atom_list{ atom.FindNeighborAtoms() };
+    const auto & neighbor_atom_list{ atom.FindNeighborAtoms(kNeighborAtomSearchRange) };
     LocalPotentialSampleList updated_list;
     updated_list.reserve(sample_entries.size());
     for (const auto & sample : sample_entries)
@@ -1733,7 +1734,7 @@ std::size_t ThawChangedActiveAtomNeighbors(
             algorithm::GetMaximumParameterChange(change_list.at(active_index))
         };
 
-        for (const auto * neighbor_atom : atom_list.at(active_index)->FindNeighborAtoms())
+        for (const auto * neighbor_atom : atom_list.at(active_index)->FindNeighborAtoms(kNeighborAtomSearchRange))
         {
             const auto neighbor_iter{ atom_index_map.find(neighbor_atom) };
             if (neighbor_iter == atom_index_map.end()) continue;
