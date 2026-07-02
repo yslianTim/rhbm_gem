@@ -6,8 +6,8 @@ Gaussian estimates after the first-stage per-atom fit. The implementation is in
 
 This stage is a fixed-point iteration across atoms. Each iteration estimates a
 joint offset update for the active atoms, refits those atoms with neighbor
-contributions removed, then uses percentile parameter movement to decide whether
-the active set has converged.
+contributions removed, then uses percentile normalized parameter movement to
+decide whether the active set has converged.
 
 ## Inputs and State
 
@@ -47,8 +47,8 @@ previous state
     -> refit active atoms with neighbor contributions removed
     -> roll back any suspicious offset clusters found before or during refit
     -> apply under-relaxation
-    -> compute active-atom p95 parameter changes
-    -> reject, shrink beta, and retry if the objective deteriorates
+    -> compute active-atom p95 absolute and normalized parameter changes
+    -> backtrack against the objective; shrink beta and retry when needed
     -> update candidate ranking and adaptive relaxation
     -> freeze stable atoms and thaw changed selected neighbors
     -> exit, fallback, or continue
@@ -155,27 +155,30 @@ relaxed = beta * current + (1 - beta) * previous
 `beta` starts from the internal `kAdaptiveRelaxationInitialBeta` value (`0.5`)
 and is clamped to the local adaptive relaxation range `[0.05, 1.0]`. After each
 iteration, the controller looks at the maximum of the three 95th-percentile
-parameter changes. A change more than 1% larger than the previous iteration for
-three consecutive accepted iterations halves `beta`. Two consecutive changes
-more than 1% smaller than the previous iteration allow `beta` to grow by `1.2x`,
-up to `1.0`. This is a trend-based adaptive relaxation rule, not Anderson
-acceleration. The relaxed vector replaces the candidate MDPDE model while
-preserving its standard-deviation model.
+normalized parameter changes. A change more than 1% larger than the previous
+iteration for three consecutive accepted iterations halves `beta`. Two
+consecutive changes more than 1% smaller than the previous iteration allow
+`beta` to grow by `1.2x`, up to `1.0`. This is a trend-based adaptive relaxation
+rule, not Anderson acceleration. The relaxed vector replaces the candidate MDPDE
+model while preserving its standard-deviation model.
 
 When an objective reference is available, the relaxed candidate must pass the
 objective quality gate before it can update ranking, freezing, thawing, or the
-next iteration's previous state. During residual-scale warm-up this reference is
-provisional and can include the candidate's own scale sample; after warm-up it is
-locked. If the candidate is worse than the previous state or the best tracked
-state by more than
-`kLocalFittingConvergenceObjectiveRelativeTolerance`, the stage shrinks `beta`
-and rebuilds the relaxed candidate from the same raw iteration result. Each
-outer iteration tries at most three relaxation candidates. If all attempts fail
-and `beta` is still above the local minimum, the raw iteration is rejected and
-the next outer iteration retries from the unchanged previous state with the
-smaller `beta`. Any rejected relaxation attempt also increases the dynamic joint
-offset ridge ratio, but that ridge change does not trigger an immediate refit;
-it applies when the next outer iteration rebuilds the joint-offset system.
+next iteration's previous state. If no objective reference can be built, this
+quality gate is skipped and candidate ranking falls back to normalized parameter
+movement. During residual-scale warm-up the objective reference is provisional
+and can include the candidate's own scale sample; after warm-up it is locked. If
+the candidate is worse than the previous state or the best tracked state by more
+than `kLocalFittingConvergenceObjectiveRelativeTolerance`, the attempt is
+rejected. When another attempt is available and `beta` is above its minimum, the
+stage shrinks `beta` and rebuilds the relaxed candidate from the same raw
+iteration result. Each outer iteration tries at most three relaxation
+candidates. If all attempts fail and `beta` is still above the local minimum,
+the raw iteration is rejected and the next outer iteration retries from the
+unchanged previous state with the smaller `beta`. Any rejected relaxation
+attempt also increases the dynamic joint offset ridge ratio, but that ridge
+change does not trigger an immediate refit; it applies when the next outer
+iteration rebuilds the joint-offset system.
 
 The stage then computes absolute and normalized parameter movement for
 amplitude, width, and offset for every selected atom. Active atoms are summarized
@@ -199,23 +202,21 @@ Suspicious offset cluster members are thawed after freeze tracking so the next
 iteration can retry them with the temporary per-atom ridge multiplier.
 
 The best fixed-point candidate is tracked separately. At second-stage entry,
-the initial residuals seed the residual normalization scale. During warm-up,
-each accepted candidate contributes its residual median absolute deviation to a
-moving-average scale; after five accepted candidates, that average is locked for
-the rest of the fitting run. Each residual scale sample is floored by a small
-fraction of the robust response scale from the same objective samples, then by
-the absolute Huber scale minimum, so a near-perfect entry fit cannot create an
-overly sensitive denominator. During warm-up, every previous, current, and best
-candidate involved in a quality comparison is re-scored with the same
-provisional scale before backtracking or ranking uses the objective values.
-A candidate is better when its normalized robust objective improves beyond the
-tie tolerance; objective ties are broken by the maximum of the three percentile
-parameter changes.
-Convergence is accepted only if the current objective is not worse than both the
-previous candidate and the best candidate by more than
-`kLocalFittingConvergenceObjectiveRelativeTolerance`, when those objective values
-are available. Parameter convergence is not allowed to terminate the stage while
-an available objective scale is still in warm-up.
+the initial residuals seed the residual normalization scale when they are finite.
+During warm-up, each accepted objective-scored candidate contributes its residual
+median absolute deviation to a moving-average scale; after five such accepted
+candidates, that average is locked for the rest of the fitting run. Each
+residual scale sample is floored by a small fraction of the robust response scale
+from the same objective samples, then by the absolute Huber scale minimum, so a
+near-perfect entry fit cannot create an overly sensitive denominator. During
+warm-up, every previous, current, and best candidate involved in a quality
+comparison is re-scored with the same provisional scale before backtracking or
+ranking uses the objective values. A candidate is better when its normalized
+robust objective improves beyond the tie tolerance; objective ties are broken by
+the maximum of the three normalized percentile parameter changes.
+Objective acceptance is enforced before convergence is evaluated, when objective
+values are available. Parameter convergence is not allowed to terminate the stage
+while an available objective scale is still in warm-up.
 
 ## Exit Paths
 

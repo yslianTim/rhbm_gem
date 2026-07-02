@@ -257,6 +257,14 @@ double ElectricPotential::CalculateSingleGausModel(Element element, double dista
     {
         offset = -0.1; // TEST
     }
+    else if (element == Element::NITROGEN)
+    {
+        offset = 0.1; // TEST
+    }
+    else if (element == Element::CARBON)
+    {
+        offset = 0.3; // TEST
+    }
     auto charge_term{ 0.0 };
     if (distance < 1.0e-5)
     {
