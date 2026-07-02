@@ -33,6 +33,12 @@ LocalGaussianResult EstimateLocalGaussian(
     const FitOptions & options,
     const GaussianModel3D & offset_model = GaussianModel3D{ 0.0, 1.0, 0.0 });
 
+LocalGaussianResult EstimateLocalGaussianWithOffset(
+    const LocalPotentialSampleList & sample_entries,
+    double alpha_r,
+    const FitOptions & options,
+    double offset_initial = 0.0);
+
 GroupGaussianResult EstimateGroupGaussian(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
     const std::vector<LocalGaussianResult> & member_result_list,
