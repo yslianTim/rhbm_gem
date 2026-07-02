@@ -2016,100 +2016,7 @@ void InitializeLocalFittingSeedModels(ModelObject & model_object)
     }
 }
 
-[[maybe_unused]] LocalGaussianResult EstimateLocalGaussianWithOffset(
-    const LocalPotentialSampleList & sample_entries,
-    double alpha_r,
-    const FitOptions & options,
-    double offset_initial)
-{
-    numeric_validation::RequireFiniteNonNegativeRange(
-        options.distance_min,
-        options.distance_max,
-        "fit range");
-    numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
-    numeric_validation::RequireFinite(offset_initial, "offset_initial");
-
-    const auto execution_options{ MakeExecutionOptions(options) };
-    auto result{ EstimateLocalGaussian(sample_entries, alpha_r, options) };
-    auto current_model{ result.mdpde.GetModel().WithOffset(offset_initial) };
-    double best_error{ std::numeric_limits<double>::infinity() };
-    auto best_result{ result };
-    for (int iteration = 0; iteration < execution_options.max_iterations; iteration++)
-    {
-        const auto offset{ current_model.GetOffset() };
-        result = EstimateLocalGaussian(sample_entries, alpha_r, options, current_model);
-        const auto raw_offset{
-            EstimateResidualOffsetParameter(
-                sample_entries,
-                *result.fit_result,
-                offset)
-        };
-        const auto candidate_model{ result.mdpde.GetModel().WithOffset(raw_offset) };
-        const auto error{ (candidate_model.ToVector() - current_model.ToVector()).norm() };
-        if (error < best_error)
-        {
-            best_error = error;
-            best_result = result;
-        }
-        if (error < execution_options.tolerance)
-        {
-            break;
-        }
-
-        if (iteration + 1 == execution_options.max_iterations)
-        {
-            result = best_result;
-            if (!options.quiet_mode)
-            {
-                Logger::Log(LogLevel::Debug,
-                    "Maximum iterations reached in local Gaussian estimation with offset; "
-                    "refitting at best fixed-point candidate with error = " +
-                    std::to_string(best_error) + ".");
-            }
-            break;
-        }
-
-        const auto damped_offset{
-            offset + kOffsetDampingFactor * (raw_offset - offset)
-        };
-        current_model = result.mdpde.GetModel().WithOffset(damped_offset);
-    }
-    return result;
-}
-
 } // namespace
-
-void ApplySpotMedianMDPDEOffsets(
-    ModelObject & model_object,
-    const std::vector<AtomObject *> & atom_list)
-{
-    std::unordered_map<Spot, std::vector<double>> offset_list_by_spot;
-    offset_list_by_spot.reserve(atom_list.size());
-    for (const auto * atom : atom_list)
-    {
-        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
-        offset_list_by_spot[atom->GetSpot()].emplace_back(
-            local_view.GetGaussianResult().mdpde.GetModel().GetOffset());
-    }
-
-    std::unordered_map<Spot, double> median_offset_by_spot;
-    median_offset_by_spot.reserve(offset_list_by_spot.size());
-    for (const auto & [spot, offset_list] : offset_list_by_spot)
-    {
-        median_offset_by_spot.emplace(spot, array_helper::ComputeMedian(offset_list));
-    }
-
-    auto local_editor_list{ BuildAtomLocalEditors(model_object, atom_list) };
-    for (std::size_t i = 0; i < atom_list.size(); i++)
-    {
-        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list.at(i)) };
-        auto result{ local_view.GetGaussianResult() };
-        result.mdpde = WithModelOffset(
-            result.mdpde,
-            median_offset_by_spot.at(atom_list.at(i)->GetSpot()));
-        local_editor_list.at(i).SetGaussianResult(std::move(result));
-    }
-}
 
 double TrainAlphaR(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
@@ -2183,6 +2090,64 @@ LocalGaussianResult EstimateLocalGaussian(
     };
     const auto result{ rhbm_helper::EstimateBetaMDPDE(alpha_r, dataset, execution_options) };
     return DecodeLocalGaussianResult(alpha_r, result, offset_model.GetOffset());
+}
+
+LocalGaussianResult EstimateLocalGaussianWithOffset(
+    const LocalPotentialSampleList & sample_entries,
+    double alpha_r,
+    const FitOptions & options,
+    double offset_initial)
+{
+    numeric_validation::RequireFiniteNonNegativeRange(
+        options.distance_min,
+        options.distance_max,
+        "fit range");
+    numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
+    numeric_validation::RequireFinite(offset_initial, "offset_initial");
+
+    const auto execution_options{ MakeExecutionOptions(options) };
+    auto result{ EstimateLocalGaussian(sample_entries, alpha_r, options) };
+    auto current_model{ result.mdpde.GetModel().WithOffset(offset_initial) };
+    double best_error{ std::numeric_limits<double>::infinity() };
+    auto best_result{ result };
+    for (int iteration = 0; iteration < execution_options.max_iterations; iteration++)
+    {
+        const auto offset{ current_model.GetOffset() };
+        result = EstimateLocalGaussian(sample_entries, alpha_r, options, current_model);
+        const auto raw_offset{
+            EstimateResidualOffsetParameter(sample_entries, *result.fit_result, offset)
+        };
+        const auto candidate_model{ result.mdpde.GetModel().WithOffset(raw_offset) };
+        const auto error{ (candidate_model.ToVector() - current_model.ToVector()).norm() };
+        if (error < best_error)
+        {
+            best_error = error;
+            best_result = result;
+        }
+        if (error < execution_options.tolerance)
+        {
+            break;
+        }
+
+        if (iteration + 1 == execution_options.max_iterations)
+        {
+            result = best_result;
+            if (!options.quiet_mode)
+            {
+                Logger::Log(LogLevel::Debug,
+                    "Maximum iterations reached in local Gaussian estimation with offset; "
+                    "refitting at best fixed-point candidate with error = " +
+                    std::to_string(best_error) + ".");
+            }
+            break;
+        }
+
+        const auto damped_offset{
+            offset + kOffsetDampingFactor * (raw_offset - offset)
+        };
+        current_model = result.mdpde.GetModel().WithOffset(damped_offset);
+    }
+    return result;
 }
 
 GroupGaussianResult EstimateGroupGaussian(
