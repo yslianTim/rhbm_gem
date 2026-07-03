@@ -376,8 +376,7 @@ BiasStatistics RunAtomicModelFullEstimationTest(
     for (int i = 0; i < replica_size; i++)
     {
         ModelObject model_object{ *input.replica_model_objects.at(static_cast<size_t>(i)) };
-        RunLocalAlphaTraining(model_object, options);
-        RunLocalPotentialFitting(model_object, options);
+        RunPotentialFittingWorkflow(model_object, options);
 
         const auto local_view{
             AtomLocalPotentialView::RequireFor(*model_object.GetSelectedAtoms().front())

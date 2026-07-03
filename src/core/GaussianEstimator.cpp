@@ -1179,17 +1179,6 @@ LocalPotentialSampleList UpdateSampleListWithFittedGaussian(
         });
 }
 
-LocalPotentialSampleList UpdateSampleListWithFittedGaussian(const AtomObject & atom)
-{
-    return UpdateSampleListWithGaussianLookup(
-        atom,
-        [](const AtomObject & neighbor_atom) -> const GaussianModel3D *
-        {
-            const auto local_view{ AtomLocalPotentialView::For(neighbor_atom) };
-            return local_view.IsAvailable() ? &local_view.GetEstimateMDPDE() : nullptr;
-        });
-}
-
 LocalPotentialSampleList UpdateSampleListWithGroupMedianGaussian(
     const AtomObject & atom,
     const GroupMedianModelMap & median_model_by_group)
@@ -2792,20 +2781,22 @@ void RunThirdStageLocalFitting(ModelObject & model_object, const FitOptions & op
         }
     }
 }
-
+/*
 void RunLocalPotentialFitting(ModelObject & model_object, const FitOptions & options)
 {
     InitializeLocalFittingSeedModels(model_object);
     RunFirstStageLocalFitting(model_object, options);
     RunSecondStageLocalFitting(model_object, options);
+    RunGroupAlphaTraining(model_object, options);
     RunThirdStageLocalFitting(model_object, options);
-}
+}*/
 
 void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & options)
 {
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
     const auto & selected_atom_list{ model_object.GetSelectedAtoms() };
+    const auto median_model_by_group{ BuildGroupMedianMDPDEModelMap(selected_atom_list) };
     for (auto * atom : selected_atom_list)
     {
         analysis.EnsureAtomLocalPotential(*atom);
@@ -2834,7 +2825,7 @@ void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & opt
         for (const auto & atom : atom_list)
         {
             const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
-            sample_entries_list.emplace_back(UpdateSampleListWithFittedGaussian(*atom));
+            sample_entries_list.emplace_back(UpdateSampleListWithGroupMedianGaussian(*atom, median_model_by_group));
             member_result_list.emplace_back(local_view.GetGaussianResult());
         }
         const auto result{
@@ -2858,7 +2849,13 @@ void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & opt
 void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & options)
 {
     RunLocalAlphaTraining(model_object, options);
-    RunLocalPotentialFitting(model_object, options);
+
+    InitializeLocalFittingSeedModels(model_object);
+    RunFirstStageLocalFitting(model_object, options);
+    RunSecondStageLocalFitting(model_object, options);
+    //RunGroupAlphaTraining(model_object, options);
+    RunThirdStageLocalFitting(model_object, options);
+
     RunGroupAlphaTraining(model_object, options);
     RunGroupPotentialFitting(model_object, options);
     if (!options.quiet_mode)
