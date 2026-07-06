@@ -33,12 +33,6 @@ LocalGaussianResult EstimateLocalGaussian(
     const FitOptions & options,
     const GaussianModel3D & offset_model = GaussianModel3D{ 0.0, 1.0, 0.0 });
 
-LocalGaussianResult EstimateLocalGaussianWithOffset(
-    const LocalPotentialSampleList & sample_entries,
-    double alpha_r,
-    const FitOptions & options,
-    double offset_initial = 0.0);
-
 GroupGaussianResult EstimateGroupGaussian(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
     const std::vector<LocalGaussianResult> & member_result_list,
@@ -51,7 +45,7 @@ void RunLocalAlphaTraining(
     bool apply_selection = true,
     bool use_updated_sample = false);
 void RunGroupAlphaTraining(ModelObject & model_object, const FitOptions & options);
-void RunFirstStageLocalFitting(ModelObject & model_object, const FitOptions & options, bool fit_offset = false);
+void RunFirstStageLocalFitting(ModelObject & model_object, const FitOptions & options);
 void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & options);
 void RunThirdStageLocalFitting(ModelObject & model_object, const FitOptions & options);
 void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & options);

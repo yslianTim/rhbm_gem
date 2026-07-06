@@ -11,11 +11,8 @@
 #include <rhbm_gem/utils/algorithm/AdaptiveRelaxationController.hpp>
 #include <rhbm_gem/utils/algorithm/ConvergenceFreezeTracker.hpp>
 #include <rhbm_gem/utils/algorithm/IterationState.hpp>
-#include <rhbm_gem/utils/algorithm/LinearRegressionSample.hpp>
 #include <rhbm_gem/utils/algorithm/NormalizedChange.hpp>
 #include <rhbm_gem/utils/algorithm/ParameterChangeStats.hpp>
-#include <rhbm_gem/utils/algorithm/RobustSlopeEstimator.hpp>
-#include <rhbm_gem/utils/algorithm/RobustSlopeOptions.hpp>
 #include <rhbm_gem/utils/algorithm/SparseRegressionRow.hpp>
 #include <rhbm_gem/utils/algorithm/WeightedRidgeSolver.hpp>
 #include <rhbm_gem/utils/algorithm/WeightedRidgeSystem.hpp>
@@ -58,21 +55,15 @@ constexpr double kLocalFittingNormalizedChangeTolerance{ 1.0e-4 };
 constexpr double kLocalFittingNormalizedChangeScaleFloor{ 1.0 };
 constexpr std::size_t kMinimumAlphaRTrainingSampleCount{ 10 };
 constexpr std::size_t kMinimumAlphaGTrainingMemberCount{ 10 };
-constexpr double kResidualOffsetRangeMin{ 1.0 };
-constexpr double kResidualOffsetRangeMax{ 2.0 };
-constexpr double kOffsetDampingFactor{ 0.5 };
 constexpr double kNeighborContributionDistanceMax{ 2.5 };
 constexpr double kNeighborAtomSearchRange{ 2.0 * kNeighborContributionDistanceMax };
 constexpr std::size_t kLocalFittingMaximumIterations{ 200 };
 constexpr double kLocalFittingParameterChangeTolerance{ 1.0e-6 };
 constexpr double kLocalFittingChangePercentile{ 0.95 };
 constexpr int kHuberSlopeMaximumIterations{ 50 };
-constexpr double kHuberSlopeTolerance{ 1.0e-8 };
 constexpr double kHuberScaleMultiplier{ 1.4826 };
 constexpr double kHuberScaleMin{ 1.0e-12 };
 constexpr double kHuberCutoffMultiplier{ 1.345 };
-constexpr double kOffsetRegularizationAmplitudeRatio{ 0.1 };
-constexpr double kOffsetRegularizationPriorScaleMin{ 1.0e-12 };
 constexpr double kJointOffsetRidgeRatio{ 1.0e-3 };
 constexpr double kJointOffsetRidgeRatioMin{ 1.0e-4 };
 constexpr double kJointOffsetRidgeRatioMax{ 1.0 };
@@ -374,15 +365,22 @@ RHBMExecutionOptions MakeExecutionOptions(const FitOptions & options)
     return execution_options;
 }
 
+double CalculateZeroOffsetResponse(
+    const LocalPotentialSample & sample,
+    const GaussianModel3D & model)
+{
+    const auto distance{ static_cast<double>(sample.point.distance) };
+    const auto model_offset{ model.ResponseAtDistance(distance) - model.SignalAtDistance(distance) };
+    return static_cast<double>(sample.response) - model_offset;
+}
+
 bool CanBuildFiniteZeroOffsetSamples(
     const LocalPotentialSampleList & sample_entries,
     const GaussianModel3D & model)
 {
     for (const auto & sample : sample_entries)
     {
-        const auto distance{ static_cast<double>(sample.point.distance) };
-        const auto model_offset{ model.ResponseAtDistance(distance) - model.SignalAtDistance(distance) };
-        const auto response{ static_cast<double>(sample.response) - model_offset };
+        const auto response{ CalculateZeroOffsetResponse(sample, model) };
         if (!std::isfinite(response)) return false;
         if (std::abs(response) > static_cast<double>(std::numeric_limits<float>::max()))
         {
@@ -390,72 +388,6 @@ bool CanBuildFiniteZeroOffsetSamples(
         }
     }
     return true;
-}
-
-algorithm::RobustSlopeOptions MakeResidualOffsetSlopeOptions(double amplitude)
-{
-    algorithm::RobustSlopeOptions options;
-    options.maximum_iterations = kHuberSlopeMaximumIterations;
-    options.tolerance = kHuberSlopeTolerance;
-    options.scale_multiplier = kHuberScaleMultiplier;
-    options.scale_min = kHuberScaleMin;
-    options.cutoff_multiplier = kHuberCutoffMultiplier;
-    options.regularization_prior_scale =
-        std::max(
-            std::abs(amplitude) * kOffsetRegularizationAmplitudeRatio,
-            kOffsetRegularizationPriorScaleMin);
-    return options;
-}
-
-double EstimateResidualOffsetParameter(
-    const LocalPotentialSampleList & sample_entries,
-    const RHBMBetaEstimateResult & fit_result,
-    double current_offset)
-{
-    const auto signal_model{
-        linearization_service::DecodeParameterVector(fit_result.beta_mdpde)
-    };
-    const auto width{ signal_model.GetWidth() };
-    if (!std::isfinite(width) || width <= 0.0) return current_offset;
-
-    std::vector<algorithm::LinearRegressionSample> residual_sample_list;
-    residual_sample_list.reserve(sample_entries.size());
-    for (const auto & sample : sample_entries)
-    {
-        const auto distance{ static_cast<double>(sample.point.distance) };
-        if (distance < kResidualOffsetRangeMin || distance > kResidualOffsetRangeMax)
-        {
-            continue;
-        }
-
-        const auto basis{ signal_model.OffsetBasisAtDistance(distance) };
-        if (!std::isfinite(basis) ||
-            std::abs(basis) <= std::numeric_limits<double>::epsilon())
-        {
-            continue;
-        }
-        const auto residual{
-            static_cast<double>(sample.response) -
-            signal_model.SignalAtDistance(distance)
-        };
-        if (!std::isfinite(residual)) continue;
-        residual_sample_list.emplace_back(algorithm::LinearRegressionSample{ basis, residual });
-    }
-
-    double candidate_offset{ current_offset };
-    if (!algorithm::RobustSlopeEstimator::EstimateHuberSlopeThroughOrigin(
-            residual_sample_list,
-            MakeResidualOffsetSlopeOptions(signal_model.GetAmplitude()),
-            candidate_offset))
-    {
-        return current_offset;
-    }
-    const auto candidate_model{ signal_model.WithOffset(candidate_offset) };
-    if (!CanBuildFiniteZeroOffsetSamples(sample_entries, candidate_model))
-    {
-        return current_offset;
-    }
-    return candidate_offset;
 }
 
 bool IsSuspiciousJointOffset(
@@ -474,7 +406,7 @@ rhbm_trainer::RHBMTrainingOptions MakeTrainingOptions(const FitOptions & options
     return training_options;
 }
 
-std::vector<RHBMMemberDataset> BuildMemberDatasetList(
+std::vector<RHBMMemberDataset> BuildMemberDatasetListFromRawSamples(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
     const FitOptions & options)
 {
@@ -514,15 +446,13 @@ LocalPotentialSampleList BuildSamplesForZeroOffsetGaussianFit(
     updated_sample_entries.reserve(sample_entries.size());
     for (const auto & sample : sample_entries)
     {
-        const auto distance{ static_cast<double>(sample.point.distance) };
-        const auto model_offset{ model.ResponseAtDistance(distance) - model.SignalAtDistance(distance) };
-        const auto response{ static_cast<float>(static_cast<double>(sample.response) - model_offset)};
+        const auto response{ static_cast<float>(CalculateZeroOffsetResponse(sample, model)) };
         updated_sample_entries.emplace_back(LocalPotentialSample{ response, sample.point });
     }
     return updated_sample_entries;
 }
 
-std::vector<RHBMMemberDataset> BuildMemberDatasetList(
+std::vector<RHBMMemberDataset> BuildMemberDatasetListFromFixedOffsetMembers(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
     const std::vector<LocalGaussianResult> & member_result_list,
     const FitOptions & options)
@@ -571,28 +501,22 @@ LocalGaussianResult DecodeLocalGaussianResult(
     };
 }
 
-GaussianModel3DWithUncertainty WithModelOffset(
-    const GaussianModel3DWithUncertainty & gaussian,
-    double offset)
-{
-    return GaussianModel3DWithUncertainty{
-        gaussian.GetModel().WithOffset(offset),
-        gaussian.GetStandardDeviationModel()
-    };
-}
-
 GroupGaussianResult DecodeGroupGaussianResult(
     double alpha_g,
     const RHBMGroupEstimationResult & result,
     double offset)
 {
+    const auto prior{
+        linearization_service::DecodeParameterVector(result.mu_prior, result.capital_lambda)
+    };
     return GroupGaussianResult{
         alpha_g,
         linearization_service::DecodeParameterVector(result.mu_mean).WithOffset(offset),
         linearization_service::DecodeParameterVector(result.mu_mdpde).WithOffset(offset),
-        WithModelOffset(
-            linearization_service::DecodeParameterVector(result.mu_prior, result.capital_lambda),
-            offset)
+        GaussianModel3DWithUncertainty{
+            prior.GetModel().WithOffset(offset),
+            prior.GetStandardDeviationModel()
+        }
     };
 }
 
@@ -625,17 +549,21 @@ std::vector<LocalGaussianResult> DecodeMemberGaussianResults(
             member_result_list.at(member_index).mdpde.GetModel().GetOffset()
         };
         const auto gaussian{
-            WithModelOffset(
-                linearization_service::DecodeParameterVector(
-                    result.beta_posterior_matrix.col(i),
-                    result.capital_sigma_posterior_list.at(member_index)),
-                offset)
+            linearization_service::DecodeParameterVector(
+                result.beta_posterior_matrix.col(i),
+                result.capital_sigma_posterior_list.at(member_index))
+        };
+        const auto gaussian_with_offset{
+            GaussianModel3DWithUncertainty{
+                gaussian.GetModel().WithOffset(offset),
+                gaussian.GetStandardDeviationModel()
+            }
         };
         member_results.emplace_back(LocalGaussianResult{
             0.0,
-            gaussian,
-            gaussian,
-            gaussian,
+            gaussian_with_offset,
+            gaussian_with_offset,
+            gaussian_with_offset,
             static_cast<bool>(result.outlier_flag_array(i)),
             result.statistical_distance_array(i)
         });
@@ -1692,8 +1620,14 @@ LocalRefitResult FitAtomWithJointOffsetFallback(
     }
 
     auto result{ previous_result };
-    result.ols = WithModelOffset(result.ols, offset_model.GetOffset());
-    result.mdpde = WithModelOffset(result.mdpde, offset_model.GetOffset());
+    result.ols = GaussianModel3DWithUncertainty{
+        result.ols.GetModel().WithOffset(offset_model.GetOffset()),
+        result.ols.GetStandardDeviationModel()
+    };
+    result.mdpde = GaussianModel3DWithUncertainty{
+        result.mdpde.GetModel().WithOffset(offset_model.GetOffset()),
+        result.mdpde.GetStandardDeviationModel()
+    };
     if (IsSuspiciousJointOffset(
             sample_entries,
             previous_result.mdpde.GetModel(),
@@ -2057,7 +1991,7 @@ double TrainAlphaR(
     numeric_validation::RequireFiniteNonNegativeRange(
         options.distance_min, options.distance_max, "fit range");
 
-    const auto dataset_list{ BuildMemberDatasetList(sample_entries_list, options) };
+    const auto dataset_list{ BuildMemberDatasetListFromRawSamples(sample_entries_list, options) };
     auto training_options{ MakeTrainingOptions(options) };
     if (!dataset_list.empty())
     {
@@ -2124,64 +2058,6 @@ LocalGaussianResult EstimateLocalGaussian(
     return DecodeLocalGaussianResult(alpha_r, result, offset_model.GetOffset());
 }
 
-LocalGaussianResult EstimateLocalGaussianWithOffset(
-    const LocalPotentialSampleList & sample_entries,
-    double alpha_r,
-    const FitOptions & options,
-    double offset_initial)
-{
-    numeric_validation::RequireFiniteNonNegativeRange(
-        options.distance_min,
-        options.distance_max,
-        "fit range");
-    numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
-    numeric_validation::RequireFinite(offset_initial, "offset_initial");
-
-    const auto execution_options{ MakeExecutionOptions(options) };
-    auto result{ EstimateLocalGaussian(sample_entries, alpha_r, options) };
-    auto current_model{ result.mdpde.GetModel().WithOffset(offset_initial) };
-    double best_error{ std::numeric_limits<double>::infinity() };
-    auto best_result{ result };
-    for (int iteration = 0; iteration < execution_options.max_iterations; iteration++)
-    {
-        const auto offset{ current_model.GetOffset() };
-        result = EstimateLocalGaussian(sample_entries, alpha_r, options, current_model);
-        const auto raw_offset{
-            EstimateResidualOffsetParameter(sample_entries, *result.fit_result, offset)
-        };
-        const auto candidate_model{ result.mdpde.GetModel().WithOffset(raw_offset) };
-        const auto error{ (candidate_model.ToVector() - current_model.ToVector()).norm() };
-        if (error < best_error)
-        {
-            best_error = error;
-            best_result = result;
-        }
-        if (error < execution_options.tolerance)
-        {
-            break;
-        }
-
-        if (iteration + 1 == execution_options.max_iterations)
-        {
-            result = best_result;
-            if (!options.quiet_mode)
-            {
-                Logger::Log(LogLevel::Debug,
-                    "Maximum iterations reached in local Gaussian estimation with offset; "
-                    "refitting at best fixed-point candidate with error = " +
-                    std::to_string(best_error) + ".");
-            }
-            break;
-        }
-
-        const auto damped_offset{
-            offset + kOffsetDampingFactor * (raw_offset - offset)
-        };
-        current_model = result.mdpde.GetModel().WithOffset(damped_offset);
-    }
-    return result;
-}
-
 GroupGaussianResult EstimateGroupGaussian(
     const std::vector<LocalPotentialSampleList> & sample_entries_list,
     const std::vector<LocalGaussianResult> & member_result_list,
@@ -2198,7 +2074,9 @@ GroupGaussianResult EstimateGroupGaussian(
     }
 
     auto execution_options{ MakeExecutionOptions(options) };
-    const auto dataset_list{ BuildMemberDatasetList(sample_entries_list, member_result_list, options) };
+    const auto dataset_list{
+        BuildMemberDatasetListFromFixedOffsetMembers(sample_entries_list, member_result_list, options)
+    };
     const auto fit_result_list{ BuildMemberFitResultList(dataset_list, member_result_list, options) };
     const auto group_input{ rhbm_helper::BuildGroupInput(dataset_list, fit_result_list) };
     const auto raw_result{ rhbm_helper::EstimateGroup(alpha_g, group_input, execution_options) };
@@ -2295,7 +2173,7 @@ void RunGroupAlphaTraining(ModelObject & model_object, const FitOptions & option
     }
 }
 
-void RunFirstStageLocalFitting(ModelObject & model_object, const FitOptions & options, bool fit_offset)
+void RunFirstStageLocalFitting(ModelObject & model_object, const FitOptions & options)
 {
     const auto & atom_list{ model_object.GetSelectedAtoms() };
     const auto selected_atom_size{ atom_list.size() };
@@ -2316,10 +2194,7 @@ void RunFirstStageLocalFitting(ModelObject & model_object, const FitOptions & op
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
         auto sample_entries{ local_view.GetSamplingEntries() };
         const auto offset_model{ local_view.GetGaussianResult().mdpde.GetModel() };
-        auto result{ fit_offset ?
-            EstimateLocalGaussianWithOffset(sample_entries, local_view.GetAlphaR(), options, 0.0) :
-            EstimateLocalGaussian(sample_entries, local_view.GetAlphaR(), options, offset_model)
-        };
+        auto result{ EstimateLocalGaussian(sample_entries, local_view.GetAlphaR(), options, offset_model) };
         local_editor_list[i].SetGaussianResult(result);
 
 #ifdef USE_OPENMP

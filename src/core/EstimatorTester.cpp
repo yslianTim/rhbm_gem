@@ -88,8 +88,7 @@ BiasStatistics FinalizeBiasStatistics(const Eigen::MatrixXd & bias_matrix)
 
 Eigen::MatrixXd EstimateAtomicModelFirstStageModels(
     const AtomicModelTestData & input,
-    const FitOptions & options,
-    bool fit_offset = false)
+    const FitOptions & options)
 {
     const auto replica_size{ static_cast<int>(input.replica_model_objects.size()) };
     if (replica_size <= 0)
@@ -105,7 +104,7 @@ Eigen::MatrixXd EstimateAtomicModelFirstStageModels(
     {
         ModelObject model_object{ *input.replica_model_objects.at(static_cast<size_t>(i)) };
         RunLocalAlphaTraining(model_object, options);
-        RunFirstStageLocalFitting(model_object, options, fit_offset);
+        RunFirstStageLocalFitting(model_object, options);
 
         const auto local_view{
             AtomLocalPotentialView::RequireFor(*model_object.GetSelectedAtoms().front())
@@ -354,7 +353,7 @@ GaussianModel3D EstimateAtomicModelFirstStageMean(
     const AtomicModelTestData & input,
     const FitOptions & options)
 {
-    const auto estimation_matrix{ EstimateAtomicModelFirstStageModels(input, options, true) };
+    const auto estimation_matrix{ EstimateAtomicModelFirstStageModels(input, options) };
     return GaussianModel3D::FromVector(estimation_matrix.rowwise().mean());
 }
 

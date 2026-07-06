@@ -271,7 +271,7 @@ suspicious offset rollback.
   `RunThirdStageLocalFitting` runs after this stage, and group alpha training and
   group potential fitting run after third-stage local fitting.
 - [`estimate-local-gaussian-with-offset.md`](/docs/developer/estimate-local-gaussian-with-offset.md)
-  documents the single-atom fixed-offset and residual-offset estimators used by
-  related local fitting paths.
+  documents the single-atom fixed-offset estimator used by related local fitting
+  paths.
 - Second-stage local fitting does not update group Gaussian results; group
   fitting is handled by `RunGroupPotentialFitting`.
