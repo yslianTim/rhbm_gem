@@ -21,7 +21,9 @@ public:
     const LocalGaussianResult & GetGaussianResult() const;
     const GaussianModel3D & GetEstimateOLS() const;
     const GaussianModel3D & GetEstimateMDPDE() const;
-    LocalPotentialSampleList GetSamplingEntries(bool apply_selection = true) const;
+    LocalPotentialSampleList GetSamplingEntries(
+        bool apply_selection = true,
+        bool use_updated_sample = false) const;
     double GetAlphaR() const;
 
 private:

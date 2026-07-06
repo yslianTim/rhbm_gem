@@ -10,6 +10,7 @@ namespace rhbm_gem {
 class LocalPotentialEntry
 {
     LocalPotentialSampleList m_sampling_entries;
+    LocalPotentialSampleList m_updated_sampling_entries;
     LocalGaussianResult m_gaussian_result;
 
 public:
@@ -20,6 +21,10 @@ public:
     void SetSamplingEntries(LocalPotentialSampleList value)
     {
         m_sampling_entries = std::move(value);
+    }
+    void SetUpdatedSamplingEntries(LocalPotentialSampleList value)
+    {
+        m_updated_sampling_entries = std::move(value);
     }
     void SetGaussianResult(LocalGaussianResult value)
     {
@@ -37,6 +42,7 @@ public:
     void ClearTransientFitState()
     {
         m_gaussian_result.fit_result.reset();
+        m_updated_sampling_entries.clear();
     }
 
     int SamplingEntryCount() const
@@ -45,6 +51,7 @@ public:
     }
     const LocalGaussianResult & GaussianResult() const { return m_gaussian_result; }
     const LocalPotentialSampleList & SamplingEntries() const { return m_sampling_entries; }
+    const LocalPotentialSampleList & UpdatedSamplingEntries() const { return m_updated_sampling_entries; }
 };
 
 } // namespace rhbm_gem

@@ -422,6 +422,15 @@ void ExpectSelectedAtomEstimatesAreFinite(const rg::ModelObject & model_object)
     }
 }
 
+void ExpectSelectedAtomUpdatedSamplesArePresent(const rg::ModelObject & model_object)
+{
+    for (const auto * atom : model_object.GetSelectedAtoms())
+    {
+        const auto local_view{ rg::AtomLocalPotentialView::RequireFor(*atom) };
+        EXPECT_FALSE(local_view.GetSamplingEntries(false, true).empty());
+    }
+}
+
 } // namespace
 
 TEST(EstimatorTesterTest, RunLocalEstimationTestPopulatesBiasOutputs)
@@ -548,6 +557,36 @@ TEST(EstimatorTesterTest, RunLocalEstimationTestRejectsNonFiniteTruth)
         rt::RunLocalEstimationTest(test_input, MakeLocalOptions(0.5, true)),
         std::invalid_argument
     );
+}
+
+TEST(EstimatorTesterTest, RunPotentialFittingWorkflowStoresUpdatedSamplingEntries)
+{
+    ElectricPotential potential_model;
+    potential_model.SetModelChoice(0);
+    potential_model.SetBlurringWidth(0.5);
+    auto input{
+        tdf::BuildPotentialModelTestData(tdf::PotentialModelScenario{
+            Spot::UNK,
+            Element::OXYGEN,
+            -0.1,
+            rg::GaussianModel3D{ 8.0, 0.5, -0.1 },
+            potential_model,
+            0.0,
+            1,
+            42
+        })
+    };
+    auto model{ std::move(input.replica_model_objects.front()) };
+    rt::FitOptions options;
+    options.distance_min = 0.0;
+    options.distance_max = 1.0;
+    options.thread_size = 1;
+    options.quiet_mode = true;
+
+    rt::RunPotentialFittingWorkflow(*model, options);
+
+    ExpectSelectedAtomUpdatedSamplesArePresent(*model);
+    ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
 TEST(EstimatorTesterTest, RunSecondStageLocalFittingHandlesNearCollinearAtoms)

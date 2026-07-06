@@ -16,6 +16,11 @@ void AtomLocalPotentialEditor::SetSamplingEntries(LocalPotentialSampleList value
     m_entry->SetSamplingEntries(std::move(value));
 }
 
+void AtomLocalPotentialEditor::SetUpdatedSamplingEntries(LocalPotentialSampleList value)
+{
+    m_entry->SetUpdatedSamplingEntries(std::move(value));
+}
+
 void AtomLocalPotentialEditor::SetGaussianResult(LocalGaussianResult value)
 {
     m_entry->SetGaussianResult(std::move(value));

@@ -14,6 +14,7 @@ class AtomLocalPotentialEditor
 
 public:
     void SetSamplingEntries(LocalPotentialSampleList value);
+    void SetUpdatedSamplingEntries(LocalPotentialSampleList value);
     void SetGaussianResult(LocalGaussianResult value);
     void SetAlphaR(double value);
 

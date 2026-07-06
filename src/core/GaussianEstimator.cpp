@@ -1217,6 +1217,30 @@ LocalPotentialSampleList UpdateSampleListWithFittedGroupGaussian(
         });
 }
 
+void SetUpdatedSamplingEntriesFromGroupMedianGaussian(ModelObject & model_object)
+{
+    const auto & atom_list{ model_object.GetSelectedAtoms() };
+    auto local_editor_list{ BuildAtomLocalEditors(model_object, atom_list) };
+    const auto median_model_by_group{ BuildGroupMedianMDPDEModelMap(atom_list) };
+    for (size_t i = 0; i < atom_list.size(); i++)
+    {
+        local_editor_list[i].SetUpdatedSamplingEntries(
+            UpdateSampleListWithGroupMedianGaussian(*atom_list[i], median_model_by_group));
+    }
+}
+
+void SetUpdatedSamplingEntriesFromFittedGroupGaussian(ModelObject & model_object)
+{
+    const auto & atom_list{ model_object.GetSelectedAtoms() };
+    auto local_editor_list{ BuildAtomLocalEditors(model_object, atom_list) };
+    const auto analysis_view{ model_object.GetAnalysisView() };
+    for (size_t i = 0; i < atom_list.size(); i++)
+    {
+        local_editor_list[i].SetUpdatedSamplingEntries(
+            UpdateSampleListWithFittedGroupGaussian(*atom_list[i], analysis_view));
+    }
+}
+
 double CalculateHuberLoss(double residual, double cutoff)
 {
     const auto absolute_residual{ std::abs(residual) };
@@ -2770,7 +2794,7 @@ void RunThirdStageLocalFitting(ModelObject & model_object, const FitOptions & op
         auto & atom{ *atom_list[i] };
         const auto local_view{ AtomLocalPotentialView::RequireFor(atom) };
         auto sample_entries{
-            UpdateSampleListWithFittedGroupGaussian(atom, analysis_view)
+            local_view.GetSamplingEntries(false, true)
         };
         const auto & offset_model{
             analysis_view.GetAtomGroupPrior(data_internal::GetGroupKey(&atom))
@@ -2793,15 +2817,11 @@ void RunThirdStageLocalFitting(ModelObject & model_object, const FitOptions & op
     }
 }
 
-void RunGroupPotentialFitting(
-    ModelObject & model_object,
-    const FitOptions & options,
-    bool is_first_fit)
+void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & options)
 {
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
     const auto & selected_atom_list{ model_object.GetSelectedAtoms() };
-    const auto median_model_by_group{ BuildGroupMedianMDPDEModelMap(selected_atom_list) };
     for (auto * atom : selected_atom_list)
     {
         analysis.EnsureAtomLocalPotential(*atom);
@@ -2830,10 +2850,7 @@ void RunGroupPotentialFitting(
         for (const auto & atom : atom_list)
         {
             const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
-            sample_entries_list.emplace_back(
-                is_first_fit ?
-                    UpdateSampleListWithGroupMedianGaussian(*atom, median_model_by_group) :
-                    UpdateSampleListWithFittedGroupGaussian(*atom, analysis_view));
+            sample_entries_list.emplace_back(local_view.GetSamplingEntries(false, true));
             member_result_list.emplace_back(local_view.GetGaussianResult());
         }
         const auto result{
@@ -2862,11 +2879,13 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
     RunFirstStageLocalFitting(model_object, options);
     RunSecondStageLocalFitting(model_object, options);
     RunGroupAlphaTraining(model_object, options);
-    RunGroupPotentialFitting(model_object, options, true);
+    SetUpdatedSamplingEntriesFromGroupMedianGaussian(model_object);
+    RunGroupPotentialFitting(model_object, options);
+    SetUpdatedSamplingEntriesFromFittedGroupGaussian(model_object);
     RunThirdStageLocalFitting(model_object, options);
 
     //RunGroupAlphaTraining(model_object, options);
-    RunGroupPotentialFitting(model_object, options, false);
+    RunGroupPotentialFitting(model_object, options);
     if (!options.quiet_mode)
     {
         LogGroupPriorSpotSummary(model_object);

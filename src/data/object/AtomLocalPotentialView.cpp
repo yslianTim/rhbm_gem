@@ -75,9 +75,14 @@ const GaussianModel3D & AtomLocalPotentialView::GetEstimateMDPDE() const
     return RequireEntry("Local estimate MDPDE").GaussianResult().mdpde.GetModel();
 }
 
-LocalPotentialSampleList AtomLocalPotentialView::GetSamplingEntries(bool apply_selection) const
+LocalPotentialSampleList AtomLocalPotentialView::GetSamplingEntries(
+    bool apply_selection,
+    bool use_updated_sample) const
 {
-    const auto & sampling_entries{ RequireEntry("Local sampling entries").SamplingEntries() };
+    const auto & entry{ RequireEntry("Local sampling entries") };
+    const auto & sampling_entries{
+        use_updated_sample ? entry.UpdatedSamplingEntries() : entry.SamplingEntries()
+    };
     if (!apply_selection)
     {
         return sampling_entries;
