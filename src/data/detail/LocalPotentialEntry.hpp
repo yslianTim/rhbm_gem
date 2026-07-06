@@ -42,12 +42,15 @@ public:
     void ClearTransientFitState()
     {
         m_gaussian_result.fit_result.reset();
-        m_updated_sampling_entries.clear();
     }
 
     int SamplingEntryCount() const
     {
         return static_cast<int>(m_sampling_entries.size());
+    }
+    int UpdatedSamplingEntryCount() const
+    {
+        return static_cast<int>(m_updated_sampling_entries.size());
     }
     const LocalGaussianResult & GaussianResult() const { return m_gaussian_result; }
     const LocalPotentialSampleList & SamplingEntries() const { return m_sampling_entries; }

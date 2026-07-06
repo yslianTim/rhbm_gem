@@ -94,7 +94,7 @@ TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsNormalizedSchema)
 
     rg::SQLitePersistence database_manager{ database_path };
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 5);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 6);
     EXPECT_TRUE(data_test::HasTable(database_path, "object_catalog"));
     EXPECT_FALSE(data_test::HasTable(database_path, "object_metadata"));
     EXPECT_TRUE(data_test::HasTable(database_path, "model_object"));
@@ -103,6 +103,20 @@ TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsNormalizedSchema)
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_group_potential", "class_key"));
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_posterior", "class_key"));
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_group_potential", "class_key"));
+}
+
+TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsUpdatedSamplingEntryColumns)
+{
+    const command_test::ScopedTempDir temp_dir{ "data_schema_updated_sampling_columns" };
+    const auto database_path{ temp_dir.path() / "updated_sampling_columns.sqlite" };
+
+    rg::SQLitePersistence database_manager{ database_path };
+
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_local_potential", "updated_sampling_size"));
+    EXPECT_TRUE(data_test::HasColumn(
+        database_path,
+        "model_atom_local_potential",
+        "updated_distance_and_map_value_list"));
 }
 
 TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsGaussianInterceptColumns)
@@ -159,7 +173,7 @@ TEST(DataObjectSchemaLifecycleTest, VersionThreeSchemaMigratesGaussianInterceptC
 
     rg::SQLitePersistence database_manager{ database_path };
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 5);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 6);
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_local_potential", "intercept_estimate_ols"));
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_local_potential", "intercept_estimate_mdpde"));
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_posterior", "class_key"));
@@ -197,7 +211,7 @@ TEST(DataObjectSchemaLifecycleTest, VersionFourSchemaMigratesAtomTablesToSingleC
 
     rg::SQLitePersistence database_manager{ database_path };
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 5);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 6);
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_posterior", "class_key"));
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_group_potential", "class_key"));
     EXPECT_EQ(data_test::CountRows(database_path, "model_atom_posterior", "model"), 1);
@@ -208,6 +222,44 @@ TEST(DataObjectSchemaLifecycleTest, VersionFourSchemaMigratesAtomTablesToSingleC
     EXPECT_EQ(
         QuerySingleInt(database_path, "SELECT group_key FROM model_atom_group_potential WHERE key_tag = 'model';"),
         10);
+}
+
+TEST(DataObjectSchemaLifecycleTest, VersionFiveSchemaMigratesUpdatedSamplingEntryColumns)
+{
+    const command_test::ScopedTempDir temp_dir{ "data_schema_v5_updated_sampling_migration" };
+    const auto database_path{ temp_dir.path() / "v5_updated_sampling.sqlite" };
+
+    {
+        rg::SQLitePersistence database_manager{ database_path };
+    }
+    data_test::ExecuteSqlWithForeignKeysOff(database_path, "DROP TABLE model_atom_local_potential;");
+    data_test::ExecuteSqlWithForeignKeysOff(
+        database_path,
+        "CREATE TABLE model_atom_local_potential ("
+        "key_tag TEXT, "
+        "serial_id INTEGER, "
+        "sampling_size INTEGER, "
+        "distance_and_map_value_list BLOB, "
+        "amplitude_estimate_ols DOUBLE, "
+        "width_estimate_ols DOUBLE, "
+        "intercept_estimate_ols DOUBLE, "
+        "amplitude_estimate_mdpde DOUBLE, "
+        "width_estimate_mdpde DOUBLE, "
+        "intercept_estimate_mdpde DOUBLE, "
+        "alpha_r DOUBLE, "
+        "PRIMARY KEY (key_tag, serial_id), "
+        "FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE"
+        ");");
+    data_test::SetUserVersion(database_path, 5);
+
+    rg::SQLitePersistence database_manager{ database_path };
+
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 6);
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_local_potential", "updated_sampling_size"));
+    EXPECT_TRUE(data_test::HasColumn(
+        database_path,
+        "model_atom_local_potential",
+        "updated_distance_and_map_value_list"));
 }
 
 TEST(DataObjectSchemaLifecycleTest, UnknownSchemaVersionThrows)

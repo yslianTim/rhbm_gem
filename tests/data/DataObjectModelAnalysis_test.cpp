@@ -489,7 +489,8 @@ TEST(DataObjectModelAnalysisTest, LocalPotentialEntryClearTransientFitStateKeeps
     EXPECT_DOUBLE_EQ(2.0, entry.GaussianResult().mdpde.GetModel().GetAmplitude());
     EXPECT_DOUBLE_EQ(0.7, entry.GaussianResult().mdpde.GetModel().GetWidth());
     EXPECT_FALSE(entry.GaussianResult().fit_result.has_value());
-    EXPECT_TRUE(entry.UpdatedSamplingEntries().empty());
+    ASSERT_EQ(entry.UpdatedSamplingEntries().size(), 1u);
+    EXPECT_FLOAT_EQ(entry.UpdatedSamplingEntries().front().response, 3.0f);
 }
 
 TEST(DataObjectModelAnalysisTest, LocalPotentialEntryStoresGaussianResult)

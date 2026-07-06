@@ -144,7 +144,7 @@ TEST(DataObjectPersistenceTest, FinalV2CatalogDatabaseRemainsLoadable)
     rg::DataRepository repository{ database_path };
     EXPECT_NE(repository.LoadModel("model"), nullptr);
     EXPECT_NE(repository.LoadMap("map"), nullptr);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 5);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 6);
 }
 
 TEST(DataObjectPersistenceTest, SamplingSelectionRoundTripPreservesUnselectedSamples)
@@ -180,6 +180,47 @@ TEST(DataObjectPersistenceTest, SamplingSelectionRoundTripPreservesUnselectedSam
     EXPECT_FALSE(all_entries.at(1).point.is_selected);
     ASSERT_EQ(selected_entries.size(), 1u);
     EXPECT_FLOAT_EQ(selected_entries.at(0).response, 6.0f);
+}
+
+TEST(DataObjectPersistenceTest, UpdatedSamplingEntriesRoundTripPreservesSelection)
+{
+    const command_test::ScopedTempDir temp_dir{ "data_schema_updated_sampling_roundtrip" };
+    const auto database_path{ temp_dir.path() / "updated_sampling.sqlite" };
+
+    {
+        rg::DataRepository repository{ database_path };
+        auto model{ data_test::MakeModelWithBond() };
+        model->SetKeyTag("model");
+        auto editor{ model->EditAnalysis().EnsureAtomLocalPotential(*model->GetAtomList().at(0)) };
+        editor.SetSamplingEntries({
+            LocalPotentialSample{ 6.0f, SamplingPoint{ 0.1f, { 0.0f, 0.0f, 0.0f }, true } },
+            LocalPotentialSample{ 4.0f, SamplingPoint{ 0.2f, { 0.0f, 0.0f, 0.0f }, false } }
+        });
+        editor.SetUpdatedSamplingEntries({
+            LocalPotentialSample{ 3.0f, SamplingPoint{ 0.1f, { 0.0f, 0.0f, 0.0f }, true } },
+            LocalPotentialSample{ 5.0f, SamplingPoint{ 0.2f, { 0.0f, 0.0f, 0.0f }, false } }
+        });
+
+        repository.SaveModel(*model, "model");
+    }
+
+    rg::DataRepository repository{ database_path };
+    auto loaded_model{ repository.LoadModel("model") };
+    ASSERT_NE(loaded_model, nullptr);
+    const auto view{ rg::AtomLocalPotentialView::RequireFor(*loaded_model->GetAtomList().at(0)) };
+    const auto original_entries{ view.GetSamplingEntries(false) };
+    const auto updated_entries{ view.GetSamplingEntries(false, true) };
+    const auto selected_updated_entries{ view.GetSamplingEntries(true, true) };
+
+    ASSERT_EQ(original_entries.size(), 2u);
+    EXPECT_FLOAT_EQ(original_entries.at(0).response, 6.0f);
+    EXPECT_FLOAT_EQ(original_entries.at(1).response, 4.0f);
+    ASSERT_EQ(updated_entries.size(), 2u);
+    EXPECT_FLOAT_EQ(updated_entries.at(0).response, 3.0f);
+    EXPECT_FLOAT_EQ(updated_entries.at(1).response, 5.0f);
+    EXPECT_FALSE(updated_entries.at(1).point.is_selected);
+    ASSERT_EQ(selected_updated_entries.size(), 1u);
+    EXPECT_FLOAT_EQ(selected_updated_entries.at(0).response, 3.0f);
 }
 
 TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
@@ -340,7 +381,13 @@ TEST(DataObjectPersistenceTest, LegacyV2SamplingBlobLoadsAsSelectedAndMigratesVe
     ASSERT_EQ(entries.size(), 2u);
     EXPECT_TRUE(entries.at(0).point.is_selected);
     EXPECT_TRUE(entries.at(1).point.is_selected);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 5);
+    const auto updated_entries{
+        rg::AtomLocalPotentialView::RequireFor(*loaded_model->GetAtomList().at(0))
+            .GetSamplingEntries(false, true)
+    };
+
+    EXPECT_TRUE(updated_entries.empty());
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 6);
 }
 
 TEST(DataObjectPersistenceTest, DatabaseRoundTripPreservesChainMetadataAndSymmetryFiltering)

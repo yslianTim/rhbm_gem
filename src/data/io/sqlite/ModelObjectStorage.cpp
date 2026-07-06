@@ -142,6 +142,8 @@ inline constexpr std::string_view kCreateModelAtomLocalTableSql = R"sql(
         serial_id INTEGER,
         sampling_size INTEGER,
         distance_and_map_value_list BLOB,
+        updated_sampling_size INTEGER,
+        updated_distance_and_map_value_list BLOB,
         amplitude_estimate_ols DOUBLE,
         width_estimate_ols DOUBLE,
         intercept_estimate_ols DOUBLE,
@@ -344,9 +346,10 @@ inline constexpr auto kInsertModelBondSql = R"sql(
 inline constexpr auto kInsertModelAtomLocalSql = R"sql(
     INSERT OR REPLACE INTO model_atom_local_potential (
         key_tag, serial_id, sampling_size, distance_and_map_value_list,
+        updated_sampling_size, updated_distance_and_map_value_list,
         amplitude_estimate_ols, width_estimate_ols, intercept_estimate_ols,
         amplitude_estimate_mdpde, width_estimate_mdpde, intercept_estimate_mdpde, alpha_r
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 )sql"sv;
 
 inline constexpr auto kInsertModelAtomPosteriorSql = R"sql(
@@ -418,6 +421,7 @@ inline constexpr auto kSelectModelBondSql = R"sql(
 inline constexpr auto kSelectModelAtomLocalSql = R"sql(
     SELECT
         serial_id, sampling_size, distance_and_map_value_list,
+        COALESCE(updated_sampling_size, 0), updated_distance_and_map_value_list,
         amplitude_estimate_ols, width_estimate_ols, intercept_estimate_ols,
         amplitude_estimate_mdpde, width_estimate_mdpde, intercept_estimate_mdpde, alpha_r
     FROM model_atom_local_potential WHERE key_tag = ?;
@@ -961,13 +965,16 @@ void SaveAtomLocalPotentialEntryList(
             statement_db.Bind<int>(3, entry->SamplingEntryCount());
             statement_db.Bind<LocalPotentialSampleList>(
                 4, entry->SamplingEntries());
-            statement_db.Bind<double>(5, gaussian_result.ols.GetModel().GetAmplitude());
-            statement_db.Bind<double>(6, gaussian_result.ols.GetModel().GetWidth());
-            statement_db.Bind<double>(7, gaussian_result.ols.GetModel().GetOffset());
-            statement_db.Bind<double>(8, gaussian_result.mdpde.GetModel().GetAmplitude());
-            statement_db.Bind<double>(9, gaussian_result.mdpde.GetModel().GetWidth());
-            statement_db.Bind<double>(10, gaussian_result.mdpde.GetModel().GetOffset());
-            statement_db.Bind<double>(11, gaussian_result.alpha_r);
+            statement_db.Bind<int>(5, entry->UpdatedSamplingEntryCount());
+            statement_db.Bind<LocalPotentialSampleList>(
+                6, entry->UpdatedSamplingEntries());
+            statement_db.Bind<double>(7, gaussian_result.ols.GetModel().GetAmplitude());
+            statement_db.Bind<double>(8, gaussian_result.ols.GetModel().GetWidth());
+            statement_db.Bind<double>(9, gaussian_result.ols.GetModel().GetOffset());
+            statement_db.Bind<double>(10, gaussian_result.mdpde.GetModel().GetAmplitude());
+            statement_db.Bind<double>(11, gaussian_result.mdpde.GetModel().GetWidth());
+            statement_db.Bind<double>(12, gaussian_result.mdpde.GetModel().GetOffset());
+            statement_db.Bind<double>(13, gaussian_result.alpha_r);
         });
     }
 }
@@ -1110,22 +1117,25 @@ std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>> LoadAtomLocalPoten
         const auto sampling_size{ database.GetColumn<int>(1) };
         entry->SetSamplingEntries(
             database.GetLocalPotentialSampleListColumn(2, sampling_size));
+        const auto updated_sampling_size{ database.GetColumn<int>(3) };
+        entry->SetUpdatedSamplingEntries(
+            database.GetLocalPotentialSampleListColumn(4, updated_sampling_size));
         LocalGaussianResult gaussian_result;
         gaussian_result.ols = GaussianModel3DWithUncertainty{
             GaussianModel3D{
-                database.GetColumn<double>(3),
-                database.GetColumn<double>(4),
-                database.GetColumn<double>(5) },
+                database.GetColumn<double>(5),
+                database.GetColumn<double>(6),
+                database.GetColumn<double>(7) },
             GaussianModel3DUncertainty{}
         };
         gaussian_result.mdpde = GaussianModel3DWithUncertainty{
             GaussianModel3D{
-                database.GetColumn<double>(6),
-                database.GetColumn<double>(7),
-                database.GetColumn<double>(8) },
+                database.GetColumn<double>(8),
+                database.GetColumn<double>(9),
+                database.GetColumn<double>(10) },
             GaussianModel3DUncertainty{}
         };
-        gaussian_result.alpha_r = database.GetColumn<double>(9);
+        gaussian_result.alpha_r = database.GetColumn<double>(11);
         entry->SetGaussianResult(gaussian_result);
         entry_map[serial_id] = std::move(entry);
     }

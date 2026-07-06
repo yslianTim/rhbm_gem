@@ -20,7 +20,7 @@ namespace {
 
 using namespace std::literals;
 
-constexpr int kCurrentSchemaVersion = 5;
+constexpr int kCurrentSchemaVersion = 6;
 constexpr std::string_view kCatalogTableName = "object_catalog";
 constexpr std::string_view kMapTableName = "map_list";
 constexpr std::string_view kUnsupportedMetadataTableName = "object_metadata";
@@ -440,6 +440,12 @@ void ValidateGaussianInterceptColumns(rhbm_gem::SQLiteWrapper & database)
     }
 }
 
+void ValidateUpdatedSamplingColumns(rhbm_gem::SQLiteWrapper & database)
+{
+    ValidateRequiredColumn(database, "model_atom_local_potential", "updated_sampling_size");
+    ValidateRequiredColumn(database, "model_atom_local_potential", "updated_distance_and_map_value_list");
+}
+
 void MigrateGaussianInterceptColumns(rhbm_gem::SQLiteWrapper & database)
 {
     for (const auto table_name : {
@@ -466,6 +472,22 @@ void MigrateGaussianInterceptColumns(rhbm_gem::SQLiteWrapper & database)
         AddColumnIfMissing(database, std::string(table_name), "intercept_estimate_mdpde");
         AddColumnIfMissing(database, std::string(table_name), "intercept_estimate_prior");
         AddColumnIfMissing(database, std::string(table_name), "intercept_variance_prior");
+    }
+}
+
+void MigrateUpdatedSamplingColumns(rhbm_gem::SQLiteWrapper & database)
+{
+    if (!HasColumn(database, "model_atom_local_potential", "updated_sampling_size"))
+    {
+        database.Execute(
+            "ALTER TABLE model_atom_local_potential "
+            "ADD COLUMN updated_sampling_size INTEGER DEFAULT 0;");
+    }
+    if (!HasColumn(database, "model_atom_local_potential", "updated_distance_and_map_value_list"))
+    {
+        database.Execute(
+            "ALTER TABLE model_atom_local_potential "
+            "ADD COLUMN updated_distance_and_map_value_list BLOB;");
     }
 }
 
@@ -679,7 +701,8 @@ void ValidateCatalogConsistency(
 void ValidateModelSchema(
     rhbm_gem::SQLiteWrapper & database,
     bool require_gaussian_intercept_columns,
-    bool atom_tables_have_class_key)
+    bool atom_tables_have_class_key,
+    bool require_updated_sampling_columns)
 {
     ValidateRequiredTables(database, kModelCanonicalTableNames, "model");
 
@@ -731,6 +754,10 @@ void ValidateModelSchema(
     {
         ValidateGaussianInterceptColumns(database);
     }
+    if (require_updated_sampling_columns)
+    {
+        ValidateUpdatedSamplingColumns(database);
+    }
 }
 
 void ValidateMapSchema(rhbm_gem::SQLiteWrapper & database)
@@ -743,7 +770,8 @@ void ValidateMapSchema(rhbm_gem::SQLiteWrapper & database)
 void ValidateCurrentSchema(
     rhbm_gem::SQLiteWrapper & database,
     bool require_gaussian_intercept_columns = true,
-    bool atom_tables_have_class_key = false)
+    bool atom_tables_have_class_key = false,
+    bool require_updated_sampling_columns = true)
 {
     if (!HasTable(database, std::string(kCatalogTableName)))
     {
@@ -755,7 +783,11 @@ void ValidateCurrentSchema(
     }
 
     ValidateObjectCatalogShape(database);
-    ValidateModelSchema(database, require_gaussian_intercept_columns, atom_tables_have_class_key);
+    ValidateModelSchema(
+        database,
+        require_gaussian_intercept_columns,
+        atom_tables_have_class_key,
+        require_updated_sampling_columns);
     ValidateMapSchema(database);
     ValidateCatalogConsistency(database, "model", ListModelKeys(database));
     ValidateCatalogConsistency(database, "map", ListMapKeys(database));
@@ -780,17 +812,27 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
     }
     if (raw_version == 2 || raw_version == 3)
     {
-        ValidateCurrentSchema(database, false, true);
+        ValidateCurrentSchema(database, false, true, false);
         MigrateGaussianInterceptColumns(database);
         MigrateAtomClassKeyColumns(database);
+        MigrateUpdatedSamplingColumns(database);
         SetSchemaVersion(database);
         ValidateCurrentSchema(database);
         return;
     }
     if (raw_version == 4)
     {
-        ValidateCurrentSchema(database, true, true);
+        ValidateCurrentSchema(database, true, true, false);
         MigrateAtomClassKeyColumns(database);
+        MigrateUpdatedSamplingColumns(database);
+        SetSchemaVersion(database);
+        ValidateCurrentSchema(database);
+        return;
+    }
+    if (raw_version == 5)
+    {
+        ValidateCurrentSchema(database, true, false, false);
+        MigrateUpdatedSamplingColumns(database);
         SetSchemaVersion(database);
         ValidateCurrentSchema(database);
         return;
