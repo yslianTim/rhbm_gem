@@ -4,10 +4,10 @@
 Gaussian estimates after the first-stage per-atom fit. The implementation is in
 [`src/core/GaussianEstimator.cpp`](/src/core/GaussianEstimator.cpp).
 
-This stage is a fixed-point iteration across atoms. Each iteration estimates a
-joint offset update for the active atoms, refits those atoms with neighbor
-contributions removed, then uses percentile normalized parameter movement to
-decide whether the active set has converged.
+This stage is a fixed-point iteration across the selected atoms. Each iteration
+estimates a joint offset update for the active selected atoms, refits those atoms
+with selected-neighbor contributions removed, then uses percentile normalized
+parameter movement to decide whether the active set has converged.
 
 ## Inputs and State
 
@@ -42,9 +42,9 @@ vectors are checked for freezing and convergence.
 previous state
     -> build active atom set
     -> exit if active set is empty
-    -> build fitted Gaussian snapshot
+    -> build selected-atom fitted Gaussian snapshot
     -> estimate joint offsets for active atoms
-    -> refit active atoms with neighbor contributions removed
+    -> refit active atoms with selected-neighbor contributions removed
     -> roll back any suspicious offset clusters found before or during refit
     -> apply under-relaxation
     -> compute active-atom p95 absolute and normalized parameter changes
@@ -58,10 +58,12 @@ The maximum iteration count is `kLocalFittingMaximumIterations` (`200`).
 
 ## Joint Offset Step
 
-`RunLocalFittingIteration` first converts the full previous per-atom vectors
-into a snapshot keyed by atom pointer. `EstimateJointOffsets` then solves one
-sparse linear system for active atom offsets. Frozen atoms remain in the
-snapshot, but they do not become columns in the linear system.
+`RunLocalFittingIteration` first converts the full previous selected-atom
+vectors into a snapshot keyed by atom pointer. `EstimateJointOffsets` then solves
+one sparse linear system for active atom offsets. Frozen selected atoms remain in
+the snapshot, but they do not become columns in the linear system. Unselected
+atoms are not present in this snapshot, so second-stage neighbor subtraction does
+not use them as fixed contributors.
 
 For each unfiltered sampling entry on each active atom:
 
@@ -121,15 +123,16 @@ weighted by normalized joint-offset column overlap. Rollback expands only across
 finite edges whose overlap is at least `0.05`, and only within two topological
 steps from the original suspicious atom. This is narrower than all spatial
 neighbors and avoids rolling back a large connected component through distant
-weak links. Frozen or unselected neighbors remain fixed snapshot contributors.
+weak links. Frozen selected neighbors remain fixed snapshot contributors;
+unselected neighbors are outside the second-stage snapshot.
 Every reached atom has its snapshot entry rolled back to the previous model and
 skips refit for that iteration, so strongly coupled nearby active atoms see a
 synchronous rollback rather than a one-sided update.
 
 For each atom:
 
-1. build a sample list by subtracting fitted neighbor responses from the atom's
-   unfiltered local sampling entries;
+1. build a sample list by subtracting fitted selected-neighbor responses from
+   the atom's unfiltered local sampling entries;
 2. use the joint-offset snapshot model as the fixed offset model;
 3. call `EstimateLocalGaussian` to fit amplitude and width with that fixed
    offset model and `FitOptions` distance limits; and
@@ -184,10 +187,11 @@ attempt also increases the dynamic joint offset ridge ratio, but that ridge
 change does not trigger an immediate refit; it applies when the next outer
 iteration rebuilds the joint-offset system.
 
-The stage then computes absolute and normalized parameter movement for
+Each relaxation attempt computes absolute and normalized parameter movement for
 amplitude, width, and offset for every selected atom. Active atoms are summarized
-by the 95th percentile. Parameter convergence requires all three active-set
-normalized percentile changes to be below
+by the 95th percentile, and the accepted attempt's normalized movement drives
+relaxation updates and convergence checks. Parameter convergence requires all
+three active-set normalized percentile changes to be below
 `kLocalFittingNormalizedChangeTolerance`, and no suspicious offset rollback may
 have occurred in that iteration. Because only candidates accepted by objective
 backtracking reach this point, convergence never applies a rejected candidate.
@@ -261,8 +265,11 @@ suspicious offset rollback.
 
 ## Related Notes
 
-- `RunFirstStageLocalFitting` seeds the per-atom local Gaussian results before
-  this stage runs.
+- In `RunPotentialFittingWorkflow`, `RunLocalAlphaTraining` runs before local
+  fitting, then `InitializeLocalFittingSeedModels` and `RunFirstStageLocalFitting`
+  seed the per-atom local Gaussian results before this stage runs.
+  `RunThirdStageLocalFitting` runs after this stage, and group alpha training and
+  group potential fitting run after third-stage local fitting.
 - [`estimate-local-gaussian-with-offset.md`](/docs/developer/estimate-local-gaussian-with-offset.md)
   documents the single-atom fixed-offset and residual-offset estimators used by
   related local fitting paths.
