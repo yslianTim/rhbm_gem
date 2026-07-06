@@ -45,7 +45,11 @@ GroupGaussianResult EstimateGroupGaussian(
     double alpha_g,
     const FitOptions & options);
 
-void RunLocalAlphaTraining(ModelObject & model_object, const FitOptions & options);
+void RunLocalAlphaTraining(
+    ModelObject & model_object,
+    const FitOptions & options,
+    bool apply_selection = true,
+    bool use_updated_sample = false);
 void RunGroupAlphaTraining(ModelObject & model_object, const FitOptions & options);
 void RunFirstStageLocalFitting(ModelObject & model_object, const FitOptions & options, bool fit_offset = false);
 void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & options);

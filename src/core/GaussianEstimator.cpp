@@ -2214,7 +2214,11 @@ GroupGaussianResult EstimateGroupGaussian(
     return result;
 }
 
-void RunLocalAlphaTraining(ModelObject & model_object, const FitOptions & options)
+void RunLocalAlphaTraining(
+    ModelObject & model_object,
+    const FitOptions & options,
+    bool apply_selection,
+    bool use_updated_sample)
 {
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
@@ -2234,7 +2238,7 @@ void RunLocalAlphaTraining(ModelObject & model_object, const FitOptions & option
         {
             analysis.EnsureAtomLocalPotential(*atom);
             const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
-            const auto & sample_entries{ local_view.GetSamplingEntries() };
+            const auto & sample_entries{ local_view.GetSamplingEntries(apply_selection, use_updated_sample) };
             if (!HasEnoughSamplesInFitRange(
                     sample_entries,
                     options.distance_min,
@@ -2873,7 +2877,7 @@ void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & opt
 
 void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & options)
 {
-    RunLocalAlphaTraining(model_object, options);
+    RunLocalAlphaTraining(model_object, options, true, false);
 
     InitializeLocalFittingSeedModels(model_object);
     RunFirstStageLocalFitting(model_object, options);
@@ -2882,9 +2886,10 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
     SetUpdatedSamplingEntriesFromGroupMedianGaussian(model_object);
     RunGroupPotentialFitting(model_object, options);
     SetUpdatedSamplingEntriesFromFittedGroupGaussian(model_object);
+    RunLocalAlphaTraining(model_object, options, false, true);
     RunThirdStageLocalFitting(model_object, options);
 
-    //RunGroupAlphaTraining(model_object, options);
+    RunGroupAlphaTraining(model_object, options);
     RunGroupPotentialFitting(model_object, options);
     if (!options.quiet_mode)
     {
