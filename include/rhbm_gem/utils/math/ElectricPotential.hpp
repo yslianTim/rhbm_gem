@@ -39,7 +39,7 @@ public:
 
 private:
     ModelChoice CheckModelChoice(int value) const;
-    double CalculateSingleGausModel(Element element, double distance) const;
+    double CalculateSingleGausModel(Element element, double distance, double charge) const;
     double CalculateSingleGausUserModel(double distance, double amplitude, double width) const;
     double CalculateFiveGausChargeModel(Element element, double distance, double charge) const;
     double CalculateFiveGausChargeIntrinsicTerm(Element element, double distance, int delta_z) const;

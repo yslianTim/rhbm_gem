@@ -138,7 +138,7 @@ double ElectricPotential::GetPotentialValue(
     switch (m_model_choice)
     {
         case ModelChoice::SINGLE_GAUS:
-            return CalculateSingleGausModel(element, distance);
+            return CalculateSingleGausModel(element, distance, charge);
         case ModelChoice::FIVE_GAUS_CHARGE:
             return CalculateFiveGausChargeModel(element, distance, charge);
         case ModelChoice::SINGLE_GAUS_USER:
@@ -246,13 +246,14 @@ ElectricPotential::ModelChoice ElectricPotential::CheckModelChoice(int value) co
     }
 }
 
-double ElectricPotential::CalculateSingleGausModel(Element element, double distance) const
+double ElectricPotential::CalculateSingleGausModel(Element element, double distance, double charge) const
 {
     auto atomic_number{ ChemicalDataHelper::GetAtomicNumber(element) };
     auto width_square{ m_blurring_width * m_blurring_width };
     auto distance_square{ distance * distance };
     auto exp_index{ -distance_square/(2.0 * width_square) };
-    auto offset{ 0.0 };
+    auto offset{ charge };
+    /*
     if (element == Element::OXYGEN)
     {
         offset = -0.1; // TEST
@@ -264,7 +265,7 @@ double ElectricPotential::CalculateSingleGausModel(Element element, double dista
     else if (element == Element::CARBON)
     {
         offset = 0.3; // TEST
-    }
+    }*/
     auto charge_term{ 0.0 };
     if (distance < 1.0e-5)
     {
