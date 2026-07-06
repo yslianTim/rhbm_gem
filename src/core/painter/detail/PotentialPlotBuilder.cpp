@@ -913,9 +913,13 @@ PotentialPlotBuilder::CreateAtomQScoreToSequenceIDGraphMap(
             count_map[chain_id] = 0;
         }
         auto x_value{ static_cast<double>(sequence_id) };
+        auto sampling_entries{ (par_choice == 0) ?
+            entry.GetSamplingEntries(false, false) :
+            entry.GetSamplingEntries(false, true)
+        };
         auto q_score{
             local_potential_series::ComputeQScore(
-                entry.GetSamplingEntries(),
+                sampling_entries,
                 entry.GetGaussianResult(),
                 static_cast<local_potential_series::QScoreReference>(par_choice))
         };
