@@ -19,9 +19,12 @@ The function receives:
   count for the lower-level Gaussian estimator, and logging mode.
 
 At entry, it reads `model_object.GetSelectedAtoms()`, builds one
-`AtomLocalPotentialEditor` per selected atom, and reads the current
-`LocalGaussianResult` from each atom. The previous iteration
-state is stored as a `GaussianFittingState` with two aligned vectors:
+`AtomLocalPotentialEditor` per selected atom, and builds a
+`SecondStageLocalFittingContext` from the same selected-atom order. The context
+stores original local sampling entries via `GetSamplingEntries(false)`, so this
+stage does not apply the sample selection filter and does not use updated
+sampling entries produced later in the workflow. The previous iteration state is
+stored as a `GaussianFittingState` with two aligned vectors:
 
 ```text
 previous_result_list      = current per-atom LocalGaussianResult
@@ -59,13 +62,14 @@ The maximum iteration count is `kLocalFittingMaximumIterations` (`200`).
 ## Joint Offset Step
 
 `RunLocalFittingIteration` first converts the full previous selected-atom
-vectors into a snapshot keyed by atom pointer. `EstimateJointOffsets` then solves
-one sparse linear system for active atom offsets. Frozen selected atoms remain in
-the snapshot, but they do not become columns in the linear system. Unselected
-atoms are not present in this snapshot, so second-stage neighbor subtraction does
-not use them as fixed contributors.
+vectors into a snapshot aligned with the second-stage context atom index.
+`EstimateJointOffsets` then solves one sparse linear system for active atom
+offsets. Frozen selected atoms remain in the snapshot, but they do not become
+columns in the linear system. Unselected atoms are not present in this snapshot,
+so second-stage neighbor subtraction does not use them as fixed contributors.
 
-For each unfiltered sampling entry on each active atom:
+For each original sampling entry on each active atom, with the sample selection
+filter disabled:
 
 1. subtract the target atom's current zero-offset signal;
 2. add the target atom's offset basis as the row entry for that atom;
@@ -169,23 +173,25 @@ consecutive changes more than 1% smaller than the previous iteration allow
 rule, not Anderson acceleration. The relaxed vector replaces the candidate MDPDE
 model while preserving its standard-deviation model.
 
-When an objective reference is available, the relaxed candidate must pass the
-objective quality gate before it can update ranking, freezing, thawing, or the
-next iteration's previous state. If no objective reference can be built, this
-quality gate is skipped and candidate ranking falls back to normalized parameter
-movement. During residual-scale warm-up the objective reference is provisional
-and can include the candidate's own scale sample; after warm-up it is locked. If
-the candidate is worse than the previous state or the best tracked state by more
-than `kLocalFittingConvergenceObjectiveRelativeTolerance`, the attempt is
-rejected. When another attempt is available and `beta` is above its minimum, the
-stage shrinks `beta` and rebuilds the relaxed candidate from the same raw
-iteration result. Each outer iteration tries at most three relaxation
-candidates. If all attempts fail and `beta` is still above the local minimum,
-the raw iteration is rejected and the next outer iteration retries from the
-unchanged previous state with the smaller `beta`. Any rejected relaxation
-attempt also increases the dynamic joint offset ridge ratio, but that ridge
-change does not trigger an immediate refit; it applies when the next outer
-iteration rebuilds the joint-offset system.
+When an objective reference is available, the relaxed candidate must produce a
+finite objective and pass the objective quality gate before it can update
+ranking, freezing, thawing, or the next iteration's previous state. If no
+objective reference can be built at all, this quality gate is skipped and
+candidate ranking falls back to normalized parameter movement. During
+residual-scale warm-up the objective reference is provisional and can include the
+candidate's own scale sample; after warm-up it is locked. If the candidate lacks
+an objective while a reference exists, or is worse than the previous state or the
+best tracked state by more than
+`kLocalFittingConvergenceObjectiveRelativeTolerance`, the attempt is rejected.
+When another attempt is available and `beta` is above its minimum, the stage
+shrinks `beta` and rebuilds the relaxed candidate from the same raw iteration
+result. Each outer iteration tries at most three relaxation candidates. If all
+attempts fail and `beta` is still above the local minimum, the raw iteration is
+rejected and the next outer iteration retries from the unchanged previous state
+with the smaller `beta`. Any rejected relaxation attempt also increases the
+dynamic joint offset ridge ratio, but that ridge change does not trigger an
+immediate refit; it applies when the next outer iteration rebuilds the
+joint-offset system.
 
 Each relaxation attempt computes absolute and normalized parameter movement for
 amplitude, width, and offset for every selected atom. Active atoms are summarized
@@ -267,9 +273,12 @@ suspicious offset rollback.
 
 - In `RunPotentialFittingWorkflow`, `RunLocalAlphaTraining` runs before local
   fitting, then `InitializeLocalFittingSeedModels` and `RunFirstStageLocalFitting`
-  seed the per-atom local Gaussian results before this stage runs.
-  `RunThirdStageLocalFitting` runs after this stage, and group alpha training and
-  group potential fitting run after third-stage local fitting.
+  seed the per-atom local Gaussian results before this stage runs. After this
+  stage, the workflow runs group alpha training, builds updated sampling entries
+  from group-median local Gaussians, runs group potential fitting, rebuilds
+  updated sampling entries from fitted group Gaussians, retrains local alpha on
+  updated samples, then runs `RunThirdStageLocalFitting`. Group alpha training
+  and group potential fitting run again after third-stage local fitting.
 - [`estimate-local-gaussian-with-offset.md`](/docs/developer/estimate-local-gaussian-with-offset.md)
   documents the single-atom fixed-offset estimator used by related local fitting
   paths.
