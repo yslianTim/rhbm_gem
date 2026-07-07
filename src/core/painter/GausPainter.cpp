@@ -1236,7 +1236,7 @@ void GausPainter::PaintQScoreAminoAcidMainChainComponent(
     root_helper::SetCanvasDefaultStyle(canvas.get());
     root_helper::PrintCanvasOpen(canvas.get(), file_path);
 
-    const int main_chain_element_count{ 3 };
+    const int main_chain_element_count{ 4 };
     std::unique_ptr<TH2> frame;
     std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> gaus_graph_ori_map[main_chain_element_count];
     std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> gaus_graph_new_map[main_chain_element_count];
@@ -1259,6 +1259,13 @@ void GausPainter::PaintQScoreAminoAcidMainChainComponent(
             {
                 x_array.emplace_back(gaus_graph_ori_map[k].at(chain_id)->GetPointX(p));
                 y_array.emplace_back(gaus_graph_ori_map[k].at(chain_id)->GetPointY(p));
+
+                // TMP
+                //Logger::Log(LogLevel::Info, Form("%d, %d, %.4f, %.4f",
+                //    static_cast<int>(k),
+                //    static_cast<int>(gaus_graph_ori_map[k].at(chain_id)->GetPointX(p)),
+                //    gaus_graph_ori_map[k].at(chain_id)->GetPointY(p),
+                //    gaus_graph_new_map[k].at(chain_id)->GetPointY(p)));
             }
             for (int p = 0; p < gaus_graph_new_map[k].at(chain_id)->GetN(); p++)
             {
