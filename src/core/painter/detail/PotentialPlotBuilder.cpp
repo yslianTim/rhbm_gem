@@ -21,7 +21,6 @@
 
 #include <array>
 #include <cmath>
-#include <limits>
 #include <optional>
 #include <stdexcept>
 #include <unordered_map>
@@ -30,12 +29,31 @@ namespace rhbm_gem {
 
 namespace {
 
-SeriesPointList BuildLocalDatasetSeries(const AtomLocalPotentialView & view)
+SeriesPointList BuildLocalDatasetSeries(
+    const AtomLocalPotentialView & view,
+    bool apply_selection,
+    bool use_updated_sample)
 {
-    return linearization_service::BuildDatasetSeries(
-        view.GetSamplingEntries(),
-        -std::numeric_limits<double>::infinity(),
-        std::numeric_limits<double>::infinity());
+    auto model_prior{ view.GetEstimateMDPDE() };
+    auto offset{ model_prior.GetOffset() };
+    auto sampling_entries{ view.GetSamplingEntries(apply_selection, use_updated_sample) };
+    for (auto & sample : sampling_entries)
+    {
+        auto distance{ static_cast<double>(sample.point.distance) };
+        sample.response -= static_cast<float>(offset * model_prior.OffsetBasisAtDistance(distance));
+    }
+
+    double range_max{ 0.0 };
+    for (const auto & sample : sampling_entries)
+    {
+        const auto distance{ static_cast<double>(sample.point.distance) };
+        if (std::isfinite(distance) && distance >= 0.0 && distance > range_max)
+        {
+            range_max = distance;
+        }
+    }
+
+    return linearization_service::BuildDatasetSeries(sampling_entries, 0.0, range_max);
 }
 
 std::vector<GroupKey> CollectComponentAtomGroupKeys(
@@ -189,9 +207,10 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateAtomGausEstimateHistogram(
     return hist;
 }
 
-std::unique_ptr<TH1D> PotentialPlotBuilder::CreateLinearModelDataHistogram(int dimension_id) const
+std::unique_ptr<TH1D> PotentialPlotBuilder::CreateLinearModelDataHistogram(
+    int dimension_id, bool apply_selection, bool use_updated_sample) const
 {
-    auto data_array{ BuildLocalDatasetSeries(GetLocalEntry()) };
+    auto data_array{ BuildLocalDatasetSeries(GetLocalEntry(), apply_selection, use_updated_sample) };
     std::vector<float> data_list;
     data_list.reserve(data_array.size());
     for (const auto & point : data_array)
@@ -223,18 +242,17 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateLinearModelDataHistogram(int d
 }
 
 std::unique_ptr<TH2D> PotentialPlotBuilder::CreateDistanceToMapValueHistogram(
-    int x_bin_size, int y_bin_size) const
+    int x_bin_size, int y_bin_size, bool apply_selection, bool use_updated_sample) const
 {
     const auto local_entry{ GetLocalEntry() };
-    auto distance_range{ local_potential_series::ComputeDistanceRange(local_entry.GetSamplingEntries(), 0.0) };
-    auto map_value_range{ local_potential_series::ComputeResponseRange(local_entry.GetSamplingEntries(), 0.1) };
+    auto map_value_range{ local_potential_series::ComputeResponseRange(local_entry.GetSamplingEntries(apply_selection, use_updated_sample), 0.1) };
     auto hist{
         root_helper::CreateHist2D(
             "hist_distance_mapvalue", "Distance vs Map Value",
-            x_bin_size, std::get<0>(distance_range), std::get<1>(distance_range),
+            x_bin_size, 0.0, 2.0,
             y_bin_size, std::get<0>(map_value_range), std::get<1>(map_value_range))
     };
-    for (const auto & sample : local_entry.GetSamplingEntries())
+    for (const auto & sample : local_entry.GetSamplingEntries(apply_selection, use_updated_sample))
     {
         hist->Fill(sample.point.distance, sample.response);
     }
@@ -459,11 +477,11 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatte
     return graph;
 }
 
-std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateDistanceToMapValueGraph()
+std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateDistanceToMapValueGraph(bool apply_selection, bool use_updated_sample)
 {
     auto graph{ root_helper::CreateGraphErrors() };
     auto count{ 0 };
-    for (const auto & sample : GetLocalEntry().GetSamplingEntries())
+    for (const auto & sample : GetLocalEntry().GetSamplingEntries(apply_selection, use_updated_sample))
     {
         graph->SetPoint(count, sample.point.distance, sample.response);
         count++;
@@ -471,11 +489,11 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateDistanceToMapValueGrap
     return graph;
 }
 
-std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateLinearModelDistanceToMapValueGraph()
+std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateLinearModelDistanceToMapValueGraph(bool apply_selection, bool use_updated_sample)
 {
     auto graph{ root_helper::CreateGraphErrors() };
     auto count{ 0 };
-    for (const auto & point : BuildLocalDatasetSeries(GetLocalEntry()))
+    for (const auto & point : BuildLocalDatasetSeries(GetLocalEntry(), apply_selection, use_updated_sample))
     {
         graph->SetPoint(count, point.GetBasisValue(1), point.response);
         count++;

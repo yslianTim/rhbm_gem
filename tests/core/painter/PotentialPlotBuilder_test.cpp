@@ -17,6 +17,7 @@
 #ifdef HAVE_ROOT
 #include <TF1.h>
 #include <TGraphErrors.h>
+#include <TH1.h>
 #endif
 
 namespace rg = rhbm_gem;
@@ -82,6 +83,32 @@ TEST(PotentialPlotBuilderTest, RepresentativeBuildersProduceRootObjects)
     EXPECT_NE(tomography_graph, nullptr);
     EXPECT_NE(distance_graph, nullptr);
     EXPECT_NE(gaus_function, nullptr);
+}
+
+TEST(PotentialPlotBuilderTest, LinearModelDataBuildersUseFiniteSamplingRange)
+{
+    auto model{ LoadModelFixture("test_model_auth_seq_alnum_struct_conn.cif") };
+    ASSERT_NE(model, nullptr);
+    ASSERT_FALSE(model->GetAtomList().empty());
+
+    auto * atom{ model->GetAtomList().front().get() };
+    auto analysis{ model->EditAnalysis() };
+    analysis.EnsureAtomLocalPotential(*atom).SetSamplingEntries({
+        {4.0f, SamplingPoint{ 0.0f }},
+        {3.0f, SamplingPoint{ 0.4f }},
+        {2.0f, SamplingPoint{ 0.8f }},
+    });
+
+    rg::PotentialPlotBuilder atom_builder{ atom };
+
+    auto basis_hist{ atom_builder.CreateLinearModelDataHistogram(0) };
+    auto response_hist{ atom_builder.CreateLinearModelDataHistogram(1) };
+    auto graph{ atom_builder.CreateLinearModelDistanceToMapValueGraph() };
+
+    EXPECT_NE(basis_hist, nullptr);
+    EXPECT_NE(response_hist, nullptr);
+    EXPECT_NE(graph, nullptr);
+    EXPECT_EQ(graph->GetN(), 3);
 }
 
 TEST(PotentialPlotBuilderTest, GaussianFunctionsPreserveModelOffset)

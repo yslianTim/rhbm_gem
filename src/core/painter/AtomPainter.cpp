@@ -187,6 +187,8 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, "AtomPainter::PaintAtomSamplingDataSummary");
+    bool apply_selection{ false };
+    bool use_updated_sample{ true };
 
     #ifdef HAVE_ROOT
 
@@ -209,14 +211,15 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
     {
         const auto entry_view{ AtomLocalPotentialView::RequireFor(*atom_object) };
         auto plot_builder{ std::make_unique<PotentialPlotBuilder>(atom_object) };
-        auto data_graph{ plot_builder->CreateDistanceToMapValueGraph() };
-        auto data_hist{ plot_builder->CreateDistanceToMapValueHistogram(15) };
+        auto data_graph{ plot_builder->CreateDistanceToMapValueGraph(apply_selection, use_updated_sample) };
+        auto data_hist{ plot_builder->CreateDistanceToMapValueHistogram(20, 1000, apply_selection, use_updated_sample) };
         auto gaus_function_mdpde{ plot_builder->CreateAtomLocalGausFunctionMDPDE() };
         auto gaus_function_ols{ plot_builder->CreateAtomLocalGausFunctionOLS() };
         auto linear_model_mdpde{ plot_builder->CreateAtomLocalLinearModelFunctionMDPDE() };
         auto linear_model_ols{ plot_builder->CreateAtomLocalLinearModelFunctionOLS() };
-        auto x_hist{ plot_builder->CreateLinearModelDataHistogram(0) };
-        auto y_hist{ plot_builder->CreateLinearModelDataHistogram(1) };
+        auto scatter_graph{ plot_builder->CreateLinearModelDistanceToMapValueGraph(apply_selection, use_updated_sample) };
+        auto x_hist{ plot_builder->CreateLinearModelDataHistogram(0, apply_selection, use_updated_sample) };
+        auto y_hist{ plot_builder->CreateLinearModelDataHistogram(1, apply_selection, use_updated_sample) };
 
         canvas->cd();
         for (int i = 0; i < pad_size; i++)
@@ -255,9 +258,11 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         const auto & estimate_mdpde{ entry_view.GetEstimateMDPDE() };
         auto amplitude_prior{ estimate_mdpde.GetAmplitude() };
         auto width_prior{ estimate_mdpde.GetWidth() };
+        auto offset_prior{ estimate_mdpde.GetOffset() };
         result_text->AddText(Form("#font[2]{A} = %.2f", amplitude_prior));
         result_text->AddText(Form("#tau = %.2f", width_prior));
-        //result_text->Draw();
+        result_text->AddText(Form("#font[2]{C} = %.2f", offset_prior));
+        result_text->Draw();
 
         pad[1]->cd();
         root_helper::SetPadMarginInCanvas(gPad, 0.10, 0.00, 0.12, 0.10);
@@ -276,10 +281,10 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         frame->GetXaxis()->SetTitle("Radial Distance #[]{#AA}");
         frame->GetYaxis()->SetTitle("Map Value");
         auto y_range{
-            local_potential_series::ComputeResponseRange(entry_view.GetSamplingEntries(), 0.1)
+            local_potential_series::ComputeResponseRange(entry_view.GetSamplingEntries(apply_selection, use_updated_sample), 0.1)
         };
-        auto x_min{ 0.01 };
-        auto x_max{ 1.49 };
+        auto x_min{ 0.00 };
+        auto x_max{ 1.99 };
         auto y_min{ std::get<0>(y_range) };
         auto y_max{ std::get<1>(y_range) };
         frame->GetXaxis()->SetLimits(x_min, x_max);
@@ -318,7 +323,7 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         root_helper::SetFillAttribute(alpha_text.get(), 4000);
         auto alpha_r{ entry_view.GetAlphaR() };
         alpha_text->AddText(Form("#alpha_{r} = %.1f", alpha_r));
-        //alpha_text->Draw();
+        alpha_text->Draw();
 
         pad[2]->cd();
         root_helper::SetPadMarginInCanvas(gPad, 0.09, 0.01, 0.12, 0.02);
@@ -347,7 +352,6 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         frame_scatter->GetYaxis()->CenterTitle();
         frame_scatter->SetStats(0);
         frame_scatter->Draw();
-        auto scatter_graph{ plot_builder->CreateLinearModelDistanceToMapValueGraph() };
         root_helper::SetMarkerAttribute(scatter_graph.get(), 20, 0.8f, kAzure-7, 0.5f);
         scatter_graph->Draw("P");
 
