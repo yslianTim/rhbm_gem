@@ -36,23 +36,17 @@ SeriesPointList BuildLocalDatasetSeries(
 {
     auto model_prior{ view.GetEstimateMDPDE() };
     auto offset{ model_prior.GetOffset() };
+    double range_max{ 0.0 };
     auto sampling_entries{ view.GetSamplingEntries(apply_selection, use_updated_sample) };
     for (auto & sample : sampling_entries)
     {
         auto distance{ static_cast<double>(sample.point.distance) };
         sample.response -= static_cast<float>(offset * model_prior.OffsetBasisAtDistance(distance));
-    }
-
-    double range_max{ 0.0 };
-    for (const auto & sample : sampling_entries)
-    {
-        const auto distance{ static_cast<double>(sample.point.distance) };
         if (std::isfinite(distance) && distance >= 0.0 && distance > range_max)
         {
             range_max = distance;
         }
     }
-
     return linearization_service::BuildDatasetSeries(sampling_entries, 0.0, range_max);
 }
 
