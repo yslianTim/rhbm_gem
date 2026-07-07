@@ -14,6 +14,7 @@
 #include <rhbm_gem/utils/algorithm/IterationState.hpp>
 #include <rhbm_gem/utils/algorithm/NormalizedChange.hpp>
 #include <rhbm_gem/utils/algorithm/ParameterChangeStats.hpp>
+#include <rhbm_gem/utils/algorithm/ScaleReferenceTracker.hpp>
 #include <rhbm_gem/utils/algorithm/WeightedRidgeSolver.hpp>
 #include <rhbm_gem/utils/algorithm/WeightedRidgeSystem.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
@@ -33,7 +34,6 @@
 #include <iomanip>
 #include <limits>
 #include <map>
-#include <numeric>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -217,12 +217,6 @@ struct LocalFittingObjectiveStats
     bool has_quality_objective{ false };
     double quality_objective{ std::numeric_limits<double>::infinity() };
     double residual_scale_sample{ std::numeric_limits<double>::infinity() };
-};
-
-struct LocalFittingObjectiveReference
-{
-    bool has_reference{ false };
-    double residual_scale{ std::numeric_limits<double>::infinity() };
 };
 
 struct LocalFittingObjectiveSamples
@@ -1224,7 +1218,7 @@ std::optional<double> CalculateLocalFittingResidualScaleSample(
 
 LocalFittingObjectiveStats CalculateLocalFittingObjectiveStats(
     const LocalFittingObjectiveSamples & objective_samples,
-    const LocalFittingObjectiveReference & objective_reference,
+    const algorithm::ScaleReference & objective_reference,
     double residual_scale_sample)
 {
     LocalFittingObjectiveStats stats;
@@ -1236,7 +1230,7 @@ LocalFittingObjectiveStats CalculateLocalFittingObjectiveStats(
     double loss_sum{ 0.0 };
     for (const auto residual : objective_samples.residual_list)
     {
-        const auto normalized_residual{ residual / objective_reference.residual_scale };
+        const auto normalized_residual{ residual / objective_reference.scale };
         loss_sum += CalculateHuberLoss(normalized_residual, kHuberCutoffMultiplier);
     }
     const auto quality_objective{
@@ -1255,7 +1249,7 @@ LocalFittingObjectiveStats CalculateLocalFittingObjectiveStats(
 
 LocalFittingObjectiveStats CalculateLocalFittingObjectiveStats(
     const LocalFittingObjectiveSamples & objective_samples,
-    const LocalFittingObjectiveReference & objective_reference)
+    const algorithm::ScaleReference & objective_reference)
 {
     const auto residual_scale_sample{
         CalculateLocalFittingResidualScaleSample(objective_samples)
@@ -1269,100 +1263,6 @@ LocalFittingObjectiveStats CalculateLocalFittingObjectiveStats(
         objective_reference,
         *residual_scale_sample);
 }
-
-class LocalFittingObjectiveScaleTracker
-{
-    std::vector<double> m_scale_sample_list{};
-    std::size_t m_accepted_scale_sample_count{ 0 };
-    bool m_locked{ false };
-
-    static void AddScaleSample(
-        std::vector<double> & scale_sample_list,
-        double scale_sample)
-    {
-        if (!std::isfinite(scale_sample)) return;
-
-        scale_sample_list.emplace_back(scale_sample);
-        while (scale_sample_list.size() > kLocalFittingObjectiveScaleWarmupCount)
-        {
-            scale_sample_list.erase(scale_sample_list.begin());
-        }
-    }
-
-    static LocalFittingObjectiveReference BuildReference(
-        const std::vector<double> & scale_sample_list)
-    {
-        LocalFittingObjectiveReference reference;
-        if (scale_sample_list.empty())
-        {
-            return reference;
-        }
-
-        const auto scale_sum{
-            std::accumulate(scale_sample_list.begin(), scale_sample_list.end(), 0.0)
-        };
-        const auto residual_scale{
-            scale_sum / static_cast<double>(scale_sample_list.size())
-        };
-        if (!std::isfinite(residual_scale))
-        {
-            return reference;
-        }
-
-        reference.has_reference = true;
-        reference.residual_scale = residual_scale;
-        return reference;
-    }
-
-public:
-    explicit LocalFittingObjectiveScaleTracker(
-        std::optional<double> initial_scale_sample)
-    {
-        if (initial_scale_sample.has_value())
-        {
-            AddScaleSample(m_scale_sample_list, *initial_scale_sample);
-        }
-    }
-
-    bool HasReference() const
-    {
-        return !m_scale_sample_list.empty();
-    }
-
-    bool IsLocked() const
-    {
-        return m_locked;
-    }
-
-    LocalFittingObjectiveReference GetCommittedReference() const
-    {
-        return BuildReference(m_scale_sample_list);
-    }
-
-    LocalFittingObjectiveReference GetProvisionalReference(double scale_sample) const
-    {
-        if (m_locked)
-        {
-            return GetCommittedReference();
-        }
-
-        auto scale_sample_list{ m_scale_sample_list };
-        AddScaleSample(scale_sample_list, scale_sample);
-        return BuildReference(scale_sample_list);
-    }
-
-    void CommitScaleSample(double scale_sample)
-    {
-        if (m_locked) return;
-
-        AddScaleSample(m_scale_sample_list, scale_sample);
-        m_accepted_scale_sample_count++;
-        if (m_accepted_scale_sample_count >= kLocalFittingObjectiveScaleWarmupCount)
-        {
-            m_locked = true;
-        }
-    }
-};
 
 ParameterSummaryStats SummarizeParameterValues(const std::vector<double> & value_list)
 {
@@ -2254,7 +2154,8 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         initial_objective_scale_sample =
             CalculateLocalFittingResidualScaleSample(*initial_objective_samples);
     }
-    LocalFittingObjectiveScaleTracker objective_scale_tracker{
+    algorithm::ScaleReferenceTracker objective_scale_tracker{
+        kLocalFittingObjectiveScaleWarmupCount,
         initial_objective_scale_sample
     };
     const auto objective_reference{ objective_scale_tracker.GetCommittedReference() };

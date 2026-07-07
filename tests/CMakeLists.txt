@@ -129,6 +129,7 @@ set(DATA_SCHEMA_TEST_SOURCES
 set(UTILS_ALGORITHM_TEST_SOURCES
     utils/algorithm/ConvergenceAlgorithm_test.cpp
     utils/algorithm/RobustSlopeEstimator_test.cpp
+    utils/algorithm/ScaleReferenceTracker_test.cpp
     utils/algorithm/WeightedRidgeSolver_test.cpp
 )
 
