@@ -854,6 +854,23 @@ bool IsJointOffsetObjectiveDeteriorated(
         current_objective + kJointOffsetIrlsObjectiveRelativeTolerance * scale;
 }
 
+double CalculateMedianAbsoluteDeviationScale(const std::vector<double> & value_list)
+{
+    if (value_list.empty())
+    {
+        return std::numeric_limits<double>::infinity();
+    }
+
+    const auto median_value{ array_helper::ComputeMedian(value_list) };
+    std::vector<double> deviation_list;
+    deviation_list.reserve(value_list.size());
+    for (const auto value : value_list)
+    {
+        deviation_list.emplace_back(std::abs(value - median_value));
+    }
+    return kHuberScaleMultiplier * array_helper::ComputeMedian(deviation_list);
+}
+
 JointOffsetSolveResult EstimateJointOffsets(
     const std::vector<AtomObject *> & atom_list,
     const std::vector<std::size_t> & active_index_list,
@@ -919,16 +936,8 @@ JointOffsetSolveResult EstimateJointOffsets(
     {
         const Eigen::VectorXd residual{ system.response - system.design_matrix * offset };
         std::vector<double> residual_list(residual.data(), residual.data() + residual.size());
-        const auto median_residual{ array_helper::ComputeMedian(residual_list) };
-        std::vector<double> deviation_list;
-        deviation_list.reserve(residual_list.size());
-        for (const auto value : residual_list)
-        {
-            deviation_list.emplace_back(std::abs(value - median_residual));
-        }
-        const auto residual_scale{ std::max(
-            kHuberScaleMultiplier * array_helper::ComputeMedian(deviation_list),
-            kHuberScaleMin)
+        const auto residual_scale{
+            std::max(CalculateMedianAbsoluteDeviationScale(residual_list), kHuberScaleMin)
         };
         const auto cutoff{ kHuberCutoffMultiplier * residual_scale };
         for (Eigen::Index i = 0; i < residual.size(); i++)
@@ -1150,23 +1159,6 @@ std::optional<LocalFittingObjectiveSamples> CollectLocalFittingObjectiveSamples(
     return objective_samples;
 }
 
-double CalculateMedianAbsoluteDeviationScale(const std::vector<double> & value_list)
-{
-    if (value_list.empty())
-    {
-        return std::numeric_limits<double>::infinity();
-    }
-
-    const auto median_value{ array_helper::ComputeMedian(value_list) };
-    std::vector<double> deviation_list;
-    deviation_list.reserve(value_list.size());
-    for (const auto value : value_list)
-    {
-        deviation_list.emplace_back(std::abs(value - median_value));
-    }
-    return kHuberScaleMultiplier * array_helper::ComputeMedian(deviation_list);
-}
-
 std::optional<double> CalculateLocalFittingResidualScaleSample(
     const LocalFittingObjectiveSamples & objective_samples)
 {
@@ -1195,18 +1187,11 @@ std::optional<double> CalculateLocalFittingResidualScaleSample(
 
 LocalFittingObjectiveStats CalculateLocalFittingObjectiveStats(
     const LocalFittingObjectiveSamples & objective_samples,
-    const LocalFittingObjectiveReference & objective_reference)
+    const LocalFittingObjectiveReference & objective_reference,
+    double residual_scale_sample)
 {
     LocalFittingObjectiveStats stats;
-    if (!objective_reference.has_reference)
-    {
-        return stats;
-    }
-
-    const auto residual_scale_sample{
-        CalculateLocalFittingResidualScaleSample(objective_samples)
-    };
-    if (!residual_scale_sample.has_value())
+    if (!objective_reference.has_reference || !std::isfinite(residual_scale_sample))
     {
         return stats;
     }
@@ -1227,8 +1212,25 @@ LocalFittingObjectiveStats CalculateLocalFittingObjectiveStats(
 
     stats.has_quality_objective = true;
     stats.quality_objective = quality_objective;
-    stats.residual_scale_sample = *residual_scale_sample;
+    stats.residual_scale_sample = residual_scale_sample;
     return stats;
+}
+
+LocalFittingObjectiveStats CalculateLocalFittingObjectiveStats(
+    const LocalFittingObjectiveSamples & objective_samples,
+    const LocalFittingObjectiveReference & objective_reference)
+{
+    const auto residual_scale_sample{
+        CalculateLocalFittingResidualScaleSample(objective_samples)
+    };
+    if (!residual_scale_sample.has_value())
+    {
+        return LocalFittingObjectiveStats{};
+    }
+    return CalculateLocalFittingObjectiveStats(
+        objective_samples,
+        objective_reference,
+        *residual_scale_sample);
 }
 
 LocalFittingObjectiveStats CalculateLocalFittingObjectiveStats(
@@ -1430,61 +1432,66 @@ void LogGroupPriorSpotSummary(const ModelObject & model_object)
     }
 }
 
-template <typename CalculateParameterChange>
-std::vector<algorithm::ParameterChange> CalculateLocalFittingParameterChangesWith(
+std::vector<algorithm::ParameterChange> CalculateLocalFittingParameterChanges(
     const std::vector<Eigen::VectorXd> & current_estimation_list,
-    const std::vector<Eigen::VectorXd> & previous_estimation_list,
-    const char * error_message,
-    CalculateParameterChange calculate_parameter_change)
+    const std::vector<Eigen::VectorXd> & previous_estimation_list)
 {
     if (current_estimation_list.size() != previous_estimation_list.size())
     {
-        throw std::invalid_argument(error_message);
+        throw std::invalid_argument("Local fitting parameter change input sizes are inconsistent.");
     }
 
     std::vector<algorithm::ParameterChange> change_list(current_estimation_list.size());
     for (size_t i = 0; i < current_estimation_list.size(); i++)
     {
+        const auto & current_estimation{ current_estimation_list.at(i) };
+        const auto & previous_estimation{ previous_estimation_list.at(i) };
         change_list.at(i).value_list = {
-            calculate_parameter_change(i, GaussianModel3D::AmplitudeIndex()),
-            calculate_parameter_change(i, GaussianModel3D::WidthIndex()),
-            calculate_parameter_change(i, GaussianModel3D::OffsetIndex())
+            std::abs(
+                current_estimation(GaussianModel3D::AmplitudeIndex()) -
+                previous_estimation(GaussianModel3D::AmplitudeIndex())),
+            std::abs(
+                current_estimation(GaussianModel3D::WidthIndex()) -
+                previous_estimation(GaussianModel3D::WidthIndex())),
+            std::abs(
+                current_estimation(GaussianModel3D::OffsetIndex()) -
+                previous_estimation(GaussianModel3D::OffsetIndex()))
         };
     }
     return change_list;
-}
-
-std::vector<algorithm::ParameterChange> CalculateLocalFittingParameterChanges(
-    const std::vector<Eigen::VectorXd> & current_estimation_list,
-    const std::vector<Eigen::VectorXd> & previous_estimation_list)
-{
-    return CalculateLocalFittingParameterChangesWith(
-        current_estimation_list,
-        previous_estimation_list,
-        "Local fitting parameter change input sizes are inconsistent.",
-        [&current_estimation_list, &previous_estimation_list](size_t index, int parameter_index)
-        {
-            return std::abs(
-                current_estimation_list[index](parameter_index) -
-                previous_estimation_list[index](parameter_index));
-        });
 }
 
 std::vector<algorithm::ParameterChange> CalculateLocalFittingNormalizedParameterChanges(
     const std::vector<Eigen::VectorXd> & current_estimation_list,
     const std::vector<Eigen::VectorXd> & previous_estimation_list)
 {
-    return CalculateLocalFittingParameterChangesWith(
-        current_estimation_list,
-        previous_estimation_list,
-        "Local fitting normalized parameter change input sizes are inconsistent.",
-        [&current_estimation_list, &previous_estimation_list](size_t index, int parameter_index)
-        {
-            return algorithm::CalculateNormalizedChange(
-                current_estimation_list[index](parameter_index),
-                previous_estimation_list[index](parameter_index),
-                kLocalFittingNormalizedChangeScaleFloor);
-        });
+    if (current_estimation_list.size() != previous_estimation_list.size())
+    {
+        throw std::invalid_argument(
+            "Local fitting normalized parameter change input sizes are inconsistent.");
+    }
+
+    std::vector<algorithm::ParameterChange> change_list(current_estimation_list.size());
+    for (size_t i = 0; i < current_estimation_list.size(); i++)
+    {
+        const auto & current_estimation{ current_estimation_list.at(i) };
+        const auto & previous_estimation{ previous_estimation_list.at(i) };
+        change_list.at(i).value_list = {
+            algorithm::CalculateNormalizedChange(
+                current_estimation(GaussianModel3D::AmplitudeIndex()),
+                previous_estimation(GaussianModel3D::AmplitudeIndex()),
+                kLocalFittingNormalizedChangeScaleFloor),
+            algorithm::CalculateNormalizedChange(
+                current_estimation(GaussianModel3D::WidthIndex()),
+                previous_estimation(GaussianModel3D::WidthIndex()),
+                kLocalFittingNormalizedChangeScaleFloor),
+            algorithm::CalculateNormalizedChange(
+                current_estimation(GaussianModel3D::OffsetIndex()),
+                previous_estimation(GaussianModel3D::OffsetIndex()),
+                kLocalFittingNormalizedChangeScaleFloor)
+        };
+    }
+    return change_list;
 }
 
 bool IsLocalFittingNormalizedParameterChangeConverged(
@@ -2393,7 +2400,8 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                         objective_scale_tracker.GetProvisionalReference(*scale_sample);
                     objective_stats = CalculateLocalFittingObjectiveStats(
                         *objective_samples,
-                        attempt_objective_reference);
+                        attempt_objective_reference,
+                        *scale_sample);
                     if (objective_stats.has_quality_objective)
                     {
                         const auto recalculated_previous_objective_stats{
