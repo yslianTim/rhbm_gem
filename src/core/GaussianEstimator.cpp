@@ -320,11 +320,17 @@ struct ParameterSummaryStats
     double standard_deviation{ 0.0 };
 };
 
-struct GroupPriorSpotSampleList
+struct GaussianModelParameterSamples
 {
     std::vector<double> amplitude_list{};
     std::vector<double> width_list{};
     std::vector<double> offset_list{};
+};
+
+enum class LocalFittingPass
+{
+    FirstStage,
+    ThirdStage
 };
 
 std::vector<AtomLocalPotentialEditor> BuildAtomLocalEditors(
@@ -406,24 +412,6 @@ rhbm_trainer::RHBMTrainingOptions MakeTrainingOptions(const FitOptions & options
     return training_options;
 }
 
-std::vector<RHBMMemberDataset> BuildMemberDatasetListFromRawSamples(
-    const std::vector<LocalPotentialSampleList> & sample_entries_list,
-    const FitOptions & options)
-{
-    std::vector<RHBMMemberDataset> dataset_list;
-    dataset_list.reserve(sample_entries_list.size());
-    for (const auto & sample_entries : sample_entries_list)
-    {
-        dataset_list.emplace_back(
-            rhbm_helper::BuildMemberDataset(
-                sample_entries,
-                options.distance_min,
-                options.distance_max)
-        );
-    }
-    return dataset_list;
-}
-
 std::size_t GetMinimumDatasetResponseCount(const std::vector<RHBMMemberDataset> & dataset_list)
 {
     std::size_t minimum_response_count{ std::numeric_limits<std::size_t>::max() };
@@ -450,31 +438,6 @@ LocalPotentialSampleList BuildSamplesForZeroOffsetGaussianFit(
         updated_sample_entries.emplace_back(LocalPotentialSample{ response, sample.point });
     }
     return updated_sample_entries;
-}
-
-std::vector<RHBMMemberDataset> BuildMemberDatasetListFromFixedOffsetMembers(
-    const std::vector<LocalPotentialSampleList> & sample_entries_list,
-    const std::vector<LocalGaussianResult> & member_result_list,
-    const FitOptions & options)
-{
-    if (sample_entries_list.size() != member_result_list.size())
-    {
-        throw std::invalid_argument("sample_entries_list and member_result_list sizes are inconsistent.");
-    }
-    auto range_min{ options.distance_min };
-    auto range_max{ options.distance_max };
-    std::vector<RHBMMemberDataset> dataset_list;
-    dataset_list.reserve(sample_entries_list.size());
-    for (std::size_t i = 0; i < sample_entries_list.size(); i++)
-    {
-        const auto sampling_entries{
-            BuildSamplesForZeroOffsetGaussianFit(
-                sample_entries_list.at(i),
-                member_result_list.at(i).mdpde.GetModel())
-        };
-        dataset_list.emplace_back(rhbm_helper::BuildMemberDataset(sampling_entries, range_min, range_max));
-    }
-    return dataset_list;
 }
 
 LocalGaussianResult DecodeLocalGaussianResult(
@@ -571,38 +534,8 @@ std::vector<LocalGaussianResult> DecodeMemberGaussianResults(
     return member_results;
 }
 
-std::vector<RHBMBetaEstimateResult> BuildMemberFitResultList(
-    const std::vector<RHBMMemberDataset> & dataset_list,
-    const std::vector<LocalGaussianResult> & member_result_list,
-    const FitOptions & options)
-{
-    if (dataset_list.size() != member_result_list.size())
-    {
-        throw std::invalid_argument("dataset_list and member_result_list sizes are inconsistent.");
-    }
-    const auto execution_options{ MakeExecutionOptions(options) };
-    std::vector<RHBMBetaEstimateResult> fit_result_list;
-    fit_result_list.reserve(member_result_list.size());
-    for (std::size_t i = 0; i < member_result_list.size(); i++)
-    {
-        fit_result_list.emplace_back(
-            rhbm_helper::EstimateBetaMDPDE(
-                member_result_list.at(i).alpha_r,
-                dataset_list.at(i),
-                execution_options));
-    }
-    return fit_result_list;
-}
-
 using FittedGaussianSnapshot = std::unordered_map<const AtomObject *, GaussianModel3D>;
 using GroupMedianModelMap = std::unordered_map<GroupKey, GaussianModel3D>;
-
-struct GaussianModelParameterSamples
-{
-    std::vector<double> amplitude_list{};
-    std::vector<double> width_list{};
-    std::vector<double> offset_list{};
-};
 
 FittedGaussianSnapshot BuildFittedGaussianSnapshot(
     const std::vector<AtomObject *> & atom_list,
@@ -1440,7 +1373,7 @@ ParameterSummaryStats SummarizeParameterValues(const std::vector<double> & value
 std::vector<std::string> BuildGroupPriorSpotSummaryLines(const ModelObject & model_object)
 {
     const auto analysis_view{ model_object.GetAnalysisView() };
-    std::map<std::string, GroupPriorSpotSampleList> spot_sample_map;
+    std::map<std::string, GaussianModelParameterSamples> spot_sample_map;
     for (const auto group_key : analysis_view.CollectAtomGroupKeys())
     {
         const auto & atom_list{ analysis_view.GetAtomObjectList(group_key) };
@@ -1497,57 +1430,61 @@ void LogGroupPriorSpotSummary(const ModelObject & model_object)
     }
 }
 
-std::vector<algorithm::ParameterChange> CalculateLocalFittingParameterChanges(
+template <typename CalculateParameterChange>
+std::vector<algorithm::ParameterChange> CalculateLocalFittingParameterChangesWith(
     const std::vector<Eigen::VectorXd> & current_estimation_list,
-    const std::vector<Eigen::VectorXd> & previous_estimation_list)
+    const std::vector<Eigen::VectorXd> & previous_estimation_list,
+    const char * error_message,
+    CalculateParameterChange calculate_parameter_change)
 {
     if (current_estimation_list.size() != previous_estimation_list.size())
     {
-        throw std::invalid_argument("Local fitting parameter change input sizes are inconsistent.");
+        throw std::invalid_argument(error_message);
     }
 
     std::vector<algorithm::ParameterChange> change_list(current_estimation_list.size());
     for (size_t i = 0; i < current_estimation_list.size(); i++)
     {
-        const auto parameter_delta{ current_estimation_list[i] - previous_estimation_list[i] };
         change_list.at(i).value_list = {
-            std::abs(parameter_delta(GaussianModel3D::AmplitudeIndex())),
-            std::abs(parameter_delta(GaussianModel3D::WidthIndex())),
-            std::abs(parameter_delta(GaussianModel3D::OffsetIndex()))
+            calculate_parameter_change(i, GaussianModel3D::AmplitudeIndex()),
+            calculate_parameter_change(i, GaussianModel3D::WidthIndex()),
+            calculate_parameter_change(i, GaussianModel3D::OffsetIndex())
         };
     }
     return change_list;
+}
+
+std::vector<algorithm::ParameterChange> CalculateLocalFittingParameterChanges(
+    const std::vector<Eigen::VectorXd> & current_estimation_list,
+    const std::vector<Eigen::VectorXd> & previous_estimation_list)
+{
+    return CalculateLocalFittingParameterChangesWith(
+        current_estimation_list,
+        previous_estimation_list,
+        "Local fitting parameter change input sizes are inconsistent.",
+        [&current_estimation_list, &previous_estimation_list](size_t index, int parameter_index)
+        {
+            return std::abs(
+                current_estimation_list[index](parameter_index) -
+                previous_estimation_list[index](parameter_index));
+        });
 }
 
 std::vector<algorithm::ParameterChange> CalculateLocalFittingNormalizedParameterChanges(
     const std::vector<Eigen::VectorXd> & current_estimation_list,
     const std::vector<Eigen::VectorXd> & previous_estimation_list)
 {
-    if (current_estimation_list.size() != previous_estimation_list.size())
-    {
-        throw std::invalid_argument(
-            "Local fitting normalized parameter change input sizes are inconsistent.");
-    }
-
-    std::vector<algorithm::ParameterChange> change_list(current_estimation_list.size());
-    for (size_t i = 0; i < current_estimation_list.size(); i++)
-    {
-        change_list.at(i).value_list = {
-            algorithm::CalculateNormalizedChange(
-                current_estimation_list[i](GaussianModel3D::AmplitudeIndex()),
-                previous_estimation_list[i](GaussianModel3D::AmplitudeIndex()),
-                kLocalFittingNormalizedChangeScaleFloor),
-            algorithm::CalculateNormalizedChange(
-                current_estimation_list[i](GaussianModel3D::WidthIndex()),
-                previous_estimation_list[i](GaussianModel3D::WidthIndex()),
-                kLocalFittingNormalizedChangeScaleFloor),
-            algorithm::CalculateNormalizedChange(
-                current_estimation_list[i](GaussianModel3D::OffsetIndex()),
-                previous_estimation_list[i](GaussianModel3D::OffsetIndex()),
-                kLocalFittingNormalizedChangeScaleFloor)
-        };
-    }
-    return change_list;
+    return CalculateLocalFittingParameterChangesWith(
+        current_estimation_list,
+        previous_estimation_list,
+        "Local fitting normalized parameter change input sizes are inconsistent.",
+        [&current_estimation_list, &previous_estimation_list](size_t index, int parameter_index)
+        {
+            return algorithm::CalculateNormalizedChange(
+                current_estimation_list[index](parameter_index),
+                previous_estimation_list[index](parameter_index),
+                kLocalFittingNormalizedChangeScaleFloor);
+        });
 }
 
 bool IsLocalFittingNormalizedParameterChangeConverged(
@@ -1982,6 +1919,65 @@ void InitializeLocalFittingSeedModels(ModelObject & model_object)
     }
 }
 
+void RunFixedOffsetLocalFittingPass(
+    ModelObject & model_object,
+    const FitOptions & options,
+    LocalFittingPass pass)
+{
+    const auto & atom_list{ model_object.GetSelectedAtoms() };
+    const auto selected_atom_size{ atom_list.size() };
+    auto local_editor_list{ BuildAtomLocalEditors(model_object, atom_list) };
+    const auto analysis_view{ model_object.GetAnalysisView() };
+    const auto stage_label{
+        pass == LocalFittingPass::FirstStage ? "1st-stage" : "3rd-stage"
+    };
+    std::atomic<size_t> atom_count{ 0 };
+    if (!options.quiet_mode)
+    {
+        Logger::Log(LogLevel::Info,
+            "Run " + std::string{ stage_label } + " local atom fitting for " +
+            std::to_string(selected_atom_size) + " atoms.");
+    }
+
+#ifdef USE_OPENMP
+    #pragma omp parallel for num_threads(options.thread_size)
+#endif
+    for (size_t i = 0; i < selected_atom_size; i++)
+    {
+        auto & atom{ *atom_list[i] };
+        const auto local_view{ AtomLocalPotentialView::RequireFor(atom) };
+        LocalPotentialSampleList sample_entries;
+        GaussianModel3D offset_model;
+        switch (pass)
+        {
+        case LocalFittingPass::FirstStage:
+            sample_entries = local_view.GetSamplingEntries();
+            offset_model = local_view.GetGaussianResult().mdpde.GetModel();
+            break;
+        case LocalFittingPass::ThirdStage:
+            sample_entries = local_view.GetSamplingEntries(false, true);
+            offset_model = analysis_view.GetAtomGroupPrior(data_internal::GetGroupKey(&atom));
+            break;
+        }
+
+        auto result{
+            EstimateLocalGaussian(sample_entries, local_view.GetAlphaR(), options, offset_model)
+        };
+        local_editor_list[i].SetGaussianResult(result);
+
+#ifdef USE_OPENMP
+        #pragma omp critical
+#endif
+        {
+            atom_count++;
+            if (!options.quiet_mode)
+            {
+                Logger::ProgressPercent(atom_count, selected_atom_size);
+            }
+        }
+    }
+}
+
 } // namespace
 
 double TrainAlphaR(
@@ -1991,7 +1987,16 @@ double TrainAlphaR(
     numeric_validation::RequireFiniteNonNegativeRange(
         options.distance_min, options.distance_max, "fit range");
 
-    const auto dataset_list{ BuildMemberDatasetListFromRawSamples(sample_entries_list, options) };
+    std::vector<RHBMMemberDataset> dataset_list;
+    dataset_list.reserve(sample_entries_list.size());
+    for (const auto & sample_entries : sample_entries_list)
+    {
+        dataset_list.emplace_back(
+            rhbm_helper::BuildMemberDataset(
+                sample_entries,
+                options.distance_min,
+                options.distance_max));
+    }
     auto training_options{ MakeTrainingOptions(options) };
     if (!dataset_list.empty())
     {
@@ -2074,10 +2079,35 @@ GroupGaussianResult EstimateGroupGaussian(
     }
 
     auto execution_options{ MakeExecutionOptions(options) };
-    const auto dataset_list{
-        BuildMemberDatasetListFromFixedOffsetMembers(sample_entries_list, member_result_list, options)
-    };
-    const auto fit_result_list{ BuildMemberFitResultList(dataset_list, member_result_list, options) };
+    const auto range_min{ options.distance_min };
+    const auto range_max{ options.distance_max };
+    std::vector<RHBMMemberDataset> dataset_list;
+    dataset_list.reserve(sample_entries_list.size());
+    for (std::size_t i = 0; i < sample_entries_list.size(); i++)
+    {
+        const auto sampling_entries{
+            BuildSamplesForZeroOffsetGaussianFit(
+                sample_entries_list.at(i),
+                member_result_list.at(i).mdpde.GetModel())
+        };
+        dataset_list.emplace_back(
+            rhbm_helper::BuildMemberDataset(sampling_entries, range_min, range_max));
+    }
+    if (dataset_list.size() != member_result_list.size())
+    {
+        throw std::invalid_argument("dataset_list and member_result_list sizes are inconsistent.");
+    }
+
+    std::vector<RHBMBetaEstimateResult> fit_result_list;
+    fit_result_list.reserve(member_result_list.size());
+    for (std::size_t i = 0; i < member_result_list.size(); i++)
+    {
+        fit_result_list.emplace_back(
+            rhbm_helper::EstimateBetaMDPDE(
+                member_result_list.at(i).alpha_r,
+                dataset_list.at(i),
+                execution_options));
+    }
     const auto group_input{ rhbm_helper::BuildGroupInput(dataset_list, fit_result_list) };
     const auto raw_result{ rhbm_helper::EstimateGroup(alpha_g, group_input, execution_options) };
     std::vector<double> member_offset_list;
@@ -2175,39 +2205,7 @@ void RunGroupAlphaTraining(ModelObject & model_object, const FitOptions & option
 
 void RunFirstStageLocalFitting(ModelObject & model_object, const FitOptions & options)
 {
-    const auto & atom_list{ model_object.GetSelectedAtoms() };
-    const auto selected_atom_size{ atom_list.size() };
-    auto local_editor_list{ BuildAtomLocalEditors(model_object, atom_list) };
-    std::atomic<size_t> atom_count{ 0 };
-    if (!options.quiet_mode)
-    {
-        Logger::Log(LogLevel::Info,
-            "Run 1st-stage local atom fitting for " +
-            std::to_string(selected_atom_size) + " atoms.");
-    }
-
-#ifdef USE_OPENMP
-    #pragma omp parallel for num_threads(options.thread_size)
-#endif
-    for (size_t i = 0; i < selected_atom_size; i++)
-    {
-        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
-        auto sample_entries{ local_view.GetSamplingEntries() };
-        const auto offset_model{ local_view.GetGaussianResult().mdpde.GetModel() };
-        auto result{ EstimateLocalGaussian(sample_entries, local_view.GetAlphaR(), options, offset_model) };
-        local_editor_list[i].SetGaussianResult(result);
-
-#ifdef USE_OPENMP
-        #pragma omp critical
-#endif
-        {
-            atom_count++;
-            if (!options.quiet_mode)
-            {
-                Logger::ProgressPercent(atom_count, selected_atom_size);
-            }
-        }
-    }
+    RunFixedOffsetLocalFittingPass(model_object, options, LocalFittingPass::FirstStage);
 }
 
 void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & options)
@@ -2653,47 +2651,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
 
 void RunThirdStageLocalFitting(ModelObject & model_object, const FitOptions & options)
 {
-    const auto & atom_list{ model_object.GetSelectedAtoms() };
-    const auto selected_atom_size{ atom_list.size() };
-    auto local_editor_list{ BuildAtomLocalEditors(model_object, atom_list) };
-    const auto analysis_view{ model_object.GetAnalysisView() };
-    std::atomic<size_t> atom_count{ 0 };
-    if (!options.quiet_mode)
-    {
-        Logger::Log(LogLevel::Info,
-            "Run 3rd-stage local atom fitting for " +
-            std::to_string(selected_atom_size) + " atoms.");
-    }
-
-#ifdef USE_OPENMP
-    #pragma omp parallel for num_threads(options.thread_size)
-#endif
-    for (size_t i = 0; i < selected_atom_size; i++)
-    {
-        auto & atom{ *atom_list[i] };
-        const auto local_view{ AtomLocalPotentialView::RequireFor(atom) };
-        auto sample_entries{
-            local_view.GetSamplingEntries(false, true)
-        };
-        const auto & offset_model{
-            analysis_view.GetAtomGroupPrior(data_internal::GetGroupKey(&atom))
-        };
-        auto result{
-            EstimateLocalGaussian(sample_entries, local_view.GetAlphaR(), options, offset_model)
-        };
-        local_editor_list[i].SetGaussianResult(result);
-
-#ifdef USE_OPENMP
-        #pragma omp critical
-#endif
-        {
-            atom_count++;
-            if (!options.quiet_mode)
-            {
-                Logger::ProgressPercent(atom_count, selected_atom_size);
-            }
-        }
-    }
+    RunFixedOffsetLocalFittingPass(model_object, options, LocalFittingPass::ThirdStage);
 }
 
 void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & options)
