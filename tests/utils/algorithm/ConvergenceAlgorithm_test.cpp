@@ -5,6 +5,7 @@
 
 #include <rhbm_gem/utils/algorithm/AdaptiveRelaxationController.hpp>
 #include <rhbm_gem/utils/algorithm/ConvergenceFreezeTracker.hpp>
+#include <rhbm_gem/utils/algorithm/DependencyThawHysteresisTracker.hpp>
 #include <rhbm_gem/utils/algorithm/NormalizedChange.hpp>
 #include <rhbm_gem/utils/algorithm/ParameterChangeStats.hpp>
 
@@ -97,6 +98,90 @@ TEST(ConvergenceAlgorithmTest, FreezeTrackerThawsFrozenEntryAndResetsStableCount
     tracker.Update(stable_change_list, tracker.BuildActiveIndexList());
 
     EXPECT_FALSE(tracker.IsFrozen(0));
+}
+
+TEST(ConvergenceAlgorithmTest, DependencyThawHysteresisTracksThresholdGrowthAndDecay)
+{
+    alg::DependencyThawHysteresisTracker tracker{
+        1,
+        2.0,
+        4.0,
+        0.5,
+        3
+    };
+
+    EXPECT_DOUBLE_EQ(10.0, tracker.GetThreshold(0, 10.0));
+    EXPECT_FALSE(tracker.ShouldThaw(0, 9.9, 10.0));
+    EXPECT_TRUE(tracker.ShouldThaw(0, 10.0, 10.0));
+
+    tracker.RecordDependencyThaw(0);
+    EXPECT_DOUBLE_EQ(20.0, tracker.GetThreshold(0, 10.0));
+    tracker.RecordDependencyThaw(0);
+    EXPECT_DOUBLE_EQ(40.0, tracker.GetThreshold(0, 10.0));
+    tracker.RecordDependencyThaw(0);
+    EXPECT_DOUBLE_EQ(40.0, tracker.GetThreshold(0, 10.0));
+
+    tracker.DecayFrozen(0);
+    EXPECT_DOUBLE_EQ(20.0, tracker.GetThreshold(0, 10.0));
+    tracker.DecayFrozen(0);
+    EXPECT_DOUBLE_EQ(10.0, tracker.GetThreshold(0, 10.0));
+    tracker.DecayFrozen(0);
+    EXPECT_DOUBLE_EQ(10.0, tracker.GetThreshold(0, 10.0));
+}
+
+TEST(ConvergenceAlgorithmTest, DependencyThawHysteresisCapsAndLocksThawCount)
+{
+    alg::DependencyThawHysteresisTracker tracker{
+        1,
+        2.0,
+        4.0,
+        0.5,
+        2
+    };
+
+    EXPECT_TRUE(tracker.CanDependencyThaw(0));
+    tracker.RecordDependencyThaw(0);
+    EXPECT_TRUE(tracker.CanDependencyThaw(0));
+    tracker.RecordDependencyThaw(0);
+
+    EXPECT_FALSE(tracker.CanDependencyThaw(0));
+    EXPECT_FALSE(tracker.CanDependencyThaw(0));
+}
+
+TEST(ConvergenceAlgorithmTest, DependencyThawHysteresisRejectsInvalidSettings)
+{
+    EXPECT_THROW(
+        alg::DependencyThawHysteresisTracker(1, 0.9, 2.0, 0.5, 1),
+        std::invalid_argument);
+    EXPECT_THROW(
+        alg::DependencyThawHysteresisTracker(1, 2.0, 0.9, 0.5, 1),
+        std::invalid_argument);
+    EXPECT_THROW(
+        alg::DependencyThawHysteresisTracker(1, 2.0, 4.0, -0.1, 1),
+        std::invalid_argument);
+    EXPECT_THROW(
+        alg::DependencyThawHysteresisTracker(1, 2.0, 4.0, 1.1, 1),
+        std::invalid_argument);
+    EXPECT_THROW(
+        alg::DependencyThawHysteresisTracker(1, 2.0, 4.0, 0.5, -1),
+        std::invalid_argument);
+}
+
+TEST(ConvergenceAlgorithmTest, DependencyThawHysteresisRejectsOutOfRangeIndex)
+{
+    alg::DependencyThawHysteresisTracker tracker{
+        1,
+        2.0,
+        4.0,
+        0.5,
+        1
+    };
+
+    EXPECT_THROW(tracker.GetThreshold(1, 10.0), std::invalid_argument);
+    EXPECT_THROW(tracker.ShouldThaw(1, 10.0, 10.0), std::invalid_argument);
+    EXPECT_THROW(tracker.CanDependencyThaw(1), std::invalid_argument);
+    EXPECT_THROW(tracker.RecordDependencyThaw(1), std::invalid_argument);
+    EXPECT_THROW(tracker.DecayFrozen(1), std::invalid_argument);
 }
 
 TEST(ConvergenceAlgorithmTest, AdaptiveRelaxationGrowsShrinksAndClamps)

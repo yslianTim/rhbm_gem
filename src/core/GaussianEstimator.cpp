@@ -10,6 +10,7 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/algorithm/AdaptiveRelaxationController.hpp>
 #include <rhbm_gem/utils/algorithm/ConvergenceFreezeTracker.hpp>
+#include <rhbm_gem/utils/algorithm/DependencyThawHysteresisTracker.hpp>
 #include <rhbm_gem/utils/algorithm/IterationState.hpp>
 #include <rhbm_gem/utils/algorithm/NormalizedChange.hpp>
 #include <rhbm_gem/utils/algorithm/ParameterChangeStats.hpp>
@@ -253,89 +254,6 @@ struct SecondStageLocalFittingContext
     std::size_t AtomSize() const
     {
         return atom_list.size();
-    }
-};
-
-class LocalFittingThawHysteresisTracker
-{
-    std::vector<double> m_multiplier_list;
-    std::vector<int> m_dependency_thaw_count_list;
-    std::vector<bool> m_dependency_thaw_locked_list;
-    double m_growth_multiplier{ 1.0 };
-    double m_max_multiplier{ 1.0 };
-    double m_frozen_decay{ 1.0 };
-    int m_dependency_thaw_maximum_count{ 0 };
-
-    void ValidateIndex(std::size_t index) const
-    {
-        if (index >= m_multiplier_list.size())
-        {
-            throw std::invalid_argument("Local fitting thaw hysteresis index is out of range.");
-        }
-    }
-
-public:
-    LocalFittingThawHysteresisTracker(
-        std::size_t value_size,
-        double growth_multiplier,
-        double max_multiplier,
-        double frozen_decay,
-        int dependency_thaw_maximum_count)
-        : m_multiplier_list(value_size, 1.0),
-          m_dependency_thaw_count_list(value_size, 0),
-          m_dependency_thaw_locked_list(value_size, false),
-          m_growth_multiplier{ growth_multiplier },
-          m_max_multiplier{ max_multiplier },
-          m_frozen_decay{ frozen_decay },
-          m_dependency_thaw_maximum_count{ dependency_thaw_maximum_count }
-    {
-        if (m_growth_multiplier < 1.0 || m_max_multiplier < 1.0 ||
-            m_frozen_decay < 0.0 || m_frozen_decay > 1.0 ||
-            m_dependency_thaw_maximum_count < 0)
-        {
-            throw std::invalid_argument("Local fitting thaw hysteresis settings are invalid.");
-        }
-    }
-
-    double GetThreshold(std::size_t index, double base_threshold) const
-    {
-        ValidateIndex(index);
-        return base_threshold * m_multiplier_list.at(index);
-    }
-
-    bool ShouldThaw(std::size_t index, double change, double base_threshold) const
-    {
-        return change >= GetThreshold(index, base_threshold);
-    }
-
-    bool CanDependencyThaw(std::size_t index)
-    {
-        ValidateIndex(index);
-        if (m_dependency_thaw_locked_list.at(index))
-        {
-            return false;
-        }
-        if (m_dependency_thaw_count_list.at(index) >= m_dependency_thaw_maximum_count)
-        {
-            m_dependency_thaw_locked_list.at(index) = true;
-            return false;
-        }
-        return true;
-    }
-
-    void RecordDependencyThaw(std::size_t index)
-    {
-        ValidateIndex(index);
-        m_dependency_thaw_count_list.at(index)++;
-        m_multiplier_list.at(index) = std::min(
-            m_max_multiplier,
-            m_multiplier_list.at(index) * m_growth_multiplier);
-    }
-
-    void DecayFrozen(std::size_t index)
-    {
-        ValidateIndex(index);
-        m_multiplier_list.at(index) = std::max(1.0, m_multiplier_list.at(index) * m_frozen_decay);
     }
 };
 
@@ -1695,7 +1613,7 @@ std::size_t ThawChangedActiveAtomNeighbors(
     const std::vector<algorithm::ParameterChange> & change_list,
     const std::vector<std::size_t> & active_index_list,
     algorithm::ConvergenceFreezeTracker & freeze_tracker,
-    LocalFittingThawHysteresisTracker & thaw_hysteresis_tracker)
+    algorithm::DependencyThawHysteresisTracker & thaw_hysteresis_tracker)
 {
     if (change_list.size() != context.AtomSize())
     {
@@ -2388,7 +2306,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         kLocalFittingFreezeStableIterations
     };
     LocalFittingFallbackStats fallback_stats{ atom_size };
-    LocalFittingThawHysteresisTracker thaw_hysteresis_tracker{
+    algorithm::DependencyThawHysteresisTracker thaw_hysteresis_tracker{
         atom_size,
         kLocalFittingDependencyThawHysteresisGrowth,
         kLocalFittingDependencyThawHysteresisMax,
