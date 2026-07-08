@@ -107,11 +107,12 @@ struct LocalFittingAccelerationAttempt
     double damping{ 1.0 };
 };
 
-enum class LocalFittingAttemptControl
+enum class LocalFittingAttemptOutcome
 {
     Accepted,
-    Continue,
-    StopGroup
+    InvalidAnderson,
+    ObjectiveRetry,
+    ObjectiveStop
 };
 
 struct ActiveCouplingEdge
@@ -242,11 +243,17 @@ struct LocalFittingObjectiveSamples
 
 struct LocalFittingCandidateScore
 {
-    LocalFittingObjectiveStats objective_stats{};
     algorithm::ScaleReference objective_reference{};
     algorithm::FittingQualityCandidateStats candidate_stats{};
-    algorithm::FittingQualityCandidateStats previous_candidate_stats{};
-    algorithm::FittingQualityCandidateStats best_candidate_stats{};
+    std::optional<algorithm::FittingQualityCandidateStats> best_candidate_stats{};
+    std::optional<LocalFittingObjectiveSamples> objective_samples{};
+    double objective_scale_sample{ std::numeric_limits<double>::infinity() };
+};
+
+struct TrackedLocalFittingCandidate
+{
+    GaussianFittingState state{};
+    algorithm::FittingQualityCandidateStats candidate_stats{};
     std::optional<LocalFittingObjectiveSamples> objective_samples{};
 };
 
@@ -257,8 +264,7 @@ struct AcceptedLocalFittingCandidate
     algorithm::ParameterChangeStats change_stats{};
     algorithm::ParameterChangeStats normalized_change_stats{};
     algorithm::FittingQualityCandidateStats candidate_stats{};
-    algorithm::FittingQualityCandidateStats previous_candidate_stats{};
-    algorithm::FittingQualityCandidateStats best_candidate_stats{};
+    std::optional<algorithm::FittingQualityCandidateStats> best_candidate_stats{};
     std::optional<LocalFittingObjectiveSamples> objective_samples{};
     double objective_scale_sample{ std::numeric_limits<double>::infinity() };
     LocalFittingAccelerationAttempt acceleration_attempt{};
@@ -266,9 +272,7 @@ struct AcceptedLocalFittingCandidate
 
 struct EvaluatedLocalFittingAttempt
 {
-    LocalFittingAttemptControl control{ LocalFittingAttemptControl::Continue };
-    bool invalid_anderson_candidate{ false };
-    bool objective_backtracking_rejection{ false };
+    LocalFittingAttemptOutcome outcome{ LocalFittingAttemptOutcome::ObjectiveRetry };
     AcceptedLocalFittingCandidate accepted_candidate{};
 };
 
@@ -1330,17 +1334,17 @@ LocalFittingCandidateScore ScoreLocalFittingCandidate(
     const SecondStageLocalFittingContext & context,
     const GaussianFittingState & candidate_state,
     const algorithm::ScaleReferenceTracker & objective_scale_tracker,
-    const algorithm::FittingQualityCandidateStats & previous_candidate_stats,
+    algorithm::FittingQualityCandidateStats & previous_candidate_stats,
     const std::optional<LocalFittingObjectiveSamples> & previous_objective_samples,
-    bool has_best_candidate,
-    const algorithm::FittingQualityCandidateStats & best_candidate_stats,
-    const std::optional<LocalFittingObjectiveSamples> & best_objective_samples,
+    const std::optional<TrackedLocalFittingCandidate> & best_candidate,
     const algorithm::ParameterChangeStats & normalized_change_stats)
 {
     LocalFittingCandidateScore score;
     score.objective_reference = objective_scale_tracker.GetCommittedReference();
-    score.previous_candidate_stats = previous_candidate_stats;
-    score.best_candidate_stats = best_candidate_stats;
+    if (best_candidate.has_value())
+    {
+        score.best_candidate_stats = best_candidate->candidate_stats;
+    }
 
     if (objective_scale_tracker.HasReference())
     {
@@ -1354,11 +1358,14 @@ LocalFittingCandidateScore ScoreLocalFittingCandidate(
             {
                 score.objective_reference =
                     objective_scale_tracker.GetProvisionalReference(*scale_sample);
-                score.objective_stats = CalculateLocalFittingObjectiveStats(
-                    *score.objective_samples,
-                    score.objective_reference,
-                    *scale_sample);
-                if (score.objective_stats.has_quality_objective)
+                const auto objective_stats{
+                    CalculateLocalFittingObjectiveStats(
+                        *score.objective_samples,
+                        score.objective_reference,
+                        *scale_sample)
+                };
+                score.objective_scale_sample = objective_stats.residual_scale_sample;
+                if (objective_stats.has_quality_objective)
                 {
                     if (previous_objective_samples.has_value())
                     {
@@ -1367,33 +1374,35 @@ LocalFittingCandidateScore ScoreLocalFittingCandidate(
                                 *previous_objective_samples,
                                 score.objective_reference)
                         };
-                        score.previous_candidate_stats.has_quality_objective =
+                        previous_candidate_stats.has_quality_objective =
                             recalculated_previous_objective_stats.has_quality_objective;
-                        score.previous_candidate_stats.quality_objective =
+                        previous_candidate_stats.quality_objective =
                             recalculated_previous_objective_stats.quality_objective;
                     }
-                    if (has_best_candidate && best_objective_samples.has_value())
+                    if (best_candidate.has_value() &&
+                        best_candidate->objective_samples.has_value() &&
+                        score.best_candidate_stats.has_value())
                     {
                         const auto recalculated_best_objective_stats{
                             CalculateLocalFittingObjectiveStats(
-                                *best_objective_samples,
+                                *best_candidate->objective_samples,
                                 score.objective_reference)
                         };
-                        score.best_candidate_stats.has_quality_objective =
+                        score.best_candidate_stats->has_quality_objective =
                             recalculated_best_objective_stats.has_quality_objective;
-                        score.best_candidate_stats.quality_objective =
+                        score.best_candidate_stats->quality_objective =
                             recalculated_best_objective_stats.quality_objective;
                     }
                 }
+                score.candidate_stats.has_quality_objective =
+                    objective_stats.has_quality_objective;
+                score.candidate_stats.quality_objective =
+                    objective_stats.quality_objective;
             }
         }
     }
 
-    score.candidate_stats = algorithm::FittingQualityCandidateStats{
-        score.objective_stats.has_quality_objective,
-        score.objective_stats.quality_objective,
-        normalized_change_stats
-    };
+    score.candidate_stats.parameter_change_stats = normalized_change_stats;
     return score;
 }
 
@@ -1694,9 +1703,7 @@ EvaluatedLocalFittingAttempt EvaluateLocalFittingAttempt(
     const algorithm::ScaleReferenceTracker & objective_scale_tracker,
     const algorithm::FittingQualityCandidateStats & previous_candidate_stats,
     const std::optional<LocalFittingObjectiveSamples> & previous_objective_samples,
-    bool has_best_candidate,
-    const algorithm::FittingQualityCandidateStats & best_candidate_stats,
-    const std::optional<LocalFittingObjectiveSamples> & best_objective_samples,
+    const std::optional<TrackedLocalFittingCandidate> & best_candidate,
     int attempt,
     int attempt_size)
 {
@@ -1717,7 +1724,7 @@ EvaluatedLocalFittingAttempt EvaluateLocalFittingAttempt(
             active_index_list,
             acceleration_attempt.damping))
     {
-        evaluated_attempt.invalid_anderson_candidate = true;
+        evaluated_attempt.outcome = LocalFittingAttemptOutcome::InvalidAnderson;
         return evaluated_attempt;
     }
 
@@ -1743,16 +1750,15 @@ EvaluatedLocalFittingAttempt EvaluateLocalFittingAttempt(
             active_index_list,
             kLocalFittingChangePercentile)
     };
+    auto previous_candidate_stats_for_backtracking{ previous_candidate_stats };
     auto score{
         ScoreLocalFittingCandidate(
             context,
             attempt_state,
             objective_scale_tracker,
-            previous_candidate_stats,
+            previous_candidate_stats_for_backtracking,
             previous_objective_samples,
-            has_best_candidate,
-            best_candidate_stats,
-            best_objective_samples,
+            best_candidate,
             normalized_change_stats)
     };
 
@@ -1763,9 +1769,9 @@ EvaluatedLocalFittingAttempt EvaluateLocalFittingAttempt(
     {
         backtracking_decision = algorithm::EvaluateFittingQualityBacktracking(
             score.candidate_stats,
-            score.previous_candidate_stats,
-            has_best_candidate,
-            score.best_candidate_stats,
+            previous_candidate_stats_for_backtracking,
+            best_candidate.has_value(),
+            score.best_candidate_stats.value_or(algorithm::FittingQualityCandidateStats{}),
             kLocalFittingConvergenceObjectiveRelativeTolerance,
             attempt,
             attempt_size);
@@ -1773,29 +1779,26 @@ EvaluatedLocalFittingAttempt EvaluateLocalFittingAttempt(
 
     if (backtracking_decision.accepted)
     {
-        evaluated_attempt.control = LocalFittingAttemptControl::Accepted;
+        evaluated_attempt.outcome = LocalFittingAttemptOutcome::Accepted;
         evaluated_attempt.accepted_candidate.state = std::move(attempt_state);
         evaluated_attempt.accepted_candidate.change_list = std::move(change_list);
         evaluated_attempt.accepted_candidate.change_stats = std::move(change_stats);
         evaluated_attempt.accepted_candidate.normalized_change_stats =
             std::move(normalized_change_stats);
         evaluated_attempt.accepted_candidate.candidate_stats = score.candidate_stats;
-        evaluated_attempt.accepted_candidate.previous_candidate_stats =
-            std::move(score.previous_candidate_stats);
         evaluated_attempt.accepted_candidate.best_candidate_stats =
             std::move(score.best_candidate_stats);
         evaluated_attempt.accepted_candidate.objective_samples =
             std::move(score.objective_samples);
         evaluated_attempt.accepted_candidate.objective_scale_sample =
-            score.objective_stats.residual_scale_sample;
+            score.objective_scale_sample;
         evaluated_attempt.accepted_candidate.acceleration_attempt = acceleration_attempt;
         return evaluated_attempt;
     }
 
-    evaluated_attempt.objective_backtracking_rejection = true;
     if (!backtracking_decision.should_shrink_beta || backtracking_decision.reached_retry_limit)
     {
-        evaluated_attempt.control = LocalFittingAttemptControl::StopGroup;
+        evaluated_attempt.outcome = LocalFittingAttemptOutcome::ObjectiveStop;
     }
     return evaluated_attempt;
 }
@@ -2662,16 +2665,14 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 0.0)
         }
     };
-    GaussianFittingState best_state;
-    algorithm::FittingQualityCandidateStats best_candidate_stats;
-    std::optional<LocalFittingObjectiveSamples> best_objective_samples;
-    bool has_best_candidate{ false };
+    std::optional<TrackedLocalFittingCandidate> best_candidate;
     if (previous_objective_stats.has_quality_objective)
     {
-        best_state = previous_state;
-        best_candidate_stats = previous_candidate_stats;
-        best_objective_samples = previous_objective_samples;
-        has_best_candidate = true;
+        best_candidate = TrackedLocalFittingCandidate{
+            previous_state,
+            previous_candidate_stats,
+            previous_objective_samples
+        };
     }
     algorithm::AndersonAccelerationHistory acceleration_history{
         algorithm::AndersonAccelerationOptions{
@@ -2783,29 +2784,30 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                         objective_scale_tracker,
                         previous_candidate_stats,
                         previous_objective_samples,
-                        has_best_candidate,
-                        best_candidate_stats,
-                        best_objective_samples,
+                        best_candidate,
                         attempt,
                         attempt_size)
                 };
-                if (evaluated_attempt.invalid_anderson_candidate)
+                if (evaluated_attempt.outcome == LocalFittingAttemptOutcome::InvalidAnderson)
                 {
                     has_invalid_anderson_candidate = true;
+                    continue;
                 }
-                if (evaluated_attempt.objective_backtracking_rejection)
+                if (evaluated_attempt.outcome == LocalFittingAttemptOutcome::ObjectiveRetry ||
+                    evaluated_attempt.outcome == LocalFittingAttemptOutcome::ObjectiveStop)
                 {
                     has_objective_backtracking_rejection = true;
                     ridge_ratio = IncreaseLocalFittingRidgeRatio(ridge_ratio);
+                    if (evaluated_attempt.outcome == LocalFittingAttemptOutcome::ObjectiveStop)
+                    {
+                        break;
+                    }
+                    continue;
                 }
-                if (evaluated_attempt.control == LocalFittingAttemptControl::Accepted)
+                if (evaluated_attempt.outcome == LocalFittingAttemptOutcome::Accepted)
                 {
                     current_candidate = std::move(evaluated_attempt.accepted_candidate);
                     has_current_candidate = true;
-                    break;
-                }
-                if (evaluated_attempt.control == LocalFittingAttemptControl::StopGroup)
-                {
                     break;
                 }
             }
@@ -2848,18 +2850,17 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             }
 
             ApplyLocalFittingState(
-                has_best_candidate ? best_state : previous_state,
+                best_candidate.has_value() ? best_candidate->state : previous_state,
                 local_editor_list);
-            LogLocalFittingBacktrackingStop(options, ridge_ratio, has_best_candidate);
+            LogLocalFittingBacktrackingStop(options, ridge_ratio, best_candidate.has_value());
             break;
         }
 
         consecutive_backtracking_retry_count = 0;
         accepted_iteration_count++;
-        previous_candidate_stats = current_candidate.previous_candidate_stats;
-        if (has_best_candidate)
+        if (best_candidate.has_value())
         {
-            best_candidate_stats = current_candidate.best_candidate_stats;
+            best_candidate->candidate_stats = current_candidate.best_candidate_stats.value();
         }
         if (current_candidate.acceleration_attempt.kind == LocalFittingAccelerationKind::DampedFixedPoint &&
             !has_objective_backtracking_rejection &&
@@ -2907,16 +2908,17 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 previous_state.estimation_list,
                 raw_state.estimation_list);
         }
-        if (!has_best_candidate ||
+        if (!best_candidate.has_value() ||
             algorithm::IsBetterFittingQualityCandidate(
                 current_candidate.candidate_stats,
-                best_candidate_stats,
+                best_candidate->candidate_stats,
                 kLocalFittingObjectiveTieRelativeTolerance))
         {
-            best_state = current_candidate.state;
-            best_candidate_stats = current_candidate.candidate_stats;
-            best_objective_samples = current_candidate.objective_samples;
-            has_best_candidate = true;
+            best_candidate = TrackedLocalFittingCandidate{
+                current_candidate.state,
+                current_candidate.candidate_stats,
+                current_candidate.objective_samples
+            };
         }
         freeze_tracker.Update(current_candidate.change_list, active_index_list);
         auto thaw_count{
@@ -2976,8 +2978,9 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
 
         if (iter + 1 == kLocalFittingMaximumIterations)
         {
-            ApplyLocalFittingState(best_state, local_editor_list);
-            LogLocalFittingMaximumIterations(options, best_candidate_stats);
+            const auto & best{ best_candidate.value() };
+            ApplyLocalFittingState(best.state, local_editor_list);
+            LogLocalFittingMaximumIterations(options, best.candidate_stats);
         }
         previous_state = std::move(current_candidate.state);
         previous_candidate_stats = current_candidate.candidate_stats;
