@@ -607,6 +607,53 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingHandlesNearCollinearAtoms)
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
+TEST(EstimatorTesterTest, RunSecondStageLocalFittingLogsAndersonAccelerationMode)
+{
+    auto model{ BuildNearCollinearSecondStageModel() };
+    auto options{ MakeSecondStageOptions() };
+    options.quiet_mode = false;
+
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    rt::RunSecondStageLocalFitting(*model, options);
+    const std::string output{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_TRUE(
+        output.find("acceleration = aa") != std::string::npos ||
+        output.find("acceleration = damped-aa") != std::string::npos);
+    const auto fallback_position{
+        output.find("switching from Anderson acceleration to damped fixed-point fallback")
+    };
+    ASSERT_NE(fallback_position, std::string::npos);
+    EXPECT_NE(
+        output.rfind('\n', fallback_position),
+        std::string::npos);
+    EXPECT_NE(
+        output.find("Objective backtracking rejected all attempts; backtracking retry"),
+        std::string::npos);
+    const auto fixed_point_position{
+        output.find("acceleration = damped-fixed-point", fallback_position)
+    };
+    ASSERT_NE(fixed_point_position, std::string::npos);
+    const auto next_anderson_position{
+        output.find("acceleration = aa", fallback_position)
+    };
+    const auto next_damped_anderson_position{
+        output.find("acceleration = damped-aa", fallback_position)
+    };
+    if (next_anderson_position != std::string::npos)
+    {
+        EXPECT_GT(next_anderson_position, fixed_point_position);
+    }
+    if (next_damped_anderson_position != std::string::npos)
+    {
+        EXPECT_GT(next_damped_anderson_position, fixed_point_position);
+    }
+    ExpectSelectedAtomEstimatesAreFinite(*model);
+}
+
 TEST(EstimatorTesterTest, RunSecondStageLocalFittingImprovesBadFiniteEntryScale)
 {
     auto model{ BuildSecondStageScaleDiagnosticModel() };

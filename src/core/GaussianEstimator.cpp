@@ -2,13 +2,12 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 
 #include "data/detail/AtomClassifier.hpp"
-
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/utils/algorithm/AdaptiveRelaxationController.hpp>
+#include <rhbm_gem/utils/algorithm/AndersonAcceleration.hpp>
 #include <rhbm_gem/utils/algorithm/ConvergenceFreezeTracker.hpp>
 #include <rhbm_gem/utils/algorithm/DependencyThawHysteresisTracker.hpp>
 #include <rhbm_gem/utils/algorithm/IterationState.hpp>
@@ -29,6 +28,7 @@
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cmath>
 #include <iomanip>
@@ -75,14 +75,10 @@ constexpr double kCollinearJointOffsetRidgeMultiplier{ 10.0 };
 constexpr double kJointOffsetIrlsScaleFloor{ 1.0e-2 };
 constexpr double kJointOffsetIrlsNormalizedChangeTolerance{ 1.0e-6 };
 constexpr double kJointOffsetIrlsObjectiveRelativeTolerance{ 1.0e-10 };
-constexpr double kAdaptiveRelaxationInitialBeta{ 0.5 };
-constexpr double kAdaptiveRelaxationMin{ 0.05 };
-constexpr double kAdaptiveRelaxationMax{ 1.0 };
-constexpr double kAdaptiveRelaxationGrowth{ 1.2 };
-constexpr double kAdaptiveRelaxationShrink{ 0.5 };
-constexpr double kAdaptiveRelaxationImprovementRatio{ 0.01 };
-constexpr int kAdaptiveRelaxationIncreaseStreak{ 2 };
-constexpr int kAdaptiveRelaxationShrinkStreak{ 3 };
+constexpr std::size_t kLocalFittingAndersonHistoryDepth{ 5 };
+constexpr double kLocalFittingAndersonCoefficientL1Limit{ 10.0 };
+constexpr double kLocalFittingAndersonRegularization{ 1.0e-12 };
+constexpr std::array<double, 3> kLocalFittingAccelerationDampingList{ 1.0, 0.5, 0.25 };
 constexpr double kLocalFittingFreezeChangeRatio{ 0.1 };
 constexpr int kLocalFittingFreezeStableIterations{ 3 };
 constexpr double kLocalFittingDependencyThawHysteresisGrowth{ 2.0 };
@@ -91,13 +87,33 @@ constexpr double kLocalFittingDependencyThawHysteresisFrozenDecay{ 0.9 };
 constexpr int kLocalFittingDependencyThawMaximumCount{ 5 };
 constexpr double kLocalFittingObjectiveTieRelativeTolerance{ 1.0e-8 };
 constexpr double kLocalFittingConvergenceObjectiveRelativeTolerance{ 1.0e-3 };
-constexpr int kLocalFittingObjectiveBacktrackingMaximumAttempts{ 3 };
 constexpr std::size_t kLocalFittingObjectiveScaleWarmupCount{ 5 };
 constexpr double kLocalFittingObjectiveResidualScaleFloorRatio{ 1.0e-6 };
 constexpr std::size_t kSuspiciousOffsetClusterMaxDepth{ 2 };
 constexpr double kSuspiciousOffsetClusterMinimumOverlap{ 0.05 };
 
 using GaussianFittingState = algorithm::IterationState<LocalGaussianResult, Eigen::VectorXd>;
+
+enum class LocalFittingAccelerationKind
+{
+    Anderson,
+    DampedAnderson,
+    DampedFixedPoint
+};
+
+struct LocalFittingAccelerationAttempt
+{
+    LocalFittingAccelerationKind kind{ LocalFittingAccelerationKind::DampedFixedPoint };
+    double damping{ 1.0 };
+};
+
+enum class LocalFittingAccelerationAttemptStatus
+{
+    Accepted,
+    ObjectiveRejectedCanRetry,
+    ObjectiveRejectedFinal,
+    InvalidCandidate
+};
 
 struct ActiveCouplingEdge
 {
@@ -1435,31 +1451,125 @@ bool IsLocalFittingNormalizedParameterChangeConverged(
     return true;
 }
 
-void ApplyLocalFittingUnderRelaxation(
+void ApplyLocalFittingDampedFixedPoint(
     GaussianFittingState & current_state,
     const GaussianFittingState & previous_state,
-    double beta)
+    double damping)
 {
     if (current_state.estimation_list.size() != previous_state.estimation_list.size() ||
         current_state.result_list.size() != previous_state.result_list.size() ||
         current_state.result_list.size() != previous_state.estimation_list.size())
     {
-        throw std::invalid_argument("Local fitting relaxation input sizes are inconsistent.");
+        throw std::invalid_argument("Local fitting fixed-point damping input sizes are inconsistent.");
     }
     for (std::size_t i = 0; i < current_state.estimation_list.size(); i++)
     {
-        auto relaxed_estimation{
-            (beta * current_state.estimation_list.at(i) +
-            (1.0 - beta) * previous_state.estimation_list.at(i)).eval()
+        auto damped_estimation{
+            (damping * current_state.estimation_list.at(i) +
+            (1.0 - damping) * previous_state.estimation_list.at(i)).eval()
         };
-        const auto relaxed_model{ GaussianModel3D::FromVector(relaxed_estimation) };
+        const auto damped_model{ GaussianModel3D::FromVector(damped_estimation) };
         auto & result{ current_state.result_list.at(i) };
         result.mdpde = GaussianModel3DWithUncertainty{
-            relaxed_model,
+            damped_model,
             result.mdpde.GetStandardDeviationModel()
         };
-        current_state.estimation_list.at(i) = relaxed_estimation;
+        current_state.estimation_list.at(i) = damped_estimation;
     }
+}
+
+const char * GetLocalFittingAccelerationText(LocalFittingAccelerationKind kind)
+{
+    switch (kind)
+    {
+    case LocalFittingAccelerationKind::Anderson:
+        return "aa";
+    case LocalFittingAccelerationKind::DampedAnderson:
+        return "damped-aa";
+    case LocalFittingAccelerationKind::DampedFixedPoint:
+        return "damped-fixed-point";
+    }
+    return "unknown";
+}
+
+std::vector<LocalFittingAccelerationAttempt> BuildLocalFittingAccelerationAttempts(
+    bool use_anderson)
+{
+    std::vector<LocalFittingAccelerationAttempt> attempt_list;
+    attempt_list.reserve(kLocalFittingAccelerationDampingList.size());
+    for (const auto damping : kLocalFittingAccelerationDampingList)
+    {
+        attempt_list.emplace_back(LocalFittingAccelerationAttempt{
+            use_anderson && damping == 1.0 ?
+                LocalFittingAccelerationKind::Anderson :
+                (use_anderson ?
+                    LocalFittingAccelerationKind::DampedAnderson :
+                    LocalFittingAccelerationKind::DampedFixedPoint),
+            damping
+        });
+    }
+    return attempt_list;
+}
+
+bool IsLocalFittingActiveEstimationFinitePositive(
+    const Eigen::VectorXd & estimation)
+{
+    return estimation.size() == GaussianModel3D::ParameterSize() &&
+        estimation.allFinite() &&
+        estimation(GaussianModel3D::WidthIndex()) > 0.0;
+}
+
+bool TryApplyLocalFittingAndersonCandidate(
+    GaussianFittingState & current_state,
+    const GaussianFittingState & previous_state,
+    const std::vector<Eigen::VectorXd> & candidate_estimation_list,
+    const std::vector<std::size_t> & active_index_list,
+    double damping)
+{
+    if (!std::isfinite(damping) || damping <= 0.0 || damping > 1.0)
+    {
+        throw std::invalid_argument("Local fitting acceleration damping is out of range.");
+    }
+    if (current_state.estimation_list.size() != previous_state.estimation_list.size() ||
+        current_state.result_list.size() != previous_state.result_list.size() ||
+        candidate_estimation_list.size() != previous_state.estimation_list.size())
+    {
+        throw std::invalid_argument("Local fitting acceleration input sizes are inconsistent.");
+    }
+
+    std::vector<std::pair<std::size_t, Eigen::VectorXd>> accelerated_estimation_list;
+    accelerated_estimation_list.reserve(active_index_list.size());
+    for (const auto active_index : active_index_list)
+    {
+        if (active_index >= previous_state.estimation_list.size() ||
+            active_index >= current_state.estimation_list.size())
+        {
+            throw std::invalid_argument("Local fitting acceleration active index is out of range.");
+        }
+        const auto accelerated_estimation{
+            (previous_state.estimation_list.at(active_index) +
+                damping * (
+                    candidate_estimation_list.at(active_index) -
+                    previous_state.estimation_list.at(active_index))).eval()
+        };
+        if (!IsLocalFittingActiveEstimationFinitePositive(accelerated_estimation))
+        {
+            return false;
+        }
+        accelerated_estimation_list.emplace_back(active_index, accelerated_estimation);
+    }
+
+    for (const auto & [active_index, accelerated_estimation] : accelerated_estimation_list)
+    {
+        const auto accelerated_model{ GaussianModel3D::FromVector(accelerated_estimation) };
+        auto & result{ current_state.result_list.at(active_index) };
+        result.mdpde = GaussianModel3DWithUncertainty{
+            accelerated_model,
+            result.mdpde.GetStandardDeviationModel()
+        };
+        current_state.estimation_list.at(active_index) = accelerated_estimation;
+    }
+    return true;
 }
 
 LocalRefitResult FitAtomWithJointOffsetFallback(
@@ -2190,15 +2300,13 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         best_objective_samples = previous_objective_samples;
         has_best_candidate = true;
     }
-    algorithm::AdaptiveRelaxationController relaxation_controller{
-        kAdaptiveRelaxationInitialBeta,
-        kAdaptiveRelaxationMin,
-        kAdaptiveRelaxationMax,
-        kAdaptiveRelaxationGrowth,
-        kAdaptiveRelaxationShrink,
-        kAdaptiveRelaxationImprovementRatio,
-        kAdaptiveRelaxationIncreaseStreak,
-        kAdaptiveRelaxationShrinkStreak
+    algorithm::AndersonAccelerationHistory acceleration_history{
+        algorithm::AndersonAccelerationOptions{
+            kLocalFittingAndersonHistoryDepth,
+            kLocalFittingNormalizedChangeScaleFloor,
+            kLocalFittingAndersonCoefficientL1Limit,
+            kLocalFittingAndersonRegularization
+        }
     };
     algorithm::ConvergenceFreezeTracker freeze_tracker{
         atom_size,
@@ -2216,8 +2324,14 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
     };
     double ridge_ratio{ kJointOffsetRidgeRatio };
     std::vector<double> joint_offset_ridge_multiplier_list(atom_size, 1.0);
+    bool suppress_anderson_until_fixed_point_progress{ false };
+    std::size_t consecutive_backtracking_retry_count{ 0 };
+    std::size_t accepted_iteration_count{ 0 };
     for (size_t iter = 0; iter < kLocalFittingMaximumIterations; iter++)
     {
+        const auto suppress_anderson_this_iteration{
+            suppress_anderson_until_fixed_point_progress
+        };
         const auto active_index_list{ freeze_tracker.BuildActiveIndexList() };
         if (active_index_list.empty())
         {
@@ -2226,7 +2340,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             {
                 Logger::FinishProgressLine();
                 Logger::Log(LogLevel::Info,
-                    "Converged after " + std::to_string(iter) +
+                    "Converged after " + std::to_string(accepted_iteration_count) +
                     " iterations because all local atoms are frozen.");
             }
             break;
@@ -2265,16 +2379,50 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         algorithm::ParameterChangeStats change_stats;
         algorithm::ParameterChangeStats normalized_change_stats;
         algorithm::FittingQualityCandidateStats current_candidate_stats;
-        double beta{ relaxation_controller.GetBeta() };
+        LocalFittingAccelerationAttempt current_acceleration_attempt;
         bool has_current_candidate{ false };
-        bool has_backtracking_rejection{ false };
+        bool has_objective_backtracking_rejection{ false };
+        bool has_invalid_anderson_candidate{ false };
+        bool should_reset_acceleration_history_before_commit{ false };
         double current_objective_scale_sample{ std::numeric_limits<double>::infinity() };
         std::optional<LocalFittingObjectiveSamples> current_objective_samples;
-        for (int attempt = 0; attempt < kLocalFittingObjectiveBacktrackingMaximumAttempts; attempt++)
+        if (!acceleration_history.HasCompatibleActiveIndexList(active_index_list))
         {
-            beta = relaxation_controller.GetBeta();
+            acceleration_history.Clear();
+        }
+        std::optional<std::vector<Eigen::VectorXd>> anderson_candidate;
+        if (!suppress_anderson_this_iteration)
+        {
+            anderson_candidate = acceleration_history.BuildCandidate(
+                active_index_list,
+                previous_state.estimation_list,
+                raw_state.estimation_list);
+        }
+
+        const auto evaluate_attempt = [&](const LocalFittingAccelerationAttempt & acceleration_attempt,
+                                          int attempt,
+                                          int attempt_size) -> LocalFittingAccelerationAttemptStatus
+        {
             auto attempt_state{ raw_state };
-            ApplyLocalFittingUnderRelaxation(attempt_state, previous_state, beta);
+            if (acceleration_attempt.kind == LocalFittingAccelerationKind::DampedFixedPoint)
+            {
+                ApplyLocalFittingDampedFixedPoint(
+                    attempt_state,
+                    previous_state,
+                    acceleration_attempt.damping);
+            }
+            else if (!anderson_candidate.has_value() ||
+                !TryApplyLocalFittingAndersonCandidate(
+                    attempt_state,
+                    previous_state,
+                    *anderson_candidate,
+                    active_index_list,
+                    acceleration_attempt.damping))
+            {
+                has_invalid_anderson_candidate = true;
+                return LocalFittingAccelerationAttemptStatus::InvalidCandidate;
+            }
+
             auto attempt_change_list{
                 CalculateLocalFittingParameterChanges(
                     attempt_state.estimation_list,
@@ -2370,7 +2518,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                     attempt_best_candidate_stats,
                     kLocalFittingConvergenceObjectiveRelativeTolerance,
                     attempt,
-                    kLocalFittingObjectiveBacktrackingMaximumAttempts);
+                    attempt_size);
             }
 
             if (backtracking_decision.accepted)
@@ -2387,33 +2535,89 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 }
                 current_objective_scale_sample = objective_stats.residual_scale_sample;
                 current_objective_samples = std::move(attempt_objective_samples);
+                current_acceleration_attempt = acceleration_attempt;
                 has_current_candidate = true;
-                break;
+                return LocalFittingAccelerationAttemptStatus::Accepted;
             }
-            has_backtracking_rejection = true;
+            has_objective_backtracking_rejection = true;
             ridge_ratio = IncreaseLocalFittingRidgeRatio(ridge_ratio);
-            if (backtracking_decision.should_shrink_beta &&
-                !relaxation_controller.IsAtMinimum())
+            if (backtracking_decision.should_shrink_beta && !backtracking_decision.reached_retry_limit)
             {
-                relaxation_controller.Shrink();
-                continue;
+                return LocalFittingAccelerationAttemptStatus::ObjectiveRejectedCanRetry;
             }
-            break;
+            return LocalFittingAccelerationAttemptStatus::ObjectiveRejectedFinal;
+        };
+
+        const auto run_attempt_group = [&](const std::vector<LocalFittingAccelerationAttempt> & attempt_list)
+        {
+            for (int attempt = 0; attempt < static_cast<int>(attempt_list.size()); attempt++)
+            {
+                const auto attempt_status{
+                    evaluate_attempt(
+                        attempt_list.at(static_cast<std::size_t>(attempt)),
+                        attempt,
+                        static_cast<int>(attempt_list.size()))
+                };
+                if (has_current_candidate)
+                {
+                    break;
+                }
+                if (attempt_status == LocalFittingAccelerationAttemptStatus::ObjectiveRejectedFinal)
+                {
+                    break;
+                }
+            }
+        };
+
+        if (anderson_candidate.has_value())
+        {
+            run_attempt_group(BuildLocalFittingAccelerationAttempts(true));
         }
 
         if (!has_current_candidate)
         {
-            if (!relaxation_controller.IsAtMinimum() && iter + 1 < kLocalFittingMaximumIterations)
+            if (anderson_candidate.has_value())
             {
-                const auto next_beta{ relaxation_controller.Shrink() };
+                suppress_anderson_until_fixed_point_progress = true;
+                acceleration_history.Clear();
+                should_reset_acceleration_history_before_commit = true;
                 if (!options.quiet_mode)
                 {
                     std::ostringstream progress_message;
                     progress_message << "Local fitting iteration " << iter + 1 << '/'
-                        << kLocalFittingMaximumIterations << std::fixed << std::setprecision(5)
-                        << " rejected by objective backtracking; retry with beta = " << next_beta
+                        << kLocalFittingMaximumIterations
+                        << " switching from Anderson acceleration to damped fixed-point fallback"
+                        << ", next acceleration = "
+                        << GetLocalFittingAccelerationText(
+                            LocalFittingAccelerationKind::DampedFixedPoint)
+                        << (has_invalid_anderson_candidate ? " after invalid Anderson candidate" : "");
+                    Logger::FinishProgressLine();
+                    Logger::Log(LogLevel::Info, progress_message.str());
+                }
+            }
+            run_attempt_group(BuildLocalFittingAccelerationAttempts(false));
+        }
+
+        if (!has_current_candidate)
+        {
+            consecutive_backtracking_retry_count++;
+            suppress_anderson_until_fixed_point_progress = true;
+            acceleration_history.Clear();
+            if (ridge_ratio < kJointOffsetRidgeRatioMax &&
+                iter + 1 < kLocalFittingMaximumIterations)
+            {
+                if (!options.quiet_mode)
+                {
+                    std::ostringstream progress_message;
+                    progress_message
+                        << "Objective backtracking rejected all attempts; backtracking retry "
+                        << consecutive_backtracking_retry_count
+                        << " after local fitting iteration " << accepted_iteration_count
+                        << std::fixed << std::setprecision(5)
+                        << "; acceleration history reset"
                         << ", next ridge ratio = " << ridge_ratio;
-                    Logger::ProgressLine(progress_message.str());
+                    Logger::FinishProgressLine();
+                    Logger::Log(LogLevel::Info, progress_message.str());
                 }
                 continue;
             }
@@ -2426,13 +2630,29 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 Logger::FinishProgressLine();
                 std::ostringstream warning_message;
                 warning_message
-                    << "Stopped local fitting because objective backtracking rejected the candidate at "
-                    << (relaxation_controller.IsAtMinimum() ? "minimum beta" : "the maximum iteration limit")
+                    << "Stopped local fitting because objective backtracking rejected all "
+                    << "acceleration and fixed-point attempts "
+                    << (ridge_ratio >= kJointOffsetRidgeRatioMax ?
+                        "at the maximum joint-offset ridge ratio" :
+                        "at the maximum iteration limit")
                     << "; applying "
                     << (has_best_candidate ? "best fixed-point candidate." : "previous state.");
                 Logger::Log(LogLevel::Warning, warning_message.str());
             }
             break;
+        }
+
+        consecutive_backtracking_retry_count = 0;
+        accepted_iteration_count++;
+        if (current_acceleration_attempt.kind == LocalFittingAccelerationKind::DampedFixedPoint &&
+            !has_objective_backtracking_rejection &&
+            suppress_anderson_this_iteration)
+        {
+            suppress_anderson_until_fixed_point_progress = false;
+        }
+        else if (current_acceleration_attempt.kind != LocalFittingAccelerationKind::DampedFixedPoint)
+        {
+            suppress_anderson_until_fixed_point_progress = false;
         }
 
         if (current_candidate_stats.has_quality_objective)
@@ -2446,11 +2666,30 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 joint_offset_ridge_multiplier_list.at(active_index) = 1.0;
             }
         }
-        if (!has_backtracking_rejection)
+        if (!has_objective_backtracking_rejection)
         {
             ridge_ratio = DecreaseLocalFittingRidgeRatio(ridge_ratio);
         }
-        relaxation_controller.Update(normalized_change_stats);
+        if (has_suspicious_offset_fallback)
+        {
+            acceleration_history.Clear();
+            suppress_anderson_until_fixed_point_progress = true;
+        }
+        else if (suppress_anderson_until_fixed_point_progress)
+        {
+            acceleration_history.Clear();
+        }
+        else
+        {
+            if (should_reset_acceleration_history_before_commit)
+            {
+                acceleration_history.Clear();
+            }
+            acceleration_history.Commit(
+                active_index_list,
+                previous_state.estimation_list,
+                raw_state.estimation_list);
+        }
         if (!has_best_candidate ||
             algorithm::IsBetterFittingQualityCandidate(
                 current_candidate_stats,
@@ -2489,13 +2728,16 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         if (!options.quiet_mode)
         {
             std::ostringstream progress_message;
-            progress_message << "Iter. " << iter + 1 << '/' << kLocalFittingMaximumIterations
+            progress_message << "Iter. " << accepted_iteration_count
+                << '/' << kLocalFittingMaximumIterations
                 << std::fixed << std::setprecision(4)
                 << ", d_amplitude = "<< change_stats.percentile_list.at(GaussianModel3D::AmplitudeIndex())
                 << ", d_width = "<< change_stats.percentile_list.at(GaussianModel3D::WidthIndex())
                 << ", d_offset = "<< change_stats.percentile_list.at(GaussianModel3D::OffsetIndex())
                 << ", objective = "<< current_candidate_stats.quality_objective
-                << ", beta = "<< beta
+                << ", acceleration = "
+                << GetLocalFittingAccelerationText(current_acceleration_attempt.kind)
+                << ", damping = "<< current_acceleration_attempt.damping
                 << ", active/frozen/thawed atoms = "<< freeze_tracker.GetActiveCount()
                 << "/" << freeze_tracker.GetFrozenCount() << "/" << thaw_count;
             Logger::ProgressLine(progress_message.str());
@@ -2508,7 +2750,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             {
                 Logger::FinishProgressLine();
                 Logger::Log(LogLevel::Info,
-                    "Converged after " + std::to_string(iter + 1) +
+                    "Converged after " + std::to_string(accepted_iteration_count) +
                     " iterations because all local atoms are frozen.");
             }
             break;
@@ -2526,7 +2768,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             {
                 Logger::FinishProgressLine();
                 Logger::Log(LogLevel::Info,
-                    "Converged after " + std::to_string(iter + 1) +
+                    "Converged after " + std::to_string(accepted_iteration_count) +
                     " iterations with normalized percentile amplitude change = " +
                     std::to_string(
                         normalized_change_stats.percentile_list.at(

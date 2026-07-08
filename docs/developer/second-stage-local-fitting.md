@@ -49,10 +49,10 @@ previous state
     -> estimate joint offsets for active atoms
     -> refit active atoms with selected-neighbor contributions removed
     -> roll back any suspicious offset clusters found before or during refit
-    -> apply under-relaxation
+    -> build an Anderson-accelerated or damped fixed-point candidate
     -> compute active-atom p95 absolute and normalized parameter changes
-    -> backtrack against the objective; shrink beta and retry when needed
-    -> update candidate ranking and adaptive relaxation
+    -> backtrack against the objective; retry with lower damping when needed
+    -> update candidate ranking and Anderson history
     -> freeze stable atoms and thaw changed selected neighbors
     -> exit, fallback, or continue
 ```
@@ -155,25 +155,43 @@ the previous iteration state. This keeps post-refit suspicious-offset handling
 synchronous with the pre-refit joint-offset check without letting atoms reached
 only by propagation become new expansion seeds.
 
-## Relaxation, Ranking, and Convergence
+## Acceleration, Ranking, and Convergence
 
-The raw iteration result is under-relaxed before convergence is checked:
+The raw iteration result is treated as the fixed-point map output `G(x)`.
+Second-stage fitting keeps a short internal Anderson Acceleration history of
+accepted active-set pairs `(x, G(x))`, with residuals `G(x) - x`. When at least
+one compatible prior pair is available, the stage solves a constrained least
+squares problem over scaled residuals and proposes:
 
 ```text
-relaxed = beta * current + (1 - beta) * previous
+candidate = sum(gamma_i * G(x_i)), where sum(gamma_i) = 1
 ```
 
-`beta` starts from the internal `kAdaptiveRelaxationInitialBeta` value (`0.5`)
-and is clamped to the local adaptive relaxation range `[0.05, 1.0]`. After each
-iteration, the controller looks at the maximum of the three 95th-percentile
-normalized parameter changes. A change more than 1% larger than the previous
-iteration for three consecutive accepted iterations halves `beta`. Two
-consecutive changes more than 1% smaller than the previous iteration allow
-`beta` to grow by `1.2x`, up to `1.0`. This is a trend-based adaptive relaxation
-rule, not Anderson acceleration. The relaxed vector replaces the candidate MDPDE
-model while preserving its standard-deviation model.
+Residuals are scaled per parameter using the same normalized-change scale floor
+used by convergence checks, so amplitude does not dominate width and offset. If
+the active atom set changes, a suspicious-offset rollback occurs, or an entire
+outer iteration is rejected and retried with a changed ridge ratio, the Anderson
+history is cleared. Candidates with non-finite active parameters, non-positive
+active widths, invalid coefficients, or excessive extrapolation are discarded.
 
-When an objective reference is available, the relaxed candidate must produce a
+Each outer iteration tries the Anderson candidate with damping values `1.0`,
+`0.5`, and `0.25`. A damping value applies as:
+
+```text
+damped = previous + damping * (candidate - previous)
+```
+
+The first attempt is logged as `acceleration = aa`; lower damping is logged as
+`acceleration = damped-aa`. If no Anderson candidate is available, if an
+Anderson candidate is invalid, or if all Anderson damping attempts are rejected
+by objective backtracking, the stage clears stale Anderson history and tries the
+same damping sequence on the raw fixed-point output. Those attempts are logged
+as `acceleration = damped-fixed-point`. When Anderson fails and the fixed-point
+fallback is used, Anderson is suppressed for the next outer iteration. A
+fixed-point iteration must then be accepted without objective backtracking before
+new Anderson history is committed and accelerated candidates are enabled again.
+
+When an objective reference is available, the accelerated or damped candidate must produce a
 finite objective and pass the objective quality gate before it can update
 ranking, freezing, thawing, or the next iteration's previous state. If no
 objective reference can be built at all, this quality gate is skipped and
@@ -183,20 +201,22 @@ candidate's own scale sample; after warm-up it is locked. If the candidate lacks
 an objective while a reference exists, or is worse than the previous state or the
 best tracked state by more than
 `kLocalFittingConvergenceObjectiveRelativeTolerance`, the attempt is rejected.
-When another attempt is available and `beta` is above its minimum, the stage
-shrinks `beta` and rebuilds the relaxed candidate from the same raw iteration
-result. Each outer iteration tries at most three relaxation candidates. If all
-attempts fail and `beta` is still above the local minimum, the raw iteration is
-rejected and the next outer iteration retries from the unchanged previous state
-with the smaller `beta`. Any rejected relaxation attempt also increases the
-dynamic joint offset ridge ratio, but that ridge change does not trigger an
-immediate refit; it applies when the next outer iteration rebuilds the
-joint-offset system.
+When another damping attempt is available, the stage rebuilds a candidate from
+the same raw iteration result. If both Anderson and fixed-point attempts fail,
+the raw iteration is rejected and the next outer iteration retries from the
+unchanged previous state with Anderson history reset and Anderson still
+suppressed. Objective backtracking rejections increase the dynamic joint offset
+ridge ratio, but invalid Anderson prechecks do not. The ridge change does not
+trigger an immediate refit; it applies when the next outer iteration rebuilds
+the joint-offset system. If rejection continues after the dynamic joint-offset
+ridge ratio reaches its configured maximum, the stage applies the best tracked
+candidate, or the unchanged previous state if no best candidate exists, instead
+of spending the remaining iteration budget on equivalent retries.
 
-Each relaxation attempt computes absolute and normalized parameter movement for
-amplitude, width, and offset for every selected atom. Active atoms are summarized
-by the 95th percentile, and the accepted attempt's normalized movement drives
-relaxation updates and convergence checks. Parameter convergence requires all
+Each acceleration attempt computes absolute and normalized parameter movement
+for amplitude, width, and offset for every selected atom. Active atoms are
+summarized by the 95th percentile, and the accepted attempt's normalized
+movement drives convergence checks. Parameter convergence requires all
 three active-set normalized percentile changes to be below
 `kLocalFittingNormalizedChangeTolerance`, and no suspicious offset rollback may
 have occurred in that iteration. Because only candidates accepted by objective
@@ -243,22 +263,21 @@ The loop has four terminal cases:
 
 - **All atoms frozen:** apply the previous state if the loop starts with no
   active atoms. If the last accepted update froze the remaining active atoms,
-  apply the current relaxed result, then log an info message when logging is
+  apply the current accepted accelerated result, then log an info message when logging is
   enabled.
-- **Parameter convergence:** apply the current relaxed iteration result when the
+- **Parameter convergence:** apply the current accepted accelerated iteration result when the
   iteration had no suspicious offset rollback, all three active-set normalized
   percentile changes are below `kLocalFittingNormalizedChangeTolerance`, and any
   available objective scale has finished warm-up, then log an info message when
   logging is enabled.
 - **Objective backtracking failure:** if a candidate is still rejected after the
-  retry limit and `beta` is already at the local minimum, or the maximum
-  iteration limit prevents retrying, apply the best tracked candidate when
-  available, otherwise apply the unchanged previous state, then log a warning
-  when logging is enabled.
+  acceleration damping sequence and the maximum iteration limit prevents retrying,
+  apply the best tracked candidate when available, otherwise apply the unchanged
+  previous state, then log a warning when logging is enabled.
 - **Maximum iterations reached:** apply the best fixed-point candidate found so
   far and log a warning when logging is enabled.
 
-On non-terminal accepted iterations, the relaxed estimation and result vectors
+On non-terminal accepted iterations, the accepted estimation and result vectors
 become the previous state for the next loop iteration. A rejected iteration does
 not update the fixed-point state or the freeze tracker.
 
