@@ -102,6 +102,35 @@ double CalculateSelectedAtomResponseMeanSquaredError(const rg::ModelObject & mod
     return squared_error_sum / static_cast<double>(sample_count);
 }
 
+double CalculateSelectedAtomResponseMeanSquaredError(
+    const rg::ModelObject & model_object,
+    std::size_t target_begin,
+    std::size_t target_end)
+{
+    double squared_error_sum{ 0.0 };
+    std::size_t sample_count{ 0 };
+    const auto & selected_atoms{ model_object.GetSelectedAtoms() };
+    for (std::size_t target_index = target_begin; target_index < target_end; target_index++)
+    {
+        const auto * atom{ selected_atoms.at(target_index) };
+        const auto local_view{ rg::AtomLocalPotentialView::RequireFor(*atom) };
+        for (const auto & sample : local_view.GetSamplingEntries(false))
+        {
+            double fitted_response{ 0.0 };
+            for (const auto * fitted_atom : selected_atoms)
+            {
+                const auto fitted_view{ rg::AtomLocalPotentialView::RequireFor(*fitted_atom) };
+                fitted_response += fitted_view.GetEstimateMDPDE().ResponseAtDistance(
+                    Distance(sample.point.position, fitted_atom->GetPosition()));
+            }
+            const auto residual{ static_cast<double>(sample.response) - fitted_response };
+            squared_error_sum += residual * residual;
+            sample_count++;
+        }
+    }
+    return squared_error_sum / static_cast<double>(sample_count);
+}
+
 std::unique_ptr<rg::ModelObject> BuildSecondStageFallbackDiagnosticModel()
 {
     ElectricPotential potential_model;
@@ -747,6 +776,37 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingKeepsAndersonAccelerationWit
     };
     const auto tolerance{ 1.0e-3 * std::max(initial_error, 1.0) };
     EXPECT_LE(fitted_error, initial_error + tolerance);
+    EXPECT_TRUE(
+        output.find("acceleration = aa") != std::string::npos ||
+        output.find("acceleration = damped-aa") != std::string::npos);
+    EXPECT_NE(
+        error_output.find("suspicious offset atom-events = "),
+        std::string::npos);
+    ExpectSelectedAtomEstimatesAreFinite(*model);
+}
+
+TEST(EstimatorTesterTest, RunSecondStageLocalFittingAcceptsSeparatedClusterWithRollbackCluster)
+{
+    auto model{ BuildSeparatedSecondStageClusterModelWithSuspiciousLeftCluster() };
+    const auto initial_right_cluster_error{
+        CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4)
+    };
+    auto options{ MakeSecondStageOptions() };
+    options.quiet_mode = false;
+
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    rt::RunSecondStageLocalFitting(*model, options);
+    const std::string output{ testing::internal::GetCapturedStdout() };
+    const std::string error_output{ testing::internal::GetCapturedStderr() };
+    Logger::SetLogLevel(previous_log_level);
+
+    const auto fitted_right_cluster_error{
+        CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4)
+    };
+    EXPECT_LT(fitted_right_cluster_error, initial_right_cluster_error);
     EXPECT_TRUE(
         output.find("acceleration = aa") != std::string::npos ||
         output.find("acceleration = damped-aa") != std::string::npos);

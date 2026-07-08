@@ -83,9 +83,11 @@ The resulting system is solved with weighted ridge regression. The ridge term is
 relative to the previous offsets, so weakly constrained columns stay close to
 their prior values. Its global ratio starts at `kJointOffsetRidgeRatio`
 (`1.0e-3`) and is adjusted across outer fixed-point iterations:
-objective-backtracking rejections increase the ratio for the next recomputed
-joint solve, while accepted iterations without backtracking gradually decrease
-it.
+objective-backtracking rejections that reject every active cluster increase the
+ratio for the next recomputed joint solve, while accepted iterations without
+cluster rejections gradually decrease it. Cluster-local objective rejections use
+per-atom ridge multipliers first, so a rejected cluster can be retried without
+raising the baseline ridge for unrelated clusters.
 
 The joint offset builder also applies a proactive local ridge guard before the
 solve. While assembling the sparse design matrix, it accumulates active-column
@@ -99,8 +101,10 @@ the active set changes.
 Atoms that previously participated in a suspicious joint offset rollback can
 also receive a temporary per-atom ridge multiplier, which keeps their next joint
 offset solve closer to the previous offset without changing public fitting
-options. Huber weights are then updated from residual median absolute deviation.
-The IRLS loop stops when the weighted-ridge surrogate objective would
+options. Suspicious-offset and objective-backtracking multipliers are tracked
+separately and combined with `max()` when the joint system is built, so accepting
+one source does not accidentally clear the other. Huber weights are then updated
+from residual median absolute deviation. The IRLS loop stops when the weighted-ridge surrogate objective would
 deteriorate, when the maximum normalized offset movement drops below
 `kJointOffsetIrlsNormalizedChangeTolerance`, or when the Huber iteration limit is
 reached.
@@ -185,51 +189,47 @@ Each outer iteration tries the Anderson candidate with damping values `1.0`,
 damped = previous + damping * (candidate - previous)
 ```
 
-The first attempt is logged as `acceleration = aa`; lower damping is logged as
-`acceleration = damped-aa`. A full candidate starts from the raw fixed-point
-output, then replaces only clusters with successful Anderson candidates. If no
-cluster can produce an Anderson candidate, the stage tries the damped fixed-point
-sequence directly. If a localized Anderson candidate is invalid or all Anderson
-damping attempts are rejected by objective backtracking, only the clusters used
-by that candidate clear their stale history and suppress Anderson. The same
-damping sequence is then tried on the raw fixed-point output and logged as
-`acceleration = damped-fixed-point`. A suppressed cluster must receive accepted
-fixed-point progress before new Anderson history is committed and accelerated
-candidates are enabled again. Suspicious-offset rollback clears and suppresses
-only clusters containing rolled-back atoms; unrelated clusters may continue to
-commit accepted fixed-point pairs.
+The first accepted Anderson attempt is logged as `acceleration = aa`; lower
+damping is logged as `acceleration = damped-aa`. A full iteration candidate
+starts from the previous state. Anderson damping is tried per cluster first; each
+cluster that passes its local objective gate writes only its active atoms into
+the assembled candidate. Clusters with missing, invalid, or rejected Anderson
+candidates remain pending and then try the damped fixed-point sequence logged as
+`acceleration = damped-fixed-point`. If no cluster can produce an Anderson
+candidate, the stage starts directly with fixed-point damping.
 
-When an objective reference is available, the accelerated or damped candidate must produce a
-finite objective and pass the objective quality gate before it can update
-ranking, freezing, thawing, or the next iteration's previous state. If no
-objective reference can be built at all, this quality gate is skipped and
-candidate ranking falls back to normalized parameter movement. During
-residual-scale warm-up the objective reference is provisional and can include the
-candidate's own scale sample; after warm-up it is locked. If the candidate lacks
-an objective while a reference exists, or is worse than the previous state or the
-best tracked state by more than
-`kLocalFittingConvergenceObjectiveRelativeTolerance`, the attempt is rejected.
-When another damping attempt is available, the stage rebuilds a candidate from
-the same raw iteration result. If both Anderson and fixed-point attempts fail,
-the raw iteration is rejected and the next outer iteration retries from the
-unchanged previous state; any Anderson clusters used by the rejected localized
-candidate remain suppressed, while unused clusters keep their histories.
-Objective backtracking rejections increase the dynamic joint offset ridge ratio,
-but invalid Anderson prechecks do not. The ridge change does not trigger an
-immediate refit; it applies when the next outer iteration rebuilds the
-joint-offset system. If rejection continues after the dynamic joint-offset ridge
-ratio reaches its configured maximum, the stage applies the best tracked
-candidate, or the unchanged previous state if no best candidate exists, instead
-of spending the remaining iteration budget on equivalent retries.
+Objective samples are owned by clusters. A selected sample belongs to the
+connected component containing the active target atom and active selected
+neighbors that contribute to that sample residual. Samples without active
+contributors are ignored by the cluster gate for that iteration, and a sample is
+never counted by more than one cluster. Each cluster keeps its own residual-scale
+tracker, previous objective samples, best local objective stats, and objective
+ridge multiplier. During residual-scale warm-up, that cluster's previous,
+current, and best objective values are re-scored with the same provisional scale
+before the backtracking decision is made.
 
-Each acceleration attempt computes absolute and normalized parameter movement
-for amplitude, width, and offset for every selected atom. Active atoms are
-summarized by the 95th percentile, and the accepted attempt's normalized
-movement drives convergence checks. Parameter convergence requires all
-three active-set normalized percentile changes to be below
-`kLocalFittingNormalizedChangeTolerance`, and no suspicious offset rollback may
-have occurred in that iteration. Because only candidates accepted by objective
-backtracking reach this point, convergence never applies a rejected candidate.
+If a cluster candidate lacks a finite objective while its local reference exists,
+or is worse than that cluster's previous or best tracked state by more than
+`kLocalFittingConvergenceObjectiveRelativeTolerance`, only that cluster is
+rejected. Other accepted clusters still update the assembled candidate and become
+the next previous state. Rejected Anderson clusters clear and suppress only their
+own history; a suppressed cluster must receive accepted fixed-point progress
+before Anderson is enabled again. Rejected clusters increase only their
+cluster-local objective ridge multiplier for the next outer iteration. The
+global ridge ratio increases only when no active cluster is accepted.
+Suspicious-offset rollback clears and suppresses only clusters containing
+rolled-back atoms; unrelated accepted clusters may continue to commit history.
+
+Each accepted assembled candidate computes absolute and normalized parameter
+movement for amplitude, width, and offset for every selected atom. Active atoms
+are summarized by the 95th percentile, and the accepted candidate's normalized
+movement drives convergence checks. Freeze tracking is updated only for active
+atoms in clusters that accepted progress; rejected clusters keep their previous
+state and cannot be frozen merely because their accepted movement is zero.
+Parameter convergence requires all three active-set normalized percentile
+changes to be below `kLocalFittingNormalizedChangeTolerance`, no suspicious
+offset rollback, no cluster objective rejection in that iteration, and every
+active cluster objective scale with a reference to be locked.
 
 Atoms are frozen when their maximum absolute parameter movement stays below
 `sqrt(kLocalFittingParameterChangeTolerance) * 0.1` for three consecutive active
@@ -249,22 +249,15 @@ Suspicious offset cluster members are thawed after freeze tracking so the next
 iteration can retry them with the temporary per-atom ridge multiplier; those
 forced retry thaws are not counted against the dependency thaw cap.
 
-The best fixed-point candidate is tracked separately. At second-stage entry,
-the initial residuals seed the residual normalization scale when they are finite.
-During warm-up, each accepted objective-scored candidate contributes its residual
-median absolute deviation to a moving-average scale; after five such accepted
-candidates, that average is locked for the rest of the fitting run. Each
-residual scale sample is floored by a small fraction of the robust response scale
-from the same objective samples, then by the absolute Huber scale minimum, so a
-near-perfect entry fit cannot create an overly sensitive denominator. During
-warm-up, every previous, current, and best candidate involved in a quality
-comparison is re-scored with the same provisional scale before backtracking or
-ranking uses the objective values. A candidate is better when its normalized
+The global best candidate is still tracked for diagnostics and initial fallback,
+but cluster-local objective states decide acceptance. At second-stage entry, each
+cluster seeds its residual normalization scale from the cluster-owned objective
+samples when they are finite. Each residual scale sample is floored by a small
+fraction of the robust response scale from the same objective samples, then by
+the absolute Huber scale minimum, so a near-perfect entry fit cannot create an
+overly sensitive denominator. A local candidate is better when its normalized
 robust objective improves beyond the tie tolerance; objective ties are broken by
 the maximum of the three normalized percentile parameter changes.
-Objective acceptance is enforced before convergence is evaluated, when objective
-values are available. Parameter convergence is not allowed to terminate the stage
-while an available objective scale is still in warm-up.
 
 ## Exit Paths
 
@@ -275,16 +268,18 @@ The loop has four terminal cases:
   apply the current accepted accelerated result, then log an info message when logging is
   enabled.
 - **Parameter convergence:** apply the current accepted accelerated iteration result when the
-  iteration had no suspicious offset rollback, all three active-set normalized
-  percentile changes are below `kLocalFittingNormalizedChangeTolerance`, and any
-  available objective scale has finished warm-up, then log an info message when
+  iteration had no suspicious offset rollback, no cluster objective rejection,
+  all three active-set normalized percentile changes are below
+  `kLocalFittingNormalizedChangeTolerance`, and all active cluster objective
+  scales with references have finished warm-up, then log an info message when
   logging is enabled.
-- **Objective backtracking failure:** if a candidate is still rejected after the
-  acceleration damping sequence and the maximum iteration limit prevents retrying,
-  apply the best tracked candidate when available, otherwise apply the unchanged
-  previous state, then log a warning when logging is enabled.
-- **Maximum iterations reached:** apply the best fixed-point candidate found so
-  far and log a warning when logging is enabled.
+- **Objective backtracking failure:** if all clusters are still rejected after the
+  acceleration damping sequence and retry is no longer possible, apply the
+  current previous state when at least one iteration has already been accepted;
+  otherwise apply the best tracked global candidate when available, or the
+  unchanged previous state if no best candidate exists.
+- **Maximum iterations reached:** apply the current accepted assembled candidate
+  and log a warning when logging is enabled.
 
 On non-terminal accepted iterations, the accepted estimation and result vectors
 become the previous state for the next loop iteration. A rejected iteration does
