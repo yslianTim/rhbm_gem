@@ -1239,11 +1239,13 @@ void GausPainter::PaintQScoreAminoAcidMainChainComponent(
     const int main_chain_element_count{ 4 };
     std::unique_ptr<TH2> frame;
     std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> gaus_graph_ori_map[main_chain_element_count];
+    std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> gaus_graph_com_map[main_chain_element_count];
     std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> gaus_graph_new_map[main_chain_element_count];
     for (size_t k = 0; k < main_chain_element_count; k++)
     {
-        gaus_graph_ori_map[k] = plot_builder->CreateAtomQScoreToSequenceIDGraphMap(k, 0);
-        gaus_graph_new_map[k] = plot_builder->CreateAtomQScoreToSequenceIDGraphMap(k, 1);
+        gaus_graph_ori_map[k] = plot_builder->CreateAtomQScoreToSequenceIDGraphMap(k, 0, false, false);
+        gaus_graph_com_map[k] = plot_builder->CreateAtomQScoreToSequenceIDGraphMap(k, 0, false, true);
+        gaus_graph_new_map[k] = plot_builder->CreateAtomQScoreToSequenceIDGraphMap(k, 1, false, true);
     }
 
     for (auto & [chain_id, gaus_graph] : gaus_graph_ori_map[0])
@@ -1307,9 +1309,12 @@ void GausPainter::PaintQScoreAminoAcidMainChainComponent(
         
             root_helper::SetMarkerAttribute(gaus_graph_ori_map[k].at(chain_id).get(), 20, 1.2f, kBlue);
             root_helper::SetLineAttribute(gaus_graph_ori_map[k].at(chain_id).get(), 1, 1, kBlue);
+            root_helper::SetMarkerAttribute(gaus_graph_com_map[k].at(chain_id).get(), 24, 1.2f, kGreen+1);
+            root_helper::SetLineAttribute(gaus_graph_com_map[k].at(chain_id).get(), 1, 1, kGreen+1);
             root_helper::SetMarkerAttribute(gaus_graph_new_map[k].at(chain_id).get(), 25, 1.2f, kRed);
             root_helper::SetLineAttribute(gaus_graph_new_map[k].at(chain_id).get(), 1, 1, kRed);
             gaus_graph_ori_map[k].at(chain_id)->Draw("PL X0");
+            gaus_graph_com_map[k].at(chain_id)->Draw("PL X0");
             gaus_graph_new_map[k].at(chain_id)->Draw("PL X0");
 
             legend = root_helper::CreateLegend(0.10, 0.90, 1.00, 1.00, false);

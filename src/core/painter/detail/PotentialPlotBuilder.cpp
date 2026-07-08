@@ -899,7 +899,7 @@ PotentialPlotBuilder::CreateAtomMapValueToSequenceIDGraphMap(
 
 std::unordered_map<std::string, std::unique_ptr<TGraphErrors>>
 PotentialPlotBuilder::CreateAtomQScoreToSequenceIDGraphMap(
-    size_t main_chain_element_id, const int par_choice)
+    size_t main_chain_element_id, const int par_choice, bool apply_selection, bool use_updated_sample)
 {
     if (IsModelObjectAvailable() == false)
     {
@@ -925,9 +925,8 @@ PotentialPlotBuilder::CreateAtomQScoreToSequenceIDGraphMap(
             count_map[chain_id] = 0;
         }
         auto x_value{ static_cast<double>(sequence_id) };
-        auto sampling_entries{ (par_choice == 0) ?
-            entry.GetSamplingEntries(false, false) :
-            entry.GetSamplingEntries(false, true)
+        auto sampling_entries{
+            entry.GetSamplingEntries(apply_selection, use_updated_sample)
         };
         auto q_score{
             local_potential_series::ComputeQScore(
