@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <string>
 #include <string_view>
 #include <atomic>
@@ -18,6 +19,7 @@ class Logger
 {
     static std::atomic<LogLevel> m_current_level;
     static std::mutex m_stream_mutex;
+    static std::size_t m_progress_line_width;
 
 public:
     static LogLevel GetLogLevel() { return m_current_level.load(); }

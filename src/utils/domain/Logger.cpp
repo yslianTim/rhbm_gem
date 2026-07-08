@@ -2,9 +2,11 @@
 
 #include <iostream>
 #include <sstream>
+#include <string>
 
 std::atomic<LogLevel> Logger::m_current_level{ LogLevel::Info };
 std::mutex Logger::m_stream_mutex{};
+std::size_t Logger::m_progress_line_width{ 0 };
 
 LogLevel Logger::NormalizeLevel(LogLevel level)
 {
@@ -129,12 +131,19 @@ void Logger::ProgressLine(std::string_view message)
 {
     if (m_current_level.load() < LogLevel::Info) return;
     std::lock_guard<std::mutex> lock(m_stream_mutex);
-    std::cout << '\r' << message << std::flush;
+    std::cout << '\r' << message;
+    if (message.size() < m_progress_line_width)
+    {
+        std::cout << std::string(m_progress_line_width - message.size(), ' ');
+    }
+    m_progress_line_width = message.size();
+    std::cout << std::flush;
 }
 
 void Logger::FinishProgressLine()
 {
-    if (m_current_level.load() < LogLevel::Info) return;
     std::lock_guard<std::mutex> lock(m_stream_mutex);
+    m_progress_line_width = 0;
+    if (m_current_level.load() < LogLevel::Info) return;
     std::cout << '\n' << std::flush;
 }

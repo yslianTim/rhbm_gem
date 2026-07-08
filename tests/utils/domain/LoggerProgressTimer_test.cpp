@@ -47,15 +47,33 @@ TEST(LoggerProgressTimerTest, ProgressLineUpdatesSingleLineAndFinishes)
 
     Logger::SetLogLevel(LogLevel::Info);
     testing::internal::CaptureStdout();
-    Logger::ProgressLine("iteration 1");
-    Logger::ProgressLine("iteration 2");
+    Logger::ProgressLine("iteration 12345");
+    Logger::ProgressLine("iter 2");
     Logger::FinishProgressLine();
     const std::string out{ testing::internal::GetCapturedStdout() };
     Logger::SetLogLevel(previous_log_level);
 
     EXPECT_EQ(static_cast<std::size_t>(2), std::count(out.begin(), out.end(), '\r'));
     EXPECT_EQ(static_cast<std::size_t>(1), std::count(out.begin(), out.end(), '\n'));
-    EXPECT_NE(out.find("\riteration 1\riteration 2\n"), std::string::npos);
+    EXPECT_NE(out.find("\riteration 12345\riter 2         \n"), std::string::npos);
+}
+
+TEST(LoggerProgressTimerTest, ProgressLineFinishResetsPaddingWidth)
+{
+    const auto previous_log_level{ Logger::GetLogLevel() };
+
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    Logger::ProgressLine("long progress");
+    Logger::FinishProgressLine();
+    Logger::ProgressLine("short");
+    Logger::FinishProgressLine();
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_EQ(static_cast<std::size_t>(2), std::count(out.begin(), out.end(), '\r'));
+    EXPECT_EQ(static_cast<std::size_t>(2), std::count(out.begin(), out.end(), '\n'));
+    EXPECT_NE(out.find("\rlong progress\n\rshort\n"), std::string::npos);
 }
 
 TEST(LoggerProgressTimerTest, ProgressLineSuppressedBelowInfo)
