@@ -196,7 +196,10 @@ cluster that passes its local objective gate writes only its active atoms into
 the assembled candidate. Clusters with missing, invalid, or rejected Anderson
 candidates remain pending and then try the damped fixed-point sequence logged as
 `acceleration = damped-fixed-point`. If no cluster can produce an Anderson
-candidate, the stage starts directly with fixed-point damping.
+candidate, the stage starts directly with fixed-point damping. Anderson history
+candidate construction only checks structural compatibility; the damped
+candidate that would actually be applied must still be finite and have positive
+active widths before it can reach objective scoring.
 
 Objective samples are owned by clusters. A selected sample belongs to the
 connected component containing the active target atom and active selected
@@ -249,15 +252,16 @@ Suspicious offset cluster members are thawed after freeze tracking so the next
 iteration can retry them with the temporary per-atom ridge multiplier; those
 forced retry thaws are not counted against the dependency thaw cap.
 
-The global best candidate is still tracked for diagnostics and initial fallback,
-but cluster-local objective states decide acceptance. At second-stage entry, each
-cluster seeds its residual normalization scale from the cluster-owned objective
-samples when they are finite. Each residual scale sample is floored by a small
-fraction of the robust response scale from the same objective samples, then by
-the absolute Huber scale minimum, so a near-perfect entry fit cannot create an
-overly sensitive denominator. A local candidate is better when its normalized
-robust objective improves beyond the tie tolerance; objective ties are broken by
-the maximum of the three normalized percentile parameter changes.
+Global objective stats are kept for progress logging and diagnostics, but
+cluster-local objective states decide acceptance and fallback behavior. At
+second-stage entry, each cluster seeds its residual normalization scale from the
+cluster-owned objective samples when they are finite. Each residual scale sample
+is floored by a small fraction of the robust response scale from the same
+objective samples, then by the absolute Huber scale minimum, so a near-perfect
+entry fit cannot create an overly sensitive denominator. A local candidate is
+better when its normalized robust objective improves beyond the tie tolerance;
+objective ties are broken by the maximum of the three normalized percentile
+parameter changes.
 
 ## Exit Paths
 
@@ -275,9 +279,7 @@ The loop has four terminal cases:
   logging is enabled.
 - **Objective backtracking failure:** if all clusters are still rejected after the
   acceleration damping sequence and retry is no longer possible, apply the
-  current previous state when at least one iteration has already been accepted;
-  otherwise apply the best tracked global candidate when available, or the
-  unchanged previous state if no best candidate exists.
+  current previous state and log a warning when logging is enabled.
 - **Maximum iterations reached:** apply the current accepted assembled candidate
   and log a warning when logging is enabled.
 

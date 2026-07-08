@@ -715,8 +715,10 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingLogsAndersonAccelerationMode
     const auto previous_log_level{ Logger::GetLogLevel() };
     Logger::SetLogLevel(LogLevel::Info);
     testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
     rt::RunSecondStageLocalFitting(*model, options);
     const std::string output{ testing::internal::GetCapturedStdout() };
+    const std::string error_output{ testing::internal::GetCapturedStderr() };
     Logger::SetLogLevel(previous_log_level);
 
     EXPECT_TRUE(
@@ -749,6 +751,16 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingLogsAndersonAccelerationMode
     if (next_damped_anderson_position != std::string::npos)
     {
         EXPECT_GT(next_damped_anderson_position, fixed_point_position);
+    }
+    EXPECT_EQ(
+        error_output.find("best fixed-point candidate"),
+        std::string::npos);
+    if (error_output.find("Stopped local fitting because objective backtracking rejected all") !=
+        std::string::npos)
+    {
+        EXPECT_NE(
+            error_output.find("applying previous state."),
+            std::string::npos);
     }
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
