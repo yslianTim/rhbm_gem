@@ -321,6 +321,76 @@ std::unique_ptr<rg::ModelObject> BuildNearCollinearSecondStageModel()
     return model;
 }
 
+std::unique_ptr<rg::ModelObject> BuildSeparatedSecondStageClusterModelWithSuspiciousLeftCluster()
+{
+    std::vector<std::unique_ptr<rg::AtomObject>> atom_list;
+    atom_list.emplace_back(MakeSecondStageAtom(
+        1,
+        Spot::C,
+        Element::CARBON,
+        std::array<float, 3>{ 0.0F, 0.0F, 0.0F }));
+    atom_list.emplace_back(MakeSecondStageAtom(
+        2,
+        Spot::O,
+        Element::OXYGEN,
+        std::array<float, 3>{ 1.0e-4F, 0.0F, 0.0F }));
+    atom_list.emplace_back(MakeSecondStageAtom(
+        3,
+        Spot::N,
+        Element::NITROGEN,
+        std::array<float, 3>{ 10.0F, 0.0F, 0.0F }));
+    atom_list.emplace_back(MakeSecondStageAtom(
+        4,
+        Spot::CA,
+        Element::CARBON,
+        std::array<float, 3>{ 10.0001F, 0.0F, 0.0F }));
+
+    auto model{ std::make_unique<rg::ModelObject>(std::move(atom_list)) };
+    model->SelectAllAtoms();
+    auto analysis{ model->EditAnalysis() };
+    const std::vector<rg::GaussianModel3D> truth_model_list{
+        rg::GaussianModel3D{ 6.0, 0.55, 0.20 },
+        rg::GaussianModel3D{ 5.5, 0.55, -0.15 },
+        rg::GaussianModel3D{ 6.2, 0.55, 0.18 },
+        rg::GaussianModel3D{ 5.7, 0.55, -0.12 }
+    };
+    const rg::GaussianModel3D initial_model{ 5.8, 0.55, 0.0 };
+    const auto & selected_atoms{ model->GetSelectedAtoms() };
+    for (auto * atom : selected_atoms)
+    {
+        auto local_editor{ analysis.EnsureAtomLocalPotential(*atom) };
+        local_editor.SetAlphaR(0.0);
+        local_editor.SetGaussianResult(MakeSecondStageGaussianResult(initial_model));
+        local_editor.SetSamplingEntries(
+            BuildNearCollinearSamples(*atom, selected_atoms, truth_model_list));
+    }
+
+    auto * suspicious_atom{ selected_atoms.at(0) };
+    const auto suspicious_position{ suspicious_atom->GetPosition() };
+    auto suspicious_sampling_entries{
+        rg::AtomLocalPotentialView::RequireFor(*suspicious_atom).GetSamplingEntries(false)
+    };
+    suspicious_sampling_entries.resize(256);
+    suspicious_sampling_entries.front().response = 0.0F;
+    suspicious_sampling_entries.front().point.distance = 0.0F;
+    suspicious_sampling_entries.front().point.position = suspicious_position;
+    for (std::size_t i = 1; i < suspicious_sampling_entries.size(); i++)
+    {
+        auto & sample{ suspicious_sampling_entries.at(i) };
+        const auto response_scale{
+            0.5F + 0.5F * static_cast<float>(i) /
+                static_cast<float>(suspicious_sampling_entries.size())
+        };
+        sample.response = std::numeric_limits<float>::max() * response_scale;
+        sample.point.position = suspicious_position;
+        sample.point.position.at(0) += 100.0F;
+        sample.point.distance = 100.0F;
+    }
+    analysis.EnsureAtomLocalPotential(*suspicious_atom).SetSamplingEntries(
+        std::move(suspicious_sampling_entries));
+    return model;
+}
+
 std::unique_ptr<rg::ModelObject> BuildSecondStageSuspiciousOffsetDiagnosticModel()
 {
     ElectricPotential potential_model;
@@ -651,6 +721,38 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingLogsAndersonAccelerationMode
     {
         EXPECT_GT(next_damped_anderson_position, fixed_point_position);
     }
+    ExpectSelectedAtomEstimatesAreFinite(*model);
+}
+
+TEST(EstimatorTesterTest, RunSecondStageLocalFittingKeepsAndersonAccelerationWithSeparatedRollbackCluster)
+{
+    auto model{ BuildSeparatedSecondStageClusterModelWithSuspiciousLeftCluster() };
+    const auto initial_error{
+        CalculateSelectedAtomResponseMeanSquaredError(*model)
+    };
+    auto options{ MakeSecondStageOptions() };
+    options.quiet_mode = false;
+
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    rt::RunSecondStageLocalFitting(*model, options);
+    const std::string output{ testing::internal::GetCapturedStdout() };
+    const std::string error_output{ testing::internal::GetCapturedStderr() };
+    Logger::SetLogLevel(previous_log_level);
+
+    const auto fitted_error{
+        CalculateSelectedAtomResponseMeanSquaredError(*model)
+    };
+    const auto tolerance{ 1.0e-3 * std::max(initial_error, 1.0) };
+    EXPECT_LE(fitted_error, initial_error + tolerance);
+    EXPECT_TRUE(
+        output.find("acceleration = aa") != std::string::npos ||
+        output.find("acceleration = damped-aa") != std::string::npos);
+    EXPECT_NE(
+        error_output.find("suspicious offset atom-events = "),
+        std::string::npos);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 

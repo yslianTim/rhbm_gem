@@ -158,21 +158,25 @@ only by propagation become new expansion seeds.
 ## Acceleration, Ranking, and Convergence
 
 The raw iteration result is treated as the fixed-point map output `G(x)`.
-Second-stage fitting keeps a short internal Anderson Acceleration history of
-accepted active-set pairs `(x, G(x))`, with residuals `G(x) - x`. When at least
-one compatible prior pair is available, the stage solves a constrained least
-squares problem over scaled residuals and proposes:
+Second-stage fitting keeps short internal Anderson Acceleration histories for
+active-atom clusters. Clusters are rebuilt each outer iteration from selected
+atom samples: the active target atom and active selected neighbors that
+contribute to the same sample residual are connected, and connected components
+keep independent histories. When a cluster has at least one compatible prior
+pair `(x, G(x))`, with residuals `G(x) - x`, the stage solves a constrained least
+squares problem over scaled residuals for that cluster and proposes:
 
 ```text
 candidate = sum(gamma_i * G(x_i)), where sum(gamma_i) = 1
 ```
 
 Residuals are scaled per parameter using the same normalized-change scale floor
-used by convergence checks, so amplitude does not dominate width and offset. If
-the active atom set changes, a suspicious-offset rollback occurs, or an entire
-outer iteration is rejected and retried with a changed ridge ratio, the Anderson
-history is cleared. Candidates with non-finite active parameters, non-positive
-active widths, invalid coefficients, or excessive extrapolation are discarded.
+used by convergence checks, so amplitude does not dominate width and offset.
+Active-set changes no longer clear unrelated histories globally: clusters whose
+active members are unchanged keep their history, while merged, split, missing,
+or newly created clusters start fresh. Candidates with non-finite active
+parameters, non-positive active widths, invalid coefficients, or excessive
+extrapolation are discarded for that cluster.
 
 Each outer iteration tries the Anderson candidate with damping values `1.0`,
 `0.5`, and `0.25`. A damping value applies as:
@@ -182,14 +186,18 @@ damped = previous + damping * (candidate - previous)
 ```
 
 The first attempt is logged as `acceleration = aa`; lower damping is logged as
-`acceleration = damped-aa`. If no Anderson candidate is available, if an
-Anderson candidate is invalid, or if all Anderson damping attempts are rejected
-by objective backtracking, the stage clears stale Anderson history and tries the
-same damping sequence on the raw fixed-point output. Those attempts are logged
-as `acceleration = damped-fixed-point`. When Anderson fails and the fixed-point
-fallback is used, Anderson is suppressed for the next outer iteration. A
-fixed-point iteration must then be accepted without objective backtracking before
-new Anderson history is committed and accelerated candidates are enabled again.
+`acceleration = damped-aa`. A full candidate starts from the raw fixed-point
+output, then replaces only clusters with successful Anderson candidates. If no
+cluster can produce an Anderson candidate, the stage tries the damped fixed-point
+sequence directly. If a localized Anderson candidate is invalid or all Anderson
+damping attempts are rejected by objective backtracking, only the clusters used
+by that candidate clear their stale history and suppress Anderson. The same
+damping sequence is then tried on the raw fixed-point output and logged as
+`acceleration = damped-fixed-point`. A suppressed cluster must receive accepted
+fixed-point progress before new Anderson history is committed and accelerated
+candidates are enabled again. Suspicious-offset rollback clears and suppresses
+only clusters containing rolled-back atoms; unrelated clusters may continue to
+commit accepted fixed-point pairs.
 
 When an objective reference is available, the accelerated or damped candidate must produce a
 finite objective and pass the objective quality gate before it can update
@@ -204,12 +212,13 @@ best tracked state by more than
 When another damping attempt is available, the stage rebuilds a candidate from
 the same raw iteration result. If both Anderson and fixed-point attempts fail,
 the raw iteration is rejected and the next outer iteration retries from the
-unchanged previous state with Anderson history reset and Anderson still
-suppressed. Objective backtracking rejections increase the dynamic joint offset
-ridge ratio, but invalid Anderson prechecks do not. The ridge change does not
-trigger an immediate refit; it applies when the next outer iteration rebuilds
-the joint-offset system. If rejection continues after the dynamic joint-offset
-ridge ratio reaches its configured maximum, the stage applies the best tracked
+unchanged previous state; any Anderson clusters used by the rejected localized
+candidate remain suppressed, while unused clusters keep their histories.
+Objective backtracking rejections increase the dynamic joint offset ridge ratio,
+but invalid Anderson prechecks do not. The ridge change does not trigger an
+immediate refit; it applies when the next outer iteration rebuilds the
+joint-offset system. If rejection continues after the dynamic joint-offset ridge
+ratio reaches its configured maximum, the stage applies the best tracked
 candidate, or the unchanged previous state if no best candidate exists, instead
 of spending the remaining iteration budget on equivalent retries.
 
