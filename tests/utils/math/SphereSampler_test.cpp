@@ -52,7 +52,7 @@ void ExpectAnalysisSampleDistances(
     for (const auto & sample : samples)
     {
         EXPECT_GE(sample.distance, 0.0f);
-        EXPECT_LE(sample.distance, 1.5f);
+        EXPECT_LE(sample.distance, 2.0f);
         EXPECT_NEAR(sample.distance, ComputeDistance(center, sample.position), 1e-5f);
     }
 }
@@ -84,10 +84,10 @@ TEST(SphereSamplerTest, FibonacciProducesFixedDeterministicShells)
     const auto first_samples{ rhbm_gem::sphere_sampler::GenerateFibonacciDeterministic(center) };
     const auto second_samples{ rhbm_gem::sphere_sampler::GenerateFibonacciDeterministic(center) };
 
-    ASSERT_EQ(150u, first_samples.size());
+    ASSERT_EQ(200u, first_samples.size());
     EXPECT_EQ(0u, CountSamplesAtRadius(first_samples, 0.0f));
     EXPECT_EQ(10u, CountSamplesAtRadius(first_samples, 0.05f));
-    EXPECT_EQ(10u, CountSamplesAtRadius(first_samples, 1.45f));
+    EXPECT_EQ(10u, CountSamplesAtRadius(first_samples, 1.95f));
     ExpectAnalysisSampleDistances(first_samples, center);
     ExpectSamplesEqual(first_samples, second_samples);
 }
@@ -110,7 +110,7 @@ TEST(SphereSamplerTest, DispatchUsesRequestedMethod)
             SphereSamplingMethod::FibonacciDeterministic)
     };
 
-    ASSERT_EQ(150u, samples.size());
+    ASSERT_EQ(200u, samples.size());
     EXPECT_EQ(10u, CountSamplesAtRadius(samples, 0.05f));
     ExpectAnalysisSampleDistances(samples, center);
 }
