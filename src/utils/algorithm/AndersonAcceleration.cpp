@@ -32,6 +32,11 @@ void ValidateOptions(const AndersonAccelerationOptions & options)
     {
         throw std::invalid_argument("Anderson acceleration regularization must be finite and non-negative.");
     }
+    if (!std::isfinite(options.coefficient_abs_limit) || options.coefficient_abs_limit < 1.0)
+    {
+        throw std::invalid_argument(
+            "Anderson acceleration coefficient absolute limit must be finite and at least one.");
+    }
 }
 
 bool HasFiniteConsistentShape(
@@ -124,7 +129,8 @@ Eigen::MatrixXd BuildScaledResidualMatrix(
 std::optional<Eigen::VectorXd> SolveConstrainedCoefficients(
     const Eigen::MatrixXd & residual_matrix,
     double regularization,
-    double coefficient_l1_limit)
+    double coefficient_l1_limit,
+    double coefficient_abs_limit)
 {
     if (residual_matrix.rows() == 0 || residual_matrix.cols() < 2 || !residual_matrix.allFinite())
     {
@@ -164,6 +170,10 @@ std::optional<Eigen::VectorXd> SolveConstrainedCoefficients(
         return std::nullopt;
     }
     if (coefficients.array().abs().sum() > coefficient_l1_limit)
+    {
+        return std::nullopt;
+    }
+    if (coefficients.array().abs().maxCoeff() > coefficient_abs_limit)
     {
         return std::nullopt;
     }
@@ -284,7 +294,8 @@ std::optional<std::vector<Eigen::VectorXd>> AndersonAccelerationHistory::BuildCa
         SolveConstrainedCoefficients(
             residual_matrix,
             m_options.regularization,
-            m_options.coefficient_l1_limit)
+            m_options.coefficient_l1_limit,
+            m_options.coefficient_abs_limit)
     };
     if (!coefficients.has_value())
     {

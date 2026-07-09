@@ -81,7 +81,8 @@ constexpr double kJointOffsetIrlsNormalizedChangeTolerance{ 1.0e-6 };
 constexpr double kJointOffsetIrlsObjectiveRelativeTolerance{ 1.0e-10 };
 constexpr std::size_t kLocalFittingAndersonHistoryDepth{ 5 };
 constexpr double kLocalFittingAndersonCoefficientL1Limit{ 10.0 };
-constexpr double kLocalFittingAndersonRegularization{ 1.0e-12 };
+constexpr double kLocalFittingAndersonRegularization{ 1.0e-4 };
+constexpr double kLocalFittingAndersonCoefficientAbsLimit{ 5.0 };
 constexpr std::array<double, 5> kLocalFittingAccelerationDampingList{ 1.0, 0.5, 0.25, 0.125, 0.0625 };
 constexpr double kLocalFittingFreezeChangeRatio{ 0.1 };
 constexpr int kLocalFittingFreezeStableIterations{ 3 };
@@ -2761,7 +2762,8 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             kLocalFittingAndersonHistoryDepth,
             kLocalFittingNormalizedChangeScaleFloor,
             kLocalFittingAndersonCoefficientL1Limit,
-            kLocalFittingAndersonRegularization
+            kLocalFittingAndersonRegularization,
+            kLocalFittingAndersonCoefficientAbsLimit
         }
     };
     algorithm::ConvergenceFreezeTracker freeze_tracker{

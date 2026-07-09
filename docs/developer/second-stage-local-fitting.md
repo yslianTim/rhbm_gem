@@ -136,8 +136,13 @@ candidate = sum(gamma_i * G(x_i)), where sum(gamma_i) = 1
 ```
 
 Residuals are scaled per parameter using the normalized-change scale floor.
-Candidate construction is structural; the damped candidate that would actually
-be applied must still have finite active parameters and positive active widths.
+The coefficient solve includes L2 regularization and rejects candidates whose
+coefficient L1 norm or maximum absolute coefficient exceeds the configured
+limits. A rejected coefficient solve is not fatal; that cluster simply has no
+Anderson candidate for the attempt and can continue through damped fixed-point
+fallback. Candidate construction is structural; the damped candidate that would
+actually be applied must still have finite active parameters and positive active
+widths.
 
 Each outer iteration tries damping values `1.0`, `0.5`, and `0.25`.
 Anderson attempts run first for clusters that have a localized candidate.

@@ -84,6 +84,38 @@ TEST(AndersonAccelerationTest, RejectsExcessiveExtrapolation)
     EXPECT_FALSE(candidate.has_value());
 }
 
+TEST(AndersonAccelerationTest, RejectsExcessiveSingleCoefficient)
+{
+    alg::AndersonAccelerationHistory history{
+        alg::AndersonAccelerationOptions{
+            5,
+            100.0,
+            10.0,
+            1.0e-12,
+            1.5
+        }
+    };
+    const std::vector<std::size_t> active_index_list{ 0 };
+    history.Commit(active_index_list, MakeState(0.0), MakeState(1.0));
+
+    const auto candidate{
+        history.BuildCandidate(active_index_list, MakeState(1.0), MakeState(1.5))
+    };
+
+    EXPECT_FALSE(candidate.has_value());
+}
+
+TEST(AndersonAccelerationTest, RejectsInvalidSingleCoefficientLimit)
+{
+    auto options{ alg::AndersonAccelerationOptions{} };
+
+    options.coefficient_abs_limit = std::numeric_limits<double>::quiet_NaN();
+    EXPECT_THROW(alg::AndersonAccelerationHistory{ options }, std::invalid_argument);
+
+    options.coefficient_abs_limit = 0.999;
+    EXPECT_THROW(alg::AndersonAccelerationHistory{ options }, std::invalid_argument);
+}
+
 TEST(AndersonAccelerationTest, InvalidatesWhenActiveIndexesDiffer)
 {
     alg::AndersonAccelerationHistory history;

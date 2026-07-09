@@ -14,6 +14,7 @@ struct AndersonAccelerationOptions
     double scale_floor{ 1.0 };
     double coefficient_l1_limit{ 10.0 };
     double regularization{ 1.0e-12 };
+    double coefficient_abs_limit{ 10.0 };
 };
 
 class AndersonAccelerationHistory
