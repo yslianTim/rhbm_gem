@@ -2123,24 +2123,6 @@ void LogLocalFittingAllAtomsFrozen(const FitOptions & options, std::size_t accep
         " iterations because all local atoms are frozen.");
 }
 
-void LogLocalFittingAndersonFallbackSwitch(
-    const FitOptions & options,
-    std::size_t iteration,
-    bool has_invalid_anderson_candidate)
-{
-    if (options.quiet_mode) return;
-
-    std::ostringstream progress_message;
-    progress_message << "Local fitting iteration " << iteration + 1 << '/'
-        << kLocalFittingMaximumIterations
-        << " switching from Anderson acceleration to damped fixed-point fallback"
-        << ", next acceleration = "
-        << GetLocalFittingAccelerationText(LocalFittingAccelerationKind::DampedFixedPoint)
-        << (has_invalid_anderson_candidate ? " after invalid Anderson candidate" : "");
-    Logger::FinishProgressLine();
-    Logger::Log(LogLevel::Info, progress_message.str());
-}
-
 void LogLocalFittingBacktrackingRetry(
     const FitOptions & options,
     std::size_t accepted_iteration_count,
@@ -2856,7 +2838,6 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             if (localized_anderson_candidate.has_value() && !rejected_anderson_cluster_key_list.empty())
             {
                 acceleration_history.ClearAndSuppress(rejected_anderson_cluster_key_list);
-                LogLocalFittingAndersonFallbackSwitch(options, iter, has_invalid_anderson_candidate);
             }
             run_attempt_group(false);
         }

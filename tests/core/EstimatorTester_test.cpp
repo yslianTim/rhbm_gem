@@ -724,13 +724,6 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingLogsAndersonAccelerationMode
     EXPECT_TRUE(
         output.find("acceleration = aa") != std::string::npos ||
         output.find("acceleration = damped-aa") != std::string::npos);
-    const auto fallback_position{
-        output.find("switching from Anderson acceleration to damped fixed-point fallback")
-    };
-    ASSERT_NE(fallback_position, std::string::npos);
-    EXPECT_NE(
-        output.rfind('\n', fallback_position),
-        std::string::npos);
     EXPECT_NE(
         output.find("Objective backtracking rejected all attempts; retrying after"),
         std::string::npos);
@@ -746,24 +739,15 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingLogsAndersonAccelerationMode
     EXPECT_EQ(
         output.find("active/frozen/thawed atoms"),
         std::string::npos);
-    const auto fixed_point_position{
-        output.find("acceleration = damped-fixed-point", fallback_position)
-    };
-    ASSERT_NE(fixed_point_position, std::string::npos);
-    const auto next_anderson_position{
-        output.find("acceleration = aa", fallback_position)
-    };
-    const auto next_damped_anderson_position{
-        output.find("acceleration = damped-aa", fallback_position)
-    };
-    if (next_anderson_position != std::string::npos)
-    {
-        EXPECT_GT(next_anderson_position, fixed_point_position);
-    }
-    if (next_damped_anderson_position != std::string::npos)
-    {
-        EXPECT_GT(next_damped_anderson_position, fixed_point_position);
-    }
+    EXPECT_EQ(
+        output.find("Local fitting iteration "),
+        std::string::npos);
+    EXPECT_EQ(
+        output.find("switching from Anderson acceleration"),
+        std::string::npos);
+    EXPECT_NE(
+        output.find("acceleration = damped-fixed-point"),
+        std::string::npos);
     EXPECT_EQ(
         error_output.find("best fixed-point candidate"),
         std::string::npos);
