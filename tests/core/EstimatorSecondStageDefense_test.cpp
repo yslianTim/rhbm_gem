@@ -237,6 +237,33 @@ std::unique_ptr<rg::ModelObject> BuildNonFiniteJointOffsetDefenseModel()
     return model;
 }
 
+std::unique_ptr<rg::ModelObject> BuildFiniteNonphysicalProfileDefenseModel()
+{
+    const rg::GaussianModel3D initial_model{ 6.0, 0.55, 0.0 };
+    auto model{
+        BuildDefenseModel(
+            { std::array<float, 3>{ 0.0F, 0.0F, 0.0F } },
+            { Spot::O },
+            { Element::OXYGEN },
+            { initial_model },
+            initial_model)
+    };
+    auto * atom{ model->GetSelectedAtoms().front() };
+    auto sampling_entries{
+        rg::AtomLocalPotentialView::RequireFor(*atom).GetSamplingEntries(false)
+    };
+    for (auto & sample : sampling_entries)
+    {
+        const auto distance{ static_cast<double>(sample.point.distance) };
+        const auto outer_bias{ distance > 0.2 ? 12.0 : 8.0 };
+        sample.response = static_cast<float>(
+            initial_model.SignalAtDistance(distance) + outer_bias);
+    }
+    auto analysis{ model->EditAnalysis() };
+    analysis.EnsureAtomLocalPotential(*atom).SetSamplingEntries(std::move(sampling_entries));
+    return model;
+}
+
 double CalculateSelectedAtomResponseMeanSquaredError(
     const rg::ModelObject & model,
     std::size_t target_begin,
@@ -323,6 +350,18 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingFallsBackWhenJoi
     EXPECT_EQ(
         error_output.find("Second-stage local fitting fallback summary:"),
         std::string::npos);
+    ExpectSelectedAtomEstimatesAreFinite(*model);
+}
+
+TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingRollsBackFiniteNonphysicalProfile)
+{
+    auto model{ BuildFiniteNonphysicalProfileDefenseModel() };
+    auto * atom{ model->GetSelectedAtoms().front() };
+    const auto previous_model{ GetEstimateModel(*atom) };
+
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
+
+    ExpectGaussianModelsNear(GetEstimateModel(*atom), previous_model, 1.0e-12);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 

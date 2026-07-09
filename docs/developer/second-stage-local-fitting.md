@@ -90,9 +90,15 @@ iteration still runs.
 ## Refit and Rollback
 
 After joint offsets are attached to the snapshot, the iteration checks every
-active atom for suspicious offsets before refit. A suspicious offset is one where
-the previous model can build finite zero-offset samples but the current
-joint-offset model cannot.
+active atom for suspicious offsets before refit. The check first preserves the
+hard finite-sample guard: if the previous model can build finite zero-offset
+samples but the current joint-offset model cannot, the offset is suspicious.
+When both profiles are finite, the same check also rejects clearly non-physical
+local profiles. It compares the fit-range zero-offset profile against the
+previous accepted profile and flags strong center sign flips, radial rebound or
+multi-peak shape, sudden width growth, and large amplitude/offset compensation.
+These profile checks are conservative and only run when the previous profile is
+usable as a baseline.
 
 Suspicious atoms seed bounded rollback propagation through the active coupling
 graph produced by the joint offset system. Propagation follows finite edges with
@@ -105,12 +111,13 @@ Each remaining active atom is refit by:
 1. subtracting fitted selected-neighbor responses from its original samples;
 2. using the joint-offset snapshot model as the fixed-offset model;
 3. calling `EstimateLocalGaussian` for amplitude and width; and
-4. accepting the result only if zero-offset sample construction stays finite.
+4. accepting the result only if zero-offset sample construction stays finite
+   and the profile/parameter plausibility gate does not mark it suspicious.
 
 If refit fails, the previous atom result is reused with the joint offset when
-that fallback remains finite. If that fallback is itself suspicious, the atom is
-kept at its previous state and can seed the same bounded rollback pass after the
-refit loop.
+that fallback remains finite and passes the same suspicious-offset gate. If that
+fallback is itself suspicious, the atom is kept at its previous state and can
+seed the same bounded rollback pass after the refit loop.
 
 ## Clusters and Acceleration
 

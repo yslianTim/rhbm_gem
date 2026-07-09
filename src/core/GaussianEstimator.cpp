@@ -95,6 +95,16 @@ constexpr std::size_t kLocalFittingObjectiveScaleWarmupCount{ 5 };
 constexpr double kLocalFittingObjectiveResidualScaleFloorRatio{ 1.0e-6 };
 constexpr std::size_t kSuspiciousOffsetClusterMaxDepth{ 2 };
 constexpr double kSuspiciousOffsetClusterMinimumOverlap{ 0.05 };
+constexpr std::size_t kSuspiciousProfileMinimumRadiusCount{ 3 };
+constexpr double kSuspiciousProfileDistanceTolerance{ 1.0e-6 };
+constexpr double kSuspiciousProfileCenterSignFlipRatio{ 0.25 };
+constexpr double kSuspiciousProfileReboundCenterRatio{ 1.5 };
+constexpr double kSuspiciousProfileReboundReferenceRatio{ 0.25 };
+constexpr double kSuspiciousProfileUpwardExcursionReferenceRatio{ 0.20 };
+constexpr int kSuspiciousProfileMaximumUpwardExcursions{ 1 };
+constexpr double kSuspiciousWidthGrowthLimit{ 1.5 };
+constexpr double kSuspiciousWidthRangeLimitRatio{ 1.5 };
+constexpr double kSuspiciousCompensationResponseRatio{ 2.0 };
 
 using GaussianFittingState = algorithm::IterationState<LocalGaussianResult, Eigen::VectorXd>;
 
@@ -124,6 +134,16 @@ struct ActiveCouplingEdge
 };
 
 using ActiveCouplingGraph = std::vector<std::vector<ActiveCouplingEdge>>;
+
+struct ZeroOffsetProfileDiagnostics
+{
+    bool has_fit_range_samples{ false };
+    double distance_min{ 0.0 };
+    double distance_max{ 0.0 };
+    double center_response{ 0.0 };
+    double max_abs_response{ 0.0 };
+    std::vector<double> radius_response_median_list{};
+};
 
 struct JointOffsetSolveResult
 {
@@ -311,13 +331,187 @@ bool CanBuildFiniteZeroOffsetSamples(
     return true;
 }
 
+bool IsSameSuspiciousProfileRadius(double lhs, double rhs)
+{
+    const auto scale{ std::max({ std::abs(lhs), std::abs(rhs), 1.0 }) };
+    return std::abs(lhs - rhs) <= kSuspiciousProfileDistanceTolerance * scale;
+}
+
+ZeroOffsetProfileDiagnostics BuildZeroOffsetProfileDiagnostics(
+    const LocalPotentialSampleList & sample_entries,
+    const GaussianModel3D & model,
+    const FitOptions & options)
+{
+    std::vector<std::pair<double, double>> profile_samples;
+    profile_samples.reserve(sample_entries.size());
+    for (const auto & sample : sample_entries)
+    {
+        const auto distance{ static_cast<double>(sample.point.distance) };
+        if (distance < options.distance_min || distance > options.distance_max) continue;
+        const auto response{ CalculateZeroOffsetResponse(sample, model) };
+        if (!std::isfinite(response)) continue;
+        if (std::abs(response) > static_cast<double>(std::numeric_limits<float>::max())) continue;
+        profile_samples.emplace_back(distance, response);
+    }
+
+    ZeroOffsetProfileDiagnostics diagnostics;
+    if (profile_samples.empty()) return diagnostics;
+    std::sort(
+        profile_samples.begin(),
+        profile_samples.end(),
+        [](const auto & lhs, const auto & rhs)
+        {
+            return lhs.first < rhs.first;
+        });
+
+    diagnostics.has_fit_range_samples = true;
+    diagnostics.distance_min = profile_samples.front().first;
+    diagnostics.distance_max = profile_samples.back().first;
+    for (std::size_t i = 0; i < profile_samples.size();)
+    {
+        const auto radius{ profile_samples.at(i).first };
+        std::vector<double> response_list;
+        while (i < profile_samples.size() &&
+            IsSameSuspiciousProfileRadius(profile_samples.at(i).first, radius))
+        {
+            const auto response{ profile_samples.at(i).second };
+            diagnostics.max_abs_response = std::max(diagnostics.max_abs_response, std::abs(response));
+            response_list.emplace_back(response);
+            i++;
+        }
+        diagnostics.radius_response_median_list.emplace_back(array_helper::ComputeMedian(response_list));
+    }
+    diagnostics.center_response = diagnostics.radius_response_median_list.front();
+    return diagnostics;
+}
+
+bool HasUsableSuspiciousProfileBaseline(
+    const GaussianModel3D & previous_model,
+    const ZeroOffsetProfileDiagnostics & previous_profile)
+{
+    if (!previous_profile.has_fit_range_samples ||
+        previous_profile.radius_response_median_list.size() < kSuspiciousProfileMinimumRadiusCount)
+    {
+        return false;
+    }
+    if (!std::isfinite(previous_model.GetAmplitude()) ||
+        !std::isfinite(previous_model.GetWidth()) ||
+        !std::isfinite(previous_model.GetOffset()) ||
+        previous_model.GetWidth() <= 0.0 ||
+        previous_profile.max_abs_response <= kRobustScaleMin)
+    {
+        return false;
+    }
+    const auto center_scale{
+        std::max(std::abs(previous_profile.center_response), kRobustScaleMin)
+    };
+    for (std::size_t i = 1; i < previous_profile.radius_response_median_list.size(); i++)
+    {
+        const auto current_scale{
+            std::abs(previous_profile.radius_response_median_list.at(i))
+        };
+        if (current_scale > kSuspiciousProfileReboundCenterRatio * center_scale) return false;
+    }
+    return true;
+}
+
+bool HasSuspiciousCenterSignFlip(
+    const ZeroOffsetProfileDiagnostics & previous_profile,
+    const ZeroOffsetProfileDiagnostics & candidate_profile)
+{
+    const auto previous_center{ previous_profile.center_response };
+    const auto candidate_center{ candidate_profile.center_response };
+    const auto reference_scale{ std::max(std::abs(previous_center), kRobustScaleMin) };
+    return previous_center * candidate_center < 0.0 &&
+        std::abs(candidate_center) > kSuspiciousProfileCenterSignFlipRatio * reference_scale;
+}
+
+bool HasSuspiciousRadialRebound(
+    const ZeroOffsetProfileDiagnostics & previous_profile,
+    const ZeroOffsetProfileDiagnostics & candidate_profile)
+{
+    if (candidate_profile.radius_response_median_list.size() < kSuspiciousProfileMinimumRadiusCount)
+    {
+        return false;
+    }
+    const auto reference_center_scale{
+        std::max(std::abs(previous_profile.center_response), kRobustScaleMin)
+    };
+    const auto candidate_center_scale{
+        std::max(std::abs(candidate_profile.center_response), kRobustScaleMin)
+    };
+    int upward_excursion_count{ 0 };
+    auto previous_abs_response{ std::abs(candidate_profile.radius_response_median_list.front()) };
+    for (std::size_t i = 1; i < candidate_profile.radius_response_median_list.size(); i++)
+    {
+        const auto current_abs_response{
+            std::abs(candidate_profile.radius_response_median_list.at(i))
+        };
+        if (current_abs_response > kSuspiciousProfileReboundCenterRatio * candidate_center_scale &&
+            current_abs_response > kSuspiciousProfileReboundReferenceRatio * reference_center_scale)
+        {
+            return true;
+        }
+        if (current_abs_response >
+            previous_abs_response + kSuspiciousProfileUpwardExcursionReferenceRatio * reference_center_scale)
+        {
+            upward_excursion_count++;
+        }
+        previous_abs_response = current_abs_response;
+    }
+    return upward_excursion_count > kSuspiciousProfileMaximumUpwardExcursions;
+}
+
+bool HasSuspiciousWidthGrowth(
+    const GaussianModel3D & previous_model,
+    const GaussianModel3D & candidate_model,
+    const ZeroOffsetProfileDiagnostics & previous_profile)
+{
+    if (!std::isfinite(candidate_model.GetWidth()) || candidate_model.GetWidth() <= 0.0) return true;
+    if (candidate_model.GetWidth() > kSuspiciousWidthGrowthLimit * previous_model.GetWidth()) return true;
+    const auto distance_range{ previous_profile.distance_max - previous_profile.distance_min };
+    return distance_range > 0.0 && candidate_model.GetWidth() > kSuspiciousWidthRangeLimitRatio * distance_range;
+}
+
+bool HasSuspiciousAmplitudeOffsetCompensation(
+    const GaussianModel3D & previous_model,
+    const GaussianModel3D & candidate_model,
+    const ZeroOffsetProfileDiagnostics & previous_profile)
+{
+    const auto signal_delta{
+        candidate_model.SignalAtDistance(0.0) - previous_model.SignalAtDistance(0.0)
+    };
+    const auto offset_delta_response{
+        (candidate_model.GetOffset() - previous_model.GetOffset()) * previous_model.OffsetBasisAtDistance(0.0)
+    };
+    const auto reference_scale{
+        std::max({
+            std::abs(previous_profile.center_response),
+            std::abs(previous_model.SignalAtDistance(0.0)),
+            kRobustScaleMin
+        })
+    };
+    return signal_delta * offset_delta_response < 0.0 &&
+        std::abs(signal_delta) > kSuspiciousCompensationResponseRatio * reference_scale &&
+        std::abs(offset_delta_response) > kSuspiciousCompensationResponseRatio * reference_scale;
+}
+
 bool IsSuspiciousJointOffset(
     const LocalPotentialSampleList & sample_entries,
     const GaussianModel3D & previous_model,
-    const GaussianModel3D & offset_model)
+    const GaussianModel3D & offset_model,
+    const FitOptions & options)
 {
-    return CanBuildFiniteZeroOffsetSamples(sample_entries, previous_model) &&
-        !CanBuildFiniteZeroOffsetSamples(sample_entries, offset_model);
+    if (!CanBuildFiniteZeroOffsetSamples(sample_entries, previous_model)) return false;
+    if (!CanBuildFiniteZeroOffsetSamples(sample_entries, offset_model)) return true;
+    const auto previous_profile{ BuildZeroOffsetProfileDiagnostics(sample_entries, previous_model, options) };
+    if (!HasUsableSuspiciousProfileBaseline(previous_model, previous_profile)) return false;
+    const auto candidate_profile{ BuildZeroOffsetProfileDiagnostics(sample_entries, offset_model, options) };
+    if (!candidate_profile.has_fit_range_samples) return true;
+    return HasSuspiciousCenterSignFlip(previous_profile, candidate_profile) ||
+        HasSuspiciousRadialRebound(previous_profile, candidate_profile) ||
+        HasSuspiciousWidthGrowth(previous_model, offset_model, previous_profile) ||
+        HasSuspiciousAmplitudeOffsetCompensation(previous_model, offset_model, previous_profile);
 }
 
 rhbm_trainer::RHBMTrainingOptions MakeTrainingOptions(const FitOptions & options)
@@ -361,12 +555,10 @@ LocalGaussianResult DecodeLocalGaussianResult(
     double offset = 0.0)
 {
     const auto ols_model{
-        linearization_service::DecodeParameterVector(fit_result.beta_ols)
-            .WithOffset(offset)
+        linearization_service::DecodeParameterVector(fit_result.beta_ols).WithOffset(offset)
     };
     const auto mdpde_model{
-        linearization_service::DecodeParameterVector(fit_result.beta_mdpde)
-            .WithOffset(offset)
+        linearization_service::DecodeParameterVector(fit_result.beta_mdpde).WithOffset(offset)
     };
     return LocalGaussianResult{
         alpha_r,
@@ -1831,7 +2023,14 @@ LocalRefitResult FitAtomWithJointOffsetFallback(
                 options,
                 offset_model)
         };
-        if (CanBuildFiniteZeroOffsetSamples(sample_entries, candidate_result.mdpde.GetModel()))
+        const auto candidate_model{ candidate_result.mdpde.GetModel() };
+        if (
+            CanBuildFiniteZeroOffsetSamples(sample_entries, candidate_model) &&
+            !IsSuspiciousJointOffset(
+                sample_entries,
+                previous_result.mdpde.GetModel(),
+                candidate_model,
+                options))
         {
             return LocalRefitResult{ candidate_result, false, false };
         }
@@ -1849,8 +2048,13 @@ LocalRefitResult FitAtomWithJointOffsetFallback(
         result.mdpde.GetModel().WithOffset(offset_model.GetOffset()),
         result.mdpde.GetStandardDeviationModel()
     };
-    if (IsSuspiciousJointOffset(
-            sample_entries, previous_result.mdpde.GetModel(), result.mdpde.GetModel()))
+    if (
+        !CanBuildFiniteZeroOffsetSamples(sample_entries, result.mdpde.GetModel()) ||
+        IsSuspiciousJointOffset(
+            sample_entries,
+            previous_result.mdpde.GetModel(),
+            result.mdpde.GetModel(),
+            options))
     {
         return LocalRefitResult{ previous_result, true, true };
     }
@@ -2033,7 +2237,8 @@ LocalFittingIterationResult RunLocalFittingIteration(
         if (!IsSuspiciousJointOffset(
                 context.atom_context_list.at(state_index).sample_entries,
                 previous_model,
-                offset_model))
+                offset_model,
+                options))
         {
             continue;
         }
