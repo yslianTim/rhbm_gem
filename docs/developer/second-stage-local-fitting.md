@@ -84,8 +84,9 @@ relative to the previous offsets, so weakly constrained columns stay close to
 their prior values. Its global ratio starts at `kJointOffsetRidgeRatio`
 (`1.0e-3`) and is adjusted across outer fixed-point iterations:
 objective-backtracking rejections that reject every active cluster increase the
-ratio for the next recomputed joint solve, while accepted iterations without
-cluster rejections gradually decrease it. Cluster-local objective rejections use
+ratio only after the rejected clusters have exhausted their cluster-local
+objective ridge multipliers. Accepted iterations without cluster rejections
+gradually decrease the global ratio. Cluster-local objective rejections use
 per-atom ridge multipliers first, so a rejected cluster can be retried without
 raising the baseline ridge for unrelated clusters.
 
@@ -219,7 +220,8 @@ the next previous state. Rejected Anderson clusters clear and suppress only thei
 own history; a suppressed cluster must receive accepted fixed-point progress
 before Anderson is enabled again. Rejected clusters increase only their
 cluster-local objective ridge multiplier for the next outer iteration. The
-global ridge ratio increases only when no active cluster is accepted.
+global ridge ratio increases only when no active cluster is accepted and the
+rejected clusters' local objective ridge multipliers are already saturated.
 Suspicious-offset rollback clears and suppresses only clusters containing
 rolled-back atoms; unrelated accepted clusters may continue to commit history.
 
@@ -252,16 +254,16 @@ Suspicious offset cluster members are thawed after freeze tracking so the next
 iteration can retry them with the temporary per-atom ridge multiplier; those
 forced retry thaws are not counted against the dependency thaw cap.
 
-Global objective stats are kept for progress logging and diagnostics, but
-cluster-local objective states decide acceptance and fallback behavior. At
-second-stage entry, each cluster seeds its residual normalization scale from the
-cluster-owned objective samples when they are finite. Each residual scale sample
-is floored by a small fraction of the robust response scale from the same
-objective samples, then by the absolute Huber scale minimum, so a near-perfect
-entry fit cannot create an overly sensitive denominator. A local candidate is
-better when its normalized robust objective improves beyond the tie tolerance;
-objective ties are broken by the maximum of the three normalized percentile
-parameter changes.
+Objective scoring is cluster-local. At second-stage entry, each cluster seeds
+its residual normalization scale from the cluster-owned objective samples when
+they are finite. Each residual scale sample is floored by a small fraction of
+the robust response scale from the same objective samples, then by the absolute
+Huber scale minimum, so a near-perfect entry fit cannot create an overly
+sensitive denominator. A local candidate is better when its normalized robust
+objective improves beyond the tie tolerance; objective ties are broken by the
+maximum of the three normalized percentile parameter changes. Global progress
+and terminal logs report parameter movement, acceleration, active/frozen/thawed
+atom counts, and terminal reasons; they do not compute a full-state objective.
 
 ## Exit Paths
 
@@ -278,8 +280,9 @@ The loop has four terminal cases:
   scales with references have finished warm-up, then log an info message when
   logging is enabled.
 - **Objective backtracking failure:** if all clusters are still rejected after the
-  acceleration damping sequence and retry is no longer possible, apply the
-  current previous state and log a warning when logging is enabled.
+  acceleration damping sequence, rejected cluster-local ridge multipliers are
+  saturated, and global-ridge retry is no longer possible, apply the current
+  previous state and log a warning when logging is enabled.
 - **Maximum iterations reached:** apply the current accepted assembled candidate
   and log a warning when logging is enabled.
 

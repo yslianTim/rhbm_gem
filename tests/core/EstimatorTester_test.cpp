@@ -734,6 +734,12 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingLogsAndersonAccelerationMode
     EXPECT_NE(
         output.find("Objective backtracking rejected all attempts; backtracking retry"),
         std::string::npos);
+    EXPECT_TRUE(
+        output.find("increased cluster-local objective ridge") != std::string::npos ||
+        output.find("increased global ridge ratio") != std::string::npos);
+    EXPECT_EQ(
+        output.find("objective ="),
+        std::string::npos);
     const auto fixed_point_position{
         output.find("acceleration = damped-fixed-point", fallback_position)
     };
