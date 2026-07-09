@@ -2840,8 +2840,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 throw std::invalid_argument("Local fitting suspicious offset atom index is out of range.");
             }
             suspicious_offset_atom_seen.at(state_index) = true;
-            suspicious_joint_offset_ridge_multiplier_list.at(state_index) =
-                kSuspiciousJointOffsetRidgeMultiplier;
+            suspicious_joint_offset_ridge_multiplier_list.at(state_index) = kSuspiciousJointOffsetRidgeMultiplier;
         }
         const auto raw_state{ std::move(iteration_result.state) };
         bool has_current_candidate{ false };
@@ -2860,11 +2859,8 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         }
 
         auto assembled_state{ previous_state };
-        std::vector<LocalFittingClusterAttemptStatus> cluster_status_list(
-            cluster_layout.cluster_list.size());
-        std::vector<
-            algorithm::ClusteredFittingQualityAcceptedScore<LocalFittingObjectiveSamples>>
-            accepted_cluster_score_list;
+        std::vector<LocalFittingClusterAttemptStatus> cluster_status_list(cluster_layout.cluster_list.size());
+        std::vector<algorithm::ClusteredFittingQualityAcceptedScore<LocalFittingObjectiveSamples>> accepted_cluster_score_list;
         LocalFittingAccelerationAttempt accepted_acceleration_attempt;
         bool has_accepted_acceleration_attempt{ false };
 
@@ -2900,10 +2896,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 for (std::size_t cluster_index = 0; cluster_index < cluster_layout.cluster_list.size(); cluster_index++)
                 {
                     auto & status{ cluster_status_list.at(cluster_index) };
-                    if (status.accepted || status.stopped)
-                    {
-                        continue;
-                    }
+                    if (status.accepted || status.stopped) continue;
 
                     const auto & cluster{ cluster_layout.cluster_list.at(cluster_index) };
                     const auto & key{ cluster.active_index_list };
@@ -2930,8 +2923,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                     }
                     else
                     {
-                        valid_attempt =
-                            anderson_candidate_estimation_list.has_value() &&
+                        valid_attempt = anderson_candidate_estimation_list.has_value() &&
                             TryApplyLocalFittingAndersonCandidate(
                                 attempt_state,
                                 previous_state,
@@ -3299,6 +3291,9 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
 
     InitializeLocalFittingSeedModels(model_object);
     RunFirstStageLocalFitting(model_object, options);
+    RunGroupAlphaTraining(model_object, options);
+    RunGroupPotentialFitting(model_object, options);
+
     RunSecondStageLocalFitting(model_object, options);
     RunGroupAlphaTraining(model_object, options);
     SetUpdatedSamplingEntriesFromGroupMedianGaussian(model_object);
