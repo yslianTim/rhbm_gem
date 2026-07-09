@@ -2353,8 +2353,7 @@ void LogLocalFittingBacktrackingRetry(
         progress_message
             << ", next attempt uses increased global ridge ratio = " << ridge_ratio;
     }
-    Logger::FinishProgressLine();
-    Logger::Log(LogLevel::Info, progress_message.str());
+    Logger::ProgressLine(progress_message.str());
 }
 
 void LogLocalFittingBacktrackingStop(

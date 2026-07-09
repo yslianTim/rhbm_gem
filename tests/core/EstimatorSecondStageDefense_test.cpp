@@ -450,6 +450,12 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingReportsClusterLo
         output.find("Objective backtracking rejected all attempts; retrying after"),
         std::string::npos);
     EXPECT_NE(
+        output.find("\rObjective backtracking rejected all attempts; retrying after"),
+        std::string::npos);
+    EXPECT_EQ(
+        output.find("\nObjective backtracking rejected all attempts; retrying after"),
+        std::string::npos);
+    EXPECT_NE(
         output.find("increased cluster-local objective ridge"),
         std::string::npos);
     EXPECT_EQ(

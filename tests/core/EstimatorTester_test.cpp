@@ -727,6 +727,12 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingLogsAndersonAccelerationMode
     EXPECT_NE(
         output.find("Objective backtracking rejected all attempts; retrying after"),
         std::string::npos);
+    EXPECT_NE(
+        output.find("\rObjective backtracking rejected all attempts; retrying after"),
+        std::string::npos);
+    EXPECT_EQ(
+        output.find("\nObjective backtracking rejected all attempts; retrying after"),
+        std::string::npos);
     EXPECT_TRUE(
         output.find("increased cluster-local objective ridge") != std::string::npos ||
         output.find("increased global ridge ratio") != std::string::npos);
