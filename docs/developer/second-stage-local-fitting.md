@@ -50,9 +50,9 @@ previous state
     -> refit active atoms with selected-neighbor contributions removed
     -> roll back any suspicious offset clusters found before or during refit
     -> build an Anderson-accelerated or damped fixed-point candidate
-    -> compute active-atom p95 absolute and normalized parameter changes
+    -> compute active-atom p95 normalized parameter changes
     -> backtrack against the objective; retry with lower damping when needed
-    -> update candidate ranking and Anderson history
+    -> update cluster quality state and Anderson history
     -> freeze stable atoms and thaw changed selected neighbors
     -> exit, fallback, or continue
 ```
@@ -112,8 +112,7 @@ reached.
 
 If the joint system cannot be built, is empty, or cannot be solved during the
 initial or robust solve, the step falls back to the previous offsets. The rest of
-the local fitting iteration still runs, and the fallback is counted for the final
-diagnostic summary.
+the local fitting iteration still runs.
 
 ## Per-Atom Refit
 
@@ -167,7 +166,10 @@ Second-stage fitting keeps short internal Anderson Acceleration histories for
 active-atom clusters. Clusters are rebuilt each outer iteration from selected
 atom samples: the active target atom and active selected neighbors that
 contribute to the same sample residual are connected, and connected components
-keep independent histories. When a cluster has at least one compatible prior
+keep independent histories. The generic clustered Anderson history manager in
+`utils/algorithm` owns the per-cluster history lifecycle; `GaussianEstimator.cpp`
+still owns the sample graph that defines the clusters. When a cluster has at
+least one compatible prior
 pair `(x, G(x))`, with residuals `G(x) - x`, the stage solves a constrained least
 squares problem over scaled residuals for that cluster and proposes:
 
@@ -208,7 +210,10 @@ neighbors that contribute to that sample residual. Samples without active
 contributors are ignored by the cluster gate for that iteration, and a sample is
 never counted by more than one cluster. Each cluster keeps its own residual-scale
 tracker, previous objective samples, best local objective stats, and objective
-ridge multiplier. During residual-scale warm-up, that cluster's previous,
+ridge multiplier. That per-cluster quality lifecycle is managed by the generic
+clustered fitting-quality state manager in `utils/algorithm`; Gaussian-specific
+objective sample collection and scoring remain source-local callbacks in
+`GaussianEstimator.cpp`. During residual-scale warm-up, that cluster's previous,
 current, and best objective values are re-scored with the same provisional scale
 before the backtracking decision is made.
 
@@ -225,10 +230,10 @@ rejected clusters' local objective ridge multipliers are already saturated.
 Suspicious-offset rollback clears and suppresses only clusters containing
 rolled-back atoms; unrelated accepted clusters may continue to commit history.
 
-Each accepted assembled candidate computes absolute and normalized parameter
-movement for amplitude, width, and offset for every selected atom. Active atoms
-are summarized by the 95th percentile, and the accepted candidate's normalized
-movement drives convergence checks. Freeze tracking is updated only for active
+Each accepted assembled candidate computes parameter movement for every selected
+atom. Active atoms are summarized by the 95th percentile normalized movement,
+and the accepted candidate's normalized movement drives convergence checks.
+Freeze tracking is updated only for active
 atoms in clusters that accepted progress; rejected clusters keep their previous
 state and cannot be frozen merely because their accepted movement is zero.
 Parameter convergence requires all three active-set normalized percentile

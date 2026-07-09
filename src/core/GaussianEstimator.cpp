@@ -8,6 +8,8 @@
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/algorithm/AndersonAcceleration.hpp>
+#include <rhbm_gem/utils/algorithm/ClusteredAndersonAcceleration.hpp>
+#include <rhbm_gem/utils/algorithm/ClusteredFittingQualityState.hpp>
 #include <rhbm_gem/utils/algorithm/ConvergenceFreezeTracker.hpp>
 #include <rhbm_gem/utils/algorithm/DependencyThawHysteresisTracker.hpp>
 #include <rhbm_gem/utils/algorithm/IterationState.hpp>
@@ -107,13 +109,6 @@ struct LocalFittingAccelerationAttempt
     double damping{ 1.0 };
 };
 
-enum class LocalFittingAttemptOutcome
-{
-    Accepted,
-    ObjectiveRetry,
-    ObjectiveStop
-};
-
 struct ActiveCouplingEdge
 {
     std::size_t neighbor_index{ 0 };
@@ -182,33 +177,21 @@ struct LocalFittingObjectiveSampleRef
     std::size_t sample_index{ 0 };
 };
 
-struct LocalFittingCandidateScore
-{
-    bool has_objective_reference{ false };
-    algorithm::FittingQualityCandidateStats candidate_stats{};
-    std::optional<algorithm::FittingQualityCandidateStats> best_candidate_stats{};
-    std::optional<LocalFittingObjectiveSamples> objective_samples{};
-    double objective_scale_sample{ std::numeric_limits<double>::infinity() };
-};
-
-struct TrackedLocalFittingClusterCandidate
-{
-    algorithm::FittingQualityCandidateStats candidate_stats{};
-    std::optional<LocalFittingObjectiveSamples> objective_samples{};
-};
-
-using LocalFittingAndersonClusterKey = std::vector<std::size_t>;
+using LocalFittingCandidateScore =
+    algorithm::ClusteredFittingQualityCandidateScore<LocalFittingObjectiveSamples>;
+using TrackedLocalFittingClusterCandidate =
+    algorithm::ClusteredFittingQualityTrackedCandidate<LocalFittingObjectiveSamples>;
+using LocalFittingClusterInitialQualityState =
+    algorithm::ClusteredFittingQualityInitialState<LocalFittingObjectiveSamples>;
+using LocalFittingClusterAcceptedScore =
+    algorithm::ClusteredFittingQualityAcceptedScore<LocalFittingObjectiveSamples>;
+using LocalFittingClusterAttemptOutcome = algorithm::ClusteredFittingQualityAttemptOutcome;
+using LocalFittingAndersonClusterKey = algorithm::ClusterKey;
 
 struct LocalFittingAndersonCluster
 {
     LocalFittingAndersonClusterKey active_index_list{};
     std::vector<LocalFittingObjectiveSampleRef> objective_sample_ref_list{};
-};
-
-struct LocalFittingAndersonCandidate
-{
-    std::vector<Eigen::VectorXd> estimation_list{};
-    std::vector<LocalFittingAndersonClusterKey> used_cluster_key_list{};
 };
 
 struct SecondStageNeighborSample
@@ -1719,475 +1702,95 @@ bool TryApplyLocalFittingAndersonCandidate(
     return true;
 }
 
-class LocalFittingAndersonHistorySet
+std::vector<LocalFittingAndersonClusterKey> BuildLocalFittingAndersonClusterKeyList(
+    const std::vector<LocalFittingAndersonCluster> & cluster_list)
 {
-    struct ClusterState
+    std::vector<LocalFittingAndersonClusterKey> key_list;
+    key_list.reserve(cluster_list.size());
+    for (const auto & cluster : cluster_list)
     {
-        algorithm::AndersonAccelerationHistory history{};
-        bool suppress_anderson{ false };
+        key_list.emplace_back(cluster.active_index_list);
+    }
+    return key_list;
+}
+
+const LocalFittingAndersonCluster & FindLocalFittingAndersonCluster(
+    const std::vector<LocalFittingAndersonCluster> & cluster_list,
+    const LocalFittingAndersonClusterKey & key)
+{
+    const auto iter{
+        std::find_if(
+            cluster_list.begin(),
+            cluster_list.end(),
+            [&](const LocalFittingAndersonCluster & cluster)
+            {
+                return cluster.active_index_list == key;
+            })
     };
-
-    algorithm::AndersonAccelerationOptions m_options{};
-    std::map<LocalFittingAndersonClusterKey, ClusterState> m_state_by_key{};
-
-    static bool ContainsAtom(const LocalFittingAndersonClusterKey & key, std::size_t atom_index)
+    if (iter == cluster_list.end())
     {
-        return std::binary_search(key.begin(), key.end(), atom_index);
+        throw std::invalid_argument("Local fitting Anderson cluster key is missing.");
     }
+    return *iter;
+}
 
-public:
-    explicit LocalFittingAndersonHistorySet(algorithm::AndersonAccelerationOptions options)
-        : m_options{ options }
-    {
-    }
-
-    void Reconcile(const std::vector<LocalFittingAndersonCluster> & cluster_list)
-    {
-        std::map<LocalFittingAndersonClusterKey, ClusterState> next_state_by_key;
-        for (const auto & cluster : cluster_list)
-        {
-            const auto & key{ cluster.active_index_list };
-            const auto iter{ m_state_by_key.find(key) };
-            if (iter == m_state_by_key.end())
-            {
-                next_state_by_key.emplace(
-                    key,
-                    ClusterState{
-                        algorithm::AndersonAccelerationHistory{ m_options },
-                        false
-                    });
-                continue;
-            }
-            next_state_by_key.emplace(key, std::move(iter->second));
-        }
-        m_state_by_key = std::move(next_state_by_key);
-    }
-
-    std::optional<LocalFittingAndersonCandidate> BuildCandidate(
-        const std::vector<LocalFittingAndersonCluster> & cluster_list,
-        const std::vector<Eigen::VectorXd> & previous_estimation_list,
-        const std::vector<Eigen::VectorXd> & raw_estimation_list)
-    {
-        LocalFittingAndersonCandidate candidate;
-        candidate.estimation_list = raw_estimation_list;
-        for (const auto & cluster : cluster_list)
-        {
-            const auto & key{ cluster.active_index_list };
-            auto state_iter{ m_state_by_key.find(key) };
-            if (state_iter == m_state_by_key.end() ||
-                state_iter->second.suppress_anderson)
-            {
-                continue;
-            }
-
-            auto & history{ state_iter->second.history };
-            if (!history.HasCompatibleActiveIndexList(key))
-            {
-                history.Clear();
-                continue;
-            }
-
-            const auto cluster_candidate{
-                history.BuildCandidate(
-                    key,
-                    previous_estimation_list,
-                    raw_estimation_list)
-            };
-            if (!cluster_candidate.has_value()) continue;
-
-            bool valid_cluster_candidate_structure{ true };
-            for (const auto active_index : key)
-            {
-                if (active_index >= cluster_candidate->size())
-                {
-                    valid_cluster_candidate_structure = false;
-                    break;
-                }
-            }
-            if (!valid_cluster_candidate_structure) continue;
-
-            for (const auto active_index : key)
-            {
-                candidate.estimation_list.at(active_index) = cluster_candidate->at(active_index);
-            }
-            candidate.used_cluster_key_list.emplace_back(key);
-        }
-
-        if (candidate.used_cluster_key_list.empty())
-        {
-            return std::nullopt;
-        }
-        return candidate;
-    }
-
-    void ClearAndSuppress(const std::vector<LocalFittingAndersonClusterKey> & key_list)
-    {
-        for (const auto & key : key_list)
-        {
-            auto iter{ m_state_by_key.find(key) };
-            if (iter == m_state_by_key.end()) continue;
-
-            iter->second.history.Clear();
-            iter->second.suppress_anderson = true;
-        }
-    }
-
-    void ClearAndSuppressClustersContaining(
-        const std::vector<std::size_t> & atom_index_list)
-    {
-        for (auto & entry : m_state_by_key)
-        {
-            const auto & key{ entry.first };
-            auto & state{ entry.second };
-            const auto has_affected_atom{
-                std::any_of(
-                    atom_index_list.begin(),
-                    atom_index_list.end(),
-                    [&](std::size_t atom_index)
-                    {
-                        return ContainsAtom(key, atom_index);
-                    })
-            };
-            if (!has_affected_atom) continue;
-
-            state.history.Clear();
-            state.suppress_anderson = true;
-        }
-    }
-
-    void ReleaseSuppression(
-        const std::vector<LocalFittingAndersonCluster> & cluster_list)
-    {
-        for (const auto & cluster : cluster_list)
-        {
-            auto iter{ m_state_by_key.find(cluster.active_index_list) };
-            if (iter == m_state_by_key.end()) continue;
-
-            iter->second.suppress_anderson = false;
-        }
-    }
-
-    void ReleaseSuppression(
-        const std::vector<LocalFittingAndersonClusterKey> & key_list)
-    {
-        for (const auto & key : key_list)
-        {
-            auto iter{ m_state_by_key.find(key) };
-            if (iter == m_state_by_key.end()) continue;
-
-            iter->second.suppress_anderson = false;
-        }
-    }
-
-    void Commit(
-        const std::vector<LocalFittingAndersonCluster> & cluster_list,
-        const std::vector<Eigen::VectorXd> & input_list,
-        const std::vector<Eigen::VectorXd> & output_list)
-    {
-        for (const auto & cluster : cluster_list)
-        {
-            auto iter{ m_state_by_key.find(cluster.active_index_list) };
-            if (iter == m_state_by_key.end() || iter->second.suppress_anderson) continue;
-
-            iter->second.history.Commit(cluster.active_index_list, input_list, output_list);
-        }
-    }
-};
-
-struct LocalFittingClusterAcceptedScore
+algorithm::FittingQualityCandidateStats BuildInitialLocalFittingClusterCandidateStats(
+    const std::optional<LocalFittingObjectiveSamples> & objective_samples,
+    const algorithm::ScaleReference & objective_reference,
+    std::optional<double> objective_scale_sample)
 {
-    LocalFittingAndersonClusterKey key{};
-    algorithm::FittingQualityCandidateStats candidate_stats{};
-    std::optional<algorithm::FittingQualityCandidateStats> best_candidate_stats{};
-    std::optional<LocalFittingObjectiveSamples> objective_samples{};
-    double objective_scale_sample{ std::numeric_limits<double>::infinity() };
-};
-
-struct LocalFittingClusterAttemptEvaluation
-{
-    LocalFittingAttemptOutcome outcome{ LocalFittingAttemptOutcome::ObjectiveRetry };
-    LocalFittingClusterAcceptedScore accepted_score{};
-};
-
-class LocalFittingClusterQualityStateSet
-{
-    struct ClusterState
+    LocalFittingObjectiveStats objective_stats;
+    if (objective_samples.has_value() && objective_scale_sample.has_value())
     {
-        algorithm::ScaleReferenceTracker objective_scale_tracker;
-        algorithm::FittingQualityCandidateStats previous_candidate_stats{};
-        std::optional<LocalFittingObjectiveSamples> previous_objective_samples{};
-        std::optional<TrackedLocalFittingClusterCandidate> best_candidate{};
-        double objective_ridge_multiplier{ 1.0 };
-
-        ClusterState(
-            std::optional<double> initial_scale_sample,
-            algorithm::FittingQualityCandidateStats initial_candidate_stats,
-            std::optional<LocalFittingObjectiveSamples> initial_objective_samples)
-            : objective_scale_tracker{
-                  kLocalFittingObjectiveScaleWarmupCount,
-                  initial_scale_sample
-              },
-              previous_candidate_stats{ std::move(initial_candidate_stats) },
-              previous_objective_samples{ std::move(initial_objective_samples) }
-        {
-            if (previous_candidate_stats.has_quality_objective)
-            {
-                best_candidate = TrackedLocalFittingClusterCandidate{
-                    previous_candidate_stats,
-                    previous_objective_samples
-                };
-            }
+        objective_stats = CalculateLocalFittingObjectiveStats(
+            *objective_samples,
+            objective_reference,
+            *objective_scale_sample);
+    }
+    return algorithm::FittingQualityCandidateStats{
+        objective_stats.has_quality_objective,
+        objective_stats.quality_objective,
+        algorithm::ParameterChangeStats{
+            std::vector<double>(
+                static_cast<std::size_t>(GaussianModel3D::ParameterSize()),
+                0.0)
         }
     };
+}
 
-    std::map<LocalFittingAndersonClusterKey, ClusterState> m_state_by_key{};
-
-    static algorithm::FittingQualityCandidateStats BuildInitialCandidateStats(
-        const std::optional<LocalFittingObjectiveSamples> & objective_samples,
-        const algorithm::ScaleReference & objective_reference,
-        std::optional<double> objective_scale_sample)
+LocalFittingClusterInitialQualityState BuildInitialLocalFittingClusterQualityState(
+    const SecondStageLocalFittingContext & context,
+    const GaussianFittingState & previous_state,
+    const LocalFittingAndersonCluster & cluster)
+{
+    auto initial_objective_samples{
+        CollectLocalFittingObjectiveSamples(
+            context,
+            previous_state,
+            cluster.objective_sample_ref_list)
+    };
+    std::optional<double> initial_objective_scale_sample;
+    if (initial_objective_samples.has_value())
     {
-        LocalFittingObjectiveStats objective_stats;
-        if (objective_samples.has_value() && objective_scale_sample.has_value())
-        {
-            objective_stats = CalculateLocalFittingObjectiveStats(
-                *objective_samples,
-                objective_reference,
-                *objective_scale_sample);
-        }
-        return algorithm::FittingQualityCandidateStats{
-            objective_stats.has_quality_objective,
-            objective_stats.quality_objective,
-            algorithm::ParameterChangeStats{
-                std::vector<double>(
-                    static_cast<std::size_t>(GaussianModel3D::ParameterSize()),
-                    0.0)
-            }
-        };
+        initial_objective_scale_sample =
+            CalculateLocalFittingResidualScaleSample(*initial_objective_samples);
     }
-
-    static double IncreaseObjectiveRidgeMultiplier(double multiplier)
-    {
-        return std::min(
-            kSuspiciousJointOffsetRidgeMultiplier,
-            std::max(1.0, multiplier) * kJointOffsetRidgeGrowth);
-    }
-
-    static double DecreaseObjectiveRidgeMultiplier(double multiplier)
-    {
-        return std::max(1.0, multiplier * kJointOffsetRidgeShrink);
-    }
-
-public:
-    void Reconcile(
-        const SecondStageLocalFittingContext & context,
-        const std::vector<LocalFittingAndersonCluster> & cluster_list,
-        const GaussianFittingState & previous_state)
-    {
-        std::map<LocalFittingAndersonClusterKey, ClusterState> next_state_by_key;
-        for (const auto & cluster : cluster_list)
-        {
-            const auto & key{ cluster.active_index_list };
-            auto iter{ m_state_by_key.find(key) };
-            if (iter != m_state_by_key.end())
-            {
-                next_state_by_key.emplace(key, std::move(iter->second));
-                continue;
-            }
-
-            auto initial_objective_samples{
-                CollectLocalFittingObjectiveSamples(
-                    context,
-                    previous_state,
-                    cluster.objective_sample_ref_list)
-            };
-            std::optional<double> initial_objective_scale_sample;
-            if (initial_objective_samples.has_value())
-            {
-                initial_objective_scale_sample =
-                    CalculateLocalFittingResidualScaleSample(*initial_objective_samples);
-            }
-            algorithm::ScaleReferenceTracker initial_tracker{
-                kLocalFittingObjectiveScaleWarmupCount,
-                initial_objective_scale_sample
-            };
-            auto initial_candidate_stats{
-                BuildInitialCandidateStats(
-                    initial_objective_samples,
-                    initial_tracker.GetCommittedReference(),
-                    initial_objective_scale_sample)
-            };
-            next_state_by_key.emplace(
-                key,
-                ClusterState{
-                    initial_objective_scale_sample,
-                    std::move(initial_candidate_stats),
-                    std::move(initial_objective_samples)
-                });
-        }
-        m_state_by_key = std::move(next_state_by_key);
-    }
-
-    LocalFittingClusterAttemptEvaluation EvaluateCandidate(
-        const SecondStageLocalFittingContext & context,
-        const LocalFittingAndersonCluster & cluster,
-        const GaussianFittingState & candidate_state,
-        const algorithm::ParameterChangeStats & normalized_change_stats,
-        int attempt,
-        int attempt_size) const
-    {
-        const auto iter{ m_state_by_key.find(cluster.active_index_list) };
-        if (iter == m_state_by_key.end())
-        {
-            throw std::invalid_argument("Local fitting cluster quality state is missing.");
-        }
-        const auto & state{ iter->second };
-
-        auto previous_candidate_stats_for_backtracking{ state.previous_candidate_stats };
-        auto score{
-            ScoreLocalFittingClusterCandidate(
-                context,
-                candidate_state,
-                cluster.objective_sample_ref_list,
-                state.objective_scale_tracker,
-                previous_candidate_stats_for_backtracking,
-                state.previous_objective_samples,
-                state.best_candidate,
-                normalized_change_stats)
-        };
-
-        auto backtracking_decision{
-            algorithm::FittingQualityBacktrackingDecision{ true, false, false }
-        };
-        if (score.has_objective_reference)
-        {
-            backtracking_decision = algorithm::EvaluateFittingQualityBacktracking(
-                score.candidate_stats,
-                previous_candidate_stats_for_backtracking,
-                state.best_candidate.has_value(),
-                score.best_candidate_stats.value_or(algorithm::FittingQualityCandidateStats{}),
-                kLocalFittingConvergenceObjectiveRelativeTolerance,
-                attempt,
-                attempt_size);
-        }
-
-        LocalFittingClusterAttemptEvaluation evaluation;
-        if (backtracking_decision.accepted)
-        {
-            evaluation.outcome = LocalFittingAttemptOutcome::Accepted;
-            evaluation.accepted_score = LocalFittingClusterAcceptedScore{
-                cluster.active_index_list,
-                score.candidate_stats,
-                std::move(score.best_candidate_stats),
-                std::move(score.objective_samples),
-                score.objective_scale_sample
-            };
-            return evaluation;
-        }
-        if (!backtracking_decision.should_shrink_beta || backtracking_decision.reached_retry_limit)
-        {
-            evaluation.outcome = LocalFittingAttemptOutcome::ObjectiveStop;
-        }
-        return evaluation;
-    }
-
-    void CommitAccepted(const std::vector<LocalFittingClusterAcceptedScore> & accepted_score_list)
-    {
-        for (const auto & accepted_score : accepted_score_list)
-        {
-            auto iter{ m_state_by_key.find(accepted_score.key) };
-            if (iter == m_state_by_key.end()) continue;
-
-            auto & state{ iter->second };
-            if (state.best_candidate.has_value() &&
-                accepted_score.best_candidate_stats.has_value())
-            {
-                state.best_candidate->candidate_stats = *accepted_score.best_candidate_stats;
-            }
-            if (accepted_score.candidate_stats.has_quality_objective)
-            {
-                state.objective_scale_tracker.CommitScaleSample(
-                    accepted_score.objective_scale_sample);
-            }
-            state.previous_candidate_stats = accepted_score.candidate_stats;
-            state.previous_objective_samples = accepted_score.objective_samples;
-            if (accepted_score.candidate_stats.has_quality_objective &&
-                (!state.best_candidate.has_value() ||
-                    algorithm::IsBetterFittingQualityCandidate(
-                        accepted_score.candidate_stats,
-                        state.best_candidate->candidate_stats,
-                        kLocalFittingObjectiveTieRelativeTolerance)))
-            {
-                state.best_candidate = TrackedLocalFittingClusterCandidate{
-                    accepted_score.candidate_stats,
-                    accepted_score.objective_samples
-                };
-            }
-        }
-    }
-
-    bool IncreaseObjectiveRidge(const std::vector<LocalFittingAndersonClusterKey> & key_list)
-    {
-        bool increased{ false };
-        for (const auto & key : key_list)
-        {
-            auto iter{ m_state_by_key.find(key) };
-            if (iter == m_state_by_key.end()) continue;
-
-            const auto previous_multiplier{ iter->second.objective_ridge_multiplier };
-            iter->second.objective_ridge_multiplier = IncreaseObjectiveRidgeMultiplier(previous_multiplier);
-            if (iter->second.objective_ridge_multiplier > previous_multiplier)
-            {
-                increased = true;
-            }
-        }
-        return increased;
-    }
-
-    void DecreaseObjectiveRidge(const std::vector<LocalFittingAndersonClusterKey> & key_list)
-    {
-        for (const auto & key : key_list)
-        {
-            auto iter{ m_state_by_key.find(key) };
-            if (iter == m_state_by_key.end()) continue;
-
-            iter->second.objective_ridge_multiplier = DecreaseObjectiveRidgeMultiplier(iter->second.objective_ridge_multiplier);
-        }
-    }
-
-    std::vector<double> BuildObjectiveRidgeMultiplierList(std::size_t atom_size) const
-    {
-        std::vector<double> multiplier_list(atom_size, 1.0);
-        for (const auto & [key, state] : m_state_by_key)
-        {
-            for (const auto active_index : key)
-            {
-                if (active_index >= multiplier_list.size())
-                {
-                    throw std::invalid_argument("Local fitting objective ridge atom index is out of range.");
-                }
-                multiplier_list.at(active_index) = std::max(multiplier_list.at(active_index), state.objective_ridge_multiplier);
-            }
-        }
-        return multiplier_list;
-    }
-
-    bool AllActiveReferencesLocked(
-        const std::vector<LocalFittingAndersonCluster> & cluster_list) const
-    {
-        for (const auto & cluster : cluster_list)
-        {
-            const auto iter{ m_state_by_key.find(cluster.active_index_list) };
-            if (iter == m_state_by_key.end())
-            {
-                throw std::invalid_argument("Local fitting cluster quality state is missing.");
-            }
-            const auto & tracker{ iter->second.objective_scale_tracker };
-            if (tracker.HasReference() && !tracker.IsLocked()) return false;
-        }
-        return true;
-    }
-};
+    algorithm::ScaleReferenceTracker initial_tracker{
+        kLocalFittingObjectiveScaleWarmupCount,
+        initial_objective_scale_sample
+    };
+    auto initial_candidate_stats{
+        BuildInitialLocalFittingClusterCandidateStats(
+            initial_objective_samples,
+            initial_tracker.GetCommittedReference(),
+            initial_objective_scale_sample)
+    };
+    return LocalFittingClusterInitialQualityState{
+        initial_objective_scale_sample,
+        std::move(initial_candidate_stats),
+        std::move(initial_objective_samples)
+    };
+}
 
 LocalRefitResult FitAtomWithJointOffsetFallback(
     const SecondStageLocalFittingContext & context,
@@ -2946,7 +2549,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
     }
 
     auto previous_state{ BuildInitialLocalFittingState(context) };
-    LocalFittingAndersonHistorySet acceleration_history{
+    algorithm::ClusteredAndersonAccelerationHistorySet acceleration_history{
         algorithm::AndersonAccelerationOptions{
             kLocalFittingAndersonHistoryDepth,
             kLocalFittingNormalizedChangeScaleFloor,
@@ -2969,7 +2572,17 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
     };
     double ridge_ratio{ kJointOffsetRidgeRatio };
     std::vector<double> suspicious_joint_offset_ridge_multiplier_list(atom_size, 1.0);
-    LocalFittingClusterQualityStateSet cluster_quality_state;
+    algorithm::ClusteredFittingQualityStateSet<LocalFittingObjectiveSamples> cluster_quality_state{
+        algorithm::ClusteredFittingQualityOptions{
+            kLocalFittingObjectiveScaleWarmupCount,
+            kLocalFittingConvergenceObjectiveRelativeTolerance,
+            kLocalFittingObjectiveTieRelativeTolerance,
+            1.0,
+            kSuspiciousJointOffsetRidgeMultiplier,
+            kJointOffsetRidgeGrowth,
+            kJointOffsetRidgeShrink
+        }
+    };
     std::size_t accepted_iteration_count{ 0 };
     for (size_t iter = 0; iter < kLocalFittingMaximumIterations; iter++)
     {
@@ -2984,8 +2597,19 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         const auto active_cluster_list{
             BuildLocalFittingAndersonClusters(context, active_index_list)
         };
-        cluster_quality_state.Reconcile(context, active_cluster_list, previous_state);
-        acceleration_history.Reconcile(active_cluster_list);
+        const auto active_cluster_key_list{
+            BuildLocalFittingAndersonClusterKeyList(active_cluster_list)
+        };
+        cluster_quality_state.Reconcile(
+            active_cluster_key_list,
+            [&](const LocalFittingAndersonClusterKey & key)
+            {
+                return BuildInitialLocalFittingClusterQualityState(
+                    context,
+                    previous_state,
+                    FindLocalFittingAndersonCluster(active_cluster_list, key));
+            });
+        acceleration_history.Reconcile(active_cluster_key_list);
         const auto joint_offset_ridge_multiplier_list{
             CombineLocalFittingRidgeMultiplierLists(
                 suspicious_joint_offset_ridge_multiplier_list,
@@ -3018,14 +2642,14 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         bool has_invalid_anderson_candidate{ false };
         const auto localized_anderson_candidate{
             acceleration_history.BuildCandidate(
-                active_cluster_list,
+                active_cluster_key_list,
                 previous_state.estimation_list,
                 raw_state.estimation_list)
         };
         std::optional<std::vector<Eigen::VectorXd>> anderson_candidate_estimation_list;
         if (localized_anderson_candidate.has_value())
         {
-            anderson_candidate_estimation_list = localized_anderson_candidate->estimation_list;
+            anderson_candidate_estimation_list = localized_anderson_candidate->state_list;
         }
 
         auto assembled_state{ previous_state };
@@ -3142,10 +2766,26 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                     };
                     auto evaluated_attempt{
                         cluster_quality_state.EvaluateCandidate(
-                            context, cluster, attempt_state,
-                            normalized_change_stats, attempt, attempt_size)
+                            key,
+                            attempt,
+                            attempt_size,
+                            [&](const algorithm::ScaleReferenceTracker & objective_scale_tracker,
+                                algorithm::FittingQualityCandidateStats & previous_candidate_stats,
+                                const std::optional<LocalFittingObjectiveSamples> & previous_objective_samples,
+                                const std::optional<TrackedLocalFittingClusterCandidate> & best_candidate)
+                            {
+                                return ScoreLocalFittingClusterCandidate(
+                                    context,
+                                    attempt_state,
+                                    cluster.objective_sample_ref_list,
+                                    objective_scale_tracker,
+                                    previous_candidate_stats,
+                                    previous_objective_samples,
+                                    best_candidate,
+                                    normalized_change_stats);
+                            })
                     };
-                    if (evaluated_attempt.outcome == LocalFittingAttemptOutcome::Accepted)
+                    if (evaluated_attempt.outcome == LocalFittingClusterAttemptOutcome::Accepted)
                     {
                         copy_cluster_state(assembled_state, attempt_state, key);
                         cluster_accepted.at(cluster_index) = true;
@@ -3174,7 +2814,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                     {
                         add_key(rejected_anderson_cluster_key_list, key);
                     }
-                    if (evaluated_attempt.outcome == LocalFittingAttemptOutcome::ObjectiveStop)
+                    if (evaluated_attempt.outcome == LocalFittingClusterAttemptOutcome::ObjectiveStop)
                     {
                         cluster_stopped.at(cluster_index) = true;
                     }
@@ -3288,18 +2928,10 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         }
         if (has_suspicious_offset_fallback)
         {
-            acceleration_history.ClearAndSuppressClustersContaining(iteration_result.suspicious_offset_state_index_list);
-        }
-        std::vector<LocalFittingAndersonCluster> accepted_cluster_list;
-        for (const auto & cluster : active_cluster_list)
-        {
-            if (contains_key(accepted_cluster_key_list, cluster.active_index_list))
-            {
-                accepted_cluster_list.emplace_back(cluster);
-            }
+            acceleration_history.ClearAndSuppressContaining(iteration_result.suspicious_offset_state_index_list);
         }
         acceleration_history.Commit(
-            accepted_cluster_list,
+            accepted_cluster_key_list,
             previous_state.estimation_list,
             raw_state.estimation_list);
         std::vector<std::size_t> accepted_active_index_list;
@@ -3341,7 +2973,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         const auto converged{
             !has_suspicious_offset_fallback &&
             !has_objective_backtracking_rejection &&
-            cluster_quality_state.AllActiveReferencesLocked(active_cluster_list) &&
+            cluster_quality_state.AllActiveReferencesLocked(active_cluster_key_list) &&
             IsLocalFittingNormalizedParameterChangeConverged(normalized_change_stats)
         };
         if (converged)
