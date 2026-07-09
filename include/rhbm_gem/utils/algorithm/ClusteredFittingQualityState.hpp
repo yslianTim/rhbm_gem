@@ -54,6 +54,7 @@ struct ClusteredFittingQualityCandidateScore
 {
     bool has_objective_reference{ false };
     FittingQualityCandidateStats candidate_stats{};
+    std::optional<FittingQualityCandidateStats> commit_candidate_stats{};
     std::optional<FittingQualityCandidateStats> best_candidate_stats{};
     std::optional<ObjectiveSamples> objective_samples{};
     double objective_scale_sample{ std::numeric_limits<double>::infinity() };
@@ -246,7 +247,7 @@ public:
             evaluation.outcome = ClusteredFittingQualityAttemptOutcome::Accepted;
             evaluation.accepted_score = AcceptedScore{
                 key,
-                score.candidate_stats,
+                score.commit_candidate_stats.value_or(score.candidate_stats),
                 std::move(score.best_candidate_stats),
                 std::move(score.objective_samples),
                 score.objective_scale_sample

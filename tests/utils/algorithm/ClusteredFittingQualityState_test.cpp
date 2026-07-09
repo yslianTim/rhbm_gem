@@ -116,6 +116,55 @@ TEST(ClusteredFittingQualityStateTest, AcceptsImprovedCandidateAndLocksReference
     EXPECT_TRUE(state_set.AllActiveReferencesLocked(key_list));
 }
 
+TEST(ClusteredFittingQualityStateTest, AcceptedCandidateCanCommitDifferentReferenceStats)
+{
+    StateSet state_set{ MakeOptions() };
+    state_set.Reconcile(
+        { { 0 } },
+        [](const alg::ClusterKey &)
+        {
+            return MakeInitialState(10.0);
+        });
+
+    const auto accepted_evaluation{
+        state_set.EvaluateCandidate(
+            { 0 },
+            0,
+            2,
+            [](const alg::ScaleReferenceTracker &,
+                alg::FittingQualityCandidateStats &,
+                const std::optional<Samples> &,
+                const std::optional<TrackedCandidate> & best_candidate)
+            {
+                auto score{ MakeScore(9.0, 1.0, best_candidate) };
+                score.commit_candidate_stats = MakeStats(5.0, 0.1);
+                return score;
+            })
+    };
+    ASSERT_EQ(
+        alg::ClusteredFittingQualityAttemptOutcome::Accepted,
+        accepted_evaluation.outcome);
+    state_set.CommitAccepted({ accepted_evaluation.accepted_score });
+
+    const auto retry_evaluation{
+        state_set.EvaluateCandidate(
+            { 0 },
+            0,
+            2,
+            [](const alg::ScaleReferenceTracker &,
+                alg::FittingQualityCandidateStats &,
+                const std::optional<Samples> &,
+                const std::optional<TrackedCandidate> & best_candidate)
+            {
+                return MakeScore(7.0, 1.0, best_candidate);
+            })
+    };
+
+    EXPECT_EQ(
+        alg::ClusteredFittingQualityAttemptOutcome::ObjectiveRetry,
+        retry_evaluation.outcome);
+}
+
 TEST(ClusteredFittingQualityStateTest, RejectsDeterioratedCandidateThenStopsAtRetryLimit)
 {
     StateSet state_set{ MakeOptions() };
