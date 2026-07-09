@@ -15,6 +15,7 @@
 #include <rhbm_gem/utils/algorithm/IterationState.hpp>
 #include <rhbm_gem/utils/algorithm/NormalizedChange.hpp>
 #include <rhbm_gem/utils/algorithm/ParameterChangeStats.hpp>
+#include <rhbm_gem/utils/algorithm/RobustLoss.hpp>
 #include <rhbm_gem/utils/algorithm/ScaleReferenceTracker.hpp>
 #include <rhbm_gem/utils/algorithm/WeightedRidgeSolver.hpp>
 #include <rhbm_gem/utils/algorithm/WeightedRidgeSystem.hpp>
@@ -62,10 +63,11 @@ constexpr double kNeighborAtomSearchRange{ 2.0 * kNeighborContributionDistanceMa
 constexpr std::size_t kLocalFittingMaximumIterations{ 200 };
 constexpr double kLocalFittingParameterChangeTolerance{ 1.0e-6 };
 constexpr double kLocalFittingChangePercentile{ 0.99 };
-constexpr int kHuberSlopeMaximumIterations{ 50 };
-constexpr double kHuberScaleMultiplier{ 1.4826 };
-constexpr double kHuberScaleMin{ 1.0e-12 };
-constexpr double kHuberCutoffMultiplier{ 1.345 };
+constexpr algorithm::RobustLossKind kSecondStageRobustLossKind{ algorithm::RobustLossKind::Cauchy };
+constexpr int kRobustLossMaximumIterations{ 50 };
+constexpr double kRobustScaleMultiplier{ 1.4826 };
+constexpr double kRobustScaleMin{ 1.0e-12 };
+constexpr double kRobustLossCutoffMultiplier{ 1.345 };
 constexpr double kJointOffsetRidgeRatio{ 1.0e-3 };
 constexpr double kJointOffsetRidgeRatioMin{ 1.0e-4 };
 constexpr double kJointOffsetRidgeRatioMax{ 1.0 };
@@ -80,7 +82,7 @@ constexpr double kJointOffsetIrlsObjectiveRelativeTolerance{ 1.0e-10 };
 constexpr std::size_t kLocalFittingAndersonHistoryDepth{ 5 };
 constexpr double kLocalFittingAndersonCoefficientL1Limit{ 10.0 };
 constexpr double kLocalFittingAndersonRegularization{ 1.0e-12 };
-constexpr std::array<double, 3> kLocalFittingAccelerationDampingList{ 1.0, 0.5, 0.25 };
+constexpr std::array<double, 5> kLocalFittingAccelerationDampingList{ 1.0, 0.5, 0.25, 0.125, 0.0625 };
 constexpr double kLocalFittingFreezeChangeRatio{ 0.1 };
 constexpr int kLocalFittingFreezeStableIterations{ 3 };
 constexpr double kLocalFittingDependencyThawHysteresisGrowth{ 2.0 };
@@ -990,7 +992,7 @@ double CalculateMedianAbsoluteDeviationScale(const std::vector<double> & value_l
     {
         deviation_list.emplace_back(std::abs(value - median_value));
     }
-    return kHuberScaleMultiplier * array_helper::ComputeMedian(deviation_list);
+    return kRobustScaleMultiplier * array_helper::ComputeMedian(deviation_list);
 }
 
 JointOffsetSolveResult EstimateJointOffsets(
@@ -1044,18 +1046,20 @@ JointOffsetSolveResult EstimateJointOffsets(
         };
     }
 
-    for (int iteration = 0; iteration < kHuberSlopeMaximumIterations; iteration++)
+    for (int iteration = 0; iteration < kRobustLossMaximumIterations; iteration++)
     {
         const Eigen::VectorXd residual{ system.response - system.design_matrix * offset };
         std::vector<double> residual_list(residual.data(), residual.data() + residual.size());
         const auto residual_scale{
-            std::max(CalculateMedianAbsoluteDeviationScale(residual_list), kHuberScaleMin)
+            std::max(CalculateMedianAbsoluteDeviationScale(residual_list), kRobustScaleMin)
         };
-        const auto cutoff{ kHuberCutoffMultiplier * residual_scale };
         for (Eigen::Index i = 0; i < residual.size(); i++)
         {
-            const auto absolute_residual{ std::abs(residual(i)) };
-            weight(i) = absolute_residual <= cutoff ? 1.0 : cutoff / absolute_residual;
+            weight(i) = algorithm::CalculateRobustWeight(
+                kSecondStageRobustLossKind,
+                residual(i),
+                residual_scale,
+                kRobustLossCutoffMultiplier);
         }
 
         Eigen::VectorXd updated_offset;
@@ -1233,16 +1237,6 @@ void SetUpdatedSamplingEntriesFromFittedGroupGaussian(ModelObject & model_object
     }
 }
 
-double CalculateHuberLoss(double residual, double cutoff)
-{
-    const auto absolute_residual{ std::abs(residual) };
-    if (absolute_residual <= cutoff)
-    {
-        return 0.5 * residual * residual;
-    }
-    return cutoff * (absolute_residual - 0.5 * cutoff);
-}
-
 std::optional<LocalFittingObjectiveSamples> CollectLocalFittingObjectiveSamples(
     const SecondStageLocalFittingContext & context,
     const FittedGaussianSnapshot & snapshot,
@@ -1312,7 +1306,7 @@ std::optional<double> CalculateLocalFittingResidualScaleSample(
         CalculateMedianAbsoluteDeviationScale(objective_samples.response_list)
     };
     const auto scale_sample{
-        std::max({ residual_scale, response_scale_floor, kHuberScaleMin })
+        std::max({ residual_scale, response_scale_floor, kRobustScaleMin })
     };
     if (!std::isfinite(scale_sample)) return std::nullopt;
     return scale_sample;
@@ -1333,7 +1327,10 @@ LocalFittingObjectiveStats CalculateLocalFittingObjectiveStats(
     for (const auto residual : objective_samples.residual_list)
     {
         const auto normalized_residual{ residual / objective_reference.scale };
-        loss_sum += CalculateHuberLoss(normalized_residual, kHuberCutoffMultiplier);
+        loss_sum += algorithm::CalculateRobustLoss(
+            kSecondStageRobustLossKind,
+            normalized_residual,
+            kRobustLossCutoffMultiplier);
     }
     const auto quality_objective{ loss_sum / static_cast<double>(objective_samples.residual_list.size()) };
     if (!std::isfinite(quality_objective)) return stats;

@@ -132,6 +132,7 @@ set(UTILS_ALGORITHM_TEST_SOURCES
     utils/algorithm/ClusteredAndersonAcceleration_test.cpp
     utils/algorithm/ClusteredFittingQualityState_test.cpp
     utils/algorithm/ConvergenceAlgorithm_test.cpp
+    utils/algorithm/RobustLoss_test.cpp
     utils/algorithm/RobustSlopeEstimator_test.cpp
     utils/algorithm/ScaleReferenceTracker_test.cpp
     utils/algorithm/WeightedRidgeSolver_test.cpp

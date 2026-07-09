@@ -79,11 +79,13 @@ active offset-basis columns have normalized overlap at least
 `kJointOffsetCollinearityOverlapThreshold`, both receive a local ridge
 multiplier for that solve.
 
-Huber weights are updated by IRLS. The IRLS loop stops when the weighted-ridge
-surrogate objective deteriorates, normalized offset movement is small, or the
-Huber iteration limit is reached. If the system cannot be built, is empty, or
-cannot be solved, the offset step uses the previous offsets and the rest of the
-local fitting iteration still runs.
+Robust-loss weights are updated by IRLS. The current internal policy defaults
+to Huber, with Cauchy available through the same source-local loss setting. The
+IRLS loop stops when the weighted-ridge surrogate objective deteriorates,
+normalized offset movement is small, or the robust-loss iteration limit is
+reached. If the system cannot be built, is empty, or cannot be solved, the
+offset step uses the previous offsets and the rest of the local fitting
+iteration still runs.
 
 ## Refit and Rollback
 
@@ -143,11 +145,12 @@ Rejected clusters keep their previous atom parameters for this iteration.
 
 ## Objective Gate and Ridge Retry
 
-Objective scoring is cluster-local. Each cluster owns its objective sample refs,
-residual-scale tracker, previous objective samples, best local objective stats,
-and objective ridge multiplier. During scale warm-up, candidate, previous, and
-best objective values are scored with the same provisional scale before
-backtracking is evaluated.
+Objective scoring is cluster-local and uses the same robust-loss policy as
+joint-offset IRLS. Each cluster owns its objective sample refs, residual-scale
+tracker, previous objective samples, best local objective stats, and objective
+ridge multiplier. During scale warm-up, candidate, previous, and best objective
+values are scored with the same provisional scale before backtracking is
+evaluated.
 
 A cluster candidate is rejected when a local reference exists and the candidate
 has no finite objective, or when its objective deteriorates beyond
