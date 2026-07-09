@@ -732,13 +732,19 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingLogsAndersonAccelerationMode
         output.rfind('\n', fallback_position),
         std::string::npos);
     EXPECT_NE(
-        output.find("Objective backtracking rejected all attempts; backtracking retry"),
+        output.find("Objective backtracking rejected all attempts; retrying after"),
         std::string::npos);
     EXPECT_TRUE(
         output.find("increased cluster-local objective ridge") != std::string::npos ||
         output.find("increased global ridge ratio") != std::string::npos);
     EXPECT_EQ(
         output.find("objective ="),
+        std::string::npos);
+    EXPECT_EQ(
+        output.find("d_amplitude ="),
+        std::string::npos);
+    EXPECT_EQ(
+        output.find("active/frozen/thawed atoms"),
         std::string::npos);
     const auto fixed_point_position{
         output.find("acceleration = damped-fixed-point", fallback_position)
@@ -783,10 +789,8 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingKeepsAndersonAccelerationWit
     const auto previous_log_level{ Logger::GetLogLevel() };
     Logger::SetLogLevel(LogLevel::Info);
     testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
     rt::RunSecondStageLocalFitting(*model, options);
     const std::string output{ testing::internal::GetCapturedStdout() };
-    const std::string error_output{ testing::internal::GetCapturedStderr() };
     Logger::SetLogLevel(previous_log_level);
 
     const auto fitted_error{
@@ -797,9 +801,6 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingKeepsAndersonAccelerationWit
     EXPECT_TRUE(
         output.find("acceleration = aa") != std::string::npos ||
         output.find("acceleration = damped-aa") != std::string::npos);
-    EXPECT_NE(
-        error_output.find("suspicious offset atom-events = "),
-        std::string::npos);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
@@ -815,10 +816,8 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingAcceptsSeparatedClusterWithR
     const auto previous_log_level{ Logger::GetLogLevel() };
     Logger::SetLogLevel(LogLevel::Info);
     testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
     rt::RunSecondStageLocalFitting(*model, options);
     const std::string output{ testing::internal::GetCapturedStdout() };
-    const std::string error_output{ testing::internal::GetCapturedStderr() };
     Logger::SetLogLevel(previous_log_level);
 
     const auto fitted_right_cluster_error{
@@ -828,9 +827,6 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingAcceptsSeparatedClusterWithR
     EXPECT_TRUE(
         output.find("acceleration = aa") != std::string::npos ||
         output.find("acceleration = damped-aa") != std::string::npos);
-    EXPECT_NE(
-        error_output.find("suspicious offset atom-events = "),
-        std::string::npos);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
@@ -870,7 +866,7 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingHandlesNearPerfectEntryScale
     EXPECT_LE(fitted_error, entry_error + 1.0e-8);
 }
 
-TEST(EstimatorTesterTest, RunSecondStageLocalFittingLogsFallbackSummary)
+TEST(EstimatorTesterTest, RunSecondStageLocalFittingDoesNotLogFallbackSummary)
 {
     auto model{ BuildSecondStageFallbackDiagnosticModel() };
     rt::FitOptions options;
@@ -886,42 +882,22 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingLogsFallbackSummary)
     const std::string error_output{ testing::internal::GetCapturedStderr() };
     Logger::SetLogLevel(previous_log_level);
 
-    EXPECT_NE(
-        error_output.find("Second-stage local fitting fallback summary:"),
-        std::string::npos);
-    EXPECT_NE(
-        error_output.find("joint offset fallback iterations = 1"),
-        std::string::npos);
-    EXPECT_NE(
-        error_output.find("refit fallback atom-events = 1"),
-        std::string::npos);
-    EXPECT_NE(
-        error_output.find("refit fallback distinct atoms = 1"),
-        std::string::npos);
-    EXPECT_NE(
-        error_output.find("suspicious offset atom-events = "),
-        std::string::npos);
-}
-
-TEST(EstimatorTesterTest, RunSecondStageLocalFittingQuietModeSuppressesFallbackSummary)
-{
-    auto model{ BuildSecondStageFallbackDiagnosticModel() };
-    rt::FitOptions options;
-    options.distance_min = 0.0;
-    options.distance_max = 1.0;
-    options.thread_size = 1;
-    options.quiet_mode = true;
-
-    const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Warning);
-    testing::internal::CaptureStderr();
-    rt::RunSecondStageLocalFitting(*model, options);
-    const std::string error_output{ testing::internal::GetCapturedStderr() };
-    Logger::SetLogLevel(previous_log_level);
-
     EXPECT_EQ(
         error_output.find("Second-stage local fitting fallback summary:"),
         std::string::npos);
+    EXPECT_EQ(
+        error_output.find("joint offset fallback iterations = 1"),
+        std::string::npos);
+    EXPECT_EQ(
+        error_output.find("refit fallback atom-events = 1"),
+        std::string::npos);
+    EXPECT_EQ(
+        error_output.find("refit fallback distinct atoms = 1"),
+        std::string::npos);
+    EXPECT_EQ(
+        error_output.find("suspicious offset atom-events = "),
+        std::string::npos);
+    ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
 TEST(EstimatorTesterTest, RunSecondStageLocalFittingRollsBackSuspiciousJointOffset)
@@ -962,12 +938,7 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingRollsBackSuspiciousJointOffs
     options.thread_size = 1;
     options.quiet_mode = false;
 
-    const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Warning);
-    testing::internal::CaptureStderr();
     rt::RunSecondStageLocalFitting(*model, options);
-    const std::string error_output{ testing::internal::GetCapturedStderr() };
-    Logger::SetLogLevel(previous_log_level);
 
     for (std::size_t i = 0; i < previous_offset_list.size(); i++)
     {
@@ -976,35 +947,5 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingRollsBackSuspiciousJointOffs
         };
         EXPECT_NEAR(fitted_offset, previous_offset_list.at(i), 1.0e-12);
     }
-    EXPECT_NE(
-        error_output.find("suspicious offset distinct atoms = 2"),
-        std::string::npos);
     ExpectSelectedAtomEstimatesAreFinite(*model);
-}
-
-TEST(EstimatorTesterTest, RunSecondStageLocalFittingLogsSuspiciousOffsetSummary)
-{
-    auto model{ BuildSecondStageSuspiciousOffsetDiagnosticModel() };
-    rt::FitOptions options;
-    options.distance_min = 0.0;
-    options.distance_max = 1.0;
-    options.thread_size = 1;
-    options.quiet_mode = false;
-
-    const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Warning);
-    testing::internal::CaptureStderr();
-    rt::RunSecondStageLocalFitting(*model, options);
-    const std::string error_output{ testing::internal::GetCapturedStderr() };
-    Logger::SetLogLevel(previous_log_level);
-
-    EXPECT_NE(
-        error_output.find("Second-stage local fitting fallback summary:"),
-        std::string::npos);
-    EXPECT_NE(
-        error_output.find("suspicious offset atom-events = "),
-        std::string::npos);
-    EXPECT_NE(
-        error_output.find("suspicious offset distinct atoms = "),
-        std::string::npos);
 }

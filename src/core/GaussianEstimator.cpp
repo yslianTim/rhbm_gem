@@ -171,8 +171,6 @@ struct LocalRefitResult
 
 struct LocalFittingFallbackEvents
 {
-    bool joint_offset_used_fallback{ false };
-    std::vector<std::size_t> refit_fallback_state_index_list{};
     std::vector<std::size_t> suspicious_offset_state_index_list{};
 };
 
@@ -180,73 +178,6 @@ struct LocalFittingIterationResult
 {
     GaussianFittingState state{};
     LocalFittingFallbackEvents fallback_events{};
-};
-
-struct LocalFittingFallbackStats
-{
-    std::size_t joint_offset_fallback_iterations{ 0 };
-    std::size_t refit_fallback_atom_events{ 0 };
-    std::size_t suspicious_offset_atom_events{ 0 };
-    std::vector<bool> refit_fallback_atom_seen{};
-    std::vector<bool> suspicious_offset_atom_seen{};
-
-    explicit LocalFittingFallbackStats(std::size_t atom_size)
-        : refit_fallback_atom_seen(atom_size, false),
-          suspicious_offset_atom_seen(atom_size, false)
-    {
-    }
-
-    void Accumulate(const LocalFittingFallbackEvents & fallback_events)
-    {
-        if (fallback_events.joint_offset_used_fallback)
-        {
-            joint_offset_fallback_iterations++;
-        }
-        refit_fallback_atom_events += fallback_events.refit_fallback_state_index_list.size();
-        for (const auto state_index : fallback_events.refit_fallback_state_index_list)
-        {
-            if (state_index >= refit_fallback_atom_seen.size())
-            {
-                throw std::invalid_argument("Local fitting fallback atom index is out of range.");
-            }
-            refit_fallback_atom_seen.at(state_index) = true;
-        }
-        suspicious_offset_atom_events += fallback_events.suspicious_offset_state_index_list.size();
-        for (const auto state_index : fallback_events.suspicious_offset_state_index_list)
-        {
-            if (state_index >= suspicious_offset_atom_seen.size())
-            {
-                throw std::invalid_argument(
-                    "Local fitting suspicious offset atom index is out of range.");
-            }
-            suspicious_offset_atom_seen.at(state_index) = true;
-        }
-    }
-
-    std::size_t GetDistinctRefitFallbackAtomCount() const
-    {
-        return static_cast<std::size_t>(
-            std::count(
-                refit_fallback_atom_seen.begin(),
-                refit_fallback_atom_seen.end(),
-                true));
-    }
-
-    std::size_t GetDistinctSuspiciousOffsetAtomCount() const
-    {
-        return static_cast<std::size_t>(
-            std::count(
-                suspicious_offset_atom_seen.begin(),
-                suspicious_offset_atom_seen.end(),
-                true));
-    }
-
-    bool HasFallback() const
-    {
-        return joint_offset_fallback_iterations > 0 ||
-            refit_fallback_atom_events > 0 ||
-            suspicious_offset_atom_events > 0;
-    }
 };
 
 struct LocalFittingObjectiveStats
@@ -289,7 +220,6 @@ struct AcceptedLocalFittingCandidate
 {
     GaussianFittingState state{};
     std::vector<algorithm::ParameterChange> change_list{};
-    algorithm::ParameterChangeStats change_stats{};
     algorithm::ParameterChangeStats normalized_change_stats{};
     LocalFittingAccelerationAttempt acceleration_attempt{};
     std::vector<LocalFittingAndersonClusterKey> accepted_cluster_key_list{};
@@ -2445,7 +2375,7 @@ LocalRefitResult FitAtomWithJointOffsetFallback(
     return LocalRefitResult{ result, true, false };
 }
 
-std::size_t ThawChangedActiveAtomNeighbors(
+void ThawChangedActiveAtomNeighbors(
     const SecondStageLocalFittingContext & context,
     const std::vector<algorithm::ParameterChange> & change_list,
     const std::vector<std::size_t> & active_index_list,
@@ -2458,7 +2388,6 @@ std::size_t ThawChangedActiveAtomNeighbors(
     }
 
     const double thaw_threshold{ std::sqrt(kLocalFittingParameterChangeTolerance) };
-    std::size_t thaw_count{ 0 };
     for (const auto active_index : active_index_list)
     {
         if (active_index >= context.AtomSize())
@@ -2486,11 +2415,9 @@ std::size_t ThawChangedActiveAtomNeighbors(
             if (freeze_tracker.Thaw(neighbor_index))
             {
                 thaw_hysteresis_tracker.RecordDependencyThaw(neighbor_index);
-                thaw_count++;
             }
         }
     }
-    return thaw_count;
 }
 
 void ExpandSuspiciousOffsetClusters(
@@ -2716,14 +2643,6 @@ LocalFittingIterationResult RunLocalFittingIteration(
 
     LocalFittingIterationResult iteration_result;
     iteration_result.state = std::move(iteration_state);
-    iteration_result.fallback_events.joint_offset_used_fallback =
-        joint_offset_result.used_fallback;
-    for (std::size_t i = 0; i < refit_fallback_flag_list.size(); i++)
-    {
-        if (refit_fallback_flag_list.at(i) == 0) continue;
-        iteration_result.fallback_events.refit_fallback_state_index_list.emplace_back(
-            active_index_list.at(i));
-    }
     for (std::size_t i = 0; i < suspicious_offset_flag_list.size(); i++)
     {
         if (suspicious_offset_flag_list.at(i) == 0) continue;
@@ -2747,20 +2666,6 @@ void ApplyLocalFittingState(
     {
         local_editor_list.at(i).SetGaussianResult(iteration_state.result_list.at(i));
     }
-}
-
-void LogLocalFittingFallbackSummary(const LocalFittingFallbackStats & fallback_stats)
-{
-    if (!fallback_stats.HasFallback()) return;
-
-    std::ostringstream message;
-    message << "Second-stage local fitting fallback summary: "
-        << "joint offset fallback iterations = " << fallback_stats.joint_offset_fallback_iterations
-        << ", refit fallback atom-events = " << fallback_stats.refit_fallback_atom_events
-        << ", refit fallback distinct atoms = " << fallback_stats.GetDistinctRefitFallbackAtomCount()
-        << ", suspicious offset atom-events = " << fallback_stats.suspicious_offset_atom_events
-        << ", suspicious offset distinct atoms = " << fallback_stats.GetDistinctSuspiciousOffsetAtomCount() << ".";
-    Logger::Log(LogLevel::Warning, message.str());
 }
 
 void LogLocalFittingAllAtomsFrozen(
@@ -2795,7 +2700,6 @@ void LogLocalFittingAndersonFallbackSwitch(
 
 void LogLocalFittingBacktrackingRetry(
     const FitOptions & options,
-    std::size_t consecutive_backtracking_retry_count,
     std::size_t accepted_iteration_count,
     double ridge_ratio,
     bool uses_cluster_local_objective_ridge)
@@ -2804,9 +2708,8 @@ void LogLocalFittingBacktrackingRetry(
 
     std::ostringstream progress_message;
     progress_message
-        << "Objective backtracking rejected all attempts; backtracking retry "
-        << consecutive_backtracking_retry_count
-        << " after local fitting iteration " << accepted_iteration_count
+        << "Objective backtracking rejected all attempts; retrying after local fitting iteration "
+        << accepted_iteration_count
         << std::fixed << std::setprecision(5)
         << "; acceleration history reset";
     if (uses_cluster_local_objective_ridge)
@@ -2844,10 +2747,8 @@ void LogLocalFittingBacktrackingStop(
 void LogLocalFittingProgress(
     const FitOptions & options,
     std::size_t accepted_iteration_count,
-    const algorithm::ParameterChangeStats & change_stats,
     const LocalFittingAccelerationAttempt & current_acceleration_attempt,
-    const algorithm::ConvergenceFreezeTracker & freeze_tracker,
-    std::size_t thaw_count)
+    const algorithm::ConvergenceFreezeTracker & freeze_tracker)
 {
     if (options.quiet_mode) return;
 
@@ -2855,13 +2756,10 @@ void LogLocalFittingProgress(
     progress_message << "Iter. " << accepted_iteration_count
         << '/' << kLocalFittingMaximumIterations
         << std::fixed << std::setprecision(4)
-        << ", d_amplitude = "<< change_stats.percentile_list.at(GaussianModel3D::AmplitudeIndex())
-        << ", d_width = "<< change_stats.percentile_list.at(GaussianModel3D::WidthIndex())
-        << ", d_offset = "<< change_stats.percentile_list.at(GaussianModel3D::OffsetIndex())
         << ", acceleration = "<< GetLocalFittingAccelerationText(current_acceleration_attempt.kind)
         << ", damping = "<< current_acceleration_attempt.damping
-        << ", active/frozen/thawed atoms = "<< freeze_tracker.GetActiveCount()
-        << "/" << freeze_tracker.GetFrozenCount() << "/" << thaw_count;
+        << ", active/frozen atoms = "<< freeze_tracker.GetActiveCount()
+        << "/" << freeze_tracker.GetFrozenCount();
     Logger::ProgressLine(progress_message.str());
 }
 
@@ -3243,7 +3141,6 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         kLocalFittingFreezeChangeRatio,
         kLocalFittingFreezeStableIterations
     };
-    LocalFittingFallbackStats fallback_stats{ atom_size };
     algorithm::DependencyThawHysteresisTracker thaw_hysteresis_tracker{
         atom_size,
         kLocalFittingDependencyThawHysteresisGrowth,
@@ -3254,7 +3151,6 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
     double ridge_ratio{ kJointOffsetRidgeRatio };
     std::vector<double> suspicious_joint_offset_ridge_multiplier_list(atom_size, 1.0);
     LocalFittingClusterQualityStateSet cluster_quality_state;
-    std::size_t consecutive_backtracking_retry_count{ 0 };
     std::size_t accepted_iteration_count{ 0 };
     for (size_t iter = 0; iter < kLocalFittingMaximumIterations; iter++)
     {
@@ -3286,7 +3182,6 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 joint_offset_ridge_multiplier_list)
         };
         const auto & fallback_events{ iteration_result.fallback_events };
-        fallback_stats.Accumulate(fallback_events);
         const auto suspicious_offset_state_index_list{
             fallback_events.suspicious_offset_state_index_list
         };
@@ -3520,7 +3415,6 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
 
         if (!has_current_candidate)
         {
-            consecutive_backtracking_retry_count++;
             bool increased_cluster_objective_ridge{ false };
             bool increased_global_ridge_ratio{ false };
             if (!rejected_anderson_cluster_key_list.empty())
@@ -3547,7 +3441,6 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             {
                 LogLocalFittingBacktrackingRetry(
                     options,
-                    consecutive_backtracking_retry_count,
                     accepted_iteration_count,
                     ridge_ratio,
                     increased_cluster_objective_ridge);
@@ -3564,12 +3457,6 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 assembled_state.estimation_list,
                 previous_state.estimation_list)
         };
-        auto change_stats{
-            algorithm::SummarizeParameterChangeStats(
-                change_list,
-                active_index_list,
-                kLocalFittingChangePercentile)
-        };
         const auto normalized_change_list{
             CalculateLocalFittingNormalizedParameterChanges(
                 assembled_state.estimation_list,
@@ -3583,14 +3470,12 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         };
         current_candidate.state = std::move(assembled_state);
         current_candidate.change_list = std::move(change_list);
-        current_candidate.change_stats = std::move(change_stats);
         current_candidate.normalized_change_stats = std::move(normalized_change_stats);
         current_candidate.acceleration_attempt = accepted_acceleration_attempt;
         current_candidate.accepted_cluster_key_list = accepted_cluster_key_list;
         current_candidate.rejected_cluster_key_list = rejected_cluster_key_list;
         current_candidate.accepted_anderson_cluster_key_list = accepted_anderson_cluster_key_list;
 
-        consecutive_backtracking_retry_count = 0;
         accepted_iteration_count++;
         cluster_quality_state.CommitAccepted(accepted_cluster_score_list);
         cluster_quality_state.DecreaseObjectiveRidge(
@@ -3653,20 +3538,15 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             std::unique(accepted_active_index_list.begin(), accepted_active_index_list.end()),
             accepted_active_index_list.end());
         freeze_tracker.Update(current_candidate.change_list, accepted_active_index_list);
-        auto thaw_count{
-            ThawChangedActiveAtomNeighbors(
-                context,
-                current_candidate.change_list,
-                accepted_active_index_list,
-                freeze_tracker,
-                thaw_hysteresis_tracker)
-        };
+        ThawChangedActiveAtomNeighbors(
+            context,
+            current_candidate.change_list,
+            accepted_active_index_list,
+            freeze_tracker,
+            thaw_hysteresis_tracker);
         for (const auto state_index : suspicious_offset_state_index_list)
         {
-            if (freeze_tracker.Thaw(state_index))
-            {
-                thaw_count++;
-            }
+            freeze_tracker.Thaw(state_index);
         }
         for (std::size_t state_index = 0; state_index < atom_size; state_index++)
         {
@@ -3679,10 +3559,8 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         LogLocalFittingProgress(
             options,
             accepted_iteration_count,
-            current_candidate.change_stats,
             current_candidate.acceleration_attempt,
-            freeze_tracker,
-            thaw_count);
+            freeze_tracker);
 
         if (freeze_tracker.GetActiveCount() == 0)
         {
@@ -3713,10 +3591,6 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             LogLocalFittingMaximumIterations(options, current_candidate.normalized_change_stats);
         }
         previous_state = std::move(current_candidate.state);
-    }
-    if (!options.quiet_mode)
-    {
-        LogLocalFittingFallbackSummary(fallback_stats);
     }
 }
 

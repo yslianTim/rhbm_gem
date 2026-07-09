@@ -262,8 +262,9 @@ Huber scale minimum, so a near-perfect entry fit cannot create an overly
 sensitive denominator. A local candidate is better when its normalized robust
 objective improves beyond the tie tolerance; objective ties are broken by the
 maximum of the three normalized percentile parameter changes. Global progress
-and terminal logs report parameter movement, acceleration, active/frozen/thawed
-atom counts, and terminal reasons; they do not compute a full-state objective.
+and terminal logs report iteration, acceleration, damping, active/frozen atom
+counts, normalized terminal movement, and terminal reasons; they do not compute
+a full-state objective or fallback summary.
 
 ## Exit Paths
 
@@ -289,13 +290,6 @@ The loop has four terminal cases:
 On non-terminal accepted iterations, the accepted estimation and result vectors
 become the previous state for the next loop iteration. A rejected iteration does
 not update the fixed-point state or the freeze tracker.
-
-When logging is enabled, the function also emits a warning summary after the
-loop if any iteration used the joint-offset fallback, any atom refit fallback, or
-any suspicious offset rollback. The summary reports joint-offset fallback
-iterations, refit fallback atom-events, distinct atoms that used the refit
-fallback, suspicious offset atom-events, and distinct atoms that were marked for
-suspicious offset rollback.
 
 ## Related Notes
 
