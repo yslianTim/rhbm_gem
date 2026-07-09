@@ -4,310 +4,221 @@
 Gaussian estimates after the first-stage per-atom fit. The implementation is in
 [`src/core/GaussianEstimator.cpp`](/src/core/GaussianEstimator.cpp).
 
-This stage is a fixed-point iteration across the selected atoms. Each iteration
-estimates a joint offset update for the active selected atoms, refits those atoms
-with selected-neighbor contributions removed, then uses percentile normalized
-parameter movement to decide whether the active set has converged.
+The stage is an outer fixed-point iteration over selected atoms. Each iteration
+solves active joint offsets, refits active atoms with selected-neighbor signals
+removed, assembles a damped or Anderson-accelerated candidate, and accepts
+cluster-local progress through an objective backtracking gate.
 
 ## Inputs and State
 
-The function receives:
-
-- a `ModelObject`, used to read the selected atom list and edit each atom's
-  local analysis entry; and
-- `FitOptions`, which supplies fit distance range, thread
-  count for the lower-level Gaussian estimator, and logging mode.
-
-At entry, it reads `model_object.GetSelectedAtoms()`, builds one
+At entry, the function reads `model_object.GetSelectedAtoms()`, creates one
 `AtomLocalPotentialEditor` per selected atom, and builds a
-`SecondStageLocalFittingContext` from the same selected-atom order. The context
-stores original local sampling entries via `GetSamplingEntries(false)`, so this
-stage does not apply the sample selection filter and does not use updated
-sampling entries produced later in the workflow. The previous iteration state is
-stored as a `GaussianFittingState` with two aligned vectors:
+`SecondStageLocalFittingContext` in the same selected-atom order. The context
+stores:
+
+- original local sampling entries from `GetSamplingEntries(false)`;
+- selected-neighbor indexes within `kNeighborAtomSearchRange`; and
+- per-sample selected-neighbor contributions within
+  `kNeighborContributionDistanceMax`.
+
+The fixed-point state is a `GaussianFittingState` with aligned result and model
+vectors:
 
 ```text
-previous_result_list      = current per-atom LocalGaussianResult
-previous_estimation_list  = current MDPDE model vector [amplitude, width, offset]
+result_list      = per-atom LocalGaussianResult
+estimation_list  = per-atom MDPDE model vector [amplitude, width, offset]
 ```
 
-These vectors are the fixed-point state. They are replaced at the end of each
-non-terminal iteration.
+`previous_state` is replaced only after an accepted non-terminal iteration.
+Rejected iterations keep the previous state.
 
-## Per-Iteration Flow
+## Outer Iteration
 
-Each loop first asks the freeze tracker for the active atom indexes. If no atom
-is active, the previous state is applied and the stage exits. Otherwise the
-active indexes are passed to `RunLocalFittingIteration`, and the updated model
-vectors are checked for freezing and convergence.
+Each loop performs the following high-level steps:
 
 ```text
 previous state
-    -> build active atom set
-    -> exit if active set is empty
-    -> build selected-atom fitted Gaussian snapshot
-    -> estimate joint offsets for active atoms
-    -> refit active atoms with selected-neighbor contributions removed
-    -> roll back any suspicious offset clusters found before or during refit
-    -> build an Anderson-accelerated or damped fixed-point candidate
-    -> compute active-atom p95 normalized parameter changes
-    -> backtrack against the objective; retry with lower damping when needed
-    -> update cluster quality state and Anderson history
-    -> freeze stable atoms and thaw changed selected neighbors
-    -> exit, fallback, or continue
+    -> collect active atoms from the freeze tracker
+    -> build active clusters and reconcile cluster-local state
+    -> solve/refit the active fixed-point map output G(x)
+    -> mark suspicious offset rollbacks and temporary ridge multipliers
+    -> try localized Anderson damping per cluster
+    -> try damped fixed-point fallback for remaining clusters
+    -> accept any cluster that passes its local objective gate
+    -> update cluster quality state, Anderson history, ridge, freeze/thaw
+    -> exit, retry, or continue
 ```
 
-The maximum iteration count is `kLocalFittingMaximumIterations` (`200`).
+The maximum outer iteration count is `kLocalFittingMaximumIterations` (`200`).
 
 ## Joint Offset Step
 
-`RunLocalFittingIteration` first converts the full previous selected-atom
-vectors into a snapshot aligned with the second-stage context atom index.
-`EstimateJointOffsets` then solves one sparse linear system for active atom
-offsets. Frozen selected atoms remain in the snapshot, but they do not become
-columns in the linear system. Unselected atoms are not present in this snapshot,
-so second-stage neighbor subtraction does not use them as fixed contributors.
+`RunLocalFittingIteration` first builds a selected-atom Gaussian snapshot from
+`previous_state`. Frozen selected atoms remain in the snapshot as fixed signal
+contributors, but they do not become active columns in the joint offset system.
+Unselected atoms are outside this second-stage snapshot.
 
-For each original sampling entry on each active atom, with the sample selection
-filter disabled:
+For each original sample on each active atom, the joint system:
 
-1. subtract the target atom's current zero-offset signal;
-2. add the target atom's offset basis as the row entry for that atom;
-3. for selected neighbors present in the snapshot and within
-   `kNeighborContributionDistanceMax`, subtract the full fitted response when
-   the neighbor is not in the active solve; and
-4. for active selected neighbors, subtract the current zero-offset signal and add
-   the neighbor's offset basis as another row entry.
+1. subtracts the target atom's current zero-offset signal;
+2. adds the target atom's offset basis as a row entry;
+3. subtracts full fitted responses from frozen selected neighbors; and
+4. subtracts active selected-neighbor zero-offset signals and adds their offset
+   bases as row entries.
 
-The resulting system is solved with weighted ridge regression. The ridge term is
+The sparse system is solved with weighted ridge regression. The ridge is
 relative to the previous offsets, so weakly constrained columns stay close to
-their prior values. Its global ratio starts at `kJointOffsetRidgeRatio`
-(`1.0e-3`) and is adjusted across outer fixed-point iterations:
-objective-backtracking rejections that reject every active cluster increase the
-ratio only after the rejected clusters have exhausted their cluster-local
-objective ridge multipliers. Accepted iterations without cluster rejections
-gradually decrease the global ratio. Cluster-local objective rejections use
-per-atom ridge multipliers first, so a rejected cluster can be retried without
-raising the baseline ridge for unrelated clusters.
+their prior offsets. Its effective multiplier is the maximum of three sources:
 
-The joint offset builder also applies a proactive local ridge guard before the
-solve. While assembling the sparse design matrix, it accumulates active-column
-cross products and converts each pair to a normalized overlap. If two active
-offset-basis columns overlap by at least `0.98`, both atoms receive a local
-ridge multiplier for that solve only. This catches near-collinear neighboring
-atoms before they can produce an extreme offset update; it is independent from
-the global objective-backtracking ridge controller and is recomputed each time
-the active set changes.
+- a global `ridge_ratio`;
+- suspicious-offset retry multipliers on affected atoms; and
+- cluster-local objective-backtracking multipliers.
 
-Atoms that previously participated in a suspicious joint offset rollback can
-also receive a temporary per-atom ridge multiplier, which keeps their next joint
-offset solve closer to the previous offset without changing public fitting
-options. Suspicious-offset and objective-backtracking multipliers are tracked
-separately and combined with `max()` when the joint system is built, so accepting
-one source does not accidentally clear the other. Huber weights are then updated
-from residual median absolute deviation. The IRLS loop stops when the weighted-ridge surrogate objective would
-deteriorate, when the maximum normalized offset movement drops below
-`kJointOffsetIrlsNormalizedChangeTolerance`, or when the Huber iteration limit is
-reached.
+The joint offset builder also applies a per-solve collinearity guard. If two
+active offset-basis columns have normalized overlap at least
+`kJointOffsetCollinearityOverlapThreshold`, both receive a local ridge
+multiplier for that solve.
 
-If the joint system cannot be built, is empty, or cannot be solved during the
-initial or robust solve, the step falls back to the previous offsets. The rest of
-the local fitting iteration still runs.
+Huber weights are updated by IRLS. The IRLS loop stops when the weighted-ridge
+surrogate objective deteriorates, normalized offset movement is small, or the
+Huber iteration limit is reached. If the system cannot be built, is empty, or
+cannot be solved, the offset step uses the previous offsets and the rest of the
+local fitting iteration still runs.
 
-## Per-Atom Refit
+## Refit and Rollback
 
-After joint offsets are attached to the snapshot, each active atom is refit.
-Frozen atoms are left in the iteration state copied from the previous state. The
-second-stage active-atom loop itself is sequential in `RunLocalFittingIteration`;
-`FitOptions::thread_size` is passed through to the lower-level fixed-offset
-Gaussian estimator.
+After joint offsets are attached to the snapshot, the iteration checks every
+active atom for suspicious offsets before refit. A suspicious offset is one where
+the previous model can build finite zero-offset samples but the current
+joint-offset model cannot.
 
-Before the per-atom refit loop runs, each active atom's joint-offset snapshot
-model is checked against the atom's raw sampling entries. If the previous model
-can build finite zero-offset samples but the joint-offset model cannot, the atom
-seeds suspicious offset rollback propagation. The propagation graph comes from
-active columns that co-occur in the sparse joint-offset system, with each edge
-weighted by normalized joint-offset column overlap. Rollback expands only across
-finite edges whose overlap is at least `0.05`, and only within two topological
-steps from the original suspicious atom. This is narrower than all spatial
-neighbors and avoids rolling back a large connected component through distant
-weak links. Frozen selected neighbors remain fixed snapshot contributors;
-unselected neighbors are outside the second-stage snapshot.
-Every reached atom has its snapshot entry rolled back to the previous model and
-skips refit for that iteration, so strongly coupled nearby active atoms see a
-synchronous rollback rather than a one-sided update.
+Suspicious atoms seed bounded rollback propagation through the active coupling
+graph produced by the joint offset system. Propagation follows finite edges with
+overlap at least `kSuspiciousOffsetClusterMinimumOverlap` and stops after
+`kSuspiciousOffsetClusterMaxDepth` graph steps. Every reached active atom is
+rolled back to its previous model for this iteration and skips refit.
 
-For each atom:
+Each remaining active atom is refit by:
 
-1. build a sample list by subtracting fitted selected-neighbor responses from
-   the atom's unfiltered local sampling entries;
-2. use the joint-offset snapshot model as the fixed offset model;
-3. call `EstimateLocalGaussian` to fit amplitude and width with that fixed
-   offset model and `FitOptions` distance limits; and
-4. accept the candidate only if `CanBuildFiniteZeroOffsetSamples` confirms that
-   subtracting the candidate offset remains finite and inside the `float`
-   response range.
+1. subtracting fitted selected-neighbor responses from its original samples;
+2. using the joint-offset snapshot model as the fixed-offset model;
+3. calling `EstimateLocalGaussian` for amplitude and width; and
+4. accepting the result only if zero-offset sample construction stays finite.
 
-If fitting throws or the finite-sample check fails, the previous atom result is
-kept, but its OLS and MDPDE models are rewritten with the joint offset when that
-fallback model still builds finite zero-offset samples. If the forced-sync
-fallback itself would become invalid while the previous model was valid, the atom
-is marked as suspicious and the previous result is kept unchanged. After the
-refit loop, any suspicious atom found this way is expanded through the same
-bounded weighted active coupling graph, and every reached atom is rolled back to
-the previous iteration state. This keeps post-refit suspicious-offset handling
-synchronous with the pre-refit joint-offset check without letting atoms reached
-only by propagation become new expansion seeds.
+If refit fails, the previous atom result is reused with the joint offset when
+that fallback remains finite. If that fallback is itself suspicious, the atom is
+kept at its previous state and can seed the same bounded rollback pass after the
+refit loop.
 
-## Acceleration, Ranking, and Convergence
+## Clusters and Acceleration
 
-The raw iteration result is treated as the fixed-point map output `G(x)`.
-Second-stage fitting keeps short internal Anderson Acceleration histories for
-active-atom clusters. Clusters are rebuilt each outer iteration from selected
-atom samples: the active target atom and active selected neighbors that
-contribute to the same sample residual are connected, and connected components
-keep independent histories. The generic clustered Anderson history manager in
-`utils/algorithm` owns the per-cluster history lifecycle; `GaussianEstimator.cpp`
-still owns the sample graph that defines the clusters. When a cluster has at
-least one compatible prior
-pair `(x, G(x))`, with residuals `G(x) - x`, the stage solves a constrained least
-squares problem over scaled residuals for that cluster and proposes:
+Active clusters are rebuilt every outer iteration from sample-level
+contributors. For each selected sample, the active target atom and active
+selected neighbors that affect the sample residual are connected. Connected
+components define both Anderson history scope and objective sample ownership.
+Samples without active contributors do not participate in the cluster objective
+gate for that iteration.
+
+The raw refit result is treated as the fixed-point output `G(x)`. For each
+cluster with compatible history, localized Anderson acceleration proposes:
 
 ```text
 candidate = sum(gamma_i * G(x_i)), where sum(gamma_i) = 1
 ```
 
-Residuals are scaled per parameter using the same normalized-change scale floor
-used by convergence checks, so amplitude does not dominate width and offset.
-Active-set changes no longer clear unrelated histories globally: clusters whose
-active members are unchanged keep their history, while merged, split, missing,
-or newly created clusters start fresh. Candidates with non-finite active
-parameters, non-positive active widths, invalid coefficients, or excessive
-extrapolation are discarded for that cluster.
+Residuals are scaled per parameter using the normalized-change scale floor.
+Candidate construction is structural; the damped candidate that would actually
+be applied must still have finite active parameters and positive active widths.
 
-Each outer iteration tries the Anderson candidate with damping values `1.0`,
-`0.5`, and `0.25`. A damping value applies as:
+Each outer iteration tries damping values `1.0`, `0.5`, and `0.25`.
+Anderson attempts run first for clusters that have a localized candidate.
+Pending clusters then try the same damping sequence as fixed-point fallback:
 
 ```text
 damped = previous + damping * (candidate - previous)
 ```
 
-The first accepted Anderson attempt is logged as `acceleration = aa`; lower
-damping is logged as `acceleration = damped-aa`. A full iteration candidate
-starts from the previous state. Anderson damping is tried per cluster first; each
-cluster that passes its local objective gate writes only its active atoms into
-the assembled candidate. Clusters with missing, invalid, or rejected Anderson
-candidates remain pending and then try the damped fixed-point sequence logged as
-`acceleration = damped-fixed-point`. If no cluster can produce an Anderson
-candidate, the stage starts directly with fixed-point damping. Anderson history
-candidate construction only checks structural compatibility; the damped
-candidate that would actually be applied must still be finite and have positive
-active widths before it can reach objective scoring.
+Accepted clusters copy only their active atoms into the assembled state.
+Rejected clusters keep their previous atom parameters for this iteration.
 
-Objective samples are owned by clusters. A selected sample belongs to the
-connected component containing the active target atom and active selected
-neighbors that contribute to that sample residual. Samples without active
-contributors are ignored by the cluster gate for that iteration, and a sample is
-never counted by more than one cluster. Each cluster keeps its own residual-scale
-tracker, previous objective samples, best local objective stats, and objective
-ridge multiplier. That per-cluster quality lifecycle is managed by the generic
-clustered fitting-quality state manager in `utils/algorithm`; Gaussian-specific
-objective sample collection and scoring remain source-local callbacks in
-`GaussianEstimator.cpp`. During residual-scale warm-up, that cluster's previous,
-current, and best objective values are re-scored with the same provisional scale
-before the backtracking decision is made.
+## Objective Gate and Ridge Retry
 
-If a cluster candidate lacks a finite objective while its local reference exists,
-or is worse than that cluster's previous or best tracked state by more than
-`kLocalFittingConvergenceObjectiveRelativeTolerance`, only that cluster is
-rejected. Other accepted clusters still update the assembled candidate and become
-the next previous state. Rejected Anderson clusters clear and suppress only their
-own history; a suppressed cluster must receive accepted fixed-point progress
-before Anderson is enabled again. Rejected clusters increase only their
-cluster-local objective ridge multiplier for the next outer iteration. The
-global ridge ratio increases only when no active cluster is accepted and the
-rejected clusters' local objective ridge multipliers are already saturated.
-Suspicious-offset rollback clears and suppresses only clusters containing
-rolled-back atoms; unrelated accepted clusters may continue to commit history.
+Objective scoring is cluster-local. Each cluster owns its objective sample refs,
+residual-scale tracker, previous objective samples, best local objective stats,
+and objective ridge multiplier. During scale warm-up, candidate, previous, and
+best objective values are scored with the same provisional scale before
+backtracking is evaluated.
 
-Each accepted assembled candidate computes parameter movement for every selected
-atom. Active atoms are summarized by the 95th percentile normalized movement,
-and the accepted candidate's normalized movement drives convergence checks.
-Freeze tracking is updated only for active
-atoms in clusters that accepted progress; rejected clusters keep their previous
-state and cannot be frozen merely because their accepted movement is zero.
-Parameter convergence requires all three active-set normalized percentile
-changes to be below `kLocalFittingNormalizedChangeTolerance`, no suspicious
-offset rollback, no cluster objective rejection in that iteration, and every
-active cluster objective scale with a reference to be locked.
+A cluster candidate is rejected when a local reference exists and the candidate
+has no finite objective, or when its objective deteriorates beyond
+`kLocalFittingConvergenceObjectiveRelativeTolerance` relative to the cluster's
+previous or best tracked state. Objective ties are broken by the maximum
+normalized percentile parameter movement.
 
-Atoms are frozen when their maximum absolute parameter movement stays below
-`sqrt(kLocalFittingParameterChangeTolerance) * 0.1` for three consecutive active
-iterations. A frozen atom can be thawed again when a currently active selected
-neighbor changes by at least `sqrt(kLocalFittingParameterChangeTolerance)`.
-Dependency thawing applies per-atom hysteresis: each dependency thaw raises that
-atom's next dependency-thaw threshold, up to a capped multiplier, and the
-multiplier decays back toward the base threshold while the atom remains frozen.
-To prevent flat-region freeze/thaw thrashing from consuming the full iteration
-budget, dependency thawing is also capped per atom within one second-stage run:
-after five successful neighbor-triggered thaws, later dependency-thaw requests
-for that atom are denied and the atom stays frozen at its current local state.
-Frozen atoms do not participate in the joint offset solve or per-atom refit while
-they remain frozen, but their fitted Gaussian remains in the snapshot so active
-neighbors can subtract them as fixed signal contributions.
-Suspicious offset cluster members are thawed after freeze tracking so the next
-iteration can retry them with the temporary per-atom ridge multiplier; those
-forced retry thaws are not counted against the dependency thaw cap.
+Rejected Anderson clusters clear and suppress only their own histories. A
+suppressed cluster can use Anderson again after accepted fixed-point progress.
+Accepted clusters commit quality state and Anderson history when not suppressed.
 
-Objective scoring is cluster-local. At second-stage entry, each cluster seeds
-its residual normalization scale from the cluster-owned objective samples when
-they are finite. Each residual scale sample is floored by a small fraction of
-the robust response scale from the same objective samples, then by the absolute
-Huber scale minimum, so a near-perfect entry fit cannot create an overly
-sensitive denominator. A local candidate is better when its normalized robust
-objective improves beyond the tie tolerance; objective ties are broken by the
-maximum of the three normalized percentile parameter changes. Global progress
-and terminal logs report iteration, acceleration, damping, active/frozen atom
-counts, normalized terminal movement, and terminal reasons; they do not compute
-a full-state objective or fallback summary.
+Ridge retry is staged:
+
+- partial accepted iterations lower objective ridge for accepted clusters and
+  raise it for rejected clusters;
+- if every cluster is rejected, rejected clusters first raise their local
+  objective ridge multipliers; and
+- the global `ridge_ratio` increases only when all rejected cluster-local
+  objective ridge multipliers are saturated.
+
+Accepted iterations without objective rejection shrink the global `ridge_ratio`
+toward `kJointOffsetRidgeRatioMin`.
+
+## Freeze, Thaw, and Convergence
+
+Accepted assembled candidates compute absolute parameter changes for freeze/thaw
+and normalized parameter changes for objective tie-breaking and convergence.
+Freeze tracking is updated only for atoms in clusters that accepted progress, so
+rejected clusters are not frozen because their assembled movement is zero.
+
+Atoms freeze after their maximum absolute parameter movement remains below the
+freeze threshold for `kLocalFittingFreezeStableIterations`. Frozen atoms can
+thaw when an active selected neighbor changes enough to pass the dependency
+thaw threshold. Dependency thaw uses per-atom hysteresis and a capped thaw count
+to limit repeated freeze/thaw cycling. Suspicious rollback atoms are force-thawed
+after freeze tracking so they can retry with their temporary ridge multiplier.
+
+Parameter convergence requires:
+
+- no suspicious offset rollback in the accepted iteration;
+- no cluster objective rejection in the accepted iteration;
+- all active cluster objective scale references to be locked when present; and
+- active-set normalized percentile changes below
+  `kLocalFittingNormalizedChangeTolerance`.
 
 ## Exit Paths
 
-The loop has four terminal cases:
+The loop exits through one of four terminal cases:
 
-- **All atoms frozen:** apply the previous state if the loop starts with no
-  active atoms. If the last accepted update froze the remaining active atoms,
-  apply the current accepted accelerated result, then log an info message when logging is
-  enabled.
-- **Parameter convergence:** apply the current accepted accelerated iteration result when the
-  iteration had no suspicious offset rollback, no cluster objective rejection,
-  all three active-set normalized percentile changes are below
-  `kLocalFittingNormalizedChangeTolerance`, and all active cluster objective
-  scales with references have finished warm-up, then log an info message when
-  logging is enabled.
-- **Objective backtracking failure:** if all clusters are still rejected after the
-  acceleration damping sequence, rejected cluster-local ridge multipliers are
-  saturated, and global-ridge retry is no longer possible, apply the current
-  previous state and log a warning when logging is enabled.
-- **Maximum iterations reached:** apply the current accepted assembled candidate
-  and log a warning when logging is enabled.
+- **All atoms frozen:** apply the previous state when the loop starts with no
+  active atoms, or apply the current accepted assembled state when the last
+  accepted update freezes all remaining atoms.
+- **Parameter convergence:** apply the current accepted assembled state after
+  the convergence conditions pass.
+- **Objective backtracking failure:** when all acceleration and fixed-point
+  attempts are rejected and no further local or global ridge retry is available,
+  apply the previous state.
+- **Maximum iterations reached:** apply the current accepted assembled state at
+  the iteration limit.
 
-On non-terminal accepted iterations, the accepted estimation and result vectors
-become the previous state for the next loop iteration. A rejected iteration does
-not update the fixed-point state or the freeze tracker.
+Progress logs report iteration, acceleration kind, damping, and active/frozen
+atom counts. Terminal logs report the stop reason and, for convergence or
+maximum-iteration exits, normalized terminal movement.
 
-## Related Notes
+## Workflow Context
 
-- In `RunPotentialFittingWorkflow`, `RunLocalAlphaTraining` runs before local
-  fitting, then `InitializeLocalFittingSeedModels` and `RunFirstStageLocalFitting`
-  seed the per-atom local Gaussian results before this stage runs. After this
-  stage, the workflow runs group alpha training, builds updated sampling entries
-  from group-median local Gaussians, runs group potential fitting, rebuilds
-  updated sampling entries from fitted group Gaussians, retrains local alpha on
-  updated samples, then runs `RunThirdStageLocalFitting`. Group alpha training
-  and group potential fitting run again after third-stage local fitting.
-- [`estimate-local-gaussian-with-offset.md`](/docs/developer/estimate-local-gaussian-with-offset.md)
-  documents the single-atom fixed-offset estimator used by related local fitting
-  paths.
-- Second-stage local fitting does not update group Gaussian results; group
-  fitting is handled by `RunGroupPotentialFitting`.
+In `RunPotentialFittingWorkflow`, this stage runs after first-stage local
+fitting initializes selected atom-local Gaussian results. Later workflow stages
+train group alpha values, fit group potentials, rebuild updated sampling
+entries, retrain local alpha on updated samples, and run third-stage local
+fitting.
+
+Second-stage local fitting updates selected atom-local Gaussian results only.
+Group Gaussian results are handled by `RunGroupPotentialFitting`.

@@ -2716,10 +2716,12 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
 
                     const auto & cluster{ cluster_layout.cluster_list.at(cluster_index) };
                     const auto & key{ cluster.active_index_list };
-                    const auto & key_list{ localized_anderson_candidate->used_cluster_key_list };
                     if (use_anderson &&
                         (!localized_anderson_candidate.has_value() ||
-                         !(std::find(key_list.begin(), key_list.end(), key) != key_list.end())))
+                            std::find(
+                                localized_anderson_candidate->used_cluster_key_list.begin(),
+                                localized_anderson_candidate->used_cluster_key_list.end(),
+                                key) == localized_anderson_candidate->used_cluster_key_list.end()))
                     {
                         continue;
                     }
