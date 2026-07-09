@@ -276,9 +276,19 @@ double CalculateSelectedAtomResponseMeanSquaredError(const rg::ModelObject & mod
         model.GetSelectedAtomCount());
 }
 
-double GetEstimateOffset(const rg::AtomObject & atom)
+rg::GaussianModel3D GetEstimateModel(const rg::AtomObject & atom)
 {
-    return rg::AtomLocalPotentialView::RequireFor(atom).GetEstimateMDPDE().GetOffset();
+    return rg::AtomLocalPotentialView::RequireFor(atom).GetEstimateMDPDE();
+}
+
+void ExpectGaussianModelsNear(
+    const rg::GaussianModel3D & actual,
+    const rg::GaussianModel3D & expected,
+    double tolerance)
+{
+    EXPECT_NEAR(actual.GetAmplitude(), expected.GetAmplitude(), tolerance);
+    EXPECT_NEAR(actual.GetWidth(), expected.GetWidth(), tolerance);
+    EXPECT_NEAR(actual.GetOffset(), expected.GetOffset(), tolerance);
 }
 
 void ExpectSelectedAtomEstimatesAreFinite(const rg::ModelObject & model)
@@ -300,7 +310,7 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingFallsBackWhenJoi
 {
     auto model{ BuildNonFiniteJointOffsetDefenseModel() };
     auto * atom{ model->GetSelectedAtoms().front() };
-    const auto previous_offset{ GetEstimateOffset(*atom) };
+    const auto previous_model{ GetEstimateModel(*atom) };
 
     const auto previous_log_level{ Logger::GetLogLevel() };
     Logger::SetLogLevel(LogLevel::Warning);
@@ -309,7 +319,7 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingFallsBackWhenJoi
     const std::string error_output{ testing::internal::GetCapturedStderr() };
     Logger::SetLogLevel(previous_log_level);
 
-    EXPECT_NEAR(GetEstimateOffset(*atom), previous_offset, 1.0e-12);
+    ExpectGaussianModelsNear(GetEstimateModel(*atom), previous_model, 1.0e-12);
     EXPECT_EQ(
         error_output.find("Second-stage local fitting fallback summary:"),
         std::string::npos);
@@ -333,9 +343,9 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingAcceptsRemoteClu
 {
     auto model{ BuildSeparatedRollbackDefenseModel() };
     const auto & selected_atoms{ model->GetSelectedAtoms() };
-    const std::array<double, 2> previous_left_offset_list{
-        GetEstimateOffset(*selected_atoms.at(0)),
-        GetEstimateOffset(*selected_atoms.at(1))
+    const std::array<rg::GaussianModel3D, 2> previous_left_model_list{
+        GetEstimateModel(*selected_atoms.at(0)),
+        GetEstimateModel(*selected_atoms.at(1))
     };
     const auto initial_right_error{
         CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4)
@@ -348,11 +358,11 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingAcceptsRemoteClu
     const std::string output{ testing::internal::GetCapturedStdout() };
     Logger::SetLogLevel(previous_log_level);
 
-    for (std::size_t i = 0; i < previous_left_offset_list.size(); i++)
+    for (std::size_t i = 0; i < previous_left_model_list.size(); i++)
     {
-        EXPECT_NEAR(
-            GetEstimateOffset(*selected_atoms.at(i)),
-            previous_left_offset_list.at(i),
+        ExpectGaussianModelsNear(
+            GetEstimateModel(*selected_atoms.at(i)),
+            previous_left_model_list.at(i),
             1.0e-12);
     }
     EXPECT_LT(
@@ -391,8 +401,10 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingReportsClusterLo
     const auto previous_log_level{ Logger::GetLogLevel() };
     Logger::SetLogLevel(LogLevel::Info);
     testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
     rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
     const std::string output{ testing::internal::GetCapturedStdout() };
+    const std::string error_output{ testing::internal::GetCapturedStderr() };
     Logger::SetLogLevel(previous_log_level);
 
     EXPECT_NE(
@@ -401,5 +413,36 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingReportsClusterLo
     EXPECT_NE(
         output.find("increased cluster-local objective ridge"),
         std::string::npos);
+    EXPECT_EQ(
+        error_output.find("best fixed-point candidate"),
+        std::string::npos);
+    ExpectSelectedAtomEstimatesAreFinite(*model);
+}
+
+TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingRetriesAfterIncreasingGlobalRidgeToMaximum)
+{
+    auto model{ BuildNearCollinearDefenseModel() };
+
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
+    const std::string output{ testing::internal::GetCapturedStdout() };
+    const std::string error_output{ testing::internal::GetCapturedStderr() };
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_NE(
+        output.find("next attempt uses increased global ridge ratio = 1.00000"),
+        std::string::npos);
+    const auto stop_warning_position{
+        error_output.find("Stopped local fitting because objective backtracking rejected all")
+    };
+    if (stop_warning_position != std::string::npos)
+    {
+        EXPECT_NE(
+            error_output.find("maximum joint-offset ridge ratio", stop_warning_position),
+            std::string::npos);
+    }
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }

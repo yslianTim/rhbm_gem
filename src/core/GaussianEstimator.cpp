@@ -103,6 +103,12 @@ enum class LocalFittingAccelerationKind
     DampedFixedPoint
 };
 
+enum class LocalFittingBacktrackingStopReason
+{
+    MaximumGlobalRidge,
+    MaximumIterationLimit
+};
+
 struct LocalFittingAccelerationAttempt
 {
     LocalFittingAccelerationKind kind{ LocalFittingAccelerationKind::DampedFixedPoint };
@@ -2169,7 +2175,7 @@ void LogLocalFittingBacktrackingRetry(
 
 void LogLocalFittingBacktrackingStop(
     const FitOptions & options,
-    double ridge_ratio)
+    LocalFittingBacktrackingStopReason reason)
 {
     if (options.quiet_mode) return;
 
@@ -2178,7 +2184,7 @@ void LogLocalFittingBacktrackingStop(
     warning_message
         << "Stopped local fitting because objective backtracking rejected all "
         << "acceleration and fixed-point attempts "
-        << (ridge_ratio >= kJointOffsetRidgeRatioMax ?
+        << (reason == LocalFittingBacktrackingStopReason::MaximumGlobalRidge ?
             "at the maximum joint-offset ridge ratio" : "at the maximum iteration limit")
         << "; applying previous state.";
     Logger::Log(LogLevel::Warning, warning_message.str());
@@ -2912,8 +2918,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 ridge_ratio = std::min(kJointOffsetRidgeRatioMax, ridge_ratio * kJointOffsetRidgeGrowth);
                 increased_global_ridge_ratio = ridge_ratio > previous_ridge_ratio;
             }
-            if ((increased_cluster_objective_ridge ||
-                (increased_global_ridge_ratio && ridge_ratio < kJointOffsetRidgeRatioMax)) &&
+            if ((increased_cluster_objective_ridge || increased_global_ridge_ratio) &&
                 iter + 1 < kLocalFittingMaximumIterations)
             {
                 LogLocalFittingBacktrackingRetry(
@@ -2922,8 +2927,13 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 continue;
             }
 
+            const auto stop_reason{
+                iter + 1 >= kLocalFittingMaximumIterations ?
+                    LocalFittingBacktrackingStopReason::MaximumIterationLimit :
+                    LocalFittingBacktrackingStopReason::MaximumGlobalRidge
+            };
             ApplyLocalFittingState(previous_state, local_editor_list);
-            LogLocalFittingBacktrackingStop(options, ridge_ratio);
+            LogLocalFittingBacktrackingStop(options, stop_reason);
             break;
         }
 
