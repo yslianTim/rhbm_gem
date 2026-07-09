@@ -193,6 +193,25 @@ TEST(ClusteredFittingQualityStateTest, ObjectiveRidgeIncreasesSaturatesAndDecrea
     }
 }
 
+TEST(ClusteredFittingQualityStateTest, UpdatesAcceptedAndRejectedRidgesIndependently)
+{
+    StateSet state_set{ MakeOptions() };
+    state_set.Reconcile(
+        { { 0 }, { 1 } },
+        [](const alg::ClusterKey &)
+        {
+            return MakeInitialState(10.0);
+        });
+    ASSERT_TRUE(state_set.IncreaseObjectiveRidge({ { 0 }, { 1 } }));
+
+    state_set.DecreaseObjectiveRidge({ { 0 } });
+    EXPECT_TRUE(state_set.IncreaseObjectiveRidge({ { 1 } }));
+
+    const auto multiplier_list{ state_set.BuildObjectiveRidgeMultiplierList(2) };
+    EXPECT_DOUBLE_EQ(1.0, multiplier_list.at(0));
+    EXPECT_DOUBLE_EQ(4.0, multiplier_list.at(1));
+}
+
 TEST(ClusteredFittingQualityStateTest, ReconcilePreservesUnchangedClusterAndDropsRemovedCluster)
 {
     StateSet state_set{ MakeOptions() };

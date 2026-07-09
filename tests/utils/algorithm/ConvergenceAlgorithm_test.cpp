@@ -71,6 +71,28 @@ TEST(ConvergenceAlgorithmTest, FreezeTrackerFreezesStableEntries)
     EXPECT_EQ(1, active_index_list.at(0));
 }
 
+TEST(ConvergenceAlgorithmTest, FreezeTrackerUpdatesOnlyActiveIndexes)
+{
+    alg::ConvergenceFreezeTracker tracker{
+        2,
+        1.0e-4,
+        0.5,
+        1
+    };
+    const std::vector<alg::ParameterChange> change_list{
+        MakeChange(0.0),
+        MakeChange(0.0)
+    };
+
+    tracker.Update(change_list, { 0 });
+
+    EXPECT_TRUE(tracker.IsFrozen(0));
+    EXPECT_FALSE(tracker.IsFrozen(1));
+    const auto active_index_list{ tracker.BuildActiveIndexList() };
+    ASSERT_EQ(1u, active_index_list.size());
+    EXPECT_EQ(1u, active_index_list.front());
+}
+
 TEST(ConvergenceAlgorithmTest, FreezeTrackerThawsFrozenEntryAndResetsStableCount)
 {
     alg::ConvergenceFreezeTracker tracker{

@@ -87,6 +87,7 @@ set(CORE_SAMPLER_TEST_SOURCES
 )
 
 set(CORE_ESTIMATOR_TEST_SOURCES
+    core/EstimatorSecondStageDefense_test.cpp
     core/EstimatorTester_test.cpp
     core/TestDataFactory_test.cpp
 )
