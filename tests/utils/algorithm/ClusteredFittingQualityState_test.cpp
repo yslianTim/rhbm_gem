@@ -30,7 +30,6 @@ alg::ClusteredFittingQualityOptions MakeOptions()
 alg::FittingQualityCandidateStats MakeStats(double objective, double change)
 {
     return alg::FittingQualityCandidateStats{
-        true,
         objective,
         alg::ParameterChangeStats{ std::vector<double>{ change } }
     };
@@ -91,9 +90,10 @@ TEST(ClusteredFittingQualityStateTest, AcceptsImprovedCandidateAndLocksReference
             })
     };
     ASSERT_EQ(
-        alg::ClusteredFittingQualityAttemptOutcome::Accepted,
+        alg::FittingQualityBacktrackingOutcome::Accepted,
         first_evaluation.outcome);
-    state_set.CommitAccepted({ first_evaluation.accepted_score });
+    ASSERT_TRUE(first_evaluation.accepted_score.has_value());
+    state_set.CommitAccepted({ *first_evaluation.accepted_score });
 
     const auto second_evaluation{
         state_set.EvaluateCandidate(
@@ -109,9 +109,10 @@ TEST(ClusteredFittingQualityStateTest, AcceptsImprovedCandidateAndLocksReference
             })
     };
     ASSERT_EQ(
-        alg::ClusteredFittingQualityAttemptOutcome::Accepted,
+        alg::FittingQualityBacktrackingOutcome::Accepted,
         second_evaluation.outcome);
-    state_set.CommitAccepted({ second_evaluation.accepted_score });
+    ASSERT_TRUE(second_evaluation.accepted_score.has_value());
+    state_set.CommitAccepted({ *second_evaluation.accepted_score });
 
     EXPECT_TRUE(state_set.AllActiveReferencesLocked(key_list));
 }
@@ -142,9 +143,10 @@ TEST(ClusteredFittingQualityStateTest, AcceptedCandidateCanCommitDifferentRefere
             })
     };
     ASSERT_EQ(
-        alg::ClusteredFittingQualityAttemptOutcome::Accepted,
+        alg::FittingQualityBacktrackingOutcome::Accepted,
         accepted_evaluation.outcome);
-    state_set.CommitAccepted({ accepted_evaluation.accepted_score });
+    ASSERT_TRUE(accepted_evaluation.accepted_score.has_value());
+    state_set.CommitAccepted({ *accepted_evaluation.accepted_score });
 
     const auto retry_evaluation{
         state_set.EvaluateCandidate(
@@ -161,8 +163,9 @@ TEST(ClusteredFittingQualityStateTest, AcceptedCandidateCanCommitDifferentRefere
     };
 
     EXPECT_EQ(
-        alg::ClusteredFittingQualityAttemptOutcome::ObjectiveRetry,
+        alg::FittingQualityBacktrackingOutcome::Retry,
         retry_evaluation.outcome);
+    EXPECT_FALSE(retry_evaluation.accepted_score.has_value());
 }
 
 TEST(ClusteredFittingQualityStateTest, RejectsDeterioratedCandidateThenStopsAtRetryLimit)
@@ -189,8 +192,9 @@ TEST(ClusteredFittingQualityStateTest, RejectsDeterioratedCandidateThenStopsAtRe
             })
     };
     EXPECT_EQ(
-        alg::ClusteredFittingQualityAttemptOutcome::ObjectiveRetry,
+        alg::FittingQualityBacktrackingOutcome::Retry,
         retry_evaluation.outcome);
+    EXPECT_FALSE(retry_evaluation.accepted_score.has_value());
 
     const auto stop_evaluation{
         state_set.EvaluateCandidate(
@@ -206,8 +210,9 @@ TEST(ClusteredFittingQualityStateTest, RejectsDeterioratedCandidateThenStopsAtRe
             })
     };
     EXPECT_EQ(
-        alg::ClusteredFittingQualityAttemptOutcome::ObjectiveStop,
+        alg::FittingQualityBacktrackingOutcome::Stop,
         stop_evaluation.outcome);
+    EXPECT_FALSE(stop_evaluation.accepted_score.has_value());
 }
 
 TEST(ClusteredFittingQualityStateTest, ObjectiveRidgeIncreasesSaturatesAndDecreasesPerCluster)

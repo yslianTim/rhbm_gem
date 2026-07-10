@@ -4,7 +4,7 @@
 #include <cmath>
 #include <cstddef>
 #include <initializer_list>
-#include <limits>
+#include <optional>
 #include <stdexcept>
 #include <vector>
 
@@ -20,16 +20,15 @@ struct ParameterChangeStats
 
 struct FittingQualityCandidateStats
 {
-    bool has_quality_objective{ false };
-    double quality_objective{ std::numeric_limits<double>::infinity() };
+    std::optional<double> quality_objective{};
     ParameterChangeStats parameter_change_stats{};
 };
 
-struct FittingQualityBacktrackingDecision
+enum class FittingQualityBacktrackingOutcome
 {
-    bool accepted{ false };
-    bool should_shrink_beta{ false };
-    bool reached_retry_limit{ false };
+    Accepted,
+    Retry,
+    Stop
 };
 
 inline ParameterChangeStats SummarizeParameterChangeStats(
@@ -101,22 +100,22 @@ inline bool IsBetterFittingQualityCandidate(
     const FittingQualityCandidateStats & best_stats,
     double objective_relative_tolerance)
 {
-    if (stats.has_quality_objective != best_stats.has_quality_objective)
+    if (stats.quality_objective.has_value() != best_stats.quality_objective.has_value())
     {
-        return stats.has_quality_objective;
+        return stats.quality_objective.has_value();
     }
 
-    if (stats.has_quality_objective)
+    if (stats.quality_objective.has_value())
     {
         const auto scale{
-            std::max({ std::abs(stats.quality_objective), std::abs(best_stats.quality_objective), 1.0 })
+            std::max({ std::abs(*stats.quality_objective), std::abs(*best_stats.quality_objective), 1.0 })
         };
         const auto tolerance{ objective_relative_tolerance * scale };
-        if (stats.quality_objective < best_stats.quality_objective - tolerance)
+        if (*stats.quality_objective < *best_stats.quality_objective - tolerance)
         {
             return true;
         }
-        if (stats.quality_objective > best_stats.quality_objective + tolerance)
+        if (*stats.quality_objective > *best_stats.quality_objective + tolerance)
         {
             return false;
         }
@@ -131,25 +130,24 @@ inline bool IsFittingQualityObjectiveDeteriorated(
     const FittingQualityCandidateStats & reference_stats,
     double objective_relative_tolerance)
 {
-    if (!reference_stats.has_quality_objective)
+    if (!reference_stats.quality_objective.has_value())
     {
         return false;
     }
-    if (!stats.has_quality_objective)
+    if (!stats.quality_objective.has_value())
     {
         return true;
     }
 
-    const auto scale{ std::max(std::abs(reference_stats.quality_objective), 1.0) };
-    return stats.quality_objective >
-        reference_stats.quality_objective + objective_relative_tolerance * scale;
+    const auto scale{ std::max(std::abs(*reference_stats.quality_objective), 1.0) };
+    return *stats.quality_objective >
+        *reference_stats.quality_objective + objective_relative_tolerance * scale;
 }
 
 inline bool IsFittingQualityAcceptableForProgress(
     const FittingQualityCandidateStats & stats,
     const FittingQualityCandidateStats & previous_stats,
-    bool has_best_candidate,
-    const FittingQualityCandidateStats & best_stats,
+    const FittingQualityCandidateStats * best_stats,
     double objective_relative_tolerance)
 {
     if (IsFittingQualityObjectiveDeteriorated(
@@ -159,18 +157,17 @@ inline bool IsFittingQualityAcceptableForProgress(
     {
         return false;
     }
-    return !has_best_candidate ||
+    return best_stats == nullptr ||
         !IsFittingQualityObjectiveDeteriorated(
             stats,
-            best_stats,
+            *best_stats,
             objective_relative_tolerance);
 }
 
-inline FittingQualityBacktrackingDecision EvaluateFittingQualityBacktracking(
+inline FittingQualityBacktrackingOutcome EvaluateFittingQualityBacktracking(
     const FittingQualityCandidateStats & stats,
     const FittingQualityCandidateStats & previous_stats,
-    bool has_best_candidate,
-    const FittingQualityCandidateStats & best_stats,
+    const FittingQualityCandidateStats * best_stats,
     double objective_relative_tolerance,
     int attempt_index,
     int maximum_attempts)
@@ -187,19 +184,15 @@ inline FittingQualityBacktrackingDecision EvaluateFittingQualityBacktracking(
     if (IsFittingQualityAcceptableForProgress(
             stats,
             previous_stats,
-            has_best_candidate,
             best_stats,
             objective_relative_tolerance))
     {
-        return FittingQualityBacktrackingDecision{ true, false, false };
+        return FittingQualityBacktrackingOutcome::Accepted;
     }
 
-    const auto reached_retry_limit{ attempt_index + 1 >= maximum_attempts };
-    return FittingQualityBacktrackingDecision{
-        false,
-        !reached_retry_limit,
-        reached_retry_limit
-    };
+    return attempt_index + 1 >= maximum_attempts ?
+        FittingQualityBacktrackingOutcome::Stop :
+        FittingQualityBacktrackingOutcome::Retry;
 }
 
 } // namespace rhbm_gem::algorithm

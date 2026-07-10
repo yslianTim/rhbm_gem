@@ -193,6 +193,12 @@ provisional scale before backtracking is evaluated. Stored objective samples
 pair each active atom index directly with its model snapshot so provisional
 rescoring does not depend on parallel index and estimation arrays.
 
+Unavailable scale references and unavailable objective values are represented
+as optional values rather than separate presence flags plus infinity sentinels.
+The objective gate and cluster selection share one backtracking outcome:
+`Accepted`, `Retry`, or `Stop`. Only an accepted evaluation carries an accepted
+score; retry and stop evaluations contain no placeholder score.
+
 A cluster candidate is rejected when a local reference exists and the candidate
 has no finite objective, or when its objective deteriorates beyond
 `kLocalFittingConvergenceObjectiveRelativeTolerance` relative to the cluster's

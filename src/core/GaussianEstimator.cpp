@@ -163,22 +163,6 @@ struct JointOffsetBuildResult
     ActiveCouplingGraph active_coupling_graph{};
 };
 
-std::vector<double> CombineLocalFittingRidgeMultiplierLists(
-    const std::vector<double> & left_multiplier_list,
-    const std::vector<double> & right_multiplier_list)
-{
-    if (left_multiplier_list.size() != right_multiplier_list.size())
-    {
-        throw std::invalid_argument("Local fitting ridge multiplier sizes are inconsistent.");
-    }
-    std::vector<double> multiplier_list(left_multiplier_list.size(), 1.0);
-    for (std::size_t i = 0; i < multiplier_list.size(); i++)
-    {
-        multiplier_list.at(i) = std::max(left_multiplier_list.at(i), right_multiplier_list.at(i));
-    }
-    return multiplier_list;
-}
-
 struct LocalFittingIterationResult
 {
     GaussianFittingState state{};
@@ -1595,10 +1579,10 @@ bool IsLocalFittingObjectiveModelValid(const GaussianModel3D & model)
 std::optional<double> CalculateLocalFittingParameterPenalty(
     const SecondStageLocalFittingContext & context,
     const LocalFittingObjectiveSamples & objective_samples,
-    const algorithm::ScaleReference & objective_reference,
+    double objective_scale,
     const GaussianFittingState * movement_reference_state)
 {
-    if (!objective_reference.has_reference || !std::isfinite(objective_reference.scale))
+    if (!numeric_validation::IsFinitePositive(objective_scale))
     {
         return std::nullopt;
     }
@@ -1611,7 +1595,7 @@ std::optional<double> CalculateLocalFittingParameterPenalty(
     double width_prior_penalty{ 0.0 };
     double offset_plausibility_penalty{ 0.0 };
     double movement_penalty{ 0.0 };
-    const auto residual_scale_floor{ std::max(objective_reference.scale, kRobustScaleMin) };
+    const auto residual_scale_floor{ std::max(objective_scale, kRobustScaleMin) };
     for (const auto & atom_model : objective_samples.active_model_list)
     {
         const auto active_index{ atom_model.atom_index };
@@ -1687,11 +1671,10 @@ std::optional<double> CalculateLocalFittingParameterPenalty(
 std::optional<double> CalculateLocalFittingObjective(
     const SecondStageLocalFittingContext & context,
     const LocalFittingObjectiveSamples & objective_samples,
-    const algorithm::ScaleReference & objective_reference,
+    double objective_scale,
     const GaussianFittingState * movement_reference_state)
 {
-    if (!objective_reference.has_reference ||
-        !numeric_validation::IsFinitePositive(objective_reference.scale) ||
+    if (!numeric_validation::IsFinitePositive(objective_scale) ||
         objective_samples.residual_list.empty())
     {
         return std::nullopt;
@@ -1700,7 +1683,7 @@ std::optional<double> CalculateLocalFittingObjective(
     double loss_sum{ 0.0 };
     for (const auto residual : objective_samples.residual_list)
     {
-        const auto normalized_residual{ residual / objective_reference.scale };
+        const auto normalized_residual{ residual / objective_scale };
         loss_sum += algorithm::CalculateRobustLoss(
             kSecondStageRobustLossKind,
             normalized_residual,
@@ -1715,7 +1698,7 @@ std::optional<double> CalculateLocalFittingObjective(
         CalculateLocalFittingParameterPenalty(
             context,
             objective_samples,
-            objective_reference,
+            objective_scale,
             movement_reference_state)
     };
     if (!parameter_penalty.has_value()) return std::nullopt;
@@ -1740,14 +1723,14 @@ ScoreLocalFittingClusterCandidate(
     const algorithm::ParameterChangeStats & normalized_change_stats)
 {
     algorithm::ClusteredFittingQualityCandidateScore<LocalFittingObjectiveSamples> score;
-    auto objective_reference{ objective_scale_tracker.GetCommittedReference() };
-    score.has_objective_reference = objective_reference.has_reference;
+    auto objective_scale{ objective_scale_tracker.GetCommittedReference() };
+    score.has_objective_reference = objective_scale.has_value();
     if (best_candidate.has_value())
     {
         score.best_candidate_stats = best_candidate->candidate_stats;
     }
 
-    if (objective_scale_tracker.HasReference())
+    if (objective_scale.has_value())
     {
         score.objective_samples =
             CollectLocalFittingObjectiveSamples(
@@ -1762,23 +1745,28 @@ ScoreLocalFittingClusterCandidate(
             };
             if (scale_sample.has_value())
             {
-                objective_reference = objective_scale_tracker.GetProvisionalReference(*scale_sample);
-                score.has_objective_reference = objective_reference.has_reference;
+                objective_scale = objective_scale_tracker.GetProvisionalReference(*scale_sample);
+                score.has_objective_reference = objective_scale.has_value();
+                if (!objective_scale.has_value())
+                {
+                    score.candidate_stats.parameter_change_stats = normalized_change_stats;
+                    return score;
+                }
                 const auto candidate_objective{
                     CalculateLocalFittingObjective(
                         context,
                         *score.objective_samples,
-                        objective_reference,
+                        *objective_scale,
                         &previous_state)
                 };
                 const auto commit_objective{
                     CalculateLocalFittingObjective(
                         context,
                         *score.objective_samples,
-                        objective_reference,
+                        *objective_scale,
                         nullptr)
                 };
-                score.objective_scale_sample = *scale_sample;
+                score.objective_scale_sample = scale_sample;
                 if (candidate_objective.has_value())
                 {
                     if (previous_objective_samples.has_value())
@@ -1787,14 +1775,11 @@ ScoreLocalFittingClusterCandidate(
                             CalculateLocalFittingObjective(
                                 context,
                                 *previous_objective_samples,
-                                objective_reference,
+                                *objective_scale,
                                 nullptr)
                         };
-                        previous_candidate_stats.has_quality_objective =
-                            recalculated_previous_objective.has_value();
                         previous_candidate_stats.quality_objective =
-                            recalculated_previous_objective.value_or(
-                                std::numeric_limits<double>::infinity());
+                            recalculated_previous_objective;
                     }
                     if (best_candidate.has_value() &&
                         best_candidate->objective_samples.has_value() &&
@@ -1804,22 +1789,16 @@ ScoreLocalFittingClusterCandidate(
                             CalculateLocalFittingObjective(
                                 context,
                                 *best_candidate->objective_samples,
-                                objective_reference,
+                                *objective_scale,
                                 nullptr)
                         };
-                        score.best_candidate_stats->has_quality_objective =
-                            recalculated_best_objective.has_value();
                         score.best_candidate_stats->quality_objective =
-                            recalculated_best_objective.value_or(
-                                std::numeric_limits<double>::infinity());
+                            recalculated_best_objective;
                     }
                 }
-                score.candidate_stats.has_quality_objective = candidate_objective.has_value();
-                score.candidate_stats.quality_objective = candidate_objective.value_or(
-                    std::numeric_limits<double>::infinity());
+                score.candidate_stats.quality_objective = candidate_objective;
                 score.commit_candidate_stats = algorithm::FittingQualityCandidateStats{
-                    commit_objective.has_value(),
-                    commit_objective.value_or(std::numeric_limits<double>::infinity()),
+                    commit_objective,
                     normalized_change_stats
                 };
             }
@@ -2081,10 +2060,6 @@ BuildInitialLocalFittingClusterQualityState(
         initial_objective_scale_sample =
             CalculateLocalFittingResidualScaleSample(*initial_objective_samples);
     }
-    algorithm::ScaleReferenceTracker initial_tracker{
-        kLocalFittingObjectiveScaleWarmupCount,
-        initial_objective_scale_sample
-    };
     std::optional<double> initial_objective;
     if (initial_objective_samples.has_value() &&
         initial_objective_scale_sample.has_value())
@@ -2092,12 +2067,11 @@ BuildInitialLocalFittingClusterQualityState(
         initial_objective = CalculateLocalFittingObjective(
             context,
             *initial_objective_samples,
-            initial_tracker.GetCommittedReference(),
+            *initial_objective_scale_sample,
             nullptr);
     }
     algorithm::FittingQualityCandidateStats initial_candidate_stats{
-        initial_objective.has_value(),
-        initial_objective.value_or(std::numeric_limits<double>::infinity()),
+        initial_objective,
         algorithm::ParameterChangeStats{
             std::vector<double>(
                 static_cast<std::size_t>(GaussianModel3D::ParameterSize()),
@@ -2232,15 +2206,20 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                                 normalized_change_stats);
                         })
                 };
-                if (evaluated_attempt.outcome == algorithm::ClusteredFittingQualityAttemptOutcome::Accepted)
+                if (evaluated_attempt.outcome == algorithm::FittingQualityBacktrackingOutcome::Accepted)
                 {
+                    if (!evaluated_attempt.accepted_score.has_value())
+                    {
+                        throw std::logic_error(
+                            "Accepted local fitting candidate is missing its score.");
+                    }
                     copy_cluster_state(selection.assembled_state, attempt_state, key);
                     cluster.attempt_state =
                         candidate_kind == LocalFittingCandidateKind::Anderson ?
                             LocalFittingClusterAttemptState::AcceptedAnderson :
                             LocalFittingClusterAttemptState::AcceptedFixedPoint;
                     selection.accepted_score_list.emplace_back(
-                        std::move(evaluated_attempt.accepted_score));
+                        std::move(*evaluated_attempt.accepted_score));
                     if (!has_accepted_acceleration_attempt)
                     {
                         selection.accepted_acceleration_attempt = acceleration_attempt;
@@ -2254,7 +2233,7 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                 {
                     cluster.rejected_anderson = true;
                 }
-                if (evaluated_attempt.outcome == algorithm::ClusteredFittingQualityAttemptOutcome::ObjectiveStop)
+                if (evaluated_attempt.outcome == algorithm::FittingQualityBacktrackingOutcome::Stop)
                 {
                     cluster.attempt_state = LocalFittingClusterAttemptState::Stopped;
                 }
@@ -3096,11 +3075,15 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                     cluster_map.at(key));
             });
         acceleration_history.Reconcile(cluster_key_list);
-        const auto joint_offset_ridge_multiplier_list{
-            CombineLocalFittingRidgeMultiplierLists(
-                suspicious_joint_offset_ridge_multiplier_list,
-                cluster_quality_state.BuildObjectiveRidgeMultiplierList(atom_size))
+        auto joint_offset_ridge_multiplier_list{
+            cluster_quality_state.BuildObjectiveRidgeMultiplierList(atom_size)
         };
+        for (std::size_t atom_index = 0; atom_index < atom_size; atom_index++)
+        {
+            joint_offset_ridge_multiplier_list.at(atom_index) = std::max(
+                joint_offset_ridge_multiplier_list.at(atom_index),
+                suspicious_joint_offset_ridge_multiplier_list.at(atom_index));
+        }
         auto iteration_result{
             RunLocalFittingIteration(
                 context,

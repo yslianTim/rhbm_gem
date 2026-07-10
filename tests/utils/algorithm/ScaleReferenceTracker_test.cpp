@@ -14,8 +14,7 @@ TEST(ScaleReferenceTrackerTest, EmptyTrackerHasNoReference)
 {
     alg::ScaleReferenceTracker tracker{ 3 };
 
-    EXPECT_FALSE(tracker.HasReference());
-    EXPECT_FALSE(tracker.GetCommittedReference().has_reference);
+    EXPECT_FALSE(tracker.GetCommittedReference().has_value());
     EXPECT_FALSE(tracker.IsLocked());
 }
 
@@ -25,8 +24,8 @@ TEST(ScaleReferenceTrackerTest, InitialSampleSeedsReferenceWithoutLocking)
 
     const auto reference{ tracker.GetCommittedReference() };
 
-    ASSERT_TRUE(reference.has_reference);
-    EXPECT_DOUBLE_EQ(4.0, reference.scale);
+    ASSERT_TRUE(reference.has_value());
+    EXPECT_DOUBLE_EQ(4.0, *reference);
     EXPECT_FALSE(tracker.IsLocked());
 }
 
@@ -37,10 +36,10 @@ TEST(ScaleReferenceTrackerTest, ProvisionalReferenceIncludesCandidateWithoutComm
     const auto provisional_reference{ tracker.GetProvisionalReference(4.0) };
     const auto committed_reference{ tracker.GetCommittedReference() };
 
-    ASSERT_TRUE(provisional_reference.has_reference);
-    EXPECT_DOUBLE_EQ(3.0, provisional_reference.scale);
-    ASSERT_TRUE(committed_reference.has_reference);
-    EXPECT_DOUBLE_EQ(2.0, committed_reference.scale);
+    ASSERT_TRUE(provisional_reference.has_value());
+    EXPECT_DOUBLE_EQ(3.0, *provisional_reference);
+    ASSERT_TRUE(committed_reference.has_value());
+    EXPECT_DOUBLE_EQ(2.0, *committed_reference);
 }
 
 TEST(ScaleReferenceTrackerTest, CommittedReferenceUsesRecentSamples)
@@ -51,8 +50,8 @@ TEST(ScaleReferenceTrackerTest, CommittedReferenceUsesRecentSamples)
     tracker.CommitScaleSample(5.0);
     const auto reference{ tracker.GetCommittedReference() };
 
-    ASSERT_TRUE(reference.has_reference);
-    EXPECT_DOUBLE_EQ(4.0, reference.scale);
+    ASSERT_TRUE(reference.has_value());
+    EXPECT_DOUBLE_EQ(4.0, *reference);
 }
 
 TEST(ScaleReferenceTrackerTest, LocksAfterFiniteCommittedWarmupSamples)
@@ -77,11 +76,11 @@ TEST(ScaleReferenceTrackerTest, LockedTrackerIgnoresProvisionalAndCommittedSampl
     tracker.CommitScaleSample(100.0);
     const auto updated_reference{ tracker.GetCommittedReference() };
 
-    ASSERT_TRUE(committed_reference.has_reference);
-    ASSERT_TRUE(provisional_reference.has_reference);
-    ASSERT_TRUE(updated_reference.has_reference);
-    EXPECT_DOUBLE_EQ(committed_reference.scale, provisional_reference.scale);
-    EXPECT_DOUBLE_EQ(committed_reference.scale, updated_reference.scale);
+    ASSERT_TRUE(committed_reference.has_value());
+    ASSERT_TRUE(provisional_reference.has_value());
+    ASSERT_TRUE(updated_reference.has_value());
+    EXPECT_DOUBLE_EQ(*committed_reference, *provisional_reference);
+    EXPECT_DOUBLE_EQ(*committed_reference, *updated_reference);
 }
 
 TEST(ScaleReferenceTrackerTest, NonFiniteSamplesDoNotCreateReferenceOrAdvanceWarmup)
@@ -91,16 +90,14 @@ TEST(ScaleReferenceTrackerTest, NonFiniteSamplesDoNotCreateReferenceOrAdvanceWar
     alg::ScaleReferenceTracker tracker{ 1 };
 
     tracker.CommitScaleSample(infinity);
-    EXPECT_FALSE(tracker.HasReference());
     EXPECT_FALSE(tracker.IsLocked());
-    EXPECT_FALSE(tracker.GetProvisionalReference(nan).has_reference);
+    EXPECT_FALSE(tracker.GetProvisionalReference(nan).has_value());
 
     tracker.CommitScaleSample(2.0);
 
-    EXPECT_TRUE(tracker.HasReference());
     EXPECT_TRUE(tracker.IsLocked());
-    ASSERT_TRUE(tracker.GetCommittedReference().has_reference);
-    EXPECT_DOUBLE_EQ(2.0, tracker.GetCommittedReference().scale);
+    ASSERT_TRUE(tracker.GetCommittedReference().has_value());
+    EXPECT_DOUBLE_EQ(2.0, *tracker.GetCommittedReference());
 }
 
 TEST(ScaleReferenceTrackerTest, RejectsZeroWarmupSampleCount)

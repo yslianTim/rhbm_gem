@@ -2,19 +2,12 @@
 
 #include <cmath>
 #include <cstddef>
-#include <limits>
 #include <numeric>
 #include <optional>
 #include <stdexcept>
 #include <vector>
 
 namespace rhbm_gem::algorithm {
-
-struct ScaleReference
-{
-    bool has_reference{ false };
-    double scale{ std::numeric_limits<double>::infinity() };
-};
 
 class ScaleReferenceTracker
 {
@@ -35,12 +28,11 @@ class ScaleReferenceTracker
         return true;
     }
 
-    static ScaleReference BuildReference(const std::vector<double> & scale_sample_list)
+    static std::optional<double> BuildReference(const std::vector<double> & scale_sample_list)
     {
-        ScaleReference reference;
         if (scale_sample_list.empty())
         {
-            return reference;
+            return std::nullopt;
         }
 
         const auto scale_sum{
@@ -51,12 +43,9 @@ class ScaleReferenceTracker
         };
         if (!std::isfinite(scale))
         {
-            return reference;
+            return std::nullopt;
         }
-
-        reference.has_reference = true;
-        reference.scale = scale;
-        return reference;
+        return scale;
     }
 
 public:
@@ -75,22 +64,17 @@ public:
         }
     }
 
-    bool HasReference() const
-    {
-        return !m_scale_sample_list.empty();
-    }
-
     bool IsLocked() const
     {
         return m_locked;
     }
 
-    ScaleReference GetCommittedReference() const
+    std::optional<double> GetCommittedReference() const
     {
         return BuildReference(m_scale_sample_list);
     }
 
-    ScaleReference GetProvisionalReference(double scale_sample) const
+    std::optional<double> GetProvisionalReference(double scale_sample) const
     {
         if (m_locked)
         {

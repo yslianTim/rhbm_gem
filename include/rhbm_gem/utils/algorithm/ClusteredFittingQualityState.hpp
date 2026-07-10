@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
-#include <limits>
 #include <map>
 #include <optional>
 #include <stdexcept>
@@ -25,13 +24,6 @@ struct ClusteredFittingQualityOptions
     double ridge_multiplier_max{ 10.0 };
     double ridge_growth{ 2.0 };
     double ridge_shrink{ 0.8 };
-};
-
-enum class ClusteredFittingQualityAttemptOutcome
-{
-    Accepted,
-    ObjectiveRetry,
-    ObjectiveStop
 };
 
 template <typename ObjectiveSamples>
@@ -57,7 +49,7 @@ struct ClusteredFittingQualityCandidateScore
     std::optional<FittingQualityCandidateStats> commit_candidate_stats{};
     std::optional<FittingQualityCandidateStats> best_candidate_stats{};
     std::optional<ObjectiveSamples> objective_samples{};
-    double objective_scale_sample{ std::numeric_limits<double>::infinity() };
+    std::optional<double> objective_scale_sample{};
 };
 
 template <typename ObjectiveSamples>
@@ -67,16 +59,14 @@ struct ClusteredFittingQualityAcceptedScore
     FittingQualityCandidateStats candidate_stats{};
     std::optional<FittingQualityCandidateStats> best_candidate_stats{};
     std::optional<ObjectiveSamples> objective_samples{};
-    double objective_scale_sample{ std::numeric_limits<double>::infinity() };
+    std::optional<double> objective_scale_sample{};
 };
 
 template <typename ObjectiveSamples>
 struct ClusteredFittingQualityAttemptEvaluation
 {
-    ClusteredFittingQualityAttemptOutcome outcome{
-        ClusteredFittingQualityAttemptOutcome::ObjectiveRetry
-    };
-    ClusteredFittingQualityAcceptedScore<ObjectiveSamples> accepted_score{};
+    FittingQualityBacktrackingOutcome outcome{ FittingQualityBacktrackingOutcome::Retry };
+    std::optional<ClusteredFittingQualityAcceptedScore<ObjectiveSamples>> accepted_score{};
 };
 
 template <typename ObjectiveSamples>
@@ -109,7 +99,7 @@ private:
               previous_objective_samples{ std::move(initial_state.objective_samples) },
               objective_ridge_multiplier{ options.ridge_multiplier_min }
         {
-            if (previous_candidate_stats.has_quality_objective)
+            if (previous_candidate_stats.quality_objective.has_value())
             {
                 best_candidate = TrackedCandidate{
                     previous_candidate_stats,
@@ -226,25 +216,27 @@ public:
                 state.best_candidate)
         };
 
-        auto backtracking_decision{
-            FittingQualityBacktrackingDecision{ true, false, false }
-        };
+        auto backtracking_outcome{ FittingQualityBacktrackingOutcome::Accepted };
         if (score.has_objective_reference)
         {
-            backtracking_decision = EvaluateFittingQualityBacktracking(
+            const auto * best_candidate_stats_for_backtracking{
+                score.best_candidate_stats.has_value() ?
+                    &*score.best_candidate_stats :
+                    nullptr
+            };
+            backtracking_outcome = EvaluateFittingQualityBacktracking(
                 score.candidate_stats,
                 previous_candidate_stats_for_backtracking,
-                state.best_candidate.has_value(),
-                score.best_candidate_stats.value_or(FittingQualityCandidateStats{}),
+                best_candidate_stats_for_backtracking,
                 m_options.objective_relative_tolerance,
                 attempt,
                 attempt_size);
         }
 
         AttemptEvaluation evaluation;
-        if (backtracking_decision.accepted)
+        evaluation.outcome = backtracking_outcome;
+        if (backtracking_outcome == FittingQualityBacktrackingOutcome::Accepted)
         {
-            evaluation.outcome = ClusteredFittingQualityAttemptOutcome::Accepted;
             evaluation.accepted_score = AcceptedScore{
                 key,
                 score.commit_candidate_stats.value_or(score.candidate_stats),
@@ -252,12 +244,6 @@ public:
                 std::move(score.objective_samples),
                 score.objective_scale_sample
             };
-            return evaluation;
-        }
-        if (!backtracking_decision.should_shrink_beta ||
-            backtracking_decision.reached_retry_limit)
-        {
-            evaluation.outcome = ClusteredFittingQualityAttemptOutcome::ObjectiveStop;
         }
         return evaluation;
     }
@@ -275,14 +261,15 @@ public:
             {
                 state.best_candidate->candidate_stats = *accepted_score.best_candidate_stats;
             }
-            if (accepted_score.candidate_stats.has_quality_objective)
+            if (accepted_score.candidate_stats.quality_objective.has_value() &&
+                accepted_score.objective_scale_sample.has_value())
             {
                 state.objective_scale_tracker.CommitScaleSample(
-                    accepted_score.objective_scale_sample);
+                    *accepted_score.objective_scale_sample);
             }
             state.previous_candidate_stats = accepted_score.candidate_stats;
             state.previous_objective_samples = accepted_score.objective_samples;
-            if (accepted_score.candidate_stats.has_quality_objective &&
+            if (accepted_score.candidate_stats.quality_objective.has_value() &&
                 (!state.best_candidate.has_value() ||
                     IsBetterFittingQualityCandidate(
                         accepted_score.candidate_stats,
@@ -356,7 +343,7 @@ public:
                 throw std::invalid_argument("Clustered fitting quality state is missing.");
             }
             const auto & tracker{ iter->second.objective_scale_tracker };
-            if (tracker.HasReference() && !tracker.IsLocked()) return false;
+            if (tracker.GetCommittedReference().has_value() && !tracker.IsLocked()) return false;
         }
         return true;
     }
