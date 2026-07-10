@@ -54,6 +54,9 @@ previous state
 ```
 
 The maximum outer iteration count is `kLocalFittingMaximumIterations` (`200`).
+`RunSecondStageLocalFitting` owns this outer lifecycle. Anderson-first attempts,
+fixed-point fallback, damping, objective evaluation, and accepted-state assembly
+are contained in `SelectLocalFittingClusterCandidates`.
 
 ## Joint Offset Step
 
@@ -97,12 +100,15 @@ After joint offsets are attached to the snapshot, the iteration checks every
 active atom for suspicious offsets before refit. The check first preserves the
 hard finite-sample guard: if the previous model can build finite zero-offset
 samples but the current joint-offset model cannot, the offset is suspicious.
-When both profiles are finite, the same check also rejects clearly non-physical
-local profiles. It compares the fit-range zero-offset profile against the
-previous accepted profile and flags strong center sign flips, radial rebound or
-multi-peak shape, sudden width growth, and large amplitude/offset compensation.
-These profile checks are conservative and only run when the previous profile is
-usable as a baseline.
+A baseline-independent magnitude guard also rejects a candidate whose center
+offset response grows beyond the previous signal, offset, and sampled-profile
+scale. This protects the Cauchy solve from finite but physically implausible
+offset compensation even when a multi-radius baseline cannot be constructed.
+When both profiles are finite, the remaining checks compare the fit-range
+zero-offset profile against the previous accepted profile and flag strong center
+sign flips, radial rebound or multi-peak shape, sudden width growth, and large
+amplitude/offset compensation. These shape checks are conservative and only run
+when the previous profile is usable as a baseline.
 
 Suspicious atoms seed bounded rollback propagation through the active coupling
 graph produced by the joint offset system. Propagation follows finite edges with
@@ -130,7 +136,9 @@ contributors. For each selected sample, the active target atom and active
 selected neighbors that affect the sample residual are connected. Connected
 components define both Anderson history scope and objective sample ownership.
 Samples without active contributors do not participate in the cluster objective
-gate for that iteration.
+gate for that iteration. A canonical cluster work map stores each component's
+objective sample references and current attempt state; the same keys reconcile
+the acceleration, objective-quality, and ridge managers.
 
 The raw refit result is treated as the fixed-point output `G(x)`. For each
 cluster with compatible history, localized Anderson acceleration proposes:
