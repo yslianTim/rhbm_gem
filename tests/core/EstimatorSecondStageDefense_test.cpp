@@ -413,6 +413,34 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingAcceptsRemoteClu
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
+TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingHandlesMultipleSuspiciousSeedsWithRemoteCluster)
+{
+    auto model{ BuildSeparatedRollbackDefenseModel() };
+    MakeAtomSamplesSuspicious(*model, 1);
+    const auto & selected_atoms{ model->GetSelectedAtoms() };
+    const std::array<rg::GaussianModel3D, 2> previous_left_model_list{
+        GetEstimateModel(*selected_atoms.at(0)),
+        GetEstimateModel(*selected_atoms.at(1))
+    };
+    const auto initial_right_error{
+        CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4)
+    };
+
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
+
+    for (std::size_t i = 0; i < previous_left_model_list.size(); i++)
+    {
+        ExpectGaussianModelsNear(
+            GetEstimateModel(*selected_atoms.at(i)),
+            previous_left_model_list.at(i),
+            1.0e-12);
+    }
+    EXPECT_LT(
+        CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4),
+        initial_right_error);
+    ExpectSelectedAtomEstimatesAreFinite(*model);
+}
+
 TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingUsesFixedPointWhenNoAndersonCandidateExists)
 {
     auto model{ BuildNearCollinearDefenseModel() };

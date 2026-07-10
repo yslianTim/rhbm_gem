@@ -56,7 +56,9 @@ previous state
 The maximum outer iteration count is `kLocalFittingMaximumIterations` (`200`).
 `RunSecondStageLocalFitting` owns this outer lifecycle. Anderson-first attempts,
 fixed-point fallback, damping, objective evaluation, and accepted-state assembly
-are contained in `SelectLocalFittingClusterCandidates`.
+are contained in `SelectLocalFittingClusterCandidates`. The same selection
+boundary suppresses rejected Anderson histories and releases suppression after
+accepted fixed-point progress.
 
 ## Joint Offset Step
 
@@ -113,8 +115,10 @@ when the previous profile is usable as a baseline.
 Suspicious atoms seed bounded rollback propagation through the active coupling
 graph produced by the joint offset system. Propagation follows finite edges with
 overlap at least `kSuspiciousOffsetClusterMinimumOverlap` and stops after
-`kSuspiciousOffsetClusterMaxDepth` graph steps. Every reached active atom is
-rolled back to its previous model for this iteration and skips refit.
+`kSuspiciousOffsetClusterMaxDepth` graph steps. All seeds in a pass are expanded
+with one multi-source traversal, producing the same union of bounded
+neighborhoods. Every newly reached active atom is rolled back once to its
+previous model for this iteration and skips refit.
 
 Each remaining active atom is refit by:
 
@@ -137,7 +141,8 @@ selected neighbors that affect the sample residual are connected. Connected
 components define both Anderson history scope and objective sample ownership.
 Samples without active contributors do not participate in the cluster objective
 gate for that iteration. A canonical cluster work map stores each component's
-objective sample references and current attempt state; the same keys reconcile
+objective sample references and one canonical attempt state (`Pending`,
+`Stopped`, `AcceptedAnderson`, or `AcceptedFixedPoint`); the same keys reconcile
 the acceleration, objective-quality, and ridge managers.
 
 The raw refit result is treated as the fixed-point output `G(x)`. For each
@@ -165,6 +170,9 @@ fallback:
 damped = previous + damping * (candidate - previous)
 ```
 
+Both candidate kinds use the same damping, finite-parameter, positive-width,
+and state-assembly path. Fixed-point candidates retain raw refit uncertainty;
+Anderson candidates retain uncertainty from the previous accepted state.
 Accepted clusters copy only their active atoms into the assembled state.
 Rejected clusters keep their previous atom parameters for this iteration.
 
@@ -181,7 +189,9 @@ not permanently pollute future comparisons. Each cluster owns its objective
 sample refs, residual-scale tracker, previous objective samples, best local
 objective stats, and objective ridge multiplier. During scale warm-up,
 candidate, previous, and best objective values are scored with the same
-provisional scale before backtracking is evaluated.
+provisional scale before backtracking is evaluated. Stored objective samples
+pair each active atom index directly with its model snapshot so provisional
+rescoring does not depend on parallel index and estimation arrays.
 
 A cluster candidate is rejected when a local reference exists and the candidate
 has no finite objective, or when its objective deteriorates beyond
