@@ -17,9 +17,13 @@ At entry, the function reads `model_object.GetSelectedAtoms()`, creates one
 stores:
 
 - original local sampling entries from `GetSamplingEntries(false)`;
-- selected-neighbor indexes within `kNeighborAtomSearchRange`; and
+- selected-neighbor indexes within `kNeighborAtomSearchRange`;
 - per-sample selected-neighbor contributions within
-  `kNeighborContributionDistanceMax`.
+  `kNeighborContributionDistanceMax`;
+- the per-atom `alpha_r` used by local refitting; and
+- a prior width for objective penalties. The prior-width preference is a finite
+  group prior, then the selected atoms' finite group-median width, then the
+  atom's current finite width, and finally `1.0`.
 
 The fixed-point state is a `GaussianFittingState` with aligned result and model
 vectors:
@@ -79,13 +83,13 @@ active offset-basis columns have normalized overlap at least
 `kJointOffsetCollinearityOverlapThreshold`, both receive a local ridge
 multiplier for that solve.
 
-Robust-loss weights are updated by IRLS. The current internal policy defaults
-to Huber, with Cauchy available through the same source-local loss setting. The
-IRLS loop stops when the weighted-ridge surrogate objective deteriorates,
-normalized offset movement is small, or the robust-loss iteration limit is
-reached. If the system cannot be built, is empty, or cannot be solved, the
-offset step uses the previous offsets and the rest of the local fitting
-iteration still runs.
+Robust-loss weights are updated by IRLS. The source-local
+`kSecondStageRobustLossKind` policy is currently Cauchy and is shared with the
+cluster objective gate. The IRLS loop stops when the weighted-ridge surrogate
+objective deteriorates, normalized offset movement is small, or the robust-loss
+iteration limit is reached. If the system cannot be built, is empty, or cannot
+be solved, the offset step uses the previous offsets and the rest of the local
+fitting iteration still runs.
 
 ## Refit and Rollback
 
@@ -144,9 +148,10 @@ fallback. Candidate construction is structural; the damped candidate that would
 actually be applied must still have finite active parameters and positive active
 widths.
 
-Each outer iteration tries damping values `1.0`, `0.5`, and `0.25`.
-Anderson attempts run first for clusters that have a localized candidate.
-Pending clusters then try the same damping sequence as fixed-point fallback:
+Each outer iteration tries damping values `1.0`, `0.5`, `0.25`, `0.125`, and
+`0.0625`. Anderson attempts run first for clusters that have a localized
+candidate. Pending clusters then try the same damping sequence as fixed-point
+fallback:
 
 ```text
 damped = previous + damping * (candidate - previous)
@@ -235,11 +240,17 @@ maximum-iteration exits, normalized terminal movement.
 
 ## Workflow Context
 
-In `RunPotentialFittingWorkflow`, this stage runs after first-stage local
-fitting initializes selected atom-local Gaussian results. Later workflow stages
-train group alpha values, fit group potentials, rebuild updated sampling
-entries, retrain local alpha on updated samples, and run third-stage local
-fitting.
+In `RunPotentialFittingWorkflow`, the stage runs after initial local-alpha
+training, seed-model initialization, first-stage local fitting, and an initial
+group-alpha/group-potential fit. After second-stage local fitting, the workflow:
+
+1. retrains group alpha;
+2. rebuilds updated samples from group-median Gaussians and refits group
+   potentials;
+3. rebuilds updated samples from the fitted group Gaussians;
+4. retrains local alpha on those updated samples and runs third-stage local
+   fitting; and
+5. retrains group alpha and group potentials once more.
 
 Second-stage local fitting updates selected atom-local Gaussian results only.
 Group Gaussian results are handled by `RunGroupPotentialFitting`.
