@@ -46,27 +46,10 @@ struct ClusteredFittingQualityCandidateScore
 {
     bool has_objective_reference{ false };
     FittingQualityCandidateStats candidate_stats{};
-    std::optional<FittingQualityCandidateStats> commit_candidate_stats{};
+    std::optional<double> committed_quality_objective{};
     std::optional<FittingQualityCandidateStats> best_candidate_stats{};
     std::optional<ObjectiveSamples> objective_samples{};
     std::optional<double> objective_scale_sample{};
-};
-
-template <typename ObjectiveSamples>
-struct ClusteredFittingQualityAcceptedScore
-{
-    ClusterKey key{};
-    FittingQualityCandidateStats candidate_stats{};
-    std::optional<FittingQualityCandidateStats> best_candidate_stats{};
-    std::optional<ObjectiveSamples> objective_samples{};
-    std::optional<double> objective_scale_sample{};
-};
-
-template <typename ObjectiveSamples>
-struct ClusteredFittingQualityAttemptEvaluation
-{
-    FittingQualityBacktrackingOutcome outcome{ FittingQualityBacktrackingOutcome::Retry };
-    std::optional<ClusteredFittingQualityAcceptedScore<ObjectiveSamples>> accepted_score{};
 };
 
 template <typename ObjectiveSamples>
@@ -75,8 +58,6 @@ class ClusteredFittingQualityStateSet
 public:
     using InitialState = ClusteredFittingQualityInitialState<ObjectiveSamples>;
     using CandidateScore = ClusteredFittingQualityCandidateScore<ObjectiveSamples>;
-    using AcceptedScore = ClusteredFittingQualityAcceptedScore<ObjectiveSamples>;
-    using AttemptEvaluation = ClusteredFittingQualityAttemptEvaluation<ObjectiveSamples>;
     using TrackedCandidate = ClusteredFittingQualityTrackedCandidate<ObjectiveSamples>;
 
 private:
@@ -194,18 +175,16 @@ public:
     }
 
     template <typename Scorer>
-    AttemptEvaluation EvaluateCandidate(
+    bool TryCommitCandidate(
         const ClusterKey & key,
-        int attempt,
-        int attempt_size,
-        Scorer scorer) const
+        Scorer scorer)
     {
-        const auto iter{ m_state_by_key.find(key) };
+        auto iter{ m_state_by_key.find(key) };
         if (iter == m_state_by_key.end())
         {
             throw std::invalid_argument("Clustered fitting quality state is missing.");
         }
-        const auto & state{ iter->second };
+        auto & state{ iter->second };
 
         auto previous_candidate_stats_for_backtracking{ state.previous_candidate_stats };
         auto score{
@@ -216,7 +195,6 @@ public:
                 state.best_candidate)
         };
 
-        auto backtracking_outcome{ FittingQualityBacktrackingOutcome::Accepted };
         if (score.has_objective_reference)
         {
             const auto * best_candidate_stats_for_backtracking{
@@ -224,64 +202,44 @@ public:
                     &*score.best_candidate_stats :
                     nullptr
             };
-            backtracking_outcome = EvaluateFittingQualityBacktracking(
-                score.candidate_stats,
-                previous_candidate_stats_for_backtracking,
-                best_candidate_stats_for_backtracking,
-                m_options.objective_relative_tolerance,
-                attempt,
-                attempt_size);
+            if (!IsFittingQualityAcceptableForProgress(
+                    score.candidate_stats,
+                    previous_candidate_stats_for_backtracking,
+                    best_candidate_stats_for_backtracking,
+                    m_options.objective_relative_tolerance))
+            {
+                return false;
+            }
         }
 
-        AttemptEvaluation evaluation;
-        evaluation.outcome = backtracking_outcome;
-        if (backtracking_outcome == FittingQualityBacktrackingOutcome::Accepted)
+        if (state.best_candidate.has_value() &&
+            score.best_candidate_stats.has_value())
         {
-            evaluation.accepted_score = AcceptedScore{
-                key,
-                score.commit_candidate_stats.value_or(score.candidate_stats),
-                std::move(score.best_candidate_stats),
-                std::move(score.objective_samples),
-                score.objective_scale_sample
+            state.best_candidate->candidate_stats = *score.best_candidate_stats;
+        }
+        auto committed_candidate_stats{ score.candidate_stats };
+        committed_candidate_stats.quality_objective = score.committed_quality_objective;
+        if (committed_candidate_stats.quality_objective.has_value() &&
+            score.objective_scale_sample.has_value())
+        {
+            state.objective_scale_tracker.CommitScaleSample(
+                *score.objective_scale_sample);
+        }
+        state.previous_candidate_stats = committed_candidate_stats;
+        state.previous_objective_samples = std::move(score.objective_samples);
+        if (committed_candidate_stats.quality_objective.has_value() &&
+            (!state.best_candidate.has_value() ||
+                IsBetterFittingQualityCandidate(
+                    committed_candidate_stats,
+                    state.best_candidate->candidate_stats,
+                    m_options.objective_tie_relative_tolerance)))
+        {
+            state.best_candidate = TrackedCandidate{
+                committed_candidate_stats,
+                state.previous_objective_samples
             };
         }
-        return evaluation;
-    }
-
-    void CommitAccepted(const std::vector<AcceptedScore> & accepted_score_list)
-    {
-        for (const auto & accepted_score : accepted_score_list)
-        {
-            auto iter{ m_state_by_key.find(accepted_score.key) };
-            if (iter == m_state_by_key.end()) continue;
-
-            auto & state{ iter->second };
-            if (state.best_candidate.has_value() &&
-                accepted_score.best_candidate_stats.has_value())
-            {
-                state.best_candidate->candidate_stats = *accepted_score.best_candidate_stats;
-            }
-            if (accepted_score.candidate_stats.quality_objective.has_value() &&
-                accepted_score.objective_scale_sample.has_value())
-            {
-                state.objective_scale_tracker.CommitScaleSample(
-                    *accepted_score.objective_scale_sample);
-            }
-            state.previous_candidate_stats = accepted_score.candidate_stats;
-            state.previous_objective_samples = accepted_score.objective_samples;
-            if (accepted_score.candidate_stats.quality_objective.has_value() &&
-                (!state.best_candidate.has_value() ||
-                    IsBetterFittingQualityCandidate(
-                        accepted_score.candidate_stats,
-                        state.best_candidate->candidate_stats,
-                        m_options.objective_tie_relative_tolerance)))
-            {
-                state.best_candidate = TrackedCandidate{
-                    accepted_score.candidate_stats,
-                    accepted_score.objective_samples
-                };
-            }
-        }
+        return true;
     }
 
     bool IncreaseObjectiveRidge(const std::vector<ClusterKey> & key_list)

@@ -24,13 +24,6 @@ struct FittingQualityCandidateStats
     ParameterChangeStats parameter_change_stats{};
 };
 
-enum class FittingQualityBacktrackingOutcome
-{
-    Accepted,
-    Retry,
-    Stop
-};
-
 inline ParameterChangeStats SummarizeParameterChangeStats(
     const std::vector<ParameterChange> & change_list,
     const std::vector<std::size_t> & index_list,
@@ -72,27 +65,6 @@ inline double GetMaximumParameterChange(const ParameterChangeStats & stats)
 {
     if (stats.percentile_list.empty()) return 0.0;
     return *std::max_element(stats.percentile_list.begin(), stats.percentile_list.end());
-}
-
-inline bool IsParameterChangeConverged(
-    const ParameterChangeStats & stats,
-    double tolerance)
-{
-    for (const auto change : stats.percentile_list)
-    {
-        if (std::pow(change, 2) >= tolerance)
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
-inline bool IsBetterParameterChangeCandidate(
-    const ParameterChangeStats & stats,
-    const ParameterChangeStats & best_stats)
-{
-    return GetMaximumParameterChange(stats) < GetMaximumParameterChange(best_stats);
 }
 
 inline bool IsBetterFittingQualityCandidate(
@@ -162,37 +134,6 @@ inline bool IsFittingQualityAcceptableForProgress(
             stats,
             *best_stats,
             objective_relative_tolerance);
-}
-
-inline FittingQualityBacktrackingOutcome EvaluateFittingQualityBacktracking(
-    const FittingQualityCandidateStats & stats,
-    const FittingQualityCandidateStats & previous_stats,
-    const FittingQualityCandidateStats * best_stats,
-    double objective_relative_tolerance,
-    int attempt_index,
-    int maximum_attempts)
-{
-    if (maximum_attempts <= 0)
-    {
-        throw std::invalid_argument("Fitting quality backtracking maximum attempts must be positive.");
-    }
-    if (attempt_index < 0 || attempt_index >= maximum_attempts)
-    {
-        throw std::invalid_argument("Fitting quality backtracking attempt index is out of range.");
-    }
-
-    if (IsFittingQualityAcceptableForProgress(
-            stats,
-            previous_stats,
-            best_stats,
-            objective_relative_tolerance))
-    {
-        return FittingQualityBacktrackingOutcome::Accepted;
-    }
-
-    return attempt_index + 1 >= maximum_attempts ?
-        FittingQualityBacktrackingOutcome::Stop :
-        FittingQualityBacktrackingOutcome::Retry;
 }
 
 } // namespace rhbm_gem::algorithm

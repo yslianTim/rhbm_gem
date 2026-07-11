@@ -19,14 +19,11 @@ alg::ParameterChange MakeChange(double value)
 }
 
 alg::FittingQualityCandidateStats MakeQualityCandidate(
-    bool has_objective,
-    double quality_objective,
+    std::optional<double> quality_objective,
     double change = 0.1)
 {
     return alg::FittingQualityCandidateStats{
-        has_objective ?
-            std::optional<double>{ quality_objective } :
-            std::nullopt,
+        quality_objective,
         alg::ParameterChangeStats{ std::vector<double>{ change } }
     };
 }
@@ -338,8 +335,8 @@ TEST(ConvergenceAlgorithmTest, FittingQualityCandidateRankingUsesChangeAsTieBrea
 
 TEST(ConvergenceAlgorithmTest, FittingQualityCandidateRankingPrefersAvailableObjective)
 {
-    const auto with_objective{ MakeQualityCandidate(true, 10.0, 1.0) };
-    const auto without_objective{ MakeQualityCandidate(false, 0.0, 0.1) };
+    const auto with_objective{ MakeQualityCandidate(10.0, 1.0) };
+    const auto without_objective{ MakeQualityCandidate(std::nullopt, 0.1) };
 
     EXPECT_TRUE(alg::IsBetterFittingQualityCandidate(
         with_objective,
@@ -351,103 +348,66 @@ TEST(ConvergenceAlgorithmTest, FittingQualityCandidateRankingPrefersAvailableObj
         1.0e-8));
 }
 
-TEST(ConvergenceAlgorithmTest, FittingQualityBacktrackingAcceptsNonDeterioratedCandidate)
+TEST(ConvergenceAlgorithmTest, FittingQualityAcceptanceAcceptsNonDeterioratedCandidate)
 {
-    const auto candidate{ MakeQualityCandidate(true, 9.5) };
-    const auto previous{ MakeQualityCandidate(true, 10.0) };
-    const auto best{ MakeQualityCandidate(true, 9.6) };
+    const auto candidate{ MakeQualityCandidate(9.5) };
+    const auto previous{ MakeQualityCandidate(10.0) };
+    const auto best{ MakeQualityCandidate(9.6) };
 
-    const auto decision{ alg::EvaluateFittingQualityBacktracking(
+    EXPECT_TRUE(alg::IsFittingQualityAcceptableForProgress(
         candidate,
         previous,
         &best,
-        1.0e-3,
-        0,
-        3) };
-
-    EXPECT_EQ(alg::FittingQualityBacktrackingOutcome::Accepted, decision);
+        1.0e-3));
 }
 
-TEST(ConvergenceAlgorithmTest, FittingQualityBacktrackingRejectsPreviousDeterioration)
+TEST(ConvergenceAlgorithmTest, FittingQualityAcceptanceRejectsPreviousDeterioration)
 {
-    const auto candidate{ MakeQualityCandidate(true, 10.2) };
-    const auto previous{ MakeQualityCandidate(true, 10.0) };
-    const auto best{ MakeQualityCandidate(true, 9.5) };
+    const auto candidate{ MakeQualityCandidate(10.2) };
+    const auto previous{ MakeQualityCandidate(10.0) };
+    const auto best{ MakeQualityCandidate(9.5) };
 
-    const auto decision{ alg::EvaluateFittingQualityBacktracking(
+    EXPECT_FALSE(alg::IsFittingQualityAcceptableForProgress(
         candidate,
         previous,
         &best,
-        1.0e-3,
-        0,
-        3) };
-
-    EXPECT_EQ(alg::FittingQualityBacktrackingOutcome::Retry, decision);
+        1.0e-3));
 }
 
-TEST(ConvergenceAlgorithmTest, FittingQualityBacktrackingRejectsBestDeterioration)
+TEST(ConvergenceAlgorithmTest, FittingQualityAcceptanceRejectsBestDeterioration)
 {
-    const auto candidate{ MakeQualityCandidate(true, 9.5) };
-    const auto previous{ MakeQualityCandidate(true, 10.0) };
-    const auto best{ MakeQualityCandidate(true, 9.0) };
+    const auto candidate{ MakeQualityCandidate(9.5) };
+    const auto previous{ MakeQualityCandidate(10.0) };
+    const auto best{ MakeQualityCandidate(9.0) };
 
-    const auto decision{ alg::EvaluateFittingQualityBacktracking(
+    EXPECT_FALSE(alg::IsFittingQualityAcceptableForProgress(
         candidate,
         previous,
         &best,
-        1.0e-3,
-        0,
-        3) };
-
-    EXPECT_EQ(alg::FittingQualityBacktrackingOutcome::Retry, decision);
+        1.0e-3));
 }
 
-TEST(ConvergenceAlgorithmTest, FittingQualityBacktrackingReportsRetryLimit)
+TEST(ConvergenceAlgorithmTest, FittingQualityAcceptanceAcceptsWhenNoObjectiveReferenceExists)
 {
-    const auto candidate{ MakeQualityCandidate(true, 10.2) };
-    const auto previous{ MakeQualityCandidate(true, 10.0) };
-    const auto best{ MakeQualityCandidate(true, 9.5) };
+    const auto candidate{ MakeQualityCandidate(std::nullopt) };
+    const auto previous{ MakeQualityCandidate(std::nullopt) };
 
-    const auto decision{ alg::EvaluateFittingQualityBacktracking(
-        candidate,
-        previous,
-        &best,
-        1.0e-3,
-        2,
-        3) };
-
-    EXPECT_EQ(alg::FittingQualityBacktrackingOutcome::Stop, decision);
-}
-
-TEST(ConvergenceAlgorithmTest, FittingQualityBacktrackingAcceptsWhenNoObjectiveReferenceExists)
-{
-    const auto candidate{ MakeQualityCandidate(false, 0.0) };
-    const auto previous{ MakeQualityCandidate(false, 0.0) };
-
-    const auto decision{ alg::EvaluateFittingQualityBacktracking(
+    EXPECT_TRUE(alg::IsFittingQualityAcceptableForProgress(
         candidate,
         previous,
         nullptr,
-        1.0e-3,
-        0,
-        3) };
-
-    EXPECT_EQ(alg::FittingQualityBacktrackingOutcome::Accepted, decision);
+        1.0e-3));
 }
 
-TEST(ConvergenceAlgorithmTest, FittingQualityBacktrackingRejectsMissingCandidateObjective)
+TEST(ConvergenceAlgorithmTest, FittingQualityAcceptanceRejectsMissingCandidateObjective)
 {
-    const auto candidate{ MakeQualityCandidate(false, 0.0) };
-    const auto previous{ MakeQualityCandidate(true, 10.0) };
-    const auto best{ MakeQualityCandidate(true, 9.5) };
+    const auto candidate{ MakeQualityCandidate(std::nullopt) };
+    const auto previous{ MakeQualityCandidate(10.0) };
+    const auto best{ MakeQualityCandidate(9.5) };
 
-    const auto decision{ alg::EvaluateFittingQualityBacktracking(
+    EXPECT_FALSE(alg::IsFittingQualityAcceptableForProgress(
         candidate,
         previous,
         &best,
-        1.0e-3,
-        0,
-        3) };
-
-    EXPECT_EQ(alg::FittingQualityBacktrackingOutcome::Retry, decision);
+        1.0e-3));
 }

@@ -52,6 +52,7 @@ CandidateScore MakeScore(
     CandidateScore score;
     score.has_objective_reference = true;
     score.candidate_stats = MakeStats(objective, 0.1);
+    score.committed_quality_objective = objective;
     if (best_candidate.has_value())
     {
         score.best_candidate_stats = best_candidate->candidate_stats;
@@ -76,43 +77,27 @@ TEST(ClusteredFittingQualityStateTest, AcceptsImprovedCandidateAndLocksReference
 
     EXPECT_FALSE(state_set.AllActiveReferencesLocked(key_list));
 
-    const auto first_evaluation{
-        state_set.EvaluateCandidate(
+    EXPECT_TRUE(
+        state_set.TryCommitCandidate(
             { 0 },
-            0,
-            2,
             [](const alg::ScaleReferenceTracker &,
                 alg::FittingQualityCandidateStats &,
                 const std::optional<Samples> &,
                 const std::optional<TrackedCandidate> & best_candidate)
             {
                 return MakeScore(9.0, 1.1, best_candidate);
-            })
-    };
-    ASSERT_EQ(
-        alg::FittingQualityBacktrackingOutcome::Accepted,
-        first_evaluation.outcome);
-    ASSERT_TRUE(first_evaluation.accepted_score.has_value());
-    state_set.CommitAccepted({ *first_evaluation.accepted_score });
+            }));
 
-    const auto second_evaluation{
-        state_set.EvaluateCandidate(
+    EXPECT_TRUE(
+        state_set.TryCommitCandidate(
             { 0 },
-            0,
-            2,
             [](const alg::ScaleReferenceTracker &,
                 alg::FittingQualityCandidateStats &,
                 const std::optional<Samples> &,
                 const std::optional<TrackedCandidate> & best_candidate)
             {
                 return MakeScore(8.0, 1.2, best_candidate);
-            })
-    };
-    ASSERT_EQ(
-        alg::FittingQualityBacktrackingOutcome::Accepted,
-        second_evaluation.outcome);
-    ASSERT_TRUE(second_evaluation.accepted_score.has_value());
-    state_set.CommitAccepted({ *second_evaluation.accepted_score });
+            }));
 
     EXPECT_TRUE(state_set.AllActiveReferencesLocked(key_list));
 }
@@ -127,48 +112,32 @@ TEST(ClusteredFittingQualityStateTest, AcceptedCandidateCanCommitDifferentRefere
             return MakeInitialState(10.0);
         });
 
-    const auto accepted_evaluation{
-        state_set.EvaluateCandidate(
+    EXPECT_TRUE(
+        state_set.TryCommitCandidate(
             { 0 },
-            0,
-            2,
             [](const alg::ScaleReferenceTracker &,
                 alg::FittingQualityCandidateStats &,
                 const std::optional<Samples> &,
                 const std::optional<TrackedCandidate> & best_candidate)
             {
                 auto score{ MakeScore(9.0, 1.0, best_candidate) };
-                score.commit_candidate_stats = MakeStats(5.0, 0.1);
+                score.committed_quality_objective = 5.0;
                 return score;
-            })
-    };
-    ASSERT_EQ(
-        alg::FittingQualityBacktrackingOutcome::Accepted,
-        accepted_evaluation.outcome);
-    ASSERT_TRUE(accepted_evaluation.accepted_score.has_value());
-    state_set.CommitAccepted({ *accepted_evaluation.accepted_score });
+            }));
 
-    const auto retry_evaluation{
-        state_set.EvaluateCandidate(
+    EXPECT_FALSE(
+        state_set.TryCommitCandidate(
             { 0 },
-            0,
-            2,
             [](const alg::ScaleReferenceTracker &,
                 alg::FittingQualityCandidateStats &,
                 const std::optional<Samples> &,
                 const std::optional<TrackedCandidate> & best_candidate)
             {
                 return MakeScore(7.0, 1.0, best_candidate);
-            })
-    };
-
-    EXPECT_EQ(
-        alg::FittingQualityBacktrackingOutcome::Retry,
-        retry_evaluation.outcome);
-    EXPECT_FALSE(retry_evaluation.accepted_score.has_value());
+            }));
 }
 
-TEST(ClusteredFittingQualityStateTest, RejectsDeterioratedCandidateThenStopsAtRetryLimit)
+TEST(ClusteredFittingQualityStateTest, RejectsDeterioratedCandidateWithoutChangingState)
 {
     StateSet state_set{ MakeOptions() };
     state_set.Reconcile(
@@ -178,41 +147,85 @@ TEST(ClusteredFittingQualityStateTest, RejectsDeterioratedCandidateThenStopsAtRe
             return MakeInitialState(10.0);
         });
 
-    const auto retry_evaluation{
-        state_set.EvaluateCandidate(
+    EXPECT_FALSE(
+        state_set.TryCommitCandidate(
             { 0 },
-            0,
-            2,
             [](const alg::ScaleReferenceTracker &,
                 alg::FittingQualityCandidateStats &,
                 const std::optional<Samples> &,
                 const std::optional<TrackedCandidate> & best_candidate)
             {
                 return MakeScore(20.0, 1.0, best_candidate);
-            })
-    };
-    EXPECT_EQ(
-        alg::FittingQualityBacktrackingOutcome::Retry,
-        retry_evaluation.outcome);
-    EXPECT_FALSE(retry_evaluation.accepted_score.has_value());
+            }));
 
-    const auto stop_evaluation{
-        state_set.EvaluateCandidate(
+    EXPECT_TRUE(
+        state_set.TryCommitCandidate(
             { 0 },
-            1,
-            2,
             [](const alg::ScaleReferenceTracker &,
                 alg::FittingQualityCandidateStats &,
                 const std::optional<Samples> &,
                 const std::optional<TrackedCandidate> & best_candidate)
             {
-                return MakeScore(20.0, 1.0, best_candidate);
-            })
-    };
-    EXPECT_EQ(
-        alg::FittingQualityBacktrackingOutcome::Stop,
-        stop_evaluation.outcome);
-    EXPECT_FALSE(stop_evaluation.accepted_score.has_value());
+                return MakeScore(9.0, 1.0, best_candidate);
+            }));
+}
+
+TEST(ClusteredFittingQualityStateTest, AcceptsCandidateWhenNoScaleReferenceExists)
+{
+    StateSet state_set{ MakeOptions() };
+    state_set.Reconcile(
+        { { 0 } },
+        [](const alg::ClusterKey &)
+        {
+            return InitialState{
+                std::nullopt,
+                alg::FittingQualityCandidateStats{
+                    std::nullopt,
+                    alg::ParameterChangeStats{ std::vector<double>{ 0.0 } }
+                },
+                std::nullopt
+            };
+        });
+
+    EXPECT_TRUE(
+        state_set.TryCommitCandidate(
+            { 0 },
+            [](const alg::ScaleReferenceTracker &,
+                alg::FittingQualityCandidateStats &,
+                const std::optional<Samples> &,
+                const std::optional<TrackedCandidate> &)
+            {
+                CandidateScore score;
+                score.candidate_stats.parameter_change_stats =
+                    alg::ParameterChangeStats{ std::vector<double>{ 0.1 } };
+                return score;
+            }));
+}
+
+TEST(ClusteredFittingQualityStateTest, RejectsMissingCandidateObjectiveWhenReferenceExists)
+{
+    StateSet state_set{ MakeOptions() };
+    state_set.Reconcile(
+        { { 0 } },
+        [](const alg::ClusterKey &)
+        {
+            return MakeInitialState(10.0);
+        });
+
+    EXPECT_FALSE(
+        state_set.TryCommitCandidate(
+            { 0 },
+            [](const alg::ScaleReferenceTracker &,
+                alg::FittingQualityCandidateStats &,
+                const std::optional<Samples> &,
+                const std::optional<TrackedCandidate> &)
+            {
+                CandidateScore score;
+                score.has_objective_reference = true;
+                score.candidate_stats.parameter_change_stats =
+                    alg::ParameterChangeStats{ std::vector<double>{ 0.1 } };
+                return score;
+            }));
 }
 
 TEST(ClusteredFittingQualityStateTest, ObjectiveRidgeIncreasesSaturatesAndDecreasesPerCluster)

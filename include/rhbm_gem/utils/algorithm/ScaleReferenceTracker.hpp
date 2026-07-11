@@ -14,7 +14,6 @@ class ScaleReferenceTracker
     std::size_t m_warmup_sample_count{ 0 };
     std::vector<double> m_scale_sample_list{};
     std::size_t m_accepted_scale_sample_count{ 0 };
-    bool m_locked{ false };
 
     bool AddScaleSample(double scale_sample)
     {
@@ -66,7 +65,7 @@ public:
 
     bool IsLocked() const
     {
-        return m_locked;
+        return m_accepted_scale_sample_count >= m_warmup_sample_count;
     }
 
     std::optional<double> GetCommittedReference() const
@@ -76,7 +75,7 @@ public:
 
     std::optional<double> GetProvisionalReference(double scale_sample) const
     {
-        if (m_locked)
+        if (IsLocked())
         {
             return GetCommittedReference();
         }
@@ -95,14 +94,10 @@ public:
 
     void CommitScaleSample(double scale_sample)
     {
-        if (m_locked) return;
+        if (IsLocked()) return;
 
         if (!AddScaleSample(scale_sample)) return;
         m_accepted_scale_sample_count++;
-        if (m_accepted_scale_sample_count >= m_warmup_sample_count)
-        {
-            m_locked = true;
-        }
     }
 };
 

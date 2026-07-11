@@ -141,9 +141,12 @@ selected neighbors that affect the sample residual are connected. Connected
 components define both Anderson history scope and objective sample ownership.
 Samples without active contributors do not participate in the cluster objective
 gate for that iteration. A canonical cluster work map stores each component's
-objective sample references and one canonical attempt state (`Pending`,
-`Stopped`, `AcceptedAnderson`, or `AcceptedFixedPoint`); the same keys reconcile
-the acceleration, objective-quality, and ridge managers.
+objective sample references and an optional accepted source (`Anderson` or
+`FixedPoint`; unset while pending); the same keys reconcile the acceleration,
+objective-quality, and ridge managers. Cluster construction
+records one representative active contributor per sample while joining all of
+that sample's contributors, then assigns objective samples after the connected
+components are complete.
 
 The raw refit result is treated as the fixed-point output `G(x)`. For each
 cluster with compatible history, localized Anderson acceleration proposes:
@@ -195,9 +198,10 @@ rescoring does not depend on parallel index and estimation arrays.
 
 Unavailable scale references and unavailable objective values are represented
 as optional values rather than separate presence flags plus infinity sentinels.
-The objective gate and cluster selection share one backtracking outcome:
-`Accepted`, `Retry`, or `Stop`. Only an accepted evaluation carries an accepted
-score; retry and stop evaluations contain no placeholder score.
+The damping loop owns candidate retry. The quality manager returns whether a
+candidate was accepted and immediately commits that cluster's scale, previous,
+best, and objective-sample state on acceptance; rejected candidates leave the
+manager state unchanged.
 
 A cluster candidate is rejected when a local reference exists and the candidate
 has no finite objective, or when its objective deteriorates beyond
