@@ -365,6 +365,10 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingFallsBackWhenJoi
 
     ExpectGaussianModelsNear(GetEstimateModel(*atom), previous_model, 1.0e-12);
     EXPECT_NE(output.find("joint-offset = system-build-failed"), std::string::npos);
+    EXPECT_NE(
+        error_output.find("terminal suspicious rollback fallback clusters/atoms = 1/1"),
+        std::string::npos);
+    EXPECT_EQ(error_output.find("Reached maximum iteration size"), std::string::npos);
     EXPECT_EQ(output.find("acceleration = aa"), std::string::npos);
     EXPECT_EQ(output.find("acceleration = damped-aa"), std::string::npos);
     EXPECT_EQ(output.find("Converged after"), std::string::npos);
@@ -383,11 +387,16 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingReportsEmptyJoin
     const auto previous_log_level{ Logger::GetLogLevel() };
     Logger::SetLogLevel(LogLevel::Info);
     testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
     rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
     const std::string output{ testing::internal::GetCapturedStdout() };
+    const std::string error_output{ testing::internal::GetCapturedStderr() };
     Logger::SetLogLevel(previous_log_level);
 
     EXPECT_NE(output.find("joint-offset = empty-system"), std::string::npos);
+    EXPECT_EQ(
+        error_output.find("terminal suspicious rollback fallback"),
+        std::string::npos);
     EXPECT_NEAR(GetEstimateModel(*atom).GetOffset(), previous_offset, 1.0e-12);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
@@ -432,8 +441,10 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingAcceptsRemoteClu
     const auto previous_log_level{ Logger::GetLogLevel() };
     Logger::SetLogLevel(LogLevel::Info);
     testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
     rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
     const std::string output{ testing::internal::GetCapturedStdout() };
+    const std::string error_output{ testing::internal::GetCapturedStderr() };
     Logger::SetLogLevel(previous_log_level);
 
     for (std::size_t i = 0; i < previous_left_model_list.size(); i++)
@@ -449,6 +460,11 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingAcceptsRemoteClu
     EXPECT_TRUE(
         output.find("acceleration = aa") != std::string::npos ||
         output.find("acceleration = damped-aa") != std::string::npos);
+    EXPECT_NE(output.find("terminal-suspicious atoms = 2"), std::string::npos);
+    EXPECT_NE(
+        error_output.find("terminal suspicious rollback fallback clusters/atoms = 1/2"),
+        std::string::npos);
+    EXPECT_EQ(error_output.find("Reached maximum iteration size"), std::string::npos);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
@@ -465,7 +481,14 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingHandlesMultipleS
         CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4)
     };
 
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
+    const std::string output{ testing::internal::GetCapturedStdout() };
+    const std::string error_output{ testing::internal::GetCapturedStderr() };
+    Logger::SetLogLevel(previous_log_level);
 
     for (std::size_t i = 0; i < previous_left_model_list.size(); i++)
     {
@@ -477,6 +500,11 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingHandlesMultipleS
     EXPECT_LT(
         CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4),
         initial_right_error);
+    EXPECT_NE(output.find("terminal-suspicious atoms = 2"), std::string::npos);
+    EXPECT_NE(
+        error_output.find("terminal suspicious rollback fallback clusters/atoms = 1/2"),
+        std::string::npos);
+    EXPECT_EQ(error_output.find("Reached maximum iteration size"), std::string::npos);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 

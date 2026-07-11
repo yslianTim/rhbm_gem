@@ -263,6 +263,17 @@ thaw threshold. Dependency thaw uses per-atom hysteresis and a capped thaw count
 to limit repeated freeze/thaw cycling. Suspicious rollback atoms are force-thawed
 after freeze tracking so they can retry with their temporary ridge multiplier.
 
+An accepted cluster enters persistent suspicious rollback tracking only when it
+contains the same expanded suspicious atom set as the previous iteration and
+its assembled normalized parameter movement is below the convergence tolerance.
+Rejected clusters, clusters with effective movement, changed suspicious sets,
+and changed cluster keys reset that tracking state. After five consecutive
+accepted no-progress iterations, the complete active cluster keeps its previous
+validated state and becomes terminal for the remainder of this second stage.
+Its atoms no longer participate in offset solving, acceleration, ridge updates,
+freeze/thaw, or convergence statistics, but remain in the fitted snapshot as
+fixed contributors for other active clusters.
+
 Parameter convergence requires:
 
 - no suspicious offset rollback in the accepted iteration;
@@ -280,13 +291,17 @@ fallback summary is emitted.
 
 ## Exit Paths
 
-The loop exits through one of four terminal cases:
+The loop exits through one of five terminal cases:
 
 - **All atoms frozen:** apply the previous state when the loop starts with no
   active atoms, or apply the current accepted assembled state when the last
   accepted update freezes all remaining atoms.
 - **Parameter convergence:** apply the current accepted assembled state after
   the convergence conditions pass.
+- **Terminal suspicious fallback:** when persistent clusters have been removed
+  and all remaining active clusters freeze or converge, apply the assembled
+  state and emit one warning with terminal cluster/atom counts instead of
+  reporting whole-stage convergence.
 - **Objective backtracking failure:** when all acceleration and fixed-point
   attempts are rejected and no further local or global ridge retry is available,
   apply the previous state.
@@ -294,8 +309,10 @@ The loop exits through one of four terminal cases:
   the iteration limit.
 
 Progress logs report iteration, acceleration kind, damping, and active/frozen
-atom counts. Terminal logs report the stop reason and, for convergence or
-maximum-iteration exits, normalized terminal movement.
+atom counts. When terminal suspicious atoms exist, active counts exclude them
+and the progress line reports their count separately. Terminal logs report the
+stop reason and, for convergence or maximum-iteration exits, normalized
+terminal movement.
 
 ## Workflow Context
 

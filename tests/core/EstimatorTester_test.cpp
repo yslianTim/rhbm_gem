@@ -923,7 +923,14 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingRollsBackSuspiciousJointOffs
     options.thread_size = 1;
     options.quiet_mode = false;
 
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
     rt::RunSecondStageLocalFitting(*model, options);
+    const std::string output{ testing::internal::GetCapturedStdout() };
+    const std::string error_output{ testing::internal::GetCapturedStderr() };
+    Logger::SetLogLevel(previous_log_level);
 
     for (std::size_t i = 0; i < previous_offset_list.size(); i++)
     {
@@ -932,5 +939,11 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingRollsBackSuspiciousJointOffs
         };
         EXPECT_NEAR(fitted_offset, previous_offset_list.at(i), 1.0e-12);
     }
+    EXPECT_NE(output.find("terminal-suspicious atoms = 2"), std::string::npos);
+    EXPECT_EQ(output.find("Iter. 6/200"), std::string::npos);
+    EXPECT_NE(
+        error_output.find("terminal suspicious rollback fallback clusters/atoms = 1/2"),
+        std::string::npos);
+    EXPECT_EQ(error_output.find("Reached maximum iteration size"), std::string::npos);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
