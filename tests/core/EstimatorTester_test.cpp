@@ -9,9 +9,9 @@
 #include <string>
 #include <utility>
 
-#include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/TestDataFactory.hpp>
 #include <rhbm_gem/core/EstimatorTester.hpp>
+#include "core/detail/GaussianEstimatorStages.hpp"
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
@@ -155,8 +155,8 @@ std::unique_ptr<rg::ModelObject> BuildSecondStageFallbackDiagnosticModel()
     options.distance_max = 1.0;
     options.thread_size = 1;
     options.quiet_mode = true;
-    rt::RunLocalAlphaTraining(*model, options);
-    rt::RunFirstStageLocalFitting(*model, options);
+    rt::RunLocalAlphaTraining(*model, options, rt::LocalFittingPass::FirstStage);
+    rt::RunFixedOffsetLocalFitting(*model, options, rt::LocalFittingPass::FirstStage);
 
     auto analysis{ model->EditAnalysis() };
     auto * atom{ model->GetSelectedAtoms().front() };
@@ -187,8 +187,8 @@ std::unique_ptr<rg::ModelObject> BuildSecondStageScaleDiagnosticModel()
     };
     auto model{ std::move(input.replica_model_objects.front()) };
     const auto options{ MakeSecondStageOptions() };
-    rt::RunLocalAlphaTraining(*model, options);
-    rt::RunFirstStageLocalFitting(*model, options);
+    rt::RunLocalAlphaTraining(*model, options, rt::LocalFittingPass::FirstStage);
+    rt::RunFixedOffsetLocalFitting(*model, options, rt::LocalFittingPass::FirstStage);
     return model;
 }
 
@@ -444,8 +444,8 @@ std::unique_ptr<rg::ModelObject> BuildSecondStageSuspiciousOffsetDiagnosticModel
     options.distance_max = 1.0;
     options.thread_size = 1;
     options.quiet_mode = true;
-    rt::RunLocalAlphaTraining(*model, options);
-    rt::RunFirstStageLocalFitting(*model, options);
+    rt::RunLocalAlphaTraining(*model, options, rt::LocalFittingPass::FirstStage);
+    rt::RunFixedOffsetLocalFitting(*model, options, rt::LocalFittingPass::FirstStage);
 
     const auto & atom_list{ model->GetSelectedAtoms() };
     auto * target_atom{ atom_list.at(0) };
@@ -658,15 +658,15 @@ TEST(EstimatorTesterTest, RunLocalEstimationTestRejectsNonFiniteTruth)
     );
 }
 
-TEST(EstimatorTesterTest, RunPotentialFittingWorkflowStoresUpdatedSamplingEntries)
+TEST(EstimatorTesterTest, RunPotentialFittingWorkflowStoresUpdatedSamplingEntriesAndLogsPriorSummary)
 {
     ElectricPotential potential_model;
     potential_model.SetModelChoice(0);
     potential_model.SetBlurringWidth(0.5);
     auto input{
         tdf::BuildPotentialModelTestData(tdf::PotentialModelScenario{
-            Spot::UNK,
-            Element::OXYGEN,
+            Spot::C,
+            Element::CARBON,
             -0.1,
             rg::GaussianModel3D{ 8.0, 0.5, -0.1 },
             potential_model,
@@ -680,12 +680,19 @@ TEST(EstimatorTesterTest, RunPotentialFittingWorkflowStoresUpdatedSamplingEntrie
     options.distance_min = 0.0;
     options.distance_max = 1.0;
     options.thread_size = 1;
-    options.quiet_mode = true;
+    options.quiet_mode = false;
 
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
     rt::RunPotentialFittingWorkflow(*model, options);
+    const std::string output{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_log_level);
 
     ExpectSelectedAtomUpdatedSamplesArePresent(*model);
     ExpectSelectedAtomEstimatesAreFinite(*model);
+    EXPECT_NE(output.find("Group fitting prior summary by Spot:"), std::string::npos);
+    EXPECT_NE(output.find("Spot::C , amplitude mean ="), std::string::npos);
 }
 
 TEST(EstimatorTesterTest, RunSecondStageLocalFittingHandlesNearCollinearAtoms)

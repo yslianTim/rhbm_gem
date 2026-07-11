@@ -1,8 +1,12 @@
 # Second-Stage Local Fitting
 
 `rhbm_gem::core::RunSecondStageLocalFitting` refines selected atom-local
-Gaussian estimates after the first-stage per-atom fit. The implementation is in
-[`src/core/GaussianEstimator.cpp`](/src/core/GaussianEstimator.cpp).
+Gaussian estimates after the first-stage per-atom fit. It is a
+workflow-internal lifecycle seam declared in
+[`src/core/detail/GaussianEstimatorStages.hpp`](/src/core/detail/GaussianEstimatorStages.hpp)
+and implemented in
+[`src/core/GaussianEstimator.cpp`](/src/core/GaussianEstimator.cpp); it is not
+part of the installed `GaussianEstimator.hpp` API.
 
 The stage is an outer fixed-point iteration over selected atoms. Each iteration
 solves active joint offsets, refits active atoms with selected-neighbor signals
@@ -173,29 +177,39 @@ fallback:
 damped = previous + damping * (candidate - previous)
 ```
 
-Both candidate kinds use the same damping, finite-parameter, positive-width,
-and state-assembly path. Fixed-point candidates retain raw refit uncertainty;
+Both candidate kinds use the same `BuildLocalFittingCandidateState` path. The
+builder copies the previous fitting state, applies the damped values, and
+returns an `std::optional<GaussianFittingState>` containing the complete
+candidate only when every changed model is finite and has positive width.
+Fixed-point candidates retain raw refit uncertainty;
 Anderson candidates retain uncertainty from the previous accepted state.
-Accepted clusters copy only their active atoms into the assembled state.
-Rejected clusters keep their previous atom parameters for this iteration.
+Accepted clusters copy only their active atoms from that candidate into the
+assembled state. Rejected or structurally invalid candidates produce no state,
+so their clusters keep the previous atom parameters for this iteration.
 
 ## Objective Gate and Ridge Retry
 
 Objective scoring is cluster-local. The residual term uses the same robust-loss
 policy as joint-offset IRLS, then adds conservative parameter plausibility
 penalties for width drift from the group prior or local group median, offset
-dominance over the local peak, and single-step movement from the previous
-accepted state. The movement penalty is used only for the current acceptance
-gate; committed previous and best objective references keep the residual,
-width-prior, and offset-plausibility terms so a one-step movement surcharge does
-not permanently pollute future comparisons. Each cluster owns its objective
-sample refs, residual-scale tracker, a tracked previous candidate that pairs its
-objective stats and samples, best local objective stats, and objective ridge
-multiplier. During scale warm-up,
+dominance over the local peak, and single-step movement from the atom/model
+snapshot stored with the previous objective candidate. The movement-reference
+snapshot is validated against the current active atom indexes before use. The
+movement penalty is used only for the current acceptance gate; committed
+previous and best objective references keep the residual, width-prior, and
+offset-plausibility terms so a one-step movement surcharge does not permanently
+pollute future comparisons. Each cluster owns its objective sample refs,
+residual-scale tracker, a tracked previous candidate that pairs its objective
+stats and samples, best local objective stats, and objective ridge multiplier.
+During scale warm-up,
 candidate, previous, and best objective values are scored with the same
 provisional scale before backtracking is evaluated. Stored objective samples
-pair each active atom index directly with its model snapshot so provisional
-rescoring does not depend on parallel index and estimation arrays.
+contain residuals, an atom/model snapshot for the active cluster, and the
+scalar residual/response-derived scale sample. Raw response values exist only
+while the samples are collected and are discarded after that scale is calculated. This
+snapshot is sufficient for provisional rescoring and movement comparison
+without retaining a response list or reconstructing models from a separate
+fitting state.
 
 Unavailable scale references and unavailable objective values are represented
 as optional values rather than separate presence flags plus infinity sentinels.
@@ -271,7 +285,13 @@ maximum-iteration exits, normalized terminal movement.
 
 ## Workflow Context
 
-In `RunPotentialFittingWorkflow`, the stage runs after initial local-alpha
+The installed estimator API exposes `RunPotentialFittingWorkflow`, while the
+local-alpha, fixed-offset first/third pass, and second-stage entry points remain
+private lifecycle seams in `src/core/detail/GaussianEstimatorStages.hpp`.
+Keeping these stage hooks private prevents callers from bypassing their required
+workflow ordering.
+
+In `RunPotentialFittingWorkflow`, the second stage runs after initial local-alpha
 training, seed-model initialization, first-stage local fitting, and an initial
 group-alpha/group-potential fit. After second-stage local fitting, the workflow:
 

@@ -1,5 +1,5 @@
 #include <rhbm_gem/core/EstimatorTester.hpp>
-#include <rhbm_gem/core/GaussianEstimator.hpp>
+#include "core/detail/GaussianEstimatorStages.hpp"
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
@@ -103,8 +103,8 @@ Eigen::MatrixXd EstimateAtomicModelFirstStageModels(
     for (int i = 0; i < replica_size; i++)
     {
         ModelObject model_object{ *input.replica_model_objects.at(static_cast<size_t>(i)) };
-        RunLocalAlphaTraining(model_object, options);
-        RunFirstStageLocalFitting(model_object, options);
+        RunLocalAlphaTraining(model_object, options, LocalFittingPass::FirstStage);
+        RunFixedOffsetLocalFitting(model_object, options, LocalFittingPass::FirstStage);
 
         const auto local_view{
             AtomLocalPotentialView::RequireFor(*model_object.GetSelectedAtoms().front())

@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-#include <rhbm_gem/core/GaussianEstimator.hpp>
+#include "core/detail/GaussianEstimatorStages.hpp"
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>

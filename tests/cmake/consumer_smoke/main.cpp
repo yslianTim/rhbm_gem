@@ -1,4 +1,5 @@
 #include <rhbm_gem/core/CommandSystem.hpp>
+#include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialEditor.hpp>
@@ -32,9 +33,17 @@ int main()
     static_assert(kHeaderExposesCompleteType<rhbm_gem::AtomLocalPotentialView>);
     static_assert(kHeaderExposesCompleteType<rhbm_gem::ModelAnalysisEditor>);
     static_assert(kHeaderExposesCompleteType<rhbm_gem::ModelObject>);
+    static_assert(kHeaderExposesCompleteType<rhbm_gem::core::FitOptions>);
 
     rhbm_gem::ModelObject model_object;
     (void)model_object;
+    rhbm_gem::core::FitOptions fit_options;
+    using PotentialFittingWorkflow = void (*)(
+        rhbm_gem::ModelObject &,
+        const rhbm_gem::core::FitOptions &);
+    PotentialFittingWorkflow volatile workflow_entry{
+        &rhbm_gem::core::RunPotentialFittingWorkflow
+    };
     const rhbm_gem::GaussianModel3D estimate{ 4.0, 2.0 };
     const std::array<int, 3> compile_only_sizes{
         static_cast<int>(sizeof(rhbm_gem::AtomObject)),
@@ -46,5 +55,7 @@ int main()
     return extension == ".cif"
             && compile_only_sizes.front() > 0
             && default_database_path.filename() == "database.sqlite"
+            && fit_options.thread_size == 1
+            && workflow_entry != nullptr
             && estimate.Intensity() > 0.0 ? 0 : 1;
 }
