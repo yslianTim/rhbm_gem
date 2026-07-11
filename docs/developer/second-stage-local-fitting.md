@@ -189,8 +189,9 @@ accepted state. The movement penalty is used only for the current acceptance
 gate; committed previous and best objective references keep the residual,
 width-prior, and offset-plausibility terms so a one-step movement surcharge does
 not permanently pollute future comparisons. Each cluster owns its objective
-sample refs, residual-scale tracker, previous objective samples, best local
-objective stats, and objective ridge multiplier. During scale warm-up,
+sample refs, residual-scale tracker, a tracked previous candidate that pairs its
+objective stats and samples, best local objective stats, and objective ridge
+multiplier. During scale warm-up,
 candidate, previous, and best objective values are scored with the same
 provisional scale before backtracking is evaluated. Stored objective samples
 pair each active atom index directly with its model snapshot so provisional
@@ -227,8 +228,10 @@ toward `kJointOffsetRidgeRatioMin`.
 
 ## Freeze, Thaw, and Convergence
 
-Accepted assembled candidates compute absolute parameter changes for freeze/thaw
-and normalized parameter changes for objective tie-breaking and convergence.
+Accepted assembled candidates compute absolute parameter changes for freeze/thaw.
+Normalized percentile statistics for objective tie-breaking and convergence are
+collected directly from the requested active indexes without constructing an
+atom-sized intermediate change list.
 Freeze tracking is updated only for atoms in clusters that accepted progress, so
 rejected clusters are not frozen because their assembled movement is zero.
 

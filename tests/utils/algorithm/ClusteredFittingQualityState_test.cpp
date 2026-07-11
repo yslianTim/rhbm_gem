@@ -39,8 +39,10 @@ InitialState MakeInitialState(double objective)
 {
     return InitialState{
         1.0,
-        MakeStats(objective, 0.0),
-        Samples{ objective }
+        TrackedCandidate{
+            MakeStats(objective, 0.0),
+            Samples{ objective }
+        }
     };
 }
 
@@ -170,6 +172,67 @@ TEST(ClusteredFittingQualityStateTest, RejectsDeterioratedCandidateWithoutChangi
             }));
 }
 
+TEST(ClusteredFittingQualityStateTest, KeepsPreviousCandidateStatsAndSamplesPaired)
+{
+    StateSet state_set{ MakeOptions() };
+    state_set.Reconcile(
+        { { 0 } },
+        [](const alg::ClusterKey &)
+        {
+            return MakeInitialState(10.0);
+        });
+
+    EXPECT_TRUE(
+        state_set.TryCommitCandidate(
+            { 0 },
+            [](const alg::ScaleReferenceTracker &,
+                alg::FittingQualityCandidateStats &,
+                const std::optional<Samples> &,
+                const std::optional<TrackedCandidate> & best_candidate)
+            {
+                return MakeScore(9.0, 1.0, best_candidate);
+            }));
+
+    const auto check_previous_candidate = [](
+        const alg::FittingQualityCandidateStats & previous_candidate_stats,
+        const std::optional<Samples> & previous_objective_samples)
+    {
+        EXPECT_DOUBLE_EQ(
+            9.0,
+            previous_candidate_stats.quality_objective.value_or(0.0));
+        EXPECT_EQ(
+            Samples({ 9.0 }),
+            previous_objective_samples.value_or(Samples{}));
+    };
+    EXPECT_FALSE(
+        state_set.TryCommitCandidate(
+            { 0 },
+            [&](const alg::ScaleReferenceTracker &,
+                alg::FittingQualityCandidateStats & previous_candidate_stats,
+                const std::optional<Samples> & previous_objective_samples,
+                const std::optional<TrackedCandidate> & best_candidate)
+            {
+                check_previous_candidate(
+                    previous_candidate_stats,
+                    previous_objective_samples);
+                return MakeScore(20.0, 1.0, best_candidate);
+            }));
+
+    EXPECT_TRUE(
+        state_set.TryCommitCandidate(
+            { 0 },
+            [&](const alg::ScaleReferenceTracker &,
+                alg::FittingQualityCandidateStats & previous_candidate_stats,
+                const std::optional<Samples> & previous_objective_samples,
+                const std::optional<TrackedCandidate> & best_candidate)
+            {
+                check_previous_candidate(
+                    previous_candidate_stats,
+                    previous_objective_samples);
+                return MakeScore(8.0, 1.0, best_candidate);
+            }));
+}
+
 TEST(ClusteredFittingQualityStateTest, AcceptsCandidateWhenNoScaleReferenceExists)
 {
     StateSet state_set{ MakeOptions() };
@@ -179,11 +242,13 @@ TEST(ClusteredFittingQualityStateTest, AcceptsCandidateWhenNoScaleReferenceExist
         {
             return InitialState{
                 std::nullopt,
-                alg::FittingQualityCandidateStats{
-                    std::nullopt,
-                    alg::ParameterChangeStats{ std::vector<double>{ 0.0 } }
-                },
-                std::nullopt
+                TrackedCandidate{
+                    alg::FittingQualityCandidateStats{
+                        std::nullopt,
+                        alg::ParameterChangeStats{ std::vector<double>{ 0.0 } }
+                    },
+                    std::nullopt
+                }
             };
         });
 

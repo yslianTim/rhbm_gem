@@ -37,8 +37,7 @@ template <typename ObjectiveSamples>
 struct ClusteredFittingQualityInitialState
 {
     std::optional<double> initial_scale_sample{};
-    FittingQualityCandidateStats candidate_stats{};
-    std::optional<ObjectiveSamples> objective_samples{};
+    ClusteredFittingQualityTrackedCandidate<ObjectiveSamples> initial_candidate{};
 };
 
 template <typename ObjectiveSamples>
@@ -64,8 +63,7 @@ private:
     struct ClusterState
     {
         ScaleReferenceTracker objective_scale_tracker;
-        FittingQualityCandidateStats previous_candidate_stats{};
-        std::optional<ObjectiveSamples> previous_objective_samples{};
+        TrackedCandidate previous_candidate{};
         std::optional<TrackedCandidate> best_candidate{};
         double objective_ridge_multiplier{ 1.0 };
 
@@ -76,16 +74,12 @@ private:
                   options.scale_warmup_count,
                   initial_state.initial_scale_sample
               },
-              previous_candidate_stats{ std::move(initial_state.candidate_stats) },
-              previous_objective_samples{ std::move(initial_state.objective_samples) },
+              previous_candidate{ std::move(initial_state.initial_candidate) },
               objective_ridge_multiplier{ options.ridge_multiplier_min }
         {
-            if (previous_candidate_stats.quality_objective.has_value())
+            if (previous_candidate.candidate_stats.quality_objective.has_value())
             {
-                best_candidate = TrackedCandidate{
-                    previous_candidate_stats,
-                    previous_objective_samples
-                };
+                best_candidate = previous_candidate;
             }
         }
     };
@@ -186,12 +180,14 @@ public:
         }
         auto & state{ iter->second };
 
-        auto previous_candidate_stats_for_backtracking{ state.previous_candidate_stats };
+        auto previous_stats_for_backtracking{
+            state.previous_candidate.candidate_stats
+        };
         auto score{
             scorer(
                 state.objective_scale_tracker,
-                previous_candidate_stats_for_backtracking,
-                state.previous_objective_samples,
+                previous_stats_for_backtracking,
+                state.previous_candidate.objective_samples,
                 state.best_candidate)
         };
 
@@ -204,7 +200,7 @@ public:
             };
             if (!IsFittingQualityAcceptableForProgress(
                     score.candidate_stats,
-                    previous_candidate_stats_for_backtracking,
+                    previous_stats_for_backtracking,
                     best_candidate_stats_for_backtracking,
                     m_options.objective_relative_tolerance))
             {
@@ -225,8 +221,10 @@ public:
             state.objective_scale_tracker.CommitScaleSample(
                 *score.objective_scale_sample);
         }
-        state.previous_candidate_stats = committed_candidate_stats;
-        state.previous_objective_samples = std::move(score.objective_samples);
+        state.previous_candidate = TrackedCandidate{
+            committed_candidate_stats,
+            std::move(score.objective_samples)
+        };
         if (committed_candidate_stats.quality_objective.has_value() &&
             (!state.best_candidate.has_value() ||
                 IsBetterFittingQualityCandidate(
@@ -234,10 +232,7 @@ public:
                     state.best_candidate->candidate_stats,
                     m_options.objective_tie_relative_tolerance)))
         {
-            state.best_candidate = TrackedCandidate{
-                committed_candidate_stats,
-                state.previous_objective_samples
-            };
+            state.best_candidate = state.previous_candidate;
         }
         return true;
     }
