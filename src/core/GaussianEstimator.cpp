@@ -151,6 +151,44 @@ struct ActiveCouplingEdge
 
 using ActiveCouplingGraph = std::vector<std::vector<ActiveCouplingEdge>>;
 
+enum class JointOffsetSolveStatus
+{
+    Converged,
+    SystemBuildFailed,
+    EmptySystem,
+    InitialSolveFailed,
+    IrlsSolveFailed,
+    IrlsObjectiveDeteriorated,
+    IrlsMaximumIterationsReached
+};
+
+bool IsJointOffsetSolveHealthy(JointOffsetSolveStatus status)
+{
+    return status == JointOffsetSolveStatus::Converged;
+}
+
+const char * GetJointOffsetSolveStatusText(JointOffsetSolveStatus status)
+{
+    switch (status)
+    {
+    case JointOffsetSolveStatus::Converged:
+        return "converged";
+    case JointOffsetSolveStatus::SystemBuildFailed:
+        return "system-build-failed";
+    case JointOffsetSolveStatus::EmptySystem:
+        return "empty-system";
+    case JointOffsetSolveStatus::InitialSolveFailed:
+        return "initial-solve-failed";
+    case JointOffsetSolveStatus::IrlsSolveFailed:
+        return "irls-solve-failed";
+    case JointOffsetSolveStatus::IrlsObjectiveDeteriorated:
+        return "irls-objective-deteriorated";
+    case JointOffsetSolveStatus::IrlsMaximumIterationsReached:
+        return "irls-maximum-iterations-reached";
+    }
+    throw std::logic_error("Joint offset solve status is invalid.");
+}
+
 struct ZeroOffsetProfileDiagnostics
 {
     double distance_min{ 0.0 };
@@ -162,6 +200,7 @@ struct ZeroOffsetProfileDiagnostics
 
 struct JointOffsetSolveResult
 {
+    JointOffsetSolveStatus status{ JointOffsetSolveStatus::SystemBuildFailed };
     Eigen::VectorXd offset{};
     ActiveCouplingGraph active_coupling_graph{};
 };
@@ -176,6 +215,7 @@ struct LocalFittingIterationResult
 {
     GaussianFittingState state{};
     std::vector<std::size_t> suspicious_offset_state_index_list{};
+    JointOffsetSolveStatus joint_offset_status{ JointOffsetSolveStatus::SystemBuildFailed };
 };
 
 struct LocalFittingObjectiveAtomModel
@@ -1225,15 +1265,20 @@ JointOffsetSolveResult EstimateJointOffsets(
     {
         build_result = BuildJointOffsetSystem(context, active_index_list, snapshot, ridge_ratio, ridge_multiplier_list);
     }
-    catch (const std::exception &)
+    catch (const std::runtime_error &)
     {
-        return JointOffsetSolveResult{ previous_offset, {} };
+        return JointOffsetSolveResult{
+            JointOffsetSolveStatus::SystemBuildFailed,
+            previous_offset,
+            {}
+        };
     }
     auto system{ std::move(build_result.system) };
     auto active_coupling_graph{ std::move(build_result.active_coupling_graph) };
     if (system.response.size() == 0 || system.previous_parameter.size() == 0)
     {
         return JointOffsetSolveResult{
+            JointOffsetSolveStatus::EmptySystem,
             previous_offset,
             std::move(active_coupling_graph)
         };
@@ -1245,6 +1290,7 @@ JointOffsetSolveResult EstimateJointOffsets(
     if (!solver.Solve(system, weight, offset))
     {
         return JointOffsetSolveResult{
+            JointOffsetSolveStatus::InitialSolveFailed,
             previous_offset,
             std::move(active_coupling_graph)
         };
@@ -1270,7 +1316,8 @@ JointOffsetSolveResult EstimateJointOffsets(
         if (!solver.Solve(system, weight, updated_offset))
         {
             return JointOffsetSolveResult{
-                system.previous_parameter,
+                JointOffsetSolveStatus::IrlsSolveFailed,
+                offset,
                 std::move(active_coupling_graph)
             };
         }
@@ -1280,15 +1327,30 @@ JointOffsetSolveResult EstimateJointOffsets(
         const auto updated_objective{
             CalculateWeightedRidgeSurrogateObjective(system, weight, updated_offset)
         };
-        if (IsJointOffsetObjectiveDeteriorated(updated_objective, current_objective)) break;
+        if (IsJointOffsetObjectiveDeteriorated(updated_objective, current_objective))
+        {
+            return JointOffsetSolveResult{
+                JointOffsetSolveStatus::IrlsObjectiveDeteriorated,
+                offset,
+                std::move(active_coupling_graph)
+            };
+        }
         const auto maximum_change{
             algorithm::CalculateMaximumNormalizedVectorChange(updated_offset, offset, kJointOffsetIrlsScaleFloor)
         };
         offset = std::move(updated_offset);
-        if (maximum_change < kJointOffsetIrlsNormalizedChangeTolerance) break;
+        if (maximum_change < kJointOffsetIrlsNormalizedChangeTolerance)
+        {
+            return JointOffsetSolveResult{
+                JointOffsetSolveStatus::Converged,
+                offset,
+                std::move(active_coupling_graph)
+            };
+        }
     }
 
     return JointOffsetSolveResult{
+        JointOffsetSolveStatus::IrlsMaximumIterationsReached,
         offset,
         std::move(active_coupling_graph)
     };
@@ -2440,6 +2502,7 @@ LocalFittingIterationResult RunLocalFittingIteration(
 
     LocalFittingIterationResult iteration_result;
     iteration_result.state = std::move(iteration_state);
+    iteration_result.joint_offset_status = joint_offset_result.status;
     for (std::size_t i = 0; i < suspicious_offset_mask.size(); i++)
     {
         if (suspicious_offset_mask.at(i) == 0) continue;
@@ -2477,7 +2540,8 @@ void LogLocalFittingBacktrackingRetry(
     const FitOptions & options,
     std::size_t accepted_iteration_count,
     double ridge_ratio,
-    bool uses_cluster_local_objective_ridge)
+    bool uses_cluster_local_objective_ridge,
+    JointOffsetSolveStatus joint_offset_status)
 {
     if (options.quiet_mode) return;
 
@@ -2497,6 +2561,11 @@ void LogLocalFittingBacktrackingRetry(
     {
         progress_message
             << ", next attempt uses increased global ridge ratio = " << ridge_ratio;
+    }
+    if (!IsJointOffsetSolveHealthy(joint_offset_status))
+    {
+        progress_message
+            << ", joint-offset = " << GetJointOffsetSolveStatusText(joint_offset_status);
     }
     Logger::ProgressLine(progress_message.str());
 }
@@ -2522,7 +2591,8 @@ void LogLocalFittingProgress(
     const FitOptions & options,
     std::size_t accepted_iteration_count,
     const LocalFittingCandidateAttempt & current_candidate_attempt,
-    const algorithm::ConvergenceFreezeTracker & freeze_tracker)
+    const algorithm::ConvergenceFreezeTracker & freeze_tracker,
+    JointOffsetSolveStatus joint_offset_status)
 {
     if (options.quiet_mode) return;
 
@@ -2534,6 +2604,11 @@ void LogLocalFittingProgress(
         << ", damping = "<< current_candidate_attempt.damping
         << ", active/frozen atoms = "<< freeze_tracker.GetActiveCount()
         << "/" << freeze_tracker.GetFrozenCount();
+    if (!IsJointOffsetSolveHealthy(joint_offset_status))
+    {
+        progress_message
+            << ", joint-offset = " << GetJointOffsetSolveStatusText(joint_offset_status);
+    }
     Logger::ProgressLine(progress_message.str());
 }
 
@@ -2985,6 +3060,10 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 ridge_ratio,
                 joint_offset_ridge_multiplier_list)
         };
+        const auto joint_offset_status{ iteration_result.joint_offset_status };
+        const auto is_joint_offset_solve_healthy{
+            IsJointOffsetSolveHealthy(joint_offset_status)
+        };
         suspicious_offset_state_index_list =
             std::move(iteration_result.suspicious_offset_state_index_list);
         const auto has_suspicious_offset_fallback{
@@ -3002,6 +3081,11 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 cluster_quality_state)
         };
         auto assembled_state{ std::move(selection.assembled_state) };
+        if (!is_joint_offset_solve_healthy)
+        {
+            freeze_tracker.ResetStability(active_index_list);
+            acceleration_history.ClearAndSuppress(cluster_key_list);
+        }
         if (selection.accepted_key_list.empty())
         {
             bool increased_cluster_objective_ridge{ false };
@@ -3022,7 +3106,8 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             {
                 LogLocalFittingBacktrackingRetry(
                     options, accepted_iteration_count, ridge_ratio,
-                    increased_cluster_objective_ridge);
+                    increased_cluster_objective_ridge,
+                    joint_offset_status);
                 continue;
             }
 
@@ -3048,32 +3133,42 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 active_index_list)
         };
         accepted_iteration_count++;
-        cluster_quality_state.DecreaseObjectiveRidge(selection.accepted_key_list);
+        if (is_joint_offset_solve_healthy)
+        {
+            cluster_quality_state.DecreaseObjectiveRidge(selection.accepted_key_list);
+        }
         if (!selection.rejected_key_list.empty())
         {
             cluster_quality_state.IncreaseObjectiveRidge(selection.rejected_key_list);
         }
 
-        if (!selection.has_objective_backtracking_rejection)
+        if (is_joint_offset_solve_healthy &&
+            !selection.has_objective_backtracking_rejection)
         {
             ridge_ratio = std::max(kJointOffsetRidgeRatioMin, ridge_ratio * kJointOffsetRidgeShrink);
         }
-        if (has_suspicious_offset_fallback)
+        if (is_joint_offset_solve_healthy && has_suspicious_offset_fallback)
         {
             acceleration_history.ClearAndSuppressContaining(
                 suspicious_offset_state_index_list);
         }
-        acceleration_history.Commit(
-            selection.accepted_key_list,
-            previous_state.estimation_list,
-            raw_state.estimation_list);
+        if (is_joint_offset_solve_healthy)
+        {
+            acceleration_history.Commit(
+                selection.accepted_key_list,
+                previous_state.estimation_list,
+                raw_state.estimation_list);
+        }
         std::vector<std::size_t> accepted_active_index_list;
         for (const auto & key : selection.accepted_key_list)
         {
             accepted_active_index_list.insert(
                 accepted_active_index_list.end(), key.begin(), key.end());
         }
-        freeze_tracker.Update(change_list, accepted_active_index_list);
+        if (is_joint_offset_solve_healthy)
+        {
+            freeze_tracker.Update(change_list, accepted_active_index_list);
+        }
         ThawChangedActiveAtomNeighbors(
             context, change_list, accepted_active_index_list,
             freeze_tracker, thaw_hysteresis_tracker);
@@ -3093,7 +3188,8 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             options,
             accepted_iteration_count,
             selection.accepted_candidate_attempt.value(),
-            freeze_tracker);
+            freeze_tracker,
+            joint_offset_status);
 
         if (freeze_tracker.GetActiveCount() == 0)
         {
@@ -3103,6 +3199,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         }
 
         const auto converged{
+            is_joint_offset_solve_healthy &&
             !has_suspicious_offset_fallback &&
             !selection.has_objective_backtracking_rejection &&
             cluster_quality_state.AllActiveReferencesLocked(cluster_key_list) &&

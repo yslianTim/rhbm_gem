@@ -76,6 +76,18 @@ public:
         }
     }
 
+    void ResetStability(const std::vector<std::size_t> & index_list)
+    {
+        for (const auto index : index_list)
+        {
+            if (index >= m_stable_count_list.size())
+            {
+                throw std::invalid_argument("Convergence freeze tracker index is out of range.");
+            }
+            m_stable_count_list.at(index) = 0;
+        }
+    }
+
     bool IsFrozen(std::size_t index) const
     {
         if (index >= m_frozen_list.size())

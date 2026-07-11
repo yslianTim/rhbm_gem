@@ -237,6 +237,21 @@ std::unique_ptr<rg::ModelObject> BuildNonFiniteJointOffsetDefenseModel()
     return model;
 }
 
+std::unique_ptr<rg::ModelObject> BuildEmptyJointOffsetDefenseModel()
+{
+    auto model{
+        BuildDefenseModel(
+            { std::array<float, 3>{ 0.0F, 0.0F, 0.0F } },
+            { Spot::O },
+            { Element::OXYGEN },
+            { rg::GaussianModel3D{ 8.0, 0.5, -0.1 } },
+            rg::GaussianModel3D{ 7.0, 0.5, 0.25 })
+    };
+    auto analysis{ model->EditAnalysis() };
+    analysis.EnsureAtomLocalPotential(*model->GetSelectedAtoms().front()).SetSamplingEntries({});
+    return model;
+}
+
 std::unique_ptr<rg::ModelObject> BuildFiniteNonphysicalProfileDefenseModel()
 {
     const rg::GaussianModel3D initial_model{ 6.0, 0.55, 0.0 };
@@ -340,16 +355,40 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingFallsBackWhenJoi
     const auto previous_model{ GetEstimateModel(*atom) };
 
     const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Warning);
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
     testing::internal::CaptureStderr();
     rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
+    const std::string output{ testing::internal::GetCapturedStdout() };
     const std::string error_output{ testing::internal::GetCapturedStderr() };
     Logger::SetLogLevel(previous_log_level);
 
     ExpectGaussianModelsNear(GetEstimateModel(*atom), previous_model, 1.0e-12);
+    EXPECT_NE(output.find("joint-offset = system-build-failed"), std::string::npos);
+    EXPECT_EQ(output.find("acceleration = aa"), std::string::npos);
+    EXPECT_EQ(output.find("acceleration = damped-aa"), std::string::npos);
+    EXPECT_EQ(output.find("Converged after"), std::string::npos);
     EXPECT_EQ(
         error_output.find("Second-stage local fitting fallback summary:"),
         std::string::npos);
+    ExpectSelectedAtomEstimatesAreFinite(*model);
+}
+
+TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingReportsEmptyJointOffsetSystem)
+{
+    auto model{ BuildEmptyJointOffsetDefenseModel() };
+    auto * atom{ model->GetSelectedAtoms().front() };
+    const auto previous_offset{ GetEstimateModel(*atom).GetOffset() };
+
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
+    const std::string output{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_NE(output.find("joint-offset = empty-system"), std::string::npos);
+    EXPECT_NEAR(GetEstimateModel(*atom).GetOffset(), previous_offset, 1.0e-12);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 

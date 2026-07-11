@@ -121,6 +121,31 @@ TEST(ConvergenceAlgorithmTest, FreezeTrackerThawsFrozenEntryAndResetsStableCount
     EXPECT_FALSE(tracker.IsFrozen(0));
 }
 
+TEST(ConvergenceAlgorithmTest, FreezeTrackerResetStabilityBreaksConsecutiveStableUpdates)
+{
+    alg::ConvergenceFreezeTracker tracker{
+        1,
+        1.0e-4,
+        0.5,
+        3
+    };
+    const std::vector<alg::ParameterChange> stable_change_list{
+        MakeChange(0.001)
+    };
+
+    tracker.Update(stable_change_list, { 0 });
+    tracker.Update(stable_change_list, { 0 });
+    tracker.ResetStability({ 0 });
+    tracker.Update(stable_change_list, { 0 });
+
+    EXPECT_FALSE(tracker.IsFrozen(0));
+
+    tracker.Update(stable_change_list, { 0 });
+    tracker.Update(stable_change_list, { 0 });
+
+    EXPECT_TRUE(tracker.IsFrozen(0));
+}
+
 TEST(ConvergenceAlgorithmTest, DependencyThawHysteresisTracksThresholdGrowthAndDecay)
 {
     alg::DependencyThawHysteresisTracker tracker{

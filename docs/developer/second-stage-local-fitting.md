@@ -96,9 +96,12 @@ Robust-loss weights are updated by IRLS. The source-local
 `kSecondStageRobustLossKind` policy is currently Cauchy and is shared with the
 cluster objective gate. The IRLS loop stops when the weighted-ridge surrogate
 objective deteriorates, normalized offset movement is small, or the robust-loss
-iteration limit is reached. If the system cannot be built, is empty, or cannot
-be solved, the offset step uses the previous offsets and the rest of the local
-fitting iteration still runs.
+iteration limit is reached. `JointOffsetSolveStatus` distinguishes converged,
+system-build failure, empty-system, initial-solve failure, IRLS-solve failure,
+objective deterioration, and IRLS-iteration-limit exits. Build, empty-system,
+and initial-solve failures use the previous offsets; later IRLS failures use the
+last valid offsets. The rest of the local fitting iteration still runs so its
+amplitude/width refits can pass through the normal cluster objective gate.
 
 ## Refit and Rollback
 
@@ -238,7 +241,9 @@ Ridge retry is staged:
   objective ridge multipliers are saturated.
 
 Accepted iterations without objective rejection shrink the global `ridge_ratio`
-toward `kJointOffsetRidgeRatioMin`.
+toward `kJointOffsetRidgeRatioMin`. An iteration whose joint-offset status is
+not converged does not lower its accepted cluster ridge or global ridge. Rejected
+clusters retain the existing ridge-increase behavior.
 
 ## Freeze, Thaw, and Convergence
 
@@ -248,6 +253,8 @@ collected directly from the requested active indexes without constructing an
 atom-sized intermediate change list.
 Freeze tracking is updated only for atoms in clusters that accepted progress, so
 rejected clusters are not frozen because their assembled movement is zero.
+If the joint-offset solve is not healthy, all active freeze-stability counters
+are reset instead. Accepted parameter movement may still thaw frozen neighbors.
 
 Atoms freeze after their maximum absolute parameter movement remains below the
 freeze threshold for `kLocalFittingFreezeStableIterations`. Frozen atoms can
@@ -259,10 +266,17 @@ after freeze tracking so they can retry with their temporary ridge multiplier.
 Parameter convergence requires:
 
 - no suspicious offset rollback in the accepted iteration;
+- a converged joint-offset solve status;
 - no cluster objective rejection in the accepted iteration;
 - all active cluster objective scale references to be locked when present; and
 - active-set normalized percentile changes below
   `kLocalFittingNormalizedChangeTolerance`.
+
+Unhealthy joint-offset iterations clear and suppress current cluster Anderson
+history and do not commit their raw fixed-point map. In non-quiet mode their
+existing progress line includes the status, for example
+`joint-offset = system-build-failed`; no separate per-iteration warning or
+fallback summary is emitted.
 
 ## Exit Paths
 
