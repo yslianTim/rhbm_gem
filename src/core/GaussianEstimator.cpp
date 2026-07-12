@@ -3,6 +3,7 @@
 
 #include "core/detail/GaussianEstimatorStages.hpp"
 #include "core/detail/LocalFittingAndersonRegime.hpp"
+#include "core/detail/LocalFittingHealth.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
 #include "core/detail/PostRefitRollback.hpp"
 #include "data/detail/AtomClassifier.hpp"
@@ -155,6 +156,7 @@ struct ActiveCouplingEdge
 };
 
 using ActiveCouplingGraph = std::vector<std::vector<ActiveCouplingEdge>>;
+using LocalFittingClusterKey = algorithm::ClusterKey;
 
 enum class JointOffsetSolveStatus
 {
@@ -218,13 +220,112 @@ struct JointOffsetBuildResult
     std::vector<double> effective_ridge_multiplier_list{};
 };
 
+struct LocalFittingClusterHealth
+{
+    JointOffsetSolveStatus joint_offset_status{ JointOffsetSolveStatus::SystemBuildFailed };
+    std::size_t unhealthy_refit_atom_count{ 0 };
+};
+
+using LocalFittingClusterHealthMap =
+    std::map<LocalFittingClusterKey, LocalFittingClusterHealth>;
+
+struct LocalFittingClusterHealthSummary
+{
+    std::size_t unhealthy_cluster_count{ 0 };
+    std::size_t unhealthy_atom_count{ 0 };
+    std::map<JointOffsetSolveStatus, std::size_t> unhealthy_joint_status_count{};
+    std::size_t unhealthy_refit_cluster_count{ 0 };
+    std::size_t unhealthy_refit_atom_count{ 0 };
+};
+
+bool IsLocalFittingClusterHealthy(const LocalFittingClusterHealth & health)
+{
+    return IsJointOffsetSolveHealthy(health.joint_offset_status) &&
+        health.unhealthy_refit_atom_count == 0;
+}
+
+void RecordUnhealthyLocalRefit(
+    LocalFittingClusterHealthMap & health_by_key,
+    std::size_t atom_index)
+{
+    for (auto & [key, health] : health_by_key)
+    {
+        if (!std::binary_search(key.begin(), key.end(), atom_index)) continue;
+        health.unhealthy_refit_atom_count++;
+        return;
+    }
+    throw std::invalid_argument("Unhealthy local refit atom is not in an active cluster.");
+}
+
+std::vector<LocalFittingClusterKey> CollectUnhealthyLocalFittingClusterKeys(
+    const LocalFittingClusterHealthMap & health_by_key)
+{
+    std::vector<LocalFittingClusterKey> key_list;
+    for (const auto & [key, health] : health_by_key)
+    {
+        if (!IsLocalFittingClusterHealthy(health))
+        {
+            key_list.emplace_back(key);
+        }
+    }
+    return key_list;
+}
+
+std::vector<std::size_t> CollectLocalFittingClusterAtomIndexes(
+    const std::vector<LocalFittingClusterKey> & key_list)
+{
+    std::vector<std::size_t> atom_index_list;
+    for (const auto & key : key_list)
+    {
+        atom_index_list.insert(atom_index_list.end(), key.begin(), key.end());
+    }
+    return atom_index_list;
+}
+
+LocalFittingClusterHealthSummary SummarizeLocalFittingClusterHealth(
+    const LocalFittingClusterHealthMap & health_by_key)
+{
+    LocalFittingClusterHealthSummary summary;
+    for (const auto & [key, health] : health_by_key)
+    {
+        if (!IsLocalFittingClusterHealthy(health))
+        {
+            summary.unhealthy_cluster_count++;
+            summary.unhealthy_atom_count += key.size();
+        }
+        if (!IsJointOffsetSolveHealthy(health.joint_offset_status))
+        {
+            summary.unhealthy_joint_status_count[health.joint_offset_status]++;
+        }
+        if (health.unhealthy_refit_atom_count > 0)
+        {
+            summary.unhealthy_refit_cluster_count++;
+            summary.unhealthy_refit_atom_count += health.unhealthy_refit_atom_count;
+        }
+    }
+    return summary;
+}
+
+struct ClusteredJointOffsetSolveResult
+{
+    Eigen::VectorXd offset{};
+    ActiveCouplingGraph active_coupling_graph{};
+    LocalFittingClusterHealthMap health_by_key{};
+    detail::LocalFittingAndersonRegimeSignatureMap anderson_regime_signature_by_key{};
+};
+
 struct LocalFittingIterationResult
 {
     GaussianFittingState state{};
     std::vector<std::size_t> suspicious_offset_state_index_list{};
-    std::optional<detail::LocalFittingAndersonRegimeSignatureMap>
-        anderson_regime_signature_by_key{};
-    JointOffsetSolveStatus joint_offset_status{ JointOffsetSolveStatus::SystemBuildFailed };
+    LocalFittingClusterHealthMap health_by_key{};
+    detail::LocalFittingAndersonRegimeSignatureMap anderson_regime_signature_by_key{};
+};
+
+struct LocalAtomRefitResult
+{
+    LocalGaussianResult result{};
+    bool is_health_eligible{ false };
 };
 
 struct LocalFittingObjectiveAtomModel
@@ -245,8 +346,6 @@ struct LocalFittingObjectiveSampleRef
     std::size_t atom_index{ 0 };
     std::size_t sample_index{ 0 };
 };
-
-using LocalFittingClusterKey = algorithm::ClusterKey;
 
 struct PersistentSuspiciousRollbackState
 {
@@ -1389,6 +1488,134 @@ JointOffsetSolveResult EstimateJointOffsets(
     };
 }
 
+ClusteredJointOffsetSolveResult EstimateClusteredJointOffsets(
+    const SecondStageLocalFittingContext & context,
+    const std::vector<std::size_t> & active_index_list,
+    const std::vector<LocalFittingClusterKey> & cluster_key_list,
+    const FittedGaussianSnapshot & snapshot,
+    double ridge_ratio,
+    const std::vector<double> & ridge_multiplier_list)
+{
+    std::unordered_map<std::size_t, std::size_t> active_position_by_atom_index;
+    active_position_by_atom_index.reserve(active_index_list.size());
+    for (std::size_t active_position = 0;
+        active_position < active_index_list.size();
+        active_position++)
+    {
+        if (!active_position_by_atom_index.emplace(
+                active_index_list.at(active_position), active_position).second)
+        {
+            throw std::invalid_argument(
+                "Clustered joint offset active atom indexes must be unique.");
+        }
+    }
+
+    ClusteredJointOffsetSolveResult clustered_result;
+    clustered_result.offset = Eigen::VectorXd::Zero(
+        static_cast<Eigen::Index>(active_index_list.size()));
+    clustered_result.active_coupling_graph.resize(active_index_list.size());
+    std::vector<char> covered_active_position_list(active_index_list.size(), 0);
+    for (const auto & key : cluster_key_list)
+    {
+        if (key.empty() || !std::is_sorted(key.begin(), key.end()) ||
+            std::adjacent_find(key.begin(), key.end()) != key.end())
+        {
+            throw std::invalid_argument(
+                "Clustered joint offset key must be non-empty and canonical.");
+        }
+
+        const auto cluster_result{
+            EstimateJointOffsets(
+                context,
+                key,
+                snapshot,
+                ridge_ratio,
+                ridge_multiplier_list)
+        };
+        if (cluster_result.offset.size() != static_cast<Eigen::Index>(key.size()))
+        {
+            throw std::logic_error("Clustered joint offset result size is inconsistent.");
+        }
+        if (!cluster_result.active_coupling_graph.empty() &&
+            cluster_result.active_coupling_graph.size() != key.size())
+        {
+            throw std::logic_error("Clustered joint offset graph size is inconsistent.");
+        }
+        if (!clustered_result.health_by_key.emplace(
+                key,
+                LocalFittingClusterHealth{ cluster_result.status, 0 }).second)
+        {
+            throw std::invalid_argument("Clustered joint offset keys must be unique.");
+        }
+
+        for (std::size_t local_position = 0; local_position < key.size(); local_position++)
+        {
+            const auto atom_index{ key.at(local_position) };
+            const auto active_iter{ active_position_by_atom_index.find(atom_index) };
+            if (active_iter == active_position_by_atom_index.end())
+            {
+                throw std::invalid_argument("Clustered joint offset atom is not active.");
+            }
+            const auto active_position{ active_iter->second };
+            if (covered_active_position_list.at(active_position) != 0)
+            {
+                throw std::invalid_argument(
+                    "Clustered joint offset keys must not share active atoms.");
+            }
+            covered_active_position_list.at(active_position) = 1;
+            clustered_result.offset(static_cast<Eigen::Index>(active_position)) =
+                cluster_result.offset(static_cast<Eigen::Index>(local_position));
+
+            if (cluster_result.active_coupling_graph.empty()) continue;
+            for (const auto & edge : cluster_result.active_coupling_graph.at(local_position))
+            {
+                if (edge.neighbor_index >= key.size())
+                {
+                    throw std::logic_error(
+                        "Clustered joint offset graph neighbor is out of range.");
+                }
+                const auto neighbor_iter{
+                    active_position_by_atom_index.find(key.at(edge.neighbor_index))
+                };
+                if (neighbor_iter == active_position_by_atom_index.end())
+                {
+                    throw std::logic_error(
+                        "Clustered joint offset graph neighbor is not active.");
+                }
+                clustered_result.active_coupling_graph.at(active_position).emplace_back(
+                    ActiveCouplingEdge{ neighbor_iter->second, edge.overlap });
+            }
+        }
+
+        if (!cluster_result.effective_ridge_multiplier_list.empty())
+        {
+            if (cluster_result.effective_ridge_multiplier_list.size() != key.size())
+            {
+                throw std::logic_error(
+                    "Clustered joint offset ridge multiplier size is inconsistent.");
+            }
+            detail::LocalFittingAndersonRegimeSignature signature{
+                ridge_ratio,
+                cluster_result.effective_ridge_multiplier_list
+            };
+            detail::ValidateLocalFittingAndersonRegimeSignature(signature);
+            clustered_result.anderson_regime_signature_by_key.emplace(
+                key,
+                std::move(signature));
+        }
+    }
+
+    if (std::find(
+            covered_active_position_list.begin(),
+            covered_active_position_list.end(),
+            0) != covered_active_position_list.end())
+    {
+        throw std::invalid_argument(
+            "Clustered joint offset keys must cover active atoms exactly once.");
+    }
+    return clustered_result;
+}
+
 void ApplyJointOffsetsToSnapshot(
     const std::vector<std::size_t> & active_index_list,
     const Eigen::VectorXd & offset,
@@ -2130,6 +2357,22 @@ std::vector<LocalFittingClusterKey> ExcludeLocalFittingClusterKeysContainingAtom
     return result;
 }
 
+std::vector<LocalFittingClusterKey> CollectLocalFittingClusterKeysWithRegimeSignatures(
+    const std::vector<LocalFittingClusterKey> & key_list,
+    const detail::LocalFittingAndersonRegimeSignatureMap & signature_by_key)
+{
+    std::vector<LocalFittingClusterKey> result;
+    result.reserve(key_list.size());
+    for (const auto & key : key_list)
+    {
+        if (signature_by_key.find(key) != signature_by_key.end())
+        {
+            result.emplace_back(key);
+        }
+    }
+    return result;
+}
+
 void ApplyTerminalSuspiciousRollbackClusters(
     const std::vector<LocalFittingClusterKey> & terminal_key_list,
     const GaussianFittingState & previous_state,
@@ -2440,7 +2683,18 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
     return selection;
 }
 
-std::optional<LocalGaussianResult> FitAtomWithJointOffsetFallback(
+bool IsLocalGaussianRefitHealthEligible(const LocalGaussianResult & result)
+{
+    if (!result.fit_result.has_value()) return false;
+    const auto & model{ result.mdpde.GetModel() };
+    return detail::IsLocalGaussianRefitStatusHealthEligible(
+            result.fit_result->status) &&
+        std::isfinite(model.GetAmplitude()) && model.GetAmplitude() > 0.0 &&
+        std::isfinite(model.GetWidth()) && model.GetWidth() > 0.0 &&
+        std::isfinite(model.GetOffset());
+}
+
+std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
     const SecondStageLocalFittingContext & context,
     std::size_t atom_index,
     const LocalGaussianResult & previous_result,
@@ -2471,7 +2725,13 @@ std::optional<LocalGaussianResult> FitAtomWithJointOffsetFallback(
         const auto candidate_model{ candidate_result.mdpde.GetModel() };
         if (is_acceptable(candidate_model))
         {
-            return candidate_result;
+            const auto is_health_eligible{
+                IsLocalGaussianRefitHealthEligible(candidate_result)
+            };
+            return LocalAtomRefitResult{
+                std::move(candidate_result),
+                is_health_eligible
+            };
         }
     }
     catch (const std::exception &)
@@ -2491,7 +2751,7 @@ std::optional<LocalGaussianResult> FitAtomWithJointOffsetFallback(
     {
         return std::nullopt;
     }
-    return result;
+    return LocalAtomRefitResult{ std::move(result), false };
 }
 
 void ThawChangedActiveAtomNeighbors(
@@ -2635,11 +2895,19 @@ LocalFittingIterationResult RunLocalFittingIteration(
     auto current_snapshot{
         BuildFittedGaussianSnapshot(previous_state.estimation_list)
     };
-    const auto joint_offset_result{
-        EstimateJointOffsets(
-            context, active_index_list, current_snapshot, ridge_ratio, ridge_multiplier_list)
+    auto clustered_joint_offset_result{
+        EstimateClusteredJointOffsets(
+            context,
+            active_index_list,
+            cluster_key_list,
+            current_snapshot,
+            ridge_ratio,
+            ridge_multiplier_list)
     };
-    ApplyJointOffsetsToSnapshot(active_index_list, joint_offset_result.offset, current_snapshot);
+    ApplyJointOffsetsToSnapshot(
+        active_index_list,
+        clustered_joint_offset_result.offset,
+        current_snapshot);
     auto iteration_state{ previous_state };
     std::vector<char> suspicious_offset_mask(active_index_list.size(), 0);
     std::vector<std::size_t> pre_refit_suspicious_seed_position_list;
@@ -2663,7 +2931,7 @@ LocalFittingIterationResult RunLocalFittingIteration(
     }
     const auto pre_refit_suspicious_position_list{
         ExpandSuspiciousOffsetClusters(
-            joint_offset_result.active_coupling_graph,
+            clustered_joint_offset_result.active_coupling_graph,
             pre_refit_suspicious_seed_position_list,
             suspicious_offset_mask)
     };
@@ -2692,10 +2960,19 @@ LocalFittingIterationResult RunLocalFittingIteration(
         };
         if (!refit_result.has_value())
         {
+            RecordUnhealthyLocalRefit(
+                clustered_joint_offset_result.health_by_key,
+                state_index);
             post_refit_suspicious_seed_position_list.emplace_back(i);
             continue;
         }
-        auto result{ std::move(*refit_result) };
+        if (!refit_result->is_health_eligible)
+        {
+            RecordUnhealthyLocalRefit(
+                clustered_joint_offset_result.health_by_key,
+                state_index);
+        }
+        auto result{ std::move(refit_result->result) };
         const auto fitted_model{ result.mdpde.GetModel() };
         iteration_state.estimation_list.at(state_index) = fitted_model.ToVector();
         iteration_state.result_list.at(state_index) = std::move(result);
@@ -2717,22 +2994,10 @@ LocalFittingIterationResult RunLocalFittingIteration(
 
     LocalFittingIterationResult iteration_result;
     iteration_result.state = std::move(iteration_state);
-    iteration_result.joint_offset_status = joint_offset_result.status;
-    if (!joint_offset_result.effective_ridge_multiplier_list.empty())
-    {
-        if (joint_offset_result.effective_ridge_multiplier_list.size() !=
-            active_index_list.size())
-        {
-            throw std::logic_error(
-                "Joint offset effective ridge multiplier size is inconsistent.");
-        }
-        iteration_result.anderson_regime_signature_by_key =
-            detail::BuildLocalFittingAndersonRegimeSignatureMap(
-                cluster_key_list,
-                active_index_list,
-                ridge_ratio,
-                joint_offset_result.effective_ridge_multiplier_list);
-    }
+    iteration_result.health_by_key =
+        std::move(clustered_joint_offset_result.health_by_key);
+    iteration_result.anderson_regime_signature_by_key =
+        std::move(clustered_joint_offset_result.anderson_regime_signature_by_key);
     for (std::size_t i = 0; i < suspicious_offset_mask.size(); i++)
     {
         if (suspicious_offset_mask.at(i) == 0) continue;
@@ -2797,13 +3062,41 @@ void LogLocalFittingTerminalSuspiciousRollback(
     Logger::Log(LogLevel::Warning, warning_message.str());
 }
 
+void AppendLocalFittingClusterHealthSummary(
+    std::ostringstream & stream,
+    const LocalFittingClusterHealthSummary & summary)
+{
+    if (summary.unhealthy_cluster_count == 0) return;
+
+    stream
+        << ", health-unhealthy clusters/atoms = "
+        << summary.unhealthy_cluster_count << "/" << summary.unhealthy_atom_count;
+    if (!summary.unhealthy_joint_status_count.empty())
+    {
+        stream << ", joint-offset = ";
+        bool is_first_status{ true };
+        for (const auto & [status, count] : summary.unhealthy_joint_status_count)
+        {
+            if (!is_first_status) stream << ",";
+            stream << GetJointOffsetSolveStatusText(status) << ":" << count;
+            is_first_status = false;
+        }
+    }
+    if (summary.unhealthy_refit_cluster_count > 0)
+    {
+        stream
+            << ", local-refit-fallback clusters/atoms = "
+            << summary.unhealthy_refit_cluster_count
+            << "/" << summary.unhealthy_refit_atom_count;
+    }
+}
+
 void LogLocalFittingBacktrackingRetry(
     const FitOptions & options,
     std::size_t accepted_iteration_count,
     double ridge_ratio,
     bool uses_cluster_local_objective_ridge,
-    bool health_policy_allows_iteration,
-    JointOffsetSolveStatus joint_offset_status)
+    const LocalFittingClusterHealthSummary & health_summary)
 {
     if (options.quiet_mode) return;
 
@@ -2824,11 +3117,7 @@ void LogLocalFittingBacktrackingRetry(
         progress_message
             << ", next attempt uses increased global ridge ratio = " << ridge_ratio;
     }
-    if (!health_policy_allows_iteration)
-    {
-        progress_message
-            << ", joint-offset = " << GetJointOffsetSolveStatusText(joint_offset_status);
-    }
+    AppendLocalFittingClusterHealthSummary(progress_message, health_summary);
     Logger::ProgressLine(progress_message.str());
 }
 
@@ -2860,8 +3149,7 @@ void LogLocalFittingProgress(
     std::size_t accepted_iteration_count,
     const LocalFittingCandidateAttempt & current_candidate_attempt,
     const algorithm::ConvergenceFreezeTracker & freeze_tracker,
-    bool health_policy_allows_iteration,
-    JointOffsetSolveStatus joint_offset_status,
+    const LocalFittingClusterHealthSummary & health_summary,
     std::size_t terminal_atom_count)
 {
     if (options.quiet_mode) return;
@@ -2887,11 +3175,7 @@ void LogLocalFittingProgress(
         progress_message
             << ", terminal-suspicious atoms = " << terminal_atom_count;
     }
-    if (!health_policy_allows_iteration)
-    {
-        progress_message
-            << ", joint-offset = " << GetJointOffsetSolveStatusText(joint_offset_status);
-    }
+    AppendLocalFittingClusterHealthSummary(progress_message, health_summary);
     Logger::ProgressLine(progress_message.str());
 }
 
@@ -3384,13 +3668,21 @@ void RunSecondStageLocalFitting(
                 ridge_ratio,
                 joint_offset_ridge_multiplier_list)
         };
-        const auto joint_offset_status{ iteration_result.joint_offset_status };
-        const auto actual_joint_offset_health{
-            IsJointOffsetSolveHealthy(joint_offset_status)
+        const auto current_health_by_key{
+            std::move(iteration_result.health_by_key)
         };
-        const auto health_policy_allows_iteration{
-            !internal_options.enable_joint_offset_health_status ||
-            actual_joint_offset_health
+        const auto actual_unhealthy_key_list{
+            CollectUnhealthyLocalFittingClusterKeys(current_health_by_key)
+        };
+        const auto policy_unhealthy_key_list{
+            internal_options.enable_end_to_end_health_status ?
+                actual_unhealthy_key_list :
+                std::vector<LocalFittingClusterKey>{}
+        };
+        const auto health_summary{
+            internal_options.enable_end_to_end_health_status ?
+                SummarizeLocalFittingClusterHealth(current_health_by_key) :
+                LocalFittingClusterHealthSummary{}
         };
         const auto current_anderson_regime_signature_by_key{
             std::move(iteration_result.anderson_regime_signature_by_key)
@@ -3400,16 +3692,13 @@ void RunSecondStageLocalFitting(
         const auto has_suspicious_offset_fallback{
             !suspicious_offset_state_index_list.empty()
         };
-        if (!health_policy_allows_iteration)
-        {
-            acceleration_history.ClearAndSuppress(cluster_key_list);
-            anderson_regime_tracker.Invalidate(cluster_key_list);
-        }
-        else if (current_anderson_regime_signature_by_key.has_value())
+        acceleration_history.ClearAndSuppress(policy_unhealthy_key_list);
+        anderson_regime_tracker.Invalidate(policy_unhealthy_key_list);
+        if (!current_anderson_regime_signature_by_key.empty())
         {
             const auto incompatible_regime_key_list{
                 anderson_regime_tracker.FindIncompatible(
-                    *current_anderson_regime_signature_by_key)
+                    current_anderson_regime_signature_by_key)
             };
             acceleration_history.ClearAndSuppress(incompatible_regime_key_list);
             anderson_regime_tracker.Invalidate(incompatible_regime_key_list);
@@ -3433,12 +3722,12 @@ void RunSecondStageLocalFitting(
                 cluster_quality_state)
         };
         auto assembled_state{ std::move(selection.assembled_state) };
-        if (!health_policy_allows_iteration)
-        {
-            freeze_tracker.ResetStability(active_index_list);
-            acceleration_history.ClearAndSuppress(cluster_key_list);
-            anderson_regime_tracker.Invalidate(cluster_key_list);
-        }
+        const auto policy_unhealthy_atom_index_list{
+            CollectLocalFittingClusterAtomIndexes(policy_unhealthy_key_list)
+        };
+        freeze_tracker.ResetStability(policy_unhealthy_atom_index_list);
+        acceleration_history.ClearAndSuppress(policy_unhealthy_key_list);
+        anderson_regime_tracker.Invalidate(policy_unhealthy_key_list);
         const auto terminal_key_list{
             UpdatePersistentSuspiciousRollbackState(
                 cluster_key_list,
@@ -3477,6 +3766,16 @@ void RunSecondStageLocalFitting(
                 selection.accepted_key_list,
                 terminal_key_list)
         };
+        const auto health_eligible_accepted_key_list{
+            ExcludeLocalFittingClusterKeys(
+                continuing_accepted_key_list,
+                policy_unhealthy_key_list)
+        };
+        const auto stability_eligible_key_list{
+            ExcludeLocalFittingClusterKeysContainingAtoms(
+                health_eligible_accepted_key_list,
+                suspicious_offset_state_index_list)
+        };
         if (selection.accepted_key_list.empty())
         {
             bool increased_cluster_objective_ridge{ false };
@@ -3498,8 +3797,7 @@ void RunSecondStageLocalFitting(
                 LogLocalFittingBacktrackingRetry(
                     options, accepted_iteration_count, ridge_ratio,
                     increased_cluster_objective_ridge,
-                    health_policy_allows_iteration,
-                    joint_offset_status);
+                    health_summary);
                 continue;
             }
 
@@ -3529,55 +3827,49 @@ void RunSecondStageLocalFitting(
                 active_index_list)
         };
         accepted_iteration_count++;
-        if (health_policy_allows_iteration)
-        {
-            cluster_quality_state.DecreaseObjectiveRidge(continuing_accepted_key_list);
-        }
+        cluster_quality_state.DecreaseObjectiveRidge(stability_eligible_key_list);
         if (!selection.rejected_key_list.empty())
         {
             cluster_quality_state.IncreaseObjectiveRidge(selection.rejected_key_list);
         }
 
-        if (health_policy_allows_iteration &&
+        if (policy_unhealthy_key_list.empty() &&
             !selection.has_objective_backtracking_rejection)
         {
             ridge_ratio = std::max(kJointOffsetRidgeRatioMin, ridge_ratio * kJointOffsetRidgeShrink);
         }
-        if (health_policy_allows_iteration && has_suspicious_offset_fallback)
+        if (has_suspicious_offset_fallback)
         {
             acceleration_history.ClearAndSuppressContaining(
                 suspicious_offset_state_index_list);
             anderson_regime_tracker.InvalidateContaining(
                 suspicious_offset_state_index_list);
         }
-        if (health_policy_allows_iteration)
-        {
-            const auto history_commit_key_list{
-                ExcludeLocalFittingClusterKeysContainingAtoms(
-                    continuing_accepted_key_list,
-                    suspicious_offset_state_index_list)
-            };
-            acceleration_history.Commit(
-                history_commit_key_list,
-                previous_state.estimation_list,
-                raw_state.estimation_list);
-            if (current_anderson_regime_signature_by_key.has_value())
-            {
-                anderson_regime_tracker.Commit(
-                    history_commit_key_list,
-                    *current_anderson_regime_signature_by_key);
-            }
-        }
+        acceleration_history.Commit(
+            stability_eligible_key_list,
+            previous_state.estimation_list,
+            raw_state.estimation_list);
+        const auto regime_signature_commit_key_list{
+            CollectLocalFittingClusterKeysWithRegimeSignatures(
+                stability_eligible_key_list,
+                current_anderson_regime_signature_by_key)
+        };
+        anderson_regime_tracker.Commit(
+            regime_signature_commit_key_list,
+            current_anderson_regime_signature_by_key);
         std::vector<std::size_t> accepted_active_index_list;
         for (const auto & key : continuing_accepted_key_list)
         {
             accepted_active_index_list.insert(
                 accepted_active_index_list.end(), key.begin(), key.end());
         }
-        if (health_policy_allows_iteration)
+        std::vector<std::size_t> stability_eligible_active_index_list;
+        for (const auto & key : stability_eligible_key_list)
         {
-            freeze_tracker.Update(change_list, accepted_active_index_list);
+            stability_eligible_active_index_list.insert(
+                stability_eligible_active_index_list.end(), key.begin(), key.end());
         }
+        freeze_tracker.Update(change_list, stability_eligible_active_index_list);
         ThawChangedActiveAtomNeighbors(
             context, change_list, accepted_active_index_list,
             freeze_tracker, thaw_hysteresis_tracker);
@@ -3598,8 +3890,7 @@ void RunSecondStageLocalFitting(
             accepted_iteration_count,
             selection.accepted_candidate_attempt.value(),
             freeze_tracker,
-            health_policy_allows_iteration,
-            joint_offset_status,
+            health_summary,
             CountTerminalSuspiciousAtoms(terminal_suspicious_atom_mask));
 
         if (BuildEligibleLocalFittingActiveIndexList(
@@ -3626,7 +3917,7 @@ void RunSecondStageLocalFitting(
         }
 
         const auto converged{
-            health_policy_allows_iteration &&
+            policy_unhealthy_key_list.empty() &&
             !has_suspicious_offset_fallback &&
             !selection.has_objective_backtracking_rejection &&
             cluster_quality_state.AllActiveReferencesLocked(cluster_key_list) &&

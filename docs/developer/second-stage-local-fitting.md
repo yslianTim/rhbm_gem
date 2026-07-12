@@ -9,9 +9,10 @@ and implemented in
 part of the installed `GaussianEstimator.hpp` API.
 
 The stage is an outer fixed-point iteration over selected atoms. Each iteration
-solves active joint offsets, refits active atoms with selected-neighbor signals
-removed, assembles a damped or Anderson-accelerated candidate, and accepts
-cluster-local progress through an objective backtracking gate.
+solves joint offsets independently for every active sample-contributor cluster,
+refits active atoms with selected-neighbor signals removed, assembles a damped
+or Anderson-accelerated candidate, and accepts cluster-local progress through
+an objective backtracking gate.
 
 ## Inputs and State
 
@@ -48,7 +49,7 @@ Each loop performs the following high-level steps:
 previous state
     -> collect active atoms from the freeze tracker
     -> build active clusters and reconcile cluster-local state
-    -> solve/refit the active fixed-point map output G(x)
+    -> solve each cluster's offsets and refit the active fixed-point map G(x)
     -> mark suspicious offset rollbacks and temporary ridge multipliers
     -> try localized Anderson damping per cluster
     -> try damped fixed-point fallback for remaining clusters
@@ -70,6 +71,13 @@ accepted fixed-point progress.
 `previous_state`. Frozen selected atoms remain in the snapshot as fixed signal
 contributors, but they do not become active columns in the joint offset system.
 Unselected atoms are outside this second-stage snapshot.
+
+The active sample-contributor components built by the outer loop also partition
+the joint-offset work. Every cluster solve reads the same immutable previous
+snapshot. Its solved offsets and local coupling edges are mapped back to the
+complete active-atom order, then all offsets are applied to one refit snapshot
+at once. Cluster iteration order therefore cannot expose one cluster to another
+cluster's newly solved offset.
 
 For each original sample on each active atom, the joint system:
 
@@ -102,6 +110,8 @@ objective deterioration, and IRLS-iteration-limit exits. Build, empty-system,
 and initial-solve failures use the previous offsets; later IRLS failures use the
 last valid offsets. The rest of the local fitting iteration still runs so its
 amplitude/width refits can pass through the normal cluster objective gate.
+Each cluster retains its own status and effective ridge multipliers; one failed
+solve does not make a disconnected, converged cluster unhealthy.
 
 ## Refit and Rollback
 
@@ -145,6 +155,13 @@ previous validated model and result. This guarantees that no retained refit was
 built from a neighbor snapshot that no longer exists. Other active clusters keep
 their provisional refits.
 
+Refit health is stricter than candidate usability. A finite, plausible result
+with `SUCCESS` or `MAX_ITERATIONS_REACHED` is health-eligible. A result with
+`NUMERICAL_FALLBACK`, `INSUFFICIENT_DATA`, or `SINGLE_MEMBER`, a missing fit
+result, an exception fallback, or reuse of the previous result marks the complete
+active cluster unhealthy. Its finite candidate can still pass the objective
+gate, but it cannot be used as stability evidence.
+
 Post-refit affected clusters clear and suppress Anderson history before
 candidate construction, so their raw fallback cannot be replaced by an
 extrapolation from earlier iterations. They remain subject to the normal
@@ -181,14 +198,16 @@ the suspicious-retry multiplier, and the proactive collinearity multiplier
 actually used to build the joint-offset system. Signatures use exact comparison,
 so any real change to one of these controls starts a new fixed-point regime.
 
-Any joint-offset system build that produces the complete effective-multiplier
-list can form a signature, including builds whose later solve does not converge.
-With the default health policy enabled, only a converged solve may use or commit
-that signature: before Anderson candidate construction, an unhealthy solve
-clears and suppresses every current cluster. A signature mismatch otherwise
-clears and suppresses only the affected cluster. Any pre-refit or post-refit
-suspicious rollback likewise clears its containing cluster before candidate
-construction. Compatible remote clusters retain their histories.
+Each joint-offset system build that produces its cluster's complete
+effective-multiplier list can form a signature, including a build whose later
+solve does not converge. The signature map is therefore partial when another
+cluster fails during system construction. With the default health policy
+enabled, an unhealthy cluster clears and suppresses only its own Anderson
+history before candidate construction and cannot commit its raw map or
+signature. A signature mismatch likewise clears only the affected cluster. Any
+pre-refit or post-refit suspicious rollback clears its containing cluster before
+candidate construction. Compatible healthy remote clusters retain their
+histories.
 
 Residuals are scaled per parameter using the normalized-change scale floor.
 The coefficient solve includes L2 regularization and rejects candidates whose
@@ -265,17 +284,18 @@ fresh fixed-point commit before Anderson can resume.
 
 Ridge retry is staged:
 
-- partial accepted iterations lower objective ridge for accepted clusters and
-  raise it for rejected clusters;
+- partial accepted iterations lower objective ridge for healthy, accepted,
+  non-suspicious clusters and raise it for rejected clusters;
 - if every cluster is rejected, rejected clusters first raise their local
   objective ridge multipliers; and
 - the global `ridge_ratio` increases only when all rejected cluster-local
   objective ridge multipliers are saturated.
 
 Accepted iterations without objective rejection shrink the global `ridge_ratio`
-toward `kJointOffsetRidgeRatioMin`. An iteration whose joint-offset status is
-not converged does not lower its accepted cluster ridge or global ridge. Rejected
-clusters retain the existing ridge-increase behavior.
+toward `kJointOffsetRidgeRatioMin` only when every active cluster is healthy.
+An unhealthy cluster does not lower its local objective ridge. Healthy remote
+clusters retain their local ridge decrease, while rejected clusters retain the
+existing ridge-increase behavior.
 
 ## Freeze, Thaw, and Convergence
 
@@ -301,8 +321,9 @@ treats them conservatively as movement.
 
 Freeze tracking is updated only for atoms in clusters that accepted progress, so
 rejected clusters are not frozen because their assembled movement is zero.
-If the joint-offset solve is not healthy, all active freeze-stability counters
-are reset instead. Accepted parameter movement may still thaw frozen neighbors.
+An unhealthy cluster resets only its own active freeze-stability counters.
+Accepted parameter movement from either healthy or unhealthy clusters may still
+thaw frozen neighbors.
 
 Atoms freeze after their maximum transformed change remains below `1.0e-4` for
 `kLocalFittingFreezeStableIterations`. Frozen atoms can thaw when an active
@@ -325,18 +346,20 @@ fixed contributors for other active clusters.
 Parameter convergence requires:
 
 - no suspicious offset rollback in the accepted iteration;
-- a converged joint-offset solve status;
+- every active cluster to have a converged joint-offset solve and no explicit
+  local-refit fallback;
 - no cluster objective rejection in the accepted iteration;
 - all active cluster objective scale references to be locked when present; and
 - each active-set transformed change percentile below
   `kLocalFittingTransformedChangeTolerance`.
 
-Unhealthy joint-offset iterations clear and suppress current cluster Anderson
-history before candidate selection and do not commit their raw fixed-point map
-or a ridge regime signature. In non-quiet mode their
-existing progress line includes the status, for example
-`joint-offset = system-build-failed`; no separate per-iteration warning or
-fallback summary is emitted.
+Unhealthy clusters clear and suppress their own Anderson history before
+candidate selection and do not commit their raw fixed-point map or ridge regime
+signature. In non-quiet mode the existing progress or retry line reports
+`health-unhealthy clusters/atoms = C/A`, counts joint reasons in enum order such
+as `joint-offset = system-build-failed:1`, and reports refit fallbacks as
+`local-refit-fallback clusters/atoms = C/A`. No separate per-iteration warning
+or fallback summary is emitted.
 
 Developers can disable only this health policy through the non-installed stage
 interface:
@@ -348,14 +371,16 @@ RunSecondStageLocalFitting(
     SecondStageLocalFittingInternalOptions{ false });
 ```
 
-The default is enabled, including every production workflow call that omits the
-internal options. When disabled, solver status is still computed and the current
-safe offset fallback remains in force, but status does not reset freeze
-stability, block freeze/ridge/history updates or convergence, or appear in
-progress output. Ridge-regime compatibility still applies when the system build
-produced a signature. A system-build failure has no signature and follows the
-legacy history path without health-driven clearing. This switch is intended
-only for controlled A/B diagnostics; it is not exposed through `FitOptions`,
+The option field is `enable_end_to_end_health_status` and defaults to enabled,
+including every production workflow call that omits the internal options. When
+disabled, joint and refit health are still computed and the current safe
+fallbacks remain in force, but health does not reset freeze stability, block
+freeze/ridge/history updates or convergence, or appear in progress output.
+Ridge-regime compatibility still applies to clusters whose system build
+produced a signature. A cluster with no signature follows the legacy history
+path without health-driven clearing. Suspicious rollback, terminal fallback,
+and objective rejection policies remain active. This switch is intended only
+for controlled A/B diagnostics; it is not exposed through `FitOptions`,
 commands, CMake, or environment variables.
 
 ## Exit Paths

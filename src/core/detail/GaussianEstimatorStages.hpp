@@ -12,7 +12,7 @@ enum class LocalFittingPass
 
 struct SecondStageLocalFittingInternalOptions
 {
-    bool enable_joint_offset_health_status{ true };
+    bool enable_end_to_end_health_status{ true };
 };
 
 void RunLocalAlphaTraining(

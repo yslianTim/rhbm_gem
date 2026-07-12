@@ -12,6 +12,7 @@
 
 #include "core/detail/GaussianEstimatorStages.hpp"
 #include "core/detail/LocalFittingAndersonRegime.hpp"
+#include "core/detail/LocalFittingHealth.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
 #include "core/detail/PostRefitRollback.hpp"
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
@@ -26,6 +27,7 @@
 namespace {
 namespace alg = rhbm_gem::algorithm;
 namespace change_detail = rhbm_gem::core::detail;
+namespace health_detail = rhbm_gem::core::detail;
 namespace regime_detail = rhbm_gem::core::detail;
 namespace rollback_detail = rhbm_gem::core::detail;
 namespace rt = rhbm_gem::core;
@@ -236,6 +238,37 @@ std::unique_ptr<rg::ModelObject> BuildSeparatedSystemBuildFailureDefenseModel()
         rg::AtomLocalPotentialView::RequireFor(*atom).GetSamplingEntries(false)
     };
     sampling_entries.front().response = std::numeric_limits<float>::quiet_NaN();
+    auto analysis{ model->EditAnalysis() };
+    analysis.EnsureAtomLocalPotential(*atom).SetSamplingEntries(
+        std::move(sampling_entries));
+    return model;
+}
+
+std::unique_ptr<rg::ModelObject> BuildSeparatedLocalRefitFallbackDefenseModel()
+{
+    auto model{
+        BuildDefenseModel(
+            {
+                std::array<float, 3>{ 0.0F, 0.0F, 0.0F },
+                std::array<float, 3>{ 1.0e-4F, 0.0F, 0.0F },
+                std::array<float, 3>{ 10.0F, 0.0F, 0.0F },
+                std::array<float, 3>{ 10.0001F, 0.0F, 0.0F }
+            },
+            { Spot::C, Spot::O, Spot::N, Spot::CA },
+            { Element::CARBON, Element::OXYGEN, Element::NITROGEN, Element::CARBON },
+            {
+                rg::GaussianModel3D{ 6.0, 0.55, 0.20 },
+                rg::GaussianModel3D{ 5.5, 0.55, -0.15 },
+                rg::GaussianModel3D{ 6.2, 0.55, 0.18 },
+                rg::GaussianModel3D{ 5.7, 0.55, -0.12 }
+            },
+            rg::GaussianModel3D{ 5.8, 0.55, 0.0 })
+    };
+    auto * atom{ model->GetSelectedAtoms().front() };
+    auto sampling_entries{
+        rg::AtomLocalPotentialView::RequireFor(*atom).GetSamplingEntries(false)
+    };
+    sampling_entries.resize(1);
     auto analysis{ model->EditAnalysis() };
     analysis.EnsureAtomLocalPotential(*atom).SetSamplingEntries(
         std::move(sampling_entries));
@@ -554,6 +587,24 @@ TEST(EstimatorSecondStageDefenseTest, AndersonRegimeInvalidatesOnlyAffectedHisto
             after_recommit->used_cluster_key_list.end(),
             alg::ClusterKey{ 0 }),
         after_recommit->used_cluster_key_list.end());
+}
+
+TEST(EstimatorSecondStageDefenseTest, LocalRefitHealthAcceptsOnlyUsableFitStatuses)
+{
+    EXPECT_TRUE(health_detail::IsLocalGaussianRefitStatusHealthEligible(
+        rg::RHBMEstimationStatus::SUCCESS));
+    EXPECT_TRUE(health_detail::IsLocalGaussianRefitStatusHealthEligible(
+        rg::RHBMEstimationStatus::MAX_ITERATIONS_REACHED));
+    EXPECT_FALSE(health_detail::IsLocalGaussianRefitStatusHealthEligible(
+        rg::RHBMEstimationStatus::NUMERICAL_FALLBACK));
+    EXPECT_FALSE(health_detail::IsLocalGaussianRefitStatusHealthEligible(
+        rg::RHBMEstimationStatus::INSUFFICIENT_DATA));
+    EXPECT_FALSE(health_detail::IsLocalGaussianRefitStatusHealthEligible(
+        rg::RHBMEstimationStatus::SINGLE_MEMBER));
+    EXPECT_THROW(
+        health_detail::IsLocalGaussianRefitStatusHealthEligible(
+            static_cast<rg::RHBMEstimationStatus>(-1)),
+        std::logic_error);
 }
 
 TEST(EstimatorSecondStageDefenseTest, TransformedChangeIsIntensityScaleInvariant)
@@ -915,7 +966,7 @@ TEST(EstimatorSecondStageDefenseTest, DisabledHealthPolicyKeepsSystemBuildFallba
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
-TEST(EstimatorSecondStageDefenseTest, DisabledHealthPolicyAllowsRemoteAndersonDuringFallback)
+TEST(EstimatorSecondStageDefenseTest, ClusterLocalHealthAllowsRemoteAndersonDuringFallback)
 {
     auto enabled_model{ BuildSeparatedSystemBuildFailureDefenseModel() };
     auto disabled_model{ BuildSeparatedSystemBuildFailureDefenseModel() };
@@ -946,7 +997,13 @@ TEST(EstimatorSecondStageDefenseTest, DisabledHealthPolicyAllowsRemoteAndersonDu
     EXPECT_NE(
         enabled_output.find("joint-offset = system-build-failed"),
         std::string::npos);
+    EXPECT_NE(
+        enabled_output.find("health-unhealthy clusters/atoms = 1/2"),
+        std::string::npos);
     EXPECT_EQ(disabled_output.find("joint-offset ="), std::string::npos);
+    EXPECT_EQ(
+        disabled_output.find("health-unhealthy clusters/atoms"),
+        std::string::npos);
     const auto enabled_first_anderson_position{
         std::min(
             enabled_output.find("acceleration = aa"),
@@ -967,13 +1024,42 @@ TEST(EstimatorSecondStageDefenseTest, DisabledHealthPolicyAllowsRemoteAndersonDu
     ASSERT_NE(disabled_first_anderson_position, std::string::npos);
     ASSERT_NE(enabled_terminal_position, std::string::npos);
     ASSERT_NE(disabled_terminal_position, std::string::npos);
-    EXPECT_GT(enabled_first_anderson_position, enabled_terminal_position);
+    EXPECT_LT(enabled_first_anderson_position, enabled_terminal_position);
     EXPECT_LT(disabled_first_anderson_position, disabled_terminal_position);
     EXPECT_LT(
         CalculateSelectedAtomResponseMeanSquaredError(*disabled_model, 2, 4),
         disabled_initial_remote_error);
     ExpectSelectedAtomEstimatesAreFinite(*enabled_model);
     ExpectSelectedAtomEstimatesAreFinite(*disabled_model);
+}
+
+TEST(EstimatorSecondStageDefenseTest, LocalRefitFallbackOnlyInvalidatesItsClusterHealth)
+{
+    auto model{ BuildSeparatedLocalRefitFallbackDefenseModel() };
+    const auto initial_remote_error{
+        CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4)
+    };
+
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
+    const std::string output{ testing::internal::GetCapturedStdout() };
+    static_cast<void>(testing::internal::GetCapturedStderr());
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_NE(
+        output.find("health-unhealthy clusters/atoms = 1/2"),
+        std::string::npos);
+    EXPECT_NE(
+        output.find("local-refit-fallback clusters/atoms = 1/1"),
+        std::string::npos);
+    EXPECT_NE(output.find("acceleration = aa"), std::string::npos);
+    EXPECT_LT(
+        CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4),
+        initial_remote_error);
+    ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
 TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingRollsBackFiniteNonphysicalProfile)
