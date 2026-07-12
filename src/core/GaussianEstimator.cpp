@@ -3,6 +3,7 @@
 
 #include "core/detail/GaussianEstimatorStages.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
+#include "core/detail/PostRefitRollback.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -218,6 +219,7 @@ struct LocalFittingIterationResult
 {
     GaussianFittingState state{};
     std::vector<std::size_t> suspicious_offset_state_index_list{};
+    std::vector<std::size_t> post_refit_rollback_state_index_list{};
     JointOffsetSolveStatus joint_offset_status{ JointOffsetSolveStatus::SystemBuildFailed };
 };
 
@@ -2574,6 +2576,7 @@ void RollBackSuspiciousOffsetClusters(
 LocalFittingIterationResult RunLocalFittingIteration(
     const SecondStageLocalFittingContext & context,
     const std::vector<std::size_t> & active_index_list,
+    const std::vector<LocalFittingClusterKey> & cluster_key_list,
     const GaussianFittingState & previous_state,
     const FitOptions & options,
     double ridge_ratio,
@@ -2629,6 +2632,7 @@ LocalFittingIterationResult RunLocalFittingIteration(
         current_snapshot,
         iteration_state);
 
+    const auto refit_snapshot{ current_snapshot };
     std::vector<std::size_t> post_refit_suspicious_seed_position_list;
     for (size_t i = 0; i < active_index_list.size(); i++)
     {
@@ -2640,7 +2644,7 @@ LocalFittingIterationResult RunLocalFittingIteration(
                 context,
                 state_index,
                 previous_state.result_list.at(state_index),
-                current_snapshot,
+                refit_snapshot,
                 options)
         };
         if (!refit_result.has_value())
@@ -2654,8 +2658,9 @@ LocalFittingIterationResult RunLocalFittingIteration(
         iteration_state.result_list.at(state_index) = std::move(result);
     }
     const auto post_refit_suspicious_position_list{
-        ExpandSuspiciousOffsetClusters(
-            joint_offset_result.active_coupling_graph,
+        detail::ExpandPostRefitRollbackClusters(
+            active_index_list,
+            cluster_key_list,
             post_refit_suspicious_seed_position_list,
             suspicious_offset_mask)
     };
@@ -2670,6 +2675,11 @@ LocalFittingIterationResult RunLocalFittingIteration(
     LocalFittingIterationResult iteration_result;
     iteration_result.state = std::move(iteration_state);
     iteration_result.joint_offset_status = joint_offset_result.status;
+    for (const auto active_position : post_refit_suspicious_position_list)
+    {
+        iteration_result.post_refit_rollback_state_index_list.emplace_back(
+            active_index_list.at(active_position));
+    }
     for (std::size_t i = 0; i < suspicious_offset_mask.size(); i++)
     {
         if (suspicious_offset_mask.at(i) == 0) continue;
@@ -3308,6 +3318,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             RunLocalFittingIteration(
                 context,
                 active_index_list,
+                cluster_key_list,
                 previous_state,
                 options,
                 ridge_ratio,
@@ -3322,6 +3333,11 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         const auto has_suspicious_offset_fallback{
             !suspicious_offset_state_index_list.empty()
         };
+        if (!iteration_result.post_refit_rollback_state_index_list.empty())
+        {
+            acceleration_history.ClearAndSuppressContaining(
+                iteration_result.post_refit_rollback_state_index_list);
+        }
         const auto raw_state{ std::move(iteration_result.state) };
         auto selection{
             SelectLocalFittingClusterCandidates(

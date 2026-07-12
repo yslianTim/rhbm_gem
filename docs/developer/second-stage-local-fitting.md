@@ -124,10 +124,11 @@ graph produced by the joint offset system. Propagation follows finite edges with
 overlap at least `kSuspiciousOffsetClusterMinimumOverlap` and stops after
 `kSuspiciousOffsetClusterMaxDepth` graph steps. All seeds in a pass are expanded
 with one multi-source traversal, producing the same union of bounded
-neighborhoods. Every newly reached active atom is rolled back once to its
-previous model for this iteration and skips refit.
+neighborhoods. This bounded propagation applies only before refit. Every newly
+reached active atom is rolled back once to its previous model and skips refit.
 
-Each remaining active atom is refit by:
+After pre-refit rollback, the snapshot is fixed for the complete refit pass.
+Each remaining active atom reads that same immutable snapshot and is refit by:
 
 1. subtracting fitted selected-neighbor responses from its original samples;
 2. using the joint-offset snapshot model as the fixed-offset model;
@@ -137,8 +138,18 @@ Each remaining active atom is refit by:
 
 If refit fails, the previous atom result is reused with the joint offset when
 that fallback remains finite and passes the same suspicious-offset gate. If that
-fallback is itself suspicious, the atom is kept at its previous state and can
-seed the same bounded rollback pass after the refit loop.
+fallback is itself suspicious, the atom seeds post-refit rollback. Post-refit
+rollback uses the complete active sample-contributor cluster rather than the
+bounded joint-offset graph: every atom in the affected cluster restores its
+previous validated model and result. This guarantees that no retained refit was
+built from a neighbor snapshot that no longer exists. Other active clusters keep
+their provisional refits.
+
+Post-refit affected clusters clear and suppress Anderson history before
+candidate construction, so their raw fallback cannot be replaced by an
+extrapolation from earlier iterations. They remain subject to the normal
+objective gate and persistent suspicious policy; five accepted no-progress
+iterations are still required before terminal fallback.
 
 ## Clusters and Acceleration
 

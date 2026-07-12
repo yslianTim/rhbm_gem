@@ -5,12 +5,14 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "core/detail/GaussianEstimatorStages.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
+#include "core/detail/PostRefitRollback.hpp"
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
@@ -22,6 +24,7 @@
 namespace {
 namespace alg = rhbm_gem::algorithm;
 namespace change_detail = rhbm_gem::core::detail;
+namespace rollback_detail = rhbm_gem::core::detail;
 namespace rt = rhbm_gem::core;
 namespace rg = rhbm_gem;
 
@@ -219,6 +222,41 @@ std::unique_ptr<rg::ModelObject> BuildSeparatedRollbackDefenseModel()
             rg::GaussianModel3D{ 5.8, 0.55, 0.0 })
     };
     MakeAtomSamplesSuspicious(*model, 0);
+    return model;
+}
+
+std::unique_ptr<rg::ModelObject> BuildPostRefitRollbackChainDefenseModel()
+{
+    auto model{
+        BuildDefenseModel(
+            {
+                std::array<float, 3>{ 0.0F, 0.0F, 0.0F },
+                std::array<float, 3>{ 2.0F, 0.0F, 0.0F },
+                std::array<float, 3>{ 4.0F, 0.0F, 0.0F },
+                std::array<float, 3>{ 6.0F, 0.0F, 0.0F },
+                std::array<float, 3>{ 8.0F, 0.0F, 0.0F }
+            },
+            { Spot::C, Spot::O, Spot::N, Spot::CA, Spot::C },
+            {
+                Element::CARBON,
+                Element::OXYGEN,
+                Element::NITROGEN,
+                Element::CARBON,
+                Element::CARBON
+            },
+            {
+                rg::GaussianModel3D{ 6.0, 0.55, 0.20 },
+                rg::GaussianModel3D{ 5.5, 0.55, -0.15 },
+                rg::GaussianModel3D{ 6.2, 0.55, 0.18 },
+                rg::GaussianModel3D{ 5.7, 0.55, -0.12 },
+                rg::GaussianModel3D{ 9.0, 0.55, 0.10 }
+            },
+            rg::GaussianModel3D{ 5.8, 0.55, 0.0 })
+    };
+    auto analysis{ model->EditAnalysis() };
+    analysis.EnsureAtomLocalPotential(*model->GetSelectedAtoms().front())
+        .SetGaussianResult(MakeGaussianResult(
+            rg::GaussianModel3D{ 1.0e300, 0.55, 0.0 }));
     return model;
 }
 
@@ -475,6 +513,105 @@ TEST(EstimatorSecondStageDefenseTest, FreezeUsesTransformedRatherThanAbsoluteMov
 
     EXPECT_TRUE(stable_tracker.IsFrozen(0));
     EXPECT_FALSE(moving_tracker.IsFrozen(0));
+}
+
+TEST(EstimatorSecondStageDefenseTest, PostRefitRollbackExpandsCompleteContributorCluster)
+{
+    const std::vector<std::size_t> active_index_list{ 10, 11, 12, 13, 20 };
+    const std::vector<rollback_detail::PostRefitRollbackClusterKey> cluster_key_list{
+        { 10, 11, 12, 13 },
+        { 20 }
+    };
+    std::vector<char> suspicious_mask{ 0, 1, 0, 0, 0 };
+
+    const auto affected_position_list{
+        rollback_detail::ExpandPostRefitRollbackClusters(
+            active_index_list,
+            cluster_key_list,
+            { 3, 0, 3 },
+            suspicious_mask)
+    };
+
+    EXPECT_EQ(
+        (std::vector<std::size_t>{ 0, 1, 2, 3 }),
+        affected_position_list);
+    EXPECT_EQ((std::vector<char>{ 1, 1, 1, 1, 0 }), suspicious_mask);
+
+    std::vector<char> permuted_suspicious_mask(5, 0);
+    EXPECT_EQ(
+        (std::vector<std::size_t>{ 0, 1, 2, 3 }),
+        rollback_detail::ExpandPostRefitRollbackClusters(
+            { 13, 12, 11, 10, 20 },
+            cluster_key_list,
+            { 0 },
+            permuted_suspicious_mask));
+    EXPECT_EQ(
+        (std::vector<char>{ 1, 1, 1, 1, 0 }),
+        permuted_suspicious_mask);
+}
+
+TEST(EstimatorSecondStageDefenseTest, PostRefitRollbackRejectsInconsistentTopology)
+{
+    std::vector<char> suspicious_mask{ 0, 0 };
+    EXPECT_THROW(
+        rollback_detail::ExpandPostRefitRollbackClusters(
+            { 10, 11 },
+            { { 10 } },
+            { 0 },
+            suspicious_mask),
+        std::invalid_argument);
+    EXPECT_THROW(
+        rollback_detail::ExpandPostRefitRollbackClusters(
+            { 10, 11 },
+            { { 10, 11 } },
+            { 2 },
+            suspicious_mask),
+        std::invalid_argument);
+    EXPECT_THROW(
+        rollback_detail::ExpandPostRefitRollbackClusters(
+            { 10, 11 },
+            { { 10 }, { 10, 11 } },
+            { 0 },
+            suspicious_mask),
+        std::invalid_argument);
+}
+
+TEST(EstimatorSecondStageDefenseTest, PostRefitRollbackRestoresCompleteLongChain)
+{
+    auto model{ BuildPostRefitRollbackChainDefenseModel() };
+    const auto & selected_atoms{ model->GetSelectedAtoms() };
+    std::vector<rg::GaussianModel3D> previous_model_list;
+    previous_model_list.reserve(selected_atoms.size());
+    for (const auto * atom : selected_atoms)
+    {
+        previous_model_list.emplace_back(GetEstimateModel(*atom));
+    }
+
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
+    const std::string output{ testing::internal::GetCapturedStdout() };
+    const std::string error_output{ testing::internal::GetCapturedStderr() };
+    Logger::SetLogLevel(previous_log_level);
+
+    for (std::size_t i = 0; i < selected_atoms.size(); i++)
+    {
+        ExpectGaussianModelsNear(
+            GetEstimateModel(*selected_atoms.at(i)),
+            previous_model_list.at(i),
+            1.0e-12);
+    }
+    EXPECT_NE(output.find("terminal-suspicious atoms = 5"), std::string::npos);
+    EXPECT_NE(
+        error_output.find(
+            "terminal suspicious rollback fallback clusters/atoms = 1/5"),
+        std::string::npos);
+    EXPECT_EQ(output.find("acceleration = aa"), std::string::npos);
+    EXPECT_EQ(output.find("acceleration = damped-aa"), std::string::npos);
+    EXPECT_EQ(output.find("Iter. 6/200"), std::string::npos);
+    EXPECT_EQ(error_output.find("Reached maximum iteration size"), std::string::npos);
 }
 
 TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingFallsBackWhenJointOffsetSamplesAreNonFinite)
