@@ -343,6 +343,16 @@ Its atoms no longer participate in offset solving, acceleration, ridge updates,
 freeze/thaw, or convergence statistics, but remain in the fitted snapshot as
 fixed contributors for other active clusters.
 
+A separate persistent joint-offset failure tracker handles accepted clusters
+that have no suspicious rollback. It advances only when the exact same
+non-converged `JointOffsetSolveStatus` repeats and the cluster's transformed
+movement is below the convergence tolerance. Rejection, effective movement,
+solver recovery, a status change, suspicious rollback, or a cluster-key change
+resets the count. After five consecutive accepted no-progress failures, the
+complete cluster restores the current iteration's `previous_state` and becomes
+terminal for the remainder of the second stage. It remains a fixed contributor,
+while disconnected healthy clusters continue fitting.
+
 Parameter convergence requires:
 
 - no suspicious offset rollback in the accepted iteration;
@@ -376,9 +386,11 @@ including every production workflow call that omits the internal options. When
 disabled, joint and refit health are still computed and the current safe
 fallbacks remain in force, but health does not reset freeze stability, block
 freeze/ridge/history updates or convergence, or appear in progress output.
+Persistent joint-offset failure tracking and its terminal fallback are also
+disabled, preserving the healthless lifecycle for A/B diagnostics.
 Ridge-regime compatibility still applies to clusters whose system build
 produced a signature. A cluster with no signature follows the legacy history
-path without health-driven clearing. Suspicious rollback, terminal fallback,
+path without health-driven clearing. Suspicious rollback, its terminal fallback,
 and objective rejection policies remain active. This switch is intended only
 for controlled A/B diagnostics; it is not exposed through `FitOptions`,
 commands, CMake, or environment variables.
@@ -392,10 +404,10 @@ The loop exits through one of five terminal cases:
   accepted update freezes all remaining atoms.
 - **Parameter convergence:** apply the current accepted assembled state after
   the convergence conditions pass.
-- **Terminal suspicious fallback:** when persistent clusters have been removed
-  and all remaining active clusters freeze or converge, apply the assembled
-  state and emit one warning with terminal cluster/atom counts instead of
-  reporting whole-stage convergence.
+- **Terminal fallback:** when persistent suspicious or joint-offset-failure
+  clusters have been removed and all remaining active clusters freeze or
+  converge, apply the assembled state and emit one warning with reason-specific
+  terminal cluster/atom counts instead of reporting whole-stage convergence.
 - **Objective backtracking failure:** when all acceleration and fixed-point
   attempts are rejected and no further local or global ridge retry is available,
   apply the previous state.
@@ -403,10 +415,12 @@ The loop exits through one of five terminal cases:
   the iteration limit.
 
 Progress logs report iteration, acceleration kind, damping, and active/frozen
-atom counts. When terminal suspicious atoms exist, active counts exclude them
-and the progress line reports their count separately. Terminal logs report the
-stop reason and, for convergence or maximum-iteration exits, the percentile
-log-peak-height, log-width, and offset-to-peak-ratio changes.
+atom counts. Active counts exclude all terminal atoms; progress reports
+`terminal-suspicious atoms` and `terminal-joint-offset-failure atoms`
+separately. Final warnings report reason-specific cluster/atom counts and the
+terminal joint-offset status breakdown. For convergence or maximum-iteration
+exits, logs retain the percentile log-peak-height, log-width, and
+offset-to-peak-ratio changes.
 
 ## Workflow Context
 

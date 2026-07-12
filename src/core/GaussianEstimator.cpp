@@ -124,6 +124,7 @@ constexpr double kSuspiciousWidthGrowthLimit{ 1.5 };
 constexpr double kSuspiciousWidthRangeLimitRatio{ 1.5 };
 constexpr double kSuspiciousCompensationResponseRatio{ 2.0 };
 constexpr std::size_t kPersistentSuspiciousRollbackIterationLimit{ 5 };
+constexpr std::size_t kPersistentJointOffsetFailureIterationLimit{ 5 };
 
 struct GaussianFittingState
 {
@@ -355,6 +356,31 @@ struct PersistentSuspiciousRollbackState
 
 using PersistentSuspiciousRollbackStateMap =
     std::map<LocalFittingClusterKey, PersistentSuspiciousRollbackState>;
+
+struct PersistentJointOffsetFailureState
+{
+    JointOffsetSolveStatus status{ JointOffsetSolveStatus::SystemBuildFailed };
+    std::size_t stable_iteration_count{ 0 };
+};
+
+using PersistentJointOffsetFailureStateMap =
+    std::map<LocalFittingClusterKey, PersistentJointOffsetFailureState>;
+using TerminalJointOffsetFailureMap =
+    std::map<LocalFittingClusterKey, JointOffsetSolveStatus>;
+
+struct LocalFittingTerminalSummary
+{
+    std::size_t suspicious_cluster_count{ 0 };
+    std::size_t suspicious_atom_count{ 0 };
+    std::size_t joint_offset_failure_cluster_count{ 0 };
+    std::size_t joint_offset_failure_atom_count{ 0 };
+    std::map<JointOffsetSolveStatus, std::size_t> joint_offset_failure_status_count{};
+
+    std::size_t AtomCount() const
+    {
+        return suspicious_atom_count + joint_offset_failure_atom_count;
+    }
+};
 
 struct LocalFittingClusterWork
 {
@@ -2310,6 +2336,72 @@ std::vector<LocalFittingClusterKey> UpdatePersistentSuspiciousRollbackState(
     return terminal_key_list;
 }
 
+TerminalJointOffsetFailureMap UpdatePersistentJointOffsetFailureState(
+    const std::vector<LocalFittingClusterKey> & cluster_key_list,
+    const std::vector<LocalFittingClusterKey> & accepted_key_list,
+    const std::vector<std::size_t> & suspicious_atom_index_list,
+    const LocalFittingClusterHealthMap & health_by_key,
+    const GaussianFittingState & assembled_state,
+    const GaussianFittingState & previous_state,
+    PersistentJointOffsetFailureStateMap & state_by_key)
+{
+    PersistentJointOffsetFailureStateMap next_state_by_key;
+    TerminalJointOffsetFailureMap terminal_failure_by_key;
+    for (const auto & key : cluster_key_list)
+    {
+        if (std::find(accepted_key_list.begin(), accepted_key_list.end(), key) ==
+            accepted_key_list.end())
+        {
+            continue;
+        }
+        if (!CollectClusterSuspiciousAtomIndexes(
+                key,
+                suspicious_atom_index_list).empty())
+        {
+            continue;
+        }
+
+        const auto health_iter{ health_by_key.find(key) };
+        if (health_iter == health_by_key.end())
+        {
+            throw std::invalid_argument(
+                "Persistent joint-offset failure cluster health is missing.");
+        }
+        const auto status{ health_iter->second.joint_offset_status };
+        if (IsJointOffsetSolveHealthy(status)) continue;
+
+        const auto transformed_change_stats{
+            SummarizeLocalFittingTransformedChanges(
+                assembled_state.estimation_list,
+                previous_state.estimation_list,
+                key)
+        };
+        if (!IsLocalFittingTransformedChangeConverged(transformed_change_stats))
+        {
+            continue;
+        }
+
+        PersistentJointOffsetFailureState next_state{ status, 1 };
+        const auto previous_iter{ state_by_key.find(key) };
+        if (previous_iter != state_by_key.end() &&
+            previous_iter->second.status == status)
+        {
+            next_state.stable_iteration_count =
+                previous_iter->second.stable_iteration_count + 1;
+        }
+
+        if (next_state.stable_iteration_count >=
+            kPersistentJointOffsetFailureIterationLimit)
+        {
+            terminal_failure_by_key.emplace(key, status);
+            continue;
+        }
+        next_state_by_key.emplace(key, next_state);
+    }
+    state_by_key = std::move(next_state_by_key);
+    return terminal_failure_by_key;
+}
+
 bool ContainsLocalFittingClusterKey(
     const std::vector<LocalFittingClusterKey> & key_list,
     const LocalFittingClusterKey & key)
@@ -2373,7 +2465,7 @@ std::vector<LocalFittingClusterKey> CollectLocalFittingClusterKeysWithRegimeSign
     return result;
 }
 
-void ApplyTerminalSuspiciousRollbackClusters(
+void ApplyTerminalFallbackClusters(
     const std::vector<LocalFittingClusterKey> & terminal_key_list,
     const GaussianFittingState & previous_state,
     std::vector<char> & terminal_atom_mask,
@@ -2385,7 +2477,7 @@ void ApplyTerminalSuspiciousRollbackClusters(
         assembled_state.result_list.size() != terminal_atom_mask.size())
     {
         throw std::invalid_argument(
-            "Persistent suspicious rollback state sizes are inconsistent.");
+            "Local fitting terminal fallback state sizes are inconsistent.");
     }
     for (const auto & key : terminal_key_list)
     {
@@ -2394,7 +2486,7 @@ void ApplyTerminalSuspiciousRollbackClusters(
             if (atom_index >= terminal_atom_mask.size())
             {
                 throw std::invalid_argument(
-                    "Persistent suspicious rollback atom index is out of range.");
+                    "Local fitting terminal fallback atom index is out of range.");
             }
             terminal_atom_mask.at(atom_index) = 1;
             assembled_state.estimation_list.at(atom_index) =
@@ -2403,12 +2495,6 @@ void ApplyTerminalSuspiciousRollbackClusters(
                 previous_state.result_list.at(atom_index);
         }
     }
-}
-
-std::size_t CountTerminalSuspiciousAtoms(const std::vector<char> & terminal_atom_mask)
-{
-    return static_cast<std::size_t>(
-        std::count(terminal_atom_mask.begin(), terminal_atom_mask.end(), 1));
 }
 
 std::vector<std::size_t> BuildEligibleLocalFittingActiveIndexList(
@@ -2425,7 +2511,7 @@ std::vector<std::size_t> BuildEligibleLocalFittingActiveIndexList(
                 if (atom_index >= terminal_atom_mask.size())
                 {
                     throw std::invalid_argument(
-                        "Persistent suspicious rollback active index is out of range.");
+                        "Local fitting terminal fallback active index is out of range.");
                 }
                 return terminal_atom_mask.at(atom_index) != 0;
             }),
@@ -3031,21 +3117,40 @@ void LogLocalFittingAllAtomsFrozen(const FitOptions & options, std::size_t accep
         " iterations because all local atoms are frozen.");
 }
 
-void AppendTerminalSuspiciousRollbackSummary(
+void AppendLocalFittingTerminalSummary(
     std::ostringstream & stream,
-    std::size_t terminal_cluster_count,
-    std::size_t terminal_atom_count)
+    const LocalFittingTerminalSummary & summary)
 {
-    if (terminal_atom_count == 0) return;
-    stream << "; terminal suspicious rollback fallback clusters/atoms = "
-        << terminal_cluster_count << "/" << terminal_atom_count;
+    if (summary.suspicious_atom_count > 0)
+    {
+        stream << "; terminal suspicious rollback fallback clusters/atoms = "
+            << summary.suspicious_cluster_count
+            << "/" << summary.suspicious_atom_count;
+    }
+    if (summary.joint_offset_failure_atom_count > 0)
+    {
+        stream << "; terminal joint-offset failure fallback clusters/atoms = "
+            << summary.joint_offset_failure_cluster_count
+            << "/" << summary.joint_offset_failure_atom_count;
+        if (!summary.joint_offset_failure_status_count.empty())
+        {
+            stream << ", statuses = ";
+            bool is_first_status{ true };
+            for (const auto & [status, count] :
+                summary.joint_offset_failure_status_count)
+            {
+                if (!is_first_status) stream << ",";
+                stream << GetJointOffsetSolveStatusText(status) << ":" << count;
+                is_first_status = false;
+            }
+        }
+    }
 }
 
-void LogLocalFittingTerminalSuspiciousRollback(
+void LogLocalFittingTerminalFallback(
     const FitOptions & options,
     std::size_t accepted_iteration_count,
-    std::size_t terminal_cluster_count,
-    std::size_t terminal_atom_count)
+    const LocalFittingTerminalSummary & terminal_summary)
 {
     if (options.quiet_mode) return;
 
@@ -3054,10 +3159,7 @@ void LogLocalFittingTerminalSuspiciousRollback(
     warning_message
         << "Completed local fitting after " << accepted_iteration_count
         << " accepted iterations with last validated states retained";
-    AppendTerminalSuspiciousRollbackSummary(
-        warning_message,
-        terminal_cluster_count,
-        terminal_atom_count);
+    AppendLocalFittingTerminalSummary(warning_message, terminal_summary);
     warning_message << ".";
     Logger::Log(LogLevel::Warning, warning_message.str());
 }
@@ -3124,8 +3226,7 @@ void LogLocalFittingBacktrackingRetry(
 void LogLocalFittingBacktrackingStop(
     const FitOptions & options,
     LocalFittingBacktrackingStopReason reason,
-    std::size_t terminal_cluster_count,
-    std::size_t terminal_atom_count)
+    const LocalFittingTerminalSummary & terminal_summary)
 {
     if (options.quiet_mode) return;
 
@@ -3136,10 +3237,7 @@ void LogLocalFittingBacktrackingStop(
         << "acceleration and fixed-point attempts "
         << (reason == LocalFittingBacktrackingStopReason::MaximumGlobalRidge ?
             "at the maximum joint-offset ridge ratio" : "at the maximum iteration limit");
-    AppendTerminalSuspiciousRollbackSummary(
-        warning_message,
-        terminal_cluster_count,
-        terminal_atom_count);
+    AppendLocalFittingTerminalSummary(warning_message, terminal_summary);
     warning_message << "; applying previous state.";
     Logger::Log(LogLevel::Warning, warning_message.str());
 }
@@ -3150,17 +3248,17 @@ void LogLocalFittingProgress(
     const LocalFittingCandidateAttempt & current_candidate_attempt,
     const algorithm::ConvergenceFreezeTracker & freeze_tracker,
     const LocalFittingClusterHealthSummary & health_summary,
-    std::size_t terminal_atom_count)
+    const LocalFittingTerminalSummary & terminal_summary)
 {
     if (options.quiet_mode) return;
 
-    if (terminal_atom_count > freeze_tracker.GetActiveCount())
+    if (terminal_summary.AtomCount() > freeze_tracker.GetActiveCount())
     {
         throw std::invalid_argument(
             "Local fitting terminal atom count exceeds the active atom count.");
     }
     const auto effective_active_count{
-        freeze_tracker.GetActiveCount() - terminal_atom_count
+        freeze_tracker.GetActiveCount() - terminal_summary.AtomCount()
     };
     std::ostringstream progress_message;
     progress_message << "Iter. " << accepted_iteration_count
@@ -3170,10 +3268,17 @@ void LogLocalFittingProgress(
         << ", damping = "<< current_candidate_attempt.damping
         << ", active/frozen atoms = "<< effective_active_count
         << "/" << freeze_tracker.GetFrozenCount();
-    if (terminal_atom_count > 0)
+    if (terminal_summary.suspicious_atom_count > 0)
     {
         progress_message
-            << ", terminal-suspicious atoms = " << terminal_atom_count;
+            << ", terminal-suspicious atoms = "
+            << terminal_summary.suspicious_atom_count;
+    }
+    if (terminal_summary.joint_offset_failure_atom_count > 0)
+    {
+        progress_message
+            << ", terminal-joint-offset-failure atoms = "
+            << terminal_summary.joint_offset_failure_atom_count;
     }
     AppendLocalFittingClusterHealthSummary(progress_message, health_summary);
     Logger::ProgressLine(progress_message.str());
@@ -3204,8 +3309,7 @@ void LogLocalFittingConverged(
 void LogLocalFittingMaximumIterations(
     const FitOptions & options,
     const algorithm::ParameterChangeStats & transformed_change_stats,
-    std::size_t terminal_cluster_count,
-    std::size_t terminal_atom_count)
+    const LocalFittingTerminalSummary & terminal_summary)
 {
     if (options.quiet_mode) return;
 
@@ -3225,10 +3329,7 @@ void LogLocalFittingMaximumIterations(
         << std::to_string(
             transformed_change_stats.percentile_list.at(
                 detail::kOffsetToPeakRatioChangeIndex));
-    AppendTerminalSuspiciousRollbackSummary(
-        warning_message,
-        terminal_cluster_count,
-        terminal_atom_count);
+    AppendLocalFittingTerminalSummary(warning_message, terminal_summary);
     Logger::Log(LogLevel::Warning, warning_message.str());
 }
 
@@ -3582,8 +3683,9 @@ void RunSecondStageLocalFitting(
     double ridge_ratio{ kJointOffsetRidgeRatio };
     std::vector<std::size_t> suspicious_offset_state_index_list;
     PersistentSuspiciousRollbackStateMap persistent_suspicious_rollback_state_by_key;
-    std::vector<char> terminal_suspicious_atom_mask(atom_size, 0);
-    std::size_t terminal_suspicious_cluster_count{ 0 };
+    PersistentJointOffsetFailureStateMap persistent_joint_offset_failure_state_by_key;
+    std::vector<char> terminal_fallback_atom_mask(atom_size, 0);
+    LocalFittingTerminalSummary terminal_summary;
     algorithm::ClusteredFittingQualityStateSet<LocalFittingObjectiveSamples> cluster_quality_state{
         algorithm::ClusteredFittingQualityOptions{
             kLocalFittingObjectiveScaleWarmupCount,
@@ -3601,21 +3703,17 @@ void RunSecondStageLocalFitting(
         const auto active_index_list{
             BuildEligibleLocalFittingActiveIndexList(
                 freeze_tracker,
-                terminal_suspicious_atom_mask)
+                terminal_fallback_atom_mask)
         };
         if (active_index_list.empty())
         {
             ApplyLocalFittingState(previous_state, local_editor_list);
-            const auto terminal_atom_count{
-                CountTerminalSuspiciousAtoms(terminal_suspicious_atom_mask)
-            };
-            if (terminal_atom_count > 0)
+            if (terminal_summary.AtomCount() > 0)
             {
-                LogLocalFittingTerminalSuspiciousRollback(
+                LogLocalFittingTerminalFallback(
                     options,
                     accepted_iteration_count,
-                    terminal_suspicious_cluster_count,
-                    terminal_atom_count);
+                    terminal_summary);
             }
             else
             {
@@ -3728,7 +3826,7 @@ void RunSecondStageLocalFitting(
         freeze_tracker.ResetStability(policy_unhealthy_atom_index_list);
         acceleration_history.ClearAndSuppress(policy_unhealthy_key_list);
         anderson_regime_tracker.Invalidate(policy_unhealthy_key_list);
-        const auto terminal_key_list{
+        const auto terminal_suspicious_key_list{
             UpdatePersistentSuspiciousRollbackState(
                 cluster_key_list,
                 selection.accepted_key_list,
@@ -3737,12 +3835,45 @@ void RunSecondStageLocalFitting(
                 previous_state,
                 persistent_suspicious_rollback_state_by_key)
         };
-        ApplyTerminalSuspiciousRollbackClusters(
+        TerminalJointOffsetFailureMap terminal_joint_offset_failure_by_key;
+        if (internal_options.enable_end_to_end_health_status)
+        {
+            terminal_joint_offset_failure_by_key =
+                UpdatePersistentJointOffsetFailureState(
+                    cluster_key_list,
+                    selection.accepted_key_list,
+                    suspicious_offset_state_index_list,
+                    current_health_by_key,
+                    assembled_state,
+                    previous_state,
+                    persistent_joint_offset_failure_state_by_key);
+        }
+        else
+        {
+            persistent_joint_offset_failure_state_by_key.clear();
+        }
+
+        std::vector<LocalFittingClusterKey> terminal_key_list{
+            terminal_suspicious_key_list
+        };
+        terminal_summary.suspicious_cluster_count +=
+            terminal_suspicious_key_list.size();
+        for (const auto & key : terminal_suspicious_key_list)
+        {
+            terminal_summary.suspicious_atom_count += key.size();
+        }
+        for (const auto & [key, status] : terminal_joint_offset_failure_by_key)
+        {
+            terminal_key_list.emplace_back(key);
+            terminal_summary.joint_offset_failure_cluster_count++;
+            terminal_summary.joint_offset_failure_atom_count += key.size();
+            terminal_summary.joint_offset_failure_status_count[status]++;
+        }
+        ApplyTerminalFallbackClusters(
             terminal_key_list,
             previous_state,
-            terminal_suspicious_atom_mask,
+            terminal_fallback_atom_mask,
             assembled_state);
-        terminal_suspicious_cluster_count += terminal_key_list.size();
         if (!terminal_key_list.empty())
         {
             acceleration_history.ClearAndSuppress(terminal_key_list);
@@ -3757,7 +3888,7 @@ void RunSecondStageLocalFitting(
                     suspicious_offset_state_index_list.end(),
                     [&](std::size_t atom_index)
                     {
-                        return terminal_suspicious_atom_mask.at(atom_index) != 0;
+                        return terminal_fallback_atom_mask.at(atom_index) != 0;
                     }),
                 suspicious_offset_state_index_list.end());
         }
@@ -3810,8 +3941,7 @@ void RunSecondStageLocalFitting(
             LogLocalFittingBacktrackingStop(
                 options,
                 stop_reason,
-                terminal_suspicious_cluster_count,
-                CountTerminalSuspiciousAtoms(terminal_suspicious_atom_mask));
+                terminal_summary);
             break;
         }
 
@@ -3891,23 +4021,19 @@ void RunSecondStageLocalFitting(
             selection.accepted_candidate_attempt.value(),
             freeze_tracker,
             health_summary,
-            CountTerminalSuspiciousAtoms(terminal_suspicious_atom_mask));
+            terminal_summary);
 
         if (BuildEligibleLocalFittingActiveIndexList(
                 freeze_tracker,
-                terminal_suspicious_atom_mask).empty())
+                terminal_fallback_atom_mask).empty())
         {
             ApplyLocalFittingState(assembled_state, local_editor_list);
-            const auto terminal_atom_count{
-                CountTerminalSuspiciousAtoms(terminal_suspicious_atom_mask)
-            };
-            if (terminal_atom_count > 0)
+            if (terminal_summary.AtomCount() > 0)
             {
-                LogLocalFittingTerminalSuspiciousRollback(
+                LogLocalFittingTerminalFallback(
                     options,
                     accepted_iteration_count,
-                    terminal_suspicious_cluster_count,
-                    terminal_atom_count);
+                    terminal_summary);
             }
             else
             {
@@ -3926,16 +4052,12 @@ void RunSecondStageLocalFitting(
         if (converged)
         {
             ApplyLocalFittingState(assembled_state, local_editor_list);
-            const auto terminal_atom_count{
-                CountTerminalSuspiciousAtoms(terminal_suspicious_atom_mask)
-            };
-            if (terminal_atom_count > 0)
+            if (terminal_summary.AtomCount() > 0)
             {
-                LogLocalFittingTerminalSuspiciousRollback(
+                LogLocalFittingTerminalFallback(
                     options,
                     accepted_iteration_count,
-                    terminal_suspicious_cluster_count,
-                    terminal_atom_count);
+                    terminal_summary);
             }
             else
             {
@@ -3953,8 +4075,7 @@ void RunSecondStageLocalFitting(
             LogLocalFittingMaximumIterations(
                 options,
                 transformed_change_stats,
-                terminal_suspicious_cluster_count,
-                CountTerminalSuspiciousAtoms(terminal_suspicious_atom_mask));
+                terminal_summary);
             break;
         }
         previous_state = std::move(assembled_state);

@@ -275,6 +275,30 @@ std::unique_ptr<rg::ModelObject> BuildSeparatedLocalRefitFallbackDefenseModel()
     return model;
 }
 
+std::unique_ptr<rg::ModelObject> BuildSeparatedEmptyJointOffsetDefenseModel()
+{
+    auto model{
+        BuildDefenseModel(
+            {
+                std::array<float, 3>{ 0.0F, 0.0F, 0.0F },
+                std::array<float, 3>{ 10.0F, 0.0F, 0.0F },
+                std::array<float, 3>{ 10.0001F, 0.0F, 0.0F }
+            },
+            { Spot::C, Spot::N, Spot::CA },
+            { Element::CARBON, Element::NITROGEN, Element::CARBON },
+            {
+                rg::GaussianModel3D{ 6.0, 0.55, 0.20 },
+                rg::GaussianModel3D{ 6.2, 0.55, 0.18 },
+                rg::GaussianModel3D{ 5.7, 0.55, -0.12 }
+            },
+            rg::GaussianModel3D{ 5.8, 0.55, 0.0 })
+    };
+    auto analysis{ model->EditAnalysis() };
+    analysis.EnsureAtomLocalPotential(*model->GetSelectedAtoms().front())
+        .SetSamplingEntries({});
+    return model;
+}
+
 std::unique_ptr<rg::ModelObject> BuildPostRefitRollbackChainDefenseModel()
 {
     auto model{
@@ -864,7 +888,7 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingReportsEmptyJoin
 {
     auto model{ BuildEmptyJointOffsetDefenseModel() };
     auto * atom{ model->GetSelectedAtoms().front() };
-    const auto previous_offset{ GetEstimateModel(*atom).GetOffset() };
+    const auto previous_model{ GetEstimateModel(*atom) };
 
     const auto previous_log_level{ Logger::GetLogLevel() };
     Logger::SetLogLevel(LogLevel::Info);
@@ -876,22 +900,29 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingReportsEmptyJoin
     Logger::SetLogLevel(previous_log_level);
 
     EXPECT_NE(output.find("joint-offset = empty-system"), std::string::npos);
+    EXPECT_NE(
+        output.find("terminal-joint-offset-failure atoms = 1"),
+        std::string::npos);
+    EXPECT_NE(output.find("Iter. 5/200"), std::string::npos);
+    EXPECT_EQ(output.find("Iter. 6/200"), std::string::npos);
     EXPECT_EQ(
         error_output.find("terminal suspicious rollback fallback"),
         std::string::npos);
     EXPECT_NE(
-        error_output.find("percentile log-peak-height change"),
+        error_output.find(
+            "terminal joint-offset failure fallback clusters/atoms = 1/1"),
         std::string::npos);
     EXPECT_NE(
-        error_output.find("percentile log-width change"),
+        error_output.find("statuses = empty-system:1"),
         std::string::npos);
     EXPECT_NE(
-        error_output.find("percentile offset-to-peak-ratio change"),
+        error_output.find("after 5 accepted iterations"),
         std::string::npos);
+    EXPECT_EQ(error_output.find("Reached maximum iteration size"), std::string::npos);
     EXPECT_EQ(
         error_output.find("normalized percentile amplitude change"),
         std::string::npos);
-    EXPECT_NEAR(GetEstimateModel(*atom).GetOffset(), previous_offset, 1.0e-12);
+    ExpectGaussianModelsNear(GetEstimateModel(*atom), previous_model, 1.0e-12);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
@@ -933,6 +964,12 @@ TEST(EstimatorSecondStageDefenseTest, DisabledHealthPolicyRestoresEmptySystemLeg
     Logger::SetLogLevel(previous_log_level);
 
     EXPECT_EQ(output.find("joint-offset ="), std::string::npos);
+    EXPECT_EQ(
+        output.find("terminal-joint-offset-failure atoms"),
+        std::string::npos);
+    EXPECT_EQ(
+        error_output.find("terminal joint-offset failure fallback"),
+        std::string::npos);
     EXPECT_NE(output.find("Converged after"), std::string::npos);
     EXPECT_EQ(error_output.find("Reached maximum iteration size"), std::string::npos);
     EXPECT_NEAR(GetEstimateModel(*atom).GetOffset(), previous_offset, 1.0e-12);
@@ -961,6 +998,9 @@ TEST(EstimatorSecondStageDefenseTest, DisabledHealthPolicyKeepsSystemBuildFallba
     EXPECT_EQ(output.find("joint-offset ="), std::string::npos);
     EXPECT_NE(
         error_output.find("terminal suspicious rollback fallback clusters/atoms = 1/1"),
+        std::string::npos);
+    EXPECT_EQ(
+        error_output.find("terminal joint-offset failure fallback"),
         std::string::npos);
     EXPECT_EQ(error_output.find("Reached maximum iteration size"), std::string::npos);
     ExpectSelectedAtomEstimatesAreFinite(*model);
@@ -1046,7 +1086,7 @@ TEST(EstimatorSecondStageDefenseTest, LocalRefitFallbackOnlyInvalidatesItsCluste
     testing::internal::CaptureStderr();
     rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
     const std::string output{ testing::internal::GetCapturedStdout() };
-    static_cast<void>(testing::internal::GetCapturedStderr());
+    const std::string error_output{ testing::internal::GetCapturedStderr() };
     Logger::SetLogLevel(previous_log_level);
 
     EXPECT_NE(
@@ -1056,8 +1096,57 @@ TEST(EstimatorSecondStageDefenseTest, LocalRefitFallbackOnlyInvalidatesItsCluste
         output.find("local-refit-fallback clusters/atoms = 1/1"),
         std::string::npos);
     EXPECT_NE(output.find("acceleration = aa"), std::string::npos);
+    EXPECT_EQ(
+        error_output.find("terminal joint-offset failure fallback"),
+        std::string::npos);
+    EXPECT_NE(
+        error_output.find("Reached maximum iteration size"),
+        std::string::npos);
     EXPECT_LT(
         CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4),
+        initial_remote_error);
+    ExpectSelectedAtomEstimatesAreFinite(*model);
+}
+
+TEST(EstimatorSecondStageDefenseTest, PersistentEmptySystemDoesNotBlockRemoteCluster)
+{
+    auto model{ BuildSeparatedEmptyJointOffsetDefenseModel() };
+    const auto & selected_atoms{ model->GetSelectedAtoms() };
+    const auto previous_empty_model{ GetEstimateModel(*selected_atoms.front()) };
+    const auto initial_remote_error{
+        CalculateSelectedAtomResponseMeanSquaredError(*model, 1, 3)
+    };
+
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
+    const std::string output{ testing::internal::GetCapturedStdout() };
+    const std::string error_output{ testing::internal::GetCapturedStderr() };
+    Logger::SetLogLevel(previous_log_level);
+
+    ExpectGaussianModelsNear(
+        GetEstimateModel(*selected_atoms.front()),
+        previous_empty_model,
+        1.0e-12);
+    EXPECT_NE(output.find("acceleration = aa"), std::string::npos);
+    EXPECT_NE(
+        output.find("terminal-joint-offset-failure atoms = 1"),
+        std::string::npos);
+    EXPECT_NE(
+        error_output.find(
+            "terminal joint-offset failure fallback clusters/atoms = 1/1"),
+        std::string::npos);
+    EXPECT_NE(
+        error_output.find("statuses = empty-system:1"),
+        std::string::npos);
+    EXPECT_EQ(
+        error_output.find("terminal suspicious rollback fallback"),
+        std::string::npos);
+    EXPECT_EQ(error_output.find("Reached maximum iteration size"), std::string::npos);
+    EXPECT_LT(
+        CalculateSelectedAtomResponseMeanSquaredError(*model, 1, 3),
         initial_remote_error);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
