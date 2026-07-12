@@ -41,6 +41,24 @@ estimation_list  = per-atom MDPDE model vector [amplitude, width, offset]
 `previous_state` is replaced only after an accepted non-terminal iteration.
 Rejected iterations keep the previous state.
 
+Before constructing `previous_state`, the stage validates every local MDPDE
+model with the same rule used by refit and objective evaluation: amplitude and
+width must be finite and positive, and offset must be finite. An invalid local
+MDPDE shape is repaired only in the internal second-stage state. The shape
+source order is atom-specific group posterior, group prior, local OLS,
+same-group valid-model parameter median, then global valid-model parameter
+median. A finite original local offset is retained; otherwise the selected
+source offset is used. Direct sources retain their uncertainty, while median
+sources use zero uncertainty. The original first-stage result, fit status, and
+other metadata are not rewritten.
+
+Group and global repair medians include only models satisfying that validity
+rule and are separate from the later third-stage group-median builder. If any
+selected atom cannot obtain a valid repaired seed, the second stage emits one
+warning in non-quiet mode and returns without applying an internal state.
+Non-quiet mode reports repair-source counts; debug logging additionally reports
+each repaired atom's original and replacement parameters.
+
 ## Outer Iteration
 
 Each loop performs the following high-level steps:
@@ -151,17 +169,19 @@ Each remaining active atom reads that same immutable snapshot and is refit by:
 1. subtracting fitted selected-neighbor responses from its original samples;
 2. using the joint-offset snapshot model as the fixed-offset model;
 3. calling `EstimateLocalGaussian` for amplitude and width; and
-4. accepting the result only if zero-offset sample construction stays finite
-   and the profile/parameter plausibility gate does not mark it suspicious.
+4. accepting the result only if its Gaussian model is valid, zero-offset sample
+   construction stays finite, and the profile/parameter plausibility gate does
+   not mark it suspicious.
 
-If refit fails, the previous atom result is reused with the joint offset when
-that fallback remains finite and passes the same suspicious-offset gate. If that
-fallback is itself suspicious, the atom seeds post-refit rollback. Post-refit
-rollback uses the complete active sample-contributor cluster rather than the
-bounded joint-offset graph: every atom in the affected cluster restores its
-previous validated model and result. This guarantees that no retained refit was
-built from a neighbor snapshot that no longer exists. Other active clusters keep
-their provisional refits.
+If refit fails or returns an invalid Gaussian, the previous validated amplitude
+and width are reused with the joint offset when that fallback remains finite and
+passes the same suspicious-offset gate. This is an explicit unhealthy refit
+fallback. If that fallback is itself suspicious, the atom seeds post-refit
+rollback. Post-refit rollback uses the complete active sample-contributor
+cluster rather than the bounded joint-offset graph: every atom in the affected
+cluster restores its previous validated model and result. This guarantees that
+no retained refit was built from a neighbor snapshot that no longer exists.
+Other active clusters keep their provisional refits.
 
 Refit health is stricter than candidate usability. A finite, plausible result
 with `SUCCESS` or `MAX_ITERATIONS_REACHED` is health-eligible. A result with

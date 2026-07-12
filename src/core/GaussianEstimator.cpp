@@ -5,6 +5,7 @@
 #include "core/detail/LocalFittingAudit.hpp"
 #include "core/detail/LocalFittingAndersonRegime.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
+#include "core/detail/LocalFittingSeedRepair.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
 #include "core/detail/PostRefitRollback.hpp"
 #include "data/detail/AtomClassifier.hpp"
@@ -610,6 +611,47 @@ struct GaussianModelParameterSamples
     std::vector<double> width_list{};
     std::vector<double> offset_list{};
 };
+
+struct SecondStageSeedRepairRecord
+{
+    std::size_t atom_index{ 0 };
+    detail::SecondStageSeedRepairSource source{
+        detail::SecondStageSeedRepairSource::GlobalMedian
+    };
+    GaussianModel3D original_model{};
+    GaussianModel3D repaired_model{};
+};
+
+struct SecondStageInitialStateBuildResult
+{
+    std::optional<GaussianFittingState> state{};
+    std::vector<SecondStageSeedRepairRecord> repair_record_list{};
+};
+
+const char * GetSecondStageSeedRepairSourceText(
+    detail::SecondStageSeedRepairSource source)
+{
+    switch (source)
+    {
+    case detail::SecondStageSeedRepairSource::GroupPosterior:
+        return "group-posterior";
+    case detail::SecondStageSeedRepairSource::GroupPrior:
+        return "group-prior";
+    case detail::SecondStageSeedRepairSource::LocalOls:
+        return "local-ols";
+    case detail::SecondStageSeedRepairSource::GroupMedian:
+        return "group-median";
+    case detail::SecondStageSeedRepairSource::GlobalMedian:
+        return "global-median";
+    }
+    throw std::logic_error("Unknown second-stage seed repair source.");
+}
+
+std::size_t GetSecondStageSeedRepairSourceIndex(
+    detail::SecondStageSeedRepairSource source)
+{
+    return static_cast<std::size_t>(source);
+}
 
 std::vector<AtomLocalPotentialEditor> BuildAtomLocalEditors(
     ModelObject & model_object,
@@ -1252,19 +1294,210 @@ LocalFittingClusterMap BuildLocalFittingClusters(
     return cluster_map;
 }
 
-GaussianFittingState BuildInitialLocalFittingState(const SecondStageLocalFittingContext & context)
+void AddGaussianModelParameterSample(
+    GaussianModelParameterSamples & samples,
+    const GaussianModel3D & model)
 {
+    if (!detail::IsValidSecondStageGaussianModel(model)) return;
+    samples.amplitude_list.emplace_back(model.GetAmplitude());
+    samples.width_list.emplace_back(model.GetWidth());
+    samples.offset_list.emplace_back(model.GetOffset());
+}
+
+std::optional<GaussianModel3DWithUncertainty> BuildValidGaussianParameterMedian(
+    const GaussianModelParameterSamples & samples)
+{
+    if (samples.amplitude_list.empty() ||
+        samples.width_list.empty() ||
+        samples.offset_list.empty())
+    {
+        return std::nullopt;
+    }
+    const GaussianModel3D median_model{
+        array_helper::ComputeMedian(samples.amplitude_list),
+        array_helper::ComputeMedian(samples.width_list),
+        array_helper::ComputeMedian(samples.offset_list)
+    };
+    if (!detail::IsValidSecondStageGaussianModel(median_model))
+    {
+        return std::nullopt;
+    }
+    return GaussianModel3DWithUncertainty{
+        median_model,
+        GaussianModel3DUncertainty{}
+    };
+}
+
+SecondStageInitialStateBuildResult BuildInitialLocalFittingState(
+    const SecondStageLocalFittingContext & context,
+    const ModelAnalysisView & analysis_view)
+{
+    SecondStageInitialStateBuildResult build_result;
     GaussianFittingState state{
         std::vector<LocalGaussianResult>(context.AtomSize()),
         std::vector<Eigen::VectorXd>(context.AtomSize())
     };
+    std::vector<std::optional<GaussianModel3DWithUncertainty>> group_prior_list(
+        context.AtomSize());
+    std::unordered_map<GroupKey, GaussianModelParameterSamples> samples_by_group;
+    GaussianModelParameterSamples global_samples;
+
     for (std::size_t i = 0; i < context.AtomSize(); i++)
     {
         const auto local_view{ AtomLocalPotentialView::RequireFor(*context.atom_list.at(i)) };
         state.result_list.at(i) = local_view.GetGaussianResult();
-        state.estimation_list.at(i) = state.result_list.at(i).mdpde.GetModel().ToVector();
+        const auto group_key{ data_internal::GetGroupKey(context.atom_list.at(i)) };
+        if (analysis_view.HasAtomGroup(group_key))
+        {
+            group_prior_list.at(i) =
+                analysis_view.GetAtomGroupPriorWithUncertainty(group_key);
+        }
+
+        const auto & result{ state.result_list.at(i) };
+        const auto & mdpde_model{ result.mdpde.GetModel() };
+        std::optional<GaussianModel3DWithUncertainty> preferred_model;
+        if (detail::IsValidSecondStageGaussianModel(mdpde_model))
+        {
+            preferred_model = result.mdpde;
+        }
+        else
+        {
+            const auto direct_selection{
+                detail::SelectSecondStageSeedRepair(
+                    detail::SecondStageSeedRepairCandidates{
+                        result.posterior,
+                        group_prior_list.at(i),
+                        result.ols,
+                        std::nullopt,
+                        std::nullopt
+                    })
+            };
+            if (direct_selection.has_value())
+            {
+                preferred_model = direct_selection->model;
+            }
+        }
+        if (!preferred_model.has_value()) continue;
+
+        AddGaussianModelParameterSample(
+            samples_by_group[group_key],
+            preferred_model->GetModel());
+        AddGaussianModelParameterSample(
+            global_samples,
+            preferred_model->GetModel());
     }
-    return state;
+
+    std::unordered_map<GroupKey, GaussianModel3DWithUncertainty> median_by_group;
+    median_by_group.reserve(samples_by_group.size());
+    for (const auto & [group_key, samples] : samples_by_group)
+    {
+        const auto median_model{ BuildValidGaussianParameterMedian(samples) };
+        if (median_model.has_value())
+        {
+            median_by_group.emplace(group_key, *median_model);
+        }
+    }
+    const auto global_median{ BuildValidGaussianParameterMedian(global_samples) };
+
+    for (std::size_t i = 0; i < context.AtomSize(); i++)
+    {
+        auto & result{ state.result_list.at(i) };
+        const auto original_model{ result.mdpde.GetModel() };
+        if (!detail::IsValidSecondStageGaussianModel(original_model))
+        {
+            const auto group_key{ data_internal::GetGroupKey(context.atom_list.at(i)) };
+            std::optional<GaussianModel3DWithUncertainty> group_median;
+            const auto group_median_iter{ median_by_group.find(group_key) };
+            if (group_median_iter != median_by_group.end())
+            {
+                group_median = group_median_iter->second;
+            }
+            const auto selection{
+                detail::SelectSecondStageSeedRepair(
+                    detail::SecondStageSeedRepairCandidates{
+                        result.posterior,
+                        group_prior_list.at(i),
+                        result.ols,
+                        group_median,
+                        global_median
+                    })
+            };
+            if (!selection.has_value())
+            {
+                return build_result;
+            }
+
+            const auto repaired_seed{
+                detail::BuildRepairedSecondStageSeed(original_model, *selection)
+            };
+            const auto repaired_model{ repaired_seed.GetModel() };
+            if (!detail::IsValidSecondStageGaussianModel(repaired_model))
+            {
+                return build_result;
+            }
+            result.mdpde = repaired_seed;
+            build_result.repair_record_list.emplace_back(
+                SecondStageSeedRepairRecord{
+                    i,
+                    selection->source,
+                    original_model,
+                    repaired_model
+                });
+        }
+        state.estimation_list.at(i) = result.mdpde.GetModel().ToVector();
+    }
+    build_result.state = std::move(state);
+    return build_result;
+}
+
+void LogSecondStageSeedRepairs(
+    const std::vector<SecondStageSeedRepairRecord> & repair_record_list,
+    const FitOptions & options)
+{
+    if (options.quiet_mode || repair_record_list.empty()) return;
+
+    constexpr std::array<detail::SecondStageSeedRepairSource, 5> source_list{
+        detail::SecondStageSeedRepairSource::GroupPosterior,
+        detail::SecondStageSeedRepairSource::GroupPrior,
+        detail::SecondStageSeedRepairSource::LocalOls,
+        detail::SecondStageSeedRepairSource::GroupMedian,
+        detail::SecondStageSeedRepairSource::GlobalMedian
+    };
+    std::array<std::size_t, source_list.size()> source_count{};
+    for (const auto & record : repair_record_list)
+    {
+        source_count.at(GetSecondStageSeedRepairSourceIndex(record.source))++;
+    }
+
+    std::ostringstream summary;
+    summary << "Repaired invalid second-stage seed atoms = "
+        << repair_record_list.size() << ", sources = ";
+    for (std::size_t i = 0; i < source_list.size(); i++)
+    {
+        if (i != 0) summary << ", ";
+        summary << GetSecondStageSeedRepairSourceText(source_list.at(i))
+            << ":" << source_count.at(i);
+    }
+    summary << ".";
+    Logger::Log(LogLevel::Info, summary.str());
+
+    for (const auto & record : repair_record_list)
+    {
+        std::ostringstream detail_message;
+        detail_message << "Second-stage seed repair: atom index = "
+            << record.atom_index
+            << ", source = " << GetSecondStageSeedRepairSourceText(record.source)
+            << std::scientific
+            << ", original A/B/C = "
+            << record.original_model.GetAmplitude() << "/"
+            << record.original_model.GetWidth() << "/"
+            << record.original_model.GetOffset()
+            << ", repaired A/B/C = "
+            << record.repaired_model.GetAmplitude() << "/"
+            << record.repaired_model.GetWidth() << "/"
+            << record.repaired_model.GetOffset() << ".";
+        Logger::Log(LogLevel::Debug, detail_message.str());
+    }
 }
 
 FittedGaussianSnapshot BuildFittedGaussianSnapshot(
@@ -2045,13 +2278,6 @@ double CalculateSquaredValue(double value)
     return value * value;
 }
 
-bool IsLocalFittingObjectiveModelValid(const GaussianModel3D & model)
-{
-    return numeric_validation::IsFinitePositive(model.GetAmplitude()) &&
-        numeric_validation::IsFinitePositive(model.GetWidth()) &&
-        std::isfinite(model.GetOffset());
-}
-
 std::optional<LocalFittingParameterPenaltyComponents>
 CalculateLocalFittingParameterPenaltyComponents(
     const SecondStageLocalFittingContext & context,
@@ -2082,7 +2308,7 @@ CalculateLocalFittingParameterPenaltyComponents(
         if (active_index >= context.AtomSize()) return std::nullopt;
 
         const auto & model{ atom_model.model };
-        if (!IsLocalFittingObjectiveModelValid(model)) return std::nullopt;
+        if (!detail::IsValidSecondStageGaussianModel(model)) return std::nullopt;
 
         const auto prior_width{ context.atom_context_list.at(active_index).prior_width };
         if (!numeric_validation::IsFinitePositive(prior_width)) return std::nullopt;
@@ -2112,7 +2338,10 @@ CalculateLocalFittingParameterPenaltyComponents(
             };
             if (previous_atom_model.atom_index != active_index) return std::nullopt;
             const auto & previous_model{ previous_atom_model.model };
-            if (!IsLocalFittingObjectiveModelValid(previous_model)) return std::nullopt;
+            if (!detail::IsValidSecondStageGaussianModel(previous_model))
+            {
+                return std::nullopt;
+            }
 
             const auto previous_offset_basis{ previous_model.OffsetBasisAtDistance(0.0) };
             const auto previous_peak_signal{ previous_model.SignalAtDistance(0.0) };
@@ -3332,9 +3561,7 @@ bool IsLocalGaussianRefitHealthEligible(const LocalGaussianResult & result)
     const auto & model{ result.mdpde.GetModel() };
     return detail::IsLocalGaussianRefitStatusHealthEligible(
             result.fit_result->status) &&
-        std::isfinite(model.GetAmplitude()) && model.GetAmplitude() > 0.0 &&
-        std::isfinite(model.GetWidth()) && model.GetWidth() > 0.0 &&
-        std::isfinite(model.GetOffset());
+        detail::IsValidSecondStageGaussianModel(model);
 }
 
 std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
@@ -3349,7 +3576,8 @@ std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
     const auto & previous_model{ previous_result.mdpde.GetModel() };
     const auto is_acceptable = [&](const GaussianModel3D & model)
     {
-        return CanBuildFiniteZeroOffsetSamples(sample_entries, model) &&
+        return detail::IsValidSecondStageGaussianModel(model) &&
+            CanBuildFiniteZeroOffsetSamples(sample_entries, model) &&
             !IsSuspiciousJointOffset(
                 sample_entries,
                 previous_model,
@@ -4532,14 +4760,33 @@ void RunSecondStageLocalFitting(
     const SecondStageLocalFittingInternalOptions & internal_options)
 {
     const auto context{ BuildSecondStageLocalFittingContext(model_object) };
-    auto local_editor_list{ BuildAtomLocalEditors(model_object, context.atom_list) };
     const auto atom_size{ context.AtomSize() };
     if (!options.quiet_mode)
     {
         Logger::Log(LogLevel::Info, "Run 2nd-stage local atom fitting with iterations...");
     }
 
-    auto previous_state{ BuildInitialLocalFittingState(context) };
+    auto initial_state_build_result{
+        BuildInitialLocalFittingState(
+            context,
+            model_object.GetAnalysisView())
+    };
+    if (!initial_state_build_result.state.has_value())
+    {
+        if (!options.quiet_mode)
+        {
+            Logger::Log(
+                LogLevel::Warning,
+                "Skip 2nd-stage local atom fitting because no valid Gaussian seed "
+                "is available for every selected atom.");
+        }
+        return;
+    }
+    LogSecondStageSeedRepairs(
+        initial_state_build_result.repair_record_list,
+        options);
+    auto local_editor_list{ BuildAtomLocalEditors(model_object, context.atom_list) };
+    auto previous_state{ std::move(*initial_state_build_result.state) };
     auto best_audit_state{
         BuildInitialLocalFittingBestAuditState(context, previous_state)
     };
