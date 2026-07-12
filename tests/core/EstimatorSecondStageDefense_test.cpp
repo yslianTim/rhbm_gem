@@ -177,6 +177,16 @@ std::unique_ptr<rg::ModelObject> BuildNearCollinearDefenseModel()
         rg::GaussianModel3D{ 5.75, 0.55, 0.0 });
 }
 
+std::unique_ptr<rg::ModelObject> BuildInvalidCandidateDefenseModel()
+{
+    auto model{ BuildNearCollinearDefenseModel() };
+    auto analysis{ model->EditAnalysis() };
+    analysis.EnsureAtomLocalPotential(*model->GetSelectedAtoms().front())
+        .SetGaussianResult(MakeGaussianResult(
+            rg::GaussianModel3D{ 0.0, 0.0, 0.0 }));
+    return model;
+}
+
 void MakeAtomSamplesSuspicious(rg::ModelObject & model, std::size_t atom_index)
 {
     const auto & selected_atoms{ model.GetSelectedAtoms() };
@@ -532,6 +542,111 @@ TEST(EstimatorSecondStageDefenseTest, AuditObjectiveKeepsEarlierBestOnTie)
         std::invalid_argument);
 }
 
+TEST(EstimatorSecondStageDefenseTest, ObjectivePenaltyUsesAtomMeanIndependentOfCardinality)
+{
+    const auto single_atom{
+        audit_detail::BuildLocalFittingMeanObjectiveBreakdown(
+            0.4,
+            25.0,
+            9.0,
+            16.0,
+            1,
+            0.01,
+            0.02,
+            0.03)
+    };
+    const auto repeated_atoms{
+        audit_detail::BuildLocalFittingMeanObjectiveBreakdown(
+            0.4,
+            2500.0,
+            900.0,
+            1600.0,
+            100,
+            0.01,
+            0.02,
+            0.03)
+    };
+    const auto single_previous{
+        audit_detail::BuildLocalFittingMeanObjectiveBreakdown(
+            1.4,
+            0.0,
+            0.0,
+            0.0,
+            1,
+            0.01,
+            0.02,
+            0.03)
+    };
+    const auto repeated_previous{
+        audit_detail::BuildLocalFittingMeanObjectiveBreakdown(
+            1.4,
+            0.0,
+            0.0,
+            0.0,
+            100,
+            0.01,
+            0.02,
+            0.03)
+    };
+
+    ASSERT_TRUE(single_atom.has_value());
+    ASSERT_TRUE(repeated_atoms.has_value());
+    ASSERT_TRUE(single_previous.has_value());
+    ASSERT_TRUE(repeated_previous.has_value());
+    EXPECT_DOUBLE_EQ(
+        single_atom->residual_objective,
+        repeated_atoms->residual_objective);
+    EXPECT_DOUBLE_EQ(
+        single_atom->width_prior_penalty,
+        repeated_atoms->width_prior_penalty);
+    EXPECT_DOUBLE_EQ(
+        single_atom->offset_plausibility_penalty,
+        repeated_atoms->offset_plausibility_penalty);
+    EXPECT_DOUBLE_EQ(
+        single_atom->movement_penalty,
+        repeated_atoms->movement_penalty);
+    EXPECT_DOUBLE_EQ(
+        single_atom->total_objective,
+        repeated_atoms->total_objective);
+    EXPECT_DOUBLE_EQ(
+        single_atom->total_objective,
+        single_atom->residual_objective +
+            single_atom->width_prior_penalty +
+            single_atom->offset_plausibility_penalty +
+            single_atom->movement_penalty);
+    EXPECT_GT(single_atom->movement_penalty, 0.0);
+    EXPECT_DOUBLE_EQ(single_previous->movement_penalty, 0.0);
+    EXPECT_EQ(
+        audit_detail::IsBetterLocalFittingAuditObjective(
+            single_atom->total_objective,
+            single_previous->total_objective,
+            1.0e-8),
+        audit_detail::IsBetterLocalFittingAuditObjective(
+            repeated_atoms->total_objective,
+            repeated_previous->total_objective,
+            1.0e-8));
+    EXPECT_FALSE(
+        audit_detail::BuildLocalFittingMeanObjectiveBreakdown(
+            0.4,
+            25.0,
+            9.0,
+            16.0,
+            0,
+            0.01,
+            0.02,
+            0.03).has_value());
+    EXPECT_FALSE(
+        audit_detail::BuildLocalFittingMeanObjectiveBreakdown(
+            std::numeric_limits<double>::infinity(),
+            25.0,
+            9.0,
+            16.0,
+            1,
+            0.01,
+            0.02,
+            0.03).has_value());
+}
+
 TEST(EstimatorSecondStageDefenseTest, AndersonRegimeTracksGlobalAndClusterEffectiveRidge)
 {
     const std::vector<regime_detail::LocalFittingAndersonRegimeClusterKey> key_list{
@@ -675,6 +790,45 @@ TEST(EstimatorSecondStageDefenseTest, LocalRefitHealthAcceptsOnlyUsableFitStatus
     EXPECT_THROW(
         health_detail::IsLocalGaussianRefitStatusHealthEligible(
             static_cast<rg::RHBMEstimationStatus>(-1)),
+        std::logic_error);
+}
+
+TEST(EstimatorSecondStageDefenseTest, JointOffsetHealthSeparatesProgressFromStationarity)
+{
+    using Status = health_detail::JointOffsetSolveStatus;
+
+    EXPECT_TRUE(health_detail::IsJointOffsetSolveProgressEligible(Status::Converged));
+    EXPECT_TRUE(health_detail::IsJointOffsetSolveStationarityEligible(Status::Converged));
+    EXPECT_FALSE(health_detail::IsJointOffsetSolveHardFailure(Status::Converged));
+
+    for (const auto status : {
+        Status::IrlsObjectiveDeteriorated,
+        Status::IrlsMaximumIterationsReached })
+    {
+        EXPECT_TRUE(health_detail::IsJointOffsetSolveProgressEligible(status));
+        EXPECT_FALSE(health_detail::IsJointOffsetSolveStationarityEligible(status));
+        EXPECT_FALSE(health_detail::IsJointOffsetSolveHardFailure(status));
+    }
+
+    for (const auto status : {
+        Status::SystemBuildFailed,
+        Status::EmptySystem,
+        Status::InitialSolveFailed,
+        Status::IrlsSolveFailed })
+    {
+        EXPECT_FALSE(health_detail::IsJointOffsetSolveProgressEligible(status));
+        EXPECT_FALSE(health_detail::IsJointOffsetSolveStationarityEligible(status));
+        EXPECT_TRUE(health_detail::IsJointOffsetSolveHardFailure(status));
+    }
+
+    const auto invalid_status{ static_cast<Status>(-1) };
+    EXPECT_THROW(
+        health_detail::IsJointOffsetSolveProgressEligible(invalid_status),
+        std::logic_error);
+    EXPECT_FALSE(
+        health_detail::IsJointOffsetSolveStationarityEligible(invalid_status));
+    EXPECT_THROW(
+        health_detail::IsJointOffsetSolveHardFailure(invalid_status),
         std::logic_error);
 }
 
@@ -1181,7 +1335,13 @@ TEST(EstimatorSecondStageDefenseTest, ClusterLocalHealthAllowsRemoteAndersonDuri
     EXPECT_NE(
         enabled_output.find("health-unhealthy clusters/atoms = 1/2"),
         std::string::npos);
+    EXPECT_NE(
+        enabled_output.find("joint-offset statuses clusters/atoms = "),
+        std::string::npos);
     EXPECT_EQ(disabled_output.find("joint-offset ="), std::string::npos);
+    EXPECT_EQ(
+        disabled_output.find("joint-offset statuses clusters/atoms = "),
+        std::string::npos);
     EXPECT_EQ(
         disabled_output.find("health-unhealthy clusters/atoms"),
         std::string::npos);
@@ -1236,6 +1396,9 @@ TEST(EstimatorSecondStageDefenseTest, LocalRefitFallbackOnlyInvalidatesItsCluste
     EXPECT_NE(
         output.find("local-refit-fallback clusters/atoms = 1/1"),
         std::string::npos);
+    EXPECT_NE(
+        output.find("objective accepted/rejected clusters = 2/0, atoms = 4/0"),
+        std::string::npos);
     EXPECT_NE(output.find("acceleration = aa"), std::string::npos);
     EXPECT_EQ(
         error_output.find("terminal joint-offset failure fallback"),
@@ -1247,7 +1410,13 @@ TEST(EstimatorSecondStageDefenseTest, LocalRefitFallbackOnlyInvalidatesItsCluste
         error_output.find("applying best validated audit state"),
         std::string::npos);
     EXPECT_NE(
-        error_output.find("fixed audit objective ="),
+        error_output.find("audit best source = accepted iteration "),
+        std::string::npos);
+    EXPECT_NE(
+        error_output.find("fixed audit objective residual/width/offset/total ="),
+        std::string::npos);
+    EXPECT_NE(
+        error_output.find("offsets finite/exact-zero ="),
         std::string::npos);
     EXPECT_LT(
         CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4),
@@ -1286,6 +1455,15 @@ TEST(EstimatorSecondStageDefenseTest, MaximumIterationAuditPreservesTerminalFall
         std::string::npos);
     EXPECT_NE(
         error_output.find("applying best validated audit state"),
+        std::string::npos);
+    EXPECT_NE(
+        error_output.find("audit best source ="),
+        std::string::npos);
+    EXPECT_NE(
+        error_output.find("fixed audit objective residual/width/offset/total ="),
+        std::string::npos);
+    EXPECT_NE(
+        error_output.find("offsets finite/exact-zero ="),
         std::string::npos);
     EXPECT_NE(
         error_output.find(
@@ -1484,6 +1662,15 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingUsesFixedPointWh
     EXPECT_NE(
         output.find("acceleration = damped-fixed-point"),
         std::string::npos);
+    EXPECT_NE(
+        output.find("offset dQ_C p99 raw/accepted ="),
+        std::string::npos);
+    EXPECT_NE(
+        output.find("exact-zero offsets raw/accepted ="),
+        std::string::npos);
+    EXPECT_NE(
+        output.find("objective accepted/rejected clusters = 1/0, atoms = 2/0"),
+        std::string::npos);
     EXPECT_EQ(output.find("objective ="), std::string::npos);
     EXPECT_EQ(output.find("d_amplitude ="), std::string::npos);
     EXPECT_EQ(output.find("active/frozen/thawed atoms"), std::string::npos);
@@ -1517,11 +1704,107 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingKeepsRidgeRetryO
         EXPECT_TRUE(
             output.find("increased cluster-local objective ridge", retry_position) != std::string::npos ||
             output.find("increased global ridge ratio", retry_position) != std::string::npos);
+        EXPECT_NE(
+            output.find("offset dQ_C p99 raw =", retry_position),
+            std::string::npos);
+        EXPECT_NE(
+            output.find("exact-zero offsets raw =", retry_position),
+            std::string::npos);
+        EXPECT_NE(
+            output.find(
+                "objective accepted/rejected clusters = 0/1, atoms = 0/2",
+                retry_position),
+            std::string::npos);
     }
     EXPECT_EQ(
         error_output.find("best fixed-point candidate"),
         std::string::npos);
     ExpectSelectedAtomEstimatesAreFinite(*model);
+}
+
+TEST(EstimatorSecondStageDefenseTest, RejectedClusterObjectiveDiagnosticsAreDebugOnly)
+{
+    auto info_model{ BuildSeparatedLocalRefitFallbackDefenseModel() };
+    auto debug_model{ BuildSeparatedLocalRefitFallbackDefenseModel() };
+
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    rt::RunSecondStageLocalFitting(*info_model, MakeSecondStageOptions(false));
+    const std::string info_output{ testing::internal::GetCapturedStdout() };
+    static_cast<void>(testing::internal::GetCapturedStderr());
+
+    Logger::SetLogLevel(LogLevel::Debug);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    rt::RunSecondStageLocalFitting(*debug_model, MakeSecondStageOptions(false));
+    const std::string debug_output{ testing::internal::GetCapturedStdout() };
+    static_cast<void>(testing::internal::GetCapturedStderr());
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_EQ(
+        info_output.find("Rejected local fitting cluster objective diagnostics:"),
+        std::string::npos);
+    EXPECT_NE(
+        debug_output.find("Rejected local fitting cluster objective diagnostics:"),
+        std::string::npos);
+    EXPECT_NE(
+        debug_output.find(
+            "Rejected local fitting cluster objective diagnostics: atoms = 2"),
+        std::string::npos);
+    EXPECT_NE(
+        debug_output.find("breakdown order = residual/width/offset/movement/total"),
+        std::string::npos);
+    EXPECT_NE(
+        debug_output.find("kind = fixed-point, damping = 1.000000e+00 (raw)"),
+        std::string::npos);
+    for (const auto damping_text : {
+        "5.000000e-01",
+        "2.500000e-01",
+        "1.250000e-01",
+        "6.250000e-02" })
+    {
+        EXPECT_NE(
+            debug_output.find(
+                std::string{ "kind = fixed-point, damping = " } + damping_text),
+            std::string::npos);
+    }
+    EXPECT_NE(debug_output.find("candidate = "), std::string::npos);
+    EXPECT_NE(debug_output.find("previous = "), std::string::npos);
+    EXPECT_NE(debug_output.find("best = "), std::string::npos);
+    EXPECT_NE(debug_output.find("rejected-by = "), std::string::npos);
+    const auto & info_atoms{ info_model->GetSelectedAtoms() };
+    const auto & debug_atoms{ debug_model->GetSelectedAtoms() };
+    ASSERT_EQ(info_atoms.size(), debug_atoms.size());
+    for (std::size_t i = 0; i < info_atoms.size(); i++)
+    {
+        ExpectGaussianModelsNear(
+            GetEstimateModel(*info_atoms.at(i)),
+            GetEstimateModel(*debug_atoms.at(i)),
+            1.0e-12);
+    }
+    ExpectSelectedAtomEstimatesAreFinite(*info_model);
+    ExpectSelectedAtomEstimatesAreFinite(*debug_model);
+}
+
+TEST(EstimatorSecondStageDefenseTest, InvalidCandidateDiagnosticReportsFirstAtomAndReason)
+{
+    auto model{ BuildInvalidCandidateDefenseModel() };
+
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Debug);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
+    const std::string output{ testing::internal::GetCapturedStdout() };
+    static_cast<void>(testing::internal::GetCapturedStderr());
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_NE(output.find("status = invalid-model"), std::string::npos);
+    EXPECT_NE(output.find("first invalid atom = 0"), std::string::npos);
+    EXPECT_NE(output.find("reason = non-positive-width"), std::string::npos);
+    EXPECT_NE(output.find("A/B/C = 0.000000e+00/0.000000e+00/"), std::string::npos);
 }
 
 TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingReportsMaximumGlobalRidgeStopWhenReached)

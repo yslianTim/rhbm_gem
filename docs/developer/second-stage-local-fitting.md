@@ -107,11 +107,19 @@ objective deteriorates, normalized offset movement is small, or the robust-loss
 iteration limit is reached. `JointOffsetSolveStatus` distinguishes converged,
 system-build failure, empty-system, initial-solve failure, IRLS-solve failure,
 objective deterioration, and IRLS-iteration-limit exits. Build, empty-system,
-and initial-solve failures use the previous offsets; later IRLS failures use the
-last valid offsets. The rest of the local fitting iteration still runs so its
+initial-solve, and IRLS-solve failures use the previous offsets. Objective
+deterioration and the IRLS iteration limit retain the last valid finite offsets.
+The rest of the local fitting iteration still runs so its
 amplitude/width refits can pass through the normal cluster objective gate.
 Each cluster retains its own status and effective ridge multipliers; one failed
 solve does not make a disconnected, converged cluster unhealthy.
+
+Joint-offset status has separate progress and stationarity meanings.
+`Converged` is eligible for both. `IrlsObjectiveDeteriorated` and
+`IrlsMaximumIterationsReached` are finite deterministic outputs eligible for
+objective-gated ridge and Anderson progress, but not freeze or convergence.
+System-build, empty-system, initial-solve, and IRLS-solve failures are hard
+failures eligible for neither.
 
 ## Refit and Rollback
 
@@ -202,9 +210,11 @@ Each joint-offset system build that produces its cluster's complete
 effective-multiplier list can form a signature, including a build whose later
 solve does not converge. The signature map is therefore partial when another
 cluster fails during system construction. With the default health policy
-enabled, an unhealthy cluster clears and suppresses only its own Anderson
-history before candidate construction and cannot commit its raw map or
-signature. A signature mismatch likewise clears only the affected cluster. Any
+enabled, a hard-failure or local-refit-fallback cluster clears and suppresses
+only its own Anderson history before candidate construction and cannot commit
+its raw map or signature. Progress-eligible joint-offset results may commit
+history only while their exact joint status also remains unchanged. A status or
+signature mismatch clears only the affected cluster. Any
 pre-refit or post-refit suspicious rollback clears its containing cluster before
 candidate construction. Compatible healthy remote clusters retain their
 histories.
@@ -284,18 +294,19 @@ fresh fixed-point commit before Anderson can resume.
 
 Ridge retry is staged:
 
-- partial accepted iterations lower objective ridge for healthy, accepted,
-  non-suspicious clusters and raise it for rejected clusters;
+- partial accepted iterations lower objective ridge for progress-eligible,
+  accepted, non-suspicious clusters and raise it for rejected clusters;
 - if every cluster is rejected, rejected clusters first raise their local
   objective ridge multipliers; and
 - the global `ridge_ratio` increases only when all rejected cluster-local
   objective ridge multipliers are saturated.
 
 Accepted iterations without objective rejection shrink the global `ridge_ratio`
-toward `kJointOffsetRidgeRatioMin` only when every active cluster is healthy.
-An unhealthy cluster does not lower its local objective ridge. Healthy remote
-clusters retain their local ridge decrease, while rejected clusters retain the
-existing ridge-increase behavior.
+toward `kJointOffsetRidgeRatioMin` when every active cluster is progress-
+eligible. Soft incomplete IRLS results can therefore continue the numerical
+trajectory without being treated as stationarity evidence. Hard-failure or
+local-refit-fallback clusters do not lower their local objective ridge;
+eligible remote clusters retain their local ridge decrease.
 
 ## Freeze, Thaw, and Convergence
 
@@ -350,8 +361,8 @@ freeze/thaw, or convergence statistics, but remain in the fitted snapshot as
 fixed contributors for other active clusters.
 
 A separate persistent joint-offset failure tracker handles accepted clusters
-that have no suspicious rollback. It advances only when the exact same
-non-converged `JointOffsetSolveStatus` repeats and the cluster's transformed
+that have no suspicious rollback. It advances only when the exact same hard-
+failure `JointOffsetSolveStatus` repeats and the cluster's transformed
 movement is below the convergence tolerance. Rejection, effective movement,
 solver recovery, a status change, suspicious rollback, or a cluster-key change
 resets the count. After five consecutive accepted no-progress failures, the
@@ -373,11 +384,13 @@ Raw residual is used only for freeze and parameter convergence. Dependency
 thaw, objective tie-breaking, persistent suspicious or solver no-progress, and
 ridge adjustment retain their accepted-change semantics.
 
-Unhealthy clusters clear and suppress their own Anderson history before
-candidate selection and do not commit their raw fixed-point map or ridge regime
-signature. In non-quiet mode the existing progress or retry line reports
-`health-unhealthy clusters/atoms = C/A`, counts joint reasons in enum order such
-as `joint-offset = system-build-failed:1`, and reports refit fallbacks as
+Hard-failure and local-refit-fallback clusters clear and suppress their own
+Anderson history before candidate selection. Soft incomplete status changes
+also start a new history regime. In non-quiet mode the existing progress or
+retry line reports every joint status as
+`joint-offset statuses clusters/atoms = status:C/A`, reports strict health as
+`health-unhealthy clusters/atoms = C/A`, counts non-stationary joint reasons in
+enum order such as `joint-offset = system-build-failed:1`, and reports refit fallbacks as
 `local-refit-fallback clusters/atoms = C/A`. No separate per-iteration warning
 or fallback summary is emitted.
 
@@ -416,9 +429,22 @@ stage; the initial state is considered first.
 
 The fixed audit objective uses the normal Cauchy residual, width prior, and
 offset plausibility penalty, but excludes the single-step movement penalty and
-all ridge or freeze state. Every complete assembled state with at least one
-objective-gated accepted cluster can compete, including partial or unhealthy
-iterations. A candidate replaces the stored complete `GaussianFittingState`
+all ridge or freeze state. Its residual is a per-sample mean, while its width
+and offset penalties are per-atom means. This keeps the audit ranking invariant
+when the same scientific case is replicated to a different atom count.
+
+Cluster-local objectives use the same cardinality-independent aggregation:
+width-prior, offset-plausibility, and single-step movement penalties are each
+averaged over the active atoms in that cluster before their existing weights
+are applied. Movement remains candidate-only; committed previous and best
+references omit it. Objective weights, tolerances, robust scales, ridge, and
+damping policies are unchanged.
+
+Every complete assembled state with at least one objective-gated accepted
+cluster can compete, including partial or unhealthy iterations. The tracker
+records whether its best state came from the initial state or an accepted
+iteration, together with residual, width, offset, and total objective
+components. A candidate replaces the stored complete `GaussianFittingState`
 only when its finite objective improves beyond the objective-tie tolerance;
 ties retain the earlier state.
 
@@ -450,14 +476,41 @@ The loop exits through one of five terminal cases:
   best validated audit state when available; otherwise preserve the current
   accepted assembled-state fallback.
 
-Progress logs report iteration, acceleration kind, damping, and active/frozen
-atom counts. Active counts exclude all terminal atoms; progress reports
+Progress logs report iteration, acceleration kind, damping, active/frozen atom
+counts, raw/accepted 99th-percentile offset-to-peak-ratio change, and raw/
+accepted exact-zero offset counts. Objective retry lines report the raw offset
+statistics because no candidate was accepted. Accepted and retry lines also
+report objective-gate accepted/rejected cluster and atom counts before health,
+suspicious, or terminal filtering, plus every joint-offset status as cluster/
+atom counts. Active counts exclude all terminal atoms;
+progress reports
 `terminal-suspicious atoms` and `terminal-joint-offset-failure atoms`
 separately. Final warnings report reason-specific cluster/atom counts and the
 terminal joint-offset status breakdown. Convergence logs retain the percentile
 log-peak-height, log-width, and offset-to-peak-ratio changes. Maximum-iteration
 warnings instead report whether the best validated audit state or the legacy
-fallback was applied, and include the fixed audit objective when available.
+fallback was applied, the audit source and objective breakdown when available,
+and the offset distribution of the state actually applied.
+
+At debug verbosity (`-v4`), every cluster that remains rejected after all
+candidate attempts emits an objective diagnostic after the normal progress or
+retry line. The cluster is identified by atom count and the first/last atom
+index in its canonical key. Attempts are reported in execution order, including
+Anderson candidates when available and all fixed-point damping values;
+fixed-point damping `1.0` is labeled `raw`.
+
+Each scored attempt reports the provisional objective scale and candidate,
+previous, and best breakdowns in
+`residual/width/offset/movement/total` order. Candidate movement is measured
+against the previous model, while committed previous and best references have
+zero movement penalty. `rejected-by` identifies whether the existing tolerance
+comparison failed against previous, best, or both. Invalid damped models and
+unavailable objectives are labeled without fabricated component values. An
+invalid-model entry also reports the first failing atom, whether the failure is
+parameter-size, non-finite-parameter, or non-positive-width, and the damped
+`A/B/C` values when their structure is valid. These
+diagnostics observe the existing gate only; they do not change objective
+weights, scale tracking, damping, or acceptance.
 
 ## Workflow Context
 
@@ -480,4 +533,9 @@ group-alpha/group-potential fit. After second-stage local fitting, the workflow:
 5. retrains group alpha and group potentials once more.
 
 Second-stage local fitting updates selected atom-local Gaussian results only.
-Group Gaussian results are handled by `RunGroupPotentialFitting`.
+Group Gaussian results are handled by `RunGroupPotentialFitting`. Info-level
+stage-boundary summaries report selected-atom offsets after second stage, group
+prior offsets before third stage, and selected-atom offsets after third stage.
+Third-stage fitting intentionally keeps the existing group-prior median offset
+as its fixed offset; the summaries make that propagation visible without
+changing it.

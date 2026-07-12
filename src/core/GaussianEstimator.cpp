@@ -159,22 +159,10 @@ struct ActiveCouplingEdge
 
 using ActiveCouplingGraph = std::vector<std::vector<ActiveCouplingEdge>>;
 using LocalFittingClusterKey = algorithm::ClusterKey;
-
-enum class JointOffsetSolveStatus
-{
-    Converged,
-    SystemBuildFailed,
-    EmptySystem,
-    InitialSolveFailed,
-    IrlsSolveFailed,
-    IrlsObjectiveDeteriorated,
-    IrlsMaximumIterationsReached
-};
-
-bool IsJointOffsetSolveHealthy(JointOffsetSolveStatus status)
-{
-    return status == JointOffsetSolveStatus::Converged;
-}
+using detail::JointOffsetSolveStatus;
+using detail::IsJointOffsetSolveHardFailure;
+using detail::IsJointOffsetSolveProgressEligible;
+using detail::IsJointOffsetSolveStationarityEligible;
 
 const char * GetJointOffsetSolveStatusText(JointOffsetSolveStatus status)
 {
@@ -236,13 +224,15 @@ struct LocalFittingClusterHealthSummary
     std::size_t unhealthy_cluster_count{ 0 };
     std::size_t unhealthy_atom_count{ 0 };
     std::map<JointOffsetSolveStatus, std::size_t> unhealthy_joint_status_count{};
+    std::map<JointOffsetSolveStatus, std::size_t> joint_status_cluster_count{};
+    std::map<JointOffsetSolveStatus, std::size_t> joint_status_atom_count{};
     std::size_t unhealthy_refit_cluster_count{ 0 };
     std::size_t unhealthy_refit_atom_count{ 0 };
 };
 
 bool IsLocalFittingClusterHealthy(const LocalFittingClusterHealth & health)
 {
-    return IsJointOffsetSolveHealthy(health.joint_offset_status) &&
+    return IsJointOffsetSolveStationarityEligible(health.joint_offset_status) &&
         health.unhealthy_refit_atom_count == 0;
 }
 
@@ -273,6 +263,21 @@ std::vector<LocalFittingClusterKey> CollectUnhealthyLocalFittingClusterKeys(
     return key_list;
 }
 
+std::vector<LocalFittingClusterKey> CollectProgressIneligibleLocalFittingClusterKeys(
+    const LocalFittingClusterHealthMap & health_by_key)
+{
+    std::vector<LocalFittingClusterKey> key_list;
+    for (const auto & [key, health] : health_by_key)
+    {
+        if (!IsJointOffsetSolveProgressEligible(health.joint_offset_status) ||
+            health.unhealthy_refit_atom_count > 0)
+        {
+            key_list.emplace_back(key);
+        }
+    }
+    return key_list;
+}
+
 std::vector<std::size_t> CollectLocalFittingClusterAtomIndexes(
     const std::vector<LocalFittingClusterKey> & key_list)
 {
@@ -290,12 +295,14 @@ LocalFittingClusterHealthSummary SummarizeLocalFittingClusterHealth(
     LocalFittingClusterHealthSummary summary;
     for (const auto & [key, health] : health_by_key)
     {
+        summary.joint_status_cluster_count[health.joint_offset_status]++;
+        summary.joint_status_atom_count[health.joint_offset_status] += key.size();
         if (!IsLocalFittingClusterHealthy(health))
         {
             summary.unhealthy_cluster_count++;
             summary.unhealthy_atom_count += key.size();
         }
-        if (!IsJointOffsetSolveHealthy(health.joint_offset_status))
+        if (!IsJointOffsetSolveStationarityEligible(health.joint_offset_status))
         {
             summary.unhealthy_joint_status_count[health.joint_offset_status]++;
         }
@@ -307,6 +314,91 @@ LocalFittingClusterHealthSummary SummarizeLocalFittingClusterHealth(
     }
     return summary;
 }
+
+class LocalFittingJointOffsetStatusTracker
+{
+    std::map<LocalFittingClusterKey, JointOffsetSolveStatus> m_status_by_key{};
+
+public:
+    void Reconcile(const std::vector<LocalFittingClusterKey> & key_list)
+    {
+        std::map<LocalFittingClusterKey, JointOffsetSolveStatus> reconciled_status_by_key;
+        for (const auto & key : key_list)
+        {
+            const auto iter{ m_status_by_key.find(key) };
+            if (iter == m_status_by_key.end()) continue;
+            reconciled_status_by_key.emplace(key, iter->second);
+        }
+        m_status_by_key = std::move(reconciled_status_by_key);
+    }
+
+    std::vector<LocalFittingClusterKey> FindIncompatible(
+        const LocalFittingClusterHealthMap & health_by_key) const
+    {
+        std::vector<LocalFittingClusterKey> incompatible_key_list;
+        for (const auto & [key, health] : health_by_key)
+        {
+            if (!IsJointOffsetSolveProgressEligible(health.joint_offset_status)) continue;
+            const auto committed_iter{ m_status_by_key.find(key) };
+            if (committed_iter != m_status_by_key.end() &&
+                committed_iter->second != health.joint_offset_status)
+            {
+                incompatible_key_list.emplace_back(key);
+            }
+        }
+        return incompatible_key_list;
+    }
+
+    void Invalidate(const std::vector<LocalFittingClusterKey> & key_list)
+    {
+        for (const auto & key : key_list)
+        {
+            m_status_by_key.erase(key);
+        }
+    }
+
+    void InvalidateContaining(const std::vector<std::size_t> & atom_index_list)
+    {
+        for (auto iter = m_status_by_key.begin(); iter != m_status_by_key.end();)
+        {
+            const auto contains_affected_atom{
+                std::any_of(
+                    atom_index_list.begin(), atom_index_list.end(),
+                    [&](std::size_t atom_index)
+                    {
+                        return std::binary_search(
+                            iter->first.begin(), iter->first.end(), atom_index);
+                    })
+            };
+            if (contains_affected_atom)
+            {
+                iter = m_status_by_key.erase(iter);
+            }
+            else
+            {
+                ++iter;
+            }
+        }
+    }
+
+    void Commit(
+        const std::vector<LocalFittingClusterKey> & key_list,
+        const LocalFittingClusterHealthMap & health_by_key)
+    {
+        for (const auto & key : key_list)
+        {
+            const auto health_iter{ health_by_key.find(key) };
+            if (health_iter == health_by_key.end() ||
+                !IsJointOffsetSolveProgressEligible(
+                    health_iter->second.joint_offset_status))
+            {
+                throw std::invalid_argument(
+                    "Joint offset status is missing or ineligible for commit.");
+            }
+            m_status_by_key[key] = health_iter->second.joint_offset_status;
+        }
+    }
+};
 
 struct ClusteredJointOffsetSolveResult
 {
@@ -349,14 +441,39 @@ struct LocalFittingObjectiveSampleRef
     std::size_t sample_index{ 0 };
 };
 
+struct LocalFittingParameterPenaltyComponents
+{
+    double width_prior_penalty_sum{ 0.0 };
+    double offset_plausibility_penalty_sum{ 0.0 };
+    double movement_penalty_sum{ 0.0 };
+};
+
 struct LocalFittingBestAuditState
 {
     std::vector<LocalFittingObjectiveSampleRef> sample_ref_list{};
     std::vector<std::size_t> atom_index_list{};
     std::optional<double> fixed_objective_scale{};
-    std::optional<double> best_objective{};
+    std::optional<detail::LocalFittingObjectiveBreakdown> best_objective{};
     std::optional<GaussianFittingState> best_state{};
+    std::optional<std::size_t> best_accepted_iteration{};
 };
+
+struct LocalFittingOffsetStats
+{
+    std::size_t atom_count{ 0 };
+    std::size_t finite_count{ 0 };
+    std::size_t exact_zero_count{ 0 };
+    double median_absolute_offset{ 0.0 };
+    double percentile_absolute_offset{ 0.0 };
+    double maximum_absolute_offset{ 0.0 };
+};
+
+LocalFittingOffsetStats SummarizeLocalFittingOffsetValues(
+    const std::vector<double> & offset_list);
+
+void AppendLocalFittingOffsetSummary(
+    std::ostringstream & stream,
+    const LocalFittingOffsetStats & stats);
 
 struct PersistentSuspiciousRollbackState
 {
@@ -392,11 +509,56 @@ struct LocalFittingTerminalSummary
     }
 };
 
+enum class LocalFittingObjectiveAttemptDiagnosticStatus
+{
+    Scored,
+    InvalidModel,
+    ObjectiveUnavailable
+};
+
+enum class LocalFittingCandidateBuildFailureReason
+{
+    ParameterSize,
+    NonFiniteParameter,
+    NonPositiveWidth
+};
+
+struct LocalFittingCandidateBuildFailure
+{
+    std::size_t atom_index{ 0 };
+    LocalFittingCandidateBuildFailureReason reason{
+        LocalFittingCandidateBuildFailureReason::ParameterSize
+    };
+    Eigen::VectorXd estimation{};
+};
+
+struct LocalFittingObjectiveAttemptDiagnostic
+{
+    LocalFittingCandidateAttempt attempt{};
+    LocalFittingObjectiveAttemptDiagnosticStatus status{
+        LocalFittingObjectiveAttemptDiagnosticStatus::ObjectiveUnavailable
+    };
+    std::optional<double> objective_scale{};
+    std::optional<detail::LocalFittingObjectiveBreakdown> candidate_objective{};
+    std::optional<detail::LocalFittingObjectiveBreakdown> previous_objective{};
+    std::optional<detail::LocalFittingObjectiveBreakdown> best_objective{};
+    bool rejected_by_previous{ false };
+    bool rejected_by_best{ false };
+    std::optional<LocalFittingCandidateBuildFailure> build_failure{};
+};
+
+struct LocalFittingRejectedClusterDiagnostic
+{
+    LocalFittingClusterKey key{};
+    std::vector<LocalFittingObjectiveAttemptDiagnostic> attempt_list{};
+};
+
 struct LocalFittingClusterWork
 {
     std::vector<LocalFittingObjectiveSampleRef> objective_sample_ref_list{};
     std::optional<LocalFittingCandidateKind> accepted_kind{};
     bool rejected_anderson{ false };
+    std::vector<LocalFittingObjectiveAttemptDiagnostic> objective_attempt_list{};
 };
 
 using LocalFittingClusterMap = std::map<LocalFittingClusterKey, LocalFittingClusterWork>;
@@ -406,8 +568,17 @@ struct LocalFittingCandidateSelection
     GaussianFittingState assembled_state{};
     std::vector<LocalFittingClusterKey> accepted_key_list{};
     std::vector<LocalFittingClusterKey> rejected_key_list{};
+    std::vector<LocalFittingRejectedClusterDiagnostic> rejected_cluster_diagnostic_list{};
     std::optional<LocalFittingCandidateAttempt> accepted_candidate_attempt{};
     bool has_objective_backtracking_rejection{ false };
+};
+
+struct LocalFittingClusterSelectionSummary
+{
+    std::size_t accepted_cluster_count{ 0 };
+    std::size_t rejected_cluster_count{ 0 };
+    std::size_t accepted_atom_count{ 0 };
+    std::size_t rejected_atom_count{ 0 };
 };
 
 struct SecondStageNeighborSample
@@ -1481,7 +1652,7 @@ JointOffsetSolveResult EstimateJointOffsets(
         {
             return JointOffsetSolveResult{
                 JointOffsetSolveStatus::IrlsSolveFailed,
-                offset,
+                previous_offset,
                 std::move(active_coupling_graph),
                 std::move(effective_ridge_multiplier_list)
             };
@@ -1881,7 +2052,8 @@ bool IsLocalFittingObjectiveModelValid(const GaussianModel3D & model)
         std::isfinite(model.GetOffset());
 }
 
-std::optional<double> CalculateLocalFittingParameterPenalty(
+std::optional<LocalFittingParameterPenaltyComponents>
+CalculateLocalFittingParameterPenaltyComponents(
     const SecondStageLocalFittingContext & context,
     const LocalFittingObjectiveSamples & objective_samples,
     double objective_scale,
@@ -1897,9 +2069,7 @@ std::optional<double> CalculateLocalFittingParameterPenalty(
         return std::nullopt;
     }
 
-    double width_prior_penalty{ 0.0 };
-    double offset_plausibility_penalty{ 0.0 };
-    double movement_penalty{ 0.0 };
+    LocalFittingParameterPenaltyComponents components;
     const auto residual_scale_floor{ std::max(objective_scale, kRobustScaleMin) };
     for (std::size_t model_position = 0;
         model_position < objective_samples.active_model_list.size();
@@ -1916,7 +2086,7 @@ std::optional<double> CalculateLocalFittingParameterPenalty(
 
         const auto prior_width{ context.atom_context_list.at(active_index).prior_width };
         if (!numeric_validation::IsFinitePositive(prior_width)) return std::nullopt;
-        width_prior_penalty += CalculateSquaredValue(
+        components.width_prior_penalty_sum += CalculateSquaredValue(
             (std::log(model.GetWidth()) - std::log(prior_width)) / kLocalFittingWidthPriorLogScale);
 
         const auto peak_signal{ model.SignalAtDistance(0.0) };
@@ -1933,7 +2103,7 @@ std::optional<double> CalculateLocalFittingParameterPenalty(
         const auto offset_excess{
             std::max(0.0, offset_ratio - kLocalFittingOffsetPeakRatioMax)
         };
-        offset_plausibility_penalty += CalculateSquaredValue(offset_excess);
+        components.offset_plausibility_penalty_sum += CalculateSquaredValue(offset_excess);
 
         if (movement_reference_model_list != nullptr)
         {
@@ -1960,7 +2130,7 @@ std::optional<double> CalculateLocalFittingParameterPenalty(
                     kRobustScaleMin
                 })
             };
-            movement_penalty += CalculateSquaredValue(
+            components.movement_penalty_sum += CalculateSquaredValue(
                     (std::log(model.GetAmplitude()) - std::log(previous_model.GetAmplitude())) /
                     kLocalFittingMovementAmplitudeLogScale) +
                 CalculateSquaredValue(
@@ -1971,19 +2141,18 @@ std::optional<double> CalculateLocalFittingParameterPenalty(
         }
     }
 
-    const auto penalty{
-        kLocalFittingWidthPriorPenaltyWeight * width_prior_penalty +
-        kLocalFittingOffsetPlausibilityPenaltyWeight * offset_plausibility_penalty +
-        kLocalFittingMovementPenaltyWeight * movement_penalty
-    };
-    return std::isfinite(penalty) ? std::optional<double>{ penalty } : std::nullopt;
+    if (!std::isfinite(components.width_prior_penalty_sum) ||
+        !std::isfinite(components.offset_plausibility_penalty_sum) ||
+        !std::isfinite(components.movement_penalty_sum))
+    {
+        return std::nullopt;
+    }
+    return components;
 }
 
-std::optional<double> CalculateLocalFittingObjective(
-    const SecondStageLocalFittingContext & context,
+std::optional<double> CalculateLocalFittingResidualObjective(
     const LocalFittingObjectiveSamples & objective_samples,
-    double objective_scale,
-    const std::vector<LocalFittingObjectiveAtomModel> * movement_reference_model_list)
+    double objective_scale)
 {
     if (!numeric_validation::IsFinitePositive(objective_scale) ||
         objective_samples.residual_list.empty())
@@ -2003,24 +2172,65 @@ std::optional<double> CalculateLocalFittingObjective(
     const auto residual_objective{
         loss_sum / static_cast<double>(objective_samples.residual_list.size())
     };
-    if (!std::isfinite(residual_objective)) return std::nullopt;
+    return std::isfinite(residual_objective) ?
+        std::optional<double>{ residual_objective } :
+        std::nullopt;
+}
 
-    const auto parameter_penalty{
-        CalculateLocalFittingParameterPenalty(
+std::optional<detail::LocalFittingObjectiveBreakdown>
+CalculateLocalFittingObjectiveBreakdown(
+    const SecondStageLocalFittingContext & context,
+    const LocalFittingObjectiveSamples & objective_samples,
+    double objective_scale,
+    const std::vector<LocalFittingObjectiveAtomModel> * movement_reference_model_list)
+{
+    const auto residual_objective{
+        CalculateLocalFittingResidualObjective(
+            objective_samples,
+            objective_scale)
+    };
+    if (!residual_objective.has_value()) return std::nullopt;
+
+    const auto parameter_penalty_components{
+        CalculateLocalFittingParameterPenaltyComponents(
             context,
             objective_samples,
             objective_scale,
             movement_reference_model_list)
     };
-    if (!parameter_penalty.has_value()) return std::nullopt;
+    if (!parameter_penalty_components.has_value()) return std::nullopt;
 
-    const auto objective{ residual_objective + *parameter_penalty };
-    return std::isfinite(objective) ?
-        std::optional<double>{ objective } :
+    return detail::BuildLocalFittingMeanObjectiveBreakdown(
+            *residual_objective,
+            parameter_penalty_components->width_prior_penalty_sum,
+            parameter_penalty_components->offset_plausibility_penalty_sum,
+            parameter_penalty_components->movement_penalty_sum,
+            objective_samples.active_model_list.size(),
+            kLocalFittingWidthPriorPenaltyWeight,
+            kLocalFittingOffsetPlausibilityPenaltyWeight,
+            kLocalFittingMovementPenaltyWeight);
+}
+
+std::optional<double> CalculateLocalFittingObjective(
+    const SecondStageLocalFittingContext & context,
+    const LocalFittingObjectiveSamples & objective_samples,
+    double objective_scale,
+    const std::vector<LocalFittingObjectiveAtomModel> * movement_reference_model_list)
+{
+    const auto objective{
+        CalculateLocalFittingObjectiveBreakdown(
+            context,
+            objective_samples,
+            objective_scale,
+            movement_reference_model_list)
+    };
+    return objective.has_value() ?
+        std::optional<double>{ objective->total_objective } :
         std::nullopt;
 }
 
-std::optional<double> EvaluateLocalFittingAuditObjective(
+std::optional<detail::LocalFittingObjectiveBreakdown>
+EvaluateLocalFittingAuditObjective(
     const SecondStageLocalFittingContext & context,
     const GaussianFittingState & state,
     LocalFittingBestAuditState & audit_state)
@@ -2038,12 +2248,32 @@ std::optional<double> EvaluateLocalFittingAuditObjective(
         audit_state.fixed_objective_scale.value_or(
             objective_samples->scale_sample)
     };
-    const auto objective{
-        CalculateLocalFittingObjective(
+    const auto residual_objective{
+        CalculateLocalFittingResidualObjective(
+            *objective_samples,
+            objective_scale)
+    };
+    const auto penalty_components{
+        CalculateLocalFittingParameterPenaltyComponents(
             context,
             *objective_samples,
             objective_scale,
             nullptr)
+    };
+    if (!residual_objective.has_value() || !penalty_components.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto objective{
+        detail::BuildLocalFittingMeanObjectiveBreakdown(
+            *residual_objective,
+            penalty_components->width_prior_penalty_sum,
+            penalty_components->offset_plausibility_penalty_sum,
+            penalty_components->movement_penalty_sum,
+            objective_samples->active_model_list.size(),
+            kLocalFittingWidthPriorPenaltyWeight,
+            kLocalFittingOffsetPlausibilityPenaltyWeight,
+            0.0)
     };
     if (!objective.has_value()) return std::nullopt;
     if (!audit_state.fixed_objective_scale.has_value())
@@ -2056,6 +2286,7 @@ std::optional<double> EvaluateLocalFittingAuditObjective(
 void TryUpdateLocalFittingBestAuditState(
     const SecondStageLocalFittingContext & context,
     const GaussianFittingState & candidate_state,
+    const std::optional<std::size_t> & accepted_iteration,
     LocalFittingBestAuditState & audit_state)
 {
     const auto candidate_objective{
@@ -2067,14 +2298,15 @@ void TryUpdateLocalFittingBestAuditState(
     if (!candidate_objective.has_value()) return;
     if (audit_state.best_objective.has_value() &&
         !detail::IsBetterLocalFittingAuditObjective(
-            *candidate_objective,
-            *audit_state.best_objective,
+            candidate_objective->total_objective,
+            audit_state.best_objective->total_objective,
             kLocalFittingObjectiveTieRelativeTolerance))
     {
         return;
     }
     audit_state.best_objective = *candidate_objective;
     audit_state.best_state = candidate_state;
+    audit_state.best_accepted_iteration = accepted_iteration;
 }
 
 LocalFittingBestAuditState BuildInitialLocalFittingBestAuditState(
@@ -2095,7 +2327,11 @@ LocalFittingBestAuditState BuildInitialLocalFittingBestAuditState(
                 LocalFittingObjectiveSampleRef{ atom_index, sample_index });
         }
     }
-    TryUpdateLocalFittingBestAuditState(context, initial_state, audit_state);
+    TryUpdateLocalFittingBestAuditState(
+        context,
+        initial_state,
+        std::nullopt,
+        audit_state);
     return audit_state;
 }
 
@@ -2140,6 +2376,7 @@ void ReconcileLocalFittingBestAuditTerminalFallback(
     {
         audit_state.best_objective.reset();
         audit_state.best_state.reset();
+        audit_state.best_accepted_iteration.reset();
         return;
     }
     audit_state.best_objective = *reconciled_objective;
@@ -2156,7 +2393,8 @@ ScoreLocalFittingClusterCandidate(
     algorithm::FittingQualityCandidateStats & previous_candidate_stats,
     const std::optional<LocalFittingObjectiveSamples> & previous_objective_samples,
     const std::optional<algorithm::ClusteredFittingQualityTrackedCandidate<LocalFittingObjectiveSamples>> & best_candidate,
-    const algorithm::ParameterChangeStats & transformed_change_stats)
+    const algorithm::ParameterChangeStats & transformed_change_stats,
+    LocalFittingObjectiveAttemptDiagnostic & diagnostic)
 {
     algorithm::ClusteredFittingQualityCandidateScore<LocalFittingObjectiveSamples> score;
     score.candidate_stats.parameter_change_stats = transformed_change_stats;
@@ -2181,43 +2419,123 @@ ScoreLocalFittingClusterCandidate(
     objective_scale = objective_scale_tracker.GetProvisionalReference(scale_sample);
     score.has_objective_reference = objective_scale.has_value();
     if (!objective_scale.has_value()) return score;
+    diagnostic.objective_scale = *objective_scale;
     score.objective_scale_sample = scale_sample;
     if (!previous_objective_samples.has_value()) return score;
 
-    const auto candidate_objective{
-        CalculateLocalFittingObjective(
+    diagnostic.candidate_objective =
+        CalculateLocalFittingObjectiveBreakdown(
             context,
             *score.objective_samples,
             *objective_scale,
-            &previous_objective_samples->active_model_list)
-    };
-    score.candidate_stats.quality_objective = candidate_objective;
+            &previous_objective_samples->active_model_list);
+    score.candidate_stats.quality_objective =
+        diagnostic.candidate_objective.has_value() ?
+            std::optional<double>{ diagnostic.candidate_objective->total_objective } :
+            std::nullopt;
     score.committed_quality_objective = CalculateLocalFittingObjective(
         context,
         *score.objective_samples,
         *objective_scale,
         nullptr);
-    if (candidate_objective.has_value())
+    if (diagnostic.candidate_objective.has_value())
     {
-        previous_candidate_stats.quality_objective =
-            CalculateLocalFittingObjective(
+        diagnostic.status = LocalFittingObjectiveAttemptDiagnosticStatus::Scored;
+        diagnostic.previous_objective =
+            CalculateLocalFittingObjectiveBreakdown(
                 context,
                 *previous_objective_samples,
                 *objective_scale,
                 nullptr);
+        previous_candidate_stats.quality_objective =
+            diagnostic.previous_objective.has_value() ?
+                std::optional<double>{ diagnostic.previous_objective->total_objective } :
+                std::nullopt;
         if (best_candidate.has_value() &&
             best_candidate->objective_samples.has_value() &&
             score.best_candidate_stats.has_value())
         {
+            diagnostic.best_objective =
+                CalculateLocalFittingObjectiveBreakdown(
+                    context,
+                    *best_candidate->objective_samples,
+                    *objective_scale,
+                    nullptr);
             score.best_candidate_stats->quality_objective =
-                CalculateLocalFittingObjective(
-                context,
-                *best_candidate->objective_samples,
-                *objective_scale,
-                nullptr);
+                diagnostic.best_objective.has_value() ?
+                    std::optional<double>{ diagnostic.best_objective->total_objective } :
+                    std::nullopt;
+        }
+    }
+    if (score.has_objective_reference)
+    {
+        diagnostic.rejected_by_previous =
+            algorithm::IsFittingQualityObjectiveDeteriorated(
+                score.candidate_stats,
+                previous_candidate_stats,
+                kLocalFittingConvergenceObjectiveRelativeTolerance);
+        if (score.best_candidate_stats.has_value())
+        {
+            diagnostic.rejected_by_best =
+                algorithm::IsFittingQualityObjectiveDeteriorated(
+                    score.candidate_stats,
+                    *score.best_candidate_stats,
+                    kLocalFittingConvergenceObjectiveRelativeTolerance);
         }
     }
     return score;
+}
+
+void LogSelectedAtomOffsetSummary(
+    const ModelObject & model_object,
+    const FitOptions & options,
+    const std::string & stage_label)
+{
+    if (options.quiet_mode) return;
+
+    std::vector<double> offset_list;
+    const auto & atom_list{ model_object.GetSelectedAtoms() };
+    offset_list.reserve(atom_list.size());
+    for (const auto * atom : atom_list)
+    {
+        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
+        offset_list.emplace_back(
+            local_view.GetEstimateMDPDE().GetOffset());
+    }
+
+    std::ostringstream message;
+    message << stage_label;
+    AppendLocalFittingOffsetSummary(
+        message,
+        SummarizeLocalFittingOffsetValues(offset_list));
+    message << ".";
+    Logger::Log(LogLevel::Info, message.str());
+}
+
+void LogAtomGroupPriorOffsetSummary(
+    const ModelObject & model_object,
+    const FitOptions & options,
+    const std::string & stage_label)
+{
+    if (options.quiet_mode) return;
+
+    const auto analysis_view{ model_object.GetAnalysisView() };
+    const auto group_key_list{ analysis_view.CollectAtomGroupKeys() };
+    std::vector<double> offset_list;
+    offset_list.reserve(group_key_list.size());
+    for (const auto group_key : group_key_list)
+    {
+        offset_list.emplace_back(
+            analysis_view.GetAtomGroupPrior(group_key).GetOffset());
+    }
+
+    std::ostringstream message;
+    message << stage_label;
+    AppendLocalFittingOffsetSummary(
+        message,
+        SummarizeLocalFittingOffsetValues(offset_list));
+    message << ".";
+    Logger::Log(LogLevel::Info, message.str());
 }
 
 std::vector<std::string> BuildGroupPriorSpotSummaryLines(const ModelObject & model_object)
@@ -2554,7 +2872,7 @@ TerminalJointOffsetFailureMap UpdatePersistentJointOffsetFailureState(
                 "Persistent joint-offset failure cluster health is missing.");
         }
         const auto status{ health_iter->second.joint_offset_status };
-        if (IsJointOffsetSolveHealthy(status)) continue;
+        if (!IsJointOffsetSolveHardFailure(status)) continue;
 
         const auto transformed_change_stats{
             SummarizeLocalFittingTransformedChanges(
@@ -2710,7 +3028,8 @@ std::optional<GaussianFittingState> BuildLocalFittingCandidateState(
     const std::vector<Eigen::VectorXd> & candidate_estimation_list,
     const std::vector<LocalGaussianResult> & uncertainty_result_list,
     const std::vector<std::size_t> & active_index_list,
-    double damping)
+    double damping,
+    LocalFittingCandidateBuildFailure * build_failure)
 {
     if (!std::isfinite(damping) || damping <= 0.0 || damping > 1.0)
     {
@@ -2736,10 +3055,28 @@ std::optional<GaussianFittingState> BuildLocalFittingCandidateState(
                     candidate_estimation_list.at(active_index) -
                     previous_state.estimation_list.at(active_index))).eval()
         };
-        if (damped_estimation.size() != GaussianModel3D::ParameterSize() ||
-            !damped_estimation.allFinite() ||
-            damped_estimation(GaussianModel3D::WidthIndex()) <= 0.0)
+        const auto set_build_failure = [&](LocalFittingCandidateBuildFailureReason reason)
         {
+            if (build_failure == nullptr) return;
+            *build_failure = LocalFittingCandidateBuildFailure{
+                active_index,
+                reason,
+                damped_estimation
+            };
+        };
+        if (damped_estimation.size() != GaussianModel3D::ParameterSize())
+        {
+            set_build_failure(LocalFittingCandidateBuildFailureReason::ParameterSize);
+            return std::nullopt;
+        }
+        if (!damped_estimation.allFinite())
+        {
+            set_build_failure(LocalFittingCandidateBuildFailureReason::NonFiniteParameter);
+            return std::nullopt;
+        }
+        if (damped_estimation(GaussianModel3D::WidthIndex()) <= 0.0)
+        {
+            set_build_failure(LocalFittingCandidateBuildFailureReason::NonPositiveWidth);
             return std::nullopt;
         }
 
@@ -2838,6 +3175,9 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
             {
                 auto & cluster{ cluster_map.at(key) };
                 if (cluster.accepted_kind.has_value()) continue;
+                LocalFittingObjectiveAttemptDiagnostic attempt_diagnostic;
+                attempt_diagnostic.attempt = candidate_attempt;
+                LocalFittingCandidateBuildFailure build_failure;
 
                 auto attempt_state{
                     BuildLocalFittingCandidateState(
@@ -2845,10 +3185,16 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                         candidate_estimation_list,
                         uncertainty_result_list,
                         key,
-                        damping)
+                        damping,
+                        &build_failure)
                 };
                 if (!attempt_state.has_value())
                 {
+                    attempt_diagnostic.status =
+                        LocalFittingObjectiveAttemptDiagnosticStatus::InvalidModel;
+                    attempt_diagnostic.build_failure = std::move(build_failure);
+                    cluster.objective_attempt_list.emplace_back(
+                        std::move(attempt_diagnostic));
                     if (candidate_kind == LocalFittingCandidateKind::Anderson)
                     {
                         cluster.rejected_anderson = true;
@@ -2880,9 +3226,12 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                                 previous_candidate_stats,
                                 previous_objective_samples,
                                 best_candidate,
-                                transformed_change_stats);
+                                transformed_change_stats,
+                                attempt_diagnostic);
                         })
                 };
+                cluster.objective_attempt_list.emplace_back(
+                    std::move(attempt_diagnostic));
                 if (accepted)
                 {
                     for (const auto active_index : key)
@@ -2949,10 +3298,32 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
         else
         {
             selection.rejected_key_list.emplace_back(key);
+            selection.rejected_cluster_diagnostic_list.emplace_back(
+                LocalFittingRejectedClusterDiagnostic{
+                    key,
+                    cluster.objective_attempt_list
+                });
         }
     }
     acceleration_history.ReleaseSuppression(fixed_point_progress_keys);
     return selection;
+}
+
+LocalFittingClusterSelectionSummary SummarizeLocalFittingClusterSelection(
+    const LocalFittingCandidateSelection & selection)
+{
+    LocalFittingClusterSelectionSummary summary;
+    summary.accepted_cluster_count = selection.accepted_key_list.size();
+    summary.rejected_cluster_count = selection.rejected_key_list.size();
+    for (const auto & key : selection.accepted_key_list)
+    {
+        summary.accepted_atom_count += key.size();
+    }
+    for (const auto & key : selection.rejected_key_list)
+    {
+        summary.rejected_atom_count += key.size();
+    }
+    return summary;
 }
 
 bool IsLocalGaussianRefitHealthEligible(const LocalGaussianResult & result)
@@ -3293,14 +3664,106 @@ void ApplyLocalFittingState(
     }
 }
 
-void LogLocalFittingAllAtomsFrozen(const FitOptions & options, std::size_t accepted_iteration_count)
+LocalFittingOffsetStats SummarizeLocalFittingOffsetValues(
+    const std::vector<double> & offset_list)
+{
+    LocalFittingOffsetStats stats;
+    stats.atom_count = offset_list.size();
+    std::vector<double> absolute_offset_list;
+    absolute_offset_list.reserve(offset_list.size());
+    for (const auto offset : offset_list)
+    {
+        if (!std::isfinite(offset)) continue;
+        stats.finite_count++;
+        if (offset == 0.0) stats.exact_zero_count++;
+        absolute_offset_list.emplace_back(std::abs(offset));
+    }
+    if (absolute_offset_list.empty()) return stats;
+
+    stats.median_absolute_offset =
+        array_helper::ComputeMedian(absolute_offset_list);
+    stats.percentile_absolute_offset =
+        array_helper::ComputePercentile(
+            absolute_offset_list,
+            kLocalFittingChangePercentile);
+    stats.maximum_absolute_offset =
+        *std::max_element(
+            absolute_offset_list.begin(),
+            absolute_offset_list.end());
+    return stats;
+}
+
+LocalFittingOffsetStats SummarizeLocalFittingOffsets(
+    const std::vector<Eigen::VectorXd> & estimation_list)
+{
+    std::vector<double> offset_list;
+    offset_list.reserve(estimation_list.size());
+    for (const auto & estimation : estimation_list)
+    {
+        GaussianModel3D::RequireParameterVector(
+            estimation,
+            "Local fitting offset summary model");
+        offset_list.emplace_back(
+            estimation(GaussianModel3D::OffsetIndex()));
+    }
+    return SummarizeLocalFittingOffsetValues(offset_list);
+}
+
+void AppendLocalFittingOffsetSummary(
+    std::ostringstream & stream,
+    const LocalFittingOffsetStats & stats)
+{
+    stream
+        << std::scientific << std::setprecision(4)
+        << "; offsets finite/exact-zero = "
+        << stats.finite_count << "/" << stats.exact_zero_count
+        << " of " << stats.atom_count
+        << ", |C| median/p99/max = "
+        << stats.median_absolute_offset << "/"
+        << stats.percentile_absolute_offset << "/"
+        << stats.maximum_absolute_offset;
+}
+
+void AppendLocalFittingAuditSummary(
+    std::ostringstream & stream,
+    const LocalFittingBestAuditState & audit_state)
+{
+    if (!audit_state.best_objective.has_value()) return;
+    const auto & objective{ *audit_state.best_objective };
+    stream
+        << "; audit best source = ";
+    if (audit_state.best_accepted_iteration.has_value())
+    {
+        stream << "accepted iteration " << *audit_state.best_accepted_iteration;
+    }
+    else
+    {
+        stream << "initial";
+    }
+    stream
+        << std::scientific << std::setprecision(4)
+        << ", fixed audit objective residual/width/offset/total = "
+        << objective.residual_objective << "/"
+        << objective.width_prior_penalty << "/"
+        << objective.offset_plausibility_penalty << "/"
+        << objective.total_objective;
+}
+
+void LogLocalFittingAllAtomsFrozen(
+    const FitOptions & options,
+    std::size_t accepted_iteration_count,
+    const LocalFittingOffsetStats & offset_stats)
 {
     if (options.quiet_mode) return;
 
     Logger::FinishProgressLine();
-    Logger::Log(LogLevel::Info,
-        "Converged after " + std::to_string(accepted_iteration_count) +
-        " iterations because all local atoms are frozen.");
+    std::ostringstream message;
+    message
+        << "Converged after " << accepted_iteration_count
+        << " iterations because all local atoms are frozen";
+    AppendLocalFittingOffsetSummary(message, offset_stats);
+    message << ".";
+    Logger::Log(LogLevel::Info, message.str());
 }
 
 void AppendLocalFittingTerminalSummary(
@@ -3336,7 +3799,8 @@ void AppendLocalFittingTerminalSummary(
 void LogLocalFittingTerminalFallback(
     const FitOptions & options,
     std::size_t accepted_iteration_count,
-    const LocalFittingTerminalSummary & terminal_summary)
+    const LocalFittingTerminalSummary & terminal_summary,
+    const LocalFittingOffsetStats & offset_stats)
 {
     if (options.quiet_mode) return;
 
@@ -3346,6 +3810,7 @@ void LogLocalFittingTerminalFallback(
         << "Completed local fitting after " << accepted_iteration_count
         << " accepted iterations with last validated states retained";
     AppendLocalFittingTerminalSummary(warning_message, terminal_summary);
+    AppendLocalFittingOffsetSummary(warning_message, offset_stats);
     warning_message << ".";
     Logger::Log(LogLevel::Warning, warning_message.str());
 }
@@ -3354,6 +3819,26 @@ void AppendLocalFittingClusterHealthSummary(
     std::ostringstream & stream,
     const LocalFittingClusterHealthSummary & summary)
 {
+    if (!summary.joint_status_cluster_count.empty())
+    {
+        stream << ", joint-offset statuses clusters/atoms = ";
+        bool is_first_status{ true };
+        for (const auto & [status, cluster_count] :
+            summary.joint_status_cluster_count)
+        {
+            const auto atom_iter{ summary.joint_status_atom_count.find(status) };
+            if (atom_iter == summary.joint_status_atom_count.end())
+            {
+                throw std::logic_error("Joint offset status atom count is missing.");
+            }
+            if (!is_first_status) stream << ",";
+            stream
+                << GetJointOffsetSolveStatusText(status) << ":"
+                << cluster_count << "/" << atom_iter->second;
+            is_first_status = false;
+        }
+    }
+
     if (summary.unhealthy_cluster_count == 0) return;
 
     stream
@@ -3379,12 +3864,176 @@ void AppendLocalFittingClusterHealthSummary(
     }
 }
 
+void AppendLocalFittingClusterSelectionSummary(
+    std::ostringstream & stream,
+    const LocalFittingClusterSelectionSummary & summary)
+{
+    stream
+        << ", objective accepted/rejected clusters = "
+        << summary.accepted_cluster_count << "/"
+        << summary.rejected_cluster_count
+        << ", atoms = "
+        << summary.accepted_atom_count << "/"
+        << summary.rejected_atom_count;
+}
+
+void AppendLocalFittingObjectiveBreakdown(
+    std::ostringstream & stream,
+    const std::optional<detail::LocalFittingObjectiveBreakdown> & breakdown)
+{
+    if (!breakdown.has_value())
+    {
+        stream << "unavailable";
+        return;
+    }
+    stream
+        << breakdown->residual_objective << "/"
+        << breakdown->width_prior_penalty << "/"
+        << breakdown->offset_plausibility_penalty << "/"
+        << breakdown->movement_penalty << "/"
+        << breakdown->total_objective;
+}
+
+void LogRejectedLocalFittingClusterDiagnostics(
+    const FitOptions & options,
+    const std::vector<LocalFittingRejectedClusterDiagnostic> & diagnostic_list)
+{
+    if (options.quiet_mode || Logger::GetLogLevel() < LogLevel::Debug ||
+        diagnostic_list.empty())
+    {
+        return;
+    }
+
+    Logger::FinishProgressLine();
+    for (const auto & cluster_diagnostic : diagnostic_list)
+    {
+        if (cluster_diagnostic.key.empty())
+        {
+            throw std::logic_error(
+                "Rejected local fitting cluster diagnostic key is empty.");
+        }
+        std::ostringstream header;
+        header
+            << "Rejected local fitting cluster objective diagnostics: atoms = "
+            << cluster_diagnostic.key.size()
+            << ", key first/last = "
+            << cluster_diagnostic.key.front() << "/"
+            << cluster_diagnostic.key.back()
+            << ", breakdown order = residual/width/offset/movement/total";
+        Logger::Log(LogLevel::Debug, header.str());
+
+        for (const auto & diagnostic : cluster_diagnostic.attempt_list)
+        {
+            std::ostringstream message;
+            message
+                << std::scientific << std::setprecision(6)
+                << "  kind = "
+                << (diagnostic.attempt.kind == LocalFittingCandidateKind::Anderson ?
+                    "anderson" : "fixed-point")
+                << ", damping = " << diagnostic.attempt.damping;
+            if (diagnostic.attempt.kind == LocalFittingCandidateKind::FixedPoint &&
+                diagnostic.attempt.damping == 1.0)
+            {
+                message << " (raw)";
+            }
+
+            if (diagnostic.status ==
+                LocalFittingObjectiveAttemptDiagnosticStatus::InvalidModel)
+            {
+                message << ", status = invalid-model";
+                if (!diagnostic.build_failure.has_value())
+                {
+                    throw std::logic_error(
+                        "Invalid local fitting candidate diagnostic has no build failure.");
+                }
+                const auto & failure{ *diagnostic.build_failure };
+                message << ", first invalid atom = " << failure.atom_index
+                    << ", reason = ";
+                switch (failure.reason)
+                {
+                case LocalFittingCandidateBuildFailureReason::ParameterSize:
+                    message << "parameter-size";
+                    break;
+                case LocalFittingCandidateBuildFailureReason::NonFiniteParameter:
+                    message << "non-finite-parameter";
+                    break;
+                case LocalFittingCandidateBuildFailureReason::NonPositiveWidth:
+                    message << "non-positive-width";
+                    break;
+                }
+                if (failure.estimation.size() == GaussianModel3D::ParameterSize())
+                {
+                    message
+                        << ", A/B/C = "
+                        << failure.estimation(GaussianModel3D::AmplitudeIndex()) << "/"
+                        << failure.estimation(GaussianModel3D::WidthIndex()) << "/"
+                        << failure.estimation(GaussianModel3D::OffsetIndex());
+                }
+                else
+                {
+                    message << ", parameter size = " << failure.estimation.size();
+                }
+                Logger::Log(LogLevel::Debug, message.str());
+                continue;
+            }
+
+            message << ", objective scale = ";
+            if (diagnostic.objective_scale.has_value())
+            {
+                message << *diagnostic.objective_scale;
+            }
+            else
+            {
+                message << "unavailable";
+            }
+            message << ", candidate = ";
+            AppendLocalFittingObjectiveBreakdown(
+                message,
+                diagnostic.candidate_objective);
+            message << ", previous = ";
+            AppendLocalFittingObjectiveBreakdown(
+                message,
+                diagnostic.previous_objective);
+            message << ", best = ";
+            AppendLocalFittingObjectiveBreakdown(
+                message,
+                diagnostic.best_objective);
+            message << ", rejected-by = ";
+            if (diagnostic.status ==
+                LocalFittingObjectiveAttemptDiagnosticStatus::ObjectiveUnavailable)
+            {
+                message << "objective-unavailable";
+            }
+            else if (diagnostic.rejected_by_previous && diagnostic.rejected_by_best)
+            {
+                message << "previous+best";
+            }
+            else if (diagnostic.rejected_by_previous)
+            {
+                message << "previous";
+            }
+            else if (diagnostic.rejected_by_best)
+            {
+                message << "best";
+            }
+            else
+            {
+                message << "none";
+            }
+            Logger::Log(LogLevel::Debug, message.str());
+        }
+    }
+}
+
 void LogLocalFittingBacktrackingRetry(
     const FitOptions & options,
     std::size_t accepted_iteration_count,
     double ridge_ratio,
     bool uses_cluster_local_objective_ridge,
-    const LocalFittingClusterHealthSummary & health_summary)
+    const LocalFittingClusterHealthSummary & health_summary,
+    const LocalFittingClusterSelectionSummary & selection_summary,
+    double raw_offset_change_percentile,
+    const LocalFittingOffsetStats & raw_offset_stats)
 {
     if (options.quiet_mode) return;
 
@@ -3405,6 +4054,13 @@ void LogLocalFittingBacktrackingRetry(
         progress_message
             << ", next attempt uses increased global ridge ratio = " << ridge_ratio;
     }
+    progress_message
+        << std::scientific << std::setprecision(4)
+        << ", offset dQ_C p99 raw = " << raw_offset_change_percentile
+        << ", exact-zero offsets raw = " << raw_offset_stats.exact_zero_count;
+    AppendLocalFittingClusterSelectionSummary(
+        progress_message,
+        selection_summary);
     AppendLocalFittingClusterHealthSummary(progress_message, health_summary);
     Logger::ProgressLine(progress_message.str());
 }
@@ -3412,8 +4068,9 @@ void LogLocalFittingBacktrackingRetry(
 void LogLocalFittingBacktrackingStop(
     const FitOptions & options,
     LocalFittingBacktrackingStopReason reason,
-    const std::optional<double> & applied_audit_objective,
-    const LocalFittingTerminalSummary & terminal_summary)
+    const LocalFittingBestAuditState * applied_audit_state,
+    const LocalFittingTerminalSummary & terminal_summary,
+    const LocalFittingOffsetStats & applied_offset_stats)
 {
     if (options.quiet_mode) return;
 
@@ -3425,11 +4082,12 @@ void LogLocalFittingBacktrackingStop(
         << (reason == LocalFittingBacktrackingStopReason::MaximumGlobalRidge ?
             "at the maximum joint-offset ridge ratio" : "at the maximum iteration limit");
     AppendLocalFittingTerminalSummary(warning_message, terminal_summary);
-    if (applied_audit_objective.has_value())
+    if (applied_audit_state != nullptr)
     {
-        warning_message
-            << "; applying best validated audit state with fixed audit objective = "
-            << *applied_audit_objective << ".";
+        warning_message << "; applying best validated audit state";
+        AppendLocalFittingAuditSummary(
+            warning_message,
+            *applied_audit_state);
     }
     else
     {
@@ -3439,8 +4097,9 @@ void LogLocalFittingBacktrackingStop(
             warning_message
                 << " because no finite fixed audit state is available";
         }
-        warning_message << ".";
     }
+    AppendLocalFittingOffsetSummary(warning_message, applied_offset_stats);
+    warning_message << ".";
     Logger::Log(LogLevel::Warning, warning_message.str());
 }
 
@@ -3450,7 +4109,12 @@ void LogLocalFittingProgress(
     const LocalFittingCandidateAttempt & current_candidate_attempt,
     const algorithm::ConvergenceFreezeTracker & freeze_tracker,
     const LocalFittingClusterHealthSummary & health_summary,
-    const LocalFittingTerminalSummary & terminal_summary)
+    const LocalFittingTerminalSummary & terminal_summary,
+    const LocalFittingClusterSelectionSummary & selection_summary,
+    double raw_offset_change_percentile,
+    double accepted_offset_change_percentile,
+    const LocalFittingOffsetStats & raw_offset_stats,
+    const LocalFittingOffsetStats & accepted_offset_stats)
 {
     if (options.quiet_mode) return;
 
@@ -3470,6 +4134,17 @@ void LogLocalFittingProgress(
         << ", damping = "<< current_candidate_attempt.damping
         << ", active/frozen atoms = "<< effective_active_count
         << "/" << freeze_tracker.GetFrozenCount();
+    progress_message
+        << std::scientific << std::setprecision(4)
+        << ", offset dQ_C p99 raw/accepted = "
+        << raw_offset_change_percentile << "/"
+        << accepted_offset_change_percentile
+        << ", exact-zero offsets raw/accepted = "
+        << raw_offset_stats.exact_zero_count << "/"
+        << accepted_offset_stats.exact_zero_count;
+    AppendLocalFittingClusterSelectionSummary(
+        progress_message,
+        selection_summary);
     if (terminal_summary.suspicious_atom_count > 0)
     {
         progress_message
@@ -3489,29 +4164,34 @@ void LogLocalFittingProgress(
 void LogLocalFittingConverged(
     const FitOptions & options,
     std::size_t accepted_iteration_count,
-    const algorithm::ParameterChangeStats & transformed_change_stats)
+    const algorithm::ParameterChangeStats & transformed_change_stats,
+    const LocalFittingOffsetStats & offset_stats)
 {
     if (options.quiet_mode) return;
 
     Logger::FinishProgressLine();
-    Logger::Log(LogLevel::Info,
-        "Converged after " + std::to_string(accepted_iteration_count) +
-        " iterations with percentile log-peak-height change = " +
-        std::to_string(transformed_change_stats.percentile_list.at(
-            detail::kLogPeakHeightChangeIndex)) +
-        ", percentile log-width change = " +
-        std::to_string(transformed_change_stats.percentile_list.at(
-            detail::kLogWidthChangeIndex)) +
-        ", and percentile offset-to-peak-ratio change = " +
-        std::to_string(transformed_change_stats.percentile_list.at(
-            detail::kOffsetToPeakRatioChangeIndex)) +
-        ".");
+    std::ostringstream message;
+    message
+        << "Converged after " << accepted_iteration_count
+        << " iterations with percentile log-peak-height change = "
+        << transformed_change_stats.percentile_list.at(
+            detail::kLogPeakHeightChangeIndex)
+        << ", percentile log-width change = "
+        << transformed_change_stats.percentile_list.at(
+            detail::kLogWidthChangeIndex)
+        << ", and percentile offset-to-peak-ratio change = "
+        << transformed_change_stats.percentile_list.at(
+            detail::kOffsetToPeakRatioChangeIndex);
+    AppendLocalFittingOffsetSummary(message, offset_stats);
+    message << ".";
+    Logger::Log(LogLevel::Info, message.str());
 }
 
 void LogLocalFittingMaximumIterations(
     const FitOptions & options,
-    const std::optional<double> & applied_audit_objective,
-    const LocalFittingTerminalSummary & terminal_summary)
+    const LocalFittingBestAuditState * applied_audit_state,
+    const LocalFittingTerminalSummary & terminal_summary,
+    const LocalFittingOffsetStats & applied_offset_stats)
 {
     if (options.quiet_mode) return;
 
@@ -3519,17 +4199,19 @@ void LogLocalFittingMaximumIterations(
     std::ostringstream warning_message;
     warning_message << "Reached maximum iteration size";
     AppendLocalFittingTerminalSummary(warning_message, terminal_summary);
-    if (applied_audit_objective.has_value())
+    if (applied_audit_state != nullptr)
     {
-        warning_message
-            << "; applying best validated audit state with fixed audit objective = "
-            << *applied_audit_objective;
+        warning_message << "; applying best validated audit state";
+        AppendLocalFittingAuditSummary(
+            warning_message,
+            *applied_audit_state);
     }
     else
     {
         warning_message
             << "; applying current accepted candidate because no finite fixed audit state is available";
     }
+    AppendLocalFittingOffsetSummary(warning_message, applied_offset_stats);
     warning_message << ".";
     Logger::Log(LogLevel::Warning, warning_message.str());
 }
@@ -3871,6 +4553,7 @@ void RunSecondStageLocalFitting(
         }
     };
     detail::LocalFittingAndersonRegimeTracker anderson_regime_tracker;
+    LocalFittingJointOffsetStatusTracker joint_offset_status_tracker;
     algorithm::ConvergenceFreezeTracker freeze_tracker{
         atom_size,
         kLocalFittingFreezeTrackerChangeTolerance,
@@ -3917,11 +4600,17 @@ void RunSecondStageLocalFitting(
                 LogLocalFittingTerminalFallback(
                     options,
                     accepted_iteration_count,
-                    terminal_summary);
+                    terminal_summary,
+                    SummarizeLocalFittingOffsets(
+                        previous_state.estimation_list));
             }
             else
             {
-                LogLocalFittingAllAtomsFrozen(options, accepted_iteration_count);
+                LogLocalFittingAllAtomsFrozen(
+                    options,
+                    accepted_iteration_count,
+                    SummarizeLocalFittingOffsets(
+                        previous_state.estimation_list));
             }
             break;
         }
@@ -3946,6 +4635,7 @@ void RunSecondStageLocalFitting(
             });
         acceleration_history.Reconcile(cluster_key_list);
         anderson_regime_tracker.Reconcile(cluster_key_list);
+        joint_offset_status_tracker.Reconcile(cluster_key_list);
         auto joint_offset_ridge_multiplier_list{
             cluster_quality_state.BuildObjectiveRidgeMultiplierList(atom_size)
         };
@@ -3976,9 +4666,17 @@ void RunSecondStageLocalFitting(
         const auto actual_unhealthy_key_list{
             CollectUnhealthyLocalFittingClusterKeys(current_health_by_key)
         };
-        const auto policy_unhealthy_key_list{
+        const auto actual_progress_ineligible_key_list{
+            CollectProgressIneligibleLocalFittingClusterKeys(current_health_by_key)
+        };
+        const auto policy_stationarity_ineligible_key_list{
             internal_options.enable_end_to_end_health_status ?
                 actual_unhealthy_key_list :
+                std::vector<LocalFittingClusterKey>{}
+        };
+        const auto policy_progress_ineligible_key_list{
+            internal_options.enable_end_to_end_health_status ?
+                actual_progress_ineligible_key_list :
                 std::vector<LocalFittingClusterKey>{}
         };
         const auto health_summary{
@@ -3994,8 +4692,18 @@ void RunSecondStageLocalFitting(
         const auto has_suspicious_offset_fallback{
             !suspicious_offset_state_index_list.empty()
         };
-        acceleration_history.ClearAndSuppress(policy_unhealthy_key_list);
-        anderson_regime_tracker.Invalidate(policy_unhealthy_key_list);
+        acceleration_history.ClearAndSuppress(policy_progress_ineligible_key_list);
+        anderson_regime_tracker.Invalidate(policy_progress_ineligible_key_list);
+        joint_offset_status_tracker.Invalidate(policy_progress_ineligible_key_list);
+        if (internal_options.enable_end_to_end_health_status)
+        {
+            const auto incompatible_status_key_list{
+                joint_offset_status_tracker.FindIncompatible(current_health_by_key)
+            };
+            acceleration_history.ClearAndSuppress(incompatible_status_key_list);
+            anderson_regime_tracker.Invalidate(incompatible_status_key_list);
+            joint_offset_status_tracker.Invalidate(incompatible_status_key_list);
+        }
         if (!current_anderson_regime_signature_by_key.empty())
         {
             const auto incompatible_regime_key_list{
@@ -4004,6 +4712,7 @@ void RunSecondStageLocalFitting(
             };
             acceleration_history.ClearAndSuppress(incompatible_regime_key_list);
             anderson_regime_tracker.Invalidate(incompatible_regime_key_list);
+            joint_offset_status_tracker.Invalidate(incompatible_regime_key_list);
         }
         if (has_suspicious_offset_fallback)
         {
@@ -4011,8 +4720,19 @@ void RunSecondStageLocalFitting(
                 suspicious_offset_state_index_list);
             anderson_regime_tracker.InvalidateContaining(
                 suspicious_offset_state_index_list);
+            joint_offset_status_tracker.InvalidateContaining(
+                suspicious_offset_state_index_list);
         }
         const auto raw_state{ std::move(iteration_result.state) };
+        const auto raw_fixed_point_residual_stats{
+            SummarizeLocalFittingTransformedChanges(
+                raw_state.estimation_list,
+                previous_state.estimation_list,
+                active_index_list)
+        };
+        const auto raw_offset_stats{
+            SummarizeLocalFittingOffsets(raw_state.estimation_list)
+        };
         auto selection{
             SelectLocalFittingClusterCandidates(
                 context,
@@ -4023,15 +4743,21 @@ void RunSecondStageLocalFitting(
                 acceleration_history,
                 cluster_quality_state)
         };
-        auto assembled_state{ std::move(selection.assembled_state) };
-        const auto policy_unhealthy_atom_index_list{
-            CollectLocalFittingClusterAtomIndexes(policy_unhealthy_key_list)
+        const auto objective_selection_summary{
+            SummarizeLocalFittingClusterSelection(selection)
         };
-        freeze_tracker.ResetStability(policy_unhealthy_atom_index_list);
+        auto assembled_state{ std::move(selection.assembled_state) };
+        const auto policy_stationarity_ineligible_atom_index_list{
+            CollectLocalFittingClusterAtomIndexes(
+                policy_stationarity_ineligible_key_list)
+        };
+        freeze_tracker.ResetStability(
+            policy_stationarity_ineligible_atom_index_list);
         freeze_tracker.ResetStability(
             CollectLocalFittingClusterAtomIndexes(selection.rejected_key_list));
-        acceleration_history.ClearAndSuppress(policy_unhealthy_key_list);
-        anderson_regime_tracker.Invalidate(policy_unhealthy_key_list);
+        acceleration_history.ClearAndSuppress(policy_progress_ineligible_key_list);
+        anderson_regime_tracker.Invalidate(policy_progress_ineligible_key_list);
+        joint_offset_status_tracker.Invalidate(policy_progress_ineligible_key_list);
         const auto terminal_suspicious_key_list{
             UpdatePersistentSuspiciousRollbackState(
                 cluster_key_list,
@@ -4089,6 +4815,7 @@ void RunSecondStageLocalFitting(
         {
             acceleration_history.ClearAndSuppress(terminal_key_list);
             anderson_regime_tracker.Invalidate(terminal_key_list);
+            joint_offset_status_tracker.Invalidate(terminal_key_list);
             for (const auto & key : terminal_key_list)
             {
                 freeze_tracker.ResetStability(key);
@@ -4108,14 +4835,24 @@ void RunSecondStageLocalFitting(
                 selection.accepted_key_list,
                 terminal_key_list)
         };
-        const auto health_eligible_accepted_key_list{
+        const auto progress_eligible_accepted_key_list{
             ExcludeLocalFittingClusterKeys(
                 continuing_accepted_key_list,
-                policy_unhealthy_key_list)
+                policy_progress_ineligible_key_list)
         };
-        const auto stability_eligible_key_list{
+        const auto progress_eligible_key_list{
             ExcludeLocalFittingClusterKeysContainingAtoms(
-                health_eligible_accepted_key_list,
+                progress_eligible_accepted_key_list,
+                suspicious_offset_state_index_list)
+        };
+        const auto stationarity_eligible_accepted_key_list{
+            ExcludeLocalFittingClusterKeys(
+                continuing_accepted_key_list,
+                policy_stationarity_ineligible_key_list)
+        };
+        const auto stationarity_eligible_key_list{
+            ExcludeLocalFittingClusterKeysContainingAtoms(
+                stationarity_eligible_accepted_key_list,
                 suspicious_offset_state_index_list)
         };
         if (selection.accepted_key_list.empty())
@@ -4139,7 +4876,14 @@ void RunSecondStageLocalFitting(
                 LogLocalFittingBacktrackingRetry(
                     options, accepted_iteration_count, ridge_ratio,
                     increased_cluster_objective_ridge,
-                    health_summary);
+                    health_summary,
+                    objective_selection_summary,
+                    raw_fixed_point_residual_stats.percentile_list.at(
+                        detail::kOffsetToPeakRatioChangeIndex),
+                    raw_offset_stats);
+                LogRejectedLocalFittingClusterDiagnostics(
+                    options,
+                    selection.rejected_cluster_diagnostic_list);
                 continue;
             }
 
@@ -4148,25 +4892,26 @@ void RunSecondStageLocalFitting(
                     LocalFittingBacktrackingStopReason::MaximumIterationLimit :
                     LocalFittingBacktrackingStopReason::MaximumGlobalRidge
             };
-            std::optional<double> applied_audit_objective;
+            const LocalFittingBestAuditState * applied_audit_state{ nullptr };
+            const GaussianFittingState * applied_state{ &previous_state };
             if (stop_reason == LocalFittingBacktrackingStopReason::MaximumIterationLimit &&
                 best_audit_state.best_state.has_value() &&
                 best_audit_state.best_objective.has_value())
             {
-                ApplyLocalFittingState(
-                    *best_audit_state.best_state,
-                    local_editor_list);
-                applied_audit_objective = best_audit_state.best_objective;
+                applied_audit_state = &best_audit_state;
+                applied_state = &*best_audit_state.best_state;
             }
-            else
-            {
-                ApplyLocalFittingState(previous_state, local_editor_list);
-            }
+            ApplyLocalFittingState(*applied_state, local_editor_list);
+            LogRejectedLocalFittingClusterDiagnostics(
+                options,
+                selection.rejected_cluster_diagnostic_list);
             LogLocalFittingBacktrackingStop(
                 options,
                 stop_reason,
-                applied_audit_objective,
-                terminal_summary);
+                applied_audit_state,
+                terminal_summary,
+                SummarizeLocalFittingOffsets(
+                    applied_state->estimation_list));
             break;
         }
 
@@ -4187,24 +4932,22 @@ void RunSecondStageLocalFitting(
                 previous_state.estimation_list,
                 active_index_list)
         };
-        auto raw_fixed_point_residual_stats{
-            SummarizeLocalFittingTransformedChanges(
-                raw_state.estimation_list,
-                previous_state.estimation_list,
-                active_index_list)
+        const auto accepted_offset_stats{
+            SummarizeLocalFittingOffsets(assembled_state.estimation_list)
         };
         accepted_iteration_count++;
         TryUpdateLocalFittingBestAuditState(
             context,
             assembled_state,
+            accepted_iteration_count,
             best_audit_state);
-        cluster_quality_state.DecreaseObjectiveRidge(stability_eligible_key_list);
+        cluster_quality_state.DecreaseObjectiveRidge(progress_eligible_key_list);
         if (!selection.rejected_key_list.empty())
         {
             cluster_quality_state.IncreaseObjectiveRidge(selection.rejected_key_list);
         }
 
-        if (policy_unhealthy_key_list.empty() &&
+        if (policy_progress_ineligible_key_list.empty() &&
             !selection.has_objective_backtracking_rejection)
         {
             ridge_ratio = std::max(kJointOffsetRidgeRatioMin, ridge_ratio * kJointOffsetRidgeShrink);
@@ -4215,34 +4958,42 @@ void RunSecondStageLocalFitting(
                 suspicious_offset_state_index_list);
             anderson_regime_tracker.InvalidateContaining(
                 suspicious_offset_state_index_list);
+            joint_offset_status_tracker.InvalidateContaining(
+                suspicious_offset_state_index_list);
         }
         acceleration_history.Commit(
-            stability_eligible_key_list,
+            progress_eligible_key_list,
             previous_state.estimation_list,
             raw_state.estimation_list);
         const auto regime_signature_commit_key_list{
             CollectLocalFittingClusterKeysWithRegimeSignatures(
-                stability_eligible_key_list,
+                progress_eligible_key_list,
                 current_anderson_regime_signature_by_key)
         };
         anderson_regime_tracker.Commit(
             regime_signature_commit_key_list,
             current_anderson_regime_signature_by_key);
+        if (internal_options.enable_end_to_end_health_status)
+        {
+            joint_offset_status_tracker.Commit(
+                progress_eligible_key_list,
+                current_health_by_key);
+        }
         std::vector<std::size_t> accepted_active_index_list;
         for (const auto & key : continuing_accepted_key_list)
         {
             accepted_active_index_list.insert(
                 accepted_active_index_list.end(), key.begin(), key.end());
         }
-        std::vector<std::size_t> stability_eligible_active_index_list;
-        for (const auto & key : stability_eligible_key_list)
+        std::vector<std::size_t> stationarity_eligible_active_index_list;
+        for (const auto & key : stationarity_eligible_key_list)
         {
-            stability_eligible_active_index_list.insert(
-                stability_eligible_active_index_list.end(), key.begin(), key.end());
+            stationarity_eligible_active_index_list.insert(
+                stationarity_eligible_active_index_list.end(), key.begin(), key.end());
         }
         freeze_tracker.Update(
             freeze_evidence_change_list,
-            stability_eligible_active_index_list);
+            stationarity_eligible_active_index_list);
         ThawChangedActiveAtomNeighbors(
             context, change_list, accepted_active_index_list,
             freeze_tracker, thaw_hysteresis_tracker);
@@ -4264,7 +5015,17 @@ void RunSecondStageLocalFitting(
             selection.accepted_candidate_attempt.value(),
             freeze_tracker,
             health_summary,
-            terminal_summary);
+            terminal_summary,
+            objective_selection_summary,
+            raw_fixed_point_residual_stats.percentile_list.at(
+                detail::kOffsetToPeakRatioChangeIndex),
+            transformed_change_stats.percentile_list.at(
+                detail::kOffsetToPeakRatioChangeIndex),
+            raw_offset_stats,
+            accepted_offset_stats);
+        LogRejectedLocalFittingClusterDiagnostics(
+            options,
+            selection.rejected_cluster_diagnostic_list);
 
         if (BuildEligibleLocalFittingActiveIndexList(
                 freeze_tracker,
@@ -4276,17 +5037,21 @@ void RunSecondStageLocalFitting(
                 LogLocalFittingTerminalFallback(
                     options,
                     accepted_iteration_count,
-                    terminal_summary);
+                    terminal_summary,
+                    accepted_offset_stats);
             }
             else
             {
-                LogLocalFittingAllAtomsFrozen(options, accepted_iteration_count);
+                LogLocalFittingAllAtomsFrozen(
+                    options,
+                    accepted_iteration_count,
+                    accepted_offset_stats);
             }
             break;
         }
 
         const auto converged{
-            policy_unhealthy_key_list.empty() &&
+            policy_stationarity_ineligible_key_list.empty() &&
             !has_suspicious_offset_fallback &&
             !selection.has_objective_backtracking_rejection &&
             cluster_quality_state.AllActiveReferencesLocked(cluster_key_list) &&
@@ -4301,37 +5066,37 @@ void RunSecondStageLocalFitting(
                 LogLocalFittingTerminalFallback(
                     options,
                     accepted_iteration_count,
-                    terminal_summary);
+                    terminal_summary,
+                    accepted_offset_stats);
             }
             else
             {
                 LogLocalFittingConverged(
                     options,
                     accepted_iteration_count,
-                    transformed_change_stats);
+                    transformed_change_stats,
+                    accepted_offset_stats);
             }
             break;
         }
 
         if (iter + 1 == kLocalFittingMaximumIterations)
         {
-            std::optional<double> applied_audit_objective;
+            const LocalFittingBestAuditState * applied_audit_state{ nullptr };
+            const GaussianFittingState * applied_state{ &assembled_state };
             if (best_audit_state.best_state.has_value() &&
                 best_audit_state.best_objective.has_value())
             {
-                ApplyLocalFittingState(
-                    *best_audit_state.best_state,
-                    local_editor_list);
-                applied_audit_objective = best_audit_state.best_objective;
+                applied_audit_state = &best_audit_state;
+                applied_state = &*best_audit_state.best_state;
             }
-            else
-            {
-                ApplyLocalFittingState(assembled_state, local_editor_list);
-            }
+            ApplyLocalFittingState(*applied_state, local_editor_list);
             LogLocalFittingMaximumIterations(
                 options,
-                applied_audit_objective,
-                terminal_summary);
+                applied_audit_state,
+                terminal_summary,
+                SummarizeLocalFittingOffsets(
+                    applied_state->estimation_list));
             break;
         }
         previous_state = std::move(assembled_state);
@@ -4406,12 +5171,24 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
     RunGroupPotentialFitting(model_object, options);
 
     RunSecondStageLocalFitting(model_object, options);
+    LogSelectedAtomOffsetSummary(
+        model_object,
+        options,
+        "Offset summary after 2nd-stage local fitting");
     RunGroupAlphaTraining(model_object, options);
     SetUpdatedSamplingEntriesFromGroupMedianGaussian(model_object);
     RunGroupPotentialFitting(model_object, options);
+    LogAtomGroupPriorOffsetSummary(
+        model_object,
+        options,
+        "Offset summary for group priors before 3rd-stage local fitting");
     SetUpdatedSamplingEntriesFromFittedGroupGaussian(model_object);
     RunLocalAlphaTraining(model_object, options, LocalFittingPass::ThirdStage);
     RunFixedOffsetLocalFitting(model_object, options, LocalFittingPass::ThirdStage);
+    LogSelectedAtomOffsetSummary(
+        model_object,
+        options,
+        "Offset summary after 3rd-stage local fitting");
 
     RunGroupAlphaTraining(model_object, options);
     RunGroupPotentialFitting(model_object, options);

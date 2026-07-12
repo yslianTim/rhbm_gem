@@ -6,6 +6,44 @@
 
 namespace rhbm_gem::core::detail {
 
+enum class JointOffsetSolveStatus
+{
+    Converged,
+    SystemBuildFailed,
+    EmptySystem,
+    InitialSolveFailed,
+    IrlsSolveFailed,
+    IrlsObjectiveDeteriorated,
+    IrlsMaximumIterationsReached
+};
+
+inline bool IsJointOffsetSolveProgressEligible(JointOffsetSolveStatus status)
+{
+    switch (status)
+    {
+    case JointOffsetSolveStatus::Converged:
+    case JointOffsetSolveStatus::IrlsObjectiveDeteriorated:
+    case JointOffsetSolveStatus::IrlsMaximumIterationsReached:
+        return true;
+    case JointOffsetSolveStatus::SystemBuildFailed:
+    case JointOffsetSolveStatus::EmptySystem:
+    case JointOffsetSolveStatus::InitialSolveFailed:
+    case JointOffsetSolveStatus::IrlsSolveFailed:
+        return false;
+    }
+    throw std::logic_error("Joint offset solve status is invalid.");
+}
+
+inline bool IsJointOffsetSolveStationarityEligible(JointOffsetSolveStatus status)
+{
+    return status == JointOffsetSolveStatus::Converged;
+}
+
+inline bool IsJointOffsetSolveHardFailure(JointOffsetSolveStatus status)
+{
+    return !IsJointOffsetSolveProgressEligible(status);
+}
+
 inline bool IsLocalGaussianRefitStatusHealthEligible(RHBMEstimationStatus status)
 {
     switch (status)

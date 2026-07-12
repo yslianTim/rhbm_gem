@@ -691,6 +691,15 @@ TEST(EstimatorTesterTest, RunPotentialFittingWorkflowStoresUpdatedSamplingEntrie
 
     ExpectSelectedAtomUpdatedSamplesArePresent(*model);
     ExpectSelectedAtomEstimatesAreFinite(*model);
+    EXPECT_NE(
+        output.find("Offset summary after 2nd-stage local fitting; offsets finite/exact-zero ="),
+        std::string::npos);
+    EXPECT_NE(
+        output.find("Offset summary for group priors before 3rd-stage local fitting; offsets finite/exact-zero ="),
+        std::string::npos);
+    EXPECT_NE(
+        output.find("Offset summary after 3rd-stage local fitting; offsets finite/exact-zero ="),
+        std::string::npos);
     EXPECT_NE(output.find("Group fitting prior summary by Spot:"), std::string::npos);
     EXPECT_NE(output.find("Spot::C , amplitude mean ="), std::string::npos);
 }
