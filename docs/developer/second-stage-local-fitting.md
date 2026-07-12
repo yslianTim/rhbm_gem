@@ -173,6 +173,21 @@ cluster with compatible history, localized Anderson acceleration proposes:
 candidate = sum(gamma_i * G(x_i)), where sum(gamma_i) = 1
 ```
 
+Compatibility includes a cluster-local ridge regime signature, not only the
+cluster key. The signature records the global joint-offset ridge ratio and,
+in canonical cluster-key order, each atom's effective ridge multiplier. The
+effective multiplier is the maximum of the cluster objective-ridge multiplier,
+the suspicious-retry multiplier, and the proactive collinearity multiplier
+actually used to build the joint-offset system. Signatures use exact comparison,
+so any real change to one of these controls starts a new fixed-point regime.
+
+Only a converged joint-offset solve produces a signature. Before Anderson
+candidate construction, an unhealthy solve clears and suppresses every current
+cluster, while a signature mismatch clears and suppresses only the affected
+cluster. Any pre-refit or post-refit suspicious rollback likewise clears its
+containing cluster before candidate construction. Compatible remote clusters
+retain their histories.
+
 Residuals are scaled per parameter using the normalized-change scale floor.
 The coefficient solve includes L2 regularization and rejects candidates whose
 coefficient L1 norm or maximum absolute coefficient exceeds the configured
@@ -240,7 +255,11 @@ scale-consistent transformed percentile movement.
 
 Rejected Anderson clusters clear and suppress only their own histories. A
 suppressed cluster can use Anderson again after accepted fixed-point progress.
-Accepted clusters commit quality state and Anderson history when not suppressed.
+Healthy accepted clusters commit the raw fixed-point map and the signature used
+to generate it together. Suspicious and terminal clusters do not commit either.
+Ridge changes made after candidate selection do not rewrite that signature; the
+next iteration detects the new regime, clears the old samples, and requires a
+fresh fixed-point commit before Anderson can resume.
 
 Ridge retry is staged:
 
@@ -311,7 +330,8 @@ Parameter convergence requires:
   `kLocalFittingTransformedChangeTolerance`.
 
 Unhealthy joint-offset iterations clear and suppress current cluster Anderson
-history and do not commit their raw fixed-point map. In non-quiet mode their
+history before candidate selection and do not commit their raw fixed-point map
+or a ridge regime signature. In non-quiet mode their
 existing progress line includes the status, for example
 `joint-offset = system-build-failed`; no separate per-iteration warning or
 fallback summary is emitted.

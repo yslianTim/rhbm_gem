@@ -11,12 +11,14 @@
 #include <vector>
 
 #include "core/detail/GaussianEstimatorStages.hpp"
+#include "core/detail/LocalFittingAndersonRegime.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
 #include "core/detail/PostRefitRollback.hpp"
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/algorithm/ClusteredAndersonAcceleration.hpp>
 #include <rhbm_gem/utils/algorithm/ConvergenceFreezeTracker.hpp>
 #include <rhbm_gem/utils/algorithm/DependencyThawHysteresisTracker.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -24,6 +26,7 @@
 namespace {
 namespace alg = rhbm_gem::algorithm;
 namespace change_detail = rhbm_gem::core::detail;
+namespace regime_detail = rhbm_gem::core::detail;
 namespace rollback_detail = rhbm_gem::core::detail;
 namespace rt = rhbm_gem::core;
 namespace rg = rhbm_gem;
@@ -389,7 +392,155 @@ void ExpectSelectedAtomEstimatesAreFinite(const rg::ModelObject & model)
     }
 }
 
+std::vector<Eigen::VectorXd> MakeAndersonState(double left, double right)
+{
+    return {
+        Eigen::VectorXd::Constant(1, left),
+        Eigen::VectorXd::Constant(1, right)
+    };
+}
+
+regime_detail::LocalFittingAndersonRegimeSignatureMap MakeAndersonRegimeSignatures(
+    double global_ridge_ratio,
+    double left_multiplier,
+    double right_multiplier)
+{
+    return regime_detail::BuildLocalFittingAndersonRegimeSignatureMap(
+        { { 0 }, { 1 } },
+        { 0, 1 },
+        global_ridge_ratio,
+        { left_multiplier, right_multiplier });
+}
+
 } // namespace
+
+TEST(EstimatorSecondStageDefenseTest, AndersonRegimeTracksGlobalAndClusterEffectiveRidge)
+{
+    const std::vector<regime_detail::LocalFittingAndersonRegimeClusterKey> key_list{
+        { 0 }, { 1 }
+    };
+    const auto baseline{ MakeAndersonRegimeSignatures(1.0e-3, 1.0, 1.0) };
+    regime_detail::LocalFittingAndersonRegimeTracker tracker;
+    tracker.Commit(key_list, baseline);
+
+    EXPECT_TRUE(tracker.FindIncompatible(baseline).empty());
+    EXPECT_EQ(key_list, tracker.FindIncompatible(
+        MakeAndersonRegimeSignatures(8.0e-4, 1.0, 1.0)));
+    EXPECT_EQ(
+        (std::vector<regime_detail::LocalFittingAndersonRegimeClusterKey>{ { 0 } }),
+        tracker.FindIncompatible(
+            MakeAndersonRegimeSignatures(1.0e-3, 10.0, 1.0)));
+}
+
+TEST(EstimatorSecondStageDefenseTest, AndersonRegimeDetectsRetryAndCollinearityTransitions)
+{
+    const std::vector<regime_detail::LocalFittingAndersonRegimeClusterKey> key_list{
+        { 0 }, { 1 }
+    };
+    const auto baseline{ MakeAndersonRegimeSignatures(1.0e-3, 1.0, 1.0) };
+    const auto guarded{ MakeAndersonRegimeSignatures(1.0e-3, 10.0, 1.0) };
+    regime_detail::LocalFittingAndersonRegimeTracker tracker;
+    tracker.Commit(key_list, baseline);
+
+    EXPECT_EQ(
+        (std::vector<regime_detail::LocalFittingAndersonRegimeClusterKey>{ { 0 } }),
+        tracker.FindIncompatible(guarded));
+    tracker.Commit({ { 0 } }, guarded);
+    EXPECT_EQ(
+        (std::vector<regime_detail::LocalFittingAndersonRegimeClusterKey>{ { 0 } }),
+        tracker.FindIncompatible(baseline));
+
+    tracker.Reconcile({ { 0, 1 } });
+    const auto merged{
+        regime_detail::BuildLocalFittingAndersonRegimeSignatureMap(
+            { { 0, 1 } }, { 0, 1 }, 1.0e-3, { 1.0, 1.0 })
+    };
+    EXPECT_TRUE(tracker.FindIncompatible(merged).empty());
+}
+
+TEST(EstimatorSecondStageDefenseTest, AndersonRegimeRejectsInvalidSignatures)
+{
+    EXPECT_THROW(
+        regime_detail::BuildLocalFittingAndersonRegimeSignatureMap(
+            { { 0 } }, { 0 }, 0.0, { 1.0 }),
+        std::invalid_argument);
+    EXPECT_THROW(
+        regime_detail::BuildLocalFittingAndersonRegimeSignatureMap(
+            { { 0 } }, { 0 }, 1.0e-3,
+            { std::numeric_limits<double>::infinity() }),
+        std::invalid_argument);
+    EXPECT_THROW(
+        regime_detail::BuildLocalFittingAndersonRegimeSignatureMap(
+            { { 0 } }, { 0 }, 1.0e-3, { 0.0 }),
+        std::invalid_argument);
+    EXPECT_THROW(
+        regime_detail::BuildLocalFittingAndersonRegimeSignatureMap(
+            { { 0 } }, { 0, 1 }, 1.0e-3, { 1.0 }),
+        std::invalid_argument);
+    EXPECT_THROW(
+        regime_detail::BuildLocalFittingAndersonRegimeSignatureMap(
+            { { 0 }, { 0 } }, { 0 }, 1.0e-3, { 1.0 }),
+        std::invalid_argument);
+
+    regime_detail::LocalFittingAndersonRegimeTracker tracker;
+    const regime_detail::LocalFittingAndersonRegimeSignatureMap wrong_size_signature{
+        { { 0 }, regime_detail::LocalFittingAndersonRegimeSignature{ 1.0e-3, { 1.0, 1.0 } } }
+    };
+    EXPECT_THROW(tracker.FindIncompatible(wrong_size_signature), std::invalid_argument);
+}
+
+TEST(EstimatorSecondStageDefenseTest, AndersonRegimeInvalidatesOnlyAffectedHistory)
+{
+    const std::vector<alg::ClusterKey> key_list{ { 0 }, { 1 } };
+    alg::ClusteredAndersonAccelerationHistorySet history{
+        alg::AndersonAccelerationOptions{ 5, 100.0, 10.0, 1.0e-12 }
+    };
+    regime_detail::LocalFittingAndersonRegimeTracker tracker;
+    const auto baseline{ MakeAndersonRegimeSignatures(1.0e-3, 1.0, 1.0) };
+    const auto changed{ MakeAndersonRegimeSignatures(1.0e-3, 10.0, 1.0) };
+    history.Reconcile(key_list);
+    tracker.Commit(key_list, baseline);
+    history.Commit(key_list, MakeAndersonState(0.0, 0.0), MakeAndersonState(1.0, 1.0));
+
+    const auto incompatible_key_list{ tracker.FindIncompatible(changed) };
+    history.ClearAndSuppress(incompatible_key_list);
+    tracker.Invalidate(incompatible_key_list);
+    const auto candidate{
+        history.BuildCandidate(
+            key_list,
+            MakeAndersonState(1.0, 1.0),
+            MakeAndersonState(1.5, 1.5))
+    };
+
+    ASSERT_TRUE(candidate.has_value());
+    EXPECT_EQ((std::vector<alg::ClusterKey>{ { 1 } }), candidate->used_cluster_key_list);
+
+    history.ReleaseSuppression({ { 0 } });
+    const auto before_recommit{
+        history.BuildCandidate(
+            key_list,
+            MakeAndersonState(1.0, 1.0),
+            MakeAndersonState(1.5, 1.5))
+    };
+    ASSERT_TRUE(before_recommit.has_value());
+    EXPECT_EQ((std::vector<alg::ClusterKey>{ { 1 } }), before_recommit->used_cluster_key_list);
+
+    history.Commit({ { 0 } }, MakeAndersonState(1.0, 1.0), MakeAndersonState(1.5, 1.5));
+    tracker.Commit({ { 0 } }, changed);
+    const auto after_recommit{
+        history.BuildCandidate(
+            key_list,
+            MakeAndersonState(1.5, 1.5),
+            MakeAndersonState(1.75, 1.75))
+    };
+    ASSERT_TRUE(after_recommit.has_value());
+    EXPECT_NE(
+        std::find(
+            after_recommit->used_cluster_key_list.begin(),
+            after_recommit->used_cluster_key_list.end(),
+            alg::ClusterKey{ 0 }),
+        after_recommit->used_cluster_key_list.end());
+}
 
 TEST(EstimatorSecondStageDefenseTest, TransformedChangeIsIntensityScaleInvariant)
 {
