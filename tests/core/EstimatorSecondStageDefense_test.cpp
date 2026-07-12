@@ -755,6 +755,100 @@ TEST(EstimatorSecondStageDefenseTest, FreezeUsesTransformedRatherThanAbsoluteMov
     EXPECT_FALSE(moving_tracker.IsFrozen(0));
 }
 
+TEST(EstimatorSecondStageDefenseTest, FreezeEvidenceRequiresSmallRawFixedPointResidual)
+{
+    const rg::GaussianModel3D previous{ 1.0e8, 0.5, 0.0 };
+    const rg::GaussianModel3D accepted{
+        previous.GetAmplitude() * std::exp(5.0e-5),
+        previous.GetWidth(),
+        previous.GetOffset()
+    };
+    const rg::GaussianModel3D raw_fixed_point{
+        previous.GetAmplitude() * std::exp(1.0e-2),
+        previous.GetWidth(),
+        previous.GetOffset()
+    };
+    const auto unstable_evidence{
+        change_detail::CalculateLocalFittingFreezeEvidenceChange(
+            accepted,
+            raw_fixed_point,
+            previous)
+    };
+    const auto stable_evidence{
+        change_detail::CalculateLocalFittingFreezeEvidenceChange(
+            accepted,
+            accepted,
+            previous)
+    };
+    alg::ConvergenceFreezeTracker unstable_tracker{ 1, 1.0e-6, 0.1, 3 };
+    alg::ConvergenceFreezeTracker stable_tracker{ 1, 1.0e-6, 0.1, 3 };
+
+    for (int i = 0; i < 3; i++)
+    {
+        unstable_tracker.Update({ unstable_evidence }, { 0 });
+        stable_tracker.Update({ stable_evidence }, { 0 });
+    }
+
+    EXPECT_FALSE(unstable_tracker.IsFrozen(0));
+    EXPECT_TRUE(stable_tracker.IsFrozen(0));
+    EXPECT_NEAR(
+        1.0e-2,
+        unstable_evidence.value_list.at(
+            change_detail::kLogPeakHeightChangeIndex),
+        1.0e-12);
+}
+
+TEST(EstimatorSecondStageDefenseTest, FreezeEvidenceIsScaleInvariantAndRejectsInvalidRawState)
+{
+    const rg::GaussianModel3D previous{ 8.0, 0.50, -0.10 };
+    const rg::GaussianModel3D accepted{ 8.1, 0.51, -0.11 };
+    const rg::GaussianModel3D raw_fixed_point{ 8.8, 0.55, -0.12 };
+    const auto base_evidence{
+        change_detail::CalculateLocalFittingFreezeEvidenceChange(
+            accepted,
+            raw_fixed_point,
+            previous)
+    };
+    const auto scale{ 1.0e2 };
+    const auto scaled_evidence{
+        change_detail::CalculateLocalFittingFreezeEvidenceChange(
+            rg::GaussianModel3D{
+                accepted.GetAmplitude() * scale,
+                accepted.GetWidth(),
+                accepted.GetOffset() * scale
+            },
+            rg::GaussianModel3D{
+                raw_fixed_point.GetAmplitude() * scale,
+                raw_fixed_point.GetWidth(),
+                raw_fixed_point.GetOffset() * scale
+            },
+            rg::GaussianModel3D{
+                previous.GetAmplitude() * scale,
+                previous.GetWidth(),
+                previous.GetOffset() * scale
+            })
+    };
+    ASSERT_EQ(base_evidence.value_list.size(), scaled_evidence.value_list.size());
+    for (std::size_t i = 0; i < base_evidence.value_list.size(); i++)
+    {
+        EXPECT_NEAR(
+            base_evidence.value_list.at(i),
+            scaled_evidence.value_list.at(i),
+            1.0e-12);
+    }
+
+    const auto invalid_evidence{
+        change_detail::CalculateLocalFittingFreezeEvidenceChange(
+            accepted,
+            rg::GaussianModel3D{ 0.0, 0.5, 0.0 },
+            previous)
+    };
+    for (const auto value : invalid_evidence.value_list)
+    {
+        EXPECT_TRUE(std::isinf(value));
+    }
+}
+
 TEST(EstimatorSecondStageDefenseTest, PostRefitRollbackExpandsCompleteContributorCluster)
 {
     const std::vector<std::size_t> active_index_list{ 10, 11, 12, 13, 20 };

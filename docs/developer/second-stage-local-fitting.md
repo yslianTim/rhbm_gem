@@ -308,19 +308,25 @@ log width       = log(B)
 offset ratio    = C * OffsetBasis(0) / peak height
 ```
 
-An atom's change is the component-wise absolute difference between its current
-and previous transformed coordinates. Scaling both amplitude and offset by the
-same map-intensity factor leaves this change unchanged. Using peak height rather
-than amplitude also prevents amplitude-width compensation from appearing as
-center-signal movement.
+An atom's accepted change is the component-wise absolute difference between its
+assembled and previous transformed coordinates. Its raw fixed-point residual is
+the same difference between the undamped refit output `G(previous)` and the
+previous state. Scaling amplitude and offset by the same map-intensity factor
+leaves both quantities unchanged. Using peak height rather than amplitude also
+prevents amplitude-width compensation from appearing as center-signal movement.
 
 Non-positive amplitude or width, and coordinates that cannot be represented as
-finite values, produce infinite change. Such states cannot freeze, converge, win
-an objective movement tie, or count as persistent no-progress; dependency thaw
-treats them conservatively as movement.
+finite values, produce infinite change or residual. Invalid accepted states
+cannot freeze, converge, win an objective movement tie, or count as persistent
+no-progress; dependency thaw treats them conservatively as movement. An invalid
+raw state independently prevents freeze and parameter convergence.
 
 Freeze tracking is updated only for atoms in clusters that accepted progress, so
-rejected clusters are not frozen because their assembled movement is zero.
+rejected clusters are not frozen because their assembled movement is zero and
+now reset their accumulated freeze stability. For eligible atoms, freeze
+evidence is the component-wise maximum of accepted change and raw fixed-point
+residual, so damping, Anderson, or an objective gate cannot make a large raw map
+look stationary.
 An unhealthy cluster resets only its own active freeze-stability counters.
 Accepted parameter movement from either healthy or unhealthy clusters may still
 thaw frozen neighbors.
@@ -360,8 +366,12 @@ Parameter convergence requires:
   local-refit fallback;
 - no cluster objective rejection in the accepted iteration;
 - all active cluster objective scale references to be locked when present; and
-- each active-set transformed change percentile below
-  `kLocalFittingTransformedChangeTolerance`.
+- each active-set accepted transformed change percentile and raw fixed-point
+  residual percentile below `kLocalFittingTransformedChangeTolerance`.
+
+Raw residual is used only for freeze and parameter convergence. Dependency
+thaw, objective tie-breaking, persistent suspicious or solver no-progress, and
+ridge adjustment retain their accepted-change semantics.
 
 Unhealthy clusters clear and suppress their own Anderson history before
 candidate selection and do not commit their raw fixed-point map or ridge regime

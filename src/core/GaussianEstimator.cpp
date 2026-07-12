@@ -2194,6 +2194,32 @@ algorithm::ParameterChange CalculateLocalFittingTransformedChange(
         });
 }
 
+algorithm::ParameterChange CalculateLocalFittingFreezeEvidenceChange(
+    const Eigen::VectorXd & accepted_estimation,
+    const Eigen::VectorXd & raw_fixed_point_estimation,
+    const Eigen::VectorXd & previous_estimation)
+{
+    if (accepted_estimation.size() != GaussianModel3D::ParameterSize() ||
+        raw_fixed_point_estimation.size() != GaussianModel3D::ParameterSize() ||
+        previous_estimation.size() != GaussianModel3D::ParameterSize())
+    {
+        throw std::invalid_argument(
+            "Local fitting freeze evidence parameter sizes are inconsistent.");
+    }
+    const auto build_model = [](const Eigen::VectorXd & estimation)
+    {
+        return GaussianModel3D{
+            estimation(GaussianModel3D::AmplitudeIndex()),
+            estimation(GaussianModel3D::WidthIndex()),
+            estimation(GaussianModel3D::OffsetIndex())
+        };
+    };
+    return detail::CalculateLocalFittingFreezeEvidenceChange(
+        build_model(accepted_estimation),
+        build_model(raw_fixed_point_estimation),
+        build_model(previous_estimation));
+}
+
 std::vector<algorithm::ParameterChange> CalculateLocalFittingTransformedChanges(
     const std::vector<Eigen::VectorXd> & current_estimation_list,
     const std::vector<Eigen::VectorXd> & previous_estimation_list)
@@ -2209,6 +2235,30 @@ std::vector<algorithm::ParameterChange> CalculateLocalFittingTransformedChanges(
     {
         change_list.at(i) = CalculateLocalFittingTransformedChange(
             current_estimation_list.at(i),
+            previous_estimation_list.at(i));
+    }
+    return change_list;
+}
+
+std::vector<algorithm::ParameterChange> CalculateLocalFittingFreezeEvidenceChanges(
+    const std::vector<Eigen::VectorXd> & accepted_estimation_list,
+    const std::vector<Eigen::VectorXd> & raw_fixed_point_estimation_list,
+    const std::vector<Eigen::VectorXd> & previous_estimation_list)
+{
+    if (accepted_estimation_list.size() != previous_estimation_list.size() ||
+        raw_fixed_point_estimation_list.size() != previous_estimation_list.size())
+    {
+        throw std::invalid_argument(
+            "Local fitting freeze evidence input sizes are inconsistent.");
+    }
+
+    std::vector<algorithm::ParameterChange> change_list(
+        previous_estimation_list.size());
+    for (std::size_t i = 0; i < previous_estimation_list.size(); i++)
+    {
+        change_list.at(i) = CalculateLocalFittingFreezeEvidenceChange(
+            accepted_estimation_list.at(i),
+            raw_fixed_point_estimation_list.at(i),
             previous_estimation_list.at(i));
     }
     return change_list;
@@ -3824,6 +3874,8 @@ void RunSecondStageLocalFitting(
             CollectLocalFittingClusterAtomIndexes(policy_unhealthy_key_list)
         };
         freeze_tracker.ResetStability(policy_unhealthy_atom_index_list);
+        freeze_tracker.ResetStability(
+            CollectLocalFittingClusterAtomIndexes(selection.rejected_key_list));
         acceleration_history.ClearAndSuppress(policy_unhealthy_key_list);
         anderson_regime_tracker.Invalidate(policy_unhealthy_key_list);
         const auto terminal_suspicious_key_list{
@@ -3950,9 +4002,21 @@ void RunSecondStageLocalFitting(
                 assembled_state.estimation_list,
                 previous_state.estimation_list)
         };
+        auto freeze_evidence_change_list{
+            CalculateLocalFittingFreezeEvidenceChanges(
+                assembled_state.estimation_list,
+                raw_state.estimation_list,
+                previous_state.estimation_list)
+        };
         auto transformed_change_stats{
             SummarizeLocalFittingTransformedChanges(
                 assembled_state.estimation_list,
+                previous_state.estimation_list,
+                active_index_list)
+        };
+        auto raw_fixed_point_residual_stats{
+            SummarizeLocalFittingTransformedChanges(
+                raw_state.estimation_list,
                 previous_state.estimation_list,
                 active_index_list)
         };
@@ -3999,7 +4063,9 @@ void RunSecondStageLocalFitting(
             stability_eligible_active_index_list.insert(
                 stability_eligible_active_index_list.end(), key.begin(), key.end());
         }
-        freeze_tracker.Update(change_list, stability_eligible_active_index_list);
+        freeze_tracker.Update(
+            freeze_evidence_change_list,
+            stability_eligible_active_index_list);
         ThawChangedActiveAtomNeighbors(
             context, change_list, accepted_active_index_list,
             freeze_tracker, thaw_hysteresis_tracker);
@@ -4047,7 +4113,8 @@ void RunSecondStageLocalFitting(
             !has_suspicious_offset_fallback &&
             !selection.has_objective_backtracking_rejection &&
             cluster_quality_state.AllActiveReferencesLocked(cluster_key_list) &&
-            IsLocalFittingTransformedChangeConverged(transformed_change_stats)
+            IsLocalFittingTransformedChangeConverged(transformed_change_stats) &&
+            IsLocalFittingTransformedChangeConverged(raw_fixed_point_residual_stats)
         };
         if (converged)
         {
