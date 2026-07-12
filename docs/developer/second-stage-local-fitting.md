@@ -405,6 +405,30 @@ and objective rejection policies remain active. This switch is intended only
 for controlled A/B diagnostics; it is not exposed through `FitOptions`,
 commands, CMake, or environment variables.
 
+## Maximum-Iteration Audit State
+
+Maximum-iteration fallback uses a global audit that is independent of
+cluster-local objective history. Its sample refs contain every original
+second-stage sample in selected-atom order, and its model set contains every
+selected atom regardless of active, frozen, or terminal status. The first state
+with a finite complete audit locks one robust scale for the remainder of the
+stage; the initial state is considered first.
+
+The fixed audit objective uses the normal Cauchy residual, width prior, and
+offset plausibility penalty, but excludes the single-step movement penalty and
+all ridge or freeze state. Every complete assembled state with at least one
+objective-gated accepted cluster can compete, including partial or unhealthy
+iterations. A candidate replaces the stored complete `GaussianFittingState`
+only when its finite objective improves beyond the objective-tie tolerance;
+ties retain the earlier state.
+
+When atoms become terminal, their validated fallback models and results are
+overlaid onto the stored audit best and the fixed objective is recomputed. This
+keeps historical improvements in remote atoms without allowing an
+iteration-limit exit to restore superseded terminal parameters. If the
+reconciled state cannot be audited, it is discarded and the current assembled
+state can establish a new best under the already fixed scale.
+
 ## Exit Paths
 
 The loop exits through one of five terminal cases:
@@ -419,18 +443,21 @@ The loop exits through one of five terminal cases:
   converge, apply the assembled state and emit one warning with reason-specific
   terminal cluster/atom counts instead of reporting whole-stage convergence.
 - **Objective backtracking failure:** when all acceleration and fixed-point
-  attempts are rejected and no further local or global ridge retry is available,
-  apply the previous state.
-- **Maximum iterations reached:** apply the current accepted assembled state at
-  the iteration limit.
+  attempts are rejected at the maximum global ridge, apply the previous state.
+  If the final rejection instead reaches the outer iteration limit, apply the
+  best validated audit state when available.
+- **Maximum iterations reached:** after an accepted final iteration, apply the
+  best validated audit state when available; otherwise preserve the current
+  accepted assembled-state fallback.
 
 Progress logs report iteration, acceleration kind, damping, and active/frozen
 atom counts. Active counts exclude all terminal atoms; progress reports
 `terminal-suspicious atoms` and `terminal-joint-offset-failure atoms`
 separately. Final warnings report reason-specific cluster/atom counts and the
-terminal joint-offset status breakdown. For convergence or maximum-iteration
-exits, logs retain the percentile log-peak-height, log-width, and
-offset-to-peak-ratio changes.
+terminal joint-offset status breakdown. Convergence logs retain the percentile
+log-peak-height, log-width, and offset-to-peak-ratio changes. Maximum-iteration
+warnings instead report whether the best validated audit state or the legacy
+fallback was applied, and include the fixed audit objective when available.
 
 ## Workflow Context
 

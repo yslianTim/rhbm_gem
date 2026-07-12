@@ -2,6 +2,7 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 
 #include "core/detail/GaussianEstimatorStages.hpp"
+#include "core/detail/LocalFittingAudit.hpp"
 #include "core/detail/LocalFittingAndersonRegime.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
@@ -346,6 +347,15 @@ struct LocalFittingObjectiveSampleRef
 {
     std::size_t atom_index{ 0 };
     std::size_t sample_index{ 0 };
+};
+
+struct LocalFittingBestAuditState
+{
+    std::vector<LocalFittingObjectiveSampleRef> sample_ref_list{};
+    std::vector<std::size_t> atom_index_list{};
+    std::optional<double> fixed_objective_scale{};
+    std::optional<double> best_objective{};
+    std::optional<GaussianFittingState> best_state{};
 };
 
 struct PersistentSuspiciousRollbackState
@@ -2010,6 +2020,132 @@ std::optional<double> CalculateLocalFittingObjective(
         std::nullopt;
 }
 
+std::optional<double> EvaluateLocalFittingAuditObjective(
+    const SecondStageLocalFittingContext & context,
+    const GaussianFittingState & state,
+    LocalFittingBestAuditState & audit_state)
+{
+    auto objective_samples{
+        CollectLocalFittingObjectiveSamples(
+            context,
+            state.estimation_list,
+            audit_state.sample_ref_list,
+            audit_state.atom_index_list)
+    };
+    if (!objective_samples.has_value()) return std::nullopt;
+
+    const auto objective_scale{
+        audit_state.fixed_objective_scale.value_or(
+            objective_samples->scale_sample)
+    };
+    const auto objective{
+        CalculateLocalFittingObjective(
+            context,
+            *objective_samples,
+            objective_scale,
+            nullptr)
+    };
+    if (!objective.has_value()) return std::nullopt;
+    if (!audit_state.fixed_objective_scale.has_value())
+    {
+        audit_state.fixed_objective_scale = objective_scale;
+    }
+    return objective;
+}
+
+void TryUpdateLocalFittingBestAuditState(
+    const SecondStageLocalFittingContext & context,
+    const GaussianFittingState & candidate_state,
+    LocalFittingBestAuditState & audit_state)
+{
+    const auto candidate_objective{
+        EvaluateLocalFittingAuditObjective(
+            context,
+            candidate_state,
+            audit_state)
+    };
+    if (!candidate_objective.has_value()) return;
+    if (audit_state.best_objective.has_value() &&
+        !detail::IsBetterLocalFittingAuditObjective(
+            *candidate_objective,
+            *audit_state.best_objective,
+            kLocalFittingObjectiveTieRelativeTolerance))
+    {
+        return;
+    }
+    audit_state.best_objective = *candidate_objective;
+    audit_state.best_state = candidate_state;
+}
+
+LocalFittingBestAuditState BuildInitialLocalFittingBestAuditState(
+    const SecondStageLocalFittingContext & context,
+    const GaussianFittingState & initial_state)
+{
+    LocalFittingBestAuditState audit_state;
+    audit_state.atom_index_list.reserve(context.AtomSize());
+    for (std::size_t atom_index = 0; atom_index < context.AtomSize(); atom_index++)
+    {
+        audit_state.atom_index_list.emplace_back(atom_index);
+        const auto sample_size{
+            context.atom_context_list.at(atom_index).sample_entries.size()
+        };
+        for (std::size_t sample_index = 0; sample_index < sample_size; sample_index++)
+        {
+            audit_state.sample_ref_list.emplace_back(
+                LocalFittingObjectiveSampleRef{ atom_index, sample_index });
+        }
+    }
+    TryUpdateLocalFittingBestAuditState(context, initial_state, audit_state);
+    return audit_state;
+}
+
+void ReconcileLocalFittingBestAuditTerminalFallback(
+    const SecondStageLocalFittingContext & context,
+    const std::vector<LocalFittingClusterKey> & terminal_key_list,
+    const GaussianFittingState & terminal_fallback_state,
+    LocalFittingBestAuditState & audit_state)
+{
+    if (terminal_key_list.empty() || !audit_state.best_state.has_value()) return;
+    if (terminal_fallback_state.estimation_list.size() != context.AtomSize() ||
+        terminal_fallback_state.result_list.size() != context.AtomSize())
+    {
+        throw std::invalid_argument(
+            "Local fitting audit terminal fallback state sizes are inconsistent.");
+    }
+
+    auto reconciled_best_state{ *audit_state.best_state };
+    for (const auto & key : terminal_key_list)
+    {
+        for (const auto atom_index : key)
+        {
+            if (atom_index >= context.AtomSize())
+            {
+                throw std::invalid_argument(
+                    "Local fitting audit terminal atom index is out of range.");
+            }
+            reconciled_best_state.estimation_list.at(atom_index) =
+                terminal_fallback_state.estimation_list.at(atom_index);
+            reconciled_best_state.result_list.at(atom_index) =
+                terminal_fallback_state.result_list.at(atom_index);
+        }
+    }
+
+    const auto reconciled_objective{
+        EvaluateLocalFittingAuditObjective(
+            context,
+            reconciled_best_state,
+            audit_state)
+    };
+    if (!reconciled_objective.has_value())
+    {
+        audit_state.best_objective.reset();
+        audit_state.best_state.reset();
+        return;
+    }
+    audit_state.best_objective = *reconciled_objective;
+    audit_state.best_state = std::move(reconciled_best_state);
+}
+
 algorithm::ClusteredFittingQualityCandidateScore<LocalFittingObjectiveSamples>
 ScoreLocalFittingClusterCandidate(
     const SecondStageLocalFittingContext & context,
@@ -3276,6 +3412,7 @@ void LogLocalFittingBacktrackingRetry(
 void LogLocalFittingBacktrackingStop(
     const FitOptions & options,
     LocalFittingBacktrackingStopReason reason,
+    const std::optional<double> & applied_audit_objective,
     const LocalFittingTerminalSummary & terminal_summary)
 {
     if (options.quiet_mode) return;
@@ -3288,7 +3425,22 @@ void LogLocalFittingBacktrackingStop(
         << (reason == LocalFittingBacktrackingStopReason::MaximumGlobalRidge ?
             "at the maximum joint-offset ridge ratio" : "at the maximum iteration limit");
     AppendLocalFittingTerminalSummary(warning_message, terminal_summary);
-    warning_message << "; applying previous state.";
+    if (applied_audit_objective.has_value())
+    {
+        warning_message
+            << "; applying best validated audit state with fixed audit objective = "
+            << *applied_audit_objective << ".";
+    }
+    else
+    {
+        warning_message << "; applying previous state";
+        if (reason == LocalFittingBacktrackingStopReason::MaximumIterationLimit)
+        {
+            warning_message
+                << " because no finite fixed audit state is available";
+        }
+        warning_message << ".";
+    }
     Logger::Log(LogLevel::Warning, warning_message.str());
 }
 
@@ -3358,28 +3510,27 @@ void LogLocalFittingConverged(
 
 void LogLocalFittingMaximumIterations(
     const FitOptions & options,
-    const algorithm::ParameterChangeStats & transformed_change_stats,
+    const std::optional<double> & applied_audit_objective,
     const LocalFittingTerminalSummary & terminal_summary)
 {
     if (options.quiet_mode) return;
 
     Logger::FinishProgressLine();
     std::ostringstream warning_message;
-    warning_message
-        << "Reached maximum iteration size; refitting at current accepted candidate "
-        << "with percentile log-peak-height change = "
-        << std::to_string(
-            transformed_change_stats.percentile_list.at(
-                detail::kLogPeakHeightChangeIndex))
-        << ", percentile log-width change = "
-        << std::to_string(
-            transformed_change_stats.percentile_list.at(
-                detail::kLogWidthChangeIndex))
-        << ", and percentile offset-to-peak-ratio change = "
-        << std::to_string(
-            transformed_change_stats.percentile_list.at(
-                detail::kOffsetToPeakRatioChangeIndex));
+    warning_message << "Reached maximum iteration size";
     AppendLocalFittingTerminalSummary(warning_message, terminal_summary);
+    if (applied_audit_objective.has_value())
+    {
+        warning_message
+            << "; applying best validated audit state with fixed audit objective = "
+            << *applied_audit_objective;
+    }
+    else
+    {
+        warning_message
+            << "; applying current accepted candidate because no finite fixed audit state is available";
+    }
+    warning_message << ".";
     Logger::Log(LogLevel::Warning, warning_message.str());
 }
 
@@ -3707,6 +3858,9 @@ void RunSecondStageLocalFitting(
     }
 
     auto previous_state{ BuildInitialLocalFittingState(context) };
+    auto best_audit_state{
+        BuildInitialLocalFittingBestAuditState(context, previous_state)
+    };
     algorithm::ClusteredAndersonAccelerationHistorySet acceleration_history{
         algorithm::AndersonAccelerationOptions{
             kLocalFittingAndersonHistoryDepth,
@@ -3926,6 +4080,11 @@ void RunSecondStageLocalFitting(
             previous_state,
             terminal_fallback_atom_mask,
             assembled_state);
+        ReconcileLocalFittingBestAuditTerminalFallback(
+            context,
+            terminal_key_list,
+            assembled_state,
+            best_audit_state);
         if (!terminal_key_list.empty())
         {
             acceleration_history.ClearAndSuppress(terminal_key_list);
@@ -3989,10 +4148,24 @@ void RunSecondStageLocalFitting(
                     LocalFittingBacktrackingStopReason::MaximumIterationLimit :
                     LocalFittingBacktrackingStopReason::MaximumGlobalRidge
             };
-            ApplyLocalFittingState(previous_state, local_editor_list);
+            std::optional<double> applied_audit_objective;
+            if (stop_reason == LocalFittingBacktrackingStopReason::MaximumIterationLimit &&
+                best_audit_state.best_state.has_value() &&
+                best_audit_state.best_objective.has_value())
+            {
+                ApplyLocalFittingState(
+                    *best_audit_state.best_state,
+                    local_editor_list);
+                applied_audit_objective = best_audit_state.best_objective;
+            }
+            else
+            {
+                ApplyLocalFittingState(previous_state, local_editor_list);
+            }
             LogLocalFittingBacktrackingStop(
                 options,
                 stop_reason,
+                applied_audit_objective,
                 terminal_summary);
             break;
         }
@@ -4021,6 +4194,10 @@ void RunSecondStageLocalFitting(
                 active_index_list)
         };
         accepted_iteration_count++;
+        TryUpdateLocalFittingBestAuditState(
+            context,
+            assembled_state,
+            best_audit_state);
         cluster_quality_state.DecreaseObjectiveRidge(stability_eligible_key_list);
         if (!selection.rejected_key_list.empty())
         {
@@ -4138,10 +4315,22 @@ void RunSecondStageLocalFitting(
 
         if (iter + 1 == kLocalFittingMaximumIterations)
         {
-            ApplyLocalFittingState(assembled_state, local_editor_list);
+            std::optional<double> applied_audit_objective;
+            if (best_audit_state.best_state.has_value() &&
+                best_audit_state.best_objective.has_value())
+            {
+                ApplyLocalFittingState(
+                    *best_audit_state.best_state,
+                    local_editor_list);
+                applied_audit_objective = best_audit_state.best_objective;
+            }
+            else
+            {
+                ApplyLocalFittingState(assembled_state, local_editor_list);
+            }
             LogLocalFittingMaximumIterations(
                 options,
-                transformed_change_stats,
+                applied_audit_objective,
                 terminal_summary);
             break;
         }

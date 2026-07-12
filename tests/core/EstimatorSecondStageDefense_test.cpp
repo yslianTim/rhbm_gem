@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "core/detail/GaussianEstimatorStages.hpp"
+#include "core/detail/LocalFittingAudit.hpp"
 #include "core/detail/LocalFittingAndersonRegime.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
@@ -26,6 +27,7 @@
 
 namespace {
 namespace alg = rhbm_gem::algorithm;
+namespace audit_detail = rhbm_gem::core::detail;
 namespace change_detail = rhbm_gem::core::detail;
 namespace health_detail = rhbm_gem::core::detail;
 namespace regime_detail = rhbm_gem::core::detail;
@@ -238,6 +240,34 @@ std::unique_ptr<rg::ModelObject> BuildSeparatedSystemBuildFailureDefenseModel()
         rg::AtomLocalPotentialView::RequireFor(*atom).GetSamplingEntries(false)
     };
     sampling_entries.front().response = std::numeric_limits<float>::quiet_NaN();
+    auto analysis{ model->EditAnalysis() };
+    analysis.EnsureAtomLocalPotential(*atom).SetSamplingEntries(
+        std::move(sampling_entries));
+    return model;
+}
+
+std::unique_ptr<rg::ModelObject> BuildTerminalWithPersistentLocalRefitFallbackDefenseModel()
+{
+    auto model{ BuildSeparatedRollbackDefenseModel() };
+    auto * atom{ model->GetSelectedAtoms().at(2) };
+    auto sampling_entries{
+        rg::AtomLocalPotentialView::RequireFor(*atom).GetSamplingEntries(false)
+    };
+    sampling_entries.resize(1);
+    auto analysis{ model->EditAnalysis() };
+    analysis.EnsureAtomLocalPotential(*atom).SetSamplingEntries(
+        std::move(sampling_entries));
+    return model;
+}
+
+std::unique_ptr<rg::ModelObject> BuildUnavailableAuditWithPersistentLocalRefitFallbackDefenseModel()
+{
+    auto model{ BuildSeparatedSystemBuildFailureDefenseModel() };
+    auto * atom{ model->GetSelectedAtoms().at(2) };
+    auto sampling_entries{
+        rg::AtomLocalPotentialView::RequireFor(*atom).GetSamplingEntries(false)
+    };
+    sampling_entries.resize(1);
     auto analysis{ model->EditAnalysis() };
     analysis.EnsureAtomLocalPotential(*atom).SetSamplingEntries(
         std::move(sampling_entries));
@@ -484,6 +514,23 @@ regime_detail::LocalFittingAndersonRegimeSignatureMap MakeAndersonRegimeSignatur
 }
 
 } // namespace
+
+TEST(EstimatorSecondStageDefenseTest, AuditObjectiveKeepsEarlierBestOnTie)
+{
+    EXPECT_TRUE(audit_detail::IsBetterLocalFittingAuditObjective(
+        0.8, 1.0, 1.0e-8));
+    EXPECT_FALSE(audit_detail::IsBetterLocalFittingAuditObjective(
+        1.2, 1.0, 1.0e-8));
+    EXPECT_FALSE(audit_detail::IsBetterLocalFittingAuditObjective(
+        1.0 - 0.5e-8, 1.0, 1.0e-8));
+    EXPECT_FALSE(audit_detail::IsBetterLocalFittingAuditObjective(
+        std::numeric_limits<double>::infinity(), 1.0, 1.0e-8));
+    EXPECT_TRUE(audit_detail::IsBetterLocalFittingAuditObjective(
+        1.0, std::numeric_limits<double>::infinity(), 1.0e-8));
+    EXPECT_THROW(
+        audit_detail::IsBetterLocalFittingAuditObjective(0.8, 1.0, -1.0),
+        std::invalid_argument);
+}
 
 TEST(EstimatorSecondStageDefenseTest, AndersonRegimeTracksGlobalAndClusterEffectiveRidge)
 {
@@ -1196,9 +1243,80 @@ TEST(EstimatorSecondStageDefenseTest, LocalRefitFallbackOnlyInvalidatesItsCluste
     EXPECT_NE(
         error_output.find("Reached maximum iteration size"),
         std::string::npos);
+    EXPECT_NE(
+        error_output.find("applying best validated audit state"),
+        std::string::npos);
+    EXPECT_NE(
+        error_output.find("fixed audit objective ="),
+        std::string::npos);
     EXPECT_LT(
         CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4),
         initial_remote_error);
+    ExpectSelectedAtomEstimatesAreFinite(*model);
+}
+
+TEST(EstimatorSecondStageDefenseTest, MaximumIterationAuditPreservesTerminalFallbackAtoms)
+{
+    auto model{ BuildTerminalWithPersistentLocalRefitFallbackDefenseModel() };
+    const auto & selected_atoms{ model->GetSelectedAtoms() };
+    const std::array<rg::GaussianModel3D, 2> previous_terminal_model_list{
+        GetEstimateModel(*selected_atoms.at(0)),
+        GetEstimateModel(*selected_atoms.at(1))
+    };
+
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
+    const std::string output{ testing::internal::GetCapturedStdout() };
+    const std::string error_output{ testing::internal::GetCapturedStderr() };
+    Logger::SetLogLevel(previous_log_level);
+
+    for (std::size_t i = 0; i < previous_terminal_model_list.size(); i++)
+    {
+        ExpectGaussianModelsNear(
+            GetEstimateModel(*selected_atoms.at(i)),
+            previous_terminal_model_list.at(i),
+            1.0e-12);
+    }
+    EXPECT_NE(output.find("terminal-suspicious atoms = 2"), std::string::npos);
+    EXPECT_NE(
+        error_output.find("Reached maximum iteration size"),
+        std::string::npos);
+    EXPECT_NE(
+        error_output.find("applying best validated audit state"),
+        std::string::npos);
+    EXPECT_NE(
+        error_output.find(
+            "terminal suspicious rollback fallback clusters/atoms = 1/2"),
+        std::string::npos);
+    ExpectSelectedAtomEstimatesAreFinite(*model);
+}
+
+TEST(EstimatorSecondStageDefenseTest, MaximumIterationKeepsLegacyFallbackWhenAuditIsUnavailable)
+{
+    auto model{ BuildUnavailableAuditWithPersistentLocalRefitFallbackDefenseModel() };
+
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
+    static_cast<void>(testing::internal::GetCapturedStdout());
+    const std::string error_output{ testing::internal::GetCapturedStderr() };
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_NE(
+        error_output.find("Reached maximum iteration size"),
+        std::string::npos);
+    EXPECT_NE(
+        error_output.find(
+            "applying current accepted candidate because no finite fixed audit state is available"),
+        std::string::npos);
+    EXPECT_EQ(
+        error_output.find("applying best validated audit state"),
+        std::string::npos);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
