@@ -2,6 +2,7 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 
 #include "core/detail/GaussianEstimatorStages.hpp"
+#include "core/detail/LocalFittingTransformedChange.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -53,14 +54,14 @@
 
 namespace rhbm_gem::core {
 namespace {
-constexpr double kLocalFittingNormalizedChangeTolerance{ 1.0e-4 };
-constexpr double kLocalFittingNormalizedChangeScaleFloor{ 1.0 };
+constexpr double kLocalFittingTransformedChangeTolerance{ 1.0e-4 };
+constexpr double kLocalFittingAndersonScaleFloor{ 1.0 };
 constexpr std::size_t kMinimumAlphaRTrainingSampleCount{ 10 };
 constexpr std::size_t kMinimumAlphaGTrainingMemberCount{ 10 };
 constexpr double kNeighborContributionDistanceMax{ 2.5 };
 constexpr double kNeighborAtomSearchRange{ 2.0 * kNeighborContributionDistanceMax };
 constexpr std::size_t kLocalFittingMaximumIterations{ 200 };
-constexpr double kLocalFittingParameterChangeTolerance{ 1.0e-6 };
+constexpr double kLocalFittingFreezeTrackerChangeTolerance{ 1.0e-6 };
 constexpr double kLocalFittingChangePercentile{ 0.99 };
 constexpr std::array<Spot, 4> kGroupPriorSummarySpotList{
     Spot::C,
@@ -91,6 +92,7 @@ constexpr double kLocalFittingAndersonCoefficientAbsLimit{ 5.0 };
 constexpr std::array<double, 5> kLocalFittingAccelerationDampingList{ 1.0, 0.5, 0.25, 0.125, 0.0625 };
 constexpr double kLocalFittingFreezeChangeRatio{ 0.1 };
 constexpr int kLocalFittingFreezeStableIterations{ 3 };
+constexpr double kLocalFittingDependencyThawChangeThreshold{ 1.0e-3 };
 constexpr double kLocalFittingDependencyThawHysteresisGrowth{ 2.0 };
 constexpr double kLocalFittingDependencyThawHysteresisMax{ 8.0 };
 constexpr double kLocalFittingDependencyThawHysteresisFrozenDecay{ 0.9 };
@@ -1744,10 +1746,10 @@ ScoreLocalFittingClusterCandidate(
     algorithm::FittingQualityCandidateStats & previous_candidate_stats,
     const std::optional<LocalFittingObjectiveSamples> & previous_objective_samples,
     const std::optional<algorithm::ClusteredFittingQualityTrackedCandidate<LocalFittingObjectiveSamples>> & best_candidate,
-    const algorithm::ParameterChangeStats & normalized_change_stats)
+    const algorithm::ParameterChangeStats & transformed_change_stats)
 {
     algorithm::ClusteredFittingQualityCandidateScore<LocalFittingObjectiveSamples> score;
-    score.candidate_stats.parameter_change_stats = normalized_change_stats;
+    score.candidate_stats.parameter_change_stats = transformed_change_stats;
     auto objective_scale{ objective_scale_tracker.GetCommittedReference() };
     score.has_objective_reference = objective_scale.has_value();
     if (best_candidate.has_value())
@@ -1895,100 +1897,90 @@ void LogGroupPriorSpotSummary(const ModelObject & model_object)
     }
 }
 
-std::vector<algorithm::ParameterChange> CalculateLocalFittingParameterChanges(
+algorithm::ParameterChange CalculateLocalFittingTransformedChange(
+    const Eigen::VectorXd & current_estimation,
+    const Eigen::VectorXd & previous_estimation)
+{
+    if (current_estimation.size() != GaussianModel3D::ParameterSize() ||
+        previous_estimation.size() != GaussianModel3D::ParameterSize())
+    {
+        throw std::invalid_argument(
+            "Local fitting transformed change parameter sizes are inconsistent.");
+    }
+    return detail::CalculateLocalFittingTransformedChange(
+        GaussianModel3D{
+            current_estimation(GaussianModel3D::AmplitudeIndex()),
+            current_estimation(GaussianModel3D::WidthIndex()),
+            current_estimation(GaussianModel3D::OffsetIndex())
+        },
+        GaussianModel3D{
+            previous_estimation(GaussianModel3D::AmplitudeIndex()),
+            previous_estimation(GaussianModel3D::WidthIndex()),
+            previous_estimation(GaussianModel3D::OffsetIndex())
+        });
+}
+
+std::vector<algorithm::ParameterChange> CalculateLocalFittingTransformedChanges(
     const std::vector<Eigen::VectorXd> & current_estimation_list,
     const std::vector<Eigen::VectorXd> & previous_estimation_list)
 {
     if (current_estimation_list.size() != previous_estimation_list.size())
     {
-        throw std::invalid_argument("Local fitting parameter change input sizes are inconsistent.");
+        throw std::invalid_argument(
+            "Local fitting transformed change input sizes are inconsistent.");
     }
 
     std::vector<algorithm::ParameterChange> change_list(current_estimation_list.size());
     for (size_t i = 0; i < current_estimation_list.size(); i++)
     {
-        const auto & current_estimation{ current_estimation_list.at(i) };
-        const auto & previous_estimation{ previous_estimation_list.at(i) };
-        change_list.at(i).value_list = {
-            std::abs(
-                current_estimation(GaussianModel3D::AmplitudeIndex()) -
-                previous_estimation(GaussianModel3D::AmplitudeIndex())),
-            std::abs(
-                current_estimation(GaussianModel3D::WidthIndex()) -
-                previous_estimation(GaussianModel3D::WidthIndex())),
-            std::abs(
-                current_estimation(GaussianModel3D::OffsetIndex()) -
-                previous_estimation(GaussianModel3D::OffsetIndex()))
-        };
+        change_list.at(i) = CalculateLocalFittingTransformedChange(
+            current_estimation_list.at(i),
+            previous_estimation_list.at(i));
     }
     return change_list;
 }
 
-algorithm::ParameterChangeStats SummarizeLocalFittingNormalizedParameterChanges(
+algorithm::ParameterChangeStats SummarizeLocalFittingTransformedChanges(
     const std::vector<Eigen::VectorXd> & current_estimation_list,
     const std::vector<Eigen::VectorXd> & previous_estimation_list,
     const std::vector<std::size_t> & index_list)
 {
     if (current_estimation_list.size() != previous_estimation_list.size())
     {
-        throw std::invalid_argument("Local fitting normalized parameter change input sizes are inconsistent.");
+        throw std::invalid_argument(
+            "Local fitting transformed change input sizes are inconsistent.");
     }
 
-    const std::array<int, 3> parameter_index_list{
-        GaussianModel3D::AmplitudeIndex(),
-        GaussianModel3D::WidthIndex(),
-        GaussianModel3D::OffsetIndex()
-    };
-    std::array<std::vector<double>, 3> change_list_by_parameter;
-    for (auto & change_list : change_list_by_parameter)
-    {
-        change_list.reserve(index_list.size());
-    }
+    std::vector<algorithm::ParameterChange> change_list;
+    change_list.reserve(index_list.size());
     for (const auto i : index_list)
     {
         if (i >= current_estimation_list.size())
         {
             throw std::invalid_argument(
-                "Local fitting normalized parameter change index is out of range.");
+                "Local fitting transformed change index is out of range.");
         }
-        const auto & current_estimation{ current_estimation_list.at(i) };
-        const auto & previous_estimation{ previous_estimation_list.at(i) };
-        for (std::size_t parameter_position = 0;
-            parameter_position < parameter_index_list.size();
-            parameter_position++)
-        {
-            const auto parameter_index{ parameter_index_list.at(parameter_position) };
-            change_list_by_parameter.at(parameter_position).emplace_back(
-                algorithm::CalculateNormalizedChange(
-                    current_estimation(parameter_index),
-                    previous_estimation(parameter_index),
-                    kLocalFittingNormalizedChangeScaleFloor));
-        }
+        change_list.emplace_back(CalculateLocalFittingTransformedChange(
+            current_estimation_list.at(i),
+            previous_estimation_list.at(i)));
     }
 
-    algorithm::ParameterChangeStats stats;
-    if (index_list.empty()) return stats;
-    stats.percentile_list.resize(
-        static_cast<std::size_t>(GaussianModel3D::ParameterSize()),
-        0.0);
-    for (std::size_t parameter_position = 0;
-        parameter_position < parameter_index_list.size();
-        parameter_position++)
+    std::vector<std::size_t> local_index_list(change_list.size());
+    for (std::size_t i = 0; i < local_index_list.size(); i++)
     {
-        const auto parameter_index{ parameter_index_list.at(parameter_position) };
-        stats.percentile_list.at(static_cast<std::size_t>(parameter_index)) =
-            array_helper::ComputePercentile(
-                change_list_by_parameter.at(parameter_position),
-                kLocalFittingChangePercentile);
+        local_index_list.at(i) = i;
     }
-    return stats;
+    return algorithm::SummarizeParameterChangeStats(
+        change_list,
+        local_index_list,
+        kLocalFittingChangePercentile);
 }
 
-bool IsLocalFittingNormalizedParameterChangeConverged(const algorithm::ParameterChangeStats & stats)
+bool IsLocalFittingTransformedChangeConverged(const algorithm::ParameterChangeStats & stats)
 {
     for (std::size_t i = 0; i < stats.percentile_list.size(); i++)
     {
-        if (stats.percentile_list.at(i) >= kLocalFittingNormalizedChangeTolerance) return false;
+        if (stats.percentile_list.at(i) >= kLocalFittingTransformedChangeTolerance) return false;
     }
     return true;
 }
@@ -2034,13 +2026,13 @@ std::vector<LocalFittingClusterKey> UpdatePersistentSuspiciousRollbackState(
         };
         if (cluster_suspicious_atom_index_list.empty()) continue;
 
-        const auto normalized_change_stats{
-            SummarizeLocalFittingNormalizedParameterChanges(
+        const auto transformed_change_stats{
+            SummarizeLocalFittingTransformedChanges(
                 assembled_state.estimation_list,
                 previous_state.estimation_list,
                 key)
         };
-        if (!IsLocalFittingNormalizedParameterChangeConverged(normalized_change_stats))
+        if (!IsLocalFittingTransformedChangeConverged(transformed_change_stats))
         {
             continue;
         }
@@ -2304,8 +2296,8 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                     continue;
                 }
 
-                auto normalized_change_stats{
-                    SummarizeLocalFittingNormalizedParameterChanges(
+                auto transformed_change_stats{
+                    SummarizeLocalFittingTransformedChanges(
                         attempt_state->estimation_list,
                         previous_state.estimation_list,
                         key)
@@ -2328,7 +2320,7 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                                 previous_candidate_stats,
                                 previous_objective_samples,
                                 best_candidate,
-                                normalized_change_stats);
+                                transformed_change_stats);
                         })
                 };
                 if (accepted)
@@ -2469,7 +2461,6 @@ void ThawChangedActiveAtomNeighbors(
         throw std::invalid_argument("Local fitting dependency thaw input size is inconsistent.");
     }
 
-    const double thaw_threshold{ std::sqrt(kLocalFittingParameterChangeTolerance) };
     for (const auto active_index : active_index_list)
     {
         if (active_index >= context.AtomSize())
@@ -2480,7 +2471,13 @@ void ThawChangedActiveAtomNeighbors(
         for (const auto neighbor_index : context.atom_context_list.at(active_index).selected_neighbor_index_list)
         {
             if (!freeze_tracker.IsFrozen(neighbor_index)) continue;
-            if (!thaw_hysteresis_tracker.ShouldThaw(neighbor_index, active_change, thaw_threshold)) continue;
+            if (!thaw_hysteresis_tracker.ShouldThaw(
+                    neighbor_index,
+                    active_change,
+                    kLocalFittingDependencyThawChangeThreshold))
+            {
+                continue;
+            }
             if (!thaw_hysteresis_tracker.CanDependencyThaw(neighbor_index)) continue;
             if (freeze_tracker.Thaw(neighbor_index))
             {
@@ -2836,25 +2833,28 @@ void LogLocalFittingProgress(
 void LogLocalFittingConverged(
     const FitOptions & options,
     std::size_t accepted_iteration_count,
-    const algorithm::ParameterChangeStats & normalized_change_stats)
+    const algorithm::ParameterChangeStats & transformed_change_stats)
 {
     if (options.quiet_mode) return;
 
     Logger::FinishProgressLine();
     Logger::Log(LogLevel::Info,
         "Converged after " + std::to_string(accepted_iteration_count) +
-        " iterations with normalized percentile amplitude change = " +
-        std::to_string(normalized_change_stats.percentile_list.at(GaussianModel3D::AmplitudeIndex())) +
-        ", normalized percentile width change = " +
-        std::to_string(normalized_change_stats.percentile_list.at(GaussianModel3D::WidthIndex())) +
-        ", and normalized percentile offset change = " +
-        std::to_string(normalized_change_stats.percentile_list.at(GaussianModel3D::OffsetIndex())) +
+        " iterations with percentile log-peak-height change = " +
+        std::to_string(transformed_change_stats.percentile_list.at(
+            detail::kLogPeakHeightChangeIndex)) +
+        ", percentile log-width change = " +
+        std::to_string(transformed_change_stats.percentile_list.at(
+            detail::kLogWidthChangeIndex)) +
+        ", and percentile offset-to-peak-ratio change = " +
+        std::to_string(transformed_change_stats.percentile_list.at(
+            detail::kOffsetToPeakRatioChangeIndex)) +
         ".");
 }
 
 void LogLocalFittingMaximumIterations(
     const FitOptions & options,
-    const algorithm::ParameterChangeStats & normalized_change_stats,
+    const algorithm::ParameterChangeStats & transformed_change_stats,
     std::size_t terminal_cluster_count,
     std::size_t terminal_atom_count)
 {
@@ -2864,15 +2864,18 @@ void LogLocalFittingMaximumIterations(
     std::ostringstream warning_message;
     warning_message
         << "Reached maximum iteration size; refitting at current accepted candidate "
-        << "with normalized percentile amplitude change = "
+        << "with percentile log-peak-height change = "
         << std::to_string(
-            normalized_change_stats.percentile_list.at(GaussianModel3D::AmplitudeIndex()))
-        << ", normalized percentile width change = "
+            transformed_change_stats.percentile_list.at(
+                detail::kLogPeakHeightChangeIndex))
+        << ", percentile log-width change = "
         << std::to_string(
-            normalized_change_stats.percentile_list.at(GaussianModel3D::WidthIndex()))
-        << ", and normalized percentile offset change = "
+            transformed_change_stats.percentile_list.at(
+                detail::kLogWidthChangeIndex))
+        << ", and percentile offset-to-peak-ratio change = "
         << std::to_string(
-            normalized_change_stats.percentile_list.at(GaussianModel3D::OffsetIndex()));
+            transformed_change_stats.percentile_list.at(
+                detail::kOffsetToPeakRatioChangeIndex));
     AppendTerminalSuspiciousRollbackSummary(
         warning_message,
         terminal_cluster_count,
@@ -3204,7 +3207,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
     algorithm::ClusteredAndersonAccelerationHistorySet acceleration_history{
         algorithm::AndersonAccelerationOptions{
             kLocalFittingAndersonHistoryDepth,
-            kLocalFittingNormalizedChangeScaleFloor,
+            kLocalFittingAndersonScaleFloor,
             kLocalFittingAndersonCoefficientL1Limit,
             kLocalFittingAndersonRegularization,
             kLocalFittingAndersonCoefficientAbsLimit
@@ -3212,7 +3215,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
     };
     algorithm::ConvergenceFreezeTracker freeze_tracker{
         atom_size,
-        kLocalFittingParameterChangeTolerance,
+        kLocalFittingFreezeTrackerChangeTolerance,
         kLocalFittingFreezeChangeRatio,
         kLocalFittingFreezeStableIterations
     };
@@ -3413,12 +3416,12 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         }
 
         auto change_list{
-            CalculateLocalFittingParameterChanges(
+            CalculateLocalFittingTransformedChanges(
                 assembled_state.estimation_list,
                 previous_state.estimation_list)
         };
-        auto normalized_change_stats{
-            SummarizeLocalFittingNormalizedParameterChanges(
+        auto transformed_change_stats{
+            SummarizeLocalFittingTransformedChanges(
                 assembled_state.estimation_list,
                 previous_state.estimation_list,
                 active_index_list)
@@ -3511,7 +3514,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             !has_suspicious_offset_fallback &&
             !selection.has_objective_backtracking_rejection &&
             cluster_quality_state.AllActiveReferencesLocked(cluster_key_list) &&
-            IsLocalFittingNormalizedParameterChangeConverged(normalized_change_stats)
+            IsLocalFittingTransformedChangeConverged(transformed_change_stats)
         };
         if (converged)
         {
@@ -3532,7 +3535,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 LogLocalFittingConverged(
                     options,
                     accepted_iteration_count,
-                    normalized_change_stats);
+                    transformed_change_stats);
             }
             break;
         }
@@ -3542,7 +3545,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             ApplyLocalFittingState(assembled_state, local_editor_list);
             LogLocalFittingMaximumIterations(
                 options,
-                normalized_change_stats,
+                transformed_change_stats,
                 terminal_suspicious_cluster_count,
                 CountTerminalSuspiciousAtoms(terminal_suspicious_atom_mask));
             break;

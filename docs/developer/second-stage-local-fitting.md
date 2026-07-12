@@ -225,7 +225,7 @@ A cluster candidate is rejected when a local reference exists and the candidate
 has no finite objective, or when its objective deteriorates beyond
 `kLocalFittingConvergenceObjectiveRelativeTolerance` relative to the cluster's
 previous or best tracked state. Objective ties are broken by the maximum
-normalized percentile parameter movement.
+scale-consistent transformed percentile movement.
 
 Rejected Anderson clusters clear and suppress only their own histories. A
 suppressed cluster can use Anderson again after accepted fixed-point progress.
@@ -247,25 +247,41 @@ clusters retain the existing ridge-increase behavior.
 
 ## Freeze, Thaw, and Convergence
 
-Accepted assembled candidates compute absolute parameter changes for freeze/thaw.
-Normalized percentile statistics for objective tie-breaking and convergence are
-collected directly from the requested active indexes without constructing an
-atom-sized intermediate change list.
+All movement and stability decisions use the same dimensionless transformed
+coordinates:
+
+```text
+log peak height = log(A * (2 pi B^2)^(-3/2))
+log width       = log(B)
+offset ratio    = C * OffsetBasis(0) / peak height
+```
+
+An atom's change is the component-wise absolute difference between its current
+and previous transformed coordinates. Scaling both amplitude and offset by the
+same map-intensity factor leaves this change unchanged. Using peak height rather
+than amplitude also prevents amplitude-width compensation from appearing as
+center-signal movement.
+
+Non-positive amplitude or width, and coordinates that cannot be represented as
+finite values, produce infinite change. Such states cannot freeze, converge, win
+an objective movement tie, or count as persistent no-progress; dependency thaw
+treats them conservatively as movement.
+
 Freeze tracking is updated only for atoms in clusters that accepted progress, so
 rejected clusters are not frozen because their assembled movement is zero.
 If the joint-offset solve is not healthy, all active freeze-stability counters
 are reset instead. Accepted parameter movement may still thaw frozen neighbors.
 
-Atoms freeze after their maximum absolute parameter movement remains below the
-freeze threshold for `kLocalFittingFreezeStableIterations`. Frozen atoms can
-thaw when an active selected neighbor changes enough to pass the dependency
-thaw threshold. Dependency thaw uses per-atom hysteresis and a capped thaw count
-to limit repeated freeze/thaw cycling. Suspicious rollback atoms are force-thawed
-after freeze tracking so they can retry with their temporary ridge multiplier.
+Atoms freeze after their maximum transformed change remains below `1.0e-4` for
+`kLocalFittingFreezeStableIterations`. Frozen atoms can thaw when an active
+selected neighbor's maximum transformed change reaches `1.0e-3` times the
+dependency-thaw hysteresis multiplier. Dependency thaw retains its capped thaw
+count and hysteresis decay. Suspicious rollback atoms are force-thawed after
+freeze tracking so they can retry with their temporary ridge multiplier.
 
 An accepted cluster enters persistent suspicious rollback tracking only when it
 contains the same expanded suspicious atom set as the previous iteration and
-its assembled normalized parameter movement is below the convergence tolerance.
+its assembled transformed movement is below the convergence tolerance.
 Rejected clusters, clusters with effective movement, changed suspicious sets,
 and changed cluster keys reset that tracking state. After five consecutive
 accepted no-progress iterations, the complete active cluster keeps its previous
@@ -280,8 +296,8 @@ Parameter convergence requires:
 - a converged joint-offset solve status;
 - no cluster objective rejection in the accepted iteration;
 - all active cluster objective scale references to be locked when present; and
-- active-set normalized percentile changes below
-  `kLocalFittingNormalizedChangeTolerance`.
+- each active-set transformed change percentile below
+  `kLocalFittingTransformedChangeTolerance`.
 
 Unhealthy joint-offset iterations clear and suppress current cluster Anderson
 history and do not commit their raw fixed-point map. In non-quiet mode their
@@ -311,8 +327,8 @@ The loop exits through one of five terminal cases:
 Progress logs report iteration, acceleration kind, damping, and active/frozen
 atom counts. When terminal suspicious atoms exist, active counts exclude them
 and the progress line reports their count separately. Terminal logs report the
-stop reason and, for convergence or maximum-iteration exits, normalized
-terminal movement.
+stop reason and, for convergence or maximum-iteration exits, the percentile
+log-peak-height, log-width, and offset-to-peak-ratio changes.
 
 ## Workflow Context
 

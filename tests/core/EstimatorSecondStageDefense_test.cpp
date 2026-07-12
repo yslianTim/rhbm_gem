@@ -10,13 +10,18 @@
 #include <vector>
 
 #include "core/detail/GaussianEstimatorStages.hpp"
+#include "core/detail/LocalFittingTransformedChange.hpp"
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/algorithm/ConvergenceFreezeTracker.hpp>
+#include <rhbm_gem/utils/algorithm/DependencyThawHysteresisTracker.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 namespace {
+namespace alg = rhbm_gem::algorithm;
+namespace change_detail = rhbm_gem::core::detail;
 namespace rt = rhbm_gem::core;
 namespace rg = rhbm_gem;
 
@@ -348,6 +353,130 @@ void ExpectSelectedAtomEstimatesAreFinite(const rg::ModelObject & model)
 
 } // namespace
 
+TEST(EstimatorSecondStageDefenseTest, TransformedChangeIsIntensityScaleInvariant)
+{
+    const rg::GaussianModel3D previous{ 8.0, 0.50, -0.10 };
+    const rg::GaussianModel3D current{ 8.8, 0.55, -0.12 };
+    const auto base_change{
+        change_detail::CalculateLocalFittingTransformedChange(current, previous)
+    };
+
+    for (const auto scale : { 1.0e-2, 1.0e2 })
+    {
+        const auto scaled_change{
+            change_detail::CalculateLocalFittingTransformedChange(
+                rg::GaussianModel3D{
+                    current.GetAmplitude() * scale,
+                    current.GetWidth(),
+                    current.GetOffset() * scale
+                },
+                rg::GaussianModel3D{
+                    previous.GetAmplitude() * scale,
+                    previous.GetWidth(),
+                    previous.GetOffset() * scale
+                })
+        };
+        ASSERT_EQ(base_change.value_list.size(), scaled_change.value_list.size());
+        for (std::size_t i = 0; i < base_change.value_list.size(); i++)
+        {
+            EXPECT_NEAR(
+                base_change.value_list.at(i),
+                scaled_change.value_list.at(i),
+                1.0e-12);
+        }
+
+        alg::DependencyThawHysteresisTracker thaw_tracker{ 1, 2.0, 8.0, 0.9, 5 };
+        EXPECT_EQ(
+            thaw_tracker.ShouldThaw(
+                0,
+                alg::GetMaximumParameterChange(base_change),
+                1.0e-3),
+            thaw_tracker.ShouldThaw(
+                0,
+                alg::GetMaximumParameterChange(scaled_change),
+                1.0e-3));
+    }
+}
+
+TEST(EstimatorSecondStageDefenseTest, TransformedChangeSeparatesPeakHeightAndWidth)
+{
+    const auto change{
+        change_detail::CalculateLocalFittingTransformedChange(
+            rg::GaussianModel3D{ 8.0, 1.0, 0.0 },
+            rg::GaussianModel3D{ 1.0, 0.5, 0.0 })
+    };
+
+    EXPECT_NEAR(
+        0.0,
+        change.value_list.at(change_detail::kLogPeakHeightChangeIndex),
+        1.0e-12);
+    EXPECT_NEAR(
+        std::log(2.0),
+        change.value_list.at(change_detail::kLogWidthChangeIndex),
+        1.0e-12);
+    EXPECT_DOUBLE_EQ(
+        0.0,
+        change.value_list.at(change_detail::kOffsetToPeakRatioChangeIndex));
+}
+
+TEST(EstimatorSecondStageDefenseTest, InvalidTransformedCoordinatesProduceInfiniteChange)
+{
+    const rg::GaussianModel3D valid_model{ 1.0, 0.5, 0.0 };
+    const std::array<rg::GaussianModel3D, 4> invalid_model_list{
+        rg::GaussianModel3D{ 0.0, 0.5, 0.0 },
+        rg::GaussianModel3D{ 1.0, 0.0, 0.0 },
+        rg::GaussianModel3D{
+            std::numeric_limits<double>::quiet_NaN(),
+            0.5,
+            0.0
+        },
+        rg::GaussianModel3D{
+            std::numeric_limits<double>::denorm_min(),
+            std::numeric_limits<double>::max(),
+            std::numeric_limits<double>::max()
+        }
+    };
+
+    for (const auto & invalid_model : invalid_model_list)
+    {
+        const auto change{
+            change_detail::CalculateLocalFittingTransformedChange(
+                invalid_model,
+                valid_model)
+        };
+        ASSERT_EQ(change_detail::kTransformedChangeSize, change.value_list.size());
+        for (const auto value : change.value_list)
+        {
+            EXPECT_TRUE(std::isinf(value));
+        }
+    }
+}
+
+TEST(EstimatorSecondStageDefenseTest, FreezeUsesTransformedRatherThanAbsoluteMovement)
+{
+    const auto scale_consistent_small_change{
+        change_detail::CalculateLocalFittingTransformedChange(
+            rg::GaussianModel3D{ 1.0e8 * std::exp(5.0e-5), 0.5, 0.0 },
+            rg::GaussianModel3D{ 1.0e8, 0.5, 0.0 })
+    };
+    const auto relatively_large_tiny_absolute_change{
+        change_detail::CalculateLocalFittingTransformedChange(
+            rg::GaussianModel3D{ 2.0e-8, 0.5, 0.0 },
+            rg::GaussianModel3D{ 1.0e-8, 0.5, 0.0 })
+    };
+    alg::ConvergenceFreezeTracker stable_tracker{ 1, 1.0e-6, 0.1, 3 };
+    alg::ConvergenceFreezeTracker moving_tracker{ 1, 1.0e-6, 0.1, 3 };
+
+    for (int i = 0; i < 3; i++)
+    {
+        stable_tracker.Update({ scale_consistent_small_change }, { 0 });
+        moving_tracker.Update({ relatively_large_tiny_absolute_change }, { 0 });
+    }
+
+    EXPECT_TRUE(stable_tracker.IsFrozen(0));
+    EXPECT_FALSE(moving_tracker.IsFrozen(0));
+}
+
 TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingFallsBackWhenJointOffsetSamplesAreNonFinite)
 {
     auto model{ BuildNonFiniteJointOffsetDefenseModel() };
@@ -396,6 +525,18 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingReportsEmptyJoin
     EXPECT_NE(output.find("joint-offset = empty-system"), std::string::npos);
     EXPECT_EQ(
         error_output.find("terminal suspicious rollback fallback"),
+        std::string::npos);
+    EXPECT_NE(
+        error_output.find("percentile log-peak-height change"),
+        std::string::npos);
+    EXPECT_NE(
+        error_output.find("percentile log-width change"),
+        std::string::npos);
+    EXPECT_NE(
+        error_output.find("percentile offset-to-peak-ratio change"),
+        std::string::npos);
+    EXPECT_EQ(
+        error_output.find("normalized percentile amplitude change"),
         std::string::npos);
     EXPECT_NEAR(GetEstimateModel(*atom).GetOffset(), previous_offset, 1.0e-12);
     ExpectSelectedAtomEstimatesAreFinite(*model);
