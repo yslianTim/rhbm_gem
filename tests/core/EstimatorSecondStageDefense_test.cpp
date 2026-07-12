@@ -228,6 +228,20 @@ std::unique_ptr<rg::ModelObject> BuildSeparatedRollbackDefenseModel()
     return model;
 }
 
+std::unique_ptr<rg::ModelObject> BuildSeparatedSystemBuildFailureDefenseModel()
+{
+    auto model{ BuildSeparatedRollbackDefenseModel() };
+    auto * atom{ model->GetSelectedAtoms().front() };
+    auto sampling_entries{
+        rg::AtomLocalPotentialView::RequireFor(*atom).GetSamplingEntries(false)
+    };
+    sampling_entries.front().response = std::numeric_limits<float>::quiet_NaN();
+    auto analysis{ model->EditAnalysis() };
+    analysis.EnsureAtomLocalPotential(*atom).SetSamplingEntries(
+        std::move(sampling_entries));
+    return model;
+}
+
 std::unique_ptr<rg::ModelObject> BuildPostRefitRollbackChainDefenseModel()
 {
     auto model{
@@ -828,6 +842,138 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingReportsEmptyJoin
         std::string::npos);
     EXPECT_NEAR(GetEstimateModel(*atom).GetOffset(), previous_offset, 1.0e-12);
     ExpectSelectedAtomEstimatesAreFinite(*model);
+}
+
+TEST(EstimatorSecondStageDefenseTest, ExplicitlyEnabledHealthPolicyMatchesDefault)
+{
+    auto default_model{ BuildEmptyJointOffsetDefenseModel() };
+    auto explicitly_enabled_model{ BuildEmptyJointOffsetDefenseModel() };
+
+    rt::RunSecondStageLocalFitting(
+        *default_model,
+        MakeSecondStageOptions());
+    rt::RunSecondStageLocalFitting(
+        *explicitly_enabled_model,
+        MakeSecondStageOptions(),
+        rt::SecondStageLocalFittingInternalOptions{ true });
+
+    ExpectGaussianModelsNear(
+        GetEstimateModel(*default_model->GetSelectedAtoms().front()),
+        GetEstimateModel(*explicitly_enabled_model->GetSelectedAtoms().front()),
+        1.0e-12);
+}
+
+TEST(EstimatorSecondStageDefenseTest, DisabledHealthPolicyRestoresEmptySystemLegacyProgress)
+{
+    auto model{ BuildEmptyJointOffsetDefenseModel() };
+    auto * atom{ model->GetSelectedAtoms().front() };
+    const auto previous_offset{ GetEstimateModel(*atom).GetOffset() };
+
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    rt::RunSecondStageLocalFitting(
+        *model,
+        MakeSecondStageOptions(false),
+        rt::SecondStageLocalFittingInternalOptions{ false });
+    const std::string output{ testing::internal::GetCapturedStdout() };
+    const std::string error_output{ testing::internal::GetCapturedStderr() };
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_EQ(output.find("joint-offset ="), std::string::npos);
+    EXPECT_NE(output.find("Converged after"), std::string::npos);
+    EXPECT_EQ(error_output.find("Reached maximum iteration size"), std::string::npos);
+    EXPECT_NEAR(GetEstimateModel(*atom).GetOffset(), previous_offset, 1.0e-12);
+    ExpectSelectedAtomEstimatesAreFinite(*model);
+}
+
+TEST(EstimatorSecondStageDefenseTest, DisabledHealthPolicyKeepsSystemBuildFallbackInternal)
+{
+    auto model{ BuildNonFiniteJointOffsetDefenseModel() };
+    auto * atom{ model->GetSelectedAtoms().front() };
+    const auto previous_model{ GetEstimateModel(*atom) };
+
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    rt::RunSecondStageLocalFitting(
+        *model,
+        MakeSecondStageOptions(false),
+        rt::SecondStageLocalFittingInternalOptions{ false });
+    const std::string output{ testing::internal::GetCapturedStdout() };
+    const std::string error_output{ testing::internal::GetCapturedStderr() };
+    Logger::SetLogLevel(previous_log_level);
+
+    ExpectGaussianModelsNear(GetEstimateModel(*atom), previous_model, 1.0e-12);
+    EXPECT_EQ(output.find("joint-offset ="), std::string::npos);
+    EXPECT_NE(
+        error_output.find("terminal suspicious rollback fallback clusters/atoms = 1/1"),
+        std::string::npos);
+    EXPECT_EQ(error_output.find("Reached maximum iteration size"), std::string::npos);
+    ExpectSelectedAtomEstimatesAreFinite(*model);
+}
+
+TEST(EstimatorSecondStageDefenseTest, DisabledHealthPolicyAllowsRemoteAndersonDuringFallback)
+{
+    auto enabled_model{ BuildSeparatedSystemBuildFailureDefenseModel() };
+    auto disabled_model{ BuildSeparatedSystemBuildFailureDefenseModel() };
+    const auto disabled_initial_remote_error{
+        CalculateSelectedAtomResponseMeanSquaredError(*disabled_model, 2, 4)
+    };
+
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    rt::RunSecondStageLocalFitting(
+        *enabled_model,
+        MakeSecondStageOptions(false));
+    const std::string enabled_output{ testing::internal::GetCapturedStdout() };
+    static_cast<void>(testing::internal::GetCapturedStderr());
+
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    rt::RunSecondStageLocalFitting(
+        *disabled_model,
+        MakeSecondStageOptions(false),
+        rt::SecondStageLocalFittingInternalOptions{ false });
+    const std::string disabled_output{ testing::internal::GetCapturedStdout() };
+    static_cast<void>(testing::internal::GetCapturedStderr());
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_NE(
+        enabled_output.find("joint-offset = system-build-failed"),
+        std::string::npos);
+    EXPECT_EQ(disabled_output.find("joint-offset ="), std::string::npos);
+    const auto enabled_first_anderson_position{
+        std::min(
+            enabled_output.find("acceleration = aa"),
+            enabled_output.find("acceleration = damped-aa"))
+    };
+    const auto disabled_first_anderson_position{
+        std::min(
+            disabled_output.find("acceleration = aa"),
+            disabled_output.find("acceleration = damped-aa"))
+    };
+    const auto enabled_terminal_position{
+        enabled_output.find("terminal-suspicious atoms = 2")
+    };
+    const auto disabled_terminal_position{
+        disabled_output.find("terminal-suspicious atoms = 2")
+    };
+    ASSERT_NE(enabled_first_anderson_position, std::string::npos);
+    ASSERT_NE(disabled_first_anderson_position, std::string::npos);
+    ASSERT_NE(enabled_terminal_position, std::string::npos);
+    ASSERT_NE(disabled_terminal_position, std::string::npos);
+    EXPECT_GT(enabled_first_anderson_position, enabled_terminal_position);
+    EXPECT_LT(disabled_first_anderson_position, disabled_terminal_position);
+    EXPECT_LT(
+        CalculateSelectedAtomResponseMeanSquaredError(*disabled_model, 2, 4),
+        disabled_initial_remote_error);
+    ExpectSelectedAtomEstimatesAreFinite(*enabled_model);
+    ExpectSelectedAtomEstimatesAreFinite(*disabled_model);
 }
 
 TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingRollsBackFiniteNonphysicalProfile)

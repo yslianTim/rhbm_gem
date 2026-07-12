@@ -10,6 +10,11 @@ enum class LocalFittingPass
     ThirdStage
 };
 
+struct SecondStageLocalFittingInternalOptions
+{
+    bool enable_joint_offset_health_status{ true };
+};
+
 void RunLocalAlphaTraining(
     ModelObject & model_object,
     const FitOptions & options,
@@ -18,6 +23,10 @@ void RunFixedOffsetLocalFitting(
     ModelObject & model_object,
     const FitOptions & options,
     LocalFittingPass pass);
-void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & options);
+void RunSecondStageLocalFitting(
+    ModelObject & model_object,
+    const FitOptions & options,
+    const SecondStageLocalFittingInternalOptions & internal_options =
+        SecondStageLocalFittingInternalOptions{});
 
 } // namespace rhbm_gem::core

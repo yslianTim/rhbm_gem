@@ -222,7 +222,8 @@ struct LocalFittingIterationResult
 {
     GaussianFittingState state{};
     std::vector<std::size_t> suspicious_offset_state_index_list{};
-    detail::LocalFittingAndersonRegimeSignatureMap anderson_regime_signature_by_key{};
+    std::optional<detail::LocalFittingAndersonRegimeSignatureMap>
+        anderson_regime_signature_by_key{};
     JointOffsetSolveStatus joint_offset_status{ JointOffsetSolveStatus::SystemBuildFailed };
 };
 
@@ -2717,8 +2718,14 @@ LocalFittingIterationResult RunLocalFittingIteration(
     LocalFittingIterationResult iteration_result;
     iteration_result.state = std::move(iteration_state);
     iteration_result.joint_offset_status = joint_offset_result.status;
-    if (IsJointOffsetSolveHealthy(joint_offset_result.status))
+    if (!joint_offset_result.effective_ridge_multiplier_list.empty())
     {
+        if (joint_offset_result.effective_ridge_multiplier_list.size() !=
+            active_index_list.size())
+        {
+            throw std::logic_error(
+                "Joint offset effective ridge multiplier size is inconsistent.");
+        }
         iteration_result.anderson_regime_signature_by_key =
             detail::BuildLocalFittingAndersonRegimeSignatureMap(
                 cluster_key_list,
@@ -2795,6 +2802,7 @@ void LogLocalFittingBacktrackingRetry(
     std::size_t accepted_iteration_count,
     double ridge_ratio,
     bool uses_cluster_local_objective_ridge,
+    bool health_policy_allows_iteration,
     JointOffsetSolveStatus joint_offset_status)
 {
     if (options.quiet_mode) return;
@@ -2816,7 +2824,7 @@ void LogLocalFittingBacktrackingRetry(
         progress_message
             << ", next attempt uses increased global ridge ratio = " << ridge_ratio;
     }
-    if (!IsJointOffsetSolveHealthy(joint_offset_status))
+    if (!health_policy_allows_iteration)
     {
         progress_message
             << ", joint-offset = " << GetJointOffsetSolveStatusText(joint_offset_status);
@@ -2852,6 +2860,7 @@ void LogLocalFittingProgress(
     std::size_t accepted_iteration_count,
     const LocalFittingCandidateAttempt & current_candidate_attempt,
     const algorithm::ConvergenceFreezeTracker & freeze_tracker,
+    bool health_policy_allows_iteration,
     JointOffsetSolveStatus joint_offset_status,
     std::size_t terminal_atom_count)
 {
@@ -2878,7 +2887,7 @@ void LogLocalFittingProgress(
         progress_message
             << ", terminal-suspicious atoms = " << terminal_atom_count;
     }
-    if (!IsJointOffsetSolveHealthy(joint_offset_status))
+    if (!health_policy_allows_iteration)
     {
         progress_message
             << ", joint-offset = " << GetJointOffsetSolveStatusText(joint_offset_status);
@@ -3249,7 +3258,10 @@ void RunGroupAlphaTraining(ModelObject & model_object, const FitOptions & option
 
 } // namespace
 
-void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & options)
+void RunSecondStageLocalFitting(
+    ModelObject & model_object,
+    const FitOptions & options,
+    const SecondStageLocalFittingInternalOptions & internal_options)
 {
     const auto context{ BuildSecondStageLocalFittingContext(model_object) };
     auto local_editor_list{ BuildAtomLocalEditors(model_object, context.atom_list) };
@@ -3373,8 +3385,12 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 joint_offset_ridge_multiplier_list)
         };
         const auto joint_offset_status{ iteration_result.joint_offset_status };
-        const auto is_joint_offset_solve_healthy{
+        const auto actual_joint_offset_health{
             IsJointOffsetSolveHealthy(joint_offset_status)
+        };
+        const auto health_policy_allows_iteration{
+            !internal_options.enable_joint_offset_health_status ||
+            actual_joint_offset_health
         };
         const auto current_anderson_regime_signature_by_key{
             std::move(iteration_result.anderson_regime_signature_by_key)
@@ -3384,16 +3400,16 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         const auto has_suspicious_offset_fallback{
             !suspicious_offset_state_index_list.empty()
         };
-        if (!is_joint_offset_solve_healthy)
+        if (!health_policy_allows_iteration)
         {
             acceleration_history.ClearAndSuppress(cluster_key_list);
             anderson_regime_tracker.Invalidate(cluster_key_list);
         }
-        else
+        else if (current_anderson_regime_signature_by_key.has_value())
         {
             const auto incompatible_regime_key_list{
                 anderson_regime_tracker.FindIncompatible(
-                    current_anderson_regime_signature_by_key)
+                    *current_anderson_regime_signature_by_key)
             };
             acceleration_history.ClearAndSuppress(incompatible_regime_key_list);
             anderson_regime_tracker.Invalidate(incompatible_regime_key_list);
@@ -3417,7 +3433,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 cluster_quality_state)
         };
         auto assembled_state{ std::move(selection.assembled_state) };
-        if (!is_joint_offset_solve_healthy)
+        if (!health_policy_allows_iteration)
         {
             freeze_tracker.ResetStability(active_index_list);
             acceleration_history.ClearAndSuppress(cluster_key_list);
@@ -3482,6 +3498,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 LogLocalFittingBacktrackingRetry(
                     options, accepted_iteration_count, ridge_ratio,
                     increased_cluster_objective_ridge,
+                    health_policy_allows_iteration,
                     joint_offset_status);
                 continue;
             }
@@ -3512,7 +3529,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 active_index_list)
         };
         accepted_iteration_count++;
-        if (is_joint_offset_solve_healthy)
+        if (health_policy_allows_iteration)
         {
             cluster_quality_state.DecreaseObjectiveRidge(continuing_accepted_key_list);
         }
@@ -3521,19 +3538,19 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             cluster_quality_state.IncreaseObjectiveRidge(selection.rejected_key_list);
         }
 
-        if (is_joint_offset_solve_healthy &&
+        if (health_policy_allows_iteration &&
             !selection.has_objective_backtracking_rejection)
         {
             ridge_ratio = std::max(kJointOffsetRidgeRatioMin, ridge_ratio * kJointOffsetRidgeShrink);
         }
-        if (is_joint_offset_solve_healthy && has_suspicious_offset_fallback)
+        if (health_policy_allows_iteration && has_suspicious_offset_fallback)
         {
             acceleration_history.ClearAndSuppressContaining(
                 suspicious_offset_state_index_list);
             anderson_regime_tracker.InvalidateContaining(
                 suspicious_offset_state_index_list);
         }
-        if (is_joint_offset_solve_healthy)
+        if (health_policy_allows_iteration)
         {
             const auto history_commit_key_list{
                 ExcludeLocalFittingClusterKeysContainingAtoms(
@@ -3544,9 +3561,12 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 history_commit_key_list,
                 previous_state.estimation_list,
                 raw_state.estimation_list);
-            anderson_regime_tracker.Commit(
-                history_commit_key_list,
-                current_anderson_regime_signature_by_key);
+            if (current_anderson_regime_signature_by_key.has_value())
+            {
+                anderson_regime_tracker.Commit(
+                    history_commit_key_list,
+                    *current_anderson_regime_signature_by_key);
+            }
         }
         std::vector<std::size_t> accepted_active_index_list;
         for (const auto & key : continuing_accepted_key_list)
@@ -3554,7 +3574,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             accepted_active_index_list.insert(
                 accepted_active_index_list.end(), key.begin(), key.end());
         }
-        if (is_joint_offset_solve_healthy)
+        if (health_policy_allows_iteration)
         {
             freeze_tracker.Update(change_list, accepted_active_index_list);
         }
@@ -3578,6 +3598,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             accepted_iteration_count,
             selection.accepted_candidate_attempt.value(),
             freeze_tracker,
+            health_policy_allows_iteration,
             joint_offset_status,
             CountTerminalSuspiciousAtoms(terminal_suspicious_atom_mask));
 
@@ -3605,7 +3626,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         }
 
         const auto converged{
-            is_joint_offset_solve_healthy &&
+            health_policy_allows_iteration &&
             !has_suspicious_offset_fallback &&
             !selection.has_objective_backtracking_rejection &&
             cluster_quality_state.AllActiveReferencesLocked(cluster_key_list) &&

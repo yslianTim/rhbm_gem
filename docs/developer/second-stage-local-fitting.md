@@ -181,12 +181,14 @@ the suspicious-retry multiplier, and the proactive collinearity multiplier
 actually used to build the joint-offset system. Signatures use exact comparison,
 so any real change to one of these controls starts a new fixed-point regime.
 
-Only a converged joint-offset solve produces a signature. Before Anderson
-candidate construction, an unhealthy solve clears and suppresses every current
-cluster, while a signature mismatch clears and suppresses only the affected
-cluster. Any pre-refit or post-refit suspicious rollback likewise clears its
-containing cluster before candidate construction. Compatible remote clusters
-retain their histories.
+Any joint-offset system build that produces the complete effective-multiplier
+list can form a signature, including builds whose later solve does not converge.
+With the default health policy enabled, only a converged solve may use or commit
+that signature: before Anderson candidate construction, an unhealthy solve
+clears and suppresses every current cluster. A signature mismatch otherwise
+clears and suppresses only the affected cluster. Any pre-refit or post-refit
+suspicious rollback likewise clears its containing cluster before candidate
+construction. Compatible remote clusters retain their histories.
 
 Residuals are scaled per parameter using the normalized-change scale floor.
 The coefficient solve includes L2 regularization and rejects candidates whose
@@ -335,6 +337,26 @@ or a ridge regime signature. In non-quiet mode their
 existing progress line includes the status, for example
 `joint-offset = system-build-failed`; no separate per-iteration warning or
 fallback summary is emitted.
+
+Developers can disable only this health policy through the non-installed stage
+interface:
+
+```cpp
+RunSecondStageLocalFitting(
+    model,
+    fit_options,
+    SecondStageLocalFittingInternalOptions{ false });
+```
+
+The default is enabled, including every production workflow call that omits the
+internal options. When disabled, solver status is still computed and the current
+safe offset fallback remains in force, but status does not reset freeze
+stability, block freeze/ridge/history updates or convergence, or appear in
+progress output. Ridge-regime compatibility still applies when the system build
+produced a signature. A system-build failure has no signature and follows the
+legacy history path without health-driven clearing. This switch is intended
+only for controlled A/B diagnostics; it is not exposed through `FitOptions`,
+commands, CMake, or environment variables.
 
 ## Exit Paths
 
