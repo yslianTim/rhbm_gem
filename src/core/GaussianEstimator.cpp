@@ -1487,7 +1487,7 @@ void LogSecondStageSeedRepairs(
         detail_message << "Second-stage seed repair: atom index = "
             << record.atom_index
             << ", source = " << GetSecondStageSeedRepairSourceText(record.source)
-            << std::scientific
+            << std::scientific << std::setprecision(2)
             << ", original A/B/C = "
             << record.original_model.GetAmplitude() << "/"
             << record.original_model.GetWidth() << "/"
@@ -3942,7 +3942,7 @@ void AppendLocalFittingOffsetSummary(
     const LocalFittingOffsetStats & stats)
 {
     stream
-        << std::scientific << std::setprecision(4)
+        << std::scientific << std::setprecision(2)
         << "; offsets finite/exact-zero = "
         << stats.finite_count << "/" << stats.exact_zero_count
         << " of " << stats.atom_count
@@ -3969,7 +3969,7 @@ void AppendLocalFittingAuditSummary(
         stream << "initial";
     }
     stream
-        << std::scientific << std::setprecision(4)
+        << std::scientific << std::setprecision(2)
         << ", fixed audit objective residual/width/offset/total = "
         << objective.residual_objective << "/"
         << objective.width_prior_penalty << "/"
@@ -4097,7 +4097,7 @@ void AppendLocalFittingClusterSelectionSummary(
     const LocalFittingClusterSelectionSummary & summary)
 {
     stream
-        << ", objective accepted/rejected clusters = "
+        << ", objective acc./rej. clusters = "
         << summary.accepted_cluster_count << "/"
         << summary.rejected_cluster_count
         << ", atoms = "
@@ -4154,7 +4154,7 @@ void LogRejectedLocalFittingClusterDiagnostics(
         {
             std::ostringstream message;
             message
-                << std::scientific << std::setprecision(6)
+                << std::scientific << std::setprecision(2)
                 << "  kind = "
                 << (diagnostic.attempt.kind == LocalFittingCandidateKind::Anderson ?
                     "anderson" : "fixed-point")
@@ -4283,7 +4283,7 @@ void LogLocalFittingBacktrackingRetry(
             << ", next attempt uses increased global ridge ratio = " << ridge_ratio;
     }
     progress_message
-        << std::scientific << std::setprecision(4)
+        << std::scientific << std::setprecision(2)
         << ", offset dQ_C p99 raw = " << raw_offset_change_percentile
         << ", exact-zero offsets raw = " << raw_offset_stats.exact_zero_count;
     AppendLocalFittingClusterSelectionSummary(
@@ -4363,16 +4363,12 @@ void LogLocalFittingProgress(
         << ", active/frozen atoms = "<< effective_active_count
         << "/" << freeze_tracker.GetFrozenCount();
     progress_message
-        << std::scientific << std::setprecision(4)
-        << ", offset dQ_C p99 raw/accepted = "
-        << raw_offset_change_percentile << "/"
-        << accepted_offset_change_percentile
-        << ", exact-zero offsets raw/accepted = "
-        << raw_offset_stats.exact_zero_count << "/"
-        << accepted_offset_stats.exact_zero_count;
-    AppendLocalFittingClusterSelectionSummary(
-        progress_message,
-        selection_summary);
+        << std::scientific << std::setprecision(2)
+        << ", offset dQ_C p99 raw/accept = "
+        << raw_offset_change_percentile << "/" << accepted_offset_change_percentile
+        << ", exact-zero offsets raw/accept = "
+        << raw_offset_stats.exact_zero_count << "/" << accepted_offset_stats.exact_zero_count;
+    AppendLocalFittingClusterSelectionSummary(progress_message, selection_summary);
     if (terminal_summary.suspicious_atom_count > 0)
     {
         progress_message
