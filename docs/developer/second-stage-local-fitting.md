@@ -449,26 +449,23 @@ the dependency-thaw hysteresis multiplier. Dependency thaw retains its capped
 thaw count and hysteresis decay. Suspicious rollback atoms are force-thawed
 after freeze tracking so they can retry with their temporary ridge multiplier.
 
-An accepted cluster enters persistent suspicious rollback tracking only when it
-contains the same expanded suspicious atom set as the previous iteration and
-its assembled transformed movement is below the convergence tolerance.
-Rejected clusters, clusters with effective movement, changed suspicious sets,
-and changed cluster keys reset that tracking state. After five consecutive
-accepted no-progress iterations, the complete active cluster keeps its previous
-validated state and becomes terminal for the remainder of this second stage.
-Its atoms no longer participate in offset solving, acceleration, ridge updates,
-freeze/thaw, or convergence statistics, but remain in the fitted snapshot as
-fixed contributors for other active clusters.
+A single persistent terminal-failure tracker handles accepted no-progress
+clusters. A suspicious rollback has priority and uses the complete expanded
+suspicious atom set as its failure reason. An accepted cluster without a
+suspicious rollback instead uses its hard-failure `JointOffsetSolveStatus` as
+the reason. The tracker advances only while the cluster key and exact failure
+reason remain unchanged and its assembled transformed movement stays below the
+convergence tolerance. Rejection, effective movement, solver recovery, a reason
+or status change, or a cluster-key change resets the count.
 
-A separate persistent joint-offset failure tracker handles accepted clusters
-that have no suspicious rollback. It advances only when the exact same hard-
-failure `JointOffsetSolveStatus` repeats and the cluster's transformed
-movement is below the convergence tolerance. Rejection, effective movement,
-solver recovery, a status change, suspicious rollback, or a cluster-key change
-resets the count. After five consecutive accepted no-progress failures, the
-complete cluster restores the current iteration's `previous_state` and becomes
-terminal for the remainder of the second stage. It remains a fixed contributor,
-while disconnected healthy clusters continue fitting.
+After five consecutive accepted no-progress iterations with the same reason,
+the complete active cluster restores the current iteration's `previous_state`
+and becomes terminal for the remainder of the second stage. Its atoms no longer
+participate in offset solving, acceleration, ridge updates, freeze/thaw, or
+convergence statistics, but remain in the fitted snapshot as fixed contributors
+while disconnected healthy clusters continue fitting. Terminal diagnostics
+retain separate suspicious-rollback and joint-offset-failure summaries,
+including the hard-failure status breakdown.
 
 Parameter convergence requires:
 
