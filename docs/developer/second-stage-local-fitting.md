@@ -280,6 +280,9 @@ damped = previous + effective damping * (candidate - previous)
 
 The scales correspond to log peak height, log width, and offset-to-peak ratio.
 Identical effective damping values caused by the cap are evaluated only once.
+An Anderson cluster clears and suppresses its history only when every damping
+attempt fails. If a larger damping fails but a smaller damping is accepted, the
+history remains active and receives the normal committed fixed-point sample.
 
 Both candidate kinds use the same `BuildLocalFittingCandidateState` path. The
 builder performs the displayed interpolation in transformed coordinates,
@@ -445,9 +448,11 @@ Atoms freeze after the maximum component of their combined accepted/raw
 freeze evidence remains below `1.0e-4` for
 `kLocalFittingFreezeStableIterations`. Frozen atoms can thaw when an active
 selected neighbor's maximum accepted transformed change reaches `1.0e-3` times
-the dependency-thaw hysteresis multiplier. Dependency thaw retains its capped
-thaw count and hysteresis decay. Suspicious rollback atoms are force-thawed
-after freeze tracking so they can retry with their temporary ridge multiplier.
+the dependency-thaw hysteresis multiplier. Dependency thaw can repeat without a
+per-atom count limit or permanent lock; threshold growth, its maximum multiplier,
+and frozen-state decay still suppress rapid oscillation. Suspicious rollback
+atoms are force-thawed after freeze tracking so they can retry with their
+temporary ridge multiplier.
 
 A single persistent terminal-failure tracker handles accepted no-progress
 clusters. A suspicious rollback has priority and uses the complete expanded

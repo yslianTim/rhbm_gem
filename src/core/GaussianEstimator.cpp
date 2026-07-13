@@ -107,7 +107,6 @@ constexpr double kLocalFittingDependencyThawChangeThreshold{ 1.0e-3 };
 constexpr double kLocalFittingDependencyThawHysteresisGrowth{ 2.0 };
 constexpr double kLocalFittingDependencyThawHysteresisMax{ 8.0 };
 constexpr double kLocalFittingDependencyThawHysteresisFrozenDecay{ 0.9 };
-constexpr int kLocalFittingDependencyThawMaximumCount{ 5 };
 constexpr double kLocalFittingObjectiveTieRelativeTolerance{ 1.0e-8 };
 constexpr double kLocalFittingConvergenceObjectiveRelativeTolerance{ 1.0e-3 };
 constexpr std::size_t kLocalFittingObjectiveScaleWarmupCount{ 5 };
@@ -521,7 +520,6 @@ struct LocalFittingClusterWork
     LocalFittingJointPolishOutcome polish_outcome{
         LocalFittingJointPolishOutcome::NotAttempted
     };
-    bool rejected_anderson{ false };
     bool grow_trust_region{ false };
     std::vector<LocalFittingObjectiveAttemptDiagnostic> objective_attempt_list{};
 };
@@ -3476,10 +3474,6 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                     attempt_diagnostic.status = LocalFittingObjectiveAttemptDiagnosticStatus::InvalidModel;
                     attempt_diagnostic.build_failure = std::move(build_failure);
                     cluster.objective_attempt_list.emplace_back(std::move(attempt_diagnostic));
-                    if (candidate_kind == LocalFittingCandidateKind::Anderson)
-                    {
-                        cluster.rejected_anderson = true;
-                    }
                     continue;
                 }
 
@@ -3634,10 +3628,6 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
 
                 cluster.objective_attempt_list.emplace_back(std::move(attempt_diagnostic));
                 selection.has_objective_backtracking_rejection = true;
-                if (candidate_kind == LocalFittingCandidateKind::Anderson)
-                {
-                    cluster.rejected_anderson = true;
-                }
             }
         }
     };
@@ -3651,11 +3641,14 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
             previous_state);
     }
     std::vector<LocalFittingClusterKey> anderson_failure_keys;
-    for (auto & [key, cluster] : cluster_map)
+    if (localized_anderson_candidate.has_value())
     {
-        if (cluster.rejected_anderson)
+        for (const auto & key : localized_anderson_candidate->used_cluster_key_list)
         {
-            anderson_failure_keys.emplace_back(key);
+            if (!cluster_map.at(key).accepted_kind.has_value())
+            {
+                anderson_failure_keys.emplace_back(key);
+            }
         }
     }
     if (!anderson_failure_keys.empty())
@@ -3834,7 +3827,6 @@ void ThawChangedActiveAtomNeighbors(
             {
                 continue;
             }
-            if (!thaw_hysteresis_tracker.CanDependencyThaw(neighbor_index)) continue;
             if (freeze_tracker.Thaw(neighbor_index))
             {
                 thaw_hysteresis_tracker.RecordDependencyThaw(neighbor_index);
@@ -5024,8 +5016,7 @@ void RunSecondStageLocalFitting(
         atom_size,
         kLocalFittingDependencyThawHysteresisGrowth,
         kLocalFittingDependencyThawHysteresisMax,
-        kLocalFittingDependencyThawHysteresisFrozenDecay,
-        kLocalFittingDependencyThawMaximumCount
+        kLocalFittingDependencyThawHysteresisFrozenDecay
     };
     double ridge_ratio{ kJointOffsetRidgeRatio };
     std::vector<std::size_t> suspicious_offset_state_index_list;

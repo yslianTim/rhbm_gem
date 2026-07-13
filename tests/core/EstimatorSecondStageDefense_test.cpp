@@ -588,6 +588,27 @@ std::size_t FindAcceptedCandidateCluster(
     return std::string::npos;
 }
 
+bool HasConsecutiveAcceptedAndersonIterations(const std::string & output)
+{
+    const std::string marker{ "accepted candidate clusters aa/fixed-point = " };
+    std::size_t search_position{ 0 };
+    bool previous_iteration_accepted_anderson{ false };
+    while ((search_position = output.find(marker, search_position)) != std::string::npos)
+    {
+        const auto anderson_count_position{ search_position + marker.size() };
+        const auto separator_position{ output.find('/', anderson_count_position) };
+        if (separator_position == std::string::npos) return false;
+        const auto accepted_anderson{
+            anderson_count_position < output.size() &&
+            output.at(anderson_count_position) != '0'
+        };
+        if (previous_iteration_accepted_anderson && accepted_anderson) return true;
+        previous_iteration_accepted_anderson = accepted_anderson;
+        search_position = separator_position + 1;
+    }
+    return false;
+}
+
 } // namespace
 
 TEST(EstimatorSecondStageDefenseTest, SeedRepairUsesConfiguredFallbackPriority)
@@ -1224,7 +1245,7 @@ TEST(EstimatorSecondStageDefenseTest, TransformedChangeIsIntensityScaleInvariant
                 1.0e-12);
         }
 
-        alg::DependencyThawHysteresisTracker thaw_tracker{ 1, 2.0, 8.0, 0.9, 5 };
+        alg::DependencyThawHysteresisTracker thaw_tracker{ 1, 2.0, 8.0, 0.9 };
         EXPECT_EQ(
             thaw_tracker.ShouldThaw(
                 0,
@@ -2221,6 +2242,21 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingRetriesTrustRadi
     EXPECT_EQ(
         error_output.find("best fixed-point candidate"),
         std::string::npos);
+    ExpectSelectedAtomEstimatesAreFinite(*model);
+}
+
+TEST(EstimatorSecondStageDefenseTest, AndersonKeepsHistoryAfterDampedAcceptance)
+{
+    auto model{ BuildNearCollinearDefenseModel() };
+
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
+    const std::string output{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_TRUE(HasConsecutiveAcceptedAndersonIterations(output)) << output;
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 

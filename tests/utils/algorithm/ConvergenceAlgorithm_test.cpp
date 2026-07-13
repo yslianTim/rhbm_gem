@@ -152,8 +152,7 @@ TEST(ConvergenceAlgorithmTest, DependencyThawHysteresisTracksThresholdGrowthAndD
         1,
         2.0,
         4.0,
-        0.5,
-        3
+        0.5
     };
 
     EXPECT_DOUBLE_EQ(10.0, tracker.GetThreshold(0, 10.0));
@@ -175,41 +174,39 @@ TEST(ConvergenceAlgorithmTest, DependencyThawHysteresisTracksThresholdGrowthAndD
     EXPECT_DOUBLE_EQ(10.0, tracker.GetThreshold(0, 10.0));
 }
 
-TEST(ConvergenceAlgorithmTest, DependencyThawHysteresisCapsAndLocksThawCount)
+TEST(ConvergenceAlgorithmTest, DependencyThawHysteresisAllowsRepeatedThaws)
 {
     alg::DependencyThawHysteresisTracker tracker{
         1,
         2.0,
         4.0,
-        0.5,
-        2
+        0.5
     };
 
-    EXPECT_TRUE(tracker.CanDependencyThaw(0));
     tracker.RecordDependencyThaw(0);
-    EXPECT_TRUE(tracker.CanDependencyThaw(0));
     tracker.RecordDependencyThaw(0);
-
-    EXPECT_FALSE(tracker.CanDependencyThaw(0));
-    EXPECT_FALSE(tracker.CanDependencyThaw(0));
+    for (std::size_t i = 0; i < 10; i++)
+    {
+        tracker.DecayFrozen(0);
+        EXPECT_DOUBLE_EQ(20.0, tracker.GetThreshold(0, 10.0));
+        tracker.RecordDependencyThaw(0);
+        EXPECT_DOUBLE_EQ(40.0, tracker.GetThreshold(0, 10.0));
+    }
 }
 
 TEST(ConvergenceAlgorithmTest, DependencyThawHysteresisRejectsInvalidSettings)
 {
     EXPECT_THROW(
-        alg::DependencyThawHysteresisTracker(1, 0.9, 2.0, 0.5, 1),
+        alg::DependencyThawHysteresisTracker(1, 0.9, 2.0, 0.5),
         std::invalid_argument);
     EXPECT_THROW(
-        alg::DependencyThawHysteresisTracker(1, 2.0, 0.9, 0.5, 1),
+        alg::DependencyThawHysteresisTracker(1, 2.0, 0.9, 0.5),
         std::invalid_argument);
     EXPECT_THROW(
-        alg::DependencyThawHysteresisTracker(1, 2.0, 4.0, -0.1, 1),
+        alg::DependencyThawHysteresisTracker(1, 2.0, 4.0, -0.1),
         std::invalid_argument);
     EXPECT_THROW(
-        alg::DependencyThawHysteresisTracker(1, 2.0, 4.0, 1.1, 1),
-        std::invalid_argument);
-    EXPECT_THROW(
-        alg::DependencyThawHysteresisTracker(1, 2.0, 4.0, 0.5, -1),
+        alg::DependencyThawHysteresisTracker(1, 2.0, 4.0, 1.1),
         std::invalid_argument);
 }
 
@@ -219,13 +216,11 @@ TEST(ConvergenceAlgorithmTest, DependencyThawHysteresisRejectsOutOfRangeIndex)
         1,
         2.0,
         4.0,
-        0.5,
-        1
+        0.5
     };
 
     EXPECT_THROW(tracker.GetThreshold(1, 10.0), std::invalid_argument);
     EXPECT_THROW(tracker.ShouldThaw(1, 10.0, 10.0), std::invalid_argument);
-    EXPECT_THROW(tracker.CanDependencyThaw(1), std::invalid_argument);
     EXPECT_THROW(tracker.RecordDependencyThaw(1), std::invalid_argument);
     EXPECT_THROW(tracker.DecayFrozen(1), std::invalid_argument);
 }
