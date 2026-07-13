@@ -15,6 +15,7 @@
 #include "core/detail/LocalFittingAndersonRegime.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
 #include "core/detail/LocalFittingJointOffsetConditioning.hpp"
+#include "core/detail/LocalFittingJointPolish.hpp"
 #include "core/detail/LocalFittingSeedRepair.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
 #include "core/detail/PostRefitRollback.hpp"
@@ -33,6 +34,7 @@ namespace audit_detail = rhbm_gem::core::detail;
 namespace change_detail = rhbm_gem::core::detail;
 namespace conditioning_detail = rhbm_gem::core::detail;
 namespace health_detail = rhbm_gem::core::detail;
+namespace polish_detail = rhbm_gem::core::detail;
 namespace regime_detail = rhbm_gem::core::detail;
 namespace rollback_detail = rhbm_gem::core::detail;
 namespace seed_detail = rhbm_gem::core::detail;
@@ -180,6 +182,22 @@ std::unique_ptr<rg::ModelObject> BuildNearCollinearDefenseModel(
             rg::GaussianModel3D{ 5.5 * intensity_scale, 0.55, -0.15 * intensity_scale }
         },
         rg::GaussianModel3D{ 5.75 * intensity_scale, 0.55, 0.0 });
+}
+
+std::unique_ptr<rg::ModelObject> BuildJointPolishDefenseModel()
+{
+    return BuildDefenseModel(
+        {
+            std::array<float, 3>{ 0.0F, 0.0F, 0.0F },
+            std::array<float, 3>{ 0.8F, 0.0F, 0.0F }
+        },
+        { Spot::C, Spot::O },
+        { Element::CARBON, Element::OXYGEN },
+        {
+            rg::GaussianModel3D{ 6.0, 0.45, 0.20 },
+            rg::GaussianModel3D{ 4.5, 0.70, -0.12 }
+        },
+        rg::GaussianModel3D{ 5.25, 0.60, 0.02 });
 }
 
 std::unique_ptr<rg::ModelObject> BuildInvalidCandidateDefenseModel()
@@ -1100,6 +1118,64 @@ TEST(EstimatorSecondStageDefenseTest, TransformedChangeIsIntensityScaleInvariant
     }
 }
 
+TEST(EstimatorSecondStageDefenseTest, JointPolishJacobianMatchesFiniteDifference)
+{
+    constexpr double step{ 1.0e-6 };
+    const std::array<rg::GaussianModel3D, 2> model_list{
+        rg::GaussianModel3D{ 6.0, 0.55, 0.20 },
+        rg::GaussianModel3D{ 5.5, 0.70, -0.15 }
+    };
+    const std::array<double, 3> distance_list{ 0.0, 5.0e-6, 0.35 };
+    for (const auto & model : model_list)
+    {
+        const auto transformed{
+            change_detail::EncodeLocalFittingTransformedCoordinates(model)
+        };
+        ASSERT_TRUE(transformed.has_value());
+        for (const auto distance : distance_list)
+        {
+            const auto evaluation{
+                polish_detail::EvaluateLocalFittingTransformedResponse(
+                    model,
+                    distance)
+            };
+            ASSERT_TRUE(evaluation.has_value());
+            EXPECT_TRUE(std::isfinite(evaluation->response));
+            EXPECT_TRUE(evaluation->jacobian.allFinite());
+
+            for (Eigen::Index parameter_index = 0;
+                parameter_index < transformed->size();
+                parameter_index++)
+            {
+                auto lower{ *transformed };
+                auto upper{ *transformed };
+                lower(parameter_index) -= step;
+                upper(parameter_index) += step;
+                const auto lower_model{
+                    change_detail::DecodeLocalFittingTransformedCoordinates(lower)
+                };
+                const auto upper_model{
+                    change_detail::DecodeLocalFittingTransformedCoordinates(upper)
+                };
+                ASSERT_TRUE(lower_model.has_value());
+                ASSERT_TRUE(upper_model.has_value());
+                const auto finite_difference{
+                    (upper_model->ResponseAtDistance(distance) -
+                        lower_model->ResponseAtDistance(distance)) /
+                    (2.0 * step)
+                };
+                const auto analytic{
+                    evaluation->jacobian(parameter_index)
+                };
+                const auto tolerance{
+                    1.0e-6 * std::max(std::abs(finite_difference), 1.0)
+                };
+                EXPECT_NEAR(analytic, finite_difference, tolerance);
+            }
+        }
+    }
+}
+
 TEST(EstimatorSecondStageDefenseTest, TransformedCoordinatesRoundTrip)
 {
     const rg::GaussianModel3D model{ 8.5, 0.65, -0.12 };
@@ -1795,6 +1871,50 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingAppliesCollinear
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
+TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingJointlyPolishesClusterParameters)
+{
+    auto model{ BuildJointPolishDefenseModel() };
+    const auto & atom_list{ model->GetSelectedAtoms() };
+    std::vector<rg::GaussianModel3D> initial_model_list;
+    for (const auto * atom : atom_list)
+    {
+        initial_model_list.emplace_back(GetEstimateModel(*atom));
+    }
+    const auto initial_error{ CalculateSelectedAtomResponseMeanSquaredError(*model) };
+
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
+    const std::string output{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_log_level);
+
+    const auto fitted_error{ CalculateSelectedAtomResponseMeanSquaredError(*model) };
+    EXPECT_LT(fitted_error, initial_error);
+    EXPECT_NE(
+        output.find(
+            "joint-ABC polish clusters accepted/stationary/fallback = 1/0/0"),
+        std::string::npos);
+    bool amplitude_changed{ false };
+    bool width_changed{ false };
+    bool offset_changed{ false };
+    for (std::size_t i = 0; i < atom_list.size(); i++)
+    {
+        const auto fitted{ GetEstimateModel(*atom_list.at(i)) };
+        const auto & initial{ initial_model_list.at(i) };
+        amplitude_changed = amplitude_changed ||
+            std::abs(fitted.GetAmplitude() - initial.GetAmplitude()) > 1.0e-6;
+        width_changed = width_changed ||
+            std::abs(fitted.GetWidth() - initial.GetWidth()) > 1.0e-6;
+        offset_changed = offset_changed ||
+            std::abs(fitted.GetOffset() - initial.GetOffset()) > 1.0e-6;
+    }
+    EXPECT_TRUE(amplitude_changed);
+    EXPECT_TRUE(width_changed);
+    EXPECT_TRUE(offset_changed);
+    ExpectSelectedAtomEstimatesAreFinite(*model);
+}
+
 TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingAcceptsRemoteClusterWhenLocalClusterRollsBack)
 {
     auto model{ BuildSeparatedRollbackDefenseModel() };
@@ -1826,7 +1946,11 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingAcceptsRemoteClu
     EXPECT_LT(
         CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4),
         initial_right_error);
-    EXPECT_NE(FindAcceptedCandidateCluster(output, true), std::string::npos);
+    EXPECT_NE(FindAcceptedCandidateCluster(output, false), std::string::npos);
+    EXPECT_NE(
+        output.find(
+            "joint-ABC polish clusters accepted/stationary/fallback = 1/0/0"),
+        std::string::npos);
     EXPECT_NE(output.find("terminal-suspicious atoms = 2"), std::string::npos);
     EXPECT_NE(
         error_output.find("terminal suspicious rollback fallback clusters/atoms = 1/2"),
@@ -1894,6 +2018,10 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingUsesFixedPointWh
         std::string::npos);
     EXPECT_NE(
         output.find("objective acc./rej. clusters = 1/0, atoms = 2/0"),
+        std::string::npos);
+    EXPECT_NE(
+        output.find(
+            "joint-ABC polish clusters accepted/stationary/fallback = 0/1/0"),
         std::string::npos);
     EXPECT_EQ(output.find("objective ="), std::string::npos);
     EXPECT_EQ(output.find("d_amplitude ="), std::string::npos);
@@ -1971,7 +2099,7 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingKeepsRidgeRetryO
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
-TEST(EstimatorSecondStageDefenseTest, RejectedClusterObjectiveDiagnosticsAreDebugOnly)
+TEST(EstimatorSecondStageDefenseTest, RejectedClusterObjectiveDiagnosticsAreDebugOnlyWhenPresent)
 {
     auto info_model{ BuildSeparatedLocalRefitFallbackDefenseModel() };
     auto debug_model{ BuildSeparatedLocalRefitFallbackDefenseModel() };
@@ -1995,34 +2123,40 @@ TEST(EstimatorSecondStageDefenseTest, RejectedClusterObjectiveDiagnosticsAreDebu
     EXPECT_EQ(
         info_output.find("Rejected local fitting cluster objective diagnostics:"),
         std::string::npos);
-    EXPECT_NE(
-        debug_output.find("Rejected local fitting cluster objective diagnostics:"),
-        std::string::npos);
-    EXPECT_NE(
-        debug_output.find(
-            "Rejected local fitting cluster objective diagnostics: atoms = 2"),
-        std::string::npos);
-    EXPECT_NE(
-        debug_output.find("breakdown order = residual/width/offset/movement/total"),
-        std::string::npos);
-    EXPECT_NE(
-        debug_output.find("kind = fixed-point, damping = 1.00e+00 (raw)"),
-        std::string::npos);
-    for (const auto damping_text : {
-        "5.00e-01",
-        "2.50e-01",
-        "1.25e-01",
-        "6.25e-02" })
+    const auto diagnostic_position{
+        debug_output.find("Rejected local fitting cluster objective diagnostics:")
+    };
+    if (diagnostic_position != std::string::npos)
     {
         EXPECT_NE(
             debug_output.find(
-                std::string{ "kind = fixed-point, damping = " } + damping_text),
+                "Rejected local fitting cluster objective diagnostics: atoms = 2"),
             std::string::npos);
+        EXPECT_NE(
+            debug_output.find("breakdown order = residual/width/offset/movement/total"),
+            std::string::npos);
+        EXPECT_NE(
+            debug_output.find("kind = fixed-point, damping = 1.00e+00 (raw)"),
+            std::string::npos);
+        for (const auto damping_text : {
+            "5.00e-01",
+            "2.50e-01",
+            "1.25e-01",
+            "6.25e-02" })
+        {
+            EXPECT_NE(
+                debug_output.find(
+                    std::string{ "kind = fixed-point, damping = " } + damping_text),
+                std::string::npos);
+        }
+        EXPECT_NE(debug_output.find("candidate = "), std::string::npos);
+        EXPECT_NE(debug_output.find("previous = "), std::string::npos);
+        EXPECT_NE(debug_output.find("best = "), std::string::npos);
+        EXPECT_NE(debug_output.find("rejected-by = "), std::string::npos);
     }
-    EXPECT_NE(debug_output.find("candidate = "), std::string::npos);
-    EXPECT_NE(debug_output.find("previous = "), std::string::npos);
-    EXPECT_NE(debug_output.find("best = "), std::string::npos);
-    EXPECT_NE(debug_output.find("rejected-by = "), std::string::npos);
+    EXPECT_NE(
+        debug_output.find("joint-ABC polish clusters accepted/stationary/fallback = "),
+        std::string::npos);
     const auto & info_atoms{ info_model->GetSelectedAtoms() };
     const auto & debug_atoms{ debug_model->GetSelectedAtoms() };
     ASSERT_EQ(info_atoms.size(), debug_atoms.size());

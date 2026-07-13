@@ -80,7 +80,8 @@ previous state
     -> mark suspicious offset rollbacks and temporary ridge multipliers
     -> try localized Anderson damping per cluster
     -> try damped fixed-point fallback for remaining clusters
-    -> accept any cluster that passes its local objective gate
+    -> jointly polish A/B/C for each healthy non-suspicious candidate
+    -> accept the polished or original candidate through the local objective gate
     -> update cluster quality state, Anderson history, ridge, freeze/thaw
     -> exit, retry, or continue
 ```
@@ -289,6 +290,44 @@ copy only their active atoms from that candidate into the assembled state.
 Rejected or structurally invalid candidates produce no state, so their clusters
 keep the previous atom parameters for this iteration.
 
+### Joint A/B/C Polishing
+
+Every structurally valid Anderson or fixed-point candidate in a cluster with a
+converged joint-offset solve, stationarity-eligible refits, and no suspicious
+atom is polished before it can contribute freeze or convergence evidence. The
+polisher uses the same dimensionless transformed coordinates as acceleration:
+
+```text
+q = [log peak height, log width, offset-to-peak ratio]
+```
+
+It collects the cluster's existing objective samples and evaluates one joint
+residual/Jacobian system with three columns per active atom. Target and active-
+neighbor derivatives occupy their cluster columns; frozen and terminal selected
+atoms remain fixed contributors in the candidate snapshot. The analytic
+Jacobian follows the same center-distance branch as `GaussianModel3D`, including
+the limiting offset-basis response at distances below `1.0e-5`.
+
+One Cauchy weight vector is calculated from the candidate residual and its MAD
+scale. A single weighted-ridge Gauss-Newton direction is then solved around zero
+movement. The ridge uses the current global ratio, the atom's effective
+cluster/suspicious multiplier, column squared norms, and the full-matrix
+conditioning guard. This is a bounded polishing step, not an inner IRLS loop.
+Directions below `kLocalFittingTransformedChangeTolerance` are stationary and
+the original candidate proceeds directly to the objective gate.
+
+For a non-stationary direction, the normal damping sequence is applied from the
+original candidate toward the joint solution. Polished variants are tried first
+through the existing cluster objective gate. Rejected polished variants do not
+commit scale or quality state and do not independently trigger objective ridge
+backtracking. If none is accepted, the original candidate receives its normal
+single objective attempt. An accepted original candidate is retained as a
+polishing fallback; an accepted polished or stationary candidate supplies valid
+stationarity evidence. Thus every cluster still commits at most one quality
+candidate per outer iteration, and polishing does not become a third candidate
+kind or change Anderson-before-fixed-point ordering. Polished candidates retain
+the original candidate's MDPDE uncertainty and other local-result fields.
+
 ## Objective Gate and Ridge Retry
 
 Objective scoring is cluster-local. The residual term uses the same robust-loss
@@ -383,6 +422,9 @@ evidence is the component-wise maximum of accepted change and raw fixed-point
 residual, so damping, Anderson, or an objective gate cannot make a large raw map
 look stationary.
 An unhealthy cluster resets only its own active freeze-stability counters.
+An accepted polishing fallback likewise resets only its cluster's stability and
+is omitted from that iteration's freeze update. This preserves its objective-
+accepted parameters without allowing an unpolished candidate to freeze.
 Accepted parameter movement from either healthy or unhealthy clusters may still
 thaw frozen neighbors.
 
@@ -420,6 +462,7 @@ Parameter convergence requires:
 - no suspicious offset rollback in the accepted iteration;
 - every active cluster to have a converged joint-offset solve and a
   stationarity-eligible local refit;
+- no accepted cluster to have used the unpolished fallback;
 - no cluster objective rejection in the accepted iteration;
 - all active cluster objective scale references to be locked when present; and
 - each active-set accepted transformed change and raw fixed-point residual to
@@ -438,7 +481,8 @@ retry line reports every joint status as
 `health-unhealthy clusters/atoms = C/A`, counts non-stationary joint reasons in
 enum order such as `joint-offset = system-build-failed:1`, and reports refit fallbacks as
 `local-refit-fallback clusters/atoms = C/A`. Stationarity-ineligible refits are
-reported as `local-refit-nonstationary clusters/atoms = C/A`. No separate
+reported as `local-refit-nonstationary clusters/atoms = C/A`. Candidate summaries
+report `joint-ABC polish clusters accepted/stationary/fallback = C/C/C`. No separate
 per-iteration warning or fallback summary is emitted.
 
 This end-to-end health lifecycle is always applied by
@@ -505,6 +549,7 @@ The loop exits through one of five terminal cases:
   accepted assembled-state fallback.
 
 Progress logs report iteration, accepted Anderson/fixed-point cluster counts,
+joint-A/B/C accepted/stationary/fallback cluster counts,
 active/frozen atom counts, and raw/accepted 99th-percentile
 offset-to-peak-ratio change. Objective retry lines report the raw offset
 statistics because no candidate was accepted. Accepted and retry lines also

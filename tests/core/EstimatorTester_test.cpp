@@ -761,6 +761,10 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingLogsAndersonAccelerationMode
     Logger::SetLogLevel(previous_log_level);
 
     EXPECT_NE(FindAcceptedCandidateCluster(output, true), std::string::npos);
+    EXPECT_NE(
+        output.find(
+            "joint-ABC polish clusters accepted/stationary/fallback = 1/0/0"),
+        std::string::npos);
     EXPECT_EQ(
         output.find("objective ="),
         std::string::npos);
@@ -792,7 +796,7 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingLogsAndersonAccelerationMode
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
-TEST(EstimatorTesterTest, RunSecondStageLocalFittingKeepsAndersonAccelerationWithSeparatedRollbackCluster)
+TEST(EstimatorTesterTest, RunSecondStageLocalFittingKeepsPolishedProgressWithSeparatedRollbackCluster)
 {
     auto model{ BuildSeparatedSecondStageClusterModelWithSuspiciousLeftCluster() };
     const auto initial_error{
@@ -813,7 +817,11 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingKeepsAndersonAccelerationWit
     };
     const auto tolerance{ 1.0e-3 * std::max(initial_error, 1.0) };
     EXPECT_LE(fitted_error, initial_error + tolerance);
-    EXPECT_NE(FindAcceptedCandidateCluster(output, true), std::string::npos);
+    EXPECT_NE(FindAcceptedCandidateCluster(output, false), std::string::npos);
+    EXPECT_NE(
+        output.find(
+            "joint-ABC polish clusters accepted/stationary/fallback = 1/0/0"),
+        std::string::npos);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
@@ -837,7 +845,11 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingAcceptsSeparatedClusterWithR
         CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4)
     };
     EXPECT_LT(fitted_right_cluster_error, initial_right_cluster_error);
-    EXPECT_NE(FindAcceptedCandidateCluster(output, true), std::string::npos);
+    EXPECT_NE(FindAcceptedCandidateCluster(output, false), std::string::npos);
+    EXPECT_NE(
+        output.find(
+            "joint-ABC polish clusters accepted/stationary/fallback = 1/0/0"),
+        std::string::npos);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
