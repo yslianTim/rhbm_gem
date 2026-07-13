@@ -16,11 +16,11 @@ an objective backtracking gate.
 
 ## Inputs and State
 
-At entry, the function reads `model_object.GetSelectedAtoms()`, creates one
-`AtomLocalPotentialEditor` per selected atom, and builds a
+At entry, the function reads `model_object.GetSelectedAtoms()` and builds a
 `SecondStageLocalFittingContext` in the same selected-atom order. The context
 stores:
 
+- the selected atom pointer;
 - original local sampling entries from `GetSamplingEntries(false)`;
 - selected-neighbor indexes within `kNeighborAtomSearchRange`;
 - per-sample selected-neighbor contributions within
@@ -38,7 +38,10 @@ state[i].mdpde.GetModel() = per-atom [amplitude, width, offset]
 ```
 
 Snapshots and transformed Anderson coordinates are derived from that model only
-at their use boundaries, so result and parameter storage cannot diverge.
+at their use boundaries, so result and parameter storage cannot diverge. The
+stage does not keep a parallel editor list or mutate atom-local results while it
+iterates. `ApplyLocalFittingState` obtains an editor for each context atom only
+when an exit path commits the selected state.
 
 `previous_state` is replaced only after an accepted non-terminal iteration.
 Rejected iterations keep the previous state.
@@ -52,13 +55,16 @@ source order is atom-specific group posterior, group prior, local OLS,
 same-group valid-model parameter median, then global valid-model parameter
 median. A finite original local offset is retained; otherwise the selected
 source offset is used. Direct sources retain their uncertainty, while median
-sources use zero uncertainty. The original first-stage result, fit status, and
-other metadata are not rewritten.
+sources use zero uncertainty. Repair changes only `mdpde` in the internal seed;
+the other `LocalGaussianResult` fields remain those read at second-stage entry.
 
-Group and global repair medians include only models satisfying that validity
-rule and are separate from the later third-stage group-median builder. If any
-selected atom cannot obtain a valid repaired seed, the second stage emits one
-warning in non-quiet mode and returns without applying an internal state.
+The group and global median pools use each atom's valid local MDPDE model when
+available; otherwise they use that atom's first valid direct source in the same
+posterior, group-prior, then local-OLS order. They include only models satisfying
+the validity rule and are separate from the later third-stage group-median
+builder. If any selected atom cannot obtain a valid repaired seed, the second
+stage emits one warning in non-quiet mode and returns without applying an
+internal state.
 Non-quiet mode reports repair-source counts; debug logging additionally reports
 each repaired atom's original and replacement parameters.
 
@@ -273,11 +279,15 @@ decodes the result to the canonical raw `[amplitude, width, offset]` state, and
 returns an `std::optional<LocalFittingState>` containing the complete
 candidate only when every changed model is valid. Exact transformed no-op
 candidates retain the previous raw model without a round-trip conversion.
-Fixed-point candidates retain raw refit uncertainty;
-Anderson candidates retain uncertainty from the previous accepted state.
-Accepted clusters copy only their active atoms from that candidate into the
-assembled state. Rejected or structurally invalid candidates produce no state,
-so their clusters keep the previous atom parameters for this iteration.
+Fixed-point candidates retain raw refit MDPDE uncertainty; Anderson candidates
+retain MDPDE uncertainty from the previous accepted state. Candidate building
+starts from `previous_state` and replaces only `mdpde`, so other
+`LocalGaussianResult` fields are retained from the previous accepted state. In
+particular, the raw refit's `fit_result` is used to classify progress and
+stationarity health but is not committed into the candidate. Accepted clusters
+copy only their active atoms from that candidate into the assembled state.
+Rejected or structurally invalid candidates produce no state, so their clusters
+keep the previous atom parameters for this iteration.
 
 ## Objective Gate and Ridge Retry
 
@@ -376,12 +386,13 @@ An unhealthy cluster resets only its own active freeze-stability counters.
 Accepted parameter movement from either healthy or unhealthy clusters may still
 thaw frozen neighbors.
 
-Atoms freeze after their maximum transformed change remains below `1.0e-4` for
+Atoms freeze after the maximum component of their combined accepted/raw
+freeze evidence remains below `1.0e-4` for
 `kLocalFittingFreezeStableIterations`. Frozen atoms can thaw when an active
-selected neighbor's maximum transformed change reaches `1.0e-3` times the
-dependency-thaw hysteresis multiplier. Dependency thaw retains its capped thaw
-count and hysteresis decay. Suspicious rollback atoms are force-thawed after
-freeze tracking so they can retry with their temporary ridge multiplier.
+selected neighbor's maximum accepted transformed change reaches `1.0e-3` times
+the dependency-thaw hysteresis multiplier. Dependency thaw retains its capped
+thaw count and hysteresis decay. Suspicious rollback atoms are force-thawed
+after freeze tracking so they can retry with their temporary ridge multiplier.
 
 An accepted cluster enters persistent suspicious rollback tracking only when it
 contains the same expanded suspicious atom set as the previous iteration and
@@ -505,9 +516,10 @@ progress reports
 separately. Final warnings report reason-specific cluster/atom counts and the
 terminal joint-offset status breakdown. Convergence logs retain the percentile
 log-peak-height, log-width, and offset-to-peak-ratio changes. Maximum-iteration
-warnings instead report whether the best validated audit state or the legacy
-fallback was applied, the audit source and objective breakdown when available,
-and the offset distribution of the state actually applied.
+warnings instead report whether the best validated audit state or the applicable
+previous/current accepted-state fallback was applied, the audit source and
+objective breakdown when available, and the offset distribution of the state
+actually applied.
 
 At debug verbosity (`-v4`), every cluster that remains rejected after all
 candidate attempts emits an objective diagnostic after the normal progress or
