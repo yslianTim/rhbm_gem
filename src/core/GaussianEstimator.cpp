@@ -1176,8 +1176,7 @@ LocalFittingClusterMap BuildLocalFittingClusters(
     const SecondStageLocalFittingContext & context,
     const std::vector<std::size_t> & active_index_list)
 {
-    std::vector<std::optional<std::size_t>> active_position_by_atom_index(
-        context.AtomSize());
+    std::vector<std::optional<std::size_t>> active_position_by_atom_index(context.AtomSize());
     for (std::size_t active_position = 0; active_position < active_index_list.size(); active_position++)
     {
         const auto active_index{ active_index_list.at(active_position) };
@@ -1194,8 +1193,7 @@ LocalFittingClusterMap BuildLocalFittingClusters(
         parent_list.at(i) = i;
     }
 
-    std::vector<std::pair<LocalFittingObjectiveSampleRef, std::size_t>>
-        sample_representative_position_list;
+    std::vector<std::pair<LocalFittingObjectiveSampleRef, std::size_t>> sample_representative_position_list;
     for (std::size_t atom_index = 0; atom_index < context.AtomSize(); atom_index++)
     {
         const auto & atom_context{ context.atom_context_list.at(atom_index) };
@@ -1245,8 +1243,7 @@ LocalFittingClusterMap BuildLocalFittingClusters(
     }
 
     std::map<std::size_t, std::vector<LocalFittingObjectiveSampleRef>> sample_ref_list_by_root;
-    for (const auto & [sample_ref, representative_position] :
-        sample_representative_position_list)
+    for (const auto & [sample_ref, representative_position] : sample_representative_position_list)
     {
         const auto root{
             FindLocalFittingClusterRoot(parent_list, representative_position)
@@ -2664,58 +2661,6 @@ ScoreLocalFittingClusterCandidate(
         }
     }
     return score;
-}
-
-void LogSelectedAtomOffsetSummary(
-    const ModelObject & model_object,
-    const FitOptions & options,
-    const std::string & stage_label)
-{
-    if (options.quiet_mode) return;
-
-    std::vector<double> offset_list;
-    const auto & atom_list{ model_object.GetSelectedAtoms() };
-    offset_list.reserve(atom_list.size());
-    for (const auto * atom : atom_list)
-    {
-        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
-        offset_list.emplace_back(
-            local_view.GetEstimateMDPDE().GetOffset());
-    }
-
-    std::ostringstream message;
-    message << stage_label;
-    AppendLocalFittingOffsetSummary(
-        message,
-        SummarizeLocalFittingOffsetValues(offset_list));
-    message << ".";
-    Logger::Log(LogLevel::Info, message.str());
-}
-
-void LogAtomGroupPriorOffsetSummary(
-    const ModelObject & model_object,
-    const FitOptions & options,
-    const std::string & stage_label)
-{
-    if (options.quiet_mode) return;
-
-    const auto analysis_view{ model_object.GetAnalysisView() };
-    const auto group_key_list{ analysis_view.CollectAtomGroupKeys() };
-    std::vector<double> offset_list;
-    offset_list.reserve(group_key_list.size());
-    for (const auto group_key : group_key_list)
-    {
-        offset_list.emplace_back(
-            analysis_view.GetAtomGroupPrior(group_key).GetOffset());
-    }
-
-    std::ostringstream message;
-    message << stage_label;
-    AppendLocalFittingOffsetSummary(
-        message,
-        SummarizeLocalFittingOffsetValues(offset_list));
-    message << ".";
-    Logger::Log(LogLevel::Info, message.str());
 }
 
 std::vector<std::string> BuildGroupPriorSpotSummaryLines(const ModelObject & model_object)
@@ -4561,9 +4506,7 @@ void LogLocalFittingProgress(
     const algorithm::ConvergenceFreezeTracker & freeze_tracker,
     const LocalFittingClusterHealthSummary & health_summary,
     const LocalFittingTerminalSummary & terminal_summary,
-    const LocalFittingClusterSelectionSummary & selection_summary,
-    double raw_offset_change_percentile,
-    double accepted_offset_change_percentile)
+    const LocalFittingClusterSelectionSummary & selection_summary)
 {
     if (options.quiet_mode) return;
 
@@ -4580,10 +4523,6 @@ void LogLocalFittingProgress(
         << '/' << kLocalFittingMaximumIterations
         << ", active/frozen atoms = "<< effective_active_count
         << "/" << freeze_tracker.GetFrozenCount();
-    progress_message
-        << std::scientific << std::setprecision(2)
-        << ", offset dQ_C p99 raw/accept = "
-        << raw_offset_change_percentile << "/" << accepted_offset_change_percentile;
     AppendLocalFittingClusterSelectionSummary(progress_message, selection_summary);
     if (terminal_summary.suspicious_atom_count > 0)
     {
@@ -5091,8 +5030,7 @@ void RunSecondStageLocalFitting(
         {
             if (state_index >= atom_size)
             {
-                throw std::invalid_argument(
-                    "Local fitting suspicious offset atom index is out of range.");
+                throw std::invalid_argument("Local fitting suspicious offset atom index is out of range.");
             }
             joint_offset_ridge_multiplier_list.at(state_index) = std::max(
                 joint_offset_ridge_multiplier_list.at(state_index),
@@ -5123,8 +5061,7 @@ void RunSecondStageLocalFitting(
         const auto current_anderson_regime_signature_by_key{
             std::move(iteration_result.anderson_regime_signature_by_key)
         };
-        suspicious_offset_state_index_list =
-            std::move(iteration_result.suspicious_offset_state_index_list);
+        suspicious_offset_state_index_list = std::move(iteration_result.suspicious_offset_state_index_list);
         const auto has_suspicious_offset_fallback{
             !suspicious_offset_state_index_list.empty()
         };
@@ -5159,18 +5096,15 @@ void RunSecondStageLocalFitting(
         if (!current_anderson_regime_signature_by_key.empty())
         {
             const auto incompatible_regime_key_list{
-                anderson_regime_tracker.FindIncompatible(
-                    current_anderson_regime_signature_by_key)
+                anderson_regime_tracker.FindIncompatible(current_anderson_regime_signature_by_key)
             };
             acceleration_history.ClearAndSuppress(incompatible_regime_key_list);
             anderson_regime_tracker.Invalidate(incompatible_regime_key_list);
         }
         if (has_suspicious_offset_fallback)
         {
-            acceleration_history.ClearAndSuppressContaining(
-                suspicious_offset_state_index_list);
-            anderson_regime_tracker.InvalidateContaining(
-                suspicious_offset_state_index_list);
+            acceleration_history.ClearAndSuppressContaining(suspicious_offset_state_index_list);
+            anderson_regime_tracker.InvalidateContaining(suspicious_offset_state_index_list);
         }
         const auto raw_state{ std::move(iteration_result.state) };
         const auto raw_fixed_point_change_list{
@@ -5206,11 +5140,9 @@ void RunSecondStageLocalFitting(
         };
         auto assembled_state{ std::move(selection.assembled_state) };
         const auto stationarity_ineligible_atom_index_list{
-            CollectLocalFittingClusterAtomIndexes(
-                stationarity_ineligible_key_list)
+            CollectLocalFittingClusterAtomIndexes(stationarity_ineligible_key_list)
         };
-        freeze_tracker.ResetStability(
-            stationarity_ineligible_atom_index_list);
+        freeze_tracker.ResetStability(stationarity_ineligible_atom_index_list);
         freeze_tracker.ResetStability(
             CollectLocalFittingClusterAtomIndexes(selection.rejected_key_list));
         freeze_tracker.ResetStability(
@@ -5483,11 +5415,7 @@ void RunSecondStageLocalFitting(
             freeze_tracker,
             health_summary,
             terminal_summary,
-            objective_selection_summary,
-            raw_fixed_point_residual_stats.percentile_list.at(
-                detail::kOffsetToPeakRatioChangeIndex),
-            transformed_change_stats.percentile_list.at(
-                detail::kOffsetToPeakRatioChangeIndex));
+            objective_selection_summary);
         LogRejectedLocalFittingClusterDiagnostics(
             options,
             selection.rejected_cluster_diagnostic_list);
@@ -5630,24 +5558,14 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
     RunGroupPotentialFitting(model_object, options);
 
     RunSecondStageLocalFitting(model_object, options);
-    LogSelectedAtomOffsetSummary(
-        model_object,
-        options,
-        "Offset summary after 2nd-stage local fitting");
+
     RunGroupAlphaTraining(model_object, options);
     SetUpdatedSamplingEntriesFromGroupMedianGaussian(model_object);
     RunGroupPotentialFitting(model_object, options);
-    LogAtomGroupPriorOffsetSummary(
-        model_object,
-        options,
-        "Offset summary for group priors before 3rd-stage local fitting");
+
     SetUpdatedSamplingEntriesFromFittedGroupGaussian(model_object);
     RunLocalAlphaTraining(model_object, options, LocalFittingPass::ThirdStage);
     RunFixedOffsetLocalFitting(model_object, options, LocalFittingPass::ThirdStage);
-    LogSelectedAtomOffsetSummary(
-        model_object,
-        options,
-        "Offset summary after 3rd-stage local fitting");
 
     RunGroupAlphaTraining(model_object, options);
     RunGroupPotentialFitting(model_object, options);

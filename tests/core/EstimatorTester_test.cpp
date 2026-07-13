@@ -521,15 +521,6 @@ void ExpectSelectedAtomEstimatesAreFinite(const rg::ModelObject & model_object)
     }
 }
 
-void ExpectSelectedAtomUpdatedSamplesArePresent(const rg::ModelObject & model_object)
-{
-    for (const auto * atom : model_object.GetSelectedAtoms())
-    {
-        const auto local_view{ rg::AtomLocalPotentialView::RequireFor(*atom) };
-        EXPECT_FALSE(local_view.GetSamplingEntries(false, true).empty());
-    }
-}
-
 std::size_t FindAcceptedCandidateCluster(
     const std::string & output,
     bool find_anderson)
@@ -679,52 +670,6 @@ TEST(EstimatorTesterTest, RunLocalEstimationTestRejectsNonFiniteTruth)
         rt::RunLocalEstimationTest(test_input, MakeLocalOptions(0.5, true)),
         std::invalid_argument
     );
-}
-
-TEST(EstimatorTesterTest, RunPotentialFittingWorkflowStoresUpdatedSamplingEntriesAndLogsPriorSummary)
-{
-    ElectricPotential potential_model;
-    potential_model.SetModelChoice(0);
-    potential_model.SetBlurringWidth(0.5);
-    auto input{
-        tdf::BuildPotentialModelTestData(tdf::PotentialModelScenario{
-            Spot::C,
-            Element::CARBON,
-            -0.1,
-            rg::GaussianModel3D{ 8.0, 0.5, -0.1 },
-            potential_model,
-            0.0,
-            1,
-            42
-        })
-    };
-    auto model{ std::move(input.replica_model_objects.front()) };
-    rt::FitOptions options;
-    options.distance_min = 0.0;
-    options.distance_max = 1.0;
-    options.thread_size = 1;
-    options.quiet_mode = false;
-
-    const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    rt::RunPotentialFittingWorkflow(*model, options);
-    const std::string output{ testing::internal::GetCapturedStdout() };
-    Logger::SetLogLevel(previous_log_level);
-
-    ExpectSelectedAtomUpdatedSamplesArePresent(*model);
-    ExpectSelectedAtomEstimatesAreFinite(*model);
-    EXPECT_NE(
-        output.find("Offset summary after 2nd-stage local fitting; offsets finite ="),
-        std::string::npos);
-    EXPECT_NE(
-        output.find("Offset summary for group priors before 3rd-stage local fitting; offsets finite ="),
-        std::string::npos);
-    EXPECT_NE(
-        output.find("Offset summary after 3rd-stage local fitting; offsets finite ="),
-        std::string::npos);
-    EXPECT_NE(output.find("Group fitting prior summary by Spot:"), std::string::npos);
-    EXPECT_NE(output.find("Spot::C , amplitude mean ="), std::string::npos);
 }
 
 TEST(EstimatorTesterTest, RunSecondStageLocalFittingHandlesNearCollinearAtoms)

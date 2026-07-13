@@ -2154,9 +2154,6 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingUsesFixedPointWh
         FindAcceptedCandidateCluster(output, false),
         std::string::npos);
     EXPECT_NE(
-        output.find("offset dQ_C p99 raw/accept ="),
-        std::string::npos);
-    EXPECT_NE(
         output.find("objective acc./rej. clusters = 1/0, atoms = 2/0"),
         std::string::npos);
     EXPECT_NE(
