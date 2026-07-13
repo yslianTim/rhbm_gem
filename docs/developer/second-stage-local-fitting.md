@@ -82,7 +82,7 @@ previous state
     -> try damped fixed-point fallback for remaining clusters
     -> jointly polish A/B/C for each healthy non-suspicious candidate
     -> accept the polished or original candidate through the local objective gate
-    -> update cluster quality state, Anderson history, ridge, freeze/thaw
+    -> update cluster quality state, trust radius, Anderson history, ridge, freeze/thaw
     -> exit, retry, or continue
 ```
 
@@ -149,7 +149,7 @@ solve does not make a disconnected, converged cluster unhealthy.
 Joint-offset status has separate progress and stationarity meanings.
 `Converged` is eligible for both. `IrlsObjectiveDeteriorated` and
 `IrlsMaximumIterationsReached` are finite deterministic outputs eligible for
-objective-gated ridge and Anderson progress, but not freeze or convergence.
+solver-ridge retry and Anderson progress, but not freeze or convergence.
 System-build, empty-system, initial-solve, and IRLS-solve failures are hard
 failures eligible for neither.
 
@@ -222,7 +222,7 @@ Samples without active contributors do not participate in the cluster objective
 gate for that iteration. A canonical cluster work map stores each component's
 objective sample references and an optional accepted source (`Anderson` or
 `FixedPoint`; unset while pending); the same keys reconcile the acceleration,
-objective-quality, and ridge managers. Cluster construction
+objective-quality, trust-radius, and ridge managers. Cluster construction
 records one representative active contributor per sample while joining all of
 that sample's contributors, then assigns objective samples after the connected
 components are complete.
@@ -268,11 +268,18 @@ finite and decode to finite models with positive amplitude and width.
 Each outer iteration tries damping values `1.0`, `0.5`, `0.25`, `0.125`, and
 `0.0625`. Anderson attempts run first for clusters that have a localized
 candidate. Pending clusters then try the same damping sequence as fixed-point
-fallback:
+fallback. Before candidate construction, the requested damping is capped by the
+cluster's adaptive trust radius:
 
 ```text
-damped = previous + damping * (candidate - previous)
+step norm = max over atoms and parameters of
+            abs(candidate - previous) / [0.50, 0.35, 1.00]
+effective damping = min(requested damping, trust radius / step norm)
+damped = previous + effective damping * (candidate - previous)
 ```
+
+The scales correspond to log peak height, log width, and offset-to-peak ratio.
+Identical effective damping values caused by the cap are evaluated only once.
 
 Both candidate kinds use the same `BuildLocalFittingCandidateState` path. The
 builder performs the displayed interpolation in transformed coordinates,
@@ -317,9 +324,12 @@ Directions below `kLocalFittingTransformedChangeTolerance` are stationary and
 the original candidate proceeds directly to the objective gate.
 
 For a non-stationary direction, the normal damping sequence is applied from the
-original candidate toward the joint solution. Polished variants are tried first
+original candidate toward the joint solution. The polish substep is clipped so
+the total displacement from the outer previous state remains inside the same
+cluster trust radius. A candidate already on the boundary cannot polish farther
+outward, but an inward polish remains eligible. Polished variants are tried first
 through the existing cluster objective gate. Rejected polished variants do not
-commit scale or quality state and do not independently trigger objective ridge
+commit scale or quality state and do not independently trigger solver-ridge
 backtracking. If none is accepted, the original candidate receives its normal
 single objective attempt. An accepted original candidate is retained as a
 polishing fallback; an accepted polished or stationary candidate supplies valid
@@ -328,29 +338,24 @@ candidate per outer iteration, and polishing does not become a third candidate
 kind or change Anderson-before-fixed-point ordering. Polished candidates retain
 the original candidate's MDPDE uncertainty and other local-result fields.
 
-## Objective Gate and Ridge Retry
+## Scientific Objective, Trust Radius, and Ridge Retry
 
 Objective scoring is cluster-local. The residual term uses the same robust-loss
 policy as joint-offset IRLS, then adds conservative parameter plausibility
 penalties for width drift from the group prior or local group median, offset
-dominance over the local peak, and single-step movement from the atom/model
-snapshot stored with the previous objective candidate. The movement-reference
-snapshot is validated against the current active atom indexes before use.
-Movement is measured in the same log-peak-height, log-width, and
-offset-to-peak-ratio coordinates used by acceleration and convergence. The
-movement penalty is used only for the current acceptance gate; committed
-previous and best objective references keep the residual, width-prior, and
-offset-plausibility terms so a one-step movement surcharge does not permanently
-pollute future comparisons. Each cluster owns its objective sample refs,
+dominance over the local peak. Candidate, previous, best, committed, and global
+audit states all use this same scientific objective; movement is not an
+objective term. Each cluster owns its objective sample refs,
 residual-scale tracker, a tracked previous candidate that pairs its objective
-stats and samples, best local objective stats, and objective ridge multiplier.
+stats and samples, best local objective stats, solver-ridge multiplier, and
+trust radius.
 During scale warm-up,
 candidate, previous, and best objective values are scored with the same
 provisional scale before backtracking is evaluated. Stored objective samples
 contain residuals, an atom/model snapshot for the active cluster, and the
 scalar residual/response-derived scale sample. Raw response values exist only
 while the samples are collected and are discarded after that scale is calculated. This
-snapshot is sufficient for provisional rescoring and movement comparison
+snapshot is sufficient for provisional rescoring
 without retaining a response list or reconstructing models from a separate
 fitting state.
 
@@ -375,20 +380,28 @@ Ridge changes made after candidate selection do not rewrite that signature; the
 next iteration detects the new regime, clears the old samples, and requires a
 fresh fixed-point commit before Anderson can resume.
 
-Ridge retry is staged:
+The trust radius starts at `1.0`, is bounded to `[0.0625, 4.0]`, shrinks by
+`0.5`, and grows by `2.0`. Exact cluster keys retain their radius across outer
+iterations; a split or merge starts at the initial radius. A cluster that
+remains rejected shrinks its radius. A candidate that improves the scientific
+objective beyond the tie tolerance and uses at least 80% of the radius grows it.
+Unavailable or tied objectives leave it unchanged.
 
-- partial accepted iterations lower objective ridge for progress-eligible,
-  accepted, non-suspicious clusters and raise it for rejected clusters;
-- if every cluster is rejected, rejected clusters first raise their local
-  objective ridge multipliers; and
+Trust-radius and solver-ridge retry are staged:
+
+- rejected clusters first shrink their trust radius;
+- only clusters already at the minimum radius raise their local solver-ridge
+  multiplier, then reset their radius because the generated direction changed;
+- partial accepted iterations lower solver ridge for progress-eligible,
+  accepted, non-suspicious clusters; and
 - the global `ridge_ratio` increases only when all rejected cluster-local
-  objective ridge multipliers are saturated.
+  solver-ridge multipliers are saturated, then resets the affected radii.
 
 Accepted iterations without objective rejection shrink the global `ridge_ratio`
 toward `kJointOffsetRidgeRatioMin` when every active cluster is progress-
 eligible. Soft incomplete IRLS results can therefore continue the numerical
 trajectory without being treated as stationarity evidence. Hard-failure or
-local-refit-fallback clusters do not lower their local objective ridge;
+local-refit-fallback clusters do not lower their local solver ridge;
 eligible remote clusters retain their local ridge decrease.
 
 ## Freeze, Thaw, and Convergence
@@ -500,17 +513,15 @@ with a finite complete audit locks one robust scale for the remainder of the
 stage; the initial state is considered first.
 
 The fixed audit objective uses the normal Cauchy residual, width prior, and
-offset plausibility penalty, but excludes the single-step movement penalty and
-all ridge or freeze state. Its residual is a per-sample mean, while its width
+offset plausibility penalty. It excludes trust-radius, ridge, and freeze state.
+Its residual is a per-sample mean, while its width
 and offset penalties are per-atom means. This keeps the audit ranking invariant
 when the same scientific case is replicated to a different atom count.
 
 Cluster-local objectives use the same cardinality-independent aggregation:
-width-prior, offset-plausibility, and single-step movement penalties are each
-averaged over the active atoms in that cluster before their existing weights
-are applied. Movement remains candidate-only; committed previous and best
-references omit it. Objective weights, tolerances, robust scales, ridge, and
-damping policies are unchanged.
+width-prior and offset-plausibility penalties are each averaged over the active
+atoms in that cluster before their weights are applied. Candidate, committed
+previous, best, and audit states therefore have identical objective semantics.
 
 Every complete assembled state with at least one objective-gated accepted
 cluster can compete, including partial or unhealthy iterations. The tracker
@@ -540,7 +551,8 @@ The loop exits through one of five terminal cases:
   converge, apply the assembled state and emit one warning with reason-specific
   terminal cluster/atom counts instead of reporting whole-stage convergence.
 - **Objective backtracking failure:** when all acceleration and fixed-point
-  attempts are rejected at the maximum global ridge, apply the best validated
+  attempts are rejected at the minimum trust radius and maximum global solver
+  ridge, apply the best validated
   accepted-iteration audit state when available, otherwise apply the previous
   state. If the final rejection instead reaches the outer iteration limit,
   apply the global best validated audit state when available.
@@ -570,22 +582,22 @@ At debug verbosity (`-v4`), every cluster that remains rejected after all
 candidate attempts emits an objective diagnostic after the normal progress or
 retry line. The cluster is identified by atom count and the first/last atom
 index in its canonical key. Attempts are reported in execution order, including
-Anderson candidates when available and all fixed-point damping values;
-fixed-point damping `1.0` is labeled `raw`.
+Anderson candidates when available and distinct effective fixed-point damping
+values. Requested damping `1.0` is labeled `raw`.
 
 Each scored attempt reports the provisional objective scale and candidate,
 previous, and best breakdowns in
-`residual/width/offset/movement/total` order. Candidate movement is measured
-against the previous model, while committed previous and best references have
-zero movement penalty. `rejected-by` identifies whether the existing tolerance
-comparison failed against previous, best, or both. Invalid damped models and
-unavailable objectives are labeled without fabricated component values. An
+`residual/width/offset/total` order. It also reports requested and effective
+damping, trust radius, normalized step, and polish damping when applicable.
+`rejected-by` identifies whether the existing tolerance comparison failed
+against previous, best, or both. Invalid damped models and unavailable
+objectives are labeled without fabricated component values. An
 invalid-model entry also reports the first failing atom, whether the failure is
 parameter-size, non-finite-parameter, invalid-transformed-coordinates, or
 non-positive-width, and the candidate `u/v/q` values when their structure is
 valid. These
 diagnostics observe the existing gate only; they do not change objective
-weights, scale tracking, damping, or acceptance.
+weights, scale tracking, trust radius, damping, or acceptance.
 
 ## Workflow Context
 

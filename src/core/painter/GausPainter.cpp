@@ -473,11 +473,11 @@ void GausPainter::PaintGausScatterPlot(
         graph_map.emplace(element_type, std::move(graph));
     }
 
-    auto x_range{ array_helper::ComputeScalingPercentileRangeTuple(x_array, 0.2, 0.005, 0.995) };
+    auto x_range{ array_helper::ComputeScalingRangeTuple(x_array, 0.2, 1.0) };
     double x_min{ std::get<0>(x_range) };
     double x_max{ std::get<1>(x_range) };
 
-    auto y_range{ array_helper::ComputeScalingPercentileRangeTuple(y_array, 0.2, 0.005, 0.995) };
+    auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.2, 0.1) };
     double y_min{ std::get<0>(y_range) };
     double y_max{ std::get<1>(y_range) };
 
@@ -1632,7 +1632,7 @@ void GausPainter::PaintLocalGausToSequenceAminoAcidMainChain(
                     y_array[j].emplace_back(gaus_graph_map[j][k].at(chain_id)->GetPointY(p));
                 }
             }
-            auto y_range{ array_helper::ComputeScalingPercentileRangeTuple(y_array[j], 0.4) };
+            auto y_range{ array_helper::ComputeScalingRangeTuple(y_array[j], 0.2, 0.1) };
             y_min[j] = std::get<0>(y_range);
             y_max[j] = std::get<1>(y_range);
         }

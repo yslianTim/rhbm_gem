@@ -17,6 +17,7 @@
 #include "core/detail/LocalFittingJointOffsetConditioning.hpp"
 #include "core/detail/LocalFittingJointPolish.hpp"
 #include "core/detail/LocalFittingSeedRepair.hpp"
+#include "core/detail/LocalFittingTrustRegion.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
 #include "core/detail/PostRefitRollback.hpp"
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
@@ -38,6 +39,7 @@ namespace polish_detail = rhbm_gem::core::detail;
 namespace regime_detail = rhbm_gem::core::detail;
 namespace rollback_detail = rhbm_gem::core::detail;
 namespace seed_detail = rhbm_gem::core::detail;
+namespace trust_detail = rhbm_gem::core::detail;
 namespace rt = rhbm_gem::core;
 namespace rg = rhbm_gem;
 
@@ -686,51 +688,43 @@ TEST(EstimatorSecondStageDefenseTest, AuditObjectiveKeepsEarlierBestOnTie)
         std::invalid_argument);
 }
 
-TEST(EstimatorSecondStageDefenseTest, ObjectivePenaltyUsesAtomMeanIndependentOfCardinality)
+TEST(EstimatorSecondStageDefenseTest, ScientificObjectiveUsesAtomMeanIndependentOfCardinality)
 {
     const auto single_atom{
         audit_detail::BuildLocalFittingMeanObjectiveBreakdown(
             0.4,
             25.0,
             9.0,
-            16.0,
             1,
             0.01,
-            0.02,
-            0.03)
+            0.02)
     };
     const auto repeated_atoms{
         audit_detail::BuildLocalFittingMeanObjectiveBreakdown(
             0.4,
             2500.0,
             900.0,
-            1600.0,
             100,
             0.01,
-            0.02,
-            0.03)
+            0.02)
     };
     const auto single_previous{
         audit_detail::BuildLocalFittingMeanObjectiveBreakdown(
             1.4,
             0.0,
             0.0,
-            0.0,
             1,
             0.01,
-            0.02,
-            0.03)
+            0.02)
     };
     const auto repeated_previous{
         audit_detail::BuildLocalFittingMeanObjectiveBreakdown(
             1.4,
             0.0,
             0.0,
-            0.0,
             100,
             0.01,
-            0.02,
-            0.03)
+            0.02)
     };
 
     ASSERT_TRUE(single_atom.has_value());
@@ -747,19 +741,13 @@ TEST(EstimatorSecondStageDefenseTest, ObjectivePenaltyUsesAtomMeanIndependentOfC
         single_atom->offset_plausibility_penalty,
         repeated_atoms->offset_plausibility_penalty);
     EXPECT_DOUBLE_EQ(
-        single_atom->movement_penalty,
-        repeated_atoms->movement_penalty);
-    EXPECT_DOUBLE_EQ(
         single_atom->total_objective,
         repeated_atoms->total_objective);
     EXPECT_DOUBLE_EQ(
         single_atom->total_objective,
         single_atom->residual_objective +
             single_atom->width_prior_penalty +
-            single_atom->offset_plausibility_penalty +
-            single_atom->movement_penalty);
-    EXPECT_GT(single_atom->movement_penalty, 0.0);
-    EXPECT_DOUBLE_EQ(single_previous->movement_penalty, 0.0);
+            single_atom->offset_plausibility_penalty);
     EXPECT_EQ(
         audit_detail::IsBetterLocalFittingAuditObjective(
             single_atom->total_objective,
@@ -774,21 +762,152 @@ TEST(EstimatorSecondStageDefenseTest, ObjectivePenaltyUsesAtomMeanIndependentOfC
             0.4,
             25.0,
             9.0,
-            16.0,
             0,
             0.01,
-            0.02,
-            0.03).has_value());
+            0.02).has_value());
     EXPECT_FALSE(
         audit_detail::BuildLocalFittingMeanObjectiveBreakdown(
             std::numeric_limits<double>::infinity(),
             25.0,
             9.0,
-            16.0,
             1,
             0.01,
-            0.02,
-            0.03).has_value());
+            0.02).has_value());
+}
+
+TEST(EstimatorSecondStageDefenseTest, TrustRegionDampingCapsLargeTransformedStep)
+{
+    const std::array<double, 3> scale{ 0.50, 0.35, 1.0 };
+    std::vector<Eigen::VectorXd> previous{
+        Eigen::VectorXd::Zero(3)
+    };
+    auto candidate{ previous };
+    candidate.at(0) << 1.0, 0.35, 0.5;
+
+    const auto capped{
+        trust_detail::LimitLocalFittingTrustRegionDamping(
+            previous, candidate, { 0 }, scale, 1.0, 1.0)
+    };
+    EXPECT_DOUBLE_EQ(capped.requested_damping, 1.0);
+    EXPECT_DOUBLE_EQ(capped.effective_damping, 0.5);
+    EXPECT_DOUBLE_EQ(capped.step_norm, 1.0);
+
+    const auto inside{
+        trust_detail::LimitLocalFittingTrustRegionDamping(
+            previous, candidate, { 0 }, scale, 0.25, 1.0)
+    };
+    EXPECT_DOUBLE_EQ(inside.effective_damping, 0.25);
+    EXPECT_DOUBLE_EQ(inside.step_norm, 0.5);
+}
+
+TEST(EstimatorSecondStageDefenseTest, TrustRegionDampingIsIntensityScaleInvariant)
+{
+    const std::array<double, 3> scale{ 0.50, 0.35, 1.0 };
+    const auto encode = [](const rg::GaussianModel3D & model)
+    {
+        const auto estimation{
+            change_detail::EncodeLocalFittingTransformedCoordinates(model)
+        };
+        EXPECT_TRUE(estimation.has_value());
+        return estimation.value_or(Eigen::VectorXd{});
+    };
+    const std::vector<Eigen::VectorXd> base_previous{
+        encode(rg::GaussianModel3D{ 2.0, 0.8, 0.2 })
+    };
+    const std::vector<Eigen::VectorXd> base_candidate{
+        encode(rg::GaussianModel3D{ 4.0, 1.0, 0.4 })
+    };
+    constexpr double intensity_scale{ 1.0e5 };
+    const std::vector<Eigen::VectorXd> scaled_previous{
+        encode(rg::GaussianModel3D{
+            2.0 * intensity_scale,
+            0.8,
+            0.2 * intensity_scale })
+    };
+    const std::vector<Eigen::VectorXd> scaled_candidate{
+        encode(rg::GaussianModel3D{
+            4.0 * intensity_scale,
+            1.0,
+            0.4 * intensity_scale })
+    };
+
+    const auto base{
+        trust_detail::LimitLocalFittingTrustRegionDamping(
+            base_previous, base_candidate, { 0 }, scale, 1.0, 0.5)
+    };
+    const auto scaled{
+        trust_detail::LimitLocalFittingTrustRegionDamping(
+            scaled_previous, scaled_candidate, { 0 }, scale, 1.0, 0.5)
+    };
+    EXPECT_NEAR(base.effective_damping, scaled.effective_damping, 1.0e-12);
+    EXPECT_NEAR(base.step_norm, scaled.step_norm, 1.0e-12);
+}
+
+TEST(EstimatorSecondStageDefenseTest, TrustRegionPolishHonorsOuterStepBoundary)
+{
+    const std::array<double, 3> scale{ 0.50, 0.35, 1.0 };
+    std::vector<Eigen::VectorXd> outer_previous{
+        Eigen::VectorXd::Zero(3)
+    };
+    auto boundary_state{ outer_previous };
+    boundary_state.at(0)(0) = 0.5;
+    auto outward_target{ boundary_state };
+    outward_target.at(0)(0) = 1.0;
+
+    const auto outward{
+        trust_detail::LimitLocalFittingTrustRegionSubstepDamping(
+            outer_previous,
+            boundary_state,
+            outward_target,
+            { 0 },
+            scale,
+            1.0,
+            1.0)
+    };
+    EXPECT_DOUBLE_EQ(outward.effective_damping, 0.0);
+    EXPECT_DOUBLE_EQ(outward.step_norm, 1.0);
+
+    const auto inward{
+        trust_detail::LimitLocalFittingTrustRegionSubstepDamping(
+            outer_previous,
+            boundary_state,
+            outer_previous,
+            { 0 },
+            scale,
+            1.0,
+            1.0)
+    };
+    EXPECT_DOUBLE_EQ(inward.effective_damping, 1.0);
+    EXPECT_DOUBLE_EQ(inward.step_norm, 0.0);
+}
+
+TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndResets)
+{
+    trust_detail::LocalFittingTrustRegionStateSet state;
+    const alg::ClusterKey key{ 0 };
+    state.Reconcile({ key });
+    EXPECT_DOUBLE_EQ(state.GetRadius(key), 1.0);
+
+    for (const auto expected : { 0.5, 0.25, 0.125, 0.0625 })
+    {
+        const auto update{ state.Shrink({ key }) };
+        EXPECT_EQ(update.changed_key_list, std::vector<alg::ClusterKey>{ key });
+        EXPECT_TRUE(update.saturated_key_list.empty());
+        EXPECT_DOUBLE_EQ(state.GetRadius(key), expected);
+    }
+    const auto saturated{ state.Shrink({ key }) };
+    EXPECT_TRUE(saturated.changed_key_list.empty());
+    EXPECT_EQ(saturated.saturated_key_list, std::vector<alg::ClusterKey>{ key });
+
+    state.Grow({ key });
+    EXPECT_DOUBLE_EQ(state.GetRadius(key), 0.125);
+    state.Reset({ key });
+    EXPECT_DOUBLE_EQ(state.GetRadius(key), 1.0);
+
+    const alg::ClusterKey replacement_key{ 1 };
+    state.Reconcile({ replacement_key });
+    EXPECT_THROW(state.GetRadius(key), std::invalid_argument);
+    EXPECT_DOUBLE_EQ(state.GetRadius(replacement_key), 1.0);
 }
 
 TEST(EstimatorSecondStageDefenseTest, AndersonRegimeTracksGlobalAndClusterEffectiveRidge)
@@ -2057,9 +2176,9 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingIsIntensityScale
     }
 }
 
-TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingKeepsRidgeRetryOnProgressLineWhenPresent)
+TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingRetriesTrustRadiusBeforeSolverRidge)
 {
-    auto model{ BuildNearCollinearDefenseModel() };
+    auto model{ BuildJointPolishDefenseModel() };
 
     const auto previous_log_level{ Logger::GetLogLevel() };
     Logger::SetLogLevel(LogLevel::Info);
@@ -2073,7 +2192,7 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingKeepsRidgeRetryO
     const auto retry_position{
         output.find("Objective backtracking rejected all attempts; retrying after")
     };
-    if (retry_position != std::string::npos)
+    ASSERT_NE(retry_position, std::string::npos);
     {
         EXPECT_NE(
             output.find("\rObjective backtracking rejected all attempts; retrying after"),
@@ -2081,16 +2200,22 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingKeepsRidgeRetryO
         EXPECT_EQ(
             output.find("\nObjective backtracking rejected all attempts; retrying after"),
             std::string::npos);
-        EXPECT_TRUE(
-            output.find("increased cluster-local objective ridge", retry_position) != std::string::npos ||
-            output.find("increased global ridge ratio", retry_position) != std::string::npos);
+        const auto trust_retry_position{
+            output.find("decreased cluster-local trust radius", retry_position)
+        };
+        EXPECT_NE(trust_retry_position, std::string::npos);
+        const auto solver_retry_position{
+            output.find("increased cluster-local solver ridge", retry_position)
+        };
+        if (solver_retry_position != std::string::npos)
+        {
+            EXPECT_LT(trust_retry_position, solver_retry_position);
+        }
         EXPECT_NE(
             output.find("offset dQ_C p99 raw =", retry_position),
             std::string::npos);
         EXPECT_NE(
-            output.find(
-                "objective acc./rej. clusters = 0/1, atoms = 0/2",
-                retry_position),
+            output.find("objective acc./rej. clusters = 0/", retry_position),
             std::string::npos);
     }
     EXPECT_EQ(
@@ -2101,8 +2226,8 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingKeepsRidgeRetryO
 
 TEST(EstimatorSecondStageDefenseTest, RejectedClusterObjectiveDiagnosticsAreDebugOnlyWhenPresent)
 {
-    auto info_model{ BuildSeparatedLocalRefitFallbackDefenseModel() };
-    auto debug_model{ BuildSeparatedLocalRefitFallbackDefenseModel() };
+    auto info_model{ BuildJointPolishDefenseModel() };
+    auto debug_model{ BuildJointPolishDefenseModel() };
 
     const auto previous_log_level{ Logger::GetLogLevel() };
     Logger::SetLogLevel(LogLevel::Info);
@@ -2126,29 +2251,18 @@ TEST(EstimatorSecondStageDefenseTest, RejectedClusterObjectiveDiagnosticsAreDebu
     const auto diagnostic_position{
         debug_output.find("Rejected local fitting cluster objective diagnostics:")
     };
-    if (diagnostic_position != std::string::npos)
+    ASSERT_NE(diagnostic_position, std::string::npos);
     {
         EXPECT_NE(
+            debug_output.find("breakdown order = residual/width/offset/total"),
+            std::string::npos);
+        EXPECT_NE(
             debug_output.find(
-                "Rejected local fitting cluster objective diagnostics: atoms = 2"),
+                "kind = fixed-point, requested damping = 1.00e+00, effective damping = "),
             std::string::npos);
         EXPECT_NE(
-            debug_output.find("breakdown order = residual/width/offset/movement/total"),
+            debug_output.find("trust radius/step norm = "),
             std::string::npos);
-        EXPECT_NE(
-            debug_output.find("kind = fixed-point, damping = 1.00e+00 (raw)"),
-            std::string::npos);
-        for (const auto damping_text : {
-            "5.00e-01",
-            "2.50e-01",
-            "1.25e-01",
-            "6.25e-02" })
-        {
-            EXPECT_NE(
-                debug_output.find(
-                    std::string{ "kind = fixed-point, damping = " } + damping_text),
-                std::string::npos);
-        }
         EXPECT_NE(debug_output.find("candidate = "), std::string::npos);
         EXPECT_NE(debug_output.find("previous = "), std::string::npos);
         EXPECT_NE(debug_output.find("best = "), std::string::npos);
@@ -2251,7 +2365,9 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingReportsMaximumGl
     if (maximum_ridge_position != std::string::npos && stop_warning_position != std::string::npos)
     {
         EXPECT_NE(
-            error_output.find("maximum joint-offset ridge ratio", stop_warning_position),
+            error_output.find(
+                "minimum trust radius and maximum joint-offset solver ridge ratio",
+                stop_warning_position),
             std::string::npos);
         EXPECT_NE(
             error_output.find("applying best validated audit state", stop_warning_position),

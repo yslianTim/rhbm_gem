@@ -1,0 +1,313 @@
+#pragma once
+
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstddef>
+#include <map>
+#include <stdexcept>
+#include <utility>
+#include <vector>
+
+#include <Eigen/Dense>
+
+#include <rhbm_gem/utils/algorithm/ClusteredAndersonAcceleration.hpp>
+
+namespace rhbm_gem::core::detail {
+
+struct LocalFittingTrustRegionOptions
+{
+    double initial_radius{ 1.0 };
+    double minimum_radius{ 0.0625 };
+    double maximum_radius{ 4.0 };
+    double shrink_factor{ 0.5 };
+    double growth_factor{ 2.0 };
+};
+
+struct LocalFittingTrustRegionRadiusUpdate
+{
+    std::vector<algorithm::ClusterKey> changed_key_list{};
+    std::vector<algorithm::ClusterKey> saturated_key_list{};
+};
+
+class LocalFittingTrustRegionStateSet
+{
+private:
+    LocalFittingTrustRegionOptions m_options{};
+    std::map<algorithm::ClusterKey, double> m_radius_by_key{};
+
+    static void ValidateOptions(const LocalFittingTrustRegionOptions & options)
+    {
+        if (!std::isfinite(options.initial_radius) ||
+            !std::isfinite(options.minimum_radius) ||
+            !std::isfinite(options.maximum_radius) ||
+            options.minimum_radius <= 0.0 ||
+            options.initial_radius < options.minimum_radius ||
+            options.maximum_radius < options.initial_radius ||
+            !std::isfinite(options.shrink_factor) ||
+            options.shrink_factor <= 0.0 ||
+            options.shrink_factor >= 1.0 ||
+            !std::isfinite(options.growth_factor) ||
+            options.growth_factor <= 1.0)
+        {
+            throw std::invalid_argument("Local fitting trust-region options are invalid.");
+        }
+    }
+
+public:
+    explicit LocalFittingTrustRegionStateSet(
+        LocalFittingTrustRegionOptions options = {})
+        : m_options{ options }
+    {
+        ValidateOptions(m_options);
+    }
+
+    void Reconcile(const std::vector<algorithm::ClusterKey> & key_list)
+    {
+        std::map<algorithm::ClusterKey, double> next_radius_by_key;
+        for (const auto & key : key_list)
+        {
+            const auto iter{ m_radius_by_key.find(key) };
+            next_radius_by_key.emplace(
+                key,
+                iter == m_radius_by_key.end() ?
+                    m_options.initial_radius : iter->second);
+        }
+        m_radius_by_key = std::move(next_radius_by_key);
+    }
+
+    double GetRadius(const algorithm::ClusterKey & key) const
+    {
+        const auto iter{ m_radius_by_key.find(key) };
+        if (iter == m_radius_by_key.end())
+        {
+            throw std::invalid_argument("Local fitting trust-region state is missing.");
+        }
+        return iter->second;
+    }
+
+    LocalFittingTrustRegionRadiusUpdate Shrink(
+        const std::vector<algorithm::ClusterKey> & key_list)
+    {
+        LocalFittingTrustRegionRadiusUpdate update;
+        for (const auto & key : key_list)
+        {
+            auto iter{ m_radius_by_key.find(key) };
+            if (iter == m_radius_by_key.end())
+            {
+                throw std::invalid_argument("Local fitting trust-region state is missing.");
+            }
+            if (iter->second <= m_options.minimum_radius)
+            {
+                update.saturated_key_list.emplace_back(key);
+                continue;
+            }
+            iter->second = std::max(
+                m_options.minimum_radius,
+                iter->second * m_options.shrink_factor);
+            update.changed_key_list.emplace_back(key);
+        }
+        return update;
+    }
+
+    void Grow(const std::vector<algorithm::ClusterKey> & key_list)
+    {
+        for (const auto & key : key_list)
+        {
+            auto iter{ m_radius_by_key.find(key) };
+            if (iter == m_radius_by_key.end())
+            {
+                throw std::invalid_argument("Local fitting trust-region state is missing.");
+            }
+            iter->second = std::min(
+                m_options.maximum_radius,
+                iter->second * m_options.growth_factor);
+        }
+    }
+
+    void Reset(const std::vector<algorithm::ClusterKey> & key_list)
+    {
+        for (const auto & key : key_list)
+        {
+            auto iter{ m_radius_by_key.find(key) };
+            if (iter == m_radius_by_key.end()) continue;
+            iter->second = m_options.initial_radius;
+        }
+    }
+};
+
+struct LocalFittingTrustRegionDamping
+{
+    double requested_damping{ 1.0 };
+    double effective_damping{ 1.0 };
+    double step_norm{ 0.0 };
+};
+
+inline void ValidateLocalFittingTrustRegionInputs(
+    const std::vector<Eigen::VectorXd> & previous_estimation_list,
+    const std::vector<Eigen::VectorXd> & candidate_estimation_list,
+    const algorithm::ClusterKey & key,
+    const std::array<double, 3> & parameter_scale,
+    double requested_damping,
+    double radius)
+{
+    if (candidate_estimation_list.size() != previous_estimation_list.size() ||
+        !std::isfinite(requested_damping) ||
+        requested_damping <= 0.0 ||
+        requested_damping > 1.0 ||
+        !std::isfinite(radius) ||
+        radius <= 0.0)
+    {
+        throw std::invalid_argument("Local fitting trust-region inputs are invalid.");
+    }
+    for (const auto scale : parameter_scale)
+    {
+        if (!std::isfinite(scale) || scale <= 0.0)
+        {
+            throw std::invalid_argument("Local fitting trust-region scale is invalid.");
+        }
+    }
+    for (const auto atom_index : key)
+    {
+        if (atom_index >= previous_estimation_list.size() ||
+            previous_estimation_list.at(atom_index).size() != 3 ||
+            candidate_estimation_list.at(atom_index).size() != 3 ||
+            !previous_estimation_list.at(atom_index).allFinite() ||
+            !candidate_estimation_list.at(atom_index).allFinite())
+        {
+            throw std::invalid_argument("Local fitting trust-region estimation is invalid.");
+        }
+    }
+}
+
+inline LocalFittingTrustRegionDamping LimitLocalFittingTrustRegionDamping(
+    const std::vector<Eigen::VectorXd> & previous_estimation_list,
+    const std::vector<Eigen::VectorXd> & candidate_estimation_list,
+    const algorithm::ClusterKey & key,
+    const std::array<double, 3> & parameter_scale,
+    double requested_damping,
+    double radius)
+{
+    ValidateLocalFittingTrustRegionInputs(
+        previous_estimation_list,
+        candidate_estimation_list,
+        key,
+        parameter_scale,
+        requested_damping,
+        radius);
+
+    double undamped_step_norm{ 0.0 };
+    for (const auto atom_index : key)
+    {
+        for (std::size_t parameter_index = 0; parameter_index < 3; parameter_index++)
+        {
+            const auto eigen_index{ static_cast<Eigen::Index>(parameter_index) };
+            undamped_step_norm = std::max(
+                undamped_step_norm,
+                std::abs(
+                    candidate_estimation_list.at(atom_index)(eigen_index) -
+                    previous_estimation_list.at(atom_index)(eigen_index)) /
+                    parameter_scale.at(parameter_index));
+        }
+    }
+
+    const auto effective_damping{
+        undamped_step_norm > 0.0 ?
+            std::min(requested_damping, radius / undamped_step_norm) :
+            requested_damping
+    };
+    return LocalFittingTrustRegionDamping{
+        requested_damping,
+        effective_damping,
+        effective_damping * undamped_step_norm
+    };
+}
+
+inline LocalFittingTrustRegionDamping LimitLocalFittingTrustRegionSubstepDamping(
+    const std::vector<Eigen::VectorXd> & outer_previous_estimation_list,
+    const std::vector<Eigen::VectorXd> & substep_previous_estimation_list,
+    const std::vector<Eigen::VectorXd> & candidate_estimation_list,
+    const algorithm::ClusterKey & key,
+    const std::array<double, 3> & parameter_scale,
+    double requested_damping,
+    double radius)
+{
+    ValidateLocalFittingTrustRegionInputs(
+        outer_previous_estimation_list,
+        substep_previous_estimation_list,
+        key,
+        parameter_scale,
+        requested_damping,
+        radius);
+    ValidateLocalFittingTrustRegionInputs(
+        substep_previous_estimation_list,
+        candidate_estimation_list,
+        key,
+        parameter_scale,
+        requested_damping,
+        radius);
+
+    double maximum_damping{ requested_damping };
+    constexpr double tolerance{ 1.0e-12 };
+    for (const auto atom_index : key)
+    {
+        for (std::size_t parameter_index = 0; parameter_index < 3; parameter_index++)
+        {
+            const auto eigen_index{ static_cast<Eigen::Index>(parameter_index) };
+            const auto limit{ radius * parameter_scale.at(parameter_index) };
+            const auto base_step{
+                substep_previous_estimation_list.at(atom_index)(eigen_index) -
+                outer_previous_estimation_list.at(atom_index)(eigen_index)
+            };
+            if (std::abs(base_step) > limit + tolerance)
+            {
+                throw std::invalid_argument(
+                    "Local fitting trust-region substep starts outside the radius.");
+            }
+            const auto direction{
+                candidate_estimation_list.at(atom_index)(eigen_index) -
+                substep_previous_estimation_list.at(atom_index)(eigen_index)
+            };
+            if (direction > 0.0)
+            {
+                maximum_damping = std::min(
+                    maximum_damping,
+                    std::max(0.0, (limit - base_step) / direction));
+            }
+            else if (direction < 0.0)
+            {
+                maximum_damping = std::min(
+                    maximum_damping,
+                    std::max(0.0, (-limit - base_step) / direction));
+            }
+        }
+    }
+
+    double step_norm{ 0.0 };
+    for (const auto atom_index : key)
+    {
+        for (std::size_t parameter_index = 0; parameter_index < 3; parameter_index++)
+        {
+            const auto eigen_index{ static_cast<Eigen::Index>(parameter_index) };
+            const auto base_step{
+                substep_previous_estimation_list.at(atom_index)(eigen_index) -
+                outer_previous_estimation_list.at(atom_index)(eigen_index)
+            };
+            const auto direction{
+                candidate_estimation_list.at(atom_index)(eigen_index) -
+                substep_previous_estimation_list.at(atom_index)(eigen_index)
+            };
+            step_norm = std::max(
+                step_norm,
+                std::abs(base_step + maximum_damping * direction) /
+                    parameter_scale.at(parameter_index));
+        }
+    }
+    return LocalFittingTrustRegionDamping{
+        requested_damping,
+        maximum_damping,
+        step_norm
+    };
+}
+
+} // namespace rhbm_gem::core::detail
