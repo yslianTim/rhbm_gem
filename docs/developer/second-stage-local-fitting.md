@@ -493,9 +493,9 @@ The loop exits through one of five terminal cases:
   best validated audit state when available; otherwise preserve the current
   accepted assembled-state fallback.
 
-Progress logs report iteration, acceleration kind, damping, active/frozen atom
-counts, raw/accepted 99th-percentile offset-to-peak-ratio change, and raw/
-accepted exact-zero offset counts. Objective retry lines report the raw offset
+Progress logs report iteration, accepted Anderson/fixed-point cluster counts,
+active/frozen atom counts, and raw/accepted 99th-percentile
+offset-to-peak-ratio change. Objective retry lines report the raw offset
 statistics because no candidate was accepted. Accepted and retry lines also
 report objective-gate accepted/rejected cluster and atom counts before health,
 suspicious, or terminal filtering, plus every joint-offset status as cluster/

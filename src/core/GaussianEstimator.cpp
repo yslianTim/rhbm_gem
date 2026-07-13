@@ -511,7 +511,8 @@ struct LocalFittingCandidateSelection
     std::vector<LocalFittingClusterKey> accepted_key_list{};
     std::vector<LocalFittingClusterKey> rejected_key_list{};
     std::vector<LocalFittingRejectedClusterDiagnostic> rejected_cluster_diagnostic_list{};
-    std::optional<LocalFittingCandidateAttempt> accepted_candidate_attempt{};
+    std::size_t accepted_anderson_cluster_count{ 0 };
+    std::size_t accepted_fixed_point_cluster_count{ 0 };
     bool has_objective_backtracking_rejection{ false };
 };
 
@@ -521,6 +522,8 @@ struct LocalFittingClusterSelectionSummary
     std::size_t rejected_cluster_count{ 0 };
     std::size_t accepted_atom_count{ 0 };
     std::size_t rejected_atom_count{ 0 };
+    std::size_t accepted_anderson_cluster_count{ 0 };
+    std::size_t accepted_fixed_point_cluster_count{ 0 };
 };
 
 struct SecondStageNeighborSample
@@ -531,6 +534,7 @@ struct SecondStageNeighborSample
 
 struct SecondStageAtomContext
 {
+    AtomObject * atom{ nullptr };
     LocalPotentialSampleList sample_entries{};
     std::vector<std::size_t> selected_neighbor_index_list{};
     std::vector<std::vector<SecondStageNeighborSample>> sample_neighbor_list{};
@@ -540,10 +544,9 @@ struct SecondStageAtomContext
 
 struct SecondStageLocalFittingContext
 {
-    std::vector<AtomObject *> atom_list{};
     std::vector<SecondStageAtomContext> atom_context_list{};
 
-    std::size_t AtomSize() const { return atom_list.size(); }
+    std::size_t AtomSize() const { return atom_context_list.size(); }
 };
 
 struct GaussianModelParameterSamples
@@ -1006,20 +1009,25 @@ using GroupMedianModelMap = std::unordered_map<GroupKey, GaussianModel3D>;
 SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(ModelObject & model_object)
 {
     SecondStageLocalFittingContext context;
-    context.atom_list = model_object.GetSelectedAtoms();
-    context.atom_context_list.resize(context.atom_list.size());
-    std::unordered_map<const AtomObject *, std::size_t> atom_index_map;
-    atom_index_map.reserve(context.atom_list.size());
-    for (std::size_t i = 0; i < context.atom_list.size(); i++)
+    const auto & atom_list{ model_object.GetSelectedAtoms() };
+    context.atom_context_list.reserve(atom_list.size());
+    for (auto * atom : atom_list)
     {
-        atom_index_map.emplace(context.atom_list.at(i), i);
+        context.atom_context_list.emplace_back(SecondStageAtomContext{ atom });
+    }
+    std::unordered_map<const AtomObject *, std::size_t> atom_index_map;
+    atom_index_map.reserve(context.AtomSize());
+    for (std::size_t i = 0; i < context.AtomSize(); i++)
+    {
+        atom_index_map.emplace(context.atom_context_list.at(i).atom, i);
     }
     const auto analysis_view{ model_object.GetAnalysisView() };
 
     std::unordered_map<GroupKey, std::vector<double>> width_samples_by_group;
-    width_samples_by_group.reserve(context.atom_list.size());
-    for (const auto * atom : context.atom_list)
+    width_samples_by_group.reserve(context.AtomSize());
+    for (const auto & atom_context : context.atom_context_list)
     {
+        const auto * atom{ atom_context.atom };
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
         const auto width{ local_view.GetEstimateMDPDE().GetWidth() };
         if (numeric_validation::IsFinitePositive(width))
@@ -1040,10 +1048,10 @@ SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(ModelObject &
         }
     }
 
-    for (std::size_t atom_index = 0; atom_index < context.atom_list.size(); atom_index++)
+    for (std::size_t atom_index = 0; atom_index < context.AtomSize(); atom_index++)
     {
-        const auto * atom{ context.atom_list.at(atom_index) };
         auto & atom_context{ context.atom_context_list.at(atom_index) };
+        const auto * atom{ atom_context.atom };
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
         atom_context.sample_entries = local_view.GetSamplingEntries(false);
         atom_context.alpha_r = local_view.GetAlphaR();
@@ -1066,10 +1074,10 @@ SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(ModelObject &
         }
     }
 
-    for (std::size_t atom_index = 0; atom_index < context.atom_list.size(); atom_index++)
+    for (std::size_t atom_index = 0; atom_index < context.AtomSize(); atom_index++)
     {
-        const auto * atom{ context.atom_list.at(atom_index) };
         auto & atom_context{ context.atom_context_list.at(atom_index) };
+        const auto * atom{ atom_context.atom };
         const auto neighbor_atom_list{ atom->FindNeighborAtoms(kNeighborAtomSearchRange) };
         atom_context.selected_neighbor_index_list.reserve(neighbor_atom_list.size());
         for (const auto * neighbor_atom : neighbor_atom_list)
@@ -1092,7 +1100,7 @@ SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(ModelObject &
                     static_cast<double>(
                         array_helper::ComputeNorm<float>(
                             sample.point.position,
-                            context.atom_list.at(neighbor_index)->GetPositionRef()))
+                            context.atom_context_list.at(neighbor_index).atom->GetPositionRef()))
                 };
                 if (distance > kNeighborContributionDistanceMax) continue;
 
@@ -1282,9 +1290,10 @@ SecondStageInitialStateBuildResult BuildInitialLocalFittingState(
 
     for (std::size_t i = 0; i < context.AtomSize(); i++)
     {
-        const auto local_view{ AtomLocalPotentialView::RequireFor(*context.atom_list.at(i)) };
+        const auto * atom{ context.atom_context_list.at(i).atom };
+        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
         state.at(i) = local_view.GetGaussianResult();
-        const auto group_key{ data_internal::GetGroupKey(context.atom_list.at(i)) };
+        const auto group_key{ data_internal::GetGroupKey(atom) };
         if (analysis_view.HasAtomGroup(group_key))
         {
             group_prior_list.at(i) =
@@ -1343,7 +1352,9 @@ SecondStageInitialStateBuildResult BuildInitialLocalFittingState(
         const auto original_model{ result.mdpde.GetModel() };
         if (!detail::IsValidSecondStageGaussianModel(original_model))
         {
-            const auto group_key{ data_internal::GetGroupKey(context.atom_list.at(i)) };
+            const auto group_key{
+                data_internal::GetGroupKey(context.atom_context_list.at(i).atom)
+            };
             std::optional<GaussianModel3DWithUncertainty> group_median;
             const auto group_median_iter{ median_by_group.find(group_key) };
             if (group_median_iter != median_by_group.end())
@@ -3077,53 +3088,6 @@ TerminalJointOffsetFailureMap UpdatePersistentJointOffsetFailureState(
     return terminal_failure_by_key;
 }
 
-bool ContainsLocalFittingClusterKey(
-    const std::vector<LocalFittingClusterKey> & key_list,
-    const LocalFittingClusterKey & key)
-{
-    return std::find(key_list.begin(), key_list.end(), key) != key_list.end();
-}
-
-std::vector<LocalFittingClusterKey> ExcludeLocalFittingClusterKeys(
-    const std::vector<LocalFittingClusterKey> & key_list,
-    const std::vector<LocalFittingClusterKey> & excluded_key_list)
-{
-    std::vector<LocalFittingClusterKey> result;
-    result.reserve(key_list.size());
-    for (const auto & key : key_list)
-    {
-        if (!ContainsLocalFittingClusterKey(excluded_key_list, key))
-        {
-            result.emplace_back(key);
-        }
-    }
-    return result;
-}
-
-std::vector<LocalFittingClusterKey> ExcludeLocalFittingClusterKeysContainingAtoms(
-    const std::vector<LocalFittingClusterKey> & key_list,
-    const std::vector<std::size_t> & excluded_atom_index_list)
-{
-    std::vector<LocalFittingClusterKey> result;
-    result.reserve(key_list.size());
-    for (const auto & key : key_list)
-    {
-        const auto contains_excluded_atom{
-            std::any_of(
-                excluded_atom_index_list.begin(), excluded_atom_index_list.end(),
-                [&](std::size_t atom_index)
-                {
-                    return std::binary_search(key.begin(), key.end(), atom_index);
-                })
-        };
-        if (!contains_excluded_atom)
-        {
-            result.emplace_back(key);
-        }
-    }
-    return result;
-}
-
 void ApplyTerminalFallbackClusters(
     const std::vector<LocalFittingClusterKey> & terminal_key_list,
     const LocalFittingState & previous_state,
@@ -3294,12 +3258,6 @@ std::optional<LocalFittingState> BuildLocalFittingCandidateState(
     return std::move(candidate_state);
 }
 
-const char * GetLocalFittingCandidateText(const LocalFittingCandidateAttempt & attempt)
-{
-    if (attempt.kind == LocalFittingCandidateKind::FixedPoint) return "damped-fixed-point";
-    return attempt.damping == 1.0 ? "aa" : "damped-aa";
-}
-
 algorithm::ClusteredFittingQualityInitialState<LocalFittingObjectiveSamples>
 BuildInitialLocalFittingClusterQualityState(
     const SecondStageLocalFittingContext & context,
@@ -3451,10 +3409,6 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                             attempt_state->at(active_index);
                     }
                     cluster.accepted_kind = candidate_kind;
-                    if (!selection.accepted_candidate_attempt.has_value())
-                    {
-                        selection.accepted_candidate_attempt = candidate_attempt;
-                    }
                     continue;
                 }
 
@@ -3499,8 +3453,13 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
         if (cluster.accepted_kind.has_value())
         {
             selection.accepted_key_list.emplace_back(key);
-            if (*cluster.accepted_kind == LocalFittingCandidateKind::FixedPoint)
+            if (*cluster.accepted_kind == LocalFittingCandidateKind::Anderson)
             {
+                selection.accepted_anderson_cluster_count++;
+            }
+            else
+            {
+                selection.accepted_fixed_point_cluster_count++;
                 fixed_point_progress_keys.emplace_back(key);
             }
         }
@@ -3524,6 +3483,10 @@ LocalFittingClusterSelectionSummary SummarizeLocalFittingClusterSelection(
     LocalFittingClusterSelectionSummary summary;
     summary.accepted_cluster_count = selection.accepted_key_list.size();
     summary.rejected_cluster_count = selection.rejected_key_list.size();
+    summary.accepted_anderson_cluster_count =
+        selection.accepted_anderson_cluster_count;
+    summary.accepted_fixed_point_cluster_count =
+        selection.accepted_fixed_point_cluster_count;
     for (const auto & key : selection.accepted_key_list)
     {
         summary.accepted_atom_count += key.size();
@@ -3871,17 +3834,22 @@ LocalFittingIterationResult RunLocalFittingIteration(
 }
 
 void ApplyLocalFittingState(
-    const LocalFittingState & iteration_state,
-    std::vector<AtomLocalPotentialEditor> & local_editor_list)
+    ModelObject & model_object,
+    const SecondStageLocalFittingContext & context,
+    const LocalFittingState & iteration_state)
 {
-    if (local_editor_list.size() != iteration_state.size())
+    if (context.AtomSize() != iteration_state.size())
     {
-        throw std::invalid_argument("local_editor_list and local fitting state sizes are inconsistent.");
+        throw std::invalid_argument("Local fitting context and state sizes are inconsistent.");
     }
 
-    for (std::size_t i = 0; i < local_editor_list.size(); i++)
+    auto analysis{ model_object.EditAnalysis() };
+    for (std::size_t i = 0; i < context.AtomSize(); i++)
     {
-        local_editor_list.at(i).SetGaussianResult(iteration_state.at(i));
+        auto local_editor{
+            analysis.EnsureAtomLocalPotential(*context.atom_context_list.at(i).atom)
+        };
+        local_editor.SetGaussianResult(iteration_state.at(i));
     }
 }
 
@@ -4029,6 +3997,31 @@ void LogLocalFittingTerminalFallback(
     Logger::Log(LogLevel::Warning, warning_message.str());
 }
 
+void FinishLocalFittingWithNoActiveAtoms(
+    ModelObject & model_object,
+    const SecondStageLocalFittingContext & context,
+    const LocalFittingState & state,
+    const FitOptions & options,
+    std::size_t accepted_iteration_count,
+    const LocalFittingTerminalSummary & terminal_summary)
+{
+    ApplyLocalFittingState(model_object, context, state);
+    const auto offset_stats{ SummarizeLocalFittingOffsets(state) };
+    if (terminal_summary.AtomCount() > 0)
+    {
+        LogLocalFittingTerminalFallback(
+            options,
+            accepted_iteration_count,
+            terminal_summary,
+            offset_stats);
+        return;
+    }
+    LogLocalFittingAllAtomsFrozen(
+        options,
+        accepted_iteration_count,
+        offset_stats);
+}
+
 void AppendLocalFittingClusterHealthSummary(
     std::ostringstream & stream,
     const LocalFittingClusterHealthSummary & summary)
@@ -4071,17 +4064,13 @@ void AppendLocalFittingClusterHealthSummary(
     }
     if (summary.unhealthy_refit_cluster_count > 0)
     {
-        stream
-            << ", local-refit-fallback clusters/atoms = "
-            << summary.unhealthy_refit_cluster_count
-            << "/" << summary.unhealthy_refit_atom_count;
+        stream << ", local-refit-fallback clusters/atoms = "
+            << summary.unhealthy_refit_cluster_count << "/" << summary.unhealthy_refit_atom_count;
     }
     if (summary.nonstationary_refit_cluster_count > 0)
     {
-        stream
-            << ", local-refit-nonstationary clusters/atoms = "
-            << summary.nonstationary_refit_cluster_count
-            << "/" << summary.nonstationary_refit_atom_count;
+        stream << ", local-refit-nonstationary clusters/atoms = "
+            << summary.nonstationary_refit_cluster_count << "/" << summary.nonstationary_refit_atom_count;
     }
 }
 
@@ -4089,13 +4078,12 @@ void AppendLocalFittingClusterSelectionSummary(
     std::ostringstream & stream,
     const LocalFittingClusterSelectionSummary & summary)
 {
-    stream
+    stream << ", accepted candidate clusters aa/fixed-point = "
+        << summary.accepted_anderson_cluster_count << "/" << summary.accepted_fixed_point_cluster_count
         << ", objective acc./rej. clusters = "
-        << summary.accepted_cluster_count << "/"
-        << summary.rejected_cluster_count
+        << summary.accepted_cluster_count << "/" << summary.rejected_cluster_count
         << ", atoms = "
-        << summary.accepted_atom_count << "/"
-        << summary.rejected_atom_count;
+        << summary.accepted_atom_count << "/" << summary.rejected_atom_count;
 }
 
 void AppendLocalFittingObjectiveBreakdown(
@@ -4119,8 +4107,7 @@ void LogRejectedLocalFittingClusterDiagnostics(
     const FitOptions & options,
     const std::vector<LocalFittingRejectedClusterDiagnostic> & diagnostic_list)
 {
-    if (options.quiet_mode || Logger::GetLogLevel() < LogLevel::Debug ||
-        diagnostic_list.empty())
+    if (options.quiet_mode || Logger::GetLogLevel() < LogLevel::Debug || diagnostic_list.empty())
     {
         return;
     }
@@ -4130,16 +4117,14 @@ void LogRejectedLocalFittingClusterDiagnostics(
     {
         if (cluster_diagnostic.key.empty())
         {
-            throw std::logic_error(
-                "Rejected local fitting cluster diagnostic key is empty.");
+            throw std::logic_error("Rejected local fitting cluster diagnostic key is empty.");
         }
         std::ostringstream header;
         header
             << "Rejected local fitting cluster objective diagnostics: atoms = "
             << cluster_diagnostic.key.size()
             << ", key first/last = "
-            << cluster_diagnostic.key.front() << "/"
-            << cluster_diagnostic.key.back()
+            << cluster_diagnostic.key.front() << "/" << cluster_diagnostic.key.back()
             << ", breakdown order = residual/width/offset/movement/total";
         Logger::Log(LogLevel::Debug, header.str());
 
@@ -4158,8 +4143,7 @@ void LogRejectedLocalFittingClusterDiagnostics(
                 message << " (raw)";
             }
 
-            if (diagnostic.status ==
-                LocalFittingObjectiveAttemptDiagnosticStatus::InvalidModel)
+            if (diagnostic.status == LocalFittingObjectiveAttemptDiagnosticStatus::InvalidModel)
             {
                 message << ", status = invalid-model";
                 if (!diagnostic.build_failure.has_value())
@@ -4332,7 +4316,6 @@ void LogLocalFittingBacktrackingStop(
 void LogLocalFittingProgress(
     const FitOptions & options,
     std::size_t accepted_iteration_count,
-    const LocalFittingCandidateAttempt & current_candidate_attempt,
     const algorithm::ConvergenceFreezeTracker & freeze_tracker,
     const LocalFittingClusterHealthSummary & health_summary,
     const LocalFittingTerminalSummary & terminal_summary,
@@ -4353,9 +4336,6 @@ void LogLocalFittingProgress(
     std::ostringstream progress_message;
     progress_message << "Iter. " << accepted_iteration_count
         << '/' << kLocalFittingMaximumIterations
-        << std::fixed << std::setprecision(4)
-        << ", acceleration = "<< GetLocalFittingCandidateText(current_candidate_attempt)
-        << ", damping = "<< current_candidate_attempt.damping
         << ", active/frozen atoms = "<< effective_active_count
         << "/" << freeze_tracker.GetFrozenCount();
     progress_message
@@ -4774,7 +4754,6 @@ void RunSecondStageLocalFitting(
     LogSecondStageSeedRepairs(
         initial_state_build_result.repair_record_list,
         options);
-    auto local_editor_list{ BuildAtomLocalEditors(model_object, context.atom_list) };
     auto previous_state{ std::move(*initial_state_build_result.state) };
     auto best_audit_state{
         BuildInitialLocalFittingBestAuditState(context, previous_state)
@@ -4829,22 +4808,13 @@ void RunSecondStageLocalFitting(
         };
         if (active_index_list.empty())
         {
-            ApplyLocalFittingState(previous_state, local_editor_list);
-            if (terminal_summary.AtomCount() > 0)
-            {
-                LogLocalFittingTerminalFallback(
-                    options,
-                    accepted_iteration_count,
-                    terminal_summary,
-                    SummarizeLocalFittingOffsets(previous_state));
-            }
-            else
-            {
-                LogLocalFittingAllAtomsFrozen(
-                    options,
-                    accepted_iteration_count,
-                    SummarizeLocalFittingOffsets(previous_state));
-            }
+            FinishLocalFittingWithNoActiveAtoms(
+                model_object,
+                context,
+                previous_state,
+                options,
+                accepted_iteration_count,
+                terminal_summary);
             return;
         }
 
@@ -5031,31 +5001,47 @@ void RunSecondStageLocalFitting(
                     }),
                 suspicious_offset_state_index_list.end());
         }
-        const auto continuing_accepted_key_list{
-            ExcludeLocalFittingClusterKeys(
-                selection.accepted_key_list,
-                terminal_key_list)
+        const auto contains_cluster_key = [](
+            const std::vector<LocalFittingClusterKey> & key_list,
+            const LocalFittingClusterKey & key)
+        {
+            return std::find(key_list.begin(), key_list.end(), key) != key_list.end();
         };
-        const auto progress_eligible_accepted_key_list{
-            ExcludeLocalFittingClusterKeys(
-                continuing_accepted_key_list,
-                progress_ineligible_key_list)
-        };
-        const auto progress_eligible_key_list{
-            ExcludeLocalFittingClusterKeysContainingAtoms(
-                progress_eligible_accepted_key_list,
-                suspicious_offset_state_index_list)
-        };
-        const auto stationarity_eligible_accepted_key_list{
-            ExcludeLocalFittingClusterKeys(
-                continuing_accepted_key_list,
-                stationarity_ineligible_key_list)
-        };
-        const auto stationarity_eligible_key_list{
-            ExcludeLocalFittingClusterKeysContainingAtoms(
-                stationarity_eligible_accepted_key_list,
-                suspicious_offset_state_index_list)
-        };
+        std::vector<LocalFittingClusterKey> progress_eligible_key_list;
+        std::vector<LocalFittingClusterKey> stationarity_eligible_key_list;
+        std::vector<std::size_t> accepted_active_index_list;
+        std::vector<std::size_t> stationarity_eligible_active_index_list;
+        for (const auto & key : selection.accepted_key_list)
+        {
+            if (contains_cluster_key(terminal_key_list, key)) continue;
+
+            accepted_active_index_list.insert(
+                accepted_active_index_list.end(), key.begin(), key.end());
+            const auto contains_suspicious_atom{
+                std::any_of(
+                    key.begin(), key.end(),
+                    [&](std::size_t atom_index)
+                    {
+                        return std::binary_search(
+                            suspicious_offset_state_index_list.begin(),
+                            suspicious_offset_state_index_list.end(),
+                            atom_index);
+                    })
+            };
+            if (!contains_suspicious_atom &&
+                !contains_cluster_key(progress_ineligible_key_list, key))
+            {
+                progress_eligible_key_list.emplace_back(key);
+            }
+            if (!contains_suspicious_atom &&
+                !contains_cluster_key(stationarity_ineligible_key_list, key))
+            {
+                stationarity_eligible_key_list.emplace_back(key);
+                stationarity_eligible_active_index_list.insert(
+                    stationarity_eligible_active_index_list.end(),
+                    key.begin(), key.end());
+            }
+        }
         if (selection.accepted_key_list.empty())
         {
             bool increased_cluster_objective_ridge{ false };
@@ -5106,7 +5092,7 @@ void RunSecondStageLocalFitting(
                 applied_audit_state = &*best_audit_state.best_accepted;
                 applied_state = &best_audit_state.best_accepted->state;
             }
-            ApplyLocalFittingState(*applied_state, local_editor_list);
+            ApplyLocalFittingState(model_object, context, *applied_state);
             LogRejectedLocalFittingClusterDiagnostics(
                 options,
                 selection.rejected_cluster_diagnostic_list);
@@ -5172,18 +5158,6 @@ void RunSecondStageLocalFitting(
         anderson_regime_tracker.Commit(
             progress_eligible_key_list,
             current_anderson_regime_signature_by_key);
-        std::vector<std::size_t> accepted_active_index_list;
-        for (const auto & key : continuing_accepted_key_list)
-        {
-            accepted_active_index_list.insert(
-                accepted_active_index_list.end(), key.begin(), key.end());
-        }
-        std::vector<std::size_t> stationarity_eligible_active_index_list;
-        for (const auto & key : stationarity_eligible_key_list)
-        {
-            stationarity_eligible_active_index_list.insert(
-                stationarity_eligible_active_index_list.end(), key.begin(), key.end());
-        }
         freeze_tracker.Update(
             freeze_evidence_change_list,
             stationarity_eligible_active_index_list);
@@ -5205,7 +5179,6 @@ void RunSecondStageLocalFitting(
         LogLocalFittingProgress(
             options,
             accepted_iteration_count,
-            selection.accepted_candidate_attempt.value(),
             freeze_tracker,
             health_summary,
             terminal_summary,
@@ -5222,22 +5195,13 @@ void RunSecondStageLocalFitting(
                 freeze_tracker,
                 terminal_fallback_atom_mask).empty())
         {
-            ApplyLocalFittingState(assembled_state, local_editor_list);
-            if (terminal_summary.AtomCount() > 0)
-            {
-                LogLocalFittingTerminalFallback(
-                    options,
-                    accepted_iteration_count,
-                    terminal_summary,
-                    accepted_offset_stats);
-            }
-            else
-            {
-                LogLocalFittingAllAtomsFrozen(
-                    options,
-                    accepted_iteration_count,
-                    accepted_offset_stats);
-            }
+            FinishLocalFittingWithNoActiveAtoms(
+                model_object,
+                context,
+                assembled_state,
+                options,
+                accepted_iteration_count,
+                terminal_summary);
             return;
         }
 
@@ -5255,7 +5219,7 @@ void RunSecondStageLocalFitting(
         };
         if (converged)
         {
-            ApplyLocalFittingState(assembled_state, local_editor_list);
+            ApplyLocalFittingState(model_object, context, assembled_state);
             if (terminal_summary.AtomCount() > 0)
             {
                 LogLocalFittingTerminalFallback(
@@ -5284,7 +5248,7 @@ void RunSecondStageLocalFitting(
                 applied_audit_state = &*best_audit_state.best;
                 applied_state = &best_audit_state.best->state;
             }
-            ApplyLocalFittingState(*applied_state, local_editor_list);
+            ApplyLocalFittingState(model_object, context, *applied_state);
             LogLocalFittingMaximumIterations(
                 options,
                 applied_audit_state,

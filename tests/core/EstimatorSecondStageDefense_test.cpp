@@ -545,6 +545,29 @@ regime_detail::LocalFittingAndersonRegimeSignatureMap MakeAndersonRegimeSignatur
     };
 }
 
+std::size_t FindAcceptedCandidateCluster(
+    const std::string & output,
+    bool find_anderson)
+{
+    const std::string marker{ "accepted candidate clusters aa/fixed-point = " };
+    std::size_t search_position{ 0 };
+    while ((search_position = output.find(marker, search_position)) != std::string::npos)
+    {
+        const auto anderson_count_position{ search_position + marker.size() };
+        const auto separator_position{ output.find('/', anderson_count_position) };
+        if (separator_position == std::string::npos) return std::string::npos;
+        const auto count_position{
+            find_anderson ? anderson_count_position : separator_position + 1
+        };
+        if (count_position < output.size() && output.at(count_position) != '0')
+        {
+            return search_position;
+        }
+        search_position = separator_position + 1;
+    }
+    return std::string::npos;
+}
+
 } // namespace
 
 TEST(EstimatorSecondStageDefenseTest, SeedRepairUsesConfiguredFallbackPriority)
@@ -1459,8 +1482,7 @@ TEST(EstimatorSecondStageDefenseTest, PostRefitRollbackRestoresCompleteLongChain
         error_output.find(
             "terminal suspicious rollback fallback clusters/atoms = 1/5"),
         std::string::npos);
-    EXPECT_EQ(output.find("acceleration = aa"), std::string::npos);
-    EXPECT_EQ(output.find("acceleration = damped-aa"), std::string::npos);
+    EXPECT_EQ(FindAcceptedCandidateCluster(output, true), std::string::npos);
     EXPECT_EQ(output.find("Iter. 6/200"), std::string::npos);
     EXPECT_EQ(error_output.find("Reached maximum iteration size"), std::string::npos);
 }
@@ -1486,8 +1508,7 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingFallsBackWhenJoi
         error_output.find("terminal suspicious rollback fallback clusters/atoms = 1/1"),
         std::string::npos);
     EXPECT_EQ(error_output.find("Reached maximum iteration size"), std::string::npos);
-    EXPECT_EQ(output.find("acceleration = aa"), std::string::npos);
-    EXPECT_EQ(output.find("acceleration = damped-aa"), std::string::npos);
+    EXPECT_EQ(FindAcceptedCandidateCluster(output, true), std::string::npos);
     EXPECT_EQ(output.find("Converged after"), std::string::npos);
     EXPECT_EQ(
         error_output.find("Second-stage local fitting fallback summary:"),
@@ -1565,9 +1586,7 @@ TEST(EstimatorSecondStageDefenseTest, ClusterLocalHealthAllowsRemoteAndersonDuri
         output.find("joint-offset statuses clusters/atoms = "),
         std::string::npos);
     const auto first_anderson_position{
-        std::min(
-            output.find("acceleration = aa"),
-            output.find("acceleration = damped-aa"))
+        FindAcceptedCandidateCluster(output, true)
     };
     const auto terminal_position{
         output.find("terminal-suspicious atoms = 2")
@@ -1606,7 +1625,10 @@ TEST(EstimatorSecondStageDefenseTest, LocalRefitFallbackOnlyInvalidatesItsCluste
     EXPECT_NE(
         output.find("objective acc./rej. clusters = 2/0, atoms = 4/0"),
         std::string::npos);
-    EXPECT_NE(output.find("acceleration = aa"), std::string::npos);
+    EXPECT_NE(
+        output.find("accepted candidate clusters aa/fixed-point = 1/1"),
+        std::string::npos);
+    EXPECT_NE(FindAcceptedCandidateCluster(output, true), std::string::npos);
     EXPECT_EQ(
         error_output.find("terminal joint-offset failure fallback"),
         std::string::npos);
@@ -1623,7 +1645,7 @@ TEST(EstimatorSecondStageDefenseTest, LocalRefitFallbackOnlyInvalidatesItsCluste
         error_output.find("fixed audit objective residual/width/offset/total ="),
         std::string::npos);
     EXPECT_NE(
-        error_output.find("offsets finite/exact-zero ="),
+        error_output.find("offsets finite ="),
         std::string::npos);
     EXPECT_LT(
         CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4),
@@ -1670,7 +1692,7 @@ TEST(EstimatorSecondStageDefenseTest, MaximumIterationAuditPreservesTerminalFall
         error_output.find("fixed audit objective residual/width/offset/total ="),
         std::string::npos);
     EXPECT_NE(
-        error_output.find("offsets finite/exact-zero ="),
+        error_output.find("offsets finite ="),
         std::string::npos);
     EXPECT_NE(
         error_output.find(
@@ -1727,7 +1749,7 @@ TEST(EstimatorSecondStageDefenseTest, PersistentEmptySystemDoesNotBlockRemoteClu
         GetEstimateModel(*selected_atoms.front()),
         previous_empty_model,
         1.0e-12);
-    EXPECT_NE(output.find("acceleration = aa"), std::string::npos);
+    EXPECT_NE(FindAcceptedCandidateCluster(output, true), std::string::npos);
     EXPECT_NE(
         output.find("terminal-joint-offset-failure atoms = 1"),
         std::string::npos);
@@ -1804,9 +1826,7 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingAcceptsRemoteClu
     EXPECT_LT(
         CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4),
         initial_right_error);
-    EXPECT_TRUE(
-        output.find("acceleration = aa") != std::string::npos ||
-        output.find("acceleration = damped-aa") != std::string::npos);
+    EXPECT_NE(FindAcceptedCandidateCluster(output, true), std::string::npos);
     EXPECT_NE(output.find("terminal-suspicious atoms = 2"), std::string::npos);
     EXPECT_NE(
         error_output.find("terminal suspicious rollback fallback clusters/atoms = 1/2"),
@@ -1867,13 +1887,10 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingUsesFixedPointWh
     Logger::SetLogLevel(previous_log_level);
 
     EXPECT_NE(
-        output.find("acceleration = damped-fixed-point"),
+        FindAcceptedCandidateCluster(output, false),
         std::string::npos);
     EXPECT_NE(
         output.find("offset dQ_C p99 raw/accept ="),
-        std::string::npos);
-    EXPECT_NE(
-        output.find("exact-zero offsets raw/accept ="),
         std::string::npos);
     EXPECT_NE(
         output.find("objective acc./rej. clusters = 1/0, atoms = 2/0"),
@@ -1943,11 +1960,8 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingKeepsRidgeRetryO
             output.find("offset dQ_C p99 raw =", retry_position),
             std::string::npos);
         EXPECT_NE(
-            output.find("exact-zero offsets raw =", retry_position),
-            std::string::npos);
-        EXPECT_NE(
             output.find(
-                "objective accepted/rejected clusters = 0/1, atoms = 0/2",
+                "objective acc./rej. clusters = 0/1, atoms = 0/2",
                 retry_position),
             std::string::npos);
     }

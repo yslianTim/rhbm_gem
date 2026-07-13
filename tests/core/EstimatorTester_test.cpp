@@ -530,6 +530,29 @@ void ExpectSelectedAtomUpdatedSamplesArePresent(const rg::ModelObject & model_ob
     }
 }
 
+std::size_t FindAcceptedCandidateCluster(
+    const std::string & output,
+    bool find_anderson)
+{
+    const std::string marker{ "accepted candidate clusters aa/fixed-point = " };
+    std::size_t search_position{ 0 };
+    while ((search_position = output.find(marker, search_position)) != std::string::npos)
+    {
+        const auto anderson_count_position{ search_position + marker.size() };
+        const auto separator_position{ output.find('/', anderson_count_position) };
+        if (separator_position == std::string::npos) return std::string::npos;
+        const auto count_position{
+            find_anderson ? anderson_count_position : separator_position + 1
+        };
+        if (count_position < output.size() && output.at(count_position) != '0')
+        {
+            return search_position;
+        }
+        search_position = separator_position + 1;
+    }
+    return std::string::npos;
+}
+
 } // namespace
 
 TEST(EstimatorTesterTest, RunLocalEstimationTestPopulatesBiasOutputs)
@@ -692,13 +715,13 @@ TEST(EstimatorTesterTest, RunPotentialFittingWorkflowStoresUpdatedSamplingEntrie
     ExpectSelectedAtomUpdatedSamplesArePresent(*model);
     ExpectSelectedAtomEstimatesAreFinite(*model);
     EXPECT_NE(
-        output.find("Offset summary after 2nd-stage local fitting; offsets finite/exact-zero ="),
+        output.find("Offset summary after 2nd-stage local fitting; offsets finite ="),
         std::string::npos);
     EXPECT_NE(
-        output.find("Offset summary for group priors before 3rd-stage local fitting; offsets finite/exact-zero ="),
+        output.find("Offset summary for group priors before 3rd-stage local fitting; offsets finite ="),
         std::string::npos);
     EXPECT_NE(
-        output.find("Offset summary after 3rd-stage local fitting; offsets finite/exact-zero ="),
+        output.find("Offset summary after 3rd-stage local fitting; offsets finite ="),
         std::string::npos);
     EXPECT_NE(output.find("Group fitting prior summary by Spot:"), std::string::npos);
     EXPECT_NE(output.find("Spot::C , amplitude mean ="), std::string::npos);
@@ -737,9 +760,7 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingLogsAndersonAccelerationMode
     const std::string error_output{ testing::internal::GetCapturedStderr() };
     Logger::SetLogLevel(previous_log_level);
 
-    EXPECT_TRUE(
-        output.find("acceleration = aa") != std::string::npos ||
-        output.find("acceleration = damped-aa") != std::string::npos);
+    EXPECT_NE(FindAcceptedCandidateCluster(output, true), std::string::npos);
     EXPECT_EQ(
         output.find("objective ="),
         std::string::npos);
@@ -756,7 +777,7 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingLogsAndersonAccelerationMode
         output.find("switching from Anderson acceleration"),
         std::string::npos);
     EXPECT_NE(
-        output.find("acceleration = damped-fixed-point"),
+        FindAcceptedCandidateCluster(output, false),
         std::string::npos);
     EXPECT_EQ(
         error_output.find("best fixed-point candidate"),
@@ -792,9 +813,7 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingKeepsAndersonAccelerationWit
     };
     const auto tolerance{ 1.0e-3 * std::max(initial_error, 1.0) };
     EXPECT_LE(fitted_error, initial_error + tolerance);
-    EXPECT_TRUE(
-        output.find("acceleration = aa") != std::string::npos ||
-        output.find("acceleration = damped-aa") != std::string::npos);
+    EXPECT_NE(FindAcceptedCandidateCluster(output, true), std::string::npos);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
@@ -818,9 +837,7 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingAcceptsSeparatedClusterWithR
         CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4)
     };
     EXPECT_LT(fitted_right_cluster_error, initial_right_cluster_error);
-    EXPECT_TRUE(
-        output.find("acceleration = aa") != std::string::npos ||
-        output.find("acceleration = damped-aa") != std::string::npos);
+    EXPECT_NE(FindAcceptedCandidateCluster(output, true), std::string::npos);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
