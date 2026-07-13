@@ -43,8 +43,9 @@ Rejected iterations keep the previous state.
 
 Before constructing `previous_state`, the stage validates every local MDPDE
 model with the same rule used by refit and objective evaluation: amplitude and
-width must be finite and positive, and offset must be finite. An invalid local
-MDPDE shape is repaired only in the internal second-stage state. The shape
+width must be finite and positive, offset must be finite, and the transformed
+coordinates must be representable. An invalid local MDPDE shape is repaired
+only in the internal second-stage state. The shape
 source order is atom-specific group posterior, group prior, local OLS,
 same-group valid-model parameter median, then global valid-model parameter
 median. A finite original local offset is retained; otherwise the selected
@@ -116,7 +117,11 @@ their prior offsets. Its effective multiplier is the maximum of three sources:
 The joint offset builder also applies a per-solve collinearity guard. If two
 active offset-basis columns have normalized overlap at least
 `kJointOffsetCollinearityOverlapThreshold`, both receive a local ridge
-multiplier for that solve.
+multiplier for that solve. A second full-matrix guard column-normalizes the
+sparse design, factorizes its Gram matrix, and applies the same proactive ridge
+to the complete cluster when factorization fails, a column is empty, or the
+normalized LDLT pivot ratio is at most `1.0e-8`. This catches multi-column
+dependencies that do not exceed the pairwise threshold.
 
 Robust-loss weights are updated by IRLS. The source-local
 `kSecondStageRobustLossKind` policy is currently Cauchy and is shared with the
@@ -183,12 +188,14 @@ cluster restores its previous validated model and result. This guarantees that
 no retained refit was built from a neighbor snapshot that no longer exists.
 Other active clusters keep their provisional refits.
 
-Refit health is stricter than candidate usability. A finite, plausible result
-with `SUCCESS` or `MAX_ITERATIONS_REACHED` is health-eligible. A result with
+Refit health separates progress from stationarity. A finite, plausible result
+with `SUCCESS` or `MAX_ITERATIONS_REACHED` is progress-eligible, but only
+`SUCCESS` is stationarity-eligible. A result with
 `NUMERICAL_FALLBACK`, `INSUFFICIENT_DATA`, or `SINGLE_MEMBER`, a missing fit
-result, an exception fallback, or reuse of the previous result marks the complete
-active cluster unhealthy. Its finite candidate can still pass the objective
-gate, but it cannot be used as stability evidence.
+result, an exception fallback, or reuse of the previous result is eligible for
+neither. Progress-eligible results may pass the objective gate and retain their
+cluster history, while stationarity-ineligible results cannot freeze or provide
+convergence evidence.
 
 Post-refit affected clusters clear and suppress Anderson history before
 candidate construction, so their raw fallback cannot be replaced by an
@@ -239,14 +246,14 @@ pre-refit or post-refit suspicious rollback clears its containing cluster before
 candidate construction. Compatible healthy remote clusters retain their
 histories.
 
-Residuals are scaled per parameter using the normalized-change scale floor.
-The coefficient solve includes L2 regularization and rejects candidates whose
+Anderson inputs and fixed-point outputs are encoded as log peak height, log
+width, and offset-to-peak ratio. The coefficient solve includes L2
+regularization and rejects candidates whose
 coefficient L1 norm or maximum absolute coefficient exceeds the configured
 limits. A rejected coefficient solve is not fatal; that cluster simply has no
 Anderson candidate for the attempt and can continue through damped fixed-point
-fallback. Candidate construction is structural; the damped candidate that would
-actually be applied must still have finite active parameters and positive active
-widths.
+fallback. Candidate construction is structural; transformed candidates must be
+finite and decode to finite models with positive amplitude and width.
 
 Each outer iteration tries damping values `1.0`, `0.5`, `0.25`, `0.125`, and
 `0.0625`. Anderson attempts run first for clusters that have a localized
@@ -258,9 +265,11 @@ damped = previous + damping * (candidate - previous)
 ```
 
 Both candidate kinds use the same `BuildLocalFittingCandidateState` path. The
-builder copies the previous fitting state, applies the damped values, and
+builder performs the displayed interpolation in transformed coordinates,
+decodes the result to the canonical raw `[amplitude, width, offset]` state, and
 returns an `std::optional<GaussianFittingState>` containing the complete
-candidate only when every changed model is finite and has positive width.
+candidate only when every changed model is valid. Exact transformed no-op
+candidates retain the previous raw model without a round-trip conversion.
 Fixed-point candidates retain raw refit uncertainty;
 Anderson candidates retain uncertainty from the previous accepted state.
 Accepted clusters copy only their active atoms from that candidate into the
@@ -274,7 +283,9 @@ policy as joint-offset IRLS, then adds conservative parameter plausibility
 penalties for width drift from the group prior or local group median, offset
 dominance over the local peak, and single-step movement from the atom/model
 snapshot stored with the previous objective candidate. The movement-reference
-snapshot is validated against the current active atom indexes before use. The
+snapshot is validated against the current active atom indexes before use.
+Movement is measured in the same log-peak-height, log-width, and
+offset-to-peak-ratio coordinates used by acceleration and convergence. The
 movement penalty is used only for the current acceptance gate; committed
 previous and best objective references keep the residual, width-prior, and
 offset-plausibility terms so a one-step movement surcharge does not permanently
@@ -393,12 +404,13 @@ while disconnected healthy clusters continue fitting.
 Parameter convergence requires:
 
 - no suspicious offset rollback in the accepted iteration;
-- every active cluster to have a converged joint-offset solve and no explicit
-  local-refit fallback;
+- every active cluster to have a converged joint-offset solve and a
+  stationarity-eligible local refit;
 - no cluster objective rejection in the accepted iteration;
 - all active cluster objective scale references to be locked when present; and
-- each active-set accepted transformed change percentile and raw fixed-point
-  residual percentile below `kLocalFittingTransformedChangeTolerance`.
+- each active-set accepted transformed change and raw fixed-point residual to
+  have p99 below `1.0e-4` and maximum below `1.0e-3` for every transformed
+  component.
 
 Raw residual is used only for freeze and parameter convergence. Dependency
 thaw, objective tie-breaking, persistent suspicious or solver no-progress, and
@@ -411,32 +423,14 @@ retry line reports every joint status as
 `joint-offset statuses clusters/atoms = status:C/A`, reports strict health as
 `health-unhealthy clusters/atoms = C/A`, counts non-stationary joint reasons in
 enum order such as `joint-offset = system-build-failed:1`, and reports refit fallbacks as
-`local-refit-fallback clusters/atoms = C/A`. No separate per-iteration warning
-or fallback summary is emitted.
+`local-refit-fallback clusters/atoms = C/A`. Stationarity-ineligible refits are
+reported as `local-refit-nonstationary clusters/atoms = C/A`. No separate
+per-iteration warning or fallback summary is emitted.
 
-Developers can disable only this health policy through the non-installed stage
-interface:
-
-```cpp
-RunSecondStageLocalFitting(
-    model,
-    fit_options,
-    SecondStageLocalFittingInternalOptions{ false });
-```
-
-The option field is `enable_end_to_end_health_status` and defaults to enabled,
-including every production workflow call that omits the internal options. When
-disabled, joint and refit health are still computed and the current safe
-fallbacks remain in force, but health does not reset freeze stability, block
-freeze/ridge/history updates or convergence, or appear in progress output.
-Persistent joint-offset failure tracking and its terminal fallback are also
-disabled, preserving the healthless lifecycle for A/B diagnostics.
-Ridge-regime compatibility still applies to clusters whose system build
-produced a signature. A cluster with no signature follows the legacy history
-path without health-driven clearing. Suspicious rollback, its terminal fallback,
-and objective rejection policies remain active. This switch is intended only
-for controlled A/B diagnostics; it is not exposed through `FitOptions`,
-commands, CMake, or environment variables.
+This end-to-end health lifecycle is always applied by
+`RunSecondStageLocalFitting`; it is not separately configurable through the
+internal stage interface, `FitOptions`, commands, CMake, or environment
+variables.
 
 ## Maximum-Iteration Audit State
 
@@ -462,9 +456,8 @@ damping policies are unchanged.
 
 Every complete assembled state with at least one objective-gated accepted
 cluster can compete, including partial or unhealthy iterations. The tracker
-records whether its best state came from the initial state or an accepted
-iteration, together with residual, width, offset, and total objective
-components. A candidate replaces the stored complete `GaussianFittingState`
+keeps both the global best, which may be the initial state, and the best state
+drawn only from accepted iterations. A candidate replaces either tracked state
 only when its finite objective improves beyond the objective-tie tolerance;
 ties retain the earlier state.
 
@@ -489,9 +482,10 @@ The loop exits through one of five terminal cases:
   converge, apply the assembled state and emit one warning with reason-specific
   terminal cluster/atom counts instead of reporting whole-stage convergence.
 - **Objective backtracking failure:** when all acceleration and fixed-point
-  attempts are rejected at the maximum global ridge, apply the previous state.
-  If the final rejection instead reaches the outer iteration limit, apply the
-  best validated audit state when available.
+  attempts are rejected at the maximum global ridge, apply the best validated
+  accepted-iteration audit state when available, otherwise apply the previous
+  state. If the final rejection instead reaches the outer iteration limit,
+  apply the global best validated audit state when available.
 - **Maximum iterations reached:** after an accepted final iteration, apply the
   best validated audit state when available; otherwise preserve the current
   accepted assembled-state fallback.
@@ -527,8 +521,9 @@ zero movement penalty. `rejected-by` identifies whether the existing tolerance
 comparison failed against previous, best, or both. Invalid damped models and
 unavailable objectives are labeled without fabricated component values. An
 invalid-model entry also reports the first failing atom, whether the failure is
-parameter-size, non-finite-parameter, or non-positive-width, and the damped
-`A/B/C` values when their structure is valid. These
+parameter-size, non-finite-parameter, invalid-transformed-coordinates, or
+non-positive-width, and the candidate `u/v/q` values when their structure is
+valid. These
 diagnostics observe the existing gate only; they do not change objective
 weights, scale tracking, damping, or acceptance.
 

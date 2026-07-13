@@ -5,6 +5,8 @@
 
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
+#include "core/detail/LocalFittingTransformedChange.hpp"
+
 namespace rhbm_gem::core::detail {
 
 enum class SecondStageSeedRepairSource
@@ -35,7 +37,8 @@ inline bool IsValidSecondStageGaussianModel(const GaussianModel3D & model)
 {
     return std::isfinite(model.GetAmplitude()) && model.GetAmplitude() > 0.0 &&
         std::isfinite(model.GetWidth()) && model.GetWidth() > 0.0 &&
-        std::isfinite(model.GetOffset());
+        std::isfinite(model.GetOffset()) &&
+        BuildLocalFittingTransformedCoordinates(model).has_value();
 }
 
 inline std::optional<SecondStageSeedRepairSelection> SelectSecondStageSeedRepair(

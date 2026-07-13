@@ -14,6 +14,7 @@
 #include "core/detail/LocalFittingAudit.hpp"
 #include "core/detail/LocalFittingAndersonRegime.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
+#include "core/detail/LocalFittingJointOffsetConditioning.hpp"
 #include "core/detail/LocalFittingSeedRepair.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
 #include "core/detail/PostRefitRollback.hpp"
@@ -30,6 +31,7 @@ namespace {
 namespace alg = rhbm_gem::algorithm;
 namespace audit_detail = rhbm_gem::core::detail;
 namespace change_detail = rhbm_gem::core::detail;
+namespace conditioning_detail = rhbm_gem::core::detail;
 namespace health_detail = rhbm_gem::core::detail;
 namespace regime_detail = rhbm_gem::core::detail;
 namespace rollback_detail = rhbm_gem::core::detail;
@@ -163,7 +165,8 @@ std::unique_ptr<rg::ModelObject> BuildDefenseModel(
     return model;
 }
 
-std::unique_ptr<rg::ModelObject> BuildNearCollinearDefenseModel()
+std::unique_ptr<rg::ModelObject> BuildNearCollinearDefenseModel(
+    double intensity_scale = 1.0)
 {
     return BuildDefenseModel(
         {
@@ -173,10 +176,10 @@ std::unique_ptr<rg::ModelObject> BuildNearCollinearDefenseModel()
         { Spot::C, Spot::O },
         { Element::CARBON, Element::OXYGEN },
         {
-            rg::GaussianModel3D{ 6.0, 0.55, 0.20 },
-            rg::GaussianModel3D{ 5.5, 0.55, -0.15 }
+            rg::GaussianModel3D{ 6.0 * intensity_scale, 0.55, 0.20 * intensity_scale },
+            rg::GaussianModel3D{ 5.5 * intensity_scale, 0.55, -0.15 * intensity_scale }
         },
-        rg::GaussianModel3D{ 5.75, 0.55, 0.0 });
+        rg::GaussianModel3D{ 5.75 * intensity_scale, 0.55, 0.0 });
 }
 
 std::unique_ptr<rg::ModelObject> BuildInvalidCandidateDefenseModel()
@@ -872,20 +875,76 @@ TEST(EstimatorSecondStageDefenseTest, AndersonRegimeInvalidatesOnlyAffectedHisto
         after_recommit->used_cluster_key_list.end());
 }
 
-TEST(EstimatorSecondStageDefenseTest, LocalRefitHealthAcceptsOnlyUsableFitStatuses)
+TEST(EstimatorSecondStageDefenseTest, JointOffsetConditioningDetectsJointDependence)
 {
-    EXPECT_TRUE(health_detail::IsLocalGaussianRefitStatusHealthEligible(
+    Eigen::SparseMatrix<double> design_matrix{ 3, 3 };
+    const std::vector<Eigen::Triplet<double>> entries{
+        { 0, 0, 1.0 }, { 0, 2, 1.0 },
+        { 1, 1, 1.0 }, { 1, 2, 1.0 },
+        { 2, 0, 1.0 }, { 2, 1, 1.0 }, { 2, 2, 2.0 }
+    };
+    design_matrix.setFromTriplets(entries.begin(), entries.end());
+
+    const Eigen::MatrixXd dense{ design_matrix };
+    for (Eigen::Index left = 0; left < dense.cols(); left++)
+    {
+        for (Eigen::Index right = left + 1; right < dense.cols(); right++)
+        {
+            const auto overlap{
+                std::abs(dense.col(left).dot(dense.col(right))) /
+                (dense.col(left).norm() * dense.col(right).norm())
+            };
+            EXPECT_LT(overlap, 0.98);
+        }
+    }
+
+    const auto diagnostics{
+        conditioning_detail::EvaluateLocalFittingJointOffsetConditioning(
+            design_matrix,
+            1.0e-8)
+    };
+    EXPECT_TRUE(diagnostics.guard_required);
+    EXPECT_LE(diagnostics.pivot_ratio, 1.0e-8);
+}
+
+TEST(EstimatorSecondStageDefenseTest, JointOffsetConditioningKeepsIndependentColumns)
+{
+    Eigen::SparseMatrix<double> design_matrix{ 3, 3 };
+    design_matrix.setIdentity();
+
+    const auto diagnostics{
+        conditioning_detail::EvaluateLocalFittingJointOffsetConditioning(
+            design_matrix,
+            1.0e-8)
+    };
+    EXPECT_FALSE(diagnostics.guard_required);
+    EXPECT_NEAR(diagnostics.pivot_ratio, 1.0, 1.0e-12);
+}
+
+TEST(EstimatorSecondStageDefenseTest, LocalRefitHealthSeparatesProgressFromStationarity)
+{
+    EXPECT_TRUE(health_detail::IsLocalGaussianRefitStatusProgressEligible(
         rg::RHBMEstimationStatus::SUCCESS));
-    EXPECT_TRUE(health_detail::IsLocalGaussianRefitStatusHealthEligible(
+    EXPECT_TRUE(health_detail::IsLocalGaussianRefitStatusStationarityEligible(
+        rg::RHBMEstimationStatus::SUCCESS));
+    EXPECT_TRUE(health_detail::IsLocalGaussianRefitStatusProgressEligible(
         rg::RHBMEstimationStatus::MAX_ITERATIONS_REACHED));
-    EXPECT_FALSE(health_detail::IsLocalGaussianRefitStatusHealthEligible(
-        rg::RHBMEstimationStatus::NUMERICAL_FALLBACK));
-    EXPECT_FALSE(health_detail::IsLocalGaussianRefitStatusHealthEligible(
-        rg::RHBMEstimationStatus::INSUFFICIENT_DATA));
-    EXPECT_FALSE(health_detail::IsLocalGaussianRefitStatusHealthEligible(
-        rg::RHBMEstimationStatus::SINGLE_MEMBER));
+    EXPECT_FALSE(health_detail::IsLocalGaussianRefitStatusStationarityEligible(
+        rg::RHBMEstimationStatus::MAX_ITERATIONS_REACHED));
+    for (const auto status : {
+        rg::RHBMEstimationStatus::NUMERICAL_FALLBACK,
+        rg::RHBMEstimationStatus::INSUFFICIENT_DATA,
+        rg::RHBMEstimationStatus::SINGLE_MEMBER })
+    {
+        EXPECT_FALSE(health_detail::IsLocalGaussianRefitStatusProgressEligible(status));
+        EXPECT_FALSE(health_detail::IsLocalGaussianRefitStatusStationarityEligible(status));
+    }
     EXPECT_THROW(
-        health_detail::IsLocalGaussianRefitStatusHealthEligible(
+        health_detail::IsLocalGaussianRefitStatusProgressEligible(
+            static_cast<rg::RHBMEstimationStatus>(-1)),
+        std::logic_error);
+    EXPECT_THROW(
+        health_detail::IsLocalGaussianRefitStatusStationarityEligible(
             static_cast<rg::RHBMEstimationStatus>(-1)),
         std::logic_error);
 }
@@ -974,6 +1033,89 @@ TEST(EstimatorSecondStageDefenseTest, TransformedChangeIsIntensityScaleInvariant
     }
 }
 
+TEST(EstimatorSecondStageDefenseTest, TransformedCoordinatesRoundTrip)
+{
+    const rg::GaussianModel3D model{ 8.5, 0.65, -0.12 };
+    const auto encoded{
+        change_detail::EncodeLocalFittingTransformedCoordinates(model)
+    };
+    ASSERT_TRUE(encoded.has_value());
+
+    const auto decoded{
+        change_detail::DecodeLocalFittingTransformedCoordinates(*encoded)
+    };
+    ASSERT_TRUE(decoded.has_value());
+    ExpectGaussianModelsNear(model, *decoded, 1.0e-12);
+}
+
+TEST(EstimatorSecondStageDefenseTest, TransformedDampingIsIntensityScaleInvariant)
+{
+    const rg::GaussianModel3D previous{ 8.0, 0.50, -0.10 };
+    const rg::GaussianModel3D current{ 9.0, 0.60, -0.15 };
+    constexpr double damping{ 0.25 };
+
+    const auto damp = [&](const rg::GaussianModel3D & lhs,
+                          const rg::GaussianModel3D & rhs)
+    {
+        const auto lhs_coordinates{
+            change_detail::EncodeLocalFittingTransformedCoordinates(lhs)
+        };
+        const auto rhs_coordinates{
+            change_detail::EncodeLocalFittingTransformedCoordinates(rhs)
+        };
+        EXPECT_TRUE(lhs_coordinates.has_value());
+        EXPECT_TRUE(rhs_coordinates.has_value());
+        return change_detail::DecodeLocalFittingTransformedCoordinates(
+            *lhs_coordinates + damping * (*rhs_coordinates - *lhs_coordinates));
+    };
+
+    const auto base{ damp(previous, current) };
+    ASSERT_TRUE(base.has_value());
+    for (const auto scale : { 1.0e-2, 1.0e2 })
+    {
+        const auto scaled{
+            damp(
+                rg::GaussianModel3D{
+                    previous.GetAmplitude() * scale,
+                    previous.GetWidth(),
+                    previous.GetOffset() * scale
+                },
+                rg::GaussianModel3D{
+                    current.GetAmplitude() * scale,
+                    current.GetWidth(),
+                    current.GetOffset() * scale
+                })
+        };
+        ASSERT_TRUE(scaled.has_value());
+        EXPECT_NEAR(base->GetAmplitude() * scale, scaled->GetAmplitude(), 1.0e-10);
+        EXPECT_NEAR(base->GetWidth(), scaled->GetWidth(), 1.0e-12);
+        EXPECT_NEAR(base->GetOffset() * scale, scaled->GetOffset(), 1.0e-12);
+    }
+}
+
+TEST(EstimatorSecondStageDefenseTest, TransformedExtrapolationKeepsPositiveShape)
+{
+    const auto left{
+        change_detail::EncodeLocalFittingTransformedCoordinates(
+            rg::GaussianModel3D{ 8.0, 0.50, -0.10 })
+    };
+    const auto right{
+        change_detail::EncodeLocalFittingTransformedCoordinates(
+            rg::GaussianModel3D{ 9.0, 0.60, -0.15 })
+    };
+    ASSERT_TRUE(left.has_value());
+    ASSERT_TRUE(right.has_value());
+
+    const auto extrapolated{
+        change_detail::DecodeLocalFittingTransformedCoordinates(
+            2.0 * *right - *left)
+    };
+    ASSERT_TRUE(extrapolated.has_value());
+    EXPECT_GT(extrapolated->GetAmplitude(), 0.0);
+    EXPECT_GT(extrapolated->GetWidth(), 0.0);
+    EXPECT_TRUE(std::isfinite(extrapolated->GetOffset()));
+}
+
 TEST(EstimatorSecondStageDefenseTest, TransformedChangeSeparatesPeakHeightAndWidth)
 {
     const auto change{
@@ -1015,6 +1157,7 @@ TEST(EstimatorSecondStageDefenseTest, InvalidTransformedCoordinatesProduceInfini
 
     for (const auto & invalid_model : invalid_model_list)
     {
+        EXPECT_FALSE(seed_detail::IsValidSecondStageGaussianModel(invalid_model));
         const auto change{
             change_detail::CalculateLocalFittingTransformedChange(
                 invalid_model,
@@ -1026,6 +1169,38 @@ TEST(EstimatorSecondStageDefenseTest, InvalidTransformedCoordinatesProduceInfini
             EXPECT_TRUE(std::isinf(value));
         }
     }
+}
+
+TEST(EstimatorSecondStageDefenseTest, TransformedConvergenceRejectsHiddenMaximumTail)
+{
+    std::vector<alg::ParameterChange> change_list(
+        1000,
+        alg::ParameterChange{ std::vector<double>(3, 0.0) });
+    change_list.back().value_list.at(change_detail::kLogPeakHeightChangeIndex) =
+        2.0e-3;
+    std::vector<std::size_t> index_list(change_list.size());
+    for (std::size_t i = 0; i < index_list.size(); i++)
+    {
+        index_list.at(i) = i;
+    }
+
+    const auto percentile_stats{
+        alg::SummarizeParameterChangeStats(change_list, index_list, 0.99)
+    };
+    const auto maximum_list{
+        change_detail::SummarizeLocalFittingMaximumTransformedChanges(
+            change_list,
+            index_list)
+    };
+    EXPECT_LT(
+        percentile_stats.percentile_list.at(
+            change_detail::kLogPeakHeightChangeIndex),
+        1.0e-4);
+    EXPECT_FALSE(change_detail::IsLocalFittingTransformedChangeConverged(
+        percentile_stats,
+        maximum_list,
+        1.0e-4,
+        1.0e-3));
 }
 
 TEST(EstimatorSecondStageDefenseTest, FreezeUsesTransformedRatherThanAbsoluteMovement)
@@ -1318,92 +1493,11 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingReportsEmptyJoin
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
-TEST(EstimatorSecondStageDefenseTest, ExplicitlyEnabledHealthPolicyMatchesDefault)
-{
-    auto default_model{ BuildEmptyJointOffsetDefenseModel() };
-    auto explicitly_enabled_model{ BuildEmptyJointOffsetDefenseModel() };
-
-    rt::RunSecondStageLocalFitting(
-        *default_model,
-        MakeSecondStageOptions());
-    rt::RunSecondStageLocalFitting(
-        *explicitly_enabled_model,
-        MakeSecondStageOptions(),
-        rt::SecondStageLocalFittingInternalOptions{ true });
-
-    ExpectGaussianModelsNear(
-        GetEstimateModel(*default_model->GetSelectedAtoms().front()),
-        GetEstimateModel(*explicitly_enabled_model->GetSelectedAtoms().front()),
-        1.0e-12);
-}
-
-TEST(EstimatorSecondStageDefenseTest, DisabledHealthPolicyRestoresEmptySystemLegacyProgress)
-{
-    auto model{ BuildEmptyJointOffsetDefenseModel() };
-    auto * atom{ model->GetSelectedAtoms().front() };
-    const auto previous_offset{ GetEstimateModel(*atom).GetOffset() };
-
-    const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
-    rt::RunSecondStageLocalFitting(
-        *model,
-        MakeSecondStageOptions(false),
-        rt::SecondStageLocalFittingInternalOptions{ false });
-    const std::string output{ testing::internal::GetCapturedStdout() };
-    const std::string error_output{ testing::internal::GetCapturedStderr() };
-    Logger::SetLogLevel(previous_log_level);
-
-    EXPECT_EQ(output.find("joint-offset ="), std::string::npos);
-    EXPECT_EQ(
-        output.find("terminal-joint-offset-failure atoms"),
-        std::string::npos);
-    EXPECT_EQ(
-        error_output.find("terminal joint-offset failure fallback"),
-        std::string::npos);
-    EXPECT_NE(output.find("Converged after"), std::string::npos);
-    EXPECT_EQ(error_output.find("Reached maximum iteration size"), std::string::npos);
-    EXPECT_NEAR(GetEstimateModel(*atom).GetOffset(), previous_offset, 1.0e-12);
-    ExpectSelectedAtomEstimatesAreFinite(*model);
-}
-
-TEST(EstimatorSecondStageDefenseTest, DisabledHealthPolicyKeepsSystemBuildFallbackInternal)
-{
-    auto model{ BuildNonFiniteJointOffsetDefenseModel() };
-    auto * atom{ model->GetSelectedAtoms().front() };
-    const auto previous_model{ GetEstimateModel(*atom) };
-
-    const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
-    rt::RunSecondStageLocalFitting(
-        *model,
-        MakeSecondStageOptions(false),
-        rt::SecondStageLocalFittingInternalOptions{ false });
-    const std::string output{ testing::internal::GetCapturedStdout() };
-    const std::string error_output{ testing::internal::GetCapturedStderr() };
-    Logger::SetLogLevel(previous_log_level);
-
-    ExpectGaussianModelsNear(GetEstimateModel(*atom), previous_model, 1.0e-12);
-    EXPECT_EQ(output.find("joint-offset ="), std::string::npos);
-    EXPECT_NE(
-        error_output.find("terminal suspicious rollback fallback clusters/atoms = 1/1"),
-        std::string::npos);
-    EXPECT_EQ(
-        error_output.find("terminal joint-offset failure fallback"),
-        std::string::npos);
-    EXPECT_EQ(error_output.find("Reached maximum iteration size"), std::string::npos);
-    ExpectSelectedAtomEstimatesAreFinite(*model);
-}
-
 TEST(EstimatorSecondStageDefenseTest, ClusterLocalHealthAllowsRemoteAndersonDuringFallback)
 {
-    auto enabled_model{ BuildSeparatedSystemBuildFailureDefenseModel() };
-    auto disabled_model{ BuildSeparatedSystemBuildFailureDefenseModel() };
-    const auto disabled_initial_remote_error{
-        CalculateSelectedAtomResponseMeanSquaredError(*disabled_model, 2, 4)
+    auto model{ BuildSeparatedSystemBuildFailureDefenseModel() };
+    const auto initial_remote_error{
+        CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4)
     };
 
     const auto previous_log_level{ Logger::GetLogLevel() };
@@ -1411,64 +1505,36 @@ TEST(EstimatorSecondStageDefenseTest, ClusterLocalHealthAllowsRemoteAndersonDuri
     testing::internal::CaptureStdout();
     testing::internal::CaptureStderr();
     rt::RunSecondStageLocalFitting(
-        *enabled_model,
+        *model,
         MakeSecondStageOptions(false));
-    const std::string enabled_output{ testing::internal::GetCapturedStdout() };
-    static_cast<void>(testing::internal::GetCapturedStderr());
-
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
-    rt::RunSecondStageLocalFitting(
-        *disabled_model,
-        MakeSecondStageOptions(false),
-        rt::SecondStageLocalFittingInternalOptions{ false });
-    const std::string disabled_output{ testing::internal::GetCapturedStdout() };
+    const std::string output{ testing::internal::GetCapturedStdout() };
     static_cast<void>(testing::internal::GetCapturedStderr());
     Logger::SetLogLevel(previous_log_level);
 
     EXPECT_NE(
-        enabled_output.find("joint-offset = system-build-failed"),
+        output.find("joint-offset = system-build-failed"),
         std::string::npos);
     EXPECT_NE(
-        enabled_output.find("health-unhealthy clusters/atoms = 1/2"),
+        output.find("health-unhealthy clusters/atoms = 1/2"),
         std::string::npos);
     EXPECT_NE(
-        enabled_output.find("joint-offset statuses clusters/atoms = "),
+        output.find("joint-offset statuses clusters/atoms = "),
         std::string::npos);
-    EXPECT_EQ(disabled_output.find("joint-offset ="), std::string::npos);
-    EXPECT_EQ(
-        disabled_output.find("joint-offset statuses clusters/atoms = "),
-        std::string::npos);
-    EXPECT_EQ(
-        disabled_output.find("health-unhealthy clusters/atoms"),
-        std::string::npos);
-    const auto enabled_first_anderson_position{
+    const auto first_anderson_position{
         std::min(
-            enabled_output.find("acceleration = aa"),
-            enabled_output.find("acceleration = damped-aa"))
+            output.find("acceleration = aa"),
+            output.find("acceleration = damped-aa"))
     };
-    const auto disabled_first_anderson_position{
-        std::min(
-            disabled_output.find("acceleration = aa"),
-            disabled_output.find("acceleration = damped-aa"))
+    const auto terminal_position{
+        output.find("terminal-suspicious atoms = 2")
     };
-    const auto enabled_terminal_position{
-        enabled_output.find("terminal-suspicious atoms = 2")
-    };
-    const auto disabled_terminal_position{
-        disabled_output.find("terminal-suspicious atoms = 2")
-    };
-    ASSERT_NE(enabled_first_anderson_position, std::string::npos);
-    ASSERT_NE(disabled_first_anderson_position, std::string::npos);
-    ASSERT_NE(enabled_terminal_position, std::string::npos);
-    ASSERT_NE(disabled_terminal_position, std::string::npos);
-    EXPECT_LT(enabled_first_anderson_position, enabled_terminal_position);
-    EXPECT_LT(disabled_first_anderson_position, disabled_terminal_position);
+    ASSERT_NE(first_anderson_position, std::string::npos);
+    ASSERT_NE(terminal_position, std::string::npos);
+    EXPECT_LT(first_anderson_position, terminal_position);
     EXPECT_LT(
-        CalculateSelectedAtomResponseMeanSquaredError(*disabled_model, 2, 4),
-        disabled_initial_remote_error);
-    ExpectSelectedAtomEstimatesAreFinite(*enabled_model);
-    ExpectSelectedAtomEstimatesAreFinite(*disabled_model);
+        CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4),
+        initial_remote_error);
+    ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
 TEST(EstimatorSecondStageDefenseTest, LocalRefitFallbackOnlyInvalidatesItsClusterHealth)
@@ -1494,7 +1560,7 @@ TEST(EstimatorSecondStageDefenseTest, LocalRefitFallbackOnlyInvalidatesItsCluste
         output.find("local-refit-fallback clusters/atoms = 1/1"),
         std::string::npos);
     EXPECT_NE(
-        output.find("objective accepted/rejected clusters = 2/0, atoms = 4/0"),
+        output.find("objective acc./rej. clusters = 2/0, atoms = 4/0"),
         std::string::npos);
     EXPECT_NE(output.find("acceleration = aa"), std::string::npos);
     EXPECT_EQ(
@@ -1760,18 +1826,46 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingUsesFixedPointWh
         output.find("acceleration = damped-fixed-point"),
         std::string::npos);
     EXPECT_NE(
-        output.find("offset dQ_C p99 raw/accepted ="),
+        output.find("offset dQ_C p99 raw/accept ="),
         std::string::npos);
     EXPECT_NE(
-        output.find("exact-zero offsets raw/accepted ="),
+        output.find("exact-zero offsets raw/accept ="),
         std::string::npos);
     EXPECT_NE(
-        output.find("objective accepted/rejected clusters = 1/0, atoms = 2/0"),
+        output.find("objective acc./rej. clusters = 1/0, atoms = 2/0"),
         std::string::npos);
     EXPECT_EQ(output.find("objective ="), std::string::npos);
     EXPECT_EQ(output.find("d_amplitude ="), std::string::npos);
     EXPECT_EQ(output.find("active/frozen/thawed atoms"), std::string::npos);
     ExpectSelectedAtomEstimatesAreFinite(*model);
+}
+
+TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingIsIntensityScaleInvariant)
+{
+    constexpr double scale{ 100.0 };
+    auto base_model{ BuildNearCollinearDefenseModel() };
+    auto scaled_model{ BuildNearCollinearDefenseModel(scale) };
+
+    rt::RunSecondStageLocalFitting(*base_model, MakeSecondStageOptions());
+    rt::RunSecondStageLocalFitting(*scaled_model, MakeSecondStageOptions());
+
+    const auto & base_atoms{ base_model->GetSelectedAtoms() };
+    const auto & scaled_atoms{ scaled_model->GetSelectedAtoms() };
+    ASSERT_EQ(base_atoms.size(), scaled_atoms.size());
+    for (std::size_t i = 0; i < base_atoms.size(); i++)
+    {
+        const auto base{ GetEstimateModel(*base_atoms.at(i)) };
+        const auto scaled{ GetEstimateModel(*scaled_atoms.at(i)) };
+        EXPECT_NEAR(
+            base.GetAmplitude() * scale,
+            scaled.GetAmplitude(),
+            std::max(1.0e-8, std::abs(scaled.GetAmplitude()) * 1.0e-5));
+        EXPECT_NEAR(base.GetWidth(), scaled.GetWidth(), 1.0e-6);
+        EXPECT_NEAR(
+            base.GetOffset() * scale,
+            scaled.GetOffset(),
+            std::max(1.0e-8, std::abs(scaled.GetOffset()) * 5.0e-5));
+    }
 }
 
 TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingKeepsRidgeRetryOnProgressLineWhenPresent)
@@ -1854,13 +1948,13 @@ TEST(EstimatorSecondStageDefenseTest, RejectedClusterObjectiveDiagnosticsAreDebu
         debug_output.find("breakdown order = residual/width/offset/movement/total"),
         std::string::npos);
     EXPECT_NE(
-        debug_output.find("kind = fixed-point, damping = 1.000000e+00 (raw)"),
+        debug_output.find("kind = fixed-point, damping = 1.00e+00 (raw)"),
         std::string::npos);
     for (const auto damping_text : {
-        "5.000000e-01",
-        "2.500000e-01",
-        "1.250000e-01",
-        "6.250000e-02" })
+        "5.00e-01",
+        "2.50e-01",
+        "1.25e-01",
+        "6.25e-02" })
     {
         EXPECT_NE(
             debug_output.find(
@@ -1903,10 +1997,10 @@ TEST(EstimatorSecondStageDefenseTest, InvalidSeedIsRepairedBeforeConnectedCluste
         std::string::npos);
     EXPECT_NE(output.find("source = global-median"), std::string::npos);
     EXPECT_NE(
-        output.find("original A/B/C = 0.000000e+00/0.000000e+00/3.700000e-01"),
+        output.find("original A/B/C = 0.00e+00/0.00e+00/3.70e-01"),
         std::string::npos);
     EXPECT_NE(
-        output.find("repaired A/B/C = 5.750000e+00/5.500000e-01/3.700000e-01"),
+        output.find("repaired A/B/C = 5.75e+00/5.50e-01/3.70e-01"),
         std::string::npos);
     EXPECT_EQ(output.find("reason = non-positive-width"), std::string::npos);
     ExpectSelectedAtomEstimatesAreFinite(*model);
@@ -1966,6 +2060,9 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingReportsMaximumGl
     {
         EXPECT_NE(
             error_output.find("maximum joint-offset ridge ratio", stop_warning_position),
+            std::string::npos);
+        EXPECT_NE(
+            error_output.find("applying best validated audit state", stop_warning_position),
             std::string::npos);
     }
     ExpectSelectedAtomEstimatesAreFinite(*model);
