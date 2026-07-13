@@ -533,13 +533,16 @@ std::vector<Eigen::VectorXd> MakeAndersonState(double left, double right)
 regime_detail::LocalFittingAndersonRegimeSignatureMap MakeAndersonRegimeSignatures(
     double global_ridge_ratio,
     double left_multiplier,
-    double right_multiplier)
+    double right_multiplier,
+    health_detail::JointOffsetSolveStatus left_status =
+        health_detail::JointOffsetSolveStatus::Converged,
+    health_detail::JointOffsetSolveStatus right_status =
+        health_detail::JointOffsetSolveStatus::Converged)
 {
-    return regime_detail::BuildLocalFittingAndersonRegimeSignatureMap(
-        { { 0 }, { 1 } },
-        { 0, 1 },
-        global_ridge_ratio,
-        { left_multiplier, right_multiplier });
+    return {
+        { { 0 }, { left_status, global_ridge_ratio, { left_multiplier } } },
+        { { 1 }, { right_status, global_ridge_ratio, { right_multiplier } } }
+    };
 }
 
 } // namespace
@@ -784,42 +787,83 @@ TEST(EstimatorSecondStageDefenseTest, AndersonRegimeDetectsRetryAndCollinearityT
         tracker.FindIncompatible(baseline));
 
     tracker.Reconcile({ { 0, 1 } });
-    const auto merged{
-        regime_detail::BuildLocalFittingAndersonRegimeSignatureMap(
-            { { 0, 1 } }, { 0, 1 }, 1.0e-3, { 1.0, 1.0 })
+    const regime_detail::LocalFittingAndersonRegimeSignatureMap merged{
+        { { 0, 1 }, {
+            health_detail::JointOffsetSolveStatus::Converged,
+            1.0e-3,
+            { 1.0, 1.0 }
+        } }
     };
     EXPECT_TRUE(tracker.FindIncompatible(merged).empty());
 }
 
 TEST(EstimatorSecondStageDefenseTest, AndersonRegimeRejectsInvalidSignatures)
 {
-    EXPECT_THROW(
-        regime_detail::BuildLocalFittingAndersonRegimeSignatureMap(
-            { { 0 } }, { 0 }, 0.0, { 1.0 }),
-        std::invalid_argument);
-    EXPECT_THROW(
-        regime_detail::BuildLocalFittingAndersonRegimeSignatureMap(
-            { { 0 } }, { 0 }, 1.0e-3,
-            { std::numeric_limits<double>::infinity() }),
-        std::invalid_argument);
-    EXPECT_THROW(
-        regime_detail::BuildLocalFittingAndersonRegimeSignatureMap(
-            { { 0 } }, { 0 }, 1.0e-3, { 0.0 }),
-        std::invalid_argument);
-    EXPECT_THROW(
-        regime_detail::BuildLocalFittingAndersonRegimeSignatureMap(
-            { { 0 } }, { 0, 1 }, 1.0e-3, { 1.0 }),
-        std::invalid_argument);
-    EXPECT_THROW(
-        regime_detail::BuildLocalFittingAndersonRegimeSignatureMap(
-            { { 0 }, { 0 } }, { 0 }, 1.0e-3, { 1.0 }),
-        std::invalid_argument);
-
     regime_detail::LocalFittingAndersonRegimeTracker tracker;
-    const regime_detail::LocalFittingAndersonRegimeSignatureMap wrong_size_signature{
-        { { 0 }, regime_detail::LocalFittingAndersonRegimeSignature{ 1.0e-3, { 1.0, 1.0 } } }
+    using Status = health_detail::JointOffsetSolveStatus;
+    const regime_detail::LocalFittingAndersonRegimeSignatureMap invalid_ridge{
+        { { 0 }, { Status::Converged, 0.0, { 1.0 } } }
     };
+    const regime_detail::LocalFittingAndersonRegimeSignatureMap invalid_multiplier{
+        { { 0 }, {
+            Status::Converged,
+            1.0e-3,
+            { std::numeric_limits<double>::infinity() }
+        } }
+    };
+    const regime_detail::LocalFittingAndersonRegimeSignatureMap wrong_size_signature{
+        { { 0 }, { Status::Converged, 1.0e-3, { 1.0, 1.0 } } }
+    };
+    const regime_detail::LocalFittingAndersonRegimeSignatureMap invalid_status{
+        { { 0 }, { static_cast<Status>(-1), 1.0e-3, { 1.0 } } }
+    };
+    EXPECT_THROW(tracker.FindIncompatible(invalid_ridge), std::invalid_argument);
+    EXPECT_THROW(tracker.FindIncompatible(invalid_multiplier), std::invalid_argument);
     EXPECT_THROW(tracker.FindIncompatible(wrong_size_signature), std::invalid_argument);
+    EXPECT_THROW(tracker.FindIncompatible(invalid_status), std::logic_error);
+}
+
+TEST(EstimatorSecondStageDefenseTest, AndersonRegimeTracksJointOffsetStatusPerCluster)
+{
+    using Status = health_detail::JointOffsetSolveStatus;
+    const std::vector<regime_detail::LocalFittingAndersonRegimeClusterKey> key_list{
+        { 0 }, { 1 }
+    };
+    const auto baseline{ MakeAndersonRegimeSignatures(1.0e-3, 1.0, 1.0) };
+    const auto changed{
+        MakeAndersonRegimeSignatures(
+            1.0e-3,
+            1.0,
+            1.0,
+            Status::IrlsMaximumIterationsReached,
+            Status::Converged)
+    };
+    regime_detail::LocalFittingAndersonRegimeTracker tracker;
+    alg::ClusteredAndersonAccelerationHistorySet history{
+        alg::AndersonAccelerationOptions{ 5, 100.0, 10.0, 1.0e-12 }
+    };
+    history.Reconcile(key_list);
+    tracker.Commit(key_list, baseline);
+    history.Commit(
+        key_list,
+        MakeAndersonState(0.0, 0.0),
+        MakeAndersonState(1.0, 1.0));
+
+    const auto incompatible_key_list{ tracker.FindIncompatible(changed) };
+    EXPECT_EQ(
+        (std::vector<regime_detail::LocalFittingAndersonRegimeClusterKey>{ { 0 } }),
+        incompatible_key_list);
+    history.ClearAndSuppress(incompatible_key_list);
+    tracker.Invalidate(incompatible_key_list);
+    const auto candidate{
+        history.BuildCandidate(
+            key_list,
+            MakeAndersonState(1.0, 1.0),
+            MakeAndersonState(1.5, 1.5))
+    };
+
+    ASSERT_TRUE(candidate.has_value());
+    EXPECT_EQ((std::vector<alg::ClusterKey>{ { 1 } }), candidate->used_cluster_key_list);
 }
 
 TEST(EstimatorSecondStageDefenseTest, AndersonRegimeInvalidatesOnlyAffectedHistory)

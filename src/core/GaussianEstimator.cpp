@@ -132,11 +132,7 @@ constexpr double kSuspiciousCompensationResponseRatio{ 2.0 };
 constexpr std::size_t kPersistentSuspiciousRollbackIterationLimit{ 5 };
 constexpr std::size_t kPersistentJointOffsetFailureIterationLimit{ 5 };
 
-struct GaussianFittingState
-{
-    std::vector<LocalGaussianResult> result_list{};
-    std::vector<Eigen::VectorXd> estimation_list{};
-};
+using LocalFittingState = std::vector<LocalGaussianResult>;
 
 enum class LocalFittingCandidateKind
 {
@@ -339,91 +335,6 @@ LocalFittingClusterHealthSummary SummarizeLocalFittingClusterHealth(
     return summary;
 }
 
-class LocalFittingJointOffsetStatusTracker
-{
-    std::map<LocalFittingClusterKey, JointOffsetSolveStatus> m_status_by_key{};
-
-public:
-    void Reconcile(const std::vector<LocalFittingClusterKey> & key_list)
-    {
-        std::map<LocalFittingClusterKey, JointOffsetSolveStatus> reconciled_status_by_key;
-        for (const auto & key : key_list)
-        {
-            const auto iter{ m_status_by_key.find(key) };
-            if (iter == m_status_by_key.end()) continue;
-            reconciled_status_by_key.emplace(key, iter->second);
-        }
-        m_status_by_key = std::move(reconciled_status_by_key);
-    }
-
-    std::vector<LocalFittingClusterKey> FindIncompatible(
-        const LocalFittingClusterHealthMap & health_by_key) const
-    {
-        std::vector<LocalFittingClusterKey> incompatible_key_list;
-        for (const auto & [key, health] : health_by_key)
-        {
-            if (!IsJointOffsetSolveProgressEligible(health.joint_offset_status)) continue;
-            const auto committed_iter{ m_status_by_key.find(key) };
-            if (committed_iter != m_status_by_key.end() &&
-                committed_iter->second != health.joint_offset_status)
-            {
-                incompatible_key_list.emplace_back(key);
-            }
-        }
-        return incompatible_key_list;
-    }
-
-    void Invalidate(const std::vector<LocalFittingClusterKey> & key_list)
-    {
-        for (const auto & key : key_list)
-        {
-            m_status_by_key.erase(key);
-        }
-    }
-
-    void InvalidateContaining(const std::vector<std::size_t> & atom_index_list)
-    {
-        for (auto iter = m_status_by_key.begin(); iter != m_status_by_key.end();)
-        {
-            const auto contains_affected_atom{
-                std::any_of(
-                    atom_index_list.begin(), atom_index_list.end(),
-                    [&](std::size_t atom_index)
-                    {
-                        return std::binary_search(
-                            iter->first.begin(), iter->first.end(), atom_index);
-                    })
-            };
-            if (contains_affected_atom)
-            {
-                iter = m_status_by_key.erase(iter);
-            }
-            else
-            {
-                ++iter;
-            }
-        }
-    }
-
-    void Commit(
-        const std::vector<LocalFittingClusterKey> & key_list,
-        const LocalFittingClusterHealthMap & health_by_key)
-    {
-        for (const auto & key : key_list)
-        {
-            const auto health_iter{ health_by_key.find(key) };
-            if (health_iter == health_by_key.end() ||
-                !IsJointOffsetSolveProgressEligible(
-                    health_iter->second.joint_offset_status))
-            {
-                throw std::invalid_argument(
-                    "Joint offset status is missing or ineligible for commit.");
-            }
-            m_status_by_key[key] = health_iter->second.joint_offset_status;
-        }
-    }
-};
-
 struct ClusteredJointOffsetSolveResult
 {
     Eigen::VectorXd offset{};
@@ -434,7 +345,7 @@ struct ClusteredJointOffsetSolveResult
 
 struct LocalFittingIterationResult
 {
-    GaussianFittingState state{};
+    LocalFittingState state{};
     std::vector<std::size_t> suspicious_offset_state_index_list{};
     LocalFittingClusterHealthMap health_by_key{};
     detail::LocalFittingAndersonRegimeSignatureMap anderson_regime_signature_by_key{};
@@ -473,24 +384,26 @@ struct LocalFittingParameterPenaltyComponents
     double movement_penalty_sum{ 0.0 };
 };
 
+struct LocalFittingAuditedState
+{
+    detail::LocalFittingObjectiveBreakdown objective{};
+    LocalFittingState state{};
+    std::optional<std::size_t> accepted_iteration{};
+};
+
 struct LocalFittingBestAuditState
 {
     std::vector<LocalFittingObjectiveSampleRef> sample_ref_list{};
     std::vector<std::size_t> atom_index_list{};
     std::optional<double> fixed_objective_scale{};
-    std::optional<detail::LocalFittingObjectiveBreakdown> best_objective{};
-    std::optional<GaussianFittingState> best_state{};
-    std::optional<std::size_t> best_accepted_iteration{};
-    std::optional<detail::LocalFittingObjectiveBreakdown> best_accepted_objective{};
-    std::optional<GaussianFittingState> best_accepted_state{};
-    std::optional<std::size_t> best_accepted_state_iteration{};
+    std::optional<LocalFittingAuditedState> best{};
+    std::optional<LocalFittingAuditedState> best_accepted{};
 };
 
 struct LocalFittingOffsetStats
 {
     std::size_t atom_count{ 0 };
     std::size_t finite_count{ 0 };
-    std::size_t exact_zero_count{ 0 };
     double median_absolute_offset{ 0.0 };
     double percentile_absolute_offset{ 0.0 };
     double maximum_absolute_offset{ 0.0 };
@@ -594,7 +507,7 @@ using LocalFittingClusterMap = std::map<LocalFittingClusterKey, LocalFittingClus
 
 struct LocalFittingCandidateSelection
 {
-    GaussianFittingState assembled_state{};
+    LocalFittingState assembled_state{};
     std::vector<LocalFittingClusterKey> accepted_key_list{};
     std::vector<LocalFittingClusterKey> rejected_key_list{};
     std::vector<LocalFittingRejectedClusterDiagnostic> rejected_cluster_diagnostic_list{};
@@ -652,7 +565,7 @@ struct SecondStageSeedRepairRecord
 
 struct SecondStageInitialStateBuildResult
 {
-    std::optional<GaussianFittingState> state{};
+    std::optional<LocalFittingState> state{};
     std::vector<SecondStageSeedRepairRecord> repair_record_list{};
 };
 
@@ -1361,10 +1274,7 @@ SecondStageInitialStateBuildResult BuildInitialLocalFittingState(
     const ModelAnalysisView & analysis_view)
 {
     SecondStageInitialStateBuildResult build_result;
-    GaussianFittingState state{
-        std::vector<LocalGaussianResult>(context.AtomSize()),
-        std::vector<Eigen::VectorXd>(context.AtomSize())
-    };
+    LocalFittingState state(context.AtomSize());
     std::vector<std::optional<GaussianModel3DWithUncertainty>> group_prior_list(
         context.AtomSize());
     std::unordered_map<GroupKey, GaussianModelParameterSamples> samples_by_group;
@@ -1373,7 +1283,7 @@ SecondStageInitialStateBuildResult BuildInitialLocalFittingState(
     for (std::size_t i = 0; i < context.AtomSize(); i++)
     {
         const auto local_view{ AtomLocalPotentialView::RequireFor(*context.atom_list.at(i)) };
-        state.result_list.at(i) = local_view.GetGaussianResult();
+        state.at(i) = local_view.GetGaussianResult();
         const auto group_key{ data_internal::GetGroupKey(context.atom_list.at(i)) };
         if (analysis_view.HasAtomGroup(group_key))
         {
@@ -1381,7 +1291,7 @@ SecondStageInitialStateBuildResult BuildInitialLocalFittingState(
                 analysis_view.GetAtomGroupPriorWithUncertainty(group_key);
         }
 
-        const auto & result{ state.result_list.at(i) };
+        const auto & result{ state.at(i) };
         const auto & mdpde_model{ result.mdpde.GetModel() };
         std::optional<GaussianModel3DWithUncertainty> preferred_model;
         if (detail::IsValidSecondStageGaussianModel(mdpde_model))
@@ -1429,7 +1339,7 @@ SecondStageInitialStateBuildResult BuildInitialLocalFittingState(
 
     for (std::size_t i = 0; i < context.AtomSize(); i++)
     {
-        auto & result{ state.result_list.at(i) };
+        auto & result{ state.at(i) };
         const auto original_model{ result.mdpde.GetModel() };
         if (!detail::IsValidSecondStageGaussianModel(original_model))
         {
@@ -1472,7 +1382,6 @@ SecondStageInitialStateBuildResult BuildInitialLocalFittingState(
                     repaired_model
                 });
         }
-        state.estimation_list.at(i) = result.mdpde.GetModel().ToVector();
     }
     build_result.state = std::move(state);
     return build_result;
@@ -1529,13 +1438,13 @@ void LogSecondStageSeedRepairs(
 }
 
 FittedGaussianSnapshot BuildFittedGaussianSnapshot(
-    const std::vector<Eigen::VectorXd> & estimation_list)
+    const LocalFittingState & state)
 {
     FittedGaussianSnapshot snapshot;
-    snapshot.reserve(estimation_list.size());
-    for (const auto & estimation : estimation_list)
+    snapshot.reserve(state.size());
+    for (const auto & result : state)
     {
-        snapshot.emplace_back(GaussianModel3D::FromVector(estimation));
+        snapshot.emplace_back(result.mdpde.GetModel());
     }
     return snapshot;
 }
@@ -2094,6 +2003,7 @@ ClusteredJointOffsetSolveResult EstimateClusteredJointOffsets(
                     "Clustered joint offset ridge multiplier size is inconsistent.");
             }
             detail::LocalFittingAndersonRegimeSignature signature{
+                cluster_result.status,
                 ridge_ratio,
                 cluster_result.effective_ridge_multiplier_list
             };
@@ -2262,16 +2172,16 @@ void SetUpdatedSamplingEntriesFromFittedGroupGaussian(ModelObject & model_object
 
 std::optional<LocalFittingObjectiveSamples> CollectLocalFittingObjectiveSamples(
     const SecondStageLocalFittingContext & context,
-    const std::vector<Eigen::VectorXd> & estimation_list,
+    const LocalFittingState & state,
     const std::vector<LocalFittingObjectiveSampleRef> & sample_ref_list,
     const std::vector<std::size_t> & active_index_list)
 {
-    if (estimation_list.size() != context.AtomSize())
+    if (state.size() != context.AtomSize())
     {
         throw std::invalid_argument(
-            "Local fitting objective estimation size is inconsistent.");
+            "Local fitting objective state size is inconsistent.");
     }
-    const auto snapshot{ BuildFittedGaussianSnapshot(estimation_list) };
+    const auto snapshot{ BuildFittedGaussianSnapshot(state) };
 
     LocalFittingObjectiveSamples objective_samples;
     objective_samples.residual_list.reserve(sample_ref_list.size());
@@ -2519,13 +2429,13 @@ std::optional<double> CalculateLocalFittingObjective(
 std::optional<detail::LocalFittingObjectiveBreakdown>
 EvaluateLocalFittingAuditObjective(
     const SecondStageLocalFittingContext & context,
-    const GaussianFittingState & state,
+    const LocalFittingState & state,
     LocalFittingBestAuditState & audit_state)
 {
     auto objective_samples{
         CollectLocalFittingObjectiveSamples(
             context,
-            state.estimation_list,
+            state,
             audit_state.sample_ref_list,
             audit_state.atom_index_list)
     };
@@ -2535,32 +2445,12 @@ EvaluateLocalFittingAuditObjective(
         audit_state.fixed_objective_scale.value_or(
             objective_samples->scale_sample)
     };
-    const auto residual_objective{
-        CalculateLocalFittingResidualObjective(
-            *objective_samples,
-            objective_scale)
-    };
-    const auto penalty_components{
-        CalculateLocalFittingParameterPenaltyComponents(
+    const auto objective{
+        CalculateLocalFittingObjectiveBreakdown(
             context,
             *objective_samples,
             objective_scale,
             nullptr)
-    };
-    if (!residual_objective.has_value() || !penalty_components.has_value())
-    {
-        return std::nullopt;
-    }
-    const auto objective{
-        detail::BuildLocalFittingMeanObjectiveBreakdown(
-            *residual_objective,
-            penalty_components->width_prior_penalty_sum,
-            penalty_components->offset_plausibility_penalty_sum,
-            penalty_components->movement_penalty_sum,
-            objective_samples->active_model_list.size(),
-            kLocalFittingWidthPriorPenaltyWeight,
-            kLocalFittingOffsetPlausibilityPenaltyWeight,
-            0.0)
     };
     if (!objective.has_value()) return std::nullopt;
     if (!audit_state.fixed_objective_scale.has_value())
@@ -2572,7 +2462,7 @@ EvaluateLocalFittingAuditObjective(
 
 void TryUpdateLocalFittingBestAuditState(
     const SecondStageLocalFittingContext & context,
-    const GaussianFittingState & candidate_state,
+    const LocalFittingState & candidate_state,
     const std::optional<std::size_t> & accepted_iteration,
     LocalFittingBestAuditState & audit_state)
 {
@@ -2583,33 +2473,34 @@ void TryUpdateLocalFittingBestAuditState(
             audit_state)
     };
     if (!candidate_objective.has_value()) return;
+    LocalFittingAuditedState candidate{
+        *candidate_objective,
+        candidate_state,
+        accepted_iteration
+    };
     if (accepted_iteration.has_value() &&
-        (!audit_state.best_accepted_objective.has_value() ||
+        (!audit_state.best_accepted.has_value() ||
             detail::IsBetterLocalFittingAuditObjective(
                 candidate_objective->total_objective,
-                audit_state.best_accepted_objective->total_objective,
+                audit_state.best_accepted->objective.total_objective,
                 kLocalFittingObjectiveTieRelativeTolerance)))
     {
-        audit_state.best_accepted_objective = *candidate_objective;
-        audit_state.best_accepted_state = candidate_state;
-        audit_state.best_accepted_state_iteration = accepted_iteration;
+        audit_state.best_accepted = candidate;
     }
-    if (audit_state.best_objective.has_value() &&
+    if (audit_state.best.has_value() &&
         !detail::IsBetterLocalFittingAuditObjective(
             candidate_objective->total_objective,
-            audit_state.best_objective->total_objective,
+            audit_state.best->objective.total_objective,
             kLocalFittingObjectiveTieRelativeTolerance))
     {
         return;
     }
-    audit_state.best_objective = *candidate_objective;
-    audit_state.best_state = candidate_state;
-    audit_state.best_accepted_iteration = accepted_iteration;
+    audit_state.best = std::move(candidate);
 }
 
 LocalFittingBestAuditState BuildInitialLocalFittingBestAuditState(
     const SecondStageLocalFittingContext & context,
-    const GaussianFittingState & initial_state)
+    const LocalFittingState & initial_state)
 {
     LocalFittingBestAuditState audit_state;
     audit_state.atom_index_list.reserve(context.AtomSize());
@@ -2636,12 +2527,11 @@ LocalFittingBestAuditState BuildInitialLocalFittingBestAuditState(
 void ReconcileLocalFittingBestAuditTerminalFallback(
     const SecondStageLocalFittingContext & context,
     const std::vector<LocalFittingClusterKey> & terminal_key_list,
-    const GaussianFittingState & terminal_fallback_state,
+    const LocalFittingState & terminal_fallback_state,
     LocalFittingBestAuditState & audit_state)
 {
     if (terminal_key_list.empty()) return;
-    if (terminal_fallback_state.estimation_list.size() != context.AtomSize() ||
-        terminal_fallback_state.result_list.size() != context.AtomSize())
+    if (terminal_fallback_state.size() != context.AtomSize())
     {
         throw std::invalid_argument(
             "Local fitting audit terminal fallback state sizes are inconsistent.");
@@ -2659,20 +2549,16 @@ void ReconcileLocalFittingBestAuditTerminalFallback(
         }
     }
 
-    const auto reconcile = [&](
-        std::optional<GaussianFittingState> & state,
-        std::optional<detail::LocalFittingObjectiveBreakdown> & objective)
+    const auto reconcile = [&](std::optional<LocalFittingAuditedState> & candidate)
     {
-        if (!state.has_value()) return true;
-        auto reconciled_state{ *state };
+        if (!candidate.has_value()) return;
+        auto reconciled_state{ candidate->state };
         for (const auto & key : terminal_key_list)
         {
             for (const auto atom_index : key)
             {
-                reconciled_state.estimation_list.at(atom_index) =
-                    terminal_fallback_state.estimation_list.at(atom_index);
-                reconciled_state.result_list.at(atom_index) =
-                    terminal_fallback_state.result_list.at(atom_index);
+                reconciled_state.at(atom_index) =
+                    terminal_fallback_state.at(atom_index);
             }
         }
         const auto reconciled_objective{
@@ -2683,31 +2569,21 @@ void ReconcileLocalFittingBestAuditTerminalFallback(
         };
         if (!reconciled_objective.has_value())
         {
-            objective.reset();
-            state.reset();
-            return false;
+            candidate.reset();
+            return;
         }
-        objective = *reconciled_objective;
-        state = std::move(reconciled_state);
-        return true;
+        candidate->objective = *reconciled_objective;
+        candidate->state = std::move(reconciled_state);
     };
 
-    if (!reconcile(audit_state.best_state, audit_state.best_objective))
-    {
-        audit_state.best_accepted_iteration.reset();
-    }
-    if (!reconcile(
-            audit_state.best_accepted_state,
-            audit_state.best_accepted_objective))
-    {
-        audit_state.best_accepted_state_iteration.reset();
-    }
+    reconcile(audit_state.best);
+    reconcile(audit_state.best_accepted);
 }
 
 algorithm::ClusteredFittingQualityCandidateScore<LocalFittingObjectiveSamples>
 ScoreLocalFittingClusterCandidate(
     const SecondStageLocalFittingContext & context,
-    const std::vector<Eigen::VectorXd> & candidate_estimation_list,
+    const LocalFittingState & candidate_state,
     const std::vector<std::size_t> & active_index_list,
     const std::vector<LocalFittingObjectiveSampleRef> & sample_ref_list,
     const algorithm::ScaleReferenceTracker & objective_scale_tracker,
@@ -2731,7 +2607,7 @@ ScoreLocalFittingClusterCandidate(
     score.objective_samples =
         CollectLocalFittingObjectiveSamples(
             context,
-            candidate_estimation_list,
+            candidate_state,
             sample_ref_list,
             active_index_list);
     if (!score.objective_samples.has_value()) return score;
@@ -2946,105 +2822,64 @@ void LogGroupPriorSpotSummary(const ModelObject & model_object)
     }
 }
 
-algorithm::ParameterChange CalculateLocalFittingTransformedChange(
-    const Eigen::VectorXd & current_estimation,
-    const Eigen::VectorXd & previous_estimation)
-{
-    if (current_estimation.size() != GaussianModel3D::ParameterSize() ||
-        previous_estimation.size() != GaussianModel3D::ParameterSize())
-    {
-        throw std::invalid_argument(
-            "Local fitting transformed change parameter sizes are inconsistent.");
-    }
-    return detail::CalculateLocalFittingTransformedChange(
-        GaussianModel3D{
-            current_estimation(GaussianModel3D::AmplitudeIndex()),
-            current_estimation(GaussianModel3D::WidthIndex()),
-            current_estimation(GaussianModel3D::OffsetIndex())
-        },
-        GaussianModel3D{
-            previous_estimation(GaussianModel3D::AmplitudeIndex()),
-            previous_estimation(GaussianModel3D::WidthIndex()),
-            previous_estimation(GaussianModel3D::OffsetIndex())
-        });
-}
-
-algorithm::ParameterChange CalculateLocalFittingFreezeEvidenceChange(
-    const Eigen::VectorXd & accepted_estimation,
-    const Eigen::VectorXd & raw_fixed_point_estimation,
-    const Eigen::VectorXd & previous_estimation)
-{
-    if (accepted_estimation.size() != GaussianModel3D::ParameterSize() ||
-        raw_fixed_point_estimation.size() != GaussianModel3D::ParameterSize() ||
-        previous_estimation.size() != GaussianModel3D::ParameterSize())
-    {
-        throw std::invalid_argument(
-            "Local fitting freeze evidence parameter sizes are inconsistent.");
-    }
-    const auto build_model = [](const Eigen::VectorXd & estimation)
-    {
-        return GaussianModel3D{
-            estimation(GaussianModel3D::AmplitudeIndex()),
-            estimation(GaussianModel3D::WidthIndex()),
-            estimation(GaussianModel3D::OffsetIndex())
-        };
-    };
-    return detail::CalculateLocalFittingFreezeEvidenceChange(
-        build_model(accepted_estimation),
-        build_model(raw_fixed_point_estimation),
-        build_model(previous_estimation));
-}
-
 std::vector<algorithm::ParameterChange> CalculateLocalFittingTransformedChanges(
-    const std::vector<Eigen::VectorXd> & current_estimation_list,
-    const std::vector<Eigen::VectorXd> & previous_estimation_list)
+    const LocalFittingState & current_state,
+    const LocalFittingState & previous_state)
 {
-    if (current_estimation_list.size() != previous_estimation_list.size())
+    if (current_state.size() != previous_state.size())
     {
         throw std::invalid_argument(
             "Local fitting transformed change input sizes are inconsistent.");
     }
 
-    std::vector<algorithm::ParameterChange> change_list(current_estimation_list.size());
-    for (size_t i = 0; i < current_estimation_list.size(); i++)
+    std::vector<algorithm::ParameterChange> change_list(current_state.size());
+    for (size_t i = 0; i < current_state.size(); i++)
     {
-        change_list.at(i) = CalculateLocalFittingTransformedChange(
-            current_estimation_list.at(i),
-            previous_estimation_list.at(i));
+        change_list.at(i) = detail::CalculateLocalFittingTransformedChange(
+            current_state.at(i).mdpde.GetModel(),
+            previous_state.at(i).mdpde.GetModel());
     }
     return change_list;
 }
 
-std::vector<algorithm::ParameterChange> CalculateLocalFittingFreezeEvidenceChanges(
-    const std::vector<Eigen::VectorXd> & accepted_estimation_list,
-    const std::vector<Eigen::VectorXd> & raw_fixed_point_estimation_list,
-    const std::vector<Eigen::VectorXd> & previous_estimation_list)
+std::vector<algorithm::ParameterChange> CombineLocalFittingFreezeEvidenceChanges(
+    const std::vector<algorithm::ParameterChange> & accepted_change_list,
+    const std::vector<algorithm::ParameterChange> & raw_fixed_point_change_list)
 {
-    if (accepted_estimation_list.size() != previous_estimation_list.size() ||
-        raw_fixed_point_estimation_list.size() != previous_estimation_list.size())
+    if (accepted_change_list.size() != raw_fixed_point_change_list.size())
     {
         throw std::invalid_argument(
             "Local fitting freeze evidence input sizes are inconsistent.");
     }
 
-    std::vector<algorithm::ParameterChange> change_list(
-        previous_estimation_list.size());
-    for (std::size_t i = 0; i < previous_estimation_list.size(); i++)
+    auto evidence_change_list{ accepted_change_list };
+    for (std::size_t i = 0; i < evidence_change_list.size(); i++)
     {
-        change_list.at(i) = CalculateLocalFittingFreezeEvidenceChange(
-            accepted_estimation_list.at(i),
-            raw_fixed_point_estimation_list.at(i),
-            previous_estimation_list.at(i));
+        auto & evidence{ evidence_change_list.at(i).value_list };
+        const auto & raw{ raw_fixed_point_change_list.at(i).value_list };
+        if (evidence.size() != raw.size())
+        {
+            throw std::invalid_argument(
+                "Local fitting freeze evidence parameter sizes are inconsistent.");
+        }
+        for (std::size_t parameter_index = 0;
+            parameter_index < evidence.size();
+            parameter_index++)
+        {
+            evidence.at(parameter_index) = std::max(
+                evidence.at(parameter_index),
+                raw.at(parameter_index));
+        }
     }
-    return change_list;
+    return evidence_change_list;
 }
 
 algorithm::ParameterChangeStats SummarizeLocalFittingTransformedChanges(
-    const std::vector<Eigen::VectorXd> & current_estimation_list,
-    const std::vector<Eigen::VectorXd> & previous_estimation_list,
+    const LocalFittingState & current_state,
+    const LocalFittingState & previous_state,
     const std::vector<std::size_t> & index_list)
 {
-    if (current_estimation_list.size() != previous_estimation_list.size())
+    if (current_state.size() != previous_state.size())
     {
         throw std::invalid_argument(
             "Local fitting transformed change input sizes are inconsistent.");
@@ -3054,14 +2889,14 @@ algorithm::ParameterChangeStats SummarizeLocalFittingTransformedChanges(
     change_list.reserve(index_list.size());
     for (const auto i : index_list)
     {
-        if (i >= current_estimation_list.size())
+        if (i >= current_state.size())
         {
             throw std::invalid_argument(
                 "Local fitting transformed change index is out of range.");
         }
-        change_list.emplace_back(CalculateLocalFittingTransformedChange(
-            current_estimation_list.at(i),
-            previous_estimation_list.at(i)));
+        change_list.emplace_back(detail::CalculateLocalFittingTransformedChange(
+            current_state.at(i).mdpde.GetModel(),
+            previous_state.at(i).mdpde.GetModel()));
     }
 
     std::vector<std::size_t> local_index_list(change_list.size());
@@ -3073,23 +2908,6 @@ algorithm::ParameterChangeStats SummarizeLocalFittingTransformedChanges(
         change_list,
         local_index_list,
         kLocalFittingChangePercentile);
-}
-
-std::vector<double> SummarizeLocalFittingMaximumTransformedChanges(
-    const std::vector<Eigen::VectorXd> & current_estimation_list,
-    const std::vector<Eigen::VectorXd> & previous_estimation_list,
-    const std::vector<std::size_t> & index_list)
-{
-    if (current_estimation_list.size() != previous_estimation_list.size())
-    {
-        throw std::invalid_argument(
-            "Local fitting maximum transformed change input sizes are inconsistent.");
-    }
-    return detail::SummarizeLocalFittingMaximumTransformedChanges(
-        CalculateLocalFittingTransformedChanges(
-            current_estimation_list,
-            previous_estimation_list),
-        index_list);
 }
 
 bool IsLocalFittingTransformedChangeConverged(
@@ -3138,8 +2956,8 @@ std::vector<LocalFittingClusterKey> UpdatePersistentSuspiciousRollbackState(
     const std::vector<LocalFittingClusterKey> & cluster_key_list,
     const std::vector<LocalFittingClusterKey> & accepted_key_list,
     const std::vector<std::size_t> & suspicious_atom_index_list,
-    const GaussianFittingState & assembled_state,
-    const GaussianFittingState & previous_state,
+    const LocalFittingState & assembled_state,
+    const LocalFittingState & previous_state,
     PersistentSuspiciousRollbackStateMap & state_by_key)
 {
     PersistentSuspiciousRollbackStateMap next_state_by_key;
@@ -3159,8 +2977,8 @@ std::vector<LocalFittingClusterKey> UpdatePersistentSuspiciousRollbackState(
 
         const auto transformed_change_stats{
             SummarizeLocalFittingTransformedChanges(
-                assembled_state.estimation_list,
-                previous_state.estimation_list,
+                assembled_state,
+                previous_state,
                 key)
         };
         if (!IsLocalFittingTransformedPercentileConverged(transformed_change_stats))
@@ -3198,8 +3016,8 @@ TerminalJointOffsetFailureMap UpdatePersistentJointOffsetFailureState(
     const std::vector<LocalFittingClusterKey> & accepted_key_list,
     const std::vector<std::size_t> & suspicious_atom_index_list,
     const LocalFittingClusterHealthMap & health_by_key,
-    const GaussianFittingState & assembled_state,
-    const GaussianFittingState & previous_state,
+    const LocalFittingState & assembled_state,
+    const LocalFittingState & previous_state,
     PersistentJointOffsetFailureStateMap & state_by_key)
 {
     PersistentJointOffsetFailureStateMap next_state_by_key;
@@ -3229,8 +3047,8 @@ TerminalJointOffsetFailureMap UpdatePersistentJointOffsetFailureState(
 
         const auto transformed_change_stats{
             SummarizeLocalFittingTransformedChanges(
-                assembled_state.estimation_list,
-                previous_state.estimation_list,
+                assembled_state,
+                previous_state,
                 key)
         };
         if (!IsLocalFittingTransformedPercentileConverged(transformed_change_stats))
@@ -3306,32 +3124,14 @@ std::vector<LocalFittingClusterKey> ExcludeLocalFittingClusterKeysContainingAtom
     return result;
 }
 
-std::vector<LocalFittingClusterKey> CollectLocalFittingClusterKeysWithRegimeSignatures(
-    const std::vector<LocalFittingClusterKey> & key_list,
-    const detail::LocalFittingAndersonRegimeSignatureMap & signature_by_key)
-{
-    std::vector<LocalFittingClusterKey> result;
-    result.reserve(key_list.size());
-    for (const auto & key : key_list)
-    {
-        if (signature_by_key.find(key) != signature_by_key.end())
-        {
-            result.emplace_back(key);
-        }
-    }
-    return result;
-}
-
 void ApplyTerminalFallbackClusters(
     const std::vector<LocalFittingClusterKey> & terminal_key_list,
-    const GaussianFittingState & previous_state,
+    const LocalFittingState & previous_state,
     std::vector<char> & terminal_atom_mask,
-    GaussianFittingState & assembled_state)
+    LocalFittingState & assembled_state)
 {
-    if (previous_state.estimation_list.size() != terminal_atom_mask.size() ||
-        previous_state.result_list.size() != terminal_atom_mask.size() ||
-        assembled_state.estimation_list.size() != terminal_atom_mask.size() ||
-        assembled_state.result_list.size() != terminal_atom_mask.size())
+    if (previous_state.size() != terminal_atom_mask.size() ||
+        assembled_state.size() != terminal_atom_mask.size())
     {
         throw std::invalid_argument(
             "Local fitting terminal fallback state sizes are inconsistent.");
@@ -3346,10 +3146,7 @@ void ApplyTerminalFallbackClusters(
                     "Local fitting terminal fallback atom index is out of range.");
             }
             terminal_atom_mask.at(atom_index) = 1;
-            assembled_state.estimation_list.at(atom_index) =
-                previous_state.estimation_list.at(atom_index);
-            assembled_state.result_list.at(atom_index) =
-                previous_state.result_list.at(atom_index);
+            assembled_state.at(atom_index) = previous_state.at(atom_index);
         }
     }
 }
@@ -3377,15 +3174,15 @@ std::vector<std::size_t> BuildEligibleLocalFittingActiveIndexList(
 }
 
 std::vector<Eigen::VectorXd> BuildLocalFittingTransformedEstimationList(
-    const std::vector<Eigen::VectorXd> & estimation_list)
+    const LocalFittingState & state)
 {
     std::vector<Eigen::VectorXd> transformed_estimation_list;
-    transformed_estimation_list.reserve(estimation_list.size());
-    for (const auto & estimation : estimation_list)
+    transformed_estimation_list.reserve(state.size());
+    for (const auto & result : state)
     {
         const auto transformed{
             detail::EncodeLocalFittingTransformedCoordinates(
-                GaussianModel3D::FromVector(estimation))
+                result.mdpde.GetModel())
         };
         if (!transformed.has_value())
         {
@@ -3397,10 +3194,10 @@ std::vector<Eigen::VectorXd> BuildLocalFittingTransformedEstimationList(
     return transformed_estimation_list;
 }
 
-std::optional<GaussianFittingState> BuildLocalFittingCandidateState(
-    const GaussianFittingState & previous_state,
+std::optional<LocalFittingState> BuildLocalFittingCandidateState(
+    const LocalFittingState & previous_state,
     const std::vector<Eigen::VectorXd> & candidate_transformed_estimation_list,
-    const std::vector<LocalGaussianResult> & uncertainty_result_list,
+    const LocalFittingState & uncertainty_state,
     const std::vector<std::size_t> & active_index_list,
     double damping,
     LocalFittingCandidateBuildFailure * build_failure)
@@ -3409,9 +3206,8 @@ std::optional<GaussianFittingState> BuildLocalFittingCandidateState(
     {
         throw std::invalid_argument("Local fitting candidate damping is out of range.");
     }
-    if (previous_state.estimation_list.size() != previous_state.result_list.size() ||
-        candidate_transformed_estimation_list.size() != previous_state.estimation_list.size() ||
-        uncertainty_result_list.size() != previous_state.result_list.size())
+    if (candidate_transformed_estimation_list.size() != previous_state.size() ||
+        uncertainty_state.size() != previous_state.size())
     {
         throw std::invalid_argument("Local fitting candidate input sizes are inconsistent.");
     }
@@ -3419,14 +3215,13 @@ std::optional<GaussianFittingState> BuildLocalFittingCandidateState(
     auto candidate_state{ previous_state };
     for (const auto active_index : active_index_list)
     {
-        if (active_index >= candidate_state.estimation_list.size())
+        if (active_index >= candidate_state.size())
         {
             throw std::invalid_argument("Local fitting candidate active index is out of range.");
         }
         const auto previous_transformed_estimation{
             detail::EncodeLocalFittingTransformedCoordinates(
-                GaussianModel3D::FromVector(
-                    previous_state.estimation_list.at(active_index)))
+                previous_state.at(active_index).mdpde.GetModel())
         };
         if (!previous_transformed_estimation.has_value())
         {
@@ -3459,11 +3254,10 @@ std::optional<GaussianFittingState> BuildLocalFittingCandidateState(
         if ((candidate_transformed_estimation.array() ==
                 previous_transformed_estimation->array()).all())
         {
-            auto & result{ candidate_state.result_list.at(active_index) };
+            auto & result{ candidate_state.at(active_index) };
             result.mdpde = GaussianModel3DWithUncertainty{
-                GaussianModel3D::FromVector(
-                    previous_state.estimation_list.at(active_index)),
-                uncertainty_result_list.at(active_index).mdpde.GetStandardDeviationModel()
+                previous_state.at(active_index).mdpde.GetModel(),
+                uncertainty_state.at(active_index).mdpde.GetStandardDeviationModel()
             };
             continue;
         }
@@ -3491,12 +3285,11 @@ std::optional<GaussianFittingState> BuildLocalFittingCandidateState(
                     LocalFittingCandidateBuildFailureReason::NonFiniteParameter);
             return std::nullopt;
         }
-        auto & result{ candidate_state.result_list.at(active_index) };
+        auto & result{ candidate_state.at(active_index) };
         result.mdpde = GaussianModel3DWithUncertainty{
             *damped_model,
-            uncertainty_result_list.at(active_index).mdpde.GetStandardDeviationModel()
+            uncertainty_state.at(active_index).mdpde.GetStandardDeviationModel()
         };
-        candidate_state.estimation_list.at(active_index) = damped_model->ToVector();
     }
     return std::move(candidate_state);
 }
@@ -3510,14 +3303,14 @@ const char * GetLocalFittingCandidateText(const LocalFittingCandidateAttempt & a
 algorithm::ClusteredFittingQualityInitialState<LocalFittingObjectiveSamples>
 BuildInitialLocalFittingClusterQualityState(
     const SecondStageLocalFittingContext & context,
-    const GaussianFittingState & previous_state,
+    const LocalFittingState & previous_state,
     const LocalFittingClusterKey & key,
     const LocalFittingClusterWork & cluster)
 {
     auto initial_objective_samples{
         CollectLocalFittingObjectiveSamples(
             context,
-            previous_state.estimation_list,
+            previous_state,
             cluster.objective_sample_ref_list,
             key)
     };
@@ -3553,18 +3346,18 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
     const SecondStageLocalFittingContext & context,
     LocalFittingClusterMap cluster_map,
     const std::vector<LocalFittingClusterKey> & key_list,
-    const GaussianFittingState & previous_state,
-    const GaussianFittingState & raw_state,
+    const LocalFittingState & previous_state,
+    const LocalFittingState & raw_state,
     algorithm::ClusteredAndersonAccelerationHistorySet & acceleration_history,
     algorithm::ClusteredFittingQualityStateSet<LocalFittingObjectiveSamples> & cluster_quality_state)
 {
     const auto previous_transformed_estimation_list{
         BuildLocalFittingTransformedEstimationList(
-            previous_state.estimation_list)
+            previous_state)
     };
     const auto raw_transformed_estimation_list{
         BuildLocalFittingTransformedEstimationList(
-            raw_state.estimation_list)
+            raw_state)
     };
     const auto localized_anderson_candidate{
         acceleration_history.BuildCandidate(
@@ -3579,7 +3372,7 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
         LocalFittingCandidateKind candidate_kind,
         const std::vector<LocalFittingClusterKey> & candidate_key_list,
         const std::vector<Eigen::VectorXd> & candidate_transformed_estimation_list,
-        const std::vector<LocalGaussianResult> & uncertainty_result_list)
+        const LocalFittingState & uncertainty_state)
     {
         for (const auto damping : kLocalFittingAccelerationDampingList)
         {
@@ -3601,7 +3394,7 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                     BuildLocalFittingCandidateState(
                         previous_state,
                         candidate_transformed_estimation_list,
-                        uncertainty_result_list,
+                        uncertainty_state,
                         key,
                         damping,
                         &build_failure)
@@ -3622,8 +3415,8 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
 
                 auto transformed_change_stats{
                     SummarizeLocalFittingTransformedChanges(
-                        attempt_state->estimation_list,
-                        previous_state.estimation_list,
+                        *attempt_state,
+                        previous_state,
                         key)
                 };
                 const auto accepted{
@@ -3637,7 +3430,7 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                         {
                             return ScoreLocalFittingClusterCandidate(
                                 context,
-                                attempt_state->estimation_list,
+                                *attempt_state,
                                 key,
                                 cluster.objective_sample_ref_list,
                                 objective_scale_tracker,
@@ -3654,10 +3447,8 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                 {
                     for (const auto active_index : key)
                     {
-                        selection.assembled_state.result_list.at(active_index) =
-                            attempt_state->result_list.at(active_index);
-                        selection.assembled_state.estimation_list.at(active_index) =
-                            attempt_state->estimation_list.at(active_index);
+                        selection.assembled_state.at(active_index) =
+                            attempt_state->at(active_index);
                     }
                     cluster.accepted_kind = candidate_kind;
                     if (!selection.accepted_candidate_attempt.has_value())
@@ -3682,7 +3473,7 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
             LocalFittingCandidateKind::Anderson,
             localized_anderson_candidate->used_cluster_key_list,
             localized_anderson_candidate->state_list,
-            previous_state.result_list);
+            previous_state);
     }
     std::vector<LocalFittingClusterKey> anderson_failure_keys;
     for (auto & [key, cluster] : cluster_map)
@@ -3700,7 +3491,7 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
         LocalFittingCandidateKind::FixedPoint,
         key_list,
         raw_transformed_estimation_list,
-        raw_state.result_list);
+        raw_state);
 
     std::vector<LocalFittingClusterKey> fixed_point_progress_keys;
     for (const auto & [key, cluster] : cluster_map)
@@ -3919,10 +3710,10 @@ std::vector<std::size_t> ExpandSuspiciousOffsetClusters(
 void RollBackSuspiciousOffsetClusters(
     const SecondStageLocalFittingContext & context,
     const std::vector<std::size_t> & active_index_list,
-    const GaussianFittingState & previous_state,
+    const LocalFittingState & previous_state,
     const std::vector<std::size_t> & suspicious_active_position_list,
     FittedGaussianSnapshot & current_snapshot,
-    GaussianFittingState & iteration_state)
+    LocalFittingState & iteration_state)
 {
     for (const auto active_position : suspicious_active_position_list)
     {
@@ -3933,19 +3724,16 @@ void RollBackSuspiciousOffsetClusters(
 
         const auto state_index{ active_index_list.at(active_position) };
         if (state_index >= context.AtomSize() ||
-            state_index >= previous_state.estimation_list.size() ||
-            state_index >= previous_state.result_list.size() ||
-            state_index >= iteration_state.estimation_list.size() ||
-            state_index >= iteration_state.result_list.size())
+            state_index >= previous_state.size() ||
+            state_index >= iteration_state.size())
         {
             throw std::invalid_argument("Suspicious offset rollback state index is out of range.");
         }
-        const auto previous_model{
-            GaussianModel3D::FromVector(previous_state.estimation_list.at(state_index))
+        const auto & previous_model{
+            previous_state.at(state_index).mdpde.GetModel()
         };
         current_snapshot.at(state_index) = previous_model;
-        iteration_state.estimation_list.at(state_index) = previous_state.estimation_list.at(state_index);
-        iteration_state.result_list.at(state_index) = previous_state.result_list.at(state_index);
+        iteration_state.at(state_index) = previous_state.at(state_index);
     }
 }
 
@@ -3953,20 +3741,19 @@ LocalFittingIterationResult RunLocalFittingIteration(
     const SecondStageLocalFittingContext & context,
     const std::vector<std::size_t> & active_index_list,
     const std::vector<LocalFittingClusterKey> & cluster_key_list,
-    const GaussianFittingState & previous_state,
+    const LocalFittingState & previous_state,
     const FitOptions & options,
     double ridge_ratio,
     const std::vector<double> & ridge_multiplier_list)
 {
     const auto selected_atom_size{ context.AtomSize() };
-    if (previous_state.result_list.size() != selected_atom_size ||
-        previous_state.estimation_list.size() != selected_atom_size ||
+    if (previous_state.size() != selected_atom_size ||
         ridge_multiplier_list.size() != selected_atom_size)
     {
         throw std::invalid_argument("Local fitting iteration input sizes are inconsistent.");
     }
     auto current_snapshot{
-        BuildFittedGaussianSnapshot(previous_state.estimation_list)
+        BuildFittedGaussianSnapshot(previous_state)
     };
     auto clustered_joint_offset_result{
         EstimateClusteredJointOffsets(
@@ -3989,8 +3776,8 @@ LocalFittingIterationResult RunLocalFittingIteration(
     for (std::size_t i = 0; i < active_index_list.size(); i++)
     {
         const auto state_index{ active_index_list.at(i) };
-        const auto previous_model{
-            GaussianModel3D::FromVector(previous_state.estimation_list.at(state_index))
+        const auto & previous_model{
+            previous_state.at(state_index).mdpde.GetModel()
         };
         const auto & offset_model{ current_snapshot.at(state_index) };
         if (!IsSuspiciousJointOffset(
@@ -4028,7 +3815,7 @@ LocalFittingIterationResult RunLocalFittingIteration(
             FitAtomWithJointOffsetFallback(
                 context,
                 state_index,
-                previous_state.result_list.at(state_index),
+                previous_state.at(state_index),
                 refit_snapshot,
                 options)
         };
@@ -4052,9 +3839,7 @@ LocalFittingIterationResult RunLocalFittingIteration(
                 refit_result->is_stationarity_eligible);
         }
         auto result{ std::move(refit_result->result) };
-        const auto fitted_model{ result.mdpde.GetModel() };
-        iteration_state.estimation_list.at(state_index) = fitted_model.ToVector();
-        iteration_state.result_list.at(state_index) = std::move(result);
+        iteration_state.at(state_index) = std::move(result);
     }
     const auto post_refit_suspicious_position_list{
         detail::ExpandPostRefitRollbackClusters(
@@ -4086,17 +3871,17 @@ LocalFittingIterationResult RunLocalFittingIteration(
 }
 
 void ApplyLocalFittingState(
-    const GaussianFittingState & iteration_state,
+    const LocalFittingState & iteration_state,
     std::vector<AtomLocalPotentialEditor> & local_editor_list)
 {
-    if (local_editor_list.size() != iteration_state.result_list.size())
+    if (local_editor_list.size() != iteration_state.size())
     {
         throw std::invalid_argument("local_editor_list and local fitting state sizes are inconsistent.");
     }
 
     for (std::size_t i = 0; i < local_editor_list.size(); i++)
     {
-        local_editor_list.at(i).SetGaussianResult(iteration_state.result_list.at(i));
+        local_editor_list.at(i).SetGaussianResult(iteration_state.at(i));
     }
 }
 
@@ -4111,7 +3896,6 @@ LocalFittingOffsetStats SummarizeLocalFittingOffsetValues(
     {
         if (!std::isfinite(offset)) continue;
         stats.finite_count++;
-        if (offset == 0.0) stats.exact_zero_count++;
         absolute_offset_list.emplace_back(std::abs(offset));
     }
     if (absolute_offset_list.empty()) return stats;
@@ -4130,17 +3914,13 @@ LocalFittingOffsetStats SummarizeLocalFittingOffsetValues(
 }
 
 LocalFittingOffsetStats SummarizeLocalFittingOffsets(
-    const std::vector<Eigen::VectorXd> & estimation_list)
+    const LocalFittingState & state)
 {
     std::vector<double> offset_list;
-    offset_list.reserve(estimation_list.size());
-    for (const auto & estimation : estimation_list)
+    offset_list.reserve(state.size());
+    for (const auto & result : state)
     {
-        GaussianModel3D::RequireParameterVector(
-            estimation,
-            "Local fitting offset summary model");
-        offset_list.emplace_back(
-            estimation(GaussianModel3D::OffsetIndex()));
+        offset_list.emplace_back(result.mdpde.GetModel().GetOffset());
     }
     return SummarizeLocalFittingOffsetValues(offset_list);
 }
@@ -4151,8 +3931,7 @@ void AppendLocalFittingOffsetSummary(
 {
     stream
         << std::scientific << std::setprecision(2)
-        << "; offsets finite/exact-zero = "
-        << stats.finite_count << "/" << stats.exact_zero_count
+        << "; offsets finite = " << stats.finite_count
         << " of " << stats.atom_count
         << ", |C| median/p99/max = "
         << stats.median_absolute_offset << "/"
@@ -4162,15 +3941,14 @@ void AppendLocalFittingOffsetSummary(
 
 void AppendLocalFittingAuditSummary(
     std::ostringstream & stream,
-    const LocalFittingBestAuditState & audit_state)
+    const LocalFittingAuditedState & audited_state)
 {
-    if (!audit_state.best_objective.has_value()) return;
-    const auto & objective{ *audit_state.best_objective };
+    const auto & objective{ audited_state.objective };
     stream
         << "; audit best source = ";
-    if (audit_state.best_accepted_iteration.has_value())
+    if (audited_state.accepted_iteration.has_value())
     {
-        stream << "accepted iteration " << *audit_state.best_accepted_iteration;
+        stream << "accepted iteration " << *audited_state.accepted_iteration;
     }
     else
     {
@@ -4482,8 +4260,7 @@ void LogLocalFittingBacktrackingRetry(
     bool uses_cluster_local_objective_ridge,
     const LocalFittingClusterHealthSummary & health_summary,
     const LocalFittingClusterSelectionSummary & selection_summary,
-    double raw_offset_change_percentile,
-    const LocalFittingOffsetStats & raw_offset_stats)
+    double raw_offset_change_percentile)
 {
     if (options.quiet_mode) return;
 
@@ -4506,8 +4283,7 @@ void LogLocalFittingBacktrackingRetry(
     }
     progress_message
         << std::scientific << std::setprecision(2)
-        << ", offset dQ_C p99 raw = " << raw_offset_change_percentile
-        << ", exact-zero offsets raw = " << raw_offset_stats.exact_zero_count;
+        << ", offset dQ_C p99 raw = " << raw_offset_change_percentile;
     AppendLocalFittingClusterSelectionSummary(
         progress_message,
         selection_summary);
@@ -4518,7 +4294,7 @@ void LogLocalFittingBacktrackingRetry(
 void LogLocalFittingBacktrackingStop(
     const FitOptions & options,
     LocalFittingBacktrackingStopReason reason,
-    const LocalFittingBestAuditState * applied_audit_state,
+    const LocalFittingAuditedState * applied_audit_state,
     const LocalFittingTerminalSummary & terminal_summary,
     const LocalFittingOffsetStats & applied_offset_stats)
 {
@@ -4562,9 +4338,7 @@ void LogLocalFittingProgress(
     const LocalFittingTerminalSummary & terminal_summary,
     const LocalFittingClusterSelectionSummary & selection_summary,
     double raw_offset_change_percentile,
-    double accepted_offset_change_percentile,
-    const LocalFittingOffsetStats & raw_offset_stats,
-    const LocalFittingOffsetStats & accepted_offset_stats)
+    double accepted_offset_change_percentile)
 {
     if (options.quiet_mode) return;
 
@@ -4587,9 +4361,7 @@ void LogLocalFittingProgress(
     progress_message
         << std::scientific << std::setprecision(2)
         << ", offset dQ_C p99 raw/accept = "
-        << raw_offset_change_percentile << "/" << accepted_offset_change_percentile
-        << ", exact-zero offsets raw/accept = "
-        << raw_offset_stats.exact_zero_count << "/" << accepted_offset_stats.exact_zero_count;
+        << raw_offset_change_percentile << "/" << accepted_offset_change_percentile;
     AppendLocalFittingClusterSelectionSummary(progress_message, selection_summary);
     if (terminal_summary.suspicious_atom_count > 0)
     {
@@ -4635,7 +4407,7 @@ void LogLocalFittingConverged(
 
 void LogLocalFittingMaximumIterations(
     const FitOptions & options,
-    const LocalFittingBestAuditState * applied_audit_state,
+    const LocalFittingAuditedState * applied_audit_state,
     const LocalFittingTerminalSummary & terminal_summary,
     const LocalFittingOffsetStats & applied_offset_stats)
 {
@@ -5017,7 +4789,6 @@ void RunSecondStageLocalFitting(
         }
     };
     detail::LocalFittingAndersonRegimeTracker anderson_regime_tracker;
-    LocalFittingJointOffsetStatusTracker joint_offset_status_tracker;
     algorithm::ConvergenceFreezeTracker freeze_tracker{
         atom_size,
         kLocalFittingFreezeTrackerChangeTolerance,
@@ -5065,18 +4836,16 @@ void RunSecondStageLocalFitting(
                     options,
                     accepted_iteration_count,
                     terminal_summary,
-                    SummarizeLocalFittingOffsets(
-                        previous_state.estimation_list));
+                    SummarizeLocalFittingOffsets(previous_state));
             }
             else
             {
                 LogLocalFittingAllAtomsFrozen(
                     options,
                     accepted_iteration_count,
-                    SummarizeLocalFittingOffsets(
-                        previous_state.estimation_list));
+                    SummarizeLocalFittingOffsets(previous_state));
             }
-            break;
+            return;
         }
 
         auto cluster_map{ BuildLocalFittingClusters(context, active_index_list) };
@@ -5099,7 +4868,6 @@ void RunSecondStageLocalFitting(
             });
         acceleration_history.Reconcile(cluster_key_list);
         anderson_regime_tracker.Reconcile(cluster_key_list);
-        joint_offset_status_tracker.Reconcile(cluster_key_list);
         auto joint_offset_ridge_multiplier_list{
             cluster_quality_state.BuildObjectiveRidgeMultiplierList(atom_size)
         };
@@ -5146,13 +4914,6 @@ void RunSecondStageLocalFitting(
         };
         acceleration_history.ClearAndSuppress(progress_ineligible_key_list);
         anderson_regime_tracker.Invalidate(progress_ineligible_key_list);
-        joint_offset_status_tracker.Invalidate(progress_ineligible_key_list);
-        const auto incompatible_status_key_list{
-            joint_offset_status_tracker.FindIncompatible(current_health_by_key)
-        };
-        acceleration_history.ClearAndSuppress(incompatible_status_key_list);
-        anderson_regime_tracker.Invalidate(incompatible_status_key_list);
-        joint_offset_status_tracker.Invalidate(incompatible_status_key_list);
         if (!current_anderson_regime_signature_by_key.empty())
         {
             const auto incompatible_regime_key_list{
@@ -5161,7 +4922,6 @@ void RunSecondStageLocalFitting(
             };
             acceleration_history.ClearAndSuppress(incompatible_regime_key_list);
             anderson_regime_tracker.Invalidate(incompatible_regime_key_list);
-            joint_offset_status_tracker.Invalidate(incompatible_regime_key_list);
         }
         if (has_suspicious_offset_fallback)
         {
@@ -5169,24 +4929,21 @@ void RunSecondStageLocalFitting(
                 suspicious_offset_state_index_list);
             anderson_regime_tracker.InvalidateContaining(
                 suspicious_offset_state_index_list);
-            joint_offset_status_tracker.InvalidateContaining(
-                suspicious_offset_state_index_list);
         }
         const auto raw_state{ std::move(iteration_result.state) };
+        const auto raw_fixed_point_change_list{
+            CalculateLocalFittingTransformedChanges(raw_state, previous_state)
+        };
         const auto raw_fixed_point_residual_stats{
-            SummarizeLocalFittingTransformedChanges(
-                raw_state.estimation_list,
-                previous_state.estimation_list,
-                active_index_list)
+            algorithm::SummarizeParameterChangeStats(
+                raw_fixed_point_change_list,
+                active_index_list,
+                kLocalFittingChangePercentile)
         };
         const auto raw_fixed_point_residual_maximum_list{
-            SummarizeLocalFittingMaximumTransformedChanges(
-                raw_state.estimation_list,
-                previous_state.estimation_list,
+            detail::SummarizeLocalFittingMaximumTransformedChanges(
+                raw_fixed_point_change_list,
                 active_index_list)
-        };
-        const auto raw_offset_stats{
-            SummarizeLocalFittingOffsets(raw_state.estimation_list)
         };
         auto selection{
             SelectLocalFittingClusterCandidates(
@@ -5210,9 +4967,6 @@ void RunSecondStageLocalFitting(
             stationarity_ineligible_atom_index_list);
         freeze_tracker.ResetStability(
             CollectLocalFittingClusterAtomIndexes(selection.rejected_key_list));
-        acceleration_history.ClearAndSuppress(progress_ineligible_key_list);
-        anderson_regime_tracker.Invalidate(progress_ineligible_key_list);
-        joint_offset_status_tracker.Invalidate(progress_ineligible_key_list);
         const auto terminal_suspicious_key_list{
             UpdatePersistentSuspiciousRollbackState(
                 cluster_key_list,
@@ -5263,7 +5017,6 @@ void RunSecondStageLocalFitting(
         {
             acceleration_history.ClearAndSuppress(terminal_key_list);
             anderson_regime_tracker.Invalidate(terminal_key_list);
-            joint_offset_status_tracker.Invalidate(terminal_key_list);
             for (const auto & key : terminal_key_list)
             {
                 freeze_tracker.ResetStability(key);
@@ -5327,8 +5080,7 @@ void RunSecondStageLocalFitting(
                     health_summary,
                     objective_selection_summary,
                     raw_fixed_point_residual_stats.percentile_list.at(
-                        detail::kOffsetToPeakRatioChangeIndex),
-                    raw_offset_stats);
+                        detail::kOffsetToPeakRatioChangeIndex));
                 LogRejectedLocalFittingClusterDiagnostics(
                     options,
                     selection.rejected_cluster_diagnostic_list);
@@ -5340,29 +5092,19 @@ void RunSecondStageLocalFitting(
                     LocalFittingBacktrackingStopReason::MaximumIterationLimit :
                     LocalFittingBacktrackingStopReason::MaximumGlobalRidge
             };
-            std::optional<LocalFittingBestAuditState> applied_audit_snapshot;
-            const LocalFittingBestAuditState * applied_audit_state{ nullptr };
-            const GaussianFittingState * applied_state{ &previous_state };
+            const LocalFittingAuditedState * applied_audit_state{ nullptr };
+            const LocalFittingState * applied_state{ &previous_state };
             if (stop_reason == LocalFittingBacktrackingStopReason::MaximumIterationLimit &&
-                best_audit_state.best_state.has_value() &&
-                best_audit_state.best_objective.has_value())
+                best_audit_state.best.has_value())
             {
-                applied_audit_state = &best_audit_state;
-                applied_state = &*best_audit_state.best_state;
+                applied_audit_state = &*best_audit_state.best;
+                applied_state = &best_audit_state.best->state;
             }
             else if (stop_reason == LocalFittingBacktrackingStopReason::MaximumGlobalRidge &&
-                best_audit_state.best_accepted_state.has_value() &&
-                best_audit_state.best_accepted_objective.has_value())
+                best_audit_state.best_accepted.has_value())
             {
-                applied_audit_snapshot = best_audit_state;
-                applied_audit_snapshot->best_state =
-                    best_audit_state.best_accepted_state;
-                applied_audit_snapshot->best_objective =
-                    best_audit_state.best_accepted_objective;
-                applied_audit_snapshot->best_accepted_iteration =
-                    best_audit_state.best_accepted_state_iteration;
-                applied_audit_state = &*applied_audit_snapshot;
-                applied_state = &*best_audit_state.best_accepted_state;
+                applied_audit_state = &*best_audit_state.best_accepted;
+                applied_state = &best_audit_state.best_accepted->state;
             }
             ApplyLocalFittingState(*applied_state, local_editor_list);
             LogRejectedLocalFittingClusterDiagnostics(
@@ -5373,37 +5115,32 @@ void RunSecondStageLocalFitting(
                 stop_reason,
                 applied_audit_state,
                 terminal_summary,
-                SummarizeLocalFittingOffsets(
-                    applied_state->estimation_list));
-            break;
+                SummarizeLocalFittingOffsets(*applied_state));
+            return;
         }
 
-        auto change_list{
+        const auto change_list{
             CalculateLocalFittingTransformedChanges(
-                assembled_state.estimation_list,
-                previous_state.estimation_list)
+                assembled_state,
+                previous_state)
         };
-        auto freeze_evidence_change_list{
-            CalculateLocalFittingFreezeEvidenceChanges(
-                assembled_state.estimation_list,
-                raw_state.estimation_list,
-                previous_state.estimation_list)
+        const auto freeze_evidence_change_list{
+            CombineLocalFittingFreezeEvidenceChanges(
+                change_list,
+                raw_fixed_point_change_list)
         };
-        auto transformed_change_stats{
-            SummarizeLocalFittingTransformedChanges(
-                assembled_state.estimation_list,
-                previous_state.estimation_list,
-                active_index_list)
+        const auto transformed_change_stats{
+            algorithm::SummarizeParameterChangeStats(
+                change_list,
+                active_index_list,
+                kLocalFittingChangePercentile)
         };
         const auto transformed_change_maximum_list{
-            SummarizeLocalFittingMaximumTransformedChanges(
-                assembled_state.estimation_list,
-                previous_state.estimation_list,
+            detail::SummarizeLocalFittingMaximumTransformedChanges(
+                change_list,
                 active_index_list)
         };
-        const auto accepted_offset_stats{
-            SummarizeLocalFittingOffsets(assembled_state.estimation_list)
-        };
+        const auto accepted_offset_stats{ SummarizeLocalFittingOffsets(assembled_state) };
         accepted_iteration_count++;
         TryUpdateLocalFittingBestAuditState(
             context,
@@ -5427,26 +5164,14 @@ void RunSecondStageLocalFitting(
                 suspicious_offset_state_index_list);
             anderson_regime_tracker.InvalidateContaining(
                 suspicious_offset_state_index_list);
-            joint_offset_status_tracker.InvalidateContaining(
-                suspicious_offset_state_index_list);
         }
         acceleration_history.Commit(
             progress_eligible_key_list,
-            BuildLocalFittingTransformedEstimationList(
-                previous_state.estimation_list),
-            BuildLocalFittingTransformedEstimationList(
-                raw_state.estimation_list));
-        const auto regime_signature_commit_key_list{
-            CollectLocalFittingClusterKeysWithRegimeSignatures(
-                progress_eligible_key_list,
-                current_anderson_regime_signature_by_key)
-        };
+            BuildLocalFittingTransformedEstimationList(previous_state),
+            BuildLocalFittingTransformedEstimationList(raw_state));
         anderson_regime_tracker.Commit(
-            regime_signature_commit_key_list,
-            current_anderson_regime_signature_by_key);
-        joint_offset_status_tracker.Commit(
             progress_eligible_key_list,
-            current_health_by_key);
+            current_anderson_regime_signature_by_key);
         std::vector<std::size_t> accepted_active_index_list;
         for (const auto & key : continuing_accepted_key_list)
         {
@@ -5488,9 +5213,7 @@ void RunSecondStageLocalFitting(
             raw_fixed_point_residual_stats.percentile_list.at(
                 detail::kOffsetToPeakRatioChangeIndex),
             transformed_change_stats.percentile_list.at(
-                detail::kOffsetToPeakRatioChangeIndex),
-            raw_offset_stats,
-            accepted_offset_stats);
+                detail::kOffsetToPeakRatioChangeIndex));
         LogRejectedLocalFittingClusterDiagnostics(
             options,
             selection.rejected_cluster_diagnostic_list);
@@ -5515,7 +5238,7 @@ void RunSecondStageLocalFitting(
                     accepted_iteration_count,
                     accepted_offset_stats);
             }
-            break;
+            return;
         }
 
         const auto converged{
@@ -5549,27 +5272,25 @@ void RunSecondStageLocalFitting(
                     transformed_change_stats,
                     accepted_offset_stats);
             }
-            break;
+            return;
         }
 
         if (iter + 1 == kLocalFittingMaximumIterations)
         {
-            const LocalFittingBestAuditState * applied_audit_state{ nullptr };
-            const GaussianFittingState * applied_state{ &assembled_state };
-            if (best_audit_state.best_state.has_value() &&
-                best_audit_state.best_objective.has_value())
+            const LocalFittingAuditedState * applied_audit_state{ nullptr };
+            const LocalFittingState * applied_state{ &assembled_state };
+            if (best_audit_state.best.has_value())
             {
-                applied_audit_state = &best_audit_state;
-                applied_state = &*best_audit_state.best_state;
+                applied_audit_state = &*best_audit_state.best;
+                applied_state = &best_audit_state.best->state;
             }
             ApplyLocalFittingState(*applied_state, local_editor_list);
             LogLocalFittingMaximumIterations(
                 options,
                 applied_audit_state,
                 terminal_summary,
-                SummarizeLocalFittingOffsets(
-                    applied_state->estimation_list));
-            break;
+                SummarizeLocalFittingOffsets(*applied_state));
+            return;
         }
         previous_state = std::move(assembled_state);
     }

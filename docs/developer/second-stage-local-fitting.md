@@ -30,13 +30,15 @@ stores:
   group prior, then the selected atoms' finite group-median width, then the
   atom's current finite width, and finally `1.0`.
 
-The fixed-point state is a `GaussianFittingState` with aligned result and model
-vectors:
+The fixed-point state is a `LocalFittingState`, an ordered vector of per-atom
+`LocalGaussianResult` values. Its MDPDE model is the single parameter source:
 
 ```text
-result_list      = per-atom LocalGaussianResult
-estimation_list  = per-atom MDPDE model vector [amplitude, width, offset]
+state[i].mdpde.GetModel() = per-atom [amplitude, width, offset]
 ```
+
+Snapshots and transformed Anderson coordinates are derived from that model only
+at their use boundaries, so result and parameter storage cannot diverge.
 
 `previous_state` is replaced only after an accepted non-terminal iteration.
 Rejected iterations keep the previous state.
@@ -225,13 +227,14 @@ cluster with compatible history, localized Anderson acceleration proposes:
 candidate = sum(gamma_i * G(x_i)), where sum(gamma_i) = 1
 ```
 
-Compatibility includes a cluster-local ridge regime signature, not only the
-cluster key. The signature records the global joint-offset ridge ratio and,
-in canonical cluster-key order, each atom's effective ridge multiplier. The
-effective multiplier is the maximum of the cluster objective-ridge multiplier,
-the suspicious-retry multiplier, and the proactive collinearity multiplier
-actually used to build the joint-offset system. Signatures use exact comparison,
-so any real change to one of these controls starts a new fixed-point regime.
+Compatibility includes a cluster-local regime signature, not only the cluster
+key. The signature records the joint-offset solve status, the global joint-offset
+ridge ratio and, in canonical cluster-key order, each atom's effective ridge
+multiplier. The effective multiplier is the maximum of the cluster objective-
+ridge multiplier, the suspicious-retry multiplier, and the proactive
+collinearity multiplier actually used to build the joint-offset system.
+Signatures use exact comparison, so a status or control change starts a new
+fixed-point regime.
 
 Each joint-offset system build that produces its cluster's complete
 effective-multiplier list can form a signature, including a build whose later
@@ -240,8 +243,8 @@ cluster fails during system construction. With the default health policy
 enabled, a hard-failure or local-refit-fallback cluster clears and suppresses
 only its own Anderson history before candidate construction and cannot commit
 its raw map or signature. Progress-eligible joint-offset results may commit
-history only while their exact joint status also remains unchanged. A status or
-signature mismatch clears only the affected cluster. Any
+history only while their complete signature remains unchanged. A mismatch
+clears only the affected cluster. Any
 pre-refit or post-refit suspicious rollback clears its containing cluster before
 candidate construction. Compatible healthy remote clusters retain their
 histories.
@@ -267,7 +270,7 @@ damped = previous + damping * (candidate - previous)
 Both candidate kinds use the same `BuildLocalFittingCandidateState` path. The
 builder performs the displayed interpolation in transformed coordinates,
 decodes the result to the canonical raw `[amplitude, width, offset]` state, and
-returns an `std::optional<GaussianFittingState>` containing the complete
+returns an `std::optional<LocalFittingState>` containing the complete
 candidate only when every changed model is valid. Exact transformed no-op
 candidates retain the previous raw model without a round-trip conversion.
 Fixed-point candidates retain raw refit uncertainty;
