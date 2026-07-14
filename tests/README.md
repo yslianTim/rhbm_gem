@@ -17,6 +17,7 @@ This project uses a two-axis test organization model:
 | `tests/utils/hrl/` | `utils` | HRL-specific algorithm and transform tests |
 | `tests/integration/` | `integration` | Python binding smoke/validation scripts and end-to-end command pipeline checks |
 | `tests/fixtures/` | fixture | Shared fixture files used by C++ and Python tests |
+| `tests/benchmarks/` | benchmark | Small checked-in baselines for opt-in external-data regressions |
 
 ## Label Vocabulary
 
@@ -66,6 +67,11 @@ Run by intent:
 ```bash
 ctest --test-dir build -L intent:migration --output-on-failure
 ```
+
+The 168-atom simulation regression is intentionally excluded unless configured
+with `RHBM_GEM_ENABLE_FOLD_168_REGRESSION=ON`. It uses hash-verified external
+inputs and can be selected with `-R fold_168_simulation_regression` or
+`-L benchmark:external`; see the developer build guide for configuration.
 
 Run repository guards and install consumer smoke (lint lane):
 

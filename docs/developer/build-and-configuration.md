@@ -204,6 +204,9 @@ Beginner / common:
 | `RHBM_GEM_OPENMP_MODE` | `AUTO` | OpenMP mode control: `AUTO`, `ON`, or `OFF`. |
 | `RHBM_GEM_ROOT_MODE` | `AUTO` | ROOT mode control: `AUTO`, `ON`, or `OFF`. |
 | `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` | `OFF` | Enable experimental features across the project. |
+| `RHBM_GEM_ENABLE_FOLD_168_REGRESSION` | `OFF` | Enable the opt-in external-data 168-atom simulation regression. |
+| `RHBM_GEM_FOLD_168_MODEL` | empty | Path to the hash-verified fold-168 CIF input. |
+| `RHBM_GEM_FOLD_168_MAP` | empty | Path to the hash-verified fold-168 map input. |
 | `RHBM_GEM_PYTHON_INSTALL_LAYOUT` | `SITE_PREFIX` | Python module install layout: `SITE_PREFIX` or `LIBDIR`. |
 | `RHBM_GEM_PYTHON_INSTALL_DIR` | empty | Explicit install directory for the Python extension module. |
 
@@ -255,6 +258,14 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_ROOT_MODE=ON -DRHBM_GE
 # Enable project-wide experimental features
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE=ON
 
+# Enable the external 168-atom regression benchmark
+cmake -S . -B build-fold-168 \
+  -DRHBM_GEM_ENABLE_FOLD_168_REGRESSION=ON \
+  -DRHBM_GEM_FOLD_168_MODEL=/path/to/fold_test_model_0.cif \
+  -DRHBM_GEM_FOLD_168_MAP=/path/to/sim_map_gaus_grid0.10_charge1_bw0.50.map
+cmake --build build-fold-168 --target tests_all -j
+ctest --test-dir build-fold-168 -R fold_168_simulation_regression --output-on-failure
+
 # Install Python module into <prefix>/<CMAKE_INSTALL_LIBDIR>/pythonX.Y/site-packages (default layout)
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_PYTHON_BINDINGS=ON
 cmake --install build --prefix "$HOME/.local"
@@ -266,6 +277,24 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_PYTHON_INSTALL_LAYOUT=
 ```
 
 Note: The Python examples here demonstrate layout validation only. For the user-facing install and example flow, follow [`/docs/user/getting-started.md#python-bindings`](/docs/user/getting-started.md#python-bindings) and [`/docs/user/getting-started.md#python-examples`](/docs/user/getting-started.md#python-examples).
+
+The fold-168 runner verifies the two external SHA-256 identities before it
+starts the command. It passes a nonexistent database path in a temporary
+directory to `potential_analysis`; the normal persistence layer creates the
+current schema and stores the benchmark output. The database is therefore an
+ephemeral output, not a fitting input. Scientific and diagnostic comparisons
+are blocking, while the single wall-time measurement is report-only.
+The required fixture hashes are:
+
+- CIF: `156d35aa326f0d4408d726a999329d2ffede775489aeaa5d99a2cc9b9f663cab`
+- map: `5e0dbb13fc3a76f8a944e6e2b18393d1896fafc2ec9020457cca8e8a421f120e`
+
+Run artifacts are written under
+`<build>/benchmark-results/fold_168/{run.log,actual.json,report.json}`. A valid
+algorithm change must update the checked-in baseline by manually reviewing
+`actual.json`; the runner never overwrites the baseline. The temporary database
+is deleted after its 168 atom results have been read and is not retained as an
+artifact.
 
 After installation, downstream CMake projects can consume this project with:
 

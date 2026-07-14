@@ -19,6 +19,13 @@ option(BUILD_PYTHON_BINDINGS "Build pybind11 Python extension module" ON)
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
 option(RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
     "Enable experimental features across the project" OFF)
+option(RHBM_GEM_ENABLE_FOLD_168_REGRESSION
+    "Enable the external 168-atom simulation regression benchmark" OFF)
+
+set(RHBM_GEM_FOLD_168_MODEL "" CACHE FILEPATH
+    "Path to the fixed fold-168 regression CIF model")
+set(RHBM_GEM_FOLD_168_MAP "" CACHE FILEPATH
+    "Path to the fixed fold-168 regression map")
 
 set(RHBM_GEM_DEP_PROVIDER "SYSTEM" CACHE STRING
     "Dependency provider mode: SYSTEM or FETCH")
@@ -52,6 +59,11 @@ rhbm_gem_normalize_cache_enum(
 
 if(ENABLE_COVERAGE AND NOT BUILD_TESTING)
     message(FATAL_ERROR "ENABLE_COVERAGE requires BUILD_TESTING=ON")
+endif()
+
+if(RHBM_GEM_ENABLE_FOLD_168_REGRESSION AND NOT BUILD_TESTING)
+    message(FATAL_ERROR
+        "RHBM_GEM_ENABLE_FOLD_168_REGRESSION requires BUILD_TESTING=ON")
 endif()
 
 add_library(CompilerFlags INTERFACE)

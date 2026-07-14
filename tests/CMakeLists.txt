@@ -284,6 +284,61 @@ add_rhbm_gtest_group(rhbm_tests_integration_command
     SOURCES ${INTEGRATION_COMMAND_TEST_SOURCES}
 )
 
+if(NOT DEFINED Python_EXECUTABLE OR Python_EXECUTABLE STREQUAL "")
+    find_package(Python QUIET COMPONENTS Interpreter)
+endif()
+
+if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
+    add_test(
+        NAME fold_168_regression_runner_test
+        COMMAND "${Python_EXECUTABLE}"
+            "${PROJECT_SOURCE_DIR}/tests/integration/fold_168_regression_test.py"
+    )
+    set_tests_properties(
+        fold_168_regression_runner_test
+        PROPERTIES LABELS "domain:integration;intent:algorithm"
+    )
+endif()
+
+if(RHBM_GEM_ENABLE_FOLD_168_REGRESSION)
+    if(NOT DEFINED Python_EXECUTABLE OR Python_EXECUTABLE STREQUAL "")
+        find_package(Python REQUIRED COMPONENTS Interpreter)
+    endif()
+
+    foreach(input_path_variable IN ITEMS
+        RHBM_GEM_FOLD_168_MODEL
+        RHBM_GEM_FOLD_168_MAP)
+        if("${${input_path_variable}}" STREQUAL "" OR
+            NOT EXISTS "${${input_path_variable}}" OR
+            IS_DIRECTORY "${${input_path_variable}}")
+            message(FATAL_ERROR
+                "${input_path_variable} must name an existing file when "
+                "RHBM_GEM_ENABLE_FOLD_168_REGRESSION=ON")
+        endif()
+    endforeach()
+
+    add_dependencies(tests_all rhbm_gem_cli)
+    add_test(
+        NAME fold_168_simulation_regression
+        COMMAND "${Python_EXECUTABLE}"
+            "${PROJECT_SOURCE_DIR}/tests/integration/fold_168_regression.py"
+            --executable $<TARGET_FILE:rhbm_gem_cli>
+            --model "${RHBM_GEM_FOLD_168_MODEL}"
+            --map "${RHBM_GEM_FOLD_168_MAP}"
+            --baseline
+                "${PROJECT_SOURCE_DIR}/tests/benchmarks/fold_168_simulation_baseline.json"
+            --output-dir
+                "${PROJECT_BINARY_DIR}/benchmark-results/fold_168"
+    )
+    set_tests_properties(
+        fold_168_simulation_regression
+        PROPERTIES
+            LABELS "domain:integration;intent:algorithm;benchmark:external"
+            RUN_SERIAL TRUE
+            TIMEOUT 300
+    )
+endif()
+
 if(UNIX)
     find_program(BASH_EXECUTABLE NAMES bash)
     if(BASH_EXECUTABLE)
