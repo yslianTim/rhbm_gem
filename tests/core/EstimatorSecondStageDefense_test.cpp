@@ -5,6 +5,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -12,6 +13,7 @@
 #include "core/detail/GaussianEstimatorStages.hpp"
 #include "core/detail/LocalFittingAudit.hpp"
 #include "core/detail/LocalFittingAndersonRegime.hpp"
+#include "core/detail/LocalFittingCouplingGraph.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
 #include "core/detail/LocalFittingJointOffsetConditioning.hpp"
 #include "core/detail/LocalFittingJointPolish.hpp"
@@ -32,6 +34,7 @@ namespace alg = rhbm_gem::algorithm;
 namespace audit_detail = rhbm_gem::core::detail;
 namespace change_detail = rhbm_gem::core::detail;
 namespace conditioning_detail = rhbm_gem::core::detail;
+namespace coupling_detail = rhbm_gem::core::detail;
 namespace health_detail = rhbm_gem::core::detail;
 namespace polish_detail = rhbm_gem::core::detail;
 namespace regime_detail = rhbm_gem::core::detail;
@@ -59,6 +62,18 @@ double Distance(
     const auto dy{ static_cast<double>(lhs.at(1) - rhs.at(1)) };
     const auto dz{ static_cast<double>(lhs.at(2) - rhs.at(2)) };
     return std::sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+std::optional<double> FindCouplingWeight(
+    const coupling_detail::LocalFittingCouplingTopology & topology,
+    std::size_t atom_index,
+    std::size_t neighbor_index)
+{
+    for (const auto & edge : topology.adjacency_list.at(atom_index))
+    {
+        if (edge.neighbor_index == neighbor_index) return edge.weight;
+    }
+    return std::nullopt;
 }
 
 std::unique_ptr<rg::AtomObject> MakeAtom(
@@ -622,6 +637,25 @@ TEST(EstimatorSecondStageDefenseTest, AuditObjectiveKeepsEarlierBestOnTie)
     EXPECT_THROW(
         audit_detail::IsBetterLocalFittingAuditObjective(0.8, 1.0, -1.0),
         std::invalid_argument);
+}
+
+TEST(EstimatorSecondStageDefenseTest, AuditObjectiveProgressGuardChecksPreviousAndBest)
+{
+    EXPECT_TRUE(audit_detail::IsLocalFittingAuditObjectiveAcceptableForProgress(
+        1.0005, 1.0, std::optional<double>{ 1.0 }, 1.0e-3));
+    EXPECT_FALSE(audit_detail::IsLocalFittingAuditObjectiveAcceptableForProgress(
+        1.002, 1.0, std::optional<double>{ 1.0 }, 1.0e-3));
+    EXPECT_FALSE(audit_detail::IsLocalFittingAuditObjectiveAcceptableForProgress(
+        1.0, 1.0, std::optional<double>{ 0.99 }, 1.0e-3));
+    EXPECT_FALSE(audit_detail::IsLocalFittingAuditObjectiveAcceptableForProgress(
+        std::numeric_limits<double>::infinity(),
+        1.0,
+        std::nullopt,
+        1.0e-3));
+    EXPECT_FALSE(audit_detail::IsLocalFittingAuditObjectiveAcceptableForProgress(
+        std::nullopt, 1.0, std::nullopt, 1.0e-3));
+    EXPECT_FALSE(audit_detail::IsLocalFittingAuditObjectiveAcceptableForProgress(
+        1.0, std::nullopt, std::nullopt, 1.0e-3));
 }
 
 TEST(EstimatorSecondStageDefenseTest, ScientificObjectiveUsesAtomMeanIndependentOfCardinality)
@@ -1229,6 +1263,131 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishJacobianMatchesFiniteDifference
             }
         }
     }
+}
+
+TEST(EstimatorSecondStageDefenseTest, CouplingGraphNormalizesFullJacobianEnergy)
+{
+    Eigen::Vector3d jacobian;
+    jacobian << 1.0, 2.0, 3.0;
+    coupling_detail::LocalFittingCouplingGraphBuilder builder{ 2 };
+    builder.AddSample({ 0, 0 }, { { 0, jacobian }, { 1, jacobian } });
+    builder.AddSample({ 0, 1 }, { { 0, 2.0 * jacobian }, { 1, 2.0 * jacobian } });
+    const auto topology{ builder.BuildWeighted(0.05) };
+    ASSERT_TRUE(topology.has_value());
+    const auto weight{ FindCouplingWeight(*topology, 0, 1) };
+    ASSERT_TRUE(weight.has_value());
+    EXPECT_NEAR(*weight, 1.0, 1.0e-12);
+
+    coupling_detail::LocalFittingCouplingGraphBuilder scaled_builder{ 2 };
+    scaled_builder.AddSample(
+        { 0, 0 },
+        { { 0, 5.0 * jacobian }, { 1, jacobian } });
+    scaled_builder.AddSample(
+        { 0, 1 },
+        { { 0, 10.0 * jacobian }, { 1, 2.0 * jacobian } });
+    const auto scaled_topology{ scaled_builder.BuildWeighted(0.05) };
+    ASSERT_TRUE(scaled_topology.has_value());
+    const auto scaled_weight{ FindCouplingWeight(*scaled_topology, 0, 1) };
+    ASSERT_TRUE(scaled_weight.has_value());
+    EXPECT_NEAR(*scaled_weight, *weight, 1.0e-12);
+
+    coupling_detail::LocalFittingCouplingGraphBuilder tiny_builder{ 2 };
+    tiny_builder.AddSample(
+        { 0, 0 },
+        { { 0, 1.0e-100 * jacobian }, { 1, 1.0e-100 * jacobian } });
+    const auto tiny_topology{ tiny_builder.BuildWeighted(0.05) };
+    ASSERT_TRUE(tiny_topology.has_value());
+    const auto tiny_weight{ FindCouplingWeight(*tiny_topology, 0, 1) };
+    ASSERT_TRUE(tiny_weight.has_value());
+    EXPECT_NEAR(*tiny_weight, *weight, 1.0e-12);
+}
+
+TEST(EstimatorSecondStageDefenseTest, CouplingGraphCutsWeakAndCancelledEdges)
+{
+    const Eigen::Vector3d unit{ 1.0, 0.0, 0.0 };
+    coupling_detail::LocalFittingCouplingGraphBuilder weak_builder{ 2 };
+    weak_builder.AddSample({ 0, 0 }, { { 0, unit }, { 1, unit } });
+    weak_builder.AddSample({ 0, 1 }, { { 0, 10.0 * unit } });
+    weak_builder.AddSample({ 1, 0 }, { { 1, 10.0 * unit } });
+    const auto weak_topology{ weak_builder.BuildWeighted(0.05) };
+    ASSERT_TRUE(weak_topology.has_value());
+    EXPECT_FALSE(FindCouplingWeight(*weak_topology, 0, 1).has_value());
+    EXPECT_EQ(weak_topology->summary.candidate_edge_count, 1U);
+    EXPECT_EQ(weak_topology->summary.cut_edge_count, 1U);
+
+    coupling_detail::LocalFittingCouplingGraphBuilder cancelled_builder{ 2 };
+    cancelled_builder.AddSample({ 0, 0 }, { { 0, unit }, { 1, unit } });
+    cancelled_builder.AddSample({ 0, 1 }, { { 0, unit }, { 1, -unit } });
+    const auto cancelled_topology{ cancelled_builder.BuildWeighted(0.05) };
+    ASSERT_TRUE(cancelled_topology.has_value());
+    EXPECT_FALSE(FindCouplingWeight(*cancelled_topology, 0, 1).has_value());
+}
+
+TEST(EstimatorSecondStageDefenseTest, CouplingPartitionCutsWeakBridgeAndDuplicatesBoundarySample)
+{
+    coupling_detail::LocalFittingCouplingTopology topology;
+    topology.adjacency_list.resize(3);
+    topology.adjacency_list.at(0).push_back({ 1, 0.8 });
+    topology.adjacency_list.at(1).push_back({ 0, 0.8 });
+    topology.sample_dependency_list = {
+        { { 0, 0 }, { 0, 1 } },
+        { { 1, 0 }, { 1, 2 } }
+    };
+
+    const auto partition{
+        coupling_detail::BuildLocalFittingCouplingPartition(topology, { 0, 1, 2 })
+    };
+    ASSERT_EQ(partition.sample_id_list_by_key.size(), 2U);
+    EXPECT_EQ(partition.sample_id_list_by_key.count({ 0, 1 }), 1U);
+    EXPECT_EQ(partition.sample_id_list_by_key.count({ 2 }), 1U);
+    EXPECT_EQ(partition.boundary_sample_count, 1U);
+    EXPECT_EQ(partition.sample_id_list_by_key.at({ 0, 1 }).size(), 2U);
+    EXPECT_EQ(partition.sample_id_list_by_key.at({ 2 }).size(), 1U);
+
+    const auto inactive_partition{
+        coupling_detail::BuildLocalFittingCouplingPartition(topology, { 2, 0 })
+    };
+    EXPECT_EQ(inactive_partition.sample_id_list_by_key.count({ 0 }), 1U);
+    EXPECT_EQ(inactive_partition.sample_id_list_by_key.count({ 2 }), 1U);
+    EXPECT_EQ(inactive_partition.boundary_sample_count, 0U);
+}
+
+TEST(EstimatorSecondStageDefenseTest, CouplingPartitionKeepsStrongChainAndBinaryFallback)
+{
+    coupling_detail::LocalFittingCouplingTopology strong_topology;
+    strong_topology.adjacency_list = {
+        { { 1, 0.8 } },
+        { { 0, 0.8 }, { 2, 0.7 } },
+        { { 1, 0.7 } }
+    };
+    const auto strong_partition{
+        coupling_detail::BuildLocalFittingCouplingPartition(
+            strong_topology,
+            { 0, 1, 2 })
+    };
+    EXPECT_EQ(strong_partition.sample_id_list_by_key.count({ 0, 1, 2 }), 1U);
+
+    coupling_detail::LocalFittingCouplingGraphBuilder builder{ 2 };
+    const auto invalid{
+        Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN())
+    };
+    builder.AddSample(
+        { 0, 0 },
+        { { 0, Eigen::Vector3d::Ones() }, { 1, invalid } });
+    EXPECT_FALSE(builder.BuildWeighted(0.05).has_value());
+    const auto binary_topology{ builder.BuildBinary() };
+    EXPECT_FALSE(binary_topology.summary.uses_weighted_graph);
+    const auto binary_partition{
+        coupling_detail::BuildLocalFittingCouplingPartition(
+            binary_topology,
+            { 0, 1 })
+    };
+    EXPECT_EQ(binary_partition.sample_id_list_by_key.count({ 0, 1 }), 1U);
+
+    coupling_detail::LocalFittingCouplingGraphBuilder overflow_builder{ 2 };
+    const auto huge{ Eigen::Vector3d::Constant(1.0e200) };
+    overflow_builder.AddSample({ 0, 0 }, { { 0, huge }, { 1, huge } });
+    EXPECT_FALSE(overflow_builder.BuildWeighted(0.05).has_value());
 }
 
 TEST(EstimatorSecondStageDefenseTest, TransformedCoordinatesRoundTrip)

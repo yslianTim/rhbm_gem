@@ -67,4 +67,30 @@ inline bool IsBetterLocalFittingAuditObjective(
     return candidate < best - relative_tolerance * scale;
 }
 
+inline bool IsLocalFittingAuditObjectiveAcceptableForProgress(
+    const std::optional<double> & candidate,
+    const std::optional<double> & previous,
+    const std::optional<double> & best,
+    double relative_tolerance)
+{
+    if (!std::isfinite(relative_tolerance) || relative_tolerance < 0.0)
+    {
+        throw std::invalid_argument(
+            "Local fitting audit objective tolerance must be finite and non-negative.");
+    }
+    if (!candidate.has_value() || !previous.has_value() ||
+        !std::isfinite(*candidate) || !std::isfinite(*previous))
+    {
+        return false;
+    }
+    const auto is_deteriorated = [&](double reference)
+    {
+        if (!std::isfinite(reference)) return true;
+        const auto scale{ std::max(std::abs(reference), 1.0) };
+        return *candidate > reference + relative_tolerance * scale;
+    };
+    return !is_deteriorated(*previous) &&
+        (!best.has_value() || !is_deteriorated(*best));
+}
+
 } // namespace rhbm_gem::core::detail
