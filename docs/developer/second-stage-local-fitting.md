@@ -86,7 +86,7 @@ previous state
     -> exit, retry, or continue
 ```
 
-The maximum outer iteration count is `kLocalFittingMaximumIterations` (`200`).
+The maximum outer iteration count is `kLocalFittingMaximumIterations` (`100`).
 `RunSecondStageLocalFitting` owns this outer lifecycle. Anderson-first attempts,
 fixed-point fallback, damping, objective evaluation, and accepted-state assembly
 are contained in `SelectLocalFittingClusterCandidates`. The same selection

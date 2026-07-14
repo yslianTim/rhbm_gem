@@ -1751,8 +1751,8 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingReportsEmptyJoin
     EXPECT_NE(
         output.find("terminal-joint-offset-failure atoms = 1"),
         std::string::npos);
-    EXPECT_NE(output.find("Iter. 5/200"), std::string::npos);
-    EXPECT_EQ(output.find("Iter. 6/200"), std::string::npos);
+    EXPECT_NE(output.find("Iter. 5/100"), std::string::npos);
+    EXPECT_EQ(output.find("Iter. 6/100"), std::string::npos);
     EXPECT_EQ(
         error_output.find("terminal suspicious rollback fallback"),
         std::string::npos);

@@ -60,7 +60,7 @@ constexpr double kLocalFittingTransformedMaximumChangeTolerance{ 1.0e-3 };
 constexpr double kLocalFittingAndersonScaleFloor{ 1.0 };
 constexpr double kNeighborContributionDistanceMax{ 2.5 };
 constexpr double kNeighborAtomSearchRange{ 2.0 * kNeighborContributionDistanceMax };
-constexpr std::size_t kLocalFittingMaximumIterations{ 200 };
+constexpr std::size_t kLocalFittingMaximumIterations{ 100 };
 constexpr double kLocalFittingFreezeTrackerChangeTolerance{ 1.0e-6 };
 constexpr double kLocalFittingChangePercentile{ 0.99 };
 constexpr algorithm::RobustLossKind kSecondStageRobustLossKind{ algorithm::RobustLossKind::Cauchy };
