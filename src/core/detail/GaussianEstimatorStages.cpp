@@ -60,7 +60,7 @@ constexpr double kLocalFittingTransformedMaximumChangeTolerance{ 1.0e-3 };
 constexpr double kLocalFittingAndersonScaleFloor{ 1.0 };
 constexpr double kNeighborContributionDistanceMax{ 2.5 };
 constexpr double kNeighborAtomSearchRange{ 2.0 * kNeighborContributionDistanceMax };
-constexpr std::size_t kLocalFittingMaximumIterations{ 100 };
+constexpr std::size_t kLocalFittingMaximumIterations{ 50 };
 constexpr double kLocalFittingFreezeTrackerChangeTolerance{ 1.0e-6 };
 constexpr double kLocalFittingChangePercentile{ 0.99 };
 constexpr algorithm::RobustLossKind kSecondStageRobustLossKind{ algorithm::RobustLossKind::Cauchy };
@@ -3839,13 +3839,7 @@ void AppendLocalFittingClusterSelectionSummary(
     std::ostringstream & stream,
     const LocalFittingClusterSelectionSummary & summary)
 {
-    stream << ", accepted candidate clusters aa/fixed-point = "
-        << summary.accepted_anderson_cluster_count << "/" << summary.accepted_fixed_point_cluster_count
-        << ", joint-ABC polish clusters accepted/stationary/fallback = "
-        << summary.accepted_polish_cluster_count << "/"
-        << summary.stationary_polish_cluster_count << "/"
-        << summary.fallback_polish_cluster_count
-        << ", objective acc./rej. clusters = "
+    stream << ", objective acc./rej. clusters = "
         << summary.accepted_cluster_count << "/" << summary.rejected_cluster_count
         << ", atoms = "
         << summary.accepted_atom_count << "/" << summary.rejected_atom_count;
