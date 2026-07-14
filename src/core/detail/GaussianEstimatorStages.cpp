@@ -411,6 +411,26 @@ struct LocalFittingBestAuditState
     std::optional<LocalFittingAuditedState> best_accepted{};
 };
 
+struct LocalFittingFallbackState
+{
+    const LocalFittingState * state{ nullptr };
+    const LocalFittingAuditedState * audit_state{ nullptr };
+};
+
+LocalFittingFallbackState SelectLocalFittingFallbackState(
+    const LocalFittingState & fallback_state,
+    const std::optional<LocalFittingAuditedState> & audited_state)
+{
+    if (!audited_state.has_value())
+    {
+        return LocalFittingFallbackState{ &fallback_state, nullptr };
+    }
+    return LocalFittingFallbackState{
+        &audited_state->state,
+        &*audited_state
+    };
+}
+
 struct LocalFittingOffsetStats
 {
     std::size_t atom_count{ 0 };
@@ -506,9 +526,8 @@ struct LocalFittingRejectedClusterDiagnostic
     std::vector<LocalFittingObjectiveAttemptDiagnostic> attempt_list{};
 };
 
-struct LocalFittingClusterWork
+struct LocalFittingClusterDecision
 {
-    std::vector<LocalFittingObjectiveSampleRef> objective_sample_ref_list{};
     std::optional<LocalFittingCandidateKind> accepted_kind{};
     LocalFittingJointPolishOutcome polish_outcome{
         LocalFittingJointPolishOutcome::NotAttempted
@@ -517,15 +536,8 @@ struct LocalFittingClusterWork
     std::vector<LocalFittingObjectiveAttemptDiagnostic> objective_attempt_list{};
 };
 
-using LocalFittingClusterMap = std::map<LocalFittingClusterKey, LocalFittingClusterWork>;
-
-struct LocalFittingClusterBuildResult
-{
-    LocalFittingClusterMap cluster_map{};
-    std::size_t boundary_sample_count{ 0 };
-    std::size_t active_atom_count{ 0 };
-    std::size_t maximum_cluster_atom_count{ 0 };
-};
+using LocalFittingClusterDecisionMap =
+    std::map<LocalFittingClusterKey, LocalFittingClusterDecision>;
 
 struct LocalFittingCombinedObjectiveDiagnostic
 {
@@ -679,12 +691,6 @@ const char * GetSecondStageSeedRepairSourceText(
         return "global-median";
     }
     throw std::logic_error("Unknown second-stage seed repair source.");
-}
-
-std::size_t GetSecondStageSeedRepairSourceIndex(
-    detail::SecondStageSeedRepairSource source)
-{
-    return static_cast<std::size_t>(source);
 }
 
 double CalculateZeroOffsetResponse(
@@ -1104,34 +1110,6 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
         std::move(*weighted_topology) : builder.BuildBinary();
 }
 
-LocalFittingClusterBuildResult BuildLocalFittingClusters(
-    const detail::LocalFittingCouplingTopology & topology,
-    const std::vector<std::size_t> & active_index_list)
-{
-    auto partition{
-        detail::BuildLocalFittingCouplingPartition(topology, active_index_list)
-    };
-    LocalFittingClusterBuildResult result;
-    result.boundary_sample_count = partition.boundary_sample_count;
-    result.active_atom_count = active_index_list.size();
-    for (auto & [key, sample_id_list] : partition.sample_id_list_by_key)
-    {
-        result.maximum_cluster_atom_count = std::max(
-            result.maximum_cluster_atom_count,
-            key.size());
-        const auto inserted{
-            result.cluster_map.emplace(
-                std::move(key),
-                LocalFittingClusterWork{ std::move(sample_id_list) })
-        };
-        if (!inserted.second)
-        {
-            throw std::logic_error("Local fitting cluster key is duplicated.");
-        }
-    }
-    return result;
-}
-
 void AddGaussianModelParameterSample(
     GaussianModelParameterSamples & samples,
     const GaussianModel3D & model)
@@ -1303,7 +1281,7 @@ void LogSecondStageSeedRepairs(
     std::array<std::size_t, source_list.size()> source_count{};
     for (const auto & record : repair_record_list)
     {
-        source_count.at(GetSecondStageSeedRepairSourceIndex(record.source))++;
+        source_count.at(static_cast<std::size_t>(record.source))++;
     }
 
     std::ostringstream summary;
@@ -2087,11 +2065,6 @@ std::optional<LocalFittingObjectiveSamples> CollectLocalFittingObjectiveSamples(
     return std::move(objective_samples);
 }
 
-double CalculateSquaredValue(double value)
-{
-    return value * value;
-}
-
 std::optional<LocalFittingParameterPenaltyComponents>
 CalculateLocalFittingParameterPenaltyComponents(
     const SecondStageLocalFittingContext & context,
@@ -2119,8 +2092,12 @@ CalculateLocalFittingParameterPenaltyComponents(
 
         const auto prior_width{ context.atom_context_list.at(active_index).prior_width };
         if (!numeric_validation::IsFinitePositive(prior_width)) return std::nullopt;
-        components.width_prior_penalty_sum += CalculateSquaredValue(
-            (std::log(model.GetWidth()) - std::log(prior_width)) / kLocalFittingWidthPriorLogScale);
+        const auto normalized_width_difference{
+            (std::log(model.GetWidth()) - std::log(prior_width)) /
+            kLocalFittingWidthPriorLogScale
+        };
+        components.width_prior_penalty_sum +=
+            normalized_width_difference * normalized_width_difference;
 
         const auto peak_signal{ model.SignalAtDistance(0.0) };
         const auto offset_peak{ model.GetOffset() * model.OffsetBasisAtDistance(0.0) };
@@ -2136,7 +2113,7 @@ CalculateLocalFittingParameterPenaltyComponents(
         const auto offset_excess{
             std::max(0.0, offset_ratio - kLocalFittingOffsetPeakRatioMax)
         };
-        components.offset_plausibility_penalty_sum += CalculateSquaredValue(offset_excess);
+        components.offset_plausibility_penalty_sum += offset_excess * offset_excess;
     }
 
     if (!std::isfinite(components.width_prior_penalty_sum) ||
@@ -2202,22 +2179,6 @@ CalculateLocalFittingObjectiveBreakdown(
             objective_samples.active_model_list.size(),
             kLocalFittingWidthPriorPenaltyWeight,
             kLocalFittingOffsetPlausibilityPenaltyWeight);
-}
-
-std::optional<double> CalculateLocalFittingObjective(
-    const SecondStageLocalFittingContext & context,
-    const LocalFittingObjectiveSamples & objective_samples,
-    double objective_scale)
-{
-    const auto objective{
-        CalculateLocalFittingObjectiveBreakdown(
-            context,
-            objective_samples,
-            objective_scale)
-    };
-    return objective.has_value() ?
-        std::optional<double>{ objective->total_objective } :
-        std::nullopt;
 }
 
 std::optional<detail::LocalFittingObjectiveBreakdown>
@@ -2477,10 +2438,8 @@ ScoreLocalFittingClusterCandidate(
         diagnostic.candidate_objective.has_value() ?
             std::optional<double>{ diagnostic.candidate_objective->total_objective } :
             std::nullopt;
-    score.committed_quality_objective = CalculateLocalFittingObjective(
-        context,
-        *score.objective_samples,
-        *objective_scale);
+    score.committed_quality_objective =
+        score.candidate_stats.quality_objective;
     if (diagnostic.candidate_objective.has_value())
     {
         diagnostic.status = LocalFittingObjectiveAttemptDiagnosticStatus::Scored;
@@ -3237,22 +3196,28 @@ BuildInitialLocalFittingClusterQualityState(
     const SecondStageLocalFittingContext & context,
     const LocalFittingState & previous_state,
     const LocalFittingClusterKey & key,
-    const LocalFittingClusterWork & cluster)
+    const std::vector<LocalFittingObjectiveSampleRef> & objective_sample_ref_list)
 {
     auto initial_objective_samples{
         CollectLocalFittingObjectiveSamples(
             context,
             previous_state,
-            cluster.objective_sample_ref_list,
+            objective_sample_ref_list,
             key)
     };
     std::optional<double> initial_objective;
     if (initial_objective_samples.has_value())
     {
-        initial_objective = CalculateLocalFittingObjective(
-            context,
-            *initial_objective_samples,
-            initial_objective_samples->scale_sample);
+        const auto objective{
+            CalculateLocalFittingObjectiveBreakdown(
+                context,
+                *initial_objective_samples,
+                initial_objective_samples->scale_sample)
+        };
+        if (objective.has_value())
+        {
+            initial_objective = objective->total_objective;
+        }
     }
     algorithm::FittingQualityCandidateStats initial_candidate_stats{
         initial_objective,
@@ -3273,26 +3238,118 @@ BuildInitialLocalFittingClusterQualityState(
     };
 }
 
+bool TryCommitLocalFittingClusterCandidate(
+    const SecondStageLocalFittingContext & context,
+    const LocalFittingState & candidate_state,
+    const LocalFittingState & previous_state,
+    const LocalFittingClusterKey & key,
+    const std::vector<LocalFittingObjectiveSampleRef> & objective_sample_ref_list,
+    bool requires_strict_improvement,
+    algorithm::ClusteredFittingQualityStateSet<LocalFittingObjectiveSamples> &
+        cluster_quality_state,
+    LocalFittingObjectiveAttemptDiagnostic & diagnostic)
+{
+    const auto transformed_change_stats{
+        SummarizeLocalFittingTransformedChanges(
+            candidate_state,
+            previous_state,
+            key)
+    };
+    const auto try_commit = [&](auto & quality_state)
+    {
+        return quality_state.TryCommitCandidate(
+            key,
+            [&](const algorithm::ScaleReferenceTracker & objective_scale_tracker,
+                algorithm::FittingQualityCandidateStats & previous_candidate_stats,
+                const std::optional<LocalFittingObjectiveSamples> & previous_objective_samples,
+                const std::optional<
+                    algorithm::ClusteredFittingQualityTrackedCandidate<
+                        LocalFittingObjectiveSamples>> & best_candidate)
+            {
+                return ScoreLocalFittingClusterCandidate(
+                    context,
+                    candidate_state,
+                    key,
+                    objective_sample_ref_list,
+                    objective_scale_tracker,
+                    previous_candidate_stats,
+                    previous_objective_samples,
+                    best_candidate,
+                    transformed_change_stats,
+                    diagnostic);
+            });
+    };
+    if (!requires_strict_improvement)
+    {
+        return try_commit(cluster_quality_state);
+    }
+
+    auto trial_quality_state{ cluster_quality_state };
+    if (!try_commit(trial_quality_state)) return false;
+    const auto candidate_objective{
+        diagnostic.candidate_objective.has_value() ?
+            std::optional<double>{
+                diagnostic.candidate_objective->total_objective } :
+            std::nullopt
+    };
+    const auto previous_objective{
+        diagnostic.previous_objective.has_value() ?
+            std::optional<double>{
+                diagnostic.previous_objective->total_objective } :
+            std::nullopt
+    };
+    if (!detail::IsLocalFittingForcedFixedPointObjectiveImproved(
+            candidate_objective,
+            previous_objective,
+            kLocalFittingObjectiveTieRelativeTolerance))
+    {
+        diagnostic.rejected_by_strict_improvement = true;
+        return false;
+    }
+    cluster_quality_state = std::move(trial_quality_state);
+    return true;
+}
+
+bool ShouldGrowLocalFittingTrustRegion(
+    const LocalFittingObjectiveAttemptDiagnostic & diagnostic)
+{
+    return diagnostic.candidate_objective.has_value() &&
+        diagnostic.previous_objective.has_value() &&
+        diagnostic.trust_region_step_norm >=
+            kLocalFittingTrustRegionBoundaryRatio * diagnostic.trust_region_radius &&
+        detail::IsBetterLocalFittingAuditObjective(
+            diagnostic.candidate_objective->total_objective,
+            diagnostic.previous_objective->total_objective,
+            kLocalFittingObjectiveTieRelativeTolerance);
+}
+
 LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
     const SecondStageLocalFittingContext & context,
-    LocalFittingClusterMap cluster_map,
+    const detail::LocalFittingCouplingPartition & partition,
     const std::vector<LocalFittingClusterKey> & key_list,
     const std::vector<LocalFittingClusterKey> & forced_fixed_point_key_list,
     const std::vector<LocalFittingClusterKey> & polish_eligible_key_list,
     const LocalFittingState & previous_state,
     const LocalFittingState & raw_state,
+    const std::vector<Eigen::VectorXd> & previous_transformed_estimation_list,
+    const std::vector<Eigen::VectorXd> & raw_transformed_estimation_list,
     double ridge_ratio,
     const std::vector<double> & ridge_multiplier_list,
     algorithm::ClusteredAndersonAccelerationHistorySet & acceleration_history,
     algorithm::ClusteredFittingQualityStateSet<LocalFittingObjectiveSamples> & cluster_quality_state,
     const detail::LocalFittingTrustRegionStateSet & trust_region_state)
 {
-    const auto previous_transformed_estimation_list{
-        BuildLocalFittingTransformedEstimationList(previous_state)
-    };
-    const auto raw_transformed_estimation_list{
-        BuildLocalFittingTransformedEstimationList(raw_state)
-    };
+    LocalFittingClusterDecisionMap cluster_decision_by_key;
+    for (const auto & key : key_list)
+    {
+        if (partition.sample_id_list_by_key.find(key) ==
+            partition.sample_id_list_by_key.end())
+        {
+            throw std::invalid_argument(
+                "Local fitting cluster objective samples are missing.");
+        }
+        cluster_decision_by_key.emplace(key, LocalFittingClusterDecision{});
+    }
     const auto localized_anderson_candidate{
         acceleration_history.BuildCandidate(
             key_list,
@@ -3318,7 +3375,7 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
     {
         for (const auto & key : candidate_key_list)
         {
-            auto & cluster{ cluster_map.at(key) };
+            auto & cluster{ cluster_decision_by_key.at(key) };
             if (cluster.accepted_kind.has_value()) continue;
             const auto trust_region_radius{ trust_region_state.GetRadius(key) };
             std::optional<double> previous_effective_damping;
@@ -3370,85 +3427,6 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                     continue;
                 }
 
-                const auto try_commit_candidate = [&](
-                    const LocalFittingState & candidate_state,
-                    LocalFittingObjectiveAttemptDiagnostic & diagnostic)
-                {
-                    const auto transformed_change_stats{
-                        SummarizeLocalFittingTransformedChanges(
-                            candidate_state,
-                            previous_state,
-                            key)
-                    };
-                    const auto try_commit = [&](auto & quality_state)
-                    {
-                        return quality_state.TryCommitCandidate(
-                            key,
-                            [&](const algorithm::ScaleReferenceTracker & objective_scale_tracker,
-                                algorithm::FittingQualityCandidateStats & previous_candidate_stats,
-                                const std::optional<LocalFittingObjectiveSamples> & previous_objective_samples,
-                                const std::optional<
-                                    algorithm::ClusteredFittingQualityTrackedCandidate<LocalFittingObjectiveSamples>> & best_candidate)
-                            {
-                                return ScoreLocalFittingClusterCandidate(
-                                    context,
-                                    candidate_state,
-                                    key,
-                                    cluster.objective_sample_ref_list,
-                                    objective_scale_tracker,
-                                    previous_candidate_stats,
-                                    previous_objective_samples,
-                                    best_candidate,
-                                    transformed_change_stats,
-                                    diagnostic);
-                            });
-                    };
-                    const auto requires_strict_improvement{
-                        candidate_kind == LocalFittingCandidateKind::FixedPoint &&
-                        is_forced_fixed_point(key)
-                    };
-                    if (!requires_strict_improvement)
-                    {
-                        return try_commit(cluster_quality_state);
-                    }
-
-                    auto trial_quality_state{ cluster_quality_state };
-                    if (!try_commit(trial_quality_state)) return false;
-                    const auto candidate_objective{
-                        diagnostic.candidate_objective.has_value() ?
-                            std::optional<double>{
-                                diagnostic.candidate_objective->total_objective } :
-                            std::nullopt
-                    };
-                    const auto previous_objective{
-                        diagnostic.previous_objective.has_value() ?
-                            std::optional<double>{
-                                diagnostic.previous_objective->total_objective } :
-                            std::nullopt
-                    };
-                    if (!detail::IsLocalFittingForcedFixedPointObjectiveImproved(
-                            candidate_objective,
-                            previous_objective,
-                            kLocalFittingObjectiveTieRelativeTolerance))
-                    {
-                        diagnostic.rejected_by_strict_improvement = true;
-                        return false;
-                    }
-                    cluster_quality_state = std::move(trial_quality_state);
-                    return true;
-                };
-                const auto should_grow_trust_region = [](
-                    const LocalFittingObjectiveAttemptDiagnostic & diagnostic)
-                {
-                    return diagnostic.candidate_objective.has_value() &&
-                        diagnostic.previous_objective.has_value() &&
-                        diagnostic.trust_region_step_norm >= kLocalFittingTrustRegionBoundaryRatio * diagnostic.trust_region_radius &&
-                        detail::IsBetterLocalFittingAuditObjective(
-                            diagnostic.candidate_objective->total_objective,
-                            diagnostic.previous_objective->total_objective,
-                            kLocalFittingObjectiveTieRelativeTolerance);
-                };
-
                 const auto polish_eligible{
                     std::find(
                         polish_eligible_key_list.begin(),
@@ -3464,7 +3442,7 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                             context,
                             *attempt_state,
                             key,
-                            cluster.objective_sample_ref_list,
+                            partition.sample_id_list_by_key.at(key),
                             ridge_ratio,
                             ridge_multiplier_list)
                     };
@@ -3513,7 +3491,16 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                                 polish_diagnostic.polish_effective_damping = polish_trust_region_damping.effective_damping;
                                 polish_diagnostic.trust_region_radius = trust_region_radius;
                                 polish_diagnostic.trust_region_step_norm = polish_trust_region_damping.step_norm;
-                                if (!try_commit_candidate(*polished_state, polish_diagnostic))
+                                if (!TryCommitLocalFittingClusterCandidate(
+                                        context,
+                                        *polished_state,
+                                        previous_state,
+                                        key,
+                                        partition.sample_id_list_by_key.at(key),
+                                        candidate_kind == LocalFittingCandidateKind::FixedPoint &&
+                                            is_forced_fixed_point(key),
+                                        cluster_quality_state,
+                                        polish_diagnostic))
                                 {
                                     cluster.objective_attempt_list.emplace_back(std::move(polish_diagnostic));
                                     continue;
@@ -3525,7 +3512,8 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                                 }
                                 cluster.accepted_kind = candidate_kind;
                                 cluster.polish_outcome = LocalFittingJointPolishOutcome::Accepted;
-                                cluster.grow_trust_region = should_grow_trust_region(polish_diagnostic);
+                                cluster.grow_trust_region =
+                                    ShouldGrowLocalFittingTrustRegion(polish_diagnostic);
                                 accepted_polish = true;
                                 break;
                             }
@@ -3535,7 +3523,16 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                 if (accepted_polish) break;
 
                 const auto accepted{
-                    try_commit_candidate(*attempt_state, attempt_diagnostic)
+                    TryCommitLocalFittingClusterCandidate(
+                        context,
+                        *attempt_state,
+                        previous_state,
+                        key,
+                        partition.sample_id_list_by_key.at(key),
+                        candidate_kind == LocalFittingCandidateKind::FixedPoint &&
+                            is_forced_fixed_point(key),
+                        cluster_quality_state,
+                        attempt_diagnostic)
                 };
                 if (accepted)
                 {
@@ -3544,7 +3541,8 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                         selection.assembled_state.at(active_index) = attempt_state->at(active_index);
                     }
                     cluster.accepted_kind = candidate_kind;
-                    cluster.grow_trust_region = should_grow_trust_region(attempt_diagnostic);
+                    cluster.grow_trust_region =
+                        ShouldGrowLocalFittingTrustRegion(attempt_diagnostic);
                     if (polish_eligible)
                     {
                         cluster.polish_outcome = polish_stationary ?
@@ -3580,7 +3578,7 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
         for (const auto & key : localized_anderson_candidate->used_cluster_key_list)
         {
             if (is_forced_fixed_point(key)) continue;
-            if (!cluster_map.at(key).accepted_kind.has_value())
+            if (!cluster_decision_by_key.at(key).accepted_kind.has_value())
             {
                 anderson_failure_keys.emplace_back(key);
             }
@@ -3597,7 +3595,7 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
         raw_state);
 
     std::vector<LocalFittingClusterKey> fixed_point_progress_keys;
-    for (const auto & [key, cluster] : cluster_map)
+    for (const auto & [key, cluster] : cluster_decision_by_key)
     {
         if (cluster.accepted_kind.has_value())
         {
@@ -5056,16 +5054,22 @@ void RunSecondStageLocalFitting(
             return;
         }
 
-        auto cluster_build_result{
-            BuildLocalFittingClusters(coupling_topology, active_index_list)
+        const auto cluster_partition{
+            detail::BuildLocalFittingCouplingPartition(
+                coupling_topology,
+                active_index_list)
         };
-        auto cluster_map{ std::move(cluster_build_result.cluster_map) };
         std::vector<LocalFittingClusterKey> cluster_key_list;
-        cluster_key_list.reserve(cluster_map.size());
-        for (const auto & [key, cluster] : cluster_map)
+        cluster_key_list.reserve(cluster_partition.sample_id_list_by_key.size());
+        std::size_t maximum_cluster_atom_count{ 0 };
+        for (const auto & [key, sample_id_list] :
+            cluster_partition.sample_id_list_by_key)
         {
-            static_cast<void>(cluster);
+            static_cast<void>(sample_id_list);
             cluster_key_list.emplace_back(key);
+            maximum_cluster_atom_count = std::max(
+                maximum_cluster_atom_count,
+                key.size());
         }
         stagnation_tracker.Reconcile(cluster_key_list);
         cluster_quality_state.Reconcile(
@@ -5076,7 +5080,7 @@ void RunSecondStageLocalFitting(
                     context,
                     previous_state,
                     key,
-                    cluster_map.at(key));
+                    cluster_partition.sample_id_list_by_key.at(key));
             });
         trust_region_state.Reconcile(cluster_key_list);
         acceleration_history.Reconcile(cluster_key_list);
@@ -5180,17 +5184,25 @@ void RunSecondStageLocalFitting(
                 raw_fixed_point_change_list,
                 active_index_list)
         };
+        const auto previous_transformed_estimation_list{
+            BuildLocalFittingTransformedEstimationList(previous_state)
+        };
+        const auto raw_transformed_estimation_list{
+            BuildLocalFittingTransformedEstimationList(raw_state)
+        };
         auto working_acceleration_history{ acceleration_history };
         auto working_cluster_quality_state{ cluster_quality_state };
         auto selection{
             SelectLocalFittingClusterCandidates(
                 context,
-                std::move(cluster_map),
+                cluster_partition,
                 cluster_key_list,
                 forced_fixed_point_key_list,
                 polish_eligible_key_list,
                 previous_state,
                 raw_state,
+                previous_transformed_estimation_list,
+                raw_transformed_estimation_list,
                 ridge_ratio,
                 joint_offset_ridge_multiplier_list,
                 working_acceleration_history,
@@ -5199,14 +5211,12 @@ void RunSecondStageLocalFitting(
         };
         const auto stop_after_local_stagnation = [&]
         {
-            const LocalFittingAuditedState * applied_audit_state{ nullptr };
-            const LocalFittingState * applied_state{ &previous_state };
-            if (best_audit_state.best.has_value())
-            {
-                applied_audit_state = &*best_audit_state.best;
-                applied_state = &best_audit_state.best->state;
-            }
-            ApplyLocalFittingState(model_object, context, *applied_state);
+            const auto fallback{
+                SelectLocalFittingFallbackState(
+                    previous_state,
+                    best_audit_state.best)
+            };
+            ApplyLocalFittingState(model_object, context, *fallback.state);
             LogRejectedLocalFittingClusterDiagnostics(
                 options,
                 selection.rejected_cluster_diagnostic_list);
@@ -5214,9 +5224,9 @@ void RunSecondStageLocalFitting(
                 options,
                 accepted_iteration_count,
                 selection,
-                applied_audit_state,
+                fallback.audit_state,
                 terminal_summary,
-                SummarizeLocalFittingOffsets(*applied_state));
+                SummarizeLocalFittingOffsets(*fallback.state));
         };
         const auto all_active_clusters_stalled{
             detail::AreAllLocalFittingActiveClustersStalled(
@@ -5260,27 +5270,25 @@ void RunSecondStageLocalFitting(
                     diagnostic.best_objective,
                     kLocalFittingObjectiveTieRelativeTolerance))
             {
-                const LocalFittingAuditedState * applied_audit_state{ nullptr };
-                const LocalFittingState * applied_state{ &previous_state };
-                if (best_audit_state.best.has_value())
-                {
-                    applied_audit_state = &*best_audit_state.best;
-                    applied_state = &best_audit_state.best->state;
-                }
-                ApplyLocalFittingState(model_object, context, *applied_state);
+                const auto fallback{
+                    SelectLocalFittingFallbackState(
+                        previous_state,
+                        best_audit_state.best)
+                };
+                ApplyLocalFittingState(model_object, context, *fallback.state);
                 LogLocalFittingGlobalAuditStagnationStop(
                     options,
                     accepted_iteration_count,
                     selection,
                     diagnostic,
-                    applied_audit_state,
+                    fallback.audit_state,
                     terminal_summary,
-                    SummarizeLocalFittingOffsets(*applied_state));
+                    SummarizeLocalFittingOffsets(*fallback.state));
                 return;
             }
         }
         const auto needs_combined_objective_guard{
-            cluster_build_result.boundary_sample_count > 0 &&
+            cluster_partition.boundary_sample_count > 0 &&
             !selection.accepted_key_list.empty()
         };
         bool combined_objective_accepted{ true };
@@ -5321,12 +5329,12 @@ void RunSecondStageLocalFitting(
             SummarizeLocalFittingClusterSelection(selection)
         };
         objective_selection_summary.boundary_sample_count =
-            cluster_build_result.boundary_sample_count;
+            cluster_partition.boundary_sample_count;
         objective_selection_summary.iteration_component_count = cluster_key_list.size();
         objective_selection_summary.iteration_maximum_component_atom_count =
-            cluster_build_result.maximum_cluster_atom_count;
+            maximum_cluster_atom_count;
         objective_selection_summary.iteration_active_atom_count =
-            cluster_build_result.active_atom_count;
+            active_index_list.size();
         objective_selection_summary.has_combined_objective_rejection =
             selection.has_combined_objective_rejection;
         auto assembled_state{ std::move(selection.assembled_state) };
@@ -5394,19 +5402,13 @@ void RunSecondStageLocalFitting(
                     }),
                 suspicious_offset_state_index_list.end());
         }
-        const auto contains_cluster_key = [](
-            const std::vector<LocalFittingClusterKey> & key_list,
-            const LocalFittingClusterKey & key)
-        {
-            return std::find(key_list.begin(), key_list.end(), key) != key_list.end();
-        };
         std::vector<LocalFittingClusterKey> progress_eligible_key_list;
         std::vector<LocalFittingClusterKey> stationarity_eligible_key_list;
         std::vector<std::size_t> accepted_active_index_list;
         std::vector<std::size_t> stationarity_eligible_active_index_list;
         for (const auto & key : selection.accepted_key_list)
         {
-            if (contains_cluster_key(terminal_key_list, key)) continue;
+            if (ContainsLocalFittingClusterKey(terminal_key_list, key)) continue;
 
             accepted_active_index_list.insert(
                 accepted_active_index_list.end(), key.begin(), key.end());
@@ -5421,13 +5423,14 @@ void RunSecondStageLocalFitting(
                             atom_index);
                     })
             };
-            if (!contains_suspicious_atom && !contains_cluster_key(progress_ineligible_key_list, key))
+            if (!contains_suspicious_atom &&
+                !ContainsLocalFittingClusterKey(progress_ineligible_key_list, key))
             {
                 progress_eligible_key_list.emplace_back(key);
             }
             if (!contains_suspicious_atom &&
-                !contains_cluster_key(stationarity_ineligible_key_list, key) &&
-                !contains_cluster_key(selection.polish_fallback_key_list, key))
+                !ContainsLocalFittingClusterKey(stationarity_ineligible_key_list, key) &&
+                !ContainsLocalFittingClusterKey(selection.polish_fallback_key_list, key))
             {
                 stationarity_eligible_key_list.emplace_back(key);
                 stationarity_eligible_active_index_list.insert(
@@ -5528,21 +5531,16 @@ void RunSecondStageLocalFitting(
                     LocalFittingBacktrackingStopReason::MaximumIterationLimit :
                     LocalFittingBacktrackingStopReason::MaximumGlobalRidge
             };
-            const LocalFittingAuditedState * applied_audit_state{ nullptr };
-            const LocalFittingState * applied_state{ &previous_state };
-            if (stop_reason == LocalFittingBacktrackingStopReason::MaximumIterationLimit &&
-                best_audit_state.best.has_value())
-            {
-                applied_audit_state = &*best_audit_state.best;
-                applied_state = &best_audit_state.best->state;
-            }
-            else if (stop_reason == LocalFittingBacktrackingStopReason::MaximumGlobalRidge &&
-                best_audit_state.best_accepted.has_value())
-            {
-                applied_audit_state = &*best_audit_state.best_accepted;
-                applied_state = &best_audit_state.best_accepted->state;
-            }
-            ApplyLocalFittingState(model_object, context, *applied_state);
+            const auto & audited_fallback{
+                stop_reason == LocalFittingBacktrackingStopReason::MaximumIterationLimit ?
+                    best_audit_state.best : best_audit_state.best_accepted
+            };
+            const auto fallback{
+                SelectLocalFittingFallbackState(
+                    previous_state,
+                    audited_fallback)
+            };
+            ApplyLocalFittingState(model_object, context, *fallback.state);
             LogLocalFittingFreezeDiagnostics(
                 options,
                 iter + 1,
@@ -5557,10 +5555,10 @@ void RunSecondStageLocalFitting(
             LogLocalFittingBacktrackingStop(
                 options,
                 stop_reason,
-                applied_audit_state,
+                fallback.audit_state,
                 terminal_summary,
                 rejected_freeze_diagnostic_summary,
-                SummarizeLocalFittingOffsets(*applied_state));
+                SummarizeLocalFittingOffsets(*fallback.state));
             return;
         }
 
@@ -5583,10 +5581,10 @@ void RunSecondStageLocalFitting(
         for (const auto & key : cluster_key_list)
         {
             const auto accepted{
-                contains_cluster_key(selection.accepted_key_list, key)
+                ContainsLocalFittingClusterKey(selection.accepted_key_list, key)
             };
             const auto stationarity_eligible{
-                contains_cluster_key(stationarity_eligible_key_list, key)
+                ContainsLocalFittingClusterKey(stationarity_eligible_key_list, key)
             };
             const auto objective_reference_locked{
                 cluster_quality_state.AllActiveReferencesLocked(
@@ -5652,8 +5650,8 @@ void RunSecondStageLocalFitting(
         }
         acceleration_history.Commit(
             progress_eligible_key_list,
-            BuildLocalFittingTransformedEstimationList(previous_state),
-            BuildLocalFittingTransformedEstimationList(raw_state));
+            previous_transformed_estimation_list,
+            raw_transformed_estimation_list);
         anderson_regime_tracker.Commit(
             progress_eligible_key_list,
             current_anderson_regime_signature_by_key);
@@ -5776,19 +5774,17 @@ void RunSecondStageLocalFitting(
 
         if (iter + 1 == kLocalFittingMaximumIterations)
         {
-            const LocalFittingAuditedState * applied_audit_state{ nullptr };
-            const LocalFittingState * applied_state{ &assembled_state };
-            if (best_audit_state.best.has_value())
-            {
-                applied_audit_state = &*best_audit_state.best;
-                applied_state = &best_audit_state.best->state;
-            }
-            ApplyLocalFittingState(model_object, context, *applied_state);
+            const auto fallback{
+                SelectLocalFittingFallbackState(
+                    assembled_state,
+                    best_audit_state.best)
+            };
+            ApplyLocalFittingState(model_object, context, *fallback.state);
             LogLocalFittingMaximumIterations(
                 options,
-                applied_audit_state,
+                fallback.audit_state,
                 terminal_summary,
-                SummarizeLocalFittingOffsets(*applied_state));
+                SummarizeLocalFittingOffsets(*fallback.state));
             return;
         }
         previous_state = std::move(assembled_state);

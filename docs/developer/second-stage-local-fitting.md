@@ -5,7 +5,7 @@ Gaussian estimates after the first-stage per-atom fit. It is a
 workflow-internal lifecycle seam declared in
 [`src/core/detail/GaussianEstimatorStages.hpp`](/src/core/detail/GaussianEstimatorStages.hpp)
 and implemented in
-[`src/core/GaussianEstimator.cpp`](/src/core/GaussianEstimator.cpp); it is not
+[`src/core/detail/GaussianEstimatorStages.cpp`](/src/core/detail/GaussianEstimatorStages.cpp); it is not
 part of the installed `GaussianEstimator.hpp` API.
 
 The stage is an outer fixed-point iteration over selected atoms. Each iteration
@@ -219,13 +219,13 @@ contributors. For each selected sample, the active target atom and active
 selected neighbors that affect the sample residual are connected. Connected
 components define both Anderson history scope and objective sample ownership.
 Samples without active contributors do not participate in the cluster objective
-gate for that iteration. A canonical cluster work map stores each component's
-objective sample references and an optional accepted source (`Anderson` or
-`FixedPoint`; unset while pending); the same keys reconcile the acceleration,
-objective-quality, trust-radius, and ridge managers. Cluster construction
-records one representative active contributor per sample while joining all of
-that sample's contributors, then assigns objective samples after the connected
-components are complete.
+gate for that iteration. The coupling partition is the canonical owner of each
+component's objective sample references. Candidate selection keeps only a
+separate per-key decision (`Anderson`, `FixedPoint`, or pending), while the same
+keys reconcile the acceleration, objective-quality, trust-radius, and ridge
+managers. Partition construction records one representative active contributor
+per sample while joining all of that sample's contributors, then assigns
+objective samples after the connected components are complete.
 
 The weighted coupling graph is constructed once from the initial full Jacobian
 weight map. Its production topology retains the fixed minimum weight `0.05`.
