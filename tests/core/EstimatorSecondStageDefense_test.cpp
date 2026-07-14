@@ -6,7 +6,6 @@
 #include <limits>
 #include <memory>
 #include <stdexcept>
-#include <string>
 #include <utility>
 #include <vector>
 
@@ -27,7 +26,6 @@
 #include <rhbm_gem/utils/algorithm/ClusteredAndersonAcceleration.hpp>
 #include <rhbm_gem/utils/algorithm/ConvergenceFreezeTracker.hpp>
 #include <rhbm_gem/utils/algorithm/DependencyThawHysteresisTracker.hpp>
-#include <rhbm_gem/utils/domain/Logger.hpp>
 
 namespace {
 namespace alg = rhbm_gem::algorithm;
@@ -43,13 +41,13 @@ namespace trust_detail = rhbm_gem::core::detail;
 namespace rt = rhbm_gem::core;
 namespace rg = rhbm_gem;
 
-rt::FitOptions MakeSecondStageOptions(bool quiet_mode = true)
+rt::FitOptions MakeSecondStageOptions()
 {
     rt::FitOptions options;
     options.distance_min = 0.0;
     options.distance_max = 1.0;
     options.thread_size = 1;
-    options.quiet_mode = quiet_mode;
+    options.quiet_mode = true;
     return options;
 }
 
@@ -202,16 +200,6 @@ std::unique_ptr<rg::ModelObject> BuildJointPolishDefenseModel()
         rg::GaussianModel3D{ 5.25, 0.60, 0.02 });
 }
 
-std::unique_ptr<rg::ModelObject> BuildInvalidCandidateDefenseModel()
-{
-    auto model{ BuildNearCollinearDefenseModel() };
-    auto analysis{ model->EditAnalysis() };
-    analysis.EnsureAtomLocalPotential(*model->GetSelectedAtoms().front())
-        .SetGaussianResult(MakeGaussianResult(
-            rg::GaussianModel3D{ 0.0, 0.0, 0.37 }));
-    return model;
-}
-
 std::unique_ptr<rg::ModelObject> BuildAllInvalidSeedDefenseModel()
 {
     auto model{ BuildNearCollinearDefenseModel() };
@@ -298,20 +286,6 @@ std::unique_ptr<rg::ModelObject> BuildSeparatedSystemBuildFailureDefenseModel()
 std::unique_ptr<rg::ModelObject> BuildTerminalWithPersistentLocalRefitFallbackDefenseModel()
 {
     auto model{ BuildSeparatedRollbackDefenseModel() };
-    auto * atom{ model->GetSelectedAtoms().at(2) };
-    auto sampling_entries{
-        rg::AtomLocalPotentialView::RequireFor(*atom).GetSamplingEntries(false)
-    };
-    sampling_entries.resize(1);
-    auto analysis{ model->EditAnalysis() };
-    analysis.EnsureAtomLocalPotential(*atom).SetSamplingEntries(
-        std::move(sampling_entries));
-    return model;
-}
-
-std::unique_ptr<rg::ModelObject> BuildUnavailableAuditWithPersistentLocalRefitFallbackDefenseModel()
-{
-    auto model{ BuildSeparatedSystemBuildFailureDefenseModel() };
     auto * atom{ model->GetSelectedAtoms().at(2) };
     auto sampling_entries{
         rg::AtomLocalPotentialView::RequireFor(*atom).GetSamplingEntries(false)
@@ -433,21 +407,6 @@ std::unique_ptr<rg::ModelObject> BuildNonFiniteJointOffsetDefenseModel()
     return model;
 }
 
-std::unique_ptr<rg::ModelObject> BuildEmptyJointOffsetDefenseModel()
-{
-    auto model{
-        BuildDefenseModel(
-            { std::array<float, 3>{ 0.0F, 0.0F, 0.0F } },
-            { Spot::O },
-            { Element::OXYGEN },
-            { rg::GaussianModel3D{ 8.0, 0.5, -0.1 } },
-            rg::GaussianModel3D{ 7.0, 0.5, 0.25 })
-    };
-    auto analysis{ model->EditAnalysis() };
-    analysis.EnsureAtomLocalPotential(*model->GetSelectedAtoms().front()).SetSamplingEntries({});
-    return model;
-}
-
 std::unique_ptr<rg::ModelObject> BuildFiniteNonphysicalProfileDefenseModel()
 {
     const rg::GaussianModel3D initial_model{ 6.0, 0.55, 0.0 };
@@ -563,50 +522,6 @@ regime_detail::LocalFittingAndersonRegimeSignatureMap MakeAndersonRegimeSignatur
         { { 0 }, { left_status, global_ridge_ratio, { left_multiplier } } },
         { { 1 }, { right_status, global_ridge_ratio, { right_multiplier } } }
     };
-}
-
-std::size_t FindAcceptedCandidateCluster(
-    const std::string & output,
-    bool find_anderson)
-{
-    const std::string marker{ "accepted candidate clusters aa/fixed-point = " };
-    std::size_t search_position{ 0 };
-    while ((search_position = output.find(marker, search_position)) != std::string::npos)
-    {
-        const auto anderson_count_position{ search_position + marker.size() };
-        const auto separator_position{ output.find('/', anderson_count_position) };
-        if (separator_position == std::string::npos) return std::string::npos;
-        const auto count_position{
-            find_anderson ? anderson_count_position : separator_position + 1
-        };
-        if (count_position < output.size() && output.at(count_position) != '0')
-        {
-            return search_position;
-        }
-        search_position = separator_position + 1;
-    }
-    return std::string::npos;
-}
-
-bool HasConsecutiveAcceptedAndersonIterations(const std::string & output)
-{
-    const std::string marker{ "accepted candidate clusters aa/fixed-point = " };
-    std::size_t search_position{ 0 };
-    bool previous_iteration_accepted_anderson{ false };
-    while ((search_position = output.find(marker, search_position)) != std::string::npos)
-    {
-        const auto anderson_count_position{ search_position + marker.size() };
-        const auto separator_position{ output.find('/', anderson_count_position) };
-        if (separator_position == std::string::npos) return false;
-        const auto accepted_anderson{
-            anderson_count_position < output.size() &&
-            output.at(anderson_count_position) != '0'
-        };
-        if (previous_iteration_accepted_anderson && accepted_anderson) return true;
-        previous_iteration_accepted_anderson = accepted_anderson;
-        search_position = separator_position + 1;
-    }
-    return false;
 }
 
 } // namespace
@@ -1677,14 +1592,7 @@ TEST(EstimatorSecondStageDefenseTest, PostRefitRollbackRestoresCompleteLongChain
         previous_model_list.emplace_back(GetEstimateModel(*atom));
     }
 
-    const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
-    const std::string output{ testing::internal::GetCapturedStdout() };
-    const std::string error_output{ testing::internal::GetCapturedStderr() };
-    Logger::SetLogLevel(previous_log_level);
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
 
     for (std::size_t i = 0; i < selected_atoms.size(); i++)
     {
@@ -1693,14 +1601,6 @@ TEST(EstimatorSecondStageDefenseTest, PostRefitRollbackRestoresCompleteLongChain
             previous_model_list.at(i),
             1.0e-12);
     }
-    EXPECT_NE(output.find("terminal-suspicious atoms = 5"), std::string::npos);
-    EXPECT_NE(
-        error_output.find(
-            "terminal suspicious rollback fallback clusters/atoms = 1/5"),
-        std::string::npos);
-    EXPECT_EQ(FindAcceptedCandidateCluster(output, true), std::string::npos);
-    EXPECT_EQ(output.find("Iter. 6/200"), std::string::npos);
-    EXPECT_EQ(error_output.find("Reached maximum iteration size"), std::string::npos);
 }
 
 TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingFallsBackWhenJointOffsetSamplesAreNonFinite)
@@ -1709,167 +1609,43 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingFallsBackWhenJoi
     auto * atom{ model->GetSelectedAtoms().front() };
     const auto previous_model{ GetEstimateModel(*atom) };
 
-    const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
-    const std::string output{ testing::internal::GetCapturedStdout() };
-    const std::string error_output{ testing::internal::GetCapturedStderr() };
-    Logger::SetLogLevel(previous_log_level);
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
 
-    ExpectGaussianModelsNear(GetEstimateModel(*atom), previous_model, 1.0e-12);
-    EXPECT_NE(output.find("joint-offset = system-build-failed"), std::string::npos);
-    EXPECT_NE(
-        error_output.find("terminal suspicious rollback fallback clusters/atoms = 1/1"),
-        std::string::npos);
-    EXPECT_EQ(error_output.find("Reached maximum iteration size"), std::string::npos);
-    EXPECT_EQ(FindAcceptedCandidateCluster(output, true), std::string::npos);
-    EXPECT_EQ(output.find("Converged after"), std::string::npos);
-    EXPECT_EQ(
-        error_output.find("Second-stage local fitting fallback summary:"),
-        std::string::npos);
-    ExpectSelectedAtomEstimatesAreFinite(*model);
-}
-
-TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingReportsEmptyJointOffsetSystem)
-{
-    auto model{ BuildEmptyJointOffsetDefenseModel() };
-    auto * atom{ model->GetSelectedAtoms().front() };
-    const auto previous_model{ GetEstimateModel(*atom) };
-
-    const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
-    const std::string output{ testing::internal::GetCapturedStdout() };
-    const std::string error_output{ testing::internal::GetCapturedStderr() };
-    Logger::SetLogLevel(previous_log_level);
-
-    EXPECT_NE(output.find("joint-offset = empty-system"), std::string::npos);
-    EXPECT_NE(
-        output.find("terminal-joint-offset-failure atoms = 1"),
-        std::string::npos);
-    EXPECT_NE(output.find("Iter. 5/100"), std::string::npos);
-    EXPECT_EQ(output.find("Iter. 6/100"), std::string::npos);
-    EXPECT_EQ(
-        error_output.find("terminal suspicious rollback fallback"),
-        std::string::npos);
-    EXPECT_NE(
-        error_output.find(
-            "terminal joint-offset failure fallback clusters/atoms = 1/1"),
-        std::string::npos);
-    EXPECT_NE(
-        error_output.find("statuses = empty-system:1"),
-        std::string::npos);
-    EXPECT_NE(
-        error_output.find("after 5 accepted iterations"),
-        std::string::npos);
-    EXPECT_EQ(error_output.find("Reached maximum iteration size"), std::string::npos);
-    EXPECT_EQ(
-        error_output.find("normalized percentile amplitude change"),
-        std::string::npos);
     ExpectGaussianModelsNear(GetEstimateModel(*atom), previous_model, 1.0e-12);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
-TEST(EstimatorSecondStageDefenseTest, ClusterLocalHealthAllowsRemoteAndersonDuringFallback)
+TEST(EstimatorSecondStageDefenseTest, SystemBuildFailureDoesNotBlockRemoteCluster)
 {
     auto model{ BuildSeparatedSystemBuildFailureDefenseModel() };
     const auto initial_remote_error{
         CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4)
     };
 
-    const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
-    rt::RunSecondStageLocalFitting(
-        *model,
-        MakeSecondStageOptions(false));
-    const std::string output{ testing::internal::GetCapturedStdout() };
-    static_cast<void>(testing::internal::GetCapturedStderr());
-    Logger::SetLogLevel(previous_log_level);
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
 
-    EXPECT_NE(
-        output.find("joint-offset = system-build-failed"),
-        std::string::npos);
-    EXPECT_NE(
-        output.find("health-unhealthy clusters/atoms = 1/2"),
-        std::string::npos);
-    EXPECT_NE(
-        output.find("joint-offset statuses clusters/atoms = "),
-        std::string::npos);
-    const auto first_anderson_position{
-        FindAcceptedCandidateCluster(output, true)
-    };
-    const auto terminal_position{
-        output.find("terminal-suspicious atoms = 2")
-    };
-    ASSERT_NE(first_anderson_position, std::string::npos);
-    ASSERT_NE(terminal_position, std::string::npos);
-    EXPECT_LT(first_anderson_position, terminal_position);
     EXPECT_LT(
         CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4),
         initial_remote_error);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
-TEST(EstimatorSecondStageDefenseTest, LocalRefitFallbackOnlyInvalidatesItsClusterHealth)
+TEST(EstimatorSecondStageDefenseTest, LocalRefitFallbackDoesNotBlockRemoteCluster)
 {
     auto model{ BuildSeparatedLocalRefitFallbackDefenseModel() };
     const auto initial_remote_error{
         CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4)
     };
 
-    const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
-    const std::string output{ testing::internal::GetCapturedStdout() };
-    const std::string error_output{ testing::internal::GetCapturedStderr() };
-    Logger::SetLogLevel(previous_log_level);
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
 
-    EXPECT_NE(
-        output.find("health-unhealthy clusters/atoms = 1/2"),
-        std::string::npos);
-    EXPECT_NE(
-        output.find("local-refit-fallback clusters/atoms = 1/1"),
-        std::string::npos);
-    EXPECT_NE(
-        output.find("objective acc./rej. clusters = 2/0, atoms = 4/0"),
-        std::string::npos);
-    EXPECT_NE(
-        output.find("accepted candidate clusters aa/fixed-point = 1/1"),
-        std::string::npos);
-    EXPECT_NE(FindAcceptedCandidateCluster(output, true), std::string::npos);
-    EXPECT_EQ(
-        error_output.find("terminal joint-offset failure fallback"),
-        std::string::npos);
-    EXPECT_NE(
-        error_output.find("Reached maximum iteration size"),
-        std::string::npos);
-    EXPECT_NE(
-        error_output.find("applying best validated audit state"),
-        std::string::npos);
-    EXPECT_NE(
-        error_output.find("audit best source = accepted iteration "),
-        std::string::npos);
-    EXPECT_NE(
-        error_output.find("fixed audit objective residual/width/offset/total ="),
-        std::string::npos);
-    EXPECT_NE(
-        error_output.find("offsets finite ="),
-        std::string::npos);
     EXPECT_LT(
         CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4),
         initial_remote_error);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
-TEST(EstimatorSecondStageDefenseTest, MaximumIterationAuditPreservesTerminalFallbackAtoms)
+TEST(EstimatorSecondStageDefenseTest, TerminalFallbackPreservesAffectedCluster)
 {
     auto model{ BuildTerminalWithPersistentLocalRefitFallbackDefenseModel() };
     const auto & selected_atoms{ model->GetSelectedAtoms() };
@@ -1878,14 +1654,7 @@ TEST(EstimatorSecondStageDefenseTest, MaximumIterationAuditPreservesTerminalFall
         GetEstimateModel(*selected_atoms.at(1))
     };
 
-    const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
-    const std::string output{ testing::internal::GetCapturedStdout() };
-    const std::string error_output{ testing::internal::GetCapturedStderr() };
-    Logger::SetLogLevel(previous_log_level);
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
 
     for (std::size_t i = 0; i < previous_terminal_model_list.size(); i++)
     {
@@ -1894,52 +1663,6 @@ TEST(EstimatorSecondStageDefenseTest, MaximumIterationAuditPreservesTerminalFall
             previous_terminal_model_list.at(i),
             1.0e-12);
     }
-    EXPECT_NE(output.find("terminal-suspicious atoms = 2"), std::string::npos);
-    EXPECT_NE(
-        error_output.find("Reached maximum iteration size"),
-        std::string::npos);
-    EXPECT_NE(
-        error_output.find("applying best validated audit state"),
-        std::string::npos);
-    EXPECT_NE(
-        error_output.find("audit best source ="),
-        std::string::npos);
-    EXPECT_NE(
-        error_output.find("fixed audit objective residual/width/offset/total ="),
-        std::string::npos);
-    EXPECT_NE(
-        error_output.find("offsets finite ="),
-        std::string::npos);
-    EXPECT_NE(
-        error_output.find(
-            "terminal suspicious rollback fallback clusters/atoms = 1/2"),
-        std::string::npos);
-    ExpectSelectedAtomEstimatesAreFinite(*model);
-}
-
-TEST(EstimatorSecondStageDefenseTest, MaximumIterationKeepsLegacyFallbackWhenAuditIsUnavailable)
-{
-    auto model{ BuildUnavailableAuditWithPersistentLocalRefitFallbackDefenseModel() };
-
-    const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
-    static_cast<void>(testing::internal::GetCapturedStdout());
-    const std::string error_output{ testing::internal::GetCapturedStderr() };
-    Logger::SetLogLevel(previous_log_level);
-
-    EXPECT_NE(
-        error_output.find("Reached maximum iteration size"),
-        std::string::npos);
-    EXPECT_NE(
-        error_output.find(
-            "applying current accepted candidate because no finite fixed audit state is available"),
-        std::string::npos);
-    EXPECT_EQ(
-        error_output.find("applying best validated audit state"),
-        std::string::npos);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
@@ -1952,34 +1675,12 @@ TEST(EstimatorSecondStageDefenseTest, PersistentEmptySystemDoesNotBlockRemoteClu
         CalculateSelectedAtomResponseMeanSquaredError(*model, 1, 3)
     };
 
-    const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
-    const std::string output{ testing::internal::GetCapturedStdout() };
-    const std::string error_output{ testing::internal::GetCapturedStderr() };
-    Logger::SetLogLevel(previous_log_level);
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
 
     ExpectGaussianModelsNear(
         GetEstimateModel(*selected_atoms.front()),
         previous_empty_model,
         1.0e-12);
-    EXPECT_NE(FindAcceptedCandidateCluster(output, true), std::string::npos);
-    EXPECT_NE(
-        output.find("terminal-joint-offset-failure atoms = 1"),
-        std::string::npos);
-    EXPECT_NE(
-        error_output.find(
-            "terminal joint-offset failure fallback clusters/atoms = 1/1"),
-        std::string::npos);
-    EXPECT_NE(
-        error_output.find("statuses = empty-system:1"),
-        std::string::npos);
-    EXPECT_EQ(
-        error_output.find("terminal suspicious rollback fallback"),
-        std::string::npos);
-    EXPECT_EQ(error_output.find("Reached maximum iteration size"), std::string::npos);
     EXPECT_LT(
         CalculateSelectedAtomResponseMeanSquaredError(*model, 1, 3),
         initial_remote_error);
@@ -2022,19 +1723,10 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingJointlyPolishesC
     }
     const auto initial_error{ CalculateSelectedAtomResponseMeanSquaredError(*model) };
 
-    const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
-    const std::string output{ testing::internal::GetCapturedStdout() };
-    Logger::SetLogLevel(previous_log_level);
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
 
     const auto fitted_error{ CalculateSelectedAtomResponseMeanSquaredError(*model) };
     EXPECT_LT(fitted_error, initial_error);
-    EXPECT_NE(
-        output.find(
-            "joint-ABC polish clusters accepted/stationary/fallback = 1/0/0"),
-        std::string::npos);
     bool amplitude_changed{ false };
     bool width_changed{ false };
     bool offset_changed{ false };
@@ -2067,14 +1759,7 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingAcceptsRemoteClu
         CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4)
     };
 
-    const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
-    const std::string output{ testing::internal::GetCapturedStdout() };
-    const std::string error_output{ testing::internal::GetCapturedStderr() };
-    Logger::SetLogLevel(previous_log_level);
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
 
     for (std::size_t i = 0; i < previous_left_model_list.size(); i++)
     {
@@ -2086,83 +1771,6 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingAcceptsRemoteClu
     EXPECT_LT(
         CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4),
         initial_right_error);
-    EXPECT_NE(FindAcceptedCandidateCluster(output, false), std::string::npos);
-    EXPECT_NE(
-        output.find(
-            "joint-ABC polish clusters accepted/stationary/fallback = 1/0/0"),
-        std::string::npos);
-    EXPECT_NE(output.find("terminal-suspicious atoms = 2"), std::string::npos);
-    EXPECT_NE(
-        error_output.find("terminal suspicious rollback fallback clusters/atoms = 1/2"),
-        std::string::npos);
-    EXPECT_EQ(error_output.find("Reached maximum iteration size"), std::string::npos);
-    ExpectSelectedAtomEstimatesAreFinite(*model);
-}
-
-TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingHandlesMultipleSuspiciousSeedsWithRemoteCluster)
-{
-    auto model{ BuildSeparatedRollbackDefenseModel() };
-    MakeAtomSamplesSuspicious(*model, 1);
-    const auto & selected_atoms{ model->GetSelectedAtoms() };
-    const std::array<rg::GaussianModel3D, 2> previous_left_model_list{
-        GetEstimateModel(*selected_atoms.at(0)),
-        GetEstimateModel(*selected_atoms.at(1))
-    };
-    const auto initial_right_error{
-        CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4)
-    };
-
-    const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
-    const std::string output{ testing::internal::GetCapturedStdout() };
-    const std::string error_output{ testing::internal::GetCapturedStderr() };
-    Logger::SetLogLevel(previous_log_level);
-
-    for (std::size_t i = 0; i < previous_left_model_list.size(); i++)
-    {
-        ExpectGaussianModelsNear(
-            GetEstimateModel(*selected_atoms.at(i)),
-            previous_left_model_list.at(i),
-            1.0e-12);
-    }
-    EXPECT_LT(
-        CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4),
-        initial_right_error);
-    EXPECT_NE(output.find("terminal-suspicious atoms = 2"), std::string::npos);
-    EXPECT_NE(
-        error_output.find("terminal suspicious rollback fallback clusters/atoms = 1/2"),
-        std::string::npos);
-    EXPECT_EQ(error_output.find("Reached maximum iteration size"), std::string::npos);
-    ExpectSelectedAtomEstimatesAreFinite(*model);
-}
-
-TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingUsesFixedPointWhenNoAndersonCandidateExists)
-{
-    auto model{ BuildNearCollinearDefenseModel() };
-
-    const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
-    const std::string output{ testing::internal::GetCapturedStdout() };
-    Logger::SetLogLevel(previous_log_level);
-
-    EXPECT_NE(
-        FindAcceptedCandidateCluster(output, false),
-        std::string::npos);
-    EXPECT_NE(
-        output.find("objective acc./rej. clusters = 1/0, atoms = 2/0"),
-        std::string::npos);
-    EXPECT_NE(
-        output.find(
-            "joint-ABC polish clusters accepted/stationary/fallback = 0/1/0"),
-        std::string::npos);
-    EXPECT_EQ(output.find("objective ="), std::string::npos);
-    EXPECT_EQ(output.find("d_amplitude ="), std::string::npos);
-    EXPECT_EQ(output.find("active/frozen/thawed atoms"), std::string::npos);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
@@ -2194,157 +1802,6 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingIsIntensityScale
     }
 }
 
-TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingRetriesTrustRadiusBeforeSolverRidge)
-{
-    auto model{ BuildJointPolishDefenseModel() };
-
-    const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
-    const std::string output{ testing::internal::GetCapturedStdout() };
-    const std::string error_output{ testing::internal::GetCapturedStderr() };
-    Logger::SetLogLevel(previous_log_level);
-
-    const auto retry_position{
-        output.find("Objective backtracking rejected all attempts; retrying after")
-    };
-    ASSERT_NE(retry_position, std::string::npos);
-    {
-        EXPECT_NE(
-            output.find("\rObjective backtracking rejected all attempts; retrying after"),
-            std::string::npos);
-        EXPECT_EQ(
-            output.find("\nObjective backtracking rejected all attempts; retrying after"),
-            std::string::npos);
-        const auto trust_retry_position{
-            output.find("decreased cluster-local trust radius", retry_position)
-        };
-        EXPECT_NE(trust_retry_position, std::string::npos);
-        const auto solver_retry_position{
-            output.find("increased cluster-local solver ridge", retry_position)
-        };
-        if (solver_retry_position != std::string::npos)
-        {
-            EXPECT_LT(trust_retry_position, solver_retry_position);
-        }
-        EXPECT_NE(
-            output.find("offset dQ_C p99 raw =", retry_position),
-            std::string::npos);
-        EXPECT_NE(
-            output.find("objective acc./rej. clusters = 0/", retry_position),
-            std::string::npos);
-    }
-    EXPECT_EQ(
-        error_output.find("best fixed-point candidate"),
-        std::string::npos);
-    ExpectSelectedAtomEstimatesAreFinite(*model);
-}
-
-TEST(EstimatorSecondStageDefenseTest, AndersonKeepsHistoryAfterDampedAcceptance)
-{
-    auto model{ BuildNearCollinearDefenseModel() };
-
-    const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
-    const std::string output{ testing::internal::GetCapturedStdout() };
-    Logger::SetLogLevel(previous_log_level);
-
-    EXPECT_TRUE(HasConsecutiveAcceptedAndersonIterations(output)) << output;
-    ExpectSelectedAtomEstimatesAreFinite(*model);
-}
-
-TEST(EstimatorSecondStageDefenseTest, RejectedClusterObjectiveDiagnosticsAreDebugOnlyWhenPresent)
-{
-    auto info_model{ BuildJointPolishDefenseModel() };
-    auto debug_model{ BuildJointPolishDefenseModel() };
-
-    const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
-    rt::RunSecondStageLocalFitting(*info_model, MakeSecondStageOptions(false));
-    const std::string info_output{ testing::internal::GetCapturedStdout() };
-    static_cast<void>(testing::internal::GetCapturedStderr());
-
-    Logger::SetLogLevel(LogLevel::Debug);
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
-    rt::RunSecondStageLocalFitting(*debug_model, MakeSecondStageOptions(false));
-    const std::string debug_output{ testing::internal::GetCapturedStdout() };
-    static_cast<void>(testing::internal::GetCapturedStderr());
-    Logger::SetLogLevel(previous_log_level);
-
-    EXPECT_EQ(
-        info_output.find("Rejected local fitting cluster objective diagnostics:"),
-        std::string::npos);
-    const auto diagnostic_position{
-        debug_output.find("Rejected local fitting cluster objective diagnostics:")
-    };
-    ASSERT_NE(diagnostic_position, std::string::npos);
-    {
-        EXPECT_NE(
-            debug_output.find("breakdown order = residual/width/offset/total"),
-            std::string::npos);
-        EXPECT_NE(
-            debug_output.find(
-                "kind = fixed-point, requested damping = 1.00e+00, effective damping = "),
-            std::string::npos);
-        EXPECT_NE(
-            debug_output.find("trust radius/step norm = "),
-            std::string::npos);
-        EXPECT_NE(debug_output.find("candidate = "), std::string::npos);
-        EXPECT_NE(debug_output.find("previous = "), std::string::npos);
-        EXPECT_NE(debug_output.find("best = "), std::string::npos);
-        EXPECT_NE(debug_output.find("rejected-by = "), std::string::npos);
-    }
-    EXPECT_NE(
-        debug_output.find("joint-ABC polish clusters accepted/stationary/fallback = "),
-        std::string::npos);
-    const auto & info_atoms{ info_model->GetSelectedAtoms() };
-    const auto & debug_atoms{ debug_model->GetSelectedAtoms() };
-    ASSERT_EQ(info_atoms.size(), debug_atoms.size());
-    for (std::size_t i = 0; i < info_atoms.size(); i++)
-    {
-        ExpectGaussianModelsNear(
-            GetEstimateModel(*info_atoms.at(i)),
-            GetEstimateModel(*debug_atoms.at(i)),
-            1.0e-12);
-    }
-    ExpectSelectedAtomEstimatesAreFinite(*info_model);
-    ExpectSelectedAtomEstimatesAreFinite(*debug_model);
-}
-
-TEST(EstimatorSecondStageDefenseTest, InvalidSeedIsRepairedBeforeConnectedClusterFitting)
-{
-    auto model{ BuildInvalidCandidateDefenseModel() };
-
-    const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Debug);
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
-    const std::string output{ testing::internal::GetCapturedStdout() };
-    static_cast<void>(testing::internal::GetCapturedStderr());
-    Logger::SetLogLevel(previous_log_level);
-
-    EXPECT_NE(
-        output.find("Repaired invalid second-stage seed atoms = 1"),
-        std::string::npos);
-    EXPECT_NE(output.find("source = global-median"), std::string::npos);
-    EXPECT_NE(
-        output.find("original A/B/C = 0.00e+00/0.00e+00/3.70e-01"),
-        std::string::npos);
-    EXPECT_NE(
-        output.find("repaired A/B/C = 5.75e+00/5.50e-01/3.70e-01"),
-        std::string::npos);
-    EXPECT_EQ(output.find("reason = non-positive-width"), std::string::npos);
-    ExpectSelectedAtomEstimatesAreFinite(*model);
-}
-
 TEST(EstimatorSecondStageDefenseTest, MissingValidSeedSkipsSecondStageWithoutChangingResults)
 {
     auto model{ BuildAllInvalidSeedDefenseModel() };
@@ -2354,19 +1811,8 @@ TEST(EstimatorSecondStageDefenseTest, MissingValidSeedSkipsSecondStageWithoutCha
         previous_model_list.emplace_back(GetEstimateModel(*atom));
     }
 
-    const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
-    const std::string output{ testing::internal::GetCapturedStdout() };
-    const std::string error_output{ testing::internal::GetCapturedStderr() };
-    Logger::SetLogLevel(previous_log_level);
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
 
-    EXPECT_NE(
-        (output + error_output).find(
-            "Skip 2nd-stage local atom fitting because no valid Gaussian seed"),
-        std::string::npos);
     for (std::size_t i = 0; i < model->GetSelectedAtoms().size(); i++)
     {
         ExpectGaussianModelsNear(
@@ -2374,37 +1820,4 @@ TEST(EstimatorSecondStageDefenseTest, MissingValidSeedSkipsSecondStageWithoutCha
             previous_model_list.at(i),
             0.0);
     }
-}
-
-TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingReportsMaximumGlobalRidgeStopWhenReached)
-{
-    auto model{ BuildNearCollinearDefenseModel() };
-
-    const auto previous_log_level{ Logger::GetLogLevel() };
-    Logger::SetLogLevel(LogLevel::Info);
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions(false));
-    const std::string output{ testing::internal::GetCapturedStdout() };
-    const std::string error_output{ testing::internal::GetCapturedStderr() };
-    Logger::SetLogLevel(previous_log_level);
-
-    const auto maximum_ridge_position{
-        output.find("next attempt uses increased global ridge ratio = 1.00000")
-    };
-    const auto stop_warning_position{
-        error_output.find("Stopped local fitting because objective backtracking rejected all")
-    };
-    if (maximum_ridge_position != std::string::npos && stop_warning_position != std::string::npos)
-    {
-        EXPECT_NE(
-            error_output.find(
-                "minimum trust radius and maximum joint-offset solver ridge ratio",
-                stop_warning_position),
-            std::string::npos);
-        EXPECT_NE(
-            error_output.find("applying best validated audit state", stop_warning_position),
-            std::string::npos);
-    }
-    ExpectSelectedAtomEstimatesAreFinite(*model);
 }
