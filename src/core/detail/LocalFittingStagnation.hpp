@@ -34,6 +34,29 @@ inline bool AreAllLocalFittingActiveClustersStalled(
     return !active_key_list.empty() && active_key_list == stalled_key_list;
 }
 
+inline bool AreAllLocalFittingActiveClustersForced(
+    const std::vector<algorithm::ClusterKey> & active_key_list,
+    const std::vector<algorithm::ClusterKey> & forced_key_list)
+{
+    return !active_key_list.empty() && active_key_list == forced_key_list;
+}
+
+inline bool ShouldStopLocalFittingForAllForcedGlobalAudit(
+    const std::vector<algorithm::ClusterKey> & active_key_list,
+    const std::vector<algorithm::ClusterKey> & forced_key_list,
+    const std::optional<double> & candidate_objective,
+    const std::optional<double> & best_objective,
+    double relative_tolerance)
+{
+    return AreAllLocalFittingActiveClustersForced(
+            active_key_list,
+            forced_key_list) &&
+        !IsLocalFittingForcedFixedPointObjectiveImproved(
+            candidate_objective,
+            best_objective,
+            relative_tolerance);
+}
+
 struct LocalFittingStagnationOptions
 {
     std::size_t mismatch_iteration_limit{ 3 };

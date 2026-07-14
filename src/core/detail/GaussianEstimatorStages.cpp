@@ -534,6 +534,12 @@ struct LocalFittingCombinedObjectiveDiagnostic
     std::optional<double> best_objective{};
 };
 
+struct LocalFittingGlobalAuditProgressDiagnostic
+{
+    std::optional<double> candidate_objective{};
+    std::optional<double> best_objective{};
+};
+
 struct LocalFittingCandidateSelection
 {
     LocalFittingState assembled_state{};
@@ -4853,25 +4859,78 @@ void LogLocalFittingStagnationStop(
     if (options.quiet_mode) return;
 
     Logger::FinishProgressLine();
-    std::size_t forced_atom_count{ 0 };
-    std::size_t stalled_atom_count{ 0 };
-    for (const auto & key : selection.forced_fixed_point_key_list)
-    {
-        forced_atom_count += key.size();
-    }
-    for (const auto & key : selection.stalled_forced_fixed_point_key_list)
-    {
-        stalled_atom_count += key.size();
-    }
+    const auto summary{ SummarizeLocalFittingClusterSelection(selection) };
 
     std::ostringstream warning_message;
     warning_message
         << "Stopped local fitting because forced fixed-point produced no objective improvement "
         << "after " << accepted_iteration_count << " accepted iterations"
         << "; stagnation forced/stalled clusters = "
-        << selection.forced_fixed_point_key_list.size() << "/"
-        << selection.stalled_forced_fixed_point_key_list.size()
-        << ", atoms = " << forced_atom_count << "/" << stalled_atom_count;
+        << summary.forced_fixed_point_cluster_count << "/"
+        << summary.stalled_forced_fixed_point_cluster_count
+        << ", atoms = " << summary.forced_fixed_point_atom_count << "/"
+        << summary.stalled_forced_fixed_point_atom_count;
+    AppendLocalFittingTerminalSummary(warning_message, terminal_summary);
+    if (applied_audit_state != nullptr)
+    {
+        warning_message << "; applying best validated audit state";
+        AppendLocalFittingAuditSummary(warning_message, *applied_audit_state);
+    }
+    else
+    {
+        warning_message
+            << "; applying previous state because no finite fixed audit state is available";
+    }
+    AppendLocalFittingOffsetSummary(warning_message, applied_offset_stats);
+    warning_message << ".";
+    Logger::Log(LogLevel::Warning, warning_message.str());
+}
+
+void LogLocalFittingGlobalAuditStagnationStop(
+    const FitOptions & options,
+    std::size_t accepted_iteration_count,
+    const LocalFittingCandidateSelection & selection,
+    const LocalFittingGlobalAuditProgressDiagnostic & diagnostic,
+    const LocalFittingAuditedState * applied_audit_state,
+    const LocalFittingTerminalSummary & terminal_summary,
+    const LocalFittingOffsetStats & applied_offset_stats)
+{
+    if (options.quiet_mode) return;
+
+    Logger::FinishProgressLine();
+    const auto summary{ SummarizeLocalFittingClusterSelection(selection) };
+    std::ostringstream warning_message;
+    warning_message
+        << "Stopped local fitting because all forced fixed-point candidates produced no "
+        << "global audit improvement after " << accepted_iteration_count
+        << " accepted iterations"
+        << "; stagnation forced/recovered/stalled clusters = "
+        << summary.forced_fixed_point_cluster_count << "/"
+        << summary.recovered_forced_fixed_point_cluster_count << "/"
+        << summary.stalled_forced_fixed_point_cluster_count
+        << ", atoms = "
+        << summary.forced_fixed_point_atom_count << "/"
+        << summary.recovered_forced_fixed_point_atom_count << "/"
+        << summary.stalled_forced_fixed_point_atom_count
+        << "; fixed global audit candidate/best total = "
+        << std::scientific << std::setprecision(2);
+    if (diagnostic.candidate_objective.has_value())
+    {
+        warning_message << *diagnostic.candidate_objective;
+    }
+    else
+    {
+        warning_message << "unavailable";
+    }
+    warning_message << "/";
+    if (diagnostic.best_objective.has_value())
+    {
+        warning_message << *diagnostic.best_objective;
+    }
+    else
+    {
+        warning_message << "unavailable";
+    }
     AppendLocalFittingTerminalSummary(warning_message, terminal_summary);
     if (applied_audit_state != nullptr)
     {
@@ -5138,6 +5197,88 @@ void RunSecondStageLocalFitting(
                 working_cluster_quality_state,
                 trust_region_state)
         };
+        const auto stop_after_local_stagnation = [&]
+        {
+            const LocalFittingAuditedState * applied_audit_state{ nullptr };
+            const LocalFittingState * applied_state{ &previous_state };
+            if (best_audit_state.best.has_value())
+            {
+                applied_audit_state = &*best_audit_state.best;
+                applied_state = &best_audit_state.best->state;
+            }
+            ApplyLocalFittingState(model_object, context, *applied_state);
+            LogRejectedLocalFittingClusterDiagnostics(
+                options,
+                selection.rejected_cluster_diagnostic_list);
+            LogLocalFittingStagnationStop(
+                options,
+                accepted_iteration_count,
+                selection,
+                applied_audit_state,
+                terminal_summary,
+                SummarizeLocalFittingOffsets(*applied_state));
+        };
+        const auto all_active_clusters_stalled{
+            detail::AreAllLocalFittingActiveClustersStalled(
+                cluster_key_list,
+                selection.stalled_forced_fixed_point_key_list)
+        };
+        if (all_active_clusters_stalled)
+        {
+            stop_after_local_stagnation();
+            return;
+        }
+        const auto all_active_clusters_forced{
+            detail::AreAllLocalFittingActiveClustersForced(
+                cluster_key_list,
+                forced_fixed_point_key_list)
+        };
+        if (all_active_clusters_forced &&
+            !selection.recovered_forced_fixed_point_key_list.empty())
+        {
+            LocalFittingGlobalAuditProgressDiagnostic diagnostic;
+            if (best_audit_state.best.has_value())
+            {
+                diagnostic.best_objective =
+                    best_audit_state.best->objective.total_objective;
+                const auto candidate_objective{
+                    EvaluateLocalFittingAuditObjective(
+                        context,
+                        selection.assembled_state,
+                        best_audit_state)
+                };
+                if (candidate_objective.has_value())
+                {
+                    diagnostic.candidate_objective =
+                        candidate_objective->total_objective;
+                }
+            }
+            if (detail::ShouldStopLocalFittingForAllForcedGlobalAudit(
+                    cluster_key_list,
+                    forced_fixed_point_key_list,
+                    diagnostic.candidate_objective,
+                    diagnostic.best_objective,
+                    kLocalFittingObjectiveTieRelativeTolerance))
+            {
+                const LocalFittingAuditedState * applied_audit_state{ nullptr };
+                const LocalFittingState * applied_state{ &previous_state };
+                if (best_audit_state.best.has_value())
+                {
+                    applied_audit_state = &*best_audit_state.best;
+                    applied_state = &best_audit_state.best->state;
+                }
+                ApplyLocalFittingState(model_object, context, *applied_state);
+                LogLocalFittingGlobalAuditStagnationStop(
+                    options,
+                    accepted_iteration_count,
+                    selection,
+                    diagnostic,
+                    applied_audit_state,
+                    terminal_summary,
+                    SummarizeLocalFittingOffsets(*applied_state));
+                return;
+            }
+        }
         const auto needs_combined_objective_guard{
             cluster_build_result.boundary_sample_count > 0 &&
             !selection.accepted_key_list.empty()
@@ -5161,33 +5302,13 @@ void RunSecondStageLocalFitting(
             LogLocalFittingCombinedObjectiveRejection(
                 options,
                 selection.combined_objective_diagnostic);
-        }
-        const auto all_active_clusters_stalled{
-            detail::AreAllLocalFittingActiveClustersStalled(
-                cluster_key_list,
-                selection.stalled_forced_fixed_point_key_list)
-        };
-        if (all_active_clusters_stalled)
-        {
-            const LocalFittingAuditedState * applied_audit_state{ nullptr };
-            const LocalFittingState * applied_state{ &previous_state };
-            if (best_audit_state.best.has_value())
+            if (detail::AreAllLocalFittingActiveClustersStalled(
+                    cluster_key_list,
+                    selection.stalled_forced_fixed_point_key_list))
             {
-                applied_audit_state = &*best_audit_state.best;
-                applied_state = &best_audit_state.best->state;
+                stop_after_local_stagnation();
+                return;
             }
-            ApplyLocalFittingState(model_object, context, *applied_state);
-            LogRejectedLocalFittingClusterDiagnostics(
-                options,
-                selection.rejected_cluster_diagnostic_list);
-            LogLocalFittingStagnationStop(
-                options,
-                accepted_iteration_count,
-                selection,
-                applied_audit_state,
-                terminal_summary,
-                SummarizeLocalFittingOffsets(*applied_state));
-            return;
         }
         if (combined_objective_accepted)
         {

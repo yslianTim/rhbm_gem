@@ -201,12 +201,50 @@ def parse_log(text: str) -> dict[str, Any]:
         rf"({FLOAT_PATTERN})/({FLOAT_PATTERN})/({FLOAT_PATTERN})/({FLOAT_PATTERN});",
         normalized,
         flags=re.MULTILINE))
-    if len(maximum_iteration_matches) + len(stagnation_matches) != 1:
+    global_stagnation_matches = list(re.finditer(
+        rf"^\[Warning\] Stopped local fitting because all forced fixed-point candidates "
+        rf"produced no global audit improvement after (\d+) accepted iterations; "
+        rf"stagnation forced/recovered/stalled clusters = (\d+)/(\d+)/(\d+), "
+        rf"atoms = (\d+)/(\d+)/(\d+); fixed global audit candidate/best total = "
+        rf"({FLOAT_PATTERN})/({FLOAT_PATTERN}); applying best validated audit state; "
+        rf"audit best source = accepted iteration (\d+), fixed audit objective "
+        rf"residual/width/offset/total = ({FLOAT_PATTERN})/({FLOAT_PATTERN})/"
+        rf"({FLOAT_PATTERN})/({FLOAT_PATTERN});",
+        normalized,
+        flags=re.MULTILINE))
+    terminal_match_count = (
+        len(maximum_iteration_matches) +
+        len(stagnation_matches) +
+        len(global_stagnation_matches))
+    if terminal_match_count != 1:
         raise RegressionError(
             "Expected exactly one terminal audit summary; found "
-            f"{len(maximum_iteration_matches) + len(stagnation_matches)}.")
+            f"{terminal_match_count}.")
 
-    if stagnation_matches:
+    if global_stagnation_matches:
+        terminal_match = global_stagnation_matches[0]
+        terminal = {
+            "outcome": "all-forced-global-audit-stagnation",
+            "accepted_iterations": int(terminal_match.group(1)),
+            "forced_clusters": int(terminal_match.group(2)),
+            "recovered_clusters": int(terminal_match.group(3)),
+            "stalled_clusters": int(terminal_match.group(4)),
+            "forced_atoms": int(terminal_match.group(5)),
+            "recovered_atoms": int(terminal_match.group(6)),
+            "stalled_atoms": int(terminal_match.group(7)),
+            "global_audit_candidate_total": float(terminal_match.group(8)),
+            "global_audit_best_total": float(terminal_match.group(9)),
+            "applied_state": "best-validated-audit",
+            "audit_source": "accepted-iteration",
+            "audit_iteration": int(terminal_match.group(10)),
+            "audit_objective": {
+                "residual": float(terminal_match.group(11)),
+                "width": float(terminal_match.group(12)),
+                "offset": float(terminal_match.group(13)),
+                "total": float(terminal_match.group(14)),
+            },
+        }
+    elif stagnation_matches:
         terminal_match = stagnation_matches[0]
         terminal = {
             "outcome": "forced-fixed-point-stagnation",

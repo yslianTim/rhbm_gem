@@ -555,6 +555,15 @@ tied, or worse objectives leave its previous state assembled and keep the
 cluster forced. Other clusters can continue accepting, freezing, and updating
 the global audit independently.
 
+When every active cluster is forced and at least one forced candidate passes
+that cluster-local strict-improvement gate, the complete assembled candidate is
+also scored with the fixed global audit scale before any working state is
+committed. It must improve the historical global audit best beyond the same
+`1.0e-8` relative tie tolerance. A tied, worse, or unavailable candidate audit,
+or an unavailable global best, stops the stage conservatively. The global best
+is applied when finite; otherwise the iteration's previous state is retained.
+This all-forced guard does not run while any active cluster remains non-forced.
+
 Hard-failure and local-refit-fallback clusters clear and suppress their own
 Anderson history before candidate selection. Soft incomplete status changes
 also start a new history regime. In non-quiet mode the existing progress or
@@ -625,11 +634,13 @@ The loop exits through one of six terminal cases:
   accepted-iteration audit state when available, otherwise apply the previous
   state. If the final rejection instead reaches the outer iteration limit,
   apply the global best validated audit state when available.
-- **Forced fixed-point stagnation:** when every current active cluster is forced
-  and none produces a strict objective improvement, stop before trust-radius,
-  ridge, freeze, or audit commits. Apply the global best validated audit state
-  when available, otherwise retain the iteration's previous state. Failed
-  forced candidates are never submitted.
+- **Forced fixed-point stagnation:** when every current active cluster is forced,
+  stop if every local fixed-point candidate fails strict cluster-objective
+  improvement, or if the locally accepted assembled candidate fails strict
+  improvement over the global audit best. Both checks run before trust-radius,
+  ridge, freeze, accepted-iteration, or audit commits. Apply the global best
+  validated audit state when available, otherwise retain the iteration's
+  previous state. Failed candidates are never submitted.
 - **Maximum iterations reached:** after an accepted final iteration, apply the
   best validated audit state when available; otherwise preserve the current
   accepted assembled-state fallback.
@@ -652,9 +663,10 @@ log-peak-height, log-width, and offset-to-peak-ratio changes. Maximum-iteration
 and forced-stagnation warnings instead report whether the best validated audit
 state or the applicable previous/current accepted-state fallback was applied,
 the audit source and objective breakdown when available, and the offset
-distribution of the state actually applied. Iteration progress additionally
-reports forced/recovered/stalled cluster and atom counts whenever forced mode is
-active.
+distribution of the state actually applied. Global-audit stagnation warnings
+also report candidate/best totals and forced/recovered/stalled cluster and atom
+counts. Iteration progress additionally reports those counts whenever forced
+mode is active.
 
 At debug verbosity (`-v4`), every cluster that remains rejected after all
 candidate attempts emits an objective diagnostic after the normal progress or

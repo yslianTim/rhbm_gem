@@ -742,6 +742,56 @@ TEST(EstimatorSecondStageDefenseTest, StagnationStopRequiresEveryActiveClusterSt
         { first_key, second_key }));
 }
 
+TEST(EstimatorSecondStageDefenseTest, AllForcedGlobalAuditRequiresStrictBestImprovement)
+{
+    const alg::ClusterKey first_key{ 0 };
+    const alg::ClusterKey second_key{ 1 };
+    const std::vector<alg::ClusterKey> active_key_list{ first_key, second_key };
+
+    EXPECT_FALSE(stagnation_detail::ShouldStopLocalFittingForAllForcedGlobalAudit(
+        {},
+        {},
+        std::nullopt,
+        std::nullopt,
+        1.0e-8));
+    EXPECT_FALSE(stagnation_detail::ShouldStopLocalFittingForAllForcedGlobalAudit(
+        active_key_list,
+        { first_key },
+        1.1,
+        1.0,
+        1.0e-8));
+    EXPECT_FALSE(stagnation_detail::ShouldStopLocalFittingForAllForcedGlobalAudit(
+        active_key_list,
+        active_key_list,
+        1.0 - 2.0e-8,
+        1.0,
+        1.0e-8));
+    EXPECT_TRUE(stagnation_detail::ShouldStopLocalFittingForAllForcedGlobalAudit(
+        active_key_list,
+        active_key_list,
+        1.0 - 0.5e-8,
+        1.0,
+        1.0e-8));
+    EXPECT_TRUE(stagnation_detail::ShouldStopLocalFittingForAllForcedGlobalAudit(
+        active_key_list,
+        active_key_list,
+        1.001,
+        1.0,
+        1.0e-8));
+    EXPECT_TRUE(stagnation_detail::ShouldStopLocalFittingForAllForcedGlobalAudit(
+        active_key_list,
+        active_key_list,
+        std::nullopt,
+        1.0,
+        1.0e-8));
+    EXPECT_TRUE(stagnation_detail::ShouldStopLocalFittingForAllForcedGlobalAudit(
+        active_key_list,
+        active_key_list,
+        1.0,
+        std::nullopt,
+        1.0e-8));
+}
+
 TEST(EstimatorSecondStageDefenseTest, StagnationTrackerResetsMismatchEvidence)
 {
     stagnation_detail::LocalFittingStagnationTracker tracker;

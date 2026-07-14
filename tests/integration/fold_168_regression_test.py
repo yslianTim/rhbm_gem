@@ -52,6 +52,16 @@ def synthetic_stagnation_log() -> str:
         "1/1, atoms = 162/162; applying best validated audit state")
 
 
+def synthetic_global_stagnation_log() -> str:
+    return synthetic_log().replace(
+        "Reached maximum iteration size; applying best validated audit state",
+        "Stopped local fitting because all forced fixed-point candidates produced no "
+        "global audit improvement after 17 accepted iterations; stagnation "
+        "forced/recovered/stalled clusters = 1/1/0, atoms = 162/162/0; fixed "
+        "global audit candidate/best total = 2.27e-02/2.22e-02; applying best "
+        "validated audit state")
+
+
 class Fold168RegressionTest(unittest.TestCase):
     def test_parses_carriage_return_log(self) -> None:
         result = regression.parse_log(synthetic_log())
@@ -66,6 +76,18 @@ class Fold168RegressionTest(unittest.TestCase):
         self.assertEqual(result["terminal"]["accepted_iterations"], 18)
         self.assertEqual(result["terminal"]["forced_clusters"], 1)
         self.assertEqual(result["terminal"]["stalled_atoms"], 162)
+        self.assertEqual(result["terminal"]["audit_iteration"], 3)
+
+    def test_parses_all_forced_global_audit_stagnation_log(self) -> None:
+        result = regression.parse_log(synthetic_global_stagnation_log())
+        self.assertEqual(
+            result["terminal"]["outcome"],
+            "all-forced-global-audit-stagnation")
+        self.assertEqual(result["terminal"]["accepted_iterations"], 17)
+        self.assertEqual(result["terminal"]["recovered_clusters"], 1)
+        self.assertEqual(result["terminal"]["stalled_atoms"], 0)
+        self.assertEqual(result["terminal"]["global_audit_candidate_total"], 0.0227)
+        self.assertEqual(result["terminal"]["global_audit_best_total"], 0.0222)
         self.assertEqual(result["terminal"]["audit_iteration"], 3)
 
     def test_rejects_duplicate_sensitivity_and_iteration(self) -> None:
