@@ -44,12 +44,28 @@ def synthetic_log() -> str:
     )
 
 
+def synthetic_stagnation_log() -> str:
+    return synthetic_log().replace(
+        "Reached maximum iteration size; applying best validated audit state",
+        "Stopped local fitting because forced fixed-point produced no objective "
+        "improvement after 18 accepted iterations; stagnation forced/stalled clusters = "
+        "1/1, atoms = 162/162; applying best validated audit state")
+
+
 class Fold168RegressionTest(unittest.TestCase):
     def test_parses_carriage_return_log(self) -> None:
         result = regression.parse_log(synthetic_log())
         self.assertEqual(result["topology"]["candidate_edges"], 1341)
         self.assertEqual(len(result["sensitivity"]), 6)
         self.assertEqual(result["iterations"][0]["freeze_outcomes"]["above_threshold"], 168)
+        self.assertEqual(result["terminal"]["audit_iteration"], 3)
+
+    def test_parses_forced_fixed_point_stagnation_log(self) -> None:
+        result = regression.parse_log(synthetic_stagnation_log())
+        self.assertEqual(result["terminal"]["outcome"], "forced-fixed-point-stagnation")
+        self.assertEqual(result["terminal"]["accepted_iterations"], 18)
+        self.assertEqual(result["terminal"]["forced_clusters"], 1)
+        self.assertEqual(result["terminal"]["stalled_atoms"], 162)
         self.assertEqual(result["terminal"]["audit_iteration"], 3)
 
     def test_rejects_duplicate_sensitivity_and_iteration(self) -> None:

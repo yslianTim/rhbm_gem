@@ -19,6 +19,7 @@
 #include "core/detail/LocalFittingJointOffsetConditioning.hpp"
 #include "core/detail/LocalFittingJointPolish.hpp"
 #include "core/detail/LocalFittingSeedRepair.hpp"
+#include "core/detail/LocalFittingStagnation.hpp"
 #include "core/detail/LocalFittingTrustRegion.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
 #include "core/detail/PostRefitRollback.hpp"
@@ -41,6 +42,7 @@ namespace polish_detail = rhbm_gem::core::detail;
 namespace regime_detail = rhbm_gem::core::detail;
 namespace rollback_detail = rhbm_gem::core::detail;
 namespace seed_detail = rhbm_gem::core::detail;
+namespace stagnation_detail = rhbm_gem::core::detail;
 namespace trust_detail = rhbm_gem::core::detail;
 namespace rt = rhbm_gem::core;
 namespace rg = rhbm_gem;
@@ -657,6 +659,181 @@ TEST(EstimatorSecondStageDefenseTest, AuditObjectiveProgressGuardChecksPreviousA
         std::nullopt, 1.0, std::nullopt, 1.0e-3));
     EXPECT_FALSE(audit_detail::IsLocalFittingAuditObjectiveAcceptableForProgress(
         1.0, std::nullopt, std::nullopt, 1.0e-3));
+}
+
+TEST(EstimatorSecondStageDefenseTest, StagnationTrackerForcesAfterThreeAcceptedRawMismatches)
+{
+    stagnation_detail::LocalFittingStagnationTracker tracker;
+    const alg::ClusterKey key{ 0, 1 };
+    tracker.Reconcile({ key });
+    const alg::ParameterChangeStats accepted_stats{
+        std::vector<double>{ 5.0e-5, 4.0e-5, 3.0e-5 }
+    };
+    const std::vector<double> accepted_maximum{ 8.0e-5, 7.0e-5, 6.0e-5 };
+    const alg::ParameterChangeStats raw_stats{
+        std::vector<double>{ 2.0e-3, 3.0e-3, 4.0e-3 }
+    };
+    const std::vector<double> raw_maximum{ 3.0e-3, 4.0e-3, 5.0e-3 };
+
+    for (int iteration = 0; iteration < 2; iteration++)
+    {
+        tracker.Update(
+            key,
+            true,
+            accepted_stats,
+            accepted_maximum,
+            raw_stats,
+            raw_maximum);
+        EXPECT_TRUE(tracker.BuildForcedFixedPointKeyList().empty());
+    }
+    tracker.Update(
+        key,
+        true,
+        accepted_stats,
+        accepted_maximum,
+        raw_stats,
+        raw_maximum);
+    EXPECT_EQ(
+        (std::vector<alg::ClusterKey>{ key }),
+        tracker.BuildForcedFixedPointKeyList());
+
+    tracker.MarkIneligible({ key });
+    EXPECT_EQ(
+        (std::vector<alg::ClusterKey>{ key }),
+        tracker.BuildForcedFixedPointKeyList());
+    tracker.MarkRecovered({ key });
+    EXPECT_TRUE(tracker.BuildForcedFixedPointKeyList().empty());
+}
+
+TEST(EstimatorSecondStageDefenseTest, ForcedFixedPointRequiresFiniteStrictObjectiveImprovement)
+{
+    EXPECT_TRUE(stagnation_detail::IsLocalFittingForcedFixedPointObjectiveImproved(
+        1.0 - 2.0e-8,
+        1.0,
+        1.0e-8));
+    EXPECT_FALSE(stagnation_detail::IsLocalFittingForcedFixedPointObjectiveImproved(
+        1.0 - 0.5e-8,
+        1.0,
+        1.0e-8));
+    EXPECT_FALSE(stagnation_detail::IsLocalFittingForcedFixedPointObjectiveImproved(
+        1.001,
+        1.0,
+        1.0e-8));
+    EXPECT_FALSE(stagnation_detail::IsLocalFittingForcedFixedPointObjectiveImproved(
+        std::nullopt,
+        1.0,
+        1.0e-8));
+    EXPECT_FALSE(stagnation_detail::IsLocalFittingForcedFixedPointObjectiveImproved(
+        1.0,
+        std::nullopt,
+        1.0e-8));
+}
+
+TEST(EstimatorSecondStageDefenseTest, StagnationStopRequiresEveryActiveClusterStalled)
+{
+    const alg::ClusterKey first_key{ 0 };
+    const alg::ClusterKey second_key{ 1 };
+    EXPECT_FALSE(stagnation_detail::AreAllLocalFittingActiveClustersStalled({}, {}));
+    EXPECT_FALSE(stagnation_detail::AreAllLocalFittingActiveClustersStalled(
+        { first_key, second_key },
+        { first_key }));
+    EXPECT_TRUE(stagnation_detail::AreAllLocalFittingActiveClustersStalled(
+        { first_key, second_key },
+        { first_key, second_key }));
+}
+
+TEST(EstimatorSecondStageDefenseTest, StagnationTrackerResetsMismatchEvidence)
+{
+    stagnation_detail::LocalFittingStagnationTracker tracker;
+    const alg::ClusterKey key{ 0 };
+    const alg::ParameterChangeStats converged_stats{
+        std::vector<double>{ 5.0e-5, 4.0e-5, 3.0e-5 }
+    };
+    const std::vector<double> converged_maximum{ 8.0e-5, 7.0e-5, 6.0e-5 };
+    const alg::ParameterChangeStats moving_stats{
+        std::vector<double>{ 2.0e-3, 3.0e-3, 4.0e-3 }
+    };
+    const std::vector<double> moving_maximum{ 3.0e-3, 4.0e-3, 5.0e-3 };
+    const auto add_mismatch = [&]
+    {
+        tracker.Update(
+            key,
+            true,
+            converged_stats,
+            converged_maximum,
+            moving_stats,
+            moving_maximum);
+    };
+
+    tracker.Reconcile({ key });
+    add_mismatch();
+    add_mismatch();
+    tracker.Update(
+        key,
+        true,
+        converged_stats,
+        converged_maximum,
+        converged_stats,
+        converged_maximum);
+    add_mismatch();
+    add_mismatch();
+    EXPECT_TRUE(tracker.BuildForcedFixedPointKeyList().empty());
+
+    tracker.MarkIneligible({ key });
+    add_mismatch();
+    add_mismatch();
+    EXPECT_TRUE(tracker.BuildForcedFixedPointKeyList().empty());
+
+    tracker.Update(
+        key,
+        true,
+        moving_stats,
+        moving_maximum,
+        moving_stats,
+        moving_maximum);
+    add_mismatch();
+    add_mismatch();
+    EXPECT_TRUE(tracker.BuildForcedFixedPointKeyList().empty());
+
+    tracker.Reconcile({ alg::ClusterKey{ 0, 1 } });
+    EXPECT_TRUE(tracker.BuildForcedFixedPointKeyList().empty());
+}
+
+TEST(EstimatorSecondStageDefenseTest, StagnationTrackerKeepsClustersIndependent)
+{
+    stagnation_detail::LocalFittingStagnationTracker tracker;
+    const alg::ClusterKey stalled_key{ 0 };
+    const alg::ClusterKey converged_key{ 1 };
+    tracker.Reconcile({ stalled_key, converged_key });
+    const alg::ParameterChangeStats accepted_stats{
+        std::vector<double>{ 5.0e-5, 4.0e-5, 3.0e-5 }
+    };
+    const std::vector<double> accepted_maximum{ 8.0e-5, 7.0e-5, 6.0e-5 };
+    const alg::ParameterChangeStats raw_stats{
+        std::vector<double>{ 2.0e-3, 3.0e-3, 4.0e-3 }
+    };
+    const std::vector<double> raw_maximum{ 3.0e-3, 4.0e-3, 5.0e-3 };
+
+    for (int iteration = 0; iteration < 3; iteration++)
+    {
+        tracker.Update(
+            stalled_key,
+            true,
+            accepted_stats,
+            accepted_maximum,
+            raw_stats,
+            raw_maximum);
+        tracker.Update(
+            converged_key,
+            true,
+            accepted_stats,
+            accepted_maximum,
+            accepted_stats,
+            accepted_maximum);
+    }
+    EXPECT_EQ(
+        (std::vector<alg::ClusterKey>{ stalled_key }),
+        tracker.BuildForcedFixedPointKeyList());
 }
 
 TEST(EstimatorSecondStageDefenseTest, ScientificObjectiveUsesAtomMeanIndependentOfCardinality)

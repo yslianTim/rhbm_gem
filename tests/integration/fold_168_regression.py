@@ -185,25 +185,60 @@ def parse_log(text: str) -> dict[str, Any]:
             raise RegressionError(f"Duplicate local-fitting iteration: {number}.")
         iteration_by_number[number] = iteration
 
-    terminal_match = require_unique_match(
+    maximum_iteration_matches = list(re.finditer(
         rf"^\[Warning\] Reached maximum iteration size; applying best validated audit state; "
         rf"audit best source = accepted iteration (\d+), fixed audit objective "
         rf"residual/width/offset/total = ({FLOAT_PATTERN})/({FLOAT_PATTERN})/"
         rf"({FLOAT_PATTERN})/({FLOAT_PATTERN});",
         normalized,
-        "maximum-iteration audit summary")
-    terminal = {
-        "outcome": "maximum-iteration",
-        "applied_state": "best-validated-audit",
-        "audit_source": "accepted-iteration",
-        "audit_iteration": int(terminal_match.group(1)),
-        "audit_objective": {
-            "residual": float(terminal_match.group(2)),
-            "width": float(terminal_match.group(3)),
-            "offset": float(terminal_match.group(4)),
-            "total": float(terminal_match.group(5)),
-        },
-    }
+        flags=re.MULTILINE))
+    stagnation_matches = list(re.finditer(
+        rf"^\[Warning\] Stopped local fitting because forced fixed-point produced no "
+        rf"objective improvement after (\d+) accepted iterations; stagnation "
+        rf"forced/stalled clusters = (\d+)/(\d+), atoms = (\d+)/(\d+); "
+        rf"applying best validated audit state; audit best source = accepted iteration "
+        rf"(\d+), fixed audit objective residual/width/offset/total = "
+        rf"({FLOAT_PATTERN})/({FLOAT_PATTERN})/({FLOAT_PATTERN})/({FLOAT_PATTERN});",
+        normalized,
+        flags=re.MULTILINE))
+    if len(maximum_iteration_matches) + len(stagnation_matches) != 1:
+        raise RegressionError(
+            "Expected exactly one terminal audit summary; found "
+            f"{len(maximum_iteration_matches) + len(stagnation_matches)}.")
+
+    if stagnation_matches:
+        terminal_match = stagnation_matches[0]
+        terminal = {
+            "outcome": "forced-fixed-point-stagnation",
+            "accepted_iterations": int(terminal_match.group(1)),
+            "forced_clusters": int(terminal_match.group(2)),
+            "stalled_clusters": int(terminal_match.group(3)),
+            "forced_atoms": int(terminal_match.group(4)),
+            "stalled_atoms": int(terminal_match.group(5)),
+            "applied_state": "best-validated-audit",
+            "audit_source": "accepted-iteration",
+            "audit_iteration": int(terminal_match.group(6)),
+            "audit_objective": {
+                "residual": float(terminal_match.group(7)),
+                "width": float(terminal_match.group(8)),
+                "offset": float(terminal_match.group(9)),
+                "total": float(terminal_match.group(10)),
+            },
+        }
+    else:
+        terminal_match = maximum_iteration_matches[0]
+        terminal = {
+            "outcome": "maximum-iteration",
+            "applied_state": "best-validated-audit",
+            "audit_source": "accepted-iteration",
+            "audit_iteration": int(terminal_match.group(1)),
+            "audit_objective": {
+                "residual": float(terminal_match.group(2)),
+                "width": float(terminal_match.group(3)),
+                "offset": float(terminal_match.group(4)),
+                "total": float(terminal_match.group(5)),
+            },
+        }
     return {
         "topology": topology,
         "sensitivity": sensitivity,

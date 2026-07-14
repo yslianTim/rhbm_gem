@@ -535,6 +535,26 @@ Raw residual is used only for freeze and parameter convergence. Dependency
 thaw, objective tie-breaking, persistent suspicious or solver no-progress, and
 ridge adjustment retain their accepted-change semantics.
 
+Each complete active cluster key also owns an accepted/raw stagnation state.
+The mismatch streak advances only after its objective reference is locked and
+the cluster accepted a stationarity-eligible candidate without suspicious
+rollback or polish fallback. A mismatch means accepted-change p99 is below
+`1.0e-4` and its maximum is below `1.0e-3`, while the raw fixed-point residual
+does not pass the same two thresholds. Raw convergence, accepted movement,
+ineligibility, or a cluster-key change resets a non-forced streak. Three
+consecutive mismatches force that cluster to bypass Anderson and retain
+Anderson suppression while it tries the normal fixed-point damping, trust
+radius, and optional joint-polish sequence.
+
+A forced fixed-point candidate is evaluated with a temporary cluster-quality
+state and is committed only when its finite objective improves the previous
+locked cluster objective beyond the existing `1.0e-8` relative tie tolerance.
+The normal `1.0e-3` candidate-acceptance tolerance is not sufficient in this
+mode. A strict improvement recovers the cluster from forced mode. Missing,
+tied, or worse objectives leave its previous state assembled and keep the
+cluster forced. Other clusters can continue accepting, freezing, and updating
+the global audit independently.
+
 Hard-failure and local-refit-fallback clusters clear and suppress their own
 Anderson history before candidate selection. Soft incomplete status changes
 also start a new history regime. In non-quiet mode the existing progress or
@@ -552,7 +572,7 @@ This end-to-end health lifecycle is always applied by
 internal stage interface, `FitOptions`, commands, CMake, or environment
 variables.
 
-## Maximum-Iteration Audit State
+## Maximum-Iteration and Stagnation Audit State
 
 Maximum-iteration fallback uses a global audit that is independent of
 cluster-local objective history. Its sample refs contain every original
@@ -588,7 +608,7 @@ state can establish a new best under the already fixed scale.
 
 ## Exit Paths
 
-The loop exits through one of five terminal cases:
+The loop exits through one of six terminal cases:
 
 - **All atoms frozen:** apply the previous state when the loop starts with no
   active atoms, or apply the current accepted assembled state when the last
@@ -605,6 +625,11 @@ The loop exits through one of five terminal cases:
   accepted-iteration audit state when available, otherwise apply the previous
   state. If the final rejection instead reaches the outer iteration limit,
   apply the global best validated audit state when available.
+- **Forced fixed-point stagnation:** when every current active cluster is forced
+  and none produces a strict objective improvement, stop before trust-radius,
+  ridge, freeze, or audit commits. Apply the global best validated audit state
+  when available, otherwise retain the iteration's previous state. Failed
+  forced candidates are never submitted.
 - **Maximum iterations reached:** after an accepted final iteration, apply the
   best validated audit state when available; otherwise preserve the current
   accepted assembled-state fallback.
@@ -624,10 +649,12 @@ progress reports
 separately. Final warnings report reason-specific cluster/atom counts and the
 terminal joint-offset status breakdown. Convergence logs retain the percentile
 log-peak-height, log-width, and offset-to-peak-ratio changes. Maximum-iteration
-warnings instead report whether the best validated audit state or the applicable
-previous/current accepted-state fallback was applied, the audit source and
-objective breakdown when available, and the offset distribution of the state
-actually applied.
+and forced-stagnation warnings instead report whether the best validated audit
+state or the applicable previous/current accepted-state fallback was applied,
+the audit source and objective breakdown when available, and the offset
+distribution of the state actually applied. Iteration progress additionally
+reports forced/recovered/stalled cluster and atom counts whenever forced mode is
+active.
 
 At debug verbosity (`-v4`), every cluster that remains rejected after all
 candidate attempts emits an objective diagnostic after the normal progress or
