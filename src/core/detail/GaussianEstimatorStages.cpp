@@ -4,6 +4,7 @@
 #include "core/detail/LocalFittingAudit.hpp"
 #include "core/detail/LocalFittingAndersonRegime.hpp"
 #include "core/detail/LocalFittingCouplingGraph.hpp"
+#include "core/detail/LocalFittingFreezeDiagnostics.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
 #include "core/detail/LocalFittingJointOffsetConditioning.hpp"
 #include "core/detail/LocalFittingJointPolish.hpp"
@@ -95,6 +96,14 @@ constexpr double kLocalFittingDependencyThawHysteresisFrozenDecay{ 0.9 };
 constexpr double kLocalFittingObjectiveTieRelativeTolerance{ 1.0e-8 };
 constexpr double kLocalFittingConvergenceObjectiveRelativeTolerance{ 1.0e-3 };
 constexpr double kLocalFittingCouplingMinimumWeight{ 0.05 };
+constexpr std::array<double, 6> kLocalFittingCouplingSensitivityMinimumWeightList{
+    0.05,
+    0.075,
+    0.10,
+    0.15,
+    0.20,
+    0.30
+};
 constexpr std::size_t kLocalFittingObjectiveScaleWarmupCount{ 5 };
 constexpr double kLocalFittingObjectiveResidualScaleFloorRatio{ 1.0e-6 };
 constexpr double kLocalFittingWidthPriorPenaltyWeight{ 1.0e-2 };
@@ -214,8 +223,8 @@ struct JointOffsetBuildResult
 struct LocalFittingClusterHealth
 {
     JointOffsetSolveStatus joint_offset_status{ JointOffsetSolveStatus::SystemBuildFailed };
-    std::size_t progress_ineligible_refit_atom_count{ 0 };
-    std::size_t stationarity_ineligible_refit_atom_count{ 0 };
+    std::vector<std::size_t> progress_ineligible_refit_atom_index_list{};
+    std::vector<std::size_t> stationarity_ineligible_refit_atom_index_list{};
 };
 
 using LocalFittingClusterHealthMap = std::map<LocalFittingClusterKey, LocalFittingClusterHealth>;
@@ -236,7 +245,7 @@ struct LocalFittingClusterHealthSummary
 bool IsLocalFittingClusterHealthy(const LocalFittingClusterHealth & health)
 {
     return IsJointOffsetSolveStationarityEligible(health.joint_offset_status) &&
-        health.stationarity_ineligible_refit_atom_count == 0;
+        health.stationarity_ineligible_refit_atom_index_list.empty();
 }
 
 void RecordLocalRefitHealth(
@@ -250,11 +259,11 @@ void RecordLocalRefitHealth(
         if (!std::binary_search(key.begin(), key.end(), atom_index)) continue;
         if (!is_progress_eligible)
         {
-            health.progress_ineligible_refit_atom_count++;
+            health.progress_ineligible_refit_atom_index_list.emplace_back(atom_index);
         }
         if (!is_stationarity_eligible)
         {
-            health.stationarity_ineligible_refit_atom_count++;
+            health.stationarity_ineligible_refit_atom_index_list.emplace_back(atom_index);
         }
         return;
     }
@@ -282,7 +291,7 @@ std::vector<LocalFittingClusterKey> CollectProgressIneligibleLocalFittingCluster
     for (const auto & [key, health] : health_by_key)
     {
         if (!IsJointOffsetSolveProgressEligible(health.joint_offset_status) ||
-            health.progress_ineligible_refit_atom_count > 0)
+            !health.progress_ineligible_refit_atom_index_list.empty())
         {
             key_list.emplace_back(key);
         }
@@ -318,17 +327,17 @@ LocalFittingClusterHealthSummary SummarizeLocalFittingClusterHealth(
         {
             summary.unhealthy_joint_status_count[health.joint_offset_status]++;
         }
-        if (health.progress_ineligible_refit_atom_count > 0)
+        if (!health.progress_ineligible_refit_atom_index_list.empty())
         {
             summary.unhealthy_refit_cluster_count++;
             summary.unhealthy_refit_atom_count +=
-                health.progress_ineligible_refit_atom_count;
+                health.progress_ineligible_refit_atom_index_list.size();
         }
-        if (health.stationarity_ineligible_refit_atom_count > 0)
+        if (!health.stationarity_ineligible_refit_atom_index_list.empty())
         {
             summary.nonstationary_refit_cluster_count++;
             summary.nonstationary_refit_atom_count +=
-                health.stationarity_ineligible_refit_atom_count;
+                health.stationarity_ineligible_refit_atom_index_list.size();
         }
     }
     return summary;
@@ -511,6 +520,8 @@ struct LocalFittingClusterBuildResult
 {
     LocalFittingClusterMap cluster_map{};
     std::size_t boundary_sample_count{ 0 };
+    std::size_t active_atom_count{ 0 };
+    std::size_t maximum_cluster_atom_count{ 0 };
 };
 
 struct LocalFittingCombinedObjectiveDiagnostic
@@ -549,7 +560,42 @@ struct LocalFittingClusterSelectionSummary
     std::size_t stationary_polish_cluster_count{ 0 };
     std::size_t fallback_polish_cluster_count{ 0 };
     std::size_t boundary_sample_count{ 0 };
+    std::size_t iteration_component_count{ 0 };
+    std::size_t iteration_maximum_component_atom_count{ 0 };
+    std::size_t iteration_active_atom_count{ 0 };
     bool has_combined_objective_rejection{ false };
+};
+
+struct LocalFittingFreezeBlockerCauses
+{
+    bool candidate_rejected{ false };
+    bool joint_offset_ineligible{ false };
+    bool self_refit_ineligible{ false };
+    bool peer_refit_ineligible{ false };
+    bool polish_fallback{ false };
+    bool self_suspicious{ false };
+    bool peer_suspicious{ false };
+};
+
+struct LocalFittingAtomFreezeDiagnostic
+{
+    std::size_t atom_index{ 0 };
+    detail::LocalFittingFreezeEvidenceDiagnostic evidence_diagnostic{};
+    LocalFittingFreezeBlockerCauses causes{};
+    std::array<double, detail::kTransformedChangeSize> accepted_change{};
+    std::array<double, detail::kTransformedChangeSize> raw_change{};
+    std::array<double, detail::kTransformedChangeSize> freeze_evidence{};
+    int stable_count{ 0 };
+};
+
+struct LocalFittingFreezeDiagnosticSummary
+{
+    std::size_t ineligible_atom_count{ 0 };
+    std::size_t above_threshold_atom_count{ 0 };
+    std::size_t stabilizing_atom_count{ 0 };
+    std::size_t newly_frozen_atom_count{ 0 };
+    std::size_t dependency_thaw_atom_count{ 0 };
+    std::size_t suspicious_thaw_atom_count{ 0 };
 };
 
 struct SecondStageNeighborSample
@@ -1029,7 +1075,12 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
     }
 
     auto weighted_topology{
-        builder.BuildWeighted(kLocalFittingCouplingMinimumWeight)
+        builder.BuildWeighted(
+            kLocalFittingCouplingMinimumWeight,
+            std::vector<double>{
+                kLocalFittingCouplingSensitivityMinimumWeightList.begin(),
+                kLocalFittingCouplingSensitivityMinimumWeightList.end()
+            })
     };
     return weighted_topology.has_value() ?
         std::move(*weighted_topology) : builder.BuildBinary();
@@ -1044,8 +1095,12 @@ LocalFittingClusterBuildResult BuildLocalFittingClusters(
     };
     LocalFittingClusterBuildResult result;
     result.boundary_sample_count = partition.boundary_sample_count;
+    result.active_atom_count = active_index_list.size();
     for (auto & [key, sample_id_list] : partition.sample_id_list_by_key)
     {
+        result.maximum_cluster_atom_count = std::max(
+            result.maximum_cluster_atom_count,
+            key.size());
         const auto inserted{
             result.cluster_map.emplace(
                 std::move(key),
@@ -1293,6 +1348,12 @@ void LogLocalFittingCouplingTopology(
         Logger::Log(
             LogLevel::Warning,
             "Weighted local-fitting coupling graph is unavailable; using binary connectivity.");
+        if (Logger::GetLogLevel() >= LogLevel::Debug)
+        {
+            Logger::Log(
+                LogLevel::Debug,
+                "Local-fitting weighted threshold sensitivity is unavailable in binary fallback mode.");
+        }
     }
     std::ostringstream message;
     message << "Local-fitting coupling graph mode = "
@@ -1310,8 +1371,26 @@ void LogLocalFittingCouplingTopology(
         << ", initial components/max atoms/ratio = "
         << partition.sample_id_list_by_key.size() << "/"
         << maximum_component_size << "/"
+        << std::fixed << std::setprecision(2)
         << maximum_component_ratio << ".";
     Logger::Log(LogLevel::Info, message.str());
+
+    for (const auto & sensitivity : summary.threshold_sensitivity_list)
+    {
+        std::ostringstream sensitivity_message;
+        sensitivity_message
+            << std::scientific << std::setprecision(2)
+            << "Coupling sensitivity: threshold=" << sensitivity.minimum_weight
+            << ", retained/cut="
+            << sensitivity.retained_edge_count << "/"
+            << sensitivity.cut_edge_count
+            << ", components/max-atoms/ratio="
+            << sensitivity.component_count << "/"
+            << sensitivity.maximum_component_size << "/"
+            << std::fixed << std::setprecision(2)
+            << sensitivity.maximum_component_ratio << ".";
+        Logger::Log(LogLevel::Info, sensitivity_message.str());
+    }
 }
 
 FittedGaussianSnapshot BuildFittedGaussianSnapshot(
@@ -1793,7 +1872,7 @@ ClusteredJointOffsetSolveResult EstimateClusteredJointOffsets(
         }
         if (!clustered_result.health_by_key.emplace(
                 key,
-                LocalFittingClusterHealth{ cluster_result.status, 0 }).second)
+                LocalFittingClusterHealth{ cluster_result.status }).second)
         {
             throw std::invalid_argument("Clustered joint offset keys must be unique.");
         }
@@ -2477,6 +2556,168 @@ std::vector<algorithm::ParameterChange> CombineLocalFittingFreezeEvidenceChanges
         }
     }
     return evidence_change_list;
+}
+
+bool ContainsLocalFittingClusterKey(
+    const std::vector<LocalFittingClusterKey> & key_list,
+    const LocalFittingClusterKey & key)
+{
+    return std::find(key_list.begin(), key_list.end(), key) != key_list.end();
+}
+
+bool ContainsLocalFittingAtomIndex(
+    const std::vector<std::size_t> & atom_index_list,
+    std::size_t atom_index)
+{
+    return std::find(atom_index_list.begin(), atom_index_list.end(), atom_index) !=
+        atom_index_list.end();
+}
+
+std::array<double, detail::kTransformedChangeSize> CopyLocalFittingDiagnosticChange(
+    const algorithm::ParameterChange & change)
+{
+    if (change.value_list.size() != detail::kTransformedChangeSize)
+    {
+        throw std::invalid_argument(
+            "Local fitting freeze diagnostic change size is inconsistent.");
+    }
+    std::array<double, detail::kTransformedChangeSize> values{};
+    std::copy(change.value_list.begin(), change.value_list.end(), values.begin());
+    return values;
+}
+
+const LocalFittingClusterKey & FindLocalFittingClusterKeyForAtom(
+    const std::vector<LocalFittingClusterKey> & cluster_key_list,
+    std::size_t atom_index)
+{
+    for (const auto & key : cluster_key_list)
+    {
+        if (std::binary_search(key.begin(), key.end(), atom_index)) return key;
+    }
+    throw std::invalid_argument("Local fitting freeze diagnostic atom has no cluster.");
+}
+
+std::vector<LocalFittingAtomFreezeDiagnostic> BuildLocalFittingAtomFreezeDiagnostics(
+    const std::vector<std::size_t> & active_index_list,
+    const std::vector<LocalFittingClusterKey> & cluster_key_list,
+    const std::vector<std::size_t> & stationarity_eligible_active_index_list,
+    const std::vector<std::size_t> & suspicious_atom_index_list,
+    const LocalFittingClusterHealthMap & health_by_key,
+    const LocalFittingCandidateSelection & selection,
+    const std::vector<algorithm::ParameterChange> & accepted_change_list,
+    const std::vector<algorithm::ParameterChange> & raw_change_list,
+    const std::vector<algorithm::ParameterChange> & evidence_change_list,
+    const algorithm::ConvergenceFreezeTracker & freeze_tracker)
+{
+    if (accepted_change_list.size() != raw_change_list.size() ||
+        accepted_change_list.size() != evidence_change_list.size())
+    {
+        throw std::invalid_argument(
+            "Local fitting freeze diagnostic change list sizes are inconsistent.");
+    }
+
+    std::vector<LocalFittingAtomFreezeDiagnostic> diagnostic_list;
+    diagnostic_list.reserve(active_index_list.size());
+    for (const auto atom_index : active_index_list)
+    {
+        if (atom_index >= evidence_change_list.size())
+        {
+            throw std::invalid_argument(
+                "Local fitting freeze diagnostic atom index is out of range.");
+        }
+        const auto & key{
+            FindLocalFittingClusterKeyForAtom(cluster_key_list, atom_index)
+        };
+        const auto health_iter{ health_by_key.find(key) };
+        if (health_iter == health_by_key.end())
+        {
+            throw std::invalid_argument(
+                "Local fitting freeze diagnostic cluster health is missing.");
+        }
+        const auto & health{ health_iter->second };
+        std::vector<std::size_t> cluster_suspicious_atom_index_list;
+        for (const auto cluster_atom_index : key)
+        {
+            if (ContainsLocalFittingAtomIndex(
+                    suspicious_atom_index_list,
+                    cluster_atom_index))
+            {
+                cluster_suspicious_atom_index_list.emplace_back(cluster_atom_index);
+            }
+        }
+        const auto suspicious_blocker{
+            detail::ClassifyLocalFittingSelfPeerBlocker(
+                atom_index,
+                cluster_suspicious_atom_index_list)
+        };
+        const auto refit_blocker{
+            detail::ClassifyLocalFittingSelfPeerBlocker(
+                atom_index,
+                health.stationarity_ineligible_refit_atom_index_list)
+        };
+        const auto stationarity_eligible{
+            ContainsLocalFittingAtomIndex(
+                stationarity_eligible_active_index_list,
+                atom_index)
+        };
+
+        LocalFittingFreezeBlockerCauses causes;
+        causes.candidate_rejected =
+            ContainsLocalFittingClusterKey(selection.rejected_key_list, key);
+        causes.joint_offset_ineligible =
+            !IsJointOffsetSolveStationarityEligible(health.joint_offset_status);
+        causes.self_refit_ineligible = refit_blocker.self;
+        causes.peer_refit_ineligible = refit_blocker.peer;
+        causes.polish_fallback =
+            ContainsLocalFittingClusterKey(selection.polish_fallback_key_list, key);
+        causes.self_suspicious = suspicious_blocker.self;
+        causes.peer_suspicious = suspicious_blocker.peer;
+
+        const auto & evidence{ evidence_change_list.at(atom_index) };
+        diagnostic_list.emplace_back(LocalFittingAtomFreezeDiagnostic{
+            atom_index,
+            detail::ClassifyLocalFittingFreezeEvidence(
+                stationarity_eligible,
+                freeze_tracker.IsFrozen(atom_index),
+                freeze_tracker.GetFreezeThreshold(),
+                evidence),
+            causes,
+            CopyLocalFittingDiagnosticChange(accepted_change_list.at(atom_index)),
+            CopyLocalFittingDiagnosticChange(raw_change_list.at(atom_index)),
+            CopyLocalFittingDiagnosticChange(evidence),
+            freeze_tracker.GetStableCount(atom_index)
+        });
+    }
+    return diagnostic_list;
+}
+
+LocalFittingFreezeDiagnosticSummary SummarizeLocalFittingFreezeDiagnostics(
+    const std::vector<LocalFittingAtomFreezeDiagnostic> & diagnostic_list,
+    const std::vector<std::size_t> & dependency_thawed_atom_index_list,
+    const std::vector<std::size_t> & suspicious_thawed_atom_index_list)
+{
+    LocalFittingFreezeDiagnosticSummary summary;
+    for (const auto & diagnostic : diagnostic_list)
+    {
+        switch (diagnostic.evidence_diagnostic.outcome)
+        {
+        case detail::LocalFittingFreezeOutcome::Ineligible:
+            summary.ineligible_atom_count++;
+            break;
+        case detail::LocalFittingFreezeOutcome::AboveThreshold:
+            summary.above_threshold_atom_count++;
+            break;
+        case detail::LocalFittingFreezeOutcome::Stabilizing:
+            summary.stabilizing_atom_count++;
+            break;
+        case detail::LocalFittingFreezeOutcome::NewlyFrozen:
+            summary.newly_frozen_atom_count++;
+            break;
+        }
+    }
+    summary.dependency_thaw_atom_count = dependency_thawed_atom_index_list.size();
+    summary.suspicious_thaw_atom_count = suspicious_thawed_atom_index_list.size();
+    return summary;
 }
 
 algorithm::ParameterChangeStats SummarizeLocalFittingTransformedChanges(
@@ -3420,7 +3661,7 @@ std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
     return LocalAtomRefitResult{ std::move(result), false, false };
 }
 
-void ThawChangedActiveAtomNeighbors(
+std::vector<std::size_t> ThawChangedActiveAtomNeighbors(
     const SecondStageLocalFittingContext & context,
     const std::vector<algorithm::ParameterChange> & change_list,
     const std::vector<std::size_t> & active_index_list,
@@ -3432,6 +3673,7 @@ void ThawChangedActiveAtomNeighbors(
         throw std::invalid_argument("Local fitting dependency thaw input size is inconsistent.");
     }
 
+    std::vector<std::size_t> thawed_atom_index_list;
     for (const auto active_index : active_index_list)
     {
         if (active_index >= context.AtomSize())
@@ -3452,9 +3694,15 @@ void ThawChangedActiveAtomNeighbors(
             if (freeze_tracker.Thaw(neighbor_index))
             {
                 thaw_hysteresis_tracker.RecordDependencyThaw(neighbor_index);
+                thawed_atom_index_list.emplace_back(neighbor_index);
             }
         }
     }
+    std::sort(thawed_atom_index_list.begin(), thawed_atom_index_list.end());
+    thawed_atom_index_list.erase(
+        std::unique(thawed_atom_index_list.begin(), thawed_atom_index_list.end()),
+        thawed_atom_index_list.end());
+    return thawed_atom_index_list;
 }
 
 std::vector<std::size_t> ExpandSuspiciousOffsetClusters(
@@ -3916,6 +4164,16 @@ void AppendLocalFittingClusterSelectionSummary(
     std::ostringstream & stream,
     const LocalFittingClusterSelectionSummary & summary)
 {
+    const auto active_ratio{
+        summary.iteration_active_atom_count == 0 ? 0.0 :
+            static_cast<double>(summary.iteration_maximum_component_atom_count) /
+                static_cast<double>(summary.iteration_active_atom_count)
+    };
+    stream << ", iteration components/max-atoms/active-ratio = "
+        << summary.iteration_component_count << "/"
+        << summary.iteration_maximum_component_atom_count << "/"
+        << std::fixed << std::setprecision(2) << active_ratio
+        << std::defaultfloat;
     stream << ", objective acc./rej. clusters = "
         << summary.accepted_cluster_count << "/" << summary.rejected_cluster_count
         << ", atoms = "
@@ -3927,6 +4185,185 @@ void AppendLocalFittingClusterSelectionSummary(
     if (summary.has_combined_objective_rejection)
     {
         stream << ", combined-objective-rejected";
+    }
+}
+
+void AppendLocalFittingFreezeDiagnosticSummary(
+    std::ostringstream & stream,
+    const LocalFittingFreezeDiagnosticSummary & summary)
+{
+    stream
+        << ", freeze outcomes ineligible/above-threshold/stabilizing/newly-frozen = "
+        << summary.ineligible_atom_count << "/"
+        << summary.above_threshold_atom_count << "/"
+        << summary.stabilizing_atom_count << "/"
+        << summary.newly_frozen_atom_count
+        << ", thaw events dependency/suspicious = "
+        << summary.dependency_thaw_atom_count << "/"
+        << summary.suspicious_thaw_atom_count;
+}
+
+const char * GetLocalFittingFreezeOutcomeText(detail::LocalFittingFreezeOutcome outcome)
+{
+    switch (outcome)
+    {
+    case detail::LocalFittingFreezeOutcome::Ineligible:
+        return "ineligible";
+    case detail::LocalFittingFreezeOutcome::AboveThreshold:
+        return "above-threshold";
+    case detail::LocalFittingFreezeOutcome::Stabilizing:
+        return "stabilizing";
+    case detail::LocalFittingFreezeOutcome::NewlyFrozen:
+        return "newly-frozen";
+    }
+    throw std::logic_error("Local fitting freeze outcome is invalid.");
+}
+
+const char * GetLocalFittingTransformedParameterText(std::size_t parameter_index)
+{
+    switch (parameter_index)
+    {
+    case detail::kLogPeakHeightChangeIndex:
+        return "u";
+    case detail::kLogWidthChangeIndex:
+        return "v";
+    case detail::kOffsetToPeakRatioChangeIndex:
+        return "q";
+    }
+    throw std::logic_error("Local fitting transformed parameter index is invalid.");
+}
+
+void AppendLocalFittingAtomIdentity(
+    std::ostringstream & stream,
+    const SecondStageLocalFittingContext & context,
+    std::size_t atom_index)
+{
+    if (atom_index >= context.AtomSize())
+    {
+        throw std::invalid_argument("Local fitting freeze diagnostic atom index is out of range.");
+    }
+    const auto * atom{ context.atom_context_list.at(atom_index).atom };
+    stream
+        << ", index=" << atom_index
+        << ", serial=" << atom->GetSerialID()
+        << ", atom=" << atom->GetChainID() << "/"
+        << atom->GetComponentID() << atom->GetSequenceID() << "/"
+        << atom->GetAtomID();
+}
+
+void AppendLocalFittingFreezeBlockerCauses(
+    std::ostringstream & stream,
+    const LocalFittingFreezeBlockerCauses & causes)
+{
+    bool appended{ false };
+    const auto append = [&](bool enabled, const char * text)
+    {
+        if (!enabled) return;
+        if (appended) stream << "+";
+        stream << text;
+        appended = true;
+    };
+    append(causes.candidate_rejected, "candidate-rejected");
+    append(
+        causes.joint_offset_ineligible,
+        "joint-offset-stationarity-ineligible");
+    append(causes.self_refit_ineligible, "self-refit-ineligible");
+    append(causes.peer_refit_ineligible, "peer-refit-ineligible");
+    append(causes.polish_fallback, "polish-fallback");
+    append(causes.self_suspicious, "self-suspicious-offset");
+    append(causes.peer_suspicious, "peer-suspicious-offset");
+    if (!appended) stream << "none";
+}
+
+void LogLocalFittingFreezeDiagnostics(
+    const FitOptions & options,
+    std::size_t iteration_number,
+    const SecondStageLocalFittingContext & context,
+    const algorithm::ConvergenceFreezeTracker & freeze_tracker,
+    const std::vector<LocalFittingAtomFreezeDiagnostic> & diagnostic_list,
+    const std::vector<std::size_t> & dependency_thawed_atom_index_list,
+    const std::vector<std::size_t> & suspicious_thawed_atom_index_list)
+{
+    if (options.quiet_mode || Logger::GetLogLevel() < LogLevel::Debug) return;
+
+    Logger::FinishProgressLine();
+    for (const auto & diagnostic : diagnostic_list)
+    {
+        const auto dependency_thawed{
+            ContainsLocalFittingAtomIndex(
+                dependency_thawed_atom_index_list,
+                diagnostic.atom_index)
+        };
+        const auto suspicious_thawed{
+            ContainsLocalFittingAtomIndex(
+                suspicious_thawed_atom_index_list,
+                diagnostic.atom_index)
+        };
+        if (freeze_tracker.IsFrozen(diagnostic.atom_index) &&
+            diagnostic.evidence_diagnostic.outcome !=
+                detail::LocalFittingFreezeOutcome::NewlyFrozen &&
+            !dependency_thawed && !suspicious_thawed)
+        {
+            continue;
+        }
+
+        std::ostringstream message;
+        message << "Freeze diagnostic: iter=" << iteration_number;
+        AppendLocalFittingAtomIdentity(message, context, diagnostic.atom_index);
+        message
+            << ", outcome="
+            << GetLocalFittingFreezeOutcomeText(diagnostic.evidence_diagnostic.outcome)
+            << ", causes=";
+        AppendLocalFittingFreezeBlockerCauses(message, diagnostic.causes);
+        message
+            << std::scientific << std::setprecision(2)
+            << ", threshold=" << freeze_tracker.GetFreezeThreshold()
+            << std::defaultfloat
+            << ", stable=" << diagnostic.stable_count << "/"
+            << freeze_tracker.GetRequiredStableIterationCount()
+            << std::scientific << std::setprecision(2)
+            << ", accepted-du/dv/dq="
+            << diagnostic.accepted_change.at(detail::kLogPeakHeightChangeIndex) << "/"
+            << diagnostic.accepted_change.at(detail::kLogWidthChangeIndex) << "/"
+            << diagnostic.accepted_change.at(detail::kOffsetToPeakRatioChangeIndex)
+            << ", raw-du/dv/dq="
+            << diagnostic.raw_change.at(detail::kLogPeakHeightChangeIndex) << "/"
+            << diagnostic.raw_change.at(detail::kLogWidthChangeIndex) << "/"
+            << diagnostic.raw_change.at(detail::kOffsetToPeakRatioChangeIndex)
+            << ", evidence-du/dv/dq="
+            << diagnostic.freeze_evidence.at(detail::kLogPeakHeightChangeIndex) << "/"
+            << diagnostic.freeze_evidence.at(detail::kLogWidthChangeIndex) << "/"
+            << diagnostic.freeze_evidence.at(detail::kOffsetToPeakRatioChangeIndex)
+            << ", dominant="
+            << GetLocalFittingTransformedParameterText(
+                diagnostic.evidence_diagnostic.dominant_parameter_index);
+        if (dependency_thawed) message << ", event=dependency-thawed";
+        if (suspicious_thawed) message << ", event=suspicious-thawed";
+        message << ".";
+        Logger::Log(LogLevel::Debug, message.str());
+    }
+
+    for (const auto atom_index : dependency_thawed_atom_index_list)
+    {
+        const auto had_iteration_diagnostic{
+            std::any_of(
+                diagnostic_list.begin(), diagnostic_list.end(),
+                [&](const LocalFittingAtomFreezeDiagnostic & diagnostic)
+                {
+                    return diagnostic.atom_index == atom_index;
+                })
+        };
+        if (had_iteration_diagnostic) continue;
+
+        std::ostringstream message;
+        message << "Freeze diagnostic: iter=" << iteration_number;
+        AppendLocalFittingAtomIdentity(message, context, atom_index);
+        message
+            << ", outcome=dependency-thawed, causes=dependency-change"
+            << ", stable=" << freeze_tracker.GetStableCount(atom_index) << "/"
+            << freeze_tracker.GetRequiredStableIterationCount()
+            << ", changes=not-evaluated-this-iteration.";
+        Logger::Log(LogLevel::Debug, message.str());
     }
 }
 
@@ -4126,6 +4563,7 @@ void LogLocalFittingBacktrackingRetry(
     bool uses_cluster_local_objective_ridge,
     const LocalFittingClusterHealthSummary & health_summary,
     const LocalFittingClusterSelectionSummary & selection_summary,
+    const LocalFittingFreezeDiagnosticSummary & freeze_diagnostic_summary,
     double raw_offset_change_percentile)
 {
     if (options.quiet_mode) return;
@@ -4157,6 +4595,9 @@ void LogLocalFittingBacktrackingRetry(
         << ", offset dQ_C p99 raw = " << raw_offset_change_percentile;
     AppendLocalFittingClusterSelectionSummary(progress_message, selection_summary);
     AppendLocalFittingClusterHealthSummary(progress_message, health_summary);
+    AppendLocalFittingFreezeDiagnosticSummary(
+        progress_message,
+        freeze_diagnostic_summary);
     Logger::ProgressLine(progress_message.str());
 }
 
@@ -4165,6 +4606,7 @@ void LogLocalFittingBacktrackingStop(
     LocalFittingBacktrackingStopReason reason,
     const LocalFittingAuditedState * applied_audit_state,
     const LocalFittingTerminalSummary & terminal_summary,
+    const LocalFittingFreezeDiagnosticSummary & freeze_diagnostic_summary,
     const LocalFittingOffsetStats & applied_offset_stats)
 {
     if (options.quiet_mode) return;
@@ -4177,6 +4619,9 @@ void LogLocalFittingBacktrackingStop(
         << (reason == LocalFittingBacktrackingStopReason::MaximumGlobalRidge ?
             "at the minimum trust radius and maximum joint-offset solver ridge ratio" :
             "at the maximum iteration limit");
+    AppendLocalFittingFreezeDiagnosticSummary(
+        warning_message,
+        freeze_diagnostic_summary);
     AppendLocalFittingTerminalSummary(warning_message, terminal_summary);
     if (applied_audit_state != nullptr)
     {
@@ -4202,7 +4647,8 @@ void LogLocalFittingProgress(
     const algorithm::ConvergenceFreezeTracker & freeze_tracker,
     const LocalFittingClusterHealthSummary & health_summary,
     const LocalFittingTerminalSummary & terminal_summary,
-    const LocalFittingClusterSelectionSummary & selection_summary)
+    const LocalFittingClusterSelectionSummary & selection_summary,
+    const LocalFittingFreezeDiagnosticSummary & freeze_diagnostic_summary)
 {
     if (options.quiet_mode) return;
 
@@ -4232,6 +4678,9 @@ void LogLocalFittingProgress(
             << terminal_summary.joint_offset_failure_atom_count;
     }
     AppendLocalFittingClusterHealthSummary(progress_message, health_summary);
+    AppendLocalFittingFreezeDiagnosticSummary(
+        progress_message,
+        freeze_diagnostic_summary);
     Logger::ProgressLine(progress_message.str());
 }
 
@@ -4555,6 +5004,11 @@ void RunSecondStageLocalFitting(
         };
         objective_selection_summary.boundary_sample_count =
             cluster_build_result.boundary_sample_count;
+        objective_selection_summary.iteration_component_count = cluster_key_list.size();
+        objective_selection_summary.iteration_maximum_component_atom_count =
+            cluster_build_result.maximum_cluster_atom_count;
+        objective_selection_summary.iteration_active_atom_count =
+            cluster_build_result.active_atom_count;
         objective_selection_summary.has_combined_objective_rejection =
             selection.has_combined_objective_rejection;
         auto assembled_state{ std::move(selection.assembled_state) };
@@ -4669,6 +5123,36 @@ void RunSecondStageLocalFitting(
         };
         if (selection.accepted_key_list.empty())
         {
+            const auto rejected_change_list{
+                CalculateLocalFittingTransformedChanges(
+                    assembled_state,
+                    previous_state)
+            };
+            const auto rejected_freeze_evidence_change_list{
+                CombineLocalFittingFreezeEvidenceChanges(
+                    rejected_change_list,
+                    raw_fixed_point_change_list)
+            };
+            const auto rejected_freeze_diagnostic_list{
+                BuildLocalFittingAtomFreezeDiagnostics(
+                    active_index_list,
+                    cluster_key_list,
+                    stationarity_eligible_active_index_list,
+                    suspicious_offset_state_index_list,
+                    current_health_by_key,
+                    selection,
+                    rejected_change_list,
+                    raw_fixed_point_change_list,
+                    rejected_freeze_evidence_change_list,
+                    freeze_tracker)
+            };
+            const std::vector<std::size_t> no_thaw_atom_index_list;
+            const auto rejected_freeze_diagnostic_summary{
+                SummarizeLocalFittingFreezeDiagnostics(
+                    rejected_freeze_diagnostic_list,
+                    no_thaw_atom_index_list,
+                    no_thaw_atom_index_list)
+            };
             bool increased_cluster_objective_ridge{ false };
             bool increased_global_ridge_ratio{ false };
             if (!trust_region_radius_update.saturated_key_list.empty())
@@ -4703,8 +5187,17 @@ void RunSecondStageLocalFitting(
                     increased_cluster_objective_ridge,
                     health_summary,
                     objective_selection_summary,
+                    rejected_freeze_diagnostic_summary,
                     raw_fixed_point_residual_stats.percentile_list.at(
                         detail::kOffsetToPeakRatioChangeIndex));
+                LogLocalFittingFreezeDiagnostics(
+                    options,
+                    iter + 1,
+                    context,
+                    freeze_tracker,
+                    rejected_freeze_diagnostic_list,
+                    no_thaw_atom_index_list,
+                    no_thaw_atom_index_list);
                 LogRejectedLocalFittingClusterDiagnostics(
                     options,
                     selection.rejected_cluster_diagnostic_list);
@@ -4731,6 +5224,14 @@ void RunSecondStageLocalFitting(
                 applied_state = &best_audit_state.best_accepted->state;
             }
             ApplyLocalFittingState(model_object, context, *applied_state);
+            LogLocalFittingFreezeDiagnostics(
+                options,
+                iter + 1,
+                context,
+                freeze_tracker,
+                rejected_freeze_diagnostic_list,
+                no_thaw_atom_index_list,
+                no_thaw_atom_index_list);
             LogRejectedLocalFittingClusterDiagnostics(
                 options,
                 selection.rejected_cluster_diagnostic_list);
@@ -4739,6 +5240,7 @@ void RunSecondStageLocalFitting(
                 stop_reason,
                 applied_audit_state,
                 terminal_summary,
+                rejected_freeze_diagnostic_summary,
                 SummarizeLocalFittingOffsets(*applied_state));
             return;
         }
@@ -4797,13 +5299,43 @@ void RunSecondStageLocalFitting(
         freeze_tracker.Update(
             freeze_evidence_change_list,
             stationarity_eligible_active_index_list);
-        ThawChangedActiveAtomNeighbors(
-            context, change_list, accepted_active_index_list,
-            freeze_tracker, thaw_hysteresis_tracker);
+        const auto freeze_diagnostic_list{
+            BuildLocalFittingAtomFreezeDiagnostics(
+                active_index_list,
+                cluster_key_list,
+                stationarity_eligible_active_index_list,
+                suspicious_offset_state_index_list,
+                current_health_by_key,
+                selection,
+                change_list,
+                raw_fixed_point_change_list,
+                freeze_evidence_change_list,
+                freeze_tracker)
+        };
+        const auto dependency_thawed_atom_index_list{
+            ThawChangedActiveAtomNeighbors(
+                context, change_list, accepted_active_index_list,
+                freeze_tracker, thaw_hysteresis_tracker)
+        };
+        auto suspicious_thawed_atom_index_list{ suspicious_offset_state_index_list };
+        std::sort(
+            suspicious_thawed_atom_index_list.begin(),
+            suspicious_thawed_atom_index_list.end());
+        suspicious_thawed_atom_index_list.erase(
+            std::unique(
+                suspicious_thawed_atom_index_list.begin(),
+                suspicious_thawed_atom_index_list.end()),
+            suspicious_thawed_atom_index_list.end());
         for (const auto state_index : suspicious_offset_state_index_list)
         {
             freeze_tracker.Thaw(state_index);
         }
+        const auto freeze_diagnostic_summary{
+            SummarizeLocalFittingFreezeDiagnostics(
+                freeze_diagnostic_list,
+                dependency_thawed_atom_index_list,
+                suspicious_thawed_atom_index_list)
+        };
         for (std::size_t state_index = 0; state_index < atom_size; state_index++)
         {
             if (freeze_tracker.IsFrozen(state_index))
@@ -4818,7 +5350,16 @@ void RunSecondStageLocalFitting(
             freeze_tracker,
             health_summary,
             terminal_summary,
-            objective_selection_summary);
+            objective_selection_summary,
+            freeze_diagnostic_summary);
+        LogLocalFittingFreezeDiagnostics(
+            options,
+            iter + 1,
+            context,
+            freeze_tracker,
+            freeze_diagnostic_list,
+            dependency_thawed_atom_index_list,
+            suspicious_thawed_atom_index_list);
         LogRejectedLocalFittingClusterDiagnostics(
             options,
             selection.rejected_cluster_diagnostic_list);

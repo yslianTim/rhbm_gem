@@ -97,6 +97,25 @@ public:
         return m_frozen_list.at(index);
     }
 
+    double GetFreezeThreshold() const
+    {
+        return m_freeze_threshold;
+    }
+
+    int GetStableCount(std::size_t index) const
+    {
+        if (index >= m_stable_count_list.size())
+        {
+            throw std::invalid_argument("Convergence freeze tracker index is out of range.");
+        }
+        return m_stable_count_list.at(index);
+    }
+
+    int GetRequiredStableIterationCount() const
+    {
+        return m_stable_iteration_size;
+    }
+
     bool Thaw(std::size_t index)
     {
         if (index >= m_frozen_list.size())

@@ -227,6 +227,24 @@ records one representative active contributor per sample while joining all of
 that sample's contributors, then assigns objective samples after the connected
 components are complete.
 
+The weighted coupling graph is constructed once from the initial full Jacobian
+weight map. Its production topology retains the fixed minimum weight `0.05`.
+For diagnostics only, the same weight map is swept at `0.05`, `0.075`, `0.10`,
+`0.15`, `0.20`, and `0.30`; no samples or Jacobians are rebuilt. Each point
+reports retained/cut edges, connected-component count, maximum component atom
+count, and maximum-component/full-atom ratio. Isolated atoms count as
+components. The `0.05` point therefore has the same retained-edge and full-set
+component results as the production topology. If an invalid Jacobian requires
+the binary fallback, weighted sensitivity is unavailable and no synthetic
+sweep is reported.
+
+At verbosity `-v3`, the sensitivity sweep is logged once after topology
+construction. Each iteration progress or retry record also reports the component count,
+maximum component atom count, and maximum-component/active-atom ratio computed
+from that iteration's starting active set on the production `0.05` topology.
+These values precede freeze updates and must not be interpreted as the
+post-update active/frozen counts on the same progress line.
+
 The raw refit result is treated as the fixed-point output `G(x)`. For each
 cluster with compatible history, localized Anderson acceleration proposes:
 
@@ -454,6 +472,35 @@ and frozen-state decay still suppress rapid oscillation. Suspicious rollback
 atoms are force-thawed after freeze tracking so they can retry with their
 temporary ridge multiplier.
 
+Freeze diagnostics are observational and do not alter eligibility, stability,
+freeze, or thaw transitions. At verbosity `-v3`, every outer iteration
+partitions all iteration-start active atoms into exactly one primary outcome:
+
+- `ineligible`: omitted from that iteration's stationarity-eligible freeze
+  update;
+- `above-threshold`: maximum combined evidence is at least the freeze
+  threshold;
+- `stabilizing`: evidence is below threshold but the stable count has not yet
+  reached the required three iterations; or
+- `newly-frozen`: the update reached the required stable count and froze the
+  atom.
+
+The same line reports dependency-thaw transitions and suspicious-offset thaw
+operations. A suspicious thaw is the existing forced `Thaw`/stable-count reset;
+because suspicious atoms start the iteration active, it need not represent a
+frozen-to-active transition.
+
+At verbosity `-v4`, every atom that remains unfrozen after the update and all
+freeze/thaw events receive a record with state index, serial ID, chain,
+component/residue ID, sequence ID, and atom ID. The record includes the primary
+outcome, threshold, stable count, accepted/raw/evidence changes for `u/v/q`,
+and the dominant evidence parameter. Ineligible records additionally expose
+overlapping blockers: candidate rejection, joint-offset stationarity
+ineligibility, self or same-cluster peer refit ineligibility, polish fallback,
+self or peer suspicious offset. Self and peer causes may
+both be present when both the atom and another atom in its cluster fail. Debug
+records first terminate the progress line so they are not overwritten.
+
 A single persistent terminal-failure tracker handles accepted no-progress
 clusters. A suspicious rollback has priority and uses the complete expanded
 suspicious atom set as its failure reason. An accepted cluster without a
@@ -562,9 +609,11 @@ The loop exits through one of five terminal cases:
   best validated audit state when available; otherwise preserve the current
   accepted assembled-state fallback.
 
-Progress logs report iteration, accepted Anderson/fixed-point cluster counts,
+At verbosity `-v3`, progress logs report iteration, accepted
+Anderson/fixed-point cluster counts,
 joint-A/B/C accepted/stationary/fallback cluster counts,
-active/frozen atom counts, and raw/accepted 99th-percentile
+iteration-start component and freeze-outcome summaries, active/frozen atom
+counts after freeze/thaw, and raw/accepted 99th-percentile
 offset-to-peak-ratio change. Objective retry lines report the raw offset
 statistics because no candidate was accepted. Accepted and retry lines also
 report objective-gate accepted/rejected cluster and atom counts before health,

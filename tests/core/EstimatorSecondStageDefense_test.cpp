@@ -14,6 +14,7 @@
 #include "core/detail/LocalFittingAudit.hpp"
 #include "core/detail/LocalFittingAndersonRegime.hpp"
 #include "core/detail/LocalFittingCouplingGraph.hpp"
+#include "core/detail/LocalFittingFreezeDiagnostics.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
 #include "core/detail/LocalFittingJointOffsetConditioning.hpp"
 #include "core/detail/LocalFittingJointPolish.hpp"
@@ -1323,6 +1324,64 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphCutsWeakAndCancelledEdges)
     EXPECT_FALSE(FindCouplingWeight(*cancelled_topology, 0, 1).has_value());
 }
 
+TEST(EstimatorSecondStageDefenseTest, CouplingGraphReportsThresholdSensitivity)
+{
+    const Eigen::Vector3d unit{ 1.0, 0.0, 0.0 };
+    coupling_detail::LocalFittingCouplingGraphBuilder builder{ 7 };
+    const std::array<double, 3> edge_weight_list{ 0.06, 0.12, 0.25 };
+    for (std::size_t edge_index = 0; edge_index < edge_weight_list.size(); edge_index++)
+    {
+        const auto left_index{ 2 * edge_index };
+        const auto right_index{ left_index + 1 };
+        const auto self_scale{
+            std::sqrt(1.0 / edge_weight_list.at(edge_index) - 1.0)
+        };
+        builder.AddSample(
+            { edge_index, 0 },
+            { { left_index, unit }, { right_index, unit } });
+        builder.AddSample(
+            { edge_index, 1 },
+            { { left_index, self_scale * unit } });
+        builder.AddSample(
+            { edge_index, 2 },
+            { { right_index, self_scale * unit } });
+    }
+
+    const std::vector<double> threshold_list{ 0.05, 0.075, 0.10, 0.15, 0.20, 0.30 };
+    const auto topology{ builder.BuildWeighted(0.05, threshold_list) };
+    ASSERT_TRUE(topology.has_value());
+    ASSERT_EQ(topology->summary.threshold_sensitivity_list.size(), threshold_list.size());
+
+    const std::array<std::size_t, 6> retained_edge_count_list{ 3, 2, 2, 1, 1, 0 };
+    for (std::size_t i = 0; i < threshold_list.size(); i++)
+    {
+        const auto & sensitivity{ topology->summary.threshold_sensitivity_list.at(i) };
+        const auto retained_edge_count{ retained_edge_count_list.at(i) };
+        EXPECT_DOUBLE_EQ(sensitivity.minimum_weight, threshold_list.at(i));
+        EXPECT_EQ(sensitivity.retained_edge_count, retained_edge_count);
+        EXPECT_EQ(sensitivity.cut_edge_count, 3U - retained_edge_count);
+        EXPECT_EQ(sensitivity.component_count, 7U - retained_edge_count);
+        EXPECT_EQ(sensitivity.maximum_component_size, retained_edge_count == 0 ? 1U : 2U);
+        EXPECT_NEAR(
+            sensitivity.maximum_component_ratio,
+            static_cast<double>(sensitivity.maximum_component_size) / 7.0,
+            1.0e-12);
+    }
+
+    const auto & formal_threshold{ topology->summary.threshold_sensitivity_list.front() };
+    EXPECT_EQ(formal_threshold.retained_edge_count, topology->summary.retained_edge_count);
+    EXPECT_EQ(
+        topology->summary.candidate_edge_count - formal_threshold.retained_edge_count,
+        topology->summary.cut_edge_count);
+    const auto formal_partition{
+        coupling_detail::BuildLocalFittingCouplingPartition(
+            *topology,
+            { 0, 1, 2, 3, 4, 5, 6 })
+    };
+    EXPECT_EQ(formal_threshold.component_count, formal_partition.sample_id_list_by_key.size());
+    EXPECT_EQ(formal_threshold.maximum_component_size, 2U);
+}
+
 TEST(EstimatorSecondStageDefenseTest, CouplingPartitionCutsWeakBridgeAndDuplicatesBoundarySample)
 {
     coupling_detail::LocalFittingCouplingTopology topology;
@@ -1374,9 +1433,10 @@ TEST(EstimatorSecondStageDefenseTest, CouplingPartitionKeepsStrongChainAndBinary
     builder.AddSample(
         { 0, 0 },
         { { 0, Eigen::Vector3d::Ones() }, { 1, invalid } });
-    EXPECT_FALSE(builder.BuildWeighted(0.05).has_value());
+    EXPECT_FALSE(builder.BuildWeighted(0.05, { 0.05, 0.10 }).has_value());
     const auto binary_topology{ builder.BuildBinary() };
     EXPECT_FALSE(binary_topology.summary.uses_weighted_graph);
+    EXPECT_TRUE(binary_topology.summary.threshold_sensitivity_list.empty());
     const auto binary_partition{
         coupling_detail::BuildLocalFittingCouplingPartition(
             binary_topology,
@@ -1626,6 +1686,71 @@ TEST(EstimatorSecondStageDefenseTest, FreezeEvidenceRequiresSmallRawFixedPointRe
         unstable_evidence.value_list.at(
             change_detail::kLogPeakHeightChangeIndex),
         1.0e-12);
+}
+
+TEST(EstimatorSecondStageDefenseTest, FreezeDiagnosticsClassifyExclusiveOutcomesAndDominantChange)
+{
+    const alg::ParameterChange above_threshold_evidence{
+        std::vector<double>{ 5.0e-5, 2.0e-4, 1.0e-5 }
+    };
+    const alg::ParameterChange below_threshold_evidence{
+        std::vector<double>{ 5.0e-5, 2.0e-5, 1.0e-5 }
+    };
+
+    const auto ineligible{
+        change_detail::ClassifyLocalFittingFreezeEvidence(
+            false, false, 1.0e-4, above_threshold_evidence)
+    };
+    const auto above_threshold{
+        change_detail::ClassifyLocalFittingFreezeEvidence(
+            true, false, 1.0e-4, above_threshold_evidence)
+    };
+    const auto stabilizing{
+        change_detail::ClassifyLocalFittingFreezeEvidence(
+            true, false, 1.0e-4, below_threshold_evidence)
+    };
+    const auto newly_frozen{
+        change_detail::ClassifyLocalFittingFreezeEvidence(
+            true, true, 1.0e-4, below_threshold_evidence)
+    };
+
+    EXPECT_EQ(ineligible.outcome, change_detail::LocalFittingFreezeOutcome::Ineligible);
+    EXPECT_EQ(
+        above_threshold.outcome,
+        change_detail::LocalFittingFreezeOutcome::AboveThreshold);
+    EXPECT_EQ(
+        stabilizing.outcome,
+        change_detail::LocalFittingFreezeOutcome::Stabilizing);
+    EXPECT_EQ(
+        newly_frozen.outcome,
+        change_detail::LocalFittingFreezeOutcome::NewlyFrozen);
+    EXPECT_EQ(above_threshold.dominant_parameter_index, 1U);
+    EXPECT_DOUBLE_EQ(above_threshold.maximum_evidence, 2.0e-4);
+    EXPECT_THROW(
+        change_detail::ClassifyLocalFittingFreezeEvidence(
+            true, false, 1.0e-4, alg::ParameterChange{}),
+        std::invalid_argument);
+}
+
+TEST(EstimatorSecondStageDefenseTest, FreezeDiagnosticsDistinguishSelfAndPeerBlockers)
+{
+    const auto self_and_peer{
+        change_detail::ClassifyLocalFittingSelfPeerBlocker(3, { 3, 4 })
+    };
+    EXPECT_TRUE(self_and_peer.self);
+    EXPECT_TRUE(self_and_peer.peer);
+
+    const auto peer_only{
+        change_detail::ClassifyLocalFittingSelfPeerBlocker(2, { 3, 4 })
+    };
+    EXPECT_FALSE(peer_only.self);
+    EXPECT_TRUE(peer_only.peer);
+
+    const auto self_only{
+        change_detail::ClassifyLocalFittingSelfPeerBlocker(3, { 3 })
+    };
+    EXPECT_TRUE(self_only.self);
+    EXPECT_FALSE(self_only.peer);
 }
 
 TEST(EstimatorSecondStageDefenseTest, FreezeEvidenceIsScaleInvariantAndRejectsInvalidRawState)

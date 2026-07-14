@@ -42,6 +42,16 @@ struct LocalFittingCouplingEdge
 
 struct LocalFittingCouplingGraphSummary
 {
+    struct ThresholdSensitivity
+    {
+        double minimum_weight{ 0.0 };
+        std::size_t retained_edge_count{ 0 };
+        std::size_t cut_edge_count{ 0 };
+        std::size_t component_count{ 0 };
+        std::size_t maximum_component_size{ 0 };
+        double maximum_component_ratio{ 0.0 };
+    };
+
     bool uses_weighted_graph{ false };
     std::size_t candidate_edge_count{ 0 };
     std::size_t retained_edge_count{ 0 };
@@ -49,6 +59,7 @@ struct LocalFittingCouplingGraphSummary
     double weight_median{ 0.0 };
     double weight_percentile_95{ 0.0 };
     double weight_maximum{ 0.0 };
+    std::vector<ThresholdSensitivity> threshold_sensitivity_list{};
 };
 
 struct LocalFittingCouplingTopology
@@ -101,6 +112,77 @@ class LocalFittingCouplingGraphBuilder
             }
         }
         return norm;
+    }
+
+    std::vector<LocalFittingCouplingGraphSummary::ThresholdSensitivity>
+    BuildThresholdSensitivity(
+        const std::map<AtomPair, double> & weight_by_pair,
+        const std::vector<double> & minimum_weight_list) const
+    {
+        std::vector<LocalFittingCouplingGraphSummary::ThresholdSensitivity> sensitivity_list;
+        sensitivity_list.reserve(minimum_weight_list.size());
+        for (const auto minimum_weight : minimum_weight_list)
+        {
+            if (!std::isfinite(minimum_weight) ||
+                minimum_weight < 0.0 || minimum_weight > 1.0)
+            {
+                throw std::invalid_argument(
+                    "Local fitting coupling sensitivity minimum weight must be in [0, 1].");
+            }
+
+            std::vector<std::size_t> parent_list(m_atom_count);
+            std::vector<std::size_t> component_size_list(m_atom_count, 1);
+            for (std::size_t i = 0; i < parent_list.size(); i++) parent_list.at(i) = i;
+            const auto find_root = [&](std::size_t index, auto && self) -> std::size_t
+            {
+                if (parent_list.at(index) == index) return index;
+                parent_list.at(index) = self(parent_list.at(index), self);
+                return parent_list.at(index);
+            };
+            const auto merge = [&](std::size_t left, std::size_t right)
+            {
+                const auto left_root{ find_root(left, find_root) };
+                const auto right_root{ find_root(right, find_root) };
+                if (left_root == right_root) return;
+                parent_list.at(right_root) = left_root;
+                component_size_list.at(left_root) += component_size_list.at(right_root);
+            };
+
+            std::size_t retained_edge_count{ 0 };
+            for (const auto & pair : m_candidate_pair_set)
+            {
+                const auto weight_iter{ weight_by_pair.find(pair) };
+                const auto weight{
+                    weight_iter == weight_by_pair.end() ? 0.0 : weight_iter->second
+                };
+                if (weight < minimum_weight) continue;
+                retained_edge_count++;
+                merge(pair.first, pair.second);
+            }
+
+            std::size_t component_count{ 0 };
+            std::size_t maximum_component_size{ 0 };
+            for (std::size_t atom_index = 0; atom_index < m_atom_count; atom_index++)
+            {
+                if (find_root(atom_index, find_root) != atom_index) continue;
+                component_count++;
+                maximum_component_size = std::max(
+                    maximum_component_size,
+                    component_size_list.at(atom_index));
+            }
+            sensitivity_list.emplace_back(
+                LocalFittingCouplingGraphSummary::ThresholdSensitivity{
+                    minimum_weight,
+                    retained_edge_count,
+                    m_candidate_pair_set.size() - retained_edge_count,
+                    component_count,
+                    maximum_component_size,
+                    m_atom_count == 0 ? 0.0 :
+                        static_cast<double>(maximum_component_size) /
+                            static_cast<double>(m_atom_count)
+                });
+        }
+        return sensitivity_list;
     }
 
     LocalFittingCouplingTopology BuildFromWeights(
@@ -215,7 +297,8 @@ public:
     }
 
     std::optional<LocalFittingCouplingTopology> BuildWeighted(
-        double minimum_weight) const
+        double minimum_weight,
+        const std::vector<double> & sensitivity_minimum_weight_list = {}) const
     {
         if (!std::isfinite(minimum_weight) ||
             minimum_weight < 0.0 || minimum_weight > 1.0)
@@ -251,7 +334,11 @@ public:
             if (!std::isfinite(raw_weight)) return std::nullopt;
             weight_by_pair.emplace(pair, std::clamp(raw_weight, 0.0, 1.0));
         }
-        return BuildFromWeights(weight_by_pair, minimum_weight, true);
+        auto topology{ BuildFromWeights(weight_by_pair, minimum_weight, true) };
+        topology.summary.threshold_sensitivity_list = BuildThresholdSensitivity(
+            weight_by_pair,
+            sensitivity_minimum_weight_list);
+        return topology;
     }
 
     LocalFittingCouplingTopology BuildBinary() const

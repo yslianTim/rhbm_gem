@@ -121,6 +121,37 @@ TEST(ConvergenceAlgorithmTest, FreezeTrackerThawsFrozenEntryAndResetsStableCount
     EXPECT_FALSE(tracker.IsFrozen(0));
 }
 
+TEST(ConvergenceAlgorithmTest, FreezeTrackerReportsReadOnlyConfigurationAndStableCount)
+{
+    alg::ConvergenceFreezeTracker tracker{
+        1,
+        1.0e-4,
+        0.5,
+        2
+    };
+    const std::vector<alg::ParameterChange> stable_change_list{
+        MakeChange(0.001)
+    };
+
+    EXPECT_DOUBLE_EQ(tracker.GetFreezeThreshold(), 0.005);
+    EXPECT_EQ(tracker.GetRequiredStableIterationCount(), 2);
+    EXPECT_EQ(tracker.GetStableCount(0), 0);
+
+    tracker.Update(stable_change_list, { 0 });
+    EXPECT_EQ(tracker.GetStableCount(0), 1);
+    tracker.ResetStability({ 0 });
+    EXPECT_EQ(tracker.GetStableCount(0), 0);
+
+    tracker.Update(stable_change_list, { 0 });
+    tracker.Update(stable_change_list, { 0 });
+    ASSERT_TRUE(tracker.IsFrozen(0));
+    EXPECT_EQ(tracker.GetStableCount(0), 2);
+
+    tracker.Thaw(0);
+    EXPECT_EQ(tracker.GetStableCount(0), 0);
+    EXPECT_THROW(tracker.GetStableCount(1), std::invalid_argument);
+}
+
 TEST(ConvergenceAlgorithmTest, FreezeTrackerResetStabilityBreaksConsecutiveStableUpdates)
 {
     alg::ConvergenceFreezeTracker tracker{
