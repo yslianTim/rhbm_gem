@@ -752,14 +752,14 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionDampingCapsLargeTransformedStep
 
     const auto capped{
         trust_detail::LimitLocalFittingTrustRegionDamping(
-            previous, candidate, { 0 }, scale, 1.0, 1.0)
+            previous, candidate, scale, 1.0, 1.0)
     };
     EXPECT_DOUBLE_EQ(capped.effective_damping, 0.5);
     EXPECT_DOUBLE_EQ(capped.step_norm, 1.0);
 
     const auto inside{
         trust_detail::LimitLocalFittingTrustRegionDamping(
-            previous, candidate, { 0 }, scale, 0.25, 1.0)
+            previous, candidate, scale, 0.25, 1.0)
     };
     EXPECT_DOUBLE_EQ(inside.effective_damping, 0.25);
     EXPECT_DOUBLE_EQ(inside.step_norm, 0.5);
@@ -798,11 +798,11 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionDampingIsIntensityScaleInvarian
 
     const auto base{
         trust_detail::LimitLocalFittingTrustRegionDamping(
-            base_previous, base_candidate, { 0 }, scale, 1.0, 0.5)
+            base_previous, base_candidate, scale, 1.0, 0.5)
     };
     const auto scaled{
         trust_detail::LimitLocalFittingTrustRegionDamping(
-            scaled_previous, scaled_candidate, { 0 }, scale, 1.0, 0.5)
+            scaled_previous, scaled_candidate, scale, 1.0, 0.5)
     };
     EXPECT_NEAR(base.effective_damping, scaled.effective_damping, 1.0e-12);
     EXPECT_NEAR(base.step_norm, scaled.step_norm, 1.0e-12);
@@ -824,7 +824,6 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionPolishHonorsOuterStepBoundary)
             outer_previous,
             boundary_state,
             outward_target,
-            { 0 },
             scale,
             1.0,
             1.0)
@@ -837,7 +836,6 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionPolishHonorsOuterStepBoundary)
             outer_previous,
             boundary_state,
             outer_previous,
-            { 0 },
             scale,
             1.0,
             1.0)
@@ -1699,20 +1697,58 @@ TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageLogsEveryOuterAttempt)
     };
     EXPECT_EQ(count_occurrences("Try/Acc"), 1U);
     EXPECT_NE(out.find("Atom A/T"), std::string::npos);
-    EXPECT_NE(out.find("Cmp/Max/R"), std::string::npos);
-    EXPECT_NE(out.find("Cand C;A A/R"), std::string::npos);
-    EXPECT_NE(out.find("TR G/S/M"), std::string::npos);
-    EXPECT_NE(out.find("Guard S/U/C"), std::string::npos);
+    EXPECT_NE(out.find("Cluster A/R"), std::string::npos);
+    EXPECT_NE(out.find("Suspicious"), std::string::npos);
     EXPECT_NE(out.find("dMax A/R"), std::string::npos);
-    EXPECT_NE(out.find("Audit B/P"), std::string::npos);
-    EXPECT_NE(out.find("| 1   | 0/0/0    | 2/0/0"), std::string::npos);
-    EXPECT_NE(out.find("| 0   | 0/0/1    | 0/0/0       | -/"), std::string::npos);
-    EXPECT_NE(out.find("| I/1"), std::string::npos);
-    EXPECT_NE(out.find("| 5/0"), std::string::npos);
 
-    const auto row_count{
-        static_cast<std::size_t>(std::count(out.begin(), out.end(), '\r'))
+    const auto header_start{ out.find("Try/Acc") };
+    ASSERT_NE(header_start, std::string::npos);
+    const auto header_end{ out.find('\n', header_start) };
+    ASSERT_NE(header_end, std::string::npos);
+    const std::string_view header{
+        out.data() + header_start,
+        header_end - header_start
     };
+    std::vector<std::string_view> progress_row_list;
+    for (std::size_t row_start = out.find('\r');
+        row_start != std::string::npos;
+        row_start = out.find('\r', row_start))
+    {
+        row_start++;
+        const auto row_end{ out.find_first_of("\r\n", row_start) };
+        ASSERT_NE(row_end, std::string::npos);
+        progress_row_list.emplace_back(
+            out.data() + row_start,
+            row_end - row_start);
+        row_start = row_end;
+    }
+    const auto separator_position_list = [](std::string_view row)
+    {
+        std::vector<std::size_t> position_list;
+        for (std::size_t position = row.find('|');
+            position != std::string::npos;
+            position = row.find('|', position + 1))
+        {
+            position_list.emplace_back(position);
+        }
+        return position_list;
+    };
+    const auto header_separator_position_list{
+        separator_position_list(header)
+    };
+    ASSERT_EQ(header_separator_position_list.size(), 4U);
+    ASSERT_EQ(progress_row_list.size(), 6U);
+    for (const auto row : progress_row_list)
+    {
+        EXPECT_EQ(row.size(), header.size());
+        EXPECT_EQ(
+            separator_position_list(row),
+            header_separator_position_list);
+    }
+    EXPECT_NE(
+        progress_row_list.front().find("3.58e-02/4.14e-02"),
+        std::string::npos);
+
     const std::string summary_prefix{
         "Second-stage local fitting summary: accepted_iterations="
     };
@@ -1727,8 +1763,12 @@ TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageLogsEveryOuterAttempt)
         static_cast<std::size_t>(std::stoull(
             out.substr(accepted_start, accepted_end - accepted_start)))
     };
-    EXPECT_GT(row_count, accepted_iteration_count);
+    EXPECT_EQ(accepted_iteration_count, 5U);
     EXPECT_NE(out.find("-/"), std::string::npos);
+    EXPECT_NE(
+        out.find(
+            "best_iteration=5, stop_reason=all-rejected-minimum-radius"),
+        std::string::npos);
 }
 
 TEST(EstimatorSecondStageDefenseTest, QuietSecondStageSuppressesIterationTable)

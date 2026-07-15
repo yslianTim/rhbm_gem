@@ -95,9 +95,9 @@ be decoded to a valid Gaussian model.
 Each cluster tracks:
 
 - a scale-reference tracker;
-- the previous accepted candidate's transformed-change statistics and
-  objective samples;
-- the best tracked candidate when a valid objective has been observed.
+- the previous accepted candidate's objective samples;
+- the best objective samples and the corresponding maximum transformed change
+  used to break objective ties.
 
 The objective combines:
 
@@ -179,22 +179,20 @@ reconciliation preserves validated progress from non-terminal clusters.
 
 ## Logging
 
-After valid seeds are available, non-quiet runs print an iteration-table header
-and update one progress row per outer attempt with `Logger::ProgressLine`. An
-outer attempt may be an accepted iteration or an all-rejected trust-region
-retry, so `Try` can advance without `Acc`.
+After valid seeds are available, non-quiet runs print a compact header and
+update one progress row per outer attempt with `Logger::ProgressLine`. An outer
+attempt may be an accepted iteration or an all-rejected trust-region retry, so
+`Try` can advance without `Acc`. The header and progress rows use the same
+fixed column widths, including enough space for both scientific-notation
+values in `dMax A/R`.
 
 | Column | Meaning after the current outer attempt |
 |---|---|
 | `Try/Acc` | One-based outer attempt / cumulative accepted iterations |
 | `Atom A/T` | Remaining active / cumulative terminal atoms |
-| `Cmp/Max/R` | Partition components / largest component atoms / largest-component-to-active-atom ratio |
-| `Cand C;A A/R` | Accepted/rejected candidate clusters; accepted/rejected candidate atoms after the objective gate |
-| `Pol` | Clusters whose strict-improvement polish replaced the base candidate |
-| `TR G/S/M` | Trust-radius grows / successful shrinks / rejected clusters already at minimum radius |
-| `Guard S/U/C` | Suspicious atoms / stationarity-ineligible clusters / combined-objective rejection (`0` or `1`) |
+| `Cluster A/R` | Accepted / rejected candidate clusters |
+| `Suspicious` | Atoms rolled back by the suspicious-offset checks in this attempt |
 | `dMax A/R` | Maximum transformed change in the accepted/raw state; accepted is `-` on an all-rejected attempt |
-| `Audit B/P` | Best audit iteration (`I`, accepted-iteration number, or `-`) / current audit patience |
 
 Debug rejection diagnostics finish the active progress line before printing
 their details. Terminal, convergence, and summary messages do the same before

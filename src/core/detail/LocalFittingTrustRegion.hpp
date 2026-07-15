@@ -136,7 +136,6 @@ struct LocalFittingTrustRegionDamping
 inline void ValidateLocalFittingTrustRegionInputs(
     const std::vector<Eigen::VectorXd> & previous_estimation_list,
     const std::vector<Eigen::VectorXd> & candidate_estimation_list,
-    const LocalFittingTrustRegionClusterKey & key,
     const std::array<double, 3> & parameter_scale,
     double requested_damping,
     double radius)
@@ -157,13 +156,12 @@ inline void ValidateLocalFittingTrustRegionInputs(
             throw std::invalid_argument("Local fitting trust-region scale is invalid.");
         }
     }
-    for (const auto atom_index : key)
+    for (std::size_t i = 0; i < previous_estimation_list.size(); i++)
     {
-        if (atom_index >= previous_estimation_list.size() ||
-            previous_estimation_list.at(atom_index).size() != 3 ||
-            candidate_estimation_list.at(atom_index).size() != 3 ||
-            !previous_estimation_list.at(atom_index).allFinite() ||
-            !candidate_estimation_list.at(atom_index).allFinite())
+        if (previous_estimation_list.at(i).size() != 3 ||
+            candidate_estimation_list.at(i).size() != 3 ||
+            !previous_estimation_list.at(i).allFinite() ||
+            !candidate_estimation_list.at(i).allFinite())
         {
             throw std::invalid_argument("Local fitting trust-region estimation is invalid.");
         }
@@ -173,7 +171,6 @@ inline void ValidateLocalFittingTrustRegionInputs(
 inline LocalFittingTrustRegionDamping LimitLocalFittingTrustRegionDamping(
     const std::vector<Eigen::VectorXd> & previous_estimation_list,
     const std::vector<Eigen::VectorXd> & candidate_estimation_list,
-    const LocalFittingTrustRegionClusterKey & key,
     const std::array<double, 3> & parameter_scale,
     double requested_damping,
     double radius)
@@ -181,13 +178,12 @@ inline LocalFittingTrustRegionDamping LimitLocalFittingTrustRegionDamping(
     ValidateLocalFittingTrustRegionInputs(
         previous_estimation_list,
         candidate_estimation_list,
-        key,
         parameter_scale,
         requested_damping,
         radius);
 
     double undamped_step_norm{ 0.0 };
-    for (const auto atom_index : key)
+    for (std::size_t i = 0; i < previous_estimation_list.size(); i++)
     {
         for (std::size_t parameter_index = 0; parameter_index < 3; parameter_index++)
         {
@@ -195,8 +191,8 @@ inline LocalFittingTrustRegionDamping LimitLocalFittingTrustRegionDamping(
             undamped_step_norm = std::max(
                 undamped_step_norm,
                 std::abs(
-                    candidate_estimation_list.at(atom_index)(eigen_index) -
-                    previous_estimation_list.at(atom_index)(eigen_index)) /
+                    candidate_estimation_list.at(i)(eigen_index) -
+                    previous_estimation_list.at(i)(eigen_index)) /
                     parameter_scale.at(parameter_index));
         }
     }
@@ -216,7 +212,6 @@ inline LocalFittingTrustRegionDamping LimitLocalFittingTrustRegionSubstepDamping
     const std::vector<Eigen::VectorXd> & outer_previous_estimation_list,
     const std::vector<Eigen::VectorXd> & substep_previous_estimation_list,
     const std::vector<Eigen::VectorXd> & candidate_estimation_list,
-    const LocalFittingTrustRegionClusterKey & key,
     const std::array<double, 3> & parameter_scale,
     double requested_damping,
     double radius)
@@ -224,29 +219,27 @@ inline LocalFittingTrustRegionDamping LimitLocalFittingTrustRegionSubstepDamping
     ValidateLocalFittingTrustRegionInputs(
         outer_previous_estimation_list,
         substep_previous_estimation_list,
-        key,
         parameter_scale,
         requested_damping,
         radius);
     ValidateLocalFittingTrustRegionInputs(
         substep_previous_estimation_list,
         candidate_estimation_list,
-        key,
         parameter_scale,
         requested_damping,
         radius);
 
     double maximum_damping{ requested_damping };
     constexpr double tolerance{ 1.0e-12 };
-    for (const auto atom_index : key)
+    for (std::size_t i = 0; i < outer_previous_estimation_list.size(); i++)
     {
         for (std::size_t parameter_index = 0; parameter_index < 3; parameter_index++)
         {
             const auto eigen_index{ static_cast<Eigen::Index>(parameter_index) };
             const auto limit{ radius * parameter_scale.at(parameter_index) };
             const auto base_step{
-                substep_previous_estimation_list.at(atom_index)(eigen_index) -
-                outer_previous_estimation_list.at(atom_index)(eigen_index)
+                substep_previous_estimation_list.at(i)(eigen_index) -
+                outer_previous_estimation_list.at(i)(eigen_index)
             };
             if (std::abs(base_step) > limit + tolerance)
             {
@@ -254,8 +247,8 @@ inline LocalFittingTrustRegionDamping LimitLocalFittingTrustRegionSubstepDamping
                     "Local fitting trust-region substep starts outside the radius.");
             }
             const auto direction{
-                candidate_estimation_list.at(atom_index)(eigen_index) -
-                substep_previous_estimation_list.at(atom_index)(eigen_index)
+                candidate_estimation_list.at(i)(eigen_index) -
+                substep_previous_estimation_list.at(i)(eigen_index)
             };
             if (direction > 0.0)
             {
@@ -273,18 +266,18 @@ inline LocalFittingTrustRegionDamping LimitLocalFittingTrustRegionSubstepDamping
     }
 
     double step_norm{ 0.0 };
-    for (const auto atom_index : key)
+    for (std::size_t i = 0; i < outer_previous_estimation_list.size(); i++)
     {
         for (std::size_t parameter_index = 0; parameter_index < 3; parameter_index++)
         {
             const auto eigen_index{ static_cast<Eigen::Index>(parameter_index) };
             const auto base_step{
-                substep_previous_estimation_list.at(atom_index)(eigen_index) -
-                outer_previous_estimation_list.at(atom_index)(eigen_index)
+                substep_previous_estimation_list.at(i)(eigen_index) -
+                outer_previous_estimation_list.at(i)(eigen_index)
             };
             const auto direction{
-                candidate_estimation_list.at(atom_index)(eigen_index) -
-                substep_previous_estimation_list.at(atom_index)(eigen_index)
+                candidate_estimation_list.at(i)(eigen_index) -
+                substep_previous_estimation_list.at(i)(eigen_index)
             };
             step_norm = std::max(
                 step_norm,
