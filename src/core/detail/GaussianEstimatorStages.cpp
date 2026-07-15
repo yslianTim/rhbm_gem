@@ -176,21 +176,6 @@ struct LocalFittingClusterHealth
 
 using LocalFittingClusterHealthMap = std::map<LocalFittingClusterKey, LocalFittingClusterHealth>;
 
-std::vector<LocalFittingClusterKey> CollectUnhealthyLocalFittingClusterKeys(
-    const LocalFittingClusterHealthMap & health_by_key)
-{
-    std::vector<LocalFittingClusterKey> key_list;
-    for (const auto & [key, health] : health_by_key)
-    {
-        if (!IsJointOffsetSolveStationarityEligible(health.joint_offset_status) ||
-            !health.is_refit_stationarity_eligible)
-        {
-            key_list.emplace_back(key);
-        }
-    }
-    return key_list;
-}
-
 struct LocalFittingIterationResult
 {
     LocalFittingState state{};
@@ -307,19 +292,10 @@ struct LocalFittingTerminalSummary
     }
 };
 
-enum class LocalFittingObjectiveAttemptDiagnosticStatus
-{
-    Scored,
-    InvalidModel,
-    ObjectiveUnavailable
-};
-
 struct LocalFittingObjectiveAttemptDiagnostic
 {
     double effective_damping{ 1.0 };
-    LocalFittingObjectiveAttemptDiagnosticStatus status{
-        LocalFittingObjectiveAttemptDiagnosticStatus::ObjectiveUnavailable
-    };
+    bool is_invalid_model{ false };
     std::optional<double> objective_scale{};
     std::optional<detail::LocalFittingObjectiveBreakdown> candidate_objective{};
     std::optional<detail::LocalFittingObjectiveBreakdown> previous_objective{};
@@ -1743,11 +1719,6 @@ bool TryUpdateLocalFittingBestAuditState(
         EvaluateLocalFittingAuditObjective(context, candidate_state, audit_state)
     };
     if (!candidate_objective.has_value()) return false;
-    LocalFittingAuditedState candidate{
-        *candidate_objective,
-        candidate_state,
-        accepted_iteration
-    };
     if (audit_state.best.has_value() &&
         !detail::IsBetterLocalFittingAuditObjective(
             candidate_objective->total_objective,
@@ -1756,7 +1727,11 @@ bool TryUpdateLocalFittingBestAuditState(
     {
         return false;
     }
-    audit_state.best = std::move(candidate);
+    audit_state.best = LocalFittingAuditedState{
+        *candidate_objective,
+        candidate_state,
+        accepted_iteration
+    };
     return true;
 }
 
@@ -1930,7 +1905,6 @@ std::vector<std::size_t> CollectClusterSuspiciousAtomIndexes(
 }
 
 TerminalPersistentFailureMap UpdatePersistentTerminalFailureState(
-    const std::vector<LocalFittingClusterKey> & cluster_key_list,
     const std::vector<LocalFittingClusterKey> & accepted_key_list,
     const std::vector<std::size_t> & suspicious_atom_index_list,
     const LocalFittingClusterHealthMap & health_by_key,
@@ -1940,7 +1914,7 @@ TerminalPersistentFailureMap UpdatePersistentTerminalFailureState(
 {
     PersistentTerminalFailureStateMap next_state_by_key;
     TerminalPersistentFailureMap terminal_failure_by_key;
-    for (const auto & key : cluster_key_list)
+    for (const auto & [key, health] : health_by_key)
     {
         if (std::find(accepted_key_list.begin(), accepted_key_list.end(), key) ==
             accepted_key_list.end())
@@ -1951,16 +1925,16 @@ TerminalPersistentFailureMap UpdatePersistentTerminalFailureState(
         auto cluster_suspicious_atom_index_list{
             CollectClusterSuspiciousAtomIndexes(key, suspicious_atom_index_list)
         };
-        std::optional<PersistentTerminalFailureReason> reason;
+        PersistentTerminalFailureReason reason;
         if (!cluster_suspicious_atom_index_list.empty())
         {
-            reason.emplace(std::move(cluster_suspicious_atom_index_list));
+            reason = std::move(cluster_suspicious_atom_index_list);
         }
         else
         {
-            const auto status{ health_by_key.at(key).joint_offset_status };
+            const auto status{ health.joint_offset_status };
             if (!IsJointOffsetSolveHardFailure(status)) continue;
-            reason.emplace(status);
+            reason = status;
         }
 
         const auto transformed_change_stats{
@@ -1974,7 +1948,7 @@ TerminalPersistentFailureMap UpdatePersistentTerminalFailureState(
             continue;
         }
 
-        PersistentTerminalFailureState next_state{ std::move(*reason), 1 };
+        PersistentTerminalFailureState next_state{ std::move(reason), 1 };
         const auto previous_iter{ state_by_key.find(key) };
         if (previous_iter != state_by_key.end() && previous_iter->second.reason == next_state.reason)
         {
@@ -2309,11 +2283,11 @@ void ReconcileLocalFittingClusterObjectiveState(
     const SecondStageLocalFittingContext & context,
     const LocalFittingState & previous_state,
     const detail::LocalFittingCouplingPartition & partition,
-    const std::vector<LocalFittingClusterKey> & key_list,
     LocalFittingClusterObjectiveStateMap & state_by_key)
 {
     LocalFittingClusterObjectiveStateMap next_state_by_key;
-    for (const auto & key : key_list)
+    for (const auto & [key, objective_sample_ref_list] :
+        partition.sample_id_list_by_key)
     {
         auto state_iter{ state_by_key.find(key) };
         if (state_iter != state_by_key.end())
@@ -2327,18 +2301,17 @@ void ReconcileLocalFittingClusterObjectiveState(
                 context,
                 previous_state,
                 key,
-                partition.sample_id_list_by_key.at(key)));
+                objective_sample_ref_list));
     }
     state_by_key = std::move(next_state_by_key);
 }
 
 bool AreLocalFittingObjectiveReferencesLocked(
-    const LocalFittingClusterObjectiveStateMap & state_by_key,
-    const std::vector<LocalFittingClusterKey> & key_list)
+    const LocalFittingClusterObjectiveStateMap & state_by_key)
 {
-    for (const auto & key : key_list)
+    for (const auto & state_entry : state_by_key)
     {
-        const auto & state{ state_by_key.at(key) };
+        const auto & state{ state_entry.second };
         if (state.scale_tracker.GetCommittedReference().has_value() &&
             !state.scale_tracker.IsLocked())
         {
@@ -2413,7 +2386,6 @@ bool TryCommitLocalFittingClusterCandidate(
         if (candidate_objective.has_value() &&
             state.previous_objective_samples.has_value())
         {
-            diagnostic.status = LocalFittingObjectiveAttemptDiagnosticStatus::Scored;
             diagnostic.candidate_objective = candidate_objective;
             diagnostic.previous_objective = previous_objective;
             diagnostic.best_objective = best_objective;
@@ -2504,12 +2476,12 @@ bool TryCommitLocalFittingClusterCandidate(
                 state.best_maximum_transformed_change;
         }
     }
-    state.previous_objective_samples = candidate_objective_samples;
     if (candidate_objective_value.has_value() && is_better_than_best)
     {
-        state.best_objective_samples = std::move(candidate_objective_samples);
+        state.best_objective_samples = candidate_objective_samples;
         state.best_maximum_transformed_change = maximum_transformed_change;
     }
+    state.previous_objective_samples = std::move(candidate_objective_samples);
     return true;
 }
 
@@ -2529,7 +2501,6 @@ bool ShouldGrowLocalFittingTrustRegion(
 LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
     const SecondStageLocalFittingContext & context,
     const detail::LocalFittingCouplingPartition & partition,
-    const std::vector<LocalFittingClusterKey> & key_list,
     const std::vector<LocalFittingClusterKey> & polish_eligible_key_list,
     const LocalFittingState & previous_state,
     const LocalFittingState & raw_state,
@@ -2541,11 +2512,9 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
 {
     LocalFittingCandidateSelection selection;
     selection.assembled_state = previous_state;
-    for (const auto & key : key_list)
+    for (const auto & [key, objective_sample_ref_list] :
+        partition.sample_id_list_by_key)
     {
-        const auto & objective_sample_ref_list{
-            partition.sample_id_list_by_key.at(key)
-        };
         const auto trust_region_radius{ trust_region_state.GetRadius(key) };
         const auto trust_region_damping{
             detail::LimitLocalFittingTrustRegionDamping(
@@ -2570,7 +2539,7 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
         };
         if (!base_state.has_value())
         {
-            base_diagnostic.status = LocalFittingObjectiveAttemptDiagnosticStatus::InvalidModel;
+            base_diagnostic.is_invalid_model = true;
             selection.rejected_key_list.emplace_back(key);
             selection.rejected_cluster_diagnostic_list.emplace_back(
                 LocalFittingRejectedClusterDiagnostic{
@@ -3151,7 +3120,7 @@ void LogRejectedLocalFittingClusterDiagnostics(
             << diagnostic.trust_region_radius << "/"
             << diagnostic.trust_region_step_norm;
 
-        if (diagnostic.status == LocalFittingObjectiveAttemptDiagnosticStatus::InvalidModel)
+        if (diagnostic.is_invalid_model)
         {
             message << ", status = invalid-model";
             Logger::Log(LogLevel::Debug, message.str());
@@ -3174,7 +3143,7 @@ void LogRejectedLocalFittingClusterDiagnostics(
         message << ", best = ";
         AppendLocalFittingObjectiveBreakdown(message, diagnostic.best_objective);
         message << ", rejected-by = ";
-        if (diagnostic.status == LocalFittingObjectiveAttemptDiagnosticStatus::ObjectiveUnavailable)
+        if (!diagnostic.candidate_objective.has_value())
         {
             message << "objective-unavailable";
         }
@@ -3540,7 +3509,6 @@ void RunSecondStageLocalFitting(
             context,
             previous_state,
             cluster_partition,
-            cluster_key_list,
             cluster_objective_state);
         trust_region_state.Reconcile(cluster_key_list);
 
@@ -3560,18 +3528,19 @@ void RunSecondStageLocalFitting(
                 joint_offset_ridge_multiplier_list)
         };
         const auto current_health_by_key{ std::move(iteration_result.health_by_key) };
-        const auto stationarity_ineligible_key_list{
-            CollectUnhealthyLocalFittingClusterKeys(current_health_by_key)
-        };
         suspicious_offset_state_index_list = std::move(iteration_result.suspicious_offset_state_index_list);
         const auto iteration_suspicious_atom_count{ suspicious_offset_state_index_list.size() };
         const auto has_suspicious_offset_fallback{ !suspicious_offset_state_index_list.empty() };
 
+        std::size_t stationarity_ineligible_cluster_count{ 0 };
         std::vector<LocalFittingClusterKey> polish_eligible_key_list;
-        for (const auto & key : cluster_key_list)
+        for (const auto & [key, health] : current_health_by_key)
         {
-            if (ContainsLocalFittingClusterKey(stationarity_ineligible_key_list, key))
+            if (!IsJointOffsetSolveStationarityEligible(
+                    health.joint_offset_status) ||
+                !health.is_refit_stationarity_eligible)
             {
+                stationarity_ineligible_cluster_count++;
                 continue;
             }
             const auto contains_suspicious_atom{
@@ -3619,7 +3588,6 @@ void RunSecondStageLocalFitting(
             SelectLocalFittingClusterCandidates(
                 context,
                 cluster_partition,
-                cluster_key_list,
                 polish_eligible_key_list,
                 previous_state,
                 raw_state,
@@ -3653,7 +3621,6 @@ void RunSecondStageLocalFitting(
         auto assembled_state{ std::move(selection.assembled_state) };
         const auto terminal_failure_by_key{
             UpdatePersistentTerminalFailureState(
-                cluster_key_list,
                 selection.accepted_key_list,
                 suspicious_offset_state_index_list,
                 current_health_by_key,
@@ -3724,7 +3691,7 @@ void RunSecondStageLocalFitting(
             trust_region_radius_update.changed_key_list.size(),
             trust_region_radius_update.saturated_key_list.size(),
             iteration_suspicious_atom_count,
-            stationarity_ineligible_key_list.size(),
+            stationarity_ineligible_cluster_count,
             !combined_objective_accepted,
             std::nullopt,
             SummarizeLocalFittingProgressMaximum(
@@ -3821,12 +3788,10 @@ void RunSecondStageLocalFitting(
         }
 
         const auto converged{
-            stationarity_ineligible_key_list.empty() &&
+            stationarity_ineligible_cluster_count == 0 &&
             !has_suspicious_offset_fallback &&
             selection.rejected_key_list.empty() &&
-            AreLocalFittingObjectiveReferencesLocked(
-                cluster_objective_state,
-                cluster_key_list) &&
+            AreLocalFittingObjectiveReferencesLocked(cluster_objective_state) &&
             IsLocalFittingTransformedChangeConverged(
                 transformed_change_stats,
                 transformed_change_maximum_list) &&
