@@ -143,6 +143,7 @@ void Logger::ProgressLine(std::string_view message)
 void Logger::FinishProgressLine()
 {
     std::lock_guard<std::mutex> lock(m_stream_mutex);
+    if (m_progress_line_width == 0) return;
     m_progress_line_width = 0;
     if (m_current_level.load() < LogLevel::Info) return;
     std::cout << '\n' << std::flush;

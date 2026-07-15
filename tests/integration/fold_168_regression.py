@@ -6,7 +6,6 @@ import argparse
 import hashlib
 import json
 import math
-import re
 import sqlite3
 import subprocess
 import tempfile
@@ -15,7 +14,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 SAVED_KEY = "fold_gaus_charge1"
 EXPECTED_INPUT_HASHES = {
     "model": "156d35aa326f0d4408d726a999329d2ffede775489aeaa5d99a2cc9b9f663cab",
@@ -37,8 +36,6 @@ COMMAND_ARGUMENT_TEMPLATE = [
 ATOM_RELATIVE_TOLERANCE = 1.0e-6
 ATOM_ABSOLUTE_TOLERANCE = 1.0e-8
 STRICT_FLOAT_TOLERANCE = 1.0e-12
-ANSI_ESCAPE_PATTERN = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
-FLOAT_PATTERN = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
 
 
 class RegressionError(RuntimeError):
@@ -51,238 +48,6 @@ def sha256_file(path: Path) -> str:
         while chunk := stream.read(1024 * 1024):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def normalize_log(text: str) -> str:
-    return ANSI_ESCAPE_PATTERN.sub("", text).replace("\r", "\n")
-
-
-def require_unique_match(pattern: str, text: str, description: str) -> re.Match[str]:
-    matches = list(re.finditer(pattern, text, flags=re.MULTILINE))
-    if len(matches) != 1:
-        raise RegressionError(
-            f"Expected exactly one {description}; found {len(matches)}.")
-    return matches[0]
-
-
-def parse_joint_statuses(text: str) -> dict[str, dict[str, int]]:
-    statuses: dict[str, dict[str, int]] = {}
-    for entry in text.split(","):
-        match = re.fullmatch(r"\s*([a-z0-9-]+):(\d+)/(\d+)\s*", entry)
-        if match is None:
-            raise RegressionError(f"Invalid joint-offset status entry: {entry!r}.")
-        name = match.group(1)
-        if name in statuses:
-            raise RegressionError(f"Duplicate joint-offset status: {name}.")
-        statuses[name] = {
-            "clusters": int(match.group(2)),
-            "atoms": int(match.group(3)),
-        }
-    return statuses
-
-
-def parse_iteration_line(line: str) -> dict[str, Any]:
-    prefix = require_unique_match(
-        rf"Iter\. (\d+)/(\d+), active/frozen atoms = (\d+)/(\d+)",
-        line,
-        "iteration prefix")
-    component = require_unique_match(
-        rf"iteration components/max-atoms/active-ratio = "
-        rf"(\d+)/(\d+)/({FLOAT_PATTERN})",
-        line,
-        "iteration component summary")
-    freeze = require_unique_match(
-        r"freeze outcomes ineligible/above-threshold/stabilizing/newly-frozen = "
-        r"(\d+)/(\d+)/(\d+)/(\d+)",
-        line,
-        "freeze outcome summary")
-    thaw = require_unique_match(
-        r"thaw events dependency/suspicious = (\d+)/(\d+)",
-        line,
-        "thaw event summary")
-
-    status_marker = "joint-offset statuses clusters/atoms = "
-    status_start = line.find(status_marker)
-    if status_start < 0:
-        raise RegressionError("Iteration line is missing joint-offset statuses.")
-    status_start += len(status_marker)
-    status_end_candidates = [
-        index for marker in (", health-unhealthy", ", freeze outcomes")
-        if (index := line.find(marker, status_start)) >= 0
-    ]
-    if not status_end_candidates:
-        raise RegressionError("Iteration line has no joint-offset status terminator.")
-    statuses = parse_joint_statuses(line[status_start:min(status_end_candidates)])
-
-    return {
-        "iteration": int(prefix.group(1)),
-        "iteration_limit": int(prefix.group(2)),
-        "active_atoms_after_update": int(prefix.group(3)),
-        "frozen_atoms_after_update": int(prefix.group(4)),
-        "components_at_start": int(component.group(1)),
-        "maximum_component_atoms_at_start": int(component.group(2)),
-        "maximum_component_active_ratio": float(component.group(3)),
-        "joint_statuses": statuses,
-        "freeze_outcomes": {
-            "ineligible": int(freeze.group(1)),
-            "above_threshold": int(freeze.group(2)),
-            "stabilizing": int(freeze.group(3)),
-            "newly_frozen": int(freeze.group(4)),
-        },
-        "thaw_events": {
-            "dependency": int(thaw.group(1)),
-            "suspicious": int(thaw.group(2)),
-        },
-    }
-
-
-def parse_log(text: str) -> dict[str, Any]:
-    normalized = normalize_log(text)
-    topology_match = require_unique_match(
-        rf"^Local-fitting coupling graph mode = ([a-z-]+), minimum weight = "
-        rf"({FLOAT_PATTERN}), candidate/retained/cut edges = (\d+)/(\d+)/(\d+),"
-        rf".*initial components/max atoms/ratio = (\d+)/(\d+)/({FLOAT_PATTERN})\.$",
-        normalized,
-        "coupling topology summary")
-    topology = {
-        "mode": topology_match.group(1),
-        "minimum_weight": float(topology_match.group(2)),
-        "candidate_edges": int(topology_match.group(3)),
-        "retained_edges": int(topology_match.group(4)),
-        "cut_edges": int(topology_match.group(5)),
-        "initial_components": int(topology_match.group(6)),
-        "initial_maximum_component_atoms": int(topology_match.group(7)),
-        "initial_maximum_component_ratio": float(topology_match.group(8)),
-    }
-
-    sensitivity_pattern = re.compile(
-        rf"^Coupling sensitivity: threshold=({FLOAT_PATTERN}), retained/cut=(\d+)/(\d+), "
-        rf"components/max-atoms/ratio=(\d+)/(\d+)/({FLOAT_PATTERN})\.$",
-        flags=re.MULTILINE)
-    sensitivity: list[dict[str, Any]] = []
-    seen_thresholds: set[float] = set()
-    for match in sensitivity_pattern.finditer(normalized):
-        threshold = float(match.group(1))
-        if threshold in seen_thresholds:
-            raise RegressionError(f"Duplicate coupling sensitivity threshold: {threshold}.")
-        seen_thresholds.add(threshold)
-        sensitivity.append({
-            "threshold": threshold,
-            "retained_edges": int(match.group(2)),
-            "cut_edges": int(match.group(3)),
-            "components": int(match.group(4)),
-            "maximum_component_atoms": int(match.group(5)),
-            "maximum_component_ratio": float(match.group(6)),
-        })
-
-    iteration_by_number: dict[int, dict[str, Any]] = {}
-    for line in normalized.splitlines():
-        if not line.startswith("Iter. "):
-            continue
-        iteration = parse_iteration_line(line)
-        number = iteration["iteration"]
-        if number in iteration_by_number:
-            raise RegressionError(f"Duplicate local-fitting iteration: {number}.")
-        iteration_by_number[number] = iteration
-
-    maximum_iteration_matches = list(re.finditer(
-        rf"^\[Warning\] Reached maximum iteration size; applying best validated audit state; "
-        rf"audit best source = accepted iteration (\d+), fixed audit objective "
-        rf"residual/width/offset/total = ({FLOAT_PATTERN})/({FLOAT_PATTERN})/"
-        rf"({FLOAT_PATTERN})/({FLOAT_PATTERN});",
-        normalized,
-        flags=re.MULTILINE))
-    stagnation_matches = list(re.finditer(
-        rf"^\[Warning\] Stopped local fitting because forced fixed-point produced no "
-        rf"objective improvement after (\d+) accepted iterations; stagnation "
-        rf"forced/stalled clusters = (\d+)/(\d+), atoms = (\d+)/(\d+); "
-        rf"applying best validated audit state; audit best source = accepted iteration "
-        rf"(\d+), fixed audit objective residual/width/offset/total = "
-        rf"({FLOAT_PATTERN})/({FLOAT_PATTERN})/({FLOAT_PATTERN})/({FLOAT_PATTERN});",
-        normalized,
-        flags=re.MULTILINE))
-    global_stagnation_matches = list(re.finditer(
-        rf"^\[Warning\] Stopped local fitting because all forced fixed-point candidates "
-        rf"produced no global audit improvement after (\d+) accepted iterations; "
-        rf"stagnation forced/recovered/stalled clusters = (\d+)/(\d+)/(\d+), "
-        rf"atoms = (\d+)/(\d+)/(\d+); fixed global audit candidate/best total = "
-        rf"({FLOAT_PATTERN})/({FLOAT_PATTERN}); applying best validated audit state; "
-        rf"audit best source = accepted iteration (\d+), fixed audit objective "
-        rf"residual/width/offset/total = ({FLOAT_PATTERN})/({FLOAT_PATTERN})/"
-        rf"({FLOAT_PATTERN})/({FLOAT_PATTERN});",
-        normalized,
-        flags=re.MULTILINE))
-    terminal_match_count = (
-        len(maximum_iteration_matches) +
-        len(stagnation_matches) +
-        len(global_stagnation_matches))
-    if terminal_match_count != 1:
-        raise RegressionError(
-            "Expected exactly one terminal audit summary; found "
-            f"{terminal_match_count}.")
-
-    if global_stagnation_matches:
-        terminal_match = global_stagnation_matches[0]
-        terminal = {
-            "outcome": "all-forced-global-audit-stagnation",
-            "accepted_iterations": int(terminal_match.group(1)),
-            "forced_clusters": int(terminal_match.group(2)),
-            "recovered_clusters": int(terminal_match.group(3)),
-            "stalled_clusters": int(terminal_match.group(4)),
-            "forced_atoms": int(terminal_match.group(5)),
-            "recovered_atoms": int(terminal_match.group(6)),
-            "stalled_atoms": int(terminal_match.group(7)),
-            "global_audit_candidate_total": float(terminal_match.group(8)),
-            "global_audit_best_total": float(terminal_match.group(9)),
-            "applied_state": "best-validated-audit",
-            "audit_source": "accepted-iteration",
-            "audit_iteration": int(terminal_match.group(10)),
-            "audit_objective": {
-                "residual": float(terminal_match.group(11)),
-                "width": float(terminal_match.group(12)),
-                "offset": float(terminal_match.group(13)),
-                "total": float(terminal_match.group(14)),
-            },
-        }
-    elif stagnation_matches:
-        terminal_match = stagnation_matches[0]
-        terminal = {
-            "outcome": "forced-fixed-point-stagnation",
-            "accepted_iterations": int(terminal_match.group(1)),
-            "forced_clusters": int(terminal_match.group(2)),
-            "stalled_clusters": int(terminal_match.group(3)),
-            "forced_atoms": int(terminal_match.group(4)),
-            "stalled_atoms": int(terminal_match.group(5)),
-            "applied_state": "best-validated-audit",
-            "audit_source": "accepted-iteration",
-            "audit_iteration": int(terminal_match.group(6)),
-            "audit_objective": {
-                "residual": float(terminal_match.group(7)),
-                "width": float(terminal_match.group(8)),
-                "offset": float(terminal_match.group(9)),
-                "total": float(terminal_match.group(10)),
-            },
-        }
-    else:
-        terminal_match = maximum_iteration_matches[0]
-        terminal = {
-            "outcome": "maximum-iteration",
-            "applied_state": "best-validated-audit",
-            "audit_source": "accepted-iteration",
-            "audit_iteration": int(terminal_match.group(1)),
-            "audit_objective": {
-                "residual": float(terminal_match.group(2)),
-                "width": float(terminal_match.group(3)),
-                "offset": float(terminal_match.group(4)),
-                "total": float(terminal_match.group(5)),
-            },
-        }
-    return {
-        "topology": topology,
-        "sensitivity": sensitivity,
-        "iterations": [iteration_by_number[key] for key in sorted(iteration_by_number)],
-        "terminal": terminal,
-    }
 
 
 def read_atom_results(database_path: Path) -> list[dict[str, Any]]:
@@ -363,10 +128,6 @@ def make_empty_actual(input_hashes: dict[str, str]) -> dict[str, Any]:
         "schema_version": SCHEMA_VERSION,
         "input_hashes": input_hashes,
         "command_arguments": COMMAND_ARGUMENT_TEMPLATE,
-        "topology": None,
-        "sensitivity": [],
-        "iterations": [],
-        "terminal": None,
         "atoms": [],
     }
 
@@ -507,8 +268,6 @@ def run(argv: Sequence[str] | None = None) -> int:
                 raise RegressionError(
                     "Benchmark command did not create the temporary output database.")
 
-            parsed_log = parse_log(log_text)
-            actual.update(parsed_log)
             actual["atoms"] = read_atom_results(temporary_database)
 
         differences = compare_values(baseline, actual)

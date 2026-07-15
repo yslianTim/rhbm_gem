@@ -566,15 +566,18 @@ This all-forced guard does not run while any active cluster remains non-forced.
 
 Hard-failure and local-refit-fallback clusters clear and suppress their own
 Anderson history before candidate selection. Soft incomplete status changes
-also start a new history regime. In non-quiet mode the existing progress or
-retry line reports every joint status as
-`joint-offset statuses clusters/atoms = status:C/A`, reports strict health as
-`health-unhealthy clusters/atoms = C/A`, counts non-stationary joint reasons in
-enum order such as `joint-offset = system-build-failed:1`, and reports refit fallbacks as
-`local-refit-fallback clusters/atoms = C/A`. Stationarity-ineligible refits are
-reported as `local-refit-nonstationary clusters/atoms = C/A`. Candidate summaries
-report `joint-ABC polish clusters accepted/stationary/fallback = C/C/C`. No separate
-per-iteration warning or fallback summary is emitted.
+also start a new history regime. In non-quiet mode the fixed-width progress
+table reports active/frozen atoms (`A/F`), component count/maximum/active ratio
+(`Cmp/Max/R`), accepted/rejected cluster and atom objectives (`Obj C;A A/R`),
+healthy/unhealthy clusters and atoms (`Hlt C;A H/U`), freeze outcomes
+(`Frz I/A/S/F`), and dependency/suspicious thaw events (`Thw D/S`). The header
+and numeric row share one run-specific column layout, so carriage-return
+updates keep every separator aligned.
+
+Non-converged joint statuses, terminal fallback, backtracking, stagnation, and
+other conditional diagnostics finish the active progress row before emitting a
+normal Info or Warning message. These diagnostics retain the detailed status
+names and cluster/atom counts instead of widening the continuously updated row.
 
 This end-to-end health lifecycle is always applied by
 `RunSecondStageLocalFitting`; it is not separately configurable through the

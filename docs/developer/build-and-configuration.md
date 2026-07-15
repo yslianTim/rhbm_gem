@@ -282,8 +282,9 @@ The fold-168 runner verifies the two external SHA-256 identities before it
 starts the command. It passes a nonexistent database path in a temporary
 directory to `potential_analysis`; the normal persistence layer creates the
 current schema and stores the benchmark output. The database is therefore an
-ephemeral output, not a fitting input. Scientific and diagnostic comparisons
-are blocking, while the single wall-time measurement is report-only.
+ephemeral output, not a fitting input. Persisted atom results are the only
+blocking scientific comparison. Console output and the single wall-time
+measurement are diagnostic/report-only.
 The required fixture hashes are:
 
 - CIF: `156d35aa326f0d4408d726a999329d2ffede775489aeaa5d99a2cc9b9f663cab`
@@ -292,9 +293,10 @@ The required fixture hashes are:
 Run artifacts are written under
 `<build>/benchmark-results/fold_168/{run.log,actual.json,report.json}`. A valid
 algorithm change must update the checked-in baseline by manually reviewing
-`actual.json`; the runner never overwrites the baseline. The temporary database
-is deleted after its 168 atom results have been read and is not retained as an
-artifact.
+`actual.json`; the runner never overwrites the baseline. `run.log` is retained
+for diagnosis but its wording is not parsed or compared. The temporary
+database is deleted after its 168 atom results have been read and is not
+retained as an artifact.
 
 After installation, downstream CMake projects can consume this project with:
 

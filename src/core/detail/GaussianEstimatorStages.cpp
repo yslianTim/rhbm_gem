@@ -44,6 +44,8 @@
 #include <optional>
 #include <sstream>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <variant>
@@ -626,6 +628,11 @@ struct LocalFittingFreezeDiagnosticSummary
     std::size_t newly_frozen_atom_count{ 0 };
     std::size_t dependency_thaw_atom_count{ 0 };
     std::size_t suspicious_thaw_atom_count{ 0 };
+};
+
+struct LocalFittingProgressTableLayout
+{
+    std::array<std::size_t, 7> column_width_list{};
 };
 
 struct SecondStageNeighborSample
@@ -4256,24 +4263,10 @@ void AppendLocalFittingClusterHealthSummary(
     }
 }
 
-void AppendLocalFittingClusterSelectionSummary(
+void AppendLocalFittingClusterSelectionDetails(
     std::ostringstream & stream,
     const LocalFittingClusterSelectionSummary & summary)
 {
-    const auto active_ratio{
-        summary.iteration_active_atom_count == 0 ? 0.0 :
-            static_cast<double>(summary.iteration_maximum_component_atom_count) /
-                static_cast<double>(summary.iteration_active_atom_count)
-    };
-    stream << ", iteration components/max-atoms/active-ratio = "
-        << summary.iteration_component_count << "/"
-        << summary.iteration_maximum_component_atom_count << "/"
-        << std::fixed << std::setprecision(2) << active_ratio
-        << std::defaultfloat;
-    stream << ", objective acc./rej. clusters = "
-        << summary.accepted_cluster_count << "/" << summary.rejected_cluster_count
-        << ", atoms = "
-        << summary.accepted_atom_count << "/" << summary.rejected_atom_count;
     if (summary.boundary_sample_count > 0)
     {
         stream << ", boundary samples = " << summary.boundary_sample_count;
@@ -4296,6 +4289,27 @@ void AppendLocalFittingClusterSelectionSummary(
     }
 }
 
+void AppendLocalFittingClusterSelectionSummary(
+    std::ostringstream & stream,
+    const LocalFittingClusterSelectionSummary & summary)
+{
+    const auto active_ratio{
+        summary.iteration_active_atom_count == 0 ? 0.0 :
+            static_cast<double>(summary.iteration_maximum_component_atom_count) /
+                static_cast<double>(summary.iteration_active_atom_count)
+    };
+    stream << ", iteration components/max-atoms/active-ratio = "
+        << summary.iteration_component_count << "/"
+        << summary.iteration_maximum_component_atom_count << "/"
+        << std::fixed << std::setprecision(2) << active_ratio
+        << std::defaultfloat;
+    stream << ", objective acc./rej. clusters = "
+        << summary.accepted_cluster_count << "/" << summary.rejected_cluster_count
+        << ", atoms = "
+        << summary.accepted_atom_count << "/" << summary.rejected_atom_count;
+    AppendLocalFittingClusterSelectionDetails(stream, summary);
+}
+
 void AppendLocalFittingFreezeDiagnosticSummary(
     std::ostringstream & stream,
     const LocalFittingFreezeDiagnosticSummary & summary)
@@ -4309,6 +4323,96 @@ void AppendLocalFittingFreezeDiagnosticSummary(
         << ", thaw events dependency/suspicious = "
         << summary.dependency_thaw_atom_count << "/"
         << summary.suspicious_thaw_atom_count;
+}
+
+constexpr std::array<std::string_view, 7> kLocalFittingProgressHeaderList{
+    "Iter.",
+    "A/F",
+    "Cmp/Max/R",
+    "Obj C;A A/R",
+    "Hlt C;A H/U",
+    "Frz I/A/S/F",
+    "Thw D/S"
+};
+
+std::string MakeLocalFittingProgressPair(std::size_t first, std::size_t second)
+{
+    return std::to_string(first) + "/" + std::to_string(second);
+}
+
+std::string MakeMaximumLocalFittingPartitionPair(std::size_t total)
+{
+    std::string maximum_pair;
+    for (std::size_t first = 0; ; first++)
+    {
+        const auto pair{
+            MakeLocalFittingProgressPair(first, total - first)
+        };
+        if (pair.size() > maximum_pair.size()) maximum_pair = pair;
+        if (first == total) break;
+    }
+    return maximum_pair;
+}
+
+LocalFittingProgressTableLayout BuildLocalFittingProgressTableLayout(std::size_t atom_size)
+{
+    const auto maximum_pair{
+        MakeLocalFittingProgressPair(atom_size, atom_size)
+    };
+    const auto maximum_iteration{
+        MakeLocalFittingProgressPair(kLocalFittingMaximumIterations, kLocalFittingMaximumIterations)
+    };
+    const auto maximum_partition_pair{
+        MakeMaximumLocalFittingPartitionPair(atom_size)
+    };
+    const std::array<std::string, 7> maximum_value_list{
+        maximum_iteration,
+        maximum_partition_pair,
+        maximum_partition_pair + "/1.00",
+        maximum_pair + ";" + maximum_pair,
+        maximum_pair + ";" + maximum_pair,
+        maximum_pair + "/" + std::to_string(atom_size) + "/" + std::to_string(atom_size),
+        maximum_pair
+    };
+
+    LocalFittingProgressTableLayout layout;
+    for (std::size_t i = 0; i < layout.column_width_list.size(); i++)
+    {
+        layout.column_width_list.at(i) = std::max(
+            kLocalFittingProgressHeaderList.at(i).size(),
+            maximum_value_list.at(i).size());
+    }
+    return layout;
+}
+
+std::string FormatLocalFittingProgressCells(
+    const LocalFittingProgressTableLayout & layout,
+    const std::array<std::string, 7> & cell_list,
+    bool left_aligned)
+{
+    std::ostringstream stream;
+    stream << (left_aligned ? std::left : std::right);
+    for (std::size_t i = 0; i < cell_list.size(); i++)
+    {
+        if (i > 0) stream << '|';
+        stream
+            << std::setw(static_cast<int>(layout.column_width_list.at(i)))
+            << cell_list.at(i);
+    }
+    return stream.str();
+}
+
+void LogLocalFittingProgressHeader(const FitOptions & options, const LocalFittingProgressTableLayout & layout)
+{
+    if (options.quiet_mode) return;
+
+    std::array<std::string, 7> header_list;
+    for (std::size_t i = 0; i < header_list.size(); i++)
+    {
+        header_list.at(i) = kLocalFittingProgressHeaderList.at(i);
+    }
+    Logger::Log(LogLevel::Info,
+        FormatLocalFittingProgressCells(layout, header_list, true));
 }
 
 const char * GetLocalFittingFreezeOutcomeText(detail::LocalFittingFreezeOutcome outcome)
@@ -4355,8 +4459,7 @@ void AppendLocalFittingAtomIdentity(
         << ", index=" << atom_index
         << ", serial=" << atom->GetSerialID()
         << ", atom=" << atom->GetChainID() << "/"
-        << atom->GetComponentID() << atom->GetSequenceID() << "/"
-        << atom->GetAtomID();
+        << atom->GetComponentID() << atom->GetSequenceID() << "/" << atom->GetAtomID();
 }
 
 void AppendLocalFittingFreezeBlockerCauses(
@@ -4372,9 +4475,7 @@ void AppendLocalFittingFreezeBlockerCauses(
         appended = true;
     };
     append(causes.candidate_rejected, "candidate-rejected");
-    append(
-        causes.joint_offset_ineligible,
-        "joint-offset-stationarity-ineligible");
+    append(causes.joint_offset_ineligible, "joint-offset-stationarity-ineligible");
     append(causes.self_refit_ineligible, "self-refit-ineligible");
     append(causes.peer_refit_ineligible, "peer-refit-ineligible");
     append(causes.polish_fallback, "polish-fallback");
@@ -4408,8 +4509,7 @@ void LogLocalFittingFreezeDiagnostics(
                 diagnostic.atom_index)
         };
         if (freeze_tracker.IsFrozen(diagnostic.atom_index) &&
-            diagnostic.evidence_diagnostic.outcome !=
-                detail::LocalFittingFreezeOutcome::NewlyFrozen &&
+            diagnostic.evidence_diagnostic.outcome != detail::LocalFittingFreezeOutcome::NewlyFrozen &&
             !dependency_thawed && !suspicious_thawed)
         {
             continue;
@@ -4680,6 +4780,7 @@ void LogLocalFittingBacktrackingRetry(
 {
     if (options.quiet_mode) return;
 
+    Logger::FinishProgressLine();
     std::ostringstream progress_message;
     progress_message
         << "Objective backtracking rejected all attempts; retrying after local fitting iteration "
@@ -4707,10 +4808,8 @@ void LogLocalFittingBacktrackingRetry(
         << ", offset dQ_C p99 raw = " << raw_offset_change_percentile;
     AppendLocalFittingClusterSelectionSummary(progress_message, selection_summary);
     AppendLocalFittingClusterHealthSummary(progress_message, health_summary);
-    AppendLocalFittingFreezeDiagnosticSummary(
-        progress_message,
-        freeze_diagnostic_summary);
-    Logger::ProgressLine(progress_message.str());
+    AppendLocalFittingFreezeDiagnosticSummary(progress_message, freeze_diagnostic_summary);
+    Logger::Log(LogLevel::Info, progress_message.str());
 }
 
 void LogLocalFittingBacktrackingStop(
@@ -4755,6 +4854,7 @@ void LogLocalFittingBacktrackingStop(
 
 void LogLocalFittingProgress(
     const FitOptions & options,
+    const LocalFittingProgressTableLayout & table_layout,
     std::size_t accepted_iteration_count,
     const algorithm::ConvergenceFreezeTracker & freeze_tracker,
     const LocalFittingClusterHealthSummary & health_summary,
@@ -4772,28 +4872,96 @@ void LogLocalFittingProgress(
     const auto effective_active_count{
         freeze_tracker.GetActiveCount() - terminal_summary.AtomCount()
     };
-    std::ostringstream progress_message;
-    progress_message << "Iter. " << accepted_iteration_count
-        << '/' << kLocalFittingMaximumIterations
-        << ", active/frozen atoms = "<< effective_active_count
-        << "/" << freeze_tracker.GetFrozenCount();
-    AppendLocalFittingClusterSelectionSummary(progress_message, selection_summary);
-    if (terminal_summary.suspicious_atom_count > 0)
+
+    std::size_t cluster_count{ 0 };
+    for (const auto & [status, count] : health_summary.joint_status_cluster_count)
     {
-        progress_message
-            << ", terminal-suspicious atoms = " << terminal_summary.suspicious_atom_count;
+        static_cast<void>(status);
+        cluster_count += count;
     }
-    if (terminal_summary.joint_offset_failure_atom_count > 0)
+    std::size_t health_atom_count{ 0 };
+    for (const auto & [status, count] : health_summary.joint_status_atom_count)
     {
-        progress_message
-            << ", terminal-joint-offset-failure atoms = "
-            << terminal_summary.joint_offset_failure_atom_count;
+        static_cast<void>(status);
+        health_atom_count += count;
     }
-    AppendLocalFittingClusterHealthSummary(progress_message, health_summary);
-    AppendLocalFittingFreezeDiagnosticSummary(
-        progress_message,
-        freeze_diagnostic_summary);
-    Logger::ProgressLine(progress_message.str());
+    if (health_summary.unhealthy_cluster_count > cluster_count ||
+        health_summary.unhealthy_atom_count > health_atom_count)
+    {
+        throw std::logic_error("Local fitting unhealthy count exceeds total count.");
+    }
+
+    const auto active_ratio{
+        selection_summary.iteration_active_atom_count == 0 ? 0.0 :
+            static_cast<double>(selection_summary.iteration_maximum_component_atom_count) /
+                static_cast<double>(selection_summary.iteration_active_atom_count)
+    };
+    std::ostringstream component_summary;
+    component_summary
+        << selection_summary.iteration_component_count << "/"
+        << selection_summary.iteration_maximum_component_atom_count << "/"
+        << std::fixed << std::setprecision(2) << active_ratio;
+
+    const auto objective_cluster_summary{ MakeLocalFittingProgressPair(
+        selection_summary.accepted_cluster_count,
+        selection_summary.rejected_cluster_count) };
+    const auto objective_atom_summary{ MakeLocalFittingProgressPair(
+        selection_summary.accepted_atom_count,
+        selection_summary.rejected_atom_count) };
+    const auto health_cluster_summary{ MakeLocalFittingProgressPair(
+        cluster_count - health_summary.unhealthy_cluster_count,
+        health_summary.unhealthy_cluster_count) };
+    const auto health_atom_summary{ MakeLocalFittingProgressPair(
+        health_atom_count - health_summary.unhealthy_atom_count,
+        health_summary.unhealthy_atom_count) };
+
+    const std::array<std::string, 7> value_list{
+        MakeLocalFittingProgressPair(accepted_iteration_count, kLocalFittingMaximumIterations),
+        MakeLocalFittingProgressPair(effective_active_count, freeze_tracker.GetFrozenCount()),
+        component_summary.str(),
+        objective_cluster_summary + ";" + objective_atom_summary,
+        health_cluster_summary + ";" + health_atom_summary,
+        std::to_string(freeze_diagnostic_summary.ineligible_atom_count) + "/" +
+            std::to_string(freeze_diagnostic_summary.above_threshold_atom_count) + "/" +
+            std::to_string(freeze_diagnostic_summary.stabilizing_atom_count) + "/" +
+            std::to_string(freeze_diagnostic_summary.newly_frozen_atom_count),
+        MakeLocalFittingProgressPair(
+            freeze_diagnostic_summary.dependency_thaw_atom_count,
+            freeze_diagnostic_summary.suspicious_thaw_atom_count)
+    };
+
+    const auto has_nonconverged_joint_status{
+        health_summary.joint_status_cluster_count.size() != 1 ||
+        health_summary.joint_status_cluster_count.begin()->first != JointOffsetSolveStatus::Converged
+    };
+    const auto has_selection_details{
+        selection_summary.boundary_sample_count > 0 ||
+        selection_summary.has_combined_objective_rejection ||
+        selection_summary.forced_fixed_point_cluster_count > 0
+    };
+    if (has_nonconverged_joint_status ||
+        health_summary.unhealthy_cluster_count > 0 ||
+        terminal_summary.AtomCount() > 0 ||
+        has_selection_details)
+    {
+        Logger::FinishProgressLine();
+        std::ostringstream detail_message;
+        detail_message << "Iteration " << accepted_iteration_count << " detail : ";
+        if (has_selection_details)
+        {
+            AppendLocalFittingClusterSelectionDetails(detail_message, selection_summary);
+        }
+        if (has_nonconverged_joint_status || health_summary.unhealthy_cluster_count > 0)
+        {
+            AppendLocalFittingClusterHealthSummary(detail_message, health_summary);
+        }
+        AppendLocalFittingTerminalSummary(detail_message, terminal_summary);
+        detail_message << ".";
+        Logger::Log(LogLevel::Info, detail_message.str());
+    }
+
+    Logger::ProgressLine(
+        FormatLocalFittingProgressCells(table_layout, value_list, false));
 }
 
 void LogLocalFittingConverged(
@@ -5034,6 +5202,8 @@ void RunSecondStageLocalFitting(
             kLocalFittingTrustRegionGrowthFactor
         }
     };
+    const auto progress_table_layout{ BuildLocalFittingProgressTableLayout(atom_size) };
+    LogLocalFittingProgressHeader(options, progress_table_layout);
     std::size_t accepted_iteration_count{ 0 };
     for (size_t iter = 0; iter < kLocalFittingMaximumIterations; iter++)
     {
@@ -5705,6 +5875,7 @@ void RunSecondStageLocalFitting(
 
         LogLocalFittingProgress(
             options,
+            progress_table_layout,
             accepted_iteration_count,
             freeze_tracker,
             health_summary,

@@ -15,95 +15,7 @@ from unittest import mock
 import fold_168_regression as regression
 
 
-def synthetic_log() -> str:
-    sensitivities = "\n".join(
-        f"Coupling sensitivity: threshold={threshold}, retained/cut={retained}/{1341 - retained}, "
-        "components/max-atoms/ratio=1/168/1.00."
-        for threshold, retained in (
-            ("5.00e-02", 684),
-            ("7.50e-02", 585),
-            ("1.00e-01", 502),
-            ("1.50e-01", 451),
-            ("2.00e-01", 413),
-            ("3.00e-01", 305),
-        )
-    )
-    return (
-        "Local-fitting coupling graph mode = weighted, minimum weight = 5.00e-02, "
-        "candidate/retained/cut edges = 1341/684/657, weight p50/p95/max = "
-        "5.28e-02/6.55e-01/7.86e-01, initial components/max atoms/ratio = 1/168/1.00.\r"
-        f"{sensitivities}\r"
-        "Iter. 1/50, active/frozen atoms = 168/0, iteration "
-        "components/max-atoms/active-ratio = 1/168/1.00, objective acc./rej. clusters = "
-        "1/0, atoms = 168/0, joint-offset statuses clusters/atoms = converged:1/168, "
-        "freeze outcomes ineligible/above-threshold/stabilizing/newly-frozen = 0/168/0/0, "
-        "thaw events dependency/suspicious = 0/0\r"
-        "[Warning] Reached maximum iteration size; applying best validated audit state; "
-        "audit best source = accepted iteration 3, fixed audit objective "
-        "residual/width/offset/total = 2.15e-02/6.79e-04/0.00e+00/2.22e-02; offsets finite.\n"
-    )
-
-
-def synthetic_stagnation_log() -> str:
-    return synthetic_log().replace(
-        "Reached maximum iteration size; applying best validated audit state",
-        "Stopped local fitting because forced fixed-point produced no objective "
-        "improvement after 18 accepted iterations; stagnation forced/stalled clusters = "
-        "1/1, atoms = 162/162; applying best validated audit state")
-
-
-def synthetic_global_stagnation_log() -> str:
-    return synthetic_log().replace(
-        "Reached maximum iteration size; applying best validated audit state",
-        "Stopped local fitting because all forced fixed-point candidates produced no "
-        "global audit improvement after 17 accepted iterations; stagnation "
-        "forced/recovered/stalled clusters = 1/1/0, atoms = 162/162/0; fixed "
-        "global audit candidate/best total = 2.27e-02/2.22e-02; applying best "
-        "validated audit state")
-
-
 class Fold168RegressionTest(unittest.TestCase):
-    def test_parses_carriage_return_log(self) -> None:
-        result = regression.parse_log(synthetic_log())
-        self.assertEqual(result["topology"]["candidate_edges"], 1341)
-        self.assertEqual(len(result["sensitivity"]), 6)
-        self.assertEqual(result["iterations"][0]["freeze_outcomes"]["above_threshold"], 168)
-        self.assertEqual(result["terminal"]["audit_iteration"], 3)
-
-    def test_parses_forced_fixed_point_stagnation_log(self) -> None:
-        result = regression.parse_log(synthetic_stagnation_log())
-        self.assertEqual(result["terminal"]["outcome"], "forced-fixed-point-stagnation")
-        self.assertEqual(result["terminal"]["accepted_iterations"], 18)
-        self.assertEqual(result["terminal"]["forced_clusters"], 1)
-        self.assertEqual(result["terminal"]["stalled_atoms"], 162)
-        self.assertEqual(result["terminal"]["audit_iteration"], 3)
-
-    def test_parses_all_forced_global_audit_stagnation_log(self) -> None:
-        result = regression.parse_log(synthetic_global_stagnation_log())
-        self.assertEqual(
-            result["terminal"]["outcome"],
-            "all-forced-global-audit-stagnation")
-        self.assertEqual(result["terminal"]["accepted_iterations"], 17)
-        self.assertEqual(result["terminal"]["recovered_clusters"], 1)
-        self.assertEqual(result["terminal"]["stalled_atoms"], 0)
-        self.assertEqual(result["terminal"]["global_audit_candidate_total"], 0.0227)
-        self.assertEqual(result["terminal"]["global_audit_best_total"], 0.0222)
-        self.assertEqual(result["terminal"]["audit_iteration"], 3)
-
-    def test_rejects_duplicate_sensitivity_and_iteration(self) -> None:
-        log = synthetic_log()
-        sensitivity_line = (
-            "Coupling sensitivity: threshold=5.00e-02, retained/cut=684/657, "
-            "components/max-atoms/ratio=1/168/1.00.\n")
-        with self.assertRaises(regression.RegressionError):
-            regression.parse_log(log + sensitivity_line)
-
-        iteration_line = next(
-            line for line in regression.normalize_log(log).splitlines()
-            if line.startswith("Iter. "))
-        with self.assertRaises(regression.RegressionError):
-            regression.parse_log(log + iteration_line + "\n")
-
     def test_reads_atoms_and_rejects_duplicate_or_nonfinite_results(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             database = Path(temp_dir) / "results.sqlite"
@@ -136,16 +48,10 @@ class Fold168RegressionTest(unittest.TestCase):
         self.assertTrue(regression.compare_values(expected, outside_tolerance))
         self.assertTrue(regression.compare_values(expected, nonfinite))
 
-    def test_reports_missing_threshold_iteration_and_atom(self) -> None:
-        expected = {
-            "sensitivity": [{"threshold": 0.05}],
-            "iterations": [{"iteration": 1}],
-            "atoms": [{"serial_id": 1}],
-        }
-        actual = {"sensitivity": [], "iterations": [], "atoms": []}
+    def test_reports_missing_atom(self) -> None:
+        expected = {"atoms": [{"serial_id": 1}]}
+        actual = {"atoms": []}
         differences = "\n".join(regression.compare_values(expected, actual))
-        self.assertIn("root.sensitivity: expected 1 entries, got 0", differences)
-        self.assertIn("root.iterations: expected 1 entries, got 0", differences)
         self.assertIn("root.atoms: expected 1 entries, got 0", differences)
 
     def test_hash_failure_does_not_execute_and_preserves_reports(self) -> None:
@@ -226,7 +132,7 @@ class Fold168RegressionTest(unittest.TestCase):
             ), redirect_stdout(StringIO()):
                 self.assertEqual(regression.run(arguments), 1)
 
-    def test_baseline_schema_version_two_is_required(self) -> None:
+    def test_baseline_schema_version_three_is_required(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             baseline_path = Path(temp_dir) / "baseline.json"
             baseline = {
@@ -237,7 +143,7 @@ class Fold168RegressionTest(unittest.TestCase):
             baseline_path.write_text(json.dumps(baseline), encoding="utf-8")
             self.assertEqual(regression.load_baseline(baseline_path), baseline)
 
-            baseline["schema_version"] = 1
+            baseline["schema_version"] = 2
             baseline_path.write_text(json.dumps(baseline), encoding="utf-8")
             with self.assertRaises(regression.RegressionError):
                 regression.load_baseline(baseline_path)

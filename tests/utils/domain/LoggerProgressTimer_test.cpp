@@ -76,6 +76,36 @@ TEST(LoggerProgressTimerTest, ProgressLineFinishResetsPaddingWidth)
     EXPECT_NE(out.find("\rlong progress\n\rshort\n"), std::string::npos);
 }
 
+TEST(LoggerProgressTimerTest, FinishProgressLineDoesNothingWithoutActiveLine)
+{
+    const auto previous_log_level{ Logger::GetLogLevel() };
+
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    Logger::FinishProgressLine();
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_TRUE(out.empty());
+}
+
+TEST(LoggerProgressTimerTest, DiagnosticCanInterruptAndRestartProgressLine)
+{
+    const auto previous_log_level{ Logger::GetLogLevel() };
+
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    Logger::ProgressLine("row 1");
+    Logger::FinishProgressLine();
+    Logger::Log(LogLevel::Info, "diagnostic");
+    Logger::ProgressLine("row 2");
+    Logger::FinishProgressLine();
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_EQ("\rrow 1\ndiagnostic\n\rrow 2\n", out);
+}
+
 TEST(LoggerProgressTimerTest, ProgressLineSuppressedBelowInfo)
 {
     const auto previous_log_level{ Logger::GetLogLevel() };
