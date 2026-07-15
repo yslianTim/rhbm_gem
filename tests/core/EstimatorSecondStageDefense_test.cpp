@@ -926,14 +926,10 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetConditioningKeepsIndependentCol
     EXPECT_NEAR(diagnostics.pivot_ratio, 1.0, 1.0e-12);
 }
 
-TEST(EstimatorSecondStageDefenseTest, LocalRefitHealthSeparatesProgressFromStationarity)
+TEST(EstimatorSecondStageDefenseTest, LocalRefitHealthTracksStationarity)
 {
-    EXPECT_TRUE(health_detail::IsLocalGaussianRefitStatusProgressEligible(
-        rg::RHBMEstimationStatus::SUCCESS));
     EXPECT_TRUE(health_detail::IsLocalGaussianRefitStatusStationarityEligible(
         rg::RHBMEstimationStatus::SUCCESS));
-    EXPECT_TRUE(health_detail::IsLocalGaussianRefitStatusProgressEligible(
-        rg::RHBMEstimationStatus::MAX_ITERATIONS_REACHED));
     EXPECT_FALSE(health_detail::IsLocalGaussianRefitStatusStationarityEligible(
         rg::RHBMEstimationStatus::MAX_ITERATIONS_REACHED));
     for (const auto status : {
@@ -941,13 +937,8 @@ TEST(EstimatorSecondStageDefenseTest, LocalRefitHealthSeparatesProgressFromStati
         rg::RHBMEstimationStatus::INSUFFICIENT_DATA,
         rg::RHBMEstimationStatus::SINGLE_MEMBER })
     {
-        EXPECT_FALSE(health_detail::IsLocalGaussianRefitStatusProgressEligible(status));
         EXPECT_FALSE(health_detail::IsLocalGaussianRefitStatusStationarityEligible(status));
     }
-    EXPECT_THROW(
-        health_detail::IsLocalGaussianRefitStatusProgressEligible(
-            static_cast<rg::RHBMEstimationStatus>(-1)),
-        std::logic_error);
     EXPECT_THROW(
         health_detail::IsLocalGaussianRefitStatusStationarityEligible(
             static_cast<rg::RHBMEstimationStatus>(-1)),

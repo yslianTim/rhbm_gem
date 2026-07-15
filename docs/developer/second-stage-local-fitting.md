@@ -74,12 +74,15 @@ The production state is a direct map owned by the implementation file. Each
 cluster stores only:
 
 - a scale-reference tracker;
-- the previous objective statistics and samples;
-- the best objective statistics and samples.
+- the previous transformed-change statistics and objective samples;
+- the best tracked candidate's transformed-change statistics and objective
+  samples, when a valid objective has been observed.
 
 Candidate scoring works on a copy of this map. A rejected candidate, including
 a combined-objective rejection, cannot advance the scale warmup, previous
-objective, or best objective.
+candidate, or best candidate. Candidate, previous, and best objectives are
+recomputed on the same provisional objective scale for each attempt rather than
+being stored in multiple state layers.
 
 The objective contains robust residual loss plus width-prior and offset
 plausibility penalties. Joint polish uses the same committed objective scale as
@@ -164,7 +167,7 @@ logging.
 The focused estimator suite covers seed repair, non-finite fallback,
 conditioning/collinearity ridge, suspicious rollback, remote-cluster
 isolation, joint polish, trust-region limits, and intensity-scale invariance.
-Shared transformed-change, parameter-quality, robust-loss, scale-tracking, and
+Shared transformed-change, robust-loss, scale-tracking, and
 weighted-ridge utilities retain focused algorithm tests because the production
 path still depends on them.
 
