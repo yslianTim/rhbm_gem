@@ -1432,63 +1432,27 @@ TEST(EstimatorSecondStageDefenseTest, TransformedConvergenceRejectsHiddenMaximum
 
 TEST(EstimatorSecondStageDefenseTest, PostRefitRollbackExpandsCompleteContributorCluster)
 {
-    const std::vector<std::size_t> active_index_list{ 10, 11, 12, 13, 20 };
     const std::vector<rollback_detail::PostRefitRollbackClusterKey> cluster_key_list{
-        { 10, 11, 12, 13 },
-        { 20 }
+        { 0, 1, 2, 3 },
+        { 4 }
     };
     std::vector<char> suspicious_mask{ 0, 1, 0, 0, 0 };
 
-    const auto affected_position_list{
-        rollback_detail::ExpandPostRefitRollbackClusters(
-            active_index_list,
-            cluster_key_list,
-            { 3, 0, 3 },
-            suspicious_mask)
-    };
+    rollback_detail::ExpandPostRefitRollbackClusters(
+        cluster_key_list,
+        { 3, 0, 3 },
+        suspicious_mask);
 
-    EXPECT_EQ(
-        (std::vector<std::size_t>{ 0, 1, 2, 3 }),
-        affected_position_list);
     EXPECT_EQ((std::vector<char>{ 1, 1, 1, 1, 0 }), suspicious_mask);
 
-    std::vector<char> permuted_suspicious_mask(5, 0);
+    std::vector<char> isolated_suspicious_mask(5, 0);
+    rollback_detail::ExpandPostRefitRollbackClusters(
+        cluster_key_list,
+        { 4 },
+        isolated_suspicious_mask);
     EXPECT_EQ(
-        (std::vector<std::size_t>{ 0, 1, 2, 3 }),
-        rollback_detail::ExpandPostRefitRollbackClusters(
-            { 13, 12, 11, 10, 20 },
-            cluster_key_list,
-            { 0 },
-            permuted_suspicious_mask));
-    EXPECT_EQ(
-        (std::vector<char>{ 1, 1, 1, 1, 0 }),
-        permuted_suspicious_mask);
-}
-
-TEST(EstimatorSecondStageDefenseTest, PostRefitRollbackRejectsInconsistentTopology)
-{
-    std::vector<char> suspicious_mask{ 0, 0 };
-    EXPECT_THROW(
-        rollback_detail::ExpandPostRefitRollbackClusters(
-            { 10, 11 },
-            { { 10 } },
-            { 0 },
-            suspicious_mask),
-        std::invalid_argument);
-    EXPECT_THROW(
-        rollback_detail::ExpandPostRefitRollbackClusters(
-            { 10, 11 },
-            { { 10, 11 } },
-            { 2 },
-            suspicious_mask),
-        std::invalid_argument);
-    EXPECT_THROW(
-        rollback_detail::ExpandPostRefitRollbackClusters(
-            { 10, 11 },
-            { { 10 }, { 10, 11 } },
-            { 0 },
-            suspicious_mask),
-        std::invalid_argument);
+        (std::vector<char>{ 0, 0, 0, 0, 1 }),
+        isolated_suspicious_mask);
 }
 
 TEST(EstimatorSecondStageDefenseTest, PostRefitRollbackRestoresCompleteLongChain)
