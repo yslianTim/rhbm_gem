@@ -21,7 +21,6 @@
 #include "core/detail/LocalFittingSeedRepair.hpp"
 #include "core/detail/LocalFittingTrustRegion.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
-#include "core/detail/PostRefitRollback.hpp"
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
@@ -36,7 +35,6 @@ namespace conditioning_detail = rhbm_gem::core::detail;
 namespace coupling_detail = rhbm_gem::core::detail;
 namespace health_detail = rhbm_gem::core::detail;
 namespace polish_detail = rhbm_gem::core::detail;
-namespace rollback_detail = rhbm_gem::core::detail;
 namespace seed_detail = rhbm_gem::core::detail;
 namespace trust_detail = rhbm_gem::core::detail;
 namespace rt = rhbm_gem::core;
@@ -1428,31 +1426,6 @@ TEST(EstimatorSecondStageDefenseTest, TransformedConvergenceRejectsHiddenMaximum
         maximum_list,
         1.0e-4,
         1.0e-3));
-}
-
-TEST(EstimatorSecondStageDefenseTest, PostRefitRollbackExpandsCompleteContributorCluster)
-{
-    const std::vector<rollback_detail::PostRefitRollbackClusterKey> cluster_key_list{
-        { 0, 1, 2, 3 },
-        { 4 }
-    };
-    std::vector<char> suspicious_mask{ 0, 1, 0, 0, 0 };
-
-    rollback_detail::ExpandPostRefitRollbackClusters(
-        cluster_key_list,
-        { 3, 0, 3 },
-        suspicious_mask);
-
-    EXPECT_EQ((std::vector<char>{ 1, 1, 1, 1, 0 }), suspicious_mask);
-
-    std::vector<char> isolated_suspicious_mask(5, 0);
-    rollback_detail::ExpandPostRefitRollbackClusters(
-        cluster_key_list,
-        { 4 },
-        isolated_suspicious_mask);
-    EXPECT_EQ(
-        (std::vector<char>{ 0, 0, 0, 0, 1 }),
-        isolated_suspicious_mask);
 }
 
 TEST(EstimatorSecondStageDefenseTest, PostRefitRollbackRestoresCompleteLongChain)
