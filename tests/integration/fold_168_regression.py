@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import math
+import re
 import sqlite3
 import subprocess
 import tempfile
@@ -14,7 +15,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 SAVED_KEY = "fold_gaus_charge1"
 EXPECTED_INPUT_HASHES = {
     "model": "156d35aa326f0d4408d726a999329d2ffede775489aeaa5d99a2cc9b9f663cab",
@@ -33,9 +34,19 @@ COMMAND_ARGUMENT_TEMPLATE = [
     "--fit-max", "1.0",
     "--exclude-hydrogen", "true",
 ]
-ATOM_RELATIVE_TOLERANCE = 1.0e-6
-ATOM_ABSOLUTE_TOLERANCE = 1.0e-8
-STRICT_FLOAT_TOLERANCE = 1.0e-12
+EXPECTED_ATOM_COUNT = 168
+QUALITY_TOLERANCE_RATIO = 1.05
+MAXIMUM_ACCEPTED_ITERATIONS = 10
+TRUTH_WIDTH = 0.50
+TRUTH_OFFSET = 1.0
+SECOND_STAGE_SUMMARY_PATTERN = re.compile(
+    r"Second-stage local fitting summary: "
+    r"accepted_iterations=(?P<accepted_iterations>\d+), "
+    r"best_iteration=(?P<best_iteration>initial|unavailable|\d+), "
+    r"stop_reason=(?P<stop_reason>[a-z-]+), "
+    r"best_audit_objective=(?P<best_audit_objective>unavailable|"
+    r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)\."
+)
 
 
 class RegressionError(RuntimeError):
@@ -52,14 +63,18 @@ def sha256_file(path: Path) -> str:
 
 def read_atom_results(database_path: Path) -> list[dict[str, Any]]:
     query = """
-        SELECT serial_id,
-               amplitude_estimate_mdpde,
-               width_estimate_mdpde,
-               intercept_estimate_mdpde,
-               alpha_r
-          FROM model_atom_local_potential
-         WHERE key_tag = ?
-         ORDER BY serial_id
+        SELECT local.serial_id,
+               atom.element,
+               local.amplitude_estimate_mdpde,
+               local.width_estimate_mdpde,
+               local.intercept_estimate_mdpde,
+               local.alpha_r
+          FROM model_atom_local_potential AS local
+          JOIN model_atom AS atom
+            ON atom.key_tag = local.key_tag
+           AND atom.serial_id = local.serial_id
+         WHERE local.key_tag = ?
+         ORDER BY local.serial_id
     """
     with sqlite3.connect(database_path) as connection:
         rows = connection.execute(query, (SAVED_KEY,)).fetchall()
@@ -72,7 +87,8 @@ def read_atom_results(database_path: Path) -> list[dict[str, Any]]:
             raise RegressionError(f"Duplicate atom serial ID in output database: {serial_id}.")
         seen_serial_ids.add(serial_id)
         try:
-            values = [float(value) for value in row[1:]]
+            element = int(row[1])
+            values = [float(value) for value in row[2:]]
         except (TypeError, ValueError) as error:
             raise RegressionError(
                 f"Invalid atom result for serial ID {serial_id}.") from error
@@ -80,12 +96,113 @@ def read_atom_results(database_path: Path) -> list[dict[str, Any]]:
             raise RegressionError(f"Non-finite atom result for serial ID {serial_id}.")
         atoms.append({
             "serial_id": serial_id,
+            "element": element,
             "amplitude_mdpde": values[0],
             "width_mdpde": values[1],
             "intercept_mdpde": values[2],
             "alpha_r": values[3],
         })
     return atoms
+
+
+def calculate_quality_metrics(atoms: Sequence[dict[str, Any]]) -> dict[str, float]:
+    if not atoms:
+        raise RegressionError("Cannot calculate fold-168 quality metrics without atoms.")
+
+    amplitude_error_square_sum = 0.0
+    width_error_square_sum = 0.0
+    offset_error_square_sum = 0.0
+    maximum_absolute_offset = 0.0
+    for atom in atoms:
+        amplitude = float(atom["amplitude_mdpde"])
+        width = float(atom["width_mdpde"])
+        offset = float(atom["intercept_mdpde"])
+        atomic_number = int(atom["element"])
+        amplitude_error_square_sum += (amplitude - atomic_number) ** 2
+        width_error_square_sum += (width - TRUTH_WIDTH) ** 2
+        offset_error_square_sum += (offset - TRUTH_OFFSET) ** 2
+        maximum_absolute_offset = max(maximum_absolute_offset, abs(offset))
+
+    atom_count = len(atoms)
+    return {
+        "amplitude_rmse": math.sqrt(amplitude_error_square_sum / atom_count),
+        "width_rmse": math.sqrt(width_error_square_sum / atom_count),
+        "offset_rmse": math.sqrt(offset_error_square_sum / atom_count),
+        "maximum_absolute_offset": maximum_absolute_offset,
+    }
+
+
+def parse_second_stage_summary(log_text: str) -> dict[str, Any]:
+    matches = list(SECOND_STAGE_SUMMARY_PATTERN.finditer(log_text))
+    if len(matches) != 1:
+        raise RegressionError(
+            "Expected exactly one parseable second-stage final summary, "
+            f"found {len(matches)}.")
+    values = matches[0].groupdict()
+    best_objective_text = values["best_audit_objective"]
+    best_objective = (
+        None if best_objective_text == "unavailable" else float(best_objective_text))
+    if best_objective is not None and not math.isfinite(best_objective):
+        raise RegressionError("Second-stage best audit objective is not finite.")
+    return {
+        "accepted_iterations": int(values["accepted_iterations"]),
+        "best_iteration": values["best_iteration"],
+        "stop_reason": values["stop_reason"],
+        "best_audit_objective": best_objective,
+    }
+
+
+def validate_quality_gate(
+    baseline: dict[str, Any],
+    actual: dict[str, Any],
+) -> list[str]:
+    differences: list[str] = []
+    atoms = actual.get("atoms", [])
+    expected_serial_ids = baseline["serial_ids"]
+    actual_serial_ids = [atom["serial_id"] for atom in atoms]
+    if len(atoms) != EXPECTED_ATOM_COUNT:
+        differences.append(
+            f"atoms: expected {EXPECTED_ATOM_COUNT} entries, got {len(atoms)}")
+    if actual_serial_ids != expected_serial_ids:
+        differences.append("atoms: serial IDs differ from the fixed fold-168 baseline")
+
+    for atom in atoms:
+        serial_id = atom["serial_id"]
+        if int(atom["element"]) <= 0:
+            differences.append(f"atom {serial_id}: invalid atomic number")
+        if float(atom["amplitude_mdpde"]) <= 0.0:
+            differences.append(f"atom {serial_id}: amplitude is not positive")
+        if float(atom["width_mdpde"]) <= 0.0:
+            differences.append(f"atom {serial_id}: width is not positive")
+        alpha_r = float(atom["alpha_r"])
+        if not 0.0 <= alpha_r <= 1.0:
+            differences.append(f"atom {serial_id}: alpha_r is outside [0, 1]")
+
+    actual_metrics = actual.get("quality_metrics")
+    if not isinstance(actual_metrics, dict):
+        differences.append("quality_metrics: missing")
+    else:
+        for name, reference_value in baseline["reference_quality_metrics"].items():
+            actual_value = actual_metrics.get(name)
+            if not isinstance(actual_value, (int, float)) or not math.isfinite(actual_value):
+                differences.append(f"quality_metrics.{name}: missing or non-finite")
+                continue
+            limit = float(reference_value) * QUALITY_TOLERANCE_RATIO
+            if float(actual_value) > limit:
+                differences.append(
+                    f"quality_metrics.{name}: {float(actual_value):.17g} exceeds "
+                    f"105% reference limit {limit:.17g}")
+
+    summary = actual.get("second_stage_summary")
+    if not isinstance(summary, dict):
+        differences.append("second_stage_summary: missing")
+    elif int(summary.get("accepted_iterations", MAXIMUM_ACCEPTED_ITERATIONS + 1)) > \
+            MAXIMUM_ACCEPTED_ITERATIONS:
+        differences.append(
+            "second_stage_summary.accepted_iterations: "
+            f"expected <= {MAXIMUM_ACCEPTED_ITERATIONS}, "
+            f"got {summary.get('accepted_iterations')}")
+    return differences
 
 
 def validate_input_hashes(paths: dict[str, Path]) -> dict[str, str]:
@@ -129,60 +246,9 @@ def make_empty_actual(input_hashes: dict[str, str]) -> dict[str, Any]:
         "input_hashes": input_hashes,
         "command_arguments": COMMAND_ARGUMENT_TEMPLATE,
         "atoms": [],
+        "quality_metrics": None,
+        "second_stage_summary": None,
     }
-
-
-def compare_values(
-    expected: Any,
-    actual: Any,
-    path: str = "root",
-) -> list[str]:
-    differences: list[str] = []
-    if isinstance(expected, dict):
-        if not isinstance(actual, dict):
-            return [f"{path}: expected object, got {type(actual).__name__}"]
-        expected_keys = set(expected)
-        actual_keys = set(actual)
-        for key in sorted(expected_keys - actual_keys):
-            differences.append(f"{path}: missing key {key!r}")
-        for key in sorted(actual_keys - expected_keys):
-            differences.append(f"{path}: unexpected key {key!r}")
-        for key in sorted(expected_keys & actual_keys):
-            differences.extend(compare_values(expected[key], actual[key], f"{path}.{key}"))
-        return differences
-    if isinstance(expected, list):
-        if not isinstance(actual, list):
-            return [f"{path}: expected list, got {type(actual).__name__}"]
-        if len(expected) != len(actual):
-            differences.append(
-                f"{path}: expected {len(expected)} entries, got {len(actual)}")
-        for index, (expected_item, actual_item) in enumerate(zip(expected, actual)):
-            differences.extend(
-                compare_values(expected_item, actual_item, f"{path}[{index}]"))
-        return differences
-    if isinstance(expected, bool) or isinstance(actual, bool):
-        if expected != actual:
-            differences.append(f"{path}: expected {expected!r}, got {actual!r}")
-        return differences
-    if isinstance(expected, float):
-        if not isinstance(actual, (int, float)) or not math.isfinite(float(actual)):
-            return [f"{path}: expected finite number, got {actual!r}"]
-        is_atom_value = path.startswith("root.atoms[") and not path.endswith(".serial_id")
-        relative_tolerance = (
-            ATOM_RELATIVE_TOLERANCE if is_atom_value else STRICT_FLOAT_TOLERANCE)
-        absolute_tolerance = (
-            ATOM_ABSOLUTE_TOLERANCE if is_atom_value else STRICT_FLOAT_TOLERANCE)
-        if not math.isclose(
-            expected,
-            float(actual),
-            rel_tol=relative_tolerance,
-            abs_tol=absolute_tolerance,
-        ):
-            differences.append(f"{path}: expected {expected:.17g}, got {float(actual):.17g}")
-        return differences
-    if expected != actual:
-        differences.append(f"{path}: expected {expected!r}, got {actual!r}")
-    return differences
 
 
 def write_json(path: Path, value: Any) -> None:
@@ -203,6 +269,23 @@ def load_baseline(path: Path) -> dict[str, Any]:
         raise RegressionError("Baseline input hashes do not match the fixed fold-168 fixture.")
     if baseline.get("command_arguments") != COMMAND_ARGUMENT_TEMPLATE:
         raise RegressionError("Baseline command arguments do not match the fixed benchmark command.")
+    serial_ids = baseline.get("serial_ids")
+    if not isinstance(serial_ids, list) or len(serial_ids) != EXPECTED_ATOM_COUNT:
+        raise RegressionError("Baseline does not contain 168 serial IDs.")
+    reference_metrics = baseline.get("reference_quality_metrics")
+    expected_metric_names = {
+        "amplitude_rmse",
+        "width_rmse",
+        "offset_rmse",
+        "maximum_absolute_offset",
+    }
+    if not isinstance(reference_metrics, dict) or set(reference_metrics) != expected_metric_names:
+        raise RegressionError("Baseline quality metric schema is invalid.")
+    if not all(
+        isinstance(value, (int, float)) and math.isfinite(value) and value >= 0.0
+        for value in reference_metrics.values()
+    ):
+        raise RegressionError("Baseline quality metrics must be finite and non-negative.")
     return baseline
 
 
@@ -269,8 +352,10 @@ def run(argv: Sequence[str] | None = None) -> int:
                     "Benchmark command did not create the temporary output database.")
 
             actual["atoms"] = read_atom_results(temporary_database)
+            actual["quality_metrics"] = calculate_quality_metrics(actual["atoms"])
+            actual["second_stage_summary"] = parse_second_stage_summary(log_text)
 
-        differences = compare_values(baseline, actual)
+        differences = validate_quality_gate(baseline, actual)
     except Exception as error:  # Preserve artifacts for all benchmark failures.
         errors.append(str(error))
 

@@ -11,9 +11,9 @@
 
 #include <Eigen/Dense>
 
-#include <rhbm_gem/utils/algorithm/ClusteredAndersonAcceleration.hpp>
-
 namespace rhbm_gem::core::detail {
+
+using LocalFittingTrustRegionClusterKey = std::vector<std::size_t>;
 
 struct LocalFittingTrustRegionOptions
 {
@@ -26,15 +26,15 @@ struct LocalFittingTrustRegionOptions
 
 struct LocalFittingTrustRegionRadiusUpdate
 {
-    std::vector<algorithm::ClusterKey> changed_key_list{};
-    std::vector<algorithm::ClusterKey> saturated_key_list{};
+    std::vector<LocalFittingTrustRegionClusterKey> changed_key_list{};
+    std::vector<LocalFittingTrustRegionClusterKey> saturated_key_list{};
 };
 
 class LocalFittingTrustRegionStateSet
 {
 private:
     LocalFittingTrustRegionOptions m_options{};
-    std::map<algorithm::ClusterKey, double> m_radius_by_key{};
+    std::map<LocalFittingTrustRegionClusterKey, double> m_radius_by_key{};
 
     static void ValidateOptions(const LocalFittingTrustRegionOptions & options)
     {
@@ -62,9 +62,9 @@ public:
         ValidateOptions(m_options);
     }
 
-    void Reconcile(const std::vector<algorithm::ClusterKey> & key_list)
+    void Reconcile(const std::vector<LocalFittingTrustRegionClusterKey> & key_list)
     {
-        std::map<algorithm::ClusterKey, double> next_radius_by_key;
+        std::map<LocalFittingTrustRegionClusterKey, double> next_radius_by_key;
         for (const auto & key : key_list)
         {
             const auto iter{ m_radius_by_key.find(key) };
@@ -76,7 +76,7 @@ public:
         m_radius_by_key = std::move(next_radius_by_key);
     }
 
-    double GetRadius(const algorithm::ClusterKey & key) const
+    double GetRadius(const LocalFittingTrustRegionClusterKey & key) const
     {
         const auto iter{ m_radius_by_key.find(key) };
         if (iter == m_radius_by_key.end())
@@ -87,7 +87,7 @@ public:
     }
 
     LocalFittingTrustRegionRadiusUpdate Shrink(
-        const std::vector<algorithm::ClusterKey> & key_list)
+        const std::vector<LocalFittingTrustRegionClusterKey> & key_list)
     {
         LocalFittingTrustRegionRadiusUpdate update;
         for (const auto & key : key_list)
@@ -110,7 +110,7 @@ public:
         return update;
     }
 
-    void Grow(const std::vector<algorithm::ClusterKey> & key_list)
+    void Grow(const std::vector<LocalFittingTrustRegionClusterKey> & key_list)
     {
         for (const auto & key : key_list)
         {
@@ -125,15 +125,6 @@ public:
         }
     }
 
-    void Reset(const std::vector<algorithm::ClusterKey> & key_list)
-    {
-        for (const auto & key : key_list)
-        {
-            auto iter{ m_radius_by_key.find(key) };
-            if (iter == m_radius_by_key.end()) continue;
-            iter->second = m_options.initial_radius;
-        }
-    }
 };
 
 struct LocalFittingTrustRegionDamping
@@ -146,7 +137,7 @@ struct LocalFittingTrustRegionDamping
 inline void ValidateLocalFittingTrustRegionInputs(
     const std::vector<Eigen::VectorXd> & previous_estimation_list,
     const std::vector<Eigen::VectorXd> & candidate_estimation_list,
-    const algorithm::ClusterKey & key,
+    const LocalFittingTrustRegionClusterKey & key,
     const std::array<double, 3> & parameter_scale,
     double requested_damping,
     double radius)
@@ -183,7 +174,7 @@ inline void ValidateLocalFittingTrustRegionInputs(
 inline LocalFittingTrustRegionDamping LimitLocalFittingTrustRegionDamping(
     const std::vector<Eigen::VectorXd> & previous_estimation_list,
     const std::vector<Eigen::VectorXd> & candidate_estimation_list,
-    const algorithm::ClusterKey & key,
+    const LocalFittingTrustRegionClusterKey & key,
     const std::array<double, 3> & parameter_scale,
     double requested_damping,
     double radius)
@@ -227,7 +218,7 @@ inline LocalFittingTrustRegionDamping LimitLocalFittingTrustRegionSubstepDamping
     const std::vector<Eigen::VectorXd> & outer_previous_estimation_list,
     const std::vector<Eigen::VectorXd> & substep_previous_estimation_list,
     const std::vector<Eigen::VectorXd> & candidate_estimation_list,
-    const algorithm::ClusterKey & key,
+    const LocalFittingTrustRegionClusterKey & key,
     const std::array<double, 3> & parameter_scale,
     double requested_damping,
     double radius)

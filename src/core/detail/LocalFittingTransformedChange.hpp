@@ -169,26 +169,6 @@ inline algorithm::ParameterChange CalculateLocalFittingTransformedChange(
     return change;
 }
 
-inline algorithm::ParameterChange CalculateLocalFittingFreezeEvidenceChange(
-    const GaussianModel3D & accepted,
-    const GaussianModel3D & raw_fixed_point,
-    const GaussianModel3D & previous)
-{
-    auto freeze_evidence{
-        CalculateLocalFittingTransformedChange(accepted, previous)
-    };
-    const auto raw_fixed_point_residual{
-        CalculateLocalFittingTransformedChange(raw_fixed_point, previous)
-    };
-    for (std::size_t i = 0; i < kTransformedChangeSize; i++)
-    {
-        freeze_evidence.value_list.at(i) = std::max(
-            freeze_evidence.value_list.at(i),
-            raw_fixed_point_residual.value_list.at(i));
-    }
-    return freeze_evidence;
-}
-
 inline std::vector<double> SummarizeLocalFittingMaximumTransformedChanges(
     const std::vector<algorithm::ParameterChange> & change_list,
     const std::vector<std::size_t> & index_list)

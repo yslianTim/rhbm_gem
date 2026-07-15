@@ -7,19 +7,18 @@
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include "core/detail/GaussianEstimatorStages.hpp"
 #include "core/detail/LocalFittingAudit.hpp"
-#include "core/detail/LocalFittingAndersonRegime.hpp"
 #include "core/detail/LocalFittingCouplingGraph.hpp"
-#include "core/detail/LocalFittingFreezeDiagnostics.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
 #include "core/detail/LocalFittingJointOffsetConditioning.hpp"
 #include "core/detail/LocalFittingJointPolish.hpp"
 #include "core/detail/LocalFittingSeedRepair.hpp"
-#include "core/detail/LocalFittingStagnation.hpp"
 #include "core/detail/LocalFittingTrustRegion.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
 #include "core/detail/PostRefitRollback.hpp"
@@ -27,9 +26,7 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/utils/algorithm/ClusteredAndersonAcceleration.hpp>
-#include <rhbm_gem/utils/algorithm/ConvergenceFreezeTracker.hpp>
-#include <rhbm_gem/utils/algorithm/DependencyThawHysteresisTracker.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 namespace {
 namespace alg = rhbm_gem::algorithm;
@@ -39,10 +36,8 @@ namespace conditioning_detail = rhbm_gem::core::detail;
 namespace coupling_detail = rhbm_gem::core::detail;
 namespace health_detail = rhbm_gem::core::detail;
 namespace polish_detail = rhbm_gem::core::detail;
-namespace regime_detail = rhbm_gem::core::detail;
 namespace rollback_detail = rhbm_gem::core::detail;
 namespace seed_detail = rhbm_gem::core::detail;
-namespace stagnation_detail = rhbm_gem::core::detail;
 namespace trust_detail = rhbm_gem::core::detail;
 namespace rt = rhbm_gem::core;
 namespace rg = rhbm_gem;
@@ -519,29 +514,6 @@ void ExpectSelectedAtomEstimatesAreFinite(const rg::ModelObject & model)
     }
 }
 
-std::vector<Eigen::VectorXd> MakeAndersonState(double left, double right)
-{
-    return {
-        Eigen::VectorXd::Constant(1, left),
-        Eigen::VectorXd::Constant(1, right)
-    };
-}
-
-regime_detail::LocalFittingAndersonRegimeSignatureMap MakeAndersonRegimeSignatures(
-    double global_ridge_ratio,
-    double left_multiplier,
-    double right_multiplier,
-    health_detail::JointOffsetSolveStatus left_status =
-        health_detail::JointOffsetSolveStatus::Converged,
-    health_detail::JointOffsetSolveStatus right_status =
-        health_detail::JointOffsetSolveStatus::Converged)
-{
-    return {
-        { { 0 }, { left_status, global_ridge_ratio, { left_multiplier } } },
-        { { 1 }, { right_status, global_ridge_ratio, { right_multiplier } } }
-    };
-}
-
 } // namespace
 
 TEST(EstimatorSecondStageDefenseTest, SeedRepairUsesConfiguredFallbackPriority)
@@ -661,229 +633,27 @@ TEST(EstimatorSecondStageDefenseTest, AuditObjectiveProgressGuardChecksPreviousA
         1.0, std::nullopt, std::nullopt, 1.0e-3));
 }
 
-TEST(EstimatorSecondStageDefenseTest, StagnationTrackerForcesAfterThreeAcceptedRawMismatches)
+TEST(EstimatorSecondStageDefenseTest, AuditPatienceStopsAfterThreeStableAcceptedIterations)
 {
-    stagnation_detail::LocalFittingStagnationTracker tracker;
-    const alg::ClusterKey key{ 0, 1 };
-    tracker.Reconcile({ key });
-    const alg::ParameterChangeStats accepted_stats{
-        std::vector<double>{ 5.0e-5, 4.0e-5, 3.0e-5 }
-    };
-    const std::vector<double> accepted_maximum{ 8.0e-5, 7.0e-5, 6.0e-5 };
-    const alg::ParameterChangeStats raw_stats{
-        std::vector<double>{ 2.0e-3, 3.0e-3, 4.0e-3 }
-    };
-    const std::vector<double> raw_maximum{ 3.0e-3, 4.0e-3, 5.0e-3 };
+    std::size_t patience_count{ 0 };
+    patience_count = audit_detail::AdvanceLocalFittingAuditPatience(
+        patience_count, false, false);
+    EXPECT_EQ(patience_count, 1U);
+    patience_count = audit_detail::AdvanceLocalFittingAuditPatience(
+        patience_count, false, false);
+    EXPECT_EQ(patience_count, 2U);
+    patience_count = audit_detail::AdvanceLocalFittingAuditPatience(
+        patience_count, false, false);
+    EXPECT_EQ(patience_count, 3U);
 
-    for (int iteration = 0; iteration < 2; iteration++)
-    {
-        tracker.Update(
-            key,
-            true,
-            accepted_stats,
-            accepted_maximum,
-            raw_stats,
-            raw_maximum);
-        EXPECT_TRUE(tracker.BuildForcedFixedPointKeyList().empty());
-    }
-    tracker.Update(
-        key,
-        true,
-        accepted_stats,
-        accepted_maximum,
-        raw_stats,
-        raw_maximum);
     EXPECT_EQ(
-        (std::vector<alg::ClusterKey>{ key }),
-        tracker.BuildForcedFixedPointKeyList());
-
-    tracker.MarkIneligible({ key });
+        audit_detail::AdvanceLocalFittingAuditPatience(
+            patience_count, true, false),
+        0U);
     EXPECT_EQ(
-        (std::vector<alg::ClusterKey>{ key }),
-        tracker.BuildForcedFixedPointKeyList());
-    tracker.MarkRecovered({ key });
-    EXPECT_TRUE(tracker.BuildForcedFixedPointKeyList().empty());
-}
-
-TEST(EstimatorSecondStageDefenseTest, ForcedFixedPointRequiresFiniteStrictObjectiveImprovement)
-{
-    EXPECT_TRUE(stagnation_detail::IsLocalFittingForcedFixedPointObjectiveImproved(
-        1.0 - 2.0e-8,
-        1.0,
-        1.0e-8));
-    EXPECT_FALSE(stagnation_detail::IsLocalFittingForcedFixedPointObjectiveImproved(
-        1.0 - 0.5e-8,
-        1.0,
-        1.0e-8));
-    EXPECT_FALSE(stagnation_detail::IsLocalFittingForcedFixedPointObjectiveImproved(
-        1.001,
-        1.0,
-        1.0e-8));
-    EXPECT_FALSE(stagnation_detail::IsLocalFittingForcedFixedPointObjectiveImproved(
-        std::nullopt,
-        1.0,
-        1.0e-8));
-    EXPECT_FALSE(stagnation_detail::IsLocalFittingForcedFixedPointObjectiveImproved(
-        1.0,
-        std::nullopt,
-        1.0e-8));
-}
-
-TEST(EstimatorSecondStageDefenseTest, StagnationStopRequiresEveryActiveClusterStalled)
-{
-    const alg::ClusterKey first_key{ 0 };
-    const alg::ClusterKey second_key{ 1 };
-    EXPECT_FALSE(stagnation_detail::AreAllLocalFittingActiveClustersStalled({}, {}));
-    EXPECT_FALSE(stagnation_detail::AreAllLocalFittingActiveClustersStalled(
-        { first_key, second_key },
-        { first_key }));
-    EXPECT_TRUE(stagnation_detail::AreAllLocalFittingActiveClustersStalled(
-        { first_key, second_key },
-        { first_key, second_key }));
-}
-
-TEST(EstimatorSecondStageDefenseTest, AllForcedGlobalAuditRequiresStrictBestImprovement)
-{
-    const alg::ClusterKey first_key{ 0 };
-    const alg::ClusterKey second_key{ 1 };
-    const std::vector<alg::ClusterKey> active_key_list{ first_key, second_key };
-
-    EXPECT_FALSE(stagnation_detail::ShouldStopLocalFittingForAllForcedGlobalAudit(
-        {},
-        {},
-        std::nullopt,
-        std::nullopt,
-        1.0e-8));
-    EXPECT_FALSE(stagnation_detail::ShouldStopLocalFittingForAllForcedGlobalAudit(
-        active_key_list,
-        { first_key },
-        1.1,
-        1.0,
-        1.0e-8));
-    EXPECT_FALSE(stagnation_detail::ShouldStopLocalFittingForAllForcedGlobalAudit(
-        active_key_list,
-        active_key_list,
-        1.0 - 2.0e-8,
-        1.0,
-        1.0e-8));
-    EXPECT_TRUE(stagnation_detail::ShouldStopLocalFittingForAllForcedGlobalAudit(
-        active_key_list,
-        active_key_list,
-        1.0 - 0.5e-8,
-        1.0,
-        1.0e-8));
-    EXPECT_TRUE(stagnation_detail::ShouldStopLocalFittingForAllForcedGlobalAudit(
-        active_key_list,
-        active_key_list,
-        1.001,
-        1.0,
-        1.0e-8));
-    EXPECT_TRUE(stagnation_detail::ShouldStopLocalFittingForAllForcedGlobalAudit(
-        active_key_list,
-        active_key_list,
-        std::nullopt,
-        1.0,
-        1.0e-8));
-    EXPECT_TRUE(stagnation_detail::ShouldStopLocalFittingForAllForcedGlobalAudit(
-        active_key_list,
-        active_key_list,
-        1.0,
-        std::nullopt,
-        1.0e-8));
-}
-
-TEST(EstimatorSecondStageDefenseTest, StagnationTrackerResetsMismatchEvidence)
-{
-    stagnation_detail::LocalFittingStagnationTracker tracker;
-    const alg::ClusterKey key{ 0 };
-    const alg::ParameterChangeStats converged_stats{
-        std::vector<double>{ 5.0e-5, 4.0e-5, 3.0e-5 }
-    };
-    const std::vector<double> converged_maximum{ 8.0e-5, 7.0e-5, 6.0e-5 };
-    const alg::ParameterChangeStats moving_stats{
-        std::vector<double>{ 2.0e-3, 3.0e-3, 4.0e-3 }
-    };
-    const std::vector<double> moving_maximum{ 3.0e-3, 4.0e-3, 5.0e-3 };
-    const auto add_mismatch = [&]
-    {
-        tracker.Update(
-            key,
-            true,
-            converged_stats,
-            converged_maximum,
-            moving_stats,
-            moving_maximum);
-    };
-
-    tracker.Reconcile({ key });
-    add_mismatch();
-    add_mismatch();
-    tracker.Update(
-        key,
-        true,
-        converged_stats,
-        converged_maximum,
-        converged_stats,
-        converged_maximum);
-    add_mismatch();
-    add_mismatch();
-    EXPECT_TRUE(tracker.BuildForcedFixedPointKeyList().empty());
-
-    tracker.MarkIneligible({ key });
-    add_mismatch();
-    add_mismatch();
-    EXPECT_TRUE(tracker.BuildForcedFixedPointKeyList().empty());
-
-    tracker.Update(
-        key,
-        true,
-        moving_stats,
-        moving_maximum,
-        moving_stats,
-        moving_maximum);
-    add_mismatch();
-    add_mismatch();
-    EXPECT_TRUE(tracker.BuildForcedFixedPointKeyList().empty());
-
-    tracker.Reconcile({ alg::ClusterKey{ 0, 1 } });
-    EXPECT_TRUE(tracker.BuildForcedFixedPointKeyList().empty());
-}
-
-TEST(EstimatorSecondStageDefenseTest, StagnationTrackerKeepsClustersIndependent)
-{
-    stagnation_detail::LocalFittingStagnationTracker tracker;
-    const alg::ClusterKey stalled_key{ 0 };
-    const alg::ClusterKey converged_key{ 1 };
-    tracker.Reconcile({ stalled_key, converged_key });
-    const alg::ParameterChangeStats accepted_stats{
-        std::vector<double>{ 5.0e-5, 4.0e-5, 3.0e-5 }
-    };
-    const std::vector<double> accepted_maximum{ 8.0e-5, 7.0e-5, 6.0e-5 };
-    const alg::ParameterChangeStats raw_stats{
-        std::vector<double>{ 2.0e-3, 3.0e-3, 4.0e-3 }
-    };
-    const std::vector<double> raw_maximum{ 3.0e-3, 4.0e-3, 5.0e-3 };
-
-    for (int iteration = 0; iteration < 3; iteration++)
-    {
-        tracker.Update(
-            stalled_key,
-            true,
-            accepted_stats,
-            accepted_maximum,
-            raw_stats,
-            raw_maximum);
-        tracker.Update(
-            converged_key,
-            true,
-            accepted_stats,
-            accepted_maximum,
-            accepted_stats,
-            accepted_maximum);
-    }
-    EXPECT_EQ(
-        (std::vector<alg::ClusterKey>{ stalled_key }),
-        tracker.BuildForcedFixedPointKeyList());
+        audit_detail::AdvanceLocalFittingAuditPatience(
+            patience_count, false, true),
+        0U);
 }
 
 TEST(EstimatorSecondStageDefenseTest, ScientificObjectiveUsesAtomMeanIndependentOfCardinality)
@@ -1079,202 +849,35 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionPolishHonorsOuterStepBoundary)
     EXPECT_DOUBLE_EQ(inward.step_norm, 0.0);
 }
 
-TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndResets)
+TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndSaturates)
 {
     trust_detail::LocalFittingTrustRegionStateSet state;
-    const alg::ClusterKey key{ 0 };
+    const trust_detail::LocalFittingTrustRegionClusterKey key{ 0 };
     state.Reconcile({ key });
     EXPECT_DOUBLE_EQ(state.GetRadius(key), 1.0);
 
     for (const auto expected : { 0.5, 0.25, 0.125, 0.0625 })
     {
         const auto update{ state.Shrink({ key }) };
-        EXPECT_EQ(update.changed_key_list, std::vector<alg::ClusterKey>{ key });
+        EXPECT_EQ(
+            update.changed_key_list,
+            std::vector<trust_detail::LocalFittingTrustRegionClusterKey>{ key });
         EXPECT_TRUE(update.saturated_key_list.empty());
         EXPECT_DOUBLE_EQ(state.GetRadius(key), expected);
     }
     const auto saturated{ state.Shrink({ key }) };
     EXPECT_TRUE(saturated.changed_key_list.empty());
-    EXPECT_EQ(saturated.saturated_key_list, std::vector<alg::ClusterKey>{ key });
+    EXPECT_EQ(
+        saturated.saturated_key_list,
+        std::vector<trust_detail::LocalFittingTrustRegionClusterKey>{ key });
 
     state.Grow({ key });
     EXPECT_DOUBLE_EQ(state.GetRadius(key), 0.125);
-    state.Reset({ key });
-    EXPECT_DOUBLE_EQ(state.GetRadius(key), 1.0);
 
-    const alg::ClusterKey replacement_key{ 1 };
+    const trust_detail::LocalFittingTrustRegionClusterKey replacement_key{ 1 };
     state.Reconcile({ replacement_key });
     EXPECT_THROW(state.GetRadius(key), std::invalid_argument);
     EXPECT_DOUBLE_EQ(state.GetRadius(replacement_key), 1.0);
-}
-
-TEST(EstimatorSecondStageDefenseTest, AndersonRegimeTracksGlobalAndClusterEffectiveRidge)
-{
-    const std::vector<regime_detail::LocalFittingAndersonRegimeClusterKey> key_list{
-        { 0 }, { 1 }
-    };
-    const auto baseline{ MakeAndersonRegimeSignatures(1.0e-3, 1.0, 1.0) };
-    regime_detail::LocalFittingAndersonRegimeTracker tracker;
-    tracker.Commit(key_list, baseline);
-
-    EXPECT_TRUE(tracker.FindIncompatible(baseline).empty());
-    EXPECT_EQ(key_list, tracker.FindIncompatible(
-        MakeAndersonRegimeSignatures(8.0e-4, 1.0, 1.0)));
-    EXPECT_EQ(
-        (std::vector<regime_detail::LocalFittingAndersonRegimeClusterKey>{ { 0 } }),
-        tracker.FindIncompatible(
-            MakeAndersonRegimeSignatures(1.0e-3, 10.0, 1.0)));
-}
-
-TEST(EstimatorSecondStageDefenseTest, AndersonRegimeDetectsRetryAndCollinearityTransitions)
-{
-    const std::vector<regime_detail::LocalFittingAndersonRegimeClusterKey> key_list{
-        { 0 }, { 1 }
-    };
-    const auto baseline{ MakeAndersonRegimeSignatures(1.0e-3, 1.0, 1.0) };
-    const auto guarded{ MakeAndersonRegimeSignatures(1.0e-3, 10.0, 1.0) };
-    regime_detail::LocalFittingAndersonRegimeTracker tracker;
-    tracker.Commit(key_list, baseline);
-
-    EXPECT_EQ(
-        (std::vector<regime_detail::LocalFittingAndersonRegimeClusterKey>{ { 0 } }),
-        tracker.FindIncompatible(guarded));
-    tracker.Commit({ { 0 } }, guarded);
-    EXPECT_EQ(
-        (std::vector<regime_detail::LocalFittingAndersonRegimeClusterKey>{ { 0 } }),
-        tracker.FindIncompatible(baseline));
-
-    tracker.Reconcile({ { 0, 1 } });
-    const regime_detail::LocalFittingAndersonRegimeSignatureMap merged{
-        { { 0, 1 }, {
-            health_detail::JointOffsetSolveStatus::Converged,
-            1.0e-3,
-            { 1.0, 1.0 }
-        } }
-    };
-    EXPECT_TRUE(tracker.FindIncompatible(merged).empty());
-}
-
-TEST(EstimatorSecondStageDefenseTest, AndersonRegimeRejectsInvalidSignatures)
-{
-    regime_detail::LocalFittingAndersonRegimeTracker tracker;
-    using Status = health_detail::JointOffsetSolveStatus;
-    const regime_detail::LocalFittingAndersonRegimeSignatureMap invalid_ridge{
-        { { 0 }, { Status::Converged, 0.0, { 1.0 } } }
-    };
-    const regime_detail::LocalFittingAndersonRegimeSignatureMap invalid_multiplier{
-        { { 0 }, {
-            Status::Converged,
-            1.0e-3,
-            { std::numeric_limits<double>::infinity() }
-        } }
-    };
-    const regime_detail::LocalFittingAndersonRegimeSignatureMap wrong_size_signature{
-        { { 0 }, { Status::Converged, 1.0e-3, { 1.0, 1.0 } } }
-    };
-    const regime_detail::LocalFittingAndersonRegimeSignatureMap invalid_status{
-        { { 0 }, { static_cast<Status>(-1), 1.0e-3, { 1.0 } } }
-    };
-    EXPECT_THROW(tracker.FindIncompatible(invalid_ridge), std::invalid_argument);
-    EXPECT_THROW(tracker.FindIncompatible(invalid_multiplier), std::invalid_argument);
-    EXPECT_THROW(tracker.FindIncompatible(wrong_size_signature), std::invalid_argument);
-    EXPECT_THROW(tracker.FindIncompatible(invalid_status), std::logic_error);
-}
-
-TEST(EstimatorSecondStageDefenseTest, AndersonRegimeTracksJointOffsetStatusPerCluster)
-{
-    using Status = health_detail::JointOffsetSolveStatus;
-    const std::vector<regime_detail::LocalFittingAndersonRegimeClusterKey> key_list{
-        { 0 }, { 1 }
-    };
-    const auto baseline{ MakeAndersonRegimeSignatures(1.0e-3, 1.0, 1.0) };
-    const auto changed{
-        MakeAndersonRegimeSignatures(
-            1.0e-3,
-            1.0,
-            1.0,
-            Status::IrlsMaximumIterationsReached,
-            Status::Converged)
-    };
-    regime_detail::LocalFittingAndersonRegimeTracker tracker;
-    alg::ClusteredAndersonAccelerationHistorySet history{
-        alg::AndersonAccelerationOptions{ 5, 100.0, 10.0, 1.0e-12 }
-    };
-    history.Reconcile(key_list);
-    tracker.Commit(key_list, baseline);
-    history.Commit(
-        key_list,
-        MakeAndersonState(0.0, 0.0),
-        MakeAndersonState(1.0, 1.0));
-
-    const auto incompatible_key_list{ tracker.FindIncompatible(changed) };
-    EXPECT_EQ(
-        (std::vector<regime_detail::LocalFittingAndersonRegimeClusterKey>{ { 0 } }),
-        incompatible_key_list);
-    history.ClearAndSuppress(incompatible_key_list);
-    tracker.Invalidate(incompatible_key_list);
-    const auto candidate{
-        history.BuildCandidate(
-            key_list,
-            MakeAndersonState(1.0, 1.0),
-            MakeAndersonState(1.5, 1.5))
-    };
-
-    ASSERT_TRUE(candidate.has_value());
-    EXPECT_EQ((std::vector<alg::ClusterKey>{ { 1 } }), candidate->used_cluster_key_list);
-}
-
-TEST(EstimatorSecondStageDefenseTest, AndersonRegimeInvalidatesOnlyAffectedHistory)
-{
-    const std::vector<alg::ClusterKey> key_list{ { 0 }, { 1 } };
-    alg::ClusteredAndersonAccelerationHistorySet history{
-        alg::AndersonAccelerationOptions{ 5, 100.0, 10.0, 1.0e-12 }
-    };
-    regime_detail::LocalFittingAndersonRegimeTracker tracker;
-    const auto baseline{ MakeAndersonRegimeSignatures(1.0e-3, 1.0, 1.0) };
-    const auto changed{ MakeAndersonRegimeSignatures(1.0e-3, 10.0, 1.0) };
-    history.Reconcile(key_list);
-    tracker.Commit(key_list, baseline);
-    history.Commit(key_list, MakeAndersonState(0.0, 0.0), MakeAndersonState(1.0, 1.0));
-
-    const auto incompatible_key_list{ tracker.FindIncompatible(changed) };
-    history.ClearAndSuppress(incompatible_key_list);
-    tracker.Invalidate(incompatible_key_list);
-    const auto candidate{
-        history.BuildCandidate(
-            key_list,
-            MakeAndersonState(1.0, 1.0),
-            MakeAndersonState(1.5, 1.5))
-    };
-
-    ASSERT_TRUE(candidate.has_value());
-    EXPECT_EQ((std::vector<alg::ClusterKey>{ { 1 } }), candidate->used_cluster_key_list);
-
-    history.ReleaseSuppression({ { 0 } });
-    const auto before_recommit{
-        history.BuildCandidate(
-            key_list,
-            MakeAndersonState(1.0, 1.0),
-            MakeAndersonState(1.5, 1.5))
-    };
-    ASSERT_TRUE(before_recommit.has_value());
-    EXPECT_EQ((std::vector<alg::ClusterKey>{ { 1 } }), before_recommit->used_cluster_key_list);
-
-    history.Commit({ { 0 } }, MakeAndersonState(1.0, 1.0), MakeAndersonState(1.5, 1.5));
-    tracker.Commit({ { 0 } }, changed);
-    const auto after_recommit{
-        history.BuildCandidate(
-            key_list,
-            MakeAndersonState(1.5, 1.5),
-            MakeAndersonState(1.75, 1.75))
-    };
-    ASSERT_TRUE(after_recommit.has_value());
-    EXPECT_NE(
-        std::find(
-            after_recommit->used_cluster_key_list.begin(),
-            after_recommit->used_cluster_key_list.end(),
-            alg::ClusterKey{ 0 }),
-        after_recommit->used_cluster_key_list.end());
 }
 
 TEST(EstimatorSecondStageDefenseTest, JointOffsetConditioningDetectsJointDependence)
@@ -1421,17 +1024,6 @@ TEST(EstimatorSecondStageDefenseTest, TransformedChangeIsIntensityScaleInvariant
                 scaled_change.value_list.at(i),
                 1.0e-12);
         }
-
-        alg::DependencyThawHysteresisTracker thaw_tracker{ 1, 2.0, 8.0, 0.9 };
-        EXPECT_EQ(
-            thaw_tracker.ShouldThaw(
-                0,
-                alg::GetMaximumParameterChange(base_change),
-                1.0e-3),
-            thaw_tracker.ShouldThaw(
-                0,
-                alg::GetMaximumParameterChange(scaled_change),
-                1.0e-3));
     }
 }
 
@@ -1847,190 +1439,6 @@ TEST(EstimatorSecondStageDefenseTest, TransformedConvergenceRejectsHiddenMaximum
         1.0e-3));
 }
 
-TEST(EstimatorSecondStageDefenseTest, FreezeUsesTransformedRatherThanAbsoluteMovement)
-{
-    const auto scale_consistent_small_change{
-        change_detail::CalculateLocalFittingTransformedChange(
-            rg::GaussianModel3D{ 1.0e8 * std::exp(5.0e-5), 0.5, 0.0 },
-            rg::GaussianModel3D{ 1.0e8, 0.5, 0.0 })
-    };
-    const auto relatively_large_tiny_absolute_change{
-        change_detail::CalculateLocalFittingTransformedChange(
-            rg::GaussianModel3D{ 2.0e-8, 0.5, 0.0 },
-            rg::GaussianModel3D{ 1.0e-8, 0.5, 0.0 })
-    };
-    alg::ConvergenceFreezeTracker stable_tracker{ 1, 1.0e-6, 0.1, 3 };
-    alg::ConvergenceFreezeTracker moving_tracker{ 1, 1.0e-6, 0.1, 3 };
-
-    for (int i = 0; i < 3; i++)
-    {
-        stable_tracker.Update({ scale_consistent_small_change }, { 0 });
-        moving_tracker.Update({ relatively_large_tiny_absolute_change }, { 0 });
-    }
-
-    EXPECT_TRUE(stable_tracker.IsFrozen(0));
-    EXPECT_FALSE(moving_tracker.IsFrozen(0));
-}
-
-TEST(EstimatorSecondStageDefenseTest, FreezeEvidenceRequiresSmallRawFixedPointResidual)
-{
-    const rg::GaussianModel3D previous{ 1.0e8, 0.5, 0.0 };
-    const rg::GaussianModel3D accepted{
-        previous.GetAmplitude() * std::exp(5.0e-5),
-        previous.GetWidth(),
-        previous.GetOffset()
-    };
-    const rg::GaussianModel3D raw_fixed_point{
-        previous.GetAmplitude() * std::exp(1.0e-2),
-        previous.GetWidth(),
-        previous.GetOffset()
-    };
-    const auto unstable_evidence{
-        change_detail::CalculateLocalFittingFreezeEvidenceChange(
-            accepted,
-            raw_fixed_point,
-            previous)
-    };
-    const auto stable_evidence{
-        change_detail::CalculateLocalFittingFreezeEvidenceChange(
-            accepted,
-            accepted,
-            previous)
-    };
-    alg::ConvergenceFreezeTracker unstable_tracker{ 1, 1.0e-6, 0.1, 3 };
-    alg::ConvergenceFreezeTracker stable_tracker{ 1, 1.0e-6, 0.1, 3 };
-
-    for (int i = 0; i < 3; i++)
-    {
-        unstable_tracker.Update({ unstable_evidence }, { 0 });
-        stable_tracker.Update({ stable_evidence }, { 0 });
-    }
-
-    EXPECT_FALSE(unstable_tracker.IsFrozen(0));
-    EXPECT_TRUE(stable_tracker.IsFrozen(0));
-    EXPECT_NEAR(
-        1.0e-2,
-        unstable_evidence.value_list.at(
-            change_detail::kLogPeakHeightChangeIndex),
-        1.0e-12);
-}
-
-TEST(EstimatorSecondStageDefenseTest, FreezeDiagnosticsClassifyExclusiveOutcomesAndDominantChange)
-{
-    const alg::ParameterChange above_threshold_evidence{
-        std::vector<double>{ 5.0e-5, 2.0e-4, 1.0e-5 }
-    };
-    const alg::ParameterChange below_threshold_evidence{
-        std::vector<double>{ 5.0e-5, 2.0e-5, 1.0e-5 }
-    };
-
-    const auto ineligible{
-        change_detail::ClassifyLocalFittingFreezeEvidence(
-            false, false, 1.0e-4, above_threshold_evidence)
-    };
-    const auto above_threshold{
-        change_detail::ClassifyLocalFittingFreezeEvidence(
-            true, false, 1.0e-4, above_threshold_evidence)
-    };
-    const auto stabilizing{
-        change_detail::ClassifyLocalFittingFreezeEvidence(
-            true, false, 1.0e-4, below_threshold_evidence)
-    };
-    const auto newly_frozen{
-        change_detail::ClassifyLocalFittingFreezeEvidence(
-            true, true, 1.0e-4, below_threshold_evidence)
-    };
-
-    EXPECT_EQ(ineligible.outcome, change_detail::LocalFittingFreezeOutcome::Ineligible);
-    EXPECT_EQ(
-        above_threshold.outcome,
-        change_detail::LocalFittingFreezeOutcome::AboveThreshold);
-    EXPECT_EQ(
-        stabilizing.outcome,
-        change_detail::LocalFittingFreezeOutcome::Stabilizing);
-    EXPECT_EQ(
-        newly_frozen.outcome,
-        change_detail::LocalFittingFreezeOutcome::NewlyFrozen);
-    EXPECT_EQ(above_threshold.dominant_parameter_index, 1U);
-    EXPECT_DOUBLE_EQ(above_threshold.maximum_evidence, 2.0e-4);
-    EXPECT_THROW(
-        change_detail::ClassifyLocalFittingFreezeEvidence(
-            true, false, 1.0e-4, alg::ParameterChange{}),
-        std::invalid_argument);
-}
-
-TEST(EstimatorSecondStageDefenseTest, FreezeDiagnosticsDistinguishSelfAndPeerBlockers)
-{
-    const auto self_and_peer{
-        change_detail::ClassifyLocalFittingSelfPeerBlocker(3, { 3, 4 })
-    };
-    EXPECT_TRUE(self_and_peer.self);
-    EXPECT_TRUE(self_and_peer.peer);
-
-    const auto peer_only{
-        change_detail::ClassifyLocalFittingSelfPeerBlocker(2, { 3, 4 })
-    };
-    EXPECT_FALSE(peer_only.self);
-    EXPECT_TRUE(peer_only.peer);
-
-    const auto self_only{
-        change_detail::ClassifyLocalFittingSelfPeerBlocker(3, { 3 })
-    };
-    EXPECT_TRUE(self_only.self);
-    EXPECT_FALSE(self_only.peer);
-}
-
-TEST(EstimatorSecondStageDefenseTest, FreezeEvidenceIsScaleInvariantAndRejectsInvalidRawState)
-{
-    const rg::GaussianModel3D previous{ 8.0, 0.50, -0.10 };
-    const rg::GaussianModel3D accepted{ 8.1, 0.51, -0.11 };
-    const rg::GaussianModel3D raw_fixed_point{ 8.8, 0.55, -0.12 };
-    const auto base_evidence{
-        change_detail::CalculateLocalFittingFreezeEvidenceChange(
-            accepted,
-            raw_fixed_point,
-            previous)
-    };
-    const auto scale{ 1.0e2 };
-    const auto scaled_evidence{
-        change_detail::CalculateLocalFittingFreezeEvidenceChange(
-            rg::GaussianModel3D{
-                accepted.GetAmplitude() * scale,
-                accepted.GetWidth(),
-                accepted.GetOffset() * scale
-            },
-            rg::GaussianModel3D{
-                raw_fixed_point.GetAmplitude() * scale,
-                raw_fixed_point.GetWidth(),
-                raw_fixed_point.GetOffset() * scale
-            },
-            rg::GaussianModel3D{
-                previous.GetAmplitude() * scale,
-                previous.GetWidth(),
-                previous.GetOffset() * scale
-            })
-    };
-    ASSERT_EQ(base_evidence.value_list.size(), scaled_evidence.value_list.size());
-    for (std::size_t i = 0; i < base_evidence.value_list.size(); i++)
-    {
-        EXPECT_NEAR(
-            base_evidence.value_list.at(i),
-            scaled_evidence.value_list.at(i),
-            1.0e-12);
-    }
-
-    const auto invalid_evidence{
-        change_detail::CalculateLocalFittingFreezeEvidenceChange(
-            accepted,
-            rg::GaussianModel3D{ 0.0, 0.5, 0.0 },
-            previous)
-    };
-    for (const auto value : invalid_evidence.value_list)
-    {
-        EXPECT_TRUE(std::isinf(value));
-    }
-}
-
 TEST(EstimatorSecondStageDefenseTest, PostRefitRollbackExpandsCompleteContributorCluster)
 {
     const std::vector<std::size_t> active_index_list{ 10, 11, 12, 13, 20 };
@@ -2331,4 +1739,77 @@ TEST(EstimatorSecondStageDefenseTest, MissingValidSeedSkipsSecondStageWithoutCha
             previous_model_list.at(i),
             0.0);
     }
+}
+
+TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageLogsEveryOuterAttempt)
+{
+    auto model{ BuildSeparatedRollbackDefenseModel() };
+    auto options{ MakeSecondStageOptions() };
+    options.quiet_mode = false;
+    const auto previous_log_level{ Logger::GetLogLevel() };
+
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    rt::RunSecondStageLocalFitting(*model, options);
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_log_level);
+
+    const auto count_occurrences = [&](std::string_view text)
+    {
+        std::size_t count{ 0 };
+        for (std::size_t position = 0;
+            (position = out.find(text, position)) != std::string::npos;
+            position += text.size())
+        {
+            count++;
+        }
+        return count;
+    };
+    EXPECT_EQ(count_occurrences("Try/Acc"), 1U);
+    EXPECT_NE(out.find("Atom A/T"), std::string::npos);
+    EXPECT_NE(out.find("Cmp/Max/R"), std::string::npos);
+    EXPECT_NE(out.find("Cand C;A A/R"), std::string::npos);
+    EXPECT_NE(out.find("TR G/S/M"), std::string::npos);
+    EXPECT_NE(out.find("Guard S/U/C"), std::string::npos);
+    EXPECT_NE(out.find("dMax A/R"), std::string::npos);
+    EXPECT_NE(out.find("Audit B/P"), std::string::npos);
+    EXPECT_NE(out.find("| 1   | 0/0/0    | 2/0/0"), std::string::npos);
+    EXPECT_NE(out.find("| 0   | 0/0/1    | 0/0/0       | -/"), std::string::npos);
+    EXPECT_NE(out.find("| I/1"), std::string::npos);
+    EXPECT_NE(out.find("| 5/0"), std::string::npos);
+
+    const auto row_count{
+        static_cast<std::size_t>(std::count(out.begin(), out.end(), '\r'))
+    };
+    const std::string summary_prefix{
+        "Second-stage local fitting summary: accepted_iterations="
+    };
+    const auto summary_position{ out.find(summary_prefix) };
+    ASSERT_NE(summary_position, std::string::npos);
+    ASSERT_GT(summary_position, 0U);
+    EXPECT_EQ(out.at(summary_position - 1), '\n');
+    const auto accepted_start{ summary_position + summary_prefix.size() };
+    const auto accepted_end{ out.find(',', accepted_start) };
+    ASSERT_NE(accepted_end, std::string::npos);
+    const auto accepted_iteration_count{
+        static_cast<std::size_t>(std::stoull(
+            out.substr(accepted_start, accepted_end - accepted_start)))
+    };
+    EXPECT_GT(row_count, accepted_iteration_count);
+    EXPECT_NE(out.find("-/"), std::string::npos);
+}
+
+TEST(EstimatorSecondStageDefenseTest, QuietSecondStageSuppressesIterationTable)
+{
+    auto model{ BuildSeparatedRollbackDefenseModel() };
+    const auto previous_log_level{ Logger::GetLogLevel() };
+
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_EQ(out.find("Try/Acc"), std::string::npos);
+    EXPECT_EQ(std::count(out.begin(), out.end(), '\r'), 0);
 }

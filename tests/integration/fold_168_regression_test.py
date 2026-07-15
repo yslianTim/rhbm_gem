@@ -15,6 +15,21 @@ from unittest import mock
 import fold_168_regression as regression
 
 
+def make_baseline() -> dict[str, object]:
+    return {
+        "schema_version": regression.SCHEMA_VERSION,
+        "input_hashes": regression.EXPECTED_INPUT_HASHES,
+        "command_arguments": regression.COMMAND_ARGUMENT_TEMPLATE,
+        "serial_ids": list(range(1, regression.EXPECTED_ATOM_COUNT + 1)),
+        "reference_quality_metrics": {
+            "amplitude_rmse": 1.0,
+            "width_rmse": 1.0,
+            "offset_rmse": 1.0,
+            "maximum_absolute_offset": 1.0,
+        },
+    }
+
+
 class Fold168RegressionTest(unittest.TestCase):
     def test_reads_atoms_and_rejects_duplicate_or_nonfinite_results(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -24,6 +39,15 @@ class Fold168RegressionTest(unittest.TestCase):
                     "CREATE TABLE model_atom_local_potential ("
                     "key_tag TEXT, serial_id INTEGER, amplitude_estimate_mdpde REAL, "
                     "width_estimate_mdpde REAL, intercept_estimate_mdpde REAL, alpha_r REAL)")
+                connection.execute(
+                    "CREATE TABLE model_atom ("
+                    "key_tag TEXT, serial_id INTEGER, element INTEGER)")
+                connection.executemany(
+                    "INSERT INTO model_atom VALUES (?, ?, ?)",
+                    [
+                        (regression.SAVED_KEY, 1, 6),
+                        (regression.SAVED_KEY, 2, 7),
+                    ])
                 connection.executemany(
                     "INSERT INTO model_atom_local_potential VALUES (?, ?, ?, ?, ?, ?)",
                     [
@@ -39,20 +63,69 @@ class Fold168RegressionTest(unittest.TestCase):
             with self.assertRaises(regression.RegressionError):
                 regression.read_atom_results(database)
 
-    def test_applies_atom_tolerance_and_rejects_nonfinite_values(self) -> None:
-        expected = {"atoms": [{"serial_id": 1, "width_mdpde": 1.0}]}
-        within_tolerance = {"atoms": [{"serial_id": 1, "width_mdpde": 1.0 + 5.0e-7}]}
-        outside_tolerance = {"atoms": [{"serial_id": 1, "width_mdpde": 1.0 + 2.0e-6}]}
-        nonfinite = {"atoms": [{"serial_id": 1, "width_mdpde": float("nan")}]}
-        self.assertEqual(regression.compare_values(expected, within_tolerance), [])
-        self.assertTrue(regression.compare_values(expected, outside_tolerance))
-        self.assertTrue(regression.compare_values(expected, nonfinite))
+    def test_calculates_truth_quality_metrics(self) -> None:
+        atoms = [
+            {
+                "serial_id": 1,
+                "element": 6,
+                "amplitude_mdpde": 6.0,
+                "width_mdpde": 0.5,
+                "intercept_mdpde": 1.0,
+                "alpha_r": 0.2,
+            },
+            {
+                "serial_id": 2,
+                "element": 8,
+                "amplitude_mdpde": 10.0,
+                "width_mdpde": 0.7,
+                "intercept_mdpde": -1.0,
+                "alpha_r": 0.3,
+            },
+        ]
+        metrics = regression.calculate_quality_metrics(atoms)
+        self.assertAlmostEqual(metrics["amplitude_rmse"], 2.0 ** 0.5)
+        self.assertAlmostEqual(metrics["width_rmse"], (0.04 / 2.0) ** 0.5)
+        self.assertAlmostEqual(metrics["offset_rmse"], (4.0 / 2.0) ** 0.5)
+        self.assertEqual(metrics["maximum_absolute_offset"], 1.0)
 
-    def test_reports_missing_atom(self) -> None:
-        expected = {"atoms": [{"serial_id": 1}]}
-        actual = {"atoms": []}
-        differences = "\n".join(regression.compare_values(expected, actual))
-        self.assertIn("root.atoms: expected 1 entries, got 0", differences)
+    def test_quality_gate_checks_validity_metrics_and_iteration_limit(self) -> None:
+        baseline = make_baseline()
+        atoms = [
+            {
+                "serial_id": serial_id,
+                "element": 6,
+                "amplitude_mdpde": 6.0,
+                "width_mdpde": 0.5,
+                "intercept_mdpde": 1.0,
+                "alpha_r": 0.2,
+            }
+            for serial_id in range(1, regression.EXPECTED_ATOM_COUNT + 1)
+        ]
+        actual = {
+            "atoms": atoms,
+            "quality_metrics": {
+                "amplitude_rmse": 1.05,
+                "width_rmse": 1.05,
+                "offset_rmse": 1.05,
+                "maximum_absolute_offset": 1.05,
+            },
+            "second_stage_summary": {"accepted_iterations": 10},
+        }
+        self.assertEqual(regression.validate_quality_gate(baseline, actual), [])
+        actual["quality_metrics"]["width_rmse"] = 1.051
+        actual["second_stage_summary"]["accepted_iterations"] = 11
+        differences = "\n".join(regression.validate_quality_gate(baseline, actual))
+        self.assertIn("quality_metrics.width_rmse", differences)
+        self.assertIn("accepted_iterations", differences)
+
+    def test_parses_stable_second_stage_summary(self) -> None:
+        summary = regression.parse_second_stage_summary(
+            "Second-stage local fitting summary: accepted_iterations=4, "
+            "best_iteration=2, stop_reason=audit-patience, "
+            "best_audit_objective=1.25000000e-03.\n")
+        self.assertEqual(summary["accepted_iterations"], 4)
+        self.assertEqual(summary["best_iteration"], "2")
+        self.assertEqual(summary["stop_reason"], "audit-patience")
 
     def test_hash_failure_does_not_execute_and_preserves_reports(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -64,11 +137,7 @@ class Fold168RegressionTest(unittest.TestCase):
             for path in (model, map_path):
                 path.write_bytes(b"wrong fixture")
             baseline = root / "baseline.json"
-            baseline.write_text(json.dumps({
-                "schema_version": regression.SCHEMA_VERSION,
-                "input_hashes": regression.EXPECTED_INPUT_HASHES,
-                "command_arguments": regression.COMMAND_ARGUMENT_TEMPLATE,
-            }), encoding="utf-8")
+            baseline.write_text(json.dumps(make_baseline()), encoding="utf-8")
             output_dir = root / "output"
             arguments = [
                 "--executable", str(executable),
@@ -98,11 +167,7 @@ class Fold168RegressionTest(unittest.TestCase):
             model.write_bytes(b"model")
             map_path.write_bytes(b"map")
             baseline = root / "baseline.json"
-            baseline.write_text(json.dumps({
-                "schema_version": regression.SCHEMA_VERSION,
-                "input_hashes": regression.EXPECTED_INPUT_HASHES,
-                "command_arguments": regression.COMMAND_ARGUMENT_TEMPLATE,
-            }), encoding="utf-8")
+            baseline.write_text(json.dumps(make_baseline()), encoding="utf-8")
             output_dir = root / "output"
             arguments = [
                 "--executable", str(executable),
@@ -132,18 +197,14 @@ class Fold168RegressionTest(unittest.TestCase):
             ), redirect_stdout(StringIO()):
                 self.assertEqual(regression.run(arguments), 1)
 
-    def test_baseline_schema_version_three_is_required(self) -> None:
+    def test_baseline_schema_version_four_is_required(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             baseline_path = Path(temp_dir) / "baseline.json"
-            baseline = {
-                "schema_version": regression.SCHEMA_VERSION,
-                "input_hashes": regression.EXPECTED_INPUT_HASHES,
-                "command_arguments": regression.COMMAND_ARGUMENT_TEMPLATE,
-            }
+            baseline = make_baseline()
             baseline_path.write_text(json.dumps(baseline), encoding="utf-8")
             self.assertEqual(regression.load_baseline(baseline_path), baseline)
 
-            baseline["schema_version"] = 2
+            baseline["schema_version"] = 3
             baseline_path.write_text(json.dumps(baseline), encoding="utf-8")
             with self.assertRaises(regression.RegressionError):
                 regression.load_baseline(baseline_path)

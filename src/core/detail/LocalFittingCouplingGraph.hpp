@@ -12,9 +12,9 @@
 
 #include <Eigen/Dense>
 
-#include <rhbm_gem/utils/algorithm/ClusteredAndersonAcceleration.hpp>
-
 namespace rhbm_gem::core::detail {
+
+using LocalFittingCouplingClusterKey = std::vector<std::size_t>;
 
 struct LocalFittingCouplingSampleId
 {
@@ -71,7 +71,7 @@ struct LocalFittingCouplingTopology
 
 struct LocalFittingCouplingPartition
 {
-    std::map<algorithm::ClusterKey, std::vector<LocalFittingCouplingSampleId>>
+    std::map<LocalFittingCouplingClusterKey, std::vector<LocalFittingCouplingSampleId>>
         sample_id_list_by_key{};
     std::size_t boundary_sample_count{ 0 };
 };
@@ -406,7 +406,7 @@ inline LocalFittingCouplingPartition BuildLocalFittingCouplingPartition(
         }
     }
 
-    std::map<std::size_t, algorithm::ClusterKey> key_by_root;
+    std::map<std::size_t, LocalFittingCouplingClusterKey> key_by_root;
     for (std::size_t position = 0; position < active_index_list.size(); position++)
     {
         key_by_root[find_root(position, find_root)].emplace_back(active_index_list.at(position));

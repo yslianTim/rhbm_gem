@@ -93,4 +93,13 @@ inline bool IsLocalFittingAuditObjectiveAcceptableForProgress(
         (!best.has_value() || !is_deteriorated(*best));
 }
 
+inline std::size_t AdvanceLocalFittingAuditPatience(
+    std::size_t current_count,
+    bool improved_best_audit,
+    bool changed_rejected_trust_radius)
+{
+    if (improved_best_audit || changed_rejected_trust_radius) return 0;
+    return current_count + 1;
+}
+
 } // namespace rhbm_gem::core::detail
