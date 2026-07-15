@@ -12,6 +12,8 @@
 
 #include <Eigen/Dense>
 
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
+
 namespace rhbm_gem::core::detail {
 
 using LocalFittingCouplingClusterKey = std::vector<std::size_t>;
@@ -34,10 +36,40 @@ struct LocalFittingCouplingSampleDependency
     std::vector<std::size_t> contributor_atom_index_list{};
 };
 
-struct LocalFittingCouplingEdge
+class LocalFittingDisjointSet
 {
-    std::size_t neighbor_index{ 0 };
-    double weight{ 0.0 };
+    std::vector<std::size_t> m_parent_list{};
+    std::vector<std::size_t> m_component_size_list{};
+
+public:
+    explicit LocalFittingDisjointSet(std::size_t item_count)
+        : m_parent_list(item_count),
+          m_component_size_list(item_count, 1)
+    {
+        for (std::size_t i = 0; i < item_count; i++) m_parent_list.at(i) = i;
+    }
+
+    std::size_t Find(std::size_t index)
+    {
+        if (m_parent_list.at(index) == index) return index;
+        m_parent_list.at(index) = Find(m_parent_list.at(index));
+        return m_parent_list.at(index);
+    }
+
+    void Merge(std::size_t left, std::size_t right)
+    {
+        const auto left_root{ Find(left) };
+        const auto right_root{ Find(right) };
+        if (left_root == right_root) return;
+        m_parent_list.at(right_root) = left_root;
+        m_component_size_list.at(left_root) +=
+            m_component_size_list.at(right_root);
+    }
+
+    std::size_t ComponentSize(std::size_t index)
+    {
+        return m_component_size_list.at(Find(index));
+    }
 };
 
 struct LocalFittingCouplingGraphSummary
@@ -64,7 +96,7 @@ struct LocalFittingCouplingGraphSummary
 
 struct LocalFittingCouplingTopology
 {
-    std::vector<std::vector<LocalFittingCouplingEdge>> adjacency_list{};
+    std::vector<std::vector<std::size_t>> adjacency_list{};
     std::vector<LocalFittingCouplingSampleDependency> sample_dependency_list{};
     LocalFittingCouplingGraphSummary summary{};
 };
@@ -86,20 +118,6 @@ class LocalFittingCouplingGraphBuilder
     std::set<AtomPair> m_candidate_pair_set{};
     std::vector<LocalFittingCouplingSampleDependency> m_sample_dependency_list{};
     bool m_has_invalid_jacobian{ false };
-
-    static double Percentile(std::vector<double> values, double quantile)
-    {
-        if (values.empty()) return 0.0;
-        std::sort(values.begin(), values.end());
-        const auto position{
-            quantile * static_cast<double>(values.size() - 1)
-        };
-        const auto lower_index{ static_cast<std::size_t>(std::floor(position)) };
-        const auto upper_index{ static_cast<std::size_t>(std::ceil(position)) };
-        const auto fraction{ position - static_cast<double>(lower_index) };
-        return values.at(lower_index) * (1.0 - fraction) +
-            values.at(upper_index) * fraction;
-    }
 
     static double FrobeniusNorm(const Eigen::Matrix3d & matrix)
     {
@@ -130,23 +148,7 @@ class LocalFittingCouplingGraphBuilder
                     "Local fitting coupling sensitivity minimum weight must be in [0, 1].");
             }
 
-            std::vector<std::size_t> parent_list(m_atom_count);
-            std::vector<std::size_t> component_size_list(m_atom_count, 1);
-            for (std::size_t i = 0; i < parent_list.size(); i++) parent_list.at(i) = i;
-            const auto find_root = [&](std::size_t index, auto && self) -> std::size_t
-            {
-                if (parent_list.at(index) == index) return index;
-                parent_list.at(index) = self(parent_list.at(index), self);
-                return parent_list.at(index);
-            };
-            const auto merge = [&](std::size_t left, std::size_t right)
-            {
-                const auto left_root{ find_root(left, find_root) };
-                const auto right_root{ find_root(right, find_root) };
-                if (left_root == right_root) return;
-                parent_list.at(right_root) = left_root;
-                component_size_list.at(left_root) += component_size_list.at(right_root);
-            };
+            LocalFittingDisjointSet component_set{ m_atom_count };
 
             std::size_t retained_edge_count{ 0 };
             for (const auto & pair : m_candidate_pair_set)
@@ -157,18 +159,18 @@ class LocalFittingCouplingGraphBuilder
                 };
                 if (weight < minimum_weight) continue;
                 retained_edge_count++;
-                merge(pair.first, pair.second);
+                component_set.Merge(pair.first, pair.second);
             }
 
             std::size_t component_count{ 0 };
             std::size_t maximum_component_size{ 0 };
             for (std::size_t atom_index = 0; atom_index < m_atom_count; atom_index++)
             {
-                if (find_root(atom_index, find_root) != atom_index) continue;
+                if (component_set.Find(atom_index) != atom_index) continue;
                 component_count++;
                 maximum_component_size = std::max(
                     maximum_component_size,
-                    component_size_list.at(atom_index));
+                    component_set.ComponentSize(atom_index));
             }
             sensitivity_list.emplace_back(
                 LocalFittingCouplingGraphSummary::ThresholdSensitivity{
@@ -207,17 +209,16 @@ class LocalFittingCouplingGraphBuilder
             weight_list.emplace_back(weight);
             if (weight < minimum_weight) continue;
 
-            topology.adjacency_list.at(pair.first).emplace_back(
-                LocalFittingCouplingEdge{ pair.second, weight });
-            topology.adjacency_list.at(pair.second).emplace_back(
-                LocalFittingCouplingEdge{ pair.first, weight });
+            topology.adjacency_list.at(pair.first).emplace_back(pair.second);
+            topology.adjacency_list.at(pair.second).emplace_back(pair.first);
             topology.summary.retained_edge_count++;
         }
         topology.summary.cut_edge_count =
             topology.summary.candidate_edge_count -
             topology.summary.retained_edge_count;
-        topology.summary.weight_median = Percentile(weight_list, 0.5);
-        topology.summary.weight_percentile_95 = Percentile(weight_list, 0.95);
+        topology.summary.weight_median = array_helper::ComputePercentile(weight_list, 0.5);
+        topology.summary.weight_percentile_95 =
+            array_helper::ComputePercentile(weight_list, 0.95);
         topology.summary.weight_maximum = weight_list.empty() ? 0.0 :
             *std::max_element(weight_list.begin(), weight_list.end());
         return topology;
@@ -374,42 +375,33 @@ inline LocalFittingCouplingPartition BuildLocalFittingCouplingPartition(
         active_position_by_atom_index.at(atom_index) = position;
     }
 
-    std::vector<std::size_t> parent_list(active_index_list.size());
-    for (std::size_t i = 0; i < parent_list.size(); i++) parent_list.at(i) = i;
-    const auto find_root = [&](std::size_t index, auto && self) -> std::size_t
-    {
-        if (parent_list.at(index) == index) return index;
-        parent_list.at(index) = self(parent_list.at(index), self);
-        return parent_list.at(index);
-    };
-    const auto merge = [&](std::size_t left, std::size_t right)
-    {
-        const auto left_root{ find_root(left, find_root) };
-        const auto right_root{ find_root(right, find_root) };
-        if (left_root != right_root) parent_list.at(right_root) = left_root;
-    };
+    LocalFittingDisjointSet component_set{ active_index_list.size() };
 
     for (const auto atom_index : active_index_list)
     {
         const auto position{ *active_position_by_atom_index.at(atom_index) };
-        for (const auto & edge : topology.adjacency_list.at(atom_index))
+        for (const auto neighbor_index : topology.adjacency_list.at(atom_index))
         {
-            if (edge.neighbor_index >= atom_count)
+            if (neighbor_index >= atom_count)
             {
                 throw std::invalid_argument(
                     "Local fitting coupling edge index is out of range.");
             }
             const auto neighbor_position{
-                active_position_by_atom_index.at(edge.neighbor_index)
+                active_position_by_atom_index.at(neighbor_index)
             };
-            if (neighbor_position.has_value()) merge(position, *neighbor_position);
+            if (neighbor_position.has_value())
+            {
+                component_set.Merge(position, *neighbor_position);
+            }
         }
     }
 
     std::map<std::size_t, LocalFittingCouplingClusterKey> key_by_root;
     for (std::size_t position = 0; position < active_index_list.size(); position++)
     {
-        key_by_root[find_root(position, find_root)].emplace_back(active_index_list.at(position));
+        key_by_root[component_set.Find(position)].emplace_back(
+            active_index_list.at(position));
     }
     for (auto & [root, key] : key_by_root)
     {
@@ -432,7 +424,7 @@ inline LocalFittingCouplingPartition BuildLocalFittingCouplingPartition(
             }
             const auto position{ active_position_by_atom_index.at(atom_index) };
             if (!position.has_value()) continue;
-            root_list.emplace_back(find_root(*position, find_root));
+            root_list.emplace_back(component_set.Find(*position));
         }
         std::sort(root_list.begin(), root_list.end());
         root_list.erase(std::unique(root_list.begin(), root_list.end()), root_list.end());

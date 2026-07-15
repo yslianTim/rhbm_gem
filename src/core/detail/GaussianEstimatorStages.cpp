@@ -15,12 +15,10 @@
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/utils/algorithm/NormalizedChange.hpp>
-#include <rhbm_gem/utils/algorithm/ParameterChangeStats.hpp>
+#include <rhbm_gem/utils/algorithm/Convergence.hpp>
 #include <rhbm_gem/utils/algorithm/RobustLoss.hpp>
 #include <rhbm_gem/utils/algorithm/ScaleReferenceTracker.hpp>
 #include <rhbm_gem/utils/algorithm/WeightedRidgeSolver.hpp>
-#include <rhbm_gem/utils/algorithm/WeightedRidgeSystem.hpp>
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
@@ -58,7 +56,6 @@ constexpr double kNeighborAtomSearchRange{ 2.0 * kNeighborContributionDistanceMa
 constexpr std::size_t kLocalFittingMaximumIterations{ 50 };
 constexpr std::size_t kLocalFittingAuditPatience{ 3 };
 constexpr double kLocalFittingChangePercentile{ 0.99 };
-constexpr algorithm::RobustLossKind kSecondStageRobustLossKind{ algorithm::RobustLossKind::Cauchy };
 constexpr int kRobustLossMaximumIterations{ 50 };
 constexpr double kRobustScaleMultiplier{ 1.4826 };
 constexpr double kRobustScaleMin{ 1.0e-12 };
@@ -1420,8 +1417,7 @@ JointOffsetSolveResult EstimateJointOffsets(
         };
         for (Eigen::Index i = 0; i < residual.size(); i++)
         {
-            weight(i) = algorithm::CalculateRobustWeight(
-                kSecondStageRobustLossKind,
+            weight(i) = algorithm::CalculateCauchyWeight(
                 residual(i),
                 residual_scale,
                 kRobustLossCutoffMultiplier);
@@ -1572,8 +1568,7 @@ CalculateLocalFittingObjectiveBreakdown(
     for (const auto residual : objective_samples.residual_list)
     {
         const auto normalized_residual{ residual / objective_scale };
-        loss_sum += algorithm::CalculateRobustLoss(
-            kSecondStageRobustLossKind,
+        loss_sum += algorithm::CalculateCauchyLoss(
             normalized_residual,
             kRobustLossCutoffMultiplier);
     }
@@ -1829,13 +1824,6 @@ std::vector<algorithm::ParameterChange> CalculateLocalFittingTransformedChanges(
             previous_state.at(i).mdpde.GetModel());
     }
     return change_list;
-}
-
-bool ContainsLocalFittingClusterKey(
-    const std::vector<LocalFittingClusterKey> & key_list,
-    const LocalFittingClusterKey & key)
-{
-    return std::find(key_list.begin(), key_list.end(), key) != key_list.end();
 }
 
 algorithm::ParameterChangeStats SummarizeLocalFittingTransformedChanges(
@@ -2152,8 +2140,7 @@ std::optional<std::vector<Eigen::VectorXd>> BuildLocalFittingJointPolishStep(
     Eigen::VectorXd weight{ Eigen::VectorXd::Ones(row_count) };
     for (Eigen::Index row_index = 0; row_index < row_count; row_index++)
     {
-        weight(row_index) = algorithm::CalculateRobustWeight(
-            kSecondStageRobustLossKind,
+        weight(row_index) = algorithm::CalculateCauchyWeight(
             system.response(row_index),
             residual_scale,
             kRobustLossCutoffMultiplier);
@@ -2576,7 +2563,13 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
             selection.assembled_state.at(active_index) = base_state->at(active_index);
         }
 
-        if (!ContainsLocalFittingClusterKey(polish_eligible_key_list, key)) continue;
+        if (std::find(
+                polish_eligible_key_list.begin(),
+                polish_eligible_key_list.end(),
+                key) == polish_eligible_key_list.end())
+        {
+            continue;
+        }
         const auto polish_step{
             BuildLocalFittingJointPolishStep(
                 context,
@@ -2632,9 +2625,10 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
         }
         selection.accepted_polish_cluster_count++;
         if (ShouldGrowLocalFittingTrustRegion(polish_diagnostic) &&
-            !ContainsLocalFittingClusterKey(
-                selection.grow_trust_region_key_list,
-                key))
+            std::find(
+                selection.grow_trust_region_key_list.begin(),
+                selection.grow_trust_region_key_list.end(),
+                key) == selection.grow_trust_region_key_list.end())
         {
             selection.grow_trust_region_key_list.emplace_back(key);
         }

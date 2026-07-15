@@ -6,12 +6,6 @@
 
 namespace rhbm_gem::algorithm {
 
-enum class RobustLossKind
-{
-    Huber,
-    Cauchy
-};
-
 namespace detail {
 
 inline void ValidateRobustLossCutoff(double cutoff)
@@ -38,8 +32,7 @@ inline double CalculateLogOnePlusSquare(double value)
 
 } // namespace detail
 
-inline double CalculateRobustLoss(
-    RobustLossKind kind,
+inline double CalculateCauchyLoss(
     double residual,
     double cutoff)
 {
@@ -49,29 +42,12 @@ inline double CalculateRobustLoss(
         return std::numeric_limits<double>::infinity();
     }
 
-    switch (kind)
-    {
-    case RobustLossKind::Huber:
-    {
-        const auto absolute_residual{ std::abs(residual) };
-        if (absolute_residual <= cutoff)
-        {
-            return 0.5 * residual * residual;
-        }
-        return cutoff * (absolute_residual - 0.5 * cutoff);
-    }
-    case RobustLossKind::Cauchy:
-    {
-        const auto normalized_residual{ residual / cutoff };
-        return 0.5 * cutoff * cutoff * detail::CalculateLogOnePlusSquare(normalized_residual);
-    }
-    }
-
-    throw std::invalid_argument("Unknown robust loss kind.");
+    const auto normalized_residual{ residual / cutoff };
+    return 0.5 * cutoff * cutoff *
+        detail::CalculateLogOnePlusSquare(normalized_residual);
 }
 
-inline double CalculateRobustWeight(
-    RobustLossKind kind,
+inline double CalculateCauchyWeight(
     double residual,
     double residual_scale,
     double cutoff_multiplier)
@@ -86,23 +62,13 @@ inline double CalculateRobustWeight(
     const auto cutoff{ cutoff_multiplier * residual_scale };
     detail::ValidateRobustLossCutoff(cutoff);
     const auto absolute_residual{ std::abs(residual) };
-    switch (kind)
+    const auto normalized_residual{ absolute_residual / cutoff };
+    if (!std::isfinite(normalized_residual))
     {
-    case RobustLossKind::Huber:
-        return absolute_residual <= cutoff ? 1.0 : cutoff / absolute_residual;
-    case RobustLossKind::Cauchy:
-    {
-        const auto normalized_residual{ absolute_residual / cutoff };
-        if (!std::isfinite(normalized_residual))
-        {
-            return 0.0;
-        }
-        const auto denominator{ 1.0 + normalized_residual * normalized_residual };
-        return std::isfinite(denominator) ? 1.0 / denominator : 0.0;
+        return 0.0;
     }
-    }
-
-    throw std::invalid_argument("Unknown robust loss kind.");
+    const auto denominator{ 1.0 + normalized_residual * normalized_residual };
+    return std::isfinite(denominator) ? 1.0 / denominator : 0.0;
 }
 
 } // namespace rhbm_gem::algorithm

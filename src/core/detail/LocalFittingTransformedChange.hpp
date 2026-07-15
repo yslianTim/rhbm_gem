@@ -9,8 +9,7 @@
 #include <stdexcept>
 #include <vector>
 
-#include <rhbm_gem/utils/algorithm/ParameterChange.hpp>
-#include <rhbm_gem/utils/algorithm/ParameterChangeStats.hpp>
+#include <rhbm_gem/utils/algorithm/Convergence.hpp>
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 

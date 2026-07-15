@@ -129,7 +129,6 @@ public:
 
 struct LocalFittingTrustRegionDamping
 {
-    double requested_damping{ 1.0 };
     double effective_damping{ 1.0 };
     double step_norm{ 0.0 };
 };
@@ -208,7 +207,6 @@ inline LocalFittingTrustRegionDamping LimitLocalFittingTrustRegionDamping(
             requested_damping
     };
     return LocalFittingTrustRegionDamping{
-        requested_damping,
         effective_damping,
         effective_damping * undamped_step_norm
     };
@@ -295,7 +293,6 @@ inline LocalFittingTrustRegionDamping LimitLocalFittingTrustRegionSubstepDamping
         }
     }
     return LocalFittingTrustRegionDamping{
-        requested_damping,
         maximum_damping,
         step_norm
     };

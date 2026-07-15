@@ -318,6 +318,21 @@ If you are upgrading from the previous CMake interface:
 - `RHBM_GEM::core` (and split library targets) -> `RHBM_GEM::rhbm_gem`
 - repository/style guard tests in `ctest` -> `cmake --build <build> --target lint_repo`
 
+If you consume the C++ algorithm headers directly:
+
+- `NormalizedChange.hpp`, `ParameterChange.hpp`, and `ParameterChangeStats.hpp`
+  -> `Convergence.hpp`
+- `WeightedRidgeSystem.hpp` -> `WeightedRidgeSolver.hpp`; `WeightedRidgeSystem`
+  keeps the same name and fields
+- `WeightedRidgeNormalEquation.hpp`, `WeightedRidgeNormalEquation`, and
+  `BuildWeightedRidgeNormalEquation(...)` were internalized into
+  `WeightedRidgeSolver`
+- `CalculateRobustLoss(RobustLossKind::Cauchy, residual, cutoff)`
+  -> `CalculateCauchyLoss(residual, cutoff)`
+- `CalculateRobustWeight(RobustLossKind::Cauchy, residual, scale, multiplier)`
+  -> `CalculateCauchyWeight(residual, scale, multiplier)`; the unused Huber
+  variant was removed
+
 To inspect the full cache after configure:
 
 ```bash

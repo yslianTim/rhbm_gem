@@ -2,8 +2,7 @@
 
 #include <vector>
 
-#include <rhbm_gem/utils/algorithm/NormalizedChange.hpp>
-#include <rhbm_gem/utils/algorithm/ParameterChangeStats.hpp>
+#include <rhbm_gem/utils/algorithm/Convergence.hpp>
 
 namespace {
 namespace alg = rhbm_gem::algorithm;

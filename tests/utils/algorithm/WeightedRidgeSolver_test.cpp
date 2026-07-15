@@ -7,7 +7,6 @@
 #include <Eigen/Sparse>
 
 #include <rhbm_gem/utils/algorithm/WeightedRidgeSolver.hpp>
-#include <rhbm_gem/utils/algorithm/WeightedRidgeSystem.hpp>
 
 namespace {
 namespace alg = rhbm_gem::algorithm;
