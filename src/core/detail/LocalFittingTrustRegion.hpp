@@ -134,8 +134,8 @@ struct LocalFittingTrustRegionDamping
 };
 
 inline void ValidateLocalFittingTrustRegionInputs(
-    const std::vector<Eigen::VectorXd> & previous_estimation_list,
-    const std::vector<Eigen::VectorXd> & candidate_estimation_list,
+    const std::vector<Eigen::Vector3d> & previous_estimation_list,
+    const std::vector<Eigen::Vector3d> & candidate_estimation_list,
     const std::array<double, 3> & parameter_scale,
     double requested_damping,
     double radius)
@@ -158,9 +158,7 @@ inline void ValidateLocalFittingTrustRegionInputs(
     }
     for (std::size_t i = 0; i < previous_estimation_list.size(); i++)
     {
-        if (previous_estimation_list.at(i).size() != 3 ||
-            candidate_estimation_list.at(i).size() != 3 ||
-            !previous_estimation_list.at(i).allFinite() ||
+        if (!previous_estimation_list.at(i).allFinite() ||
             !candidate_estimation_list.at(i).allFinite())
         {
             throw std::invalid_argument("Local fitting trust-region estimation is invalid.");
@@ -169,8 +167,8 @@ inline void ValidateLocalFittingTrustRegionInputs(
 }
 
 inline LocalFittingTrustRegionDamping LimitLocalFittingTrustRegionDamping(
-    const std::vector<Eigen::VectorXd> & previous_estimation_list,
-    const std::vector<Eigen::VectorXd> & candidate_estimation_list,
+    const std::vector<Eigen::Vector3d> & previous_estimation_list,
+    const std::vector<Eigen::Vector3d> & candidate_estimation_list,
     const std::array<double, 3> & parameter_scale,
     double requested_damping,
     double radius)
@@ -209,9 +207,9 @@ inline LocalFittingTrustRegionDamping LimitLocalFittingTrustRegionDamping(
 }
 
 inline LocalFittingTrustRegionDamping LimitLocalFittingTrustRegionSubstepDamping(
-    const std::vector<Eigen::VectorXd> & outer_previous_estimation_list,
-    const std::vector<Eigen::VectorXd> & substep_previous_estimation_list,
-    const std::vector<Eigen::VectorXd> & candidate_estimation_list,
+    const std::vector<Eigen::Vector3d> & outer_previous_estimation_list,
+    const std::vector<Eigen::Vector3d> & substep_previous_estimation_list,
+    const std::vector<Eigen::Vector3d> & candidate_estimation_list,
     const std::array<double, 3> & parameter_scale,
     double requested_damping,
     double radius)

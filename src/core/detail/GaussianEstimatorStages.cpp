@@ -354,12 +354,7 @@ struct SecondStageAtomContext
     double prior_width{ 1.0 };
 };
 
-struct SecondStageLocalFittingContext
-{
-    std::vector<SecondStageAtomContext> atom_context_list{};
-
-    std::size_t AtomSize() const { return atom_context_list.size(); }
-};
+using SecondStageLocalFittingContext = std::vector<SecondStageAtomContext>;
 
 struct SecondStageSeedRepairRecord
 {
@@ -641,22 +636,22 @@ SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(ModelObject &
 {
     SecondStageLocalFittingContext context;
     const auto & atom_list{ model_object.GetSelectedAtoms() };
-    context.atom_context_list.reserve(atom_list.size());
+    context.reserve(atom_list.size());
     for (auto * atom : atom_list)
     {
-        context.atom_context_list.emplace_back(SecondStageAtomContext{ atom });
+        context.emplace_back(SecondStageAtomContext{ atom });
     }
     std::unordered_map<const AtomObject *, std::size_t> atom_index_map;
-    atom_index_map.reserve(context.AtomSize());
-    for (std::size_t i = 0; i < context.AtomSize(); i++)
+    atom_index_map.reserve(context.size());
+    for (std::size_t i = 0; i < context.size(); i++)
     {
-        atom_index_map.emplace(context.atom_context_list.at(i).atom, i);
+        atom_index_map.emplace(context.at(i).atom, i);
     }
     const auto analysis_view{ model_object.GetAnalysisView() };
 
     std::unordered_map<GroupKey, std::vector<double>> width_samples_by_group;
-    width_samples_by_group.reserve(context.AtomSize());
-    for (const auto & atom_context : context.atom_context_list)
+    width_samples_by_group.reserve(context.size());
+    for (const auto & atom_context : context)
     {
         const auto * atom{ atom_context.atom };
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
@@ -679,9 +674,9 @@ SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(ModelObject &
         }
     }
 
-    for (std::size_t atom_index = 0; atom_index < context.AtomSize(); atom_index++)
+    for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
     {
-        auto & atom_context{ context.atom_context_list.at(atom_index) };
+        auto & atom_context{ context.at(atom_index) };
         const auto * atom{ atom_context.atom };
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
         atom_context.sample_entries = local_view.GetSamplingEntries(false);
@@ -705,9 +700,9 @@ SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(ModelObject &
         }
     }
 
-    for (std::size_t atom_index = 0; atom_index < context.AtomSize(); atom_index++)
+    for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
     {
-        auto & atom_context{ context.atom_context_list.at(atom_index) };
+        auto & atom_context{ context.at(atom_index) };
         const auto * atom{ atom_context.atom };
         const auto neighbor_atom_list{ atom->FindNeighborAtoms(kNeighborAtomSearchRange) };
         std::vector<std::size_t> selected_neighbor_index_list;
@@ -732,7 +727,7 @@ SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(ModelObject &
                     static_cast<double>(
                         array_helper::ComputeNorm<float>(
                             sample.point.position,
-                            context.atom_context_list.at(neighbor_index).atom->GetPositionRef()))
+                            context.at(neighbor_index).atom->GetPositionRef()))
                 };
                 if (distance > kNeighborContributionDistanceMax) continue;
 
@@ -748,13 +743,13 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
     const SecondStageLocalFittingContext & context,
     const LocalFittingState & initial_state)
 {
-    detail::LocalFittingCouplingGraphBuilder builder{ context.AtomSize() };
+    detail::LocalFittingCouplingGraphBuilder builder{ context.size() };
     const auto invalid_jacobian{
         Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN())
     };
-    for (std::size_t atom_index = 0; atom_index < context.AtomSize(); atom_index++)
+    for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
     {
-        const auto & atom_context{ context.atom_context_list.at(atom_index) };
+        const auto & atom_context{ context.at(atom_index) };
         for (std::size_t sample_index = 0;
             sample_index < atom_context.sample_entries.size();
             sample_index++)
@@ -847,15 +842,15 @@ std::optional<SecondStageInitialStateBuildResult> BuildInitialLocalFittingState(
 {
     SecondStageInitialStateBuildResult build_result;
     auto & state{ build_result.state };
-    state.resize(context.AtomSize());
+    state.resize(context.size());
     std::vector<std::optional<GaussianModel3DWithUncertainty>> group_prior_list(
-        context.AtomSize());
+        context.size());
     std::unordered_map<GroupKey, std::vector<GaussianModel3D>> models_by_group;
     std::vector<GaussianModel3D> global_models;
 
-    for (std::size_t i = 0; i < context.AtomSize(); i++)
+    for (std::size_t i = 0; i < context.size(); i++)
     {
-        const auto * atom{ context.atom_context_list.at(i).atom };
+        const auto * atom{ context.at(i).atom };
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
         state.at(i) = local_view.GetGaussianResult();
         const auto group_key{ data_internal::GetGroupKey(atom) };
@@ -906,14 +901,14 @@ std::optional<SecondStageInitialStateBuildResult> BuildInitialLocalFittingState(
     }
     const auto global_median{ BuildValidGaussianParameterMedian(global_models) };
 
-    for (std::size_t i = 0; i < context.AtomSize(); i++)
+    for (std::size_t i = 0; i < context.size(); i++)
     {
         auto & result{ state.at(i) };
         const auto original_model{ result.mdpde.GetModel() };
         if (!detail::IsValidSecondStageGaussianModel(original_model))
         {
             const auto group_key{
-                data_internal::GetGroupKey(context.atom_context_list.at(i).atom)
+                data_internal::GetGroupKey(context.at(i).atom)
             };
             std::optional<GaussianModel3DWithUncertainty> group_median;
             const auto group_median_iter{ median_by_group.find(group_key) };
@@ -1116,7 +1111,7 @@ JointOffsetBuildResult BuildJointOffsetSystem(
     const std::vector<double> & ridge_multiplier_list,
     bool log_debug_diagnostics)
 {
-    const auto atom_size{ context.AtomSize() };
+    const auto atom_size{ context.size() };
     std::vector<int> active_column_by_atom_index(atom_size, -1);
     for (std::size_t i = 0; i < active_index_list.size(); i++)
     {
@@ -1134,7 +1129,7 @@ JointOffsetBuildResult BuildJointOffsetSystem(
     for (const auto active_index : active_index_list)
     {
         const auto target_column{ active_column_by_atom_index.at(active_index) };
-        const auto & atom_context{ context.atom_context_list.at(active_index) };
+        const auto & atom_context{ context.at(active_index) };
         const auto & target_model{ snapshot.at(active_index) };
         row_basis_entries.reserve(atom_size);
         for (std::size_t sample_index = 0; sample_index < atom_context.sample_entries.size(); sample_index++)
@@ -1470,7 +1465,7 @@ double CalculateSecondStageAdjustedResponse(
     std::size_t sample_index,
     const FittedGaussianSnapshot & snapshot)
 {
-    const auto & atom_context{ context.atom_context_list.at(atom_index) };
+    const auto & atom_context{ context.at(atom_index) };
     auto response_value{ static_cast<double>(atom_context.sample_entries.at(sample_index).response) };
     for (const auto & neighbor_sample : atom_context.sample_neighbor_list.at(sample_index))
     {
@@ -1484,7 +1479,7 @@ LocalPotentialSampleList BuildSecondStageAdjustedSamples(
     std::size_t atom_index,
     const FittedGaussianSnapshot & snapshot)
 {
-    const auto & atom_context{ context.atom_context_list.at(atom_index) };
+    const auto & atom_context{ context.at(atom_index) };
     LocalPotentialSampleList updated_list;
     updated_list.reserve(atom_context.sample_entries.size());
     for (std::size_t sample_index = 0; sample_index < atom_context.sample_entries.size(); sample_index++)
@@ -1508,14 +1503,14 @@ std::optional<LocalFittingObjectiveSamples> CollectLocalFittingObjectiveSamples(
     {
         objective_samples.atom_sample_list.emplace_back(LocalFittingObjectiveAtomSample{
             state.at(active_index).mdpde.GetModel(),
-            context.atom_context_list.at(active_index).prior_width
+            context.at(active_index).prior_width
         });
     }
     std::vector<double> response_list;
     response_list.reserve(sample_ref_list.size());
     for (const auto & sample_ref : sample_ref_list)
     {
-        const auto & atom_context{ context.atom_context_list.at(sample_ref.atom_index) };
+        const auto & atom_context{ context.at(sample_ref.atom_index) };
         const auto & sample{ atom_context.sample_entries.at(sample_ref.sample_index) };
         const auto & target_model{
             state.at(sample_ref.atom_index).mdpde.GetModel()
@@ -1726,12 +1721,12 @@ LocalFittingBestAuditState BuildInitialLocalFittingBestAuditState(
     const LocalFittingState & initial_state)
 {
     LocalFittingBestAuditState audit_state;
-    audit_state.atom_index_list.reserve(context.AtomSize());
-    for (std::size_t atom_index = 0; atom_index < context.AtomSize(); atom_index++)
+    audit_state.atom_index_list.reserve(context.size());
+    for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
     {
         audit_state.atom_index_list.emplace_back(atom_index);
         const auto sample_size{
-            context.atom_context_list.at(atom_index).sample_entries.size()
+            context.at(atom_index).sample_entries.size()
         };
         for (std::size_t sample_index = 0; sample_index < sample_size; sample_index++)
         {
@@ -1956,10 +1951,10 @@ std::vector<std::size_t> BuildEligibleLocalFittingActiveIndexList(
     return active_index_list;
 }
 
-std::vector<Eigen::VectorXd> BuildLocalFittingTransformedEstimationList(
+std::vector<Eigen::Vector3d> BuildLocalFittingTransformedEstimationList(
     const LocalFittingState & state)
 {
-    std::vector<Eigen::VectorXd> transformed_estimation_list;
+    std::vector<Eigen::Vector3d> transformed_estimation_list;
     transformed_estimation_list.reserve(state.size());
     for (const auto & result : state)
     {
@@ -1993,7 +1988,7 @@ std::optional<Eigen::VectorXd> BuildLocalFittingJointPolishDirection(
     const auto column_count{
         static_cast<Eigen::Index>(key.size() * parameter_size)
     };
-    std::vector<int> column_base_by_atom_index(context.AtomSize(), -1);
+    std::vector<int> column_base_by_atom_index(context.size(), -1);
     for (std::size_t local_position = 0; local_position < key.size(); local_position++)
     {
         const auto atom_index{ key.at(local_position) };
@@ -2007,7 +2002,7 @@ std::optional<Eigen::VectorXd> BuildLocalFittingJointPolishDirection(
     for (const auto & sample_ref : sample_ref_list)
     {
         const auto & atom_context{
-            context.atom_context_list.at(sample_ref.atom_index)
+            context.at(sample_ref.atom_index)
         };
         const auto & sample{ atom_context.sample_entries.at(sample_ref.sample_index) };
         if (!std::isfinite(static_cast<double>(sample.response))) return std::nullopt;
@@ -2122,9 +2117,9 @@ std::optional<Eigen::VectorXd> BuildLocalFittingJointPolishDirection(
     return direction;
 }
 
-std::vector<Eigen::VectorXd> InterpolateLocalFittingTransformedEstimations(
-    const std::vector<Eigen::VectorXd> & previous_estimation_list,
-    const std::vector<Eigen::VectorXd> & candidate_estimation_list,
+std::vector<Eigen::Vector3d> InterpolateLocalFittingTransformedEstimations(
+    const std::vector<Eigen::Vector3d> & previous_estimation_list,
+    const std::vector<Eigen::Vector3d> & candidate_estimation_list,
     double damping)
 {
     if (previous_estimation_list.size() != candidate_estimation_list.size() ||
@@ -2133,7 +2128,7 @@ std::vector<Eigen::VectorXd> InterpolateLocalFittingTransformedEstimations(
         throw std::invalid_argument(
             "Local fitting transformed interpolation inputs are invalid.");
     }
-    std::vector<Eigen::VectorXd> interpolated_list;
+    std::vector<Eigen::Vector3d> interpolated_list;
     interpolated_list.reserve(previous_estimation_list.size());
     for (std::size_t i = 0; i < previous_estimation_list.size(); i++)
     {
@@ -2147,8 +2142,8 @@ std::vector<Eigen::VectorXd> InterpolateLocalFittingTransformedEstimations(
 
 std::optional<LocalFittingState> BuildLocalFittingCandidateState(
     const LocalFittingState & previous_state,
-    const std::vector<Eigen::VectorXd> & previous_transformed_estimation_list,
-    const std::vector<Eigen::VectorXd> & candidate_transformed_estimation_list,
+    const std::vector<Eigen::Vector3d> & previous_transformed_estimation_list,
+    const std::vector<Eigen::Vector3d> & candidate_transformed_estimation_list,
     const LocalFittingState & uncertainty_state,
     const std::vector<std::size_t> & active_index_list)
 {
@@ -2170,13 +2165,6 @@ std::optional<LocalFittingState> BuildLocalFittingCandidateState(
         const auto & candidate_transformed_estimation{
             candidate_transformed_estimation_list.at(local_position)
         };
-        if (previous_transformed_estimation.size() !=
-                static_cast<Eigen::Index>(detail::kTransformedChangeSize) ||
-            candidate_transformed_estimation.size() !=
-                static_cast<Eigen::Index>(detail::kTransformedChangeSize))
-        {
-            return std::nullopt;
-        }
         if (!previous_transformed_estimation.allFinite() ||
             !candidate_transformed_estimation.allFinite())
         {
@@ -2464,8 +2452,8 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
     const std::vector<LocalFittingClusterKey> & polish_eligible_key_list,
     const LocalFittingState & previous_state,
     const LocalFittingState & raw_state,
-    const std::vector<Eigen::VectorXd> & previous_transformed_estimation_list,
-    const std::vector<Eigen::VectorXd> & raw_transformed_estimation_list,
+    const std::vector<Eigen::Vector3d> & previous_transformed_estimation_list,
+    const std::vector<Eigen::Vector3d> & raw_transformed_estimation_list,
     const std::vector<double> & ridge_multiplier_list,
     LocalFittingClusterObjectiveStateMap & cluster_objective_state,
     const detail::LocalFittingTrustRegionStateSet & trust_region_state)
@@ -2475,8 +2463,8 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
     for (const auto & [key, objective_sample_ref_list] :
         partition.sample_id_list_by_key)
     {
-        std::vector<Eigen::VectorXd> previous_cluster_estimation_list;
-        std::vector<Eigen::VectorXd> raw_cluster_estimation_list;
+        std::vector<Eigen::Vector3d> previous_cluster_estimation_list;
+        std::vector<Eigen::Vector3d> raw_cluster_estimation_list;
         previous_cluster_estimation_list.reserve(key.size());
         raw_cluster_estimation_list.reserve(key.size());
         for (const auto atom_index : key)
@@ -2667,7 +2655,7 @@ std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
         auto candidate_result{
             EstimateLocalGaussian(
                 sample_entries,
-                context.atom_context_list.at(atom_index).alpha_r,
+                context.at(atom_index).alpha_r,
                 options,
                 offset_model)
         };
@@ -2766,23 +2754,6 @@ void ExpandPostRefitRollbackClusters(
     }
 }
 
-void RollBackSuspiciousOffsetClusters(
-    const LocalFittingState & previous_state,
-    const std::vector<char> & suspicious_atom_mask,
-    FittedGaussianSnapshot & current_snapshot,
-    LocalFittingState & iteration_state)
-{
-    for (std::size_t atom_index = 0;
-        atom_index < suspicious_atom_mask.size();
-        atom_index++)
-    {
-        if (suspicious_atom_mask.at(atom_index) == 0) continue;
-        current_snapshot.at(atom_index) =
-            previous_state.at(atom_index).mdpde.GetModel();
-        iteration_state.at(atom_index) = previous_state.at(atom_index);
-    }
-}
-
 LocalFittingIterationResult RunLocalFittingIteration(
     const SecondStageLocalFittingContext & context,
     const std::vector<LocalFittingClusterKey> & cluster_key_list,
@@ -2790,7 +2761,7 @@ LocalFittingIterationResult RunLocalFittingIteration(
     const FitOptions & options,
     const std::vector<double> & ridge_multiplier_list)
 {
-    const auto selected_atom_size{ context.AtomSize() };
+    const auto selected_atom_size{ context.size() };
     auto current_snapshot{ BuildFittedGaussianSnapshot(previous_state) };
     std::map<LocalFittingClusterKey, JointOffsetSolveResult>
         joint_offset_result_by_key;
@@ -2830,7 +2801,7 @@ LocalFittingIterationResult RunLocalFittingIteration(
         {
             const auto atom_index{ key.at(position) };
             if (IsSuspiciousJointOffset(
-                    context.atom_context_list.at(atom_index).sample_entries,
+                    context.at(atom_index).sample_entries,
                     previous_state.at(atom_index).mdpde.GetModel(),
                     current_snapshot.at(atom_index),
                     options))
@@ -2849,11 +2820,14 @@ LocalFittingIterationResult RunLocalFittingIteration(
             suspicious_offset_mask.at(key.at(position)) = 1;
         }
     }
-    RollBackSuspiciousOffsetClusters(
-        previous_state,
-        suspicious_offset_mask,
-        current_snapshot,
-        iteration_state);
+    for (std::size_t atom_index = 0;
+        atom_index < suspicious_offset_mask.size();
+        atom_index++)
+    {
+        if (suspicious_offset_mask.at(atom_index) == 0) continue;
+        current_snapshot.at(atom_index) =
+            previous_state.at(atom_index).mdpde.GetModel();
+    }
 
     const auto refit_snapshot{ current_snapshot };
     std::vector<std::size_t> post_refit_suspicious_seed_atom_index_list;
@@ -2888,11 +2862,13 @@ LocalFittingIterationResult RunLocalFittingIteration(
         cluster_key_list,
         post_refit_suspicious_seed_atom_index_list,
         suspicious_offset_mask);
-    RollBackSuspiciousOffsetClusters(
-        previous_state,
-        suspicious_offset_mask,
-        current_snapshot,
-        iteration_state);
+    for (std::size_t atom_index = 0;
+        atom_index < suspicious_offset_mask.size();
+        atom_index++)
+    {
+        if (suspicious_offset_mask.at(atom_index) == 0) continue;
+        iteration_state.at(atom_index) = previous_state.at(atom_index);
+    }
 
     LocalFittingIterationResult iteration_result;
     iteration_result.state = std::move(iteration_state);
@@ -2908,10 +2884,10 @@ void ApplyLocalFittingState(
     const LocalFittingState & iteration_state)
 {
     auto analysis{ model_object.EditAnalysis() };
-    for (std::size_t i = 0; i < context.AtomSize(); i++)
+    for (std::size_t i = 0; i < context.size(); i++)
     {
         auto local_editor{
-            analysis.EnsureAtomLocalPotential(*context.atom_context_list.at(i).atom)
+            analysis.EnsureAtomLocalPotential(*context.at(i).atom)
         };
         local_editor.SetGaussianResult(iteration_state.at(i));
     }
@@ -3359,7 +3335,7 @@ void RunSecondStageLocalFitting(
     const FitOptions & options)
 {
     const auto context{ BuildSecondStageLocalFittingContext(model_object) };
-    const auto atom_size{ context.AtomSize() };
+    const auto atom_size{ context.size() };
     if (!options.quiet_mode)
     {
         Logger::Log(LogLevel::Info, "Run 2nd-stage local atom fitting with iterations...");

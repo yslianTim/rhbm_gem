@@ -1,13 +1,14 @@
 #pragma once
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <cstddef>
 #include <limits>
 #include <optional>
 #include <stdexcept>
 #include <vector>
+
+#include <Eigen/Dense>
 
 #include <rhbm_gem/utils/algorithm/Convergence.hpp>
 #include <rhbm_gem/utils/domain/Constants.hpp>
@@ -29,8 +30,8 @@ inline algorithm::ParameterChange MakeInfiniteLocalFittingTransformedChange()
     };
 }
 
-inline std::optional<std::array<double, kTransformedChangeSize>>
-BuildLocalFittingTransformedCoordinates(const GaussianModel3D & model)
+inline std::optional<Eigen::Vector3d> EncodeLocalFittingTransformedCoordinates(
+    const GaussianModel3D & model)
 {
     const auto amplitude{ model.GetAmplitude() };
     const auto width{ model.GetWidth() };
@@ -73,34 +74,18 @@ BuildLocalFittingTransformedCoordinates(const GaussianModel3D & model)
     {
         return std::nullopt;
     }
-    return std::array<double, kTransformedChangeSize>{
+
+    return Eigen::Vector3d{
         log_peak_height,
         log_width,
         offset_to_peak_ratio
     };
 }
 
-inline std::optional<Eigen::VectorXd> EncodeLocalFittingTransformedCoordinates(
-    const GaussianModel3D & model)
-{
-    const auto coordinates{ BuildLocalFittingTransformedCoordinates(model) };
-    if (!coordinates.has_value()) return std::nullopt;
-
-    Eigen::VectorXd encoded{
-        Eigen::VectorXd::Zero(static_cast<Eigen::Index>(kTransformedChangeSize))
-    };
-    for (std::size_t i = 0; i < kTransformedChangeSize; i++)
-    {
-        encoded(static_cast<Eigen::Index>(i)) = coordinates->at(i);
-    }
-    return encoded;
-}
-
 inline std::optional<GaussianModel3D> DecodeLocalFittingTransformedCoordinates(
-    const Eigen::VectorXd & coordinates)
+    const Eigen::Vector3d & coordinates)
 {
-    if (coordinates.size() != static_cast<Eigen::Index>(kTransformedChangeSize) ||
-        !coordinates.allFinite())
+    if (!coordinates.allFinite())
     {
         return std::nullopt;
     }
@@ -144,8 +129,12 @@ inline algorithm::ParameterChange CalculateLocalFittingTransformedChange(
     const GaussianModel3D & current,
     const GaussianModel3D & previous)
 {
-    const auto current_coordinates{ BuildLocalFittingTransformedCoordinates(current) };
-    const auto previous_coordinates{ BuildLocalFittingTransformedCoordinates(previous) };
+    const auto current_coordinates{
+        EncodeLocalFittingTransformedCoordinates(current)
+    };
+    const auto previous_coordinates{
+        EncodeLocalFittingTransformedCoordinates(previous)
+    };
     if (!current_coordinates.has_value() || !previous_coordinates.has_value())
     {
         return MakeInfiniteLocalFittingTransformedChange();
@@ -156,8 +145,11 @@ inline algorithm::ParameterChange CalculateLocalFittingTransformedChange(
     };
     for (std::size_t i = 0; i < kTransformedChangeSize; i++)
     {
+        const auto eigen_index{ static_cast<Eigen::Index>(i) };
         const auto value{
-            std::abs(current_coordinates->at(i) - previous_coordinates->at(i))
+            std::abs(
+                (*current_coordinates)(eigen_index) -
+                (*previous_coordinates)(eigen_index))
         };
         if (!std::isfinite(value))
         {

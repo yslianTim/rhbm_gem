@@ -744,8 +744,8 @@ TEST(EstimatorSecondStageDefenseTest, ScientificObjectiveUsesAtomMeanIndependent
 TEST(EstimatorSecondStageDefenseTest, TrustRegionDampingCapsLargeTransformedStep)
 {
     const std::array<double, 3> scale{ 0.50, 0.35, 1.0 };
-    std::vector<Eigen::VectorXd> previous{
-        Eigen::VectorXd::Zero(3)
+    std::vector<Eigen::Vector3d> previous{
+        Eigen::Vector3d::Zero()
     };
     auto candidate{ previous };
     candidate.at(0) << 1.0, 0.35, 0.5;
@@ -774,22 +774,22 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionDampingIsIntensityScaleInvarian
             change_detail::EncodeLocalFittingTransformedCoordinates(model)
         };
         EXPECT_TRUE(estimation.has_value());
-        return estimation.value_or(Eigen::VectorXd{});
+        return estimation.value_or(Eigen::Vector3d::Zero());
     };
-    const std::vector<Eigen::VectorXd> base_previous{
+    const std::vector<Eigen::Vector3d> base_previous{
         encode(rg::GaussianModel3D{ 2.0, 0.8, 0.2 })
     };
-    const std::vector<Eigen::VectorXd> base_candidate{
+    const std::vector<Eigen::Vector3d> base_candidate{
         encode(rg::GaussianModel3D{ 4.0, 1.0, 0.4 })
     };
     constexpr double intensity_scale{ 1.0e5 };
-    const std::vector<Eigen::VectorXd> scaled_previous{
+    const std::vector<Eigen::Vector3d> scaled_previous{
         encode(rg::GaussianModel3D{
             2.0 * intensity_scale,
             0.8,
             0.2 * intensity_scale })
     };
-    const std::vector<Eigen::VectorXd> scaled_candidate{
+    const std::vector<Eigen::Vector3d> scaled_candidate{
         encode(rg::GaussianModel3D{
             4.0 * intensity_scale,
             1.0,
@@ -811,8 +811,8 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionDampingIsIntensityScaleInvarian
 TEST(EstimatorSecondStageDefenseTest, TrustRegionPolishHonorsOuterStepBoundary)
 {
     const std::array<double, 3> scale{ 0.50, 0.35, 1.0 };
-    std::vector<Eigen::VectorXd> outer_previous{
-        Eigen::VectorXd::Zero(3)
+    std::vector<Eigen::Vector3d> outer_previous{
+        Eigen::Vector3d::Zero()
     };
     auto boundary_state{ outer_previous };
     boundary_state.at(0)(0) = 0.5;

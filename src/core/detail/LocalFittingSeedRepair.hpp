@@ -38,7 +38,7 @@ inline bool IsValidSecondStageGaussianModel(const GaussianModel3D & model)
     return std::isfinite(model.GetAmplitude()) && model.GetAmplitude() > 0.0 &&
         std::isfinite(model.GetWidth()) && model.GetWidth() > 0.0 &&
         std::isfinite(model.GetOffset()) &&
-        BuildLocalFittingTransformedCoordinates(model).has_value();
+        EncodeLocalFittingTransformedCoordinates(model).has_value();
 }
 
 inline std::optional<SecondStageSeedRepairSelection> SelectSecondStageSeedRepair(
