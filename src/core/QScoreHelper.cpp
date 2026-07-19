@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <stdexcept>
 #include <vector>
 
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -20,6 +21,8 @@ constexpr std::size_t kCandidatePointIncrement{ 2 };
 constexpr double kNeighborExclusionRadiusRatio{ 0.9 };
 constexpr double kNeighborSearchRadiusRatio{ 2.0 };
 constexpr double kSpiralSpacing{ 3.6 };
+constexpr double kMapBoundaryMarginRatio{ 0.5 };
+constexpr double kMaximumRadiusTolerance{ 0.01 };
 
 using RadialPoint = std::array<double, 3>;
 
@@ -58,6 +61,138 @@ std::vector<RadialPoint> GenerateSpiralSpherePoints(
         });
     }
     return points;
+}
+
+double InterpolateMapValueTrilinear(
+    const MapObject & map,
+    const std::array<float, 3> & position)
+{
+    const auto grid_size{ map.GetGridSize() };
+    const auto grid_spacing{ map.GetGridSpacing() };
+    const auto origin{ map.GetOrigin() };
+
+    std::array<int, 3> lower_indices;
+    std::array<int, 3> upper_indices;
+    std::array<double, 3> fractions;
+    for (std::size_t axis = 0; axis < position.size(); ++axis)
+    {
+        const auto lower_boundary{
+            static_cast<double>(origin.at(axis)) -
+                kMapBoundaryMarginRatio * static_cast<double>(grid_spacing.at(axis))
+        };
+        const auto upper_boundary{
+            static_cast<double>(origin.at(axis)) +
+                (static_cast<double>(grid_size.at(axis)) - kMapBoundaryMarginRatio) *
+                    static_cast<double>(grid_spacing.at(axis))
+        };
+        const auto coordinate{ static_cast<double>(position.at(axis)) };
+        if (!std::isfinite(coordinate) ||
+            coordinate < lower_boundary ||
+            coordinate > upper_boundary)
+        {
+            throw std::out_of_range(
+                "CalculateQScoreForAtom sampling position is outside the map boundary.");
+        }
+
+        const auto grid_coordinate{
+            std::clamp(
+                (coordinate - static_cast<double>(origin.at(axis))) /
+                    static_cast<double>(grid_spacing.at(axis)),
+                0.0,
+                static_cast<double>(grid_size.at(axis) - 1))
+        };
+        lower_indices.at(axis) = static_cast<int>(std::floor(grid_coordinate));
+        upper_indices.at(axis) = std::min(
+            lower_indices.at(axis) + 1,
+            grid_size.at(axis) - 1);
+        fractions.at(axis) =
+            grid_coordinate - static_cast<double>(lower_indices.at(axis));
+    }
+
+    double interpolated_value{ 0.0 };
+    for (int x_offset = 0; x_offset <= 1; ++x_offset)
+    {
+        const auto x_index{
+            x_offset == 0 ? lower_indices.at(0) : upper_indices.at(0)
+        };
+        const auto x_weight{
+            x_offset == 0 ? 1.0 - fractions.at(0) : fractions.at(0)
+        };
+        for (int y_offset = 0; y_offset <= 1; ++y_offset)
+        {
+            const auto y_index{
+                y_offset == 0 ? lower_indices.at(1) : upper_indices.at(1)
+            };
+            const auto y_weight{
+                y_offset == 0 ? 1.0 - fractions.at(1) : fractions.at(1)
+            };
+            for (int z_offset = 0; z_offset <= 1; ++z_offset)
+            {
+                const auto z_index{
+                    z_offset == 0 ? lower_indices.at(2) : upper_indices.at(2)
+                };
+                const auto z_weight{
+                    z_offset == 0 ? 1.0 - fractions.at(2) : fractions.at(2)
+                };
+                interpolated_value +=
+                    x_weight * y_weight * z_weight *
+                    static_cast<double>(map.GetMapValue(x_index, y_index, z_index));
+            }
+        }
+    }
+    return interpolated_value;
+}
+
+double CalculateMeanSubtractedCorrelation(
+    const std::vector<double> & map_values,
+    const std::vector<double> & reference_values)
+{
+    if (map_values.empty())
+    {
+        return 0.0;
+    }
+
+    double map_value_sum{ 0.0 };
+    double reference_value_sum{ 0.0 };
+    for (std::size_t i = 0; i < map_values.size(); ++i)
+    {
+        map_value_sum += map_values.at(i);
+        reference_value_sum += reference_values.at(i);
+    }
+    const auto sample_count{ static_cast<double>(map_values.size()) };
+    const auto map_value_mean{ map_value_sum / sample_count };
+    const auto reference_value_mean{ reference_value_sum / sample_count };
+
+    double numerator{ 0.0 };
+    double map_value_norm_square{ 0.0 };
+    double reference_value_norm_square{ 0.0 };
+    for (std::size_t i = 0; i < map_values.size(); ++i)
+    {
+        const auto map_value_difference{
+            map_values.at(i) - map_value_mean
+        };
+        const auto reference_value_difference{
+            reference_values.at(i) - reference_value_mean
+        };
+        numerator += map_value_difference * reference_value_difference;
+        map_value_norm_square += map_value_difference * map_value_difference;
+        reference_value_norm_square +=
+            reference_value_difference * reference_value_difference;
+    }
+
+    const auto denominator{
+        std::sqrt(map_value_norm_square) *
+            std::sqrt(reference_value_norm_square)
+    };
+    if (denominator == 0.0 ||
+        !std::isfinite(denominator) ||
+        !std::isfinite(numerator))
+    {
+        return 0.0;
+    }
+
+    const auto q_score{ numerator / denominator };
+    return std::isfinite(q_score) ? q_score : 0.0;
 }
 
 } // namespace
@@ -174,6 +309,88 @@ SamplingPointList GetRadialPointsForQScore(
     }
 
     return {};
+}
+
+double CalculateQScoreForAtom(
+    const AtomObject & atom,
+    const MapObject & map,
+    const ModelObject & model,
+    double sigma,
+    double max_radius,
+    double radial_step,
+    int num_points)
+{
+    numeric_validation::RequireFinitePositive(
+        sigma,
+        "CalculateQScoreForAtom sigma");
+    numeric_validation::RequireFinitePositive(
+        max_radius,
+        "CalculateQScoreForAtom max_radius");
+    numeric_validation::RequireFinitePositive(
+        radial_step,
+        "CalculateQScoreForAtom radial_step");
+    numeric_validation::RequireAtLeast(
+        num_points,
+        2,
+        "CalculateQScoreForAtom num_points");
+    if (radial_step > max_radius)
+    {
+        throw std::invalid_argument(
+            "CalculateQScoreForAtom radial_step must not exceed max_radius.");
+    }
+
+    (void)model.FindNeighborAtoms(atom, 0.0);
+
+    const auto [height, offset]{ GetReferenceGaussianParameters(map) };
+    const auto center_map_value{
+        InterpolateMapValueTrilinear(map, atom.GetPositionRef())
+    };
+    const auto center_reference_value{
+        static_cast<double>(height) + static_cast<double>(offset)
+    };
+
+    std::vector<double> map_values(
+        static_cast<std::size_t>(num_points),
+        center_map_value);
+    std::vector<double> reference_values(
+        static_cast<std::size_t>(num_points),
+        center_reference_value);
+
+    for (double radius = radial_step;
+         radius < max_radius + kMaximumRadiusTolerance;
+         radius += radial_step)
+    {
+        const auto radial_points{
+            GetRadialPointsForQScore(
+                atom,
+                model,
+                radius,
+                num_points)
+        };
+        if (radial_points.empty())
+        {
+            continue;
+        }
+
+        const auto scaled_radius{ radius / sigma };
+        const auto reference_value{
+            static_cast<double>(height) *
+                std::exp(-0.5 * scaled_radius * scaled_radius) +
+                static_cast<double>(offset)
+        };
+        for (const auto & radial_point : radial_points)
+        {
+            map_values.emplace_back(
+                InterpolateMapValueTrilinear(
+                    map,
+                    radial_point.position));
+            reference_values.emplace_back(reference_value);
+        }
+    }
+
+    return CalculateMeanSubtractedCorrelation(
+        map_values,
+        reference_values);
 }
 
 } // namespace rhbm_gem::core

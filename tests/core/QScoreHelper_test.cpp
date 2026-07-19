@@ -3,6 +3,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -22,15 +23,12 @@ struct AtomSpec
     Element element{ Element::CARBON };
 };
 
-rhbm_gem::MapObject MakeMapObject(const std::vector<float> & values)
+rhbm_gem::MapObject MakeMapObject(
+    const std::array<int, 3> & grid_size,
+    const std::array<float, 3> & grid_spacing,
+    const std::array<float, 3> & origin,
+    const std::vector<float> & values)
 {
-    const std::array<int, 3> grid_size{
-        static_cast<int>(values.size()),
-        1,
-        1
-    };
-    const std::array<float, 3> grid_spacing{ 1.0f, 1.0f, 1.0f };
-    const std::array<float, 3> origin{ 0.0f, 0.0f, 0.0f };
     auto map_values{ std::make_unique<float[]>(values.size()) };
     for (std::size_t i = 0; i < values.size(); ++i)
     {
@@ -42,6 +40,48 @@ rhbm_gem::MapObject MakeMapObject(const std::vector<float> & values)
         origin,
         std::move(map_values)
     };
+}
+
+rhbm_gem::MapObject MakeMapObject(const std::vector<float> & values)
+{
+    return MakeMapObject(
+        {
+            static_cast<int>(values.size()),
+            1,
+            1
+        },
+        { 1.0f, 1.0f, 1.0f },
+        { 0.0f, 0.0f, 0.0f },
+        values);
+}
+
+rhbm_gem::MapObject MakeMapObject(
+    const std::array<int, 3> & grid_size,
+    const std::array<float, 3> & grid_spacing,
+    const std::array<float, 3> & origin,
+    const std::function<float(const std::array<float, 3> &)> & value_at_position)
+{
+    std::vector<float> values;
+    values.reserve(
+        static_cast<std::size_t>(grid_size.at(0)) *
+        static_cast<std::size_t>(grid_size.at(1)) *
+        static_cast<std::size_t>(grid_size.at(2)));
+    for (int z = 0; z < grid_size.at(2); ++z)
+    {
+        for (int y = 0; y < grid_size.at(1); ++y)
+        {
+            for (int x = 0; x < grid_size.at(0); ++x)
+            {
+                values.emplace_back(
+                    value_at_position({
+                        origin.at(0) + static_cast<float>(x) * grid_spacing.at(0),
+                        origin.at(1) + static_cast<float>(y) * grid_spacing.at(1),
+                        origin.at(2) + static_cast<float>(z) * grid_spacing.at(2)
+                    }));
+            }
+        }
+    }
+    return MakeMapObject(grid_size, grid_spacing, origin, values);
 }
 
 std::unique_ptr<rhbm_gem::ModelObject> MakeModelObject(
@@ -58,6 +98,38 @@ std::unique_ptr<rhbm_gem::ModelObject> MakeModelObject(
         atoms.emplace_back(std::move(atom));
     }
     return std::make_unique<rhbm_gem::ModelObject>(std::move(atoms));
+}
+
+std::unique_ptr<rhbm_gem::ModelObject> MakeCrowdedModelObject()
+{
+    std::vector<AtomSpec> atom_specs{
+        { { 0.0f, 0.0f, 0.0f }, Element::CARBON }
+    };
+    for (int x = -1; x <= 1; ++x)
+    {
+        for (int y = -1; y <= 1; ++y)
+        {
+            for (int z = -1; z <= 1; ++z)
+            {
+                if (x == 0 && y == 0 && z == 0)
+                {
+                    continue;
+                }
+                const auto norm{
+                    std::sqrt(static_cast<float>(x * x + y * y + z * z))
+                };
+                atom_specs.emplace_back(AtomSpec{
+                    {
+                        static_cast<float>(x) / norm,
+                        static_cast<float>(y) / norm,
+                        static_cast<float>(z) / norm
+                    },
+                    Element::CARBON
+                });
+            }
+        }
+    }
+    return MakeModelObject(atom_specs);
 }
 
 double ComputeDistanceSquare(
@@ -238,34 +310,7 @@ TEST(QScoreHelperTest, IgnoresHydrogenAtomsWhenFilteringRadialPoints)
 
 TEST(QScoreHelperTest, ReturnsEmptyWhenCrowdingPreventsRequestedPointCount)
 {
-    std::vector<AtomSpec> atom_specs{
-        { { 0.0f, 0.0f, 0.0f }, Element::CARBON }
-    };
-    for (int x = -1; x <= 1; ++x)
-    {
-        for (int y = -1; y <= 1; ++y)
-        {
-            for (int z = -1; z <= 1; ++z)
-            {
-                if (x == 0 && y == 0 && z == 0)
-                {
-                    continue;
-                }
-                const auto norm{
-                    std::sqrt(static_cast<float>(x * x + y * y + z * z))
-                };
-                atom_specs.emplace_back(AtomSpec{
-                    {
-                        static_cast<float>(x) / norm,
-                        static_cast<float>(y) / norm,
-                        static_cast<float>(z) / norm
-                    },
-                    Element::CARBON
-                });
-            }
-        }
-    }
-    const auto model{ MakeModelObject(atom_specs) };
+    const auto model{ MakeCrowdedModelObject() };
     const auto & target_atom{ *model->GetAtomList().front() };
 
     const auto points{
@@ -313,6 +358,262 @@ TEST(QScoreHelperTest, RejectsInvalidRadialPointArguments)
         std::invalid_argument);
     EXPECT_THROW(
         rhbm_gem::core::GetRadialPointsForQScore(atom, *model, 1.0, -1),
+        std::invalid_argument);
+}
+
+TEST(QScoreHelperTest, CalculatesHighQScoreForMatchingGaussianWidth)
+{
+    constexpr double sigma{ 0.4 };
+    const auto map{
+        MakeMapObject(
+            { 41, 41, 41 },
+            { 0.1f, 0.1f, 0.1f },
+            { -2.0f, -2.0f, -2.0f },
+            [](const std::array<float, 3> & position)
+            {
+                const auto distance_square{
+                    static_cast<double>(position.at(0)) *
+                        static_cast<double>(position.at(0)) +
+                    static_cast<double>(position.at(1)) *
+                        static_cast<double>(position.at(1)) +
+                    static_cast<double>(position.at(2)) *
+                        static_cast<double>(position.at(2))
+                };
+                return static_cast<float>(
+                    std::exp(-0.5 * distance_square / (sigma * sigma)));
+            })
+    };
+    const auto model{
+        MakeModelObject({
+            { { 0.0f, 0.0f, 0.0f }, Element::CARBON }
+        })
+    };
+    const auto & atom{ *model->GetAtomList().front() };
+
+    const auto matching_score{
+        rhbm_gem::core::CalculateQScoreForAtom(
+            atom,
+            map,
+            *model,
+            sigma,
+            1.0,
+            0.1,
+            8)
+    };
+    const auto mismatched_score{
+        rhbm_gem::core::CalculateQScoreForAtom(
+            atom,
+            map,
+            *model,
+            0.8,
+            1.0,
+            0.1,
+            8)
+    };
+
+    EXPECT_GT(matching_score, 0.99);
+    EXPECT_GT(matching_score, mismatched_score);
+}
+
+TEST(QScoreHelperTest, UsesCenterWeightMaximumShellAndAllAcceptedPoints)
+{
+    const auto map{
+        MakeMapObject(
+            { 5, 5, 5 },
+            { 0.5f, 0.5f, 0.5f },
+            { -1.0f, -1.0f, -1.0f },
+            [](const std::array<float, 3> & position)
+            {
+                return position.at(2);
+            })
+    };
+    const auto model{
+        MakeModelObject({
+            { { 0.0f, 0.0f, 0.0f }, Element::CARBON },
+            { { 0.0f, 0.0f, 0.5f }, Element::CARBON }
+        })
+    };
+    const auto & atom{ *model->GetAtomList().front() };
+
+    const auto q_score{
+        rhbm_gem::core::CalculateQScoreForAtom(
+            atom,
+            map,
+            *model,
+            0.5,
+            1.0,
+            1.0,
+            2)
+    };
+
+    constexpr double expected_q_score{ 0.3611575593 };
+    EXPECT_NEAR(q_score, expected_q_score, 1.0e-6);
+}
+
+TEST(QScoreHelperTest, ReturnsZeroQScoreForConstantMap)
+{
+    const auto map{
+        MakeMapObject(
+            { 5, 5, 5 },
+            { 0.5f, 0.5f, 0.5f },
+            { -1.0f, -1.0f, -1.0f },
+            [](const std::array<float, 3> &)
+            {
+                return 3.5f;
+            })
+    };
+    const auto model{
+        MakeModelObject({
+            { { 0.0f, 0.0f, 0.0f }, Element::CARBON }
+        })
+    };
+    const auto & atom{ *model->GetAtomList().front() };
+
+    EXPECT_DOUBLE_EQ(
+        rhbm_gem::core::CalculateQScoreForAtom(
+            atom,
+            map,
+            *model,
+            0.5,
+            1.0,
+            0.5,
+            4),
+        0.0);
+}
+
+TEST(QScoreHelperTest, ReturnsZeroQScoreWhenEveryRadialShellIsEmpty)
+{
+    const auto map{
+        MakeMapObject(
+            { 5, 5, 5 },
+            { 0.5f, 0.5f, 0.5f },
+            { -1.0f, -1.0f, -1.0f },
+            [](const std::array<float, 3> & position)
+            {
+                return position.at(2);
+            })
+    };
+    const auto model{ MakeCrowdedModelObject() };
+    const auto & atom{ *model->GetAtomList().front() };
+
+    EXPECT_DOUBLE_EQ(
+        rhbm_gem::core::CalculateQScoreForAtom(
+            atom,
+            map,
+            *model,
+            0.5,
+            1.0,
+            1.0,
+            8),
+        0.0);
+}
+
+TEST(QScoreHelperTest, RejectsSamplingPositionsOutsideMapBoundary)
+{
+    const auto map{
+        MakeMapObject(
+            { 3, 3, 3 },
+            { 1.0f, 1.0f, 1.0f },
+            { -1.0f, -1.0f, -1.0f },
+            [](const std::array<float, 3> & position)
+            {
+                return position.at(2);
+            })
+    };
+    const auto outside_center_model{
+        MakeModelObject({
+            { { 0.0f, 0.0f, 2.0f }, Element::CARBON }
+        })
+    };
+    const auto radial_outside_model{
+        MakeModelObject({
+            { { 0.0f, 0.0f, 1.0f }, Element::CARBON }
+        })
+    };
+
+    EXPECT_THROW(
+        rhbm_gem::core::CalculateQScoreForAtom(
+            *outside_center_model->GetAtomList().front(),
+            map,
+            *outside_center_model,
+            0.5,
+            0.5,
+            0.5,
+            2),
+        std::out_of_range);
+    EXPECT_THROW(
+        rhbm_gem::core::CalculateQScoreForAtom(
+            *radial_outside_model->GetAtomList().front(),
+            map,
+            *radial_outside_model,
+            0.5,
+            1.0,
+            1.0,
+            2),
+        std::out_of_range);
+}
+
+TEST(QScoreHelperTest, RejectsInvalidQScoreArguments)
+{
+    const auto map{
+        MakeMapObject(
+            { 5, 5, 5 },
+            { 0.5f, 0.5f, 0.5f },
+            { -1.0f, -1.0f, -1.0f },
+            [](const std::array<float, 3> & position)
+            {
+                return position.at(2);
+            })
+    };
+    const auto model{
+        MakeModelObject({
+            { { 0.0f, 0.0f, 0.0f }, Element::CARBON }
+        })
+    };
+    const auto other_model{
+        MakeModelObject({
+            { { 0.0f, 0.0f, 0.0f }, Element::CARBON }
+        })
+    };
+    const auto & atom{ *model->GetAtomList().front() };
+    const auto nan{ std::numeric_limits<double>::quiet_NaN() };
+    const auto infinity{ std::numeric_limits<double>::infinity() };
+    const std::array<double, 4> invalid_positive_values{
+        0.0,
+        -1.0,
+        nan,
+        infinity
+    };
+
+    for (const auto invalid_value : invalid_positive_values)
+    {
+        EXPECT_THROW(
+            rhbm_gem::core::CalculateQScoreForAtom(
+                atom, map, *model, invalid_value, 1.0, 0.1, 8),
+            std::invalid_argument);
+        EXPECT_THROW(
+            rhbm_gem::core::CalculateQScoreForAtom(
+                atom, map, *model, 0.5, invalid_value, 0.1, 8),
+            std::invalid_argument);
+        EXPECT_THROW(
+            rhbm_gem::core::CalculateQScoreForAtom(
+                atom, map, *model, 0.5, 1.0, invalid_value, 8),
+            std::invalid_argument);
+    }
+    EXPECT_THROW(
+        rhbm_gem::core::CalculateQScoreForAtom(
+            atom, map, *model, 0.5, 1.0, 2.0, 8),
+        std::invalid_argument);
+    for (const auto invalid_num_points : { 1, 0, -1 })
+    {
+        EXPECT_THROW(
+            rhbm_gem::core::CalculateQScoreForAtom(
+                atom, map, *model, 0.5, 1.0, 0.1, invalid_num_points),
+            std::invalid_argument);
+    }
+    EXPECT_THROW(
+        rhbm_gem::core::CalculateQScoreForAtom(
+            atom, map, *other_model, 0.5, 1.0, 0.1, 8),
         std::invalid_argument);
 }
 

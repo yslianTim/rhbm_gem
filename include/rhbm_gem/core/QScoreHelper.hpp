@@ -23,6 +23,16 @@ SamplingPointList GetRadialPointsForQScore(
     double radius,
     int num_points);
 
+// Calculates the MapQ-style mean-subtracted correlation for one atom.
+double CalculateQScoreForAtom(
+    const AtomObject & atom,
+    const MapObject & map,
+    const ModelObject & model,
+    double sigma,
+    double max_radius,
+    double radial_step,
+    int num_points);
+
 } // namespace core
 
 } // namespace rhbm_gem
