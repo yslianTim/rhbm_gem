@@ -23,6 +23,10 @@ constexpr double kNeighborSearchRadiusRatio{ 2.0 };
 constexpr double kSpiralSpacing{ 3.6 };
 constexpr double kMapBoundaryMarginRatio{ 0.5 };
 constexpr double kMaximumRadiusTolerance{ 0.01 };
+constexpr double kAverageQScoreSigma{ 0.6 };
+constexpr double kAverageQScoreMaximumRadius{ 2.0 };
+constexpr double kAverageQScoreRadialStep{ 0.1 };
+constexpr int kAverageQScorePointCount{ 8 };
 
 using RadialPoint = std::array<double, 3>;
 
@@ -391,6 +395,37 @@ double CalculateQScoreForAtom(
     return CalculateMeanSubtractedCorrelation(
         map_values,
         reference_values);
+}
+
+double CalculateAverageQScores(
+    const MapObject & map,
+    const ModelObject & model)
+{
+    double q_score_sum{ 0.0 };
+    std::size_t atom_count{ 0 };
+    for (const auto & atom : model.GetAtomList())
+    {
+        if (atom->GetElement() == Element::HYDROGEN)
+        {
+            continue;
+        }
+
+        q_score_sum += CalculateQScoreForAtom(
+            *atom,
+            map,
+            model,
+            kAverageQScoreSigma,
+            kAverageQScoreMaximumRadius,
+            kAverageQScoreRadialStep,
+            kAverageQScorePointCount);
+        atom_count++;
+    }
+
+    if (atom_count == 0)
+    {
+        return 0.0;
+    }
+    return q_score_sum / static_cast<double>(atom_count);
 }
 
 } // namespace rhbm_gem::core

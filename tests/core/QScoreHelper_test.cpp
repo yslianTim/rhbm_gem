@@ -84,6 +84,28 @@ rhbm_gem::MapObject MakeMapObject(
     return MakeMapObject(grid_size, grid_spacing, origin, values);
 }
 
+rhbm_gem::MapObject MakeGaussianMapObject()
+{
+    constexpr double sigma{ 0.6 };
+    return MakeMapObject(
+        { 61, 61, 61 },
+        { 0.1f, 0.1f, 0.1f },
+        { -3.0f, -3.0f, -3.0f },
+        [](const std::array<float, 3> & position)
+        {
+            const auto distance_square{
+                static_cast<double>(position.at(0)) *
+                    static_cast<double>(position.at(0)) +
+                static_cast<double>(position.at(1)) *
+                    static_cast<double>(position.at(1)) +
+                static_cast<double>(position.at(2)) *
+                    static_cast<double>(position.at(2))
+            };
+            return static_cast<float>(
+                std::exp(-0.5 * distance_square / (sigma * sigma)));
+        });
+}
+
 std::unique_ptr<rhbm_gem::ModelObject> MakeModelObject(
     const std::vector<AtomSpec> & atom_specs)
 {
@@ -615,6 +637,124 @@ TEST(QScoreHelperTest, RejectsInvalidQScoreArguments)
         rhbm_gem::core::CalculateQScoreForAtom(
             atom, map, *other_model, 0.5, 1.0, 0.1, 8),
         std::invalid_argument);
+}
+
+TEST(QScoreHelperTest, CalculatesSingleAtomAverageWithMapQParameters)
+{
+    const auto map{ MakeGaussianMapObject() };
+    const auto model{
+        MakeModelObject({
+            { { 0.0f, 0.0f, 0.0f }, Element::CARBON }
+        })
+    };
+    const auto & atom{ *model->GetAtomList().front() };
+    const auto expected_q_score{
+        rhbm_gem::core::CalculateQScoreForAtom(
+            atom,
+            map,
+            *model,
+            0.6,
+            2.0,
+            0.1,
+            8)
+    };
+
+    EXPECT_DOUBLE_EQ(
+        rhbm_gem::core::CalculateAverageQScores(map, *model),
+        expected_q_score);
+}
+
+TEST(QScoreHelperTest, AveragesAllNonHydrogenAtomsRegardlessOfSelection)
+{
+    const auto map{ MakeGaussianMapObject() };
+    const auto model{
+        MakeModelObject({
+            { { -0.5f, 0.0f, 0.0f }, Element::CARBON },
+            { { 0.8f, 0.0f, 0.0f }, Element::OXYGEN },
+            { { 100.0f, 0.0f, 0.0f }, Element::HYDROGEN }
+        })
+    };
+    model->SelectAllAtoms();
+    model->SetAtomSelected(2, false);
+    ASSERT_EQ(model->GetSelectedAtomCount(), 2u);
+
+    const auto first_q_score{
+        rhbm_gem::core::CalculateQScoreForAtom(
+            *model->GetAtomList().at(0),
+            map,
+            *model,
+            0.6,
+            2.0,
+            0.1,
+            8)
+    };
+    const auto second_q_score{
+        rhbm_gem::core::CalculateQScoreForAtom(
+            *model->GetAtomList().at(1),
+            map,
+            *model,
+            0.6,
+            2.0,
+            0.1,
+            8)
+    };
+
+    EXPECT_DOUBLE_EQ(
+        rhbm_gem::core::CalculateAverageQScores(map, *model),
+        (first_q_score + second_q_score) / 2.0);
+}
+
+TEST(QScoreHelperTest, ReturnsZeroAverageWithoutNonHydrogenAtoms)
+{
+    const auto map{ MakeGaussianMapObject() };
+    const rhbm_gem::ModelObject empty_model;
+    const auto hydrogen_model{
+        MakeModelObject({
+            { { 100.0f, 0.0f, 0.0f }, Element::HYDROGEN }
+        })
+    };
+
+    EXPECT_DOUBLE_EQ(
+        rhbm_gem::core::CalculateAverageQScores(map, empty_model),
+        0.0);
+    EXPECT_DOUBLE_EQ(
+        rhbm_gem::core::CalculateAverageQScores(map, *hydrogen_model),
+        0.0);
+}
+
+TEST(QScoreHelperTest, PropagatesOutOfRangeFromNonHydrogenAtoms)
+{
+    const auto map{
+        MakeMapObject(
+            { 5, 5, 5 },
+            { 1.0f, 1.0f, 1.0f },
+            { -2.0f, -2.0f, -2.0f },
+            [](const std::array<float, 3> & position)
+            {
+                return position.at(2);
+            })
+    };
+    const auto outside_center_model{
+        MakeModelObject({
+            { { 0.0f, 0.0f, 100.0f }, Element::CARBON }
+        })
+    };
+    const auto radial_outside_model{
+        MakeModelObject({
+            { { 0.0f, 0.0f, 1.0f }, Element::CARBON }
+        })
+    };
+
+    EXPECT_THROW(
+        rhbm_gem::core::CalculateAverageQScores(
+            map,
+            *outside_center_model),
+        std::out_of_range);
+    EXPECT_THROW(
+        rhbm_gem::core::CalculateAverageQScores(
+            map,
+            *radial_outside_model),
+        std::out_of_range);
 }
 
 TEST(QScoreHelperTest, RejectsTargetAtomFromDifferentModel)

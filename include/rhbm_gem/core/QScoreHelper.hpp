@@ -33,6 +33,11 @@ double CalculateQScoreForAtom(
     double radial_step,
     int num_points);
 
+// Returns the mean MapQ-style Q-score across all non-hydrogen model atoms.
+double CalculateAverageQScores(
+    const MapObject & map,
+    const ModelObject & model);
+
 } // namespace core
 
 } // namespace rhbm_gem
