@@ -21,6 +21,7 @@ target_sources(rhbm_gem PRIVATE
     core/GaussianEstimator.cpp
     core/detail/GaussianEstimatorStages.cpp
     core/MapSampler.cpp
+    core/QScoreHelper.cpp
     core/TestDataFactory.cpp
     core/command/CommandSystem.cpp
     core/painter/AtomPainter.cpp

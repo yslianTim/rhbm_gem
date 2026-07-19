@@ -86,6 +86,10 @@ set(CORE_SAMPLER_TEST_SOURCES
     core/MapSampler_test.cpp
 )
 
+set(CORE_QSCORE_TEST_SOURCES
+    core/QScoreHelper_test.cpp
+)
+
 set(CORE_ESTIMATOR_TEST_SOURCES
     core/EstimatorSecondStageDefense_test.cpp
     core/EstimatorTester_test.cpp
@@ -177,6 +181,7 @@ set(INTEGRATION_COMMAND_TEST_SOURCES
 set(RHBM_GEM_ALL_GTEST_SOURCES
     ${CORE_COMMAND_TEST_SOURCES}
     ${CORE_ESTIMATOR_TEST_SOURCES}
+    ${CORE_QSCORE_TEST_SOURCES}
     ${CORE_SAMPLER_TEST_SOURCES}
     ${CORE_CONTRACT_TEST_SOURCES}
     ${CORE_PAINTER_TEST_SOURCES}
@@ -218,6 +223,12 @@ add_rhbm_gtest_group(rhbm_tests_core_sampler
     DOMAIN core
     INTENTS sampling
     SOURCES ${CORE_SAMPLER_TEST_SOURCES}
+)
+
+add_rhbm_gtest_group(rhbm_tests_core_qscore
+    DOMAIN core
+    INTENTS algorithm
+    SOURCES ${CORE_QSCORE_TEST_SOURCES}
 )
 
 add_rhbm_gtest_group(rhbm_tests_core_estimator
