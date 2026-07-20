@@ -945,7 +945,7 @@ PotentialPlotBuilder::CreateAtomQScoreToSequenceIDGraphMap(
 
 std::unordered_map<std::string, std::unique_ptr<TGraphErrors>>
 PotentialPlotBuilder::CreateAverageQScoreToSequenceIDGraphMap(
-    size_t method, bool apply_selection, bool use_updated_sample)
+    bool use_fitted_par, bool apply_selection, bool use_updated_sample)
 {
     if (IsModelObjectAvailable() == false) return {};
     auto model_object{ m_model_object };
@@ -957,6 +957,9 @@ PotentialPlotBuilder::CreateAverageQScoreToSequenceIDGraphMap(
         chain_id_list.insert(chain_id_list.end(), chain_ids.begin(), chain_ids.end());
     }
 
+    local_potential_series::QScoreReference method{ use_fitted_par ?
+        local_potential_series::QScoreReference::Fixed : local_potential_series::QScoreReference::MDPDE
+    };
     std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> graph_map;
     for (auto & chain_id : chain_id_list)
     {
@@ -972,7 +975,7 @@ PotentialPlotBuilder::CreateAverageQScoreToSequenceIDGraphMap(
                 local_potential_series::ComputeQScore(
                     entry.GetSamplingEntries(apply_selection, use_updated_sample),
                     entry.GetGaussianResult(),
-                    static_cast<local_potential_series::QScoreReference>(method))
+                    method)
             };
             q_scores_map[sequence_id].emplace_back(q_score);
         }

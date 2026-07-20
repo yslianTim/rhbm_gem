@@ -42,8 +42,7 @@ std::vector<RadialPoint> GenerateSpiralSpherePoints(
     for (std::size_t i = 0; i < point_count; ++i)
     {
         const auto height{
-            -1.0 + 2.0 * static_cast<double>(i) /
-                static_cast<double>(point_count - 1)
+            -1.0 + 2.0 * static_cast<double>(i) / static_cast<double>(point_count - 1)
         };
         const auto phi{ std::acos(height) };
         double theta{ 0.0 };
@@ -67,9 +66,7 @@ std::vector<RadialPoint> GenerateSpiralSpherePoints(
     return points;
 }
 
-double InterpolateMapValueTrilinear(
-    const MapObject & map,
-    const std::array<float, 3> & position)
+double InterpolateMapValueTrilinear(const MapObject & map, const std::array<float, 3> & position)
 {
     const auto grid_size{ map.GetGridSize() };
     const auto grid_spacing{ map.GetGridSpacing() };
@@ -106,11 +103,8 @@ double InterpolateMapValueTrilinear(
                 static_cast<double>(grid_size.at(axis) - 1))
         };
         lower_indices.at(axis) = static_cast<int>(std::floor(grid_coordinate));
-        upper_indices.at(axis) = std::min(
-            lower_indices.at(axis) + 1,
-            grid_size.at(axis) - 1);
-        fractions.at(axis) =
-            grid_coordinate - static_cast<double>(lower_indices.at(axis));
+        upper_indices.at(axis) = std::min(lower_indices.at(axis) + 1, grid_size.at(axis) - 1);
+        fractions.at(axis) = grid_coordinate - static_cast<double>(lower_indices.at(axis));
     }
 
     double interpolated_value{ 0.0 };
@@ -180,13 +174,11 @@ double CalculateMeanSubtractedCorrelation(
         };
         numerator += map_value_difference * reference_value_difference;
         map_value_norm_square += map_value_difference * map_value_difference;
-        reference_value_norm_square +=
-            reference_value_difference * reference_value_difference;
+        reference_value_norm_square += reference_value_difference * reference_value_difference;
     }
 
     const auto denominator{
-        std::sqrt(map_value_norm_square) *
-            std::sqrt(reference_value_norm_square)
+        std::sqrt(map_value_norm_square) * std::sqrt(reference_value_norm_square)
     };
     if (denominator == 0.0 ||
         !std::isfinite(denominator) ||
@@ -222,18 +214,11 @@ SamplingPointList GetRadialPointsForQScore(
     double radius,
     int num_points)
 {
-    numeric_validation::RequireFinitePositive(
-        radius,
-        "GetRadialPointsForQScore radius");
-    numeric_validation::RequireAtLeast(
-        num_points,
-        2,
-        "GetRadialPointsForQScore num_points");
+    numeric_validation::RequireFinitePositive(radius, "GetRadialPointsForQScore radius");
+    numeric_validation::RequireAtLeast(num_points, 2, "GetRadialPointsForQScore num_points");
 
     auto neighbor_atoms{
-        model.FindNeighborAtoms(
-            atom,
-            kNeighborSearchRadiusRatio * radius)
+        model.FindNeighborAtoms(atom, kNeighborSearchRadiusRatio * radius)
     };
     neighbor_atoms.erase(
         std::remove_if(
@@ -257,8 +242,7 @@ SamplingPointList GetRadialPointsForQScore(
     for (int attempt = 0; attempt < kMaximumRadialPointAttempts; ++attempt)
     {
         const auto candidate_point_count{
-            target_point_count +
-                static_cast<std::size_t>(attempt) * kCandidatePointIncrement
+            target_point_count + static_cast<std::size_t>(attempt) * kCandidatePointIncrement
         };
         const auto candidate_points{
             GenerateSpiralSpherePoints(
@@ -281,8 +265,7 @@ SamplingPointList GetRadialPointsForQScore(
                 for (std::size_t axis = 0; axis < candidate_point.size(); ++axis)
                 {
                     const auto difference{
-                        candidate_point.at(axis) -
-                            static_cast<double>(neighbor_position.at(axis))
+                        candidate_point.at(axis) - static_cast<double>(neighbor_position.at(axis))
                     };
                     distance_square += difference * difference;
                 }
@@ -324,23 +307,13 @@ double CalculateQScoreForAtom(
     double radial_step,
     int num_points)
 {
-    numeric_validation::RequireFinitePositive(
-        sigma,
-        "CalculateQScoreForAtom sigma");
-    numeric_validation::RequireFinitePositive(
-        max_radius,
-        "CalculateQScoreForAtom max_radius");
-    numeric_validation::RequireFinitePositive(
-        radial_step,
-        "CalculateQScoreForAtom radial_step");
-    numeric_validation::RequireAtLeast(
-        num_points,
-        2,
-        "CalculateQScoreForAtom num_points");
+    numeric_validation::RequireFinitePositive(sigma, "CalculateQScoreForAtom sigma");
+    numeric_validation::RequireFinitePositive(max_radius, "CalculateQScoreForAtom max_radius");
+    numeric_validation::RequireFinitePositive(radial_step, "CalculateQScoreForAtom radial_step");
+    numeric_validation::RequireAtLeast(num_points, 2, "CalculateQScoreForAtom num_points");
     if (radial_step > max_radius)
     {
-        throw std::invalid_argument(
-            "CalculateQScoreForAtom radial_step must not exceed max_radius.");
+        throw std::invalid_argument("CalculateQScoreForAtom radial_step must not exceed max_radius.");
     }
 
     (void)model.FindNeighborAtoms(atom, 0.0);
@@ -353,28 +326,17 @@ double CalculateQScoreForAtom(
         static_cast<double>(height) + static_cast<double>(offset)
     };
 
-    std::vector<double> map_values(
-        static_cast<std::size_t>(num_points),
-        center_map_value);
-    std::vector<double> reference_values(
-        static_cast<std::size_t>(num_points),
-        center_reference_value);
+    std::vector<double> map_values(static_cast<std::size_t>(num_points), center_map_value);
+    std::vector<double> reference_values(static_cast<std::size_t>(num_points), center_reference_value);
 
     for (double radius = radial_step;
          radius < max_radius + kMaximumRadiusTolerance;
          radius += radial_step)
     {
         const auto radial_points{
-            GetRadialPointsForQScore(
-                atom,
-                model,
-                radius,
-                num_points)
+            GetRadialPointsForQScore(atom, model, radius, num_points)
         };
-        if (radial_points.empty())
-        {
-            continue;
-        }
+        if (radial_points.empty()) continue;
 
         const auto scaled_radius{ radius / sigma };
         const auto reference_value{
@@ -385,30 +347,21 @@ double CalculateQScoreForAtom(
         for (const auto & radial_point : radial_points)
         {
             map_values.emplace_back(
-                InterpolateMapValueTrilinear(
-                    map,
-                    radial_point.position));
+                InterpolateMapValueTrilinear(map, radial_point.position));
             reference_values.emplace_back(reference_value);
         }
     }
 
-    return CalculateMeanSubtractedCorrelation(
-        map_values,
-        reference_values);
+    return CalculateMeanSubtractedCorrelation(map_values, reference_values);
 }
 
-double CalculateAverageQScores(
-    const MapObject & map,
-    const ModelObject & model)
+double CalculateAverageQScores(const MapObject & map, const ModelObject & model)
 {
     double q_score_sum{ 0.0 };
     std::size_t atom_count{ 0 };
     for (const auto & atom : model.GetAtomList())
     {
-        if (atom->GetElement() == Element::HYDROGEN)
-        {
-            continue;
-        }
+        if (atom->GetElement() == Element::HYDROGEN) continue;
 
         q_score_sum += CalculateQScoreForAtom(
             *atom,
