@@ -121,12 +121,6 @@ const std::vector<AtomObject *> & ModelObject::GetSelectedAtomList(int residue_i
         iter->second;
 }
 
-const std::unordered_map<std::string, std::vector<std::string>> &
-ModelObject::GetChainIDListMap() const
-{
-    return m_chain_id_list_map;
-}
-
 ModelObject::ModelObject(ModelObject && other) noexcept :
     m_atom_list{ std::move(other.m_atom_list) },
     m_bond_list{ std::move(other.m_bond_list) },

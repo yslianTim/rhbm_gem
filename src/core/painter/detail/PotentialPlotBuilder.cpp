@@ -944,6 +944,53 @@ PotentialPlotBuilder::CreateAtomQScoreToSequenceIDGraphMap(
 }
 
 std::unordered_map<std::string, std::unique_ptr<TGraphErrors>>
+PotentialPlotBuilder::CreateAverageQScoreToSequenceIDGraphMap(
+    size_t method, bool apply_selection, bool use_updated_sample)
+{
+    if (IsModelObjectAvailable() == false) return {};
+    auto model_object{ m_model_object };
+    std::vector<std::string> chain_id_list;
+    for (auto & [entity_id, chain_ids] : model_object->GetChainIDListMap())
+    {
+        (void) entity_id;
+        if (chain_ids.empty()) continue;
+        chain_id_list.insert(chain_id_list.end(), chain_ids.begin(), chain_ids.end());
+    }
+
+    std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> graph_map;
+    for (auto & chain_id : chain_id_list)
+    {
+        std::unordered_map<int, std::vector<double>> q_scores_map;
+        for (auto & atom : model_object->GetSelectedAtoms())
+        {
+            if (atom->GetChainID() != chain_id) continue;
+            const auto entry{ AtomLocalPotentialView::For(*atom) };
+            if (!entry.IsAvailable()) continue;
+            auto sequence_id{ atom->GetSequenceID() };
+            if (sequence_id < 0) continue;
+            auto q_score{
+                local_potential_series::ComputeQScore(
+                    entry.GetSamplingEntries(apply_selection, use_updated_sample),
+                    entry.GetGaussianResult(),
+                    static_cast<local_potential_series::QScoreReference>(method))
+            };
+            q_scores_map[sequence_id].emplace_back(q_score);
+        }
+        if (q_scores_map.empty()) continue;
+
+        graph_map[chain_id] = root_helper::CreateGraphErrors();
+        int count{ 0 };
+        for (const auto & [seq_id, q_score_vec] : q_scores_map)
+        {
+            auto q_score_average{ array_helper::ComputeMean(q_score_vec.data(), q_score_vec.size()) };
+            graph_map[chain_id]->SetPoint(count, static_cast<double>(seq_id), q_score_average);
+            count++;
+        }
+    }
+    return graph_map;
+}
+
+std::unordered_map<std::string, std::unique_ptr<TGraphErrors>>
 PotentialPlotBuilder::CreateAtomGausEstimateToSequenceIDGraphMap(
     size_t main_chain_element_id, const int par_id, Residue residue)
 {
