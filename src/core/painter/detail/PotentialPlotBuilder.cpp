@@ -3,6 +3,7 @@
 #include "data/detail/AtomClassifier.hpp"
 #include "data/detail/ModelDerivedState.hpp"
 
+#include <rhbm_gem/core/QScoreHelper.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/KeyPacker.hpp>
