@@ -28,6 +28,8 @@ def assert_module_surface() -> None:
     assert hasattr(m, "CommandDiagnostic")
     assert hasattr(m, "CommandResult")
     assert hasattr(m, "RunCommand")
+    assert hasattr(m, "PainterType")
+    assert hasattr(m.PainterType, "QSCORE")
     assert hasattr(m, "PrinterType")
     assert hasattr(m.PrinterType, "ATOM_OUTLIER")
     assert hasattr(m, "TesterType")
@@ -138,6 +140,12 @@ def assert_request_objects_are_usable() -> None:
         analysis.sampling_method
         == m.SphereSamplingMethod.VOLUME_UNIFORM_RANDOM
     )
+
+    display = m.PotentialDisplayRequest()
+    display.map_file_path = str(PROJECT_ROOT / "tests" / "fixtures" / "test.map")
+    display.painter_choice = m.PainterType.QSCORE
+    assert Path(display.map_file_path).name == "test.map"
+    assert display.painter_choice == m.PainterType.QSCORE
 
 
 def has_issue(report, option_name: str) -> bool:

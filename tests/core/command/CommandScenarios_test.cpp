@@ -514,6 +514,72 @@ TEST(CommandScenariosTest, PotentialDisplayAllowsWellFormedReferenceGroupsPastPr
     EXPECT_FALSE(HasDiagnosticForOption(result.issues, "--ref-group"));
 }
 
+TEST(CommandScenariosTest, PotentialDisplayQScoreRequiresMapFileAtPrepare)
+{
+    PotentialDisplayRequest request{};
+    request.painter_choice = PainterType::QSCORE;
+    request.model_key_tag_list = { "model_key" };
+
+    const auto result{ RunCommand(request) };
+
+    EXPECT_FALSE(result.succeeded);
+    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "request"));
+}
+
+TEST(CommandScenariosTest, PotentialDisplayRejectsMissingOptionalMapPath)
+{
+    command_test::ScopedTempDir temp_dir{ "potential_display_missing_map" };
+
+    PotentialDisplayRequest request{};
+    request.painter_choice = PainterType::QSCORE;
+    request.model_key_tag_list = { "model_key" };
+    request.map_file_path = temp_dir.path() / "missing.map";
+
+    const auto result{ RunCommand(request) };
+
+    EXPECT_FALSE(result.succeeded);
+    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "-m,--map"));
+}
+
+TEST(CommandScenariosTest, PotentialDisplayGausDoesNotRequireMapAtPrepare)
+{
+    PotentialDisplayRequest request{};
+    request.painter_choice = PainterType::GAUS;
+    request.model_key_tag_list = { "model_key" };
+
+    const auto result{ RunCommand(request) };
+
+    EXPECT_FALSE(result.succeeded);
+    EXPECT_FALSE(HasDiagnosticForOption(result.issues, "-m,--map"));
+    EXPECT_FALSE(HasDiagnosticForOption(result.issues, "request"));
+}
+
+TEST(CommandScenariosTest, PotentialDisplayQScoreLoadsMapAndDispatchesPainter)
+{
+    command_test::ScopedTempDir temp_dir{ "potential_display_qscore" };
+    const auto model_path{ command_test::TestDataPath("test_model.cif") };
+    const auto map_path{
+        command_test::GenerateMapFile(temp_dir.path() / "map", model_path)
+    };
+    const auto database_path{ temp_dir.path() / "analysis.sqlite" };
+
+    PotentialAnalysisRequest analysis_request{};
+    analysis_request.database_path = database_path;
+    analysis_request.model_file_path = model_path;
+    analysis_request.map_file_path = map_path;
+    analysis_request.saved_key_tag = "qscore_model";
+    ASSERT_TRUE(RunCommand(analysis_request).succeeded);
+
+    PotentialDisplayRequest display_request{};
+    display_request.output_dir = temp_dir.path() / "display";
+    display_request.database_path = database_path;
+    display_request.map_file_path = map_path;
+    display_request.painter_choice = PainterType::QSCORE;
+    display_request.model_key_tag_list = { "qscore_model" };
+
+    EXPECT_TRUE(RunCommand(display_request).succeeded);
+}
+
 TEST(CommandScenariosTest, ResultDumpRequiresMapFileForMapPrinterAtPrepare)
 {
     ResultDumpRequest request{};

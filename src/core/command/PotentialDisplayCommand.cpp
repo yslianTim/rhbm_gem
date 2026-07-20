@@ -1,7 +1,9 @@
 #include "detail/CommandBase.hpp"
 #include <rhbm_gem/data/io/DataRepository.hpp>
+#include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
+#include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/core/PainterFunctions.hpp>
 #include <rhbm_gem/utils/domain/AtomSelector.hpp>
@@ -25,6 +27,7 @@ public:
 
 private:
     void NormalizeAndValidateRequest(PotentialDisplayRequest & request) override;
+    void ValidatePreparedRequest(const PotentialDisplayRequest & request) override;
     bool ExecuteImpl(const PotentialDisplayRequest & request) override;
 };
 
@@ -32,6 +35,7 @@ namespace {
 
 struct PotentialDisplayInputs
 {
+    std::unique_ptr<rhbm_gem::MapObject> map_object;
     std::vector<std::unique_ptr<rhbm_gem::ModelObject>> model_objects;
     std::unordered_map<
         std::string,
@@ -46,6 +50,11 @@ std::optional<PotentialDisplayInputs> LoadPotentialDisplayInputs(
     {
         DataRepository repository{ request.database_path };
         PotentialDisplayInputs inputs;
+        if (request.painter_choice == PainterType::QSCORE)
+        {
+            inputs.map_object = ReadMap(request.map_file_path);
+            inputs.map_object->SetKeyTag("map");
+        }
 
         auto model_size{ request.model_key_tag_list.size() };
         size_t model_count{ 1 };
@@ -81,7 +90,7 @@ std::optional<PotentialDisplayInputs> LoadPotentialDisplayInputs(
     catch(const std::exception & e)
     {
         Logger::Log(LogLevel::Error,
-            "PotentialDisplayCommand::BuildDataObject : Failed to load model data from database: "
+            "PotentialDisplayCommand::BuildDataObject : Failed to load display inputs: "
                 + std::string(e.what()));
         return std::nullopt;
     }
@@ -162,6 +171,7 @@ PotentialDisplayCommand::PotentialDisplayCommand() : CommandBase<PotentialDispla
 void PotentialDisplayCommand::NormalizeAndValidateRequest(PotentialDisplayRequest & request)
 {
     RequireEnum(request, &PotentialDisplayRequest::painter_choice);
+    RequireOptionalExistingPath(request, &PotentialDisplayRequest::map_file_path);
     RequireNonEmptyList(request, &PotentialDisplayRequest::model_key_tag_list);
     for (const auto & [group_name, members] : request.reference_model_groups)
     {
@@ -177,6 +187,14 @@ void PotentialDisplayCommand::NormalizeAndValidateRequest(PotentialDisplayReques
                 "Reference group '" + group_name + "' cannot be empty.");
         }
     }
+}
+
+void PotentialDisplayCommand::ValidatePreparedRequest(
+    const PotentialDisplayRequest & request)
+{
+    RequirePrepareCondition(
+        request.painter_choice != PainterType::QSCORE || !request.map_file_path.empty(),
+        "A map file is required when '--painter qscore' is selected.");
 }
 
 bool PotentialDisplayCommand::ExecuteImpl(const PotentialDisplayRequest & request)
@@ -195,6 +213,11 @@ bool PotentialDisplayCommand::ExecuteImpl(const PotentialDisplayRequest & reques
         case PainterType::GAUS:
         {
             PaintGaus(model_objects, output_folder);
+            break;
+        }
+        case PainterType::QSCORE:
+        {
+            PaintQScore(model_objects, *inputs->map_object, output_folder);
             break;
         }
         case PainterType::COMPARISON:
@@ -226,6 +249,7 @@ bool PotentialDisplayCommand::ExecuteImpl(const PotentialDisplayRequest & reques
             Logger::Log(LogLevel::Warning,
                         "Available Painter Choices:\n"
                         "  [0] GausPainter\n"
+                        "  [1] QScorePainter\n"
                         "  [2] ComparisonPainter\n"
                         "  [3] DemoPainter\n"
                         "  [4] AtomPainter");
