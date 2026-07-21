@@ -320,10 +320,8 @@ double CalculateQScoreForAtom(
             GetRadialPointsForQScore(atom, model, radius, num_points)
         };
         if (radial_points.empty()) continue;
-
-        const auto scaled_radius{ radius / sigma };
         const auto reference_value{
-            height * std::exp(-0.5 * scaled_radius * scaled_radius) + offset
+            height * std::exp(-0.5 * radius * radius / (sigma * sigma)) + offset
         };
         for (const auto & radial_point : radial_points)
         {
