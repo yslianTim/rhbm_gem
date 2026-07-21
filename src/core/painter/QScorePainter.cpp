@@ -1,5 +1,6 @@
 #include <rhbm_gem/core/PainterFunctions.hpp>
 
+#include <rhbm_gem/core/QScoreHelper.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
@@ -38,7 +39,7 @@ namespace {
 class QScorePainter
 {
     std::vector<ModelObject *> m_model_object_list;
-    [[maybe_unused]] const MapObject & m_map_object;
+    const MapObject & m_map_object;
     std::string m_folder_path{ "./" };
 
 public:
@@ -96,7 +97,9 @@ void QScorePainter::PaintAverageQScoreToSequenceSummary(
     Logger::Log(LogLevel::Info, "QScorePainter::PaintAverageQScoreToSequenceSummary");
 
     #ifdef HAVE_ROOT
-    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
+    auto plot_builder{
+        std::make_unique<PotentialPlotBuilder>(model_object, &m_map_object)
+    };
 
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);
@@ -113,7 +116,7 @@ void QScorePainter::PaintAverageQScoreToSequenceSummary(
 
     for (auto & [chain_id, gaus_graph] : qscore_graph_map[0])
     {
-        double y_min{ 0.0 };
+        double y_min{ 0.5 };
         double y_max{ 1.0 };
 
         std::vector<double> x_array;
@@ -158,14 +161,10 @@ void QScorePainter::PaintAverageQScoreToSequenceSummary(
         {
             root_helper::SetMarkerAttribute(
                 qscore_graph_map[k].at(chain_id).get(),
-                marker_list[k],
-                1.2f,
-                color_list[k]);
+                marker_list[k], 1.2f, color_list[k]);
             root_helper::SetLineAttribute(
                 qscore_graph_map[k].at(chain_id).get(),
-                1,
-                1,
-                color_list[k]);
+                1, 1, color_list[k]);
             qscore_graph_map[k].at(chain_id)->Draw("PL X0");
         }
 
@@ -184,8 +183,10 @@ void QScorePainter::PaintAverageQScoreToSequenceSummary(
     Logger::Log(LogLevel::Info, " Output file: " + file_path);
     #else
     (void)file_path;
-    (void)model_object;
     #endif
+
+    auto average_qscore{ core::CalculateAverageQScores(m_map_object, *model_object) };
+    Logger::Log(LogLevel::Info, Form("Average Q-Score: %.3f", average_qscore));
 }
 
 void QScorePainter::PaintQScoreAminoAcidMainChainComponent(
@@ -193,9 +194,7 @@ void QScorePainter::PaintQScoreAminoAcidMainChainComponent(
     const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    Logger::Log(
-        LogLevel::Info,
-        "QScorePainter::PaintQScoreAminoAcidMainChainComponent");
+    Logger::Log(LogLevel::Info, "QScorePainter::PaintQScoreAminoAcidMainChainComponent");
 
     #ifdef HAVE_ROOT
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };

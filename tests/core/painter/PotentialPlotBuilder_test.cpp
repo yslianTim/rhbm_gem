@@ -10,6 +10,7 @@
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
+#include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/KeyPacker.hpp>
@@ -83,6 +84,35 @@ TEST(PotentialPlotBuilderTest, RepresentativeBuildersProduceRootObjects)
     EXPECT_NE(tomography_graph, nullptr);
     EXPECT_NE(distance_graph, nullptr);
     EXPECT_NE(gaus_function, nullptr);
+}
+
+TEST(PotentialPlotBuilderTest, AverageQScoreBuilderUsesProvidedMap)
+{
+    command_test::ScopedTempDir temp_dir{ "potential_plot_builder_qscore" };
+    const auto model_path{ command_test::TestDataPath("test_model.cif") };
+    const auto map_path{
+        command_test::GenerateMapFile(temp_dir.path() / "map", model_path)
+    };
+    auto model{ rg::ReadModel(model_path) };
+    auto map{ rg::ReadMap(map_path) };
+    ASSERT_NE(model, nullptr);
+    ASSERT_NE(map, nullptr);
+
+    model->SelectAllAtoms();
+    EnsureLocalPotentialEntries(*model);
+
+    rg::PotentialPlotBuilder model_builder{ model.get(), map.get() };
+    const auto graph_map{
+        model_builder.CreateAverageQScoreToSequenceIDGraphMap(false, true, false)
+    };
+
+    ASSERT_FALSE(graph_map.empty());
+    for (const auto & [chain_id, graph] : graph_map)
+    {
+        (void)chain_id;
+        ASSERT_NE(graph, nullptr);
+        EXPECT_GT(graph->GetN(), 0);
+    }
 }
 
 TEST(PotentialPlotBuilderTest, LinearModelDataBuildersUseFiniteSamplingRange)

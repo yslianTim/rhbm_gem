@@ -23,10 +23,6 @@ constexpr double kNeighborSearchRadiusRatio{ 2.0 };
 constexpr double kSpiralSpacing{ 3.6 };
 constexpr double kMapBoundaryMarginRatio{ 0.5 };
 constexpr double kMaximumRadiusTolerance{ 0.01 };
-constexpr double kAverageQScoreSigma{ 0.6 };
-constexpr double kAverageQScoreMaximumRadius{ 2.0 };
-constexpr double kAverageQScoreRadialStep{ 0.1 };
-constexpr int kAverageQScorePointCount{ 8 };
 
 using RadialPoint = std::array<double, 3>;
 
@@ -193,7 +189,7 @@ double CalculateMeanSubtractedCorrelation(
 
 } // namespace
 
-std::tuple<float, float> GetReferenceGaussianParameters(const MapObject & map_object)
+std::tuple<double, double> GetReferenceGaussianParameters(const MapObject & map_object)
 {
     const auto reference_high{
         std::min(
@@ -205,7 +201,7 @@ std::tuple<float, float> GetReferenceGaussianParameters(const MapObject & map_ob
             map_object.GetMapValueMean() - map_object.GetMapValueSD(),
             map_object.GetMapValueMin())
     };
-    return std::make_tuple(reference_high - offset, offset);
+    return std::make_tuple(static_cast<double>(reference_high - offset), static_cast<double>(offset));
 }
 
 SamplingPointList GetRadialPointsForQScore(
@@ -302,36 +298,23 @@ double CalculateQScoreForAtom(
     const AtomObject & atom,
     const MapObject & map,
     const ModelObject & model,
+    double height,
+    double offset,
     double sigma,
-    double max_radius,
-    double radial_step,
     int num_points)
 {
     numeric_validation::RequireFinitePositive(sigma, "CalculateQScoreForAtom sigma");
-    numeric_validation::RequireFinitePositive(max_radius, "CalculateQScoreForAtom max_radius");
-    numeric_validation::RequireFinitePositive(radial_step, "CalculateQScoreForAtom radial_step");
     numeric_validation::RequireAtLeast(num_points, 2, "CalculateQScoreForAtom num_points");
-    if (radial_step > max_radius)
-    {
-        throw std::invalid_argument("CalculateQScoreForAtom radial_step must not exceed max_radius.");
-    }
-
-    (void)model.FindNeighborAtoms(atom, 0.0);
-
-    const auto [height, offset]{ GetReferenceGaussianParameters(map) };
+    
     const auto center_map_value{
         InterpolateMapValueTrilinear(map, atom.GetPositionRef())
     };
-    const auto center_reference_value{
-        static_cast<double>(height) + static_cast<double>(offset)
-    };
+    const auto center_reference_value{ height + offset };
 
     std::vector<double> map_values(static_cast<std::size_t>(num_points), center_map_value);
     std::vector<double> reference_values(static_cast<std::size_t>(num_points), center_reference_value);
 
-    for (double radius = radial_step;
-         radius < max_radius + kMaximumRadiusTolerance;
-         radius += radial_step)
+    for (double radius = 0.1; radius < 2.0 + kMaximumRadiusTolerance; radius += 0.1)
     {
         const auto radial_points{
             GetRadialPointsForQScore(atom, model, radius, num_points)
@@ -340,14 +323,11 @@ double CalculateQScoreForAtom(
 
         const auto scaled_radius{ radius / sigma };
         const auto reference_value{
-            static_cast<double>(height) *
-                std::exp(-0.5 * scaled_radius * scaled_radius) +
-                static_cast<double>(offset)
+            height * std::exp(-0.5 * scaled_radius * scaled_radius) + offset
         };
         for (const auto & radial_point : radial_points)
         {
-            map_values.emplace_back(
-                InterpolateMapValueTrilinear(map, radial_point.position));
+            map_values.emplace_back(InterpolateMapValueTrilinear(map, radial_point.position));
             reference_values.emplace_back(reference_value);
         }
     }
@@ -357,27 +337,17 @@ double CalculateQScoreForAtom(
 
 double CalculateAverageQScores(const MapObject & map, const ModelObject & model)
 {
+    const auto [height, offset]{ GetReferenceGaussianParameters(map) };
     double q_score_sum{ 0.0 };
     std::size_t atom_count{ 0 };
     for (const auto & atom : model.GetAtomList())
     {
         if (atom->GetElement() == Element::HYDROGEN) continue;
-
-        q_score_sum += CalculateQScoreForAtom(
-            *atom,
-            map,
-            model,
-            kAverageQScoreSigma,
-            kAverageQScoreMaximumRadius,
-            kAverageQScoreRadialStep,
-            kAverageQScorePointCount);
+        q_score_sum += CalculateQScoreForAtom(*atom, map, model, height, offset);
         atom_count++;
     }
 
-    if (atom_count == 0)
-    {
-        return 0.0;
-    }
+    if (atom_count == 0) return 0.0;
     return q_score_sum / static_cast<double>(atom_count);
 }
 

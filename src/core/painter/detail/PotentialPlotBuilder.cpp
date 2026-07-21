@@ -6,6 +6,7 @@
 #include <rhbm_gem/core/QScoreHelper.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/utils/domain/KeyPacker.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
@@ -69,8 +70,10 @@ std::vector<GroupKey> CollectComponentAtomGroupKeys(
 
 } // namespace
 
-PotentialPlotBuilder::PotentialPlotBuilder(ModelObject * model_object) :
-    m_model_object{ model_object }
+PotentialPlotBuilder::PotentialPlotBuilder(
+    ModelObject * model_object,
+    const MapObject * map_object) :
+    m_model_object{ model_object }, m_map_object{ map_object }
 {
 }
 
@@ -102,6 +105,16 @@ bool PotentialPlotBuilder::IsModelObjectAvailable() const
     if (m_model_object == nullptr)
     {
         Logger::Log(LogLevel::Error, "Model object is not available.");
+        return false;
+    }
+    return true;
+}
+
+bool PotentialPlotBuilder::IsMapObjectAvailable() const
+{
+    if (m_map_object == nullptr)
+    {
+        Logger::Log(LogLevel::Error, "Map object is not available.");
         return false;
     }
     return true;
@@ -948,8 +961,10 @@ std::unordered_map<std::string, std::unique_ptr<TGraphErrors>>
 PotentialPlotBuilder::CreateAverageQScoreToSequenceIDGraphMap(
     bool use_fitted_par, bool apply_selection, bool use_updated_sample)
 {
-    if (IsModelObjectAvailable() == false) return {};
+    if (IsModelObjectAvailable() == false || IsMapObjectAvailable() == false) return {};
     auto model_object{ m_model_object };
+    auto map_object{ m_map_object };
+    const auto [height, offset]{ core::GetReferenceGaussianParameters(*map_object) };
     std::vector<std::string> chain_id_list;
     for (auto & [entity_id, chain_ids] : model_object->GetChainIDListMap())
     {
@@ -972,11 +987,12 @@ PotentialPlotBuilder::CreateAverageQScoreToSequenceIDGraphMap(
             if (!entry.IsAvailable()) continue;
             auto sequence_id{ atom->GetSequenceID() };
             if (sequence_id < 0) continue;
-            auto q_score{
+            auto q_score{ use_fitted_par ?
                 local_potential_series::ComputeQScore(
                     entry.GetSamplingEntries(apply_selection, use_updated_sample),
                     entry.GetGaussianResult(),
-                    method)
+                    method) :
+                core::CalculateQScoreForAtom(*atom, *map_object, *model_object, height, offset)
             };
             q_scores_map[sequence_id].emplace_back(q_score);
         }

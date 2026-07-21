@@ -23,14 +23,16 @@ namespace rhbm_gem {
 
 class AtomObject;
 class ModelObject;
+class MapObject;
 
 class PotentialPlotBuilder
 {
     ModelObject * m_model_object{ nullptr };
+    const MapObject * m_map_object{ nullptr };
     AtomObject * m_atom_object{ nullptr };
 
 public:
-    explicit PotentialPlotBuilder(ModelObject * model_object);
+    PotentialPlotBuilder(ModelObject * model_object, const MapObject * map_object = nullptr);
     explicit PotentialPlotBuilder(AtomObject * atom_object);
 
 #ifdef HAVE_ROOT
@@ -81,6 +83,7 @@ private:
     ModelAnalysisView GetModelView() const;
     AtomLocalPotentialView GetLocalEntry() const;
     bool IsModelObjectAvailable() const;
+    bool IsMapObjectAvailable() const;
     bool IsAtomLocalEntryAvailable() const;
     bool IsAvailableAtomGroupKey(GroupKey group_key) const;
 };

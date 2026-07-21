@@ -577,7 +577,14 @@ TEST(CommandScenariosTest, PotentialDisplayQScoreLoadsMapAndDispatchesPainter)
     display_request.painter_choice = PainterType::QSCORE;
     display_request.model_key_tag_list = { "qscore_model" };
 
-    EXPECT_TRUE(RunCommand(display_request).succeeded);
+    testing::internal::CaptureStderr();
+    const auto display_result{ RunCommand(display_request) };
+    const std::string error_output{ testing::internal::GetCapturedStderr() };
+
+    EXPECT_TRUE(display_result.succeeded);
+    EXPECT_EQ(
+        error_output.find("Map object is not available."),
+        std::string::npos);
 #ifdef HAVE_ROOT
     EXPECT_EQ(
         command_test::CountFilesWithExtension(display_request.output_dir, ".pdf"),
