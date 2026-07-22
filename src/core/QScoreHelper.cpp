@@ -103,38 +103,51 @@ double InterpolateMapValueTrilinear(const MapObject & map, const std::array<floa
         fractions.at(axis) = grid_coordinate - static_cast<double>(lower_indices.at(axis));
     }
 
-    double interpolated_value{ 0.0 };
-    for (int x_offset = 0; x_offset <= 1; ++x_offset)
-    {
-        const auto x_index{
-            x_offset == 0 ? lower_indices.at(0) : upper_indices.at(0)
-        };
-        const auto x_weight{
-            x_offset == 0 ? 1.0 - fractions.at(0) : fractions.at(0)
-        };
-        for (int y_offset = 0; y_offset <= 1; ++y_offset)
+    const auto interpolate{
+        [](double lower_value, double upper_value, double fraction)
         {
-            const auto y_index{
-                y_offset == 0 ? lower_indices.at(1) : upper_indices.at(1)
+            return lower_value + fraction * (upper_value - lower_value);
+        }
+    };
+
+    std::array<std::array<double, 2>, 2> x_interpolated_values{};
+    for (std::size_t y_offset = 0; y_offset < 2; ++y_offset)
+    {
+        const auto y_index{
+            y_offset == 0 ? lower_indices.at(1) : upper_indices.at(1)
+        };
+        for (std::size_t z_offset = 0; z_offset < 2; ++z_offset)
+        {
+            const auto z_index{
+                z_offset == 0 ? lower_indices.at(2) : upper_indices.at(2)
             };
-            const auto y_weight{
-                y_offset == 0 ? 1.0 - fractions.at(1) : fractions.at(1)
+            const auto lower_value{
+                static_cast<double>(map.GetMapValue(
+                    lower_indices.at(0), y_index, z_index))
             };
-            for (int z_offset = 0; z_offset <= 1; ++z_offset)
-            {
-                const auto z_index{
-                    z_offset == 0 ? lower_indices.at(2) : upper_indices.at(2)
-                };
-                const auto z_weight{
-                    z_offset == 0 ? 1.0 - fractions.at(2) : fractions.at(2)
-                };
-                interpolated_value +=
-                    x_weight * y_weight * z_weight *
-                    static_cast<double>(map.GetMapValue(x_index, y_index, z_index));
-            }
+            const auto upper_value{
+                static_cast<double>(map.GetMapValue(
+                    upper_indices.at(0), y_index, z_index))
+            };
+            x_interpolated_values.at(y_offset).at(z_offset) = interpolate(
+                lower_value,
+                upper_value,
+                fractions.at(0));
         }
     }
-    return interpolated_value;
+
+    std::array<double, 2> y_interpolated_values{};
+    for (std::size_t z_offset = 0; z_offset < 2; ++z_offset)
+    {
+        y_interpolated_values.at(z_offset) = interpolate(
+            x_interpolated_values.at(0).at(z_offset),
+            x_interpolated_values.at(1).at(z_offset),
+            fractions.at(1));
+    }
+    return interpolate(
+        y_interpolated_values.at(0),
+        y_interpolated_values.at(1),
+        fractions.at(2));
 }
 
 double CalculateMeanSubtractedCorrelation(

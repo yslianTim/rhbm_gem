@@ -385,7 +385,11 @@ TEST(QScoreHelperTest, RejectsInvalidRadialPointArguments)
 
 TEST(QScoreHelperTest, CalculatesHighQScoreForMatchingGaussianWidth)
 {
+    constexpr double height{ 1.0 };
+    constexpr double offset{ 0.0 };
     constexpr double sigma{ 0.4 };
+    constexpr double mismatched_sigma{ 0.8 };
+    constexpr int point_count{ 8 };
     const auto map{
         MakeMapObject(
             { 41, 41, 41 },
@@ -417,20 +421,20 @@ TEST(QScoreHelperTest, CalculatesHighQScoreForMatchingGaussianWidth)
             atom,
             map,
             *model,
+            height,
+            offset,
             sigma,
-            1.0,
-            0.1,
-            8)
+            point_count)
     };
     const auto mismatched_score{
         rhbm_gem::core::CalculateQScoreForAtom(
             atom,
             map,
             *model,
-            0.8,
-            1.0,
-            0.1,
-            8)
+            height,
+            offset,
+            mismatched_sigma,
+            point_count)
     };
 
     EXPECT_GT(matching_score, 0.99);
@@ -439,11 +443,15 @@ TEST(QScoreHelperTest, CalculatesHighQScoreForMatchingGaussianWidth)
 
 TEST(QScoreHelperTest, UsesCenterWeightMaximumShellAndAllAcceptedPoints)
 {
+    constexpr double height{ 0.5 };
+    constexpr double offset{ 1.0 };
+    constexpr double sigma{ 1.0 };
+    constexpr int point_count{ 2 };
     const auto map{
         MakeMapObject(
             { 5, 5, 5 },
-            { 0.5f, 0.5f, 0.5f },
-            { -1.0f, -1.0f, -1.0f },
+            { 1.0f, 1.0f, 1.0f },
+            { -2.0f, -2.0f, -2.0f },
             [](const std::array<float, 3> & position)
             {
                 return position.at(2);
@@ -462,23 +470,27 @@ TEST(QScoreHelperTest, UsesCenterWeightMaximumShellAndAllAcceptedPoints)
             atom,
             map,
             *model,
-            0.5,
-            1.0,
-            1.0,
-            2)
+            height,
+            offset,
+            sigma,
+            point_count)
     };
 
-    constexpr double expected_q_score{ 0.3611575593 };
+    constexpr double expected_q_score{ 0.29089961997690711 };
     EXPECT_NEAR(q_score, expected_q_score, 1.0e-6);
 }
 
 TEST(QScoreHelperTest, ReturnsZeroQScoreForConstantMap)
 {
+    constexpr double height{ 0.5 };
+    constexpr double offset{ 1.0 };
+    constexpr double sigma{ 0.5 };
+    constexpr int point_count{ 4 };
     const auto map{
         MakeMapObject(
             { 5, 5, 5 },
-            { 0.5f, 0.5f, 0.5f },
-            { -1.0f, -1.0f, -1.0f },
+            { 1.0f, 1.0f, 1.0f },
+            { -2.0f, -2.0f, -2.0f },
             [](const std::array<float, 3> &)
             {
                 return 3.5f;
@@ -496,10 +508,10 @@ TEST(QScoreHelperTest, ReturnsZeroQScoreForConstantMap)
             atom,
             map,
             *model,
-            0.5,
-            1.0,
-            0.5,
-            4),
+            height,
+            offset,
+            sigma,
+            point_count),
         0.0);
 }
 
@@ -600,32 +612,20 @@ TEST(QScoreHelperTest, RejectsInvalidQScoreArguments)
     const auto & atom{ *model->GetAtomList().front() };
     const auto nan{ std::numeric_limits<double>::quiet_NaN() };
     const auto infinity{ std::numeric_limits<double>::infinity() };
-    const std::array<double, 4> invalid_positive_values{
+    const std::array<double, 4> invalid_sigma_values{
         0.0,
         -1.0,
         nan,
         infinity
     };
 
-    for (const auto invalid_value : invalid_positive_values)
+    for (const auto invalid_sigma : invalid_sigma_values)
     {
         EXPECT_THROW(
             rhbm_gem::core::CalculateQScoreForAtom(
-                atom, map, *model, invalid_value, 1.0, 0.1, 8),
-            std::invalid_argument);
-        EXPECT_THROW(
-            rhbm_gem::core::CalculateQScoreForAtom(
-                atom, map, *model, 0.5, invalid_value, 0.1, 8),
-            std::invalid_argument);
-        EXPECT_THROW(
-            rhbm_gem::core::CalculateQScoreForAtom(
-                atom, map, *model, 0.5, 1.0, invalid_value, 8),
+                atom, map, *model, 0.5, 1.0, invalid_sigma, 8),
             std::invalid_argument);
     }
-    EXPECT_THROW(
-        rhbm_gem::core::CalculateQScoreForAtom(
-            atom, map, *model, 0.5, 1.0, 2.0, 8),
-        std::invalid_argument);
     for (const auto invalid_num_points : { 1, 0, -1 })
     {
         EXPECT_THROW(
@@ -648,15 +648,16 @@ TEST(QScoreHelperTest, CalculatesSingleAtomAverageWithMapQParameters)
         })
     };
     const auto & atom{ *model->GetAtomList().front() };
+    const auto [height, offset]{
+        rhbm_gem::core::GetReferenceGaussianParameters(map)
+    };
     const auto expected_q_score{
         rhbm_gem::core::CalculateQScoreForAtom(
             atom,
             map,
             *model,
-            0.6,
-            2.0,
-            0.1,
-            8)
+            height,
+            offset)
     };
 
     EXPECT_DOUBLE_EQ(
@@ -677,26 +678,25 @@ TEST(QScoreHelperTest, AveragesAllNonHydrogenAtomsRegardlessOfSelection)
     model->SelectAllAtoms();
     model->SetAtomSelected(2, false);
     ASSERT_EQ(model->GetSelectedAtomCount(), 2u);
+    const auto [height, offset]{
+        rhbm_gem::core::GetReferenceGaussianParameters(map)
+    };
 
     const auto first_q_score{
         rhbm_gem::core::CalculateQScoreForAtom(
             *model->GetAtomList().at(0),
             map,
             *model,
-            0.6,
-            2.0,
-            0.1,
-            8)
+            height,
+            offset)
     };
     const auto second_q_score{
         rhbm_gem::core::CalculateQScoreForAtom(
             *model->GetAtomList().at(1),
             map,
             *model,
-            0.6,
-            2.0,
-            0.1,
-            8)
+            height,
+            offset)
     };
 
     EXPECT_DOUBLE_EQ(
