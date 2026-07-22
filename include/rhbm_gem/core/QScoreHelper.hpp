@@ -33,6 +33,12 @@ double CalculateQScoreForAtom(
     double sigma=0.6,
     int num_points=8);
 
+double CalculateQScoreForAtom(
+    const LocalPotentialSampleList & sampling_entries,
+    double height,
+    double offset,
+    double sigma=0.6);
+
 // Returns the mean MapQ-style Q-score across all non-hydrogen model atoms.
 double CalculateAverageQScores(const MapObject & map, const ModelObject & model);
 

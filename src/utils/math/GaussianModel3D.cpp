@@ -136,6 +136,11 @@ double GaussianModel3D::GetDisplayParameter(int par_id) const
     }
 }
 
+double GaussianModel3D::GetHeight() const
+{
+    return m_amplitude * std::pow(Constants::two_pi * m_width * m_width, -1.5);
+}
+
 double GaussianModel3D::Intensity() const
 {
     return WithOffset(0.0).ResponseAtDistance(0.0);

@@ -333,6 +333,32 @@ double CalculateQScoreForAtom(
     return CalculateMeanSubtractedCorrelation(map_values, reference_values);
 }
 
+double CalculateQScoreForAtom(
+    const LocalPotentialSampleList & sampling_entries,
+    double height,
+    double offset,
+    double sigma)
+{
+    if (sampling_entries.empty()) return 0.0;
+    if (std::isfinite(sigma) == false || sigma <= 0.0) return 0.0;
+
+    std::vector<double> map_values;
+    std::vector<double> reference_values;
+    map_values.reserve(sampling_entries.size());
+    reference_values.reserve(sampling_entries.size());
+    for (const auto & sample : sampling_entries)
+    {
+        const auto radius{ static_cast<double>(sample.point.distance) };
+        const auto reference_value{
+            height * std::exp(-0.5 * radius * radius / (sigma * sigma)) + offset
+        };
+        map_values.emplace_back(sample.response);
+        reference_values.emplace_back(reference_value);
+    }
+
+    return CalculateMeanSubtractedCorrelation(map_values, reference_values);
+}
+
 double CalculateAverageQScores(const MapObject & map, const ModelObject & model)
 {
     const auto [height, offset]{ GetReferenceGaussianParameters(map) };

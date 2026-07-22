@@ -48,6 +48,7 @@ public:
     double GetAmplitude() const { return m_amplitude; }
     double GetWidth() const { return m_width; }
     double GetOffset() const { return m_offset; }
+    double GetHeight() const;
     Eigen::VectorXd ToVector() const;
     double GetModelParameter(int par_id) const;
     double GetDisplayParameter(int par_id) const;
