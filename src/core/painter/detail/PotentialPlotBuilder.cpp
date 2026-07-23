@@ -912,52 +912,6 @@ PotentialPlotBuilder::CreateAtomMapValueToSequenceIDGraphMap(
 }
 
 std::unordered_map<std::string, std::unique_ptr<TGraphErrors>>
-PotentialPlotBuilder::CreateAtomQScoreToSequenceIDGraphMap(
-    size_t main_chain_element_id, const int par_choice, bool apply_selection, bool use_updated_sample)
-{
-    if (IsModelObjectAvailable() == false)
-    {
-        return {};
-    }
-    auto model_object{ m_model_object };
-
-    std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> graph_map;
-    std::unordered_map<std::string, int> count_map;
-    std::vector<double> q_score_list;
-    for (auto & atom : model_object->GetSelectedAtoms())
-    {
-        if (atom->GetElement() != data_internal::GetMainChainElement(main_chain_element_id)) continue;
-        if (atom->GetSpot() != data_internal::GetMainChainSpot(main_chain_element_id)) continue;
-        const auto entry{ AtomLocalPotentialView::For(*atom) };
-        if (!entry.IsAvailable()) continue;
-        auto sequence_id{ atom->GetSequenceID() };
-        auto chain_id{ atom->GetChainID() };
-        if (sequence_id < 0) continue;
-        if (graph_map.find(chain_id) == graph_map.end())
-        {
-            graph_map[chain_id] = root_helper::CreateGraphErrors();
-            count_map[chain_id] = 0;
-        }
-        auto x_value{ static_cast<double>(sequence_id) };
-        auto sampling_entries{
-            entry.GetSamplingEntries(apply_selection, use_updated_sample)
-        };
-        auto q_score{
-            local_potential_series::ComputeQScore(
-                sampling_entries,
-                entry.GetGaussianResult(),
-                static_cast<local_potential_series::QScoreReference>(par_choice))
-        };
-        q_score_list.emplace_back(q_score);
-        graph_map[chain_id]->SetPoint(count_map[chain_id], x_value, q_score);
-        count_map[chain_id]++;
-    }
-    auto q_score_average{ array_helper::ComputeMean(q_score_list.data(), q_score_list.size()) };
-    Logger::Log(LogLevel::Info, Form("Average Q-Score: %.3f, %d, %d", q_score_average, par_choice, static_cast<int>(main_chain_element_id)));
-    return graph_map;
-}
-
-std::unordered_map<std::string, std::unique_ptr<TGraphErrors>>
 PotentialPlotBuilder::CreateAverageQScoreToSequenceIDGraphMap(
     bool use_fitted_par, bool apply_selection, bool use_updated_sample)
 {

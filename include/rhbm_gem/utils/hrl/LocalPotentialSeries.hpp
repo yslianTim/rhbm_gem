@@ -8,12 +8,6 @@
 namespace rhbm_gem::local_potential_series
 {
 
-enum class QScoreReference
-{
-    Fixed = 0,
-    MDPDE = 1
-};
-
 std::tuple<float, float> ComputeDistanceRange(
     const LocalPotentialSampleList & sampling_entries,
     double margin_rate = 0.0);
@@ -26,9 +20,5 @@ SeriesPointList BuildBinnedDistanceResponseSeries(
     double x_min = 0.0,
     double x_max = 1.5);
 double ComputeMapValueNearCenter(const LocalPotentialSampleList & sampling_entries);
-double ComputeQScore(
-    const LocalPotentialSampleList & sampling_entries,
-    const LocalGaussianResult & gaussian_result,
-    QScoreReference reference);
 
 } // namespace rhbm_gem::local_potential_series
