@@ -248,6 +248,53 @@ std::unique_ptr<rg::ModelObject> BuildJointPolishDefenseModel()
         rg::GaussianModel3D{ 5.25, 0.60, 0.02 });
 }
 
+std::unique_ptr<rg::ModelObject> BuildSharedOffsetJointPolishDefenseModel(
+    double intensity_scale = 1.0)
+{
+    auto model{ BuildDefenseModel(
+        {
+            std::array<float, 3>{ 0.0F, 0.0F, 0.0F },
+            std::array<float, 3>{ 0.8F, 0.0F, 0.0F }
+        },
+        { Spot::C, Spot::C },
+        { Element::CARBON, Element::CARBON },
+        {
+            rg::GaussianModel3D{
+                6.0 * intensity_scale,
+                0.48,
+                0.05 * intensity_scale
+            },
+            rg::GaussianModel3D{
+                4.8 * intensity_scale,
+                0.62,
+                0.05 * intensity_scale
+            }
+        },
+        rg::GaussianModel3D{
+            5.3 * intensity_scale,
+            0.57,
+            0.02 * intensity_scale
+        }) };
+
+    const std::array<double, 2> initial_offset_list{
+        0.03 * intensity_scale,
+        0.07 * intensity_scale
+    };
+    auto analysis{ model->EditAnalysis() };
+    const auto & atom_list{ model->GetSelectedAtoms() };
+    for (std::size_t i = 0; i < atom_list.size(); i++)
+    {
+        const auto current{
+            rg::AtomLocalPotentialView::RequireFor(*atom_list.at(i))
+                .GetGaussianResult().mdpde.GetModel()
+        };
+        analysis.EnsureAtomLocalPotential(*atom_list.at(i))
+            .SetGaussianResult(MakeGaussianResult(
+                current.WithOffset(initial_offset_list.at(i))));
+    }
+    return model;
+}
+
 std::unique_ptr<rg::ModelObject> BuildAllInvalidSeedDefenseModel()
 {
     auto model{ BuildNearCollinearDefenseModel() };
@@ -1057,7 +1104,12 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishJacobianMatchesFiniteDifference
         rg::GaussianModel3D{ 6.0, 0.55, 0.20 },
         rg::GaussianModel3D{ 5.5, 0.70, -0.15 }
     };
-    const std::array<double, 3> distance_list{ 0.0, 5.0e-6, 0.35 };
+    const std::array<double, 4> distance_list{
+        0.0,
+        5.0e-6,
+        1.0e-5,
+        0.35
+    };
     for (const auto & model : model_list)
     {
         const auto transformed{
@@ -1104,6 +1156,163 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishJacobianMatchesFiniteDifference
                 };
                 EXPECT_NEAR(analytic, finite_difference, tolerance);
             }
+        }
+    }
+}
+
+TEST(EstimatorSecondStageDefenseTest,
+    JointPolishParameterizationSharesOneOffsetColumnPerGroup)
+{
+    const std::vector<rg::GaussianModel3D> base_model_list{
+        rg::GaussianModel3D{ 6.0, 0.55, 1.0 },
+        rg::GaussianModel3D{ 7.0, 0.60, 4.0 },
+        rg::GaussianModel3D{ 8.0, 0.65, 3.0 }
+    };
+    const auto parameterization{
+        polish_detail::BuildLocalFittingJointPolishParameterization(
+            std::vector<GroupKey>{ 20, 10, 20 },
+            base_model_list)
+    };
+
+    ASSERT_TRUE(parameterization.has_value());
+    EXPECT_EQ(parameterization->AtomCount(), 3U);
+    EXPECT_EQ(parameterization->GroupCount(), 2U);
+    EXPECT_EQ(parameterization->ParameterCount(), 8);
+    EXPECT_EQ(parameterization->ShapeColumn(0, 0), 0);
+    EXPECT_EQ(parameterization->ShapeColumn(1, 0), 2);
+    EXPECT_EQ(parameterization->ShapeColumn(2, 0), 4);
+    EXPECT_EQ(
+        parameterization->OffsetColumn(0),
+        parameterization->OffsetColumn(2));
+    EXPECT_NE(
+        parameterization->OffsetColumn(0),
+        parameterization->OffsetColumn(1));
+}
+
+TEST(EstimatorSecondStageDefenseTest, JointPolishSharedOffsetSeedUsesGroupMedians)
+{
+    const std::vector<rg::GaussianModel3D> base_model_list{
+        rg::GaussianModel3D{ 6.0, 0.55, 1.0 },
+        rg::GaussianModel3D{ 7.0, 0.60, 4.0 },
+        rg::GaussianModel3D{ 8.0, 0.65, 3.0 },
+        rg::GaussianModel3D{ 9.0, 0.70, 2.0 },
+        rg::GaussianModel3D{ 10.0, 0.75, 6.0 }
+    };
+    const auto parameterization{
+        polish_detail::BuildLocalFittingJointPolishParameterization(
+            std::vector<GroupKey>{ 20, 10, 20, 20, 10 },
+            base_model_list)
+    };
+
+    ASSERT_TRUE(parameterization.has_value());
+    EXPECT_EQ(parameterization->ParameterCount(), 12);
+    EXPECT_DOUBLE_EQ(
+        parameterization->seed_parameter(
+            parameterization->OffsetColumn(0)),
+        2.0);
+    EXPECT_DOUBLE_EQ(
+        parameterization->seed_parameter(
+            parameterization->OffsetColumn(1)),
+        5.0);
+
+    Eigen::VectorXd direction{
+        Eigen::VectorXd::Zero(parameterization->ParameterCount())
+    };
+    direction(parameterization->OffsetColumn(1)) = 2.0;
+    direction(parameterization->OffsetColumn(0)) = -1.0;
+    const auto candidate_model_list{
+        parameterization->DecodeModels(direction, 0.5)
+    };
+    ASSERT_TRUE(candidate_model_list.has_value());
+    EXPECT_DOUBLE_EQ(candidate_model_list->at(0).GetOffset(), 1.5);
+    EXPECT_DOUBLE_EQ(candidate_model_list->at(1).GetOffset(), 6.0);
+    EXPECT_DOUBLE_EQ(candidate_model_list->at(2).GetOffset(), 1.5);
+    EXPECT_DOUBLE_EQ(candidate_model_list->at(3).GetOffset(), 1.5);
+    EXPECT_DOUBLE_EQ(candidate_model_list->at(4).GetOffset(), 6.0);
+    EXPECT_FALSE(
+        polish_detail::BuildLocalFittingJointPolishParameterization(
+            std::vector<GroupKey>{ 20 },
+            base_model_list).has_value());
+}
+
+TEST(EstimatorSecondStageDefenseTest, SharedOffsetJacobianMatchesFiniteDifference)
+{
+    constexpr double step{ 1.0e-6 };
+    const std::array<rg::GaussianModel3D, 2> model_list{
+        rg::GaussianModel3D{ 6.0, 0.55, 0.20 },
+        rg::GaussianModel3D{ 5.5, 0.70, -0.15 }
+    };
+    const std::array<double, 4> distance_list{
+        0.0,
+        5.0e-6,
+        1.0e-5,
+        0.35
+    };
+    for (const auto & model : model_list)
+    {
+        const auto transformed{
+            change_detail::EncodeLocalFittingTransformedCoordinates(model)
+        };
+        ASSERT_TRUE(transformed.has_value());
+        for (const auto distance : distance_list)
+        {
+            const auto evaluation{
+                polish_detail::EvaluateLocalFittingSharedOffsetResponse(
+                    model,
+                    distance)
+            };
+            ASSERT_TRUE(evaluation.has_value());
+            EXPECT_TRUE(std::isfinite(evaluation->response));
+            EXPECT_TRUE(evaluation->shape_jacobian.allFinite());
+            EXPECT_TRUE(std::isfinite(evaluation->offset_jacobian));
+
+            for (Eigen::Index parameter_index = 0;
+                parameter_index < evaluation->shape_jacobian.size();
+                parameter_index++)
+            {
+                auto lower{ *transformed };
+                auto upper{ *transformed };
+                lower(parameter_index) -= step;
+                upper(parameter_index) += step;
+                lower(static_cast<Eigen::Index>(
+                    change_detail::kOffsetToPeakRatioChangeIndex)) = 0.0;
+                upper(static_cast<Eigen::Index>(
+                    change_detail::kOffsetToPeakRatioChangeIndex)) = 0.0;
+                const auto lower_shape{
+                    change_detail::DecodeLocalFittingTransformedCoordinates(lower)
+                };
+                const auto upper_shape{
+                    change_detail::DecodeLocalFittingTransformedCoordinates(upper)
+                };
+                ASSERT_TRUE(lower_shape.has_value());
+                ASSERT_TRUE(upper_shape.has_value());
+                const auto finite_difference{
+                    (upper_shape->WithOffset(model.GetOffset())
+                            .ResponseAtDistance(distance) -
+                        lower_shape->WithOffset(model.GetOffset())
+                            .ResponseAtDistance(distance)) /
+                    (2.0 * step)
+                };
+                const auto tolerance{
+                    1.0e-6 * std::max(std::abs(finite_difference), 1.0)
+                };
+                EXPECT_NEAR(
+                    evaluation->shape_jacobian(parameter_index),
+                    finite_difference,
+                    tolerance);
+            }
+
+            const auto offset_finite_difference{
+                (model.WithOffset(model.GetOffset() + step)
+                        .ResponseAtDistance(distance) -
+                    model.WithOffset(model.GetOffset() - step)
+                        .ResponseAtDistance(distance)) /
+                (2.0 * step)
+            };
+            EXPECT_NEAR(
+                evaluation->offset_jacobian,
+                offset_finite_difference,
+                1.0e-8 * std::max(std::abs(offset_finite_difference), 1.0));
         }
     }
 }
@@ -1633,6 +1842,56 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingJointlyPolishesC
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
+TEST(EstimatorSecondStageDefenseTest, SharedOffsetGroupParticipatesInAcceptedJointPolish)
+{
+    auto model{ BuildSharedOffsetJointPolishDefenseModel() };
+    auto options{ MakeSecondStageOptions() };
+    options.quiet_mode = false;
+    const auto initial_error{ CalculateSelectedAtomResponseMeanSquaredError(*model) };
+
+    testing::internal::CaptureStdout();
+    rt::RunSecondStageLocalFitting(*model, options);
+    const std::string out{ testing::internal::GetCapturedStdout() };
+
+    const auto & atom_list{ model->GetSelectedAtoms() };
+    ASSERT_EQ(atom_list.size(), 2U);
+    EXPECT_EQ(atom_list.at(0)->GetAtomKey(), atom_list.at(1)->GetAtomKey());
+    EXPECT_LT(CalculateSelectedAtomResponseMeanSquaredError(*model), initial_error);
+    EXPECT_NE(out.find("1/1/0/0"), std::string::npos);
+    ExpectSelectedAtomEstimatesAreFinite(*model);
+}
+
+TEST(EstimatorSecondStageDefenseTest, SharedOffsetJointPolishIsIntensityScaleInvariant)
+{
+    constexpr double scale{ 100.0 };
+    auto base_model{ BuildSharedOffsetJointPolishDefenseModel() };
+    auto scaled_model{ BuildSharedOffsetJointPolishDefenseModel(scale) };
+
+    rt::RunSecondStageLocalFitting(*base_model, MakeSecondStageOptions());
+    rt::RunSecondStageLocalFitting(*scaled_model, MakeSecondStageOptions());
+
+    const auto & base_atoms{ base_model->GetSelectedAtoms() };
+    const auto & scaled_atoms{ scaled_model->GetSelectedAtoms() };
+    ASSERT_EQ(base_atoms.size(), scaled_atoms.size());
+    for (std::size_t i = 0; i < base_atoms.size(); i++)
+    {
+        const auto base{ GetEstimateModel(*base_atoms.at(i)) };
+        const auto scaled{ GetEstimateModel(*scaled_atoms.at(i)) };
+        EXPECT_NEAR(
+            base.GetAmplitude() * scale,
+            scaled.GetAmplitude(),
+            std::max(1.0e-8, std::abs(scaled.GetAmplitude()) * 5.0e-5));
+        EXPECT_NEAR(
+            base.GetWidth(),
+            scaled.GetWidth(),
+            std::max(1.0e-8, std::abs(scaled.GetWidth()) * 5.0e-5));
+        EXPECT_NEAR(
+            base.GetOffset() * scale,
+            scaled.GetOffset(),
+            std::max(1.0e-8, std::abs(scaled.GetOffset()) * 5.0e-5));
+    }
+}
+
 TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingAcceptsRemoteClusterWhenLocalClusterRollsBack)
 {
     auto model{ BuildSeparatedRollbackDefenseModel() };
@@ -1849,7 +2108,7 @@ TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageLogsEveryOuterAttempt)
     }
     EXPECT_TRUE(found_skipped_polish);
     EXPECT_NE(
-        progress_row_list.front().find("3.58e-02/4.14e-02"),
+        progress_row_list.front().find("3.55e-02/4.14e-02"),
         std::string::npos);
 
     const std::string summary_prefix{

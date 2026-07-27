@@ -2016,33 +2016,32 @@ std::vector<Eigen::Vector3d> BuildLocalFittingTransformedEstimationList(
 
 std::optional<Eigen::VectorXd> BuildLocalFittingJointPolishDirection(
     const SecondStageLocalFittingContext & context,
-    const LocalFittingState & candidate_state,
+    const LocalFittingState & base_state,
+    const std::vector<GaussianModel3D> & seed_model_list,
     const LocalFittingClusterKey & key,
     const std::vector<LocalFittingObjectiveSampleRef> & sample_ref_list,
-    const std::vector<double> & ridge_multiplier_list)
+    const std::vector<double> & ridge_multiplier_list,
+    const detail::LocalFittingJointPolishParameterization & parameterization)
 {
-    if (key.empty() || sample_ref_list.empty())
+    if (key.empty() || sample_ref_list.empty() ||
+        seed_model_list.size() != key.size() ||
+        parameterization.AtomCount() != key.size())
     {
         return std::nullopt;
     }
 
-    constexpr auto parameter_size{
-        static_cast<std::size_t>(detail::kTransformedChangeSize)
-    };
-    const auto column_count{
-        static_cast<Eigen::Index>(key.size() * parameter_size)
-    };
-    std::vector<int> column_base_by_atom_index(context.size(), -1);
+    const auto column_count{ parameterization.ParameterCount() };
+    std::vector<int> local_position_by_atom_index(context.size(), -1);
     for (std::size_t local_position = 0; local_position < key.size(); local_position++)
     {
         const auto atom_index{ key.at(local_position) };
-        column_base_by_atom_index.at(atom_index) = static_cast<int>(local_position * parameter_size);
+        local_position_by_atom_index.at(atom_index) =
+            static_cast<int>(local_position);
     }
 
     std::vector<Eigen::Triplet<double>> triplet_list;
     std::vector<double> residual_list;
     residual_list.reserve(sample_ref_list.size());
-    Eigen::VectorXd column_square_sum{ Eigen::VectorXd::Zero(column_count) };
     for (const auto & sample_ref : sample_ref_list)
     {
         const auto & atom_context{
@@ -2055,27 +2054,50 @@ std::optional<Eigen::VectorXd> BuildLocalFittingJointPolishDirection(
         double predicted_response{ 0.0 };
         const auto append_model = [&](std::size_t atom_index, double distance) -> bool
         {
+            const auto local_position_value{
+                local_position_by_atom_index.at(atom_index)
+            };
+            const auto & model{
+                local_position_value >= 0 ?
+                    seed_model_list.at(static_cast<std::size_t>(
+                        local_position_value)) :
+                    base_state.at(atom_index).mdpde.GetModel()
+            };
             const auto evaluation{
-                detail::EvaluateLocalFittingTransformedResponse(
-                    candidate_state.at(atom_index).mdpde.GetModel(),
+                detail::EvaluateLocalFittingSharedOffsetResponse(
+                    model,
                     distance)
             };
             if (!evaluation.has_value()) return false;
             predicted_response += evaluation->response;
 
-            const auto column_base{ column_base_by_atom_index.at(atom_index) };
-            if (column_base < 0) return true;
-            for (std::size_t parameter_index = 0; parameter_index < parameter_size; parameter_index++)
+            if (local_position_value < 0) return true;
+            const auto local_position{
+                static_cast<std::size_t>(local_position_value)
+            };
+            for (std::size_t parameter_index = 0;
+                parameter_index < detail::kLocalFittingJointPolishShapeParameterSize;
+                parameter_index++)
             {
                 const auto column_index{
-                    static_cast<Eigen::Index>(column_base + static_cast<int>(parameter_index))
+                    parameterization.ShapeColumn(
+                        local_position,
+                        parameter_index)
                 };
                 const auto derivative{
-                    evaluation->jacobian(static_cast<Eigen::Index>(parameter_index))
+                    evaluation->shape_jacobian(
+                        static_cast<Eigen::Index>(parameter_index))
                 };
                 if (std::abs(derivative) <= std::numeric_limits<double>::epsilon()) continue;
                 triplet_list.emplace_back(row_index, column_index, derivative);
-                column_square_sum(column_index) += derivative * derivative;
+            }
+            if (std::abs(evaluation->offset_jacobian) >
+                std::numeric_limits<double>::epsilon())
+            {
+                triplet_list.emplace_back(
+                    row_index,
+                    parameterization.OffsetColumn(local_position),
+                    evaluation->offset_jacobian);
             }
             return true;
         };
@@ -2104,6 +2126,20 @@ std::optional<Eigen::VectorXd> BuildLocalFittingJointPolishDirection(
     algorithm::WeightedRidgeSystem system;
     system.design_matrix.resize(row_count, column_count);
     system.design_matrix.setFromTriplets(triplet_list.begin(), triplet_list.end());
+    Eigen::VectorXd column_square_sum{ Eigen::VectorXd::Zero(column_count) };
+    for (Eigen::Index column_index = 0;
+        column_index < system.design_matrix.outerSize();
+        column_index++)
+    {
+        for (Eigen::SparseMatrix<double>::InnerIterator iter(
+                system.design_matrix,
+                column_index);
+            iter;
+            ++iter)
+        {
+            column_square_sum(column_index) += iter.value() * iter.value();
+        }
+    }
     system.response = Eigen::VectorXd::Zero(row_count);
     for (Eigen::Index row_index = 0; row_index < row_count; row_index++)
     {
@@ -2122,16 +2158,38 @@ std::optional<Eigen::VectorXd> BuildLocalFittingJointPolishDirection(
     };
     for (Eigen::Index column_index = 0; column_index < column_count; column_index++)
     {
-        const auto local_position{
-            static_cast<std::size_t>(column_index) / parameter_size
+        double parameter_multiplier{ 1.0 };
+        const auto offset_column_base{
+            static_cast<Eigen::Index>(
+                key.size() * detail::kLocalFittingJointPolishShapeParameterSize)
         };
-        const auto atom_index{ key.at(local_position) };
-        const auto atom_multiplier{ ridge_multiplier_list.at(atom_index) };
+        if (column_index < offset_column_base)
+        {
+            const auto local_position{
+                static_cast<std::size_t>(column_index) /
+                detail::kLocalFittingJointPolishShapeParameterSize
+            };
+            parameter_multiplier = ridge_multiplier_list.at(
+                key.at(local_position));
+        }
+        else
+        {
+            const auto group_position{
+                static_cast<std::size_t>(column_index - offset_column_base)
+            };
+            for (const auto local_position :
+                parameterization.atom_position_list_by_group.at(group_position))
+            {
+                parameter_multiplier = std::max(
+                    parameter_multiplier,
+                    ridge_multiplier_list.at(key.at(local_position)));
+            }
+        }
         const auto square_sum{ column_square_sum(column_index) };
         system.ridge_diagonal(column_index) =
             CalculateLocalFittingRidgeDiagonal(
                 square_sum,
-                std::max(atom_multiplier, conditioning_multiplier));
+                std::max(parameter_multiplier, conditioning_multiplier));
     }
 
     const auto residual_scale{
@@ -2153,12 +2211,230 @@ std::optional<Eigen::VectorXd> BuildLocalFittingJointPolishDirection(
     {
         return std::nullopt;
     }
-    if (direction.cwiseAbs().maxCoeff() < kLocalFittingTransformedChangeTolerance)
+
+    return direction;
+}
+
+std::optional<double> CalculateLocalFittingJointPolishTrustRegionStepNorm(
+    const LocalFittingState & outer_previous_state,
+    const LocalFittingClusterKey & key,
+    const std::vector<GaussianModel3D> & candidate_model_list)
+{
+    if (candidate_model_list.size() != key.size()) return std::nullopt;
+    double step_norm{ 0.0 };
+    for (std::size_t atom_position = 0;
+        atom_position < key.size();
+        atom_position++)
+    {
+        const auto atom_index{ key.at(atom_position) };
+        const auto previous{
+            detail::EncodeLocalFittingTransformedCoordinates(
+                outer_previous_state.at(atom_index).mdpde.GetModel())
+        };
+        const auto candidate{
+            detail::EncodeLocalFittingTransformedCoordinates(
+                candidate_model_list.at(atom_position))
+        };
+        if (!previous.has_value() || !candidate.has_value())
+        {
+            return std::nullopt;
+        }
+        for (std::size_t parameter_index = 0;
+            parameter_index < detail::kTransformedChangeSize;
+            parameter_index++)
+        {
+            const auto eigen_index{ static_cast<Eigen::Index>(parameter_index) };
+            step_norm = std::max(
+                step_norm,
+                std::abs((*candidate)(eigen_index) - (*previous)(eigen_index)) /
+                    kLocalFittingTrustRegionParameterScale.at(parameter_index));
+        }
+    }
+    return std::isfinite(step_norm) ?
+        std::optional<double>{ step_norm } : std::nullopt;
+}
+
+bool HasMaterialLocalFittingJointPolishChange(
+    const std::vector<GaussianModel3D> & candidate_model_list,
+    const std::vector<GaussianModel3D> & seed_model_list)
+{
+    if (candidate_model_list.size() != seed_model_list.size()) return false;
+    for (std::size_t atom_position = 0;
+        atom_position < candidate_model_list.size();
+        atom_position++)
+    {
+        const auto change{
+            detail::CalculateLocalFittingTransformedChange(
+                candidate_model_list.at(atom_position),
+                seed_model_list.at(atom_position))
+        };
+        if (std::any_of(
+                change.value_list.begin(),
+                change.value_list.end(),
+                [](double value)
+                {
+                    return std::isfinite(value) &&
+                        value >= kLocalFittingTransformedChangeTolerance;
+                }))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+struct LocalFittingJointPolishProposal
+{
+    LocalFittingState state{};
+    double effective_damping{ 0.0 };
+    double step_norm{ 0.0 };
+    std::vector<std::size_t> changed_atom_index_list{};
+};
+
+std::optional<LocalFittingJointPolishProposal>
+BuildLocalFittingJointPolishProposal(
+    const SecondStageLocalFittingContext & context,
+    const LocalFittingState & outer_previous_state,
+    const LocalFittingState & base_state,
+    const LocalFittingClusterKey & key,
+    const std::vector<LocalFittingObjectiveSampleRef> & sample_ref_list,
+    const std::vector<double> & ridge_multiplier_list,
+    double trust_region_radius)
+{
+    constexpr double trust_region_tolerance{ 1.0e-12 };
+    std::vector<GroupKey> group_key_by_atom_position;
+    std::vector<GaussianModel3D> base_model_list;
+    group_key_by_atom_position.reserve(key.size());
+    base_model_list.reserve(key.size());
+    for (const auto atom_index : key)
+    {
+        group_key_by_atom_position.emplace_back(
+            data_internal::GetGroupKey(context.at(atom_index).atom));
+        base_model_list.emplace_back(
+            base_state.at(atom_index).mdpde.GetModel());
+    }
+    const auto parameterization{
+        detail::BuildLocalFittingJointPolishParameterization(
+            group_key_by_atom_position,
+            base_model_list)
+    };
+    if (!parameterization.has_value()) return std::nullopt;
+
+    const Eigen::VectorXd zero_direction{
+        Eigen::VectorXd::Zero(parameterization->ParameterCount())
+    };
+    const auto seed_model_list{
+        parameterization->DecodeModels(zero_direction, 0.0)
+    };
+    if (!seed_model_list.has_value() ||
+        std::any_of(
+            seed_model_list->begin(),
+            seed_model_list->end(),
+            [](const GaussianModel3D & model)
+            {
+                return !detail::IsValidSecondStageGaussianModel(model);
+            }))
     {
         return std::nullopt;
     }
+    const auto seed_step_norm{
+        CalculateLocalFittingJointPolishTrustRegionStepNorm(
+            outer_previous_state,
+            key,
+            *seed_model_list)
+    };
+    if (!seed_step_norm.has_value() ||
+        *seed_step_norm > trust_region_radius + trust_region_tolerance)
+    {
+        return std::nullopt;
+    }
+    const auto direction{
+        BuildLocalFittingJointPolishDirection(
+            context,
+            base_state,
+            *seed_model_list,
+            key,
+            sample_ref_list,
+            ridge_multiplier_list,
+            *parameterization)
+    };
+    if (!direction.has_value()) return std::nullopt;
 
-    return direction;
+    double damping{ 1.0 };
+    while (damping >= std::numeric_limits<double>::epsilon())
+    {
+        auto candidate_model_list{
+            parameterization->DecodeModels(*direction, damping)
+        };
+        if (candidate_model_list.has_value() &&
+            std::none_of(
+                candidate_model_list->begin(),
+                candidate_model_list->end(),
+                [](const GaussianModel3D & model)
+                {
+                    return !detail::IsValidSecondStageGaussianModel(model);
+                }))
+        {
+            const auto step_norm{
+                CalculateLocalFittingJointPolishTrustRegionStepNorm(
+                    outer_previous_state,
+                    key,
+                    *candidate_model_list)
+            };
+            if (step_norm.has_value() &&
+                *step_norm <= trust_region_radius + trust_region_tolerance)
+            {
+                if (!HasMaterialLocalFittingJointPolishChange(
+                        *candidate_model_list,
+                        *seed_model_list))
+                {
+                    return std::nullopt;
+                }
+
+                LocalFittingJointPolishProposal proposal;
+                proposal.state = base_state;
+                proposal.effective_damping = damping;
+                proposal.step_norm = *step_norm;
+                for (std::size_t atom_position = 0;
+                    atom_position < key.size();
+                    atom_position++)
+                {
+                    const auto atom_index{ key.at(atom_position) };
+                    const auto & base_result{ base_state.at(atom_index) };
+                    const auto & candidate_model{
+                        candidate_model_list->at(atom_position)
+                    };
+                    proposal.state.at(atom_index).mdpde =
+                        GaussianModel3DWithUncertainty{
+                            candidate_model,
+                            base_result.mdpde.GetStandardDeviationModel()
+                        };
+                    const auto base_coordinates{
+                        detail::EncodeLocalFittingTransformedCoordinates(
+                            base_result.mdpde.GetModel())
+                    };
+                    const auto candidate_coordinates{
+                        detail::EncodeLocalFittingTransformedCoordinates(
+                            candidate_model)
+                    };
+                    if (!base_coordinates.has_value() ||
+                        !candidate_coordinates.has_value())
+                    {
+                        return std::nullopt;
+                    }
+                    if ((base_coordinates->array() !=
+                            candidate_coordinates->array()).any())
+                    {
+                        proposal.changed_atom_index_list.emplace_back(
+                            atom_index);
+                    }
+                }
+                return proposal;
+            }
+        }
+        damping *= 0.5;
+    }
+    return std::nullopt;
 }
 
 std::vector<Eigen::Vector3d> InterpolateLocalFittingTransformedEstimations(
@@ -2609,76 +2885,30 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
         {
             continue;
         }
-        const auto polish_direction{
-            BuildLocalFittingJointPolishDirection(
+        auto polished_candidate{
+            BuildLocalFittingJointPolishProposal(
                 context,
+                previous_state,
                 *base_state,
                 key,
                 objective_sample_ref_list,
-                ridge_multiplier_list)
-        };
-        if (!polish_direction.has_value())
-        {
-            selection.polish_progress.skipped_count++;
-            continue;
-        }
-        auto polished_transformed_estimation_list{
-            base_cluster_estimation_list
-        };
-        constexpr auto parameter_size{
-            static_cast<std::size_t>(detail::kTransformedChangeSize)
-        };
-        for (std::size_t local_position = 0;
-            local_position < key.size();
-            local_position++)
-        {
-            const auto direction_offset{
-                static_cast<Eigen::Index>(local_position * parameter_size)
-            };
-            polished_transformed_estimation_list.at(local_position) +=
-                polish_direction->segment(
-                    direction_offset,
-                    static_cast<Eigen::Index>(parameter_size));
-        }
-        const auto polish_damping{
-            detail::LimitLocalFittingTrustRegionSubstepDamping(
-                previous_cluster_estimation_list,
-                base_cluster_estimation_list,
-                polished_transformed_estimation_list,
-                kLocalFittingTrustRegionParameterScale,
-                1.0,
+                ridge_multiplier_list,
                 trust_region_radius)
         };
-        if (polish_damping.effective_damping <= 0.0)
-        {
-            selection.polish_progress.skipped_count++;
-            continue;
-        }
-        const auto accepted_polish_estimation_list{
-            InterpolateLocalFittingTransformedEstimations(
-                base_cluster_estimation_list,
-                polished_transformed_estimation_list,
-                polish_damping.effective_damping)
-        };
-        auto polished_state{
-            BuildLocalFittingCandidateState(
-                *base_state,
-                base_cluster_estimation_list,
-                accepted_polish_estimation_list,
-                *base_state,
-                key)
-        };
-        if (!polished_state.has_value())
+        if (!polished_candidate.has_value())
         {
             selection.polish_progress.skipped_count++;
             continue;
         }
         LocalFittingObjectiveAttemptDiagnostic polish_diagnostic;
+        polish_diagnostic.effective_damping =
+            polished_candidate->effective_damping;
         polish_diagnostic.trust_region_radius = trust_region_radius;
-        polish_diagnostic.trust_region_step_norm = polish_damping.step_norm;
+        polish_diagnostic.trust_region_step_norm =
+            polished_candidate->step_norm;
         if (!TryCommitLocalFittingClusterCandidate(
                 context,
-                *polished_state,
+                polished_candidate->state,
                 *base_state,
                 key,
                 objective_sample_ref_list,
@@ -2693,16 +2923,12 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
         for (const auto active_index : key)
         {
             selection.assembled_state.at(active_index) =
-                polished_state->at(active_index);
+                polished_candidate->state.at(active_index);
         }
-        for (std::size_t local_position = 0; local_position < key.size(); local_position++)
+        for (const auto atom_index :
+            polished_candidate->changed_atom_index_list)
         {
-            if ((accepted_polish_estimation_list.at(local_position).array() ==
-                    base_cluster_estimation_list.at(local_position).array()).all())
-            {
-                continue;
-            }
-            selection.assembled_polish_provenance.at(key.at(local_position)) = 1;
+            selection.assembled_polish_provenance.at(atom_index) = 1;
         }
         if (ShouldGrowLocalFittingTrustRegion(polish_diagnostic) &&
             std::find(
