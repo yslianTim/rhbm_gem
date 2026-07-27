@@ -45,7 +45,8 @@ SECOND_STAGE_SUMMARY_PATTERN = re.compile(
     r"best_iteration=(?P<best_iteration>initial|unavailable|\d+), "
     r"stop_reason=(?P<stop_reason>[a-z-]+), "
     r"best_audit_objective=(?P<best_audit_objective>unavailable|"
-    r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)\."
+    r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?), "
+    r"final_uses_polish=(?P<final_uses_polish>yes|no|unavailable)\."
 )
 
 
@@ -144,11 +145,16 @@ def parse_second_stage_summary(log_text: str) -> dict[str, Any]:
         None if best_objective_text == "unavailable" else float(best_objective_text))
     if best_objective is not None and not math.isfinite(best_objective):
         raise RegressionError("Second-stage best audit objective is not finite.")
+    final_uses_polish_text = values["final_uses_polish"]
+    final_uses_polish = (
+        None if final_uses_polish_text == "unavailable" else
+        final_uses_polish_text == "yes")
     return {
         "accepted_iterations": int(values["accepted_iterations"]),
         "best_iteration": values["best_iteration"],
         "stop_reason": values["stop_reason"],
         "best_audit_objective": best_objective,
+        "final_uses_polish": final_uses_polish,
     }
 
 

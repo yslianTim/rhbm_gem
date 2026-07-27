@@ -108,6 +108,7 @@ constexpr double kSuspiciousCompensationResponseRatio{ 2.0 };
 constexpr std::size_t kPersistentTerminalFailureIterationLimit{ 5 };
 
 using LocalFittingState = std::vector<LocalGaussianResult>;
+using LocalFittingPolishProvenance = std::vector<char>;
 
 struct ActiveCouplingEdge
 {
@@ -239,6 +240,7 @@ struct LocalFittingAuditedState
 {
     detail::LocalFittingObjectiveBreakdown objective{};
     LocalFittingState state{};
+    LocalFittingPolishProvenance polish_provenance{};
     std::optional<std::size_t> accepted_iteration{};
 };
 
@@ -255,6 +257,25 @@ const LocalFittingState & SelectLocalFittingFallbackState(
     const std::optional<LocalFittingAuditedState> & audited_state)
 {
     return audited_state.has_value() ? audited_state->state : fallback_state;
+}
+
+bool UsesLocalFittingPolish(const LocalFittingPolishProvenance & provenance)
+{
+    return std::any_of(
+        provenance.begin(),
+        provenance.end(),
+        [](char is_polished)
+        {
+            return is_polished != 0;
+        });
+}
+
+bool SelectLocalFittingFallbackUsesPolish(
+    const LocalFittingPolishProvenance & fallback_provenance,
+    const std::optional<LocalFittingAuditedState> & audited_state)
+{
+    return UsesLocalFittingPolish(
+        audited_state.has_value() ? audited_state->polish_provenance : fallback_provenance);
 }
 
 struct LocalFittingOffsetStats
@@ -315,13 +336,23 @@ struct LocalFittingRejectedClusterDiagnostic
     LocalFittingObjectiveAttemptDiagnostic attempt{};
 };
 
+struct LocalFittingPolishProgress
+{
+    std::size_t eligible_count{ 0 };
+    std::size_t accepted_count{ 0 };
+    std::size_t rejected_count{ 0 };
+    std::size_t skipped_count{ 0 };
+};
+
 struct LocalFittingCandidateSelection
 {
     LocalFittingState assembled_state{};
+    LocalFittingPolishProvenance assembled_polish_provenance{};
     std::vector<LocalFittingClusterKey> accepted_key_list{};
     std::vector<LocalFittingClusterKey> rejected_key_list{};
     std::vector<LocalFittingRejectedClusterDiagnostic> rejected_cluster_diagnostic_list{};
     std::vector<LocalFittingClusterKey> grow_trust_region_key_list{};
+    LocalFittingPolishProgress polish_progress{};
 };
 
 struct LocalFittingIterationProgress
@@ -332,12 +363,13 @@ struct LocalFittingIterationProgress
     std::size_t terminal_atom_count{ 0 };
     std::size_t accepted_cluster_count{ 0 };
     std::size_t rejected_cluster_count{ 0 };
+    LocalFittingPolishProgress polish_progress{};
     std::size_t suspicious_atom_count{ 0 };
     std::optional<double> accepted_maximum_transformed_change{};
     std::optional<double> raw_maximum_transformed_change{};
 };
 
-using LocalFittingProgressColumnWidths = std::array<std::size_t, 5>;
+using LocalFittingProgressColumnWidths = std::array<std::size_t, 6>;
 
 struct SecondStageNeighborSample
 {
@@ -1681,18 +1713,23 @@ bool IsLocalFittingCombinedObjectiveAcceptable(
 
 void RejectLocalFittingCombinedCandidate(
     const LocalFittingState & previous_state,
+    const LocalFittingPolishProvenance & previous_polish_provenance,
     const std::vector<LocalFittingClusterKey> & cluster_key_list,
     LocalFittingCandidateSelection & selection)
 {
     selection.assembled_state = previous_state;
+    selection.assembled_polish_provenance = previous_polish_provenance;
     selection.accepted_key_list.clear();
     selection.rejected_key_list = cluster_key_list;
     selection.grow_trust_region_key_list.clear();
+    selection.polish_progress.rejected_count += selection.polish_progress.accepted_count;
+    selection.polish_progress.accepted_count = 0;
 }
 
 bool TryUpdateLocalFittingBestAuditState(
     const SecondStageLocalFittingContext & context,
     const LocalFittingState & candidate_state,
+    const LocalFittingPolishProvenance & candidate_polish_provenance,
     const std::optional<std::size_t> & accepted_iteration,
     LocalFittingBestAuditState & audit_state)
 {
@@ -1711,6 +1748,7 @@ bool TryUpdateLocalFittingBestAuditState(
     audit_state.best = LocalFittingAuditedState{
         *candidate_objective,
         candidate_state,
+        candidate_polish_provenance,
         accepted_iteration
     };
     return true;
@@ -1737,6 +1775,7 @@ LocalFittingBestAuditState BuildInitialLocalFittingBestAuditState(
     static_cast<void>(TryUpdateLocalFittingBestAuditState(
         context,
         initial_state,
+        LocalFittingPolishProvenance(initial_state.size(), 0),
         std::nullopt,
         audit_state));
     return audit_state;
@@ -1746,6 +1785,7 @@ void ReconcileLocalFittingBestAuditTerminalFallback(
     const SecondStageLocalFittingContext & context,
     const std::vector<LocalFittingClusterKey> & terminal_key_list,
     const LocalFittingState & terminal_fallback_state,
+    const LocalFittingPolishProvenance & terminal_fallback_polish_provenance,
     std::size_t accepted_iteration,
     LocalFittingBestAuditState & audit_state)
 {
@@ -1795,6 +1835,7 @@ void ReconcileLocalFittingBestAuditTerminalFallback(
     }
     audit_state.best->objective = *reconciled_objective;
     audit_state.best->state = std::move(reconciled_state);
+    audit_state.best->polish_provenance = terminal_fallback_polish_provenance;
     audit_state.best->accepted_iteration = accepted_iteration;
 }
 
@@ -1922,8 +1963,10 @@ TerminalPersistentFailureMap UpdatePersistentTerminalFailureState(
 void ApplyTerminalFallbackClusters(
     const std::vector<LocalFittingClusterKey> & terminal_key_list,
     const LocalFittingState & previous_state,
+    const LocalFittingPolishProvenance & previous_polish_provenance,
     std::vector<char> & terminal_atom_mask,
-    LocalFittingState & assembled_state)
+    LocalFittingState & assembled_state,
+    LocalFittingPolishProvenance & assembled_polish_provenance)
 {
     for (const auto & key : terminal_key_list)
     {
@@ -1931,6 +1974,7 @@ void ApplyTerminalFallbackClusters(
         {
             terminal_atom_mask.at(atom_index) = 1;
             assembled_state.at(atom_index) = previous_state.at(atom_index);
+            assembled_polish_provenance.at(atom_index) = previous_polish_provenance.at(atom_index);
         }
     }
 }
@@ -2451,6 +2495,7 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
     const detail::LocalFittingCouplingPartition & partition,
     const std::vector<LocalFittingClusterKey> & polish_eligible_key_list,
     const LocalFittingState & previous_state,
+    const LocalFittingPolishProvenance & previous_polish_provenance,
     const LocalFittingState & raw_state,
     const std::vector<Eigen::Vector3d> & previous_transformed_estimation_list,
     const std::vector<Eigen::Vector3d> & raw_transformed_estimation_list,
@@ -2460,9 +2505,17 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
 {
     LocalFittingCandidateSelection selection;
     selection.assembled_state = previous_state;
+    selection.assembled_polish_provenance = previous_polish_provenance;
     for (const auto & [key, objective_sample_ref_list] :
         partition.sample_id_list_by_key)
     {
+        const auto is_polish_eligible{
+            std::find(
+                polish_eligible_key_list.begin(),
+                polish_eligible_key_list.end(),
+                key) != polish_eligible_key_list.end()
+        };
+        if (is_polish_eligible) selection.polish_progress.eligible_count++;
         std::vector<Eigen::Vector3d> previous_cluster_estimation_list;
         std::vector<Eigen::Vector3d> raw_cluster_estimation_list;
         previous_cluster_estimation_list.reserve(key.size());
@@ -2503,6 +2556,7 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
         };
         if (!base_state.has_value())
         {
+            if (is_polish_eligible) selection.polish_progress.skipped_count++;
             base_diagnostic.is_invalid_model = true;
             selection.rejected_key_list.emplace_back(key);
             selection.rejected_cluster_diagnostic_list.emplace_back(
@@ -2522,6 +2576,7 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                 cluster_objective_state,
                 base_diagnostic))
         {
+            if (is_polish_eligible) selection.polish_progress.skipped_count++;
             selection.rejected_key_list.emplace_back(key);
             selection.rejected_cluster_diagnostic_list.emplace_back(
                 LocalFittingRejectedClusterDiagnostic{
@@ -2540,10 +2595,17 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
             selection.assembled_state.at(active_index) = base_state->at(active_index);
         }
 
-        if (std::find(
-                polish_eligible_key_list.begin(),
-                polish_eligible_key_list.end(),
-                key) == polish_eligible_key_list.end())
+        for (std::size_t local_position = 0; local_position < key.size(); local_position++)
+        {
+            if ((base_cluster_estimation_list.at(local_position).array() ==
+                    previous_cluster_estimation_list.at(local_position).array()).all())
+            {
+                continue;
+            }
+            selection.assembled_polish_provenance.at(key.at(local_position)) = 0;
+        }
+
+        if (!is_polish_eligible)
         {
             continue;
         }
@@ -2555,7 +2617,11 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                 objective_sample_ref_list,
                 ridge_multiplier_list)
         };
-        if (!polish_direction.has_value()) continue;
+        if (!polish_direction.has_value())
+        {
+            selection.polish_progress.skipped_count++;
+            continue;
+        }
         auto polished_transformed_estimation_list{
             base_cluster_estimation_list
         };
@@ -2583,7 +2649,11 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                 1.0,
                 trust_region_radius)
         };
-        if (polish_damping.effective_damping <= 0.0) continue;
+        if (polish_damping.effective_damping <= 0.0)
+        {
+            selection.polish_progress.skipped_count++;
+            continue;
+        }
         const auto accepted_polish_estimation_list{
             InterpolateLocalFittingTransformedEstimations(
                 base_cluster_estimation_list,
@@ -2598,7 +2668,11 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                 *base_state,
                 key)
         };
-        if (!polished_state.has_value()) continue;
+        if (!polished_state.has_value())
+        {
+            selection.polish_progress.skipped_count++;
+            continue;
+        }
         LocalFittingObjectiveAttemptDiagnostic polish_diagnostic;
         polish_diagnostic.trust_region_radius = trust_region_radius;
         polish_diagnostic.trust_region_step_norm = polish_damping.step_norm;
@@ -2612,12 +2686,23 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                 cluster_objective_state,
                 polish_diagnostic))
         {
+            selection.polish_progress.rejected_count++;
             continue;
         }
+        selection.polish_progress.accepted_count++;
         for (const auto active_index : key)
         {
             selection.assembled_state.at(active_index) =
                 polished_state->at(active_index);
+        }
+        for (std::size_t local_position = 0; local_position < key.size(); local_position++)
+        {
+            if ((accepted_polish_estimation_list.at(local_position).array() ==
+                    base_cluster_estimation_list.at(local_position).array()).all())
+            {
+                continue;
+            }
+            selection.assembled_polish_provenance.at(key.at(local_position)) = 1;
         }
         if (ShouldGrowLocalFittingTrustRegion(polish_diagnostic) &&
             std::find(
@@ -3147,17 +3232,18 @@ std::optional<double> SummarizeLocalFittingProgressMaximum(
     return *std::max_element(maximum_list.begin(), maximum_list.end());
 }
 
-constexpr std::array<std::string_view, 5> kLocalFittingProgressHeaderList{
+constexpr std::array<std::string_view, 6> kLocalFittingProgressHeaderList{
     "Try/Acc",
     "Atom A/T",
     "Cluster A/R",
+    "Polish E/A/R/S",
     "Suspicious",
     "dMax A/R"
 };
 
 std::string FormatLocalFittingProgressRow(
     const LocalFittingProgressColumnWidths & column_widths,
-    const std::array<std::string, 5> & cell_list)
+    const std::array<std::string, 6> & cell_list)
 {
     std::ostringstream stream;
     for (std::size_t i = 0; i < cell_list.size(); i++)
@@ -3182,10 +3268,12 @@ LocalFittingProgressColumnWidths BuildLocalFittingProgressColumnWidths(
         FormatLocalFittingProgressMaximum(
             std::numeric_limits<double>::max())
     };
-    const std::array<std::string, 5> maximum_cell_list{
+    const std::array<std::string, 6> maximum_cell_list{
         maximum_iteration_text + "/" + maximum_iteration_text,
         maximum_atom_text + "/" + maximum_atom_text,
         maximum_atom_text + "/" + maximum_atom_text,
+        maximum_atom_text + "/" + maximum_atom_text + "/" +
+            maximum_atom_text + "/" + maximum_atom_text,
         maximum_atom_text,
         maximum_change_text + "/" + maximum_change_text
     };
@@ -3205,7 +3293,7 @@ void LogLocalFittingProgressHeader(
     const LocalFittingProgressColumnWidths & column_widths)
 {
     if (options.quiet_mode) return;
-    std::array<std::string, 5> header_list;
+    std::array<std::string, 6> header_list;
     for (std::size_t i = 0; i < header_list.size(); i++)
     {
         header_list.at(i) = kLocalFittingProgressHeaderList.at(i);
@@ -3222,13 +3310,17 @@ void LogLocalFittingIterationProgress(
 {
     if (options.quiet_mode) return;
 
-    const std::array<std::string, 5> cell_list{
+    const std::array<std::string, 6> cell_list{
         std::to_string(progress.attempt_number) + "/" +
             std::to_string(progress.accepted_iteration_count),
         std::to_string(progress.active_atom_count) + "/" +
             std::to_string(progress.terminal_atom_count),
         std::to_string(progress.accepted_cluster_count) + "/" +
             std::to_string(progress.rejected_cluster_count),
+        std::to_string(progress.polish_progress.eligible_count) + "/" +
+            std::to_string(progress.polish_progress.accepted_count) + "/" +
+            std::to_string(progress.polish_progress.rejected_count) + "/" +
+            std::to_string(progress.polish_progress.skipped_count),
         std::to_string(progress.suspicious_atom_count),
         FormatLocalFittingProgressMaximum(
             progress.accepted_maximum_transformed_change) + "/" +
@@ -3293,7 +3385,8 @@ void LogSecondStageLocalFittingSummary(
     const FitOptions & options,
     std::size_t accepted_iteration_count,
     std::string_view stop_reason,
-    const LocalFittingBestAuditState & best_audit_state)
+    const LocalFittingBestAuditState & best_audit_state,
+    std::optional<bool> final_uses_polish)
 {
     if (options.quiet_mode) return;
 
@@ -3323,6 +3416,15 @@ void LogSecondStageLocalFittingSummary(
     else
     {
         message << "unavailable";
+    }
+    message << ", final_uses_polish=";
+    if (!final_uses_polish.has_value())
+    {
+        message << "unavailable";
+    }
+    else
+    {
+        message << (*final_uses_polish ? "yes" : "no");
     }
     message << ".";
     Logger::Log(LogLevel::Info, message.str());
@@ -3356,12 +3458,13 @@ void RunSecondStageLocalFitting(
                 LogLevel::Info,
                 "Second-stage local fitting summary: accepted_iterations=0, "
                 "best_iteration=unavailable, stop_reason=no-valid-seed, "
-                "best_audit_objective=unavailable.");
+                "best_audit_objective=unavailable, final_uses_polish=unavailable.");
         }
         return;
     }
     LogSecondStageSeedRepairs(initial_state_build_result->repair_record_list, options);
     auto previous_state{ std::move(initial_state_build_result->state) };
+    LocalFittingPolishProvenance previous_polish_provenance(atom_size, 0);
     const auto coupling_topology{
         BuildLocalFittingCouplingTopology(context, previous_state)
     };
@@ -3410,7 +3513,8 @@ void RunSecondStageLocalFitting(
                 options,
                 accepted_iteration_count,
                 "terminal-isolation",
-                best_audit_state);
+                best_audit_state,
+                UsesLocalFittingPolish(previous_polish_provenance));
             return;
         }
 
@@ -3513,6 +3617,7 @@ void RunSecondStageLocalFitting(
                 cluster_partition,
                 polish_eligible_key_list,
                 previous_state,
+                previous_polish_provenance,
                 raw_state,
                 previous_transformed_estimation_list,
                 raw_transformed_estimation_list,
@@ -3534,7 +3639,11 @@ void RunSecondStageLocalFitting(
         };
         if (!combined_objective_accepted)
         {
-            RejectLocalFittingCombinedCandidate(previous_state, cluster_key_list, selection);
+            RejectLocalFittingCombinedCandidate(
+                previous_state,
+                previous_polish_provenance,
+                cluster_key_list,
+                selection);
         }
         else
         {
@@ -3542,6 +3651,9 @@ void RunSecondStageLocalFitting(
         }
 
         auto assembled_state{ std::move(selection.assembled_state) };
+        auto assembled_polish_provenance{
+            std::move(selection.assembled_polish_provenance)
+        };
         const auto terminal_failure_by_key{
             UpdatePersistentTerminalFailureState(
                 selection.accepted_key_list,
@@ -3570,12 +3682,15 @@ void RunSecondStageLocalFitting(
         ApplyTerminalFallbackClusters(
             terminal_key_list,
             previous_state,
+            previous_polish_provenance,
             terminal_fallback_atom_mask,
-            assembled_state);
+            assembled_state,
+            assembled_polish_provenance);
         ReconcileLocalFittingBestAuditTerminalFallback(
             context,
             terminal_key_list,
             assembled_state,
+            assembled_polish_provenance,
             accepted_iteration_count + 1,
             best_audit_state);
         if (!terminal_key_list.empty())
@@ -3601,6 +3716,7 @@ void RunSecondStageLocalFitting(
             terminal_atom_count,
             selection.accepted_key_list.size(),
             selection.rejected_key_list.size(),
+            selection.polish_progress,
             iteration_suspicious_atom_count,
             std::nullopt,
             SummarizeLocalFittingProgressMaximum(
@@ -3623,6 +3739,11 @@ void RunSecondStageLocalFitting(
             const auto fallback{
                 SelectLocalFittingFallbackState(previous_state, best_audit_state.best)
             };
+            const auto final_uses_polish{
+                SelectLocalFittingFallbackUsesPolish(
+                    previous_polish_provenance,
+                    best_audit_state.best)
+            };
             ApplyLocalFittingState(model_object, context, fallback);
             LogSecondStageLocalFittingSummary(
                 options,
@@ -3630,7 +3751,8 @@ void RunSecondStageLocalFitting(
                 iter + 1 >= kLocalFittingMaximumIterations ?
                     "maximum-iterations" :
                     "all-rejected-minimum-radius",
-                best_audit_state);
+                best_audit_state,
+                final_uses_polish);
             return;
         }
 
@@ -3646,6 +3768,7 @@ void RunSecondStageLocalFitting(
             TryUpdateLocalFittingBestAuditState(
                 context,
                 assembled_state,
+                assembled_polish_provenance,
                 accepted_iteration_count,
                 best_audit_state)
         };
@@ -3673,12 +3796,18 @@ void RunSecondStageLocalFitting(
                     assembled_state,
                     best_audit_state.best)
             };
+            const auto final_uses_polish{
+                SelectLocalFittingFallbackUsesPolish(
+                    assembled_polish_provenance,
+                    best_audit_state.best)
+            };
             ApplyLocalFittingState(model_object, context, fallback);
             LogSecondStageLocalFittingSummary(
                 options,
                 accepted_iteration_count,
                 "audit-patience",
-                best_audit_state);
+                best_audit_state,
+                final_uses_polish);
             return;
         }
 
@@ -3720,7 +3849,8 @@ void RunSecondStageLocalFitting(
                 options,
                 accepted_iteration_count,
                 "converged",
-                best_audit_state);
+                best_audit_state,
+                UsesLocalFittingPolish(assembled_polish_provenance));
             return;
         }
 
@@ -3729,6 +3859,11 @@ void RunSecondStageLocalFitting(
             const auto fallback{
                 SelectLocalFittingFallbackState(
                     assembled_state,
+                    best_audit_state.best)
+            };
+            const auto final_uses_polish{
+                SelectLocalFittingFallbackUsesPolish(
+                    assembled_polish_provenance,
                     best_audit_state.best)
             };
             ApplyLocalFittingState(model_object, context, fallback);
@@ -3741,10 +3876,12 @@ void RunSecondStageLocalFitting(
                 options,
                 accepted_iteration_count,
                 "maximum-iterations",
-                best_audit_state);
+                best_audit_state,
+                final_uses_polish);
             return;
         }
         previous_state = std::move(assembled_state);
+        previous_polish_provenance = std::move(assembled_polish_provenance);
     }
 }
 

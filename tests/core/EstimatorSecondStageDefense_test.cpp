@@ -72,6 +72,43 @@ bool HasCouplingNeighbor(
         neighbor_index) != neighbor_index_list.end();
 }
 
+std::optional<std::array<std::size_t, 4>> ParsePolishProgressCounts(
+    std::string_view row)
+{
+    std::array<std::size_t, 4> separator_position{};
+    std::size_t search_position{ 0 };
+    for (auto & position : separator_position)
+    {
+        position = row.find('|', search_position);
+        if (position == std::string_view::npos) return std::nullopt;
+        search_position = position + 1;
+    }
+
+    auto cell{
+        row.substr(
+            separator_position.at(2) + 1,
+            separator_position.at(3) - separator_position.at(2) - 1)
+    };
+    while (!cell.empty() && cell.front() == ' ') cell.remove_prefix(1);
+    while (!cell.empty() && cell.back() == ' ') cell.remove_suffix(1);
+
+    std::array<std::size_t, 4> count{};
+    std::size_t value_start{ 0 };
+    for (std::size_t value_index = 0; value_index < count.size(); value_index++)
+    {
+        const auto value_end{
+            value_index + 1 == count.size() ?
+                cell.size() : cell.find('/', value_start)
+        };
+        if (value_end == std::string_view::npos) return std::nullopt;
+        count.at(value_index) = static_cast<std::size_t>(
+            std::stoull(std::string{
+                cell.substr(value_start, value_end - value_start) }));
+        value_start = value_end + 1;
+    }
+    return count;
+}
+
 std::unique_ptr<rg::AtomObject> MakeAtom(
     int serial_id,
     Spot spot,
@@ -1654,13 +1691,17 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingIsIntensityScale
 TEST(EstimatorSecondStageDefenseTest, MissingValidSeedSkipsSecondStageWithoutChangingResults)
 {
     auto model{ BuildAllInvalidSeedDefenseModel() };
+    auto options{ MakeSecondStageOptions() };
+    options.quiet_mode = false;
     std::vector<rg::GaussianModel3D> previous_model_list;
     for (const auto * atom : model->GetSelectedAtoms())
     {
         previous_model_list.emplace_back(GetEstimateModel(*atom));
     }
 
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
+    testing::internal::CaptureStdout();
+    rt::RunSecondStageLocalFitting(*model, options);
+    const std::string out{ testing::internal::GetCapturedStdout() };
 
     for (std::size_t i = 0; i < model->GetSelectedAtoms().size(); i++)
     {
@@ -1669,6 +1710,58 @@ TEST(EstimatorSecondStageDefenseTest, MissingValidSeedSkipsSecondStageWithoutCha
             previous_model_list.at(i),
             0.0);
     }
+    EXPECT_NE(out.find("final_uses_polish=unavailable"), std::string::npos);
+}
+
+TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageReportsAcceptedJointPolish)
+{
+    auto model{ BuildJointPolishDefenseModel() };
+    auto options{ MakeSecondStageOptions() };
+    options.quiet_mode = false;
+    const auto previous_log_level{ Logger::GetLogLevel() };
+
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    rt::RunSecondStageLocalFitting(*model, options);
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_NE(out.find("final_uses_polish=yes"), std::string::npos);
+    bool found_accepted_polish{ false };
+    bool found_skipped_polish{ false };
+    for (std::size_t row_start = out.find('\r');
+        row_start != std::string::npos;
+        row_start = out.find('\r', row_start))
+    {
+        row_start++;
+        const auto row_end{ out.find_first_of("\r\n", row_start) };
+        ASSERT_NE(row_end, std::string::npos);
+        const std::string_view row{
+            out.data() + row_start,
+            row_end - row_start
+        };
+        const auto polish_count{ ParsePolishProgressCounts(row) };
+        ASSERT_TRUE(polish_count.has_value());
+        found_accepted_polish = found_accepted_polish || polish_count->at(1) > 0;
+        found_skipped_polish = found_skipped_polish || polish_count->at(3) > 0;
+        row_start = row_end;
+    }
+    EXPECT_TRUE(found_accepted_polish);
+    EXPECT_TRUE(found_skipped_polish);
+}
+
+TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageReportsNoPolishForEmptySelection)
+{
+    auto model{ BuildJointPolishDefenseModel() };
+    model->SelectAllAtoms(false);
+    auto options{ MakeSecondStageOptions() };
+    options.quiet_mode = false;
+
+    testing::internal::CaptureStdout();
+    rt::RunSecondStageLocalFitting(*model, options);
+    const std::string out{ testing::internal::GetCapturedStdout() };
+
+    EXPECT_NE(out.find("final_uses_polish=no"), std::string::npos);
 }
 
 TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageLogsEveryOuterAttempt)
@@ -1698,6 +1791,7 @@ TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageLogsEveryOuterAttempt)
     EXPECT_EQ(count_occurrences("Try/Acc"), 1U);
     EXPECT_NE(out.find("Atom A/T"), std::string::npos);
     EXPECT_NE(out.find("Cluster A/R"), std::string::npos);
+    EXPECT_NE(out.find("Polish E/A/R/S"), std::string::npos);
     EXPECT_NE(out.find("Suspicious"), std::string::npos);
     EXPECT_NE(out.find("dMax A/R"), std::string::npos);
 
@@ -1736,15 +1830,24 @@ TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageLogsEveryOuterAttempt)
     const auto header_separator_position_list{
         separator_position_list(header)
     };
-    ASSERT_EQ(header_separator_position_list.size(), 4U);
+    ASSERT_EQ(header_separator_position_list.size(), 5U);
     ASSERT_EQ(progress_row_list.size(), 6U);
+    bool found_skipped_polish{ false };
     for (const auto row : progress_row_list)
     {
         EXPECT_EQ(row.size(), header.size());
         EXPECT_EQ(
             separator_position_list(row),
             header_separator_position_list);
+
+        const auto polish_count{ ParsePolishProgressCounts(row) };
+        ASSERT_TRUE(polish_count.has_value());
+        EXPECT_EQ(
+            polish_count->at(0),
+            polish_count->at(1) + polish_count->at(2) + polish_count->at(3));
+        found_skipped_polish = found_skipped_polish || polish_count->at(3) > 0;
     }
+    EXPECT_TRUE(found_skipped_polish);
     EXPECT_NE(
         progress_row_list.front().find("3.58e-02/4.14e-02"),
         std::string::npos);
@@ -1769,6 +1872,9 @@ TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageLogsEveryOuterAttempt)
         out.find(
             "best_iteration=5, stop_reason=all-rejected-minimum-radius"),
         std::string::npos);
+    EXPECT_TRUE(
+        out.find("final_uses_polish=yes") != std::string::npos ||
+        out.find("final_uses_polish=no") != std::string::npos);
 }
 
 TEST(EstimatorSecondStageDefenseTest, QuietSecondStageSuppressesIterationTable)

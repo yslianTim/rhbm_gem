@@ -191,6 +191,7 @@ values in `dMax A/R`.
 | `Try/Acc` | One-based outer attempt / cumulative accepted iterations |
 | `Atom A/T` | Remaining active / cumulative terminal atoms |
 | `Cluster A/R` | Accepted / rejected candidate clusters |
+| `Polish E/A/R/S` | Eligible / accepted / rejected / skipped polish clusters after the combined-objective guard; `E = A + R + S` |
 | `Suspicious` | Atoms rolled back by the suspicious-offset checks in this attempt |
 | `dMax A/R` | Maximum transformed change in the accepted/raw state; accepted is `-` on an all-rejected attempt |
 
@@ -201,7 +202,12 @@ normal line output.
 Non-quiet runs end with this summary format:
 
 ```text
-Second-stage local fitting summary: accepted_iterations=<N>, best_iteration=<initial|N|unavailable>, stop_reason=<reason>, best_audit_objective=<value|unavailable>.
+Second-stage local fitting summary: accepted_iterations=<N>, best_iteration=<initial|N|unavailable>, stop_reason=<reason>, best_audit_objective=<value|unavailable>, final_uses_polish=<yes|no|unavailable>.
 ```
+
+`final_uses_polish` describes the state actually written to `ModelObject`. It is
+`yes` when at least one atom's most recent transformed-parameter update in that
+state came from an accepted polish, `no` when none did, and `unavailable` when
+the stage exits before a valid state can be formed.
 
 `quiet_mode` suppresses the second-stage informational logging.
