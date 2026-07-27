@@ -3,6 +3,7 @@
 #include "core/detail/GaussianEstimatorStages.hpp"
 #include "core/detail/LocalFittingAudit.hpp"
 #include "core/detail/LocalFittingCouplingGraph.hpp"
+#include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
 #include "core/detail/LocalFittingJointOffsetConditioning.hpp"
 #include "core/detail/LocalFittingJointPolish.hpp"
@@ -836,34 +837,12 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
 std::optional<GaussianModel3DWithUncertainty> BuildValidGaussianParameterMedian(
     const std::vector<GaussianModel3D> & model_list)
 {
-    if (model_list.empty()) return std::nullopt;
-
-    std::vector<double> amplitude_list;
-    std::vector<double> width_list;
-    std::vector<double> offset_list;
-    amplitude_list.reserve(model_list.size());
-    width_list.reserve(model_list.size());
-    offset_list.reserve(model_list.size());
-    for (const auto & model : model_list)
-    {
-        if (!detail::IsValidSecondStageGaussianModel(model)) continue;
-        amplitude_list.emplace_back(model.GetAmplitude());
-        width_list.emplace_back(model.GetWidth());
-        offset_list.emplace_back(model.GetOffset());
-    }
-    if (amplitude_list.empty()) return std::nullopt;
-
-    const GaussianModel3D median_model{
-        array_helper::ComputeMedian(amplitude_list),
-        array_helper::ComputeMedian(width_list),
-        array_helper::ComputeMedian(offset_list)
+    const auto median_model{
+        detail::BuildLocalFittingGaussianParameterMedian(model_list)
     };
-    if (!detail::IsValidSecondStageGaussianModel(median_model))
-    {
-        return std::nullopt;
-    }
+    if (!median_model.has_value()) return std::nullopt;
     return GaussianModel3DWithUncertainty{
-        median_model,
+        *median_model,
         GaussianModel3DUncertainty{}
     };
 }
@@ -2215,7 +2194,7 @@ std::optional<Eigen::VectorXd> BuildLocalFittingJointPolishDirection(
     return direction;
 }
 
-std::optional<double> CalculateLocalFittingJointPolishTrustRegionStepNorm(
+std::optional<double> CalculateLocalFittingClusterModelTrustRegionStepNorm(
     const LocalFittingState & outer_previous_state,
     const LocalFittingClusterKey & key,
     const std::vector<GaussianModel3D> & candidate_model_list)
@@ -2252,6 +2231,110 @@ std::optional<double> CalculateLocalFittingJointPolishTrustRegionStepNorm(
     }
     return std::isfinite(step_norm) ?
         std::optional<double>{ step_norm } : std::nullopt;
+}
+
+struct LocalFittingBaseProposal
+{
+    LocalFittingState state{};
+    double effective_damping{ 0.0 };
+    double step_norm{ 0.0 };
+};
+
+std::optional<LocalFittingBaseProposal>
+BuildLocalFittingSharedOffsetBaseProposal(
+    const SecondStageLocalFittingContext & context,
+    const LocalFittingState & outer_previous_state,
+    const LocalFittingState & raw_state,
+    const LocalFittingClusterKey & key,
+    double trust_region_radius)
+{
+    constexpr double trust_region_tolerance{ 1.0e-12 };
+    if (key.empty()) return std::nullopt;
+
+    std::vector<GroupKey> group_key_by_atom_position;
+    std::vector<GaussianModel3D> previous_model_list;
+    std::vector<GaussianModel3D> raw_model_list;
+    group_key_by_atom_position.reserve(key.size());
+    previous_model_list.reserve(key.size());
+    raw_model_list.reserve(key.size());
+    for (const auto atom_index : key)
+    {
+        group_key_by_atom_position.emplace_back(
+            data_internal::GetGroupKey(context.at(atom_index).atom));
+        previous_model_list.emplace_back(
+            outer_previous_state.at(atom_index).mdpde.GetModel());
+        raw_model_list.emplace_back(
+            raw_state.at(atom_index).mdpde.GetModel());
+    }
+    const auto shared_offset_model_list{
+        detail::BuildLocalFittingGroupMedianModelList(
+            group_key_by_atom_position,
+            raw_model_list)
+    };
+
+    const auto seed_model_list{
+        detail::BuildLocalFittingSharedOffsetDampedModelList(
+            previous_model_list,
+            raw_model_list,
+            shared_offset_model_list,
+            0.0)
+    };
+    if (!seed_model_list.has_value()) return std::nullopt;
+    const auto seed_step_norm{
+        CalculateLocalFittingClusterModelTrustRegionStepNorm(
+            outer_previous_state,
+            key,
+            *seed_model_list)
+    };
+    if (!seed_step_norm.has_value() ||
+        *seed_step_norm > trust_region_radius + trust_region_tolerance)
+    {
+        return std::nullopt;
+    }
+
+    double damping{ 1.0 };
+    while (damping >= std::numeric_limits<double>::epsilon())
+    {
+        auto candidate_model_list{
+            detail::BuildLocalFittingSharedOffsetDampedModelList(
+                previous_model_list,
+                raw_model_list,
+                shared_offset_model_list,
+                damping)
+        };
+        if (candidate_model_list.has_value())
+        {
+            const auto step_norm{
+                CalculateLocalFittingClusterModelTrustRegionStepNorm(
+                    outer_previous_state,
+                    key,
+                    *candidate_model_list)
+            };
+            if (step_norm.has_value() &&
+                *step_norm <= trust_region_radius + trust_region_tolerance)
+            {
+                LocalFittingBaseProposal proposal;
+                proposal.state = outer_previous_state;
+                proposal.effective_damping = damping;
+                proposal.step_norm = *step_norm;
+                for (std::size_t atom_position = 0;
+                    atom_position < key.size();
+                    atom_position++)
+                {
+                    const auto atom_index{ key.at(atom_position) };
+                    proposal.state.at(atom_index).mdpde =
+                        GaussianModel3DWithUncertainty{
+                            candidate_model_list->at(atom_position),
+                            raw_state.at(atom_index).mdpde
+                                .GetStandardDeviationModel()
+                        };
+                }
+                return proposal;
+            }
+        }
+        damping *= 0.5;
+    }
+    return std::nullopt;
 }
 
 bool HasMaterialLocalFittingJointPolishChange(
@@ -2338,7 +2421,7 @@ BuildLocalFittingJointPolishProposal(
         return std::nullopt;
     }
     const auto seed_step_norm{
-        CalculateLocalFittingJointPolishTrustRegionStepNorm(
+        CalculateLocalFittingClusterModelTrustRegionStepNorm(
             outer_previous_state,
             key,
             *seed_model_list)
@@ -2376,7 +2459,7 @@ BuildLocalFittingJointPolishProposal(
                 }))
         {
             const auto step_norm{
-                CalculateLocalFittingJointPolishTrustRegionStepNorm(
+                CalculateLocalFittingClusterModelTrustRegionStepNorm(
                     outer_previous_state,
                     key,
                     *candidate_model_list)
@@ -2775,6 +2858,7 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
     const LocalFittingState & raw_state,
     const std::vector<Eigen::Vector3d> & previous_transformed_estimation_list,
     const std::vector<Eigen::Vector3d> & raw_transformed_estimation_list,
+    const std::vector<char> & suspicious_offset_atom_mask,
     const std::vector<double> & ridge_multiplier_list,
     LocalFittingClusterObjectiveStateMap & cluster_objective_state,
     const detail::LocalFittingTrustRegionStateSet & trust_region_state)
@@ -2792,48 +2876,79 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                 key) != polish_eligible_key_list.end()
         };
         if (is_polish_eligible) selection.polish_progress.eligible_count++;
-        std::vector<Eigen::Vector3d> previous_cluster_estimation_list;
-        std::vector<Eigen::Vector3d> raw_cluster_estimation_list;
-        previous_cluster_estimation_list.reserve(key.size());
-        raw_cluster_estimation_list.reserve(key.size());
-        for (const auto atom_index : key)
-        {
-            previous_cluster_estimation_list.emplace_back(
-                previous_transformed_estimation_list.at(atom_index));
-            raw_cluster_estimation_list.emplace_back(
-                raw_transformed_estimation_list.at(atom_index));
-        }
         const auto trust_region_radius{ trust_region_state.GetRadius(key) };
-        const auto trust_region_damping{
-            detail::LimitLocalFittingTrustRegionDamping(
-                previous_cluster_estimation_list,
-                raw_cluster_estimation_list,
-                kLocalFittingTrustRegionParameterScale,
-                1.0,
-                trust_region_radius)
-        };
-        const auto base_cluster_estimation_list{
-            InterpolateLocalFittingTransformedEstimations(
-                previous_cluster_estimation_list,
-                raw_cluster_estimation_list,
-                trust_region_damping.effective_damping)
+        const auto contains_suspicious_atom{
+            std::any_of(
+                key.begin(),
+                key.end(),
+                [&](std::size_t atom_index)
+                {
+                    return suspicious_offset_atom_mask.at(atom_index) != 0;
+                })
         };
         LocalFittingObjectiveAttemptDiagnostic base_diagnostic;
-        base_diagnostic.effective_damping = trust_region_damping.effective_damping;
         base_diagnostic.trust_region_radius = trust_region_radius;
-        base_diagnostic.trust_region_step_norm = trust_region_damping.step_norm;
-        auto base_state{
-            BuildLocalFittingCandidateState(
+        std::optional<LocalFittingBaseProposal> base_proposal;
+        if (!contains_suspicious_atom)
+        {
+            base_proposal = BuildLocalFittingSharedOffsetBaseProposal(
+                context,
                 previous_state,
-                previous_cluster_estimation_list,
-                base_cluster_estimation_list,
                 raw_state,
-                key)
-        };
-        if (!base_state.has_value())
+                key,
+                trust_region_radius);
+        }
+        else
+        {
+            std::vector<Eigen::Vector3d> previous_cluster_estimation_list;
+            std::vector<Eigen::Vector3d> raw_cluster_estimation_list;
+            previous_cluster_estimation_list.reserve(key.size());
+            raw_cluster_estimation_list.reserve(key.size());
+            for (const auto atom_index : key)
+            {
+                previous_cluster_estimation_list.emplace_back(
+                    previous_transformed_estimation_list.at(atom_index));
+                raw_cluster_estimation_list.emplace_back(
+                    raw_transformed_estimation_list.at(atom_index));
+            }
+            const auto trust_region_damping{
+                detail::LimitLocalFittingTrustRegionDamping(
+                    previous_cluster_estimation_list,
+                    raw_cluster_estimation_list,
+                    kLocalFittingTrustRegionParameterScale,
+                    1.0,
+                    trust_region_radius)
+            };
+            const auto base_cluster_estimation_list{
+                InterpolateLocalFittingTransformedEstimations(
+                    previous_cluster_estimation_list,
+                    raw_cluster_estimation_list,
+                    trust_region_damping.effective_damping)
+            };
+            auto base_state{
+                BuildLocalFittingCandidateState(
+                    previous_state,
+                    previous_cluster_estimation_list,
+                    base_cluster_estimation_list,
+                    raw_state,
+                    key)
+            };
+            if (base_state.has_value())
+            {
+                base_proposal = LocalFittingBaseProposal{
+                    std::move(*base_state),
+                    trust_region_damping.effective_damping,
+                    trust_region_damping.step_norm
+                };
+            }
+            else
+            {
+                base_diagnostic.is_invalid_model = true;
+            }
+        }
+        if (!base_proposal.has_value())
         {
             if (is_polish_eligible) selection.polish_progress.skipped_count++;
-            base_diagnostic.is_invalid_model = true;
             selection.rejected_key_list.emplace_back(key);
             selection.rejected_cluster_diagnostic_list.emplace_back(
                 LocalFittingRejectedClusterDiagnostic{
@@ -2842,9 +2957,14 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                 });
             continue;
         }
+        base_diagnostic.effective_damping =
+            base_proposal->effective_damping;
+        base_diagnostic.trust_region_step_norm =
+            base_proposal->step_norm;
+        auto & base_state{ base_proposal->state };
         if (!TryCommitLocalFittingClusterCandidate(
                 context,
-                *base_state,
+                base_state,
                 previous_state,
                 key,
                 objective_sample_ref_list,
@@ -2868,17 +2988,22 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
         }
         for (const auto active_index : key)
         {
-            selection.assembled_state.at(active_index) = base_state->at(active_index);
+            selection.assembled_state.at(active_index) = base_state.at(active_index);
         }
 
-        for (std::size_t local_position = 0; local_position < key.size(); local_position++)
+        for (const auto atom_index : key)
         {
-            if ((base_cluster_estimation_list.at(local_position).array() ==
-                    previous_cluster_estimation_list.at(local_position).array()).all())
+            const auto base_transformed{
+                detail::EncodeLocalFittingTransformedCoordinates(
+                    base_state.at(atom_index).mdpde.GetModel())
+            };
+            if (base_transformed.has_value() &&
+                (base_transformed->array() ==
+                    previous_transformed_estimation_list.at(atom_index).array()).all())
             {
                 continue;
             }
-            selection.assembled_polish_provenance.at(key.at(local_position)) = 0;
+            selection.assembled_polish_provenance.at(atom_index) = 0;
         }
 
         if (!is_polish_eligible)
@@ -2889,7 +3014,7 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
             BuildLocalFittingJointPolishProposal(
                 context,
                 previous_state,
-                *base_state,
+                base_state,
                 key,
                 objective_sample_ref_list,
                 ridge_multiplier_list,
@@ -2909,7 +3034,7 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
         if (!TryCommitLocalFittingClusterCandidate(
                 context,
                 polished_candidate->state,
-                *base_state,
+                base_state,
                 key,
                 objective_sample_ref_list,
                 true,
@@ -2946,11 +3071,16 @@ std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
     const SecondStageLocalFittingContext & context,
     std::size_t atom_index,
     const LocalGaussianResult & previous_result,
-    const FittedGaussianSnapshot & offset_snapshot,
+    const FittedGaussianSnapshot & refit_model_snapshot,
     const FitOptions & options)
 {
-    auto sample_entries{ BuildSecondStageAdjustedSamples(context, atom_index, offset_snapshot) };
-    const auto & offset_model{ offset_snapshot.at(atom_index) };
+    auto sample_entries{
+        BuildSecondStageAdjustedSamples(
+            context,
+            atom_index,
+            refit_model_snapshot)
+    };
+    const auto & offset_model{ refit_model_snapshot.at(atom_index) };
     const auto & previous_model{ previous_result.mdpde.GetModel() };
     const auto is_acceptable = [&](const GaussianModel3D & model)
     {
@@ -3140,7 +3270,18 @@ LocalFittingIterationResult RunLocalFittingIteration(
             previous_state.at(atom_index).mdpde.GetModel();
     }
 
-    const auto refit_snapshot{ current_snapshot };
+    std::vector<GroupKey> group_key_by_atom_index;
+    group_key_by_atom_index.reserve(context.size());
+    for (const auto & atom_context : context)
+    {
+        group_key_by_atom_index.emplace_back(
+            data_internal::GetGroupKey(atom_context.atom));
+    }
+    const auto refit_model_snapshot{
+        detail::BuildLocalFittingGroupMedianModelList(
+            group_key_by_atom_index,
+            current_snapshot)
+    };
     std::vector<std::size_t> post_refit_suspicious_seed_atom_index_list;
     for (auto & [key, health] : health_by_key)
     {
@@ -3153,7 +3294,7 @@ LocalFittingIterationResult RunLocalFittingIteration(
                     context,
                     atom_index,
                     previous_state.at(atom_index),
-                    refit_snapshot,
+                    refit_model_snapshot,
                     options)
             };
             if (!refit_result.has_value())
@@ -3847,6 +3988,7 @@ void RunSecondStageLocalFitting(
                 raw_state,
                 previous_transformed_estimation_list,
                 raw_transformed_estimation_list,
+                suspicious_offset_atom_mask,
                 joint_offset_ridge_multiplier_list,
                 working_cluster_objective_state,
                 trust_region_state)

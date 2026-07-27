@@ -15,12 +15,14 @@
 #include "core/detail/GaussianEstimatorStages.hpp"
 #include "core/detail/LocalFittingAudit.hpp"
 #include "core/detail/LocalFittingCouplingGraph.hpp"
+#include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
 #include "core/detail/LocalFittingJointOffsetConditioning.hpp"
 #include "core/detail/LocalFittingJointPolish.hpp"
 #include "core/detail/LocalFittingSeedRepair.hpp"
 #include "core/detail/LocalFittingTrustRegion.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
+#include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
@@ -33,6 +35,7 @@ namespace audit_detail = rhbm_gem::core::detail;
 namespace change_detail = rhbm_gem::core::detail;
 namespace conditioning_detail = rhbm_gem::core::detail;
 namespace coupling_detail = rhbm_gem::core::detail;
+namespace median_detail = rhbm_gem::core::detail;
 namespace health_detail = rhbm_gem::core::detail;
 namespace polish_detail = rhbm_gem::core::detail;
 namespace seed_detail = rhbm_gem::core::detail;
@@ -1161,6 +1164,239 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishJacobianMatchesFiniteDifference
 }
 
 TEST(EstimatorSecondStageDefenseTest,
+    GroupMedianModelListUsesComponentMediansAndKeepsGroupsSeparate)
+{
+    const std::vector<GroupKey> group_key_list{ 10, 10, 10, 20, 20, 30 };
+    const std::vector<rg::GaussianModel3D> model_list{
+        rg::GaussianModel3D{ 1.0, 0.20, 1.0 },
+        rg::GaussianModel3D{ 9.0, 0.60, 3.0 },
+        rg::GaussianModel3D{ 5.0, 0.40, 2.0 },
+        rg::GaussianModel3D{ 4.0, 0.50, -2.0 },
+        rg::GaussianModel3D{ 8.0, 0.90, 2.0 },
+        rg::GaussianModel3D{ 7.0, 0.80, 0.4 }
+    };
+
+    const auto median_model_list{
+        median_detail::BuildLocalFittingGroupMedianModelList(
+            group_key_list,
+            model_list)
+    };
+
+    ASSERT_EQ(median_model_list.size(), model_list.size());
+    for (const auto atom_position : std::array<std::size_t, 3>{ 0, 1, 2 })
+    {
+        ExpectGaussianModelsNear(
+            median_model_list.at(atom_position),
+            rg::GaussianModel3D{ 5.0, 0.40, 2.0 },
+            1.0e-12);
+    }
+    for (const auto atom_position : std::array<std::size_t, 2>{ 3, 4 })
+    {
+        ExpectGaussianModelsNear(
+            median_model_list.at(atom_position),
+            rg::GaussianModel3D{ 6.0, 0.70, 0.0 },
+            1.0e-12);
+    }
+    ExpectGaussianModelsNear(
+        median_model_list.at(5),
+        model_list.at(5),
+        1.0e-12);
+}
+
+TEST(EstimatorSecondStageDefenseTest,
+    GroupMedianModelListIgnoresInvalidMembersAndFallsBackToSnapshot)
+{
+    const rg::GaussianModel3D valid_model{ 6.0, 0.55, 0.2 };
+    const rg::GaussianModel3D invalid_model{ -1.0, 0.60, 9.0 };
+    const std::vector<rg::GaussianModel3D> model_list{
+        valid_model,
+        invalid_model,
+        invalid_model
+    };
+    const auto median_model_list{
+        median_detail::BuildLocalFittingGroupMedianModelList(
+            std::vector<GroupKey>{ 10, 10, 20 },
+            model_list)
+    };
+
+    ASSERT_EQ(median_model_list.size(), model_list.size());
+    ExpectGaussianModelsNear(median_model_list.at(0), valid_model, 1.0e-12);
+    ExpectGaussianModelsNear(median_model_list.at(1), valid_model, 1.0e-12);
+    ExpectGaussianModelsNear(median_model_list.at(2), invalid_model, 1.0e-12);
+    EXPECT_THROW(
+        median_detail::BuildLocalFittingGroupMedianModelList(
+            std::vector<GroupKey>{ 10 },
+            model_list),
+        std::invalid_argument);
+}
+
+TEST(EstimatorSecondStageDefenseTest,
+    SharedOffsetDampedModelsKeepMedianOffsetAtEveryDamping)
+{
+    const std::vector<GroupKey> group_key_list{ 10, 10, 20 };
+    const std::vector<rg::GaussianModel3D> previous_model_list{
+        rg::GaussianModel3D{ 4.0, 0.40, 0.1 },
+        rg::GaussianModel3D{ 6.0, 0.60, 0.9 },
+        rg::GaussianModel3D{ 8.0, 0.80, -1.0 }
+    };
+    const std::vector<rg::GaussianModel3D> raw_model_list{
+        rg::GaussianModel3D{ 5.0, 0.50, 0.5 },
+        rg::GaussianModel3D{ 9.0, 0.90, 0.7 },
+        rg::GaussianModel3D{ 7.0, 0.70, 2.0 }
+    };
+    const auto shared_offset_model_list{
+        median_detail::BuildLocalFittingGroupMedianModelList(
+            group_key_list,
+            raw_model_list)
+    };
+
+    for (const auto damping : std::array<double, 3>{ 0.0, 0.5, 1.0 })
+    {
+        const auto candidate_model_list{
+            median_detail::BuildLocalFittingSharedOffsetDampedModelList(
+                previous_model_list,
+                raw_model_list,
+                shared_offset_model_list,
+                damping)
+        };
+        ASSERT_TRUE(candidate_model_list.has_value());
+        EXPECT_DOUBLE_EQ(candidate_model_list->at(0).GetOffset(), 0.6);
+        EXPECT_DOUBLE_EQ(candidate_model_list->at(1).GetOffset(), 0.6);
+        EXPECT_DOUBLE_EQ(candidate_model_list->at(2).GetOffset(), 2.0);
+
+        for (std::size_t atom_position = 0;
+            atom_position < candidate_model_list->size();
+            atom_position++)
+        {
+            const auto previous_coordinates{
+                change_detail::EncodeLocalFittingTransformedCoordinates(
+                    previous_model_list.at(atom_position))
+            };
+            const auto raw_coordinates{
+                change_detail::EncodeLocalFittingTransformedCoordinates(
+                    raw_model_list.at(atom_position))
+            };
+            const auto candidate_coordinates{
+                change_detail::EncodeLocalFittingTransformedCoordinates(
+                    candidate_model_list->at(atom_position))
+            };
+            ASSERT_TRUE(previous_coordinates.has_value());
+            ASSERT_TRUE(raw_coordinates.has_value());
+            ASSERT_TRUE(candidate_coordinates.has_value());
+            for (const auto parameter_index : std::array<std::size_t, 2>{
+                change_detail::kLogPeakHeightChangeIndex,
+                change_detail::kLogWidthChangeIndex })
+            {
+                const auto eigen_index{
+                    static_cast<Eigen::Index>(parameter_index)
+                };
+                EXPECT_NEAR(
+                    (*candidate_coordinates)(eigen_index),
+                    (*previous_coordinates)(eigen_index) +
+                        damping * ((*raw_coordinates)(eigen_index) -
+                            (*previous_coordinates)(eigen_index)),
+                    1.0e-12);
+            }
+        }
+    }
+}
+
+TEST(EstimatorSecondStageDefenseTest, GroupMedianModelsAreIntensityScaleInvariant)
+{
+    constexpr double scale{ 100.0 };
+    const std::vector<GroupKey> group_key_list{ 10, 10, 10 };
+    const std::vector<rg::GaussianModel3D> model_list{
+        rg::GaussianModel3D{ 3.0, 0.40, -0.2 },
+        rg::GaussianModel3D{ 5.0, 0.60, 0.1 },
+        rg::GaussianModel3D{ 7.0, 0.80, 0.4 }
+    };
+    std::vector<rg::GaussianModel3D> scaled_model_list;
+    scaled_model_list.reserve(model_list.size());
+    for (const auto & model : model_list)
+    {
+        scaled_model_list.emplace_back(rg::GaussianModel3D{
+            scale * model.GetAmplitude(),
+            model.GetWidth(),
+            scale * model.GetOffset()
+        });
+    }
+
+    const auto median_model_list{
+        median_detail::BuildLocalFittingGroupMedianModelList(
+            group_key_list,
+            model_list)
+    };
+    const auto scaled_median_model_list{
+        median_detail::BuildLocalFittingGroupMedianModelList(
+            group_key_list,
+            scaled_model_list)
+    };
+    ASSERT_EQ(median_model_list.size(), scaled_median_model_list.size());
+    for (std::size_t atom_position = 0;
+        atom_position < median_model_list.size();
+        atom_position++)
+    {
+        EXPECT_DOUBLE_EQ(
+            scale * median_model_list.at(atom_position).GetAmplitude(),
+            scaled_median_model_list.at(atom_position).GetAmplitude());
+        EXPECT_DOUBLE_EQ(
+            median_model_list.at(atom_position).GetWidth(),
+            scaled_median_model_list.at(atom_position).GetWidth());
+        EXPECT_DOUBLE_EQ(
+            scale * median_model_list.at(atom_position).GetOffset(),
+            scaled_median_model_list.at(atom_position).GetOffset());
+    }
+}
+
+TEST(EstimatorSecondStageDefenseTest,
+    IndividualRefitUsesGroupMedianModelForTargetOffsetResponse)
+{
+    const auto median_model_list{
+        median_detail::BuildLocalFittingGroupMedianModelList(
+            std::vector<GroupKey>{ 10, 10, 10 },
+            std::vector<rg::GaussianModel3D>{
+                rg::GaussianModel3D{ 3.0, 0.70, 0.2 },
+                rg::GaussianModel3D{ 5.0, 0.80, 0.3 },
+                rg::GaussianModel3D{ 7.0, 0.90, 0.4 }
+            })
+    };
+    ASSERT_EQ(median_model_list.size(), 3U);
+    const auto & offset_model{ median_model_list.front() };
+    const rg::GaussianModel3D truth_shape{ 6.0, 0.55, 0.0 };
+    LocalPotentialSampleList sample_list;
+    for (const auto distance : std::array<float, 5>{
+        0.0F, 0.15F, 0.30F, 0.45F, 0.60F })
+    {
+        sample_list.emplace_back(LocalPotentialSample{
+            static_cast<float>(
+                truth_shape.SignalAtDistance(distance) +
+                offset_model.GetOffset() *
+                    offset_model.OffsetBasisAtDistance(distance)),
+            SamplingPoint{ distance }
+        });
+    }
+
+    const auto result{
+        rt::EstimateLocalGaussian(
+            sample_list,
+            0.0,
+            MakeSecondStageOptions(),
+            offset_model)
+    };
+    EXPECT_NEAR(
+        result.mdpde.GetModel().GetAmplitude(),
+        truth_shape.GetAmplitude(),
+        1.0e-4);
+    EXPECT_NEAR(
+        result.mdpde.GetModel().GetWidth(),
+        truth_shape.GetWidth(),
+        1.0e-6);
+    EXPECT_DOUBLE_EQ(
+        result.mdpde.GetModel().GetOffset(),
+        offset_model.GetOffset());
+}
+
+TEST(EstimatorSecondStageDefenseTest,
     JointPolishParameterizationSharesOneOffsetColumnPerGroup)
 {
     const std::vector<rg::GaussianModel3D> base_model_list{
@@ -1839,6 +2075,11 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingJointlyPolishesC
     EXPECT_TRUE(amplitude_changed);
     EXPECT_TRUE(width_changed);
     EXPECT_TRUE(offset_changed);
+    EXPECT_GT(
+        std::abs(
+            GetEstimateModel(*atom_list.at(0)).GetOffset() -
+            GetEstimateModel(*atom_list.at(1)).GetOffset()),
+        1.0e-6);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
@@ -1856,6 +2097,9 @@ TEST(EstimatorSecondStageDefenseTest, SharedOffsetGroupParticipatesInAcceptedJoi
     const auto & atom_list{ model->GetSelectedAtoms() };
     ASSERT_EQ(atom_list.size(), 2U);
     EXPECT_EQ(atom_list.at(0)->GetAtomKey(), atom_list.at(1)->GetAtomKey());
+    EXPECT_DOUBLE_EQ(
+        GetEstimateModel(*atom_list.at(0)).GetOffset(),
+        GetEstimateModel(*atom_list.at(1)).GetOffset());
     EXPECT_LT(CalculateSelectedAtomResponseMeanSquaredError(*model), initial_error);
     EXPECT_NE(out.find("1/1/0/0"), std::string::npos);
     ExpectSelectedAtomEstimatesAreFinite(*model);
@@ -1873,6 +2117,13 @@ TEST(EstimatorSecondStageDefenseTest, SharedOffsetJointPolishIsIntensityScaleInv
     const auto & base_atoms{ base_model->GetSelectedAtoms() };
     const auto & scaled_atoms{ scaled_model->GetSelectedAtoms() };
     ASSERT_EQ(base_atoms.size(), scaled_atoms.size());
+    ASSERT_EQ(base_atoms.size(), 2U);
+    EXPECT_DOUBLE_EQ(
+        GetEstimateModel(*base_atoms.at(0)).GetOffset(),
+        GetEstimateModel(*base_atoms.at(1)).GetOffset());
+    EXPECT_DOUBLE_EQ(
+        GetEstimateModel(*scaled_atoms.at(0)).GetOffset(),
+        GetEstimateModel(*scaled_atoms.at(1)).GetOffset());
     for (std::size_t i = 0; i < base_atoms.size(); i++)
     {
         const auto base{ GetEstimateModel(*base_atoms.at(i)) };
