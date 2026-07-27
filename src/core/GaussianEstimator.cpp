@@ -43,11 +43,8 @@ constexpr std::size_t kMinimumAlphaRTrainingSampleCount{ 10 };
 constexpr std::size_t kMinimumAlphaGTrainingMemberCount{ 10 };
 constexpr double kNeighborContributionDistanceMax{ 2.5 };
 constexpr double kNeighborAtomSearchRange{ 2.0 * kNeighborContributionDistanceMax };
-constexpr std::array<Spot, 4> kGroupPriorSummarySpotList{
-    Spot::C,
-    Spot::CA,
-    Spot::N,
-    Spot::O
+constexpr std::array<Spot, 5> kGroupPriorSummarySpotList{
+    Spot::C, Spot::CA, Spot::CB, Spot::N, Spot::O
 };
 
 struct GaussianModelParameterSamples
@@ -372,12 +369,8 @@ std::vector<std::string> BuildGroupPriorSpotSummaryLines(const ModelObject & mod
 
         const auto spot{ atom_list.front()->GetSpot() };
         if (std::find(
-                kGroupPriorSummarySpotList.begin(),
-                kGroupPriorSummarySpotList.end(),
-                spot) == kGroupPriorSummarySpotList.end())
-        {
-            continue;
-        }
+                kGroupPriorSummarySpotList.begin(), kGroupPriorSummarySpotList.end(),
+                spot) == kGroupPriorSummarySpotList.end()) continue;
         const auto & prior{ analysis_view.GetAtomGroupPrior(group_key) };
         auto & sample_list{ spot_sample_map[spot] };
         sample_list.amplitude_list.emplace_back(prior.GetAmplitude());
@@ -407,26 +400,28 @@ std::vector<std::string> BuildGroupPriorSpotSummaryLines(const ModelObject & mod
         };
 
         std::ostringstream stream;
-        stream << "Spot::" << ChemicalDataHelper::GetLabel(spot)
-            << std::fixed << std::setprecision(2)
-            << " , amplitude mean = " << amplitude_mean
-            << ", amplitude s.d. = "
+        stream << "| " << std::left << std::setw(8)
+            << ChemicalDataHelper::GetLabel(spot)
+            << " | " << std::right << std::fixed << std::setprecision(2)
+            << std::setw(8) << amplitude_mean
+            << " | " << std::setw(8)
             << array_helper::ComputeStandardDeviation(
                 sample_list.amplitude_list.data(),
                 sample_list.amplitude_list.size(),
                 amplitude_mean)
-            << ", width mean = " << width_mean
-            << ", width s.d. = "
+            << " | " << std::setw(8) << width_mean
+            << " | " << std::setw(8)
             << array_helper::ComputeStandardDeviation(
                 sample_list.width_list.data(),
                 sample_list.width_list.size(),
                 width_mean)
-            << ", offset mean = " << offset_mean
-            << ", offset s.d. = "
+            << " | " << std::setw(8) << offset_mean
+            << " | " << std::setw(8)
             << array_helper::ComputeStandardDeviation(
                 sample_list.offset_list.data(),
                 sample_list.offset_list.size(),
-                offset_mean);
+                offset_mean)
+            << " |";
         summary_lines.emplace_back(stream.str());
     }
     return summary_lines;
@@ -442,6 +437,10 @@ void LogGroupPriorSpotSummary(const ModelObject & model_object)
     }
 
     Logger::Log(LogLevel::Info, "Group fitting prior summary by Spot:");
+    Logger::Log(LogLevel::Info,
+        "|---Spot---|------Amplitude------|--------Width--------|-------Offset--------|");
+    Logger::Log(LogLevel::Info,
+        "|          |   mean   |   s.d.   |   mean   |   s.d.   |   mean   |   s.d.   |");
     for (const auto & line : summary_lines)
     {
         Logger::Log(LogLevel::Info, line);
