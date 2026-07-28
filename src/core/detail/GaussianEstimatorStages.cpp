@@ -5,6 +5,7 @@
 #include "core/detail/LocalFittingCouplingGraph.hpp"
 #include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
+#include "core/detail/LocalFittingJointOffset.hpp"
 #include "core/detail/LocalFittingJointOffsetConditioning.hpp"
 #include "core/detail/LocalFittingJointPolish.hpp"
 #include "core/detail/LocalFittingSeedRepair.hpp"
@@ -165,6 +166,7 @@ struct JointOffsetBuildResult
 {
     algorithm::WeightedRidgeSystem system{};
     ActiveCouplingGraph active_coupling_graph{};
+    detail::LocalFittingJointOffsetParameterization parameterization{};
 };
 
 struct LocalFittingClusterHealth
@@ -1123,26 +1125,60 @@ JointOffsetBuildResult BuildJointOffsetSystem(
     bool log_debug_diagnostics)
 {
     const auto atom_size{ context.size() };
-    std::vector<int> active_column_by_atom_index(atom_size, -1);
+    std::vector<GroupKey> group_key_by_atom_position;
+    std::vector<GaussianModel3D> active_model_list;
+    group_key_by_atom_position.reserve(active_index_list.size());
+    active_model_list.reserve(active_index_list.size());
+    for (const auto atom_index : active_index_list)
+    {
+        group_key_by_atom_position.emplace_back(
+            data_internal::GetGroupKey(context.at(atom_index).atom));
+        active_model_list.emplace_back(snapshot.at(atom_index));
+    }
+    auto parameterization{
+        detail::BuildLocalFittingJointOffsetParameterization(
+            group_key_by_atom_position,
+            active_model_list)
+    };
+    if (!parameterization.has_value())
+    {
+        throw std::runtime_error(
+            "Joint offset group parameterization is invalid.");
+    }
+
+    std::vector<int> active_position_by_atom_index(atom_size, -1);
     for (std::size_t i = 0; i < active_index_list.size(); i++)
     {
         const auto atom_index{ active_index_list.at(i) };
-        active_column_by_atom_index.at(atom_index) = static_cast<int>(i);
+        active_position_by_atom_index.at(atom_index) = static_cast<int>(i);
     }
 
-    const auto column_count{ static_cast<Eigen::Index>(active_index_list.size()) };
+    const auto column_count{ parameterization->ParameterCount() };
     std::vector<Eigen::Triplet<double>> triplet_list;
     std::vector<double> response_list;
-    Eigen::VectorXd column_square_sum{ Eigen::VectorXd::Zero(column_count) };
-    std::map<std::pair<Eigen::Index, Eigen::Index>, double> column_cross_sum_map;
+    Eigen::VectorXd group_column_square_sum{
+        Eigen::VectorXd::Zero(column_count)
+    };
+    std::map<std::pair<Eigen::Index, Eigen::Index>, double>
+        group_column_cross_sum_map;
+    Eigen::VectorXd atom_column_square_sum{
+        Eigen::VectorXd::Zero(
+            static_cast<Eigen::Index>(active_index_list.size()))
+    };
+    std::map<std::pair<std::size_t, std::size_t>, double>
+        atom_column_cross_sum_map;
     ActiveCouplingGraph active_coupling_graph(active_index_list.size());
-    std::vector<std::pair<Eigen::Index, double>> row_basis_entries;
+    std::vector<std::pair<std::size_t, double>> atom_row_basis_entries;
+    std::vector<std::pair<Eigen::Index, double>> group_row_basis_entries;
     for (const auto active_index : active_index_list)
     {
-        const auto target_column{ active_column_by_atom_index.at(active_index) };
+        const auto target_position{
+            active_position_by_atom_index.at(active_index)
+        };
         const auto & atom_context{ context.at(active_index) };
         const auto & target_model{ snapshot.at(active_index) };
-        row_basis_entries.reserve(atom_size);
+        atom_row_basis_entries.reserve(atom_size);
+        group_row_basis_entries.reserve(parameterization->GroupCount());
         for (std::size_t sample_index = 0; sample_index < atom_context.sample_entries.size(); sample_index++)
         {
             const auto & sample{ atom_context.sample_entries.at(sample_index) };
@@ -1158,17 +1194,21 @@ JointOffsetBuildResult BuildJointOffsetSystem(
                 throw std::runtime_error("Joint offset target model evaluation is not finite.");
             }
             auto residual{ static_cast<double>(sample.response) - target_signal };
-            row_basis_entries.clear();
+            atom_row_basis_entries.clear();
             if (std::abs(target_basis) > std::numeric_limits<double>::epsilon())
             {
-                row_basis_entries.emplace_back(static_cast<Eigen::Index>(target_column), target_basis);
+                atom_row_basis_entries.emplace_back(
+                    static_cast<std::size_t>(target_position),
+                    target_basis);
             }
 
             for (const auto & neighbor_sample : atom_context.sample_neighbor_list.at(sample_index))
             {
                 const auto & neighbor_model{ snapshot.at(neighbor_sample.atom_index) };
-                const auto neighbor_column{ active_column_by_atom_index.at(neighbor_sample.atom_index) };
-                if (neighbor_column < 0)
+                const auto neighbor_position{
+                    active_position_by_atom_index.at(neighbor_sample.atom_index)
+                };
+                if (neighbor_position < 0)
                 {
                     const auto response{ neighbor_model.ResponseAtDistance(neighbor_sample.distance) };
                     if (!std::isfinite(response))
@@ -1188,43 +1228,129 @@ JointOffsetBuildResult BuildJointOffsetSystem(
                 residual -= signal;
                 if (std::abs(basis) > std::numeric_limits<double>::epsilon())
                 {
-                    row_basis_entries.emplace_back(static_cast<Eigen::Index>(neighbor_column), basis);
+                    atom_row_basis_entries.emplace_back(
+                        static_cast<std::size_t>(neighbor_position),
+                        basis);
                 }
             }
             if (!std::isfinite(residual))
             {
                 throw std::runtime_error("Joint offset residual is not finite.");
             }
-            if (row_basis_entries.empty()) continue;
+            if (atom_row_basis_entries.empty()) continue;
 
-            const auto row_index{ static_cast<Eigen::Index>(response_list.size()) };
+            for (const auto & [atom_position, basis] : atom_row_basis_entries)
+            {
+                atom_column_square_sum(
+                    static_cast<Eigen::Index>(atom_position)) += basis * basis;
+            }
+            for (std::size_t i = 0; i < atom_row_basis_entries.size(); i++)
+            {
+                const auto [left_position, left_basis]{
+                    atom_row_basis_entries.at(i)
+                };
+                for (std::size_t j = i + 1;
+                    j < atom_row_basis_entries.size();
+                    j++)
+                {
+                    const auto [right_position, right_basis]{
+                        atom_row_basis_entries.at(j)
+                    };
+                    if (left_position == right_position) continue;
+                    const auto position_pair{
+                        std::minmax(left_position, right_position)
+                    };
+                    atom_column_cross_sum_map[position_pair] +=
+                        left_basis * right_basis;
+                }
+            }
+
+            const auto group_basis{
+                parameterization->AggregateBasis(atom_row_basis_entries)
+            };
+            if (!group_basis.has_value())
+            {
+                throw std::runtime_error(
+                    "Joint offset group basis is invalid.");
+            }
+            group_row_basis_entries.clear();
+            for (Eigen::Index column_index = 0;
+                column_index < group_basis->size();
+                column_index++)
+            {
+                const auto basis{ (*group_basis)(column_index) };
+                if (std::abs(basis) <= std::numeric_limits<double>::epsilon())
+                {
+                    continue;
+                }
+                group_row_basis_entries.emplace_back(column_index, basis);
+            }
+            if (group_row_basis_entries.empty()) continue;
+
+            const auto row_index{
+                static_cast<Eigen::Index>(response_list.size())
+            };
             response_list.emplace_back(residual);
-            for (const auto & [column_index, basis] : row_basis_entries)
+            for (const auto & [column_index, basis] : group_row_basis_entries)
             {
                 triplet_list.emplace_back(row_index, column_index, basis);
-                column_square_sum(column_index) += basis * basis;
+                group_column_square_sum(column_index) += basis * basis;
             }
-            for (std::size_t i = 0; i < row_basis_entries.size(); i++)
+            for (std::size_t i = 0; i < group_row_basis_entries.size(); i++)
             {
-                const auto [left_column, left_basis]{ row_basis_entries.at(i) };
-                for (std::size_t j = i + 1; j < row_basis_entries.size(); j++)
+                const auto [left_column, left_basis]{
+                    group_row_basis_entries.at(i)
+                };
+                for (std::size_t j = i + 1;
+                    j < group_row_basis_entries.size();
+                    j++)
                 {
-                    const auto [right_column, right_basis]{ row_basis_entries.at(j) };
-                    if (left_column == right_column) continue;
-                    const auto column_pair{ std::minmax(left_column, right_column) };
-                    column_cross_sum_map[column_pair] += left_basis * right_basis;
+                    const auto [right_column, right_basis]{
+                        group_row_basis_entries.at(j)
+                    };
+                    const auto column_pair{
+                        std::minmax(left_column, right_column)
+                    };
+                    group_column_cross_sum_map[column_pair] +=
+                        left_basis * right_basis;
                 }
             }
         }
     }
 
+    for (const auto & [position_pair, cross_sum] :
+        atom_column_cross_sum_map)
+    {
+        const auto left_position{ position_pair.first };
+        const auto right_position{ position_pair.second };
+        const auto left_square_sum{ atom_column_square_sum(
+            static_cast<Eigen::Index>(left_position)) };
+        const auto right_square_sum{ atom_column_square_sum(
+            static_cast<Eigen::Index>(right_position)) };
+        if (left_square_sum <= std::numeric_limits<double>::epsilon() ||
+            right_square_sum <= std::numeric_limits<double>::epsilon())
+        {
+            continue;
+        }
+        const auto overlap{
+            std::abs(cross_sum) /
+                std::sqrt(left_square_sum * right_square_sum)
+        };
+        if (!std::isfinite(overlap)) continue;
+        active_coupling_graph.at(left_position).emplace_back(
+            ActiveCouplingEdge{ right_position, overlap });
+        active_coupling_graph.at(right_position).emplace_back(
+            ActiveCouplingEdge{ left_position, overlap });
+    }
+
     Eigen::VectorXd proactive_ridge_multiplier{ Eigen::VectorXd::Ones(column_count) };
-    for (const auto & [column_pair, cross_sum] : column_cross_sum_map)
+    for (const auto & [column_pair, cross_sum] :
+        group_column_cross_sum_map)
     {
         const auto left_column{ column_pair.first };
         const auto right_column{ column_pair.second };
-        const auto left_square_sum{ column_square_sum(left_column) };
-        const auto right_square_sum{ column_square_sum(right_column) };
+        const auto left_square_sum{ group_column_square_sum(left_column) };
+        const auto right_square_sum{ group_column_square_sum(right_column) };
         if (left_square_sum <= std::numeric_limits<double>::epsilon() ||
             right_square_sum <= std::numeric_limits<double>::epsilon())
         {
@@ -1235,10 +1361,6 @@ JointOffsetBuildResult BuildJointOffsetSystem(
         {
             continue;
         }
-        active_coupling_graph.at(static_cast<std::size_t>(left_column)).emplace_back(
-            ActiveCouplingEdge{ static_cast<std::size_t>(right_column), overlap });
-        active_coupling_graph.at(static_cast<std::size_t>(right_column)).emplace_back(
-            ActiveCouplingEdge{ static_cast<std::size_t>(left_column), overlap });
         if (overlap < kJointOffsetCollinearityOverlapThreshold) continue;
 
         proactive_ridge_multiplier(left_column) = std::max(
@@ -1281,15 +1403,21 @@ JointOffsetBuildResult BuildJointOffsetSystem(
         }
     }
     system.response = std::move(response);
-    system.previous_parameter = Eigen::VectorXd::Zero(column_count);
+    system.previous_parameter = parameterization->seed_offset;
     system.ridge_diagonal = Eigen::VectorXd::Zero(column_count);
     for (Eigen::Index column_index = 0; column_index < column_count; column_index++)
     {
-        const auto atom_index{ active_index_list.at(static_cast<std::size_t>(column_index)) };
-        const auto & model{ snapshot.at(atom_index) };
-        system.previous_parameter(column_index) = model.GetOffset();
-        const auto square_sum{ column_square_sum(column_index) };
-        const auto multiplier{ ridge_multiplier_list.at(atom_index) };
+        double multiplier{ 1.0 };
+        for (const auto atom_position :
+            parameterization->atom_position_list_by_group.at(
+                static_cast<std::size_t>(column_index)))
+        {
+            const auto atom_index{ active_index_list.at(atom_position) };
+            multiplier = std::max(
+                multiplier,
+                ridge_multiplier_list.at(atom_index));
+        }
+        const auto square_sum{ group_column_square_sum(column_index) };
         const auto combined_multiplier{
             std::max(multiplier, proactive_ridge_multiplier(column_index))
         };
@@ -1298,7 +1426,8 @@ JointOffsetBuildResult BuildJointOffsetSystem(
     }
     return JointOffsetBuildResult{
         std::move(system),
-        std::move(active_coupling_graph)
+        std::move(active_coupling_graph),
+        std::move(*parameterization)
     };
 }
 
@@ -1390,6 +1519,26 @@ JointOffsetSolveResult EstimateJointOffsets(
     }
     auto system{ std::move(build_result.system) };
     auto active_coupling_graph{ std::move(build_result.active_coupling_graph) };
+    auto parameterization{ std::move(build_result.parameterization) };
+    const auto make_progress_result = [&](
+        JointOffsetSolveStatus status,
+        const Eigen::VectorXd & group_offset)
+    {
+        auto atom_offset{ parameterization.ExpandOffsets(group_offset) };
+        if (!atom_offset.has_value())
+        {
+            return JointOffsetSolveResult{
+                JointOffsetSolveStatus::IrlsSolveFailed,
+                previous_offset,
+                std::move(active_coupling_graph)
+            };
+        }
+        return JointOffsetSolveResult{
+            status,
+            std::move(*atom_offset),
+            std::move(active_coupling_graph)
+        };
+    };
     if (system.response.size() == 0 || system.previous_parameter.size() == 0)
     {
         return JointOffsetSolveResult{
@@ -1443,11 +1592,9 @@ JointOffsetSolveResult EstimateJointOffsets(
         };
         if (IsJointOffsetObjectiveDeteriorated(updated_objective, current_objective))
         {
-            return JointOffsetSolveResult{
+            return make_progress_result(
                 JointOffsetSolveStatus::IrlsObjectiveDeteriorated,
-                offset,
-                std::move(active_coupling_graph)
-            };
+                offset);
         }
         const auto maximum_change{
             algorithm::CalculateMaximumNormalizedVectorChange(updated_offset, offset, kJointOffsetIrlsScaleFloor)
@@ -1455,19 +1602,15 @@ JointOffsetSolveResult EstimateJointOffsets(
         offset = std::move(updated_offset);
         if (maximum_change < kJointOffsetIrlsNormalizedChangeTolerance)
         {
-            return JointOffsetSolveResult{
+            return make_progress_result(
                 JointOffsetSolveStatus::Converged,
-                offset,
-                std::move(active_coupling_graph)
-            };
+                offset);
         }
     }
 
-    return JointOffsetSolveResult{
+    return make_progress_result(
         JointOffsetSolveStatus::IrlsMaximumIterationsReached,
-        offset,
-        std::move(active_coupling_graph)
-    };
+        offset);
 }
 
 double CalculateSecondStageAdjustedResponse(

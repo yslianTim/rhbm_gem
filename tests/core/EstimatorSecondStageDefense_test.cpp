@@ -17,6 +17,7 @@
 #include "core/detail/LocalFittingCouplingGraph.hpp"
 #include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
+#include "core/detail/LocalFittingJointOffset.hpp"
 #include "core/detail/LocalFittingJointOffsetConditioning.hpp"
 #include "core/detail/LocalFittingJointPolish.hpp"
 #include "core/detail/LocalFittingSeedRepair.hpp"
@@ -37,6 +38,7 @@ namespace conditioning_detail = rhbm_gem::core::detail;
 namespace coupling_detail = rhbm_gem::core::detail;
 namespace median_detail = rhbm_gem::core::detail;
 namespace health_detail = rhbm_gem::core::detail;
+namespace offset_detail = rhbm_gem::core::detail;
 namespace polish_detail = rhbm_gem::core::detail;
 namespace seed_detail = rhbm_gem::core::detail;
 namespace trust_detail = rhbm_gem::core::detail;
@@ -1006,6 +1008,119 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetConditioningKeepsIndependentCol
     };
     EXPECT_FALSE(diagnostics.guard_required);
     EXPECT_NEAR(diagnostics.pivot_ratio, 1.0, 1.0e-12);
+}
+
+TEST(EstimatorSecondStageDefenseTest,
+    JointOffsetParameterizationSharesColumnsAndUsesGroupMedianSeeds)
+{
+    const std::vector<rg::GaussianModel3D> base_model_list{
+        rg::GaussianModel3D{ 6.0, 0.55, 1.0 },
+        rg::GaussianModel3D{ 7.0, 0.60, 4.0 },
+        rg::GaussianModel3D{ 8.0, 0.65, 3.0 },
+        rg::GaussianModel3D{ 9.0, 0.70, 2.0 },
+        rg::GaussianModel3D{ 10.0, 0.75, 6.0 }
+    };
+    const auto parameterization{
+        offset_detail::BuildLocalFittingJointOffsetParameterization(
+            std::vector<GroupKey>{ 20, 10, 20, 20, 10 },
+            base_model_list)
+    };
+
+    ASSERT_TRUE(parameterization.has_value());
+    EXPECT_EQ(parameterization->AtomCount(), 5U);
+    EXPECT_EQ(parameterization->GroupCount(), 2U);
+    EXPECT_EQ(parameterization->ParameterCount(), 2);
+    EXPECT_EQ(parameterization->OffsetColumn(0), 1);
+    EXPECT_EQ(parameterization->OffsetColumn(1), 0);
+    EXPECT_EQ(
+        parameterization->OffsetColumn(0),
+        parameterization->OffsetColumn(2));
+    EXPECT_EQ(
+        parameterization->OffsetColumn(0),
+        parameterization->OffsetColumn(3));
+    EXPECT_EQ(
+        parameterization->OffsetColumn(1),
+        parameterization->OffsetColumn(4));
+    EXPECT_DOUBLE_EQ(
+        parameterization->seed_offset(parameterization->OffsetColumn(0)),
+        2.0);
+    EXPECT_DOUBLE_EQ(
+        parameterization->seed_offset(parameterization->OffsetColumn(1)),
+        5.0);
+
+    Eigen::VectorXd group_offset{ Eigen::VectorXd::Zero(2) };
+    group_offset(parameterization->OffsetColumn(0)) = 2.5;
+    group_offset(parameterization->OffsetColumn(1)) = 5.5;
+    const auto atom_offset{ parameterization->ExpandOffsets(group_offset) };
+    ASSERT_TRUE(atom_offset.has_value());
+    EXPECT_EQ(atom_offset->size(), 5);
+    EXPECT_DOUBLE_EQ((*atom_offset)(0), 2.5);
+    EXPECT_DOUBLE_EQ((*atom_offset)(1), 5.5);
+    EXPECT_DOUBLE_EQ((*atom_offset)(2), 2.5);
+    EXPECT_DOUBLE_EQ((*atom_offset)(3), 2.5);
+    EXPECT_DOUBLE_EQ((*atom_offset)(4), 5.5);
+    EXPECT_FALSE(
+        parameterization->ExpandOffsets(Eigen::VectorXd::Zero(1)).has_value());
+
+    EXPECT_FALSE(
+        offset_detail::BuildLocalFittingJointOffsetParameterization(
+            std::vector<GroupKey>{ 20 },
+            base_model_list).has_value());
+    auto non_finite_model_list{ base_model_list };
+    non_finite_model_list.at(0) = rg::GaussianModel3D{
+        6.0,
+        0.55,
+        std::numeric_limits<double>::infinity()
+    };
+    EXPECT_FALSE(
+        offset_detail::BuildLocalFittingJointOffsetParameterization(
+            std::vector<GroupKey>{ 20, 10, 20, 20, 10 },
+            non_finite_model_list).has_value());
+}
+
+TEST(EstimatorSecondStageDefenseTest,
+    JointOffsetParameterizationAggregatesBasisByDeterministicGroupColumn)
+{
+    const auto parameterization{
+        offset_detail::BuildLocalFittingJointOffsetParameterization(
+            std::vector<GroupKey>{ 20, 10, 20 },
+            std::vector<rg::GaussianModel3D>{
+                rg::GaussianModel3D{ 6.0, 0.55, 1.0 },
+                rg::GaussianModel3D{ 7.0, 0.60, 4.0 },
+                rg::GaussianModel3D{ 8.0, 0.65, 3.0 } })
+    };
+    ASSERT_TRUE(parameterization.has_value());
+
+    const auto group_basis{
+        parameterization->AggregateBasis(
+            std::vector<std::pair<std::size_t, double>>{
+                { 0, 0.2 },
+                { 2, 0.3 },
+                { 1, -0.4 } })
+    };
+    ASSERT_TRUE(group_basis.has_value());
+    ASSERT_EQ(group_basis->size(), 2);
+    EXPECT_NEAR(
+        (*group_basis)(parameterization->OffsetColumn(0)),
+        0.5,
+        1.0e-12);
+    EXPECT_NEAR(
+        (*group_basis)(parameterization->OffsetColumn(1)),
+        -0.4,
+        1.0e-12);
+
+    const auto reordered{
+        offset_detail::BuildLocalFittingJointOffsetParameterization(
+            std::vector<GroupKey>{ 10, 20, 20 },
+            std::vector<rg::GaussianModel3D>{
+                rg::GaussianModel3D{ 7.0, 0.60, 4.0 },
+                rg::GaussianModel3D{ 6.0, 0.55, 1.0 },
+                rg::GaussianModel3D{ 8.0, 0.65, 3.0 } })
+    };
+    ASSERT_TRUE(reordered.has_value());
+    EXPECT_EQ(reordered->OffsetColumn(0), 0);
+    EXPECT_EQ(reordered->OffsetColumn(1), 1);
+    EXPECT_EQ(reordered->OffsetColumn(2), 1);
 }
 
 TEST(EstimatorSecondStageDefenseTest, LocalRefitHealthTracksStationarity)

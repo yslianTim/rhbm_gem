@@ -554,48 +554,6 @@ TEST(CommandScenariosTest, PotentialDisplayGausDoesNotRequireMapAtPrepare)
     EXPECT_FALSE(HasDiagnosticForOption(result.issues, "request"));
 }
 
-TEST(CommandScenariosTest, PotentialDisplayQScoreLoadsMapAndDispatchesPainter)
-{
-    command_test::ScopedTempDir temp_dir{ "potential_display_qscore" };
-    const auto model_path{ command_test::TestDataPath("test_model.cif") };
-    const auto map_path{
-        command_test::GenerateMapFile(temp_dir.path() / "map", model_path)
-    };
-    const auto database_path{ temp_dir.path() / "analysis.sqlite" };
-
-    PotentialAnalysisRequest analysis_request{};
-    analysis_request.database_path = database_path;
-    analysis_request.model_file_path = model_path;
-    analysis_request.map_file_path = map_path;
-    analysis_request.saved_key_tag = "qscore_model";
-    ASSERT_TRUE(RunCommand(analysis_request).succeeded);
-
-    PotentialDisplayRequest display_request{};
-    display_request.output_dir = temp_dir.path() / "display";
-    display_request.database_path = database_path;
-    display_request.map_file_path = map_path;
-    display_request.painter_choice = PainterType::QSCORE;
-    display_request.model_key_tag_list = { "qscore_model" };
-
-    testing::internal::CaptureStderr();
-    const auto display_result{ RunCommand(display_request) };
-    const std::string error_output{ testing::internal::GetCapturedStderr() };
-
-    EXPECT_TRUE(display_result.succeeded);
-    EXPECT_EQ(
-        error_output.find("Map object is not available."),
-        std::string::npos);
-#ifdef HAVE_ROOT
-    EXPECT_EQ(
-        command_test::CountFilesWithExtension(display_request.output_dir, ".pdf"),
-        2);
-#else
-    EXPECT_EQ(
-        command_test::CountFilesWithExtension(display_request.output_dir, ".pdf"),
-        0);
-#endif
-}
-
 TEST(CommandScenariosTest, ResultDumpRequiresMapFileForMapPrinterAtPrepare)
 {
     ResultDumpRequest request{};

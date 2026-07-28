@@ -48,13 +48,14 @@ Each outer attempt performs the following sequence:
 1. Build the active atom list by excluding terminal-fallback atoms.
 2. Partition the active coupling topology and reconcile the per-cluster
    objective and trust-region states.
-3. Jointly estimate the offsets within each cluster using robust IRLS and the
-   fixed `kJointOffsetRidgeRatio`.
-4. For each active atom, subtract the fitted responses of its selected
+3. Jointly estimate one shared offset per represented group within each cluster
+   using robust IRLS and the fixed `kJointOffsetRidgeRatio`.
+4. Build component-wise group-median models from the post-solve snapshot. For
+   each active atom, subtract the group-median responses of its selected
    neighbors from the observed sample responses.
-5. Refit the atom's local Gaussian with its trained `alpha_r`, using the joint
-   offset as the fixed offset model. These refits form the raw fixed-point
-   state.
+5. Refit the atom's local Gaussian with its trained `alpha_r`, using its
+   group-median model as the fixed offset model. These refits form the raw
+   fixed-point state.
 6. Limit each cluster's raw proposal to its trust region and score the resulting
    base candidate.
 7. For a stationarity-eligible cluster without suspicious atoms, attempt one
@@ -74,6 +75,13 @@ adjusted response = observed response
 
 This offset solve and neighbor-adjusted local refit constitute one raw
 fixed-point update.
+
+The joint-offset parameterization is cluster-local. Atoms with the same group
+key share one offset column when they are in the same coupling cluster. The same
+group key represented in separate clusters has a separate offset variable in
+each solve, preserving independent cluster failure and acceptance behavior.
+Joint polish uses the same cluster-local group-sharing rule, while also updating
+each atom's amplitude and width.
 
 ## Parameter coordinates
 
