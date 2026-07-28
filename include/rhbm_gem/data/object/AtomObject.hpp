@@ -23,6 +23,7 @@ class AtomObject
     int m_serial_id, m_residue_id;
     std::string m_component_id, m_atom_id, m_chain_id, m_indicator;
     float m_occupancy, m_temperature;
+    double m_standard_qscore;
     ComponentKey m_component_key;
     AtomKey m_atom_key;
     Residue m_residue;
@@ -51,6 +52,7 @@ public:
     void SetIndicator(const std::string & value) { m_indicator = value; }
     void SetOccupancy(float value) { m_occupancy = value; }
     void SetTemperature(float value) { m_temperature = value; }
+    void SetStandardQScore(double value) { m_standard_qscore = value; }
     void SetResidue(Residue value) { m_residue = value; }
     void SetElement(Element value) { m_element = value; }
     void SetSpot(Spot value) { m_spot = value; }
@@ -78,6 +80,7 @@ public:
     std::string GetIndicator() const { return m_indicator; }
     float GetOccupancy() const { return m_occupancy; }
     float GetTemperature() const { return m_temperature; }
+    double GetStandardQScore() const { return m_standard_qscore; }
     std::array<float, 3> GetPosition() const { return m_position; }
     const std::array<float, 3> & GetPositionRef() const { return m_position; }
     const std::unordered_map<std::string, std::array<float, 3>> & GetAlternatePositions() const;

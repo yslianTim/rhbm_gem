@@ -54,6 +54,7 @@ namespace rhbm_gem {
 
 ModelObject::ModelObject() :
     m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" },
+    m_standard_average_qscore{ 0.0 },
     m_derived_state{ std::make_unique<ModelDerivedState>() },
     m_analysis_data{ std::make_unique<ModelAnalysisData>() }
 {
@@ -62,6 +63,7 @@ ModelObject::ModelObject() :
 ModelObject::ModelObject(std::vector<std::unique_ptr<AtomObject>> atom_object_list) :
     m_atom_list{ std::move(atom_object_list) },
     m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" },
+    m_standard_average_qscore{ 0.0 },
     m_derived_state{ std::make_unique<ModelDerivedState>() },
     m_analysis_data{ std::make_unique<ModelAnalysisData>() }
 {
@@ -136,6 +138,7 @@ ModelObject::ModelObject(ModelObject && other) noexcept :
     m_emd_id{ std::move(other.m_emd_id) },
     m_resolution_method{ std::move(other.m_resolution_method) },
     m_resolution{ other.m_resolution },
+    m_standard_average_qscore{ other.m_standard_average_qscore },
     m_serial_id_atom_map{ std::move(other.m_serial_id_atom_map) },
     m_derived_state{ std::move(other.m_derived_state) },
     m_analysis_data{ std::move(other.m_analysis_data) }
@@ -183,6 +186,7 @@ ModelObject & ModelObject::operator=(ModelObject && other) noexcept
     m_emd_id = std::move(other.m_emd_id);
     m_resolution_method = std::move(other.m_resolution_method);
     m_resolution = other.m_resolution;
+    m_standard_average_qscore = other.m_standard_average_qscore;
     m_serial_id_atom_map = std::move(other.m_serial_id_atom_map);
     m_derived_state = std::move(other.m_derived_state);
     m_analysis_data = std::move(other.m_analysis_data);
@@ -213,6 +217,7 @@ ModelObject & ModelObject::operator=(ModelObject && other) noexcept
 ModelObject::ModelObject(const ModelObject & other) :
     m_key_tag{ other.m_key_tag }, m_pdb_id{ other.m_pdb_id }, m_emd_id{ other.m_emd_id },
     m_resolution_method{ other.m_resolution_method }, m_resolution{ other.m_resolution },
+    m_standard_average_qscore{ other.m_standard_average_qscore },
     m_derived_state{ std::make_unique<ModelDerivedState>() },
     m_analysis_data{ std::make_unique<ModelAnalysisData>() }
 {

@@ -24,7 +24,7 @@ void ExpectNormalizedSchemaValidationFailure(
 
     {
         rg::SQLitePersistence database_manager{ database_path };
-        EXPECT_EQ(data_test::GetUserVersion(database_path), 6);
+        EXPECT_EQ(data_test::GetUserVersion(database_path), 7);
     }
 
     mutate_database(database_path);
@@ -42,6 +42,19 @@ TEST(DataObjectSchemaValidationTest, NormalizedV2DatabaseMissingRequiredTableThr
         {
             data_test::ExecuteSql(database_path, "DROP TABLE model_bond_group_potential;");
             data_test::SetUserVersion(database_path, 2);
+        });
+}
+
+TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingStandardQScoreColumnThrows)
+{
+    ExpectNormalizedSchemaValidationFailure(
+        "data_schema_missing_standard_qscore",
+        "missing_standard_qscore.sqlite",
+        [](const std::filesystem::path & database_path)
+        {
+            data_test::ExecuteSqlWithForeignKeysOff(
+                database_path,
+                "ALTER TABLE model_atom DROP COLUMN standard_qscore;");
         });
 }
 

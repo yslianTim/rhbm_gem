@@ -6,6 +6,7 @@
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/CommandSystem.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
+#include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 
@@ -98,6 +99,11 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     auto model{ repository.LoadModel("pipeline_model") };
     ASSERT_NE(model, nullptr);
     ExpectSelectedAtomsHaveFiniteNonNegativeAlphaR(*model);
+    ASSERT_EQ(model->GetAtomList().size(), 1u);
+    EXPECT_TRUE(std::isfinite(model->GetAtomList().front()->GetStandardQScore()));
+    EXPECT_DOUBLE_EQ(
+        model->GetStandardAverageQScore(),
+        model->GetAtomList().front()->GetStandardQScore());
 
     rgc::ResultDumpRequest dump_request;
     dump_request.database_path = database_path;

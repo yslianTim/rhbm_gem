@@ -94,11 +94,16 @@ TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsNormalizedSchema)
 
     rg::SQLitePersistence database_manager{ database_path };
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 6);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 7);
     EXPECT_TRUE(data_test::HasTable(database_path, "object_catalog"));
     EXPECT_FALSE(data_test::HasTable(database_path, "object_metadata"));
     EXPECT_TRUE(data_test::HasTable(database_path, "model_object"));
     EXPECT_TRUE(data_test::HasTable(database_path, "map_list"));
+    EXPECT_TRUE(data_test::HasColumn(
+        database_path,
+        "model_object",
+        "standard_average_qscore"));
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom", "standard_qscore"));
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_posterior", "class_key"));
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_group_potential", "class_key"));
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_posterior", "class_key"));
@@ -173,7 +178,7 @@ TEST(DataObjectSchemaLifecycleTest, VersionThreeSchemaMigratesGaussianInterceptC
 
     rg::SQLitePersistence database_manager{ database_path };
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 6);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 7);
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_local_potential", "intercept_estimate_ols"));
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_local_potential", "intercept_estimate_mdpde"));
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_posterior", "class_key"));
@@ -211,7 +216,7 @@ TEST(DataObjectSchemaLifecycleTest, VersionFourSchemaMigratesAtomTablesToSingleC
 
     rg::SQLitePersistence database_manager{ database_path };
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 6);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 7);
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_posterior", "class_key"));
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_group_potential", "class_key"));
     EXPECT_EQ(data_test::CountRows(database_path, "model_atom_posterior", "model"), 1);
@@ -254,12 +259,49 @@ TEST(DataObjectSchemaLifecycleTest, VersionFiveSchemaMigratesUpdatedSamplingEntr
 
     rg::SQLitePersistence database_manager{ database_path };
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 6);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 7);
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_local_potential", "updated_sampling_size"));
     EXPECT_TRUE(data_test::HasColumn(
         database_path,
         "model_atom_local_potential",
         "updated_distance_and_map_value_list"));
+}
+
+TEST(DataObjectSchemaLifecycleTest, VersionSixSchemaMigratesStandardQScoreColumns)
+{
+    const command_test::ScopedTempDir temp_dir{ "data_schema_v6_standard_qscore_migration" };
+    const auto database_path{ temp_dir.path() / "v6_standard_qscore.sqlite" };
+
+    {
+        rg::DataRepository repository{ database_path };
+        auto model{ data_test::MakeModelWithBond() };
+        model->SetStandardAverageQScore(0.75);
+        model->GetAtomList().at(0)->SetStandardQScore(0.5);
+        repository.SaveModel(*model, "model");
+    }
+    data_test::ExecuteSqlWithForeignKeysOff(
+        database_path,
+        "ALTER TABLE model_atom DROP COLUMN standard_qscore;");
+    data_test::ExecuteSqlWithForeignKeysOff(
+        database_path,
+        "ALTER TABLE model_object DROP COLUMN standard_average_qscore;");
+    data_test::SetUserVersion(database_path, 6);
+
+    rg::DataRepository repository{ database_path };
+    auto loaded_model{ repository.LoadModel("model") };
+
+    ASSERT_NE(loaded_model, nullptr);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 7);
+    EXPECT_TRUE(data_test::HasColumn(
+        database_path,
+        "model_object",
+        "standard_average_qscore"));
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom", "standard_qscore"));
+    EXPECT_DOUBLE_EQ(loaded_model->GetStandardAverageQScore(), 0.0);
+    for (const auto & atom : loaded_model->GetAtomList())
+    {
+        EXPECT_DOUBLE_EQ(atom->GetStandardQScore(), 0.0);
+    }
 }
 
 TEST(DataObjectSchemaLifecycleTest, UnknownSchemaVersionThrows)

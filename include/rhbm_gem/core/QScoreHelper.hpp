@@ -1,6 +1,7 @@
 #pragma once
 
 #include <tuple>
+#include <unordered_map>
 
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 
@@ -41,6 +42,12 @@ double CalculateQScoreForAtom(
 
 // Returns the mean MapQ-style Q-score across all non-hydrogen model atoms.
 double CalculateAverageQScores(const MapObject & map, const ModelObject & model);
+
+// Also returns each non-hydrogen atom Q-score keyed by serial ID.
+double CalculateAverageQScores(
+    const MapObject & map,
+    const ModelObject & model,
+    std::unordered_map<int, double> & q_scores_by_serial_id);
 
 } // namespace core
 

@@ -39,7 +39,8 @@ inline constexpr std::string_view kCreateModelObjectTableSql = R"sql(
         pdb_id TEXT,
         emd_id TEXT,
         map_resolution DOUBLE,
-        resolution_method TEXT
+        resolution_method TEXT,
+        standard_average_qscore DOUBLE DEFAULT 0.0
     )
 )sql";
 
@@ -117,6 +118,7 @@ inline constexpr std::string_view kCreateModelAtomTableSql = R"sql(
         position_z DOUBLE,
         component_key INTEGER,
         atom_key INTEGER,
+        standard_qscore DOUBLE DEFAULT 0.0,
         PRIMARY KEY (key_tag, serial_id),
         FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
     )
@@ -291,14 +293,16 @@ inline constexpr std::array<std::string_view, 12> kModelTablesScopedByKey{
 
 inline constexpr auto kUpsertModelObjectSql = R"sql(
     INSERT INTO model_object (
-        key_tag, atom_size, pdb_id, emd_id, map_resolution, resolution_method
-    ) VALUES (?, ?, ?, ?, ?, ?)
+        key_tag, atom_size, pdb_id, emd_id, map_resolution, resolution_method,
+        standard_average_qscore
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(key_tag) DO UPDATE SET
         atom_size = excluded.atom_size,
         pdb_id = excluded.pdb_id,
         emd_id = excluded.emd_id,
         map_resolution = excluded.map_resolution,
-        resolution_method = excluded.resolution_method
+        resolution_method = excluded.resolution_method,
+        standard_average_qscore = excluded.standard_average_qscore
 )sql"sv;
 
 inline constexpr auto kInsertModelChainMapSql = R"sql(
@@ -332,8 +336,9 @@ inline constexpr auto kInsertModelAtomSql = R"sql(
     INSERT OR REPLACE INTO model_atom (
         key_tag, serial_id, sequence_id, component_id, atom_id, chain_id, indicator,
         occupancy, temperature, element, structure, is_special_atom,
-        position_x, position_y, position_z, component_key, atom_key
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        position_x, position_y, position_z, component_key, atom_key,
+        standard_qscore
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 )sql"sv;
 
 inline constexpr auto kInsertModelBondSql = R"sql(
@@ -375,7 +380,8 @@ inline constexpr auto kDeleteRowsForKeySqlPrefix = "DELETE FROM "sv;
 inline constexpr auto kDeleteRowsForKeySqlSuffix = " WHERE key_tag = ?;"sv;
 
 inline constexpr auto kSelectModelObjectSql = R"sql(
-    SELECT key_tag, atom_size, pdb_id, emd_id, map_resolution, resolution_method
+    SELECT key_tag, atom_size, pdb_id, emd_id, map_resolution, resolution_method,
+        standard_average_qscore
     FROM model_object WHERE key_tag = ? LIMIT 1;
 )sql"sv;
 
@@ -407,7 +413,8 @@ inline constexpr auto kSelectModelAtomSql = R"sql(
     SELECT
         serial_id, sequence_id, component_id, atom_id, chain_id, indicator,
         occupancy, temperature, element, structure, is_special_atom,
-        position_x, position_y, position_z, component_key, atom_key
+        position_x, position_y, position_z, component_key, atom_key,
+        standard_qscore
     FROM model_atom WHERE key_tag = ?
     ORDER BY serial_id;
 )sql"sv;
@@ -494,6 +501,7 @@ void SaveModelObjectRow(
         statement_db.Bind<std::string>(4, model_obj.GetEmdID());
         statement_db.Bind<double>(5, model_obj.GetResolution());
         statement_db.Bind<std::string>(6, model_obj.GetResolutionMethod());
+        statement_db.Bind<double>(7, model_obj.GetStandardAverageQScore());
     });
 }
 
@@ -629,6 +637,7 @@ void SaveAtomObjectList(
             statement_db.Bind<double>(15, static_cast<double>(atom_object->GetPosition().at(2)));
             statement_db.Bind<int>(16, static_cast<int>(atom_object->GetComponentKey()));
             statement_db.Bind<int>(17, static_cast<int>(atom_object->GetAtomKey()));
+            statement_db.Bind<double>(18, atom_object->GetStandardQScore());
         });
     }
 }
@@ -678,6 +687,7 @@ void LoadModelObjectRow(
     model_obj.SetEmdID(database.GetColumn<std::string>(3));
     model_obj.SetResolution(database.GetColumn<double>(4));
     model_obj.SetResolutionMethod(database.GetColumn<std::string>(5));
+    model_obj.SetStandardAverageQScore(database.GetColumn<double>(6));
     if (atom_size != static_cast<int>(model_obj.GetNumberOfAtom()))
     {
         throw std::runtime_error(
@@ -873,6 +883,7 @@ std::vector<std::unique_ptr<AtomObject>> LoadAtomObjectList(
             static_cast<float>(database.GetColumn<double>(13)));
         atom_object->SetComponentKey(database.GetColumn<ComponentKey>(14));
         atom_object->SetAtomKey(database.GetColumn<AtomKey>(15));
+        atom_object->SetStandardQScore(database.GetColumn<double>(16));
         atom_object_list.emplace_back(std::move(atom_object));
     }
     return atom_object_list;

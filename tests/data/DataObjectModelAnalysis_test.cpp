@@ -18,6 +18,21 @@
 
 namespace rg = rhbm_gem;
 
+TEST(DataObjectModelAnalysisTest, StandardQScoresDefaultToZeroAndCanBeSet)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    ASSERT_FALSE(model->GetAtomList().empty());
+
+    EXPECT_DOUBLE_EQ(model->GetStandardAverageQScore(), 0.0);
+    EXPECT_DOUBLE_EQ(model->GetAtomList().front()->GetStandardQScore(), 0.0);
+
+    model->SetStandardAverageQScore(0.75);
+    model->GetAtomList().front()->SetStandardQScore(0.5);
+
+    EXPECT_DOUBLE_EQ(model->GetStandardAverageQScore(), 0.75);
+    EXPECT_DOUBLE_EQ(model->GetAtomList().front()->GetStandardQScore(), 0.5);
+}
+
 TEST(DataObjectModelAnalysisTest, SelectedModelEntriesCanBeInitializedForTypedWorkflows)
 {
     auto model{ data_test::MakeModelWithBond() };

@@ -2,14 +2,17 @@
 
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/MapSampler.hpp>
+#include <rhbm_gem/core/QScoreHelper.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
+#include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 
 namespace rhbm_gem::core {
 
@@ -66,6 +69,27 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
     if (!request.simulation_flag && request.map_normalization_flag)
     {
         map_object->MapValueArrayNormalization();
+    }
+
+    try
+    {
+        std::unordered_map<int, double> q_scores_by_serial_id;
+        const auto standard_average_qscore{
+            CalculateAverageQScores(*map_object, *model_object, q_scores_by_serial_id)
+        };
+        for (const auto & atom : model_object->GetAtomList())
+        {
+            atom->SetStandardQScore(atom->GetElement() == Element::HYDROGEN ?
+                0.0 : q_scores_by_serial_id.at(atom->GetSerialID()));
+        }
+        model_object->SetStandardAverageQScore(standard_average_qscore);
+    }
+    catch (const std::exception & e)
+    {
+        Logger::Log(LogLevel::Error,
+            "PotentialAnalysisCommand : standard Q-score calculation failed: "
+                + std::string(e.what()));
+        return false;
     }
 
     model_object->SelectAllAtoms();

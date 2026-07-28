@@ -8,10 +8,12 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/CommandSystem.hpp>
+#include <rhbm_gem/core/QScoreHelper.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
@@ -276,6 +278,18 @@ TEST(CommandScenariosTest, PotentialAnalysisNormalizesMapByDefault)
     EXPECT_NE(error_output.find(kMapNormalizationWarning), std::string::npos);
 }
 
+TEST(CommandScenariosTest, PotentialAnalysisFailsWhenStandardQScoreIsOutsideMap)
+{
+    command_test::ScopedTempDir temp_dir{ "potential_analysis_qscore_boundary_failure" };
+    const auto map_path{ WriteConstantMapFixture(temp_dir.path() / "maps") };
+    auto request{ MakeNormalizationScenarioRequest(temp_dir.path(), map_path) };
+
+    const auto result{ RunCommand(request) };
+
+    EXPECT_FALSE(result.succeeded);
+    EXPECT_FALSE(std::filesystem::exists(request.database_path));
+}
+
 TEST(CommandScenariosTest, PotentialAnalysisSkipsMapNormalizationForSimulationDefault)
 {
     command_test::ScopedTempDir temp_dir{ "potential_analysis_normalization_simulation" };
@@ -471,6 +485,27 @@ TEST(CommandScenariosTest, PotentialAnalysisOnlyBackboneFiltersOnlyBackboneAtoms
     EXPECT_EQ(all_atom_model->GetSelectedAtomCount(), 2u);
     ASSERT_EQ(backbone_model->GetSelectedAtomCount(), 1u);
     EXPECT_EQ(backbone_model->GetSelectedAtoms().front()->GetSpot(), Spot::CA);
+
+    auto normalized_map{ ReadMap(map_path) };
+    ASSERT_NE(normalized_map, nullptr);
+    normalized_map->MapValueArrayNormalization();
+    std::unordered_map<int, double> expected_q_scores;
+    const auto expected_average{
+        CalculateAverageQScores(
+            *normalized_map,
+            *backbone_model,
+            expected_q_scores)
+    };
+    EXPECT_DOUBLE_EQ(
+        backbone_model->GetStandardAverageQScore(),
+        expected_average);
+    ASSERT_EQ(expected_q_scores.size(), backbone_model->GetNumberOfAtom());
+    for (const auto & atom : backbone_model->GetAtomList())
+    {
+        EXPECT_DOUBLE_EQ(
+            atom->GetStandardQScore(),
+            expected_q_scores.at(atom->GetSerialID()));
+    }
 }
 
 TEST(CommandScenariosTest, RHBMTestRejectsInvertedFitRangeAtPrepare)
