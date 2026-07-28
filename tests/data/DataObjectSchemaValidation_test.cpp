@@ -24,7 +24,7 @@ void ExpectNormalizedSchemaValidationFailure(
 
     {
         rg::SQLitePersistence database_manager{ database_path };
-        EXPECT_EQ(data_test::GetUserVersion(database_path), 7);
+        EXPECT_EQ(data_test::GetUserVersion(database_path), 8);
     }
 
     mutate_database(database_path);
@@ -55,6 +55,32 @@ TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingStandardQScoreColumnThr
             data_test::ExecuteSqlWithForeignKeysOff(
                 database_path,
                 "ALTER TABLE model_atom DROP COLUMN standard_qscore;");
+        });
+}
+
+TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingReferenceHeightColumnThrows)
+{
+    ExpectNormalizedSchemaValidationFailure(
+        "data_schema_missing_reference_height",
+        "missing_reference_height.sqlite",
+        [](const std::filesystem::path & database_path)
+        {
+            data_test::ExecuteSqlWithForeignKeysOff(
+                database_path,
+                "ALTER TABLE model_object DROP COLUMN reference_height;");
+        });
+}
+
+TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingReferenceOffsetColumnThrows)
+{
+    ExpectNormalizedSchemaValidationFailure(
+        "data_schema_missing_reference_offset",
+        "missing_reference_offset.sqlite",
+        [](const std::filesystem::path & database_path)
+        {
+            data_test::ExecuteSqlWithForeignKeysOff(
+                database_path,
+                "ALTER TABLE model_object DROP COLUMN reference_offset;");
         });
 }
 

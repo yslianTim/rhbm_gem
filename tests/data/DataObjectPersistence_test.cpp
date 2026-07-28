@@ -108,7 +108,7 @@ TEST(DataObjectPersistenceTest, SaveAndLoadModelWithoutRegistryState)
     EXPECT_EQ(loaded_model->GetNumberOfAtom(), model->GetNumberOfAtom());
 }
 
-TEST(DataObjectPersistenceTest, StandardQScoresRoundTripThroughRepository)
+TEST(DataObjectPersistenceTest, StandardQScoresAndReferenceParametersRoundTripThroughRepository)
 {
     const command_test::ScopedTempDir temp_dir{ "standard_qscore_roundtrip" };
     const auto database_path{ temp_dir.path() / "repository.sqlite" };
@@ -117,6 +117,8 @@ TEST(DataObjectPersistenceTest, StandardQScoresRoundTripThroughRepository)
     auto model{ data_test::MakeModelWithBond() };
     ASSERT_EQ(model->GetAtomList().size(), 2u);
     model->SetStandardAverageQScore(0.625);
+    model->SetReferenceHeight(1.25);
+    model->SetReferenceOffset(-0.5);
     model->GetAtomList().at(0)->SetStandardQScore(0.5);
     model->GetAtomList().at(1)->SetStandardQScore(0.75);
 
@@ -126,6 +128,8 @@ TEST(DataObjectPersistenceTest, StandardQScoresRoundTripThroughRepository)
     ASSERT_NE(loaded_model, nullptr);
     ASSERT_EQ(loaded_model->GetAtomList().size(), 2u);
     EXPECT_DOUBLE_EQ(loaded_model->GetStandardAverageQScore(), 0.625);
+    EXPECT_DOUBLE_EQ(loaded_model->GetReferenceHeight(), 1.25);
+    EXPECT_DOUBLE_EQ(loaded_model->GetReferenceOffset(), -0.5);
     EXPECT_DOUBLE_EQ(
         loaded_model->GetAtomList().at(0)->GetStandardQScore(),
         0.5);
@@ -170,7 +174,7 @@ TEST(DataObjectPersistenceTest, FinalV2CatalogDatabaseRemainsLoadable)
     rg::DataRepository repository{ database_path };
     EXPECT_NE(repository.LoadModel("model"), nullptr);
     EXPECT_NE(repository.LoadMap("map"), nullptr);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 7);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 8);
 }
 
 TEST(DataObjectPersistenceTest, SamplingSelectionRoundTripPreservesUnselectedSamples)
@@ -413,7 +417,7 @@ TEST(DataObjectPersistenceTest, LegacyV2SamplingBlobLoadsAsSelectedAndMigratesVe
     };
 
     EXPECT_TRUE(updated_entries.empty());
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 7);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 8);
 }
 
 TEST(DataObjectPersistenceTest, DatabaseRoundTripPreservesChainMetadataAndSymmetryFiltering)

@@ -94,7 +94,7 @@ TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsNormalizedSchema)
 
     rg::SQLitePersistence database_manager{ database_path };
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 7);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 8);
     EXPECT_TRUE(data_test::HasTable(database_path, "object_catalog"));
     EXPECT_FALSE(data_test::HasTable(database_path, "object_metadata"));
     EXPECT_TRUE(data_test::HasTable(database_path, "model_object"));
@@ -104,6 +104,8 @@ TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsNormalizedSchema)
         "model_object",
         "standard_average_qscore"));
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom", "standard_qscore"));
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_object", "reference_height"));
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_object", "reference_offset"));
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_posterior", "class_key"));
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_group_potential", "class_key"));
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_posterior", "class_key"));
@@ -178,7 +180,7 @@ TEST(DataObjectSchemaLifecycleTest, VersionThreeSchemaMigratesGaussianInterceptC
 
     rg::SQLitePersistence database_manager{ database_path };
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 7);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 8);
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_local_potential", "intercept_estimate_ols"));
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_local_potential", "intercept_estimate_mdpde"));
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_posterior", "class_key"));
@@ -216,7 +218,7 @@ TEST(DataObjectSchemaLifecycleTest, VersionFourSchemaMigratesAtomTablesToSingleC
 
     rg::SQLitePersistence database_manager{ database_path };
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 7);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 8);
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_posterior", "class_key"));
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_group_potential", "class_key"));
     EXPECT_EQ(data_test::CountRows(database_path, "model_atom_posterior", "model"), 1);
@@ -259,7 +261,7 @@ TEST(DataObjectSchemaLifecycleTest, VersionFiveSchemaMigratesUpdatedSamplingEntr
 
     rg::SQLitePersistence database_manager{ database_path };
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 7);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 8);
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_local_potential", "updated_sampling_size"));
     EXPECT_TRUE(data_test::HasColumn(
         database_path,
@@ -291,7 +293,7 @@ TEST(DataObjectSchemaLifecycleTest, VersionSixSchemaMigratesStandardQScoreColumn
     auto loaded_model{ repository.LoadModel("model") };
 
     ASSERT_NE(loaded_model, nullptr);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 7);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 8);
     EXPECT_TRUE(data_test::HasColumn(
         database_path,
         "model_object",
@@ -302,6 +304,37 @@ TEST(DataObjectSchemaLifecycleTest, VersionSixSchemaMigratesStandardQScoreColumn
     {
         EXPECT_DOUBLE_EQ(atom->GetStandardQScore(), 0.0);
     }
+}
+
+TEST(DataObjectSchemaLifecycleTest, VersionSevenSchemaMigratesReferenceGaussianParameters)
+{
+    const command_test::ScopedTempDir temp_dir{ "data_schema_v7_reference_gaussian_migration" };
+    const auto database_path{ temp_dir.path() / "v7_reference_gaussian.sqlite" };
+
+    {
+        rg::DataRepository repository{ database_path };
+        auto model{ data_test::MakeModelWithBond() };
+        model->SetReferenceHeight(1.25);
+        model->SetReferenceOffset(-0.5);
+        repository.SaveModel(*model, "model");
+    }
+    data_test::ExecuteSqlWithForeignKeysOff(
+        database_path,
+        "ALTER TABLE model_object DROP COLUMN reference_height;");
+    data_test::ExecuteSqlWithForeignKeysOff(
+        database_path,
+        "ALTER TABLE model_object DROP COLUMN reference_offset;");
+    data_test::SetUserVersion(database_path, 7);
+
+    rg::DataRepository repository{ database_path };
+    auto loaded_model{ repository.LoadModel("model") };
+
+    ASSERT_NE(loaded_model, nullptr);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 8);
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_object", "reference_height"));
+    EXPECT_TRUE(data_test::HasColumn(database_path, "model_object", "reference_offset"));
+    EXPECT_DOUBLE_EQ(loaded_model->GetReferenceHeight(), 0.0);
+    EXPECT_DOUBLE_EQ(loaded_model->GetReferenceOffset(), 0.0);
 }
 
 TEST(DataObjectSchemaLifecycleTest, UnknownSchemaVersionThrows)

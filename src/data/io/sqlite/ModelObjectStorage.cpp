@@ -40,7 +40,9 @@ inline constexpr std::string_view kCreateModelObjectTableSql = R"sql(
         emd_id TEXT,
         map_resolution DOUBLE,
         resolution_method TEXT,
-        standard_average_qscore DOUBLE DEFAULT 0.0
+        standard_average_qscore DOUBLE DEFAULT 0.0,
+        reference_height DOUBLE DEFAULT 0.0,
+        reference_offset DOUBLE DEFAULT 0.0
     )
 )sql";
 
@@ -294,15 +296,17 @@ inline constexpr std::array<std::string_view, 12> kModelTablesScopedByKey{
 inline constexpr auto kUpsertModelObjectSql = R"sql(
     INSERT INTO model_object (
         key_tag, atom_size, pdb_id, emd_id, map_resolution, resolution_method,
-        standard_average_qscore
-    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        standard_average_qscore, reference_height, reference_offset
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(key_tag) DO UPDATE SET
         atom_size = excluded.atom_size,
         pdb_id = excluded.pdb_id,
         emd_id = excluded.emd_id,
         map_resolution = excluded.map_resolution,
         resolution_method = excluded.resolution_method,
-        standard_average_qscore = excluded.standard_average_qscore
+        standard_average_qscore = excluded.standard_average_qscore,
+        reference_height = excluded.reference_height,
+        reference_offset = excluded.reference_offset
 )sql"sv;
 
 inline constexpr auto kInsertModelChainMapSql = R"sql(
@@ -381,7 +385,7 @@ inline constexpr auto kDeleteRowsForKeySqlSuffix = " WHERE key_tag = ?;"sv;
 
 inline constexpr auto kSelectModelObjectSql = R"sql(
     SELECT key_tag, atom_size, pdb_id, emd_id, map_resolution, resolution_method,
-        standard_average_qscore
+        standard_average_qscore, reference_height, reference_offset
     FROM model_object WHERE key_tag = ? LIMIT 1;
 )sql"sv;
 
@@ -502,6 +506,8 @@ void SaveModelObjectRow(
         statement_db.Bind<double>(5, model_obj.GetResolution());
         statement_db.Bind<std::string>(6, model_obj.GetResolutionMethod());
         statement_db.Bind<double>(7, model_obj.GetStandardAverageQScore());
+        statement_db.Bind<double>(8, model_obj.GetReferenceHeight());
+        statement_db.Bind<double>(9, model_obj.GetReferenceOffset());
     });
 }
 
@@ -688,6 +694,8 @@ void LoadModelObjectRow(
     model_obj.SetResolution(database.GetColumn<double>(4));
     model_obj.SetResolutionMethod(database.GetColumn<std::string>(5));
     model_obj.SetStandardAverageQScore(database.GetColumn<double>(6));
+    model_obj.SetReferenceHeight(database.GetColumn<double>(7));
+    model_obj.SetReferenceOffset(database.GetColumn<double>(8));
     if (atom_size != static_cast<int>(model_obj.GetNumberOfAtom()))
     {
         throw std::runtime_error(

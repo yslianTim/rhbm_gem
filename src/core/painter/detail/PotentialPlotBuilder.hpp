@@ -42,7 +42,7 @@ public:
     std::unique_ptr<::TGraphErrors> CreateNormalizedAtomGausEstimateScatterGraph(Element element, double reference_amplitude, bool reverse=false);
     std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAtomMapValueToSequenceIDGraphMap(size_t main_chain_element_id, Residue residue=Residue::UNK);
     std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAtomGausEstimateToSequenceIDGraphMap(size_t main_chain_element_id, const int par_id=0, Residue residue=Residue::UNK);
-    std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAverageQScoreToSequenceIDGraphMap(bool use_fitted_par=false, bool apply_selection=true, bool use_updated_sample=false);
+    std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAverageQScoreToSequenceIDGraphMap(bool use_standard=false, bool use_updated_sample=false);
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateToResidueGraph(const std::vector<GroupKey> & group_key_list, const int par_id=0);
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateToAtomIdGraph(const std::map<std::string, GroupKey> & group_key_map, const std::vector<std::string> & atom_id_list, const int par_id=0);
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateScatterGraph(GroupKey group_key, int par1_id=0, int par2_id=1, bool select_outliers=false);

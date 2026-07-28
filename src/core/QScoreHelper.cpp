@@ -374,54 +374,31 @@ double CalculateQScoreForAtom(
     return CalculateMeanSubtractedCorrelation(map_values, reference_values);
 }
 
-namespace {
-
-double CalculateAverageQScoresImpl(
+double CalculateAverageQScores(
     const MapObject & map,
     const ModelObject & model,
-    std::unordered_map<int, double> * q_scores_by_serial_id)
+    double reference_height,
+    double reference_offset,
+    std::unordered_map<int, double> & q_scores_by_serial_id)
 {
-    const auto [height, offset]{ GetReferenceGaussianParameters(map) };
     std::unordered_map<int, double> computed_q_scores;
-    if (q_scores_by_serial_id != nullptr)
-    {
-        computed_q_scores.reserve(model.GetNumberOfAtom());
-    }
+    computed_q_scores.reserve(model.GetNumberOfAtom());
 
     double q_score_sum{ 0.0 };
     std::size_t atom_count{ 0 };
     for (const auto & atom : model.GetAtomList())
     {
         if (atom->GetElement() == Element::HYDROGEN) continue;
-        const auto q_score{ CalculateQScoreForAtom(*atom, map, model, height, offset) };
+        const auto q_score{
+            CalculateQScoreForAtom(*atom, map, model, reference_height, reference_offset)
+        };
         q_score_sum += q_score;
-        if (q_scores_by_serial_id != nullptr)
-        {
-            computed_q_scores[atom->GetSerialID()] = q_score;
-        }
+        computed_q_scores[atom->GetSerialID()] = q_score;
         atom_count++;
     }
 
-    if (q_scores_by_serial_id != nullptr)
-    {
-        *q_scores_by_serial_id = std::move(computed_q_scores);
-    }
+    q_scores_by_serial_id = std::move(computed_q_scores);
     return atom_count == 0 ? 0.0 : q_score_sum / static_cast<double>(atom_count);
-}
-
-} // namespace
-
-double CalculateAverageQScores(const MapObject & map, const ModelObject & model)
-{
-    return CalculateAverageQScoresImpl(map, model, nullptr);
-}
-
-double CalculateAverageQScores(
-    const MapObject & map,
-    const ModelObject & model,
-    std::unordered_map<int, double> & q_scores_by_serial_id)
-{
-    return CalculateAverageQScoresImpl(map, model, &q_scores_by_serial_id);
 }
 
 } // namespace rhbm_gem::core

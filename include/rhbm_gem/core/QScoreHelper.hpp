@@ -40,13 +40,13 @@ double CalculateQScoreForAtom(
     double offset,
     double sigma=0.6);
 
-// Returns the mean MapQ-style Q-score across all non-hydrogen model atoms.
-double CalculateAverageQScores(const MapObject & map, const ModelObject & model);
-
-// Also returns each non-hydrogen atom Q-score keyed by serial ID.
+// Uses caller-provided reference Gaussian parameters and also returns each
+// non-hydrogen atom Q-score keyed by serial ID.
 double CalculateAverageQScores(
     const MapObject & map,
     const ModelObject & model,
+    double reference_height,
+    double reference_offset,
     std::unordered_map<int, double> & q_scores_by_serial_id);
 
 } // namespace core

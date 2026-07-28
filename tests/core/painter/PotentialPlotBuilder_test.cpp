@@ -85,45 +85,6 @@ TEST(PotentialPlotBuilderTest, RepresentativeBuildersProduceRootObjects)
     EXPECT_NE(gaus_function, nullptr);
 }
 
-TEST(PotentialPlotBuilderTest, AverageQScoreBuilderUsesPersistedAtomScoresWithoutMap)
-{
-    auto model{ LoadModelFixture("test_model.cif") };
-    ASSERT_NE(model, nullptr);
-
-    model->SelectAllAtoms();
-    EnsureLocalPotentialEntries(*model);
-    constexpr double persisted_qscore{ 0.625 };
-    for (auto & atom : model->GetAtomList())
-    {
-        atom->SetStandardQScore(persisted_qscore);
-    }
-
-    rg::PotentialPlotBuilder model_builder{ model.get() };
-    const auto graph_map{
-        model_builder.CreateAverageQScoreToSequenceIDGraphMap(false, true, false)
-    };
-
-    ASSERT_FALSE(graph_map.empty());
-    for (const auto & [chain_id, graph] : graph_map)
-    {
-        (void)chain_id;
-        ASSERT_NE(graph, nullptr);
-        EXPECT_GT(graph->GetN(), 0);
-        for (int point_id = 0; point_id < graph->GetN(); ++point_id)
-        {
-            double x_value{ 0.0 };
-            double qscore{ 0.0 };
-            graph->GetPoint(point_id, x_value, qscore);
-            EXPECT_DOUBLE_EQ(qscore, persisted_qscore);
-        }
-    }
-
-    const auto fitted_graph_map{
-        model_builder.CreateAverageQScoreToSequenceIDGraphMap(true, false, true)
-    };
-    EXPECT_FALSE(fitted_graph_map.empty());
-}
-
 TEST(PotentialPlotBuilderTest, LinearModelDataBuildersUseFiniteSamplingRange)
 {
     auto model{ LoadModelFixture("test_model_auth_seq_alnum_struct_conn.cif") };

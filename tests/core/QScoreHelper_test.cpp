@@ -660,9 +660,15 @@ TEST(QScoreHelperTest, CalculatesSingleAtomAverageWithMapQParameters)
             height,
             offset)
     };
+    std::unordered_map<int, double> q_scores_by_serial_id;
 
     EXPECT_DOUBLE_EQ(
-        rhbm_gem::core::CalculateAverageQScores(map, *model),
+        rhbm_gem::core::CalculateAverageQScores(
+            map,
+            *model,
+            height,
+            offset,
+            q_scores_by_serial_id),
         expected_q_score);
 }
 
@@ -699,13 +705,19 @@ TEST(QScoreHelperTest, AveragesAllNonHydrogenAtomsRegardlessOfSelection)
             height,
             offset)
     };
+    std::unordered_map<int, double> q_scores_by_serial_id;
 
     EXPECT_DOUBLE_EQ(
-        rhbm_gem::core::CalculateAverageQScores(map, *model),
+        rhbm_gem::core::CalculateAverageQScores(
+            map,
+            *model,
+            height,
+            offset,
+            q_scores_by_serial_id),
         (first_q_score + second_q_score) / 2.0);
 }
 
-TEST(QScoreHelperTest, AverageOverloadReturnsEachNonHydrogenAtomScore)
+TEST(QScoreHelperTest, AverageOverloadUsesProvidedParametersAndReturnsEachNonHydrogenAtomScore)
 {
     const auto map{ MakeGaussianMapObject() };
     const auto model{
@@ -716,9 +728,8 @@ TEST(QScoreHelperTest, AverageOverloadReturnsEachNonHydrogenAtomScore)
         })
     };
     model->SelectAllAtoms(false);
-    const auto [height, offset]{
-        rhbm_gem::core::GetReferenceGaussianParameters(map)
-    };
+    constexpr double height{ 1.75 };
+    constexpr double offset{ -0.25 };
     const auto expected_first{
         rhbm_gem::core::CalculateQScoreForAtom(
             *model->GetAtomList().at(0), map, *model, height, offset)
@@ -733,6 +744,8 @@ TEST(QScoreHelperTest, AverageOverloadReturnsEachNonHydrogenAtomScore)
         rhbm_gem::core::CalculateAverageQScores(
             map,
             *model,
+            height,
+            offset,
             q_scores_by_serial_id)
     };
 
@@ -741,9 +754,6 @@ TEST(QScoreHelperTest, AverageOverloadReturnsEachNonHydrogenAtomScore)
     EXPECT_DOUBLE_EQ(q_scores_by_serial_id.at(2), expected_second);
     EXPECT_EQ(q_scores_by_serial_id.count(3), 0u);
     EXPECT_DOUBLE_EQ(average, (expected_first + expected_second) / 2.0);
-    EXPECT_DOUBLE_EQ(
-        average,
-        rhbm_gem::core::CalculateAverageQScores(map, *model));
 }
 
 TEST(QScoreHelperTest, ReturnsZeroAverageWithoutNonHydrogenAtoms)
@@ -755,13 +765,9 @@ TEST(QScoreHelperTest, ReturnsZeroAverageWithoutNonHydrogenAtoms)
             { { 100.0f, 0.0f, 0.0f }, Element::HYDROGEN }
         })
     };
-
-    EXPECT_DOUBLE_EQ(
-        rhbm_gem::core::CalculateAverageQScores(map, empty_model),
-        0.0);
-    EXPECT_DOUBLE_EQ(
-        rhbm_gem::core::CalculateAverageQScores(map, *hydrogen_model),
-        0.0);
+    const auto [height, offset]{
+        rhbm_gem::core::GetReferenceGaussianParameters(map)
+    };
 
     std::unordered_map<int, double> q_scores_by_serial_id{
         { 99, 1.0 }
@@ -769,7 +775,20 @@ TEST(QScoreHelperTest, ReturnsZeroAverageWithoutNonHydrogenAtoms)
     EXPECT_DOUBLE_EQ(
         rhbm_gem::core::CalculateAverageQScores(
             map,
+            empty_model,
+            height,
+            offset,
+            q_scores_by_serial_id),
+        0.0);
+    EXPECT_TRUE(q_scores_by_serial_id.empty());
+
+    q_scores_by_serial_id = { { 99, 1.0 } };
+    EXPECT_DOUBLE_EQ(
+        rhbm_gem::core::CalculateAverageQScores(
+            map,
             *hydrogen_model,
+            height,
+            offset,
             q_scores_by_serial_id),
         0.0);
     EXPECT_TRUE(q_scores_by_serial_id.empty());
@@ -797,17 +816,9 @@ TEST(QScoreHelperTest, PropagatesOutOfRangeFromNonHydrogenAtoms)
             { { 0.0f, 0.0f, 1.0f }, Element::CARBON }
         })
     };
-
-    EXPECT_THROW(
-        rhbm_gem::core::CalculateAverageQScores(
-            map,
-            *outside_center_model),
-        std::out_of_range);
-    EXPECT_THROW(
-        rhbm_gem::core::CalculateAverageQScores(
-            map,
-            *radial_outside_model),
-        std::out_of_range);
+    const auto [height, offset]{
+        rhbm_gem::core::GetReferenceGaussianParameters(map)
+    };
 
     std::unordered_map<int, double> q_scores_by_serial_id{
         { 99, 1.0 }
@@ -816,6 +827,20 @@ TEST(QScoreHelperTest, PropagatesOutOfRangeFromNonHydrogenAtoms)
         rhbm_gem::core::CalculateAverageQScores(
             map,
             *outside_center_model,
+            height,
+            offset,
+            q_scores_by_serial_id),
+        std::out_of_range);
+    EXPECT_EQ(
+        q_scores_by_serial_id,
+        (std::unordered_map<int, double>{ { 99, 1.0 } }));
+
+    EXPECT_THROW(
+        rhbm_gem::core::CalculateAverageQScores(
+            map,
+            *radial_outside_model,
+            height,
+            offset,
             q_scores_by_serial_id),
         std::out_of_range);
     EXPECT_EQ(

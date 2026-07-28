@@ -98,9 +98,9 @@ void QScorePainter::PaintAverageQScoreToSequenceSummary(
     const int method_count{ 3 };
     std::unique_ptr<TH2> frame;
     std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> qscore_graph_map[method_count];
-    qscore_graph_map[0] = plot_builder->CreateAverageQScoreToSequenceIDGraphMap(false, true, false);
-    qscore_graph_map[1] = plot_builder->CreateAverageQScoreToSequenceIDGraphMap(false, false, true);
-    qscore_graph_map[2] = plot_builder->CreateAverageQScoreToSequenceIDGraphMap(true, false, true);
+    qscore_graph_map[0] = plot_builder->CreateAverageQScoreToSequenceIDGraphMap(true, false);
+    qscore_graph_map[1] = plot_builder->CreateAverageQScoreToSequenceIDGraphMap(false, false);
+    qscore_graph_map[2] = plot_builder->CreateAverageQScoreToSequenceIDGraphMap(false, true);
 
     for (auto & [chain_id, gaus_graph] : qscore_graph_map[0])
     {

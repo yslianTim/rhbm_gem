@@ -49,6 +49,8 @@ class ModelObject
     std::string m_resolution_method;
     double m_resolution;
     double m_standard_average_qscore;
+    double m_reference_height;
+    double m_reference_offset;
     std::map<int, AtomObject*> m_serial_id_atom_map;
     std::unique_ptr<ModelDerivedState> m_derived_state;
     std::unique_ptr<ModelAnalysisData> m_analysis_data;
@@ -67,6 +69,8 @@ public:
     void SetResolution(double value) { m_resolution = value; }
     void SetResolutionMethod(const std::string & value) { m_resolution_method = value; }
     void SetStandardAverageQScore(double value) { m_standard_average_qscore = value; }
+    void SetReferenceHeight(double value) { m_reference_height = value; }
+    void SetReferenceOffset(double value) { m_reference_offset = value; }
 
     bool HasStandardRNAComponent() const;
     bool HasStandardDNAComponent() const;
@@ -85,6 +89,8 @@ public:
     double GetResolution() const { return m_resolution; }
     std::string GetResolutionMethod() const { return m_resolution_method; }
     double GetStandardAverageQScore() const { return m_standard_average_qscore; }
+    double GetReferenceHeight() const { return m_reference_height; }
+    double GetReferenceOffset() const { return m_reference_offset; }
     const std::unordered_map<std::string, std::vector<std::string>> & GetChainIDListMap() const { return m_chain_id_list_map; }
     std::array<float, 3> GetCenterOfMassPosition();
     std::tuple<double, double> GetModelPositionRange(int axis);

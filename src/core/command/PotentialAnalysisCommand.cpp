@@ -73,9 +73,14 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
 
     try
     {
+        const auto [reference_height, reference_offset]{
+            GetReferenceGaussianParameters(*map_object)
+        };
         std::unordered_map<int, double> q_scores_by_serial_id;
         const auto standard_average_qscore{
-            CalculateAverageQScores(*map_object, *model_object, q_scores_by_serial_id)
+            CalculateAverageQScores(
+                *map_object, *model_object,
+                reference_height, reference_offset, q_scores_by_serial_id)
         };
         for (const auto & atom : model_object->GetAtomList())
         {
@@ -83,11 +88,13 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
                 0.0 : q_scores_by_serial_id.at(atom->GetSerialID()));
         }
         model_object->SetStandardAverageQScore(standard_average_qscore);
+        model_object->SetReferenceHeight(reference_height);
+        model_object->SetReferenceOffset(reference_offset);
     }
     catch (const std::exception & e)
     {
         Logger::Log(LogLevel::Error,
-            "PotentialAnalysisCommand : standard Q-score calculation failed: "
+            "PotentialAnalysisCommand : reference Gaussian/Q-score calculation failed: "
                 + std::string(e.what()));
         return false;
     }

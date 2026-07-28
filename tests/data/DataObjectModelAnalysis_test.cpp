@@ -33,6 +33,20 @@ TEST(DataObjectModelAnalysisTest, StandardQScoresDefaultToZeroAndCanBeSet)
     EXPECT_DOUBLE_EQ(model->GetAtomList().front()->GetStandardQScore(), 0.5);
 }
 
+TEST(DataObjectModelAnalysisTest, ReferenceGaussianParametersDefaultToZeroAndCanBeSet)
+{
+    auto model{ data_test::MakeModelWithBond() };
+
+    EXPECT_DOUBLE_EQ(model->GetReferenceHeight(), 0.0);
+    EXPECT_DOUBLE_EQ(model->GetReferenceOffset(), 0.0);
+
+    model->SetReferenceHeight(1.25);
+    model->SetReferenceOffset(-0.5);
+
+    EXPECT_DOUBLE_EQ(model->GetReferenceHeight(), 1.25);
+    EXPECT_DOUBLE_EQ(model->GetReferenceOffset(), -0.5);
+}
+
 TEST(DataObjectModelAnalysisTest, SelectedModelEntriesCanBeInitializedForTypedWorkflows)
 {
     auto model{ data_test::MakeModelWithBond() };

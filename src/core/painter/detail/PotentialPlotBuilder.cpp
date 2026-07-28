@@ -899,10 +899,10 @@ PotentialPlotBuilder::CreateAtomMapValueToSequenceIDGraphMap(
 }
 
 std::unordered_map<std::string, std::unique_ptr<TGraphErrors>>
-PotentialPlotBuilder::CreateAverageQScoreToSequenceIDGraphMap(
-    bool use_fitted_par, bool apply_selection, bool use_updated_sample)
+PotentialPlotBuilder::CreateAverageQScoreToSequenceIDGraphMap(bool use_standard, bool use_updated_sample)
 {
     if (IsModelObjectAvailable() == false) return {};
+    auto apply_selection{ false };
     auto model_object{ m_model_object };
     std::vector<std::string> chain_id_list;
     for (auto & [entity_id, chain_ids] : model_object->GetChainIDListMap())
@@ -912,6 +912,9 @@ PotentialPlotBuilder::CreateAverageQScoreToSequenceIDGraphMap(
         chain_id_list.insert(chain_id_list.end(), chain_ids.begin(), chain_ids.end());
     }
 
+    auto reference_height{ model_object->GetReferenceHeight() };
+    auto reference_offset{ model_object->GetReferenceOffset() };
+    auto reference_width{ 0.6 };
     std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> graph_map;
     for (auto & chain_id : chain_id_list)
     {
@@ -923,14 +926,21 @@ PotentialPlotBuilder::CreateAverageQScoreToSequenceIDGraphMap(
             if (!entry.IsAvailable()) continue;
             auto sequence_id{ atom->GetSequenceID() };
             if (sequence_id < 0) continue;
-            auto q_score{ use_fitted_par ?
+            if (use_updated_sample)
+            {
+                reference_height = entry.GetGaussianResult().mdpde.GetModel().GetHeight();
+                reference_offset = entry.GetGaussianResult().mdpde.GetModel().GetOffset();
+                reference_width = entry.GetGaussianResult().mdpde.GetModel().GetWidth();
+            }
+            if (!use_updated_sample) apply_selection = true;
+            auto q_score{ use_standard ?
+                atom->GetStandardQScore() :
                 core::CalculateQScoreForAtom(
                     entry.GetSamplingEntries(apply_selection, use_updated_sample),
-                    entry.GetGaussianResult().mdpde.GetModel().GetHeight(),
-                    entry.GetGaussianResult().mdpde.GetModel().GetOffset(),
-                    entry.GetGaussianResult().mdpde.GetModel().GetWidth()
-                ) :
-                atom->GetStandardQScore()
+                    reference_height,
+                    reference_offset,
+                    reference_width
+                )
             };
             q_scores_map[sequence_id].emplace_back(q_score);
         }

@@ -20,7 +20,7 @@ namespace {
 
 using namespace std::literals;
 
-constexpr int kCurrentSchemaVersion = 7;
+constexpr int kCurrentSchemaVersion = 8;
 constexpr std::string_view kCatalogTableName = "object_catalog";
 constexpr std::string_view kMapTableName = "map_list";
 constexpr std::string_view kUnsupportedMetadataTableName = "object_metadata";
@@ -452,6 +452,12 @@ void ValidateStandardQScoreColumns(rhbm_gem::SQLiteWrapper & database)
     ValidateRequiredColumn(database, "model_atom", "standard_qscore");
 }
 
+void ValidateReferenceGaussianParameterColumns(rhbm_gem::SQLiteWrapper & database)
+{
+    ValidateRequiredColumn(database, "model_object", "reference_height");
+    ValidateRequiredColumn(database, "model_object", "reference_offset");
+}
+
 void MigrateGaussianInterceptColumns(rhbm_gem::SQLiteWrapper & database)
 {
     for (const auto table_name : {
@@ -501,6 +507,12 @@ void MigrateStandardQScoreColumns(rhbm_gem::SQLiteWrapper & database)
 {
     AddColumnIfMissing(database, "model_object", "standard_average_qscore");
     AddColumnIfMissing(database, "model_atom", "standard_qscore");
+}
+
+void MigrateReferenceGaussianParameterColumns(rhbm_gem::SQLiteWrapper & database)
+{
+    AddColumnIfMissing(database, "model_object", "reference_height");
+    AddColumnIfMissing(database, "model_object", "reference_offset");
 }
 
 void MigrateAtomClassKeyColumns(rhbm_gem::SQLiteWrapper & database)
@@ -715,7 +727,8 @@ void ValidateModelSchema(
     bool require_gaussian_intercept_columns,
     bool atom_tables_have_class_key,
     bool require_updated_sampling_columns,
-    bool require_standard_qscore_columns)
+    bool require_standard_qscore_columns,
+    bool require_reference_gaussian_parameter_columns)
 {
     ValidateRequiredTables(database, kModelCanonicalTableNames, "model");
 
@@ -775,6 +788,10 @@ void ValidateModelSchema(
     {
         ValidateStandardQScoreColumns(database);
     }
+    if (require_reference_gaussian_parameter_columns)
+    {
+        ValidateReferenceGaussianParameterColumns(database);
+    }
 }
 
 void ValidateMapSchema(rhbm_gem::SQLiteWrapper & database)
@@ -789,7 +806,8 @@ void ValidateCurrentSchema(
     bool require_gaussian_intercept_columns = true,
     bool atom_tables_have_class_key = false,
     bool require_updated_sampling_columns = true,
-    bool require_standard_qscore_columns = true)
+    bool require_standard_qscore_columns = true,
+    bool require_reference_gaussian_parameter_columns = true)
 {
     if (!HasTable(database, std::string(kCatalogTableName)))
     {
@@ -806,7 +824,8 @@ void ValidateCurrentSchema(
         require_gaussian_intercept_columns,
         atom_tables_have_class_key,
         require_updated_sampling_columns,
-        require_standard_qscore_columns);
+        require_standard_qscore_columns,
+        require_reference_gaussian_parameter_columns);
     ValidateMapSchema(database);
     ValidateCatalogConsistency(database, "model", ListModelKeys(database));
     ValidateCatalogConsistency(database, "map", ListMapKeys(database));
@@ -831,38 +850,50 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
     }
     if (raw_version == 2 || raw_version == 3)
     {
-        ValidateCurrentSchema(database, false, true, false, false);
+        ValidateCurrentSchema(database, false, true, false, false, false);
         MigrateGaussianInterceptColumns(database);
         MigrateAtomClassKeyColumns(database);
         MigrateUpdatedSamplingColumns(database);
         MigrateStandardQScoreColumns(database);
+        MigrateReferenceGaussianParameterColumns(database);
         SetSchemaVersion(database);
         ValidateCurrentSchema(database);
         return;
     }
     if (raw_version == 4)
     {
-        ValidateCurrentSchema(database, true, true, false, false);
+        ValidateCurrentSchema(database, true, true, false, false, false);
         MigrateAtomClassKeyColumns(database);
         MigrateUpdatedSamplingColumns(database);
         MigrateStandardQScoreColumns(database);
+        MigrateReferenceGaussianParameterColumns(database);
         SetSchemaVersion(database);
         ValidateCurrentSchema(database);
         return;
     }
     if (raw_version == 5)
     {
-        ValidateCurrentSchema(database, true, false, false, false);
+        ValidateCurrentSchema(database, true, false, false, false, false);
         MigrateUpdatedSamplingColumns(database);
         MigrateStandardQScoreColumns(database);
+        MigrateReferenceGaussianParameterColumns(database);
         SetSchemaVersion(database);
         ValidateCurrentSchema(database);
         return;
     }
     if (raw_version == 6)
     {
-        ValidateCurrentSchema(database, true, false, true, false);
+        ValidateCurrentSchema(database, true, false, true, false, false);
         MigrateStandardQScoreColumns(database);
+        MigrateReferenceGaussianParameterColumns(database);
+        SetSchemaVersion(database);
+        ValidateCurrentSchema(database);
+        return;
+    }
+    if (raw_version == 7)
+    {
+        ValidateCurrentSchema(database, true, false, true, true, false);
+        MigrateReferenceGaussianParameterColumns(database);
         SetSchemaVersion(database);
         ValidateCurrentSchema(database);
         return;

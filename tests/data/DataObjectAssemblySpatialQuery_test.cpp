@@ -242,6 +242,8 @@ TEST(DataObjectAssemblySpatialQueryTest, DerivedStateSpatialQueriesRemainAvailab
 
     auto assembled_model{ rg::AssembleModelObject(std::move(parts)) };
     assembled_model.SetStandardAverageQScore(0.75);
+    assembled_model.SetReferenceHeight(1.25);
+    assembled_model.SetReferenceOffset(-0.5);
     assembled_model.GetAtomList().at(0)->SetStandardQScore(0.5);
     const auto assembled_hits{
         rg::ModelDerivedState::Of(assembled_model).FindAtomsInRange(
@@ -258,6 +260,8 @@ TEST(DataObjectAssemblySpatialQueryTest, DerivedStateSpatialQueriesRemainAvailab
             1.5) };
     ASSERT_EQ(copied_hits.size(), 2);
     EXPECT_DOUBLE_EQ(copied_model.GetStandardAverageQScore(), 0.75);
+    EXPECT_DOUBLE_EQ(copied_model.GetReferenceHeight(), 1.25);
+    EXPECT_DOUBLE_EQ(copied_model.GetReferenceOffset(), -0.5);
     EXPECT_DOUBLE_EQ(copied_model.GetAtomList().at(0)->GetStandardQScore(), 0.5);
     std::vector<int> copied_serials;
     copied_serials.reserve(copied_hits.size());
@@ -276,6 +280,8 @@ TEST(DataObjectAssemblySpatialQueryTest, DerivedStateSpatialQueriesRemainAvailab
             1.5) };
     ASSERT_EQ(moved_hits.size(), 2);
     EXPECT_DOUBLE_EQ(moved_model.GetStandardAverageQScore(), 0.75);
+    EXPECT_DOUBLE_EQ(moved_model.GetReferenceHeight(), 1.25);
+    EXPECT_DOUBLE_EQ(moved_model.GetReferenceOffset(), -0.5);
     EXPECT_DOUBLE_EQ(moved_model.GetAtomList().at(0)->GetStandardQScore(), 0.5);
     std::vector<int> moved_serials;
     moved_serials.reserve(moved_hits.size());
@@ -289,6 +295,8 @@ TEST(DataObjectAssemblySpatialQueryTest, DerivedStateSpatialQueriesRemainAvailab
     rg::ModelObject move_assigned_model;
     move_assigned_model = std::move(moved_model);
     EXPECT_DOUBLE_EQ(move_assigned_model.GetStandardAverageQScore(), 0.75);
+    EXPECT_DOUBLE_EQ(move_assigned_model.GetReferenceHeight(), 1.25);
+    EXPECT_DOUBLE_EQ(move_assigned_model.GetReferenceOffset(), -0.5);
     EXPECT_DOUBLE_EQ(
         move_assigned_model.GetAtomList().at(0)->GetStandardQScore(),
         0.5);

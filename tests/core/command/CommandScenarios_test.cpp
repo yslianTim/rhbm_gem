@@ -489,16 +489,25 @@ TEST(CommandScenariosTest, PotentialAnalysisOnlyBackboneFiltersOnlyBackboneAtoms
     auto normalized_map{ ReadMap(map_path) };
     ASSERT_NE(normalized_map, nullptr);
     normalized_map->MapValueArrayNormalization();
+    const auto [expected_reference_height, expected_reference_offset]{
+        GetReferenceGaussianParameters(*normalized_map)
+    };
     std::unordered_map<int, double> expected_q_scores;
     const auto expected_average{
         CalculateAverageQScores(
             *normalized_map,
             *backbone_model,
+            expected_reference_height,
+            expected_reference_offset,
             expected_q_scores)
     };
     EXPECT_DOUBLE_EQ(
         backbone_model->GetStandardAverageQScore(),
         expected_average);
+    EXPECT_DOUBLE_EQ(all_atom_model->GetReferenceHeight(), expected_reference_height);
+    EXPECT_DOUBLE_EQ(all_atom_model->GetReferenceOffset(), expected_reference_offset);
+    EXPECT_DOUBLE_EQ(backbone_model->GetReferenceHeight(), expected_reference_height);
+    EXPECT_DOUBLE_EQ(backbone_model->GetReferenceOffset(), expected_reference_offset);
     ASSERT_EQ(expected_q_scores.size(), backbone_model->GetNumberOfAtom());
     for (const auto & atom : backbone_model->GetAtomList())
     {
