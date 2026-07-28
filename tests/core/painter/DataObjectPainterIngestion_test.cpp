@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 
-#include <array>
 #include <filesystem>
 #include <memory>
 #include <stdexcept>
@@ -10,27 +9,12 @@
 #include <rhbm_gem/core/PainterFunctions.hpp>
 #include "core/painter/detail/PainterModelValidation.hpp"
 #include <rhbm_gem/data/io/DataRepository.hpp>
-#include <rhbm_gem/data/io/ModelMapFileIO.hpp>
-#include <rhbm_gem/data/object/MapObject.hpp>
 #include "support/DataObjectTestSupport.hpp"
 
 namespace rg = rhbm_gem;
 namespace rgc = rhbm_gem::core;
 
 namespace {
-
-rg::MapObject MakeConstantMapObject()
-{
-    std::array<int, 3> grid_size{ 2, 2, 2 };
-    std::array<float, 3> grid_spacing{ 1.0f, 1.0f, 1.0f };
-    std::array<float, 3> origin{ 0.0f, 0.0f, 0.0f };
-    auto values{ std::make_unique<float[]>(8) };
-    for (std::size_t i = 0; i < 8; ++i)
-    {
-        values[i] = 1.0f;
-    }
-    return rg::MapObject{ grid_size, grid_spacing, origin, std::move(values) };
-}
 
 std::shared_ptr<rg::ModelObject> LoadAnalyzedModelFixture(
     const std::filesystem::path & temp_root,
@@ -67,25 +51,56 @@ TEST(DataObjectPainterIngestionTest, PainterValidationAcceptsAnalysisReadyModels
         command_test::GenerateMapFile(temp_dir.path() / "map", model_path, "fixture_map")
     };
     auto model{ LoadAnalyzedModelFixture(temp_dir.path(), map_path) };
-    auto map{ rg::ReadMap(map_path) };
     ASSERT_NE(model, nullptr);
-    ASSERT_NE(map, nullptr);
 
     EXPECT_NO_THROW(rg::painter_internal::RequireLocalAnalyzedModel(*model, "AtomPainter"));
     EXPECT_NO_THROW(rg::painter_internal::RequireGroupedAnalyzedModel(*model, "GausPainter"));
     EXPECT_NO_THROW(rgc::PaintQScore(
         rgc::ModelObjectList{ model.get() },
-        *map,
         temp_dir.path().string()));
     EXPECT_NO_THROW(rg::painter_internal::RequireGroupedAnalyzedModel(*model, "ComparisonPainter"));
     EXPECT_NO_THROW(rg::painter_internal::RequireGroupedAnalyzedModel(*model, "DemoPainter"));
+}
+
+TEST(DataObjectPainterIngestionTest, PotentialDisplayQScoreRunsWithoutMap)
+{
+    command_test::ScopedTempDir temp_dir{ "potential_display_qscore_without_map" };
+    const auto model_path{ command_test::TestDataPath("test_model.cif") };
+    const auto map_path{
+        command_test::GenerateMapFile(temp_dir.path() / "map", model_path, "fixture_map")
+    };
+    const auto model{ LoadAnalyzedModelFixture(temp_dir.path(), map_path) };
+    ASSERT_NE(model, nullptr);
+
+    const auto output_dir{ temp_dir.path() / "display_out" };
+    rgc::PotentialDisplayRequest request{};
+    request.database_path = temp_dir.path() / "db" / "database.sqlite";
+    request.output_dir = output_dir;
+    request.painter_choice = rgc::PainterType::QSCORE;
+    request.model_key_tag_list = { "analyzed_model" };
+
+    const auto result{ rgc::RunCommand(request) };
+
+    ASSERT_TRUE(result.succeeded);
+    bool found_qscore_output{ false };
+    for (const auto & entry : std::filesystem::directory_iterator(output_dir))
+    {
+        const auto file_name{ entry.path().filename().string() };
+        if (entry.is_regular_file()
+            && file_name.find("average_qscore_to_sequence_summary_") == 0
+            && entry.path().extension() == ".pdf")
+        {
+            found_qscore_output = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(found_qscore_output);
 }
 
 TEST(DataObjectPainterIngestionTest, PainterFunctionEntrypointsRejectModelsWithoutAnalysisData)
 {
     command_test::ScopedTempDir temp_dir{ "painter_ingestion_invalid" };
     auto model{ data_test::MakeModelWithBond() };
-    auto map{ MakeConstantMapObject() };
     ASSERT_NE(model, nullptr);
     model->SetKeyTag("raw_model");
     model->SelectAllAtoms();
@@ -104,7 +119,7 @@ TEST(DataObjectPainterIngestionTest, PainterFunctionEntrypointsRejectModelsWitho
         rgc::PaintGaus(model_objects, output_folder),
         std::runtime_error);
     EXPECT_THROW(
-        rgc::PaintQScore(model_objects, map, output_folder),
+        rgc::PaintQScore(model_objects, output_folder),
         std::runtime_error);
     EXPECT_THROW(
         rgc::PaintComparison(

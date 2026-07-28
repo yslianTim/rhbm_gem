@@ -93,7 +93,6 @@ struct PotentialAnalysisRequest : public CommandRequestBase
 struct PotentialDisplayRequest : public CommandRequestBase
 {
     std::filesystem::path database_path{ GetDefaultDatabasePath() };
-    std::filesystem::path map_file_path{};
     PainterType painter_choice{ PainterType::GAUS };
     std::vector<std::string> model_key_tag_list{};
     std::unordered_map<std::string, std::vector<std::string>> reference_model_groups{};

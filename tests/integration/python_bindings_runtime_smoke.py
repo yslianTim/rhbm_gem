@@ -142,9 +142,8 @@ def assert_request_objects_are_usable() -> None:
     )
 
     display = m.PotentialDisplayRequest()
-    display.map_file_path = str(PROJECT_ROOT / "tests" / "fixtures" / "test.map")
+    assert not hasattr(display, "map_file_path")
     display.painter_choice = m.PainterType.QSCORE
-    assert Path(display.map_file_path).name == "test.map"
     assert display.painter_choice == m.PainterType.QSCORE
 
 

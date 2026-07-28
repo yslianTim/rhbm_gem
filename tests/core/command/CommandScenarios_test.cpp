@@ -549,7 +549,7 @@ TEST(CommandScenariosTest, PotentialDisplayAllowsWellFormedReferenceGroupsPastPr
     EXPECT_FALSE(HasDiagnosticForOption(result.issues, "--ref-group"));
 }
 
-TEST(CommandScenariosTest, PotentialDisplayQScoreRequiresMapFileAtPrepare)
+TEST(CommandScenariosTest, PotentialDisplayQScoreDoesNotRequireMapAtPrepare)
 {
     PotentialDisplayRequest request{};
     request.painter_choice = PainterType::QSCORE;
@@ -558,22 +558,8 @@ TEST(CommandScenariosTest, PotentialDisplayQScoreRequiresMapFileAtPrepare)
     const auto result{ RunCommand(request) };
 
     EXPECT_FALSE(result.succeeded);
-    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "request"));
-}
-
-TEST(CommandScenariosTest, PotentialDisplayRejectsMissingOptionalMapPath)
-{
-    command_test::ScopedTempDir temp_dir{ "potential_display_missing_map" };
-
-    PotentialDisplayRequest request{};
-    request.painter_choice = PainterType::QSCORE;
-    request.model_key_tag_list = { "model_key" };
-    request.map_file_path = temp_dir.path() / "missing.map";
-
-    const auto result{ RunCommand(request) };
-
-    EXPECT_FALSE(result.succeeded);
-    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "-m,--map"));
+    EXPECT_FALSE(HasDiagnosticForOption(result.issues, "-m,--map"));
+    EXPECT_FALSE(HasDiagnosticForOption(result.issues, "request"));
 }
 
 TEST(CommandScenariosTest, PotentialDisplayGausDoesNotRequireMapAtPrepare)

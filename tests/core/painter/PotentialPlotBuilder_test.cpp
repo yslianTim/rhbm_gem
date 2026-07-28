@@ -10,7 +10,6 @@
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
-#include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/KeyPacker.hpp>
@@ -86,22 +85,20 @@ TEST(PotentialPlotBuilderTest, RepresentativeBuildersProduceRootObjects)
     EXPECT_NE(gaus_function, nullptr);
 }
 
-TEST(PotentialPlotBuilderTest, AverageQScoreBuilderUsesProvidedMap)
+TEST(PotentialPlotBuilderTest, AverageQScoreBuilderUsesPersistedAtomScoresWithoutMap)
 {
-    command_test::ScopedTempDir temp_dir{ "potential_plot_builder_qscore" };
-    const auto model_path{ command_test::TestDataPath("test_model.cif") };
-    const auto map_path{
-        command_test::GenerateMapFile(temp_dir.path() / "map", model_path)
-    };
-    auto model{ rg::ReadModel(model_path) };
-    auto map{ rg::ReadMap(map_path) };
+    auto model{ LoadModelFixture("test_model.cif") };
     ASSERT_NE(model, nullptr);
-    ASSERT_NE(map, nullptr);
 
     model->SelectAllAtoms();
     EnsureLocalPotentialEntries(*model);
+    constexpr double persisted_qscore{ 0.625 };
+    for (auto & atom : model->GetAtomList())
+    {
+        atom->SetStandardQScore(persisted_qscore);
+    }
 
-    rg::PotentialPlotBuilder model_builder{ model.get(), map.get() };
+    rg::PotentialPlotBuilder model_builder{ model.get() };
     const auto graph_map{
         model_builder.CreateAverageQScoreToSequenceIDGraphMap(false, true, false)
     };
@@ -112,7 +109,19 @@ TEST(PotentialPlotBuilderTest, AverageQScoreBuilderUsesProvidedMap)
         (void)chain_id;
         ASSERT_NE(graph, nullptr);
         EXPECT_GT(graph->GetN(), 0);
+        for (int point_id = 0; point_id < graph->GetN(); ++point_id)
+        {
+            double x_value{ 0.0 };
+            double qscore{ 0.0 };
+            graph->GetPoint(point_id, x_value, qscore);
+            EXPECT_DOUBLE_EQ(qscore, persisted_qscore);
+        }
     }
+
+    const auto fitted_graph_map{
+        model_builder.CreateAverageQScoreToSequenceIDGraphMap(true, false, true)
+    };
+    EXPECT_FALSE(fitted_graph_map.empty());
 }
 
 TEST(PotentialPlotBuilderTest, LinearModelDataBuildersUseFiniteSamplingRange)

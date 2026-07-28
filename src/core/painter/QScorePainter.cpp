@@ -1,7 +1,5 @@
 #include <rhbm_gem/core/PainterFunctions.hpp>
 
-#include <rhbm_gem/core/QScoreHelper.hpp>
-#include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -39,14 +37,10 @@ namespace {
 class QScorePainter
 {
     std::vector<ModelObject *> m_model_object_list;
-    const MapObject & m_map_object;
     std::string m_folder_path{ "./" };
 
 public:
-    QScorePainter(
-        const core::ModelObjectList & model_objects,
-        const MapObject & map_object,
-        const std::string & output_folder);
+    QScorePainter(const core::ModelObjectList & model_objects, const std::string & output_folder);
     void Run();
 
 private:
@@ -56,9 +50,7 @@ private:
 
 QScorePainter::QScorePainter(
     const core::ModelObjectList & model_objects,
-    const MapObject & map_object,
     const std::string & output_folder) :
-    m_map_object{ map_object },
     m_folder_path{ path_helper::EnsureTrailingSlash(output_folder) }
 {
     for (auto * model_object : model_objects)
@@ -95,9 +87,7 @@ void QScorePainter::PaintAverageQScoreToSequenceSummary(
     Logger::Log(LogLevel::Info, "QScorePainter::PaintAverageQScoreToSequenceSummary");
 
     #ifdef HAVE_ROOT
-    auto plot_builder{
-        std::make_unique<PotentialPlotBuilder>(model_object, &m_map_object)
-    };
+    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
 
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);
@@ -183,7 +173,7 @@ void QScorePainter::PaintAverageQScoreToSequenceSummary(
     (void)file_path;
     #endif
 
-    auto average_qscore{ core::CalculateAverageQScores(m_map_object, *model_object) };
+    auto average_qscore{ model_object->GetStandardAverageQScore() };
     Logger::Log(LogLevel::Info, Form("Average Q-Score: %.3f", average_qscore));
 }
 
@@ -193,10 +183,9 @@ namespace core {
 
 void PaintQScore(
     const ModelObjectList & model_objects,
-    const MapObject & map_object,
     const std::string & output_folder)
 {
-    QScorePainter painter{ model_objects, map_object, output_folder };
+    QScorePainter painter{ model_objects, output_folder };
     painter.Run();
 }
 
