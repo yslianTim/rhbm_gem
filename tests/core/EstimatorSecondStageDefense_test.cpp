@@ -141,6 +141,7 @@ rg::LocalGaussianResult MakeGaussianResult(const rg::GaussianModel3D & model)
         model,
         rg::GaussianModel3DUncertainty{}
     };
+    result.posterior = result.mdpde;
     return result;
 }
 
@@ -297,20 +298,6 @@ std::unique_ptr<rg::ModelObject> BuildSharedOffsetJointPolishDefenseModel(
             .SetGaussianResult(MakeGaussianResult(
                 current.WithOffset(initial_offset_list.at(i))));
     }
-    return model;
-}
-
-std::unique_ptr<rg::ModelObject> BuildAllInvalidSeedDefenseModel()
-{
-    auto model{ BuildNearCollinearDefenseModel() };
-    auto analysis{ model->EditAnalysis() };
-    const auto & atom_list{ model->GetSelectedAtoms() };
-    analysis.EnsureAtomLocalPotential(*atom_list.at(0))
-        .SetGaussianResult(MakeGaussianResult(
-            rg::GaussianModel3D{ 0.0, 0.0, 0.25 }));
-    analysis.EnsureAtomLocalPotential(*atom_list.at(1))
-        .SetGaussianResult(MakeGaussianResult(
-            rg::GaussianModel3D{ -1.0, -0.5, -0.15 }));
     return model;
 }
 
@@ -603,7 +590,7 @@ void ExpectSelectedAtomEstimatesAreFinite(const rg::ModelObject & model)
 
 } // namespace
 
-TEST(EstimatorSecondStageDefenseTest, SeedRepairUsesConfiguredFallbackPriority)
+TEST(EstimatorSecondStageDefenseTest, SeedSelectionUsesConfiguredFallbackPriority)
 {
     const auto make_candidate = [](double amplitude)
     {
@@ -618,70 +605,140 @@ TEST(EstimatorSecondStageDefenseTest, SeedRepairUsesConfiguredFallbackPriority)
             rg::GaussianModel3DUncertainty{}
         }
     };
-    seed_detail::SecondStageSeedRepairCandidates candidates;
+    seed_detail::SecondStageSeedCandidates candidates;
     candidates.group_posterior = make_candidate(1.0);
     candidates.group_prior = make_candidate(2.0);
-    candidates.local_ols = make_candidate(3.0);
-    candidates.group_median = make_candidate(4.0);
-    candidates.global_median = make_candidate(5.0);
+    candidates.group_median = make_candidate(3.0);
+    candidates.global_median = make_candidate(4.0);
 
-    const auto expect_source = [&](seed_detail::SecondStageSeedRepairSource source)
+    const auto expect_source = [&](seed_detail::SecondStageSeedSource source)
     {
-        const auto selection{ seed_detail::SelectSecondStageSeedRepair(candidates) };
+        const auto selection{ seed_detail::SelectSecondStageSeed(candidates) };
         ASSERT_TRUE(selection.has_value());
         EXPECT_EQ(selection->source, source);
     };
-    expect_source(seed_detail::SecondStageSeedRepairSource::GroupPosterior);
+    expect_source(seed_detail::SecondStageSeedSource::GroupPosterior);
     candidates.group_posterior = invalid_candidate;
-    expect_source(seed_detail::SecondStageSeedRepairSource::GroupPrior);
+    expect_source(seed_detail::SecondStageSeedSource::GroupPrior);
     candidates.group_prior = invalid_candidate;
-    expect_source(seed_detail::SecondStageSeedRepairSource::LocalOls);
-    candidates.local_ols = invalid_candidate;
-    expect_source(seed_detail::SecondStageSeedRepairSource::GroupMedian);
+    expect_source(seed_detail::SecondStageSeedSource::GroupMedian);
     candidates.group_median = invalid_candidate;
-    expect_source(seed_detail::SecondStageSeedRepairSource::GlobalMedian);
+    expect_source(seed_detail::SecondStageSeedSource::GlobalMedian);
     candidates.global_median = invalid_candidate;
-    EXPECT_FALSE(seed_detail::SelectSecondStageSeedRepair(candidates).has_value());
+    EXPECT_FALSE(seed_detail::SelectSecondStageSeed(candidates).has_value());
 }
 
-TEST(EstimatorSecondStageDefenseTest, SeedRepairPreservesFiniteOffsetAndSourceUncertainty)
+TEST(EstimatorSecondStageDefenseTest, SeedSelectionReturnsCompleteSourceModelAndUncertainty)
 {
-    const seed_detail::SecondStageSeedRepairSelection selection{
-        seed_detail::SecondStageSeedRepairSource::GroupPosterior,
+    seed_detail::SecondStageSeedCandidates candidates;
+    candidates.group_posterior =
         rg::GaussianModel3DWithUncertainty{
             rg::GaussianModel3D{ 6.0, 0.55, -0.2 },
             rg::GaussianModel3DUncertainty{ 0.1, 0.02, 0.03 }
-        }
+    };
+    candidates.group_prior = rg::GaussianModel3DWithUncertainty{
+        rg::GaussianModel3D{ 4.0, 0.65, 0.4 },
+        rg::GaussianModel3DUncertainty{}
     };
 
-    const auto repaired_with_finite_offset{
-        seed_detail::BuildRepairedSecondStageSeed(
-            rg::GaussianModel3D{ 0.0, 0.0, 0.37 },
-            selection)
-    };
-    EXPECT_DOUBLE_EQ(repaired_with_finite_offset.GetModel().GetAmplitude(), 6.0);
-    EXPECT_DOUBLE_EQ(repaired_with_finite_offset.GetModel().GetWidth(), 0.55);
-    EXPECT_DOUBLE_EQ(repaired_with_finite_offset.GetModel().GetOffset(), 0.37);
+    const auto selection{ seed_detail::SelectSecondStageSeed(candidates) };
+    ASSERT_TRUE(selection.has_value());
+    EXPECT_EQ(selection->source, seed_detail::SecondStageSeedSource::GroupPosterior);
+    EXPECT_DOUBLE_EQ(selection->model.GetModel().GetAmplitude(), 6.0);
+    EXPECT_DOUBLE_EQ(selection->model.GetModel().GetWidth(), 0.55);
+    EXPECT_DOUBLE_EQ(selection->model.GetModel().GetOffset(), -0.2);
     EXPECT_DOUBLE_EQ(
-        repaired_with_finite_offset.GetStandardDeviationModel().GetAmplitude(),
+        selection->model.GetStandardDeviationModel().GetAmplitude(),
         0.1);
     EXPECT_DOUBLE_EQ(
-        repaired_with_finite_offset.GetStandardDeviationModel().GetWidth(),
+        selection->model.GetStandardDeviationModel().GetWidth(),
         0.02);
     EXPECT_DOUBLE_EQ(
-        repaired_with_finite_offset.GetStandardDeviationModel().GetOffset(),
+        selection->model.GetStandardDeviationModel().GetOffset(),
         0.03);
+}
 
-    const auto repaired_with_invalid_offset{
-        seed_detail::BuildRepairedSecondStageSeed(
-            rg::GaussianModel3D{
-                0.0,
-                0.0,
-                std::numeric_limits<double>::quiet_NaN()
+TEST(EstimatorSecondStageDefenseTest, SeedInitializationBuildsMediansOnlyFromDirectSources)
+{
+    auto model{
+        BuildDefenseModel(
+            {
+                std::array<float, 3>{ 0.0F, 0.0F, 0.0F },
+                std::array<float, 3>{ 6.0F, 0.0F, 0.0F },
+                std::array<float, 3>{ 12.0F, 0.0F, 0.0F },
+                std::array<float, 3>{ 18.0F, 0.0F, 0.0F }
             },
-            selection)
+            { Spot::C, Spot::C, Spot::O, Spot::N },
+            {
+                Element::CARBON,
+                Element::CARBON,
+                Element::OXYGEN,
+                Element::NITROGEN
+            },
+            {
+                rg::GaussianModel3D{ 2.0, 0.5, 0.2 },
+                rg::GaussianModel3D{ 3.0, 0.5, 0.2 },
+                rg::GaussianModel3D{ 10.0, 0.7, -0.2 },
+                rg::GaussianModel3D{ 6.0, 0.6, 0.0 }
+            },
+            rg::GaussianModel3D{ 20.0, 0.8, 0.3 })
     };
-    EXPECT_DOUBLE_EQ(repaired_with_invalid_offset.GetModel().GetOffset(), -0.2);
+
+    auto analysis{ model->EditAnalysis() };
+    const auto & atom_list{ model->GetSelectedAtoms() };
+    for (std::size_t i = 0; i < atom_list.size(); i++)
+    {
+        auto result{ MakeGaussianResult(
+            rg::GaussianModel3D{
+                20.0 + static_cast<double>(i),
+                0.8,
+                0.3
+            }) };
+        result.posterior.reset();
+        if (i == 0)
+        {
+            result.posterior = rg::GaussianModel3DWithUncertainty{
+                rg::GaussianModel3D{ 2.0, 0.5, 0.2 },
+                rg::GaussianModel3DUncertainty{ 0.1, 0.02, 0.03 }
+            };
+        }
+        else if (i == 2)
+        {
+            result.posterior = rg::GaussianModel3DWithUncertainty{
+                rg::GaussianModel3D{ 10.0, 0.7, -0.2 },
+                rg::GaussianModel3DUncertainty{ 0.2, 0.03, 0.04 }
+            };
+        }
+        analysis.EnsureAtomLocalPotential(*atom_list.at(i))
+            .SetGaussianResult(std::move(result));
+    }
+
+    auto options{ MakeSecondStageOptions() };
+    options.quiet_mode = false;
+    const auto previous_log_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Debug);
+    testing::internal::CaptureStdout();
+    rt::RunSecondStageLocalFitting(*model, options);
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_NE(
+        out.find(
+            "Selected second-stage initial seeds = 4, sources = "
+            "group-posterior:2, group-prior:0, group-median:1, global-median:1."),
+        std::string::npos);
+    EXPECT_NE(
+        out.find(
+            "atom index = 1, source = group-median, "
+            "original MDPDE A/B/C = 2.10e+01/8.00e-01/3.00e-01, "
+            "selected A/B/C = 2.00e+00/5.00e-01/2.00e-01."),
+        std::string::npos);
+    EXPECT_NE(
+        out.find(
+            "atom index = 3, source = global-median, "
+            "original MDPDE A/B/C = 2.30e+01/8.00e-01/3.00e-01, "
+            "selected A/B/C = 6.00e+00/6.00e-01/0.00e+00."),
+        std::string::npos);
 }
 
 TEST(EstimatorSecondStageDefenseTest, AuditObjectiveKeepsEarlierBestOnTie)
@@ -2313,14 +2370,27 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingIsIntensityScale
     }
 }
 
-TEST(EstimatorSecondStageDefenseTest, MissingValidSeedSkipsSecondStageWithoutChangingResults)
+TEST(
+    EstimatorSecondStageDefenseTest,
+    MissingPosteriorAndPriorSkipsSecondStageDespiteValidLocalSeeds)
 {
-    auto model{ BuildAllInvalidSeedDefenseModel() };
+    auto model{ BuildNearCollinearDefenseModel() };
     auto options{ MakeSecondStageOptions() };
     options.quiet_mode = false;
     std::vector<rg::GaussianModel3D> previous_model_list;
-    for (const auto * atom : model->GetSelectedAtoms())
+    auto analysis{ model->EditAnalysis() };
+    for (auto * atom : model->GetSelectedAtoms())
     {
+        auto result{
+            rg::AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult()
+        };
+        ASSERT_TRUE(seed_detail::IsValidSecondStageGaussianModel(
+            result.mdpde.GetModel()));
+        ASSERT_TRUE(seed_detail::IsValidSecondStageGaussianModel(
+            result.ols.GetModel()));
+        result.posterior.reset();
+        analysis.EnsureAtomLocalPotential(*atom)
+            .SetGaussianResult(std::move(result));
         previous_model_list.emplace_back(GetEstimateModel(*atom));
     }
 
@@ -2335,6 +2405,7 @@ TEST(EstimatorSecondStageDefenseTest, MissingValidSeedSkipsSecondStageWithoutCha
             previous_model_list.at(i),
             0.0);
     }
+    EXPECT_NE(out.find("stop_reason=no-valid-seed"), std::string::npos);
     EXPECT_NE(out.find("final_uses_polish=unavailable"), std::string::npos);
 }
 

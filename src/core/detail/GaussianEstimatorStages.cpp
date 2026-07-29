@@ -391,39 +391,37 @@ struct SecondStageAtomContext
 
 using SecondStageLocalFittingContext = std::vector<SecondStageAtomContext>;
 
-struct SecondStageSeedRepairRecord
+struct SecondStageSeedSelectionRecord
 {
     std::size_t atom_index{ 0 };
-    detail::SecondStageSeedRepairSource source{
-        detail::SecondStageSeedRepairSource::GlobalMedian
+    detail::SecondStageSeedSource source{
+        detail::SecondStageSeedSource::GlobalMedian
     };
     GaussianModel3D original_model{};
-    GaussianModel3D repaired_model{};
+    GaussianModel3D selected_model{};
 };
 
 struct SecondStageInitialStateBuildResult
 {
     LocalFittingState state{};
-    std::vector<SecondStageSeedRepairRecord> repair_record_list{};
+    std::vector<SecondStageSeedSelectionRecord> selection_record_list{};
 };
 
-const char * GetSecondStageSeedRepairSourceText(
-    detail::SecondStageSeedRepairSource source)
+const char * GetSecondStageSeedSourceText(
+    detail::SecondStageSeedSource source)
 {
     switch (source)
     {
-    case detail::SecondStageSeedRepairSource::GroupPosterior:
+    case detail::SecondStageSeedSource::GroupPosterior:
         return "group-posterior";
-    case detail::SecondStageSeedRepairSource::GroupPrior:
+    case detail::SecondStageSeedSource::GroupPrior:
         return "group-prior";
-    case detail::SecondStageSeedRepairSource::LocalOls:
-        return "local-ols";
-    case detail::SecondStageSeedRepairSource::GroupMedian:
+    case detail::SecondStageSeedSource::GroupMedian:
         return "group-median";
-    case detail::SecondStageSeedRepairSource::GlobalMedian:
+    case detail::SecondStageSeedSource::GlobalMedian:
         return "global-median";
     }
-    throw std::logic_error("Unknown second-stage seed repair source.");
+    throw std::logic_error("Unknown second-stage seed source.");
 }
 
 double CalculateZeroOffsetResponse(
@@ -860,6 +858,7 @@ std::optional<SecondStageInitialStateBuildResult> BuildInitialLocalFittingState(
         context.size());
     std::unordered_map<GroupKey, std::vector<GaussianModel3D>> models_by_group;
     std::vector<GaussianModel3D> global_models;
+    global_models.reserve(context.size());
 
     for (std::size_t i = 0; i < context.size(); i++)
     {
@@ -873,33 +872,20 @@ std::optional<SecondStageInitialStateBuildResult> BuildInitialLocalFittingState(
         }
 
         const auto & result{ state.at(i) };
-        const auto & mdpde_model{ result.mdpde.GetModel() };
-        std::optional<GaussianModel3DWithUncertainty> preferred_model;
-        if (detail::IsValidSecondStageGaussianModel(mdpde_model))
-        {
-            preferred_model = result.mdpde;
-        }
-        else
-        {
-            const auto direct_selection{
-                detail::SelectSecondStageSeedRepair(
-                    detail::SecondStageSeedRepairCandidates{
-                        result.posterior,
-                        group_prior_list.at(i),
-                        result.ols,
-                        std::nullopt,
-                        std::nullopt
-                    })
-            };
-            if (direct_selection.has_value())
-            {
-                preferred_model = direct_selection->model;
-            }
-        }
-        if (!preferred_model.has_value()) continue;
+        const auto direct_selection{
+            detail::SelectSecondStageSeed(
+                detail::SecondStageSeedCandidates{
+                    result.posterior,
+                    group_prior_list.at(i),
+                    std::nullopt,
+                    std::nullopt
+                })
+        };
+        if (!direct_selection.has_value()) continue;
 
-        models_by_group[group_key].emplace_back(preferred_model->GetModel());
-        global_models.emplace_back(preferred_model->GetModel());
+        models_by_group[group_key].emplace_back(
+            direct_selection->model.GetModel());
+        global_models.emplace_back(direct_selection->model.GetModel());
     }
 
     std::unordered_map<GroupKey, GaussianModel3DWithUncertainty> median_by_group;
@@ -918,99 +904,83 @@ std::optional<SecondStageInitialStateBuildResult> BuildInitialLocalFittingState(
     {
         auto & result{ state.at(i) };
         const auto original_model{ result.mdpde.GetModel() };
-        if (!detail::IsValidSecondStageGaussianModel(original_model))
+        const auto group_key{
+            data_internal::GetGroupKey(context.at(i).atom)
+        };
+        std::optional<GaussianModel3DWithUncertainty> group_median;
+        const auto group_median_iter{ median_by_group.find(group_key) };
+        if (group_median_iter != median_by_group.end())
         {
-            const auto group_key{
-                data_internal::GetGroupKey(context.at(i).atom)
-            };
-            std::optional<GaussianModel3DWithUncertainty> group_median;
-            const auto group_median_iter{ median_by_group.find(group_key) };
-            if (group_median_iter != median_by_group.end())
-            {
-                group_median = group_median_iter->second;
-            }
-            const auto selection{
-                detail::SelectSecondStageSeedRepair(
-                    detail::SecondStageSeedRepairCandidates{
-                        result.posterior,
-                        group_prior_list.at(i),
-                        result.ols,
-                        group_median,
-                        global_median
-                    })
-            };
-            if (!selection.has_value())
-            {
-                return std::nullopt;
-            }
-
-            const auto repaired_seed{
-                detail::BuildRepairedSecondStageSeed(original_model, *selection)
-            };
-            const auto repaired_model{ repaired_seed.GetModel() };
-            if (!detail::IsValidSecondStageGaussianModel(repaired_model))
-            {
-                return std::nullopt;
-            }
-            result.mdpde = repaired_seed;
-            build_result.repair_record_list.emplace_back(
-                SecondStageSeedRepairRecord{
-                    i,
-                    selection->source,
-                    original_model,
-                    repaired_model
-                });
+            group_median = group_median_iter->second;
         }
+        const auto selection{
+            detail::SelectSecondStageSeed(
+                detail::SecondStageSeedCandidates{
+                    result.posterior,
+                    group_prior_list.at(i),
+                    group_median,
+                    global_median
+                })
+        };
+        if (!selection.has_value()) return std::nullopt;
+
+        result.mdpde = selection->model;
+        build_result.selection_record_list.emplace_back(
+            SecondStageSeedSelectionRecord{
+                i,
+                selection->source,
+                original_model,
+                selection->model.GetModel()
+            });
     }
     return build_result;
 }
 
-void LogSecondStageSeedRepairs(
-    const std::vector<SecondStageSeedRepairRecord> & repair_record_list,
+void LogSecondStageSeedSelections(
+    const std::vector<SecondStageSeedSelectionRecord> & selection_record_list,
     const FitOptions & options)
 {
-    if (options.quiet_mode || repair_record_list.empty()) return;
+    if (options.quiet_mode || selection_record_list.empty()) return;
 
-    constexpr std::array<detail::SecondStageSeedRepairSource, 5> source_list{
-        detail::SecondStageSeedRepairSource::GroupPosterior,
-        detail::SecondStageSeedRepairSource::GroupPrior,
-        detail::SecondStageSeedRepairSource::LocalOls,
-        detail::SecondStageSeedRepairSource::GroupMedian,
-        detail::SecondStageSeedRepairSource::GlobalMedian
+    constexpr std::array<detail::SecondStageSeedSource, 4> source_list{
+        detail::SecondStageSeedSource::GroupPosterior,
+        detail::SecondStageSeedSource::GroupPrior,
+        detail::SecondStageSeedSource::GroupMedian,
+        detail::SecondStageSeedSource::GlobalMedian
     };
     std::array<std::size_t, source_list.size()> source_count{};
-    for (const auto & record : repair_record_list)
+    for (const auto & record : selection_record_list)
     {
         source_count.at(static_cast<std::size_t>(record.source))++;
     }
 
     std::ostringstream summary;
-    summary << "Repaired invalid second-stage seed atoms = "
-        << repair_record_list.size() << ", sources = ";
+    summary << "Selected second-stage initial seeds = "
+        << selection_record_list.size() << ", sources = ";
     for (std::size_t i = 0; i < source_list.size(); i++)
     {
         if (i != 0) summary << ", ";
-        summary << GetSecondStageSeedRepairSourceText(source_list.at(i))
+        summary << GetSecondStageSeedSourceText(source_list.at(i))
             << ":" << source_count.at(i);
     }
     summary << ".";
     Logger::Log(LogLevel::Info, summary.str());
 
-    for (const auto & record : repair_record_list)
+    for (const auto & record : selection_record_list)
     {
         std::ostringstream detail_message;
-        detail_message << "Second-stage seed repair: atom index = "
+        detail_message << "Second-stage seed selection: atom index = "
             << record.atom_index
-            << ", source = " << GetSecondStageSeedRepairSourceText(record.source)
+            << ", source = " << GetSecondStageSeedSourceText(record.source)
             << std::scientific << std::setprecision(2)
-            << ", original A/B/C = "
+            << ", original MDPDE A/B/C = "
             << record.original_model.GetAmplitude() << "/"
             << record.original_model.GetWidth() << "/"
             << record.original_model.GetOffset()
-            << ", repaired A/B/C = "
-            << record.repaired_model.GetAmplitude() << "/"
-            << record.repaired_model.GetWidth() << "/"
-            << record.repaired_model.GetOffset() << ".";
+            << ", selected A/B/C = "
+            << record.selected_model.GetAmplitude() << "/"
+            << record.selected_model.GetWidth() << "/"
+            << record.selected_model.GetOffset() << ".";
         Logger::Log(LogLevel::Debug, detail_message.str());
     }
 }
@@ -3972,7 +3942,9 @@ void RunSecondStageLocalFitting(
         }
         return;
     }
-    LogSecondStageSeedRepairs(initial_state_build_result->repair_record_list, options);
+    LogSecondStageSeedSelections(
+        initial_state_build_result->selection_record_list,
+        options);
     auto previous_state{ std::move(initial_state_build_result->state) };
     LocalFittingPolishProvenance previous_polish_provenance(atom_size, 0);
     const auto coupling_topology{

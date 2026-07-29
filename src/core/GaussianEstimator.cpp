@@ -755,7 +755,11 @@ void RunGroupAlphaTraining(ModelObject & model_object, const FitOptions & option
     }
 }
 
-void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & options)
+void RunGroupPotentialFitting(
+    ModelObject & model_object,
+    const FitOptions & options,
+    bool apply_selection = false,
+    bool use_updated_sample = true)
 {
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
@@ -788,7 +792,7 @@ void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & opt
         for (const auto & atom : atom_list)
         {
             const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
-            sample_entries_list.emplace_back(local_view.GetSamplingEntries(false, true));
+            sample_entries_list.emplace_back(local_view.GetSamplingEntries(apply_selection, use_updated_sample));
             member_result_list.emplace_back(local_view.GetGaussianResult());
         }
         const auto result{
@@ -818,7 +822,7 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
     InitializeLocalFittingSeedModels(model_object);
     RunFixedOffsetLocalFitting(model_object, options, LocalFittingPass::FirstStage);
     RunGroupAlphaTraining(model_object, options);
-    RunGroupPotentialFitting(model_object, options);
+    RunGroupPotentialFitting(model_object, options, true, false);
 
     RunSecondStageLocalFitting(model_object, options);
 

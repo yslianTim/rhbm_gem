@@ -5,6 +5,7 @@
 #include <limits>
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <utility>
 
 #include <rhbm_gem/core/TestDataFactory.hpp>
@@ -99,6 +100,20 @@ double CalculateSelectedAtomResponseMeanSquaredError(const rg::ModelObject & mod
     return squared_error_sum / static_cast<double>(sample_count);
 }
 
+void SetSelectedAtomPosteriorFromMdpde(rg::ModelObject & model_object)
+{
+    auto analysis{ model_object.EditAnalysis() };
+    for (auto * atom : model_object.GetSelectedAtoms())
+    {
+        auto result{
+            rg::AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult()
+        };
+        result.posterior = result.mdpde;
+        analysis.EnsureAtomLocalPotential(*atom).SetGaussianResult(
+            std::move(result));
+    }
+}
+
 std::unique_ptr<rg::ModelObject> BuildSecondStageScaleDiagnosticModel()
 {
     ElectricPotential potential_model;
@@ -120,6 +135,7 @@ std::unique_ptr<rg::ModelObject> BuildSecondStageScaleDiagnosticModel()
     const auto options{ MakeSecondStageOptions() };
     rt::RunLocalAlphaTraining(*model, options, rt::LocalFittingPass::FirstStage);
     rt::RunFixedOffsetLocalFitting(*model, options, rt::LocalFittingPass::FirstStage);
+    SetSelectedAtomPosteriorFromMdpde(*model);
     return model;
 }
 
@@ -198,6 +214,7 @@ std::unique_ptr<rg::ModelObject> BuildSecondStageSuspiciousOffsetDiagnosticModel
     options.quiet_mode = true;
     rt::RunLocalAlphaTraining(*model, options, rt::LocalFittingPass::FirstStage);
     rt::RunFixedOffsetLocalFitting(*model, options, rt::LocalFittingPass::FirstStage);
+    SetSelectedAtomPosteriorFromMdpde(*model);
 
     const auto & atom_list{ model->GetSelectedAtoms() };
     auto * target_atom{ atom_list.at(0) };
@@ -343,6 +360,54 @@ TEST(EstimatorTesterTest, RunGroupEstimationTestSkipsTrainedAlphaWhenDisabled)
     ExpectBiasStatisticSize(bias.mdpde.requested_alpha);
     EXPECT_FALSE(bias.mdpde.trained_alpha.has_value());
     EXPECT_FALSE(bias.mdpde.trained_alpha_median.has_value());
+}
+
+TEST(
+    EstimatorTesterTest,
+    RunPotentialFittingWorkflowBootstrapsGroupPosteriorFromAdjustedSamples)
+{
+    ElectricPotential potential_model;
+    potential_model.SetModelChoice(0);
+    potential_model.SetBlurringWidth(0.5);
+    auto input{
+        tdf::BuildPotentialModelTestData(tdf::PotentialModelScenario{
+            Spot::UNK,
+            Element::OXYGEN,
+            -0.1,
+            rg::GaussianModel3D{ 8.0, 0.5, -0.1 },
+            potential_model,
+            0.0,
+            1,
+            42
+        })
+    };
+    auto model{ std::move(input.replica_model_objects.front()) };
+    ASSERT_EQ(model->GetSelectedAtoms().size(), 1u);
+    const auto initial_view{
+        rg::AtomLocalPotentialView::RequireFor(
+            *model->GetSelectedAtoms().front())
+    };
+    ASSERT_FALSE(initial_view.GetSamplingEntries(false).empty());
+    ASSERT_TRUE(initial_view.GetSamplingEntries(false, true).empty());
+
+    auto options{ MakeSecondStageOptions() };
+    options.quiet_mode = false;
+    testing::internal::CaptureStdout();
+    rt::RunPotentialFittingWorkflow(*model, options);
+    const std::string out{ testing::internal::GetCapturedStdout() };
+
+    const auto fitted_view{
+        rg::AtomLocalPotentialView::RequireFor(
+            *model->GetSelectedAtoms().front())
+    };
+    EXPECT_FALSE(fitted_view.GetSamplingEntries(false, true).empty());
+    EXPECT_NE(
+        out.find(
+            "Selected second-stage initial seeds = 1, sources = "
+            "group-posterior:1, group-prior:0, group-median:0, "
+            "global-median:0."),
+        std::string::npos);
+    EXPECT_EQ(out.find("stop_reason=no-valid-seed"), std::string::npos);
 }
 
 TEST(EstimatorTesterTest, RunLocalEstimationTestRejectsNonFiniteTruth)

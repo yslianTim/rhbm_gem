@@ -24,14 +24,29 @@ Neighbor candidates are searched within `kNeighborAtomSearchRange`. A neighbor
 contributes to a sample only when its distance from that sample does not exceed
 `kNeighborContributionDistanceMax`.
 
-The current local MDPDE estimate is used as the initial Gaussian seed when it is
-valid. An invalid seed is repaired from the first valid source in this order:
+Before the second stage starts, the workflow rebuilds each atom's updated
+sampling entries by subtracting neighboring responses estimated from the
+first-stage group-median MDPDE models. The first group fit consumes these
+neighbor-adjusted samples and supplies the per-atom posterior and group prior
+used by seed selection. The first-stage MDPDE models participate only in this
+sampling adjustment; they are not passed to the second-stage seed selector.
+
+The initial Gaussian seed is rebuilt for every selected atom. The current local
+MDPDE and local OLS estimates are not seed sources. The first valid source is
+selected in this order:
 
 1. group posterior;
 2. group prior;
-3. local OLS estimate;
-4. same-group parameter median;
-5. global parameter median.
+3. same-group parameter median;
+4. global parameter median.
+
+The median sources are bootstrapped in two passes. Each atom first contributes
+at most one direct model, preferring its valid group posterior over its valid
+group prior. The component-wise group and global parameter medians are computed
+only from those direct models; atoms filled from a median are not fed back into
+either median. The selected seed replaces the complete local MDPDE model,
+including its offset and uncertainty. Direct posterior and prior seeds retain
+their uncertainty, while median seeds use zero uncertainty.
 
 If a valid seed cannot be obtained for every selected atom, the stage exits
 without changing the stored estimates.

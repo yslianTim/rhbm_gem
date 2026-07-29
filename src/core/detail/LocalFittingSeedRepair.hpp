@@ -9,27 +9,25 @@
 
 namespace rhbm_gem::core::detail {
 
-enum class SecondStageSeedRepairSource
+enum class SecondStageSeedSource
 {
     GroupPosterior,
     GroupPrior,
-    LocalOls,
     GroupMedian,
     GlobalMedian
 };
 
-struct SecondStageSeedRepairCandidates
+struct SecondStageSeedCandidates
 {
     std::optional<GaussianModel3DWithUncertainty> group_posterior{};
     std::optional<GaussianModel3DWithUncertainty> group_prior{};
-    std::optional<GaussianModel3DWithUncertainty> local_ols{};
     std::optional<GaussianModel3DWithUncertainty> group_median{};
     std::optional<GaussianModel3DWithUncertainty> global_median{};
 };
 
-struct SecondStageSeedRepairSelection
+struct SecondStageSeedSelection
 {
-    SecondStageSeedRepairSource source{ SecondStageSeedRepairSource::GlobalMedian };
+    SecondStageSeedSource source{ SecondStageSeedSource::GlobalMedian };
     GaussianModel3DWithUncertainty model{};
 };
 
@@ -41,56 +39,38 @@ inline bool IsValidSecondStageGaussianModel(const GaussianModel3D & model)
         EncodeLocalFittingTransformedCoordinates(model).has_value();
 }
 
-inline std::optional<SecondStageSeedRepairSelection> SelectSecondStageSeedRepair(
-    const SecondStageSeedRepairCandidates & candidates)
+inline std::optional<SecondStageSeedSelection> SelectSecondStageSeed(
+    const SecondStageSeedCandidates & candidates)
 {
     const auto select = [](
-        SecondStageSeedRepairSource source,
+        SecondStageSeedSource source,
         const std::optional<GaussianModel3DWithUncertainty> & candidate)
-        -> std::optional<SecondStageSeedRepairSelection>
+        -> std::optional<SecondStageSeedSelection>
     {
         if (!candidate.has_value() ||
             !IsValidSecondStageGaussianModel(candidate->GetModel()))
         {
             return std::nullopt;
         }
-        return SecondStageSeedRepairSelection{ source, *candidate };
+        return SecondStageSeedSelection{ source, *candidate };
     };
 
     if (const auto selected{
-            select(SecondStageSeedRepairSource::GroupPosterior, candidates.group_posterior) })
+            select(SecondStageSeedSource::GroupPosterior, candidates.group_posterior) })
     {
         return selected;
     }
     if (const auto selected{
-            select(SecondStageSeedRepairSource::GroupPrior, candidates.group_prior) })
+            select(SecondStageSeedSource::GroupPrior, candidates.group_prior) })
     {
         return selected;
     }
     if (const auto selected{
-            select(SecondStageSeedRepairSource::LocalOls, candidates.local_ols) })
+            select(SecondStageSeedSource::GroupMedian, candidates.group_median) })
     {
         return selected;
     }
-    if (const auto selected{
-            select(SecondStageSeedRepairSource::GroupMedian, candidates.group_median) })
-    {
-        return selected;
-    }
-    return select(SecondStageSeedRepairSource::GlobalMedian, candidates.global_median);
-}
-
-inline GaussianModel3DWithUncertainty BuildRepairedSecondStageSeed(
-    const GaussianModel3D & original_model,
-    const SecondStageSeedRepairSelection & selection)
-{
-    const auto & fallback_model{ selection.model.GetModel() };
-    return GaussianModel3DWithUncertainty{
-        fallback_model.WithOffset(
-            std::isfinite(original_model.GetOffset()) ?
-                original_model.GetOffset() : fallback_model.GetOffset()),
-        selection.model.GetStandardDeviationModel()
-    };
+    return select(SecondStageSeedSource::GlobalMedian, candidates.global_median);
 }
 
 } // namespace rhbm_gem::core::detail
