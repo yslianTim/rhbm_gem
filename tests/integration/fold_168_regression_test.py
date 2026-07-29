@@ -122,23 +122,35 @@ class Fold168RegressionTest(unittest.TestCase):
         summary = regression.parse_second_stage_summary(
             "Second-stage local fitting summary: accepted_iterations=4, "
             "best_iteration=2, stop_reason=audit-patience, "
-            "best_audit_objective=1.25000000e-03, final_uses_polish=yes.\n")
+            "best_audit_objective=1.25000000e-03, final_uses_polish=yes, "
+            "final_state_source=best-audit.\n")
         self.assertEqual(summary["accepted_iterations"], 4)
         self.assertEqual(summary["best_iteration"], "2")
         self.assertEqual(summary["stop_reason"], "audit-patience")
         self.assertIs(summary["final_uses_polish"], True)
+        self.assertEqual(summary["final_state_source"], "best-audit")
 
         no_polish = regression.parse_second_stage_summary(
             "Second-stage local fitting summary: accepted_iterations=0, "
             "best_iteration=initial, stop_reason=all-rejected-minimum-radius, "
-            "best_audit_objective=2.50000000e-03, final_uses_polish=no.\n")
+            "best_audit_objective=2.50000000e-03, final_uses_polish=no, "
+            "final_state_source=latest-validated.\n")
         self.assertIs(no_polish["final_uses_polish"], False)
+        self.assertEqual(no_polish["final_state_source"], "latest-validated")
 
         unavailable = regression.parse_second_stage_summary(
             "Second-stage local fitting summary: accepted_iterations=0, "
             "best_iteration=unavailable, stop_reason=no-valid-seed, "
-            "best_audit_objective=unavailable, final_uses_polish=unavailable.\n")
+            "best_audit_objective=unavailable, final_uses_polish=unavailable, "
+            "final_state_source=unavailable.\n")
         self.assertIsNone(unavailable["final_uses_polish"])
+        self.assertEqual(unavailable["final_state_source"], "unavailable")
+
+        with self.assertRaises(regression.RegressionError):
+            regression.parse_second_stage_summary(
+                "Second-stage local fitting summary: accepted_iterations=4, "
+                "best_iteration=2, stop_reason=audit-patience, "
+                "best_audit_objective=1.25000000e-03, final_uses_polish=yes.\n")
 
     def test_hash_failure_does_not_execute_and_preserves_reports(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

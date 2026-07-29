@@ -16,8 +16,6 @@ stored atom estimates.
 The fitting context contains, for each selected atom:
 
 - its local-potential samples and trained `alpha_r`;
-- a width prior, preferring the group prior over the same-group median and the
-  atom's current valid width;
 - the selected neighboring atoms that contribute to each sample.
 
 Neighbor candidates are searched within `kNeighborAtomSearchRange`. A neighbor
@@ -72,12 +70,15 @@ Each outer attempt performs the following sequence:
    group-median model as the fixed offset model. These refits form the raw
    fixed-point state.
 6. Limit each cluster's raw proposal to its trust region and score the resulting
-   base candidate.
+   endpoint candidate. If the endpoint fails the objective guard, backtrack in
+   the three transformed coordinates within the same outer attempt.
 7. For a stationarity-eligible cluster without suspicious atoms, attempt one
    joint amplitude/width/offset polish. Keep the polish only when it strictly
    improves the base candidate on the same objective scale.
 8. If clusters share boundary samples, validate the assembled candidates with
-   the combined-objective guard.
+   the combined-objective guard. If the guard rejects the endpoint, jointly
+   backtrack every changed cluster with one common factor and commit only a
+   factor that passes every local guard and the global guard.
 9. Update trust radii, persistent-failure state, the global audit state, and the
    stopping conditions.
 
@@ -115,30 +116,69 @@ be decoded to a valid Gaussian model.
 
 ## Cluster objective
 
-Each cluster tracks:
+Every raw sample belongs to exactly one owner cluster: the cluster containing
+the sample's target atom. Samples whose distances are inside the inclusive
+`distance_min <= distance <= distance_max` interval form the fit-range domain;
+all other raw samples form the tail-validation domain. Selection flags and the
+sign of the response do not remove samples from either domain.
 
-- a scale-reference tracker;
-- the previous accepted candidate's objective samples;
-- the best objective samples and the corresponding maximum transformed change
-  used to break objective ties.
+The initial validated state supplies two independent, fixed robust scales for
+each cluster:
 
-The objective combines:
+```text
+fit scale  = max(MAD(fit residual),
+                 1e-6 * MAD(fit adjusted response), 1e-12)
+tail scale = max(MAD(tail residual),
+                 1e-6 * MAD(tail adjusted response), 1e-12)
+```
 
-- Cauchy robust residual loss;
-- a width-prior penalty weighted by
-  `kLocalFittingWidthPriorPenaltyWeight`;
-- an offset-plausibility penalty weighted by
-  `kLocalFittingOffsetPlausibilityPenaltyWeight`.
+A cluster must have valid fit-range samples. Its tail may be empty, in which
+case both tail loss fields are zero and no tail scale is needed. Scales are not
+warmed up or updated after candidates are accepted.
 
-The width penalty measures the log-width displacement from the atom's prior.
-The offset penalty applies when the offset response is too large relative to
-the fitted peak and residual scale.
+For cluster `c`, the fixed-scale objective is:
+
+```text
+fit-range loss       = mean Cauchy(fit residual / fit scale, cutoff=1.345)
+tail validation loss = mean Cauchy(tail residual / tail scale, cutoff=1.345)
+tail penalty         = 0.25 * tail validation loss
+offset penalty       = 0.01 * mean offset-plausibility penalty
+cluster total        = fit-range loss + tail penalty + offset penalty
+```
+
+There is no width-prior term. Group posterior and prior models participate in
+seed selection only. The offset-plausibility residual floor uses the owning
+cluster's fixed fit scale.
+
+The global objective weights clusters by active atom count:
+
+```text
+global objective = sum((cluster atom count / active atom count) * cluster total)
+```
+
+Owner assignment makes every sample appear once in this global sum, including
+boundary samples. Local scoring still includes every sample affected by the
+candidate cluster. It applies that sample's owner scale and exact global
+normalization coefficient, so the local candidate-minus-previous difference
+matches the corresponding full-global difference when only that cluster
+changes.
 
 Candidate scoring uses a provisional copy of the cluster objective state. A
-rejected base candidate or a combined-objective rejection does not advance the
-scale warmup, previous candidate, or best candidate. Candidate, previous, and
-best objectives are evaluated on the same provisional scale. Joint polish uses
-the committed scale of its accepted base candidate.
+rejected base, polish, backtracking trial, or combined candidate does not
+advance the previous or best references. The best objective and maximum
+transformed change are retained to break objective ties.
+
+All second-stage audit tolerances use:
+
+```text
+tolerance(reference) = absolute tolerance + relative tolerance * abs(reference)
+```
+
+Progress and deterioration guards use `1e-8 + 1e-3 * abs(reference)`. Strict
+best, tie, polish-improvement, and trust-growth comparisons use
+`1e-10 + 1e-8 * abs(reference)`. Candidate comparisons against previous and
+best compute separate tolerances from their respective references. The
+joint-offset IRLS objective retains its independent tolerance.
 
 ## Trust region
 
@@ -149,10 +189,32 @@ by the transformed step norm and the cluster radius:
 effective damping = min(1.0, trust radius / transformed step norm)
 ```
 
-The polish step is limited by the radius remaining after the base movement. A
-rejected cluster shrinks its own radius. An accepted cluster grows its radius
-only when the objective improves and the accepted step is close to the current
-boundary. Trust-region updates are isolated by cluster.
+If the endpoint is valid but fails its local objective guard, the same cluster
+attempt evaluates factors `1/2, 1/4, 1/8, ...` between the previous and endpoint
+states. Interpolation includes the offset-to-peak coordinate, so a factor
+approaching zero reproduces the complete previous model. Search stops when the
+largest transformed change is below
+`kLocalFittingTransformedChangeTolerance`. The first passing trial is committed
+with endpoint uncertainty, records its factor, and does not grow the radius.
+Rejected trials do not mutate objective state or polish provenance.
+When another cluster is responsible for a radius retry, an exhausted cluster
+is not evaluated again against the unchanged state and its radius is not
+shrunk a second time. It becomes eligible again after another cluster commits
+a state change.
+
+The polish step is limited by the radius remaining after the accepted base
+movement. A rejected polish keeps the base candidate and is not backtracked.
+A rejected cluster shrinks its own radius once. A non-backtracked accepted
+cluster grows its radius only when the objective strictly improves and its step
+is close to the current boundary. Trust-region updates are isolated by cluster.
+
+When the assembled state fails the combined-objective guard, all changed
+clusters are interpolated from the original committed state with one common
+factor. Each factor starts from the committed objective references and must
+pass all affected local criteria plus the unique-owner global objective before
+the cluster states are atomically committed. Failed factors leave no partial
+cluster commits. A global-backtracked state does not grow trust radii; polish
+provenance is retained only for atoms with a material polished endpoint change.
 
 ## Numerical defenses and terminal isolation
 
@@ -171,34 +233,45 @@ boundary. Trust-region updates are isolated by cluster.
 - Terminal isolation removes only the affected cluster, allowing independent
   active clusters to continue fitting.
 
-When terminal isolation changes the active domain, the global audit removes the
-terminal samples and penalty atoms and reconciles its fallback state with the
-validated non-terminal progress.
+When terminal isolation changes the active partition, the implementation uses
+the current validated state to rebuild the new clusters' fit and tail scales
+and all atom-count normalizations. Per-cluster previous/best references and the
+global best-audit baseline are reset to that state; objective values from the
+old and new domains are never compared.
 
 ## Global audit and stopping
 
-The global audit uses a fixed objective scale and retains the earliest state
-that improves the best objective beyond the tie tolerance.
+The global audit uses the fixed per-cluster fit/tail scales and retains the
+earliest state that improves the best objective beyond the strict tolerance.
 
 The stage stops on the first applicable condition:
 
 - no valid initial seed is available for every selected atom;
 - every selected atom has become terminal;
 - the accepted and raw fixed-point transformed changes both converge, all
-  active objective references are locked, and no active cluster is rejected,
-  suspicious, or unhealthy;
+  active clusters are accepted, and no active cluster is suspicious or
+  unhealthy;
 - `kLocalFittingAuditPatience` accepted iterations produce no strict global
   audit improvement;
+- every rejected cluster has exhausted objective backtracking in the same
+  outer attempt (`all-rejected-backtracking-exhausted`);
 - all clusters reject at their minimum trust radius;
 - `kLocalFittingMaximumIterations` outer attempts are reached.
 
-Trust-radius shrink retries do not consume audit patience while a rejected
-cluster's radius is still changing.
+Numerical and invalid-model rejections that cannot perform objective
+backtracking retain the minimum-radius retry behavior. Trust-radius shrink
+retries do not consume audit patience while a rejected cluster's radius is
+still changing.
 
 Convergence writes the current accepted state. Audit-patience, minimum-radius
-all-reject, and iteration-limit stops write the best validated audit state when
-one is available, otherwise the current validated fallback. Terminal
-reconciliation preserves validated progress from non-terminal clusters.
+all-reject, backtracking-exhaustion, and iteration-limit stops consult the
+internal compile-time switch `kApplyLocalFittingBestIteration`. The switch
+defaults to `true`: when enabled, these stops write the best validated audit
+state when one is available; when disabled, they write the latest validated
+state. Best tracking, best-relative guards, audit patience, iteration history,
+and stop reasons are unchanged by the switch. Convergence and terminal
+isolation always write the latest validated state. Terminal reconciliation
+preserves validated progress from non-terminal clusters.
 
 ## Logging
 
@@ -218,19 +291,26 @@ values in `dMax A/R`.
 | `Suspicious` | Atoms rolled back by the suspicious-offset checks in this attempt |
 | `dMax A/R` | Maximum transformed change in the accepted/raw state; accepted is `-` on an all-rejected attempt |
 
-Debug rejection diagnostics finish the active progress line before printing
-their details. Terminal, convergence, and summary messages do the same before
-normal line output.
+Objective-domain startup diagnostics report the weights, cluster and unique
+fit/tail sample counts, and fixed-scale median/p99/maximum. Debug rejection
+diagnostics use `fit/tail-weighted/offset/total` order and also report raw tail
+loss, weights, sample counts, fixed scales, and backtracking
+trials/factor/exhaustion. Accepted local and combined backtracking factors are
+logged at debug level. Terminal, convergence, and summary messages finish the
+active progress line before normal line output.
 
 Non-quiet runs end with this summary format:
 
 ```text
-Second-stage local fitting summary: accepted_iterations=<N>, best_iteration=<initial|N|unavailable>, stop_reason=<reason>, best_audit_objective=<value|unavailable>, final_uses_polish=<yes|no|unavailable>.
+Second-stage local fitting summary: accepted_iterations=<N>, best_iteration=<initial|N|unavailable>, stop_reason=<reason>, best_audit_objective=<value|unavailable>, final_uses_polish=<yes|no|unavailable>, final_state_source=<best-audit|latest-validated|unavailable>.
 ```
 
 `final_uses_polish` describes the state actually written to `ModelObject`. It is
 `yes` when at least one atom's most recent transformed-parameter update in that
 state came from an accepted polish, `no` when none did, and `unavailable` when
-the stage exits before a valid state can be formed.
+the stage exits before a valid state can be formed. `best_iteration` continues
+to describe the audit result even when best-iteration application is disabled;
+`final_state_source` identifies the state actually written. A separate startup
+diagnostic reports whether best-iteration application is enabled.
 
 `quiet_mode` suppresses the second-stage informational logging.

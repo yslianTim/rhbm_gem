@@ -743,38 +743,86 @@ TEST(EstimatorSecondStageDefenseTest, SeedInitializationBuildsMediansOnlyFromDir
 
 TEST(EstimatorSecondStageDefenseTest, AuditObjectiveKeepsEarlierBestOnTie)
 {
+    const audit_detail::LocalFittingObjectiveTolerance tolerance{
+        1.0e-10,
+        1.0e-8
+    };
     EXPECT_TRUE(audit_detail::IsBetterLocalFittingAuditObjective(
-        0.8, 1.0, 1.0e-8));
+        0.8, 1.0, tolerance));
     EXPECT_FALSE(audit_detail::IsBetterLocalFittingAuditObjective(
-        1.2, 1.0, 1.0e-8));
+        1.2, 1.0, tolerance));
     EXPECT_FALSE(audit_detail::IsBetterLocalFittingAuditObjective(
-        1.0 - 0.5e-8, 1.0, 1.0e-8));
+        1.0 - 0.5e-8, 1.0, tolerance));
     EXPECT_FALSE(audit_detail::IsBetterLocalFittingAuditObjective(
-        std::numeric_limits<double>::infinity(), 1.0, 1.0e-8));
+        std::numeric_limits<double>::infinity(), 1.0, tolerance));
     EXPECT_TRUE(audit_detail::IsBetterLocalFittingAuditObjective(
-        1.0, std::numeric_limits<double>::infinity(), 1.0e-8));
+        1.0, std::numeric_limits<double>::infinity(), tolerance));
     EXPECT_THROW(
-        audit_detail::IsBetterLocalFittingAuditObjective(0.8, 1.0, -1.0),
+        audit_detail::IsBetterLocalFittingAuditObjective(
+            0.8,
+            1.0,
+            audit_detail::LocalFittingObjectiveTolerance{ -1.0, 0.0 }),
         std::invalid_argument);
 }
 
 TEST(EstimatorSecondStageDefenseTest, AuditObjectiveProgressGuardChecksPreviousAndBest)
 {
+    const audit_detail::LocalFittingObjectiveTolerance tolerance{
+        1.0e-8,
+        1.0e-3
+    };
     EXPECT_TRUE(audit_detail::IsLocalFittingAuditObjectiveAcceptableForProgress(
-        1.0005, 1.0, std::optional<double>{ 1.0 }, 1.0e-3));
+        1.0005, 1.0, std::optional<double>{ 1.0 }, tolerance));
     EXPECT_FALSE(audit_detail::IsLocalFittingAuditObjectiveAcceptableForProgress(
-        1.002, 1.0, std::optional<double>{ 1.0 }, 1.0e-3));
+        1.002, 1.0, std::optional<double>{ 1.0 }, tolerance));
     EXPECT_FALSE(audit_detail::IsLocalFittingAuditObjectiveAcceptableForProgress(
-        1.0, 1.0, std::optional<double>{ 0.99 }, 1.0e-3));
+        1.0, 1.0, std::optional<double>{ 0.99 }, tolerance));
     EXPECT_FALSE(audit_detail::IsLocalFittingAuditObjectiveAcceptableForProgress(
         std::numeric_limits<double>::infinity(),
         1.0,
         std::nullopt,
-        1.0e-3));
+        tolerance));
     EXPECT_FALSE(audit_detail::IsLocalFittingAuditObjectiveAcceptableForProgress(
-        std::nullopt, 1.0, std::nullopt, 1.0e-3));
+        std::nullopt, 1.0, std::nullopt, tolerance));
     EXPECT_FALSE(audit_detail::IsLocalFittingAuditObjectiveAcceptableForProgress(
-        1.0, std::nullopt, std::nullopt, 1.0e-3));
+        1.0, std::nullopt, std::nullopt, tolerance));
+}
+
+TEST(EstimatorSecondStageDefenseTest, AuditToleranceUsesAbsolutePlusRelativeReference)
+{
+    const audit_detail::LocalFittingObjectiveTolerance tolerance{
+        1.0e-8,
+        1.0e-3
+    };
+    EXPECT_DOUBLE_EQ(
+        audit_detail::CalculateLocalFittingObjectiveTolerance(0.0, tolerance),
+        1.0e-8);
+    EXPECT_DOUBLE_EQ(
+        audit_detail::CalculateLocalFittingObjectiveTolerance(-2.0, tolerance),
+        1.0e-8 + 2.0e-3);
+    EXPECT_TRUE(audit_detail::IsLocalFittingAuditObjectiveAcceptableForProgress(
+        -2.0 + 1.0e-8 + 2.0e-3,
+        -2.0,
+        std::nullopt,
+        tolerance));
+    const auto boundary{
+        2.0 + audit_detail::CalculateLocalFittingObjectiveTolerance(2.0, tolerance)
+    };
+    EXPECT_TRUE(audit_detail::IsLocalFittingAuditObjectiveAcceptableForProgress(
+        boundary,
+        2.0,
+        std::nullopt,
+        tolerance));
+    EXPECT_FALSE(audit_detail::IsLocalFittingAuditObjectiveAcceptableForProgress(
+        boundary + 1.0e-9,
+        2.0,
+        std::nullopt,
+        tolerance));
+    EXPECT_THROW(
+        audit_detail::CalculateLocalFittingObjectiveTolerance(
+            std::numeric_limits<double>::infinity(),
+            tolerance),
+        std::invalid_argument);
 }
 
 TEST(EstimatorSecondStageDefenseTest, AuditPatienceStopsAfterThreeStableAcceptedIterations)
@@ -800,91 +848,91 @@ TEST(EstimatorSecondStageDefenseTest, AuditPatienceStopsAfterThreeStableAccepted
         0U);
 }
 
-TEST(EstimatorSecondStageDefenseTest, ScientificObjectiveUsesAtomMeanIndependentOfCardinality)
+TEST(EstimatorSecondStageDefenseTest, FinalStatePolicySelectsBestOnlyWhenEnabled)
 {
-    const auto single_atom{
-        audit_detail::BuildLocalFittingMeanObjectiveBreakdown(
+    using Source = audit_detail::LocalFittingFinalStateSource;
+
+    EXPECT_EQ(
+        audit_detail::SelectLocalFittingFinalStateSource(true, true, true),
+        Source::BestAudit);
+    EXPECT_EQ(
+        audit_detail::SelectLocalFittingFinalStateSource(false, true, true),
+        Source::LatestValidated);
+    EXPECT_EQ(
+        audit_detail::SelectLocalFittingFinalStateSource(true, true, false),
+        Source::LatestValidated);
+    EXPECT_EQ(
+        audit_detail::SelectLocalFittingFinalStateSource(false, true, false),
+        Source::LatestValidated);
+    EXPECT_EQ(
+        audit_detail::SelectLocalFittingFinalStateSource(true, false, false),
+        Source::Unavailable);
+}
+
+TEST(EstimatorSecondStageDefenseTest, ScientificObjectiveUsesFitTailAndOffsetOnly)
+{
+    const auto objective{
+        audit_detail::BuildLocalFittingObjectiveBreakdown(
             0.4,
-            25.0,
-            9.0,
-            1,
-            0.01,
-            0.02)
+            2.0,
+            0.18,
+            0.25)
     };
-    const auto repeated_atoms{
-        audit_detail::BuildLocalFittingMeanObjectiveBreakdown(
-            0.4,
-            2500.0,
-            900.0,
-            100,
-            0.01,
-            0.02)
-    };
-    const auto single_previous{
-        audit_detail::BuildLocalFittingMeanObjectiveBreakdown(
+    const auto previous{
+        audit_detail::BuildLocalFittingObjectiveBreakdown(
             1.4,
             0.0,
             0.0,
-            1,
-            0.01,
-            0.02)
-    };
-    const auto repeated_previous{
-        audit_detail::BuildLocalFittingMeanObjectiveBreakdown(
-            1.4,
-            0.0,
-            0.0,
-            100,
-            0.01,
-            0.02)
+            0.25)
     };
 
-    ASSERT_TRUE(single_atom.has_value());
-    ASSERT_TRUE(repeated_atoms.has_value());
-    ASSERT_TRUE(single_previous.has_value());
-    ASSERT_TRUE(repeated_previous.has_value());
-    EXPECT_DOUBLE_EQ(
-        single_atom->residual_objective,
-        repeated_atoms->residual_objective);
-    EXPECT_DOUBLE_EQ(
-        single_atom->width_prior_penalty,
-        repeated_atoms->width_prior_penalty);
-    EXPECT_DOUBLE_EQ(
-        single_atom->offset_plausibility_penalty,
-        repeated_atoms->offset_plausibility_penalty);
-    EXPECT_DOUBLE_EQ(
-        single_atom->total_objective,
-        repeated_atoms->total_objective);
-    EXPECT_DOUBLE_EQ(
-        single_atom->total_objective,
-        single_atom->residual_objective +
-            single_atom->width_prior_penalty +
-            single_atom->offset_plausibility_penalty);
-    EXPECT_EQ(
-        audit_detail::IsBetterLocalFittingAuditObjective(
-            single_atom->total_objective,
-            single_previous->total_objective,
-            1.0e-8),
-        audit_detail::IsBetterLocalFittingAuditObjective(
-            repeated_atoms->total_objective,
-            repeated_previous->total_objective,
-            1.0e-8));
-    EXPECT_FALSE(
-        audit_detail::BuildLocalFittingMeanObjectiveBreakdown(
+    ASSERT_TRUE(objective.has_value());
+    ASSERT_TRUE(previous.has_value());
+    const auto empty_tail{
+        audit_detail::BuildLocalFittingObjectiveBreakdown(
             0.4,
-            25.0,
-            9.0,
-            0,
-            0.01,
-            0.02).has_value());
+            0.0,
+            0.0,
+            0.25)
+    };
+    ASSERT_TRUE(empty_tail.has_value());
+    EXPECT_DOUBLE_EQ(empty_tail->tail_validation_loss, 0.0);
+    EXPECT_DOUBLE_EQ(empty_tail->tail_validation_penalty, 0.0);
+    EXPECT_DOUBLE_EQ(objective->tail_validation_loss, 2.0);
+    EXPECT_DOUBLE_EQ(objective->tail_validation_penalty, 0.5);
+    EXPECT_DOUBLE_EQ(objective->offset_plausibility_penalty, 0.18);
+    EXPECT_DOUBLE_EQ(objective->total_objective, 1.08);
+    EXPECT_DOUBLE_EQ(
+        objective->total_objective,
+        objective->fit_range_residual_objective +
+            objective->tail_validation_penalty +
+            objective->offset_plausibility_penalty);
+    EXPECT_TRUE(audit_detail::IsBetterLocalFittingAuditObjective(
+        objective->total_objective,
+        previous->total_objective,
+        audit_detail::LocalFittingObjectiveTolerance{ 1.0e-10, 1.0e-8 }));
     EXPECT_FALSE(
-        audit_detail::BuildLocalFittingMeanObjectiveBreakdown(
+        audit_detail::BuildLocalFittingObjectiveBreakdown(
             std::numeric_limits<double>::infinity(),
-            25.0,
-            9.0,
-            1,
-            0.01,
-            0.02).has_value());
+            2.0,
+            0.18,
+            0.25).has_value());
+}
+
+TEST(EstimatorSecondStageDefenseTest, GlobalObjectiveWeightsClustersByAtomCount)
+{
+    EXPECT_DOUBLE_EQ(
+        audit_detail::CalculateLocalFittingClusterAtomWeight(1, 4),
+        0.25);
+    EXPECT_DOUBLE_EQ(
+        audit_detail::CalculateLocalFittingClusterAtomWeight(3, 4),
+        0.75);
+    EXPECT_DOUBLE_EQ(
+        0.25 * 2.0 + 0.75 * 6.0,
+        5.0);
+    EXPECT_THROW(
+        audit_detail::CalculateLocalFittingClusterAtomWeight(0, 4),
+        std::invalid_argument);
 }
 
 TEST(EstimatorSecondStageDefenseTest, TrustRegionDampingCapsLargeTransformedStep)
@@ -1974,6 +2022,38 @@ TEST(EstimatorSecondStageDefenseTest, TransformedDampingIsIntensityScaleInvarian
     }
 }
 
+TEST(EstimatorSecondStageDefenseTest, TransformedBacktrackingIncludesOffset)
+{
+    const rg::GaussianModel3D previous{ 8.0, 0.50, -0.10 };
+    const rg::GaussianModel3D endpoint{ 12.0, 0.75, 0.40 };
+    const auto previous_coordinates{
+        change_detail::EncodeLocalFittingTransformedCoordinates(previous)
+    };
+    const auto endpoint_coordinates{
+        change_detail::EncodeLocalFittingTransformedCoordinates(endpoint)
+    };
+    ASSERT_TRUE(previous_coordinates.has_value());
+    ASSERT_TRUE(endpoint_coordinates.has_value());
+
+    double previous_offset_distance{
+        std::abs(endpoint.GetOffset() - previous.GetOffset())
+    };
+    for (const auto factor : { 0.5, 0.25, 0.125 })
+    {
+        const auto candidate{
+            change_detail::DecodeLocalFittingTransformedCoordinates(
+                *previous_coordinates +
+                factor * (*endpoint_coordinates - *previous_coordinates))
+        };
+        ASSERT_TRUE(candidate.has_value());
+        const auto offset_distance{
+            std::abs(candidate->GetOffset() - previous.GetOffset())
+        };
+        EXPECT_LT(offset_distance, previous_offset_distance);
+        previous_offset_distance = offset_distance;
+    }
+}
+
 TEST(EstimatorSecondStageDefenseTest, TransformedExtrapolationKeepsPositiveShape)
 {
     const auto left{
@@ -2156,8 +2236,17 @@ TEST(EstimatorSecondStageDefenseTest, TerminalFallbackPreservesAffectedCluster)
         GetEstimateModel(*selected_atoms.at(0)),
         GetEstimateModel(*selected_atoms.at(1))
     };
+    auto options{ MakeSecondStageOptions() };
+    options.quiet_mode = false;
+    const auto previous_log_level{ Logger::GetLogLevel() };
 
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    rt::RunSecondStageLocalFitting(*model, options);
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    static_cast<void>(testing::internal::GetCapturedStderr());
+    Logger::SetLogLevel(previous_log_level);
 
     for (std::size_t i = 0; i < previous_terminal_model_list.size(); i++)
     {
@@ -2166,6 +2255,9 @@ TEST(EstimatorSecondStageDefenseTest, TerminalFallbackPreservesAffectedCluster)
             previous_terminal_model_list.at(i),
             1.0e-12);
     }
+    EXPECT_NE(
+        out.find("Reset second-stage objective domain"),
+        std::string::npos);
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
@@ -2370,6 +2462,67 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingIsIntensityScale
     }
 }
 
+TEST(EstimatorSecondStageDefenseTest, ObjectiveSeparatesFitAndTailDomains)
+{
+    auto model{
+        BuildDefenseModel(
+            { std::array<float, 3>{ 0.0F, 0.0F, 0.0F } },
+            { Spot::O },
+            { Element::OXYGEN },
+            { rg::GaussianModel3D{ 8.0, 0.45, -0.1 } },
+            rg::GaussianModel3D{ 6.0, 0.60, 0.0 })
+    };
+    auto options{ MakeSecondStageOptions() };
+    options.distance_max = 0.5;
+    options.quiet_mode = false;
+    const auto previous_log_level{ Logger::GetLogLevel() };
+
+    Logger::SetLogLevel(LogLevel::Debug);
+    testing::internal::CaptureStdout();
+    rt::RunSecondStageLocalFitting(*model, options);
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_NE(out.find("unique fit/tail samples = 12/12"), std::string::npos);
+    EXPECT_NE(
+        out.find("fixed tail scale median/p99/max = "),
+        std::string::npos);
+    EXPECT_EQ(
+        out.find("fixed tail scale median/p99/max = unavailable"),
+        std::string::npos);
+}
+
+TEST(EstimatorSecondStageDefenseTest, ObjectiveDomainCountsCutBoundarySamplesOnce)
+{
+    auto model{
+        BuildDefenseModel(
+            {
+                std::array<float, 3>{ 0.0F, 0.0F, 0.0F },
+                std::array<float, 3>{ 3.4F, 0.0F, 0.0F }
+            },
+            { Spot::C, Spot::O },
+            { Element::CARBON, Element::OXYGEN },
+            {
+                rg::GaussianModel3D{ 8.0, 0.90, 0.20 },
+                rg::GaussianModel3D{ 3.0, 0.80, -0.10 }
+            },
+            rg::GaussianModel3D{ 5.5, 0.30, 0.0 })
+    };
+    auto options{ MakeSecondStageOptions() };
+    options.quiet_mode = false;
+    const auto previous_log_level{ Logger::GetLogLevel() };
+
+    Logger::SetLogLevel(LogLevel::Debug);
+    testing::internal::CaptureStdout();
+    rt::RunSecondStageLocalFitting(*model, options);
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_NE(out.find("candidate/retained/cut edges = 1/0/1"), std::string::npos);
+    EXPECT_NE(out.find("clusters = 2"), std::string::npos);
+    EXPECT_NE(out.find("unique fit/tail samples = 48/0"), std::string::npos);
+}
+
 TEST(
     EstimatorSecondStageDefenseTest,
     MissingPosteriorAndPriorSkipsSecondStageDespiteValidLocalSeeds)
@@ -2407,6 +2560,12 @@ TEST(
     }
     EXPECT_NE(out.find("stop_reason=no-valid-seed"), std::string::npos);
     EXPECT_NE(out.find("final_uses_polish=unavailable"), std::string::npos);
+    EXPECT_NE(
+        out.find("Second-stage best-iteration application: enabled."),
+        std::string::npos);
+    EXPECT_NE(
+        out.find("final_state_source=unavailable"),
+        std::string::npos);
 }
 
 TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageReportsAcceptedJointPolish)
@@ -2416,13 +2575,17 @@ TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageReportsAcceptedJointPol
     options.quiet_mode = false;
     const auto previous_log_level{ Logger::GetLogLevel() };
 
-    Logger::SetLogLevel(LogLevel::Info);
+    Logger::SetLogLevel(LogLevel::Debug);
     testing::internal::CaptureStdout();
     rt::RunSecondStageLocalFitting(*model, options);
     const std::string out{ testing::internal::GetCapturedStdout() };
     Logger::SetLogLevel(previous_log_level);
 
     EXPECT_NE(out.find("final_uses_polish=yes"), std::string::npos);
+    EXPECT_NE(
+        out.find("Accepted local fitting objective backtracking"),
+        std::string::npos);
+    EXPECT_NE(out.find("trials/factor = 3/0.25"), std::string::npos);
     bool found_accepted_polish{ false };
     bool found_skipped_polish{ false };
     for (std::size_t row_start = out.find('\r');
@@ -2458,6 +2621,9 @@ TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageReportsNoPolishForEmpty
     const std::string out{ testing::internal::GetCapturedStdout() };
 
     EXPECT_NE(out.find("final_uses_polish=no"), std::string::npos);
+    EXPECT_NE(
+        out.find("final_state_source=latest-validated"),
+        std::string::npos);
 }
 
 TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageLogsEveryOuterAttempt)
@@ -2566,11 +2732,14 @@ TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageLogsEveryOuterAttempt)
     EXPECT_NE(out.find("-/"), std::string::npos);
     EXPECT_NE(
         out.find(
-            "best_iteration=5, stop_reason=all-rejected-minimum-radius"),
+            "best_iteration=5, stop_reason=all-rejected-backtracking-exhausted"),
         std::string::npos);
     EXPECT_TRUE(
         out.find("final_uses_polish=yes") != std::string::npos ||
         out.find("final_uses_polish=no") != std::string::npos);
+    EXPECT_NE(
+        out.find("final_state_source=best-audit"),
+        std::string::npos);
 }
 
 TEST(EstimatorSecondStageDefenseTest, QuietSecondStageSuppressesIterationTable)

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <optional>
@@ -10,42 +9,106 @@ namespace rhbm_gem::core::detail {
 
 struct LocalFittingObjectiveBreakdown
 {
-    double residual_objective{ 0.0 };
-    double width_prior_penalty{ 0.0 };
+    double fit_range_residual_objective{ 0.0 };
+    double tail_validation_loss{ 0.0 };
+    double tail_validation_penalty{ 0.0 };
     double offset_plausibility_penalty{ 0.0 };
     double total_objective{ 0.0 };
 };
 
-inline std::optional<LocalFittingObjectiveBreakdown>
-BuildLocalFittingMeanObjectiveBreakdown(
-    double residual_objective,
-    double width_prior_penalty_sum,
-    double offset_plausibility_penalty_sum,
-    std::size_t atom_count,
-    double width_prior_penalty_weight,
-    double offset_plausibility_penalty_weight)
+struct LocalFittingObjectiveTolerance
 {
-    if (atom_count == 0 ||
-        !std::isfinite(residual_objective) ||
-        !std::isfinite(width_prior_penalty_sum) ||
-        !std::isfinite(offset_plausibility_penalty_sum) ||
-        !std::isfinite(width_prior_penalty_weight) ||
-        !std::isfinite(offset_plausibility_penalty_weight))
+    double absolute_tolerance{ 0.0 };
+    double relative_tolerance{ 0.0 };
+};
+
+enum class LocalFittingFinalStateSource
+{
+    BestAudit,
+    LatestValidated,
+    Unavailable
+};
+
+inline LocalFittingFinalStateSource SelectLocalFittingFinalStateSource(
+    bool apply_best_iteration,
+    bool has_latest_validated_state,
+    bool has_best_audit_state)
+{
+    if (!has_latest_validated_state)
+    {
+        return LocalFittingFinalStateSource::Unavailable;
+    }
+    return apply_best_iteration && has_best_audit_state ?
+        LocalFittingFinalStateSource::BestAudit :
+        LocalFittingFinalStateSource::LatestValidated;
+}
+
+inline double CalculateLocalFittingClusterAtomWeight(
+    std::size_t cluster_atom_count,
+    std::size_t active_atom_count)
+{
+    if (cluster_atom_count == 0 || active_atom_count == 0 ||
+        cluster_atom_count > active_atom_count)
+    {
+        throw std::invalid_argument(
+            "Local fitting cluster atom counts are invalid.");
+    }
+    return static_cast<double>(cluster_atom_count) /
+        static_cast<double>(active_atom_count);
+}
+
+inline void ValidateLocalFittingObjectiveTolerance(
+    const LocalFittingObjectiveTolerance & tolerance)
+{
+    if (!std::isfinite(tolerance.absolute_tolerance) ||
+        tolerance.absolute_tolerance < 0.0 ||
+        !std::isfinite(tolerance.relative_tolerance) ||
+        tolerance.relative_tolerance < 0.0)
+    {
+        throw std::invalid_argument(
+            "Local fitting audit objective tolerances must be finite and "
+            "non-negative.");
+    }
+}
+
+inline double CalculateLocalFittingObjectiveTolerance(
+    double reference,
+    const LocalFittingObjectiveTolerance & tolerance)
+{
+    ValidateLocalFittingObjectiveTolerance(tolerance);
+    if (!std::isfinite(reference))
+    {
+        throw std::invalid_argument(
+            "Local fitting audit objective reference must be finite.");
+    }
+    return tolerance.absolute_tolerance +
+        tolerance.relative_tolerance * std::abs(reference);
+}
+
+inline std::optional<LocalFittingObjectiveBreakdown>
+BuildLocalFittingObjectiveBreakdown(
+    double fit_range_residual_objective,
+    double tail_validation_loss,
+    double offset_plausibility_penalty,
+    double tail_validation_weight)
+{
+    if (!std::isfinite(fit_range_residual_objective) ||
+        !std::isfinite(tail_validation_loss) ||
+        !std::isfinite(offset_plausibility_penalty) ||
+        !std::isfinite(tail_validation_weight))
     {
         return std::nullopt;
     }
 
-    const auto atom_count_double{ static_cast<double>(atom_count) };
     LocalFittingObjectiveBreakdown breakdown;
-    breakdown.residual_objective = residual_objective;
-    breakdown.width_prior_penalty =
-        width_prior_penalty_weight * width_prior_penalty_sum / atom_count_double;
-    breakdown.offset_plausibility_penalty =
-        offset_plausibility_penalty_weight *
-        offset_plausibility_penalty_sum / atom_count_double;
+    breakdown.fit_range_residual_objective = fit_range_residual_objective;
+    breakdown.tail_validation_loss = tail_validation_loss;
+    breakdown.tail_validation_penalty =
+        tail_validation_weight * tail_validation_loss;
+    breakdown.offset_plausibility_penalty = offset_plausibility_penalty;
     breakdown.total_objective =
-        breakdown.residual_objective +
-        breakdown.width_prior_penalty +
+        breakdown.fit_range_residual_objective +
+        breakdown.tail_validation_penalty +
         breakdown.offset_plausibility_penalty;
     if (!std::isfinite(breakdown.total_objective)) return std::nullopt;
     return breakdown;
@@ -54,30 +117,22 @@ BuildLocalFittingMeanObjectiveBreakdown(
 inline bool IsBetterLocalFittingAuditObjective(
     double candidate,
     double best,
-    double relative_tolerance)
+    const LocalFittingObjectiveTolerance & tolerance)
 {
-    if (!std::isfinite(relative_tolerance) || relative_tolerance < 0.0)
-    {
-        throw std::invalid_argument(
-            "Local fitting audit objective tolerance must be finite and non-negative.");
-    }
+    ValidateLocalFittingObjectiveTolerance(tolerance);
     if (!std::isfinite(candidate)) return false;
     if (!std::isfinite(best)) return true;
-    const auto scale{ std::max({ std::abs(candidate), std::abs(best), 1.0 }) };
-    return candidate < best - relative_tolerance * scale;
+    return candidate < best -
+        CalculateLocalFittingObjectiveTolerance(best, tolerance);
 }
 
 inline bool IsLocalFittingAuditObjectiveAcceptableForProgress(
     const std::optional<double> & candidate,
     const std::optional<double> & previous,
     const std::optional<double> & best,
-    double relative_tolerance)
+    const LocalFittingObjectiveTolerance & tolerance)
 {
-    if (!std::isfinite(relative_tolerance) || relative_tolerance < 0.0)
-    {
-        throw std::invalid_argument(
-            "Local fitting audit objective tolerance must be finite and non-negative.");
-    }
+    ValidateLocalFittingObjectiveTolerance(tolerance);
     if (!candidate.has_value() || !previous.has_value() ||
         !std::isfinite(*candidate) || !std::isfinite(*previous))
     {
@@ -86,8 +141,8 @@ inline bool IsLocalFittingAuditObjectiveAcceptableForProgress(
     const auto is_deteriorated = [&](double reference)
     {
         if (!std::isfinite(reference)) return true;
-        const auto scale{ std::max(std::abs(reference), 1.0) };
-        return *candidate > reference + relative_tolerance * scale;
+        return *candidate > reference +
+            CalculateLocalFittingObjectiveTolerance(reference, tolerance);
     };
     return !is_deteriorated(*previous) &&
         (!best.has_value() || !is_deteriorated(*best));

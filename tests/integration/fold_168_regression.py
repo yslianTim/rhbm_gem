@@ -46,7 +46,9 @@ SECOND_STAGE_SUMMARY_PATTERN = re.compile(
     r"stop_reason=(?P<stop_reason>[a-z-]+), "
     r"best_audit_objective=(?P<best_audit_objective>unavailable|"
     r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?), "
-    r"final_uses_polish=(?P<final_uses_polish>yes|no|unavailable)\."
+    r"final_uses_polish=(?P<final_uses_polish>yes|no|unavailable), "
+    r"final_state_source=(?P<final_state_source>"
+    r"best-audit|latest-validated|unavailable)\."
 )
 
 
@@ -155,6 +157,7 @@ def parse_second_stage_summary(log_text: str) -> dict[str, Any]:
         "stop_reason": values["stop_reason"],
         "best_audit_objective": best_objective,
         "final_uses_polish": final_uses_polish,
+        "final_state_source": values["final_state_source"],
     }
 
 
