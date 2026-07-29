@@ -138,6 +138,15 @@ class Fold168RegressionTest(unittest.TestCase):
         self.assertIs(no_polish["final_uses_polish"], False)
         self.assertEqual(no_polish["final_state_source"], "latest-validated")
 
+        no_retry_progress = regression.parse_second_stage_summary(
+            "Second-stage local fitting summary: accepted_iterations=2, "
+            "best_iteration=1, stop_reason=all-rejected-no-retry-progress, "
+            "best_audit_objective=2.00000000e-03, final_uses_polish=no, "
+            "final_state_source=best-audit.\n")
+        self.assertEqual(
+            no_retry_progress["stop_reason"],
+            "all-rejected-no-retry-progress")
+
         unavailable = regression.parse_second_stage_summary(
             "Second-stage local fitting summary: accepted_iterations=0, "
             "best_iteration=unavailable, stop_reason=no-valid-seed, "

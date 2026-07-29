@@ -30,6 +30,90 @@ struct LocalFittingTrustRegionRadiusUpdate
     std::vector<LocalFittingTrustRegionClusterKey> saturated_key_list{};
 };
 
+struct LocalFittingRejectedClusterPartition
+{
+    std::vector<LocalFittingTrustRegionClusterKey> exhausted_key_list{};
+    std::vector<LocalFittingTrustRegionClusterKey> retryable_key_list{};
+};
+
+enum class LocalFittingAllRejectedResolution
+{
+    Retry,
+    MaximumIterations,
+    BacktrackingExhausted,
+    MinimumRadius,
+    NoRetryProgress
+};
+
+inline LocalFittingRejectedClusterPartition
+PartitionLocalFittingRejectedClusters(
+    const std::vector<LocalFittingTrustRegionClusterKey> & rejected_key_list,
+    const std::vector<LocalFittingTrustRegionClusterKey> & exhausted_key_list)
+{
+    LocalFittingRejectedClusterPartition partition;
+    for (const auto & key : rejected_key_list)
+    {
+        if (std::find(
+                exhausted_key_list.begin(),
+                exhausted_key_list.end(),
+                key) != exhausted_key_list.end())
+        {
+            partition.exhausted_key_list.emplace_back(key);
+        }
+        else
+        {
+            partition.retryable_key_list.emplace_back(key);
+        }
+    }
+    return partition;
+}
+
+inline LocalFittingAllRejectedResolution ResolveLocalFittingAllRejected(
+    bool maximum_iterations_reached,
+    const LocalFittingRejectedClusterPartition & partition,
+    const LocalFittingTrustRegionRadiusUpdate & radius_update)
+{
+    if (maximum_iterations_reached)
+    {
+        return LocalFittingAllRejectedResolution::MaximumIterations;
+    }
+    if (partition.exhausted_key_list.empty() &&
+        partition.retryable_key_list.empty())
+    {
+        throw std::invalid_argument(
+            "All-rejected local fitting resolution requires rejected clusters.");
+    }
+    if (partition.retryable_key_list.empty())
+    {
+        return LocalFittingAllRejectedResolution::BacktrackingExhausted;
+    }
+    if (!radius_update.changed_key_list.empty())
+    {
+        return LocalFittingAllRejectedResolution::Retry;
+    }
+
+    const auto all_retryable_saturated{
+        std::all_of(
+            partition.retryable_key_list.begin(),
+            partition.retryable_key_list.end(),
+            [&](const LocalFittingTrustRegionClusterKey & key)
+            {
+                return std::find(
+                    radius_update.saturated_key_list.begin(),
+                    radius_update.saturated_key_list.end(),
+                    key) != radius_update.saturated_key_list.end();
+            })
+    };
+    if (!all_retryable_saturated)
+    {
+        throw std::logic_error(
+            "Trust-region shrink did not classify every retryable rejection.");
+    }
+    return partition.exhausted_key_list.empty() ?
+        LocalFittingAllRejectedResolution::MinimumRadius :
+        LocalFittingAllRejectedResolution::NoRetryProgress;
+}
+
 class LocalFittingTrustRegionStateSet
 {
 private:

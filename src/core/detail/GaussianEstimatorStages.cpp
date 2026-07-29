@@ -3135,6 +3135,7 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
         {
             if (is_polish_eligible) selection.polish_progress.skipped_count++;
             LocalFittingObjectiveAttemptDiagnostic diagnostic;
+            diagnostic.trust_region_radius = trust_region_state.GetRadius(key);
             diagnostic.backtracking_exhausted = true;
             selection.rejected_key_list.emplace_back(key);
             selection.backtracking_exhausted_key_list.emplace_back(key);
@@ -4103,6 +4104,49 @@ void LogRejectedLocalFittingClusterDiagnostics(
     }
 }
 
+std::string_view GetLocalFittingAllRejectedResolutionText(
+    detail::LocalFittingAllRejectedResolution resolution)
+{
+    switch (resolution)
+    {
+    case detail::LocalFittingAllRejectedResolution::Retry:
+        return "retry";
+    case detail::LocalFittingAllRejectedResolution::MaximumIterations:
+        return "maximum-iterations";
+    case detail::LocalFittingAllRejectedResolution::BacktrackingExhausted:
+        return "all-rejected-backtracking-exhausted";
+    case detail::LocalFittingAllRejectedResolution::MinimumRadius:
+        return "all-rejected-minimum-radius";
+    case detail::LocalFittingAllRejectedResolution::NoRetryProgress:
+        return "all-rejected-no-retry-progress";
+    }
+    return "all-rejected-no-retry-progress";
+}
+
+void LogLocalFittingAllRejectedResolution(
+    const FitOptions & options,
+    const detail::LocalFittingRejectedClusterPartition & partition,
+    const detail::LocalFittingTrustRegionRadiusUpdate & radius_update,
+    detail::LocalFittingAllRejectedResolution resolution)
+{
+    if (options.quiet_mode || Logger::GetLogLevel() < LogLevel::Debug)
+    {
+        return;
+    }
+
+    Logger::FinishProgressLine();
+    std::ostringstream message;
+    message
+        << "All-rejected local fitting resolution: outcome = "
+        << GetLocalFittingAllRejectedResolutionText(resolution)
+        << ", exhausted/retryable/radius-changed/radius-saturated = "
+        << partition.exhausted_key_list.size() << "/"
+        << partition.retryable_key_list.size() << "/"
+        << radius_update.changed_key_list.size() << "/"
+        << radius_update.saturated_key_list.size() << ".";
+    Logger::Log(LogLevel::Debug, message.str());
+}
+
 void LogAcceptedLocalFittingBacktrackingDiagnostics(
     const FitOptions & options,
     const LocalFittingCandidateSelection & selection)
@@ -4794,21 +4838,14 @@ void RunSecondStageLocalFitting(
         }
 
         trust_region_state.Grow(selection.grow_trust_region_key_list);
-        auto shrink_trust_region_key_list{ selection.rejected_key_list };
-        shrink_trust_region_key_list.erase(
-            std::remove_if(
-                shrink_trust_region_key_list.begin(),
-                shrink_trust_region_key_list.end(),
-                [&](const LocalFittingClusterKey & key)
-                {
-                    return std::find(
-                        unchanged_state_exhausted_key_list.begin(),
-                        unchanged_state_exhausted_key_list.end(),
-                        key) != unchanged_state_exhausted_key_list.end();
-                }),
-            shrink_trust_region_key_list.end());
+        const auto rejected_cluster_partition{
+            detail::PartitionLocalFittingRejectedClusters(
+                selection.rejected_key_list,
+                selection.backtracking_exhausted_key_list)
+        };
         const auto trust_region_radius_update{
-            trust_region_state.Shrink(shrink_trust_region_key_list)
+            trust_region_state.Shrink(
+                rejected_cluster_partition.retryable_key_list)
         };
         const auto terminal_atom_count{ terminal_summary.AtomCount() };
         LocalFittingIterationProgress progress{
@@ -4826,19 +4863,11 @@ void RunSecondStageLocalFitting(
         };
         if (selection.accepted_key_list.empty())
         {
-            const auto all_rejected_backtracking_exhausted{
-                !selection.rejected_key_list.empty() &&
-                std::all_of(
-                    selection.rejected_key_list.begin(),
-                    selection.rejected_key_list.end(),
-                    [&](const LocalFittingClusterKey & rejected_key)
-                    {
-                        return std::find(
-                            selection.backtracking_exhausted_key_list.begin(),
-                            selection.backtracking_exhausted_key_list.end(),
-                            rejected_key) !=
-                            selection.backtracking_exhausted_key_list.end();
-                    })
+            const auto all_rejected_resolution{
+                detail::ResolveLocalFittingAllRejected(
+                    iter + 1 >= kLocalFittingMaximumIterations,
+                    rejected_cluster_partition,
+                    trust_region_radius_update)
             };
             LogRejectedLocalFittingClusterDiagnostics(
                 options,
@@ -4847,12 +4876,16 @@ void RunSecondStageLocalFitting(
                 options,
                 progress_column_widths,
                 progress);
-            if (!all_rejected_backtracking_exhausted &&
-                !trust_region_radius_update.changed_key_list.empty() &&
-                iter + 1 < kLocalFittingMaximumIterations)
+            LogLocalFittingAllRejectedResolution(
+                options,
+                rejected_cluster_partition,
+                trust_region_radius_update,
+                all_rejected_resolution);
+            if (all_rejected_resolution ==
+                detail::LocalFittingAllRejectedResolution::Retry)
             {
                 for (const auto & key :
-                    selection.backtracking_exhausted_key_list)
+                    rejected_cluster_partition.exhausted_key_list)
                 {
                     if (std::find(
                             unchanged_state_exhausted_key_list.begin(),
@@ -4878,11 +4911,8 @@ void RunSecondStageLocalFitting(
             LogSecondStageLocalFittingSummary(
                 options,
                 accepted_iteration_count,
-                iter + 1 >= kLocalFittingMaximumIterations ?
-                    "maximum-iterations" :
-                    (all_rejected_backtracking_exhausted ?
-                        "all-rejected-backtracking-exhausted" :
-                        "all-rejected-minimum-radius"),
+                GetLocalFittingAllRejectedResolutionText(
+                    all_rejected_resolution),
                 best_audit_state,
                 UsesLocalFittingPolish(
                     *final_state_selection.polish_provenance),

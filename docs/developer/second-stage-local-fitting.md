@@ -196,17 +196,18 @@ approaching zero reproduces the complete previous model. Search stops when the
 largest transformed change is below
 `kLocalFittingTransformedChangeTolerance`. The first passing trial is committed
 with endpoint uncertainty, records its factor, and does not grow the radius.
-Rejected trials do not mutate objective state or polish provenance.
-When another cluster is responsible for a radius retry, an exhausted cluster
-is not evaluated again against the unchanged state and its radius is not
-shrunk a second time. It becomes eligible again after another cluster commits
-a state change.
+Rejected trials do not mutate objective state or polish provenance. A cluster
+that exhausts objective backtracking is immediately excluded from trust-radius
+shrink. When another, radius-retryable cluster causes an unchanged-state retry,
+the exhausted cluster is skipped and its diagnostic retains its actual radius.
+It becomes eligible again after another cluster commits a state change.
 
 The polish step is limited by the radius remaining after the accepted base
 movement. A rejected polish keeps the base candidate and is not backtracked.
-A rejected cluster shrinks its own radius once. A non-backtracked accepted
-cluster grows its radius only when the objective strictly improves and its step
-is close to the current boundary. Trust-region updates are isolated by cluster.
+A radius-retryable rejected cluster shrinks its own radius once. A
+non-backtracked accepted cluster grows its radius only when the objective
+strictly improves and its step is close to the current boundary. Trust-region
+updates are isolated by cluster.
 
 When the assembled state fails the combined-objective guard, all changed
 clusters are interpolated from the original committed state with one common
@@ -253,10 +254,20 @@ The stage stops on the first applicable condition:
   unhealthy;
 - `kLocalFittingAuditPatience` accepted iterations produce no strict global
   audit improvement;
-- every rejected cluster has exhausted objective backtracking in the same
-  outer attempt (`all-rejected-backtracking-exhausted`);
-- all clusters reject at their minimum trust radius;
+- an all-rejected attempt reaches one of the terminal resolutions below;
 - `kLocalFittingMaximumIterations` outer attempts are reached.
+
+On an all-rejected attempt, the iteration limit has the highest resolution
+priority. Otherwise, rejected clusters are partitioned into objective-
+backtracking-exhausted and radius-retryable sets. If any retryable radius
+shrinks, the stage continues. When none can shrink, the terminal reason is:
+
+- `all-rejected-backtracking-exhausted` when every rejected cluster is
+  exhausted;
+- `all-rejected-minimum-radius` when there are no exhausted clusters and every
+  rejected cluster is radius-retryable and saturated at the minimum radius;
+- `all-rejected-no-retry-progress` when exhausted and saturated retryable
+  clusters are both present.
 
 Numerical and invalid-model rejections that cannot perform objective
 backtracking retain the minimum-radius retry behavior. Trust-radius shrink
@@ -264,14 +275,15 @@ retries do not consume audit patience while a rejected cluster's radius is
 still changing.
 
 Convergence writes the current accepted state. Audit-patience, minimum-radius
-all-reject, backtracking-exhaustion, and iteration-limit stops consult the
-internal compile-time switch `kApplyLocalFittingBestIteration`. The switch
-defaults to `true`: when enabled, these stops write the best validated audit
-state when one is available; when disabled, they write the latest validated
-state. Best tracking, best-relative guards, audit patience, iteration history,
-and stop reasons are unchanged by the switch. Convergence and terminal
-isolation always write the latest validated state. Terminal reconciliation
-preserves validated progress from non-terminal clusters.
+all-reject, backtracking-exhaustion, no-retry-progress, and iteration-limit
+stops consult the internal compile-time switch
+`kApplyLocalFittingBestIteration`. The switch defaults to `true`: when enabled,
+these stops write the best validated audit state when one is available; when
+disabled, they write the latest validated state. Best tracking, best-relative
+guards, audit patience, iteration history, and stop reasons are unchanged by
+the switch. Convergence and terminal isolation always write the latest
+validated state. Terminal reconciliation preserves validated progress from
+non-terminal clusters.
 
 ## Logging
 
@@ -296,8 +308,10 @@ fit/tail sample counts, and fixed-scale median/p99/maximum. Debug rejection
 diagnostics use `fit/tail-weighted/offset/total` order and also report raw tail
 loss, weights, sample counts, fixed scales, and backtracking
 trials/factor/exhaustion. Accepted local and combined backtracking factors are
-logged at debug level. Terminal, convergence, and summary messages finish the
-active progress line before normal line output.
+logged at debug level. An all-rejected debug record reports
+`exhausted/retryable/radius-changed/radius-saturated` counts so its retry or
+terminal classification can be audited directly. Terminal, convergence, and
+summary messages finish the active progress line before normal line output.
 
 Non-quiet runs end with this summary format:
 

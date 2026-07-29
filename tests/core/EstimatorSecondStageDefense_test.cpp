@@ -1069,6 +1069,99 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndS
     EXPECT_DOUBLE_EQ(state.GetRadius(replacement_key), 1.0);
 }
 
+TEST(EstimatorSecondStageDefenseTest, ExhaustedRejectionsAreExcludedFromRadiusShrink)
+{
+    using Key = trust_detail::LocalFittingTrustRegionClusterKey;
+    const Key exhausted_key{ 0 };
+    const Key retryable_key{ 1 };
+    const auto partition{
+        trust_detail::PartitionLocalFittingRejectedClusters(
+            { exhausted_key, retryable_key },
+            { exhausted_key })
+    };
+    ASSERT_EQ(partition.exhausted_key_list, std::vector<Key>{ exhausted_key });
+    ASSERT_EQ(partition.retryable_key_list, std::vector<Key>{ retryable_key });
+
+    trust_detail::LocalFittingTrustRegionStateSet state;
+    state.Reconcile({ exhausted_key, retryable_key });
+    const auto update{ state.Shrink(partition.retryable_key_list) };
+
+    EXPECT_DOUBLE_EQ(state.GetRadius(exhausted_key), 1.0);
+    EXPECT_DOUBLE_EQ(state.GetRadius(retryable_key), 0.5);
+    EXPECT_EQ(update.changed_key_list, std::vector<Key>{ retryable_key });
+
+    const auto all_exhausted{
+        trust_detail::PartitionLocalFittingRejectedClusters(
+            { exhausted_key },
+            { exhausted_key })
+    };
+    const auto exhausted_update{
+        state.Shrink(all_exhausted.retryable_key_list)
+    };
+    EXPECT_TRUE(exhausted_update.changed_key_list.empty());
+    EXPECT_TRUE(exhausted_update.saturated_key_list.empty());
+    EXPECT_DOUBLE_EQ(state.GetRadius(exhausted_key), 1.0);
+}
+
+TEST(EstimatorSecondStageDefenseTest, AllRejectedResolutionDistinguishesTerminalCases)
+{
+    using Key = trust_detail::LocalFittingTrustRegionClusterKey;
+    using Resolution = trust_detail::LocalFittingAllRejectedResolution;
+    const Key first_key{ 0 };
+    const Key second_key{ 1 };
+
+    const auto exhausted{
+        trust_detail::PartitionLocalFittingRejectedClusters(
+            { first_key, second_key },
+            { first_key, second_key })
+    };
+    EXPECT_EQ(
+        trust_detail::ResolveLocalFittingAllRejected(false, exhausted, {}),
+        Resolution::BacktrackingExhausted);
+
+    const auto retryable{
+        trust_detail::PartitionLocalFittingRejectedClusters(
+            { first_key, second_key },
+            {})
+    };
+    trust_detail::LocalFittingTrustRegionRadiusUpdate changed;
+    changed.changed_key_list = { first_key };
+    EXPECT_EQ(
+        trust_detail::ResolveLocalFittingAllRejected(
+            false,
+            retryable,
+            changed),
+        Resolution::Retry);
+
+    trust_detail::LocalFittingTrustRegionRadiusUpdate saturated;
+    saturated.saturated_key_list = { first_key, second_key };
+    EXPECT_EQ(
+        trust_detail::ResolveLocalFittingAllRejected(
+            false,
+            retryable,
+            saturated),
+        Resolution::MinimumRadius);
+
+    const auto mixed{
+        trust_detail::PartitionLocalFittingRejectedClusters(
+            { first_key, second_key },
+            { first_key })
+    };
+    saturated.saturated_key_list = { second_key };
+    EXPECT_EQ(
+        trust_detail::ResolveLocalFittingAllRejected(
+            false,
+            mixed,
+            saturated),
+        Resolution::NoRetryProgress);
+    EXPECT_EQ(
+        trust_detail::ResolveLocalFittingAllRejected(
+            true,
+            mixed,
+            changed),
+        Resolution::MaximumIterations);
+}
+
 TEST(EstimatorSecondStageDefenseTest, JointOffsetConditioningDetectsJointDependence)
 {
     Eigen::SparseMatrix<double> design_matrix{ 3, 3 };
@@ -2525,6 +2618,94 @@ TEST(EstimatorSecondStageDefenseTest, ObjectiveDomainCountsCutBoundarySamplesOnc
 
 TEST(
     EstimatorSecondStageDefenseTest,
+    RunSecondStageLocalFittingStopsWhenRetryableClusterReachesMinimumRadius)
+{
+    const rg::GaussianModel3D initial_model{ 6.0, 0.55, 0.0 };
+    auto truth_coordinates{
+        change_detail::EncodeLocalFittingTransformedCoordinates(initial_model)
+    };
+    ASSERT_TRUE(truth_coordinates.has_value());
+    (*truth_coordinates)(static_cast<Eigen::Index>(
+        change_detail::kOffsetToPeakRatioChangeIndex)) = 1.25;
+    const auto truth_model{
+        change_detail::DecodeLocalFittingTransformedCoordinates(
+            *truth_coordinates)
+    };
+    ASSERT_TRUE(truth_model.has_value());
+
+    auto model{
+        BuildDefenseModel(
+            { std::array<float, 3>{ 0.0F, 0.0F, 0.0F } },
+            { Spot::O },
+            { Element::OXYGEN },
+            { *truth_model },
+            initial_model)
+    };
+    const auto previous_model{
+        GetEstimateModel(*model->GetSelectedAtoms().front())
+    };
+    auto options{ MakeSecondStageOptions() };
+    options.quiet_mode = false;
+    const auto previous_log_level{ Logger::GetLogLevel() };
+
+    Logger::SetLogLevel(LogLevel::Debug);
+    testing::internal::CaptureStdout();
+    rt::RunSecondStageLocalFitting(*model, options);
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_log_level);
+
+    const auto count_occurrences = [&](std::string_view text)
+    {
+        std::size_t count{ 0 };
+        for (std::size_t position = 0;
+            (position = out.find(text, position)) != std::string::npos;
+            position += text.size())
+        {
+            count++;
+        }
+        return count;
+    };
+    const std::array<std::string_view, 5> expected_radius_list{
+        "1.00e+00",
+        "5.00e-01",
+        "2.50e-01",
+        "1.25e-01",
+        "6.25e-02"
+    };
+    for (const auto radius : expected_radius_list)
+    {
+        EXPECT_EQ(
+            count_occurrences(
+                std::string{ "trust radius/step norm = " } +
+                std::string{ radius } + "/0.00e+00"),
+            1U);
+    }
+    EXPECT_EQ(std::count(out.begin(), out.end(), '\r'), 5);
+    EXPECT_EQ(
+        count_occurrences(
+            "outcome = retry, "
+            "exhausted/retryable/radius-changed/radius-saturated = 0/1/1/0"),
+        4U);
+    EXPECT_EQ(
+        count_occurrences(
+            "outcome = all-rejected-minimum-radius, "
+            "exhausted/retryable/radius-changed/radius-saturated = 0/1/0/1"),
+        1U);
+
+    ExpectGaussianModelsNear(
+        GetEstimateModel(*model->GetSelectedAtoms().front()),
+        previous_model,
+        0.0);
+    EXPECT_NE(
+        out.find(
+            "accepted_iterations=0, best_iteration=initial, "
+            "stop_reason=all-rejected-minimum-radius"),
+        std::string::npos);
+    EXPECT_NE(out.find("final_state_source=best-audit"), std::string::npos);
+}
+
+TEST(
+    EstimatorSecondStageDefenseTest,
     MissingPosteriorAndPriorSkipsSecondStageDespiteValidLocalSeeds)
 {
     auto model{ BuildNearCollinearDefenseModel() };
@@ -2693,7 +2874,7 @@ TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageLogsEveryOuterAttempt)
         separator_position_list(header)
     };
     ASSERT_EQ(header_separator_position_list.size(), 5U);
-    ASSERT_EQ(progress_row_list.size(), 6U);
+    ASSERT_EQ(progress_row_list.size(), 4U);
     bool found_skipped_polish{ false };
     for (const auto row : progress_row_list)
     {
@@ -2728,11 +2909,10 @@ TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageLogsEveryOuterAttempt)
         static_cast<std::size_t>(std::stoull(
             out.substr(accepted_start, accepted_end - accepted_start)))
     };
-    EXPECT_EQ(accepted_iteration_count, 5U);
-    EXPECT_NE(out.find("-/"), std::string::npos);
+    EXPECT_EQ(accepted_iteration_count, 4U);
     EXPECT_NE(
         out.find(
-            "best_iteration=5, stop_reason=all-rejected-backtracking-exhausted"),
+            "best_iteration=1, stop_reason=audit-patience"),
         std::string::npos);
     EXPECT_TRUE(
         out.find("final_uses_polish=yes") != std::string::npos ||
