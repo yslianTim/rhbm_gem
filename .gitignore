@@ -19,6 +19,7 @@ CMakeFiles/
 *.app
 
 # Python environments and caches
+.cache/
 .venv/
 __pycache__/
 *.pyc
