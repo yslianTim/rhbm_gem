@@ -169,15 +169,16 @@ TEST(DataObjectPersistenceTest, FinalV2CatalogDatabaseRemainsLoadable)
         data_test::SaveTinyMapThroughRepository(repository, "map", 3.0f);
     }
 
+    data_test::ConvertSamplingEntryColumnsToLegacyRawOnly(database_path);
     data_test::SetUserVersion(database_path, 5);
 
     rg::DataRepository repository{ database_path };
     EXPECT_NE(repository.LoadModel("model"), nullptr);
     EXPECT_NE(repository.LoadMap("map"), nullptr);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 8);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 9);
 }
 
-TEST(DataObjectPersistenceTest, SamplingSelectionRoundTripPreservesUnselectedSamples)
+TEST(DataObjectPersistenceTest, RawSamplingSelectionRoundTripPreservesUnselectedSamples)
 {
     const command_test::ScopedTempDir temp_dir{ "data_schema_sampling_selection_roundtrip" };
     const auto database_path{ temp_dir.path() / "sampling_selection.sqlite" };
@@ -187,7 +188,7 @@ TEST(DataObjectPersistenceTest, SamplingSelectionRoundTripPreservesUnselectedSam
         auto model{ data_test::MakeModelWithBond() };
         model->SetKeyTag("model");
         auto editor{ model->EditAnalysis().EnsureAtomLocalPotential(*model->GetAtomList().at(0)) };
-        editor.SetSamplingEntries({
+        editor.SetRawSamplingEntries({
             LocalPotentialSample{ 6.0f, SamplingPoint{ 0.1f, { 0.0f, 0.0f, 0.0f }, true } },
             LocalPotentialSample{ 4.0f, SamplingPoint{ 0.2f, { 0.0f, 0.0f, 0.0f }, false } }
         });
@@ -198,35 +199,37 @@ TEST(DataObjectPersistenceTest, SamplingSelectionRoundTripPreservesUnselectedSam
     rg::DataRepository repository{ database_path };
     auto loaded_model{ repository.LoadModel("model") };
     ASSERT_NE(loaded_model, nullptr);
-    const auto all_entries{
-        rg::AtomLocalPotentialView::RequireFor(*loaded_model->GetAtomList().at(0)).GetSamplingEntries(false)
+    const auto raw_all_entries{
+        rg::AtomLocalPotentialView::RequireFor(
+            *loaded_model->GetAtomList().at(0)).GetRawSamplingEntries(false)
     };
-    const auto selected_entries{
-        rg::AtomLocalPotentialView::RequireFor(*loaded_model->GetAtomList().at(0)).GetSamplingEntries()
+    const auto raw_selected_entries{
+        rg::AtomLocalPotentialView::RequireFor(
+            *loaded_model->GetAtomList().at(0)).GetRawSamplingEntries()
     };
 
-    ASSERT_EQ(all_entries.size(), 2u);
-    EXPECT_TRUE(all_entries.at(0).point.is_selected);
-    EXPECT_FALSE(all_entries.at(1).point.is_selected);
-    ASSERT_EQ(selected_entries.size(), 1u);
-    EXPECT_FLOAT_EQ(selected_entries.at(0).response, 6.0f);
+    ASSERT_EQ(raw_all_entries.size(), 2u);
+    EXPECT_TRUE(raw_all_entries.at(0).point.is_selected);
+    EXPECT_FALSE(raw_all_entries.at(1).point.is_selected);
+    ASSERT_EQ(raw_selected_entries.size(), 1u);
+    EXPECT_FLOAT_EQ(raw_selected_entries.at(0).response, 6.0f);
 }
 
-TEST(DataObjectPersistenceTest, UpdatedSamplingEntriesRoundTripPreservesSelection)
+TEST(DataObjectPersistenceTest, RawAndPeelingSamplingEntriesRoundTripPreservesSelection)
 {
-    const command_test::ScopedTempDir temp_dir{ "data_schema_updated_sampling_roundtrip" };
-    const auto database_path{ temp_dir.path() / "updated_sampling.sqlite" };
+    const command_test::ScopedTempDir temp_dir{ "data_schema_raw_peeling_sampling_roundtrip" };
+    const auto database_path{ temp_dir.path() / "raw_peeling_sampling.sqlite" };
 
     {
         rg::DataRepository repository{ database_path };
         auto model{ data_test::MakeModelWithBond() };
         model->SetKeyTag("model");
         auto editor{ model->EditAnalysis().EnsureAtomLocalPotential(*model->GetAtomList().at(0)) };
-        editor.SetSamplingEntries({
+        editor.SetRawSamplingEntries({
             LocalPotentialSample{ 6.0f, SamplingPoint{ 0.1f, { 0.0f, 0.0f, 0.0f }, true } },
             LocalPotentialSample{ 4.0f, SamplingPoint{ 0.2f, { 0.0f, 0.0f, 0.0f }, false } }
         });
-        editor.SetUpdatedSamplingEntries({
+        editor.SetPeelingSamplingEntries({
             LocalPotentialSample{ 3.0f, SamplingPoint{ 0.1f, { 0.0f, 0.0f, 0.0f }, true } },
             LocalPotentialSample{ 5.0f, SamplingPoint{ 0.2f, { 0.0f, 0.0f, 0.0f }, false } }
         });
@@ -238,19 +241,109 @@ TEST(DataObjectPersistenceTest, UpdatedSamplingEntriesRoundTripPreservesSelectio
     auto loaded_model{ repository.LoadModel("model") };
     ASSERT_NE(loaded_model, nullptr);
     const auto view{ rg::AtomLocalPotentialView::RequireFor(*loaded_model->GetAtomList().at(0)) };
-    const auto original_entries{ view.GetSamplingEntries(false) };
-    const auto updated_entries{ view.GetSamplingEntries(false, true) };
-    const auto selected_updated_entries{ view.GetSamplingEntries(true, true) };
+    const auto raw_entries{ view.GetRawSamplingEntries(false) };
+    const auto peeling_entries{ view.GetPeelingSamplingEntries(false) };
+    const auto selected_peeling_entries{ view.GetPeelingSamplingEntries() };
 
-    ASSERT_EQ(original_entries.size(), 2u);
-    EXPECT_FLOAT_EQ(original_entries.at(0).response, 6.0f);
-    EXPECT_FLOAT_EQ(original_entries.at(1).response, 4.0f);
-    ASSERT_EQ(updated_entries.size(), 2u);
-    EXPECT_FLOAT_EQ(updated_entries.at(0).response, 3.0f);
-    EXPECT_FLOAT_EQ(updated_entries.at(1).response, 5.0f);
-    EXPECT_FALSE(updated_entries.at(1).point.is_selected);
-    ASSERT_EQ(selected_updated_entries.size(), 1u);
-    EXPECT_FLOAT_EQ(selected_updated_entries.at(0).response, 3.0f);
+    ASSERT_EQ(raw_entries.size(), 2u);
+    EXPECT_FLOAT_EQ(raw_entries.at(0).response, 6.0f);
+    EXPECT_FLOAT_EQ(raw_entries.at(1).response, 4.0f);
+    EXPECT_TRUE(raw_entries.at(0).point.is_selected);
+    EXPECT_FALSE(raw_entries.at(1).point.is_selected);
+    ASSERT_EQ(peeling_entries.size(), 2u);
+    EXPECT_FLOAT_EQ(peeling_entries.at(0).response, 3.0f);
+    EXPECT_FLOAT_EQ(peeling_entries.at(1).response, 5.0f);
+    EXPECT_TRUE(peeling_entries.at(0).point.is_selected);
+    EXPECT_FALSE(peeling_entries.at(1).point.is_selected);
+    ASSERT_EQ(selected_peeling_entries.size(), 1u);
+    EXPECT_FLOAT_EQ(selected_peeling_entries.at(0).response, 3.0f);
+}
+
+TEST(DataObjectPersistenceTest, VersionEightSamplingColumnsMigrateToRawAndPeelingWithoutDataLoss)
+{
+    const command_test::ScopedTempDir temp_dir{ "data_schema_v8_raw_peeling_migration" };
+    const auto database_path{ temp_dir.path() / "v8_raw_peeling_migration.sqlite" };
+
+    {
+        rg::DataRepository repository{ database_path };
+        auto model{ data_test::MakeModelWithBond() };
+        model->SetKeyTag("model");
+        auto editor{
+            model->EditAnalysis().EnsureAtomLocalPotential(
+                *model->GetAtomList().at(0))
+        };
+        editor.SetRawSamplingEntries({
+            LocalPotentialSample{
+                8.0f,
+                SamplingPoint{ 0.1f, { 1.0f, 2.0f, 3.0f }, true } },
+            LocalPotentialSample{
+                6.0f,
+                SamplingPoint{ 0.2f, { 4.0f, 5.0f, 6.0f }, false } }
+        });
+        editor.SetPeelingSamplingEntries({
+            LocalPotentialSample{
+                3.5f,
+                SamplingPoint{ 0.1f, { 1.0f, 2.0f, 3.0f }, false } },
+            LocalPotentialSample{
+                1.5f,
+                SamplingPoint{ 0.2f, { 4.0f, 5.0f, 6.0f }, true } }
+        });
+        repository.SaveModel(*model, "model");
+    }
+
+    data_test::ConvertSamplingEntryColumnsToLegacyRawAndUpdated(database_path);
+    data_test::SetUserVersion(database_path, 8);
+    ASSERT_TRUE(data_test::HasColumn(
+        database_path, "model_atom_local_potential", "sampling_size"));
+    ASSERT_TRUE(data_test::HasColumn(
+        database_path, "model_atom_local_potential", "updated_sampling_size"));
+
+    rg::DataRepository repository{ database_path };
+    auto loaded_model{ repository.LoadModel("model") };
+    ASSERT_NE(loaded_model, nullptr);
+
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 9);
+    EXPECT_TRUE(data_test::HasColumn(
+        database_path, "model_atom_local_potential", "raw_sampling_size"));
+    EXPECT_TRUE(data_test::HasColumn(
+        database_path,
+        "model_atom_local_potential",
+        "raw_distance_and_map_value_list"));
+    EXPECT_TRUE(data_test::HasColumn(
+        database_path, "model_atom_local_potential", "peeling_sampling_size"));
+    EXPECT_TRUE(data_test::HasColumn(
+        database_path,
+        "model_atom_local_potential",
+        "peeling_distance_and_map_value_list"));
+    EXPECT_FALSE(data_test::HasColumn(
+        database_path, "model_atom_local_potential", "sampling_size"));
+    EXPECT_FALSE(data_test::HasColumn(
+        database_path,
+        "model_atom_local_potential",
+        "distance_and_map_value_list"));
+    EXPECT_FALSE(data_test::HasColumn(
+        database_path, "model_atom_local_potential", "updated_sampling_size"));
+    EXPECT_FALSE(data_test::HasColumn(
+        database_path,
+        "model_atom_local_potential",
+        "updated_distance_and_map_value_list"));
+
+    const auto view{
+        rg::AtomLocalPotentialView::RequireFor(
+            *loaded_model->GetAtomList().at(0))
+    };
+    const auto raw_entries{ view.GetRawSamplingEntries(false) };
+    const auto peeling_entries{ view.GetPeelingSamplingEntries(false) };
+    ASSERT_EQ(raw_entries.size(), 2u);
+    EXPECT_FLOAT_EQ(raw_entries.at(0).response, 8.0f);
+    EXPECT_FLOAT_EQ(raw_entries.at(1).response, 6.0f);
+    EXPECT_TRUE(raw_entries.at(0).point.is_selected);
+    EXPECT_FALSE(raw_entries.at(1).point.is_selected);
+    ASSERT_EQ(peeling_entries.size(), 2u);
+    EXPECT_FLOAT_EQ(peeling_entries.at(0).response, 3.5f);
+    EXPECT_FLOAT_EQ(peeling_entries.at(1).response, 1.5f);
+    EXPECT_FALSE(peeling_entries.at(0).point.is_selected);
+    EXPECT_TRUE(peeling_entries.at(1).point.is_selected);
 }
 
 TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
@@ -373,6 +466,8 @@ TEST(DataObjectPersistenceTest, LegacyV2SamplingBlobLoadsAsSelectedAndMigratesVe
         repository.SaveModel(*model, "model");
     }
 
+    data_test::ConvertSamplingEntryColumnsToLegacyRawOnly(database_path);
+
     {
         rg::SQLiteWrapper database{ database_path };
         database.Prepare(
@@ -404,20 +499,21 @@ TEST(DataObjectPersistenceTest, LegacyV2SamplingBlobLoadsAsSelectedAndMigratesVe
     rg::DataRepository repository{ database_path };
     auto loaded_model{ repository.LoadModel("model") };
     ASSERT_NE(loaded_model, nullptr);
-    const auto entries{
-        rg::AtomLocalPotentialView::RequireFor(*loaded_model->GetAtomList().at(0)).GetSamplingEntries(false)
+    const auto raw_entries{
+        rg::AtomLocalPotentialView::RequireFor(
+            *loaded_model->GetAtomList().at(0)).GetRawSamplingEntries(false)
     };
 
-    ASSERT_EQ(entries.size(), 2u);
-    EXPECT_TRUE(entries.at(0).point.is_selected);
-    EXPECT_TRUE(entries.at(1).point.is_selected);
-    const auto updated_entries{
+    ASSERT_EQ(raw_entries.size(), 2u);
+    EXPECT_TRUE(raw_entries.at(0).point.is_selected);
+    EXPECT_TRUE(raw_entries.at(1).point.is_selected);
+    const auto peeling_entries{
         rg::AtomLocalPotentialView::RequireFor(*loaded_model->GetAtomList().at(0))
-            .GetSamplingEntries(false, true)
+            .GetPeelingSamplingEntries(false)
     };
 
-    EXPECT_TRUE(updated_entries.empty());
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 8);
+    EXPECT_TRUE(peeling_entries.empty());
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 9);
 }
 
 TEST(DataObjectPersistenceTest, DatabaseRoundTripPreservesChainMetadataAndSymmetryFiltering)

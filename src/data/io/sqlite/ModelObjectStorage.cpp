@@ -144,10 +144,10 @@ inline constexpr std::string_view kCreateModelAtomLocalTableSql = R"sql(
     CREATE TABLE IF NOT EXISTS model_atom_local_potential (
         key_tag TEXT,
         serial_id INTEGER,
-        sampling_size INTEGER,
-        distance_and_map_value_list BLOB,
-        updated_sampling_size INTEGER,
-        updated_distance_and_map_value_list BLOB,
+        raw_sampling_size INTEGER,
+        raw_distance_and_map_value_list BLOB,
+        peeling_sampling_size INTEGER,
+        peeling_distance_and_map_value_list BLOB,
         amplitude_estimate_ols DOUBLE,
         width_estimate_ols DOUBLE,
         intercept_estimate_ols DOUBLE,
@@ -354,8 +354,8 @@ inline constexpr auto kInsertModelBondSql = R"sql(
 
 inline constexpr auto kInsertModelAtomLocalSql = R"sql(
     INSERT OR REPLACE INTO model_atom_local_potential (
-        key_tag, serial_id, sampling_size, distance_and_map_value_list,
-        updated_sampling_size, updated_distance_and_map_value_list,
+        key_tag, serial_id, raw_sampling_size, raw_distance_and_map_value_list,
+        peeling_sampling_size, peeling_distance_and_map_value_list,
         amplitude_estimate_ols, width_estimate_ols, intercept_estimate_ols,
         amplitude_estimate_mdpde, width_estimate_mdpde, intercept_estimate_mdpde, alpha_r
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -431,8 +431,8 @@ inline constexpr auto kSelectModelBondSql = R"sql(
 
 inline constexpr auto kSelectModelAtomLocalSql = R"sql(
     SELECT
-        serial_id, sampling_size, distance_and_map_value_list,
-        COALESCE(updated_sampling_size, 0), updated_distance_and_map_value_list,
+        serial_id, raw_sampling_size, raw_distance_and_map_value_list,
+        COALESCE(peeling_sampling_size, 0), peeling_distance_and_map_value_list,
         amplitude_estimate_ols, width_estimate_ols, intercept_estimate_ols,
         amplitude_estimate_mdpde, width_estimate_mdpde, intercept_estimate_mdpde, alpha_r
     FROM model_atom_local_potential WHERE key_tag = ?;
@@ -981,12 +981,12 @@ void SaveAtomLocalPotentialEntryList(
             const auto & gaussian_result{ entry->GaussianResult() };
             statement_db.Bind<std::string>(1, key_tag);
             statement_db.Bind<int>(2, atom_object->GetSerialID());
-            statement_db.Bind<int>(3, entry->SamplingEntryCount());
+            statement_db.Bind<int>(3, entry->RawSamplingEntryCount());
             statement_db.Bind<LocalPotentialSampleList>(
-                4, entry->SamplingEntries());
-            statement_db.Bind<int>(5, entry->UpdatedSamplingEntryCount());
+                4, entry->RawSamplingEntries());
+            statement_db.Bind<int>(5, entry->PeelingSamplingEntryCount());
             statement_db.Bind<LocalPotentialSampleList>(
-                6, entry->UpdatedSamplingEntries());
+                6, entry->PeelingSamplingEntries());
             statement_db.Bind<double>(7, gaussian_result.ols.GetModel().GetAmplitude());
             statement_db.Bind<double>(8, gaussian_result.ols.GetModel().GetWidth());
             statement_db.Bind<double>(9, gaussian_result.ols.GetModel().GetOffset());
@@ -1133,12 +1133,13 @@ std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>> LoadAtomLocalPoten
 
         auto entry{ std::make_unique<LocalPotentialEntry>() };
         const auto serial_id{ database.GetColumn<int>(0) };
-        const auto sampling_size{ database.GetColumn<int>(1) };
-        entry->SetSamplingEntries(
-            database.GetLocalPotentialSampleListColumn(2, sampling_size));
-        const auto updated_sampling_size{ database.GetColumn<int>(3) };
-        entry->SetUpdatedSamplingEntries(
-            database.GetLocalPotentialSampleListColumn(4, updated_sampling_size));
+        const auto raw_sampling_size{ database.GetColumn<int>(1) };
+        entry->SetRawSamplingEntries(
+            database.GetLocalPotentialSampleListColumn(2, raw_sampling_size));
+        const auto peeling_sampling_size{ database.GetColumn<int>(3) };
+        entry->SetPeelingSamplingEntries(
+            database.GetLocalPotentialSampleListColumn(
+                4, peeling_sampling_size));
         LocalGaussianResult gaussian_result;
         gaussian_result.ols = GaussianModel3DWithUncertainty{
             GaussianModel3D{

@@ -113,10 +113,12 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
     const auto atom_entry{ AtomLocalPotentialView::RequireFor(*atom_object) };
     auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom_object) };
     auto map_value_range{
-        local_potential_series::ComputeResponseRange(atom_entry.GetSamplingEntries(), 0.3)
+        local_potential_series::ComputeResponseRange(
+            atom_entry.GetRawSamplingEntries(), 0.3)
     };
     auto distance_range{
-        local_potential_series::ComputeDistanceRange(atom_entry.GetSamplingEntries(), 0.0)
+        local_potential_series::ComputeDistanceRange(
+            atom_entry.GetRawSamplingEntries(), 0.0)
     };
 
     auto map_value_graph{ atom_plot_builder->CreateDistanceToMapValueGraph() };
@@ -188,7 +190,7 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, "AtomPainter::PaintAtomSamplingDataSummary");
     bool apply_selection{ false };
-    bool use_updated_sample{ true };
+    bool use_peeling_sampling_entries{ true };
 
     #ifdef HAVE_ROOT
 
@@ -211,15 +213,20 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
     {
         const auto entry_view{ AtomLocalPotentialView::RequireFor(*atom_object) };
         auto plot_builder{ std::make_unique<PotentialPlotBuilder>(atom_object) };
-        auto data_graph{ plot_builder->CreateDistanceToMapValueGraph(apply_selection, use_updated_sample) };
-        auto data_hist{ plot_builder->CreateDistanceToMapValueHistogram(20, 1000, apply_selection, use_updated_sample) };
+        auto data_graph{ plot_builder->CreateDistanceToMapValueGraph(
+            apply_selection, use_peeling_sampling_entries) };
+        auto data_hist{ plot_builder->CreateDistanceToMapValueHistogram(
+            20, 1000, apply_selection, use_peeling_sampling_entries) };
         auto gaus_function_mdpde{ plot_builder->CreateAtomLocalGausFunctionMDPDE() };
         auto gaus_function_ols{ plot_builder->CreateAtomLocalGausFunctionOLS() };
         auto linear_model_mdpde{ plot_builder->CreateAtomLocalLinearModelFunctionMDPDE() };
         auto linear_model_ols{ plot_builder->CreateAtomLocalLinearModelFunctionOLS() };
-        auto scatter_graph{ plot_builder->CreateLinearModelDistanceToMapValueGraph(apply_selection, use_updated_sample) };
-        auto x_hist{ plot_builder->CreateLinearModelDataHistogram(0, apply_selection, use_updated_sample) };
-        auto y_hist{ plot_builder->CreateLinearModelDataHistogram(1, apply_selection, use_updated_sample) };
+        auto scatter_graph{ plot_builder->CreateLinearModelDistanceToMapValueGraph(
+            apply_selection, use_peeling_sampling_entries) };
+        auto x_hist{ plot_builder->CreateLinearModelDataHistogram(
+            0, apply_selection, use_peeling_sampling_entries) };
+        auto y_hist{ plot_builder->CreateLinearModelDataHistogram(
+            1, apply_selection, use_peeling_sampling_entries) };
 
         canvas->cd();
         for (int i = 0; i < pad_size; i++)
@@ -281,7 +288,11 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         frame->GetXaxis()->SetTitle("Radial Distance #[]{#AA}");
         frame->GetYaxis()->SetTitle("Map Value");
         auto y_range{
-            local_potential_series::ComputeResponseRange(entry_view.GetSamplingEntries(apply_selection, use_updated_sample), 0.1)
+            local_potential_series::ComputeResponseRange(
+                use_peeling_sampling_entries
+                    ? entry_view.GetPeelingSamplingEntries(apply_selection)
+                    : entry_view.GetRawSamplingEntries(apply_selection),
+                0.1)
         };
         auto x_min{ 0.00 };
         auto x_max{ 1.99 };

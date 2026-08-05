@@ -303,10 +303,16 @@ std::unique_ptr<ModelObject> BuildAtomicModelObject(
     for (std::size_t i = 0; i < atom_field.size(); i++)
     {
         const auto & atom_object{ *model_object->GetSelectedAtoms().at(i) };
-        auto sampling_entries{ GenerateAtomicModelSampleList(model, atom_field.at(i), atom_field) };
+        auto raw_sampling_entries{
+            GenerateAtomicModelSampleList(model, atom_field.at(i), atom_field)
+        };
         auto model_response_max{ model.GetPotentialValue(atom_field.at(i).element, 0.0, atom_field.at(i).charge) };
-        sampling_entries = ApplyLogQuadraticNoise(std::move(sampling_entries), model_response_max, error_sigma, generator);
-        analysis.EnsureAtomLocalPotential(atom_object).SetSamplingEntries(std::move(sampling_entries));
+        raw_sampling_entries = ApplyLogQuadraticNoise(
+            std::move(raw_sampling_entries),
+            model_response_max,
+            error_sigma,
+            generator);
+        analysis.EnsureAtomLocalPotential(atom_object).SetRawSamplingEntries(std::move(raw_sampling_entries));
     }
     return model_object;
 }

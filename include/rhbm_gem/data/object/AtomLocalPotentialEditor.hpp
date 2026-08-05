@@ -13,8 +13,8 @@ class AtomLocalPotentialEditor
     LocalPotentialEntry * m_entry;
 
 public:
-    void SetSamplingEntries(LocalPotentialSampleList value);
-    void SetUpdatedSamplingEntries(LocalPotentialSampleList value);
+    void SetRawSamplingEntries(LocalPotentialSampleList value);
+    void SetPeelingSamplingEntries(LocalPotentialSampleList value);
     void SetGaussianResult(LocalGaussianResult value);
     void SetAlphaR(double value);
 

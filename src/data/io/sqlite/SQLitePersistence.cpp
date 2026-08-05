@@ -20,7 +20,7 @@ namespace {
 
 using namespace std::literals;
 
-constexpr int kCurrentSchemaVersion = 8;
+constexpr int kCurrentSchemaVersion = 9;
 constexpr std::string_view kCatalogTableName = "object_catalog";
 constexpr std::string_view kMapTableName = "map_list";
 constexpr std::string_view kUnsupportedMetadataTableName = "object_metadata";
@@ -142,6 +142,13 @@ enum class CatalogObjectType
 {
     Model,
     Map
+};
+
+enum class SamplingEntryColumnLayout
+{
+    LegacyRawOnly,
+    LegacyRawAndUpdated,
+    RawAndPeeling
 };
 
 std::string_view GetCatalogTypeName(CatalogObjectType object_type) noexcept
@@ -440,10 +447,59 @@ void ValidateGaussianInterceptColumns(rhbm_gem::SQLiteWrapper & database)
     }
 }
 
-void ValidateUpdatedSamplingColumns(rhbm_gem::SQLiteWrapper & database)
+void ValidateSamplingEntryColumnState(
+    rhbm_gem::SQLiteWrapper & database,
+    std::string_view column_name,
+    bool expected)
 {
-    ValidateRequiredColumn(database, "model_atom_local_potential", "updated_sampling_size");
-    ValidateRequiredColumn(database, "model_atom_local_potential", "updated_distance_and_map_value_list");
+    const auto found{
+        HasColumn(database, "model_atom_local_potential", column_name)
+    };
+    if (found != expected)
+    {
+        throw std::runtime_error(
+            "Sampling entry column layout mismatch for column: "
+            + std::string(column_name));
+    }
+}
+
+void ValidateSamplingEntryColumnLayout(
+    rhbm_gem::SQLiteWrapper & database,
+    SamplingEntryColumnLayout layout)
+{
+    const auto expects_legacy_raw{
+        layout == SamplingEntryColumnLayout::LegacyRawOnly ||
+        layout == SamplingEntryColumnLayout::LegacyRawAndUpdated
+    };
+    const auto expects_legacy_updated{
+        layout == SamplingEntryColumnLayout::LegacyRawAndUpdated
+    };
+    const auto expects_raw_and_peeling{
+        layout == SamplingEntryColumnLayout::RawAndPeeling
+    };
+
+    ValidateSamplingEntryColumnState(
+        database, "sampling_size", expects_legacy_raw);
+    ValidateSamplingEntryColumnState(
+        database, "distance_and_map_value_list", expects_legacy_raw);
+    ValidateSamplingEntryColumnState(
+        database, "updated_sampling_size", expects_legacy_updated);
+    ValidateSamplingEntryColumnState(
+        database,
+        "updated_distance_and_map_value_list",
+        expects_legacy_updated);
+    ValidateSamplingEntryColumnState(
+        database, "raw_sampling_size", expects_raw_and_peeling);
+    ValidateSamplingEntryColumnState(
+        database,
+        "raw_distance_and_map_value_list",
+        expects_raw_and_peeling);
+    ValidateSamplingEntryColumnState(
+        database, "peeling_sampling_size", expects_raw_and_peeling);
+    ValidateSamplingEntryColumnState(
+        database,
+        "peeling_distance_and_map_value_list",
+        expects_raw_and_peeling);
 }
 
 void ValidateStandardQScoreColumns(rhbm_gem::SQLiteWrapper & database)
@@ -487,19 +543,48 @@ void MigrateGaussianInterceptColumns(rhbm_gem::SQLiteWrapper & database)
     }
 }
 
-void MigrateUpdatedSamplingColumns(rhbm_gem::SQLiteWrapper & database)
+void AddLegacyUpdatedSamplingColumns(rhbm_gem::SQLiteWrapper & database)
 {
-    if (!HasColumn(database, "model_atom_local_potential", "updated_sampling_size"))
+    database.Execute(
+        "ALTER TABLE model_atom_local_potential "
+        "ADD COLUMN updated_sampling_size INTEGER DEFAULT 0;");
+    database.Execute(
+        "ALTER TABLE model_atom_local_potential "
+        "ADD COLUMN updated_distance_and_map_value_list BLOB;");
+}
+
+void MigrateSamplingEntryColumnsToRawPeeling(
+    rhbm_gem::SQLiteWrapper & database)
+{
+    ValidateSamplingEntryColumnLayout(
+        database,
+        SamplingEntryColumnLayout::LegacyRawAndUpdated);
+    database.Execute("BEGIN TRANSACTION;");
+    try
     {
         database.Execute(
             "ALTER TABLE model_atom_local_potential "
-            "ADD COLUMN updated_sampling_size INTEGER DEFAULT 0;");
+            "RENAME COLUMN sampling_size TO raw_sampling_size;");
+        database.Execute(
+            "ALTER TABLE model_atom_local_potential "
+            "RENAME COLUMN distance_and_map_value_list "
+            "TO raw_distance_and_map_value_list;");
+        database.Execute(
+            "ALTER TABLE model_atom_local_potential "
+            "RENAME COLUMN updated_sampling_size TO peeling_sampling_size;");
+        database.Execute(
+            "ALTER TABLE model_atom_local_potential "
+            "RENAME COLUMN updated_distance_and_map_value_list "
+            "TO peeling_distance_and_map_value_list;");
+        ValidateSamplingEntryColumnLayout(
+            database,
+            SamplingEntryColumnLayout::RawAndPeeling);
+        database.Execute("COMMIT;");
     }
-    if (!HasColumn(database, "model_atom_local_potential", "updated_distance_and_map_value_list"))
+    catch (...)
     {
-        database.Execute(
-            "ALTER TABLE model_atom_local_potential "
-            "ADD COLUMN updated_distance_and_map_value_list BLOB;");
+        database.Execute("ROLLBACK;");
+        throw;
     }
 }
 
@@ -726,7 +811,7 @@ void ValidateModelSchema(
     rhbm_gem::SQLiteWrapper & database,
     bool require_gaussian_intercept_columns,
     bool atom_tables_have_class_key,
-    bool require_updated_sampling_columns,
+    SamplingEntryColumnLayout sampling_entry_column_layout,
     bool require_standard_qscore_columns,
     bool require_reference_gaussian_parameter_columns)
 {
@@ -780,10 +865,9 @@ void ValidateModelSchema(
     {
         ValidateGaussianInterceptColumns(database);
     }
-    if (require_updated_sampling_columns)
-    {
-        ValidateUpdatedSamplingColumns(database);
-    }
+    ValidateSamplingEntryColumnLayout(
+        database,
+        sampling_entry_column_layout);
     if (require_standard_qscore_columns)
     {
         ValidateStandardQScoreColumns(database);
@@ -805,7 +889,8 @@ void ValidateCurrentSchema(
     rhbm_gem::SQLiteWrapper & database,
     bool require_gaussian_intercept_columns = true,
     bool atom_tables_have_class_key = false,
-    bool require_updated_sampling_columns = true,
+    SamplingEntryColumnLayout sampling_entry_column_layout =
+        SamplingEntryColumnLayout::RawAndPeeling,
     bool require_standard_qscore_columns = true,
     bool require_reference_gaussian_parameter_columns = true)
 {
@@ -823,7 +908,7 @@ void ValidateCurrentSchema(
         database,
         require_gaussian_intercept_columns,
         atom_tables_have_class_key,
-        require_updated_sampling_columns,
+        sampling_entry_column_layout,
         require_standard_qscore_columns,
         require_reference_gaussian_parameter_columns);
     ValidateMapSchema(database);
@@ -850,50 +935,99 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
     }
     if (raw_version == 2 || raw_version == 3)
     {
-        ValidateCurrentSchema(database, false, true, false, false, false);
+        ValidateCurrentSchema(
+            database,
+            false,
+            true,
+            SamplingEntryColumnLayout::LegacyRawOnly,
+            false,
+            false);
         MigrateGaussianInterceptColumns(database);
         MigrateAtomClassKeyColumns(database);
-        MigrateUpdatedSamplingColumns(database);
+        AddLegacyUpdatedSamplingColumns(database);
         MigrateStandardQScoreColumns(database);
         MigrateReferenceGaussianParameterColumns(database);
+        MigrateSamplingEntryColumnsToRawPeeling(database);
         SetSchemaVersion(database);
         ValidateCurrentSchema(database);
         return;
     }
     if (raw_version == 4)
     {
-        ValidateCurrentSchema(database, true, true, false, false, false);
+        ValidateCurrentSchema(
+            database,
+            true,
+            true,
+            SamplingEntryColumnLayout::LegacyRawOnly,
+            false,
+            false);
         MigrateAtomClassKeyColumns(database);
-        MigrateUpdatedSamplingColumns(database);
+        AddLegacyUpdatedSamplingColumns(database);
         MigrateStandardQScoreColumns(database);
         MigrateReferenceGaussianParameterColumns(database);
+        MigrateSamplingEntryColumnsToRawPeeling(database);
         SetSchemaVersion(database);
         ValidateCurrentSchema(database);
         return;
     }
     if (raw_version == 5)
     {
-        ValidateCurrentSchema(database, true, false, false, false, false);
-        MigrateUpdatedSamplingColumns(database);
+        ValidateCurrentSchema(
+            database,
+            true,
+            false,
+            SamplingEntryColumnLayout::LegacyRawOnly,
+            false,
+            false);
+        AddLegacyUpdatedSamplingColumns(database);
         MigrateStandardQScoreColumns(database);
         MigrateReferenceGaussianParameterColumns(database);
+        MigrateSamplingEntryColumnsToRawPeeling(database);
         SetSchemaVersion(database);
         ValidateCurrentSchema(database);
         return;
     }
     if (raw_version == 6)
     {
-        ValidateCurrentSchema(database, true, false, true, false, false);
+        ValidateCurrentSchema(
+            database,
+            true,
+            false,
+            SamplingEntryColumnLayout::LegacyRawAndUpdated,
+            false,
+            false);
         MigrateStandardQScoreColumns(database);
         MigrateReferenceGaussianParameterColumns(database);
+        MigrateSamplingEntryColumnsToRawPeeling(database);
         SetSchemaVersion(database);
         ValidateCurrentSchema(database);
         return;
     }
     if (raw_version == 7)
     {
-        ValidateCurrentSchema(database, true, false, true, true, false);
+        ValidateCurrentSchema(
+            database,
+            true,
+            false,
+            SamplingEntryColumnLayout::LegacyRawAndUpdated,
+            true,
+            false);
         MigrateReferenceGaussianParameterColumns(database);
+        MigrateSamplingEntryColumnsToRawPeeling(database);
+        SetSchemaVersion(database);
+        ValidateCurrentSchema(database);
+        return;
+    }
+    if (raw_version == 8)
+    {
+        ValidateCurrentSchema(
+            database,
+            true,
+            false,
+            SamplingEntryColumnLayout::LegacyRawAndUpdated,
+            true,
+            true);
+        MigrateSamplingEntryColumnsToRawPeeling(database);
         SetSchemaVersion(database);
         ValidateCurrentSchema(database);
         return;

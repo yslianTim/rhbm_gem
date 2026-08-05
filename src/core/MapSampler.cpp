@@ -161,10 +161,10 @@ void RunPotentialSamplingWorkflow(
 #endif
     for (size_t i = 0; i < atom_list.size(); i++)
     {
-        auto sampling_entries{
+        auto raw_sampling_entries{
             SampleAtomMapValues(map_object, *atom_list[i], sampling_method)
         };
-        local_editor_list[i].SetSamplingEntries(std::move(sampling_entries));
+        local_editor_list[i].SetRawSamplingEntries(std::move(raw_sampling_entries));
 
 #ifdef USE_OPENMP
         #pragma omp critical

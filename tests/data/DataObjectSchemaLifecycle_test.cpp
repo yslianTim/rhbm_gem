@@ -94,7 +94,7 @@ TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsNormalizedSchema)
 
     rg::SQLitePersistence database_manager{ database_path };
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 8);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 9);
     EXPECT_TRUE(data_test::HasTable(database_path, "object_catalog"));
     EXPECT_FALSE(data_test::HasTable(database_path, "object_metadata"));
     EXPECT_TRUE(data_test::HasTable(database_path, "model_object"));
@@ -112,18 +112,31 @@ TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsNormalizedSchema)
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_group_potential", "class_key"));
 }
 
-TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsUpdatedSamplingEntryColumns)
+TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsRawAndPeelingSamplingEntryColumns)
 {
-    const command_test::ScopedTempDir temp_dir{ "data_schema_updated_sampling_columns" };
-    const auto database_path{ temp_dir.path() / "updated_sampling_columns.sqlite" };
+    const command_test::ScopedTempDir temp_dir{ "data_schema_raw_peeling_sampling_columns" };
+    const auto database_path{ temp_dir.path() / "raw_peeling_sampling_columns.sqlite" };
 
     rg::SQLitePersistence database_manager{ database_path };
 
-    EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_local_potential", "updated_sampling_size"));
+    EXPECT_TRUE(data_test::HasColumn(
+        database_path, "model_atom_local_potential", "raw_sampling_size"));
     EXPECT_TRUE(data_test::HasColumn(
         database_path,
         "model_atom_local_potential",
-        "updated_distance_and_map_value_list"));
+        "raw_distance_and_map_value_list"));
+    EXPECT_TRUE(data_test::HasColumn(
+        database_path, "model_atom_local_potential", "peeling_sampling_size"));
+    EXPECT_TRUE(data_test::HasColumn(
+        database_path,
+        "model_atom_local_potential",
+        "peeling_distance_and_map_value_list"));
+    EXPECT_FALSE(data_test::HasColumn(
+        database_path, "model_atom_local_potential", "sampling_size"));
+    EXPECT_FALSE(data_test::HasColumn(
+        database_path,
+        "model_atom_local_potential",
+        "updated_sampling_size"));
 }
 
 TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsGaussianInterceptColumns)
@@ -180,7 +193,7 @@ TEST(DataObjectSchemaLifecycleTest, VersionThreeSchemaMigratesGaussianInterceptC
 
     rg::SQLitePersistence database_manager{ database_path };
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 8);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 9);
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_local_potential", "intercept_estimate_ols"));
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_local_potential", "intercept_estimate_mdpde"));
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_posterior", "class_key"));
@@ -214,11 +227,12 @@ TEST(DataObjectSchemaLifecycleTest, VersionFourSchemaMigratesAtomTablesToSingleC
         "INSERT INTO model_atom_group_potential VALUES "
         "('model', 'component_atom_class', 10, 2, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 0.1, 0.2, 0.3, 0.4),"
         "('model', 'structure_atom_class', 20, 3, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 1.1, 1.2, 1.3, 1.4);");
+    data_test::ConvertSamplingEntryColumnsToLegacyRawOnly(database_path);
     data_test::SetUserVersion(database_path, 4);
 
     rg::SQLitePersistence database_manager{ database_path };
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 8);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 9);
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_posterior", "class_key"));
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_group_potential", "class_key"));
     EXPECT_EQ(data_test::CountRows(database_path, "model_atom_posterior", "model"), 1);
@@ -231,10 +245,10 @@ TEST(DataObjectSchemaLifecycleTest, VersionFourSchemaMigratesAtomTablesToSingleC
         10);
 }
 
-TEST(DataObjectSchemaLifecycleTest, VersionFiveSchemaMigratesUpdatedSamplingEntryColumns)
+TEST(DataObjectSchemaLifecycleTest, VersionFiveSchemaMigratesRawAndPeelingSamplingEntryColumns)
 {
-    const command_test::ScopedTempDir temp_dir{ "data_schema_v5_updated_sampling_migration" };
-    const auto database_path{ temp_dir.path() / "v5_updated_sampling.sqlite" };
+    const command_test::ScopedTempDir temp_dir{ "data_schema_v5_raw_peeling_sampling_migration" };
+    const auto database_path{ temp_dir.path() / "v5_raw_peeling_sampling.sqlite" };
 
     {
         rg::SQLitePersistence database_manager{ database_path };
@@ -261,12 +275,19 @@ TEST(DataObjectSchemaLifecycleTest, VersionFiveSchemaMigratesUpdatedSamplingEntr
 
     rg::SQLitePersistence database_manager{ database_path };
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 8);
-    EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_local_potential", "updated_sampling_size"));
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 9);
+    EXPECT_TRUE(data_test::HasColumn(
+        database_path, "model_atom_local_potential", "raw_sampling_size"));
     EXPECT_TRUE(data_test::HasColumn(
         database_path,
         "model_atom_local_potential",
-        "updated_distance_and_map_value_list"));
+        "raw_distance_and_map_value_list"));
+    EXPECT_TRUE(data_test::HasColumn(
+        database_path, "model_atom_local_potential", "peeling_sampling_size"));
+    EXPECT_TRUE(data_test::HasColumn(
+        database_path,
+        "model_atom_local_potential",
+        "peeling_distance_and_map_value_list"));
 }
 
 TEST(DataObjectSchemaLifecycleTest, VersionSixSchemaMigratesStandardQScoreColumns)
@@ -287,13 +308,14 @@ TEST(DataObjectSchemaLifecycleTest, VersionSixSchemaMigratesStandardQScoreColumn
     data_test::ExecuteSqlWithForeignKeysOff(
         database_path,
         "ALTER TABLE model_object DROP COLUMN standard_average_qscore;");
+    data_test::ConvertSamplingEntryColumnsToLegacyRawAndUpdated(database_path);
     data_test::SetUserVersion(database_path, 6);
 
     rg::DataRepository repository{ database_path };
     auto loaded_model{ repository.LoadModel("model") };
 
     ASSERT_NE(loaded_model, nullptr);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 8);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 9);
     EXPECT_TRUE(data_test::HasColumn(
         database_path,
         "model_object",
@@ -324,13 +346,14 @@ TEST(DataObjectSchemaLifecycleTest, VersionSevenSchemaMigratesReferenceGaussianP
     data_test::ExecuteSqlWithForeignKeysOff(
         database_path,
         "ALTER TABLE model_object DROP COLUMN reference_offset;");
+    data_test::ConvertSamplingEntryColumnsToLegacyRawAndUpdated(database_path);
     data_test::SetUserVersion(database_path, 7);
 
     rg::DataRepository repository{ database_path };
     auto loaded_model{ repository.LoadModel("model") };
 
     ASSERT_NE(loaded_model, nullptr);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 8);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 9);
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_object", "reference_height"));
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_object", "reference_offset"));
     EXPECT_DOUBLE_EQ(loaded_model->GetReferenceHeight(), 0.0);
@@ -378,6 +401,7 @@ TEST(DataObjectSchemaLifecycleTest, Version2WithObjectMetadataFailsFast)
             data_test::ExecuteSql(
                 database_path,
                 "INSERT INTO object_metadata(key_tag, object_type) VALUES ('map_only', 'map');");
+            data_test::ConvertSamplingEntryColumnsToLegacyRawOnly(database_path);
             data_test::SetUserVersion(database_path, 2);
         });
 }

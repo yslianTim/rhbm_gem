@@ -206,6 +206,45 @@ inline void ExecuteSqlWithForeignKeysOff(
     database.Execute(sql);
 }
 
+inline void ConvertSamplingEntryColumnsToLegacyRawOnly(
+    const std::filesystem::path & database_path)
+{
+    rg::SQLiteWrapper database{ database_path };
+    database.Execute(
+        "ALTER TABLE model_atom_local_potential "
+        "RENAME COLUMN raw_sampling_size TO sampling_size;");
+    database.Execute(
+        "ALTER TABLE model_atom_local_potential "
+        "RENAME COLUMN raw_distance_and_map_value_list "
+        "TO distance_and_map_value_list;");
+    database.Execute(
+        "ALTER TABLE model_atom_local_potential "
+        "DROP COLUMN peeling_sampling_size;");
+    database.Execute(
+        "ALTER TABLE model_atom_local_potential "
+        "DROP COLUMN peeling_distance_and_map_value_list;");
+}
+
+inline void ConvertSamplingEntryColumnsToLegacyRawAndUpdated(
+    const std::filesystem::path & database_path)
+{
+    rg::SQLiteWrapper database{ database_path };
+    database.Execute(
+        "ALTER TABLE model_atom_local_potential "
+        "RENAME COLUMN raw_sampling_size TO sampling_size;");
+    database.Execute(
+        "ALTER TABLE model_atom_local_potential "
+        "RENAME COLUMN raw_distance_and_map_value_list "
+        "TO distance_and_map_value_list;");
+    database.Execute(
+        "ALTER TABLE model_atom_local_potential "
+        "RENAME COLUMN peeling_sampling_size TO updated_sampling_size;");
+    database.Execute(
+        "ALTER TABLE model_atom_local_potential "
+        "RENAME COLUMN peeling_distance_and_map_value_list "
+        "TO updated_distance_and_map_value_list;");
+}
+
 inline bool HasTable(const std::filesystem::path & database_path, const std::string & table_name)
 {
     rg::SQLiteWrapper database{ database_path };

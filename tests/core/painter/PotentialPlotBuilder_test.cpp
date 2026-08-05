@@ -93,7 +93,7 @@ TEST(PotentialPlotBuilderTest, LinearModelDataBuildersUseFiniteSamplingRange)
 
     auto * atom{ model->GetAtomList().front().get() };
     auto analysis{ model->EditAnalysis() };
-    analysis.EnsureAtomLocalPotential(*atom).SetSamplingEntries({
+    analysis.EnsureAtomLocalPotential(*atom).SetRawSamplingEntries({
         {4.0f, SamplingPoint{ 0.0f }},
         {3.0f, SamplingPoint{ 0.4f }},
         {2.0f, SamplingPoint{ 0.8f }},

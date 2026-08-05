@@ -24,7 +24,7 @@ void ExpectNormalizedSchemaValidationFailure(
 
     {
         rg::SQLitePersistence database_manager{ database_path };
-        EXPECT_EQ(data_test::GetUserVersion(database_path), 8);
+        EXPECT_EQ(data_test::GetUserVersion(database_path), 9);
     }
 
     mutate_database(database_path);
@@ -40,6 +40,7 @@ TEST(DataObjectSchemaValidationTest, NormalizedV2DatabaseMissingRequiredTableThr
         "missing_v2.sqlite",
         [](const std::filesystem::path & database_path)
         {
+            data_test::ConvertSamplingEntryColumnsToLegacyRawOnly(database_path);
             data_test::ExecuteSql(database_path, "DROP TABLE model_bond_group_potential;");
             data_test::SetUserVersion(database_path, 2);
         });
@@ -84,6 +85,20 @@ TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingReferenceOffsetColumnTh
         });
 }
 
+TEST(DataObjectSchemaValidationTest, CurrentSchemaRejectsMixedSamplingColumnLayout)
+{
+    ExpectNormalizedSchemaValidationFailure(
+        "data_schema_mixed_sampling_columns",
+        "mixed_sampling_columns.sqlite",
+        [](const std::filesystem::path & database_path)
+        {
+            data_test::ExecuteSqlWithForeignKeysOff(
+                database_path,
+                "ALTER TABLE model_atom_local_potential "
+                "RENAME COLUMN raw_sampling_size TO sampling_size;");
+        });
+}
+
 TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsMissingForeignKeys)
 {
     ExpectNormalizedSchemaValidationFailure(
@@ -91,6 +106,7 @@ TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsMissingForeig
         "missing_fk.sqlite",
         [](const std::filesystem::path & database_path)
         {
+            data_test::ConvertSamplingEntryColumnsToLegacyRawOnly(database_path);
             data_test::ExecuteSql(database_path, "DROP TABLE map_list;");
             data_test::ExecuteSql(
                 database_path,
@@ -121,6 +137,7 @@ TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsMissingRequir
         "bad_catalog_columns.sqlite",
         [](const std::filesystem::path & database_path)
         {
+            data_test::ConvertSamplingEntryColumnsToLegacyRawOnly(database_path);
             data_test::ExecuteSqlWithForeignKeysOff(database_path, "DROP TABLE object_catalog;");
             data_test::ExecuteSqlWithForeignKeysOff(
                 database_path,
@@ -136,6 +153,7 @@ TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsUnknownObject
         "bad_catalog_type.sqlite",
         [](const std::filesystem::path & database_path)
         {
+            data_test::ConvertSamplingEntryColumnsToLegacyRawOnly(database_path);
             data_test::ExecuteSqlWithForeignKeysOff(database_path, "DROP TABLE object_catalog;");
             data_test::ExecuteSqlWithForeignKeysOff(
                 database_path,

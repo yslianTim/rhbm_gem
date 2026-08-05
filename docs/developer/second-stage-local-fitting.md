@@ -15,14 +15,14 @@ stored atom estimates.
 
 The fitting context contains, for each selected atom:
 
-- its local-potential samples and trained `alpha_r`;
+- its raw local-potential sampling entries and trained `alpha_r`;
 - the selected neighboring atoms that contribute to each sample.
 
 Neighbor candidates are searched within `kNeighborAtomSearchRange`. A neighbor
 contributes to a sample only when its distance from that sample does not exceed
 `kNeighborContributionDistanceMax`.
 
-Before the second stage starts, the workflow rebuilds each atom's updated
+Before the second stage starts, the workflow rebuilds each atom's peeling
 sampling entries by subtracting neighboring responses estimated from the
 first-stage group-median MDPDE models. The first group fit consumes these
 neighbor-adjusted samples and supplies the per-atom posterior and group prior

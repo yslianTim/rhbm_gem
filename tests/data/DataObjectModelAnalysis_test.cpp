@@ -506,11 +506,11 @@ TEST(DataObjectModelAnalysisTest, LocalPotentialEntryClearTransientFitStateKeeps
     };
     result.fit_result = rg::RHBMBetaEstimateResult{};
     entry.SetGaussianResult(result);
-    entry.SetUpdatedSamplingEntries({
+    entry.SetPeelingSamplingEntries({
         LocalPotentialSample{ 3.0f, SamplingPoint{ 0.1f } }
     });
     ASSERT_TRUE(entry.GaussianResult().fit_result.has_value());
-    ASSERT_FALSE(entry.UpdatedSamplingEntries().empty());
+    ASSERT_FALSE(entry.PeelingSamplingEntries().empty());
 
     entry.ClearTransientFitState();
 
@@ -518,8 +518,27 @@ TEST(DataObjectModelAnalysisTest, LocalPotentialEntryClearTransientFitStateKeeps
     EXPECT_DOUBLE_EQ(2.0, entry.GaussianResult().mdpde.GetModel().GetAmplitude());
     EXPECT_DOUBLE_EQ(0.7, entry.GaussianResult().mdpde.GetModel().GetWidth());
     EXPECT_FALSE(entry.GaussianResult().fit_result.has_value());
-    ASSERT_EQ(entry.UpdatedSamplingEntries().size(), 1u);
-    EXPECT_FLOAT_EQ(entry.UpdatedSamplingEntries().front().response, 3.0f);
+    ASSERT_EQ(entry.PeelingSamplingEntries().size(), 1u);
+    EXPECT_FLOAT_EQ(entry.PeelingSamplingEntries().front().response, 3.0f);
+}
+
+TEST(DataObjectModelAnalysisTest, LocalPotentialEntryStoresRawAndPeelingSamplingEntries)
+{
+    rg::LocalPotentialEntry entry;
+    entry.SetRawSamplingEntries({
+        LocalPotentialSample{ 6.0f, SamplingPoint{ 0.1f } },
+        LocalPotentialSample{ 4.0f, SamplingPoint{ 0.2f } }
+    });
+    entry.SetPeelingSamplingEntries({
+        LocalPotentialSample{ 3.0f, SamplingPoint{ 0.1f } }
+    });
+
+    EXPECT_EQ(entry.RawSamplingEntryCount(), 2);
+    EXPECT_EQ(entry.PeelingSamplingEntryCount(), 1);
+    ASSERT_EQ(entry.RawSamplingEntries().size(), 2u);
+    ASSERT_EQ(entry.PeelingSamplingEntries().size(), 1u);
+    EXPECT_FLOAT_EQ(entry.RawSamplingEntries().front().response, 6.0f);
+    EXPECT_FLOAT_EQ(entry.PeelingSamplingEntries().front().response, 3.0f);
 }
 
 TEST(DataObjectModelAnalysisTest, LocalPotentialEntryStoresGaussianResult)
@@ -567,7 +586,7 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialEditorSetGaussianResultUpdat
         LocalPotentialSample{ 4.0f, SamplingPoint{ 0.5f } },
         LocalPotentialSample{ 2.0f, SamplingPoint{ 0.9f } }
     };
-    editor.SetSamplingEntries(sampling_entries);
+    editor.SetRawSamplingEntries(sampling_entries);
 
     rg::LocalGaussianResult gaussian_result;
     gaussian_result.alpha_r = 0.6;
@@ -587,62 +606,76 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialEditorSetGaussianResultUpdat
     EXPECT_DOUBLE_EQ(0.0, rg::AtomLocalPotentialView::RequireFor(*atom).GetEstimateMDPDE().GetWidth());
 }
 
-TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewCanApplySamplingSelection)
+TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewCanApplyRawSamplingSelection)
 {
     auto model{ data_test::MakeModelWithBond() };
     auto * atom{ model->GetAtomList().at(0).get() };
     auto analysis{ model->EditAnalysis() };
     auto editor{ analysis.EnsureAtomLocalPotential(*atom) };
 
-    editor.SetSamplingEntries({
+    editor.SetRawSamplingEntries({
         LocalPotentialSample{ 6.0f, SamplingPoint{ 0.0f, { 0.0f, 0.0f, 0.0f }, true } },
         LocalPotentialSample{ 4.0f, SamplingPoint{ 0.5f, { 0.0f, 0.0f, 0.0f }, false } },
         LocalPotentialSample{ 2.0f, SamplingPoint{ 0.9f, { 0.0f, 0.0f, 0.0f }, true } }
     });
 
     const auto view{ rg::AtomLocalPotentialView::RequireFor(*atom) };
-    const auto selected_entries{ view.GetSamplingEntries() };
-    const auto all_entries{ view.GetSamplingEntries(false) };
+    const auto raw_selected_entries{ view.GetRawSamplingEntries() };
+    const auto raw_all_entries{ view.GetRawSamplingEntries(false) };
 
-    ASSERT_EQ(selected_entries.size(), 2u);
-    EXPECT_FLOAT_EQ(selected_entries.at(0).response, 6.0f);
-    EXPECT_FLOAT_EQ(selected_entries.at(1).response, 2.0f);
-    ASSERT_EQ(all_entries.size(), 3u);
-    EXPECT_FALSE(all_entries.at(1).point.is_selected);
+    ASSERT_EQ(raw_selected_entries.size(), 2u);
+    EXPECT_FLOAT_EQ(raw_selected_entries.at(0).response, 6.0f);
+    EXPECT_FLOAT_EQ(raw_selected_entries.at(1).response, 2.0f);
+    ASSERT_EQ(raw_all_entries.size(), 3u);
+    EXPECT_FALSE(raw_all_entries.at(1).point.is_selected);
 }
 
-TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewCanReadUpdatedSamplingEntries)
+TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewCanApplyPeelingSamplingSelection)
 {
     auto model{ data_test::MakeModelWithBond() };
     auto * atom{ model->GetAtomList().at(0).get() };
     auto analysis{ model->EditAnalysis() };
     auto editor{ analysis.EnsureAtomLocalPotential(*atom) };
 
-    editor.SetSamplingEntries({
+    editor.SetRawSamplingEntries({
         LocalPotentialSample{ 6.0f, SamplingPoint{ 0.0f, { 0.0f, 0.0f, 0.0f }, true } },
         LocalPotentialSample{ 4.0f, SamplingPoint{ 0.5f, { 0.0f, 0.0f, 0.0f }, false } },
         LocalPotentialSample{ 2.0f, SamplingPoint{ 0.9f, { 0.0f, 0.0f, 0.0f }, true } }
     });
-    editor.SetUpdatedSamplingEntries({
+    editor.SetPeelingSamplingEntries({
         LocalPotentialSample{ 3.0f, SamplingPoint{ 0.0f, { 0.0f, 0.0f, 0.0f }, true } },
         LocalPotentialSample{ 5.0f, SamplingPoint{ 0.5f, { 0.0f, 0.0f, 0.0f }, false } },
         LocalPotentialSample{ 7.0f, SamplingPoint{ 0.9f, { 0.0f, 0.0f, 0.0f }, true } }
     });
 
     const auto view{ rg::AtomLocalPotentialView::RequireFor(*atom) };
-    const auto original_selected_entries{ view.GetSamplingEntries() };
-    const auto updated_selected_entries{ view.GetSamplingEntries(true, true) };
-    const auto updated_all_entries{ view.GetSamplingEntries(false, true) };
+    const auto raw_selected_entries{ view.GetRawSamplingEntries() };
+    const auto peeling_selected_entries{ view.GetPeelingSamplingEntries() };
+    const auto peeling_all_entries{ view.GetPeelingSamplingEntries(false) };
 
-    ASSERT_EQ(original_selected_entries.size(), 2u);
-    EXPECT_FLOAT_EQ(original_selected_entries.at(0).response, 6.0f);
-    EXPECT_FLOAT_EQ(original_selected_entries.at(1).response, 2.0f);
-    ASSERT_EQ(updated_selected_entries.size(), 2u);
-    EXPECT_FLOAT_EQ(updated_selected_entries.at(0).response, 3.0f);
-    EXPECT_FLOAT_EQ(updated_selected_entries.at(1).response, 7.0f);
-    ASSERT_EQ(updated_all_entries.size(), 3u);
-    EXPECT_FLOAT_EQ(updated_all_entries.at(1).response, 5.0f);
-    EXPECT_FALSE(updated_all_entries.at(1).point.is_selected);
+    ASSERT_EQ(raw_selected_entries.size(), 2u);
+    EXPECT_FLOAT_EQ(raw_selected_entries.at(0).response, 6.0f);
+    EXPECT_FLOAT_EQ(raw_selected_entries.at(1).response, 2.0f);
+    ASSERT_EQ(peeling_selected_entries.size(), 2u);
+    EXPECT_FLOAT_EQ(peeling_selected_entries.at(0).response, 3.0f);
+    EXPECT_FLOAT_EQ(peeling_selected_entries.at(1).response, 7.0f);
+    ASSERT_EQ(peeling_all_entries.size(), 3u);
+    EXPECT_FLOAT_EQ(peeling_all_entries.at(1).response, 5.0f);
+    EXPECT_FALSE(peeling_all_entries.at(1).point.is_selected);
+}
+
+TEST(DataObjectModelAnalysisTest, EmptyPeelingSamplingEntriesDoNotFallBackToRaw)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto * atom{ model->GetAtomList().at(0).get() };
+    auto editor{ model->EditAnalysis().EnsureAtomLocalPotential(*atom) };
+    editor.SetRawSamplingEntries({
+        LocalPotentialSample{ 6.0f, SamplingPoint{ 0.0f } }
+    });
+
+    const auto view{ rg::AtomLocalPotentialView::RequireFor(*atom) };
+    EXPECT_EQ(view.GetRawSamplingEntries(false).size(), 1u);
+    EXPECT_TRUE(view.GetPeelingSamplingEntries(false).empty());
 }
 
 TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupGaussianResultToStatisticsAndPosterior)

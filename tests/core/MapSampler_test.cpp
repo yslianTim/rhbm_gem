@@ -155,7 +155,7 @@ TEST(MapSamplerTest, PotentialSamplingWorkflowWritesSamplesToSelectedAtoms)
     for (const auto * atom : model->GetSelectedAtoms())
     {
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
-        EXPECT_FALSE(local_view.GetSamplingEntries(false).empty());
+        EXPECT_FALSE(local_view.GetRawSamplingEntries(false).empty());
     }
 }
 

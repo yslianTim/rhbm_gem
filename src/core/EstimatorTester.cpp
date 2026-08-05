@@ -367,7 +367,7 @@ LocalGaussianEstimateBias RunAtomicModelLocalEstimationTest(
         };
         const auto estimate{
             EstimateLocalGaussian(
-                local_view.GetSamplingEntries(false), alpha_r, options)
+                local_view.GetRawSamplingEntries(false), alpha_r, options)
         };
         ols_bias.col(i) = CalculateNormalizedBias(estimate.ols.GetModel(), input.gaus_true);
         mdpde_bias.col(i) = CalculateNormalizedBias(estimate.mdpde.GetModel(), input.gaus_true);

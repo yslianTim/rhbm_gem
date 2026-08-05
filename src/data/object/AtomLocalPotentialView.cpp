@@ -22,6 +22,27 @@ const LocalPotentialEntry & RequireLocalEntry(
     return *entry;
 }
 
+LocalPotentialSampleList ApplySamplingEntrySelection(
+    const LocalPotentialSampleList & sampling_entries,
+    bool apply_selection)
+{
+    if (!apply_selection)
+    {
+        return sampling_entries;
+    }
+
+    LocalPotentialSampleList selected_entries;
+    selected_entries.reserve(sampling_entries.size());
+    for (const auto & sample : sampling_entries)
+    {
+        if (sample.point.is_selected)
+        {
+            selected_entries.emplace_back(sample);
+        }
+    }
+    return selected_entries;
+}
+
 } // namespace
 
 AtomLocalPotentialView::AtomLocalPotentialView(const AtomObject * atom_object) :
@@ -75,29 +96,16 @@ const GaussianModel3D & AtomLocalPotentialView::GetEstimateMDPDE() const
     return RequireEntry("Local estimate MDPDE").GaussianResult().mdpde.GetModel();
 }
 
-LocalPotentialSampleList AtomLocalPotentialView::GetSamplingEntries(
-    bool apply_selection,
-    bool use_updated_sample) const
+LocalPotentialSampleList AtomLocalPotentialView::GetRawSamplingEntries(bool apply_selection) const
 {
-    const auto & entry{ RequireEntry("Local sampling entries") };
-    const auto & sampling_entries{
-        use_updated_sample ? entry.UpdatedSamplingEntries() : entry.SamplingEntries()
-    };
-    if (!apply_selection)
-    {
-        return sampling_entries;
-    }
+    const auto & entry{ RequireEntry("Local raw sampling entries") };
+    return ApplySamplingEntrySelection(entry.RawSamplingEntries(), apply_selection);
+}
 
-    LocalPotentialSampleList selected_entries;
-    selected_entries.reserve(sampling_entries.size());
-    for (const auto & sample : sampling_entries)
-    {
-        if (sample.point.is_selected)
-        {
-            selected_entries.emplace_back(sample);
-        }
-    }
-    return selected_entries;
+LocalPotentialSampleList AtomLocalPotentialView::GetPeelingSamplingEntries(bool apply_selection) const
+{
+    const auto & entry{ RequireEntry("Local peeling sampling entries") };
+    return ApplySamplingEntrySelection(entry.PeelingSamplingEntries(), apply_selection);
 }
 
 double AtomLocalPotentialView::GetAlphaR() const

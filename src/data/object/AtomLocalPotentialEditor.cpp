@@ -11,14 +11,14 @@ AtomLocalPotentialEditor::AtomLocalPotentialEditor(LocalPotentialEntry & entry) 
 {
 }
 
-void AtomLocalPotentialEditor::SetSamplingEntries(LocalPotentialSampleList value)
+void AtomLocalPotentialEditor::SetRawSamplingEntries(LocalPotentialSampleList value)
 {
-    m_entry->SetSamplingEntries(std::move(value));
+    m_entry->SetRawSamplingEntries(std::move(value));
 }
 
-void AtomLocalPotentialEditor::SetUpdatedSamplingEntries(LocalPotentialSampleList value)
+void AtomLocalPotentialEditor::SetPeelingSamplingEntries(LocalPotentialSampleList value)
 {
-    m_entry->SetUpdatedSamplingEntries(std::move(value));
+    m_entry->SetPeelingSamplingEntries(std::move(value));
 }
 
 void AtomLocalPotentialEditor::SetGaussianResult(LocalGaussianResult value)

@@ -9,8 +9,8 @@ namespace rhbm_gem {
 
 class LocalPotentialEntry
 {
-    LocalPotentialSampleList m_sampling_entries;
-    LocalPotentialSampleList m_updated_sampling_entries;
+    LocalPotentialSampleList m_raw_sampling_entries;
+    LocalPotentialSampleList m_peeling_sampling_entries;
     LocalGaussianResult m_gaussian_result;
 
 public:
@@ -18,13 +18,13 @@ public:
     ~LocalPotentialEntry() = default;
 
     void SetAlphaR(double value) { m_gaussian_result.alpha_r = value; }
-    void SetSamplingEntries(LocalPotentialSampleList value)
+    void SetRawSamplingEntries(LocalPotentialSampleList value)
     {
-        m_sampling_entries = std::move(value);
+        m_raw_sampling_entries = std::move(value);
     }
-    void SetUpdatedSamplingEntries(LocalPotentialSampleList value)
+    void SetPeelingSamplingEntries(LocalPotentialSampleList value)
     {
-        m_updated_sampling_entries = std::move(value);
+        m_peeling_sampling_entries = std::move(value);
     }
     void SetGaussianResult(LocalGaussianResult value)
     {
@@ -44,17 +44,17 @@ public:
         m_gaussian_result.fit_result.reset();
     }
 
-    int SamplingEntryCount() const
+    int RawSamplingEntryCount() const
     {
-        return static_cast<int>(m_sampling_entries.size());
+        return static_cast<int>(m_raw_sampling_entries.size());
     }
-    int UpdatedSamplingEntryCount() const
+    int PeelingSamplingEntryCount() const
     {
-        return static_cast<int>(m_updated_sampling_entries.size());
+        return static_cast<int>(m_peeling_sampling_entries.size());
     }
     const LocalGaussianResult & GaussianResult() const { return m_gaussian_result; }
-    const LocalPotentialSampleList & SamplingEntries() const { return m_sampling_entries; }
-    const LocalPotentialSampleList & UpdatedSamplingEntries() const { return m_updated_sampling_entries; }
+    const LocalPotentialSampleList & RawSamplingEntries() const { return m_raw_sampling_entries; }
+    const LocalPotentialSampleList & PeelingSamplingEntries() const { return m_peeling_sampling_entries; }
 };
 
 } // namespace rhbm_gem

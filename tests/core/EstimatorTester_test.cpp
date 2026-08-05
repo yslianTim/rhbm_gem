@@ -83,7 +83,7 @@ double CalculateSelectedAtomResponseMeanSquaredError(const rg::ModelObject & mod
     for (const auto * atom : selected_atoms)
     {
         const auto local_view{ rg::AtomLocalPotentialView::RequireFor(*atom) };
-        for (const auto & sample : local_view.GetSamplingEntries(false))
+        for (const auto & sample : local_view.GetRawSamplingEntries(false))
         {
             double fitted_response{ 0.0 };
             for (const auto * fitted_atom : selected_atoms)
@@ -167,10 +167,11 @@ void RewriteSamplingResponsesFromSelectedAtomEstimates(rg::ModelObject & model_o
     const auto & selected_atoms{ model_object.GetSelectedAtoms() };
     for (auto * atom : selected_atoms)
     {
-        auto sampling_entries{
-            rg::AtomLocalPotentialView::RequireFor(*atom).GetSamplingEntries(false)
+        auto raw_sampling_entries{
+            rg::AtomLocalPotentialView::RequireFor(*atom)
+                .GetRawSamplingEntries(false)
         };
-        for (auto & sample : sampling_entries)
+        for (auto & sample : raw_sampling_entries)
         {
             double response{ 0.0 };
             for (const auto * fitted_atom : selected_atoms)
@@ -183,8 +184,8 @@ void RewriteSamplingResponsesFromSelectedAtomEstimates(rg::ModelObject & model_o
             }
             sample.response = static_cast<float>(response);
         }
-        analysis.EnsureAtomLocalPotential(*atom).SetSamplingEntries(
-            std::move(sampling_entries));
+        analysis.EnsureAtomLocalPotential(*atom).SetRawSamplingEntries(
+            std::move(raw_sampling_entries));
     }
 }
 
@@ -221,27 +222,28 @@ std::unique_ptr<rg::ModelObject> BuildSecondStageSuspiciousOffsetDiagnosticModel
     auto target_position{ target_atom->GetPosition() };
 
     auto analysis{ model->EditAnalysis() };
-    auto target_sampling_entries{
-        rg::AtomLocalPotentialView::RequireFor(*target_atom).GetSamplingEntries(false)
+    auto target_raw_sampling_entries{
+        rg::AtomLocalPotentialView::RequireFor(*target_atom)
+            .GetRawSamplingEntries(false)
     };
-    target_sampling_entries.resize(256);
-    target_sampling_entries.front().response = 0.0F;
-    target_sampling_entries.front().point.distance = 0.0F;
-    target_sampling_entries.front().point.position = target_position;
-    for (std::size_t i = 1; i < target_sampling_entries.size(); i++)
+    target_raw_sampling_entries.resize(256);
+    target_raw_sampling_entries.front().response = 0.0F;
+    target_raw_sampling_entries.front().point.distance = 0.0F;
+    target_raw_sampling_entries.front().point.position = target_position;
+    for (std::size_t i = 1; i < target_raw_sampling_entries.size(); i++)
     {
-        auto & sample{ target_sampling_entries.at(i) };
+        auto & sample{ target_raw_sampling_entries.at(i) };
         const auto response_scale{
             0.5F + 0.5F * static_cast<float>(i) /
-                static_cast<float>(target_sampling_entries.size())
+                static_cast<float>(target_raw_sampling_entries.size())
         };
         sample.response = std::numeric_limits<float>::max() * response_scale;
         sample.point.position = target_position;
         sample.point.position.at(0) += 100.0F;
         sample.point.distance = 100.0F;
     }
-    analysis.EnsureAtomLocalPotential(*target_atom).SetSamplingEntries(
-        std::move(target_sampling_entries));
+    analysis.EnsureAtomLocalPotential(*target_atom).SetRawSamplingEntries(
+        std::move(target_raw_sampling_entries));
     return model;
 }
 
@@ -387,8 +389,8 @@ TEST(
         rg::AtomLocalPotentialView::RequireFor(
             *model->GetSelectedAtoms().front())
     };
-    ASSERT_FALSE(initial_view.GetSamplingEntries(false).empty());
-    ASSERT_TRUE(initial_view.GetSamplingEntries(false, true).empty());
+    ASSERT_FALSE(initial_view.GetRawSamplingEntries(false).empty());
+    ASSERT_TRUE(initial_view.GetPeelingSamplingEntries(false).empty());
 
     auto options{ MakeSecondStageOptions() };
     options.quiet_mode = false;
@@ -400,7 +402,7 @@ TEST(
         rg::AtomLocalPotentialView::RequireFor(
             *model->GetSelectedAtoms().front())
     };
-    EXPECT_FALSE(fitted_view.GetSamplingEntries(false, true).empty());
+    EXPECT_FALSE(fitted_view.GetPeelingSamplingEntries(false).empty());
     EXPECT_NE(
         out.find(
             "Selected second-stage initial seeds = 1, sources = "

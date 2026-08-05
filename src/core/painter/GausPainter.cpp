@@ -197,7 +197,8 @@ void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::
             map_value_graph_list[k].emplace_back(std::move(graph));
             const auto atom_view{ AtomLocalPotentialView::RequireFor(*atom) };
             auto map_value_range{
-                local_potential_series::ComputeResponseRange(atom_view.GetSamplingEntries(), 0.0)
+                local_potential_series::ComputeResponseRange(
+                    atom_view.GetRawSamplingEntries(), 0.0)
             };
             y_array.emplace_back(std::get<0>(map_value_range));
             y_array.emplace_back(std::get<1>(map_value_range));

@@ -421,7 +421,7 @@ struct SecondStageNeighborSample
 struct SecondStageAtomContext
 {
     AtomObject * atom{ nullptr };
-    LocalPotentialSampleList sample_entries{};
+    LocalPotentialSampleList raw_sampling_entries{};
     std::vector<std::vector<SecondStageNeighborSample>> sample_neighbor_list{};
     double alpha_r{ 0.0 };
 };
@@ -722,7 +722,7 @@ SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(ModelObject &
         auto & atom_context{ context.at(atom_index) };
         const auto * atom{ atom_context.atom };
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
-        atom_context.sample_entries = local_view.GetSamplingEntries(false);
+        atom_context.raw_sampling_entries = local_view.GetRawSamplingEntries(false);
         atom_context.alpha_r = local_view.GetAlphaR();
     }
 
@@ -741,10 +741,12 @@ SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(ModelObject &
             selected_neighbor_index_list.emplace_back(neighbor_iter->second);
         }
 
-        atom_context.sample_neighbor_list.resize(atom_context.sample_entries.size());
-        for (std::size_t sample_index = 0; sample_index < atom_context.sample_entries.size(); sample_index++)
+        atom_context.sample_neighbor_list.resize(atom_context.raw_sampling_entries.size());
+        for (std::size_t sample_index = 0;
+            sample_index < atom_context.raw_sampling_entries.size();
+            sample_index++)
         {
-            const auto & sample{ atom_context.sample_entries.at(sample_index) };
+            const auto & sample{ atom_context.raw_sampling_entries.at(sample_index) };
             auto & sample_neighbor_list{ atom_context.sample_neighbor_list.at(sample_index) };
             sample_neighbor_list.reserve(selected_neighbor_index_list.size());
             for (const auto neighbor_index : selected_neighbor_index_list)
@@ -777,10 +779,10 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
     {
         const auto & atom_context{ context.at(atom_index) };
         for (std::size_t sample_index = 0;
-            sample_index < atom_context.sample_entries.size();
+            sample_index < atom_context.raw_sampling_entries.size();
             sample_index++)
         {
-            const auto & sample{ atom_context.sample_entries.at(sample_index) };
+            const auto & sample{ atom_context.raw_sampling_entries.at(sample_index) };
             std::vector<detail::LocalFittingCouplingParticipant> participant_list;
             participant_list.reserve(
                 atom_context.sample_neighbor_list.at(sample_index).size() + 1);
@@ -1105,8 +1107,7 @@ JointOffsetBuildResult BuildJointOffsetSystem(
     };
     if (!parameterization.has_value())
     {
-        throw std::runtime_error(
-            "Joint offset group parameterization is invalid.");
+        throw std::runtime_error("Joint offset group parameterization is invalid.");
     }
 
     std::vector<int> active_position_by_atom_index(atom_size, -1);
@@ -1142,9 +1143,11 @@ JointOffsetBuildResult BuildJointOffsetSystem(
         const auto & target_model{ snapshot.at(active_index) };
         atom_row_basis_entries.reserve(atom_size);
         group_row_basis_entries.reserve(parameterization->GroupCount());
-        for (std::size_t sample_index = 0; sample_index < atom_context.sample_entries.size(); sample_index++)
+        for (std::size_t sample_index = 0;
+            sample_index < atom_context.raw_sampling_entries.size();
+            sample_index++)
         {
-            const auto & sample{ atom_context.sample_entries.at(sample_index) };
+            const auto & sample{ atom_context.raw_sampling_entries.at(sample_index) };
             if (!std::isfinite(static_cast<double>(sample.response)))
             {
                 throw std::runtime_error("Joint offset sample response is not finite.");
@@ -1583,7 +1586,9 @@ double CalculateSecondStageAdjustedResponse(
     const FittedGaussianSnapshot & snapshot)
 {
     const auto & atom_context{ context.at(atom_index) };
-    auto response_value{ static_cast<double>(atom_context.sample_entries.at(sample_index).response) };
+    auto response_value{
+        static_cast<double>(atom_context.raw_sampling_entries.at(sample_index).response)
+    };
     for (const auto & neighbor_sample : atom_context.sample_neighbor_list.at(sample_index))
     {
         response_value -= snapshot.at(neighbor_sample.atom_index).ResponseAtDistance(neighbor_sample.distance);
@@ -1597,15 +1602,17 @@ LocalPotentialSampleList BuildSecondStageAdjustedSamples(
     const FittedGaussianSnapshot & snapshot)
 {
     const auto & atom_context{ context.at(atom_index) };
-    LocalPotentialSampleList updated_list;
-    updated_list.reserve(atom_context.sample_entries.size());
-    for (std::size_t sample_index = 0; sample_index < atom_context.sample_entries.size(); sample_index++)
+    LocalPotentialSampleList adjusted_sampling_entries;
+    adjusted_sampling_entries.reserve(atom_context.raw_sampling_entries.size());
+    for (std::size_t sample_index = 0;
+        sample_index < atom_context.raw_sampling_entries.size();
+        sample_index++)
     {
-        auto sample{ atom_context.sample_entries.at(sample_index) };
+        auto sample{ atom_context.raw_sampling_entries.at(sample_index) };
         sample.response = static_cast<float>(CalculateSecondStageAdjustedResponse(context, atom_index, sample_index, snapshot));
-        updated_list.emplace_back(sample);
+        adjusted_sampling_entries.emplace_back(sample);
     }
-    return updated_list;
+    return adjusted_sampling_entries;
 }
 struct LocalFittingResidualSample
 {
@@ -1619,7 +1626,9 @@ std::optional<LocalFittingResidualSample> EvaluateLocalFittingResidualSample(
     const LocalFittingObjectiveSampleRef & sample_ref)
 {
     const auto & atom_context{ context.at(sample_ref.atom_index) };
-    const auto & sample{ atom_context.sample_entries.at(sample_ref.sample_index) };
+    const auto & sample{
+        atom_context.raw_sampling_entries.at(sample_ref.sample_index)
+    };
     auto adjusted_response{ static_cast<double>(sample.response) };
     for (const auto & neighbor_sample :
         atom_context.sample_neighbor_list.at(sample_ref.sample_index))
@@ -1672,7 +1681,7 @@ LocalFittingObjectiveDomain BuildLocalFittingObjectiveDomain(
     for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
     {
         domain.fit_sample_mask_by_atom.at(atom_index).resize(
-            context.at(atom_index).sample_entries.size(),
+            context.at(atom_index).raw_sampling_entries.size(),
             0);
     }
     for (const auto & [key, affected_sample_ref_list] :
@@ -1688,9 +1697,11 @@ LocalFittingObjectiveDomain BuildLocalFittingObjectiveDomain(
         for (const auto atom_index : key)
         {
             domain.owner_key_by_atom_index.at(atom_index) = key;
-            const auto & sample_entries{ context.at(atom_index).sample_entries };
+            const auto & raw_sampling_entries{
+                context.at(atom_index).raw_sampling_entries
+            };
             for (std::size_t sample_index = 0;
-                sample_index < sample_entries.size();
+                sample_index < raw_sampling_entries.size();
                 sample_index++)
             {
                 const LocalFittingObjectiveSampleRef sample_ref{
@@ -1704,7 +1715,8 @@ LocalFittingObjectiveDomain BuildLocalFittingObjectiveDomain(
                         sample_ref)
                 };
                 const auto distance{
-                    static_cast<double>(sample_entries.at(sample_index).point.distance)
+                    static_cast<double>(
+                        raw_sampling_entries.at(sample_index).point.distance)
                 };
                 const auto is_fit_range{
                     distance >= options.distance_min &&
@@ -2277,7 +2289,9 @@ std::optional<Eigen::VectorXd> BuildLocalFittingJointPolishDirection(
         const auto & atom_context{
             context.at(sample_ref.atom_index)
         };
-        const auto & sample{ atom_context.sample_entries.at(sample_ref.sample_index) };
+        const auto & sample{
+            atom_context.raw_sampling_entries.at(sample_ref.sample_index)
+        };
         if (!std::isfinite(static_cast<double>(sample.response))) return std::nullopt;
 
         const auto row_index{ static_cast<Eigen::Index>(residual_list.size()) };
@@ -3557,7 +3571,7 @@ std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
     const FittedGaussianSnapshot & refit_model_snapshot,
     const FitOptions & options)
 {
-    auto sample_entries{
+    auto adjusted_sampling_entries{
         BuildSecondStageAdjustedSamples(
             context,
             atom_index,
@@ -3569,7 +3583,7 @@ std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
     {
         return detail::IsValidSecondStageGaussianModel(model) &&
             !IsSuspiciousJointOffset(
-                sample_entries,
+                adjusted_sampling_entries,
                 previous_model,
                 model,
                 options);
@@ -3578,7 +3592,7 @@ std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
     {
         auto candidate_result{
             EstimateLocalGaussian(
-                sample_entries,
+                adjusted_sampling_entries,
                 context.at(atom_index).alpha_r,
                 options,
                 offset_model)
@@ -3725,7 +3739,7 @@ LocalFittingIterationResult RunLocalFittingIteration(
         {
             const auto atom_index{ key.at(position) };
             if (IsSuspiciousJointOffset(
-                    context.at(atom_index).sample_entries,
+                    context.at(atom_index).raw_sampling_entries,
                     previous_state.at(atom_index).mdpde.GetModel(),
                     current_snapshot.at(atom_index),
                     options))

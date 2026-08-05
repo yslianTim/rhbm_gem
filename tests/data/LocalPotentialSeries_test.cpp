@@ -116,16 +116,21 @@ TEST(LocalPotentialSeriesTest, PureHelpersWorkWithResolvedEntrySamples)
     auto * atom{ model->GetAtomList().front().get() };
     auto analysis{ model->EditAnalysis() };
     auto editor{ analysis.EnsureAtomLocalPotential(*atom) };
-    editor.SetSamplingEntries({
+    editor.SetRawSamplingEntries({
         {2.0f, SamplingPoint{ 0.1f }},
         {4.0f, SamplingPoint{ 0.4f }},
         {6.0f, SamplingPoint{ 0.8f }},
     });
 
     const auto view{ rg::AtomLocalPotentialView::RequireFor(*atom) };
-    const auto & sampling_entries{ view.GetSamplingEntries() };
-    const auto map_value_range{ lps::ComputeResponseRange(sampling_entries, 0.0) };
-    const auto binned{ lps::BuildBinnedDistanceResponseSeries(sampling_entries, 2, 0.0, 1.0) };
+    const auto & raw_sampling_entries{ view.GetRawSamplingEntries() };
+    const auto map_value_range{
+        lps::ComputeResponseRange(raw_sampling_entries, 0.0)
+    };
+    const auto binned{
+        lps::BuildBinnedDistanceResponseSeries(
+            raw_sampling_entries, 2, 0.0, 1.0)
+    };
 
     EXPECT_FLOAT_EQ(std::get<0>(map_value_range), 2.0f);
     EXPECT_FLOAT_EQ(std::get<1>(map_value_range), 6.0f);
@@ -135,7 +140,7 @@ TEST(LocalPotentialSeriesTest, PureHelpersWorkWithResolvedEntrySamples)
 
     const auto fit_dataset_series{
         ls::BuildDatasetSeries(
-            view.GetSamplingEntries(),
+            view.GetRawSamplingEntries(),
             0.0,
             0.5)
     };

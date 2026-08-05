@@ -30,15 +30,27 @@ namespace rhbm_gem {
 
 namespace {
 
+LocalPotentialSampleList LoadSamplingEntries(
+    const AtomLocalPotentialView & view,
+    bool apply_selection,
+    bool use_peeling_sampling_entries)
+{
+    return use_peeling_sampling_entries
+        ? view.GetPeelingSamplingEntries(apply_selection)
+        : view.GetRawSamplingEntries(apply_selection);
+}
+
 SeriesPointList BuildLocalDatasetSeries(
     const AtomLocalPotentialView & view,
     bool apply_selection,
-    bool use_updated_sample)
+    bool use_peeling_sampling_entries)
 {
     auto model_prior{ view.GetEstimateMDPDE() };
     auto offset{ model_prior.GetOffset() };
     double range_max{ 0.0 };
-    auto sampling_entries{ view.GetSamplingEntries(apply_selection, use_updated_sample) };
+    auto sampling_entries{
+        LoadSamplingEntries(view, apply_selection, use_peeling_sampling_entries)
+    };
     for (auto & sample : sampling_entries)
     {
         auto distance{ static_cast<double>(sample.point.distance) };
@@ -203,9 +215,13 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateAtomGausEstimateHistogram(
 }
 
 std::unique_ptr<TH1D> PotentialPlotBuilder::CreateLinearModelDataHistogram(
-    int dimension_id, bool apply_selection, bool use_updated_sample) const
+    int dimension_id,
+    bool apply_selection,
+    bool use_peeling_sampling_entries) const
 {
-    auto data_array{ BuildLocalDatasetSeries(GetLocalEntry(), apply_selection, use_updated_sample) };
+    auto data_array{
+        BuildLocalDatasetSeries(GetLocalEntry(), apply_selection, use_peeling_sampling_entries)
+    };
     std::vector<float> data_list;
     data_list.reserve(data_array.size());
     for (const auto & point : data_array)
@@ -237,17 +253,25 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateLinearModelDataHistogram(
 }
 
 std::unique_ptr<TH2D> PotentialPlotBuilder::CreateDistanceToMapValueHistogram(
-    int x_bin_size, int y_bin_size, bool apply_selection, bool use_updated_sample) const
+    int x_bin_size,
+    int y_bin_size,
+    bool apply_selection,
+    bool use_peeling_sampling_entries) const
 {
     const auto local_entry{ GetLocalEntry() };
-    auto map_value_range{ local_potential_series::ComputeResponseRange(local_entry.GetSamplingEntries(apply_selection, use_updated_sample), 0.1) };
+    const auto sampling_entries{
+        LoadSamplingEntries(local_entry, apply_selection, use_peeling_sampling_entries)
+    };
+    auto map_value_range{
+        local_potential_series::ComputeResponseRange(sampling_entries, 0.1)
+    };
     auto hist{
         root_helper::CreateHist2D(
             "hist_distance_mapvalue", "Distance vs Map Value",
             x_bin_size, 0.0, 2.0,
             y_bin_size, std::get<0>(map_value_range), std::get<1>(map_value_range))
     };
-    for (const auto & sample : local_entry.GetSamplingEntries(apply_selection, use_updated_sample))
+    for (const auto & sample : sampling_entries)
     {
         hist->Fill(sample.point.distance, sample.response);
     }
@@ -472,11 +496,13 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatte
     return graph;
 }
 
-std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateDistanceToMapValueGraph(bool apply_selection, bool use_updated_sample)
+std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateDistanceToMapValueGraph(
+    bool apply_selection,
+    bool use_peeling_sampling_entries)
 {
     auto graph{ root_helper::CreateGraphErrors() };
     auto count{ 0 };
-    for (const auto & sample : GetLocalEntry().GetSamplingEntries(apply_selection, use_updated_sample))
+    for (const auto & sample : LoadSamplingEntries(GetLocalEntry(), apply_selection, use_peeling_sampling_entries))
     {
         graph->SetPoint(count, sample.point.distance, sample.response);
         count++;
@@ -484,11 +510,13 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateDistanceToMapValueGrap
     return graph;
 }
 
-std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateLinearModelDistanceToMapValueGraph(bool apply_selection, bool use_updated_sample)
+std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateLinearModelDistanceToMapValueGraph(
+    bool apply_selection,
+    bool use_peeling_sampling_entries)
 {
     auto graph{ root_helper::CreateGraphErrors() };
     auto count{ 0 };
-    for (const auto & point : BuildLocalDatasetSeries(GetLocalEntry(), apply_selection, use_updated_sample))
+    for (const auto & point : BuildLocalDatasetSeries(GetLocalEntry(), apply_selection, use_peeling_sampling_entries))
     {
         graph->SetPoint(count, point.GetBasisValue(1), point.response);
         count++;
@@ -501,7 +529,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToMapVal
 {
     auto data_array{
         local_potential_series::BuildBinnedDistanceResponseSeries(
-            GetLocalEntry().GetSamplingEntries(false), bin_size, x_min, x_max)
+            GetLocalEntry().GetRawSamplingEntries(false), bin_size, x_min, x_max)
     };
     auto graph{ root_helper::CreateGraphErrors(bin_size) };
     auto count{ 0 };
@@ -637,14 +665,14 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateMapValueScatterGraph(
         auto * atom_object2{ model2_atom_map.at(atom_id) };
         auto data1_array{
             local_potential_series::BuildBinnedDistanceResponseSeries(
-                AtomLocalPotentialView::RequireFor(*atom_object1).GetSamplingEntries(),
+                AtomLocalPotentialView::RequireFor(*atom_object1).GetRawSamplingEntries(),
                 bin_size,
                 x_min,
                 x_max)
         };
         auto data2_array{
             local_potential_series::BuildBinnedDistanceResponseSeries(
-                AtomLocalPotentialView::RequireFor(*atom_object2).GetSamplingEntries(),
+                AtomLocalPotentialView::RequireFor(*atom_object2).GetRawSamplingEntries(),
                 bin_size,
                 x_min,
                 x_max)
@@ -892,14 +920,16 @@ PotentialPlotBuilder::CreateAtomMapValueToSequenceIDGraphMap(
         graph_map[chain_id]->SetPoint(
             count_map[chain_id],
             x_value,
-            local_potential_series::ComputeMapValueNearCenter(entry.GetSamplingEntries()));
+            local_potential_series::ComputeMapValueNearCenter(entry.GetRawSamplingEntries()));
         count_map[chain_id]++;
     }
     return graph_map;
 }
 
 std::unordered_map<std::string, std::unique_ptr<TGraphErrors>>
-PotentialPlotBuilder::CreateAverageQScoreToSequenceIDGraphMap(bool use_standard, bool use_updated_sample)
+PotentialPlotBuilder::CreateAverageQScoreToSequenceIDGraphMap(
+    bool use_standard,
+    bool use_peeling_sampling_entries)
 {
     if (IsModelObjectAvailable() == false) return {};
     auto apply_selection{ false };
@@ -926,17 +956,20 @@ PotentialPlotBuilder::CreateAverageQScoreToSequenceIDGraphMap(bool use_standard,
             if (!entry.IsAvailable()) continue;
             auto sequence_id{ atom->GetSequenceID() };
             if (sequence_id < 0) continue;
-            if (use_updated_sample)
+            if (use_peeling_sampling_entries)
             {
                 reference_height = entry.GetGaussianResult().mdpde.GetModel().GetHeight();
                 reference_offset = entry.GetGaussianResult().mdpde.GetModel().GetOffset();
                 reference_width = entry.GetGaussianResult().mdpde.GetModel().GetWidth();
             }
-            if (!use_updated_sample) apply_selection = true;
+            if (!use_peeling_sampling_entries) apply_selection = true;
             auto q_score{ use_standard ?
                 atom->GetStandardQScore() :
                 core::CalculateQScoreForAtom(
-                    entry.GetSamplingEntries(apply_selection, use_updated_sample),
+                    LoadSamplingEntries(
+                        entry,
+                        apply_selection,
+                        use_peeling_sampling_entries),
                     reference_height,
                     reference_offset,
                     reference_width
