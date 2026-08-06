@@ -305,12 +305,18 @@ the original sampling-point order and metadata. The final local Gaussian
 results and these entries are written with `SetGaussianResult` and
 `SetPeelingSamplingEntries` before group fitting begins.
 
-`RunSecondStageLocalFitting` then runs group fitting with
-`apply_selection=false` and `use_peeling_sampling_entries=true`. The group fit
-therefore reads the newly persisted complete peeling entries and reuses the
-`alpha_g` trained before the first group fit. The later workflow steps still
-rebuild peeling entries from the fitted group priors for third-stage local
-training and fitting, retrain `alpha_g`, and perform the final group fit.
+`RunSecondStageLocalFitting` then calls
+`RunGroupPotentialFitting(model_object, options, true)`. The group fit reads the
+newly persisted complete entries through `GetPeelingSamplingEntries(false)` and
+reuses the `alpha_g` trained before the first group fit.
+
+After the second stage returns, the workflow passes the same persisted peeling
+entries to `RunLocalAlphaTraining(..., true)` and
+`RunFixedOffsetLocalFitting(..., true)`, retrains `alpha_g`, and calls
+`RunGroupPotentialFitting(..., true)` for the final group fit. These later local
+fits may update local Gaussian results, but they do not rebuild or overwrite
+the peeling entries; the final group fit therefore consumes the same
+atom-level peeling snapshot written during second-stage finalization.
 
 ## Logging
 

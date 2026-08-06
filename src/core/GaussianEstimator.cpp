@@ -2,7 +2,6 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 
 #include "core/detail/GaussianEstimatorStages.hpp"
-#include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
@@ -40,8 +39,6 @@ namespace rhbm_gem::core {
 namespace {
 constexpr std::size_t kMinimumAlphaRTrainingSampleCount{ 10 };
 constexpr std::size_t kMinimumAlphaGTrainingMemberCount{ 10 };
-constexpr double kNeighborContributionDistanceMax{ 2.5 };
-constexpr double kNeighborAtomSearchRange{ 2.0 * kNeighborContributionDistanceMax };
 constexpr std::array<Spot, 5> kGroupPriorSummarySpotList{
     Spot::C, Spot::CA, Spot::CB, Spot::N, Spot::O
 };
@@ -225,64 +222,6 @@ std::vector<LocalGaussianResult> DecodeMemberGaussianResults(
         });
     }
     return member_results;
-}
-
-template <typename GaussianLookup>
-LocalPotentialSampleList BuildPeelingSamplingEntriesWithGaussianLookup(
-    const AtomObject & atom,
-    GaussianLookup lookup_gaussian)
-{
-    const auto local_view{ AtomLocalPotentialView::RequireFor(atom) };
-    const auto raw_sampling_entries{ local_view.GetRawSamplingEntries(false) };
-    const auto & neighbor_atom_list{ atom.FindNeighborAtoms(kNeighborAtomSearchRange) };
-    LocalPotentialSampleList peeling_sampling_entries;
-    peeling_sampling_entries.reserve(raw_sampling_entries.size());
-    for (const auto & sample : raw_sampling_entries)
-    {
-        auto sample_position{ sample.point.position };
-        auto response_value{ sample.response };
-        for (const auto * neighbor_atom : neighbor_atom_list)
-        {
-            const auto * gaussian{ lookup_gaussian(*neighbor_atom) };
-            if (gaussian == nullptr) continue;
-
-            auto neighbor_position{ neighbor_atom->GetPosition() };
-            auto distance{
-                static_cast<double>(array_helper::ComputeNorm<float>(sample_position, neighbor_position))
-            };
-            if (distance > kNeighborContributionDistanceMax) continue;
-            response_value -= static_cast<float>(gaussian->ResponseAtDistance(distance));
-        }
-        peeling_sampling_entries.emplace_back(LocalPotentialSample{response_value, sample.point });
-    }
-    return peeling_sampling_entries;
-}
-
-LocalPotentialSampleList BuildPeelingSamplingEntriesFromFittedGroupGaussian(
-    const AtomObject & atom,
-    const ModelAnalysisView & analysis_view)
-{
-    return BuildPeelingSamplingEntriesWithGaussianLookup(
-        atom,
-        [&analysis_view](const AtomObject & neighbor_atom) -> const GaussianModel3D *
-        {
-            const auto group_key{ data_internal::GetGroupKey(&neighbor_atom) };
-            if (!analysis_view.HasAtomGroup(group_key)) return nullptr;
-            return &analysis_view.GetAtomGroupPrior(group_key);
-        });
-}
-
-void SetPeelingSamplingEntriesFromFittedGroupGaussian(ModelObject & model_object)
-{
-    const auto & atom_list{ model_object.GetSelectedAtoms() };
-    auto local_editor_list{ BuildAtomLocalEditors(model_object, atom_list) };
-    const auto analysis_view{ model_object.GetAnalysisView() };
-    for (size_t i = 0; i < atom_list.size(); i++)
-    {
-        local_editor_list[i].SetPeelingSamplingEntries(
-            BuildPeelingSamplingEntriesFromFittedGroupGaussian(*atom_list[i], analysis_view)
-        );
-    }
 }
 
 std::vector<std::string> BuildGroupPriorSpotSummaryLines(const ModelObject & model_object)
@@ -739,7 +678,6 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
 
     RunSecondStageLocalFitting(model_object, options);
 
-    SetPeelingSamplingEntriesFromFittedGroupGaussian(model_object);
     RunLocalAlphaTraining(model_object, options, true);
     RunFixedOffsetLocalFitting(model_object, options, true);
     RunGroupAlphaTraining(model_object, options);
