@@ -133,8 +133,8 @@ std::unique_ptr<rg::ModelObject> BuildSecondStageScaleDiagnosticModel()
     };
     auto model{ std::move(input.replica_model_objects.front()) };
     const auto options{ MakeSecondStageOptions() };
-    rt::RunLocalAlphaTraining(*model, options, rt::LocalFittingPass::FirstStage);
-    rt::RunFixedOffsetLocalFitting(*model, options, rt::LocalFittingPass::FirstStage);
+    rt::RunLocalAlphaTraining(*model, options, false);
+    rt::RunFixedOffsetLocalFitting(*model, options, false);
     SetSelectedAtomPosteriorFromMdpde(*model);
     return model;
 }
@@ -213,8 +213,8 @@ std::unique_ptr<rg::ModelObject> BuildSecondStageSuspiciousOffsetDiagnosticModel
     options.distance_max = 1.0;
     options.thread_size = 1;
     options.quiet_mode = true;
-    rt::RunLocalAlphaTraining(*model, options, rt::LocalFittingPass::FirstStage);
-    rt::RunFixedOffsetLocalFitting(*model, options, rt::LocalFittingPass::FirstStage);
+    rt::RunLocalAlphaTraining(*model, options, false);
+    rt::RunFixedOffsetLocalFitting(*model, options, false);
     SetSelectedAtomPosteriorFromMdpde(*model);
 
     const auto & atom_list{ model->GetSelectedAtoms() };
@@ -410,6 +410,18 @@ TEST(
             "global-median:0."),
         std::string::npos);
     EXPECT_EQ(out.find("stop_reason=no-valid-seed"), std::string::npos);
+    const auto count_occurrences = [&](const std::string & text)
+    {
+        std::size_t count{ 0 };
+        for (std::size_t position = 0;
+            (position = out.find(text, position)) != std::string::npos;
+            position += text.size())
+        {
+            count++;
+        }
+        return count;
+    };
+    EXPECT_EQ(count_occurrences("Run atom group fitting."), 3U);
 }
 
 TEST(EstimatorTesterTest, RunLocalEstimationTestRejectsNonFiniteTruth)

@@ -103,8 +103,8 @@ Eigen::MatrixXd EstimateAtomicModelFirstStageModels(
     for (int i = 0; i < replica_size; i++)
     {
         ModelObject model_object{ *input.replica_model_objects.at(static_cast<size_t>(i)) };
-        RunLocalAlphaTraining(model_object, options, LocalFittingPass::FirstStage);
-        RunFixedOffsetLocalFitting(model_object, options, LocalFittingPass::FirstStage);
+        RunLocalAlphaTraining(model_object, options, false);
+        RunFixedOffsetLocalFitting(model_object, options, false);
 
         const auto local_view{
             AtomLocalPotentialView::RequireFor(*model_object.GetSelectedAtoms().front())

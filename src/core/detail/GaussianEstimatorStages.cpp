@@ -3832,6 +3832,7 @@ void ApplyLocalFittingState(
     const SecondStageLocalFittingContext & context,
     const LocalFittingState & iteration_state)
 {
+    const auto fitted_gaussian_snapshot{ BuildFittedGaussianSnapshot(iteration_state) };
     auto analysis{ model_object.EditAnalysis() };
     for (std::size_t i = 0; i < context.size(); i++)
     {
@@ -3839,6 +3840,8 @@ void ApplyLocalFittingState(
             analysis.EnsureAtomLocalPotential(*context.at(i).atom)
         };
         local_editor.SetGaussianResult(iteration_state.at(i));
+        local_editor.SetPeelingSamplingEntries(
+            BuildSecondStageAdjustedSamples(context, i, fitted_gaussian_snapshot));
     }
 }
 
@@ -3890,8 +3893,7 @@ void AppendLocalFittingAuditSummary(
     const LocalFittingAuditedState & audited_state)
 {
     const auto & objective{ audited_state.objective };
-    stream
-        << "; audit best source = ";
+    stream << "; audit best source = ";
     if (audited_state.accepted_iteration.has_value())
     {
         stream << "accepted iteration " << *audited_state.accepted_iteration;
@@ -4301,13 +4303,10 @@ std::string FormatLocalFittingProgressRow(
 LocalFittingProgressColumnWidths BuildLocalFittingProgressColumnWidths(
     std::size_t atom_size)
 {
-    const auto maximum_iteration_text{
-        std::to_string(kLocalFittingMaximumIterations)
-    };
+    const auto maximum_iteration_text{ std::to_string(kLocalFittingMaximumIterations) };
     const auto maximum_atom_text{ std::to_string(atom_size) };
     const auto maximum_change_text{
-        FormatLocalFittingProgressMaximum(
-            std::numeric_limits<double>::max())
+        FormatLocalFittingProgressMaximum(std::numeric_limits<double>::max())
     };
     const std::array<std::string, 6> maximum_cell_list{
         maximum_iteration_text + "/" + maximum_iteration_text,
@@ -4363,13 +4362,10 @@ void LogLocalFittingIterationProgress(
             std::to_string(progress.polish_progress.rejected_count) + "/" +
             std::to_string(progress.polish_progress.skipped_count),
         std::to_string(progress.suspicious_atom_count),
-        FormatLocalFittingProgressMaximum(
-            progress.accepted_maximum_transformed_change) + "/" +
-            FormatLocalFittingProgressMaximum(
-                progress.raw_maximum_transformed_change)
+        FormatLocalFittingProgressMaximum(progress.accepted_maximum_transformed_change) + "/" +
+            FormatLocalFittingProgressMaximum(progress.raw_maximum_transformed_change)
     };
-    Logger::ProgressLine(
-        FormatLocalFittingProgressRow(column_widths, cell_list));
+    Logger::ProgressLine(FormatLocalFittingProgressRow(column_widths, cell_list));
 }
 
 void LogLocalFittingConverged(
@@ -4414,8 +4410,7 @@ void LogLocalFittingMaximumIterations(
         warning_message << "; applying best validated audit state";
         AppendLocalFittingAuditSummary(warning_message, *applied_audit_state);
     }
-    else if (final_state_source ==
-        detail::LocalFittingFinalStateSource::LatestValidated)
+    else if (final_state_source == detail::LocalFittingFinalStateSource::LatestValidated)
     {
         warning_message << "; applying latest validated state";
     }
@@ -4483,9 +4478,7 @@ void LogSecondStageLocalFittingSummary(
 
 } // namespace
 
-void RunSecondStageLocalFitting(
-    ModelObject & model_object,
-    const FitOptions & options)
+void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & options)
 {
     const auto context{ BuildSecondStageLocalFittingContext(model_object) };
     const auto atom_size{ context.size() };
@@ -4519,9 +4512,7 @@ void RunSecondStageLocalFitting(
         }
         return;
     }
-    LogSecondStageSeedSelections(
-        initial_state_build_result->selection_record_list,
-        options);
+    LogSecondStageSeedSelections(initial_state_build_result->selection_record_list, options);
     auto previous_state{ std::move(initial_state_build_result->state) };
     LocalFittingPolishProvenance previous_polish_provenance(atom_size, 0);
     const auto coupling_topology{
@@ -4533,9 +4524,7 @@ void RunSecondStageLocalFitting(
         BuildEligibleLocalFittingActiveIndexList(terminal_fallback_atom_mask)
     };
     const auto initial_cluster_partition{
-        detail::BuildLocalFittingCouplingPartition(
-            coupling_topology,
-            initial_active_index_list)
+        detail::BuildLocalFittingCouplingPartition(coupling_topology, initial_active_index_list)
     };
     auto objective_domain{
         BuildLocalFittingObjectiveDomain(
@@ -4567,20 +4556,16 @@ void RunSecondStageLocalFitting(
             kLocalFittingTrustRegionGrowthFactor
         }
     };
-    const auto progress_column_widths{
-        BuildLocalFittingProgressColumnWidths(atom_size)
-    };
+    const auto progress_column_widths{ BuildLocalFittingProgressColumnWidths(atom_size) };
     LogLocalFittingProgressHeader(options, progress_column_widths);
 
     std::size_t accepted_iteration_count{ 0 };
     std::size_t audit_patience_count{ 0 };
-    std::vector<LocalFittingClusterKey>
-        unchanged_state_exhausted_key_list;
+    std::vector<LocalFittingClusterKey> unchanged_state_exhausted_key_list;
     for (std::size_t iter = 0; iter < kLocalFittingMaximumIterations; iter++)
     {
         const auto active_index_list{
-            BuildEligibleLocalFittingActiveIndexList(
-                terminal_fallback_atom_mask)
+            BuildEligibleLocalFittingActiveIndexList(terminal_fallback_atom_mask)
         };
         if (active_index_list.empty())
         {
@@ -4598,13 +4583,12 @@ void RunSecondStageLocalFitting(
                 best_audit_state,
                 UsesLocalFittingPolish(previous_polish_provenance),
                 detail::LocalFittingFinalStateSource::LatestValidated);
+            RunGroupPotentialFitting(model_object, options, true);
             return;
         }
 
         const auto cluster_partition{
-            detail::BuildLocalFittingCouplingPartition(
-                coupling_topology,
-                active_index_list)
+            detail::BuildLocalFittingCouplingPartition(coupling_topology, active_index_list)
         };
         std::vector<LocalFittingClusterKey> cluster_key_list;
         cluster_key_list.reserve(cluster_partition.sample_id_list_by_key.size());
@@ -4627,8 +4611,7 @@ void RunSecondStageLocalFitting(
         for (std::size_t atom_index = 0; atom_index < atom_size; atom_index++)
         {
             if (suspicious_offset_atom_mask.at(atom_index) == 0) continue;
-            joint_offset_ridge_multiplier_list.at(atom_index) =
-                kSuspiciousJointOffsetRidgeMultiplier;
+            joint_offset_ridge_multiplier_list.at(atom_index) = kSuspiciousJointOffsetRidgeMultiplier;
         }
 
         auto iteration_result{
@@ -4640,8 +4623,7 @@ void RunSecondStageLocalFitting(
                 joint_offset_ridge_multiplier_list)
         };
         const auto current_health_by_key{ std::move(iteration_result.health_by_key) };
-        suspicious_offset_atom_mask =
-            std::move(iteration_result.suspicious_offset_atom_mask);
+        suspicious_offset_atom_mask = std::move(iteration_result.suspicious_offset_atom_mask);
         const auto iteration_suspicious_atom_count{
             static_cast<std::size_t>(std::count_if(
                 suspicious_offset_atom_mask.begin(),
@@ -4651,9 +4633,7 @@ void RunSecondStageLocalFitting(
                     return is_suspicious != 0;
                 }))
         };
-        const auto has_suspicious_offset_fallback{
-            iteration_suspicious_atom_count > 0
-        };
+        const auto has_suspicious_offset_fallback{ iteration_suspicious_atom_count > 0 };
 
         std::size_t stationarity_ineligible_cluster_count{ 0 };
         std::vector<LocalFittingClusterKey> polish_eligible_key_list;
@@ -4682,10 +4662,7 @@ void RunSecondStageLocalFitting(
         }
         const auto raw_state{ std::move(iteration_result.state) };
         const auto raw_fixed_point_change_summary{
-            SummarizeLocalFittingTransformedChanges(
-                raw_state,
-                previous_state,
-                active_index_list)
+            SummarizeLocalFittingTransformedChanges(raw_state, previous_state, active_index_list)
         };
         const auto previous_transformed_estimation_list{
             BuildLocalFittingTransformedEstimationList(previous_state)
@@ -4768,9 +4745,7 @@ void RunSecondStageLocalFitting(
         LogAcceptedLocalFittingBacktrackingDiagnostics(options, selection);
 
         auto assembled_state{ std::move(selection.assembled_state) };
-        auto assembled_polish_provenance{
-            std::move(selection.assembled_polish_provenance)
-        };
+        auto assembled_polish_provenance{ std::move(selection.assembled_polish_provenance) };
         const auto terminal_failure_by_key{
             UpdatePersistentTerminalFailureState(
                 selection.accepted_key_list,
@@ -4814,8 +4789,7 @@ void RunSecondStageLocalFitting(
                 }
             }
             const auto remaining_active_index_list{
-                BuildEligibleLocalFittingActiveIndexList(
-                    terminal_fallback_atom_mask)
+                BuildEligibleLocalFittingActiveIndexList(terminal_fallback_atom_mask)
             };
             if (!remaining_active_index_list.empty())
             {
@@ -4858,8 +4832,7 @@ void RunSecondStageLocalFitting(
                 selection.backtracking_exhausted_key_list)
         };
         const auto trust_region_radius_update{
-            trust_region_state.Shrink(
-                rejected_cluster_partition.retryable_key_list)
+            trust_region_state.Shrink(rejected_cluster_partition.retryable_key_list)
         };
         const auto terminal_atom_count{ terminal_summary.AtomCount() };
         LocalFittingIterationProgress progress{
@@ -4872,8 +4845,7 @@ void RunSecondStageLocalFitting(
             selection.polish_progress,
             iteration_suspicious_atom_count,
             std::nullopt,
-            SummarizeLocalFittingProgressMaximum(
-                raw_fixed_point_change_summary.maximum_list)
+            SummarizeLocalFittingProgressMaximum(raw_fixed_point_change_summary.maximum_list)
         };
         if (selection.accepted_key_list.empty())
         {
@@ -4883,23 +4855,16 @@ void RunSecondStageLocalFitting(
                     rejected_cluster_partition,
                     trust_region_radius_update)
             };
-            LogRejectedLocalFittingClusterDiagnostics(
-                options,
-                selection.rejected_cluster_diagnostic_list);
-            LogLocalFittingIterationProgress(
-                options,
-                progress_column_widths,
-                progress);
+            LogRejectedLocalFittingClusterDiagnostics(options, selection.rejected_cluster_diagnostic_list);
+            LogLocalFittingIterationProgress(options, progress_column_widths, progress);
             LogLocalFittingAllRejectedResolution(
                 options,
                 rejected_cluster_partition,
                 trust_region_radius_update,
                 all_rejected_resolution);
-            if (all_rejected_resolution ==
-                detail::LocalFittingAllRejectedResolution::Retry)
+            if (all_rejected_resolution == detail::LocalFittingAllRejectedResolution::Retry)
             {
-                for (const auto & key :
-                    rejected_cluster_partition.exhausted_key_list)
+                for (const auto & key : rejected_cluster_partition.exhausted_key_list)
                 {
                     if (std::find(
                             unchanged_state_exhausted_key_list.begin(),
@@ -4925,20 +4890,16 @@ void RunSecondStageLocalFitting(
             LogSecondStageLocalFittingSummary(
                 options,
                 accepted_iteration_count,
-                GetLocalFittingAllRejectedResolutionText(
-                    all_rejected_resolution),
+                GetLocalFittingAllRejectedResolutionText(all_rejected_resolution),
                 best_audit_state,
-                UsesLocalFittingPolish(
-                    *final_state_selection.polish_provenance),
+                UsesLocalFittingPolish(*final_state_selection.polish_provenance),
                 final_state_selection.source);
+            RunGroupPotentialFitting(model_object, options, true);
             return;
         }
 
         const auto transformed_change_summary{
-            SummarizeLocalFittingTransformedChanges(
-                assembled_state,
-                previous_state,
-                active_index_list)
+            SummarizeLocalFittingTransformedChanges(assembled_state, previous_state, active_index_list)
         };
 
         accepted_iteration_count++;
@@ -4958,16 +4919,9 @@ void RunSecondStageLocalFitting(
                 !selection.rejected_key_list.empty() &&
                     !trust_region_radius_update.changed_key_list.empty());
         progress.accepted_iteration_count = accepted_iteration_count;
-        progress.accepted_maximum_transformed_change =
-            SummarizeLocalFittingProgressMaximum(
-                transformed_change_summary.maximum_list);
-        LogRejectedLocalFittingClusterDiagnostics(
-            options,
-            selection.rejected_cluster_diagnostic_list);
-        LogLocalFittingIterationProgress(
-            options,
-            progress_column_widths,
-            progress);
+        progress.accepted_maximum_transformed_change = SummarizeLocalFittingProgressMaximum(transformed_change_summary.maximum_list);
+        LogRejectedLocalFittingClusterDiagnostics(options, selection.rejected_cluster_diagnostic_list);
+        LogLocalFittingIterationProgress(options, progress_column_widths, progress);
 
         if (audit_patience_count >= kLocalFittingAuditPatience)
         {
@@ -4986,9 +4940,9 @@ void RunSecondStageLocalFitting(
                 accepted_iteration_count,
                 "audit-patience",
                 best_audit_state,
-                UsesLocalFittingPolish(
-                    *final_state_selection.polish_provenance),
+                UsesLocalFittingPolish(*final_state_selection.polish_provenance),
                 final_state_selection.source);
+            RunGroupPotentialFitting(model_object, options, true);
             return;
         }
 
@@ -5032,6 +4986,7 @@ void RunSecondStageLocalFitting(
                 best_audit_state,
                 UsesLocalFittingPolish(assembled_polish_provenance),
                 detail::LocalFittingFinalStateSource::LatestValidated);
+            RunGroupPotentialFitting(model_object, options, true);
             return;
         }
 
@@ -5052,16 +5007,15 @@ void RunSecondStageLocalFitting(
                 final_state_selection.source,
                 final_state_selection.audit_state,
                 terminal_summary,
-                SummarizeLocalFittingOffsets(
-                    *final_state_selection.state));
+                SummarizeLocalFittingOffsets(*final_state_selection.state));
             LogSecondStageLocalFittingSummary(
                 options,
                 accepted_iteration_count,
                 "maximum-iterations",
                 best_audit_state,
-                UsesLocalFittingPolish(
-                    *final_state_selection.polish_provenance),
+                UsesLocalFittingPolish(*final_state_selection.polish_provenance),
                 final_state_selection.source);
+            RunGroupPotentialFitting(model_object, options, true);
             return;
         }
         unchanged_state_exhausted_key_list.clear();

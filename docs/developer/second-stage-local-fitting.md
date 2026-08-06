@@ -22,12 +22,10 @@ Neighbor candidates are searched within `kNeighborAtomSearchRange`. A neighbor
 contributes to a sample only when its distance from that sample does not exceed
 `kNeighborContributionDistanceMax`.
 
-Before the second stage starts, the workflow rebuilds each atom's peeling
-sampling entries by subtracting neighboring responses estimated from the
-first-stage group-median MDPDE models. The first group fit consumes these
-neighbor-adjusted samples and supplies the per-atom posterior and group prior
-used by seed selection. The first-stage MDPDE models participate only in this
-sampling adjustment; they are not passed to the second-stage seed selector.
+Before the second stage starts, the first group fit consumes the selected raw
+sampling entries and supplies the per-atom posterior and group prior used by
+seed selection. The first-stage local MDPDE and OLS models are not passed to
+the second-stage seed selector.
 
 The initial Gaussian seed is rebuilt for every selected atom. The current local
 MDPDE and local OLS estimates are not seed sources. The first valid source is
@@ -47,7 +45,8 @@ including its offset and uncertainty. Direct posterior and prior seeds retain
 their uncertainty, while median seeds use zero uncertainty.
 
 If a valid seed cannot be obtained for every selected atom, the stage exits
-without changing the stored estimates.
+without changing the stored estimates, peeling sampling entries, or group
+results.
 
 The valid initial state is used to build a weighted coupling topology. The
 topology records atoms that jointly affect objective samples. Each iteration
@@ -90,7 +89,8 @@ adjusted response = observed response
 ```
 
 This offset solve and neighbor-adjusted local refit constitute one raw
-fixed-point update.
+fixed-point update. These group-median-adjusted entries are temporary inputs to
+the current raw proposal; they are not persisted as peeling sampling entries.
 
 The joint-offset parameterization is cluster-local. Atoms with the same group
 key share one offset column when they are in the same coupling cluster. The same
@@ -284,6 +284,33 @@ guards, audit patience, iteration history, and stop reasons are unchanged by
 the switch. Convergence and terminal isolation always write the latest
 validated state. Terminal reconciliation preserves validated progress from
 non-terminal clusters.
+
+## Final state application and group fitting
+
+After the stopping policy selects the final validated state, the stage builds
+one atom-level snapshot from the MDPDE model stored in each selected result.
+This is the actual best-audit or latest-validated state chosen for application,
+not the last raw proposal and not a group-median snapshot.
+
+For every selected atom, the stage then rebuilds its persistent peeling
+sampling entries from the raw entries:
+
+```text
+peeling response = raw response
+                 - sum(final neighbor MDPDE responses at the sample position)
+```
+
+The calculation reuses the context's selected-neighbor mapping and preserves
+the original sampling-point order and metadata. The final local Gaussian
+results and these entries are written with `SetGaussianResult` and
+`SetPeelingSamplingEntries` before group fitting begins.
+
+`RunSecondStageLocalFitting` then runs group fitting with
+`apply_selection=false` and `use_peeling_sampling_entries=true`. The group fit
+therefore reads the newly persisted complete peeling entries and reuses the
+`alpha_g` trained before the first group fit. The later workflow steps still
+rebuild peeling entries from the fitted group priors for third-stage local
+training and fitting, retrain `alpha_g`, and perform the final group fit.
 
 ## Logging
 

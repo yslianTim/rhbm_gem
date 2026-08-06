@@ -27,6 +27,7 @@
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
@@ -595,6 +596,72 @@ void ExpectSelectedAtomEstimatesAreFinite(const rg::ModelObject & model)
         EXPECT_TRUE(std::isfinite(estimate.GetAmplitude()));
         EXPECT_TRUE(std::isfinite(estimate.GetWidth()));
         EXPECT_TRUE(std::isfinite(estimate.GetOffset()));
+    }
+}
+
+void ExpectPeelingSamplingEntriesMatchFinalModels(
+    const rg::ModelObject & model)
+{
+    constexpr double neighbor_atom_search_range{ 5.0 };
+    constexpr double neighbor_contribution_distance_max{ 2.5 };
+    const auto & selected_atoms{ model.GetSelectedAtoms() };
+    for (const auto * target_atom : selected_atoms)
+    {
+        const auto target_view{
+            rg::AtomLocalPotentialView::RequireFor(*target_atom)
+        };
+        const auto raw_sampling_entries{
+            target_view.GetRawSamplingEntries(false)
+        };
+        const auto peeling_sampling_entries{
+            target_view.GetPeelingSamplingEntries(false)
+        };
+        ASSERT_EQ(peeling_sampling_entries.size(), raw_sampling_entries.size());
+        for (std::size_t sample_index = 0;
+            sample_index < raw_sampling_entries.size();
+            sample_index++)
+        {
+            const auto & raw_sample{ raw_sampling_entries.at(sample_index) };
+            const auto & peeling_sample{
+                peeling_sampling_entries.at(sample_index)
+            };
+            auto expected_response{ static_cast<double>(raw_sample.response) };
+            for (const auto * neighbor_atom : selected_atoms)
+            {
+                if (neighbor_atom == target_atom) continue;
+                if (Distance(
+                        target_atom->GetPosition(),
+                        neighbor_atom->GetPosition()) >
+                    neighbor_atom_search_range)
+                {
+                    continue;
+                }
+                const auto sample_distance{
+                    Distance(
+                        raw_sample.point.position,
+                        neighbor_atom->GetPosition())
+                };
+                if (sample_distance > neighbor_contribution_distance_max)
+                {
+                    continue;
+                }
+                expected_response -= GetEstimateModel(*neighbor_atom)
+                    .ResponseAtDistance(sample_distance);
+            }
+
+            EXPECT_FLOAT_EQ(
+                peeling_sample.response,
+                static_cast<float>(expected_response));
+            EXPECT_FLOAT_EQ(
+                peeling_sample.point.distance,
+                raw_sample.point.distance);
+            EXPECT_EQ(
+                peeling_sample.point.position,
+                raw_sample.point.position);
+            EXPECT_EQ(
+                peeling_sample.point.is_selected,
+                raw_sample.point.is_selected);
+        }
     }
 }
 
@@ -2410,6 +2477,77 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingAppliesCollinear
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
+TEST(
+    EstimatorSecondStageDefenseTest,
+    RunSecondStageLocalFittingPersistsFinalModelPeelingBeforeGroupFitting)
+{
+    auto model{ BuildSharedOffsetJointPolishDefenseModel() };
+    auto analysis{ model->EditAnalysis() };
+    analysis.RebuildAtomGroupsFromSelection();
+    analysis.InitializeGroupAlpha(0.0);
+    const auto options{ MakeSecondStageOptions() };
+
+    rt::RunSecondStageLocalFitting(*model, options);
+
+    ExpectPeelingSamplingEntriesMatchFinalModels(*model);
+    const auto analysis_view{ model->GetAnalysisView() };
+    for (const auto group_key : analysis_view.CollectAtomGroupKeys())
+    {
+        const auto & atom_list{
+            analysis_view.GetAtomObjectList(group_key)
+        };
+        std::vector<LocalPotentialSampleList> sample_entries_list;
+        std::vector<rg::LocalGaussianResult> member_result_list;
+        sample_entries_list.reserve(atom_list.size());
+        member_result_list.reserve(atom_list.size());
+        for (const auto * atom : atom_list)
+        {
+            const auto local_view{
+                rg::AtomLocalPotentialView::RequireFor(*atom)
+            };
+            sample_entries_list.emplace_back(
+                local_view.GetPeelingSamplingEntries(false));
+            member_result_list.emplace_back(
+                local_view.GetGaussianResult());
+        }
+        const auto expected_group_result{
+            rt::EstimateGroupGaussian(
+                sample_entries_list,
+                member_result_list,
+                analysis_view.GetAtomAlphaG(group_key),
+                options)
+        };
+
+        ExpectGaussianModelsNear(
+            analysis_view.GetAtomGroupMean(group_key),
+            expected_group_result.mean,
+            1.0e-10);
+        ExpectGaussianModelsNear(
+            analysis_view.GetAtomGroupMDPDE(group_key),
+            expected_group_result.mdpde,
+            1.0e-10);
+        ExpectGaussianModelsNear(
+            analysis_view.GetAtomGroupPrior(group_key),
+            expected_group_result.prior.GetModel(),
+            1.0e-10);
+        ASSERT_EQ(
+            expected_group_result.member_results.size(),
+            atom_list.size());
+        for (std::size_t i = 0; i < atom_list.size(); i++)
+        {
+            const auto actual_result{
+                rg::AtomLocalPotentialView::RequireFor(*atom_list.at(i))
+                    .GetGaussianResult()
+            };
+            ASSERT_TRUE(actual_result.posterior.has_value());
+            ExpectGaussianModelsNear(
+                actual_result.posterior->GetModel(),
+                expected_group_result.member_results.at(i).mdpde.GetModel(),
+                1.0e-10);
+        }
+    }
+}
+
 TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingJointlyPolishesClusterParameters)
 {
     auto model{ BuildJointPolishDefenseModel() };
@@ -2722,7 +2860,10 @@ TEST(
     auto options{ MakeSecondStageOptions() };
     options.quiet_mode = false;
     std::vector<rg::GaussianModel3D> previous_model_list;
+    std::vector<LocalPotentialSampleList> previous_peeling_sampling_entries_list;
     auto analysis{ model->EditAnalysis() };
+    analysis.RebuildAtomGroupsFromSelection();
+    analysis.InitializeGroupAlpha(0.0);
     for (auto * atom : model->GetSelectedAtoms())
     {
         auto result{
@@ -2733,9 +2874,26 @@ TEST(
         ASSERT_TRUE(seed_detail::IsValidSecondStageGaussianModel(
             result.ols.GetModel()));
         result.posterior.reset();
-        analysis.EnsureAtomLocalPotential(*atom)
-            .SetGaussianResult(std::move(result));
+        auto local_editor{ analysis.EnsureAtomLocalPotential(*atom) };
+        local_editor.SetGaussianResult(std::move(result));
+        LocalPotentialSampleList sentinel_peeling_sampling_entries{
+            LocalPotentialSample{
+                static_cast<float>(100.0 + previous_model_list.size()),
+                SamplingPoint{ 0.5F, atom->GetPosition(), true }
+            }
+        };
+        local_editor.SetPeelingSamplingEntries(
+            sentinel_peeling_sampling_entries);
         previous_model_list.emplace_back(GetEstimateModel(*atom));
+        previous_peeling_sampling_entries_list.emplace_back(
+            std::move(sentinel_peeling_sampling_entries));
+    }
+    const auto previous_analysis_view{ model->GetAnalysisView() };
+    std::vector<rg::GaussianModel3D> previous_group_prior_list;
+    for (const auto group_key : previous_analysis_view.CollectAtomGroupKeys())
+    {
+        previous_group_prior_list.emplace_back(
+            previous_analysis_view.GetAtomGroupPrior(group_key));
     }
 
     testing::internal::CaptureStdout();
@@ -2747,6 +2905,25 @@ TEST(
         ExpectGaussianModelsNear(
             GetEstimateModel(*model->GetSelectedAtoms().at(i)),
             previous_model_list.at(i),
+            0.0);
+        const auto peeling_sampling_entries{
+            rg::AtomLocalPotentialView::RequireFor(
+                *model->GetSelectedAtoms().at(i))
+                .GetPeelingSamplingEntries(false)
+        };
+        ASSERT_EQ(peeling_sampling_entries.size(), 1U);
+        EXPECT_FLOAT_EQ(
+            peeling_sampling_entries.front().response,
+            previous_peeling_sampling_entries_list.at(i).front().response);
+    }
+    const auto final_analysis_view{ model->GetAnalysisView() };
+    const auto group_key_list{ final_analysis_view.CollectAtomGroupKeys() };
+    ASSERT_EQ(group_key_list.size(), previous_group_prior_list.size());
+    for (std::size_t i = 0; i < group_key_list.size(); i++)
+    {
+        ExpectGaussianModelsNear(
+            final_analysis_view.GetAtomGroupPrior(group_key_list.at(i)),
+            previous_group_prior_list.at(i),
             0.0);
     }
     EXPECT_NE(out.find("stop_reason=no-valid-seed"), std::string::npos);
@@ -2930,6 +3107,7 @@ TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageLogsEveryOuterAttempt)
     EXPECT_NE(
         out.find("final_state_source=best-audit"),
         std::string::npos);
+    ExpectPeelingSamplingEntriesMatchFinalModels(*model);
 }
 
 TEST(EstimatorSecondStageDefenseTest, QuietSecondStageSuppressesIterationTable)

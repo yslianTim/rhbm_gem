@@ -27,7 +27,6 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -53,8 +52,6 @@ struct GaussianModelParameterSamples
     std::vector<double> width_list{};
     std::vector<double> offset_list{};
 };
-
-using GroupMedianModelMap = std::unordered_map<GroupKey, GaussianModel3D>;
 
 std::vector<AtomLocalPotentialEditor> BuildAtomLocalEditors(
     ModelObject & model_object,
@@ -230,41 +227,6 @@ std::vector<LocalGaussianResult> DecodeMemberGaussianResults(
     return member_results;
 }
 
-GroupMedianModelMap BuildGroupMedianMDPDEModelMap(const std::vector<AtomObject *> & atom_list)
-{
-    std::unordered_map<GroupKey, GaussianModelParameterSamples> parameter_samples_by_group;
-    parameter_samples_by_group.reserve(atom_list.size());
-    for (const auto * atom : atom_list)
-    {
-        const auto local_view{ AtomLocalPotentialView::For(*atom) };
-        if (!local_view.IsAvailable()) continue;
-
-        const auto & model{ local_view.GetEstimateMDPDE() };
-        auto & parameter_samples{
-            parameter_samples_by_group[data_internal::GetGroupKey(atom)]
-        };
-        parameter_samples.amplitude_list.emplace_back(model.GetAmplitude());
-        parameter_samples.width_list.emplace_back(model.GetWidth());
-        parameter_samples.offset_list.emplace_back(model.GetOffset());
-    }
-
-    GroupMedianModelMap median_model_by_group;
-    median_model_by_group.reserve(parameter_samples_by_group.size());
-    for (const auto & [group_key, parameter_samples] : parameter_samples_by_group)
-    {
-        if (parameter_samples.amplitude_list.empty()) continue;
-
-        median_model_by_group.emplace(
-            group_key,
-            GaussianModel3D{
-                array_helper::ComputeMedian(parameter_samples.amplitude_list),
-                array_helper::ComputeMedian(parameter_samples.width_list),
-                array_helper::ComputeMedian(parameter_samples.offset_list)
-            });
-    }
-    return median_model_by_group;
-}
-
 template <typename GaussianLookup>
 LocalPotentialSampleList BuildPeelingSamplingEntriesWithGaussianLookup(
     const AtomObject & atom,
@@ -296,27 +258,6 @@ LocalPotentialSampleList BuildPeelingSamplingEntriesWithGaussianLookup(
     return peeling_sampling_entries;
 }
 
-LocalPotentialSampleList BuildPeelingSamplingEntriesFromGroupMedianGaussian(
-    const AtomObject & atom,
-    const GroupMedianModelMap & median_model_by_group)
-{
-    return BuildPeelingSamplingEntriesWithGaussianLookup(
-        atom,
-        [&median_model_by_group](const AtomObject & neighbor_atom) -> const GaussianModel3D *
-        {
-            const auto median_model_iter{
-                median_model_by_group.find(data_internal::GetGroupKey(&neighbor_atom))
-            };
-            if (median_model_iter != median_model_by_group.end())
-            {
-                return &median_model_iter->second;
-            }
-
-            const auto local_view{ AtomLocalPotentialView::For(neighbor_atom) };
-            return local_view.IsAvailable() ? &local_view.GetEstimateMDPDE() : nullptr;
-        });
-}
-
 LocalPotentialSampleList BuildPeelingSamplingEntriesFromFittedGroupGaussian(
     const AtomObject & atom,
     const ModelAnalysisView & analysis_view)
@@ -329,19 +270,6 @@ LocalPotentialSampleList BuildPeelingSamplingEntriesFromFittedGroupGaussian(
             if (!analysis_view.HasAtomGroup(group_key)) return nullptr;
             return &analysis_view.GetAtomGroupPrior(group_key);
         });
-}
-
-void SetPeelingSamplingEntriesFromGroupMedianGaussian(ModelObject & model_object)
-{
-    const auto & atom_list{ model_object.GetSelectedAtoms() };
-    auto local_editor_list{ BuildAtomLocalEditors(model_object, atom_list) };
-    const auto median_model_by_group{ BuildGroupMedianMDPDEModelMap(atom_list) };
-    for (size_t i = 0; i < atom_list.size(); i++)
-    {
-        local_editor_list[i].SetPeelingSamplingEntries(
-            BuildPeelingSamplingEntriesFromGroupMedianGaussian(*atom_list[i], median_model_by_group)
-        );
-    }
 }
 
 void SetPeelingSamplingEntriesFromFittedGroupGaussian(ModelObject & model_object)
@@ -476,21 +404,16 @@ void InitializeLocalFittingSeedModels(ModelObject & model_object)
 void RunFixedOffsetLocalFitting(
     ModelObject & model_object,
     const FitOptions & options,
-    LocalFittingPass pass)
+    bool use_peeling_sampling_entries)
 {
     const auto & atom_list{ model_object.GetSelectedAtoms() };
     const auto selected_atom_size{ atom_list.size() };
     auto local_editor_list{ BuildAtomLocalEditors(model_object, atom_list) };
-    const auto analysis_view{ model_object.GetAnalysisView() };
-    const auto stage_label{
-        pass == LocalFittingPass::FirstStage ? "1st-stage" : "3rd-stage"
-    };
     size_t atom_count{ 0 };
     if (!options.quiet_mode)
     {
         Logger::Log(LogLevel::Info,
-            "Run " + std::string{ stage_label } + " local atom fitting for " +
-            std::to_string(selected_atom_size) + " atoms.");
+            "Run local atom fitting for " + std::to_string(selected_atom_size) + " atoms.");
     }
 
 #ifdef USE_OPENMP
@@ -500,19 +423,11 @@ void RunFixedOffsetLocalFitting(
     {
         auto & atom{ *atom_list[i] };
         const auto local_view{ AtomLocalPotentialView::RequireFor(atom) };
-        LocalPotentialSampleList sample_entries;
-        GaussianModel3D offset_model;
-        switch (pass)
-        {
-        case LocalFittingPass::FirstStage:
-            sample_entries = local_view.GetRawSamplingEntries();
-            offset_model = local_view.GetGaussianResult().mdpde.GetModel();
-            break;
-        case LocalFittingPass::ThirdStage:
-            sample_entries = local_view.GetPeelingSamplingEntries(false);
-            offset_model = analysis_view.GetAtomGroupPrior(data_internal::GetGroupKey(&atom));
-            break;
-        }
+        LocalPotentialSampleList sample_entries{ use_peeling_sampling_entries == true
+            ? local_view.GetPeelingSamplingEntries(false)
+            : local_view.GetRawSamplingEntries()
+        };
+        GaussianModel3D offset_model{ local_view.GetGaussianResult().mdpde.GetModel() };
 
         auto result{
             EstimateLocalGaussian(sample_entries, local_view.GetAlphaR(), options, offset_model)
@@ -672,7 +587,7 @@ GroupGaussianResult EstimateGroupGaussian(
 void RunLocalAlphaTraining(
     ModelObject & model_object,
     const FitOptions & options,
-    LocalFittingPass pass)
+    bool use_peeling_sampling_entries)
 {
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
@@ -692,10 +607,9 @@ void RunLocalAlphaTraining(
         {
             analysis.EnsureAtomLocalPotential(*atom);
             const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
-            auto sample_entries{
-                pass == LocalFittingPass::FirstStage
-                    ? local_view.GetRawSamplingEntries()
-                    : local_view.GetPeelingSamplingEntries(false)
+            auto sample_entries{ use_peeling_sampling_entries == true
+                ? local_view.GetPeelingSamplingEntries(false)
+                : local_view.GetRawSamplingEntries()
             };
             if (!HasEnoughSamplesInFitRange(
                     sample_entries,
@@ -754,11 +668,12 @@ void RunGroupAlphaTraining(ModelObject & model_object, const FitOptions & option
     }
 }
 
+} // namespace
+
 void RunGroupPotentialFitting(
     ModelObject & model_object,
     const FitOptions & options,
-    bool apply_selection = false,
-    bool use_peeling_sampling_entries = true)
+    bool use_peeling_sampling_entries)
 {
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
@@ -791,10 +706,9 @@ void RunGroupPotentialFitting(
         for (const auto & atom : atom_list)
         {
             const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
-            sample_entries_list.emplace_back(
-                use_peeling_sampling_entries
-                    ? local_view.GetPeelingSamplingEntries(apply_selection)
-                    : local_view.GetRawSamplingEntries(apply_selection));
+            sample_entries_list.emplace_back(use_peeling_sampling_entries == true
+                    ? local_view.GetPeelingSamplingEntries(false)
+                    : local_view.GetRawSamplingEntries(true));
             member_result_list.emplace_back(local_view.GetGaussianResult());
         }
         const auto result{
@@ -815,27 +729,21 @@ void RunGroupPotentialFitting(
     }
 }
 
-} // namespace
-
 void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & options)
 {
-    RunLocalAlphaTraining(model_object, options, LocalFittingPass::FirstStage);
-
+    RunLocalAlphaTraining(model_object, options, false);
     InitializeLocalFittingSeedModels(model_object);
-    RunFixedOffsetLocalFitting(model_object, options, LocalFittingPass::FirstStage);
+    RunFixedOffsetLocalFitting(model_object, options, false);
     RunGroupAlphaTraining(model_object, options);
-    RunGroupPotentialFitting(model_object, options, true, false);
+    RunGroupPotentialFitting(model_object, options, false);
 
     RunSecondStageLocalFitting(model_object, options);
-    SetPeelingSamplingEntriesFromGroupMedianGaussian(model_object);
-    RunGroupPotentialFitting(model_object, options, false, true);
 
     SetPeelingSamplingEntriesFromFittedGroupGaussian(model_object);
-    RunLocalAlphaTraining(model_object, options, LocalFittingPass::ThirdStage);
-    RunFixedOffsetLocalFitting(model_object, options, LocalFittingPass::ThirdStage);
-
+    RunLocalAlphaTraining(model_object, options, true);
+    RunFixedOffsetLocalFitting(model_object, options, true);
     RunGroupAlphaTraining(model_object, options);
-    RunGroupPotentialFitting(model_object, options, false, true);
+    RunGroupPotentialFitting(model_object, options, true);
     if (!options.quiet_mode)
     {
         LogGroupPriorSpotSummary(model_object);

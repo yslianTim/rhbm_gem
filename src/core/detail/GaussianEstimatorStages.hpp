@@ -4,20 +4,18 @@
 
 namespace rhbm_gem::core {
 
-enum class LocalFittingPass
-{
-    FirstStage,
-    ThirdStage
-};
-
 void RunLocalAlphaTraining(
     ModelObject & model_object,
     const FitOptions & options,
-    LocalFittingPass pass);
+    bool use_peeling_sampling_entries);
 void RunFixedOffsetLocalFitting(
     ModelObject & model_object,
     const FitOptions & options,
-    LocalFittingPass pass);
+    bool use_peeling_sampling_entries);
+void RunGroupPotentialFitting(
+    ModelObject & model_object,
+    const FitOptions & options,
+    bool use_peeling_sampling_entries);
 void RunSecondStageLocalFitting(
     ModelObject & model_object,
     const FitOptions & options);
