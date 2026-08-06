@@ -49,7 +49,11 @@
 #endif
 
 namespace rhbm_gem::core {
+
 namespace {
+constexpr double kSuspiciousProfileCenterSignFlipRatio{ 0.25 };
+constexpr double kSuspiciousProfileCenterNoiseScaleMultiplier{ 3.0 };
+constexpr double kSuspiciousProfileCenterNoiseScaleMin{ 1.0e-12 };
 constexpr double kLocalFittingTransformedChangeTolerance{ 1.0e-4 };
 constexpr double kLocalFittingTransformedMaximumChangeTolerance{ 1.0e-3 };
 constexpr double kNeighborContributionDistanceMax{ 2.5 };
@@ -100,7 +104,6 @@ constexpr std::size_t kSuspiciousOffsetClusterMaxDepth{ 2 };
 constexpr double kSuspiciousOffsetClusterMinimumOverlap{ 0.05 };
 constexpr std::size_t kSuspiciousProfileMinimumRadiusCount{ 3 };
 constexpr double kSuspiciousProfileDistanceTolerance{ 1.0e-6 };
-constexpr double kSuspiciousProfileCenterSignFlipRatio{ 0.25 };
 constexpr double kSuspiciousProfileReboundCenterRatio{ 1.5 };
 constexpr double kSuspiciousProfileReboundReferenceRatio{ 0.25 };
 constexpr double kSuspiciousProfileUpwardExcursionReferenceRatio{ 0.20 };
@@ -153,6 +156,7 @@ struct ZeroOffsetProfileDiagnostics
     double distance_max{ 0.0 };
     double center_response{ 0.0 };
     double max_abs_response{ 0.0 };
+    double robust_residual_scale{ 0.0 };
     std::vector<double> radius_response_median_list{};
 };
 
@@ -444,6 +448,31 @@ struct SecondStageInitialStateBuildResult
     std::vector<SecondStageSeedSelectionRecord> selection_record_list{};
 };
 
+bool HasSuspiciousCenterSignFlip(
+    double previous_center_response,
+    double candidate_center_response,
+    double previous_residual_scale)
+{
+    if (!std::isfinite(previous_center_response) ||
+        !std::isfinite(candidate_center_response) ||
+        !std::isfinite(previous_residual_scale) ||
+        previous_residual_scale < 0.0)
+    {
+        return false;
+    }
+    const auto noise_threshold{
+        std::max(
+            kSuspiciousProfileCenterNoiseScaleMultiplier * previous_residual_scale,
+            kSuspiciousProfileCenterNoiseScaleMin)
+    };
+    const auto negative_threshold{
+        std::max(
+            kSuspiciousProfileCenterSignFlipRatio * previous_center_response,
+            noise_threshold)
+    };
+    return previous_center_response > noise_threshold && candidate_center_response < -negative_threshold;
+}
+
 const char * GetSecondStageSeedSourceText(
     detail::SecondStageSeedSource source)
 {
@@ -483,6 +512,8 @@ bool CanBuildFiniteZeroOffsetSamples(
     return true;
 }
 
+double CalculateMedianAbsoluteDeviationScale(const std::vector<double> & value_list);
+
 bool IsSameSuspiciousProfileRadius(double lhs, double rhs)
 {
     const auto scale{ std::max({ std::abs(lhs), std::abs(rhs), 1.0 }) };
@@ -495,7 +526,9 @@ std::optional<ZeroOffsetProfileDiagnostics> BuildZeroOffsetProfileDiagnostics(
     const FitOptions & options)
 {
     std::vector<std::pair<double, double>> profile_samples;
+    std::vector<double> residual_list;
     profile_samples.reserve(sample_entries.size());
+    residual_list.reserve(sample_entries.size());
     for (const auto & sample : sample_entries)
     {
         const auto distance{ static_cast<double>(sample.point.distance) };
@@ -504,6 +537,8 @@ std::optional<ZeroOffsetProfileDiagnostics> BuildZeroOffsetProfileDiagnostics(
         if (!std::isfinite(response)) continue;
         if (std::abs(response) > static_cast<double>(std::numeric_limits<float>::max())) continue;
         profile_samples.emplace_back(distance, response);
+        const auto residual{ response - model.SignalAtDistance(distance) };
+        if (std::isfinite(residual)) residual_list.emplace_back(residual);
     }
 
     if (profile_samples.empty()) return std::nullopt;
@@ -533,6 +568,7 @@ std::optional<ZeroOffsetProfileDiagnostics> BuildZeroOffsetProfileDiagnostics(
         diagnostics.radius_response_median_list.emplace_back(array_helper::ComputeMedian(response_list));
     }
     diagnostics.center_response = diagnostics.radius_response_median_list.front();
+    diagnostics.robust_residual_scale = CalculateMedianAbsoluteDeviationScale(residual_list);
     return diagnostics;
 }
 
@@ -548,7 +584,8 @@ bool HasUsableSuspiciousProfileBaseline(
         !std::isfinite(previous_model.GetWidth()) ||
         !std::isfinite(previous_model.GetOffset()) ||
         previous_model.GetWidth() <= 0.0 ||
-        previous_profile.max_abs_response <= kRobustScaleMin)
+        previous_profile.max_abs_response <= kRobustScaleMin ||
+        !std::isfinite(previous_profile.robust_residual_scale))
     {
         return false;
     }
@@ -589,17 +626,6 @@ bool HasSuspiciousOffsetMagnitude(
         })
     };
     return std::abs(candidate_offset_response) > kSuspiciousCompensationResponseRatio * reference_scale;
-}
-
-bool HasSuspiciousCenterSignFlip(
-    const ZeroOffsetProfileDiagnostics & previous_profile,
-    const ZeroOffsetProfileDiagnostics & candidate_profile)
-{
-    const auto previous_center{ previous_profile.center_response };
-    const auto candidate_center{ candidate_profile.center_response };
-    const auto reference_scale{ std::max(std::abs(previous_center), kRobustScaleMin) };
-    return previous_center * candidate_center < 0.0 &&
-        std::abs(candidate_center) > kSuspiciousProfileCenterSignFlipRatio * reference_scale;
 }
 
 bool HasSuspiciousRadialRebound(
@@ -695,7 +721,10 @@ bool IsSuspiciousJointOffset(
     }
     const auto candidate_profile{ BuildZeroOffsetProfileDiagnostics(sample_entries, offset_model, options) };
     if (!candidate_profile.has_value()) return true;
-    return HasSuspiciousCenterSignFlip(*previous_profile, *candidate_profile) ||
+    return HasSuspiciousCenterSignFlip(
+            previous_profile->center_response,
+            candidate_profile->center_response,
+            previous_profile->robust_residual_scale) ||
         HasSuspiciousRadialRebound(*previous_profile, *candidate_profile) ||
         HasSuspiciousWidthGrowth(previous_model, offset_model, *previous_profile) ||
         HasSuspiciousAmplitudeOffsetCompensation(previous_model, offset_model, *previous_profile);

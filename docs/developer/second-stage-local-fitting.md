@@ -224,6 +224,12 @@ provenance is retained only for atoms with a material polished endpoint change.
 - A suspicious joint-offset or post-refit model is rolled back to the previous
   validated atom state. On the next attempt, affected active atoms receive
   `kSuspiciousJointOffsetRidgeMultiplier`.
+- The center sign-flip guard only rejects a statistically significant
+  positive-to-negative change. It estimates the previous atom's fit-range
+  residual scale as `1.4826 * MAD`, requires the previous center response to
+  exceed `3 * scale`, and requires the candidate to be below the negative of
+  both that noise threshold and `0.25 * previous center`. Near-zero noise
+  crossings and negative-to-positive changes do not trigger this guard.
 - A failed or invalid local refit falls back to the previous Gaussian
   parameters with the newly estimated offset when that model remains valid.
   The owning cluster is then stationarity-ineligible for that attempt. If the
