@@ -827,17 +827,15 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
     RunGroupPotentialFitting(model_object, options, true, false);
 
     RunSecondStageLocalFitting(model_object, options);
-
-    RunGroupAlphaTraining(model_object, options);
     SetPeelingSamplingEntriesFromGroupMedianGaussian(model_object);
-    RunGroupPotentialFitting(model_object, options);
+    RunGroupPotentialFitting(model_object, options, false, true);
 
     SetPeelingSamplingEntriesFromFittedGroupGaussian(model_object);
     RunLocalAlphaTraining(model_object, options, LocalFittingPass::ThirdStage);
     RunFixedOffsetLocalFitting(model_object, options, LocalFittingPass::ThirdStage);
 
     RunGroupAlphaTraining(model_object, options);
-    RunGroupPotentialFitting(model_object, options);
+    RunGroupPotentialFitting(model_object, options, false, true);
     if (!options.quiet_mode)
     {
         LogGroupPriorSpotSummary(model_object);
