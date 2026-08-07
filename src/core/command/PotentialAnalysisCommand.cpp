@@ -111,6 +111,7 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
     options.distance_min = request.fit_range_min;
     options.distance_max = request.fit_range_max;
     options.thread_size = request.job_count;
+    options.exclude_hydrogen = request.exclude_hydrogen;
     RunPotentialFittingWorkflow(*model_object, options);
 
     DataRepository repository{ request.database_path };

@@ -5,7 +5,9 @@
 `RunSecondStageLocalFitting(ModelObject&, const FitOptions&)` refines the
 Gaussian estimates of the selected atoms after the first-stage local and group
 fits. It accounts for overlapping responses from neighboring selected atoms
-while updating each atom's amplitude, width, and offset.
+and unselected model atoms while updating each selected atom's amplitude,
+width, and offset. Unselected atoms contribute background responses but are
+never added to the optimizer state.
 
 The stage keeps candidate states in memory and writes one validated terminal
 state to `ModelObject`. Individual outer iterations do not partially update the
@@ -16,11 +18,15 @@ stored atom estimates.
 The fitting context contains, for each selected atom:
 
 - its raw local-potential sampling entries and trained `alpha_r`;
-- the selected neighboring atoms that contribute to each sample.
+- every model atom that contributes to each sample.
 
 Neighbor candidates are searched within `kNeighborAtomSearchRange`. A neighbor
 contributes to a sample only when its distance from that sample does not exceed
-`kNeighborContributionDistanceMax`.
+`kNeighborContributionDistanceMax`. Unselected candidates are deduplicated
+across targets and retained only when they affect at least one sample. When
+`FitOptions::exclude_hydrogen` is true, hydrogen atoms are removed from this
+contributor set; other selection exclusions do not remove background
+contributors.
 
 Before the second stage starts, the first group fit consumes the selected raw
 sampling entries and supplies the per-atom posterior and group prior used by
@@ -48,6 +54,13 @@ If a valid seed cannot be obtained for every selected atom, the stage exits
 without changing the stored estimates, peeling sampling entries, or group
 results.
 
+Each effective unselected neighbor then receives a transient seed from the
+same-group median or, when that group has no selected direct seed, the global
+median. Unselected seeds never feed back into either median pool. Selected and
+unselected seed summaries are logged separately. If an unselected seed cannot
+be built, the stage exits with `no-valid-unselected-neighbor-seed` before
+changing stored results.
+
 The valid initial state is used to build a weighted coupling topology. The
 topology records atoms that jointly affect objective samples. Each iteration
 partitions the active portion of this topology into deterministic cluster keys,
@@ -63,8 +76,8 @@ Each outer attempt performs the following sequence:
 3. Jointly estimate one shared offset per represented group within each cluster
    using robust IRLS and the fixed `kJointOffsetRidgeRatio`.
 4. Build component-wise group-median models from the post-solve snapshot. For
-   each active atom, subtract the group-median responses of its selected
-   neighbors from the observed sample responses.
+   each active atom, subtract its selected neighbors and all effective
+   unselected contributors from the observed sample responses.
 5. Refit the atom's local Gaussian with its trained `alpha_r`, using its
    group-median model as the fixed offset model. These refits form the raw
    fixed-point state.
@@ -85,8 +98,15 @@ The neighbor-adjusted response for atom `i` and one of its samples is:
 
 ```text
 adjusted response = observed response
-                  - sum(neighbor fitted responses at the sample position)
+                  - sum(selected-neighbor fitted responses)
+                  - sum(unselected-contributor responses)
 ```
+
+For every evaluated selected snapshot, an unselected contributor uses the
+latest median of the selected models with its `GroupKey`. If no selected atom
+has that key, it keeps its initialization-time global-median seed. The same
+resolver is used by the coupling topology, joint-offset system, local refit,
+objective guards, audit, and final peeling calculation.
 
 This offset solve and neighbor-adjusted local refit constitute one raw
 fixed-point update. These group-median-adjusted entries are temporary inputs to
@@ -354,12 +374,16 @@ sampling entries from the raw entries:
 
 ```text
 peeling response = raw response
-                 - sum(final neighbor MDPDE responses at the sample position)
+                 - sum(final selected-neighbor MDPDE responses)
+                 - sum(final unselected-contributor responses)
 ```
 
-The calculation reuses the context's selected-neighbor mapping and preserves
-the original sampling-point order and metadata. The final local Gaussian
-results and these entries are written with `SetGaussianResult` and
+Selected neighbors use their final atom-level MDPDE models. Unselected
+contributors use group medians derived from the final selected state, or their
+initial global seed when no matching selected group exists. The calculation
+preserves the original sampling-point order and metadata. Only selected local
+Gaussian results are written; unselected seeds remain transient. The selected
+results and rebuilt entries are persisted with `SetGaussianResult` and
 `SetPeelingSamplingEntries` before group fitting begins.
 
 `RunSecondStageLocalFitting` then calls

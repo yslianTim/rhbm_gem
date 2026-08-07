@@ -23,6 +23,7 @@
 #include "core/detail/LocalFittingSeedRepair.hpp"
 #include "core/detail/LocalFittingTrustRegion.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
+#include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -628,6 +629,158 @@ std::unique_ptr<rg::ModelObject> BuildDefenseModel(
             BuildSamples(*atom, selected_atoms, truth_model_list));
     }
     return model;
+}
+
+std::unique_ptr<rg::ModelObject> BuildUnselectedContributorDefenseModel(
+    const rg::GaussianModel3D & model_value)
+{
+    const std::vector<std::array<float, 3>> position_list{
+        { 0.0F, 0.0F, 0.0F },
+        { 0.9F, 0.0F, 0.0F },
+        { 0.45F, 0.0F, 0.0F },
+        { 0.60F, 0.0F, 0.0F },
+        { 0.75F, 0.0F, 0.0F },
+        { 4.50F, 0.0F, 0.0F },
+        { 10.0F, 0.0F, 0.0F }
+    };
+    const std::vector<Spot> spot_list{
+        Spot::C,
+        Spot::C,
+        Spot::C,
+        Spot::O,
+        Spot::C,
+        Spot::O,
+        Spot::O
+    };
+    const std::vector<Element> element_list{
+        Element::CARBON,
+        Element::CARBON,
+        Element::CARBON,
+        Element::OXYGEN,
+        Element::HYDROGEN,
+        Element::OXYGEN,
+        Element::OXYGEN
+    };
+    std::vector<std::unique_ptr<rg::AtomObject>> atom_list;
+    for (std::size_t i = 0; i < position_list.size(); i++)
+    {
+        atom_list.emplace_back(MakeAtom(
+            static_cast<int>(i + 1),
+            spot_list.at(i),
+            element_list.at(i),
+            position_list.at(i)));
+    }
+    auto model{ std::make_unique<rg::ModelObject>(std::move(atom_list)) };
+    model->SelectAllAtoms();
+    for (int serial_id = 3; serial_id <= 7; serial_id++)
+    {
+        model->SetAtomSelected(serial_id, false);
+    }
+
+    std::vector<rg::AtomObject *> all_atoms;
+    std::vector<rg::GaussianModel3D> truth_models;
+    for (const auto & atom : model->GetAtomList())
+    {
+        all_atoms.emplace_back(atom.get());
+        truth_models.emplace_back(model_value);
+    }
+
+    auto analysis{ model->EditAnalysis() };
+    analysis.RebuildAtomGroupsFromSelection();
+    analysis.InitializeGroupAlpha(0.0);
+    for (auto * atom : model->GetSelectedAtoms())
+    {
+        auto local_editor{ analysis.EnsureAtomLocalPotential(*atom) };
+        local_editor.SetAlphaR(0.0);
+        local_editor.SetGaussianResult(MakeGaussianResult(model_value));
+        local_editor.SetRawSamplingEntries(
+            BuildSamples(*atom, all_atoms, truth_models));
+    }
+    return model;
+}
+
+void ExpectUnselectedContributorPeeling(
+    const rg::ModelObject & model,
+    const rg::GaussianModel3D & global_fallback_model,
+    bool exclude_hydrogen)
+{
+    const auto & selected_atoms{ model.GetSelectedAtoms() };
+    std::vector<rg::GaussianModel3D> selected_models;
+    std::vector<GroupKey> selected_group_keys;
+    selected_models.reserve(selected_atoms.size());
+    selected_group_keys.reserve(selected_atoms.size());
+    for (const auto * atom : selected_atoms)
+    {
+        selected_models.emplace_back(
+            rg::AtomLocalPotentialView::RequireFor(*atom).GetEstimateMDPDE());
+        selected_group_keys.emplace_back(
+            rg::data_internal::GetGroupKey(atom));
+    }
+
+    for (const auto * target_atom : selected_atoms)
+    {
+        const auto view{ rg::AtomLocalPotentialView::RequireFor(*target_atom) };
+        const auto raw_entries{ view.GetRawSamplingEntries(false) };
+        const auto peeling_entries{ view.GetPeelingSamplingEntries(false) };
+        ASSERT_EQ(raw_entries.size(), peeling_entries.size());
+        for (std::size_t sample_index = 0;
+            sample_index < raw_entries.size();
+            sample_index++)
+        {
+            const auto & raw_sample{ raw_entries.at(sample_index) };
+            auto expected_response{ static_cast<double>(raw_sample.response) };
+            for (const auto * neighbor : target_atom->FindNeighborAtoms(5.0))
+            {
+                if (exclude_hydrogen &&
+                    neighbor->GetElement() == Element::HYDROGEN)
+                {
+                    continue;
+                }
+                const auto sample_distance{
+                    Distance(raw_sample.point.position, neighbor->GetPosition())
+                };
+                if (sample_distance > 2.5) continue;
+
+                const auto selected_iter{
+                    std::find(selected_atoms.begin(), selected_atoms.end(), neighbor)
+                };
+                rg::GaussianModel3D contributor_model{ global_fallback_model };
+                if (selected_iter != selected_atoms.end())
+                {
+                    contributor_model =
+                        rg::AtomLocalPotentialView::RequireFor(*neighbor)
+                            .GetEstimateMDPDE();
+                }
+                else
+                {
+                    std::vector<rg::GaussianModel3D> group_models;
+                    const auto neighbor_group_key{
+                        rg::data_internal::GetGroupKey(neighbor)
+                    };
+                    for (std::size_t i = 0; i < selected_atoms.size(); i++)
+                    {
+                        if (selected_group_keys.at(i) == neighbor_group_key)
+                        {
+                            group_models.emplace_back(selected_models.at(i));
+                        }
+                    }
+                    const auto group_median{
+                        median_detail::BuildLocalFittingGaussianParameterMedian(
+                            group_models)
+                    };
+                    if (group_median.has_value())
+                    {
+                        contributor_model = *group_median;
+                    }
+                }
+                expected_response -= contributor_model.ResponseAtDistance(
+                    sample_distance);
+            }
+            EXPECT_FLOAT_EQ(
+                peeling_entries.at(sample_index).response,
+                static_cast<float>(expected_response));
+        }
+    }
 }
 
 std::unique_ptr<rg::ModelObject> BuildNearCollinearDefenseModel(
@@ -3130,6 +3283,100 @@ TEST(
                 1.0e-10);
         }
     }
+}
+
+TEST(
+    EstimatorSecondStageDefenseTest,
+    RunSecondStageLocalFittingIncludesEffectiveUnselectedContributors)
+{
+    const rg::GaussianModel3D seed_model{ 6.0, 0.55, 0.10 };
+    std::optional<float> include_hydrogen_response;
+    for (const bool exclude_hydrogen : { false, true })
+    {
+        auto model{ BuildUnselectedContributorDefenseModel(seed_model) };
+        auto options{ MakeSecondStageOptions() };
+        options.quiet_mode = false;
+        options.exclude_hydrogen = exclude_hydrogen;
+        const auto previous_log_level{ Logger::GetLogLevel() };
+        Logger::SetLogLevel(LogLevel::Debug);
+        testing::internal::CaptureStdout();
+        rt::RunSecondStageLocalFitting(*model, options);
+        const std::string out{ testing::internal::GetCapturedStdout() };
+        Logger::SetLogLevel(previous_log_level);
+
+        EXPECT_EQ(model->GetSelectedAtomCount(), 2U);
+        for (int serial_id = 3; serial_id <= 7; serial_id++)
+        {
+            EXPECT_FALSE(rg::AtomLocalPotentialView::For(
+                *model->FindAtomPtr(serial_id)).IsAvailable());
+        }
+        ExpectUnselectedContributorPeeling(
+            *model,
+            seed_model,
+            exclude_hydrogen);
+
+        EXPECT_NE(
+            out.find(
+                exclude_hydrogen ?
+                    "Unselected second-stage neighbor seeds = 2, "
+                    "sources = group-median:1, global-median:1." :
+                    "Unselected second-stage neighbor seeds = 3, "
+                    "sources = group-median:2, global-median:1."),
+            std::string::npos);
+        EXPECT_NE(
+            out.find(
+                "Unselected second-stage neighbor seed selection: serial ID = 3"),
+            std::string::npos);
+        EXPECT_NE(
+            out.find(
+                "Unselected second-stage neighbor seed selection: serial ID = 4"),
+            std::string::npos);
+        EXPECT_EQ(
+            out.find(
+                "Unselected second-stage neighbor seed selection: serial ID = 6"),
+            std::string::npos);
+        EXPECT_EQ(
+            out.find(
+                "Unselected second-stage neighbor seed selection: serial ID = 7"),
+            std::string::npos);
+        const auto hydrogen_log_position{
+            out.find(
+                "Unselected second-stage neighbor seed selection: serial ID = 5")
+        };
+        if (exclude_hydrogen)
+        {
+            EXPECT_EQ(hydrogen_log_position, std::string::npos);
+        }
+        else
+        {
+            EXPECT_NE(hydrogen_log_position, std::string::npos);
+        }
+
+        const auto first_response{
+            rg::AtomLocalPotentialView::RequireFor(
+                *model->GetSelectedAtoms().front())
+                .GetPeelingSamplingEntries(false).front().response
+        };
+        if (exclude_hydrogen)
+        {
+            ASSERT_TRUE(include_hydrogen_response.has_value());
+            EXPECT_NE(first_response, *include_hydrogen_response);
+        }
+        else
+        {
+            include_hydrogen_response = first_response;
+        }
+    }
+
+    auto quiet_model{ BuildUnselectedContributorDefenseModel(seed_model) };
+    auto quiet_options{ MakeSecondStageOptions() };
+    quiet_options.quiet_mode = true;
+    testing::internal::CaptureStdout();
+    rt::RunSecondStageLocalFitting(*quiet_model, quiet_options);
+    const std::string quiet_out{ testing::internal::GetCapturedStdout() };
+    EXPECT_EQ(
+        quiet_out.find("Unselected second-stage neighbor seeds"),
+        std::string::npos);
 }
 
 TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingJointlyPolishesClusterParameters)
