@@ -79,6 +79,7 @@ kLocalFittingObjectiveStrictTolerance{ 1.0e-10, 1.0e-8 };
 constexpr detail::LocalFittingObjectiveTolerance
 kLocalFittingObjectiveProgressTolerance{ 1.0e-8, 1.0e-3 };
 constexpr double kLocalFittingCouplingMinimumWeight{ 0.05 };
+constexpr std::size_t kLocalFittingCouplingMaximumResidueCount{ 10 };
 constexpr std::array<double, 6> kLocalFittingCouplingSensitivityMinimumWeightList{
     0.05,
     0.075,
@@ -940,7 +941,23 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
                 kLocalFittingCouplingSensitivityMinimumWeightList.end()
             })
     };
-    return weighted_topology.has_value() ? std::move(*weighted_topology) : builder.BuildBinary();
+    auto topology{
+        weighted_topology.has_value() ?
+            std::move(*weighted_topology) : builder.BuildBinary()
+    };
+    std::vector<detail::LocalFittingCouplingResidueKey>
+        residue_key_by_atom_index;
+    residue_key_by_atom_index.reserve(context.size());
+    for (const auto & atom_context : context)
+    {
+        residue_key_by_atom_index.emplace_back(
+            atom_context.atom->GetChainID(),
+            atom_context.atom->GetSequenceID());
+    }
+    return detail::ApplyLocalFittingCouplingResidueCutoff(
+        std::move(topology),
+        std::move(residue_key_by_atom_index),
+        kLocalFittingCouplingMaximumResidueCount);
 }
 
 std::optional<GaussianModel3DWithUncertainty> BuildValidGaussianParameterMedian(
@@ -1149,6 +1166,17 @@ void LogLocalFittingCouplingTopology(
         << std::fixed << std::setprecision(2)
         << maximum_component_ratio << ".";
     Logger::Log(LogLevel::Info, message.str());
+
+    const auto & residue_cutoff_summary{ topology.residue_cutoff_summary };
+    std::ostringstream residue_cutoff_message;
+    residue_cutoff_message
+        << "Local-fitting residue cutoff: residues="
+        << residue_cutoff_summary.residue_count
+        << ", limit=" << kLocalFittingCouplingMaximumResidueCount
+        << ", clusters=" << residue_cutoff_summary.cluster_count
+        << ", max-residues=" << residue_cutoff_summary.maximum_residue_count
+        << ", cutoff-edges=" << residue_cutoff_summary.cut_edge_count << ".";
+    Logger::Log(LogLevel::Info, residue_cutoff_message.str());
 
     for (const auto & sensitivity : summary.threshold_sensitivity_list)
     {

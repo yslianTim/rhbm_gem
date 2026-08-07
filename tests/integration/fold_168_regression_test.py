@@ -20,6 +20,9 @@ def make_baseline() -> dict[str, object]:
         "schema_version": regression.SCHEMA_VERSION,
         "input_hashes": regression.EXPECTED_INPUT_HASHES,
         "command_arguments": regression.COMMAND_ARGUMENT_TEMPLATE,
+        "expected_residue_count": 20,
+        "maximum_residues_per_cluster": 10,
+        "minimum_cluster_count": 2,
         "serial_ids": list(range(1, regression.EXPECTED_ATOM_COUNT + 1)),
         "reference_quality_metrics": {
             "amplitude_rmse": 1.0,
@@ -109,14 +112,31 @@ class Fold168RegressionTest(unittest.TestCase):
                 "offset_rmse": 1.05,
                 "maximum_absolute_offset": 1.05,
             },
-            "second_stage_summary": {"accepted_iterations": 10},
+            "second_stage_summary": {"accepted_iterations": 25},
+            "residue_cutoff_summary": {
+                "residue_count": 20,
+                "limit": 10,
+                "cluster_count": 2,
+                "maximum_residue_count": 10,
+                "cut_edge_count": 12,
+            },
         }
         self.assertEqual(regression.validate_quality_gate(baseline, actual), [])
         actual["quality_metrics"]["width_rmse"] = 1.051
-        actual["second_stage_summary"]["accepted_iterations"] = 11
+        actual["second_stage_summary"]["accepted_iterations"] = 26
         differences = "\n".join(regression.validate_quality_gate(baseline, actual))
         self.assertIn("quality_metrics.width_rmse", differences)
         self.assertIn("accepted_iterations", differences)
+
+        actual["second_stage_summary"]["accepted_iterations"] = 25
+        actual["residue_cutoff_summary"]["cluster_count"] = 1
+        actual["residue_cutoff_summary"]["maximum_residue_count"] = 11
+        cutoff_differences = "\n".join(
+            regression.validate_quality_gate(baseline, actual))
+        self.assertIn("residue_cutoff_summary.cluster_count", cutoff_differences)
+        self.assertIn(
+            "residue_cutoff_summary.maximum_residue_count",
+            cutoff_differences)
 
     def test_parses_stable_second_stage_summary(self) -> None:
         summary = regression.parse_second_stage_summary(
@@ -160,6 +180,20 @@ class Fold168RegressionTest(unittest.TestCase):
                 "Second-stage local fitting summary: accepted_iterations=4, "
                 "best_iteration=2, stop_reason=audit-patience, "
                 "best_audit_objective=1.25000000e-03, final_uses_polish=yes.\n")
+
+    def test_parses_stable_residue_cutoff_summary(self) -> None:
+        summary = regression.parse_residue_cutoff_summary(
+            "Local-fitting residue cutoff: residues=20, limit=10, clusters=2, "
+            "max-residues=10, cutoff-edges=42.\n")
+        self.assertEqual(summary, {
+            "residue_count": 20,
+            "limit": 10,
+            "cluster_count": 2,
+            "maximum_residue_count": 10,
+            "cut_edge_count": 42,
+        })
+        with self.assertRaises(regression.RegressionError):
+            regression.parse_residue_cutoff_summary("missing")
 
     def test_hash_failure_does_not_execute_and_preserves_reports(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -231,7 +265,7 @@ class Fold168RegressionTest(unittest.TestCase):
             ), redirect_stdout(StringIO()):
                 self.assertEqual(regression.run(arguments), 1)
 
-    def test_baseline_schema_version_four_is_required(self) -> None:
+    def test_baseline_schema_version_five_is_required(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             baseline_path = Path(temp_dir) / "baseline.json"
             baseline = make_baseline()

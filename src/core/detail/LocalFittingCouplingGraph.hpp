@@ -7,6 +7,7 @@
 #include <optional>
 #include <set>
 #include <stdexcept>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -17,6 +18,14 @@
 namespace rhbm_gem::core::detail {
 
 using LocalFittingCouplingClusterKey = std::vector<std::size_t>;
+using LocalFittingCouplingResidueKey = std::pair<std::string, int>;
+
+struct LocalFittingCouplingWeightedEdge
+{
+    std::size_t left_atom_index{ 0 };
+    std::size_t right_atom_index{ 0 };
+    double weight{ 0.0 };
+};
 
 struct LocalFittingCouplingSampleId
 {
@@ -97,8 +106,17 @@ struct LocalFittingCouplingGraphSummary
 struct LocalFittingCouplingTopology
 {
     std::vector<std::vector<std::size_t>> adjacency_list{};
+    std::vector<LocalFittingCouplingWeightedEdge> retained_edge_list{};
+    std::vector<LocalFittingCouplingResidueKey> residue_key_by_atom_index{};
     std::vector<LocalFittingCouplingSampleDependency> sample_dependency_list{};
     LocalFittingCouplingGraphSummary summary{};
+    struct ResidueCutoffSummary
+    {
+        std::size_t residue_count{ 0 };
+        std::size_t maximum_residue_count{ 0 };
+        std::size_t cluster_count{ 0 };
+        std::size_t cut_edge_count{ 0 };
+    } residue_cutoff_summary{};
 };
 
 struct LocalFittingCouplingPartition
@@ -211,6 +229,12 @@ class LocalFittingCouplingGraphBuilder
 
             topology.adjacency_list.at(pair.first).emplace_back(pair.second);
             topology.adjacency_list.at(pair.second).emplace_back(pair.first);
+            topology.retained_edge_list.emplace_back(
+                LocalFittingCouplingWeightedEdge{
+                    pair.first,
+                    pair.second,
+                    weight
+                });
             topology.summary.retained_edge_count++;
         }
         topology.summary.cut_edge_count =
@@ -353,6 +377,161 @@ public:
     }
 };
 
+inline LocalFittingCouplingTopology ApplyLocalFittingCouplingResidueCutoff(
+    LocalFittingCouplingTopology topology,
+    std::vector<LocalFittingCouplingResidueKey> residue_key_by_atom_index,
+    std::size_t maximum_residue_count)
+{
+    const auto atom_count{ topology.adjacency_list.size() };
+    if (residue_key_by_atom_index.size() != atom_count)
+    {
+        throw std::invalid_argument(
+            "Local fitting coupling residue key count must match atom count.");
+    }
+    if (maximum_residue_count == 0)
+    {
+        throw std::invalid_argument(
+            "Local fitting coupling maximum residue count must be positive.");
+    }
+
+    std::map<LocalFittingCouplingResidueKey, std::size_t> residue_index_by_key;
+    for (const auto & residue_key : residue_key_by_atom_index)
+    {
+        residue_index_by_key.emplace(residue_key, 0);
+    }
+    std::size_t next_residue_index{ 0 };
+    for (auto & [residue_key, residue_index] : residue_index_by_key)
+    {
+        static_cast<void>(residue_key);
+        residue_index = next_residue_index++;
+    }
+
+    std::vector<std::size_t> residue_index_by_atom_index;
+    residue_index_by_atom_index.reserve(atom_count);
+    for (const auto & residue_key : residue_key_by_atom_index)
+    {
+        residue_index_by_atom_index.emplace_back(
+            residue_index_by_key.at(residue_key));
+    }
+
+    using ResiduePair = std::pair<std::size_t, std::size_t>;
+    std::map<ResiduePair, double> maximum_weight_by_residue_pair;
+    for (const auto & edge : topology.retained_edge_list)
+    {
+        if (edge.left_atom_index >= atom_count ||
+            edge.right_atom_index >= atom_count)
+        {
+            throw std::invalid_argument(
+                "Local fitting coupling retained edge index is out of range.");
+        }
+        if (!std::isfinite(edge.weight))
+        {
+            throw std::invalid_argument(
+                "Local fitting coupling retained edge weight must be finite.");
+        }
+        const auto left_residue_index{
+            residue_index_by_atom_index.at(edge.left_atom_index)
+        };
+        const auto right_residue_index{
+            residue_index_by_atom_index.at(edge.right_atom_index)
+        };
+        if (left_residue_index == right_residue_index) continue;
+
+        const auto residue_pair{
+            std::minmax(left_residue_index, right_residue_index)
+        };
+        auto weight_iter{ maximum_weight_by_residue_pair.find(residue_pair) };
+        if (weight_iter == maximum_weight_by_residue_pair.end())
+        {
+            maximum_weight_by_residue_pair.emplace(residue_pair, edge.weight);
+        }
+        else
+        {
+            weight_iter->second = std::max(weight_iter->second, edge.weight);
+        }
+    }
+
+    struct WeightedResidueEdge
+    {
+        ResiduePair residue_pair{};
+        double weight{ 0.0 };
+    };
+    std::vector<WeightedResidueEdge> weighted_residue_edge_list;
+    weighted_residue_edge_list.reserve(maximum_weight_by_residue_pair.size());
+    for (const auto & [residue_pair, weight] : maximum_weight_by_residue_pair)
+    {
+        weighted_residue_edge_list.emplace_back(
+            WeightedResidueEdge{ residue_pair, weight });
+    }
+    std::sort(
+        weighted_residue_edge_list.begin(),
+        weighted_residue_edge_list.end(),
+        [](const auto & lhs, const auto & rhs)
+        {
+            if (lhs.weight != rhs.weight) return lhs.weight > rhs.weight;
+            return lhs.residue_pair < rhs.residue_pair;
+        });
+
+    LocalFittingDisjointSet residue_component_set{ residue_index_by_key.size() };
+    for (const auto & edge : weighted_residue_edge_list)
+    {
+        const auto left_root{ residue_component_set.Find(edge.residue_pair.first) };
+        const auto right_root{ residue_component_set.Find(edge.residue_pair.second) };
+        if (left_root == right_root) continue;
+        if (residue_component_set.ComponentSize(left_root) +
+                residue_component_set.ComponentSize(right_root) >
+            maximum_residue_count)
+        {
+            continue;
+        }
+        residue_component_set.Merge(left_root, right_root);
+    }
+
+    topology.adjacency_list.assign(atom_count, {});
+    std::size_t cut_edge_count{ 0 };
+    for (const auto & edge : topology.retained_edge_list)
+    {
+        const auto left_residue_index{
+            residue_index_by_atom_index.at(edge.left_atom_index)
+        };
+        const auto right_residue_index{
+            residue_index_by_atom_index.at(edge.right_atom_index)
+        };
+        if (residue_component_set.Find(left_residue_index) !=
+            residue_component_set.Find(right_residue_index))
+        {
+            cut_edge_count++;
+            continue;
+        }
+        topology.adjacency_list.at(edge.left_atom_index).emplace_back(
+            edge.right_atom_index);
+        topology.adjacency_list.at(edge.right_atom_index).emplace_back(
+            edge.left_atom_index);
+    }
+
+    std::size_t cluster_count{ 0 };
+    std::size_t observed_maximum_residue_count{ 0 };
+    for (std::size_t residue_index = 0;
+        residue_index < residue_index_by_key.size();
+        residue_index++)
+    {
+        if (residue_component_set.Find(residue_index) != residue_index) continue;
+        cluster_count++;
+        observed_maximum_residue_count = std::max(
+            observed_maximum_residue_count,
+            residue_component_set.ComponentSize(residue_index));
+    }
+    topology.residue_key_by_atom_index = std::move(residue_key_by_atom_index);
+    topology.residue_cutoff_summary =
+        LocalFittingCouplingTopology::ResidueCutoffSummary{
+            residue_index_by_key.size(),
+            observed_maximum_residue_count,
+            cluster_count,
+            cut_edge_count
+        };
+    return topology;
+}
+
 inline LocalFittingCouplingPartition BuildLocalFittingCouplingPartition(
     const LocalFittingCouplingTopology & topology,
     const std::vector<std::size_t> & active_index_list)
@@ -376,6 +555,30 @@ inline LocalFittingCouplingPartition BuildLocalFittingCouplingPartition(
     }
 
     LocalFittingDisjointSet component_set{ active_index_list.size() };
+
+    if (!topology.residue_key_by_atom_index.empty())
+    {
+        if (topology.residue_key_by_atom_index.size() != atom_count)
+        {
+            throw std::invalid_argument(
+                "Local fitting coupling residue key count must match atom count.");
+        }
+        std::map<LocalFittingCouplingResidueKey, std::size_t>
+            first_position_by_residue_key;
+        for (std::size_t position = 0;
+            position < active_index_list.size();
+            position++)
+        {
+            const auto atom_index{ active_index_list.at(position) };
+            const auto & residue_key{
+                topology.residue_key_by_atom_index.at(atom_index)
+            };
+            const auto [iter, inserted]{
+                first_position_by_residue_key.emplace(residue_key, position)
+            };
+            if (!inserted) component_set.Merge(iter->second, position);
+        }
+    }
 
     for (const auto atom_index : active_index_list)
     {

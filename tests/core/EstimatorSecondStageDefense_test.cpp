@@ -123,6 +123,8 @@ std::unique_ptr<rg::AtomObject> MakeAtom(
 {
     auto atom{ std::make_unique<rg::AtomObject>() };
     atom->SetSerialID(serial_id);
+    atom->SetChainID("A");
+    atom->SetSequenceID(serial_id);
     atom->SetComponentKey(1);
     atom->SetAtomKey(static_cast<AtomKey>(spot));
     atom->SetElement(element);
@@ -2530,6 +2532,115 @@ TEST(EstimatorSecondStageDefenseTest, CouplingPartitionCutsWeakBridgeAndDuplicat
     EXPECT_EQ(inactive_partition.boundary_sample_count, 0U);
 }
 
+TEST(EstimatorSecondStageDefenseTest, CouplingResidueCutoffKeepsResiduesWholeAndBounded)
+{
+    coupling_detail::LocalFittingCouplingTopology topology;
+    topology.adjacency_list.resize(13);
+    for (std::size_t atom_index = 1; atom_index < 12; atom_index++)
+    {
+        topology.retained_edge_list.emplace_back(
+            coupling_detail::LocalFittingCouplingWeightedEdge{
+                atom_index,
+                atom_index + 1,
+                1.0 - 0.01 * static_cast<double>(atom_index)
+            });
+    }
+    topology.sample_dependency_list = {
+        { { 0, 0 }, { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 } }
+    };
+    std::vector<coupling_detail::LocalFittingCouplingResidueKey> residue_key_list{
+        { "A", 1 },
+        { "A", 1 },
+        { "B", 1 }
+    };
+    for (int residue_id = 2; residue_id <= 11; residue_id++)
+    {
+        residue_key_list.emplace_back("A", residue_id);
+    }
+
+    const auto capped_topology{
+        coupling_detail::ApplyLocalFittingCouplingResidueCutoff(
+            std::move(topology),
+            residue_key_list,
+            10)
+    };
+    EXPECT_EQ(capped_topology.residue_cutoff_summary.residue_count, 12U);
+    EXPECT_GE(capped_topology.residue_cutoff_summary.cluster_count, 2U);
+    EXPECT_LE(capped_topology.residue_cutoff_summary.maximum_residue_count, 10U);
+    EXPECT_GT(capped_topology.residue_cutoff_summary.cut_edge_count, 0U);
+
+    std::vector<std::size_t> active_index_list(13);
+    for (std::size_t atom_index = 0; atom_index < active_index_list.size(); atom_index++)
+    {
+        active_index_list.at(atom_index) = atom_index;
+    }
+    const auto partition{
+        coupling_detail::BuildLocalFittingCouplingPartition(
+            capped_topology,
+            active_index_list)
+    };
+    EXPECT_EQ(partition.boundary_sample_count, 1U);
+    EXPECT_GE(partition.sample_id_list_by_key.size(), 2U);
+
+    bool found_first_residue{ false };
+    for (const auto & [key, sample_id_list] : partition.sample_id_list_by_key)
+    {
+        EXPECT_EQ(sample_id_list.size(), 1U);
+        std::set<coupling_detail::LocalFittingCouplingResidueKey> residue_key_set;
+        for (const auto atom_index : key)
+        {
+            residue_key_set.emplace(residue_key_list.at(atom_index));
+        }
+        EXPECT_LE(residue_key_set.size(), 10U);
+        if (std::find(key.begin(), key.end(), 0U) == key.end()) continue;
+        found_first_residue = true;
+        EXPECT_NE(std::find(key.begin(), key.end(), 1U), key.end());
+    }
+    EXPECT_TRUE(found_first_residue);
+
+    std::reverse(active_index_list.begin(), active_index_list.end());
+    const auto reversed_partition{
+        coupling_detail::BuildLocalFittingCouplingPartition(
+            capped_topology,
+            active_index_list)
+    };
+    EXPECT_EQ(
+        partition.sample_id_list_by_key.size(),
+        reversed_partition.sample_id_list_by_key.size());
+    auto expected_iter{ partition.sample_id_list_by_key.begin() };
+    auto actual_iter{ reversed_partition.sample_id_list_by_key.begin() };
+    for (; expected_iter != partition.sample_id_list_by_key.end();
+        expected_iter++, actual_iter++)
+    {
+        EXPECT_EQ(expected_iter->first, actual_iter->first);
+    }
+}
+
+TEST(EstimatorSecondStageDefenseTest, CouplingResidueCutoffPrioritizesStrongEdges)
+{
+    coupling_detail::LocalFittingCouplingTopology topology;
+    topology.adjacency_list.resize(3);
+    topology.retained_edge_list = {
+        { 1, 2, 0.80 },
+        { 0, 1, 0.90 }
+    };
+    const auto capped_topology{
+        coupling_detail::ApplyLocalFittingCouplingResidueCutoff(
+            std::move(topology),
+            { { "A", 1 }, { "A", 2 }, { "A", 3 } },
+            2)
+    };
+    const auto partition{
+        coupling_detail::BuildLocalFittingCouplingPartition(
+            capped_topology,
+            { 2, 1, 0 })
+    };
+    EXPECT_EQ(partition.sample_id_list_by_key.count({ 0, 1 }), 1U);
+    EXPECT_EQ(partition.sample_id_list_by_key.count({ 2 }), 1U);
+    EXPECT_TRUE(HasCouplingNeighbor(capped_topology, 0, 1));
+    EXPECT_FALSE(HasCouplingNeighbor(capped_topology, 1, 2));
+}
+
 TEST(EstimatorSecondStageDefenseTest, CouplingPartitionKeepsStrongChainAndBinaryFallback)
 {
     coupling_detail::LocalFittingCouplingTopology strong_topology;
@@ -2562,6 +2673,18 @@ TEST(EstimatorSecondStageDefenseTest, CouplingPartitionKeepsStrongChainAndBinary
             { 0, 1 })
     };
     EXPECT_EQ(binary_partition.sample_id_list_by_key.count({ 0, 1 }), 1U);
+    const auto capped_binary_topology{
+        coupling_detail::ApplyLocalFittingCouplingResidueCutoff(
+            binary_topology,
+            { { "A", 1 }, { "A", 2 } },
+            1)
+    };
+    const auto capped_binary_partition{
+        coupling_detail::BuildLocalFittingCouplingPartition(
+            capped_binary_topology,
+            { 0, 1 })
+    };
+    EXPECT_EQ(capped_binary_partition.sample_id_list_by_key.size(), 2U);
 
     coupling_detail::LocalFittingCouplingGraphBuilder overflow_builder{ 2 };
     const auto huge{ Eigen::Vector3d::Constant(1.0e200) };
