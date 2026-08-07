@@ -190,6 +190,412 @@ LocalPotentialSampleList BuildSamples(
     return sample_list;
 }
 
+rg::GaussianModel3D MakeGaussianWithCenterSignal(
+    double center_signal,
+    double width,
+    double offset = 0.0)
+{
+    const auto amplitude{
+        center_signal * std::pow(2.0 * std::acos(-1.0) * width * width, 1.5)
+    };
+    return rg::GaussianModel3D{ amplitude, width, offset };
+}
+
+LocalPotentialSampleList BuildSuspiciousGuardSamples(
+    const rg::GaussianModel3D & previous_model,
+    const std::vector<double> & radius_list,
+    const std::vector<std::vector<double>> & zero_offset_response_list_by_radius)
+{
+    if (radius_list.size() != zero_offset_response_list_by_radius.size())
+    {
+        throw std::invalid_argument(
+            "Suspicious guard sample input sizes are inconsistent.");
+    }
+
+    LocalPotentialSampleList sample_list;
+    for (std::size_t radius_index = 0;
+        radius_index < radius_list.size();
+        radius_index++)
+    {
+        const auto radius{ radius_list.at(radius_index) };
+        const auto previous_offset_response{
+            previous_model.GetOffset() *
+                previous_model.OffsetBasisAtDistance(radius)
+        };
+        for (const auto zero_offset_response :
+            zero_offset_response_list_by_radius.at(radius_index))
+        {
+            SamplingPoint point;
+            point.distance = static_cast<float>(radius);
+            point.position = {
+                static_cast<float>(radius),
+                0.0F,
+                0.0F
+            };
+            sample_list.emplace_back(LocalPotentialSample{
+                static_cast<float>(
+                    zero_offset_response + previous_offset_response),
+                point
+            });
+        }
+    }
+    return sample_list;
+}
+
+TEST(EstimatorSecondStageDefenseTest, SuspiciousEvaluatorReportsInvalidAndNonFiniteReasons)
+{
+    const auto options{ MakeSecondStageOptions() };
+    const auto previous_model{ MakeGaussianWithCenterSignal(0.1, 1.0) };
+    const auto sample_list{
+        BuildSuspiciousGuardSamples(
+            previous_model,
+            { 0.0 },
+            { { 0.1 } })
+    };
+
+    EXPECT_EQ(
+        audit_detail::EvaluateSuspiciousPostRefitUpdate(
+            sample_list,
+            previous_model,
+            rg::GaussianModel3D{ -1.0, 1.0, 0.0 },
+            options),
+        audit_detail::SuspiciousGaussianReason::InvalidModel);
+
+    auto non_finite_sample_list{ sample_list };
+    non_finite_sample_list.front().response =
+        std::numeric_limits<float>::quiet_NaN();
+    EXPECT_EQ(
+        audit_detail::EvaluateSuspiciousPostRefitUpdate(
+            non_finite_sample_list,
+            previous_model,
+            previous_model,
+            options),
+        audit_detail::SuspiciousGaussianReason::NonFiniteResponse);
+}
+
+TEST(EstimatorSecondStageDefenseTest, OffsetOnlyEvaluatorAppliesMagnitudeButSkipsWidthGuard)
+{
+    const auto options{ MakeSecondStageOptions() };
+    const auto previous_model{ MakeGaussianWithCenterSignal(0.1, 1.0) };
+    const auto sample_list{
+        BuildSuspiciousGuardSamples(
+            previous_model,
+            { 0.0 },
+            { { 0.1 } })
+    };
+    const auto large_offset_model{
+        previous_model.WithOffset(
+            1.0 / previous_model.OffsetBasisAtDistance(0.0))
+    };
+    EXPECT_EQ(
+        audit_detail::EvaluateSuspiciousOffsetUpdate(
+            sample_list,
+            previous_model,
+            large_offset_model,
+            options),
+        audit_detail::SuspiciousGaussianReason::OffsetMagnitude);
+
+    const auto wide_model{ MakeGaussianWithCenterSignal(0.1, 2.0) };
+    EXPECT_EQ(
+        audit_detail::EvaluateSuspiciousOffsetUpdate(
+            sample_list,
+            previous_model,
+            wide_model,
+            options),
+        audit_detail::SuspiciousGaussianReason::None);
+    EXPECT_EQ(
+        audit_detail::EvaluateSuspiciousPostRefitUpdate(
+            sample_list,
+            previous_model,
+            wide_model,
+            options),
+        audit_detail::SuspiciousGaussianReason::WidthGrowth);
+}
+
+TEST(EstimatorSecondStageDefenseTest, OffsetOnlyEvaluatorAcceptsUnchangedShapeOutsideProfileRange)
+{
+    const auto options{ MakeSecondStageOptions() };
+    const auto previous_model{ MakeGaussianWithCenterSignal(0.1, 1.0) };
+    const auto sample_list{
+        BuildSuspiciousGuardSamples(
+            previous_model,
+            { 0.0, 0.1 },
+            { { 0.1 }, { previous_model.ResponseAtDistance(0.1) } })
+    };
+    const auto fallback_model{ previous_model.WithOffset(1.0e-4) };
+
+    EXPECT_EQ(
+        audit_detail::EvaluateSuspiciousPostRefitUpdate(
+            sample_list,
+            previous_model,
+            fallback_model,
+            options),
+        audit_detail::SuspiciousGaussianReason::WidthGrowth);
+    EXPECT_EQ(
+        audit_detail::EvaluateSuspiciousOffsetUpdate(
+            sample_list,
+            previous_model,
+            fallback_model,
+            options),
+        audit_detail::SuspiciousGaussianReason::None);
+}
+
+TEST(EstimatorSecondStageDefenseTest, CenterSignFlipRequiresPositiveSignalNoiseAndEffectSizeThresholds)
+{
+    auto options{ MakeSecondStageOptions() };
+    options.distance_max = 0.02;
+    const auto previous_model{ MakeGaussianWithCenterSignal(0.01, 1.0) };
+    const auto noisy_sample_list{
+        BuildSuspiciousGuardSamples(
+            previous_model,
+            { 0.0, 0.01, 0.02 },
+            {
+                { 0.9, 1.0, 1.1 },
+                { 0.9, 1.0, 1.1 },
+                { 0.9, 1.0, 1.1 }
+            })
+    };
+    const auto candidate_with_center_offset = [&](double response)
+    {
+        return previous_model.WithOffset(
+            response / previous_model.OffsetBasisAtDistance(0.0));
+    };
+
+    EXPECT_EQ(
+        audit_detail::EvaluateSuspiciousOffsetUpdate(
+            noisy_sample_list,
+            previous_model,
+            candidate_with_center_offset(1.3),
+            options),
+        audit_detail::SuspiciousGaussianReason::None);
+    EXPECT_EQ(
+        audit_detail::EvaluateSuspiciousOffsetUpdate(
+            noisy_sample_list,
+            previous_model,
+            candidate_with_center_offset(1.6),
+            options),
+        audit_detail::SuspiciousGaussianReason::CenterSignFlip);
+
+    const auto zero_mad_sample_list{
+        BuildSuspiciousGuardSamples(
+            previous_model,
+            { 0.0, 0.01, 0.02 },
+            { { 1.0 }, { 1.0 }, { 1.0 } })
+    };
+    EXPECT_EQ(
+        audit_detail::EvaluateSuspiciousOffsetUpdate(
+            zero_mad_sample_list,
+            previous_model,
+            candidate_with_center_offset(1.2),
+            options),
+        audit_detail::SuspiciousGaussianReason::None);
+    EXPECT_EQ(
+        audit_detail::EvaluateSuspiciousOffsetUpdate(
+            zero_mad_sample_list,
+            previous_model,
+            candidate_with_center_offset(1.3),
+            options),
+        audit_detail::SuspiciousGaussianReason::CenterSignFlip);
+
+    const auto low_snr_sample_list{
+        BuildSuspiciousGuardSamples(
+            previous_model,
+            { 0.0, 0.01, 0.02 },
+            {
+                { 0.0, 0.1, 0.2 },
+                { 0.0, 0.1, 0.2 },
+                { 0.0, 0.1, 0.2 }
+            })
+    };
+    EXPECT_EQ(
+        audit_detail::EvaluateSuspiciousOffsetUpdate(
+            low_snr_sample_list,
+            previous_model,
+            candidate_with_center_offset(0.3),
+            options),
+        audit_detail::SuspiciousGaussianReason::None);
+
+    const auto negative_profile_samples{
+        BuildSuspiciousGuardSamples(
+            previous_model,
+            { 0.0, 0.01, 0.02 },
+            { { -1.0 }, { -1.0 }, { -1.0 } })
+    };
+    EXPECT_EQ(
+        audit_detail::EvaluateSuspiciousOffsetUpdate(
+            negative_profile_samples,
+            previous_model,
+            candidate_with_center_offset(-1.5),
+            options),
+        audit_detail::SuspiciousGaussianReason::None);
+}
+
+TEST(EstimatorSecondStageDefenseTest, RadialReboundUsesResidualNoiseAndExcursionCount)
+{
+    auto options{ MakeSecondStageOptions() };
+    options.distance_max = 4.0;
+    const auto previous_model{ MakeGaussianWithCenterSignal(1.0e-6, 1.0) };
+    const auto candidate_model{
+        previous_model.WithOffset(
+            0.6 / previous_model.OffsetBasisAtDistance(0.0))
+    };
+    const auto noisy_sample_list{
+        BuildSuspiciousGuardSamples(
+            previous_model,
+            { 0.0, 2.0, 4.0 },
+            {
+                { 0.8, 1.0, 1.2 },
+                { 0.8, 1.0, 1.2 },
+                { 0.8, 1.0, 1.2 }
+            })
+    };
+    EXPECT_EQ(
+        audit_detail::EvaluateSuspiciousOffsetUpdate(
+            noisy_sample_list,
+            previous_model,
+            candidate_model,
+            options),
+        audit_detail::SuspiciousGaussianReason::None);
+
+    const auto low_noise_sample_list{
+        BuildSuspiciousGuardSamples(
+            previous_model,
+            { 0.0, 2.0, 4.0 },
+            {
+                { 0.95, 1.0, 1.05 },
+                { 0.95, 1.0, 1.05 },
+                { 0.95, 1.0, 1.05 }
+            })
+    };
+    EXPECT_EQ(
+        audit_detail::EvaluateSuspiciousOffsetUpdate(
+            low_noise_sample_list,
+            previous_model,
+            candidate_model,
+            options),
+        audit_detail::SuspiciousGaussianReason::RadialRebound);
+
+    const auto excursion_model{ MakeGaussianWithCenterSignal(1.0, 1.0) };
+    const std::vector<double> radius_list{ 0.0, 0.1, 0.2, 0.3, 0.4 };
+    std::vector<double> innermost_response_list(10, 1.0);
+    const auto one_excursion_samples{
+        BuildSuspiciousGuardSamples(
+            excursion_model,
+            radius_list,
+            {
+                innermost_response_list,
+                { 0.6 },
+                { 0.9 },
+                { 0.5 },
+                { 0.6 }
+            })
+    };
+    options.distance_max = 0.41;
+    EXPECT_EQ(
+        audit_detail::EvaluateSuspiciousOffsetUpdate(
+            one_excursion_samples,
+            excursion_model,
+            excursion_model,
+            options),
+        audit_detail::SuspiciousGaussianReason::None);
+
+    const auto two_excursion_samples{
+        BuildSuspiciousGuardSamples(
+            excursion_model,
+            radius_list,
+            {
+                innermost_response_list,
+                { 0.6 },
+                { 0.9 },
+                { 0.5 },
+                { 0.8 }
+            })
+    };
+    EXPECT_EQ(
+        audit_detail::EvaluateSuspiciousOffsetUpdate(
+            two_excursion_samples,
+            excursion_model,
+            excursion_model,
+            options),
+        audit_detail::SuspiciousGaussianReason::RadialRebound);
+}
+
+TEST(EstimatorSecondStageDefenseTest, WidthAndCompensationRemainActiveWithoutTrustedRadialShape)
+{
+    auto options{ MakeSecondStageOptions() };
+    const auto previous_model{ MakeGaussianWithCenterSignal(0.1, 1.0) };
+    const auto short_range_samples{
+        BuildSuspiciousGuardSamples(
+            previous_model,
+            { 0.0, 0.5 },
+            { { 0.1 }, { 0.1 } })
+    };
+    const auto range_wide_model{ MakeGaussianWithCenterSignal(0.1, 1.4) };
+    EXPECT_EQ(
+        audit_detail::EvaluateSuspiciousPostRefitUpdate(
+            short_range_samples,
+            previous_model,
+            range_wide_model,
+            options),
+        audit_detail::SuspiciousGaussianReason::WidthGrowth);
+
+    const auto previous_compensation_model{
+        MakeGaussianWithCenterSignal(0.1, 1.0, 10.0)
+    };
+    const auto compensation_samples{
+        BuildSuspiciousGuardSamples(
+            previous_compensation_model,
+            { 0.0 },
+            { { 0.1 } })
+    };
+    const auto candidate_compensation_model{
+        MakeGaussianWithCenterSignal(0.4, 1.4, 10.0)
+    };
+    EXPECT_EQ(
+        audit_detail::EvaluateSuspiciousPostRefitUpdate(
+            compensation_samples,
+            previous_compensation_model,
+            candidate_compensation_model,
+            options),
+        audit_detail::SuspiciousGaussianReason::AmplitudeOffsetCompensation);
+
+    const auto same_direction_model{
+        MakeGaussianWithCenterSignal(0.4, 0.8, 10.0)
+    };
+    EXPECT_EQ(
+        audit_detail::EvaluateSuspiciousPostRefitUpdate(
+            compensation_samples,
+            previous_compensation_model,
+            same_direction_model,
+            options),
+        audit_detail::SuspiciousGaussianReason::None);
+
+    const auto insufficient_signal_model{
+        MakeGaussianWithCenterSignal(0.2, 1.4, 10.0)
+    };
+    EXPECT_EQ(
+        audit_detail::EvaluateSuspiciousPostRefitUpdate(
+            compensation_samples,
+            previous_compensation_model,
+            insufficient_signal_model,
+            options),
+        audit_detail::SuspiciousGaussianReason::None);
+}
+
+TEST(EstimatorSecondStageDefenseTest, SuspiciousRollbackExpandsOnlyWithinSharedOffsetGroup)
+{
+    EXPECT_EQ(
+        audit_detail::ExpandSuspiciousSharedOffsetGroups(
+            std::vector<GroupKey>{ 10, 10, 20, 30, 20 },
+            std::vector<char>{ 0, 1, 0, 0, 0 }),
+        (std::vector<char>{ 1, 1, 0, 0, 0 }));
+    EXPECT_EQ(
+        audit_detail::ExpandSuspiciousSharedOffsetGroups(
+            std::vector<GroupKey>{ 10, 20, 10, 20 },
+            std::vector<char>{ 0, 1, 0, 0 }),
+        (std::vector<char>{ 0, 1, 0, 1 }));
+}
+
 std::unique_ptr<rg::ModelObject> BuildDefenseModel(
     const std::vector<std::array<float, 3>> & position_list,
     const std::vector<Spot> & spot_list,
@@ -241,7 +647,7 @@ std::unique_ptr<rg::ModelObject> BuildNearCollinearDefenseModel(
 
 std::unique_ptr<rg::ModelObject> BuildJointPolishDefenseModel()
 {
-    return BuildDefenseModel(
+    auto model{ BuildDefenseModel(
         {
             std::array<float, 3>{ 0.0F, 0.0F, 0.0F },
             std::array<float, 3>{ 0.8F, 0.0F, 0.0F }
@@ -252,7 +658,18 @@ std::unique_ptr<rg::ModelObject> BuildJointPolishDefenseModel()
             rg::GaussianModel3D{ 6.0, 0.45, 0.20 },
             rg::GaussianModel3D{ 4.5, 0.70, -0.12 }
         },
-        rg::GaussianModel3D{ 5.25, 0.60, 0.02 });
+        rg::GaussianModel3D{ 5.25, 0.60, 0.02 }) };
+    auto analysis{ model->EditAnalysis() };
+    const auto & atom_list{ model->GetSelectedAtoms() };
+    // Keep the raw joint-offset update inside the trust region now that a
+    // noise-scale rebound no longer supplies an incidental rollback.
+    analysis.EnsureAtomLocalPotential(*atom_list.at(0))
+        .SetGaussianResult(MakeGaussianResult(
+            rg::GaussianModel3D{ 5.8, 0.47, 0.15 }));
+    analysis.EnsureAtomLocalPotential(*atom_list.at(1))
+        .SetGaussianResult(MakeGaussianResult(
+            rg::GaussianModel3D{ 4.7, 0.68, -0.08 }));
+    return model;
 }
 
 std::unique_ptr<rg::ModelObject> BuildSharedOffsetJointPolishDefenseModel(
@@ -414,10 +831,13 @@ std::unique_ptr<rg::ModelObject> BuildSeparatedLocalRefitFallbackDefenseModel()
         rg::AtomLocalPotentialView::RequireFor(*atom)
             .GetRawSamplingEntries(false)
     };
-    raw_sampling_entries.resize(1);
+    LocalPotentialSampleList fallback_sampling_entries{
+        raw_sampling_entries.at(0),
+        raw_sampling_entries.at(6)
+    };
     auto analysis{ model->EditAnalysis() };
     analysis.EnsureAtomLocalPotential(*atom).SetRawSamplingEntries(
-        std::move(raw_sampling_entries));
+        std::move(fallback_sampling_entries));
     return model;
 }
 
@@ -1621,7 +2041,7 @@ TEST(EstimatorSecondStageDefenseTest,
 }
 
 TEST(EstimatorSecondStageDefenseTest,
-    SharedOffsetDampedModelsKeepMedianOffsetAtEveryDamping)
+    SharedOffsetDampedModelsInterpolatePhysicalGroupOffset)
 {
     const std::vector<GroupKey> group_key_list{ 10, 10, 20 };
     const std::vector<rg::GaussianModel3D> previous_model_list{
@@ -1634,25 +2054,42 @@ TEST(EstimatorSecondStageDefenseTest,
         rg::GaussianModel3D{ 9.0, 0.90, 0.7 },
         rg::GaussianModel3D{ 7.0, 0.70, 2.0 }
     };
-    const auto shared_offset_model_list{
+    const auto previous_shared_offset_model_list{
+        median_detail::BuildLocalFittingGroupMedianModelList(
+            group_key_list,
+            previous_model_list)
+    };
+    const auto raw_shared_offset_model_list{
         median_detail::BuildLocalFittingGroupMedianModelList(
             group_key_list,
             raw_model_list)
     };
 
-    for (const auto damping : std::array<double, 3>{ 0.0, 0.5, 1.0 })
+    for (const auto damping : std::array<double, 3>{ 0.0, 0.25, 1.0 })
     {
         const auto candidate_model_list{
             median_detail::BuildLocalFittingSharedOffsetDampedModelList(
                 previous_model_list,
                 raw_model_list,
-                shared_offset_model_list,
+                previous_shared_offset_model_list,
+                raw_shared_offset_model_list,
                 damping)
         };
         ASSERT_TRUE(candidate_model_list.has_value());
-        EXPECT_DOUBLE_EQ(candidate_model_list->at(0).GetOffset(), 0.6);
-        EXPECT_DOUBLE_EQ(candidate_model_list->at(1).GetOffset(), 0.6);
-        EXPECT_DOUBLE_EQ(candidate_model_list->at(2).GetOffset(), 2.0);
+        const auto expected_first_group_offset{ 0.5 + damping * 0.1 };
+        const auto expected_second_group_offset{ -1.0 + damping * 3.0 };
+        EXPECT_NEAR(
+            candidate_model_list->at(0).GetOffset(),
+            expected_first_group_offset,
+            1.0e-12);
+        EXPECT_NEAR(
+            candidate_model_list->at(1).GetOffset(),
+            expected_first_group_offset,
+            1.0e-12);
+        EXPECT_NEAR(
+            candidate_model_list->at(2).GetOffset(),
+            expected_second_group_offset,
+            1.0e-12);
 
         for (std::size_t atom_position = 0;
             atom_position < candidate_model_list->size();
@@ -2361,11 +2798,20 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingFallsBackWhenJoi
     auto model{ BuildNonFiniteJointOffsetDefenseModel() };
     auto * atom{ model->GetSelectedAtoms().front() };
     const auto previous_model{ GetEstimateModel(*atom) };
+    auto options{ MakeSecondStageOptions() };
+    options.quiet_mode = false;
+    const auto previous_log_level{ Logger::GetLogLevel() };
 
-    rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
+    Logger::SetLogLevel(LogLevel::Debug);
+    testing::internal::CaptureStdout();
+    rt::RunSecondStageLocalFitting(*model, options);
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_log_level);
 
     ExpectGaussianModelsNear(GetEstimateModel(*atom), previous_model, 1.0e-12);
     ExpectSelectedAtomEstimatesAreFinite(*model);
+    EXPECT_NE(out.find("objective-unavailable"), std::string::npos);
+    EXPECT_EQ(out.find("objective = not-evaluated"), std::string::npos);
 }
 
 TEST(EstimatorSecondStageDefenseTest, SystemBuildFailureDoesNotBlockRemoteCluster)
@@ -2386,12 +2832,27 @@ TEST(EstimatorSecondStageDefenseTest, SystemBuildFailureDoesNotBlockRemoteCluste
 TEST(EstimatorSecondStageDefenseTest, LocalRefitFallbackDoesNotBlockRemoteCluster)
 {
     auto model{ BuildSeparatedLocalRefitFallbackDefenseModel() };
+    const auto previous_fallback_model{
+        GetEstimateModel(*model->GetSelectedAtoms().front())
+    };
     const auto initial_remote_error{
         CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4)
     };
 
     rt::RunSecondStageLocalFitting(*model, MakeSecondStageOptions());
 
+    const auto fallback_model{
+        GetEstimateModel(*model->GetSelectedAtoms().front())
+    };
+    EXPECT_DOUBLE_EQ(
+        fallback_model.GetAmplitude(),
+        previous_fallback_model.GetAmplitude());
+    EXPECT_DOUBLE_EQ(
+        fallback_model.GetWidth(),
+        previous_fallback_model.GetWidth());
+    EXPECT_NE(
+        fallback_model.GetOffset(),
+        previous_fallback_model.GetOffset());
     EXPECT_LT(
         CalculateSelectedAtomResponseMeanSquaredError(*model, 2, 4),
         initial_remote_error);
@@ -2766,7 +3227,7 @@ TEST(EstimatorSecondStageDefenseTest, ObjectiveDomainCountsCutBoundarySamplesOnc
 
 TEST(
     EstimatorSecondStageDefenseTest,
-    RunSecondStageLocalFittingStopsWhenRetryableClusterReachesMinimumRadius)
+    RunSecondStageLocalFittingDampsOffsetStepIntoInitialTrustRadius)
 {
     const rg::GaussianModel3D initial_model{ 6.0, 0.55, 0.0 };
     auto truth_coordinates{
@@ -2802,54 +3263,59 @@ TEST(
     const std::string out{ testing::internal::GetCapturedStdout() };
     Logger::SetLogLevel(previous_log_level);
 
-    const auto count_occurrences = [&](std::string_view text)
-    {
-        std::size_t count{ 0 };
-        for (std::size_t position = 0;
-            (position = out.find(text, position)) != std::string::npos;
-            position += text.size())
-        {
-            count++;
-        }
-        return count;
+    const auto fitted_model{
+        GetEstimateModel(*model->GetSelectedAtoms().front())
     };
-    const std::array<std::string_view, 5> expected_radius_list{
-        "1.00e+00",
-        "5.00e-01",
-        "2.50e-01",
-        "1.25e-01",
-        "6.25e-02"
-    };
-    for (const auto radius : expected_radius_list)
-    {
-        EXPECT_EQ(
-            count_occurrences(
-                std::string{ "trust radius/step norm = " } +
-                std::string{ radius } + "/0.00e+00"),
-            1U);
-    }
-    EXPECT_EQ(std::count(out.begin(), out.end(), '\r'), 5);
+    EXPECT_NE(fitted_model.GetOffset(), previous_model.GetOffset());
+    EXPECT_NE(out.find("accepted_iterations="), std::string::npos);
+    EXPECT_EQ(out.find("accepted_iterations=0"), std::string::npos);
     EXPECT_EQ(
-        count_occurrences(
-            "outcome = retry, "
-            "exhausted/retryable/radius-changed/radius-saturated = 0/1/1/0"),
-        4U);
-    EXPECT_EQ(
-        count_occurrences(
-            "outcome = all-rejected-minimum-radius, "
-            "exhausted/retryable/radius-changed/radius-saturated = 0/1/0/1"),
-        1U);
-
-    ExpectGaussianModelsNear(
-        GetEstimateModel(*model->GetSelectedAtoms().front()),
-        previous_model,
-        0.0);
-    EXPECT_NE(
-        out.find(
-            "accepted_iterations=0, best_iteration=initial, "
-            "stop_reason=all-rejected-minimum-radius"),
+        out.find("previous-shared-offset-projection-outside-trust-region"),
         std::string::npos);
-    EXPECT_NE(out.find("final_state_source=best-audit"), std::string::npos);
+    EXPECT_EQ(out.find("objective = not-evaluated"), std::string::npos);
+    ExpectSelectedAtomEstimatesAreFinite(*model);
+}
+
+TEST(
+    EstimatorSecondStageDefenseTest,
+    PreObjectiveTrustFailureDoesNotReportUnavailableObjective)
+{
+    const rg::GaussianModel3D initial_model{ 6.0, 0.55, 0.0 };
+    auto model{
+        BuildDefenseModel(
+            {
+                std::array<float, 3>{ 0.0F, 0.0F, 0.0F },
+                std::array<float, 3>{ 1.0e-4F, 0.0F, 0.0F }
+            },
+            { Spot::C, Spot::C },
+            { Element::CARBON, Element::CARBON },
+            { initial_model, initial_model },
+            initial_model)
+    };
+    const auto & atom_list{ model->GetSelectedAtoms() };
+    auto analysis{ model->EditAnalysis() };
+    analysis.EnsureAtomLocalPotential(*atom_list.at(0))
+        .SetGaussianResult(MakeGaussianResult(
+            initial_model.WithOffset(-2.0)));
+    analysis.EnsureAtomLocalPotential(*atom_list.at(1))
+        .SetGaussianResult(MakeGaussianResult(
+            initial_model.WithOffset(2.0)));
+    auto options{ MakeSecondStageOptions() };
+    options.quiet_mode = false;
+    const auto previous_log_level{ Logger::GetLogLevel() };
+
+    Logger::SetLogLevel(LogLevel::Debug);
+    testing::internal::CaptureStdout();
+    rt::RunSecondStageLocalFitting(*model, options);
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    Logger::SetLogLevel(previous_log_level);
+
+    EXPECT_NE(
+        out.find("previous-shared-offset-projection-outside-trust-region"),
+        std::string::npos);
+    EXPECT_NE(out.find("objective = not-evaluated"), std::string::npos);
+    EXPECT_EQ(out.find("objective-unavailable"), std::string::npos);
+    EXPECT_EQ(out.find("fit/tail samples = 0/0"), std::string::npos);
 }
 
 TEST(
@@ -2950,10 +3416,6 @@ TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageReportsAcceptedJointPol
     Logger::SetLogLevel(previous_log_level);
 
     EXPECT_NE(out.find("final_uses_polish=yes"), std::string::npos);
-    EXPECT_NE(
-        out.find("Accepted local fitting objective backtracking"),
-        std::string::npos);
-    EXPECT_NE(out.find("trials/factor = 3/0.25"), std::string::npos);
     bool found_accepted_polish{ false };
     bool found_skipped_polish{ false };
     for (std::size_t row_start = out.find('\r');

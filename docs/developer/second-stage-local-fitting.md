@@ -182,18 +182,28 @@ joint-offset IRLS objective retains its independent tolerance.
 
 ## Trust region
 
-Each base proposal requests the full raw step. Its effective damping is limited
-by the transformed step norm and the cluster radius:
+For a non-suspicious cluster, previous and raw offsets are reduced to one
+physical offset per `GroupKey` by deterministic component medians. Base
+proposal trials use factors `1, 1/2, 1/4, ...`; each trial interpolates the
+atom-level log-peak and log-width coordinates and the physical group offset
+with the same factor:
 
 ```text
-effective damping = min(1.0, trust radius / transformed step norm)
+C_g(t) = C_previous,g + t * (C_raw,g - C_previous,g)
 ```
+
+The realized atom models are then re-encoded and measured against the trust
+radius. At `t = 0`, the shape is the previous shape and the offset is the
+previous group median; at `t = 1`, the complete raw shared-offset state is
+recovered. If projecting an inconsistent previous group onto its median already
+exceeds the radius, the proposal fails before objective evaluation with an
+explicit diagnostic reason.
 
 If the endpoint is valid but fails its local objective guard, the same cluster
 attempt evaluates factors `1/2, 1/4, 1/8, ...` between the previous and endpoint
-states. Interpolation includes the offset-to-peak coordinate, so a factor
-approaching zero reproduces the complete previous model. Search stops when the
-largest transformed change is below
+states. Local and combined backtracking preserve one physical offset per
+`GroupKey`; shapes remain interpolated in transformed coordinates. Search stops
+when the largest transformed change is below
 `kLocalFittingTransformedChangeTolerance`. The first passing trial is committed
 with endpoint uncertainty, records its factor, and does not grow the radius.
 Rejected trials do not mutate objective state or polish provenance. A cluster
@@ -221,24 +231,65 @@ provenance is retained only for atoms with a material polished endpoint change.
 
 - Joint-offset conditioning and column-collinearity guards can increase the
   ridge multiplier for affected atoms.
-- A suspicious joint-offset or post-refit model is rolled back to the previous
-  validated atom state. On the next attempt, affected active atoms receive
-  `kSuspiciousJointOffsetRidgeMultiplier`.
-- The center sign-flip guard only rejects a statistically significant
+- Suspicious evaluation has two paths. An offset-only update checks finite
+  zero-offset responses, offset magnitude, center sign flip, and radial
+  rebound. A post-refit update first requires a valid second-stage model, then
+  applies the same guards plus width growth and amplitude-offset compensation.
+  A local-refit candidate uses the post-refit path. If that candidate fails,
+  the fallback preserves the previous amplitude and width, applies only the
+  jointly estimated offset, and uses the offset-only path. Width and
+  compensation are intentionally not reevaluated for this fallback.
+- The previous suspicious baseline is built in one fit-range scan. It records
+  the innermost response, per-radius response medians, distance range, maximum
+  absolute response, and residual scale `1.4826 * MAD`. Candidate profiles do
+  not calculate a residual MAD. The post-refit candidate and its offset-only
+  fallback reuse the same previous baseline.
+- The center sign-flip guard treats the smallest sampled radius as the
+  innermost response and only rejects a statistically significant
   positive-to-negative change. It estimates the previous atom's fit-range
-  residual scale as `1.4826 * MAD`, requires the previous center response to
+  residual scale as `1.4826 * MAD`, requires the previous innermost response to
   exceed `3 * scale`, and requires the candidate to be below the negative of
-  both that noise threshold and `0.25 * previous center`. Near-zero noise
-  crossings and negative-to-positive changes do not trigger this guard.
-- A failed or invalid local refit falls back to the previous Gaussian
-  parameters with the newly estimated offset when that model remains valid.
-  The owning cluster is then stationarity-ineligible for that attempt. If the
-  fallback is also invalid, the affected post-refit cluster is rolled back.
+  both that noise threshold and `0.25 * previous innermost response`.
+  Near-zero noise crossings and negative-to-positive changes do not trigger
+  this guard.
+- The radial rebound guard uses the same previous residual noise estimate. A
+  radial magnitude must exceed both `1.5 * abs(candidate innermost response)`
+  and `max(0.25 * abs(previous innermost response), 3 * scale, 1e-12)`.
+  Upward excursions use
+  `max(0.20 * abs(previous innermost response), 3 * scale, 1e-12)` and become
+  suspicious only after more than one excursion.
+- Sign flip and rebound require a trustworthy previous radial shape. Width
+  growth remains active for valid post-refit models and uses the available
+  fit-range distance span without depending on radial monotonicity.
+  Amplitude-offset compensation likewise does not require a trustworthy
+  radial shape; it uses the previous innermost response when available and the
+  previous center signal as its reference. Its offset response delta is
+  evaluated exactly as
+  `candidate.offset * candidate.OffsetBasisAtDistance(0) -
+  previous.offset * previous.OffsetBasisAtDistance(0)`.
+- An offset-only suspicious seed rolls back only atoms in the same coupling
+  cluster that share its `GroupKey`, matching the cluster-local shared offset
+  parameterization. It no longer propagates through a depth-limited atom
+  overlap graph. If both a post-refit candidate and its fallback fail, the
+  complete acceptance cluster is still rolled back atomically. On the next
+  attempt, affected active atoms receive
+  `kSuspiciousJointOffsetRidgeMultiplier`.
+- A failed or suspicious local refit falls back to the previous Gaussian
+  parameters with the newly estimated offset when that offset-only update
+  passes finite-response, offset-magnitude, sign-flip, and radial-rebound
+  guards. The owning cluster is then stationarity-ineligible for that attempt.
+  If the fallback fails one of those guards, the affected post-refit cluster is
+  rolled back.
 - Repeated stable hard solver failures or suspicious rollbacks become terminal
   cluster fallbacks. Terminal atoms retain their previous validated states and
   no longer participate in later solves.
 - Terminal isolation removes only the affected cluster, allowing independent
   active clusters to continue fitting.
+- Rejected-cluster debug output distinguishes failures before objective
+  evaluation from objective rejection. Pre-objective failures report their
+  proposal reason, radius, available step norm, and `objective =
+  not-evaluated`; `objective-unavailable` is reserved for an objective that was
+  actually attempted but could not be calculated.
 
 When terminal isolation changes the active partition, the implementation uses
 the current validated state to rebuild the new clusters' fit and tail scales

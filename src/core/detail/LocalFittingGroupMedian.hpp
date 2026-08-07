@@ -97,11 +97,13 @@ inline std::optional<std::vector<GaussianModel3D>>
 BuildLocalFittingSharedOffsetDampedModelList(
     const std::vector<GaussianModel3D> & previous_model_list,
     const std::vector<GaussianModel3D> & raw_model_list,
-    const std::vector<GaussianModel3D> & shared_offset_model_list,
+    const std::vector<GaussianModel3D> & previous_shared_offset_model_list,
+    const std::vector<GaussianModel3D> & raw_shared_offset_model_list,
     double damping)
 {
     if (raw_model_list.size() != previous_model_list.size() ||
-        shared_offset_model_list.size() != previous_model_list.size() ||
+        previous_shared_offset_model_list.size() != previous_model_list.size() ||
+        raw_shared_offset_model_list.size() != previous_model_list.size() ||
         !std::isfinite(damping) || damping < 0.0 || damping > 1.0)
     {
         return std::nullopt;
@@ -137,8 +139,15 @@ BuildLocalFittingSharedOffsetDampedModelList(
         };
         if (!shape_model.has_value()) return std::nullopt;
 
+        const auto previous_shared_offset{
+            previous_shared_offset_model_list.at(atom_position).GetOffset()
+        };
+        const auto raw_shared_offset{
+            raw_shared_offset_model_list.at(atom_position).GetOffset()
+        };
         const auto candidate_model{ shape_model->WithOffset(
-            shared_offset_model_list.at(atom_position).GetOffset()) };
+            previous_shared_offset +
+                damping * (raw_shared_offset - previous_shared_offset)) };
         if (!IsValidSecondStageGaussianModel(candidate_model))
         {
             return std::nullopt;
