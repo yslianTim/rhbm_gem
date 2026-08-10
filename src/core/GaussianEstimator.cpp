@@ -670,8 +670,9 @@ void RunGroupPotentialFitting(
 
 void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & options)
 {
-    RunLocalAlphaTraining(model_object, options, false);
     InitializeLocalFittingSeedModels(model_object);
+    
+    RunLocalAlphaTraining(model_object, options, false);
     RunFixedOffsetLocalFitting(model_object, options, false);
     RunGroupAlphaTraining(model_object, options);
     RunGroupPotentialFitting(model_object, options, false);
