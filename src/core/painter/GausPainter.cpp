@@ -199,7 +199,7 @@ void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::
         for (auto atom : atom_list)
         {
             auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
-            auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
+            auto graph{ atom_plot_builder->CreateBinnedDistanceToRawMapValueGraph() };
             root_helper::SetLineAttribute(graph.get(), 1, 2, static_cast<short>(kAzure-7), 0.3f);
             map_value_graph_list[k].emplace_back(std::move(graph));
             const auto atom_view{ AtomLocalPotentialView::RequireFor(*atom) };
@@ -856,7 +856,7 @@ void GausPainter::PaintLocalGausSummary(
             for (auto atom : entry_iter->GetAtomObjectList(group_key))
             {
                 auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
-                auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
+                auto graph{ atom_plot_builder->CreateBinnedDistanceToRawMapValueGraph() };
                 const auto & result{
                     AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult(
                         LocalFittingStage::Third)
@@ -1266,7 +1266,7 @@ void GausPainter::PaintGroupFittingComparison(
         if (component_entry == nullptr) continue;
         auto component_id{ component_entry->GetComponentId() };
 
-        std::map<Spot, std::vector<std::unique_ptr<TGraphErrors>>> map_value_graph_list_map;
+        std::map<Spot, std::vector<std::unique_ptr<TGraphErrors>>> map_value_graph_list_map[row_size];
         std::map<Spot, std::unique_ptr<TF1>> gaus_prior_map;
         std::vector<double> global_y_array;
         for (auto & spot : spot_list)
@@ -1278,28 +1278,43 @@ void GausPainter::PaintGroupFittingComparison(
             gaus_prior_map.emplace(spot, std::move(gaus_prior));
 
             auto member_size{ entry_iter->GetAtomObjectList(group_key).size() };
-            std::vector<std::unique_ptr<TGraphErrors>> map_value_graph_list;
+            std::vector<std::unique_ptr<TGraphErrors>> raw_map_value_graph_list;
+            std::vector<std::unique_ptr<TGraphErrors>> peeling_map_value_graph_list;
+            std::vector<std::unique_ptr<TGraphErrors>> neighbor_map_value_graph_list;
             std::vector<double> y_array;
-            map_value_graph_list.reserve(member_size);
+            raw_map_value_graph_list.reserve(member_size);
+            peeling_map_value_graph_list.reserve(member_size);
+            neighbor_map_value_graph_list.reserve(member_size);
             y_array.reserve(member_size * 2);
             for (auto atom : entry_iter->GetAtomObjectList(group_key))
             {
                 auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
-                auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
+                auto raw_graph{ atom_plot_builder->CreateBinnedDistanceToRawMapValueGraph() };
+                auto peeling_graph{ atom_plot_builder->CreateBinnedDistanceToPeelingMapValueGraph() };
+                auto neighbor_graph{ atom_plot_builder->CreateBinnedDistanceToNeighborMapValueGraph() };
                 const auto & result{
                     AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult(LocalFittingStage::Third)
                 };
                 auto is_outlier{ result.posterior.has_value() && result.is_outlier };
                 auto line_color{ kAzure-7 };
                 if (show_outlier == true && is_outlier == true) line_color = kRed+1;
-                root_helper::SetLineAttribute(graph.get(), 1, 3, static_cast<short>(line_color), 0.3f);
-                auto range_in_graph{ root_helper::GetRangeInGraph(graph.get()) };
-                y_array.emplace_back(std::get<0>(range_in_graph));
-                y_array.emplace_back(std::get<1>(range_in_graph));
-                map_value_graph_list.emplace_back(std::move(graph));
+                root_helper::SetLineAttribute(raw_graph.get(), 1, 3, static_cast<short>(line_color), 0.3f);
+                root_helper::SetLineAttribute(peeling_graph.get(), 1, 3, static_cast<short>(line_color), 0.3f);
+                root_helper::SetLineAttribute(neighbor_graph.get(), 1, 3, static_cast<short>(line_color), 0.3f);
+                auto range_in_raw_graph{ root_helper::GetRangeInGraph(raw_graph.get()) };
+                auto range_in_peeling_graph{ root_helper::GetRangeInGraph(peeling_graph.get()) };
+                y_array.emplace_back(std::get<0>(range_in_raw_graph));
+                y_array.emplace_back(std::get<1>(range_in_raw_graph));
+                y_array.emplace_back(std::get<0>(range_in_peeling_graph));
+                y_array.emplace_back(std::get<1>(range_in_peeling_graph));
+                raw_map_value_graph_list.emplace_back(std::move(raw_graph));
+                peeling_map_value_graph_list.emplace_back(std::move(peeling_graph));
+                neighbor_map_value_graph_list.emplace_back(std::move(neighbor_graph));
             }
             global_y_array.insert(global_y_array.end(), y_array.begin(), y_array.end());
-            map_value_graph_list_map.emplace(spot, std::move(map_value_graph_list));
+            map_value_graph_list_map[0].emplace(spot, std::move(raw_map_value_graph_list));
+            map_value_graph_list_map[1].emplace(spot, std::move(peeling_map_value_graph_list));
+            map_value_graph_list_map[2].emplace(spot, std::move(neighbor_map_value_graph_list));
         }
 
         double y_min{ 0.0 };
@@ -1332,35 +1347,38 @@ void GausPainter::PaintGroupFittingComparison(
                 frame[i][j]->SetStats(0);
                 frame[i][j]->Draw("");
 
-                const auto & map_value_graph_list{ map_value_graph_list_map.at(spot) };
-                for (auto & graph : map_value_graph_list)
-                {
-                    graph->Draw("L X0");
-                }
+                const auto & map_value_graph_list{ map_value_graph_list_map[row_size-j-1].at(spot) };
+                for (auto & graph : map_value_graph_list) graph->Draw("L X0");
 
-                info_text[i][j] = root_helper::CreatePaveText(0.65, 0.80, 0.99, 0.99, "nbNDC ARC", true);
-                root_helper::SetPaveTextDefaultStyle(info_text[i][j].get());
-                root_helper::SetPaveAttribute(info_text[i][j].get(), 0, 0.2);
-                root_helper::SetLineAttribute(info_text[i][j].get(), 1, 0);
-                root_helper::SetTextAttribute(info_text[i][j].get(), 50.0f, 103, 22);
-                root_helper::SetFillAttribute(info_text[i][j].get(), 1001, kAzure-7, 0.5f);
-                info_text[i][j]->AddText(painter_internal::GetMainChainSpotLabel(spot).data());
-                info_text[i][j]->Draw();
+                if (j == row_size - 1)
+                {
+                    info_text[i][j] = root_helper::CreatePaveText(0.65, 0.80, 0.99, 0.99, "nbNDC ARC", true);
+                    root_helper::SetPaveTextDefaultStyle(info_text[i][j].get());
+                    root_helper::SetPaveAttribute(info_text[i][j].get(), 0, 0.2);
+                    root_helper::SetLineAttribute(info_text[i][j].get(), 1, 0);
+                    root_helper::SetTextAttribute(info_text[i][j].get(), 50.0f, 103, 22);
+                    root_helper::SetFillAttribute(info_text[i][j].get(), 1001, kAzure-7, 0.5f);
+                    info_text[i][j]->AddText(painter_internal::GetMainChainSpotLabel(spot).data());
+                    info_text[i][j]->Draw();
+                }
 
                 auto & gaus_prior{ gaus_prior_map.at(spot) };
                 root_helper::SetLineAttribute(gaus_prior.get(), 2, 3, kRed);
-                gaus_prior->Draw("SAME");
+                if (j != 0) gaus_prior->Draw("SAME");
 
-                result_text[i][j] = root_helper::CreatePaveText(0.11, 0.10, 0.95, 0.20, "nbNDC", true);
-                root_helper::SetPaveTextDefaultStyle(result_text[i][j].get());
-                root_helper::SetLineAttribute(result_text[i][j].get(), 1, 0);
-                root_helper::SetTextAttribute(result_text[i][j].get(), 30.0f, 133, 22, 0.0f, kRed);
-                root_helper::SetFillAttribute(result_text[i][j].get(), 4000);
-                result_text[i][j]->AddText(
-                    Form("A = %.2f,   #tau = %.2f,   c = %.2f",
-                        gaus_prior->GetParameter(0), gaus_prior->GetParameter(1), gaus_prior->GetParameter(2))
-                );
-                result_text[i][j]->Draw();
+                if (j != 0)
+                {
+                    result_text[i][j] = root_helper::CreatePaveText(0.11, 0.10, 0.95, 0.20, "nbNDC", true);
+                    root_helper::SetPaveTextDefaultStyle(result_text[i][j].get());
+                    root_helper::SetLineAttribute(result_text[i][j].get(), 1, 0);
+                    root_helper::SetTextAttribute(result_text[i][j].get(), 30.0f, 133, 22, 0.0f, kRed);
+                    root_helper::SetFillAttribute(result_text[i][j].get(), 4000);
+                    result_text[i][j]->AddText(
+                        Form("A = %.2f,   #tau = %.2f,   c = %.2f",
+                            gaus_prior->GetParameter(0), gaus_prior->GetParameter(1), gaus_prior->GetParameter(2))
+                    );
+                    result_text[i][j]->Draw();
+                }
             }
         }
 
@@ -1398,7 +1416,7 @@ void GausPainter::PaintGroupFittingComparison(
         legend->SetMargin(0.25f);
         legend->AddEntry(gaus_prior_map.at(Spot::CA).get(),
             "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau},#font[1]{c})} with selected #alpha_{r} and #alpha_{g}", "l");
-        legend->AddEntry(map_value_graph_list_map.at(Spot::CA).front().get(),
+        legend->AddEntry(map_value_graph_list_map[0].at(Spot::CA).front().get(),
             "Members of Map Value", "l");
         legend->Draw();
 
@@ -1509,7 +1527,7 @@ void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
             for (auto atom : entry_iter->GetAtomObjectList(group_key))
             {
                 auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
-                auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
+                auto graph{ atom_plot_builder->CreateBinnedDistanceToRawMapValueGraph() };
                 const auto & result{
                     AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult(
                         LocalFittingStage::Third)

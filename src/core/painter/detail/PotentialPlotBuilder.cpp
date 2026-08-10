@@ -539,12 +539,52 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateLinearModelDistanceToM
     return graph;
 }
 
-std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToMapValueGraph(
+std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToRawMapValueGraph(
     int bin_size, double x_min, double x_max)
 {
     auto data_array{
         local_potential_series::BuildBinnedDistanceResponseSeries(
-            GetLocalEntry().GetRawSamplingEntries(false), bin_size, x_min, x_max)
+            GetLocalEntry().GetRawSamplingEntries(true), bin_size, x_min, x_max)
+    };
+    auto graph{ root_helper::CreateGraphErrors(bin_size) };
+    auto count{ 0 };
+    for (const auto & point : data_array)
+    {
+        graph->SetPoint(count, point.GetBasisValue(0), point.response);
+        count++;
+    }
+    return graph;
+}
+
+std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToPeelingMapValueGraph(
+    int bin_size, double x_min, double x_max)
+{
+    auto data_array{
+        local_potential_series::BuildBinnedDistanceResponseSeries(
+            GetLocalEntry().GetPeelingSamplingEntries(false), bin_size, x_min, x_max)
+    };
+    auto graph{ root_helper::CreateGraphErrors(bin_size) };
+    auto count{ 0 };
+    for (const auto & point : data_array)
+    {
+        graph->SetPoint(count, point.GetBasisValue(0), point.response);
+        count++;
+    }
+    return graph;
+}
+
+std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToNeighborMapValueGraph(
+    int bin_size, double x_min, double x_max)
+{
+    auto raw_sampling_entries{ GetLocalEntry().GetRawSamplingEntries(false) };
+    auto peeling_sampling_entries{ GetLocalEntry().GetPeelingSamplingEntries(false) };
+    auto neighbor_sampling_entries{ raw_sampling_entries };
+    for (size_t i = 0; i < raw_sampling_entries.size(); i++)
+    {
+        neighbor_sampling_entries.at(i).response = raw_sampling_entries.at(i).response - peeling_sampling_entries.at(i).response;
+    }
+    auto data_array{
+        local_potential_series::BuildBinnedDistanceResponseSeries(neighbor_sampling_entries, bin_size, x_min, x_max)
     };
     auto graph{ root_helper::CreateGraphErrors(bin_size) };
     auto count{ 0 };

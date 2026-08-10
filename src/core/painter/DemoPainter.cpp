@@ -476,7 +476,7 @@ void DemoPainter::PaintAtomMapValueExample(
     for (auto atom : entry_iter->GetAtomObjectList(group_key))
     {
         auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
-        auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
+        auto graph{ atom_plot_builder->CreateBinnedDistanceToRawMapValueGraph() };
         root_helper::SetLineAttribute(graph.get(), 1, 5, static_cast<short>(kAzure-7), 0.3f);
         map_value_graph_list.emplace_back(std::move(graph));
         const auto atom_view{ AtomLocalPotentialView::RequireFor(*atom) };

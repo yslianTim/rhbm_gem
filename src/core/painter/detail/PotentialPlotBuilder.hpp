@@ -50,7 +50,9 @@ public:
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateScatterGraph(Element element, bool reverse=false);
     std::unique_ptr<::TGraphErrors> CreateDistanceToMapValueGraph(bool apply_selection=true, bool use_peeling_sampling_entries=false);
     std::unique_ptr<::TGraphErrors> CreateLinearModelDistanceToMapValueGraph(bool apply_selection=true, bool use_peeling_sampling_entries=false);
-    std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToMapValueGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
+    std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToRawMapValueGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
+    std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToPeelingMapValueGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
+    std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToNeighborMapValueGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
     std::unique_ptr<::TGraphErrors> CreateInRangeAtomsToGausEstimateGraph(GroupKey group_key, double range=5.0, int par_id=0);
     std::unique_ptr<::TGraphErrors> CreateCOMDistanceToGausEstimateGraph(GroupKey group_key, int par_id=0);
     std::unique_ptr<::TGraphErrors> CreateAtomXYPositionTomographyGraph(double normalized_z_pos=0.5, double z_ratio_window=0.1, bool com_center=false);
