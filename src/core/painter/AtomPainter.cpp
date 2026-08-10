@@ -50,6 +50,7 @@ private:
     void AppendAtomObject(AtomObject & data_object);
     void PaintDemoPlot(const std::string & name);
     void PaintAtomSamplingDataSummary(const std::string & name);
+    void PaintAtomSamplingDataComparison(const std::string & name);
 };
 
 AtomPainter::AtomPainter(
@@ -94,6 +95,7 @@ void AtomPainter::Run()
     
     //PaintDemoPlot("demo_plot" + label);
     PaintAtomSamplingDataSummary("atom_sampling_data_summary" + label);
+    PaintAtomSamplingDataComparison("atom_sampling_data_comparison" + label);
 }
 
 void AtomPainter::PaintDemoPlot(const std::string & name)
@@ -414,6 +416,13 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
 
     root_helper::PrintCanvasClose(canvas.get(), file_path);
     #endif
+}
+
+void AtomPainter::PaintAtomSamplingDataComparison(const std::string & name)
+{
+    auto file_path{ m_folder_path + name };
+    Logger::Log(LogLevel::Info, "AtomPainter::PaintAtomSamplingDataComparison");
+
 }
 
 } // namespace

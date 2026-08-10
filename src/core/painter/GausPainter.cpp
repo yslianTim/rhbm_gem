@@ -108,6 +108,7 @@ private:
     void PaintGausRankMainChain(ModelObject * model_object, const std::string & name);
     void PaintLocalGausSummary(ModelObject * model_object, const std::string & name);
     void PaintGroupGausSummary(ModelObject * model_object, const std::string & name);
+    void PaintGroupFittingComparison(ModelObject * model_object, const std::string & name);
     void PaintGroupMapValueAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);
     void PaintGroupGausAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);
     void PaintLocalGausToSequenceAminoAcidMainChain(ModelObject * model_object, const std::string & name);
@@ -153,6 +154,7 @@ void GausPainter::Run()
         PaintGausRankMainChain(model_object, "gaus_rank_main_chain_"+ label);
         PaintLocalGausSummary(model_object, "local_gaus_summary_"+ label);
         PaintGroupGausSummary(model_object, "group_gaus_summary_"+ label);
+        PaintGroupFittingComparison(model_object, "group_fitting_comparison_"+ label);
         PaintGroupMapValueAminoAcidMainChainComponent(model_object, "group_map_value_amino_acid_main_chain_component_"+ label);
         PaintGroupGausAminoAcidMainChainComponent(model_object, "group_gaus_amino_acid_main_chain_component_"+ label);
         PaintLocalGausToSequenceAminoAcidMainChain(model_object, "local_gaus_to_sequence_amino_acid_main_chain_"+ label);
@@ -1225,6 +1227,212 @@ void GausPainter::PaintGroupGausSummary(ModelObject * model_object, const std::s
         
         root_helper::PrintCanvasPad(canvas.get(), file_path);
     }
+    root_helper::PrintCanvasClose(canvas.get(), file_path);
+    Logger::Log(LogLevel::Info, " Output file: " + file_path);
+    #endif
+}
+
+void GausPainter::PaintGroupFittingComparison(
+    ModelObject * model_object, const std::string & name)
+{
+    auto file_path{ m_folder_path + name };
+    Logger::Log(LogLevel::Info, "GausPainter::PaintGroupFittingComparison");
+
+    auto entry_iter{ std::make_unique<ModelAnalysisView>(*model_object) };
+    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
+    const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
+    const auto & standard_residue_list{ ChemicalDataHelper::GetStandardAminoAcidList() };
+    bool show_outlier{ false };
+
+    #ifdef HAVE_ROOT
+
+    gStyle->SetLineScalePS(1.5);
+    gStyle->SetGridColor(kGray);
+
+    const int col_size{ 4 };
+    const int row_size{ 3 };
+
+    auto canvas{ root_helper::CreateCanvas("test","", 2000, 1500) };
+    root_helper::SetCanvasDefaultStyle(canvas.get());
+    root_helper::SetCanvasPartition(
+        canvas.get(), col_size, row_size, 0.10f, 0.02f, 0.10f, 0.12f, 0.01f, 0.01f
+    );
+
+    root_helper::PrintCanvasOpen(canvas.get(), file_path);
+    for (auto residue : standard_residue_list)
+    {
+        auto component_key{ static_cast<ComponentKey>(residue) };
+        const auto * component_entry{ model_object->FindChemicalComponentEntry(component_key) };
+        if (component_entry == nullptr) continue;
+        auto component_id{ component_entry->GetComponentId() };
+
+        std::map<Spot, std::vector<std::unique_ptr<TGraphErrors>>> map_value_graph_list_map;
+        std::map<Spot, std::unique_ptr<TF1>> gaus_prior_map;
+        std::vector<double> global_y_array;
+        for (auto & spot : spot_list)
+        {
+            size_t member_id;
+            if (!data_internal::IsMainChainMember(spot, member_id)) continue;
+            auto group_key{ data_internal::GetMainChainGroupKey(member_id, residue) };
+            auto gaus_prior{ plot_builder->CreateAtomGroupGausFunctionPrior(group_key) };
+            gaus_prior_map.emplace(spot, std::move(gaus_prior));
+
+            auto member_size{ entry_iter->GetAtomObjectList(group_key).size() };
+            std::vector<std::unique_ptr<TGraphErrors>> map_value_graph_list;
+            std::vector<double> y_array;
+            map_value_graph_list.reserve(member_size);
+            y_array.reserve(member_size * 2);
+            for (auto atom : entry_iter->GetAtomObjectList(group_key))
+            {
+                auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
+                auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
+                const auto & result{
+                    AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult(LocalFittingStage::Third)
+                };
+                auto is_outlier{ result.posterior.has_value() && result.is_outlier };
+                auto line_color{ kAzure-7 };
+                if (show_outlier == true && is_outlier == true) line_color = kRed+1;
+                root_helper::SetLineAttribute(graph.get(), 1, 3, static_cast<short>(line_color), 0.3f);
+                auto range_in_graph{ root_helper::GetRangeInGraph(graph.get()) };
+                y_array.emplace_back(std::get<0>(range_in_graph));
+                y_array.emplace_back(std::get<1>(range_in_graph));
+                map_value_graph_list.emplace_back(std::move(graph));
+            }
+            global_y_array.insert(global_y_array.end(), y_array.begin(), y_array.end());
+            map_value_graph_list_map.emplace(spot, std::move(map_value_graph_list));
+        }
+
+        double y_min{ 0.0 };
+        double y_max{ 0.0 };
+        auto y_range{ array_helper::ComputeScalingRangeTuple(global_y_array, 0.20) };
+        y_min = std::get<0>(y_range);
+        y_max = std::get<1>(y_range);
+
+        std::unique_ptr<TH2> frame[col_size][row_size];
+        std::unique_ptr<TPaveText> info_text[col_size][row_size];
+        std::unique_ptr<TPaveText> result_text[col_size][row_size];
+        for (int i = 0; i < col_size; i++)
+        {
+            auto spot{ spot_list.at(static_cast<size_t>(i)) };
+            for (int j = 0; j < row_size; j++)
+            {
+                root_helper::FindPadInCanvasPartition(canvas.get(), i, j);
+                root_helper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+                root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+                auto x_factor{ root_helper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
+                auto y_factor{ root_helper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
+                frame[i][j] = root_helper::CreateHist2D(Form("frame_%d_%d", i, j),"", 500, 0.01, 1.99, 500, y_min, y_max);
+                root_helper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 60.0f, 0.01f, 133);
+                root_helper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.08/x_factor), 505);
+                root_helper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 60.0f, 0.01f, 133);
+                root_helper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 505);
+                root_helper::SetLineAttribute(frame[i][j].get(), 1, 0);
+                frame[i][j]->GetXaxis()->SetTitle("");
+                frame[i][j]->GetYaxis()->SetTitle("");
+                frame[i][j]->SetStats(0);
+                frame[i][j]->Draw("");
+
+                const auto & map_value_graph_list{ map_value_graph_list_map.at(spot) };
+                for (auto & graph : map_value_graph_list)
+                {
+                    graph->Draw("L X0");
+                }
+
+                info_text[i][j] = root_helper::CreatePaveText(0.65, 0.80, 0.99, 0.99, "nbNDC ARC", true);
+                root_helper::SetPaveTextDefaultStyle(info_text[i][j].get());
+                root_helper::SetPaveAttribute(info_text[i][j].get(), 0, 0.2);
+                root_helper::SetLineAttribute(info_text[i][j].get(), 1, 0);
+                root_helper::SetTextAttribute(info_text[i][j].get(), 50.0f, 103, 22);
+                root_helper::SetFillAttribute(info_text[i][j].get(), 1001, kAzure-7, 0.5f);
+                info_text[i][j]->AddText(painter_internal::GetMainChainSpotLabel(spot).data());
+                info_text[i][j]->Draw();
+
+                auto & gaus_prior{ gaus_prior_map.at(spot) };
+                root_helper::SetLineAttribute(gaus_prior.get(), 2, 3, kRed);
+                gaus_prior->Draw("SAME");
+
+                result_text[i][j] = root_helper::CreatePaveText(0.11, 0.10, 0.95, 0.20, "nbNDC", true);
+                root_helper::SetPaveTextDefaultStyle(result_text[i][j].get());
+                root_helper::SetLineAttribute(result_text[i][j].get(), 1, 0);
+                root_helper::SetTextAttribute(result_text[i][j].get(), 30.0f, 133, 22, 0.0f, kRed);
+                root_helper::SetFillAttribute(result_text[i][j].get(), 4000);
+                result_text[i][j]->AddText(
+                    Form("A = %.2f,   #tau = %.2f,   c = %.2f",
+                        gaus_prior->GetParameter(0), gaus_prior->GetParameter(1), gaus_prior->GetParameter(2))
+                );
+                result_text[i][j]->Draw();
+            }
+        }
+
+        canvas->cd();
+        auto pad_extra_0{ root_helper::CreatePad("pad_extra_0","", 0.00, 0.88, 1.00, 1.00) };
+        pad_extra_0->Draw();
+        pad_extra_0->cd();
+        root_helper::SetPadDefaultStyle(pad_extra_0.get());
+        root_helper::SetFillAttribute(pad_extra_0.get(), 4000);
+        root_helper::SetPadMarginInCanvas(gPad, 0.01, 0.01, 0.01, 0.01);
+
+        auto residue_text{ root_helper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC ARC", false) };
+        root_helper::SetPaveTextMarginInCanvas(gPad, residue_text.get(), 0.01, 0.91, 0.02, 0.01);
+        root_helper::SetPaveTextDefaultStyle(residue_text.get());
+        root_helper::SetFillAttribute(residue_text.get(), 1001, kAzure-7, 0.5f);
+        root_helper::SetLineAttribute(residue_text.get(), 1, 3, kAzure-7);
+        root_helper::SetTextAttribute(residue_text.get(), 90.0f, 133, 22);
+        residue_text->AddText(component_id.data());
+        residue_text->Draw();
+
+        auto resolution_text{ CreateResolutionPaveText(model_object) };
+        root_helper::SetPaveTextMarginInCanvas(gPad, resolution_text.get(), 0.10, 0.76, 0.02, 0.01);
+        resolution_text->SetTextSize(90.0f);
+        resolution_text->Draw();
+
+        auto map_info_text{ CreateDataInfoPaveText(model_object) };
+        root_helper::SetPaveTextMarginInCanvas(gPad, map_info_text.get(), 0.25, 0.53, 0.02, 0.01);
+        map_info_text->SetTextSize(70.0f);
+        map_info_text->Draw();
+
+        auto legend{ root_helper::CreateLegend(0.50, 0.02, 1.00, 0.99, false) };
+        root_helper::SetLegendDefaultStyle(legend.get());
+        root_helper::SetFillAttribute(legend.get(), 4000);
+        root_helper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
+        legend->SetMargin(0.25f);
+        legend->AddEntry(gaus_prior_map.at(Spot::CA).get(),
+            "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau},#font[1]{c})} with selected #alpha_{r} and #alpha_{g}", "l");
+        legend->AddEntry(map_value_graph_list_map.at(Spot::CA).front().get(),
+            "Members of Map Value", "l");
+        legend->Draw();
+
+        canvas->cd();
+        auto pad_extra_1{ root_helper::CreatePad("pad_extra_1","", 0.00, 0.10, 0.05, 0.88) };
+        pad_extra_1->Draw();
+        pad_extra_1->cd();
+        root_helper::SetPadDefaultStyle(pad_extra_1.get());
+        root_helper::SetFillAttribute(pad_extra_1.get(), 4000);
+        auto y_title_text{ root_helper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
+        root_helper::SetPaveTextDefaultStyle(y_title_text.get());
+        root_helper::SetFillAttribute(y_title_text.get(), 4000);
+        root_helper::SetTextAttribute(y_title_text.get(), 70.0f, 133, 22);
+        y_title_text->AddText("Normalized Map Value");
+        auto y_text{ y_title_text->GetLineWith("Normalized") };
+        y_text->SetTextAngle(90.0f);
+        y_title_text->Draw();
+
+        canvas->cd();
+        auto pad_extra_2{ root_helper::CreatePad("pad_extra_2","", 0.10, 0.00, 0.98, 0.05) };
+        pad_extra_2->Draw();
+        pad_extra_2->cd();
+        root_helper::SetPadDefaultStyle(pad_extra_2.get());
+        root_helper::SetFillAttribute(pad_extra_2.get(), 4000);
+        auto x_title_text{ root_helper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
+        root_helper::SetPaveTextDefaultStyle(x_title_text.get());
+        root_helper::SetFillAttribute(x_title_text.get(), 4000);
+        root_helper::SetTextAttribute(x_title_text.get(), 70.0f, 133, 22);
+        x_title_text->AddText("Radial Distance #[]{#AA}");
+        x_title_text->Draw();
+
+        root_helper::PrintCanvasPad(canvas.get(), file_path);
+    }
+
     root_helper::PrintCanvasClose(canvas.get(), file_path);
     Logger::Log(LogLevel::Info, " Output file: " + file_path);
     #endif
