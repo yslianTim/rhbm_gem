@@ -3300,19 +3300,21 @@ TEST(
         const auto previous_log_level{ Logger::GetLogLevel() };
         Logger::SetLogLevel(LogLevel::Debug);
         testing::internal::CaptureStdout();
-        const auto diagnostics{ rt::RunSecondStageLocalFitting(*model, options) };
+        const auto peeling_applied{ rt::RunSecondStageLocalFitting(*model, options) };
         const std::string out{ testing::internal::GetCapturedStdout() };
         Logger::SetLogLevel(previous_log_level);
 
         EXPECT_EQ(model->GetSelectedAtomCount(), 2U);
-        EXPECT_TRUE(diagnostics.peeling_applied);
-        const auto expected_neighbor_count{ exclude_hydrogen ? 3U : 4U };
-        EXPECT_EQ(
-            diagnostics.neighbor_count_by_serial_id.at(1),
-            expected_neighbor_count);
-        EXPECT_EQ(
-            diagnostics.neighbor_count_by_serial_id.at(2),
-            expected_neighbor_count);
+        EXPECT_TRUE(peeling_applied);
+        const auto expected_neighbor_count{ exclude_hydrogen ? 3 : 4 };
+        for (const int serial_id : { 1, 2 })
+        {
+            EXPECT_EQ(
+                rg::AtomLocalPotentialView::RequireFor(
+                    *model->FindAtomPtr(serial_id))
+                    .GetNeighborCountForPeeling(),
+                expected_neighbor_count);
+        }
         for (int serial_id = 3; serial_id <= 7; serial_id++)
         {
             EXPECT_FALSE(rg::AtomLocalPotentialView::For(
@@ -3728,6 +3730,7 @@ TEST(
         };
         local_editor.SetPeelingSamplingEntries(
             sentinel_peeling_sampling_entries);
+        local_editor.SetNeighborCountForPeeling(99);
         previous_model_list.emplace_back(GetEstimateModel(*atom));
         previous_peeling_sampling_entries_list.emplace_back(
             std::move(sentinel_peeling_sampling_entries));
@@ -3741,10 +3744,10 @@ TEST(
     }
 
     testing::internal::CaptureStdout();
-    const auto diagnostics{ rt::RunSecondStageLocalFitting(*model, options) };
+    const auto peeling_applied{ rt::RunSecondStageLocalFitting(*model, options) };
     const std::string out{ testing::internal::GetCapturedStdout() };
 
-    EXPECT_FALSE(diagnostics.peeling_applied);
+    EXPECT_FALSE(peeling_applied);
 
     for (std::size_t i = 0; i < model->GetSelectedAtoms().size(); i++)
     {
@@ -3761,6 +3764,11 @@ TEST(
         EXPECT_FLOAT_EQ(
             peeling_sampling_entries.front().response,
             previous_peeling_sampling_entries_list.at(i).front().response);
+        EXPECT_NE(
+            rg::AtomLocalPotentialView::RequireFor(
+                *model->GetSelectedAtoms().at(i))
+                .GetNeighborCountForPeeling(),
+            99);
     }
     const auto final_analysis_view{ model->GetAnalysisView() };
     const auto group_key_list{ final_analysis_view.CollectAtomGroupKeys() };

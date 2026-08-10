@@ -21,6 +21,11 @@ void AtomLocalPotentialEditor::SetPeelingSamplingEntries(LocalPotentialSampleLis
     m_entry->SetPeelingSamplingEntries(std::move(value));
 }
 
+void AtomLocalPotentialEditor::SetNeighborCountForPeeling(int value)
+{
+    m_entry->SetNeighborCountForPeeling(value);
+}
+
 void AtomLocalPotentialEditor::SetGaussianResult(LocalGaussianResult value)
 {
     m_entry->SetGaussianResult(std::move(value));

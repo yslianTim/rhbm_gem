@@ -175,7 +175,7 @@ TEST(DataObjectPersistenceTest, FinalV2CatalogDatabaseRemainsLoadable)
     rg::DataRepository repository{ database_path };
     EXPECT_NE(repository.LoadModel("model"), nullptr);
     EXPECT_NE(repository.LoadMap("map"), nullptr);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 9);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 10);
 }
 
 TEST(DataObjectPersistenceTest, RawSamplingSelectionRoundTripPreservesUnselectedSamples)
@@ -233,6 +233,7 @@ TEST(DataObjectPersistenceTest, RawAndPeelingSamplingEntriesRoundTripPreservesSe
             LocalPotentialSample{ 3.0f, SamplingPoint{ 0.1f, { 0.0f, 0.0f, 0.0f }, true } },
             LocalPotentialSample{ 5.0f, SamplingPoint{ 0.2f, { 0.0f, 0.0f, 0.0f }, false } }
         });
+        editor.SetNeighborCountForPeeling(7);
 
         repository.SaveModel(*model, "model");
     }
@@ -257,6 +258,7 @@ TEST(DataObjectPersistenceTest, RawAndPeelingSamplingEntriesRoundTripPreservesSe
     EXPECT_FALSE(peeling_entries.at(1).point.is_selected);
     ASSERT_EQ(selected_peeling_entries.size(), 1u);
     EXPECT_FLOAT_EQ(selected_peeling_entries.at(0).response, 3.0f);
+    EXPECT_EQ(view.GetNeighborCountForPeeling(), 7);
 }
 
 TEST(DataObjectPersistenceTest, VersionEightSamplingColumnsMigrateToRawAndPeelingWithoutDataLoss)
@@ -302,7 +304,7 @@ TEST(DataObjectPersistenceTest, VersionEightSamplingColumnsMigrateToRawAndPeelin
     auto loaded_model{ repository.LoadModel("model") };
     ASSERT_NE(loaded_model, nullptr);
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 9);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 10);
     EXPECT_TRUE(data_test::HasColumn(
         database_path, "model_atom_local_potential", "raw_sampling_size"));
     EXPECT_TRUE(data_test::HasColumn(
@@ -513,7 +515,7 @@ TEST(DataObjectPersistenceTest, LegacyV2SamplingBlobLoadsAsSelectedAndMigratesVe
     };
 
     EXPECT_TRUE(peeling_entries.empty());
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 9);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 10);
 }
 
 TEST(DataObjectPersistenceTest, DatabaseRoundTripPreservesChainMetadataAndSymmetryFiltering)

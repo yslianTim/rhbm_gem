@@ -357,7 +357,7 @@ LocalFittingModelSnapshot CaptureLocalFittingModelSnapshot(
 
 void OutputLocalFittingResultTable(
     const ModelObject & model_object,
-    const SecondStageLocalFittingDiagnostics & second_stage_diagnostics,
+    bool peeling_applied,
     const LocalFittingModelSnapshot & first_stage_snapshot,
     const LocalFittingModelSnapshot & second_stage_snapshot,
     const LocalFittingModelSnapshot & third_stage_snapshot,
@@ -395,12 +395,12 @@ void OutputLocalFittingResultTable(
             << serial_id << ','
             << ChemicalDataHelper::GetLabel(atom->GetResidue()) << ','
             << atom->GetAtomID() << ','
-            << second_stage_diagnostics.neighbor_count_by_serial_id.at(serial_id) << ',';
+            << local_view.GetNeighborCountForPeeling() << ',';
         const auto peeling_ratio{
             detail::CalculateLocalFittingPeelingRatio(
                 raw_sampling_entries,
                 peeling_sampling_entries,
-                second_stage_diagnostics.peeling_applied)
+                peeling_applied)
         };
         if (!peeling_ratio.has_value())
         {
@@ -778,7 +778,7 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
     RunGroupAlphaTraining(model_object, options);
     RunGroupPotentialFitting(model_object, options, false);
 
-    const auto second_stage_diagnostics{ RunSecondStageLocalFitting(model_object, options) };
+    const auto peeling_applied{ RunSecondStageLocalFitting(model_object, options) };
     const auto second_stage_snapshot{ CaptureLocalFittingModelSnapshot(model_object) };
 
     RunLocalAlphaTraining(model_object, options, true);
@@ -794,7 +794,7 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
     {
         OutputLocalFittingResultTable(
             model_object,
-            second_stage_diagnostics,
+            peeling_applied,
             first_stage_snapshot,
             second_stage_snapshot,
             third_stage_snapshot,

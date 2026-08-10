@@ -547,7 +547,9 @@ TEST(
     EXPECT_EQ(std::stoi(row.at(0)), atom->GetSerialID());
     EXPECT_FALSE(row.at(1).empty());
     EXPECT_EQ(row.at(2), atom->GetAtomID());
-    EXPECT_EQ(std::stoul(row.at(3)), 0U);
+    EXPECT_EQ(
+        std::stoi(row.at(3)),
+        fitted_view.GetNeighborCountForPeeling());
     const auto expected_peeling_ratio{
         rt::detail::CalculateLocalFittingPeelingRatio(
             fitted_view.GetRawSamplingEntries(false),

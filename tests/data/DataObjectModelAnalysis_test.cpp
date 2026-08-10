@@ -525,6 +525,7 @@ TEST(DataObjectModelAnalysisTest, LocalPotentialEntryClearTransientFitStateKeeps
 TEST(DataObjectModelAnalysisTest, LocalPotentialEntryStoresRawAndPeelingSamplingEntries)
 {
     rg::LocalPotentialEntry entry;
+    EXPECT_EQ(entry.NeighborCountForPeeling(), 0);
     entry.SetRawSamplingEntries({
         LocalPotentialSample{ 6.0f, SamplingPoint{ 0.1f } },
         LocalPotentialSample{ 4.0f, SamplingPoint{ 0.2f } }
@@ -532,6 +533,7 @@ TEST(DataObjectModelAnalysisTest, LocalPotentialEntryStoresRawAndPeelingSampling
     entry.SetPeelingSamplingEntries({
         LocalPotentialSample{ 3.0f, SamplingPoint{ 0.1f } }
     });
+    entry.SetNeighborCountForPeeling(7);
 
     EXPECT_EQ(entry.RawSamplingEntryCount(), 2);
     EXPECT_EQ(entry.PeelingSamplingEntryCount(), 1);
@@ -539,6 +541,7 @@ TEST(DataObjectModelAnalysisTest, LocalPotentialEntryStoresRawAndPeelingSampling
     ASSERT_EQ(entry.PeelingSamplingEntries().size(), 1u);
     EXPECT_FLOAT_EQ(entry.RawSamplingEntries().front().response, 6.0f);
     EXPECT_FLOAT_EQ(entry.PeelingSamplingEntries().front().response, 3.0f);
+    EXPECT_EQ(entry.NeighborCountForPeeling(), 7);
 }
 
 TEST(DataObjectModelAnalysisTest, LocalPotentialEntryStoresGaussianResult)
@@ -572,6 +575,20 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialEditorCanSetAlphaR)
     editor.SetAlphaR(0.37);
 
     EXPECT_DOUBLE_EQ(0.37, rg::AtomLocalPotentialView::RequireFor(*atom).GetAlphaR());
+}
+
+TEST(DataObjectModelAnalysisTest, AtomLocalPotentialEditorCanSetPeelingNeighborCount)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto * atom{ model->GetAtomList().at(0).get() };
+    auto editor{ model->EditAnalysis().EnsureAtomLocalPotential(*atom) };
+
+    editor.SetNeighborCountForPeeling(5);
+
+    EXPECT_EQ(
+        rg::AtomLocalPotentialView::RequireFor(*atom)
+            .GetNeighborCountForPeeling(),
+        5);
 }
 
 TEST(DataObjectModelAnalysisTest, AtomLocalPotentialEditorSetGaussianResultUpdatesViewEstimates)

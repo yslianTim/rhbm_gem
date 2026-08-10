@@ -2,7 +2,6 @@
 
 #include <cstddef>
 #include <optional>
-#include <unordered_map>
 
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
@@ -59,13 +58,7 @@ void RunGroupPotentialFitting(
     const FitOptions & options,
     bool use_peeling_sampling_entries);
 
-struct SecondStageLocalFittingDiagnostics
-{
-    std::unordered_map<int, std::size_t> neighbor_count_by_serial_id{};
-    bool peeling_applied{ false };
-};
-
-SecondStageLocalFittingDiagnostics RunSecondStageLocalFitting(
+bool RunSecondStageLocalFitting(
     ModelObject & model_object,
     const FitOptions & options);
 

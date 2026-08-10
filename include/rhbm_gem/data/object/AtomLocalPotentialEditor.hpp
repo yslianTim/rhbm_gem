@@ -15,6 +15,7 @@ class AtomLocalPotentialEditor
 public:
     void SetRawSamplingEntries(LocalPotentialSampleList value);
     void SetPeelingSamplingEntries(LocalPotentialSampleList value);
+    void SetNeighborCountForPeeling(int value);
     void SetGaussianResult(LocalGaussianResult value);
     void SetAlphaR(double value);
 

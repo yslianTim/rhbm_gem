@@ -5,6 +5,7 @@
 
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
+#include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include "io/sqlite/SQLitePersistence.hpp"
 #include "io/sqlite/SQLiteWrapper.hpp"
 #include "support/CommandTestHelpers.hpp"
@@ -94,7 +95,7 @@ TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsNormalizedSchema)
 
     rg::SQLitePersistence database_manager{ database_path };
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 9);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 10);
     EXPECT_TRUE(data_test::HasTable(database_path, "object_catalog"));
     EXPECT_FALSE(data_test::HasTable(database_path, "object_metadata"));
     EXPECT_TRUE(data_test::HasTable(database_path, "model_object"));
@@ -106,10 +107,52 @@ TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsNormalizedSchema)
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom", "standard_qscore"));
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_object", "reference_height"));
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_object", "reference_offset"));
+    EXPECT_TRUE(data_test::HasColumn(
+        database_path,
+        "model_atom_local_potential",
+        "neighbor_count_for_peeling"));
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_posterior", "class_key"));
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_group_potential", "class_key"));
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_posterior", "class_key"));
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_group_potential", "class_key"));
+}
+
+TEST(DataObjectSchemaLifecycleTest, VersionNineSchemaMigratesPeelingNeighborCount)
+{
+    const command_test::ScopedTempDir temp_dir{ "data_schema_v9_peeling_neighbor_count" };
+    const auto database_path{ temp_dir.path() / "v9_peeling_neighbor_count.sqlite" };
+
+    {
+        rg::DataRepository repository{ database_path };
+        auto model{ data_test::MakeModelWithBond() };
+        model->SetKeyTag("model");
+        auto editor{
+            model->EditAnalysis().EnsureAtomLocalPotential(
+                *model->GetAtomList().at(0))
+        };
+        editor.SetNeighborCountForPeeling(7);
+        repository.SaveModel(*model, "model");
+    }
+    data_test::ExecuteSqlWithForeignKeysOff(
+        database_path,
+        "ALTER TABLE model_atom_local_potential "
+        "DROP COLUMN neighbor_count_for_peeling;");
+    data_test::SetUserVersion(database_path, 9);
+
+    rg::DataRepository repository{ database_path };
+    auto loaded_model{ repository.LoadModel("model") };
+
+    ASSERT_NE(loaded_model, nullptr);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 10);
+    EXPECT_TRUE(data_test::HasColumn(
+        database_path,
+        "model_atom_local_potential",
+        "neighbor_count_for_peeling"));
+    EXPECT_EQ(
+        rg::AtomLocalPotentialView::RequireFor(
+            *loaded_model->GetAtomList().at(0))
+            .GetNeighborCountForPeeling(),
+        0);
 }
 
 TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsRawAndPeelingSamplingEntryColumns)
@@ -193,7 +236,7 @@ TEST(DataObjectSchemaLifecycleTest, VersionThreeSchemaMigratesGaussianInterceptC
 
     rg::SQLitePersistence database_manager{ database_path };
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 9);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 10);
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_local_potential", "intercept_estimate_ols"));
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_local_potential", "intercept_estimate_mdpde"));
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_posterior", "class_key"));
@@ -232,7 +275,7 @@ TEST(DataObjectSchemaLifecycleTest, VersionFourSchemaMigratesAtomTablesToSingleC
 
     rg::SQLitePersistence database_manager{ database_path };
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 9);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 10);
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_posterior", "class_key"));
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_group_potential", "class_key"));
     EXPECT_EQ(data_test::CountRows(database_path, "model_atom_posterior", "model"), 1);
@@ -275,7 +318,7 @@ TEST(DataObjectSchemaLifecycleTest, VersionFiveSchemaMigratesRawAndPeelingSampli
 
     rg::SQLitePersistence database_manager{ database_path };
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 9);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 10);
     EXPECT_TRUE(data_test::HasColumn(
         database_path, "model_atom_local_potential", "raw_sampling_size"));
     EXPECT_TRUE(data_test::HasColumn(
@@ -315,7 +358,7 @@ TEST(DataObjectSchemaLifecycleTest, VersionSixSchemaMigratesStandardQScoreColumn
     auto loaded_model{ repository.LoadModel("model") };
 
     ASSERT_NE(loaded_model, nullptr);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 9);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 10);
     EXPECT_TRUE(data_test::HasColumn(
         database_path,
         "model_object",
@@ -353,7 +396,7 @@ TEST(DataObjectSchemaLifecycleTest, VersionSevenSchemaMigratesReferenceGaussianP
     auto loaded_model{ repository.LoadModel("model") };
 
     ASSERT_NE(loaded_model, nullptr);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 9);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 10);
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_object", "reference_height"));
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_object", "reference_offset"));
     EXPECT_DOUBLE_EQ(loaded_model->GetReferenceHeight(), 0.0);

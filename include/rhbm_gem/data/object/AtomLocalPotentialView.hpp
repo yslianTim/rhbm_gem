@@ -23,6 +23,7 @@ public:
     const GaussianModel3D & GetEstimateMDPDE() const;
     LocalPotentialSampleList GetRawSamplingEntries(bool apply_selection = true) const;
     LocalPotentialSampleList GetPeelingSamplingEntries(bool apply_selection = true) const;
+    int GetNeighborCountForPeeling() const;
     double GetAlphaR() const;
 
 private:

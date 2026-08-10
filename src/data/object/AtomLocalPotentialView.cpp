@@ -108,6 +108,11 @@ LocalPotentialSampleList AtomLocalPotentialView::GetPeelingSamplingEntries(bool 
     return ApplySamplingEntrySelection(entry.PeelingSamplingEntries(), apply_selection);
 }
 
+int AtomLocalPotentialView::GetNeighborCountForPeeling() const
+{
+    return RequireEntry("Local peeling neighbor count").NeighborCountForPeeling();
+}
+
 double AtomLocalPotentialView::GetAlphaR() const
 {
     return RequireEntry("Local alpha-r").GaussianResult().alpha_r;

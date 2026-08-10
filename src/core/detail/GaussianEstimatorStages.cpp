@@ -958,11 +958,11 @@ SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(
     return context;
 }
 
-SecondStageLocalFittingDiagnostics BuildSecondStageLocalFittingDiagnostics(
+void StoreSecondStageNeighborCounts(
+    ModelObject & model_object,
     const SecondStageLocalFittingContext & context)
 {
-    SecondStageLocalFittingDiagnostics diagnostics;
-    diagnostics.neighbor_count_by_serial_id.reserve(context.size());
+    auto analysis{ model_object.EditAnalysis() };
     for (const auto & atom_context : context)
     {
         std::unordered_set<const AtomObject *> neighbor_atom_set;
@@ -977,11 +977,9 @@ SecondStageLocalFittingDiagnostics BuildSecondStageLocalFittingDiagnostics(
                 neighbor_atom_set.emplace(neighbor_atom);
             }
         }
-        diagnostics.neighbor_count_by_serial_id.emplace(
-            atom_context.atom->GetSerialID(),
-            neighbor_atom_set.size());
+        analysis.EnsureAtomLocalPotential(*atom_context.atom)
+            .SetNeighborCountForPeeling(static_cast<int>(neighbor_atom_set.size()));
     }
-    return diagnostics;
 }
 
 detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
@@ -5051,12 +5049,12 @@ std::vector<char> detail::ExpandSuspiciousSharedOffsetGroups(
     return rollback_mask;
 }
 
-SecondStageLocalFittingDiagnostics RunSecondStageLocalFitting(
+bool RunSecondStageLocalFitting(
     ModelObject & model_object,
     const FitOptions & options)
 {
     auto context{ BuildSecondStageLocalFittingContext(model_object, options) };
-    auto diagnostics{ BuildSecondStageLocalFittingDiagnostics(context) };
+    StoreSecondStageNeighborCounts(model_object, context);
     const auto atom_size{ context.size() };
     if (!options.quiet_mode)
     {
@@ -5097,7 +5095,7 @@ SecondStageLocalFittingDiagnostics RunSecondStageLocalFitting(
                 "best_audit_objective=unavailable, final_uses_polish=unavailable, "
                 "final_state_source=unavailable.");
         }
-        return diagnostics;
+        return false;
     }
     LogSecondStageSeedSelections(initial_state_build_result->selection_record_list, options);
     LogUnselectedSecondStageSeedSelections(
@@ -5167,7 +5165,6 @@ SecondStageLocalFittingDiagnostics RunSecondStageLocalFitting(
                 options,
                 accepted_iteration_count,
                 terminal_summary);
-            diagnostics.peeling_applied = true;
             LogSecondStageLocalFittingSummary(
                 options,
                 accepted_iteration_count,
@@ -5176,7 +5173,7 @@ SecondStageLocalFittingDiagnostics RunSecondStageLocalFitting(
                 UsesLocalFittingPolish(previous_polish_provenance),
                 detail::LocalFittingFinalStateSource::LatestValidated);
             RunGroupPotentialFitting(model_object, options, true);
-            return diagnostics;
+            return true;
         }
 
         const auto cluster_partition{
@@ -5479,7 +5476,6 @@ SecondStageLocalFittingDiagnostics RunSecondStageLocalFitting(
                 model_object,
                 context,
                 *final_state_selection.state);
-            diagnostics.peeling_applied = true;
             LogSecondStageLocalFittingSummary(
                 options,
                 accepted_iteration_count,
@@ -5488,7 +5484,7 @@ SecondStageLocalFittingDiagnostics RunSecondStageLocalFitting(
                 UsesLocalFittingPolish(*final_state_selection.polish_provenance),
                 final_state_selection.source);
             RunGroupPotentialFitting(model_object, options, true);
-            return diagnostics;
+            return true;
         }
 
         const auto transformed_change_summary{
@@ -5528,7 +5524,6 @@ SecondStageLocalFittingDiagnostics RunSecondStageLocalFitting(
                 model_object,
                 context,
                 *final_state_selection.state);
-            diagnostics.peeling_applied = true;
             LogSecondStageLocalFittingSummary(
                 options,
                 accepted_iteration_count,
@@ -5537,7 +5532,7 @@ SecondStageLocalFittingDiagnostics RunSecondStageLocalFitting(
                 UsesLocalFittingPolish(*final_state_selection.polish_provenance),
                 final_state_selection.source);
             RunGroupPotentialFitting(model_object, options, true);
-            return diagnostics;
+            return true;
         }
 
         const auto converged{
@@ -5557,7 +5552,6 @@ SecondStageLocalFittingDiagnostics RunSecondStageLocalFitting(
                 SummarizeLocalFittingOffsets(assembled_state)
             };
             ApplyLocalFittingState(model_object, context, assembled_state);
-            diagnostics.peeling_applied = true;
             if (terminal_summary.AtomCount() > 0)
             {
                 LogLocalFittingTerminalFallback(
@@ -5582,7 +5576,7 @@ SecondStageLocalFittingDiagnostics RunSecondStageLocalFitting(
                 UsesLocalFittingPolish(assembled_polish_provenance),
                 detail::LocalFittingFinalStateSource::LatestValidated);
             RunGroupPotentialFitting(model_object, options, true);
-            return diagnostics;
+            return true;
         }
 
         if (iter + 1 == kLocalFittingMaximumIterations)
@@ -5597,7 +5591,6 @@ SecondStageLocalFittingDiagnostics RunSecondStageLocalFitting(
                 model_object,
                 context,
                 *final_state_selection.state);
-            diagnostics.peeling_applied = true;
             LogLocalFittingMaximumIterations(
                 options,
                 final_state_selection.source,
@@ -5612,13 +5605,13 @@ SecondStageLocalFittingDiagnostics RunSecondStageLocalFitting(
                 UsesLocalFittingPolish(*final_state_selection.polish_provenance),
                 final_state_selection.source);
             RunGroupPotentialFitting(model_object, options, true);
-            return diagnostics;
+            return true;
         }
         unchanged_state_exhausted_key_list.clear();
         previous_state = std::move(assembled_state);
         previous_polish_provenance = std::move(assembled_polish_provenance);
     }
-    return diagnostics;
+    return false;
 }
 
 } // namespace rhbm_gem::core

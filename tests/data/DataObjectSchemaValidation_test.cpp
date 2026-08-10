@@ -24,11 +24,25 @@ void ExpectNormalizedSchemaValidationFailure(
 
     {
         rg::SQLitePersistence database_manager{ database_path };
-        EXPECT_EQ(data_test::GetUserVersion(database_path), 9);
+        EXPECT_EQ(data_test::GetUserVersion(database_path), 10);
     }
 
     mutate_database(database_path);
     EXPECT_THROW((void)rg::SQLitePersistence(database_path), std::runtime_error);
+}
+
+TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingPeelingNeighborCountColumnThrows)
+{
+    ExpectNormalizedSchemaValidationFailure(
+        "data_schema_missing_peeling_neighbor_count",
+        "missing_peeling_neighbor_count.sqlite",
+        [](const std::filesystem::path & database_path)
+        {
+            data_test::ExecuteSqlWithForeignKeysOff(
+                database_path,
+                "ALTER TABLE model_atom_local_potential "
+                "DROP COLUMN neighbor_count_for_peeling;");
+        });
 }
 
 } // namespace
