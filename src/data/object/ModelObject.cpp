@@ -577,7 +577,9 @@ void ModelObject::LocalPotentialInitialization()
     auto analysis{ EditAnalysis() };
     analysis.Clear();
     analysis.RebuildAtomGroupsFromSelection();
-    analysis.InitializeLocalAlpha(kInitialLocalAlpha);
+    analysis.InitializeLocalAlpha(LocalFittingStage::First, kInitialLocalAlpha);
+    analysis.InitializeLocalAlpha(LocalFittingStage::Second, kInitialLocalAlpha);
+    analysis.InitializeLocalAlpha(LocalFittingStage::Third, kInitialLocalAlpha);
     analysis.InitializeGroupAlpha(kInitialGroupAlpha);
 }
 

@@ -54,7 +54,10 @@ size_t CountOutlierAtoms(
     size_t outlier_count{ 0 };
     for (auto * atom : analysis_view.GetAtomObjectList(group_key))
     {
-        const auto & result{ AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult() };
+        const auto & result{
+            AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult(
+                LocalFittingStage::Third)
+        };
         if (result.posterior.has_value() && result.is_outlier)
         {
             outlier_count++;
@@ -74,7 +77,9 @@ double ComputeAtomGausEstimateMinimum(
     {
         if (atom->GetElement() != element) continue;
         gaus_estimate_list.emplace_back(
-            AtomLocalPotentialView::RequireFor(*atom).GetEstimateMDPDE().GetDisplayParameter(par_id));
+            AtomLocalPotentialView::RequireFor(*atom)
+                .GetEstimateMDPDE(LocalFittingStage::Third)
+                .GetDisplayParameter(par_id));
     }
     return array_helper::ComputeMin(gaus_estimate_list.data(), gaus_estimate_list.size());
 }
@@ -850,7 +855,10 @@ void GausPainter::PaintLocalGausSummary(
             {
                 auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
                 auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
-                const auto & result{ AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult() };
+                const auto & result{
+                    AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult(
+                        LocalFittingStage::Third)
+                };
                 auto is_outlier{ result.posterior.has_value() && result.is_outlier };
                 auto line_color{ kAzure-7 };
                 if (show_outlier == true && is_outlier == true) line_color = kRed+1;
@@ -908,7 +916,9 @@ void GausPainter::PaintLocalGausSummary(
             //    "Members of Value", "l");
             legend->AddEntry(gaus_prior.get(),
                 Form("#alpha_{r} = %.1f, #alpha_{g} = %.1f",
-                    entry_iter->GetAtomAlphaR(group_key),
+                    entry_iter->GetAtomAlphaR(
+                        LocalFittingStage::Third,
+                        group_key),
                     entry_iter->GetAtomAlphaG(group_key)), "l");
             legend->AddEntry(gaus_mean.get(),
                 "#alpha_{r} = #alpha_{g} = 0", "l");
@@ -1292,7 +1302,10 @@ void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
             {
                 auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
                 auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
-                const auto & result{ AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult() };
+                const auto & result{
+                    AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult(
+                        LocalFittingStage::Third)
+                };
                 auto is_outlier{ result.posterior.has_value() && result.is_outlier };
                 auto line_color{ kAzure-7 };
                 if (show_outlier == true && is_outlier == true) line_color = kRed+1;

@@ -40,8 +40,9 @@ class Fold168RegressionTest(unittest.TestCase):
             with sqlite3.connect(database) as connection:
                 connection.execute(
                     "CREATE TABLE model_atom_local_potential ("
-                    "key_tag TEXT, serial_id INTEGER, amplitude_estimate_mdpde REAL, "
-                    "width_estimate_mdpde REAL, intercept_estimate_mdpde REAL, alpha_r REAL)")
+                    "key_tag TEXT, serial_id INTEGER, amplitude_estimate_mdpde_3rd REAL, "
+                    "width_estimate_mdpde_3rd REAL, intercept_estimate_mdpde_3rd REAL, "
+                    "alpha_r_3rd REAL)")
                 connection.execute(
                     "CREATE TABLE model_atom ("
                     "key_tag TEXT, serial_id INTEGER, element INTEGER)")

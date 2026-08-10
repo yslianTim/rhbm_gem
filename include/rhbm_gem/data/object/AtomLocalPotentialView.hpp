@@ -18,13 +18,13 @@ public:
     static AtomLocalPotentialView For(const AtomObject & atom_object);
     static AtomLocalPotentialView RequireFor(const AtomObject & atom_object);
     bool IsAvailable() const;
-    const LocalGaussianResult & GetGaussianResult() const;
-    const GaussianModel3D & GetEstimateOLS() const;
-    const GaussianModel3D & GetEstimateMDPDE() const;
+    const LocalGaussianResult & GetGaussianResult(LocalFittingStage stage) const;
+    const GaussianModel3D & GetEstimateOLS(LocalFittingStage stage) const;
+    const GaussianModel3D & GetEstimateMDPDE(LocalFittingStage stage) const;
     LocalPotentialSampleList GetRawSamplingEntries(bool apply_selection = true) const;
     LocalPotentialSampleList GetPeelingSamplingEntries(bool apply_selection = true) const;
     int GetNeighborCountForPeeling() const;
-    double GetAlphaR() const;
+    double GetAlphaR(LocalFittingStage stage) const;
 
 private:
     explicit AtomLocalPotentialView(const AtomObject * atom_object);

@@ -884,7 +884,7 @@ SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(
         const auto * atom{ atom_context.atom };
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
         atom_context.raw_sampling_entries = local_view.GetRawSamplingEntries(false);
-        atom_context.alpha_r = local_view.GetAlphaR();
+        atom_context.alpha_r = local_view.GetAlphaR(LocalFittingStage::Second);
     }
 
     for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
@@ -1147,7 +1147,7 @@ std::optional<SecondStageInitialStateBuildResult> BuildInitialLocalFittingState(
     {
         const auto * atom{ context.at(i).atom };
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
-        state.at(i) = local_view.GetGaussianResult();
+        state.at(i) = local_view.GetGaussianResult(LocalFittingStage::Second);
         const auto group_key{ data_internal::GetGroupKey(atom) };
         if (analysis_view.HasAtomGroup(group_key))
         {
@@ -4289,7 +4289,7 @@ void ApplyLocalFittingState(
         auto local_editor{
             analysis.EnsureAtomLocalPotential(*context.at(i).atom)
         };
-        local_editor.SetGaussianResult(iteration_state.at(i));
+        local_editor.SetGaussianResult(LocalFittingStage::Second, iteration_state.at(i));
         local_editor.SetPeelingSamplingEntries(
             BuildSecondStageAdjustedSamples(context, i, fitted_gaussian_snapshot));
     }
@@ -5172,7 +5172,7 @@ bool RunSecondStageLocalFitting(
                 best_audit_state,
                 UsesLocalFittingPolish(previous_polish_provenance),
                 detail::LocalFittingFinalStateSource::LatestValidated);
-            RunGroupPotentialFitting(model_object, options, true);
+            RunGroupPotentialFitting(model_object, options, LocalFittingStage::Second);
             return true;
         }
 
@@ -5483,7 +5483,10 @@ bool RunSecondStageLocalFitting(
                 best_audit_state,
                 UsesLocalFittingPolish(*final_state_selection.polish_provenance),
                 final_state_selection.source);
-            RunGroupPotentialFitting(model_object, options, true);
+            RunGroupPotentialFitting(
+                model_object,
+                options,
+                LocalFittingStage::Second);
             return true;
         }
 
@@ -5531,7 +5534,10 @@ bool RunSecondStageLocalFitting(
                 best_audit_state,
                 UsesLocalFittingPolish(*final_state_selection.polish_provenance),
                 final_state_selection.source);
-            RunGroupPotentialFitting(model_object, options, true);
+            RunGroupPotentialFitting(
+                model_object,
+                options,
+                LocalFittingStage::Second);
             return true;
         }
 
@@ -5575,7 +5581,7 @@ bool RunSecondStageLocalFitting(
                 best_audit_state,
                 UsesLocalFittingPolish(assembled_polish_provenance),
                 detail::LocalFittingFinalStateSource::LatestValidated);
-            RunGroupPotentialFitting(model_object, options, true);
+            RunGroupPotentialFitting(model_object, options, LocalFittingStage::Second);
             return true;
         }
 
@@ -5604,7 +5610,7 @@ bool RunSecondStageLocalFitting(
                 best_audit_state,
                 UsesLocalFittingPolish(*final_state_selection.polish_provenance),
                 final_state_selection.source);
-            RunGroupPotentialFitting(model_object, options, true);
+            RunGroupPotentialFitting(model_object, options, LocalFittingStage::Second);
             return true;
         }
         unchanged_state_exhausted_key_list.clear();

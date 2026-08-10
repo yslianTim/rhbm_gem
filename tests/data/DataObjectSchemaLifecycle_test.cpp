@@ -95,7 +95,7 @@ TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsNormalizedSchema)
 
     rg::SQLitePersistence database_manager{ database_path };
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 10);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 11);
     EXPECT_TRUE(data_test::HasTable(database_path, "object_catalog"));
     EXPECT_FALSE(data_test::HasTable(database_path, "object_metadata"));
     EXPECT_TRUE(data_test::HasTable(database_path, "model_object"));
@@ -111,6 +111,27 @@ TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsNormalizedSchema)
         database_path,
         "model_atom_local_potential",
         "neighbor_count_for_peeling"));
+    for (const auto * suffix : { "1st", "2nd", "3rd" })
+    {
+        for (const auto * prefix : {
+                 "amplitude_estimate_ols_",
+                 "width_estimate_ols_",
+                 "intercept_estimate_ols_",
+                 "amplitude_estimate_mdpde_",
+                 "width_estimate_mdpde_",
+                 "intercept_estimate_mdpde_",
+                 "alpha_r_" })
+        {
+            EXPECT_TRUE(data_test::HasColumn(
+                database_path,
+                "model_atom_local_potential",
+                std::string(prefix) + suffix));
+        }
+    }
+    EXPECT_FALSE(data_test::HasColumn(
+        database_path,
+        "model_atom_local_potential",
+        "amplitude_estimate_mdpde"));
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_posterior", "class_key"));
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_group_potential", "class_key"));
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_posterior", "class_key"));
@@ -133,6 +154,7 @@ TEST(DataObjectSchemaLifecycleTest, VersionNineSchemaMigratesPeelingNeighborCoun
         editor.SetNeighborCountForPeeling(7);
         repository.SaveModel(*model, "model");
     }
+    data_test::ConvertLocalGaussianColumnsToLegacyFinal(database_path);
     data_test::ExecuteSqlWithForeignKeysOff(
         database_path,
         "ALTER TABLE model_atom_local_potential "
@@ -143,7 +165,7 @@ TEST(DataObjectSchemaLifecycleTest, VersionNineSchemaMigratesPeelingNeighborCoun
     auto loaded_model{ repository.LoadModel("model") };
 
     ASSERT_NE(loaded_model, nullptr);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 10);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 11);
     EXPECT_TRUE(data_test::HasColumn(
         database_path,
         "model_atom_local_potential",
@@ -153,6 +175,51 @@ TEST(DataObjectSchemaLifecycleTest, VersionNineSchemaMigratesPeelingNeighborCoun
             *loaded_model->GetAtomList().at(0))
             .GetNeighborCountForPeeling(),
         0);
+}
+
+TEST(DataObjectSchemaLifecycleTest, VersionTenSchemaCopiesFinalGaussianToAllStages)
+{
+    const command_test::ScopedTempDir temp_dir{ "data_schema_v10_local_gaussian_stages" };
+    const auto database_path{ temp_dir.path() / "v10_local_gaussian_stages.sqlite" };
+
+    {
+        rg::DataRepository repository{ database_path };
+        auto model{ data_test::MakeModelWithBond() };
+        model->SetKeyTag("model");
+        rg::LocalGaussianResult result;
+        result.alpha_r = 0.45;
+        result.ols = rg::GaussianModel3DWithUncertainty{
+            rg::GaussianModel3D{ 1.0, 0.6, 0.1 },
+            rg::GaussianModel3DUncertainty{}
+        };
+        result.mdpde = rg::GaussianModel3DWithUncertainty{
+            rg::GaussianModel3D{ 2.5, 0.8, 0.2 },
+            rg::GaussianModel3DUncertainty{}
+        };
+        model->EditAnalysis().EnsureAtomLocalPotential(
+            *model->GetAtomList().at(0))
+            .SetGaussianResult(rg::LocalFittingStage::Third, result);
+        repository.SaveModel(*model, "model");
+    }
+    data_test::ConvertLocalGaussianColumnsToLegacyFinal(database_path);
+    data_test::SetUserVersion(database_path, 10);
+
+    rg::DataRepository repository{ database_path };
+    auto loaded_model{ repository.LoadModel("model") };
+
+    ASSERT_NE(loaded_model, nullptr);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 11);
+    const auto view{ rg::AtomLocalPotentialView::RequireFor(
+        *loaded_model->GetAtomList().at(0)) };
+    for (const auto stage : {
+             rg::LocalFittingStage::First,
+             rg::LocalFittingStage::Second,
+             rg::LocalFittingStage::Third })
+    {
+        EXPECT_DOUBLE_EQ(view.GetGaussianResult(stage).alpha_r, 0.45);
+        EXPECT_DOUBLE_EQ(view.GetEstimateMDPDE(stage).GetAmplitude(), 2.5);
+        EXPECT_DOUBLE_EQ(view.GetEstimateMDPDE(stage).GetOffset(), 0.2);
+    }
 }
 
 TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsRawAndPeelingSamplingEntryColumns)
@@ -189,8 +256,25 @@ TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsGaussianInterceptColu
 
     rg::SQLitePersistence database_manager{ database_path };
 
-    EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_local_potential", "intercept_estimate_ols"));
-    EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_local_potential", "intercept_estimate_mdpde"));
+    for (const auto * suffix : { "1st", "2nd", "3rd" })
+    {
+        EXPECT_TRUE(data_test::HasColumn(
+            database_path,
+            "model_atom_local_potential",
+            std::string("intercept_estimate_ols_") + suffix));
+        EXPECT_TRUE(data_test::HasColumn(
+            database_path,
+            "model_atom_local_potential",
+            std::string("intercept_estimate_mdpde_") + suffix));
+    }
+    EXPECT_FALSE(data_test::HasColumn(
+        database_path,
+        "model_atom_local_potential",
+        "intercept_estimate_ols"));
+    EXPECT_FALSE(data_test::HasColumn(
+        database_path,
+        "model_atom_local_potential",
+        "intercept_estimate_mdpde"));
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_local_potential", "intercept_estimate_ols"));
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_bond_local_potential", "intercept_estimate_mdpde"));
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_posterior", "intercept_estimate_posterior"));
@@ -236,9 +320,22 @@ TEST(DataObjectSchemaLifecycleTest, VersionThreeSchemaMigratesGaussianInterceptC
 
     rg::SQLitePersistence database_manager{ database_path };
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 10);
-    EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_local_potential", "intercept_estimate_ols"));
-    EXPECT_TRUE(data_test::HasColumn(database_path, "model_atom_local_potential", "intercept_estimate_mdpde"));
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 11);
+    for (const auto * suffix : { "1st", "2nd", "3rd" })
+    {
+        EXPECT_TRUE(data_test::HasColumn(
+            database_path,
+            "model_atom_local_potential",
+            std::string("intercept_estimate_ols_") + suffix));
+        EXPECT_TRUE(data_test::HasColumn(
+            database_path,
+            "model_atom_local_potential",
+            std::string("intercept_estimate_mdpde_") + suffix));
+    }
+    EXPECT_FALSE(data_test::HasColumn(
+        database_path,
+        "model_atom_local_potential",
+        "intercept_estimate_ols"));
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_posterior", "class_key"));
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_group_potential", "class_key"));
 }
@@ -270,12 +367,13 @@ TEST(DataObjectSchemaLifecycleTest, VersionFourSchemaMigratesAtomTablesToSingleC
         "INSERT INTO model_atom_group_potential VALUES "
         "('model', 'component_atom_class', 10, 2, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 0.1, 0.2, 0.3, 0.4),"
         "('model', 'structure_atom_class', 20, 3, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 1.1, 1.2, 1.3, 1.4);");
+    data_test::ConvertLocalGaussianColumnsToLegacyFinal(database_path);
     data_test::ConvertSamplingEntryColumnsToLegacyRawOnly(database_path);
     data_test::SetUserVersion(database_path, 4);
 
     rg::SQLitePersistence database_manager{ database_path };
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 10);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 11);
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_posterior", "class_key"));
     EXPECT_FALSE(data_test::HasColumn(database_path, "model_atom_group_potential", "class_key"));
     EXPECT_EQ(data_test::CountRows(database_path, "model_atom_posterior", "model"), 1);
@@ -318,7 +416,7 @@ TEST(DataObjectSchemaLifecycleTest, VersionFiveSchemaMigratesRawAndPeelingSampli
 
     rg::SQLitePersistence database_manager{ database_path };
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 10);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 11);
     EXPECT_TRUE(data_test::HasColumn(
         database_path, "model_atom_local_potential", "raw_sampling_size"));
     EXPECT_TRUE(data_test::HasColumn(
@@ -351,6 +449,7 @@ TEST(DataObjectSchemaLifecycleTest, VersionSixSchemaMigratesStandardQScoreColumn
     data_test::ExecuteSqlWithForeignKeysOff(
         database_path,
         "ALTER TABLE model_object DROP COLUMN standard_average_qscore;");
+    data_test::ConvertLocalGaussianColumnsToLegacyFinal(database_path);
     data_test::ConvertSamplingEntryColumnsToLegacyRawAndUpdated(database_path);
     data_test::SetUserVersion(database_path, 6);
 
@@ -358,7 +457,7 @@ TEST(DataObjectSchemaLifecycleTest, VersionSixSchemaMigratesStandardQScoreColumn
     auto loaded_model{ repository.LoadModel("model") };
 
     ASSERT_NE(loaded_model, nullptr);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 10);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 11);
     EXPECT_TRUE(data_test::HasColumn(
         database_path,
         "model_object",
@@ -389,6 +488,7 @@ TEST(DataObjectSchemaLifecycleTest, VersionSevenSchemaMigratesReferenceGaussianP
     data_test::ExecuteSqlWithForeignKeysOff(
         database_path,
         "ALTER TABLE model_object DROP COLUMN reference_offset;");
+    data_test::ConvertLocalGaussianColumnsToLegacyFinal(database_path);
     data_test::ConvertSamplingEntryColumnsToLegacyRawAndUpdated(database_path);
     data_test::SetUserVersion(database_path, 7);
 
@@ -396,7 +496,7 @@ TEST(DataObjectSchemaLifecycleTest, VersionSevenSchemaMigratesReferenceGaussianP
     auto loaded_model{ repository.LoadModel("model") };
 
     ASSERT_NE(loaded_model, nullptr);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 10);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 11);
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_object", "reference_height"));
     EXPECT_TRUE(data_test::HasColumn(database_path, "model_object", "reference_offset"));
     EXPECT_DOUBLE_EQ(loaded_model->GetReferenceHeight(), 0.0);

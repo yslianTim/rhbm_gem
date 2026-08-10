@@ -28,7 +28,9 @@ void ModelAnalysisEditor::ClearTransientFitStates()
         (void)serial_id;
         if (entry != nullptr)
         {
-            entry->ClearTransientFitState();
+            entry->ClearTransientFitState(LocalFittingStage::First);
+            entry->ClearTransientFitState(LocalFittingStage::Second);
+            entry->ClearTransientFitState(LocalFittingStage::Third);
         }
     }
 }
@@ -51,11 +53,13 @@ void ModelAnalysisEditor::RebuildAtomGroupsFromSelection()
     }
 }
 
-void ModelAnalysisEditor::InitializeLocalAlpha(double alpha_r)
+void ModelAnalysisEditor::InitializeLocalAlpha(
+    LocalFittingStage stage,
+    double alpha_r)
 {
     for (auto * atom : m_model_object.GetSelectedAtoms())
     {
-        EnsureAtomLocalPotential(*atom).SetAlphaR(alpha_r);
+        EnsureAtomLocalPotential(*atom).SetAlphaR(stage, alpha_r);
     }
 }
 
@@ -69,6 +73,7 @@ void ModelAnalysisEditor::InitializeGroupAlpha(double alpha_g)
 }
 
 void ModelAnalysisEditor::ApplyAtomGroupGaussianResult(
+    LocalFittingStage stage,
     GroupKey group_key,
     const GroupGaussianResult & group_result)
 {
@@ -89,6 +94,7 @@ void ModelAnalysisEditor::ApplyAtomGroupGaussianResult(
         const auto & member_result{ group_result.member_results.at(i) };
         auto & atom_entry{ analysis_data.EnsureAtomLocalEntry(*atom_list.at(i)) };
         atom_entry.SetPosteriorResult(
+            stage,
             member_result.mdpde,
             member_result.is_outlier,
             member_result.statistical_distance);

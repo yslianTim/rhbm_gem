@@ -20,7 +20,7 @@ namespace {
 
 using namespace std::literals;
 
-constexpr int kCurrentSchemaVersion = 10;
+constexpr int kCurrentSchemaVersion = 11;
 constexpr std::string_view kCatalogTableName = "object_catalog";
 constexpr std::string_view kMapTableName = "map_list";
 constexpr std::string_view kUnsupportedMetadataTableName = "object_metadata";
@@ -418,11 +418,62 @@ void ValidateRequiredTables(
     }
 }
 
-void ValidateGaussianInterceptColumns(rhbm_gem::SQLiteWrapper & database)
+void ValidateGaussianInterceptColumns(
+    rhbm_gem::SQLiteWrapper & database,
+    bool atom_local_has_staged_gaussian_columns)
 {
-    for (const auto table_name : {
-             "model_atom_local_potential"sv,
-             "model_bond_local_potential"sv })
+    if (atom_local_has_staged_gaussian_columns)
+    {
+        for (const auto suffix : { "1st"sv, "2nd"sv, "3rd"sv })
+        {
+            for (const auto column_prefix : {
+                     "amplitude_estimate_ols_"sv,
+                     "width_estimate_ols_"sv,
+                     "intercept_estimate_ols_"sv,
+                     "amplitude_estimate_mdpde_"sv,
+                     "width_estimate_mdpde_"sv,
+                     "intercept_estimate_mdpde_"sv,
+                     "alpha_r_"sv })
+            {
+                ValidateRequiredColumn(
+                    database,
+                    "model_atom_local_potential",
+                    std::string(column_prefix) + std::string(suffix));
+            }
+        }
+        for (const auto legacy_column : {
+                 "amplitude_estimate_ols"sv,
+                 "width_estimate_ols"sv,
+                 "intercept_estimate_ols"sv,
+                 "amplitude_estimate_mdpde"sv,
+                 "width_estimate_mdpde"sv,
+                 "intercept_estimate_mdpde"sv,
+                 "alpha_r"sv })
+        {
+            if (HasColumn(
+                    database,
+                    "model_atom_local_potential",
+                    legacy_column))
+            {
+                throw std::runtime_error(
+                    "Current schema contains legacy local Gaussian column: "
+                    + std::string(legacy_column));
+            }
+        }
+    }
+    else
+    {
+        ValidateRequiredColumn(
+            database,
+            "model_atom_local_potential",
+            "intercept_estimate_ols");
+        ValidateRequiredColumn(
+            database,
+            "model_atom_local_potential",
+            "intercept_estimate_mdpde");
+    }
+
+    for (const auto table_name : { "model_bond_local_potential"sv })
     {
         ValidateRequiredColumn(database, std::string(table_name), "intercept_estimate_ols");
         ValidateRequiredColumn(database, std::string(table_name), "intercept_estimate_mdpde");
@@ -620,6 +671,92 @@ void MigrateNeighborCountForPeelingColumn(rhbm_gem::SQLiteWrapper & database)
     database.Execute(
         "ALTER TABLE model_atom_local_potential "
         "ADD COLUMN neighbor_count_for_peeling INTEGER DEFAULT 0;");
+}
+
+void MigrateLocalGaussianResultColumns(rhbm_gem::SQLiteWrapper & database)
+{
+    database.Execute("BEGIN TRANSACTION;");
+    try
+    {
+        database.Execute(
+            "ALTER TABLE model_atom_local_potential "
+            "RENAME TO model_atom_local_potential_v10;");
+        database.Execute(R"sql(
+            CREATE TABLE model_atom_local_potential (
+                key_tag TEXT,
+                serial_id INTEGER,
+                raw_sampling_size INTEGER,
+                raw_distance_and_map_value_list BLOB,
+                peeling_sampling_size INTEGER,
+                peeling_distance_and_map_value_list BLOB,
+                amplitude_estimate_ols_1st DOUBLE,
+                width_estimate_ols_1st DOUBLE,
+                intercept_estimate_ols_1st DOUBLE,
+                amplitude_estimate_mdpde_1st DOUBLE,
+                width_estimate_mdpde_1st DOUBLE,
+                intercept_estimate_mdpde_1st DOUBLE,
+                alpha_r_1st DOUBLE,
+                amplitude_estimate_ols_2nd DOUBLE,
+                width_estimate_ols_2nd DOUBLE,
+                intercept_estimate_ols_2nd DOUBLE,
+                amplitude_estimate_mdpde_2nd DOUBLE,
+                width_estimate_mdpde_2nd DOUBLE,
+                intercept_estimate_mdpde_2nd DOUBLE,
+                alpha_r_2nd DOUBLE,
+                amplitude_estimate_ols_3rd DOUBLE,
+                width_estimate_ols_3rd DOUBLE,
+                intercept_estimate_ols_3rd DOUBLE,
+                amplitude_estimate_mdpde_3rd DOUBLE,
+                width_estimate_mdpde_3rd DOUBLE,
+                intercept_estimate_mdpde_3rd DOUBLE,
+                alpha_r_3rd DOUBLE,
+                neighbor_count_for_peeling INTEGER DEFAULT 0,
+                PRIMARY KEY (key_tag, serial_id),
+                FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
+            );
+        )sql");
+        database.Execute(R"sql(
+            INSERT INTO model_atom_local_potential (
+                key_tag, serial_id,
+                raw_sampling_size, raw_distance_and_map_value_list,
+                peeling_sampling_size, peeling_distance_and_map_value_list,
+                amplitude_estimate_ols_1st, width_estimate_ols_1st,
+                intercept_estimate_ols_1st, amplitude_estimate_mdpde_1st,
+                width_estimate_mdpde_1st, intercept_estimate_mdpde_1st,
+                alpha_r_1st,
+                amplitude_estimate_ols_2nd, width_estimate_ols_2nd,
+                intercept_estimate_ols_2nd, amplitude_estimate_mdpde_2nd,
+                width_estimate_mdpde_2nd, intercept_estimate_mdpde_2nd,
+                alpha_r_2nd,
+                amplitude_estimate_ols_3rd, width_estimate_ols_3rd,
+                intercept_estimate_ols_3rd, amplitude_estimate_mdpde_3rd,
+                width_estimate_mdpde_3rd, intercept_estimate_mdpde_3rd,
+                alpha_r_3rd, neighbor_count_for_peeling
+            )
+            SELECT
+                key_tag, serial_id,
+                raw_sampling_size, raw_distance_and_map_value_list,
+                peeling_sampling_size, peeling_distance_and_map_value_list,
+                amplitude_estimate_ols, width_estimate_ols,
+                intercept_estimate_ols, amplitude_estimate_mdpde,
+                width_estimate_mdpde, intercept_estimate_mdpde, alpha_r,
+                amplitude_estimate_ols, width_estimate_ols,
+                intercept_estimate_ols, amplitude_estimate_mdpde,
+                width_estimate_mdpde, intercept_estimate_mdpde, alpha_r,
+                amplitude_estimate_ols, width_estimate_ols,
+                intercept_estimate_ols, amplitude_estimate_mdpde,
+                width_estimate_mdpde, intercept_estimate_mdpde, alpha_r,
+                COALESCE(neighbor_count_for_peeling, 0)
+            FROM model_atom_local_potential_v10;
+        )sql");
+        database.Execute("DROP TABLE model_atom_local_potential_v10;");
+        database.Execute("COMMIT;");
+    }
+    catch (...)
+    {
+        database.Execute("ROLLBACK;");
+        throw;
+    }
 }
 
 void MigrateAtomClassKeyColumns(rhbm_gem::SQLiteWrapper & database)
@@ -836,7 +973,8 @@ void ValidateModelSchema(
     SamplingEntryColumnLayout sampling_entry_column_layout,
     bool require_standard_qscore_columns,
     bool require_reference_gaussian_parameter_columns,
-    bool require_neighbor_count_for_peeling_column)
+    bool require_neighbor_count_for_peeling_column,
+    bool atom_local_has_staged_gaussian_columns)
 {
     ValidateRequiredTables(database, kModelCanonicalTableNames, "model");
 
@@ -886,7 +1024,9 @@ void ValidateModelSchema(
 
     if (require_gaussian_intercept_columns)
     {
-        ValidateGaussianInterceptColumns(database);
+        ValidateGaussianInterceptColumns(
+            database,
+            atom_local_has_staged_gaussian_columns);
     }
     ValidateSamplingEntryColumnLayout(
         database,
@@ -920,7 +1060,8 @@ void ValidateCurrentSchema(
         SamplingEntryColumnLayout::RawAndPeeling,
     bool require_standard_qscore_columns = true,
     bool require_reference_gaussian_parameter_columns = true,
-    bool require_neighbor_count_for_peeling_column = true)
+    bool require_neighbor_count_for_peeling_column = true,
+    bool atom_local_has_staged_gaussian_columns = true)
 {
     if (!HasTable(database, std::string(kCatalogTableName)))
     {
@@ -939,7 +1080,8 @@ void ValidateCurrentSchema(
         sampling_entry_column_layout,
         require_standard_qscore_columns,
         require_reference_gaussian_parameter_columns,
-        require_neighbor_count_for_peeling_column);
+        require_neighbor_count_for_peeling_column,
+        atom_local_has_staged_gaussian_columns);
     ValidateMapSchema(database);
     ValidateCatalogConsistency(database, "model", ListModelKeys(database));
     ValidateCatalogConsistency(database, "map", ListMapKeys(database));
@@ -962,6 +1104,22 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
         ValidateCurrentSchema(database);
         return;
     }
+    if (raw_version == 10)
+    {
+        ValidateCurrentSchema(
+            database,
+            true,
+            false,
+            SamplingEntryColumnLayout::RawAndPeeling,
+            true,
+            true,
+            true,
+            false);
+        MigrateLocalGaussianResultColumns(database);
+        SetSchemaVersion(database);
+        ValidateCurrentSchema(database);
+        return;
+    }
     if (raw_version == 9)
     {
         ValidateCurrentSchema(
@@ -971,8 +1129,10 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
             SamplingEntryColumnLayout::RawAndPeeling,
             true,
             true,
+            false,
             false);
         MigrateNeighborCountForPeelingColumn(database);
+        MigrateLocalGaussianResultColumns(database);
         SetSchemaVersion(database);
         ValidateCurrentSchema(database);
         return;
@@ -986,6 +1146,7 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
             SamplingEntryColumnLayout::LegacyRawOnly,
             false,
             false,
+            false,
             false);
         MigrateGaussianInterceptColumns(database);
         MigrateAtomClassKeyColumns(database);
@@ -994,6 +1155,7 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
         MigrateReferenceGaussianParameterColumns(database);
         MigrateSamplingEntryColumnsToRawPeeling(database);
         MigrateNeighborCountForPeelingColumn(database);
+        MigrateLocalGaussianResultColumns(database);
         SetSchemaVersion(database);
         ValidateCurrentSchema(database);
         return;
@@ -1007,6 +1169,7 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
             SamplingEntryColumnLayout::LegacyRawOnly,
             false,
             false,
+            false,
             false);
         MigrateAtomClassKeyColumns(database);
         AddLegacyUpdatedSamplingColumns(database);
@@ -1014,6 +1177,7 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
         MigrateReferenceGaussianParameterColumns(database);
         MigrateSamplingEntryColumnsToRawPeeling(database);
         MigrateNeighborCountForPeelingColumn(database);
+        MigrateLocalGaussianResultColumns(database);
         SetSchemaVersion(database);
         ValidateCurrentSchema(database);
         return;
@@ -1027,12 +1191,14 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
             SamplingEntryColumnLayout::LegacyRawOnly,
             false,
             false,
+            false,
             false);
         AddLegacyUpdatedSamplingColumns(database);
         MigrateStandardQScoreColumns(database);
         MigrateReferenceGaussianParameterColumns(database);
         MigrateSamplingEntryColumnsToRawPeeling(database);
         MigrateNeighborCountForPeelingColumn(database);
+        MigrateLocalGaussianResultColumns(database);
         SetSchemaVersion(database);
         ValidateCurrentSchema(database);
         return;
@@ -1046,11 +1212,13 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
             SamplingEntryColumnLayout::LegacyRawAndUpdated,
             false,
             false,
+            false,
             false);
         MigrateStandardQScoreColumns(database);
         MigrateReferenceGaussianParameterColumns(database);
         MigrateSamplingEntryColumnsToRawPeeling(database);
         MigrateNeighborCountForPeelingColumn(database);
+        MigrateLocalGaussianResultColumns(database);
         SetSchemaVersion(database);
         ValidateCurrentSchema(database);
         return;
@@ -1064,10 +1232,12 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
             SamplingEntryColumnLayout::LegacyRawAndUpdated,
             true,
             false,
+            false,
             false);
         MigrateReferenceGaussianParameterColumns(database);
         MigrateSamplingEntryColumnsToRawPeeling(database);
         MigrateNeighborCountForPeelingColumn(database);
+        MigrateLocalGaussianResultColumns(database);
         SetSchemaVersion(database);
         ValidateCurrentSchema(database);
         return;
@@ -1081,9 +1251,11 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
             SamplingEntryColumnLayout::LegacyRawAndUpdated,
             true,
             true,
+            false,
             false);
         MigrateSamplingEntryColumnsToRawPeeling(database);
         MigrateNeighborCountForPeelingColumn(database);
+        MigrateLocalGaussianResultColumns(database);
         SetSchemaVersion(database);
         ValidateCurrentSchema(database);
         return;

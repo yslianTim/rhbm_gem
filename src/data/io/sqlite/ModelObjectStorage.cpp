@@ -148,13 +148,27 @@ inline constexpr std::string_view kCreateModelAtomLocalTableSql = R"sql(
         raw_distance_and_map_value_list BLOB,
         peeling_sampling_size INTEGER,
         peeling_distance_and_map_value_list BLOB,
-        amplitude_estimate_ols DOUBLE,
-        width_estimate_ols DOUBLE,
-        intercept_estimate_ols DOUBLE,
-        amplitude_estimate_mdpde DOUBLE,
-        width_estimate_mdpde DOUBLE,
-        intercept_estimate_mdpde DOUBLE,
-        alpha_r DOUBLE,
+        amplitude_estimate_ols_1st DOUBLE,
+        width_estimate_ols_1st DOUBLE,
+        intercept_estimate_ols_1st DOUBLE,
+        amplitude_estimate_mdpde_1st DOUBLE,
+        width_estimate_mdpde_1st DOUBLE,
+        intercept_estimate_mdpde_1st DOUBLE,
+        alpha_r_1st DOUBLE,
+        amplitude_estimate_ols_2nd DOUBLE,
+        width_estimate_ols_2nd DOUBLE,
+        intercept_estimate_ols_2nd DOUBLE,
+        amplitude_estimate_mdpde_2nd DOUBLE,
+        width_estimate_mdpde_2nd DOUBLE,
+        intercept_estimate_mdpde_2nd DOUBLE,
+        alpha_r_2nd DOUBLE,
+        amplitude_estimate_ols_3rd DOUBLE,
+        width_estimate_ols_3rd DOUBLE,
+        intercept_estimate_ols_3rd DOUBLE,
+        amplitude_estimate_mdpde_3rd DOUBLE,
+        width_estimate_mdpde_3rd DOUBLE,
+        intercept_estimate_mdpde_3rd DOUBLE,
+        alpha_r_3rd DOUBLE,
         neighbor_count_for_peeling INTEGER DEFAULT 0,
         PRIMARY KEY (key_tag, serial_id),
         FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
@@ -357,10 +371,19 @@ inline constexpr auto kInsertModelAtomLocalSql = R"sql(
     INSERT OR REPLACE INTO model_atom_local_potential (
         key_tag, serial_id, raw_sampling_size, raw_distance_and_map_value_list,
         peeling_sampling_size, peeling_distance_and_map_value_list,
-        amplitude_estimate_ols, width_estimate_ols, intercept_estimate_ols,
-        amplitude_estimate_mdpde, width_estimate_mdpde, intercept_estimate_mdpde, alpha_r,
+        amplitude_estimate_ols_1st, width_estimate_ols_1st, intercept_estimate_ols_1st,
+        amplitude_estimate_mdpde_1st, width_estimate_mdpde_1st,
+        intercept_estimate_mdpde_1st, alpha_r_1st,
+        amplitude_estimate_ols_2nd, width_estimate_ols_2nd, intercept_estimate_ols_2nd,
+        amplitude_estimate_mdpde_2nd, width_estimate_mdpde_2nd,
+        intercept_estimate_mdpde_2nd, alpha_r_2nd,
+        amplitude_estimate_ols_3rd, width_estimate_ols_3rd, intercept_estimate_ols_3rd,
+        amplitude_estimate_mdpde_3rd, width_estimate_mdpde_3rd,
+        intercept_estimate_mdpde_3rd, alpha_r_3rd,
         neighbor_count_for_peeling
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 )sql"sv;
 
 inline constexpr auto kInsertModelAtomPosteriorSql = R"sql(
@@ -435,8 +458,15 @@ inline constexpr auto kSelectModelAtomLocalSql = R"sql(
     SELECT
         serial_id, raw_sampling_size, raw_distance_and_map_value_list,
         COALESCE(peeling_sampling_size, 0), peeling_distance_and_map_value_list,
-        amplitude_estimate_ols, width_estimate_ols, intercept_estimate_ols,
-        amplitude_estimate_mdpde, width_estimate_mdpde, intercept_estimate_mdpde, alpha_r,
+        amplitude_estimate_ols_1st, width_estimate_ols_1st, intercept_estimate_ols_1st,
+        amplitude_estimate_mdpde_1st, width_estimate_mdpde_1st,
+        intercept_estimate_mdpde_1st, alpha_r_1st,
+        amplitude_estimate_ols_2nd, width_estimate_ols_2nd, intercept_estimate_ols_2nd,
+        amplitude_estimate_mdpde_2nd, width_estimate_mdpde_2nd,
+        intercept_estimate_mdpde_2nd, alpha_r_2nd,
+        amplitude_estimate_ols_3rd, width_estimate_ols_3rd, intercept_estimate_ols_3rd,
+        amplitude_estimate_mdpde_3rd, width_estimate_mdpde_3rd,
+        intercept_estimate_mdpde_3rd, alpha_r_3rd,
         COALESCE(neighbor_count_for_peeling, 0)
     FROM model_atom_local_potential WHERE key_tag = ?;
 )sql"sv;
@@ -981,7 +1011,6 @@ void SaveAtomLocalPotentialEntryList(
 
         batch.Execute([&](SQLiteWrapper & statement_db)
         {
-            const auto & gaussian_result{ entry->GaussianResult() };
             statement_db.Bind<std::string>(1, key_tag);
             statement_db.Bind<int>(2, atom_object->GetSerialID());
             statement_db.Bind<int>(3, entry->RawSamplingEntryCount());
@@ -990,14 +1019,37 @@ void SaveAtomLocalPotentialEntryList(
             statement_db.Bind<int>(5, entry->PeelingSamplingEntryCount());
             statement_db.Bind<LocalPotentialSampleList>(
                 6, entry->PeelingSamplingEntries());
-            statement_db.Bind<double>(7, gaussian_result.ols.GetModel().GetAmplitude());
-            statement_db.Bind<double>(8, gaussian_result.ols.GetModel().GetWidth());
-            statement_db.Bind<double>(9, gaussian_result.ols.GetModel().GetOffset());
-            statement_db.Bind<double>(10, gaussian_result.mdpde.GetModel().GetAmplitude());
-            statement_db.Bind<double>(11, gaussian_result.mdpde.GetModel().GetWidth());
-            statement_db.Bind<double>(12, gaussian_result.mdpde.GetModel().GetOffset());
-            statement_db.Bind<double>(13, gaussian_result.alpha_r);
-            statement_db.Bind<int>(14, entry->NeighborCountForPeeling());
+            const auto bind_gaussian_result = [&entry, &statement_db](
+                int first_parameter_index,
+                LocalFittingStage stage)
+            {
+                const auto & gaussian_result{ entry->GaussianResult(stage) };
+                statement_db.Bind<double>(
+                    first_parameter_index,
+                    gaussian_result.ols.GetModel().GetAmplitude());
+                statement_db.Bind<double>(
+                    first_parameter_index + 1,
+                    gaussian_result.ols.GetModel().GetWidth());
+                statement_db.Bind<double>(
+                    first_parameter_index + 2,
+                    gaussian_result.ols.GetModel().GetOffset());
+                statement_db.Bind<double>(
+                    first_parameter_index + 3,
+                    gaussian_result.mdpde.GetModel().GetAmplitude());
+                statement_db.Bind<double>(
+                    first_parameter_index + 4,
+                    gaussian_result.mdpde.GetModel().GetWidth());
+                statement_db.Bind<double>(
+                    first_parameter_index + 5,
+                    gaussian_result.mdpde.GetModel().GetOffset());
+                statement_db.Bind<double>(
+                    first_parameter_index + 6,
+                    gaussian_result.alpha_r);
+            };
+            bind_gaussian_result(7, LocalFittingStage::First);
+            bind_gaussian_result(14, LocalFittingStage::Second);
+            bind_gaussian_result(21, LocalFittingStage::Third);
+            statement_db.Bind<int>(28, entry->NeighborCountForPeeling());
         });
     }
 }
@@ -1012,7 +1064,9 @@ void SaveAtomLocalPotentialEntrySubList(
     {
         auto * entry{ ModelAnalysisData::Of(model_obj).FindAtomLocalEntry(*atom_object) };
         if (entry == nullptr) continue;
-        const auto & gaussian_result{ entry->GaussianResult() };
+        const auto & gaussian_result{
+            entry->GaussianResult(LocalFittingStage::Third)
+        };
         if (!gaussian_result.posterior.has_value()) continue;
         const auto & posterior{ gaussian_result.posterior.value() };
 
@@ -1109,6 +1163,7 @@ void LoadAtomLocalPotentialEntrySubList(
                 database.GetColumn<double>(6) }
         };
         entry->SetPosteriorResult(
+            LocalFittingStage::Third,
             posterior,
             static_cast<bool>(database.GetColumn<int>(7)),
             database.GetColumn<double>(8));
@@ -1144,24 +1199,37 @@ std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>> LoadAtomLocalPoten
         entry->SetPeelingSamplingEntries(
             database.GetLocalPotentialSampleListColumn(
                 4, peeling_sampling_size));
-        LocalGaussianResult gaussian_result;
-        gaussian_result.ols = GaussianModel3DWithUncertainty{
-            GaussianModel3D{
-                database.GetColumn<double>(5),
-                database.GetColumn<double>(6),
-                database.GetColumn<double>(7) },
-            GaussianModel3DUncertainty{}
+        const auto read_gaussian_result = [&database](int first_column_index)
+        {
+            LocalGaussianResult gaussian_result;
+            gaussian_result.ols = GaussianModel3DWithUncertainty{
+                GaussianModel3D{
+                    database.GetColumn<double>(first_column_index),
+                    database.GetColumn<double>(first_column_index + 1),
+                    database.GetColumn<double>(first_column_index + 2) },
+                GaussianModel3DUncertainty{}
+            };
+            gaussian_result.mdpde = GaussianModel3DWithUncertainty{
+                GaussianModel3D{
+                    database.GetColumn<double>(first_column_index + 3),
+                    database.GetColumn<double>(first_column_index + 4),
+                    database.GetColumn<double>(first_column_index + 5) },
+                GaussianModel3DUncertainty{}
+            };
+            gaussian_result.alpha_r =
+                database.GetColumn<double>(first_column_index + 6);
+            return gaussian_result;
         };
-        gaussian_result.mdpde = GaussianModel3DWithUncertainty{
-            GaussianModel3D{
-                database.GetColumn<double>(8),
-                database.GetColumn<double>(9),
-                database.GetColumn<double>(10) },
-            GaussianModel3DUncertainty{}
-        };
-        gaussian_result.alpha_r = database.GetColumn<double>(11);
-        entry->SetGaussianResult(gaussian_result);
-        entry->SetNeighborCountForPeeling(database.GetColumn<int>(12));
+        entry->SetGaussianResult(
+            LocalFittingStage::First,
+            read_gaussian_result(5));
+        entry->SetGaussianResult(
+            LocalFittingStage::Second,
+            read_gaussian_result(12));
+        entry->SetGaussianResult(
+            LocalFittingStage::Third,
+            read_gaussian_result(19));
+        entry->SetNeighborCountForPeeling(database.GetColumn<int>(26));
         entry_map[serial_id] = std::move(entry);
     }
 

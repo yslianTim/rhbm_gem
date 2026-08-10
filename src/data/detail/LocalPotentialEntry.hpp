@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdexcept>
 #include <utility>
 
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
@@ -11,14 +12,19 @@ class LocalPotentialEntry
 {
     LocalPotentialSampleList m_raw_sampling_entries;
     LocalPotentialSampleList m_peeling_sampling_entries;
-    LocalGaussianResult m_gaussian_result;
+    LocalGaussianResult m_gaussian_result_1st;
+    LocalGaussianResult m_gaussian_result_2nd;
+    LocalGaussianResult m_gaussian_result_3rd;
     int m_neighbor_count_for_peeling{ 0 };
 
 public:
     LocalPotentialEntry() = default;
     ~LocalPotentialEntry() = default;
 
-    void SetAlphaR(double value) { m_gaussian_result.alpha_r = value; }
+    void SetAlphaR(LocalFittingStage stage, double value)
+    {
+        GaussianResult(stage).alpha_r = value;
+    }
     void SetRawSamplingEntries(LocalPotentialSampleList value)
     {
         m_raw_sampling_entries = std::move(value);
@@ -31,22 +37,24 @@ public:
     {
         m_neighbor_count_for_peeling = value;
     }
-    void SetGaussianResult(LocalGaussianResult value)
+    void SetGaussianResult(LocalFittingStage stage, LocalGaussianResult value)
     {
-        m_gaussian_result = std::move(value);
+        GaussianResult(stage) = std::move(value);
     }
     void SetPosteriorResult(
+        LocalFittingStage stage,
         GaussianModel3DWithUncertainty posterior,
         bool is_outlier,
         double statistical_distance)
     {
-        m_gaussian_result.posterior = std::move(posterior);
-        m_gaussian_result.is_outlier = is_outlier;
-        m_gaussian_result.statistical_distance = statistical_distance;
+        auto & result{ GaussianResult(stage) };
+        result.posterior = std::move(posterior);
+        result.is_outlier = is_outlier;
+        result.statistical_distance = statistical_distance;
     }
-    void ClearTransientFitState()
+    void ClearTransientFitState(LocalFittingStage stage)
     {
-        m_gaussian_result.fit_result.reset();
+        GaussianResult(stage).fit_result.reset();
     }
 
     int RawSamplingEntryCount() const
@@ -58,7 +66,26 @@ public:
         return static_cast<int>(m_peeling_sampling_entries.size());
     }
     int NeighborCountForPeeling() const { return m_neighbor_count_for_peeling; }
-    const LocalGaussianResult & GaussianResult() const { return m_gaussian_result; }
+    LocalGaussianResult & GaussianResult(LocalFittingStage stage)
+    {
+        switch (stage)
+        {
+            case LocalFittingStage::First:  return m_gaussian_result_1st;
+            case LocalFittingStage::Second: return m_gaussian_result_2nd;
+            case LocalFittingStage::Third:  return m_gaussian_result_3rd;
+        }
+        throw std::invalid_argument("Unknown local fitting stage.");
+    }
+    const LocalGaussianResult & GaussianResult(LocalFittingStage stage) const
+    {
+        switch (stage)
+        {
+            case LocalFittingStage::First:  return m_gaussian_result_1st;
+            case LocalFittingStage::Second: return m_gaussian_result_2nd;
+            case LocalFittingStage::Third:  return m_gaussian_result_3rd;
+        }
+        throw std::invalid_argument("Unknown local fitting stage.");
+    }
     const LocalPotentialSampleList & RawSamplingEntries() const { return m_raw_sampling_entries; }
     const LocalPotentialSampleList & PeelingSamplingEntries() const { return m_peeling_sampling_entries; }
 };

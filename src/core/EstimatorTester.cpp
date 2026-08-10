@@ -103,13 +103,15 @@ Eigen::MatrixXd EstimateAtomicModelFirstStageModels(
     for (int i = 0; i < replica_size; i++)
     {
         ModelObject model_object{ *input.replica_model_objects.at(static_cast<size_t>(i)) };
-        RunLocalAlphaTraining(model_object, options, false);
-        RunFixedOffsetLocalFitting(model_object, options, false);
+        RunLocalAlphaTraining(model_object, options, LocalFittingStage::First);
+        RunFixedOffsetLocalFitting(model_object, options, LocalFittingStage::First);
 
         const auto local_view{
             AtomLocalPotentialView::RequireFor(*model_object.GetSelectedAtoms().front())
         };
-        const auto & gaussian_result{ local_view.GetGaussianResult() };
+        const auto & gaussian_result{
+            local_view.GetGaussianResult(LocalFittingStage::First)
+        };
         estimation_matrix.col(i) = gaussian_result.mdpde.GetModel().ToVector();
     }
 
@@ -138,7 +140,9 @@ Eigen::MatrixXd EstimateAtomicModelFullStageModels(
         const auto local_view{
             AtomLocalPotentialView::RequireFor(*model_object.GetSelectedAtoms().front())
         };
-        const auto & gaussian_result{ local_view.GetGaussianResult() };
+        const auto & gaussian_result{
+            local_view.GetGaussianResult(LocalFittingStage::Third)
+        };
         estimation_matrix.col(i) = gaussian_result.mdpde.GetModel().ToVector();
     }
 
@@ -418,7 +422,9 @@ BiasStatistics RunAtomicModelFullEstimationTest(
         const auto local_view{
             AtomLocalPotentialView::RequireFor(*model_object.GetSelectedAtoms().front())
         };
-        const auto & gaussian_result{ local_view.GetGaussianResult() };
+        const auto & gaussian_result{
+            local_view.GetGaussianResult(LocalFittingStage::Third)
+        };
         bias_matrix.col(i) =
             CalculateNormalizedBias(gaussian_result.mdpde.GetModel(), input.gaus_true);
     }

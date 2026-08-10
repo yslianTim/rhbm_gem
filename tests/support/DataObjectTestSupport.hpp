@@ -206,6 +206,45 @@ inline void ExecuteSqlWithForeignKeysOff(
     database.Execute(sql);
 }
 
+inline void ConvertLocalGaussianColumnsToLegacyFinal(
+    const std::filesystem::path & database_path)
+{
+    rg::SQLiteWrapper database{ database_path };
+    for (const auto * column_name : {
+             "amplitude_estimate_ols",
+             "width_estimate_ols",
+             "intercept_estimate_ols",
+             "amplitude_estimate_mdpde",
+             "width_estimate_mdpde",
+             "intercept_estimate_mdpde",
+             "alpha_r" })
+    {
+        database.Execute(
+            "ALTER TABLE model_atom_local_potential ADD COLUMN "
+            + std::string(column_name) + " DOUBLE DEFAULT 0.0;");
+        database.Execute(
+            "UPDATE model_atom_local_potential SET "
+            + std::string(column_name) + " = "
+            + std::string(column_name) + "_3rd;");
+    }
+    for (const auto * suffix : { "1st", "2nd", "3rd" })
+    {
+        for (const auto * column_prefix : {
+                 "amplitude_estimate_ols_",
+                 "width_estimate_ols_",
+                 "intercept_estimate_ols_",
+                 "amplitude_estimate_mdpde_",
+                 "width_estimate_mdpde_",
+                 "intercept_estimate_mdpde_",
+                 "alpha_r_" })
+        {
+            database.Execute(
+                "ALTER TABLE model_atom_local_potential DROP COLUMN "
+                + std::string(column_prefix) + suffix + ";");
+        }
+    }
+}
+
 inline void ConvertSamplingEntryColumnsToLegacyRawOnly(
     const std::filesystem::path & database_path)
 {

@@ -81,19 +81,22 @@ const LocalPotentialEntry & AtomLocalPotentialView::RequireEntry(const char * co
     return RequireLocalEntry(FindEntry(), context);
 }
 
-const LocalGaussianResult & AtomLocalPotentialView::GetGaussianResult() const
+const LocalGaussianResult & AtomLocalPotentialView::GetGaussianResult(
+    LocalFittingStage stage) const
 {
-    return RequireEntry("Local Gaussian result").GaussianResult();
+    return RequireEntry("Local Gaussian result").GaussianResult(stage);
 }
 
-const GaussianModel3D & AtomLocalPotentialView::GetEstimateOLS() const
+const GaussianModel3D & AtomLocalPotentialView::GetEstimateOLS(
+    LocalFittingStage stage) const
 {
-    return RequireEntry("Local estimate OLS").GaussianResult().ols.GetModel();
+    return RequireEntry("Local estimate OLS").GaussianResult(stage).ols.GetModel();
 }
 
-const GaussianModel3D & AtomLocalPotentialView::GetEstimateMDPDE() const
+const GaussianModel3D & AtomLocalPotentialView::GetEstimateMDPDE(
+    LocalFittingStage stage) const
 {
-    return RequireEntry("Local estimate MDPDE").GaussianResult().mdpde.GetModel();
+    return RequireEntry("Local estimate MDPDE").GaussianResult(stage).mdpde.GetModel();
 }
 
 LocalPotentialSampleList AtomLocalPotentialView::GetRawSamplingEntries(bool apply_selection) const
@@ -113,9 +116,9 @@ int AtomLocalPotentialView::GetNeighborCountForPeeling() const
     return RequireEntry("Local peeling neighbor count").NeighborCountForPeeling();
 }
 
-double AtomLocalPotentialView::GetAlphaR() const
+double AtomLocalPotentialView::GetAlphaR(LocalFittingStage stage) const
 {
-    return RequireEntry("Local alpha-r").GaussianResult().alpha_r;
+    return RequireEntry("Local alpha-r").GaussianResult(stage).alpha_r;
 }
 
 } // namespace rhbm_gem

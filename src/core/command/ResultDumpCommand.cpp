@@ -117,7 +117,10 @@ void RunAtomOutlierDumping(
         outfile << "SerialID,Residue,Element,Spot\n";
         for (auto * atom : model_object->GetSelectedAtoms())
         {
-            const auto & result{ AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult() };
+            const auto & result{
+                AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult(
+                    LocalFittingStage::Third)
+            };
             if (!result.posterior.has_value() || !result.is_outlier) continue;
             outfile << atom->GetSerialID() << ','
                     << ChemicalDataHelper::GetLabel(atom->GetResidue()) << ','
@@ -279,7 +282,9 @@ void RunGausEstimatesDumping(
         for (auto * atom : model_object->GetSelectedAtoms())
         {
             const auto entry{ AtomLocalPotentialView::RequireFor(*atom) };
-            const auto & estimate{ entry.GetEstimateMDPDE() };
+            const auto & estimate{
+                entry.GetEstimateMDPDE(LocalFittingStage::Third)
+            };
             outfile << atom->GetSerialID() << ',' << estimate.GetAmplitude() << ','
                     << estimate.GetWidth() << ',' << atom->GetPosition().at(0) << ','
                     << atom->GetPosition().at(1) << ',' << atom->GetPosition().at(2) << ','

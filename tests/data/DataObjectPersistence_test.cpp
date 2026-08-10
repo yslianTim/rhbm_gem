@@ -169,13 +169,14 @@ TEST(DataObjectPersistenceTest, FinalV2CatalogDatabaseRemainsLoadable)
         data_test::SaveTinyMapThroughRepository(repository, "map", 3.0f);
     }
 
+    data_test::ConvertLocalGaussianColumnsToLegacyFinal(database_path);
     data_test::ConvertSamplingEntryColumnsToLegacyRawOnly(database_path);
     data_test::SetUserVersion(database_path, 5);
 
     rg::DataRepository repository{ database_path };
     EXPECT_NE(repository.LoadModel("model"), nullptr);
     EXPECT_NE(repository.LoadMap("map"), nullptr);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 10);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 11);
 }
 
 TEST(DataObjectPersistenceTest, RawSamplingSelectionRoundTripPreservesUnselectedSamples)
@@ -293,6 +294,7 @@ TEST(DataObjectPersistenceTest, VersionEightSamplingColumnsMigrateToRawAndPeelin
         repository.SaveModel(*model, "model");
     }
 
+    data_test::ConvertLocalGaussianColumnsToLegacyFinal(database_path);
     data_test::ConvertSamplingEntryColumnsToLegacyRawAndUpdated(database_path);
     data_test::SetUserVersion(database_path, 8);
     ASSERT_TRUE(data_test::HasColumn(
@@ -304,7 +306,7 @@ TEST(DataObjectPersistenceTest, VersionEightSamplingColumnsMigrateToRawAndPeelin
     auto loaded_model{ repository.LoadModel("model") };
     ASSERT_NE(loaded_model, nullptr);
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 10);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 11);
     EXPECT_TRUE(data_test::HasColumn(
         database_path, "model_atom_local_potential", "raw_sampling_size"));
     EXPECT_TRUE(data_test::HasColumn(
@@ -374,7 +376,35 @@ TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
             rg::GaussianModel3D{ 1.5, 0.8, 0.22 },
             rg::GaussianModel3DUncertainty{}
         };
-        local_editor.SetGaussianResult(local_result);
+        auto first_result{ local_result };
+        first_result.alpha_r = 0.1;
+        first_result.ols = rg::GaussianModel3DWithUncertainty{
+            rg::GaussianModel3D{ 1.0, 0.6, 1.11 },
+            rg::GaussianModel3DUncertainty{}
+        };
+        first_result.mdpde = rg::GaussianModel3DWithUncertainty{
+            rg::GaussianModel3D{ 1.5, 0.8, 1.22 },
+            rg::GaussianModel3DUncertainty{}
+        };
+        auto second_result{ local_result };
+        second_result.alpha_r = 0.2;
+        second_result.ols = rg::GaussianModel3DWithUncertainty{
+            rg::GaussianModel3D{ 1.0, 0.6, 2.11 },
+            rg::GaussianModel3DUncertainty{}
+        };
+        second_result.mdpde = rg::GaussianModel3DWithUncertainty{
+            rg::GaussianModel3D{ 1.5, 0.8, 2.22 },
+            rg::GaussianModel3DUncertainty{}
+        };
+        local_editor.SetGaussianResult(
+            rg::LocalFittingStage::First,
+            first_result);
+        local_editor.SetGaussianResult(
+            rg::LocalFittingStage::Second,
+            second_result);
+        local_editor.SetGaussianResult(
+            rg::LocalFittingStage::Third,
+            local_result);
 
         analysis.RebuildAtomGroupsFromSelection();
         const auto analysis_view{ model->GetAnalysisView() };
@@ -405,7 +435,10 @@ TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
             member_result.statistical_distance = 1.5 + static_cast<double>(i);
             group_result.member_results.emplace_back(member_result);
         }
-        analysis.ApplyAtomGroupGaussianResult(group_key, group_result);
+        analysis.ApplyAtomGroupGaussianResult(
+            rg::LocalFittingStage::Third,
+            group_key,
+            group_result);
 
         repository.SaveModel(*model, "model");
     }
@@ -417,8 +450,22 @@ TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
     const auto local_view{
         rg::AtomLocalPotentialView::RequireFor(*loaded_model->GetAtomList().at(0))
     };
-    EXPECT_DOUBLE_EQ(local_view.GetGaussianResult().ols.GetModel().GetOffset(), 0.11);
-    EXPECT_DOUBLE_EQ(local_view.GetGaussianResult().mdpde.GetModel().GetOffset(), 0.22);
+    EXPECT_DOUBLE_EQ(
+        local_view.GetGaussianResult(rg::LocalFittingStage::First)
+            .mdpde.GetModel().GetOffset(),
+        1.22);
+    EXPECT_DOUBLE_EQ(
+        local_view.GetGaussianResult(rg::LocalFittingStage::Second)
+            .mdpde.GetModel().GetOffset(),
+        2.22);
+    EXPECT_DOUBLE_EQ(
+        local_view.GetGaussianResult(rg::LocalFittingStage::Third)
+            .ols.GetModel().GetOffset(),
+        0.11);
+    EXPECT_DOUBLE_EQ(
+        local_view.GetGaussianResult(rg::LocalFittingStage::Third)
+            .mdpde.GetModel().GetOffset(),
+        0.22);
 
     const auto loaded_analysis_view{ loaded_model->GetAnalysisView() };
     EXPECT_DOUBLE_EQ(
@@ -447,7 +494,8 @@ TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
     }
     ASSERT_NE(annotated_atom, nullptr);
     const auto & gaussian_result{
-        rg::AtomLocalPotentialView::RequireFor(*annotated_atom).GetGaussianResult()
+        rg::AtomLocalPotentialView::RequireFor(*annotated_atom)
+            .GetGaussianResult(rg::LocalFittingStage::Third)
     };
     ASSERT_TRUE(gaussian_result.posterior.has_value());
     EXPECT_DOUBLE_EQ(gaussian_result.posterior->GetModel().GetOffset(), 0.66);
@@ -468,6 +516,7 @@ TEST(DataObjectPersistenceTest, LegacyV2SamplingBlobLoadsAsSelectedAndMigratesVe
         repository.SaveModel(*model, "model");
     }
 
+    data_test::ConvertLocalGaussianColumnsToLegacyFinal(database_path);
     data_test::ConvertSamplingEntryColumnsToLegacyRawOnly(database_path);
 
     {
@@ -515,7 +564,7 @@ TEST(DataObjectPersistenceTest, LegacyV2SamplingBlobLoadsAsSelectedAndMigratesVe
     };
 
     EXPECT_TRUE(peeling_entries.empty());
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 10);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 11);
 }
 
 TEST(DataObjectPersistenceTest, DatabaseRoundTripPreservesChainMetadataAndSymmetryFiltering)

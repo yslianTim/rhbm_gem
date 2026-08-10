@@ -26,7 +26,7 @@ public:
     const GaussianModel3D & GetAtomGroupPrior(GroupKey group_key) const;
     GaussianModel3DWithUncertainty GetAtomGroupPriorWithUncertainty(GroupKey group_key) const;
     const std::vector<AtomObject *> & GetAtomObjectList(GroupKey group_key) const;
-    double GetAtomAlphaR(GroupKey group_key) const;
+    double GetAtomAlphaR(LocalFittingStage stage, GroupKey group_key) const;
     double GetAtomAlphaG(GroupKey group_key) const;
     std::vector<GroupKey> CollectAtomGroupKeys() const;
     std::string GetAtomCountingSummary() const;

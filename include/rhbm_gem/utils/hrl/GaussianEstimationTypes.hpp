@@ -8,6 +8,13 @@
 
 namespace rhbm_gem {
 
+enum class LocalFittingStage
+{
+    First,
+    Second,
+    Third
+};
+
 struct LocalGaussianResult
 {
     double alpha_r{ 0.0 };

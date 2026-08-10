@@ -26,14 +26,16 @@ void AtomLocalPotentialEditor::SetNeighborCountForPeeling(int value)
     m_entry->SetNeighborCountForPeeling(value);
 }
 
-void AtomLocalPotentialEditor::SetGaussianResult(LocalGaussianResult value)
+void AtomLocalPotentialEditor::SetGaussianResult(
+    LocalFittingStage stage,
+    LocalGaussianResult value)
 {
-    m_entry->SetGaussianResult(std::move(value));
+    m_entry->SetGaussianResult(stage, std::move(value));
 }
 
-void AtomLocalPotentialEditor::SetAlphaR(double value)
+void AtomLocalPotentialEditor::SetAlphaR(LocalFittingStage stage, double value)
 {
-    m_entry->SetAlphaR(value);
+    m_entry->SetAlphaR(stage, value);
 }
 
 } // namespace rhbm_gem

@@ -128,7 +128,9 @@ TEST(PotentialPlotBuilderTest, GaussianFunctionsPreserveModelOffset)
         local_model,
         rg::GaussianModel3DUncertainty{}
     };
-    analysis.EnsureAtomLocalPotential(*atom).SetGaussianResult(local_result);
+    analysis.EnsureAtomLocalPotential(*atom).SetGaussianResult(
+        rg::LocalFittingStage::Third,
+        local_result);
 
     rg::PotentialPlotBuilder atom_builder{ atom };
     auto local_function{ atom_builder.CreateAtomLocalGausFunctionMDPDE() };
@@ -155,7 +157,10 @@ TEST(PotentialPlotBuilderTest, GaussianFunctionsPreserveModelOffset)
         rg::GaussianModel3DUncertainty{}
     };
     group_result.member_results.resize(atom_list.size());
-    analysis.ApplyAtomGroupGaussianResult(group_key, group_result);
+    analysis.ApplyAtomGroupGaussianResult(
+        rg::LocalFittingStage::Third,
+        group_key,
+        group_result);
 
     rg::PotentialPlotBuilder model_builder{ model.get() };
     auto mean_function{ model_builder.CreateAtomGroupGausFunctionMean(group_key) };
@@ -221,7 +226,10 @@ TEST(PotentialPlotBuilderTest, ComponentAtomAveragePriorUsesEqualComponentWeight
     };
     first_result.member_results.resize(
         analysis_view.GetAtomObjectList(first_group_key).size());
-    analysis.ApplyAtomGroupGaussianResult(first_group_key, first_result);
+    analysis.ApplyAtomGroupGaussianResult(
+        rg::LocalFittingStage::Third,
+        first_group_key,
+        first_result);
 
     rg::GroupGaussianResult second_result;
     second_result.prior = rg::GaussianModel3DWithUncertainty{
@@ -230,7 +238,10 @@ TEST(PotentialPlotBuilderTest, ComponentAtomAveragePriorUsesEqualComponentWeight
     };
     second_result.member_results.resize(
         analysis_view.GetAtomObjectList(second_group_key).size());
-    analysis.ApplyAtomGroupGaussianResult(second_group_key, second_result);
+    analysis.ApplyAtomGroupGaussianResult(
+        rg::LocalFittingStage::Third,
+        second_group_key,
+        second_result);
 
     const auto average_prior{
         rg::PotentialPlotBuilder::ComputeComponentAtomAveragePrior(analysis_view, atom_key)

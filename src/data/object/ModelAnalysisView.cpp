@@ -56,14 +56,16 @@ const std::vector<AtomObject *> & ModelAnalysisView::GetAtomObjectList(GroupKey 
     return ModelAnalysisData::Of(m_model_object).AtomGroupEntry().GetMembers(group_key);
 }
 
-double ModelAnalysisView::GetAtomAlphaR(GroupKey group_key) const
+double ModelAnalysisView::GetAtomAlphaR(
+    LocalFittingStage stage,
+    GroupKey group_key) const
 {
     const auto & atom_list{ GetAtomObjectList(group_key) };
     if (atom_list.empty())
     {
         throw std::runtime_error("Atom group has no members.");
     }
-    return AtomLocalPotentialView::RequireFor(*atom_list.front()).GetAlphaR();
+    return AtomLocalPotentialView::RequireFor(*atom_list.front()).GetAlphaR(stage);
 }
 
 double ModelAnalysisView::GetAtomAlphaG(GroupKey group_key) const

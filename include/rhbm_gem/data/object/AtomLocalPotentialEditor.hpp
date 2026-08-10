@@ -16,8 +16,8 @@ public:
     void SetRawSamplingEntries(LocalPotentialSampleList value);
     void SetPeelingSamplingEntries(LocalPotentialSampleList value);
     void SetNeighborCountForPeeling(int value);
-    void SetGaussianResult(LocalGaussianResult value);
-    void SetAlphaR(double value);
+    void SetGaussianResult(LocalFittingStage stage, LocalGaussianResult value);
+    void SetAlphaR(LocalFittingStage stage, double value);
 
 private:
     explicit AtomLocalPotentialEditor(LocalPotentialEntry & entry);

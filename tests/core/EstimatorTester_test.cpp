@@ -26,6 +26,7 @@ namespace {
 namespace rt = rhbm_gem::core;
 namespace tdf = rhbm_gem::core;
 namespace rg = rhbm_gem;
+using rg::LocalFittingStage;
 
 std::vector<std::string> SplitCsvLine(const std::string & line)
 {
@@ -192,7 +193,8 @@ double CalculateSelectedAtomResponseMeanSquaredError(const rg::ModelObject & mod
             for (const auto * fitted_atom : selected_atoms)
             {
                 const auto fitted_view{ rg::AtomLocalPotentialView::RequireFor(*fitted_atom) };
-                fitted_response += fitted_view.GetEstimateMDPDE().ResponseAtDistance(
+                fitted_response += fitted_view.GetEstimateMDPDE(
+                    LocalFittingStage::Second).ResponseAtDistance(
                     Distance(sample.point.position, fitted_atom->GetPosition()));
             }
             const auto residual{ static_cast<double>(sample.response) - fitted_response };
@@ -209,10 +211,12 @@ void SetSelectedAtomPosteriorFromMdpde(rg::ModelObject & model_object)
     for (auto * atom : model_object.GetSelectedAtoms())
     {
         auto result{
-            rg::AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult()
+            rg::AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult(
+                LocalFittingStage::First)
         };
         result.posterior = result.mdpde;
         analysis.EnsureAtomLocalPotential(*atom).SetGaussianResult(
+            LocalFittingStage::Second,
             std::move(result));
     }
 }
@@ -236,8 +240,8 @@ std::unique_ptr<rg::ModelObject> BuildSecondStageScaleDiagnosticModel()
     };
     auto model{ std::move(input.replica_model_objects.front()) };
     const auto options{ MakeSecondStageOptions() };
-    rt::RunLocalAlphaTraining(*model, options, false);
-    rt::RunFixedOffsetLocalFitting(*model, options, false);
+    rt::RunLocalAlphaTraining(*model, options, LocalFittingStage::First);
+    rt::RunFixedOffsetLocalFitting(*model, options, LocalFittingStage::First);
     SetSelectedAtomPosteriorFromMdpde(*model);
     return model;
 }
@@ -250,7 +254,8 @@ void SetSelectedAtomEstimateModel(
     for (auto * atom : model_object.GetSelectedAtoms())
     {
         auto result{
-            rg::AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult()
+            rg::AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult(
+                LocalFittingStage::Second)
         };
         result.ols = rg::GaussianModel3DWithUncertainty{
             model,
@@ -260,7 +265,9 @@ void SetSelectedAtomEstimateModel(
             model,
             result.mdpde.GetStandardDeviationModel()
         };
-        analysis.EnsureAtomLocalPotential(*atom).SetGaussianResult(std::move(result));
+        analysis.EnsureAtomLocalPotential(*atom).SetGaussianResult(
+            LocalFittingStage::Second,
+            std::move(result));
     }
 }
 
@@ -282,7 +289,8 @@ void RewriteSamplingResponsesFromSelectedAtomEstimates(rg::ModelObject & model_o
                 const auto fitted_view{
                     rg::AtomLocalPotentialView::RequireFor(*fitted_atom)
                 };
-                response += fitted_view.GetEstimateMDPDE().ResponseAtDistance(
+                response += fitted_view.GetEstimateMDPDE(
+                    LocalFittingStage::Second).ResponseAtDistance(
                     Distance(sample.point.position, fitted_atom->GetPosition()));
             }
             sample.response = static_cast<float>(response);
@@ -316,8 +324,8 @@ std::unique_ptr<rg::ModelObject> BuildSecondStageSuspiciousOffsetDiagnosticModel
     options.distance_max = 1.0;
     options.thread_size = 1;
     options.quiet_mode = true;
-    rt::RunLocalAlphaTraining(*model, options, false);
-    rt::RunFixedOffsetLocalFitting(*model, options, false);
+    rt::RunLocalAlphaTraining(*model, options, LocalFittingStage::First);
+    rt::RunFixedOffsetLocalFitting(*model, options, LocalFittingStage::First);
     SetSelectedAtomPosteriorFromMdpde(*model);
 
     const auto & atom_list{ model->GetSelectedAtoms() };
@@ -355,7 +363,8 @@ void ExpectSelectedAtomEstimatesAreFinite(const rg::ModelObject & model_object)
     for (const auto * atom : model_object.GetSelectedAtoms())
     {
         const auto model{
-            rg::AtomLocalPotentialView::RequireFor(*atom).GetEstimateMDPDE()
+            rg::AtomLocalPotentialView::RequireFor(*atom).GetEstimateMDPDE(
+                LocalFittingStage::Second)
         };
         EXPECT_TRUE(std::isfinite(model.GetAmplitude()));
         EXPECT_TRUE(std::isfinite(model.GetWidth()));
@@ -563,9 +572,23 @@ TEST(
         EXPECT_TRUE(HasTwoFractionalDigits(row.at(column)));
         EXPECT_TRUE(std::isfinite(std::stod(row.at(column))));
     }
-    const auto & final_model{ fitted_view.GetEstimateMDPDE() };
+    const auto & final_model{
+        fitted_view.GetEstimateMDPDE(LocalFittingStage::Third)
+    };
+    const auto & first_model{
+        fitted_view.GetEstimateMDPDE(LocalFittingStage::First)
+    };
+    const auto & second_model{
+        fitted_view.GetEstimateMDPDE(LocalFittingStage::Second)
+    };
+    EXPECT_NEAR(std::stod(row.at(5)), first_model.GetAmplitude(), 0.0051);
+    EXPECT_NEAR(std::stod(row.at(6)), second_model.GetAmplitude(), 0.0051);
     EXPECT_NEAR(std::stod(row.at(7)), final_model.GetAmplitude(), 0.0051);
+    EXPECT_NEAR(std::stod(row.at(8)), first_model.GetWidth(), 0.0051);
+    EXPECT_NEAR(std::stod(row.at(9)), second_model.GetWidth(), 0.0051);
     EXPECT_NEAR(std::stod(row.at(10)), final_model.GetWidth(), 0.0051);
+    EXPECT_NEAR(std::stod(row.at(11)), first_model.GetOffset(), 0.0051);
+    EXPECT_NEAR(std::stod(row.at(12)), second_model.GetOffset(), 0.0051);
     EXPECT_NEAR(std::stod(row.at(13)), final_model.GetOffset(), 0.0051);
 
     {
@@ -647,7 +670,8 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingRollsBackSuspiciousJointOffs
     auto model{ BuildSecondStageSuspiciousOffsetDiagnosticModel() };
     auto * target_atom{ model->GetSelectedAtoms().front() };
     const auto previous_offset{
-        rg::AtomLocalPotentialView::RequireFor(*target_atom).GetEstimateMDPDE().GetOffset()
+        rg::AtomLocalPotentialView::RequireFor(*target_atom)
+            .GetEstimateMDPDE(LocalFittingStage::Second).GetOffset()
     };
 
     rt::FitOptions options;
@@ -659,7 +683,8 @@ TEST(EstimatorTesterTest, RunSecondStageLocalFittingRollsBackSuspiciousJointOffs
     rt::RunSecondStageLocalFitting(*model, options);
 
     const auto fitted_offset{
-        rg::AtomLocalPotentialView::RequireFor(*target_atom).GetEstimateMDPDE().GetOffset()
+        rg::AtomLocalPotentialView::RequireFor(*target_atom)
+            .GetEstimateMDPDE(LocalFittingStage::Second).GetOffset()
     };
     EXPECT_NEAR(fitted_offset, previous_offset, 1.0e-12);
     ExpectSelectedAtomEstimatesAreFinite(*model);

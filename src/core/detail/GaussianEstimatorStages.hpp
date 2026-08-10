@@ -48,15 +48,15 @@ std::vector<char> ExpandSuspiciousSharedOffsetGroups(
 void RunLocalAlphaTraining(
     ModelObject & model_object,
     const FitOptions & options,
-    bool use_peeling_sampling_entries);
+    LocalFittingStage stage);
 void RunFixedOffsetLocalFitting(
     ModelObject & model_object,
     const FitOptions & options,
-    bool use_peeling_sampling_entries);
+    LocalFittingStage stage);
 void RunGroupPotentialFitting(
     ModelObject & model_object,
     const FitOptions & options,
-    bool use_peeling_sampling_entries);
+    LocalFittingStage stage);
 
 bool RunSecondStageLocalFitting(
     ModelObject & model_object,
