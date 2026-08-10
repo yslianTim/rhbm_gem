@@ -530,7 +530,7 @@ TEST(
     EXPECT_EQ(count_occurrences("Run atom group fitting."), 3U);
 
     constexpr std::string_view csv_header{
-        "serial id,residue,spot,neighbors in 5A,neighbor count,peeling ratio,"
+        "serial id,residue,spot,neighbor count,peeling ratio,"
         "amplitude 1st,amplitude 2nd,amplitude 3rd,"
         "width 1st,width 2nd,width 3rd,"
         "offset 1st,offset 2nd,offset 3rd"
@@ -542,13 +542,12 @@ TEST(
     const auto row_begin{ csv_header.size() + 1 };
     const auto row_end{ csv_content.find('\n', row_begin) };
     const auto row{ SplitCsvLine(csv_content.substr(row_begin, row_end - row_begin)) };
-    ASSERT_EQ(row.size(), 15U);
+    ASSERT_EQ(row.size(), 14U);
     const auto * atom{ model->GetSelectedAtoms().front() };
     EXPECT_EQ(std::stoi(row.at(0)), atom->GetSerialID());
     EXPECT_FALSE(row.at(1).empty());
     EXPECT_EQ(row.at(2), atom->GetAtomID());
     EXPECT_EQ(std::stoul(row.at(3)), 0U);
-    EXPECT_EQ(std::stoul(row.at(4)), 0U);
     const auto expected_peeling_ratio{
         rt::detail::CalculateLocalFittingPeelingRatio(
             fitted_view.GetRawSamplingEntries(false),
@@ -556,16 +555,16 @@ TEST(
             true)
     };
     ASSERT_TRUE(expected_peeling_ratio.has_value());
-    EXPECT_NEAR(std::stod(row.at(5)), *expected_peeling_ratio, 0.0051);
-    for (std::size_t column = 5; column < row.size(); column++)
+    EXPECT_NEAR(std::stod(row.at(4)), *expected_peeling_ratio, 0.0051);
+    for (std::size_t column = 4; column < row.size(); column++)
     {
         EXPECT_TRUE(HasTwoFractionalDigits(row.at(column)));
         EXPECT_TRUE(std::isfinite(std::stod(row.at(column))));
     }
     const auto & final_model{ fitted_view.GetEstimateMDPDE() };
-    EXPECT_NEAR(std::stod(row.at(8)), final_model.GetAmplitude(), 0.0051);
-    EXPECT_NEAR(std::stod(row.at(11)), final_model.GetWidth(), 0.0051);
-    EXPECT_NEAR(std::stod(row.at(14)), final_model.GetOffset(), 0.0051);
+    EXPECT_NEAR(std::stod(row.at(7)), final_model.GetAmplitude(), 0.0051);
+    EXPECT_NEAR(std::stod(row.at(10)), final_model.GetWidth(), 0.0051);
+    EXPECT_NEAR(std::stod(row.at(13)), final_model.GetOffset(), 0.0051);
 
     {
         std::ofstream stale_output{ csv_path };

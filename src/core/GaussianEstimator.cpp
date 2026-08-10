@@ -375,7 +375,7 @@ void OutputLocalFittingResultTable(
     std::ostringstream table;
     table << std::fixed << std::setprecision(2);
     table
-        << "serial id,residue,spot,neighbors in 5A,neighbor count,peeling ratio,"
+        << "serial id,residue,spot,neighbor count,peeling ratio,"
         << "amplitude 1st,amplitude 2nd,amplitude 3rd,"
         << "width 1st,width 2nd,width 3rd,"
         << "offset 1st,offset 2nd,offset 3rd";
@@ -395,7 +395,6 @@ void OutputLocalFittingResultTable(
             << serial_id << ','
             << ChemicalDataHelper::GetLabel(atom->GetResidue()) << ','
             << atom->GetAtomID() << ','
-            << second_stage_diagnostics.neighbors_in_5a_by_serial_id.at(serial_id) << ','
             << second_stage_diagnostics.neighbor_count_by_serial_id.at(serial_id) << ',';
         const auto peeling_ratio{
             detail::CalculateLocalFittingPeelingRatio(

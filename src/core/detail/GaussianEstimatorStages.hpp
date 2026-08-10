@@ -61,7 +61,6 @@ void RunGroupPotentialFitting(
 
 struct SecondStageLocalFittingDiagnostics
 {
-    std::unordered_map<int, std::size_t> neighbors_in_5a_by_serial_id{};
     std::unordered_map<int, std::size_t> neighbor_count_by_serial_id{};
     bool peeling_applied{ false };
 };

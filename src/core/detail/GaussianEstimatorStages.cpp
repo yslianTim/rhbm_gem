@@ -58,7 +58,7 @@ constexpr double kSuspiciousProfileNoiseScaleMin{ 1.0e-12 };
 constexpr double kLocalFittingTransformedChangeTolerance{ 1.0e-4 };
 constexpr double kLocalFittingTransformedMaximumChangeTolerance{ 1.0e-3 };
 constexpr double kNeighborContributionDistanceMax{ 2.5 };
-constexpr double kNeighborAtomSearchRange{ 5.0 };
+constexpr double kNeighborAtomSearchRange{ 2.0 * kNeighborContributionDistanceMax };
 constexpr std::size_t kLocalFittingMaximumIterations{ 100 };
 constexpr std::size_t kLocalFittingAuditPatience{ 3 };
 constexpr bool kApplyLocalFittingBestIteration{ true };
@@ -447,7 +447,6 @@ struct SecondStageAtomContext
     AtomObject * atom{ nullptr };
     LocalPotentialSampleList raw_sampling_entries{};
     std::vector<std::vector<SecondStageNeighborSample>> sample_neighbor_list{};
-    std::size_t neighbors_in_5a_count{ 0 };
     double alpha_r{ 0.0 };
 };
 
@@ -893,14 +892,6 @@ SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(
         auto & atom_context{ context.at(atom_index) };
         const auto * atom{ atom_context.atom };
         const auto neighbor_atom_list{ atom->FindNeighborAtoms(kNeighborAtomSearchRange) };
-        atom_context.neighbors_in_5a_count = static_cast<std::size_t>(std::count_if(
-            neighbor_atom_list.begin(),
-            neighbor_atom_list.end(),
-            [&options](const AtomObject * neighbor_atom)
-            {
-                return !options.exclude_hydrogen
-                    || neighbor_atom->GetElement() != Element::HYDROGEN;
-            }));
 
         atom_context.sample_neighbor_list.resize(atom_context.raw_sampling_entries.size());
         for (std::size_t sample_index = 0;
@@ -971,13 +962,9 @@ SecondStageLocalFittingDiagnostics BuildSecondStageLocalFittingDiagnostics(
     const SecondStageLocalFittingContext & context)
 {
     SecondStageLocalFittingDiagnostics diagnostics;
-    diagnostics.neighbors_in_5a_by_serial_id.reserve(context.size());
     diagnostics.neighbor_count_by_serial_id.reserve(context.size());
     for (const auto & atom_context : context)
     {
-        diagnostics.neighbors_in_5a_by_serial_id.emplace(
-            atom_context.atom->GetSerialID(),
-            atom_context.neighbors_in_5a_count);
         std::unordered_set<const AtomObject *> neighbor_atom_set;
         for (const auto & sample_neighbor_list : atom_context.sample_neighbor_list)
         {

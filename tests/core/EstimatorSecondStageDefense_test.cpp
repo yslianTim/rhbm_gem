@@ -3306,13 +3306,6 @@ TEST(
 
         EXPECT_EQ(model->GetSelectedAtomCount(), 2U);
         EXPECT_TRUE(diagnostics.peeling_applied);
-        const auto expected_neighbors_in_5a{ exclude_hydrogen ? 4U : 5U };
-        EXPECT_EQ(
-            diagnostics.neighbors_in_5a_by_serial_id.at(1),
-            expected_neighbors_in_5a);
-        EXPECT_EQ(
-            diagnostics.neighbors_in_5a_by_serial_id.at(2),
-            expected_neighbors_in_5a);
         const auto expected_neighbor_count{ exclude_hydrogen ? 3U : 4U };
         EXPECT_EQ(
             diagnostics.neighbor_count_by_serial_id.at(1),
@@ -3752,12 +3745,6 @@ TEST(
     const std::string out{ testing::internal::GetCapturedStdout() };
 
     EXPECT_FALSE(diagnostics.peeling_applied);
-    for (const auto * atom : model->GetSelectedAtoms())
-    {
-        EXPECT_EQ(
-            diagnostics.neighbors_in_5a_by_serial_id.at(atom->GetSerialID()),
-            atom->FindNeighborAtoms(5.0).size());
-    }
 
     for (std::size_t i = 0; i < model->GetSelectedAtoms().size(); i++)
     {
