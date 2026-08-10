@@ -15,6 +15,38 @@
 #include <unordered_map>
 
 namespace rhbm_gem::core {
+namespace {
+
+std::string SanitizeLocalFittingResultFileTag(const std::string & saved_key_tag)
+{
+    std::string sanitized_tag;
+    sanitized_tag.reserve(saved_key_tag.size());
+    for (const char raw_character : saved_key_tag)
+    {
+        const auto character{ static_cast<unsigned char>(raw_character) };
+        const bool is_ascii_alphanumeric{
+            (character >= '0' && character <= '9')
+            || (character >= 'A' && character <= 'Z')
+            || (character >= 'a' && character <= 'z')
+        };
+        sanitized_tag.push_back(
+            is_ascii_alphanumeric || character == '.' || character == '_'
+                || character == '-'
+            ? static_cast<char>(character)
+            : '_');
+    }
+    return sanitized_tag;
+}
+
+std::filesystem::path BuildLocalFittingResultCsvPath(
+    const PotentialAnalysisRequest & request)
+{
+    return request.output_dir /
+        ("local_fitting_result_"
+            + SanitizeLocalFittingResultFileTag(request.saved_key_tag) + ".csv");
+}
+
+} // namespace
 
 class PotentialAnalysisCommand final : public CommandBase<PotentialAnalysisRequest>
 {
@@ -112,7 +144,17 @@ bool PotentialAnalysisCommand::ExecuteImpl(const PotentialAnalysisRequest & requ
     options.distance_max = request.fit_range_max;
     options.thread_size = request.job_count;
     options.exclude_hydrogen = request.exclude_hydrogen;
-    RunPotentialFittingWorkflow(*model_object, options);
+    options.local_fitting_result_csv_path = BuildLocalFittingResultCsvPath(request);
+    try
+    {
+        RunPotentialFittingWorkflow(*model_object, options);
+    }
+    catch (const std::exception & e)
+    {
+        Logger::Log(LogLevel::Error,
+            "PotentialAnalysisCommand : potential fitting failed: " + std::string(e.what()));
+        return false;
+    }
 
     DataRepository repository{ request.database_path };
     repository.SaveModel(*model_object, request.saved_key_tag);

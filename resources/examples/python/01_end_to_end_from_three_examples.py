@@ -230,6 +230,7 @@ def main() -> int:
     for spec, model_path, map_path in staged_inputs:
         analysis_request = rgm.PotentialAnalysisRequest()
         analysis_request.database_path = str(database_path)
+        analysis_request.output_dir = str(workdir)
         analysis_request.job_count = JOBS
         analysis_request.model_file_path = str(model_path)
         analysis_request.map_file_path = str(map_path)

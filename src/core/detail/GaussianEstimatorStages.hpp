@@ -1,5 +1,9 @@
 #pragma once
 
+#include <cstddef>
+#include <optional>
+#include <unordered_map>
+
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 
@@ -31,6 +35,11 @@ SuspiciousGaussianReason EvaluateSuspiciousPostRefitUpdate(
     const GaussianModel3D & candidate_model,
     const FitOptions & options);
 
+std::optional<double> CalculateLocalFittingPeelingRatio(
+    const LocalPotentialSampleList & raw_sampling_entries,
+    const LocalPotentialSampleList & peeling_sampling_entries,
+    bool peeling_applied);
+
 std::vector<char> ExpandSuspiciousSharedOffsetGroups(
     const std::vector<GroupKey> & group_key_by_position,
     const std::vector<char> & suspicious_seed_mask);
@@ -49,7 +58,15 @@ void RunGroupPotentialFitting(
     ModelObject & model_object,
     const FitOptions & options,
     bool use_peeling_sampling_entries);
-void RunSecondStageLocalFitting(
+
+struct SecondStageLocalFittingDiagnostics
+{
+    std::unordered_map<int, std::size_t> neighbors_in_5a_by_serial_id{};
+    std::unordered_map<int, std::size_t> neighbor_count_by_serial_id{};
+    bool peeling_applied{ false };
+};
+
+SecondStageLocalFittingDiagnostics RunSecondStageLocalFitting(
     ModelObject & model_object,
     const FitOptions & options);
 

@@ -132,6 +132,7 @@ for i in "${!model_params[@]}"; do
     map_name="$data_dir/${map_params[i]}"
     model_name="$data_dir/${model_params[i]}"
     "$executable" potential_analysis \
+        -o "$work_dir" \
         -d "$database" \
         -m "$map_name" \
         -a "$model_name" \

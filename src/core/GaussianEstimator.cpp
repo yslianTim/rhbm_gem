@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <array>
+#include <fstream>
 #include <iomanip>
 #include <limits>
 #include <map>
@@ -49,6 +50,8 @@ struct GaussianModelParameterSamples
     std::vector<double> width_list{};
     std::vector<double> offset_list{};
 };
+
+using LocalFittingModelSnapshot = std::map<int, GaussianModel3D>;
 
 std::vector<AtomLocalPotentialEditor> BuildAtomLocalEditors(
     ModelObject & model_object,
@@ -335,6 +338,104 @@ void InitializeLocalFittingSeedModels(ModelObject & model_object)
         result.statistical_distance = 0.0;
         result.fit_result.reset();
         local_editor_list[i].SetGaussianResult(result);
+    }
+}
+
+LocalFittingModelSnapshot CaptureLocalFittingModelSnapshot(
+    const ModelObject & model_object)
+{
+    LocalFittingModelSnapshot snapshot;
+    for (const auto * atom : model_object.GetSelectedAtoms())
+    {
+        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
+        snapshot.emplace(
+            atom->GetSerialID(),
+            local_view.GetGaussianResult().mdpde.GetModel());
+    }
+    return snapshot;
+}
+
+void OutputLocalFittingResultTable(
+    const ModelObject & model_object,
+    const SecondStageLocalFittingDiagnostics & second_stage_diagnostics,
+    const LocalFittingModelSnapshot & first_stage_snapshot,
+    const LocalFittingModelSnapshot & second_stage_snapshot,
+    const LocalFittingModelSnapshot & third_stage_snapshot,
+    const std::filesystem::path & output_path)
+{
+    auto atom_list{ model_object.GetSelectedAtoms() };
+    std::sort(
+        atom_list.begin(),
+        atom_list.end(),
+        [](const AtomObject * lhs, const AtomObject * rhs)
+        {
+            return lhs->GetSerialID() < rhs->GetSerialID();
+        });
+
+    std::ostringstream table;
+    table << std::fixed << std::setprecision(2);
+    table
+        << "serial id,residue,spot,neighbors in 5A,neighbor count,peeling ratio,"
+        << "amplitude 1st,amplitude 2nd,amplitude 3rd,"
+        << "width 1st,width 2nd,width 3rd,"
+        << "offset 1st,offset 2nd,offset 3rd";
+    for (const auto * atom : atom_list)
+    {
+        const auto serial_id{ atom->GetSerialID() };
+        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
+        const auto raw_sampling_entries{ local_view.GetRawSamplingEntries(false) };
+        const auto peeling_sampling_entries{
+            local_view.GetPeelingSamplingEntries(false)
+        };
+        const auto & first_model{ first_stage_snapshot.at(serial_id) };
+        const auto & second_model{ second_stage_snapshot.at(serial_id) };
+        const auto & third_model{ third_stage_snapshot.at(serial_id) };
+
+        table << '\n'
+            << serial_id << ','
+            << ChemicalDataHelper::GetLabel(atom->GetResidue()) << ','
+            << atom->GetAtomID() << ','
+            << second_stage_diagnostics.neighbors_in_5a_by_serial_id.at(serial_id) << ','
+            << second_stage_diagnostics.neighbor_count_by_serial_id.at(serial_id) << ',';
+        const auto peeling_ratio{
+            detail::CalculateLocalFittingPeelingRatio(
+                raw_sampling_entries,
+                peeling_sampling_entries,
+                second_stage_diagnostics.peeling_applied)
+        };
+        if (!peeling_ratio.has_value())
+        {
+            table << "nan";
+        }
+        else
+        {
+            table << *peeling_ratio;
+        }
+        table << ','
+            << first_model.GetAmplitude() << ','
+            << second_model.GetAmplitude() << ','
+            << third_model.GetAmplitude() << ','
+            << first_model.GetWidth() << ','
+            << second_model.GetWidth() << ','
+            << third_model.GetWidth() << ','
+            << first_model.GetOffset() << ','
+            << second_model.GetOffset() << ','
+            << third_model.GetOffset();
+    }
+    table << '\n';
+
+    std::ofstream output{ output_path, std::ios::out | std::ios::trunc };
+    if (!output.is_open())
+    {
+        throw std::runtime_error(
+            "Failed to open local fitting result CSV file: " + output_path.string());
+    }
+    output << table.str();
+    output.close();
+    if (!output)
+    {
+        throw std::runtime_error(
+            "Failed to write local fitting result CSV file: " + output_path.string());
     }
 }
 
@@ -674,18 +775,31 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
     
     RunLocalAlphaTraining(model_object, options, false);
     RunFixedOffsetLocalFitting(model_object, options, false);
+    const auto first_stage_snapshot{ CaptureLocalFittingModelSnapshot(model_object) };
     RunGroupAlphaTraining(model_object, options);
     RunGroupPotentialFitting(model_object, options, false);
 
-    RunSecondStageLocalFitting(model_object, options);
+    const auto second_stage_diagnostics{ RunSecondStageLocalFitting(model_object, options) };
+    const auto second_stage_snapshot{ CaptureLocalFittingModelSnapshot(model_object) };
 
     RunLocalAlphaTraining(model_object, options, true);
     RunFixedOffsetLocalFitting(model_object, options, true);
+    const auto third_stage_snapshot{ CaptureLocalFittingModelSnapshot(model_object) };
     RunGroupAlphaTraining(model_object, options);
     RunGroupPotentialFitting(model_object, options, true);
     if (!options.quiet_mode)
     {
         LogGroupPriorSpotSummary(model_object);
+    }
+    if (options.local_fitting_result_csv_path.has_value())
+    {
+        OutputLocalFittingResultTable(
+            model_object,
+            second_stage_diagnostics,
+            first_stage_snapshot,
+            second_stage_snapshot,
+            third_stage_snapshot,
+            *options.local_fitting_result_csv_path);
     }
 }
 

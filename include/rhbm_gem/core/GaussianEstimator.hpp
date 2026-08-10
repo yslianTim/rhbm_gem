@@ -1,5 +1,7 @@
 #pragma once
 
+#include <filesystem>
+#include <optional>
 #include <vector>
 
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
@@ -18,6 +20,7 @@ struct FitOptions
     int thread_size{ 1 };
     bool quiet_mode{ false };
     bool exclude_hydrogen{ false };
+    std::optional<std::filesystem::path> local_fitting_result_csv_path{};
 };
 
 double TrainAlphaR(

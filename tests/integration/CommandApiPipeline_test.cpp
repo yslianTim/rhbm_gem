@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <filesystem>
+#include <stdexcept>
 
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/CommandSystem.hpp>
@@ -88,15 +89,17 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     analysis_request.output_dir = analysis_output_dir;
     analysis_request.model_file_path = command_test::TestDataPath("test_model.cif");
     analysis_request.map_file_path = generated_map_file;
-    analysis_request.saved_key_tag = "pipeline_model";
+    analysis_request.saved_key_tag = "pipeline/model test";
 
     const auto analysis_result{
         rgc::RunCommand(analysis_request)
     };
     ASSERT_TRUE(analysis_result.succeeded);
+    EXPECT_TRUE(std::filesystem::exists(
+        analysis_output_dir / "local_fitting_result_pipeline_model_test.csv"));
 
     rg::DataRepository repository{ database_path };
-    auto model{ repository.LoadModel("pipeline_model") };
+    auto model{ repository.LoadModel("pipeline/model test") };
     ASSERT_NE(model, nullptr);
     ExpectSelectedAtomsHaveFiniteNonNegativeAlphaR(*model);
     ASSERT_EQ(model->GetAtomList().size(), 1u);
@@ -105,11 +108,23 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
         model->GetStandardAverageQScore(),
         model->GetAtomList().front()->GetStandardQScore());
 
+    const auto failure_output_dir{ temp_dir.path() / "analysis_failure_output" };
+    std::filesystem::create_directories(
+        failure_output_dir / "local_fitting_result_write_failure.csv");
+    auto failure_request{ analysis_request };
+    failure_request.output_dir = failure_output_dir;
+    failure_request.saved_key_tag = "write/failure";
+    const auto failure_result{ rgc::RunCommand(failure_request) };
+    EXPECT_FALSE(failure_result.succeeded);
+    EXPECT_THROW(
+        (void)repository.LoadModel("write/failure"),
+        std::runtime_error);
+
     rgc::ResultDumpRequest dump_request;
     dump_request.database_path = database_path;
     dump_request.output_dir = dump_output_dir;
     dump_request.printer_choice = rgc::PrinterType::GAUS_ESTIMATES;
-    dump_request.model_key_tag_list = { "pipeline_model" };
+    dump_request.model_key_tag_list = { "pipeline/model test" };
 
     const auto dump_result{
         rgc::RunCommand(dump_request)

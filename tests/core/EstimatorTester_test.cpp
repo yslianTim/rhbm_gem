@@ -2,12 +2,19 @@
 
 #include <array>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <limits>
 #include <memory>
+#include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
+#include <vector>
 
+#include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/TestDataFactory.hpp>
 #include <rhbm_gem/core/EstimatorTester.hpp>
 #include "core/detail/GaussianEstimatorStages.hpp"
@@ -19,6 +26,102 @@ namespace {
 namespace rt = rhbm_gem::core;
 namespace tdf = rhbm_gem::core;
 namespace rg = rhbm_gem;
+
+std::vector<std::string> SplitCsvLine(const std::string & line)
+{
+    std::vector<std::string> cells;
+    std::istringstream stream{ line };
+    std::string cell;
+    while (std::getline(stream, cell, ','))
+    {
+        cells.emplace_back(std::move(cell));
+    }
+    return cells;
+}
+
+std::string ReadTextFile(const std::filesystem::path & path)
+{
+    std::ifstream input{ path };
+    return std::string{
+        std::istreambuf_iterator<char>{ input },
+        std::istreambuf_iterator<char>{}
+    };
+}
+
+bool HasTwoFractionalDigits(const std::string & value)
+{
+    const auto decimal_position{ value.find('.') };
+    return decimal_position != std::string::npos
+        && decimal_position + 3 == value.size()
+        && value.at(decimal_position + 1) >= '0'
+        && value.at(decimal_position + 1) <= '9'
+        && value.at(decimal_position + 2) >= '0'
+        && value.at(decimal_position + 2) <= '9';
+}
+
+TEST(EstimatorTesterTest, CalculateLocalFittingPeelingRatioUsesSignedResponseSums)
+{
+    const LocalPotentialSampleList raw_sampling_entries{
+        LocalPotentialSample{ 2.0F, SamplingPoint{} },
+        LocalPotentialSample{ 3.0F, SamplingPoint{} }
+    };
+    const LocalPotentialSampleList peeling_sampling_entries{
+        LocalPotentialSample{ 1.0F, SamplingPoint{} },
+        LocalPotentialSample{ 1.0F, SamplingPoint{} }
+    };
+
+    const auto ratio{ rt::detail::CalculateLocalFittingPeelingRatio(
+        raw_sampling_entries,
+        peeling_sampling_entries,
+        true) };
+
+    ASSERT_TRUE(ratio.has_value());
+    EXPECT_DOUBLE_EQ(*ratio, 0.6);
+
+    const auto negative_ratio{ rt::detail::CalculateLocalFittingPeelingRatio(
+        LocalPotentialSampleList{ LocalPotentialSample{ 1.0F, SamplingPoint{} } },
+        LocalPotentialSampleList{ LocalPotentialSample{ 2.0F, SamplingPoint{} } },
+        true) };
+    ASSERT_TRUE(negative_ratio.has_value());
+    EXPECT_DOUBLE_EQ(*negative_ratio, -1.0);
+
+    const auto above_one_ratio{ rt::detail::CalculateLocalFittingPeelingRatio(
+        LocalPotentialSampleList{ LocalPotentialSample{ 1.0F, SamplingPoint{} } },
+        LocalPotentialSampleList{ LocalPotentialSample{ -1.0F, SamplingPoint{} } },
+        true) };
+    ASSERT_TRUE(above_one_ratio.has_value());
+    EXPECT_DOUBLE_EQ(*above_one_ratio, 2.0);
+}
+
+TEST(EstimatorTesterTest, CalculateLocalFittingPeelingRatioRejectsUnavailableInputs)
+{
+    const LocalPotentialSampleList valid_entries{
+        LocalPotentialSample{ 1.0F, SamplingPoint{} }
+    };
+    const LocalPotentialSampleList zero_sum_entries{
+        LocalPotentialSample{ 1.0F, SamplingPoint{} },
+        LocalPotentialSample{ -1.0F, SamplingPoint{} }
+    };
+    const LocalPotentialSampleList non_finite_entries{
+        LocalPotentialSample{
+            std::numeric_limits<float>::quiet_NaN(),
+            SamplingPoint{}
+        }
+    };
+
+    EXPECT_FALSE(rt::detail::CalculateLocalFittingPeelingRatio(
+        {}, valid_entries, true).has_value());
+    EXPECT_FALSE(rt::detail::CalculateLocalFittingPeelingRatio(
+        valid_entries, {}, true).has_value());
+    EXPECT_FALSE(rt::detail::CalculateLocalFittingPeelingRatio(
+        zero_sum_entries, valid_entries, true).has_value());
+    EXPECT_FALSE(rt::detail::CalculateLocalFittingPeelingRatio(
+        non_finite_entries, valid_entries, true).has_value());
+    EXPECT_FALSE(rt::detail::CalculateLocalFittingPeelingRatio(
+        valid_entries, non_finite_entries, true).has_value());
+    EXPECT_FALSE(rt::detail::CalculateLocalFittingPeelingRatio(
+        valid_entries, valid_entries, false).has_value());
+}
 
 tdf::GaussianParameterDistribution MakeDistribution(
     const rg::GaussianModel3D & mean,
@@ -394,6 +497,9 @@ TEST(
 
     auto options{ MakeSecondStageOptions() };
     options.quiet_mode = false;
+    command_test::ScopedTempDir temp_dir{ "local_fitting_result_table" };
+    const auto csv_path{ temp_dir.path() / "local_fitting_result.csv" };
+    options.local_fitting_result_csv_path = csv_path;
     testing::internal::CaptureStdout();
     rt::RunPotentialFittingWorkflow(*model, options);
     const std::string out{ testing::internal::GetCapturedStdout() };
@@ -422,6 +528,57 @@ TEST(
         return count;
     };
     EXPECT_EQ(count_occurrences("Run atom group fitting."), 3U);
+
+    constexpr std::string_view csv_header{
+        "serial id,residue,spot,neighbors in 5A,neighbor count,peeling ratio,"
+        "amplitude 1st,amplitude 2nd,amplitude 3rd,"
+        "width 1st,width 2nd,width 3rd,"
+        "offset 1st,offset 2nd,offset 3rd"
+    };
+    EXPECT_EQ(out.find(csv_header), std::string::npos);
+    ASSERT_TRUE(std::filesystem::exists(csv_path));
+    const auto csv_content{ ReadTextFile(csv_path) };
+    ASSERT_EQ(csv_content.find(csv_header), 0U);
+    const auto row_begin{ csv_header.size() + 1 };
+    const auto row_end{ csv_content.find('\n', row_begin) };
+    const auto row{ SplitCsvLine(csv_content.substr(row_begin, row_end - row_begin)) };
+    ASSERT_EQ(row.size(), 15U);
+    const auto * atom{ model->GetSelectedAtoms().front() };
+    EXPECT_EQ(std::stoi(row.at(0)), atom->GetSerialID());
+    EXPECT_FALSE(row.at(1).empty());
+    EXPECT_EQ(row.at(2), atom->GetAtomID());
+    EXPECT_EQ(std::stoul(row.at(3)), 0U);
+    EXPECT_EQ(std::stoul(row.at(4)), 0U);
+    const auto expected_peeling_ratio{
+        rt::detail::CalculateLocalFittingPeelingRatio(
+            fitted_view.GetRawSamplingEntries(false),
+            fitted_view.GetPeelingSamplingEntries(false),
+            true)
+    };
+    ASSERT_TRUE(expected_peeling_ratio.has_value());
+    EXPECT_NEAR(std::stod(row.at(5)), *expected_peeling_ratio, 0.0051);
+    for (std::size_t column = 5; column < row.size(); column++)
+    {
+        EXPECT_TRUE(HasTwoFractionalDigits(row.at(column)));
+        EXPECT_TRUE(std::isfinite(std::stod(row.at(column))));
+    }
+    const auto & final_model{ fitted_view.GetEstimateMDPDE() };
+    EXPECT_NEAR(std::stod(row.at(8)), final_model.GetAmplitude(), 0.0051);
+    EXPECT_NEAR(std::stod(row.at(11)), final_model.GetWidth(), 0.0051);
+    EXPECT_NEAR(std::stod(row.at(14)), final_model.GetOffset(), 0.0051);
+
+    {
+        std::ofstream stale_output{ csv_path };
+        stale_output << "stale content";
+    }
+    options.quiet_mode = true;
+    testing::internal::CaptureStdout();
+    rt::RunPotentialFittingWorkflow(*model, options);
+    const std::string quiet_out{ testing::internal::GetCapturedStdout() };
+    EXPECT_EQ(quiet_out.find(csv_header), std::string::npos);
+    const auto quiet_csv_content{ ReadTextFile(csv_path) };
+    EXPECT_EQ(quiet_csv_content.find(csv_header), 0U);
+    EXPECT_EQ(quiet_csv_content.find("stale content"), std::string::npos);
 }
 
 TEST(EstimatorTesterTest, RunLocalEstimationTestRejectsNonFiniteTruth)

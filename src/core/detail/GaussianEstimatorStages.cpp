@@ -37,6 +37,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -57,7 +58,7 @@ constexpr double kSuspiciousProfileNoiseScaleMin{ 1.0e-12 };
 constexpr double kLocalFittingTransformedChangeTolerance{ 1.0e-4 };
 constexpr double kLocalFittingTransformedMaximumChangeTolerance{ 1.0e-3 };
 constexpr double kNeighborContributionDistanceMax{ 2.5 };
-constexpr double kNeighborAtomSearchRange{ 2.0 * kNeighborContributionDistanceMax };
+constexpr double kNeighborAtomSearchRange{ 5.0 };
 constexpr std::size_t kLocalFittingMaximumIterations{ 100 };
 constexpr std::size_t kLocalFittingAuditPatience{ 3 };
 constexpr bool kApplyLocalFittingBestIteration{ true };
@@ -446,6 +447,7 @@ struct SecondStageAtomContext
     AtomObject * atom{ nullptr };
     LocalPotentialSampleList raw_sampling_entries{};
     std::vector<std::vector<SecondStageNeighborSample>> sample_neighbor_list{};
+    std::size_t neighbors_in_5a_count{ 0 };
     double alpha_r{ 0.0 };
 };
 
@@ -891,6 +893,14 @@ SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(
         auto & atom_context{ context.at(atom_index) };
         const auto * atom{ atom_context.atom };
         const auto neighbor_atom_list{ atom->FindNeighborAtoms(kNeighborAtomSearchRange) };
+        atom_context.neighbors_in_5a_count = static_cast<std::size_t>(std::count_if(
+            neighbor_atom_list.begin(),
+            neighbor_atom_list.end(),
+            [&options](const AtomObject * neighbor_atom)
+            {
+                return !options.exclude_hydrogen
+                    || neighbor_atom->GetElement() != Element::HYDROGEN;
+            }));
 
         atom_context.sample_neighbor_list.resize(atom_context.raw_sampling_entries.size());
         for (std::size_t sample_index = 0;
@@ -955,6 +965,36 @@ SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(
     }
 
     return context;
+}
+
+SecondStageLocalFittingDiagnostics BuildSecondStageLocalFittingDiagnostics(
+    const SecondStageLocalFittingContext & context)
+{
+    SecondStageLocalFittingDiagnostics diagnostics;
+    diagnostics.neighbors_in_5a_by_serial_id.reserve(context.size());
+    diagnostics.neighbor_count_by_serial_id.reserve(context.size());
+    for (const auto & atom_context : context)
+    {
+        diagnostics.neighbors_in_5a_by_serial_id.emplace(
+            atom_context.atom->GetSerialID(),
+            atom_context.neighbors_in_5a_count);
+        std::unordered_set<const AtomObject *> neighbor_atom_set;
+        for (const auto & sample_neighbor_list : atom_context.sample_neighbor_list)
+        {
+            for (const auto & neighbor_sample : sample_neighbor_list)
+            {
+                const auto * neighbor_atom{ neighbor_sample.is_selected
+                    ? context.selected_atom_list.at(neighbor_sample.atom_index).atom
+                    : context.unselected_atom_list.at(neighbor_sample.atom_index).atom
+                };
+                neighbor_atom_set.emplace(neighbor_atom);
+            }
+        }
+        diagnostics.neighbor_count_by_serial_id.emplace(
+            atom_context.atom->GetSerialID(),
+            neighbor_atom_set.size());
+    }
+    return diagnostics;
 }
 
 detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
@@ -4963,6 +5003,37 @@ detail::SuspiciousGaussianReason detail::EvaluateSuspiciousPostRefitUpdate(
         true);
 }
 
+std::optional<double> detail::CalculateLocalFittingPeelingRatio(
+    const LocalPotentialSampleList & raw_sampling_entries,
+    const LocalPotentialSampleList & peeling_sampling_entries,
+    bool peeling_applied)
+{
+    if (!peeling_applied
+        || raw_sampling_entries.empty()
+        || peeling_sampling_entries.empty())
+    {
+        return std::nullopt;
+    }
+
+    double raw_sum{ 0.0 };
+    for (const auto & sample : raw_sampling_entries)
+    {
+        raw_sum += static_cast<double>(sample.response);
+    }
+    double peeling_sum{ 0.0 };
+    for (const auto & sample : peeling_sampling_entries)
+    {
+        peeling_sum += static_cast<double>(sample.response);
+    }
+    if (!std::isfinite(raw_sum) || !std::isfinite(peeling_sum) || raw_sum == 0.0)
+    {
+        return std::nullopt;
+    }
+
+    const auto ratio{ (raw_sum - peeling_sum) / raw_sum };
+    return std::isfinite(ratio) ? std::optional<double>{ ratio } : std::nullopt;
+}
+
 std::vector<char> detail::ExpandSuspiciousSharedOffsetGroups(
     const std::vector<GroupKey> & group_key_by_position,
     const std::vector<char> & suspicious_seed_mask)
@@ -4993,9 +5064,12 @@ std::vector<char> detail::ExpandSuspiciousSharedOffsetGroups(
     return rollback_mask;
 }
 
-void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & options)
+SecondStageLocalFittingDiagnostics RunSecondStageLocalFitting(
+    ModelObject & model_object,
+    const FitOptions & options)
 {
     auto context{ BuildSecondStageLocalFittingContext(model_object, options) };
+    auto diagnostics{ BuildSecondStageLocalFittingDiagnostics(context) };
     const auto atom_size{ context.size() };
     if (!options.quiet_mode)
     {
@@ -5036,7 +5110,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 "best_audit_objective=unavailable, final_uses_polish=unavailable, "
                 "final_state_source=unavailable.");
         }
-        return;
+        return diagnostics;
     }
     LogSecondStageSeedSelections(initial_state_build_result->selection_record_list, options);
     LogUnselectedSecondStageSeedSelections(
@@ -5106,6 +5180,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 options,
                 accepted_iteration_count,
                 terminal_summary);
+            diagnostics.peeling_applied = true;
             LogSecondStageLocalFittingSummary(
                 options,
                 accepted_iteration_count,
@@ -5114,7 +5189,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 UsesLocalFittingPolish(previous_polish_provenance),
                 detail::LocalFittingFinalStateSource::LatestValidated);
             RunGroupPotentialFitting(model_object, options, true);
-            return;
+            return diagnostics;
         }
 
         const auto cluster_partition{
@@ -5417,6 +5492,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 model_object,
                 context,
                 *final_state_selection.state);
+            diagnostics.peeling_applied = true;
             LogSecondStageLocalFittingSummary(
                 options,
                 accepted_iteration_count,
@@ -5425,7 +5501,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 UsesLocalFittingPolish(*final_state_selection.polish_provenance),
                 final_state_selection.source);
             RunGroupPotentialFitting(model_object, options, true);
-            return;
+            return diagnostics;
         }
 
         const auto transformed_change_summary{
@@ -5465,6 +5541,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 model_object,
                 context,
                 *final_state_selection.state);
+            diagnostics.peeling_applied = true;
             LogSecondStageLocalFittingSummary(
                 options,
                 accepted_iteration_count,
@@ -5473,7 +5550,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 UsesLocalFittingPolish(*final_state_selection.polish_provenance),
                 final_state_selection.source);
             RunGroupPotentialFitting(model_object, options, true);
-            return;
+            return diagnostics;
         }
 
         const auto converged{
@@ -5493,6 +5570,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 SummarizeLocalFittingOffsets(assembled_state)
             };
             ApplyLocalFittingState(model_object, context, assembled_state);
+            diagnostics.peeling_applied = true;
             if (terminal_summary.AtomCount() > 0)
             {
                 LogLocalFittingTerminalFallback(
@@ -5517,7 +5595,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 UsesLocalFittingPolish(assembled_polish_provenance),
                 detail::LocalFittingFinalStateSource::LatestValidated);
             RunGroupPotentialFitting(model_object, options, true);
-            return;
+            return diagnostics;
         }
 
         if (iter + 1 == kLocalFittingMaximumIterations)
@@ -5532,6 +5610,7 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 model_object,
                 context,
                 *final_state_selection.state);
+            diagnostics.peeling_applied = true;
             LogLocalFittingMaximumIterations(
                 options,
                 final_state_selection.source,
@@ -5546,12 +5625,13 @@ void RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 UsesLocalFittingPolish(*final_state_selection.polish_provenance),
                 final_state_selection.source);
             RunGroupPotentialFitting(model_object, options, true);
-            return;
+            return diagnostics;
         }
         unchanged_state_exhausted_key_list.clear();
         previous_state = std::move(assembled_state);
         previous_polish_provenance = std::move(assembled_polish_provenance);
     }
+    return diagnostics;
 }
 
 } // namespace rhbm_gem::core

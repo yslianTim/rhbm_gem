@@ -162,6 +162,7 @@ def main() -> int:
     print("[2/3] Potential analysis")
     analysis_request = rgm.PotentialAnalysisRequest()
     analysis_request.database_path = str(database_path)
+    analysis_request.output_dir = str(workdir)
     analysis_request.job_count = JOBS
     analysis_request.model_file_path = str(model_path)
     analysis_request.map_file_path = str(map_path)

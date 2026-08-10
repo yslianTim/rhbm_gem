@@ -71,6 +71,7 @@ def assert_quickstart_smoke() -> None:
 
         assert db_file.exists(), output
         assert dump_outputs, output
+        assert (workdir / "local_fitting_result_6z6u.csv").exists(), output
 
 
 def assert_end_to_end_smoke() -> None:
@@ -111,6 +112,8 @@ def assert_end_to_end_smoke() -> None:
 
         assert db_file.exists(), output
         assert dump_outputs, output
+        for key_tag in ("6z6u", "6drv", "9gxm"):
+            assert (workdir / f"local_fitting_result_{key_tag}.csv").exists(), output
 
 
 def main() -> int:

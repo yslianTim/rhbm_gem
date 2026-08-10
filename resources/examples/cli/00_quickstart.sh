@@ -149,6 +149,7 @@ jobs=4
 key_tag="6z6u"
 
 "$executable" potential_analysis \
+    -o "$work_dir" \
     -d "$database" \
     -m "$map_name" \
     -a "$model_name" \
