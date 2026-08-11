@@ -370,6 +370,8 @@ TEST(CommandScenariosTest, PotentialAnalysisCliAcceptsExcludeHydrogen)
         model_path.string(),
         "--map",
         map_path.string(),
+        "--folder",
+        (temp_dir.path() / "analysis_output").string(),
         "--save-key",
         "exclude_hydrogen_cli",
         "--exclude-hydrogen",
@@ -404,6 +406,8 @@ TEST(CommandScenariosTest, PotentialAnalysisCliAcceptsOnlyBackbone)
         model_path.string(),
         "--map",
         map_path.string(),
+        "--folder",
+        (temp_dir.path() / "analysis_output").string(),
         "--save-key",
         "only_backbone_cli",
         "--only-backbone",
@@ -431,6 +435,7 @@ TEST(CommandScenariosTest, PotentialAnalysisExcludeHydrogenFiltersOnlyHydrogenAt
     const auto database_path{ temp_dir.path() / "analysis.sqlite" };
 
     PotentialAnalysisRequest include_request{};
+    include_request.output_dir = temp_dir.path() / "analysis_output";
     include_request.database_path = database_path;
     include_request.model_file_path = model_path;
     include_request.map_file_path = map_path;
@@ -464,6 +469,7 @@ TEST(CommandScenariosTest, PotentialAnalysisOnlyBackboneFiltersOnlyBackboneAtoms
     const auto database_path{ temp_dir.path() / "analysis.sqlite" };
 
     PotentialAnalysisRequest all_atom_request{};
+    all_atom_request.output_dir = temp_dir.path() / "analysis_output";
     all_atom_request.database_path = database_path;
     all_atom_request.model_file_path = model_path;
     all_atom_request.map_file_path = map_path;

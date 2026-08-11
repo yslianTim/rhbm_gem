@@ -246,13 +246,18 @@ class Fold168RegressionTest(unittest.TestCase):
                 "--output-dir", str(output_dir),
             ]
 
+            captured_working_directories: list[Path] = []
+
             def reject_after_inspection(
                 command: list[str],
-                **_: object,
+                **kwargs: object,
             ) -> subprocess.CompletedProcess[bytes]:
                 database_path = Path(command[command.index("-d") + 1])
                 self.assertEqual(database_path.name, "database.sqlite")
                 self.assertFalse(database_path.exists())
+                working_directory = Path(str(kwargs["cwd"]))
+                self.assertEqual(working_directory, database_path.parent)
+                captured_working_directories.append(working_directory)
                 return subprocess.CompletedProcess(command, 1, stdout=b"mock failure")
 
             with mock.patch.object(
@@ -265,6 +270,9 @@ class Fold168RegressionTest(unittest.TestCase):
                 side_effect=reject_after_inspection,
             ), redirect_stdout(StringIO()):
                 self.assertEqual(regression.run(arguments), 1)
+
+            self.assertEqual(len(captured_working_directories), 1)
+            self.assertFalse(captured_working_directories[0].exists())
 
     def test_baseline_schema_version_five_is_required(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

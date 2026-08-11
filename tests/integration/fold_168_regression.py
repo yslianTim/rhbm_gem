@@ -416,7 +416,8 @@ def run(argv: Sequence[str] | None = None) -> int:
                 command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                check=False)
+                check=False,
+                cwd=temp_dir)
             wall_time_seconds = time.perf_counter() - start_time
             log_text = completed.stdout.decode("utf-8", errors="replace")
             log_path.write_text(log_text, encoding="utf-8")
