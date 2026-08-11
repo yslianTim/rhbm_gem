@@ -911,7 +911,7 @@ void GausPainter::PaintLocalGausSummary(
             }
 
             auto gaus_mean{ plot_builder->CreateAtomGroupGausFunctionMean(group_key) };
-            auto gaus_prior{ plot_builder->CreateAtomGroupGausFunctionPrior(group_key) };
+            auto gaus_prior{ plot_builder->CreateAtomGroupGausFunctionPrior(LocalFittingStage::Third, group_key) };
             root_helper::SetLineAttribute(gaus_prior.get(), 2, 3, kRed);
             root_helper::SetLineAttribute(gaus_mean.get(), 3, 3, kBlue);
             gaus_prior->Draw("SAME");
@@ -1282,25 +1282,27 @@ void GausPainter::PaintGroupFittingComparison(
         auto component_id{ component_entry->GetComponentId() };
 
         std::map<Spot, std::vector<std::unique_ptr<TGraphErrors>>> map_value_graph_list_map[row_size];
-        std::map<Spot, std::unique_ptr<TF1>> gaus_prior_map;
+        std::map<Spot, std::unique_ptr<TF1>> gaus_prior_1st_map;
+        std::map<Spot, std::unique_ptr<TF1>> gaus_prior_3rd_map;
         std::vector<double> global_y_array;
+        std::vector<double> neighbor_y_array;
         for (auto & spot : spot_list)
         {
             size_t member_id;
             if (!data_internal::IsMainChainMember(spot, member_id)) continue;
             auto group_key{ data_internal::GetMainChainGroupKey(member_id, residue) };
-            auto gaus_prior{ plot_builder->CreateAtomGroupGausFunctionPrior(group_key) };
-            gaus_prior_map.emplace(spot, std::move(gaus_prior));
+            auto gaus_prior_1st{ plot_builder->CreateAtomGroupGausFunctionPrior(LocalFittingStage::First, group_key) };
+            auto gaus_prior_3rd{ plot_builder->CreateAtomGroupGausFunctionPrior(LocalFittingStage::Third, group_key) };
+            gaus_prior_1st_map.emplace(spot, std::move(gaus_prior_1st));
+            gaus_prior_3rd_map.emplace(spot, std::move(gaus_prior_3rd));
 
             auto member_size{ entry_iter->GetAtomObjectList(LocalFittingStage::Third, group_key).size() };
             std::vector<std::unique_ptr<TGraphErrors>> raw_map_value_graph_list;
             std::vector<std::unique_ptr<TGraphErrors>> peeling_map_value_graph_list;
             std::vector<std::unique_ptr<TGraphErrors>> neighbor_map_value_graph_list;
-            std::vector<double> y_array;
             raw_map_value_graph_list.reserve(member_size);
             peeling_map_value_graph_list.reserve(member_size);
             neighbor_map_value_graph_list.reserve(member_size);
-            y_array.reserve(member_size * 2);
             for (auto atom : entry_iter->GetAtomObjectList(LocalFittingStage::Third, group_key))
             {
                 auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
@@ -1318,25 +1320,33 @@ void GausPainter::PaintGroupFittingComparison(
                 root_helper::SetLineAttribute(neighbor_graph.get(), 1, 3, static_cast<short>(line_color), 0.3f);
                 auto range_in_raw_graph{ root_helper::GetRangeInGraph(raw_graph.get()) };
                 auto range_in_peeling_graph{ root_helper::GetRangeInGraph(peeling_graph.get()) };
-                y_array.emplace_back(std::get<0>(range_in_raw_graph));
-                y_array.emplace_back(std::get<1>(range_in_raw_graph));
-                y_array.emplace_back(std::get<0>(range_in_peeling_graph));
-                y_array.emplace_back(std::get<1>(range_in_peeling_graph));
+                auto range_in_neighbor_graph{ root_helper::GetRangeInGraph(neighbor_graph.get()) };
+
+                global_y_array.emplace_back(std::get<0>(range_in_raw_graph));
+                global_y_array.emplace_back(std::get<1>(range_in_raw_graph));
+                global_y_array.emplace_back(std::get<0>(range_in_peeling_graph));
+                global_y_array.emplace_back(std::get<1>(range_in_peeling_graph));
+                neighbor_y_array.emplace_back(std::get<0>(range_in_neighbor_graph));
+                neighbor_y_array.emplace_back(std::get<1>(range_in_neighbor_graph));
                 raw_map_value_graph_list.emplace_back(std::move(raw_graph));
                 peeling_map_value_graph_list.emplace_back(std::move(peeling_graph));
                 neighbor_map_value_graph_list.emplace_back(std::move(neighbor_graph));
             }
-            global_y_array.insert(global_y_array.end(), y_array.begin(), y_array.end());
             map_value_graph_list_map[0].emplace(spot, std::move(raw_map_value_graph_list));
             map_value_graph_list_map[1].emplace(spot, std::move(peeling_map_value_graph_list));
             map_value_graph_list_map[2].emplace(spot, std::move(neighbor_map_value_graph_list));
         }
 
-        double y_min{ 0.0 };
-        double y_max{ 0.0 };
+        double y_min[row_size]{ 0.0 };
+        double y_max[row_size]{ 0.0 };
         auto y_range{ array_helper::ComputeScalingRangeTuple(global_y_array, 0.20) };
-        y_min = std::get<0>(y_range);
-        y_max = std::get<1>(y_range);
+        y_min[0] = std::get<0>(y_range);
+        y_max[0] = std::get<1>(y_range);
+        y_min[1] = std::get<0>(y_range);
+        y_max[1] = std::get<1>(y_range);
+        auto neighbor_y_range{ array_helper::ComputeScalingRangeTuple(neighbor_y_array, 0.20) };
+        y_min[2] = std::get<0>(neighbor_y_range);
+        y_max[2] = std::get<1>(neighbor_y_range);
 
         std::unique_ptr<TH2> frame[col_size][row_size];
         std::unique_ptr<TPaveText> info_text[col_size][row_size];
@@ -1351,7 +1361,7 @@ void GausPainter::PaintGroupFittingComparison(
                 root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
                 auto x_factor{ root_helper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
                 auto y_factor{ root_helper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
-                frame[i][j] = root_helper::CreateHist2D(Form("frame_%d_%d", i, j),"", 500, 0.01, 1.99, 500, y_min, y_max);
+                frame[i][j] = root_helper::CreateHist2D(Form("frame_%d_%d", i, j),"", 500, 0.01, 1.99, 500, y_min[row_size-j-1], y_max[row_size-j-1]);
                 root_helper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 60.0f, 0.01f, 133);
                 root_helper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.08/x_factor), 505);
                 root_helper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 60.0f, 0.01f, 133);
@@ -1367,17 +1377,18 @@ void GausPainter::PaintGroupFittingComparison(
 
                 if (j == row_size - 1)
                 {
-                    info_text[i][j] = root_helper::CreatePaveText(0.65, 0.80, 0.99, 0.99, "nbNDC ARC", true);
+                    auto spot_color{ painter_internal::GetMainChainSpotColor(spot) };
+                    info_text[i][j] = root_helper::CreatePaveText(0.80, 0.80, 0.99, 0.99, "nbNDC ARC", true);
                     root_helper::SetPaveTextDefaultStyle(info_text[i][j].get());
                     root_helper::SetPaveAttribute(info_text[i][j].get(), 0, 0.2);
                     root_helper::SetLineAttribute(info_text[i][j].get(), 1, 0);
                     root_helper::SetTextAttribute(info_text[i][j].get(), 50.0f, 103, 22);
-                    root_helper::SetFillAttribute(info_text[i][j].get(), 1001, kAzure-7, 0.5f);
+                    root_helper::SetFillAttribute(info_text[i][j].get(), 1001, spot_color, 0.3f);
                     info_text[i][j]->AddText(painter_internal::GetMainChainSpotLabel(spot).data());
                     info_text[i][j]->Draw();
                 }
 
-                auto & gaus_prior{ gaus_prior_map.at(spot) };
+                auto & gaus_prior{ (j == row_size - 1) ? gaus_prior_1st_map.at(spot) : gaus_prior_3rd_map.at(spot) };
                 root_helper::SetLineAttribute(gaus_prior.get(), 2, 3, kRed);
                 if (j != 0) gaus_prior->Draw("SAME");
 
@@ -1389,7 +1400,7 @@ void GausPainter::PaintGroupFittingComparison(
                     root_helper::SetTextAttribute(result_text[i][j].get(), 30.0f, 133, 22, 0.0f, kRed);
                     root_helper::SetFillAttribute(result_text[i][j].get(), 4000);
                     result_text[i][j]->AddText(
-                        Form("A = %.2f,   #tau = %.2f,   c = %.2f",
+                        Form("A = %.2f,   #tau = %.2f,   C = %.2f",
                             gaus_prior->GetParameter(0), gaus_prior->GetParameter(1), gaus_prior->GetParameter(2))
                     );
                     result_text[i][j]->Draw();
@@ -1408,9 +1419,9 @@ void GausPainter::PaintGroupFittingComparison(
         auto residue_text{ root_helper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC ARC", false) };
         root_helper::SetPaveTextMarginInCanvas(gPad, residue_text.get(), 0.01, 0.91, 0.02, 0.01);
         root_helper::SetPaveTextDefaultStyle(residue_text.get());
-        root_helper::SetFillAttribute(residue_text.get(), 1001, kAzure-7, 0.5f);
+        root_helper::SetFillAttribute(residue_text.get(), 1001, kAzure-7, 0.3f);
         root_helper::SetLineAttribute(residue_text.get(), 1, 3, kAzure-7);
-        root_helper::SetTextAttribute(residue_text.get(), 90.0f, 133, 22);
+        root_helper::SetTextAttribute(residue_text.get(), 70.0f, 133, 22);
         residue_text->AddText(component_id.data());
         residue_text->Draw();
 
@@ -1429,8 +1440,8 @@ void GausPainter::PaintGroupFittingComparison(
         root_helper::SetFillAttribute(legend.get(), 4000);
         root_helper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
         legend->SetMargin(0.25f);
-        legend->AddEntry(gaus_prior_map.at(Spot::CA).get(),
-            "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau},#font[1]{c})} with selected #alpha_{r} and #alpha_{g}", "l");
+        legend->AddEntry(gaus_prior_1st_map.at(Spot::CA).get(),
+            "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau},#font[1]{C})} with selected #alpha_{r} and #alpha_{g}", "l");
         legend->AddEntry(map_value_graph_list_map[0].at(Spot::CA).front().get(),
             "Members of Map Value", "l");
         legend->Draw();
@@ -1530,24 +1541,21 @@ void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
             component_id_map.emplace(residue, component_id);
 
             auto gaus_mean{ plot_builder->CreateAtomGroupGausFunctionMean(group_key) };
-            auto gaus_prior{ plot_builder->CreateAtomGroupGausFunctionPrior(group_key) };
+            auto gaus_prior{ plot_builder->CreateAtomGroupGausFunctionPrior(LocalFittingStage::Third, group_key) };
             gaus_mean_map.emplace(residue, std::move(gaus_mean));
             gaus_prior_map.emplace(residue, std::move(gaus_prior));
 
-            auto member_size{ entry_iter->GetAtomObjectList(
-                LocalFittingStage::Third, group_key).size() };
+            auto member_size{ entry_iter->GetAtomObjectList(LocalFittingStage::Third, group_key).size() };
             std::vector<std::unique_ptr<TGraphErrors>> map_value_graph_list;
             std::vector<double> y_array;
             map_value_graph_list.reserve(member_size);
             y_array.reserve(member_size * 2);
-            for (auto atom : entry_iter->GetAtomObjectList(
-                LocalFittingStage::Third, group_key))
+            for (auto atom : entry_iter->GetAtomObjectList(LocalFittingStage::Third, group_key))
             {
                 auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
                 auto graph{ atom_plot_builder->CreateBinnedDistanceToRawMapValueGraph() };
                 const auto & result{
-                    AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult(
-                        LocalFittingStage::Third)
+                    AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult(LocalFittingStage::Third)
                 };
                 auto is_outlier{ result.posterior.has_value() && result.is_outlier };
                 auto line_color{ kAzure-7 };

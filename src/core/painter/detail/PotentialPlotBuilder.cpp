@@ -888,14 +888,13 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionMean(
 }
 
 std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionPrior(
-    GroupKey group_key) const
+    LocalFittingStage stage, GroupKey group_key) const
 {
     if (IsModelObjectAvailable() == false)
     {
         return nullptr;
     }
-    const auto & prior{ GetModelView().GetAtomGroupPrior(
-        LocalFittingStage::Third, group_key) };
+    const auto & prior{ GetModelView().GetAtomGroupPrior(stage, group_key) };
     auto amplitude{ prior.GetAmplitude() };
     auto width{ prior.GetWidth() };
     auto offset{ prior.GetOffset() };

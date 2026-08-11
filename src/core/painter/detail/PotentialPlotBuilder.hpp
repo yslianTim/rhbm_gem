@@ -10,6 +10,7 @@
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
+#include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 
 #ifdef HAVE_ROOT
@@ -74,7 +75,7 @@ public:
     std::unique_ptr<::TF1> CreateAtomLocalGausFunctionOLS() const;
     std::unique_ptr<::TF1> CreateAtomLocalGausFunctionMDPDE() const;
     std::unique_ptr<::TF1> CreateAtomGroupGausFunctionMean(GroupKey group_key) const;
-    std::unique_ptr<::TF1> CreateAtomGroupGausFunctionPrior(GroupKey group_key) const;
+    std::unique_ptr<::TF1> CreateAtomGroupGausFunctionPrior(LocalFittingStage stage, GroupKey group_key) const;
     std::unique_ptr<::TF1> CreateComponentAtomAverageGausFunctionPrior(AtomKey atom_key) const;
 #endif
 

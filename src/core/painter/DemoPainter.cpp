@@ -488,11 +488,9 @@ void DemoPainter::PaintAtomMapValueExample(
         y_array.emplace_back(std::get<0>(map_value_range));
         y_array.emplace_back(std::get<1>(map_value_range));
     }
-    gaus_function = plot_builder->CreateAtomGroupGausFunctionPrior(group_key);
-    amplitude_prior = entry_iter->GetAtomGroupPrior(
-        LocalFittingStage::Third, group_key).GetDisplayParameter(0);
-    width_prior = entry_iter->GetAtomGroupPrior(
-        LocalFittingStage::Third, group_key).GetDisplayParameter(1);
+    gaus_function = plot_builder->CreateAtomGroupGausFunctionPrior(LocalFittingStage::Third, group_key);
+    amplitude_prior = entry_iter->GetAtomGroupPrior(LocalFittingStage::Third, group_key).GetDisplayParameter(0);
+    width_prior = entry_iter->GetAtomGroupPrior(LocalFittingStage::Third, group_key).GetDisplayParameter(1);
 
 
     auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.15) };
