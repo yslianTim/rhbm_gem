@@ -5,6 +5,7 @@
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
 
+#include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <stdexcept>
@@ -76,13 +77,34 @@ void ModelAnalysisEditor::InitializeGroupAlpha(
     }
 }
 
-void ModelAnalysisEditor::CopyAtomGroupPotentialStage(
+void ModelAnalysisEditor::CopyLocalFittingStageResult(
+    FittingStage source_stage,
+    FittingStage destination_stage)
+{
+    for (auto * atom : m_model_object.GetSelectedAtoms())
+    {
+        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
+        EnsureAtomLocalPotential(*atom).SetGaussianResult(
+            destination_stage,
+            local_view.GetGaussianResult(source_stage));
+    }
+}
+
+void ModelAnalysisEditor::CopyGroupFittingStageResult(
     FittingStage source_stage,
     FittingStage destination_stage)
 {
     ModelAnalysisData::Of(m_model_object).AtomGroupEntry().CopyStage(
         source_stage,
         destination_stage);
+}
+
+void ModelAnalysisEditor::CopyFittingStageState(
+    FittingStage source_stage,
+    FittingStage destination_stage)
+{
+    CopyLocalFittingStageResult(source_stage, destination_stage);
+    CopyGroupFittingStageResult(source_stage, destination_stage);
 }
 
 void ModelAnalysisEditor::ApplyAtomGroupGaussianResult(

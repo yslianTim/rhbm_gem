@@ -350,21 +350,6 @@ void InitializeLocalFittingSeedModels(ModelObject & model_object)
     }
 }
 
-void CopyFittingStageResults(
-    ModelObject & model_object,
-    FittingStage source_stage,
-    FittingStage destination_stage)
-{
-    auto analysis{ model_object.EditAnalysis() };
-    for (auto * atom : model_object.GetSelectedAtoms())
-    {
-        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
-        analysis.EnsureAtomLocalPotential(*atom).SetGaussianResult(
-            destination_stage,
-            local_view.GetGaussianResult(source_stage));
-    }
-}
-
 void OutputLocalFittingResultTable(
     const ModelObject & model_object,
     bool peeling_applied,
@@ -801,12 +786,10 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
     RunGroupAlphaTraining(model_object, options, FittingStage::First);
     RunGroupPotentialFitting(model_object, options, FittingStage::First);
 
-    CopyFittingStageResults(model_object,FittingStage::First, FittingStage::Second);
-    model_object.EditAnalysis().CopyAtomGroupPotentialStage(FittingStage::First, FittingStage::Second);
+    model_object.EditAnalysis().CopyFittingStageState(FittingStage::First, FittingStage::Second);
     const auto peeling_applied{ RunSecondStageLocalFitting(model_object, options) };
 
-    CopyFittingStageResults(model_object, FittingStage::Second, FittingStage::Third);
-    model_object.EditAnalysis().CopyAtomGroupPotentialStage(FittingStage::Second, FittingStage::Third);
+    model_object.EditAnalysis().CopyFittingStageState(FittingStage::Second, FittingStage::Third);
     RunLocalAlphaTraining(model_object, options, FittingStage::Third);
     RunFixedOffsetLocalFitting(model_object, options, FittingStage::Third);
     RunGroupAlphaTraining(model_object, options, FittingStage::Third);

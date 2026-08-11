@@ -21,7 +21,9 @@ public:
     void RebuildAtomGroupsFromSelection();
     void InitializeLocalAlpha(FittingStage stage, double alpha_r);
     void InitializeGroupAlpha(FittingStage stage, double alpha_g);
-    void CopyAtomGroupPotentialStage(FittingStage source_stage, FittingStage destination_stage);
+    void CopyLocalFittingStageResult(FittingStage source_stage, FittingStage destination_stage);
+    void CopyGroupFittingStageResult(FittingStage source_stage, FittingStage destination_stage);
+    void CopyFittingStageState(FittingStage source_stage, FittingStage destination_stage);
     void ApplyAtomGroupGaussianResult(
         FittingStage stage,
         GroupKey group_key,
