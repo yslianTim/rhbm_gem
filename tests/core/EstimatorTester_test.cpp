@@ -323,7 +323,7 @@ std::unique_ptr<rg::ModelObject> BuildSecondStageSuspiciousOffsetDiagnosticModel
     rt::FitOptions options;
     options.distance_min = 0.0;
     options.distance_max = 1.0;
-    options.thread_size = 1;
+    options.thread_size = 2;
     options.quiet_mode = true;
     rt::RunLocalAlphaTraining(*model, options, FittingStage::First);
     rt::RunFixedOffsetLocalFitting(*model, options, FittingStage::First);

@@ -18,6 +18,7 @@ public:
     void Clear();
     void ClearTransientFitStates();
     AtomLocalPotentialEditor EnsureAtomLocalPotential(const AtomObject & atom_object);
+    AtomLocalPotentialEditor GetAtomLocalPotentialEditor(const AtomObject & atom_object) const;
     void RebuildAtomGroupsFromSelection();
     void InitializeLocalAlpha(FittingStage stage, double alpha_r);
     void InitializeGroupAlpha(FittingStage stage, double alpha_g);

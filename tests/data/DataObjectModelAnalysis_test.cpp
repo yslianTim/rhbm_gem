@@ -772,6 +772,35 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialEditorCanSetAlphaR)
             rg::FittingStage::Third));
 }
 
+TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorGetsExistingAtomLocalPotentialEditor)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto * atom{ model->GetAtomList().at(0).get() };
+    auto analysis{ model->EditAnalysis() };
+    analysis.EnsureAtomLocalPotential(*atom);
+
+    analysis.GetAtomLocalPotentialEditor(*atom).SetAlphaR(
+        rg::FittingStage::Third,
+        0.37);
+
+    EXPECT_DOUBLE_EQ(
+        0.37,
+        rg::AtomLocalPotentialView::RequireFor(*atom).GetAlphaR(
+            rg::FittingStage::Third));
+}
+
+TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorRejectsMissingAtomLocalPotentialEditor)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto * atom{ model->GetAtomList().at(0).get() };
+    auto analysis{ model->EditAnalysis() };
+
+    EXPECT_THROW(
+        analysis.GetAtomLocalPotentialEditor(*atom),
+        std::runtime_error);
+    EXPECT_FALSE(rg::AtomLocalPotentialView::For(*atom).IsAvailable());
+}
+
 TEST(DataObjectModelAnalysisTest, AtomLocalPotentialEditorCanSetPeelingNeighborCount)
 {
     auto model{ data_test::MakeModelWithBond() };

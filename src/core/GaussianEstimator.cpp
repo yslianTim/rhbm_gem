@@ -50,20 +50,6 @@ struct GaussianModelParameterSamples
     std::vector<double> offset_list{};
 };
 
-std::vector<AtomLocalPotentialEditor> BuildAtomLocalEditors(
-    ModelObject & model_object,
-    const std::vector<AtomObject *> & atom_list)
-{
-    auto analysis{ model_object.EditAnalysis() };
-    std::vector<AtomLocalPotentialEditor> local_editor_list;
-    local_editor_list.reserve(atom_list.size());
-    for (auto * atom : atom_list)
-    {
-        local_editor_list.emplace_back(analysis.EnsureAtomLocalPotential(*atom));
-    }
-    return local_editor_list;
-}
-
 bool UsesPeelingSamplingEntries(FittingStage stage)
 {
     return stage != FittingStage::First;
@@ -326,10 +312,11 @@ void LogGroupPriorSpotSummary(const ModelObject & model_object)
 void InitializeLocalFittingSeedModels(ModelObject & model_object)
 {
     const auto & atom_list{ model_object.GetSelectedAtoms() };
-    auto local_editor_list{ BuildAtomLocalEditors(model_object, atom_list) };
+    auto analysis{ model_object.EditAnalysis() };
     const auto seed_model{ GaussianModel3D{ 0.0, 1.0, 0.0 } };
     for (size_t i = 0; i < atom_list.size(); i++)
     {
+        auto local_editor{ analysis.EnsureAtomLocalPotential(*atom_list[i]) };
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
         auto result{ local_view.GetGaussianResult(FittingStage::First) };
         result.ols = GaussianModel3DWithUncertainty{
@@ -344,9 +331,9 @@ void InitializeLocalFittingSeedModels(ModelObject & model_object)
         result.is_outlier = false;
         result.statistical_distance = 0.0;
         result.fit_result.reset();
-        local_editor_list[i].SetGaussianResult(FittingStage::First, result);
-        local_editor_list[i].SetGaussianResult(FittingStage::Second, result);
-        local_editor_list[i].SetGaussianResult(FittingStage::Third, result);
+        local_editor.SetGaussianResult(FittingStage::First, result);
+        local_editor.SetGaussianResult(FittingStage::Second, result);
+        local_editor.SetGaussianResult(FittingStage::Third, result);
     }
 }
 
@@ -445,7 +432,8 @@ void RunFixedOffsetLocalFitting(
 {
     const auto & atom_list{ model_object.GetSelectedAtoms() };
     const auto selected_atom_size{ atom_list.size() };
-    auto local_editor_list{ BuildAtomLocalEditors(model_object, atom_list) };
+    auto analysis{ model_object.EditAnalysis() };
+    for (auto * atom : atom_list) analysis.EnsureAtomLocalPotential(*atom);
     size_t atom_count{ 0 };
     if (!options.quiet_mode)
     {
@@ -464,10 +452,7 @@ void RunFixedOffsetLocalFitting(
             ? local_view.GetPeelingSamplingEntries(false)
             : local_view.GetRawSamplingEntries()
         };
-        GaussianModel3D offset_model{
-            local_view.GetGaussianResult(stage).mdpde.GetModel()
-        };
-
+        GaussianModel3D offset_model{ local_view.GetGaussianResult(stage).mdpde.GetModel() };
         auto result{
             EstimateLocalGaussian(
                 sample_entries,
@@ -475,7 +460,7 @@ void RunFixedOffsetLocalFitting(
                 options,
                 offset_model)
         };
-        local_editor_list[i].SetGaussianResult(stage, result);
+        analysis.GetAtomLocalPotentialEditor(atom).SetGaussianResult(stage, result);
 
         if (!options.quiet_mode)
         {

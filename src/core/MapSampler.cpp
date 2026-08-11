@@ -6,7 +6,6 @@
 #include <utility>
 #include <vector>
 
-#include <rhbm_gem/data/object/AtomLocalPotentialEditor.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
@@ -101,19 +100,6 @@ LocalPotentialSampleList BuildLocalPotentialSampleList(
     return sampling_data_list;
 }
 
-std::vector<AtomLocalPotentialEditor> BuildSelectedAtomLocalEditors(ModelObject & model_object)
-{
-    auto analysis{ model_object.EditAnalysis() };
-    const auto & atom_list{ model_object.GetSelectedAtoms() };
-    std::vector<AtomLocalPotentialEditor> local_editor_list;
-    local_editor_list.reserve(atom_list.size());
-    for (auto * atom : atom_list)
-    {
-        local_editor_list.emplace_back(analysis.EnsureAtomLocalPotential(*atom));
-    }
-    return local_editor_list;
-}
-
 } // namespace
 
 LocalPotentialSampleList SampleMapValues(
@@ -155,7 +141,11 @@ void RunPotentialSamplingWorkflow(
     ScopeTimer timer("MapSampler::RunPotentialSamplingWorkflow");
     const auto & atom_list{ model_object.GetSelectedAtoms() };
     size_t atom_count{ 0 };
-    auto local_editor_list{ BuildSelectedAtomLocalEditors(model_object) };
+    auto analysis{ model_object.EditAnalysis() };
+    for (auto * atom : atom_list)
+    {
+        analysis.EnsureAtomLocalPotential(*atom);
+    }
 #ifdef USE_OPENMP
     #pragma omp parallel for num_threads(thread_count)
 #endif
@@ -164,7 +154,8 @@ void RunPotentialSamplingWorkflow(
         auto raw_sampling_entries{
             SampleAtomMapValues(map_object, *atom_list[i], sampling_method)
         };
-        local_editor_list[i].SetRawSamplingEntries(std::move(raw_sampling_entries));
+        analysis.GetAtomLocalPotentialEditor(*atom_list[i])
+            .SetRawSamplingEntries(std::move(raw_sampling_entries));
 
 #ifdef USE_OPENMP
         #pragma omp critical

@@ -42,6 +42,17 @@ AtomLocalPotentialEditor ModelAnalysisEditor::EnsureAtomLocalPotential(const Ato
     return AtomLocalPotentialEditor(entry);
 }
 
+AtomLocalPotentialEditor ModelAnalysisEditor::GetAtomLocalPotentialEditor(
+    const AtomObject & atom_object) const
+{
+    auto * entry{ ModelAnalysisData::Of(m_model_object).FindAtomLocalEntry(atom_object) };
+    if (entry == nullptr)
+    {
+        throw std::runtime_error("Atom local potential entry is not available.");
+    }
+    return AtomLocalPotentialEditor(*entry);
+}
+
 void ModelAnalysisEditor::RebuildAtomGroupsFromSelection()
 {
     auto & analysis_data{ ModelAnalysisData::Of(m_model_object) };

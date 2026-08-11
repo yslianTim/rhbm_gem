@@ -149,7 +149,7 @@ TEST(MapSamplerTest, PotentialSamplingWorkflowWritesSamplesToSelectedAtoms)
         map,
         *model,
         SphereSamplingMethod::FibonacciDeterministic,
-        1);
+        2);
 
     ASSERT_EQ(2u, model->GetSelectedAtomCount());
     for (const auto * atom : model->GetSelectedAtoms())
