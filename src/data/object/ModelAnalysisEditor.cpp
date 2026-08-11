@@ -212,6 +212,23 @@ void ModelAnalysisEditor::ApplyAtomLocalGaussianResult(
     GetAtomLocalPotentialEditor(atom_object).SetGaussianResult(stage, std::move(result));
 }
 
+void ModelAnalysisEditor::SetAtomLocalNeighborCountForPeeling(
+    const AtomObject & atom_object,
+    int neighbor_count)
+{
+    EnsureAtomLocalPotential(atom_object).SetNeighborCountForPeeling(neighbor_count);
+}
+
+void ModelAnalysisEditor::ApplyAtomLocalSecondStageResult(
+    const AtomObject & atom_object,
+    LocalGaussianResult result,
+    LocalPotentialSampleList peeling_sampling_entries)
+{
+    auto local_editor{ EnsureAtomLocalPotential(atom_object) };
+    local_editor.SetGaussianResult(FittingStage::Second, std::move(result));
+    local_editor.SetPeelingSamplingEntries(std::move(peeling_sampling_entries));
+}
+
 void ModelAnalysisEditor::SetAtomGroupAlphaG(
     FittingStage stage,
     GroupKey group_key,

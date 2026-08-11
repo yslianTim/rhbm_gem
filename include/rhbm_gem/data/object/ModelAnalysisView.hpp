@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -26,8 +27,10 @@ public:
     const GaussianModel3D & GetAtomGroupPrior(FittingStage stage, GroupKey group_key) const;
     GaussianModel3DWithUncertainty GetAtomGroupPriorWithUncertainty(
         FittingStage stage, GroupKey group_key) const;
-    const std::vector<AtomObject *> & GetAtomObjectList(
-        FittingStage stage, GroupKey group_key) const;
+    std::optional<GaussianModel3DWithUncertainty> FindAtomGroupPriorWithUncertainty(
+        FittingStage stage,
+        const AtomObject & atom_object) const;
+    const std::vector<AtomObject *> & GetAtomObjectList(FittingStage stage, GroupKey group_key) const;
     double GetAtomAlphaR(FittingStage stage, GroupKey group_key) const;
     double GetAtomAlphaG(FittingStage stage, GroupKey group_key) const;
     std::vector<GroupKey> CollectAtomGroupKeys(FittingStage stage) const;

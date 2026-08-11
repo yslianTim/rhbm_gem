@@ -430,7 +430,7 @@ struct SecondStageNeighborSample
 
 struct SecondStageUnselectedContributor
 {
-    AtomObject * atom{ nullptr };
+    const AtomObject * atom{ nullptr };
     GroupKey group_key{};
     std::optional<GaussianModel3DWithUncertainty> initial_seed{};
     detail::SecondStageSeedSource seed_source{
@@ -440,10 +440,15 @@ struct SecondStageUnselectedContributor
 
 struct SecondStageAtomContext
 {
-    AtomObject * atom{ nullptr };
+    const AtomObject * atom{ nullptr };
+    GroupKey group_key{};
+    detail::LocalFittingCouplingResidueKey residue_key{};
     LocalPotentialSampleList raw_sampling_entries{};
+    LocalGaussianResult initial_result{};
+    std::optional<GaussianModel3DWithUncertainty> group_prior{};
     std::vector<std::vector<SecondStageNeighborSample>> sample_neighbor_list{};
     double alpha_r{ 0.0 };
+    int neighbor_count_for_peeling{ 0 };
 };
 
 struct SecondStageLocalFittingContext
@@ -856,6 +861,7 @@ SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(
     {
         context.selected_atom_list.emplace_back(SecondStageAtomContext{ atom });
     }
+    const auto analysis_view{ model_object.GetAnalysisView() };
     std::unordered_map<const AtomObject *, std::size_t> atom_index_map;
     atom_index_map.reserve(context.size());
     for (std::size_t i = 0; i < context.size(); i++)
@@ -867,8 +873,17 @@ SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(
     {
         auto & atom_context{ context.at(atom_index) };
         const auto * atom{ atom_context.atom };
+        atom_context.group_key = data_internal::GetGroupKey(atom);
+        atom_context.residue_key = {
+            atom->GetChainID(),
+            atom->GetSequenceID()
+        };
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
         atom_context.raw_sampling_entries = local_view.GetRawSamplingEntries(false);
+        atom_context.initial_result = local_view.GetGaussianResult(FittingStage::Second);
+        atom_context.group_prior = analysis_view.FindAtomGroupPriorWithUncertainty(
+            FittingStage::Second,
+            *atom);
         atom_context.alpha_r = local_view.GetAlphaR(FittingStage::Second);
     }
 
@@ -877,6 +892,7 @@ SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(
         auto & atom_context{ context.at(atom_index) };
         const auto * atom{ atom_context.atom };
         const auto neighbor_atom_list{ atom->FindNeighborAtoms(kNeighborAtomSearchRange) };
+        std::unordered_set<const AtomObject *> neighbor_atom_set;
 
         atom_context.sample_neighbor_list.resize(atom_context.raw_sampling_entries.size());
         for (std::size_t sample_index = 0;
@@ -897,6 +913,7 @@ SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(
                         array_helper::ComputeNorm<float>(sample.point.position, neighbor_atom->GetPositionRef()))
                 };
                 if (distance > kNeighborContributionDistanceMax) continue;
+                neighbor_atom_set.emplace(neighbor_atom);
 
                 const auto selected_iter{ atom_index_map.find(neighbor_atom) };
                 if (selected_iter != atom_index_map.end())
@@ -933,6 +950,8 @@ SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(
                     });
             }
         }
+        atom_context.neighbor_count_for_peeling =
+            static_cast<int>(neighbor_atom_set.size());
     }
 
     return context;
@@ -945,20 +964,9 @@ void StoreSecondStageNeighborCounts(
     auto analysis{ model_object.EditAnalysis() };
     for (const auto & atom_context : context)
     {
-        std::unordered_set<const AtomObject *> neighbor_atom_set;
-        for (const auto & sample_neighbor_list : atom_context.sample_neighbor_list)
-        {
-            for (const auto & neighbor_sample : sample_neighbor_list)
-            {
-                const auto * neighbor_atom{ neighbor_sample.is_selected
-                    ? context.selected_atom_list.at(neighbor_sample.atom_index).atom
-                    : context.unselected_atom_list.at(neighbor_sample.atom_index).atom
-                };
-                neighbor_atom_set.emplace(neighbor_atom);
-            }
-        }
-        analysis.EnsureAtomLocalPotential(*atom_context.atom)
-            .SetNeighborCountForPeeling(static_cast<int>(neighbor_atom_set.size()));
+        analysis.SetAtomLocalNeighborCountForPeeling(
+            *atom_context.atom,
+            atom_context.neighbor_count_for_peeling);
     }
 }
 
@@ -1042,8 +1050,7 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
                     selected_index < context.size();
                     selected_index++)
                 {
-                    if (data_internal::GetGroupKey(
-                            context.at(selected_index).atom) != group_key)
+                    if (context.at(selected_index).group_key != group_key)
                     {
                         continue;
                     }
@@ -1085,9 +1092,7 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
     residue_key_by_atom_index.reserve(context.size());
     for (const auto & atom_context : context)
     {
-        residue_key_by_atom_index.emplace_back(
-            atom_context.atom->GetChainID(),
-            atom_context.atom->GetSequenceID());
+        residue_key_by_atom_index.emplace_back(atom_context.residue_key);
     }
     return detail::ApplyLocalFittingCouplingResidueCutoff(
         std::move(topology),
@@ -1110,38 +1115,28 @@ std::optional<GaussianModel3DWithUncertainty> BuildValidGaussianParameterMedian(
 
 std::optional<SecondStageInitialStateBuildResult> BuildInitialLocalFittingState(
     SecondStageLocalFittingContext & context,
-    const ModelAnalysisView & analysis_view,
     bool & unselected_seed_failure)
 {
     unselected_seed_failure = false;
     SecondStageInitialStateBuildResult build_result;
     auto & state{ build_result.state };
     state.resize(context.size());
-    std::vector<std::optional<GaussianModel3DWithUncertainty>> group_prior_list(
-        context.size());
     std::unordered_map<GroupKey, std::vector<GaussianModel3D>> models_by_group;
     std::vector<GaussianModel3D> global_models;
     global_models.reserve(context.size());
 
     for (std::size_t i = 0; i < context.size(); i++)
     {
-        const auto * atom{ context.at(i).atom };
-        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
-        state.at(i) = local_view.GetGaussianResult(FittingStage::Second);
-        const auto group_key{ data_internal::GetGroupKey(atom) };
-        if (analysis_view.HasAtomGroup(FittingStage::Second, group_key))
-        {
-            group_prior_list.at(i) = analysis_view.GetAtomGroupPriorWithUncertainty(
-                FittingStage::Second,
-                group_key);
-        }
+        const auto & atom_context{ context.at(i) };
+        state.at(i) = atom_context.initial_result;
+        const auto group_key{ atom_context.group_key };
 
         const auto & result{ state.at(i) };
         const auto direct_selection{
             detail::SelectSecondStageSeed(
                 detail::SecondStageSeedCandidates{
                     result.posterior,
-                    group_prior_list.at(i),
+                    atom_context.group_prior,
                     std::nullopt,
                     std::nullopt
                 })
@@ -1169,9 +1164,8 @@ std::optional<SecondStageInitialStateBuildResult> BuildInitialLocalFittingState(
     {
         auto & result{ state.at(i) };
         const auto original_model{ result.mdpde.GetModel() };
-        const auto group_key{
-            data_internal::GetGroupKey(context.at(i).atom)
-        };
+        const auto & atom_context{ context.at(i) };
+        const auto group_key{ atom_context.group_key };
         std::optional<GaussianModel3DWithUncertainty> group_median;
         const auto group_median_iter{ median_by_group.find(group_key) };
         if (group_median_iter != median_by_group.end())
@@ -1182,7 +1176,7 @@ std::optional<SecondStageInitialStateBuildResult> BuildInitialLocalFittingState(
             detail::SelectSecondStageSeed(
                 detail::SecondStageSeedCandidates{
                     result.posterior,
-                    group_prior_list.at(i),
+                    atom_context.group_prior,
                     group_median,
                     global_median
                 })
@@ -1448,8 +1442,7 @@ FittedGaussianSnapshot BuildUnselectedContributorSnapshot(
     selected_models_by_group.reserve(context.size());
     for (std::size_t i = 0; i < context.size(); i++)
     {
-        selected_models_by_group[
-            data_internal::GetGroupKey(context.at(i).atom)]
+        selected_models_by_group[context.at(i).group_key]
             .emplace_back(selected_snapshot.at(i));
     }
 
@@ -1531,8 +1524,7 @@ JointOffsetBuildResult BuildJointOffsetSystem(
     active_model_list.reserve(active_index_list.size());
     for (const auto atom_index : active_index_list)
     {
-        group_key_by_atom_position.emplace_back(
-            data_internal::GetGroupKey(context.at(atom_index).atom));
+        group_key_by_atom_position.emplace_back(context.at(atom_index).group_key);
         active_model_list.emplace_back(snapshot.at(atom_index));
     }
     auto parameterization{
@@ -1665,26 +1657,18 @@ JointOffsetBuildResult BuildJointOffsetSystem(
             };
             if (!group_basis.has_value())
             {
-                throw std::runtime_error(
-                    "Joint offset group basis is invalid.");
+                throw std::runtime_error("Joint offset group basis is invalid.");
             }
             group_row_basis_entries.clear();
-            for (Eigen::Index column_index = 0;
-                column_index < group_basis->size();
-                column_index++)
+            for (Eigen::Index column_index = 0; column_index < group_basis->size(); column_index++)
             {
                 const auto basis{ (*group_basis)(column_index) };
-                if (std::abs(basis) <= std::numeric_limits<double>::epsilon())
-                {
-                    continue;
-                }
+                if (std::abs(basis) <= std::numeric_limits<double>::epsilon()) continue;
                 group_row_basis_entries.emplace_back(column_index, basis);
             }
             if (group_row_basis_entries.empty()) continue;
 
-            const auto row_index{
-                static_cast<Eigen::Index>(response_list.size())
-            };
+            const auto row_index{ static_cast<Eigen::Index>(response_list.size()) };
             response_list.emplace_back(residual);
             for (const auto & [column_index, basis] : group_row_basis_entries)
             {
@@ -1696,18 +1680,13 @@ JointOffsetBuildResult BuildJointOffsetSystem(
                 const auto [left_column, left_basis]{
                     group_row_basis_entries.at(i)
                 };
-                for (std::size_t j = i + 1;
-                    j < group_row_basis_entries.size();
-                    j++)
+                for (std::size_t j = i + 1; j < group_row_basis_entries.size(); j++)
                 {
                     const auto [right_column, right_basis]{
                         group_row_basis_entries.at(j)
                     };
-                    const auto column_pair{
-                        std::minmax(left_column, right_column)
-                    };
-                    group_column_cross_sum_map[column_pair] +=
-                        left_basis * right_basis;
+                    const auto column_pair{ std::minmax(left_column, right_column) };
+                    group_column_cross_sum_map[column_pair] += left_basis * right_basis;
                 }
             }
         }
@@ -1727,10 +1706,7 @@ JointOffsetBuildResult BuildJointOffsetSystem(
             continue;
         }
         const auto overlap{ std::abs(cross_sum) / std::sqrt(left_square_sum * right_square_sum) };
-        if (!std::isfinite(overlap))
-        {
-            continue;
-        }
+        if (!std::isfinite(overlap)) continue;
         if (overlap < kJointOffsetCollinearityOverlapThreshold) continue;
 
         proactive_ridge_multiplier(left_column) = std::max(
@@ -1779,13 +1755,10 @@ JointOffsetBuildResult BuildJointOffsetSystem(
     {
         double multiplier{ 1.0 };
         for (const auto atom_position :
-            parameterization->atom_position_list_by_group.at(
-                static_cast<std::size_t>(column_index)))
+            parameterization->atom_position_list_by_group.at(static_cast<std::size_t>(column_index)))
         {
             const auto atom_index{ active_index_list.at(atom_position) };
-            multiplier = std::max(
-                multiplier,
-                ridge_multiplier_list.at(atom_index));
+            multiplier = std::max(multiplier, ridge_multiplier_list.at(atom_index));
         }
         const auto square_sum{ group_column_square_sum(column_index) };
         const auto combined_multiplier{
@@ -2002,9 +1975,7 @@ LocalPotentialSampleList BuildSecondStageAdjustedSamples(
     };
     LocalPotentialSampleList adjusted_sampling_entries;
     adjusted_sampling_entries.reserve(atom_context.raw_sampling_entries.size());
-    for (std::size_t sample_index = 0;
-        sample_index < atom_context.raw_sampling_entries.size();
-        sample_index++)
+    for (std::size_t sample_index = 0; sample_index < atom_context.raw_sampling_entries.size(); sample_index++)
     {
         auto sample{ atom_context.raw_sampling_entries.at(sample_index) };
         sample.response = static_cast<float>(CalculateSecondStageAdjustedResponse(
@@ -2699,7 +2670,7 @@ std::optional<Eigen::VectorXd> BuildLocalFittingJointPolishDirection(
         local_position_by_atom_index.at(atom_index) =
             static_cast<int>(local_position);
         local_position_by_group_key.emplace(
-            data_internal::GetGroupKey(context.at(atom_index).atom),
+            context.at(atom_index).group_key,
             local_position);
     }
     auto selected_snapshot{ BuildFittedGaussianSnapshot(base_state) };
@@ -2996,7 +2967,7 @@ BuildLocalFittingSharedOffsetBaseProposal(
     raw_model_list.reserve(key.size());
     for (const auto atom_index : key)
     {
-        group_key_by_atom_position.emplace_back(data_internal::GetGroupKey(context.at(atom_index).atom));
+        group_key_by_atom_position.emplace_back(context.at(atom_index).group_key);
         previous_model_list.emplace_back(outer_previous_state.at(atom_index).mdpde.GetModel());
         raw_model_list.emplace_back(raw_state.at(atom_index).mdpde.GetModel());
     }
@@ -3148,7 +3119,7 @@ BuildLocalFittingJointPolishProposal(
     base_model_list.reserve(key.size());
     for (const auto atom_index : key)
     {
-        group_key_by_atom_position.emplace_back(data_internal::GetGroupKey(context.at(atom_index).atom));
+        group_key_by_atom_position.emplace_back(context.at(atom_index).group_key);
         base_model_list.emplace_back(base_state.at(atom_index).mdpde.GetModel());
     }
     const auto parameterization{
@@ -3358,7 +3329,7 @@ std::optional<LocalFittingState> BuildLocalFittingBacktrackedState(
     endpoint_model_list.reserve(active_index_list.size());
     for (const auto atom_index : active_index_list)
     {
-        group_key_by_atom_position.emplace_back(data_internal::GetGroupKey(context.at(atom_index).atom));
+        group_key_by_atom_position.emplace_back(context.at(atom_index).group_key);
         previous_model_list.emplace_back(previous_state.at(atom_index).mdpde.GetModel());
         endpoint_model_list.emplace_back(endpoint_state.at(atom_index).mdpde.GetModel());
     }
@@ -4173,7 +4144,7 @@ LocalFittingIterationResult RunLocalFittingIteration(
     group_key_by_atom_index.reserve(context.size());
     for (const auto & atom_context : context)
     {
-        group_key_by_atom_index.emplace_back(data_internal::GetGroupKey(atom_context.atom));
+        group_key_by_atom_index.emplace_back(atom_context.group_key);
     }
     for (const auto & [key, result] : joint_offset_result_by_key)
     {
@@ -4264,16 +4235,28 @@ void ApplyLocalFittingState(
     const SecondStageLocalFittingContext & context,
     const LocalFittingState & iteration_state)
 {
+    if (context.size() != iteration_state.size())
+    {
+        throw std::invalid_argument(
+            "Local fitting context and state sizes are inconsistent.");
+    }
+
     const auto fitted_gaussian_snapshot{ BuildFittedGaussianSnapshot(iteration_state) };
+    std::vector<LocalPotentialSampleList> adjusted_sampling_entries_list;
+    adjusted_sampling_entries_list.reserve(context.size());
+    for (std::size_t i = 0; i < context.size(); i++)
+    {
+        adjusted_sampling_entries_list.emplace_back(
+            BuildSecondStageAdjustedSamples(context, i, fitted_gaussian_snapshot));
+    }
+
     auto analysis{ model_object.EditAnalysis() };
     for (std::size_t i = 0; i < context.size(); i++)
     {
-        auto local_editor{
-            analysis.EnsureAtomLocalPotential(*context.at(i).atom)
-        };
-        local_editor.SetGaussianResult(FittingStage::Second, iteration_state.at(i));
-        local_editor.SetPeelingSamplingEntries(
-            BuildSecondStageAdjustedSamples(context, i, fitted_gaussian_snapshot));
+        analysis.ApplyAtomLocalSecondStageResult(
+            *context.at(i).atom,
+            iteration_state.at(i),
+            std::move(adjusted_sampling_entries_list.at(i)));
     }
 }
 
@@ -5021,7 +5004,6 @@ bool RunSecondStageLocalFitting(
     auto initial_state_build_result{
         BuildInitialLocalFittingState(
             context,
-            model_object.GetAnalysisView(),
             unselected_seed_failure)
     };
     if (!initial_state_build_result.has_value())

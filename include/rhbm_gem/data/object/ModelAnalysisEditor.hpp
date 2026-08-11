@@ -37,6 +37,13 @@ public:
         FittingStage stage,
         const AtomObject & atom_object,
         LocalGaussianResult result);
+    void SetAtomLocalNeighborCountForPeeling(
+        const AtomObject & atom_object,
+        int neighbor_count);
+    void ApplyAtomLocalSecondStageResult(
+        const AtomObject & atom_object,
+        LocalGaussianResult result,
+        LocalPotentialSampleList peeling_sampling_entries);
     void SetAtomGroupAlphaG(FittingStage stage, GroupKey group_key, double alpha_g);
     
 };

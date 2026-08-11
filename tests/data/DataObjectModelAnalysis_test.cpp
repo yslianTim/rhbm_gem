@@ -817,6 +817,79 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialEditorCanSetPeelingNeighborC
         5);
 }
 
+TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorSetsPeelingNeighborCountAndCreatesEntry)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto * atom{ model->GetAtomList().at(0).get() };
+    auto analysis{ model->EditAnalysis() };
+
+    EXPECT_FALSE(rg::AtomLocalPotentialView::For(*atom).IsAvailable());
+
+    analysis.SetAtomLocalNeighborCountForPeeling(*atom, 5);
+
+    const auto view{ rg::AtomLocalPotentialView::RequireFor(*atom) };
+    EXPECT_EQ(view.GetNeighborCountForPeeling(), 5);
+}
+
+TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomLocalSecondStageResult)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto * atom{ model->GetAtomList().at(0).get() };
+    auto analysis{ model->EditAnalysis() };
+    auto local_editor{ analysis.EnsureAtomLocalPotential(*atom) };
+
+    const LocalPotentialSampleList raw_sampling_entries{
+        LocalPotentialSample{ 8.0f, SamplingPoint{ 0.2f } }
+    };
+    const LocalPotentialSampleList peeling_sampling_entries{
+        LocalPotentialSample{ 3.0f, SamplingPoint{ 0.4f } }
+    };
+    local_editor.SetRawSamplingEntries(raw_sampling_entries);
+
+    rg::LocalGaussianResult first_result;
+    first_result.mdpde = rg::GaussianModel3DWithUncertainty{
+        rg::GaussianModel3D{ 1.0, 0.6 },
+        rg::GaussianModel3DUncertainty{}
+    };
+    local_editor.SetGaussianResult(rg::FittingStage::First, first_result);
+
+    rg::LocalGaussianResult third_result;
+    third_result.mdpde = rg::GaussianModel3DWithUncertainty{
+        rg::GaussianModel3D{ 3.0, 0.8 },
+        rg::GaussianModel3DUncertainty{}
+    };
+    local_editor.SetGaussianResult(rg::FittingStage::Third, third_result);
+
+    rg::LocalGaussianResult second_result;
+    second_result.alpha_r = 0.42;
+    second_result.mdpde = rg::GaussianModel3DWithUncertainty{
+        rg::GaussianModel3D{ 2.0, 0.7, -0.1 },
+        rg::GaussianModel3DUncertainty{}
+    };
+    analysis.ApplyAtomLocalSecondStageResult(
+        *atom,
+        second_result,
+        peeling_sampling_entries);
+
+    const auto view{ rg::AtomLocalPotentialView::RequireFor(*atom) };
+    EXPECT_EQ(view.GetRawSamplingEntries(false).size(), 1u);
+    EXPECT_FLOAT_EQ(view.GetRawSamplingEntries(false).front().response, 8.0f);
+    EXPECT_EQ(view.GetPeelingSamplingEntries(false).size(), 1u);
+    EXPECT_FLOAT_EQ(view.GetPeelingSamplingEntries(false).front().response, 3.0f);
+    EXPECT_DOUBLE_EQ(
+        view.GetGaussianResult(rg::FittingStage::Second).alpha_r,
+        0.42);
+    EXPECT_DOUBLE_EQ(
+        view.GetEstimateMDPDE(rg::FittingStage::Second).GetAmplitude(),
+        2.0);
+    EXPECT_DOUBLE_EQ(
+        view.GetEstimateMDPDE(rg::FittingStage::First).GetAmplitude(),
+        1.0);
+    EXPECT_DOUBLE_EQ(
+        view.GetEstimateMDPDE(rg::FittingStage::Third).GetAmplitude(),
+        3.0);
+}
+
 TEST(DataObjectModelAnalysisTest, AtomLocalPotentialEditorSetGaussianResultUpdatesViewEstimates)
 {
     auto model{ data_test::MakeModelWithBond() };
@@ -1078,6 +1151,60 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupGaussianRes
         rg::FittingStage::First).posterior.has_value());
     EXPECT_FALSE(local_view.GetGaussianResult(
         rg::FittingStage::Second).posterior.has_value());
+}
+
+TEST(DataObjectModelAnalysisTest, ModelAnalysisViewFindsAtomGroupPriorForAtom)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    model->SelectAllAtoms();
+    model->ApplySymmetrySelection(false);
+    auto analysis{ model->EditAnalysis() };
+    analysis.RebuildAtomGroupsFromSelection();
+
+    const auto before_view{ model->GetAnalysisView() };
+    const auto group_key{ before_view.CollectAtomGroupKeys(
+        rg::FittingStage::Third).front() };
+    const auto & atom_list{ before_view.GetAtomObjectList(
+        rg::FittingStage::Third,
+        group_key) };
+    ASSERT_FALSE(atom_list.empty());
+
+    rg::GroupGaussianResult group_result;
+    group_result.prior = rg::GaussianModel3DWithUncertainty{
+        rg::GaussianModel3D{ 1.7, 0.9, -0.2 },
+        rg::GaussianModel3DUncertainty{ 0.1, 0.2, 0.3 }
+    };
+    group_result.member_results.resize(atom_list.size());
+    analysis.ApplyAtomGroupGaussianResult(
+        rg::FittingStage::Third,
+        group_key,
+        group_result);
+
+    const auto view{ model->GetAnalysisView() };
+    const auto found{ view.FindAtomGroupPriorWithUncertainty(
+        rg::FittingStage::Third,
+        *atom_list.front()) };
+    ASSERT_TRUE(found.has_value());
+    EXPECT_DOUBLE_EQ(found->GetModel().GetAmplitude(), 1.7);
+    EXPECT_DOUBLE_EQ(found->GetModel().GetWidth(), 0.9);
+    EXPECT_DOUBLE_EQ(found->GetModel().GetOffset(), -0.2);
+    EXPECT_DOUBLE_EQ(
+        found->GetStandardDeviationModel().GetWidth(),
+        0.2);
+
+    auto missing_model{ data_test::MakeModelWithBond() };
+    auto * missing_atom{ missing_model->GetAtomList().at(1).get() };
+    missing_atom->SetAtomKey(static_cast<AtomKey>(65535));
+    missing_model->SelectAllAtoms(false);
+    missing_model->SetAtomSelected(
+        missing_model->GetAtomList().at(0)->GetSerialID(),
+        true);
+    missing_model->EditAnalysis().RebuildAtomGroupsFromSelection();
+    EXPECT_FALSE(missing_model->GetAnalysisView()
+        .FindAtomGroupPriorWithUncertainty(
+            rg::FittingStage::Third,
+            *missing_atom)
+        .has_value());
 }
 
 TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorRejectsAtomGroupGaussianResultWithMismatchedMemberCount)
