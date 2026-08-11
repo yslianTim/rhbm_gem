@@ -9,6 +9,7 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <stdexcept>
+#include <utility>
 
 namespace rhbm_gem {
 
@@ -68,6 +69,25 @@ AtomLocalPotentialEditor ModelAnalysisEditor::EnsureAtomLocalPotential(const Ato
     return AtomLocalPotentialEditor(entry);
 }
 
+void ModelAnalysisEditor::EnsureSelectedAtomLocalPotentials()
+{
+    for (auto * atom : m_model_object.GetSelectedAtoms())
+    {
+        EnsureAtomLocalPotential(*atom);
+    }
+}
+
+void ModelAnalysisEditor::EnsureAtomGroupLocalPotentials(FittingStage stage, GroupKey group_key)
+{
+    const auto & atom_list{
+        ModelAnalysisData::Of(m_model_object).AtomGroupEntry().GetMembers(stage, group_key)
+    };
+    for (auto * atom : atom_list)
+    {
+        EnsureAtomLocalPotential(*atom);
+    }
+}
+
 AtomLocalPotentialEditor ModelAnalysisEditor::GetAtomLocalPotentialEditor(
     const AtomObject & atom_object) const
 {
@@ -93,9 +113,7 @@ void ModelAnalysisEditor::RebuildAtomGroupsFromSelection()
     }
 }
 
-void ModelAnalysisEditor::InitializeLocalAlpha(
-    FittingStage stage,
-    double alpha_r)
+void ModelAnalysisEditor::InitializeLocalAlpha(FittingStage stage, double alpha_r)
 {
     for (auto * atom : m_model_object.GetSelectedAtoms())
     {
@@ -103,9 +121,21 @@ void ModelAnalysisEditor::InitializeLocalAlpha(
     }
 }
 
-void ModelAnalysisEditor::InitializeGroupAlpha(
+void ModelAnalysisEditor::SetAtomGroupAlphaR(
     FittingStage stage,
-    double alpha_g)
+    GroupKey group_key,
+    double alpha_r)
+{
+    const auto & atom_list{
+        ModelAnalysisData::Of(m_model_object).AtomGroupEntry().GetMembers(stage, group_key)
+    };
+    for (auto * atom : atom_list)
+    {
+        EnsureAtomLocalPotential(*atom).SetAlphaR(stage, alpha_r);
+    }
+}
+
+void ModelAnalysisEditor::InitializeGroupAlpha(FittingStage stage, double alpha_g)
 {
     auto & group_entry{ ModelAnalysisData::Of(m_model_object).AtomGroupEntry() };
     for (const auto group_key : group_entry.CollectGroupKeys(stage))
@@ -174,13 +204,20 @@ void ModelAnalysisEditor::ApplyAtomGroupGaussianResult(
     group_entry.SetGaussianResult(stage, group_key, group_result);
 }
 
+void ModelAnalysisEditor::ApplyAtomLocalGaussianResult(
+    FittingStage stage,
+    const AtomObject & atom_object,
+    LocalGaussianResult result)
+{
+    GetAtomLocalPotentialEditor(atom_object).SetGaussianResult(stage, std::move(result));
+}
+
 void ModelAnalysisEditor::SetAtomGroupAlphaG(
     FittingStage stage,
     GroupKey group_key,
     double alpha_g)
 {
-    ModelAnalysisData::Of(m_model_object)
-        .AtomGroupEntry().SetAlphaG(stage, group_key, alpha_g);
+    ModelAnalysisData::Of(m_model_object).AtomGroupEntry().SetAlphaG(stage, group_key, alpha_g);
 }
 
 } // namespace rhbm_gem

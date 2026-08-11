@@ -405,7 +405,7 @@ void RunFixedOffsetLocalFitting(
     const auto & atom_list{ model_object.GetSelectedAtoms() };
     const auto selected_atom_size{ atom_list.size() };
     auto analysis{ model_object.EditAnalysis() };
-    for (auto * atom : atom_list) analysis.EnsureAtomLocalPotential(*atom);
+    analysis.EnsureSelectedAtomLocalPotentials();
     size_t atom_count{ 0 };
     if (!options.quiet_mode)
     {
@@ -432,7 +432,7 @@ void RunFixedOffsetLocalFitting(
                 options,
                 offset_model)
         };
-        analysis.GetAtomLocalPotentialEditor(atom).SetGaussianResult(stage, result);
+        analysis.ApplyAtomLocalGaussianResult(stage, atom, std::move(result));
 
         if (!options.quiet_mode)
         {
@@ -601,11 +601,11 @@ void RunLocalAlphaTraining(
     for (const auto group_key : group_key_list)
     {
         const auto & group_atom_list{ analysis_view.GetAtomObjectList(stage, group_key) };
+        analysis.EnsureAtomGroupLocalPotentials(stage, group_key);
         std::vector<LocalPotentialSampleList> sample_entries_list;
         sample_entries_list.reserve(group_atom_list.size());
         for (auto * atom : group_atom_list)
         {
-            analysis.EnsureAtomLocalPotential(*atom);
             const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
             auto sample_entries{ UsesPeelingSamplingEntries(stage)
                 ? local_view.GetPeelingSamplingEntries(false)
@@ -621,10 +621,7 @@ void RunLocalAlphaTraining(
         if (!sample_entries_list.empty())
         {
             const auto alpha_r{ TrainAlphaR(sample_entries_list, options) };
-            for (auto * atom : group_atom_list)
-            {
-                analysis.EnsureAtomLocalPotential(*atom).SetAlphaR(stage, alpha_r);
-            }
+            analysis.SetAtomGroupAlphaR(stage, group_key, alpha_r);
         }
         count++;
         if (!options.quiet_mode)
@@ -654,12 +651,12 @@ void RunGroupAlphaTraining(
         };
         if (group_atom_list.size() < kMinimumAlphaGTrainingMemberCount) continue;
         if (group_atom_list.front()->IsMainChainAtom() == false) continue;
+        analysis.EnsureAtomGroupLocalPotentials(stage, group_key);
 
         std::vector<LocalGaussianResult> group_member_results;
         group_member_results.reserve(group_atom_list.size());
         for (auto * atom : group_atom_list)
         {
-            analysis.EnsureAtomLocalPotential(*atom);
             const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
             group_member_results.emplace_back(local_view.GetGaussianResult(stage));
         }
@@ -667,10 +664,7 @@ void RunGroupAlphaTraining(
     }
 
     const auto alpha_g{ TrainAlphaG(member_result_list, options) };
-    for (const auto group_key : group_key_list)
-    {
-        analysis.SetAtomGroupAlphaG(stage, group_key, alpha_g);
-    }
+    analysis.InitializeGroupAlpha(stage, alpha_g);
 }
 
 } // namespace
@@ -682,11 +676,7 @@ void RunGroupPotentialFitting(
 {
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
-    const auto & selected_atom_list{ model_object.GetSelectedAtoms() };
-    for (auto * atom : selected_atom_list)
-    {
-        analysis.EnsureAtomLocalPotential(*atom);
-    }
+    analysis.EnsureSelectedAtomLocalPotentials();
     if (!options.quiet_mode)
     {
         Logger::Log(LogLevel::Info, "Run atom group fitting.");
