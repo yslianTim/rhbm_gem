@@ -61,70 +61,6 @@ bool HasTwoFractionalDigits(const std::string & value)
         && value.at(decimal_position + 2) <= '9';
 }
 
-TEST(EstimatorTesterTest, CalculateLocalFittingPeelingRatioUsesSignedResponseSums)
-{
-    const LocalPotentialSampleList raw_sampling_entries{
-        LocalPotentialSample{ 2.0F, SamplingPoint{} },
-        LocalPotentialSample{ 3.0F, SamplingPoint{} }
-    };
-    const LocalPotentialSampleList peeling_sampling_entries{
-        LocalPotentialSample{ 1.0F, SamplingPoint{} },
-        LocalPotentialSample{ 1.0F, SamplingPoint{} }
-    };
-
-    const auto ratio{ rt::detail::CalculateLocalFittingPeelingRatio(
-        raw_sampling_entries,
-        peeling_sampling_entries,
-        true) };
-
-    ASSERT_TRUE(ratio.has_value());
-    EXPECT_DOUBLE_EQ(*ratio, 0.6);
-
-    const auto negative_ratio{ rt::detail::CalculateLocalFittingPeelingRatio(
-        LocalPotentialSampleList{ LocalPotentialSample{ 1.0F, SamplingPoint{} } },
-        LocalPotentialSampleList{ LocalPotentialSample{ 2.0F, SamplingPoint{} } },
-        true) };
-    ASSERT_TRUE(negative_ratio.has_value());
-    EXPECT_DOUBLE_EQ(*negative_ratio, -1.0);
-
-    const auto above_one_ratio{ rt::detail::CalculateLocalFittingPeelingRatio(
-        LocalPotentialSampleList{ LocalPotentialSample{ 1.0F, SamplingPoint{} } },
-        LocalPotentialSampleList{ LocalPotentialSample{ -1.0F, SamplingPoint{} } },
-        true) };
-    ASSERT_TRUE(above_one_ratio.has_value());
-    EXPECT_DOUBLE_EQ(*above_one_ratio, 2.0);
-}
-
-TEST(EstimatorTesterTest, CalculateLocalFittingPeelingRatioRejectsUnavailableInputs)
-{
-    const LocalPotentialSampleList valid_entries{
-        LocalPotentialSample{ 1.0F, SamplingPoint{} }
-    };
-    const LocalPotentialSampleList zero_sum_entries{
-        LocalPotentialSample{ 1.0F, SamplingPoint{} },
-        LocalPotentialSample{ -1.0F, SamplingPoint{} }
-    };
-    const LocalPotentialSampleList non_finite_entries{
-        LocalPotentialSample{
-            std::numeric_limits<float>::quiet_NaN(),
-            SamplingPoint{}
-        }
-    };
-
-    EXPECT_FALSE(rt::detail::CalculateLocalFittingPeelingRatio(
-        {}, valid_entries, true).has_value());
-    EXPECT_FALSE(rt::detail::CalculateLocalFittingPeelingRatio(
-        valid_entries, {}, true).has_value());
-    EXPECT_FALSE(rt::detail::CalculateLocalFittingPeelingRatio(
-        zero_sum_entries, valid_entries, true).has_value());
-    EXPECT_FALSE(rt::detail::CalculateLocalFittingPeelingRatio(
-        non_finite_entries, valid_entries, true).has_value());
-    EXPECT_FALSE(rt::detail::CalculateLocalFittingPeelingRatio(
-        valid_entries, non_finite_entries, true).has_value());
-    EXPECT_FALSE(rt::detail::CalculateLocalFittingPeelingRatio(
-        valid_entries, valid_entries, false).has_value());
-}
-
 tdf::GaussianParameterDistribution MakeDistribution(
     const rg::GaussianModel3D & mean,
     const rg::GaussianModel3DUncertainty & sigma = rg::GaussianModel3DUncertainty{ 0.05, 0.025, 0.01 })
@@ -575,12 +511,7 @@ TEST(
     EXPECT_EQ(
         std::stoi(row.at(3)),
         fitted_view.GetNeighborCountForPeeling());
-    const auto expected_peeling_ratio{
-        rt::detail::CalculateLocalFittingPeelingRatio(
-            fitted_view.GetRawSamplingEntries(false),
-            fitted_view.GetPeelingSamplingEntries(false),
-            true)
-    };
+    const auto expected_peeling_ratio{ fitted_view.GetLocalFittingPeelingRatio(true) };
     ASSERT_TRUE(expected_peeling_ratio.has_value());
     EXPECT_NEAR(std::stod(row.at(4)), *expected_peeling_ratio, 0.0051);
     for (std::size_t column = 4; column < row.size(); column++)

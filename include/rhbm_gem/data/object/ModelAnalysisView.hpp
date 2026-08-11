@@ -33,6 +33,8 @@ public:
     std::vector<GroupKey> CollectAtomGroupKeys(FittingStage stage) const;
     std::string GetAtomCountingSummary() const;
     std::string GetAtomGroupingSummary(FittingStage stage) const;
+    std::string GetGroupPriorSpotSummary(FittingStage stage) const;
+    std::string GetLocalFittingResultCsv(bool peeling_applied) const;
     
 };
 

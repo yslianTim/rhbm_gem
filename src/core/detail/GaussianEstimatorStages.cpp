@@ -4970,37 +4970,6 @@ detail::SuspiciousGaussianReason detail::EvaluateSuspiciousPostRefitUpdate(
         true);
 }
 
-std::optional<double> detail::CalculateLocalFittingPeelingRatio(
-    const LocalPotentialSampleList & raw_sampling_entries,
-    const LocalPotentialSampleList & peeling_sampling_entries,
-    bool peeling_applied)
-{
-    if (!peeling_applied
-        || raw_sampling_entries.empty()
-        || peeling_sampling_entries.empty())
-    {
-        return std::nullopt;
-    }
-
-    double raw_sum{ 0.0 };
-    for (const auto & sample : raw_sampling_entries)
-    {
-        raw_sum += static_cast<double>(sample.response);
-    }
-    double peeling_sum{ 0.0 };
-    for (const auto & sample : peeling_sampling_entries)
-    {
-        peeling_sum += static_cast<double>(sample.response);
-    }
-    if (!std::isfinite(raw_sum) || !std::isfinite(peeling_sum) || raw_sum == 0.0)
-    {
-        return std::nullopt;
-    }
-
-    const auto ratio{ (raw_sum - peeling_sum) / raw_sum };
-    return std::isfinite(ratio) ? std::optional<double>{ ratio } : std::nullopt;
-}
-
 std::vector<char> detail::ExpandSuspiciousSharedOffsetGroups(
     const std::vector<GroupKey> & group_key_by_position,
     const std::vector<char> & suspicious_seed_mask)

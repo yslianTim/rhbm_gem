@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstddef>
-#include <optional>
 
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
@@ -33,11 +32,6 @@ SuspiciousGaussianReason EvaluateSuspiciousPostRefitUpdate(
     const GaussianModel3D & previous_model,
     const GaussianModel3D & candidate_model,
     const FitOptions & options);
-
-std::optional<double> CalculateLocalFittingPeelingRatio(
-    const LocalPotentialSampleList & raw_sampling_entries,
-    const LocalPotentialSampleList & peeling_sampling_entries,
-    bool peeling_applied);
 
 std::vector<char> ExpandSuspiciousSharedOffsetGroups(
     const std::vector<GroupKey> & group_key_by_position,

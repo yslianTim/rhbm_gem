@@ -5,6 +5,7 @@
 
 #include <rhbm_gem/data/object/AtomObject.hpp>
 
+#include <cmath>
 #include <stdexcept>
 
 namespace rhbm_gem {
@@ -123,6 +124,77 @@ LocalPotentialSampleList AtomLocalPotentialView::GetSamplingEntries(
             return GetPeelingSamplingEntries(false);
     }
     throw std::invalid_argument("Unknown local fitting stage.");
+}
+
+bool AtomLocalPotentialView::HasEnoughSamplingEntriesInRange(
+    FittingStage stage,
+    double distance_min,
+    double distance_max,
+    std::size_t minimum_sample_count) const
+{
+    const auto & entry{ RequireEntry("Local fitting samples") };
+    const LocalPotentialSampleList * sample_entries{ nullptr };
+    bool apply_selection{ false };
+    switch (stage)
+    {
+        case FittingStage::First:
+            sample_entries = &entry.RawSamplingEntries();
+            apply_selection = true;
+            break;
+        case FittingStage::Second:
+        case FittingStage::Third:
+            sample_entries = &entry.PeelingSamplingEntries();
+            break;
+        default:
+            throw std::invalid_argument("Unknown local fitting stage.");
+    }
+
+    std::size_t count{ 0 };
+    for (const auto & sample : *sample_entries)
+    {
+        if (apply_selection && !sample.point.is_selected) continue;
+        if (sample.point.distance < distance_min || sample.point.distance > distance_max)
+        {
+            continue;
+        }
+        count++;
+        if (count >= minimum_sample_count)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::optional<double> AtomLocalPotentialView::GetLocalFittingPeelingRatio(
+    bool peeling_applied) const
+{
+    const auto raw_sampling_entries{ GetRawSamplingEntries(false) };
+    const auto peeling_sampling_entries{ GetPeelingSamplingEntries(false) };
+    if (!peeling_applied
+        || raw_sampling_entries.empty()
+        || peeling_sampling_entries.empty())
+    {
+        return std::nullopt;
+    }
+
+    double raw_sum{ 0.0 };
+    for (const auto & sample : raw_sampling_entries)
+    {
+        raw_sum += static_cast<double>(sample.response);
+    }
+    double peeling_sum{ 0.0 };
+    for (const auto & sample : peeling_sampling_entries)
+    {
+        peeling_sum += static_cast<double>(sample.response);
+    }
+    if (!std::isfinite(raw_sum) || !std::isfinite(peeling_sum) || raw_sum == 0.0)
+    {
+        return std::nullopt;
+    }
+
+    const auto ratio{ (raw_sum - peeling_sum) / raw_sum };
+    return std::isfinite(ratio) ? std::optional<double>{ ratio } : std::nullopt;
 }
 
 int AtomLocalPotentialView::GetNeighborCountForPeeling() const
