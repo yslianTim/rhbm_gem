@@ -53,11 +53,11 @@ size_t CountOutlierAtoms(
 {
     size_t outlier_count{ 0 };
     for (auto * atom : analysis_view.GetAtomObjectList(
-        LocalFittingStage::Third, group_key))
+        FittingStage::Third, group_key))
     {
         const auto & result{
             AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult(
-                LocalFittingStage::Third)
+                FittingStage::Third)
         };
         if (result.posterior.has_value() && result.is_outlier)
         {
@@ -79,7 +79,7 @@ double ComputeAtomGausEstimateMinimum(
         if (atom->GetElement() != element) continue;
         gaus_estimate_list.emplace_back(
             AtomLocalPotentialView::RequireFor(*atom)
-                .GetEstimateMDPDE(LocalFittingStage::Third)
+                .GetEstimateMDPDE(FittingStage::Third)
                 .GetDisplayParameter(par_id));
     }
     return array_helper::ComputeMin(gaus_estimate_list.data(), gaus_estimate_list.size());
@@ -719,9 +719,9 @@ void GausPainter::PaintLocalGausSummary(
             if (atom_entry.atom_id == "OXT") continue;
             auto group_key{ KeyPackerComponentAtomClass::Pack(component_key, atom_key) };
             if (!entry_iter->HasAtomGroup(
-                    LocalFittingStage::Third, group_key)) continue;
+                    FittingStage::Third, group_key)) continue;
             if (entry_iter->GetAtomObjectList(
-                    LocalFittingStage::Third, group_key).empty()) continue;
+                    FittingStage::Third, group_key).empty()) continue;
 
             auto amplitude_hist{ plot_builder->CreateAtomGausEstimateHistogram(group_key, 0) };
             auto width_hist{ plot_builder->CreateAtomGausEstimateHistogram(group_key, 1) };
@@ -758,29 +758,29 @@ void GausPainter::PaintLocalGausSummary(
             root_helper::SetFillAttribute(result_text.get(), 4000);
             auto amplitude_prior{
                 entry_iter->GetAtomGroupPrior(
-                    LocalFittingStage::Third, group_key).GetDisplayParameter(0)
+                    FittingStage::Third, group_key).GetDisplayParameter(0)
             };
             auto amplitude_error{
                 entry_iter->GetAtomGroupPriorWithUncertainty(
-                    LocalFittingStage::Third, group_key)
+                    FittingStage::Third, group_key)
                     .GetDisplayStandardDeviation(0)
             };
             auto width_prior{
                 entry_iter->GetAtomGroupPrior(
-                    LocalFittingStage::Third, group_key).GetDisplayParameter(1)
+                    FittingStage::Third, group_key).GetDisplayParameter(1)
             };
             auto width_error{
                 entry_iter->GetAtomGroupPriorWithUncertainty(
-                    LocalFittingStage::Third, group_key)
+                    FittingStage::Third, group_key)
                     .GetDisplayStandardDeviation(1)
             };
             auto offset_prior{
                 entry_iter->GetAtomGroupPrior(
-                    LocalFittingStage::Third, group_key).GetOffset()
+                    FittingStage::Third, group_key).GetOffset()
             };
             auto offset_error{
                 entry_iter->GetAtomGroupPriorWithUncertainty(
-                    LocalFittingStage::Third, group_key)
+                    FittingStage::Third, group_key)
                     .GetStandardDeviationModel().GetOffset()
             };
             result_text->AddText(Form("#font[2]{#hat{A}} = %.2f #pm %.2f", amplitude_prior, amplitude_error));
@@ -857,20 +857,20 @@ void GausPainter::PaintLocalGausSummary(
             pad[1]->cd();
             root_helper::SetPadMarginInCanvas(gPad, 0.10, 0.00, 0.12, 0.10);
             auto member_size{ entry_iter->GetAtomObjectList(
-                LocalFittingStage::Third, group_key).size() };
+                FittingStage::Third, group_key).size() };
             auto outlier_size{ CountOutlierAtoms(*entry_iter, group_key) };
             std::vector<std::unique_ptr<TGraphErrors>> map_value_graph_list;
             std::vector<double> y_array;
             map_value_graph_list.reserve(member_size);
             y_array.reserve(member_size * 2);
             for (auto atom : entry_iter->GetAtomObjectList(
-                LocalFittingStage::Third, group_key))
+                FittingStage::Third, group_key))
             {
                 auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
                 auto graph{ atom_plot_builder->CreateBinnedDistanceToRawMapValueGraph() };
                 const auto & result{
                     AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult(
-                        LocalFittingStage::Third)
+                        FittingStage::Third)
                 };
                 auto is_outlier{ result.posterior.has_value() && result.is_outlier };
                 auto line_color{ kAzure-7 };
@@ -911,7 +911,7 @@ void GausPainter::PaintLocalGausSummary(
             }
 
             auto gaus_mean{ plot_builder->CreateAtomGroupGausFunctionMean(group_key) };
-            auto gaus_prior{ plot_builder->CreateAtomGroupGausFunctionPrior(LocalFittingStage::Third, group_key) };
+            auto gaus_prior{ plot_builder->CreateAtomGroupGausFunctionPrior(FittingStage::Third, group_key) };
             root_helper::SetLineAttribute(gaus_prior.get(), 2, 3, kRed);
             root_helper::SetLineAttribute(gaus_mean.get(), 3, 3, kBlue);
             gaus_prior->Draw("SAME");
@@ -930,10 +930,10 @@ void GausPainter::PaintLocalGausSummary(
             legend->AddEntry(gaus_prior.get(),
                 Form("#alpha_{r} = %.1f, #alpha_{g} = %.1f",
                     entry_iter->GetAtomAlphaR(
-                        LocalFittingStage::Third,
+                        FittingStage::Third,
                         group_key),
                     entry_iter->GetAtomAlphaG(
-                        LocalFittingStage::Third, group_key)), "l");
+                        FittingStage::Third, group_key)), "l");
             legend->AddEntry(gaus_mean.get(),
                 "#alpha_{r} = #alpha_{g} = 0", "l");
             legend->AddEntry(map_value_graph_list.at(0).get(),
@@ -956,7 +956,7 @@ void GausPainter::PaintLocalGausSummary(
             root_helper::SetTextAttribute(alpha_text.get(), 50.0f, 133, 12, 0.0, kRed);
             root_helper::SetFillAttribute(alpha_text.get(), 4000);
             auto alpha_g{ entry_iter->GetAtomAlphaG(
-                LocalFittingStage::Third, group_key) };
+                FittingStage::Third, group_key) };
             alpha_text->AddText(Form("#alpha_{g} = %.1f", alpha_g));
             //alpha_text->Draw();
             
@@ -1028,7 +1028,7 @@ void GausPainter::PaintGroupGausSummary(ModelObject * model_object, const std::s
             atom_id_list.emplace_back(atom_entry.atom_id);
         }
         if (!entry_iter->HasAtomGroup(
-                LocalFittingStage::Third, group_key_tmp)) continue;
+                FittingStage::Third, group_key_tmp)) continue;
 
         std::map<Element, std::unique_ptr<TGraphErrors>> amplitude_graph_map;
         std::map<Element, std::unique_ptr<TGraphErrors>> width_graph_map;
@@ -1041,7 +1041,7 @@ void GausPainter::PaintGroupGausSummary(ModelObject * model_object, const std::s
         width_array.reserve(component_atom_map.size());
         
         auto component_size{ entry_iter->GetAtomObjectList(
-            LocalFittingStage::Third, group_key_tmp).size() };
+            FittingStage::Third, group_key_tmp).size() };
         for (auto & [element, group_key_list] : group_key_list_map)
         {
             auto amplitude_graph{
@@ -1291,26 +1291,26 @@ void GausPainter::PaintGroupFittingComparison(
             size_t member_id;
             if (!data_internal::IsMainChainMember(spot, member_id)) continue;
             auto group_key{ data_internal::GetMainChainGroupKey(member_id, residue) };
-            auto gaus_prior_1st{ plot_builder->CreateAtomGroupGausFunctionPrior(LocalFittingStage::First, group_key) };
-            auto gaus_prior_3rd{ plot_builder->CreateAtomGroupGausFunctionPrior(LocalFittingStage::Third, group_key) };
+            auto gaus_prior_1st{ plot_builder->CreateAtomGroupGausFunctionPrior(FittingStage::First, group_key) };
+            auto gaus_prior_3rd{ plot_builder->CreateAtomGroupGausFunctionPrior(FittingStage::Third, group_key) };
             gaus_prior_1st_map.emplace(spot, std::move(gaus_prior_1st));
             gaus_prior_3rd_map.emplace(spot, std::move(gaus_prior_3rd));
 
-            auto member_size{ entry_iter->GetAtomObjectList(LocalFittingStage::Third, group_key).size() };
+            auto member_size{ entry_iter->GetAtomObjectList(FittingStage::Third, group_key).size() };
             std::vector<std::unique_ptr<TGraphErrors>> raw_map_value_graph_list;
             std::vector<std::unique_ptr<TGraphErrors>> peeling_map_value_graph_list;
             std::vector<std::unique_ptr<TGraphErrors>> neighbor_map_value_graph_list;
             raw_map_value_graph_list.reserve(member_size);
             peeling_map_value_graph_list.reserve(member_size);
             neighbor_map_value_graph_list.reserve(member_size);
-            for (auto atom : entry_iter->GetAtomObjectList(LocalFittingStage::Third, group_key))
+            for (auto atom : entry_iter->GetAtomObjectList(FittingStage::Third, group_key))
             {
                 auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
                 auto raw_graph{ atom_plot_builder->CreateBinnedDistanceToRawMapValueGraph() };
                 auto peeling_graph{ atom_plot_builder->CreateBinnedDistanceToPeelingMapValueGraph() };
                 auto neighbor_graph{ atom_plot_builder->CreateBinnedDistanceToNeighborMapValueGraph() };
                 const auto & result{
-                    AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult(LocalFittingStage::Third)
+                    AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult(FittingStage::Third)
                 };
                 auto is_outlier{ result.posterior.has_value() && result.is_outlier };
                 auto line_color{ kAzure-7 };
@@ -1516,7 +1516,7 @@ void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
         auto group_key_list{ data_internal::GetMainChainGroupKeyList(k) };
         for (auto it = group_key_list.begin(); it != group_key_list.end(); )
         {
-            if (!entry_iter->HasAtomGroup(LocalFittingStage::Third, *it))
+            if (!entry_iter->HasAtomGroup(FittingStage::Third, *it))
             {
                 it = group_key_list.erase(it);
             }
@@ -1541,21 +1541,21 @@ void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
             component_id_map.emplace(residue, component_id);
 
             auto gaus_mean{ plot_builder->CreateAtomGroupGausFunctionMean(group_key) };
-            auto gaus_prior{ plot_builder->CreateAtomGroupGausFunctionPrior(LocalFittingStage::Third, group_key) };
+            auto gaus_prior{ plot_builder->CreateAtomGroupGausFunctionPrior(FittingStage::Third, group_key) };
             gaus_mean_map.emplace(residue, std::move(gaus_mean));
             gaus_prior_map.emplace(residue, std::move(gaus_prior));
 
-            auto member_size{ entry_iter->GetAtomObjectList(LocalFittingStage::Third, group_key).size() };
+            auto member_size{ entry_iter->GetAtomObjectList(FittingStage::Third, group_key).size() };
             std::vector<std::unique_ptr<TGraphErrors>> map_value_graph_list;
             std::vector<double> y_array;
             map_value_graph_list.reserve(member_size);
             y_array.reserve(member_size * 2);
-            for (auto atom : entry_iter->GetAtomObjectList(LocalFittingStage::Third, group_key))
+            for (auto atom : entry_iter->GetAtomObjectList(FittingStage::Third, group_key))
             {
                 auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
                 auto graph{ atom_plot_builder->CreateBinnedDistanceToRawMapValueGraph() };
                 const auto & result{
-                    AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult(LocalFittingStage::Third)
+                    AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult(FittingStage::Third)
                 };
                 auto is_outlier{ result.posterior.has_value() && result.is_outlier };
                 auto line_color{ kAzure-7 };
@@ -1987,7 +1987,7 @@ void GausPainter::PaintGroupGausAminoAcidMainChainComponent(
         auto & group_key_list{ group_key_list_map.at(spot) };
         for (auto it = group_key_list.begin(); it != group_key_list.end(); )
         {
-            if (!entry_iter->HasAtomGroup(LocalFittingStage::Third, *it))
+            if (!entry_iter->HasAtomGroup(FittingStage::Third, *it))
             {
                 it = group_key_list.erase(it);
             }

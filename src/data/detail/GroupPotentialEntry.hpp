@@ -37,13 +37,13 @@ public:
     GroupPotentialEntry() = default;
     ~GroupPotentialEntry() = default;
 
-    bool HasGroup(LocalFittingStage stage, GroupKey group_key) const
+    bool HasGroup(FittingStage stage, GroupKey group_key) const
     {
         const auto & group_map{ GetGroupMap(stage) };
         return group_map.find(group_key) != group_map.end();
     }
 
-    std::vector<GroupKey> CollectGroupKeys(LocalFittingStage stage) const
+    std::vector<GroupKey> CollectGroupKeys(FittingStage stage) const
     {
         const auto & group_map{ GetGroupMap(stage) };
         std::vector<GroupKey> group_keys;
@@ -56,18 +56,18 @@ public:
         return group_keys;
     }
 
-    size_t GroupCount(LocalFittingStage stage) const
+    size_t GroupCount(FittingStage stage) const
     {
         return GetGroupMap(stage).size();
     }
 
-    void AddMember(LocalFittingStage stage, GroupKey group_key, MemberT & member)
+    void AddMember(FittingStage stage, GroupKey group_key, MemberT & member)
     {
         EnsureGroup(stage, group_key).members.emplace_back(&member);
     }
 
     void ReserveMembers(
-        LocalFittingStage stage,
+        FittingStage stage,
         GroupKey group_key,
         size_t member_count)
     {
@@ -75,19 +75,19 @@ public:
     }
 
     const std::vector<MemberT *> & GetMembers(
-        LocalFittingStage stage,
+        FittingStage stage,
         GroupKey group_key) const
     {
         return RequireGroup(stage, group_key).members;
     }
 
-    size_t GetMemberCount(LocalFittingStage stage, GroupKey group_key) const
+    size_t GetMemberCount(FittingStage stage, GroupKey group_key) const
     {
         return GetMembers(stage, group_key).size();
     }
 
     void SetGaussianResult(
-        LocalFittingStage stage,
+        FittingStage stage,
         GroupKey group_key,
         const GroupGaussianResult & result)
     {
@@ -98,79 +98,79 @@ public:
         group.alpha_g = result.alpha_g;
     }
 
-    void SetAlphaG(LocalFittingStage stage, GroupKey group_key, double alpha_g)
+    void SetAlphaG(FittingStage stage, GroupKey group_key, double alpha_g)
     {
         EnsureGroup(stage, group_key).alpha_g = alpha_g;
     }
 
-    const GaussianModel3D & GetMean(LocalFittingStage stage, GroupKey group_key) const
+    const GaussianModel3D & GetMean(FittingStage stage, GroupKey group_key) const
     {
         return RequireGroup(stage, group_key).mean;
     }
 
-    const GaussianModel3D & GetMDPDE(LocalFittingStage stage, GroupKey group_key) const
+    const GaussianModel3D & GetMDPDE(FittingStage stage, GroupKey group_key) const
     {
         return RequireGroup(stage, group_key).mdpde;
     }
 
-    const GaussianModel3D & GetPrior(LocalFittingStage stage, GroupKey group_key) const
+    const GaussianModel3D & GetPrior(FittingStage stage, GroupKey group_key) const
     {
         return RequireGroup(stage, group_key).prior.GetModel();
     }
 
     const GaussianModel3DUncertainty & GetPriorStandardDeviation(
-        LocalFittingStage stage,
+        FittingStage stage,
         GroupKey group_key) const
     {
         return RequireGroup(stage, group_key).prior.GetStandardDeviationModel();
     }
 
     GaussianModel3DWithUncertainty GetPriorWithUncertainty(
-        LocalFittingStage stage,
+        FittingStage stage,
         GroupKey group_key) const
     {
         return RequireGroup(stage, group_key).prior;
     }
 
-    double GetAlphaG(LocalFittingStage stage, GroupKey group_key) const
+    double GetAlphaG(FittingStage stage, GroupKey group_key) const
     {
         return RequireGroup(stage, group_key).alpha_g;
     }
 
-    void CopyStage(LocalFittingStage source_stage, LocalFittingStage destination_stage)
+    void CopyStage(FittingStage source_stage, FittingStage destination_stage)
     {
         GetGroupMap(destination_stage) = GetGroupMap(source_stage);
     }
 
 private:
-    GroupMap & GetGroupMap(LocalFittingStage stage)
+    GroupMap & GetGroupMap(FittingStage stage)
     {
         switch (stage)
         {
-            case LocalFittingStage::First: return m_group_map_1st;
-            case LocalFittingStage::Second: return m_group_map_2nd;
-            case LocalFittingStage::Third: return m_group_map_3rd;
+            case FittingStage::First: return m_group_map_1st;
+            case FittingStage::Second: return m_group_map_2nd;
+            case FittingStage::Third: return m_group_map_3rd;
         }
         throw std::invalid_argument("Unknown local fitting stage.");
     }
 
-    const GroupMap & GetGroupMap(LocalFittingStage stage) const
+    const GroupMap & GetGroupMap(FittingStage stage) const
     {
         switch (stage)
         {
-            case LocalFittingStage::First: return m_group_map_1st;
-            case LocalFittingStage::Second: return m_group_map_2nd;
-            case LocalFittingStage::Third: return m_group_map_3rd;
+            case FittingStage::First: return m_group_map_1st;
+            case FittingStage::Second: return m_group_map_2nd;
+            case FittingStage::Third: return m_group_map_3rd;
         }
         throw std::invalid_argument("Unknown local fitting stage.");
     }
 
-    GroupPotentialBucket & EnsureGroup(LocalFittingStage stage, GroupKey group_key)
+    GroupPotentialBucket & EnsureGroup(FittingStage stage, GroupKey group_key)
     {
         return GetGroupMap(stage)[group_key];
     }
 
-    GroupPotentialBucket & RequireGroup(LocalFittingStage stage, GroupKey group_key)
+    GroupPotentialBucket & RequireGroup(FittingStage stage, GroupKey group_key)
     {
         auto & group_map{ GetGroupMap(stage) };
         const auto iter{ group_map.find(group_key) };
@@ -182,7 +182,7 @@ private:
     }
 
     const GroupPotentialBucket & RequireGroup(
-        LocalFittingStage stage,
+        FittingStage stage,
         GroupKey group_key) const
     {
         const auto & group_map{ GetGroupMap(stage) };

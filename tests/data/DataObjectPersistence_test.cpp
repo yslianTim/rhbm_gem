@@ -399,23 +399,23 @@ TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
             rg::GaussianModel3DUncertainty{}
         };
         local_editor.SetGaussianResult(
-            rg::LocalFittingStage::First,
+            rg::FittingStage::First,
             first_result);
         local_editor.SetGaussianResult(
-            rg::LocalFittingStage::Second,
+            rg::FittingStage::Second,
             second_result);
         local_editor.SetGaussianResult(
-            rg::LocalFittingStage::Third,
+            rg::FittingStage::Third,
             local_result);
 
         analysis.RebuildAtomGroupsFromSelection();
         const auto analysis_view{ model->GetAnalysisView() };
         const auto group_keys{ analysis_view.CollectAtomGroupKeys(
-            rg::LocalFittingStage::Third) };
+            rg::FittingStage::Third) };
         ASSERT_FALSE(group_keys.empty());
         group_key = group_keys.front();
         const auto & atom_list{ analysis_view.GetAtomObjectList(
-            rg::LocalFittingStage::Third, group_key) };
+            rg::FittingStage::Third, group_key) };
         ASSERT_FALSE(atom_list.empty());
         annotated_serial_id = atom_list.front()->GetSerialID();
 
@@ -448,7 +448,7 @@ TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
             rg::GaussianModel3DUncertainty{ 0.1, 0.2, 0.13 }
         };
         analysis.ApplyAtomGroupGaussianResult(
-            rg::LocalFittingStage::First,
+            rg::FittingStage::First,
             group_key,
             first_group_result);
         auto second_group_result{ group_result };
@@ -460,11 +460,11 @@ TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
             rg::GaussianModel3DUncertainty{ 0.1, 0.2, 0.23 }
         };
         analysis.ApplyAtomGroupGaussianResult(
-            rg::LocalFittingStage::Second,
+            rg::FittingStage::Second,
             group_key,
             second_group_result);
         analysis.ApplyAtomGroupGaussianResult(
-            rg::LocalFittingStage::Third,
+            rg::FittingStage::Third,
             group_key,
             group_result);
 
@@ -479,70 +479,70 @@ TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
         rg::AtomLocalPotentialView::RequireFor(*loaded_model->GetAtomList().at(0))
     };
     EXPECT_DOUBLE_EQ(
-        local_view.GetGaussianResult(rg::LocalFittingStage::First)
+        local_view.GetGaussianResult(rg::FittingStage::First)
             .mdpde.GetModel().GetOffset(),
         1.22);
     EXPECT_DOUBLE_EQ(
-        local_view.GetGaussianResult(rg::LocalFittingStage::Second)
+        local_view.GetGaussianResult(rg::FittingStage::Second)
             .mdpde.GetModel().GetOffset(),
         2.22);
     EXPECT_DOUBLE_EQ(
-        local_view.GetGaussianResult(rg::LocalFittingStage::Third)
+        local_view.GetGaussianResult(rg::FittingStage::Third)
             .ols.GetModel().GetOffset(),
         0.11);
     EXPECT_DOUBLE_EQ(
-        local_view.GetGaussianResult(rg::LocalFittingStage::Third)
+        local_view.GetGaussianResult(rg::FittingStage::Third)
             .mdpde.GetModel().GetOffset(),
         0.22);
 
     const auto loaded_analysis_view{ loaded_model->GetAnalysisView() };
     EXPECT_DOUBLE_EQ(
         loaded_analysis_view.GetAtomGroupMean(
-            rg::LocalFittingStage::First, group_key).GetOffset(),
+            rg::FittingStage::First, group_key).GetOffset(),
         1.33);
     EXPECT_DOUBLE_EQ(
         loaded_analysis_view.GetAtomGroupMDPDE(
-            rg::LocalFittingStage::First, group_key).GetOffset(),
+            rg::FittingStage::First, group_key).GetOffset(),
         1.44);
     EXPECT_DOUBLE_EQ(
         loaded_analysis_view.GetAtomGroupPrior(
-            rg::LocalFittingStage::First, group_key).GetOffset(),
+            rg::FittingStage::First, group_key).GetOffset(),
         1.55);
     EXPECT_DOUBLE_EQ(
         loaded_analysis_view.GetAtomAlphaG(
-            rg::LocalFittingStage::First, group_key),
+            rg::FittingStage::First, group_key),
         0.1);
     EXPECT_DOUBLE_EQ(
         loaded_analysis_view.GetAtomGroupMean(
-            rg::LocalFittingStage::Second, group_key).GetOffset(),
+            rg::FittingStage::Second, group_key).GetOffset(),
         2.33);
     EXPECT_DOUBLE_EQ(
         loaded_analysis_view.GetAtomGroupMDPDE(
-            rg::LocalFittingStage::Second, group_key).GetOffset(),
+            rg::FittingStage::Second, group_key).GetOffset(),
         2.44);
     EXPECT_DOUBLE_EQ(
         loaded_analysis_view.GetAtomGroupPrior(
-            rg::LocalFittingStage::Second, group_key).GetOffset(),
+            rg::FittingStage::Second, group_key).GetOffset(),
         2.55);
     EXPECT_DOUBLE_EQ(
         loaded_analysis_view.GetAtomAlphaG(
-            rg::LocalFittingStage::Second, group_key),
+            rg::FittingStage::Second, group_key),
         0.2);
     EXPECT_DOUBLE_EQ(
         loaded_analysis_view.GetAtomGroupMean(
-            rg::LocalFittingStage::Third, group_key).GetOffset(),
+            rg::FittingStage::Third, group_key).GetOffset(),
         0.33);
     EXPECT_DOUBLE_EQ(
         loaded_analysis_view.GetAtomGroupMDPDE(
-            rg::LocalFittingStage::Third, group_key).GetOffset(),
+            rg::FittingStage::Third, group_key).GetOffset(),
         0.44);
     EXPECT_DOUBLE_EQ(
         loaded_analysis_view.GetAtomGroupPrior(
-            rg::LocalFittingStage::Third, group_key).GetOffset(),
+            rg::FittingStage::Third, group_key).GetOffset(),
         0.55);
     EXPECT_DOUBLE_EQ(
         loaded_analysis_view.GetAtomGroupPriorWithUncertainty(
-            rg::LocalFittingStage::Third, group_key)
+            rg::FittingStage::Third, group_key)
             .GetStandardDeviationModel()
             .GetOffset(),
         0.03);
@@ -559,7 +559,7 @@ TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
     ASSERT_NE(annotated_atom, nullptr);
     const auto & gaussian_result{
         rg::AtomLocalPotentialView::RequireFor(*annotated_atom)
-            .GetGaussianResult(rg::LocalFittingStage::Third)
+            .GetGaussianResult(rg::FittingStage::Third)
     };
     ASSERT_TRUE(gaussian_result.posterior.has_value());
     EXPECT_DOUBLE_EQ(gaussian_result.posterior->GetModel().GetOffset(), 0.66);

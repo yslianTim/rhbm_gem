@@ -472,9 +472,9 @@ void DemoPainter::PaintAtomMapValueExample(
     double width_prior;
     std::vector<double> y_array;
         auto group_key{ data_internal::GetMainChainGroupKey(0, Residue::ALA) };
-    if (!entry_iter->HasAtomGroup(LocalFittingStage::Third, group_key)) return;
+    if (!entry_iter->HasAtomGroup(FittingStage::Third, group_key)) return;
     for (auto atom : entry_iter->GetAtomObjectList(
-        LocalFittingStage::Third, group_key))
+        FittingStage::Third, group_key))
     {
         auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
         auto graph{ atom_plot_builder->CreateBinnedDistanceToRawMapValueGraph() };
@@ -488,9 +488,9 @@ void DemoPainter::PaintAtomMapValueExample(
         y_array.emplace_back(std::get<0>(map_value_range));
         y_array.emplace_back(std::get<1>(map_value_range));
     }
-    gaus_function = plot_builder->CreateAtomGroupGausFunctionPrior(LocalFittingStage::Third, group_key);
-    amplitude_prior = entry_iter->GetAtomGroupPrior(LocalFittingStage::Third, group_key).GetDisplayParameter(0);
-    width_prior = entry_iter->GetAtomGroupPrior(LocalFittingStage::Third, group_key).GetDisplayParameter(1);
+    gaus_function = plot_builder->CreateAtomGroupGausFunctionPrior(FittingStage::Third, group_key);
+    amplitude_prior = entry_iter->GetAtomGroupPrior(FittingStage::Third, group_key).GetDisplayParameter(0);
+    width_prior = entry_iter->GetAtomGroupPrior(FittingStage::Third, group_key).GetDisplayParameter(1);
 
 
     auto y_range{ array_helper::ComputeScalingRangeTuple(y_array, 0.15) };
@@ -1068,7 +1068,7 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
         {
             auto group_key{ data_internal::GetMainChainGroupKey(i, residue) };
             if (!entry_iter->HasAtomGroup(
-                    LocalFittingStage::Third, group_key)) continue;
+                    FittingStage::Third, group_key)) continue;
             auto gaus_graph{ plot_builder->CreateCOMDistanceToGausEstimateGraph(group_key, 1) };
             for (int p = 0; p < gaus_graph->GetN(); p++)
             {
@@ -1258,7 +1258,7 @@ void DemoPainter::PaintGroupWidthScatterPlot(
             {
                 auto group_key{ data_internal::GetMainChainGroupKey(element_id, residue) };
                 if (!entry_iter->HasAtomGroup(
-                        LocalFittingStage::Third, group_key)) continue;
+                        FittingStage::Third, group_key)) continue;
                 auto graph{ (par_id == 0) ?
                     plot_builder->CreateCOMDistanceToGausEstimateGraph(group_key, 1) :
                     plot_builder->CreateInRangeAtomsToGausEstimateGraph(group_key, 5.0, 1) };
@@ -1774,7 +1774,7 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
             auto & group_key_list{ group_key_list_map[i].at(spot) };
             for (auto it = group_key_list.begin(); it != group_key_list.end(); )
             {
-                if (!entry_iter->HasAtomGroup(LocalFittingStage::Third, *it))
+                if (!entry_iter->HasAtomGroup(FittingStage::Third, *it))
                 {
                     it = group_key_list.erase(it);
                 }

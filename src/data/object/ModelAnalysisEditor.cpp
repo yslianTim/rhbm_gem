@@ -28,9 +28,9 @@ void ModelAnalysisEditor::ClearTransientFitStates()
         (void)serial_id;
         if (entry != nullptr)
         {
-            entry->ClearTransientFitState(LocalFittingStage::First);
-            entry->ClearTransientFitState(LocalFittingStage::Second);
-            entry->ClearTransientFitState(LocalFittingStage::Third);
+            entry->ClearTransientFitState(FittingStage::First);
+            entry->ClearTransientFitState(FittingStage::Second);
+            entry->ClearTransientFitState(FittingStage::Third);
         }
     }
 }
@@ -49,14 +49,14 @@ void ModelAnalysisEditor::RebuildAtomGroupsFromSelection()
     for (auto * atom : m_model_object.GetSelectedAtoms())
     {
         const auto group_key{ data_internal::GetGroupKey(atom) };
-        group_entry.AddMember(LocalFittingStage::First, group_key, *atom);
-        group_entry.AddMember(LocalFittingStage::Second, group_key, *atom);
-        group_entry.AddMember(LocalFittingStage::Third, group_key, *atom);
+        group_entry.AddMember(FittingStage::First, group_key, *atom);
+        group_entry.AddMember(FittingStage::Second, group_key, *atom);
+        group_entry.AddMember(FittingStage::Third, group_key, *atom);
     }
 }
 
 void ModelAnalysisEditor::InitializeLocalAlpha(
-    LocalFittingStage stage,
+    FittingStage stage,
     double alpha_r)
 {
     for (auto * atom : m_model_object.GetSelectedAtoms())
@@ -66,7 +66,7 @@ void ModelAnalysisEditor::InitializeLocalAlpha(
 }
 
 void ModelAnalysisEditor::InitializeGroupAlpha(
-    LocalFittingStage stage,
+    FittingStage stage,
     double alpha_g)
 {
     auto & group_entry{ ModelAnalysisData::Of(m_model_object).AtomGroupEntry() };
@@ -77,8 +77,8 @@ void ModelAnalysisEditor::InitializeGroupAlpha(
 }
 
 void ModelAnalysisEditor::CopyAtomGroupPotentialStage(
-    LocalFittingStage source_stage,
-    LocalFittingStage destination_stage)
+    FittingStage source_stage,
+    FittingStage destination_stage)
 {
     ModelAnalysisData::Of(m_model_object).AtomGroupEntry().CopyStage(
         source_stage,
@@ -86,7 +86,7 @@ void ModelAnalysisEditor::CopyAtomGroupPotentialStage(
 }
 
 void ModelAnalysisEditor::ApplyAtomGroupGaussianResult(
-    LocalFittingStage stage,
+    FittingStage stage,
     GroupKey group_key,
     const GroupGaussianResult & group_result)
 {
@@ -116,7 +116,7 @@ void ModelAnalysisEditor::ApplyAtomGroupGaussianResult(
 }
 
 void ModelAnalysisEditor::SetAtomGroupAlphaG(
-    LocalFittingStage stage,
+    FittingStage stage,
     GroupKey group_key,
     double alpha_g)
 {

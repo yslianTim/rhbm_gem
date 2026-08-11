@@ -227,7 +227,7 @@ TEST(DataObjectSchemaLifecycleTest, VersionTenSchemaCopiesFinalGaussianToAllStag
         };
         model->EditAnalysis().EnsureAtomLocalPotential(
             *model->GetAtomList().at(0))
-            .SetGaussianResult(rg::LocalFittingStage::Third, result);
+            .SetGaussianResult(rg::FittingStage::Third, result);
         repository.SaveModel(*model, "model");
     }
     data_test::ConvertLocalGaussianColumnsToLegacyFinal(database_path);
@@ -242,9 +242,9 @@ TEST(DataObjectSchemaLifecycleTest, VersionTenSchemaCopiesFinalGaussianToAllStag
     const auto view{ rg::AtomLocalPotentialView::RequireFor(
         *loaded_model->GetAtomList().at(0)) };
     for (const auto stage : {
-             rg::LocalFittingStage::First,
-             rg::LocalFittingStage::Second,
-             rg::LocalFittingStage::Third })
+             rg::FittingStage::First,
+             rg::FittingStage::Second,
+             rg::FittingStage::Third })
     {
         EXPECT_DOUBLE_EQ(view.GetGaussianResult(stage).alpha_r, 0.45);
         EXPECT_DOUBLE_EQ(view.GetEstimateMDPDE(stage).GetAmplitude(), 2.5);
@@ -267,7 +267,7 @@ TEST(DataObjectSchemaLifecycleTest, VersionElevenSchemaCopiesFinalGroupToAllStag
         model->LocalPotentialInitialization();
         const auto view{ model->GetAnalysisView() };
         const auto group_keys{ view.CollectAtomGroupKeys(
-            rg::LocalFittingStage::Third) };
+            rg::FittingStage::Third) };
         ASSERT_FALSE(group_keys.empty());
         group_key = group_keys.front();
 
@@ -281,9 +281,9 @@ TEST(DataObjectSchemaLifecycleTest, VersionElevenSchemaCopiesFinalGroupToAllStag
         };
         result.member_results.resize(
             view.GetAtomObjectList(
-                rg::LocalFittingStage::Third, group_key).size());
+                rg::FittingStage::Third, group_key).size());
         model->EditAnalysis().ApplyAtomGroupGaussianResult(
-            rg::LocalFittingStage::Third,
+            rg::FittingStage::Third,
             group_key,
             result);
         repository.SaveModel(*model, "model");
@@ -298,9 +298,9 @@ TEST(DataObjectSchemaLifecycleTest, VersionElevenSchemaCopiesFinalGroupToAllStag
     EXPECT_EQ(data_test::GetUserVersion(database_path), 12);
     const auto view{ loaded_model->GetAnalysisView() };
     for (const auto stage : {
-             rg::LocalFittingStage::First,
-             rg::LocalFittingStage::Second,
-             rg::LocalFittingStage::Third })
+             rg::FittingStage::First,
+             rg::FittingStage::Second,
+             rg::FittingStage::Third })
     {
         EXPECT_DOUBLE_EQ(
             view.GetAtomGroupMean(stage, group_key).GetOffset(),

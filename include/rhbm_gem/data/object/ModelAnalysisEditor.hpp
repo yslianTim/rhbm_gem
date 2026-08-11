@@ -19,19 +19,14 @@ public:
     void ClearTransientFitStates();
     AtomLocalPotentialEditor EnsureAtomLocalPotential(const AtomObject & atom_object);
     void RebuildAtomGroupsFromSelection();
-    void InitializeLocalAlpha(LocalFittingStage stage, double alpha_r);
-    void InitializeGroupAlpha(LocalFittingStage stage, double alpha_g);
-    void CopyAtomGroupPotentialStage(
-        LocalFittingStage source_stage,
-        LocalFittingStage destination_stage);
+    void InitializeLocalAlpha(FittingStage stage, double alpha_r);
+    void InitializeGroupAlpha(FittingStage stage, double alpha_g);
+    void CopyAtomGroupPotentialStage(FittingStage source_stage, FittingStage destination_stage);
     void ApplyAtomGroupGaussianResult(
-        LocalFittingStage stage,
+        FittingStage stage,
         GroupKey group_key,
         const GroupGaussianResult & group_result);
-    void SetAtomGroupAlphaG(
-        LocalFittingStage stage,
-        GroupKey group_key,
-        double alpha_g);
+    void SetAtomGroupAlphaG(FittingStage stage, GroupKey group_key, double alpha_g);
     
 };
 

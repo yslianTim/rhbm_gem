@@ -119,7 +119,7 @@ void RunAtomOutlierDumping(
         {
             const auto & result{
                 AtomLocalPotentialView::RequireFor(*atom).GetGaussianResult(
-                    LocalFittingStage::Third)
+                    FittingStage::Third)
             };
             if (!result.posterior.has_value() || !result.is_outlier) continue;
             outfile << atom->GetSerialID() << ','
@@ -283,7 +283,7 @@ void RunGausEstimatesDumping(
         {
             const auto entry{ AtomLocalPotentialView::RequireFor(*atom) };
             const auto & estimate{
-                entry.GetEstimateMDPDE(LocalFittingStage::Third)
+                entry.GetEstimateMDPDE(FittingStage::Third)
             };
             outfile << atom->GetSerialID() << ',' << estimate.GetAmplitude() << ','
                     << estimate.GetWidth() << ',' << atom->GetPosition().at(0) << ','
@@ -338,12 +338,12 @@ void RunGroupGausEstimatesDumping(
                 const auto atom_key{ static_cast<uint16_t>(spot) };
                 const auto group_key{ KeyPackerComponentAtomClass::Pack(component_key, atom_key) };
                 const auto atom_id{ model_object->FindAtomID(atom_key) };
-                if (!entry_view.HasAtomGroup(LocalFittingStage::Third, group_key)) continue;
+                if (!entry_view.HasAtomGroup(FittingStage::Third, group_key)) continue;
                 outfile << residue_name << ',' << atom_id << ','
                         << entry_view.GetAtomGroupPrior(
-                            LocalFittingStage::Third, group_key).GetDisplayParameter(0) << ','
+                            FittingStage::Third, group_key).GetDisplayParameter(0) << ','
                         << entry_view.GetAtomGroupPrior(
-                            LocalFittingStage::Third, group_key).GetDisplayParameter(1) << '\n';
+                            FittingStage::Third, group_key).GetDisplayParameter(1) << '\n';
             }
         }
 

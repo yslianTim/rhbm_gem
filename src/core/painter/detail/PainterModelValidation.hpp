@@ -36,7 +36,7 @@ inline void RequireGroupedAnalyzedModel(
 {
     RequireLocalAnalyzedModel(model_object, painter_name);
     if (model_object.GetAnalysisView().HasGroupedAnalysisData(
-            LocalFittingStage::Third))
+            FittingStage::Third))
     {
         return;
     }

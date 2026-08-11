@@ -8,7 +8,7 @@
 
 namespace rhbm_gem {
 
-enum class LocalFittingStage
+enum class FittingStage
 {
     First,
     Second,

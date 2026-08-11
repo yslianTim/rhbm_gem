@@ -280,9 +280,9 @@ ModelObject::ModelObject(const ModelObject & other) :
         const auto & source_entry{ source_analysis_data.AtomGroupEntry() };
         auto & cloned_entry{ m_analysis_data->AtomGroupEntry() };
         for (const auto stage : {
-                 LocalFittingStage::First,
-                 LocalFittingStage::Second,
-                 LocalFittingStage::Third })
+                 FittingStage::First,
+                 FittingStage::Second,
+                 FittingStage::Third })
         {
             for (const auto group_key : source_entry.CollectGroupKeys(stage))
             {
@@ -589,12 +589,12 @@ void ModelObject::LocalPotentialInitialization()
     auto analysis{ EditAnalysis() };
     analysis.Clear();
     analysis.RebuildAtomGroupsFromSelection();
-    analysis.InitializeLocalAlpha(LocalFittingStage::First, kInitialLocalAlpha);
-    analysis.InitializeLocalAlpha(LocalFittingStage::Second, kInitialLocalAlpha);
-    analysis.InitializeLocalAlpha(LocalFittingStage::Third, kInitialLocalAlpha);
-    analysis.InitializeGroupAlpha(LocalFittingStage::First, kInitialGroupAlpha);
-    analysis.InitializeGroupAlpha(LocalFittingStage::Second, kInitialGroupAlpha);
-    analysis.InitializeGroupAlpha(LocalFittingStage::Third, kInitialGroupAlpha);
+    analysis.InitializeLocalAlpha(FittingStage::First, kInitialLocalAlpha);
+    analysis.InitializeLocalAlpha(FittingStage::Second, kInitialLocalAlpha);
+    analysis.InitializeLocalAlpha(FittingStage::Third, kInitialLocalAlpha);
+    analysis.InitializeGroupAlpha(FittingStage::First, kInitialGroupAlpha);
+    analysis.InitializeGroupAlpha(FittingStage::Second, kInitialGroupAlpha);
+    analysis.InitializeGroupAlpha(FittingStage::Third, kInitialGroupAlpha);
 }
 
 void ModelObject::ClearTransientFitStates()
@@ -763,7 +763,7 @@ void ModelObject::PrintSummary() const
     Logger::Log(LogLevel::Info, this->GetAnalysisView().GetAtomCountingSummary());
     Logger::Log(
         LogLevel::Info,
-        this->GetAnalysisView().GetAtomGroupingSummary(LocalFittingStage::Third));
+        this->GetAnalysisView().GetAtomGroupingSummary(FittingStage::Third));
 }
 
 } // namespace rhbm_gem

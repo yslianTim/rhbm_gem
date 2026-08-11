@@ -1071,7 +1071,7 @@ void SaveAtomLocalPotentialEntryList(
                 6, entry->PeelingSamplingEntries());
             const auto bind_gaussian_result = [&entry, &statement_db](
                 int first_parameter_index,
-                LocalFittingStage stage)
+                FittingStage stage)
             {
                 const auto & gaussian_result{ entry->GaussianResult(stage) };
                 statement_db.Bind<double>(
@@ -1096,9 +1096,9 @@ void SaveAtomLocalPotentialEntryList(
                     first_parameter_index + 6,
                     gaussian_result.alpha_r);
             };
-            bind_gaussian_result(7, LocalFittingStage::First);
-            bind_gaussian_result(14, LocalFittingStage::Second);
-            bind_gaussian_result(21, LocalFittingStage::Third);
+            bind_gaussian_result(7, FittingStage::First);
+            bind_gaussian_result(14, FittingStage::Second);
+            bind_gaussian_result(21, FittingStage::Third);
             statement_db.Bind<int>(28, entry->NeighborCountForPeeling());
         });
     }
@@ -1115,7 +1115,7 @@ void SaveAtomLocalPotentialEntrySubList(
         auto * entry{ ModelAnalysisData::Of(model_obj).FindAtomLocalEntry(*atom_object) };
         if (entry == nullptr) continue;
         const auto & gaussian_result{
-            entry->GaussianResult(LocalFittingStage::Third)
+            entry->GaussianResult(FittingStage::Third)
         };
         if (!gaussian_result.posterior.has_value()) continue;
         const auto & posterior{ gaussian_result.posterior.value() };
@@ -1149,7 +1149,7 @@ void SaveAtomGroupPotentialEntryList(
 {
     SQLiteStatementBatch batch{ database, std::string(kInsertModelAtomGroupSql) };
     for (const auto group_key :
-        group_entry.CollectGroupKeys(LocalFittingStage::Third))
+        group_entry.CollectGroupKeys(FittingStage::Third))
     {
         batch.Execute([&](SQLiteWrapper & statement_db)
         {
@@ -1158,10 +1158,10 @@ void SaveAtomGroupPotentialEntryList(
             statement_db.Bind<int>(
                 3,
                 static_cast<int>(group_entry.GetMemberCount(
-                    LocalFittingStage::Third,
+                    FittingStage::Third,
                     group_key)));
             const auto bind_group_result{
-                [&](LocalFittingStage stage, int first_parameter_index)
+                [&](FittingStage stage, int first_parameter_index)
                 {
                     const auto & mean{ group_entry.GetMean(stage, group_key) };
                     const auto & mdpde{ group_entry.GetMDPDE(stage, group_key) };
@@ -1201,9 +1201,9 @@ void SaveAtomGroupPotentialEntryList(
                         group_entry.GetAlphaG(stage, group_key));
                 }
             };
-            bind_group_result(LocalFittingStage::First, 4);
-            bind_group_result(LocalFittingStage::Second, 17);
-            bind_group_result(LocalFittingStage::Third, 30);
+            bind_group_result(FittingStage::First, 4);
+            bind_group_result(FittingStage::Second, 17);
+            bind_group_result(FittingStage::Third, 30);
         });
     }
 }
@@ -1243,7 +1243,7 @@ void LoadAtomLocalPotentialEntrySubList(
                 database.GetColumn<double>(6) }
         };
         entry->SetPosteriorResult(
-            LocalFittingStage::Third,
+            FittingStage::Third,
             posterior,
             static_cast<bool>(database.GetColumn<int>(7)),
             database.GetColumn<double>(8));
@@ -1301,13 +1301,13 @@ std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>> LoadAtomLocalPoten
             return gaussian_result;
         };
         entry->SetGaussianResult(
-            LocalFittingStage::First,
+            FittingStage::First,
             read_gaussian_result(5));
         entry->SetGaussianResult(
-            LocalFittingStage::Second,
+            FittingStage::Second,
             read_gaussian_result(12));
         entry->SetGaussianResult(
-            LocalFittingStage::Third,
+            FittingStage::Third,
             read_gaussian_result(19));
         entry->SetNeighborCountForPeeling(database.GetColumn<int>(26));
         entry_map[serial_id] = std::move(entry);
@@ -1341,7 +1341,7 @@ void LoadAtomGroupPotentialEntryList(
         const auto group_key{ database.GetColumn<GroupKey>(0) };
         const auto member_count{ static_cast<size_t>(database.GetColumn<int>(1)) };
         const auto load_group_result{
-            [&](LocalFittingStage stage, int first_column_index)
+            [&](FittingStage stage, int first_column_index)
             {
                 group_entry.ReserveMembers(stage, group_key, member_count);
                 GroupGaussianResult group_result;
@@ -1368,17 +1368,17 @@ void LoadAtomGroupPotentialEntryList(
                 group_entry.SetGaussianResult(stage, group_key, group_result);
             }
         };
-        load_group_result(LocalFittingStage::First, 2);
-        load_group_result(LocalFittingStage::Second, 15);
-        load_group_result(LocalFittingStage::Third, 28);
+        load_group_result(FittingStage::First, 2);
+        load_group_result(FittingStage::Second, 15);
+        load_group_result(FittingStage::Third, 28);
     }
 
     for (auto & atom : model_obj.GetSelectedAtoms())
     {
         const auto group_key{ data_internal::GetGroupKey(atom) };
-        group_entry.AddMember(LocalFittingStage::First, group_key, *atom);
-        group_entry.AddMember(LocalFittingStage::Second, group_key, *atom);
-        group_entry.AddMember(LocalFittingStage::Third, group_key, *atom);
+        group_entry.AddMember(FittingStage::First, group_key, *atom);
+        group_entry.AddMember(FittingStage::Second, group_key, *atom);
+        group_entry.AddMember(FittingStage::Third, group_key, *atom);
     }
 }
 
@@ -1391,7 +1391,7 @@ void SaveAnalysis(
     const auto & analysis_data{ ModelAnalysisData::Of(model_obj) };
 
     const auto & group_entry{ analysis_data.AtomGroupEntry() };
-    if (group_entry.GroupCount(LocalFittingStage::Third) > 0)
+    if (group_entry.GroupCount(FittingStage::Third) > 0)
     {
         SaveAtomLocalPotentialEntrySubList(database, model_obj, key_tag);
         SaveAtomGroupPotentialEntryList(database, group_entry, key_tag);

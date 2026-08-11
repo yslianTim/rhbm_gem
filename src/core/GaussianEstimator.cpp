@@ -64,9 +64,9 @@ std::vector<AtomLocalPotentialEditor> BuildAtomLocalEditors(
     return local_editor_list;
 }
 
-bool UsesPeelingSamplingEntries(LocalFittingStage stage)
+bool UsesPeelingSamplingEntries(FittingStage stage)
 {
-    return stage != LocalFittingStage::First;
+    return stage != FittingStage::First;
 }
 
 bool HasEnoughSamplesInFitRange(
@@ -234,10 +234,10 @@ std::vector<std::string> BuildGroupPriorSpotSummaryLines(const ModelObject & mod
     const auto analysis_view{ model_object.GetAnalysisView() };
     std::map<Spot, GaussianModelParameterSamples> spot_sample_map;
     for (const auto group_key :
-        analysis_view.CollectAtomGroupKeys(LocalFittingStage::Third))
+        analysis_view.CollectAtomGroupKeys(FittingStage::Third))
     {
         const auto & atom_list{
-            analysis_view.GetAtomObjectList(LocalFittingStage::Third, group_key)
+            analysis_view.GetAtomObjectList(FittingStage::Third, group_key)
         };
         if (atom_list.empty()) continue;
 
@@ -246,7 +246,7 @@ std::vector<std::string> BuildGroupPriorSpotSummaryLines(const ModelObject & mod
                 kGroupPriorSummarySpotList.begin(), kGroupPriorSummarySpotList.end(),
                 spot) == kGroupPriorSummarySpotList.end()) continue;
         const auto & prior{
-            analysis_view.GetAtomGroupPrior(LocalFittingStage::Third, group_key)
+            analysis_view.GetAtomGroupPrior(FittingStage::Third, group_key)
         };
         auto & sample_list{ spot_sample_map[spot] };
         sample_list.amplitude_list.emplace_back(prior.GetAmplitude());
@@ -331,7 +331,7 @@ void InitializeLocalFittingSeedModels(ModelObject & model_object)
     for (size_t i = 0; i < atom_list.size(); i++)
     {
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
-        auto result{ local_view.GetGaussianResult(LocalFittingStage::First) };
+        auto result{ local_view.GetGaussianResult(FittingStage::First) };
         result.ols = GaussianModel3DWithUncertainty{
             seed_model,
             GaussianModel3DUncertainty{}
@@ -344,16 +344,16 @@ void InitializeLocalFittingSeedModels(ModelObject & model_object)
         result.is_outlier = false;
         result.statistical_distance = 0.0;
         result.fit_result.reset();
-        local_editor_list[i].SetGaussianResult(LocalFittingStage::First, result);
-        local_editor_list[i].SetGaussianResult(LocalFittingStage::Second, result);
-        local_editor_list[i].SetGaussianResult(LocalFittingStage::Third, result);
+        local_editor_list[i].SetGaussianResult(FittingStage::First, result);
+        local_editor_list[i].SetGaussianResult(FittingStage::Second, result);
+        local_editor_list[i].SetGaussianResult(FittingStage::Third, result);
     }
 }
 
-void CopyLocalFittingStageResults(
+void CopyFittingStageResults(
     ModelObject & model_object,
-    LocalFittingStage source_stage,
-    LocalFittingStage destination_stage)
+    FittingStage source_stage,
+    FittingStage destination_stage)
 {
     auto analysis{ model_object.EditAnalysis() };
     for (auto * atom : model_object.GetSelectedAtoms())
@@ -395,13 +395,13 @@ void OutputLocalFittingResultTable(
             local_view.GetPeelingSamplingEntries(false)
         };
         const auto & first_model{
-            local_view.GetEstimateMDPDE(LocalFittingStage::First)
+            local_view.GetEstimateMDPDE(FittingStage::First)
         };
         const auto & second_model{
-            local_view.GetEstimateMDPDE(LocalFittingStage::Second)
+            local_view.GetEstimateMDPDE(FittingStage::Second)
         };
         const auto & third_model{
-            local_view.GetEstimateMDPDE(LocalFittingStage::Third)
+            local_view.GetEstimateMDPDE(FittingStage::Third)
         };
 
         table << '\n'
@@ -456,7 +456,7 @@ void OutputLocalFittingResultTable(
 void RunFixedOffsetLocalFitting(
     ModelObject & model_object,
     const FitOptions & options,
-    LocalFittingStage stage)
+    FittingStage stage)
 {
     const auto & atom_list{ model_object.GetSelectedAtoms() };
     const auto selected_atom_size{ atom_list.size() };
@@ -645,7 +645,7 @@ GroupGaussianResult EstimateGroupGaussian(
 void RunLocalAlphaTraining(
     ModelObject & model_object,
     const FitOptions & options,
-    LocalFittingStage stage)
+    FittingStage stage)
 {
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
@@ -697,7 +697,7 @@ namespace {
 void RunGroupAlphaTraining(
     ModelObject & model_object,
     const FitOptions & options,
-    LocalFittingStage stage)
+    FittingStage stage)
 {
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
@@ -736,7 +736,7 @@ void RunGroupAlphaTraining(
 void RunGroupPotentialFitting(
     ModelObject & model_object,
     const FitOptions & options,
-    LocalFittingStage stage)
+    FittingStage stage)
 {
     auto analysis{ model_object.EditAnalysis() };
     const auto analysis_view{ model_object.GetAnalysisView() };
@@ -796,21 +796,21 @@ void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & 
 {
     InitializeLocalFittingSeedModels(model_object);
     
-    RunLocalAlphaTraining(model_object, options, LocalFittingStage::First);
-    RunFixedOffsetLocalFitting(model_object, options, LocalFittingStage::First);
-    RunGroupAlphaTraining(model_object, options, LocalFittingStage::First);
-    RunGroupPotentialFitting(model_object, options, LocalFittingStage::First);
+    RunLocalAlphaTraining(model_object, options, FittingStage::First);
+    RunFixedOffsetLocalFitting(model_object, options, FittingStage::First);
+    RunGroupAlphaTraining(model_object, options, FittingStage::First);
+    RunGroupPotentialFitting(model_object, options, FittingStage::First);
 
-    CopyLocalFittingStageResults(model_object,LocalFittingStage::First, LocalFittingStage::Second);
-    model_object.EditAnalysis().CopyAtomGroupPotentialStage(LocalFittingStage::First, LocalFittingStage::Second);
+    CopyFittingStageResults(model_object,FittingStage::First, FittingStage::Second);
+    model_object.EditAnalysis().CopyAtomGroupPotentialStage(FittingStage::First, FittingStage::Second);
     const auto peeling_applied{ RunSecondStageLocalFitting(model_object, options) };
 
-    CopyLocalFittingStageResults(model_object, LocalFittingStage::Second, LocalFittingStage::Third);
-    model_object.EditAnalysis().CopyAtomGroupPotentialStage(LocalFittingStage::Second, LocalFittingStage::Third);
-    RunLocalAlphaTraining(model_object, options, LocalFittingStage::Third);
-    RunFixedOffsetLocalFitting(model_object, options, LocalFittingStage::Third);
-    RunGroupAlphaTraining(model_object, options, LocalFittingStage::Third);
-    RunGroupPotentialFitting(model_object, options, LocalFittingStage::Third);
+    CopyFittingStageResults(model_object, FittingStage::Second, FittingStage::Third);
+    model_object.EditAnalysis().CopyAtomGroupPotentialStage(FittingStage::Second, FittingStage::Third);
+    RunLocalAlphaTraining(model_object, options, FittingStage::Third);
+    RunFixedOffsetLocalFitting(model_object, options, FittingStage::Third);
+    RunGroupAlphaTraining(model_object, options, FittingStage::Third);
+    RunGroupPotentialFitting(model_object, options, FittingStage::Third);
     if (!options.quiet_mode)
     {
         LogGroupPriorSpotSummary(model_object);

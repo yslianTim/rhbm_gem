@@ -172,7 +172,7 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
     map_value_hist->Draw("CANDLE2 SAME");
 
     const auto & estimate{
-        atom_entry.GetEstimateMDPDE(LocalFittingStage::Third)
+        atom_entry.GetEstimateMDPDE(FittingStage::Third)
     };
     auto amplitude{ estimate.GetAmplitude() };
     auto width{ estimate.GetWidth() };
@@ -267,7 +267,7 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         root_helper::SetTextAttribute(result_text.get(), 50.0f, 133, 12, 0.0, kRed);
         root_helper::SetFillAttribute(result_text.get(), 4000);
         const auto & estimate_mdpde{
-            entry_view.GetEstimateMDPDE(LocalFittingStage::Third)
+            entry_view.GetEstimateMDPDE(FittingStage::Third)
         };
         auto amplitude_prior{ estimate_mdpde.GetAmplitude() };
         auto width_prior{ estimate_mdpde.GetWidth() };
@@ -338,7 +338,7 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         root_helper::SetPaveTextDefaultStyle(alpha_text.get());
         root_helper::SetTextAttribute(alpha_text.get(), 50.0f, 133, 12, 0.0, kRed);
         root_helper::SetFillAttribute(alpha_text.get(), 4000);
-        auto alpha_r{ entry_view.GetAlphaR(LocalFittingStage::Third) };
+        auto alpha_r{ entry_view.GetAlphaR(FittingStage::Third) };
         alpha_text->AddText(Form("#alpha_{r} = %.1f", alpha_r));
         alpha_text->Draw();
 

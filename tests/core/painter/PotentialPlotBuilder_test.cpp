@@ -131,7 +131,7 @@ TEST(PotentialPlotBuilderTest, ComponentAtomAveragePriorUsesEqualComponentWeight
 
     std::map<AtomKey, std::vector<GroupKey>> groups_by_atom_key;
     for (const auto group_key : analysis_view.CollectAtomGroupKeys(
-        rg::LocalFittingStage::Third))
+        rg::FittingStage::Third))
     {
         const auto unpacked_key{ KeyPackerComponentAtomClass::Unpack(group_key) };
         groups_by_atom_key[std::get<1>(unpacked_key)].emplace_back(group_key);
@@ -159,9 +159,9 @@ TEST(PotentialPlotBuilderTest, ComponentAtomAveragePriorUsesEqualComponentWeight
     };
     first_result.member_results.resize(
         analysis_view.GetAtomObjectList(
-            rg::LocalFittingStage::Third, first_group_key).size());
+            rg::FittingStage::Third, first_group_key).size());
     analysis.ApplyAtomGroupGaussianResult(
-        rg::LocalFittingStage::Third,
+        rg::FittingStage::Third,
         first_group_key,
         first_result);
 
@@ -172,9 +172,9 @@ TEST(PotentialPlotBuilderTest, ComponentAtomAveragePriorUsesEqualComponentWeight
     };
     second_result.member_results.resize(
         analysis_view.GetAtomObjectList(
-            rg::LocalFittingStage::Third, second_group_key).size());
+            rg::FittingStage::Third, second_group_key).size());
     analysis.ApplyAtomGroupGaussianResult(
-        rg::LocalFittingStage::Third,
+        rg::FittingStage::Third,
         second_group_key,
         second_result);
 

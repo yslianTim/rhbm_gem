@@ -51,7 +51,7 @@ void ExpectSelectedAtomsHaveFiniteNonNegativeAlphaR(const rg::ModelObject & mode
     {
         const auto alpha_r{
             rg::AtomLocalPotentialView::RequireFor(*atom).GetAlphaR(
-                rg::LocalFittingStage::Third)
+                rg::FittingStage::Third)
         };
         EXPECT_TRUE(std::isfinite(alpha_r));
         EXPECT_GE(alpha_r, 0.0);

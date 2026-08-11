@@ -82,19 +82,19 @@ const LocalPotentialEntry & AtomLocalPotentialView::RequireEntry(const char * co
 }
 
 const LocalGaussianResult & AtomLocalPotentialView::GetGaussianResult(
-    LocalFittingStage stage) const
+    FittingStage stage) const
 {
     return RequireEntry("Local Gaussian result").GaussianResult(stage);
 }
 
 const GaussianModel3D & AtomLocalPotentialView::GetEstimateOLS(
-    LocalFittingStage stage) const
+    FittingStage stage) const
 {
     return RequireEntry("Local estimate OLS").GaussianResult(stage).ols.GetModel();
 }
 
 const GaussianModel3D & AtomLocalPotentialView::GetEstimateMDPDE(
-    LocalFittingStage stage) const
+    FittingStage stage) const
 {
     return RequireEntry("Local estimate MDPDE").GaussianResult(stage).mdpde.GetModel();
 }
@@ -116,7 +116,7 @@ int AtomLocalPotentialView::GetNeighborCountForPeeling() const
     return RequireEntry("Local peeling neighbor count").NeighborCountForPeeling();
 }
 
-double AtomLocalPotentialView::GetAlphaR(LocalFittingStage stage) const
+double AtomLocalPotentialView::GetAlphaR(FittingStage stage) const
 {
     return RequireEntry("Local alpha-r").GaussianResult(stage).alpha_r;
 }

@@ -21,7 +21,7 @@ public:
     LocalPotentialEntry() = default;
     ~LocalPotentialEntry() = default;
 
-    void SetAlphaR(LocalFittingStage stage, double value)
+    void SetAlphaR(FittingStage stage, double value)
     {
         GaussianResult(stage).alpha_r = value;
     }
@@ -37,12 +37,12 @@ public:
     {
         m_neighbor_count_for_peeling = value;
     }
-    void SetGaussianResult(LocalFittingStage stage, LocalGaussianResult value)
+    void SetGaussianResult(FittingStage stage, LocalGaussianResult value)
     {
         GaussianResult(stage) = std::move(value);
     }
     void SetPosteriorResult(
-        LocalFittingStage stage,
+        FittingStage stage,
         GaussianModel3DWithUncertainty posterior,
         bool is_outlier,
         double statistical_distance)
@@ -52,7 +52,7 @@ public:
         result.is_outlier = is_outlier;
         result.statistical_distance = statistical_distance;
     }
-    void ClearTransientFitState(LocalFittingStage stage)
+    void ClearTransientFitState(FittingStage stage)
     {
         GaussianResult(stage).fit_result.reset();
     }
@@ -66,23 +66,23 @@ public:
         return static_cast<int>(m_peeling_sampling_entries.size());
     }
     int NeighborCountForPeeling() const { return m_neighbor_count_for_peeling; }
-    LocalGaussianResult & GaussianResult(LocalFittingStage stage)
+    LocalGaussianResult & GaussianResult(FittingStage stage)
     {
         switch (stage)
         {
-            case LocalFittingStage::First:  return m_gaussian_result_1st;
-            case LocalFittingStage::Second: return m_gaussian_result_2nd;
-            case LocalFittingStage::Third:  return m_gaussian_result_3rd;
+            case FittingStage::First:  return m_gaussian_result_1st;
+            case FittingStage::Second: return m_gaussian_result_2nd;
+            case FittingStage::Third:  return m_gaussian_result_3rd;
         }
         throw std::invalid_argument("Unknown local fitting stage.");
     }
-    const LocalGaussianResult & GaussianResult(LocalFittingStage stage) const
+    const LocalGaussianResult & GaussianResult(FittingStage stage) const
     {
         switch (stage)
         {
-            case LocalFittingStage::First:  return m_gaussian_result_1st;
-            case LocalFittingStage::Second: return m_gaussian_result_2nd;
-            case LocalFittingStage::Third:  return m_gaussian_result_3rd;
+            case FittingStage::First:  return m_gaussian_result_1st;
+            case FittingStage::Second: return m_gaussian_result_2nd;
+            case FittingStage::Third:  return m_gaussian_result_3rd;
         }
         throw std::invalid_argument("Unknown local fitting stage.");
     }

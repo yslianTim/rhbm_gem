@@ -27,13 +27,13 @@ void AtomLocalPotentialEditor::SetNeighborCountForPeeling(int value)
 }
 
 void AtomLocalPotentialEditor::SetGaussianResult(
-    LocalFittingStage stage,
+    FittingStage stage,
     LocalGaussianResult value)
 {
     m_entry->SetGaussianResult(stage, std::move(value));
 }
 
-void AtomLocalPotentialEditor::SetAlphaR(LocalFittingStage stage, double value)
+void AtomLocalPotentialEditor::SetAlphaR(FittingStage stage, double value)
 {
     m_entry->SetAlphaR(stage, value);
 }
