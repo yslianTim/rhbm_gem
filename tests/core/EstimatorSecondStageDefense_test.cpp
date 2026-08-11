@@ -690,7 +690,7 @@ std::unique_ptr<rg::ModelObject> BuildUnselectedContributorDefenseModel(
 
     auto analysis{ model->EditAnalysis() };
     analysis.RebuildAtomGroupsFromSelection();
-    analysis.InitializeGroupAlpha(0.0);
+    analysis.InitializeGroupAlpha(rg::LocalFittingStage::Second, 0.0);
     for (auto * atom : model->GetSelectedAtoms())
     {
         auto local_editor{ analysis.EnsureAtomLocalPotential(*atom) };
@@ -3232,17 +3232,19 @@ TEST(
     auto model{ BuildSharedOffsetJointPolishDefenseModel() };
     auto analysis{ model->EditAnalysis() };
     analysis.RebuildAtomGroupsFromSelection();
-    analysis.InitializeGroupAlpha(0.0);
+    analysis.InitializeGroupAlpha(rg::LocalFittingStage::Second, 0.0);
     const auto options{ MakeSecondStageOptions() };
 
     rt::RunSecondStageLocalFitting(*model, options);
 
     ExpectPeelingSamplingEntriesMatchFinalModels(*model);
     const auto analysis_view{ model->GetAnalysisView() };
-    for (const auto group_key : analysis_view.CollectAtomGroupKeys())
+    for (const auto group_key : analysis_view.CollectAtomGroupKeys(
+        rg::LocalFittingStage::Second))
     {
         const auto & atom_list{
-            analysis_view.GetAtomObjectList(group_key)
+            analysis_view.GetAtomObjectList(
+                rg::LocalFittingStage::Second, group_key)
         };
         std::vector<LocalPotentialSampleList> sample_entries_list;
         std::vector<rg::LocalGaussianResult> member_result_list;
@@ -3262,20 +3264,24 @@ TEST(
             rt::EstimateGroupGaussian(
                 sample_entries_list,
                 member_result_list,
-                analysis_view.GetAtomAlphaG(group_key),
+                analysis_view.GetAtomAlphaG(
+                    rg::LocalFittingStage::Second, group_key),
                 options)
         };
 
         ExpectGaussianModelsNear(
-            analysis_view.GetAtomGroupMean(group_key),
+            analysis_view.GetAtomGroupMean(
+                rg::LocalFittingStage::Second, group_key),
             expected_group_result.mean,
             1.0e-10);
         ExpectGaussianModelsNear(
-            analysis_view.GetAtomGroupMDPDE(group_key),
+            analysis_view.GetAtomGroupMDPDE(
+                rg::LocalFittingStage::Second, group_key),
             expected_group_result.mdpde,
             1.0e-10);
         ExpectGaussianModelsNear(
-            analysis_view.GetAtomGroupPrior(group_key),
+            analysis_view.GetAtomGroupPrior(
+                rg::LocalFittingStage::Second, group_key),
             expected_group_result.prior.GetModel(),
             1.0e-10);
         ASSERT_EQ(
@@ -3720,7 +3726,7 @@ TEST(
     std::vector<LocalPotentialSampleList> previous_peeling_sampling_entries_list;
     auto analysis{ model->EditAnalysis() };
     analysis.RebuildAtomGroupsFromSelection();
-    analysis.InitializeGroupAlpha(0.0);
+    analysis.InitializeGroupAlpha(rg::LocalFittingStage::Second, 0.0);
     for (auto * atom : model->GetSelectedAtoms())
     {
         auto result{
@@ -3751,10 +3757,12 @@ TEST(
     }
     const auto previous_analysis_view{ model->GetAnalysisView() };
     std::vector<rg::GaussianModel3D> previous_group_prior_list;
-    for (const auto group_key : previous_analysis_view.CollectAtomGroupKeys())
+    for (const auto group_key : previous_analysis_view.CollectAtomGroupKeys(
+        rg::LocalFittingStage::Second))
     {
         previous_group_prior_list.emplace_back(
-            previous_analysis_view.GetAtomGroupPrior(group_key));
+            previous_analysis_view.GetAtomGroupPrior(
+                rg::LocalFittingStage::Second, group_key));
     }
 
     testing::internal::CaptureStdout();
@@ -3785,12 +3793,14 @@ TEST(
             99);
     }
     const auto final_analysis_view{ model->GetAnalysisView() };
-    const auto group_key_list{ final_analysis_view.CollectAtomGroupKeys() };
+    const auto group_key_list{ final_analysis_view.CollectAtomGroupKeys(
+        rg::LocalFittingStage::Second) };
     ASSERT_EQ(group_key_list.size(), previous_group_prior_list.size());
     for (std::size_t i = 0; i < group_key_list.size(); i++)
     {
         ExpectGaussianModelsNear(
-            final_analysis_view.GetAtomGroupPrior(group_key_list.at(i)),
+            final_analysis_view.GetAtomGroupPrior(
+                rg::LocalFittingStage::Second, group_key_list.at(i)),
             previous_group_prior_list.at(i),
             0.0);
     }

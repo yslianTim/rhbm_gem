@@ -245,6 +245,57 @@ inline void ConvertLocalGaussianColumnsToLegacyFinal(
     }
 }
 
+inline void ConvertAtomGroupGaussianColumnsToLegacyFinal(
+    const std::filesystem::path & database_path)
+{
+    rg::SQLiteWrapper database{ database_path };
+    for (const auto * column_name : {
+             "amplitude_estimate_mean",
+             "width_estimate_mean",
+             "intercept_estimate_mean",
+             "amplitude_estimate_mdpde",
+             "width_estimate_mdpde",
+             "intercept_estimate_mdpde",
+             "amplitude_estimate_prior",
+             "width_estimate_prior",
+             "intercept_estimate_prior",
+             "amplitude_variance_prior",
+             "width_variance_prior",
+             "intercept_variance_prior",
+             "alpha_g" })
+    {
+        database.Execute(
+            "ALTER TABLE model_atom_group_potential ADD COLUMN "
+            + std::string(column_name) + " DOUBLE DEFAULT 0.0;");
+        database.Execute(
+            "UPDATE model_atom_group_potential SET "
+            + std::string(column_name) + " = "
+            + std::string(column_name) + "_3rd;");
+    }
+    for (const auto * suffix : { "1st", "2nd", "3rd" })
+    {
+        for (const auto * column_prefix : {
+                 "amplitude_estimate_mean_",
+                 "width_estimate_mean_",
+                 "intercept_estimate_mean_",
+                 "amplitude_estimate_mdpde_",
+                 "width_estimate_mdpde_",
+                 "intercept_estimate_mdpde_",
+                 "amplitude_estimate_prior_",
+                 "width_estimate_prior_",
+                 "intercept_estimate_prior_",
+                 "amplitude_variance_prior_",
+                 "width_variance_prior_",
+                 "intercept_variance_prior_",
+                 "alpha_g_" })
+        {
+            database.Execute(
+                "ALTER TABLE model_atom_group_potential DROP COLUMN "
+                + std::string(column_prefix) + suffix + ";");
+        }
+    }
+}
+
 inline void ConvertSamplingEntryColumnsToLegacyRawOnly(
     const std::filesystem::path & database_path)
 {

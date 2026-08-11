@@ -142,10 +142,12 @@ TEST(PotentialPlotBuilderTest, GaussianFunctionsPreserveModelOffset)
 
     analysis.RebuildAtomGroupsFromSelection();
     const auto analysis_view{ model->GetAnalysisView() };
-    const auto group_keys{ analysis_view.CollectAtomGroupKeys() };
+    const auto group_keys{ analysis_view.CollectAtomGroupKeys(
+        rg::LocalFittingStage::Third) };
     ASSERT_FALSE(group_keys.empty());
     const auto group_key{ group_keys.front() };
-    const auto & atom_list{ analysis_view.GetAtomObjectList(group_key) };
+    const auto & atom_list{ analysis_view.GetAtomObjectList(
+        rg::LocalFittingStage::Third, group_key) };
     ASSERT_FALSE(atom_list.empty());
 
     const rg::GaussianModel3D mean_model{ 1.10, 0.70, 0.21 };
@@ -198,7 +200,8 @@ TEST(PotentialPlotBuilderTest, ComponentAtomAveragePriorUsesEqualComponentWeight
     const auto analysis_view{ model->GetAnalysisView() };
 
     std::map<AtomKey, std::vector<GroupKey>> groups_by_atom_key;
-    for (const auto group_key : analysis_view.CollectAtomGroupKeys())
+    for (const auto group_key : analysis_view.CollectAtomGroupKeys(
+        rg::LocalFittingStage::Third))
     {
         const auto unpacked_key{ KeyPackerComponentAtomClass::Unpack(group_key) };
         groups_by_atom_key[std::get<1>(unpacked_key)].emplace_back(group_key);
@@ -225,7 +228,8 @@ TEST(PotentialPlotBuilderTest, ComponentAtomAveragePriorUsesEqualComponentWeight
         rg::GaussianModel3DUncertainty{ 0.2, 0.4, 0.06 }
     };
     first_result.member_results.resize(
-        analysis_view.GetAtomObjectList(first_group_key).size());
+        analysis_view.GetAtomObjectList(
+            rg::LocalFittingStage::Third, first_group_key).size());
     analysis.ApplyAtomGroupGaussianResult(
         rg::LocalFittingStage::Third,
         first_group_key,
@@ -237,7 +241,8 @@ TEST(PotentialPlotBuilderTest, ComponentAtomAveragePriorUsesEqualComponentWeight
         rg::GaussianModel3DUncertainty{ 0.6, 0.8, 0.10 }
     };
     second_result.member_results.resize(
-        analysis_view.GetAtomObjectList(second_group_key).size());
+        analysis_view.GetAtomObjectList(
+            rg::LocalFittingStage::Third, second_group_key).size());
     analysis.ApplyAtomGroupGaussianResult(
         rg::LocalFittingStage::Third,
         second_group_key,

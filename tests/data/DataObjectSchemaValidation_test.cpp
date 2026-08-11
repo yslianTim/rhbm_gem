@@ -24,7 +24,7 @@ void ExpectNormalizedSchemaValidationFailure(
 
     {
         rg::SQLitePersistence database_manager{ database_path };
-        EXPECT_EQ(data_test::GetUserVersion(database_path), 11);
+        EXPECT_EQ(data_test::GetUserVersion(database_path), 12);
     }
 
     mutate_database(database_path);
@@ -69,6 +69,34 @@ TEST(DataObjectSchemaValidationTest, CurrentSchemaRejectsLegacyLocalGaussianColu
                 database_path,
                 "ALTER TABLE model_atom_local_potential "
                 "ADD COLUMN alpha_r DOUBLE DEFAULT 0.0;");
+        });
+}
+
+TEST(DataObjectSchemaValidationTest, CurrentSchemaMissingGroupGaussianStageColumnThrows)
+{
+    ExpectNormalizedSchemaValidationFailure(
+        "data_schema_missing_group_gaussian_stage",
+        "missing_group_gaussian_stage.sqlite",
+        [](const std::filesystem::path & database_path)
+        {
+            data_test::ExecuteSqlWithForeignKeysOff(
+                database_path,
+                "ALTER TABLE model_atom_group_potential "
+                "DROP COLUMN alpha_g_2nd;");
+        });
+}
+
+TEST(DataObjectSchemaValidationTest, CurrentSchemaRejectsLegacyGroupGaussianColumn)
+{
+    ExpectNormalizedSchemaValidationFailure(
+        "data_schema_legacy_group_gaussian_column",
+        "legacy_group_gaussian_column.sqlite",
+        [](const std::filesystem::path & database_path)
+        {
+            data_test::ExecuteSql(
+                database_path,
+                "ALTER TABLE model_atom_group_potential "
+                "ADD COLUMN alpha_g DOUBLE DEFAULT 0.0;");
         });
 }
 

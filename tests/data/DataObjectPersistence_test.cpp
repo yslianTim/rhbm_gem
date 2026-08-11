@@ -170,13 +170,14 @@ TEST(DataObjectPersistenceTest, FinalV2CatalogDatabaseRemainsLoadable)
     }
 
     data_test::ConvertLocalGaussianColumnsToLegacyFinal(database_path);
+    data_test::ConvertAtomGroupGaussianColumnsToLegacyFinal(database_path);
     data_test::ConvertSamplingEntryColumnsToLegacyRawOnly(database_path);
     data_test::SetUserVersion(database_path, 5);
 
     rg::DataRepository repository{ database_path };
     EXPECT_NE(repository.LoadModel("model"), nullptr);
     EXPECT_NE(repository.LoadMap("map"), nullptr);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 11);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 12);
 }
 
 TEST(DataObjectPersistenceTest, RawSamplingSelectionRoundTripPreservesUnselectedSamples)
@@ -295,6 +296,7 @@ TEST(DataObjectPersistenceTest, VersionEightSamplingColumnsMigrateToRawAndPeelin
     }
 
     data_test::ConvertLocalGaussianColumnsToLegacyFinal(database_path);
+    data_test::ConvertAtomGroupGaussianColumnsToLegacyFinal(database_path);
     data_test::ConvertSamplingEntryColumnsToLegacyRawAndUpdated(database_path);
     data_test::SetUserVersion(database_path, 8);
     ASSERT_TRUE(data_test::HasColumn(
@@ -306,7 +308,7 @@ TEST(DataObjectPersistenceTest, VersionEightSamplingColumnsMigrateToRawAndPeelin
     auto loaded_model{ repository.LoadModel("model") };
     ASSERT_NE(loaded_model, nullptr);
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 11);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 12);
     EXPECT_TRUE(data_test::HasColumn(
         database_path, "model_atom_local_potential", "raw_sampling_size"));
     EXPECT_TRUE(data_test::HasColumn(
@@ -408,10 +410,12 @@ TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
 
         analysis.RebuildAtomGroupsFromSelection();
         const auto analysis_view{ model->GetAnalysisView() };
-        const auto group_keys{ analysis_view.CollectAtomGroupKeys() };
+        const auto group_keys{ analysis_view.CollectAtomGroupKeys(
+            rg::LocalFittingStage::Third) };
         ASSERT_FALSE(group_keys.empty());
         group_key = group_keys.front();
-        const auto & atom_list{ analysis_view.GetAtomObjectList(group_key) };
+        const auto & atom_list{ analysis_view.GetAtomObjectList(
+            rg::LocalFittingStage::Third, group_key) };
         ASSERT_FALSE(atom_list.empty());
         annotated_serial_id = atom_list.front()->GetSerialID();
 
@@ -435,6 +439,30 @@ TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
             member_result.statistical_distance = 1.5 + static_cast<double>(i);
             group_result.member_results.emplace_back(member_result);
         }
+        auto first_group_result{ group_result };
+        first_group_result.alpha_g = 0.1;
+        first_group_result.mean = rg::GaussianModel3D{ 1.1, 1.2, 1.33 };
+        first_group_result.mdpde = rg::GaussianModel3D{ 1.2, 1.1, 1.44 };
+        first_group_result.prior = rg::GaussianModel3DWithUncertainty{
+            rg::GaussianModel3D{ 1.3, 1.0, 1.55 },
+            rg::GaussianModel3DUncertainty{ 0.1, 0.2, 0.13 }
+        };
+        analysis.ApplyAtomGroupGaussianResult(
+            rg::LocalFittingStage::First,
+            group_key,
+            first_group_result);
+        auto second_group_result{ group_result };
+        second_group_result.alpha_g = 0.2;
+        second_group_result.mean = rg::GaussianModel3D{ 1.1, 1.2, 2.33 };
+        second_group_result.mdpde = rg::GaussianModel3D{ 1.2, 1.1, 2.44 };
+        second_group_result.prior = rg::GaussianModel3DWithUncertainty{
+            rg::GaussianModel3D{ 1.3, 1.0, 2.55 },
+            rg::GaussianModel3DUncertainty{ 0.1, 0.2, 0.23 }
+        };
+        analysis.ApplyAtomGroupGaussianResult(
+            rg::LocalFittingStage::Second,
+            group_key,
+            second_group_result);
         analysis.ApplyAtomGroupGaussianResult(
             rg::LocalFittingStage::Third,
             group_key,
@@ -469,16 +497,52 @@ TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
 
     const auto loaded_analysis_view{ loaded_model->GetAnalysisView() };
     EXPECT_DOUBLE_EQ(
-        loaded_analysis_view.GetAtomGroupMean(group_key).GetOffset(),
+        loaded_analysis_view.GetAtomGroupMean(
+            rg::LocalFittingStage::First, group_key).GetOffset(),
+        1.33);
+    EXPECT_DOUBLE_EQ(
+        loaded_analysis_view.GetAtomGroupMDPDE(
+            rg::LocalFittingStage::First, group_key).GetOffset(),
+        1.44);
+    EXPECT_DOUBLE_EQ(
+        loaded_analysis_view.GetAtomGroupPrior(
+            rg::LocalFittingStage::First, group_key).GetOffset(),
+        1.55);
+    EXPECT_DOUBLE_EQ(
+        loaded_analysis_view.GetAtomAlphaG(
+            rg::LocalFittingStage::First, group_key),
+        0.1);
+    EXPECT_DOUBLE_EQ(
+        loaded_analysis_view.GetAtomGroupMean(
+            rg::LocalFittingStage::Second, group_key).GetOffset(),
+        2.33);
+    EXPECT_DOUBLE_EQ(
+        loaded_analysis_view.GetAtomGroupMDPDE(
+            rg::LocalFittingStage::Second, group_key).GetOffset(),
+        2.44);
+    EXPECT_DOUBLE_EQ(
+        loaded_analysis_view.GetAtomGroupPrior(
+            rg::LocalFittingStage::Second, group_key).GetOffset(),
+        2.55);
+    EXPECT_DOUBLE_EQ(
+        loaded_analysis_view.GetAtomAlphaG(
+            rg::LocalFittingStage::Second, group_key),
+        0.2);
+    EXPECT_DOUBLE_EQ(
+        loaded_analysis_view.GetAtomGroupMean(
+            rg::LocalFittingStage::Third, group_key).GetOffset(),
         0.33);
     EXPECT_DOUBLE_EQ(
-        loaded_analysis_view.GetAtomGroupMDPDE(group_key).GetOffset(),
+        loaded_analysis_view.GetAtomGroupMDPDE(
+            rg::LocalFittingStage::Third, group_key).GetOffset(),
         0.44);
     EXPECT_DOUBLE_EQ(
-        loaded_analysis_view.GetAtomGroupPrior(group_key).GetOffset(),
+        loaded_analysis_view.GetAtomGroupPrior(
+            rg::LocalFittingStage::Third, group_key).GetOffset(),
         0.55);
     EXPECT_DOUBLE_EQ(
-        loaded_analysis_view.GetAtomGroupPriorWithUncertainty(group_key)
+        loaded_analysis_view.GetAtomGroupPriorWithUncertainty(
+            rg::LocalFittingStage::Third, group_key)
             .GetStandardDeviationModel()
             .GetOffset(),
         0.03);
@@ -517,6 +581,7 @@ TEST(DataObjectPersistenceTest, LegacyV2SamplingBlobLoadsAsSelectedAndMigratesVe
     }
 
     data_test::ConvertLocalGaussianColumnsToLegacyFinal(database_path);
+    data_test::ConvertAtomGroupGaussianColumnsToLegacyFinal(database_path);
     data_test::ConvertSamplingEntryColumnsToLegacyRawOnly(database_path);
 
     {
@@ -564,7 +629,7 @@ TEST(DataObjectPersistenceTest, LegacyV2SamplingBlobLoadsAsSelectedAndMigratesVe
     };
 
     EXPECT_TRUE(peeling_entries.empty());
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 11);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 12);
 }
 
 TEST(DataObjectPersistenceTest, DatabaseRoundTripPreservesChainMetadataAndSymmetryFiltering)

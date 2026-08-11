@@ -1149,9 +1149,11 @@ std::optional<SecondStageInitialStateBuildResult> BuildInitialLocalFittingState(
         const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
         state.at(i) = local_view.GetGaussianResult(LocalFittingStage::Second);
         const auto group_key{ data_internal::GetGroupKey(atom) };
-        if (analysis_view.HasAtomGroup(group_key))
+        if (analysis_view.HasAtomGroup(LocalFittingStage::Second, group_key))
         {
-            group_prior_list.at(i) = analysis_view.GetAtomGroupPriorWithUncertainty(group_key);
+            group_prior_list.at(i) = analysis_view.GetAtomGroupPriorWithUncertainty(
+                LocalFittingStage::Second,
+                group_key);
         }
 
         const auto & result{ state.at(i) };

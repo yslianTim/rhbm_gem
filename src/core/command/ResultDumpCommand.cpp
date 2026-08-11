@@ -338,10 +338,12 @@ void RunGroupGausEstimatesDumping(
                 const auto atom_key{ static_cast<uint16_t>(spot) };
                 const auto group_key{ KeyPackerComponentAtomClass::Pack(component_key, atom_key) };
                 const auto atom_id{ model_object->FindAtomID(atom_key) };
-                if (!entry_view.HasAtomGroup(group_key)) continue;
+                if (!entry_view.HasAtomGroup(LocalFittingStage::Third, group_key)) continue;
                 outfile << residue_name << ',' << atom_id << ','
-                        << entry_view.GetAtomGroupPrior(group_key).GetDisplayParameter(0) << ','
-                        << entry_view.GetAtomGroupPrior(group_key).GetDisplayParameter(1) << '\n';
+                        << entry_view.GetAtomGroupPrior(
+                            LocalFittingStage::Third, group_key).GetDisplayParameter(0) << ','
+                        << entry_view.GetAtomGroupPrior(
+                            LocalFittingStage::Third, group_key).GetDisplayParameter(1) << '\n';
             }
         }
 

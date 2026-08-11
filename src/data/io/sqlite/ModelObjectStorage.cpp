@@ -235,19 +235,45 @@ inline constexpr std::string_view kCreateModelAtomGroupTableSql = R"sql(
         key_tag TEXT,
         group_key INTEGER,
         member_size INTEGER,
-        amplitude_estimate_mean DOUBLE,
-        width_estimate_mean DOUBLE,
-        intercept_estimate_mean DOUBLE,
-        amplitude_estimate_mdpde DOUBLE,
-        width_estimate_mdpde DOUBLE,
-        intercept_estimate_mdpde DOUBLE,
-        amplitude_estimate_prior DOUBLE,
-        width_estimate_prior DOUBLE,
-        intercept_estimate_prior DOUBLE,
-        amplitude_variance_prior DOUBLE,
-        width_variance_prior DOUBLE,
-        intercept_variance_prior DOUBLE,
-        alpha_g DOUBLE,
+        amplitude_estimate_mean_1st DOUBLE,
+        width_estimate_mean_1st DOUBLE,
+        intercept_estimate_mean_1st DOUBLE,
+        amplitude_estimate_mdpde_1st DOUBLE,
+        width_estimate_mdpde_1st DOUBLE,
+        intercept_estimate_mdpde_1st DOUBLE,
+        amplitude_estimate_prior_1st DOUBLE,
+        width_estimate_prior_1st DOUBLE,
+        intercept_estimate_prior_1st DOUBLE,
+        amplitude_variance_prior_1st DOUBLE,
+        width_variance_prior_1st DOUBLE,
+        intercept_variance_prior_1st DOUBLE,
+        alpha_g_1st DOUBLE,
+        amplitude_estimate_mean_2nd DOUBLE,
+        width_estimate_mean_2nd DOUBLE,
+        intercept_estimate_mean_2nd DOUBLE,
+        amplitude_estimate_mdpde_2nd DOUBLE,
+        width_estimate_mdpde_2nd DOUBLE,
+        intercept_estimate_mdpde_2nd DOUBLE,
+        amplitude_estimate_prior_2nd DOUBLE,
+        width_estimate_prior_2nd DOUBLE,
+        intercept_estimate_prior_2nd DOUBLE,
+        amplitude_variance_prior_2nd DOUBLE,
+        width_variance_prior_2nd DOUBLE,
+        intercept_variance_prior_2nd DOUBLE,
+        alpha_g_2nd DOUBLE,
+        amplitude_estimate_mean_3rd DOUBLE,
+        width_estimate_mean_3rd DOUBLE,
+        intercept_estimate_mean_3rd DOUBLE,
+        amplitude_estimate_mdpde_3rd DOUBLE,
+        width_estimate_mdpde_3rd DOUBLE,
+        intercept_estimate_mdpde_3rd DOUBLE,
+        amplitude_estimate_prior_3rd DOUBLE,
+        width_estimate_prior_3rd DOUBLE,
+        intercept_estimate_prior_3rd DOUBLE,
+        amplitude_variance_prior_3rd DOUBLE,
+        width_variance_prior_3rd DOUBLE,
+        intercept_variance_prior_3rd DOUBLE,
+        alpha_g_3rd DOUBLE,
         PRIMARY KEY (key_tag, group_key),
         FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
     )
@@ -398,11 +424,24 @@ inline constexpr auto kInsertModelAtomPosteriorSql = R"sql(
 inline constexpr auto kInsertModelAtomGroupSql = R"sql(
     INSERT OR REPLACE INTO model_atom_group_potential (
         key_tag, group_key, member_size,
-        amplitude_estimate_mean, width_estimate_mean, intercept_estimate_mean,
-        amplitude_estimate_mdpde, width_estimate_mdpde, intercept_estimate_mdpde,
-        amplitude_estimate_prior, width_estimate_prior, intercept_estimate_prior,
-        amplitude_variance_prior, width_variance_prior, intercept_variance_prior, alpha_g
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        amplitude_estimate_mean_1st, width_estimate_mean_1st, intercept_estimate_mean_1st,
+        amplitude_estimate_mdpde_1st, width_estimate_mdpde_1st, intercept_estimate_mdpde_1st,
+        amplitude_estimate_prior_1st, width_estimate_prior_1st, intercept_estimate_prior_1st,
+        amplitude_variance_prior_1st, width_variance_prior_1st,
+        intercept_variance_prior_1st, alpha_g_1st,
+        amplitude_estimate_mean_2nd, width_estimate_mean_2nd, intercept_estimate_mean_2nd,
+        amplitude_estimate_mdpde_2nd, width_estimate_mdpde_2nd, intercept_estimate_mdpde_2nd,
+        amplitude_estimate_prior_2nd, width_estimate_prior_2nd, intercept_estimate_prior_2nd,
+        amplitude_variance_prior_2nd, width_variance_prior_2nd,
+        intercept_variance_prior_2nd, alpha_g_2nd,
+        amplitude_estimate_mean_3rd, width_estimate_mean_3rd, intercept_estimate_mean_3rd,
+        amplitude_estimate_mdpde_3rd, width_estimate_mdpde_3rd, intercept_estimate_mdpde_3rd,
+        amplitude_estimate_prior_3rd, width_estimate_prior_3rd, intercept_estimate_prior_3rd,
+        amplitude_variance_prior_3rd, width_variance_prior_3rd,
+        intercept_variance_prior_3rd, alpha_g_3rd
+    ) VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 )sql"sv;
 
 inline constexpr auto kDeleteRowsForKeySqlPrefix = "DELETE FROM "sv;
@@ -483,10 +522,21 @@ inline constexpr auto kSelectModelAtomPosteriorSql = R"sql(
 inline constexpr auto kSelectModelAtomGroupSql = R"sql(
     SELECT
         group_key, member_size,
-        amplitude_estimate_mean, width_estimate_mean, intercept_estimate_mean,
-        amplitude_estimate_mdpde, width_estimate_mdpde, intercept_estimate_mdpde,
-        amplitude_estimate_prior, width_estimate_prior, intercept_estimate_prior,
-        amplitude_variance_prior, width_variance_prior, intercept_variance_prior, alpha_g
+        amplitude_estimate_mean_1st, width_estimate_mean_1st, intercept_estimate_mean_1st,
+        amplitude_estimate_mdpde_1st, width_estimate_mdpde_1st, intercept_estimate_mdpde_1st,
+        amplitude_estimate_prior_1st, width_estimate_prior_1st, intercept_estimate_prior_1st,
+        amplitude_variance_prior_1st, width_variance_prior_1st,
+        intercept_variance_prior_1st, alpha_g_1st,
+        amplitude_estimate_mean_2nd, width_estimate_mean_2nd, intercept_estimate_mean_2nd,
+        amplitude_estimate_mdpde_2nd, width_estimate_mdpde_2nd, intercept_estimate_mdpde_2nd,
+        amplitude_estimate_prior_2nd, width_estimate_prior_2nd, intercept_estimate_prior_2nd,
+        amplitude_variance_prior_2nd, width_variance_prior_2nd,
+        intercept_variance_prior_2nd, alpha_g_2nd,
+        amplitude_estimate_mean_3rd, width_estimate_mean_3rd, intercept_estimate_mean_3rd,
+        amplitude_estimate_mdpde_3rd, width_estimate_mdpde_3rd, intercept_estimate_mdpde_3rd,
+        amplitude_estimate_prior_3rd, width_estimate_prior_3rd, intercept_estimate_prior_3rd,
+        amplitude_variance_prior_3rd, width_variance_prior_3rd,
+        intercept_variance_prior_3rd, alpha_g_3rd
     FROM model_atom_group_potential WHERE key_tag = ?;
 )sql"sv;
 
@@ -1098,32 +1148,62 @@ void SaveAtomGroupPotentialEntryList(
     const std::string & key_tag)
 {
     SQLiteStatementBatch batch{ database, std::string(kInsertModelAtomGroupSql) };
-    for (const auto group_key : group_entry.CollectGroupKeys())
+    for (const auto group_key :
+        group_entry.CollectGroupKeys(LocalFittingStage::Third))
     {
         batch.Execute([&](SQLiteWrapper & statement_db)
         {
-            const auto & mean{ group_entry.GetMean(group_key) };
-            const auto & mdpde{ group_entry.GetMDPDE(group_key) };
-            const auto & prior{ group_entry.GetPrior(group_key) };
-            const auto & prior_standard_deviation{
-                group_entry.GetPriorStandardDeviation(group_key)
-            };
             statement_db.Bind<std::string>(1, key_tag);
             statement_db.Bind<GroupKey>(2, group_key);
-            statement_db.Bind<int>(3, static_cast<int>(group_entry.GetMemberCount(group_key)));
-            statement_db.Bind<double>(4, mean.GetAmplitude());
-            statement_db.Bind<double>(5, mean.GetWidth());
-            statement_db.Bind<double>(6, mean.GetOffset());
-            statement_db.Bind<double>(7, mdpde.GetAmplitude());
-            statement_db.Bind<double>(8, mdpde.GetWidth());
-            statement_db.Bind<double>(9, mdpde.GetOffset());
-            statement_db.Bind<double>(10, prior.GetAmplitude());
-            statement_db.Bind<double>(11, prior.GetWidth());
-            statement_db.Bind<double>(12, prior.GetOffset());
-            statement_db.Bind<double>(13, prior_standard_deviation.GetAmplitude());
-            statement_db.Bind<double>(14, prior_standard_deviation.GetWidth());
-            statement_db.Bind<double>(15, prior_standard_deviation.GetOffset());
-            statement_db.Bind<double>(16, group_entry.GetAlphaG(group_key));
+            statement_db.Bind<int>(
+                3,
+                static_cast<int>(group_entry.GetMemberCount(
+                    LocalFittingStage::Third,
+                    group_key)));
+            const auto bind_group_result{
+                [&](LocalFittingStage stage, int first_parameter_index)
+                {
+                    const auto & mean{ group_entry.GetMean(stage, group_key) };
+                    const auto & mdpde{ group_entry.GetMDPDE(stage, group_key) };
+                    const auto & prior{ group_entry.GetPrior(stage, group_key) };
+                    const auto & prior_standard_deviation{
+                        group_entry.GetPriorStandardDeviation(stage, group_key)
+                    };
+                    statement_db.Bind<double>(
+                        first_parameter_index, mean.GetAmplitude());
+                    statement_db.Bind<double>(
+                        first_parameter_index + 1, mean.GetWidth());
+                    statement_db.Bind<double>(
+                        first_parameter_index + 2, mean.GetOffset());
+                    statement_db.Bind<double>(
+                        first_parameter_index + 3, mdpde.GetAmplitude());
+                    statement_db.Bind<double>(
+                        first_parameter_index + 4, mdpde.GetWidth());
+                    statement_db.Bind<double>(
+                        first_parameter_index + 5, mdpde.GetOffset());
+                    statement_db.Bind<double>(
+                        first_parameter_index + 6, prior.GetAmplitude());
+                    statement_db.Bind<double>(
+                        first_parameter_index + 7, prior.GetWidth());
+                    statement_db.Bind<double>(
+                        first_parameter_index + 8, prior.GetOffset());
+                    statement_db.Bind<double>(
+                        first_parameter_index + 9,
+                        prior_standard_deviation.GetAmplitude());
+                    statement_db.Bind<double>(
+                        first_parameter_index + 10,
+                        prior_standard_deviation.GetWidth());
+                    statement_db.Bind<double>(
+                        first_parameter_index + 11,
+                        prior_standard_deviation.GetOffset());
+                    statement_db.Bind<double>(
+                        first_parameter_index + 12,
+                        group_entry.GetAlphaG(stage, group_key));
+                }
+            };
+            bind_group_result(LocalFittingStage::First, 4);
+            bind_group_result(LocalFittingStage::Second, 17);
+            bind_group_result(LocalFittingStage::Third, 30);
         });
     }
 }
@@ -1259,34 +1339,46 @@ void LoadAtomGroupPotentialEntryList(
         }
 
         const auto group_key{ database.GetColumn<GroupKey>(0) };
-        group_entry.ReserveMembers(group_key, static_cast<size_t>(database.GetColumn<int>(1)));
-        GroupGaussianResult group_result;
-        group_result.mean = GaussianModel3D{
-            database.GetColumn<double>(2),
-            database.GetColumn<double>(3),
-            database.GetColumn<double>(4) };
-        group_result.mdpde = GaussianModel3D{
-            database.GetColumn<double>(5),
-            database.GetColumn<double>(6),
-            database.GetColumn<double>(7) };
-        group_result.prior = GaussianModel3DWithUncertainty{
-            GaussianModel3D{
-                database.GetColumn<double>(8),
-                database.GetColumn<double>(9),
-                database.GetColumn<double>(10) },
-            GaussianModel3DUncertainty{
-                database.GetColumn<double>(11),
-                database.GetColumn<double>(12),
-                database.GetColumn<double>(13) }
+        const auto member_count{ static_cast<size_t>(database.GetColumn<int>(1)) };
+        const auto load_group_result{
+            [&](LocalFittingStage stage, int first_column_index)
+            {
+                group_entry.ReserveMembers(stage, group_key, member_count);
+                GroupGaussianResult group_result;
+                group_result.mean = GaussianModel3D{
+                    database.GetColumn<double>(first_column_index),
+                    database.GetColumn<double>(first_column_index + 1),
+                    database.GetColumn<double>(first_column_index + 2) };
+                group_result.mdpde = GaussianModel3D{
+                    database.GetColumn<double>(first_column_index + 3),
+                    database.GetColumn<double>(first_column_index + 4),
+                    database.GetColumn<double>(first_column_index + 5) };
+                group_result.prior = GaussianModel3DWithUncertainty{
+                    GaussianModel3D{
+                        database.GetColumn<double>(first_column_index + 6),
+                        database.GetColumn<double>(first_column_index + 7),
+                        database.GetColumn<double>(first_column_index + 8) },
+                    GaussianModel3DUncertainty{
+                        database.GetColumn<double>(first_column_index + 9),
+                        database.GetColumn<double>(first_column_index + 10),
+                        database.GetColumn<double>(first_column_index + 11) }
+                };
+                group_result.alpha_g =
+                    database.GetColumn<double>(first_column_index + 12);
+                group_entry.SetGaussianResult(stage, group_key, group_result);
+            }
         };
-        group_result.alpha_g = database.GetColumn<double>(14);
-        group_entry.SetGaussianResult(group_key, group_result);
+        load_group_result(LocalFittingStage::First, 2);
+        load_group_result(LocalFittingStage::Second, 15);
+        load_group_result(LocalFittingStage::Third, 28);
     }
 
     for (auto & atom : model_obj.GetSelectedAtoms())
     {
         const auto group_key{ data_internal::GetGroupKey(atom) };
-        group_entry.AddMember(group_key, *atom);
+        group_entry.AddMember(LocalFittingStage::First, group_key, *atom);
+        group_entry.AddMember(LocalFittingStage::Second, group_key, *atom);
+        group_entry.AddMember(LocalFittingStage::Third, group_key, *atom);
     }
 }
 
@@ -1299,7 +1391,7 @@ void SaveAnalysis(
     const auto & analysis_data{ ModelAnalysisData::Of(model_obj) };
 
     const auto & group_entry{ analysis_data.AtomGroupEntry() };
-    if (group_entry.GroupCount() > 0)
+    if (group_entry.GroupCount(LocalFittingStage::Third) > 0)
     {
         SaveAtomLocalPotentialEntrySubList(database, model_obj, key_tag);
         SaveAtomGroupPotentialEntryList(database, group_entry, key_tag);

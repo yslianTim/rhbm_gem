@@ -21,46 +21,65 @@ ModelAnalysisView::ModelAnalysisView(const ModelObject & model_object) :
 {
 }
 
-bool ModelAnalysisView::HasGroupedAnalysisData() const
+bool ModelAnalysisView::HasGroupedAnalysisData(LocalFittingStage stage) const
 {
-    return !ModelAnalysisData::Of(m_model_object).AtomGroupEntry().CollectGroupKeys().empty();
+    return !ModelAnalysisData::Of(m_model_object)
+        .AtomGroupEntry().CollectGroupKeys(stage).empty();
 }
 
-bool ModelAnalysisView::HasAtomGroup(GroupKey group_key) const
+bool ModelAnalysisView::HasAtomGroup(
+    LocalFittingStage stage,
+    GroupKey group_key) const
 {
-    return ModelAnalysisData::Of(m_model_object).AtomGroupEntry().HasGroup(group_key);
+    return ModelAnalysisData::Of(m_model_object)
+        .AtomGroupEntry().HasGroup(stage, group_key);
 }
 
-const GaussianModel3D & ModelAnalysisView::GetAtomGroupMean(GroupKey group_key) const
+const GaussianModel3D & ModelAnalysisView::GetAtomGroupMean(
+    LocalFittingStage stage,
+    GroupKey group_key) const
 {
-    return ModelAnalysisData::Of(m_model_object).AtomGroupEntry().GetMean(group_key);
+    return ModelAnalysisData::Of(m_model_object)
+        .AtomGroupEntry().GetMean(stage, group_key);
 }
 
-const GaussianModel3D & ModelAnalysisView::GetAtomGroupMDPDE(GroupKey group_key) const
+const GaussianModel3D & ModelAnalysisView::GetAtomGroupMDPDE(
+    LocalFittingStage stage,
+    GroupKey group_key) const
 {
-    return ModelAnalysisData::Of(m_model_object).AtomGroupEntry().GetMDPDE(group_key);
+    return ModelAnalysisData::Of(m_model_object)
+        .AtomGroupEntry().GetMDPDE(stage, group_key);
 }
 
-const GaussianModel3D & ModelAnalysisView::GetAtomGroupPrior(GroupKey group_key) const
+const GaussianModel3D & ModelAnalysisView::GetAtomGroupPrior(
+    LocalFittingStage stage,
+    GroupKey group_key) const
 {
-    return ModelAnalysisData::Of(m_model_object).AtomGroupEntry().GetPrior(group_key);
+    return ModelAnalysisData::Of(m_model_object)
+        .AtomGroupEntry().GetPrior(stage, group_key);
 }
 
-GaussianModel3DWithUncertainty ModelAnalysisView::GetAtomGroupPriorWithUncertainty(GroupKey group_key) const
+GaussianModel3DWithUncertainty ModelAnalysisView::GetAtomGroupPriorWithUncertainty(
+    LocalFittingStage stage,
+    GroupKey group_key) const
 {
-    return ModelAnalysisData::Of(m_model_object).AtomGroupEntry().GetPriorWithUncertainty(group_key);
+    return ModelAnalysisData::Of(m_model_object)
+        .AtomGroupEntry().GetPriorWithUncertainty(stage, group_key);
 }
 
-const std::vector<AtomObject *> & ModelAnalysisView::GetAtomObjectList(GroupKey group_key) const
+const std::vector<AtomObject *> & ModelAnalysisView::GetAtomObjectList(
+    LocalFittingStage stage,
+    GroupKey group_key) const
 {
-    return ModelAnalysisData::Of(m_model_object).AtomGroupEntry().GetMembers(group_key);
+    return ModelAnalysisData::Of(m_model_object)
+        .AtomGroupEntry().GetMembers(stage, group_key);
 }
 
 double ModelAnalysisView::GetAtomAlphaR(
     LocalFittingStage stage,
     GroupKey group_key) const
 {
-    const auto & atom_list{ GetAtomObjectList(group_key) };
+    const auto & atom_list{ GetAtomObjectList(stage, group_key) };
     if (atom_list.empty())
     {
         throw std::runtime_error("Atom group has no members.");
@@ -68,14 +87,19 @@ double ModelAnalysisView::GetAtomAlphaR(
     return AtomLocalPotentialView::RequireFor(*atom_list.front()).GetAlphaR(stage);
 }
 
-double ModelAnalysisView::GetAtomAlphaG(GroupKey group_key) const
+double ModelAnalysisView::GetAtomAlphaG(
+    LocalFittingStage stage,
+    GroupKey group_key) const
 {
-    return ModelAnalysisData::Of(m_model_object).AtomGroupEntry().GetAlphaG(group_key);
+    return ModelAnalysisData::Of(m_model_object)
+        .AtomGroupEntry().GetAlphaG(stage, group_key);
 }
 
-std::vector<GroupKey> ModelAnalysisView::CollectAtomGroupKeys() const
+std::vector<GroupKey> ModelAnalysisView::CollectAtomGroupKeys(
+    LocalFittingStage stage) const
 {
-    return ModelAnalysisData::Of(m_model_object).AtomGroupEntry().CollectGroupKeys();
+    return ModelAnalysisData::Of(m_model_object)
+        .AtomGroupEntry().CollectGroupKeys(stage);
 }
 
 std::string ModelAnalysisView::GetAtomCountingSummary() const
@@ -98,10 +122,11 @@ std::string ModelAnalysisView::GetAtomCountingSummary() const
     return description;
 }
 
-std::string ModelAnalysisView::GetAtomGroupingSummary() const
+std::string ModelAnalysisView::GetAtomGroupingSummary(
+    LocalFittingStage stage) const
 {
     std::string description{ "Atomic model includes " };
-    description += std::to_string(CollectAtomGroupKeys().size()) + " atom groups.";
+    description += std::to_string(CollectAtomGroupKeys(stage).size()) + " atom groups.";
     return description;
 }
 

@@ -279,18 +279,30 @@ ModelObject::ModelObject(const ModelObject & other) :
     {
         const auto & source_entry{ source_analysis_data.AtomGroupEntry() };
         auto & cloned_entry{ m_analysis_data->AtomGroupEntry() };
-        for (const auto group_key : source_entry.CollectGroupKeys())
+        for (const auto stage : {
+                 LocalFittingStage::First,
+                 LocalFittingStage::Second,
+                 LocalFittingStage::Third })
         {
-            GroupGaussianResult result;
-            result.mean = source_entry.GetMean(group_key);
-            result.mdpde = source_entry.GetMDPDE(group_key);
-            result.prior = source_entry.GetPriorWithUncertainty(group_key);
-            result.alpha_g = source_entry.GetAlphaG(group_key);
-            cloned_entry.SetGaussianResult(group_key, result);
-            cloned_entry.ReserveMembers(group_key, source_entry.GetMemberCount(group_key));
-            for (auto * atom : source_entry.GetMembers(group_key))
+            for (const auto group_key : source_entry.CollectGroupKeys(stage))
             {
-                cloned_entry.AddMember(group_key, *atom_ptr_map.at(atom));
+                GroupGaussianResult result;
+                result.mean = source_entry.GetMean(stage, group_key);
+                result.mdpde = source_entry.GetMDPDE(stage, group_key);
+                result.prior = source_entry.GetPriorWithUncertainty(stage, group_key);
+                result.alpha_g = source_entry.GetAlphaG(stage, group_key);
+                cloned_entry.SetGaussianResult(stage, group_key, result);
+                cloned_entry.ReserveMembers(
+                    stage,
+                    group_key,
+                    source_entry.GetMemberCount(stage, group_key));
+                for (auto * atom : source_entry.GetMembers(stage, group_key))
+                {
+                    cloned_entry.AddMember(
+                        stage,
+                        group_key,
+                        *atom_ptr_map.at(atom));
+                }
             }
         }
     }
@@ -580,7 +592,9 @@ void ModelObject::LocalPotentialInitialization()
     analysis.InitializeLocalAlpha(LocalFittingStage::First, kInitialLocalAlpha);
     analysis.InitializeLocalAlpha(LocalFittingStage::Second, kInitialLocalAlpha);
     analysis.InitializeLocalAlpha(LocalFittingStage::Third, kInitialLocalAlpha);
-    analysis.InitializeGroupAlpha(kInitialGroupAlpha);
+    analysis.InitializeGroupAlpha(LocalFittingStage::First, kInitialGroupAlpha);
+    analysis.InitializeGroupAlpha(LocalFittingStage::Second, kInitialGroupAlpha);
+    analysis.InitializeGroupAlpha(LocalFittingStage::Third, kInitialGroupAlpha);
 }
 
 void ModelObject::ClearTransientFitStates()
@@ -747,7 +761,9 @@ bool ModelObject::HasStandardDNAComponent() const
 void ModelObject::PrintSummary() const
 {
     Logger::Log(LogLevel::Info, this->GetAnalysisView().GetAtomCountingSummary());
-    Logger::Log(LogLevel::Info, this->GetAnalysisView().GetAtomGroupingSummary());
+    Logger::Log(
+        LogLevel::Info,
+        this->GetAnalysisView().GetAtomGroupingSummary(LocalFittingStage::Third));
 }
 
 } // namespace rhbm_gem

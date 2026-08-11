@@ -21,6 +21,7 @@
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 
 namespace {
 namespace rt = rhbm_gem::core;
@@ -537,6 +538,21 @@ TEST(
         return count;
     };
     EXPECT_EQ(count_occurrences("Run atom group fitting."), 3U);
+    const auto analysis_view{ model->GetAnalysisView() };
+    for (const auto stage : {
+             LocalFittingStage::First,
+             LocalFittingStage::Second,
+             LocalFittingStage::Third })
+    {
+        const auto group_keys{ analysis_view.CollectAtomGroupKeys(stage) };
+        ASSERT_EQ(group_keys.size(), 1u);
+        const auto group_key{ group_keys.front() };
+        EXPECT_EQ(analysis_view.GetAtomObjectList(stage, group_key).size(), 1u);
+        EXPECT_TRUE(std::isfinite(
+            analysis_view.GetAtomGroupPrior(stage, group_key).GetAmplitude()));
+        EXPECT_TRUE(std::isfinite(analysis_view.GetAtomAlphaG(stage, group_key)));
+        EXPECT_TRUE(fitted_view.GetGaussianResult(stage).posterior.has_value());
+    }
 
     constexpr std::string_view csv_header{
         "serial id,residue,spot,neighbor count,peeling ratio,"

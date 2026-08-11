@@ -68,7 +68,8 @@ std::vector<GroupKey> CollectComponentAtomGroupKeys(
     AtomKey atom_key)
 {
     std::vector<GroupKey> result;
-    for (const auto group_key : model_view.CollectAtomGroupKeys())
+    for (const auto group_key :
+        model_view.CollectAtomGroupKeys(LocalFittingStage::Third))
     {
         const auto unpacked_key{ KeyPackerComponentAtomClass::Unpack(group_key) };
         if (std::get<1>(unpacked_key) == atom_key)
@@ -126,7 +127,7 @@ bool PotentialPlotBuilder::IsAtomLocalEntryAvailable() const
 
 bool PotentialPlotBuilder::IsAvailableAtomGroupKey(GroupKey group_key) const
 {
-    return GetModelView().HasAtomGroup(group_key);
+    return GetModelView().HasAtomGroup(LocalFittingStage::Third, group_key);
 }
 
 #ifdef HAVE_ROOT
@@ -144,7 +145,8 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateComponentCountHistogram(
     };
     for (size_t i = 0; i < group_key_list.size(); i++)
     {
-        auto count{ GetModelView().GetAtomObjectList(group_key_list.at(i)).size() };
+        auto count{ GetModelView().GetAtomObjectList(
+            LocalFittingStage::Third, group_key_list.at(i)).size() };
         hist->SetBinContent(static_cast<int>(i + 1), static_cast<double>(count));
     }
     return hist;
@@ -163,7 +165,9 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateAtomGausEstimateHistogram(
         return nullptr;
     }
 
-    const auto & atom_list{ GetModelView().GetAtomObjectList(group_key) };
+    const auto & atom_list{
+        GetModelView().GetAtomObjectList(LocalFittingStage::Third, group_key)
+    };
     std::vector<double> gaus_estimate_list;
     gaus_estimate_list.reserve(atom_list.size());
     for (auto atom : atom_list)
@@ -367,8 +371,10 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToResi
             continue;
         }
         auto x_value{ static_cast<int>(data_internal::GetResidueFromGroupKey(group_key)) - 1 };
-        auto y_value{ model_view.GetAtomGroupPrior(group_key).GetDisplayParameter(par_id) };
-        auto y_error{ model_view.GetAtomGroupPriorWithUncertainty(group_key).GetDisplayStandardDeviation(par_id) };
+        auto y_value{ model_view.GetAtomGroupPrior(
+            LocalFittingStage::Third, group_key).GetDisplayParameter(par_id) };
+        auto y_error{ model_view.GetAtomGroupPriorWithUncertainty(
+            LocalFittingStage::Third, group_key).GetDisplayStandardDeviation(par_id) };
         graph->SetPoint(count, x_value, y_value);
         graph->SetPointError(count, 0.0, y_error);
         count++;
@@ -401,8 +407,10 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToAtom
             continue;
         }
         auto x_value{ static_cast<double>(i) };
-        auto y_value{ model_view.GetAtomGroupPrior(group_key).GetDisplayParameter(par_id) };
-        auto y_error{ model_view.GetAtomGroupPriorWithUncertainty(group_key).GetDisplayStandardDeviation(par_id) };
+        auto y_value{ model_view.GetAtomGroupPrior(
+            LocalFittingStage::Third, group_key).GetDisplayParameter(par_id) };
+        auto y_error{ model_view.GetAtomGroupPriorWithUncertainty(
+            LocalFittingStage::Third, group_key).GetDisplayStandardDeviation(par_id) };
         graph->SetPoint(count, x_value, y_value);
         graph->SetPointError(count, 0.0, y_error);
         count++;
@@ -417,7 +425,8 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatte
     {
         return nullptr;
     }
-    auto atom_list{ GetModelView().GetAtomObjectList(group_key) };
+    auto atom_list{ GetModelView().GetAtomObjectList(
+        LocalFittingStage::Third, group_key) };
     auto graph{ root_helper::CreateGraphErrors() };
     auto count{ 0 };
     for (auto atom : atom_list)
@@ -461,13 +470,17 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatte
         }
         graph->SetPoint(
             count,
-            GetModelView().GetAtomGroupPrior(group_key).GetDisplayParameter(par1_id),
-            GetModelView().GetAtomGroupPrior(group_key).GetDisplayParameter(par2_id));
+            GetModelView().GetAtomGroupPrior(
+                LocalFittingStage::Third, group_key).GetDisplayParameter(par1_id),
+            GetModelView().GetAtomGroupPrior(
+                LocalFittingStage::Third, group_key).GetDisplayParameter(par2_id));
         graph->SetPointError(
             count,
-            GetModelView().GetAtomGroupPriorWithUncertainty(group_key)
+            GetModelView().GetAtomGroupPriorWithUncertainty(
+                LocalFittingStage::Third, group_key)
                 .GetDisplayStandardDeviation(par1_id),
-            GetModelView().GetAtomGroupPriorWithUncertainty(group_key)
+            GetModelView().GetAtomGroupPriorWithUncertainty(
+                LocalFittingStage::Third, group_key)
                 .GetDisplayStandardDeviation(par2_id));
         count++;
     }
@@ -607,7 +620,8 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateInRangeAtomsToGausEsti
     auto graph{ root_helper::CreateGraphErrors() };
 
     auto count{ 0 };
-    for (auto & atom : GetModelView().GetAtomObjectList(group_key))
+    for (auto & atom : GetModelView().GetAtomObjectList(
+        LocalFittingStage::Third, group_key))
     {
         auto in_range_atom_list{
             ModelDerivedState::Of(*model_object).FindAtomsInRange(*model_object, *atom, range) };
@@ -634,7 +648,8 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateCOMDistanceToGausEstim
     auto center_of_mass_pos{ model_object->GetCenterOfMassPosition() };
 
     auto count{ 0 };
-    for (auto & atom : GetModelView().GetAtomObjectList(group_key))
+    for (auto & atom : GetModelView().GetAtomObjectList(
+        LocalFittingStage::Third, group_key))
     {
         const auto & atom_pos{ atom->GetPositionRef() };
         auto distance{ array_helper::ComputeNorm(atom_pos, center_of_mass_pos) };
@@ -750,7 +765,8 @@ std::vector<AtomObject *> PotentialPlotBuilder::CollectComponentAtomMembers(
     std::vector<AtomObject *> result;
     for (const auto group_key : CollectComponentAtomGroupKeys(model_view, atom_key))
     {
-        const auto & members{ model_view.GetAtomObjectList(group_key) };
+        const auto & members{ model_view.GetAtomObjectList(
+            LocalFittingStage::Third, group_key) };
         result.insert(result.end(), members.begin(), members.end());
     }
     return result;
@@ -769,7 +785,8 @@ std::optional<GaussianModel3DWithUncertainty> PotentialPlotBuilder::ComputeCompo
     std::size_t count{ 0 };
     for (const auto group_key : CollectComponentAtomGroupKeys(model_view, atom_key))
     {
-        const auto prior{ model_view.GetAtomGroupPriorWithUncertainty(group_key) };
+        const auto prior{ model_view.GetAtomGroupPriorWithUncertainty(
+            LocalFittingStage::Third, group_key) };
         const auto & model{ prior.GetModel() };
         const auto & uncertainty{ prior.GetStandardDeviationModel() };
         amplitude += model.GetAmplitude();
@@ -862,7 +879,8 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionMean(
     {
         return nullptr;
     }
-    const auto & mean{ GetModelView().GetAtomGroupMean(group_key) };
+    const auto & mean{ GetModelView().GetAtomGroupMean(
+        LocalFittingStage::Third, group_key) };
     auto amplitude{ mean.GetAmplitude() };
     auto width{ mean.GetWidth() };
     auto offset{ mean.GetOffset() };
@@ -876,7 +894,8 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionPrior(
     {
         return nullptr;
     }
-    const auto & prior{ GetModelView().GetAtomGroupPrior(group_key) };
+    const auto & prior{ GetModelView().GetAtomGroupPrior(
+        LocalFittingStage::Third, group_key) };
     auto amplitude{ prior.GetAmplitude() };
     auto width{ prior.GetWidth() };
     auto offset{ prior.GetOffset() };

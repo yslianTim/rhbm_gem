@@ -20,12 +20,18 @@ public:
     AtomLocalPotentialEditor EnsureAtomLocalPotential(const AtomObject & atom_object);
     void RebuildAtomGroupsFromSelection();
     void InitializeLocalAlpha(LocalFittingStage stage, double alpha_r);
-    void InitializeGroupAlpha(double alpha_g);
+    void InitializeGroupAlpha(LocalFittingStage stage, double alpha_g);
+    void CopyAtomGroupPotentialStage(
+        LocalFittingStage source_stage,
+        LocalFittingStage destination_stage);
     void ApplyAtomGroupGaussianResult(
         LocalFittingStage stage,
         GroupKey group_key,
         const GroupGaussianResult & group_result);
-    void SetAtomGroupAlphaG(GroupKey group_key, double alpha_g);
+    void SetAtomGroupAlphaG(
+        LocalFittingStage stage,
+        GroupKey group_key,
+        double alpha_g);
     
 };
 

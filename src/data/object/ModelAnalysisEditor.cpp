@@ -49,7 +49,9 @@ void ModelAnalysisEditor::RebuildAtomGroupsFromSelection()
     for (auto * atom : m_model_object.GetSelectedAtoms())
     {
         const auto group_key{ data_internal::GetGroupKey(atom) };
-        group_entry.AddMember(group_key, *atom);
+        group_entry.AddMember(LocalFittingStage::First, group_key, *atom);
+        group_entry.AddMember(LocalFittingStage::Second, group_key, *atom);
+        group_entry.AddMember(LocalFittingStage::Third, group_key, *atom);
     }
 }
 
@@ -63,13 +65,24 @@ void ModelAnalysisEditor::InitializeLocalAlpha(
     }
 }
 
-void ModelAnalysisEditor::InitializeGroupAlpha(double alpha_g)
+void ModelAnalysisEditor::InitializeGroupAlpha(
+    LocalFittingStage stage,
+    double alpha_g)
 {
     auto & group_entry{ ModelAnalysisData::Of(m_model_object).AtomGroupEntry() };
-    for (const auto group_key : group_entry.CollectGroupKeys())
+    for (const auto group_key : group_entry.CollectGroupKeys(stage))
     {
-        group_entry.SetAlphaG(group_key, alpha_g);
+        group_entry.SetAlphaG(stage, group_key, alpha_g);
     }
+}
+
+void ModelAnalysisEditor::CopyAtomGroupPotentialStage(
+    LocalFittingStage source_stage,
+    LocalFittingStage destination_stage)
+{
+    ModelAnalysisData::Of(m_model_object).AtomGroupEntry().CopyStage(
+        source_stage,
+        destination_stage);
 }
 
 void ModelAnalysisEditor::ApplyAtomGroupGaussianResult(
@@ -79,11 +92,11 @@ void ModelAnalysisEditor::ApplyAtomGroupGaussianResult(
 {
     auto & analysis_data{ ModelAnalysisData::Of(m_model_object) };
     auto & group_entry{ analysis_data.AtomGroupEntry() };
-    if (!group_entry.HasGroup(group_key))
+    if (!group_entry.HasGroup(stage, group_key))
     {
         throw std::runtime_error("Atom group entry is not available.");
     }
-    const auto & atom_list{ group_entry.GetMembers(group_key) };
+    const auto & atom_list{ group_entry.GetMembers(stage, group_key) };
     if (group_result.member_results.size() != atom_list.size())
     {
         throw std::invalid_argument("Atom group result member result count is inconsistent.");
@@ -99,14 +112,16 @@ void ModelAnalysisEditor::ApplyAtomGroupGaussianResult(
             member_result.is_outlier,
             member_result.statistical_distance);
     }
-    group_entry.SetGaussianResult(group_key, group_result);
+    group_entry.SetGaussianResult(stage, group_key, group_result);
 }
 
 void ModelAnalysisEditor::SetAtomGroupAlphaG(
+    LocalFittingStage stage,
     GroupKey group_key,
     double alpha_g)
 {
-    ModelAnalysisData::Of(m_model_object).AtomGroupEntry().SetAlphaG(group_key, alpha_g);
+    ModelAnalysisData::Of(m_model_object)
+        .AtomGroupEntry().SetAlphaG(stage, group_key, alpha_g);
 }
 
 } // namespace rhbm_gem

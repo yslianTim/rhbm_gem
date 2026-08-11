@@ -20,7 +20,7 @@ namespace {
 
 using namespace std::literals;
 
-constexpr int kCurrentSchemaVersion = 11;
+constexpr int kCurrentSchemaVersion = 12;
 constexpr std::string_view kCatalogTableName = "object_catalog";
 constexpr std::string_view kMapTableName = "map_list";
 constexpr std::string_view kUnsupportedMetadataTableName = "object_metadata";
@@ -420,7 +420,8 @@ void ValidateRequiredTables(
 
 void ValidateGaussianInterceptColumns(
     rhbm_gem::SQLiteWrapper & database,
-    bool atom_local_has_staged_gaussian_columns)
+    bool atom_local_has_staged_gaussian_columns,
+    bool atom_group_has_staged_gaussian_columns)
 {
     if (atom_local_has_staged_gaussian_columns)
     {
@@ -487,15 +488,77 @@ void ValidateGaussianInterceptColumns(
         ValidateRequiredColumn(database, std::string(table_name), "intercept_variance_posterior");
     }
 
-    for (const auto table_name : {
-             "model_atom_group_potential"sv,
-             "model_bond_group_potential"sv })
+    if (atom_group_has_staged_gaussian_columns)
     {
-        ValidateRequiredColumn(database, std::string(table_name), "intercept_estimate_mean");
-        ValidateRequiredColumn(database, std::string(table_name), "intercept_estimate_mdpde");
-        ValidateRequiredColumn(database, std::string(table_name), "intercept_estimate_prior");
-        ValidateRequiredColumn(database, std::string(table_name), "intercept_variance_prior");
+        for (const auto suffix : { "1st"sv, "2nd"sv, "3rd"sv })
+        {
+            for (const auto column_prefix : {
+                     "amplitude_estimate_mean_"sv,
+                     "width_estimate_mean_"sv,
+                     "intercept_estimate_mean_"sv,
+                     "amplitude_estimate_mdpde_"sv,
+                     "width_estimate_mdpde_"sv,
+                     "intercept_estimate_mdpde_"sv,
+                     "amplitude_estimate_prior_"sv,
+                     "width_estimate_prior_"sv,
+                     "intercept_estimate_prior_"sv,
+                     "amplitude_variance_prior_"sv,
+                     "width_variance_prior_"sv,
+                     "intercept_variance_prior_"sv,
+                     "alpha_g_"sv })
+            {
+                ValidateRequiredColumn(
+                    database,
+                    "model_atom_group_potential",
+                    std::string(column_prefix) + std::string(suffix));
+            }
+        }
+        for (const auto legacy_column : {
+                 "amplitude_estimate_mean"sv,
+                 "width_estimate_mean"sv,
+                 "intercept_estimate_mean"sv,
+                 "amplitude_estimate_mdpde"sv,
+                 "width_estimate_mdpde"sv,
+                 "intercept_estimate_mdpde"sv,
+                 "amplitude_estimate_prior"sv,
+                 "width_estimate_prior"sv,
+                 "intercept_estimate_prior"sv,
+                 "amplitude_variance_prior"sv,
+                 "width_variance_prior"sv,
+                 "intercept_variance_prior"sv,
+                 "alpha_g"sv })
+        {
+            if (HasColumn(
+                    database,
+                    "model_atom_group_potential",
+                    legacy_column))
+            {
+                throw std::runtime_error(
+                    "Current schema contains legacy atom group Gaussian column: "
+                    + std::string(legacy_column));
+            }
+        }
     }
+    else
+    {
+        ValidateRequiredColumn(
+            database, "model_atom_group_potential", "intercept_estimate_mean");
+        ValidateRequiredColumn(
+            database, "model_atom_group_potential", "intercept_estimate_mdpde");
+        ValidateRequiredColumn(
+            database, "model_atom_group_potential", "intercept_estimate_prior");
+        ValidateRequiredColumn(
+            database, "model_atom_group_potential", "intercept_variance_prior");
+    }
+
+    ValidateRequiredColumn(
+        database, "model_bond_group_potential", "intercept_estimate_mean");
+    ValidateRequiredColumn(
+        database, "model_bond_group_potential", "intercept_estimate_mdpde");
+    ValidateRequiredColumn(
+        database, "model_bond_group_potential", "intercept_estimate_prior");
+    ValidateRequiredColumn(
+        database, "model_bond_group_potential", "intercept_variance_prior");
 }
 
 void ValidateSamplingEntryColumnState(
@@ -759,6 +822,120 @@ void MigrateLocalGaussianResultColumns(rhbm_gem::SQLiteWrapper & database)
     }
 }
 
+void MigrateAtomGroupGaussianResultColumns(
+    rhbm_gem::SQLiteWrapper & database)
+{
+    database.Execute("BEGIN TRANSACTION;");
+    try
+    {
+        database.Execute(
+            "ALTER TABLE model_atom_group_potential "
+            "RENAME TO model_atom_group_potential_v11;");
+        database.Execute(R"sql(
+            CREATE TABLE model_atom_group_potential (
+                key_tag TEXT,
+                group_key INTEGER,
+                member_size INTEGER,
+                amplitude_estimate_mean_1st DOUBLE,
+                width_estimate_mean_1st DOUBLE,
+                intercept_estimate_mean_1st DOUBLE,
+                amplitude_estimate_mdpde_1st DOUBLE,
+                width_estimate_mdpde_1st DOUBLE,
+                intercept_estimate_mdpde_1st DOUBLE,
+                amplitude_estimate_prior_1st DOUBLE,
+                width_estimate_prior_1st DOUBLE,
+                intercept_estimate_prior_1st DOUBLE,
+                amplitude_variance_prior_1st DOUBLE,
+                width_variance_prior_1st DOUBLE,
+                intercept_variance_prior_1st DOUBLE,
+                alpha_g_1st DOUBLE,
+                amplitude_estimate_mean_2nd DOUBLE,
+                width_estimate_mean_2nd DOUBLE,
+                intercept_estimate_mean_2nd DOUBLE,
+                amplitude_estimate_mdpde_2nd DOUBLE,
+                width_estimate_mdpde_2nd DOUBLE,
+                intercept_estimate_mdpde_2nd DOUBLE,
+                amplitude_estimate_prior_2nd DOUBLE,
+                width_estimate_prior_2nd DOUBLE,
+                intercept_estimate_prior_2nd DOUBLE,
+                amplitude_variance_prior_2nd DOUBLE,
+                width_variance_prior_2nd DOUBLE,
+                intercept_variance_prior_2nd DOUBLE,
+                alpha_g_2nd DOUBLE,
+                amplitude_estimate_mean_3rd DOUBLE,
+                width_estimate_mean_3rd DOUBLE,
+                intercept_estimate_mean_3rd DOUBLE,
+                amplitude_estimate_mdpde_3rd DOUBLE,
+                width_estimate_mdpde_3rd DOUBLE,
+                intercept_estimate_mdpde_3rd DOUBLE,
+                amplitude_estimate_prior_3rd DOUBLE,
+                width_estimate_prior_3rd DOUBLE,
+                intercept_estimate_prior_3rd DOUBLE,
+                amplitude_variance_prior_3rd DOUBLE,
+                width_variance_prior_3rd DOUBLE,
+                intercept_variance_prior_3rd DOUBLE,
+                alpha_g_3rd DOUBLE,
+                PRIMARY KEY (key_tag, group_key),
+                FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
+            );
+        )sql");
+        database.Execute(R"sql(
+            INSERT INTO model_atom_group_potential (
+                key_tag, group_key, member_size,
+                amplitude_estimate_mean_1st, width_estimate_mean_1st,
+                intercept_estimate_mean_1st, amplitude_estimate_mdpde_1st,
+                width_estimate_mdpde_1st, intercept_estimate_mdpde_1st,
+                amplitude_estimate_prior_1st, width_estimate_prior_1st,
+                intercept_estimate_prior_1st, amplitude_variance_prior_1st,
+                width_variance_prior_1st, intercept_variance_prior_1st,
+                alpha_g_1st,
+                amplitude_estimate_mean_2nd, width_estimate_mean_2nd,
+                intercept_estimate_mean_2nd, amplitude_estimate_mdpde_2nd,
+                width_estimate_mdpde_2nd, intercept_estimate_mdpde_2nd,
+                amplitude_estimate_prior_2nd, width_estimate_prior_2nd,
+                intercept_estimate_prior_2nd, amplitude_variance_prior_2nd,
+                width_variance_prior_2nd, intercept_variance_prior_2nd,
+                alpha_g_2nd,
+                amplitude_estimate_mean_3rd, width_estimate_mean_3rd,
+                intercept_estimate_mean_3rd, amplitude_estimate_mdpde_3rd,
+                width_estimate_mdpde_3rd, intercept_estimate_mdpde_3rd,
+                amplitude_estimate_prior_3rd, width_estimate_prior_3rd,
+                intercept_estimate_prior_3rd, amplitude_variance_prior_3rd,
+                width_variance_prior_3rd, intercept_variance_prior_3rd,
+                alpha_g_3rd
+            )
+            SELECT
+                key_tag, group_key, member_size,
+                amplitude_estimate_mean, width_estimate_mean,
+                intercept_estimate_mean, amplitude_estimate_mdpde,
+                width_estimate_mdpde, intercept_estimate_mdpde,
+                amplitude_estimate_prior, width_estimate_prior,
+                intercept_estimate_prior, amplitude_variance_prior,
+                width_variance_prior, intercept_variance_prior, alpha_g,
+                amplitude_estimate_mean, width_estimate_mean,
+                intercept_estimate_mean, amplitude_estimate_mdpde,
+                width_estimate_mdpde, intercept_estimate_mdpde,
+                amplitude_estimate_prior, width_estimate_prior,
+                intercept_estimate_prior, amplitude_variance_prior,
+                width_variance_prior, intercept_variance_prior, alpha_g,
+                amplitude_estimate_mean, width_estimate_mean,
+                intercept_estimate_mean, amplitude_estimate_mdpde,
+                width_estimate_mdpde, intercept_estimate_mdpde,
+                amplitude_estimate_prior, width_estimate_prior,
+                intercept_estimate_prior, amplitude_variance_prior,
+                width_variance_prior, intercept_variance_prior, alpha_g
+            FROM model_atom_group_potential_v11;
+        )sql");
+        database.Execute("DROP TABLE model_atom_group_potential_v11;");
+        database.Execute("COMMIT;");
+    }
+    catch (...)
+    {
+        database.Execute("ROLLBACK;");
+        throw;
+    }
+}
+
 void MigrateAtomClassKeyColumns(rhbm_gem::SQLiteWrapper & database)
 {
     database.Execute("BEGIN TRANSACTION;");
@@ -974,7 +1151,8 @@ void ValidateModelSchema(
     bool require_standard_qscore_columns,
     bool require_reference_gaussian_parameter_columns,
     bool require_neighbor_count_for_peeling_column,
-    bool atom_local_has_staged_gaussian_columns)
+    bool atom_local_has_staged_gaussian_columns,
+    bool atom_group_has_staged_gaussian_columns)
 {
     ValidateRequiredTables(database, kModelCanonicalTableNames, "model");
 
@@ -1026,7 +1204,8 @@ void ValidateModelSchema(
     {
         ValidateGaussianInterceptColumns(
             database,
-            atom_local_has_staged_gaussian_columns);
+            atom_local_has_staged_gaussian_columns,
+            atom_group_has_staged_gaussian_columns);
     }
     ValidateSamplingEntryColumnLayout(
         database,
@@ -1061,7 +1240,8 @@ void ValidateCurrentSchema(
     bool require_standard_qscore_columns = true,
     bool require_reference_gaussian_parameter_columns = true,
     bool require_neighbor_count_for_peeling_column = true,
-    bool atom_local_has_staged_gaussian_columns = true)
+    bool atom_local_has_staged_gaussian_columns = true,
+    bool atom_group_has_staged_gaussian_columns = true)
 {
     if (!HasTable(database, std::string(kCatalogTableName)))
     {
@@ -1081,7 +1261,8 @@ void ValidateCurrentSchema(
         require_standard_qscore_columns,
         require_reference_gaussian_parameter_columns,
         require_neighbor_count_for_peeling_column,
-        atom_local_has_staged_gaussian_columns);
+        atom_local_has_staged_gaussian_columns,
+        atom_group_has_staged_gaussian_columns);
     ValidateMapSchema(database);
     ValidateCatalogConsistency(database, "model", ListModelKeys(database));
     ValidateCatalogConsistency(database, "map", ListMapKeys(database));
@@ -1104,6 +1285,23 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
         ValidateCurrentSchema(database);
         return;
     }
+    if (raw_version == 11)
+    {
+        ValidateCurrentSchema(
+            database,
+            true,
+            false,
+            SamplingEntryColumnLayout::RawAndPeeling,
+            true,
+            true,
+            true,
+            true,
+            false);
+        MigrateAtomGroupGaussianResultColumns(database);
+        SetSchemaVersion(database);
+        ValidateCurrentSchema(database);
+        return;
+    }
     if (raw_version == 10)
     {
         ValidateCurrentSchema(
@@ -1114,8 +1312,10 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
             true,
             true,
             true,
+            false,
             false);
         MigrateLocalGaussianResultColumns(database);
+        MigrateAtomGroupGaussianResultColumns(database);
         SetSchemaVersion(database);
         ValidateCurrentSchema(database);
         return;
@@ -1130,9 +1330,11 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
             true,
             true,
             false,
+            false,
             false);
         MigrateNeighborCountForPeelingColumn(database);
         MigrateLocalGaussianResultColumns(database);
+        MigrateAtomGroupGaussianResultColumns(database);
         SetSchemaVersion(database);
         ValidateCurrentSchema(database);
         return;
@@ -1147,6 +1349,7 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
             false,
             false,
             false,
+            false,
             false);
         MigrateGaussianInterceptColumns(database);
         MigrateAtomClassKeyColumns(database);
@@ -1156,6 +1359,7 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
         MigrateSamplingEntryColumnsToRawPeeling(database);
         MigrateNeighborCountForPeelingColumn(database);
         MigrateLocalGaussianResultColumns(database);
+        MigrateAtomGroupGaussianResultColumns(database);
         SetSchemaVersion(database);
         ValidateCurrentSchema(database);
         return;
@@ -1170,6 +1374,7 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
             false,
             false,
             false,
+            false,
             false);
         MigrateAtomClassKeyColumns(database);
         AddLegacyUpdatedSamplingColumns(database);
@@ -1178,6 +1383,7 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
         MigrateSamplingEntryColumnsToRawPeeling(database);
         MigrateNeighborCountForPeelingColumn(database);
         MigrateLocalGaussianResultColumns(database);
+        MigrateAtomGroupGaussianResultColumns(database);
         SetSchemaVersion(database);
         ValidateCurrentSchema(database);
         return;
@@ -1192,6 +1398,7 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
             false,
             false,
             false,
+            false,
             false);
         AddLegacyUpdatedSamplingColumns(database);
         MigrateStandardQScoreColumns(database);
@@ -1199,6 +1406,7 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
         MigrateSamplingEntryColumnsToRawPeeling(database);
         MigrateNeighborCountForPeelingColumn(database);
         MigrateLocalGaussianResultColumns(database);
+        MigrateAtomGroupGaussianResultColumns(database);
         SetSchemaVersion(database);
         ValidateCurrentSchema(database);
         return;
@@ -1213,12 +1421,14 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
             false,
             false,
             false,
+            false,
             false);
         MigrateStandardQScoreColumns(database);
         MigrateReferenceGaussianParameterColumns(database);
         MigrateSamplingEntryColumnsToRawPeeling(database);
         MigrateNeighborCountForPeelingColumn(database);
         MigrateLocalGaussianResultColumns(database);
+        MigrateAtomGroupGaussianResultColumns(database);
         SetSchemaVersion(database);
         ValidateCurrentSchema(database);
         return;
@@ -1233,11 +1443,13 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
             true,
             false,
             false,
+            false,
             false);
         MigrateReferenceGaussianParameterColumns(database);
         MigrateSamplingEntryColumnsToRawPeeling(database);
         MigrateNeighborCountForPeelingColumn(database);
         MigrateLocalGaussianResultColumns(database);
+        MigrateAtomGroupGaussianResultColumns(database);
         SetSchemaVersion(database);
         ValidateCurrentSchema(database);
         return;
@@ -1252,10 +1464,12 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
             true,
             true,
             false,
+            false,
             false);
         MigrateSamplingEntryColumnsToRawPeeling(database);
         MigrateNeighborCountForPeelingColumn(database);
         MigrateLocalGaussianResultColumns(database);
+        MigrateAtomGroupGaussianResultColumns(database);
         SetSchemaVersion(database);
         ValidateCurrentSchema(database);
         return;
