@@ -36,6 +36,32 @@ void ModelAnalysisEditor::ClearTransientFitStates()
     }
 }
 
+void ModelAnalysisEditor::InitializeLocalFittingSeedModels()
+{
+    const auto seed_model{ GaussianModel3D{ 0.0, 1.0, 0.0 } };
+    for (auto * atom : m_model_object.GetSelectedAtoms())
+    {
+        auto local_editor{ EnsureAtomLocalPotential(*atom) };
+        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
+        auto result{ local_view.GetGaussianResult(FittingStage::First) };
+        result.ols = GaussianModel3DWithUncertainty{
+            seed_model,
+            GaussianModel3DUncertainty{}
+        };
+        result.mdpde = GaussianModel3DWithUncertainty{
+            seed_model,
+            GaussianModel3DUncertainty{}
+        };
+        result.posterior.reset();
+        result.is_outlier = false;
+        result.statistical_distance = 0.0;
+        result.fit_result.reset();
+        local_editor.SetGaussianResult(FittingStage::First, result);
+        local_editor.SetGaussianResult(FittingStage::Second, result);
+        local_editor.SetGaussianResult(FittingStage::Third, result);
+    }
+}
+
 AtomLocalPotentialEditor ModelAnalysisEditor::EnsureAtomLocalPotential(const AtomObject & atom_object)
 {
     auto & entry{ ModelAnalysisData::Of(m_model_object).EnsureAtomLocalEntry(atom_object) };

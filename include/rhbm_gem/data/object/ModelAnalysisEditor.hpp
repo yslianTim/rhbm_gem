@@ -17,6 +17,7 @@ public:
     explicit ModelAnalysisEditor(ModelObject & model_object);
     void Clear();
     void ClearTransientFitStates();
+    void InitializeLocalFittingSeedModels();
     AtomLocalPotentialEditor EnsureAtomLocalPotential(const AtomObject & atom_object);
     AtomLocalPotentialEditor GetAtomLocalPotentialEditor(const AtomObject & atom_object) const;
     void RebuildAtomGroupsFromSelection();

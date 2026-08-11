@@ -309,34 +309,6 @@ void LogGroupPriorSpotSummary(const ModelObject & model_object)
     }
 }
 
-void InitializeLocalFittingSeedModels(ModelObject & model_object)
-{
-    const auto & atom_list{ model_object.GetSelectedAtoms() };
-    auto analysis{ model_object.EditAnalysis() };
-    const auto seed_model{ GaussianModel3D{ 0.0, 1.0, 0.0 } };
-    for (size_t i = 0; i < atom_list.size(); i++)
-    {
-        auto local_editor{ analysis.EnsureAtomLocalPotential(*atom_list[i]) };
-        const auto local_view{ AtomLocalPotentialView::RequireFor(*atom_list[i]) };
-        auto result{ local_view.GetGaussianResult(FittingStage::First) };
-        result.ols = GaussianModel3DWithUncertainty{
-            seed_model,
-            GaussianModel3DUncertainty{}
-        };
-        result.mdpde = GaussianModel3DWithUncertainty{
-            seed_model,
-            GaussianModel3DUncertainty{}
-        };
-        result.posterior.reset();
-        result.is_outlier = false;
-        result.statistical_distance = 0.0;
-        result.fit_result.reset();
-        local_editor.SetGaussianResult(FittingStage::First, result);
-        local_editor.SetGaussianResult(FittingStage::Second, result);
-        local_editor.SetGaussianResult(FittingStage::Third, result);
-    }
-}
-
 void OutputLocalFittingResultTable(
     const ModelObject & model_object,
     bool peeling_applied,
@@ -764,7 +736,7 @@ void RunGroupPotentialFitting(
 
 void RunPotentialFittingWorkflow(ModelObject & model_object, const FitOptions & options)
 {
-    InitializeLocalFittingSeedModels(model_object);
+    model_object.EditAnalysis().InitializeLocalFittingSeedModels();
     
     RunLocalAlphaTraining(model_object, options, FittingStage::First);
     RunFixedOffsetLocalFitting(model_object, options, FittingStage::First);
