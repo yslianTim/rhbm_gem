@@ -245,8 +245,8 @@ TEST(DataObjectPersistenceTest, RawAndPeelingSamplingEntriesRoundTripPreservesSe
     ASSERT_NE(loaded_model, nullptr);
     const auto view{ rg::AtomLocalPotentialView::RequireFor(*loaded_model->GetAtomList().at(0)) };
     const auto raw_entries{ view.GetRawSamplingEntries(false) };
-    const auto peeling_entries{ view.GetPeelingSamplingEntries(false) };
-    const auto selected_peeling_entries{ view.GetPeelingSamplingEntries() };
+    const auto peeling_entries{ view.GetPeelingSamplingEntries() };
+    const auto selected_peeling_entries{ view.GetPeelingSamplingEntries(true) };
 
     ASSERT_EQ(raw_entries.size(), 2u);
     EXPECT_FLOAT_EQ(raw_entries.at(0).response, 6.0f);

@@ -902,8 +902,8 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewCanApplyPeelingSamplingS
 
     const auto view{ rg::AtomLocalPotentialView::RequireFor(*atom) };
     const auto raw_selected_entries{ view.GetRawSamplingEntries() };
-    const auto peeling_selected_entries{ view.GetPeelingSamplingEntries() };
-    const auto peeling_all_entries{ view.GetPeelingSamplingEntries(false) };
+    const auto peeling_selected_entries{ view.GetPeelingSamplingEntries(true) };
+    const auto peeling_all_entries{ view.GetPeelingSamplingEntries() };
 
     ASSERT_EQ(raw_selected_entries.size(), 2u);
     EXPECT_FLOAT_EQ(raw_selected_entries.at(0).response, 6.0f);
