@@ -916,6 +916,39 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewCanApplyPeelingSamplingS
     EXPECT_FALSE(peeling_all_entries.at(1).point.is_selected);
 }
 
+TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewGetsSamplingEntriesByFittingStage)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto * atom{ model->GetAtomList().at(0).get() };
+    auto editor{ model->EditAnalysis().EnsureAtomLocalPotential(*atom) };
+
+    editor.SetRawSamplingEntries({
+        LocalPotentialSample{ 6.0f, SamplingPoint{ 0.0f, { 0.0f, 0.0f, 0.0f }, true } },
+        LocalPotentialSample{ 4.0f, SamplingPoint{ 0.5f, { 0.0f, 0.0f, 0.0f }, false } }
+    });
+    editor.SetPeelingSamplingEntries({
+        LocalPotentialSample{ 3.0f, SamplingPoint{ 0.0f, { 0.0f, 0.0f, 0.0f }, true } },
+        LocalPotentialSample{ 5.0f, SamplingPoint{ 0.5f, { 0.0f, 0.0f, 0.0f }, false } }
+    });
+
+    const auto view{ rg::AtomLocalPotentialView::RequireFor(*atom) };
+    const auto first_entries{ view.GetSamplingEntries(rg::FittingStage::First) };
+    const auto second_entries{ view.GetSamplingEntries(rg::FittingStage::Second) };
+    const auto third_entries{ view.GetSamplingEntries(rg::FittingStage::Third) };
+
+    ASSERT_EQ(first_entries.size(), 1u);
+    EXPECT_FLOAT_EQ(first_entries.front().response, 6.0f);
+    ASSERT_EQ(second_entries.size(), 2u);
+    EXPECT_FLOAT_EQ(second_entries.at(0).response, 3.0f);
+    EXPECT_FLOAT_EQ(second_entries.at(1).response, 5.0f);
+    ASSERT_EQ(third_entries.size(), 2u);
+    EXPECT_FLOAT_EQ(third_entries.at(0).response, 3.0f);
+    EXPECT_FLOAT_EQ(third_entries.at(1).response, 5.0f);
+    EXPECT_THROW(
+        view.GetSamplingEntries(static_cast<rg::FittingStage>(3)),
+        std::invalid_argument);
+}
+
 TEST(DataObjectModelAnalysisTest, EmptyPeelingSamplingEntriesDoNotFallBackToRaw)
 {
     auto model{ data_test::MakeModelWithBond() };

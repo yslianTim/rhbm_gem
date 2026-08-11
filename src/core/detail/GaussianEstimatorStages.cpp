@@ -215,8 +215,7 @@ struct LocalFittingObjectiveClusterDomain
 
 struct LocalFittingObjectiveDomain
 {
-    std::map<LocalFittingClusterKey, LocalFittingObjectiveClusterDomain>
-        cluster_by_key{};
+    std::map<LocalFittingClusterKey, LocalFittingObjectiveClusterDomain> cluster_by_key{};
     std::vector<LocalFittingClusterKey> owner_key_by_atom_index{};
     std::vector<std::vector<char>> fit_sample_mask_by_atom{};
     std::size_t active_atom_count{ 0 };
@@ -230,8 +229,7 @@ struct LocalFittingClusterObjectiveState
     double best_maximum_transformed_change{ 0.0 };
 };
 
-using LocalFittingClusterObjectiveStateMap =
-    std::map<LocalFittingClusterKey, LocalFittingClusterObjectiveState>;
+using LocalFittingClusterObjectiveStateMap = std::map<LocalFittingClusterKey, LocalFittingClusterObjectiveState>;
 
 struct LocalFittingAuditedState
 {
@@ -282,8 +280,7 @@ LocalFittingFinalStateSelection SelectLocalFittingFinalState(
     };
 }
 
-std::string_view GetLocalFittingFinalStateSourceText(
-    detail::LocalFittingFinalStateSource source)
+std::string_view GetLocalFittingFinalStateSourceText(detail::LocalFittingFinalStateSource source)
 {
     switch (source)
     {
@@ -398,8 +395,7 @@ struct LocalFittingCandidateSelection
     LocalFittingPolishProvenance assembled_polish_provenance{};
     std::vector<LocalFittingClusterKey> accepted_key_list{};
     std::vector<LocalFittingClusterKey> rejected_key_list{};
-    std::vector<LocalFittingRejectedClusterDiagnostic>
-        accepted_cluster_diagnostic_list{};
+    std::vector<LocalFittingRejectedClusterDiagnostic> accepted_cluster_diagnostic_list{};
     std::vector<LocalFittingRejectedClusterDiagnostic> rejected_cluster_diagnostic_list{};
     std::vector<LocalFittingClusterKey> grow_trust_region_key_list{};
     std::vector<LocalFittingClusterKey> backtracking_exhausted_key_list{};
@@ -484,8 +480,7 @@ struct SecondStageInitialStateBuildResult
 {
     LocalFittingState state{};
     std::vector<SecondStageSeedSelectionRecord> selection_record_list{};
-    std::vector<SecondStageSeedSelectionRecord>
-        unselected_selection_record_list{};
+    std::vector<SecondStageSeedSelectionRecord> unselected_selection_record_list{};
 };
 
 bool HasSuspiciousCenterSignFlip(
@@ -514,8 +509,7 @@ bool HasSuspiciousCenterSignFlip(
         candidate_innermost_response < -negative_threshold;
 }
 
-const char * GetSecondStageSeedSourceText(
-    detail::SecondStageSeedSource source)
+const char * GetSecondStageSeedSourceText(detail::SecondStageSeedSource source)
 {
     switch (source)
     {
@@ -607,8 +601,7 @@ SuspiciousProfileAnalysis BuildSuspiciousProfileAnalysis(
     diagnostics.innermost_response = diagnostics.radius_response_median_list.front();
     if (calculate_residual_scale)
     {
-        diagnostics.robust_residual_scale =
-            CalculateMedianAbsoluteDeviationScale(residual_list);
+        diagnostics.robust_residual_scale = CalculateMedianAbsoluteDeviationScale(residual_list);
     }
     analysis.profile = std::move(diagnostics);
     return analysis;
@@ -639,8 +632,7 @@ bool HasUsableSuspiciousProfileBaseline(
         const auto current_scale{
             std::abs(previous_profile.radius_response_median_list.at(i))
         };
-        if (current_scale >
-            kSuspiciousProfileReboundCenterRatio * innermost_scale)
+        if (current_scale > kSuspiciousProfileReboundCenterRatio * innermost_scale)
         {
             return false;
         }
@@ -687,20 +679,17 @@ bool HasSuspiciousRadialRebound(
     };
     const auto noise_threshold{
         std::max(
-            kSuspiciousProfileNoiseScaleMultiplier *
-                previous_profile.robust_residual_scale,
+            kSuspiciousProfileNoiseScaleMultiplier * previous_profile.robust_residual_scale,
             kSuspiciousProfileNoiseScaleMin)
     };
     const auto rebound_magnitude_threshold{
         std::max(
-            kSuspiciousProfileReboundReferenceRatio *
-                reference_innermost_scale,
+            kSuspiciousProfileReboundReferenceRatio * reference_innermost_scale,
             noise_threshold)
     };
     const auto upward_excursion_threshold{
         std::max(
-            kSuspiciousProfileUpwardExcursionReferenceRatio *
-                reference_innermost_scale,
+            kSuspiciousProfileUpwardExcursionReferenceRatio * reference_innermost_scale,
             noise_threshold)
     };
     const auto candidate_innermost_scale{
@@ -715,14 +704,12 @@ bool HasSuspiciousRadialRebound(
         const auto current_abs_response{
             std::abs(candidate_profile.radius_response_median_list.at(i))
         };
-        if (current_abs_response >
-                kSuspiciousProfileReboundCenterRatio * candidate_innermost_scale &&
+        if (current_abs_response > kSuspiciousProfileReboundCenterRatio * candidate_innermost_scale &&
             current_abs_response > rebound_magnitude_threshold)
         {
             return true;
         }
-        if (current_abs_response >
-            previous_abs_response + upward_excursion_threshold)
+        if (current_abs_response > previous_abs_response + upward_excursion_threshold)
         {
             upward_excursion_count++;
         }
@@ -849,8 +836,7 @@ SuspiciousProfileAnalysis BuildPreviousSuspiciousProfileBaseline(
 }
 
 using FittedGaussianSnapshot = std::vector<GaussianModel3D>;
-FittedGaussianSnapshot BuildFittedGaussianSnapshot(
-    const LocalFittingState & state);
+FittedGaussianSnapshot BuildFittedGaussianSnapshot(const LocalFittingState & state);
 FittedGaussianSnapshot BuildUnselectedContributorSnapshot(
     const SecondStageLocalFittingContext & context,
     const FittedGaussianSnapshot & selected_snapshot);
@@ -876,8 +862,7 @@ SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(
     {
         atom_index_map.emplace(context.at(i).atom, i);
     }
-    std::unordered_map<const AtomObject *, std::size_t>
-        unselected_atom_index_map;
+    std::unordered_map<const AtomObject *, std::size_t> unselected_atom_index_map;
     for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
     {
         auto & atom_context{ context.at(atom_index) };
@@ -903,16 +888,13 @@ SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(
             sample_neighbor_list.reserve(neighbor_atom_list.size());
             for (auto * neighbor_atom : neighbor_atom_list)
             {
-                if (options.exclude_hydrogen &&
-                    neighbor_atom->GetElement() == Element::HYDROGEN)
+                if (options.exclude_hydrogen && neighbor_atom->GetElement() == Element::HYDROGEN)
                 {
                     continue;
                 }
                 const auto distance{
                     static_cast<double>(
-                        array_helper::ComputeNorm<float>(
-                            sample.point.position,
-                            neighbor_atom->GetPositionRef()))
+                        array_helper::ComputeNorm<float>(sample.point.position, neighbor_atom->GetPositionRef()))
                 };
                 if (distance > kNeighborContributionDistanceMax) continue;
 
@@ -928,9 +910,7 @@ SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(
                     continue;
                 }
 
-                auto contributor_iter{
-                    unselected_atom_index_map.find(neighbor_atom)
-                };
+                auto contributor_iter{ unselected_atom_index_map.find(neighbor_atom) };
                 if (contributor_iter == unselected_atom_index_map.end())
                 {
                     const auto contributor_index{

@@ -22,7 +22,8 @@ public:
     const GaussianModel3D & GetEstimateOLS(FittingStage stage) const;
     const GaussianModel3D & GetEstimateMDPDE(FittingStage stage) const;
     LocalPotentialSampleList GetRawSamplingEntries(bool apply_selection = true) const;
-    LocalPotentialSampleList GetPeelingSamplingEntries(bool apply_selection = true) const;
+    LocalPotentialSampleList GetPeelingSamplingEntries(bool apply_selection = false) const;
+    LocalPotentialSampleList GetSamplingEntries(FittingStage stage) const;
     int GetNeighborCountForPeeling() const;
     double GetAlphaR(FittingStage stage) const;
 

@@ -111,6 +111,20 @@ LocalPotentialSampleList AtomLocalPotentialView::GetPeelingSamplingEntries(bool 
     return ApplySamplingEntrySelection(entry.PeelingSamplingEntries(), apply_selection);
 }
 
+LocalPotentialSampleList AtomLocalPotentialView::GetSamplingEntries(
+    FittingStage stage) const
+{
+    switch (stage)
+    {
+        case FittingStage::First:
+            return GetRawSamplingEntries();
+        case FittingStage::Second:
+        case FittingStage::Third:
+            return GetPeelingSamplingEntries(false);
+    }
+    throw std::invalid_argument("Unknown local fitting stage.");
+}
+
 int AtomLocalPotentialView::GetNeighborCountForPeeling() const
 {
     return RequireEntry("Local peeling neighbor count").NeighborCountForPeeling();

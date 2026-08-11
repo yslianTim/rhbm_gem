@@ -50,11 +50,6 @@ struct GaussianModelParameterSamples
     std::vector<double> offset_list{};
 };
 
-bool UsesPeelingSamplingEntries(FittingStage stage)
-{
-    return stage != FittingStage::First;
-}
-
 bool HasEnoughSamplesInFitRange(
     const LocalPotentialSampleList & sample_entries,
     double fit_range_min,
@@ -420,10 +415,7 @@ void RunFixedOffsetLocalFitting(
     {
         auto & atom{ *atom_list[i] };
         const auto local_view{ AtomLocalPotentialView::RequireFor(atom) };
-        LocalPotentialSampleList sample_entries{ UsesPeelingSamplingEntries(stage)
-            ? local_view.GetPeelingSamplingEntries(false)
-            : local_view.GetRawSamplingEntries()
-        };
+        LocalPotentialSampleList sample_entries{ local_view.GetSamplingEntries(stage) };
         GaussianModel3D offset_model{ local_view.GetGaussianResult(stage).mdpde.GetModel() };
         auto result{
             EstimateLocalGaussian(
@@ -607,10 +599,7 @@ void RunLocalAlphaTraining(
         for (auto * atom : group_atom_list)
         {
             const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
-            auto sample_entries{ UsesPeelingSamplingEntries(stage)
-                ? local_view.GetPeelingSamplingEntries(false)
-                : local_view.GetRawSamplingEntries()
-            };
+            auto sample_entries{ local_view.GetSamplingEntries(stage) };
             if (!HasEnoughSamplesInFitRange(
                     sample_entries,
                     options.distance_min,
@@ -701,9 +690,7 @@ void RunGroupPotentialFitting(
         for (const auto & atom : atom_list)
         {
             const auto local_view{ AtomLocalPotentialView::RequireFor(*atom) };
-            sample_entries_list.emplace_back(UsesPeelingSamplingEntries(stage)
-                    ? local_view.GetPeelingSamplingEntries(false)
-                    : local_view.GetRawSamplingEntries(true));
+            sample_entries_list.emplace_back(local_view.GetSamplingEntries(stage));
             member_result_list.emplace_back(local_view.GetGaussianResult(stage));
         }
         const auto result{
