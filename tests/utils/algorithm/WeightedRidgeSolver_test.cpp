@@ -91,6 +91,40 @@ TEST(WeightedRidgeSolverTest, WeightChangesSolution)
     EXPECT_NEAR(100.0 / 11.0, second_parameter(0), 1.0e-12);
 }
 
+TEST(WeightedRidgeSolverTest, ReusesSymbolicAnalysisAcrossNumericSystems)
+{
+    const auto first_system{
+        MakeSingleParameterSystem({ 1.0, 1.0 }, { 0.0, 10.0 }, 0.1)
+    };
+    const auto second_system{
+        MakeSingleParameterSystem({ 2.0, 3.0 }, { 4.0, 9.0 }, 0.2)
+    };
+    const Eigen::VectorXd weight{ Eigen::VectorXd::Ones(2) };
+    alg::WeightedRidgeSolver reused_solver;
+    ASSERT_TRUE(reused_solver.AnalyzePattern(first_system));
+    Eigen::VectorXd reused_first;
+    Eigen::VectorXd reused_second;
+    ASSERT_TRUE(reused_solver.SolveNumeric(
+        first_system,
+        weight,
+        reused_first));
+    ASSERT_TRUE(reused_solver.SolveNumeric(
+        second_system,
+        weight,
+        reused_second));
+
+    alg::WeightedRidgeSolver fresh_first_solver{ first_system };
+    alg::WeightedRidgeSolver fresh_second_solver{ second_system };
+    Eigen::VectorXd fresh_first;
+    Eigen::VectorXd fresh_second;
+    ASSERT_TRUE(fresh_first_solver.Solve(first_system, weight, fresh_first));
+    ASSERT_TRUE(fresh_second_solver.Solve(second_system, weight, fresh_second));
+
+    EXPECT_EQ(reused_solver.GetSymbolicAnalysisCount(), 1U);
+    EXPECT_TRUE(reused_first.isApprox(fresh_first, 1.0e-12));
+    EXPECT_TRUE(reused_second.isApprox(fresh_second, 1.0e-12));
+}
+
 TEST(WeightedRidgeSolverTest, LargerRidgeKeepsSolutionCloserToPreviousParameter)
 {
     const auto weak_ridge_system{ MakeSingleParameterSystem({ 1.0 }, { 10.0 }, 0.1, 2.0) };

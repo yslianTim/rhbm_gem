@@ -148,31 +148,46 @@ double GaussianModel3D::Intensity() const
 
 double GaussianModel3D::SignalAtDistance(double distance) const
 {
-    return WithOffset(0.0).ResponseAtDistance(distance);
+    return EvaluateAtDistance(distance).signal;
 }
 
 double GaussianModel3D::OffsetBasisAtDistance(double distance) const
 {
+    return EvaluateAtDistance(distance).offset_basis;
+}
+
+GaussianModel3DEvaluation GaussianModel3D::EvaluateAtDistance(double distance) const
+{
+    double offset_basis{ 0.0 };
     if (distance < 1.0e-5)
     {
-        return std::sqrt(2.0/M_PI) / m_width;
+        offset_basis = std::sqrt(2.0/M_PI) / m_width;
     }
     else
     {
-        return std::erf(distance/m_width/std::sqrt(2.0)) / distance;
+        offset_basis = std::erf(distance/m_width/std::sqrt(2.0)) / distance;
     }
+
+    if (m_width == 0.0)
+    {
+        return GaussianModel3DEvaluation{ 0.0, offset_basis, m_offset };
+    }
+    const auto width_square{ m_width * m_width };
+    const auto signal{
+        m_amplitude *
+        std::pow(Constants::two_pi * width_square, -1.5) *
+        std::exp(-0.5 * distance * distance / width_square)
+    };
+    return GaussianModel3DEvaluation{
+        signal,
+        offset_basis,
+        signal + m_offset * offset_basis
+    };
 }
 
 double GaussianModel3D::ResponseAtDistance(double distance) const
 {
-    if (m_width == 0.0)
-    {
-        return m_offset;
-    }
-    return m_amplitude *
-        std::pow(Constants::two_pi * m_width * m_width, -1.5) *
-        std::exp(-0.5 * distance * distance / (m_width * m_width)) +
-        m_offset * OffsetBasisAtDistance(distance);
+    return EvaluateAtDistance(distance).response;
 }
 
 GaussianModel3DUncertainty::GaussianModel3DUncertainty(

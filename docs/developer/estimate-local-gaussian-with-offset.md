@@ -50,6 +50,13 @@ is subtracted from each sample before fitting the next amplitude and width.
 If no sample survives the range and positivity filters, the dataset builder
 uses one zero-valued fallback row.
 
+For repeated second-stage refits, `BuildLocalGaussianDesignTemplate` prepares
+the inclusive fit-range sample indices and fixed `[1, -0.5*r^2]` rows once.
+`EstimateLocalGaussianPrepared` then applies the current fixed-offset response,
+keeps only dynamically positive rows, and builds `log(adjusted_response)`.
+`EstimateLocalGaussian` remains the high-level entry point and delegates to the
+same prepared implementation through a temporary template.
+
 ## Regression Shape
 
 The retained samples are transformed into:
@@ -64,7 +71,8 @@ count used by the execution options.
 
 ## Important Implementation Constraints
 
-- `EstimateLocalGaussian` is the only public local Gaussian fitting entry point.
+- `EstimateLocalGaussian` remains the public high-level fitting entry point;
+  the prepared-template interface is available to repeated-fit callers.
 - The default offset model is `GaussianModel3D{ 0.0, 1.0, 0.0 }`.
 - First-stage local fitting reuses the current atom-local MDPDE model as the
   fixed offset model.

@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "support/CommandTestHelpers.hpp"
+#include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/TestDataFactory.hpp>
 #include <rhbm_gem/core/EstimatorTester.hpp>
 #include "core/detail/GaussianEstimatorStages.hpp"
@@ -22,6 +23,7 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
+#include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 
 namespace {
 namespace rt = rhbm_gem::core;
@@ -310,6 +312,70 @@ void ExpectSelectedAtomEstimatesAreFinite(const rg::ModelObject & model_object)
 }
 
 } // namespace
+
+TEST(EstimatorTesterTest, PreparedLocalGaussianDatasetMatchesLegacyBuilder)
+{
+    LocalPotentialSampleList samples{
+        { 0.6F, SamplingPoint{ 0.0F } },
+        { 0.8F, SamplingPoint{ 0.25F } },
+        { -1.0F, SamplingPoint{ 0.5F } },
+        { 0.7F, SamplingPoint{ 1.0F } },
+        { 0.9F, SamplingPoint{ 1.25F } }
+    };
+    constexpr double range_min{ 0.25 };
+    constexpr double range_max{ 1.0 };
+    const rg::GaussianModel3D offset_model{ 1.0, 0.5, 0.1 };
+    auto adjusted_samples{ samples };
+    std::vector<double> response_list;
+    response_list.reserve(samples.size());
+    for (std::size_t i = 0; i < samples.size(); i++)
+    {
+        const auto evaluation{
+            offset_model.EvaluateAtDistance(
+                static_cast<double>(samples.at(i).point.distance))
+        };
+        adjusted_samples.at(i).response = static_cast<float>(
+            static_cast<double>(samples.at(i).response) -
+            (evaluation.response - evaluation.signal));
+        response_list.emplace_back(static_cast<double>(samples.at(i).response));
+    }
+
+    const auto legacy_dataset{
+        rhbm_gem::rhbm_helper::BuildMemberDataset(
+            adjusted_samples,
+            range_min,
+            range_max)
+    };
+    const auto design_template{
+        rt::BuildLocalGaussianDesignTemplate(samples, range_min, range_max)
+    };
+    const auto prepared_dataset{
+        rt::BuildLocalGaussianPreparedDataset(
+            design_template,
+            response_list,
+            offset_model)
+    };
+
+    EXPECT_TRUE(prepared_dataset.X.isApprox(legacy_dataset.X, 0.0));
+    EXPECT_TRUE(prepared_dataset.y.isApprox(legacy_dataset.y, 0.0));
+
+    std::fill(response_list.begin(), response_list.end(), -1.0);
+    for (auto & sample : adjusted_samples) sample.response = -1.0F;
+    const auto legacy_fallback{
+        rhbm_gem::rhbm_helper::BuildMemberDataset(
+            adjusted_samples,
+            range_min,
+            range_max)
+    };
+    const auto prepared_fallback{
+        rt::BuildLocalGaussianPreparedDataset(
+            design_template,
+            response_list,
+            offset_model)
+    };
+    EXPECT_TRUE(prepared_fallback.X.isApprox(legacy_fallback.X, 0.0));
+    EXPECT_TRUE(prepared_fallback.y.isApprox(legacy_fallback.y, 0.0));
+}
 
 TEST(EstimatorTesterTest, RunLocalEstimationTestPopulatesBiasOutputs)
 {

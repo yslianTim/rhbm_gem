@@ -120,6 +120,23 @@ TEST(GaussianModel3DTest, ResponseMatchesClosedForm)
     EXPECT_DOUBLE_EQ(model.ResponseAtDistance(distance), expected_response);
 }
 
+TEST(GaussianModel3DTest, FusedEvaluationMatchesIndividualAccessors)
+{
+    const rg::GaussianModel3D model{ 9.0, 1.5, 0.25 };
+    for (const auto distance : { 0.0, 0.999e-5, 1.001e-5, 0.75 })
+    {
+        const auto evaluation{ model.EvaluateAtDistance(distance) };
+        EXPECT_DOUBLE_EQ(evaluation.signal, model.SignalAtDistance(distance));
+        EXPECT_DOUBLE_EQ(
+            evaluation.offset_basis,
+            model.OffsetBasisAtDistance(distance));
+        EXPECT_DOUBLE_EQ(evaluation.response, model.ResponseAtDistance(distance));
+        EXPECT_DOUBLE_EQ(
+            evaluation.response,
+            evaluation.signal + model.GetOffset() * evaluation.offset_basis);
+    }
+}
+
 TEST(GaussianModel3DTest, SignalAndIntensityDeriveFromZeroOffsetResponse)
 {
     const rg::GaussianModel3D model{ 9.0, 1.5, 0.25 };

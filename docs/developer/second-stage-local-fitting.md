@@ -399,6 +399,37 @@ fits may update local Gaussian results, but they do not rebuild or overwrite
 the peeling entries; the final group fit therefore consumes the same
 atom-level peeling snapshot written during second-stage finalization.
 
+## Performance architecture
+
+The fitting context stores numeric group IDs, selected group membership,
+unselected-contributor group IDs, flattened sample-neighbor edges, prepared
+refit design templates, and profile-radius ordering. These structures are
+rebuilt only when terminal isolation changes the partition.
+
+Each outer iteration builds one selected/unselected Gaussian snapshot, one
+adjusted-response cache for refits, and one residual/objective baseline.
+Cluster candidates are represented by atom-local state patches. Candidate
+evaluation overlays a patch on the previous state, recomputes medians only for
+groups touched by the patch, and evaluates the objective as baseline plus the
+changed sample and offset delta. For a combined guard, affected sample IDs are
+sorted and deduplicated so a boundary sample is recomputed once. A complete
+candidate state is materialized only when patches are assembled or a combined
+backtracking candidate is accepted.
+
+Joint-offset and joint-polish solvers retain their sparse pattern analysis for
+the lifetime of a partition and refresh only numeric values, weights,
+responses, and ridge terms. Cluster candidate workers own independent solver
+state and patches. With OpenMP, more than one cluster, and `thread_size > 1`,
+base proposal, local backtracking, polish, and local objective evaluation run
+per cluster in parallel while Eigen uses one thread. Results are committed in
+the partition's fixed cluster order; the serial path calls the same worker and
+merge code.
+
+Non-quiet runs also emit non-blocking performance counters for complete-state
+materializations, Gaussian cache hits/misses, recomputed/reused objective
+samples, symbolic solver analyses, and iteration/candidate/total elapsed time.
+These counters are diagnostic evidence rather than acceptance thresholds.
+
 ## Logging
 
 After valid seeds are available, non-quiet runs print a compact header and

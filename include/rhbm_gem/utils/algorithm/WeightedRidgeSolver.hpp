@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <cstddef>
 #include <utility>
 
 #include <Eigen/Dense>
@@ -27,6 +28,7 @@ class WeightedRidgeSolver
 
     Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> m_solver;
     bool m_analysis_success{ false };
+    std::size_t m_symbolic_analysis_count{ 0 };
 
     static NormalEquation BuildNormalEquation(
         const WeightedRidgeSystem & system,
@@ -63,15 +65,24 @@ class WeightedRidgeSolver
     }
 
 public:
+    WeightedRidgeSolver() = default;
+
     explicit WeightedRidgeSolver(const WeightedRidgeSystem & system)
+    {
+        AnalyzePattern(system);
+    }
+
+    bool AnalyzePattern(const WeightedRidgeSystem & system)
     {
         const Eigen::VectorXd weight{ Eigen::VectorXd::Ones(system.response.size()) };
         auto equation{ BuildNormalEquation(system, weight) };
         m_solver.analyzePattern(equation.normal_matrix);
         m_analysis_success = m_solver.info() == Eigen::Success;
+        m_symbolic_analysis_count++;
+        return m_analysis_success;
     }
 
-    bool Solve(
+    bool SolveNumeric(
         const WeightedRidgeSystem & system,
         const Eigen::VectorXd & weight,
         Eigen::VectorXd & parameter)
@@ -83,6 +94,19 @@ public:
         if (m_solver.info() != Eigen::Success) return false;
         parameter = m_solver.solve(equation.right_hand_side);
         return m_solver.info() == Eigen::Success && parameter.allFinite();
+    }
+
+    bool Solve(
+        const WeightedRidgeSystem & system,
+        const Eigen::VectorXd & weight,
+        Eigen::VectorXd & parameter)
+    {
+        return SolveNumeric(system, weight, parameter);
+    }
+
+    std::size_t GetSymbolicAnalysisCount() const
+    {
+        return m_symbolic_analysis_count;
     }
 };
 

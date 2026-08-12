@@ -3533,6 +3533,31 @@ TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingAcceptsRemoteClu
     ExpectSelectedAtomEstimatesAreFinite(*model);
 }
 
+TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingMatchesSerialAndParallelSelection)
+{
+    auto serial_model{ BuildSeparatedRollbackDefenseModel() };
+    auto parallel_model{ BuildSeparatedRollbackDefenseModel() };
+    auto serial_options{ MakeSecondStageOptions() };
+    auto parallel_options{ MakeSecondStageOptions() };
+    serial_options.thread_size = 1;
+    parallel_options.thread_size = 2;
+
+    EXPECT_EQ(
+        rt::RunSecondStageLocalFitting(*serial_model, serial_options),
+        rt::RunSecondStageLocalFitting(*parallel_model, parallel_options));
+
+    const auto & serial_atoms{ serial_model->GetSelectedAtoms() };
+    const auto & parallel_atoms{ parallel_model->GetSelectedAtoms() };
+    ASSERT_EQ(serial_atoms.size(), parallel_atoms.size());
+    for (std::size_t i = 0; i < serial_atoms.size(); i++)
+    {
+        ExpectGaussianModelsNear(
+            GetEstimateModel(*serial_atoms.at(i)),
+            GetEstimateModel(*parallel_atoms.at(i)),
+            1.0e-12);
+    }
+}
+
 TEST(EstimatorSecondStageDefenseTest, RunSecondStageLocalFittingIsIntensityScaleInvariant)
 {
     constexpr double scale{ 100.0 };

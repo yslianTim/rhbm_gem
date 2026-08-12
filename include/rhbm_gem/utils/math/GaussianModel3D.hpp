@@ -7,6 +7,13 @@
 namespace rhbm_gem
 {
 
+struct GaussianModel3DEvaluation
+{
+    double signal{ 0.0 };
+    double offset_basis{ 0.0 };
+    double response{ 0.0 };
+};
+
 class GaussianModel3D
 {
     double m_amplitude{ 0.0 };
@@ -53,6 +60,7 @@ public:
     double GetModelParameter(int par_id) const;
     double GetDisplayParameter(int par_id) const;
     double Intensity() const;
+    GaussianModel3DEvaluation EvaluateAtDistance(double distance) const;
     double SignalAtDistance(double distance) const;
     double OffsetBasisAtDistance(double distance) const;
     double ResponseAtDistance(double distance) const;
