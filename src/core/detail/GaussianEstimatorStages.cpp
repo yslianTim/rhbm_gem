@@ -975,8 +975,30 @@ void StoreSecondStageNeighborCounts(
 
 detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
     const SecondStageLocalFittingContext & context,
-    const LocalFittingState & initial_state)
+    const LocalFittingState & initial_state,
+    const FitOptions & options)
 {
+    std::size_t total_sample_count{ 0 };
+    for (const auto & atom_context : context)
+    {
+        total_sample_count += atom_context.raw_sampling_entries.size();
+    }
+    const std::size_t total_work{ total_sample_count + 2 };
+    std::size_t completed_work{ 0 };
+    const std::string progress_message{ " Build local-fitting coupling topology" };
+    const auto update_progress = [&]()
+    {
+        if (!options.quiet_mode)
+        {
+            Logger::ProgressPercent(
+                completed_work,
+                total_work,
+                50,
+                progress_message);
+        }
+    };
+    update_progress();
+
     detail::LocalFittingCouplingGraphBuilder builder{ context.size() };
     const auto model_snapshot{
         BuildSecondStageModelSnapshot(
@@ -1078,6 +1100,8 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
             builder.AddSample(
                 LocalFittingObjectiveSampleRef{ atom_index, sample_index },
                 std::move(participant_list));
+            completed_work++;
+            update_progress();
         }
     }
 
@@ -1093,6 +1117,9 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
         weighted_topology.has_value() ?
             std::move(*weighted_topology) : builder.BuildBinary()
     };
+    completed_work++;
+    update_progress();
+
     std::vector<detail::LocalFittingCouplingResidueKey>
         residue_key_by_atom_index;
     residue_key_by_atom_index.reserve(context.size());
@@ -1100,10 +1127,15 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
     {
         residue_key_by_atom_index.emplace_back(atom_context.residue_key);
     }
-    return detail::ApplyLocalFittingCouplingResidueCutoff(
-        std::move(topology),
-        std::move(residue_key_by_atom_index),
-        kLocalFittingCouplingMaximumResidueCount);
+    auto residue_cutoff_topology{
+        detail::ApplyLocalFittingCouplingResidueCutoff(
+            std::move(topology),
+            std::move(residue_key_by_atom_index),
+            kLocalFittingCouplingMaximumResidueCount)
+    };
+    completed_work++;
+    update_progress();
+    return residue_cutoff_topology;
 }
 
 std::optional<GaussianModel3DWithUncertainty> BuildValidGaussianParameterMedian(
@@ -5887,7 +5919,7 @@ bool RunSecondStageLocalFitting(
     auto previous_state{ std::move(initial_state_build_result->state) };
     LocalFittingPolishProvenance previous_polish_provenance(atom_size, 0);
     const auto coupling_topology{
-        BuildLocalFittingCouplingTopology(context, previous_state)
+        BuildLocalFittingCouplingTopology(context, previous_state, options)
     };
     LogLocalFittingCouplingTopology(coupling_topology, options);
     std::vector<char> terminal_fallback_atom_mask(atom_size, 0);

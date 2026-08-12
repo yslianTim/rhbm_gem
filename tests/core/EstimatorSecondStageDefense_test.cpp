@@ -3867,7 +3867,7 @@ TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageReportsAcceptedJointPol
             row_end - row_start
         };
         const auto polish_count{ ParsePolishProgressCounts(row) };
-        ASSERT_TRUE(polish_count.has_value());
+        if (!polish_count.has_value()) continue;
         found_accepted_polish = found_accepted_polish || polish_count->at(1) > 0;
         found_skipped_polish = found_skipped_polish || polish_count->at(3) > 0;
         row_start = row_end;
@@ -3940,9 +3940,14 @@ TEST(EstimatorSecondStageDefenseTest, NonQuietSecondStageLogsEveryOuterAttempt)
         row_start++;
         const auto row_end{ out.find_first_of("\r\n", row_start) };
         ASSERT_NE(row_end, std::string::npos);
-        progress_row_list.emplace_back(
+        const std::string_view row{
             out.data() + row_start,
-            row_end - row_start);
+            row_end - row_start
+        };
+        if (ParsePolishProgressCounts(row).has_value())
+        {
+            progress_row_list.emplace_back(row);
+        }
         row_start = row_end;
     }
     const auto separator_position_list = [](std::string_view row)
