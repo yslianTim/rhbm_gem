@@ -230,6 +230,8 @@ struct LocalFittingClusterObjectiveState
 };
 
 using LocalFittingClusterObjectiveStateMap = std::map<LocalFittingClusterKey, LocalFittingClusterObjectiveState>;
+using LocalFittingObjectiveByKey =
+    std::map<LocalFittingClusterKey, std::optional<detail::LocalFittingObjectiveBreakdown>>;
 
 struct LocalFittingAuditedState
 {
@@ -242,6 +244,12 @@ struct LocalFittingAuditedState
 struct LocalFittingBestAuditState
 {
     std::optional<LocalFittingAuditedState> best{};
+};
+
+struct LocalFittingCombinedObjectiveCheck
+{
+    bool accepted{ false };
+    std::optional<detail::LocalFittingObjectiveBreakdown> candidate_objective{};
 };
 
 struct LocalFittingFinalStateSelection
@@ -401,6 +409,7 @@ struct LocalFittingCandidateSelection
     std::vector<LocalFittingClusterKey> backtracking_exhausted_key_list{};
     std::size_t combined_backtracking_trial_count{ 0 };
     std::optional<double> combined_backtracking_factor{};
+    std::optional<detail::LocalFittingObjectiveBreakdown> combined_backtracking_objective{};
     bool combined_backtracking_exhausted{ false };
     LocalFittingPolishProgress polish_progress{};
 };
@@ -845,6 +854,14 @@ FittedGaussianSnapshot BuildFittedGaussianSnapshot(const LocalFittingState & sta
 FittedGaussianSnapshot BuildUnselectedContributorSnapshot(
     const SecondStageLocalFittingContext & context,
     const FittedGaussianSnapshot & selected_snapshot);
+struct SecondStageModelSnapshot
+{
+    FittedGaussianSnapshot selected{};
+    FittedGaussianSnapshot unselected{};
+};
+SecondStageModelSnapshot BuildSecondStageModelSnapshot(
+    const SecondStageLocalFittingContext & context,
+    FittedGaussianSnapshot selected_snapshot);
 const GaussianModel3D & ResolveSecondStageNeighborModel(
     const SecondStageNeighborSample & neighbor_sample,
     const FittedGaussianSnapshot & selected_snapshot,
@@ -975,9 +992,10 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
     const LocalFittingState & initial_state)
 {
     detail::LocalFittingCouplingGraphBuilder builder{ context.size() };
-    const auto selected_snapshot{ BuildFittedGaussianSnapshot(initial_state) };
-    const auto unselected_snapshot{
-        BuildUnselectedContributorSnapshot(context, selected_snapshot)
+    const auto model_snapshot{
+        BuildSecondStageModelSnapshot(
+            context,
+            BuildFittedGaussianSnapshot(initial_state))
     };
     const auto invalid_jacobian{
         Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN())
@@ -1025,8 +1043,8 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
                 const auto & neighbor_model{
                     ResolveSecondStageNeighborModel(
                         neighbor_sample,
-                        selected_snapshot,
-                        unselected_snapshot)
+                        model_snapshot.selected,
+                        model_snapshot.unselected)
                 };
                 const auto neighbor_evaluation{
                     detail::EvaluateLocalFittingTransformedResponse(
@@ -1481,6 +1499,19 @@ FittedGaussianSnapshot BuildUnselectedContributorSnapshot(
     return snapshot;
 }
 
+SecondStageModelSnapshot BuildSecondStageModelSnapshot(
+    const SecondStageLocalFittingContext & context,
+    FittedGaussianSnapshot selected_snapshot)
+{
+    auto unselected_snapshot{
+        BuildUnselectedContributorSnapshot(context, selected_snapshot)
+    };
+    return SecondStageModelSnapshot{
+        std::move(selected_snapshot),
+        std::move(unselected_snapshot)
+    };
+}
+
 const GaussianModel3D & ResolveSecondStageNeighborModel(
     const SecondStageNeighborSample & neighbor_sample,
     const FittedGaussianSnapshot & selected_snapshot,
@@ -1510,14 +1541,11 @@ double CalculateLocalFittingRidgeDiagonal(
 JointOffsetBuildResult BuildJointOffsetSystem(
     const SecondStageLocalFittingContext & context,
     const std::vector<std::size_t> & active_index_list,
-    const FittedGaussianSnapshot & snapshot,
+    const SecondStageModelSnapshot & model_snapshot,
     const std::vector<double> & ridge_multiplier_list,
     bool log_debug_diagnostics)
 {
     const auto atom_size{ context.size() };
-    const auto unselected_snapshot{
-        BuildUnselectedContributorSnapshot(context, snapshot)
-    };
     std::vector<GroupKey> group_key_by_atom_position;
     std::vector<GaussianModel3D> active_model_list;
     group_key_by_atom_position.reserve(active_index_list.size());
@@ -1525,7 +1553,7 @@ JointOffsetBuildResult BuildJointOffsetSystem(
     for (const auto atom_index : active_index_list)
     {
         group_key_by_atom_position.emplace_back(context.at(atom_index).group_key);
-        active_model_list.emplace_back(snapshot.at(atom_index));
+        active_model_list.emplace_back(model_snapshot.selected.at(atom_index));
     }
     auto parameterization{
         detail::BuildLocalFittingJointOffsetParameterization(
@@ -1564,7 +1592,7 @@ JointOffsetBuildResult BuildJointOffsetSystem(
             active_position_by_atom_index.at(active_index)
         };
         const auto & atom_context{ context.at(active_index) };
-        const auto & target_model{ snapshot.at(active_index) };
+        const auto & target_model{ model_snapshot.selected.at(active_index) };
         atom_row_basis_entries.reserve(atom_size);
         group_row_basis_entries.reserve(parameterization->GroupCount());
         for (std::size_t sample_index = 0;
@@ -1597,8 +1625,8 @@ JointOffsetBuildResult BuildJointOffsetSystem(
                 const auto & neighbor_model{
                     ResolveSecondStageNeighborModel(
                         neighbor_sample,
-                        snapshot,
-                        unselected_snapshot)
+                        model_snapshot.selected,
+                        model_snapshot.unselected)
                 };
                 int neighbor_position{ -1 };
                 if (neighbor_sample.is_selected)
@@ -1829,7 +1857,7 @@ double CalculateMedianAbsoluteDeviationScale(const std::vector<double> & value_l
 JointOffsetSolveResult EstimateJointOffsets(
     const SecondStageLocalFittingContext & context,
     const std::vector<std::size_t> & active_index_list,
-    const FittedGaussianSnapshot & snapshot,
+    const SecondStageModelSnapshot & model_snapshot,
     const std::vector<double> & ridge_multiplier_list,
     bool log_debug_diagnostics)
 {
@@ -1839,7 +1867,8 @@ JointOffsetSolveResult EstimateJointOffsets(
     for (std::size_t i = 0; i < active_index_list.size(); i++)
     {
         const auto atom_index{ active_index_list.at(i) };
-        previous_offset(static_cast<Eigen::Index>(i)) = snapshot.at(atom_index).GetOffset();
+        previous_offset(static_cast<Eigen::Index>(i)) =
+            model_snapshot.selected.at(atom_index).GetOffset();
     }
     JointOffsetBuildResult build_result;
     try
@@ -1847,7 +1876,7 @@ JointOffsetSolveResult EstimateJointOffsets(
         build_result = BuildJointOffsetSystem(
             context,
             active_index_list,
-            snapshot,
+            model_snapshot,
             ridge_multiplier_list,
             log_debug_diagnostics);
     }
@@ -1947,8 +1976,7 @@ double CalculateSecondStageAdjustedResponse(
     const SecondStageLocalFittingContext & context,
     std::size_t atom_index,
     std::size_t sample_index,
-    const FittedGaussianSnapshot & selected_snapshot,
-    const FittedGaussianSnapshot & unselected_snapshot)
+    const SecondStageModelSnapshot & model_snapshot)
 {
     const auto & atom_context{ context.at(atom_index) };
     auto response_value{
@@ -1958,8 +1986,8 @@ double CalculateSecondStageAdjustedResponse(
     {
         response_value -= ResolveSecondStageNeighborModel(
             neighbor_sample,
-            selected_snapshot,
-            unselected_snapshot).ResponseAtDistance(neighbor_sample.distance);
+            model_snapshot.selected,
+            model_snapshot.unselected).ResponseAtDistance(neighbor_sample.distance);
     }
     return response_value;
 }
@@ -1967,12 +1995,9 @@ double CalculateSecondStageAdjustedResponse(
 LocalPotentialSampleList BuildSecondStageAdjustedSamples(
     const SecondStageLocalFittingContext & context,
     std::size_t atom_index,
-    const FittedGaussianSnapshot & snapshot)
+    const SecondStageModelSnapshot & model_snapshot)
 {
     const auto & atom_context{ context.at(atom_index) };
-    const auto unselected_snapshot{
-        BuildUnselectedContributorSnapshot(context, snapshot)
-    };
     LocalPotentialSampleList adjusted_sampling_entries;
     adjusted_sampling_entries.reserve(atom_context.raw_sampling_entries.size());
     for (std::size_t sample_index = 0; sample_index < atom_context.raw_sampling_entries.size(); sample_index++)
@@ -1982,8 +2007,7 @@ LocalPotentialSampleList BuildSecondStageAdjustedSamples(
             context,
             atom_index,
             sample_index,
-            snapshot,
-            unselected_snapshot));
+            model_snapshot));
         adjusted_sampling_entries.emplace_back(sample);
     }
     return adjusted_sampling_entries;
@@ -1998,8 +2022,7 @@ std::optional<LocalFittingResidualSample> EvaluateLocalFittingResidualSample(
     const SecondStageLocalFittingContext & context,
     const LocalFittingState & state,
     const LocalFittingObjectiveSampleRef & sample_ref,
-    const FittedGaussianSnapshot & selected_snapshot,
-    const FittedGaussianSnapshot & unselected_snapshot)
+    const SecondStageModelSnapshot & model_snapshot)
 {
     const auto & atom_context{ context.at(sample_ref.atom_index) };
     const auto & sample{
@@ -2011,8 +2034,8 @@ std::optional<LocalFittingResidualSample> EvaluateLocalFittingResidualSample(
     {
         adjusted_response -= ResolveSecondStageNeighborModel(
             neighbor_sample,
-            selected_snapshot,
-            unselected_snapshot).ResponseAtDistance(neighbor_sample.distance);
+            model_snapshot.selected,
+            model_snapshot.unselected).ResponseAtDistance(neighbor_sample.distance);
     }
     const auto expected_response{
         state.at(sample_ref.atom_index).mdpde.GetModel().ResponseAtDistance(
@@ -2054,9 +2077,10 @@ LocalFittingObjectiveDomain BuildLocalFittingObjectiveDomain(
     const FitOptions & options)
 {
     LocalFittingObjectiveDomain domain;
-    const auto selected_snapshot{ BuildFittedGaussianSnapshot(initial_state) };
-    const auto unselected_snapshot{
-        BuildUnselectedContributorSnapshot(context, selected_snapshot)
+    const auto model_snapshot{
+        BuildSecondStageModelSnapshot(
+            context,
+            BuildFittedGaussianSnapshot(initial_state))
     };
     domain.owner_key_by_atom_index.resize(context.size());
     domain.fit_sample_mask_by_atom.resize(context.size());
@@ -2095,8 +2119,7 @@ LocalFittingObjectiveDomain BuildLocalFittingObjectiveDomain(
                         context,
                         initial_state,
                         sample_ref,
-                        selected_snapshot,
-                        unselected_snapshot)
+                        model_snapshot)
                 };
                 const auto distance{
                     static_cast<double>(
@@ -2216,15 +2239,13 @@ std::optional<detail::LocalFittingObjectiveBreakdown>
 EvaluateLocalFittingObjectiveContribution(
     const SecondStageLocalFittingContext & context,
     const LocalFittingState & state,
+    const SecondStageModelSnapshot & model_snapshot,
     const LocalFittingClusterKey & changed_key,
     const std::vector<LocalFittingObjectiveSampleRef> & sample_ref_list,
-    const LocalFittingObjectiveDomain & domain)
+    const LocalFittingObjectiveDomain & domain,
+    bool include_offset_penalty = true)
 {
     if (domain.active_atom_count == 0) return std::nullopt;
-    const auto selected_snapshot{ BuildFittedGaussianSnapshot(state) };
-    const auto unselected_snapshot{
-        BuildUnselectedContributorSnapshot(context, selected_snapshot)
-    };
     detail::LocalFittingObjectiveBreakdown breakdown;
     for (const auto & sample_ref : sample_ref_list)
     {
@@ -2243,8 +2264,7 @@ EvaluateLocalFittingObjectiveContribution(
                 context,
                 state,
                 sample_ref,
-                selected_snapshot,
-                unselected_snapshot)
+                model_snapshot)
         };
         if (!residual_sample.has_value()) return std::nullopt;
         const auto is_fit_range{
@@ -2284,42 +2304,45 @@ EvaluateLocalFittingObjectiveContribution(
             breakdown.tail_validation_loss += coefficient * loss;
         }
     }
-    for (const auto atom_index : changed_key)
+    if (include_offset_penalty)
     {
-        const auto owner_iter{
-            domain.cluster_by_key.find(
-                domain.owner_key_by_atom_index.at(atom_index))
-        };
-        if (owner_iter == domain.cluster_by_key.end() ||
-            !owner_iter->second.scale.has_value())
+        for (const auto atom_index : changed_key)
         {
-            return std::nullopt;
+            const auto owner_iter{
+                domain.cluster_by_key.find(
+                    domain.owner_key_by_atom_index.at(atom_index))
+            };
+            if (owner_iter == domain.cluster_by_key.end() ||
+                !owner_iter->second.scale.has_value())
+            {
+                return std::nullopt;
+            }
+            const auto & model{ state.at(atom_index).mdpde.GetModel() };
+            if (!detail::IsValidSecondStageGaussianModel(model)) return std::nullopt;
+            const auto peak_signal{ model.SignalAtDistance(0.0) };
+            const auto offset_peak{
+                model.GetOffset() * model.OffsetBasisAtDistance(0.0)
+            };
+            if (!std::isfinite(peak_signal) || !std::isfinite(offset_peak))
+            {
+                return std::nullopt;
+            }
+            const auto offset_ratio{
+                std::abs(offset_peak) /
+                std::max({
+                    std::abs(peak_signal),
+                    owner_iter->second.scale->fit,
+                    kRobustScaleMin
+                })
+            };
+            const auto offset_excess{
+                std::max(0.0, offset_ratio - kLocalFittingOffsetPeakRatioMax)
+            };
+            breakdown.offset_plausibility_penalty +=
+                kLocalFittingOffsetPlausibilityPenaltyWeight *
+                offset_excess * offset_excess /
+                static_cast<double>(domain.active_atom_count);
         }
-        const auto & model{ state.at(atom_index).mdpde.GetModel() };
-        if (!detail::IsValidSecondStageGaussianModel(model)) return std::nullopt;
-        const auto peak_signal{ model.SignalAtDistance(0.0) };
-        const auto offset_peak{
-            model.GetOffset() * model.OffsetBasisAtDistance(0.0)
-        };
-        if (!std::isfinite(peak_signal) || !std::isfinite(offset_peak))
-        {
-            return std::nullopt;
-        }
-        const auto offset_ratio{
-            std::abs(offset_peak) /
-            std::max({
-                std::abs(peak_signal),
-                owner_iter->second.scale->fit,
-                kRobustScaleMin
-            })
-        };
-        const auto offset_excess{
-            std::max(0.0, offset_ratio - kLocalFittingOffsetPeakRatioMax)
-        };
-        breakdown.offset_plausibility_penalty +=
-            kLocalFittingOffsetPlausibilityPenaltyWeight *
-            offset_excess * offset_excess /
-            static_cast<double>(domain.active_atom_count);
     }
     return detail::BuildLocalFittingObjectiveBreakdown(
         breakdown.fit_range_residual_objective,
@@ -2332,34 +2355,57 @@ std::optional<detail::LocalFittingObjectiveBreakdown>
 EvaluateLocalFittingAuditObjective(
     const SecondStageLocalFittingContext & context,
     const LocalFittingState & state,
-    const LocalFittingObjectiveDomain & domain)
+    const LocalFittingObjectiveDomain & domain,
+    const SecondStageModelSnapshot & model_snapshot)
 {
     detail::LocalFittingObjectiveBreakdown total;
     for (const auto & [key, cluster_domain] : domain.cluster_by_key)
     {
-        std::vector<LocalFittingObjectiveSampleRef> owner_sample_ref_list{
-            cluster_domain.fit_sample_ref_list
-        };
-        owner_sample_ref_list.insert(
-            owner_sample_ref_list.end(),
-            cluster_domain.tail_sample_ref_list.begin(),
-            cluster_domain.tail_sample_ref_list.end());
-        const auto contribution{
+        const auto fit_contribution{
             EvaluateLocalFittingObjectiveContribution(
                 context,
                 state,
+                model_snapshot,
                 key,
-                owner_sample_ref_list,
+                cluster_domain.fit_sample_ref_list,
+                domain,
+                false)
+        };
+        if (!fit_contribution.has_value()) return std::nullopt;
+        const auto tail_contribution{
+            EvaluateLocalFittingObjectiveContribution(
+                context,
+                state,
+                model_snapshot,
+                key,
+                cluster_domain.tail_sample_ref_list,
+                domain,
+                false)
+        };
+        if (!tail_contribution.has_value()) return std::nullopt;
+        const std::vector<LocalFittingObjectiveSampleRef> empty_sample_ref_list;
+        const auto offset_contribution{
+            EvaluateLocalFittingObjectiveContribution(
+                context,
+                state,
+                model_snapshot,
+                key,
+                empty_sample_ref_list,
                 domain)
         };
-        if (!contribution.has_value()) return std::nullopt;
+        if (!offset_contribution.has_value()) return std::nullopt;
         total.fit_range_residual_objective +=
-            contribution->fit_range_residual_objective;
-        total.tail_validation_loss += contribution->tail_validation_loss;
+            fit_contribution->fit_range_residual_objective;
+        total.fit_range_residual_objective +=
+            tail_contribution->fit_range_residual_objective;
+        total.tail_validation_loss += fit_contribution->tail_validation_loss;
+        total.tail_validation_loss += tail_contribution->tail_validation_loss;
         total.tail_validation_penalty +=
-            contribution->tail_validation_penalty;
+            fit_contribution->tail_validation_penalty;
+        total.tail_validation_penalty +=
+            tail_contribution->tail_validation_penalty;
         total.offset_plausibility_penalty +=
-            contribution->offset_plausibility_penalty;
+            offset_contribution->offset_plausibility_penalty;
     }
     total.total_objective =
         total.fit_range_residual_objective +
@@ -2370,30 +2416,77 @@ EvaluateLocalFittingAuditObjective(
         std::nullopt;
 }
 
-bool IsLocalFittingCombinedObjectiveAcceptable(
+std::optional<detail::LocalFittingObjectiveBreakdown>
+EvaluateLocalFittingAuditObjective(
+    const SecondStageLocalFittingContext & context,
+    const LocalFittingState & state,
+    const LocalFittingObjectiveDomain & domain)
+{
+    const auto model_snapshot{
+        BuildSecondStageModelSnapshot(
+            context,
+            BuildFittedGaussianSnapshot(state))
+    };
+    return EvaluateLocalFittingAuditObjective(
+        context,
+        state,
+        domain,
+        model_snapshot);
+}
+
+LocalFittingObjectiveByKey BuildLocalFittingObjectiveByKey(
+    const SecondStageLocalFittingContext & context,
+    const LocalFittingState & state,
+    const detail::LocalFittingCouplingPartition & partition,
+    const LocalFittingObjectiveDomain & domain,
+    const SecondStageModelSnapshot & model_snapshot)
+{
+    LocalFittingObjectiveByKey objective_by_key;
+    for (const auto & [key, sample_ref_list] : partition.sample_id_list_by_key)
+    {
+        objective_by_key.emplace(
+            key,
+            EvaluateLocalFittingObjectiveContribution(
+                context,
+                state,
+                model_snapshot,
+                key,
+                sample_ref_list,
+                domain));
+    }
+    return objective_by_key;
+}
+
+LocalFittingCombinedObjectiveCheck EvaluateLocalFittingCombinedObjective(
     const SecondStageLocalFittingContext & context,
     const LocalFittingState & candidate_state,
     const LocalFittingState & previous_state,
     const LocalFittingObjectiveDomain & domain,
-    const LocalFittingBestAuditState & audit_state)
+    const LocalFittingBestAuditState & audit_state,
+    const std::optional<detail::LocalFittingObjectiveBreakdown> & previous_objective = std::nullopt)
 {
     const auto candidate_objective{
         EvaluateLocalFittingAuditObjective(context, candidate_state, domain)
     };
-    const auto previous_objective{
-        EvaluateLocalFittingAuditObjective(context, previous_state, domain)
-    };
-    return detail::IsLocalFittingAuditObjectiveAcceptableForProgress(
-        candidate_objective.has_value() ?
-            std::optional<double>{ candidate_objective->total_objective } :
-            std::nullopt,
+    const auto resolved_previous_objective{
         previous_objective.has_value() ?
-            std::optional<double>{ previous_objective->total_objective } :
-            std::nullopt,
-        audit_state.best.has_value() ?
-            std::optional<double>{ audit_state.best->objective.total_objective } :
-            std::nullopt,
-        kLocalFittingObjectiveProgressTolerance);
+            previous_objective :
+            EvaluateLocalFittingAuditObjective(context, previous_state, domain)
+    };
+    return LocalFittingCombinedObjectiveCheck{
+        detail::IsLocalFittingAuditObjectiveAcceptableForProgress(
+            candidate_objective.has_value() ?
+                std::optional<double>{ candidate_objective->total_objective } :
+                std::nullopt,
+            resolved_previous_objective.has_value() ?
+                std::optional<double>{ resolved_previous_objective->total_objective } :
+                std::nullopt,
+            audit_state.best.has_value() ?
+                std::optional<double>{ audit_state.best->objective.total_objective } :
+                std::nullopt,
+            kLocalFittingObjectiveProgressTolerance),
+        candidate_objective
+    };
 }
 
 void RejectLocalFittingCombinedCandidate(
@@ -2407,6 +2500,7 @@ void RejectLocalFittingCombinedCandidate(
     selection.accepted_key_list.clear();
     selection.rejected_key_list = cluster_key_list;
     selection.grow_trust_region_key_list.clear();
+    selection.combined_backtracking_objective.reset();
     selection.polish_progress.rejected_count += selection.polish_progress.accepted_count;
     selection.polish_progress.accepted_count = 0;
 }
@@ -2417,11 +2511,12 @@ bool TryUpdateLocalFittingBestAuditState(
     const LocalFittingPolishProvenance & candidate_polish_provenance,
     const std::optional<std::size_t> & accepted_iteration,
     const LocalFittingObjectiveDomain & domain,
-    LocalFittingBestAuditState & audit_state)
+    LocalFittingBestAuditState & audit_state,
+    const std::optional<detail::LocalFittingObjectiveBreakdown> & precomputed_objective = std::nullopt)
 {
-    const auto candidate_objective{
-        EvaluateLocalFittingAuditObjective(context, candidate_state, domain)
-    };
+    const auto candidate_objective{ precomputed_objective.has_value() ?
+        precomputed_objective :
+        EvaluateLocalFittingAuditObjective(context, candidate_state, domain) };
     if (!candidate_objective.has_value()) return false;
     if (audit_state.best.has_value() &&
         !detail::IsBetterLocalFittingAuditObjective(
@@ -2681,8 +2776,8 @@ std::optional<Eigen::VectorXd> BuildLocalFittingJointPolishDirection(
         selected_snapshot.at(key.at(local_position)) =
             seed_model_list.at(local_position);
     }
-    const auto unselected_snapshot{
-        BuildUnselectedContributorSnapshot(context, selected_snapshot)
+    const auto model_snapshot{
+        BuildSecondStageModelSnapshot(context, std::move(selected_snapshot))
     };
 
     std::vector<Eigen::Triplet<double>> triplet_list;
@@ -2756,7 +2851,7 @@ std::optional<Eigen::VectorXd> BuildLocalFittingJointPolishDirection(
             const auto & contributor{
                 context.unselected_atom_list.at(contributor_index)
             };
-            const auto & model{ unselected_snapshot.at(contributor_index) };
+            const auto & model{ model_snapshot.unselected.at(contributor_index) };
             const auto evaluation{
                 detail::EvaluateLocalFittingSharedOffsetResponse(model, distance)
             };
@@ -3379,28 +3474,27 @@ double GetLocalFittingMaximumTransformedChange(
 
 LocalFittingClusterObjectiveState
 BuildInitialLocalFittingClusterObjectiveState(
-    const SecondStageLocalFittingContext & context,
-    const LocalFittingState & previous_state,
-    const LocalFittingClusterKey & key,
-    const std::vector<LocalFittingObjectiveSampleRef> & objective_sample_ref_list,
-    const LocalFittingObjectiveDomain & domain)
+    const LocalFittingObjectiveByKey & previous_objective_by_key,
+    const LocalFittingClusterKey & key)
 {
     LocalFittingClusterObjectiveState state;
-    state.best_objective = EvaluateLocalFittingObjectiveContribution(
-        context, previous_state, key, objective_sample_ref_list, domain);
+    const auto objective_iter{ previous_objective_by_key.find(key) };
+    if (objective_iter != previous_objective_by_key.end())
+    {
+        state.best_objective = objective_iter->second;
+    }
     return state;
 }
 
 void ReconcileLocalFittingClusterObjectiveState(
-    const SecondStageLocalFittingContext & context,
-    const LocalFittingState & previous_state,
     const detail::LocalFittingCouplingPartition & partition,
-    const LocalFittingObjectiveDomain & domain,
+    const LocalFittingObjectiveByKey & previous_objective_by_key,
     LocalFittingClusterObjectiveStateMap & state_by_key)
 {
     LocalFittingClusterObjectiveStateMap next_state_by_key;
     for (const auto & [key, objective_sample_ref_list] : partition.sample_id_list_by_key)
     {
+        static_cast<void>(objective_sample_ref_list);
         auto state_iter{ state_by_key.find(key) };
         if (state_iter != state_by_key.end())
         {
@@ -3410,11 +3504,8 @@ void ReconcileLocalFittingClusterObjectiveState(
         next_state_by_key.emplace(
             key,
             BuildInitialLocalFittingClusterObjectiveState(
-                context,
-                previous_state,
-                key,
-                objective_sample_ref_list,
-                domain));
+                previous_objective_by_key,
+                key));
     }
     state_by_key = std::move(next_state_by_key);
 }
@@ -3425,6 +3516,7 @@ bool TryCommitLocalFittingClusterCandidate(
     const LocalFittingState & previous_state,
     const LocalFittingClusterKey & key,
     const std::vector<LocalFittingObjectiveSampleRef> & objective_sample_ref_list,
+    const std::optional<detail::LocalFittingObjectiveBreakdown> & previous_objective,
     bool requires_strict_improvement,
     const LocalFittingObjectiveDomain & domain,
     LocalFittingClusterObjectiveStateMap & cluster_objective_state,
@@ -3449,20 +3541,20 @@ bool TryCommitLocalFittingClusterCandidate(
         }
     }
     auto & state{ cluster_objective_state.at(key) };
+    const auto model_snapshot{
+        BuildSecondStageModelSnapshot(
+            context,
+            BuildFittedGaussianSnapshot(candidate_state))
+    };
     diagnostic.candidate_objective =
         EvaluateLocalFittingObjectiveContribution(
             context,
             candidate_state,
+            model_snapshot,
             key,
             objective_sample_ref_list,
             domain);
-    diagnostic.previous_objective =
-        EvaluateLocalFittingObjectiveContribution(
-            context,
-            previous_state,
-            key,
-            objective_sample_ref_list,
-            domain);
+    diagnostic.previous_objective = previous_objective;
     diagnostic.best_objective = state.best_objective;
 
     const auto is_objective_deteriorated = [](
@@ -3561,6 +3653,7 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
     const std::vector<double> & ridge_multiplier_list,
     const std::vector<LocalFittingClusterKey> & unchanged_state_exhausted_key_list,
     const LocalFittingObjectiveDomain & objective_domain,
+    const LocalFittingObjectiveByKey & previous_objective_by_key,
     LocalFittingClusterObjectiveStateMap & cluster_objective_state,
     const detail::LocalFittingTrustRegionStateSet & trust_region_state)
 {
@@ -3694,6 +3787,7 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                 previous_state,
                 key,
                 objective_sample_ref_list,
+                previous_objective_by_key.at(key),
                 false,
                 objective_domain,
                 cluster_objective_state,
@@ -3741,6 +3835,7 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                         previous_state,
                         key,
                         objective_sample_ref_list,
+                        previous_objective_by_key.at(key),
                         false,
                         objective_domain,
                         cluster_objective_state,
@@ -3828,6 +3923,7 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                 base_state,
                 key,
                 objective_sample_ref_list,
+                base_diagnostic.candidate_objective,
                 true,
                 objective_domain,
                 cluster_objective_state,
@@ -3897,6 +3993,8 @@ bool TryBacktrackLocalFittingCombinedCandidate(
     const LocalFittingState & previous_state,
     const LocalFittingPolishProvenance & previous_polish_provenance,
     const LocalFittingObjectiveDomain & objective_domain,
+    const LocalFittingObjectiveByKey & previous_objective_by_key,
+    const std::optional<detail::LocalFittingObjectiveBreakdown> & previous_audit_objective,
     const LocalFittingBestAuditState & best_audit_state,
     const LocalFittingClusterObjectiveStateMap & committed_objective_state,
     LocalFittingClusterObjectiveStateMap & working_objective_state,
@@ -3956,6 +4054,7 @@ bool TryBacktrackLocalFittingCombinedCandidate(
                     previous_state,
                     key,
                     sample_iter->second,
+                    previous_objective_by_key.at(key),
                     false,
                     objective_domain,
                     trial_objective_state,
@@ -3965,13 +4064,18 @@ bool TryBacktrackLocalFittingCombinedCandidate(
                 break;
             }
         }
-        if (local_criteria_accepted &&
-            IsLocalFittingCombinedObjectiveAcceptable(
-                context,
-                *candidate_state,
-                previous_state,
-                objective_domain,
-                best_audit_state))
+        const auto combined_check{
+            local_criteria_accepted ?
+                EvaluateLocalFittingCombinedObjective(
+                    context,
+                    *candidate_state,
+                    previous_state,
+                    objective_domain,
+                    best_audit_state,
+                    previous_audit_objective) :
+                LocalFittingCombinedObjectiveCheck{}
+        };
+        if (combined_check.accepted)
         {
             selection.assembled_state = std::move(*candidate_state);
             selection.assembled_polish_provenance =
@@ -3982,6 +4086,7 @@ bool TryBacktrackLocalFittingCombinedCandidate(
                     selection.assembled_state,
                     changed_atom_index_list);
             selection.combined_backtracking_factor = factor;
+            selection.combined_backtracking_objective = combined_check.candidate_objective;
             selection.grow_trust_region_key_list.clear();
             working_objective_state = std::move(trial_objective_state);
             return true;
@@ -3996,13 +4101,13 @@ std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
     const SecondStageLocalFittingContext & context,
     std::size_t atom_index,
     const LocalGaussianResult & previous_result,
-    const FittedGaussianSnapshot & refit_model_snapshot,
+    const SecondStageModelSnapshot & model_snapshot,
     const FitOptions & options)
 {
     auto adjusted_sampling_entries{
-        BuildSecondStageAdjustedSamples(context, atom_index, refit_model_snapshot)
+        BuildSecondStageAdjustedSamples(context, atom_index, model_snapshot)
     };
-    const auto & offset_model{ refit_model_snapshot.at(atom_index) };
+    const auto & offset_model{ model_snapshot.selected.at(atom_index) };
     const auto & previous_model{ previous_result.mdpde.GetModel() };
     const auto previous_baseline{
         BuildPreviousSuspiciousProfileBaseline(
@@ -4112,7 +4217,11 @@ LocalFittingIterationResult RunLocalFittingIteration(
     const std::vector<double> & ridge_multiplier_list)
 {
     const auto selected_atom_size{ context.size() };
-    auto current_snapshot{ BuildFittedGaussianSnapshot(previous_state) };
+    auto current_model_snapshot{
+        BuildSecondStageModelSnapshot(
+            context,
+            BuildFittedGaussianSnapshot(previous_state))
+    };
     std::map<LocalFittingClusterKey, JointOffsetSolveResult> joint_offset_result_by_key;
     for (const auto & key : cluster_key_list)
     {
@@ -4121,7 +4230,7 @@ LocalFittingIterationResult RunLocalFittingIteration(
             EstimateJointOffsets(
                 context,
                 key,
-                current_snapshot,
+                current_model_snapshot,
                 ridge_multiplier_list,
                 !options.quiet_mode &&
                     Logger::GetLogLevel() >= LogLevel::Debug));
@@ -4132,8 +4241,9 @@ LocalFittingIterationResult RunLocalFittingIteration(
         for (std::size_t i = 0; i < key.size(); i++)
         {
             const auto atom_index{ key.at(i) };
-            current_snapshot.at(atom_index) =
-                current_snapshot.at(atom_index).WithOffset(result.offset(static_cast<Eigen::Index>(i)));
+            current_model_snapshot.selected.at(atom_index) =
+                current_model_snapshot.selected.at(atom_index)
+                    .WithOffset(result.offset(static_cast<Eigen::Index>(i)));
         }
         health_by_key.emplace(key, LocalFittingClusterHealth{ result.status });
     }
@@ -4159,7 +4269,7 @@ LocalFittingIterationResult RunLocalFittingIteration(
             if (detail::EvaluateSuspiciousOffsetUpdate(
                     context.at(atom_index).raw_sampling_entries,
                     previous_state.at(atom_index).mdpde.GetModel(),
-                    current_snapshot.at(atom_index),
+                    current_model_snapshot.selected.at(atom_index),
                     options) != detail::SuspiciousGaussianReason::None)
             {
                 suspicious_seed_mask.at(position) = 1;
@@ -4177,13 +4287,19 @@ LocalFittingIterationResult RunLocalFittingIteration(
     for (std::size_t atom_index = 0; atom_index < rollback_atom_mask.size(); atom_index++)
     {
         if (rollback_atom_mask.at(atom_index) == 0) continue;
-        current_snapshot.at(atom_index) = previous_state.at(atom_index).mdpde.GetModel();
+        current_model_snapshot.selected.at(atom_index) =
+            previous_state.at(atom_index).mdpde.GetModel();
     }
 
-    const auto refit_model_snapshot{
+    auto refit_model_snapshot{
         detail::BuildLocalFittingGroupMedianModelList(
             group_key_by_atom_index,
-            current_snapshot)
+            current_model_snapshot.selected)
+    };
+    const auto refit_model_bundle{
+        BuildSecondStageModelSnapshot(
+            context,
+            std::move(refit_model_snapshot))
     };
     std::vector<std::size_t> post_refit_suspicious_seed_atom_index_list;
     for (auto & [key, health] : health_by_key)
@@ -4197,7 +4313,7 @@ LocalFittingIterationResult RunLocalFittingIteration(
                     context,
                     atom_index,
                     previous_state.at(atom_index),
-                    refit_model_snapshot,
+                    refit_model_bundle,
                     options)
             };
             if (!refit_result.has_value())
@@ -4241,13 +4357,17 @@ void ApplyLocalFittingState(
             "Local fitting context and state sizes are inconsistent.");
     }
 
-    const auto fitted_gaussian_snapshot{ BuildFittedGaussianSnapshot(iteration_state) };
+    const auto model_snapshot{
+        BuildSecondStageModelSnapshot(
+            context,
+            BuildFittedGaussianSnapshot(iteration_state))
+    };
     std::vector<LocalPotentialSampleList> adjusted_sampling_entries_list;
     adjusted_sampling_entries_list.reserve(context.size());
     for (std::size_t i = 0; i < context.size(); i++)
     {
         adjusted_sampling_entries_list.emplace_back(
-            BuildSecondStageAdjustedSamples(context, i, fitted_gaussian_snapshot));
+            BuildSecondStageAdjustedSamples(context, i, model_snapshot));
     }
 
     auto analysis{ model_object.EditAnalysis() };
@@ -5112,6 +5232,11 @@ bool RunSecondStageLocalFitting(
         const auto cluster_partition{
             detail::BuildLocalFittingCouplingPartition(coupling_topology, active_index_list)
         };
+        const auto previous_model_snapshot{
+            BuildSecondStageModelSnapshot(
+                context,
+                BuildFittedGaussianSnapshot(previous_state))
+        };
         std::vector<LocalFittingClusterKey> cluster_key_list;
         cluster_key_list.reserve(cluster_partition.sample_id_list_by_key.size());
         for (const auto & [key, sample_id_list] :
@@ -5121,11 +5246,17 @@ bool RunSecondStageLocalFitting(
             cluster_key_list.emplace_back(key);
         }
 
+        const auto previous_objective_by_key{
+            BuildLocalFittingObjectiveByKey(
+                context,
+                previous_state,
+                cluster_partition,
+                objective_domain,
+                previous_model_snapshot)
+        };
         ReconcileLocalFittingClusterObjectiveState(
-            context,
-            previous_state,
             cluster_partition,
-            objective_domain,
+            previous_objective_by_key,
             cluster_objective_state);
         trust_region_state.Reconcile(cluster_key_list);
 
@@ -5208,6 +5339,7 @@ bool RunSecondStageLocalFitting(
                 joint_offset_ridge_multiplier_list,
                 unchanged_state_exhausted_key_list,
                 objective_domain,
+                previous_objective_by_key,
                 working_cluster_objective_state,
                 trust_region_state)
         };
@@ -5216,14 +5348,29 @@ bool RunSecondStageLocalFitting(
             cluster_partition.boundary_sample_count > 0 && !selection.accepted_key_list.empty()
         };
         const auto combined_changed_key_list{ selection.accepted_key_list };
-        auto combined_objective_accepted{
-            !needs_combined_objective_guard ||
-            IsLocalFittingCombinedObjectiveAcceptable(
+        std::optional<detail::LocalFittingObjectiveBreakdown>
+            previous_audit_objective;
+        LocalFittingCombinedObjectiveCheck combined_check;
+        if (needs_combined_objective_guard)
+        {
+            previous_audit_objective =
+                EvaluateLocalFittingAuditObjective(
+                    context,
+                    previous_state,
+                    objective_domain,
+                    previous_model_snapshot);
+            combined_check = EvaluateLocalFittingCombinedObjective(
                 context,
                 selection.assembled_state,
                 previous_state,
                 objective_domain,
-                best_audit_state)
+                best_audit_state,
+                previous_audit_objective);
+            selection.combined_backtracking_objective =
+                combined_check.candidate_objective;
+        }
+        auto combined_objective_accepted{
+            !needs_combined_objective_guard || combined_check.accepted
         };
         if (!combined_objective_accepted)
         {
@@ -5234,6 +5381,8 @@ bool RunSecondStageLocalFitting(
                     previous_state,
                     previous_polish_provenance,
                     objective_domain,
+                    previous_objective_by_key,
+                    previous_audit_objective,
                     best_audit_state,
                     cluster_objective_state,
                     working_cluster_objective_state,
@@ -5330,11 +5479,22 @@ bool RunSecondStageLocalFitting(
                     options,
                     true);
                 cluster_objective_state.clear();
+                const auto assembled_model_snapshot{
+                    BuildSecondStageModelSnapshot(
+                        context,
+                        BuildFittedGaussianSnapshot(assembled_state))
+                };
+                const auto remaining_objective_by_key{
+                    BuildLocalFittingObjectiveByKey(
+                        context,
+                        assembled_state,
+                        remaining_partition,
+                        objective_domain,
+                        assembled_model_snapshot)
+                };
                 ReconcileLocalFittingClusterObjectiveState(
-                    context,
-                    assembled_state,
                     remaining_partition,
-                    objective_domain,
+                    remaining_objective_by_key,
                     cluster_objective_state);
                 ResetLocalFittingBestAuditAfterObjectiveDomainChange(
                     context,
@@ -5435,7 +5595,9 @@ bool RunSecondStageLocalFitting(
                 assembled_polish_provenance,
                 accepted_iteration_count,
                 objective_domain,
-                best_audit_state)
+                best_audit_state,
+                objective_domain_changed ?
+                    std::nullopt : selection.combined_backtracking_objective)
         };
         audit_patience_count = objective_domain_changed ? 0 :
             detail::AdvanceLocalFittingAuditPatience(
