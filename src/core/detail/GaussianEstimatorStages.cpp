@@ -4,7 +4,7 @@
 #include "core/detail/LocalFittingAudit.hpp"
 #include "core/detail/LocalFittingBacktrackingWorkspace.hpp"
 #include "core/detail/LocalFittingCandidateEvaluationOverlay.hpp"
-#include "core/detail/LocalFittingCouplingGraph.hpp"
+#include "core/detail/CouplingGraph.hpp"
 #include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
 #include "core/detail/LocalFittingJointOffset.hpp"
@@ -963,7 +963,7 @@ void StoreSecondStageNeighborCounts(
     }
 }
 
-detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
+detail::GraphTopology BuildGraphTopology(
     const SecondStageLocalFittingContext & context,
     const LocalFittingState & initial_state,
     const FitOptions & options)
@@ -992,7 +992,7 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
     };
     update_progress();
 
-    detail::LocalFittingCouplingGraphBuilder builder{ context.size() };
+    detail::CouplingGraphBuilder builder{ context.size() };
     const auto model_snapshot{
         BuildSecondStageModelSnapshot(
             context,
@@ -1027,7 +1027,7 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
     const auto invalid_jacobian{
         Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN())
     };
-    std::vector<detail::LocalFittingCouplingParticipant> participant_list;
+    std::vector<detail::GraphParticipant> participant_list;
     participant_list.reserve(context.size());
     for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
     {
@@ -1042,7 +1042,7 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
                 static_cast<double>(sample.point.distance)) };
             participant_list.clear();
             participant_list.emplace_back(
-                detail::LocalFittingCouplingParticipant{
+                detail::GraphParticipant{
                     atom_index,
                     target_evaluation.has_value() ?
                         target_evaluation->jacobian : invalid_jacobian
@@ -1066,7 +1066,7 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
                 if (neighbor_sample.is_selected)
                 {
                     participant_list.emplace_back(
-                        detail::LocalFittingCouplingParticipant{
+                        detail::GraphParticipant{
                             neighbor_sample.atom_index,
                             jacobian
                         });
@@ -1081,7 +1081,7 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
                     context.selected_atom_index_list_by_group.at(*selected_group_id))
                 {
                     participant_list.emplace_back(
-                        detail::LocalFittingCouplingParticipant{
+                        detail::GraphParticipant{
                             selected_index,
                             jacobian
                         });
@@ -1095,7 +1095,7 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
         }
     }
 
-    std::vector<detail::LocalFittingCouplingResidueKey>
+    std::vector<detail::GraphResidueKey>
         residue_key_by_atom_index;
     residue_key_by_atom_index.reserve(context.size());
     for (const auto & atom_context : context)
@@ -1338,8 +1338,8 @@ void LogUnselectedSecondStageSeedSelections(
     }
 }
 
-void LogLocalFittingCouplingTopology(
-    const detail::LocalFittingCouplingTopology & topology,
+void LogGraphTopology(
+    const detail::GraphTopology & topology,
     const FitOptions & options)
 {
     if (options.quiet_mode) return;
@@ -2159,7 +2159,7 @@ std::optional<double> BuildFixedLocalFittingObjectiveScale(
 LocalFittingObjectiveDomain BuildLocalFittingObjectiveDomain(
     const SecondStageLocalFittingContext & context,
     const LocalFittingState & initial_state,
-    const detail::LocalFittingCouplingPartition & partition,
+    const detail::CouplingGraphPartition & partition,
     const FitOptions & options)
 {
     LocalFittingObjectiveDomain domain;
@@ -2698,7 +2698,7 @@ EvaluateLocalFittingAuditObjective(
 LocalFittingObjectiveByKey BuildLocalFittingObjectiveByKey(
     const SecondStageLocalFittingContext & context,
     const LocalFittingState & state,
-    const detail::LocalFittingCouplingPartition & partition,
+    const detail::CouplingGraphPartition & partition,
     const LocalFittingObjectiveDomain & domain,
     const SecondStageModelSnapshot & model_snapshot)
 {
@@ -2721,7 +2721,7 @@ LocalFittingObjectiveByKey BuildLocalFittingObjectiveByKey(
 LocalFittingObjectiveByKey BuildLocalFittingObjectiveByKey(
     const SecondStageLocalFittingContext & context,
     const LocalFittingState & state,
-    const detail::LocalFittingCouplingPartition & partition,
+    const detail::CouplingGraphPartition & partition,
     const LocalFittingObjectiveDomain & domain,
     const LocalFittingResidualBaseline & residual_baseline)
 {
@@ -3764,7 +3764,7 @@ BuildInitialLocalFittingClusterObjectiveState(
 }
 
 void ReconcileLocalFittingClusterObjectiveState(
-    const detail::LocalFittingCouplingPartition & partition,
+    const detail::CouplingGraphPartition & partition,
     const LocalFittingObjectiveByKey & previous_objective_by_key,
     LocalFittingClusterObjectiveStateMap & state_by_key)
 {
@@ -4282,7 +4282,7 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
     const SecondStageLocalFittingContext & context,
     const SecondStageModelSnapshot & previous_model_snapshot,
     const LocalFittingResidualBaseline & residual_baseline,
-    const detail::LocalFittingCouplingPartition & partition,
+    const detail::CouplingGraphPartition & partition,
     const std::vector<LocalFittingClusterKey> & polish_eligible_key_list,
     const LocalFittingState & previous_state,
     const LocalFittingPolishProvenance & previous_polish_provenance,
@@ -4491,7 +4491,7 @@ bool TryBacktrackLocalFittingCombinedCandidate(
     const SecondStageLocalFittingContext & context,
     const SecondStageModelSnapshot & previous_model_snapshot,
     const LocalFittingResidualBaseline & residual_baseline,
-    const detail::LocalFittingCouplingPartition & partition,
+    const detail::CouplingGraphPartition & partition,
     const LocalFittingState & previous_state,
     const LocalFittingPolishProvenance & previous_polish_provenance,
     const LocalFittingObjectiveDomain & objective_domain,
@@ -4515,7 +4515,7 @@ bool TryBacktrackLocalFittingCombinedCandidate(
             key.end());
     }
     const auto affected_sample_ref_list{
-        detail::BuildLocalFittingCouplingAffectedSampleUnion(
+        detail::BuildGraphAffectedSampleUnion(
             partition,
             accepted_key_list)
     };
@@ -5824,19 +5824,19 @@ bool RunSecondStageLocalFitting(
         options);
     auto previous_state{ std::move(initial_state_build_result->state) };
     LocalFittingPolishProvenance previous_polish_provenance(atom_size, 0);
-    const auto coupling_topology{
-        BuildLocalFittingCouplingTopology(context, previous_state, options)
+    const auto graph_topology{
+        BuildGraphTopology(context, previous_state, options)
     };
-    LogLocalFittingCouplingTopology(coupling_topology, options);
+    LogGraphTopology(graph_topology, options);
     std::vector<char> terminal_fallback_atom_mask(atom_size, 0);
     auto active_index_list{
         BuildEligibleLocalFittingActiveIndexList(terminal_fallback_atom_mask)
     };
-    auto cluster_partition{
-        detail::BuildLocalFittingCouplingPartition(coupling_topology, active_index_list)
+    auto graph_partition{
+        detail::BuildGraphPartition(graph_topology, active_index_list)
     };
     auto cluster_key_list{
-        detail::BuildLocalFittingCouplingClusterKeyList(cluster_partition)
+        detail::BuildGraphClusterKeyList(graph_partition)
     };
     LocalFittingClusterSolverWorkspaceMap solver_workspace_by_key;
     ResetLocalFittingClusterSolverWorkspace(
@@ -5860,7 +5860,7 @@ bool RunSecondStageLocalFitting(
         BuildLocalFittingObjectiveDomain(
             context,
             previous_state,
-            cluster_partition,
+            graph_partition,
             options)
     };
     LogLocalFittingObjectiveDomain(objective_domain, options);
@@ -5935,12 +5935,12 @@ bool RunSecondStageLocalFitting(
             BuildLocalFittingObjectiveByKey(
                 context,
                 previous_state,
-                cluster_partition,
+                graph_partition,
                 objective_domain,
                 residual_baseline)
         };
         ReconcileLocalFittingClusterObjectiveState(
-            cluster_partition,
+            graph_partition,
             previous_objective_by_key,
             cluster_objective_state);
         trust_region_state.Reconcile(cluster_key_list);
@@ -6023,7 +6023,7 @@ bool RunSecondStageLocalFitting(
                 context,
                 previous_model_snapshot,
                 residual_baseline,
-                cluster_partition,
+                graph_partition,
                 polish_eligible_key_list,
                 previous_state,
                 previous_polish_provenance,
@@ -6048,7 +6048,7 @@ bool RunSecondStageLocalFitting(
         performance_counters.full_state_materialization_count++;
 
         const auto needs_combined_objective_guard{
-            cluster_partition.boundary_sample_count > 0 && !selection.accepted_key_list.empty()
+            graph_partition.boundary_sample_count > 0 && !selection.accepted_key_list.empty()
         };
         const auto combined_changed_key_list{ selection.accepted_key_list };
         std::optional<detail::LocalFittingObjectiveBreakdown>
@@ -6087,8 +6087,8 @@ bool RunSecondStageLocalFitting(
                 combined_patch
             };
             const auto affected_sample_ref_list{
-                detail::BuildLocalFittingCouplingAffectedSampleUnion(
-                    cluster_partition,
+                detail::BuildGraphAffectedSampleUnion(
+                    graph_partition,
                     combined_changed_key_list)
             };
             combined_check = EvaluateLocalFittingCombinedObjective(
@@ -6116,7 +6116,7 @@ bool RunSecondStageLocalFitting(
                     context,
                     previous_model_snapshot,
                     residual_baseline,
-                    cluster_partition,
+                    graph_partition,
                     previous_state,
                     previous_polish_provenance,
                     objective_domain,
@@ -6204,15 +6204,15 @@ bool RunSecondStageLocalFitting(
             };
             if (!remaining_active_index_list.empty())
             {
-                auto remaining_partition{
-                    detail::BuildLocalFittingCouplingPartition(
-                        coupling_topology,
+                auto remaining_graph_partition{
+                    detail::BuildGraphPartition(
+                        graph_topology,
                         remaining_active_index_list)
                 };
                 objective_domain = BuildLocalFittingObjectiveDomain(
                     context,
                     assembled_state,
-                    remaining_partition,
+                    remaining_graph_partition,
                     options);
                 LogLocalFittingObjectiveDomain(
                     objective_domain,
@@ -6228,12 +6228,12 @@ bool RunSecondStageLocalFitting(
                     BuildLocalFittingObjectiveByKey(
                         context,
                         assembled_state,
-                        remaining_partition,
+                        remaining_graph_partition,
                         objective_domain,
                         assembled_model_snapshot)
                 };
                 ReconcileLocalFittingClusterObjectiveState(
-                    remaining_partition,
+                    remaining_graph_partition,
                     remaining_objective_by_key,
                     cluster_objective_state);
                 ResetLocalFittingBestAuditAfterObjectiveDomainChange(
@@ -6245,12 +6245,12 @@ bool RunSecondStageLocalFitting(
                     best_audit_state);
                 active_index_list = std::move(remaining_active_index_list);
                 cluster_key_list =
-                    detail::BuildLocalFittingCouplingClusterKeyList(
-                        remaining_partition);
+                    detail::BuildGraphClusterKeyList(
+                        remaining_graph_partition);
                 ResetLocalFittingClusterSolverWorkspace(
                     cluster_key_list,
                     solver_workspace_by_key);
-                cluster_partition = std::move(remaining_partition);
+                graph_partition = std::move(remaining_graph_partition);
                 objective_domain_changed = true;
             }
             else

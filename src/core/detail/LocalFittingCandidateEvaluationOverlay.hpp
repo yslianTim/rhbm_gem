@@ -13,7 +13,7 @@
 
 namespace rhbm_gem::core::detail {
 
-using LocalFittingObjectiveSampleRef = LocalFittingCouplingSampleId;
+using LocalFittingObjectiveSampleRef = GraphSampleId;
 using FittedGaussianSnapshot = std::vector<GaussianModel3D>;
 
 struct SecondStageModelSnapshot

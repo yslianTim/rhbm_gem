@@ -14,7 +14,7 @@
 
 #include "core/detail/GaussianEstimatorStages.hpp"
 #include "core/detail/LocalFittingAudit.hpp"
-#include "core/detail/LocalFittingCouplingGraph.hpp"
+#include "core/detail/CouplingGraph.hpp"
 #include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
 #include "core/detail/LocalFittingJointOffset.hpp"
@@ -68,10 +68,10 @@ double Distance(
     return std::sqrt(dx * dx + dy * dy + dz * dz);
 }
 
-std::vector<coupling_detail::LocalFittingCouplingResidueKey>
+std::vector<coupling_detail::GraphResidueKey>
 MakeUniqueResidueKeys(std::size_t count)
 {
-    std::vector<coupling_detail::LocalFittingCouplingResidueKey> key_list;
+    std::vector<coupling_detail::GraphResidueKey> key_list;
     key_list.reserve(count);
     for (std::size_t index = 0; index < count; index++)
     {
@@ -81,7 +81,7 @@ MakeUniqueResidueKeys(std::size_t count)
 }
 
 bool HasCouplingNeighbor(
-    const coupling_detail::LocalFittingCouplingTopology & topology,
+    const coupling_detail::GraphTopology & topology,
     std::size_t atom_index,
     std::size_t neighbor_index)
 {
@@ -2562,7 +2562,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphNormalizesFullJacobianEnergy)
 {
     Eigen::Vector3d jacobian;
     jacobian << 1.0, 2.0, 3.0;
-    coupling_detail::LocalFittingCouplingGraphBuilder builder{ 2 };
+    coupling_detail::CouplingGraphBuilder builder{ 2 };
     builder.AddSample({ 0, 0 }, { { 0, jacobian }, { 1, jacobian } });
     builder.AddSample({ 0, 1 }, { { 0, 2.0 * jacobian }, { 1, 2.0 * jacobian } });
     const auto topology{ builder.BuildTopology(MakeUniqueResidueKeys(2)) };
@@ -2571,7 +2571,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphNormalizesFullJacobianEnergy)
     EXPECT_NEAR(topology.summary.weight_percentile_95, 1.0, 1.0e-12);
     EXPECT_NEAR(topology.summary.weight_maximum, 1.0, 1.0e-12);
 
-    coupling_detail::LocalFittingCouplingGraphBuilder scaled_builder{ 2 };
+    coupling_detail::CouplingGraphBuilder scaled_builder{ 2 };
     scaled_builder.AddSample(
         { 0, 0 },
         { { 0, 5.0 * jacobian }, { 1, jacobian } });
@@ -2587,7 +2587,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphNormalizesFullJacobianEnergy)
         topology.summary.weight_median,
         1.0e-12);
 
-    coupling_detail::LocalFittingCouplingGraphBuilder tiny_builder{ 2 };
+    coupling_detail::CouplingGraphBuilder tiny_builder{ 2 };
     tiny_builder.AddSample(
         { 0, 0 },
         { { 0, 1.0e-100 * jacobian }, { 1, 1.0e-100 * jacobian } });
@@ -2604,7 +2604,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphNormalizesFullJacobianEnergy)
 TEST(EstimatorSecondStageDefenseTest, CouplingGraphNormalizesDuplicateParticipants)
 {
     const Eigen::Vector3d unit{ 1.0, 0.0, 0.0 };
-    coupling_detail::LocalFittingCouplingGraphBuilder builder{ 2 };
+    coupling_detail::CouplingGraphBuilder builder{ 2 };
     builder.AddSample(
         { 0, 0 },
         {
@@ -2639,7 +2639,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphPropagatesInvalidDuplicateJac
     const auto invalid{
         Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN())
     };
-    coupling_detail::LocalFittingCouplingGraphBuilder builder{ 2 };
+    coupling_detail::CouplingGraphBuilder builder{ 2 };
     builder.AddSample(
         { 0, 0 },
         {
@@ -2661,14 +2661,14 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphPropagatesInvalidDuplicateJac
 TEST(EstimatorSecondStageDefenseTest, CouplingGraphValidatesSampleAndBuildOptions)
 {
     const Eigen::Vector3d unit{ 1.0, 0.0, 0.0 };
-    coupling_detail::LocalFittingCouplingGraphBuilder builder{ 2 };
+    coupling_detail::CouplingGraphBuilder builder{ 2 };
     EXPECT_THROW(
         builder.AddSample({ 0, 0 }, { { 2, unit } }),
         std::invalid_argument);
 
     builder.AddSample({ 0, 0 }, { { 0, unit } });
     auto invalid_weight_options{
-        coupling_detail::LocalFittingCouplingGraphOptions{}
+        coupling_detail::CouplingGraphOptions{}
     };
     invalid_weight_options.minimum_weight = -0.01;
     EXPECT_THROW(
@@ -2676,7 +2676,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphValidatesSampleAndBuildOption
         std::invalid_argument);
 
     auto invalid_residue_limit_options{
-        coupling_detail::LocalFittingCouplingGraphOptions{}
+        coupling_detail::CouplingGraphOptions{}
     };
     invalid_residue_limit_options.maximum_residue_count = 0;
     EXPECT_THROW(
@@ -2689,7 +2689,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphValidatesSampleAndBuildOption
 TEST(EstimatorSecondStageDefenseTest, CouplingGraphSummaryIncludesResidueComponents)
 {
     const Eigen::Vector3d unit{ 1.0, 0.0, 0.0 };
-    coupling_detail::LocalFittingCouplingGraphBuilder builder{ 2 };
+    coupling_detail::CouplingGraphBuilder builder{ 2 };
     builder.AddSample({ 0, 0 }, { { 0, unit } });
     builder.AddSample({ 1, 0 }, { { 1, unit } });
 
@@ -2706,7 +2706,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphSummaryIncludesResidueCompone
 TEST(EstimatorSecondStageDefenseTest, CouplingGraphCutsWeakAndCancelledEdges)
 {
     const Eigen::Vector3d unit{ 1.0, 0.0, 0.0 };
-    coupling_detail::LocalFittingCouplingGraphBuilder weak_builder{ 2 };
+    coupling_detail::CouplingGraphBuilder weak_builder{ 2 };
     weak_builder.AddSample({ 0, 0 }, { { 0, unit }, { 1, unit } });
     weak_builder.AddSample({ 0, 1 }, { { 0, 10.0 * unit } });
     weak_builder.AddSample({ 1, 0 }, { { 1, 10.0 * unit } });
@@ -2717,7 +2717,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphCutsWeakAndCancelledEdges)
     EXPECT_EQ(weak_topology.summary.candidate_edge_count, 1U);
     EXPECT_EQ(weak_topology.summary.cut_edge_count, 1U);
 
-    coupling_detail::LocalFittingCouplingGraphBuilder cancelled_builder{ 2 };
+    coupling_detail::CouplingGraphBuilder cancelled_builder{ 2 };
     cancelled_builder.AddSample({ 0, 0 }, { { 0, unit }, { 1, unit } });
     cancelled_builder.AddSample({ 0, 1 }, { { 0, unit }, { 1, -unit } });
     const auto cancelled_topology{
@@ -2729,7 +2729,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphCutsWeakAndCancelledEdges)
 TEST(EstimatorSecondStageDefenseTest, CouplingGraphReportsThresholdSensitivity)
 {
     const Eigen::Vector3d unit{ 1.0, 0.0, 0.0 };
-    coupling_detail::LocalFittingCouplingGraphBuilder builder{ 7 };
+    coupling_detail::CouplingGraphBuilder builder{ 7 };
     const std::array<double, 3> edge_weight_list{ 0.06, 0.12, 0.25 };
     for (std::size_t edge_index = 0; edge_index < edge_weight_list.size(); edge_index++)
     {
@@ -2750,7 +2750,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphReportsThresholdSensitivity)
     }
 
     const std::vector<double> threshold_list{ 0.05, 0.075, 0.10, 0.15, 0.20, 0.30 };
-    coupling_detail::LocalFittingCouplingGraphOptions options;
+    coupling_detail::CouplingGraphOptions options;
     options.sensitivity_minimum_weight_list = threshold_list;
     const auto topology{
         builder.BuildTopology(MakeUniqueResidueKeys(7), options)
@@ -2779,7 +2779,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphReportsThresholdSensitivity)
         topology.summary.candidate_edge_count - formal_threshold.retained_edge_count,
         topology.summary.cut_edge_count);
     const auto formal_partition{
-        coupling_detail::BuildLocalFittingCouplingPartition(
+        coupling_detail::BuildGraphPartition(
             topology,
             { 0, 1, 2, 3, 4, 5, 6 })
     };
@@ -2792,7 +2792,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphReportsThresholdSensitivity)
 
 TEST(EstimatorSecondStageDefenseTest, CouplingPartitionCutsWeakBridgeAndDuplicatesBoundarySample)
 {
-    coupling_detail::LocalFittingCouplingTopology topology;
+    coupling_detail::GraphTopology topology;
     topology.adjacency_list.resize(3);
     topology.adjacency_list.at(0).push_back(1);
     topology.adjacency_list.at(1).push_back(0);
@@ -2802,7 +2802,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingPartitionCutsWeakBridgeAndDuplicat
     };
 
     const auto partition{
-        coupling_detail::BuildLocalFittingCouplingPartition(topology, { 0, 1, 2 })
+        coupling_detail::BuildGraphPartition(topology, { 0, 1, 2 })
     };
     ASSERT_EQ(partition.sample_id_list_by_key.size(), 2U);
     EXPECT_EQ(partition.sample_id_list_by_key.count({ 0, 1 }), 1U);
@@ -2812,11 +2812,11 @@ TEST(EstimatorSecondStageDefenseTest, CouplingPartitionCutsWeakBridgeAndDuplicat
     EXPECT_EQ(partition.sample_id_list_by_key.at({ 2 }).size(), 1U);
 
     const auto key_list{
-        coupling_detail::BuildLocalFittingCouplingClusterKeyList(partition)
+        coupling_detail::BuildGraphClusterKeyList(partition)
     };
     EXPECT_EQ(key_list, (std::vector<std::vector<std::size_t>>{ { 0, 1 }, { 2 } }));
     const auto affected_sample_list{
-        coupling_detail::BuildLocalFittingCouplingAffectedSampleUnion(
+        coupling_detail::BuildGraphAffectedSampleUnion(
             partition,
             key_list)
     };
@@ -2827,7 +2827,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingPartitionCutsWeakBridgeAndDuplicat
     EXPECT_EQ(affected_sample_list.at(1).sample_index, 0U);
 
     const auto inactive_partition{
-        coupling_detail::BuildLocalFittingCouplingPartition(topology, { 2, 0 })
+        coupling_detail::BuildGraphPartition(topology, { 2, 0 })
     };
     EXPECT_EQ(inactive_partition.sample_id_list_by_key.count({ 0 }), 1U);
     EXPECT_EQ(inactive_partition.sample_id_list_by_key.count({ 2 }), 1U);
@@ -2836,12 +2836,12 @@ TEST(EstimatorSecondStageDefenseTest, CouplingPartitionCutsWeakBridgeAndDuplicat
 
 TEST(EstimatorSecondStageDefenseTest, CouplingResidueCutoffKeepsResiduesWholeAndBounded)
 {
-    coupling_detail::LocalFittingCouplingTopology topology;
+    coupling_detail::GraphTopology topology;
     topology.adjacency_list.resize(13);
     for (std::size_t atom_index = 1; atom_index < 12; atom_index++)
     {
         topology.retained_edge_list.emplace_back(
-            coupling_detail::LocalFittingCouplingWeightedEdge{
+            coupling_detail::GraphWeightedEdge{
                 atom_index,
                 atom_index + 1,
                 1.0 - 0.01 * static_cast<double>(atom_index)
@@ -2850,7 +2850,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingResidueCutoffKeepsResiduesWholeAnd
     topology.sample_dependency_list = {
         { { 0, 0 }, { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 } }
     };
-    std::vector<coupling_detail::LocalFittingCouplingResidueKey> residue_key_list{
+    std::vector<coupling_detail::GraphResidueKey> residue_key_list{
         { "A", 1 },
         { "A", 1 },
         { "B", 1 }
@@ -2861,7 +2861,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingResidueCutoffKeepsResiduesWholeAnd
     }
 
     const auto capped_topology{
-        coupling_detail::ApplyLocalFittingCouplingResidueCutoff(
+        coupling_detail::ApplyGraphResidueCutoff(
             std::move(topology),
             residue_key_list,
             10)
@@ -2877,7 +2877,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingResidueCutoffKeepsResiduesWholeAnd
         active_index_list.at(atom_index) = atom_index;
     }
     const auto partition{
-        coupling_detail::BuildLocalFittingCouplingPartition(
+        coupling_detail::BuildGraphPartition(
             capped_topology,
             active_index_list)
     };
@@ -2888,7 +2888,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingResidueCutoffKeepsResiduesWholeAnd
     for (const auto & [key, sample_id_list] : partition.sample_id_list_by_key)
     {
         EXPECT_EQ(sample_id_list.size(), 1U);
-        std::set<coupling_detail::LocalFittingCouplingResidueKey> residue_key_set;
+        std::set<coupling_detail::GraphResidueKey> residue_key_set;
         for (const auto atom_index : key)
         {
             residue_key_set.emplace(residue_key_list.at(atom_index));
@@ -2902,7 +2902,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingResidueCutoffKeepsResiduesWholeAnd
 
     std::reverse(active_index_list.begin(), active_index_list.end());
     const auto reversed_partition{
-        coupling_detail::BuildLocalFittingCouplingPartition(
+        coupling_detail::BuildGraphPartition(
             capped_topology,
             active_index_list)
     };
@@ -2920,20 +2920,20 @@ TEST(EstimatorSecondStageDefenseTest, CouplingResidueCutoffKeepsResiduesWholeAnd
 
 TEST(EstimatorSecondStageDefenseTest, CouplingResidueCutoffPrioritizesStrongEdges)
 {
-    coupling_detail::LocalFittingCouplingTopology topology;
+    coupling_detail::GraphTopology topology;
     topology.adjacency_list.resize(3);
     topology.retained_edge_list = {
         { 1, 2, 0.80 },
         { 0, 1, 0.90 }
     };
     const auto capped_topology{
-        coupling_detail::ApplyLocalFittingCouplingResidueCutoff(
+        coupling_detail::ApplyGraphResidueCutoff(
             std::move(topology),
             { { "A", 1 }, { "A", 2 }, { "A", 3 } },
             2)
     };
     const auto partition{
-        coupling_detail::BuildLocalFittingCouplingPartition(
+        coupling_detail::BuildGraphPartition(
             capped_topology,
             { 2, 1, 0 })
     };
@@ -2945,27 +2945,27 @@ TEST(EstimatorSecondStageDefenseTest, CouplingResidueCutoffPrioritizesStrongEdge
 
 TEST(EstimatorSecondStageDefenseTest, CouplingPartitionKeepsStrongChainAndBinaryFallback)
 {
-    coupling_detail::LocalFittingCouplingTopology strong_topology;
+    coupling_detail::GraphTopology strong_topology;
     strong_topology.adjacency_list = {
         { 1 },
         { 0, 2 },
         { 1 }
     };
     const auto strong_partition{
-        coupling_detail::BuildLocalFittingCouplingPartition(
+        coupling_detail::BuildGraphPartition(
             strong_topology,
             { 0, 1, 2 })
     };
     EXPECT_EQ(strong_partition.sample_id_list_by_key.count({ 0, 1, 2 }), 1U);
 
-    coupling_detail::LocalFittingCouplingGraphBuilder builder{ 2 };
+    coupling_detail::CouplingGraphBuilder builder{ 2 };
     const auto invalid{
         Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN())
     };
     builder.AddSample(
         { 0, 0 },
         { { 0, Eigen::Vector3d::Ones() }, { 1, invalid } });
-    coupling_detail::LocalFittingCouplingGraphOptions fallback_options;
+    coupling_detail::CouplingGraphOptions fallback_options;
     fallback_options.sensitivity_minimum_weight_list = { 0.05, 0.10 };
     const auto binary_topology{
         builder.BuildTopology(MakeUniqueResidueKeys(2), fallback_options)
@@ -2973,25 +2973,25 @@ TEST(EstimatorSecondStageDefenseTest, CouplingPartitionKeepsStrongChainAndBinary
     EXPECT_FALSE(binary_topology.summary.uses_weighted_graph);
     EXPECT_TRUE(binary_topology.summary.threshold_sensitivity_list.empty());
     const auto binary_partition{
-        coupling_detail::BuildLocalFittingCouplingPartition(
+        coupling_detail::BuildGraphPartition(
             binary_topology,
             { 0, 1 })
     };
     EXPECT_EQ(binary_partition.sample_id_list_by_key.count({ 0, 1 }), 1U);
     const auto capped_binary_topology{
-        coupling_detail::ApplyLocalFittingCouplingResidueCutoff(
+        coupling_detail::ApplyGraphResidueCutoff(
             binary_topology,
             { { "A", 1 }, { "A", 2 } },
             1)
     };
     const auto capped_binary_partition{
-        coupling_detail::BuildLocalFittingCouplingPartition(
+        coupling_detail::BuildGraphPartition(
             capped_binary_topology,
             { 0, 1 })
     };
     EXPECT_EQ(capped_binary_partition.sample_id_list_by_key.size(), 2U);
 
-    coupling_detail::LocalFittingCouplingGraphBuilder overflow_builder{ 2 };
+    coupling_detail::CouplingGraphBuilder overflow_builder{ 2 };
     const auto huge{ Eigen::Vector3d::Constant(1.0e200) };
     overflow_builder.AddSample({ 0, 0 }, { { 0, huge }, { 1, huge } });
     const auto overflow_topology{

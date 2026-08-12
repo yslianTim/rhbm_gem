@@ -17,41 +17,41 @@
 
 namespace rhbm_gem::core::detail {
 
-using LocalFittingCouplingClusterKey = std::vector<std::size_t>;
-using LocalFittingCouplingResidueKey = std::pair<std::string, int>;
+using GraphClusterKey = std::vector<std::size_t>;
+using GraphResidueKey = std::pair<std::string, int>;
 
-struct LocalFittingCouplingWeightedEdge
+struct GraphWeightedEdge
 {
     std::size_t left_atom_index{ 0 };
     std::size_t right_atom_index{ 0 };
     double weight{ 0.0 };
 };
 
-struct LocalFittingCouplingSampleId
+struct GraphSampleId
 {
     std::size_t atom_index{ 0 };
     std::size_t sample_index{ 0 };
 };
 
-struct LocalFittingCouplingParticipant
+struct GraphParticipant
 {
     std::size_t atom_index{ 0 };
     Eigen::Vector3d jacobian{ Eigen::Vector3d::Zero() };
 };
 
-struct LocalFittingCouplingSampleDependency
+struct GraphSampleDependency
 {
-    LocalFittingCouplingSampleId sample_id{};
+    GraphSampleId sample_id{};
     std::vector<std::size_t> contributor_atom_index_list{};
 };
 
-class LocalFittingDisjointSet
+class DisjointSet
 {
     std::vector<std::size_t> m_parent_list{};
     std::vector<std::size_t> m_component_size_list{};
 
 public:
-    explicit LocalFittingDisjointSet(std::size_t item_count)
+    explicit DisjointSet(std::size_t item_count)
         : m_parent_list(item_count),
           m_component_size_list(item_count, 1)
     {
@@ -80,7 +80,7 @@ public:
     }
 };
 
-struct LocalFittingCouplingGraphSummary
+struct CouplingGraphSummary
 {
     struct ThresholdSensitivity
     {
@@ -109,13 +109,13 @@ struct LocalFittingCouplingGraphSummary
     double maximum_component_ratio{ 0.0 };
 };
 
-struct LocalFittingCouplingTopology
+struct GraphTopology
 {
     std::vector<std::vector<std::size_t>> adjacency_list{};
-    std::vector<LocalFittingCouplingWeightedEdge> retained_edge_list{};
-    std::vector<LocalFittingCouplingResidueKey> residue_key_by_atom_index{};
-    std::vector<LocalFittingCouplingSampleDependency> sample_dependency_list{};
-    LocalFittingCouplingGraphSummary summary{};
+    std::vector<GraphWeightedEdge> retained_edge_list{};
+    std::vector<GraphResidueKey> residue_key_by_atom_index{};
+    std::vector<GraphSampleDependency> sample_dependency_list{};
+    CouplingGraphSummary summary{};
     struct ResidueCutoffSummary
     {
         std::size_t residue_count{ 0 };
@@ -126,7 +126,7 @@ struct LocalFittingCouplingTopology
     } residue_cutoff_summary{};
 };
 
-struct LocalFittingCouplingGraphOptions
+struct CouplingGraphOptions
 {
     double minimum_weight{ 0.05 };
     std::vector<double> sensitivity_minimum_weight_list{
@@ -135,20 +135,20 @@ struct LocalFittingCouplingGraphOptions
     std::size_t maximum_residue_count{ 10 };
 };
 
-struct LocalFittingCouplingPartition
+struct CouplingGraphPartition
 {
-    std::map<LocalFittingCouplingClusterKey, std::vector<LocalFittingCouplingSampleId>> sample_id_list_by_key{};
+    std::map<GraphClusterKey, std::vector<GraphSampleId>> sample_id_list_by_key{};
     std::size_t boundary_sample_count{ 0 };
 };
 
-inline LocalFittingCouplingTopology ApplyLocalFittingCouplingResidueCutoff(
-    LocalFittingCouplingTopology topology,
-    std::vector<LocalFittingCouplingResidueKey> residue_key_by_atom_index,
+inline GraphTopology ApplyGraphResidueCutoff(
+    GraphTopology topology,
+    std::vector<GraphResidueKey> residue_key_by_atom_index,
     std::size_t maximum_residue_count);
 
-inline void UpdateLocalFittingCouplingComponentSummary(LocalFittingCouplingTopology & topology);
+inline void UpdateGraphComponentSummary(GraphTopology & topology);
 
-class LocalFittingCouplingGraphBuilder
+class CouplingGraphBuilder
 {
     using AtomPair = std::pair<std::size_t, std::size_t>;
 
@@ -161,11 +161,11 @@ class LocalFittingCouplingGraphBuilder
     std::size_t m_atom_count{ 0 };
     std::vector<Eigen::Matrix3d> m_self_gram_list{};
     std::map<AtomPair, Eigen::Matrix3d> m_pair_accumulator_by_pair{};
-    std::vector<LocalFittingCouplingSampleDependency> m_sample_dependency_list{};
+    std::vector<GraphSampleDependency> m_sample_dependency_list{};
     bool m_has_invalid_jacobian{ false };
 
     static void NormalizeParticipantList(
-        std::vector<LocalFittingCouplingParticipant> & participant_list)
+        std::vector<GraphParticipant> & participant_list)
     {
         std::sort(
             participant_list.begin(),
@@ -207,7 +207,7 @@ class LocalFittingCouplingGraphBuilder
         participant_list.resize(normalized_size);
     }
 
-    static void ValidateBuildOptions(const LocalFittingCouplingGraphOptions & options)
+    static void ValidateBuildOptions(const CouplingGraphOptions & options)
     {
         if (!std::isfinite(options.minimum_weight) ||
             options.minimum_weight < 0.0 || options.minimum_weight > 1.0)
@@ -243,12 +243,12 @@ class LocalFittingCouplingGraphBuilder
         return norm;
     }
 
-    std::vector<LocalFittingCouplingGraphSummary::ThresholdSensitivity>
+    std::vector<CouplingGraphSummary::ThresholdSensitivity>
     BuildThresholdSensitivity(
         const std::vector<WeightedPair> & weighted_pair_list,
         const std::vector<double> & minimum_weight_list) const
     {
-        std::vector<LocalFittingCouplingGraphSummary::ThresholdSensitivity> sensitivity_list;
+        std::vector<CouplingGraphSummary::ThresholdSensitivity> sensitivity_list;
         sensitivity_list.reserve(minimum_weight_list.size());
         for (const auto minimum_weight : minimum_weight_list)
         {
@@ -258,7 +258,7 @@ class LocalFittingCouplingGraphBuilder
                     "Local fitting coupling sensitivity minimum weight must be in [0, 1].");
             }
 
-            LocalFittingDisjointSet component_set{ m_atom_count };
+            DisjointSet component_set{ m_atom_count };
 
             std::size_t retained_edge_count{ 0 };
             for (const auto & weighted_pair : weighted_pair_list)
@@ -280,7 +280,7 @@ class LocalFittingCouplingGraphBuilder
                     component_set.ComponentSize(atom_index));
             }
             sensitivity_list.emplace_back(
-                LocalFittingCouplingGraphSummary::ThresholdSensitivity{
+                CouplingGraphSummary::ThresholdSensitivity{
                     minimum_weight,
                     retained_edge_count,
                     weighted_pair_list.size() - retained_edge_count,
@@ -293,12 +293,12 @@ class LocalFittingCouplingGraphBuilder
         return sensitivity_list;
     }
 
-    LocalFittingCouplingTopology BuildFromWeights(
+    GraphTopology BuildFromWeights(
         const std::vector<WeightedPair> & weighted_pair_list,
         double minimum_weight,
         bool uses_weighted_graph)
     {
-        LocalFittingCouplingTopology topology;
+        GraphTopology topology;
         topology.adjacency_list.resize(m_atom_count);
         topology.sample_dependency_list = std::move(m_sample_dependency_list);
         topology.summary.uses_weighted_graph = uses_weighted_graph;
@@ -316,7 +316,7 @@ class LocalFittingCouplingGraphBuilder
             topology.adjacency_list.at(weighted_pair.pair.first).emplace_back(weighted_pair.pair.second);
             topology.adjacency_list.at(weighted_pair.pair.second).emplace_back(weighted_pair.pair.first);
             topology.retained_edge_list.emplace_back(
-                LocalFittingCouplingWeightedEdge{
+                GraphWeightedEdge{
                     weighted_pair.pair.first,
                     weighted_pair.pair.second,
                     weight
@@ -332,8 +332,8 @@ class LocalFittingCouplingGraphBuilder
     }
 
     void AddSampleData(
-        LocalFittingCouplingSampleId sample_id,
-        const std::vector<LocalFittingCouplingParticipant> & participant_list)
+        GraphSampleId sample_id,
+        const std::vector<GraphParticipant> & participant_list)
     {
         bool sample_has_invalid_jacobian{ false };
         for (std::size_t i = 0; i < participant_list.size(); i++)
@@ -356,7 +356,7 @@ class LocalFittingCouplingGraphBuilder
         }
         m_has_invalid_jacobian = m_has_invalid_jacobian || sample_has_invalid_jacobian;
 
-        LocalFittingCouplingSampleDependency dependency;
+        GraphSampleDependency dependency;
         dependency.sample_id = sample_id;
         dependency.contributor_atom_index_list.reserve(participant_list.size());
         for (const auto & participant : participant_list)
@@ -391,31 +391,31 @@ class LocalFittingCouplingGraphBuilder
     }
 
 public:
-    explicit LocalFittingCouplingGraphBuilder(std::size_t atom_count)
+    explicit CouplingGraphBuilder(std::size_t atom_count)
         : m_atom_count{ atom_count },
           m_self_gram_list(atom_count, Eigen::Matrix3d::Zero())
     {
     }
 
     void AddSample(
-        LocalFittingCouplingSampleId sample_id,
-        std::vector<LocalFittingCouplingParticipant> & participant_list)
+        GraphSampleId sample_id,
+        std::vector<GraphParticipant> & participant_list)
     {
         NormalizeParticipantList(participant_list);
         AddSampleData(sample_id, participant_list);
     }
 
     void AddSample(
-        LocalFittingCouplingSampleId sample_id,
-        std::vector<LocalFittingCouplingParticipant> && participant_list)
+        GraphSampleId sample_id,
+        std::vector<GraphParticipant> && participant_list)
     {
         NormalizeParticipantList(participant_list);
         AddSampleData(sample_id, participant_list);
     }
 
     void AddSortedSample(
-        LocalFittingCouplingSampleId sample_id,
-        const std::vector<LocalFittingCouplingParticipant> & participant_list)
+        GraphSampleId sample_id,
+        const std::vector<GraphParticipant> & participant_list)
     {
         auto normalized_list{ participant_list };
         NormalizeParticipantList(normalized_list);
@@ -423,7 +423,7 @@ public:
     }
 
 private:
-    std::optional<LocalFittingCouplingTopology> BuildWeighted(
+    std::optional<GraphTopology> BuildWeighted(
         double minimum_weight,
         const std::vector<double> & sensitivity_minimum_weight_list = {})
     {
@@ -490,7 +490,7 @@ private:
         return topology;
     }
 
-    LocalFittingCouplingTopology BuildBinary()
+    GraphTopology BuildBinary()
     {
         std::vector<WeightedPair> weighted_pair_list;
         weighted_pair_list.reserve(m_pair_accumulator_by_pair.size());
@@ -503,9 +503,9 @@ private:
     }
 
 public:
-    LocalFittingCouplingTopology BuildTopology(
-        std::vector<LocalFittingCouplingResidueKey> residue_key_by_atom_index,
-        const LocalFittingCouplingGraphOptions & options = {})
+    GraphTopology BuildTopology(
+        std::vector<GraphResidueKey> residue_key_by_atom_index,
+        const CouplingGraphOptions & options = {})
     {
         ValidateBuildOptions(options);
         if (residue_key_by_atom_index.size() != m_atom_count)
@@ -521,7 +521,7 @@ public:
             weighted_topology.has_value() ? std::move(*weighted_topology) : BuildBinary()
         };
         topology.summary.configured_minimum_weight = options.minimum_weight;
-        topology = ApplyLocalFittingCouplingResidueCutoff(
+        topology = ApplyGraphResidueCutoff(
             std::move(topology),
             std::move(residue_key_by_atom_index),
             options.maximum_residue_count);
@@ -529,9 +529,9 @@ public:
     }
 };
 
-inline LocalFittingCouplingTopology ApplyLocalFittingCouplingResidueCutoff(
-    LocalFittingCouplingTopology topology,
-    std::vector<LocalFittingCouplingResidueKey> residue_key_by_atom_index,
+inline GraphTopology ApplyGraphResidueCutoff(
+    GraphTopology topology,
+    std::vector<GraphResidueKey> residue_key_by_atom_index,
     std::size_t maximum_residue_count)
 {
     const auto atom_count{ topology.adjacency_list.size() };
@@ -546,7 +546,7 @@ inline LocalFittingCouplingTopology ApplyLocalFittingCouplingResidueCutoff(
             "Local fitting coupling maximum residue count must be positive.");
     }
 
-    std::map<LocalFittingCouplingResidueKey, std::size_t> residue_index_by_key;
+    std::map<GraphResidueKey, std::size_t> residue_index_by_key;
     for (const auto & residue_key : residue_key_by_atom_index)
     {
         residue_index_by_key.emplace(residue_key, 0);
@@ -621,7 +621,7 @@ inline LocalFittingCouplingTopology ApplyLocalFittingCouplingResidueCutoff(
             return lhs.residue_pair < rhs.residue_pair;
         });
 
-    LocalFittingDisjointSet residue_component_set{ residue_index_by_key.size() };
+    DisjointSet residue_component_set{ residue_index_by_key.size() };
     for (const auto & edge : weighted_residue_edge_list)
     {
         const auto left_root{ residue_component_set.Find(edge.residue_pair.first) };
@@ -666,21 +666,21 @@ inline LocalFittingCouplingTopology ApplyLocalFittingCouplingResidueCutoff(
     }
     topology.residue_key_by_atom_index = std::move(residue_key_by_atom_index);
     topology.residue_cutoff_summary =
-        LocalFittingCouplingTopology::ResidueCutoffSummary{
+        GraphTopology::ResidueCutoffSummary{
             residue_index_by_key.size(),
             observed_maximum_residue_count,
             cluster_count,
             cut_edge_count,
             maximum_residue_count
         };
-    UpdateLocalFittingCouplingComponentSummary(topology);
+    UpdateGraphComponentSummary(topology);
     return topology;
 }
 
-inline void UpdateLocalFittingCouplingComponentSummary(LocalFittingCouplingTopology & topology)
+inline void UpdateGraphComponentSummary(GraphTopology & topology)
 {
     const auto atom_count{ topology.adjacency_list.size() };
-    LocalFittingDisjointSet component_set{ atom_count };
+    DisjointSet component_set{ atom_count };
     if (!topology.residue_key_by_atom_index.empty())
     {
         if (topology.residue_key_by_atom_index.size() != atom_count)
@@ -688,7 +688,7 @@ inline void UpdateLocalFittingCouplingComponentSummary(LocalFittingCouplingTopol
             throw std::invalid_argument(
                 "Local fitting coupling residue key count must match atom count.");
         }
-        std::map<LocalFittingCouplingResidueKey, std::size_t> first_atom_index_by_residue_key;
+        std::map<GraphResidueKey, std::size_t> first_atom_index_by_residue_key;
         for (std::size_t atom_index = 0; atom_index < atom_count; atom_index++)
         {
             const auto [iter, inserted]{
@@ -731,8 +731,8 @@ inline void UpdateLocalFittingCouplingComponentSummary(LocalFittingCouplingTopol
         static_cast<double>(maximum_component_size) / static_cast<double>(atom_count);
 }
 
-inline LocalFittingCouplingPartition BuildLocalFittingCouplingPartition(
-    const LocalFittingCouplingTopology & topology,
+inline CouplingGraphPartition BuildGraphPartition(
+    const GraphTopology & topology,
     const std::vector<std::size_t> & active_index_list)
 {
     const auto atom_count{ topology.adjacency_list.size() };
@@ -753,7 +753,7 @@ inline LocalFittingCouplingPartition BuildLocalFittingCouplingPartition(
         active_position_by_atom_index.at(atom_index) = position;
     }
 
-    LocalFittingDisjointSet component_set{ active_index_list.size() };
+    DisjointSet component_set{ active_index_list.size() };
 
     if (!topology.residue_key_by_atom_index.empty())
     {
@@ -762,7 +762,7 @@ inline LocalFittingCouplingPartition BuildLocalFittingCouplingPartition(
             throw std::invalid_argument(
                 "Local fitting coupling residue key count must match atom count.");
         }
-        std::map<LocalFittingCouplingResidueKey, std::size_t> first_position_by_residue_key;
+        std::map<GraphResidueKey, std::size_t> first_position_by_residue_key;
         for (std::size_t position = 0; position < active_index_list.size(); position++)
         {
             const auto atom_index{ active_index_list.at(position) };
@@ -796,7 +796,7 @@ inline LocalFittingCouplingPartition BuildLocalFittingCouplingPartition(
         }
     }
 
-    std::map<std::size_t, LocalFittingCouplingClusterKey> key_by_root;
+    std::map<std::size_t, GraphClusterKey> key_by_root;
     for (std::size_t position = 0; position < active_index_list.size(); position++)
     {
         key_by_root[component_set.Find(position)].emplace_back(active_index_list.at(position));
@@ -807,8 +807,8 @@ inline LocalFittingCouplingPartition BuildLocalFittingCouplingPartition(
         std::sort(key.begin(), key.end());
     }
 
-    std::map<std::size_t, std::vector<LocalFittingCouplingSampleId>> sample_id_list_by_root;
-    LocalFittingCouplingPartition partition;
+    std::map<std::size_t, std::vector<GraphSampleId>> sample_id_list_by_root;
+    CouplingGraphPartition partition;
     for (const auto & dependency : topology.sample_dependency_list)
     {
         std::vector<std::size_t> root_list;
@@ -839,11 +839,11 @@ inline LocalFittingCouplingPartition BuildLocalFittingCouplingPartition(
     return partition;
 }
 
-inline std::vector<LocalFittingCouplingClusterKey>
-BuildLocalFittingCouplingClusterKeyList(
-    const LocalFittingCouplingPartition & partition)
+inline std::vector<GraphClusterKey>
+BuildGraphClusterKeyList(
+    const CouplingGraphPartition & partition)
 {
-    std::vector<LocalFittingCouplingClusterKey> cluster_key_list;
+    std::vector<GraphClusterKey> cluster_key_list;
     cluster_key_list.reserve(partition.sample_id_list_by_key.size());
     for (const auto & [key, sample_id_list] : partition.sample_id_list_by_key)
     {
@@ -853,12 +853,12 @@ BuildLocalFittingCouplingClusterKeyList(
     return cluster_key_list;
 }
 
-inline std::vector<LocalFittingCouplingSampleId>
-BuildLocalFittingCouplingAffectedSampleUnion(
-    const LocalFittingCouplingPartition & partition,
-    const std::vector<LocalFittingCouplingClusterKey> & key_list)
+inline std::vector<GraphSampleId>
+BuildGraphAffectedSampleUnion(
+    const CouplingGraphPartition & partition,
+    const std::vector<GraphClusterKey> & key_list)
 {
-    std::vector<LocalFittingCouplingSampleId> sample_id_list;
+    std::vector<GraphSampleId> sample_id_list;
     for (const auto & key : key_list)
     {
         const auto iter{ partition.sample_id_list_by_key.find(key) };
