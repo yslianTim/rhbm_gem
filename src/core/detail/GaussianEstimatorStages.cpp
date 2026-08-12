@@ -115,16 +115,6 @@ constexpr detail::LocalFittingObjectiveTolerance
 kLocalFittingObjectiveStrictTolerance{ 1.0e-10, 1.0e-8 };
 constexpr detail::LocalFittingObjectiveTolerance
 kLocalFittingObjectiveProgressTolerance{ 1.0e-8, 1.0e-3 };
-constexpr double kLocalFittingCouplingMinimumWeight{ 0.05 };
-constexpr std::size_t kLocalFittingCouplingMaximumResidueCount{ 10 };
-constexpr std::array<double, 6> kLocalFittingCouplingSensitivityMinimumWeightList{
-    0.05,
-    0.075,
-    0.10,
-    0.15,
-    0.20,
-    0.30
-};
 constexpr double kLocalFittingObjectiveResidualScaleFloorRatio{ 1.0e-6 };
 constexpr double kLocalFittingFitRangeWeight{ 1.0 };
 constexpr double kLocalFittingTailValidationWeight{ 0.25 };
@@ -983,7 +973,7 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
     {
         total_sample_count += atom_context.raw_sampling_entries.size();
     }
-    const std::size_t total_work{ total_sample_count + 2 };
+    const std::size_t total_work{ total_sample_count + 1 };
     std::size_t completed_work{ 0 };
     const std::string progress_message{ " Build local-fitting coupling topology" };
     int last_progress_percent{ -1 };
@@ -1037,11 +1027,6 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
     const auto invalid_jacobian{
         Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN())
     };
-    std::vector<Eigen::Vector3d> jacobian_by_atom_index(context.size(), Eigen::Vector3d::Zero());
-    std::vector<std::size_t> generation_by_atom_index(context.size(), 0);
-    std::size_t sample_generation{ 0 };
-    std::vector<std::size_t> touched_atom_index_list;
-    touched_atom_index_list.reserve(context.size());
     std::vector<detail::LocalFittingCouplingParticipant> participant_list;
     participant_list.reserve(context.size());
     for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
@@ -1052,43 +1037,16 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
             sample_index++)
         {
             const auto & sample{ atom_context.raw_sampling_entries.at(sample_index) };
-            sample_generation++;
-            if (sample_generation == 0)
-            {
-                std::fill(generation_by_atom_index.begin(), generation_by_atom_index.end(), 0);
-                sample_generation++;
-            }
-            touched_atom_index_list.clear();
-            const auto add_participant = [&](
-                std::size_t participant_atom_index,
-                const Eigen::Vector3d & jacobian)
-            {
-                if (generation_by_atom_index.at(participant_atom_index) != sample_generation)
-                {
-                    generation_by_atom_index.at(participant_atom_index) = sample_generation;
-                    jacobian_by_atom_index.at(participant_atom_index) = jacobian;
-                    touched_atom_index_list.emplace_back(participant_atom_index);
-                    return;
-                }
-                auto & accumulated_jacobian{
-                    jacobian_by_atom_index.at(participant_atom_index)
-                };
-                if (!accumulated_jacobian.allFinite() || !jacobian.allFinite())
-                {
-                    accumulated_jacobian = invalid_jacobian;
-                }
-                else
-                {
-                    accumulated_jacobian += jacobian;
-                }
-            };
             const auto target_evaluation{ evaluate_model(
                 selected_model_invariants.at(atom_index),
                 static_cast<double>(sample.point.distance)) };
-            add_participant(
-                atom_index,
-                target_evaluation.has_value() ?
-                    target_evaluation->jacobian : invalid_jacobian);
+            participant_list.clear();
+            participant_list.emplace_back(
+                detail::LocalFittingCouplingParticipant{
+                    atom_index,
+                    target_evaluation.has_value() ?
+                        target_evaluation->jacobian : invalid_jacobian
+                });
             for (auto neighbor_iter = atom_context.NeighborBegin(sample_index);
                 neighbor_iter != atom_context.NeighborEnd(sample_index);
                 ++neighbor_iter)
@@ -1107,7 +1065,11 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
                 };
                 if (neighbor_sample.is_selected)
                 {
-                    add_participant(neighbor_sample.atom_index, jacobian);
+                    participant_list.emplace_back(
+                        detail::LocalFittingCouplingParticipant{
+                            neighbor_sample.atom_index,
+                            jacobian
+                        });
                     continue;
                 }
                 const auto selected_group_id{
@@ -1118,42 +1080,20 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
                 for (const auto selected_index :
                     context.selected_atom_index_list_by_group.at(*selected_group_id))
                 {
-                    add_participant(selected_index, jacobian);
+                    participant_list.emplace_back(
+                        detail::LocalFittingCouplingParticipant{
+                            selected_index,
+                            jacobian
+                        });
                 }
             }
-            std::sort(touched_atom_index_list.begin(), touched_atom_index_list.end());
-            participant_list.clear();
-            participant_list.reserve(touched_atom_index_list.size());
-            for (const auto participant_atom_index : touched_atom_index_list)
-            {
-                participant_list.emplace_back(
-                    detail::LocalFittingCouplingParticipant{
-                        participant_atom_index,
-                        jacobian_by_atom_index.at(participant_atom_index)
-                    });
-            }
-            builder.AddSortedSample(
+            builder.AddSample(
                 LocalFittingObjectiveSampleRef{ atom_index, sample_index },
                 participant_list);
             completed_work++;
             update_progress();
         }
     }
-
-    auto weighted_topology{
-        builder.BuildWeighted(
-            kLocalFittingCouplingMinimumWeight,
-            std::vector<double>{
-                kLocalFittingCouplingSensitivityMinimumWeightList.begin(),
-                kLocalFittingCouplingSensitivityMinimumWeightList.end()
-            })
-    };
-    auto topology{
-        weighted_topology.has_value() ?
-            std::move(*weighted_topology) : builder.BuildBinary()
-    };
-    completed_work++;
-    update_progress();
 
     std::vector<detail::LocalFittingCouplingResidueKey>
         residue_key_by_atom_index;
@@ -1162,15 +1102,10 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
     {
         residue_key_by_atom_index.emplace_back(atom_context.residue_key);
     }
-    auto residue_cutoff_topology{
-        detail::ApplyLocalFittingCouplingResidueCutoff(
-            std::move(topology),
-            std::move(residue_key_by_atom_index),
-            kLocalFittingCouplingMaximumResidueCount)
-    };
+    const auto topology{ builder.BuildTopology(std::move(residue_key_by_atom_index)) };
     completed_work++;
     update_progress();
-    return residue_cutoff_topology;
+    return topology;
 }
 
 std::optional<GaussianModel3DWithUncertainty> BuildValidGaussianParameterMedian(
@@ -1409,23 +1344,6 @@ void LogLocalFittingCouplingTopology(
 {
     if (options.quiet_mode) return;
 
-    std::vector<std::size_t> atom_index_list(topology.adjacency_list.size());
-    for (std::size_t i = 0; i < atom_index_list.size(); i++) atom_index_list.at(i) = i;
-    const auto partition{
-        detail::BuildLocalFittingCouplingPartition(topology, atom_index_list)
-    };
-    std::size_t maximum_component_size{ 0 };
-    for (const auto & [key, sample_list] : partition.sample_id_list_by_key)
-    {
-        static_cast<void>(sample_list);
-        maximum_component_size = std::max(maximum_component_size, key.size());
-    }
-    const auto maximum_component_ratio{
-        atom_index_list.empty() ? 0.0 :
-            static_cast<double>(maximum_component_size) /
-                static_cast<double>(atom_index_list.size())
-    };
-
     const auto & summary{ topology.summary };
     if (!summary.uses_weighted_graph)
     {
@@ -1443,7 +1361,7 @@ void LogLocalFittingCouplingTopology(
     message << "Local-fitting coupling graph mode = "
         << (summary.uses_weighted_graph ? "weighted" : "binary-fallback")
         << std::scientific << std::setprecision(2)
-        << ", minimum weight = " << kLocalFittingCouplingMinimumWeight
+        << ", minimum weight = " << summary.configured_minimum_weight
         << ", candidate/retained/cut edges = "
         << summary.candidate_edge_count << "/"
         << summary.retained_edge_count << "/"
@@ -1453,10 +1371,10 @@ void LogLocalFittingCouplingTopology(
         << summary.weight_percentile_95 << "/"
         << summary.weight_maximum
         << ", initial components/max atoms/ratio = "
-        << partition.sample_id_list_by_key.size() << "/"
-        << maximum_component_size << "/"
+        << summary.component_count << "/"
+        << summary.maximum_component_size << "/"
         << std::fixed << std::setprecision(2)
-        << maximum_component_ratio << ".";
+        << summary.maximum_component_ratio << ".";
     Logger::Log(LogLevel::Info, message.str());
 
     const auto & residue_cutoff_summary{ topology.residue_cutoff_summary };
@@ -1464,7 +1382,7 @@ void LogLocalFittingCouplingTopology(
     residue_cutoff_message
         << "Local-fitting residue cutoff: residues="
         << residue_cutoff_summary.residue_count
-        << ", limit=" << kLocalFittingCouplingMaximumResidueCount
+        << ", limit=" << residue_cutoff_summary.maximum_residue_count_limit
         << ", clusters=" << residue_cutoff_summary.cluster_count
         << ", max-residues=" << residue_cutoff_summary.maximum_residue_count
         << ", cutoff-edges=" << residue_cutoff_summary.cut_edge_count << ".";
@@ -3132,19 +3050,6 @@ std::vector<std::size_t> BuildEligibleLocalFittingActiveIndexList(
     return active_index_list;
 }
 
-std::vector<LocalFittingClusterKey> BuildLocalFittingClusterKeyList(
-    const detail::LocalFittingCouplingPartition & partition)
-{
-    std::vector<LocalFittingClusterKey> cluster_key_list;
-    cluster_key_list.reserve(partition.sample_id_list_by_key.size());
-    for (const auto & [key, sample_id_list] : partition.sample_id_list_by_key)
-    {
-        static_cast<void>(sample_id_list);
-        cluster_key_list.emplace_back(key);
-    }
-    return cluster_key_list;
-}
-
 std::vector<Eigen::Vector3d> BuildLocalFittingTransformedEstimationList(
     const LocalFittingState & state)
 {
@@ -4582,42 +4487,6 @@ LocalFittingStatePatch BuildLocalFittingStatePatch(
     return patch;
 }
 
-std::vector<LocalFittingObjectiveSampleRef>
-BuildLocalFittingAffectedSampleUnion(
-    const detail::LocalFittingCouplingPartition & partition,
-    const std::vector<LocalFittingClusterKey> & key_list)
-{
-    std::vector<LocalFittingObjectiveSampleRef> sample_ref_list;
-    for (const auto & key : key_list)
-    {
-        const auto iter{ partition.sample_id_list_by_key.find(key) };
-        if (iter == partition.sample_id_list_by_key.end()) continue;
-        sample_ref_list.insert(
-            sample_ref_list.end(),
-            iter->second.begin(),
-            iter->second.end());
-    }
-    std::sort(
-        sample_ref_list.begin(),
-        sample_ref_list.end(),
-        [](const auto & lhs, const auto & rhs)
-        {
-            return std::tie(lhs.atom_index, lhs.sample_index) <
-                std::tie(rhs.atom_index, rhs.sample_index);
-        });
-    sample_ref_list.erase(
-        std::unique(
-            sample_ref_list.begin(),
-            sample_ref_list.end(),
-            [](const auto & lhs, const auto & rhs)
-            {
-                return lhs.atom_index == rhs.atom_index &&
-                    lhs.sample_index == rhs.sample_index;
-            }),
-        sample_ref_list.end());
-    return sample_ref_list;
-}
-
 bool TryBacktrackLocalFittingCombinedCandidate(
     const SecondStageLocalFittingContext & context,
     const SecondStageModelSnapshot & previous_model_snapshot,
@@ -4646,7 +4515,9 @@ bool TryBacktrackLocalFittingCombinedCandidate(
             key.end());
     }
     const auto affected_sample_ref_list{
-        BuildLocalFittingAffectedSampleUnion(partition, accepted_key_list)
+        detail::BuildLocalFittingCouplingAffectedSampleUnion(
+            partition,
+            accepted_key_list)
     };
     LocalFittingBacktrackingWorkspace backtracking_workspace{
         context,
@@ -5964,7 +5835,9 @@ bool RunSecondStageLocalFitting(
     auto cluster_partition{
         detail::BuildLocalFittingCouplingPartition(coupling_topology, active_index_list)
     };
-    auto cluster_key_list{ BuildLocalFittingClusterKeyList(cluster_partition) };
+    auto cluster_key_list{
+        detail::BuildLocalFittingCouplingClusterKeyList(cluster_partition)
+    };
     LocalFittingClusterSolverWorkspaceMap solver_workspace_by_key;
     ResetLocalFittingClusterSolverWorkspace(
         cluster_key_list,
@@ -6214,7 +6087,7 @@ bool RunSecondStageLocalFitting(
                 combined_patch
             };
             const auto affected_sample_ref_list{
-                BuildLocalFittingAffectedSampleUnion(
+                detail::BuildLocalFittingCouplingAffectedSampleUnion(
                     cluster_partition,
                     combined_changed_key_list)
             };
@@ -6371,7 +6244,9 @@ bool RunSecondStageLocalFitting(
                     objective_domain,
                     best_audit_state);
                 active_index_list = std::move(remaining_active_index_list);
-                cluster_key_list = BuildLocalFittingClusterKeyList(remaining_partition);
+                cluster_key_list =
+                    detail::BuildLocalFittingCouplingClusterKeyList(
+                        remaining_partition);
                 ResetLocalFittingClusterSolverWorkspace(
                     cluster_key_list,
                     solver_workspace_by_key);
