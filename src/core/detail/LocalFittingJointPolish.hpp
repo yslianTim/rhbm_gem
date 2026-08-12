@@ -252,24 +252,95 @@ struct LocalFittingTransformedResponse
     Eigen::Vector3d jacobian{ Eigen::Vector3d::Zero() };
 };
 
-inline std::optional<LocalFittingTransformedResponse>
-EvaluateLocalFittingTransformedResponse(
-    const GaussianModel3D & model,
-    double distance)
+struct LocalFittingTransformedModelInvariants
+{
+    GaussianModel3D model{};
+    Eigen::Vector3d transformed{ Eigen::Vector3d::Zero() };
+    double peak_height{ 0.0 };
+};
+
+inline std::optional<LocalFittingTransformedModelInvariants>
+BuildLocalFittingTransformedModelInvariants(
+    const GaussianModel3D & model)
 {
     const auto transformed{ EncodeLocalFittingTransformedCoordinates(model) };
-    const auto shared_offset_evaluation{
-        EvaluateLocalFittingSharedOffsetResponse(model, distance)
-    };
-    if (!transformed.has_value() || !shared_offset_evaluation.has_value())
-    {
-        return std::nullopt;
-    }
+    if (!transformed.has_value()) return std::nullopt;
 
     const auto peak_height{
         std::exp((*transformed)(static_cast<Eigen::Index>(
             kLogPeakHeightChangeIndex)))
     };
+    if (!std::isfinite(peak_height)) return std::nullopt;
+
+    return LocalFittingTransformedModelInvariants{
+        model,
+        *transformed,
+        peak_height
+    };
+}
+
+inline std::optional<LocalFittingSharedOffsetResponse>
+EvaluateLocalFittingSharedOffsetResponse(
+    const LocalFittingTransformedModelInvariants & invariants,
+    double distance)
+{
+    if (!std::isfinite(distance) || distance < 0.0) return std::nullopt;
+
+    const auto evaluation{ invariants.model.EvaluateAtDistance(distance) };
+    if (!std::isfinite(evaluation.signal) ||
+        !std::isfinite(evaluation.offset_basis) ||
+        !std::isfinite(evaluation.response))
+    {
+        return std::nullopt;
+    }
+
+    const auto width{ invariants.model.GetWidth() };
+    const double center_offset_basis_scale{ std::sqrt(2.0 / M_PI) };
+    const auto normalized_distance{ distance / width };
+    auto log_width_derivative{
+        evaluation.signal * normalized_distance * normalized_distance
+    };
+    if (distance < 1.0e-5)
+    {
+        log_width_derivative -=
+            invariants.model.GetOffset() * center_offset_basis_scale / width;
+    }
+    else
+    {
+        const auto exponent{
+            -0.5 * normalized_distance * normalized_distance
+        };
+        log_width_derivative -= invariants.model.GetOffset() *
+            center_offset_basis_scale / width * std::exp(exponent);
+    }
+
+    const Eigen::Vector2d shape_jacobian{
+        evaluation.signal,
+        log_width_derivative
+    };
+    if (!shape_jacobian.allFinite()) return std::nullopt;
+
+    return LocalFittingSharedOffsetResponse{
+        evaluation.response,
+        shape_jacobian,
+        evaluation.offset_basis
+    };
+}
+
+inline std::optional<LocalFittingTransformedResponse>
+EvaluateLocalFittingTransformedResponse(
+    const LocalFittingTransformedModelInvariants & invariants,
+    double distance)
+{
+    const auto shared_offset_evaluation{
+        EvaluateLocalFittingSharedOffsetResponse(invariants, distance)
+    };
+    if (!shared_offset_evaluation.has_value())
+    {
+        return std::nullopt;
+    }
+
+    const auto & model{ invariants.model };
     const auto width{ model.GetWidth() };
     const double center_offset_basis_scale{ std::sqrt(2.0 / M_PI) };
     Eigen::Vector3d jacobian{ Eigen::Vector3d::Zero() };
@@ -280,9 +351,10 @@ EvaluateLocalFittingTransformedResponse(
         shared_offset_evaluation->shape_jacobian(1) +
         model.GetOffset() * shared_offset_evaluation->offset_jacobian;
     jacobian(static_cast<Eigen::Index>(kOffsetToPeakRatioChangeIndex)) =
-        peak_height * width * shared_offset_evaluation->offset_jacobian /
+        invariants.peak_height * width *
+        shared_offset_evaluation->offset_jacobian /
         center_offset_basis_scale;
-    if (!std::isfinite(peak_height) || !jacobian.allFinite())
+    if (!jacobian.allFinite())
     {
         return std::nullopt;
     }
@@ -291,6 +363,16 @@ EvaluateLocalFittingTransformedResponse(
         shared_offset_evaluation->response,
         jacobian
     };
+}
+
+inline std::optional<LocalFittingTransformedResponse>
+EvaluateLocalFittingTransformedResponse(
+    const GaussianModel3D & model,
+    double distance)
+{
+    const auto invariants{ BuildLocalFittingTransformedModelInvariants(model) };
+    if (!invariants.has_value()) return std::nullopt;
+    return EvaluateLocalFittingTransformedResponse(*invariants, distance);
 }
 
 } // namespace rhbm_gem::core::detail

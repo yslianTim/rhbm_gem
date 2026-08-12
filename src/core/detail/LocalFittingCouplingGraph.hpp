@@ -3,9 +3,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <map>
 #include <optional>
-#include <set>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -130,10 +130,15 @@ class LocalFittingCouplingGraphBuilder
 {
     using AtomPair = std::pair<std::size_t, std::size_t>;
 
+    struct WeightedPair
+    {
+        AtomPair pair{};
+        double weight{ 0.0 };
+    };
+
     std::size_t m_atom_count{ 0 };
     std::vector<Eigen::Matrix3d> m_self_gram_list{};
-    std::map<AtomPair, Eigen::Matrix3d> m_cross_gram_by_pair{};
-    std::set<AtomPair> m_candidate_pair_set{};
+    std::map<AtomPair, Eigen::Matrix3d> m_pair_accumulator_by_pair{};
     std::vector<LocalFittingCouplingSampleDependency> m_sample_dependency_list{};
     bool m_has_invalid_jacobian{ false };
 
@@ -152,7 +157,7 @@ class LocalFittingCouplingGraphBuilder
 
     std::vector<LocalFittingCouplingGraphSummary::ThresholdSensitivity>
     BuildThresholdSensitivity(
-        const std::map<AtomPair, double> & weight_by_pair,
+        const std::vector<WeightedPair> & weighted_pair_list,
         const std::vector<double> & minimum_weight_list) const
     {
         std::vector<LocalFittingCouplingGraphSummary::ThresholdSensitivity> sensitivity_list;
@@ -169,15 +174,14 @@ class LocalFittingCouplingGraphBuilder
             LocalFittingDisjointSet component_set{ m_atom_count };
 
             std::size_t retained_edge_count{ 0 };
-            for (const auto & pair : m_candidate_pair_set)
+            for (const auto & weighted_pair : weighted_pair_list)
             {
-                const auto weight_iter{ weight_by_pair.find(pair) };
-                const auto weight{
-                    weight_iter == weight_by_pair.end() ? 0.0 : weight_iter->second
-                };
+                const auto weight{ weighted_pair.weight };
                 if (weight < minimum_weight) continue;
                 retained_edge_count++;
-                component_set.Merge(pair.first, pair.second);
+                component_set.Merge(
+                    weighted_pair.pair.first,
+                    weighted_pair.pair.second);
             }
 
             std::size_t component_count{ 0 };
@@ -194,7 +198,7 @@ class LocalFittingCouplingGraphBuilder
                 LocalFittingCouplingGraphSummary::ThresholdSensitivity{
                     minimum_weight,
                     retained_edge_count,
-                    m_candidate_pair_set.size() - retained_edge_count,
+                    weighted_pair_list.size() - retained_edge_count,
                     component_count,
                     maximum_component_size,
                     m_atom_count == 0 ? 0.0 :
@@ -206,33 +210,32 @@ class LocalFittingCouplingGraphBuilder
     }
 
     LocalFittingCouplingTopology BuildFromWeights(
-        const std::map<AtomPair, double> & weight_by_pair,
+        const std::vector<WeightedPair> & weighted_pair_list,
         double minimum_weight,
-        bool uses_weighted_graph) const
+        bool uses_weighted_graph)
     {
         LocalFittingCouplingTopology topology;
         topology.adjacency_list.resize(m_atom_count);
-        topology.sample_dependency_list = m_sample_dependency_list;
+        topology.sample_dependency_list = std::move(m_sample_dependency_list);
         topology.summary.uses_weighted_graph = uses_weighted_graph;
-        topology.summary.candidate_edge_count = m_candidate_pair_set.size();
+        topology.summary.candidate_edge_count = weighted_pair_list.size();
 
         std::vector<double> weight_list;
-        weight_list.reserve(m_candidate_pair_set.size());
-        for (const auto & pair : m_candidate_pair_set)
+        weight_list.reserve(weighted_pair_list.size());
+        for (const auto & weighted_pair : weighted_pair_list)
         {
-            const auto weight_iter{ weight_by_pair.find(pair) };
-            const auto weight{
-                weight_iter == weight_by_pair.end() ? 0.0 : weight_iter->second
-            };
+            const auto weight{ weighted_pair.weight };
             weight_list.emplace_back(weight);
             if (weight < minimum_weight) continue;
 
-            topology.adjacency_list.at(pair.first).emplace_back(pair.second);
-            topology.adjacency_list.at(pair.second).emplace_back(pair.first);
+            topology.adjacency_list.at(weighted_pair.pair.first).emplace_back(
+                weighted_pair.pair.second);
+            topology.adjacency_list.at(weighted_pair.pair.second).emplace_back(
+                weighted_pair.pair.first);
             topology.retained_edge_list.emplace_back(
                 LocalFittingCouplingWeightedEdge{
-                    pair.first,
-                    pair.second,
+                    weighted_pair.pair.first,
+                    weighted_pair.pair.second,
                     weight
                 });
             topology.summary.retained_edge_count++;
@@ -246,6 +249,68 @@ class LocalFittingCouplingGraphBuilder
         topology.summary.weight_maximum = weight_list.empty() ? 0.0 :
             *std::max_element(weight_list.begin(), weight_list.end());
         return topology;
+    }
+
+    void AddSampleData(
+        LocalFittingCouplingSampleId sample_id,
+        const std::vector<LocalFittingCouplingParticipant> & participant_list)
+    {
+        bool sample_has_invalid_jacobian{ false };
+        for (std::size_t i = 0; i < participant_list.size(); i++)
+        {
+            const auto & participant{ participant_list.at(i) };
+            if (participant.atom_index >= m_atom_count)
+            {
+                throw std::invalid_argument(
+                    "Local fitting coupling participant index is out of range.");
+            }
+            if (i > 0 &&
+                participant_list.at(i - 1).atom_index == participant.atom_index)
+            {
+                throw std::invalid_argument(
+                    "Local fitting coupling sample participants must be unique.");
+            }
+            if (!participant.jacobian.allFinite())
+            {
+                sample_has_invalid_jacobian = true;
+            }
+        }
+        m_has_invalid_jacobian =
+            m_has_invalid_jacobian || sample_has_invalid_jacobian;
+
+        LocalFittingCouplingSampleDependency dependency;
+        dependency.sample_id = sample_id;
+        dependency.contributor_atom_index_list.reserve(participant_list.size());
+        for (const auto & participant : participant_list)
+        {
+            dependency.contributor_atom_index_list.emplace_back(participant.atom_index);
+            if (!m_has_invalid_jacobian)
+            {
+                m_self_gram_list.at(participant.atom_index) +=
+                    participant.jacobian * participant.jacobian.transpose();
+            }
+        }
+        m_sample_dependency_list.emplace_back(std::move(dependency));
+
+        for (std::size_t i = 0; i < participant_list.size(); i++)
+        {
+            for (std::size_t j = i + 1; j < participant_list.size(); j++)
+            {
+                const auto & left{ participant_list.at(i) };
+                const auto & right{ participant_list.at(j) };
+                const AtomPair pair{ left.atom_index, right.atom_index };
+                auto pair_iter{ m_pair_accumulator_by_pair.find(pair) };
+                if (pair_iter == m_pair_accumulator_by_pair.end())
+                {
+                    pair_iter = m_pair_accumulator_by_pair.emplace(
+                        pair,
+                        Eigen::Matrix3d::Zero()).first;
+                }
+                if (m_has_invalid_jacobian) continue;
+                pair_iter->second +=
+                    left.jacobian * right.jacobian.transpose();
+            }
+        }
     }
 
 public:
@@ -266,64 +331,19 @@ public:
             {
                 return lhs.atom_index < rhs.atom_index;
             });
-        for (std::size_t i = 0; i < participant_list.size(); i++)
-        {
-            const auto & participant{ participant_list.at(i) };
-            if (participant.atom_index >= m_atom_count)
-            {
-                throw std::invalid_argument(
-                    "Local fitting coupling participant index is out of range.");
-            }
-            if (i > 0 &&
-                participant_list.at(i - 1).atom_index == participant.atom_index)
-            {
-                throw std::invalid_argument(
-                    "Local fitting coupling sample participants must be unique.");
-            }
-            if (!participant.jacobian.allFinite())
-            {
-                m_has_invalid_jacobian = true;
-            }
-        }
+        AddSampleData(sample_id, participant_list);
+    }
 
-        LocalFittingCouplingSampleDependency dependency;
-        dependency.sample_id = sample_id;
-        dependency.contributor_atom_index_list.reserve(participant_list.size());
-        for (const auto & participant : participant_list)
-        {
-            dependency.contributor_atom_index_list.emplace_back(participant.atom_index);
-            if (participant.jacobian.allFinite())
-            {
-                m_self_gram_list.at(participant.atom_index) +=
-                    participant.jacobian * participant.jacobian.transpose();
-            }
-        }
-        m_sample_dependency_list.emplace_back(std::move(dependency));
-
-        for (std::size_t i = 0; i < participant_list.size(); i++)
-        {
-            for (std::size_t j = i + 1; j < participant_list.size(); j++)
-            {
-                const auto & left{ participant_list.at(i) };
-                const auto & right{ participant_list.at(j) };
-                const AtomPair pair{ left.atom_index, right.atom_index };
-                m_candidate_pair_set.emplace(pair);
-                if (!left.jacobian.allFinite() || !right.jacobian.allFinite()) continue;
-                auto iter{ m_cross_gram_by_pair.find(pair) };
-                if (iter == m_cross_gram_by_pair.end())
-                {
-                    iter = m_cross_gram_by_pair.emplace(
-                        pair,
-                        Eigen::Matrix3d::Zero()).first;
-                }
-                iter->second += left.jacobian * right.jacobian.transpose();
-            }
-        }
+    void AddSortedSample(
+        LocalFittingCouplingSampleId sample_id,
+        const std::vector<LocalFittingCouplingParticipant> & participant_list)
+    {
+        AddSampleData(sample_id, participant_list);
     }
 
     std::optional<LocalFittingCouplingTopology> BuildWeighted(
         double minimum_weight,
-        const std::vector<double> & sensitivity_minimum_weight_list = {}) const
+        const std::vector<double> & sensitivity_minimum_weight_list = {})
     {
         if (!std::isfinite(minimum_weight) ||
             minimum_weight < 0.0 || minimum_weight > 1.0)
@@ -333,47 +353,74 @@ public:
         }
         if (m_has_invalid_jacobian) return std::nullopt;
 
-        std::map<AtomPair, double> weight_by_pair;
-        for (const auto & pair : m_candidate_pair_set)
+        std::vector<double> self_gram_norm_list(m_atom_count, 0.0);
+        std::vector<char> self_gram_norm_is_built(m_atom_count, 0);
+        const auto get_self_gram_norm = [&](std::size_t atom_index)
         {
-            const auto cross_iter{ m_cross_gram_by_pair.find(pair) };
-            if (cross_iter == m_cross_gram_by_pair.end()) continue;
-            const auto & left_self_gram{ m_self_gram_list.at(pair.first) };
-            const auto & right_self_gram{ m_self_gram_list.at(pair.second) };
-            if (!left_self_gram.allFinite() ||
-                !right_self_gram.allFinite() ||
-                !cross_iter->second.allFinite())
+            if (self_gram_norm_is_built.at(atom_index) != 0)
+            {
+                return self_gram_norm_list.at(atom_index);
+            }
+            const auto & self_gram{ m_self_gram_list.at(atom_index) };
+            if (!self_gram.allFinite())
+            {
+                return std::numeric_limits<double>::quiet_NaN();
+            }
+            const auto norm{ FrobeniusNorm(self_gram) };
+            self_gram_norm_is_built.at(atom_index) = 1;
+            self_gram_norm_list.at(atom_index) = norm;
+            return norm;
+        };
+
+        std::vector<WeightedPair> weighted_pair_list;
+        weighted_pair_list.reserve(m_pair_accumulator_by_pair.size());
+        for (const auto & [pair, cross_gram] : m_pair_accumulator_by_pair)
+        {
+            if (!cross_gram.allFinite())
             {
                 return std::nullopt;
             }
-            const auto left_norm{ FrobeniusNorm(left_self_gram) };
-            const auto right_norm{ FrobeniusNorm(right_self_gram) };
-            if (left_norm == 0.0 || right_norm == 0.0) continue;
+            const auto left_norm{ get_self_gram_norm(pair.first) };
+            const auto right_norm{ get_self_gram_norm(pair.second) };
+            if (!std::isfinite(left_norm) || !std::isfinite(right_norm))
+            {
+                return std::nullopt;
+            }
+            double weight{ 0.0 };
+            if (left_norm == 0.0 || right_norm == 0.0)
+            {
+                weighted_pair_list.emplace_back(WeightedPair{ pair, weight });
+                continue;
+            }
             const auto denominator{
                 std::sqrt(left_norm) * std::sqrt(right_norm)
             };
             if (!std::isfinite(denominator)) return std::nullopt;
             const auto raw_weight{
-                FrobeniusNorm(cross_iter->second) / denominator
+                FrobeniusNorm(cross_gram) / denominator
             };
             if (!std::isfinite(raw_weight)) return std::nullopt;
-            weight_by_pair.emplace(pair, std::clamp(raw_weight, 0.0, 1.0));
+            weight = std::clamp(raw_weight, 0.0, 1.0);
+            weighted_pair_list.emplace_back(WeightedPair{ pair, weight });
         }
-        auto topology{ BuildFromWeights(weight_by_pair, minimum_weight, true) };
-        topology.summary.threshold_sensitivity_list = BuildThresholdSensitivity(
-            weight_by_pair,
-            sensitivity_minimum_weight_list);
+        auto sensitivity_list{ BuildThresholdSensitivity(
+            weighted_pair_list,
+            sensitivity_minimum_weight_list) };
+        auto topology{ BuildFromWeights(weighted_pair_list, minimum_weight, true) };
+        topology.summary.threshold_sensitivity_list = std::move(sensitivity_list);
         return topology;
     }
 
-    LocalFittingCouplingTopology BuildBinary() const
+    LocalFittingCouplingTopology BuildBinary()
     {
-        std::map<AtomPair, double> weight_by_pair;
-        for (const auto & pair : m_candidate_pair_set)
+        std::vector<WeightedPair> weighted_pair_list;
+        weighted_pair_list.reserve(m_pair_accumulator_by_pair.size());
+        for (const auto & [pair, cross_gram] : m_pair_accumulator_by_pair)
         {
-            weight_by_pair.emplace(pair, 1.0);
+            static_cast<void>(cross_gram);
+            weighted_pair_list.emplace_back(WeightedPair{ pair, 1.0 });
         }
-        return BuildFromWeights(weight_by_pair, 0.0, false);
+        return BuildFromWeights(weighted_pair_list, 0.0, false);
     }
 };
 

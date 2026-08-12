@@ -986,16 +986,19 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
     const std::size_t total_work{ total_sample_count + 2 };
     std::size_t completed_work{ 0 };
     const std::string progress_message{ " Build local-fitting coupling topology" };
+    int last_progress_percent{ -1 };
     const auto update_progress = [&]()
     {
-        if (!options.quiet_mode)
-        {
-            Logger::ProgressPercent(
-                completed_work,
-                total_work,
-                50,
-                progress_message);
-        }
+        if (options.quiet_mode) return;
+        const auto progress_percent{ static_cast<int>(
+            100.0 * static_cast<double>(completed_work) / static_cast<double>(total_work)) };
+        if (progress_percent == last_progress_percent) return;
+        last_progress_percent = progress_percent;
+        Logger::ProgressPercent(
+            completed_work,
+            total_work,
+            50,
+            progress_message);
     };
     update_progress();
 
@@ -1005,9 +1008,42 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
             context,
             BuildFittedGaussianSnapshot(initial_state))
     };
+    std::vector<std::optional<detail::LocalFittingTransformedModelInvariants>>
+        selected_model_invariants;
+    selected_model_invariants.reserve(model_snapshot.selected.size());
+    for (const auto & model : model_snapshot.selected)
+    {
+        selected_model_invariants.emplace_back(
+            detail::BuildLocalFittingTransformedModelInvariants(model));
+    }
+    std::vector<std::optional<detail::LocalFittingTransformedModelInvariants>>
+        unselected_model_invariants;
+    unselected_model_invariants.reserve(model_snapshot.unselected.size());
+    for (const auto & model : model_snapshot.unselected)
+    {
+        unselected_model_invariants.emplace_back(
+            detail::BuildLocalFittingTransformedModelInvariants(model));
+    }
+    const auto evaluate_model = [](
+        const std::optional<detail::LocalFittingTransformedModelInvariants> & invariants,
+        double distance)
+    {
+        if (!invariants.has_value())
+        {
+            return std::optional<detail::LocalFittingTransformedResponse>{};
+        }
+        return detail::EvaluateLocalFittingTransformedResponse(*invariants, distance);
+    };
     const auto invalid_jacobian{
         Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN())
     };
+    std::vector<Eigen::Vector3d> jacobian_by_atom_index(context.size(), Eigen::Vector3d::Zero());
+    std::vector<std::size_t> generation_by_atom_index(context.size(), 0);
+    std::size_t sample_generation{ 0 };
+    std::vector<std::size_t> touched_atom_index_list;
+    touched_atom_index_list.reserve(context.size());
+    std::vector<detail::LocalFittingCouplingParticipant> participant_list;
+    participant_list.reserve(context.size());
     for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
     {
         const auto & atom_context{ context.at(atom_index) };
@@ -1016,31 +1052,39 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
             sample_index++)
         {
             const auto & sample{ atom_context.raw_sampling_entries.at(sample_index) };
-            std::map<std::size_t, Eigen::Vector3d> jacobian_by_atom_index;
+            sample_generation++;
+            if (sample_generation == 0)
+            {
+                std::fill(generation_by_atom_index.begin(), generation_by_atom_index.end(), 0);
+                sample_generation++;
+            }
+            touched_atom_index_list.clear();
             const auto add_participant = [&](
                 std::size_t participant_atom_index,
                 const Eigen::Vector3d & jacobian)
             {
-                auto [iter, inserted]{ jacobian_by_atom_index.emplace(
-                    participant_atom_index,
-                    jacobian) };
-                if (!inserted)
+                if (generation_by_atom_index.at(participant_atom_index) != sample_generation)
                 {
-                    if (!iter->second.allFinite() || !jacobian.allFinite())
-                    {
-                        iter->second = invalid_jacobian;
-                    }
-                    else
-                    {
-                        iter->second += jacobian;
-                    }
+                    generation_by_atom_index.at(participant_atom_index) = sample_generation;
+                    jacobian_by_atom_index.at(participant_atom_index) = jacobian;
+                    touched_atom_index_list.emplace_back(participant_atom_index);
+                    return;
+                }
+                auto & accumulated_jacobian{
+                    jacobian_by_atom_index.at(participant_atom_index)
+                };
+                if (!accumulated_jacobian.allFinite() || !jacobian.allFinite())
+                {
+                    accumulated_jacobian = invalid_jacobian;
+                }
+                else
+                {
+                    accumulated_jacobian += jacobian;
                 }
             };
-            const auto target_evaluation{
-                detail::EvaluateLocalFittingTransformedResponse(
-                    initial_state.at(atom_index).mdpde.GetModel(),
-                    static_cast<double>(sample.point.distance))
-            };
+            const auto target_evaluation{ evaluate_model(
+                selected_model_invariants.at(atom_index),
+                static_cast<double>(sample.point.distance)) };
             add_participant(
                 atom_index,
                 target_evaluation.has_value() ?
@@ -1050,17 +1094,13 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
                 ++neighbor_iter)
             {
                 const auto & neighbor_sample{ *neighbor_iter };
-                const auto & neighbor_model{
-                    ResolveSecondStageNeighborModel(
-                        neighbor_sample,
-                        model_snapshot.selected,
-                        model_snapshot.unselected)
-                };
-                const auto neighbor_evaluation{
-                    detail::EvaluateLocalFittingTransformedResponse(
-                        neighbor_model,
-                        neighbor_sample.distance)
-                };
+                const auto neighbor_evaluation{ neighbor_sample.is_selected ?
+                    evaluate_model(
+                        selected_model_invariants.at(neighbor_sample.atom_index),
+                        neighbor_sample.distance) :
+                    evaluate_model(
+                        unselected_model_invariants.at(neighbor_sample.atom_index),
+                        neighbor_sample.distance) };
                 const auto jacobian{
                     neighbor_evaluation.has_value() ?
                         neighbor_evaluation->jacobian : invalid_jacobian
@@ -1070,36 +1110,31 @@ detail::LocalFittingCouplingTopology BuildLocalFittingCouplingTopology(
                     add_participant(neighbor_sample.atom_index, jacobian);
                     continue;
                 }
-                const auto group_key{
+                const auto selected_group_id{
                     context.unselected_atom_list.at(
-                        neighbor_sample.atom_index).group_key
+                        neighbor_sample.atom_index).selected_group_id
                 };
-                for (std::size_t selected_index = 0;
-                    selected_index < context.size();
-                    selected_index++)
+                if (!selected_group_id.has_value()) continue;
+                for (const auto selected_index :
+                    context.selected_atom_index_list_by_group.at(*selected_group_id))
                 {
-                    if (context.at(selected_index).group_key != group_key)
-                    {
-                        continue;
-                    }
                     add_participant(selected_index, jacobian);
                 }
             }
-            std::vector<detail::LocalFittingCouplingParticipant>
-                participant_list;
-            participant_list.reserve(jacobian_by_atom_index.size());
-            for (const auto & [participant_atom_index, jacobian] :
-                jacobian_by_atom_index)
+            std::sort(touched_atom_index_list.begin(), touched_atom_index_list.end());
+            participant_list.clear();
+            participant_list.reserve(touched_atom_index_list.size());
+            for (const auto participant_atom_index : touched_atom_index_list)
             {
                 participant_list.emplace_back(
                     detail::LocalFittingCouplingParticipant{
                         participant_atom_index,
-                        jacobian
+                        jacobian_by_atom_index.at(participant_atom_index)
                     });
             }
-            builder.AddSample(
+            builder.AddSortedSample(
                 LocalFittingObjectiveSampleRef{ atom_index, sample_index },
-                std::move(participant_list));
+                participant_list);
             completed_work++;
             update_progress();
         }
