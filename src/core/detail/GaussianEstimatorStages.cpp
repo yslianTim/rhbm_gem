@@ -8,7 +8,7 @@
 #include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
 #include "core/detail/JointOffset.hpp"
-#include "core/detail/LocalFittingJointPolish.hpp"
+#include "core/detail/JointPolish.hpp"
 #include "core/detail/LocalFittingObjectiveAttemptDiagnostic.hpp"
 #include "core/detail/LocalFittingPerformanceCounters.hpp"
 #include "core/detail/LocalFittingSeedRepair.hpp"
@@ -86,7 +86,7 @@ using detail::SecondStageNeighborSample;
 using detail::SecondStageUnselectedContributor;
 using detail::ReusableWeightedRidgeSolver;
 using detail::ScopedEigenThreadCount;
-using detail::BuildLocalFittingJointPolishProposal;
+using detail::BuildJointPolishProposal;
 using detail::CalculateLocalFittingClusterModelTrustRegionStepNorm;
 
 constexpr double kSuspiciousProfileInnermostSignFlipRatio{ 0.25 };
@@ -944,31 +944,31 @@ detail::GraphTopology BuildGraphTopology(
             context,
             BuildFittedGaussianSnapshot(initial_state))
     };
-    std::vector<std::optional<detail::LocalFittingTransformedModelInvariants>>
+    std::vector<std::optional<detail::TransformedModelInvariants>>
         selected_model_invariants;
     selected_model_invariants.reserve(model_snapshot.selected.size());
     for (const auto & model : model_snapshot.selected)
     {
         selected_model_invariants.emplace_back(
-            detail::BuildLocalFittingTransformedModelInvariants(model));
+            detail::BuildTransformedModelInvariants(model));
     }
-    std::vector<std::optional<detail::LocalFittingTransformedModelInvariants>>
+    std::vector<std::optional<detail::TransformedModelInvariants>>
         unselected_model_invariants;
     unselected_model_invariants.reserve(model_snapshot.unselected.size());
     for (const auto & model : model_snapshot.unselected)
     {
         unselected_model_invariants.emplace_back(
-            detail::BuildLocalFittingTransformedModelInvariants(model));
+            detail::BuildTransformedModelInvariants(model));
     }
     const auto evaluate_model = [](
-        const std::optional<detail::LocalFittingTransformedModelInvariants> & invariants,
+        const std::optional<detail::TransformedModelInvariants> & invariants,
         double distance)
     {
         if (!invariants.has_value())
         {
-            return std::optional<detail::LocalFittingTransformedResponse>{};
+            return std::optional<detail::TransformedResponse>{};
         }
-        return detail::EvaluateLocalFittingTransformedResponse(*invariants, distance);
+        return detail::EvaluateTransformedResponse(*invariants, distance);
     };
     const auto invalid_jacobian{
         Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN())
@@ -3126,7 +3126,7 @@ ClusterCandidateResult SelectLocalFittingClusterCandidate(
     if (is_polish_eligible)
     {
         auto polished_candidate{
-            BuildLocalFittingJointPolishProposal(
+            BuildJointPolishProposal(
                 context,
                 previous_state,
                 base_state_view,

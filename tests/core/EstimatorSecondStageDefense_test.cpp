@@ -18,7 +18,7 @@
 #include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
 #include "core/detail/JointOffset.hpp"
-#include "core/detail/LocalFittingJointPolish.hpp"
+#include "core/detail/JointPolish.hpp"
 #include "core/detail/LocalFittingSeedRepair.hpp"
 #include "core/detail/LocalFittingTrustRegion.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
@@ -256,7 +256,7 @@ BuildJointOffsetEstimationFixture(
     };
 }
 
-struct LocalFittingJointPolishFixture
+struct JointPolishFixture
 {
     polish_detail::SecondStageLocalFittingContext context{};
     polish_detail::LocalFittingState state{};
@@ -264,7 +264,7 @@ struct LocalFittingJointPolishFixture
         sample_ref_list{};
 };
 
-LocalFittingJointPolishFixture BuildLocalFittingJointPolishFixture(
+JointPolishFixture BuildJointPolishFixture(
     const std::vector<GroupKey> & group_key_list,
     const std::vector<rg::GaussianModel3D> & base_model_list,
     const std::vector<rg::GaussianModel3D> & target_model_list)
@@ -284,7 +284,7 @@ LocalFittingJointPolishFixture BuildLocalFittingJointPolishFixture(
         0.45F,
         0.60F
     };
-    LocalFittingJointPolishFixture fixture;
+    JointPolishFixture fixture;
     fixture.context.selected_atom_list.resize(base_model_list.size());
     fixture.state.reserve(base_model_list.size());
     for (std::size_t atom_index = 0;
@@ -2375,7 +2375,7 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishJacobianMatchesFiniteDifference
         for (const auto distance : distance_list)
         {
             const auto evaluation{
-                polish_detail::EvaluateLocalFittingTransformedResponse(
+                polish_detail::EvaluateTransformedResponse(
                     model,
                     distance)
             };
@@ -2675,7 +2675,7 @@ TEST(EstimatorSecondStageDefenseTest,
         rg::GaussianModel3D{ 8.0, 0.65, 3.0 }
     };
     const auto parameterization{
-        polish_detail::BuildLocalFittingJointPolishParameterization(
+        polish_detail::BuildJointPolishParameterization(
             std::vector<GroupKey>{ 20, 10, 20 },
             base_model_list)
     };
@@ -2705,7 +2705,7 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishSharedOffsetSeedUsesGroupMedian
         rg::GaussianModel3D{ 10.0, 0.75, 6.0 }
     };
     const auto parameterization{
-        polish_detail::BuildLocalFittingJointPolishParameterization(
+        polish_detail::BuildJointPolishParameterization(
             std::vector<GroupKey>{ 20, 10, 20, 20, 10 },
             base_model_list)
     };
@@ -2736,7 +2736,7 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishSharedOffsetSeedUsesGroupMedian
     EXPECT_DOUBLE_EQ(candidate_model_list->at(3).GetOffset(), 1.5);
     EXPECT_DOUBLE_EQ(candidate_model_list->at(4).GetOffset(), 6.0);
     EXPECT_FALSE(
-        polish_detail::BuildLocalFittingJointPolishParameterization(
+        polish_detail::BuildJointPolishParameterization(
             std::vector<GroupKey>{ 20 },
             base_model_list).has_value());
 }
@@ -2755,13 +2755,13 @@ TEST(
         rg::GaussianModel3D{ 4.0, 0.65, 0.30 }
     };
     auto fixture{
-        BuildLocalFittingJointPolishFixture(
+        BuildJointPolishFixture(
             group_key_list,
             base_model_list,
             target_model_list)
     };
     const auto parameterization{
-        polish_detail::BuildLocalFittingJointPolishParameterization(
+        polish_detail::BuildJointPolishParameterization(
             group_key_list,
             base_model_list)
     };
@@ -2776,7 +2776,7 @@ TEST(
     polish_detail::ReusableWeightedRidgeSolver direction_solver;
     const polish_detail::LocalFittingStateView base_state_view{ fixture.state };
     const auto direction{
-        polish_detail::BuildLocalFittingJointPolishDirection(
+        polish_detail::BuildJointPolishDirection(
             fixture.context,
             base_state_view,
             *seed_model_list,
@@ -2792,7 +2792,7 @@ TEST(
 
     polish_detail::ReusableWeightedRidgeSolver proposal_solver;
     const auto proposal{
-        polish_detail::BuildLocalFittingJointPolishProposal(
+        polish_detail::BuildJointPolishProposal(
             fixture.context,
             fixture.state,
             base_state_view,
@@ -2847,7 +2847,7 @@ TEST(
         rg::GaussianModel3D{ 4.0, 0.65, 0.30 }
     };
     auto fixture{
-        BuildLocalFittingJointPolishFixture(
+        BuildJointPolishFixture(
             group_key_list,
             base_model_list,
             target_model_list)
@@ -2857,7 +2857,7 @@ TEST(
 
     polish_detail::ReusableWeightedRidgeSolver empty_solver;
     EXPECT_FALSE(
-        polish_detail::BuildLocalFittingJointPolishProposal(
+        polish_detail::BuildJointPolishProposal(
             fixture.context,
             fixture.state,
             base_state_view,
@@ -2878,7 +2878,7 @@ TEST(
     };
     polish_detail::ReusableWeightedRidgeSolver invalid_solver;
     EXPECT_FALSE(
-        polish_detail::BuildLocalFittingJointPolishProposal(
+        polish_detail::BuildJointPolishProposal(
             invalid_fixture.context,
             invalid_fixture.state,
             invalid_state_view,
@@ -2893,7 +2893,7 @@ TEST(
         rg::GaussianModel3D{ 4.5, 0.70, 0.10 }
     };
     auto unchanged_fixture{
-        BuildLocalFittingJointPolishFixture(
+        BuildJointPolishFixture(
             group_key_list,
             unchanged_model_list,
             unchanged_model_list)
@@ -2903,7 +2903,7 @@ TEST(
     };
     polish_detail::ReusableWeightedRidgeSolver unchanged_solver;
     EXPECT_FALSE(
-        polish_detail::BuildLocalFittingJointPolishProposal(
+        polish_detail::BuildJointPolishProposal(
             unchanged_fixture.context,
             unchanged_fixture.state,
             unchanged_state_view,
@@ -2915,7 +2915,7 @@ TEST(
 
     polish_detail::ReusableWeightedRidgeSolver trust_region_solver;
     EXPECT_FALSE(
-        polish_detail::BuildLocalFittingJointPolishProposal(
+        polish_detail::BuildJointPolishProposal(
             fixture.context,
             fixture.state,
             base_state_view,
@@ -2948,7 +2948,7 @@ TEST(EstimatorSecondStageDefenseTest, SharedOffsetJacobianMatchesFiniteDifferenc
         for (const auto distance : distance_list)
         {
             const auto evaluation{
-                polish_detail::EvaluateLocalFittingSharedOffsetResponse(
+        polish_detail::EvaluateSharedOffsetResponse(
                     model,
                     distance)
             };

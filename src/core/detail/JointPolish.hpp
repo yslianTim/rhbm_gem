@@ -25,9 +25,9 @@
 
 namespace rhbm_gem::core::detail {
 
-constexpr std::size_t kLocalFittingJointPolishShapeParameterSize{ 2 };
+constexpr std::size_t kJointPolishShapeParameterSize{ 2 };
 
-struct LocalFittingJointPolishParameterization
+struct JointPolishParameterization
 {
     std::vector<std::size_t> group_position_by_atom{};
     std::vector<std::vector<std::size_t>> atom_position_list_by_group{};
@@ -53,14 +53,14 @@ struct LocalFittingJointPolishParameterization
         std::size_t shape_parameter_index) const
     {
         return static_cast<Eigen::Index>(
-            atom_position * kLocalFittingJointPolishShapeParameterSize +
+            atom_position * kJointPolishShapeParameterSize +
             shape_parameter_index);
     }
 
     Eigen::Index OffsetColumn(std::size_t atom_position) const
     {
         return static_cast<Eigen::Index>(
-            AtomCount() * kLocalFittingJointPolishShapeParameterSize +
+            AtomCount() * kJointPolishShapeParameterSize +
             group_position_by_atom.at(atom_position));
     }
 
@@ -106,8 +106,8 @@ struct LocalFittingJointPolishParameterization
     }
 };
 
-inline std::optional<LocalFittingJointPolishParameterization>
-BuildLocalFittingJointPolishParameterization(
+inline std::optional<JointPolishParameterization>
+BuildJointPolishParameterization(
     const std::vector<GroupKey> & group_key_by_atom_position,
     const std::vector<GaussianModel3D> & base_model_list)
 {
@@ -129,14 +129,14 @@ BuildLocalFittingJointPolishParameterization(
         position = group_position++;
     }
 
-    LocalFittingJointPolishParameterization parameterization;
+    JointPolishParameterization parameterization;
     parameterization.group_position_by_atom.resize(base_model_list.size());
     parameterization.atom_position_list_by_group.resize(
         group_position_by_key.size());
     parameterization.seed_parameter = Eigen::VectorXd::Zero(
         static_cast<Eigen::Index>(
             base_model_list.size() *
-                kLocalFittingJointPolishShapeParameterSize +
+                kJointPolishShapeParameterSize +
             group_position_by_key.size()));
     std::vector<std::vector<double>> offset_list_by_group(
         group_position_by_key.size());
@@ -195,15 +195,15 @@ BuildLocalFittingJointPolishParameterization(
     return parameterization;
 }
 
-struct LocalFittingSharedOffsetResponse
+struct SharedOffsetResponse
 {
     double response{ 0.0 };
     Eigen::Vector2d shape_jacobian{ Eigen::Vector2d::Zero() };
     double offset_jacobian{ 0.0 };
 };
 
-inline std::optional<LocalFittingSharedOffsetResponse>
-EvaluateLocalFittingSharedOffsetResponse(
+inline std::optional<SharedOffsetResponse>
+EvaluateSharedOffsetResponse(
     const GaussianModel3D & model,
     double distance)
 {
@@ -248,28 +248,28 @@ EvaluateLocalFittingSharedOffsetResponse(
     };
     if (!shape_jacobian.allFinite()) return std::nullopt;
 
-    return LocalFittingSharedOffsetResponse{
+    return SharedOffsetResponse{
         response,
         shape_jacobian,
         offset_basis
     };
 }
 
-struct LocalFittingTransformedResponse
+struct TransformedResponse
 {
     double response{ 0.0 };
     Eigen::Vector3d jacobian{ Eigen::Vector3d::Zero() };
 };
 
-struct LocalFittingTransformedModelInvariants
+struct TransformedModelInvariants
 {
     GaussianModel3D model{};
     Eigen::Vector3d transformed{ Eigen::Vector3d::Zero() };
     double peak_height{ 0.0 };
 };
 
-inline std::optional<LocalFittingTransformedModelInvariants>
-BuildLocalFittingTransformedModelInvariants(
+inline std::optional<TransformedModelInvariants>
+BuildTransformedModelInvariants(
     const GaussianModel3D & model)
 {
     const auto transformed{ EncodeLocalFittingTransformedCoordinates(model) };
@@ -281,16 +281,16 @@ BuildLocalFittingTransformedModelInvariants(
     };
     if (!std::isfinite(peak_height)) return std::nullopt;
 
-    return LocalFittingTransformedModelInvariants{
+    return TransformedModelInvariants{
         model,
         *transformed,
         peak_height
     };
 }
 
-inline std::optional<LocalFittingSharedOffsetResponse>
-EvaluateLocalFittingSharedOffsetResponse(
-    const LocalFittingTransformedModelInvariants & invariants,
+inline std::optional<SharedOffsetResponse>
+EvaluateSharedOffsetResponse(
+    const TransformedModelInvariants & invariants,
     double distance)
 {
     if (!std::isfinite(distance) || distance < 0.0) return std::nullopt;
@@ -329,20 +329,20 @@ EvaluateLocalFittingSharedOffsetResponse(
     };
     if (!shape_jacobian.allFinite()) return std::nullopt;
 
-    return LocalFittingSharedOffsetResponse{
+    return SharedOffsetResponse{
         evaluation.response,
         shape_jacobian,
         evaluation.offset_basis
     };
 }
 
-inline std::optional<LocalFittingTransformedResponse>
-EvaluateLocalFittingTransformedResponse(
-    const LocalFittingTransformedModelInvariants & invariants,
+inline std::optional<TransformedResponse>
+EvaluateTransformedResponse(
+    const TransformedModelInvariants & invariants,
     double distance)
 {
     const auto shared_offset_evaluation{
-        EvaluateLocalFittingSharedOffsetResponse(invariants, distance)
+        EvaluateSharedOffsetResponse(invariants, distance)
     };
     if (!shared_offset_evaluation.has_value())
     {
@@ -368,32 +368,32 @@ EvaluateLocalFittingTransformedResponse(
         return std::nullopt;
     }
 
-    return LocalFittingTransformedResponse{
+    return TransformedResponse{
         shared_offset_evaluation->response,
         jacobian
     };
 }
 
-inline std::optional<LocalFittingTransformedResponse>
-EvaluateLocalFittingTransformedResponse(
+inline std::optional<TransformedResponse>
+EvaluateTransformedResponse(
     const GaussianModel3D & model,
     double distance)
 {
-    const auto invariants{ BuildLocalFittingTransformedModelInvariants(model) };
+    const auto invariants{ BuildTransformedModelInvariants(model) };
     if (!invariants.has_value()) return std::nullopt;
-    return EvaluateLocalFittingTransformedResponse(*invariants, distance);
+    return EvaluateTransformedResponse(*invariants, distance);
 }
 
-constexpr double kLocalFittingJointPolishTransformedChangeTolerance{ 1.0e-4 };
+constexpr double kJointPolishTransformedChangeTolerance{ 1.0e-4 };
 
-inline std::optional<Eigen::VectorXd> BuildLocalFittingJointPolishDirection(
+inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
     const SecondStageLocalFittingContext & context,
     const LocalFittingStateView & base_state,
     const std::vector<GaussianModel3D> & seed_model_list,
     const LocalFittingClusterKey & key,
     const std::vector<LocalFittingObjectiveSampleRef> & sample_ref_list,
     const std::vector<double> & ridge_multiplier_list,
-    const LocalFittingJointPolishParameterization & parameterization,
+    const JointPolishParameterization & parameterization,
     ReusableWeightedRidgeSolver & reusable_solver)
 {
     if (key.empty() || sample_ref_list.empty() ||
@@ -462,7 +462,7 @@ inline std::optional<Eigen::VectorXd> BuildLocalFittingJointPolishDirection(
                     base_state.GetModel(atom_index)
             };
             const auto evaluation{
-                EvaluateLocalFittingSharedOffsetResponse(model, distance)
+                EvaluateSharedOffsetResponse(model, distance)
             };
             if (!evaluation.has_value()) return false;
             predicted_response += evaluation->response;
@@ -472,7 +472,7 @@ inline std::optional<Eigen::VectorXd> BuildLocalFittingJointPolishDirection(
                 static_cast<std::size_t>(local_position_value)
             };
             for (std::size_t parameter_index = 0;
-                parameter_index < kLocalFittingJointPolishShapeParameterSize;
+                parameter_index < kJointPolishShapeParameterSize;
                 parameter_index++)
             {
                 const auto column_index{
@@ -512,7 +512,7 @@ inline std::optional<Eigen::VectorXd> BuildLocalFittingJointPolishDirection(
                 model_snapshot.unselected.at(contributor_index)
             };
             const auto evaluation{
-                EvaluateLocalFittingSharedOffsetResponse(model, distance)
+                EvaluateSharedOffsetResponse(model, distance)
             };
             if (!evaluation.has_value()) return false;
             predicted_response += evaluation->response;
@@ -613,13 +613,13 @@ inline std::optional<Eigen::VectorXd> BuildLocalFittingJointPolishDirection(
         double parameter_multiplier{ 1.0 };
         const auto offset_column_base{
             static_cast<Eigen::Index>(
-                key.size() * kLocalFittingJointPolishShapeParameterSize)
+                key.size() * kJointPolishShapeParameterSize)
         };
         if (column_index < offset_column_base)
         {
             const auto local_position{
                 static_cast<std::size_t>(column_index) /
-                    kLocalFittingJointPolishShapeParameterSize
+                    kJointPolishShapeParameterSize
             };
             parameter_multiplier = ridge_multiplier_list.at(
                 key.at(local_position));
@@ -672,7 +672,7 @@ inline std::optional<Eigen::VectorXd> BuildLocalFittingJointPolishDirection(
     return direction;
 }
 
-inline bool HasMaterialLocalFittingJointPolishChange(
+inline bool HasMaterialJointPolishChange(
     const std::vector<GaussianModel3D> & candidate_model_list,
     const std::vector<GaussianModel3D> & seed_model_list)
 {
@@ -693,7 +693,7 @@ inline bool HasMaterialLocalFittingJointPolishChange(
                 {
                     return std::isfinite(value) &&
                         value >=
-                            kLocalFittingJointPolishTransformedChangeTolerance;
+                            kJointPolishTransformedChangeTolerance;
                 }))
         {
             return true;
@@ -702,7 +702,7 @@ inline bool HasMaterialLocalFittingJointPolishChange(
     return false;
 }
 
-struct LocalFittingJointPolishProposal
+struct JointPolishProposal
 {
     LocalFittingStatePatch patch{};
     double effective_damping{ 0.0 };
@@ -710,8 +710,8 @@ struct LocalFittingJointPolishProposal
     std::vector<std::size_t> changed_atom_index_list{};
 };
 
-inline std::optional<LocalFittingJointPolishProposal>
-BuildLocalFittingJointPolishProposal(
+inline std::optional<JointPolishProposal>
+BuildJointPolishProposal(
     const SecondStageLocalFittingContext & context,
     const LocalFittingState & outer_previous_state,
     const LocalFittingStateView & base_state,
@@ -733,7 +733,7 @@ BuildLocalFittingJointPolishProposal(
         base_model_list.emplace_back(base_state.GetModel(atom_index));
     }
     const auto parameterization{
-        BuildLocalFittingJointPolishParameterization(
+        BuildJointPolishParameterization(
             group_key_by_atom_position,
             base_model_list)
     };
@@ -768,7 +768,7 @@ BuildLocalFittingJointPolishProposal(
         return std::nullopt;
     }
     const auto direction{
-        BuildLocalFittingJointPolishDirection(
+        BuildJointPolishDirection(
             context,
             base_state,
             *seed_model_list,
@@ -804,14 +804,14 @@ BuildLocalFittingJointPolishProposal(
             if (step_norm.has_value() &&
                 *step_norm <= trust_region_radius + trust_region_tolerance)
             {
-                if (!HasMaterialLocalFittingJointPolishChange(
+                if (!HasMaterialJointPolishChange(
                         *candidate_model_list,
                         *seed_model_list))
                 {
                     return std::nullopt;
                 }
 
-                LocalFittingJointPolishProposal proposal;
+                JointPolishProposal proposal;
                 proposal.patch.atom_index_list = key;
                 proposal.patch.mdpde_list.reserve(key.size());
                 proposal.effective_damping = damping;
