@@ -8,7 +8,6 @@
 #include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
 #include "core/detail/LocalFittingJointOffset.hpp"
-#include "core/detail/LocalFittingJointOffsetConditioning.hpp"
 #include "core/detail/LocalFittingJointPolish.hpp"
 #include "core/detail/LocalFittingObjectiveAttemptDiagnostic.hpp"
 #include "core/detail/LocalFittingPerformanceCounters.hpp"
