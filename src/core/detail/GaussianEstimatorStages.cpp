@@ -2,15 +2,23 @@
 
 #include "core/detail/GaussianEstimatorStages.hpp"
 #include "core/detail/LocalFittingAudit.hpp"
+#include "core/detail/LocalFittingBacktrackingWorkspace.hpp"
+#include "core/detail/LocalFittingCandidateEvaluationOverlay.hpp"
 #include "core/detail/LocalFittingCouplingGraph.hpp"
 #include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
 #include "core/detail/LocalFittingJointOffset.hpp"
 #include "core/detail/LocalFittingJointOffsetConditioning.hpp"
 #include "core/detail/LocalFittingJointPolish.hpp"
+#include "core/detail/LocalFittingObjectiveAttemptDiagnostic.hpp"
+#include "core/detail/LocalFittingPerformanceCounters.hpp"
 #include "core/detail/LocalFittingSeedRepair.hpp"
+#include "core/detail/LocalFittingStateView.hpp"
 #include "core/detail/LocalFittingTrustRegion.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
+#include "core/detail/ReusableWeightedRidgeSolver.hpp"
+#include "core/detail/ScopedEigenThreadCount.hpp"
+#include "core/detail/SecondStageLocalFittingContext.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -27,7 +35,6 @@
 
 #include <algorithm>
 #include <array>
-#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <exception>
@@ -57,35 +64,29 @@ namespace rhbm_gem::core {
 
 namespace {
 
-class ScopedEigenThreadCount
-{
-public:
-    explicit ScopedEigenThreadCount(int requested_thread_count)
-        : previous_thread_count_(Eigen::nbThreads()),
-          changed_(requested_thread_count > 0 &&
-              previous_thread_count_ != requested_thread_count)
-    {
-        if (changed_)
-        {
-            Eigen::setNbThreads(requested_thread_count);
-        }
-    }
-
-    ScopedEigenThreadCount(const ScopedEigenThreadCount &) = delete;
-    ScopedEigenThreadCount & operator=(const ScopedEigenThreadCount &) = delete;
-
-    ~ScopedEigenThreadCount()
-    {
-        if (changed_ && Eigen::nbThreads() != previous_thread_count_)
-        {
-            Eigen::setNbThreads(previous_thread_count_);
-        }
-    }
-
-private:
-    int previous_thread_count_{ 1 };
-    bool changed_{ false };
-};
+using detail::FittedGaussianSnapshot;
+using detail::LocalFittingBacktrackingWorkspace;
+using detail::LocalFittingCandidateEvaluationOverlay;
+using detail::LocalFittingClusterKey;
+using detail::LocalFittingClusterSolverWorkspace;
+using detail::LocalFittingClusterSolverWorkspaceMap;
+using detail::LocalFittingObjectiveAttemptDiagnostic;
+using detail::LocalFittingObjectiveSampleRef;
+using detail::LocalFittingPerformanceCounters;
+using detail::LocalFittingPolishProvenance;
+using detail::LocalFittingPreObjectiveFailureReason;
+using detail::LocalFittingResidualBaseline;
+using detail::LocalFittingResidualSample;
+using detail::LocalFittingState;
+using detail::LocalFittingStatePatch;
+using detail::LocalFittingStateView;
+using detail::SecondStageAtomContext;
+using detail::SecondStageLocalFittingContext;
+using detail::SecondStageModelSnapshot;
+using detail::SecondStageNeighborSample;
+using detail::SecondStageUnselectedContributor;
+using detail::ReusableWeightedRidgeSolver;
+using detail::ScopedEigenThreadCount;
 
 constexpr double kSuspiciousProfileInnermostSignFlipRatio{ 0.25 };
 constexpr double kSuspiciousProfileNoiseScaleMultiplier{ 3.0 };
@@ -148,83 +149,6 @@ constexpr double kSuspiciousWidthRangeLimitRatio{ 1.5 };
 constexpr double kSuspiciousCompensationResponseRatio{ 2.0 };
 constexpr std::size_t kPersistentTerminalFailureIterationLimit{ 5 };
 
-using LocalFittingState = std::vector<LocalGaussianResult>;
-using LocalFittingPolishProvenance = std::vector<char>;
-
-using LocalFittingClusterKey = std::vector<std::size_t>;
-
-struct LocalFittingStatePatch
-{
-    LocalFittingClusterKey atom_index_list{};
-    std::vector<GaussianModel3DWithUncertainty> mdpde_list{};
-
-    const GaussianModel3DWithUncertainty * Find(std::size_t atom_index) const
-    {
-        const auto iter{
-            std::lower_bound(
-                atom_index_list.begin(),
-                atom_index_list.end(),
-                atom_index)
-        };
-        if (iter == atom_index_list.end() || *iter != atom_index)
-        {
-            return nullptr;
-        }
-        return &mdpde_list.at(static_cast<std::size_t>(
-            std::distance(atom_index_list.begin(), iter)));
-    }
-
-    void ApplyTo(LocalFittingState & state) const
-    {
-        if (atom_index_list.size() != mdpde_list.size())
-        {
-            throw std::invalid_argument(
-                "Local fitting state patch sizes are inconsistent.");
-        }
-        for (std::size_t i = 0; i < atom_index_list.size(); i++)
-        {
-            state.at(atom_index_list.at(i)).mdpde = mdpde_list.at(i);
-        }
-    }
-};
-
-class LocalFittingStateView
-{
-    const LocalFittingState * base_state_{ nullptr };
-    const LocalFittingStatePatch * patch_{ nullptr };
-
-public:
-    explicit LocalFittingStateView(const LocalFittingState & base_state)
-        : base_state_{ &base_state }
-    {
-    }
-
-    LocalFittingStateView(
-        const LocalFittingState & base_state,
-        const LocalFittingStatePatch & patch)
-        : base_state_{ &base_state },
-          patch_{ &patch }
-    {
-    }
-
-    const GaussianModel3DWithUncertainty & Mdpde(
-        std::size_t atom_index) const
-    {
-        if (patch_ != nullptr)
-        {
-            const auto * value{ patch_->Find(atom_index) };
-            if (value != nullptr) return *value;
-        }
-        return base_state_->at(atom_index).mdpde;
-    }
-
-    const GaussianModel3D & Model(std::size_t atom_index) const
-    {
-        return Mdpde(atom_index).GetModel();
-    }
-
-    std::size_t size() const { return base_state_->size(); }
-};
 using detail::JointOffsetSolveStatus;
 using detail::IsJointOffsetSolveHardFailure;
 using detail::IsJointOffsetSolveStationarityEligible;
@@ -279,115 +203,6 @@ struct JointOffsetBuildResult
     detail::LocalFittingJointOffsetParameterization parameterization{};
 };
 
-class ReusableWeightedRidgeSolver
-{
-    algorithm::WeightedRidgeSolver solver_{};
-    Eigen::Index row_count_{ -1 };
-    Eigen::Index column_count_{ -1 };
-    std::vector<std::pair<Eigen::Index, Eigen::Index>> pattern_{};
-
-    static std::vector<std::pair<Eigen::Index, Eigen::Index>> BuildPattern(
-        const Eigen::SparseMatrix<double> & matrix)
-    {
-        std::vector<std::pair<Eigen::Index, Eigen::Index>> pattern;
-        pattern.reserve(static_cast<std::size_t>(matrix.nonZeros()));
-        for (Eigen::Index outer = 0; outer < matrix.outerSize(); outer++)
-        {
-            for (Eigen::SparseMatrix<double>::InnerIterator iter(matrix, outer);
-                iter;
-                ++iter)
-            {
-                pattern.emplace_back(iter.row(), iter.col());
-            }
-        }
-        return pattern;
-    }
-
-public:
-    bool Solve(
-        const algorithm::WeightedRidgeSystem & system,
-        const Eigen::VectorXd & weight,
-        Eigen::VectorXd & parameter)
-    {
-        const auto pattern{ BuildPattern(system.design_matrix) };
-        if (row_count_ != system.design_matrix.rows() ||
-            column_count_ != system.design_matrix.cols() ||
-            pattern_ != pattern)
-        {
-            if (!solver_.AnalyzePattern(system)) return false;
-            row_count_ = system.design_matrix.rows();
-            column_count_ = system.design_matrix.cols();
-            pattern_ = pattern;
-        }
-        return solver_.SolveNumeric(system, weight, parameter);
-    }
-
-    std::size_t SymbolicAnalysisCount() const
-    {
-        return solver_.GetSymbolicAnalysisCount();
-    }
-};
-
-struct LocalFittingClusterSolverWorkspace
-{
-    ReusableWeightedRidgeSolver joint_offset{};
-    ReusableWeightedRidgeSolver joint_polish{};
-};
-
-using LocalFittingClusterSolverWorkspaceMap =
-    std::map<LocalFittingClusterKey, LocalFittingClusterSolverWorkspace>;
-
-struct LocalFittingPerformanceCounters
-{
-    const FitOptions & options;
-    const LocalFittingClusterSolverWorkspaceMap & solver_workspace_by_key;
-    std::chrono::steady_clock::time_point start_time{
-        std::chrono::steady_clock::now()
-    };
-    std::atomic<std::size_t> full_state_materialization_count{ 0 };
-    std::atomic<std::size_t> gaussian_cache_hit_count{ 0 };
-    std::atomic<std::size_t> gaussian_cache_miss_count{ 0 };
-    std::atomic<std::size_t> objective_recomputed_sample_count{ 0 };
-    std::atomic<std::size_t> objective_reused_sample_count{ 0 };
-    double iteration_phase_milliseconds{ 0.0 };
-    double candidate_phase_milliseconds{ 0.0 };
-
-    ~LocalFittingPerformanceCounters()
-    {
-        if (options.quiet_mode) return;
-        std::size_t symbolic_analysis_count{ 0 };
-        for (const auto & [key, workspace] : solver_workspace_by_key)
-        {
-            static_cast<void>(key);
-            symbolic_analysis_count +=
-                workspace.joint_offset.SymbolicAnalysisCount();
-            symbolic_analysis_count +=
-                workspace.joint_polish.SymbolicAnalysisCount();
-        }
-        const auto total_milliseconds{
-            std::chrono::duration<double, std::milli>(
-                std::chrono::steady_clock::now() - start_time).count()
-        };
-        std::ostringstream message;
-        message
-            << "Second-stage local fitting performance: full_state_materializations="
-            << full_state_materialization_count.load()
-            << ", gaussian_cache_hit/miss="
-            << gaussian_cache_hit_count.load() << "/"
-            << gaussian_cache_miss_count.load()
-            << ", objective_recomputed/reused_samples="
-            << objective_recomputed_sample_count.load() << "/"
-            << objective_reused_sample_count.load()
-            << ", solver_symbolic_analyses=" << symbolic_analysis_count
-            << ", iteration/candidate/total_ms="
-            << std::fixed << std::setprecision(3)
-            << iteration_phase_milliseconds << "/"
-            << candidate_phase_milliseconds << "/"
-            << total_milliseconds << ".";
-        Logger::Log(LogLevel::Info, message.str());
-    }
-};
-
 void ResetLocalFittingClusterSolverWorkspace(
     const std::vector<LocalFittingClusterKey> & cluster_key_list,
     LocalFittingClusterSolverWorkspaceMap & workspace_by_key)
@@ -425,8 +240,6 @@ struct LocalFittingTransformedChangeSummary
     algorithm::ParameterChangeStats percentile_stats{};
     std::vector<double> maximum_list{};
 };
-
-using LocalFittingObjectiveSampleRef = detail::LocalFittingCouplingSampleId;
 
 struct LocalFittingObjectiveScale
 {
@@ -579,38 +392,6 @@ struct LocalFittingTerminalSummary
     }
 };
 
-enum class LocalFittingPreObjectiveFailureReason
-{
-    None,
-    InvalidModel,
-    PreviousSharedOffsetProjectionOutsideTrustRegion,
-    NoCandidateWithinTrustRegion
-};
-
-struct LocalFittingObjectiveAttemptDiagnostic
-{
-    double effective_damping{ 1.0 };
-    bool is_invalid_model{ false };
-    LocalFittingPreObjectiveFailureReason pre_objective_failure_reason{
-        LocalFittingPreObjectiveFailureReason::None
-    };
-    std::optional<double> pre_objective_attempted_step_norm{};
-    std::optional<double> fit_scale{};
-    std::optional<double> tail_scale{};
-    std::size_t fit_sample_count{ 0 };
-    std::size_t tail_sample_count{ 0 };
-    std::optional<detail::LocalFittingObjectiveBreakdown> candidate_objective{};
-    std::optional<detail::LocalFittingObjectiveBreakdown> previous_objective{};
-    std::optional<detail::LocalFittingObjectiveBreakdown> best_objective{};
-    double trust_region_radius{ 0.0 };
-    double trust_region_step_norm{ 0.0 };
-    bool rejected_by_previous{ false };
-    bool rejected_by_best{ false };
-    std::size_t backtracking_trial_count{ 0 };
-    std::optional<double> accepted_backtracking_factor{};
-    bool backtracking_exhausted{ false };
-};
-
 struct LocalFittingRejectedClusterDiagnostic
 {
     LocalFittingClusterKey key{};
@@ -657,76 +438,6 @@ struct LocalFittingIterationProgress
 };
 
 using LocalFittingProgressColumnWidths = std::array<std::size_t, 6>;
-
-struct SecondStageNeighborSample
-{
-    bool is_selected{ true };
-    std::size_t atom_index{ 0 };
-    double distance{ 0.0 };
-};
-
-struct SecondStageUnselectedContributor
-{
-    const AtomObject * atom{ nullptr };
-    GroupKey group_key{};
-    std::optional<std::size_t> selected_group_id{};
-    std::optional<GaussianModel3DWithUncertainty> initial_seed{};
-    detail::SecondStageSeedSource seed_source{
-        detail::SecondStageSeedSource::GlobalMedian
-    };
-};
-
-struct SecondStageAtomContext
-{
-    const AtomObject * atom{ nullptr };
-    GroupKey group_key{};
-    std::size_t group_id{ 0 };
-    detail::LocalFittingCouplingResidueKey residue_key{};
-    LocalPotentialSampleList raw_sampling_entries{};
-    LocalGaussianResult initial_result{};
-    std::optional<GaussianModel3DWithUncertainty> group_prior{};
-    std::vector<SecondStageNeighborSample> sample_neighbor_list{};
-    std::vector<std::size_t> sample_neighbor_offset_list{};
-    LocalGaussianDesignTemplate refit_design_template{};
-    double alpha_r{ 0.0 };
-    int neighbor_count_for_peeling{ 0 };
-
-    auto NeighborBegin(std::size_t sample_index) const
-    {
-        return sample_neighbor_list.begin() +
-            static_cast<std::ptrdiff_t>(
-                sample_neighbor_offset_list.at(sample_index));
-    }
-
-    auto NeighborEnd(std::size_t sample_index) const
-    {
-        return sample_neighbor_list.begin() +
-            static_cast<std::ptrdiff_t>(
-                sample_neighbor_offset_list.at(sample_index + 1));
-    }
-};
-
-struct SecondStageLocalFittingContext
-{
-    std::vector<SecondStageAtomContext> selected_atom_list{};
-    std::vector<SecondStageUnselectedContributor> unselected_atom_list{};
-    std::unordered_map<GroupKey, std::size_t> selected_group_id_by_key{};
-    std::vector<std::vector<std::size_t>> selected_atom_index_list_by_group{};
-
-    std::size_t size() const { return selected_atom_list.size(); }
-    SecondStageAtomContext & at(std::size_t index)
-    {
-        return selected_atom_list.at(index);
-    }
-    const SecondStageAtomContext & at(std::size_t index) const
-    {
-        return selected_atom_list.at(index);
-    }
-    auto begin() { return selected_atom_list.begin(); }
-    auto end() { return selected_atom_list.end(); }
-    auto begin() const { return selected_atom_list.begin(); }
-    auto end() const { return selected_atom_list.end(); }
-};
 
 struct SecondStageSeedSelectionRecord
 {
@@ -1097,17 +808,11 @@ SuspiciousProfileAnalysis BuildPreviousSuspiciousProfileBaseline(
         true);
 }
 
-using FittedGaussianSnapshot = std::vector<GaussianModel3D>;
 using SecondStageAdjustedResponseCache = std::vector<std::vector<double>>;
 FittedGaussianSnapshot BuildFittedGaussianSnapshot(const LocalFittingState & state);
 FittedGaussianSnapshot BuildUnselectedContributorSnapshot(
     const SecondStageLocalFittingContext & context,
     const FittedGaussianSnapshot & selected_snapshot);
-struct SecondStageModelSnapshot
-{
-    FittedGaussianSnapshot selected{};
-    FittedGaussianSnapshot unselected{};
-};
 SecondStageModelSnapshot BuildSecondStageModelSnapshot(
     const SecondStageLocalFittingContext & context,
     FittedGaussianSnapshot selected_snapshot);
@@ -1732,10 +1437,12 @@ FittedGaussianSnapshot BuildFittedGaussianSnapshot(
     const LocalFittingStateView & state)
 {
     FittedGaussianSnapshot snapshot;
-    snapshot.reserve(state.size());
-    for (std::size_t atom_index = 0; atom_index < state.size(); atom_index++)
+    snapshot.reserve(state.GetSize());
+    for (std::size_t atom_index = 0;
+        atom_index < state.GetSize();
+        atom_index++)
     {
-        snapshot.emplace_back(state.Model(atom_index));
+        snapshot.emplace_back(state.GetModel(atom_index));
     }
     return snapshot;
 }
@@ -1751,21 +1458,7 @@ const GaussianModel3D & GetLocalFittingModel(
     const LocalFittingStateView & state,
     std::size_t atom_index)
 {
-    return state.Model(atom_index);
-}
-
-const GaussianModel3DWithUncertainty & GetLocalFittingMdpde(
-    const LocalFittingState & state,
-    std::size_t atom_index)
-{
-    return state.at(atom_index).mdpde;
-}
-
-const GaussianModel3DWithUncertainty & GetLocalFittingMdpde(
-    const LocalFittingStateView & state,
-    std::size_t atom_index)
-{
-    return state.Mdpde(atom_index);
+    return state.GetModel(atom_index);
 }
 
 FittedGaussianSnapshot BuildUnselectedContributorSnapshot(
@@ -2379,15 +2072,6 @@ LocalPotentialSampleList BuildSecondStageAdjustedSamples(
     }
     return adjusted_sampling_entries;
 }
-struct LocalFittingResidualSample
-{
-    double adjusted_response{ 0.0 };
-    double residual{ 0.0 };
-};
-
-using LocalFittingResidualBaseline =
-    std::vector<std::vector<std::optional<LocalFittingResidualSample>>>;
-
 LocalFittingResidualBaseline BuildLocalFittingResidualBaseline(
     const SecondStageLocalFittingContext & context,
     const LocalFittingState & state,
@@ -2430,138 +2114,6 @@ LocalFittingResidualBaseline BuildLocalFittingResidualBaseline(
     }
     return baseline;
 }
-
-class LocalFittingCandidateEvaluationOverlay
-{
-    const SecondStageLocalFittingContext & context_;
-    const SecondStageModelSnapshot & baseline_model_snapshot_;
-    const LocalFittingResidualBaseline & residual_baseline_;
-    const LocalFittingStatePatch & patch_;
-    std::vector<char> changed_group_mask_{};
-    std::vector<std::optional<GaussianModel3D>> changed_group_median_{};
-
-public:
-    LocalFittingCandidateEvaluationOverlay(
-        const SecondStageLocalFittingContext & context,
-        const SecondStageModelSnapshot & baseline_model_snapshot,
-        const LocalFittingResidualBaseline & residual_baseline,
-        const LocalFittingStateView & candidate_state,
-        const LocalFittingStatePatch & patch)
-        : context_{ context },
-          baseline_model_snapshot_{ baseline_model_snapshot },
-          residual_baseline_{ residual_baseline },
-          patch_{ patch },
-          changed_group_mask_(
-              context.selected_atom_index_list_by_group.size(),
-              0),
-          changed_group_median_(
-              context.selected_atom_index_list_by_group.size())
-    {
-        for (const auto atom_index : patch.atom_index_list)
-        {
-            changed_group_mask_.at(context.at(atom_index).group_id) = 1;
-        }
-        std::vector<GaussianModel3D> model_list;
-        for (std::size_t group_id = 0;
-            group_id < changed_group_mask_.size();
-            group_id++)
-        {
-            if (changed_group_mask_.at(group_id) == 0) continue;
-            const auto & atom_index_list{
-                context.selected_atom_index_list_by_group.at(group_id)
-            };
-            model_list.clear();
-            model_list.reserve(atom_index_list.size());
-            for (const auto atom_index : atom_index_list)
-            {
-                model_list.emplace_back(candidate_state.Model(atom_index));
-            }
-            changed_group_median_.at(group_id) =
-                detail::BuildLocalFittingGaussianParameterMedian(model_list);
-        }
-    }
-
-    std::optional<LocalFittingResidualSample> Evaluate(
-        const LocalFittingStateView & candidate_state,
-        const LocalFittingObjectiveSampleRef & sample_ref) const
-    {
-        const auto & baseline{
-            residual_baseline_.at(sample_ref.atom_index).at(
-                sample_ref.sample_index)
-        };
-        if (!baseline.has_value()) return std::nullopt;
-        const auto & atom_context{ context_.at(sample_ref.atom_index) };
-        const auto & sample{
-            atom_context.raw_sampling_entries.at(sample_ref.sample_index)
-        };
-        auto adjusted_response{ baseline->adjusted_response };
-        for (auto neighbor_iter =
-                atom_context.NeighborBegin(sample_ref.sample_index);
-            neighbor_iter != atom_context.NeighborEnd(sample_ref.sample_index);
-            ++neighbor_iter)
-        {
-            const auto & neighbor_sample{ *neighbor_iter };
-            const GaussianModel3D * candidate_model{ nullptr };
-            const GaussianModel3D * baseline_model{ nullptr };
-            if (neighbor_sample.is_selected)
-            {
-                if (patch_.Find(neighbor_sample.atom_index) == nullptr)
-                {
-                    continue;
-                }
-                baseline_model = &baseline_model_snapshot_.selected.at(
-                    neighbor_sample.atom_index);
-                candidate_model = &candidate_state.Model(
-                    neighbor_sample.atom_index);
-            }
-            else
-            {
-                const auto & contributor{
-                    context_.unselected_atom_list.at(
-                        neighbor_sample.atom_index)
-                };
-                if (!contributor.selected_group_id.has_value() ||
-                    changed_group_mask_.at(*contributor.selected_group_id) == 0)
-                {
-                    continue;
-                }
-                baseline_model = &baseline_model_snapshot_.unselected.at(
-                    neighbor_sample.atom_index);
-                const auto & median{
-                    changed_group_median_.at(
-                        *contributor.selected_group_id)
-                };
-                if (median.has_value())
-                {
-                    candidate_model = &*median;
-                }
-                else
-                {
-                    if (!contributor.initial_seed.has_value())
-                    {
-                        return std::nullopt;
-                    }
-                    candidate_model = &contributor.initial_seed->GetModel();
-                }
-            }
-            adjusted_response +=
-                baseline_model->ResponseAtDistance(neighbor_sample.distance) -
-                candidate_model->ResponseAtDistance(neighbor_sample.distance);
-        }
-        const auto expected_response{
-            patch_.Find(sample_ref.atom_index) == nullptr ?
-                baseline->adjusted_response - baseline->residual :
-                candidate_state.Model(sample_ref.atom_index).ResponseAtDistance(
-                    static_cast<double>(sample.point.distance))
-        };
-        const auto residual{ adjusted_response - expected_response };
-        if (!std::isfinite(adjusted_response) || !std::isfinite(residual))
-        {
-            return std::nullopt;
-        }
-        return LocalFittingResidualSample{ adjusted_response, residual };
-    }
-};
 
 template <typename State>
 std::optional<LocalFittingResidualSample> EvaluateLocalFittingResidualSample(
@@ -3615,7 +3167,7 @@ std::optional<Eigen::VectorXd> BuildLocalFittingJointPolishDirection(
                 local_position_value >= 0 ?
                     seed_model_list.at(static_cast<std::size_t>(
                         local_position_value)) :
-                    base_state.Model(atom_index)
+                    base_state.GetModel(atom_index)
             };
             const auto evaluation{
                 detail::EvaluateLocalFittingSharedOffsetResponse(
@@ -4031,7 +3583,7 @@ BuildLocalFittingJointPolishProposal(
     for (const auto atom_index : key)
     {
         group_key_by_atom_position.emplace_back(context.at(atom_index).group_key);
-        base_model_list.emplace_back(base_state.Model(atom_index));
+        base_model_list.emplace_back(base_state.GetModel(atom_index));
     }
     const auto parameterization{
         detail::BuildLocalFittingJointPolishParameterization(group_key_by_atom_position, base_model_list)
@@ -4114,7 +3666,7 @@ BuildLocalFittingJointPolishProposal(
                 for (std::size_t atom_position = 0; atom_position < key.size(); atom_position++)
                 {
                     const auto atom_index{ key.at(atom_position) };
-                    const auto & base_mdpde{ base_state.Mdpde(atom_index) };
+                    const auto & base_mdpde{ base_state.GetMdpde(atom_index) };
                     const auto & candidate_model{
                         candidate_model_list->at(atom_position)
                     };
@@ -4224,146 +3776,6 @@ std::optional<LocalFittingStatePatch> BuildLocalFittingCandidatePatch(
     }
     return candidate_patch;
 }
-
-struct LocalFittingBacktrackingWorkspace
-{
-    template <typename EndpointState>
-    LocalFittingBacktrackingWorkspace(
-        const SecondStageLocalFittingContext & context,
-        const LocalFittingState & previous_state,
-        const EndpointState & endpoint_state,
-        const std::vector<std::size_t> & active_index_list)
-        : previous_state_(&previous_state),
-          active_index_list(active_index_list)
-    {
-        group_key_by_atom_position.reserve(active_index_list.size());
-        previous_model_list.reserve(active_index_list.size());
-        endpoint_model_list.reserve(active_index_list.size());
-        previous_transformed_estimation_list.reserve(active_index_list.size());
-        for (const auto atom_index : active_index_list)
-        {
-            group_key_by_atom_position.emplace_back(context.at(atom_index).group_key);
-            previous_model_list.emplace_back(previous_state.at(atom_index).mdpde.GetModel());
-            endpoint_model_list.emplace_back(
-                GetLocalFittingModel(endpoint_state, atom_index));
-            endpoint_uncertainty_list.emplace_back(
-                GetLocalFittingMdpde(endpoint_state, atom_index)
-                    .GetStandardDeviationModel());
-            previous_transformed_estimation_list.emplace_back(
-                detail::EncodeLocalFittingTransformedCoordinates(
-                    previous_state.at(atom_index).mdpde.GetModel()));
-        }
-        previous_shared_offset_model_list =
-            detail::BuildLocalFittingGroupMedianModelList(
-                group_key_by_atom_position,
-                previous_model_list);
-        endpoint_shared_offset_model_list =
-            detail::BuildLocalFittingGroupMedianModelList(
-                group_key_by_atom_position,
-                endpoint_model_list);
-        candidate_patch.atom_index_list = active_index_list;
-        candidate_patch.mdpde_list.resize(active_index_list.size());
-    }
-
-    LocalFittingBacktrackingWorkspace(const LocalFittingBacktrackingWorkspace &) = delete;
-    LocalFittingBacktrackingWorkspace & operator=(const LocalFittingBacktrackingWorkspace &) = delete;
-
-    const LocalFittingStatePatch * BuildCandidate(double factor)
-    {
-        if (!std::isfinite(factor) || factor < 0.0 || factor > 1.0)
-        {
-            throw std::invalid_argument(
-                "Local fitting objective backtracking factor must be in [0, 1].");
-        }
-        const auto candidate_model_list{
-            detail::BuildLocalFittingSharedOffsetDampedModelList(
-                previous_model_list,
-                endpoint_model_list,
-                previous_shared_offset_model_list,
-                endpoint_shared_offset_model_list,
-                factor)
-        };
-        if (!candidate_model_list.has_value()) return nullptr;
-
-        for (std::size_t atom_position = 0;
-            atom_position < active_index_list.size();
-            atom_position++)
-        {
-            candidate_patch.mdpde_list.at(atom_position) =
-                GaussianModel3DWithUncertainty{
-                    candidate_model_list->at(atom_position),
-                    endpoint_uncertainty_list.at(atom_position)
-                };
-        }
-        return &candidate_patch;
-    }
-
-    LocalFittingStatePatch TakeCandidatePatch()
-    {
-        return std::move(candidate_patch);
-    }
-
-    LocalFittingState TakeCandidateState()
-    {
-        auto state{ *previous_state_ };
-        candidate_patch.ApplyTo(state);
-        return state;
-    }
-
-    double GetMaximumTransformedChange() const
-    {
-        std::array<double, detail::kTransformedChangeSize> maximum_list{};
-        for (std::size_t atom_position = 0;
-            atom_position < active_index_list.size();
-            atom_position++)
-        {
-            const auto current_coordinates{
-                detail::EncodeLocalFittingTransformedCoordinates(
-                    candidate_patch.mdpde_list.at(atom_position).GetModel())
-            };
-            const auto & previous_coordinates{
-                previous_transformed_estimation_list.at(atom_position)
-            };
-            if (!current_coordinates.has_value() ||
-                !previous_coordinates.has_value())
-            {
-                return std::numeric_limits<double>::infinity();
-            }
-            for (std::size_t parameter_index = 0;
-                parameter_index < detail::kTransformedChangeSize;
-                parameter_index++)
-            {
-                const auto parameter_value{
-                    std::abs(
-                        (*current_coordinates)(
-                            static_cast<Eigen::Index>(parameter_index)) -
-                        (*previous_coordinates)(
-                            static_cast<Eigen::Index>(parameter_index)))
-                };
-                if (!std::isfinite(parameter_value))
-                {
-                    return std::numeric_limits<double>::infinity();
-                }
-                maximum_list.at(parameter_index) = std::max(
-                    maximum_list.at(parameter_index),
-                    parameter_value);
-            }
-        }
-        return *std::max_element(maximum_list.begin(), maximum_list.end());
-    }
-
-private:
-    const LocalFittingState * previous_state_{ nullptr };
-    std::vector<std::size_t> active_index_list{};
-    std::vector<GroupKey> group_key_by_atom_position{};
-    std::vector<GaussianModel3D> previous_model_list{};
-    std::vector<GaussianModel3D> endpoint_model_list{};
-    std::vector<GaussianModel3DUncertainty> endpoint_uncertainty_list{};
-    std::vector<std::optional<Eigen::Vector3d>> previous_transformed_estimation_list{};
-    std::vector<GaussianModel3D> previous_shared_offset_model_list{};
-    std::vector<GaussianModel3D> endpoint_shared_offset_model_list{};
-    LocalFittingStatePatch candidate_patch{};
-};
 
 LocalFittingClusterObjectiveState
 BuildInitialLocalFittingClusterObjectiveState(
@@ -4807,7 +4219,7 @@ ClusterCandidateResult SelectLocalFittingClusterCandidate(
         const auto atom_index{ key.at(position) };
         const auto base_transformed{
             detail::EncodeLocalFittingTransformedCoordinates(
-                base_state_view.Model(atom_index))
+                base_state_view.GetModel(atom_index))
         };
         if (!base_transformed.has_value() ||
             (base_transformed->array() !=
