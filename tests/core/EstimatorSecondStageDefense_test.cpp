@@ -256,6 +256,88 @@ BuildJointOffsetEstimationFixture(
     };
 }
 
+struct LocalFittingJointPolishFixture
+{
+    polish_detail::SecondStageLocalFittingContext context{};
+    polish_detail::LocalFittingState state{};
+    std::vector<polish_detail::LocalFittingObjectiveSampleRef>
+        sample_ref_list{};
+};
+
+LocalFittingJointPolishFixture BuildLocalFittingJointPolishFixture(
+    const std::vector<GroupKey> & group_key_list,
+    const std::vector<rg::GaussianModel3D> & base_model_list,
+    const std::vector<rg::GaussianModel3D> & target_model_list)
+{
+    if (group_key_list.size() != base_model_list.size() ||
+        base_model_list.size() != target_model_list.size() ||
+        base_model_list.empty())
+    {
+        throw std::invalid_argument(
+            "Joint polish fixture input sizes are inconsistent.");
+    }
+
+    constexpr std::array<float, 5> distance_list{
+        0.0F,
+        0.15F,
+        0.30F,
+        0.45F,
+        0.60F
+    };
+    LocalFittingJointPolishFixture fixture;
+    fixture.context.selected_atom_list.resize(base_model_list.size());
+    fixture.state.reserve(base_model_list.size());
+    for (std::size_t atom_index = 0;
+        atom_index < base_model_list.size();
+        atom_index++)
+    {
+        auto & atom_context{ fixture.context.at(atom_index) };
+        atom_context.group_key = group_key_list.at(atom_index);
+        atom_context.sample_neighbor_offset_list.assign(
+            distance_list.size() + 1,
+            0);
+        for (const auto distance : distance_list)
+        {
+            atom_context.raw_sampling_entries.emplace_back(
+                LocalPotentialSample{
+                    static_cast<float>(
+                        target_model_list.at(atom_index).ResponseAtDistance(
+                            distance)),
+                    SamplingPoint{ distance }
+                });
+            fixture.sample_ref_list.emplace_back(
+                polish_detail::LocalFittingObjectiveSampleRef{
+                    atom_index,
+                    atom_context.raw_sampling_entries.size() - 1
+                });
+        }
+        fixture.state.emplace_back(MakeGaussianResult(
+            base_model_list.at(atom_index)));
+
+        const auto group_position_iter{
+            fixture.context.selected_group_id_by_key.find(
+                group_key_list.at(atom_index))
+        };
+        const auto group_position{
+            group_position_iter ==
+                fixture.context.selected_group_id_by_key.end() ?
+                fixture.context.selected_atom_index_list_by_group.size() :
+                group_position_iter->second
+        };
+        if (group_position_iter ==
+            fixture.context.selected_group_id_by_key.end())
+        {
+            fixture.context.selected_group_id_by_key.emplace(
+                group_key_list.at(atom_index),
+                group_position);
+            fixture.context.selected_atom_index_list_by_group.emplace_back();
+        }
+        fixture.context.selected_atom_index_list_by_group.at(group_position)
+            .emplace_back(atom_index);
+    }
+    return fixture;
+}
+
 LocalPotentialSampleList BuildSuspiciousGuardSamples(
     const rg::GaussianModel3D & previous_model,
     const std::vector<double> & radius_list,
@@ -2657,6 +2739,191 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishSharedOffsetSeedUsesGroupMedian
         polish_detail::BuildLocalFittingJointPolishParameterization(
             std::vector<GroupKey>{ 20 },
             base_model_list).has_value());
+}
+
+TEST(
+    EstimatorSecondStageDefenseTest,
+    JointPolishDirectionAndProposalShareGroupOffset)
+{
+    const std::vector<GroupKey> group_key_list{ 20, 20 };
+    const std::vector<rg::GaussianModel3D> base_model_list{
+        rg::GaussianModel3D{ 6.0, 0.55, 0.10 },
+        rg::GaussianModel3D{ 4.5, 0.70, -0.10 }
+    };
+    const std::vector<rg::GaussianModel3D> target_model_list{
+        rg::GaussianModel3D{ 6.5, 0.60, 0.30 },
+        rg::GaussianModel3D{ 4.0, 0.65, 0.30 }
+    };
+    auto fixture{
+        BuildLocalFittingJointPolishFixture(
+            group_key_list,
+            base_model_list,
+            target_model_list)
+    };
+    const auto parameterization{
+        polish_detail::BuildLocalFittingJointPolishParameterization(
+            group_key_list,
+            base_model_list)
+    };
+    ASSERT_TRUE(parameterization.has_value());
+    const auto zero_direction{
+        Eigen::VectorXd::Zero(parameterization->ParameterCount())
+    };
+    const auto seed_model_list{
+        parameterization->DecodeModels(zero_direction, 0.0)
+    };
+    ASSERT_TRUE(seed_model_list.has_value());
+    polish_detail::ReusableWeightedRidgeSolver direction_solver;
+    const polish_detail::LocalFittingStateView base_state_view{ fixture.state };
+    const auto direction{
+        polish_detail::BuildLocalFittingJointPolishDirection(
+            fixture.context,
+            base_state_view,
+            *seed_model_list,
+            polish_detail::LocalFittingClusterKey{ 0, 1 },
+            fixture.sample_ref_list,
+            { 1.0, 1.0 },
+            *parameterization,
+            direction_solver)
+    };
+    ASSERT_TRUE(direction.has_value());
+    EXPECT_TRUE(direction->allFinite());
+    EXPECT_GT(direction->norm(), 1.0e-8);
+
+    polish_detail::ReusableWeightedRidgeSolver proposal_solver;
+    const auto proposal{
+        polish_detail::BuildLocalFittingJointPolishProposal(
+            fixture.context,
+            fixture.state,
+            base_state_view,
+            polish_detail::LocalFittingClusterKey{ 0, 1 },
+            fixture.sample_ref_list,
+            { 1.0, 1.0 },
+            proposal_solver,
+            4.0)
+    };
+    ASSERT_TRUE(proposal.has_value());
+    EXPECT_EQ(proposal->patch.atom_index_list,
+        (polish_detail::LocalFittingClusterKey{ 0, 1 }));
+    ASSERT_EQ(proposal->patch.mdpde_list.size(), 2U);
+    EXPECT_DOUBLE_EQ(
+        proposal->patch.mdpde_list.at(0).GetModel().GetOffset(),
+        proposal->patch.mdpde_list.at(1).GetModel().GetOffset());
+    bool shape_changed{ false };
+    bool offset_changed{ false };
+    for (std::size_t atom_index = 0; atom_index < base_model_list.size(); atom_index++)
+    {
+        const auto & candidate{
+            proposal->patch.mdpde_list.at(atom_index).GetModel()
+        };
+        const auto & base{ base_model_list.at(atom_index) };
+        shape_changed = shape_changed ||
+            std::abs(candidate.GetAmplitude() - base.GetAmplitude()) > 1.0e-8 ||
+            std::abs(candidate.GetWidth() - base.GetWidth()) > 1.0e-8;
+        offset_changed = offset_changed ||
+            std::abs(candidate.GetOffset() - base.GetOffset()) > 1.0e-8;
+    }
+    EXPECT_TRUE(shape_changed);
+    EXPECT_TRUE(offset_changed);
+    EXPECT_LE(proposal->step_norm, 4.0 + 1.0e-12);
+    EXPECT_FALSE(proposal->changed_atom_index_list.empty());
+    EXPECT_DOUBLE_EQ(
+        proposal->patch.mdpde_list.at(0)
+            .GetStandardDeviationModel().GetAmplitude(),
+        0.0);
+}
+
+TEST(
+    EstimatorSecondStageDefenseTest,
+    JointPolishProposalRejectsEmptyInvalidUnchangedAndOutOfRegionInputs)
+{
+    const std::vector<GroupKey> group_key_list{ 20, 20 };
+    const std::vector<rg::GaussianModel3D> base_model_list{
+        rg::GaussianModel3D{ 6.0, 0.55, 0.10 },
+        rg::GaussianModel3D{ 4.5, 0.70, -0.10 }
+    };
+    const std::vector<rg::GaussianModel3D> target_model_list{
+        rg::GaussianModel3D{ 6.5, 0.60, 0.30 },
+        rg::GaussianModel3D{ 4.0, 0.65, 0.30 }
+    };
+    auto fixture{
+        BuildLocalFittingJointPolishFixture(
+            group_key_list,
+            base_model_list,
+            target_model_list)
+    };
+    const polish_detail::LocalFittingStateView base_state_view{ fixture.state };
+    const auto key{ polish_detail::LocalFittingClusterKey{ 0, 1 } };
+
+    polish_detail::ReusableWeightedRidgeSolver empty_solver;
+    EXPECT_FALSE(
+        polish_detail::BuildLocalFittingJointPolishProposal(
+            fixture.context,
+            fixture.state,
+            base_state_view,
+            key,
+            {},
+            { 1.0, 1.0 },
+            empty_solver,
+            4.0).has_value());
+
+    auto invalid_fixture{ fixture };
+    invalid_fixture.state.at(0).mdpde =
+        rg::GaussianModel3DWithUncertainty{
+            rg::GaussianModel3D{ 0.0, 0.55, 0.10 },
+            rg::GaussianModel3DUncertainty{}
+        };
+    const polish_detail::LocalFittingStateView invalid_state_view{
+        invalid_fixture.state
+    };
+    polish_detail::ReusableWeightedRidgeSolver invalid_solver;
+    EXPECT_FALSE(
+        polish_detail::BuildLocalFittingJointPolishProposal(
+            invalid_fixture.context,
+            invalid_fixture.state,
+            invalid_state_view,
+            key,
+            invalid_fixture.sample_ref_list,
+            { 1.0, 1.0 },
+            invalid_solver,
+            4.0).has_value());
+
+    const std::vector<rg::GaussianModel3D> unchanged_model_list{
+        rg::GaussianModel3D{ 6.0, 0.55, 0.10 },
+        rg::GaussianModel3D{ 4.5, 0.70, 0.10 }
+    };
+    auto unchanged_fixture{
+        BuildLocalFittingJointPolishFixture(
+            group_key_list,
+            unchanged_model_list,
+            unchanged_model_list)
+    };
+    const polish_detail::LocalFittingStateView unchanged_state_view{
+        unchanged_fixture.state
+    };
+    polish_detail::ReusableWeightedRidgeSolver unchanged_solver;
+    EXPECT_FALSE(
+        polish_detail::BuildLocalFittingJointPolishProposal(
+            unchanged_fixture.context,
+            unchanged_fixture.state,
+            unchanged_state_view,
+            key,
+            unchanged_fixture.sample_ref_list,
+            { 1.0, 1.0 },
+            unchanged_solver,
+            4.0).has_value());
+
+    polish_detail::ReusableWeightedRidgeSolver trust_region_solver;
+    EXPECT_FALSE(
+        polish_detail::BuildLocalFittingJointPolishProposal(
+            fixture.context,
+            fixture.state,
+            base_state_view,
+            key,
+            fixture.sample_ref_list,
+            { 1.0, 1.0 },
+            trust_region_solver,
+            0.01).has_value());
 }
 
 TEST(EstimatorSecondStageDefenseTest, SharedOffsetJacobianMatchesFiniteDifference)

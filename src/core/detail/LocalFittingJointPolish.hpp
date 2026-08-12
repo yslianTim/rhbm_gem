@@ -1,16 +1,25 @@
 #pragma once
 
+#include "core/detail/JointOffset.hpp"
+#include "core/detail/LocalFittingCandidateEvaluationOverlay.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
+#include "core/detail/LocalFittingTrustRegion.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <map>
 #include <optional>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <Eigen/Dense>
+#include <Eigen/Sparse>
 
+#include <rhbm_gem/utils/algorithm/RobustLoss.hpp>
+#include <rhbm_gem/utils/algorithm/WeightedRidgeSolver.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
@@ -373,6 +382,479 @@ EvaluateLocalFittingTransformedResponse(
     const auto invariants{ BuildLocalFittingTransformedModelInvariants(model) };
     if (!invariants.has_value()) return std::nullopt;
     return EvaluateLocalFittingTransformedResponse(*invariants, distance);
+}
+
+constexpr double kLocalFittingJointPolishTransformedChangeTolerance{ 1.0e-4 };
+
+inline std::optional<Eigen::VectorXd> BuildLocalFittingJointPolishDirection(
+    const SecondStageLocalFittingContext & context,
+    const LocalFittingStateView & base_state,
+    const std::vector<GaussianModel3D> & seed_model_list,
+    const LocalFittingClusterKey & key,
+    const std::vector<LocalFittingObjectiveSampleRef> & sample_ref_list,
+    const std::vector<double> & ridge_multiplier_list,
+    const LocalFittingJointPolishParameterization & parameterization,
+    ReusableWeightedRidgeSolver & reusable_solver)
+{
+    if (key.empty() || sample_ref_list.empty() ||
+        seed_model_list.size() != key.size() ||
+        parameterization.AtomCount() != key.size())
+    {
+        return std::nullopt;
+    }
+
+    const auto column_count{ parameterization.ParameterCount() };
+    std::unordered_map<std::size_t, std::size_t>
+        local_position_by_atom_index;
+    local_position_by_atom_index.reserve(key.size());
+    std::unordered_map<GroupKey, std::size_t> local_position_by_group_key;
+    for (std::size_t local_position = 0;
+        local_position < key.size();
+        local_position++)
+    {
+        const auto atom_index{ key.at(local_position) };
+        local_position_by_atom_index.emplace(atom_index, local_position);
+        local_position_by_group_key.emplace(
+            context.at(atom_index).group_key,
+            local_position);
+    }
+    auto selected_snapshot{ BuildFittedGaussianSnapshot(base_state) };
+    for (std::size_t local_position = 0;
+        local_position < key.size();
+        local_position++)
+    {
+        selected_snapshot.at(key.at(local_position)) =
+            seed_model_list.at(local_position);
+    }
+    const auto model_snapshot{
+        BuildSecondStageModelSnapshot(context, std::move(selected_snapshot))
+    };
+
+    std::vector<Eigen::Triplet<double>> triplet_list;
+    std::vector<double> residual_list;
+    residual_list.reserve(sample_ref_list.size());
+    for (const auto & sample_ref : sample_ref_list)
+    {
+        const auto & atom_context{ context.at(sample_ref.atom_index) };
+        const auto & sample{
+            atom_context.raw_sampling_entries.at(sample_ref.sample_index)
+        };
+        if (!std::isfinite(static_cast<double>(sample.response)))
+        {
+            return std::nullopt;
+        }
+
+        const auto row_index{ static_cast<Eigen::Index>(residual_list.size()) };
+        double predicted_response{ 0.0 };
+        const auto append_model = [&](std::size_t atom_index, double distance) -> bool
+        {
+            const auto local_position_iter{
+                local_position_by_atom_index.find(atom_index)
+            };
+            const auto local_position_value{
+                local_position_iter == local_position_by_atom_index.end() ?
+                    -1 : static_cast<int>(local_position_iter->second)
+            };
+            const auto & model{
+                local_position_value >= 0 ?
+                    seed_model_list.at(static_cast<std::size_t>(
+                        local_position_value)) :
+                    base_state.GetModel(atom_index)
+            };
+            const auto evaluation{
+                EvaluateLocalFittingSharedOffsetResponse(model, distance)
+            };
+            if (!evaluation.has_value()) return false;
+            predicted_response += evaluation->response;
+
+            if (local_position_value < 0) return true;
+            const auto local_position{
+                static_cast<std::size_t>(local_position_value)
+            };
+            for (std::size_t parameter_index = 0;
+                parameter_index < kLocalFittingJointPolishShapeParameterSize;
+                parameter_index++)
+            {
+                const auto column_index{
+                    parameterization.ShapeColumn(
+                        local_position,
+                        parameter_index)
+                };
+                const auto derivative{
+                    evaluation->shape_jacobian(
+                        static_cast<Eigen::Index>(parameter_index))
+                };
+                if (std::abs(derivative) <=
+                    std::numeric_limits<double>::epsilon())
+                {
+                    continue;
+                }
+                triplet_list.emplace_back(row_index, column_index, derivative);
+            }
+            if (std::abs(evaluation->offset_jacobian) >
+                std::numeric_limits<double>::epsilon())
+            {
+                triplet_list.emplace_back(
+                    row_index,
+                    parameterization.OffsetColumn(local_position),
+                    evaluation->offset_jacobian);
+            }
+            return true;
+        };
+        const auto append_unselected_model = [&](
+            std::size_t contributor_index,
+            double distance) -> bool
+        {
+            const auto & contributor{
+                context.unselected_atom_list.at(contributor_index)
+            };
+            const auto & model{
+                model_snapshot.unselected.at(contributor_index)
+            };
+            const auto evaluation{
+                EvaluateLocalFittingSharedOffsetResponse(model, distance)
+            };
+            if (!evaluation.has_value()) return false;
+            predicted_response += evaluation->response;
+
+            const auto local_position_iter{
+                local_position_by_group_key.find(contributor.group_key)
+            };
+            if (local_position_iter == local_position_by_group_key.end() ||
+                std::abs(evaluation->offset_jacobian) <=
+                    std::numeric_limits<double>::epsilon())
+            {
+                return true;
+            }
+            triplet_list.emplace_back(
+                row_index,
+                parameterization.OffsetColumn(local_position_iter->second),
+                evaluation->offset_jacobian);
+            return true;
+        };
+
+        if (!append_model(
+                sample_ref.atom_index,
+                static_cast<double>(sample.point.distance)))
+        {
+            return std::nullopt;
+        }
+        for (auto neighbor_iter =
+                atom_context.NeighborBegin(sample_ref.sample_index);
+            neighbor_iter != atom_context.NeighborEnd(sample_ref.sample_index);
+            ++neighbor_iter)
+        {
+            const auto & neighbor_sample{ *neighbor_iter };
+            const auto appended{
+                neighbor_sample.is_selected ?
+                    append_model(
+                        neighbor_sample.atom_index,
+                        neighbor_sample.distance) :
+                    append_unselected_model(
+                        neighbor_sample.atom_index,
+                        neighbor_sample.distance)
+            };
+            if (!appended) return std::nullopt;
+        }
+
+        const auto residual{
+            static_cast<double>(sample.response) - predicted_response
+        };
+        if (!std::isfinite(residual)) return std::nullopt;
+        residual_list.emplace_back(residual);
+    }
+
+    const auto row_count{ static_cast<Eigen::Index>(residual_list.size()) };
+    algorithm::WeightedRidgeSystem system;
+    system.design_matrix.resize(row_count, column_count);
+    system.design_matrix.setFromTriplets(
+        triplet_list.begin(),
+        triplet_list.end());
+    Eigen::VectorXd column_square_sum{
+        Eigen::VectorXd::Zero(column_count)
+    };
+    for (Eigen::Index column_index = 0;
+        column_index < system.design_matrix.outerSize();
+        column_index++)
+    {
+        for (Eigen::SparseMatrix<double>::InnerIterator iter(
+                system.design_matrix,
+                column_index);
+            iter;
+            ++iter)
+        {
+            column_square_sum(column_index) += iter.value() * iter.value();
+        }
+    }
+    system.response = Eigen::VectorXd::Zero(row_count);
+    for (Eigen::Index row_index = 0;
+        row_index < row_count;
+        row_index++)
+    {
+        system.response(row_index) = residual_list.at(
+            static_cast<std::size_t>(row_index));
+    }
+    system.previous_parameter = Eigen::VectorXd::Zero(column_count);
+    system.ridge_diagonal = Eigen::VectorXd::Zero(column_count);
+
+    const auto conditioning{
+        EvaluateJointOffsetConditioning(
+            system.design_matrix,
+            kJointOffsetConditioningPivotRatioThreshold)
+    };
+    const auto conditioning_multiplier{
+        conditioning.guard_required ?
+            kCollinearJointOffsetRidgeMultiplier : 1.0
+    };
+    for (Eigen::Index column_index = 0;
+        column_index < column_count;
+        column_index++)
+    {
+        double parameter_multiplier{ 1.0 };
+        const auto offset_column_base{
+            static_cast<Eigen::Index>(
+                key.size() * kLocalFittingJointPolishShapeParameterSize)
+        };
+        if (column_index < offset_column_base)
+        {
+            const auto local_position{
+                static_cast<std::size_t>(column_index) /
+                    kLocalFittingJointPolishShapeParameterSize
+            };
+            parameter_multiplier = ridge_multiplier_list.at(
+                key.at(local_position));
+        }
+        else
+        {
+            const auto group_position{
+                static_cast<std::size_t>(column_index - offset_column_base)
+            };
+            for (const auto local_position :
+                parameterization.atom_position_list_by_group.at(
+                    group_position))
+            {
+                parameter_multiplier = std::max(
+                    parameter_multiplier,
+                    ridge_multiplier_list.at(key.at(local_position)));
+            }
+        }
+        const auto square_sum{ column_square_sum(column_index) };
+        system.ridge_diagonal(column_index) =
+            CalculateJointOffsetRidgeDiagonal(
+                square_sum,
+                std::max(parameter_multiplier, conditioning_multiplier));
+    }
+
+    const auto residual_scale{
+        std::max(
+            CalculateMedianAbsoluteDeviationScale(residual_list),
+            kRobustScaleMin)
+    };
+    if (!std::isfinite(residual_scale)) return std::nullopt;
+    Eigen::VectorXd weight{ Eigen::VectorXd::Ones(row_count) };
+    for (Eigen::Index row_index = 0;
+        row_index < row_count;
+        row_index++)
+    {
+        weight(row_index) = algorithm::CalculateCauchyWeight(
+            system.response(row_index),
+            residual_scale,
+            kRobustLossCutoffMultiplier);
+    }
+
+    Eigen::VectorXd direction;
+    if (!reusable_solver.Solve(system, weight, direction) ||
+        !direction.allFinite())
+    {
+        return std::nullopt;
+    }
+
+    return direction;
+}
+
+inline bool HasMaterialLocalFittingJointPolishChange(
+    const std::vector<GaussianModel3D> & candidate_model_list,
+    const std::vector<GaussianModel3D> & seed_model_list)
+{
+    if (candidate_model_list.size() != seed_model_list.size()) return false;
+    for (std::size_t atom_position = 0;
+        atom_position < candidate_model_list.size();
+        atom_position++)
+    {
+        const auto change{
+            CalculateLocalFittingTransformedChange(
+                candidate_model_list.at(atom_position),
+                seed_model_list.at(atom_position))
+        };
+        if (std::any_of(
+                change.value_list.begin(),
+                change.value_list.end(),
+                [](double value)
+                {
+                    return std::isfinite(value) &&
+                        value >=
+                            kLocalFittingJointPolishTransformedChangeTolerance;
+                }))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+struct LocalFittingJointPolishProposal
+{
+    LocalFittingStatePatch patch{};
+    double effective_damping{ 0.0 };
+    double step_norm{ 0.0 };
+    std::vector<std::size_t> changed_atom_index_list{};
+};
+
+inline std::optional<LocalFittingJointPolishProposal>
+BuildLocalFittingJointPolishProposal(
+    const SecondStageLocalFittingContext & context,
+    const LocalFittingState & outer_previous_state,
+    const LocalFittingStateView & base_state,
+    const LocalFittingClusterKey & key,
+    const std::vector<LocalFittingObjectiveSampleRef> & sample_ref_list,
+    const std::vector<double> & ridge_multiplier_list,
+    ReusableWeightedRidgeSolver & reusable_solver,
+    double trust_region_radius)
+{
+    constexpr double trust_region_tolerance{ 1.0e-12 };
+    std::vector<GroupKey> group_key_by_atom_position;
+    std::vector<GaussianModel3D> base_model_list;
+    group_key_by_atom_position.reserve(key.size());
+    base_model_list.reserve(key.size());
+    for (const auto atom_index : key)
+    {
+        group_key_by_atom_position.emplace_back(
+            context.at(atom_index).group_key);
+        base_model_list.emplace_back(base_state.GetModel(atom_index));
+    }
+    const auto parameterization{
+        BuildLocalFittingJointPolishParameterization(
+            group_key_by_atom_position,
+            base_model_list)
+    };
+    if (!parameterization.has_value()) return std::nullopt;
+
+    const Eigen::VectorXd zero_direction{
+        Eigen::VectorXd::Zero(parameterization->ParameterCount())
+    };
+    const auto seed_model_list{
+        parameterization->DecodeModels(zero_direction, 0.0)
+    };
+    if (!seed_model_list.has_value() ||
+        std::any_of(
+            seed_model_list->begin(),
+            seed_model_list->end(),
+            [](const GaussianModel3D & model)
+            {
+                return !IsValidSecondStageGaussianModel(model);
+            }))
+    {
+        return std::nullopt;
+    }
+    const auto seed_step_norm{
+        CalculateLocalFittingClusterModelTrustRegionStepNorm(
+            outer_previous_state,
+            key,
+            *seed_model_list)
+    };
+    if (!seed_step_norm.has_value() ||
+        *seed_step_norm > trust_region_radius + trust_region_tolerance)
+    {
+        return std::nullopt;
+    }
+    const auto direction{
+        BuildLocalFittingJointPolishDirection(
+            context,
+            base_state,
+            *seed_model_list,
+            key,
+            sample_ref_list,
+            ridge_multiplier_list,
+            *parameterization,
+            reusable_solver)
+    };
+    if (!direction.has_value()) return std::nullopt;
+
+    double damping{ 1.0 };
+    while (damping >= std::numeric_limits<double>::epsilon())
+    {
+        auto candidate_model_list{
+            parameterization->DecodeModels(*direction, damping)
+        };
+        if (candidate_model_list.has_value() &&
+            std::none_of(
+                candidate_model_list->begin(),
+                candidate_model_list->end(),
+                [](const GaussianModel3D & model)
+                {
+                    return !IsValidSecondStageGaussianModel(model);
+                }))
+        {
+            const auto step_norm{
+                CalculateLocalFittingClusterModelTrustRegionStepNorm(
+                    outer_previous_state,
+                    key,
+                    *candidate_model_list)
+            };
+            if (step_norm.has_value() &&
+                *step_norm <= trust_region_radius + trust_region_tolerance)
+            {
+                if (!HasMaterialLocalFittingJointPolishChange(
+                        *candidate_model_list,
+                        *seed_model_list))
+                {
+                    return std::nullopt;
+                }
+
+                LocalFittingJointPolishProposal proposal;
+                proposal.patch.atom_index_list = key;
+                proposal.patch.mdpde_list.reserve(key.size());
+                proposal.effective_damping = damping;
+                proposal.step_norm = *step_norm;
+                for (std::size_t atom_position = 0;
+                    atom_position < key.size();
+                    atom_position++)
+                {
+                    const auto atom_index{ key.at(atom_position) };
+                    const auto & base_mdpde{ base_state.GetMdpde(atom_index) };
+                    const auto & candidate_model{
+                        candidate_model_list->at(atom_position)
+                    };
+                    proposal.patch.mdpde_list.emplace_back(
+                        GaussianModel3DWithUncertainty{
+                            candidate_model,
+                            base_mdpde.GetStandardDeviationModel()
+                        });
+                    const auto base_coordinates{
+                        EncodeLocalFittingTransformedCoordinates(
+                            base_mdpde.GetModel())
+                    };
+                    const auto candidate_coordinates{
+                        EncodeLocalFittingTransformedCoordinates(
+                            candidate_model)
+                    };
+                    if (!base_coordinates.has_value() ||
+                        !candidate_coordinates.has_value())
+                    {
+                        return std::nullopt;
+                    }
+                    if ((base_coordinates->array() !=
+                        candidate_coordinates->array()).any())
+                    {
+                        proposal.changed_atom_index_list.emplace_back(atom_index);
+                    }
+                }
+                return proposal;
+            }
+        }
+        damping *= 0.5;
+    }
+    return std::nullopt;
 }
 
 } // namespace rhbm_gem::core::detail

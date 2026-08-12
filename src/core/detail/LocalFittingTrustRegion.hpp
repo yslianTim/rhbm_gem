@@ -11,7 +11,13 @@
 
 #include <Eigen/Dense>
 
+#include "core/detail/LocalFittingStateView.hpp"
+#include "core/detail/LocalFittingTransformedChange.hpp"
+
 namespace rhbm_gem::core::detail {
+
+constexpr std::array<double, kTransformedChangeSize>
+kLocalFittingTrustRegionParameterScale{ 0.50, 0.35, 1.0 };
 
 using LocalFittingTrustRegionClusterKey = std::vector<std::size_t>;
 
@@ -371,6 +377,45 @@ inline LocalFittingTrustRegionDamping LimitLocalFittingTrustRegionSubstepDamping
         maximum_damping,
         step_norm
     };
+}
+
+inline std::optional<double> CalculateLocalFittingClusterModelTrustRegionStepNorm(
+    const LocalFittingState & outer_previous_state,
+    const LocalFittingClusterKey & key,
+    const std::vector<GaussianModel3D> & candidate_model_list)
+{
+    if (candidate_model_list.size() != key.size()) return std::nullopt;
+    double step_norm{ 0.0 };
+    for (std::size_t atom_position = 0;
+        atom_position < key.size();
+        atom_position++)
+    {
+        const auto atom_index{ key.at(atom_position) };
+        const auto previous{
+            EncodeLocalFittingTransformedCoordinates(
+                outer_previous_state.at(atom_index).mdpde.GetModel())
+        };
+        const auto candidate{
+            EncodeLocalFittingTransformedCoordinates(
+                candidate_model_list.at(atom_position))
+        };
+        if (!previous.has_value() || !candidate.has_value())
+        {
+            return std::nullopt;
+        }
+        for (std::size_t parameter_index = 0;
+            parameter_index < kTransformedChangeSize;
+            parameter_index++)
+        {
+            const auto eigen_index{ static_cast<Eigen::Index>(parameter_index) };
+            step_norm = std::max(
+                step_norm,
+                std::abs((*candidate)(eigen_index) - (*previous)(eigen_index)) /
+                    kLocalFittingTrustRegionParameterScale.at(parameter_index));
+        }
+    }
+    return std::isfinite(step_norm) ?
+        std::optional<double>{ step_norm } : std::nullopt;
 }
 
 } // namespace rhbm_gem::core::detail
