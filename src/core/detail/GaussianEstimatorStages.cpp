@@ -98,18 +98,6 @@ constexpr std::size_t kLocalFittingMaximumIterations{ 100 };
 constexpr std::size_t kLocalFittingAuditPatience{ 3 };
 constexpr bool kApplyLocalFittingBestIteration{ true };
 constexpr double kLocalFittingChangePercentile{ 0.99 };
-constexpr int kRobustLossMaximumIterations{ 50 };
-constexpr double kRobustScaleMultiplier{ 1.4826 };
-constexpr double kRobustScaleMin{ 1.0e-12 };
-constexpr double kRobustLossCutoffMultiplier{ 1.345 };
-constexpr double kJointOffsetRidgeRatio{ 1.0e-3 };
-constexpr double kSuspiciousJointOffsetRidgeMultiplier{ 10.0 };
-constexpr double kJointOffsetCollinearityOverlapThreshold{ 0.98 };
-constexpr double kCollinearJointOffsetRidgeMultiplier{ 10.0 };
-constexpr double kJointOffsetConditioningPivotRatioThreshold{ 1.0e-8 };
-constexpr double kJointOffsetIrlsScaleFloor{ 1.0e-2 };
-constexpr double kJointOffsetIrlsNormalizedChangeTolerance{ 1.0e-6 };
-constexpr double kJointOffsetIrlsObjectiveRelativeTolerance{ 1.0e-10 };
 constexpr detail::LocalFittingObjectiveTolerance
 kLocalFittingObjectiveStrictTolerance{ 1.0e-10, 1.0e-8 };
 constexpr detail::LocalFittingObjectiveTolerance
@@ -141,28 +129,11 @@ constexpr std::size_t kPersistentTerminalFailureIterationLimit{ 5 };
 using detail::JointOffsetSolveStatus;
 using detail::IsJointOffsetSolveHardFailure;
 using detail::IsJointOffsetSolveStationarityEligible;
-
-const char * GetJointOffsetSolveStatusText(JointOffsetSolveStatus status)
-{
-    switch (status)
-    {
-    case JointOffsetSolveStatus::Converged:
-        return "converged";
-    case JointOffsetSolveStatus::SystemBuildFailed:
-        return "system-build-failed";
-    case JointOffsetSolveStatus::EmptySystem:
-        return "empty-system";
-    case JointOffsetSolveStatus::InitialSolveFailed:
-        return "initial-solve-failed";
-    case JointOffsetSolveStatus::IrlsSolveFailed:
-        return "irls-solve-failed";
-    case JointOffsetSolveStatus::IrlsObjectiveDeteriorated:
-        return "irls-objective-deteriorated";
-    case JointOffsetSolveStatus::IrlsMaximumIterationsReached:
-        return "irls-maximum-iterations-reached";
-    }
-    throw std::logic_error("Joint offset solve status is invalid.");
-}
+using detail::CalculateLocalFittingRidgeDiagonal;
+using detail::CalculateMedianAbsoluteDeviationScale;
+using detail::GetJointOffsetSolveStatusText;
+using detail::LocalFittingJointOffsetSolveResult;
+using detail::EstimateLocalFittingJointOffsets;
 
 struct ZeroOffsetProfileDiagnostics
 {
@@ -178,18 +149,6 @@ struct SuspiciousProfileAnalysis
 {
     bool all_responses_finite{ true };
     std::optional<ZeroOffsetProfileDiagnostics> profile{};
-};
-
-struct JointOffsetSolveResult
-{
-    JointOffsetSolveStatus status{ JointOffsetSolveStatus::SystemBuildFailed };
-    Eigen::VectorXd offset{};
-};
-
-struct JointOffsetBuildResult
-{
-    algorithm::WeightedRidgeSystem system{};
-    detail::LocalFittingJointOffsetParameterization parameterization{};
 };
 
 void ResetLocalFittingClusterSolverWorkspace(
@@ -496,8 +455,6 @@ double CalculateZeroOffsetResponse(
     return static_cast<double>(sample.response) - model_offset;
 }
 
-double CalculateMedianAbsoluteDeviationScale(const std::vector<double> & value_list);
-
 bool IsSameSuspiciousProfileRadius(double lhs, double rhs)
 {
     const auto scale{ std::max({ std::abs(lhs), std::abs(rhs), 1.0 }) };
@@ -581,13 +538,15 @@ bool HasUsableSuspiciousProfileBaseline(
         !std::isfinite(previous_model.GetWidth()) ||
         !std::isfinite(previous_model.GetOffset()) ||
         previous_model.GetWidth() <= 0.0 ||
-        previous_profile.max_abs_response <= kRobustScaleMin ||
+        previous_profile.max_abs_response <= detail::kRobustScaleMin ||
         !std::isfinite(previous_profile.robust_residual_scale))
     {
         return false;
     }
     const auto innermost_scale{
-        std::max(std::abs(previous_profile.innermost_response), kRobustScaleMin)
+        std::max(
+            std::abs(previous_profile.innermost_response),
+            detail::kRobustScaleMin)
     };
     for (std::size_t i = 1; i < previous_profile.radius_response_median_list.size(); i++)
     {
@@ -622,7 +581,7 @@ bool HasSuspiciousOffsetMagnitude(
             std::abs(previous_model.SignalAtDistance(0.0)),
             std::abs(previous_offset_response),
             previous_profile_max_abs_response,
-            kRobustScaleMin
+            detail::kRobustScaleMin
         })
     };
     return std::abs(candidate_offset_response) > kSuspiciousCompensationResponseRatio * reference_scale;
@@ -709,7 +668,7 @@ bool HasSuspiciousAmplitudeOffsetCompensation(
             previous_profile.has_value() ?
                 std::abs(previous_profile->innermost_response) : 0.0,
             std::abs(previous_model.SignalAtDistance(0.0)),
-            kRobustScaleMin
+            detail::kRobustScaleMin
         })
     };
     return signal_delta * offset_delta_response < 0.0 &&
@@ -805,10 +764,6 @@ FittedGaussianSnapshot BuildUnselectedContributorSnapshot(
 SecondStageModelSnapshot BuildSecondStageModelSnapshot(
     const SecondStageLocalFittingContext & context,
     FittedGaussianSnapshot selected_snapshot);
-const GaussianModel3D & ResolveSecondStageNeighborModel(
-    const SecondStageNeighborSample & neighbor_sample,
-    const FittedGaussianSnapshot & selected_snapshot,
-    const FittedGaussianSnapshot & unselected_snapshot);
 
 SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(
     ModelObject & model_object,
@@ -1509,478 +1464,6 @@ SecondStageModelSnapshot BuildSecondStageModelSnapshot(
     };
 }
 
-const GaussianModel3D & ResolveSecondStageNeighborModel(
-    const SecondStageNeighborSample & neighbor_sample,
-    const FittedGaussianSnapshot & selected_snapshot,
-    const FittedGaussianSnapshot & unselected_snapshot)
-{
-    return neighbor_sample.is_selected ?
-        selected_snapshot.at(neighbor_sample.atom_index) :
-        unselected_snapshot.at(neighbor_sample.atom_index);
-}
-
-double CalculateLocalFittingRidgeDiagonal(
-    double column_square_sum,
-    double multiplier)
-{
-    if (!std::isfinite(multiplier) || multiplier <= 0.0)
-    {
-        throw std::invalid_argument(
-            "Local fitting ridge multiplier must be positive and finite.");
-    }
-    const auto base_ridge{
-        column_square_sum > std::numeric_limits<double>::epsilon() ?
-            kJointOffsetRidgeRatio * column_square_sum : 1.0
-    };
-    return multiplier * base_ridge;
-}
-
-JointOffsetBuildResult BuildJointOffsetSystem(
-    const SecondStageLocalFittingContext & context,
-    const std::vector<std::size_t> & active_index_list,
-    const SecondStageModelSnapshot & model_snapshot,
-    const std::vector<double> & ridge_multiplier_list,
-    bool log_debug_diagnostics)
-{
-    std::vector<GroupKey> group_key_by_atom_position;
-    std::vector<GaussianModel3D> active_model_list;
-    group_key_by_atom_position.reserve(active_index_list.size());
-    active_model_list.reserve(active_index_list.size());
-    for (const auto atom_index : active_index_list)
-    {
-        group_key_by_atom_position.emplace_back(context.at(atom_index).group_key);
-        active_model_list.emplace_back(model_snapshot.selected.at(atom_index));
-    }
-    auto parameterization{
-        detail::BuildLocalFittingJointOffsetParameterization(
-            group_key_by_atom_position,
-            active_model_list)
-    };
-    if (!parameterization.has_value())
-    {
-        throw std::runtime_error("Joint offset group parameterization is invalid.");
-    }
-
-    std::unordered_map<std::size_t, std::size_t>
-        active_position_by_atom_index;
-    active_position_by_atom_index.reserve(active_index_list.size());
-    std::unordered_map<GroupKey, std::size_t> active_position_by_group_key;
-    for (std::size_t i = 0; i < active_index_list.size(); i++)
-    {
-        const auto atom_index{ active_index_list.at(i) };
-        active_position_by_atom_index.emplace(atom_index, i);
-        active_position_by_group_key.emplace(
-            group_key_by_atom_position.at(i),
-            i);
-    }
-
-    const auto column_count{ parameterization->ParameterCount() };
-    std::vector<Eigen::Triplet<double>> triplet_list;
-    std::vector<double> response_list;
-    Eigen::VectorXd group_column_square_sum{
-        Eigen::VectorXd::Zero(column_count)
-    };
-    std::map<std::pair<Eigen::Index, Eigen::Index>, double>
-        group_column_cross_sum_map;
-    std::vector<std::pair<std::size_t, double>> atom_row_basis_entries;
-    std::vector<std::pair<Eigen::Index, double>> group_row_basis_entries;
-    for (const auto active_index : active_index_list)
-    {
-        const auto target_position{
-            active_position_by_atom_index.at(active_index)
-        };
-        const auto & atom_context{ context.at(active_index) };
-        const auto & target_model{ model_snapshot.selected.at(active_index) };
-        atom_row_basis_entries.reserve(active_index_list.size());
-        group_row_basis_entries.reserve(parameterization->GroupCount());
-        for (std::size_t sample_index = 0;
-            sample_index < atom_context.raw_sampling_entries.size();
-            sample_index++)
-        {
-            const auto & sample{ atom_context.raw_sampling_entries.at(sample_index) };
-            if (!std::isfinite(static_cast<double>(sample.response)))
-            {
-                throw std::runtime_error("Joint offset sample response is not finite.");
-            }
-            const auto target_distance{ static_cast<double>(sample.point.distance) };
-            const auto target_signal{ target_model.SignalAtDistance(target_distance) };
-            const auto target_basis{ target_model.OffsetBasisAtDistance(target_distance) };
-            if (!std::isfinite(target_signal) || !std::isfinite(target_basis))
-            {
-                throw std::runtime_error("Joint offset target model evaluation is not finite.");
-            }
-            auto residual{ static_cast<double>(sample.response) - target_signal };
-            atom_row_basis_entries.clear();
-            if (std::abs(target_basis) > std::numeric_limits<double>::epsilon())
-            {
-                atom_row_basis_entries.emplace_back(
-                    static_cast<std::size_t>(target_position),
-                    target_basis);
-            }
-
-            for (auto neighbor_iter = atom_context.NeighborBegin(sample_index);
-                neighbor_iter != atom_context.NeighborEnd(sample_index);
-                ++neighbor_iter)
-            {
-                const auto & neighbor_sample{ *neighbor_iter };
-                const auto & neighbor_model{
-                    ResolveSecondStageNeighborModel(
-                        neighbor_sample,
-                        model_snapshot.selected,
-                        model_snapshot.unselected)
-                };
-                int neighbor_position{ -1 };
-                if (neighbor_sample.is_selected)
-                {
-                    const auto neighbor_position_iter{
-                        active_position_by_atom_index.find(
-                            neighbor_sample.atom_index)
-                    };
-                    if (neighbor_position_iter !=
-                        active_position_by_atom_index.end())
-                    {
-                        neighbor_position = static_cast<int>(
-                            neighbor_position_iter->second);
-                    }
-                }
-                else
-                {
-                    const auto group_key{
-                        context.unselected_atom_list.at(
-                            neighbor_sample.atom_index).group_key
-                    };
-                    const auto position_iter{
-                        active_position_by_group_key.find(group_key)
-                    };
-                    if (position_iter != active_position_by_group_key.end())
-                    {
-                        neighbor_position = static_cast<int>(
-                            position_iter->second);
-                    }
-                }
-                if (neighbor_position < 0)
-                {
-                    const auto response{ neighbor_model.ResponseAtDistance(neighbor_sample.distance) };
-                    if (!std::isfinite(response))
-                    {
-                        throw std::runtime_error("Joint offset fixed neighbor model evaluation is not finite.");
-                    }
-                    residual -= response;
-                    continue;
-                }
-
-                const auto signal{ neighbor_model.SignalAtDistance(neighbor_sample.distance) };
-                const auto basis{ neighbor_model.OffsetBasisAtDistance(neighbor_sample.distance) };
-                if (!std::isfinite(signal) || !std::isfinite(basis))
-                {
-                    throw std::runtime_error("Joint offset active neighbor model evaluation is not finite.");
-                }
-                residual -= signal;
-                if (std::abs(basis) > std::numeric_limits<double>::epsilon())
-                {
-                    atom_row_basis_entries.emplace_back(
-                        static_cast<std::size_t>(neighbor_position),
-                        basis);
-                }
-            }
-            if (!std::isfinite(residual))
-            {
-                throw std::runtime_error("Joint offset residual is not finite.");
-            }
-            if (atom_row_basis_entries.empty()) continue;
-
-            const auto group_basis{
-                parameterization->AggregateBasis(atom_row_basis_entries)
-            };
-            if (!group_basis.has_value())
-            {
-                throw std::runtime_error("Joint offset group basis is invalid.");
-            }
-            group_row_basis_entries.clear();
-            for (Eigen::Index column_index = 0; column_index < group_basis->size(); column_index++)
-            {
-                const auto basis{ (*group_basis)(column_index) };
-                if (std::abs(basis) <= std::numeric_limits<double>::epsilon()) continue;
-                group_row_basis_entries.emplace_back(column_index, basis);
-            }
-            if (group_row_basis_entries.empty()) continue;
-
-            const auto row_index{ static_cast<Eigen::Index>(response_list.size()) };
-            response_list.emplace_back(residual);
-            for (const auto & [column_index, basis] : group_row_basis_entries)
-            {
-                triplet_list.emplace_back(row_index, column_index, basis);
-                group_column_square_sum(column_index) += basis * basis;
-            }
-            for (std::size_t i = 0; i < group_row_basis_entries.size(); i++)
-            {
-                const auto [left_column, left_basis]{
-                    group_row_basis_entries.at(i)
-                };
-                for (std::size_t j = i + 1; j < group_row_basis_entries.size(); j++)
-                {
-                    const auto [right_column, right_basis]{
-                        group_row_basis_entries.at(j)
-                    };
-                    const auto column_pair{ std::minmax(left_column, right_column) };
-                    group_column_cross_sum_map[column_pair] += left_basis * right_basis;
-                }
-            }
-        }
-    }
-
-    Eigen::VectorXd proactive_ridge_multiplier{ Eigen::VectorXd::Ones(column_count) };
-    for (const auto & [column_pair, cross_sum] :
-        group_column_cross_sum_map)
-    {
-        const auto left_column{ column_pair.first };
-        const auto right_column{ column_pair.second };
-        const auto left_square_sum{ group_column_square_sum(left_column) };
-        const auto right_square_sum{ group_column_square_sum(right_column) };
-        if (left_square_sum <= std::numeric_limits<double>::epsilon() ||
-            right_square_sum <= std::numeric_limits<double>::epsilon())
-        {
-            continue;
-        }
-        const auto overlap{ std::abs(cross_sum) / std::sqrt(left_square_sum * right_square_sum) };
-        if (!std::isfinite(overlap)) continue;
-        if (overlap < kJointOffsetCollinearityOverlapThreshold) continue;
-
-        proactive_ridge_multiplier(left_column) = std::max(
-            proactive_ridge_multiplier(left_column),
-            kCollinearJointOffsetRidgeMultiplier);
-        proactive_ridge_multiplier(right_column) = std::max(
-            proactive_ridge_multiplier(right_column),
-            kCollinearJointOffsetRidgeMultiplier);
-    }
-
-    const auto row_count{ static_cast<Eigen::Index>(response_list.size()) };
-    Eigen::VectorXd response{ Eigen::VectorXd::Zero(row_count) };
-    for (Eigen::Index row_index = 0; row_index < row_count; row_index++)
-    {
-        response(row_index) = response_list.at(static_cast<std::size_t>(row_index));
-    }
-
-    algorithm::WeightedRidgeSystem system;
-    system.design_matrix.resize(row_count, column_count);
-    system.design_matrix.setFromTriplets(triplet_list.begin(), triplet_list.end());
-    const auto conditioning{
-        detail::EvaluateLocalFittingJointOffsetConditioning(
-            system.design_matrix,
-            kJointOffsetConditioningPivotRatioThreshold)
-    };
-    if (conditioning.guard_required)
-    {
-        proactive_ridge_multiplier.array() = proactive_ridge_multiplier.array().max(
-            kCollinearJointOffsetRidgeMultiplier);
-        if (log_debug_diagnostics)
-        {
-            std::ostringstream message;
-            message
-                << std::scientific << std::setprecision(2)
-                << "Joint offset conditioning guard: columns = " << column_count
-                << ", normalized LDLT pivot ratio = " << conditioning.pivot_ratio
-                << ", proactive ridge multiplier = "
-                << kCollinearJointOffsetRidgeMultiplier << ".";
-            Logger::Log(LogLevel::Debug, message.str());
-        }
-    }
-    system.response = std::move(response);
-    system.previous_parameter = parameterization->seed_offset;
-    system.ridge_diagonal = Eigen::VectorXd::Zero(column_count);
-    for (Eigen::Index column_index = 0; column_index < column_count; column_index++)
-    {
-        double multiplier{ 1.0 };
-        for (const auto atom_position :
-            parameterization->atom_position_list_by_group.at(static_cast<std::size_t>(column_index)))
-        {
-            const auto atom_index{ active_index_list.at(atom_position) };
-            multiplier = std::max(multiplier, ridge_multiplier_list.at(atom_index));
-        }
-        const auto square_sum{ group_column_square_sum(column_index) };
-        const auto combined_multiplier{
-            std::max(multiplier, proactive_ridge_multiplier(column_index))
-        };
-        system.ridge_diagonal(column_index) =
-            CalculateLocalFittingRidgeDiagonal(square_sum, combined_multiplier);
-    }
-    return JointOffsetBuildResult{
-        std::move(system),
-        std::move(*parameterization)
-    };
-}
-
-double CalculateWeightedRidgeSurrogateObjective(
-    const algorithm::WeightedRidgeSystem & system,
-    const Eigen::VectorXd & weight,
-    const Eigen::VectorXd & offset)
-{
-    if (system.response.size() != weight.size())
-    {
-        throw std::invalid_argument("Weighted ridge objective input sizes are inconsistent.");
-    }
-    if (system.previous_parameter.size() != offset.size() || system.ridge_diagonal.size() != offset.size())
-    {
-        throw std::invalid_argument("Weighted ridge objective parameter sizes are inconsistent.");
-    }
-    if (system.response.size() == 0)
-    {
-        return std::numeric_limits<double>::infinity();
-    }
-
-    const Eigen::VectorXd residual{ system.response - system.design_matrix * offset };
-    const auto weighted_residual_loss{ weight.cwiseProduct(residual.cwiseAbs2()).sum() };
-    const Eigen::VectorXd offset_delta{ offset - system.previous_parameter };
-    const auto ridge_loss{ system.ridge_diagonal.cwiseProduct(offset_delta.cwiseAbs2()).sum() };
-    const auto objective{ (weighted_residual_loss + ridge_loss) / static_cast<double>(system.response.size()) };
-    return std::isfinite(objective) ? objective : std::numeric_limits<double>::infinity();
-}
-
-bool IsJointOffsetObjectiveDeteriorated(double updated_objective, double current_objective)
-{
-    if (!std::isfinite(updated_objective)) return true;
-    if (!std::isfinite(current_objective)) return false;
-    const auto scale{
-        std::max({ std::abs(updated_objective), std::abs(current_objective), 1.0 })
-    };
-    return updated_objective > current_objective + kJointOffsetIrlsObjectiveRelativeTolerance * scale;
-}
-
-double CalculateMedianAbsoluteDeviationScale(const std::vector<double> & value_list)
-{
-    if (value_list.empty())
-    {
-        return std::numeric_limits<double>::infinity();
-    }
-
-    const auto median_value{ array_helper::ComputeMedian(value_list) };
-    std::vector<double> deviation_list;
-    deviation_list.reserve(value_list.size());
-    for (const auto value : value_list)
-    {
-        deviation_list.emplace_back(std::abs(value - median_value));
-    }
-    return kRobustScaleMultiplier * array_helper::ComputeMedian(deviation_list);
-}
-
-JointOffsetSolveResult EstimateJointOffsets(
-    const SecondStageLocalFittingContext & context,
-    const std::vector<std::size_t> & active_index_list,
-    const SecondStageModelSnapshot & model_snapshot,
-    const std::vector<double> & ridge_multiplier_list,
-    ReusableWeightedRidgeSolver & reusable_solver,
-    bool log_debug_diagnostics)
-{
-    Eigen::VectorXd previous_offset{
-        Eigen::VectorXd::Zero(static_cast<Eigen::Index>(active_index_list.size()))
-    };
-    for (std::size_t i = 0; i < active_index_list.size(); i++)
-    {
-        const auto atom_index{ active_index_list.at(i) };
-        previous_offset(static_cast<Eigen::Index>(i)) =
-            model_snapshot.selected.at(atom_index).GetOffset();
-    }
-    JointOffsetBuildResult build_result;
-    try
-    {
-        build_result = BuildJointOffsetSystem(
-            context,
-            active_index_list,
-            model_snapshot,
-            ridge_multiplier_list,
-            log_debug_diagnostics);
-    }
-    catch (const std::runtime_error &)
-    {
-        return JointOffsetSolveResult{
-            JointOffsetSolveStatus::SystemBuildFailed,
-            previous_offset
-        };
-    }
-    auto system{ std::move(build_result.system) };
-    auto parameterization{ std::move(build_result.parameterization) };
-    const auto make_progress_result = [&](
-        JointOffsetSolveStatus status,
-        const Eigen::VectorXd & group_offset)
-    {
-        auto atom_offset{ parameterization.ExpandOffsets(group_offset) };
-        if (!atom_offset.has_value())
-        {
-            return JointOffsetSolveResult{
-                JointOffsetSolveStatus::IrlsSolveFailed,
-                previous_offset
-            };
-        }
-        return JointOffsetSolveResult{
-            status,
-            std::move(*atom_offset)
-        };
-    };
-    if (system.response.size() == 0 || system.previous_parameter.size() == 0)
-    {
-        return JointOffsetSolveResult{
-            JointOffsetSolveStatus::EmptySystem,
-            previous_offset
-        };
-    }
-
-    Eigen::VectorXd weight{ Eigen::VectorXd::Ones(system.response.size()) };
-    Eigen::VectorXd offset;
-    if (!reusable_solver.Solve(system, weight, offset))
-    {
-        return JointOffsetSolveResult{
-            JointOffsetSolveStatus::InitialSolveFailed,
-            previous_offset
-        };
-    }
-
-    for (int iteration = 0; iteration < kRobustLossMaximumIterations; iteration++)
-    {
-        const Eigen::VectorXd residual{ system.response - system.design_matrix * offset };
-        std::vector<double> residual_list(residual.data(), residual.data() + residual.size());
-        const auto residual_scale{
-            std::max(CalculateMedianAbsoluteDeviationScale(residual_list), kRobustScaleMin)
-        };
-        for (Eigen::Index i = 0; i < residual.size(); i++)
-        {
-            weight(i) = algorithm::CalculateCauchyWeight(
-                residual(i),
-                residual_scale,
-                kRobustLossCutoffMultiplier);
-        }
-
-        Eigen::VectorXd updated_offset;
-        if (!reusable_solver.Solve(system, weight, updated_offset))
-        {
-            return JointOffsetSolveResult{ JointOffsetSolveStatus::IrlsSolveFailed, previous_offset };
-        }
-        const auto current_objective{
-            CalculateWeightedRidgeSurrogateObjective(system, weight, offset)
-        };
-        const auto updated_objective{
-            CalculateWeightedRidgeSurrogateObjective(system, weight, updated_offset)
-        };
-        if (IsJointOffsetObjectiveDeteriorated(updated_objective, current_objective))
-        {
-            return make_progress_result(
-                JointOffsetSolveStatus::IrlsObjectiveDeteriorated,
-                offset);
-        }
-        const auto maximum_change{
-            algorithm::CalculateMaximumNormalizedVectorChange(updated_offset, offset, kJointOffsetIrlsScaleFloor)
-        };
-        offset = std::move(updated_offset);
-        if (maximum_change < kJointOffsetIrlsNormalizedChangeTolerance)
-        {
-            return make_progress_result(JointOffsetSolveStatus::Converged, offset);
-        }
-    }
-
-    return make_progress_result(
-        JointOffsetSolveStatus::IrlsMaximumIterationsReached,
-        offset);
-}
-
 double CalculateSecondStageAdjustedResponse(
     const SecondStageLocalFittingContext & context,
     std::size_t atom_index,
@@ -1996,7 +1479,7 @@ double CalculateSecondStageAdjustedResponse(
         ++neighbor_iter)
     {
         const auto & neighbor_sample{ *neighbor_iter };
-        response_value -= ResolveSecondStageNeighborModel(
+        response_value -= detail::ResolveSecondStageNeighborModel(
             neighbor_sample,
             model_snapshot.selected,
             model_snapshot.unselected).ResponseAtDistance(neighbor_sample.distance);
@@ -2117,7 +1600,7 @@ std::optional<LocalFittingResidualSample> EvaluateLocalFittingResidualSample(
         ++neighbor_iter)
     {
         const auto & neighbor_sample{ *neighbor_iter };
-        adjusted_response -= ResolveSecondStageNeighborModel(
+        adjusted_response -= detail::ResolveSecondStageNeighborModel(
             neighbor_sample,
             model_snapshot.selected,
             model_snapshot.unselected).ResponseAtDistance(neighbor_sample.distance);
@@ -2148,7 +1631,7 @@ std::optional<double> BuildFixedLocalFittingObjectiveScale(
             CalculateMedianAbsoluteDeviationScale(residual_list),
             kLocalFittingObjectiveResidualScaleFloorRatio *
                 CalculateMedianAbsoluteDeviationScale(adjusted_response_list),
-            kRobustScaleMin
+            detail::kRobustScaleMin
         })
     };
     return numeric_validation::IsFinitePositive(scale) ?
@@ -2369,7 +1852,7 @@ EvaluateLocalFittingObjectiveContributionImpl(
         const auto loss{
             algorithm::CalculateCauchyLoss(
                 residual_sample->residual / *scale,
-                kRobustLossCutoffMultiplier)
+                detail::kRobustLossCutoffMultiplier)
         };
         const auto coefficient{
             detail::CalculateLocalFittingClusterAtomWeight(
@@ -2415,7 +1898,7 @@ EvaluateLocalFittingObjectiveContributionImpl(
                 std::max({
                     std::abs(peak_signal),
                     owner_iter->second.scale->fit,
-                    kRobustScaleMin
+            detail::kRobustScaleMin
                 })
             };
             const auto offset_excess{
@@ -3265,10 +2748,11 @@ std::optional<Eigen::VectorXd> BuildLocalFittingJointPolishDirection(
     const auto conditioning{
         detail::EvaluateLocalFittingJointOffsetConditioning(
             system.design_matrix,
-            kJointOffsetConditioningPivotRatioThreshold)
+            detail::kJointOffsetConditioningPivotRatioThreshold)
     };
     const auto conditioning_multiplier{
-        conditioning.guard_required ? kCollinearJointOffsetRidgeMultiplier : 1.0
+        conditioning.guard_required ?
+            detail::kCollinearJointOffsetRidgeMultiplier : 1.0
     };
     for (Eigen::Index column_index = 0; column_index < column_count; column_index++)
     {
@@ -3304,7 +2788,9 @@ std::optional<Eigen::VectorXd> BuildLocalFittingJointPolishDirection(
     }
 
     const auto residual_scale{
-        std::max(CalculateMedianAbsoluteDeviationScale(residual_list), kRobustScaleMin)
+        std::max(
+            CalculateMedianAbsoluteDeviationScale(residual_list),
+            detail::kRobustScaleMin)
     };
     if (!std::isfinite(residual_scale)) return std::nullopt;
     Eigen::VectorXd weight{ Eigen::VectorXd::Ones(row_count) };
@@ -3313,7 +2799,7 @@ std::optional<Eigen::VectorXd> BuildLocalFittingJointPolishDirection(
         weight(row_index) = algorithm::CalculateCauchyWeight(
             system.response(row_index),
             residual_scale,
-            kRobustLossCutoffMultiplier);
+            detail::kRobustLossCutoffMultiplier);
     }
 
     Eigen::VectorXd direction;
@@ -4761,14 +4247,15 @@ LocalFittingIterationResult RunLocalFittingIteration(
     const auto log_debug_diagnostics{
         !options.quiet_mode && is_debug_logging_enabled
     };
-    std::vector<JointOffsetSolveResult> joint_offset_result_list(cluster_key_list.size());
+    std::vector<LocalFittingJointOffsetSolveResult>
+        joint_offset_result_list(cluster_key_list.size());
     std::vector<std::exception_ptr> joint_offset_exception_list(cluster_key_list.size());
     const auto solve_joint_offset = [&](std::size_t cluster_position)
     {
         try
         {
             joint_offset_result_list.at(cluster_position) =
-                EstimateJointOffsets(
+                EstimateLocalFittingJointOffsets(
                 context,
                 cluster_key_list.at(cluster_position),
                 current_model_snapshot,
@@ -5948,7 +5435,8 @@ bool RunSecondStageLocalFitting(
         for (std::size_t atom_index = 0; atom_index < atom_size; atom_index++)
         {
             if (rollback_atom_mask.at(atom_index) == 0) continue;
-            joint_offset_ridge_multiplier_list.at(atom_index) = kSuspiciousJointOffsetRidgeMultiplier;
+            joint_offset_ridge_multiplier_list.at(atom_index) =
+                detail::kSuspiciousJointOffsetRidgeMultiplier;
         }
 
         const auto iteration_phase_start{ std::chrono::steady_clock::now() };

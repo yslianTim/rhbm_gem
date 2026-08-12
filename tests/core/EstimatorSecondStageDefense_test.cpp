@@ -216,6 +216,46 @@ rg::GaussianModel3D MakeGaussianWithCenterSignal(
     return rg::GaussianModel3D{ amplitude, width, offset };
 }
 
+std::pair<offset_detail::SecondStageLocalFittingContext,
+    offset_detail::SecondStageModelSnapshot>
+BuildJointOffsetEstimationFixture(
+    const std::vector<GroupKey> & group_key_list,
+    const std::vector<rg::GaussianModel3D> & model_list,
+    const std::vector<double> & target_offset_list)
+{
+    if (group_key_list.size() != model_list.size() ||
+        model_list.size() != target_offset_list.size())
+    {
+        throw std::invalid_argument(
+            "Joint offset fixture input sizes are inconsistent.");
+    }
+
+    offset_detail::SecondStageLocalFittingContext context;
+    context.selected_atom_list.resize(model_list.size());
+    for (std::size_t atom_index = 0;
+        atom_index < model_list.size();
+        atom_index++)
+    {
+        auto & atom_context{ context.at(atom_index) };
+        atom_context.group_key = group_key_list.at(atom_index);
+        SamplingPoint point;
+        point.distance = 0.35F;
+        atom_context.raw_sampling_entries.emplace_back(LocalPotentialSample{
+            static_cast<float>(
+                model_list.at(atom_index).SignalAtDistance(point.distance) +
+                target_offset_list.at(atom_index) *
+                    model_list.at(atom_index).OffsetBasisAtDistance(
+                        point.distance)),
+            point
+        });
+        atom_context.sample_neighbor_offset_list = { 0, 0 };
+    }
+    return {
+        std::move(context),
+        offset_detail::SecondStageModelSnapshot{ model_list, {} }
+    };
+}
+
 LocalPotentialSampleList BuildSuspiciousGuardSamples(
     const rg::GaussianModel3D & previous_model,
     const std::vector<double> & radius_list,
@@ -2016,19 +2056,19 @@ TEST(EstimatorSecondStageDefenseTest, LocalRefitHealthTracksStationarity)
 
 TEST(EstimatorSecondStageDefenseTest, JointOffsetHealthSeparatesProgressFromStationarity)
 {
-    using Status = health_detail::JointOffsetSolveStatus;
+    using Status = offset_detail::JointOffsetSolveStatus;
 
-    EXPECT_TRUE(health_detail::IsJointOffsetSolveProgressEligible(Status::Converged));
-    EXPECT_TRUE(health_detail::IsJointOffsetSolveStationarityEligible(Status::Converged));
-    EXPECT_FALSE(health_detail::IsJointOffsetSolveHardFailure(Status::Converged));
+    EXPECT_TRUE(offset_detail::IsJointOffsetSolveProgressEligible(Status::Converged));
+    EXPECT_TRUE(offset_detail::IsJointOffsetSolveStationarityEligible(Status::Converged));
+    EXPECT_FALSE(offset_detail::IsJointOffsetSolveHardFailure(Status::Converged));
 
     for (const auto status : {
         Status::IrlsObjectiveDeteriorated,
         Status::IrlsMaximumIterationsReached })
     {
-        EXPECT_TRUE(health_detail::IsJointOffsetSolveProgressEligible(status));
-        EXPECT_FALSE(health_detail::IsJointOffsetSolveStationarityEligible(status));
-        EXPECT_FALSE(health_detail::IsJointOffsetSolveHardFailure(status));
+        EXPECT_TRUE(offset_detail::IsJointOffsetSolveProgressEligible(status));
+        EXPECT_FALSE(offset_detail::IsJointOffsetSolveStationarityEligible(status));
+        EXPECT_FALSE(offset_detail::IsJointOffsetSolveHardFailure(status));
     }
 
     for (const auto status : {
@@ -2037,19 +2077,163 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetHealthSeparatesProgressFromStat
         Status::InitialSolveFailed,
         Status::IrlsSolveFailed })
     {
-        EXPECT_FALSE(health_detail::IsJointOffsetSolveProgressEligible(status));
-        EXPECT_FALSE(health_detail::IsJointOffsetSolveStationarityEligible(status));
-        EXPECT_TRUE(health_detail::IsJointOffsetSolveHardFailure(status));
+        EXPECT_FALSE(offset_detail::IsJointOffsetSolveProgressEligible(status));
+        EXPECT_FALSE(offset_detail::IsJointOffsetSolveStationarityEligible(status));
+        EXPECT_TRUE(offset_detail::IsJointOffsetSolveHardFailure(status));
     }
 
     const auto invalid_status{ static_cast<Status>(-1) };
     EXPECT_THROW(
-        health_detail::IsJointOffsetSolveProgressEligible(invalid_status),
+        offset_detail::IsJointOffsetSolveProgressEligible(invalid_status),
         std::logic_error);
     EXPECT_FALSE(
-        health_detail::IsJointOffsetSolveStationarityEligible(invalid_status));
+        offset_detail::IsJointOffsetSolveStationarityEligible(invalid_status));
     EXPECT_THROW(
-        health_detail::IsJointOffsetSolveHardFailure(invalid_status),
+        offset_detail::IsJointOffsetSolveHardFailure(invalid_status),
+        std::logic_error);
+}
+
+TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorSharesGroupOffsets)
+{
+    auto fixture{
+        BuildJointOffsetEstimationFixture(
+            { 20, 20 },
+            {
+                rg::GaussianModel3D{ 6.0, 0.55, 0.0 },
+                rg::GaussianModel3D{ 7.0, 0.60, 4.0 }
+            },
+            { 2.0, 2.0 })
+    };
+    offset_detail::ReusableWeightedRidgeSolver solver;
+    const auto result{
+        offset_detail::EstimateLocalFittingJointOffsets(
+            fixture.first,
+            { 0, 1 },
+            fixture.second,
+            { 1.0, 1.0 },
+            solver,
+            false)
+    };
+
+    EXPECT_EQ(
+        result.status,
+        offset_detail::JointOffsetSolveStatus::Converged);
+    ASSERT_EQ(result.offset.size(), 2);
+    EXPECT_NEAR(result.offset(0), 2.0, 1.0e-5);
+    EXPECT_DOUBLE_EQ(result.offset(0), result.offset(1));
+}
+
+TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorKeepsIndependentGroups)
+{
+    auto fixture{
+        BuildJointOffsetEstimationFixture(
+            { 20, 10 },
+            {
+                rg::GaussianModel3D{ 6.0, 0.55, 1.0 },
+                rg::GaussianModel3D{ 7.0, 0.60, 3.0 }
+            },
+            { 1.0, 3.0 })
+    };
+    offset_detail::ReusableWeightedRidgeSolver solver;
+    const auto result{
+        offset_detail::EstimateLocalFittingJointOffsets(
+            fixture.first,
+            { 0, 1 },
+            fixture.second,
+            { 1.0, 1.0 },
+            solver,
+            false)
+    };
+
+    EXPECT_EQ(
+        result.status,
+        offset_detail::JointOffsetSolveStatus::Converged);
+    ASSERT_EQ(result.offset.size(), 2);
+    EXPECT_NEAR(result.offset(0), 1.0, 1.0e-5);
+    EXPECT_NEAR(result.offset(1), 3.0, 1.0e-5);
+    EXPECT_GT(std::abs(result.offset(0) - result.offset(1)), 1.0);
+}
+
+TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorReportsBuildAndEmptyFailures)
+{
+    auto empty_fixture{
+        BuildJointOffsetEstimationFixture(
+            { 20 },
+            { rg::GaussianModel3D{ 6.0, 0.55, 2.0 } },
+            { 2.0 })
+    };
+    empty_fixture.first.at(0).raw_sampling_entries.clear();
+    empty_fixture.first.at(0).sample_neighbor_offset_list.clear();
+    offset_detail::ReusableWeightedRidgeSolver empty_solver;
+    const auto empty_result{
+        offset_detail::EstimateLocalFittingJointOffsets(
+            empty_fixture.first,
+            { 0 },
+            empty_fixture.second,
+            { 1.0 },
+            empty_solver,
+            false)
+    };
+    EXPECT_EQ(
+        empty_result.status,
+        offset_detail::JointOffsetSolveStatus::EmptySystem);
+    ASSERT_EQ(empty_result.offset.size(), 1);
+    EXPECT_DOUBLE_EQ(empty_result.offset(0), 2.0);
+
+    auto invalid_fixture{
+        BuildJointOffsetEstimationFixture(
+            { 20 },
+            { rg::GaussianModel3D{ 6.0, 0.55, 2.0 } },
+            { 2.0 })
+    };
+    invalid_fixture.first.at(0).raw_sampling_entries.at(0).response =
+        std::numeric_limits<float>::infinity();
+    offset_detail::ReusableWeightedRidgeSolver invalid_solver;
+    const auto invalid_result{
+        offset_detail::EstimateLocalFittingJointOffsets(
+            invalid_fixture.first,
+            { 0 },
+            invalid_fixture.second,
+            { 1.0 },
+            invalid_solver,
+            false)
+    };
+    EXPECT_EQ(
+        invalid_result.status,
+        offset_detail::JointOffsetSolveStatus::SystemBuildFailed);
+    ASSERT_EQ(invalid_result.offset.size(), 1);
+    EXPECT_DOUBLE_EQ(invalid_result.offset(0), 2.0);
+}
+
+TEST(EstimatorSecondStageDefenseTest, JointOffsetStatusTextCoversAllStatuses)
+{
+    using Status = offset_detail::JointOffsetSolveStatus;
+    EXPECT_STREQ(
+        offset_detail::GetJointOffsetSolveStatusText(Status::Converged),
+        "converged");
+    EXPECT_STREQ(
+        offset_detail::GetJointOffsetSolveStatusText(Status::SystemBuildFailed),
+        "system-build-failed");
+    EXPECT_STREQ(
+        offset_detail::GetJointOffsetSolveStatusText(Status::EmptySystem),
+        "empty-system");
+    EXPECT_STREQ(
+        offset_detail::GetJointOffsetSolveStatusText(Status::InitialSolveFailed),
+        "initial-solve-failed");
+    EXPECT_STREQ(
+        offset_detail::GetJointOffsetSolveStatusText(Status::IrlsSolveFailed),
+        "irls-solve-failed");
+    EXPECT_STREQ(
+        offset_detail::GetJointOffsetSolveStatusText(
+            Status::IrlsObjectiveDeteriorated),
+        "irls-objective-deteriorated");
+    EXPECT_STREQ(
+        offset_detail::GetJointOffsetSolveStatusText(
+            Status::IrlsMaximumIterationsReached),
+        "irls-maximum-iterations-reached");
+    EXPECT_THROW(
+        offset_detail::GetJointOffsetSolveStatusText(
+            static_cast<Status>(-1)),
         std::logic_error);
 }
 

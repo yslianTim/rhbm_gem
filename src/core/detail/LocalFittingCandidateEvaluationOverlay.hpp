@@ -22,6 +22,16 @@ struct SecondStageModelSnapshot
     FittedGaussianSnapshot unselected{};
 };
 
+inline const GaussianModel3D & ResolveSecondStageNeighborModel(
+    const SecondStageNeighborSample & neighbor_sample,
+    const FittedGaussianSnapshot & selected_snapshot,
+    const FittedGaussianSnapshot & unselected_snapshot)
+{
+    return neighbor_sample.is_selected ?
+        selected_snapshot.at(neighbor_sample.atom_index) :
+        unselected_snapshot.at(neighbor_sample.atom_index);
+}
+
 struct LocalFittingResidualSample
 {
     double adjusted_response{ 0.0 };
