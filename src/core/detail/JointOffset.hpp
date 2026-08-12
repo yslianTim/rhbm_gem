@@ -119,13 +119,13 @@ inline double CalculateMedianAbsoluteDeviationScale(
     return kRobustScaleMultiplier * array_helper::ComputeMedian(deviation_list);
 }
 
-struct LocalFittingJointOffsetConditioning
+struct JointOffsetConditioning
 {
     bool guard_required{ false };
     double pivot_ratio{ 0.0 };
 };
 
-struct LocalFittingJointOffsetParameterization
+struct JointOffsetParameterization
 {
     std::vector<std::size_t> group_position_by_atom{};
     std::vector<std::vector<std::size_t>> atom_position_list_by_group{};
@@ -148,8 +148,7 @@ struct LocalFittingJointOffsetParameterization
 
     Eigen::Index OffsetColumn(std::size_t atom_position) const
     {
-        return static_cast<Eigen::Index>(
-            group_position_by_atom.at(atom_position));
+        return static_cast<Eigen::Index>(group_position_by_atom.at(atom_position));
     }
 
     std::optional<Eigen::VectorXd> AggregateBasis(
@@ -165,12 +164,10 @@ struct LocalFittingJointOffsetParameterization
             group_basis(OffsetColumn(atom_position)) += basis;
         }
         return group_basis.allFinite() ?
-            std::optional<Eigen::VectorXd>{ std::move(group_basis) } :
-            std::nullopt;
+            std::optional<Eigen::VectorXd>{ std::move(group_basis) } : std::nullopt;
     }
 
-    std::optional<Eigen::VectorXd> ExpandOffsets(
-        const Eigen::VectorXd & group_offset) const
+    std::optional<Eigen::VectorXd> ExpandOffsets(const Eigen::VectorXd & group_offset) const
     {
         if (group_offset.size() != ParameterCount() || !group_offset.allFinite())
         {
@@ -180,9 +177,7 @@ struct LocalFittingJointOffsetParameterization
         Eigen::VectorXd atom_offset{
             Eigen::VectorXd::Zero(static_cast<Eigen::Index>(AtomCount()))
         };
-        for (std::size_t atom_position = 0;
-            atom_position < AtomCount();
-            atom_position++)
+        for (std::size_t atom_position = 0; atom_position < AtomCount(); atom_position++)
         {
             atom_offset(static_cast<Eigen::Index>(atom_position)) =
                 group_offset(OffsetColumn(atom_position));
@@ -191,13 +186,12 @@ struct LocalFittingJointOffsetParameterization
     }
 };
 
-inline std::optional<LocalFittingJointOffsetParameterization>
-BuildLocalFittingJointOffsetParameterization(
+inline std::optional<JointOffsetParameterization>
+BuildJointOffsetParameterization(
     const std::vector<GroupKey> & group_key_by_atom_position,
     const std::vector<GaussianModel3D> & base_model_list)
 {
-    if (group_key_by_atom_position.empty() ||
-        group_key_by_atom_position.size() != base_model_list.size())
+    if (group_key_by_atom_position.empty() || group_key_by_atom_position.size() != base_model_list.size())
     {
         return std::nullopt;
     }
@@ -214,18 +208,13 @@ BuildLocalFittingJointOffsetParameterization(
         position = group_position++;
     }
 
-    LocalFittingJointOffsetParameterization parameterization;
+    JointOffsetParameterization parameterization;
     parameterization.group_position_by_atom.resize(base_model_list.size());
-    parameterization.atom_position_list_by_group.resize(
-        group_position_by_key.size());
-    parameterization.seed_offset = Eigen::VectorXd::Zero(
-        static_cast<Eigen::Index>(group_position_by_key.size()));
-    std::vector<std::vector<double>> offset_list_by_group(
-        group_position_by_key.size());
+    parameterization.atom_position_list_by_group.resize(group_position_by_key.size());
+    parameterization.seed_offset = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(group_position_by_key.size()));
+    std::vector<std::vector<double>> offset_list_by_group(group_position_by_key.size());
 
-    for (std::size_t atom_position = 0;
-        atom_position < base_model_list.size();
-        atom_position++)
+    for (std::size_t atom_position = 0; atom_position < base_model_list.size(); atom_position++)
     {
         const auto offset{ base_model_list.at(atom_position).GetOffset() };
         if (!std::isfinite(offset)) return std::nullopt;
@@ -233,10 +222,8 @@ BuildLocalFittingJointOffsetParameterization(
         const auto atom_group_position{
             group_position_by_key.at(group_key_by_atom_position.at(atom_position))
         };
-        parameterization.group_position_by_atom.at(atom_position) =
-            atom_group_position;
-        parameterization.atom_position_list_by_group.at(atom_group_position)
-            .emplace_back(atom_position);
+        parameterization.group_position_by_atom.at(atom_position) = atom_group_position;
+        parameterization.atom_position_list_by_group.at(atom_group_position).emplace_back(atom_position);
         offset_list_by_group.at(atom_group_position).emplace_back(offset);
     }
 
@@ -248,24 +235,19 @@ BuildLocalFittingJointOffsetParameterization(
         if (offset_list.empty()) return std::nullopt;
         std::sort(offset_list.begin(), offset_list.end());
         const auto middle{ offset_list.size() / 2 };
-        const auto median{
-            offset_list.size() % 2 == 0 ?
-                0.5 * offset_list.at(middle - 1) +
-                    0.5 * offset_list.at(middle) :
-                offset_list.at(middle)
+        const auto median{ offset_list.size() % 2 == 0 ?
+            0.5 * offset_list.at(middle - 1) + 0.5 * offset_list.at(middle) :
+            offset_list.at(middle)
         };
         if (!std::isfinite(median)) return std::nullopt;
-        parameterization.seed_offset(
-            static_cast<Eigen::Index>(current_group_position)) = median;
+        parameterization.seed_offset(static_cast<Eigen::Index>(current_group_position)) = median;
     }
     return parameterization.seed_offset.allFinite() ?
-        std::optional<LocalFittingJointOffsetParameterization>{
-            std::move(parameterization) } :
-        std::nullopt;
+        std::optional<JointOffsetParameterization>{ std::move(parameterization) } : std::nullopt;
 }
 
-inline LocalFittingJointOffsetConditioning
-EvaluateLocalFittingJointOffsetConditioning(
+inline JointOffsetConditioning
+EvaluateJointOffsetConditioning(
     const Eigen::SparseMatrix<double> & design_matrix,
     double pivot_ratio_threshold)
 {
@@ -278,95 +260,87 @@ EvaluateLocalFittingJointOffsetConditioning(
     }
     if (design_matrix.cols() == 0)
     {
-        return LocalFittingJointOffsetConditioning{ true, 0.0 };
+        return JointOffsetConditioning{ true, 0.0 };
     }
 
     Eigen::SparseMatrix<double> normalized_design{ design_matrix };
     for (Eigen::Index column = 0; column < normalized_design.outerSize(); column++)
     {
         double square_sum{ 0.0 };
-        for (Eigen::SparseMatrix<double>::InnerIterator entry(
-                normalized_design, column); entry; ++entry)
+        for (Eigen::SparseMatrix<double>::InnerIterator entry(normalized_design, column); entry; ++entry)
         {
             square_sum += entry.value() * entry.value();
         }
         if (!std::isfinite(square_sum) ||
             square_sum <= std::numeric_limits<double>::epsilon())
         {
-            return LocalFittingJointOffsetConditioning{ true, 0.0 };
+            return JointOffsetConditioning{ true, 0.0 };
         }
         const auto scale{ std::sqrt(square_sum) };
-        for (Eigen::SparseMatrix<double>::InnerIterator entry(
-                normalized_design, column); entry; ++entry)
+        for (Eigen::SparseMatrix<double>::InnerIterator entry(normalized_design, column); entry; ++entry)
         {
             entry.valueRef() /= scale;
         }
     }
 
-    Eigen::SparseMatrix<double> normalized_gram{
-        normalized_design.transpose() * normalized_design
-    };
+    Eigen::SparseMatrix<double> normalized_gram{ normalized_design.transpose() * normalized_design };
     normalized_gram.makeCompressed();
     Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> solver;
     solver.compute(normalized_gram);
     if (solver.info() != Eigen::Success)
     {
-        return LocalFittingJointOffsetConditioning{ true, 0.0 };
+        return JointOffsetConditioning{ true, 0.0 };
     }
 
     const auto diagonal{ solver.vectorD().eval() };
     if (diagonal.size() == 0 || !diagonal.allFinite())
     {
-        return LocalFittingJointOffsetConditioning{ true, 0.0 };
+        return JointOffsetConditioning{ true, 0.0 };
     }
     if (diagonal.minCoeff() <= 0.0)
     {
-        return LocalFittingJointOffsetConditioning{ true, 0.0 };
+        return JointOffsetConditioning{ true, 0.0 };
     }
     const auto maximum_pivot{ diagonal.maxCoeff() };
     const auto minimum_pivot{ diagonal.minCoeff() };
-    if (!std::isfinite(maximum_pivot) ||
-        maximum_pivot <= std::numeric_limits<double>::epsilon())
+    if (!std::isfinite(maximum_pivot) || maximum_pivot <= std::numeric_limits<double>::epsilon())
     {
-        return LocalFittingJointOffsetConditioning{ true, 0.0 };
+        return JointOffsetConditioning{ true, 0.0 };
     }
 
     const auto pivot_ratio{ minimum_pivot / maximum_pivot };
-    return LocalFittingJointOffsetConditioning{
+    return JointOffsetConditioning{
         !std::isfinite(pivot_ratio) || pivot_ratio <= pivot_ratio_threshold,
         std::isfinite(pivot_ratio) ? pivot_ratio : 0.0
     };
 }
 
-struct LocalFittingJointOffsetSolveResult
+struct JointOffsetSolveResult
 {
     JointOffsetSolveStatus status{ JointOffsetSolveStatus::SystemBuildFailed };
     Eigen::VectorXd offset{};
 };
 
-struct LocalFittingJointOffsetBuildResult
+struct JointOffsetBuildResult
 {
     algorithm::WeightedRidgeSystem system{};
-    LocalFittingJointOffsetParameterization parameterization{};
+    JointOffsetParameterization parameterization{};
 };
 
-inline double CalculateLocalFittingRidgeDiagonal(
-    double column_square_sum,
-    double multiplier)
+inline double CalculateJointOffsetRidgeDiagonal(double column_square_sum, double multiplier)
 {
     if (!std::isfinite(multiplier) || multiplier <= 0.0)
     {
         throw std::invalid_argument(
             "Local fitting ridge multiplier must be positive and finite.");
     }
-    const auto base_ridge{
-        column_square_sum > std::numeric_limits<double>::epsilon() ?
-            kJointOffsetRidgeRatio * column_square_sum : 1.0
+    const auto base_ridge{ column_square_sum > std::numeric_limits<double>::epsilon() ?
+        kJointOffsetRidgeRatio * column_square_sum : 1.0
     };
     return multiplier * base_ridge;
 }
 
-inline LocalFittingJointOffsetBuildResult BuildLocalFittingJointOffsetSystem(
+inline JointOffsetBuildResult BuildJointOffsetSystem(
     const SecondStageLocalFittingContext & context,
     const std::vector<std::size_t> & active_index_list,
     const SecondStageModelSnapshot & model_snapshot,
@@ -383,36 +357,28 @@ inline LocalFittingJointOffsetBuildResult BuildLocalFittingJointOffsetSystem(
         active_model_list.emplace_back(model_snapshot.selected.at(atom_index));
     }
     auto parameterization{
-        BuildLocalFittingJointOffsetParameterization(
-            group_key_by_atom_position,
-            active_model_list)
+        BuildJointOffsetParameterization(group_key_by_atom_position, active_model_list)
     };
     if (!parameterization.has_value())
     {
         throw std::runtime_error("Joint offset group parameterization is invalid.");
     }
 
-    std::unordered_map<std::size_t, std::size_t>
-        active_position_by_atom_index;
+    std::unordered_map<std::size_t, std::size_t> active_position_by_atom_index;
     active_position_by_atom_index.reserve(active_index_list.size());
     std::unordered_map<GroupKey, std::size_t> active_position_by_group_key;
     for (std::size_t i = 0; i < active_index_list.size(); i++)
     {
         const auto atom_index{ active_index_list.at(i) };
         active_position_by_atom_index.emplace(atom_index, i);
-        active_position_by_group_key.emplace(
-            group_key_by_atom_position.at(i),
-            i);
+        active_position_by_group_key.emplace(group_key_by_atom_position.at(i), i);
     }
 
     const auto column_count{ parameterization->ParameterCount() };
     std::vector<Eigen::Triplet<double>> triplet_list;
     std::vector<double> response_list;
-    Eigen::VectorXd group_column_square_sum{
-        Eigen::VectorXd::Zero(column_count)
-    };
-    std::map<std::pair<Eigen::Index, Eigen::Index>, double>
-        group_column_cross_sum_map;
+    Eigen::VectorXd group_column_square_sum{ Eigen::VectorXd::Zero(column_count) };
+    std::map<std::pair<Eigen::Index, Eigen::Index>, double> group_column_cross_sum_map;
     std::vector<std::pair<std::size_t, double>> atom_row_basis_entries;
     std::vector<std::pair<Eigen::Index, double>> group_row_basis_entries;
     for (const auto active_index : active_index_list)
@@ -424,9 +390,7 @@ inline LocalFittingJointOffsetBuildResult BuildLocalFittingJointOffsetSystem(
         const auto & target_model{ model_snapshot.selected.at(active_index) };
         atom_row_basis_entries.reserve(active_index_list.size());
         group_row_basis_entries.reserve(parameterization->GroupCount());
-        for (std::size_t sample_index = 0;
-            sample_index < atom_context.raw_sampling_entries.size();
-            sample_index++)
+        for (std::size_t sample_index = 0; sample_index < atom_context.raw_sampling_entries.size(); sample_index++)
         {
             const auto & sample{ atom_context.raw_sampling_entries.at(sample_index) };
             if (!std::isfinite(static_cast<double>(sample.response)))
@@ -444,9 +408,7 @@ inline LocalFittingJointOffsetBuildResult BuildLocalFittingJointOffsetSystem(
             atom_row_basis_entries.clear();
             if (std::abs(target_basis) > std::numeric_limits<double>::epsilon())
             {
-                atom_row_basis_entries.emplace_back(
-                    static_cast<std::size_t>(target_position),
-                    target_basis);
+                atom_row_basis_entries.emplace_back(static_cast<std::size_t>(target_position), target_basis);
             }
 
             for (auto neighbor_iter = atom_context.NeighborBegin(sample_index);
@@ -464,29 +426,24 @@ inline LocalFittingJointOffsetBuildResult BuildLocalFittingJointOffsetSystem(
                 if (neighbor_sample.is_selected)
                 {
                     const auto neighbor_position_iter{
-                        active_position_by_atom_index.find(
-                            neighbor_sample.atom_index)
+                        active_position_by_atom_index.find(neighbor_sample.atom_index)
                     };
-                    if (neighbor_position_iter !=
-                        active_position_by_atom_index.end())
+                    if (neighbor_position_iter != active_position_by_atom_index.end())
                     {
-                        neighbor_position = static_cast<int>(
-                            neighbor_position_iter->second);
+                        neighbor_position = static_cast<int>(neighbor_position_iter->second);
                     }
                 }
                 else
                 {
                     const auto group_key{
-                        context.unselected_atom_list.at(
-                            neighbor_sample.atom_index).group_key
+                        context.unselected_atom_list.at(neighbor_sample.atom_index).group_key
                     };
                     const auto position_iter{
                         active_position_by_group_key.find(group_key)
                     };
                     if (position_iter != active_position_by_group_key.end())
                     {
-                        neighbor_position = static_cast<int>(
-                            position_iter->second);
+                        neighbor_position = static_cast<int>(position_iter->second);
                     }
                 }
                 if (neighbor_position < 0)
@@ -517,9 +474,7 @@ inline LocalFittingJointOffsetBuildResult BuildLocalFittingJointOffsetSystem(
                 residual -= signal;
                 if (std::abs(basis) > std::numeric_limits<double>::epsilon())
                 {
-                    atom_row_basis_entries.emplace_back(
-                        static_cast<std::size_t>(neighbor_position),
-                        basis);
+                    atom_row_basis_entries.emplace_back(static_cast<std::size_t>(neighbor_position), basis);
                 }
             }
             if (!std::isfinite(residual))
@@ -536,9 +491,7 @@ inline LocalFittingJointOffsetBuildResult BuildLocalFittingJointOffsetSystem(
                 throw std::runtime_error("Joint offset group basis is invalid.");
             }
             group_row_basis_entries.clear();
-            for (Eigen::Index column_index = 0;
-                column_index < group_basis->size();
-                column_index++)
+            for (Eigen::Index column_index = 0; column_index < group_basis->size(); column_index++)
             {
                 const auto basis{ (*group_basis)(column_index) };
                 if (std::abs(basis) <= std::numeric_limits<double>::epsilon())
@@ -563,28 +516,20 @@ inline LocalFittingJointOffsetBuildResult BuildLocalFittingJointOffsetSystem(
                 const auto [left_column, left_basis]{
                     group_row_basis_entries.at(i)
                 };
-                for (std::size_t j = i + 1;
-                    j < group_row_basis_entries.size();
-                    j++)
+                for (std::size_t j = i + 1; j < group_row_basis_entries.size(); j++)
                 {
                     const auto [right_column, right_basis]{
                         group_row_basis_entries.at(j)
                     };
-                    const auto column_pair{
-                        std::minmax(left_column, right_column)
-                    };
-                    group_column_cross_sum_map[column_pair] +=
-                        left_basis * right_basis;
+                    const auto column_pair{ std::minmax(left_column, right_column) };
+                    group_column_cross_sum_map[column_pair] += left_basis * right_basis;
                 }
             }
         }
     }
 
-    Eigen::VectorXd proactive_ridge_multiplier{
-        Eigen::VectorXd::Ones(column_count)
-    };
-    for (const auto & [column_pair, cross_sum] :
-        group_column_cross_sum_map)
+    Eigen::VectorXd proactive_ridge_multiplier{ Eigen::VectorXd::Ones(column_count) };
+    for (const auto & [column_pair, cross_sum] : group_column_cross_sum_map)
     {
         const auto left_column{ column_pair.first };
         const auto right_column{ column_pair.second };
@@ -596,11 +541,9 @@ inline LocalFittingJointOffsetBuildResult BuildLocalFittingJointOffsetSystem(
             continue;
         }
         const auto overlap{
-            std::abs(cross_sum) /
-            std::sqrt(left_square_sum * right_square_sum)
+            std::abs(cross_sum) / std::sqrt(left_square_sum * right_square_sum)
         };
-        if (!std::isfinite(overlap) ||
-            overlap < kJointOffsetCollinearityOverlapThreshold)
+        if (!std::isfinite(overlap) || overlap < kJointOffsetCollinearityOverlapThreshold)
         {
             continue;
         }
@@ -617,24 +560,20 @@ inline LocalFittingJointOffsetBuildResult BuildLocalFittingJointOffsetSystem(
     Eigen::VectorXd response{ Eigen::VectorXd::Zero(row_count) };
     for (Eigen::Index row_index = 0; row_index < row_count; row_index++)
     {
-        response(row_index) = response_list.at(
-            static_cast<std::size_t>(row_index));
+        response(row_index) = response_list.at(static_cast<std::size_t>(row_index));
     }
 
     algorithm::WeightedRidgeSystem system;
     system.design_matrix.resize(row_count, column_count);
-    system.design_matrix.setFromTriplets(
-        triplet_list.begin(), triplet_list.end());
+    system.design_matrix.setFromTriplets(triplet_list.begin(), triplet_list.end());
     const auto conditioning{
-        EvaluateLocalFittingJointOffsetConditioning(
+        EvaluateJointOffsetConditioning(
             system.design_matrix,
             kJointOffsetConditioningPivotRatioThreshold)
     };
     if (conditioning.guard_required)
     {
-        proactive_ridge_multiplier.array() =
-            proactive_ridge_multiplier.array().max(
-                kCollinearJointOffsetRidgeMultiplier);
+        proactive_ridge_multiplier.array() = proactive_ridge_multiplier.array().max(kCollinearJointOffsetRidgeMultiplier);
         if (log_debug_diagnostics)
         {
             std::ostringstream message;
@@ -652,32 +591,23 @@ inline LocalFittingJointOffsetBuildResult BuildLocalFittingJointOffsetSystem(
     system.response = std::move(response);
     system.previous_parameter = parameterization->seed_offset;
     system.ridge_diagonal = Eigen::VectorXd::Zero(column_count);
-    for (Eigen::Index column_index = 0;
-        column_index < column_count;
-        column_index++)
+    for (Eigen::Index column_index = 0; column_index < column_count; column_index++)
     {
         double multiplier{ 1.0 };
         for (const auto atom_position :
-            parameterization->atom_position_list_by_group.at(
-                static_cast<std::size_t>(column_index)))
+            parameterization->atom_position_list_by_group.at(static_cast<std::size_t>(column_index)))
         {
             const auto atom_index{ active_index_list.at(atom_position) };
-            multiplier = std::max(
-                multiplier,
-                ridge_multiplier_list.at(atom_index));
+            multiplier = std::max(multiplier, ridge_multiplier_list.at(atom_index));
         }
         const auto square_sum{ group_column_square_sum(column_index) };
         const auto combined_multiplier{
-            std::max(
-                multiplier,
-                proactive_ridge_multiplier(column_index))
+            std::max(multiplier, proactive_ridge_multiplier(column_index))
         };
         system.ridge_diagonal(column_index) =
-            CalculateLocalFittingRidgeDiagonal(
-                square_sum,
-                combined_multiplier);
+            CalculateJointOffsetRidgeDiagonal(square_sum, combined_multiplier);
     }
-    return LocalFittingJointOffsetBuildResult{
+    return JointOffsetBuildResult{
         std::move(system),
         std::move(*parameterization)
     };
@@ -717,16 +647,12 @@ inline double CalculateWeightedRidgeSurrogateObjective(
         system.ridge_diagonal.cwiseProduct(offset_delta.cwiseAbs2()).sum()
     };
     const auto objective{
-        (weighted_residual_loss + ridge_loss) /
-        static_cast<double>(system.response.size())
+        (weighted_residual_loss + ridge_loss) / static_cast<double>(system.response.size())
     };
-    return std::isfinite(objective) ? objective :
-        std::numeric_limits<double>::infinity();
+    return std::isfinite(objective) ? objective : std::numeric_limits<double>::infinity();
 }
 
-inline bool IsJointOffsetObjectiveDeteriorated(
-    double updated_objective,
-    double current_objective)
+inline bool IsJointOffsetObjectiveDeteriorated(double updated_objective, double current_objective)
 {
     if (!std::isfinite(updated_objective)) return true;
     if (!std::isfinite(current_objective)) return false;
@@ -737,11 +663,10 @@ inline bool IsJointOffsetObjectiveDeteriorated(
             1.0
         })
     };
-    return updated_objective > current_objective +
-        kJointOffsetIrlsObjectiveRelativeTolerance * scale;
+    return updated_objective > current_objective + kJointOffsetIrlsObjectiveRelativeTolerance * scale;
 }
 
-inline LocalFittingJointOffsetSolveResult EstimateLocalFittingJointOffsets(
+inline JointOffsetSolveResult EstimateJointOffsets(
     const SecondStageLocalFittingContext & context,
     const std::vector<std::size_t> & active_index_list,
     const SecondStageModelSnapshot & model_snapshot,
@@ -750,19 +675,17 @@ inline LocalFittingJointOffsetSolveResult EstimateLocalFittingJointOffsets(
     bool log_debug_diagnostics)
 {
     Eigen::VectorXd previous_offset{
-        Eigen::VectorXd::Zero(
-            static_cast<Eigen::Index>(active_index_list.size()))
+        Eigen::VectorXd::Zero(static_cast<Eigen::Index>(active_index_list.size()))
     };
     for (std::size_t i = 0; i < active_index_list.size(); i++)
     {
         const auto atom_index{ active_index_list.at(i) };
-        previous_offset(static_cast<Eigen::Index>(i)) =
-            model_snapshot.selected.at(atom_index).GetOffset();
+        previous_offset(static_cast<Eigen::Index>(i)) = model_snapshot.selected.at(atom_index).GetOffset();
     }
-    LocalFittingJointOffsetBuildResult build_result;
+    JointOffsetBuildResult build_result;
     try
     {
-        build_result = BuildLocalFittingJointOffsetSystem(
+        build_result = BuildJointOffsetSystem(
             context,
             active_index_list,
             model_snapshot,
@@ -771,7 +694,7 @@ inline LocalFittingJointOffsetSolveResult EstimateLocalFittingJointOffsets(
     }
     catch (const std::runtime_error &)
     {
-        return LocalFittingJointOffsetSolveResult{
+        return JointOffsetSolveResult{
             JointOffsetSolveStatus::SystemBuildFailed,
             previous_offset
         };
@@ -785,20 +708,19 @@ inline LocalFittingJointOffsetSolveResult EstimateLocalFittingJointOffsets(
         auto atom_offset{ parameterization.ExpandOffsets(group_offset) };
         if (!atom_offset.has_value())
         {
-            return LocalFittingJointOffsetSolveResult{
+            return JointOffsetSolveResult{
                 JointOffsetSolveStatus::IrlsSolveFailed,
                 previous_offset
             };
         }
-        return LocalFittingJointOffsetSolveResult{
+        return JointOffsetSolveResult{
             status,
             std::move(*atom_offset)
         };
     };
-    if (system.response.size() == 0 ||
-        system.previous_parameter.size() == 0)
+    if (system.response.size() == 0 || system.previous_parameter.size() == 0)
     {
-        return LocalFittingJointOffsetSolveResult{
+        return JointOffsetSolveResult{
             JointOffsetSolveStatus::EmptySystem,
             previous_offset
         };
@@ -808,22 +730,16 @@ inline LocalFittingJointOffsetSolveResult EstimateLocalFittingJointOffsets(
     Eigen::VectorXd offset;
     if (!reusable_solver.Solve(system, weight, offset))
     {
-        return LocalFittingJointOffsetSolveResult{
+        return JointOffsetSolveResult{
             JointOffsetSolveStatus::InitialSolveFailed,
             previous_offset
         };
     }
 
-    for (int iteration = 0;
-        iteration < kRobustLossMaximumIterations;
-        iteration++)
+    for (int iteration = 0; iteration < kRobustLossMaximumIterations; iteration++)
     {
-        const Eigen::VectorXd residual{
-            system.response - system.design_matrix * offset
-        };
-        std::vector<double> residual_list(
-            residual.data(),
-            residual.data() + residual.size());
+        const Eigen::VectorXd residual{ system.response - system.design_matrix * offset };
+        std::vector<double> residual_list(residual.data(), residual.data() + residual.size());
         const auto residual_scale{
             std::max(
                 CalculateMedianAbsoluteDeviationScale(residual_list),
@@ -840,7 +756,7 @@ inline LocalFittingJointOffsetSolveResult EstimateLocalFittingJointOffsets(
         Eigen::VectorXd updated_offset;
         if (!reusable_solver.Solve(system, weight, updated_offset))
         {
-            return LocalFittingJointOffsetSolveResult{
+            return JointOffsetSolveResult{
                 JointOffsetSolveStatus::IrlsSolveFailed,
                 previous_offset
             };
@@ -849,14 +765,9 @@ inline LocalFittingJointOffsetSolveResult EstimateLocalFittingJointOffsets(
             CalculateWeightedRidgeSurrogateObjective(system, weight, offset)
         };
         const auto updated_objective{
-            CalculateWeightedRidgeSurrogateObjective(
-                system,
-                weight,
-                updated_offset)
+            CalculateWeightedRidgeSurrogateObjective(system, weight, updated_offset)
         };
-        if (IsJointOffsetObjectiveDeteriorated(
-                updated_objective,
-                current_objective))
+        if (IsJointOffsetObjectiveDeteriorated(updated_objective, current_objective))
         {
             return make_progress_result(
                 JointOffsetSolveStatus::IrlsObjectiveDeteriorated,
@@ -871,15 +782,11 @@ inline LocalFittingJointOffsetSolveResult EstimateLocalFittingJointOffsets(
         offset = std::move(updated_offset);
         if (maximum_change < kJointOffsetIrlsNormalizedChangeTolerance)
         {
-            return make_progress_result(
-                JointOffsetSolveStatus::Converged,
-                offset);
+            return make_progress_result(JointOffsetSolveStatus::Converged, offset);
         }
     }
 
-    return make_progress_result(
-        JointOffsetSolveStatus::IrlsMaximumIterationsReached,
-        offset);
+    return make_progress_result(JointOffsetSolveStatus::IrlsMaximumIterationsReached, offset);
 }
 
 } // namespace rhbm_gem::core::detail

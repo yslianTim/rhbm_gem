@@ -7,7 +7,7 @@
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
-#include "core/detail/LocalFittingJointOffset.hpp"
+#include "core/detail/JointOffset.hpp"
 #include "core/detail/LocalFittingJointPolish.hpp"
 #include "core/detail/LocalFittingObjectiveAttemptDiagnostic.hpp"
 #include "core/detail/LocalFittingPerformanceCounters.hpp"
@@ -129,11 +129,11 @@ constexpr std::size_t kPersistentTerminalFailureIterationLimit{ 5 };
 using detail::JointOffsetSolveStatus;
 using detail::IsJointOffsetSolveHardFailure;
 using detail::IsJointOffsetSolveStationarityEligible;
-using detail::CalculateLocalFittingRidgeDiagonal;
+using detail::CalculateJointOffsetRidgeDiagonal;
 using detail::CalculateMedianAbsoluteDeviationScale;
 using detail::GetJointOffsetSolveStatusText;
-using detail::LocalFittingJointOffsetSolveResult;
-using detail::EstimateLocalFittingJointOffsets;
+using detail::JointOffsetSolveResult;
+using detail::EstimateJointOffsets;
 
 struct ZeroOffsetProfileDiagnostics
 {
@@ -2746,7 +2746,7 @@ std::optional<Eigen::VectorXd> BuildLocalFittingJointPolishDirection(
     system.ridge_diagonal = Eigen::VectorXd::Zero(column_count);
 
     const auto conditioning{
-        detail::EvaluateLocalFittingJointOffsetConditioning(
+        detail::EvaluateJointOffsetConditioning(
             system.design_matrix,
             detail::kJointOffsetConditioningPivotRatioThreshold)
     };
@@ -2782,7 +2782,7 @@ std::optional<Eigen::VectorXd> BuildLocalFittingJointPolishDirection(
         }
         const auto square_sum{ column_square_sum(column_index) };
         system.ridge_diagonal(column_index) =
-            CalculateLocalFittingRidgeDiagonal(
+            CalculateJointOffsetRidgeDiagonal(
                 square_sum,
                 std::max(parameter_multiplier, conditioning_multiplier));
     }
@@ -4247,7 +4247,7 @@ LocalFittingIterationResult RunLocalFittingIteration(
     const auto log_debug_diagnostics{
         !options.quiet_mode && is_debug_logging_enabled
     };
-    std::vector<LocalFittingJointOffsetSolveResult>
+    std::vector<JointOffsetSolveResult>
         joint_offset_result_list(cluster_key_list.size());
     std::vector<std::exception_ptr> joint_offset_exception_list(cluster_key_list.size());
     const auto solve_joint_offset = [&](std::size_t cluster_position)
@@ -4255,7 +4255,7 @@ LocalFittingIterationResult RunLocalFittingIteration(
         try
         {
             joint_offset_result_list.at(cluster_position) =
-                EstimateLocalFittingJointOffsets(
+                EstimateJointOffsets(
                 context,
                 cluster_key_list.at(cluster_position),
                 current_model_snapshot,

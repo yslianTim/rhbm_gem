@@ -17,7 +17,7 @@
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
-#include "core/detail/LocalFittingJointOffset.hpp"
+#include "core/detail/JointOffset.hpp"
 #include "core/detail/LocalFittingJointPolish.hpp"
 #include "core/detail/LocalFittingSeedRepair.hpp"
 #include "core/detail/LocalFittingTrustRegion.hpp"
@@ -1900,7 +1900,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetConditioningDetectsJointDepende
     }
 
     const auto diagnostics{
-        conditioning_detail::EvaluateLocalFittingJointOffsetConditioning(
+        conditioning_detail::EvaluateJointOffsetConditioning(
             design_matrix,
             1.0e-8)
     };
@@ -1914,7 +1914,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetConditioningKeepsIndependentCol
     design_matrix.setIdentity();
 
     const auto diagnostics{
-        conditioning_detail::EvaluateLocalFittingJointOffsetConditioning(
+        conditioning_detail::EvaluateJointOffsetConditioning(
             design_matrix,
             1.0e-8)
     };
@@ -1933,7 +1933,7 @@ TEST(EstimatorSecondStageDefenseTest,
         rg::GaussianModel3D{ 10.0, 0.75, 6.0 }
     };
     const auto parameterization{
-        offset_detail::BuildLocalFittingJointOffsetParameterization(
+        offset_detail::BuildJointOffsetParameterization(
             std::vector<GroupKey>{ 20, 10, 20, 20, 10 },
             base_model_list)
     };
@@ -1975,7 +1975,7 @@ TEST(EstimatorSecondStageDefenseTest,
         parameterization->ExpandOffsets(Eigen::VectorXd::Zero(1)).has_value());
 
     EXPECT_FALSE(
-        offset_detail::BuildLocalFittingJointOffsetParameterization(
+        offset_detail::BuildJointOffsetParameterization(
             std::vector<GroupKey>{ 20 },
             base_model_list).has_value());
     auto non_finite_model_list{ base_model_list };
@@ -1985,7 +1985,7 @@ TEST(EstimatorSecondStageDefenseTest,
         std::numeric_limits<double>::infinity()
     };
     EXPECT_FALSE(
-        offset_detail::BuildLocalFittingJointOffsetParameterization(
+        offset_detail::BuildJointOffsetParameterization(
             std::vector<GroupKey>{ 20, 10, 20, 20, 10 },
             non_finite_model_list).has_value());
 }
@@ -1994,7 +1994,7 @@ TEST(EstimatorSecondStageDefenseTest,
     JointOffsetParameterizationAggregatesBasisByDeterministicGroupColumn)
 {
     const auto parameterization{
-        offset_detail::BuildLocalFittingJointOffsetParameterization(
+        offset_detail::BuildJointOffsetParameterization(
             std::vector<GroupKey>{ 20, 10, 20 },
             std::vector<rg::GaussianModel3D>{
                 rg::GaussianModel3D{ 6.0, 0.55, 1.0 },
@@ -2022,7 +2022,7 @@ TEST(EstimatorSecondStageDefenseTest,
         1.0e-12);
 
     const auto reordered{
-        offset_detail::BuildLocalFittingJointOffsetParameterization(
+        offset_detail::BuildJointOffsetParameterization(
             std::vector<GroupKey>{ 10, 20, 20 },
             std::vector<rg::GaussianModel3D>{
                 rg::GaussianModel3D{ 7.0, 0.60, 4.0 },
@@ -2106,7 +2106,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorSharesGroupOffsets)
     };
     offset_detail::ReusableWeightedRidgeSolver solver;
     const auto result{
-        offset_detail::EstimateLocalFittingJointOffsets(
+        offset_detail::EstimateJointOffsets(
             fixture.first,
             { 0, 1 },
             fixture.second,
@@ -2136,7 +2136,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorKeepsIndependentGroups
     };
     offset_detail::ReusableWeightedRidgeSolver solver;
     const auto result{
-        offset_detail::EstimateLocalFittingJointOffsets(
+        offset_detail::EstimateJointOffsets(
             fixture.first,
             { 0, 1 },
             fixture.second,
@@ -2166,7 +2166,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorReportsBuildAndEmptyFa
     empty_fixture.first.at(0).sample_neighbor_offset_list.clear();
     offset_detail::ReusableWeightedRidgeSolver empty_solver;
     const auto empty_result{
-        offset_detail::EstimateLocalFittingJointOffsets(
+        offset_detail::EstimateJointOffsets(
             empty_fixture.first,
             { 0 },
             empty_fixture.second,
@@ -2190,7 +2190,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorReportsBuildAndEmptyFa
         std::numeric_limits<float>::infinity();
     offset_detail::ReusableWeightedRidgeSolver invalid_solver;
     const auto invalid_result{
-        offset_detail::EstimateLocalFittingJointOffsets(
+        offset_detail::EstimateJointOffsets(
             invalid_fixture.first,
             { 0 },
             invalid_fixture.second,
