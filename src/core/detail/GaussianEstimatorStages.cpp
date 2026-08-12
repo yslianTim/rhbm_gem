@@ -28,6 +28,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <exception>
 #include <iomanip>
 #include <limits>
 #include <map>
@@ -52,6 +53,37 @@
 namespace rhbm_gem::core {
 
 namespace {
+
+class ScopedEigenThreadCount
+{
+public:
+    explicit ScopedEigenThreadCount(int requested_thread_count)
+        : previous_thread_count_(Eigen::nbThreads()),
+          changed_(requested_thread_count > 0 &&
+              previous_thread_count_ != requested_thread_count)
+    {
+        if (changed_)
+        {
+            Eigen::setNbThreads(requested_thread_count);
+        }
+    }
+
+    ScopedEigenThreadCount(const ScopedEigenThreadCount &) = delete;
+    ScopedEigenThreadCount & operator=(const ScopedEigenThreadCount &) = delete;
+
+    ~ScopedEigenThreadCount()
+    {
+        if (changed_ && Eigen::nbThreads() != previous_thread_count_)
+        {
+            Eigen::setNbThreads(previous_thread_count_);
+        }
+    }
+
+private:
+    int previous_thread_count_{ 1 };
+    bool changed_{ false };
+};
+
 constexpr double kSuspiciousProfileInnermostSignFlipRatio{ 0.25 };
 constexpr double kSuspiciousProfileNoiseScaleMultiplier{ 3.0 };
 constexpr double kSuspiciousProfileNoiseScaleMin{ 1.0e-12 };
@@ -2721,6 +2753,19 @@ std::vector<std::size_t> BuildEligibleLocalFittingActiveIndexList(
     return active_index_list;
 }
 
+std::vector<LocalFittingClusterKey> BuildLocalFittingClusterKeyList(
+    const detail::LocalFittingCouplingPartition & partition)
+{
+    std::vector<LocalFittingClusterKey> cluster_key_list;
+    cluster_key_list.reserve(partition.sample_id_list_by_key.size());
+    for (const auto & [key, sample_id_list] : partition.sample_id_list_by_key)
+    {
+        static_cast<void>(sample_id_list);
+        cluster_key_list.emplace_back(key);
+    }
+    return cluster_key_list;
+}
+
 std::vector<Eigen::Vector3d> BuildLocalFittingTransformedEstimationList(
     const LocalFittingState & state)
 {
@@ -3404,73 +3449,133 @@ std::optional<LocalFittingState> BuildLocalFittingCandidateState(
     return candidate_state;
 }
 
-std::optional<LocalFittingState> BuildLocalFittingBacktrackedState(
-    const SecondStageLocalFittingContext & context,
-    const LocalFittingState & previous_state,
-    const LocalFittingState & endpoint_state,
-    const std::vector<std::size_t> & active_index_list,
-    double factor)
+struct LocalFittingBacktrackingWorkspace
 {
-    if (!std::isfinite(factor) || factor < 0.0 || factor > 1.0)
+    LocalFittingBacktrackingWorkspace(
+        const SecondStageLocalFittingContext & context,
+        const LocalFittingState & previous_state,
+        const LocalFittingState & endpoint_state,
+        const std::vector<std::size_t> & active_index_list)
+        : endpoint_state(endpoint_state),
+          active_index_list(active_index_list),
+          candidate_state(previous_state)
     {
-        throw std::invalid_argument(
-            "Local fitting objective backtracking factor must be in [0, 1].");
+        group_key_by_atom_position.reserve(active_index_list.size());
+        previous_model_list.reserve(active_index_list.size());
+        endpoint_model_list.reserve(active_index_list.size());
+        previous_transformed_estimation_list.reserve(active_index_list.size());
+        for (const auto atom_index : active_index_list)
+        {
+            group_key_by_atom_position.emplace_back(context.at(atom_index).group_key);
+            previous_model_list.emplace_back(previous_state.at(atom_index).mdpde.GetModel());
+            endpoint_model_list.emplace_back(endpoint_state.at(atom_index).mdpde.GetModel());
+            previous_transformed_estimation_list.emplace_back(
+                detail::EncodeLocalFittingTransformedCoordinates(
+                    previous_state.at(atom_index).mdpde.GetModel()));
+        }
+        previous_shared_offset_model_list =
+            detail::BuildLocalFittingGroupMedianModelList(
+                group_key_by_atom_position,
+                previous_model_list);
+        endpoint_shared_offset_model_list =
+            detail::BuildLocalFittingGroupMedianModelList(
+                group_key_by_atom_position,
+                endpoint_model_list);
     }
-    std::vector<GroupKey> group_key_by_atom_position;
-    std::vector<GaussianModel3D> previous_model_list;
-    std::vector<GaussianModel3D> endpoint_model_list;
-    group_key_by_atom_position.reserve(active_index_list.size());
-    previous_model_list.reserve(active_index_list.size());
-    endpoint_model_list.reserve(active_index_list.size());
-    for (const auto atom_index : active_index_list)
-    {
-        group_key_by_atom_position.emplace_back(context.at(atom_index).group_key);
-        previous_model_list.emplace_back(previous_state.at(atom_index).mdpde.GetModel());
-        endpoint_model_list.emplace_back(endpoint_state.at(atom_index).mdpde.GetModel());
-    }
-    const auto previous_shared_offset_model_list{
-        detail::BuildLocalFittingGroupMedianModelList(group_key_by_atom_position, previous_model_list)
-    };
-    const auto endpoint_shared_offset_model_list{
-        detail::BuildLocalFittingGroupMedianModelList(group_key_by_atom_position, endpoint_model_list)
-    };
-    const auto candidate_model_list{
-        detail::BuildLocalFittingSharedOffsetDampedModelList(
-            previous_model_list,
-            endpoint_model_list,
-            previous_shared_offset_model_list,
-            endpoint_shared_offset_model_list,
-            factor)
-    };
-    if (!candidate_model_list.has_value()) return std::nullopt;
 
-    auto candidate_state{ previous_state };
-    for (std::size_t atom_position = 0; atom_position < active_index_list.size(); atom_position++)
+    LocalFittingBacktrackingWorkspace(const LocalFittingBacktrackingWorkspace &) = delete;
+    LocalFittingBacktrackingWorkspace & operator=(const LocalFittingBacktrackingWorkspace &) = delete;
+
+    const LocalFittingState * BuildCandidate(double factor)
     {
-        const auto atom_index{ active_index_list.at(atom_position) };
-        candidate_state.at(atom_index).mdpde =
-            GaussianModel3DWithUncertainty{
-                candidate_model_list->at(atom_position),
-                endpoint_state.at(atom_index).mdpde.GetStandardDeviationModel()
+        if (!std::isfinite(factor) || factor < 0.0 || factor > 1.0)
+        {
+            throw std::invalid_argument(
+                "Local fitting objective backtracking factor must be in [0, 1].");
+        }
+        const auto candidate_model_list{
+            detail::BuildLocalFittingSharedOffsetDampedModelList(
+                previous_model_list,
+                endpoint_model_list,
+                previous_shared_offset_model_list,
+                endpoint_shared_offset_model_list,
+                factor)
+        };
+        if (!candidate_model_list.has_value()) return nullptr;
+
+        for (std::size_t atom_position = 0;
+            atom_position < active_index_list.size();
+            atom_position++)
+        {
+            const auto atom_index{ active_index_list.at(atom_position) };
+            candidate_state.at(atom_index).mdpde =
+                GaussianModel3DWithUncertainty{
+                    candidate_model_list->at(atom_position),
+                    endpoint_state.at(atom_index).mdpde.GetStandardDeviationModel()
+                };
+        }
+        return &candidate_state;
+    }
+
+    LocalFittingState TakeCandidateState()
+    {
+        return std::move(candidate_state);
+    }
+
+    double GetMaximumTransformedChange() const
+    {
+        std::array<double, detail::kTransformedChangeSize> maximum_list{};
+        for (std::size_t atom_position = 0;
+            atom_position < active_index_list.size();
+            atom_position++)
+        {
+            const auto current_coordinates{
+                detail::EncodeLocalFittingTransformedCoordinates(
+                    candidate_state.at(active_index_list.at(atom_position))
+                        .mdpde.GetModel())
             };
+            const auto & previous_coordinates{
+                previous_transformed_estimation_list.at(atom_position)
+            };
+            if (!current_coordinates.has_value() ||
+                !previous_coordinates.has_value())
+            {
+                return std::numeric_limits<double>::infinity();
+            }
+            for (std::size_t parameter_index = 0;
+                parameter_index < detail::kTransformedChangeSize;
+                parameter_index++)
+            {
+                const auto parameter_value{
+                    std::abs(
+                        (*current_coordinates)(
+                            static_cast<Eigen::Index>(parameter_index)) -
+                        (*previous_coordinates)(
+                            static_cast<Eigen::Index>(parameter_index)))
+                };
+                if (!std::isfinite(parameter_value))
+                {
+                    return std::numeric_limits<double>::infinity();
+                }
+                maximum_list.at(parameter_index) = std::max(
+                    maximum_list.at(parameter_index),
+                    parameter_value);
+            }
+        }
+        return *std::max_element(maximum_list.begin(), maximum_list.end());
     }
-    return candidate_state;
-}
 
-double GetLocalFittingMaximumTransformedChange(
-    const LocalFittingState & candidate_state,
-    const LocalFittingState & previous_state,
-    const std::vector<std::size_t> & active_index_list)
-{
-    const auto summary{
-        SummarizeLocalFittingTransformedChanges(
-            candidate_state,
-            previous_state,
-            active_index_list)
-    };
-    return summary.maximum_list.empty() ? 0.0 :
-        *std::max_element(summary.maximum_list.begin(), summary.maximum_list.end());
-}
+private:
+    const LocalFittingState & endpoint_state;
+    std::vector<std::size_t> active_index_list{};
+    std::vector<GroupKey> group_key_by_atom_position{};
+    std::vector<GaussianModel3D> previous_model_list{};
+    std::vector<GaussianModel3D> endpoint_model_list{};
+    std::vector<std::optional<Eigen::Vector3d>> previous_transformed_estimation_list{};
+    std::vector<GaussianModel3D> previous_shared_offset_model_list{};
+    std::vector<GaussianModel3D> endpoint_shared_offset_model_list{};
+    LocalFittingState candidate_state{};
+};
 
 LocalFittingClusterObjectiveState
 BuildInitialLocalFittingClusterObjectiveState(
@@ -3799,26 +3904,25 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
             const auto endpoint_state{ base_state };
             const auto endpoint_effective_damping{ base_proposal->effective_damping };
             const auto endpoint_step_norm{ base_proposal->step_norm };
+            LocalFittingBacktrackingWorkspace backtracking_workspace{
+                context,
+                previous_state,
+                endpoint_state,
+                key
+            };
             double factor{ 0.5 };
             while (factor >= std::numeric_limits<double>::epsilon())
             {
-                auto backtracked_state{
-                    BuildLocalFittingBacktrackedState(
-                        context,
-                        previous_state,
-                        endpoint_state,
-                        key,
-                        factor)
+                const auto * backtracked_state{
+                    backtracking_workspace.BuildCandidate(factor)
                 };
-                if (!backtracked_state.has_value())
+                if (backtracked_state == nullptr)
                 {
                     base_diagnostic.is_invalid_model = true;
                     break;
                 }
-                if (GetLocalFittingMaximumTransformedChange(
-                        *backtracked_state,
-                        previous_state,
-                        key) < kLocalFittingTransformedChangeTolerance)
+                if (backtracking_workspace.GetMaximumTransformedChange() <
+                    kLocalFittingTransformedChangeTolerance)
                 {
                     base_diagnostic.backtracking_exhausted = true;
                     break;
@@ -3842,7 +3946,7 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
                         trial_diagnostic))
                 {
                     trial_diagnostic.accepted_backtracking_factor = factor;
-                    base_state = std::move(*backtracked_state);
+                    base_state = backtracking_workspace.TakeCandidateState();
                     base_diagnostic = std::move(trial_diagnostic);
                     accepted_base_candidate = true;
                     accepted_by_backtracking = true;
@@ -4011,24 +4115,21 @@ bool TryBacktrackLocalFittingCombinedCandidate(
             key.begin(),
             key.end());
     }
+    LocalFittingBacktrackingWorkspace backtracking_workspace{
+        context,
+        previous_state,
+        endpoint_state,
+        changed_atom_index_list
+    };
 
     selection.combined_backtracking_trial_count = 1;
     double factor{ 0.5 };
     while (factor >= std::numeric_limits<double>::epsilon())
     {
-        auto candidate_state{
-            BuildLocalFittingBacktrackedState(
-                context,
-                previous_state,
-                endpoint_state,
-                changed_atom_index_list,
-                factor)
-        };
-        if (!candidate_state.has_value()) return false;
-        if (GetLocalFittingMaximumTransformedChange(
-                *candidate_state,
-                previous_state,
-                changed_atom_index_list) < kLocalFittingTransformedChangeTolerance)
+        const auto * candidate_state{ backtracking_workspace.BuildCandidate(factor) };
+        if (candidate_state == nullptr) return false;
+        if (backtracking_workspace.GetMaximumTransformedChange() <
+            kLocalFittingTransformedChangeTolerance)
         {
             selection.combined_backtracking_exhausted = true;
             return false;
@@ -4077,7 +4178,7 @@ bool TryBacktrackLocalFittingCombinedCandidate(
         };
         if (combined_check.accepted)
         {
-            selection.assembled_state = std::move(*candidate_state);
+            selection.assembled_state = backtracking_workspace.TakeCandidateState();
             selection.assembled_polish_provenance =
                 BuildBacktrackedLocalFittingPolishProvenance(
                     previous_state,
@@ -4222,22 +4323,71 @@ LocalFittingIterationResult RunLocalFittingIteration(
             context,
             BuildFittedGaussianSnapshot(previous_state))
     };
-    std::map<LocalFittingClusterKey, JointOffsetSolveResult> joint_offset_result_by_key;
-    for (const auto & key : cluster_key_list)
+    const auto is_debug_logging_enabled{
+        Logger::GetLogLevel() >= LogLevel::Debug
+    };
+    const auto log_debug_diagnostics{
+        !options.quiet_mode && is_debug_logging_enabled
+    };
+    std::vector<JointOffsetSolveResult> joint_offset_result_list(cluster_key_list.size());
+    std::vector<std::exception_ptr> joint_offset_exception_list(cluster_key_list.size());
+    const auto solve_joint_offset = [&](std::size_t cluster_position)
     {
-        joint_offset_result_by_key.emplace(
-            key,
-            EstimateJointOffsets(
+        try
+        {
+            joint_offset_result_list.at(cluster_position) =
+                EstimateJointOffsets(
                 context,
-                key,
+                cluster_key_list.at(cluster_position),
                 current_model_snapshot,
                 ridge_multiplier_list,
-                !options.quiet_mode &&
-                    Logger::GetLogLevel() >= LogLevel::Debug));
-    }
-    LocalFittingClusterHealthMap health_by_key;
-    for (const auto & [key, result] : joint_offset_result_by_key)
+                log_debug_diagnostics);
+        }
+        catch (...)
+        {
+            joint_offset_exception_list.at(cluster_position) =
+                std::current_exception();
+        }
+    };
+#ifdef USE_OPENMP
+    const bool parallel_joint_offsets{
+        !is_debug_logging_enabled &&
+        options.thread_size > 1 &&
+        cluster_key_list.size() > 1
+    };
+    if (parallel_joint_offsets)
     {
+        ScopedEigenThreadCount eigen_thread_guard{ 1 };
+#pragma omp parallel for schedule(dynamic) num_threads(options.thread_size)
+        for (std::size_t cluster_position = 0;
+            cluster_position < cluster_key_list.size();
+            cluster_position++)
+        {
+            solve_joint_offset(cluster_position);
+        }
+    }
+    else
+#endif
+    {
+        for (std::size_t cluster_position = 0;
+            cluster_position < cluster_key_list.size();
+            cluster_position++)
+        {
+            solve_joint_offset(cluster_position);
+        }
+    }
+    for (const auto & exception : joint_offset_exception_list)
+    {
+        if (exception) std::rethrow_exception(exception);
+    }
+
+    LocalFittingClusterHealthMap health_by_key;
+    for (std::size_t cluster_position = 0;
+        cluster_position < cluster_key_list.size();
+        cluster_position++)
+    {
+        const auto & key{ cluster_key_list.at(cluster_position) };
+        const auto & result{ joint_offset_result_list.at(cluster_position) };
         for (std::size_t i = 0; i < key.size(); i++)
         {
             const auto atom_index{ key.at(i) };
@@ -4256,9 +4406,11 @@ LocalFittingIterationResult RunLocalFittingIteration(
     {
         group_key_by_atom_index.emplace_back(atom_context.group_key);
     }
-    for (const auto & [key, result] : joint_offset_result_by_key)
+    for (std::size_t cluster_position = 0;
+        cluster_position < cluster_key_list.size();
+        cluster_position++)
     {
-        static_cast<void>(result);
+        const auto & key{ cluster_key_list.at(cluster_position) };
         std::vector<GroupKey> group_key_by_position;
         std::vector<char> suspicious_seed_mask(key.size(), 0);
         group_key_by_position.reserve(key.size());
@@ -4301,21 +4453,89 @@ LocalFittingIterationResult RunLocalFittingIteration(
             context,
             std::move(refit_model_snapshot))
     };
-    std::vector<std::size_t> post_refit_suspicious_seed_atom_index_list;
-    for (auto & [key, health] : health_by_key)
+    std::vector<std::size_t> refit_atom_index_list;
+    for (const auto & key : cluster_key_list)
     {
         for (const auto atom_index : key)
         {
-            if (rollback_atom_mask.at(atom_index) != 0) continue;
-
-            auto refit_result{
+            if (rollback_atom_mask.at(atom_index) == 0)
+            {
+                refit_atom_index_list.emplace_back(atom_index);
+            }
+        }
+    }
+    std::vector<std::optional<LocalAtomRefitResult>> refit_result_list(
+        refit_atom_index_list.size());
+    std::vector<std::exception_ptr> refit_exception_list(refit_atom_index_list.size());
+#ifdef USE_OPENMP
+    const bool parallel_refits{
+        !is_debug_logging_enabled &&
+        options.thread_size > 1 &&
+        refit_atom_index_list.size() > 1
+    };
+#else
+    const bool parallel_refits{ false };
+#endif
+    FitOptions refit_options{ options };
+    if (parallel_refits)
+    {
+        refit_options.thread_size = 1;
+    }
+    const auto run_refit = [&](std::size_t refit_position)
+    {
+        const auto atom_index{ refit_atom_index_list.at(refit_position) };
+        try
+        {
+            refit_result_list.at(refit_position) =
                 FitAtomWithJointOffsetFallback(
                     context,
                     atom_index,
                     previous_state.at(atom_index),
                     refit_model_bundle,
-                    options)
-            };
+                    refit_options);
+        }
+        catch (...)
+        {
+            refit_exception_list.at(refit_position) = std::current_exception();
+        }
+    };
+#ifdef USE_OPENMP
+    if (parallel_refits)
+    {
+        ScopedEigenThreadCount eigen_thread_guard{ 1 };
+#pragma omp parallel for schedule(dynamic) num_threads(options.thread_size)
+        for (std::size_t refit_position = 0;
+            refit_position < refit_atom_index_list.size();
+            refit_position++)
+        {
+            run_refit(refit_position);
+        }
+    }
+    else
+#endif
+    {
+        for (std::size_t refit_position = 0;
+            refit_position < refit_atom_index_list.size();
+            refit_position++)
+        {
+            run_refit(refit_position);
+        }
+    }
+    for (const auto & exception : refit_exception_list)
+    {
+        if (exception) std::rethrow_exception(exception);
+    }
+
+    std::vector<std::size_t> post_refit_suspicious_seed_atom_index_list;
+    std::size_t refit_position{ 0 };
+    for (const auto & key : cluster_key_list)
+    {
+        auto & health{ health_by_key.at(key) };
+        for (const auto atom_index : key)
+        {
+            if (rollback_atom_mask.at(atom_index) != 0) continue;
+
+            auto refit_result{ std::move(refit_result_list.at(refit_position++)) };
             if (!refit_result.has_value())
             {
                 health.is_refit_stationarity_eligible = false;
@@ -5162,17 +5382,18 @@ bool RunSecondStageLocalFitting(
     };
     LogLocalFittingCouplingTopology(coupling_topology, options);
     std::vector<char> terminal_fallback_atom_mask(atom_size, 0);
-    const auto initial_active_index_list{
+    auto active_index_list{
         BuildEligibleLocalFittingActiveIndexList(terminal_fallback_atom_mask)
     };
-    const auto initial_cluster_partition{
-        detail::BuildLocalFittingCouplingPartition(coupling_topology, initial_active_index_list)
+    auto cluster_partition{
+        detail::BuildLocalFittingCouplingPartition(coupling_topology, active_index_list)
     };
+    auto cluster_key_list{ BuildLocalFittingClusterKeyList(cluster_partition) };
     auto objective_domain{
         BuildLocalFittingObjectiveDomain(
             context,
             previous_state,
-            initial_cluster_partition,
+            cluster_partition,
             options)
     };
     LogLocalFittingObjectiveDomain(objective_domain, options);
@@ -5206,9 +5427,6 @@ bool RunSecondStageLocalFitting(
     std::vector<LocalFittingClusterKey> unchanged_state_exhausted_key_list;
     for (std::size_t iter = 0; iter < kLocalFittingMaximumIterations; iter++)
     {
-        const auto active_index_list{
-            BuildEligibleLocalFittingActiveIndexList(terminal_fallback_atom_mask)
-        };
         if (active_index_list.empty())
         {
             FinishLocalFittingWithNoActiveAtoms(
@@ -5229,22 +5447,11 @@ bool RunSecondStageLocalFitting(
             return true;
         }
 
-        const auto cluster_partition{
-            detail::BuildLocalFittingCouplingPartition(coupling_topology, active_index_list)
-        };
         const auto previous_model_snapshot{
             BuildSecondStageModelSnapshot(
                 context,
                 BuildFittedGaussianSnapshot(previous_state))
         };
-        std::vector<LocalFittingClusterKey> cluster_key_list;
-        cluster_key_list.reserve(cluster_partition.sample_id_list_by_key.size());
-        for (const auto & [key, sample_id_list] :
-            cluster_partition.sample_id_list_by_key)
-        {
-            static_cast<void>(sample_id_list);
-            cluster_key_list.emplace_back(key);
-        }
 
         const auto previous_objective_by_key{
             BuildLocalFittingObjectiveByKey(
@@ -5459,12 +5666,12 @@ bool RunSecondStageLocalFitting(
                     rollback_atom_mask.at(atom_index) = 0;
                 }
             }
-            const auto remaining_active_index_list{
+            auto remaining_active_index_list{
                 BuildEligibleLocalFittingActiveIndexList(terminal_fallback_atom_mask)
             };
             if (!remaining_active_index_list.empty())
             {
-                const auto remaining_partition{
+                auto remaining_partition{
                     detail::BuildLocalFittingCouplingPartition(
                         coupling_topology,
                         remaining_active_index_list)
@@ -5503,7 +5710,14 @@ bool RunSecondStageLocalFitting(
                     accepted_iteration_count + 1,
                     objective_domain,
                     best_audit_state);
+                active_index_list = std::move(remaining_active_index_list);
+                cluster_key_list = BuildLocalFittingClusterKeyList(remaining_partition);
+                cluster_partition = std::move(remaining_partition);
                 objective_domain_changed = true;
+            }
+            else
+            {
+                active_index_list.clear();
             }
         }
 
