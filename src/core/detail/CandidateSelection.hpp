@@ -24,7 +24,7 @@
 #include "core/detail/LocalFittingPerformanceCounters.hpp"
 #include "core/detail/LocalFittingStateView.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
-#include "core/detail/LocalFittingTrustRegion.hpp"
+#include "core/detail/TrustRegion.hpp"
 #include "core/detail/ReusableWeightedRidgeSolver.hpp"
 #include "core/detail/ScopedEigenThreadCount.hpp"
 #include "core/detail/SecondStageLocalFittingContext.hpp"
@@ -131,7 +131,7 @@ inline BaseProposalBuildResult BuildSharedOffsetBaseProposal(
         };
     }
     const auto seed_step_norm{
-        CalculateLocalFittingClusterModelTrustRegionStepNorm(outer_previous_state, key, *seed_model_list)
+        CalculateClusterModelTrustRegionStepNorm(outer_previous_state, key, *seed_model_list)
     };
     if (!seed_step_norm.has_value())
     {
@@ -141,7 +141,7 @@ inline BaseProposalBuildResult BuildSharedOffsetBaseProposal(
             std::nullopt
         };
     }
-    if (!IsLocalFittingTrustRegionStepWithinRadius(*seed_step_norm, trust_region_radius))
+    if (!IsTrustRegionStepWithinRadius(*seed_step_norm, trust_region_radius))
     {
         return BaseProposalBuildResult{
             std::nullopt,
@@ -165,13 +165,13 @@ inline BaseProposalBuildResult BuildSharedOffsetBaseProposal(
         if (candidate_model_list.has_value())
         {
             const auto step_norm{
-                CalculateLocalFittingClusterModelTrustRegionStepNorm(
+                CalculateClusterModelTrustRegionStepNorm(
                     outer_previous_state,
                     key,
                     *candidate_model_list)
             };
             if (step_norm.has_value() &&
-                IsLocalFittingTrustRegionStepWithinRadius(*step_norm, trust_region_radius))
+                IsTrustRegionStepWithinRadius(*step_norm, trust_region_radius))
             {
                 BaseProposal proposal;
                 proposal.patch.atom_index_list = key;
@@ -319,7 +319,7 @@ inline bool ShouldGrowTrustRegion(const LocalFittingObjectiveAttemptDiagnostic &
 {
     return diagnostic.candidate_objective.has_value() &&
         diagnostic.previous_objective.has_value() &&
-        IsLocalFittingTrustRegionGrowthEligible(
+        IsTrustRegionGrowthEligible(
             diagnostic.trust_region_step_norm,
             diagnostic.trust_region_radius,
             IsBetterLocalFittingAuditObjective(
@@ -419,10 +419,10 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
                 raw_transformed_estimation_list.at(atom_index));
         }
         const auto trust_region_damping{
-            LimitLocalFittingTrustRegionDamping(
+            LimitTrustRegionDamping(
                 previous_cluster_estimation_list,
                 raw_cluster_estimation_list,
-                kLocalFittingTrustRegionParameterScale,
+                kTrustRegionParameterScale,
                 1.0,
                 trust_region_radius)
         };
@@ -670,7 +670,7 @@ inline CandidateSelection SelectClusterCandidates(
     const LocalFittingObjectiveDomain & objective_domain,
     const LocalFittingObjectiveByKey & previous_objective_by_key,
     LocalFittingClusterObjectiveStateMap & cluster_objective_state,
-    const LocalFittingTrustRegionStateSet & trust_region_state,
+    const TrustRegionStateSet & trust_region_state,
     LocalFittingClusterSolverWorkspaceMap & solver_workspace_by_key,
     int thread_size,
     LocalFittingPerformanceCounters & performance_counters)

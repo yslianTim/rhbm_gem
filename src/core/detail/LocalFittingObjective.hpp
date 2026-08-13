@@ -3,10 +3,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
-#include <limits>
 #include <map>
 #include <optional>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -17,15 +15,12 @@
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/LocalFittingAudit.hpp"
 #include "core/detail/LocalFittingCandidateEvaluationOverlay.hpp"
-#include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/LocalFittingObjectiveAttemptDiagnostic.hpp"
 #include "core/detail/LocalFittingPerformanceCounters.hpp"
 #include "core/detail/LocalFittingResidualEvaluation.hpp"
 #include "core/detail/LocalFittingRobustScale.hpp"
-#include "core/detail/LocalFittingSeedRepair.hpp"
 #include "core/detail/LocalFittingStateView.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
-#include "core/detail/LocalFittingTrustRegion.hpp"
 
 namespace rhbm_gem::core::detail {
 

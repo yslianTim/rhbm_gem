@@ -16,7 +16,7 @@
 #include "core/detail/LocalFittingSeedRepair.hpp"
 #include "core/detail/SecondStageLocalFittingInitialization.hpp"
 #include "core/detail/LocalFittingStateView.hpp"
-#include "core/detail/LocalFittingTrustRegion.hpp"
+#include "core/detail/TrustRegion.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
 #include "core/detail/ReusableWeightedRidgeSolver.hpp"
 #include "core/detail/ScopedEigenThreadCount.hpp"
@@ -926,30 +926,30 @@ void LogRejectedLocalFittingClusterDiagnostics(
     }
 }
 
-std::string_view GetLocalFittingAllRejectedResolutionText(
-    detail::LocalFittingAllRejectedResolution resolution)
+std::string_view GetAllRejectedResolutionText(
+    detail::AllRejectedResolution resolution)
 {
     switch (resolution)
     {
-    case detail::LocalFittingAllRejectedResolution::Retry:
+    case detail::AllRejectedResolution::Retry:
         return "retry";
-    case detail::LocalFittingAllRejectedResolution::MaximumIterations:
+    case detail::AllRejectedResolution::MaximumIterations:
         return "maximum-iterations";
-    case detail::LocalFittingAllRejectedResolution::BacktrackingExhausted:
+    case detail::AllRejectedResolution::BacktrackingExhausted:
         return "all-rejected-backtracking-exhausted";
-    case detail::LocalFittingAllRejectedResolution::MinimumRadius:
+    case detail::AllRejectedResolution::MinimumRadius:
         return "all-rejected-minimum-radius";
-    case detail::LocalFittingAllRejectedResolution::NoRetryProgress:
+    case detail::AllRejectedResolution::NoRetryProgress:
         return "all-rejected-no-retry-progress";
     }
     return "all-rejected-no-retry-progress";
 }
 
-void LogLocalFittingAllRejectedResolution(
+void LogAllRejectedResolution(
     const FitOptions & options,
-    const detail::LocalFittingRejectedClusterPartition & partition,
-    const detail::LocalFittingTrustRegionRadiusUpdate & radius_update,
-    detail::LocalFittingAllRejectedResolution resolution)
+    const detail::RejectedClusterPartition & partition,
+    const detail::TrustRegionRadiusUpdate & radius_update,
+    detail::AllRejectedResolution resolution)
 {
     if (options.quiet_mode || Logger::GetLogLevel() < LogLevel::Debug)
     {
@@ -960,7 +960,7 @@ void LogLocalFittingAllRejectedResolution(
     std::ostringstream message;
     message
         << "All-rejected local fitting resolution: outcome = "
-        << GetLocalFittingAllRejectedResolutionText(resolution)
+        << GetAllRejectedResolutionText(resolution)
         << ", exhausted/retryable/radius-changed/radius-saturated = "
         << partition.exhausted_key_list.size() << "/"
         << partition.retryable_key_list.size() << "/"
@@ -1395,7 +1395,7 @@ bool RunSecondStageLocalFitting(
     PersistentTerminalFailureStateMap persistent_terminal_failure_state_by_key;
     LocalFittingTerminalSummary terminal_summary;
     LocalFittingClusterObjectiveStateMap cluster_objective_state;
-    detail::LocalFittingTrustRegionStateSet trust_region_state;
+    detail::TrustRegionStateSet trust_region_state;
     const auto progress_column_widths{ BuildLocalFittingProgressColumnWidths(atom_size) };
     LogLocalFittingProgressHeader(options, progress_column_widths);
 
@@ -1794,19 +1794,19 @@ bool RunSecondStageLocalFitting(
         if (selection.accepted_key_list.empty())
         {
             const auto all_rejected_resolution{
-                detail::ResolveLocalFittingAllRejected(
+                detail::ResolveAllRejected(
                     iter + 1 >= kLocalFittingMaximumIterations,
                     rejected_cluster_partition,
                     trust_region_radius_update)
             };
             LogRejectedLocalFittingClusterDiagnostics(options, selection.rejected_cluster_diagnostic_list);
             LogLocalFittingIterationProgress(options, progress_column_widths, progress);
-            LogLocalFittingAllRejectedResolution(
+            LogAllRejectedResolution(
                 options,
                 rejected_cluster_partition,
                 trust_region_radius_update,
                 all_rejected_resolution);
-            if (all_rejected_resolution == detail::LocalFittingAllRejectedResolution::Retry)
+            if (all_rejected_resolution == detail::AllRejectedResolution::Retry)
             {
                 for (const auto & key : rejected_cluster_partition.exhausted_key_list)
                 {
@@ -1834,7 +1834,7 @@ bool RunSecondStageLocalFitting(
             LogSecondStageLocalFittingSummary(
                 options,
                 accepted_iteration_count,
-                GetLocalFittingAllRejectedResolutionText(all_rejected_resolution),
+                GetAllRejectedResolutionText(all_rejected_resolution),
                 best_audit_state,
                 UsesLocalFittingPolish(*final_state_selection.polish_provenance),
                 final_state_selection.source);

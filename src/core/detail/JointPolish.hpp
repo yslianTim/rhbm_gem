@@ -3,7 +3,7 @@
 #include "core/detail/JointOffset.hpp"
 #include "core/detail/LocalFittingRobustScale.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
-#include "core/detail/LocalFittingTrustRegion.hpp"
+#include "core/detail/TrustRegion.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -753,13 +753,13 @@ BuildJointPolishProposal(
         return std::nullopt;
     }
     const auto seed_step_norm{
-        CalculateLocalFittingClusterModelTrustRegionStepNorm(
+        CalculateClusterModelTrustRegionStepNorm(
             outer_previous_state,
             key,
             *seed_model_list)
     };
     if (!seed_step_norm.has_value() ||
-        !IsLocalFittingTrustRegionStepWithinRadius(*seed_step_norm, trust_region_radius))
+        !IsTrustRegionStepWithinRadius(*seed_step_norm, trust_region_radius))
     {
         return std::nullopt;
     }
@@ -792,13 +792,13 @@ BuildJointPolishProposal(
                 }))
         {
             const auto step_norm{
-                CalculateLocalFittingClusterModelTrustRegionStepNorm(
+                CalculateClusterModelTrustRegionStepNorm(
                     outer_previous_state,
                     key,
                     *candidate_model_list)
             };
             if (step_norm.has_value() &&
-                IsLocalFittingTrustRegionStepWithinRadius(*step_norm, trust_region_radius))
+                IsTrustRegionStepWithinRadius(*step_norm, trust_region_radius))
             {
                 if (!HasMaterialJointPolishChange(
                         *candidate_model_list,

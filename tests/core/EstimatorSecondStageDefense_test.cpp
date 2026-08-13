@@ -30,7 +30,7 @@
 #include "core/detail/LocalFittingSuspiciousUpdate.hpp"
 #include "core/detail/LocalFittingTerminalFailure.hpp"
 #include "core/detail/SecondStageLocalFittingInitialization.hpp"
-#include "core/detail/LocalFittingTrustRegion.hpp"
+#include "core/detail/TrustRegion.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
@@ -1802,14 +1802,14 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionDampingCapsLargeTransformedStep
     candidate.at(0) << 1.0, 0.35, 0.5;
 
     const auto capped{
-        trust_detail::LimitLocalFittingTrustRegionDamping(
+        trust_detail::LimitTrustRegionDamping(
             previous, candidate, scale, 1.0, 1.0)
     };
     EXPECT_DOUBLE_EQ(capped.effective_damping, 0.5);
     EXPECT_DOUBLE_EQ(capped.step_norm, 1.0);
 
     const auto inside{
-        trust_detail::LimitLocalFittingTrustRegionDamping(
+        trust_detail::LimitTrustRegionDamping(
             previous, candidate, scale, 0.25, 1.0)
     };
     EXPECT_DOUBLE_EQ(inside.effective_damping, 0.25);
@@ -1848,11 +1848,11 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionDampingIsIntensityScaleInvarian
     };
 
     const auto base{
-        trust_detail::LimitLocalFittingTrustRegionDamping(
+        trust_detail::LimitTrustRegionDamping(
             base_previous, base_candidate, scale, 1.0, 0.5)
     };
     const auto scaled{
-        trust_detail::LimitLocalFittingTrustRegionDamping(
+        trust_detail::LimitTrustRegionDamping(
             scaled_previous, scaled_candidate, scale, 1.0, 0.5)
     };
     EXPECT_NEAR(base.effective_damping, scaled.effective_damping, 1.0e-12);
@@ -1871,7 +1871,7 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionPolishHonorsOuterStepBoundary)
     outward_target.at(0)(0) = 1.0;
 
     const auto outward{
-        trust_detail::LimitLocalFittingTrustRegionSubstepDamping(
+        trust_detail::LimitTrustRegionSubstepDamping(
             outer_previous,
             boundary_state,
             outward_target,
@@ -1883,7 +1883,7 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionPolishHonorsOuterStepBoundary)
     EXPECT_DOUBLE_EQ(outward.step_norm, 1.0);
 
     const auto inward{
-        trust_detail::LimitLocalFittingTrustRegionSubstepDamping(
+        trust_detail::LimitTrustRegionSubstepDamping(
             outer_previous,
             boundary_state,
             outer_previous,
@@ -1897,8 +1897,8 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionPolishHonorsOuterStepBoundary)
 
 TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndSaturates)
 {
-    trust_detail::LocalFittingTrustRegionStateSet state;
-    const trust_detail::LocalFittingTrustRegionClusterKey key{ 0 };
+    trust_detail::TrustRegionStateSet state;
+    const trust_detail::TrustRegionClusterKey key{ 0 };
     state.Reconcile({ key });
     EXPECT_DOUBLE_EQ(state.GetRadius(key), 1.0);
 
@@ -1907,7 +1907,7 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndS
         const auto update{ state.Shrink({ key }) };
         EXPECT_EQ(
             update.changed_key_list,
-            std::vector<trust_detail::LocalFittingTrustRegionClusterKey>{ key });
+            std::vector<trust_detail::TrustRegionClusterKey>{ key });
         EXPECT_TRUE(update.saturated_key_list.empty());
         EXPECT_DOUBLE_EQ(state.GetRadius(key), expected);
     }
@@ -1915,12 +1915,12 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndS
     EXPECT_TRUE(saturated.changed_key_list.empty());
     EXPECT_EQ(
         saturated.saturated_key_list,
-        std::vector<trust_detail::LocalFittingTrustRegionClusterKey>{ key });
+        std::vector<trust_detail::TrustRegionClusterKey>{ key });
 
     state.Grow({ key });
     EXPECT_DOUBLE_EQ(state.GetRadius(key), 0.125);
 
-    const trust_detail::LocalFittingTrustRegionClusterKey replacement_key{ 1 };
+    const trust_detail::TrustRegionClusterKey replacement_key{ 1 };
     state.Reconcile({ replacement_key });
     EXPECT_THROW(state.GetRadius(key), std::invalid_argument);
     EXPECT_DOUBLE_EQ(state.GetRadius(replacement_key), 1.0);
@@ -1928,18 +1928,18 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndS
 
 TEST(EstimatorSecondStageDefenseTest, ExhaustedRejectionsAreExcludedFromRadiusShrink)
 {
-    using Key = trust_detail::LocalFittingTrustRegionClusterKey;
+    using Key = trust_detail::TrustRegionClusterKey;
     const Key exhausted_key{ 0 };
     const Key retryable_key{ 1 };
     const auto partition{
-        trust_detail::PartitionLocalFittingRejectedClusters(
+        trust_detail::PartitionRejectedClusters(
             { exhausted_key, retryable_key },
             { exhausted_key })
     };
     ASSERT_EQ(partition.exhausted_key_list, std::vector<Key>{ exhausted_key });
     ASSERT_EQ(partition.retryable_key_list, std::vector<Key>{ retryable_key });
 
-    trust_detail::LocalFittingTrustRegionStateSet state;
+    trust_detail::TrustRegionStateSet state;
     state.Reconcile({ exhausted_key, retryable_key });
     const auto update{ state.Shrink(partition.retryable_key_list) };
 
@@ -1948,7 +1948,7 @@ TEST(EstimatorSecondStageDefenseTest, ExhaustedRejectionsAreExcludedFromRadiusSh
     EXPECT_EQ(update.changed_key_list, std::vector<Key>{ retryable_key });
 
     const auto all_exhausted{
-        trust_detail::PartitionLocalFittingRejectedClusters(
+        trust_detail::PartitionRejectedClusters(
             { exhausted_key },
             { exhausted_key })
     };
@@ -1962,57 +1962,57 @@ TEST(EstimatorSecondStageDefenseTest, ExhaustedRejectionsAreExcludedFromRadiusSh
 
 TEST(EstimatorSecondStageDefenseTest, AllRejectedResolutionDistinguishesTerminalCases)
 {
-    using Key = trust_detail::LocalFittingTrustRegionClusterKey;
-    using Resolution = trust_detail::LocalFittingAllRejectedResolution;
+    using Key = trust_detail::TrustRegionClusterKey;
+    using Resolution = trust_detail::AllRejectedResolution;
     const Key first_key{ 0 };
     const Key second_key{ 1 };
 
     const auto exhausted{
-        trust_detail::PartitionLocalFittingRejectedClusters(
+        trust_detail::PartitionRejectedClusters(
             { first_key, second_key },
             { first_key, second_key })
     };
     EXPECT_EQ(
-        trust_detail::ResolveLocalFittingAllRejected(false, exhausted, {}),
+        trust_detail::ResolveAllRejected(false, exhausted, {}),
         Resolution::BacktrackingExhausted);
 
     const auto retryable{
-        trust_detail::PartitionLocalFittingRejectedClusters(
+        trust_detail::PartitionRejectedClusters(
             { first_key, second_key },
             {})
     };
-    trust_detail::LocalFittingTrustRegionRadiusUpdate changed;
+    trust_detail::TrustRegionRadiusUpdate changed;
     changed.changed_key_list = { first_key };
     EXPECT_EQ(
-        trust_detail::ResolveLocalFittingAllRejected(
+        trust_detail::ResolveAllRejected(
             false,
             retryable,
             changed),
         Resolution::Retry);
 
-    trust_detail::LocalFittingTrustRegionRadiusUpdate saturated;
+    trust_detail::TrustRegionRadiusUpdate saturated;
     saturated.saturated_key_list = { first_key, second_key };
     EXPECT_EQ(
-        trust_detail::ResolveLocalFittingAllRejected(
+        trust_detail::ResolveAllRejected(
             false,
             retryable,
             saturated),
         Resolution::MinimumRadius);
 
     const auto mixed{
-        trust_detail::PartitionLocalFittingRejectedClusters(
+        trust_detail::PartitionRejectedClusters(
             { first_key, second_key },
             { first_key })
     };
     saturated.saturated_key_list = { second_key };
     EXPECT_EQ(
-        trust_detail::ResolveLocalFittingAllRejected(
+        trust_detail::ResolveAllRejected(
             false,
             mixed,
             saturated),
         Resolution::NoRetryProgress);
     EXPECT_EQ(
-        trust_detail::ResolveLocalFittingAllRejected(
+        trust_detail::ResolveAllRejected(
             true,
             mixed,
             changed),
