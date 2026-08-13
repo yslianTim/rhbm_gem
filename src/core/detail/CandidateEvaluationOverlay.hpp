@@ -8,7 +8,7 @@
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
 #include "core/detail/LocalFittingGroupMedian.hpp"
-#include "core/detail/LocalFittingResidualEvaluation.hpp"
+#include "core/detail/ResidualEvaluation.hpp"
 #include "core/detail/FitStateView.hpp"
 #include "core/detail/SecondStageContext.hpp"
 
@@ -18,7 +18,7 @@ class CandidateEvaluationOverlay
 {
     const SecondStageContext & m_context;
     const SecondStageModelSnapshot & m_baseline_model_snapshot;
-    const LocalFittingResidualBaseline & m_residual_baseline;
+    const ResidualBaseline & m_residual_baseline;
     const FitStatePatch & m_patch;
     std::vector<char> m_changed_group_mask{};
     std::vector<std::optional<GaussianModel3D>> m_changed_group_median{};
@@ -27,7 +27,7 @@ public:
     CandidateEvaluationOverlay(
         const SecondStageContext & context,
         const SecondStageModelSnapshot & baseline_model_snapshot,
-        const LocalFittingResidualBaseline & residual_baseline,
+        const ResidualBaseline & residual_baseline,
         const FitStateView & candidate_state,
         const FitStatePatch & patch)
         : m_context{ context },
@@ -58,7 +58,7 @@ public:
         }
     }
 
-    std::optional<LocalFittingResidualSample> Evaluate(
+    std::optional<ResidualSample> Evaluate(
         const FitStateView & candidate_state,
         const ObjectiveSampleRef & sample_ref) const
     {
@@ -130,7 +130,7 @@ public:
         {
             return std::nullopt;
         }
-        return LocalFittingResidualSample{ adjusted_response, residual };
+        return ResidualSample{ adjusted_response, residual };
     }
 };
 

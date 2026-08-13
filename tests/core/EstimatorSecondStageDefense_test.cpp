@@ -21,7 +21,7 @@
 #include "core/detail/JointOffset.hpp"
 #include "core/detail/JointPolish.hpp"
 #include "core/detail/Objective.hpp"
-#include "core/detail/LocalFittingResidualEvaluation.hpp"
+#include "core/detail/ResidualEvaluation.hpp"
 #include "core/detail/SeedRepair.hpp"
 #include "core/detail/LocalFittingSuspiciousUpdate.hpp"
 #include "core/detail/LocalFittingTerminalFailure.hpp"
@@ -3751,7 +3751,7 @@ TEST(EstimatorSecondStageDefenseTest, ResidualBaselineAndOverlayAgreeForCandidat
             residual_detail::BuildFittedGaussianSnapshot(previous_state))
     };
     const auto baseline{
-        residual_detail::BuildLocalFittingResidualBaseline(
+        residual_detail::BuildResidualBaseline(
             context,
             previous_state,
             model_snapshot)
@@ -3783,7 +3783,7 @@ TEST(EstimatorSecondStageDefenseTest, ResidualBaselineAndOverlayAgreeForCandidat
     };
     const residual_detail::ObjectiveSampleRef sample_ref{ 0, 1 };
     const auto direct{
-        residual_detail::EvaluateLocalFittingResidualSample(
+        residual_detail::EvaluateResidualSample(
             context,
             candidate_view,
             sample_ref,

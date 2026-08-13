@@ -23,7 +23,7 @@
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
-#include "core/detail/LocalFittingResidualEvaluation.hpp"
+#include "core/detail/ResidualEvaluation.hpp"
 #include "core/detail/SecondStageContext.hpp"
 #include "core/detail/RobustScale.hpp"
 #include "core/detail/ReusableWeightedRidgeSolver.hpp"

@@ -25,10 +25,8 @@ struct PersistentTerminalFailureState
     std::size_t stable_iteration_count{ 0 };
 };
 
-using PersistentTerminalFailureStateMap =
-    std::map<ClusterKey, PersistentTerminalFailureState>;
-using TerminalPersistentFailureMap =
-    std::map<ClusterKey, PersistentTerminalFailureReason>;
+using PersistentTerminalFailureStateMap = std::map<ClusterKey, PersistentTerminalFailureState>;
+using TerminalPersistentFailureMap = std::map<ClusterKey, PersistentTerminalFailureReason>;
 
 struct LocalFittingTerminalSummary
 {
@@ -43,7 +41,6 @@ struct LocalFittingTerminalSummary
         return suspicious_atom_count + joint_offset_failure_atom_count;
     }
 };
-
 
 inline TerminalPersistentFailureMap UpdatePersistentTerminalFailureState(
     const std::vector<ClusterKey> & accepted_key_list,
@@ -128,8 +125,7 @@ inline void ApplyTerminalFallbackClusters(
     }
 }
 
-inline std::vector<std::size_t> BuildEligibleLocalFittingActiveIndexList(
-    const std::vector<char> & terminal_atom_mask)
+inline std::vector<std::size_t> BuildEligibleLocalFittingActiveIndexList(const std::vector<char> & terminal_atom_mask)
 {
     const auto atom_size{ terminal_atom_mask.size() };
     std::vector<std::size_t> active_index_list;
@@ -143,7 +139,5 @@ inline std::vector<std::size_t> BuildEligibleLocalFittingActiveIndexList(
     }
     return active_index_list;
 }
-
-
 
 } // namespace rhbm_gem::core::detail

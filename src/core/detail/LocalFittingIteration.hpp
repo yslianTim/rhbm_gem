@@ -15,7 +15,7 @@
 
 #include "core/detail/JointOffset.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
-#include "core/detail/LocalFittingResidualEvaluation.hpp"
+#include "core/detail/ResidualEvaluation.hpp"
 #include "core/detail/FitStateView.hpp"
 #include "core/detail/LocalFittingSuspiciousUpdate.hpp"
 #include "core/detail/ReusableWeightedRidgeSolver.hpp"

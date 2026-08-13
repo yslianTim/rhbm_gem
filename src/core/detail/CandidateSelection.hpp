@@ -329,7 +329,7 @@ inline bool ShouldGrowTrustRegion(const ObjectiveAttemptDiagnostic & diagnostic)
 inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
     const SecondStageContext & context,
     const SecondStageModelSnapshot & previous_model_snapshot,
-    const LocalFittingResidualBaseline & residual_baseline,
+    const ResidualBaseline & residual_baseline,
     const ClusterKey & key,
     const std::vector<ObjectiveSampleRef> & objective_sample_ref_list,
     bool is_polish_eligible,
@@ -654,7 +654,7 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
 inline CandidateSelection SelectClusterCandidates(
     const SecondStageContext & context,
     const SecondStageModelSnapshot & previous_model_snapshot,
-    const LocalFittingResidualBaseline & residual_baseline,
+    const ResidualBaseline & residual_baseline,
     const CouplingGraphPartition & partition,
     const std::vector<ClusterKey> & polish_eligible_key_list,
     const FitState & previous_state,
@@ -804,7 +804,7 @@ inline CandidateSelection SelectClusterCandidates(
 inline bool TryBacktrackCombinedCandidate(
     const SecondStageContext & context,
     const SecondStageModelSnapshot & previous_model_snapshot,
-    const LocalFittingResidualBaseline & residual_baseline,
+    const ResidualBaseline & residual_baseline,
     const CouplingGraphPartition & partition,
     const FitState & previous_state,
     const PolishProvenance & previous_polish_provenance,

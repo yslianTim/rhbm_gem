@@ -16,7 +16,7 @@
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/CandidateEvaluationOverlay.hpp"
 #include "core/detail/LocalFittingPerformanceCounters.hpp"
-#include "core/detail/LocalFittingResidualEvaluation.hpp"
+#include "core/detail/ResidualEvaluation.hpp"
 #include "core/detail/RobustScale.hpp"
 #include "core/detail/FitStateView.hpp"
 #include "core/detail/TransformedChange.hpp"
@@ -332,7 +332,7 @@ inline ObjectiveDomain BuildObjectiveDomain(
                     sample_index
                 };
                 const auto residual_sample{
-                    EvaluateLocalFittingResidualSample(
+                    EvaluateResidualSample(
                         context,
                         initial_state,
                         sample_ref,
@@ -529,7 +529,7 @@ EvaluateObjectiveContribution(
         domain,
         [&](const ObjectiveSampleRef & sample_ref)
         {
-            return EvaluateLocalFittingResidualSample(
+            return EvaluateResidualSample(
                 context,
                 state,
                 sample_ref,
@@ -542,7 +542,7 @@ inline std::optional<ObjectiveBreakdown>
 EvaluateObjectiveContribution(
     const SecondStageContext & context,
     const FitState & state,
-    const LocalFittingResidualBaseline & residual_baseline,
+    const ResidualBaseline & residual_baseline,
     const ClusterKey & changed_key,
     const std::vector<ObjectiveSampleRef> & sample_ref_list,
     const ObjectiveDomain & domain,
@@ -655,7 +655,7 @@ EvaluateAuditObjective(
     const SecondStageContext & context,
     const FitState & state,
     const ObjectiveDomain & domain,
-    const LocalFittingResidualBaseline & residual_baseline)
+    const ResidualBaseline & residual_baseline)
 {
     ObjectiveBreakdown total;
     for (const auto & [key, cluster_domain] : domain.cluster_by_key)
@@ -695,7 +695,7 @@ EvaluateObjectiveDelta(
     const SecondStageContext & context,
     const FitState & previous_state,
     const FitStateView & candidate_state,
-    const LocalFittingResidualBaseline & residual_baseline,
+    const ResidualBaseline & residual_baseline,
     const CandidateEvaluationOverlay & candidate_overlay,
     const ClusterKey & changed_key,
     const std::vector<ObjectiveSampleRef> & affected_sample_ref_list,
@@ -798,7 +798,7 @@ inline ObjectiveByKey BuildObjectiveByKey(
     const FitState & state,
     const CouplingGraphPartition & partition,
     const ObjectiveDomain & domain,
-    const LocalFittingResidualBaseline & residual_baseline)
+    const ResidualBaseline & residual_baseline)
 {
     ObjectiveByKey objective_by_key;
     for (const auto & [key, sample_ref_list] :
@@ -854,7 +854,7 @@ inline CombinedObjectiveCheck EvaluateCombinedObjective(
     const SecondStageContext & context,
     const FitState & previous_state,
     const FitStateView & candidate_state,
-    const LocalFittingResidualBaseline & residual_baseline,
+    const ResidualBaseline & residual_baseline,
     const CandidateEvaluationOverlay & candidate_overlay,
     const ClusterKey & changed_key,
     const std::vector<ObjectiveSampleRef> & affected_sample_ref_list,
@@ -896,7 +896,7 @@ inline CombinedCandidateObjectiveCheck
 EvaluateCombinedCandidateObjective(
     const SecondStageContext & context,
     const SecondStageModelSnapshot & previous_model_snapshot,
-    const LocalFittingResidualBaseline & residual_baseline,
+    const ResidualBaseline & residual_baseline,
     const CouplingGraphPartition & partition,
     const FitState & previous_state,
     const FitState & candidate_state,

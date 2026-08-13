@@ -1,7 +1,7 @@
 #include <cstddef>
 
 #include "core/detail/GaussianEstimatorStages.hpp"
-#include "core/detail/LocalFittingResidualEvaluation.hpp"
+#include "core/detail/ResidualEvaluation.hpp"
 #include "core/detail/Objective.hpp"
 #include "core/detail/LocalFittingTerminalFailure.hpp"
 #include "core/detail/CandidateSelection.hpp"
@@ -65,7 +65,7 @@ using detail::ObjectiveSampleRef;
 using detail::LocalFittingPerformanceCounters;
 using detail::PolishProvenance;
 using detail::PreObjectiveFailureReason;
-using detail::LocalFittingResidualBaseline;
+using detail::ResidualBaseline;
 using detail::FitState;
 using detail::AtomContext;
 using detail::SecondStageContext;
@@ -82,7 +82,7 @@ using detail::IsJointOffsetSolveStationarityEligible;
 using detail::GetJointOffsetSolveStatusText;
 using detail::ResetLocalFittingClusterSolverWorkspace;
 using detail::BuildSecondStageAdjustedSamples;
-using detail::BuildLocalFittingResidualBaseline;
+using detail::BuildResidualBaseline;
 using detail::SummarizeTransformedChanges;
 using detail::IsTransformedChangeConverged;
 using detail::GetMaximumTransformedChange;
@@ -1390,7 +1390,7 @@ bool RunSecondStageLocalFitting(
             BuildSecondStageModelSnapshot(context, previous_state)
         };
         const auto residual_baseline{
-            BuildLocalFittingResidualBaseline(
+            BuildResidualBaseline(
                 context,
                 previous_state,
                 previous_model_snapshot)
