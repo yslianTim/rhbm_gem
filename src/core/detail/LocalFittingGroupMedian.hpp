@@ -17,8 +17,7 @@
 
 namespace rhbm_gem::core::detail {
 
-inline std::optional<GaussianModel3D>
-BuildLocalFittingGaussianParameterMedian(
+inline std::optional<GaussianModel3D> BuildLocalFittingGaussianParameterMedian(
     const std::vector<GaussianModel3D> & model_list)
 {
     std::vector<double> amplitude_list;
@@ -80,9 +79,7 @@ inline std::vector<GaussianModel3D> BuildLocalFittingGroupMedianModelList(
 
     std::vector<GaussianModel3D> group_median_model_list;
     group_median_model_list.reserve(model_list.size());
-    for (std::size_t atom_position = 0;
-        atom_position < model_list.size();
-        atom_position++)
+    for (std::size_t atom_position = 0; atom_position < model_list.size(); atom_position++)
     {
         const auto median_iter{ median_model_by_group.find(
             group_key_by_atom_position.at(atom_position)) };
@@ -93,8 +90,7 @@ inline std::vector<GaussianModel3D> BuildLocalFittingGroupMedianModelList(
     return group_median_model_list;
 }
 
-inline std::optional<std::vector<GaussianModel3D>>
-BuildLocalFittingSharedOffsetDampedModelList(
+inline std::optional<std::vector<GaussianModel3D>> BuildLocalFittingSharedOffsetDampedModelList(
     const std::vector<GaussianModel3D> & previous_model_list,
     const std::vector<GaussianModel3D> & raw_model_list,
     const std::vector<GaussianModel3D> & previous_shared_offset_model_list,
@@ -111,17 +107,13 @@ BuildLocalFittingSharedOffsetDampedModelList(
 
     std::vector<GaussianModel3D> candidate_model_list;
     candidate_model_list.reserve(previous_model_list.size());
-    for (std::size_t atom_position = 0;
-        atom_position < previous_model_list.size();
-        atom_position++)
+    for (std::size_t atom_position = 0; atom_position < previous_model_list.size(); atom_position++)
     {
         const auto previous_coordinates{
-            EncodeTransformedCoordinates(
-                previous_model_list.at(atom_position))
+            EncodeTransformedCoordinates(previous_model_list.at(atom_position))
         };
         const auto raw_coordinates{
-            EncodeTransformedCoordinates(
-                raw_model_list.at(atom_position))
+            EncodeTransformedCoordinates(raw_model_list.at(atom_position))
         };
         if (!previous_coordinates.has_value() || !raw_coordinates.has_value())
         {
@@ -129,11 +121,9 @@ BuildLocalFittingSharedOffsetDampedModelList(
         }
 
         Eigen::Vector3d shape_coordinates{
-            (*previous_coordinates +
-                damping * (*raw_coordinates - *previous_coordinates)).eval()
+            (*previous_coordinates + damping * (*raw_coordinates - *previous_coordinates)).eval()
         };
-        shape_coordinates(static_cast<Eigen::Index>(
-            kOffsetToPeakRatioChangeIndex)) = 0.0;
+        shape_coordinates(static_cast<Eigen::Index>(kOffsetToPeakRatioChangeIndex)) = 0.0;
         const auto shape_model{
             DecodeTransformedCoordinates(shape_coordinates)
         };
@@ -146,8 +136,7 @@ BuildLocalFittingSharedOffsetDampedModelList(
             raw_shared_offset_model_list.at(atom_position).GetOffset()
         };
         const auto candidate_model{ shape_model->WithOffset(
-            previous_shared_offset +
-                damping * (raw_shared_offset - previous_shared_offset)) };
+            previous_shared_offset + damping * (raw_shared_offset - previous_shared_offset)) };
         if (!IsValidSecondStageGaussianModel(candidate_model))
         {
             return std::nullopt;

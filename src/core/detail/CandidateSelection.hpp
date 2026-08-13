@@ -16,7 +16,7 @@
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/JointPolish.hpp"
 #include "core/detail/BacktrackingWorkspace.hpp"
-#include "core/detail/LocalFittingCandidateEvaluationOverlay.hpp"
+#include "core/detail/CandidateEvaluationOverlay.hpp"
 #include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/Objective.hpp"
 #include "core/detail/LocalFittingPerformanceCounters.hpp"
@@ -472,7 +472,7 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
         key,
         kTransformedChangeTolerance
     };
-    LocalFittingCandidateEvaluationOverlay base_overlay{
+    CandidateEvaluationOverlay base_overlay{
         context,
         previous_model_snapshot,
         residual_baseline,
@@ -513,7 +513,7 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
                     previous_state,
                     *backtracked_patch
                 };
-                const LocalFittingCandidateEvaluationOverlay backtracked_overlay{
+                const CandidateEvaluationOverlay backtracked_overlay{
                     context,
                     previous_model_snapshot,
                     residual_baseline,
@@ -604,7 +604,7 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
                 previous_state,
                 polished_candidate->patch
             };
-            const LocalFittingCandidateEvaluationOverlay polished_overlay{
+            const CandidateEvaluationOverlay polished_overlay{
                 context,
                 previous_model_snapshot,
                 residual_baseline,
@@ -851,7 +851,7 @@ inline bool TryBacktrackCombinedCandidate(
                 previous_state,
                 *candidate_patch
             };
-            const LocalFittingCandidateEvaluationOverlay candidate_overlay{
+            const CandidateEvaluationOverlay candidate_overlay{
                 context,
                 previous_model_snapshot,
                 residual_baseline,

@@ -15,7 +15,7 @@
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 #include "core/detail/TransformedChange.hpp"
-#include "core/detail/LocalFittingRobustScale.hpp"
+#include "core/detail/RobustScale.hpp"
 
 namespace rhbm_gem::core::detail {
 
@@ -162,7 +162,7 @@ inline SuspiciousProfileAnalysis BuildSuspiciousProfileAnalysis(
     diagnostics.innermost_response = diagnostics.radius_response_median_list.front();
     if (calculate_residual_scale)
     {
-        diagnostics.robust_residual_scale = CalculateLocalFittingMedianAbsoluteDeviationScale(residual_list);
+        diagnostics.robust_residual_scale = CalculateMedianAbsoluteDeviationScale(residual_list);
     }
     analysis.profile = std::move(diagnostics);
     return analysis;
@@ -180,15 +180,13 @@ inline bool HasUsableSuspiciousProfileBaseline(
         !std::isfinite(previous_model.GetWidth()) ||
         !std::isfinite(previous_model.GetOffset()) ||
         previous_model.GetWidth() <= 0.0 ||
-        previous_profile.max_abs_response <= kLocalFittingRobustScaleMin ||
+        previous_profile.max_abs_response <= kRobustScaleMin ||
         !std::isfinite(previous_profile.robust_residual_scale))
     {
         return false;
     }
     const auto innermost_scale{
-        std::max(
-            std::abs(previous_profile.innermost_response),
-            kLocalFittingRobustScaleMin)
+        std::max(std::abs(previous_profile.innermost_response), kRobustScaleMin)
     };
     for (std::size_t i = 1; i < previous_profile.radius_response_median_list.size(); i++)
     {
@@ -223,7 +221,7 @@ inline bool HasSuspiciousOffsetMagnitude(
             std::abs(previous_model.SignalAtDistance(0.0)),
             std::abs(previous_offset_response),
             previous_profile_max_abs_response,
-            kLocalFittingRobustScaleMin
+            kRobustScaleMin
         })
     };
     return std::abs(candidate_offset_response) > kSuspiciousCompensationResponseRatio * reference_scale;
@@ -310,7 +308,7 @@ inline bool HasSuspiciousAmplitudeOffsetCompensation(
             previous_profile.has_value() ?
                 std::abs(previous_profile->innermost_response) : 0.0,
             std::abs(previous_model.SignalAtDistance(0.0)),
-            kLocalFittingRobustScaleMin
+            kRobustScaleMin
         })
     };
     return signal_delta * offset_delta_response < 0.0 &&

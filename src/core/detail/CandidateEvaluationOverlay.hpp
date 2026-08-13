@@ -3,8 +3,6 @@
 #include <cmath>
 #include <cstddef>
 #include <optional>
-#include <stdexcept>
-#include <utility>
 #include <vector>
 
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
@@ -16,10 +14,17 @@
 
 namespace rhbm_gem::core::detail {
 
-class LocalFittingCandidateEvaluationOverlay
+class CandidateEvaluationOverlay
 {
+    const SecondStageContext & m_context;
+    const SecondStageModelSnapshot & m_baseline_model_snapshot;
+    const LocalFittingResidualBaseline & m_residual_baseline;
+    const FitStatePatch & m_patch;
+    std::vector<char> m_changed_group_mask{};
+    std::vector<std::optional<GaussianModel3D>> m_changed_group_median{};
+
 public:
-    LocalFittingCandidateEvaluationOverlay(
+    CandidateEvaluationOverlay(
         const SecondStageContext & context,
         const SecondStageModelSnapshot & baseline_model_snapshot,
         const LocalFittingResidualBaseline & residual_baseline,
@@ -29,20 +34,15 @@ public:
           m_baseline_model_snapshot{ baseline_model_snapshot },
           m_residual_baseline{ residual_baseline },
           m_patch{ patch },
-          m_changed_group_mask(
-              context.selected_atom_index_list_by_group.size(),
-              0),
-          m_changed_group_median(
-              context.selected_atom_index_list_by_group.size())
+          m_changed_group_mask(context.selected_atom_index_list_by_group.size(), 0),
+          m_changed_group_median(context.selected_atom_index_list_by_group.size())
     {
         for (const auto atom_index : patch.atom_index_list)
         {
             m_changed_group_mask.at(m_context.at(atom_index).group_id) = 1;
         }
         std::vector<GaussianModel3D> model_list;
-        for (std::size_t group_id = 0;
-            group_id < m_changed_group_mask.size();
-            group_id++)
+        for (std::size_t group_id = 0; group_id < m_changed_group_mask.size(); group_id++)
         {
             if (m_changed_group_mask.at(group_id) == 0) continue;
             const auto & atom_index_list{
@@ -54,8 +54,7 @@ public:
             {
                 model_list.emplace_back(candidate_state.GetModel(atom_index));
             }
-            m_changed_group_median.at(group_id) =
-                BuildLocalFittingGaussianParameterMedian(model_list);
+            m_changed_group_median.at(group_id) = BuildLocalFittingGaussianParameterMedian(model_list);
         }
     }
 
@@ -73,8 +72,7 @@ public:
             atom_context.raw_sampling_entries.at(sample_ref.sample_index)
         };
         auto adjusted_response{ baseline->adjusted_response };
-        for (auto neighbor_iter =
-                atom_context.NeighborBegin(sample_ref.sample_index);
+        for (auto neighbor_iter = atom_context.NeighborBegin(sample_ref.sample_index);
             neighbor_iter != atom_context.NeighborEnd(sample_ref.sample_index);
             ++neighbor_iter)
         {
@@ -87,27 +85,22 @@ public:
                 {
                     continue;
                 }
-                baseline_model = &m_baseline_model_snapshot.selected.at(
-                    neighbor_atom_sample.atom_index);
-                candidate_model = &candidate_state.GetModel(
-                    neighbor_atom_sample.atom_index);
+                baseline_model = &m_baseline_model_snapshot.selected.at(neighbor_atom_sample.atom_index);
+                candidate_model = &candidate_state.GetModel(neighbor_atom_sample.atom_index);
             }
             else
             {
                 const auto & unselected_atom_contributor{
-                    m_context.unselected_atom_list.at(
-                        neighbor_atom_sample.atom_index)
+                    m_context.unselected_atom_list.at(neighbor_atom_sample.atom_index)
                 };
                 if (!unselected_atom_contributor.selected_group_id.has_value() ||
                     m_changed_group_mask.at(*unselected_atom_contributor.selected_group_id) == 0)
                 {
                     continue;
                 }
-                baseline_model = &m_baseline_model_snapshot.unselected.at(
-                    neighbor_atom_sample.atom_index);
+                baseline_model = &m_baseline_model_snapshot.unselected.at(neighbor_atom_sample.atom_index);
                 const auto & median{
-                    m_changed_group_median.at(
-                        *unselected_atom_contributor.selected_group_id)
+                    m_changed_group_median.at(*unselected_atom_contributor.selected_group_id)
                 };
                 if (median.has_value())
                 {
@@ -139,14 +132,6 @@ public:
         }
         return LocalFittingResidualSample{ adjusted_response, residual };
     }
-
-private:
-    const SecondStageContext & m_context;
-    const SecondStageModelSnapshot & m_baseline_model_snapshot;
-    const LocalFittingResidualBaseline & m_residual_baseline;
-    const FitStatePatch & m_patch;
-    std::vector<char> m_changed_group_mask{};
-    std::vector<std::optional<GaussianModel3D>> m_changed_group_median{};
 };
 
 } // namespace rhbm_gem::core::detail

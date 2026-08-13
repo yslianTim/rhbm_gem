@@ -1,6 +1,5 @@
 #pragma once
 
-#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <vector>
@@ -9,11 +8,10 @@
 
 namespace rhbm_gem::core::detail {
 
-constexpr double kLocalFittingRobustScaleMultiplier{ 1.4826 };
-constexpr double kLocalFittingRobustScaleMin{ 1.0e-12 };
+constexpr double kRobustScaleMultiplier{ 1.4826 };
+constexpr double kRobustScaleMin{ 1.0e-12 };
 
-inline double CalculateLocalFittingMedianAbsoluteDeviationScale(
-    const std::vector<double> & value_list)
+inline double CalculateMedianAbsoluteDeviationScale(const std::vector<double> & value_list)
 {
     if (value_list.empty())
     {
@@ -33,16 +31,7 @@ inline double CalculateLocalFittingMedianAbsoluteDeviationScale(
     {
         deviation_list.emplace_back(std::abs(value - median));
     }
-    return kLocalFittingRobustScaleMultiplier *
-        array_helper::ComputeMedian(deviation_list);
-}
-
-// Kept as a compatibility name while the implementation lives in the
-// responsibility-specific robust-scale header.
-inline double CalculateMedianAbsoluteDeviationScale(
-    const std::vector<double> & value_list)
-{
-    return CalculateLocalFittingMedianAbsoluteDeviationScale(value_list);
+    return kRobustScaleMultiplier * array_helper::ComputeMedian(deviation_list);
 }
 
 } // namespace rhbm_gem::core::detail

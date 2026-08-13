@@ -3819,7 +3819,7 @@ TEST(EstimatorSecondStageDefenseTest, ResidualBaselineAndOverlayAgreeForCandidat
         previous_state,
         patch
     };
-    const residual_detail::LocalFittingCandidateEvaluationOverlay overlay{
+    const residual_detail::CandidateEvaluationOverlay overlay{
         context,
         model_snapshot,
         baseline,

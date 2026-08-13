@@ -14,10 +14,10 @@
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include "core/detail/CouplingGraph.hpp"
-#include "core/detail/LocalFittingCandidateEvaluationOverlay.hpp"
+#include "core/detail/CandidateEvaluationOverlay.hpp"
 #include "core/detail/LocalFittingPerformanceCounters.hpp"
 #include "core/detail/LocalFittingResidualEvaluation.hpp"
-#include "core/detail/LocalFittingRobustScale.hpp"
+#include "core/detail/RobustScale.hpp"
 #include "core/detail/FitStateView.hpp"
 #include "core/detail/TransformedChange.hpp"
 
@@ -276,10 +276,10 @@ inline std::optional<double> BuildFixedObjectiveScale(
     }
     const auto scale{
         std::max({
-            CalculateLocalFittingMedianAbsoluteDeviationScale(residual_list),
+            CalculateMedianAbsoluteDeviationScale(residual_list),
             kObjectiveResidualScaleFloorRatio *
-                CalculateLocalFittingMedianAbsoluteDeviationScale(adjusted_response_list),
-            kLocalFittingRobustScaleMin
+                CalculateMedianAbsoluteDeviationScale(adjusted_response_list),
+            kRobustScaleMin
         })
     };
     return numeric_validation::IsFinitePositive(scale) ?
@@ -491,8 +491,7 @@ EvaluateObjectiveContributionImpl(
                 std::abs(offset_peak) /
                 std::max({
                     std::abs(peak_signal),
-                    owner_iter->second.scale->fit,
-            kLocalFittingRobustScaleMin
+                    owner_iter->second.scale->fit, kRobustScaleMin
                 })
             };
             const auto offset_excess{
@@ -567,7 +566,7 @@ inline std::optional<ObjectiveBreakdown>
 EvaluateObjectiveContribution(
     const SecondStageContext & context,
     const FitStateView & state,
-    const LocalFittingCandidateEvaluationOverlay & overlay,
+    const CandidateEvaluationOverlay & overlay,
     const ClusterKey & changed_key,
     const std::vector<ObjectiveSampleRef> & sample_ref_list,
     const ObjectiveDomain & domain,
@@ -697,7 +696,7 @@ EvaluateObjectiveDelta(
     const FitState & previous_state,
     const FitStateView & candidate_state,
     const LocalFittingResidualBaseline & residual_baseline,
-    const LocalFittingCandidateEvaluationOverlay & candidate_overlay,
+    const CandidateEvaluationOverlay & candidate_overlay,
     const ClusterKey & changed_key,
     const std::vector<ObjectiveSampleRef> & affected_sample_ref_list,
     const ObjectiveDomain & domain,
@@ -856,7 +855,7 @@ inline CombinedObjectiveCheck EvaluateCombinedObjective(
     const FitState & previous_state,
     const FitStateView & candidate_state,
     const LocalFittingResidualBaseline & residual_baseline,
-    const LocalFittingCandidateEvaluationOverlay & candidate_overlay,
+    const CandidateEvaluationOverlay & candidate_overlay,
     const ClusterKey & changed_key,
     const std::vector<ObjectiveSampleRef> & affected_sample_ref_list,
     const ObjectiveDomain & domain,
@@ -934,7 +933,7 @@ EvaluateCombinedCandidateObjective(
         previous_state,
         combined_patch
     };
-    const LocalFittingCandidateEvaluationOverlay combined_overlay{
+    const CandidateEvaluationOverlay combined_overlay{
         context,
         previous_model_snapshot,
         residual_baseline,
@@ -1072,7 +1071,7 @@ inline void ReconcileClusterObjectiveState(
 inline bool TryCommitClusterCandidate(
     const SecondStageContext & context,
     const FitStateView & candidate_state,
-    const LocalFittingCandidateEvaluationOverlay & candidate_overlay,
+    const CandidateEvaluationOverlay & candidate_overlay,
     const FitStateView & previous_state,
     const ClusterKey & key,
     const std::vector<ObjectiveSampleRef> & objective_sample_ref_list,

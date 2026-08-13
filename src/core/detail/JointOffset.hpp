@@ -23,15 +23,14 @@
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
-#include "core/detail/LocalFittingCandidateEvaluationOverlay.hpp"
-#include "core/detail/LocalFittingRobustScale.hpp"
+#include "core/detail/LocalFittingResidualEvaluation.hpp"
+#include "core/detail/SecondStageContext.hpp"
+#include "core/detail/RobustScale.hpp"
 #include "core/detail/ReusableWeightedRidgeSolver.hpp"
 
 namespace rhbm_gem::core::detail {
 
 constexpr int kRobustLossMaximumIterations{ 50 };
-constexpr double kRobustScaleMultiplier{ kLocalFittingRobustScaleMultiplier };
-constexpr double kRobustScaleMin{ kLocalFittingRobustScaleMin };
 constexpr double kRobustLossCutoffMultiplier{ 1.345 };
 constexpr double kJointOffsetRidgeRatio{ 1.0e-3 };
 constexpr double kSuspiciousJointOffsetRidgeMultiplier{ 10.0 };
@@ -725,7 +724,7 @@ inline JointOffsetSolveResult EstimateJointOffsets(
         std::vector<double> residual_list(residual.data(), residual.data() + residual.size());
         const auto residual_scale{
             std::max(
-                CalculateLocalFittingMedianAbsoluteDeviationScale(residual_list),
+                CalculateMedianAbsoluteDeviationScale(residual_list),
                 kRobustScaleMin)
         };
         for (Eigen::Index i = 0; i < residual.size(); i++)

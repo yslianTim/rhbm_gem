@@ -12,7 +12,7 @@
 #include "core/detail/JointPolish.hpp"
 #include "core/detail/LocalFittingPerformanceCounters.hpp"
 #include "core/detail/SeedRepair.hpp"
-#include "core/detail/SecondStageLocalFittingInitialization.hpp"
+#include "core/detail/SecondStageInitialization.hpp"
 #include "core/detail/TrustRegion.hpp"
 #include "core/detail/TransformedChange.hpp"
 #include "core/detail/ReusableWeightedRidgeSolver.hpp"
