@@ -1,7 +1,6 @@
 #pragma once
 
 #include "core/detail/JointOffset.hpp"
-#include "core/detail/LocalFittingCandidateEvaluationOverlay.hpp"
 #include "core/detail/LocalFittingRobustScale.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
 #include "core/detail/LocalFittingTrustRegion.hpp"
@@ -722,21 +721,17 @@ BuildJointPolishProposal(
     ReusableWeightedRidgeSolver & reusable_solver,
     double trust_region_radius)
 {
-    constexpr double trust_region_tolerance{ 1.0e-12 };
     std::vector<GroupKey> group_key_by_atom_position;
     std::vector<GaussianModel3D> base_model_list;
     group_key_by_atom_position.reserve(key.size());
     base_model_list.reserve(key.size());
     for (const auto atom_index : key)
     {
-        group_key_by_atom_position.emplace_back(
-            context.at(atom_index).group_key);
+        group_key_by_atom_position.emplace_back(context.at(atom_index).group_key);
         base_model_list.emplace_back(base_state.GetModel(atom_index));
     }
     const auto parameterization{
-        BuildJointPolishParameterization(
-            group_key_by_atom_position,
-            base_model_list)
+        BuildJointPolishParameterization(group_key_by_atom_position, base_model_list)
     };
     if (!parameterization.has_value()) return std::nullopt;
 
@@ -764,7 +759,7 @@ BuildJointPolishProposal(
             *seed_model_list)
     };
     if (!seed_step_norm.has_value() ||
-        *seed_step_norm > trust_region_radius + trust_region_tolerance)
+        !IsLocalFittingTrustRegionStepWithinRadius(*seed_step_norm, trust_region_radius))
     {
         return std::nullopt;
     }
@@ -803,7 +798,7 @@ BuildJointPolishProposal(
                     *candidate_model_list)
             };
             if (step_norm.has_value() &&
-                *step_norm <= trust_region_radius + trust_region_tolerance)
+                IsLocalFittingTrustRegionStepWithinRadius(*step_norm, trust_region_radius))
             {
                 if (!HasMaterialJointPolishChange(
                         *candidate_model_list,
@@ -817,9 +812,7 @@ BuildJointPolishProposal(
                 proposal.patch.mdpde_list.reserve(key.size());
                 proposal.effective_damping = damping;
                 proposal.step_norm = *step_norm;
-                for (std::size_t atom_position = 0;
-                    atom_position < key.size();
-                    atom_position++)
+                for (std::size_t atom_position = 0; atom_position < key.size(); atom_position++)
                 {
                     const auto atom_index{ key.at(atom_position) };
                     const auto & base_mdpde{ base_state.GetMdpde(atom_index) };

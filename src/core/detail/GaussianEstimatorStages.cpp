@@ -86,11 +86,6 @@ using detail::ScopedEigenThreadCount;
 constexpr std::size_t kLocalFittingMaximumIterations{ 100 };
 constexpr std::size_t kLocalFittingAuditPatience{ 3 };
 constexpr bool kApplyLocalFittingBestIteration{ true };
-constexpr double kLocalFittingTrustRegionInitialRadius{ 1.0 };
-constexpr double kLocalFittingTrustRegionMinimumRadius{ 0.0625 };
-constexpr double kLocalFittingTrustRegionMaximumRadius{ 4.0 };
-constexpr double kLocalFittingTrustRegionShrinkFactor{ 0.5 };
-constexpr double kLocalFittingTrustRegionGrowthFactor{ 2.0 };
 
 using detail::JointOffsetSolveStatus;
 using detail::IsJointOffsetSolveStationarityEligible;
@@ -1400,15 +1395,7 @@ bool RunSecondStageLocalFitting(
     PersistentTerminalFailureStateMap persistent_terminal_failure_state_by_key;
     LocalFittingTerminalSummary terminal_summary;
     LocalFittingClusterObjectiveStateMap cluster_objective_state;
-    detail::LocalFittingTrustRegionStateSet trust_region_state{
-        detail::LocalFittingTrustRegionOptions{
-            kLocalFittingTrustRegionInitialRadius,
-            kLocalFittingTrustRegionMinimumRadius,
-            kLocalFittingTrustRegionMaximumRadius,
-            kLocalFittingTrustRegionShrinkFactor,
-            kLocalFittingTrustRegionGrowthFactor
-        }
-    };
+    detail::LocalFittingTrustRegionStateSet trust_region_state;
     const auto progress_column_widths{ BuildLocalFittingProgressColumnWidths(atom_size) };
     LogLocalFittingProgressHeader(options, progress_column_widths);
 
@@ -1779,14 +1766,17 @@ bool RunSecondStageLocalFitting(
             }
         }
 
-        trust_region_state.Grow(selection.grow_trust_region_key_list);
-        const auto rejected_cluster_partition{
-            detail::PartitionLocalFittingRejectedClusters(
+        const auto trust_region_iteration_update{
+            trust_region_state.UpdateAfterIteration(
+                selection.grow_trust_region_key_list,
                 selection.rejected_key_list,
                 selection.backtracking_exhausted_key_list)
         };
-        const auto trust_region_radius_update{
-            trust_region_state.Shrink(rejected_cluster_partition.retryable_key_list)
+        const auto & rejected_cluster_partition{
+            trust_region_iteration_update.rejected_cluster_partition
+        };
+        const auto & trust_region_radius_update{
+            trust_region_iteration_update.radius_update
         };
         const auto terminal_atom_count{ terminal_summary.AtomCount() };
         LocalFittingIterationProgress progress{

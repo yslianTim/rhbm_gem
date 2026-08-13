@@ -18,6 +18,8 @@ namespace rhbm_gem::core::detail {
 
 constexpr std::array<double, kTransformedChangeSize>
 kLocalFittingTrustRegionParameterScale{ 0.50, 0.35, 1.0 };
+constexpr double kLocalFittingTrustRegionBoundaryTolerance{ 1.0e-12 };
+constexpr double kLocalFittingTrustRegionGrowthBoundaryRatio{ 0.8 };
 
 using LocalFittingTrustRegionClusterKey = std::vector<std::size_t>;
 
@@ -42,6 +44,12 @@ struct LocalFittingRejectedClusterPartition
     std::vector<LocalFittingTrustRegionClusterKey> retryable_key_list{};
 };
 
+struct LocalFittingTrustRegionIterationUpdate
+{
+    LocalFittingRejectedClusterPartition rejected_cluster_partition{};
+    LocalFittingTrustRegionRadiusUpdate radius_update{};
+};
+
 enum class LocalFittingAllRejectedResolution
 {
     Retry,
@@ -51,8 +59,31 @@ enum class LocalFittingAllRejectedResolution
     NoRetryProgress
 };
 
-inline LocalFittingRejectedClusterPartition
-PartitionLocalFittingRejectedClusters(
+inline bool IsLocalFittingTrustRegionStepWithinRadius(double step_norm, double radius)
+{
+    return std::isfinite(step_norm) &&
+        std::isfinite(radius) &&
+        radius > 0.0 &&
+        step_norm <= radius + kLocalFittingTrustRegionBoundaryTolerance;
+}
+
+inline bool IsLocalFittingTrustRegionStepAtGrowthBoundary(double step_norm, double radius)
+{
+    return std::isfinite(step_norm) &&
+        std::isfinite(radius) &&
+        radius > 0.0 &&
+        step_norm >= kLocalFittingTrustRegionGrowthBoundaryRatio * radius;
+}
+
+inline bool IsLocalFittingTrustRegionGrowthEligible(
+    double step_norm,
+    double radius,
+    bool objective_improved)
+{
+    return objective_improved && IsLocalFittingTrustRegionStepAtGrowthBoundary(step_norm, radius);
+}
+
+inline LocalFittingRejectedClusterPartition PartitionLocalFittingRejectedClusters(
     const std::vector<LocalFittingTrustRegionClusterKey> & rejected_key_list,
     const std::vector<LocalFittingTrustRegionClusterKey> & exhausted_key_list)
 {
@@ -145,8 +176,7 @@ private:
     }
 
 public:
-    explicit LocalFittingTrustRegionStateSet(
-        LocalFittingTrustRegionOptions options = {})
+    explicit LocalFittingTrustRegionStateSet(LocalFittingTrustRegionOptions options = {})
         : m_options{ options }
     {
         ValidateOptions(m_options);
@@ -176,8 +206,7 @@ public:
         return iter->second;
     }
 
-    LocalFittingTrustRegionRadiusUpdate Shrink(
-        const std::vector<LocalFittingTrustRegionClusterKey> & key_list)
+    LocalFittingTrustRegionRadiusUpdate Shrink(const std::vector<LocalFittingTrustRegionClusterKey> & key_list)
     {
         LocalFittingTrustRegionRadiusUpdate update;
         for (const auto & key : key_list)
@@ -213,6 +242,26 @@ public:
                 m_options.maximum_radius,
                 iter->second * m_options.growth_factor);
         }
+    }
+
+    LocalFittingTrustRegionIterationUpdate UpdateAfterIteration(
+        const std::vector<LocalFittingTrustRegionClusterKey> & grow_key_list,
+        const std::vector<LocalFittingTrustRegionClusterKey> & rejected_key_list,
+        const std::vector<LocalFittingTrustRegionClusterKey> & backtracking_exhausted_key_list)
+    {
+        Grow(grow_key_list);
+        auto rejected_cluster_partition{
+            PartitionLocalFittingRejectedClusters(
+                rejected_key_list,
+                backtracking_exhausted_key_list)
+        };
+        auto radius_update{
+            Shrink(rejected_cluster_partition.retryable_key_list)
+        };
+        return LocalFittingTrustRegionIterationUpdate{
+            std::move(rejected_cluster_partition),
+            std::move(radius_update)
+        };
     }
 
 };
@@ -318,7 +367,6 @@ inline LocalFittingTrustRegionDamping LimitLocalFittingTrustRegionSubstepDamping
         radius);
 
     double maximum_damping{ requested_damping };
-    constexpr double tolerance{ 1.0e-12 };
     for (std::size_t i = 0; i < outer_previous_estimation_list.size(); i++)
     {
         for (std::size_t parameter_index = 0; parameter_index < 3; parameter_index++)
@@ -329,7 +377,8 @@ inline LocalFittingTrustRegionDamping LimitLocalFittingTrustRegionSubstepDamping
                 substep_previous_estimation_list.at(i)(eigen_index) -
                 outer_previous_estimation_list.at(i)(eigen_index)
             };
-            if (std::abs(base_step) > limit + tolerance)
+            if (std::abs(base_step) >
+                limit + kLocalFittingTrustRegionBoundaryTolerance)
             {
                 throw std::invalid_argument(
                     "Local fitting trust-region substep starts outside the radius.");
@@ -386,9 +435,7 @@ inline std::optional<double> CalculateLocalFittingClusterModelTrustRegionStepNor
 {
     if (candidate_model_list.size() != key.size()) return std::nullopt;
     double step_norm{ 0.0 };
-    for (std::size_t atom_position = 0;
-        atom_position < key.size();
-        atom_position++)
+    for (std::size_t atom_position = 0; atom_position < key.size(); atom_position++)
     {
         const auto atom_index{ key.at(atom_position) };
         const auto previous{
@@ -396,8 +443,7 @@ inline std::optional<double> CalculateLocalFittingClusterModelTrustRegionStepNor
                 outer_previous_state.at(atom_index).mdpde.GetModel())
         };
         const auto candidate{
-            EncodeLocalFittingTransformedCoordinates(
-                candidate_model_list.at(atom_position))
+            EncodeLocalFittingTransformedCoordinates(candidate_model_list.at(atom_position))
         };
         if (!previous.has_value() || !candidate.has_value())
         {
@@ -414,8 +460,7 @@ inline std::optional<double> CalculateLocalFittingClusterModelTrustRegionStepNor
                     kLocalFittingTrustRegionParameterScale.at(parameter_index));
         }
     }
-    return std::isfinite(step_norm) ?
-        std::optional<double>{ step_norm } : std::nullopt;
+    return std::isfinite(step_norm) ? std::optional<double>{ step_norm } : std::nullopt;
 }
 
 } // namespace rhbm_gem::core::detail

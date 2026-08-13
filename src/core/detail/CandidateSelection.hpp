@@ -31,8 +31,6 @@
 
 namespace rhbm_gem::core::detail {
 
-constexpr double kCandidateTrustRegionBoundaryRatio{ 0.8 };
-
 struct RejectedClusterDiagnostic
 {
     LocalFittingClusterKey key{};
@@ -88,7 +86,6 @@ inline BaseProposalBuildResult BuildSharedOffsetBaseProposal(
     const LocalFittingClusterKey & key,
     double trust_region_radius)
 {
-    constexpr double trust_region_tolerance{ 1.0e-12 };
     if (key.empty())
     {
         return BaseProposalBuildResult{
@@ -144,7 +141,7 @@ inline BaseProposalBuildResult BuildSharedOffsetBaseProposal(
             std::nullopt
         };
     }
-    if (*seed_step_norm > trust_region_radius + trust_region_tolerance)
+    if (!IsLocalFittingTrustRegionStepWithinRadius(*seed_step_norm, trust_region_radius))
     {
         return BaseProposalBuildResult{
             std::nullopt,
@@ -173,7 +170,8 @@ inline BaseProposalBuildResult BuildSharedOffsetBaseProposal(
                     key,
                     *candidate_model_list)
             };
-            if (step_norm.has_value() && *step_norm <= trust_region_radius + trust_region_tolerance)
+            if (step_norm.has_value() &&
+                IsLocalFittingTrustRegionStepWithinRadius(*step_norm, trust_region_radius))
             {
                 BaseProposal proposal;
                 proposal.patch.atom_index_list = key;
@@ -321,11 +319,13 @@ inline bool ShouldGrowTrustRegion(const LocalFittingObjectiveAttemptDiagnostic &
 {
     return diagnostic.candidate_objective.has_value() &&
         diagnostic.previous_objective.has_value() &&
-        diagnostic.trust_region_step_norm >= kCandidateTrustRegionBoundaryRatio * diagnostic.trust_region_radius &&
-        IsBetterLocalFittingAuditObjective(
-            diagnostic.candidate_objective->total_objective,
-            diagnostic.previous_objective->total_objective,
-            kLocalFittingObjectiveStrictTolerance);
+        IsLocalFittingTrustRegionGrowthEligible(
+            diagnostic.trust_region_step_norm,
+            diagnostic.trust_region_radius,
+            IsBetterLocalFittingAuditObjective(
+                diagnostic.candidate_objective->total_objective,
+                diagnostic.previous_objective->total_objective,
+                kLocalFittingObjectiveStrictTolerance));
 }
 
 inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
