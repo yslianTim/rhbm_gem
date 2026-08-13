@@ -15,6 +15,11 @@ namespace rhbm_gem::core::detail {
 
 class ReusableWeightedRidgeSolver
 {
+    algorithm::WeightedRidgeSolver m_solver{};
+    Eigen::Index m_row_count{ -1 };
+    Eigen::Index m_column_count{ -1 };
+    std::vector<std::pair<Eigen::Index, Eigen::Index>> m_pattern{};
+
 public:
     bool Solve(
         const algorithm::WeightedRidgeSystem & system,
@@ -40,41 +45,32 @@ public:
     }
 
 private:
-    static std::vector<std::pair<Eigen::Index, Eigen::Index>> BuildPattern(
-        const Eigen::SparseMatrix<double> & matrix)
+    static std::vector<std::pair<Eigen::Index, Eigen::Index>> BuildPattern(const Eigen::SparseMatrix<double> & matrix)
     {
         std::vector<std::pair<Eigen::Index, Eigen::Index>> pattern;
         pattern.reserve(static_cast<std::size_t>(matrix.nonZeros()));
         for (Eigen::Index outer = 0; outer < matrix.outerSize(); outer++)
         {
-            for (Eigen::SparseMatrix<double>::InnerIterator iter(matrix, outer);
-                iter;
-                ++iter)
+            for (Eigen::SparseMatrix<double>::InnerIterator iter(matrix, outer); iter; ++iter)
             {
                 pattern.emplace_back(iter.row(), iter.col());
             }
         }
         return pattern;
     }
-
-    algorithm::WeightedRidgeSolver m_solver{};
-    Eigen::Index m_row_count{ -1 };
-    Eigen::Index m_column_count{ -1 };
-    std::vector<std::pair<Eigen::Index, Eigen::Index>> m_pattern{};
 };
 
-struct LocalFittingClusterSolverWorkspace
+struct ClusterSolverWorkspace
 {
     ReusableWeightedRidgeSolver joint_offset{};
     ReusableWeightedRidgeSolver joint_polish{};
 };
 
-using LocalFittingClusterSolverWorkspaceMap =
-    std::map<ClusterKey, LocalFittingClusterSolverWorkspace>;
+using ClusterSolverWorkspaceMap = std::map<ClusterKey, ClusterSolverWorkspace>;
 
-inline void ResetLocalFittingClusterSolverWorkspace(
+inline void ResetClusterSolverWorkspace(
     const std::vector<ClusterKey> & cluster_key_list,
-    LocalFittingClusterSolverWorkspaceMap & workspace_by_key)
+    ClusterSolverWorkspaceMap & workspace_by_key)
 {
     workspace_by_key.clear();
     for (const auto & key : cluster_key_list)

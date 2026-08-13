@@ -59,8 +59,8 @@ namespace {
 
 using detail::BuildSecondStageModelSnapshot;
 using detail::ClusterKey;
-using detail::LocalFittingClusterSolverWorkspace;
-using detail::LocalFittingClusterSolverWorkspaceMap;
+using detail::ClusterSolverWorkspace;
+using detail::ClusterSolverWorkspaceMap;
 using detail::ObjectiveAttemptDiagnostic;
 using detail::ObjectiveSampleRef;
 using detail::LocalFittingPerformanceCounters;
@@ -81,7 +81,7 @@ constexpr double kLocalFittingOffsetSummaryPercentile{ 0.99 };
 using detail::JointOffsetSolveStatus;
 using detail::IsJointOffsetSolveStationarityEligible;
 using detail::GetJointOffsetSolveStatusText;
-using detail::ResetLocalFittingClusterSolverWorkspace;
+using detail::ResetClusterSolverWorkspace;
 using detail::BuildSecondStageAdjustedSamples;
 using detail::BuildResidualBaseline;
 using detail::SummarizeTransformedChanges;
@@ -144,8 +144,8 @@ LocalFittingFinalStateSelection SelectLocalFittingFinalState(
     const std::optional<AuditedState> & audited_state)
 {
     const auto source{ kApplyLocalFittingBestIteration && audited_state.has_value() ?
-        LocalFittingFinalStateSource::BestAudit :
-        LocalFittingFinalStateSource::LatestValidated };
+        LocalFittingFinalStateSource::BestAudit : LocalFittingFinalStateSource::LatestValidated
+    };
     if (source == LocalFittingFinalStateSource::BestAudit)
     {
         return LocalFittingFinalStateSelection{
@@ -1315,8 +1315,8 @@ bool RunSecondStageLocalFitting(
     auto cluster_key_list{
         detail::BuildGraphClusterKeyList(graph_partition)
     };
-    LocalFittingClusterSolverWorkspaceMap solver_workspace_by_key;
-    ResetLocalFittingClusterSolverWorkspace(
+    ClusterSolverWorkspaceMap solver_workspace_by_key;
+    ResetClusterSolverWorkspace(
         cluster_key_list,
         solver_workspace_by_key);
     LocalFittingPerformanceCounters performance_counters{
@@ -1652,7 +1652,7 @@ bool RunSecondStageLocalFitting(
                 cluster_key_list =
                     detail::BuildGraphClusterKeyList(
                         remaining_graph_partition);
-                ResetLocalFittingClusterSolverWorkspace(
+                ResetClusterSolverWorkspace(
                     cluster_key_list,
                     solver_workspace_by_key);
                 graph_partition = std::move(remaining_graph_partition);

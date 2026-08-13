@@ -15,7 +15,7 @@ namespace rhbm_gem::core::detail {
 struct LocalFittingPerformanceCounters
 {
     const FitOptions & options;
-    const LocalFittingClusterSolverWorkspaceMap & solver_workspace_by_key;
+    const ClusterSolverWorkspaceMap & solver_workspace_by_key;
     std::chrono::steady_clock::time_point start_time{
         std::chrono::steady_clock::now()
     };

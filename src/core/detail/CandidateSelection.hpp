@@ -346,7 +346,7 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
     const ObjectiveByKey & previous_objective_by_key,
     const ClusterObjectiveState & previous_objective_state,
     double trust_region_radius,
-    LocalFittingClusterSolverWorkspace & solver_workspace,
+    ClusterSolverWorkspace & solver_workspace,
     LocalFittingPerformanceCounters & performance_counters)
 {
     using candidate_internal::BuildSharedOffsetBaseProposal;
@@ -664,13 +664,13 @@ inline CandidateSelection SelectClusterCandidates(
     const ObjectiveByKey & previous_objective_by_key,
     ClusterObjectiveStateMap & cluster_objective_state,
     const TrustRegionStateSet & trust_region_state,
-    LocalFittingClusterSolverWorkspaceMap & solver_workspace_by_key,
+    ClusterSolverWorkspaceMap & solver_workspace_by_key,
     int thread_size,
     LocalFittingPerformanceCounters & performance_counters)
 {
     std::vector<const ClusterKey *> key_list;
     std::vector<const std::vector<ObjectiveSampleRef> *> sample_ref_list_by_position;
-    std::vector<LocalFittingClusterSolverWorkspace *> solver_workspace_list;
+    std::vector<ClusterSolverWorkspace *> solver_workspace_list;
     std::vector<const ClusterObjectiveState *> objective_state_list;
     std::vector<char> polish_eligible_list;
     std::vector<char> exhausted_list;

@@ -131,7 +131,7 @@ inline LocalFittingIterationResult RunLocalFittingIteration(
     const FitState & previous_state,
     const FitOptions & options,
     const std::vector<double> & ridge_multiplier_list,
-    LocalFittingClusterSolverWorkspaceMap & solver_workspace_by_key)
+    ClusterSolverWorkspaceMap & solver_workspace_by_key)
 {
     using local_fitting_iteration_internal::LocalAtomRefitResult;
     const auto selected_atom_size{ context.size() };
