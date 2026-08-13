@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <map>
 #include <optional>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -13,9 +14,7 @@
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include "core/detail/CouplingGraph.hpp"
-#include "core/detail/LocalFittingAudit.hpp"
 #include "core/detail/LocalFittingCandidateEvaluationOverlay.hpp"
-#include "core/detail/LocalFittingObjectiveAttemptDiagnostic.hpp"
 #include "core/detail/LocalFittingPerformanceCounters.hpp"
 #include "core/detail/LocalFittingResidualEvaluation.hpp"
 #include "core/detail/LocalFittingRobustScale.hpp"
@@ -23,6 +22,21 @@
 #include "core/detail/TransformedChange.hpp"
 
 namespace rhbm_gem::core::detail {
+
+struct LocalFittingObjectiveBreakdown
+{
+    double fit_range_residual_objective{ 0.0 };
+    double tail_validation_loss{ 0.0 };
+    double tail_validation_penalty{ 0.0 };
+    double offset_plausibility_penalty{ 0.0 };
+    double total_objective{ 0.0 };
+};
+
+struct LocalFittingObjectiveTolerance
+{
+    double absolute_tolerance{ 0.0 };
+    double relative_tolerance{ 0.0 };
+};
 
 constexpr double kLocalFittingObjectiveResidualScaleFloorRatio{ 1.0e-6 };
 constexpr double kLocalFittingFitRangeWeight{ 1.0 };
@@ -34,6 +48,156 @@ constexpr LocalFittingObjectiveTolerance
 kLocalFittingObjectiveStrictTolerance{ 1.0e-10, 1.0e-8 };
 constexpr LocalFittingObjectiveTolerance
 kLocalFittingObjectiveProgressTolerance{ 1.0e-8, 1.0e-3 };
+
+struct LocalFittingAuditedState
+{
+    LocalFittingObjectiveBreakdown objective{};
+    FitState state{};
+    PolishProvenance polish_provenance{};
+    std::optional<std::size_t> accepted_iteration{};
+};
+
+struct LocalFittingBestAuditState
+{
+    std::optional<LocalFittingAuditedState> best{};
+};
+
+enum class LocalFittingPreObjectiveFailureReason
+{
+    None,
+    InvalidModel,
+    PreviousSharedOffsetProjectionOutsideTrustRegion,
+    NoCandidateWithinTrustRegion
+};
+
+struct LocalFittingObjectiveAttemptDiagnostic
+{
+    double effective_damping{ 1.0 };
+    bool is_invalid_model{ false };
+    LocalFittingPreObjectiveFailureReason pre_objective_failure_reason{
+        LocalFittingPreObjectiveFailureReason::None
+    };
+    std::optional<double> pre_objective_attempted_step_norm{};
+    std::optional<double> fit_scale{};
+    std::optional<double> tail_scale{};
+    std::size_t fit_sample_count{ 0 };
+    std::size_t tail_sample_count{ 0 };
+    std::optional<LocalFittingObjectiveBreakdown> candidate_objective{};
+    std::optional<LocalFittingObjectiveBreakdown> previous_objective{};
+    std::optional<LocalFittingObjectiveBreakdown> best_objective{};
+    double trust_region_radius{ 0.0 };
+    double trust_region_step_norm{ 0.0 };
+    bool rejected_by_previous{ false };
+    bool rejected_by_best{ false };
+    std::size_t backtracking_trial_count{ 0 };
+    std::optional<double> accepted_backtracking_factor{};
+    bool backtracking_exhausted{ false };
+};
+
+inline double CalculateLocalFittingClusterAtomWeight(
+    std::size_t cluster_atom_count,
+    std::size_t active_atom_count)
+{
+    if (cluster_atom_count == 0 || active_atom_count == 0 ||
+        cluster_atom_count > active_atom_count)
+    {
+        throw std::invalid_argument(
+            "Local fitting cluster atom counts are invalid.");
+    }
+    return static_cast<double>(cluster_atom_count) /
+        static_cast<double>(active_atom_count);
+}
+
+inline void ValidateLocalFittingObjectiveTolerance(
+    const LocalFittingObjectiveTolerance & tolerance)
+{
+    if (!std::isfinite(tolerance.absolute_tolerance) ||
+        tolerance.absolute_tolerance < 0.0 ||
+        !std::isfinite(tolerance.relative_tolerance) ||
+        tolerance.relative_tolerance < 0.0)
+    {
+        throw std::invalid_argument(
+            "Local fitting audit objective tolerances must be finite and "
+            "non-negative.");
+    }
+}
+
+inline double CalculateLocalFittingObjectiveTolerance(
+    double reference,
+    const LocalFittingObjectiveTolerance & tolerance)
+{
+    ValidateLocalFittingObjectiveTolerance(tolerance);
+    if (!std::isfinite(reference))
+    {
+        throw std::invalid_argument(
+            "Local fitting audit objective reference must be finite.");
+    }
+    return tolerance.absolute_tolerance +
+        tolerance.relative_tolerance * std::abs(reference);
+}
+
+inline std::optional<LocalFittingObjectiveBreakdown>
+BuildLocalFittingObjectiveBreakdown(
+    double fit_range_residual_objective,
+    double tail_validation_loss,
+    double offset_plausibility_penalty,
+    double tail_validation_weight)
+{
+    if (!std::isfinite(fit_range_residual_objective) ||
+        !std::isfinite(tail_validation_loss) ||
+        !std::isfinite(offset_plausibility_penalty) ||
+        !std::isfinite(tail_validation_weight))
+    {
+        return std::nullopt;
+    }
+
+    LocalFittingObjectiveBreakdown breakdown;
+    breakdown.fit_range_residual_objective = fit_range_residual_objective;
+    breakdown.tail_validation_loss = tail_validation_loss;
+    breakdown.tail_validation_penalty =
+        tail_validation_weight * tail_validation_loss;
+    breakdown.offset_plausibility_penalty = offset_plausibility_penalty;
+    breakdown.total_objective =
+        breakdown.fit_range_residual_objective +
+        breakdown.tail_validation_penalty +
+        breakdown.offset_plausibility_penalty;
+    if (!std::isfinite(breakdown.total_objective)) return std::nullopt;
+    return breakdown;
+}
+
+inline bool IsBetterLocalFittingAuditObjective(
+    double candidate,
+    double best,
+    const LocalFittingObjectiveTolerance & tolerance)
+{
+    ValidateLocalFittingObjectiveTolerance(tolerance);
+    if (!std::isfinite(candidate)) return false;
+    if (!std::isfinite(best)) return true;
+    return candidate < best -
+        CalculateLocalFittingObjectiveTolerance(best, tolerance);
+}
+
+inline bool IsLocalFittingAuditObjectiveAcceptableForProgress(
+    const std::optional<double> & candidate,
+    const std::optional<double> & previous,
+    const std::optional<double> & best,
+    const LocalFittingObjectiveTolerance & tolerance)
+{
+    ValidateLocalFittingObjectiveTolerance(tolerance);
+    if (!candidate.has_value() || !previous.has_value() ||
+        !std::isfinite(*candidate) || !std::isfinite(*previous))
+    {
+        return false;
+    }
+    const auto is_deteriorated = [&](double reference)
+    {
+        if (!std::isfinite(reference)) return true;
+        return *candidate > reference +
+            CalculateLocalFittingObjectiveTolerance(reference, tolerance);
+    };
+    return !is_deteriorated(*previous) &&
+        (!best.has_value() || !is_deteriorated(*best));
+}
 
 struct LocalFittingObjectiveScale
 {
@@ -73,6 +237,32 @@ struct LocalFittingCombinedObjectiveCheck
     bool accepted{ false };
     std::optional<LocalFittingObjectiveBreakdown> candidate_objective{};
 };
+
+struct LocalFittingCombinedCandidateObjectiveCheck
+{
+    bool guard_required{ false };
+    bool accepted{ true };
+    std::optional<LocalFittingObjectiveBreakdown> previous_objective{};
+    std::optional<LocalFittingObjectiveBreakdown> candidate_objective{};
+};
+
+inline FitStatePatch BuildStatePatch(
+    const FitState & state,
+    ClusterKey atom_index_list)
+{
+    std::sort(atom_index_list.begin(), atom_index_list.end());
+    atom_index_list.erase(
+        std::unique(atom_index_list.begin(), atom_index_list.end()),
+        atom_index_list.end());
+    FitStatePatch patch;
+    patch.atom_index_list = std::move(atom_index_list);
+    patch.mdpde_list.reserve(patch.atom_index_list.size());
+    for (const auto atom_index : patch.atom_index_list)
+    {
+        patch.mdpde_list.emplace_back(state.at(atom_index).mdpde);
+    }
+    return patch;
+}
 
 
 inline std::optional<double> BuildFixedLocalFittingObjectiveScale(
@@ -701,6 +891,78 @@ inline LocalFittingCombinedObjectiveCheck EvaluateLocalFittingCombinedObjective(
             kLocalFittingObjectiveProgressTolerance),
         candidate_objective
     };
+}
+
+inline LocalFittingCombinedCandidateObjectiveCheck
+EvaluateLocalFittingCombinedCandidateObjective(
+    const SecondStageContext & context,
+    const SecondStageModelSnapshot & previous_model_snapshot,
+    const LocalFittingResidualBaseline & residual_baseline,
+    const CouplingGraphPartition & partition,
+    const FitState & previous_state,
+    const FitState & candidate_state,
+    const std::vector<ClusterKey> & accepted_key_list,
+    const LocalFittingObjectiveDomain & objective_domain,
+    const LocalFittingBestAuditState & best_audit_state,
+    LocalFittingPerformanceCounters * performance_counters = nullptr)
+{
+    LocalFittingCombinedCandidateObjectiveCheck result;
+    result.guard_required =
+        partition.boundary_sample_count > 0 && !accepted_key_list.empty();
+    if (!result.guard_required) return result;
+
+    result.previous_objective = EvaluateLocalFittingAuditObjective(
+        context,
+        previous_state,
+        objective_domain,
+        residual_baseline);
+
+    ClusterKey changed_atom_index_list;
+    for (const auto & key : accepted_key_list)
+    {
+        changed_atom_index_list.insert(
+            changed_atom_index_list.end(),
+            key.begin(),
+            key.end());
+    }
+    const auto combined_patch{
+        BuildStatePatch(
+            candidate_state,
+            std::move(changed_atom_index_list))
+    };
+    const FitStateView combined_state_view{
+        previous_state,
+        combined_patch
+    };
+    const LocalFittingCandidateEvaluationOverlay combined_overlay{
+        context,
+        previous_model_snapshot,
+        residual_baseline,
+        combined_state_view,
+        combined_patch
+    };
+    const auto affected_sample_ref_list{
+        BuildGraphAffectedSampleUnion(
+            partition,
+            accepted_key_list)
+    };
+    const auto combined_check{
+        EvaluateLocalFittingCombinedObjective(
+            context,
+            previous_state,
+            combined_state_view,
+            residual_baseline,
+            combined_overlay,
+            combined_patch.atom_index_list,
+            affected_sample_ref_list,
+            objective_domain,
+            best_audit_state,
+            result.previous_objective,
+            performance_counters)
+    };
+    result.accepted = combined_check.accepted;
+    result.candidate_objective = combined_check.candidate_objective;
+    return result;
 }
 
 

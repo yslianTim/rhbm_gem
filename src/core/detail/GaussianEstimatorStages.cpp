@@ -2,7 +2,6 @@
 
 #include "core/detail/GaussianEstimatorStages.hpp"
 #include "core/detail/LocalFittingAudit.hpp"
-#include "core/detail/LocalFittingCandidateEvaluationOverlay.hpp"
 #include "core/detail/LocalFittingResidualEvaluation.hpp"
 #include "core/detail/LocalFittingObjective.hpp"
 #include "core/detail/LocalFittingTerminalFailure.hpp"
@@ -11,11 +10,9 @@
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/JointOffset.hpp"
 #include "core/detail/JointPolish.hpp"
-#include "core/detail/LocalFittingObjectiveAttemptDiagnostic.hpp"
 #include "core/detail/LocalFittingPerformanceCounters.hpp"
 #include "core/detail/SeedRepair.hpp"
 #include "core/detail/SecondStageLocalFittingInitialization.hpp"
-#include "core/detail/FitStateView.hpp"
 #include "core/detail/TrustRegion.hpp"
 #include "core/detail/TransformedChange.hpp"
 #include "core/detail/ReusableWeightedRidgeSolver.hpp"
@@ -64,7 +61,6 @@ namespace {
 using detail::FittedGaussianSnapshot;
 using detail::BuildFittedGaussianSnapshot;
 using detail::BuildSecondStageModelSnapshot;
-using detail::LocalFittingCandidateEvaluationOverlay;
 using detail::ClusterKey;
 using detail::LocalFittingClusterSolverWorkspace;
 using detail::LocalFittingClusterSolverWorkspaceMap;
@@ -75,8 +71,6 @@ using detail::PolishProvenance;
 using detail::LocalFittingPreObjectiveFailureReason;
 using detail::LocalFittingResidualBaseline;
 using detail::FitState;
-using detail::FitStatePatch;
-using detail::FitStateView;
 using detail::AtomContext;
 using detail::SecondStageContext;
 using detail::SecondStageModelSnapshot;
@@ -103,13 +97,11 @@ using detail::LocalFittingObjectiveDomain;
 using detail::LocalFittingClusterObjectiveState;
 using detail::LocalFittingClusterObjectiveStateMap;
 using detail::LocalFittingObjectiveByKey;
-using detail::LocalFittingCombinedObjectiveCheck;
 using detail::LocalFittingAuditedState;
 using detail::LocalFittingBestAuditState;
 using detail::BuildLocalFittingObjectiveDomain;
 using detail::BuildLocalFittingObjectiveByKey;
-using detail::EvaluateLocalFittingAuditObjective;
-using detail::EvaluateLocalFittingCombinedObjective;
+using detail::EvaluateLocalFittingCombinedCandidateObjective;
 using detail::BuildInitialLocalFittingBestAuditState;
 using detail::ResetLocalFittingBestAuditAfterObjectiveDomainChange;
 using detail::TryUpdateLocalFittingBestAuditState;
@@ -126,7 +118,6 @@ using detail::CandidateSelection;
 using detail::RejectCombinedCandidate;
 using detail::SelectClusterCandidates;
 using detail::TryBacktrackCombinedCandidate;
-using detail::BuildStatePatch;
 using detail::kLocalFittingFitRangeWeight;
 using detail::kLocalFittingTailValidationWeight;
 using detail::kLocalFittingOffsetPlausibilityPenaltyWeight;
@@ -1550,67 +1541,24 @@ bool RunSecondStageLocalFitting(
                 candidate_phase_start).count();
         performance_counters.full_state_materialization_count++;
 
-        const auto needs_combined_objective_guard{
-            graph_partition.boundary_sample_count > 0 && !selection.accepted_key_list.empty()
-        };
         const auto combined_changed_key_list{ selection.accepted_key_list };
-        std::optional<detail::LocalFittingObjectiveBreakdown>
-            previous_audit_objective;
-        LocalFittingCombinedObjectiveCheck combined_check;
-        if (needs_combined_objective_guard)
-        {
-            previous_audit_objective =
-                EvaluateLocalFittingAuditObjective(
-                    context,
-                    previous_state,
-                    objective_domain,
-                    residual_baseline);
-            ClusterKey changed_atom_index_list;
-            for (const auto & key : combined_changed_key_list)
-            {
-                changed_atom_index_list.insert(
-                    changed_atom_index_list.end(),
-                    key.begin(),
-                    key.end());
-            }
-            const auto combined_patch{
-                BuildStatePatch(
-                    selection.assembled_state,
-                    std::move(changed_atom_index_list))
-            };
-            const FitStateView combined_state_view{
-                previous_state,
-                combined_patch
-            };
-            const LocalFittingCandidateEvaluationOverlay combined_overlay{
+        const auto combined_check{
+            EvaluateLocalFittingCombinedCandidateObjective(
                 context,
                 previous_model_snapshot,
                 residual_baseline,
-                combined_state_view,
-                combined_patch
-            };
-            const auto affected_sample_ref_list{
-                detail::BuildGraphAffectedSampleUnion(
-                    graph_partition,
-                    combined_changed_key_list)
-            };
-            combined_check = EvaluateLocalFittingCombinedObjective(
-                context,
+                graph_partition,
                 previous_state,
-                combined_state_view,
-                residual_baseline,
-                combined_overlay,
-                combined_patch.atom_index_list,
-                affected_sample_ref_list,
+                selection.assembled_state,
+                selection.accepted_key_list,
                 objective_domain,
                 best_audit_state,
-                previous_audit_objective,
-                &performance_counters);
-            selection.combined_backtracking_objective =
-                combined_check.candidate_objective;
-        }
+                &performance_counters)
+        };
+        selection.combined_backtracking_objective =
+            combined_check.candidate_objective;
         auto combined_objective_accepted{
-            !needs_combined_objective_guard || combined_check.accepted
+            !combined_check.guard_required || combined_check.accepted
         };
         if (!combined_objective_accepted)
         {
@@ -1624,7 +1572,7 @@ bool RunSecondStageLocalFitting(
                     previous_polish_provenance,
                     objective_domain,
                     previous_objective_by_key,
-                    previous_audit_objective,
+                    combined_check.previous_objective,
                     best_audit_state,
                     cluster_objective_state,
                     working_cluster_objective_state,

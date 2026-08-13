@@ -15,12 +15,10 @@
 
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/JointPolish.hpp"
-#include "core/detail/LocalFittingAudit.hpp"
 #include "core/detail/BacktrackingWorkspace.hpp"
 #include "core/detail/LocalFittingCandidateEvaluationOverlay.hpp"
 #include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/LocalFittingObjective.hpp"
-#include "core/detail/LocalFittingObjectiveAttemptDiagnostic.hpp"
 #include "core/detail/LocalFittingPerformanceCounters.hpp"
 #include "core/detail/FitStateView.hpp"
 #include "core/detail/TransformedChange.hpp"
@@ -801,24 +799,6 @@ inline CandidateSelection SelectClusterCandidates(
         }
     }
     return selection;
-}
-
-inline FitStatePatch BuildStatePatch(
-    const FitState & state,
-    ClusterKey atom_index_list)
-{
-    std::sort(atom_index_list.begin(), atom_index_list.end());
-    atom_index_list.erase(
-        std::unique(atom_index_list.begin(), atom_index_list.end()),
-        atom_index_list.end());
-    FitStatePatch patch;
-    patch.atom_index_list = std::move(atom_index_list);
-    patch.mdpde_list.reserve(patch.atom_index_list.size());
-    for (const auto atom_index : patch.atom_index_list)
-    {
-        patch.mdpde_list.emplace_back(state.at(atom_index).mdpde);
-    }
-    return patch;
 }
 
 inline bool TryBacktrackCombinedCandidate(
