@@ -1,7 +1,5 @@
 #pragma once
 
-#include "core/detail/LocalFittingSeedRepair.hpp"
-
 #include <cmath>
 #include <cstddef>
 #include <optional>
@@ -14,6 +12,8 @@
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
+
+#include "core/detail/TransformedChange.hpp"
 
 namespace rhbm_gem::core::detail {
 

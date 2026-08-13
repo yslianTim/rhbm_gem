@@ -30,8 +30,7 @@ struct SecondStageSeedSelection
     GaussianModel3DWithUncertainty model{};
 };
 
-inline std::optional<SecondStageSeedSelection> SelectSecondStageSeed(
-    const SecondStageSeedCandidates & candidates)
+inline std::optional<SecondStageSeedSelection> SelectSecondStageSeed(const SecondStageSeedCandidates & candidates)
 {
     const auto select = [](
         SecondStageSeedSource source,

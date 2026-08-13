@@ -13,7 +13,7 @@
 #include "core/detail/JointPolish.hpp"
 #include "core/detail/LocalFittingObjectiveAttemptDiagnostic.hpp"
 #include "core/detail/LocalFittingPerformanceCounters.hpp"
-#include "core/detail/LocalFittingSeedRepair.hpp"
+#include "core/detail/SeedRepair.hpp"
 #include "core/detail/SecondStageLocalFittingInitialization.hpp"
 #include "core/detail/FitStateView.hpp"
 #include "core/detail/TrustRegion.hpp"

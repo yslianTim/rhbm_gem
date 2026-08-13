@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cmath>
 #include <cstddef>
 #include <optional>
 #include <unordered_map>
@@ -18,7 +17,7 @@
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 #include "core/detail/LocalFittingGroupMedian.hpp"
-#include "core/detail/LocalFittingSeedRepair.hpp"
+#include "core/detail/SeedRepair.hpp"
 #include "core/detail/SecondStageLocalFittingContext.hpp"
 #include "data/detail/AtomClassifier.hpp"
 

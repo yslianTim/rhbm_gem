@@ -3,14 +3,13 @@
 #include <cstddef>
 #include <optional>
 #include <unordered_map>
-#include <utility>
 #include <vector>
 
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 
 #include "core/detail/CouplingGraph.hpp"
-#include "core/detail/LocalFittingSeedRepair.hpp"
+#include "core/detail/SeedRepair.hpp"
 
 namespace rhbm_gem::core::detail {
 
