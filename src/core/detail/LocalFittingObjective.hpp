@@ -19,7 +19,7 @@
 #include "core/detail/LocalFittingPerformanceCounters.hpp"
 #include "core/detail/LocalFittingResidualEvaluation.hpp"
 #include "core/detail/LocalFittingRobustScale.hpp"
-#include "core/detail/LocalFittingStateView.hpp"
+#include "core/detail/FitStateView.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
 
 namespace rhbm_gem::core::detail {
@@ -50,8 +50,8 @@ struct LocalFittingObjectiveClusterDomain
 
 struct LocalFittingObjectiveDomain
 {
-    std::map<LocalFittingClusterKey, LocalFittingObjectiveClusterDomain> cluster_by_key{};
-    std::vector<LocalFittingClusterKey> owner_key_by_atom_index{};
+    std::map<ClusterKey, LocalFittingObjectiveClusterDomain> cluster_by_key{};
+    std::vector<ClusterKey> owner_key_by_atom_index{};
     std::vector<std::vector<char>> fit_sample_mask_by_atom{};
     std::size_t active_atom_count{ 0 };
     std::size_t fit_sample_count{ 0 };
@@ -64,9 +64,9 @@ struct LocalFittingClusterObjectiveState
     double best_maximum_transformed_change{ 0.0 };
 };
 
-using LocalFittingClusterObjectiveStateMap = std::map<LocalFittingClusterKey, LocalFittingClusterObjectiveState>;
+using LocalFittingClusterObjectiveStateMap = std::map<ClusterKey, LocalFittingClusterObjectiveState>;
 using LocalFittingObjectiveByKey =
-    std::map<LocalFittingClusterKey, std::optional<LocalFittingObjectiveBreakdown>>;
+    std::map<ClusterKey, std::optional<LocalFittingObjectiveBreakdown>>;
 
 struct LocalFittingCombinedObjectiveCheck
 {
@@ -99,7 +99,7 @@ inline std::optional<double> BuildFixedLocalFittingObjectiveScale(
 
 inline LocalFittingObjectiveDomain BuildLocalFittingObjectiveDomain(
     const SecondStageLocalFittingContext & context,
-    const LocalFittingState & initial_state,
+    const FitState & initial_state,
     const CouplingGraphPartition & partition,
     const FitOptions & options)
 {
@@ -212,7 +212,7 @@ inline std::optional<LocalFittingObjectiveBreakdown>
 EvaluateLocalFittingObjectiveContributionImpl(
     const SecondStageLocalFittingContext & context,
     const State & state,
-    const LocalFittingClusterKey & changed_key,
+    const ClusterKey & changed_key,
     const std::vector<LocalFittingObjectiveSampleRef> & sample_ref_list,
     const LocalFittingObjectiveDomain & domain,
     const ResidualEvaluator & residual_evaluator,
@@ -287,7 +287,7 @@ EvaluateLocalFittingObjectiveContributionImpl(
             {
                 return std::nullopt;
             }
-            const auto & model{ GetLocalFittingModel(state, atom_index) };
+            const auto & model{ GetFitModel(state, atom_index) };
             if (!IsValidSecondStageGaussianModel(model)) return std::nullopt;
             const auto peak_signal{ model.SignalAtDistance(0.0) };
             const auto offset_peak{
@@ -327,7 +327,7 @@ EvaluateLocalFittingObjectiveContribution(
     const SecondStageLocalFittingContext & context,
     const State & state,
     const SecondStageModelSnapshot & model_snapshot,
-    const LocalFittingClusterKey & changed_key,
+    const ClusterKey & changed_key,
     const std::vector<LocalFittingObjectiveSampleRef> & sample_ref_list,
     const LocalFittingObjectiveDomain & domain,
     bool include_offset_penalty = true)
@@ -352,9 +352,9 @@ EvaluateLocalFittingObjectiveContribution(
 inline std::optional<LocalFittingObjectiveBreakdown>
 EvaluateLocalFittingObjectiveContribution(
     const SecondStageLocalFittingContext & context,
-    const LocalFittingState & state,
+    const FitState & state,
     const LocalFittingResidualBaseline & residual_baseline,
-    const LocalFittingClusterKey & changed_key,
+    const ClusterKey & changed_key,
     const std::vector<LocalFittingObjectiveSampleRef> & sample_ref_list,
     const LocalFittingObjectiveDomain & domain,
     bool include_offset_penalty = true)
@@ -376,9 +376,9 @@ EvaluateLocalFittingObjectiveContribution(
 inline std::optional<LocalFittingObjectiveBreakdown>
 EvaluateLocalFittingObjectiveContribution(
     const SecondStageLocalFittingContext & context,
-    const LocalFittingStateView & state,
+    const FitStateView & state,
     const LocalFittingCandidateEvaluationOverlay & overlay,
-    const LocalFittingClusterKey & changed_key,
+    const ClusterKey & changed_key,
     const std::vector<LocalFittingObjectiveSampleRef> & sample_ref_list,
     const LocalFittingObjectiveDomain & domain,
     bool include_offset_penalty = true)
@@ -399,7 +399,7 @@ EvaluateLocalFittingObjectiveContribution(
 inline std::optional<LocalFittingObjectiveBreakdown>
 EvaluateLocalFittingAuditObjective(
     const SecondStageLocalFittingContext & context,
-    const LocalFittingState & state,
+    const FitState & state,
     const LocalFittingObjectiveDomain & domain,
     const SecondStageModelSnapshot & model_snapshot)
 {
@@ -464,7 +464,7 @@ EvaluateLocalFittingAuditObjective(
 inline std::optional<LocalFittingObjectiveBreakdown>
 EvaluateLocalFittingAuditObjective(
     const SecondStageLocalFittingContext & context,
-    const LocalFittingState & state,
+    const FitState & state,
     const LocalFittingObjectiveDomain & domain,
     const LocalFittingResidualBaseline & residual_baseline)
 {
@@ -504,11 +504,11 @@ EvaluateLocalFittingAuditObjective(
 inline std::optional<LocalFittingObjectiveBreakdown>
 EvaluateLocalFittingObjectiveDelta(
     const SecondStageLocalFittingContext & context,
-    const LocalFittingState & previous_state,
-    const LocalFittingStateView & candidate_state,
+    const FitState & previous_state,
+    const FitStateView & candidate_state,
     const LocalFittingResidualBaseline & residual_baseline,
     const LocalFittingCandidateEvaluationOverlay & candidate_overlay,
-    const LocalFittingClusterKey & changed_key,
+    const ClusterKey & changed_key,
     const std::vector<LocalFittingObjectiveSampleRef> & affected_sample_ref_list,
     const LocalFittingObjectiveDomain & domain,
     const std::optional<LocalFittingObjectiveBreakdown> & baseline,
@@ -566,7 +566,7 @@ EvaluateLocalFittingObjectiveDelta(
 inline std::optional<LocalFittingObjectiveBreakdown>
 EvaluateLocalFittingAuditObjective(
     const SecondStageLocalFittingContext & context,
-    const LocalFittingState & state,
+    const FitState & state,
     const LocalFittingObjectiveDomain & domain)
 {
     const auto model_snapshot{
@@ -583,7 +583,7 @@ EvaluateLocalFittingAuditObjective(
 
 inline LocalFittingObjectiveByKey BuildLocalFittingObjectiveByKey(
     const SecondStageLocalFittingContext & context,
-    const LocalFittingState & state,
+    const FitState & state,
     const CouplingGraphPartition & partition,
     const LocalFittingObjectiveDomain & domain,
     const SecondStageModelSnapshot & model_snapshot)
@@ -606,7 +606,7 @@ inline LocalFittingObjectiveByKey BuildLocalFittingObjectiveByKey(
 
 inline LocalFittingObjectiveByKey BuildLocalFittingObjectiveByKey(
     const SecondStageLocalFittingContext & context,
-    const LocalFittingState & state,
+    const FitState & state,
     const CouplingGraphPartition & partition,
     const LocalFittingObjectiveDomain & domain,
     const LocalFittingResidualBaseline & residual_baseline)
@@ -631,8 +631,8 @@ inline LocalFittingObjectiveByKey BuildLocalFittingObjectiveByKey(
 [[maybe_unused]] inline LocalFittingCombinedObjectiveCheck
 EvaluateLocalFittingCombinedObjective(
     const SecondStageLocalFittingContext & context,
-    const LocalFittingState & candidate_state,
-    const LocalFittingState & previous_state,
+    const FitState & candidate_state,
+    const FitState & previous_state,
     const LocalFittingObjectiveDomain & domain,
     const LocalFittingBestAuditState & audit_state,
     const std::optional<LocalFittingObjectiveBreakdown> & previous_objective = std::nullopt)
@@ -663,11 +663,11 @@ EvaluateLocalFittingCombinedObjective(
 
 inline LocalFittingCombinedObjectiveCheck EvaluateLocalFittingCombinedObjective(
     const SecondStageLocalFittingContext & context,
-    const LocalFittingState & previous_state,
-    const LocalFittingStateView & candidate_state,
+    const FitState & previous_state,
+    const FitStateView & candidate_state,
     const LocalFittingResidualBaseline & residual_baseline,
     const LocalFittingCandidateEvaluationOverlay & candidate_overlay,
-    const LocalFittingClusterKey & changed_key,
+    const ClusterKey & changed_key,
     const std::vector<LocalFittingObjectiveSampleRef> & affected_sample_ref_list,
     const LocalFittingObjectiveDomain & domain,
     const LocalFittingBestAuditState & audit_state,
@@ -706,8 +706,8 @@ inline LocalFittingCombinedObjectiveCheck EvaluateLocalFittingCombinedObjective(
 
 inline bool TryUpdateLocalFittingBestAuditState(
     const SecondStageLocalFittingContext & context,
-    const LocalFittingState & candidate_state,
-    const LocalFittingPolishProvenance & candidate_polish_provenance,
+    const FitState & candidate_state,
+    const PolishProvenance & candidate_polish_provenance,
     const std::optional<std::size_t> & accepted_iteration,
     const LocalFittingObjectiveDomain & domain,
     LocalFittingBestAuditState & audit_state,
@@ -736,8 +736,8 @@ inline bool TryUpdateLocalFittingBestAuditState(
 
 inline LocalFittingBestAuditState BuildInitialLocalFittingBestAuditState(
     const SecondStageLocalFittingContext & context,
-    const LocalFittingState & initial_state,
-    const LocalFittingPolishProvenance & initial_polish_provenance,
+    const FitState & initial_state,
+    const PolishProvenance & initial_polish_provenance,
     const std::optional<std::size_t> & accepted_iteration,
     const LocalFittingObjectiveDomain & domain)
 {
@@ -754,8 +754,8 @@ inline LocalFittingBestAuditState BuildInitialLocalFittingBestAuditState(
 
 inline void ResetLocalFittingBestAuditAfterObjectiveDomainChange(
     const SecondStageLocalFittingContext & context,
-    const LocalFittingState & validated_state,
-    const LocalFittingPolishProvenance & validated_polish_provenance,
+    const FitState & validated_state,
+    const PolishProvenance & validated_polish_provenance,
     std::size_t accepted_iteration,
     const LocalFittingObjectiveDomain & domain,
     LocalFittingBestAuditState & audit_state)
@@ -772,7 +772,7 @@ inline void ResetLocalFittingBestAuditAfterObjectiveDomainChange(
 inline LocalFittingClusterObjectiveState
 BuildInitialLocalFittingClusterObjectiveState(
     const LocalFittingObjectiveByKey & previous_objective_by_key,
-    const LocalFittingClusterKey & key)
+    const ClusterKey & key)
 {
     LocalFittingClusterObjectiveState state;
     const auto objective_iter{ previous_objective_by_key.find(key) };
@@ -809,10 +809,10 @@ inline void ReconcileLocalFittingClusterObjectiveState(
 
 inline bool TryCommitLocalFittingClusterCandidate(
     const SecondStageLocalFittingContext & context,
-    const LocalFittingStateView & candidate_state,
+    const FitStateView & candidate_state,
     const LocalFittingCandidateEvaluationOverlay & candidate_overlay,
-    const LocalFittingStateView & previous_state,
-    const LocalFittingClusterKey & key,
+    const FitStateView & previous_state,
+    const ClusterKey & key,
     const std::vector<LocalFittingObjectiveSampleRef> & objective_sample_ref_list,
     const std::optional<LocalFittingObjectiveBreakdown> & previous_objective,
     bool requires_strict_improvement,

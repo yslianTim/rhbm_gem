@@ -10,20 +10,18 @@
 
 namespace rhbm_gem::core::detail {
 
-using LocalFittingState = std::vector<LocalGaussianResult>;
-using LocalFittingPolishProvenance = std::vector<char>;
-using LocalFittingClusterKey = std::vector<std::size_t>;
+using FitState = std::vector<LocalGaussianResult>;
+using PolishProvenance = std::vector<char>;
+using ClusterKey = std::vector<std::size_t>;
 
-inline const GaussianModel3D & GetLocalFittingModel(
-    const LocalFittingState & state,
-    std::size_t atom_index)
+inline const GaussianModel3D & GetFitModel(const FitState & state, std::size_t atom_index)
 {
     return state.at(atom_index).mdpde.GetModel();
 }
 
-struct LocalFittingStatePatch
+struct FitStatePatch
 {
-    LocalFittingClusterKey atom_index_list{};
+    ClusterKey atom_index_list{};
     std::vector<GaussianModel3DWithUncertainty> mdpde_list{};
 
     const GaussianModel3DWithUncertainty * Find(std::size_t atom_index) const
@@ -42,7 +40,7 @@ struct LocalFittingStatePatch
             std::distance(atom_index_list.begin(), iter)));
     }
 
-    void ApplyTo(LocalFittingState & state) const
+    void ApplyTo(FitState & state) const
     {
         if (atom_index_list.size() != mdpde_list.size())
         {
@@ -56,24 +54,19 @@ struct LocalFittingStatePatch
     }
 };
 
-class LocalFittingStateView
+class FitStateView
 {
 public:
-    explicit LocalFittingStateView(const LocalFittingState & base_state)
-        : m_base_state{ &base_state }
+    explicit FitStateView(const FitState & base_state) : m_base_state{ &base_state }
     {
     }
 
-    LocalFittingStateView(
-        const LocalFittingState & base_state,
-        const LocalFittingStatePatch & patch)
-        : m_base_state{ &base_state },
-          m_patch{ &patch }
+    FitStateView(const FitState & base_state, const FitStatePatch & patch)
+        : m_base_state{ &base_state }, m_patch{ &patch }
     {
     }
 
-    const GaussianModel3DWithUncertainty & GetMdpde(
-        std::size_t atom_index) const
+    const GaussianModel3DWithUncertainty & GetMdpde(std::size_t atom_index) const
     {
         if (m_patch != nullptr)
         {
@@ -91,13 +84,11 @@ public:
     std::size_t GetSize() const { return m_base_state->size(); }
 
 private:
-    const LocalFittingState * m_base_state{ nullptr };
-    const LocalFittingStatePatch * m_patch{ nullptr };
+    const FitState * m_base_state{ nullptr };
+    const FitStatePatch * m_patch{ nullptr };
 };
 
-inline const GaussianModel3D & GetLocalFittingModel(
-    const LocalFittingStateView & state,
-    std::size_t atom_index)
+inline const GaussianModel3D & GetFitModel(const FitStateView & state, std::size_t atom_index)
 {
     return state.GetModel(atom_index);
 }

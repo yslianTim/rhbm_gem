@@ -11,7 +11,7 @@
 
 #include <Eigen/Dense>
 
-#include "core/detail/LocalFittingStateView.hpp"
+#include "core/detail/FitStateView.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
 
 namespace rhbm_gem::core::detail {
@@ -418,8 +418,8 @@ inline TrustRegionDamping LimitTrustRegionSubstepDamping(
 }
 
 inline std::optional<double> CalculateClusterModelTrustRegionStepNorm(
-    const LocalFittingState & outer_previous_state,
-    const LocalFittingClusterKey & key,
+    const FitState & outer_previous_state,
+    const ClusterKey & key,
     const std::vector<GaussianModel3D> & candidate_model_list)
 {
     if (candidate_model_list.size() != key.size()) return std::nullopt;

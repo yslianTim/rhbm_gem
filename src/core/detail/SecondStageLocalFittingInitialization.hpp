@@ -41,7 +41,7 @@ struct SecondStageSeedSelectionRecord
 
 struct SecondStageInitialStateBuildResult
 {
-    LocalFittingState state{};
+    FitState state{};
     std::vector<SecondStageSeedSelectionRecord> selection_record_list{};
     std::vector<SecondStageSeedSelectionRecord> unselected_selection_record_list{};
 };
@@ -213,7 +213,7 @@ inline std::optional<GaussianModel3DWithUncertainty> BuildValidGaussianParameter
     };
 }
 
-inline std::optional<SecondStageInitialStateBuildResult> BuildInitialLocalFittingState(
+inline std::optional<SecondStageInitialStateBuildResult> BuildInitialFitState(
     SecondStageLocalFittingContext & context,
     bool & unselected_seed_failure)
 {

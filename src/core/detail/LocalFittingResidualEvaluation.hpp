@@ -10,7 +10,7 @@
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
 #include "core/detail/LocalFittingGroupMedian.hpp"
-#include "core/detail/LocalFittingStateView.hpp"
+#include "core/detail/FitStateView.hpp"
 #include "core/detail/SecondStageLocalFittingContext.hpp"
 
 namespace rhbm_gem::core::detail {
@@ -21,7 +21,7 @@ using LocalFittingObjectiveSampleRef = GraphSampleId;
 using FittedGaussianSnapshot = std::vector<GaussianModel3D>;
 
 inline FittedGaussianSnapshot BuildFittedGaussianSnapshot(
-    const LocalFittingState & state)
+    const FitState & state)
 {
     FittedGaussianSnapshot snapshot;
     snapshot.reserve(state.size());
@@ -33,7 +33,7 @@ inline FittedGaussianSnapshot BuildFittedGaussianSnapshot(
 }
 
 inline FittedGaussianSnapshot BuildFittedGaussianSnapshot(
-    const LocalFittingStateView & state)
+    const FitStateView & state)
 {
     FittedGaussianSnapshot snapshot;
     snapshot.reserve(state.GetSize());
@@ -212,7 +212,7 @@ inline LocalPotentialSampleList BuildSecondStageAdjustedSamples(
 }
 inline LocalFittingResidualBaseline BuildLocalFittingResidualBaseline(
     const SecondStageLocalFittingContext & context,
-    const LocalFittingState & state,
+    const FitState & state,
     const SecondStageModelSnapshot & model_snapshot)
 {
     LocalFittingResidualBaseline baseline(context.size());
@@ -277,7 +277,7 @@ inline std::optional<LocalFittingResidualSample> EvaluateLocalFittingResidualSam
             model_snapshot.unselected).ResponseAtDistance(neighbor_sample.distance);
     }
     const auto expected_response{
-        GetLocalFittingModel(state, sample_ref.atom_index).ResponseAtDistance(
+        GetFitModel(state, sample_ref.atom_index).ResponseAtDistance(
             static_cast<double>(sample.point.distance))
     };
     const auto residual{ adjusted_response - expected_response };

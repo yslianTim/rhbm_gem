@@ -388,9 +388,9 @@ constexpr double kJointPolishTransformedChangeTolerance{ 1.0e-4 };
 
 inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
     const SecondStageLocalFittingContext & context,
-    const LocalFittingStateView & base_state,
+    const FitStateView & base_state,
     const std::vector<GaussianModel3D> & seed_model_list,
-    const LocalFittingClusterKey & key,
+    const ClusterKey & key,
     const std::vector<LocalFittingObjectiveSampleRef> & sample_ref_list,
     const std::vector<double> & ridge_multiplier_list,
     const JointPolishParameterization & parameterization,
@@ -704,7 +704,7 @@ inline bool HasMaterialJointPolishChange(
 
 struct JointPolishProposal
 {
-    LocalFittingStatePatch patch{};
+    FitStatePatch patch{};
     double effective_damping{ 0.0 };
     double step_norm{ 0.0 };
     std::vector<std::size_t> changed_atom_index_list{};
@@ -713,9 +713,9 @@ struct JointPolishProposal
 inline std::optional<JointPolishProposal>
 BuildJointPolishProposal(
     const SecondStageLocalFittingContext & context,
-    const LocalFittingState & outer_previous_state,
-    const LocalFittingStateView & base_state,
-    const LocalFittingClusterKey & key,
+    const FitState & outer_previous_state,
+    const FitStateView & base_state,
+    const ClusterKey & key,
     const std::vector<LocalFittingObjectiveSampleRef> & sample_ref_list,
     const std::vector<double> & ridge_multiplier_list,
     ReusableWeightedRidgeSolver & reusable_solver,

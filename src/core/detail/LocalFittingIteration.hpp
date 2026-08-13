@@ -16,7 +16,7 @@
 #include "core/detail/JointOffset.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
 #include "core/detail/LocalFittingResidualEvaluation.hpp"
-#include "core/detail/LocalFittingStateView.hpp"
+#include "core/detail/FitStateView.hpp"
 #include "core/detail/LocalFittingSuspiciousUpdate.hpp"
 #include "core/detail/ReusableWeightedRidgeSolver.hpp"
 #include "core/detail/ScopedEigenThreadCount.hpp"
@@ -26,7 +26,7 @@ namespace rhbm_gem::core::detail {
 
 struct LocalFittingIterationResult
 {
-    LocalFittingState state{};
+    FitState state{};
     std::vector<char> rollback_atom_mask{};
     LocalFittingClusterHealthMap health_by_key{};
 };
@@ -132,7 +132,7 @@ FitAtomWithJointOffsetFallback(
 }
 
 inline void ExpandPostRefitRollbackClusters(
-    const std::vector<LocalFittingClusterKey> & cluster_key_list,
+    const std::vector<ClusterKey> & cluster_key_list,
     const std::vector<std::size_t> & seed_atom_index_list,
     std::vector<char> & rollback_mask)
 {
@@ -162,8 +162,8 @@ inline void ExpandPostRefitRollbackClusters(
 
 inline LocalFittingIterationResult RunLocalFittingIteration(
     const SecondStageLocalFittingContext & context,
-    const std::vector<LocalFittingClusterKey> & cluster_key_list,
-    const LocalFittingState & previous_state,
+    const std::vector<ClusterKey> & cluster_key_list,
+    const FitState & previous_state,
     const FitOptions & options,
     const std::vector<double> & ridge_multiplier_list,
     LocalFittingClusterSolverWorkspaceMap & solver_workspace_by_key)

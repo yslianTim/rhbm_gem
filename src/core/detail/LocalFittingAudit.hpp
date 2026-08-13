@@ -5,7 +5,7 @@
 #include <optional>
 #include <stdexcept>
 
-#include "core/detail/LocalFittingStateView.hpp"
+#include "core/detail/FitStateView.hpp"
 
 namespace rhbm_gem::core::detail {
 
@@ -34,8 +34,8 @@ enum class LocalFittingFinalStateSource
 struct LocalFittingAuditedState
 {
     LocalFittingObjectiveBreakdown objective{};
-    LocalFittingState state{};
-    LocalFittingPolishProvenance polish_provenance{};
+    FitState state{};
+    PolishProvenance polish_provenance{};
     std::optional<std::size_t> accepted_iteration{};
 };
 

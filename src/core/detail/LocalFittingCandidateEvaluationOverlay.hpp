@@ -11,7 +11,7 @@
 
 #include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/LocalFittingResidualEvaluation.hpp"
-#include "core/detail/LocalFittingStateView.hpp"
+#include "core/detail/FitStateView.hpp"
 #include "core/detail/SecondStageLocalFittingContext.hpp"
 
 namespace rhbm_gem::core::detail {
@@ -23,8 +23,8 @@ public:
         const SecondStageLocalFittingContext & context,
         const SecondStageModelSnapshot & baseline_model_snapshot,
         const LocalFittingResidualBaseline & residual_baseline,
-        const LocalFittingStateView & candidate_state,
-        const LocalFittingStatePatch & patch)
+        const FitStateView & candidate_state,
+        const FitStatePatch & patch)
         : m_context{ context },
           m_baseline_model_snapshot{ baseline_model_snapshot },
           m_residual_baseline{ residual_baseline },
@@ -60,7 +60,7 @@ public:
     }
 
     std::optional<LocalFittingResidualSample> Evaluate(
-        const LocalFittingStateView & candidate_state,
+        const FitStateView & candidate_state,
         const LocalFittingObjectiveSampleRef & sample_ref) const
     {
         const auto & baseline{
@@ -144,7 +144,7 @@ private:
     const SecondStageLocalFittingContext & m_context;
     const SecondStageModelSnapshot & m_baseline_model_snapshot;
     const LocalFittingResidualBaseline & m_residual_baseline;
-    const LocalFittingStatePatch & m_patch;
+    const FitStatePatch & m_patch;
     std::vector<char> m_changed_group_mask{};
     std::vector<std::optional<GaussianModel3D>> m_changed_group_median{};
 };

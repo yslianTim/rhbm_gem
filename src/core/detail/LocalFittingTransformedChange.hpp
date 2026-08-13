@@ -14,7 +14,7 @@
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
-#include "core/detail/LocalFittingStateView.hpp"
+#include "core/detail/FitStateView.hpp"
 
 namespace rhbm_gem::core::detail {
 
@@ -244,8 +244,8 @@ inline LocalFittingTransformedChangeSummary SummarizeLocalFittingTransformedChan
     for (const auto i : index_list)
     {
         change_list.emplace_back(CalculateLocalFittingTransformedChange(
-            GetLocalFittingModel(current_state, i),
-            GetLocalFittingModel(previous_state, i)));
+            GetFitModel(current_state, i),
+            GetFitModel(previous_state, i)));
     }
 
     std::vector<std::size_t> local_index_list(change_list.size());
@@ -291,7 +291,7 @@ inline bool IsLocalFittingTransformedPercentileConverged(
 
 
 inline std::vector<Eigen::Vector3d> BuildLocalFittingTransformedEstimationList(
-    const LocalFittingState & state)
+    const FitState & state)
 {
     std::vector<Eigen::Vector3d> transformed_estimation_list;
     transformed_estimation_list.reserve(state.size());

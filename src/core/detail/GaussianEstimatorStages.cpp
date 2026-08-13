@@ -15,7 +15,7 @@
 #include "core/detail/LocalFittingPerformanceCounters.hpp"
 #include "core/detail/LocalFittingSeedRepair.hpp"
 #include "core/detail/SecondStageLocalFittingInitialization.hpp"
-#include "core/detail/LocalFittingStateView.hpp"
+#include "core/detail/FitStateView.hpp"
 #include "core/detail/TrustRegion.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
 #include "core/detail/ReusableWeightedRidgeSolver.hpp"
@@ -65,18 +65,18 @@ using detail::FittedGaussianSnapshot;
 using detail::BuildFittedGaussianSnapshot;
 using detail::BuildSecondStageModelSnapshot;
 using detail::LocalFittingCandidateEvaluationOverlay;
-using detail::LocalFittingClusterKey;
+using detail::ClusterKey;
 using detail::LocalFittingClusterSolverWorkspace;
 using detail::LocalFittingClusterSolverWorkspaceMap;
 using detail::LocalFittingObjectiveAttemptDiagnostic;
 using detail::LocalFittingObjectiveSampleRef;
 using detail::LocalFittingPerformanceCounters;
-using detail::LocalFittingPolishProvenance;
+using detail::PolishProvenance;
 using detail::LocalFittingPreObjectiveFailureReason;
 using detail::LocalFittingResidualBaseline;
-using detail::LocalFittingState;
-using detail::LocalFittingStatePatch;
-using detail::LocalFittingStateView;
+using detail::FitState;
+using detail::FitStatePatch;
+using detail::FitStateView;
 using detail::SecondStageAtomContext;
 using detail::SecondStageLocalFittingContext;
 using detail::SecondStageModelSnapshot;
@@ -131,15 +131,15 @@ using detail::kLocalFittingTailValidationWeight;
 using detail::kLocalFittingOffsetPlausibilityPenaltyWeight;
 using detail::BuildSecondStageLocalFittingContext;
 using detail::StoreSecondStageNeighborCounts;
-using detail::BuildInitialLocalFittingState;
+using detail::BuildInitialFitState;
 using detail::GetSecondStageSeedSourceText;
 using detail::SecondStageSeedSelectionRecord;
 using detail::RunLocalFittingIteration;
 
 struct LocalFittingFinalStateSelection
 {
-    const LocalFittingState * state{ nullptr };
-    const LocalFittingPolishProvenance * polish_provenance{ nullptr };
+    const FitState * state{ nullptr };
+    const PolishProvenance * polish_provenance{ nullptr };
     const LocalFittingAuditedState * audit_state{ nullptr };
     detail::LocalFittingFinalStateSource source{
         detail::LocalFittingFinalStateSource::Unavailable
@@ -147,8 +147,8 @@ struct LocalFittingFinalStateSelection
 };
 
 LocalFittingFinalStateSelection SelectLocalFittingFinalState(
-    const LocalFittingState & latest_validated_state,
-    const LocalFittingPolishProvenance & latest_validated_polish_provenance,
+    const FitState & latest_validated_state,
+    const PolishProvenance & latest_validated_polish_provenance,
     const std::optional<LocalFittingAuditedState> & audited_state)
 {
     const auto source{ detail::SelectLocalFittingFinalStateSource(
@@ -186,7 +186,7 @@ std::string_view GetLocalFittingFinalStateSourceText(detail::LocalFittingFinalSt
     return "unavailable";
 }
 
-bool UsesLocalFittingPolish(const LocalFittingPolishProvenance & provenance)
+bool UsesPolish(const PolishProvenance & provenance)
 {
     return std::any_of(
         provenance.begin(),
@@ -224,7 +224,7 @@ using LocalFittingProgressColumnWidths = std::array<std::size_t, 6>;
 
 detail::GraphTopology BuildGraphTopology(
     const SecondStageLocalFittingContext & context,
-    const LocalFittingState & initial_state,
+    const FitState & initial_state,
     const FitOptions & options)
 {
     std::size_t total_sample_count{ 0 };
@@ -587,10 +587,10 @@ void LogLocalFittingObjectiveDomain(
     Logger::Log(LogLevel::Info, message.str());
 }
 
-void ApplyLocalFittingState(
+void ApplyFitState(
     ModelObject & model_object,
     const SecondStageLocalFittingContext & context,
-    const LocalFittingState & iteration_state)
+    const FitState & iteration_state)
 {
     if (context.size() != iteration_state.size())
     {
@@ -627,7 +627,7 @@ void ApplyLocalFittingState(
     }
 }
 
-LocalFittingOffsetStats SummarizeLocalFittingOffsets(const LocalFittingState & state)
+LocalFittingOffsetStats SummarizeLocalFittingOffsets(const FitState & state)
 {
     LocalFittingOffsetStats stats;
     stats.atom_count = state.size();
@@ -734,12 +734,12 @@ void LogLocalFittingTerminalFallback(
 void FinishLocalFittingWithNoActiveAtoms(
     ModelObject & model_object,
     const SecondStageLocalFittingContext & context,
-    const LocalFittingState & state,
+    const FitState & state,
     const FitOptions & options,
     std::size_t accepted_iteration_count,
     const LocalFittingTerminalSummary & terminal_summary)
 {
-    ApplyLocalFittingState(model_object, context, state);
+    ApplyFitState(model_object, context, state);
     const auto offset_stats{ SummarizeLocalFittingOffsets(state) };
     if (terminal_summary.AtomCount() > 0)
     {
@@ -1303,7 +1303,7 @@ bool RunSecondStageLocalFitting(
 
     bool unselected_seed_failure{ false };
     auto initial_state_build_result{
-        BuildInitialLocalFittingState(
+        BuildInitialFitState(
             context,
             unselected_seed_failure)
     };
@@ -1337,7 +1337,7 @@ bool RunSecondStageLocalFitting(
         initial_state_build_result->unselected_selection_record_list,
         options);
     auto previous_state{ std::move(initial_state_build_result->state) };
-    LocalFittingPolishProvenance previous_polish_provenance(atom_size, 0);
+    PolishProvenance previous_polish_provenance(atom_size, 0);
     const auto graph_topology{
         BuildGraphTopology(context, previous_state, options)
     };
@@ -1401,7 +1401,7 @@ bool RunSecondStageLocalFitting(
 
     std::size_t accepted_iteration_count{ 0 };
     std::size_t audit_patience_count{ 0 };
-    std::vector<LocalFittingClusterKey> unchanged_state_exhausted_key_list;
+    std::vector<ClusterKey> unchanged_state_exhausted_key_list;
     for (std::size_t iter = 0; iter < kLocalFittingMaximumIterations; iter++)
     {
         if (active_index_list.empty())
@@ -1418,7 +1418,7 @@ bool RunSecondStageLocalFitting(
                 accepted_iteration_count,
                 "terminal-isolation",
                 best_audit_state,
-                UsesLocalFittingPolish(previous_polish_provenance),
+                UsesPolish(previous_polish_provenance),
                 detail::LocalFittingFinalStateSource::LatestValidated);
             RunGroupPotentialFitting(model_object, options, FittingStage::Second);
             return true;
@@ -1488,7 +1488,7 @@ bool RunSecondStageLocalFitting(
         const auto has_suspicious_offset_fallback{ iteration_suspicious_atom_count > 0 };
 
         std::size_t stationarity_ineligible_cluster_count{ 0 };
-        std::vector<LocalFittingClusterKey> polish_eligible_key_list;
+        std::vector<ClusterKey> polish_eligible_key_list;
         for (const auto & [key, health] : current_health_by_key)
         {
             if (!IsJointOffsetSolveStationarityEligible(
@@ -1569,7 +1569,7 @@ bool RunSecondStageLocalFitting(
                     previous_state,
                     objective_domain,
                     residual_baseline);
-            LocalFittingClusterKey changed_atom_index_list;
+            ClusterKey changed_atom_index_list;
             for (const auto & key : combined_changed_key_list)
             {
                 changed_atom_index_list.insert(
@@ -1582,7 +1582,7 @@ bool RunSecondStageLocalFitting(
                     selection.assembled_state,
                     std::move(changed_atom_index_list))
             };
-            const LocalFittingStateView combined_state_view{
+            const FitStateView combined_state_view{
                 previous_state,
                 combined_patch
             };
@@ -1674,7 +1674,7 @@ bool RunSecondStageLocalFitting(
                 persistent_terminal_failure_state_by_key)
         };
 
-        std::vector<LocalFittingClusterKey> terminal_key_list;
+        std::vector<ClusterKey> terminal_key_list;
         for (const auto & [key, reason] : terminal_failure_by_key)
         {
             terminal_key_list.emplace_back(key);
@@ -1827,7 +1827,7 @@ bool RunSecondStageLocalFitting(
                     previous_polish_provenance,
                     best_audit_state.best)
             };
-            ApplyLocalFittingState(
+            ApplyFitState(
                 model_object,
                 context,
                 *final_state_selection.state);
@@ -1836,7 +1836,7 @@ bool RunSecondStageLocalFitting(
                 accepted_iteration_count,
                 GetAllRejectedResolutionText(all_rejected_resolution),
                 best_audit_state,
-                UsesLocalFittingPolish(*final_state_selection.polish_provenance),
+                UsesPolish(*final_state_selection.polish_provenance),
                 final_state_selection.source);
             RunGroupPotentialFitting(
                 model_object,
@@ -1884,7 +1884,7 @@ bool RunSecondStageLocalFitting(
                     assembled_polish_provenance,
                     best_audit_state.best)
             };
-            ApplyLocalFittingState(
+            ApplyFitState(
                 model_object,
                 context,
                 *final_state_selection.state);
@@ -1893,7 +1893,7 @@ bool RunSecondStageLocalFitting(
                 accepted_iteration_count,
                 "audit-patience",
                 best_audit_state,
-                UsesLocalFittingPolish(*final_state_selection.polish_provenance),
+                UsesPolish(*final_state_selection.polish_provenance),
                 final_state_selection.source);
             RunGroupPotentialFitting(
                 model_object,
@@ -1918,7 +1918,7 @@ bool RunSecondStageLocalFitting(
             const auto accepted_offset_stats{
                 SummarizeLocalFittingOffsets(assembled_state)
             };
-            ApplyLocalFittingState(model_object, context, assembled_state);
+            ApplyFitState(model_object, context, assembled_state);
             if (terminal_summary.AtomCount() > 0)
             {
                 LogLocalFittingTerminalFallback(
@@ -1940,7 +1940,7 @@ bool RunSecondStageLocalFitting(
                 accepted_iteration_count,
                 "converged",
                 best_audit_state,
-                UsesLocalFittingPolish(assembled_polish_provenance),
+                UsesPolish(assembled_polish_provenance),
                 detail::LocalFittingFinalStateSource::LatestValidated);
             RunGroupPotentialFitting(model_object, options, FittingStage::Second);
             return true;
@@ -1954,7 +1954,7 @@ bool RunSecondStageLocalFitting(
                     assembled_polish_provenance,
                     best_audit_state.best)
             };
-            ApplyLocalFittingState(
+            ApplyFitState(
                 model_object,
                 context,
                 *final_state_selection.state);
@@ -1969,7 +1969,7 @@ bool RunSecondStageLocalFitting(
                 accepted_iteration_count,
                 "maximum-iterations",
                 best_audit_state,
-                UsesLocalFittingPolish(*final_state_selection.polish_provenance),
+                UsesPolish(*final_state_selection.polish_provenance),
                 final_state_selection.source);
             RunGroupPotentialFitting(model_object, options, FittingStage::Second);
             return true;

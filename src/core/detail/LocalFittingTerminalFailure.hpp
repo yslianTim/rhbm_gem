@@ -8,7 +8,7 @@
 
 #include "core/detail/JointOffset.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
-#include "core/detail/LocalFittingStateView.hpp"
+#include "core/detail/FitStateView.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
 
 namespace rhbm_gem::core::detail {
@@ -26,9 +26,9 @@ struct PersistentTerminalFailureState
 };
 
 using PersistentTerminalFailureStateMap =
-    std::map<LocalFittingClusterKey, PersistentTerminalFailureState>;
+    std::map<ClusterKey, PersistentTerminalFailureState>;
 using TerminalPersistentFailureMap =
-    std::map<LocalFittingClusterKey, PersistentTerminalFailureReason>;
+    std::map<ClusterKey, PersistentTerminalFailureReason>;
 
 struct LocalFittingTerminalSummary
 {
@@ -46,11 +46,11 @@ struct LocalFittingTerminalSummary
 
 
 inline TerminalPersistentFailureMap UpdatePersistentTerminalFailureState(
-    const std::vector<LocalFittingClusterKey> & accepted_key_list,
+    const std::vector<ClusterKey> & accepted_key_list,
     const std::vector<char> & suspicious_atom_mask,
     const LocalFittingClusterHealthMap & health_by_key,
-    const LocalFittingState & assembled_state,
-    const LocalFittingState & previous_state,
+    const FitState & assembled_state,
+    const FitState & previous_state,
     PersistentTerminalFailureStateMap & state_by_key)
 {
     PersistentTerminalFailureStateMap next_state_by_key;
@@ -110,12 +110,12 @@ inline TerminalPersistentFailureMap UpdatePersistentTerminalFailureState(
 }
 
 inline void ApplyTerminalFallbackClusters(
-    const std::vector<LocalFittingClusterKey> & terminal_key_list,
-    const LocalFittingState & previous_state,
-    const LocalFittingPolishProvenance & previous_polish_provenance,
+    const std::vector<ClusterKey> & terminal_key_list,
+    const FitState & previous_state,
+    const PolishProvenance & previous_polish_provenance,
     std::vector<char> & terminal_atom_mask,
-    LocalFittingState & assembled_state,
-    LocalFittingPolishProvenance & assembled_polish_provenance)
+    FitState & assembled_state,
+    PolishProvenance & assembled_polish_provenance)
 {
     for (const auto & key : terminal_key_list)
     {

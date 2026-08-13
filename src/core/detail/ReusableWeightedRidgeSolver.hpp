@@ -9,7 +9,7 @@
 
 #include <rhbm_gem/utils/algorithm/WeightedRidgeSolver.hpp>
 
-#include "core/detail/LocalFittingStateView.hpp"
+#include "core/detail/FitStateView.hpp"
 
 namespace rhbm_gem::core::detail {
 
@@ -70,10 +70,10 @@ struct LocalFittingClusterSolverWorkspace
 };
 
 using LocalFittingClusterSolverWorkspaceMap =
-    std::map<LocalFittingClusterKey, LocalFittingClusterSolverWorkspace>;
+    std::map<ClusterKey, LocalFittingClusterSolverWorkspace>;
 
 inline void ResetLocalFittingClusterSolverWorkspace(
-    const std::vector<LocalFittingClusterKey> & cluster_key_list,
+    const std::vector<ClusterKey> & cluster_key_list,
     LocalFittingClusterSolverWorkspaceMap & workspace_by_key)
 {
     workspace_by_key.clear();

@@ -7,7 +7,7 @@
 #include <map>
 
 #include "core/detail/JointOffset.hpp"
-#include "core/detail/LocalFittingStateView.hpp"
+#include "core/detail/FitStateView.hpp"
 
 namespace rhbm_gem::core::detail {
 
@@ -20,7 +20,7 @@ struct LocalFittingClusterHealth
 };
 
 using LocalFittingClusterHealthMap =
-    std::map<LocalFittingClusterKey, LocalFittingClusterHealth>;
+    std::map<ClusterKey, LocalFittingClusterHealth>;
 
 inline bool IsLocalGaussianRefitStatusStationarityEligible(
     RHBMEstimationStatus status)

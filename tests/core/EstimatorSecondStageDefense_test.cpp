@@ -271,7 +271,7 @@ BuildJointOffsetEstimationFixture(
 struct JointPolishFixture
 {
     polish_detail::SecondStageLocalFittingContext context{};
-    polish_detail::LocalFittingState state{};
+    polish_detail::FitState state{};
     std::vector<polish_detail::LocalFittingObjectiveSampleRef>
         sample_ref_list{};
 };
@@ -1745,8 +1745,8 @@ TEST(EstimatorSecondStageDefenseTest, GlobalObjectiveWeightsClustersByAtomCount)
 
 TEST(EstimatorSecondStageDefenseTest, ObjectiveClusterStateLifecycleReconcilesPartition)
 {
-    const audit_detail::LocalFittingClusterKey existing_key{ 0 };
-    const audit_detail::LocalFittingClusterKey new_key{ 1 };
+    const audit_detail::ClusterKey existing_key{ 0 };
+    const audit_detail::ClusterKey new_key{ 1 };
     coupling_detail::CouplingGraphPartition partition;
     partition.sample_id_list_by_key.emplace(
         existing_key,
@@ -2835,13 +2835,13 @@ TEST(
     };
     ASSERT_TRUE(seed_model_list.has_value());
     polish_detail::ReusableWeightedRidgeSolver direction_solver;
-    const polish_detail::LocalFittingStateView base_state_view{ fixture.state };
+    const polish_detail::FitStateView base_state_view{ fixture.state };
     const auto direction{
         polish_detail::BuildJointPolishDirection(
             fixture.context,
             base_state_view,
             *seed_model_list,
-            polish_detail::LocalFittingClusterKey{ 0, 1 },
+            polish_detail::ClusterKey{ 0, 1 },
             fixture.sample_ref_list,
             { 1.0, 1.0 },
             *parameterization,
@@ -2857,7 +2857,7 @@ TEST(
             fixture.context,
             fixture.state,
             base_state_view,
-            polish_detail::LocalFittingClusterKey{ 0, 1 },
+            polish_detail::ClusterKey{ 0, 1 },
             fixture.sample_ref_list,
             { 1.0, 1.0 },
             proposal_solver,
@@ -2865,7 +2865,7 @@ TEST(
     };
     ASSERT_TRUE(proposal.has_value());
     EXPECT_EQ(proposal->patch.atom_index_list,
-        (polish_detail::LocalFittingClusterKey{ 0, 1 }));
+        (polish_detail::ClusterKey{ 0, 1 }));
     ASSERT_EQ(proposal->patch.mdpde_list.size(), 2U);
     EXPECT_DOUBLE_EQ(
         proposal->patch.mdpde_list.at(0).GetModel().GetOffset(),
@@ -2913,8 +2913,8 @@ TEST(
             base_model_list,
             target_model_list)
     };
-    const polish_detail::LocalFittingStateView base_state_view{ fixture.state };
-    const auto key{ polish_detail::LocalFittingClusterKey{ 0, 1 } };
+    const polish_detail::FitStateView base_state_view{ fixture.state };
+    const auto key{ polish_detail::ClusterKey{ 0, 1 } };
 
     polish_detail::ReusableWeightedRidgeSolver empty_solver;
     EXPECT_FALSE(
@@ -2934,7 +2934,7 @@ TEST(
             rg::GaussianModel3D{ 0.0, 0.55, 0.10 },
             rg::GaussianModel3DUncertainty{}
         };
-    const polish_detail::LocalFittingStateView invalid_state_view{
+    const polish_detail::FitStateView invalid_state_view{
         invalid_fixture.state
     };
     polish_detail::ReusableWeightedRidgeSolver invalid_solver;
@@ -2959,7 +2959,7 @@ TEST(
             unchanged_model_list,
             unchanged_model_list)
     };
-    const polish_detail::LocalFittingStateView unchanged_state_view{
+    const polish_detail::FitStateView unchanged_state_view{
         unchanged_fixture.state
     };
     polish_detail::ReusableWeightedRidgeSolver unchanged_solver;
@@ -3589,8 +3589,8 @@ TEST(EstimatorSecondStageDefenseTest,
 
     backtracking_detail::SecondStageLocalFittingContext context;
     context.selected_atom_list.resize(previous_model_list.size());
-    backtracking_detail::LocalFittingState previous_state;
-    backtracking_detail::LocalFittingState endpoint_state;
+    backtracking_detail::FitState previous_state;
+    backtracking_detail::FitState endpoint_state;
     previous_state.resize(previous_model_list.size());
     endpoint_state.resize(endpoint_model_list.size());
     for (std::size_t atom_index = 0;
@@ -3653,13 +3653,13 @@ TEST(EstimatorSecondStageDefenseTest,
     };
     EXPECT_EQ(merged_provenance, (std::vector<char>{ 1, 0 }));
 
-    backtracking_detail::LocalFittingStatePatch endpoint_patch;
+    backtracking_detail::FitStatePatch endpoint_patch;
     endpoint_patch.atom_index_list = { 0, 1 };
     endpoint_patch.mdpde_list = {
         endpoint_state.at(0).mdpde,
         endpoint_state.at(1).mdpde
     };
-    const backtracking_detail::LocalFittingStateView endpoint_view{
+    const backtracking_detail::FitStateView endpoint_view{
         previous_state,
         endpoint_patch
     };
@@ -3691,13 +3691,13 @@ TEST(EstimatorSecondStageDefenseTest,
     context.selected_atom_list.resize(1);
     context.at(0).group_key = 1;
 
-    backtracking_detail::LocalFittingState previous_state(1);
+    backtracking_detail::FitState previous_state(1);
     previous_state.at(0).mdpde = rg::GaussianModel3DWithUncertainty{
         rg::GaussianModel3D{ 8.0, 0.50, -0.10 },
         rg::GaussianModel3DUncertainty{ 0.1, 0.02, 0.03 }
     };
 
-    backtracking_detail::LocalFittingState endpoint_state(1);
+    backtracking_detail::FitState endpoint_state(1);
     endpoint_state.at(0).mdpde = rg::GaussianModel3DWithUncertainty{
         rg::GaussianModel3D{ 0.0, 0.0, 0.0 },
         rg::GaussianModel3DUncertainty{ 0.2, 0.04, 0.05 }
@@ -3737,7 +3737,7 @@ TEST(EstimatorSecondStageDefenseTest,
     EXPECT_EQ(change_exhausted_step.candidate_patch, nullptr);
 
     backtracking_detail::SecondStageLocalFittingContext empty_context;
-    backtracking_detail::LocalFittingState empty_state;
+    backtracking_detail::FitState empty_state;
     backtracking_detail::BacktrackingWorkspace factor_workspace{
         empty_context,
         empty_state,
@@ -3792,7 +3792,7 @@ TEST(EstimatorSecondStageDefenseTest, ResidualBaselineAndOverlayAgreeForCandidat
             });
     }
 
-    residual_detail::LocalFittingState previous_state;
+    residual_detail::FitState previous_state;
     previous_state.emplace_back(MakeGaussianResult(previous_model));
     const auto model_snapshot{
         residual_detail::BuildSecondStageModelSnapshot(
@@ -3815,11 +3815,11 @@ TEST(EstimatorSecondStageDefenseTest, ResidualBaselineAndOverlayAgreeForCandidat
             previous_model.ResponseAtDistance(0.45),
         1.0e-6);
 
-    residual_detail::LocalFittingStatePatch patch;
+    residual_detail::FitStatePatch patch;
     patch.atom_index_list = { 0 };
     auto candidate_result{ MakeGaussianResult(candidate_model) };
     patch.mdpde_list.emplace_back(candidate_result.mdpde);
-    const residual_detail::LocalFittingStateView candidate_view{
+    const residual_detail::FitStateView candidate_view{
         previous_state,
         patch
     };
@@ -4110,12 +4110,12 @@ TEST(EstimatorSecondStageDefenseTest, TerminalFallbackPreservesAffectedCluster)
 
 TEST(EstimatorSecondStageDefenseTest, PersistentTerminalReasonRequiresStableReason)
 {
-    const audit_detail::LocalFittingClusterKey key{ 0 };
-    const std::vector<audit_detail::LocalFittingClusterKey> accepted_key_list{
+    const audit_detail::ClusterKey key{ 0 };
+    const std::vector<audit_detail::ClusterKey> accepted_key_list{
         key
     };
     const rg::GaussianModel3D model{ 8.0, 0.50, -0.10 };
-    audit_detail::LocalFittingState previous_state;
+    audit_detail::FitState previous_state;
     previous_state.emplace_back(MakeGaussianResult(model));
     const auto assembled_state{ previous_state };
     audit_detail::LocalFittingClusterHealthMap health_by_key;

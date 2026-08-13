@@ -14,7 +14,7 @@
 #include <Eigen/Dense>
 
 #include "core/detail/LocalFittingGroupMedian.hpp"
-#include "core/detail/LocalFittingStateView.hpp"
+#include "core/detail/FitStateView.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
 #include "core/detail/SecondStageLocalFittingContext.hpp"
 
@@ -33,7 +33,7 @@ struct BacktrackingStep
     double factor{ 0.0 };
     std::size_t trial_number{ 0 };
     double maximum_transformed_change{ std::numeric_limits<double>::infinity() };
-    const LocalFittingStatePatch * candidate_patch{ nullptr };
+    const FitStatePatch * candidate_patch{ nullptr };
 
     bool IsCandidateReady() const
     {
@@ -46,7 +46,7 @@ struct BacktrackingWorkspace
     template <typename EndpointState>
     BacktrackingWorkspace(
         const SecondStageLocalFittingContext & context,
-        const LocalFittingState & previous_state,
+        const FitState & previous_state,
         const EndpointState & endpoint_state,
         const std::vector<std::size_t> & active_index_list,
         double minimum_transformed_change)
@@ -158,21 +158,21 @@ struct BacktrackingWorkspace
         }
     }
 
-    LocalFittingStatePatch TakeCandidatePatch()
+    FitStatePatch TakeCandidatePatch()
     {
         return std::move(m_candidate_patch);
     }
 
-    LocalFittingState MaterializeCandidateState() const
+    FitState MaterializeCandidateState() const
     {
         auto state{ *m_previous_state };
         m_candidate_patch.ApplyTo(state);
         return state;
     }
 
-    LocalFittingPolishProvenance BuildCandidatePolishProvenance(
-        const LocalFittingPolishProvenance & previous_provenance,
-        const LocalFittingPolishProvenance & endpoint_provenance) const
+    PolishProvenance BuildCandidatePolishProvenance(
+        const PolishProvenance & previous_provenance,
+        const PolishProvenance & endpoint_provenance) const
     {
         if (previous_provenance.size() != m_previous_state->size() ||
             endpoint_provenance.size() != m_previous_state->size())
@@ -192,9 +192,9 @@ struct BacktrackingWorkspace
         return provenance;
     }
 
-    LocalFittingPolishProvenance BuildActiveCandidatePolishProvenance(
-        const LocalFittingPolishProvenance & previous_provenance,
-        const LocalFittingPolishProvenance & endpoint_provenance) const
+    PolishProvenance BuildActiveCandidatePolishProvenance(
+        const PolishProvenance & previous_provenance,
+        const PolishProvenance & endpoint_provenance) const
     {
         if (previous_provenance.size() != m_active_index_list.size() ||
             endpoint_provenance.size() != m_active_index_list.size())
@@ -214,7 +214,7 @@ struct BacktrackingWorkspace
     }
 
 private:
-    const LocalFittingStatePatch * BuildCandidate(double factor)
+    const FitStatePatch * BuildCandidate(double factor)
     {
         const auto candidate_model_list{
             BuildLocalFittingSharedOffsetDampedModelList(
@@ -294,7 +294,7 @@ private:
         const EndpointState & state,
         std::size_t atom_index)
     {
-        if constexpr (std::is_same_v<std::decay_t<EndpointState>, LocalFittingStateView>)
+        if constexpr (std::is_same_v<std::decay_t<EndpointState>, FitStateView>)
         {
             return state.GetModel(atom_index);
         }
@@ -309,7 +309,7 @@ private:
         const EndpointState & state,
         std::size_t atom_index)
     {
-        if constexpr (std::is_same_v<std::decay_t<EndpointState>, LocalFittingStateView>)
+        if constexpr (std::is_same_v<std::decay_t<EndpointState>, FitStateView>)
         {
             return state.GetMdpde(atom_index);
         }
@@ -319,7 +319,7 @@ private:
         }
     }
 
-    const LocalFittingState * m_previous_state{ nullptr };
+    const FitState * m_previous_state{ nullptr };
     std::vector<std::size_t> m_active_index_list{};
     double m_minimum_transformed_change{ 0.0 };
     double m_next_factor{ 0.5 };
@@ -331,7 +331,7 @@ private:
     std::vector<std::optional<Eigen::Vector3d>> m_previous_transformed_estimation_list{};
     std::vector<GaussianModel3D> m_previous_shared_offset_model_list{};
     std::vector<GaussianModel3D> m_endpoint_shared_offset_model_list{};
-    LocalFittingStatePatch m_candidate_patch{};
+    FitStatePatch m_candidate_patch{};
 };
 
 } // namespace rhbm_gem::core::detail
