@@ -6,7 +6,7 @@
 #include "core/detail/LocalFittingResidualEvaluation.hpp"
 #include "core/detail/LocalFittingObjective.hpp"
 #include "core/detail/LocalFittingTerminalFailure.hpp"
-#include "core/detail/LocalFittingCandidateSelection.hpp"
+#include "core/detail/CandidateSelection.hpp"
 #include "core/detail/LocalFittingIteration.hpp"
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/JointOffset.hpp"
@@ -124,13 +124,13 @@ using detail::LocalFittingTerminalSummary;
 using detail::UpdatePersistentTerminalFailureState;
 using detail::ApplyTerminalFallbackClusters;
 using detail::BuildEligibleLocalFittingActiveIndexList;
-using detail::LocalFittingRejectedClusterDiagnostic;
-using detail::LocalFittingPolishProgress;
-using detail::LocalFittingCandidateSelection;
-using detail::RejectLocalFittingCombinedCandidate;
-using detail::SelectLocalFittingClusterCandidates;
-using detail::TryBacktrackLocalFittingCombinedCandidate;
-using detail::BuildLocalFittingStatePatch;
+using detail::RejectedClusterDiagnostic;
+using detail::PolishProgress;
+using detail::CandidateSelection;
+using detail::RejectCombinedCandidate;
+using detail::SelectClusterCandidates;
+using detail::TryBacktrackCombinedCandidate;
+using detail::BuildStatePatch;
 using detail::kLocalFittingFitRangeWeight;
 using detail::kLocalFittingTailValidationWeight;
 using detail::kLocalFittingOffsetPlausibilityPenaltyWeight;
@@ -219,7 +219,7 @@ struct LocalFittingIterationProgress
     std::size_t terminal_atom_count{ 0 };
     std::size_t accepted_cluster_count{ 0 };
     std::size_t rejected_cluster_count{ 0 };
-    LocalFittingPolishProgress polish_progress{};
+    PolishProgress polish_progress{};
     std::size_t suspicious_atom_count{ 0 };
     std::optional<double> accepted_maximum_transformed_change{};
     std::optional<double> raw_maximum_transformed_change{};
@@ -799,7 +799,7 @@ std::string_view GetLocalFittingPreObjectiveFailureReasonText(
 
 void LogRejectedLocalFittingClusterDiagnostics(
     const FitOptions & options,
-    const std::vector<LocalFittingRejectedClusterDiagnostic> & diagnostic_list)
+    const std::vector<RejectedClusterDiagnostic> & diagnostic_list)
 {
     if (options.quiet_mode || Logger::GetLogLevel() < LogLevel::Debug || diagnostic_list.empty())
     {
@@ -976,7 +976,7 @@ void LogLocalFittingAllRejectedResolution(
 
 void LogAcceptedLocalFittingBacktrackingDiagnostics(
     const FitOptions & options,
-    const LocalFittingCandidateSelection & selection)
+    const CandidateSelection & selection)
 {
     if (options.quiet_mode || Logger::GetLogLevel() < LogLevel::Debug)
     {
@@ -986,7 +986,7 @@ void LogAcceptedLocalFittingBacktrackingDiagnostics(
         std::any_of(
             selection.accepted_cluster_diagnostic_list.begin(),
             selection.accepted_cluster_diagnostic_list.end(),
-            [&](const LocalFittingRejectedClusterDiagnostic & diagnostic)
+            [&](const RejectedClusterDiagnostic & diagnostic)
             {
                 return diagnostic.attempt.backtracking_trial_count > 1 &&
                     std::find(
@@ -1539,7 +1539,7 @@ bool RunSecondStageLocalFitting(
         auto working_cluster_objective_state{ cluster_objective_state };
         const auto candidate_phase_start{ std::chrono::steady_clock::now() };
         auto selection{
-            SelectLocalFittingClusterCandidates(
+            SelectClusterCandidates(
                 context,
                 previous_model_snapshot,
                 residual_baseline,
@@ -1591,7 +1591,7 @@ bool RunSecondStageLocalFitting(
                     key.end());
             }
             const auto combined_patch{
-                BuildLocalFittingStatePatch(
+                BuildStatePatch(
                     selection.assembled_state,
                     std::move(changed_atom_index_list))
             };
@@ -1632,7 +1632,7 @@ bool RunSecondStageLocalFitting(
         if (!combined_objective_accepted)
         {
             combined_objective_accepted =
-                TryBacktrackLocalFittingCombinedCandidate(
+                TryBacktrackCombinedCandidate(
                     context,
                     previous_model_snapshot,
                     residual_baseline,
@@ -1650,7 +1650,7 @@ bool RunSecondStageLocalFitting(
         }
         if (!combined_objective_accepted)
         {
-            RejectLocalFittingCombinedCandidate(
+            RejectCombinedCandidate(
                 previous_state,
                 previous_polish_provenance,
                 cluster_key_list,

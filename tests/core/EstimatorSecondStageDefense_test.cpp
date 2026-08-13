@@ -15,8 +15,8 @@
 
 #include "core/detail/GaussianEstimatorStages.hpp"
 #include "core/detail/LocalFittingAudit.hpp"
-#include "core/detail/LocalFittingBacktrackingWorkspace.hpp"
-#include "core/detail/LocalFittingCandidateSelection.hpp"
+#include "core/detail/BacktrackingWorkspace.hpp"
+#include "core/detail/CandidateSelection.hpp"
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
@@ -3610,7 +3610,7 @@ TEST(EstimatorSecondStageDefenseTest,
             };
     }
 
-    backtracking_detail::LocalFittingBacktrackingWorkspace workspace{
+    backtracking_detail::BacktrackingWorkspace workspace{
         context,
         previous_state,
         endpoint_state,
@@ -3620,7 +3620,7 @@ TEST(EstimatorSecondStageDefenseTest,
     const auto step{ workspace.BuildNextCandidate() };
     ASSERT_EQ(
         step.status,
-        backtracking_detail::LocalFittingBacktrackingStepStatus::CandidateReady);
+        backtracking_detail::BacktrackingStepStatus::CandidateReady);
     EXPECT_TRUE(step.IsCandidateReady());
     EXPECT_DOUBLE_EQ(step.factor, 0.5);
     EXPECT_EQ(step.trial_number, 2U);
@@ -3663,7 +3663,7 @@ TEST(EstimatorSecondStageDefenseTest,
         previous_state,
         endpoint_patch
     };
-    backtracking_detail::LocalFittingBacktrackingWorkspace view_workspace{
+    backtracking_detail::BacktrackingWorkspace view_workspace{
         context,
         previous_state,
         endpoint_view,
@@ -3702,7 +3702,7 @@ TEST(EstimatorSecondStageDefenseTest,
         rg::GaussianModel3D{ 0.0, 0.0, 0.0 },
         rg::GaussianModel3DUncertainty{ 0.2, 0.04, 0.05 }
     };
-    backtracking_detail::LocalFittingBacktrackingWorkspace invalid_workspace{
+    backtracking_detail::BacktrackingWorkspace invalid_workspace{
         context,
         previous_state,
         endpoint_state,
@@ -3712,7 +3712,7 @@ TEST(EstimatorSecondStageDefenseTest,
     const auto invalid_step{ invalid_workspace.BuildNextCandidate() };
     EXPECT_EQ(
         invalid_step.status,
-        backtracking_detail::LocalFittingBacktrackingStepStatus::InvalidCandidate);
+        backtracking_detail::BacktrackingStepStatus::InvalidCandidate);
     EXPECT_EQ(invalid_step.trial_number, 1U);
     EXPECT_EQ(invalid_step.candidate_patch, nullptr);
 
@@ -3720,7 +3720,7 @@ TEST(EstimatorSecondStageDefenseTest,
         rg::GaussianModel3D{ 12.0, 0.75, 0.40 },
         rg::GaussianModel3DUncertainty{ 0.2, 0.04, 0.05 }
     };
-    backtracking_detail::LocalFittingBacktrackingWorkspace change_exhausted_workspace{
+    backtracking_detail::BacktrackingWorkspace change_exhausted_workspace{
         context,
         previous_state,
         endpoint_state,
@@ -3732,13 +3732,13 @@ TEST(EstimatorSecondStageDefenseTest,
     };
     EXPECT_EQ(
         change_exhausted_step.status,
-        backtracking_detail::LocalFittingBacktrackingStepStatus::Exhausted);
+        backtracking_detail::BacktrackingStepStatus::Exhausted);
     EXPECT_EQ(change_exhausted_step.trial_number, 1U);
     EXPECT_EQ(change_exhausted_step.candidate_patch, nullptr);
 
     backtracking_detail::SecondStageLocalFittingContext empty_context;
     backtracking_detail::LocalFittingState empty_state;
-    backtracking_detail::LocalFittingBacktrackingWorkspace factor_workspace{
+    backtracking_detail::BacktrackingWorkspace factor_workspace{
         empty_context,
         empty_state,
         empty_state,
@@ -3748,7 +3748,7 @@ TEST(EstimatorSecondStageDefenseTest,
     std::size_t ready_count{ 0 };
     double expected_factor{ 0.5 };
     std::size_t expected_trial_number{ 2 };
-    backtracking_detail::LocalFittingBacktrackingStep factor_step;
+    backtracking_detail::BacktrackingStep factor_step;
     do
     {
         factor_step = factor_workspace.BuildNextCandidate();
@@ -3764,7 +3764,7 @@ TEST(EstimatorSecondStageDefenseTest,
     while (factor_step.IsCandidateReady());
     EXPECT_EQ(
         factor_step.status,
-        backtracking_detail::LocalFittingBacktrackingStepStatus::Exhausted);
+        backtracking_detail::BacktrackingStepStatus::Exhausted);
     EXPECT_GT(ready_count, 40U);
     EXPECT_LT(
         factor_step.factor,
