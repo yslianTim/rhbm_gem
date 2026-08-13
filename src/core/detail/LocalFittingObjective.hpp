@@ -98,7 +98,7 @@ inline std::optional<double> BuildFixedLocalFittingObjectiveScale(
 
 
 inline LocalFittingObjectiveDomain BuildLocalFittingObjectiveDomain(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const FitState & initial_state,
     const CouplingGraphPartition & partition,
     const FitOptions & options)
@@ -210,7 +210,7 @@ inline LocalFittingObjectiveDomain BuildLocalFittingObjectiveDomain(
 template <typename State, typename ResidualEvaluator>
 inline std::optional<LocalFittingObjectiveBreakdown>
 EvaluateLocalFittingObjectiveContributionImpl(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const State & state,
     const ClusterKey & changed_key,
     const std::vector<LocalFittingObjectiveSampleRef> & sample_ref_list,
@@ -324,7 +324,7 @@ EvaluateLocalFittingObjectiveContributionImpl(
 template <typename State>
 inline std::optional<LocalFittingObjectiveBreakdown>
 EvaluateLocalFittingObjectiveContribution(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const State & state,
     const SecondStageModelSnapshot & model_snapshot,
     const ClusterKey & changed_key,
@@ -351,7 +351,7 @@ EvaluateLocalFittingObjectiveContribution(
 
 inline std::optional<LocalFittingObjectiveBreakdown>
 EvaluateLocalFittingObjectiveContribution(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const FitState & state,
     const LocalFittingResidualBaseline & residual_baseline,
     const ClusterKey & changed_key,
@@ -375,7 +375,7 @@ EvaluateLocalFittingObjectiveContribution(
 
 inline std::optional<LocalFittingObjectiveBreakdown>
 EvaluateLocalFittingObjectiveContribution(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const FitStateView & state,
     const LocalFittingCandidateEvaluationOverlay & overlay,
     const ClusterKey & changed_key,
@@ -398,7 +398,7 @@ EvaluateLocalFittingObjectiveContribution(
 
 inline std::optional<LocalFittingObjectiveBreakdown>
 EvaluateLocalFittingAuditObjective(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const FitState & state,
     const LocalFittingObjectiveDomain & domain,
     const SecondStageModelSnapshot & model_snapshot)
@@ -463,7 +463,7 @@ EvaluateLocalFittingAuditObjective(
 
 inline std::optional<LocalFittingObjectiveBreakdown>
 EvaluateLocalFittingAuditObjective(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const FitState & state,
     const LocalFittingObjectiveDomain & domain,
     const LocalFittingResidualBaseline & residual_baseline)
@@ -503,7 +503,7 @@ EvaluateLocalFittingAuditObjective(
 
 inline std::optional<LocalFittingObjectiveBreakdown>
 EvaluateLocalFittingObjectiveDelta(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const FitState & previous_state,
     const FitStateView & candidate_state,
     const LocalFittingResidualBaseline & residual_baseline,
@@ -565,7 +565,7 @@ EvaluateLocalFittingObjectiveDelta(
 
 inline std::optional<LocalFittingObjectiveBreakdown>
 EvaluateLocalFittingAuditObjective(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const FitState & state,
     const LocalFittingObjectiveDomain & domain)
 {
@@ -582,7 +582,7 @@ EvaluateLocalFittingAuditObjective(
 }
 
 inline LocalFittingObjectiveByKey BuildLocalFittingObjectiveByKey(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const FitState & state,
     const CouplingGraphPartition & partition,
     const LocalFittingObjectiveDomain & domain,
@@ -605,7 +605,7 @@ inline LocalFittingObjectiveByKey BuildLocalFittingObjectiveByKey(
 }
 
 inline LocalFittingObjectiveByKey BuildLocalFittingObjectiveByKey(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const FitState & state,
     const CouplingGraphPartition & partition,
     const LocalFittingObjectiveDomain & domain,
@@ -630,7 +630,7 @@ inline LocalFittingObjectiveByKey BuildLocalFittingObjectiveByKey(
 
 [[maybe_unused]] inline LocalFittingCombinedObjectiveCheck
 EvaluateLocalFittingCombinedObjective(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const FitState & candidate_state,
     const FitState & previous_state,
     const LocalFittingObjectiveDomain & domain,
@@ -662,7 +662,7 @@ EvaluateLocalFittingCombinedObjective(
 }
 
 inline LocalFittingCombinedObjectiveCheck EvaluateLocalFittingCombinedObjective(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const FitState & previous_state,
     const FitStateView & candidate_state,
     const LocalFittingResidualBaseline & residual_baseline,
@@ -705,7 +705,7 @@ inline LocalFittingCombinedObjectiveCheck EvaluateLocalFittingCombinedObjective(
 
 
 inline bool TryUpdateLocalFittingBestAuditState(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const FitState & candidate_state,
     const PolishProvenance & candidate_polish_provenance,
     const std::optional<std::size_t> & accepted_iteration,
@@ -735,7 +735,7 @@ inline bool TryUpdateLocalFittingBestAuditState(
 }
 
 inline LocalFittingBestAuditState BuildInitialLocalFittingBestAuditState(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const FitState & initial_state,
     const PolishProvenance & initial_polish_provenance,
     const std::optional<std::size_t> & accepted_iteration,
@@ -753,7 +753,7 @@ inline LocalFittingBestAuditState BuildInitialLocalFittingBestAuditState(
 }
 
 inline void ResetLocalFittingBestAuditAfterObjectiveDomainChange(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const FitState & validated_state,
     const PolishProvenance & validated_polish_provenance,
     std::size_t accepted_iteration,
@@ -808,7 +808,7 @@ inline void ReconcileLocalFittingClusterObjectiveState(
 }
 
 inline bool TryCommitLocalFittingClusterCandidate(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const FitStateView & candidate_state,
     const LocalFittingCandidateEvaluationOverlay & candidate_overlay,
     const FitStateView & previous_state,

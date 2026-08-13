@@ -387,7 +387,7 @@ EvaluateTransformedResponse(
 constexpr double kJointPolishTransformedChangeTolerance{ 1.0e-4 };
 
 inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const FitStateView & base_state,
     const std::vector<GaussianModel3D> & seed_model_list,
     const ClusterKey & key,
@@ -505,7 +505,7 @@ inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
             std::size_t contributor_index,
             double distance) -> bool
         {
-            const auto & contributor{
+            const auto & unselected_atom_contributor{
                 context.unselected_atom_list.at(contributor_index)
             };
             const auto & model{
@@ -518,7 +518,7 @@ inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
             predicted_response += evaluation->response;
 
             const auto local_position_iter{
-                local_position_by_group_key.find(contributor.group_key)
+                local_position_by_group_key.find(unselected_atom_contributor.group_key)
             };
             if (local_position_iter == local_position_by_group_key.end() ||
                 std::abs(evaluation->offset_jacobian) <=
@@ -544,15 +544,15 @@ inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
             neighbor_iter != atom_context.NeighborEnd(sample_ref.sample_index);
             ++neighbor_iter)
         {
-            const auto & neighbor_sample{ *neighbor_iter };
+            const auto & neighbor_atom_sample{ *neighbor_iter };
             const auto appended{
-                neighbor_sample.is_selected ?
+                neighbor_atom_sample.is_selected ?
                     append_model(
-                        neighbor_sample.atom_index,
-                        neighbor_sample.distance) :
+                        neighbor_atom_sample.atom_index,
+                        neighbor_atom_sample.distance) :
                     append_unselected_model(
-                        neighbor_sample.atom_index,
-                        neighbor_sample.distance)
+                        neighbor_atom_sample.atom_index,
+                        neighbor_atom_sample.distance)
             };
             if (!appended) return std::nullopt;
         }
@@ -706,7 +706,7 @@ struct JointPolishProposal
 
 inline std::optional<JointPolishProposal>
 BuildJointPolishProposal(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const FitState & outer_previous_state,
     const FitStateView & base_state,
     const ClusterKey & key,

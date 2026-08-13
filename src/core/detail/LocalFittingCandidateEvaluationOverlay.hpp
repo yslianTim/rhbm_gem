@@ -12,7 +12,7 @@
 #include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/LocalFittingResidualEvaluation.hpp"
 #include "core/detail/FitStateView.hpp"
-#include "core/detail/SecondStageLocalFittingContext.hpp"
+#include "core/detail/SecondStageContext.hpp"
 
 namespace rhbm_gem::core::detail {
 
@@ -20,7 +20,7 @@ class LocalFittingCandidateEvaluationOverlay
 {
 public:
     LocalFittingCandidateEvaluationOverlay(
-        const SecondStageLocalFittingContext & context,
+        const SecondStageContext & context,
         const SecondStageModelSnapshot & baseline_model_snapshot,
         const LocalFittingResidualBaseline & residual_baseline,
         const FitStateView & candidate_state,
@@ -78,36 +78,36 @@ public:
             neighbor_iter != atom_context.NeighborEnd(sample_ref.sample_index);
             ++neighbor_iter)
         {
-            const auto & neighbor_sample{ *neighbor_iter };
+            const auto & neighbor_atom_sample{ *neighbor_iter };
             const GaussianModel3D * candidate_model{ nullptr };
             const GaussianModel3D * baseline_model{ nullptr };
-            if (neighbor_sample.is_selected)
+            if (neighbor_atom_sample.is_selected)
             {
-                if (m_patch.Find(neighbor_sample.atom_index) == nullptr)
+                if (m_patch.Find(neighbor_atom_sample.atom_index) == nullptr)
                 {
                     continue;
                 }
                 baseline_model = &m_baseline_model_snapshot.selected.at(
-                    neighbor_sample.atom_index);
+                    neighbor_atom_sample.atom_index);
                 candidate_model = &candidate_state.GetModel(
-                    neighbor_sample.atom_index);
+                    neighbor_atom_sample.atom_index);
             }
             else
             {
-                const auto & contributor{
+                const auto & unselected_atom_contributor{
                     m_context.unselected_atom_list.at(
-                        neighbor_sample.atom_index)
+                        neighbor_atom_sample.atom_index)
                 };
-                if (!contributor.selected_group_id.has_value() ||
-                    m_changed_group_mask.at(*contributor.selected_group_id) == 0)
+                if (!unselected_atom_contributor.selected_group_id.has_value() ||
+                    m_changed_group_mask.at(*unselected_atom_contributor.selected_group_id) == 0)
                 {
                     continue;
                 }
                 baseline_model = &m_baseline_model_snapshot.unselected.at(
-                    neighbor_sample.atom_index);
+                    neighbor_atom_sample.atom_index);
                 const auto & median{
                     m_changed_group_median.at(
-                        *contributor.selected_group_id)
+                        *unselected_atom_contributor.selected_group_id)
                 };
                 if (median.has_value())
                 {
@@ -115,16 +115,16 @@ public:
                 }
                 else
                 {
-                    if (!contributor.initial_seed.has_value())
+                    if (!unselected_atom_contributor.initial_seed.has_value())
                     {
                         return std::nullopt;
                     }
-                    candidate_model = &contributor.initial_seed->GetModel();
+                    candidate_model = &unselected_atom_contributor.initial_seed->GetModel();
                 }
             }
             adjusted_response +=
-                baseline_model->ResponseAtDistance(neighbor_sample.distance) -
-                candidate_model->ResponseAtDistance(neighbor_sample.distance);
+                baseline_model->ResponseAtDistance(neighbor_atom_sample.distance) -
+                candidate_model->ResponseAtDistance(neighbor_atom_sample.distance);
         }
         const auto expected_response{
             m_patch.Find(sample_ref.atom_index) == nullptr ?
@@ -141,7 +141,7 @@ public:
     }
 
 private:
-    const SecondStageLocalFittingContext & m_context;
+    const SecondStageContext & m_context;
     const SecondStageModelSnapshot & m_baseline_model_snapshot;
     const LocalFittingResidualBaseline & m_residual_baseline;
     const FitStatePatch & m_patch;

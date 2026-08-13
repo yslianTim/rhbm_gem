@@ -20,7 +20,7 @@
 #include "core/detail/LocalFittingSuspiciousUpdate.hpp"
 #include "core/detail/ReusableWeightedRidgeSolver.hpp"
 #include "core/detail/ScopedEigenThreadCount.hpp"
-#include "core/detail/SecondStageLocalFittingContext.hpp"
+#include "core/detail/SecondStageContext.hpp"
 
 namespace rhbm_gem::core::detail {
 
@@ -44,7 +44,7 @@ struct LocalAtomRefitResult
 
 inline std::optional<local_fitting_iteration_internal::LocalAtomRefitResult>
 FitAtomWithJointOffsetFallback(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     std::size_t atom_index,
     const LocalGaussianResult & previous_result,
     const GaussianModel3D & offset_model,
@@ -161,7 +161,7 @@ inline void ExpandPostRefitRollbackClusters(
 }
 
 inline LocalFittingIterationResult RunLocalFittingIteration(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const std::vector<ClusterKey> & cluster_key_list,
     const FitState & previous_state,
     const FitOptions & options,

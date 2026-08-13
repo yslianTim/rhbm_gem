@@ -11,7 +11,7 @@
 
 #include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/FitStateView.hpp"
-#include "core/detail/SecondStageLocalFittingContext.hpp"
+#include "core/detail/SecondStageContext.hpp"
 
 namespace rhbm_gem::core::detail {
 
@@ -52,18 +52,18 @@ struct SecondStageModelSnapshot
     FittedGaussianSnapshot unselected{};
 };
 
-inline const GaussianModel3D & ResolveSecondStageNeighborModel(
-    const SecondStageNeighborSample & neighbor_sample,
+inline const GaussianModel3D & ResolveNeighborAtomModel(
+    const NeighborAtomSample & neighbor_atom_sample,
     const FittedGaussianSnapshot & selected_snapshot,
     const FittedGaussianSnapshot & unselected_snapshot)
 {
-    return neighbor_sample.is_selected ?
-        selected_snapshot.at(neighbor_sample.atom_index) :
-        unselected_snapshot.at(neighbor_sample.atom_index);
+    return neighbor_atom_sample.is_selected ?
+        selected_snapshot.at(neighbor_atom_sample.atom_index) :
+        unselected_snapshot.at(neighbor_atom_sample.atom_index);
 }
 
-inline FittedGaussianSnapshot BuildUnselectedContributorSnapshot(
-    const SecondStageLocalFittingContext & context,
+inline FittedGaussianSnapshot BuildUnselectedAtomContributorSnapshot(
+    const SecondStageContext & context,
     const FittedGaussianSnapshot & selected_snapshot)
 {
     if (selected_snapshot.size() != context.size())
@@ -94,31 +94,31 @@ inline FittedGaussianSnapshot BuildUnselectedContributorSnapshot(
 
     FittedGaussianSnapshot snapshot;
     snapshot.reserve(context.unselected_atom_list.size());
-    for (const auto & contributor : context.unselected_atom_list)
+    for (const auto & unselected_atom_contributor : context.unselected_atom_list)
     {
-        if (contributor.selected_group_id.has_value() &&
-            median_model_by_group.at(*contributor.selected_group_id).has_value())
+        if (unselected_atom_contributor.selected_group_id.has_value() &&
+            median_model_by_group.at(*unselected_atom_contributor.selected_group_id).has_value())
         {
             snapshot.emplace_back(
-                *median_model_by_group.at(*contributor.selected_group_id));
+                *median_model_by_group.at(*unselected_atom_contributor.selected_group_id));
             continue;
         }
-        if (!contributor.initial_seed.has_value())
+        if (!unselected_atom_contributor.initial_seed.has_value())
         {
             throw std::logic_error(
                 "Second-stage unselected contributor seed is unavailable.");
         }
-        snapshot.emplace_back(contributor.initial_seed->GetModel());
+        snapshot.emplace_back(unselected_atom_contributor.initial_seed->GetModel());
     }
     return snapshot;
 }
 
 inline SecondStageModelSnapshot BuildSecondStageModelSnapshot(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     FittedGaussianSnapshot selected_snapshot)
 {
     auto unselected_snapshot{
-        BuildUnselectedContributorSnapshot(context, selected_snapshot)
+        BuildUnselectedAtomContributorSnapshot(context, selected_snapshot)
     };
     return SecondStageModelSnapshot{
         std::move(selected_snapshot),
@@ -136,7 +136,7 @@ using LocalFittingResidualBaseline =
     std::vector<std::vector<std::optional<LocalFittingResidualSample>>>;
 
 inline double CalculateSecondStageAdjustedResponse(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     std::size_t atom_index,
     std::size_t sample_index,
     const SecondStageModelSnapshot & model_snapshot)
@@ -149,17 +149,17 @@ inline double CalculateSecondStageAdjustedResponse(
         neighbor_iter != atom_context.NeighborEnd(sample_index);
         ++neighbor_iter)
     {
-        const auto & neighbor_sample{ *neighbor_iter };
-        response_value -= ResolveSecondStageNeighborModel(
-            neighbor_sample,
+        const auto & neighbor_atom_sample{ *neighbor_iter };
+        response_value -= ResolveNeighborAtomModel(
+            neighbor_atom_sample,
             model_snapshot.selected,
-            model_snapshot.unselected).ResponseAtDistance(neighbor_sample.distance);
+            model_snapshot.unselected).ResponseAtDistance(neighbor_atom_sample.distance);
     }
     return response_value;
 }
 
 inline SecondStageAdjustedResponseCache BuildSecondStageAdjustedResponseCache(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const SecondStageModelSnapshot & model_snapshot)
 {
     SecondStageAdjustedResponseCache cache(context.size());
@@ -186,7 +186,7 @@ inline SecondStageAdjustedResponseCache BuildSecondStageAdjustedResponseCache(
 }
 
 inline LocalPotentialSampleList BuildSecondStageAdjustedSamples(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     std::size_t atom_index,
     const std::vector<double> & adjusted_response_list)
 {
@@ -211,7 +211,7 @@ inline LocalPotentialSampleList BuildSecondStageAdjustedSamples(
     return adjusted_sampling_entries;
 }
 inline LocalFittingResidualBaseline BuildLocalFittingResidualBaseline(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const FitState & state,
     const SecondStageModelSnapshot & model_snapshot)
 {
@@ -255,7 +255,7 @@ inline LocalFittingResidualBaseline BuildLocalFittingResidualBaseline(
 
 template <typename State>
 inline std::optional<LocalFittingResidualSample> EvaluateLocalFittingResidualSample(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const State & state,
     const LocalFittingObjectiveSampleRef & sample_ref,
     const SecondStageModelSnapshot & model_snapshot)
@@ -270,11 +270,11 @@ inline std::optional<LocalFittingResidualSample> EvaluateLocalFittingResidualSam
         neighbor_iter != atom_context.NeighborEnd(sample_ref.sample_index);
         ++neighbor_iter)
     {
-        const auto & neighbor_sample{ *neighbor_iter };
-        adjusted_response -= ResolveSecondStageNeighborModel(
-            neighbor_sample,
+        const auto & neighbor_atom_sample{ *neighbor_iter };
+        adjusted_response -= ResolveNeighborAtomModel(
+            neighbor_atom_sample,
             model_snapshot.selected,
-            model_snapshot.unselected).ResponseAtDistance(neighbor_sample.distance);
+            model_snapshot.unselected).ResponseAtDistance(neighbor_atom_sample.distance);
     }
     const auto expected_response{
         GetFitModel(state, sample_ref.atom_index).ResponseAtDistance(

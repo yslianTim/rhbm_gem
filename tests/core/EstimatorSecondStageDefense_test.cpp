@@ -224,7 +224,7 @@ rg::GaussianModel3D MakeGaussianWithCenterSignal(
     return rg::GaussianModel3D{ amplitude, width, offset };
 }
 
-std::pair<offset_detail::SecondStageLocalFittingContext,
+std::pair<offset_detail::SecondStageContext,
     offset_detail::SecondStageModelSnapshot>
 BuildJointOffsetEstimationFixture(
     const std::vector<GroupKey> & group_key_list,
@@ -238,7 +238,7 @@ BuildJointOffsetEstimationFixture(
             "Joint offset fixture input sizes are inconsistent.");
     }
 
-    offset_detail::SecondStageLocalFittingContext context;
+    offset_detail::SecondStageContext context;
     context.selected_atom_list.resize(model_list.size());
     for (std::size_t atom_index = 0;
         atom_index < model_list.size();
@@ -256,7 +256,7 @@ BuildJointOffsetEstimationFixture(
                         point.distance)),
             point
         });
-        atom_context.sample_neighbor_offset_list = { 0, 0 };
+        atom_context.neighbor_atom_sample_offset_list = { 0, 0 };
     }
     return {
         std::move(context),
@@ -266,7 +266,7 @@ BuildJointOffsetEstimationFixture(
 
 struct JointPolishFixture
 {
-    polish_detail::SecondStageLocalFittingContext context{};
+    polish_detail::SecondStageContext context{};
     polish_detail::FitState state{};
     std::vector<polish_detail::LocalFittingObjectiveSampleRef>
         sample_ref_list{};
@@ -301,7 +301,7 @@ JointPolishFixture BuildJointPolishFixture(
     {
         auto & atom_context{ fixture.context.at(atom_index) };
         atom_context.group_key = group_key_list.at(atom_index);
-        atom_context.sample_neighbor_offset_list.assign(
+        atom_context.neighbor_atom_sample_offset_list.assign(
             distance_list.size() + 1,
             0);
         for (const auto distance : distance_list)
@@ -2302,7 +2302,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetEstimatorReportsBuildAndEmptyFa
             { 2.0 })
     };
     empty_fixture.first.at(0).raw_sampling_entries.clear();
-    empty_fixture.first.at(0).sample_neighbor_offset_list.clear();
+    empty_fixture.first.at(0).neighbor_atom_sample_offset_list.clear();
     offset_detail::ReusableWeightedRidgeSolver empty_solver;
     const auto empty_result{
         offset_detail::EstimateJointOffsets(
@@ -3583,7 +3583,7 @@ TEST(EstimatorSecondStageDefenseTest,
         rg::GaussianModel3DUncertainty{ 0.20, 0.04, 0.05 }
     };
 
-    backtracking_detail::SecondStageLocalFittingContext context;
+    backtracking_detail::SecondStageContext context;
     context.selected_atom_list.resize(previous_model_list.size());
     backtracking_detail::FitState previous_state;
     backtracking_detail::FitState endpoint_state;
@@ -3683,7 +3683,7 @@ TEST(EstimatorSecondStageDefenseTest,
 TEST(EstimatorSecondStageDefenseTest,
     BacktrackingWorkspaceDistinguishesInvalidAndExhaustedSteps)
 {
-    backtracking_detail::SecondStageLocalFittingContext context;
+    backtracking_detail::SecondStageContext context;
     context.selected_atom_list.resize(1);
     context.at(0).group_key = 1;
 
@@ -3732,7 +3732,7 @@ TEST(EstimatorSecondStageDefenseTest,
     EXPECT_EQ(change_exhausted_step.trial_number, 1U);
     EXPECT_EQ(change_exhausted_step.candidate_patch, nullptr);
 
-    backtracking_detail::SecondStageLocalFittingContext empty_context;
+    backtracking_detail::SecondStageContext empty_context;
     backtracking_detail::FitState empty_state;
     backtracking_detail::BacktrackingWorkspace factor_workspace{
         empty_context,
@@ -3769,13 +3769,13 @@ TEST(EstimatorSecondStageDefenseTest,
 
 TEST(EstimatorSecondStageDefenseTest, ResidualBaselineAndOverlayAgreeForCandidate)
 {
-    residual_detail::SecondStageLocalFittingContext context;
+    residual_detail::SecondStageContext context;
     context.selected_atom_list.resize(1);
     context.selected_group_id_by_key.emplace(4, 0);
     context.selected_atom_index_list_by_group.emplace_back(
         std::vector<std::size_t>{ 0 });
     context.at(0).group_key = 4;
-    context.at(0).sample_neighbor_offset_list = { 0, 0, 0 };
+    context.at(0).neighbor_atom_sample_offset_list = { 0, 0, 0 };
 
     const rg::GaussianModel3D previous_model{ 8.0, 0.50, -0.10 };
     const rg::GaussianModel3D candidate_model{ 10.0, 0.60, 0.20 };

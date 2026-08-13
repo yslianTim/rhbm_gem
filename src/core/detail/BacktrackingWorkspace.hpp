@@ -13,7 +13,7 @@
 #include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/FitStateView.hpp"
 #include "core/detail/TransformedChange.hpp"
-#include "core/detail/SecondStageLocalFittingContext.hpp"
+#include "core/detail/SecondStageContext.hpp"
 
 namespace rhbm_gem::core::detail {
 
@@ -42,7 +42,7 @@ struct BacktrackingWorkspace
 {
     template <typename EndpointState>
     BacktrackingWorkspace(
-        const SecondStageLocalFittingContext & context,
+        const SecondStageContext & context,
         const FitState & previous_state,
         const EndpointState & endpoint_state,
         const std::vector<std::size_t> & active_index_list,

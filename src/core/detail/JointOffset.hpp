@@ -324,7 +324,7 @@ inline double CalculateJointOffsetRidgeDiagonal(double column_square_sum, double
 }
 
 inline JointOffsetBuildResult BuildJointOffsetSystem(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const std::vector<std::size_t> & active_index_list,
     const SecondStageModelSnapshot & model_snapshot,
     const std::vector<double> & ridge_multiplier_list,
@@ -398,18 +398,18 @@ inline JointOffsetBuildResult BuildJointOffsetSystem(
                 neighbor_iter != atom_context.NeighborEnd(sample_index);
                 ++neighbor_iter)
             {
-                const auto & neighbor_sample{ *neighbor_iter };
+                const auto & neighbor_atom_sample{ *neighbor_iter };
                 const auto & neighbor_model{
-                    ResolveSecondStageNeighborModel(
-                        neighbor_sample,
+                    ResolveNeighborAtomModel(
+                        neighbor_atom_sample,
                         model_snapshot.selected,
                         model_snapshot.unselected)
                 };
                 int neighbor_position{ -1 };
-                if (neighbor_sample.is_selected)
+                if (neighbor_atom_sample.is_selected)
                 {
                     const auto neighbor_position_iter{
-                        active_position_by_atom_index.find(neighbor_sample.atom_index)
+                        active_position_by_atom_index.find(neighbor_atom_sample.atom_index)
                     };
                     if (neighbor_position_iter != active_position_by_atom_index.end())
                     {
@@ -419,7 +419,7 @@ inline JointOffsetBuildResult BuildJointOffsetSystem(
                 else
                 {
                     const auto group_key{
-                        context.unselected_atom_list.at(neighbor_sample.atom_index).group_key
+                        context.unselected_atom_list.at(neighbor_atom_sample.atom_index).group_key
                     };
                     const auto position_iter{
                         active_position_by_group_key.find(group_key)
@@ -432,7 +432,7 @@ inline JointOffsetBuildResult BuildJointOffsetSystem(
                 if (neighbor_position < 0)
                 {
                     const auto response{
-                        neighbor_model.ResponseAtDistance(neighbor_sample.distance)
+                        neighbor_model.ResponseAtDistance(neighbor_atom_sample.distance)
                     };
                     if (!std::isfinite(response))
                     {
@@ -444,10 +444,10 @@ inline JointOffsetBuildResult BuildJointOffsetSystem(
                 }
 
                 const auto signal{
-                    neighbor_model.SignalAtDistance(neighbor_sample.distance)
+                    neighbor_model.SignalAtDistance(neighbor_atom_sample.distance)
                 };
                 const auto basis{
-                    neighbor_model.OffsetBasisAtDistance(neighbor_sample.distance)
+                    neighbor_model.OffsetBasisAtDistance(neighbor_atom_sample.distance)
                 };
                 if (!std::isfinite(signal) || !std::isfinite(basis))
                 {
@@ -650,7 +650,7 @@ inline bool IsJointOffsetObjectiveDeteriorated(double updated_objective, double 
 }
 
 inline JointOffsetSolveResult EstimateJointOffsets(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const std::vector<std::size_t> & active_index_list,
     const SecondStageModelSnapshot & model_snapshot,
     const std::vector<double> & ridge_multiplier_list,

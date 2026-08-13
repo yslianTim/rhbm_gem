@@ -18,7 +18,7 @@
 
 #include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/SeedRepair.hpp"
-#include "core/detail/SecondStageLocalFittingContext.hpp"
+#include "core/detail/SecondStageContext.hpp"
 #include "data/detail/AtomClassifier.hpp"
 
 namespace rhbm_gem::core::detail {
@@ -46,16 +46,16 @@ struct SecondStageInitialStateBuildResult
 };
 
 
-inline SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(
+inline SecondStageContext BuildSecondStageContext(
     ModelObject & model_object,
     const FitOptions & options)
 {
-    SecondStageLocalFittingContext context;
+    SecondStageContext context;
     const auto & atom_list{ model_object.GetSelectedAtoms() };
     context.selected_atom_list.reserve(atom_list.size());
     for (auto * atom : atom_list)
     {
-        context.selected_atom_list.emplace_back(SecondStageAtomContext{ atom });
+        context.selected_atom_list.emplace_back(AtomContext{ atom });
     }
     const auto analysis_view{ model_object.GetAnalysisView() };
     std::unordered_map<const AtomObject *, std::size_t> atom_index_map;
@@ -106,10 +106,10 @@ inline SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(
         const auto neighbor_atom_list{ atom->FindNeighborAtoms(kSecondStageNeighborAtomSearchRange) };
         std::unordered_set<const AtomObject *> neighbor_atom_set;
 
-        atom_context.sample_neighbor_offset_list.reserve(
+        atom_context.neighbor_atom_sample_offset_list.reserve(
             atom_context.raw_sampling_entries.size() + 1);
-        atom_context.sample_neighbor_offset_list.emplace_back(0);
-        atom_context.sample_neighbor_list.reserve(
+        atom_context.neighbor_atom_sample_offset_list.emplace_back(0);
+        atom_context.neighbor_atom_sample_list.reserve(
             atom_context.raw_sampling_entries.size() *
             neighbor_atom_list.size());
         for (std::size_t sample_index = 0;
@@ -133,8 +133,8 @@ inline SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(
                 const auto selected_iter{ atom_index_map.find(neighbor_atom) };
                 if (selected_iter != atom_index_map.end())
                 {
-                    atom_context.sample_neighbor_list.emplace_back(
-                        SecondStageNeighborSample{
+                    atom_context.neighbor_atom_sample_list.emplace_back(
+                        NeighborAtomSample{
                             true,
                             selected_iter->second,
                             distance
@@ -142,10 +142,12 @@ inline SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(
                     continue;
                 }
 
-                auto contributor_iter{ unselected_atom_index_map.find(neighbor_atom) };
-                if (contributor_iter == unselected_atom_index_map.end())
+                auto unselected_atom_contributor_iter{
+                    unselected_atom_index_map.find(neighbor_atom)
+                };
+                if (unselected_atom_contributor_iter == unselected_atom_index_map.end())
                 {
-                    const auto contributor_index{
+                    const auto unselected_atom_contributor_index{
                         context.unselected_atom_list.size()
                     };
                     const auto group_key{
@@ -155,7 +157,7 @@ inline SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(
                         context.selected_group_id_by_key.find(group_key)
                     };
                     context.unselected_atom_list.emplace_back(
-                        SecondStageUnselectedContributor{
+                        UnselectedAtomContributor{
                             neighbor_atom,
                             group_key,
                             selected_group_iter ==
@@ -164,19 +166,19 @@ inline SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(
                                 std::optional<std::size_t>{
                                     selected_group_iter->second }
                         });
-                    contributor_iter = unselected_atom_index_map.emplace(
+                    unselected_atom_contributor_iter = unselected_atom_index_map.emplace(
                         neighbor_atom,
-                        contributor_index).first;
+                        unselected_atom_contributor_index).first;
                 }
-                atom_context.sample_neighbor_list.emplace_back(
-                    SecondStageNeighborSample{
+                atom_context.neighbor_atom_sample_list.emplace_back(
+                    NeighborAtomSample{
                         false,
-                        contributor_iter->second,
+                        unselected_atom_contributor_iter->second,
                         distance
                     });
             }
-            atom_context.sample_neighbor_offset_list.emplace_back(
-                atom_context.sample_neighbor_list.size());
+            atom_context.neighbor_atom_sample_offset_list.emplace_back(
+                atom_context.neighbor_atom_sample_list.size());
         }
         atom_context.neighbor_count_for_peeling =
             static_cast<int>(neighbor_atom_set.size());
@@ -187,7 +189,7 @@ inline SecondStageLocalFittingContext BuildSecondStageLocalFittingContext(
 
 inline void StoreSecondStageNeighborCounts(
     ModelObject & model_object,
-    const SecondStageLocalFittingContext & context)
+    const SecondStageContext & context)
 {
     auto analysis{ model_object.EditAnalysis() };
     for (const auto & atom_context : context)
@@ -213,7 +215,7 @@ inline std::optional<GaussianModel3DWithUncertainty> BuildValidGaussianParameter
 }
 
 inline std::optional<SecondStageInitialStateBuildResult> BuildInitialFitState(
-    SecondStageLocalFittingContext & context,
+    SecondStageContext & context,
     bool & unselected_seed_failure)
 {
     unselected_seed_failure = false;
@@ -296,10 +298,12 @@ inline std::optional<SecondStageInitialStateBuildResult> BuildInitialFitState(
         i < context.unselected_atom_list.size();
         i++)
     {
-        auto & contributor{ context.unselected_atom_list.at(i) };
+        auto & unselected_atom_contributor{
+            context.unselected_atom_list.at(i)
+        };
         std::optional<GaussianModel3DWithUncertainty> group_median;
         const auto group_median_iter{
-            median_by_group.find(contributor.group_key)
+            median_by_group.find(unselected_atom_contributor.group_key)
         };
         if (group_median_iter != median_by_group.end())
         {
@@ -320,8 +324,8 @@ inline std::optional<SecondStageInitialStateBuildResult> BuildInitialFitState(
             return std::nullopt;
         }
 
-        contributor.initial_seed = selection->model;
-        contributor.seed_source = selection->source;
+        unselected_atom_contributor.initial_seed = selection->model;
+        unselected_atom_contributor.seed_source = selection->source;
         build_result.unselected_selection_record_list.emplace_back(
             SecondStageSeedSelectionRecord{
                 i,

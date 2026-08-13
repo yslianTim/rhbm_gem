@@ -20,7 +20,7 @@
 #include "core/detail/TransformedChange.hpp"
 #include "core/detail/ReusableWeightedRidgeSolver.hpp"
 #include "core/detail/ScopedEigenThreadCount.hpp"
-#include "core/detail/SecondStageLocalFittingContext.hpp"
+#include "core/detail/SecondStageContext.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -77,8 +77,8 @@ using detail::LocalFittingResidualBaseline;
 using detail::FitState;
 using detail::FitStatePatch;
 using detail::FitStateView;
-using detail::SecondStageAtomContext;
-using detail::SecondStageLocalFittingContext;
+using detail::AtomContext;
+using detail::SecondStageContext;
 using detail::SecondStageModelSnapshot;
 using detail::ReusableWeightedRidgeSolver;
 using detail::ScopedEigenThreadCount;
@@ -130,7 +130,7 @@ using detail::BuildStatePatch;
 using detail::kLocalFittingFitRangeWeight;
 using detail::kLocalFittingTailValidationWeight;
 using detail::kLocalFittingOffsetPlausibilityPenaltyWeight;
-using detail::BuildSecondStageLocalFittingContext;
+using detail::BuildSecondStageContext;
 using detail::StoreSecondStageNeighborCounts;
 using detail::BuildInitialFitState;
 using detail::GetSecondStageSeedSourceText;
@@ -224,7 +224,7 @@ struct LocalFittingIterationProgress
 using LocalFittingProgressColumnWidths = std::array<std::size_t, 6>;
 
 detail::GraphTopology BuildGraphTopology(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const FitState & initial_state,
     const FitOptions & options)
 {
@@ -311,30 +311,30 @@ detail::GraphTopology BuildGraphTopology(
                 neighbor_iter != atom_context.NeighborEnd(sample_index);
                 ++neighbor_iter)
             {
-                const auto & neighbor_sample{ *neighbor_iter };
-                const auto neighbor_evaluation{ neighbor_sample.is_selected ?
+                const auto & neighbor_atom_sample{ *neighbor_iter };
+                const auto neighbor_evaluation{ neighbor_atom_sample.is_selected ?
                     evaluate_model(
-                        selected_model_invariants.at(neighbor_sample.atom_index),
-                        neighbor_sample.distance) :
+                        selected_model_invariants.at(neighbor_atom_sample.atom_index),
+                        neighbor_atom_sample.distance) :
                     evaluate_model(
-                        unselected_model_invariants.at(neighbor_sample.atom_index),
-                        neighbor_sample.distance) };
+                        unselected_model_invariants.at(neighbor_atom_sample.atom_index),
+                        neighbor_atom_sample.distance) };
                 const auto jacobian{
                     neighbor_evaluation.has_value() ?
                         neighbor_evaluation->jacobian : invalid_jacobian
                 };
-                if (neighbor_sample.is_selected)
+                if (neighbor_atom_sample.is_selected)
                 {
                     participant_list.emplace_back(
                         detail::GraphParticipant{
-                            neighbor_sample.atom_index,
+                            neighbor_atom_sample.atom_index,
                             jacobian
                         });
                     continue;
                 }
                 const auto selected_group_id{
                     context.unselected_atom_list.at(
-                        neighbor_sample.atom_index).selected_group_id
+                        neighbor_atom_sample.atom_index).selected_group_id
                 };
                 if (!selected_group_id.has_value()) continue;
                 for (const auto selected_index :
@@ -418,7 +418,7 @@ void LogSecondStageSeedSelections(
 }
 
 void LogUnselectedSecondStageSeedSelections(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const std::vector<SecondStageSeedSelectionRecord> & selection_record_list,
     const FitOptions & options)
 {
@@ -447,13 +447,13 @@ void LogUnselectedSecondStageSeedSelections(
 
     for (const auto & record : selection_record_list)
     {
-        const auto & contributor{
+        const auto & unselected_atom_contributor{
             context.unselected_atom_list.at(record.atom_index)
         };
         std::ostringstream detail_message;
         detail_message
             << "Unselected second-stage neighbor seed selection: serial ID = "
-            << contributor.atom->GetSerialID()
+            << unselected_atom_contributor.atom->GetSerialID()
             << ", source = " << GetSecondStageSeedSourceText(record.source)
             << std::scientific << std::setprecision(2)
             << ", seed A/B/C = "
@@ -590,7 +590,7 @@ void LogLocalFittingObjectiveDomain(
 
 void ApplyFitState(
     ModelObject & model_object,
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const FitState & iteration_state)
 {
     if (context.size() != iteration_state.size())
@@ -736,7 +736,7 @@ void LogLocalFittingTerminalFallback(
 
 void FinishLocalFittingWithNoActiveAtoms(
     ModelObject & model_object,
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const FitState & state,
     const FitOptions & options,
     std::size_t accepted_iteration_count,
@@ -1284,7 +1284,7 @@ bool RunSecondStageLocalFitting(
     ModelObject & model_object,
     const FitOptions & options)
 {
-    auto context{ BuildSecondStageLocalFittingContext(model_object, options) };
+    auto context{ BuildSecondStageContext(model_object, options) };
     StoreSecondStageNeighborCounts(model_object, context);
     const auto atom_size{ context.size() };
     if (!options.quiet_mode)
@@ -1361,7 +1361,7 @@ bool RunSecondStageLocalFitting(
             context.begin(),
             context.end(),
             std::size_t{ 0 },
-            [](std::size_t count, const SecondStageAtomContext & atom_context)
+            [](std::size_t count, const AtomContext & atom_context)
             {
                 return count + atom_context.raw_sampling_entries.size();
             })

@@ -27,7 +27,7 @@
 #include "core/detail/TrustRegion.hpp"
 #include "core/detail/ReusableWeightedRidgeSolver.hpp"
 #include "core/detail/ScopedEigenThreadCount.hpp"
-#include "core/detail/SecondStageLocalFittingContext.hpp"
+#include "core/detail/SecondStageContext.hpp"
 
 namespace rhbm_gem::core::detail {
 
@@ -80,7 +80,7 @@ struct BaseProposalBuildResult
 };
 
 inline BaseProposalBuildResult BuildSharedOffsetBaseProposal(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const FitState & outer_previous_state,
     const FitState & raw_state,
     const ClusterKey & key,
@@ -329,7 +329,7 @@ inline bool ShouldGrowTrustRegion(const LocalFittingObjectiveAttemptDiagnostic &
 }
 
 inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const SecondStageModelSnapshot & previous_model_snapshot,
     const LocalFittingResidualBaseline & residual_baseline,
     const ClusterKey & key,
@@ -654,7 +654,7 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
 }
 
 inline CandidateSelection SelectClusterCandidates(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const SecondStageModelSnapshot & previous_model_snapshot,
     const LocalFittingResidualBaseline & residual_baseline,
     const CouplingGraphPartition & partition,
@@ -822,7 +822,7 @@ inline FitStatePatch BuildStatePatch(
 }
 
 inline bool TryBacktrackCombinedCandidate(
-    const SecondStageLocalFittingContext & context,
+    const SecondStageContext & context,
     const SecondStageModelSnapshot & previous_model_snapshot,
     const LocalFittingResidualBaseline & residual_baseline,
     const CouplingGraphPartition & partition,
