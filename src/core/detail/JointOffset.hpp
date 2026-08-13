@@ -33,7 +33,6 @@ namespace rhbm_gem::core::detail {
 constexpr int kRobustLossMaximumIterations{ 50 };
 constexpr double kRobustLossCutoffMultiplier{ 1.345 };
 constexpr double kJointOffsetRidgeRatio{ 1.0e-3 };
-constexpr double kSuspiciousJointOffsetRidgeMultiplier{ 10.0 };
 constexpr double kJointOffsetCollinearityOverlapThreshold{ 0.98 };
 constexpr double kCollinearJointOffsetRidgeMultiplier{ 10.0 };
 constexpr double kJointOffsetConditioningPivotRatioThreshold{ 1.0e-8 };

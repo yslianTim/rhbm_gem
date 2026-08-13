@@ -10,6 +10,7 @@
 #include "core/detail/LocalFittingHealth.hpp"
 #include "core/detail/FitStateView.hpp"
 #include "core/detail/TransformedChange.hpp"
+#include "core/detail/SuspiciousUpdate.hpp"
 
 namespace rhbm_gem::core::detail {
 
@@ -44,7 +45,7 @@ struct LocalFittingTerminalSummary
 
 inline TerminalPersistentFailureMap UpdatePersistentTerminalFailureState(
     const std::vector<ClusterKey> & accepted_key_list,
-    const std::vector<char> & suspicious_atom_mask,
+    const SuspiciousUpdateMask & suspicious_atom_mask,
     const LocalFittingClusterHealthMap & health_by_key,
     const FitState & assembled_state,
     const FitState & previous_state,
@@ -60,14 +61,9 @@ inline TerminalPersistentFailureMap UpdatePersistentTerminalFailureState(
             continue;
         }
 
-        PersistentSuspiciousRollbackReason cluster_suspicious_atom_index_list;
-        for (const auto atom_index : key)
-        {
-            if (suspicious_atom_mask.at(atom_index) != 0)
-            {
-                cluster_suspicious_atom_index_list.emplace_back(atom_index);
-            }
-        }
+        auto cluster_suspicious_atom_index_list{
+            CollectSuspiciousAtomIndices(key, suspicious_atom_mask)
+        };
         PersistentTerminalFailureReason reason;
         if (!cluster_suspicious_atom_index_list.empty())
         {

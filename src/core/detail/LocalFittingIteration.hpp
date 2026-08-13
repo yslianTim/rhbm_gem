@@ -1,6 +1,5 @@
 #pragma once
 
-#include <algorithm>
 #include <cstddef>
 #include <exception>
 #include <optional>
@@ -17,7 +16,7 @@
 #include "core/detail/LocalFittingHealth.hpp"
 #include "core/detail/ResidualEvaluation.hpp"
 #include "core/detail/FitStateView.hpp"
-#include "core/detail/LocalFittingSuspiciousUpdate.hpp"
+#include "core/detail/SuspiciousUpdate.hpp"
 #include "core/detail/ReusableWeightedRidgeSolver.hpp"
 #include "core/detail/ScopedEigenThreadCount.hpp"
 #include "core/detail/SecondStageContext.hpp"
@@ -27,7 +26,7 @@ namespace rhbm_gem::core::detail {
 struct LocalFittingIterationResult
 {
     FitState state{};
-    std::vector<char> rollback_atom_mask{};
+    SuspiciousUpdateMask rollback_atom_mask{};
     LocalFittingClusterHealthMap health_by_key{};
 };
 
@@ -41,9 +40,7 @@ struct LocalAtomRefitResult
 
 } // namespace local_fitting_iteration_internal
 
-
-inline std::optional<local_fitting_iteration_internal::LocalAtomRefitResult>
-FitAtomWithJointOffsetFallback(
+inline std::optional<local_fitting_iteration_internal::LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
     const SecondStageContext & context,
     std::size_t atom_index,
     const LocalGaussianResult & previous_result,
@@ -53,10 +50,7 @@ FitAtomWithJointOffsetFallback(
 {
     using local_fitting_iteration_internal::LocalAtomRefitResult;
     auto adjusted_sampling_entries{
-        BuildSecondStageAdjustedSamples(
-            context,
-            atom_index,
-            adjusted_response_list)
+        BuildSecondStageAdjustedSamples(context, atom_index, adjusted_response_list)
     };
     const auto & previous_model{ previous_result.mdpde.GetModel() };
     const auto previous_baseline{
@@ -131,35 +125,6 @@ FitAtomWithJointOffsetFallback(
     return LocalAtomRefitResult{ std::move(result), false };
 }
 
-inline void ExpandPostRefitRollbackClusters(
-    const std::vector<ClusterKey> & cluster_key_list,
-    const std::vector<std::size_t> & seed_atom_index_list,
-    std::vector<char> & rollback_mask)
-{
-    if (seed_atom_index_list.empty()) return;
-
-    for (const auto & key : cluster_key_list)
-    {
-        const auto is_affected{
-            std::any_of(
-                key.begin(),
-                key.end(),
-                [&](std::size_t atom_index)
-                {
-                    return std::find(
-                        seed_atom_index_list.begin(),
-                        seed_atom_index_list.end(),
-                        atom_index) != seed_atom_index_list.end();
-                })
-        };
-        if (!is_affected) continue;
-        for (const auto atom_index : key)
-        {
-            rollback_mask.at(atom_index) = 1;
-        }
-    }
-}
-
 inline LocalFittingIterationResult RunLocalFittingIteration(
     const SecondStageContext & context,
     const std::vector<ClusterKey> & cluster_key_list,
@@ -181,8 +146,7 @@ inline LocalFittingIterationResult RunLocalFittingIteration(
     const auto log_debug_diagnostics{
         !options.quiet_mode && is_debug_logging_enabled
     };
-    std::vector<JointOffsetSolveResult>
-        joint_offset_result_list(cluster_key_list.size());
+    std::vector<JointOffsetSolveResult> joint_offset_result_list(cluster_key_list.size());
     std::vector<std::exception_ptr> joint_offset_exception_list(cluster_key_list.size());
     const auto solve_joint_offset = [&](std::size_t cluster_position)
     {
@@ -200,8 +164,7 @@ inline LocalFittingIterationResult RunLocalFittingIteration(
         }
         catch (...)
         {
-            joint_offset_exception_list.at(cluster_position) =
-                std::current_exception();
+            joint_offset_exception_list.at(cluster_position) = std::current_exception();
         }
     };
 #ifdef USE_OPENMP
@@ -214,9 +177,7 @@ inline LocalFittingIterationResult RunLocalFittingIteration(
     {
         ScopedEigenThreadCount eigen_thread_guard{ 1 };
 #pragma omp parallel for schedule(dynamic) num_threads(options.thread_size)
-        for (std::size_t cluster_position = 0;
-            cluster_position < cluster_key_list.size();
-            cluster_position++)
+        for (std::size_t cluster_position = 0; cluster_position < cluster_key_list.size(); cluster_position++)
         {
             solve_joint_offset(cluster_position);
         }
@@ -224,9 +185,7 @@ inline LocalFittingIterationResult RunLocalFittingIteration(
     else
 #endif
     {
-        for (std::size_t cluster_position = 0;
-            cluster_position < cluster_key_list.size();
-            cluster_position++)
+        for (std::size_t cluster_position = 0; cluster_position < cluster_key_list.size(); cluster_position++)
         {
             solve_joint_offset(cluster_position);
         }
@@ -237,9 +196,7 @@ inline LocalFittingIterationResult RunLocalFittingIteration(
     }
 
     LocalFittingClusterHealthMap health_by_key;
-    for (std::size_t cluster_position = 0;
-        cluster_position < cluster_key_list.size();
-        cluster_position++)
+    for (std::size_t cluster_position = 0; cluster_position < cluster_key_list.size(); cluster_position++)
     {
         const auto & key{ cluster_key_list.at(cluster_position) };
         const auto & result{ joint_offset_result_list.at(cluster_position) };
@@ -254,20 +211,18 @@ inline LocalFittingIterationResult RunLocalFittingIteration(
     }
 
     auto iteration_state{ previous_state };
-    std::vector<char> rollback_atom_mask(selected_atom_size, 0);
+    SuspiciousUpdateMask rollback_atom_mask(selected_atom_size, 0);
     std::vector<GroupKey> group_key_by_atom_index;
     group_key_by_atom_index.reserve(context.size());
     for (const auto & atom_context : context)
     {
         group_key_by_atom_index.emplace_back(atom_context.group_key);
     }
-    for (std::size_t cluster_position = 0;
-        cluster_position < cluster_key_list.size();
-        cluster_position++)
+    for (std::size_t cluster_position = 0; cluster_position < cluster_key_list.size(); cluster_position++)
     {
         const auto & key{ cluster_key_list.at(cluster_position) };
         std::vector<GroupKey> group_key_by_position;
-        std::vector<char> suspicious_seed_mask(key.size(), 0);
+        SuspiciousUpdateMask suspicious_seed_mask(key.size(), 0);
         group_key_by_position.reserve(key.size());
         for (std::size_t position = 0; position < key.size(); position++)
         {
@@ -294,8 +249,7 @@ inline LocalFittingIterationResult RunLocalFittingIteration(
     for (std::size_t atom_index = 0; atom_index < rollback_atom_mask.size(); atom_index++)
     {
         if (rollback_atom_mask.at(atom_index) == 0) continue;
-        current_model_snapshot.selected.at(atom_index) =
-            previous_state.at(atom_index).mdpde.GetModel();
+        current_model_snapshot.selected.at(atom_index) = previous_state.at(atom_index).mdpde.GetModel();
     }
 
     auto refit_model_snapshot{
@@ -304,14 +258,10 @@ inline LocalFittingIterationResult RunLocalFittingIteration(
             current_model_snapshot.selected)
     };
     const auto refit_model_bundle{
-        BuildSecondStageModelSnapshot(
-            context,
-            std::move(refit_model_snapshot))
+        BuildSecondStageModelSnapshot(context, std::move(refit_model_snapshot))
     };
     const auto refit_response_cache{
-        BuildSecondStageAdjustedResponseCache(
-            context,
-            refit_model_bundle)
+        BuildSecondStageAdjustedResponseCache(context, refit_model_bundle)
     };
     std::vector<std::size_t> refit_atom_index_list;
     for (const auto & key : cluster_key_list)
@@ -324,8 +274,7 @@ inline LocalFittingIterationResult RunLocalFittingIteration(
             }
         }
     }
-    std::vector<std::optional<LocalAtomRefitResult>> refit_result_list(
-        refit_atom_index_list.size());
+    std::vector<std::optional<LocalAtomRefitResult>> refit_result_list(refit_atom_index_list.size());
     std::vector<std::exception_ptr> refit_exception_list(refit_atom_index_list.size());
 #ifdef USE_OPENMP
     const bool parallel_refits{
@@ -365,9 +314,7 @@ inline LocalFittingIterationResult RunLocalFittingIteration(
     {
         ScopedEigenThreadCount eigen_thread_guard{ 1 };
 #pragma omp parallel for schedule(dynamic) num_threads(options.thread_size)
-        for (std::size_t refit_position = 0;
-            refit_position < refit_atom_index_list.size();
-            refit_position++)
+        for (std::size_t refit_position = 0; refit_position < refit_atom_index_list.size(); refit_position++)
         {
             run_refit(refit_position);
         }
@@ -375,9 +322,7 @@ inline LocalFittingIterationResult RunLocalFittingIteration(
     else
 #endif
     {
-        for (std::size_t refit_position = 0;
-            refit_position < refit_atom_index_list.size();
-            refit_position++)
+        for (std::size_t refit_position = 0; refit_position < refit_atom_index_list.size(); refit_position++)
         {
             run_refit(refit_position);
         }
@@ -410,7 +355,7 @@ inline LocalFittingIterationResult RunLocalFittingIteration(
             iteration_state.at(atom_index) = std::move(refit_result->result);
         }
     }
-    ExpandPostRefitRollbackClusters(
+    ExpandPostRefitSuspiciousClusters(
         cluster_key_list,
         post_refit_suspicious_seed_atom_index_list,
         rollback_atom_mask);
@@ -426,7 +371,5 @@ inline LocalFittingIterationResult RunLocalFittingIteration(
     iteration_result.health_by_key = std::move(health_by_key);
     return iteration_result;
 }
-
-
 
 } // namespace rhbm_gem::core::detail

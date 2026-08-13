@@ -26,6 +26,7 @@
 #include "core/detail/ReusableWeightedRidgeSolver.hpp"
 #include "core/detail/ScopedEigenThreadCount.hpp"
 #include "core/detail/SecondStageContext.hpp"
+#include "core/detail/SuspiciousUpdate.hpp"
 
 namespace rhbm_gem::core::detail {
 
@@ -339,7 +340,7 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
     const FitState & raw_state,
     const std::vector<Eigen::Vector3d> & previous_transformed_estimation_list,
     const std::vector<Eigen::Vector3d> & raw_transformed_estimation_list,
-    const std::vector<char> & rollback_atom_mask,
+    const SuspiciousUpdateMask & rollback_atom_mask,
     const std::vector<double> & ridge_multiplier_list,
     const ObjectiveDomain & objective_domain,
     const ObjectiveByKey & previous_objective_by_key,
@@ -373,13 +374,7 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
     objective_state.emplace(key, result.objective_state);
     const FitStateView previous_state_view{ previous_state };
     const auto contains_suspicious_atom{
-        std::any_of(
-            key.begin(),
-            key.end(),
-            [&](std::size_t atom_index)
-            {
-                return rollback_atom_mask.at(atom_index) != 0;
-            })
+        HasSuspiciousAtom(key, rollback_atom_mask)
     };
     std::optional<BaseProposal> base_proposal;
     if (!contains_suspicious_atom)
@@ -662,7 +657,7 @@ inline CandidateSelection SelectClusterCandidates(
     const FitState & raw_state,
     const std::vector<Eigen::Vector3d> & previous_transformed_estimation_list,
     const std::vector<Eigen::Vector3d> & raw_transformed_estimation_list,
-    const std::vector<char> & rollback_atom_mask,
+    const SuspiciousUpdateMask & rollback_atom_mask,
     const std::vector<double> & ridge_multiplier_list,
     const std::vector<ClusterKey> & unchanged_state_exhausted_key_list,
     const ObjectiveDomain & objective_domain,

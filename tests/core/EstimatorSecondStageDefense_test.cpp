@@ -23,7 +23,7 @@
 #include "core/detail/Objective.hpp"
 #include "core/detail/ResidualEvaluation.hpp"
 #include "core/detail/SeedRepair.hpp"
-#include "core/detail/LocalFittingSuspiciousUpdate.hpp"
+#include "core/detail/SuspiciousUpdate.hpp"
 #include "core/detail/LocalFittingTerminalFailure.hpp"
 #include "core/detail/TrustRegion.hpp"
 #include "core/detail/TransformedChange.hpp"

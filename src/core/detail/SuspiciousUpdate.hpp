@@ -31,6 +31,78 @@ enum class SuspiciousGaussianReason
     AmplitudeOffsetCompensation
 };
 
+using SuspiciousUpdateMask = std::vector<char>;
+
+constexpr double kSuspiciousJointOffsetRidgeMultiplier{ 10.0 };
+
+inline std::size_t CountSuspiciousAtoms(const SuspiciousUpdateMask & suspicious_mask)
+{
+    return static_cast<std::size_t>(std::count_if(
+        suspicious_mask.begin(),
+        suspicious_mask.end(),
+        [](char is_suspicious)
+        {
+            return is_suspicious != 0;
+        }));
+}
+
+inline bool HasSuspiciousAtom(
+    const std::vector<std::size_t> & atom_index_list,
+    const SuspiciousUpdateMask & suspicious_mask)
+{
+    return std::any_of(
+        atom_index_list.begin(),
+        atom_index_list.end(),
+        [&](std::size_t atom_index)
+        {
+            return suspicious_mask.at(atom_index) != 0;
+        });
+}
+
+inline std::vector<std::size_t> CollectSuspiciousAtomIndices(
+    const std::vector<std::size_t> & atom_index_list,
+    const SuspiciousUpdateMask & suspicious_mask)
+{
+    std::vector<std::size_t> suspicious_atom_index_list;
+    suspicious_atom_index_list.reserve(atom_index_list.size());
+    for (const auto atom_index : atom_index_list)
+    {
+        if (suspicious_mask.at(atom_index) != 0)
+        {
+            suspicious_atom_index_list.emplace_back(atom_index);
+        }
+    }
+    return suspicious_atom_index_list;
+}
+
+inline std::vector<double> BuildSuspiciousJointOffsetRidgeMultiplierList(
+    std::size_t atom_size,
+    const SuspiciousUpdateMask & suspicious_mask)
+{
+    std::vector<double> ridge_multiplier_list(atom_size, 1.0);
+    for (std::size_t atom_index = 0; atom_index < atom_size; atom_index++)
+    {
+        if (suspicious_mask.at(atom_index) != 0)
+        {
+            ridge_multiplier_list.at(atom_index) = kSuspiciousJointOffsetRidgeMultiplier;
+        }
+    }
+    return ridge_multiplier_list;
+}
+
+inline void ClearSuspiciousUpdateMaskForClusters(
+    const std::vector<std::vector<std::size_t>> & cluster_key_list,
+    SuspiciousUpdateMask & suspicious_mask)
+{
+    for (const auto & key : cluster_key_list)
+    {
+        for (const auto atom_index : key)
+        {
+            suspicious_mask.at(atom_index) = 0;
+        }
+    }
+}
+
 namespace local_fitting_suspicious_internal {
 
 constexpr double kSuspiciousProfileInnermostSignFlipRatio{ 0.25 };
@@ -437,9 +509,9 @@ inline SuspiciousGaussianReason EvaluateSuspiciousPostRefitUpdate(
         true);
 }
 
-inline std::vector<char> ExpandSuspiciousSharedOffsetGroups(
+inline SuspiciousUpdateMask ExpandSuspiciousSharedOffsetGroups(
     const std::vector<GroupKey> & group_key_by_position,
-    const std::vector<char> & suspicious_seed_mask)
+    const SuspiciousUpdateMask & suspicious_seed_mask)
 {
     if (group_key_by_position.size() != suspicious_seed_mask.size())
     {
@@ -456,7 +528,7 @@ inline std::vector<char> ExpandSuspiciousSharedOffsetGroups(
         has_suspicious_seed_by_group[group_key_by_position.at(position)] = true;
     }
 
-    std::vector<char> rollback_mask(group_key_by_position.size(), 0);
+    SuspiciousUpdateMask rollback_mask(group_key_by_position.size(), 0);
     for (std::size_t position = 0;
         position < group_key_by_position.size();
         position++)
@@ -471,6 +543,35 @@ inline std::vector<char> ExpandSuspiciousSharedOffsetGroups(
         }
     }
     return rollback_mask;
+}
+
+inline void ExpandPostRefitSuspiciousClusters(
+    const std::vector<std::vector<std::size_t>> & cluster_key_list,
+    const std::vector<std::size_t> & seed_atom_index_list,
+    SuspiciousUpdateMask & suspicious_mask)
+{
+    if (seed_atom_index_list.empty()) return;
+
+    for (const auto & key : cluster_key_list)
+    {
+        const auto is_affected{
+            std::any_of(
+                key.begin(),
+                key.end(),
+                [&](std::size_t atom_index)
+                {
+                    return std::find(
+                        seed_atom_index_list.begin(),
+                        seed_atom_index_list.end(),
+                        atom_index) != seed_atom_index_list.end();
+                })
+        };
+        if (!is_affected) continue;
+        for (const auto atom_index : key)
+        {
+            suspicious_mask.at(atom_index) = 1;
+        }
+    }
 }
 
 } // namespace rhbm_gem::core::detail

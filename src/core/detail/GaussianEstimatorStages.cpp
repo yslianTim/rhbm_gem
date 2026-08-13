@@ -10,6 +10,7 @@
 #include "core/detail/JointOffset.hpp"
 #include "core/detail/JointPolish.hpp"
 #include "core/detail/LocalFittingPerformanceCounters.hpp"
+#include "core/detail/SuspiciousUpdate.hpp"
 #include "core/detail/SeedRepair.hpp"
 #include "core/detail/SecondStageInitialization.hpp"
 #include "core/detail/TrustRegion.hpp"
@@ -1353,7 +1354,7 @@ bool RunSecondStageLocalFitting(
         performance_counters.full_state_materialization_count++;
     }
 
-    std::vector<char> rollback_atom_mask(atom_size, 0);
+    detail::SuspiciousUpdateMask rollback_atom_mask(atom_size, 0);
     PersistentTerminalFailureStateMap persistent_terminal_failure_state_by_key;
     LocalFittingTerminalSummary terminal_summary;
     ClusterObjectiveStateMap cluster_objective_state;
@@ -1411,13 +1412,11 @@ bool RunSecondStageLocalFitting(
             cluster_objective_state);
         trust_region_state.Reconcile(cluster_key_list);
 
-        std::vector<double> joint_offset_ridge_multiplier_list(atom_size, 1.0);
-        for (std::size_t atom_index = 0; atom_index < atom_size; atom_index++)
-        {
-            if (rollback_atom_mask.at(atom_index) == 0) continue;
-            joint_offset_ridge_multiplier_list.at(atom_index) =
-                detail::kSuspiciousJointOffsetRidgeMultiplier;
-        }
+        const auto joint_offset_ridge_multiplier_list{
+            detail::BuildSuspiciousJointOffsetRidgeMultiplierList(
+                atom_size,
+                rollback_atom_mask)
+        };
 
         const auto iteration_phase_start{ std::chrono::steady_clock::now() };
         auto iteration_result{
@@ -1437,13 +1436,7 @@ bool RunSecondStageLocalFitting(
         const auto current_health_by_key{ std::move(iteration_result.health_by_key) };
         rollback_atom_mask = std::move(iteration_result.rollback_atom_mask);
         const auto iteration_suspicious_atom_count{
-            static_cast<std::size_t>(std::count_if(
-                rollback_atom_mask.begin(),
-                rollback_atom_mask.end(),
-                [](char is_suspicious)
-                {
-                    return is_suspicious != 0;
-                }))
+            detail::CountSuspiciousAtoms(rollback_atom_mask)
         };
         const auto has_suspicious_offset_fallback{ iteration_suspicious_atom_count > 0 };
 
@@ -1459,13 +1452,7 @@ bool RunSecondStageLocalFitting(
                 continue;
             }
             const auto contains_suspicious_atom{
-                std::any_of(
-                    key.begin(),
-                    key.end(),
-                    [&](std::size_t atom_index)
-                    {
-                        return rollback_atom_mask.at(atom_index) != 0;
-                    })
+                detail::HasSuspiciousAtom(key, rollback_atom_mask)
             };
             if (!contains_suspicious_atom)
             {
@@ -1616,13 +1603,9 @@ bool RunSecondStageLocalFitting(
             assembled_polish_provenance);
         if (!terminal_key_list.empty())
         {
-            for (const auto & key : terminal_key_list)
-            {
-                for (const auto atom_index : key)
-                {
-                    rollback_atom_mask.at(atom_index) = 0;
-                }
-            }
+            detail::ClearSuspiciousUpdateMaskForClusters(
+                terminal_key_list,
+                rollback_atom_mask);
             auto remaining_active_index_list{
                 BuildEligibleLocalFittingActiveIndexList(terminal_fallback_atom_mask)
             };

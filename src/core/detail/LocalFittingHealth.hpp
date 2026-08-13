@@ -19,11 +19,9 @@ struct LocalFittingClusterHealth
     bool is_refit_stationarity_eligible{ true };
 };
 
-using LocalFittingClusterHealthMap =
-    std::map<ClusterKey, LocalFittingClusterHealth>;
+using LocalFittingClusterHealthMap = std::map<ClusterKey, LocalFittingClusterHealth>;
 
-inline bool IsLocalGaussianRefitStatusStationarityEligible(
-    RHBMEstimationStatus status)
+inline bool IsLocalGaussianRefitStatusStationarityEligible(RHBMEstimationStatus status)
 {
     switch (status)
     {
