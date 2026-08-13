@@ -40,7 +40,6 @@
 #include <numeric>
 #include <optional>
 #include <sstream>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -57,8 +56,6 @@ namespace rhbm_gem::core {
 
 namespace {
 
-using detail::FittedGaussianSnapshot;
-using detail::BuildFittedGaussianSnapshot;
 using detail::BuildSecondStageModelSnapshot;
 using detail::ClusterKey;
 using detail::LocalFittingClusterSolverWorkspace;
@@ -72,7 +69,6 @@ using detail::LocalFittingResidualBaseline;
 using detail::FitState;
 using detail::AtomContext;
 using detail::SecondStageContext;
-using detail::SecondStageModelSnapshot;
 using detail::ReusableWeightedRidgeSolver;
 using detail::ScopedEigenThreadCount;
 
@@ -85,7 +81,6 @@ using detail::JointOffsetSolveStatus;
 using detail::IsJointOffsetSolveStationarityEligible;
 using detail::GetJointOffsetSolveStatusText;
 using detail::ResetLocalFittingClusterSolverWorkspace;
-using detail::BuildSecondStageAdjustedResponseCache;
 using detail::BuildSecondStageAdjustedSamples;
 using detail::BuildLocalFittingResidualBaseline;
 using detail::SummarizeTransformedChanges;
@@ -248,9 +243,7 @@ detail::GraphTopology BuildGraphTopology(
 
     detail::CouplingGraphBuilder builder{ context.size() };
     const auto model_snapshot{
-        BuildSecondStageModelSnapshot(
-            context,
-            BuildFittedGaussianSnapshot(initial_state))
+        BuildSecondStageModelSnapshot(context, initial_state)
     };
     std::vector<std::optional<detail::TransformedModelInvariants>>
         selected_model_invariants;
@@ -587,30 +580,9 @@ void ApplyFitState(
     const SecondStageContext & context,
     const FitState & iteration_state)
 {
-    if (context.size() != iteration_state.size())
-    {
-        throw std::invalid_argument(
-            "Local fitting context and state sizes are inconsistent.");
-    }
-
-    const auto model_snapshot{
-        BuildSecondStageModelSnapshot(
-            context,
-            BuildFittedGaussianSnapshot(iteration_state))
+    auto adjusted_sampling_entries_list{
+        BuildSecondStageAdjustedSamples(context, iteration_state)
     };
-    const auto adjusted_response_cache{
-        BuildSecondStageAdjustedResponseCache(context, model_snapshot)
-    };
-    std::vector<LocalPotentialSampleList> adjusted_sampling_entries_list;
-    adjusted_sampling_entries_list.reserve(context.size());
-    for (std::size_t i = 0; i < context.size(); i++)
-    {
-        adjusted_sampling_entries_list.emplace_back(
-            BuildSecondStageAdjustedSamples(
-                context,
-                i,
-                adjusted_response_cache.at(i)));
-    }
 
     auto analysis{ model_object.EditAnalysis() };
     for (std::size_t i = 0; i < context.size(); i++)
@@ -1415,9 +1387,7 @@ bool RunSecondStageLocalFitting(
         }
 
         const auto previous_model_snapshot{
-            BuildSecondStageModelSnapshot(
-                context,
-                BuildFittedGaussianSnapshot(previous_state))
+            BuildSecondStageModelSnapshot(context, previous_state)
         };
         const auto residual_baseline{
             BuildLocalFittingResidualBaseline(
@@ -1674,9 +1644,7 @@ bool RunSecondStageLocalFitting(
                     true);
                 cluster_objective_state.clear();
                 const auto assembled_model_snapshot{
-                    BuildSecondStageModelSnapshot(
-                        context,
-                        BuildFittedGaussianSnapshot(assembled_state))
+                    BuildSecondStageModelSnapshot(context, assembled_state)
                 };
                 const auto remaining_objective_by_key{
                     BuildObjectiveByKey(

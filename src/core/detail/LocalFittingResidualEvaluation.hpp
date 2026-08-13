@@ -126,6 +126,20 @@ inline SecondStageModelSnapshot BuildSecondStageModelSnapshot(
     };
 }
 
+inline SecondStageModelSnapshot BuildSecondStageModelSnapshot(
+    const SecondStageContext & context,
+    const FitState & state)
+{
+    if (context.size() != state.size())
+    {
+        throw std::invalid_argument(
+            "Local fitting context and state sizes are inconsistent.");
+    }
+    return BuildSecondStageModelSnapshot(
+        context,
+        BuildFittedGaussianSnapshot(state));
+}
+
 struct LocalFittingResidualSample
 {
     double adjusted_response{ 0.0 };
@@ -210,6 +224,32 @@ inline LocalPotentialSampleList BuildSecondStageAdjustedSamples(
     }
     return adjusted_sampling_entries;
 }
+
+inline std::vector<LocalPotentialSampleList> BuildSecondStageAdjustedSamples(
+    const SecondStageContext & context,
+    const FitState & state)
+{
+    const auto model_snapshot{
+        BuildSecondStageModelSnapshot(context, state)
+    };
+    const auto adjusted_response_cache{
+        BuildSecondStageAdjustedResponseCache(context, model_snapshot)
+    };
+    std::vector<LocalPotentialSampleList> adjusted_sampling_entries_list;
+    adjusted_sampling_entries_list.reserve(context.size());
+    for (std::size_t atom_index = 0;
+        atom_index < context.size();
+        atom_index++)
+    {
+        adjusted_sampling_entries_list.emplace_back(
+            BuildSecondStageAdjustedSamples(
+                context,
+                atom_index,
+                adjusted_response_cache.at(atom_index)));
+    }
+    return adjusted_sampling_entries_list;
+}
+
 inline LocalFittingResidualBaseline BuildLocalFittingResidualBaseline(
     const SecondStageContext & context,
     const FitState & state,
@@ -264,18 +304,13 @@ inline std::optional<LocalFittingResidualSample> EvaluateLocalFittingResidualSam
     const auto & sample{
         atom_context.raw_sampling_entries.at(sample_ref.sample_index)
     };
-    auto adjusted_response{ static_cast<double>(sample.response) };
-    for (auto neighbor_iter =
-            atom_context.NeighborBegin(sample_ref.sample_index);
-        neighbor_iter != atom_context.NeighborEnd(sample_ref.sample_index);
-        ++neighbor_iter)
-    {
-        const auto & neighbor_atom_sample{ *neighbor_iter };
-        adjusted_response -= ResolveNeighborAtomModel(
-            neighbor_atom_sample,
-            model_snapshot.selected,
-            model_snapshot.unselected).ResponseAtDistance(neighbor_atom_sample.distance);
-    }
+    const auto adjusted_response{
+        CalculateSecondStageAdjustedResponse(
+            context,
+            sample_ref.atom_index,
+            sample_ref.sample_index,
+            model_snapshot)
+    };
     const auto expected_response{
         GetFitModel(state, sample_ref.atom_index).ResponseAtDistance(
             static_cast<double>(sample.point.distance))
