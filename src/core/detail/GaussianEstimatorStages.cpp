@@ -2860,7 +2860,6 @@ struct ClusterCandidateResult
     LocalFittingPolishProgress polish_progress{};
     bool accepted{ false };
     bool grow_trust_region{ false };
-    bool backtracking_exhausted{ false };
 };
 
 ClusterCandidateResult SelectLocalFittingClusterCandidate(
@@ -2900,7 +2899,6 @@ ClusterCandidateResult SelectLocalFittingClusterCandidate(
     {
         if (is_polish_eligible) result.polish_progress.skipped_count = 1;
         result.diagnostic.backtracking_exhausted = true;
-        result.backtracking_exhausted = true;
         return result;
     }
 
@@ -3000,6 +2998,13 @@ ClusterCandidateResult SelectLocalFittingClusterCandidate(
     result.diagnostic.accepted_backtracking_factor = 1.0;
     auto & base_patch{ base_proposal->patch };
     LocalFittingStateView base_state_view{ previous_state, base_patch };
+    LocalFittingBacktrackingWorkspace backtracking_workspace{
+        context,
+        previous_state,
+        base_state_view,
+        key,
+        kLocalFittingTransformedChangeTolerance
+    };
     LocalFittingCandidateEvaluationOverlay base_overlay{
         context,
         previous_model_snapshot,
@@ -3023,43 +3028,36 @@ ClusterCandidateResult SelectLocalFittingClusterCandidate(
             &performance_counters)
     };
     auto accepted_by_backtracking{ false };
+    const LocalFittingPolishProvenance non_polished_endpoint_provenance(
+        key.size(),
+        0);
     if (!accepted_base_candidate)
     {
         result.diagnostic.accepted_backtracking_factor.reset();
-        const auto endpoint_effective_damping{
-            base_proposal->effective_damping
-        };
-        const auto endpoint_step_norm{ base_proposal->step_norm };
-        LocalFittingBacktrackingWorkspace backtracking_workspace{
-            context,
-            previous_state,
-            base_state_view,
-            key
-        };
-        double factor{ 0.5 };
-        while (factor >= std::numeric_limits<double>::epsilon())
+        while (true)
         {
-            const auto * backtracked_patch{
-                backtracking_workspace.BuildCandidate(factor)
-            };
-            if (backtracked_patch == nullptr)
-            {
-                result.diagnostic.is_invalid_model = true;
-                break;
-            }
-            if (backtracking_workspace.GetMaximumTransformedChange() <
-                kLocalFittingTransformedChangeTolerance)
+            const auto step{ backtracking_workspace.BuildNextCandidate() };
+            if (step.status ==
+                detail::LocalFittingBacktrackingStepStatus::Exhausted)
             {
                 result.diagnostic.backtracking_exhausted = true;
                 break;
             }
+            if (step.status ==
+                detail::LocalFittingBacktrackingStepStatus::InvalidCandidate)
+            {
+                result.diagnostic.is_invalid_model = true;
+                break;
+            }
+            const auto factor{ step.factor };
+            const auto * backtracked_patch{ step.candidate_patch };
             LocalFittingObjectiveAttemptDiagnostic trial_diagnostic;
             trial_diagnostic.effective_damping =
-                endpoint_effective_damping * factor;
+                base_proposal->effective_damping * factor;
             trial_diagnostic.trust_region_radius = trust_region_radius;
-            trial_diagnostic.trust_region_step_norm = endpoint_step_norm * factor;
-            trial_diagnostic.backtracking_trial_count =
-                result.diagnostic.backtracking_trial_count + 1;
+            trial_diagnostic.trust_region_step_norm =
+                base_proposal->step_norm * factor;
+            trial_diagnostic.backtracking_trial_count = step.trial_number;
             const LocalFittingStateView backtracked_state_view{
                 previous_state,
                 *backtracked_patch
@@ -3086,6 +3084,10 @@ ClusterCandidateResult SelectLocalFittingClusterCandidate(
                     &performance_counters))
             {
                 trial_diagnostic.accepted_backtracking_factor = factor;
+                result.polish_provenance =
+                    backtracking_workspace.BuildActiveCandidatePolishProvenance(
+                        result.polish_provenance,
+                        non_polished_endpoint_provenance);
                 base_patch = backtracking_workspace.TakeCandidatePatch();
                 result.diagnostic = std::move(trial_diagnostic);
                 accepted_base_candidate = true;
@@ -3093,14 +3095,18 @@ ClusterCandidateResult SelectLocalFittingClusterCandidate(
                 break;
             }
             result.diagnostic = std::move(trial_diagnostic);
-            factor *= 0.5;
         }
+    }
+    else
+    {
+        result.polish_provenance =
+            backtracking_workspace.BuildActiveCandidatePolishProvenance(
+                result.polish_provenance,
+                non_polished_endpoint_provenance);
     }
     if (!accepted_base_candidate)
     {
         if (is_polish_eligible) result.polish_progress.skipped_count = 1;
-        result.backtracking_exhausted =
-            result.diagnostic.backtracking_exhausted;
         result.objective_state = local_objective_state.at(key);
         return result;
     }
@@ -3109,20 +3115,6 @@ ClusterCandidateResult SelectLocalFittingClusterCandidate(
     result.grow_trust_region = !accepted_by_backtracking &&
         ShouldGrowLocalFittingTrustRegion(result.diagnostic);
     result.accepted_patch = base_patch;
-    for (std::size_t position = 0; position < key.size(); position++)
-    {
-        const auto atom_index{ key.at(position) };
-        const auto base_transformed{
-            detail::EncodeLocalFittingTransformedCoordinates(
-                base_state_view.GetModel(atom_index))
-        };
-        if (!base_transformed.has_value() ||
-            (base_transformed->array() !=
-                previous_transformed_estimation_list.at(atom_index).array()).any())
-        {
-            result.polish_provenance.at(position) = 0;
-        }
-    }
     if (is_polish_eligible)
     {
         auto polished_candidate{
@@ -3326,7 +3318,7 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
         if (!result.accepted)
         {
             selection.rejected_key_list.emplace_back(result.key);
-            if (result.backtracking_exhausted)
+            if (result.diagnostic.backtracking_exhausted)
             {
                 selection.backtracking_exhausted_key_list.emplace_back(
                     result.key);
@@ -3357,39 +3349,6 @@ LocalFittingCandidateSelection SelectLocalFittingClusterCandidates(
         }
     }
     return selection;
-}
-
-LocalFittingPolishProvenance BuildBacktrackedLocalFittingPolishProvenance(
-    const LocalFittingState & previous_state,
-    const LocalFittingPolishProvenance & previous_provenance,
-    const LocalFittingPolishProvenance & endpoint_provenance,
-    const LocalFittingState & candidate_state,
-    const std::vector<std::size_t> & changed_atom_index_list)
-{
-    auto provenance{ previous_provenance };
-    for (const auto atom_index : changed_atom_index_list)
-    {
-        const auto change{
-            detail::CalculateLocalFittingTransformedChange(
-                candidate_state.at(atom_index).mdpde.GetModel(),
-                previous_state.at(atom_index).mdpde.GetModel())
-        };
-        const auto has_material_change{
-            std::any_of(
-                change.value_list.begin(),
-                change.value_list.end(),
-                [](double value)
-                {
-                    return std::isfinite(value) &&
-                        value >= kLocalFittingTransformedChangeTolerance;
-                })
-        };
-        if (has_material_change)
-        {
-            provenance.at(atom_index) = endpoint_provenance.at(atom_index);
-        }
-    }
-    return provenance;
 }
 
 LocalFittingStatePatch BuildLocalFittingStatePatch(
@@ -3446,18 +3405,28 @@ bool TryBacktrackLocalFittingCombinedCandidate(
         context,
         previous_state,
         endpoint_state,
-        changed_atom_index_list
+        changed_atom_index_list,
+        kLocalFittingTransformedChangeTolerance
     };
     const LocalFittingStateView previous_state_view{ previous_state };
 
     selection.combined_backtracking_trial_count = 1;
-    double factor{ 0.5 };
-    while (factor >= std::numeric_limits<double>::epsilon())
+    while (true)
     {
-        const auto * candidate_patch{
-            backtracking_workspace.BuildCandidate(factor)
-        };
-        if (candidate_patch == nullptr) return false;
+        const auto step{ backtracking_workspace.BuildNextCandidate() };
+        if (step.status ==
+            detail::LocalFittingBacktrackingStepStatus::Exhausted)
+        {
+            selection.combined_backtracking_exhausted = true;
+            return false;
+        }
+        if (step.status ==
+            detail::LocalFittingBacktrackingStepStatus::InvalidCandidate)
+        {
+            return false;
+        }
+        const auto factor{ step.factor };
+        const auto * candidate_patch{ step.candidate_patch };
         const LocalFittingStateView candidate_state_view{
             previous_state,
             *candidate_patch
@@ -3469,14 +3438,7 @@ bool TryBacktrackLocalFittingCombinedCandidate(
             candidate_state_view,
             *candidate_patch
         };
-        if (backtracking_workspace.GetMaximumTransformedChange() <
-            kLocalFittingTransformedChangeTolerance)
-        {
-            selection.combined_backtracking_exhausted = true;
-            return false;
-        }
-
-        selection.combined_backtracking_trial_count++;
+        selection.combined_backtracking_trial_count = step.trial_number;
         auto trial_objective_state{ committed_objective_state };
         auto local_criteria_accepted{ true };
         for (const auto & key : accepted_key_list)
@@ -3526,27 +3488,20 @@ bool TryBacktrackLocalFittingCombinedCandidate(
         };
         if (combined_check.accepted)
         {
-            auto candidate_state{ previous_state };
-            candidate_patch->ApplyTo(candidate_state);
+            auto candidate_state{ backtracking_workspace.MaterializeCandidateState() };
             performance_counters.full_state_materialization_count++;
             selection.assembled_state = std::move(candidate_state);
             selection.assembled_polish_provenance =
-                BuildBacktrackedLocalFittingPolishProvenance(
-                    previous_state,
+                backtracking_workspace.BuildCandidatePolishProvenance(
                     previous_polish_provenance,
-                    endpoint_provenance,
-                    selection.assembled_state,
-                    changed_atom_index_list);
+                    endpoint_provenance);
             selection.combined_backtracking_factor = factor;
             selection.combined_backtracking_objective = combined_check.candidate_objective;
             selection.grow_trust_region_key_list.clear();
             working_objective_state = std::move(trial_objective_state);
             return true;
         }
-        factor *= 0.5;
     }
-    selection.combined_backtracking_exhausted = true;
-    return false;
 }
 
 std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(

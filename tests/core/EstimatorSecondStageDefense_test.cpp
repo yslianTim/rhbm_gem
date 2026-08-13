@@ -14,6 +14,7 @@
 
 #include "core/detail/GaussianEstimatorStages.hpp"
 #include "core/detail/LocalFittingAudit.hpp"
+#include "core/detail/LocalFittingBacktrackingWorkspace.hpp"
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
@@ -37,6 +38,7 @@ namespace audit_detail = rhbm_gem::core::detail;
 namespace change_detail = rhbm_gem::core::detail;
 namespace conditioning_detail = rhbm_gem::core::detail;
 namespace coupling_detail = rhbm_gem::core::detail;
+namespace backtracking_detail = rhbm_gem::core::detail;
 namespace median_detail = rhbm_gem::core::detail;
 namespace health_detail = rhbm_gem::core::detail;
 namespace offset_detail = rhbm_gem::core::detail;
@@ -3508,6 +3510,197 @@ TEST(EstimatorSecondStageDefenseTest, TransformedDampingIsIntensityScaleInvarian
         EXPECT_NEAR(base->GetWidth(), scaled->GetWidth(), 1.0e-12);
         EXPECT_NEAR(base->GetOffset() * scale, scaled->GetOffset(), 1.0e-12);
     }
+}
+
+TEST(EstimatorSecondStageDefenseTest,
+    BacktrackingWorkspaceGeneratesCandidatesAndMergesProvenance)
+{
+    const std::vector<rg::GaussianModel3D> previous_model_list{
+        rg::GaussianModel3D{ 8.0, 0.50, -0.10 },
+        rg::GaussianModel3D{ 10.0, 0.60, 0.20 }
+    };
+    const std::vector<rg::GaussianModel3D> endpoint_model_list{
+        rg::GaussianModel3D{ 12.0, 0.75, 0.40 },
+        rg::GaussianModel3D{ 14.0, 0.90, 0.80 }
+    };
+    const std::vector<rg::GaussianModel3DUncertainty> endpoint_uncertainty_list{
+        rg::GaussianModel3DUncertainty{ 0.10, 0.02, 0.03 },
+        rg::GaussianModel3DUncertainty{ 0.20, 0.04, 0.05 }
+    };
+
+    backtracking_detail::SecondStageLocalFittingContext context;
+    context.selected_atom_list.resize(previous_model_list.size());
+    backtracking_detail::LocalFittingState previous_state;
+    backtracking_detail::LocalFittingState endpoint_state;
+    previous_state.resize(previous_model_list.size());
+    endpoint_state.resize(endpoint_model_list.size());
+    for (std::size_t atom_index = 0;
+        atom_index < previous_model_list.size();
+        atom_index++)
+    {
+        context.at(atom_index).group_key = 7;
+        previous_state.at(atom_index).mdpde =
+            rg::GaussianModel3DWithUncertainty{
+                previous_model_list.at(atom_index),
+                rg::GaussianModel3DUncertainty{ 0.01, 0.02, 0.03 }
+            };
+        endpoint_state.at(atom_index).mdpde =
+            rg::GaussianModel3DWithUncertainty{
+                endpoint_model_list.at(atom_index),
+                endpoint_uncertainty_list.at(atom_index)
+            };
+    }
+
+    backtracking_detail::LocalFittingBacktrackingWorkspace workspace{
+        context,
+        previous_state,
+        endpoint_state,
+        std::vector<std::size_t>{ 1, 0 },
+        1.0e-4
+    };
+    const auto step{ workspace.BuildNextCandidate() };
+    ASSERT_EQ(
+        step.status,
+        backtracking_detail::LocalFittingBacktrackingStepStatus::CandidateReady);
+    EXPECT_TRUE(step.IsCandidateReady());
+    EXPECT_DOUBLE_EQ(step.factor, 0.5);
+    EXPECT_EQ(step.trial_number, 2U);
+    ASSERT_NE(step.candidate_patch, nullptr);
+    EXPECT_EQ(
+        step.candidate_patch->atom_index_list,
+        (std::vector<std::size_t>{ 0, 1 }));
+    EXPECT_DOUBLE_EQ(
+        step.candidate_patch->mdpde_list.at(0)
+            .GetStandardDeviationModel().GetAmplitude(),
+        endpoint_uncertainty_list.at(0).GetAmplitude());
+    EXPECT_DOUBLE_EQ(
+        step.candidate_patch->mdpde_list.at(1)
+            .GetStandardDeviationModel().GetWidth(),
+        endpoint_uncertainty_list.at(1).GetWidth());
+
+    const auto candidate_state{ workspace.MaterializeCandidateState() };
+    for (const auto atom_index : step.candidate_patch->atom_index_list)
+    {
+        ExpectGaussianModelsNear(
+            candidate_state.at(atom_index).mdpde.GetModel(),
+            step.candidate_patch->mdpde_list.at(atom_index).GetModel(),
+            1.0e-12);
+    }
+
+    const auto merged_provenance{
+        workspace.BuildCandidatePolishProvenance(
+            std::vector<char>{ 0, 1 },
+            std::vector<char>{ 1, 0 })
+    };
+    EXPECT_EQ(merged_provenance, (std::vector<char>{ 1, 0 }));
+
+    backtracking_detail::LocalFittingStatePatch endpoint_patch;
+    endpoint_patch.atom_index_list = { 0, 1 };
+    endpoint_patch.mdpde_list = {
+        endpoint_state.at(0).mdpde,
+        endpoint_state.at(1).mdpde
+    };
+    const backtracking_detail::LocalFittingStateView endpoint_view{
+        previous_state,
+        endpoint_patch
+    };
+    backtracking_detail::LocalFittingBacktrackingWorkspace view_workspace{
+        context,
+        previous_state,
+        endpoint_view,
+        std::vector<std::size_t>{ 0, 1 },
+        1.0e-4
+    };
+    const auto view_step{ view_workspace.BuildNextCandidate() };
+    ASSERT_TRUE(view_step.IsCandidateReady());
+    ASSERT_NE(view_step.candidate_patch, nullptr);
+    for (std::size_t atom_index = 0;
+        atom_index < previous_model_list.size();
+        atom_index++)
+    {
+        ExpectGaussianModelsNear(
+            step.candidate_patch->mdpde_list.at(atom_index).GetModel(),
+            view_step.candidate_patch->mdpde_list.at(atom_index).GetModel(),
+            1.0e-12);
+    }
+}
+
+TEST(EstimatorSecondStageDefenseTest,
+    BacktrackingWorkspaceDistinguishesInvalidAndExhaustedSteps)
+{
+    backtracking_detail::SecondStageLocalFittingContext context;
+    context.selected_atom_list.resize(1);
+    context.at(0).group_key = 1;
+
+    backtracking_detail::LocalFittingState previous_state(1);
+    previous_state.at(0).mdpde = rg::GaussianModel3DWithUncertainty{
+        rg::GaussianModel3D{ 8.0, 0.50, -0.10 },
+        rg::GaussianModel3DUncertainty{ 0.1, 0.02, 0.03 }
+    };
+
+    backtracking_detail::LocalFittingState endpoint_state(1);
+    endpoint_state.at(0).mdpde = rg::GaussianModel3DWithUncertainty{
+        rg::GaussianModel3D{ 0.0, 0.0, 0.0 },
+        rg::GaussianModel3DUncertainty{ 0.2, 0.04, 0.05 }
+    };
+    backtracking_detail::LocalFittingBacktrackingWorkspace invalid_workspace{
+        context,
+        previous_state,
+        endpoint_state,
+        std::vector<std::size_t>{ 0 },
+        1.0e-4
+    };
+    const auto invalid_step{ invalid_workspace.BuildNextCandidate() };
+    EXPECT_EQ(
+        invalid_step.status,
+        backtracking_detail::LocalFittingBacktrackingStepStatus::InvalidCandidate);
+    EXPECT_EQ(invalid_step.trial_number, 1U);
+    EXPECT_EQ(invalid_step.candidate_patch, nullptr);
+
+    endpoint_state.at(0).mdpde = rg::GaussianModel3DWithUncertainty{
+        rg::GaussianModel3D{ 12.0, 0.75, 0.40 },
+        rg::GaussianModel3DUncertainty{ 0.2, 0.04, 0.05 }
+    };
+    backtracking_detail::LocalFittingBacktrackingWorkspace change_exhausted_workspace{
+        context,
+        previous_state,
+        endpoint_state,
+        std::vector<std::size_t>{ 0 },
+        1.0e6
+    };
+    const auto change_exhausted_step{
+        change_exhausted_workspace.BuildNextCandidate()
+    };
+    EXPECT_EQ(
+        change_exhausted_step.status,
+        backtracking_detail::LocalFittingBacktrackingStepStatus::Exhausted);
+    EXPECT_EQ(change_exhausted_step.trial_number, 1U);
+    EXPECT_EQ(change_exhausted_step.candidate_patch, nullptr);
+
+    backtracking_detail::SecondStageLocalFittingContext empty_context;
+    backtracking_detail::LocalFittingState empty_state;
+    backtracking_detail::LocalFittingBacktrackingWorkspace factor_workspace{
+        empty_context,
+        empty_state,
+        empty_state,
+        std::vector<std::size_t>{},
+        0.0
+    };
+    std::size_t ready_count{ 0 };
+    backtracking_detail::LocalFittingBacktrackingStep factor_step;
+    do
+    {
+        factor_step = factor_workspace.BuildNextCandidate();
+        if (factor_step.IsCandidateReady()) ready_count++;
+    }
+    while (factor_step.IsCandidateReady());
+    EXPECT_EQ(
+        factor_step.status,
+        backtracking_detail::LocalFittingBacktrackingStepStatus::Exhausted);
+    EXPECT_GT(ready_count, 40U);
+    EXPECT_LT(
+        factor_step.factor,
+        std::numeric_limits<double>::epsilon());
 }
 
 TEST(EstimatorSecondStageDefenseTest, TransformedBacktrackingIncludesOffset)
