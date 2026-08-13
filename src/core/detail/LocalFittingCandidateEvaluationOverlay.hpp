@@ -61,7 +61,7 @@ public:
 
     std::optional<LocalFittingResidualSample> Evaluate(
         const FitStateView & candidate_state,
-        const LocalFittingObjectiveSampleRef & sample_ref) const
+        const ObjectiveSampleRef & sample_ref) const
     {
         const auto & baseline{
             m_residual_baseline.at(sample_ref.atom_index).at(

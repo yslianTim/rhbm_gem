@@ -17,7 +17,7 @@ namespace rhbm_gem::core::detail {
 
 using SecondStageAdjustedResponseCache = std::vector<std::vector<double>>;
 
-using LocalFittingObjectiveSampleRef = GraphSampleId;
+using ObjectiveSampleRef = GraphSampleId;
 using FittedGaussianSnapshot = std::vector<GaussianModel3D>;
 
 inline FittedGaussianSnapshot BuildFittedGaussianSnapshot(
@@ -257,7 +257,7 @@ template <typename State>
 inline std::optional<LocalFittingResidualSample> EvaluateLocalFittingResidualSample(
     const SecondStageContext & context,
     const State & state,
-    const LocalFittingObjectiveSampleRef & sample_ref,
+    const ObjectiveSampleRef & sample_ref,
     const SecondStageModelSnapshot & model_snapshot)
 {
     const auto & atom_context{ context.at(sample_ref.atom_index) };

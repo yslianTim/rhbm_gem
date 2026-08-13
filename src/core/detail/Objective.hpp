@@ -23,7 +23,7 @@
 
 namespace rhbm_gem::core::detail {
 
-struct LocalFittingObjectiveBreakdown
+struct ObjectiveBreakdown
 {
     double fit_range_residual_objective{ 0.0 };
     double tail_validation_loss{ 0.0 };
@@ -32,37 +32,37 @@ struct LocalFittingObjectiveBreakdown
     double total_objective{ 0.0 };
 };
 
-struct LocalFittingObjectiveTolerance
+struct ObjectiveTolerance
 {
     double absolute_tolerance{ 0.0 };
     double relative_tolerance{ 0.0 };
 };
 
-constexpr double kLocalFittingObjectiveResidualScaleFloorRatio{ 1.0e-6 };
-constexpr double kLocalFittingFitRangeWeight{ 1.0 };
-constexpr double kLocalFittingTailValidationWeight{ 0.25 };
-constexpr double kLocalFittingOffsetPlausibilityPenaltyWeight{ 1.0e-2 };
-constexpr double kLocalFittingOffsetPeakRatioMax{ 1.0 };
-constexpr double kLocalFittingObjectiveRobustLossCutoffMultiplier{ 1.345 };
-constexpr LocalFittingObjectiveTolerance
-kLocalFittingObjectiveStrictTolerance{ 1.0e-10, 1.0e-8 };
-constexpr LocalFittingObjectiveTolerance
-kLocalFittingObjectiveProgressTolerance{ 1.0e-8, 1.0e-3 };
+constexpr double kObjectiveResidualScaleFloorRatio{ 1.0e-6 };
+constexpr double kFitRangeWeight{ 1.0 };
+constexpr double kTailValidationWeight{ 0.25 };
+constexpr double kOffsetPlausibilityPenaltyWeight{ 1.0e-2 };
+constexpr double kOffsetPeakRatioMax{ 1.0 };
+constexpr double kObjectiveRobustLossCutoffMultiplier{ 1.345 };
+constexpr ObjectiveTolerance
+kObjectiveStrictTolerance{ 1.0e-10, 1.0e-8 };
+constexpr ObjectiveTolerance
+kObjectiveProgressTolerance{ 1.0e-8, 1.0e-3 };
 
-struct LocalFittingAuditedState
+struct AuditedState
 {
-    LocalFittingObjectiveBreakdown objective{};
+    ObjectiveBreakdown objective{};
     FitState state{};
     PolishProvenance polish_provenance{};
     std::optional<std::size_t> accepted_iteration{};
 };
 
-struct LocalFittingBestAuditState
+struct BestAuditState
 {
-    std::optional<LocalFittingAuditedState> best{};
+    std::optional<AuditedState> best{};
 };
 
-enum class LocalFittingPreObjectiveFailureReason
+enum class PreObjectiveFailureReason
 {
     None,
     InvalidModel,
@@ -70,21 +70,21 @@ enum class LocalFittingPreObjectiveFailureReason
     NoCandidateWithinTrustRegion
 };
 
-struct LocalFittingObjectiveAttemptDiagnostic
+struct ObjectiveAttemptDiagnostic
 {
     double effective_damping{ 1.0 };
     bool is_invalid_model{ false };
-    LocalFittingPreObjectiveFailureReason pre_objective_failure_reason{
-        LocalFittingPreObjectiveFailureReason::None
+    PreObjectiveFailureReason pre_objective_failure_reason{
+        PreObjectiveFailureReason::None
     };
     std::optional<double> pre_objective_attempted_step_norm{};
     std::optional<double> fit_scale{};
     std::optional<double> tail_scale{};
     std::size_t fit_sample_count{ 0 };
     std::size_t tail_sample_count{ 0 };
-    std::optional<LocalFittingObjectiveBreakdown> candidate_objective{};
-    std::optional<LocalFittingObjectiveBreakdown> previous_objective{};
-    std::optional<LocalFittingObjectiveBreakdown> best_objective{};
+    std::optional<ObjectiveBreakdown> candidate_objective{};
+    std::optional<ObjectiveBreakdown> previous_objective{};
+    std::optional<ObjectiveBreakdown> best_objective{};
     double trust_region_radius{ 0.0 };
     double trust_region_step_norm{ 0.0 };
     bool rejected_by_previous{ false };
@@ -94,7 +94,7 @@ struct LocalFittingObjectiveAttemptDiagnostic
     bool backtracking_exhausted{ false };
 };
 
-inline double CalculateLocalFittingClusterAtomWeight(
+inline double CalculateClusterAtomWeight(
     std::size_t cluster_atom_count,
     std::size_t active_atom_count)
 {
@@ -108,8 +108,8 @@ inline double CalculateLocalFittingClusterAtomWeight(
         static_cast<double>(active_atom_count);
 }
 
-inline void ValidateLocalFittingObjectiveTolerance(
-    const LocalFittingObjectiveTolerance & tolerance)
+inline void ValidateObjectiveTolerance(
+    const ObjectiveTolerance & tolerance)
 {
     if (!std::isfinite(tolerance.absolute_tolerance) ||
         tolerance.absolute_tolerance < 0.0 ||
@@ -122,11 +122,11 @@ inline void ValidateLocalFittingObjectiveTolerance(
     }
 }
 
-inline double CalculateLocalFittingObjectiveTolerance(
+inline double CalculateObjectiveTolerance(
     double reference,
-    const LocalFittingObjectiveTolerance & tolerance)
+    const ObjectiveTolerance & tolerance)
 {
-    ValidateLocalFittingObjectiveTolerance(tolerance);
+    ValidateObjectiveTolerance(tolerance);
     if (!std::isfinite(reference))
     {
         throw std::invalid_argument(
@@ -136,8 +136,8 @@ inline double CalculateLocalFittingObjectiveTolerance(
         tolerance.relative_tolerance * std::abs(reference);
 }
 
-inline std::optional<LocalFittingObjectiveBreakdown>
-BuildLocalFittingObjectiveBreakdown(
+inline std::optional<ObjectiveBreakdown>
+BuildObjectiveBreakdown(
     double fit_range_residual_objective,
     double tail_validation_loss,
     double offset_plausibility_penalty,
@@ -151,7 +151,7 @@ BuildLocalFittingObjectiveBreakdown(
         return std::nullopt;
     }
 
-    LocalFittingObjectiveBreakdown breakdown;
+    ObjectiveBreakdown breakdown;
     breakdown.fit_range_residual_objective = fit_range_residual_objective;
     breakdown.tail_validation_loss = tail_validation_loss;
     breakdown.tail_validation_penalty =
@@ -165,25 +165,25 @@ BuildLocalFittingObjectiveBreakdown(
     return breakdown;
 }
 
-inline bool IsBetterLocalFittingAuditObjective(
+inline bool IsBetterAuditObjective(
     double candidate,
     double best,
-    const LocalFittingObjectiveTolerance & tolerance)
+    const ObjectiveTolerance & tolerance)
 {
-    ValidateLocalFittingObjectiveTolerance(tolerance);
+    ValidateObjectiveTolerance(tolerance);
     if (!std::isfinite(candidate)) return false;
     if (!std::isfinite(best)) return true;
     return candidate < best -
-        CalculateLocalFittingObjectiveTolerance(best, tolerance);
+        CalculateObjectiveTolerance(best, tolerance);
 }
 
-inline bool IsLocalFittingAuditObjectiveAcceptableForProgress(
+inline bool IsAuditObjectiveAcceptableForProgress(
     const std::optional<double> & candidate,
     const std::optional<double> & previous,
     const std::optional<double> & best,
-    const LocalFittingObjectiveTolerance & tolerance)
+    const ObjectiveTolerance & tolerance)
 {
-    ValidateLocalFittingObjectiveTolerance(tolerance);
+    ValidateObjectiveTolerance(tolerance);
     if (!candidate.has_value() || !previous.has_value() ||
         !std::isfinite(*candidate) || !std::isfinite(*previous))
     {
@@ -193,28 +193,28 @@ inline bool IsLocalFittingAuditObjectiveAcceptableForProgress(
     {
         if (!std::isfinite(reference)) return true;
         return *candidate > reference +
-            CalculateLocalFittingObjectiveTolerance(reference, tolerance);
+            CalculateObjectiveTolerance(reference, tolerance);
     };
     return !is_deteriorated(*previous) &&
         (!best.has_value() || !is_deteriorated(*best));
 }
 
-struct LocalFittingObjectiveScale
+struct ObjectiveScale
 {
     double fit{ 0.0 };
     std::optional<double> tail{};
 };
 
-struct LocalFittingObjectiveClusterDomain
+struct ObjectiveClusterDomain
 {
-    std::vector<LocalFittingObjectiveSampleRef> fit_sample_ref_list{};
-    std::vector<LocalFittingObjectiveSampleRef> tail_sample_ref_list{};
-    std::optional<LocalFittingObjectiveScale> scale{};
+    std::vector<ObjectiveSampleRef> fit_sample_ref_list{};
+    std::vector<ObjectiveSampleRef> tail_sample_ref_list{};
+    std::optional<ObjectiveScale> scale{};
 };
 
-struct LocalFittingObjectiveDomain
+struct ObjectiveDomain
 {
-    std::map<ClusterKey, LocalFittingObjectiveClusterDomain> cluster_by_key{};
+    std::map<ClusterKey, ObjectiveClusterDomain> cluster_by_key{};
     std::vector<ClusterKey> owner_key_by_atom_index{};
     std::vector<std::vector<char>> fit_sample_mask_by_atom{};
     std::size_t active_atom_count{ 0 };
@@ -222,28 +222,28 @@ struct LocalFittingObjectiveDomain
     std::size_t tail_sample_count{ 0 };
 };
 
-struct LocalFittingClusterObjectiveState
+struct ClusterObjectiveState
 {
-    std::optional<LocalFittingObjectiveBreakdown> best_objective{};
+    std::optional<ObjectiveBreakdown> best_objective{};
     double best_maximum_transformed_change{ 0.0 };
 };
 
-using LocalFittingClusterObjectiveStateMap = std::map<ClusterKey, LocalFittingClusterObjectiveState>;
-using LocalFittingObjectiveByKey =
-    std::map<ClusterKey, std::optional<LocalFittingObjectiveBreakdown>>;
+using ClusterObjectiveStateMap = std::map<ClusterKey, ClusterObjectiveState>;
+using ObjectiveByKey =
+    std::map<ClusterKey, std::optional<ObjectiveBreakdown>>;
 
-struct LocalFittingCombinedObjectiveCheck
+struct CombinedObjectiveCheck
 {
     bool accepted{ false };
-    std::optional<LocalFittingObjectiveBreakdown> candidate_objective{};
+    std::optional<ObjectiveBreakdown> candidate_objective{};
 };
 
-struct LocalFittingCombinedCandidateObjectiveCheck
+struct CombinedCandidateObjectiveCheck
 {
     bool guard_required{ false };
     bool accepted{ true };
-    std::optional<LocalFittingObjectiveBreakdown> previous_objective{};
-    std::optional<LocalFittingObjectiveBreakdown> candidate_objective{};
+    std::optional<ObjectiveBreakdown> previous_objective{};
+    std::optional<ObjectiveBreakdown> candidate_objective{};
 };
 
 inline FitStatePatch BuildStatePatch(
@@ -265,7 +265,7 @@ inline FitStatePatch BuildStatePatch(
 }
 
 
-inline std::optional<double> BuildFixedLocalFittingObjectiveScale(
+inline std::optional<double> BuildFixedObjectiveScale(
     const std::vector<double> & residual_list,
     const std::vector<double> & adjusted_response_list)
 {
@@ -277,7 +277,7 @@ inline std::optional<double> BuildFixedLocalFittingObjectiveScale(
     const auto scale{
         std::max({
             CalculateLocalFittingMedianAbsoluteDeviationScale(residual_list),
-            kLocalFittingObjectiveResidualScaleFloorRatio *
+            kObjectiveResidualScaleFloorRatio *
                 CalculateLocalFittingMedianAbsoluteDeviationScale(adjusted_response_list),
             kLocalFittingRobustScaleMin
         })
@@ -287,13 +287,13 @@ inline std::optional<double> BuildFixedLocalFittingObjectiveScale(
 }
 
 
-inline LocalFittingObjectiveDomain BuildLocalFittingObjectiveDomain(
+inline ObjectiveDomain BuildObjectiveDomain(
     const SecondStageContext & context,
     const FitState & initial_state,
     const CouplingGraphPartition & partition,
     const FitOptions & options)
 {
-    LocalFittingObjectiveDomain domain;
+    ObjectiveDomain domain;
     const auto model_snapshot{
         BuildSecondStageModelSnapshot(
             context,
@@ -327,7 +327,7 @@ inline LocalFittingObjectiveDomain BuildLocalFittingObjectiveDomain(
                 sample_index < raw_sampling_entries.size();
                 sample_index++)
             {
-                const LocalFittingObjectiveSampleRef sample_ref{
+                const ObjectiveSampleRef sample_ref{
                     atom_index,
                     sample_index
                 };
@@ -368,7 +368,7 @@ inline LocalFittingObjectiveDomain BuildLocalFittingObjectiveDomain(
         domain.fit_sample_count += cluster_domain.fit_sample_ref_list.size();
         domain.tail_sample_count += cluster_domain.tail_sample_ref_list.size();
         const auto fit_scale{
-            BuildFixedLocalFittingObjectiveScale(
+            BuildFixedObjectiveScale(
                 fit_residual_list,
                 fit_response_list)
         };
@@ -377,11 +377,11 @@ inline LocalFittingObjectiveDomain BuildLocalFittingObjectiveDomain(
         {
             continue;
         }
-        LocalFittingObjectiveScale scale;
+        ObjectiveScale scale;
         scale.fit = *fit_scale;
         if (!cluster_domain.tail_sample_ref_list.empty())
         {
-            scale.tail = BuildFixedLocalFittingObjectiveScale(
+            scale.tail = BuildFixedObjectiveScale(
                 tail_residual_list,
                 tail_response_list);
             if (!scale.tail.has_value() ||
@@ -398,19 +398,19 @@ inline LocalFittingObjectiveDomain BuildLocalFittingObjectiveDomain(
 
 
 template <typename State, typename ResidualEvaluator>
-inline std::optional<LocalFittingObjectiveBreakdown>
-EvaluateLocalFittingObjectiveContributionImpl(
+inline std::optional<ObjectiveBreakdown>
+EvaluateObjectiveContributionImpl(
     const SecondStageContext & context,
     const State & state,
     const ClusterKey & changed_key,
-    const std::vector<LocalFittingObjectiveSampleRef> & sample_ref_list,
-    const LocalFittingObjectiveDomain & domain,
+    const std::vector<ObjectiveSampleRef> & sample_ref_list,
+    const ObjectiveDomain & domain,
     const ResidualEvaluator & residual_evaluator,
     bool include_offset_penalty = true)
 {
     static_cast<void>(context);
     if (domain.active_atom_count == 0) return std::nullopt;
-    LocalFittingObjectiveBreakdown breakdown;
+    ObjectiveBreakdown breakdown;
     for (const auto & sample_ref : sample_ref_list)
     {
         const auto & owner_key{
@@ -446,10 +446,10 @@ EvaluateLocalFittingObjectiveContributionImpl(
         const auto loss{
             algorithm::CalculateCauchyLoss(
                 residual_sample->residual / *scale,
-                kLocalFittingObjectiveRobustLossCutoffMultiplier)
+                kObjectiveRobustLossCutoffMultiplier)
         };
         const auto coefficient{
-            CalculateLocalFittingClusterAtomWeight(
+            CalculateClusterAtomWeight(
                 owner_key.size(),
                 domain.active_atom_count) /
             static_cast<double>(sample_count)
@@ -457,7 +457,7 @@ EvaluateLocalFittingObjectiveContributionImpl(
         if (is_fit_range)
         {
             breakdown.fit_range_residual_objective +=
-                kLocalFittingFitRangeWeight * coefficient * loss;
+                kFitRangeWeight * coefficient * loss;
         }
         else
         {
@@ -496,39 +496,39 @@ EvaluateLocalFittingObjectiveContributionImpl(
                 })
             };
             const auto offset_excess{
-                std::max(0.0, offset_ratio - kLocalFittingOffsetPeakRatioMax)
+                std::max(0.0, offset_ratio - kOffsetPeakRatioMax)
             };
             breakdown.offset_plausibility_penalty +=
-                kLocalFittingOffsetPlausibilityPenaltyWeight *
+                kOffsetPlausibilityPenaltyWeight *
                 offset_excess * offset_excess /
                 static_cast<double>(domain.active_atom_count);
         }
     }
-    return BuildLocalFittingObjectiveBreakdown(
+    return BuildObjectiveBreakdown(
         breakdown.fit_range_residual_objective,
         breakdown.tail_validation_loss,
         breakdown.offset_plausibility_penalty,
-        kLocalFittingTailValidationWeight);
+        kTailValidationWeight);
 }
 
 template <typename State>
-inline std::optional<LocalFittingObjectiveBreakdown>
-EvaluateLocalFittingObjectiveContribution(
+inline std::optional<ObjectiveBreakdown>
+EvaluateObjectiveContribution(
     const SecondStageContext & context,
     const State & state,
     const SecondStageModelSnapshot & model_snapshot,
     const ClusterKey & changed_key,
-    const std::vector<LocalFittingObjectiveSampleRef> & sample_ref_list,
-    const LocalFittingObjectiveDomain & domain,
+    const std::vector<ObjectiveSampleRef> & sample_ref_list,
+    const ObjectiveDomain & domain,
     bool include_offset_penalty = true)
 {
-    return EvaluateLocalFittingObjectiveContributionImpl(
+    return EvaluateObjectiveContributionImpl(
         context,
         state,
         changed_key,
         sample_ref_list,
         domain,
-        [&](const LocalFittingObjectiveSampleRef & sample_ref)
+        [&](const ObjectiveSampleRef & sample_ref)
         {
             return EvaluateLocalFittingResidualSample(
                 context,
@@ -539,23 +539,23 @@ EvaluateLocalFittingObjectiveContribution(
         include_offset_penalty);
 }
 
-inline std::optional<LocalFittingObjectiveBreakdown>
-EvaluateLocalFittingObjectiveContribution(
+inline std::optional<ObjectiveBreakdown>
+EvaluateObjectiveContribution(
     const SecondStageContext & context,
     const FitState & state,
     const LocalFittingResidualBaseline & residual_baseline,
     const ClusterKey & changed_key,
-    const std::vector<LocalFittingObjectiveSampleRef> & sample_ref_list,
-    const LocalFittingObjectiveDomain & domain,
+    const std::vector<ObjectiveSampleRef> & sample_ref_list,
+    const ObjectiveDomain & domain,
     bool include_offset_penalty = true)
 {
-    return EvaluateLocalFittingObjectiveContributionImpl(
+    return EvaluateObjectiveContributionImpl(
         context,
         state,
         changed_key,
         sample_ref_list,
         domain,
-        [&](const LocalFittingObjectiveSampleRef & sample_ref)
+        [&](const ObjectiveSampleRef & sample_ref)
         {
             return residual_baseline.at(sample_ref.atom_index).at(
                 sample_ref.sample_index);
@@ -563,41 +563,41 @@ EvaluateLocalFittingObjectiveContribution(
         include_offset_penalty);
 }
 
-inline std::optional<LocalFittingObjectiveBreakdown>
-EvaluateLocalFittingObjectiveContribution(
+inline std::optional<ObjectiveBreakdown>
+EvaluateObjectiveContribution(
     const SecondStageContext & context,
     const FitStateView & state,
     const LocalFittingCandidateEvaluationOverlay & overlay,
     const ClusterKey & changed_key,
-    const std::vector<LocalFittingObjectiveSampleRef> & sample_ref_list,
-    const LocalFittingObjectiveDomain & domain,
+    const std::vector<ObjectiveSampleRef> & sample_ref_list,
+    const ObjectiveDomain & domain,
     bool include_offset_penalty = true)
 {
-    return EvaluateLocalFittingObjectiveContributionImpl(
+    return EvaluateObjectiveContributionImpl(
         context,
         state,
         changed_key,
         sample_ref_list,
         domain,
-        [&](const LocalFittingObjectiveSampleRef & sample_ref)
+        [&](const ObjectiveSampleRef & sample_ref)
         {
             return overlay.Evaluate(state, sample_ref);
         },
         include_offset_penalty);
 }
 
-inline std::optional<LocalFittingObjectiveBreakdown>
-EvaluateLocalFittingAuditObjective(
+inline std::optional<ObjectiveBreakdown>
+EvaluateAuditObjective(
     const SecondStageContext & context,
     const FitState & state,
-    const LocalFittingObjectiveDomain & domain,
+    const ObjectiveDomain & domain,
     const SecondStageModelSnapshot & model_snapshot)
 {
-    LocalFittingObjectiveBreakdown total;
+    ObjectiveBreakdown total;
     for (const auto & [key, cluster_domain] : domain.cluster_by_key)
     {
         const auto fit_contribution{
-            EvaluateLocalFittingObjectiveContribution(
+            EvaluateObjectiveContribution(
                 context,
                 state,
                 model_snapshot,
@@ -608,7 +608,7 @@ EvaluateLocalFittingAuditObjective(
         };
         if (!fit_contribution.has_value()) return std::nullopt;
         const auto tail_contribution{
-            EvaluateLocalFittingObjectiveContribution(
+            EvaluateObjectiveContribution(
                 context,
                 state,
                 model_snapshot,
@@ -618,9 +618,9 @@ EvaluateLocalFittingAuditObjective(
                 false)
         };
         if (!tail_contribution.has_value()) return std::nullopt;
-        const std::vector<LocalFittingObjectiveSampleRef> empty_sample_ref_list;
+        const std::vector<ObjectiveSampleRef> empty_sample_ref_list;
         const auto offset_contribution{
-            EvaluateLocalFittingObjectiveContribution(
+            EvaluateObjectiveContribution(
                 context,
                 state,
                 model_snapshot,
@@ -647,21 +647,21 @@ EvaluateLocalFittingAuditObjective(
         total.tail_validation_penalty +
         total.offset_plausibility_penalty;
     return std::isfinite(total.total_objective) ?
-        std::optional<LocalFittingObjectiveBreakdown>{ total } :
+        std::optional<ObjectiveBreakdown>{ total } :
         std::nullopt;
 }
 
-inline std::optional<LocalFittingObjectiveBreakdown>
-EvaluateLocalFittingAuditObjective(
+inline std::optional<ObjectiveBreakdown>
+EvaluateAuditObjective(
     const SecondStageContext & context,
     const FitState & state,
-    const LocalFittingObjectiveDomain & domain,
+    const ObjectiveDomain & domain,
     const LocalFittingResidualBaseline & residual_baseline)
 {
-    LocalFittingObjectiveBreakdown total;
+    ObjectiveBreakdown total;
     for (const auto & [key, cluster_domain] : domain.cluster_by_key)
     {
-        std::vector<LocalFittingObjectiveSampleRef> sample_ref_list{
+        std::vector<ObjectiveSampleRef> sample_ref_list{
             cluster_domain.fit_sample_ref_list
         };
         sample_ref_list.insert(
@@ -669,7 +669,7 @@ EvaluateLocalFittingAuditObjective(
             cluster_domain.tail_sample_ref_list.begin(),
             cluster_domain.tail_sample_ref_list.end());
         const auto contribution{
-            EvaluateLocalFittingObjectiveContribution(
+            EvaluateObjectiveContribution(
                 context,
                 state,
                 residual_baseline,
@@ -684,24 +684,24 @@ EvaluateLocalFittingAuditObjective(
         total.offset_plausibility_penalty +=
             contribution->offset_plausibility_penalty;
     }
-    return BuildLocalFittingObjectiveBreakdown(
+    return BuildObjectiveBreakdown(
         total.fit_range_residual_objective,
         total.tail_validation_loss,
         total.offset_plausibility_penalty,
-        kLocalFittingTailValidationWeight);
+        kTailValidationWeight);
 }
 
-inline std::optional<LocalFittingObjectiveBreakdown>
-EvaluateLocalFittingObjectiveDelta(
+inline std::optional<ObjectiveBreakdown>
+EvaluateObjectiveDelta(
     const SecondStageContext & context,
     const FitState & previous_state,
     const FitStateView & candidate_state,
     const LocalFittingResidualBaseline & residual_baseline,
     const LocalFittingCandidateEvaluationOverlay & candidate_overlay,
     const ClusterKey & changed_key,
-    const std::vector<LocalFittingObjectiveSampleRef> & affected_sample_ref_list,
-    const LocalFittingObjectiveDomain & domain,
-    const std::optional<LocalFittingObjectiveBreakdown> & baseline,
+    const std::vector<ObjectiveSampleRef> & affected_sample_ref_list,
+    const ObjectiveDomain & domain,
+    const std::optional<ObjectiveBreakdown> & baseline,
     LocalFittingPerformanceCounters * performance_counters = nullptr)
 {
     if (!baseline.has_value()) return std::nullopt;
@@ -719,7 +719,7 @@ EvaluateLocalFittingObjectiveDelta(
             std::memory_order_relaxed);
     }
     const auto candidate_changed{
-        EvaluateLocalFittingObjectiveContribution(
+        EvaluateObjectiveContribution(
             context,
             candidate_state,
             candidate_overlay,
@@ -728,7 +728,7 @@ EvaluateLocalFittingObjectiveDelta(
             domain)
     };
     const auto previous_changed{
-        EvaluateLocalFittingObjectiveContribution(
+        EvaluateObjectiveContribution(
             context,
             previous_state,
             residual_baseline,
@@ -740,7 +740,7 @@ EvaluateLocalFittingObjectiveDelta(
     {
         return std::nullopt;
     }
-    return BuildLocalFittingObjectiveBreakdown(
+    return BuildObjectiveBreakdown(
         baseline->fit_range_residual_objective +
             candidate_changed->fit_range_residual_objective -
             previous_changed->fit_range_residual_objective,
@@ -750,40 +750,40 @@ EvaluateLocalFittingObjectiveDelta(
         baseline->offset_plausibility_penalty +
             candidate_changed->offset_plausibility_penalty -
             previous_changed->offset_plausibility_penalty,
-        kLocalFittingTailValidationWeight);
+        kTailValidationWeight);
 }
 
-inline std::optional<LocalFittingObjectiveBreakdown>
-EvaluateLocalFittingAuditObjective(
+inline std::optional<ObjectiveBreakdown>
+EvaluateAuditObjective(
     const SecondStageContext & context,
     const FitState & state,
-    const LocalFittingObjectiveDomain & domain)
+    const ObjectiveDomain & domain)
 {
     const auto model_snapshot{
         BuildSecondStageModelSnapshot(
             context,
             BuildFittedGaussianSnapshot(state))
     };
-    return EvaluateLocalFittingAuditObjective(
+    return EvaluateAuditObjective(
         context,
         state,
         domain,
         model_snapshot);
 }
 
-inline LocalFittingObjectiveByKey BuildLocalFittingObjectiveByKey(
+inline ObjectiveByKey BuildObjectiveByKey(
     const SecondStageContext & context,
     const FitState & state,
     const CouplingGraphPartition & partition,
-    const LocalFittingObjectiveDomain & domain,
+    const ObjectiveDomain & domain,
     const SecondStageModelSnapshot & model_snapshot)
 {
-    LocalFittingObjectiveByKey objective_by_key;
+    ObjectiveByKey objective_by_key;
     for (const auto & [key, sample_ref_list] : partition.sample_id_list_by_key)
     {
         objective_by_key.emplace(
             key,
-            EvaluateLocalFittingObjectiveContribution(
+            EvaluateObjectiveContribution(
                 context,
                 state,
                 model_snapshot,
@@ -794,20 +794,20 @@ inline LocalFittingObjectiveByKey BuildLocalFittingObjectiveByKey(
     return objective_by_key;
 }
 
-inline LocalFittingObjectiveByKey BuildLocalFittingObjectiveByKey(
+inline ObjectiveByKey BuildObjectiveByKey(
     const SecondStageContext & context,
     const FitState & state,
     const CouplingGraphPartition & partition,
-    const LocalFittingObjectiveDomain & domain,
+    const ObjectiveDomain & domain,
     const LocalFittingResidualBaseline & residual_baseline)
 {
-    LocalFittingObjectiveByKey objective_by_key;
+    ObjectiveByKey objective_by_key;
     for (const auto & [key, sample_ref_list] :
         partition.sample_id_list_by_key)
     {
         objective_by_key.emplace(
             key,
-            EvaluateLocalFittingObjectiveContribution(
+            EvaluateObjectiveContribution(
                 context,
                 state,
                 residual_baseline,
@@ -818,25 +818,25 @@ inline LocalFittingObjectiveByKey BuildLocalFittingObjectiveByKey(
     return objective_by_key;
 }
 
-[[maybe_unused]] inline LocalFittingCombinedObjectiveCheck
-EvaluateLocalFittingCombinedObjective(
+[[maybe_unused]] inline CombinedObjectiveCheck
+EvaluateCombinedObjective(
     const SecondStageContext & context,
     const FitState & candidate_state,
     const FitState & previous_state,
-    const LocalFittingObjectiveDomain & domain,
-    const LocalFittingBestAuditState & audit_state,
-    const std::optional<LocalFittingObjectiveBreakdown> & previous_objective = std::nullopt)
+    const ObjectiveDomain & domain,
+    const BestAuditState & audit_state,
+    const std::optional<ObjectiveBreakdown> & previous_objective = std::nullopt)
 {
     const auto candidate_objective{
-        EvaluateLocalFittingAuditObjective(context, candidate_state, domain)
+        EvaluateAuditObjective(context, candidate_state, domain)
     };
     const auto resolved_previous_objective{
         previous_objective.has_value() ?
             previous_objective :
-            EvaluateLocalFittingAuditObjective(context, previous_state, domain)
+            EvaluateAuditObjective(context, previous_state, domain)
     };
-    return LocalFittingCombinedObjectiveCheck{
-        IsLocalFittingAuditObjectiveAcceptableForProgress(
+    return CombinedObjectiveCheck{
+        IsAuditObjectiveAcceptableForProgress(
             candidate_objective.has_value() ?
                 std::optional<double>{ candidate_objective->total_objective } :
                 std::nullopt,
@@ -846,26 +846,26 @@ EvaluateLocalFittingCombinedObjective(
             audit_state.best.has_value() ?
                 std::optional<double>{ audit_state.best->objective.total_objective } :
                 std::nullopt,
-            kLocalFittingObjectiveProgressTolerance),
+            kObjectiveProgressTolerance),
         candidate_objective
     };
 }
 
-inline LocalFittingCombinedObjectiveCheck EvaluateLocalFittingCombinedObjective(
+inline CombinedObjectiveCheck EvaluateCombinedObjective(
     const SecondStageContext & context,
     const FitState & previous_state,
     const FitStateView & candidate_state,
     const LocalFittingResidualBaseline & residual_baseline,
     const LocalFittingCandidateEvaluationOverlay & candidate_overlay,
     const ClusterKey & changed_key,
-    const std::vector<LocalFittingObjectiveSampleRef> & affected_sample_ref_list,
-    const LocalFittingObjectiveDomain & domain,
-    const LocalFittingBestAuditState & audit_state,
-    const std::optional<LocalFittingObjectiveBreakdown> & previous_objective,
+    const std::vector<ObjectiveSampleRef> & affected_sample_ref_list,
+    const ObjectiveDomain & domain,
+    const BestAuditState & audit_state,
+    const std::optional<ObjectiveBreakdown> & previous_objective,
     LocalFittingPerformanceCounters * performance_counters = nullptr)
 {
     const auto candidate_objective{
-        EvaluateLocalFittingObjectiveDelta(
+        EvaluateObjectiveDelta(
             context,
             previous_state,
             candidate_state,
@@ -877,8 +877,8 @@ inline LocalFittingCombinedObjectiveCheck EvaluateLocalFittingCombinedObjective(
             previous_objective,
             performance_counters)
     };
-    return LocalFittingCombinedObjectiveCheck{
-        IsLocalFittingAuditObjectiveAcceptableForProgress(
+    return CombinedObjectiveCheck{
+        IsAuditObjectiveAcceptableForProgress(
             candidate_objective.has_value() ?
                 std::optional<double>{ candidate_objective->total_objective } :
                 std::nullopt,
@@ -888,13 +888,13 @@ inline LocalFittingCombinedObjectiveCheck EvaluateLocalFittingCombinedObjective(
             audit_state.best.has_value() ?
                 std::optional<double>{ audit_state.best->objective.total_objective } :
                 std::nullopt,
-            kLocalFittingObjectiveProgressTolerance),
+            kObjectiveProgressTolerance),
         candidate_objective
     };
 }
 
-inline LocalFittingCombinedCandidateObjectiveCheck
-EvaluateLocalFittingCombinedCandidateObjective(
+inline CombinedCandidateObjectiveCheck
+EvaluateCombinedCandidateObjective(
     const SecondStageContext & context,
     const SecondStageModelSnapshot & previous_model_snapshot,
     const LocalFittingResidualBaseline & residual_baseline,
@@ -902,16 +902,16 @@ EvaluateLocalFittingCombinedCandidateObjective(
     const FitState & previous_state,
     const FitState & candidate_state,
     const std::vector<ClusterKey> & accepted_key_list,
-    const LocalFittingObjectiveDomain & objective_domain,
-    const LocalFittingBestAuditState & best_audit_state,
+    const ObjectiveDomain & objective_domain,
+    const BestAuditState & best_audit_state,
     LocalFittingPerformanceCounters * performance_counters = nullptr)
 {
-    LocalFittingCombinedCandidateObjectiveCheck result;
+    CombinedCandidateObjectiveCheck result;
     result.guard_required =
         partition.boundary_sample_count > 0 && !accepted_key_list.empty();
     if (!result.guard_required) return result;
 
-    result.previous_objective = EvaluateLocalFittingAuditObjective(
+    result.previous_objective = EvaluateAuditObjective(
         context,
         previous_state,
         objective_domain,
@@ -947,7 +947,7 @@ EvaluateLocalFittingCombinedCandidateObjective(
             accepted_key_list)
     };
     const auto combined_check{
-        EvaluateLocalFittingCombinedObjective(
+        EvaluateCombinedObjective(
             context,
             previous_state,
             combined_state_view,
@@ -966,28 +966,28 @@ EvaluateLocalFittingCombinedCandidateObjective(
 }
 
 
-inline bool TryUpdateLocalFittingBestAuditState(
+inline bool TryUpdateBestAuditState(
     const SecondStageContext & context,
     const FitState & candidate_state,
     const PolishProvenance & candidate_polish_provenance,
     const std::optional<std::size_t> & accepted_iteration,
-    const LocalFittingObjectiveDomain & domain,
-    LocalFittingBestAuditState & audit_state,
-    const std::optional<LocalFittingObjectiveBreakdown> & precomputed_objective = std::nullopt)
+    const ObjectiveDomain & domain,
+    BestAuditState & audit_state,
+    const std::optional<ObjectiveBreakdown> & precomputed_objective = std::nullopt)
 {
     const auto candidate_objective{ precomputed_objective.has_value() ?
         precomputed_objective :
-        EvaluateLocalFittingAuditObjective(context, candidate_state, domain) };
+        EvaluateAuditObjective(context, candidate_state, domain) };
     if (!candidate_objective.has_value()) return false;
     if (audit_state.best.has_value() &&
-        !IsBetterLocalFittingAuditObjective(
+        !IsBetterAuditObjective(
             candidate_objective->total_objective,
             audit_state.best->objective.total_objective,
-            kLocalFittingObjectiveStrictTolerance))
+            kObjectiveStrictTolerance))
     {
         return false;
     }
-    audit_state.best = LocalFittingAuditedState{
+    audit_state.best = AuditedState{
         *candidate_objective,
         candidate_state,
         candidate_polish_provenance,
@@ -996,15 +996,15 @@ inline bool TryUpdateLocalFittingBestAuditState(
     return true;
 }
 
-inline LocalFittingBestAuditState BuildInitialLocalFittingBestAuditState(
+inline BestAuditState BuildInitialBestAuditState(
     const SecondStageContext & context,
     const FitState & initial_state,
     const PolishProvenance & initial_polish_provenance,
     const std::optional<std::size_t> & accepted_iteration,
-    const LocalFittingObjectiveDomain & domain)
+    const ObjectiveDomain & domain)
 {
-    LocalFittingBestAuditState audit_state;
-    static_cast<void>(TryUpdateLocalFittingBestAuditState(
+    BestAuditState audit_state;
+    static_cast<void>(TryUpdateBestAuditState(
         context,
         initial_state,
         initial_polish_provenance,
@@ -1014,15 +1014,15 @@ inline LocalFittingBestAuditState BuildInitialLocalFittingBestAuditState(
     return audit_state;
 }
 
-inline void ResetLocalFittingBestAuditAfterObjectiveDomainChange(
+inline void ResetBestAuditAfterObjectiveDomainChange(
     const SecondStageContext & context,
     const FitState & validated_state,
     const PolishProvenance & validated_polish_provenance,
     std::size_t accepted_iteration,
-    const LocalFittingObjectiveDomain & domain,
-    LocalFittingBestAuditState & audit_state)
+    const ObjectiveDomain & domain,
+    BestAuditState & audit_state)
 {
-    audit_state = BuildInitialLocalFittingBestAuditState(
+    audit_state = BuildInitialBestAuditState(
         context,
         validated_state,
         validated_polish_provenance,
@@ -1031,12 +1031,12 @@ inline void ResetLocalFittingBestAuditAfterObjectiveDomainChange(
 }
 
 
-inline LocalFittingClusterObjectiveState
-BuildInitialLocalFittingClusterObjectiveState(
-    const LocalFittingObjectiveByKey & previous_objective_by_key,
+inline ClusterObjectiveState
+BuildInitialClusterObjectiveState(
+    const ObjectiveByKey & previous_objective_by_key,
     const ClusterKey & key)
 {
-    LocalFittingClusterObjectiveState state;
+    ClusterObjectiveState state;
     const auto objective_iter{ previous_objective_by_key.find(key) };
     if (objective_iter != previous_objective_by_key.end())
     {
@@ -1045,12 +1045,12 @@ BuildInitialLocalFittingClusterObjectiveState(
     return state;
 }
 
-inline void ReconcileLocalFittingClusterObjectiveState(
+inline void ReconcileClusterObjectiveState(
     const CouplingGraphPartition & partition,
-    const LocalFittingObjectiveByKey & previous_objective_by_key,
-    LocalFittingClusterObjectiveStateMap & state_by_key)
+    const ObjectiveByKey & previous_objective_by_key,
+    ClusterObjectiveStateMap & state_by_key)
 {
-    LocalFittingClusterObjectiveStateMap next_state_by_key;
+    ClusterObjectiveStateMap next_state_by_key;
     for (const auto & [key, objective_sample_ref_list] : partition.sample_id_list_by_key)
     {
         static_cast<void>(objective_sample_ref_list);
@@ -1062,25 +1062,25 @@ inline void ReconcileLocalFittingClusterObjectiveState(
         }
         next_state_by_key.emplace(
             key,
-            BuildInitialLocalFittingClusterObjectiveState(
+            BuildInitialClusterObjectiveState(
                 previous_objective_by_key,
                 key));
     }
     state_by_key = std::move(next_state_by_key);
 }
 
-inline bool TryCommitLocalFittingClusterCandidate(
+inline bool TryCommitClusterCandidate(
     const SecondStageContext & context,
     const FitStateView & candidate_state,
     const LocalFittingCandidateEvaluationOverlay & candidate_overlay,
     const FitStateView & previous_state,
     const ClusterKey & key,
-    const std::vector<LocalFittingObjectiveSampleRef> & objective_sample_ref_list,
-    const std::optional<LocalFittingObjectiveBreakdown> & previous_objective,
+    const std::vector<ObjectiveSampleRef> & objective_sample_ref_list,
+    const std::optional<ObjectiveBreakdown> & previous_objective,
     bool requires_strict_improvement,
-    const LocalFittingObjectiveDomain & domain,
-    LocalFittingClusterObjectiveStateMap & cluster_objective_state,
-    LocalFittingObjectiveAttemptDiagnostic & diagnostic,
+    const ObjectiveDomain & domain,
+    ClusterObjectiveStateMap & cluster_objective_state,
+    ObjectiveAttemptDiagnostic & diagnostic,
     LocalFittingPerformanceCounters * performance_counters = nullptr)
 {
     if (performance_counters != nullptr)
@@ -1119,7 +1119,7 @@ inline bool TryCommitLocalFittingClusterCandidate(
     }
     auto & state{ cluster_objective_state.at(key) };
     diagnostic.candidate_objective =
-        EvaluateLocalFittingObjectiveContribution(
+        EvaluateObjectiveContribution(
             context,
             candidate_state,
             candidate_overlay,
@@ -1130,15 +1130,15 @@ inline bool TryCommitLocalFittingClusterCandidate(
     diagnostic.best_objective = state.best_objective;
 
     const auto is_objective_deteriorated = [](
-        const std::optional<LocalFittingObjectiveBreakdown> & candidate,
+        const std::optional<ObjectiveBreakdown> & candidate,
         const std::optional<double> & reference)
     {
         if (!reference.has_value()) return false;
         if (!candidate.has_value()) return true;
         return candidate->total_objective > *reference +
-            CalculateLocalFittingObjectiveTolerance(
+            CalculateObjectiveTolerance(
                 *reference,
-                kLocalFittingObjectiveProgressTolerance);
+                kObjectiveProgressTolerance);
     };
     if (!diagnostic.candidate_objective.has_value() || !diagnostic.previous_objective.has_value())
     {
@@ -1159,10 +1159,10 @@ inline bool TryCommitLocalFittingClusterCandidate(
     if (requires_strict_improvement &&
         (!diagnostic.candidate_objective.has_value() ||
             !diagnostic.previous_objective.has_value() ||
-            !IsBetterLocalFittingAuditObjective(
+            !IsBetterAuditObjective(
                 diagnostic.candidate_objective->total_objective,
                 diagnostic.previous_objective->total_objective,
-                kLocalFittingObjectiveStrictTolerance)))
+                kObjectiveStrictTolerance)))
     {
         return false;
     }
@@ -1174,17 +1174,17 @@ inline bool TryCommitLocalFittingClusterCandidate(
             diagnostic.candidate_objective->total_objective
         };
         const auto best_objective_value{ state.best_objective->total_objective };
-        if (IsBetterLocalFittingAuditObjective(
+        if (IsBetterAuditObjective(
                 candidate_objective_value,
                 best_objective_value,
-                kLocalFittingObjectiveStrictTolerance))
+                kObjectiveStrictTolerance))
         {
             is_better_than_best = true;
         }
-        else if (IsBetterLocalFittingAuditObjective(
+        else if (IsBetterAuditObjective(
                      best_objective_value,
                      candidate_objective_value,
-                     kLocalFittingObjectiveStrictTolerance))
+                     kObjectiveStrictTolerance))
         {
             is_better_than_best = false;
         }

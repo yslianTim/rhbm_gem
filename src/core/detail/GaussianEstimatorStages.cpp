@@ -3,7 +3,7 @@
 #include "core/detail/GaussianEstimatorStages.hpp"
 #include "core/detail/LocalFittingAudit.hpp"
 #include "core/detail/LocalFittingResidualEvaluation.hpp"
-#include "core/detail/LocalFittingObjective.hpp"
+#include "core/detail/Objective.hpp"
 #include "core/detail/LocalFittingTerminalFailure.hpp"
 #include "core/detail/CandidateSelection.hpp"
 #include "core/detail/LocalFittingIteration.hpp"
@@ -64,11 +64,11 @@ using detail::BuildSecondStageModelSnapshot;
 using detail::ClusterKey;
 using detail::LocalFittingClusterSolverWorkspace;
 using detail::LocalFittingClusterSolverWorkspaceMap;
-using detail::LocalFittingObjectiveAttemptDiagnostic;
-using detail::LocalFittingObjectiveSampleRef;
+using detail::ObjectiveAttemptDiagnostic;
+using detail::ObjectiveSampleRef;
 using detail::LocalFittingPerformanceCounters;
 using detail::PolishProvenance;
-using detail::LocalFittingPreObjectiveFailureReason;
+using detail::PreObjectiveFailureReason;
 using detail::LocalFittingResidualBaseline;
 using detail::FitState;
 using detail::AtomContext;
@@ -93,19 +93,19 @@ using detail::SummarizeTransformedChanges;
 using detail::IsTransformedChangeConverged;
 using detail::GetMaximumTransformedChange;
 using detail::BuildTransformedEstimationList;
-using detail::LocalFittingObjectiveDomain;
-using detail::LocalFittingClusterObjectiveState;
-using detail::LocalFittingClusterObjectiveStateMap;
-using detail::LocalFittingObjectiveByKey;
-using detail::LocalFittingAuditedState;
-using detail::LocalFittingBestAuditState;
-using detail::BuildLocalFittingObjectiveDomain;
-using detail::BuildLocalFittingObjectiveByKey;
-using detail::EvaluateLocalFittingCombinedCandidateObjective;
-using detail::BuildInitialLocalFittingBestAuditState;
-using detail::ResetLocalFittingBestAuditAfterObjectiveDomainChange;
-using detail::TryUpdateLocalFittingBestAuditState;
-using detail::ReconcileLocalFittingClusterObjectiveState;
+using detail::ObjectiveDomain;
+using detail::ClusterObjectiveState;
+using detail::ClusterObjectiveStateMap;
+using detail::ObjectiveByKey;
+using detail::AuditedState;
+using detail::BestAuditState;
+using detail::BuildObjectiveDomain;
+using detail::BuildObjectiveByKey;
+using detail::EvaluateCombinedCandidateObjective;
+using detail::BuildInitialBestAuditState;
+using detail::ResetBestAuditAfterObjectiveDomainChange;
+using detail::TryUpdateBestAuditState;
+using detail::ReconcileClusterObjectiveState;
 using detail::PersistentTerminalFailureState;
 using detail::PersistentTerminalFailureStateMap;
 using detail::LocalFittingTerminalSummary;
@@ -118,9 +118,9 @@ using detail::CandidateSelection;
 using detail::RejectCombinedCandidate;
 using detail::SelectClusterCandidates;
 using detail::TryBacktrackCombinedCandidate;
-using detail::kLocalFittingFitRangeWeight;
-using detail::kLocalFittingTailValidationWeight;
-using detail::kLocalFittingOffsetPlausibilityPenaltyWeight;
+using detail::kFitRangeWeight;
+using detail::kTailValidationWeight;
+using detail::kOffsetPlausibilityPenaltyWeight;
 using detail::BuildSecondStageContext;
 using detail::StoreSecondStageNeighborCounts;
 using detail::BuildInitialFitState;
@@ -132,7 +132,7 @@ struct LocalFittingFinalStateSelection
 {
     const FitState * state{ nullptr };
     const PolishProvenance * polish_provenance{ nullptr };
-    const LocalFittingAuditedState * audit_state{ nullptr };
+    const AuditedState * audit_state{ nullptr };
     detail::LocalFittingFinalStateSource source{
         detail::LocalFittingFinalStateSource::Unavailable
     };
@@ -141,7 +141,7 @@ struct LocalFittingFinalStateSelection
 LocalFittingFinalStateSelection SelectLocalFittingFinalState(
     const FitState & latest_validated_state,
     const PolishProvenance & latest_validated_polish_provenance,
-    const std::optional<LocalFittingAuditedState> & audited_state)
+    const std::optional<AuditedState> & audited_state)
 {
     const auto source{ detail::SelectLocalFittingFinalStateSource(
         kApplyLocalFittingBestIteration,
@@ -339,7 +339,7 @@ detail::GraphTopology BuildGraphTopology(
                 }
             }
             builder.AddSample(
-                LocalFittingObjectiveSampleRef{ atom_index, sample_index },
+                ObjectiveSampleRef{ atom_index, sample_index },
                 participant_list);
             completed_work++;
             update_progress();
@@ -523,8 +523,8 @@ void LogGraphTopology(
     }
 }
 
-void LogLocalFittingObjectiveDomain(
-    const LocalFittingObjectiveDomain & domain,
+void LogObjectiveDomain(
+    const ObjectiveDomain & domain,
     const FitOptions & options,
     bool is_terminal_reset = false)
 {
@@ -562,9 +562,9 @@ void LogLocalFittingObjectiveDomain(
             "Reset second-stage objective domain" :
             "Initialize second-stage objective domain")
         << ": fit/tail/offset weights = "
-        << kLocalFittingFitRangeWeight << "/"
-        << kLocalFittingTailValidationWeight << "/"
-        << kLocalFittingOffsetPlausibilityPenaltyWeight
+        << kFitRangeWeight << "/"
+        << kTailValidationWeight << "/"
+        << kOffsetPlausibilityPenaltyWeight
         << ", clusters = " << domain.cluster_by_key.size()
         << ", active atoms = " << domain.active_atom_count
         << ", unique fit/tail samples = "
@@ -654,7 +654,7 @@ void AppendLocalFittingOffsetSummary(std::ostringstream & stream, const LocalFit
         << stats.maximum_absolute_offset;
 }
 
-void AppendLocalFittingAuditSummary(std::ostringstream & stream, const LocalFittingAuditedState & audited_state)
+void AppendLocalFittingAuditSummary(std::ostringstream & stream, const AuditedState & audited_state)
 {
     const auto & objective{ audited_state.objective };
     stream << "; audit best source = ";
@@ -675,7 +675,7 @@ void AppendLocalFittingAuditSummary(std::ostringstream & stream, const LocalFitt
         << objective.total_objective
         << ", tail raw/weight = "
         << objective.tail_validation_loss << "/"
-        << kLocalFittingTailValidationWeight;
+        << kTailValidationWeight;
 }
 
 void AppendLocalFittingTerminalSummary(std::ostringstream & stream, const LocalFittingTerminalSummary & summary)
@@ -753,9 +753,9 @@ void FinishLocalFittingWithNoActiveAtoms(
     }
 }
 
-void AppendLocalFittingObjectiveBreakdown(
+void AppendObjectiveBreakdown(
     std::ostringstream & stream,
-    const std::optional<detail::LocalFittingObjectiveBreakdown> & breakdown)
+    const std::optional<detail::ObjectiveBreakdown> & breakdown)
 {
     if (!breakdown.has_value())
     {
@@ -769,18 +769,18 @@ void AppendLocalFittingObjectiveBreakdown(
         << breakdown->total_objective;
 }
 
-std::string_view GetLocalFittingPreObjectiveFailureReasonText(
-    LocalFittingPreObjectiveFailureReason reason)
+std::string_view GetPreObjectiveFailureReasonText(
+    PreObjectiveFailureReason reason)
 {
     switch (reason)
     {
-    case LocalFittingPreObjectiveFailureReason::None:
+    case PreObjectiveFailureReason::None:
         return "none";
-    case LocalFittingPreObjectiveFailureReason::InvalidModel:
+    case PreObjectiveFailureReason::InvalidModel:
         return "invalid-model";
-    case LocalFittingPreObjectiveFailureReason::PreviousSharedOffsetProjectionOutsideTrustRegion:
+    case PreObjectiveFailureReason::PreviousSharedOffsetProjectionOutsideTrustRegion:
         return "previous-shared-offset-projection-outside-trust-region";
-    case LocalFittingPreObjectiveFailureReason::NoCandidateWithinTrustRegion:
+    case PreObjectiveFailureReason::NoCandidateWithinTrustRegion:
         return "no-candidate-within-trust-region";
     }
     return "unknown";
@@ -817,7 +817,7 @@ void LogRejectedLocalFittingClusterDiagnostics(
             << diagnostic.trust_region_radius << "/";
 
         if (diagnostic.pre_objective_failure_reason !=
-            LocalFittingPreObjectiveFailureReason::None)
+            PreObjectiveFailureReason::None)
         {
             if (diagnostic.pre_objective_attempted_step_norm.has_value())
             {
@@ -829,7 +829,7 @@ void LogRejectedLocalFittingClusterDiagnostics(
             }
             message
                 << ", status = "
-                << GetLocalFittingPreObjectiveFailureReasonText(
+                << GetPreObjectiveFailureReasonText(
                     diagnostic.pre_objective_failure_reason)
                 << ", objective = not-evaluated";
             Logger::Log(LogLevel::Debug, message.str());
@@ -876,13 +876,13 @@ void LogRejectedLocalFittingClusterDiagnostics(
         {
             message << "unavailable";
         }
-        message << "/" << kLocalFittingTailValidationWeight;
+        message << "/" << kTailValidationWeight;
         message << ", candidate = ";
-        AppendLocalFittingObjectiveBreakdown(message, diagnostic.candidate_objective);
+        AppendObjectiveBreakdown(message, diagnostic.candidate_objective);
         message << ", previous = ";
-        AppendLocalFittingObjectiveBreakdown(message, diagnostic.previous_objective);
+        AppendObjectiveBreakdown(message, diagnostic.previous_objective);
         message << ", best = ";
-        AppendLocalFittingObjectiveBreakdown(message, diagnostic.best_objective);
+        AppendObjectiveBreakdown(message, diagnostic.best_objective);
         message << ", rejected-by = ";
         if (!diagnostic.candidate_objective.has_value())
         {
@@ -1187,7 +1187,7 @@ void LogLocalFittingConverged(
 void LogLocalFittingMaximumIterations(
     const FitOptions & options,
     detail::LocalFittingFinalStateSource final_state_source,
-    const LocalFittingAuditedState * applied_audit_state,
+    const AuditedState * applied_audit_state,
     const LocalFittingTerminalSummary & terminal_summary,
     const LocalFittingOffsetStats & applied_offset_stats)
 {
@@ -1220,7 +1220,7 @@ void LogSecondStageLocalFittingSummary(
     const FitOptions & options,
     std::size_t accepted_iteration_count,
     std::string_view stop_reason,
-    const LocalFittingBestAuditState & best_audit_state,
+    const BestAuditState & best_audit_state,
     std::optional<bool> final_uses_polish,
     detail::LocalFittingFinalStateSource final_state_source)
 {
@@ -1358,15 +1358,15 @@ bool RunSecondStageLocalFitting(
             })
     };
     auto objective_domain{
-        BuildLocalFittingObjectiveDomain(
+        BuildObjectiveDomain(
             context,
             previous_state,
             graph_partition,
             options)
     };
-    LogLocalFittingObjectiveDomain(objective_domain, options);
+    LogObjectiveDomain(objective_domain, options);
     auto best_audit_state{
-        BuildInitialLocalFittingBestAuditState(
+        BuildInitialBestAuditState(
             context,
             previous_state,
             previous_polish_provenance,
@@ -1381,7 +1381,7 @@ bool RunSecondStageLocalFitting(
     std::vector<char> rollback_atom_mask(atom_size, 0);
     PersistentTerminalFailureStateMap persistent_terminal_failure_state_by_key;
     LocalFittingTerminalSummary terminal_summary;
-    LocalFittingClusterObjectiveStateMap cluster_objective_state;
+    ClusterObjectiveStateMap cluster_objective_state;
     detail::TrustRegionStateSet trust_region_state;
     const auto progress_column_widths{ BuildLocalFittingProgressColumnWidths(atom_size) };
     LogLocalFittingProgressHeader(options, progress_column_widths);
@@ -1425,14 +1425,14 @@ bool RunSecondStageLocalFitting(
         performance_counters.gaussian_cache_miss_count += cached_sample_count;
 
         const auto previous_objective_by_key{
-            BuildLocalFittingObjectiveByKey(
+            BuildObjectiveByKey(
                 context,
                 previous_state,
                 graph_partition,
                 objective_domain,
                 residual_baseline)
         };
-        ReconcileLocalFittingClusterObjectiveState(
+        ReconcileClusterObjectiveState(
             graph_partition,
             previous_objective_by_key,
             cluster_objective_state);
@@ -1543,7 +1543,7 @@ bool RunSecondStageLocalFitting(
 
         const auto combined_changed_key_list{ selection.accepted_key_list };
         const auto combined_check{
-            EvaluateLocalFittingCombinedCandidateObjective(
+            EvaluateCombinedCandidateObjective(
                 context,
                 previous_model_snapshot,
                 residual_baseline,
@@ -1660,12 +1660,12 @@ bool RunSecondStageLocalFitting(
                         graph_topology,
                         remaining_active_index_list)
                 };
-                objective_domain = BuildLocalFittingObjectiveDomain(
+                objective_domain = BuildObjectiveDomain(
                     context,
                     assembled_state,
                     remaining_graph_partition,
                     options);
-                LogLocalFittingObjectiveDomain(
+                LogObjectiveDomain(
                     objective_domain,
                     options,
                     true);
@@ -1676,18 +1676,18 @@ bool RunSecondStageLocalFitting(
                         BuildFittedGaussianSnapshot(assembled_state))
                 };
                 const auto remaining_objective_by_key{
-                    BuildLocalFittingObjectiveByKey(
+                    BuildObjectiveByKey(
                         context,
                         assembled_state,
                         remaining_graph_partition,
                         objective_domain,
                         assembled_model_snapshot)
                 };
-                ReconcileLocalFittingClusterObjectiveState(
+                ReconcileClusterObjectiveState(
                     remaining_graph_partition,
                     remaining_objective_by_key,
                     cluster_objective_state);
-                ResetLocalFittingBestAuditAfterObjectiveDomainChange(
+                ResetBestAuditAfterObjectiveDomainChange(
                     context,
                     assembled_state,
                     assembled_polish_provenance,
@@ -1795,7 +1795,7 @@ bool RunSecondStageLocalFitting(
 
         accepted_iteration_count++;
         const auto improved_best_audit{
-            TryUpdateLocalFittingBestAuditState(
+            TryUpdateBestAuditState(
                 context,
                 assembled_state,
                 assembled_polish_provenance,

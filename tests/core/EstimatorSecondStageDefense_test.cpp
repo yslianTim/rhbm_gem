@@ -21,7 +21,7 @@
 #include "core/detail/LocalFittingHealth.hpp"
 #include "core/detail/JointOffset.hpp"
 #include "core/detail/JointPolish.hpp"
-#include "core/detail/LocalFittingObjective.hpp"
+#include "core/detail/Objective.hpp"
 #include "core/detail/LocalFittingResidualEvaluation.hpp"
 #include "core/detail/SeedRepair.hpp"
 #include "core/detail/LocalFittingSuspiciousUpdate.hpp"
@@ -268,7 +268,7 @@ struct JointPolishFixture
 {
     polish_detail::SecondStageContext context{};
     polish_detail::FitState state{};
-    std::vector<polish_detail::LocalFittingObjectiveSampleRef>
+    std::vector<polish_detail::ObjectiveSampleRef>
         sample_ref_list{};
 };
 
@@ -314,7 +314,7 @@ JointPolishFixture BuildJointPolishFixture(
                     SamplingPoint{ distance }
                 });
             fixture.sample_ref_list.emplace_back(
-                polish_detail::LocalFittingObjectiveSampleRef{
+                polish_detail::ObjectiveSampleRef{
                     atom_index,
                     atom_context.raw_sampling_entries.size() - 1
                 });
@@ -1547,83 +1547,83 @@ TEST(EstimatorSecondStageDefenseTest, SeedInitializationBuildsMediansOnlyFromDir
 
 TEST(EstimatorSecondStageDefenseTest, AuditObjectiveKeepsEarlierBestOnTie)
 {
-    const audit_detail::LocalFittingObjectiveTolerance tolerance{
+    const audit_detail::ObjectiveTolerance tolerance{
         1.0e-10,
         1.0e-8
     };
-    EXPECT_TRUE(audit_detail::IsBetterLocalFittingAuditObjective(
+    EXPECT_TRUE(audit_detail::IsBetterAuditObjective(
         0.8, 1.0, tolerance));
-    EXPECT_FALSE(audit_detail::IsBetterLocalFittingAuditObjective(
+    EXPECT_FALSE(audit_detail::IsBetterAuditObjective(
         1.2, 1.0, tolerance));
-    EXPECT_FALSE(audit_detail::IsBetterLocalFittingAuditObjective(
+    EXPECT_FALSE(audit_detail::IsBetterAuditObjective(
         1.0 - 0.5e-8, 1.0, tolerance));
-    EXPECT_FALSE(audit_detail::IsBetterLocalFittingAuditObjective(
+    EXPECT_FALSE(audit_detail::IsBetterAuditObjective(
         std::numeric_limits<double>::infinity(), 1.0, tolerance));
-    EXPECT_TRUE(audit_detail::IsBetterLocalFittingAuditObjective(
+    EXPECT_TRUE(audit_detail::IsBetterAuditObjective(
         1.0, std::numeric_limits<double>::infinity(), tolerance));
     EXPECT_THROW(
-        audit_detail::IsBetterLocalFittingAuditObjective(
+        audit_detail::IsBetterAuditObjective(
             0.8,
             1.0,
-            audit_detail::LocalFittingObjectiveTolerance{ -1.0, 0.0 }),
+            audit_detail::ObjectiveTolerance{ -1.0, 0.0 }),
         std::invalid_argument);
 }
 
 TEST(EstimatorSecondStageDefenseTest, AuditObjectiveProgressGuardChecksPreviousAndBest)
 {
-    const audit_detail::LocalFittingObjectiveTolerance tolerance{
+    const audit_detail::ObjectiveTolerance tolerance{
         1.0e-8,
         1.0e-3
     };
-    EXPECT_TRUE(audit_detail::IsLocalFittingAuditObjectiveAcceptableForProgress(
+    EXPECT_TRUE(audit_detail::IsAuditObjectiveAcceptableForProgress(
         1.0005, 1.0, std::optional<double>{ 1.0 }, tolerance));
-    EXPECT_FALSE(audit_detail::IsLocalFittingAuditObjectiveAcceptableForProgress(
+    EXPECT_FALSE(audit_detail::IsAuditObjectiveAcceptableForProgress(
         1.002, 1.0, std::optional<double>{ 1.0 }, tolerance));
-    EXPECT_FALSE(audit_detail::IsLocalFittingAuditObjectiveAcceptableForProgress(
+    EXPECT_FALSE(audit_detail::IsAuditObjectiveAcceptableForProgress(
         1.0, 1.0, std::optional<double>{ 0.99 }, tolerance));
-    EXPECT_FALSE(audit_detail::IsLocalFittingAuditObjectiveAcceptableForProgress(
+    EXPECT_FALSE(audit_detail::IsAuditObjectiveAcceptableForProgress(
         std::numeric_limits<double>::infinity(),
         1.0,
         std::nullopt,
         tolerance));
-    EXPECT_FALSE(audit_detail::IsLocalFittingAuditObjectiveAcceptableForProgress(
+    EXPECT_FALSE(audit_detail::IsAuditObjectiveAcceptableForProgress(
         std::nullopt, 1.0, std::nullopt, tolerance));
-    EXPECT_FALSE(audit_detail::IsLocalFittingAuditObjectiveAcceptableForProgress(
+    EXPECT_FALSE(audit_detail::IsAuditObjectiveAcceptableForProgress(
         1.0, std::nullopt, std::nullopt, tolerance));
 }
 
 TEST(EstimatorSecondStageDefenseTest, AuditToleranceUsesAbsolutePlusRelativeReference)
 {
-    const audit_detail::LocalFittingObjectiveTolerance tolerance{
+    const audit_detail::ObjectiveTolerance tolerance{
         1.0e-8,
         1.0e-3
     };
     EXPECT_DOUBLE_EQ(
-        audit_detail::CalculateLocalFittingObjectiveTolerance(0.0, tolerance),
+        audit_detail::CalculateObjectiveTolerance(0.0, tolerance),
         1.0e-8);
     EXPECT_DOUBLE_EQ(
-        audit_detail::CalculateLocalFittingObjectiveTolerance(-2.0, tolerance),
+        audit_detail::CalculateObjectiveTolerance(-2.0, tolerance),
         1.0e-8 + 2.0e-3);
-    EXPECT_TRUE(audit_detail::IsLocalFittingAuditObjectiveAcceptableForProgress(
+    EXPECT_TRUE(audit_detail::IsAuditObjectiveAcceptableForProgress(
         -2.0 + 1.0e-8 + 2.0e-3,
         -2.0,
         std::nullopt,
         tolerance));
     const auto boundary{
-        2.0 + audit_detail::CalculateLocalFittingObjectiveTolerance(2.0, tolerance)
+        2.0 + audit_detail::CalculateObjectiveTolerance(2.0, tolerance)
     };
-    EXPECT_TRUE(audit_detail::IsLocalFittingAuditObjectiveAcceptableForProgress(
+    EXPECT_TRUE(audit_detail::IsAuditObjectiveAcceptableForProgress(
         boundary,
         2.0,
         std::nullopt,
         tolerance));
-    EXPECT_FALSE(audit_detail::IsLocalFittingAuditObjectiveAcceptableForProgress(
+    EXPECT_FALSE(audit_detail::IsAuditObjectiveAcceptableForProgress(
         boundary + 1.0e-9,
         2.0,
         std::nullopt,
         tolerance));
     EXPECT_THROW(
-        audit_detail::CalculateLocalFittingObjectiveTolerance(
+        audit_detail::CalculateObjectiveTolerance(
             std::numeric_limits<double>::infinity(),
             tolerance),
         std::invalid_argument);
@@ -1676,14 +1676,14 @@ TEST(EstimatorSecondStageDefenseTest, FinalStatePolicySelectsBestOnlyWhenEnabled
 TEST(EstimatorSecondStageDefenseTest, ScientificObjectiveUsesFitTailAndOffsetOnly)
 {
     const auto objective{
-        audit_detail::BuildLocalFittingObjectiveBreakdown(
+        audit_detail::BuildObjectiveBreakdown(
             0.4,
             2.0,
             0.18,
             0.25)
     };
     const auto previous{
-        audit_detail::BuildLocalFittingObjectiveBreakdown(
+        audit_detail::BuildObjectiveBreakdown(
             1.4,
             0.0,
             0.0,
@@ -1693,7 +1693,7 @@ TEST(EstimatorSecondStageDefenseTest, ScientificObjectiveUsesFitTailAndOffsetOnl
     ASSERT_TRUE(objective.has_value());
     ASSERT_TRUE(previous.has_value());
     const auto empty_tail{
-        audit_detail::BuildLocalFittingObjectiveBreakdown(
+        audit_detail::BuildObjectiveBreakdown(
             0.4,
             0.0,
             0.0,
@@ -1711,12 +1711,12 @@ TEST(EstimatorSecondStageDefenseTest, ScientificObjectiveUsesFitTailAndOffsetOnl
         objective->fit_range_residual_objective +
             objective->tail_validation_penalty +
             objective->offset_plausibility_penalty);
-    EXPECT_TRUE(audit_detail::IsBetterLocalFittingAuditObjective(
+    EXPECT_TRUE(audit_detail::IsBetterAuditObjective(
         objective->total_objective,
         previous->total_objective,
-        audit_detail::LocalFittingObjectiveTolerance{ 1.0e-10, 1.0e-8 }));
+        audit_detail::ObjectiveTolerance{ 1.0e-10, 1.0e-8 }));
     EXPECT_FALSE(
-        audit_detail::BuildLocalFittingObjectiveBreakdown(
+        audit_detail::BuildObjectiveBreakdown(
             std::numeric_limits<double>::infinity(),
             2.0,
             0.18,
@@ -1726,16 +1726,16 @@ TEST(EstimatorSecondStageDefenseTest, ScientificObjectiveUsesFitTailAndOffsetOnl
 TEST(EstimatorSecondStageDefenseTest, GlobalObjectiveWeightsClustersByAtomCount)
 {
     EXPECT_DOUBLE_EQ(
-        audit_detail::CalculateLocalFittingClusterAtomWeight(1, 4),
+        audit_detail::CalculateClusterAtomWeight(1, 4),
         0.25);
     EXPECT_DOUBLE_EQ(
-        audit_detail::CalculateLocalFittingClusterAtomWeight(3, 4),
+        audit_detail::CalculateClusterAtomWeight(3, 4),
         0.75);
     EXPECT_DOUBLE_EQ(
         0.25 * 2.0 + 0.75 * 6.0,
         5.0);
     EXPECT_THROW(
-        audit_detail::CalculateLocalFittingClusterAtomWeight(0, 4),
+        audit_detail::CalculateClusterAtomWeight(0, 4),
         std::invalid_argument);
 }
 
@@ -1751,25 +1751,25 @@ TEST(EstimatorSecondStageDefenseTest, ObjectiveClusterStateLifecycleReconcilesPa
         new_key,
         std::vector<coupling_detail::GraphSampleId>{ { 1, 0 } });
 
-    const audit_detail::LocalFittingObjectiveBreakdown previous_breakdown{
+    const audit_detail::ObjectiveBreakdown previous_breakdown{
         1.0, 2.0, 0.0, 0.0, 3.0
     };
-    const audit_detail::LocalFittingObjectiveBreakdown existing_best{
+    const audit_detail::ObjectiveBreakdown existing_best{
         0.5, 0.5, 0.0, 0.0, 1.0
     };
-    audit_detail::LocalFittingObjectiveByKey previous_objective_by_key;
+    audit_detail::ObjectiveByKey previous_objective_by_key;
     previous_objective_by_key.emplace(existing_key, previous_breakdown);
     previous_objective_by_key.emplace(new_key, previous_breakdown);
 
-    audit_detail::LocalFittingClusterObjectiveStateMap state_by_key;
+    audit_detail::ClusterObjectiveStateMap state_by_key;
     state_by_key.emplace(
         existing_key,
-        audit_detail::LocalFittingClusterObjectiveState{
+        audit_detail::ClusterObjectiveState{
             existing_best,
             0.25
         });
 
-    audit_detail::ReconcileLocalFittingClusterObjectiveState(
+    audit_detail::ReconcileClusterObjectiveState(
         partition,
         previous_objective_by_key,
         state_by_key);
@@ -3826,7 +3826,7 @@ TEST(EstimatorSecondStageDefenseTest, ResidualBaselineAndOverlayAgreeForCandidat
         candidate_view,
         patch
     };
-    const residual_detail::LocalFittingObjectiveSampleRef sample_ref{ 0, 1 };
+    const residual_detail::ObjectiveSampleRef sample_ref{ 0, 1 };
     const auto direct{
         residual_detail::EvaluateLocalFittingResidualSample(
             context,

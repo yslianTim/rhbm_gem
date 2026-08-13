@@ -391,7 +391,7 @@ inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
     const FitStateView & base_state,
     const std::vector<GaussianModel3D> & seed_model_list,
     const ClusterKey & key,
-    const std::vector<LocalFittingObjectiveSampleRef> & sample_ref_list,
+    const std::vector<ObjectiveSampleRef> & sample_ref_list,
     const std::vector<double> & ridge_multiplier_list,
     const JointPolishParameterization & parameterization,
     ReusableWeightedRidgeSolver & reusable_solver)
@@ -710,7 +710,7 @@ BuildJointPolishProposal(
     const FitState & outer_previous_state,
     const FitStateView & base_state,
     const ClusterKey & key,
-    const std::vector<LocalFittingObjectiveSampleRef> & sample_ref_list,
+    const std::vector<ObjectiveSampleRef> & sample_ref_list,
     const std::vector<double> & ridge_multiplier_list,
     ReusableWeightedRidgeSolver & reusable_solver,
     double trust_region_radius)
