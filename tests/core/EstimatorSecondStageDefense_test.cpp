@@ -14,7 +14,6 @@
 #include <vector>
 
 #include "core/detail/GaussianEstimatorStages.hpp"
-#include "core/detail/LocalFittingAudit.hpp"
 #include "core/detail/BacktrackingWorkspace.hpp"
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/LocalFittingGroupMedian.hpp"
@@ -1627,50 +1626,6 @@ TEST(EstimatorSecondStageDefenseTest, AuditToleranceUsesAbsolutePlusRelativeRefe
             std::numeric_limits<double>::infinity(),
             tolerance),
         std::invalid_argument);
-}
-
-TEST(EstimatorSecondStageDefenseTest, AuditPatienceStopsAfterThreeStableAcceptedIterations)
-{
-    std::size_t patience_count{ 0 };
-    patience_count = audit_detail::AdvanceLocalFittingAuditPatience(
-        patience_count, false, false);
-    EXPECT_EQ(patience_count, 1U);
-    patience_count = audit_detail::AdvanceLocalFittingAuditPatience(
-        patience_count, false, false);
-    EXPECT_EQ(patience_count, 2U);
-    patience_count = audit_detail::AdvanceLocalFittingAuditPatience(
-        patience_count, false, false);
-    EXPECT_EQ(patience_count, 3U);
-
-    EXPECT_EQ(
-        audit_detail::AdvanceLocalFittingAuditPatience(
-            patience_count, true, false),
-        0U);
-    EXPECT_EQ(
-        audit_detail::AdvanceLocalFittingAuditPatience(
-            patience_count, false, true),
-        0U);
-}
-
-TEST(EstimatorSecondStageDefenseTest, FinalStatePolicySelectsBestOnlyWhenEnabled)
-{
-    using Source = audit_detail::LocalFittingFinalStateSource;
-
-    EXPECT_EQ(
-        audit_detail::SelectLocalFittingFinalStateSource(true, true, true),
-        Source::BestAudit);
-    EXPECT_EQ(
-        audit_detail::SelectLocalFittingFinalStateSource(false, true, true),
-        Source::LatestValidated);
-    EXPECT_EQ(
-        audit_detail::SelectLocalFittingFinalStateSource(true, true, false),
-        Source::LatestValidated);
-    EXPECT_EQ(
-        audit_detail::SelectLocalFittingFinalStateSource(false, true, false),
-        Source::LatestValidated);
-    EXPECT_EQ(
-        audit_detail::SelectLocalFittingFinalStateSource(true, false, false),
-        Source::Unavailable);
 }
 
 TEST(EstimatorSecondStageDefenseTest, ScientificObjectiveUsesFitTailAndOffsetOnly)

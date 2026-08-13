@@ -1,7 +1,6 @@
 #include <cstddef>
 
 #include "core/detail/GaussianEstimatorStages.hpp"
-#include "core/detail/LocalFittingAudit.hpp"
 #include "core/detail/LocalFittingResidualEvaluation.hpp"
 #include "core/detail/Objective.hpp"
 #include "core/detail/LocalFittingTerminalFailure.hpp"
@@ -128,14 +127,19 @@ using detail::GetSecondStageSeedSourceText;
 using detail::SecondStageSeedSelectionRecord;
 using detail::RunLocalFittingIteration;
 
+enum class LocalFittingFinalStateSource
+{
+    BestAudit,
+    LatestValidated,
+    Unavailable
+};
+
 struct LocalFittingFinalStateSelection
 {
     const FitState * state{ nullptr };
     const PolishProvenance * polish_provenance{ nullptr };
     const AuditedState * audit_state{ nullptr };
-    detail::LocalFittingFinalStateSource source{
-        detail::LocalFittingFinalStateSource::Unavailable
-    };
+    LocalFittingFinalStateSource source{ LocalFittingFinalStateSource::Unavailable };
 };
 
 LocalFittingFinalStateSelection SelectLocalFittingFinalState(
@@ -143,11 +147,10 @@ LocalFittingFinalStateSelection SelectLocalFittingFinalState(
     const PolishProvenance & latest_validated_polish_provenance,
     const std::optional<AuditedState> & audited_state)
 {
-    const auto source{ detail::SelectLocalFittingFinalStateSource(
-        kApplyLocalFittingBestIteration,
-        true,
-        audited_state.has_value()) };
-    if (source == detail::LocalFittingFinalStateSource::BestAudit)
+    const auto source{ kApplyLocalFittingBestIteration && audited_state.has_value() ?
+        LocalFittingFinalStateSource::BestAudit :
+        LocalFittingFinalStateSource::LatestValidated };
+    if (source == LocalFittingFinalStateSource::BestAudit)
     {
         return LocalFittingFinalStateSelection{
             &audited_state->state,
@@ -164,15 +167,15 @@ LocalFittingFinalStateSelection SelectLocalFittingFinalState(
     };
 }
 
-std::string_view GetLocalFittingFinalStateSourceText(detail::LocalFittingFinalStateSource source)
+std::string_view GetLocalFittingFinalStateSourceText(LocalFittingFinalStateSource source)
 {
     switch (source)
     {
-    case detail::LocalFittingFinalStateSource::BestAudit:
+    case LocalFittingFinalStateSource::BestAudit:
         return "best-audit";
-    case detail::LocalFittingFinalStateSource::LatestValidated:
+    case LocalFittingFinalStateSource::LatestValidated:
         return "latest-validated";
-    case detail::LocalFittingFinalStateSource::Unavailable:
+    case LocalFittingFinalStateSource::Unavailable:
         return "unavailable";
     }
     return "unavailable";
@@ -1186,7 +1189,7 @@ void LogLocalFittingConverged(
 
 void LogLocalFittingMaximumIterations(
     const FitOptions & options,
-    detail::LocalFittingFinalStateSource final_state_source,
+    LocalFittingFinalStateSource final_state_source,
     const AuditedState * applied_audit_state,
     const LocalFittingTerminalSummary & terminal_summary,
     const LocalFittingOffsetStats & applied_offset_stats)
@@ -1197,13 +1200,13 @@ void LogLocalFittingMaximumIterations(
     std::ostringstream warning_message;
     warning_message << "Reached maximum iteration size";
     AppendLocalFittingTerminalSummary(warning_message, terminal_summary);
-    if (final_state_source == detail::LocalFittingFinalStateSource::BestAudit &&
+    if (final_state_source == LocalFittingFinalStateSource::BestAudit &&
         applied_audit_state != nullptr)
     {
         warning_message << "; applying best validated audit state";
         AppendLocalFittingAuditSummary(warning_message, *applied_audit_state);
     }
-    else if (final_state_source == detail::LocalFittingFinalStateSource::LatestValidated)
+    else if (final_state_source == LocalFittingFinalStateSource::LatestValidated)
     {
         warning_message << "; applying latest validated state";
     }
@@ -1222,7 +1225,7 @@ void LogSecondStageLocalFittingSummary(
     std::string_view stop_reason,
     const BestAuditState & best_audit_state,
     std::optional<bool> final_uses_polish,
-    detail::LocalFittingFinalStateSource final_state_source)
+    LocalFittingFinalStateSource final_state_source)
 {
     if (options.quiet_mode) return;
 
@@ -1406,7 +1409,7 @@ bool RunSecondStageLocalFitting(
                 "terminal-isolation",
                 best_audit_state,
                 UsesPolish(previous_polish_provenance),
-                detail::LocalFittingFinalStateSource::LatestValidated);
+                LocalFittingFinalStateSource::LatestValidated);
             RunGroupPotentialFitting(model_object, options, FittingStage::Second);
             return true;
         }
@@ -1809,12 +1812,18 @@ bool RunSecondStageLocalFitting(
         {
             performance_counters.full_state_materialization_count++;
         }
-        audit_patience_count = objective_domain_changed ? 0 :
-            detail::AdvanceLocalFittingAuditPatience(
-                audit_patience_count,
-                improved_best_audit,
-                !selection.rejected_key_list.empty() &&
-                    !trust_region_radius_update.changed_key_list.empty());
+        const auto changed_rejected_trust_radius{
+            !selection.rejected_key_list.empty() &&
+            !trust_region_radius_update.changed_key_list.empty()
+        };
+        if (objective_domain_changed || improved_best_audit || changed_rejected_trust_radius)
+        {
+            audit_patience_count = 0;
+        }
+        else
+        {
+            audit_patience_count++;
+        }
         progress.accepted_iteration_count = accepted_iteration_count;
         progress.accepted_maximum_transformed_change =
             GetMaximumTransformedChange(transformed_change_summary);
@@ -1882,7 +1891,7 @@ bool RunSecondStageLocalFitting(
                 "converged",
                 best_audit_state,
                 UsesPolish(assembled_polish_provenance),
-                detail::LocalFittingFinalStateSource::LatestValidated);
+                LocalFittingFinalStateSource::LatestValidated);
             RunGroupPotentialFitting(model_object, options, FittingStage::Second);
             return true;
         }
