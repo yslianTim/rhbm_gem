@@ -1,0 +1,79 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "common",
+      "hidden": true,
+      "generator": "Ninja",
+      "cacheVariables": {
+        "BUILD_TESTING": "OFF",
+        "BUILD_PYTHON_BINDINGS": "OFF",
+        "RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE": "ON",
+        "RHBM_GEM_DEP_PROVIDER": "SYSTEM",
+        "RHBM_GEM_OPENMP_MODE": "AUTO",
+        "RHBM_GEM_ROOT_MODE": "AUTO"
+      }
+    },
+    {
+      "name": "debug",
+      "displayName": "Debug",
+      "description": "Debug CLI build without tests or Python bindings",
+      "inherits": "common",
+      "binaryDir": "${sourceDir}/build/debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "relwithdebinfo",
+      "displayName": "RelWithDebInfo",
+      "description": "Optimized CLI build with debug information",
+      "inherits": "common",
+      "binaryDir": "${sourceDir}/build/relwithdebinfo",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Release",
+      "description": "Optimized CLI build without debug information",
+      "inherits": "common",
+      "binaryDir": "${sourceDir}/build/release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "debug",
+      "displayName": "Build Debug",
+      "configurePreset": "debug",
+      "configuration": "Debug",
+      "targets": "rhbm_gem_cli",
+      "jobs": 0
+    },
+    {
+      "name": "relwithdebinfo",
+      "displayName": "Build RelWithDebInfo",
+      "configurePreset": "relwithdebinfo",
+      "configuration": "RelWithDebInfo",
+      "targets": "rhbm_gem_cli",
+      "jobs": 0
+    },
+    {
+      "name": "release",
+      "displayName": "Build Release",
+      "configurePreset": "release",
+      "configuration": "Release",
+      "targets": "rhbm_gem_cli",
+      "jobs": 0
+    }
+  ]
+}

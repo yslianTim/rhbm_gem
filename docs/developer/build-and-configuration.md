@@ -225,15 +225,48 @@ Notes:
 2. The project-specific mode flags (`RHBM_GEM_OPENMP_MODE`, `RHBM_GEM_ROOT_MODE`) are preferred over `CMAKE_DISABLE_FIND_PACKAGE_*`.
 3. `FETCH` mode requires network access unless archives are already cached.
 
-## Standard Build Directory Workflow
+## CMake Preset Workflow
 
-Use explicit source/build directory commands instead of CMake presets:
+The project provides Debug, RelWithDebInfo, and Release configure/build presets.
+The presets require CMake 3.21 or newer and the Ninja generator. They use
+separate build directories, disable tests and Python bindings, and build the
+CLI target with the shared project feature settings:
+
+| Preset | Build type | Executable |
+| --- | --- | --- |
+| `debug` | `Debug` | `build/debug/bin/RHBM-GEM` |
+| `relwithdebinfo` | `RelWithDebInfo` | `build/relwithdebinfo/bin/RHBM-GEM` |
+| `release` | `Release` | `build/release/bin/RHBM-GEM` |
+
+To configure and incrementally build all three variants in order:
 
 ```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build -j
-ctest --test-dir build
+cmake -P cmake/BuildAllPresets.cmake
 ```
+
+The script stops at the first configure or build failure and identifies the
+failed preset. Running it again reuses the three existing build directories.
+
+To configure or build one variant independently:
+
+```bash
+cmake --preset debug
+cmake --build --preset debug
+
+cmake --preset relwithdebinfo
+cmake --build --preset relwithdebinfo
+
+cmake --preset release
+cmake --build --preset release
+```
+
+In VS Code, `CMake: Build Debug + RelWithDebInfo + Release` is the default build
+task, so `Cmd/Ctrl + Shift + B` runs the same all-variants build script.
+
+For coverage, external regression data, or other option-specific validation,
+continue to use explicit `cmake -S/-B` build directories as shown in the
+sections above. This keeps those specialized configurations independent from
+the three standard preset directories.
 
 ## Validation Examples
 
