@@ -2,10 +2,6 @@
 
 #include <cstddef>
 
-// Keep the objective model available to existing audit-header consumers while
-// keeping its definitions in Objective.hpp.
-#include "core/detail/Objective.hpp"
-
 namespace rhbm_gem::core::detail {
 
 enum class LocalFittingFinalStateSource
