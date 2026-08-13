@@ -170,6 +170,66 @@ inline algorithm::ParameterChange CalculateLocalFittingTransformedChange(
     return change;
 }
 
+inline double GetMaximumLocalFittingTransformedChange(
+    const std::vector<double> & value_list)
+{
+    if (value_list.empty()) return 0.0;
+    if (value_list.size() != kTransformedChangeSize)
+    {
+        throw std::invalid_argument(
+            "Local fitting transformed change input is inconsistent.");
+    }
+    return *std::max_element(value_list.begin(), value_list.end());
+}
+
+inline double GetMaximumLocalFittingTransformedChange(
+    const algorithm::ParameterChange & change)
+{
+    return GetMaximumLocalFittingTransformedChange(change.value_list);
+}
+
+inline double GetMaximumLocalFittingTransformedChange(
+    const algorithm::ParameterChangeStats & stats)
+{
+    return GetMaximumLocalFittingTransformedChange(stats.percentile_list);
+}
+
+inline double GetMaximumLocalFittingTransformedChange(
+    const std::vector<algorithm::ParameterChange> & change_list)
+{
+    double maximum_change{ 0.0 };
+    for (const auto & change : change_list)
+    {
+        maximum_change = std::max(
+            maximum_change,
+            GetMaximumLocalFittingTransformedChange(change));
+    }
+    return maximum_change;
+}
+
+inline bool IsLocalFittingTransformedChangeMaterial(
+    const algorithm::ParameterChange & change,
+    double minimum_change)
+{
+    if (!std::isfinite(minimum_change) || minimum_change < 0.0)
+    {
+        throw std::invalid_argument(
+            "Local fitting transformed change threshold is invalid.");
+    }
+    if (change.value_list.size() != kTransformedChangeSize)
+    {
+        throw std::invalid_argument(
+            "Local fitting transformed change input is inconsistent.");
+    }
+    return std::any_of(
+        change.value_list.begin(),
+        change.value_list.end(),
+        [minimum_change](double value)
+        {
+            return std::isfinite(value) && value >= minimum_change;
+        });
+}
+
 inline std::vector<double> SummarizeLocalFittingMaximumTransformedChanges(
     const std::vector<algorithm::ParameterChange> & change_list,
     const std::vector<std::size_t> & index_list)
@@ -221,7 +281,7 @@ inline bool IsLocalFittingTransformedChangeConverged(
 }
 
 
-constexpr double kLocalFittingChangePercentile{ 0.99 };
+constexpr double kLocalFittingTransformedChangePercentile{ 0.99 };
 constexpr double kLocalFittingTransformedChangeTolerance{ 1.0e-4 };
 constexpr double kLocalFittingTransformedMaximumChangeTolerance{ 1.0e-3 };
 
@@ -257,7 +317,7 @@ inline LocalFittingTransformedChangeSummary SummarizeLocalFittingTransformedChan
         algorithm::SummarizeParameterChangeStats(
             change_list,
             local_index_list,
-            kLocalFittingChangePercentile),
+            kLocalFittingTransformedChangePercentile),
         SummarizeLocalFittingMaximumTransformedChanges(
             change_list,
             local_index_list)
@@ -275,6 +335,26 @@ inline bool IsLocalFittingTransformedChangeConverged(
         kLocalFittingTransformedMaximumChangeTolerance);
 }
 
+inline double GetMaximumLocalFittingTransformedChange(
+    const LocalFittingTransformedChangeSummary & summary)
+{
+    return GetMaximumLocalFittingTransformedChange(summary.maximum_list);
+}
+
+inline double GetMaximumLocalFittingTransformedPercentileChange(
+    const LocalFittingTransformedChangeSummary & summary)
+{
+    return GetMaximumLocalFittingTransformedChange(summary.percentile_stats);
+}
+
+inline bool IsLocalFittingTransformedChangeConverged(
+    const LocalFittingTransformedChangeSummary & summary)
+{
+    return IsLocalFittingTransformedChangeConverged(
+        summary.percentile_stats,
+        summary.maximum_list);
+}
+
 inline bool IsLocalFittingTransformedPercentileConverged(
     const algorithm::ParameterChangeStats & stats)
 {
@@ -285,6 +365,13 @@ inline bool IsLocalFittingTransformedPercentileConverged(
         {
             return std::isfinite(value) && value < kLocalFittingTransformedChangeTolerance;
         });
+}
+
+inline bool IsLocalFittingTransformedPercentileConverged(
+    const LocalFittingTransformedChangeSummary & summary)
+{
+    return IsLocalFittingTransformedPercentileConverged(
+        summary.percentile_stats);
 }
 
 

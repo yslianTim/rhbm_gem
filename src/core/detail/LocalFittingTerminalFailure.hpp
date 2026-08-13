@@ -86,7 +86,7 @@ inline TerminalPersistentFailureMap UpdatePersistentTerminalFailureState(
         const auto transformed_change_summary{
             SummarizeLocalFittingTransformedChanges(assembled_state, previous_state, key)
         };
-        if (!IsLocalFittingTransformedPercentileConverged(transformed_change_summary.percentile_stats))
+        if (!IsLocalFittingTransformedPercentileConverged(transformed_change_summary))
         {
             continue;
         }
@@ -147,4 +147,3 @@ inline std::vector<std::size_t> BuildEligibleLocalFittingActiveIndexList(
 
 
 } // namespace rhbm_gem::core::detail
-

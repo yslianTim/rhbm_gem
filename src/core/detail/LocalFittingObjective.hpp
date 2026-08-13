@@ -834,12 +834,15 @@ inline bool TryCommitLocalFittingClusterCandidate(
                 unique_sample_count - objective_sample_ref_list.size() : 0,
             std::memory_order_relaxed);
     }
+    const auto transformed_change_summary{
+        SummarizeLocalFittingTransformedChanges(
+            candidate_state,
+            previous_state,
+            key)
+    };
     const auto maximum_transformed_change{
-        algorithm::GetMaximumParameterChange(
-            SummarizeLocalFittingTransformedChanges(
-                candidate_state,
-                previous_state,
-                key).percentile_stats)
+        GetMaximumLocalFittingTransformedPercentileChange(
+            transformed_change_summary)
     };
     const auto domain_iter{ domain.cluster_by_key.find(key) };
     if (domain_iter != domain.cluster_by_key.end())

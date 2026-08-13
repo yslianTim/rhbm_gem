@@ -686,15 +686,9 @@ inline bool HasMaterialJointPolishChange(
                 candidate_model_list.at(atom_position),
                 seed_model_list.at(atom_position))
         };
-        if (std::any_of(
-                change.value_list.begin(),
-                change.value_list.end(),
-                [](double value)
-                {
-                    return std::isfinite(value) &&
-                        value >=
-                            kJointPolishTransformedChangeTolerance;
-                }))
+        if (IsLocalFittingTransformedChangeMaterial(
+                change,
+                kJointPolishTransformedChangeTolerance))
         {
             return true;
         }

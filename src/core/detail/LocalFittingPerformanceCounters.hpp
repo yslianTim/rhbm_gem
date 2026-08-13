@@ -5,7 +5,6 @@
 #include <cstddef>
 #include <iomanip>
 #include <sstream>
-#include <string>
 
 #include <rhbm_gem/utils/domain/Logger.hpp>
 

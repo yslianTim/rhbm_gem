@@ -86,6 +86,7 @@ using detail::ScopedEigenThreadCount;
 constexpr std::size_t kLocalFittingMaximumIterations{ 100 };
 constexpr std::size_t kLocalFittingAuditPatience{ 3 };
 constexpr bool kApplyLocalFittingBestIteration{ true };
+constexpr double kLocalFittingOffsetSummaryPercentile{ 0.99 };
 
 using detail::JointOffsetSolveStatus;
 using detail::IsJointOffsetSolveStationarityEligible;
@@ -96,8 +97,8 @@ using detail::BuildSecondStageAdjustedSamples;
 using detail::BuildLocalFittingResidualBaseline;
 using detail::SummarizeLocalFittingTransformedChanges;
 using detail::IsLocalFittingTransformedChangeConverged;
+using detail::GetMaximumLocalFittingTransformedChange;
 using detail::BuildLocalFittingTransformedEstimationList;
-using detail::kLocalFittingChangePercentile;
 using detail::LocalFittingObjectiveDomain;
 using detail::LocalFittingClusterObjectiveState;
 using detail::LocalFittingClusterObjectiveStateMap;
@@ -643,7 +644,9 @@ LocalFittingOffsetStats SummarizeLocalFittingOffsets(const FitState & state)
     if (absolute_offset_list.empty()) return stats;
 
     stats.median_absolute_offset = array_helper::ComputeMedian(absolute_offset_list);
-    stats.percentile_absolute_offset = array_helper::ComputePercentile(absolute_offset_list, kLocalFittingChangePercentile);
+    stats.percentile_absolute_offset = array_helper::ComputePercentile(
+        absolute_offset_list,
+        kLocalFittingOffsetSummaryPercentile);
     stats.maximum_absolute_offset = *std::max_element(absolute_offset_list.begin(), absolute_offset_list.end());
     return stats;
 }
@@ -1072,13 +1075,6 @@ std::string FormatLocalFittingProgressMaximum(
     std::ostringstream stream;
     stream << std::scientific << std::setprecision(2) << *value;
     return stream.str();
-}
-
-std::optional<double> SummarizeLocalFittingProgressMaximum(
-    const std::vector<double> & maximum_list)
-{
-    if (maximum_list.empty()) return std::nullopt;
-    return *std::max_element(maximum_list.begin(), maximum_list.end());
 }
 
 constexpr std::array<std::string_view, 6> kLocalFittingProgressHeaderList{
@@ -1789,7 +1785,7 @@ bool RunSecondStageLocalFitting(
             selection.polish_progress,
             iteration_suspicious_atom_count,
             std::nullopt,
-            SummarizeLocalFittingProgressMaximum(raw_fixed_point_change_summary.maximum_list)
+            GetMaximumLocalFittingTransformedChange(raw_fixed_point_change_summary)
         };
         if (selection.accepted_key_list.empty())
         {
@@ -1872,7 +1868,8 @@ bool RunSecondStageLocalFitting(
                 !selection.rejected_key_list.empty() &&
                     !trust_region_radius_update.changed_key_list.empty());
         progress.accepted_iteration_count = accepted_iteration_count;
-        progress.accepted_maximum_transformed_change = SummarizeLocalFittingProgressMaximum(transformed_change_summary.maximum_list);
+        progress.accepted_maximum_transformed_change =
+            GetMaximumLocalFittingTransformedChange(transformed_change_summary);
         LogRejectedLocalFittingClusterDiagnostics(options, selection.rejected_cluster_diagnostic_list);
         LogLocalFittingIterationProgress(options, progress_column_widths, progress);
 
@@ -1906,12 +1903,8 @@ bool RunSecondStageLocalFitting(
             stationarity_ineligible_cluster_count == 0 &&
             !has_suspicious_offset_fallback &&
             selection.rejected_key_list.empty() &&
-            IsLocalFittingTransformedChangeConverged(
-                transformed_change_summary.percentile_stats,
-                transformed_change_summary.maximum_list) &&
-            IsLocalFittingTransformedChangeConverged(
-                raw_fixed_point_change_summary.percentile_stats,
-                raw_fixed_point_change_summary.maximum_list)
+            IsLocalFittingTransformedChangeConverged(transformed_change_summary) &&
+            IsLocalFittingTransformedChangeConverged(raw_fixed_point_change_summary)
         };
         if (converged)
         {
