@@ -10,17 +10,26 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "core/detail/GaussianEstimatorStages.hpp"
 #include "core/detail/LocalFittingAudit.hpp"
 #include "core/detail/LocalFittingBacktrackingWorkspace.hpp"
+#include "core/detail/LocalFittingCandidateSelection.hpp"
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
 #include "core/detail/JointOffset.hpp"
 #include "core/detail/JointPolish.hpp"
+#include "core/detail/LocalFittingIteration.hpp"
+#include "core/detail/LocalFittingObjective.hpp"
+#include "core/detail/LocalFittingResidualEvaluation.hpp"
+#include "core/detail/LocalFittingRobustScale.hpp"
 #include "core/detail/LocalFittingSeedRepair.hpp"
+#include "core/detail/LocalFittingSuspiciousUpdate.hpp"
+#include "core/detail/LocalFittingTerminalFailure.hpp"
+#include "core/detail/SecondStageLocalFittingInitialization.hpp"
 #include "core/detail/LocalFittingTrustRegion.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
 #include "data/detail/AtomClassifier.hpp"
@@ -39,6 +48,7 @@ namespace change_detail = rhbm_gem::core::detail;
 namespace conditioning_detail = rhbm_gem::core::detail;
 namespace coupling_detail = rhbm_gem::core::detail;
 namespace backtracking_detail = rhbm_gem::core::detail;
+namespace residual_detail = rhbm_gem::core::detail;
 namespace median_detail = rhbm_gem::core::detail;
 namespace health_detail = rhbm_gem::core::detail;
 namespace offset_detail = rhbm_gem::core::detail;
@@ -1731,6 +1741,55 @@ TEST(EstimatorSecondStageDefenseTest, GlobalObjectiveWeightsClustersByAtomCount)
     EXPECT_THROW(
         audit_detail::CalculateLocalFittingClusterAtomWeight(0, 4),
         std::invalid_argument);
+}
+
+TEST(EstimatorSecondStageDefenseTest, ObjectiveClusterStateLifecycleReconcilesPartition)
+{
+    const audit_detail::LocalFittingClusterKey existing_key{ 0 };
+    const audit_detail::LocalFittingClusterKey new_key{ 1 };
+    coupling_detail::CouplingGraphPartition partition;
+    partition.sample_id_list_by_key.emplace(
+        existing_key,
+        std::vector<coupling_detail::GraphSampleId>{ { 0, 0 } });
+    partition.sample_id_list_by_key.emplace(
+        new_key,
+        std::vector<coupling_detail::GraphSampleId>{ { 1, 0 } });
+
+    const audit_detail::LocalFittingObjectiveBreakdown previous_breakdown{
+        1.0, 2.0, 0.0, 0.0, 3.0
+    };
+    const audit_detail::LocalFittingObjectiveBreakdown existing_best{
+        0.5, 0.5, 0.0, 0.0, 1.0
+    };
+    audit_detail::LocalFittingObjectiveByKey previous_objective_by_key;
+    previous_objective_by_key.emplace(existing_key, previous_breakdown);
+    previous_objective_by_key.emplace(new_key, previous_breakdown);
+
+    audit_detail::LocalFittingClusterObjectiveStateMap state_by_key;
+    state_by_key.emplace(
+        existing_key,
+        audit_detail::LocalFittingClusterObjectiveState{
+            existing_best,
+            0.25
+        });
+
+    audit_detail::ReconcileLocalFittingClusterObjectiveState(
+        partition,
+        previous_objective_by_key,
+        state_by_key);
+
+    ASSERT_EQ(state_by_key.size(), 2U);
+    ASSERT_TRUE(state_by_key.at(existing_key).best_objective.has_value());
+    EXPECT_DOUBLE_EQ(
+        state_by_key.at(existing_key).best_objective->total_objective,
+        existing_best.total_objective);
+    ASSERT_TRUE(state_by_key.at(new_key).best_objective.has_value());
+    EXPECT_DOUBLE_EQ(
+        state_by_key.at(new_key).best_objective->total_objective,
+        previous_breakdown.total_objective);
+    EXPECT_DOUBLE_EQ(
+        state_by_key.at(new_key).best_maximum_transformed_change,
+        0.0);
 }
 
 TEST(EstimatorSecondStageDefenseTest, TrustRegionDampingCapsLargeTransformedStep)
@@ -3687,11 +3746,20 @@ TEST(EstimatorSecondStageDefenseTest,
         0.0
     };
     std::size_t ready_count{ 0 };
+    double expected_factor{ 0.5 };
+    std::size_t expected_trial_number{ 2 };
     backtracking_detail::LocalFittingBacktrackingStep factor_step;
     do
     {
         factor_step = factor_workspace.BuildNextCandidate();
-        if (factor_step.IsCandidateReady()) ready_count++;
+        if (factor_step.IsCandidateReady())
+        {
+            ready_count++;
+            EXPECT_DOUBLE_EQ(factor_step.factor, expected_factor);
+            EXPECT_EQ(factor_step.trial_number, expected_trial_number);
+            expected_factor *= 0.5;
+            expected_trial_number++;
+        }
     }
     while (factor_step.IsCandidateReady());
     EXPECT_EQ(
@@ -3701,6 +3769,80 @@ TEST(EstimatorSecondStageDefenseTest,
     EXPECT_LT(
         factor_step.factor,
         std::numeric_limits<double>::epsilon());
+}
+
+TEST(EstimatorSecondStageDefenseTest, ResidualBaselineAndOverlayAgreeForCandidate)
+{
+    residual_detail::SecondStageLocalFittingContext context;
+    context.selected_atom_list.resize(1);
+    context.selected_group_id_by_key.emplace(4, 0);
+    context.selected_atom_index_list_by_group.emplace_back(
+        std::vector<std::size_t>{ 0 });
+    context.at(0).group_key = 4;
+    context.at(0).sample_neighbor_offset_list = { 0, 0, 0 };
+
+    const rg::GaussianModel3D previous_model{ 8.0, 0.50, -0.10 };
+    const rg::GaussianModel3D candidate_model{ 10.0, 0.60, 0.20 };
+    for (const auto distance : { 0.15F, 0.45F })
+    {
+        context.at(0).raw_sampling_entries.emplace_back(
+            LocalPotentialSample{
+                static_cast<float>(candidate_model.ResponseAtDistance(distance)),
+                SamplingPoint{ distance }
+            });
+    }
+
+    residual_detail::LocalFittingState previous_state;
+    previous_state.emplace_back(MakeGaussianResult(previous_model));
+    const auto model_snapshot{
+        residual_detail::BuildSecondStageModelSnapshot(
+            context,
+            residual_detail::BuildFittedGaussianSnapshot(previous_state))
+    };
+    const auto baseline{
+        residual_detail::BuildLocalFittingResidualBaseline(
+            context,
+            previous_state,
+            model_snapshot)
+    };
+    ASSERT_TRUE(baseline.at(0).at(1).has_value());
+    EXPECT_DOUBLE_EQ(
+        baseline.at(0).at(1)->adjusted_response,
+        static_cast<double>(context.at(0).raw_sampling_entries.at(1).response));
+    EXPECT_NEAR(
+        baseline.at(0).at(1)->residual,
+        baseline.at(0).at(1)->adjusted_response -
+            previous_model.ResponseAtDistance(0.45),
+        1.0e-6);
+
+    residual_detail::LocalFittingStatePatch patch;
+    patch.atom_index_list = { 0 };
+    auto candidate_result{ MakeGaussianResult(candidate_model) };
+    patch.mdpde_list.emplace_back(candidate_result.mdpde);
+    const residual_detail::LocalFittingStateView candidate_view{
+        previous_state,
+        patch
+    };
+    const residual_detail::LocalFittingCandidateEvaluationOverlay overlay{
+        context,
+        model_snapshot,
+        baseline,
+        candidate_view,
+        patch
+    };
+    const residual_detail::LocalFittingObjectiveSampleRef sample_ref{ 0, 1 };
+    const auto direct{
+        residual_detail::EvaluateLocalFittingResidualSample(
+            context,
+            candidate_view,
+            sample_ref,
+            model_snapshot)
+    };
+    const auto overlaid{ overlay.Evaluate(candidate_view, sample_ref) };
+    ASSERT_TRUE(direct.has_value());
+    ASSERT_TRUE(overlaid.has_value());
+    EXPECT_DOUBLE_EQ(direct->adjusted_response, overlaid->adjusted_response);
+    EXPECT_DOUBLE_EQ(direct->residual, overlaid->residual);
 }
 
 TEST(EstimatorSecondStageDefenseTest, TransformedBacktrackingIncludesOffset)
@@ -3964,6 +4106,80 @@ TEST(EstimatorSecondStageDefenseTest, TerminalFallbackPreservesAffectedCluster)
         out.find("Reset second-stage objective domain"),
         std::string::npos);
     ExpectSelectedAtomEstimatesAreFinite(*model);
+}
+
+TEST(EstimatorSecondStageDefenseTest, PersistentTerminalReasonRequiresStableReason)
+{
+    const audit_detail::LocalFittingClusterKey key{ 0 };
+    const std::vector<audit_detail::LocalFittingClusterKey> accepted_key_list{
+        key
+    };
+    const rg::GaussianModel3D model{ 8.0, 0.50, -0.10 };
+    audit_detail::LocalFittingState previous_state;
+    previous_state.emplace_back(MakeGaussianResult(model));
+    const auto assembled_state{ previous_state };
+    audit_detail::LocalFittingClusterHealthMap health_by_key;
+    health_by_key.emplace(
+        key,
+        audit_detail::LocalFittingClusterHealth{
+            audit_detail::JointOffsetSolveStatus::Converged });
+    std::vector<char> suspicious_atom_mask{ 1 };
+    audit_detail::PersistentTerminalFailureStateMap state_by_key;
+
+    for (std::size_t stable_count = 1;
+        stable_count < audit_detail::kPersistentTerminalFailureIterationLimit;
+        stable_count++)
+    {
+        const auto terminal_failure_by_key{
+            audit_detail::UpdatePersistentTerminalFailureState(
+                accepted_key_list,
+                suspicious_atom_mask,
+                health_by_key,
+                assembled_state,
+                previous_state,
+                state_by_key)
+        };
+        EXPECT_TRUE(terminal_failure_by_key.empty());
+        ASSERT_EQ(state_by_key.size(), 1U);
+        EXPECT_EQ(
+            state_by_key.at(key).stable_iteration_count,
+            stable_count);
+    }
+
+    const auto terminal_failure_by_key{
+        audit_detail::UpdatePersistentTerminalFailureState(
+            accepted_key_list,
+            suspicious_atom_mask,
+            health_by_key,
+            assembled_state,
+            previous_state,
+            state_by_key)
+    };
+    ASSERT_EQ(terminal_failure_by_key.size(), 1U);
+    ASSERT_TRUE(state_by_key.empty());
+    ASSERT_TRUE(std::holds_alternative<
+        audit_detail::PersistentSuspiciousRollbackReason>(
+            terminal_failure_by_key.at(key)));
+    EXPECT_EQ(
+        std::get<audit_detail::PersistentSuspiciousRollbackReason>(
+            terminal_failure_by_key.at(key)),
+        (audit_detail::PersistentSuspiciousRollbackReason{ 0 }));
+
+    suspicious_atom_mask.at(0) = 0;
+    health_by_key.at(key).joint_offset_status =
+        audit_detail::JointOffsetSolveStatus::SystemBuildFailed;
+    const auto changed_reason_terminal_failure_by_key{
+        audit_detail::UpdatePersistentTerminalFailureState(
+            accepted_key_list,
+            suspicious_atom_mask,
+            health_by_key,
+            assembled_state,
+            previous_state,
+            state_by_key)
+    };
+    EXPECT_TRUE(changed_reason_terminal_failure_by_key.empty());
+    ASSERT_EQ(state_by_key.size(), 1U);
+    EXPECT_EQ(state_by_key.at(key).stable_iteration_count, 1U);
 }
 
 TEST(EstimatorSecondStageDefenseTest, PersistentEmptySystemDoesNotBlockRemoteCluster)

@@ -1,0 +1,150 @@
+#pragma once
+
+#include <algorithm>
+#include <cstddef>
+#include <map>
+#include <variant>
+#include <vector>
+
+#include "core/detail/JointOffset.hpp"
+#include "core/detail/LocalFittingHealth.hpp"
+#include "core/detail/LocalFittingStateView.hpp"
+#include "core/detail/LocalFittingTransformedChange.hpp"
+
+namespace rhbm_gem::core::detail {
+
+constexpr std::size_t kPersistentTerminalFailureIterationLimit{ 5 };
+
+using PersistentSuspiciousRollbackReason = std::vector<std::size_t>;
+using PersistentTerminalFailureReason =
+    std::variant<PersistentSuspiciousRollbackReason, JointOffsetSolveStatus>;
+
+struct PersistentTerminalFailureState
+{
+    PersistentTerminalFailureReason reason{};
+    std::size_t stable_iteration_count{ 0 };
+};
+
+using PersistentTerminalFailureStateMap =
+    std::map<LocalFittingClusterKey, PersistentTerminalFailureState>;
+using TerminalPersistentFailureMap =
+    std::map<LocalFittingClusterKey, PersistentTerminalFailureReason>;
+
+struct LocalFittingTerminalSummary
+{
+    std::size_t suspicious_cluster_count{ 0 };
+    std::size_t suspicious_atom_count{ 0 };
+    std::size_t joint_offset_failure_cluster_count{ 0 };
+    std::size_t joint_offset_failure_atom_count{ 0 };
+    std::map<JointOffsetSolveStatus, std::size_t> joint_offset_failure_status_count{};
+
+    std::size_t AtomCount() const
+    {
+        return suspicious_atom_count + joint_offset_failure_atom_count;
+    }
+};
+
+
+inline TerminalPersistentFailureMap UpdatePersistentTerminalFailureState(
+    const std::vector<LocalFittingClusterKey> & accepted_key_list,
+    const std::vector<char> & suspicious_atom_mask,
+    const LocalFittingClusterHealthMap & health_by_key,
+    const LocalFittingState & assembled_state,
+    const LocalFittingState & previous_state,
+    PersistentTerminalFailureStateMap & state_by_key)
+{
+    PersistentTerminalFailureStateMap next_state_by_key;
+    TerminalPersistentFailureMap terminal_failure_by_key;
+    for (const auto & [key, health] : health_by_key)
+    {
+        if (std::find(accepted_key_list.begin(), accepted_key_list.end(), key) ==
+            accepted_key_list.end())
+        {
+            continue;
+        }
+
+        PersistentSuspiciousRollbackReason cluster_suspicious_atom_index_list;
+        for (const auto atom_index : key)
+        {
+            if (suspicious_atom_mask.at(atom_index) != 0)
+            {
+                cluster_suspicious_atom_index_list.emplace_back(atom_index);
+            }
+        }
+        PersistentTerminalFailureReason reason;
+        if (!cluster_suspicious_atom_index_list.empty())
+        {
+            reason = std::move(cluster_suspicious_atom_index_list);
+        }
+        else
+        {
+            const auto status{ health.joint_offset_status };
+            if (!IsJointOffsetSolveHardFailure(status)) continue;
+            reason = status;
+        }
+
+        const auto transformed_change_summary{
+            SummarizeLocalFittingTransformedChanges(assembled_state, previous_state, key)
+        };
+        if (!IsLocalFittingTransformedPercentileConverged(transformed_change_summary.percentile_stats))
+        {
+            continue;
+        }
+
+        PersistentTerminalFailureState next_state{ std::move(reason), 1 };
+        const auto previous_iter{ state_by_key.find(key) };
+        if (previous_iter != state_by_key.end() && previous_iter->second.reason == next_state.reason)
+        {
+            next_state.stable_iteration_count = previous_iter->second.stable_iteration_count + 1;
+        }
+
+        if (next_state.stable_iteration_count >= kPersistentTerminalFailureIterationLimit)
+        {
+            terminal_failure_by_key.emplace(key, std::move(next_state.reason));
+            continue;
+        }
+        next_state_by_key.emplace(key, std::move(next_state));
+    }
+    state_by_key = std::move(next_state_by_key);
+    return terminal_failure_by_key;
+}
+
+inline void ApplyTerminalFallbackClusters(
+    const std::vector<LocalFittingClusterKey> & terminal_key_list,
+    const LocalFittingState & previous_state,
+    const LocalFittingPolishProvenance & previous_polish_provenance,
+    std::vector<char> & terminal_atom_mask,
+    LocalFittingState & assembled_state,
+    LocalFittingPolishProvenance & assembled_polish_provenance)
+{
+    for (const auto & key : terminal_key_list)
+    {
+        for (const auto atom_index : key)
+        {
+            terminal_atom_mask.at(atom_index) = 1;
+            assembled_state.at(atom_index) = previous_state.at(atom_index);
+            assembled_polish_provenance.at(atom_index) = previous_polish_provenance.at(atom_index);
+        }
+    }
+}
+
+inline std::vector<std::size_t> BuildEligibleLocalFittingActiveIndexList(
+    const std::vector<char> & terminal_atom_mask)
+{
+    const auto atom_size{ terminal_atom_mask.size() };
+    std::vector<std::size_t> active_index_list;
+    active_index_list.reserve(atom_size);
+    for (std::size_t atom_index = 0; atom_index < atom_size; atom_index++)
+    {
+        if (terminal_atom_mask.at(atom_index) == 0)
+        {
+            active_index_list.emplace_back(atom_index);
+        }
+    }
+    return active_index_list;
+}
+
+
+
+} // namespace rhbm_gem::core::detail
+

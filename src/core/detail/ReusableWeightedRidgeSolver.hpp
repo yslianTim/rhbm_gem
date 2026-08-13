@@ -72,4 +72,15 @@ struct LocalFittingClusterSolverWorkspace
 using LocalFittingClusterSolverWorkspaceMap =
     std::map<LocalFittingClusterKey, LocalFittingClusterSolverWorkspace>;
 
+inline void ResetLocalFittingClusterSolverWorkspace(
+    const std::vector<LocalFittingClusterKey> & cluster_key_list,
+    LocalFittingClusterSolverWorkspaceMap & workspace_by_key)
+{
+    workspace_by_key.clear();
+    for (const auto & key : cluster_key_list)
+    {
+        workspace_by_key.try_emplace(key);
+    }
+}
+
 } // namespace rhbm_gem::core::detail

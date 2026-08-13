@@ -4,7 +4,23 @@
 
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 
+#include <map>
+
+#include "core/detail/JointOffset.hpp"
+#include "core/detail/LocalFittingStateView.hpp"
+
 namespace rhbm_gem::core::detail {
+
+struct LocalFittingClusterHealth
+{
+    JointOffsetSolveStatus joint_offset_status{
+        JointOffsetSolveStatus::SystemBuildFailed
+    };
+    bool is_refit_stationarity_eligible{ true };
+};
+
+using LocalFittingClusterHealthMap =
+    std::map<LocalFittingClusterKey, LocalFittingClusterHealth>;
 
 inline bool IsLocalGaussianRefitStatusStationarityEligible(
     RHBMEstimationStatus status)

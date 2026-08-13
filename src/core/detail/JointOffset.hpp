@@ -24,13 +24,14 @@
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
 #include "core/detail/LocalFittingCandidateEvaluationOverlay.hpp"
+#include "core/detail/LocalFittingRobustScale.hpp"
 #include "core/detail/ReusableWeightedRidgeSolver.hpp"
 
 namespace rhbm_gem::core::detail {
 
 constexpr int kRobustLossMaximumIterations{ 50 };
-constexpr double kRobustScaleMultiplier{ 1.4826 };
-constexpr double kRobustScaleMin{ 1.0e-12 };
+constexpr double kRobustScaleMultiplier{ kLocalFittingRobustScaleMultiplier };
+constexpr double kRobustScaleMin{ kLocalFittingRobustScaleMin };
 constexpr double kRobustLossCutoffMultiplier{ 1.345 };
 constexpr double kJointOffsetRidgeRatio{ 1.0e-3 };
 constexpr double kSuspiciousJointOffsetRidgeMultiplier{ 10.0 };
@@ -99,24 +100,6 @@ inline const char * GetJointOffsetSolveStatusText(JointOffsetSolveStatus status)
         return "irls-maximum-iterations-reached";
     }
     throw std::logic_error("Joint offset solve status is invalid.");
-}
-
-inline double CalculateMedianAbsoluteDeviationScale(
-    const std::vector<double> & value_list)
-{
-    if (value_list.empty())
-    {
-        return std::numeric_limits<double>::infinity();
-    }
-
-    const auto median_value{ array_helper::ComputeMedian(value_list) };
-    std::vector<double> deviation_list;
-    deviation_list.reserve(value_list.size());
-    for (const auto value : value_list)
-    {
-        deviation_list.emplace_back(std::abs(value - median_value));
-    }
-    return kRobustScaleMultiplier * array_helper::ComputeMedian(deviation_list);
 }
 
 struct JointOffsetConditioning
@@ -742,7 +725,7 @@ inline JointOffsetSolveResult EstimateJointOffsets(
         std::vector<double> residual_list(residual.data(), residual.data() + residual.size());
         const auto residual_scale{
             std::max(
-                CalculateMedianAbsoluteDeviationScale(residual_list),
+                CalculateLocalFittingMedianAbsoluteDeviationScale(residual_list),
                 kRobustScaleMin)
         };
         for (Eigen::Index i = 0; i < residual.size(); i++)

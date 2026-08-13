@@ -14,6 +14,8 @@
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
+#include "core/detail/LocalFittingStateView.hpp"
+
 namespace rhbm_gem::core::detail {
 
 constexpr std::size_t kLogPeakHeightChangeIndex{ 0 };
@@ -125,6 +127,14 @@ inline std::optional<GaussianModel3D> DecodeLocalFittingTransformedCoordinates(
     return model;
 }
 
+inline bool IsValidSecondStageGaussianModel(const GaussianModel3D & model)
+{
+    return std::isfinite(model.GetAmplitude()) && model.GetAmplitude() > 0.0 &&
+        std::isfinite(model.GetWidth()) && model.GetWidth() > 0.0 &&
+        std::isfinite(model.GetOffset()) &&
+        EncodeLocalFittingTransformedCoordinates(model).has_value();
+}
+
 inline algorithm::ParameterChange CalculateLocalFittingTransformedChange(
     const GaussianModel3D & current,
     const GaussianModel3D & previous)
@@ -208,6 +218,95 @@ inline bool IsLocalFittingTransformedChangeConverged(
         }
     }
     return true;
+}
+
+
+constexpr double kLocalFittingChangePercentile{ 0.99 };
+constexpr double kLocalFittingTransformedChangeTolerance{ 1.0e-4 };
+constexpr double kLocalFittingTransformedMaximumChangeTolerance{ 1.0e-3 };
+
+struct LocalFittingTransformedChangeSummary
+{
+    algorithm::ParameterChangeStats percentile_stats{};
+    std::vector<double> maximum_list{};
+};
+
+
+
+template <typename CurrentState, typename PreviousState>
+inline LocalFittingTransformedChangeSummary SummarizeLocalFittingTransformedChanges(
+    const CurrentState & current_state,
+    const PreviousState & previous_state,
+    const std::vector<std::size_t> & index_list)
+{
+    std::vector<algorithm::ParameterChange> change_list;
+    change_list.reserve(index_list.size());
+    for (const auto i : index_list)
+    {
+        change_list.emplace_back(CalculateLocalFittingTransformedChange(
+            GetLocalFittingModel(current_state, i),
+            GetLocalFittingModel(previous_state, i)));
+    }
+
+    std::vector<std::size_t> local_index_list(change_list.size());
+    for (std::size_t i = 0; i < local_index_list.size(); i++)
+    {
+        local_index_list.at(i) = i;
+    }
+    return LocalFittingTransformedChangeSummary{
+        algorithm::SummarizeParameterChangeStats(
+            change_list,
+            local_index_list,
+            kLocalFittingChangePercentile),
+        SummarizeLocalFittingMaximumTransformedChanges(
+            change_list,
+            local_index_list)
+    };
+}
+
+inline bool IsLocalFittingTransformedChangeConverged(
+    const algorithm::ParameterChangeStats & percentile_stats,
+    const std::vector<double> & maximum_list)
+{
+    return IsLocalFittingTransformedChangeConverged(
+        percentile_stats,
+        maximum_list,
+        kLocalFittingTransformedChangeTolerance,
+        kLocalFittingTransformedMaximumChangeTolerance);
+}
+
+inline bool IsLocalFittingTransformedPercentileConverged(
+    const algorithm::ParameterChangeStats & stats)
+{
+    return std::all_of(
+        stats.percentile_list.begin(),
+        stats.percentile_list.end(),
+        [](double value)
+        {
+            return std::isfinite(value) && value < kLocalFittingTransformedChangeTolerance;
+        });
+}
+
+
+
+
+inline std::vector<Eigen::Vector3d> BuildLocalFittingTransformedEstimationList(
+    const LocalFittingState & state)
+{
+    std::vector<Eigen::Vector3d> transformed_estimation_list;
+    transformed_estimation_list.reserve(state.size());
+    for (const auto & result : state)
+    {
+        const auto transformed{
+            EncodeLocalFittingTransformedCoordinates(result.mdpde.GetModel())
+        };
+        if (!transformed.has_value())
+        {
+            throw std::invalid_argument("Local fitting state has invalid transformed coordinates.");
+        }
+        transformed_estimation_list.emplace_back(*transformed);
+    }
+    return transformed_estimation_list;
 }
 
 } // namespace rhbm_gem::core::detail

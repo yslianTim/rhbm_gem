@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cmath>
 #include <optional>
 
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
@@ -30,14 +29,6 @@ struct SecondStageSeedSelection
     SecondStageSeedSource source{ SecondStageSeedSource::GlobalMedian };
     GaussianModel3DWithUncertainty model{};
 };
-
-inline bool IsValidSecondStageGaussianModel(const GaussianModel3D & model)
-{
-    return std::isfinite(model.GetAmplitude()) && model.GetAmplitude() > 0.0 &&
-        std::isfinite(model.GetWidth()) && model.GetWidth() > 0.0 &&
-        std::isfinite(model.GetOffset()) &&
-        EncodeLocalFittingTransformedCoordinates(model).has_value();
-}
 
 inline std::optional<SecondStageSeedSelection> SelectSecondStageSeed(
     const SecondStageSeedCandidates & candidates)

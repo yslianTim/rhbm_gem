@@ -14,6 +14,13 @@ using LocalFittingState = std::vector<LocalGaussianResult>;
 using LocalFittingPolishProvenance = std::vector<char>;
 using LocalFittingClusterKey = std::vector<std::size_t>;
 
+inline const GaussianModel3D & GetLocalFittingModel(
+    const LocalFittingState & state,
+    std::size_t atom_index)
+{
+    return state.at(atom_index).mdpde.GetModel();
+}
+
 struct LocalFittingStatePatch
 {
     LocalFittingClusterKey atom_index_list{};
@@ -87,5 +94,12 @@ private:
     const LocalFittingState * m_base_state{ nullptr };
     const LocalFittingStatePatch * m_patch{ nullptr };
 };
+
+inline const GaussianModel3D & GetLocalFittingModel(
+    const LocalFittingStateView & state,
+    std::size_t atom_index)
+{
+    return state.GetModel(atom_index);
+}
 
 } // namespace rhbm_gem::core::detail

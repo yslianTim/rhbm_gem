@@ -5,6 +5,8 @@
 #include <optional>
 #include <stdexcept>
 
+#include "core/detail/LocalFittingStateView.hpp"
+
 namespace rhbm_gem::core::detail {
 
 struct LocalFittingObjectiveBreakdown
@@ -27,6 +29,19 @@ enum class LocalFittingFinalStateSource
     BestAudit,
     LatestValidated,
     Unavailable
+};
+
+struct LocalFittingAuditedState
+{
+    LocalFittingObjectiveBreakdown objective{};
+    LocalFittingState state{};
+    LocalFittingPolishProvenance polish_provenance{};
+    std::optional<std::size_t> accepted_iteration{};
+};
+
+struct LocalFittingBestAuditState
+{
+    std::optional<LocalFittingAuditedState> best{};
 };
 
 inline LocalFittingFinalStateSource SelectLocalFittingFinalStateSource(

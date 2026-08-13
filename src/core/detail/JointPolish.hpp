@@ -2,6 +2,7 @@
 
 #include "core/detail/JointOffset.hpp"
 #include "core/detail/LocalFittingCandidateEvaluationOverlay.hpp"
+#include "core/detail/LocalFittingRobustScale.hpp"
 #include "core/detail/LocalFittingTransformedChange.hpp"
 #include "core/detail/LocalFittingTrustRegion.hpp"
 
@@ -647,8 +648,8 @@ inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
 
     const auto residual_scale{
         std::max(
-            CalculateMedianAbsoluteDeviationScale(residual_list),
-            kRobustScaleMin)
+            CalculateLocalFittingMedianAbsoluteDeviationScale(residual_list),
+            kLocalFittingRobustScaleMin)
     };
     if (!std::isfinite(residual_scale)) return std::nullopt;
     Eigen::VectorXd weight{ Eigen::VectorXd::Ones(row_count) };
