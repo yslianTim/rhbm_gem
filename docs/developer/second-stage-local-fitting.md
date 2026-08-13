@@ -224,7 +224,7 @@ attempt evaluates factors `1/2, 1/4, 1/8, ...` between the previous and endpoint
 states. Local and combined backtracking preserve one physical offset per
 `GroupKey`; shapes remain interpolated in transformed coordinates. Search stops
 when the largest transformed change is below
-`kLocalFittingTransformedChangeTolerance`. The first passing trial is committed
+`kTransformedChangeTolerance`. The first passing trial is committed
 with endpoint uncertainty, records its factor, and does not grow the radius.
 Rejected trials do not mutate objective state or polish provenance. A cluster
 that exhausts objective backtracking is immediately excluded from trust-radius

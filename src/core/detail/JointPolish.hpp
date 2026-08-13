@@ -2,7 +2,7 @@
 
 #include "core/detail/JointOffset.hpp"
 #include "core/detail/LocalFittingRobustScale.hpp"
-#include "core/detail/LocalFittingTransformedChange.hpp"
+#include "core/detail/TransformedChange.hpp"
 #include "core/detail/TrustRegion.hpp"
 
 #include <algorithm>
@@ -90,13 +90,13 @@ struct JointPolishParameterization
                 0.0
             };
             const auto shape_model{
-                DecodeLocalFittingTransformedCoordinates(shape_coordinates)
+                DecodeTransformedCoordinates(shape_coordinates)
             };
             if (!shape_model.has_value()) return std::nullopt;
             const auto model{
                 shape_model->WithOffset(parameter(OffsetColumn(atom_position)))
             };
-            if (!EncodeLocalFittingTransformedCoordinates(model).has_value())
+            if (!EncodeTransformedCoordinates(model).has_value())
             {
                 return std::nullopt;
             }
@@ -146,7 +146,7 @@ BuildJointPolishParameterization(
         atom_position++)
     {
         const auto transformed{
-            EncodeLocalFittingTransformedCoordinates(
+            EncodeTransformedCoordinates(
                 base_model_list.at(atom_position))
         };
         if (!transformed.has_value()) return std::nullopt;
@@ -207,7 +207,7 @@ EvaluateSharedOffsetResponse(
     const GaussianModel3D & model,
     double distance)
 {
-    if (!EncodeLocalFittingTransformedCoordinates(model).has_value() ||
+    if (!EncodeTransformedCoordinates(model).has_value() ||
         !std::isfinite(distance) || distance < 0.0)
     {
         return std::nullopt;
@@ -272,7 +272,7 @@ inline std::optional<TransformedModelInvariants>
 BuildTransformedModelInvariants(
     const GaussianModel3D & model)
 {
-    const auto transformed{ EncodeLocalFittingTransformedCoordinates(model) };
+    const auto transformed{ EncodeTransformedCoordinates(model) };
     if (!transformed.has_value()) return std::nullopt;
 
     const auto peak_height{
@@ -682,11 +682,11 @@ inline bool HasMaterialJointPolishChange(
         atom_position++)
     {
         const auto change{
-            CalculateLocalFittingTransformedChange(
+            CalculateTransformedChange(
                 candidate_model_list.at(atom_position),
                 seed_model_list.at(atom_position))
         };
-        if (IsLocalFittingTransformedChangeMaterial(
+        if (IsTransformedChangeMaterial(
                 change,
                 kJointPolishTransformedChangeTolerance))
         {
@@ -819,11 +819,11 @@ BuildJointPolishProposal(
                             base_mdpde.GetStandardDeviationModel()
                         });
                     const auto base_coordinates{
-                        EncodeLocalFittingTransformedCoordinates(
+                        EncodeTransformedCoordinates(
                             base_mdpde.GetModel())
                     };
                     const auto candidate_coordinates{
-                        EncodeLocalFittingTransformedCoordinates(
+                        EncodeTransformedCoordinates(
                             candidate_model)
                     };
                     if (!base_coordinates.has_value() ||

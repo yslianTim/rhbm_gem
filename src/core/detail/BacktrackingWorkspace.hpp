@@ -12,7 +12,7 @@
 
 #include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/FitStateView.hpp"
-#include "core/detail/LocalFittingTransformedChange.hpp"
+#include "core/detail/TransformedChange.hpp"
 #include "core/detail/SecondStageLocalFittingContext.hpp"
 
 namespace rhbm_gem::core::detail {
@@ -233,11 +233,11 @@ private:
     bool HasMaterialChange(std::size_t atom_position) const
     {
         const auto change{
-            CalculateLocalFittingTransformedChange(
+            CalculateTransformedChange(
                 m_candidate_patch.mdpde_list.at(atom_position).GetModel(),
                 m_previous_model_list.at(atom_position))
         };
-        return IsLocalFittingTransformedChangeMaterial(change, m_minimum_transformed_change);
+        return IsTransformedChangeMaterial(change, m_minimum_transformed_change);
     }
 
     double GetMaximumTransformedChange() const
@@ -247,11 +247,11 @@ private:
         for (std::size_t atom_position = 0; atom_position < m_active_index_list.size(); atom_position++)
         {
             change_list.emplace_back(
-                CalculateLocalFittingTransformedChange(
+                CalculateTransformedChange(
                     m_candidate_patch.mdpde_list.at(atom_position).GetModel(),
                     m_previous_model_list.at(atom_position)));
         }
-        return GetMaximumLocalFittingTransformedChange(change_list);
+        return ::rhbm_gem::core::detail::GetMaximumTransformedChange(change_list);
     }
 
     template <typename EndpointState>

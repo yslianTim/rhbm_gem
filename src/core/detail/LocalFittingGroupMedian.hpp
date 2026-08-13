@@ -116,11 +116,11 @@ BuildLocalFittingSharedOffsetDampedModelList(
         atom_position++)
     {
         const auto previous_coordinates{
-            EncodeLocalFittingTransformedCoordinates(
+            EncodeTransformedCoordinates(
                 previous_model_list.at(atom_position))
         };
         const auto raw_coordinates{
-            EncodeLocalFittingTransformedCoordinates(
+            EncodeTransformedCoordinates(
                 raw_model_list.at(atom_position))
         };
         if (!previous_coordinates.has_value() || !raw_coordinates.has_value())
@@ -135,7 +135,7 @@ BuildLocalFittingSharedOffsetDampedModelList(
         shape_coordinates(static_cast<Eigen::Index>(
             kOffsetToPeakRatioChangeIndex)) = 0.0;
         const auto shape_model{
-            DecodeLocalFittingTransformedCoordinates(shape_coordinates)
+            DecodeTransformedCoordinates(shape_coordinates)
         };
         if (!shape_model.has_value()) return std::nullopt;
 

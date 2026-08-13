@@ -20,7 +20,7 @@
 #include "core/detail/LocalFittingResidualEvaluation.hpp"
 #include "core/detail/LocalFittingRobustScale.hpp"
 #include "core/detail/FitStateView.hpp"
-#include "core/detail/LocalFittingTransformedChange.hpp"
+#include "core/detail/TransformedChange.hpp"
 
 namespace rhbm_gem::core::detail {
 
@@ -835,13 +835,13 @@ inline bool TryCommitLocalFittingClusterCandidate(
             std::memory_order_relaxed);
     }
     const auto transformed_change_summary{
-        SummarizeLocalFittingTransformedChanges(
+        SummarizeTransformedChanges(
             candidate_state,
             previous_state,
             key)
     };
     const auto maximum_transformed_change{
-        GetMaximumLocalFittingTransformedPercentileChange(
+        GetMaximumTransformedPercentileChange(
             transformed_change_summary)
     };
     const auto domain_iter{ domain.cluster_by_key.find(key) };

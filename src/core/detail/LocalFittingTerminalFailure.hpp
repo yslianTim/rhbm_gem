@@ -9,7 +9,7 @@
 #include "core/detail/JointOffset.hpp"
 #include "core/detail/LocalFittingHealth.hpp"
 #include "core/detail/FitStateView.hpp"
-#include "core/detail/LocalFittingTransformedChange.hpp"
+#include "core/detail/TransformedChange.hpp"
 
 namespace rhbm_gem::core::detail {
 
@@ -84,9 +84,9 @@ inline TerminalPersistentFailureMap UpdatePersistentTerminalFailureState(
         }
 
         const auto transformed_change_summary{
-            SummarizeLocalFittingTransformedChanges(assembled_state, previous_state, key)
+            SummarizeTransformedChanges(assembled_state, previous_state, key)
         };
-        if (!IsLocalFittingTransformedPercentileConverged(transformed_change_summary))
+        if (!IsTransformedPercentileConverged(transformed_change_summary))
         {
             continue;
         }

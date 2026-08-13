@@ -23,7 +23,7 @@
 #include "core/detail/LocalFittingObjectiveAttemptDiagnostic.hpp"
 #include "core/detail/LocalFittingPerformanceCounters.hpp"
 #include "core/detail/FitStateView.hpp"
-#include "core/detail/LocalFittingTransformedChange.hpp"
+#include "core/detail/TransformedChange.hpp"
 #include "core/detail/TrustRegion.hpp"
 #include "core/detail/ReusableWeightedRidgeSolver.hpp"
 #include "core/detail/ScopedEigenThreadCount.hpp"
@@ -296,7 +296,7 @@ inline std::optional<FitStatePatch> BuildCandidatePatch(
             continue;
         }
         const auto candidate_model{
-            DecodeLocalFittingTransformedCoordinates(candidate_transformed_estimation)
+            DecodeTransformedCoordinates(candidate_transformed_estimation)
         };
         if (!candidate_model.has_value())
         {
@@ -472,7 +472,7 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
         previous_state,
         base_state_view,
         key,
-        kLocalFittingTransformedChangeTolerance
+        kTransformedChangeTolerance
     };
     LocalFittingCandidateEvaluationOverlay base_overlay{
         context,
@@ -856,7 +856,7 @@ inline bool TryBacktrackCombinedCandidate(
         previous_state,
         endpoint_state,
         changed_atom_index_list,
-        kLocalFittingTransformedChangeTolerance
+        kTransformedChangeTolerance
     };
     const FitStateView previous_state_view{ previous_state };
 

@@ -4,7 +4,7 @@
 
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
-#include "core/detail/LocalFittingTransformedChange.hpp"
+#include "core/detail/TransformedChange.hpp"
 
 namespace rhbm_gem::core::detail {
 

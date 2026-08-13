@@ -12,7 +12,7 @@
 #include <Eigen/Dense>
 
 #include "core/detail/FitStateView.hpp"
-#include "core/detail/LocalFittingTransformedChange.hpp"
+#include "core/detail/TransformedChange.hpp"
 
 namespace rhbm_gem::core::detail {
 
@@ -428,10 +428,10 @@ inline std::optional<double> CalculateClusterModelTrustRegionStepNorm(
     {
         const auto atom_index{ key.at(atom_position) };
         const auto previous{
-            EncodeLocalFittingTransformedCoordinates(outer_previous_state.at(atom_index).mdpde.GetModel())
+            EncodeTransformedCoordinates(outer_previous_state.at(atom_index).mdpde.GetModel())
         };
         const auto candidate{
-            EncodeLocalFittingTransformedCoordinates(candidate_model_list.at(atom_position))
+            EncodeTransformedCoordinates(candidate_model_list.at(atom_position))
         };
         if (!previous.has_value() || !candidate.has_value())
         {

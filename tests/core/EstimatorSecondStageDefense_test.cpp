@@ -31,7 +31,7 @@
 #include "core/detail/LocalFittingTerminalFailure.hpp"
 #include "core/detail/SecondStageLocalFittingInitialization.hpp"
 #include "core/detail/TrustRegion.hpp"
-#include "core/detail/LocalFittingTransformedChange.hpp"
+#include "core/detail/TransformedChange.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
@@ -1822,7 +1822,7 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionDampingIsIntensityScaleInvarian
     const auto encode = [](const rg::GaussianModel3D & model)
     {
         const auto estimation{
-            change_detail::EncodeLocalFittingTransformedCoordinates(model)
+            change_detail::EncodeTransformedCoordinates(model)
         };
         EXPECT_TRUE(estimation.has_value());
         return estimation.value_or(Eigen::Vector3d::Zero());
@@ -2385,13 +2385,13 @@ TEST(EstimatorSecondStageDefenseTest, TransformedChangeIsIntensityScaleInvariant
     const rg::GaussianModel3D previous{ 8.0, 0.50, -0.10 };
     const rg::GaussianModel3D current{ 8.8, 0.55, -0.12 };
     const auto base_change{
-        change_detail::CalculateLocalFittingTransformedChange(current, previous)
+        change_detail::CalculateTransformedChange(current, previous)
     };
 
     for (const auto scale : { 1.0e-2, 1.0e2 })
     {
         const auto scaled_change{
-            change_detail::CalculateLocalFittingTransformedChange(
+            change_detail::CalculateTransformedChange(
                 rg::GaussianModel3D{
                     current.GetAmplitude() * scale,
                     current.GetWidth(),
@@ -2430,7 +2430,7 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishJacobianMatchesFiniteDifference
     for (const auto & model : model_list)
     {
         const auto transformed{
-            change_detail::EncodeLocalFittingTransformedCoordinates(model)
+            change_detail::EncodeTransformedCoordinates(model)
         };
         ASSERT_TRUE(transformed.has_value());
         for (const auto distance : distance_list)
@@ -2453,10 +2453,10 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishJacobianMatchesFiniteDifference
                 lower(parameter_index) -= step;
                 upper(parameter_index) += step;
                 const auto lower_model{
-                    change_detail::DecodeLocalFittingTransformedCoordinates(lower)
+                    change_detail::DecodeTransformedCoordinates(lower)
                 };
                 const auto upper_model{
-                    change_detail::DecodeLocalFittingTransformedCoordinates(upper)
+                    change_detail::DecodeTransformedCoordinates(upper)
                 };
                 ASSERT_TRUE(lower_model.has_value());
                 ASSERT_TRUE(upper_model.has_value());
@@ -2600,15 +2600,15 @@ TEST(EstimatorSecondStageDefenseTest,
             atom_position++)
         {
             const auto previous_coordinates{
-                change_detail::EncodeLocalFittingTransformedCoordinates(
+                change_detail::EncodeTransformedCoordinates(
                     previous_model_list.at(atom_position))
             };
             const auto raw_coordinates{
-                change_detail::EncodeLocalFittingTransformedCoordinates(
+                change_detail::EncodeTransformedCoordinates(
                     raw_model_list.at(atom_position))
             };
             const auto candidate_coordinates{
-                change_detail::EncodeLocalFittingTransformedCoordinates(
+                change_detail::EncodeTransformedCoordinates(
                     candidate_model_list->at(atom_position))
             };
             ASSERT_TRUE(previous_coordinates.has_value());
@@ -3003,7 +3003,7 @@ TEST(EstimatorSecondStageDefenseTest, SharedOffsetJacobianMatchesFiniteDifferenc
     for (const auto & model : model_list)
     {
         const auto transformed{
-            change_detail::EncodeLocalFittingTransformedCoordinates(model)
+            change_detail::EncodeTransformedCoordinates(model)
         };
         ASSERT_TRUE(transformed.has_value());
         for (const auto distance : distance_list)
@@ -3031,10 +3031,10 @@ TEST(EstimatorSecondStageDefenseTest, SharedOffsetJacobianMatchesFiniteDifferenc
                 upper(static_cast<Eigen::Index>(
                     change_detail::kOffsetToPeakRatioChangeIndex)) = 0.0;
                 const auto lower_shape{
-                    change_detail::DecodeLocalFittingTransformedCoordinates(lower)
+                    change_detail::DecodeTransformedCoordinates(lower)
                 };
                 const auto upper_shape{
-                    change_detail::DecodeLocalFittingTransformedCoordinates(upper)
+                    change_detail::DecodeTransformedCoordinates(upper)
                 };
                 ASSERT_TRUE(lower_shape.has_value());
                 ASSERT_TRUE(upper_shape.has_value());
@@ -3515,12 +3515,12 @@ TEST(EstimatorSecondStageDefenseTest, TransformedCoordinatesRoundTrip)
 {
     const rg::GaussianModel3D model{ 8.5, 0.65, -0.12 };
     const auto encoded{
-        change_detail::EncodeLocalFittingTransformedCoordinates(model)
+        change_detail::EncodeTransformedCoordinates(model)
     };
     ASSERT_TRUE(encoded.has_value());
 
     const auto decoded{
-        change_detail::DecodeLocalFittingTransformedCoordinates(*encoded)
+        change_detail::DecodeTransformedCoordinates(*encoded)
     };
     ASSERT_TRUE(decoded.has_value());
     ExpectGaussianModelsNear(model, *decoded, 1.0e-12);
@@ -3536,14 +3536,14 @@ TEST(EstimatorSecondStageDefenseTest, TransformedDampingIsIntensityScaleInvarian
                           const rg::GaussianModel3D & rhs)
     {
         const auto lhs_coordinates{
-            change_detail::EncodeLocalFittingTransformedCoordinates(lhs)
+            change_detail::EncodeTransformedCoordinates(lhs)
         };
         const auto rhs_coordinates{
-            change_detail::EncodeLocalFittingTransformedCoordinates(rhs)
+            change_detail::EncodeTransformedCoordinates(rhs)
         };
         EXPECT_TRUE(lhs_coordinates.has_value());
         EXPECT_TRUE(rhs_coordinates.has_value());
-        return change_detail::DecodeLocalFittingTransformedCoordinates(
+        return change_detail::DecodeTransformedCoordinates(
             *lhs_coordinates + damping * (*rhs_coordinates - *lhs_coordinates));
     };
 
@@ -3850,10 +3850,10 @@ TEST(EstimatorSecondStageDefenseTest, TransformedBacktrackingIncludesOffset)
     const rg::GaussianModel3D previous{ 8.0, 0.50, -0.10 };
     const rg::GaussianModel3D endpoint{ 12.0, 0.75, 0.40 };
     const auto previous_coordinates{
-        change_detail::EncodeLocalFittingTransformedCoordinates(previous)
+        change_detail::EncodeTransformedCoordinates(previous)
     };
     const auto endpoint_coordinates{
-        change_detail::EncodeLocalFittingTransformedCoordinates(endpoint)
+        change_detail::EncodeTransformedCoordinates(endpoint)
     };
     ASSERT_TRUE(previous_coordinates.has_value());
     ASSERT_TRUE(endpoint_coordinates.has_value());
@@ -3864,7 +3864,7 @@ TEST(EstimatorSecondStageDefenseTest, TransformedBacktrackingIncludesOffset)
     for (const auto factor : { 0.5, 0.25, 0.125 })
     {
         const auto candidate{
-            change_detail::DecodeLocalFittingTransformedCoordinates(
+            change_detail::DecodeTransformedCoordinates(
                 *previous_coordinates +
                 factor * (*endpoint_coordinates - *previous_coordinates))
         };
@@ -3880,18 +3880,18 @@ TEST(EstimatorSecondStageDefenseTest, TransformedBacktrackingIncludesOffset)
 TEST(EstimatorSecondStageDefenseTest, TransformedExtrapolationKeepsPositiveShape)
 {
     const auto left{
-        change_detail::EncodeLocalFittingTransformedCoordinates(
+        change_detail::EncodeTransformedCoordinates(
             rg::GaussianModel3D{ 8.0, 0.50, -0.10 })
     };
     const auto right{
-        change_detail::EncodeLocalFittingTransformedCoordinates(
+        change_detail::EncodeTransformedCoordinates(
             rg::GaussianModel3D{ 9.0, 0.60, -0.15 })
     };
     ASSERT_TRUE(left.has_value());
     ASSERT_TRUE(right.has_value());
 
     const auto extrapolated{
-        change_detail::DecodeLocalFittingTransformedCoordinates(
+        change_detail::DecodeTransformedCoordinates(
             2.0 * *right - *left)
     };
     ASSERT_TRUE(extrapolated.has_value());
@@ -3903,7 +3903,7 @@ TEST(EstimatorSecondStageDefenseTest, TransformedExtrapolationKeepsPositiveShape
 TEST(EstimatorSecondStageDefenseTest, TransformedChangeSeparatesPeakHeightAndWidth)
 {
     const auto change{
-        change_detail::CalculateLocalFittingTransformedChange(
+        change_detail::CalculateTransformedChange(
             rg::GaussianModel3D{ 8.0, 1.0, 0.0 },
             rg::GaussianModel3D{ 1.0, 0.5, 0.0 })
     };
@@ -3943,7 +3943,7 @@ TEST(EstimatorSecondStageDefenseTest, InvalidTransformedCoordinatesProduceInfini
     {
         EXPECT_FALSE(seed_detail::IsValidSecondStageGaussianModel(invalid_model));
         const auto change{
-            change_detail::CalculateLocalFittingTransformedChange(
+            change_detail::CalculateTransformedChange(
                 invalid_model,
                 valid_model)
         };
@@ -3972,7 +3972,7 @@ TEST(EstimatorSecondStageDefenseTest, TransformedConvergenceRejectsHiddenMaximum
         alg::SummarizeParameterChangeStats(change_list, index_list, 0.99)
     };
     const auto maximum_list{
-        change_detail::SummarizeLocalFittingMaximumTransformedChanges(
+        change_detail::SummarizeMaximumTransformedChanges(
             change_list,
             index_list)
     };
@@ -3980,7 +3980,7 @@ TEST(EstimatorSecondStageDefenseTest, TransformedConvergenceRejectsHiddenMaximum
         percentile_stats.percentile_list.at(
             change_detail::kLogPeakHeightChangeIndex),
         1.0e-4);
-    EXPECT_FALSE(change_detail::IsLocalFittingTransformedChangeConverged(
+    EXPECT_FALSE(change_detail::IsTransformedChangeConverged(
         percentile_stats,
         maximum_list,
         1.0e-4,
@@ -4656,13 +4656,13 @@ TEST(
 {
     const rg::GaussianModel3D initial_model{ 6.0, 0.55, 0.0 };
     auto truth_coordinates{
-        change_detail::EncodeLocalFittingTransformedCoordinates(initial_model)
+        change_detail::EncodeTransformedCoordinates(initial_model)
     };
     ASSERT_TRUE(truth_coordinates.has_value());
     (*truth_coordinates)(static_cast<Eigen::Index>(
         change_detail::kOffsetToPeakRatioChangeIndex)) = 1.25;
     const auto truth_model{
-        change_detail::DecodeLocalFittingTransformedCoordinates(
+        change_detail::DecodeTransformedCoordinates(
             *truth_coordinates)
     };
     ASSERT_TRUE(truth_model.has_value());

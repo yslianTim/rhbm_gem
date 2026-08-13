@@ -17,7 +17,7 @@
 #include "core/detail/SecondStageLocalFittingInitialization.hpp"
 #include "core/detail/FitStateView.hpp"
 #include "core/detail/TrustRegion.hpp"
-#include "core/detail/LocalFittingTransformedChange.hpp"
+#include "core/detail/TransformedChange.hpp"
 #include "core/detail/ReusableWeightedRidgeSolver.hpp"
 #include "core/detail/ScopedEigenThreadCount.hpp"
 #include "core/detail/SecondStageLocalFittingContext.hpp"
@@ -95,10 +95,10 @@ using detail::ResetLocalFittingClusterSolverWorkspace;
 using detail::BuildSecondStageAdjustedResponseCache;
 using detail::BuildSecondStageAdjustedSamples;
 using detail::BuildLocalFittingResidualBaseline;
-using detail::SummarizeLocalFittingTransformedChanges;
-using detail::IsLocalFittingTransformedChangeConverged;
-using detail::GetMaximumLocalFittingTransformedChange;
-using detail::BuildLocalFittingTransformedEstimationList;
+using detail::SummarizeTransformedChanges;
+using detail::IsTransformedChangeConverged;
+using detail::GetMaximumTransformedChange;
+using detail::BuildTransformedEstimationList;
 using detail::LocalFittingObjectiveDomain;
 using detail::LocalFittingClusterObjectiveState;
 using detail::LocalFittingClusterObjectiveStateMap;
@@ -1510,13 +1510,13 @@ bool RunSecondStageLocalFitting(
         }
         const auto raw_state{ std::move(iteration_result.state) };
         const auto raw_fixed_point_change_summary{
-            SummarizeLocalFittingTransformedChanges(raw_state, previous_state, active_index_list)
+            SummarizeTransformedChanges(raw_state, previous_state, active_index_list)
         };
         const auto previous_transformed_estimation_list{
-            BuildLocalFittingTransformedEstimationList(previous_state)
+            BuildTransformedEstimationList(previous_state)
         };
         const auto raw_transformed_estimation_list{
-            BuildLocalFittingTransformedEstimationList(raw_state)
+            BuildTransformedEstimationList(raw_state)
         };
 
         auto working_cluster_objective_state{ cluster_objective_state };
@@ -1785,7 +1785,7 @@ bool RunSecondStageLocalFitting(
             selection.polish_progress,
             iteration_suspicious_atom_count,
             std::nullopt,
-            GetMaximumLocalFittingTransformedChange(raw_fixed_point_change_summary)
+            GetMaximumTransformedChange(raw_fixed_point_change_summary)
         };
         if (selection.accepted_key_list.empty())
         {
@@ -1842,7 +1842,7 @@ bool RunSecondStageLocalFitting(
         }
 
         const auto transformed_change_summary{
-            SummarizeLocalFittingTransformedChanges(assembled_state, previous_state, active_index_list)
+            SummarizeTransformedChanges(assembled_state, previous_state, active_index_list)
         };
 
         accepted_iteration_count++;
@@ -1869,7 +1869,7 @@ bool RunSecondStageLocalFitting(
                     !trust_region_radius_update.changed_key_list.empty());
         progress.accepted_iteration_count = accepted_iteration_count;
         progress.accepted_maximum_transformed_change =
-            GetMaximumLocalFittingTransformedChange(transformed_change_summary);
+            GetMaximumTransformedChange(transformed_change_summary);
         LogRejectedLocalFittingClusterDiagnostics(options, selection.rejected_cluster_diagnostic_list);
         LogLocalFittingIterationProgress(options, progress_column_widths, progress);
 
@@ -1903,8 +1903,8 @@ bool RunSecondStageLocalFitting(
             stationarity_ineligible_cluster_count == 0 &&
             !has_suspicious_offset_fallback &&
             selection.rejected_key_list.empty() &&
-            IsLocalFittingTransformedChangeConverged(transformed_change_summary) &&
-            IsLocalFittingTransformedChangeConverged(raw_fixed_point_change_summary)
+            IsTransformedChangeConverged(transformed_change_summary) &&
+            IsTransformedChangeConverged(raw_fixed_point_change_summary)
         };
         if (converged)
         {

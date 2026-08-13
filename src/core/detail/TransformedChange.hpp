@@ -22,8 +22,17 @@ constexpr std::size_t kLogPeakHeightChangeIndex{ 0 };
 constexpr std::size_t kLogWidthChangeIndex{ 1 };
 constexpr std::size_t kOffsetToPeakRatioChangeIndex{ 2 };
 constexpr std::size_t kTransformedChangeSize{ 3 };
+constexpr double kTransformedChangePercentile{ 0.99 };
+constexpr double kTransformedChangeTolerance{ 1.0e-4 };
+constexpr double kTransformedMaximumChangeTolerance{ 1.0e-3 };
 
-inline algorithm::ParameterChange MakeInfiniteLocalFittingTransformedChange()
+struct TransformedChangeSummary
+{
+    algorithm::ParameterChangeStats percentile_stats{};
+    std::vector<double> maximum_list{};
+};
+
+inline algorithm::ParameterChange MakeInfiniteTransformedChange()
 {
     return algorithm::ParameterChange{
         std::vector<double>(
@@ -32,7 +41,7 @@ inline algorithm::ParameterChange MakeInfiniteLocalFittingTransformedChange()
     };
 }
 
-inline std::optional<Eigen::Vector3d> EncodeLocalFittingTransformedCoordinates(
+inline std::optional<Eigen::Vector3d> EncodeTransformedCoordinates(
     const GaussianModel3D & model)
 {
     const auto amplitude{ model.GetAmplitude() };
@@ -60,14 +69,11 @@ inline std::optional<Eigen::Vector3d> EncodeLocalFittingTransformedCoordinates(
             log_width -
             log_peak_height
         };
-        if (log_abs_offset_to_peak_ratio >
-            std::log(std::numeric_limits<double>::max()))
+        if (log_abs_offset_to_peak_ratio > std::log(std::numeric_limits<double>::max()))
         {
             return std::nullopt;
         }
-        offset_to_peak_ratio = std::copysign(
-            std::exp(log_abs_offset_to_peak_ratio),
-            offset);
+        offset_to_peak_ratio = std::copysign(std::exp(log_abs_offset_to_peak_ratio), offset);
     }
 
     if (!std::isfinite(log_peak_height) ||
@@ -84,8 +90,7 @@ inline std::optional<Eigen::Vector3d> EncodeLocalFittingTransformedCoordinates(
     };
 }
 
-inline std::optional<GaussianModel3D> DecodeLocalFittingTransformedCoordinates(
-    const Eigen::Vector3d & coordinates)
+inline std::optional<GaussianModel3D> DecodeTransformedCoordinates(const Eigen::Vector3d & coordinates)
 {
     if (!coordinates.allFinite())
     {
@@ -132,22 +137,22 @@ inline bool IsValidSecondStageGaussianModel(const GaussianModel3D & model)
     return std::isfinite(model.GetAmplitude()) && model.GetAmplitude() > 0.0 &&
         std::isfinite(model.GetWidth()) && model.GetWidth() > 0.0 &&
         std::isfinite(model.GetOffset()) &&
-        EncodeLocalFittingTransformedCoordinates(model).has_value();
+        EncodeTransformedCoordinates(model).has_value();
 }
 
-inline algorithm::ParameterChange CalculateLocalFittingTransformedChange(
+inline algorithm::ParameterChange CalculateTransformedChange(
     const GaussianModel3D & current,
     const GaussianModel3D & previous)
 {
     const auto current_coordinates{
-        EncodeLocalFittingTransformedCoordinates(current)
+        EncodeTransformedCoordinates(current)
     };
     const auto previous_coordinates{
-        EncodeLocalFittingTransformedCoordinates(previous)
+        EncodeTransformedCoordinates(previous)
     };
     if (!current_coordinates.has_value() || !previous_coordinates.has_value())
     {
-        return MakeInfiniteLocalFittingTransformedChange();
+        return MakeInfiniteTransformedChange();
     }
 
     algorithm::ParameterChange change{
@@ -163,15 +168,14 @@ inline algorithm::ParameterChange CalculateLocalFittingTransformedChange(
         };
         if (!std::isfinite(value))
         {
-            return MakeInfiniteLocalFittingTransformedChange();
+            return MakeInfiniteTransformedChange();
         }
         change.value_list.at(i) = value;
     }
     return change;
 }
 
-inline double GetMaximumLocalFittingTransformedChange(
-    const std::vector<double> & value_list)
+inline double GetMaximumTransformedChange(const std::vector<double> & value_list)
 {
     if (value_list.empty()) return 0.0;
     if (value_list.size() != kTransformedChangeSize)
@@ -182,32 +186,27 @@ inline double GetMaximumLocalFittingTransformedChange(
     return *std::max_element(value_list.begin(), value_list.end());
 }
 
-inline double GetMaximumLocalFittingTransformedChange(
-    const algorithm::ParameterChange & change)
+inline double GetMaximumTransformedChange(const algorithm::ParameterChange & change)
 {
-    return GetMaximumLocalFittingTransformedChange(change.value_list);
+    return GetMaximumTransformedChange(change.value_list);
 }
 
-inline double GetMaximumLocalFittingTransformedChange(
-    const algorithm::ParameterChangeStats & stats)
+inline double GetMaximumTransformedChange(const algorithm::ParameterChangeStats & stats)
 {
-    return GetMaximumLocalFittingTransformedChange(stats.percentile_list);
+    return GetMaximumTransformedChange(stats.percentile_list);
 }
 
-inline double GetMaximumLocalFittingTransformedChange(
-    const std::vector<algorithm::ParameterChange> & change_list)
+inline double GetMaximumTransformedChange(const std::vector<algorithm::ParameterChange> & change_list)
 {
     double maximum_change{ 0.0 };
     for (const auto & change : change_list)
     {
-        maximum_change = std::max(
-            maximum_change,
-            GetMaximumLocalFittingTransformedChange(change));
+        maximum_change = std::max(maximum_change, GetMaximumTransformedChange(change));
     }
     return maximum_change;
 }
 
-inline bool IsLocalFittingTransformedChangeMaterial(
+inline bool IsTransformedChangeMaterial(
     const algorithm::ParameterChange & change,
     double minimum_change)
 {
@@ -230,7 +229,7 @@ inline bool IsLocalFittingTransformedChangeMaterial(
         });
 }
 
-inline std::vector<double> SummarizeLocalFittingMaximumTransformedChanges(
+inline std::vector<double> SummarizeMaximumTransformedChanges(
     const std::vector<algorithm::ParameterChange> & change_list,
     const std::vector<std::size_t> & index_list)
 {
@@ -255,7 +254,7 @@ inline std::vector<double> SummarizeLocalFittingMaximumTransformedChanges(
     return maximum_list;
 }
 
-inline bool IsLocalFittingTransformedChangeConverged(
+inline bool IsTransformedChangeConverged(
     const algorithm::ParameterChangeStats & percentile_stats,
     const std::vector<double> & maximum_list,
     double percentile_tolerance,
@@ -280,21 +279,8 @@ inline bool IsLocalFittingTransformedChangeConverged(
     return true;
 }
 
-
-constexpr double kLocalFittingTransformedChangePercentile{ 0.99 };
-constexpr double kLocalFittingTransformedChangeTolerance{ 1.0e-4 };
-constexpr double kLocalFittingTransformedMaximumChangeTolerance{ 1.0e-3 };
-
-struct LocalFittingTransformedChangeSummary
-{
-    algorithm::ParameterChangeStats percentile_stats{};
-    std::vector<double> maximum_list{};
-};
-
-
-
 template <typename CurrentState, typename PreviousState>
-inline LocalFittingTransformedChangeSummary SummarizeLocalFittingTransformedChanges(
+inline TransformedChangeSummary SummarizeTransformedChanges(
     const CurrentState & current_state,
     const PreviousState & previous_state,
     const std::vector<std::size_t> & index_list)
@@ -303,7 +289,7 @@ inline LocalFittingTransformedChangeSummary SummarizeLocalFittingTransformedChan
     change_list.reserve(index_list.size());
     for (const auto i : index_list)
     {
-        change_list.emplace_back(CalculateLocalFittingTransformedChange(
+        change_list.emplace_back(CalculateTransformedChange(
             GetFitModel(current_state, i),
             GetFitModel(previous_state, i)));
     }
@@ -313,49 +299,49 @@ inline LocalFittingTransformedChangeSummary SummarizeLocalFittingTransformedChan
     {
         local_index_list.at(i) = i;
     }
-    return LocalFittingTransformedChangeSummary{
+    return TransformedChangeSummary{
         algorithm::SummarizeParameterChangeStats(
             change_list,
             local_index_list,
-            kLocalFittingTransformedChangePercentile),
-        SummarizeLocalFittingMaximumTransformedChanges(
+            kTransformedChangePercentile),
+        SummarizeMaximumTransformedChanges(
             change_list,
             local_index_list)
     };
 }
 
-inline bool IsLocalFittingTransformedChangeConverged(
+inline bool IsTransformedChangeConverged(
     const algorithm::ParameterChangeStats & percentile_stats,
     const std::vector<double> & maximum_list)
 {
-    return IsLocalFittingTransformedChangeConverged(
+    return IsTransformedChangeConverged(
         percentile_stats,
         maximum_list,
-        kLocalFittingTransformedChangeTolerance,
-        kLocalFittingTransformedMaximumChangeTolerance);
+        kTransformedChangeTolerance,
+        kTransformedMaximumChangeTolerance);
 }
 
-inline double GetMaximumLocalFittingTransformedChange(
-    const LocalFittingTransformedChangeSummary & summary)
+inline double GetMaximumTransformedChange(
+    const TransformedChangeSummary & summary)
 {
-    return GetMaximumLocalFittingTransformedChange(summary.maximum_list);
+    return GetMaximumTransformedChange(summary.maximum_list);
 }
 
-inline double GetMaximumLocalFittingTransformedPercentileChange(
-    const LocalFittingTransformedChangeSummary & summary)
+inline double GetMaximumTransformedPercentileChange(
+    const TransformedChangeSummary & summary)
 {
-    return GetMaximumLocalFittingTransformedChange(summary.percentile_stats);
+    return GetMaximumTransformedChange(summary.percentile_stats);
 }
 
-inline bool IsLocalFittingTransformedChangeConverged(
-    const LocalFittingTransformedChangeSummary & summary)
+inline bool IsTransformedChangeConverged(
+    const TransformedChangeSummary & summary)
 {
-    return IsLocalFittingTransformedChangeConverged(
+    return IsTransformedChangeConverged(
         summary.percentile_stats,
         summary.maximum_list);
 }
 
-inline bool IsLocalFittingTransformedPercentileConverged(
+inline bool IsTransformedPercentileConverged(
     const algorithm::ParameterChangeStats & stats)
 {
     return std::all_of(
@@ -363,21 +349,18 @@ inline bool IsLocalFittingTransformedPercentileConverged(
         stats.percentile_list.end(),
         [](double value)
         {
-            return std::isfinite(value) && value < kLocalFittingTransformedChangeTolerance;
+            return std::isfinite(value) && value < kTransformedChangeTolerance;
         });
 }
 
-inline bool IsLocalFittingTransformedPercentileConverged(
-    const LocalFittingTransformedChangeSummary & summary)
+inline bool IsTransformedPercentileConverged(
+    const TransformedChangeSummary & summary)
 {
-    return IsLocalFittingTransformedPercentileConverged(
+    return IsTransformedPercentileConverged(
         summary.percentile_stats);
 }
 
-
-
-
-inline std::vector<Eigen::Vector3d> BuildLocalFittingTransformedEstimationList(
+inline std::vector<Eigen::Vector3d> BuildTransformedEstimationList(
     const FitState & state)
 {
     std::vector<Eigen::Vector3d> transformed_estimation_list;
@@ -385,7 +368,7 @@ inline std::vector<Eigen::Vector3d> BuildLocalFittingTransformedEstimationList(
     for (const auto & result : state)
     {
         const auto transformed{
-            EncodeLocalFittingTransformedCoordinates(result.mdpde.GetModel())
+            EncodeTransformedCoordinates(result.mdpde.GetModel())
         };
         if (!transformed.has_value())
         {
