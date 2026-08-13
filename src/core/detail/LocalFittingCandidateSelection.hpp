@@ -506,67 +506,67 @@ SelectLocalFittingClusterCandidate(
     if (!accepted_base_candidate)
     {
         result.diagnostic.accepted_backtracking_factor.reset();
-        while (true)
-        {
-            const auto step{ backtracking_workspace.BuildNextCandidate() };
-            if (step.status ==
-                LocalFittingBacktrackingStepStatus::Exhausted)
+        const auto step{ backtracking_workspace.FindAcceptedCandidate(
+            [&](const LocalFittingBacktrackingStep & step)
             {
-                result.diagnostic.backtracking_exhausted = true;
-                break;
-            }
-            if (step.status ==
-                LocalFittingBacktrackingStepStatus::InvalidCandidate)
-            {
-                result.diagnostic.is_invalid_model = true;
-                break;
-            }
-            const auto factor{ step.factor };
-            const auto * backtracked_patch{ step.candidate_patch };
-            LocalFittingObjectiveAttemptDiagnostic trial_diagnostic;
-            trial_diagnostic.effective_damping =
-                base_proposal->effective_damping * factor;
-            trial_diagnostic.trust_region_radius = trust_region_radius;
-            trial_diagnostic.trust_region_step_norm =
-                base_proposal->step_norm * factor;
-            trial_diagnostic.backtracking_trial_count = step.trial_number;
-            const LocalFittingStateView backtracked_state_view{
-                previous_state,
-                *backtracked_patch
-            };
-            const LocalFittingCandidateEvaluationOverlay backtracked_overlay{
-                context,
-                previous_model_snapshot,
-                residual_baseline,
-                backtracked_state_view,
-                *backtracked_patch
-            };
-            if (TryCommitLocalFittingClusterCandidate(
+                const auto factor{ step.factor };
+                const auto * backtracked_patch{ step.candidate_patch };
+                LocalFittingObjectiveAttemptDiagnostic trial_diagnostic;
+                trial_diagnostic.effective_damping =
+                    base_proposal->effective_damping * factor;
+                trial_diagnostic.trust_region_radius = trust_region_radius;
+                trial_diagnostic.trust_region_step_norm =
+                    base_proposal->step_norm * factor;
+                trial_diagnostic.backtracking_trial_count = step.trial_number;
+                const LocalFittingStateView backtracked_state_view{
+                    previous_state,
+                    *backtracked_patch
+                };
+                const LocalFittingCandidateEvaluationOverlay backtracked_overlay{
                     context,
+                    previous_model_snapshot,
+                    residual_baseline,
                     backtracked_state_view,
-                    backtracked_overlay,
-                    previous_state_view,
-                    key,
-                    objective_sample_ref_list,
-                    previous_objective_by_key.at(key),
-                    false,
-                    objective_domain,
-                    local_objective_state,
-                    trial_diagnostic,
-                    &performance_counters))
-            {
-                trial_diagnostic.accepted_backtracking_factor = factor;
-                result.polish_provenance =
-                    backtracking_workspace.BuildActiveCandidatePolishProvenance(
-                        result.polish_provenance,
-                        non_polished_endpoint_provenance);
-                base_patch = backtracking_workspace.TakeCandidatePatch();
+                    *backtracked_patch
+                };
+                if (TryCommitLocalFittingClusterCandidate(
+                        context,
+                        backtracked_state_view,
+                        backtracked_overlay,
+                        previous_state_view,
+                        key,
+                        objective_sample_ref_list,
+                        previous_objective_by_key.at(key),
+                        false,
+                        objective_domain,
+                        local_objective_state,
+                        trial_diagnostic,
+                        &performance_counters))
+                {
+                    trial_diagnostic.accepted_backtracking_factor = factor;
+                    result.diagnostic = std::move(trial_diagnostic);
+                    return true;
+                }
                 result.diagnostic = std::move(trial_diagnostic);
-                accepted_base_candidate = true;
-                accepted_by_backtracking = true;
-                break;
-            }
-            result.diagnostic = std::move(trial_diagnostic);
+                return false;
+            }) };
+        if (step.status == LocalFittingBacktrackingStepStatus::Exhausted)
+        {
+            result.diagnostic.backtracking_exhausted = true;
+        }
+        else if (step.status == LocalFittingBacktrackingStepStatus::InvalidCandidate)
+        {
+            result.diagnostic.is_invalid_model = true;
+        }
+        else
+        {
+            result.polish_provenance =
+                backtracking_workspace.BuildActiveCandidatePolishProvenance(
+                    result.polish_provenance,
+                    non_polished_endpoint_provenance);
+            base_patch = backtracking_workspace.TakeCandidatePatch();
+            accepted_base_candidate = true;
+            accepted_by_backtracking = true;
         }
     }
     else
@@ -884,97 +884,104 @@ inline bool TryBacktrackLocalFittingCombinedCandidate(
     const LocalFittingStateView previous_state_view{ previous_state };
 
     selection.combined_backtracking_trial_count = 1;
-    while (true)
+    LocalFittingClusterObjectiveStateMap accepted_trial_objective_state;
+    const auto step{ backtracking_workspace.FindAcceptedCandidate(
+        [&](const LocalFittingBacktrackingStep & step)
+        {
+            const auto factor{ step.factor };
+            const auto * candidate_patch{ step.candidate_patch };
+            const LocalFittingStateView candidate_state_view{
+                previous_state,
+                *candidate_patch
+            };
+            const LocalFittingCandidateEvaluationOverlay candidate_overlay{
+                context,
+                previous_model_snapshot,
+                residual_baseline,
+                candidate_state_view,
+                *candidate_patch
+            };
+            selection.combined_backtracking_trial_count = step.trial_number;
+            auto trial_objective_state{ committed_objective_state };
+            auto local_criteria_accepted{ true };
+            for (const auto & key : accepted_key_list)
+            {
+                const auto sample_iter{
+                    partition.sample_id_list_by_key.find(key)
+                };
+                if (sample_iter == partition.sample_id_list_by_key.end())
+                {
+                    local_criteria_accepted = false;
+                    break;
+                }
+                LocalFittingObjectiveAttemptDiagnostic diagnostic;
+                diagnostic.backtracking_trial_count =
+                    selection.combined_backtracking_trial_count;
+                diagnostic.accepted_backtracking_factor = factor;
+                if (!TryCommitLocalFittingClusterCandidate(
+                        context,
+                        candidate_state_view,
+                        candidate_overlay,
+                        previous_state_view,
+                        key,
+                        sample_iter->second,
+                        previous_objective_by_key.at(key),
+                        false,
+                        objective_domain,
+                        trial_objective_state,
+                        diagnostic,
+                        &performance_counters))
+                {
+                    local_criteria_accepted = false;
+                    break;
+                }
+            }
+            const auto combined_check{
+                local_criteria_accepted ?
+                    EvaluateLocalFittingCombinedObjective(
+                        context,
+                        previous_state,
+                        candidate_state_view,
+                        residual_baseline,
+                        candidate_overlay,
+                        candidate_patch->atom_index_list,
+                        affected_sample_ref_list,
+                        objective_domain,
+                        best_audit_state,
+                        previous_audit_objective,
+                        &performance_counters) :
+                    LocalFittingCombinedObjectiveCheck{}
+            };
+            if (combined_check.accepted)
+            {
+                selection.combined_backtracking_factor = factor;
+                selection.combined_backtracking_objective =
+                    combined_check.candidate_objective;
+                accepted_trial_objective_state = std::move(trial_objective_state);
+                return true;
+            }
+            return false;
+        }) };
+    if (step.status == LocalFittingBacktrackingStepStatus::Exhausted)
     {
-        const auto step{ backtracking_workspace.BuildNextCandidate() };
-        if (step.status ==
-            LocalFittingBacktrackingStepStatus::Exhausted)
-        {
-            selection.combined_backtracking_exhausted = true;
-            return false;
-        }
-        if (step.status ==
-            LocalFittingBacktrackingStepStatus::InvalidCandidate)
-        {
-            return false;
-        }
-        const auto factor{ step.factor };
-        const auto * candidate_patch{ step.candidate_patch };
-        const LocalFittingStateView candidate_state_view{
-            previous_state,
-            *candidate_patch
-        };
-        const LocalFittingCandidateEvaluationOverlay candidate_overlay{
-            context,
-            previous_model_snapshot,
-            residual_baseline,
-            candidate_state_view,
-            *candidate_patch
-        };
-        selection.combined_backtracking_trial_count = step.trial_number;
-        auto trial_objective_state{ committed_objective_state };
-        auto local_criteria_accepted{ true };
-        for (const auto & key : accepted_key_list)
-        {
-            const auto sample_iter{ partition.sample_id_list_by_key.find(key) };
-            if (sample_iter == partition.sample_id_list_by_key.end())
-            {
-                local_criteria_accepted = false;
-                break;
-            }
-            LocalFittingObjectiveAttemptDiagnostic diagnostic;
-            diagnostic.backtracking_trial_count = selection.combined_backtracking_trial_count;
-            diagnostic.accepted_backtracking_factor = factor;
-            if (!TryCommitLocalFittingClusterCandidate(
-                    context,
-                    candidate_state_view,
-                    candidate_overlay,
-                    previous_state_view,
-                    key,
-                    sample_iter->second,
-                    previous_objective_by_key.at(key),
-                    false,
-                    objective_domain,
-                    trial_objective_state,
-                    diagnostic,
-                    &performance_counters))
-            {
-                local_criteria_accepted = false;
-                break;
-            }
-        }
-        const auto combined_check{
-            local_criteria_accepted ?
-                EvaluateLocalFittingCombinedObjective(
-                    context,
-                    previous_state,
-                    candidate_state_view,
-                    residual_baseline,
-                    candidate_overlay,
-                    candidate_patch->atom_index_list,
-                    affected_sample_ref_list,
-                    objective_domain,
-                    best_audit_state,
-                    previous_audit_objective,
-                    &performance_counters) :
-                LocalFittingCombinedObjectiveCheck{}
-        };
-        if (combined_check.accepted)
-        {
-            auto candidate_state{ backtracking_workspace.MaterializeCandidateState() };
-            performance_counters.full_state_materialization_count++;
-            selection.assembled_state = std::move(candidate_state);
-            selection.assembled_polish_provenance =
-                backtracking_workspace.BuildCandidatePolishProvenance(
-                    previous_polish_provenance,
-                    endpoint_provenance);
-            selection.combined_backtracking_factor = factor;
-            selection.combined_backtracking_objective = combined_check.candidate_objective;
-            selection.grow_trust_region_key_list.clear();
-            working_objective_state = std::move(trial_objective_state);
-            return true;
-        }
+        selection.combined_backtracking_exhausted = true;
+        return false;
     }
+    if (step.status == LocalFittingBacktrackingStepStatus::InvalidCandidate)
+    {
+        return false;
+    }
+
+    auto candidate_state{ backtracking_workspace.MaterializeCandidateState() };
+    performance_counters.full_state_materialization_count++;
+    selection.assembled_state = std::move(candidate_state);
+    selection.assembled_polish_provenance =
+        backtracking_workspace.BuildCandidatePolishProvenance(
+            previous_polish_provenance,
+            endpoint_provenance);
+    selection.grow_trust_region_key_list.clear();
+    working_objective_state = std::move(accepted_trial_objective_state);
+    return true;
 }
 
 

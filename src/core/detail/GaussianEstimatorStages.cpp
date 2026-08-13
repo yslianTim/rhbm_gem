@@ -2,7 +2,6 @@
 
 #include "core/detail/GaussianEstimatorStages.hpp"
 #include "core/detail/LocalFittingAudit.hpp"
-#include "core/detail/LocalFittingBacktrackingWorkspace.hpp"
 #include "core/detail/LocalFittingCandidateEvaluationOverlay.hpp"
 #include "core/detail/LocalFittingResidualEvaluation.hpp"
 #include "core/detail/LocalFittingObjective.hpp"
@@ -65,7 +64,6 @@ namespace {
 using detail::FittedGaussianSnapshot;
 using detail::BuildFittedGaussianSnapshot;
 using detail::BuildSecondStageModelSnapshot;
-using detail::LocalFittingBacktrackingWorkspace;
 using detail::LocalFittingCandidateEvaluationOverlay;
 using detail::LocalFittingClusterKey;
 using detail::LocalFittingClusterSolverWorkspace;

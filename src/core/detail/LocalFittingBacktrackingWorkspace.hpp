@@ -165,6 +165,17 @@ struct LocalFittingBacktrackingWorkspace
         };
     }
 
+    template <typename Evaluator>
+    LocalFittingBacktrackingStep FindAcceptedCandidate(Evaluator && evaluator)
+    {
+        while (true)
+        {
+            const auto step{ BuildNextCandidate() };
+            if (!step.IsCandidateReady()) return step;
+            if (evaluator(step)) return step;
+        }
+    }
+
     LocalFittingStatePatch TakeCandidatePatch()
     {
         return std::move(m_candidate_patch);
