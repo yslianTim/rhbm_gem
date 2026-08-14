@@ -43,6 +43,29 @@ struct LocalFittingTerminalSummary
     }
 };
 
+inline std::vector<ClusterKey> AccumulateTerminalFailureSummary(
+    const TerminalPersistentFailureMap & terminal_failure_by_key,
+    LocalFittingTerminalSummary & terminal_summary)
+{
+    std::vector<ClusterKey> terminal_key_list;
+    terminal_key_list.reserve(terminal_failure_by_key.size());
+    for (const auto & [key, reason] : terminal_failure_by_key)
+    {
+        terminal_key_list.emplace_back(key);
+        if (std::holds_alternative<PersistentSuspiciousRollbackReason>(reason))
+        {
+            terminal_summary.suspicious_cluster_count++;
+            terminal_summary.suspicious_atom_count += key.size();
+            continue;
+        }
+        const auto status{ std::get<JointOffsetSolveStatus>(reason) };
+        terminal_summary.joint_offset_failure_cluster_count++;
+        terminal_summary.joint_offset_failure_atom_count += key.size();
+        terminal_summary.joint_offset_failure_status_count[status]++;
+    }
+    return terminal_key_list;
+}
+
 inline TerminalPersistentFailureMap UpdatePersistentTerminalFailureState(
     const std::vector<ClusterKey> & accepted_key_list,
     const SuspiciousUpdateMask & suspicious_atom_mask,

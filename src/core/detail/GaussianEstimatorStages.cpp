@@ -37,14 +37,12 @@
 #include <cmath>
 #include <iomanip>
 #include <limits>
-#include <map>
 #include <numeric>
 #include <optional>
 #include <sstream>
 #include <string>
 #include <string_view>
 #include <utility>
-#include <variant>
 #include <vector>
 
 #include <Eigen/Dense>
@@ -78,8 +76,7 @@ constexpr std::size_t kLocalFittingAuditPatience{ 3 };
 constexpr bool kApplyLocalFittingBestIteration{ true };
 constexpr double kLocalFittingOffsetSummaryPercentile{ 0.99 };
 
-using detail::JointOffsetSolveStatus;
-using detail::IsJointOffsetSolveStationarityEligible;
+using detail::AreLocalFittingClustersStationarityEligible;
 using detail::GetJointOffsetSolveStatusText;
 using detail::ResetClusterSolverWorkspace;
 using detail::BuildSecondStageAdjustedSamples;
@@ -104,6 +101,7 @@ using detail::ReconcileClusterObjectiveState;
 using detail::PersistentTerminalFailureState;
 using detail::PersistentTerminalFailureStateMap;
 using detail::LocalFittingTerminalSummary;
+using detail::AccumulateTerminalFailureSummary;
 using detail::UpdatePersistentTerminalFailureState;
 using detail::ApplyTerminalFallbackClusters;
 using detail::BuildEligibleLocalFittingActiveIndexList;
@@ -1439,26 +1437,9 @@ bool RunSecondStageLocalFitting(
             detail::CountSuspiciousAtoms(rollback_atom_mask)
         };
         const auto has_suspicious_offset_fallback{ iteration_suspicious_atom_count > 0 };
-
-        std::size_t stationarity_ineligible_cluster_count{ 0 };
-        std::vector<ClusterKey> polish_eligible_key_list;
-        for (const auto & [key, health] : current_health_by_key)
-        {
-            if (!IsJointOffsetSolveStationarityEligible(
-                    health.joint_offset_status) ||
-                !health.is_refit_stationarity_eligible)
-            {
-                stationarity_ineligible_cluster_count++;
-                continue;
-            }
-            const auto contains_suspicious_atom{
-                detail::HasSuspiciousAtom(key, rollback_atom_mask)
-            };
-            if (!contains_suspicious_atom)
-            {
-                polish_eligible_key_list.emplace_back(key);
-            }
-        }
+        const auto is_stationarity_eligible{
+            AreLocalFittingClustersStationarityEligible(current_health_by_key)
+        };
         const auto raw_state{ std::move(iteration_result.state) };
         const auto raw_fixed_point_change_summary{
             SummarizeTransformedChanges(raw_state, previous_state, active_index_list)
@@ -1478,7 +1459,7 @@ bool RunSecondStageLocalFitting(
                 previous_model_snapshot,
                 residual_baseline,
                 graph_partition,
-                polish_eligible_key_list,
+                current_health_by_key,
                 previous_state,
                 previous_polish_provenance,
                 raw_state,
@@ -1497,8 +1478,7 @@ bool RunSecondStageLocalFitting(
         };
         performance_counters.candidate_phase_milliseconds +=
             std::chrono::duration<double, std::milli>(
-                std::chrono::steady_clock::now() -
-                candidate_phase_start).count();
+                std::chrono::steady_clock::now() - candidate_phase_start).count();
         performance_counters.full_state_materialization_count++;
 
         const auto combined_changed_key_list{ selection.accepted_key_list };
@@ -1515,8 +1495,7 @@ bool RunSecondStageLocalFitting(
                 best_audit_state,
                 &performance_counters)
         };
-        selection.combined_backtracking_objective =
-            combined_check.candidate_objective;
+        selection.combined_backtracking_objective = combined_check.candidate_objective;
         auto combined_objective_accepted{
             !combined_check.guard_required || combined_check.accepted
         };
@@ -1578,21 +1557,9 @@ bool RunSecondStageLocalFitting(
                 persistent_terminal_failure_state_by_key)
         };
 
-        std::vector<ClusterKey> terminal_key_list;
-        for (const auto & [key, reason] : terminal_failure_by_key)
-        {
-            terminal_key_list.emplace_back(key);
-            if (std::holds_alternative<detail::PersistentSuspiciousRollbackReason>(reason))
-            {
-                terminal_summary.suspicious_cluster_count++;
-                terminal_summary.suspicious_atom_count += key.size();
-                continue;
-            }
-            const auto status{ std::get<JointOffsetSolveStatus>(reason) };
-            terminal_summary.joint_offset_failure_cluster_count++;
-            terminal_summary.joint_offset_failure_atom_count += key.size();
-            terminal_summary.joint_offset_failure_status_count[status]++;
-        }
+        const auto terminal_key_list{
+            AccumulateTerminalFailureSummary(terminal_failure_by_key, terminal_summary)
+        };
         auto objective_domain_changed{ false };
         ApplyTerminalFallbackClusters(
             terminal_key_list,
@@ -1612,19 +1579,14 @@ bool RunSecondStageLocalFitting(
             if (!remaining_active_index_list.empty())
             {
                 auto remaining_graph_partition{
-                    detail::BuildGraphPartition(
-                        graph_topology,
-                        remaining_active_index_list)
+                    detail::BuildGraphPartition(graph_topology, remaining_active_index_list)
                 };
                 objective_domain = BuildObjectiveDomain(
                     context,
                     assembled_state,
                     remaining_graph_partition,
                     options);
-                LogObjectiveDomain(
-                    objective_domain,
-                    options,
-                    true);
+                LogObjectiveDomain(objective_domain, options, true);
                 cluster_objective_state.clear();
                 const auto assembled_model_snapshot{
                     BuildSecondStageModelSnapshot(context, assembled_state)
@@ -1649,12 +1611,8 @@ bool RunSecondStageLocalFitting(
                     objective_domain,
                     best_audit_state);
                 active_index_list = std::move(remaining_active_index_list);
-                cluster_key_list =
-                    detail::BuildGraphClusterKeyList(
-                        remaining_graph_partition);
-                ResetClusterSolverWorkspace(
-                    cluster_key_list,
-                    solver_workspace_by_key);
+                cluster_key_list = detail::BuildGraphClusterKeyList(remaining_graph_partition);
+                ResetClusterSolverWorkspace(cluster_key_list, solver_workspace_by_key);
                 graph_partition = std::move(remaining_graph_partition);
                 objective_domain_changed = true;
             }
@@ -1736,10 +1694,7 @@ bool RunSecondStageLocalFitting(
                 best_audit_state,
                 UsesPolish(*final_state_selection.polish_provenance),
                 final_state_selection.source);
-            RunGroupPotentialFitting(
-                model_object,
-                options,
-                FittingStage::Second);
+            RunGroupPotentialFitting(model_object, options, FittingStage::Second);
             return true;
         }
 
@@ -1776,8 +1731,7 @@ bool RunSecondStageLocalFitting(
             audit_patience_count++;
         }
         progress.accepted_iteration_count = accepted_iteration_count;
-        progress.accepted_maximum_transformed_change =
-            GetMaximumTransformedChange(transformed_change_summary);
+        progress.accepted_maximum_transformed_change = GetMaximumTransformedChange(transformed_change_summary);
         LogRejectedLocalFittingClusterDiagnostics(options, selection.rejected_cluster_diagnostic_list);
         LogLocalFittingIterationProgress(options, progress_column_widths, progress);
 
@@ -1789,10 +1743,7 @@ bool RunSecondStageLocalFitting(
                     assembled_polish_provenance,
                     best_audit_state.best)
             };
-            ApplyFitState(
-                model_object,
-                context,
-                *final_state_selection.state);
+            ApplyFitState(model_object, context, *final_state_selection.state);
             LogSecondStageLocalFittingSummary(
                 options,
                 accepted_iteration_count,
@@ -1800,15 +1751,12 @@ bool RunSecondStageLocalFitting(
                 best_audit_state,
                 UsesPolish(*final_state_selection.polish_provenance),
                 final_state_selection.source);
-            RunGroupPotentialFitting(
-                model_object,
-                options,
-                FittingStage::Second);
+            RunGroupPotentialFitting(model_object, options, FittingStage::Second);
             return true;
         }
 
         const auto converged{
-            stationarity_ineligible_cluster_count == 0 &&
+            is_stationarity_eligible &&
             !has_suspicious_offset_fallback &&
             selection.rejected_key_list.empty() &&
             IsTransformedChangeConverged(transformed_change_summary) &&

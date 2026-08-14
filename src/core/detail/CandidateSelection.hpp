@@ -18,6 +18,7 @@
 #include "core/detail/BacktrackingWorkspace.hpp"
 #include "core/detail/CandidateEvaluationOverlay.hpp"
 #include "core/detail/LocalFittingGroupMedian.hpp"
+#include "core/detail/LocalFittingHealth.hpp"
 #include "core/detail/Objective.hpp"
 #include "core/detail/LocalFittingPerformanceCounters.hpp"
 #include "core/detail/FitStateView.hpp"
@@ -651,7 +652,7 @@ inline CandidateSelection SelectClusterCandidates(
     const SecondStageModelSnapshot & previous_model_snapshot,
     const ResidualBaseline & residual_baseline,
     const CouplingGraphPartition & partition,
-    const std::vector<ClusterKey> & polish_eligible_key_list,
+    const LocalFittingClusterHealthMap & health_by_key,
     const FitState & previous_state,
     const PolishProvenance & previous_polish_provenance,
     const FitState & raw_state,
@@ -685,10 +686,8 @@ inline CandidateSelection SelectClusterCandidates(
         solver_workspace_list.emplace_back(&solver_workspace_by_key.at(key));
         objective_state_list.emplace_back(&cluster_objective_state.at(key));
         polish_eligible_list.emplace_back(
-            std::find(
-                polish_eligible_key_list.begin(),
-                polish_eligible_key_list.end(),
-                key) != polish_eligible_key_list.end());
+            health_by_key.at(key).IsStationarityEligible() &&
+            !HasSuspiciousAtom(key, rollback_atom_mask));
         exhausted_list.emplace_back(
             std::find(
                 unchanged_state_exhausted_key_list.begin(),

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <stdexcept>
 
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
@@ -13,13 +14,28 @@ namespace rhbm_gem::core::detail {
 
 struct LocalFittingClusterHealth
 {
-    JointOffsetSolveStatus joint_offset_status{
-        JointOffsetSolveStatus::SystemBuildFailed
-    };
+    JointOffsetSolveStatus joint_offset_status{ JointOffsetSolveStatus::SystemBuildFailed };
     bool is_refit_stationarity_eligible{ true };
+
+    bool IsStationarityEligible() const
+    {
+        return IsJointOffsetSolveStationarityEligible(joint_offset_status) &&
+            is_refit_stationarity_eligible;
+    }
 };
 
 using LocalFittingClusterHealthMap = std::map<ClusterKey, LocalFittingClusterHealth>;
+
+inline bool AreLocalFittingClustersStationarityEligible(const LocalFittingClusterHealthMap & health_by_key)
+{
+    return std::all_of(
+        health_by_key.begin(),
+        health_by_key.end(),
+        [](const auto & entry)
+        {
+            return entry.second.IsStationarityEligible();
+        });
+}
 
 inline bool IsLocalGaussianRefitStatusStationarityEligible(RHBMEstimationStatus status)
 {
