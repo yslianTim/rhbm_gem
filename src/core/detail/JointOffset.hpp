@@ -25,13 +25,13 @@
 
 #include "core/detail/ResidualEvaluation.hpp"
 #include "core/detail/SecondStageContext.hpp"
-#include "core/detail/RobustScale.hpp"
 #include "core/detail/ReusableWeightedRidgeSolver.hpp"
 
 namespace rhbm_gem::core::detail {
 
 constexpr int kRobustLossMaximumIterations{ 50 };
 constexpr double kRobustLossCutoffMultiplier{ 1.345 };
+constexpr double kJointOffsetResidualScaleMin{ 1.0e-12 };
 constexpr double kJointOffsetRidgeRatio{ 1.0e-3 };
 constexpr double kJointOffsetCollinearityOverlapThreshold{ 0.98 };
 constexpr double kCollinearJointOffsetRidgeMultiplier{ 10.0 };
@@ -714,8 +714,8 @@ inline JointOffsetSolveResult EstimateJointOffsets(
         std::vector<double> residual_list(residual.data(), residual.data() + residual.size());
         const auto residual_scale{
             std::max(
-                CalculateMedianAbsoluteDeviationScale(residual_list),
-                kRobustScaleMin)
+                array_helper::ComputeMedianAbsoluteDeviationScale(residual_list),
+                kJointOffsetResidualScaleMin)
         };
         for (Eigen::Index i = 0; i < residual.size(); i++)
         {

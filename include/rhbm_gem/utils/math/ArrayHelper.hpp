@@ -134,6 +134,31 @@ Type ComputeMedian(const std::vector<Type> & data)
     }
 }
 
+inline double ComputeMedianAbsoluteDeviationScale(
+    const std::vector<double> & data)
+{
+    constexpr double kScaleMultiplier{ 1.4826 };
+    if (data.empty())
+    {
+        return std::numeric_limits<double>::infinity();
+    }
+    for (const auto value : data)
+    {
+        if (!std::isfinite(value))
+        {
+            return std::numeric_limits<double>::infinity();
+        }
+    }
+    const auto median{ ComputeMedian(data) };
+    std::vector<double> deviation_list;
+    deviation_list.reserve(data.size());
+    for (const auto value : data)
+    {
+        deviation_list.emplace_back(std::abs(value - median));
+    }
+    return kScaleMultiplier * ComputeMedian(deviation_list);
+}
+
 inline std::size_t ComputeProportionValueCount(std::size_t data_size, double ratio)
 {
     if (data_size == 0 || !std::isfinite(ratio) || ratio <= 0.0) return 0;

@@ -15,7 +15,6 @@
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 #include "core/detail/TransformedChange.hpp"
-#include "core/detail/RobustScale.hpp"
 
 namespace rhbm_gem::core::detail {
 
@@ -105,7 +104,7 @@ namespace local_fitting_suspicious_internal {
 
 constexpr double kSuspiciousProfileInnermostSignFlipRatio{ 0.25 };
 constexpr double kSuspiciousProfileNoiseScaleMultiplier{ 3.0 };
-constexpr double kSuspiciousProfileNoiseScaleMin{ 1.0e-12 };
+constexpr double kSuspiciousProfileScaleMin{ 1.0e-12 };
 constexpr std::size_t kSuspiciousProfileMinimumRadiusCount{ 3 };
 constexpr double kSuspiciousProfileDistanceTolerance{ 1.0e-6 };
 constexpr double kSuspiciousProfileReboundCenterRatio{ 1.5 };
@@ -147,7 +146,7 @@ inline bool HasSuspiciousCenterSignFlip(
     const auto noise_threshold{
         std::max(
             kSuspiciousProfileNoiseScaleMultiplier * previous_residual_scale,
-            kSuspiciousProfileNoiseScaleMin)
+            kSuspiciousProfileScaleMin)
     };
     const auto negative_threshold{
         std::max(
@@ -232,7 +231,8 @@ inline SuspiciousProfileAnalysis BuildSuspiciousProfileAnalysis(
     diagnostics.innermost_response = diagnostics.radius_response_median_list.front();
     if (calculate_residual_scale)
     {
-        diagnostics.robust_residual_scale = CalculateMedianAbsoluteDeviationScale(residual_list);
+        diagnostics.robust_residual_scale =
+            array_helper::ComputeMedianAbsoluteDeviationScale(residual_list);
     }
     analysis.profile = std::move(diagnostics);
     return analysis;
@@ -250,13 +250,13 @@ inline bool HasUsableSuspiciousProfileBaseline(
         !std::isfinite(previous_model.GetWidth()) ||
         !std::isfinite(previous_model.GetOffset()) ||
         previous_model.GetWidth() <= 0.0 ||
-        previous_profile.max_abs_response <= kRobustScaleMin ||
+        previous_profile.max_abs_response <= kSuspiciousProfileScaleMin ||
         !std::isfinite(previous_profile.robust_residual_scale))
     {
         return false;
     }
     const auto innermost_scale{
-        std::max(std::abs(previous_profile.innermost_response), kRobustScaleMin)
+        std::max(std::abs(previous_profile.innermost_response), kSuspiciousProfileScaleMin)
     };
     for (std::size_t i = 1; i < previous_profile.radius_response_median_list.size(); i++)
     {
@@ -291,7 +291,7 @@ inline bool HasSuspiciousOffsetMagnitude(
             std::abs(previous_model.SignalAtDistance(0.0)),
             std::abs(previous_offset_response),
             previous_profile_max_abs_response,
-            kRobustScaleMin
+            kSuspiciousProfileScaleMin
         })
     };
     return std::abs(candidate_offset_response) > kSuspiciousCompensationResponseRatio * reference_scale;
@@ -311,7 +311,7 @@ inline bool HasSuspiciousRadialRebound(
     const auto noise_threshold{
         std::max(
             kSuspiciousProfileNoiseScaleMultiplier * previous_profile.robust_residual_scale,
-            kSuspiciousProfileNoiseScaleMin)
+            kSuspiciousProfileScaleMin)
     };
     const auto rebound_magnitude_threshold{
         std::max(
@@ -326,7 +326,7 @@ inline bool HasSuspiciousRadialRebound(
     const auto candidate_innermost_scale{
         std::max(
             std::abs(candidate_profile.innermost_response),
-            kSuspiciousProfileNoiseScaleMin)
+            kSuspiciousProfileScaleMin)
     };
     int upward_excursion_count{ 0 };
     auto previous_abs_response{ std::abs(candidate_profile.radius_response_median_list.front()) };
@@ -378,7 +378,7 @@ inline bool HasSuspiciousAmplitudeOffsetCompensation(
             previous_profile.has_value() ?
                 std::abs(previous_profile->innermost_response) : 0.0,
             std::abs(previous_model.SignalAtDistance(0.0)),
-            kRobustScaleMin
+            kSuspiciousProfileScaleMin
         })
     };
     return signal_delta * offset_delta_response < 0.0 &&

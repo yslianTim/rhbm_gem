@@ -1,7 +1,6 @@
 #pragma once
 
 #include "core/detail/JointOffset.hpp"
-#include "core/detail/RobustScale.hpp"
 #include "core/detail/TransformedChange.hpp"
 #include "core/detail/TrustRegion.hpp"
 
@@ -21,11 +20,13 @@
 #include <rhbm_gem/utils/algorithm/RobustLoss.hpp>
 #include <rhbm_gem/utils/algorithm/WeightedRidgeSolver.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
 namespace rhbm_gem::core::detail {
 
 constexpr std::size_t kJointPolishShapeParameterSize{ 2 };
+constexpr double kJointPolishResidualScaleMin{ 1.0e-12 };
 
 struct JointPolishParameterization
 {
@@ -645,8 +646,8 @@ inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
 
     const auto residual_scale{
         std::max(
-            CalculateMedianAbsoluteDeviationScale(residual_list),
-            kRobustScaleMin)
+            array_helper::ComputeMedianAbsoluteDeviationScale(residual_list),
+            kJointPolishResidualScaleMin)
     };
     if (!std::isfinite(residual_scale)) return std::nullopt;
     Eigen::VectorXd weight{ Eigen::VectorXd::Ones(row_count) };

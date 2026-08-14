@@ -11,13 +11,13 @@
 
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/utils/algorithm/RobustLoss.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/CandidateEvaluationOverlay.hpp"
 #include "core/detail/PerformanceCounters.hpp"
 #include "core/detail/ResidualEvaluation.hpp"
-#include "core/detail/RobustScale.hpp"
 #include "core/detail/FitStateView.hpp"
 #include "core/detail/TransformedChange.hpp"
 
@@ -39,6 +39,7 @@ struct ObjectiveTolerance
 };
 
 constexpr double kObjectiveResidualScaleFloorRatio{ 1.0e-6 };
+constexpr double kObjectiveResidualScaleMin{ 1.0e-12 };
 constexpr double kFitRangeWeight{ 1.0 };
 constexpr double kTailValidationWeight{ 0.25 };
 constexpr double kOffsetPlausibilityPenaltyWeight{ 1.0e-2 };
@@ -272,10 +273,10 @@ inline std::optional<double> BuildFixedObjectiveScale(
     }
     const auto scale{
         std::max({
-            CalculateMedianAbsoluteDeviationScale(residual_list),
+            array_helper::ComputeMedianAbsoluteDeviationScale(residual_list),
             kObjectiveResidualScaleFloorRatio *
-                CalculateMedianAbsoluteDeviationScale(adjusted_response_list),
-            kRobustScaleMin
+                array_helper::ComputeMedianAbsoluteDeviationScale(adjusted_response_list),
+            kObjectiveResidualScaleMin
         })
     };
     return numeric_validation::IsFinitePositive(scale) ?
@@ -449,7 +450,7 @@ inline std::optional<ObjectiveBreakdown> EvaluateObjectiveContributionImpl(
                 std::abs(offset_peak) /
                 std::max({
                     std::abs(peak_signal),
-                    owner_iter->second.scale->fit, kRobustScaleMin
+                    owner_iter->second.scale->fit, kObjectiveResidualScaleMin
                 })
             };
             const auto offset_excess{
