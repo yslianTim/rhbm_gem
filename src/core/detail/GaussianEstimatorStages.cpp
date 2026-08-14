@@ -4,7 +4,7 @@
 #include "core/detail/ResidualEvaluation.hpp"
 #include "core/detail/Objective.hpp"
 #include "core/detail/LocalFittingTerminalFailure.hpp"
-#include "core/detail/LocalFittingIteration.hpp"
+#include "core/detail/IterationProcess.hpp"
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/JointOffset.hpp"
 #include "core/detail/LocalFittingPerformanceCounters.hpp"
@@ -54,15 +54,14 @@ using detail::SecondStageContext;
 constexpr bool kApplyLocalFittingBestIteration{ true };
 constexpr double kLocalFittingOffsetSummaryPercentile{ 0.99 };
 
-using detail::kLocalFittingMaximumIterations;
-using detail::kLocalFittingAuditPatience;
-using detail::BuildLocalFittingProgressColumnWidths;
-using detail::LogLocalFittingProgressHeader;
-using detail::LogLocalFittingIterationProgress;
-using detail::LogLocalFittingRejectedClusterDiagnostics;
-using detail::LogLocalFittingAcceptedBacktrackingDiagnostics;
-using detail::LogLocalFittingAllRejectedResolution;
-using detail::GetLocalFittingAllRejectedResolutionText;
+using detail::kMaximumIterations;
+using detail::BuildProgressColumnWidths;
+using detail::LogProgressHeader;
+using detail::LogIterationProgress;
+using detail::LogRejectedClusterDiagnostics;
+using detail::LogAcceptedBacktrackingDiagnostics;
+using detail::LogAllRejectedResolution;
+using detail::GetAllRejectedResolutionText;
 using detail::GetJointOffsetSolveStatusText;
 using detail::BuildSecondStageAdjustedSamples;
 using detail::ObjectiveDomain;
@@ -79,9 +78,9 @@ using detail::StoreSecondStageNeighborCounts;
 using detail::BuildInitialFitState;
 using detail::GetSecondStageSeedSourceText;
 using detail::SecondStageSeedSelectionRecord;
-using detail::BuildLocalFittingIterationState;
-using detail::LocalFittingIterationOutcome;
-using detail::RunLocalFittingIteration;
+using detail::BuildIterationState;
+using detail::IterationOutcome;
+using detail::RunIteration;
 
 enum class LocalFittingFinalStateSource
 {
@@ -841,7 +840,7 @@ bool RunSecondStageLocalFitting(
     };
     LogGraphTopology(graph_topology, options);
     auto iteration_state{
-        BuildLocalFittingIterationState(
+        BuildIterationState(
             context,
             graph_topology,
             std::move(initial_state),
@@ -866,10 +865,10 @@ bool RunSecondStageLocalFitting(
             })
     };
     LogObjectiveDomain(iteration_state.objective_domain, options);
-    const auto progress_column_widths{ BuildLocalFittingProgressColumnWidths(atom_size) };
-    LogLocalFittingProgressHeader(options, progress_column_widths);
+    const auto progress_column_widths{ BuildProgressColumnWidths(atom_size) };
+    LogProgressHeader(options, progress_column_widths);
 
-    for (std::size_t iter = 0; iter < kLocalFittingMaximumIterations; iter++)
+    for (std::size_t iter = 0; iter < kMaximumIterations; iter++)
     {
         if (iteration_state.active_index_list.empty())
         {
@@ -892,13 +891,11 @@ bool RunSecondStageLocalFitting(
         }
 
         auto iteration_result{
-            RunLocalFittingIteration(
+            RunIteration(
                 context,
                 graph_topology,
                 options,
                 iter + 1,
-                kLocalFittingMaximumIterations,
-                kLocalFittingAuditPatience,
                 cached_sample_count,
                 iteration_state,
                 performance_counters)
@@ -910,24 +907,24 @@ bool RunSecondStageLocalFitting(
                 options,
                 true);
         }
-        LogLocalFittingAcceptedBacktrackingDiagnostics(
+        LogAcceptedBacktrackingDiagnostics(
             options,
             iteration_result.diagnostics);
-        if (iteration_result.outcome != LocalFittingIterationOutcome::Accepted)
+        if (iteration_result.outcome != IterationOutcome::Accepted)
         {
-            LogLocalFittingRejectedClusterDiagnostics(
+            LogRejectedClusterDiagnostics(
                 options,
                 iteration_result.diagnostics.rejected_cluster_diagnostic_list);
-            LogLocalFittingIterationProgress(
+            LogIterationProgress(
                 options,
                 progress_column_widths,
                 iteration_result.progress);
-            LogLocalFittingAllRejectedResolution(
+            LogAllRejectedResolution(
                 options,
                 iteration_result.diagnostics.rejected_cluster_partition,
                 iteration_result.diagnostics.trust_region_radius_update,
                 *iteration_result.all_rejected_resolution);
-            if (iteration_result.outcome == LocalFittingIterationOutcome::Retry)
+            if (iteration_result.outcome == IterationOutcome::Retry)
             {
                 continue;
             }
@@ -945,7 +942,7 @@ bool RunSecondStageLocalFitting(
             LogSecondStageLocalFittingSummary(
                 options,
                 iteration_state.accepted_iteration_count,
-                GetLocalFittingAllRejectedResolutionText(*iteration_result.all_rejected_resolution),
+                GetAllRejectedResolutionText(*iteration_result.all_rejected_resolution),
                 iteration_state.best_audit_state,
                 UsesPolish(*final_state_selection.polish_provenance),
                 final_state_selection.source);
@@ -953,10 +950,10 @@ bool RunSecondStageLocalFitting(
             return true;
         }
 
-        LogLocalFittingRejectedClusterDiagnostics(
+        LogRejectedClusterDiagnostics(
             options,
             iteration_result.diagnostics.rejected_cluster_diagnostic_list);
-        LogLocalFittingIterationProgress(
+        LogIterationProgress(
             options,
             progress_column_widths,
             iteration_result.progress);
@@ -1020,7 +1017,7 @@ bool RunSecondStageLocalFitting(
             return true;
         }
 
-        if (iter + 1 == kLocalFittingMaximumIterations)
+        if (iter + 1 == kMaximumIterations)
         {
             const auto final_state_selection{
                 SelectLocalFittingFinalState(

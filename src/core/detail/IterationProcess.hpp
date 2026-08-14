@@ -39,17 +39,17 @@
 
 namespace rhbm_gem::core::detail {
 
-constexpr std::size_t kLocalFittingMaximumIterations{ 100 };
-constexpr std::size_t kLocalFittingAuditPatience{ 3 };
+constexpr std::size_t kMaximumIterations{ 100 };
+constexpr std::size_t kAuditPatience{ 3 };
 
-enum class LocalFittingIterationOutcome
+enum class IterationOutcome
 {
     Accepted,
     Retry,
     AllRejected
 };
 
-struct LocalFittingIterationDiagnostics
+struct IterationDiagnostics
 {
     std::vector<ClusterKey> accepted_key_list{};
     std::vector<ClusterKey> rejected_key_list{};
@@ -65,7 +65,7 @@ struct LocalFittingIterationDiagnostics
     TrustRegionRadiusUpdate trust_region_radius_update{};
 };
 
-struct LocalFittingIterationState
+struct IterationState
 {
     FitState previous_state{};
     PolishProvenance previous_polish_provenance{};
@@ -86,7 +86,7 @@ struct LocalFittingIterationState
     std::size_t audit_patience_count{ 0 };
 };
 
-struct LocalFittingIterationProgress
+struct IterationProgress
 {
     std::size_t attempt_number{ 0 };
     std::size_t accepted_iteration_count{ 0 };
@@ -100,13 +100,13 @@ struct LocalFittingIterationProgress
     std::optional<double> raw_maximum_transformed_change{};
 };
 
-using LocalFittingProgressColumnWidths = std::array<std::size_t, 6>;
+using ProgressColumnWidths = std::array<std::size_t, 6>;
 
-struct LocalFittingIterationResult
+struct IterationResult
 {
-    LocalFittingIterationOutcome outcome{ LocalFittingIterationOutcome::Accepted };
-    LocalFittingIterationDiagnostics diagnostics{};
-    LocalFittingIterationProgress progress{};
+    IterationOutcome outcome{ IterationOutcome::Accepted };
+    IterationDiagnostics diagnostics{};
+    IterationProgress progress{};
     std::optional<AllRejectedResolution> all_rejected_resolution{};
     bool objective_domain_changed{ false };
     bool converged{ false };
@@ -117,7 +117,7 @@ struct LocalFittingIterationResult
     algorithm::ParameterChangeStats transformed_change_stats{};
 };
 
-inline void AppendLocalFittingObjectiveBreakdown(
+inline void AppendObjectiveBreakdown(
     std::ostringstream & stream,
     const std::optional<ObjectiveBreakdown> & breakdown)
 {
@@ -133,8 +133,7 @@ inline void AppendLocalFittingObjectiveBreakdown(
         << breakdown->total_objective;
 }
 
-inline std::string_view GetLocalFittingPreObjectiveFailureReasonText(
-    PreObjectiveFailureReason reason)
+inline std::string_view GetPreObjectiveFailureReasonText(PreObjectiveFailureReason reason)
 {
     switch (reason)
     {
@@ -150,7 +149,7 @@ inline std::string_view GetLocalFittingPreObjectiveFailureReasonText(
     return "unknown";
 }
 
-inline void LogLocalFittingRejectedClusterDiagnostics(
+inline void LogRejectedClusterDiagnostics(
     const FitOptions & options,
     const std::vector<RejectedClusterDiagnostic> & diagnostic_list)
 {
@@ -164,8 +163,7 @@ inline void LogLocalFittingRejectedClusterDiagnostics(
     {
         std::ostringstream header;
         header
-            << "Rejected local fitting cluster diagnostics: atoms = "
-            << cluster_diagnostic.key.size()
+            << "Rejected local fitting cluster diagnostics: atoms = " << cluster_diagnostic.key.size()
             << ", key first/last = "
             << cluster_diagnostic.key.front() << "/" << cluster_diagnostic.key.back()
             << ", breakdown order = fit/tail-weighted/offset/total";
@@ -173,12 +171,9 @@ inline void LogLocalFittingRejectedClusterDiagnostics(
 
         const auto & diagnostic{ cluster_diagnostic.attempt };
         std::ostringstream message;
-        message
-            << std::scientific << std::setprecision(2)
-            << "  fixed-point effective damping = "
-            << diagnostic.effective_damping
-            << ", trust radius/step norm = "
-            << diagnostic.trust_region_radius << "/";
+        message << std::scientific << std::setprecision(2)
+            << "  fixed-point effective damping = " << diagnostic.effective_damping
+            << ", trust radius/step norm = " << diagnostic.trust_region_radius << "/";
 
         if (diagnostic.pre_objective_failure_reason !=
             PreObjectiveFailureReason::None)
@@ -193,8 +188,7 @@ inline void LogLocalFittingRejectedClusterDiagnostics(
             }
             message
                 << ", status = "
-                << GetLocalFittingPreObjectiveFailureReasonText(
-                    diagnostic.pre_objective_failure_reason)
+                << GetPreObjectiveFailureReasonText(diagnostic.pre_objective_failure_reason)
                 << ", objective = not-evaluated";
             Logger::Log(LogLevel::Debug, message.str());
             continue;
@@ -229,8 +223,7 @@ inline void LogLocalFittingRejectedClusterDiagnostics(
         }
         message
             << ", fit/tail samples = "
-            << diagnostic.fit_sample_count << "/"
-            << diagnostic.tail_sample_count
+            << diagnostic.fit_sample_count << "/" << diagnostic.tail_sample_count
             << ", tail raw/weight = ";
         if (diagnostic.candidate_objective.has_value())
         {
@@ -242,11 +235,11 @@ inline void LogLocalFittingRejectedClusterDiagnostics(
         }
         message << "/" << kTailValidationWeight;
         message << ", candidate = ";
-        AppendLocalFittingObjectiveBreakdown(message, diagnostic.candidate_objective);
+        AppendObjectiveBreakdown(message, diagnostic.candidate_objective);
         message << ", previous = ";
-        AppendLocalFittingObjectiveBreakdown(message, diagnostic.previous_objective);
+        AppendObjectiveBreakdown(message, diagnostic.previous_objective);
         message << ", best = ";
-        AppendLocalFittingObjectiveBreakdown(message, diagnostic.best_objective);
+        AppendObjectiveBreakdown(message, diagnostic.best_objective);
         message << ", rejected-by = ";
         if (!diagnostic.candidate_objective.has_value())
         {
@@ -284,7 +277,7 @@ inline void LogLocalFittingRejectedClusterDiagnostics(
     }
 }
 
-inline std::string_view GetLocalFittingAllRejectedResolutionText(AllRejectedResolution resolution)
+inline std::string_view GetAllRejectedResolutionText(AllRejectedResolution resolution)
 {
     switch (resolution)
     {
@@ -302,7 +295,7 @@ inline std::string_view GetLocalFittingAllRejectedResolutionText(AllRejectedReso
     return "all-rejected-no-retry-progress";
 }
 
-inline void LogLocalFittingAllRejectedResolution(
+inline void LogAllRejectedResolution(
     const FitOptions & options,
     const RejectedClusterPartition & partition,
     const TrustRegionRadiusUpdate & radius_update,
@@ -317,7 +310,7 @@ inline void LogLocalFittingAllRejectedResolution(
     std::ostringstream message;
     message
         << "All-rejected local fitting resolution: outcome = "
-        << GetLocalFittingAllRejectedResolutionText(resolution)
+        << GetAllRejectedResolutionText(resolution)
         << ", exhausted/retryable/radius-changed/radius-saturated = "
         << partition.exhausted_key_list.size() << "/"
         << partition.retryable_key_list.size() << "/"
@@ -326,9 +319,9 @@ inline void LogLocalFittingAllRejectedResolution(
     Logger::Log(LogLevel::Debug, message.str());
 }
 
-inline void LogLocalFittingAcceptedBacktrackingDiagnostics(
+inline void LogAcceptedBacktrackingDiagnostics(
     const FitOptions & options,
-    const LocalFittingIterationDiagnostics & selection)
+    const IterationDiagnostics & selection)
 {
     if (options.quiet_mode || Logger::GetLogLevel() < LogLevel::Debug)
     {
@@ -365,13 +358,10 @@ inline void LogLocalFittingAcceptedBacktrackingDiagnostics(
         }
         std::ostringstream message;
         message
-            << "Accepted local fitting objective backtracking: atoms = "
-            << cluster_diagnostic.key.size()
+            << "Accepted local fitting objective backtracking: atoms = " << cluster_diagnostic.key.size()
             << ", key first/last = "
-            << cluster_diagnostic.key.front() << "/"
-            << cluster_diagnostic.key.back()
-            << ", trials/factor = "
-            << diagnostic.backtracking_trial_count << "/";
+            << cluster_diagnostic.key.front() << "/" << cluster_diagnostic.key.back()
+            << ", trials/factor = " << diagnostic.backtracking_trial_count << "/";
         if (diagnostic.accepted_backtracking_factor.has_value())
         {
             message << *diagnostic.accepted_backtracking_factor;
@@ -420,8 +410,7 @@ inline void LogLocalFittingAcceptedBacktrackingDiagnostics(
     Logger::Log(LogLevel::Debug, message.str());
 }
 
-inline std::string FormatLocalFittingProgressMaximum(
-    const std::optional<double> & value)
+inline std::string FormatProgressMaximum(const std::optional<double> & value)
 {
     if (!value.has_value()) return "-";
     std::ostringstream stream;
@@ -429,41 +418,38 @@ inline std::string FormatLocalFittingProgressMaximum(
     return stream.str();
 }
 
-inline constexpr std::array<std::string_view, 6>
-    kLocalFittingProgressHeaderList{
-        "Try/Acc",
-        "Atom A/T",
-        "Cluster A/R",
-        "Polish E/A/R/S",
-        "Suspicious",
-        "dMax A/R"
-    };
+inline constexpr std::array<std::string_view, 6> kProgressHeaderList
+{
+    "Try/Acc",
+    "Atom A/T",
+    "Cluster A/R",
+    "Polish E/A/R/S",
+    "Suspicious",
+    "dMax A/R"
+};
 
-inline std::string FormatLocalFittingProgressRow(
-    const LocalFittingProgressColumnWidths & column_widths,
+inline std::string FormatProgressRow(
+    const ProgressColumnWidths & column_widths,
     const std::array<std::string, 6> & cell_list)
 {
     std::ostringstream stream;
     for (std::size_t i = 0; i < cell_list.size(); i++)
     {
         if (i > 0) stream << " | ";
-        stream
-            << std::left
-            << std::setw(static_cast<int>(column_widths.at(i)))
+        stream << std::left << std::setw(static_cast<int>(column_widths.at(i)))
             << cell_list.at(i);
     }
     return stream.str();
 }
 
-inline LocalFittingProgressColumnWidths BuildLocalFittingProgressColumnWidths(
-    std::size_t atom_size)
+inline ProgressColumnWidths BuildProgressColumnWidths(std::size_t atom_size)
 {
     const auto maximum_iteration_text{
-        std::to_string(kLocalFittingMaximumIterations)
+        std::to_string(kMaximumIterations)
     };
     const auto maximum_atom_text{ std::to_string(atom_size) };
     const auto maximum_change_text{
-        FormatLocalFittingProgressMaximum(std::numeric_limits<double>::max())
+        FormatProgressMaximum(std::numeric_limits<double>::max())
     };
     const std::array<std::string, 6> maximum_cell_list{
         maximum_iteration_text + "/" + maximum_iteration_text,
@@ -475,35 +461,31 @@ inline LocalFittingProgressColumnWidths BuildLocalFittingProgressColumnWidths(
         maximum_change_text + "/" + maximum_change_text
     };
 
-    LocalFittingProgressColumnWidths column_widths;
+    ProgressColumnWidths column_widths;
     for (std::size_t i = 0; i < column_widths.size(); i++)
     {
         column_widths.at(i) = std::max(
-            kLocalFittingProgressHeaderList.at(i).size(),
+            kProgressHeaderList.at(i).size(),
             maximum_cell_list.at(i).size());
     }
     return column_widths;
 }
 
-inline void LogLocalFittingProgressHeader(
-    const FitOptions & options,
-    const LocalFittingProgressColumnWidths & column_widths)
+inline void LogProgressHeader(const FitOptions & options, const ProgressColumnWidths & column_widths)
 {
     if (options.quiet_mode) return;
     std::array<std::string, 6> header_list;
     for (std::size_t i = 0; i < header_list.size(); i++)
     {
-        header_list.at(i) = kLocalFittingProgressHeaderList.at(i);
+        header_list.at(i) = kProgressHeaderList.at(i);
     }
-    Logger::Log(
-        LogLevel::Info,
-        FormatLocalFittingProgressRow(column_widths, header_list));
+    Logger::Log(LogLevel::Info, FormatProgressRow(column_widths, header_list));
 }
 
-inline void LogLocalFittingIterationProgress(
+inline void LogIterationProgress(
     const FitOptions & options,
-    const LocalFittingProgressColumnWidths & column_widths,
-    const LocalFittingIterationProgress & progress)
+    const ProgressColumnWidths & column_widths,
+    const IterationProgress & progress)
 {
     if (options.quiet_mode) return;
 
@@ -519,15 +501,13 @@ inline void LogLocalFittingIterationProgress(
             std::to_string(progress.polish_progress.rejected_count) + "/" +
             std::to_string(progress.polish_progress.skipped_count),
         std::to_string(progress.suspicious_atom_count),
-        FormatLocalFittingProgressMaximum(progress.accepted_maximum_transformed_change) + "/" +
-            FormatLocalFittingProgressMaximum(progress.raw_maximum_transformed_change)
+        FormatProgressMaximum(progress.accepted_maximum_transformed_change) + "/" +
+            FormatProgressMaximum(progress.raw_maximum_transformed_change)
     };
-    Logger::ProgressLine(FormatLocalFittingProgressRow(column_widths, cell_list));
+    Logger::ProgressLine(FormatProgressRow(column_widths, cell_list));
 }
 
-namespace local_fitting_iteration_internal {
-
-struct RawLocalFittingIterationResult
+struct RawIterationResult
 {
     FitState state{};
     SuspiciousUpdateMask rollback_atom_mask{};
@@ -624,7 +604,7 @@ inline std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
     return LocalAtomRefitResult{ std::move(result), false };
 }
 
-inline RawLocalFittingIterationResult RunRawLocalFittingIteration(
+inline RawIterationResult RunRawIteration(
     const SecondStageContext & context,
     const std::vector<ClusterKey> & cluster_key_list,
     const FitState & previous_state,
@@ -650,8 +630,7 @@ inline RawLocalFittingIterationResult RunRawLocalFittingIteration(
     {
         try
         {
-            joint_offset_result_list.at(cluster_position) =
-                EstimateJointOffsets(
+            joint_offset_result_list.at(cluster_position) = EstimateJointOffsets(
                 context,
                 cluster_key_list.at(cluster_position),
                 current_model_snapshot,
@@ -863,22 +842,20 @@ inline RawLocalFittingIterationResult RunRawLocalFittingIteration(
         iteration_state.at(atom_index) = previous_state.at(atom_index);
     }
 
-    RawLocalFittingIterationResult iteration_result;
+    RawIterationResult iteration_result;
     iteration_result.state = std::move(iteration_state);
     iteration_result.rollback_atom_mask = std::move(rollback_atom_mask);
     iteration_result.health_by_key = std::move(health_by_key);
     return iteration_result;
 }
 
-} // namespace local_fitting_iteration_internal
-
-inline LocalFittingIterationState BuildLocalFittingIterationState(
+inline IterationState BuildIterationState(
     const SecondStageContext & context,
     const GraphTopology & graph_topology,
     FitState initial_state,
     const FitOptions & options)
 {
-    LocalFittingIterationState iteration_state;
+    IterationState iteration_state;
     iteration_state.previous_state = std::move(initial_state);
     iteration_state.previous_polish_provenance.assign(context.size(), 0);
     iteration_state.rollback_atom_mask.assign(context.size(), 0);
@@ -906,15 +883,13 @@ inline LocalFittingIterationState BuildLocalFittingIterationState(
     return iteration_state;
 }
 
-inline LocalFittingIterationResult RunLocalFittingIteration(
+inline IterationResult RunIteration(
     const SecondStageContext & context,
     const GraphTopology & graph_topology,
     const FitOptions & options,
     std::size_t attempt_number,
-    std::size_t maximum_iteration_count,
-    std::size_t audit_patience_limit,
     std::size_t cached_sample_count,
-    LocalFittingIterationState & iteration_state,
+    IterationState & iteration_state,
     LocalFittingPerformanceCounters & performance_counters)
 {
     const auto & previous_state{ iteration_state.previous_state };
@@ -953,7 +928,7 @@ inline LocalFittingIterationResult RunLocalFittingIteration(
 
     const auto iteration_phase_start{ std::chrono::steady_clock::now() };
     auto raw_iteration_result{
-        local_fitting_iteration_internal::RunRawLocalFittingIteration(
+        RunRawIteration(
             context,
             cluster_key_list,
             previous_state,
@@ -1174,7 +1149,7 @@ inline LocalFittingIterationResult RunLocalFittingIteration(
         trust_region_iteration_update.radius_update
     };
 
-    LocalFittingIterationResult result;
+    IterationResult result;
     result.objective_domain_changed = objective_domain_changed;
     result.suspicious_atom_count = iteration_suspicious_atom_count;
     result.raw_maximum_transformed_change = GetMaximumTransformedChange(raw_fixed_point_change_summary);
@@ -1191,7 +1166,7 @@ inline LocalFittingIterationResult RunLocalFittingIteration(
     result.diagnostics.rejected_cluster_partition = rejected_cluster_partition;
     result.diagnostics.trust_region_radius_update = trust_region_radius_update;
     iteration_state.rollback_atom_mask = std::move(raw_iteration_result.rollback_atom_mask);
-    result.progress = LocalFittingIterationProgress{
+    result.progress = IterationProgress{
         attempt_number,
         iteration_state.accepted_iteration_count,
         context.size() - iteration_state.terminal_summary.AtomCount(),
@@ -1206,9 +1181,9 @@ inline LocalFittingIterationResult RunLocalFittingIteration(
 
     if (result.diagnostics.accepted_key_list.empty())
     {
-        result.outcome = LocalFittingIterationOutcome::AllRejected;
+        result.outcome = IterationOutcome::AllRejected;
         result.all_rejected_resolution = ResolveAllRejected(
-            attempt_number >= maximum_iteration_count,
+            attempt_number >= kMaximumIterations,
             result.diagnostics.rejected_cluster_partition,
             result.diagnostics.trust_region_radius_update);
         if (*result.all_rejected_resolution == AllRejectedResolution::Retry)
@@ -1224,7 +1199,7 @@ inline LocalFittingIterationResult RunLocalFittingIteration(
                     iteration_state.unchanged_state_exhausted_key_list.emplace_back(key);
                 }
             }
-            result.outcome = LocalFittingIterationOutcome::Retry;
+            result.outcome = IterationOutcome::Retry;
         }
         return result;
     }
@@ -1269,7 +1244,7 @@ inline LocalFittingIterationResult RunLocalFittingIteration(
     result.progress.accepted_iteration_count = iteration_state.accepted_iteration_count;
     result.progress.accepted_maximum_transformed_change = result.accepted_maximum_transformed_change;
     result.transformed_change_stats = transformed_change_summary.percentile_stats;
-    result.audit_patience_exhausted = iteration_state.audit_patience_count >= audit_patience_limit;
+    result.audit_patience_exhausted = iteration_state.audit_patience_count >= kAuditPatience;
     result.converged =
         is_stationarity_eligible &&
         !has_suspicious_offset_fallback &&
@@ -1280,7 +1255,7 @@ inline LocalFittingIterationResult RunLocalFittingIteration(
     iteration_state.previous_state = std::move(assembled_state);
     iteration_state.previous_polish_provenance = std::move(assembled_polish_provenance);
     iteration_state.unchanged_state_exhausted_key_list.clear();
-    result.outcome = LocalFittingIterationOutcome::Accepted;
+    result.outcome = IterationOutcome::Accepted;
     return result;
 }
 
