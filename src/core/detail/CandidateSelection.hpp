@@ -341,10 +341,10 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
     const FitState & raw_state,
     const std::vector<Eigen::Vector3d> & previous_transformed_estimation_list,
     const std::vector<Eigen::Vector3d> & raw_transformed_estimation_list,
-    const SuspiciousUpdateMask & rollback_atom_mask,
+    bool contains_suspicious_atom,
     const std::vector<double> & ridge_multiplier_list,
     const ObjectiveDomain & objective_domain,
-    const ObjectiveByKey & previous_objective_by_key,
+    const std::optional<ObjectiveBreakdown> & previous_objective,
     const ClusterObjectiveState & previous_objective_state,
     double trust_region_radius,
     ClusterSolverWorkspace & solver_workspace,
@@ -374,9 +374,6 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
     ClusterObjectiveStateMap objective_state;
     objective_state.emplace(key, result.objective_state);
     const FitStateView previous_state_view{ previous_state };
-    const auto contains_suspicious_atom{
-        HasSuspiciousAtom(key, rollback_atom_mask)
-    };
     std::optional<BaseProposal> base_proposal;
     if (!contains_suspicious_atom)
     {
@@ -388,14 +385,11 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
                 key,
                 trust_region_radius)
         };
-        result.diagnostic.pre_objective_failure_reason =
-            proposal_result.failure_reason;
+        result.diagnostic.pre_objective_failure_reason = proposal_result.failure_reason;
         if (proposal_result.attempted_step_norm.has_value())
         {
-            result.diagnostic.pre_objective_attempted_step_norm =
-                proposal_result.attempted_step_norm;
-            result.diagnostic.trust_region_step_norm =
-                *proposal_result.attempted_step_norm;
+            result.diagnostic.pre_objective_attempted_step_norm = proposal_result.attempted_step_norm;
+            result.diagnostic.trust_region_step_norm = *proposal_result.attempted_step_norm;
         }
         base_proposal = std::move(proposal_result.proposal);
     }
@@ -407,10 +401,8 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
         raw_cluster_estimation_list.reserve(key.size());
         for (const auto atom_index : key)
         {
-            previous_cluster_estimation_list.emplace_back(
-                previous_transformed_estimation_list.at(atom_index));
-            raw_cluster_estimation_list.emplace_back(
-                raw_transformed_estimation_list.at(atom_index));
+            previous_cluster_estimation_list.emplace_back(previous_transformed_estimation_list.at(atom_index));
+            raw_cluster_estimation_list.emplace_back(raw_transformed_estimation_list.at(atom_index));
         }
         const auto trust_region_damping{
             LimitTrustRegionDamping(
@@ -445,8 +437,7 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
         else
         {
             result.diagnostic.is_invalid_model = true;
-            result.diagnostic.pre_objective_failure_reason =
-                PreObjectiveFailureReason::InvalidModel;
+            result.diagnostic.pre_objective_failure_reason = PreObjectiveFailureReason::InvalidModel;
         }
     }
     if (!base_proposal.has_value())
@@ -472,18 +463,15 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
         context,
         previous_model_snapshot,
         residual_baseline,
-        base_state_view,
-        base_patch
+        base_state_view
     };
     auto accepted_base_candidate{
         TryCommitClusterCandidate(
-            context,
-            base_state_view,
             base_overlay,
             previous_state_view,
             key,
             objective_sample_ref_list,
-            previous_objective_by_key.at(key),
+            previous_objective,
             false,
             objective_domain,
             objective_state,
@@ -513,17 +501,14 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
                     context,
                     previous_model_snapshot,
                     residual_baseline,
-                    backtracked_state_view,
-                    *backtracked_patch
+                    backtracked_state_view
                 };
                 if (TryCommitClusterCandidate(
-                        context,
-                        backtracked_state_view,
                         backtracked_overlay,
                         previous_state_view,
                         key,
                         objective_sample_ref_list,
-                        previous_objective_by_key.at(key),
+                        previous_objective,
                         false,
                         objective_domain,
                         objective_state,
@@ -604,12 +589,9 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
                 context,
                 previous_model_snapshot,
                 residual_baseline,
-                polished_state_view,
-                polished_candidate->patch
+                polished_state_view
             };
             if (!TryCommitClusterCandidate(
-                    context,
-                    polished_state_view,
                     polished_overlay,
                     base_state_view,
                     key,
@@ -674,20 +656,23 @@ inline CandidateSelection SelectClusterCandidates(
     std::vector<ClusterSolverWorkspace *> solver_workspace_list;
     std::vector<const ClusterObjectiveState *> objective_state_list;
     std::vector<char> polish_eligible_list;
+    std::vector<char> contains_suspicious_atom_list;
     std::vector<char> exhausted_list;
     key_list.reserve(partition.sample_id_list_by_key.size());
     sample_ref_list_by_position.reserve(partition.sample_id_list_by_key.size());
     solver_workspace_list.reserve(partition.sample_id_list_by_key.size());
     objective_state_list.reserve(partition.sample_id_list_by_key.size());
+    contains_suspicious_atom_list.reserve(partition.sample_id_list_by_key.size());
     for (const auto & [key, sample_ref_list] : partition.sample_id_list_by_key)
     {
         key_list.emplace_back(&key);
         sample_ref_list_by_position.emplace_back(&sample_ref_list);
         solver_workspace_list.emplace_back(&solver_workspace_by_key.at(key));
         objective_state_list.emplace_back(&cluster_objective_state.at(key));
+        const auto contains_suspicious_atom{ HasSuspiciousAtom(key, rollback_atom_mask) };
+        contains_suspicious_atom_list.emplace_back(contains_suspicious_atom ? 1 : 0);
         polish_eligible_list.emplace_back(
-            health_by_key.at(key).IsStationarityEligible() &&
-            !HasSuspiciousAtom(key, rollback_atom_mask));
+            health_by_key.at(key).IsStationarityEligible() && !contains_suspicious_atom);
         exhausted_list.emplace_back(
             std::find(
                 unchanged_state_exhausted_key_list.begin(),
@@ -715,10 +700,10 @@ inline CandidateSelection SelectClusterCandidates(
                 raw_state,
                 previous_transformed_estimation_list,
                 raw_transformed_estimation_list,
-                rollback_atom_mask,
+                contains_suspicious_atom_list.at(position) != 0,
                 ridge_multiplier_list,
                 objective_domain,
-                previous_objective_by_key,
+                previous_objective_by_key.at(*key_list.at(position)),
                 *objective_state_list.at(position),
                 trust_region_state.GetRadius(*key_list.at(position)),
                 *solver_workspace_list.at(position),
@@ -849,8 +834,7 @@ inline bool TryBacktrackCombinedCandidate(
                 context,
                 previous_model_snapshot,
                 residual_baseline,
-                candidate_state_view,
-                *candidate_patch
+                candidate_state_view
             };
             selection.combined_backtracking_trial_count = step.trial_number;
             auto trial_objective_state{ committed_objective_state };
@@ -869,8 +853,6 @@ inline bool TryBacktrackCombinedCandidate(
                 diagnostic.backtracking_trial_count = selection.combined_backtracking_trial_count;
                 diagnostic.accepted_backtracking_factor = factor;
                 if (!TryCommitClusterCandidate(
-                        context,
-                        candidate_state_view,
                         candidate_overlay,
                         previous_state_view,
                         key,
@@ -889,9 +871,7 @@ inline bool TryBacktrackCombinedCandidate(
             const auto combined_check{
                 local_criteria_accepted ?
                     EvaluateCombinedObjective(
-                        context,
                         previous_state,
-                        candidate_state_view,
                         residual_baseline,
                         candidate_overlay,
                         candidate_patch->atom_index_list,

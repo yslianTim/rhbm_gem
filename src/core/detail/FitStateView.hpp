@@ -56,6 +56,9 @@ struct FitStatePatch
 
 class FitStateView
 {
+    const FitState * m_base_state{ nullptr };
+    const FitStatePatch * m_patch{ nullptr };
+
 public:
     explicit FitStateView(const FitState & base_state) : m_base_state{ &base_state }
     {
@@ -68,11 +71,8 @@ public:
 
     const GaussianModel3DWithUncertainty & GetMdpde(std::size_t atom_index) const
     {
-        if (m_patch != nullptr)
-        {
-            const auto * value{ m_patch->Find(atom_index) };
-            if (value != nullptr) return *value;
-        }
+        const auto * value{ FindOverride(atom_index) };
+        if (value != nullptr) return *value;
         return m_base_state->at(atom_index).mdpde;
     }
 
@@ -81,11 +81,18 @@ public:
         return GetMdpde(atom_index).GetModel();
     }
 
-    std::size_t GetSize() const { return m_base_state->size(); }
+    const GaussianModel3DWithUncertainty * FindOverride(std::size_t atom_index) const
+    {
+        return m_patch == nullptr ? nullptr : m_patch->Find(atom_index);
+    }
 
-private:
-    const FitState * m_base_state{ nullptr };
-    const FitStatePatch * m_patch{ nullptr };
+    const ClusterKey & GetOverrideAtomIndexList() const
+    {
+        static const ClusterKey empty_atom_index_list;
+        return m_patch == nullptr ? empty_atom_index_list : m_patch->atom_index_list;
+    }
+
+    std::size_t GetSize() const { return m_base_state->size(); }
 };
 
 inline const GaussianModel3D & GetFitModel(const FitStateView & state, std::size_t atom_index)

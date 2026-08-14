@@ -75,12 +75,10 @@ inline std::vector<std::size_t> CollectSuspiciousAtomIndices(
     return suspicious_atom_index_list;
 }
 
-inline std::vector<double> BuildSuspiciousJointOffsetRidgeMultiplierList(
-    std::size_t atom_size,
-    const SuspiciousUpdateMask & suspicious_mask)
+inline std::vector<double> BuildSuspiciousJointOffsetRidgeMultiplierList(const SuspiciousUpdateMask & suspicious_mask)
 {
-    std::vector<double> ridge_multiplier_list(atom_size, 1.0);
-    for (std::size_t atom_index = 0; atom_index < atom_size; atom_index++)
+    std::vector<double> ridge_multiplier_list(suspicious_mask.size(), 1.0);
+    for (std::size_t atom_index = 0; atom_index < suspicious_mask.size(); atom_index++)
     {
         if (suspicious_mask.at(atom_index) != 0)
         {

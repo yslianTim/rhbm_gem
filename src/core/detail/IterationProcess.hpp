@@ -147,10 +147,10 @@ inline std::string_view GetPreObjectiveFailureReasonText(PreObjectiveFailureReas
 }
 
 inline void LogRejectedClusterDiagnostics(
-    const FitOptions & options,
+    bool quiet_mode,
     const std::vector<RejectedClusterDiagnostic> & diagnostic_list)
 {
-    if (options.quiet_mode || Logger::GetLogLevel() < LogLevel::Debug || diagnostic_list.empty())
+    if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug || diagnostic_list.empty())
     {
         return;
     }
@@ -293,12 +293,12 @@ inline std::string_view GetAllRejectedResolutionText(AllRejectedResolution resol
 }
 
 inline void LogAllRejectedResolution(
-    const FitOptions & options,
+    bool quiet_mode,
     const RejectedClusterPartition & partition,
     const TrustRegionRadiusUpdate & radius_update,
     AllRejectedResolution resolution)
 {
-    if (options.quiet_mode || Logger::GetLogLevel() < LogLevel::Debug)
+    if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug)
     {
         return;
     }
@@ -317,10 +317,10 @@ inline void LogAllRejectedResolution(
 }
 
 inline void LogAcceptedBacktrackingDiagnostics(
-    const FitOptions & options,
+    bool quiet_mode,
     const IterationDiagnostics & selection)
 {
-    if (options.quiet_mode || Logger::GetLogLevel() < LogLevel::Debug)
+    if (quiet_mode || Logger::GetLogLevel() < LogLevel::Debug)
     {
         return;
     }
@@ -468,9 +468,9 @@ inline ProgressColumnWidths BuildProgressColumnWidths(std::size_t atom_size)
     return column_widths;
 }
 
-inline void LogProgressHeader(const FitOptions & options, const ProgressColumnWidths & column_widths)
+inline void LogProgressHeader(bool quiet_mode, const ProgressColumnWidths & column_widths)
 {
-    if (options.quiet_mode) return;
+    if (quiet_mode) return;
     std::array<std::string, 6> header_list;
     for (std::size_t i = 0; i < header_list.size(); i++)
     {
@@ -480,11 +480,11 @@ inline void LogProgressHeader(const FitOptions & options, const ProgressColumnWi
 }
 
 inline void LogIterationProgress(
-    const FitOptions & options,
+    bool quiet_mode,
     const ProgressColumnWidths & column_widths,
     const IterationProgress & progress)
 {
-    if (options.quiet_mode) return;
+    if (quiet_mode) return;
 
     const std::array<std::string, 6> cell_list{
         std::to_string(progress.attempt_number) + "/" +
@@ -518,15 +518,14 @@ struct LocalAtomRefitResult
 };
 
 inline std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
-    const SecondStageContext & context,
-    std::size_t atom_index,
+    const AtomContext & atom_context,
     const LocalGaussianResult & previous_result,
     const GaussianModel3D & offset_model,
     const std::vector<double> & adjusted_response_list,
     const FitOptions & options)
 {
     auto adjusted_sampling_entries{
-        BuildSecondStageAdjustedSamples(context, atom_index, adjusted_response_list)
+        BuildSecondStageAdjustedSamples(atom_context, adjusted_response_list)
     };
     const auto & previous_model{ previous_result.mdpde.GetModel() };
     const auto previous_baseline{
@@ -562,9 +561,9 @@ inline std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
     {
         auto candidate_result{
             EstimateLocalGaussianPrepared(
-                context.at(atom_index).refit_design_template,
+                atom_context.refit_design_template,
                 adjusted_response_list,
-                context.at(atom_index).alpha_r,
+                atom_context.alpha_r,
                 options,
                 offset_model)
         };
@@ -611,9 +610,7 @@ inline RawIterationResult RunRawIteration(
 {
     const auto selected_atom_size{ context.size() };
     auto current_model_snapshot{
-        BuildSecondStageModelSnapshot(
-            context,
-            BuildFittedGaussianSnapshot(previous_state))
+        BuildSecondStageModelSnapshot(context, previous_state)
     };
     const auto is_debug_logging_enabled{
         Logger::GetLogLevel() >= LogLevel::Debug
@@ -771,8 +768,7 @@ inline RawIterationResult RunRawIteration(
         {
             refit_result_list.at(refit_position) =
                 FitAtomWithJointOffsetFallback(
-                    context,
-                    atom_index,
+                    context.at(atom_index),
                     previous_state.at(atom_index),
                     refit_model_bundle.selected.at(atom_index),
                     refit_response_cache.at(atom_index),
@@ -866,7 +862,7 @@ inline IterationState BuildIterationState(
     iteration_state.objective_domain = BuildObjectiveDomain(
         context,
         iteration_state.previous_state,
-        iteration_state.graph_partition,
+        iteration_state.cluster_key_list,
         options);
     iteration_state.best_audit_state = BuildInitialBestAuditState(
         context,
@@ -901,21 +897,19 @@ inline IterationResult RunIteration(
 
     const auto previous_objective_by_key{
         BuildObjectiveByKey(
-            context,
             previous_state,
             graph_partition,
             objective_domain,
             residual_baseline)
     };
     ReconcileClusterObjectiveState(
-        graph_partition,
+        cluster_key_list,
         previous_objective_by_key,
         iteration_state.cluster_objective_state);
     iteration_state.trust_region_state.Reconcile(cluster_key_list);
 
     const auto joint_offset_ridge_multiplier_list{
         BuildSuspiciousJointOffsetRidgeMultiplierList(
-            context.size(),
             iteration_state.rollback_atom_mask)
     };
 
@@ -1072,10 +1066,13 @@ inline IterationResult RunIteration(
             auto remaining_graph_partition{
                 BuildGraphPartition(graph_topology, remaining_active_index_list)
             };
+            auto remaining_cluster_key_list{
+                BuildGraphClusterKeyList(remaining_graph_partition)
+            };
             iteration_state.objective_domain = BuildObjectiveDomain(
                 context,
                 assembled_state,
-                remaining_graph_partition,
+                remaining_cluster_key_list,
                 options);
             iteration_state.cluster_objective_state.clear();
             const auto assembled_model_snapshot{
@@ -1090,7 +1087,7 @@ inline IterationResult RunIteration(
                     assembled_model_snapshot)
             };
             ReconcileClusterObjectiveState(
-                remaining_graph_partition,
+                remaining_cluster_key_list,
                 remaining_objective_by_key,
                 iteration_state.cluster_objective_state);
             ResetBestAuditAfterObjectiveDomainChange(
@@ -1101,7 +1098,7 @@ inline IterationResult RunIteration(
                 iteration_state.objective_domain,
                 iteration_state.best_audit_state);
             iteration_state.active_index_list = std::move(remaining_active_index_list);
-            iteration_state.cluster_key_list = BuildGraphClusterKeyList(remaining_graph_partition);
+            iteration_state.cluster_key_list = std::move(remaining_cluster_key_list);
             performance_counters.RecordSolverWorkspaceReset();
             ResetClusterSolverWorkspace(
                 iteration_state.cluster_key_list,

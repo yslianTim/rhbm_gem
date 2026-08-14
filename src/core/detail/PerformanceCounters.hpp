@@ -15,7 +15,7 @@ namespace rhbm_gem::core::detail {
 
 class PerformanceCounters
 {
-    const FitOptions & m_options;
+    const bool m_quiet_mode;
     const ClusterSolverWorkspaceMap & m_solver_workspace_by_key;
     const std::chrono::steady_clock::time_point m_start_time;
     const std::size_t m_cached_sample_count;
@@ -30,10 +30,10 @@ class PerformanceCounters
     
 public:
     PerformanceCounters(
-        const FitOptions & options,
+        bool quiet_mode,
         const SecondStageContext & context,
         const ClusterSolverWorkspaceMap & solver_workspace_by_key)
-        : m_options{ options },
+        : m_quiet_mode{ quiet_mode },
           m_solver_workspace_by_key{ solver_workspace_by_key },
           m_start_time{ std::chrono::steady_clock::now() },
           m_cached_sample_count{ CountRawSamplingEntries(context) }
@@ -42,7 +42,7 @@ public:
 
     ~PerformanceCounters()
     {
-        if (m_options.quiet_mode) return;
+        if (m_quiet_mode) return;
 
         const auto symbolic_analysis_count{
             m_retired_solver_symbolic_analysis_count + CountCurrentSolverSymbolicAnalyses()

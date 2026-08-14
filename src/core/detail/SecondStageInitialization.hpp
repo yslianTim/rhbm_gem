@@ -96,6 +96,12 @@ struct SecondStageInitialStateBuildResult
     FitState state{};
     std::vector<SecondStageSeedSelectionRecord> selection_record_list{};
     std::vector<SecondStageSeedSelectionRecord> unselected_selection_record_list{};
+    enum class Failure
+    {
+        None,
+        SelectedSeedUnavailable,
+        UnselectedSeedUnavailable
+    } failure{ Failure::None };
 };
 
 inline SecondStageContext BuildSecondStageContext(
@@ -255,11 +261,9 @@ inline std::optional<GaussianModel3DWithUncertainty> BuildValidGaussianParameter
     };
 }
 
-inline std::optional<SecondStageInitialStateBuildResult> BuildInitialFitState(
-    SecondStageContext & context,
-    bool & unselected_seed_failure)
+inline SecondStageInitialStateBuildResult BuildInitialFitState(
+    SecondStageContext & context)
 {
-    unselected_seed_failure = false;
     SecondStageInitialStateBuildResult build_result;
     auto & state{ build_result.state };
     state.resize(context.size());
@@ -322,7 +326,12 @@ inline std::optional<SecondStageInitialStateBuildResult> BuildInitialFitState(
                     global_median
                 })
         };
-        if (!selection.has_value()) return std::nullopt;
+        if (!selection.has_value())
+        {
+            build_result.failure =
+                SecondStageInitialStateBuildResult::Failure::SelectedSeedUnavailable;
+            return build_result;
+        }
 
         result.mdpde = selection->model;
         build_result.selection_record_list.emplace_back(
@@ -358,8 +367,8 @@ inline std::optional<SecondStageInitialStateBuildResult> BuildInitialFitState(
         };
         if (!selection.has_value())
         {
-            unselected_seed_failure = true;
-            return std::nullopt;
+            build_result.failure = SecondStageInitialStateBuildResult::Failure::UnselectedSeedUnavailable;
+            return build_result;
         }
 
         unselected_atom_contributor.initial_seed = selection->model;

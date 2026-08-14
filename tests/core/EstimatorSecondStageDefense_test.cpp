@@ -1725,7 +1725,7 @@ TEST(EstimatorSecondStageDefenseTest, ObjectiveClusterStateLifecycleReconcilesPa
         });
 
     audit_detail::ReconcileClusterObjectiveState(
-        partition,
+        coupling_detail::BuildGraphClusterKeyList(partition),
         previous_objective_by_key,
         state_by_key);
 
@@ -3778,8 +3778,7 @@ TEST(EstimatorSecondStageDefenseTest, ResidualBaselineAndOverlayAgreeForCandidat
         context,
         model_snapshot,
         baseline,
-        candidate_view,
-        patch
+        candidate_view
     };
     const residual_detail::ObjectiveSampleRef sample_ref{ 0, 1 };
     const auto direct{
@@ -3789,7 +3788,7 @@ TEST(EstimatorSecondStageDefenseTest, ResidualBaselineAndOverlayAgreeForCandidat
             sample_ref,
             model_snapshot)
     };
-    const auto overlaid{ overlay.Evaluate(candidate_view, sample_ref) };
+    const auto overlaid{ overlay.Evaluate(sample_ref) };
     ASSERT_TRUE(direct.has_value());
     ASSERT_TRUE(overlaid.has_value());
     EXPECT_DOUBLE_EQ(direct->adjusted_response, overlaid->adjusted_response);

@@ -288,27 +288,22 @@ inline std::optional<double> BuildFixedObjectiveScale(
 inline ObjectiveDomain BuildObjectiveDomain(
     const SecondStageContext & context,
     const FitState & initial_state,
-    const CouplingGraphPartition & partition,
+    const std::vector<ClusterKey> & cluster_key_list,
     const FitOptions & options)
 {
     ObjectiveDomain domain;
     const auto model_snapshot{
-        BuildSecondStageModelSnapshot(
-            context,
-            BuildFittedGaussianSnapshot(initial_state))
+        BuildSecondStageModelSnapshot(context, initial_state)
     };
     domain.owner_key_by_atom_index.resize(context.size());
     domain.fit_sample_mask_by_atom.resize(context.size());
     for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
     {
         domain.fit_sample_mask_by_atom.at(atom_index).resize(
-            context.at(atom_index).raw_sampling_entries.size(),
-            0);
+            context.at(atom_index).raw_sampling_entries.size(), 0);
     }
-    for (const auto & [key, affected_sample_ref_list] :
-        partition.sample_id_list_by_key)
+    for (const auto & key : cluster_key_list)
     {
-        static_cast<void>(affected_sample_ref_list);
         auto & cluster_domain{ domain.cluster_by_key[key] };
         domain.active_atom_count += key.size();
         std::vector<double> fit_residual_list;
@@ -334,8 +329,7 @@ inline ObjectiveDomain BuildObjectiveDomain(
                     static_cast<double>(raw_sampling_entries.at(sample_index).point.distance)
                 };
                 const auto is_fit_range{
-                    distance >= options.distance_min &&
-                    distance <= options.distance_max
+                    distance >= options.distance_min && distance <= options.distance_max
                 };
                 domain.fit_sample_mask_by_atom.at(atom_index).at(sample_index) =
                     is_fit_range ? 1 : 0;
@@ -357,9 +351,7 @@ inline ObjectiveDomain BuildObjectiveDomain(
         domain.fit_sample_count += cluster_domain.fit_sample_ref_list.size();
         domain.tail_sample_count += cluster_domain.tail_sample_ref_list.size();
         const auto fit_scale{
-            BuildFixedObjectiveScale(
-                fit_residual_list,
-                fit_response_list)
+            BuildFixedObjectiveScale(fit_residual_list, fit_response_list)
         };
         if (!fit_scale.has_value() ||
             fit_residual_list.size() != cluster_domain.fit_sample_ref_list.size())
@@ -384,9 +376,7 @@ inline ObjectiveDomain BuildObjectiveDomain(
 
 
 template <typename State, typename ResidualEvaluator>
-inline std::optional<ObjectiveBreakdown>
-EvaluateObjectiveContributionImpl(
-    const SecondStageContext & context,
+inline std::optional<ObjectiveBreakdown> EvaluateObjectiveContributionImpl(
     const State & state,
     const ClusterKey & changed_key,
     const std::vector<ObjectiveSampleRef> & sample_ref_list,
@@ -394,7 +384,6 @@ EvaluateObjectiveContributionImpl(
     const ResidualEvaluator & residual_evaluator,
     bool include_offset_penalty = true)
 {
-    static_cast<void>(context);
     if (domain.active_atom_count == 0) return std::nullopt;
     ObjectiveBreakdown breakdown;
     for (const auto & sample_ref : sample_ref_list)
@@ -404,28 +393,21 @@ EvaluateObjectiveContributionImpl(
         };
         if (owner_key.empty()) continue;
         const auto owner_iter{ domain.cluster_by_key.find(owner_key) };
-        if (owner_iter == domain.cluster_by_key.end() ||
-            !owner_iter->second.scale.has_value())
+        if (owner_iter == domain.cluster_by_key.end() || !owner_iter->second.scale.has_value())
         {
             return std::nullopt;
         }
-        const auto residual_sample{
-            residual_evaluator(sample_ref)
-        };
+        const auto residual_sample{ residual_evaluator(sample_ref) };
         if (!residual_sample.has_value()) return std::nullopt;
         const auto is_fit_range{
             domain.fit_sample_mask_by_atom.at(sample_ref.atom_index).at(sample_ref.sample_index) != 0
         };
-        const auto sample_count{
-            is_fit_range ?
-                owner_iter->second.fit_sample_ref_list.size() :
-                owner_iter->second.tail_sample_ref_list.size()
+        const auto sample_count{ is_fit_range ?
+            owner_iter->second.fit_sample_ref_list.size() : owner_iter->second.tail_sample_ref_list.size()
         };
         if (sample_count == 0) return std::nullopt;
-        const auto scale{
-            is_fit_range ?
-                std::optional<double>{ owner_iter->second.scale->fit } :
-                owner_iter->second.scale->tail
+        const auto scale{ is_fit_range ?
+            std::optional<double>{ owner_iter->second.scale->fit } : owner_iter->second.scale->tail
         };
         if (!scale.has_value()) return std::nullopt;
         const auto loss{
@@ -434,9 +416,7 @@ EvaluateObjectiveContributionImpl(
                 kObjectiveRobustLossCutoffMultiplier)
         };
         const auto coefficient{
-            CalculateClusterAtomWeight(
-                owner_key.size(),
-                domain.active_atom_count) /
+            CalculateClusterAtomWeight(owner_key.size(), domain.active_atom_count) /
             static_cast<double>(sample_count)
         };
         if (is_fit_range)
@@ -455,17 +435,14 @@ EvaluateObjectiveContributionImpl(
             const auto owner_iter{
                 domain.cluster_by_key.find(domain.owner_key_by_atom_index.at(atom_index))
             };
-            if (owner_iter == domain.cluster_by_key.end() ||
-                !owner_iter->second.scale.has_value())
+            if (owner_iter == domain.cluster_by_key.end() || !owner_iter->second.scale.has_value())
             {
                 return std::nullopt;
             }
             const auto & model{ GetFitModel(state, atom_index) };
             if (!IsValidSecondStageGaussianModel(model)) return std::nullopt;
             const auto peak_signal{ model.SignalAtDistance(0.0) };
-            const auto offset_peak{
-                model.GetOffset() * model.OffsetBasisAtDistance(0.0)
-            };
+            const auto offset_peak{ model.GetOffset() * model.OffsetBasisAtDistance(0.0) };
             if (!std::isfinite(peak_signal) || !std::isfinite(offset_peak))
             {
                 return std::nullopt;
@@ -493,8 +470,7 @@ EvaluateObjectiveContributionImpl(
 }
 
 template <typename State>
-inline std::optional<ObjectiveBreakdown>
-EvaluateObjectiveContribution(
+inline std::optional<ObjectiveBreakdown> EvaluateObjectiveContribution(
     const SecondStageContext & context,
     const State & state,
     const SecondStageModelSnapshot & model_snapshot,
@@ -504,7 +480,6 @@ EvaluateObjectiveContribution(
     bool include_offset_penalty = true)
 {
     return EvaluateObjectiveContributionImpl(
-        context,
         state,
         changed_key,
         sample_ref_list,
@@ -516,9 +491,7 @@ EvaluateObjectiveContribution(
         include_offset_penalty);
 }
 
-inline std::optional<ObjectiveBreakdown>
-EvaluateObjectiveContribution(
-    const SecondStageContext & context,
+inline std::optional<ObjectiveBreakdown> EvaluateObjectiveContribution(
     const FitState & state,
     const ResidualBaseline & residual_baseline,
     const ClusterKey & changed_key,
@@ -527,7 +500,6 @@ EvaluateObjectiveContribution(
     bool include_offset_penalty = true)
 {
     return EvaluateObjectiveContributionImpl(
-        context,
         state,
         changed_key,
         sample_ref_list,
@@ -539,10 +511,7 @@ EvaluateObjectiveContribution(
         include_offset_penalty);
 }
 
-inline std::optional<ObjectiveBreakdown>
-EvaluateObjectiveContribution(
-    const SecondStageContext & context,
-    const FitStateView & state,
+inline std::optional<ObjectiveBreakdown> EvaluateObjectiveContribution(
     const CandidateEvaluationOverlay & overlay,
     const ClusterKey & changed_key,
     const std::vector<ObjectiveSampleRef> & sample_ref_list,
@@ -550,20 +519,18 @@ EvaluateObjectiveContribution(
     bool include_offset_penalty = true)
 {
     return EvaluateObjectiveContributionImpl(
-        context,
-        state,
+        overlay.GetCandidateState(),
         changed_key,
         sample_ref_list,
         domain,
         [&](const ObjectiveSampleRef & sample_ref)
         {
-            return overlay.Evaluate(state, sample_ref);
+            return overlay.Evaluate(sample_ref);
         },
         include_offset_penalty);
 }
 
-inline std::optional<ObjectiveBreakdown>
-EvaluateAuditObjective(
+inline std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
     const SecondStageContext & context,
     const FitState & state,
     const ObjectiveDomain & domain,
@@ -621,9 +588,7 @@ EvaluateAuditObjective(
         std::optional<ObjectiveBreakdown>{ total } : std::nullopt;
 }
 
-inline std::optional<ObjectiveBreakdown>
-EvaluateAuditObjective(
-    const SecondStageContext & context,
+inline std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
     const FitState & state,
     const ObjectiveDomain & domain,
     const ResidualBaseline & residual_baseline)
@@ -640,7 +605,6 @@ EvaluateAuditObjective(
             cluster_domain.tail_sample_ref_list.end());
         const auto contribution{
             EvaluateObjectiveContribution(
-                context,
                 state,
                 residual_baseline,
                 key,
@@ -659,11 +623,8 @@ EvaluateAuditObjective(
         kTailValidationWeight);
 }
 
-inline std::optional<ObjectiveBreakdown>
-EvaluateObjectiveDelta(
-    const SecondStageContext & context,
+inline std::optional<ObjectiveBreakdown> EvaluateObjectiveDelta(
     const FitState & previous_state,
-    const FitStateView & candidate_state,
     const ResidualBaseline & residual_baseline,
     const CandidateEvaluationOverlay & candidate_overlay,
     const ClusterKey & changed_key,
@@ -684,8 +645,6 @@ EvaluateObjectiveDelta(
     }
     const auto candidate_changed{
         EvaluateObjectiveContribution(
-            context,
-            candidate_state,
             candidate_overlay,
             changed_key,
             affected_sample_ref_list,
@@ -693,7 +652,6 @@ EvaluateObjectiveDelta(
     };
     const auto previous_changed{
         EvaluateObjectiveContribution(
-            context,
             previous_state,
             residual_baseline,
             changed_key,
@@ -723,9 +681,7 @@ inline std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
     const ObjectiveDomain & domain)
 {
     const auto model_snapshot{
-        BuildSecondStageModelSnapshot(
-            context,
-            BuildFittedGaussianSnapshot(state))
+        BuildSecondStageModelSnapshot(context, state)
     };
     return EvaluateAuditObjective(context, state, domain, model_snapshot);
 }
@@ -754,7 +710,6 @@ inline ObjectiveByKey BuildObjectiveByKey(
 }
 
 inline ObjectiveByKey BuildObjectiveByKey(
-    const SecondStageContext & context,
     const FitState & state,
     const CouplingGraphPartition & partition,
     const ObjectiveDomain & domain,
@@ -766,7 +721,6 @@ inline ObjectiveByKey BuildObjectiveByKey(
         objective_by_key.emplace(
             key,
             EvaluateObjectiveContribution(
-                context,
                 state,
                 residual_baseline,
                 key,
@@ -776,42 +730,8 @@ inline ObjectiveByKey BuildObjectiveByKey(
     return objective_by_key;
 }
 
-[[maybe_unused]] inline CombinedObjectiveCheck EvaluateCombinedObjective(
-    const SecondStageContext & context,
-    const FitState & candidate_state,
-    const FitState & previous_state,
-    const ObjectiveDomain & domain,
-    const BestAuditState & audit_state,
-    const std::optional<ObjectiveBreakdown> & previous_objective = std::nullopt)
-{
-    const auto candidate_objective{
-        EvaluateAuditObjective(context, candidate_state, domain)
-    };
-    const auto resolved_previous_objective{
-        previous_objective.has_value() ?
-            previous_objective :
-            EvaluateAuditObjective(context, previous_state, domain)
-    };
-    return CombinedObjectiveCheck{
-        IsAuditObjectiveAcceptableForProgress(
-            candidate_objective.has_value() ?
-                std::optional<double>{ candidate_objective->total_objective } :
-                std::nullopt,
-            resolved_previous_objective.has_value() ?
-                std::optional<double>{ resolved_previous_objective->total_objective } :
-                std::nullopt,
-            audit_state.best.has_value() ?
-                std::optional<double>{ audit_state.best->objective.total_objective } :
-                std::nullopt,
-            kObjectiveProgressTolerance),
-        candidate_objective
-    };
-}
-
 inline CombinedObjectiveCheck EvaluateCombinedObjective(
-    const SecondStageContext & context,
     const FitState & previous_state,
-    const FitStateView & candidate_state,
     const ResidualBaseline & residual_baseline,
     const CandidateEvaluationOverlay & candidate_overlay,
     const ClusterKey & changed_key,
@@ -823,9 +743,7 @@ inline CombinedObjectiveCheck EvaluateCombinedObjective(
 {
     const auto candidate_objective{
         EvaluateObjectiveDelta(
-            context,
             previous_state,
-            candidate_state,
             residual_baseline,
             candidate_overlay,
             changed_key,
@@ -850,8 +768,7 @@ inline CombinedObjectiveCheck EvaluateCombinedObjective(
     };
 }
 
-inline CombinedCandidateObjectiveCheck
-EvaluateCombinedCandidateObjective(
+inline CombinedCandidateObjectiveCheck EvaluateCombinedCandidateObjective(
     const SecondStageContext & context,
     const SecondStageModelSnapshot & previous_model_snapshot,
     const ResidualBaseline & residual_baseline,
@@ -868,7 +785,6 @@ EvaluateCombinedCandidateObjective(
     if (!result.guard_required) return result;
 
     result.previous_objective = EvaluateAuditObjective(
-        context,
         previous_state,
         objective_domain,
         residual_baseline);
@@ -894,17 +810,14 @@ EvaluateCombinedCandidateObjective(
         context,
         previous_model_snapshot,
         residual_baseline,
-        combined_state_view,
-        combined_patch
+        combined_state_view
     };
     const auto affected_sample_ref_list{
         BuildGraphAffectedSampleUnion(partition, accepted_key_list)
     };
     const auto combined_check{
         EvaluateCombinedObjective(
-            context,
             previous_state,
-            combined_state_view,
             residual_baseline,
             combined_overlay,
             combined_patch.atom_index_list,
@@ -998,14 +911,13 @@ inline ClusterObjectiveState BuildInitialClusterObjectiveState(
 }
 
 inline void ReconcileClusterObjectiveState(
-    const CouplingGraphPartition & partition,
+    const std::vector<ClusterKey> & cluster_key_list,
     const ObjectiveByKey & previous_objective_by_key,
     ClusterObjectiveStateMap & state_by_key)
 {
     ClusterObjectiveStateMap next_state_by_key;
-    for (const auto & [key, objective_sample_ref_list] : partition.sample_id_list_by_key)
+    for (const auto & key : cluster_key_list)
     {
-        static_cast<void>(objective_sample_ref_list);
         auto state_iter{ state_by_key.find(key) };
         if (state_iter != state_by_key.end())
         {
@@ -1020,8 +932,6 @@ inline void ReconcileClusterObjectiveState(
 }
 
 inline bool TryCommitClusterCandidate(
-    const SecondStageContext & context,
-    const FitStateView & candidate_state,
     const CandidateEvaluationOverlay & candidate_overlay,
     const FitStateView & previous_state,
     const ClusterKey & key,
@@ -1043,7 +953,7 @@ inline bool TryCommitClusterCandidate(
             unique_sample_count);
     }
     const auto transformed_change_summary{
-        SummarizeTransformedChanges(candidate_state, previous_state, key)
+        SummarizeTransformedChanges(candidate_overlay.GetCandidateState(), previous_state, key)
     };
     const auto maximum_transformed_change{
         GetMaximumTransformedPercentileChange(transformed_change_summary)
@@ -1062,8 +972,6 @@ inline bool TryCommitClusterCandidate(
     auto & state{ cluster_objective_state.at(key) };
     diagnostic.candidate_objective =
         EvaluateObjectiveContribution(
-            context,
-            candidate_state,
             candidate_overlay,
             key,
             objective_sample_ref_list,

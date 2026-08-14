@@ -49,12 +49,11 @@ struct SecondStageModelSnapshot
 
 inline const GaussianModel3D & ResolveNeighborAtomModel(
     const NeighborAtomSample & neighbor_atom_sample,
-    const FittedGaussianSnapshot & selected_snapshot,
-    const FittedGaussianSnapshot & unselected_snapshot)
+    const SecondStageModelSnapshot & model_snapshot)
 {
     return neighbor_atom_sample.is_selected ?
-        selected_snapshot.at(neighbor_atom_sample.atom_index) :
-        unselected_snapshot.at(neighbor_atom_sample.atom_index);
+        model_snapshot.selected.at(neighbor_atom_sample.atom_index) :
+        model_snapshot.unselected.at(neighbor_atom_sample.atom_index);
 }
 
 inline FittedGaussianSnapshot BuildUnselectedAtomContributorSnapshot(
@@ -140,12 +139,10 @@ struct ResidualSample
 using ResidualBaseline = std::vector<std::vector<std::optional<ResidualSample>>>;
 
 inline double CalculateSecondStageAdjustedResponse(
-    const SecondStageContext & context,
-    std::size_t atom_index,
+    const AtomContext & atom_context,
     std::size_t sample_index,
     const SecondStageModelSnapshot & model_snapshot)
 {
-    const auto & atom_context{ context.at(atom_index) };
     auto response_value{
         static_cast<double>(atom_context.raw_sampling_entries.at(sample_index).response)
     };
@@ -156,8 +153,7 @@ inline double CalculateSecondStageAdjustedResponse(
         const auto & neighbor_atom_sample{ *neighbor_iter };
         response_value -= ResolveNeighborAtomModel(
             neighbor_atom_sample,
-            model_snapshot.selected,
-            model_snapshot.unselected).ResponseAtDistance(neighbor_atom_sample.distance);
+            model_snapshot).ResponseAtDistance(neighbor_atom_sample.distance);
     }
     return response_value;
 }
@@ -178,18 +174,16 @@ inline SecondStageAdjustedResponseCache BuildSecondStageAdjustedResponseCache(
         {
             response_list.emplace_back(static_cast<double>(static_cast<float>(
                 CalculateSecondStageAdjustedResponse(
-                    context, atom_index, sample_index, model_snapshot))));
+                    context.at(atom_index), sample_index, model_snapshot))));
         }
     }
     return cache;
 }
 
 inline LocalPotentialSampleList BuildSecondStageAdjustedSamples(
-    const SecondStageContext & context,
-    std::size_t atom_index,
+    const AtomContext & atom_context,
     const std::vector<double> & adjusted_response_list)
 {
-    const auto & atom_context{ context.at(atom_index) };
     if (adjusted_response_list.size() != atom_context.raw_sampling_entries.size())
     {
         throw std::invalid_argument(
@@ -222,8 +216,7 @@ inline std::vector<LocalPotentialSampleList> BuildSecondStageAdjustedSamples(
     {
         adjusted_sampling_entries_list.emplace_back(
             BuildSecondStageAdjustedSamples(
-                context,
-                atom_index,
+                context.at(atom_index),
                 adjusted_response_cache.at(atom_index)));
     }
     return adjusted_sampling_entries_list;
@@ -244,7 +237,8 @@ inline ResidualBaseline BuildResidualBaseline(
         for (std::size_t sample_index = 0; sample_index < sample_count; sample_index++)
         {
             const auto adjusted_response{
-                CalculateSecondStageAdjustedResponse(context, atom_index, sample_index, model_snapshot)
+                CalculateSecondStageAdjustedResponse(
+                    context.at(atom_index), sample_index, model_snapshot)
             };
             const auto & sample{
                 context.at(atom_index).raw_sampling_entries.at(sample_index)
@@ -279,8 +273,7 @@ inline std::optional<ResidualSample> EvaluateResidualSample(
     };
     const auto adjusted_response{
         CalculateSecondStageAdjustedResponse(
-            context,
-            sample_ref.atom_index,
+            atom_context,
             sample_ref.sample_index,
             model_snapshot)
     };

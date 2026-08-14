@@ -19,7 +19,7 @@ class CandidateEvaluationOverlay
     const SecondStageContext & m_context;
     const SecondStageModelSnapshot & m_baseline_model_snapshot;
     const ResidualBaseline & m_residual_baseline;
-    const FitStatePatch & m_patch;
+    const FitStateView & m_candidate_state;
     std::vector<char> m_changed_group_mask{};
     std::vector<std::optional<GaussianModel3D>> m_changed_group_median{};
 
@@ -28,16 +28,15 @@ public:
         const SecondStageContext & context,
         const SecondStageModelSnapshot & baseline_model_snapshot,
         const ResidualBaseline & residual_baseline,
-        const FitStateView & candidate_state,
-        const FitStatePatch & patch)
+        const FitStateView & candidate_state)
         : m_context{ context },
           m_baseline_model_snapshot{ baseline_model_snapshot },
           m_residual_baseline{ residual_baseline },
-          m_patch{ patch },
+          m_candidate_state{ candidate_state },
           m_changed_group_mask(context.selected_atom_index_list_by_group.size(), 0),
           m_changed_group_median(context.selected_atom_index_list_by_group.size())
     {
-        for (const auto atom_index : patch.atom_index_list)
+        for (const auto atom_index : m_candidate_state.GetOverrideAtomIndexList())
         {
             m_changed_group_mask.at(m_context.at(atom_index).group_id) = 1;
         }
@@ -52,15 +51,13 @@ public:
             model_list.reserve(atom_index_list.size());
             for (const auto atom_index : atom_index_list)
             {
-                model_list.emplace_back(candidate_state.GetModel(atom_index));
+                model_list.emplace_back(m_candidate_state.GetModel(atom_index));
             }
             m_changed_group_median.at(group_id) = BuildLocalFittingGaussianParameterMedian(model_list);
         }
     }
 
-    std::optional<ResidualSample> Evaluate(
-        const FitStateView & candidate_state,
-        const ObjectiveSampleRef & sample_ref) const
+    std::optional<ResidualSample> Evaluate(const ObjectiveSampleRef & sample_ref) const
     {
         const auto & baseline{
             m_residual_baseline.at(sample_ref.atom_index).at(
@@ -81,12 +78,12 @@ public:
             const GaussianModel3D * baseline_model{ nullptr };
             if (neighbor_atom_sample.is_selected)
             {
-                if (m_patch.Find(neighbor_atom_sample.atom_index) == nullptr)
+                if (m_candidate_state.FindOverride(neighbor_atom_sample.atom_index) == nullptr)
                 {
                     continue;
                 }
                 baseline_model = &m_baseline_model_snapshot.selected.at(neighbor_atom_sample.atom_index);
-                candidate_model = &candidate_state.GetModel(neighbor_atom_sample.atom_index);
+                candidate_model = &m_candidate_state.GetModel(neighbor_atom_sample.atom_index);
             }
             else
             {
@@ -120,9 +117,9 @@ public:
                 candidate_model->ResponseAtDistance(neighbor_atom_sample.distance);
         }
         const auto expected_response{
-            m_patch.Find(sample_ref.atom_index) == nullptr ?
+            m_candidate_state.FindOverride(sample_ref.atom_index) == nullptr ?
                 baseline->adjusted_response - baseline->residual :
-                candidate_state.GetModel(sample_ref.atom_index).ResponseAtDistance(
+                m_candidate_state.GetModel(sample_ref.atom_index).ResponseAtDistance(
                     static_cast<double>(sample.point.distance))
         };
         const auto residual{ adjusted_response - expected_response };
@@ -132,6 +129,8 @@ public:
         }
         return ResidualSample{ adjusted_response, residual };
     }
+
+    const FitStateView & GetCandidateState() const { return m_candidate_state; }
 };
 
 } // namespace rhbm_gem::core::detail

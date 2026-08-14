@@ -400,8 +400,7 @@ inline JointOffsetBuildResult BuildJointOffsetSystem(
                 const auto & neighbor_model{
                     ResolveNeighborAtomModel(
                         neighbor_atom_sample,
-                        model_snapshot.selected,
-                        model_snapshot.unselected)
+                        model_snapshot)
                 };
                 int neighbor_position{ -1 };
                 if (neighbor_atom_sample.is_selected)
