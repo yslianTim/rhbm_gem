@@ -16,6 +16,36 @@
 namespace rhbm_gem {
 namespace eigen_helper {
 
+class ScopedEigenThreadCount
+{
+public:
+    explicit ScopedEigenThreadCount(int requested_thread_count)
+        : m_previous_thread_count{ Eigen::nbThreads() },
+          m_changed{ requested_thread_count > 0 &&
+              m_previous_thread_count != requested_thread_count }
+    {
+        if (m_changed)
+        {
+            Eigen::setNbThreads(requested_thread_count);
+        }
+    }
+
+    ScopedEigenThreadCount(const ScopedEigenThreadCount &) = delete;
+    ScopedEigenThreadCount & operator=(const ScopedEigenThreadCount &) = delete;
+
+    ~ScopedEigenThreadCount()
+    {
+        if (m_changed && Eigen::nbThreads() != m_previous_thread_count)
+        {
+            Eigen::setNbThreads(m_previous_thread_count);
+        }
+    }
+
+private:
+    int m_previous_thread_count{ 1 };
+    bool m_changed{ false };
+};
+
 template <typename Type, std::size_t N>
 inline Eigen::VectorXd ToEigenVector(const std::array<Type, N> & value)
 {

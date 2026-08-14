@@ -13,6 +13,8 @@
 
 #include <Eigen/Dense>
 
+#include <rhbm_gem/utils/math/EigenHelper.hpp>
+
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/JointPolish.hpp"
 #include "core/detail/BacktrackingWorkspace.hpp"
@@ -25,7 +27,6 @@
 #include "core/detail/TransformedChange.hpp"
 #include "core/detail/TrustRegion.hpp"
 #include "core/detail/ReusableWeightedRidgeSolver.hpp"
-#include "core/detail/ScopedEigenThreadCount.hpp"
 #include "core/detail/SecondStageContext.hpp"
 #include "core/detail/SuspiciousUpdate.hpp"
 
@@ -709,7 +710,7 @@ inline CandidateSelection SelectClusterCandidates(
 #ifdef USE_OPENMP
     if (thread_size > 1 && key_list.size() > 1)
     {
-        ScopedEigenThreadCount eigen_thread_guard{ 1 };
+        eigen_helper::ScopedEigenThreadCount eigen_thread_guard{ 1 };
 #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
         for (std::size_t position = 0; position < key_list.size(); position++)
         {

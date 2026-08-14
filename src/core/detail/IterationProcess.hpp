@@ -15,6 +15,7 @@
 #include <vector>
 
 #include <rhbm_gem/utils/domain/Logger.hpp>
+#include <rhbm_gem/utils/math/EigenHelper.hpp>
 
 #ifdef USE_OPENMP
 #include <omp.h>
@@ -30,7 +31,6 @@
 #include "core/detail/FitStateView.hpp"
 #include "core/detail/SuspiciousUpdate.hpp"
 #include "core/detail/ReusableWeightedRidgeSolver.hpp"
-#include "core/detail/ScopedEigenThreadCount.hpp"
 #include "core/detail/SecondStageContext.hpp"
 #include "core/detail/TransformedChange.hpp"
 #include "core/detail/TrustRegion.hpp"
@@ -646,7 +646,7 @@ inline RawIterationResult RunRawIteration(
     };
     if (parallel_joint_offsets)
     {
-        ScopedEigenThreadCount eigen_thread_guard{ 1 };
+        eigen_helper::ScopedEigenThreadCount eigen_thread_guard{ 1 };
 #pragma omp parallel for schedule(dynamic) num_threads(options.thread_size)
         for (std::size_t cluster_position = 0; cluster_position < cluster_key_list.size(); cluster_position++)
         {
@@ -783,7 +783,7 @@ inline RawIterationResult RunRawIteration(
 #ifdef USE_OPENMP
     if (parallel_refits)
     {
-        ScopedEigenThreadCount eigen_thread_guard{ 1 };
+        eigen_helper::ScopedEigenThreadCount eigen_thread_guard{ 1 };
 #pragma omp parallel for schedule(dynamic) num_threads(options.thread_size)
         for (std::size_t refit_position = 0; refit_position < refit_atom_index_list.size(); refit_position++)
         {

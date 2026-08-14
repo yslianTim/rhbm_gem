@@ -1,8 +1,97 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <type_traits>
 
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
+
+namespace
+{
+using ScopedEigenThreadCount = rhbm_gem::eigen_helper::ScopedEigenThreadCount;
+
+static_assert(!std::is_copy_constructible_v<ScopedEigenThreadCount>);
+static_assert(!std::is_copy_assignable_v<ScopedEigenThreadCount>);
+
+class EigenThreadCountTest : public testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        m_original_thread_count = Eigen::nbThreads();
+    }
+
+    void TearDown() override
+    {
+        Eigen::setNbThreads(m_original_thread_count);
+    }
+
+    int AlternateThreadCount() const
+    {
+        return (m_original_thread_count == 1) ? 2 : 1;
+    }
+
+    bool SupportsThreadCount(int thread_count)
+    {
+        Eigen::setNbThreads(thread_count);
+        const bool supported{ Eigen::nbThreads() == thread_count };
+        Eigen::setNbThreads(m_original_thread_count);
+        return supported;
+    }
+
+    int m_original_thread_count{ 1 };
+};
+} // namespace
+
+TEST_F(EigenThreadCountTest, PositiveRequestAppliesWithinScopeAndRestoresPreviousCount)
+{
+    const int requested_thread_count{ AlternateThreadCount() };
+    if (!SupportsThreadCount(requested_thread_count))
+    {
+        GTEST_SKIP() << "Eigen thread-count changes are unavailable in this build";
+    }
+
+    {
+        const ScopedEigenThreadCount guard{ requested_thread_count };
+        EXPECT_EQ(requested_thread_count, Eigen::nbThreads());
+    }
+
+    EXPECT_EQ(m_original_thread_count, Eigen::nbThreads());
+}
+
+TEST_F(EigenThreadCountTest, NonPositiveRequestLeavesCurrentCountUnchanged)
+{
+    {
+        const ScopedEigenThreadCount zero_guard{ 0 };
+        EXPECT_EQ(m_original_thread_count, Eigen::nbThreads());
+    }
+    {
+        const ScopedEigenThreadCount negative_guard{ -1 };
+        EXPECT_EQ(m_original_thread_count, Eigen::nbThreads());
+    }
+
+    EXPECT_EQ(m_original_thread_count, Eigen::nbThreads());
+}
+
+TEST_F(EigenThreadCountTest, NestedGuardsRestoreEachPreviousCount)
+{
+    const int outer_thread_count{ AlternateThreadCount() };
+    if (!SupportsThreadCount(outer_thread_count))
+    {
+        GTEST_SKIP() << "Eigen thread-count changes are unavailable in this build";
+    }
+
+    {
+        const ScopedEigenThreadCount outer_guard{ outer_thread_count };
+        EXPECT_EQ(outer_thread_count, Eigen::nbThreads());
+        {
+            const ScopedEigenThreadCount inner_guard{ m_original_thread_count };
+            EXPECT_EQ(m_original_thread_count, Eigen::nbThreads());
+        }
+        EXPECT_EQ(outer_thread_count, Eigen::nbThreads());
+    }
+
+    EXPECT_EQ(m_original_thread_count, Eigen::nbThreads());
+}
 
 TEST(EigenHelperTest, ToEigenVectorConvertsFloatArray3D)
 {
