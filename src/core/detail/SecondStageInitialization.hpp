@@ -18,8 +18,9 @@
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 #include "core/detail/LocalFittingGroupMedian.hpp"
+#include "core/detail/FitState.hpp"
 #include "core/detail/SecondStageContext.hpp"
-#include "core/detail/TransformedChange.hpp"
+#include "core/detail/TransformedGaussianModel.hpp"
 #include "data/detail/AtomClassifier.hpp"
 
 namespace rhbm_gem::core::detail {

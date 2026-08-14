@@ -18,93 +18,26 @@
 #include <Eigen/SparseCholesky>
 
 #include <rhbm_gem/utils/algorithm/RobustLoss.hpp>
+#include <rhbm_gem/utils/algorithm/Convergence.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
 #include "core/detail/ResidualEvaluation.hpp"
+#include "core/detail/JointFittingSolverPolicy.hpp"
+#include "core/detail/JointOffsetSolveStatus.hpp"
 #include "core/detail/SecondStageContext.hpp"
 #include "core/detail/ReusableWeightedRidgeSolver.hpp"
 
 namespace rhbm_gem::core::detail {
 
 constexpr int kRobustLossMaximumIterations{ 50 };
-constexpr double kRobustLossCutoffMultiplier{ 1.345 };
 constexpr double kJointOffsetResidualScaleMin{ 1.0e-12 };
-constexpr double kJointOffsetRidgeRatio{ 1.0e-3 };
 constexpr double kJointOffsetCollinearityOverlapThreshold{ 0.98 };
-constexpr double kCollinearJointOffsetRidgeMultiplier{ 10.0 };
-constexpr double kJointOffsetConditioningPivotRatioThreshold{ 1.0e-8 };
 constexpr double kJointOffsetIrlsScaleFloor{ 1.0e-2 };
 constexpr double kJointOffsetIrlsNormalizedChangeTolerance{ 1.0e-6 };
 constexpr double kJointOffsetIrlsObjectiveRelativeTolerance{ 1.0e-10 };
-
-enum class JointOffsetSolveStatus
-{
-    Converged,
-    SystemBuildFailed,
-    EmptySystem,
-    InitialSolveFailed,
-    IrlsSolveFailed,
-    IrlsObjectiveDeteriorated,
-    IrlsMaximumIterationsReached
-};
-
-inline bool IsJointOffsetSolveProgressEligible(JointOffsetSolveStatus status)
-{
-    switch (status)
-    {
-    case JointOffsetSolveStatus::Converged:
-    case JointOffsetSolveStatus::IrlsObjectiveDeteriorated:
-    case JointOffsetSolveStatus::IrlsMaximumIterationsReached:
-        return true;
-    case JointOffsetSolveStatus::SystemBuildFailed:
-    case JointOffsetSolveStatus::EmptySystem:
-    case JointOffsetSolveStatus::InitialSolveFailed:
-    case JointOffsetSolveStatus::IrlsSolveFailed:
-        return false;
-    }
-    throw std::logic_error("Joint offset solve status is invalid.");
-}
-
-inline bool IsJointOffsetSolveStationarityEligible(JointOffsetSolveStatus status)
-{
-    return status == JointOffsetSolveStatus::Converged;
-}
-
-inline bool IsJointOffsetSolveHardFailure(JointOffsetSolveStatus status)
-{
-    return !IsJointOffsetSolveProgressEligible(status);
-}
-
-inline const char * GetJointOffsetSolveStatusText(JointOffsetSolveStatus status)
-{
-    switch (status)
-    {
-    case JointOffsetSolveStatus::Converged:
-        return "converged";
-    case JointOffsetSolveStatus::SystemBuildFailed:
-        return "system-build-failed";
-    case JointOffsetSolveStatus::EmptySystem:
-        return "empty-system";
-    case JointOffsetSolveStatus::InitialSolveFailed:
-        return "initial-solve-failed";
-    case JointOffsetSolveStatus::IrlsSolveFailed:
-        return "irls-solve-failed";
-    case JointOffsetSolveStatus::IrlsObjectiveDeteriorated:
-        return "irls-objective-deteriorated";
-    case JointOffsetSolveStatus::IrlsMaximumIterationsReached:
-        return "irls-maximum-iterations-reached";
-    }
-    throw std::logic_error("Joint offset solve status is invalid.");
-}
-
-struct JointOffsetConditioning
-{
-    bool guard_required{ false };
-    double pivot_ratio{ 0.0 };
-};
 
 struct JointOffsetParameterization
 {
@@ -227,66 +160,6 @@ BuildJointOffsetParameterization(
         std::optional<JointOffsetParameterization>{ std::move(parameterization) } : std::nullopt;
 }
 
-inline JointOffsetConditioning EvaluateJointOffsetConditioning(const Eigen::SparseMatrix<double> & design_matrix)
-{
-    if (design_matrix.cols() == 0)
-    {
-        return JointOffsetConditioning{ true, 0.0 };
-    }
-
-    Eigen::SparseMatrix<double> normalized_design{ design_matrix };
-    for (Eigen::Index column = 0; column < normalized_design.outerSize(); column++)
-    {
-        double square_sum{ 0.0 };
-        for (Eigen::SparseMatrix<double>::InnerIterator entry(normalized_design, column); entry; ++entry)
-        {
-            square_sum += entry.value() * entry.value();
-        }
-        if (!std::isfinite(square_sum) ||
-            square_sum <= std::numeric_limits<double>::epsilon())
-        {
-            return JointOffsetConditioning{ true, 0.0 };
-        }
-        const auto scale{ std::sqrt(square_sum) };
-        for (Eigen::SparseMatrix<double>::InnerIterator entry(normalized_design, column); entry; ++entry)
-        {
-            entry.valueRef() /= scale;
-        }
-    }
-
-    Eigen::SparseMatrix<double> normalized_gram{ normalized_design.transpose() * normalized_design };
-    normalized_gram.makeCompressed();
-    Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> solver;
-    solver.compute(normalized_gram);
-    if (solver.info() != Eigen::Success)
-    {
-        return JointOffsetConditioning{ true, 0.0 };
-    }
-
-    const auto diagonal{ solver.vectorD().eval() };
-    if (diagonal.size() == 0 || !diagonal.allFinite())
-    {
-        return JointOffsetConditioning{ true, 0.0 };
-    }
-    if (diagonal.minCoeff() <= 0.0)
-    {
-        return JointOffsetConditioning{ true, 0.0 };
-    }
-    const auto maximum_pivot{ diagonal.maxCoeff() };
-    const auto minimum_pivot{ diagonal.minCoeff() };
-    if (!std::isfinite(maximum_pivot) || maximum_pivot <= std::numeric_limits<double>::epsilon())
-    {
-        return JointOffsetConditioning{ true, 0.0 };
-    }
-
-    const auto pivot_ratio{ minimum_pivot / maximum_pivot };
-    return JointOffsetConditioning{
-        !std::isfinite(pivot_ratio) ||
-            pivot_ratio <= kJointOffsetConditioningPivotRatioThreshold,
-        std::isfinite(pivot_ratio) ? pivot_ratio : 0.0
-    };
-}
-
 struct JointOffsetSolveResult
 {
     JointOffsetSolveStatus status{ JointOffsetSolveStatus::SystemBuildFailed };
@@ -298,19 +171,6 @@ struct JointOffsetBuildResult
     algorithm::WeightedRidgeSystem system{};
     JointOffsetParameterization parameterization{};
 };
-
-inline double CalculateJointOffsetRidgeDiagonal(double column_square_sum, double multiplier)
-{
-    if (!std::isfinite(multiplier) || multiplier <= 0.0)
-    {
-        throw std::invalid_argument(
-            "Local fitting ridge multiplier must be positive and finite.");
-    }
-    const auto base_ridge{ column_square_sum > std::numeric_limits<double>::epsilon() ?
-        kJointOffsetRidgeRatio * column_square_sum : 1.0
-    };
-    return multiplier * base_ridge;
-}
 
 inline JointOffsetBuildResult BuildJointOffsetSystem(
     const SecondStageContext & context,

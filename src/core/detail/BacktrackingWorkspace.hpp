@@ -12,6 +12,7 @@
 
 #include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/FitStateView.hpp"
+#include "core/detail/PolishProvenance.hpp"
 #include "core/detail/TransformedChange.hpp"
 #include "core/detail/SecondStageContext.hpp"
 
@@ -158,9 +159,7 @@ struct BacktrackingWorkspace
 
     FitState MaterializeCandidateState() const
     {
-        auto state{ *m_previous_state };
-        m_candidate_patch.ApplyTo(state);
-        return state;
+        return FitStateView{ *m_previous_state, m_candidate_patch }.Materialize();
     }
 
     PolishProvenance BuildCandidatePolishProvenance(

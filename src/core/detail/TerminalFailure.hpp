@@ -7,9 +7,11 @@
 #include <variant>
 #include <vector>
 
-#include "core/detail/JointOffset.hpp"
 #include "core/detail/ClusterHealth.hpp"
-#include "core/detail/FitStateView.hpp"
+#include "core/detail/FitState.hpp"
+#include "core/detail/JointOffsetSolveStatus.hpp"
+#include "core/detail/PolishProvenance.hpp"
+#include "core/detail/SecondStageIdentifiers.hpp"
 #include "core/detail/TransformedChange.hpp"
 #include "core/detail/SuspiciousUpdate.hpp"
 

@@ -14,7 +14,7 @@
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
-#include "core/detail/TransformedChange.hpp"
+#include "core/detail/TransformedGaussianModel.hpp"
 
 namespace rhbm_gem::core::detail {
 

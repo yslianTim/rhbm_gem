@@ -21,12 +21,14 @@
 #include "core/detail/CandidateEvaluationOverlay.hpp"
 #include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/ClusterHealth.hpp"
+#include "core/detail/ClusterSolverWorkspace.hpp"
 #include "core/detail/Objective.hpp"
 #include "core/detail/PerformanceCounters.hpp"
 #include "core/detail/FitStateView.hpp"
+#include "core/detail/PolishProvenance.hpp"
+#include "core/detail/SecondStageIdentifiers.hpp"
 #include "core/detail/TransformedChange.hpp"
 #include "core/detail/TrustRegion.hpp"
-#include "core/detail/ReusableWeightedRidgeSolver.hpp"
 #include "core/detail/SecondStageContext.hpp"
 #include "core/detail/SuspiciousUpdate.hpp"
 
@@ -333,7 +335,7 @@ inline ClusterCandidateResult SelectClusterCandidate(
     const SecondStageContext & context,
     const ResidualBaseline & residual_baseline,
     const ClusterKey & key,
-    const std::vector<ObjectiveSampleRef> & objective_sample_ref_list,
+    const std::vector<SampleRef> & objective_sample_ref_list,
     bool is_polish_eligible,
     bool is_unchanged_state_exhausted,
     const FitState & previous_state,
@@ -649,7 +651,7 @@ inline CandidateSelection SelectClusterCandidates(
     PerformanceCounters & performance_counters)
 {
     std::vector<const ClusterKey *> key_list;
-    std::vector<const std::vector<ObjectiveSampleRef> *> sample_ref_list_by_position;
+    std::vector<const std::vector<SampleRef> *> sample_ref_list_by_position;
     std::vector<ClusterSolverWorkspace *> solver_workspace_list;
     std::vector<const ClusterObjectiveState *> objective_state_list;
     std::vector<char> polish_eligible_list;

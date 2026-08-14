@@ -10,6 +10,7 @@
 #include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/ResidualEvaluation.hpp"
 #include "core/detail/FitStateView.hpp"
+#include "core/detail/SecondStageIdentifiers.hpp"
 #include "core/detail/SecondStageContext.hpp"
 
 namespace rhbm_gem::core::detail {
@@ -54,7 +55,7 @@ public:
         }
     }
 
-    std::optional<ResidualSample> Evaluate(const ObjectiveSampleRef & sample_ref) const
+    std::optional<ResidualSample> Evaluate(const SampleRef & sample_ref) const
     {
         const auto & baseline{
             m_baseline.sample_list.at(sample_ref.atom_index).at(sample_ref.sample_index)

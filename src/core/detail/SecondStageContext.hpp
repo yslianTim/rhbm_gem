@@ -8,7 +8,7 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 
-#include "core/detail/CouplingGraph.hpp"
+#include "core/detail/SecondStageIdentifiers.hpp"
 
 namespace rhbm_gem::core::detail {
 
@@ -32,7 +32,7 @@ struct AtomContext
     const AtomObject * atom{ nullptr };
     GroupKey group_key{};
     std::size_t group_id{ 0 };
-    GraphResidueKey residue_key{};
+    ResidueKey residue_key{};
     LocalPotentialSampleList raw_sampling_entries{};
     LocalGaussianResult initial_result{};
     std::optional<GaussianModel3DWithUncertainty> group_prior{};

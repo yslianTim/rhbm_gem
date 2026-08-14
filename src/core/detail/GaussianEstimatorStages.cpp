@@ -1,14 +1,18 @@
 #include <cstddef>
 
 #include "core/detail/GaussianEstimatorStages.hpp"
+#include "core/detail/FitState.hpp"
+#include "core/detail/PolishProvenance.hpp"
 #include "core/detail/ResidualEvaluation.hpp"
+#include "core/detail/SecondStageIdentifiers.hpp"
 #include "core/detail/Objective.hpp"
 #include "core/detail/TerminalFailure.hpp"
 #include "core/detail/IterationProcess.hpp"
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/PerformanceCounters.hpp"
 #include "core/detail/SecondStageInitialization.hpp"
-#include "core/detail/TransformedChange.hpp"
+#include "core/detail/TransformedGaussianEvaluation.hpp"
+#include "core/detail/TransformedGaussianModel.hpp"
 #include "core/detail/SecondStageContext.hpp"
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -41,12 +45,10 @@ namespace rhbm_gem::core {
 namespace {
 
 using detail::BuildSecondStageModelSnapshot;
-using detail::ObjectiveSampleRef;
+using detail::SampleRef;
 using detail::PerformanceCounters;
 using detail::PolishProvenance;
-using detail::PreObjectiveFailureReason;
 using detail::FitState;
-using detail::AtomContext;
 using detail::SecondStageContext;
 using detail::SecondStageInitialStateBuildResult;
 
@@ -66,8 +68,7 @@ using detail::AuditedState;
 using detail::BestAuditState;
 using detail::TerminalSummary;
 using detail::AppendTerminalSummary;
-using detail::RejectedClusterDiagnostic;
-using detail::PolishProgress;
+using detail::UsesPolish;
 using detail::kFitRangeWeight;
 using detail::kTailValidationWeight;
 using detail::kOffsetPlausibilityPenaltyWeight;
@@ -129,17 +130,6 @@ std::string_view GetFinalStateSourceText(FinalStateSource source)
         return "unavailable";
     }
     return "unavailable";
-}
-
-bool UsesPolish(const PolishProvenance & provenance)
-{
-    return std::any_of(
-        provenance.begin(),
-        provenance.end(),
-        [](char is_polished)
-        {
-            return is_polished != 0;
-        });
 }
 
 struct OffsetStat
@@ -268,14 +258,14 @@ detail::GraphTopology BuildGraphTopology(
                 }
             }
             builder.AddSample(
-                ObjectiveSampleRef{ atom_index, sample_index },
+                SampleRef{ atom_index, sample_index },
                 participant_list);
             completed_work++;
             update_progress();
         }
     }
 
-    std::vector<detail::GraphResidueKey> residue_key_by_atom_index;
+    std::vector<detail::ResidueKey> residue_key_by_atom_index;
     residue_key_by_atom_index.reserve(context.size());
     for (const auto & atom_context : context)
     {

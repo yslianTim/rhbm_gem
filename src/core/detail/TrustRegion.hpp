@@ -11,15 +11,14 @@
 
 #include <Eigen/Dense>
 
-#include "core/detail/TransformedChange.hpp"
+#include "core/detail/SecondStageIdentifiers.hpp"
+#include "core/detail/TransformedGaussianModel.hpp"
 
 namespace rhbm_gem::core::detail {
 
 constexpr std::array<double, kTransformedChangeSize> kTrustRegionParameterScale{ 0.50, 0.35, 1.0 };
 constexpr double kTrustRegionBoundaryTolerance{ 1.0e-12 };
 constexpr double kTrustRegionGrowthBoundaryRatio{ 0.8 };
-
-using TrustRegionClusterKey = std::vector<std::size_t>;
 
 struct TrustRegionOptions
 {
@@ -32,14 +31,14 @@ struct TrustRegionOptions
 
 struct TrustRegionRadiusUpdate
 {
-    std::vector<TrustRegionClusterKey> changed_key_list{};
-    std::vector<TrustRegionClusterKey> saturated_key_list{};
+    std::vector<ClusterKey> changed_key_list{};
+    std::vector<ClusterKey> saturated_key_list{};
 };
 
 struct RejectedClusterPartition
 {
-    std::vector<TrustRegionClusterKey> exhausted_key_list{};
-    std::vector<TrustRegionClusterKey> retryable_key_list{};
+    std::vector<ClusterKey> exhausted_key_list{};
+    std::vector<ClusterKey> retryable_key_list{};
 };
 
 struct TrustRegionIterationUpdate
@@ -82,8 +81,8 @@ inline bool IsTrustRegionGrowthEligible(
 }
 
 inline RejectedClusterPartition PartitionRejectedClusters(
-    const std::vector<TrustRegionClusterKey> & rejected_key_list,
-    const std::vector<TrustRegionClusterKey> & exhausted_key_list)
+    const std::vector<ClusterKey> & rejected_key_list,
+    const std::vector<ClusterKey> & exhausted_key_list)
 {
     RejectedClusterPartition partition;
     for (const auto & key : rejected_key_list)
@@ -130,7 +129,7 @@ inline AllRejectedResolution ResolveAllRejected(
         std::all_of(
             partition.retryable_key_list.begin(),
             partition.retryable_key_list.end(),
-            [&](const TrustRegionClusterKey & key)
+            [&](const ClusterKey & key)
             {
                 return std::find(
                     radius_update.saturated_key_list.begin(),
@@ -151,7 +150,7 @@ class TrustRegionStateSet
 {
 private:
     TrustRegionOptions m_options{};
-    std::map<TrustRegionClusterKey, double> m_radius_by_key{};
+    std::map<ClusterKey, double> m_radius_by_key{};
 
     static void ValidateOptions(const TrustRegionOptions & options)
     {
@@ -178,9 +177,9 @@ public:
         ValidateOptions(m_options);
     }
 
-    void Reconcile(const std::vector<TrustRegionClusterKey> & key_list)
+    void Reconcile(const std::vector<ClusterKey> & key_list)
     {
-        std::map<TrustRegionClusterKey, double> next_radius_by_key;
+        std::map<ClusterKey, double> next_radius_by_key;
         for (const auto & key : key_list)
         {
             const auto iter{ m_radius_by_key.find(key) };
@@ -190,7 +189,7 @@ public:
         m_radius_by_key = std::move(next_radius_by_key);
     }
 
-    double GetRadius(const TrustRegionClusterKey & key) const
+    double GetRadius(const ClusterKey & key) const
     {
         const auto iter{ m_radius_by_key.find(key) };
         if (iter == m_radius_by_key.end())
@@ -200,7 +199,7 @@ public:
         return iter->second;
     }
 
-    TrustRegionRadiusUpdate Shrink(const std::vector<TrustRegionClusterKey> & key_list)
+    TrustRegionRadiusUpdate Shrink(const std::vector<ClusterKey> & key_list)
     {
         TrustRegionRadiusUpdate update;
         for (const auto & key : key_list)
@@ -221,7 +220,7 @@ public:
         return update;
     }
 
-    void Grow(const std::vector<TrustRegionClusterKey> & key_list)
+    void Grow(const std::vector<ClusterKey> & key_list)
     {
         for (const auto & key : key_list)
         {
@@ -235,9 +234,9 @@ public:
     }
 
     TrustRegionIterationUpdate UpdateAfterIteration(
-        const std::vector<TrustRegionClusterKey> & grow_key_list,
-        const std::vector<TrustRegionClusterKey> & rejected_key_list,
-        const std::vector<TrustRegionClusterKey> & backtracking_exhausted_key_list)
+        const std::vector<ClusterKey> & grow_key_list,
+        const std::vector<ClusterKey> & rejected_key_list,
+        const std::vector<ClusterKey> & backtracking_exhausted_key_list)
     {
         Grow(grow_key_list);
         auto rejected_cluster_partition{

@@ -11,12 +11,12 @@
 
 #include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/FitStateView.hpp"
+#include "core/detail/SecondStageIdentifiers.hpp"
 #include "core/detail/SecondStageContext.hpp"
 
 namespace rhbm_gem::core::detail {
 
 using SecondStageAdjustedResponseCache = std::vector<std::vector<double>>;
-using ObjectiveSampleRef = GraphSampleId;
 
 struct FittedGaussianSnapshot
 {
@@ -287,7 +287,7 @@ template <typename State>
 inline std::optional<ResidualSample> EvaluateResidualSample(
     const SecondStageContext & context,
     const State & state,
-    const ObjectiveSampleRef & sample_ref,
+    const SampleRef & sample_ref,
     const SecondStageModelSnapshot & model_snapshot)
 {
     const auto & atom_context{ context.at(sample_ref.atom_index) };

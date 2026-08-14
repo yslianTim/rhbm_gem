@@ -15,22 +15,15 @@
 
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
-namespace rhbm_gem::core::detail {
+#include "core/detail/SecondStageIdentifiers.hpp"
 
-using GraphClusterKey = std::vector<std::size_t>;
-using GraphResidueKey = std::pair<std::string, int>;
+namespace rhbm_gem::core::detail {
 
 struct GraphWeightedEdge
 {
     std::size_t left_atom_index{ 0 };
     std::size_t right_atom_index{ 0 };
     double weight{ 0.0 };
-};
-
-struct GraphSampleId
-{
-    std::size_t atom_index{ 0 };
-    std::size_t sample_index{ 0 };
 };
 
 struct GraphParticipant
@@ -41,7 +34,7 @@ struct GraphParticipant
 
 struct GraphSampleDependency
 {
-    GraphSampleId sample_id{};
+    SampleRef sample_id{};
     std::vector<std::size_t> contributor_atom_index_list{};
 };
 
@@ -113,7 +106,7 @@ struct GraphTopology
 {
     std::vector<std::vector<std::size_t>> adjacency_list{};
     std::vector<GraphWeightedEdge> retained_edge_list{};
-    std::vector<GraphResidueKey> residue_key_by_atom_index{};
+    std::vector<ResidueKey> residue_key_by_atom_index{};
     std::vector<GraphSampleDependency> sample_dependency_list{};
     CouplingGraphSummary summary{};
     struct ResidueCutoffSummary
@@ -137,13 +130,13 @@ struct CouplingGraphOptions
 
 struct CouplingGraphPartition
 {
-    std::map<GraphClusterKey, std::vector<GraphSampleId>> sample_id_list_by_key{};
+    std::map<ClusterKey, std::vector<SampleRef>> sample_id_list_by_key{};
     std::size_t boundary_sample_count{ 0 };
 };
 
 inline GraphTopology ApplyGraphResidueCutoff(
     GraphTopology topology,
-    std::vector<GraphResidueKey> residue_key_by_atom_index,
+    std::vector<ResidueKey> residue_key_by_atom_index,
     std::size_t maximum_residue_count);
 
 inline void UpdateGraphComponentSummary(GraphTopology & topology);
@@ -332,7 +325,7 @@ class CouplingGraphBuilder
     }
 
     void AddSampleData(
-        GraphSampleId sample_id,
+        SampleRef sample_id,
         const std::vector<GraphParticipant> & participant_list)
     {
         bool sample_has_invalid_jacobian{ false };
@@ -398,7 +391,7 @@ public:
     }
 
     void AddSample(
-        GraphSampleId sample_id,
+        SampleRef sample_id,
         std::vector<GraphParticipant> & participant_list)
     {
         NormalizeParticipantList(participant_list);
@@ -406,7 +399,7 @@ public:
     }
 
     void AddSample(
-        GraphSampleId sample_id,
+        SampleRef sample_id,
         std::vector<GraphParticipant> && participant_list)
     {
         NormalizeParticipantList(participant_list);
@@ -414,7 +407,7 @@ public:
     }
 
     void AddSortedSample(
-        GraphSampleId sample_id,
+        SampleRef sample_id,
         const std::vector<GraphParticipant> & participant_list)
     {
         auto normalized_list{ participant_list };
@@ -504,7 +497,7 @@ private:
 
 public:
     GraphTopology BuildTopology(
-        std::vector<GraphResidueKey> residue_key_by_atom_index,
+        std::vector<ResidueKey> residue_key_by_atom_index,
         const CouplingGraphOptions & options = {})
     {
         ValidateBuildOptions(options);
@@ -531,7 +524,7 @@ public:
 
 inline GraphTopology ApplyGraphResidueCutoff(
     GraphTopology topology,
-    std::vector<GraphResidueKey> residue_key_by_atom_index,
+    std::vector<ResidueKey> residue_key_by_atom_index,
     std::size_t maximum_residue_count)
 {
     const auto atom_count{ topology.adjacency_list.size() };
@@ -546,7 +539,7 @@ inline GraphTopology ApplyGraphResidueCutoff(
             "Local fitting coupling maximum residue count must be positive.");
     }
 
-    std::map<GraphResidueKey, std::size_t> residue_index_by_key;
+    std::map<ResidueKey, std::size_t> residue_index_by_key;
     for (const auto & residue_key : residue_key_by_atom_index)
     {
         residue_index_by_key.emplace(residue_key, 0);
@@ -688,7 +681,7 @@ inline void UpdateGraphComponentSummary(GraphTopology & topology)
             throw std::invalid_argument(
                 "Local fitting coupling residue key count must match atom count.");
         }
-        std::map<GraphResidueKey, std::size_t> first_atom_index_by_residue_key;
+        std::map<ResidueKey, std::size_t> first_atom_index_by_residue_key;
         for (std::size_t atom_index = 0; atom_index < atom_count; atom_index++)
         {
             const auto [iter, inserted]{
@@ -762,7 +755,7 @@ inline CouplingGraphPartition BuildGraphPartition(
             throw std::invalid_argument(
                 "Local fitting coupling residue key count must match atom count.");
         }
-        std::map<GraphResidueKey, std::size_t> first_position_by_residue_key;
+        std::map<ResidueKey, std::size_t> first_position_by_residue_key;
         for (std::size_t position = 0; position < active_index_list.size(); position++)
         {
             const auto atom_index{ active_index_list.at(position) };
@@ -796,7 +789,7 @@ inline CouplingGraphPartition BuildGraphPartition(
         }
     }
 
-    std::map<std::size_t, GraphClusterKey> key_by_root;
+    std::map<std::size_t, ClusterKey> key_by_root;
     for (std::size_t position = 0; position < active_index_list.size(); position++)
     {
         key_by_root[component_set.Find(position)].emplace_back(active_index_list.at(position));
@@ -807,7 +800,7 @@ inline CouplingGraphPartition BuildGraphPartition(
         std::sort(key.begin(), key.end());
     }
 
-    std::map<std::size_t, std::vector<GraphSampleId>> sample_id_list_by_root;
+    std::map<std::size_t, std::vector<SampleRef>> sample_id_list_by_root;
     CouplingGraphPartition partition;
     for (const auto & dependency : topology.sample_dependency_list)
     {
@@ -839,11 +832,11 @@ inline CouplingGraphPartition BuildGraphPartition(
     return partition;
 }
 
-inline std::vector<GraphClusterKey>
+inline std::vector<ClusterKey>
 BuildGraphClusterKeyList(
     const CouplingGraphPartition & partition)
 {
-    std::vector<GraphClusterKey> cluster_key_list;
+    std::vector<ClusterKey> cluster_key_list;
     cluster_key_list.reserve(partition.sample_id_list_by_key.size());
     for (const auto & [key, sample_id_list] : partition.sample_id_list_by_key)
     {
@@ -853,12 +846,12 @@ BuildGraphClusterKeyList(
     return cluster_key_list;
 }
 
-inline std::vector<GraphSampleId>
+inline std::vector<SampleRef>
 BuildGraphAffectedSampleUnion(
     const CouplingGraphPartition & partition,
-    const std::vector<GraphClusterKey> & key_list)
+    const std::vector<ClusterKey> & key_list)
 {
-    std::vector<GraphSampleId> sample_id_list;
+    std::vector<SampleRef> sample_id_list;
     for (const auto & key : key_list)
     {
         const auto iter{ partition.sample_id_list_by_key.find(key) };

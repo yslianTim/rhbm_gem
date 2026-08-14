@@ -1,15 +1,12 @@
 #pragma once
 
 #include <cstddef>
-#include <map>
 #include <utility>
 #include <vector>
 
 #include <Eigen/Sparse>
 
 #include <rhbm_gem/utils/algorithm/WeightedRidgeSolver.hpp>
-
-#include "core/detail/FitStateView.hpp"
 
 namespace rhbm_gem::core::detail {
 
@@ -59,24 +56,5 @@ private:
         return pattern;
     }
 };
-
-struct ClusterSolverWorkspace
-{
-    ReusableWeightedRidgeSolver joint_offset{};
-    ReusableWeightedRidgeSolver joint_polish{};
-};
-
-using ClusterSolverWorkspaceMap = std::map<ClusterKey, ClusterSolverWorkspace>;
-
-inline void ResetClusterSolverWorkspace(
-    const std::vector<ClusterKey> & cluster_key_list,
-    ClusterSolverWorkspaceMap & workspace_by_key)
-{
-    workspace_by_key.clear();
-    for (const auto & key : cluster_key_list)
-    {
-        workspace_by_key.try_emplace(key);
-    }
-}
 
 } // namespace rhbm_gem::core::detail

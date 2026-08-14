@@ -4,25 +4,37 @@
 #include <cstddef>
 #include <iterator>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
-#include <rhbm_gem/core/GaussianEstimator.hpp>
+#include "core/detail/FitState.hpp"
+#include "core/detail/SecondStageIdentifiers.hpp"
 
 namespace rhbm_gem::core::detail {
-
-using FitState = std::vector<LocalGaussianResult>;
-using PolishProvenance = std::vector<char>;
-using ClusterKey = std::vector<std::size_t>;
-
-inline const GaussianModel3D & GetFitModel(const FitState & state, std::size_t atom_index)
-{
-    return state.at(atom_index).mdpde.GetModel();
-}
 
 struct FitStatePatch
 {
     ClusterKey atom_index_list{};
     std::vector<GaussianModel3DWithUncertainty> mdpde_list{};
+
+    static FitStatePatch FromState(
+        const FitState & state,
+        ClusterKey atom_index_list)
+    {
+        std::sort(atom_index_list.begin(), atom_index_list.end());
+        atom_index_list.erase(
+            std::unique(atom_index_list.begin(), atom_index_list.end()),
+            atom_index_list.end());
+
+        FitStatePatch patch;
+        patch.atom_index_list = std::move(atom_index_list);
+        patch.mdpde_list.reserve(patch.atom_index_list.size());
+        for (const auto atom_index : patch.atom_index_list)
+        {
+            patch.mdpde_list.emplace_back(state.at(atom_index).mdpde);
+        }
+        return patch;
+    }
 
     const GaussianModel3DWithUncertainty * Find(std::size_t atom_index) const
     {
@@ -90,6 +102,13 @@ public:
     {
         static const ClusterKey empty_atom_index_list;
         return m_patch == nullptr ? empty_atom_index_list : m_patch->atom_index_list;
+    }
+
+    FitState Materialize() const
+    {
+        auto state{ *m_base_state };
+        if (m_patch != nullptr) m_patch->ApplyTo(state);
+        return state;
     }
 
     std::size_t GetSize() const { return m_base_state->size(); }

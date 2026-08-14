@@ -8,7 +8,7 @@
 
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
-#include "core/detail/ReusableWeightedRidgeSolver.hpp"
+#include "core/detail/ClusterSolverWorkspace.hpp"
 #include "core/detail/SecondStageContext.hpp"
 
 namespace rhbm_gem::core::detail {

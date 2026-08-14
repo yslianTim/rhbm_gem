@@ -74,10 +74,10 @@ double Distance(
     return std::sqrt(dx * dx + dy * dy + dz * dz);
 }
 
-std::vector<coupling_detail::GraphResidueKey>
+std::vector<coupling_detail::ResidueKey>
 MakeUniqueResidueKeys(std::size_t count)
 {
-    std::vector<coupling_detail::GraphResidueKey> key_list;
+    std::vector<coupling_detail::ResidueKey> key_list;
     key_list.reserve(count);
     for (std::size_t index = 0; index < count; index++)
     {
@@ -270,7 +270,7 @@ struct JointPolishFixture
 {
     polish_detail::SecondStageContext context{};
     polish_detail::FitState state{};
-    std::vector<polish_detail::ObjectiveSampleRef>
+    std::vector<polish_detail::SampleRef>
         sample_ref_list{};
 };
 
@@ -316,7 +316,7 @@ JointPolishFixture BuildJointPolishFixture(
                     SamplingPoint{ distance }
                 });
             fixture.sample_ref_list.emplace_back(
-                polish_detail::ObjectiveSampleRef{
+                polish_detail::SampleRef{
                     atom_index,
                     atom_context.raw_sampling_entries.size() - 1
                 });
@@ -1700,10 +1700,10 @@ TEST(EstimatorSecondStageDefenseTest, ObjectiveClusterStateLifecycleReconcilesPa
     coupling_detail::CouplingGraphPartition partition;
     partition.sample_id_list_by_key.emplace(
         existing_key,
-        std::vector<coupling_detail::GraphSampleId>{ { 0, 0 } });
+        std::vector<coupling_detail::SampleRef>{ { 0, 0 } });
     partition.sample_id_list_by_key.emplace(
         new_key,
-        std::vector<coupling_detail::GraphSampleId>{ { 1, 0 } });
+        std::vector<coupling_detail::SampleRef>{ { 1, 0 } });
 
     const audit_detail::ObjectiveBreakdown previous_breakdown{
         1.0, 2.0, 0.0, 0.0, 3.0
@@ -1843,7 +1843,7 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionPolishHonorsOuterStepBoundary)
 TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndSaturates)
 {
     trust_detail::TrustRegionStateSet state;
-    const trust_detail::TrustRegionClusterKey key{ 0 };
+    const trust_detail::ClusterKey key{ 0 };
     state.Reconcile({ key });
     EXPECT_DOUBLE_EQ(state.GetRadius(key), 1.0);
 
@@ -1852,7 +1852,7 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndS
         const auto update{ state.Shrink({ key }) };
         EXPECT_EQ(
             update.changed_key_list,
-            std::vector<trust_detail::TrustRegionClusterKey>{ key });
+            std::vector<trust_detail::ClusterKey>{ key });
         EXPECT_TRUE(update.saturated_key_list.empty());
         EXPECT_DOUBLE_EQ(state.GetRadius(key), expected);
     }
@@ -1860,12 +1860,12 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndS
     EXPECT_TRUE(saturated.changed_key_list.empty());
     EXPECT_EQ(
         saturated.saturated_key_list,
-        std::vector<trust_detail::TrustRegionClusterKey>{ key });
+        std::vector<trust_detail::ClusterKey>{ key });
 
     state.Grow({ key });
     EXPECT_DOUBLE_EQ(state.GetRadius(key), 0.125);
 
-    const trust_detail::TrustRegionClusterKey replacement_key{ 1 };
+    const trust_detail::ClusterKey replacement_key{ 1 };
     state.Reconcile({ replacement_key });
     EXPECT_THROW(state.GetRadius(key), std::invalid_argument);
     EXPECT_DOUBLE_EQ(state.GetRadius(replacement_key), 1.0);
@@ -1873,7 +1873,7 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndS
 
 TEST(EstimatorSecondStageDefenseTest, ExhaustedRejectionsAreExcludedFromRadiusShrink)
 {
-    using Key = trust_detail::TrustRegionClusterKey;
+    using Key = trust_detail::ClusterKey;
     const Key exhausted_key{ 0 };
     const Key retryable_key{ 1 };
     const auto partition{
@@ -1907,7 +1907,7 @@ TEST(EstimatorSecondStageDefenseTest, ExhaustedRejectionsAreExcludedFromRadiusSh
 
 TEST(EstimatorSecondStageDefenseTest, AllRejectedResolutionDistinguishesTerminalCases)
 {
-    using Key = trust_detail::TrustRegionClusterKey;
+    using Key = trust_detail::ClusterKey;
     using Resolution = trust_detail::AllRejectedResolution;
     const Key first_key{ 0 };
     const Key second_key{ 1 };
@@ -3302,7 +3302,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingResidueCutoffKeepsResiduesWholeAnd
     topology.sample_dependency_list = {
         { { 0, 0 }, { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 } }
     };
-    std::vector<coupling_detail::GraphResidueKey> residue_key_list{
+    std::vector<coupling_detail::ResidueKey> residue_key_list{
         { "A", 1 },
         { "A", 1 },
         { "B", 1 }
@@ -3340,7 +3340,7 @@ TEST(EstimatorSecondStageDefenseTest, CouplingResidueCutoffKeepsResiduesWholeAnd
     for (const auto & [key, sample_id_list] : partition.sample_id_list_by_key)
     {
         EXPECT_EQ(sample_id_list.size(), 1U);
-        std::set<coupling_detail::GraphResidueKey> residue_key_set;
+        std::set<coupling_detail::ResidueKey> residue_key_set;
         for (const auto atom_index : key)
         {
             residue_key_set.emplace(residue_key_list.at(atom_index));
@@ -3763,7 +3763,7 @@ TEST(EstimatorSecondStageDefenseTest, ResidualBaselineAndOverlayAgreeForCandidat
         baseline,
         candidate_view
     };
-    const residual_detail::ObjectiveSampleRef sample_ref{ 0, 1 };
+    const residual_detail::SampleRef sample_ref{ 0, 1 };
     const auto direct{
         residual_detail::EvaluateResidualSample(
             context,

@@ -13,7 +13,7 @@
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
-#include "core/detail/TransformedChange.hpp"
+#include "core/detail/TransformedGaussianModel.hpp"
 
 namespace rhbm_gem::core::detail {
 
