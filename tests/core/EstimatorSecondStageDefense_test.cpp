@@ -4765,8 +4765,8 @@ TEST(
     }
     EXPECT_NE(out.find("stop_reason=no-valid-seed"), std::string::npos);
     EXPECT_NE(out.find("final_uses_polish=unavailable"), std::string::npos);
-    EXPECT_NE(
-        out.find("Second-stage best-iteration application: enabled."),
+    EXPECT_EQ(
+        out.find("Second-stage best-iteration application:"),
         std::string::npos);
     EXPECT_NE(
         out.find("final_state_source=unavailable"),

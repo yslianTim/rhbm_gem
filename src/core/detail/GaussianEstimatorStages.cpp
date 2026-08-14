@@ -50,7 +50,6 @@ using detail::AtomContext;
 using detail::SecondStageContext;
 using detail::SecondStageInitialStateBuildResult;
 
-constexpr bool kApplyBestIteration{ false };
 constexpr double kOffsetSummaryPercentile{ 0.99 };
 
 using detail::kMaximumIterations;
@@ -101,23 +100,20 @@ FinalStateSelection SelectFinalState(
     const PolishProvenance & latest_validated_polish_provenance,
     const std::optional<AuditedState> & audited_state)
 {
-    const auto source{ kApplyBestIteration && audited_state.has_value() ?
-        FinalStateSource::BestAudit : FinalStateSource::LatestValidated
-    };
-    if (source == FinalStateSource::BestAudit)
+    if (audited_state.has_value())
     {
         return FinalStateSelection{
             &audited_state->state,
             &audited_state->polish_provenance,
             &*audited_state,
-            source
+            FinalStateSource::BestAudit
         };
     }
     return FinalStateSelection{
         &latest_validated_state,
         &latest_validated_polish_provenance,
         nullptr,
-        source
+        FinalStateSource::LatestValidated
     };
 }
 
@@ -739,10 +735,6 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
     if (!options.quiet_mode)
     {
         Logger::Log(LogLevel::Info, "Run 2nd-stage local atom fitting with iterations...");
-        Logger::Log(LogLevel::Info,
-            kApplyBestIteration ?
-                "Second-stage best-iteration application: enabled." :
-                "Second-stage best-iteration application: disabled.");
     }
 
     auto initial_state_build_result{ BuildInitialFitState(context) };

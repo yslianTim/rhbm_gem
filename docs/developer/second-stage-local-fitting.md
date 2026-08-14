@@ -353,21 +353,20 @@ still changing.
 
 Convergence writes the current accepted state. Audit-patience, minimum-radius
 all-reject, backtracking-exhaustion, no-retry-progress, and iteration-limit
-stops consult the internal compile-time switch
-`kApplyLocalFittingBestIteration`. The switch defaults to `true`: when enabled,
-these stops write the best validated audit state when one is available; when
-disabled, they write the latest validated state. Best tracking, best-relative
-guards, audit patience, iteration history, and stop reasons are unchanged by
-the switch. Convergence and terminal isolation always write the latest
-validated state. Terminal reconciliation preserves validated progress from
-non-terminal clusters.
+stops always write the best validated audit state when one is available;
+otherwise they write the latest validated state. Best tracking, best-relative
+guards, audit patience, iteration history, and stop reasons are independent of
+which validated state is ultimately written. Convergence and terminal
+isolation always write the latest validated state. Terminal reconciliation
+preserves validated progress from non-terminal clusters.
 
 ## Final state application and group fitting
 
 After the stopping policy selects the final validated state, the stage builds
 one atom-level snapshot from the MDPDE model stored in each selected result.
-This is the actual best-audit or latest-validated state chosen for application,
-not the last raw proposal and not a group-median snapshot.
+This is the actual best-audit or latest-validated state chosen for application
+according to the stopping condition, not the last raw proposal and not a
+group-median snapshot.
 
 For every selected atom, the stage then rebuilds its persistent peeling
 sampling entries from the raw entries:
@@ -467,9 +466,8 @@ Second-stage local fitting summary: accepted_iterations=<N>, best_iteration=<ini
 `final_uses_polish` describes the state actually written to `ModelObject`. It is
 `yes` when at least one atom's most recent transformed-parameter update in that
 state came from an accepted polish, `no` when none did, and `unavailable` when
-the stage exits before a valid state can be formed. `best_iteration` continues
-to describe the audit result even when best-iteration application is disabled;
-`final_state_source` identifies the state actually written. A separate startup
-diagnostic reports whether best-iteration application is enabled.
+the stage exits before a valid state can be formed. `best_iteration` describes
+the audit result and `final_state_source` identifies the state actually
+written.
 
 `quiet_mode` suppresses the second-stage informational logging.
