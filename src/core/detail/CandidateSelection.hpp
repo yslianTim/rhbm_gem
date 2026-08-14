@@ -20,7 +20,7 @@
 #include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/ClusterHealth.hpp"
 #include "core/detail/Objective.hpp"
-#include "core/detail/LocalFittingPerformanceCounters.hpp"
+#include "core/detail/PerformanceCounters.hpp"
 #include "core/detail/FitStateView.hpp"
 #include "core/detail/TransformedChange.hpp"
 #include "core/detail/TrustRegion.hpp"
@@ -348,7 +348,7 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
     const ClusterObjectiveState & previous_objective_state,
     double trust_region_radius,
     ClusterSolverWorkspace & solver_workspace,
-    LocalFittingPerformanceCounters & performance_counters)
+    PerformanceCounters & performance_counters)
 {
     using candidate_internal::BuildSharedOffsetBaseProposal;
     using candidate_internal::ClusterCandidateResult;
@@ -667,7 +667,7 @@ inline CandidateSelection SelectClusterCandidates(
     const TrustRegionStateSet & trust_region_state,
     ClusterSolverWorkspaceMap & solver_workspace_by_key,
     int thread_size,
-    LocalFittingPerformanceCounters & performance_counters)
+    PerformanceCounters & performance_counters)
 {
     std::vector<const ClusterKey *> key_list;
     std::vector<const std::vector<ObjectiveSampleRef> *> sample_ref_list_by_position;
@@ -809,7 +809,7 @@ inline bool TryBacktrackCombinedCandidate(
     const ClusterObjectiveStateMap & committed_objective_state,
     ClusterObjectiveStateMap & working_objective_state,
     CandidateSelection & selection,
-    LocalFittingPerformanceCounters & performance_counters)
+    PerformanceCounters & performance_counters)
 {
     const auto endpoint_state{ selection.assembled_state };
     const auto endpoint_provenance{ selection.assembled_polish_provenance };
@@ -922,7 +922,7 @@ inline bool TryBacktrackCombinedCandidate(
     }
 
     auto candidate_state{ backtracking_workspace.MaterializeCandidateState() };
-    performance_counters.full_state_materialization_count++;
+    performance_counters.RecordFullStateMaterialization();
     selection.assembled_state = std::move(candidate_state);
     selection.assembled_polish_provenance =
         backtracking_workspace.BuildCandidatePolishProvenance(

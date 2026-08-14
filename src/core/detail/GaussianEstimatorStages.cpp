@@ -6,7 +6,7 @@
 #include "core/detail/TerminalFailure.hpp"
 #include "core/detail/IterationProcess.hpp"
 #include "core/detail/CouplingGraph.hpp"
-#include "core/detail/LocalFittingPerformanceCounters.hpp"
+#include "core/detail/PerformanceCounters.hpp"
 #include "core/detail/SecondStageInitialization.hpp"
 #include "core/detail/TransformedChange.hpp"
 #include "core/detail/SecondStageContext.hpp"
@@ -27,7 +27,6 @@
 #include <cmath>
 #include <iomanip>
 #include <limits>
-#include <numeric>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -43,7 +42,7 @@ namespace {
 
 using detail::BuildSecondStageModelSnapshot;
 using detail::ObjectiveSampleRef;
-using detail::LocalFittingPerformanceCounters;
+using detail::PerformanceCounters;
 using detail::PolishProvenance;
 using detail::PreObjectiveFailureReason;
 using detail::FitState;
@@ -817,24 +816,15 @@ bool RunSecondStageLocalFitting(
             std::move(initial_state),
             options)
     };
-    LocalFittingPerformanceCounters performance_counters{
+    PerformanceCounters performance_counters{
         options,
+        context,
         iteration_state.solver_workspace_by_key
     };
     if (iteration_state.best_audit_state.best.has_value())
     {
-        performance_counters.full_state_materialization_count++;
+        performance_counters.RecordFullStateMaterialization();
     }
-    const auto cached_sample_count{
-        std::accumulate(
-            context.begin(),
-            context.end(),
-            std::size_t{ 0 },
-            [](std::size_t count, const AtomContext & atom_context)
-            {
-                return count + atom_context.raw_sampling_entries.size();
-            })
-    };
     LogObjectiveDomain(iteration_state.objective_domain, options);
     const auto progress_column_widths{ BuildProgressColumnWidths(atom_size) };
     LogProgressHeader(options, progress_column_widths);
@@ -867,16 +857,12 @@ bool RunSecondStageLocalFitting(
                 graph_topology,
                 options,
                 iter + 1,
-                cached_sample_count,
                 iteration_state,
                 performance_counters)
         };
         if (iteration_result.objective_domain_changed)
         {
-            LogObjectiveDomain(
-                iteration_state.objective_domain,
-                options,
-                true);
+            LogObjectiveDomain(iteration_state.objective_domain, options, true);
         }
         LogAcceptedBacktrackingDiagnostics(
             options,

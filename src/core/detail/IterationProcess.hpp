@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <cstddef>
 #include <exception>
 #include <iomanip>
@@ -35,7 +34,7 @@
 #include "core/detail/SecondStageContext.hpp"
 #include "core/detail/TransformedChange.hpp"
 #include "core/detail/TrustRegion.hpp"
-#include "core/detail/LocalFittingPerformanceCounters.hpp"
+#include "core/detail/PerformanceCounters.hpp"
 
 namespace rhbm_gem::core::detail {
 
@@ -883,9 +882,8 @@ inline IterationResult RunIteration(
     const GraphTopology & graph_topology,
     const FitOptions & options,
     std::size_t attempt_number,
-    std::size_t cached_sample_count,
     IterationState & iteration_state,
-    LocalFittingPerformanceCounters & performance_counters)
+    PerformanceCounters & performance_counters)
 {
     const auto & previous_state{ iteration_state.previous_state };
     const auto & active_index_list{ iteration_state.active_index_list };
@@ -899,7 +897,7 @@ inline IterationResult RunIteration(
     const auto residual_baseline{
         BuildResidualBaseline(context, previous_state, previous_model_snapshot)
     };
-    performance_counters.gaussian_cache_miss_count += cached_sample_count;
+    performance_counters.RecordGaussianCacheMisses();
 
     const auto previous_objective_by_key{
         BuildObjectiveByKey(
@@ -921,7 +919,9 @@ inline IterationResult RunIteration(
             iteration_state.rollback_atom_mask)
     };
 
-    const auto iteration_phase_start{ std::chrono::steady_clock::now() };
+    const auto iteration_phase_start{
+        performance_counters.StartIterationPhase()
+    };
     auto raw_iteration_result{
         RunRawIteration(
             context,
@@ -931,10 +931,8 @@ inline IterationResult RunIteration(
             joint_offset_ridge_multiplier_list,
             iteration_state.solver_workspace_by_key)
     };
-    performance_counters.iteration_phase_milliseconds +=
-        std::chrono::duration<double, std::milli>(
-            std::chrono::steady_clock::now() - iteration_phase_start).count();
-    performance_counters.gaussian_cache_hit_count += cached_sample_count;
+    performance_counters.FinishIterationPhase(iteration_phase_start);
+    performance_counters.RecordGaussianCacheHits();
 
     const auto iteration_suspicious_atom_count{
         CountSuspiciousAtoms(raw_iteration_result.rollback_atom_mask)
@@ -959,7 +957,9 @@ inline IterationResult RunIteration(
     auto working_cluster_objective_state{
         iteration_state.cluster_objective_state
     };
-    const auto candidate_phase_start{ std::chrono::steady_clock::now() };
+    const auto candidate_phase_start{
+        performance_counters.StartCandidatePhase()
+    };
     auto selection{
         SelectClusterCandidates(
             context,
@@ -983,10 +983,8 @@ inline IterationResult RunIteration(
             options.thread_size,
             performance_counters)
     };
-    performance_counters.candidate_phase_milliseconds +=
-        std::chrono::duration<double, std::milli>(
-            std::chrono::steady_clock::now() - candidate_phase_start).count();
-    performance_counters.full_state_materialization_count++;
+    performance_counters.FinishCandidatePhase(candidate_phase_start);
+    performance_counters.RecordFullStateMaterialization();
 
     const auto combined_changed_key_list{ selection.accepted_key_list };
     const auto combined_check{
@@ -1104,6 +1102,7 @@ inline IterationResult RunIteration(
                 iteration_state.best_audit_state);
             iteration_state.active_index_list = std::move(remaining_active_index_list);
             iteration_state.cluster_key_list = BuildGraphClusterKeyList(remaining_graph_partition);
+            performance_counters.RecordSolverWorkspaceReset();
             ResetClusterSolverWorkspace(
                 iteration_state.cluster_key_list,
                 iteration_state.solver_workspace_by_key);
@@ -1204,7 +1203,7 @@ inline IterationResult RunIteration(
     };
     if (improved_best_audit)
     {
-        performance_counters.full_state_materialization_count++;
+        performance_counters.RecordFullStateMaterialization();
     }
     const auto changed_rejected_trust_radius{
         !result.diagnostics.rejected_key_list.empty() &&
