@@ -70,15 +70,13 @@ struct IterationState
     FitState previous_state{};
     PolishProvenance previous_polish_provenance{};
     SuspiciousUpdateMask rollback_atom_mask{};
-    std::vector<char> terminal_fallback_atom_mask{};
     std::vector<std::size_t> active_index_list{};
     CouplingGraphPartition graph_partition{};
     std::vector<ClusterKey> cluster_key_list{};
     ClusterSolverWorkspaceMap solver_workspace_by_key{};
     ObjectiveDomain objective_domain{};
     BestAuditState best_audit_state{};
-    PersistentTerminalFailureStateMap persistent_terminal_failure_state_by_key{};
-    LocalFittingTerminalSummary terminal_summary{};
+    LocalFittingTerminalFailureState terminal_failure_state{};
     ClusterObjectiveStateMap cluster_objective_state{};
     TrustRegionStateSet trust_region_state{};
     std::vector<ClusterKey> unchanged_state_exhausted_key_list{};
@@ -859,9 +857,10 @@ inline IterationState BuildIterationState(
     iteration_state.previous_state = std::move(initial_state);
     iteration_state.previous_polish_provenance.assign(context.size(), 0);
     iteration_state.rollback_atom_mask.assign(context.size(), 0);
-    iteration_state.terminal_fallback_atom_mask.assign(context.size(), 0);
+    iteration_state.terminal_failure_state =
+        LocalFittingTerminalFailureState(context.size());
     iteration_state.active_index_list =
-        BuildEligibleLocalFittingActiveIndexList(iteration_state.terminal_fallback_atom_mask);
+        iteration_state.terminal_failure_state.BuildEligibleActiveIndexList();
     iteration_state.graph_partition = BuildGraphPartition(
         graph_topology,
         iteration_state.active_index_list);
@@ -1058,36 +1057,21 @@ inline IterationResult RunIteration(
 
     auto assembled_state{ std::move(selection.assembled_state) };
     auto assembled_polish_provenance{ std::move(selection.assembled_polish_provenance) };
-    const auto terminal_failure_by_key{
-        UpdatePersistentTerminalFailureState(
+    const auto terminal_key_list{
+        iteration_state.terminal_failure_state.IsolatePersistentFailures(
             selection.accepted_key_list,
             raw_iteration_result.rollback_atom_mask,
             raw_iteration_result.health_by_key,
             assembled_state,
             previous_state,
-            iteration_state.persistent_terminal_failure_state_by_key)
-    };
-
-    const auto terminal_key_list{
-        AccumulateTerminalFailureSummary(
-            terminal_failure_by_key,
-            iteration_state.terminal_summary)
+            iteration_state.previous_polish_provenance,
+            assembled_polish_provenance)
     };
     bool objective_domain_changed{ false };
-    ApplyTerminalFallbackClusters(
-        terminal_key_list,
-        previous_state,
-        iteration_state.previous_polish_provenance,
-        iteration_state.terminal_fallback_atom_mask,
-        assembled_state,
-        assembled_polish_provenance);
     if (!terminal_key_list.empty())
     {
-        ClearSuspiciousUpdateMaskForClusters(
-            terminal_key_list,
-            raw_iteration_result.rollback_atom_mask);
         auto remaining_active_index_list{
-            BuildEligibleLocalFittingActiveIndexList(iteration_state.terminal_fallback_atom_mask)
+            iteration_state.terminal_failure_state.BuildEligibleActiveIndexList()
         };
         if (!remaining_active_index_list.empty())
         {
@@ -1169,8 +1153,8 @@ inline IterationResult RunIteration(
     result.progress = IterationProgress{
         attempt_number,
         iteration_state.accepted_iteration_count,
-        context.size() - iteration_state.terminal_summary.AtomCount(),
-        iteration_state.terminal_summary.AtomCount(),
+        context.size() - iteration_state.terminal_failure_state.AtomCount(),
+        iteration_state.terminal_failure_state.AtomCount(),
         result.diagnostics.accepted_key_list.size(),
         result.diagnostics.rejected_key_list.size(),
         result.diagnostics.polish_progress,

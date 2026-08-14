@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <map>
+#include <ostream>
 #include <variant>
 #include <vector>
 
@@ -40,7 +41,42 @@ struct LocalFittingTerminalSummary
     {
         return suspicious_atom_count + joint_offset_failure_atom_count;
     }
+
+    bool HasFailures() const
+    {
+        return AtomCount() > 0;
+    }
 };
+
+inline void AppendLocalFittingTerminalSummary(
+    std::ostream & stream,
+    const LocalFittingTerminalSummary & summary)
+{
+    if (summary.suspicious_atom_count > 0)
+    {
+        stream << "; terminal suspicious rollback fallback clusters/atoms = "
+            << summary.suspicious_cluster_count
+            << "/" << summary.suspicious_atom_count;
+    }
+    if (summary.joint_offset_failure_atom_count > 0)
+    {
+        stream << "; terminal joint-offset failure fallback clusters/atoms = "
+            << summary.joint_offset_failure_cluster_count
+            << "/" << summary.joint_offset_failure_atom_count;
+        if (!summary.joint_offset_failure_status_count.empty())
+        {
+            stream << ", statuses = ";
+            bool is_first_status{ true };
+            for (const auto & [status, count] :
+                summary.joint_offset_failure_status_count)
+            {
+                if (!is_first_status) stream << ",";
+                stream << GetJointOffsetSolveStatusText(status) << ":" << count;
+                is_first_status = false;
+            }
+        }
+    }
+}
 
 inline std::vector<ClusterKey> AccumulateTerminalFailureSummary(
     const TerminalPersistentFailureMap & terminal_failure_by_key,
@@ -157,5 +193,78 @@ inline std::vector<std::size_t> BuildEligibleLocalFittingActiveIndexList(const s
     }
     return active_index_list;
 }
+
+struct LocalFittingTerminalFailureState
+{
+    PersistentTerminalFailureStateMap persistent_state_by_key{};
+    std::vector<char> terminal_atom_mask{};
+    LocalFittingTerminalSummary terminal_summary{};
+
+    LocalFittingTerminalFailureState() = default;
+
+    explicit LocalFittingTerminalFailureState(std::size_t atom_count)
+        : terminal_atom_mask(atom_count, 0)
+    {
+    }
+
+    const LocalFittingTerminalSummary & Summary() const
+    {
+        return terminal_summary;
+    }
+
+    bool HasFailures() const
+    {
+        return terminal_summary.HasFailures();
+    }
+
+    std::size_t AtomCount() const
+    {
+        return terminal_summary.AtomCount();
+    }
+
+    std::vector<std::size_t> BuildEligibleActiveIndexList() const
+    {
+        return BuildEligibleLocalFittingActiveIndexList(terminal_atom_mask);
+    }
+
+    std::vector<ClusterKey> IsolatePersistentFailures(
+        const std::vector<ClusterKey> & accepted_key_list,
+        SuspiciousUpdateMask & suspicious_atom_mask,
+        const ClusterHealthMap & health_by_key,
+        FitState & assembled_state,
+        const FitState & previous_state,
+        const PolishProvenance & previous_polish_provenance,
+        PolishProvenance & assembled_polish_provenance)
+    {
+        const auto terminal_failure_by_key{
+            UpdatePersistentTerminalFailureState(
+                accepted_key_list,
+                suspicious_atom_mask,
+                health_by_key,
+                assembled_state,
+                previous_state,
+                persistent_state_by_key)
+        };
+        const auto terminal_key_list{
+            AccumulateTerminalFailureSummary(
+                terminal_failure_by_key,
+                terminal_summary)
+        };
+        ApplyTerminalFallbackClusters(
+            terminal_key_list,
+            previous_state,
+            previous_polish_provenance,
+            terminal_atom_mask,
+            assembled_state,
+            assembled_polish_provenance);
+        if (!terminal_key_list.empty())
+        {
+            ClearSuspiciousUpdateMaskForClusters(
+                terminal_key_list,
+                suspicious_atom_mask);
+        }
+        return terminal_key_list;
+    }
+};
 
 } // namespace rhbm_gem::core::detail

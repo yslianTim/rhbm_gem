@@ -62,12 +62,12 @@ using detail::LogRejectedClusterDiagnostics;
 using detail::LogAcceptedBacktrackingDiagnostics;
 using detail::LogAllRejectedResolution;
 using detail::GetAllRejectedResolutionText;
-using detail::GetJointOffsetSolveStatusText;
 using detail::BuildSecondStageAdjustedSamples;
 using detail::ObjectiveDomain;
 using detail::AuditedState;
 using detail::BestAuditState;
 using detail::LocalFittingTerminalSummary;
+using detail::AppendLocalFittingTerminalSummary;
 using detail::RejectedClusterDiagnostic;
 using detail::PolishProgress;
 using detail::kFitRangeWeight;
@@ -597,34 +597,6 @@ void AppendLocalFittingAuditSummary(std::ostringstream & stream, const AuditedSt
         << kTailValidationWeight;
 }
 
-void AppendLocalFittingTerminalSummary(std::ostringstream & stream, const LocalFittingTerminalSummary & summary)
-{
-    if (summary.suspicious_atom_count > 0)
-    {
-        stream << "; terminal suspicious rollback fallback clusters/atoms = "
-            << summary.suspicious_cluster_count
-            << "/" << summary.suspicious_atom_count;
-    }
-    if (summary.joint_offset_failure_atom_count > 0)
-    {
-        stream << "; terminal joint-offset failure fallback clusters/atoms = "
-            << summary.joint_offset_failure_cluster_count
-            << "/" << summary.joint_offset_failure_atom_count;
-        if (!summary.joint_offset_failure_status_count.empty())
-        {
-            stream << ", statuses = ";
-            bool is_first_status{ true };
-            for (const auto & [status, count] :
-                summary.joint_offset_failure_status_count)
-            {
-                if (!is_first_status) stream << ",";
-                stream << GetJointOffsetSolveStatusText(status) << ":" << count;
-                is_first_status = false;
-            }
-        }
-    }
-}
-
 void LogLocalFittingTerminalFallback(
     const FitOptions & options,
     std::size_t accepted_iteration_count,
@@ -654,7 +626,7 @@ void FinishLocalFittingWithNoActiveAtoms(
 {
     ApplyFitState(model_object, context, state);
     const auto offset_stats{ SummarizeLocalFittingOffsets(state) };
-    if (terminal_summary.AtomCount() > 0)
+    if (terminal_summary.HasFailures())
     {
         LogLocalFittingTerminalFallback(
             options,
@@ -878,7 +850,7 @@ bool RunSecondStageLocalFitting(
                 iteration_state.previous_state,
                 options,
                 iteration_state.accepted_iteration_count,
-                iteration_state.terminal_summary);
+                iteration_state.terminal_failure_state.Summary());
             LogSecondStageLocalFittingSummary(
                 options,
                 iteration_state.accepted_iteration_count,
@@ -990,12 +962,12 @@ bool RunSecondStageLocalFitting(
                 model_object,
                 context,
                 iteration_state.previous_state);
-            if (iteration_state.terminal_summary.AtomCount() > 0)
+            if (iteration_state.terminal_failure_state.HasFailures())
             {
                 LogLocalFittingTerminalFallback(
                     options,
                     iteration_state.accepted_iteration_count,
-                    iteration_state.terminal_summary,
+                    iteration_state.terminal_failure_state.Summary(),
                     accepted_offset_stats);
             }
             else
@@ -1033,7 +1005,7 @@ bool RunSecondStageLocalFitting(
                 options,
                 final_state_selection.source,
                 final_state_selection.audit_state,
-                iteration_state.terminal_summary,
+                iteration_state.terminal_failure_state.Summary(),
                 SummarizeLocalFittingOffsets(*final_state_selection.state));
             LogSecondStageLocalFittingSummary(
                 options,
