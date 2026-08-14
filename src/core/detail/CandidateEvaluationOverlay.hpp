@@ -17,8 +17,7 @@ namespace rhbm_gem::core::detail {
 class CandidateEvaluationOverlay
 {
     const SecondStageContext & m_context;
-    const SecondStageModelSnapshot & m_baseline_model_snapshot;
-    const ResidualBaseline & m_residual_baseline;
+    const ResidualBaseline & m_baseline;
     const FitStateView & m_candidate_state;
     std::vector<char> m_changed_group_mask{};
     std::vector<std::optional<GaussianModel3D>> m_changed_group_median{};
@@ -26,12 +25,10 @@ class CandidateEvaluationOverlay
 public:
     CandidateEvaluationOverlay(
         const SecondStageContext & context,
-        const SecondStageModelSnapshot & baseline_model_snapshot,
-        const ResidualBaseline & residual_baseline,
+        const ResidualBaseline & baseline,
         const FitStateView & candidate_state)
         : m_context{ context },
-          m_baseline_model_snapshot{ baseline_model_snapshot },
-          m_residual_baseline{ residual_baseline },
+          m_baseline{ baseline },
           m_candidate_state{ candidate_state },
           m_changed_group_mask(context.selected_atom_index_list_by_group.size(), 0),
           m_changed_group_median(context.selected_atom_index_list_by_group.size())
@@ -60,8 +57,7 @@ public:
     std::optional<ResidualSample> Evaluate(const ObjectiveSampleRef & sample_ref) const
     {
         const auto & baseline{
-            m_residual_baseline.at(sample_ref.atom_index).at(
-                sample_ref.sample_index)
+            m_baseline.sample_list.at(sample_ref.atom_index).at(sample_ref.sample_index)
         };
         if (!baseline.has_value()) return std::nullopt;
         const auto & atom_context{ m_context.at(sample_ref.atom_index) };
@@ -82,7 +78,9 @@ public:
                 {
                     continue;
                 }
-                baseline_model = &m_baseline_model_snapshot.selected.at(neighbor_atom_sample.atom_index);
+                baseline_model = &GetFitModel(
+                    m_baseline.model_snapshot.selected,
+                    neighbor_atom_sample.atom_index);
                 candidate_model = &m_candidate_state.GetModel(neighbor_atom_sample.atom_index);
             }
             else
@@ -95,7 +93,9 @@ public:
                 {
                     continue;
                 }
-                baseline_model = &m_baseline_model_snapshot.unselected.at(neighbor_atom_sample.atom_index);
+                baseline_model = &GetFitModel(
+                    m_baseline.model_snapshot.unselected,
+                    neighbor_atom_sample.atom_index);
                 const auto & median{
                     m_changed_group_median.at(*unselected_atom_contributor.selected_group_id)
                 };
@@ -131,6 +131,11 @@ public:
     }
 
     const FitStateView & GetCandidateState() const { return m_candidate_state; }
+    const ResidualBaseline & GetBaseline() const { return m_baseline; }
+    const FittedGaussianSnapshot & GetBaselineState() const
+    {
+        return m_baseline.model_snapshot.selected;
+    }
 };
 
 } // namespace rhbm_gem::core::detail

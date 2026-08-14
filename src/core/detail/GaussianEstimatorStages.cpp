@@ -50,7 +50,7 @@ using detail::AtomContext;
 using detail::SecondStageContext;
 using detail::SecondStageInitialStateBuildResult;
 
-constexpr bool kApplyBestIteration{ true };
+constexpr bool kApplyBestIteration{ false };
 constexpr double kOffsetSummaryPercentile{ 0.99 };
 
 using detail::kMaximumIterations;
@@ -189,14 +189,14 @@ detail::GraphTopology BuildGraphTopology(
         BuildSecondStageModelSnapshot(context, initial_state)
     };
     std::vector<std::optional<detail::TransformedModelInvariants>> selected_model_invariants;
-    selected_model_invariants.reserve(model_snapshot.selected.size());
-    for (const auto & model : model_snapshot.selected)
+    selected_model_invariants.reserve(model_snapshot.selected.model_list.size());
+    for (const auto & model : model_snapshot.selected.model_list)
     {
         selected_model_invariants.emplace_back(detail::BuildTransformedModelInvariants(model));
     }
     std::vector<std::optional<detail::TransformedModelInvariants>> unselected_model_invariants;
-    unselected_model_invariants.reserve(model_snapshot.unselected.size());
-    for (const auto & model : model_snapshot.unselected)
+    unselected_model_invariants.reserve(model_snapshot.unselected.model_list.size());
+    for (const auto & model : model_snapshot.unselected.model_list)
     {
         unselected_model_invariants.emplace_back(detail::BuildTransformedModelInvariants(model));
     }

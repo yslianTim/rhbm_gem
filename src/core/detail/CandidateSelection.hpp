@@ -62,9 +62,6 @@ struct CandidateSelection
     PolishProgress polish_progress{};
 };
 
-
-namespace candidate_internal {
-
 struct BaseProposal
 {
     FitStatePatch patch{};
@@ -131,7 +128,7 @@ inline BaseProposalBuildResult BuildSharedOffsetBaseProposal(
         };
     }
     const auto seed_step_norm{
-        CalculateClusterModelTrustRegionStepNorm(outer_previous_state, key, *seed_model_list)
+        CalculateModelTrustRegionStepNorm(previous_model_list, *seed_model_list)
     };
     if (!seed_step_norm.has_value())
     {
@@ -165,10 +162,7 @@ inline BaseProposalBuildResult BuildSharedOffsetBaseProposal(
         if (candidate_model_list.has_value())
         {
             const auto step_norm{
-                CalculateClusterModelTrustRegionStepNorm(
-                    outer_previous_state,
-                    key,
-                    *candidate_model_list)
+                CalculateModelTrustRegionStepNorm(previous_model_list, *candidate_model_list)
             };
             if (step_norm.has_value() &&
                 IsTrustRegionStepWithinRadius(*step_norm, trust_region_radius))
@@ -205,7 +199,6 @@ inline BaseProposalBuildResult BuildSharedOffsetBaseProposal(
     };
 }
 
-
 struct ClusterCandidateResult
 {
     ClusterKey key{};
@@ -218,19 +211,26 @@ struct ClusterCandidateResult
     bool grow_trust_region{ false };
 };
 
-} // namespace candidate_internal
-
-
 inline void RejectCombinedCandidate(
     const FitState & previous_state,
     const PolishProvenance & previous_polish_provenance,
-    const std::vector<ClusterKey> & cluster_key_list,
     CandidateSelection & selection)
 {
     selection.assembled_state = previous_state;
     selection.assembled_polish_provenance = previous_polish_provenance;
+    selection.rejected_key_list.insert(
+        selection.rejected_key_list.end(),
+        selection.accepted_key_list.begin(),
+        selection.accepted_key_list.end());
+    std::sort(
+        selection.rejected_key_list.begin(),
+        selection.rejected_key_list.end());
+    selection.rejected_key_list.erase(
+        std::unique(
+            selection.rejected_key_list.begin(),
+            selection.rejected_key_list.end()),
+        selection.rejected_key_list.end());
     selection.accepted_key_list.clear();
-    selection.rejected_key_list = cluster_key_list;
     selection.grow_trust_region_key_list.clear();
     selection.combined_backtracking_objective.reset();
     selection.polish_progress.rejected_count += selection.polish_progress.accepted_count;
@@ -328,9 +328,8 @@ inline bool ShouldGrowTrustRegion(const ObjectiveAttemptDiagnostic & diagnostic)
                 kObjectiveStrictTolerance));
 }
 
-inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
+inline ClusterCandidateResult SelectClusterCandidate(
     const SecondStageContext & context,
-    const SecondStageModelSnapshot & previous_model_snapshot,
     const ResidualBaseline & residual_baseline,
     const ClusterKey & key,
     const std::vector<ObjectiveSampleRef> & objective_sample_ref_list,
@@ -339,8 +338,6 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
     const FitState & previous_state,
     const PolishProvenance & previous_polish_provenance,
     const FitState & raw_state,
-    const std::vector<Eigen::Vector3d> & previous_transformed_estimation_list,
-    const std::vector<Eigen::Vector3d> & raw_transformed_estimation_list,
     bool contains_suspicious_atom,
     const std::vector<double> & ridge_multiplier_list,
     const ObjectiveDomain & objective_domain,
@@ -350,9 +347,6 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
     ClusterSolverWorkspace & solver_workspace,
     PerformanceCounters & performance_counters)
 {
-    using candidate_internal::BuildSharedOffsetBaseProposal;
-    using candidate_internal::ClusterCandidateResult;
-    using candidate_internal::BaseProposal;
     ClusterCandidateResult result;
     result.key = key;
     result.objective_state = previous_objective_state;
@@ -373,7 +367,6 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
 
     ClusterObjectiveStateMap objective_state;
     objective_state.emplace(key, result.objective_state);
-    const FitStateView previous_state_view{ previous_state };
     std::optional<BaseProposal> base_proposal;
     if (!contains_suspicious_atom)
     {
@@ -401,14 +394,26 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
         raw_cluster_estimation_list.reserve(key.size());
         for (const auto atom_index : key)
         {
-            previous_cluster_estimation_list.emplace_back(previous_transformed_estimation_list.at(atom_index));
-            raw_cluster_estimation_list.emplace_back(raw_transformed_estimation_list.at(atom_index));
+            const auto previous_estimation{
+                EncodeTransformedCoordinates(
+                    previous_state.at(atom_index).mdpde.GetModel())
+            };
+            const auto raw_estimation{
+                EncodeTransformedCoordinates(
+                    raw_state.at(atom_index).mdpde.GetModel())
+            };
+            if (!previous_estimation.has_value() || !raw_estimation.has_value())
+            {
+                throw std::invalid_argument(
+                    "Local fitting state has invalid transformed coordinates.");
+            }
+            previous_cluster_estimation_list.emplace_back(*previous_estimation);
+            raw_cluster_estimation_list.emplace_back(*raw_estimation);
         }
         const auto trust_region_damping{
             LimitTrustRegionDamping(
                 previous_cluster_estimation_list,
                 raw_cluster_estimation_list,
-                kTrustRegionParameterScale,
                 1.0,
                 trust_region_radius)
         };
@@ -461,14 +466,12 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
     };
     CandidateEvaluationOverlay base_overlay{
         context,
-        previous_model_snapshot,
         residual_baseline,
         base_state_view
     };
     auto accepted_base_candidate{
         TryCommitClusterCandidate(
             base_overlay,
-            previous_state_view,
             key,
             objective_sample_ref_list,
             previous_objective,
@@ -476,7 +479,7 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
             objective_domain,
             objective_state,
             result.diagnostic,
-            &performance_counters)
+            performance_counters)
     };
     auto accepted_by_backtracking{ false };
     const PolishProvenance non_polished_endpoint_provenance(key.size(), 0);
@@ -499,13 +502,11 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
                 };
                 const CandidateEvaluationOverlay backtracked_overlay{
                     context,
-                    previous_model_snapshot,
                     residual_baseline,
                     backtracked_state_view
                 };
                 if (TryCommitClusterCandidate(
                         backtracked_overlay,
-                        previous_state_view,
                         key,
                         objective_sample_ref_list,
                         previous_objective,
@@ -513,7 +514,7 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
                         objective_domain,
                         objective_state,
                         trial_diagnostic,
-                        &performance_counters))
+                        performance_counters))
                 {
                     trial_diagnostic.accepted_backtracking_factor = factor;
                     result.diagnostic = std::move(trial_diagnostic);
@@ -587,13 +588,11 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
             };
             const CandidateEvaluationOverlay polished_overlay{
                 context,
-                previous_model_snapshot,
                 residual_baseline,
                 polished_state_view
             };
             if (!TryCommitClusterCandidate(
                     polished_overlay,
-                    base_state_view,
                     key,
                     objective_sample_ref_list,
                     result.diagnostic.candidate_objective,
@@ -601,7 +600,7 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
                     objective_domain,
                     objective_state,
                     polish_diagnostic,
-                    &performance_counters))
+                    performance_counters))
             {
                 result.polish_progress.rejected_count = 1;
             }
@@ -631,15 +630,12 @@ inline candidate_internal::ClusterCandidateResult SelectClusterCandidate(
 
 inline CandidateSelection SelectClusterCandidates(
     const SecondStageContext & context,
-    const SecondStageModelSnapshot & previous_model_snapshot,
     const ResidualBaseline & residual_baseline,
     const CouplingGraphPartition & partition,
     const ClusterHealthMap & health_by_key,
     const FitState & previous_state,
     const PolishProvenance & previous_polish_provenance,
     const FitState & raw_state,
-    const std::vector<Eigen::Vector3d> & previous_transformed_estimation_list,
-    const std::vector<Eigen::Vector3d> & raw_transformed_estimation_list,
     const SuspiciousUpdateMask & rollback_atom_mask,
     const std::vector<double> & ridge_multiplier_list,
     const std::vector<ClusterKey> & unchanged_state_exhausted_key_list,
@@ -680,7 +676,6 @@ inline CandidateSelection SelectClusterCandidates(
                 key) != unchanged_state_exhausted_key_list.end());
     }
 
-    using candidate_internal::ClusterCandidateResult;
     std::vector<ClusterCandidateResult> result_list(key_list.size());
     std::vector<std::exception_ptr> exception_list(key_list.size());
     const auto select_candidate = [&](std::size_t position)
@@ -689,7 +684,6 @@ inline CandidateSelection SelectClusterCandidates(
         {
             result_list.at(position) = SelectClusterCandidate(
                 context,
-                previous_model_snapshot,
                 residual_baseline,
                 *key_list.at(position),
                 *sample_ref_list_by_position.at(position),
@@ -698,8 +692,6 @@ inline CandidateSelection SelectClusterCandidates(
                 previous_state,
                 previous_polish_provenance,
                 raw_state,
-                previous_transformed_estimation_list,
-                raw_transformed_estimation_list,
                 contains_suspicious_atom_list.at(position) != 0,
                 ridge_multiplier_list,
                 objective_domain,
@@ -782,7 +774,6 @@ inline CandidateSelection SelectClusterCandidates(
 
 inline bool TryBacktrackCombinedCandidate(
     const SecondStageContext & context,
-    const SecondStageModelSnapshot & previous_model_snapshot,
     const ResidualBaseline & residual_baseline,
     const CouplingGraphPartition & partition,
     const FitState & previous_state,
@@ -817,8 +808,6 @@ inline bool TryBacktrackCombinedCandidate(
         changed_atom_index_list,
         kTransformedChangeTolerance
     };
-    const FitStateView previous_state_view{ previous_state };
-
     selection.combined_backtracking_trial_count = 1;
     ClusterObjectiveStateMap accepted_trial_objective_state;
     const auto step{ backtracking_workspace.FindAcceptedCandidate(
@@ -832,7 +821,6 @@ inline bool TryBacktrackCombinedCandidate(
             };
             const CandidateEvaluationOverlay candidate_overlay{
                 context,
-                previous_model_snapshot,
                 residual_baseline,
                 candidate_state_view
             };
@@ -854,7 +842,6 @@ inline bool TryBacktrackCombinedCandidate(
                 diagnostic.accepted_backtracking_factor = factor;
                 if (!TryCommitClusterCandidate(
                         candidate_overlay,
-                        previous_state_view,
                         key,
                         sample_iter->second,
                         previous_objective_by_key.at(key),
@@ -862,7 +849,7 @@ inline bool TryBacktrackCombinedCandidate(
                         objective_domain,
                         trial_objective_state,
                         diagnostic,
-                        &performance_counters))
+                        performance_counters))
                 {
                     local_criteria_accepted = false;
                     break;
@@ -871,15 +858,13 @@ inline bool TryBacktrackCombinedCandidate(
             const auto combined_check{
                 local_criteria_accepted ?
                     EvaluateCombinedObjective(
-                        previous_state,
-                        residual_baseline,
                         candidate_overlay,
                         candidate_patch->atom_index_list,
                         affected_sample_ref_list,
                         objective_domain,
                         best_audit_state,
                         previous_audit_objective,
-                        &performance_counters) :
+                        performance_counters) :
                     CombinedObjectiveCheck{}
             };
             if (combined_check.accepted)
@@ -912,7 +897,5 @@ inline bool TryBacktrackCombinedCandidate(
     working_objective_state = std::move(accepted_trial_objective_state);
     return true;
 }
-
-
 
 } // namespace rhbm_gem::core::detail

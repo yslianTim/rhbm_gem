@@ -259,7 +259,10 @@ BuildJointOffsetEstimationFixture(
     }
     return {
         std::move(context),
-        offset_detail::SecondStageModelSnapshot{ model_list, {} }
+        offset_detail::SecondStageModelSnapshot{
+            offset_detail::FittedGaussianSnapshot{ model_list },
+            {}
+        }
     };
 }
 
@@ -1634,15 +1637,13 @@ TEST(EstimatorSecondStageDefenseTest, ScientificObjectiveUsesFitTailAndOffsetOnl
         audit_detail::BuildObjectiveBreakdown(
             0.4,
             2.0,
-            0.18,
-            0.25)
+            0.18)
     };
     const auto previous{
         audit_detail::BuildObjectiveBreakdown(
             1.4,
             0.0,
-            0.0,
-            0.25)
+            0.0)
     };
 
     ASSERT_TRUE(objective.has_value());
@@ -1651,8 +1652,7 @@ TEST(EstimatorSecondStageDefenseTest, ScientificObjectiveUsesFitTailAndOffsetOnl
         audit_detail::BuildObjectiveBreakdown(
             0.4,
             0.0,
-            0.0,
-            0.25)
+            0.0)
     };
     ASSERT_TRUE(empty_tail.has_value());
     EXPECT_DOUBLE_EQ(empty_tail->tail_validation_loss, 0.0);
@@ -1674,8 +1674,7 @@ TEST(EstimatorSecondStageDefenseTest, ScientificObjectiveUsesFitTailAndOffsetOnl
         audit_detail::BuildObjectiveBreakdown(
             std::numeric_limits<double>::infinity(),
             2.0,
-            0.18,
-            0.25).has_value());
+            0.18).has_value());
 }
 
 TEST(EstimatorSecondStageDefenseTest, GlobalObjectiveWeightsClustersByAtomCount)
@@ -1745,7 +1744,6 @@ TEST(EstimatorSecondStageDefenseTest, ObjectiveClusterStateLifecycleReconcilesPa
 
 TEST(EstimatorSecondStageDefenseTest, TrustRegionDampingCapsLargeTransformedStep)
 {
-    const std::array<double, 3> scale{ 0.50, 0.35, 1.0 };
     std::vector<Eigen::Vector3d> previous{
         Eigen::Vector3d::Zero()
     };
@@ -1754,14 +1752,14 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionDampingCapsLargeTransformedStep
 
     const auto capped{
         trust_detail::LimitTrustRegionDamping(
-            previous, candidate, scale, 1.0, 1.0)
+            previous, candidate, 1.0, 1.0)
     };
     EXPECT_DOUBLE_EQ(capped.effective_damping, 0.5);
     EXPECT_DOUBLE_EQ(capped.step_norm, 1.0);
 
     const auto inside{
         trust_detail::LimitTrustRegionDamping(
-            previous, candidate, scale, 0.25, 1.0)
+            previous, candidate, 0.25, 1.0)
     };
     EXPECT_DOUBLE_EQ(inside.effective_damping, 0.25);
     EXPECT_DOUBLE_EQ(inside.step_norm, 0.5);
@@ -1769,7 +1767,6 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionDampingCapsLargeTransformedStep
 
 TEST(EstimatorSecondStageDefenseTest, TrustRegionDampingIsIntensityScaleInvariant)
 {
-    const std::array<double, 3> scale{ 0.50, 0.35, 1.0 };
     const auto encode = [](const rg::GaussianModel3D & model)
     {
         const auto estimation{
@@ -1800,11 +1797,11 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionDampingIsIntensityScaleInvarian
 
     const auto base{
         trust_detail::LimitTrustRegionDamping(
-            base_previous, base_candidate, scale, 1.0, 0.5)
+            base_previous, base_candidate, 1.0, 0.5)
     };
     const auto scaled{
         trust_detail::LimitTrustRegionDamping(
-            scaled_previous, scaled_candidate, scale, 1.0, 0.5)
+            scaled_previous, scaled_candidate, 1.0, 0.5)
     };
     EXPECT_NEAR(base.effective_damping, scaled.effective_damping, 1.0e-12);
     EXPECT_NEAR(base.step_norm, scaled.step_norm, 1.0e-12);
@@ -1812,7 +1809,6 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionDampingIsIntensityScaleInvarian
 
 TEST(EstimatorSecondStageDefenseTest, TrustRegionPolishHonorsOuterStepBoundary)
 {
-    const std::array<double, 3> scale{ 0.50, 0.35, 1.0 };
     std::vector<Eigen::Vector3d> outer_previous{
         Eigen::Vector3d::Zero()
     };
@@ -1826,7 +1822,6 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionPolishHonorsOuterStepBoundary)
             outer_previous,
             boundary_state,
             outward_target,
-            scale,
             1.0,
             1.0)
     };
@@ -1838,7 +1833,6 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionPolishHonorsOuterStepBoundary)
             outer_previous,
             boundary_state,
             outer_previous,
-            scale,
             1.0,
             1.0)
     };
@@ -1994,9 +1988,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetConditioningDetectsJointDepende
     }
 
     const auto diagnostics{
-        conditioning_detail::EvaluateJointOffsetConditioning(
-            design_matrix,
-            1.0e-8)
+        conditioning_detail::EvaluateJointOffsetConditioning(design_matrix)
     };
     EXPECT_TRUE(diagnostics.guard_required);
     EXPECT_LE(diagnostics.pivot_ratio, 1.0e-8);
@@ -2008,9 +2000,7 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetConditioningKeepsIndependentCol
     design_matrix.setIdentity();
 
     const auto diagnostics{
-        conditioning_detail::EvaluateJointOffsetConditioning(
-            design_matrix,
-            1.0e-8)
+        conditioning_detail::EvaluateJointOffsetConditioning(design_matrix)
     };
     EXPECT_FALSE(diagnostics.guard_required);
     EXPECT_NEAR(diagnostics.pivot_ratio, 1.0, 1.0e-12);
@@ -3745,24 +3735,18 @@ TEST(EstimatorSecondStageDefenseTest, ResidualBaselineAndOverlayAgreeForCandidat
 
     residual_detail::FitState previous_state;
     previous_state.emplace_back(MakeGaussianResult(previous_model));
-    const auto model_snapshot{
-        residual_detail::BuildSecondStageModelSnapshot(
-            context,
-            residual_detail::BuildFittedGaussianSnapshot(previous_state))
-    };
     const auto baseline{
         residual_detail::BuildResidualBaseline(
             context,
-            previous_state,
-            model_snapshot)
+            previous_state)
     };
-    ASSERT_TRUE(baseline.at(0).at(1).has_value());
+    ASSERT_TRUE(baseline.sample_list.at(0).at(1).has_value());
     EXPECT_DOUBLE_EQ(
-        baseline.at(0).at(1)->adjusted_response,
+        baseline.sample_list.at(0).at(1)->adjusted_response,
         static_cast<double>(context.at(0).raw_sampling_entries.at(1).response));
     EXPECT_NEAR(
-        baseline.at(0).at(1)->residual,
-        baseline.at(0).at(1)->adjusted_response -
+        baseline.sample_list.at(0).at(1)->residual,
+        baseline.sample_list.at(0).at(1)->adjusted_response -
             previous_model.ResponseAtDistance(0.45),
         1.0e-6);
 
@@ -3776,7 +3760,6 @@ TEST(EstimatorSecondStageDefenseTest, ResidualBaselineAndOverlayAgreeForCandidat
     };
     const residual_detail::CandidateEvaluationOverlay overlay{
         context,
-        model_snapshot,
         baseline,
         candidate_view
     };
@@ -3786,7 +3769,7 @@ TEST(EstimatorSecondStageDefenseTest, ResidualBaselineAndOverlayAgreeForCandidat
             context,
             candidate_view,
             sample_ref,
-            model_snapshot)
+            baseline.model_snapshot)
     };
     const auto overlaid{ overlay.Evaluate(sample_ref) };
     ASSERT_TRUE(direct.has_value());
@@ -3932,9 +3915,7 @@ TEST(EstimatorSecondStageDefenseTest, TransformedConvergenceRejectsHiddenMaximum
         1.0e-4);
     EXPECT_FALSE(change_detail::IsTransformedChangeConverged(
         percentile_stats,
-        maximum_list,
-        1.0e-4,
-        1.0e-3));
+        maximum_list));
 }
 
 TEST(EstimatorSecondStageDefenseTest, PostRefitRollbackRestoresCompleteLongChain)

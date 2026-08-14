@@ -11,7 +11,6 @@
 
 #include <Eigen/Dense>
 
-#include "core/detail/FitStateView.hpp"
 #include "core/detail/TransformedChange.hpp"
 
 namespace rhbm_gem::core::detail {
@@ -266,7 +265,6 @@ struct TrustRegionDamping
 inline void ValidateTrustRegionInputs(
     const std::vector<Eigen::Vector3d> & previous_estimation_list,
     const std::vector<Eigen::Vector3d> & candidate_estimation_list,
-    const std::array<double, 3> & parameter_scale,
     double requested_damping,
     double radius)
 {
@@ -278,13 +276,6 @@ inline void ValidateTrustRegionInputs(
         radius <= 0.0)
     {
         throw std::invalid_argument("Local fitting trust-region inputs are invalid.");
-    }
-    for (const auto scale : parameter_scale)
-    {
-        if (!std::isfinite(scale) || scale <= 0.0)
-        {
-            throw std::invalid_argument("Local fitting trust-region scale is invalid.");
-        }
     }
     for (std::size_t i = 0; i < previous_estimation_list.size(); i++)
     {
@@ -299,14 +290,12 @@ inline void ValidateTrustRegionInputs(
 inline TrustRegionDamping LimitTrustRegionDamping(
     const std::vector<Eigen::Vector3d> & previous_estimation_list,
     const std::vector<Eigen::Vector3d> & candidate_estimation_list,
-    const std::array<double, 3> & parameter_scale,
     double requested_damping,
     double radius)
 {
     ValidateTrustRegionInputs(
         previous_estimation_list,
         candidate_estimation_list,
-        parameter_scale,
         requested_damping,
         radius);
 
@@ -321,7 +310,7 @@ inline TrustRegionDamping LimitTrustRegionDamping(
                 std::abs(
                     candidate_estimation_list.at(i)(eigen_index) -
                     previous_estimation_list.at(i)(eigen_index)) /
-                    parameter_scale.at(parameter_index));
+                    kTrustRegionParameterScale.at(parameter_index));
         }
     }
 
@@ -340,20 +329,17 @@ inline TrustRegionDamping LimitTrustRegionSubstepDamping(
     const std::vector<Eigen::Vector3d> & outer_previous_estimation_list,
     const std::vector<Eigen::Vector3d> & substep_previous_estimation_list,
     const std::vector<Eigen::Vector3d> & candidate_estimation_list,
-    const std::array<double, 3> & parameter_scale,
     double requested_damping,
     double radius)
 {
     ValidateTrustRegionInputs(
         outer_previous_estimation_list,
         substep_previous_estimation_list,
-        parameter_scale,
         requested_damping,
         radius);
     ValidateTrustRegionInputs(
         substep_previous_estimation_list,
         candidate_estimation_list,
-        parameter_scale,
         requested_damping,
         radius);
 
@@ -363,7 +349,9 @@ inline TrustRegionDamping LimitTrustRegionSubstepDamping(
         for (std::size_t parameter_index = 0; parameter_index < 3; parameter_index++)
         {
             const auto eigen_index{ static_cast<Eigen::Index>(parameter_index) };
-            const auto limit{ radius * parameter_scale.at(parameter_index) };
+            const auto limit{
+                radius * kTrustRegionParameterScale.at(parameter_index)
+            };
             const auto base_step{
                 substep_previous_estimation_list.at(i)(eigen_index) -
                 outer_previous_estimation_list.at(i)(eigen_index)
@@ -408,7 +396,8 @@ inline TrustRegionDamping LimitTrustRegionSubstepDamping(
             };
             step_norm = std::max(
                 step_norm,
-                std::abs(base_step + maximum_damping * direction) / parameter_scale.at(parameter_index));
+                std::abs(base_step + maximum_damping * direction) /
+                    kTrustRegionParameterScale.at(parameter_index));
         }
     }
     return TrustRegionDamping{
@@ -417,18 +406,19 @@ inline TrustRegionDamping LimitTrustRegionSubstepDamping(
     };
 }
 
-inline std::optional<double> CalculateClusterModelTrustRegionStepNorm(
-    const FitState & outer_previous_state,
-    const ClusterKey & key,
+inline std::optional<double> CalculateModelTrustRegionStepNorm(
+    const std::vector<GaussianModel3D> & previous_model_list,
     const std::vector<GaussianModel3D> & candidate_model_list)
 {
-    if (candidate_model_list.size() != key.size()) return std::nullopt;
-    double step_norm{ 0.0 };
-    for (std::size_t atom_position = 0; atom_position < key.size(); atom_position++)
+    if (candidate_model_list.size() != previous_model_list.size())
     {
-        const auto atom_index{ key.at(atom_position) };
+        return std::nullopt;
+    }
+    double step_norm{ 0.0 };
+    for (std::size_t atom_position = 0; atom_position < previous_model_list.size(); atom_position++)
+    {
         const auto previous{
-            EncodeTransformedCoordinates(outer_previous_state.at(atom_index).mdpde.GetModel())
+            EncodeTransformedCoordinates(previous_model_list.at(atom_position))
         };
         const auto candidate{
             EncodeTransformedCoordinates(candidate_model_list.at(atom_position))

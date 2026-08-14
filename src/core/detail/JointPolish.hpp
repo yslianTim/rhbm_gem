@@ -423,7 +423,7 @@ inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
         local_position < key.size();
         local_position++)
     {
-        selected_snapshot.at(key.at(local_position)) =
+        selected_snapshot.model_list.at(key.at(local_position)) =
             seed_model_list.at(local_position);
     }
     const auto model_snapshot{
@@ -509,7 +509,7 @@ inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
                 context.unselected_atom_list.at(contributor_index)
             };
             const auto & model{
-                model_snapshot.unselected.at(contributor_index)
+                GetFitModel(model_snapshot.unselected, contributor_index)
             };
             const auto evaluation{
                 EvaluateSharedOffsetResponse(model, distance)
@@ -598,9 +598,7 @@ inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
     system.ridge_diagonal = Eigen::VectorXd::Zero(column_count);
 
     const auto conditioning{
-        EvaluateJointOffsetConditioning(
-            system.design_matrix,
-            kJointOffsetConditioningPivotRatioThreshold)
+        EvaluateJointOffsetConditioning(system.design_matrix)
     };
     const auto conditioning_multiplier{
         conditioning.guard_required ?
@@ -716,12 +714,16 @@ BuildJointPolishProposal(
     double trust_region_radius)
 {
     std::vector<GroupKey> group_key_by_atom_position;
+    std::vector<GaussianModel3D> outer_previous_model_list;
     std::vector<GaussianModel3D> base_model_list;
     group_key_by_atom_position.reserve(key.size());
+    outer_previous_model_list.reserve(key.size());
     base_model_list.reserve(key.size());
     for (const auto atom_index : key)
     {
         group_key_by_atom_position.emplace_back(context.at(atom_index).group_key);
+        outer_previous_model_list.emplace_back(
+            outer_previous_state.at(atom_index).mdpde.GetModel());
         base_model_list.emplace_back(base_state.GetModel(atom_index));
     }
     const auto parameterization{
@@ -747,9 +749,8 @@ BuildJointPolishProposal(
         return std::nullopt;
     }
     const auto seed_step_norm{
-        CalculateClusterModelTrustRegionStepNorm(
-            outer_previous_state,
-            key,
+        CalculateModelTrustRegionStepNorm(
+            outer_previous_model_list,
             *seed_model_list)
     };
     if (!seed_step_norm.has_value() ||
@@ -786,9 +787,8 @@ BuildJointPolishProposal(
                 }))
         {
             const auto step_norm{
-                CalculateClusterModelTrustRegionStepNorm(
-                    outer_previous_state,
-                    key,
+                CalculateModelTrustRegionStepNorm(
+                    outer_previous_model_list,
                     *candidate_model_list)
             };
             if (step_norm.has_value() &&

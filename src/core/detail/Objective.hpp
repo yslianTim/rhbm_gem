@@ -140,13 +140,11 @@ inline std::optional<ObjectiveBreakdown>
 BuildObjectiveBreakdown(
     double fit_range_residual_objective,
     double tail_validation_loss,
-    double offset_plausibility_penalty,
-    double tail_validation_weight)
+    double offset_plausibility_penalty)
 {
     if (!std::isfinite(fit_range_residual_objective) ||
         !std::isfinite(tail_validation_loss) ||
-        !std::isfinite(offset_plausibility_penalty) ||
-        !std::isfinite(tail_validation_weight))
+        !std::isfinite(offset_plausibility_penalty))
     {
         return std::nullopt;
     }
@@ -155,7 +153,7 @@ BuildObjectiveBreakdown(
     breakdown.fit_range_residual_objective = fit_range_residual_objective;
     breakdown.tail_validation_loss = tail_validation_loss;
     breakdown.tail_validation_penalty =
-        tail_validation_weight * tail_validation_loss;
+        kTailValidationWeight * tail_validation_loss;
     breakdown.offset_plausibility_penalty = offset_plausibility_penalty;
     breakdown.total_objective =
         breakdown.fit_range_residual_objective +
@@ -465,14 +463,11 @@ inline std::optional<ObjectiveBreakdown> EvaluateObjectiveContributionImpl(
     return BuildObjectiveBreakdown(
         breakdown.fit_range_residual_objective,
         breakdown.tail_validation_loss,
-        breakdown.offset_plausibility_penalty,
-        kTailValidationWeight);
+        breakdown.offset_plausibility_penalty);
 }
 
-template <typename State>
 inline std::optional<ObjectiveBreakdown> EvaluateObjectiveContribution(
     const SecondStageContext & context,
-    const State & state,
     const SecondStageModelSnapshot & model_snapshot,
     const ClusterKey & changed_key,
     const std::vector<ObjectiveSampleRef> & sample_ref_list,
@@ -480,33 +475,37 @@ inline std::optional<ObjectiveBreakdown> EvaluateObjectiveContribution(
     bool include_offset_penalty = true)
 {
     return EvaluateObjectiveContributionImpl(
-        state,
+        model_snapshot.selected,
         changed_key,
         sample_ref_list,
         domain,
         [&](const ObjectiveSampleRef & sample_ref)
         {
-            return EvaluateResidualSample(context, state, sample_ref, model_snapshot);
+            return EvaluateResidualSample(
+                context,
+                model_snapshot.selected,
+                sample_ref,
+                model_snapshot);
         },
         include_offset_penalty);
 }
 
 inline std::optional<ObjectiveBreakdown> EvaluateObjectiveContribution(
-    const FitState & state,
-    const ResidualBaseline & residual_baseline,
+    const ResidualBaseline & baseline,
     const ClusterKey & changed_key,
     const std::vector<ObjectiveSampleRef> & sample_ref_list,
     const ObjectiveDomain & domain,
     bool include_offset_penalty = true)
 {
     return EvaluateObjectiveContributionImpl(
-        state,
+        baseline.model_snapshot.selected,
         changed_key,
         sample_ref_list,
         domain,
         [&](const ObjectiveSampleRef & sample_ref)
         {
-            return residual_baseline.at(sample_ref.atom_index).at(sample_ref.sample_index);
+            return baseline.sample_list.at(sample_ref.atom_index).at(
+                sample_ref.sample_index);
         },
         include_offset_penalty);
 }
@@ -532,7 +531,6 @@ inline std::optional<ObjectiveBreakdown> EvaluateObjectiveContribution(
 
 inline std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
     const SecondStageContext & context,
-    const FitState & state,
     const ObjectiveDomain & domain,
     const SecondStageModelSnapshot & model_snapshot)
 {
@@ -542,7 +540,6 @@ inline std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
         const auto fit_contribution{
             EvaluateObjectiveContribution(
                 context,
-                state,
                 model_snapshot,
                 key,
                 cluster_domain.fit_sample_ref_list,
@@ -553,7 +550,6 @@ inline std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
         const auto tail_contribution{
             EvaluateObjectiveContribution(
                 context,
-                state,
                 model_snapshot,
                 key,
                 cluster_domain.tail_sample_ref_list,
@@ -565,7 +561,6 @@ inline std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
         const auto offset_contribution{
             EvaluateObjectiveContribution(
                 context,
-                state,
                 model_snapshot,
                 key,
                 empty_sample_ref_list,
@@ -589,9 +584,8 @@ inline std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
 }
 
 inline std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
-    const FitState & state,
     const ObjectiveDomain & domain,
-    const ResidualBaseline & residual_baseline)
+    const ResidualBaseline & baseline)
 {
     ObjectiveBreakdown total;
     for (const auto & [key, cluster_domain] : domain.cluster_by_key)
@@ -605,8 +599,7 @@ inline std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
             cluster_domain.tail_sample_ref_list.end());
         const auto contribution{
             EvaluateObjectiveContribution(
-                state,
-                residual_baseline,
+                baseline,
                 key,
                 sample_ref_list,
                 domain)
@@ -619,30 +612,24 @@ inline std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
     return BuildObjectiveBreakdown(
         total.fit_range_residual_objective,
         total.tail_validation_loss,
-        total.offset_plausibility_penalty,
-        kTailValidationWeight);
+        total.offset_plausibility_penalty);
 }
 
 inline std::optional<ObjectiveBreakdown> EvaluateObjectiveDelta(
-    const FitState & previous_state,
-    const ResidualBaseline & residual_baseline,
     const CandidateEvaluationOverlay & candidate_overlay,
     const ClusterKey & changed_key,
     const std::vector<ObjectiveSampleRef> & affected_sample_ref_list,
     const ObjectiveDomain & domain,
     const std::optional<ObjectiveBreakdown> & baseline,
-    PerformanceCounters * performance_counters = nullptr)
+    PerformanceCounters & performance_counters)
 {
     if (!baseline.has_value()) return std::nullopt;
-    if (performance_counters != nullptr)
-    {
-        const auto unique_sample_count{
-            domain.fit_sample_count + domain.tail_sample_count
-        };
-        performance_counters->RecordObjectiveSampleEvaluation(
-            affected_sample_ref_list.size(),
-            unique_sample_count);
-    }
+    const auto unique_sample_count{
+        domain.fit_sample_count + domain.tail_sample_count
+    };
+    performance_counters.RecordObjectiveSampleEvaluation(
+        affected_sample_ref_list.size(),
+        unique_sample_count);
     const auto candidate_changed{
         EvaluateObjectiveContribution(
             candidate_overlay,
@@ -652,8 +639,7 @@ inline std::optional<ObjectiveBreakdown> EvaluateObjectiveDelta(
     };
     const auto previous_changed{
         EvaluateObjectiveContribution(
-            previous_state,
-            residual_baseline,
+            candidate_overlay.GetBaseline(),
             changed_key,
             affected_sample_ref_list,
             domain)
@@ -671,8 +657,7 @@ inline std::optional<ObjectiveBreakdown> EvaluateObjectiveDelta(
             previous_changed->tail_validation_loss,
         baseline->offset_plausibility_penalty +
             candidate_changed->offset_plausibility_penalty -
-            previous_changed->offset_plausibility_penalty,
-        kTailValidationWeight);
+            previous_changed->offset_plausibility_penalty);
 }
 
 inline std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
@@ -683,12 +668,11 @@ inline std::optional<ObjectiveBreakdown> EvaluateAuditObjective(
     const auto model_snapshot{
         BuildSecondStageModelSnapshot(context, state)
     };
-    return EvaluateAuditObjective(context, state, domain, model_snapshot);
+    return EvaluateAuditObjective(context, domain, model_snapshot);
 }
 
 inline ObjectiveByKey BuildObjectiveByKey(
     const SecondStageContext & context,
-    const FitState & state,
     const CouplingGraphPartition & partition,
     const ObjectiveDomain & domain,
     const SecondStageModelSnapshot & model_snapshot)
@@ -700,7 +684,6 @@ inline ObjectiveByKey BuildObjectiveByKey(
             key,
             EvaluateObjectiveContribution(
                 context,
-                state,
                 model_snapshot,
                 key,
                 sample_ref_list,
@@ -710,10 +693,9 @@ inline ObjectiveByKey BuildObjectiveByKey(
 }
 
 inline ObjectiveByKey BuildObjectiveByKey(
-    const FitState & state,
     const CouplingGraphPartition & partition,
     const ObjectiveDomain & domain,
-    const ResidualBaseline & residual_baseline)
+    const ResidualBaseline & baseline)
 {
     ObjectiveByKey objective_by_key;
     for (const auto & [key, sample_ref_list] : partition.sample_id_list_by_key)
@@ -721,8 +703,7 @@ inline ObjectiveByKey BuildObjectiveByKey(
         objective_by_key.emplace(
             key,
             EvaluateObjectiveContribution(
-                state,
-                residual_baseline,
+                baseline,
                 key,
                 sample_ref_list,
                 domain));
@@ -731,20 +712,16 @@ inline ObjectiveByKey BuildObjectiveByKey(
 }
 
 inline CombinedObjectiveCheck EvaluateCombinedObjective(
-    const FitState & previous_state,
-    const ResidualBaseline & residual_baseline,
     const CandidateEvaluationOverlay & candidate_overlay,
     const ClusterKey & changed_key,
     const std::vector<ObjectiveSampleRef> & affected_sample_ref_list,
     const ObjectiveDomain & domain,
     const BestAuditState & audit_state,
     const std::optional<ObjectiveBreakdown> & previous_objective,
-    PerformanceCounters * performance_counters = nullptr)
+    PerformanceCounters & performance_counters)
 {
     const auto candidate_objective{
         EvaluateObjectiveDelta(
-            previous_state,
-            residual_baseline,
             candidate_overlay,
             changed_key,
             affected_sample_ref_list,
@@ -770,24 +747,22 @@ inline CombinedObjectiveCheck EvaluateCombinedObjective(
 
 inline CombinedCandidateObjectiveCheck EvaluateCombinedCandidateObjective(
     const SecondStageContext & context,
-    const SecondStageModelSnapshot & previous_model_snapshot,
-    const ResidualBaseline & residual_baseline,
+    const ResidualBaseline & baseline,
     const CouplingGraphPartition & partition,
     const FitState & previous_state,
     const FitState & candidate_state,
     const std::vector<ClusterKey> & accepted_key_list,
     const ObjectiveDomain & objective_domain,
     const BestAuditState & best_audit_state,
-    PerformanceCounters * performance_counters = nullptr)
+    PerformanceCounters & performance_counters)
 {
     CombinedCandidateObjectiveCheck result;
     result.guard_required = partition.boundary_sample_count > 0 && !accepted_key_list.empty();
     if (!result.guard_required) return result;
 
     result.previous_objective = EvaluateAuditObjective(
-        previous_state,
         objective_domain,
-        residual_baseline);
+        baseline);
 
     ClusterKey changed_atom_index_list;
     for (const auto & key : accepted_key_list)
@@ -808,8 +783,7 @@ inline CombinedCandidateObjectiveCheck EvaluateCombinedCandidateObjective(
     };
     const CandidateEvaluationOverlay combined_overlay{
         context,
-        previous_model_snapshot,
-        residual_baseline,
+        baseline,
         combined_state_view
     };
     const auto affected_sample_ref_list{
@@ -817,8 +791,6 @@ inline CombinedCandidateObjectiveCheck EvaluateCombinedCandidateObjective(
     };
     const auto combined_check{
         EvaluateCombinedObjective(
-            previous_state,
-            residual_baseline,
             combined_overlay,
             combined_patch.atom_index_list,
             affected_sample_ref_list,
@@ -933,7 +905,6 @@ inline void ReconcileClusterObjectiveState(
 
 inline bool TryCommitClusterCandidate(
     const CandidateEvaluationOverlay & candidate_overlay,
-    const FitStateView & previous_state,
     const ClusterKey & key,
     const std::vector<ObjectiveSampleRef> & objective_sample_ref_list,
     const std::optional<ObjectiveBreakdown> & previous_objective,
@@ -941,19 +912,19 @@ inline bool TryCommitClusterCandidate(
     const ObjectiveDomain & domain,
     ClusterObjectiveStateMap & cluster_objective_state,
     ObjectiveAttemptDiagnostic & diagnostic,
-    PerformanceCounters * performance_counters = nullptr)
+    PerformanceCounters & performance_counters)
 {
-    if (performance_counters != nullptr)
-    {
-        const auto unique_sample_count{
-            domain.fit_sample_count + domain.tail_sample_count
-        };
-        performance_counters->RecordObjectiveSampleEvaluation(
-            objective_sample_ref_list.size(),
-            unique_sample_count);
-    }
+    const auto unique_sample_count{
+        domain.fit_sample_count + domain.tail_sample_count
+    };
+    performance_counters.RecordObjectiveSampleEvaluation(
+        objective_sample_ref_list.size(),
+        unique_sample_count);
     const auto transformed_change_summary{
-        SummarizeTransformedChanges(candidate_overlay.GetCandidateState(), previous_state, key)
+        SummarizeTransformedChanges(
+            candidate_overlay.GetCandidateState(),
+            candidate_overlay.GetBaselineState(),
+            key)
     };
     const auto maximum_transformed_change{
         GetMaximumTransformedPercentileChange(transformed_change_summary)

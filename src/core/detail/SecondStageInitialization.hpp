@@ -105,7 +105,7 @@ struct SecondStageInitialStateBuildResult
 };
 
 inline SecondStageContext BuildSecondStageContext(
-    ModelObject & model_object,
+    const ModelObject & model_object,
     const FitOptions & options)
 {
     SecondStageContext context;

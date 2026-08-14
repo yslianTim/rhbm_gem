@@ -674,8 +674,8 @@ inline RawIterationResult RunRawIteration(
         for (std::size_t i = 0; i < key.size(); i++)
         {
             const auto atom_index{ key.at(i) };
-            current_model_snapshot.selected.at(atom_index) =
-                current_model_snapshot.selected.at(atom_index)
+            current_model_snapshot.selected.model_list.at(atom_index) =
+                GetFitModel(current_model_snapshot.selected, atom_index)
                     .WithOffset(result.offset(static_cast<Eigen::Index>(i)));
         }
         health_by_key.emplace(key, ClusterHealth{ result.status });
@@ -702,7 +702,7 @@ inline RawIterationResult RunRawIteration(
             if (EvaluateSuspiciousOffsetUpdate(
                     context.at(atom_index).raw_sampling_entries,
                     previous_state.at(atom_index).mdpde.GetModel(),
-                    current_model_snapshot.selected.at(atom_index),
+                    GetFitModel(current_model_snapshot.selected, atom_index),
                     options) != SuspiciousGaussianReason::None)
             {
                 suspicious_seed_mask.at(position) = 1;
@@ -720,13 +720,14 @@ inline RawIterationResult RunRawIteration(
     for (std::size_t atom_index = 0; atom_index < rollback_atom_mask.size(); atom_index++)
     {
         if (rollback_atom_mask.at(atom_index) == 0) continue;
-        current_model_snapshot.selected.at(atom_index) = previous_state.at(atom_index).mdpde.GetModel();
+        current_model_snapshot.selected.model_list.at(atom_index) =
+            previous_state.at(atom_index).mdpde.GetModel();
     }
 
-    auto refit_model_snapshot{
+    FittedGaussianSnapshot refit_model_snapshot{
         BuildLocalFittingGroupMedianModelList(
             group_key_by_atom_index,
-            current_model_snapshot.selected)
+            current_model_snapshot.selected.model_list)
     };
     const auto refit_model_bundle{
         BuildSecondStageModelSnapshot(context, std::move(refit_model_snapshot))
@@ -770,7 +771,7 @@ inline RawIterationResult RunRawIteration(
                 FitAtomWithJointOffsetFallback(
                     context.at(atom_index),
                     previous_state.at(atom_index),
-                    refit_model_bundle.selected.at(atom_index),
+                    GetFitModel(refit_model_bundle.selected, atom_index),
                     refit_response_cache.at(atom_index),
                     refit_options);
         }
@@ -887,17 +888,13 @@ inline IterationResult RunIteration(
     const auto & cluster_key_list{ iteration_state.cluster_key_list };
     const auto & objective_domain{ iteration_state.objective_domain };
 
-    const auto previous_model_snapshot{
-        BuildSecondStageModelSnapshot(context, previous_state)
-    };
     const auto residual_baseline{
-        BuildResidualBaseline(context, previous_state, previous_model_snapshot)
+        BuildResidualBaseline(context, previous_state)
     };
     performance_counters.RecordGaussianCacheMisses();
 
     const auto previous_objective_by_key{
         BuildObjectiveByKey(
-            previous_state,
             graph_partition,
             objective_domain,
             residual_baseline)
@@ -941,13 +938,6 @@ inline IterationResult RunIteration(
     const auto raw_fixed_point_change_summary{
         SummarizeTransformedChanges(raw_state, previous_state, active_index_list)
     };
-    const auto previous_transformed_estimation_list{
-        BuildTransformedEstimationList(previous_state)
-    };
-    const auto raw_transformed_estimation_list{
-        BuildTransformedEstimationList(raw_state)
-    };
-
     auto working_cluster_objective_state{
         iteration_state.cluster_objective_state
     };
@@ -957,15 +947,12 @@ inline IterationResult RunIteration(
     auto selection{
         SelectClusterCandidates(
             context,
-            previous_model_snapshot,
             residual_baseline,
             graph_partition,
             raw_iteration_result.health_by_key,
             previous_state,
             iteration_state.previous_polish_provenance,
             raw_state,
-            previous_transformed_estimation_list,
-            raw_transformed_estimation_list,
             raw_iteration_result.rollback_atom_mask,
             joint_offset_ridge_multiplier_list,
             iteration_state.unchanged_state_exhausted_key_list,
@@ -984,7 +971,6 @@ inline IterationResult RunIteration(
     const auto combined_check{
         EvaluateCombinedCandidateObjective(
             context,
-            previous_model_snapshot,
             residual_baseline,
             graph_partition,
             previous_state,
@@ -992,7 +978,7 @@ inline IterationResult RunIteration(
             selection.accepted_key_list,
             objective_domain,
             iteration_state.best_audit_state,
-            &performance_counters)
+            performance_counters)
     };
     selection.combined_backtracking_objective = combined_check.candidate_objective;
     auto combined_objective_accepted{
@@ -1003,7 +989,6 @@ inline IterationResult RunIteration(
         combined_objective_accepted =
             TryBacktrackCombinedCandidate(
                 context,
-                previous_model_snapshot,
                 residual_baseline,
                 graph_partition,
                 previous_state,
@@ -1022,7 +1007,6 @@ inline IterationResult RunIteration(
         RejectCombinedCandidate(
             previous_state,
             iteration_state.previous_polish_provenance,
-            cluster_key_list,
             selection);
         if (selection.combined_backtracking_exhausted)
         {
@@ -1081,7 +1065,6 @@ inline IterationResult RunIteration(
             const auto remaining_objective_by_key{
                 BuildObjectiveByKey(
                     context,
-                    assembled_state,
                     remaining_graph_partition,
                     iteration_state.objective_domain,
                     assembled_model_snapshot)

@@ -17,15 +17,26 @@ namespace rhbm_gem::core::detail {
 
 using SecondStageAdjustedResponseCache = std::vector<std::vector<double>>;
 using ObjectiveSampleRef = GraphSampleId;
-using FittedGaussianSnapshot = std::vector<GaussianModel3D>;
+
+struct FittedGaussianSnapshot
+{
+    std::vector<GaussianModel3D> model_list{};
+};
+
+inline const GaussianModel3D & GetFitModel(
+    const FittedGaussianSnapshot & snapshot,
+    std::size_t atom_index)
+{
+    return snapshot.model_list.at(atom_index);
+}
 
 inline FittedGaussianSnapshot BuildFittedGaussianSnapshot(const FitState & state)
 {
     FittedGaussianSnapshot snapshot;
-    snapshot.reserve(state.size());
+    snapshot.model_list.reserve(state.size());
     for (const auto & result : state)
     {
-        snapshot.emplace_back(result.mdpde.GetModel());
+        snapshot.model_list.emplace_back(result.mdpde.GetModel());
     }
     return snapshot;
 }
@@ -33,10 +44,10 @@ inline FittedGaussianSnapshot BuildFittedGaussianSnapshot(const FitState & state
 inline FittedGaussianSnapshot BuildFittedGaussianSnapshot(const FitStateView & state)
 {
     FittedGaussianSnapshot snapshot;
-    snapshot.reserve(state.GetSize());
+    snapshot.model_list.reserve(state.GetSize());
     for (std::size_t atom_index = 0; atom_index < state.GetSize(); atom_index++)
     {
-        snapshot.emplace_back(state.GetModel(atom_index));
+        snapshot.model_list.emplace_back(state.GetModel(atom_index));
     }
     return snapshot;
 }
@@ -52,15 +63,15 @@ inline const GaussianModel3D & ResolveNeighborAtomModel(
     const SecondStageModelSnapshot & model_snapshot)
 {
     return neighbor_atom_sample.is_selected ?
-        model_snapshot.selected.at(neighbor_atom_sample.atom_index) :
-        model_snapshot.unselected.at(neighbor_atom_sample.atom_index);
+        GetFitModel(model_snapshot.selected, neighbor_atom_sample.atom_index) :
+        GetFitModel(model_snapshot.unselected, neighbor_atom_sample.atom_index);
 }
 
 inline FittedGaussianSnapshot BuildUnselectedAtomContributorSnapshot(
     const SecondStageContext & context,
     const FittedGaussianSnapshot & selected_snapshot)
 {
-    if (selected_snapshot.size() != context.size())
+    if (selected_snapshot.model_list.size() != context.size())
     {
         throw std::invalid_argument(
             "Second-stage selected contributor snapshot size is inconsistent.");
@@ -80,19 +91,20 @@ inline FittedGaussianSnapshot BuildUnselectedAtomContributorSnapshot(
         model_list.reserve(atom_index_list.size());
         for (const auto atom_index : atom_index_list)
         {
-            model_list.emplace_back(selected_snapshot.at(atom_index));
+            model_list.emplace_back(GetFitModel(selected_snapshot, atom_index));
         }
         median_model_by_group.at(group_id) = BuildLocalFittingGaussianParameterMedian(model_list);
     }
 
     FittedGaussianSnapshot snapshot;
-    snapshot.reserve(context.unselected_atom_list.size());
+    snapshot.model_list.reserve(context.unselected_atom_list.size());
     for (const auto & unselected_atom_contributor : context.unselected_atom_list)
     {
         if (unselected_atom_contributor.selected_group_id.has_value() &&
             median_model_by_group.at(*unselected_atom_contributor.selected_group_id).has_value())
         {
-            snapshot.emplace_back(*median_model_by_group.at(*unselected_atom_contributor.selected_group_id));
+            snapshot.model_list.emplace_back(
+                *median_model_by_group.at(*unselected_atom_contributor.selected_group_id));
             continue;
         }
         if (!unselected_atom_contributor.initial_seed.has_value())
@@ -100,7 +112,8 @@ inline FittedGaussianSnapshot BuildUnselectedAtomContributorSnapshot(
             throw std::logic_error(
                 "Second-stage unselected contributor seed is unavailable.");
         }
-        snapshot.emplace_back(unselected_atom_contributor.initial_seed->GetModel());
+        snapshot.model_list.emplace_back(
+            unselected_atom_contributor.initial_seed->GetModel());
     }
     return snapshot;
 }
@@ -136,7 +149,11 @@ struct ResidualSample
     double residual{ 0.0 };
 };
 
-using ResidualBaseline = std::vector<std::vector<std::optional<ResidualSample>>>;
+struct ResidualBaseline
+{
+    SecondStageModelSnapshot model_snapshot{};
+    std::vector<std::vector<std::optional<ResidualSample>>> sample_list{};
+};
 
 inline double CalculateSecondStageAdjustedResponse(
     const AtomContext & atom_context,
@@ -224,31 +241,37 @@ inline std::vector<LocalPotentialSampleList> BuildSecondStageAdjustedSamples(
 
 inline ResidualBaseline BuildResidualBaseline(
     const SecondStageContext & context,
-    const FitState & state,
-    const SecondStageModelSnapshot & model_snapshot)
+    const FitState & state)
 {
-    ResidualBaseline baseline(context.size());
+    ResidualBaseline baseline{
+        BuildSecondStageModelSnapshot(context, state),
+        std::vector<std::vector<std::optional<ResidualSample>>>(context.size())
+    };
     for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
     {
         const auto sample_count{
             context.at(atom_index).raw_sampling_entries.size()
         };
-        baseline.at(atom_index).reserve(sample_count);
+        baseline.sample_list.at(atom_index).reserve(sample_count);
         for (std::size_t sample_index = 0; sample_index < sample_count; sample_index++)
         {
             const auto adjusted_response{
                 CalculateSecondStageAdjustedResponse(
-                    context.at(atom_index), sample_index, model_snapshot)
+                    context.at(atom_index),
+                    sample_index,
+                    baseline.model_snapshot)
             };
             const auto & sample{
                 context.at(atom_index).raw_sampling_entries.at(sample_index)
             };
             const auto expected_response{
-                state.at(atom_index).mdpde.GetModel().ResponseAtDistance(
+                GetFitModel(
+                    baseline.model_snapshot.selected,
+                    atom_index).ResponseAtDistance(
                     static_cast<double>(sample.point.distance))
             };
             const auto residual{ adjusted_response - expected_response };
-            baseline.at(atom_index).emplace_back(
+            baseline.sample_list.at(atom_index).emplace_back(
                 std::isfinite(adjusted_response) && std::isfinite(residual) ?
                     std::optional<ResidualSample>{
                         ResidualSample{

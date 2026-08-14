@@ -256,9 +256,7 @@ inline std::vector<double> SummarizeMaximumTransformedChanges(
 
 inline bool IsTransformedChangeConverged(
     const algorithm::ParameterChangeStats & percentile_stats,
-    const std::vector<double> & maximum_list,
-    double percentile_tolerance,
-    double maximum_tolerance)
+    const std::vector<double> & maximum_list)
 {
     if (percentile_stats.percentile_list.size() != kTransformedChangeSize ||
         maximum_list.size() != kTransformedChangeSize)
@@ -269,9 +267,9 @@ inline bool IsTransformedChangeConverged(
     for (std::size_t i = 0; i < kTransformedChangeSize; i++)
     {
         if (!std::isfinite(percentile_stats.percentile_list.at(i)) ||
-            percentile_stats.percentile_list.at(i) >= percentile_tolerance ||
+            percentile_stats.percentile_list.at(i) >= kTransformedChangeTolerance ||
             !std::isfinite(maximum_list.at(i)) ||
-            maximum_list.at(i) >= maximum_tolerance)
+            maximum_list.at(i) >= kTransformedMaximumChangeTolerance)
         {
             return false;
         }
@@ -304,45 +302,26 @@ inline TransformedChangeSummary SummarizeTransformedChanges(
             change_list,
             local_index_list,
             kTransformedChangePercentile),
-        SummarizeMaximumTransformedChanges(
-            change_list,
-            local_index_list)
+        SummarizeMaximumTransformedChanges(change_list, local_index_list)
     };
 }
 
-inline bool IsTransformedChangeConverged(
-    const algorithm::ParameterChangeStats & percentile_stats,
-    const std::vector<double> & maximum_list)
-{
-    return IsTransformedChangeConverged(
-        percentile_stats,
-        maximum_list,
-        kTransformedChangeTolerance,
-        kTransformedMaximumChangeTolerance);
-}
-
-inline double GetMaximumTransformedChange(
-    const TransformedChangeSummary & summary)
+inline double GetMaximumTransformedChange(const TransformedChangeSummary & summary)
 {
     return GetMaximumTransformedChange(summary.maximum_list);
 }
 
-inline double GetMaximumTransformedPercentileChange(
-    const TransformedChangeSummary & summary)
+inline double GetMaximumTransformedPercentileChange(const TransformedChangeSummary & summary)
 {
     return GetMaximumTransformedChange(summary.percentile_stats);
 }
 
-inline bool IsTransformedChangeConverged(
-    const TransformedChangeSummary & summary)
+inline bool IsTransformedChangeConverged(const TransformedChangeSummary & summary)
 {
-    return IsTransformedChangeConverged(
-        summary.percentile_stats,
-        summary.maximum_list);
+    return IsTransformedChangeConverged(summary.percentile_stats, summary.maximum_list);
 }
 
-inline bool IsTransformedPercentileConverged(
-    const algorithm::ParameterChangeStats & stats)
+inline bool IsTransformedPercentileConverged(const algorithm::ParameterChangeStats & stats)
 {
     return std::all_of(
         stats.percentile_list.begin(),
@@ -353,30 +332,9 @@ inline bool IsTransformedPercentileConverged(
         });
 }
 
-inline bool IsTransformedPercentileConverged(
-    const TransformedChangeSummary & summary)
+inline bool IsTransformedPercentileConverged(const TransformedChangeSummary & summary)
 {
-    return IsTransformedPercentileConverged(
-        summary.percentile_stats);
-}
-
-inline std::vector<Eigen::Vector3d> BuildTransformedEstimationList(
-    const FitState & state)
-{
-    std::vector<Eigen::Vector3d> transformed_estimation_list;
-    transformed_estimation_list.reserve(state.size());
-    for (const auto & result : state)
-    {
-        const auto transformed{
-            EncodeTransformedCoordinates(result.mdpde.GetModel())
-        };
-        if (!transformed.has_value())
-        {
-            throw std::invalid_argument("Local fitting state has invalid transformed coordinates.");
-        }
-        transformed_estimation_list.emplace_back(*transformed);
-    }
-    return transformed_estimation_list;
+    return IsTransformedPercentileConverged(summary.percentile_stats);
 }
 
 } // namespace rhbm_gem::core::detail

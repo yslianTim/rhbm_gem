@@ -227,18 +227,8 @@ BuildJointOffsetParameterization(
         std::optional<JointOffsetParameterization>{ std::move(parameterization) } : std::nullopt;
 }
 
-inline JointOffsetConditioning
-EvaluateJointOffsetConditioning(
-    const Eigen::SparseMatrix<double> & design_matrix,
-    double pivot_ratio_threshold)
+inline JointOffsetConditioning EvaluateJointOffsetConditioning(const Eigen::SparseMatrix<double> & design_matrix)
 {
-    if (!std::isfinite(pivot_ratio_threshold) ||
-        pivot_ratio_threshold <= 0.0 ||
-        pivot_ratio_threshold >= 1.0)
-    {
-        throw std::invalid_argument(
-            "Joint offset conditioning pivot ratio threshold is out of range.");
-    }
     if (design_matrix.cols() == 0)
     {
         return JointOffsetConditioning{ true, 0.0 };
@@ -291,7 +281,8 @@ EvaluateJointOffsetConditioning(
 
     const auto pivot_ratio{ minimum_pivot / maximum_pivot };
     return JointOffsetConditioning{
-        !std::isfinite(pivot_ratio) || pivot_ratio <= pivot_ratio_threshold,
+        !std::isfinite(pivot_ratio) ||
+            pivot_ratio <= kJointOffsetConditioningPivotRatioThreshold,
         std::isfinite(pivot_ratio) ? pivot_ratio : 0.0
     };
 }
@@ -335,7 +326,7 @@ inline JointOffsetBuildResult BuildJointOffsetSystem(
     for (const auto atom_index : active_index_list)
     {
         group_key_by_atom_position.emplace_back(context.at(atom_index).group_key);
-        active_model_list.emplace_back(model_snapshot.selected.at(atom_index));
+        active_model_list.emplace_back(GetFitModel(model_snapshot.selected, atom_index));
     }
     auto parameterization{
         BuildJointOffsetParameterization(group_key_by_atom_position, active_model_list)
@@ -368,7 +359,9 @@ inline JointOffsetBuildResult BuildJointOffsetSystem(
             active_position_by_atom_index.at(active_index)
         };
         const auto & atom_context{ context.at(active_index) };
-        const auto & target_model{ model_snapshot.selected.at(active_index) };
+        const auto & target_model{
+            GetFitModel(model_snapshot.selected, active_index)
+        };
         atom_row_basis_entries.reserve(active_index_list.size());
         group_row_basis_entries.reserve(parameterization->GroupCount());
         for (std::size_t sample_index = 0; sample_index < atom_context.raw_sampling_entries.size(); sample_index++)
@@ -547,9 +540,7 @@ inline JointOffsetBuildResult BuildJointOffsetSystem(
     system.design_matrix.resize(row_count, column_count);
     system.design_matrix.setFromTriplets(triplet_list.begin(), triplet_list.end());
     const auto conditioning{
-        EvaluateJointOffsetConditioning(
-            system.design_matrix,
-            kJointOffsetConditioningPivotRatioThreshold)
+        EvaluateJointOffsetConditioning(system.design_matrix)
     };
     if (conditioning.guard_required)
     {
@@ -660,7 +651,8 @@ inline JointOffsetSolveResult EstimateJointOffsets(
     for (std::size_t i = 0; i < active_index_list.size(); i++)
     {
         const auto atom_index{ active_index_list.at(i) };
-        previous_offset(static_cast<Eigen::Index>(i)) = model_snapshot.selected.at(atom_index).GetOffset();
+        previous_offset(static_cast<Eigen::Index>(i)) =
+            GetFitModel(model_snapshot.selected, atom_index).GetOffset();
     }
     JointOffsetBuildResult build_result;
     try
