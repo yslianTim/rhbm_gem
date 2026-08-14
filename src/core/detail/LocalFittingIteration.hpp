@@ -30,17 +30,13 @@ struct LocalFittingIterationResult
     ClusterHealthMap health_by_key{};
 };
 
-namespace local_fitting_iteration_internal {
-
 struct LocalAtomRefitResult
 {
     LocalGaussianResult result{};
     bool is_stationarity_eligible{ false };
 };
 
-} // namespace local_fitting_iteration_internal
-
-inline std::optional<local_fitting_iteration_internal::LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
+inline std::optional<LocalAtomRefitResult> FitAtomWithJointOffsetFallback(
     const SecondStageContext & context,
     std::size_t atom_index,
     const LocalGaussianResult & previous_result,
@@ -48,7 +44,6 @@ inline std::optional<local_fitting_iteration_internal::LocalAtomRefitResult> Fit
     const std::vector<double> & adjusted_response_list,
     const FitOptions & options)
 {
-    using local_fitting_iteration_internal::LocalAtomRefitResult;
     auto adjusted_sampling_entries{
         BuildSecondStageAdjustedSamples(context, atom_index, adjusted_response_list)
     };
@@ -133,7 +128,6 @@ inline LocalFittingIterationResult RunLocalFittingIteration(
     const std::vector<double> & ridge_multiplier_list,
     ClusterSolverWorkspaceMap & solver_workspace_by_key)
 {
-    using local_fitting_iteration_internal::LocalAtomRefitResult;
     const auto selected_atom_size{ context.size() };
     auto current_model_snapshot{
         BuildSecondStageModelSnapshot(
