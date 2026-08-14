@@ -49,8 +49,8 @@ using detail::FitState;
 using detail::AtomContext;
 using detail::SecondStageContext;
 
-constexpr bool kApplyLocalFittingBestIteration{ true };
-constexpr double kLocalFittingOffsetSummaryPercentile{ 0.99 };
+constexpr bool kApplyBestIteration{ true };
+constexpr double kOffsetSummaryPercentile{ 0.99 };
 
 using detail::kMaximumIterations;
 using detail::BuildProgressColumnWidths;
@@ -80,39 +80,39 @@ using detail::BuildIterationState;
 using detail::IterationOutcome;
 using detail::RunIteration;
 
-enum class LocalFittingFinalStateSource
+enum class FinalStateSource
 {
     BestAudit,
     LatestValidated,
     Unavailable
 };
 
-struct LocalFittingFinalStateSelection
+struct FinalStateSelection
 {
     const FitState * state{ nullptr };
     const PolishProvenance * polish_provenance{ nullptr };
     const AuditedState * audit_state{ nullptr };
-    LocalFittingFinalStateSource source{ LocalFittingFinalStateSource::Unavailable };
+    FinalStateSource source{ FinalStateSource::Unavailable };
 };
 
-LocalFittingFinalStateSelection SelectLocalFittingFinalState(
+FinalStateSelection SelectFinalState(
     const FitState & latest_validated_state,
     const PolishProvenance & latest_validated_polish_provenance,
     const std::optional<AuditedState> & audited_state)
 {
-    const auto source{ kApplyLocalFittingBestIteration && audited_state.has_value() ?
-        LocalFittingFinalStateSource::BestAudit : LocalFittingFinalStateSource::LatestValidated
+    const auto source{ kApplyBestIteration && audited_state.has_value() ?
+        FinalStateSource::BestAudit : FinalStateSource::LatestValidated
     };
-    if (source == LocalFittingFinalStateSource::BestAudit)
+    if (source == FinalStateSource::BestAudit)
     {
-        return LocalFittingFinalStateSelection{
+        return FinalStateSelection{
             &audited_state->state,
             &audited_state->polish_provenance,
             &*audited_state,
             source
         };
     }
-    return LocalFittingFinalStateSelection{
+    return FinalStateSelection{
         &latest_validated_state,
         &latest_validated_polish_provenance,
         nullptr,
@@ -120,15 +120,15 @@ LocalFittingFinalStateSelection SelectLocalFittingFinalState(
     };
 }
 
-std::string_view GetLocalFittingFinalStateSourceText(LocalFittingFinalStateSource source)
+std::string_view GetFinalStateSourceText(FinalStateSource source)
 {
     switch (source)
     {
-    case LocalFittingFinalStateSource::BestAudit:
+    case FinalStateSource::BestAudit:
         return "best-audit";
-    case LocalFittingFinalStateSource::LatestValidated:
+    case FinalStateSource::LatestValidated:
         return "latest-validated";
-    case LocalFittingFinalStateSource::Unavailable:
+    case FinalStateSource::Unavailable:
         return "unavailable";
     }
     return "unavailable";
@@ -145,7 +145,7 @@ bool UsesPolish(const PolishProvenance & provenance)
         });
 }
 
-struct LocalFittingOffsetStats
+struct OffsetStat
 {
     std::size_t atom_count{ 0 };
     std::size_t finite_count{ 0 };
@@ -187,21 +187,17 @@ detail::GraphTopology BuildGraphTopology(
     const auto model_snapshot{
         BuildSecondStageModelSnapshot(context, initial_state)
     };
-    std::vector<std::optional<detail::TransformedModelInvariants>>
-        selected_model_invariants;
+    std::vector<std::optional<detail::TransformedModelInvariants>> selected_model_invariants;
     selected_model_invariants.reserve(model_snapshot.selected.size());
     for (const auto & model : model_snapshot.selected)
     {
-        selected_model_invariants.emplace_back(
-            detail::BuildTransformedModelInvariants(model));
+        selected_model_invariants.emplace_back(detail::BuildTransformedModelInvariants(model));
     }
-    std::vector<std::optional<detail::TransformedModelInvariants>>
-        unselected_model_invariants;
+    std::vector<std::optional<detail::TransformedModelInvariants>> unselected_model_invariants;
     unselected_model_invariants.reserve(model_snapshot.unselected.size());
     for (const auto & model : model_snapshot.unselected)
     {
-        unselected_model_invariants.emplace_back(
-            detail::BuildTransformedModelInvariants(model));
+        unselected_model_invariants.emplace_back(detail::BuildTransformedModelInvariants(model));
     }
     const auto evaluate_model = [](
         const std::optional<detail::TransformedModelInvariants> & invariants,
@@ -249,8 +245,7 @@ detail::GraphTopology BuildGraphTopology(
                         unselected_model_invariants.at(neighbor_atom_sample.atom_index),
                         neighbor_atom_sample.distance) };
                 const auto jacobian{
-                    neighbor_evaluation.has_value() ?
-                        neighbor_evaluation->jacobian : invalid_jacobian
+                    neighbor_evaluation.has_value() ? neighbor_evaluation->jacobian : invalid_jacobian
                 };
                 if (neighbor_atom_sample.is_selected)
                 {
@@ -262,8 +257,7 @@ detail::GraphTopology BuildGraphTopology(
                     continue;
                 }
                 const auto selected_group_id{
-                    context.unselected_atom_list.at(
-                        neighbor_atom_sample.atom_index).selected_group_id
+                    context.unselected_atom_list.at(neighbor_atom_sample.atom_index).selected_group_id
                 };
                 if (!selected_group_id.has_value()) continue;
                 for (const auto selected_index :
@@ -284,8 +278,7 @@ detail::GraphTopology BuildGraphTopology(
         }
     }
 
-    std::vector<detail::GraphResidueKey>
-        residue_key_by_atom_index;
+    std::vector<detail::GraphResidueKey> residue_key_by_atom_index;
     residue_key_by_atom_index.reserve(context.size());
     for (const auto & atom_context : context)
     {
@@ -368,8 +361,7 @@ void LogUnselectedSecondStageSeedSelections(
     }
 
     std::ostringstream summary;
-    summary << "Unselected second-stage neighbor seeds = "
-        << selection_record_list.size()
+    summary << "Unselected second-stage neighbor seeds = " << selection_record_list.size()
         << ", sources = group-median:" << group_median_count
         << ", global-median:" << global_median_count << ".";
     Logger::Log(LogLevel::Info, summary.str());
@@ -393,22 +385,18 @@ void LogUnselectedSecondStageSeedSelections(
     }
 }
 
-void LogGraphTopology(
-    const detail::GraphTopology & topology,
-    const FitOptions & options)
+void LogGraphTopology(const detail::GraphTopology & topology, const FitOptions & options)
 {
     if (options.quiet_mode) return;
 
     const auto & summary{ topology.summary };
     if (!summary.uses_weighted_graph)
     {
-        Logger::Log(
-            LogLevel::Warning,
+        Logger::Log(LogLevel::Warning,
             "Weighted local-fitting coupling graph is unavailable; using binary connectivity.");
         if (Logger::GetLogLevel() >= LogLevel::Debug)
         {
-            Logger::Log(
-                LogLevel::Debug,
+            Logger::Log(LogLevel::Debug,
                 "Local-fitting weighted threshold sensitivity is unavailable in binary fallback mode.");
         }
     }
@@ -536,9 +524,9 @@ void ApplyFitState(
     }
 }
 
-LocalFittingOffsetStats SummarizeLocalFittingOffsets(const FitState & state)
+OffsetStat SummarizeOffsets(const FitState & state)
 {
-    LocalFittingOffsetStats stats;
+    OffsetStat stats;
     stats.atom_count = state.size();
     std::vector<double> absolute_offset_list;
     absolute_offset_list.reserve(state.size());
@@ -554,12 +542,12 @@ LocalFittingOffsetStats SummarizeLocalFittingOffsets(const FitState & state)
     stats.median_absolute_offset = array_helper::ComputeMedian(absolute_offset_list);
     stats.percentile_absolute_offset = array_helper::ComputePercentile(
         absolute_offset_list,
-        kLocalFittingOffsetSummaryPercentile);
+        kOffsetSummaryPercentile);
     stats.maximum_absolute_offset = *std::max_element(absolute_offset_list.begin(), absolute_offset_list.end());
     return stats;
 }
 
-void AppendLocalFittingOffsetSummary(std::ostringstream & stream, const LocalFittingOffsetStats & stats)
+void AppendOffsetSummary(std::ostringstream & stream, const OffsetStat & stats)
 {
     stream
         << std::scientific << std::setprecision(2)
@@ -571,7 +559,7 @@ void AppendLocalFittingOffsetSummary(std::ostringstream & stream, const LocalFit
         << stats.maximum_absolute_offset;
 }
 
-void AppendLocalFittingAuditSummary(std::ostringstream & stream, const AuditedState & audited_state)
+void AppendAuditSummary(std::ostringstream & stream, const AuditedState & audited_state)
 {
     const auto & objective{ audited_state.objective };
     stream << "; audit best source = ";
@@ -595,11 +583,11 @@ void AppendLocalFittingAuditSummary(std::ostringstream & stream, const AuditedSt
         << kTailValidationWeight;
 }
 
-void LogLocalFittingTerminalFallback(
+void LogTerminalFallback(
     const FitOptions & options,
     std::size_t accepted_iteration_count,
     const TerminalSummary & terminal_summary,
-    const LocalFittingOffsetStats & offset_stats)
+    const OffsetStat & offset_stats)
 {
     if (options.quiet_mode) return;
 
@@ -609,12 +597,12 @@ void LogLocalFittingTerminalFallback(
         << "Completed local fitting after " << accepted_iteration_count
         << " accepted iterations with last validated states retained";
     AppendTerminalSummary(warning_message, terminal_summary);
-    AppendLocalFittingOffsetSummary(warning_message, offset_stats);
+    AppendOffsetSummary(warning_message, offset_stats);
     warning_message << ".";
     Logger::Log(LogLevel::Warning, warning_message.str());
 }
 
-void FinishLocalFittingWithNoActiveAtoms(
+void FinishWithNoActiveAtoms(
     ModelObject & model_object,
     const SecondStageContext & context,
     const FitState & state,
@@ -623,30 +611,25 @@ void FinishLocalFittingWithNoActiveAtoms(
     const TerminalSummary & terminal_summary)
 {
     ApplyFitState(model_object, context, state);
-    const auto offset_stats{ SummarizeLocalFittingOffsets(state) };
+    const auto offset_stats{ SummarizeOffsets(state) };
     if (terminal_summary.HasFailures())
     {
-        LogLocalFittingTerminalFallback(
-            options,
-            accepted_iteration_count,
-            terminal_summary,
-            offset_stats);
+        LogTerminalFallback(options, accepted_iteration_count, terminal_summary, offset_stats);
         return;
     }
     if (!options.quiet_mode)
     {
         Logger::FinishProgressLine();
-        Logger::Log(
-            LogLevel::Info,
+        Logger::Log(LogLevel::Info,
             "Skip 2nd-stage local atom fitting because no atoms are selected.");
     }
 }
 
-void LogLocalFittingConverged(
+void LogConverged(
     const FitOptions & options,
     std::size_t accepted_iteration_count,
     const algorithm::ParameterChangeStats & transformed_change_stats,
-    const LocalFittingOffsetStats & offset_stats)
+    const OffsetStat & offset_stats)
 {
     if (options.quiet_mode) return;
 
@@ -660,17 +643,17 @@ void LogLocalFittingConverged(
         << transformed_change_stats.percentile_list.at(detail::kLogWidthChangeIndex)
         << ", and percentile offset-to-peak-ratio change = "
         << transformed_change_stats.percentile_list.at(detail::kOffsetToPeakRatioChangeIndex);
-    AppendLocalFittingOffsetSummary(message, offset_stats);
+    AppendOffsetSummary(message, offset_stats);
     message << ".";
     Logger::Log(LogLevel::Info, message.str());
 }
 
-void LogLocalFittingMaximumIterations(
+void LogMaximumIterations(
     const FitOptions & options,
-    LocalFittingFinalStateSource final_state_source,
+    FinalStateSource final_state_source,
     const AuditedState * applied_audit_state,
     const TerminalSummary & terminal_summary,
-    const LocalFittingOffsetStats & applied_offset_stats)
+    const OffsetStat & applied_offset_stats)
 {
     if (options.quiet_mode) return;
 
@@ -678,13 +661,13 @@ void LogLocalFittingMaximumIterations(
     std::ostringstream warning_message;
     warning_message << "Reached maximum iteration size";
     AppendTerminalSummary(warning_message, terminal_summary);
-    if (final_state_source == LocalFittingFinalStateSource::BestAudit &&
+    if (final_state_source == FinalStateSource::BestAudit &&
         applied_audit_state != nullptr)
     {
         warning_message << "; applying best validated audit state";
-        AppendLocalFittingAuditSummary(warning_message, *applied_audit_state);
+        AppendAuditSummary(warning_message, *applied_audit_state);
     }
-    else if (final_state_source == LocalFittingFinalStateSource::LatestValidated)
+    else if (final_state_source == FinalStateSource::LatestValidated)
     {
         warning_message << "; applying latest validated state";
     }
@@ -692,18 +675,18 @@ void LogLocalFittingMaximumIterations(
     {
         warning_message << "; no validated state is available";
     }
-    AppendLocalFittingOffsetSummary(warning_message, applied_offset_stats);
+    AppendOffsetSummary(warning_message, applied_offset_stats);
     warning_message << ".";
     Logger::Log(LogLevel::Warning, warning_message.str());
 }
 
-void LogSecondStageLocalFittingSummary(
+void LogSecondStageSummary(
     const FitOptions & options,
     std::size_t accepted_iteration_count,
     std::string_view stop_reason,
     const BestAuditState & best_audit_state,
     std::optional<bool> final_uses_polish,
-    LocalFittingFinalStateSource final_state_source)
+    FinalStateSource final_state_source)
 {
     if (options.quiet_mode) return;
 
@@ -745,16 +728,14 @@ void LogSecondStageLocalFittingSummary(
     }
     message
         << ", final_state_source="
-        << GetLocalFittingFinalStateSourceText(final_state_source)
+        << GetFinalStateSourceText(final_state_source)
         << ".";
     Logger::Log(LogLevel::Info, message.str());
 }
 
 } // namespace
 
-bool RunSecondStageLocalFitting(
-    ModelObject & model_object,
-    const FitOptions & options)
+bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & options)
 {
     auto context{ BuildSecondStageContext(model_object, options) };
     StoreSecondStageNeighborCounts(model_object, context);
@@ -762,32 +743,27 @@ bool RunSecondStageLocalFitting(
     if (!options.quiet_mode)
     {
         Logger::Log(LogLevel::Info, "Run 2nd-stage local atom fitting with iterations...");
-        Logger::Log(
-            LogLevel::Info,
-            kApplyLocalFittingBestIteration ?
+        Logger::Log(LogLevel::Info,
+            kApplyBestIteration ?
                 "Second-stage best-iteration application: enabled." :
                 "Second-stage best-iteration application: disabled.");
     }
 
     bool unselected_seed_failure{ false };
     auto initial_state_build_result{
-        BuildInitialFitState(
-            context,
-            unselected_seed_failure)
+        BuildInitialFitState(context, unselected_seed_failure)
     };
     if (!initial_state_build_result.has_value())
     {
         if (!options.quiet_mode)
         {
-            Logger::Log(
-                LogLevel::Warning,
+            Logger::Log(LogLevel::Warning,
                 unselected_seed_failure ?
                     "Skip 2nd-stage local atom fitting because no valid Gaussian seed "
                     "is available for every unselected neighbor atom." :
                     "Skip 2nd-stage local atom fitting because no valid Gaussian seed "
                     "is available for every selected atom.");
-            Logger::Log(
-                LogLevel::Info,
+            Logger::Log(LogLevel::Info,
                 "Second-stage local fitting summary: accepted_iterations=0, "
                 "best_iteration=unavailable, stop_reason=" +
                     std::string(unselected_seed_failure ?
@@ -833,20 +809,20 @@ bool RunSecondStageLocalFitting(
     {
         if (iteration_state.active_index_list.empty())
         {
-            FinishLocalFittingWithNoActiveAtoms(
+            FinishWithNoActiveAtoms(
                 model_object,
                 context,
                 iteration_state.previous_state,
                 options,
                 iteration_state.accepted_iteration_count,
                 iteration_state.terminal_failure_state.Summary());
-            LogSecondStageLocalFittingSummary(
+            LogSecondStageSummary(
                 options,
                 iteration_state.accepted_iteration_count,
                 "terminal-isolation",
                 iteration_state.best_audit_state,
                 UsesPolish(iteration_state.previous_polish_provenance),
-                LocalFittingFinalStateSource::LatestValidated);
+                FinalStateSource::LatestValidated);
             RunGroupPotentialFitting(model_object, options, FittingStage::Second);
             return true;
         }
@@ -887,7 +863,7 @@ bool RunSecondStageLocalFitting(
             }
 
             const auto final_state_selection{
-                SelectLocalFittingFinalState(
+                SelectFinalState(
                     iteration_state.previous_state,
                     iteration_state.previous_polish_provenance,
                     iteration_state.best_audit_state.best)
@@ -896,7 +872,7 @@ bool RunSecondStageLocalFitting(
                 model_object,
                 context,
                 *final_state_selection.state);
-            LogSecondStageLocalFittingSummary(
+            LogSecondStageSummary(
                 options,
                 iteration_state.accepted_iteration_count,
                 GetAllRejectedResolutionText(*iteration_result.all_rejected_resolution),
@@ -918,7 +894,7 @@ bool RunSecondStageLocalFitting(
         if (iteration_result.audit_patience_exhausted)
         {
             const auto final_state_selection{
-                SelectLocalFittingFinalState(
+                SelectFinalState(
                     iteration_state.previous_state,
                     iteration_state.previous_polish_provenance,
                     iteration_state.best_audit_state.best)
@@ -927,7 +903,7 @@ bool RunSecondStageLocalFitting(
                 model_object,
                 context,
                 *final_state_selection.state);
-            LogSecondStageLocalFittingSummary(
+            LogSecondStageSummary(
                 options,
                 iteration_state.accepted_iteration_count,
                 "audit-patience",
@@ -941,7 +917,7 @@ bool RunSecondStageLocalFitting(
         if (iteration_result.converged)
         {
             const auto accepted_offset_stats{
-                SummarizeLocalFittingOffsets(iteration_state.previous_state)
+                SummarizeOffsets(iteration_state.previous_state)
             };
             ApplyFitState(
                 model_object,
@@ -949,7 +925,7 @@ bool RunSecondStageLocalFitting(
                 iteration_state.previous_state);
             if (iteration_state.terminal_failure_state.HasFailures())
             {
-                LogLocalFittingTerminalFallback(
+                LogTerminalFallback(
                     options,
                     iteration_state.accepted_iteration_count,
                     iteration_state.terminal_failure_state.Summary(),
@@ -957,19 +933,19 @@ bool RunSecondStageLocalFitting(
             }
             else
             {
-                LogLocalFittingConverged(
+                LogConverged(
                     options,
                     iteration_state.accepted_iteration_count,
                     iteration_result.transformed_change_stats,
                     accepted_offset_stats);
             }
-            LogSecondStageLocalFittingSummary(
+            LogSecondStageSummary(
                 options,
                 iteration_state.accepted_iteration_count,
                 "converged",
                 iteration_state.best_audit_state,
                 UsesPolish(iteration_state.previous_polish_provenance),
-                LocalFittingFinalStateSource::LatestValidated);
+                FinalStateSource::LatestValidated);
             RunGroupPotentialFitting(model_object, options, FittingStage::Second);
             return true;
         }
@@ -977,7 +953,7 @@ bool RunSecondStageLocalFitting(
         if (iter + 1 == kMaximumIterations)
         {
             const auto final_state_selection{
-                SelectLocalFittingFinalState(
+                SelectFinalState(
                     iteration_state.previous_state,
                     iteration_state.previous_polish_provenance,
                     iteration_state.best_audit_state.best)
@@ -986,13 +962,13 @@ bool RunSecondStageLocalFitting(
                 model_object,
                 context,
                 *final_state_selection.state);
-            LogLocalFittingMaximumIterations(
+            LogMaximumIterations(
                 options,
                 final_state_selection.source,
                 final_state_selection.audit_state,
                 iteration_state.terminal_failure_state.Summary(),
-                SummarizeLocalFittingOffsets(*final_state_selection.state));
-            LogSecondStageLocalFittingSummary(
+                SummarizeOffsets(*final_state_selection.state));
+            LogSecondStageSummary(
                 options,
                 iteration_state.accepted_iteration_count,
                 "maximum-iterations",
