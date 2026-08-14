@@ -3,10 +3,9 @@
 #include "core/detail/GaussianEstimatorStages.hpp"
 #include "core/detail/ResidualEvaluation.hpp"
 #include "core/detail/Objective.hpp"
-#include "core/detail/LocalFittingTerminalFailure.hpp"
+#include "core/detail/TerminalFailure.hpp"
 #include "core/detail/IterationProcess.hpp"
 #include "core/detail/CouplingGraph.hpp"
-#include "core/detail/JointOffset.hpp"
 #include "core/detail/LocalFittingPerformanceCounters.hpp"
 #include "core/detail/SecondStageInitialization.hpp"
 #include "core/detail/TransformedChange.hpp"
@@ -66,8 +65,8 @@ using detail::BuildSecondStageAdjustedSamples;
 using detail::ObjectiveDomain;
 using detail::AuditedState;
 using detail::BestAuditState;
-using detail::LocalFittingTerminalSummary;
-using detail::AppendLocalFittingTerminalSummary;
+using detail::TerminalSummary;
+using detail::AppendTerminalSummary;
 using detail::RejectedClusterDiagnostic;
 using detail::PolishProgress;
 using detail::kFitRangeWeight;
@@ -600,7 +599,7 @@ void AppendLocalFittingAuditSummary(std::ostringstream & stream, const AuditedSt
 void LogLocalFittingTerminalFallback(
     const FitOptions & options,
     std::size_t accepted_iteration_count,
-    const LocalFittingTerminalSummary & terminal_summary,
+    const TerminalSummary & terminal_summary,
     const LocalFittingOffsetStats & offset_stats)
 {
     if (options.quiet_mode) return;
@@ -610,7 +609,7 @@ void LogLocalFittingTerminalFallback(
     warning_message
         << "Completed local fitting after " << accepted_iteration_count
         << " accepted iterations with last validated states retained";
-    AppendLocalFittingTerminalSummary(warning_message, terminal_summary);
+    AppendTerminalSummary(warning_message, terminal_summary);
     AppendLocalFittingOffsetSummary(warning_message, offset_stats);
     warning_message << ".";
     Logger::Log(LogLevel::Warning, warning_message.str());
@@ -622,7 +621,7 @@ void FinishLocalFittingWithNoActiveAtoms(
     const FitState & state,
     const FitOptions & options,
     std::size_t accepted_iteration_count,
-    const LocalFittingTerminalSummary & terminal_summary)
+    const TerminalSummary & terminal_summary)
 {
     ApplyFitState(model_object, context, state);
     const auto offset_stats{ SummarizeLocalFittingOffsets(state) };
@@ -671,7 +670,7 @@ void LogLocalFittingMaximumIterations(
     const FitOptions & options,
     LocalFittingFinalStateSource final_state_source,
     const AuditedState * applied_audit_state,
-    const LocalFittingTerminalSummary & terminal_summary,
+    const TerminalSummary & terminal_summary,
     const LocalFittingOffsetStats & applied_offset_stats)
 {
     if (options.quiet_mode) return;
@@ -679,7 +678,7 @@ void LogLocalFittingMaximumIterations(
     Logger::FinishProgressLine();
     std::ostringstream warning_message;
     warning_message << "Reached maximum iteration size";
-    AppendLocalFittingTerminalSummary(warning_message, terminal_summary);
+    AppendTerminalSummary(warning_message, terminal_summary);
     if (final_state_source == LocalFittingFinalStateSource::BestAudit &&
         applied_audit_state != nullptr)
     {

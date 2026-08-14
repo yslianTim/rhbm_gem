@@ -29,7 +29,7 @@ struct PersistentTerminalFailureState
 using PersistentTerminalFailureStateMap = std::map<ClusterKey, PersistentTerminalFailureState>;
 using TerminalPersistentFailureMap = std::map<ClusterKey, PersistentTerminalFailureReason>;
 
-struct LocalFittingTerminalSummary
+struct TerminalSummary
 {
     std::size_t suspicious_cluster_count{ 0 };
     std::size_t suspicious_atom_count{ 0 };
@@ -48,15 +48,12 @@ struct LocalFittingTerminalSummary
     }
 };
 
-inline void AppendLocalFittingTerminalSummary(
-    std::ostream & stream,
-    const LocalFittingTerminalSummary & summary)
+inline void AppendTerminalSummary(std::ostream & stream, const TerminalSummary & summary)
 {
     if (summary.suspicious_atom_count > 0)
     {
         stream << "; terminal suspicious rollback fallback clusters/atoms = "
-            << summary.suspicious_cluster_count
-            << "/" << summary.suspicious_atom_count;
+            << summary.suspicious_cluster_count << "/" << summary.suspicious_atom_count;
     }
     if (summary.joint_offset_failure_atom_count > 0)
     {
@@ -80,7 +77,7 @@ inline void AppendLocalFittingTerminalSummary(
 
 inline std::vector<ClusterKey> AccumulateTerminalFailureSummary(
     const TerminalPersistentFailureMap & terminal_failure_by_key,
-    LocalFittingTerminalSummary & terminal_summary)
+    TerminalSummary & terminal_summary)
 {
     std::vector<ClusterKey> terminal_key_list;
     terminal_key_list.reserve(terminal_failure_by_key.size());
@@ -179,7 +176,7 @@ inline void ApplyTerminalFallbackClusters(
     }
 }
 
-inline std::vector<std::size_t> BuildEligibleLocalFittingActiveIndexList(const std::vector<char> & terminal_atom_mask)
+inline std::vector<std::size_t> BuildEligibleActiveIndexList(const std::vector<char> & terminal_atom_mask)
 {
     const auto atom_size{ terminal_atom_mask.size() };
     std::vector<std::size_t> active_index_list;
@@ -194,37 +191,26 @@ inline std::vector<std::size_t> BuildEligibleLocalFittingActiveIndexList(const s
     return active_index_list;
 }
 
-struct LocalFittingTerminalFailureState
+struct TerminalFailureState
 {
     PersistentTerminalFailureStateMap persistent_state_by_key{};
     std::vector<char> terminal_atom_mask{};
-    LocalFittingTerminalSummary terminal_summary{};
+    TerminalSummary terminal_summary{};
 
-    LocalFittingTerminalFailureState() = default;
+    TerminalFailureState() = default;
 
-    explicit LocalFittingTerminalFailureState(std::size_t atom_count)
+    explicit TerminalFailureState(std::size_t atom_count)
         : terminal_atom_mask(atom_count, 0)
     {
     }
 
-    const LocalFittingTerminalSummary & Summary() const
-    {
-        return terminal_summary;
-    }
-
-    bool HasFailures() const
-    {
-        return terminal_summary.HasFailures();
-    }
-
-    std::size_t AtomCount() const
-    {
-        return terminal_summary.AtomCount();
-    }
+    const TerminalSummary & Summary() const { return terminal_summary; }
+    bool HasFailures() const { return terminal_summary.HasFailures(); }
+    std::size_t AtomCount() const { return terminal_summary.AtomCount(); }
 
     std::vector<std::size_t> BuildEligibleActiveIndexList() const
     {
-        return BuildEligibleLocalFittingActiveIndexList(terminal_atom_mask);
+        return detail::BuildEligibleActiveIndexList(terminal_atom_mask);
     }
 
     std::vector<ClusterKey> IsolatePersistentFailures(
@@ -246,9 +232,7 @@ struct LocalFittingTerminalFailureState
                 persistent_state_by_key)
         };
         const auto terminal_key_list{
-            AccumulateTerminalFailureSummary(
-                terminal_failure_by_key,
-                terminal_summary)
+            AccumulateTerminalFailureSummary(terminal_failure_by_key, terminal_summary)
         };
         ApplyTerminalFallbackClusters(
             terminal_key_list,

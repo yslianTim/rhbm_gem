@@ -25,7 +25,7 @@
 #include "core/detail/ClusterHealth.hpp"
 #include "core/detail/CandidateSelection.hpp"
 #include "core/detail/CouplingGraph.hpp"
-#include "core/detail/LocalFittingTerminalFailure.hpp"
+#include "core/detail/TerminalFailure.hpp"
 #include "core/detail/Objective.hpp"
 #include "core/detail/ResidualEvaluation.hpp"
 #include "core/detail/FitStateView.hpp"
@@ -76,7 +76,7 @@ struct IterationState
     ClusterSolverWorkspaceMap solver_workspace_by_key{};
     ObjectiveDomain objective_domain{};
     BestAuditState best_audit_state{};
-    LocalFittingTerminalFailureState terminal_failure_state{};
+    TerminalFailureState terminal_failure_state{};
     ClusterObjectiveStateMap cluster_objective_state{};
     TrustRegionStateSet trust_region_state{};
     std::vector<ClusterKey> unchanged_state_exhausted_key_list{};
@@ -857,13 +857,9 @@ inline IterationState BuildIterationState(
     iteration_state.previous_state = std::move(initial_state);
     iteration_state.previous_polish_provenance.assign(context.size(), 0);
     iteration_state.rollback_atom_mask.assign(context.size(), 0);
-    iteration_state.terminal_failure_state =
-        LocalFittingTerminalFailureState(context.size());
-    iteration_state.active_index_list =
-        iteration_state.terminal_failure_state.BuildEligibleActiveIndexList();
-    iteration_state.graph_partition = BuildGraphPartition(
-        graph_topology,
-        iteration_state.active_index_list);
+    iteration_state.terminal_failure_state = TerminalFailureState(context.size());
+    iteration_state.active_index_list = iteration_state.terminal_failure_state.BuildEligibleActiveIndexList();
+    iteration_state.graph_partition = BuildGraphPartition(graph_topology, iteration_state.active_index_list);
     iteration_state.cluster_key_list = BuildGraphClusterKeyList(iteration_state.graph_partition);
     ResetClusterSolverWorkspace(
         iteration_state.cluster_key_list,

@@ -24,7 +24,7 @@
 #include "core/detail/ResidualEvaluation.hpp"
 #include "core/detail/SecondStageInitialization.hpp"
 #include "core/detail/SuspiciousUpdate.hpp"
-#include "core/detail/LocalFittingTerminalFailure.hpp"
+#include "core/detail/TerminalFailure.hpp"
 #include "core/detail/TrustRegion.hpp"
 #include "core/detail/TransformedChange.hpp"
 #include "data/detail/AtomClassifier.hpp"
