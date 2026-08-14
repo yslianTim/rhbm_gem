@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <optional>
+#include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -17,11 +18,67 @@
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 #include "core/detail/LocalFittingGroupMedian.hpp"
-#include "core/detail/SeedRepair.hpp"
 #include "core/detail/SecondStageContext.hpp"
+#include "core/detail/TransformedChange.hpp"
 #include "data/detail/AtomClassifier.hpp"
 
 namespace rhbm_gem::core::detail {
+
+enum class SecondStageSeedSource
+{
+    GroupPosterior,
+    GroupPrior,
+    GroupMedian,
+    GlobalMedian
+};
+
+struct SecondStageSeedCandidates
+{
+    std::optional<GaussianModel3DWithUncertainty> group_posterior{};
+    std::optional<GaussianModel3DWithUncertainty> group_prior{};
+    std::optional<GaussianModel3DWithUncertainty> group_median{};
+    std::optional<GaussianModel3DWithUncertainty> global_median{};
+};
+
+struct SecondStageSeedSelection
+{
+    SecondStageSeedSource source{ SecondStageSeedSource::GlobalMedian };
+    GaussianModel3DWithUncertainty model{};
+};
+
+inline std::optional<SecondStageSeedSelection> SelectSecondStageSeed(
+    const SecondStageSeedCandidates & candidates)
+{
+    const auto select = [](
+        SecondStageSeedSource source,
+        const std::optional<GaussianModel3DWithUncertainty> & candidate)
+        -> std::optional<SecondStageSeedSelection>
+    {
+        if (!candidate.has_value() ||
+            !IsValidSecondStageGaussianModel(candidate->GetModel()))
+        {
+            return std::nullopt;
+        }
+        return SecondStageSeedSelection{ source, *candidate };
+    };
+
+    if (const auto selected{
+            select(SecondStageSeedSource::GroupPosterior, candidates.group_posterior) })
+    {
+        return selected;
+    }
+    if (const auto selected{
+            select(SecondStageSeedSource::GroupPrior, candidates.group_prior) })
+    {
+        return selected;
+    }
+    if (const auto selected{
+            select(SecondStageSeedSource::GroupMedian, candidates.group_median) })
+    {
+        return selected;
+    }
+    return select(SecondStageSeedSource::GlobalMedian, candidates.global_median);
+}
 
 constexpr double kNeighborContributionDistanceMax{ 2.5 };
 constexpr double kNeighborAtomSearchRange{ 2.0 * kNeighborContributionDistanceMax };
@@ -306,7 +363,6 @@ inline std::optional<SecondStageInitialStateBuildResult> BuildInitialFitState(
         }
 
         unselected_atom_contributor.initial_seed = selection->model;
-        unselected_atom_contributor.seed_source = selection->source;
         build_result.unselected_selection_record_list.emplace_back(
             SecondStageSeedSelectionRecord{
                 i,

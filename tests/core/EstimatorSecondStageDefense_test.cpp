@@ -22,7 +22,7 @@
 #include "core/detail/JointPolish.hpp"
 #include "core/detail/Objective.hpp"
 #include "core/detail/ResidualEvaluation.hpp"
-#include "core/detail/SeedRepair.hpp"
+#include "core/detail/SecondStageInitialization.hpp"
 #include "core/detail/SuspiciousUpdate.hpp"
 #include "core/detail/LocalFittingTerminalFailure.hpp"
 #include "core/detail/TrustRegion.hpp"

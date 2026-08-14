@@ -9,7 +9,6 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 
 #include "core/detail/CouplingGraph.hpp"
-#include "core/detail/SeedRepair.hpp"
 
 namespace rhbm_gem::core::detail {
 
@@ -26,7 +25,6 @@ struct UnselectedAtomContributor
     GroupKey group_key{};
     std::optional<std::size_t> selected_group_id{};
     std::optional<GaussianModel3DWithUncertainty> initial_seed{};
-    SecondStageSeedSource seed_source{ SecondStageSeedSource::GlobalMedian };
 };
 
 struct AtomContext
@@ -67,17 +65,8 @@ struct SecondStageContext
     std::vector<std::vector<std::size_t>> selected_atom_index_list_by_group{};
 
     std::size_t size() const { return selected_atom_list.size(); }
-
-    AtomContext & at(std::size_t index)
-    {
-        return selected_atom_list.at(index);
-    }
-
-    const AtomContext & at(std::size_t index) const
-    {
-        return selected_atom_list.at(index);
-    }
-
+    AtomContext & at(std::size_t index) { return selected_atom_list.at(index); }
+    const AtomContext & at(std::size_t index) const { return selected_atom_list.at(index); }
     auto begin() { return selected_atom_list.begin(); }
     auto end() { return selected_atom_list.end(); }
     auto begin() const { return selected_atom_list.begin(); }

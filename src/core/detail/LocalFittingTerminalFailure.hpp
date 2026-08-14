@@ -17,8 +17,7 @@ namespace rhbm_gem::core::detail {
 constexpr std::size_t kPersistentTerminalFailureIterationLimit{ 5 };
 
 using PersistentSuspiciousRollbackReason = std::vector<std::size_t>;
-using PersistentTerminalFailureReason =
-    std::variant<PersistentSuspiciousRollbackReason, JointOffsetSolveStatus>;
+using PersistentTerminalFailureReason = std::variant<PersistentSuspiciousRollbackReason, JointOffsetSolveStatus>;
 
 struct PersistentTerminalFailureState
 {
