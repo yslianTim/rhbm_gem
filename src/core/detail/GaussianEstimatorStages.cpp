@@ -76,7 +76,7 @@ constexpr std::size_t kLocalFittingAuditPatience{ 3 };
 constexpr bool kApplyLocalFittingBestIteration{ true };
 constexpr double kLocalFittingOffsetSummaryPercentile{ 0.99 };
 
-using detail::AreLocalFittingClustersStationarityEligible;
+using detail::AreClustersStationarityEligible;
 using detail::GetJointOffsetSolveStatusText;
 using detail::ResetClusterSolverWorkspace;
 using detail::BuildSecondStageAdjustedSamples;
@@ -1438,7 +1438,7 @@ bool RunSecondStageLocalFitting(
         };
         const auto has_suspicious_offset_fallback{ iteration_suspicious_atom_count > 0 };
         const auto is_stationarity_eligible{
-            AreLocalFittingClustersStationarityEligible(current_health_by_key)
+            AreClustersStationarityEligible(current_health_by_key)
         };
         const auto raw_state{ std::move(iteration_result.state) };
         const auto raw_fixed_point_change_summary{

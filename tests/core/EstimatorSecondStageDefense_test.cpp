@@ -17,7 +17,7 @@
 #include "core/detail/BacktrackingWorkspace.hpp"
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/LocalFittingGroupMedian.hpp"
-#include "core/detail/LocalFittingHealth.hpp"
+#include "core/detail/ClusterHealth.hpp"
 #include "core/detail/JointOffset.hpp"
 #include "core/detail/JointPolish.hpp"
 #include "core/detail/Objective.hpp"
@@ -2131,19 +2131,19 @@ TEST(EstimatorSecondStageDefenseTest,
 
 TEST(EstimatorSecondStageDefenseTest, LocalRefitHealthTracksStationarity)
 {
-    EXPECT_TRUE(health_detail::IsLocalGaussianRefitStatusStationarityEligible(
+    EXPECT_TRUE(health_detail::IsLocalRefitStatusStationarityEligible(
         rg::RHBMEstimationStatus::SUCCESS));
-    EXPECT_FALSE(health_detail::IsLocalGaussianRefitStatusStationarityEligible(
+    EXPECT_FALSE(health_detail::IsLocalRefitStatusStationarityEligible(
         rg::RHBMEstimationStatus::MAX_ITERATIONS_REACHED));
     for (const auto status : {
         rg::RHBMEstimationStatus::NUMERICAL_FALLBACK,
         rg::RHBMEstimationStatus::INSUFFICIENT_DATA,
         rg::RHBMEstimationStatus::SINGLE_MEMBER })
     {
-        EXPECT_FALSE(health_detail::IsLocalGaussianRefitStatusStationarityEligible(status));
+        EXPECT_FALSE(health_detail::IsLocalRefitStatusStationarityEligible(status));
     }
     EXPECT_THROW(
-        health_detail::IsLocalGaussianRefitStatusStationarityEligible(
+        health_detail::IsLocalRefitStatusStationarityEligible(
             static_cast<rg::RHBMEstimationStatus>(-1)),
         std::logic_error);
 }
@@ -4069,10 +4069,10 @@ TEST(EstimatorSecondStageDefenseTest, PersistentTerminalReasonRequiresStableReas
     audit_detail::FitState previous_state;
     previous_state.emplace_back(MakeGaussianResult(model));
     const auto assembled_state{ previous_state };
-    audit_detail::LocalFittingClusterHealthMap health_by_key;
+    audit_detail::ClusterHealthMap health_by_key;
     health_by_key.emplace(
         key,
-        audit_detail::LocalFittingClusterHealth{
+        audit_detail::ClusterHealth{
             audit_detail::JointOffsetSolveStatus::Converged });
     std::vector<char> suspicious_atom_mask{ 1 };
     audit_detail::PersistentTerminalFailureStateMap state_by_key;

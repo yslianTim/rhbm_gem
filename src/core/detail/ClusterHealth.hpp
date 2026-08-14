@@ -12,7 +12,7 @@
 
 namespace rhbm_gem::core::detail {
 
-struct LocalFittingClusterHealth
+struct ClusterHealth
 {
     JointOffsetSolveStatus joint_offset_status{ JointOffsetSolveStatus::SystemBuildFailed };
     bool is_refit_stationarity_eligible{ true };
@@ -24,9 +24,9 @@ struct LocalFittingClusterHealth
     }
 };
 
-using LocalFittingClusterHealthMap = std::map<ClusterKey, LocalFittingClusterHealth>;
+using ClusterHealthMap = std::map<ClusterKey, ClusterHealth>;
 
-inline bool AreLocalFittingClustersStationarityEligible(const LocalFittingClusterHealthMap & health_by_key)
+inline bool AreClustersStationarityEligible(const ClusterHealthMap & health_by_key)
 {
     return std::all_of(
         health_by_key.begin(),
@@ -37,7 +37,7 @@ inline bool AreLocalFittingClustersStationarityEligible(const LocalFittingCluste
         });
 }
 
-inline bool IsLocalGaussianRefitStatusStationarityEligible(RHBMEstimationStatus status)
+inline bool IsLocalRefitStatusStationarityEligible(RHBMEstimationStatus status)
 {
     switch (status)
     {

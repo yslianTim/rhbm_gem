@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "core/detail/JointOffset.hpp"
-#include "core/detail/LocalFittingHealth.hpp"
+#include "core/detail/ClusterHealth.hpp"
 #include "core/detail/FitStateView.hpp"
 #include "core/detail/TransformedChange.hpp"
 #include "core/detail/SuspiciousUpdate.hpp"
@@ -69,7 +69,7 @@ inline std::vector<ClusterKey> AccumulateTerminalFailureSummary(
 inline TerminalPersistentFailureMap UpdatePersistentTerminalFailureState(
     const std::vector<ClusterKey> & accepted_key_list,
     const SuspiciousUpdateMask & suspicious_atom_mask,
-    const LocalFittingClusterHealthMap & health_by_key,
+    const ClusterHealthMap & health_by_key,
     const FitState & assembled_state,
     const FitState & previous_state,
     PersistentTerminalFailureStateMap & state_by_key)

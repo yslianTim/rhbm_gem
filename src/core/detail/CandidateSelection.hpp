@@ -18,7 +18,7 @@
 #include "core/detail/BacktrackingWorkspace.hpp"
 #include "core/detail/CandidateEvaluationOverlay.hpp"
 #include "core/detail/LocalFittingGroupMedian.hpp"
-#include "core/detail/LocalFittingHealth.hpp"
+#include "core/detail/ClusterHealth.hpp"
 #include "core/detail/Objective.hpp"
 #include "core/detail/LocalFittingPerformanceCounters.hpp"
 #include "core/detail/FitStateView.hpp"
@@ -652,7 +652,7 @@ inline CandidateSelection SelectClusterCandidates(
     const SecondStageModelSnapshot & previous_model_snapshot,
     const ResidualBaseline & residual_baseline,
     const CouplingGraphPartition & partition,
-    const LocalFittingClusterHealthMap & health_by_key,
+    const ClusterHealthMap & health_by_key,
     const FitState & previous_state,
     const PolishProvenance & previous_polish_provenance,
     const FitState & raw_state,

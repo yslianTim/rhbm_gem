@@ -13,7 +13,7 @@
 #endif
 
 #include "core/detail/JointOffset.hpp"
-#include "core/detail/LocalFittingHealth.hpp"
+#include "core/detail/ClusterHealth.hpp"
 #include "core/detail/ResidualEvaluation.hpp"
 #include "core/detail/FitStateView.hpp"
 #include "core/detail/SuspiciousUpdate.hpp"
@@ -27,7 +27,7 @@ struct LocalFittingIterationResult
 {
     FitState state{};
     SuspiciousUpdateMask rollback_atom_mask{};
-    LocalFittingClusterHealthMap health_by_key{};
+    ClusterHealthMap health_by_key{};
 };
 
 namespace local_fitting_iteration_internal {
@@ -97,7 +97,7 @@ inline std::optional<local_fitting_iteration_internal::LocalAtomRefitResult> Fit
         {
             const auto is_stationarity_eligible{
                 candidate_result.fit_result.has_value() &&
-                IsLocalGaussianRefitStatusStationarityEligible(candidate_result.fit_result->status)
+                IsLocalRefitStatusStationarityEligible(candidate_result.fit_result->status)
             };
             return LocalAtomRefitResult{
                 std::move(candidate_result),
@@ -195,7 +195,7 @@ inline LocalFittingIterationResult RunLocalFittingIteration(
         if (exception) std::rethrow_exception(exception);
     }
 
-    LocalFittingClusterHealthMap health_by_key;
+    ClusterHealthMap health_by_key;
     for (std::size_t cluster_position = 0; cluster_position < cluster_key_list.size(); cluster_position++)
     {
         const auto & key{ cluster_key_list.at(cluster_position) };
@@ -207,7 +207,7 @@ inline LocalFittingIterationResult RunLocalFittingIteration(
                 current_model_snapshot.selected.at(atom_index)
                     .WithOffset(result.offset(static_cast<Eigen::Index>(i)));
         }
-        health_by_key.emplace(key, LocalFittingClusterHealth{ result.status });
+        health_by_key.emplace(key, ClusterHealth{ result.status });
     }
 
     auto iteration_state{ previous_state };
