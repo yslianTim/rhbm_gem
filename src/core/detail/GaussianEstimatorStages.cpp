@@ -43,41 +43,18 @@ namespace rhbm_gem::core {
 
 namespace {
 
-using detail::BuildSecondStageModelSnapshot;
-using detail::SampleRef;
+constexpr double kOffsetSummaryPercentile{ 0.99 };
+
 using detail::PerformanceCounters;
 using detail::FitState;
 using detail::SecondStageContext;
 using detail::SecondStageInitialStateBuildResult;
-
-constexpr double kOffsetSummaryPercentile{ 0.99 };
-
-using detail::kMaximumIterations;
-using detail::BuildProgressColumnWidths;
-using detail::LogProgressHeader;
-using detail::LogIterationProgress;
-using detail::LogRejectedClusterDiagnostics;
-using detail::LogAcceptedBacktrackingDiagnostics;
-using detail::LogAllRejectedResolution;
-using detail::GetAllRejectedResolutionText;
-using detail::BuildSecondStageAdjustedSamples;
 using detail::ObjectiveDomain;
 using detail::AuditedState;
 using detail::BestAuditState;
 using detail::TerminalSummary;
-using detail::AppendTerminalSummary;
-using detail::UsesPolish;
-using detail::kFitRangeWeight;
-using detail::kTailValidationWeight;
-using detail::kOffsetPlausibilityPenaltyWeight;
-using detail::BuildSecondStageContext;
-using detail::StoreSecondStageNeighborCounts;
-using detail::BuildInitialFitState;
-using detail::GetSecondStageSeedSourceText;
 using detail::SecondStageSeedSelectionRecord;
-using detail::BuildIterationState;
 using detail::IterationOutcome;
-using detail::RunIteration;
 
 enum class FinalStateSource
 {
@@ -170,7 +147,7 @@ detail::GraphTopology BuildGraphTopology(
 
     detail::CouplingGraphBuilder builder{ context.size() };
     const auto model_snapshot{
-        BuildSecondStageModelSnapshot(context, initial_state)
+        detail::BuildSecondStageModelSnapshot(context, initial_state)
     };
     std::vector<std::optional<detail::TransformedModelInvariants>> selected_model_invariants;
     selected_model_invariants.reserve(model_snapshot.selected.model_list.size());
@@ -256,7 +233,7 @@ detail::GraphTopology BuildGraphTopology(
                 }
             }
             builder.AddSample(
-                SampleRef{ atom_index, sample_index },
+                detail::SampleRef{ atom_index, sample_index },
                 participant_list);
             completed_work++;
             update_progress();
@@ -299,7 +276,7 @@ void LogSecondStageSeedSelections(
     for (std::size_t i = 0; i < source_list.size(); i++)
     {
         if (i != 0) summary << ", ";
-        summary << GetSecondStageSeedSourceText(source_list.at(i))
+        summary << detail::GetSecondStageSeedSourceText(source_list.at(i))
             << ":" << source_count.at(i);
     }
     summary << ".";
@@ -310,7 +287,7 @@ void LogSecondStageSeedSelections(
         std::ostringstream detail_message;
         detail_message << "Second-stage seed selection: atom index = "
             << record.atom_index
-            << ", source = " << GetSecondStageSeedSourceText(record.source)
+            << ", source = " << detail::GetSecondStageSeedSourceText(record.source)
             << std::scientific << std::setprecision(2)
             << ", original MDPDE A/B/C = "
             << record.original_model.GetAmplitude() << "/"
@@ -360,7 +337,7 @@ void LogUnselectedSecondStageSeedSelections(
         detail_message
             << "Unselected second-stage neighbor seed selection: serial ID = "
             << unselected_atom_contributor.atom->GetSerialID()
-            << ", source = " << GetSecondStageSeedSourceText(record.source)
+            << ", source = " << detail::GetSecondStageSeedSourceText(record.source)
             << std::scientific << std::setprecision(2)
             << ", seed A/B/C = "
             << record.selected_model.GetAmplitude() << "/"
@@ -469,9 +446,9 @@ void LogObjectiveDomain(const ObjectiveDomain & domain, bool quiet_mode, bool is
         << (is_terminal_reset ?
             "Reset second-stage objective domain" : "Initialize second-stage objective domain")
         << ": fit/tail/offset weights = "
-        << kFitRangeWeight << "/"
-        << kTailValidationWeight << "/"
-        << kOffsetPlausibilityPenaltyWeight
+        << detail::kFitRangeWeight << "/"
+        << detail::kTailValidationWeight << "/"
+        << detail::kOffsetPlausibilityPenaltyWeight
         << ", clusters = " << domain.cluster_by_key.size()
         << ", active atoms = " << domain.active_atom_count
         << ", unique fit/tail samples = "
@@ -492,7 +469,7 @@ void ApplyFitState(
     const FitState & iteration_state)
 {
     auto adjusted_sampling_entries_list{
-        BuildSecondStageAdjustedSamples(context, iteration_state)
+        detail::BuildSecondStageAdjustedSamples(context, iteration_state)
     };
 
     auto analysis{ model_object.EditAnalysis() };
@@ -561,7 +538,7 @@ void AppendAuditSummary(std::ostringstream & stream, const AuditedState & audite
         << objective.total_objective
         << ", tail raw/weight = "
         << objective.tail_validation_loss << "/"
-        << kTailValidationWeight;
+        << detail::kTailValidationWeight;
 }
 
 void LogTerminalFallback(
@@ -577,7 +554,7 @@ void LogTerminalFallback(
     warning_message
         << "Completed local fitting after " << accepted_iteration_count
         << " accepted iterations with last validated states retained";
-    AppendTerminalSummary(warning_message, terminal_summary);
+    detail::AppendTerminalSummary(warning_message, terminal_summary);
     AppendOffsetSummary(warning_message, offset_stats);
     warning_message << ".";
     Logger::Log(LogLevel::Warning, warning_message.str());
@@ -640,7 +617,7 @@ void LogMaximumIterations(
     Logger::FinishProgressLine();
     std::ostringstream warning_message;
     warning_message << "Reached maximum iteration size";
-    AppendTerminalSummary(warning_message, terminal_summary);
+    detail::AppendTerminalSummary(warning_message, terminal_summary);
     if (final_state_selection.source == FinalStateSource::BestAudit &&
         final_state_selection.audit_state != nullptr)
     {
@@ -717,15 +694,15 @@ void LogSecondStageSummary(
 
 bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & options)
 {
-    auto context{ BuildSecondStageContext(model_object, options) };
-    StoreSecondStageNeighborCounts(model_object, context);
+    auto context{ detail::BuildSecondStageContext(model_object, options) };
+    detail::StoreSecondStageNeighborCounts(model_object, context);
     const auto atom_size{ context.size() };
     if (!options.quiet_mode)
     {
         Logger::Log(LogLevel::Info, "Run 2nd-stage local atom fitting with iterations...");
     }
 
-    auto initial_state_build_result{ BuildInitialFitState(context) };
+    auto initial_state_build_result{ detail::BuildInitialFitState(context) };
     if (initial_state_build_result.failure !=
         SecondStageInitialStateBuildResult::Failure::None)
     {
@@ -764,7 +741,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
     };
     LogGraphTopology(graph_topology, options.quiet_mode);
     auto iteration_state{
-        BuildIterationState(context, graph_topology, std::move(initial_state), options)
+        detail::BuildIterationState(context, graph_topology, std::move(initial_state), options)
     };
     PerformanceCounters performance_counters{
         options.quiet_mode,
@@ -776,10 +753,10 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         performance_counters.RecordFullStateMaterialization();
     }
     LogObjectiveDomain(iteration_state.objective_domain, options.quiet_mode);
-    const auto progress_column_widths{ BuildProgressColumnWidths(atom_size) };
-    LogProgressHeader(options.quiet_mode, progress_column_widths);
+    const auto progress_column_widths{ detail::BuildProgressColumnWidths(atom_size) };
+    detail::LogProgressHeader(options.quiet_mode, progress_column_widths);
 
-    for (std::size_t iter = 0; iter < kMaximumIterations; iter++)
+    for (std::size_t iter = 0; iter < detail::kMaximumIterations; iter++)
     {
         if (iteration_state.active_index_list.empty())
         {
@@ -795,14 +772,14 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 iteration_state.accepted_iteration_count,
                 "terminal-isolation",
                 iteration_state.best_audit_state,
-                UsesPolish(iteration_state.previous_polish_provenance),
+                detail::UsesPolish(iteration_state.previous_polish_provenance),
                 FinalStateSource::LatestValidated);
             RunGroupPotentialFitting(model_object, options, FittingStage::Second);
             return true;
         }
 
         auto iteration_result{
-            RunIteration(
+            detail::RunIteration(
                 context,
                 graph_topology,
                 options,
@@ -814,17 +791,17 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         {
             LogObjectiveDomain(iteration_state.objective_domain, options.quiet_mode, true);
         }
-        LogAcceptedBacktrackingDiagnostics(options.quiet_mode, iteration_result.diagnostics);
+        detail::LogAcceptedBacktrackingDiagnostics(options.quiet_mode, iteration_result.diagnostics);
         if (iteration_result.outcome != IterationOutcome::Accepted)
         {
-            LogRejectedClusterDiagnostics(
+            detail::LogRejectedClusterDiagnostics(
                 options.quiet_mode,
                 iteration_result.diagnostics.rejected_cluster_diagnostic_list);
-            LogIterationProgress(
+            detail::LogIterationProgress(
                 options.quiet_mode,
                 progress_column_widths,
                 iteration_result.progress);
-            LogAllRejectedResolution(
+            detail::LogAllRejectedResolution(
                 options.quiet_mode,
                 iteration_result.diagnostics.rejected_cluster_partition,
                 iteration_result.diagnostics.trust_region_radius_update,
@@ -837,14 +814,14 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             const auto final_state_selection{
                 SelectFinalState(
                     iteration_state.previous_state,
-                    UsesPolish(iteration_state.previous_polish_provenance),
+                    detail::UsesPolish(iteration_state.previous_polish_provenance),
                     iteration_state.best_audit_state.best)
             };
             ApplyFitState(model_object, context, final_state_selection.state);
             LogSecondStageSummary(
                 options.quiet_mode,
                 iteration_state.accepted_iteration_count,
-                GetAllRejectedResolutionText(*iteration_result.all_rejected_resolution),
+                detail::GetAllRejectedResolutionText(*iteration_result.all_rejected_resolution),
                 iteration_state.best_audit_state,
                 final_state_selection.uses_polish,
                 final_state_selection.source);
@@ -852,10 +829,10 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             return true;
         }
 
-        LogRejectedClusterDiagnostics(
+        detail::LogRejectedClusterDiagnostics(
             options.quiet_mode,
             iteration_result.diagnostics.rejected_cluster_diagnostic_list);
-        LogIterationProgress(
+        detail::LogIterationProgress(
             options.quiet_mode,
             progress_column_widths,
             iteration_result.progress);
@@ -865,7 +842,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             const auto final_state_selection{
                 SelectFinalState(
                     iteration_state.previous_state,
-                    UsesPolish(iteration_state.previous_polish_provenance),
+                    detail::UsesPolish(iteration_state.previous_polish_provenance),
                     iteration_state.best_audit_state.best)
             };
             ApplyFitState(
@@ -913,18 +890,18 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 iteration_state.accepted_iteration_count,
                 "converged",
                 iteration_state.best_audit_state,
-                UsesPolish(iteration_state.previous_polish_provenance),
+                detail::UsesPolish(iteration_state.previous_polish_provenance),
                 FinalStateSource::LatestValidated);
             RunGroupPotentialFitting(model_object, options, FittingStage::Second);
             return true;
         }
 
-        if (iter + 1 == kMaximumIterations)
+        if (iter + 1 == detail::kMaximumIterations)
         {
             const auto final_state_selection{
                 SelectFinalState(
                     iteration_state.previous_state,
-                    UsesPolish(iteration_state.previous_polish_provenance),
+                    detail::UsesPolish(iteration_state.previous_polish_provenance),
                     iteration_state.best_audit_state.best)
             };
             ApplyFitState(
