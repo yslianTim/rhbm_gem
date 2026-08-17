@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "core/detail/ClusterHealth.hpp"
-#include "core/detail/FitState.hpp"
+#include "core/detail/FitStateView.hpp"
 #include "core/detail/JointOffsetSolveStatus.hpp"
 #include "core/detail/PolishProvenance.hpp"
 #include "core/detail/SecondStageContext.hpp"

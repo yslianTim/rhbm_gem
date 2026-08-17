@@ -10,7 +10,7 @@
 #include <Eigen/Dense>
 
 #include <rhbm_gem/utils/algorithm/Convergence.hpp>
-#include "core/detail/FitState.hpp"
+#include "core/detail/FitStateView.hpp"
 #include "core/detail/TransformedGaussianModel.hpp"
 
 namespace rhbm_gem::core::detail {

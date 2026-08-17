@@ -29,7 +29,7 @@
 #include "core/detail/TerminalFailure.hpp"
 #include "core/detail/Objective.hpp"
 #include "core/detail/ResidualEvaluation.hpp"
-#include "core/detail/FitState.hpp"
+#include "core/detail/FitStateView.hpp"
 #include "core/detail/PolishProvenance.hpp"
 #include "core/detail/SuspiciousUpdate.hpp"
 #include "core/detail/TransformedGaussianModel.hpp"

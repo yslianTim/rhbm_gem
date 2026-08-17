@@ -17,7 +17,7 @@
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
-#include "core/detail/FitState.hpp"
+#include "core/detail/FitStateView.hpp"
 #include "core/detail/SecondStageContext.hpp"
 #include "core/detail/TransformedGaussianModel.hpp"
 #include "data/detail/AtomClassifier.hpp"

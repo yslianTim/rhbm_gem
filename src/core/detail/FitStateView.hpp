@@ -7,19 +7,27 @@
 #include <utility>
 #include <vector>
 
-#include "core/detail/FitState.hpp"
+#include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
+
 #include "core/detail/SecondStageContext.hpp"
 
 namespace rhbm_gem::core::detail {
+
+using FitState = std::vector<LocalGaussianResult>;
+
+inline const GaussianModel3D & GetFitModel(
+    const FitState & state,
+    std::size_t atom_index)
+{
+    return state.at(atom_index).mdpde.GetModel();
+}
 
 struct FitStatePatch
 {
     ClusterKey atom_index_list{};
     std::vector<GaussianModel3DWithUncertainty> mdpde_list{};
 
-    static FitStatePatch FromState(
-        const FitState & state,
-        ClusterKey atom_index_list)
+    static FitStatePatch FromState(const FitState & state, ClusterKey atom_index_list)
     {
         std::sort(atom_index_list.begin(), atom_index_list.end());
         atom_index_list.erase(
