@@ -33,14 +33,7 @@ namespace rhbm_gem::core {
 
 namespace {
 
-using detail::PerformanceCounters;
 using detail::FitState;
-using detail::SecondStageContext;
-using detail::SecondStageInitialStateBuildResult;
-using detail::AuditedState;
-using detail::BestAuditState;
-using detail::TerminalSummary;
-using detail::IterationOutcome;
 
 struct OffsetStat
 {
@@ -53,7 +46,7 @@ struct OffsetStat
 
 void ApplyFitState(
     ModelObject & model_object,
-    const SecondStageContext & context,
+    const detail::SecondStageContext & context,
     const FitState & iteration_state)
 {
     auto adjusted_sampling_entries_list{
@@ -102,7 +95,7 @@ void AppendOffsetSummary(std::ostringstream & stream, const OffsetStat & stats)
         << stats.maximum_absolute_offset;
 }
 
-void AppendAuditSummary(std::ostringstream & stream, const AuditedState & audited_state)
+void AppendAuditSummary(std::ostringstream & stream, const detail::AuditedState & audited_state)
 {
     const auto & objective{ audited_state.objective };
     stream << "; audit best source = ";
@@ -129,7 +122,7 @@ void AppendAuditSummary(std::ostringstream & stream, const AuditedState & audite
 void LogTerminalFallback(
     bool quiet_mode,
     std::size_t accepted_iteration_count,
-    const TerminalSummary & terminal_summary,
+    const detail::TerminalSummary & terminal_summary,
     const OffsetStat & offset_stats)
 {
     if (quiet_mode) return;
@@ -146,11 +139,11 @@ void LogTerminalFallback(
 
 void FinishWithNoActiveAtoms(
     ModelObject & model_object,
-    const SecondStageContext & context,
+    const detail::SecondStageContext & context,
     const FitState & state,
     bool quiet_mode,
     std::size_t accepted_iteration_count,
-    const TerminalSummary & terminal_summary)
+    const detail::TerminalSummary & terminal_summary)
 {
     ApplyFitState(model_object, context, state);
     const auto offset_stats{ SummarizeOffsets(state) };
@@ -193,7 +186,7 @@ void LogConverged(
 void LogMaximumIterations(
     bool quiet_mode,
     const detail::FinalStateSelection & selection,
-    const TerminalSummary & terminal_summary,
+    const detail::TerminalSummary & terminal_summary,
     const OffsetStat & applied_offset_stats)
 {
     if (quiet_mode) return;
@@ -224,7 +217,7 @@ void LogSecondStageSummary(
     bool quiet_mode,
     std::size_t accepted_iteration_count,
     std::string_view stop_reason,
-    const BestAuditState & best_audit_state,
+    const detail::BestAuditState & best_audit_state,
     std::optional<bool> final_uses_polish,
     detail::FinalStateSource final_state_source)
 {
@@ -282,12 +275,12 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
     }
 
     auto initial_state_build_result{ detail::BuildInitialFitState(context) };
-    if (initial_state_build_result.failure != SecondStageInitialStateBuildResult::Failure::None)
+    if (initial_state_build_result.failure != detail::SecondStageInitialStateBuildResult::Failure::None)
     {
         if (!options.quiet_mode)
         {
             const auto unselected_seed_failure{
-                initial_state_build_result.failure == SecondStageInitialStateBuildResult::Failure::UnselectedSeedUnavailable
+                initial_state_build_result.failure == detail::SecondStageInitialStateBuildResult::Failure::UnselectedSeedUnavailable
             };
             Logger::Log(LogLevel::Warning,
                 unselected_seed_failure ?
@@ -319,7 +312,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
     auto iteration_state{
         detail::BuildIterationState(context, graph_topology, std::move(initial_state), options)
     };
-    PerformanceCounters performance_counters{
+    detail::PerformanceCounters performance_counters{
         options.quiet_mode,
         context,
         iteration_state.solver_workspace_by_key
@@ -368,7 +361,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             detail::LogObjectiveDomain(iteration_state.objective_domain, options.quiet_mode, true);
         }
         detail::LogAcceptedBacktrackingDiagnostics(options.quiet_mode, iteration_result.diagnostics);
-        if (iteration_result.outcome != IterationOutcome::Accepted)
+        if (iteration_result.outcome != detail::IterationOutcome::Accepted)
         {
             detail::LogRejectedClusterDiagnostics(
                 options.quiet_mode,
@@ -382,7 +375,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 iteration_result.diagnostics.rejected_cluster_partition,
                 iteration_result.diagnostics.trust_region_radius_update,
                 *iteration_result.all_rejected_resolution);
-            if (iteration_result.outcome == IterationOutcome::Retry)
+            if (iteration_result.outcome == detail::IterationOutcome::Retry)
             {
                 continue;
             }
