@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -17,9 +18,11 @@
 #include "core/detail/BacktrackingWorkspace.hpp"
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/TransformedGaussianModel.hpp"
+#include "core/detail/ClusterHealth.hpp"
 #include "core/detail/ClusterSolverWorkspace.hpp"
 #include "core/detail/JointFittingSolverPolicy.hpp"
 #include "core/detail/JointOffset.hpp"
+#include "core/detail/JointOffsetSolveStatus.hpp"
 #include "core/detail/JointPolish.hpp"
 #include "core/detail/Objective.hpp"
 #include "core/detail/ResidualEvaluation.hpp"
@@ -54,6 +57,8 @@ using rhbm_gem::FittingStage;
 namespace trust_detail = rhbm_gem::core::detail;
 namespace rt = rhbm_gem::core;
 namespace rg = rhbm_gem;
+
+static_assert(!std::is_default_constructible_v<audit_detail::ClusterHealth>);
 
 rt::FitOptions MakeSecondStageOptions()
 {
@@ -2143,11 +2148,10 @@ TEST(EstimatorSecondStageDefenseTest, LocalRefitHealthTracksStationarity)
         std::logic_error);
 }
 
-TEST(EstimatorSecondStageDefenseTest, JointOffsetHealthSeparatesProgressFromStationarity)
+TEST(EstimatorSecondStageDefenseTest, JointOffsetHealthSeparatesHardFailureFromStationarity)
 {
     using Status = offset_detail::JointOffsetSolveStatus;
 
-    EXPECT_TRUE(offset_detail::IsJointOffsetSolveProgressEligible(Status::Converged));
     EXPECT_TRUE(offset_detail::IsJointOffsetSolveStationarityEligible(Status::Converged));
     EXPECT_FALSE(offset_detail::IsJointOffsetSolveHardFailure(Status::Converged));
 
@@ -2155,7 +2159,6 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetHealthSeparatesProgressFromStat
         Status::IrlsObjectiveDeteriorated,
         Status::IrlsMaximumIterationsReached })
     {
-        EXPECT_TRUE(offset_detail::IsJointOffsetSolveProgressEligible(status));
         EXPECT_FALSE(offset_detail::IsJointOffsetSolveStationarityEligible(status));
         EXPECT_FALSE(offset_detail::IsJointOffsetSolveHardFailure(status));
     }
@@ -2166,15 +2169,11 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetHealthSeparatesProgressFromStat
         Status::InitialSolveFailed,
         Status::IrlsSolveFailed })
     {
-        EXPECT_FALSE(offset_detail::IsJointOffsetSolveProgressEligible(status));
         EXPECT_FALSE(offset_detail::IsJointOffsetSolveStationarityEligible(status));
         EXPECT_TRUE(offset_detail::IsJointOffsetSolveHardFailure(status));
     }
 
     const auto invalid_status{ static_cast<Status>(-1) };
-    EXPECT_THROW(
-        offset_detail::IsJointOffsetSolveProgressEligible(invalid_status),
-        std::logic_error);
     EXPECT_FALSE(
         offset_detail::IsJointOffsetSolveStationarityEligible(invalid_status));
     EXPECT_THROW(

@@ -7,7 +7,7 @@
 #include <variant>
 #include <vector>
 
-#include "core/detail/ClusterSolverWorkspace.hpp"
+#include "core/detail/ClusterHealth.hpp"
 #include "core/detail/FitStateView.hpp"
 #include "core/detail/JointOffsetSolveStatus.hpp"
 #include "core/detail/PolishProvenance.hpp"

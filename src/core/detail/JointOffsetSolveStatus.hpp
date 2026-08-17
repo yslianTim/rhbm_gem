@@ -15,32 +15,26 @@ enum class JointOffsetSolveStatus
     IrlsMaximumIterationsReached
 };
 
-inline bool IsJointOffsetSolveProgressEligible(JointOffsetSolveStatus status)
-{
-    switch (status)
-    {
-    case JointOffsetSolveStatus::Converged:
-    case JointOffsetSolveStatus::IrlsObjectiveDeteriorated:
-    case JointOffsetSolveStatus::IrlsMaximumIterationsReached:
-        return true;
-    case JointOffsetSolveStatus::SystemBuildFailed:
-    case JointOffsetSolveStatus::EmptySystem:
-    case JointOffsetSolveStatus::InitialSolveFailed:
-    case JointOffsetSolveStatus::IrlsSolveFailed:
-        return false;
-    }
-    throw std::logic_error("Joint offset solve status is invalid.");
-}
-
-inline bool IsJointOffsetSolveStationarityEligible(
-    JointOffsetSolveStatus status)
+inline bool IsJointOffsetSolveStationarityEligible(JointOffsetSolveStatus status)
 {
     return status == JointOffsetSolveStatus::Converged;
 }
 
 inline bool IsJointOffsetSolveHardFailure(JointOffsetSolveStatus status)
 {
-    return !IsJointOffsetSolveProgressEligible(status);
+    switch (status)
+    {
+    case JointOffsetSolveStatus::Converged:
+    case JointOffsetSolveStatus::IrlsObjectiveDeteriorated:
+    case JointOffsetSolveStatus::IrlsMaximumIterationsReached:
+        return false;
+    case JointOffsetSolveStatus::SystemBuildFailed:
+    case JointOffsetSolveStatus::EmptySystem:
+    case JointOffsetSolveStatus::InitialSolveFailed:
+    case JointOffsetSolveStatus::IrlsSolveFailed:
+        return true;
+    }
+    throw std::logic_error("Joint offset solve status is invalid.");
 }
 
 inline const char * GetJointOffsetSolveStatusText(JointOffsetSolveStatus status)
