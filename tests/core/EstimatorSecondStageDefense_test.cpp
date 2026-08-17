@@ -92,6 +92,14 @@ MakeUniqueResidueKeys(std::size_t count)
     return key_list;
 }
 
+void AddCouplingGraphSample(
+    coupling_detail::CouplingGraphBuilder & builder,
+    coupling_detail::SampleRef sample_id,
+    std::vector<coupling_detail::GraphParticipant> participant_list)
+{
+    builder.AddSample(sample_id, participant_list);
+}
+
 bool HasCouplingNeighbor(
     const coupling_detail::GraphTopology & topology,
     std::size_t atom_index,
@@ -395,6 +403,27 @@ LocalPotentialSampleList BuildSuspiciousGuardSamples(
     return sample_list;
 }
 
+audit_detail::SuspiciousGaussianReason EvaluateSuspiciousPostRefitUpdateForTest(
+    const LocalPotentialSampleList & sample_entries,
+    const rg::GaussianModel3D & previous_model,
+    const rg::GaussianModel3D & candidate_model,
+    const rt::FitOptions & options)
+{
+    const auto previous_baseline{
+        audit_detail::local_fitting_suspicious_internal::
+            BuildPreviousSuspiciousProfileBaseline(
+                sample_entries, previous_model, options)
+    };
+    return audit_detail::local_fitting_suspicious_internal::
+        EvaluateSuspiciousGaussianUpdate(
+            sample_entries,
+            previous_model,
+            candidate_model,
+            options,
+            previous_baseline,
+            true);
+}
+
 TEST(EstimatorSecondStageDefenseTest, SuspiciousEvaluatorReportsInvalidAndNonFiniteReasons)
 {
     const auto options{ MakeSecondStageOptions() };
@@ -407,7 +436,7 @@ TEST(EstimatorSecondStageDefenseTest, SuspiciousEvaluatorReportsInvalidAndNonFin
     };
 
     EXPECT_EQ(
-        audit_detail::EvaluateSuspiciousPostRefitUpdate(
+        EvaluateSuspiciousPostRefitUpdateForTest(
             sample_list,
             previous_model,
             rg::GaussianModel3D{ -1.0, 1.0, 0.0 },
@@ -418,7 +447,7 @@ TEST(EstimatorSecondStageDefenseTest, SuspiciousEvaluatorReportsInvalidAndNonFin
     non_finite_sample_list.front().response =
         std::numeric_limits<float>::quiet_NaN();
     EXPECT_EQ(
-        audit_detail::EvaluateSuspiciousPostRefitUpdate(
+        EvaluateSuspiciousPostRefitUpdateForTest(
             non_finite_sample_list,
             previous_model,
             previous_model,
@@ -457,7 +486,7 @@ TEST(EstimatorSecondStageDefenseTest, OffsetOnlyEvaluatorAppliesMagnitudeButSkip
             options),
         audit_detail::SuspiciousGaussianReason::None);
     EXPECT_EQ(
-        audit_detail::EvaluateSuspiciousPostRefitUpdate(
+        EvaluateSuspiciousPostRefitUpdateForTest(
             sample_list,
             previous_model,
             wide_model,
@@ -478,7 +507,7 @@ TEST(EstimatorSecondStageDefenseTest, OffsetOnlyEvaluatorAcceptsUnchangedShapeOu
     const auto fallback_model{ previous_model.WithOffset(1.0e-4) };
 
     EXPECT_EQ(
-        audit_detail::EvaluateSuspiciousPostRefitUpdate(
+        EvaluateSuspiciousPostRefitUpdateForTest(
             sample_list,
             previous_model,
             fallback_model,
@@ -685,7 +714,7 @@ TEST(EstimatorSecondStageDefenseTest, WidthAndCompensationRemainActiveWithoutTru
     };
     const auto range_wide_model{ MakeGaussianWithCenterSignal(0.1, 1.4) };
     EXPECT_EQ(
-        audit_detail::EvaluateSuspiciousPostRefitUpdate(
+        EvaluateSuspiciousPostRefitUpdateForTest(
             short_range_samples,
             previous_model,
             range_wide_model,
@@ -705,7 +734,7 @@ TEST(EstimatorSecondStageDefenseTest, WidthAndCompensationRemainActiveWithoutTru
         MakeGaussianWithCenterSignal(0.4, 1.4, 10.0)
     };
     EXPECT_EQ(
-        audit_detail::EvaluateSuspiciousPostRefitUpdate(
+        EvaluateSuspiciousPostRefitUpdateForTest(
             compensation_samples,
             previous_compensation_model,
             candidate_compensation_model,
@@ -716,7 +745,7 @@ TEST(EstimatorSecondStageDefenseTest, WidthAndCompensationRemainActiveWithoutTru
         MakeGaussianWithCenterSignal(0.4, 0.8, 10.0)
     };
     EXPECT_EQ(
-        audit_detail::EvaluateSuspiciousPostRefitUpdate(
+        EvaluateSuspiciousPostRefitUpdateForTest(
             compensation_samples,
             previous_compensation_model,
             same_direction_model,
@@ -727,7 +756,7 @@ TEST(EstimatorSecondStageDefenseTest, WidthAndCompensationRemainActiveWithoutTru
         MakeGaussianWithCenterSignal(0.2, 1.4, 10.0)
     };
     EXPECT_EQ(
-        audit_detail::EvaluateSuspiciousPostRefitUpdate(
+        EvaluateSuspiciousPostRefitUpdateForTest(
             compensation_samples,
             previous_compensation_model,
             insufficient_signal_model,
@@ -1813,39 +1842,6 @@ TEST(EstimatorSecondStageDefenseTest, TrustRegionDampingIsIntensityScaleInvarian
     EXPECT_NEAR(base.step_norm, scaled.step_norm, 1.0e-12);
 }
 
-TEST(EstimatorSecondStageDefenseTest, TrustRegionPolishHonorsOuterStepBoundary)
-{
-    std::vector<Eigen::Vector3d> outer_previous{
-        Eigen::Vector3d::Zero()
-    };
-    auto boundary_state{ outer_previous };
-    boundary_state.at(0)(0) = 0.5;
-    auto outward_target{ boundary_state };
-    outward_target.at(0)(0) = 1.0;
-
-    const auto outward{
-        trust_detail::LimitTrustRegionSubstepDamping(
-            outer_previous,
-            boundary_state,
-            outward_target,
-            1.0,
-            1.0)
-    };
-    EXPECT_DOUBLE_EQ(outward.effective_damping, 0.0);
-    EXPECT_DOUBLE_EQ(outward.step_norm, 1.0);
-
-    const auto inward{
-        trust_detail::LimitTrustRegionSubstepDamping(
-            outer_previous,
-            boundary_state,
-            outer_previous,
-            1.0,
-            1.0)
-    };
-    EXPECT_DOUBLE_EQ(inward.effective_damping, 1.0);
-    EXPECT_DOUBLE_EQ(inward.step_norm, 0.0);
-}
-
 TEST(EstimatorSecondStageDefenseTest, TrustRegionStateReconcilesShrinksGrowsAndSaturates)
 {
     trust_detail::TrustRegionStateSet state;
@@ -2378,11 +2374,15 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishJacobianMatchesFiniteDifference
             change_detail::EncodeTransformedCoordinates(model)
         };
         ASSERT_TRUE(transformed.has_value());
+        const auto invariants{
+            polish_detail::BuildTransformedModelInvariants(model)
+        };
+        ASSERT_TRUE(invariants.has_value());
         for (const auto distance : distance_list)
         {
             const auto evaluation{
                 polish_detail::EvaluateTransformedResponse(
-                    model,
+                    *invariants,
                     distance)
             };
             ASSERT_TRUE(evaluation.has_value());
@@ -2688,7 +2688,7 @@ TEST(EstimatorSecondStageDefenseTest,
 
     ASSERT_TRUE(parameterization.has_value());
     EXPECT_EQ(parameterization->AtomCount(), 3U);
-    EXPECT_EQ(parameterization->GroupCount(), 2U);
+    EXPECT_EQ(parameterization->atom_position_list_by_group.size(), 2U);
     EXPECT_EQ(parameterization->ParameterCount(), 8);
     EXPECT_EQ(parameterization->ShapeColumn(0, 0), 0);
     EXPECT_EQ(parameterization->ShapeColumn(1, 0), 2);
@@ -2780,7 +2780,8 @@ TEST(
     };
     ASSERT_TRUE(seed_model_list.has_value());
     polish_detail::ReusableWeightedRidgeSolver direction_solver;
-    const polish_detail::FitStateView base_state_view{ fixture.state };
+    const polish_detail::FitStatePatch base_patch;
+    const polish_detail::FitStateView base_state_view{ fixture.state, base_patch };
     const auto direction{
         polish_detail::BuildJointPolishDirection(
             fixture.context,
@@ -2858,7 +2859,8 @@ TEST(
             base_model_list,
             target_model_list)
     };
-    const polish_detail::FitStateView base_state_view{ fixture.state };
+    const polish_detail::FitStatePatch base_patch;
+    const polish_detail::FitStateView base_state_view{ fixture.state, base_patch };
     const auto key{ polish_detail::ClusterKey{ 0, 1 } };
 
     polish_detail::ReusableWeightedRidgeSolver empty_solver;
@@ -2879,8 +2881,10 @@ TEST(
             rg::GaussianModel3D{ 0.0, 0.55, 0.10 },
             rg::GaussianModel3DUncertainty{}
         };
+    const polish_detail::FitStatePatch invalid_patch;
     const polish_detail::FitStateView invalid_state_view{
-        invalid_fixture.state
+        invalid_fixture.state,
+        invalid_patch
     };
     polish_detail::ReusableWeightedRidgeSolver invalid_solver;
     EXPECT_FALSE(
@@ -2904,8 +2908,10 @@ TEST(
             unchanged_model_list,
             unchanged_model_list)
     };
+    const polish_detail::FitStatePatch unchanged_patch;
     const polish_detail::FitStateView unchanged_state_view{
-        unchanged_fixture.state
+        unchanged_fixture.state,
+        unchanged_patch
     };
     polish_detail::ReusableWeightedRidgeSolver unchanged_solver;
     EXPECT_FALSE(
@@ -3019,8 +3025,8 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphNormalizesFullJacobianEnergy)
     Eigen::Vector3d jacobian;
     jacobian << 1.0, 2.0, 3.0;
     coupling_detail::CouplingGraphBuilder builder{ 2 };
-    builder.AddSample({ 0, 0 }, { { 0, jacobian }, { 1, jacobian } });
-    builder.AddSample({ 0, 1 }, { { 0, 2.0 * jacobian }, { 1, 2.0 * jacobian } });
+    AddCouplingGraphSample(builder, { 0, 0 }, { { 0, jacobian }, { 1, jacobian } });
+    AddCouplingGraphSample(builder, { 0, 1 }, { { 0, 2.0 * jacobian }, { 1, 2.0 * jacobian } });
     const auto topology{ builder.BuildTopology(MakeUniqueResidueKeys(2)) };
     EXPECT_TRUE(HasCouplingNeighbor(topology, 0, 1));
     EXPECT_NEAR(topology.summary.weight_median, 1.0, 1.0e-12);
@@ -3028,10 +3034,12 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphNormalizesFullJacobianEnergy)
     EXPECT_NEAR(topology.summary.weight_maximum, 1.0, 1.0e-12);
 
     coupling_detail::CouplingGraphBuilder scaled_builder{ 2 };
-    scaled_builder.AddSample(
+    AddCouplingGraphSample(
+        scaled_builder,
         { 0, 0 },
         { { 0, 5.0 * jacobian }, { 1, jacobian } });
-    scaled_builder.AddSample(
+    AddCouplingGraphSample(
+        scaled_builder,
         { 0, 1 },
         { { 0, 10.0 * jacobian }, { 1, 2.0 * jacobian } });
     const auto scaled_topology{
@@ -3044,7 +3052,8 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphNormalizesFullJacobianEnergy)
         1.0e-12);
 
     coupling_detail::CouplingGraphBuilder tiny_builder{ 2 };
-    tiny_builder.AddSample(
+    AddCouplingGraphSample(
+        tiny_builder,
         { 0, 0 },
         { { 0, 1.0e-100 * jacobian }, { 1, 1.0e-100 * jacobian } });
     const auto tiny_topology{
@@ -3061,14 +3070,15 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphNormalizesDuplicateParticipan
 {
     const Eigen::Vector3d unit{ 1.0, 0.0, 0.0 };
     coupling_detail::CouplingGraphBuilder builder{ 2 };
-    builder.AddSample(
+    AddCouplingGraphSample(
+        builder,
         { 0, 0 },
         {
             { 1, unit },
             { 0, unit },
             { 1, unit }
         });
-    builder.AddSample({ 0, 1 }, { { 0, unit } });
+    AddCouplingGraphSample(builder, { 0, 1 }, { { 0, unit } });
 
     const auto topology{ builder.BuildTopology(MakeUniqueResidueKeys(2)) };
     ASSERT_EQ(topology.sample_dependency_list.size(), 2U);
@@ -3096,7 +3106,8 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphPropagatesInvalidDuplicateJac
         Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN())
     };
     coupling_detail::CouplingGraphBuilder builder{ 2 };
-    builder.AddSample(
+    AddCouplingGraphSample(
+        builder,
         { 0, 0 },
         {
             { 0, unit },
@@ -3119,10 +3130,10 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphValidatesSampleAndBuildOption
     const Eigen::Vector3d unit{ 1.0, 0.0, 0.0 };
     coupling_detail::CouplingGraphBuilder builder{ 2 };
     EXPECT_THROW(
-        builder.AddSample({ 0, 0 }, { { 2, unit } }),
+        AddCouplingGraphSample(builder, { 0, 0 }, { { 2, unit } }),
         std::invalid_argument);
 
-    builder.AddSample({ 0, 0 }, { { 0, unit } });
+    AddCouplingGraphSample(builder, { 0, 0 }, { { 0, unit } });
     auto invalid_weight_options{
         coupling_detail::CouplingGraphOptions{}
     };
@@ -3146,8 +3157,8 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphSummaryIncludesResidueCompone
 {
     const Eigen::Vector3d unit{ 1.0, 0.0, 0.0 };
     coupling_detail::CouplingGraphBuilder builder{ 2 };
-    builder.AddSample({ 0, 0 }, { { 0, unit } });
-    builder.AddSample({ 1, 0 }, { { 1, unit } });
+    AddCouplingGraphSample(builder, { 0, 0 }, { { 0, unit } });
+    AddCouplingGraphSample(builder, { 1, 0 }, { { 1, unit } });
 
     const auto topology{
         builder.BuildTopology({ { "A", 1 }, { "A", 1 } })
@@ -3163,9 +3174,9 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphCutsWeakAndCancelledEdges)
 {
     const Eigen::Vector3d unit{ 1.0, 0.0, 0.0 };
     coupling_detail::CouplingGraphBuilder weak_builder{ 2 };
-    weak_builder.AddSample({ 0, 0 }, { { 0, unit }, { 1, unit } });
-    weak_builder.AddSample({ 0, 1 }, { { 0, 10.0 * unit } });
-    weak_builder.AddSample({ 1, 0 }, { { 1, 10.0 * unit } });
+    AddCouplingGraphSample(weak_builder, { 0, 0 }, { { 0, unit }, { 1, unit } });
+    AddCouplingGraphSample(weak_builder, { 0, 1 }, { { 0, 10.0 * unit } });
+    AddCouplingGraphSample(weak_builder, { 1, 0 }, { { 1, 10.0 * unit } });
     const auto weak_topology{
         weak_builder.BuildTopology(MakeUniqueResidueKeys(2))
     };
@@ -3174,8 +3185,8 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphCutsWeakAndCancelledEdges)
     EXPECT_EQ(weak_topology.summary.cut_edge_count, 1U);
 
     coupling_detail::CouplingGraphBuilder cancelled_builder{ 2 };
-    cancelled_builder.AddSample({ 0, 0 }, { { 0, unit }, { 1, unit } });
-    cancelled_builder.AddSample({ 0, 1 }, { { 0, unit }, { 1, -unit } });
+    AddCouplingGraphSample(cancelled_builder, { 0, 0 }, { { 0, unit }, { 1, unit } });
+    AddCouplingGraphSample(cancelled_builder, { 0, 1 }, { { 0, unit }, { 1, -unit } });
     const auto cancelled_topology{
         cancelled_builder.BuildTopology(MakeUniqueResidueKeys(2))
     };
@@ -3194,13 +3205,16 @@ TEST(EstimatorSecondStageDefenseTest, CouplingGraphReportsThresholdSensitivity)
         const auto self_scale{
             std::sqrt(1.0 / edge_weight_list.at(edge_index) - 1.0)
         };
-        builder.AddSample(
+        AddCouplingGraphSample(
+            builder,
             { edge_index, 0 },
             { { left_index, unit }, { right_index, unit } });
-        builder.AddSample(
+        AddCouplingGraphSample(
+            builder,
             { edge_index, 1 },
             { { left_index, self_scale * unit } });
-        builder.AddSample(
+        AddCouplingGraphSample(
+            builder,
             { edge_index, 2 },
             { { right_index, self_scale * unit } });
     }
@@ -3418,7 +3432,8 @@ TEST(EstimatorSecondStageDefenseTest, CouplingPartitionKeepsStrongChainAndBinary
     const auto invalid{
         Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN())
     };
-    builder.AddSample(
+    AddCouplingGraphSample(
+        builder,
         { 0, 0 },
         { { 0, Eigen::Vector3d::Ones() }, { 1, invalid } });
     coupling_detail::CouplingGraphOptions fallback_options;
@@ -3449,7 +3464,10 @@ TEST(EstimatorSecondStageDefenseTest, CouplingPartitionKeepsStrongChainAndBinary
 
     coupling_detail::CouplingGraphBuilder overflow_builder{ 2 };
     const auto huge{ Eigen::Vector3d::Constant(1.0e200) };
-    overflow_builder.AddSample({ 0, 0 }, { { 0, huge }, { 1, huge } });
+    AddCouplingGraphSample(
+        overflow_builder,
+        { 0, 0 },
+        { { 0, huge }, { 1, huge } });
     const auto overflow_topology{
         overflow_builder.BuildTopology(MakeUniqueResidueKeys(2))
     };

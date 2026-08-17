@@ -15,9 +15,7 @@ namespace rhbm_gem::core::detail {
 
 using FitState = std::vector<LocalGaussianResult>;
 
-inline const GaussianModel3D & GetFitModel(
-    const FitState & state,
-    std::size_t atom_index)
+inline const GaussianModel3D & GetFitModel(const FitState & state, std::size_t atom_index)
 {
     return state.at(atom_index).mdpde.GetModel();
 }
@@ -80,10 +78,6 @@ class FitStateView
     const FitStatePatch * m_patch{ nullptr };
 
 public:
-    explicit FitStateView(const FitState & base_state) : m_base_state{ &base_state }
-    {
-    }
-
     FitStateView(const FitState & base_state, const FitStatePatch & patch)
         : m_base_state{ &base_state }, m_patch{ &patch }
     {

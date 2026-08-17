@@ -48,11 +48,6 @@ struct JointPolishParameterization
         return group_position_by_atom.size();
     }
 
-    std::size_t GroupCount() const
-    {
-        return atom_position_list_by_group.size();
-    }
-
     Eigen::Index ParameterCount() const
     {
         return seed_parameter.size();

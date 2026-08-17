@@ -488,25 +488,6 @@ inline SuspiciousGaussianReason EvaluateSuspiciousOffsetUpdate(
         false);
 }
 
-inline SuspiciousGaussianReason EvaluateSuspiciousPostRefitUpdate(
-    const LocalPotentialSampleList & sample_entries,
-    const GaussianModel3D & previous_model,
-    const GaussianModel3D & candidate_model,
-    const FitOptions & options)
-{
-    const auto previous_baseline{
-        local_fitting_suspicious_internal::BuildPreviousSuspiciousProfileBaseline(
-            sample_entries, previous_model, options)
-    };
-    return local_fitting_suspicious_internal::EvaluateSuspiciousGaussianUpdate(
-        sample_entries,
-        previous_model,
-        candidate_model,
-        options,
-        previous_baseline,
-        true);
-}
-
 inline SuspiciousUpdateMask ExpandSuspiciousSharedOffsetGroups(
     const std::vector<GroupKey> & group_key_by_position,
     const SuspiciousUpdateMask & suspicious_seed_mask)

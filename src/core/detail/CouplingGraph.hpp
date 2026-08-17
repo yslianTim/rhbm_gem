@@ -397,14 +397,6 @@ public:
         AddSampleData(sample_id, participant_list);
     }
 
-    void AddSample(
-        SampleRef sample_id,
-        std::vector<GraphParticipant> && participant_list)
-    {
-        NormalizeParticipantList(participant_list);
-        AddSampleData(sample_id, participant_list);
-    }
-
     void AddSortedSample(
         SampleRef sample_id,
         const std::vector<GraphParticipant> & participant_list)

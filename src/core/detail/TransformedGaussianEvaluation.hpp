@@ -190,14 +190,4 @@ EvaluateTransformedResponse(
     };
 }
 
-inline std::optional<TransformedResponse>
-EvaluateTransformedResponse(
-    const GaussianModel3D & model,
-    double distance)
-{
-    const auto invariants{ BuildTransformedModelInvariants(model) };
-    if (!invariants.has_value()) return std::nullopt;
-    return EvaluateTransformedResponse(*invariants, distance);
-}
-
 } // namespace rhbm_gem::core::detail
