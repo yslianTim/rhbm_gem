@@ -32,6 +32,10 @@ namespace rhbm_gem::core::detail {
 
 constexpr std::size_t kJointPolishShapeParameterSize{ 2 };
 constexpr double kJointPolishResidualScaleMin{ 1.0e-12 };
+constexpr double kJointPolishRobustLossCutoffMultiplier{ 1.345 };
+constexpr double kJointPolishRidgeRatio{ 1.0e-3 };
+constexpr double kJointPolishConditioningRidgeMultiplier{ 10.0 };
+constexpr double kJointPolishConditioningPivotRatioThreshold{ 1.0e-8 };
 
 struct JointPolishParameterization
 {
@@ -415,11 +419,13 @@ inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
     system.ridge_diagonal = Eigen::VectorXd::Zero(column_count);
 
     const auto conditioning{
-        EvaluateJointOffsetConditioning(system.design_matrix)
+        EvaluateJointFittingConditioning(
+            system.design_matrix,
+            kJointPolishConditioningPivotRatioThreshold)
     };
     const auto conditioning_multiplier{
         conditioning.guard_required ?
-            kCollinearJointOffsetRidgeMultiplier : 1.0
+            kJointPolishConditioningRidgeMultiplier : 1.0
     };
     for (Eigen::Index column_index = 0;
         column_index < column_count;
@@ -455,8 +461,9 @@ inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
         }
         const auto square_sum{ column_square_sum(column_index) };
         system.ridge_diagonal(column_index) =
-            CalculateJointOffsetRidgeDiagonal(
+            CalculateJointFittingRidgeDiagonal(
                 square_sum,
+                kJointPolishRidgeRatio,
                 std::max(parameter_multiplier, conditioning_multiplier));
     }
 
@@ -474,7 +481,7 @@ inline std::optional<Eigen::VectorXd> BuildJointPolishDirection(
         weight(row_index) = algorithm::CalculateCauchyWeight(
             system.response(row_index),
             residual_scale,
-            kRobustLossCutoffMultiplier);
+            kJointPolishRobustLossCutoffMultiplier);
     }
 
     Eigen::VectorXd direction;

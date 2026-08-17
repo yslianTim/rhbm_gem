@@ -33,8 +33,12 @@
 namespace rhbm_gem::core::detail {
 
 constexpr int kRobustLossMaximumIterations{ 50 };
+constexpr double kJointOffsetRobustLossCutoffMultiplier{ 1.345 };
 constexpr double kJointOffsetResidualScaleMin{ 1.0e-12 };
+constexpr double kJointOffsetRidgeRatio{ 1.0e-3 };
 constexpr double kJointOffsetCollinearityOverlapThreshold{ 0.98 };
+constexpr double kJointOffsetConditioningRidgeMultiplier{ 10.0 };
+constexpr double kJointOffsetConditioningPivotRatioThreshold{ 1.0e-8 };
 constexpr double kJointOffsetIrlsScaleFloor{ 1.0e-2 };
 constexpr double kJointOffsetIrlsNormalizedChangeTolerance{ 1.0e-6 };
 constexpr double kJointOffsetIrlsObjectiveRelativeTolerance{ 1.0e-10 };
@@ -383,10 +387,10 @@ inline JointOffsetBuildResult BuildJointOffsetSystem(
 
         proactive_ridge_multiplier(left_column) = std::max(
             proactive_ridge_multiplier(left_column),
-            kCollinearJointOffsetRidgeMultiplier);
+            kJointOffsetConditioningRidgeMultiplier);
         proactive_ridge_multiplier(right_column) = std::max(
             proactive_ridge_multiplier(right_column),
-            kCollinearJointOffsetRidgeMultiplier);
+            kJointOffsetConditioningRidgeMultiplier);
     }
 
     const auto row_count{ static_cast<Eigen::Index>(response_list.size()) };
@@ -400,11 +404,14 @@ inline JointOffsetBuildResult BuildJointOffsetSystem(
     system.design_matrix.resize(row_count, column_count);
     system.design_matrix.setFromTriplets(triplet_list.begin(), triplet_list.end());
     const auto conditioning{
-        EvaluateJointOffsetConditioning(system.design_matrix)
+        EvaluateJointFittingConditioning(
+            system.design_matrix,
+            kJointOffsetConditioningPivotRatioThreshold)
     };
     if (conditioning.guard_required)
     {
-        proactive_ridge_multiplier.array() = proactive_ridge_multiplier.array().max(kCollinearJointOffsetRidgeMultiplier);
+        proactive_ridge_multiplier.array() = proactive_ridge_multiplier.array().max(
+            kJointOffsetConditioningRidgeMultiplier);
         if (log_debug_diagnostics)
         {
             std::ostringstream message;
@@ -415,7 +422,7 @@ inline JointOffsetBuildResult BuildJointOffsetSystem(
                 << ", normalized LDLT pivot ratio = "
                 << conditioning.pivot_ratio
                 << ", proactive ridge multiplier = "
-                << kCollinearJointOffsetRidgeMultiplier << ".";
+                << kJointOffsetConditioningRidgeMultiplier << ".";
             Logger::Log(LogLevel::Debug, message.str());
         }
     }
@@ -436,7 +443,10 @@ inline JointOffsetBuildResult BuildJointOffsetSystem(
             std::max(multiplier, proactive_ridge_multiplier(column_index))
         };
         system.ridge_diagonal(column_index) =
-            CalculateJointOffsetRidgeDiagonal(square_sum, combined_multiplier);
+            CalculateJointFittingRidgeDiagonal(
+                square_sum,
+                kJointOffsetRidgeRatio,
+                combined_multiplier);
     }
     return JointOffsetBuildResult{
         std::move(system),
@@ -582,7 +592,7 @@ inline JointOffsetSolveResult EstimateJointOffsets(
             weight(i) = algorithm::CalculateCauchyWeight(
                 residual(i),
                 residual_scale,
-                kRobustLossCutoffMultiplier);
+                kJointOffsetRobustLossCutoffMultiplier);
         }
 
         Eigen::VectorXd updated_offset;

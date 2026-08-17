@@ -18,6 +18,7 @@
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/TransformedGaussianModel.hpp"
 #include "core/detail/ClusterSolverWorkspace.hpp"
+#include "core/detail/JointFittingSolverPolicy.hpp"
 #include "core/detail/JointOffset.hpp"
 #include "core/detail/JointPolish.hpp"
 #include "core/detail/Objective.hpp"
@@ -1964,7 +1965,7 @@ TEST(EstimatorSecondStageDefenseTest, AllRejectedResolutionDistinguishesTerminal
         Resolution::MaximumIterations);
 }
 
-TEST(EstimatorSecondStageDefenseTest, JointOffsetConditioningDetectsJointDependence)
+TEST(EstimatorSecondStageDefenseTest, JointFittingConditioningDetectsJointDependence)
 {
     Eigen::SparseMatrix<double> design_matrix{ 3, 3 };
     const std::vector<Eigen::Triplet<double>> entries{
@@ -1988,19 +1989,23 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetConditioningDetectsJointDepende
     }
 
     const auto diagnostics{
-        conditioning_detail::EvaluateJointOffsetConditioning(design_matrix)
+        conditioning_detail::EvaluateJointFittingConditioning(
+            design_matrix,
+            1.0e-8)
     };
     EXPECT_TRUE(diagnostics.guard_required);
     EXPECT_LE(diagnostics.pivot_ratio, 1.0e-8);
 }
 
-TEST(EstimatorSecondStageDefenseTest, JointOffsetConditioningKeepsIndependentColumns)
+TEST(EstimatorSecondStageDefenseTest, JointFittingConditioningKeepsIndependentColumns)
 {
     Eigen::SparseMatrix<double> design_matrix{ 3, 3 };
     design_matrix.setIdentity();
 
     const auto diagnostics{
-        conditioning_detail::EvaluateJointOffsetConditioning(design_matrix)
+        conditioning_detail::EvaluateJointFittingConditioning(
+            design_matrix,
+            1.0e-8)
     };
     EXPECT_FALSE(diagnostics.guard_required);
     EXPECT_NEAR(diagnostics.pivot_ratio, 1.0, 1.0e-12);
