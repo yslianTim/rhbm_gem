@@ -17,7 +17,7 @@
 #include "core/detail/BacktrackingWorkspace.hpp"
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/TransformedGaussianModel.hpp"
-#include "core/detail/ClusterHealth.hpp"
+#include "core/detail/ClusterSolverWorkspace.hpp"
 #include "core/detail/JointOffset.hpp"
 #include "core/detail/JointPolish.hpp"
 #include "core/detail/Objective.hpp"

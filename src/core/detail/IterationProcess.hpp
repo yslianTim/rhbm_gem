@@ -22,7 +22,6 @@
 #endif
 
 #include "core/detail/JointOffset.hpp"
-#include "core/detail/ClusterHealth.hpp"
 #include "core/detail/ClusterSolverWorkspace.hpp"
 #include "core/detail/CandidateSelection.hpp"
 #include "core/detail/CouplingGraph.hpp"

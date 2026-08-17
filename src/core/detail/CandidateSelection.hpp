@@ -20,7 +20,6 @@
 #include "core/detail/BacktrackingWorkspace.hpp"
 #include "core/detail/CandidateEvaluationOverlay.hpp"
 #include "core/detail/TransformedGaussianModel.hpp"
-#include "core/detail/ClusterHealth.hpp"
 #include "core/detail/ClusterSolverWorkspace.hpp"
 #include "core/detail/Objective.hpp"
 #include "core/detail/PerformanceCounters.hpp"
