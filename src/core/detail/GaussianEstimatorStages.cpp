@@ -10,26 +10,18 @@
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/PerformanceCounters.hpp"
 #include "core/detail/SecondStageInitialization.hpp"
-#include "core/detail/TransformedGaussianEvaluation.hpp"
 #include "core/detail/TransformedGaussianModel.hpp"
 #include "core/detail/SecondStageContext.hpp"
-#include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
-#include <rhbm_gem/data/object/AtomObject.hpp>
+
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
-#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/algorithm/Convergence.hpp>
-#include <rhbm_gem/utils/algorithm/RobustLoss.hpp>
-#include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
-#include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <iomanip>
-#include <limits>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -37,75 +29,18 @@
 #include <utility>
 #include <vector>
 
-#include <Eigen/Dense>
-
 namespace rhbm_gem::core {
 
 namespace {
-
-constexpr double kOffsetSummaryPercentile{ 0.99 };
 
 using detail::PerformanceCounters;
 using detail::FitState;
 using detail::SecondStageContext;
 using detail::SecondStageInitialStateBuildResult;
-using detail::ObjectiveDomain;
 using detail::AuditedState;
 using detail::BestAuditState;
 using detail::TerminalSummary;
-using detail::SecondStageSeedSelectionRecord;
 using detail::IterationOutcome;
-
-enum class FinalStateSource
-{
-    BestAudit,
-    LatestValidated,
-    Unavailable
-};
-
-struct FinalStateSelection
-{
-    const FitState & state;
-    bool uses_polish{ false };
-    const AuditedState * audit_state{ nullptr };
-    FinalStateSource source;
-};
-
-FinalStateSelection SelectFinalState(
-    const FitState & latest_validated_state,
-    bool latest_validated_uses_polish,
-    const std::optional<AuditedState> & audited_state)
-{
-    if (audited_state.has_value())
-    {
-        return FinalStateSelection{
-            audited_state->state,
-            audited_state->uses_polish,
-            &*audited_state,
-            FinalStateSource::BestAudit
-        };
-    }
-    return FinalStateSelection{
-        latest_validated_state,
-        latest_validated_uses_polish,
-        nullptr,
-        FinalStateSource::LatestValidated
-    };
-}
-
-std::string_view GetFinalStateSourceText(FinalStateSource source)
-{
-    switch (source)
-    {
-    case FinalStateSource::BestAudit:
-        return "best-audit";
-    case FinalStateSource::LatestValidated:
-        return "latest-validated";
-    case FinalStateSource::Unavailable:
-        return "unavailable";
-    }
-    return "unavailable";
-}
 
 struct OffsetStat
 {
@@ -115,353 +50,6 @@ struct OffsetStat
     double percentile_absolute_offset{ 0.0 };
     double maximum_absolute_offset{ 0.0 };
 };
-
-detail::GraphTopology BuildGraphTopology(
-    const SecondStageContext & context,
-    const FitState & initial_state,
-    bool quiet_mode)
-{
-    std::size_t total_sample_count{ 0 };
-    for (const auto & atom_context : context)
-    {
-        total_sample_count += atom_context.raw_sampling_entries.size();
-    }
-    const std::size_t total_work{ total_sample_count + 1 };
-    std::size_t completed_work{ 0 };
-    const std::string progress_message{ " Build local-fitting coupling topology" };
-    int last_progress_percent{ -1 };
-    const auto update_progress = [&]()
-    {
-        if (quiet_mode) return;
-        const auto progress_percent{ static_cast<int>(
-            100.0 * static_cast<double>(completed_work) / static_cast<double>(total_work)) };
-        if (progress_percent == last_progress_percent) return;
-        last_progress_percent = progress_percent;
-        Logger::ProgressPercent(
-            completed_work,
-            total_work,
-            50,
-            progress_message);
-    };
-    update_progress();
-
-    detail::CouplingGraphBuilder builder{ context.size() };
-    const auto model_snapshot{
-        detail::BuildSecondStageModelSnapshot(context, initial_state)
-    };
-    std::vector<std::optional<detail::TransformedModelInvariants>> selected_model_invariants;
-    selected_model_invariants.reserve(model_snapshot.selected.model_list.size());
-    for (const auto & model : model_snapshot.selected.model_list)
-    {
-        selected_model_invariants.emplace_back(detail::BuildTransformedModelInvariants(model));
-    }
-    std::vector<std::optional<detail::TransformedModelInvariants>> unselected_model_invariants;
-    unselected_model_invariants.reserve(model_snapshot.unselected.model_list.size());
-    for (const auto & model : model_snapshot.unselected.model_list)
-    {
-        unselected_model_invariants.emplace_back(detail::BuildTransformedModelInvariants(model));
-    }
-    const auto evaluate_model = [](
-        const std::optional<detail::TransformedModelInvariants> & invariants,
-        double distance)
-    {
-        if (!invariants.has_value())
-        {
-            return std::optional<detail::TransformedResponse>{};
-        }
-        return detail::EvaluateTransformedResponse(*invariants, distance);
-    };
-    const auto invalid_jacobian{
-        Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN())
-    };
-    std::vector<detail::GraphParticipant> participant_list;
-    participant_list.reserve(context.size());
-    for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
-    {
-        const auto & atom_context{ context.at(atom_index) };
-        for (std::size_t sample_index = 0;
-            sample_index < atom_context.raw_sampling_entries.size();
-            sample_index++)
-        {
-            const auto & sample{ atom_context.raw_sampling_entries.at(sample_index) };
-            const auto target_evaluation{ evaluate_model(
-                selected_model_invariants.at(atom_index),
-                static_cast<double>(sample.point.distance)) };
-            participant_list.clear();
-            participant_list.emplace_back(
-                detail::GraphParticipant{
-                    atom_index,
-                    target_evaluation.has_value() ?
-                        target_evaluation->jacobian : invalid_jacobian
-                });
-            for (auto neighbor_iter = atom_context.NeighborBegin(sample_index);
-                neighbor_iter != atom_context.NeighborEnd(sample_index);
-                ++neighbor_iter)
-            {
-                const auto & neighbor_atom_sample{ *neighbor_iter };
-                const auto neighbor_evaluation{ neighbor_atom_sample.is_selected ?
-                    evaluate_model(
-                        selected_model_invariants.at(neighbor_atom_sample.atom_index),
-                        neighbor_atom_sample.distance) :
-                    evaluate_model(
-                        unselected_model_invariants.at(neighbor_atom_sample.atom_index),
-                        neighbor_atom_sample.distance) };
-                const auto jacobian{
-                    neighbor_evaluation.has_value() ? neighbor_evaluation->jacobian : invalid_jacobian
-                };
-                if (neighbor_atom_sample.is_selected)
-                {
-                    participant_list.emplace_back(
-                        detail::GraphParticipant{
-                            neighbor_atom_sample.atom_index,
-                            jacobian
-                        });
-                    continue;
-                }
-                const auto selected_group_id{
-                    context.unselected_atom_list.at(neighbor_atom_sample.atom_index).selected_group_id
-                };
-                if (!selected_group_id.has_value()) continue;
-                for (const auto selected_index :
-                    context.selected_atom_index_list_by_group.at(*selected_group_id))
-                {
-                    participant_list.emplace_back(
-                        detail::GraphParticipant{
-                            selected_index,
-                            jacobian
-                        });
-                }
-            }
-            builder.AddSample(
-                detail::SampleRef{ atom_index, sample_index },
-                participant_list);
-            completed_work++;
-            update_progress();
-        }
-    }
-
-    std::vector<detail::ResidueKey> residue_key_by_atom_index;
-    residue_key_by_atom_index.reserve(context.size());
-    for (const auto & atom_context : context)
-    {
-        residue_key_by_atom_index.emplace_back(atom_context.residue_key);
-    }
-    const auto topology{ builder.BuildTopology(std::move(residue_key_by_atom_index)) };
-    completed_work++;
-    update_progress();
-    return topology;
-}
-
-void LogSecondStageSeedSelections(
-    const std::vector<SecondStageSeedSelectionRecord> & selection_record_list,
-    bool quiet_mode)
-{
-    if (quiet_mode || selection_record_list.empty()) return;
-
-    constexpr std::array<detail::SecondStageSeedSource, 4> source_list{
-        detail::SecondStageSeedSource::GroupPosterior,
-        detail::SecondStageSeedSource::GroupPrior,
-        detail::SecondStageSeedSource::GroupMedian,
-        detail::SecondStageSeedSource::GlobalMedian
-    };
-    std::array<std::size_t, source_list.size()> source_count{};
-    for (const auto & record : selection_record_list)
-    {
-        source_count.at(static_cast<std::size_t>(record.source))++;
-    }
-
-    std::ostringstream summary;
-    summary << "Selected second-stage initial seeds = "
-        << selection_record_list.size() << ", sources = ";
-    for (std::size_t i = 0; i < source_list.size(); i++)
-    {
-        if (i != 0) summary << ", ";
-        summary << detail::GetSecondStageSeedSourceText(source_list.at(i))
-            << ":" << source_count.at(i);
-    }
-    summary << ".";
-    Logger::Log(LogLevel::Info, summary.str());
-
-    for (const auto & record : selection_record_list)
-    {
-        std::ostringstream detail_message;
-        detail_message << "Second-stage seed selection: atom index = "
-            << record.atom_index
-            << ", source = " << detail::GetSecondStageSeedSourceText(record.source)
-            << std::scientific << std::setprecision(2)
-            << ", original MDPDE A/B/C = "
-            << record.original_model.GetAmplitude() << "/"
-            << record.original_model.GetWidth() << "/"
-            << record.original_model.GetOffset()
-            << ", selected A/B/C = "
-            << record.selected_model.GetAmplitude() << "/"
-            << record.selected_model.GetWidth() << "/"
-            << record.selected_model.GetOffset() << ".";
-        Logger::Log(LogLevel::Debug, detail_message.str());
-    }
-}
-
-void LogUnselectedSecondStageSeedSelections(
-    const SecondStageContext & context,
-    const std::vector<SecondStageSeedSelectionRecord> & selection_record_list,
-    bool quiet_mode)
-{
-    if (quiet_mode || selection_record_list.empty()) return;
-
-    std::size_t group_median_count{ 0 };
-    std::size_t global_median_count{ 0 };
-    for (const auto & record : selection_record_list)
-    {
-        if (record.source == detail::SecondStageSeedSource::GroupMedian)
-        {
-            group_median_count++;
-        }
-        else if (record.source == detail::SecondStageSeedSource::GlobalMedian)
-        {
-            global_median_count++;
-        }
-    }
-
-    std::ostringstream summary;
-    summary << "Unselected second-stage neighbor seeds = " << selection_record_list.size()
-        << ", sources = group-median:" << group_median_count
-        << ", global-median:" << global_median_count << ".";
-    Logger::Log(LogLevel::Info, summary.str());
-
-    for (const auto & record : selection_record_list)
-    {
-        const auto & unselected_atom_contributor{
-            context.unselected_atom_list.at(record.atom_index)
-        };
-        std::ostringstream detail_message;
-        detail_message
-            << "Unselected second-stage neighbor seed selection: serial ID = "
-            << unselected_atom_contributor.atom->GetSerialID()
-            << ", source = " << detail::GetSecondStageSeedSourceText(record.source)
-            << std::scientific << std::setprecision(2)
-            << ", seed A/B/C = "
-            << record.selected_model.GetAmplitude() << "/"
-            << record.selected_model.GetWidth() << "/"
-            << record.selected_model.GetOffset() << ".";
-        Logger::Log(LogLevel::Debug, detail_message.str());
-    }
-}
-
-void LogGraphTopology(const detail::GraphTopology & topology, bool quiet_mode)
-{
-    if (quiet_mode) return;
-
-    const auto & summary{ topology.summary };
-    if (!summary.uses_weighted_graph)
-    {
-        Logger::Log(LogLevel::Warning,
-            "Weighted local-fitting coupling graph is unavailable; using binary connectivity.");
-        if (Logger::GetLogLevel() >= LogLevel::Debug)
-        {
-            Logger::Log(LogLevel::Debug,
-                "Local-fitting weighted threshold sensitivity is unavailable in binary fallback mode.");
-        }
-    }
-    std::ostringstream message;
-    message << "Local-fitting coupling graph mode = "
-        << (summary.uses_weighted_graph ? "weighted" : "binary-fallback")
-        << std::scientific << std::setprecision(2)
-        << ", minimum weight = " << summary.configured_minimum_weight
-        << ", candidate/retained/cut edges = "
-        << summary.candidate_edge_count << "/"
-        << summary.retained_edge_count << "/"
-        << summary.cut_edge_count
-        << ", weight p50/p95/max = "
-        << summary.weight_median << "/"
-        << summary.weight_percentile_95 << "/"
-        << summary.weight_maximum
-        << ", initial components/max atoms/ratio = "
-        << summary.component_count << "/"
-        << summary.maximum_component_size << "/"
-        << std::fixed << std::setprecision(2)
-        << summary.maximum_component_ratio << ".";
-    Logger::Log(LogLevel::Info, message.str());
-
-    const auto & residue_cutoff_summary{ topology.residue_cutoff_summary };
-    std::ostringstream residue_cutoff_message;
-    residue_cutoff_message
-        << "Local-fitting residue cutoff: residues="
-        << residue_cutoff_summary.residue_count
-        << ", limit=" << residue_cutoff_summary.maximum_residue_count_limit
-        << ", clusters=" << residue_cutoff_summary.cluster_count
-        << ", max-residues=" << residue_cutoff_summary.maximum_residue_count
-        << ", cutoff-edges=" << residue_cutoff_summary.cut_edge_count << ".";
-    Logger::Log(LogLevel::Info, residue_cutoff_message.str());
-
-    for (const auto & sensitivity : summary.threshold_sensitivity_list)
-    {
-        std::ostringstream sensitivity_message;
-        sensitivity_message
-            << std::scientific << std::setprecision(2)
-            << "Coupling sensitivity: threshold=" << sensitivity.minimum_weight
-            << ", retained/cut="
-            << sensitivity.retained_edge_count << "/"
-            << sensitivity.cut_edge_count
-            << ", components/max-atoms/ratio="
-            << sensitivity.component_count << "/"
-            << sensitivity.maximum_component_size << "/"
-            << std::fixed << std::setprecision(2)
-            << sensitivity.maximum_component_ratio << ".";
-        Logger::Log(LogLevel::Info, sensitivity_message.str());
-    }
-}
-
-void LogObjectiveDomain(const ObjectiveDomain & domain, bool quiet_mode, bool is_terminal_reset = false)
-{
-    if (quiet_mode) return;
-    std::vector<double> fit_scale_list;
-    std::vector<double> tail_scale_list;
-    for (const auto & [key, cluster_domain] : domain.cluster_by_key)
-    {
-        static_cast<void>(key);
-        if (!cluster_domain.scale.has_value()) continue;
-        fit_scale_list.emplace_back(cluster_domain.scale->fit);
-        if (cluster_domain.scale->tail.has_value())
-        {
-            tail_scale_list.emplace_back(*cluster_domain.scale->tail);
-        }
-    }
-    const auto append_scale_summary = [](
-        std::ostringstream & message,
-        const std::vector<double> & scale_list)
-    {
-        if (scale_list.empty())
-        {
-            message << "unavailable";
-            return;
-        }
-        message
-            << array_helper::ComputePercentile(scale_list, 0.5) << "/"
-            << array_helper::ComputePercentile(scale_list, 0.99) << "/"
-            << *std::max_element(scale_list.begin(), scale_list.end());
-    };
-
-    std::ostringstream message;
-    message
-        << (is_terminal_reset ?
-            "Reset second-stage objective domain" : "Initialize second-stage objective domain")
-        << ": fit/tail/offset weights = "
-        << detail::kFitRangeWeight << "/"
-        << detail::kTailValidationWeight << "/"
-        << detail::kOffsetPlausibilityPenaltyWeight
-        << ", clusters = " << domain.cluster_by_key.size()
-        << ", active atoms = " << domain.active_atom_count
-        << ", unique fit/tail samples = "
-        << domain.fit_sample_count << "/"
-        << domain.tail_sample_count
-        << ", fixed fit scale median/p99/max = ";
-    append_scale_summary(message, fit_scale_list);
-    message << ", fixed tail scale median/p99/max = ";
-    append_scale_summary(message, tail_scale_list);
-    message << ".";
-    Logger::FinishProgressLine();
-    Logger::Log(LogLevel::Info, message.str());
-}
 
 void ApplyFitState(
     ModelObject & model_object,
@@ -498,17 +86,14 @@ OffsetStat SummarizeOffsets(const FitState & state)
     if (absolute_offset_list.empty()) return stats;
 
     stats.median_absolute_offset = array_helper::ComputeMedian(absolute_offset_list);
-    stats.percentile_absolute_offset = array_helper::ComputePercentile(
-        absolute_offset_list,
-        kOffsetSummaryPercentile);
+    stats.percentile_absolute_offset = array_helper::ComputePercentile(absolute_offset_list, 0.99);
     stats.maximum_absolute_offset = *std::max_element(absolute_offset_list.begin(), absolute_offset_list.end());
     return stats;
 }
 
 void AppendOffsetSummary(std::ostringstream & stream, const OffsetStat & stats)
 {
-    stream
-        << std::scientific << std::setprecision(2)
+    stream << std::scientific << std::setprecision(2)
         << "; offsets finite = " << stats.finite_count
         << " of " << stats.atom_count
         << ", |C| median/p99/max = "
@@ -551,8 +136,7 @@ void LogTerminalFallback(
 
     Logger::FinishProgressLine();
     std::ostringstream warning_message;
-    warning_message
-        << "Completed local fitting after " << accepted_iteration_count
+    warning_message << "Completed local fitting after " << accepted_iteration_count
         << " accepted iterations with last validated states retained";
     detail::AppendTerminalSummary(warning_message, terminal_summary);
     AppendOffsetSummary(warning_message, offset_stats);
@@ -608,7 +192,7 @@ void LogConverged(
 
 void LogMaximumIterations(
     bool quiet_mode,
-    const FinalStateSelection & final_state_selection,
+    const detail::FinalStateSelection & selection,
     const TerminalSummary & terminal_summary,
     const OffsetStat & applied_offset_stats)
 {
@@ -618,13 +202,12 @@ void LogMaximumIterations(
     std::ostringstream warning_message;
     warning_message << "Reached maximum iteration size";
     detail::AppendTerminalSummary(warning_message, terminal_summary);
-    if (final_state_selection.source == FinalStateSource::BestAudit &&
-        final_state_selection.audit_state != nullptr)
+    if (selection.source == detail::FinalStateSource::BestAudit && selection.audit_state != nullptr)
     {
         warning_message << "; applying best validated audit state";
-        AppendAuditSummary(warning_message, *final_state_selection.audit_state);
+        AppendAuditSummary(warning_message, *selection.audit_state);
     }
-    else if (final_state_selection.source == FinalStateSource::LatestValidated)
+    else if (selection.source == detail::FinalStateSource::LatestValidated)
     {
         warning_message << "; applying latest validated state";
     }
@@ -643,14 +226,13 @@ void LogSecondStageSummary(
     std::string_view stop_reason,
     const BestAuditState & best_audit_state,
     std::optional<bool> final_uses_polish,
-    FinalStateSource final_state_source)
+    detail::FinalStateSource final_state_source)
 {
     if (quiet_mode) return;
 
     Logger::FinishProgressLine();
     std::ostringstream message;
-    message
-        << "Second-stage local fitting summary: accepted_iterations="
+    message << "Second-stage local fitting summary: accepted_iterations="
         << accepted_iteration_count << ", best_iteration=";
     if (!best_audit_state.best.has_value())
     {
@@ -667,8 +249,7 @@ void LogSecondStageSummary(
     message << ", stop_reason=" << stop_reason << ", best_audit_objective=";
     if (best_audit_state.best.has_value())
     {
-        message << std::scientific << std::setprecision(8)
-            << best_audit_state.best->objective.total_objective;
+        message << std::scientific << std::setprecision(8) << best_audit_state.best->objective.total_objective;
     }
     else
     {
@@ -683,10 +264,8 @@ void LogSecondStageSummary(
     {
         message << (*final_uses_polish ? "yes" : "no");
     }
-    message
-        << ", final_state_source="
-        << GetFinalStateSourceText(final_state_source)
-        << ".";
+    message << ", final_state_source="
+        << detail::GetFinalStateSourceText(final_state_source) << ".";
     Logger::Log(LogLevel::Info, message.str());
 }
 
@@ -703,14 +282,12 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
     }
 
     auto initial_state_build_result{ detail::BuildInitialFitState(context) };
-    if (initial_state_build_result.failure !=
-        SecondStageInitialStateBuildResult::Failure::None)
+    if (initial_state_build_result.failure != SecondStageInitialStateBuildResult::Failure::None)
     {
         if (!options.quiet_mode)
         {
             const auto unselected_seed_failure{
-                initial_state_build_result.failure ==
-                SecondStageInitialStateBuildResult::Failure::UnselectedSeedUnavailable
+                initial_state_build_result.failure == SecondStageInitialStateBuildResult::Failure::UnselectedSeedUnavailable
             };
             Logger::Log(LogLevel::Warning,
                 unselected_seed_failure ?
@@ -721,25 +298,24 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             Logger::Log(LogLevel::Info,
                 "Second-stage local fitting summary: accepted_iterations=0, "
                 "best_iteration=unavailable, stop_reason=" +
-                    std::string(unselected_seed_failure ?
-                        "no-valid-unselected-neighbor-seed" :
-                        "no-valid-seed") +
-                    ", "
-                "best_audit_objective=unavailable, final_uses_polish=unavailable, "
+                std::string(unselected_seed_failure ? "no-valid-unselected-neighbor-seed" : "no-valid-seed") +
+                ", best_audit_objective=unavailable, final_uses_polish=unavailable, "
                 "final_state_source=unavailable.");
         }
         return false;
     }
-    LogSecondStageSeedSelections(initial_state_build_result.selection_record_list, options.quiet_mode);
-    LogUnselectedSecondStageSeedSelections(
+    detail::LogSecondStageSeedSelections(
+        initial_state_build_result.selection_record_list,
+        options.quiet_mode);
+    detail::LogUnselectedSecondStageSeedSelections(
         context,
         initial_state_build_result.unselected_selection_record_list,
         options.quiet_mode);
     auto initial_state{ std::move(initial_state_build_result.state) };
     const auto graph_topology{
-        BuildGraphTopology(context, initial_state, options.quiet_mode)
+        detail::BuildSecondStageGraphTopology(context, initial_state, options.quiet_mode)
     };
-    LogGraphTopology(graph_topology, options.quiet_mode);
+    detail::LogGraphTopology(graph_topology, options.quiet_mode);
     auto iteration_state{
         detail::BuildIterationState(context, graph_topology, std::move(initial_state), options)
     };
@@ -752,7 +328,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
     {
         performance_counters.RecordFullStateMaterialization();
     }
-    LogObjectiveDomain(iteration_state.objective_domain, options.quiet_mode);
+    detail::LogObjectiveDomain(iteration_state.objective_domain, options.quiet_mode);
     const auto progress_column_widths{ detail::BuildProgressColumnWidths(atom_size) };
     detail::LogProgressHeader(options.quiet_mode, progress_column_widths);
 
@@ -773,7 +349,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 "terminal-isolation",
                 iteration_state.best_audit_state,
                 detail::UsesPolish(iteration_state.previous_polish_provenance),
-                FinalStateSource::LatestValidated);
+                detail::FinalStateSource::LatestValidated);
             RunGroupPotentialFitting(model_object, options, FittingStage::Second);
             return true;
         }
@@ -789,7 +365,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         };
         if (iteration_result.objective_domain_changed)
         {
-            LogObjectiveDomain(iteration_state.objective_domain, options.quiet_mode, true);
+            detail::LogObjectiveDomain(iteration_state.objective_domain, options.quiet_mode, true);
         }
         detail::LogAcceptedBacktrackingDiagnostics(options.quiet_mode, iteration_result.diagnostics);
         if (iteration_result.outcome != IterationOutcome::Accepted)
@@ -812,7 +388,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             }
 
             const auto final_state_selection{
-                SelectFinalState(
+                detail::SelectFinalState(
                     iteration_state.previous_state,
                     detail::UsesPolish(iteration_state.previous_polish_provenance),
                     iteration_state.best_audit_state.best)
@@ -840,15 +416,12 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         if (iteration_result.audit_patience_exhausted)
         {
             const auto final_state_selection{
-                SelectFinalState(
+                detail::SelectFinalState(
                     iteration_state.previous_state,
                     detail::UsesPolish(iteration_state.previous_polish_provenance),
                     iteration_state.best_audit_state.best)
             };
-            ApplyFitState(
-                model_object,
-                context,
-                final_state_selection.state);
+            ApplyFitState(model_object, context, final_state_selection.state);
             LogSecondStageSummary(
                 options.quiet_mode,
                 iteration_state.accepted_iteration_count,
@@ -865,10 +438,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             const auto accepted_offset_stats{
                 SummarizeOffsets(iteration_state.previous_state)
             };
-            ApplyFitState(
-                model_object,
-                context,
-                iteration_state.previous_state);
+            ApplyFitState(model_object, context, iteration_state.previous_state);
             if (iteration_state.terminal_failure_state.HasFailures())
             {
                 LogTerminalFallback(
@@ -891,7 +461,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 "converged",
                 iteration_state.best_audit_state,
                 detail::UsesPolish(iteration_state.previous_polish_provenance),
-                FinalStateSource::LatestValidated);
+                detail::FinalStateSource::LatestValidated);
             RunGroupPotentialFitting(model_object, options, FittingStage::Second);
             return true;
         }
@@ -899,15 +469,12 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         if (iter + 1 == detail::kMaximumIterations)
         {
             const auto final_state_selection{
-                SelectFinalState(
+                detail::SelectFinalState(
                     iteration_state.previous_state,
                     detail::UsesPolish(iteration_state.previous_polish_provenance),
                     iteration_state.best_audit_state.best)
             };
-            ApplyFitState(
-                model_object,
-                context,
-                final_state_selection.state);
+            ApplyFitState(model_object, context, final_state_selection.state);
             LogMaximumIterations(
                 options.quiet_mode,
                 final_state_selection,

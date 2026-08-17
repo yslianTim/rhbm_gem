@@ -1,7 +1,10 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
+#include <iomanip>
 #include <optional>
+#include <sstream>
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
@@ -15,6 +18,7 @@
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 #include "core/detail/FitStateView.hpp"
@@ -397,6 +401,101 @@ inline const char * GetSecondStageSeedSourceText(SecondStageSeedSource source)
         return "global-median";
     }
     throw std::logic_error("Unknown second-stage seed source.");
+}
+
+inline void LogSecondStageSeedSelections(
+    const std::vector<SecondStageSeedSelectionRecord> & selection_record_list,
+    bool quiet_mode)
+{
+    if (quiet_mode || selection_record_list.empty()) return;
+
+    constexpr std::array<SecondStageSeedSource, 4> source_list{
+        SecondStageSeedSource::GroupPosterior,
+        SecondStageSeedSource::GroupPrior,
+        SecondStageSeedSource::GroupMedian,
+        SecondStageSeedSource::GlobalMedian
+    };
+    std::array<std::size_t, source_list.size()> source_count{};
+    for (const auto & record : selection_record_list)
+    {
+        source_count.at(static_cast<std::size_t>(record.source))++;
+    }
+
+    std::ostringstream summary;
+    summary << "Selected second-stage initial seeds = "
+        << selection_record_list.size() << ", sources = ";
+    for (std::size_t i = 0; i < source_list.size(); i++)
+    {
+        if (i != 0) summary << ", ";
+        summary << GetSecondStageSeedSourceText(source_list.at(i))
+            << ":" << source_count.at(i);
+    }
+    summary << ".";
+    Logger::Log(LogLevel::Info, summary.str());
+
+    for (const auto & record : selection_record_list)
+    {
+        std::ostringstream detail_message;
+        detail_message << "Second-stage seed selection: atom index = "
+            << record.atom_index
+            << ", source = " << GetSecondStageSeedSourceText(record.source)
+            << std::scientific << std::setprecision(2)
+            << ", original MDPDE A/B/C = "
+            << record.original_model.GetAmplitude() << "/"
+            << record.original_model.GetWidth() << "/"
+            << record.original_model.GetOffset()
+            << ", selected A/B/C = "
+            << record.selected_model.GetAmplitude() << "/"
+            << record.selected_model.GetWidth() << "/"
+            << record.selected_model.GetOffset() << ".";
+        Logger::Log(LogLevel::Debug, detail_message.str());
+    }
+}
+
+inline void LogUnselectedSecondStageSeedSelections(
+    const SecondStageContext & context,
+    const std::vector<SecondStageSeedSelectionRecord> & selection_record_list,
+    bool quiet_mode)
+{
+    if (quiet_mode || selection_record_list.empty()) return;
+
+    std::size_t group_median_count{ 0 };
+    std::size_t global_median_count{ 0 };
+    for (const auto & record : selection_record_list)
+    {
+        if (record.source == SecondStageSeedSource::GroupMedian)
+        {
+            group_median_count++;
+        }
+        else if (record.source == SecondStageSeedSource::GlobalMedian)
+        {
+            global_median_count++;
+        }
+    }
+
+    std::ostringstream summary;
+    summary << "Unselected second-stage neighbor seeds = " << selection_record_list.size()
+        << ", sources = group-median:" << group_median_count
+        << ", global-median:" << global_median_count << ".";
+    Logger::Log(LogLevel::Info, summary.str());
+
+    for (const auto & record : selection_record_list)
+    {
+        const auto & unselected_atom_contributor{
+            context.unselected_atom_list.at(record.atom_index)
+        };
+        std::ostringstream detail_message;
+        detail_message
+            << "Unselected second-stage neighbor seed selection: serial ID = "
+            << unselected_atom_contributor.atom->GetSerialID()
+            << ", source = " << GetSecondStageSeedSourceText(record.source)
+            << std::scientific << std::setprecision(2)
+            << ", seed A/B/C = "
+            << record.selected_model.GetAmplitude() << "/"
+            << record.selected_model.GetWidth() << "/"
+            << record.selected_model.GetOffset() << ".";
+        Logger::Log(LogLevel::Debug, detail_message.str());
+    }
 }
 
 } // namespace rhbm_gem::core::detail

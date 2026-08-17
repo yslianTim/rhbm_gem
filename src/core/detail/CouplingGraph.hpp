@@ -3,18 +3,24 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <iomanip>
 #include <limits>
 #include <map>
 #include <optional>
+#include <sstream>
 #include <stdexcept>
+#include <string>
 #include <utility>
 #include <vector>
 
 #include <Eigen/Dense>
 
+#include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
+#include "core/detail/ResidualEvaluation.hpp"
 #include "core/detail/SecondStageContext.hpp"
+#include "core/detail/TransformedGaussianEvaluation.hpp"
 
 namespace rhbm_gem::core::detail {
 
@@ -512,6 +518,202 @@ public:
         return topology;
     }
 };
+
+inline GraphTopology BuildSecondStageGraphTopology(
+    const SecondStageContext & context,
+    const FitState & initial_state,
+    bool quiet_mode)
+{
+    std::size_t total_sample_count{ 0 };
+    for (const auto & atom_context : context)
+    {
+        total_sample_count += atom_context.raw_sampling_entries.size();
+    }
+    const std::size_t total_work{ total_sample_count + 1 };
+    std::size_t completed_work{ 0 };
+    const std::string progress_message{ " Build local-fitting coupling topology" };
+    int last_progress_percent{ -1 };
+    const auto update_progress = [&]()
+    {
+        if (quiet_mode) return;
+        const auto progress_percent{ static_cast<int>(
+            100.0 * static_cast<double>(completed_work) / static_cast<double>(total_work)) };
+        if (progress_percent == last_progress_percent) return;
+        last_progress_percent = progress_percent;
+        Logger::ProgressPercent(completed_work, total_work, 50, progress_message);
+    };
+    update_progress();
+
+    CouplingGraphBuilder builder{ context.size() };
+    const auto model_snapshot{
+        BuildSecondStageModelSnapshot(context, initial_state)
+    };
+    std::vector<std::optional<TransformedModelInvariants>> selected_model_invariants;
+    selected_model_invariants.reserve(model_snapshot.selected.model_list.size());
+    for (const auto & model : model_snapshot.selected.model_list)
+    {
+        selected_model_invariants.emplace_back(BuildTransformedModelInvariants(model));
+    }
+    std::vector<std::optional<TransformedModelInvariants>> unselected_model_invariants;
+    unselected_model_invariants.reserve(model_snapshot.unselected.model_list.size());
+    for (const auto & model : model_snapshot.unselected.model_list)
+    {
+        unselected_model_invariants.emplace_back(BuildTransformedModelInvariants(model));
+    }
+    const auto evaluate_model = [](
+        const std::optional<TransformedModelInvariants> & invariants,
+        double distance)
+    {
+        if (!invariants.has_value())
+        {
+            return std::optional<TransformedResponse>{};
+        }
+        return EvaluateTransformedResponse(*invariants, distance);
+    };
+    const auto invalid_jacobian{
+        Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN())
+    };
+    std::vector<GraphParticipant> participant_list;
+    participant_list.reserve(context.size());
+    for (std::size_t atom_index = 0; atom_index < context.size(); atom_index++)
+    {
+        const auto & atom_context{ context.at(atom_index) };
+        for (std::size_t sample_index = 0;
+            sample_index < atom_context.raw_sampling_entries.size();
+            sample_index++)
+        {
+            const auto & sample{ atom_context.raw_sampling_entries.at(sample_index) };
+            const auto target_evaluation{ evaluate_model(
+                selected_model_invariants.at(atom_index),
+                static_cast<double>(sample.point.distance)) };
+            participant_list.clear();
+            participant_list.emplace_back(
+                GraphParticipant{
+                    atom_index,
+                    target_evaluation.has_value() ?
+                        target_evaluation->jacobian : invalid_jacobian
+                });
+            for (auto neighbor_iter = atom_context.NeighborBegin(sample_index);
+                neighbor_iter != atom_context.NeighborEnd(sample_index);
+                ++neighbor_iter)
+            {
+                const auto & neighbor_atom_sample{ *neighbor_iter };
+                const auto neighbor_evaluation{ neighbor_atom_sample.is_selected ?
+                    evaluate_model(
+                        selected_model_invariants.at(neighbor_atom_sample.atom_index),
+                        neighbor_atom_sample.distance) :
+                    evaluate_model(
+                        unselected_model_invariants.at(neighbor_atom_sample.atom_index),
+                        neighbor_atom_sample.distance) };
+                const auto jacobian{
+                    neighbor_evaluation.has_value() ? neighbor_evaluation->jacobian : invalid_jacobian
+                };
+                if (neighbor_atom_sample.is_selected)
+                {
+                    participant_list.emplace_back(
+                        GraphParticipant{
+                            neighbor_atom_sample.atom_index,
+                            jacobian
+                        });
+                    continue;
+                }
+                const auto selected_group_id{
+                    context.unselected_atom_list.at(neighbor_atom_sample.atom_index).selected_group_id
+                };
+                if (!selected_group_id.has_value()) continue;
+                for (const auto selected_index :
+                    context.selected_atom_index_list_by_group.at(*selected_group_id))
+                {
+                    participant_list.emplace_back(
+                        GraphParticipant{
+                            selected_index,
+                            jacobian
+                        });
+                }
+            }
+            builder.AddSample(
+                SampleRef{ atom_index, sample_index },
+                participant_list);
+            completed_work++;
+            update_progress();
+        }
+    }
+
+    std::vector<ResidueKey> residue_key_by_atom_index;
+    residue_key_by_atom_index.reserve(context.size());
+    for (const auto & atom_context : context)
+    {
+        residue_key_by_atom_index.emplace_back(atom_context.residue_key);
+    }
+    const auto topology{ builder.BuildTopology(std::move(residue_key_by_atom_index)) };
+    completed_work++;
+    update_progress();
+    return topology;
+}
+
+inline void LogGraphTopology(const GraphTopology & topology, bool quiet_mode)
+{
+    if (quiet_mode) return;
+
+    const auto & summary{ topology.summary };
+    if (!summary.uses_weighted_graph)
+    {
+        Logger::Log(LogLevel::Warning,
+            "Weighted local-fitting coupling graph is unavailable; using binary connectivity.");
+        if (Logger::GetLogLevel() >= LogLevel::Debug)
+        {
+            Logger::Log(LogLevel::Debug,
+                "Local-fitting weighted threshold sensitivity is unavailable in binary fallback mode.");
+        }
+    }
+    std::ostringstream message;
+    message << "Local-fitting coupling graph mode = "
+        << (summary.uses_weighted_graph ? "weighted" : "binary-fallback")
+        << std::scientific << std::setprecision(2)
+        << ", minimum weight = " << summary.configured_minimum_weight
+        << ", candidate/retained/cut edges = "
+        << summary.candidate_edge_count << "/"
+        << summary.retained_edge_count << "/"
+        << summary.cut_edge_count
+        << ", weight p50/p95/max = "
+        << summary.weight_median << "/"
+        << summary.weight_percentile_95 << "/"
+        << summary.weight_maximum
+        << ", initial components/max atoms/ratio = "
+        << summary.component_count << "/"
+        << summary.maximum_component_size << "/"
+        << std::fixed << std::setprecision(2)
+        << summary.maximum_component_ratio << ".";
+    Logger::Log(LogLevel::Info, message.str());
+
+    const auto & residue_cutoff_summary{ topology.residue_cutoff_summary };
+    std::ostringstream residue_cutoff_message;
+    residue_cutoff_message
+        << "Local-fitting residue cutoff: residues="
+        << residue_cutoff_summary.residue_count
+        << ", limit=" << residue_cutoff_summary.maximum_residue_count_limit
+        << ", clusters=" << residue_cutoff_summary.cluster_count
+        << ", max-residues=" << residue_cutoff_summary.maximum_residue_count
+        << ", cutoff-edges=" << residue_cutoff_summary.cut_edge_count << ".";
+    Logger::Log(LogLevel::Info, residue_cutoff_message.str());
+
+    for (const auto & sensitivity : summary.threshold_sensitivity_list)
+    {
+        std::ostringstream sensitivity_message;
+        sensitivity_message
+            << std::scientific << std::setprecision(2)
+            << "Coupling sensitivity: threshold=" << sensitivity.minimum_weight
+            << ", retained/cut="
+            << sensitivity.retained_edge_count << "/"
+            << sensitivity.cut_edge_count
+            << ", components/max-atoms/ratio="
+            << sensitivity.component_count << "/"
+            << sensitivity.maximum_component_size << "/"
+            << std::fixed << std::setprecision(2)
+            << sensitivity.maximum_component_ratio << ".";
+        Logger::Log(LogLevel::Info, sensitivity_message.str());
+    }
+}
 
 inline GraphTopology ApplyGraphResidueCutoff(
     GraphTopology topology,

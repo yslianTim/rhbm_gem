@@ -5,12 +5,15 @@
 #include <cstddef>
 #include <map>
 #include <optional>
+#include <sstream>
 #include <stdexcept>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/utils/algorithm/RobustLoss.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 
@@ -63,6 +66,57 @@ struct BestAuditState
 {
     std::optional<AuditedState> best{};
 };
+
+enum class FinalStateSource
+{
+    BestAudit,
+    LatestValidated,
+    Unavailable
+};
+
+struct FinalStateSelection
+{
+    const FitState & state;
+    bool uses_polish{ false };
+    const AuditedState * audit_state{ nullptr };
+    FinalStateSource source;
+};
+
+inline FinalStateSelection SelectFinalState(
+    const FitState & latest_validated_state,
+    bool latest_validated_uses_polish,
+    const std::optional<AuditedState> & audited_state)
+{
+    if (audited_state.has_value())
+    {
+        return FinalStateSelection{
+            audited_state->state,
+            audited_state->uses_polish,
+            &*audited_state,
+            FinalStateSource::BestAudit
+        };
+    }
+    return FinalStateSelection{
+        latest_validated_state,
+        latest_validated_uses_polish,
+        nullptr,
+        FinalStateSource::LatestValidated
+    };
+}
+
+inline std::string_view GetFinalStateSourceText(FinalStateSource source)
+{
+    switch (source)
+    {
+    case FinalStateSource::BestAudit:
+        return "best-audit";
+    case FinalStateSource::LatestValidated:
+        return "latest-validated";
+    case FinalStateSource::Unavailable:
+        return "unavailable";
+    }
+    return "unavailable";
+}
 
 enum class PreObjectiveFailureReason
 {
@@ -221,6 +275,61 @@ struct ObjectiveDomain
     std::size_t fit_sample_count{ 0 };
     std::size_t tail_sample_count{ 0 };
 };
+
+inline void LogObjectiveDomain(
+    const ObjectiveDomain & domain,
+    bool quiet_mode,
+    bool is_terminal_reset = false)
+{
+    if (quiet_mode) return;
+    std::vector<double> fit_scale_list;
+    std::vector<double> tail_scale_list;
+    for (const auto & [key, cluster_domain] : domain.cluster_by_key)
+    {
+        static_cast<void>(key);
+        if (!cluster_domain.scale.has_value()) continue;
+        fit_scale_list.emplace_back(cluster_domain.scale->fit);
+        if (cluster_domain.scale->tail.has_value())
+        {
+            tail_scale_list.emplace_back(*cluster_domain.scale->tail);
+        }
+    }
+    const auto append_scale_summary = [](
+        std::ostringstream & message,
+        const std::vector<double> & scale_list)
+    {
+        if (scale_list.empty())
+        {
+            message << "unavailable";
+            return;
+        }
+        message
+            << array_helper::ComputePercentile(scale_list, 0.5) << "/"
+            << array_helper::ComputePercentile(scale_list, 0.99) << "/"
+            << *std::max_element(scale_list.begin(), scale_list.end());
+    };
+
+    std::ostringstream message;
+    message
+        << (is_terminal_reset ?
+            "Reset second-stage objective domain" : "Initialize second-stage objective domain")
+        << ": fit/tail/offset weights = "
+        << kFitRangeWeight << "/"
+        << kTailValidationWeight << "/"
+        << kOffsetPlausibilityPenaltyWeight
+        << ", clusters = " << domain.cluster_by_key.size()
+        << ", active atoms = " << domain.active_atom_count
+        << ", unique fit/tail samples = "
+        << domain.fit_sample_count << "/"
+        << domain.tail_sample_count
+        << ", fixed fit scale median/p99/max = ";
+    append_scale_summary(message, fit_scale_list);
+    message << ", fixed tail scale median/p99/max = ";
+    append_scale_summary(message, tail_scale_list);
+    message << ".";
+    Logger::FinishProgressLine();
+    Logger::Log(LogLevel::Info, message.str());
+}
 
 struct ClusterObjectiveState
 {
