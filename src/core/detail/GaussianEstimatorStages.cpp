@@ -89,10 +89,10 @@ enum class FinalStateSource
 
 struct FinalStateSelection
 {
-    const FitState * state{ nullptr };
-    const PolishProvenance * polish_provenance{ nullptr };
+    const FitState & state;
+    const PolishProvenance & polish_provenance;
     const AuditedState * audit_state{ nullptr };
-    FinalStateSource source{ FinalStateSource::Unavailable };
+    FinalStateSource source;
 };
 
 FinalStateSelection SelectFinalState(
@@ -103,15 +103,15 @@ FinalStateSelection SelectFinalState(
     if (audited_state.has_value())
     {
         return FinalStateSelection{
-            &audited_state->state,
-            &audited_state->polish_provenance,
+            audited_state->state,
+            audited_state->polish_provenance,
             &*audited_state,
             FinalStateSource::BestAudit
         };
     }
     return FinalStateSelection{
-        &latest_validated_state,
-        &latest_validated_polish_provenance,
+        latest_validated_state,
+        latest_validated_polish_provenance,
         nullptr,
         FinalStateSource::LatestValidated
     };
@@ -841,13 +841,13 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                     iteration_state.previous_polish_provenance,
                     iteration_state.best_audit_state.best)
             };
-            ApplyFitState(model_object, context, *final_state_selection.state);
+            ApplyFitState(model_object, context, final_state_selection.state);
             LogSecondStageSummary(
                 options.quiet_mode,
                 iteration_state.accepted_iteration_count,
                 GetAllRejectedResolutionText(*iteration_result.all_rejected_resolution),
                 iteration_state.best_audit_state,
-                UsesPolish(*final_state_selection.polish_provenance),
+                UsesPolish(final_state_selection.polish_provenance),
                 final_state_selection.source);
             RunGroupPotentialFitting(model_object, options, FittingStage::Second);
             return true;
@@ -872,13 +872,13 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             ApplyFitState(
                 model_object,
                 context,
-                *final_state_selection.state);
+                final_state_selection.state);
             LogSecondStageSummary(
                 options.quiet_mode,
                 iteration_state.accepted_iteration_count,
                 "audit-patience",
                 iteration_state.best_audit_state,
-                UsesPolish(*final_state_selection.polish_provenance),
+                UsesPolish(final_state_selection.polish_provenance),
                 final_state_selection.source);
             RunGroupPotentialFitting(model_object, options, FittingStage::Second);
             return true;
@@ -931,18 +931,18 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             ApplyFitState(
                 model_object,
                 context,
-                *final_state_selection.state);
+                final_state_selection.state);
             LogMaximumIterations(
                 options.quiet_mode,
                 final_state_selection,
                 iteration_state.terminal_failure_state.Summary(),
-                SummarizeOffsets(*final_state_selection.state));
+                SummarizeOffsets(final_state_selection.state));
             LogSecondStageSummary(
                 options.quiet_mode,
                 iteration_state.accepted_iteration_count,
                 "maximum-iterations",
                 iteration_state.best_audit_state,
-                UsesPolish(*final_state_selection.polish_provenance),
+                UsesPolish(final_state_selection.polish_provenance),
                 final_state_selection.source);
             RunGroupPotentialFitting(model_object, options, FittingStage::Second);
             return true;
