@@ -27,8 +27,8 @@
 #include "core/detail/ResidualEvaluation.hpp"
 #include "core/detail/JointFittingSolverPolicy.hpp"
 #include "core/detail/JointOffsetSolveStatus.hpp"
+#include "core/detail/ClusterSolverWorkspace.hpp"
 #include "core/detail/SecondStageContext.hpp"
-#include "core/detail/ReusableWeightedRidgeSolver.hpp"
 
 namespace rhbm_gem::core::detail {
 
