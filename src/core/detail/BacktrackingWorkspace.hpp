@@ -33,14 +33,25 @@ struct BacktrackingStep
     double maximum_transformed_change{ std::numeric_limits<double>::infinity() };
     const FitStatePatch * candidate_patch{ nullptr };
 
-    bool IsCandidateReady() const
-    {
-        return status == BacktrackingStepStatus::CandidateReady;
-    }
+    bool IsCandidateReady() const { return status == BacktrackingStepStatus::CandidateReady; }
 };
 
-struct BacktrackingWorkspace
+class BacktrackingWorkspace
 {
+    const FitState * m_previous_state{ nullptr };
+    std::vector<std::size_t> m_active_index_list{};
+    double m_minimum_transformed_change{ 0.0 };
+    double m_next_factor{ 0.5 };
+    std::size_t m_trial_number{ 1 };
+    std::vector<GroupKey> m_group_key_by_atom_position{};
+    std::vector<GaussianModel3D> m_previous_model_list{};
+    std::vector<GaussianModel3D> m_endpoint_model_list{};
+    std::vector<GaussianModel3DUncertainty> m_endpoint_uncertainty_list{};
+    std::vector<GaussianModel3D> m_previous_shared_offset_model_list{};
+    std::vector<GaussianModel3D> m_endpoint_shared_offset_model_list{};
+    FitStatePatch m_candidate_patch{};
+
+public:
     template <typename EndpointState>
     BacktrackingWorkspace(
         const SecondStageContext & context,
@@ -278,19 +289,6 @@ private:
             return state.at(atom_index).mdpde;
         }
     }
-
-    const FitState * m_previous_state{ nullptr };
-    std::vector<std::size_t> m_active_index_list{};
-    double m_minimum_transformed_change{ 0.0 };
-    double m_next_factor{ 0.5 };
-    std::size_t m_trial_number{ 1 };
-    std::vector<GroupKey> m_group_key_by_atom_position{};
-    std::vector<GaussianModel3D> m_previous_model_list{};
-    std::vector<GaussianModel3D> m_endpoint_model_list{};
-    std::vector<GaussianModel3DUncertainty> m_endpoint_uncertainty_list{};
-    std::vector<GaussianModel3D> m_previous_shared_offset_model_list{};
-    std::vector<GaussianModel3D> m_endpoint_shared_offset_model_list{};
-    FitStatePatch m_candidate_patch{};
 };
 
 } // namespace rhbm_gem::core::detail
