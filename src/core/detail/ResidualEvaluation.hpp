@@ -9,7 +9,7 @@
 
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
-#include "core/detail/LocalFittingGroupMedian.hpp"
+#include "core/detail/TransformedGaussianModel.hpp"
 #include "core/detail/FitStateView.hpp"
 #include "core/detail/SecondStageIdentifiers.hpp"
 #include "core/detail/SecondStageContext.hpp"
@@ -93,7 +93,7 @@ inline FittedGaussianSnapshot BuildUnselectedAtomContributorSnapshot(
         {
             model_list.emplace_back(GetFitModel(selected_snapshot, atom_index));
         }
-        median_model_by_group.at(group_id) = BuildLocalFittingGaussianParameterMedian(model_list);
+        median_model_by_group.at(group_id) = BuildGaussianParameterMedian(model_list);
     }
 
     FittedGaussianSnapshot snapshot;

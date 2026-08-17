@@ -19,7 +19,7 @@
 #include "core/detail/JointPolish.hpp"
 #include "core/detail/BacktrackingWorkspace.hpp"
 #include "core/detail/CandidateEvaluationOverlay.hpp"
-#include "core/detail/LocalFittingGroupMedian.hpp"
+#include "core/detail/TransformedGaussianModel.hpp"
 #include "core/detail/ClusterHealth.hpp"
 #include "core/detail/ClusterSolverWorkspace.hpp"
 #include "core/detail/Objective.hpp"
@@ -108,14 +108,14 @@ inline BaseProposalBuildResult BuildSharedOffsetBaseProposal(
         raw_model_list.emplace_back(raw_state.at(atom_index).mdpde.GetModel());
     }
     const auto previous_shared_offset_model_list{
-        BuildLocalFittingGroupMedianModelList(group_key_by_atom_position, previous_model_list)
+        BuildGroupMedianModelList(group_key_by_atom_position, previous_model_list)
     };
     const auto raw_shared_offset_model_list{
-        BuildLocalFittingGroupMedianModelList(group_key_by_atom_position, raw_model_list)
+        BuildGroupMedianModelList(group_key_by_atom_position, raw_model_list)
     };
 
     const auto seed_model_list{
-        BuildLocalFittingSharedOffsetDampedModelList(
+        BuildSharedOffsetDampedModelList(
             previous_model_list,
             raw_model_list,
             previous_shared_offset_model_list,
@@ -155,7 +155,7 @@ inline BaseProposalBuildResult BuildSharedOffsetBaseProposal(
     while (damping >= std::numeric_limits<double>::epsilon())
     {
         auto candidate_model_list{
-            BuildLocalFittingSharedOffsetDampedModelList(
+            BuildSharedOffsetDampedModelList(
                 previous_model_list,
                 raw_model_list,
                 previous_shared_offset_model_list,

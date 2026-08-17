@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include "core/detail/LocalFittingGroupMedian.hpp"
+#include "core/detail/TransformedGaussianModel.hpp"
 #include "core/detail/FitStateView.hpp"
 #include "core/detail/PolishProvenance.hpp"
 #include "core/detail/TransformedChange.hpp"
@@ -74,11 +74,11 @@ struct BacktrackingWorkspace
                 GetEndpointMdpde(endpoint_state, atom_index).GetStandardDeviationModel());
         }
         m_previous_shared_offset_model_list =
-            BuildLocalFittingGroupMedianModelList(
+            BuildGroupMedianModelList(
                 m_group_key_by_atom_position,
                 m_previous_model_list);
         m_endpoint_shared_offset_model_list =
-            BuildLocalFittingGroupMedianModelList(
+            BuildGroupMedianModelList(
                 m_group_key_by_atom_position,
                 m_endpoint_model_list);
         m_candidate_patch.atom_index_list = m_active_index_list;
@@ -209,7 +209,7 @@ private:
     const FitStatePatch * BuildCandidate(double factor)
     {
         const auto candidate_model_list{
-            BuildLocalFittingSharedOffsetDampedModelList(
+            BuildSharedOffsetDampedModelList(
                 m_previous_model_list,
                 m_endpoint_model_list,
                 m_previous_shared_offset_model_list,

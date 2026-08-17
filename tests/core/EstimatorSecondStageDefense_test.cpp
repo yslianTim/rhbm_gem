@@ -16,7 +16,7 @@
 #include "core/detail/GaussianEstimatorStages.hpp"
 #include "core/detail/BacktrackingWorkspace.hpp"
 #include "core/detail/CouplingGraph.hpp"
-#include "core/detail/LocalFittingGroupMedian.hpp"
+#include "core/detail/TransformedGaussianModel.hpp"
 #include "core/detail/ClusterHealth.hpp"
 #include "core/detail/JointOffset.hpp"
 #include "core/detail/JointPolish.hpp"
@@ -914,7 +914,7 @@ void ExpectUnselectedContributorPeeling(
                         }
                     }
                     const auto group_median{
-                        median_detail::BuildLocalFittingGaussianParameterMedian(
+                        median_detail::BuildGaussianParameterMedian(
                             group_models)
                     };
                     if (group_median.has_value())
@@ -2432,7 +2432,7 @@ TEST(EstimatorSecondStageDefenseTest,
     };
 
     const auto median_model_list{
-        median_detail::BuildLocalFittingGroupMedianModelList(
+        median_detail::BuildGroupMedianModelList(
             group_key_list,
             model_list)
     };
@@ -2469,7 +2469,7 @@ TEST(EstimatorSecondStageDefenseTest,
         invalid_model
     };
     const auto median_model_list{
-        median_detail::BuildLocalFittingGroupMedianModelList(
+        median_detail::BuildGroupMedianModelList(
             std::vector<GroupKey>{ 10, 10, 20 },
             model_list)
     };
@@ -2479,7 +2479,7 @@ TEST(EstimatorSecondStageDefenseTest,
     ExpectGaussianModelsNear(median_model_list.at(1), valid_model, 1.0e-12);
     ExpectGaussianModelsNear(median_model_list.at(2), invalid_model, 1.0e-12);
     EXPECT_THROW(
-        median_detail::BuildLocalFittingGroupMedianModelList(
+        median_detail::BuildGroupMedianModelList(
             std::vector<GroupKey>{ 10 },
             model_list),
         std::invalid_argument);
@@ -2500,12 +2500,12 @@ TEST(EstimatorSecondStageDefenseTest,
         rg::GaussianModel3D{ 7.0, 0.70, 2.0 }
     };
     const auto previous_shared_offset_model_list{
-        median_detail::BuildLocalFittingGroupMedianModelList(
+        median_detail::BuildGroupMedianModelList(
             group_key_list,
             previous_model_list)
     };
     const auto raw_shared_offset_model_list{
-        median_detail::BuildLocalFittingGroupMedianModelList(
+        median_detail::BuildGroupMedianModelList(
             group_key_list,
             raw_model_list)
     };
@@ -2513,7 +2513,7 @@ TEST(EstimatorSecondStageDefenseTest,
     for (const auto damping : std::array<double, 3>{ 0.0, 0.25, 1.0 })
     {
         const auto candidate_model_list{
-            median_detail::BuildLocalFittingSharedOffsetDampedModelList(
+            median_detail::BuildSharedOffsetDampedModelList(
                 previous_model_list,
                 raw_model_list,
                 previous_shared_offset_model_list,
@@ -2594,12 +2594,12 @@ TEST(EstimatorSecondStageDefenseTest, GroupMedianModelsAreIntensityScaleInvarian
     }
 
     const auto median_model_list{
-        median_detail::BuildLocalFittingGroupMedianModelList(
+        median_detail::BuildGroupMedianModelList(
             group_key_list,
             model_list)
     };
     const auto scaled_median_model_list{
-        median_detail::BuildLocalFittingGroupMedianModelList(
+        median_detail::BuildGroupMedianModelList(
             group_key_list,
             scaled_model_list)
     };
@@ -2624,7 +2624,7 @@ TEST(EstimatorSecondStageDefenseTest,
     IndividualRefitUsesGroupMedianModelForTargetOffsetResponse)
 {
     const auto median_model_list{
-        median_detail::BuildLocalFittingGroupMedianModelList(
+        median_detail::BuildGroupMedianModelList(
             std::vector<GroupKey>{ 10, 10, 10 },
             std::vector<rg::GaussianModel3D>{
                 rg::GaussianModel3D{ 3.0, 0.70, 0.2 },

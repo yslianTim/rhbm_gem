@@ -17,7 +17,6 @@
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
-#include "core/detail/LocalFittingGroupMedian.hpp"
 #include "core/detail/FitState.hpp"
 #include "core/detail/SecondStageContext.hpp"
 #include "core/detail/TransformedGaussianModel.hpp"
@@ -254,7 +253,7 @@ inline void StoreSecondStageNeighborCounts(
 inline std::optional<GaussianModel3DWithUncertainty> BuildValidGaussianParameterMedian(
     const std::vector<GaussianModel3D> & model_list)
 {
-    const auto median_model{ BuildLocalFittingGaussianParameterMedian(model_list) };
+    const auto median_model{ BuildGaussianParameterMedian(model_list) };
     if (!median_model.has_value()) return std::nullopt;
     return GaussianModel3DWithUncertainty{
         *median_model,

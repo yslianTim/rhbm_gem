@@ -33,6 +33,7 @@
 #include "core/detail/PolishProvenance.hpp"
 #include "core/detail/SecondStageIdentifiers.hpp"
 #include "core/detail/SuspiciousUpdate.hpp"
+#include "core/detail/TransformedGaussianModel.hpp"
 #include "core/detail/SecondStageContext.hpp"
 #include "core/detail/TransformedChange.hpp"
 #include "core/detail/TrustRegion.hpp"
@@ -727,7 +728,7 @@ inline RawIterationResult RunRawIteration(
     }
 
     FittedGaussianSnapshot refit_model_snapshot{
-        BuildLocalFittingGroupMedianModelList(
+        BuildGroupMedianModelList(
             group_key_by_atom_index,
             current_model_snapshot.selected.model_list)
     };

@@ -7,7 +7,7 @@
 
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
-#include "core/detail/LocalFittingGroupMedian.hpp"
+#include "core/detail/TransformedGaussianModel.hpp"
 #include "core/detail/ResidualEvaluation.hpp"
 #include "core/detail/FitStateView.hpp"
 #include "core/detail/SecondStageIdentifiers.hpp"
@@ -51,7 +51,7 @@ public:
             {
                 model_list.emplace_back(m_candidate_state.GetModel(atom_index));
             }
-            m_changed_group_median.at(group_id) = BuildLocalFittingGaussianParameterMedian(model_list);
+            m_changed_group_median.at(group_id) = BuildGaussianParameterMedian(model_list);
         }
     }
 
