@@ -10,7 +10,6 @@
 #include "core/detail/TransformedGaussianModel.hpp"
 #include "core/detail/ResidualEvaluation.hpp"
 #include "core/detail/FitStateView.hpp"
-#include "core/detail/SecondStageIdentifiers.hpp"
 #include "core/detail/SecondStageContext.hpp"
 
 namespace rhbm_gem::core::detail {

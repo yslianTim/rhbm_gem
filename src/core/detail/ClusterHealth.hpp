@@ -8,7 +8,7 @@
 #include <map>
 
 #include "core/detail/JointOffsetSolveStatus.hpp"
-#include "core/detail/SecondStageIdentifiers.hpp"
+#include "core/detail/SecondStageContext.hpp"
 
 namespace rhbm_gem::core::detail {
 

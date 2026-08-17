@@ -31,7 +31,6 @@
 #include "core/detail/ResidualEvaluation.hpp"
 #include "core/detail/FitState.hpp"
 #include "core/detail/PolishProvenance.hpp"
-#include "core/detail/SecondStageIdentifiers.hpp"
 #include "core/detail/SuspiciousUpdate.hpp"
 #include "core/detail/TransformedGaussianModel.hpp"
 #include "core/detail/SecondStageContext.hpp"

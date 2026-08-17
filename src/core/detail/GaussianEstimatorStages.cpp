@@ -4,7 +4,6 @@
 #include "core/detail/FitState.hpp"
 #include "core/detail/PolishProvenance.hpp"
 #include "core/detail/ResidualEvaluation.hpp"
-#include "core/detail/SecondStageIdentifiers.hpp"
 #include "core/detail/Objective.hpp"
 #include "core/detail/TerminalFailure.hpp"
 #include "core/detail/IterationProcess.hpp"

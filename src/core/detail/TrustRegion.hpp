@@ -11,7 +11,7 @@
 
 #include <Eigen/Dense>
 
-#include "core/detail/SecondStageIdentifiers.hpp"
+#include "core/detail/SecondStageContext.hpp"
 #include "core/detail/TransformedGaussianModel.hpp"
 
 namespace rhbm_gem::core::detail {

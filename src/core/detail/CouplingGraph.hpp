@@ -15,7 +15,7 @@
 
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
-#include "core/detail/SecondStageIdentifiers.hpp"
+#include "core/detail/SecondStageContext.hpp"
 
 namespace rhbm_gem::core::detail {
 

@@ -4,7 +4,6 @@
 #include "core/detail/JointFittingSolverPolicy.hpp"
 #include "core/detail/ResidualEvaluation.hpp"
 #include "core/detail/ReusableWeightedRidgeSolver.hpp"
-#include "core/detail/SecondStageIdentifiers.hpp"
 #include "core/detail/SecondStageContext.hpp"
 #include "core/detail/TransformedChange.hpp"
 #include "core/detail/TransformedGaussianEvaluation.hpp"

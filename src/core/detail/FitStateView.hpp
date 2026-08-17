@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "core/detail/FitState.hpp"
-#include "core/detail/SecondStageIdentifiers.hpp"
+#include "core/detail/SecondStageContext.hpp"
 
 namespace rhbm_gem::core::detail {
 

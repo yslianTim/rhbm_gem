@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "core/detail/ReusableWeightedRidgeSolver.hpp"
-#include "core/detail/SecondStageIdentifiers.hpp"
+#include "core/detail/SecondStageContext.hpp"
 
 namespace rhbm_gem::core::detail {
 

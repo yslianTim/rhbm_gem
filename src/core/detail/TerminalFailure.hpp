@@ -11,7 +11,7 @@
 #include "core/detail/FitState.hpp"
 #include "core/detail/JointOffsetSolveStatus.hpp"
 #include "core/detail/PolishProvenance.hpp"
-#include "core/detail/SecondStageIdentifiers.hpp"
+#include "core/detail/SecondStageContext.hpp"
 #include "core/detail/TransformedChange.hpp"
 #include "core/detail/SuspiciousUpdate.hpp"
 

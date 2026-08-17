@@ -2,15 +2,24 @@
 
 #include <cstddef>
 #include <optional>
+#include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 
-#include "core/detail/SecondStageIdentifiers.hpp"
-
 namespace rhbm_gem::core::detail {
+
+using ClusterKey = std::vector<std::size_t>;
+using ResidueKey = std::pair<std::string, int>;
+
+struct SampleRef
+{
+    std::size_t atom_index{ 0 };
+    std::size_t sample_index{ 0 };
+};
 
 struct NeighborAtomSample
 {
