@@ -869,7 +869,7 @@ inline IterationState BuildIterationState(
     iteration_state.best_audit_state = BuildInitialBestAuditState(
         context,
         iteration_state.previous_state,
-        iteration_state.previous_polish_provenance,
+        UsesPolish(iteration_state.previous_polish_provenance),
         std::nullopt,
         iteration_state.objective_domain);
     return iteration_state;
@@ -1040,6 +1040,9 @@ inline IterationResult RunIteration(
             iteration_state.previous_polish_provenance,
             assembled_polish_provenance)
     };
+    const auto assembled_uses_polish{
+        UsesPolish(assembled_polish_provenance)
+    };
     bool objective_domain_changed{ false };
     if (!terminal_key_list.empty())
     {
@@ -1077,7 +1080,7 @@ inline IterationResult RunIteration(
             ResetBestAuditAfterObjectiveDomainChange(
                 context,
                 assembled_state,
-                assembled_polish_provenance,
+                assembled_uses_polish,
                 iteration_state.accepted_iteration_count + 1,
                 iteration_state.objective_domain,
                 iteration_state.best_audit_state);
@@ -1175,7 +1178,7 @@ inline IterationResult RunIteration(
         TryUpdateBestAuditState(
             context,
             assembled_state,
-            assembled_polish_provenance,
+            assembled_uses_polish,
             iteration_state.accepted_iteration_count,
             iteration_state.objective_domain,
             iteration_state.best_audit_state,

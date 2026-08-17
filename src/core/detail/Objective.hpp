@@ -17,7 +17,6 @@
 #include "core/detail/CouplingGraph.hpp"
 #include "core/detail/CandidateEvaluationOverlay.hpp"
 #include "core/detail/PerformanceCounters.hpp"
-#include "core/detail/PolishProvenance.hpp"
 #include "core/detail/ResidualEvaluation.hpp"
 #include "core/detail/SecondStageContext.hpp"
 #include "core/detail/FitStateView.hpp"
@@ -56,7 +55,7 @@ struct AuditedState
 {
     ObjectiveBreakdown objective{};
     FitState state{};
-    PolishProvenance polish_provenance{};
+    bool uses_polish{ false };
     std::optional<std::size_t> accepted_iteration{};
 };
 
@@ -794,7 +793,7 @@ inline CombinedCandidateObjectiveCheck EvaluateCombinedCandidateObjective(
 inline bool TryUpdateBestAuditState(
     const SecondStageContext & context,
     const FitState & candidate_state,
-    const PolishProvenance & candidate_polish_provenance,
+    bool candidate_uses_polish,
     const std::optional<std::size_t> & accepted_iteration,
     const ObjectiveDomain & domain,
     BestAuditState & audit_state,
@@ -815,7 +814,7 @@ inline bool TryUpdateBestAuditState(
     audit_state.best = AuditedState{
         *candidate_objective,
         candidate_state,
-        candidate_polish_provenance,
+        candidate_uses_polish,
         accepted_iteration
     };
     return true;
@@ -824,7 +823,7 @@ inline bool TryUpdateBestAuditState(
 inline BestAuditState BuildInitialBestAuditState(
     const SecondStageContext & context,
     const FitState & initial_state,
-    const PolishProvenance & initial_polish_provenance,
+    bool initial_uses_polish,
     const std::optional<std::size_t> & accepted_iteration,
     const ObjectiveDomain & domain)
 {
@@ -832,7 +831,7 @@ inline BestAuditState BuildInitialBestAuditState(
     static_cast<void>(TryUpdateBestAuditState(
         context,
         initial_state,
-        initial_polish_provenance,
+        initial_uses_polish,
         accepted_iteration,
         domain,
         audit_state));
@@ -842,7 +841,7 @@ inline BestAuditState BuildInitialBestAuditState(
 inline void ResetBestAuditAfterObjectiveDomainChange(
     const SecondStageContext & context,
     const FitState & validated_state,
-    const PolishProvenance & validated_polish_provenance,
+    bool validated_uses_polish,
     std::size_t accepted_iteration,
     const ObjectiveDomain & domain,
     BestAuditState & audit_state)
@@ -850,7 +849,7 @@ inline void ResetBestAuditAfterObjectiveDomainChange(
     audit_state = BuildInitialBestAuditState(
         context,
         validated_state,
-        validated_polish_provenance,
+        validated_uses_polish,
         accepted_iteration,
         domain);
 }

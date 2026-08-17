@@ -46,7 +46,6 @@ namespace {
 using detail::BuildSecondStageModelSnapshot;
 using detail::SampleRef;
 using detail::PerformanceCounters;
-using detail::PolishProvenance;
 using detail::FitState;
 using detail::SecondStageContext;
 using detail::SecondStageInitialStateBuildResult;
@@ -90,28 +89,28 @@ enum class FinalStateSource
 struct FinalStateSelection
 {
     const FitState & state;
-    const PolishProvenance & polish_provenance;
+    bool uses_polish{ false };
     const AuditedState * audit_state{ nullptr };
     FinalStateSource source;
 };
 
 FinalStateSelection SelectFinalState(
     const FitState & latest_validated_state,
-    const PolishProvenance & latest_validated_polish_provenance,
+    bool latest_validated_uses_polish,
     const std::optional<AuditedState> & audited_state)
 {
     if (audited_state.has_value())
     {
         return FinalStateSelection{
             audited_state->state,
-            audited_state->polish_provenance,
+            audited_state->uses_polish,
             &*audited_state,
             FinalStateSource::BestAudit
         };
     }
     return FinalStateSelection{
         latest_validated_state,
-        latest_validated_polish_provenance,
+        latest_validated_uses_polish,
         nullptr,
         FinalStateSource::LatestValidated
     };
@@ -838,7 +837,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             const auto final_state_selection{
                 SelectFinalState(
                     iteration_state.previous_state,
-                    iteration_state.previous_polish_provenance,
+                    UsesPolish(iteration_state.previous_polish_provenance),
                     iteration_state.best_audit_state.best)
             };
             ApplyFitState(model_object, context, final_state_selection.state);
@@ -847,7 +846,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 iteration_state.accepted_iteration_count,
                 GetAllRejectedResolutionText(*iteration_result.all_rejected_resolution),
                 iteration_state.best_audit_state,
-                UsesPolish(final_state_selection.polish_provenance),
+                final_state_selection.uses_polish,
                 final_state_selection.source);
             RunGroupPotentialFitting(model_object, options, FittingStage::Second);
             return true;
@@ -866,7 +865,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             const auto final_state_selection{
                 SelectFinalState(
                     iteration_state.previous_state,
-                    iteration_state.previous_polish_provenance,
+                    UsesPolish(iteration_state.previous_polish_provenance),
                     iteration_state.best_audit_state.best)
             };
             ApplyFitState(
@@ -878,7 +877,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 iteration_state.accepted_iteration_count,
                 "audit-patience",
                 iteration_state.best_audit_state,
-                UsesPolish(final_state_selection.polish_provenance),
+                final_state_selection.uses_polish,
                 final_state_selection.source);
             RunGroupPotentialFitting(model_object, options, FittingStage::Second);
             return true;
@@ -925,7 +924,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
             const auto final_state_selection{
                 SelectFinalState(
                     iteration_state.previous_state,
-                    iteration_state.previous_polish_provenance,
+                    UsesPolish(iteration_state.previous_polish_provenance),
                     iteration_state.best_audit_state.best)
             };
             ApplyFitState(
@@ -942,7 +941,7 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
                 iteration_state.accepted_iteration_count,
                 "maximum-iterations",
                 iteration_state.best_audit_state,
-                UsesPolish(final_state_selection.polish_provenance),
+                final_state_selection.uses_polish,
                 final_state_selection.source);
             RunGroupPotentialFitting(model_object, options, FittingStage::Second);
             return true;
