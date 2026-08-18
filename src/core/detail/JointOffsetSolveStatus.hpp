@@ -15,11 +15,6 @@ enum class JointOffsetSolveStatus
     IrlsMaximumIterationsReached
 };
 
-inline bool IsJointOffsetSolveStationarityEligible(JointOffsetSolveStatus status)
-{
-    return status == JointOffsetSolveStatus::Converged;
-}
-
 inline bool IsJointOffsetSolveHardFailure(JointOffsetSolveStatus status)
 {
     switch (status)

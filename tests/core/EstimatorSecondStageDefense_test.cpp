@@ -2126,8 +2126,8 @@ TEST(EstimatorSecondStageDefenseTest,
     };
 
     ASSERT_TRUE(parameterization.has_value());
-    EXPECT_EQ(parameterization->AtomCount(), 5U);
-    EXPECT_EQ(parameterization->ParameterCount(), 2);
+    EXPECT_EQ(parameterization->group_position_by_atom.size(), 5U);
+    EXPECT_EQ(parameterization->seed_offset.size(), 2);
     EXPECT_EQ(parameterization->OffsetColumn(0), 1);
     EXPECT_EQ(parameterization->OffsetColumn(1), 0);
     EXPECT_EQ(
@@ -2217,14 +2217,14 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetHealthSeparatesHardFailureFromS
 {
     using Status = offset_detail::JointOffsetSolveStatus;
 
-    EXPECT_TRUE(offset_detail::IsJointOffsetSolveStationarityEligible(Status::Converged));
+    EXPECT_TRUE(health_detail::ClusterHealth{ Status::Converged }.IsStationarityEligible());
     EXPECT_FALSE(offset_detail::IsJointOffsetSolveHardFailure(Status::Converged));
 
     for (const auto status : {
         Status::IrlsObjectiveDeteriorated,
         Status::IrlsMaximumIterationsReached })
     {
-        EXPECT_FALSE(offset_detail::IsJointOffsetSolveStationarityEligible(status));
+        EXPECT_FALSE(health_detail::ClusterHealth{ status }.IsStationarityEligible());
         EXPECT_FALSE(offset_detail::IsJointOffsetSolveHardFailure(status));
     }
 
@@ -2234,13 +2234,12 @@ TEST(EstimatorSecondStageDefenseTest, JointOffsetHealthSeparatesHardFailureFromS
         Status::InitialSolveFailed,
         Status::IrlsSolveFailed })
     {
-        EXPECT_FALSE(offset_detail::IsJointOffsetSolveStationarityEligible(status));
+        EXPECT_FALSE(health_detail::ClusterHealth{ status }.IsStationarityEligible());
         EXPECT_TRUE(offset_detail::IsJointOffsetSolveHardFailure(status));
     }
 
     const auto invalid_status{ static_cast<Status>(-1) };
-    EXPECT_FALSE(
-        offset_detail::IsJointOffsetSolveStationarityEligible(invalid_status));
+    EXPECT_FALSE(health_detail::ClusterHealth{ invalid_status }.IsStationarityEligible());
     EXPECT_THROW(
         offset_detail::IsJointOffsetSolveHardFailure(invalid_status),
         std::logic_error);

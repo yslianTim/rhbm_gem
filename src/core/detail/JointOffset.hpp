@@ -48,16 +48,6 @@ struct JointOffsetParameterization
     std::vector<std::size_t> group_position_by_atom{};
     Eigen::VectorXd seed_offset{};
 
-    std::size_t AtomCount() const
-    {
-        return group_position_by_atom.size();
-    }
-
-    Eigen::Index ParameterCount() const
-    {
-        return seed_offset.size();
-    }
-
     Eigen::Index OffsetColumn(std::size_t atom_position) const
     {
         return static_cast<Eigen::Index>(group_position_by_atom.at(atom_position));
@@ -66,9 +56,11 @@ struct JointOffsetParameterization
     Eigen::VectorXd ExpandOffsets(const Eigen::VectorXd & group_offset) const
     {
         Eigen::VectorXd atom_offset{
-            Eigen::VectorXd::Zero(static_cast<Eigen::Index>(AtomCount()))
+            Eigen::VectorXd::Zero(static_cast<Eigen::Index>(group_position_by_atom.size()))
         };
-        for (std::size_t atom_position = 0; atom_position < AtomCount(); atom_position++)
+        for (std::size_t atom_position = 0;
+            atom_position < group_position_by_atom.size();
+            atom_position++)
         {
             atom_offset(static_cast<Eigen::Index>(atom_position)) =
                 group_offset(OffsetColumn(atom_position));
@@ -93,10 +85,9 @@ inline std::optional<JointOffsetParameterization> BuildJointOffsetParameterizati
         group_position_by_key.emplace(group_key, 0);
     }
     std::size_t group_position{ 0 };
-    for (auto & [group_key, position] : group_position_by_key)
+    for (auto & group_entry : group_position_by_key)
     {
-        static_cast<void>(group_key);
-        position = group_position++;
+        group_entry.second = group_position++;
     }
 
     JointOffsetParameterization parameterization;
@@ -121,7 +112,6 @@ inline std::optional<JointOffsetParameterization> BuildJointOffsetParameterizati
         current_group_position++)
     {
         auto & offset_list{ offset_list_by_group.at(current_group_position) };
-        if (offset_list.empty()) return std::nullopt;
         std::sort(offset_list.begin(), offset_list.end());
         const auto middle{ offset_list.size() / 2 };
         const auto median{ offset_list.size() % 2 == 0 ?
@@ -148,9 +138,11 @@ inline algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
     const JointOffsetParameterization & parameterization,
     bool log_debug_diagnostics)
 {
+    const auto column_count{ parameterization.seed_offset.size() };
     std::unordered_map<std::size_t, Eigen::Index> active_offset_column_by_atom_index;
     active_offset_column_by_atom_index.reserve(active_index_list.size());
     std::unordered_map<GroupKey, Eigen::Index> active_offset_column_by_group_key;
+    Eigen::VectorXd ridge_multiplier_by_group{ Eigen::VectorXd::Ones(column_count) };
     for (std::size_t i = 0; i < active_index_list.size(); i++)
     {
         const auto atom_index{ active_index_list.at(i) };
@@ -159,17 +151,21 @@ inline algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
         active_offset_column_by_group_key.emplace(
             context.at(atom_index).group_key,
             offset_column);
+        ridge_multiplier_by_group(offset_column) = std::max(
+            ridge_multiplier_by_group(offset_column),
+            ridge_multiplier_list.at(atom_index));
     }
 
-    const auto column_count{ parameterization.ParameterCount() };
     std::vector<Eigen::Triplet<double>> triplet_list;
     std::vector<double> response_list;
     Eigen::VectorXd group_column_square_sum{ Eigen::VectorXd::Zero(column_count) };
     std::map<std::pair<Eigen::Index, Eigen::Index>, double> group_column_cross_sum_map;
     std::vector<std::pair<Eigen::Index, double>> group_row_basis_entries;
     group_row_basis_entries.reserve(static_cast<std::size_t>(column_count));
-    for (const auto active_index : active_index_list)
+    for (std::size_t atom_position = 0; atom_position < active_index_list.size(); atom_position++)
     {
+        const auto active_index{ active_index_list.at(atom_position) };
+        const auto target_offset_column{ parameterization.OffsetColumn(atom_position) };
         const auto & atom_context{ context.at(active_index) };
         const auto & target_model{
             GetFitModel(model_snapshot.selected, active_index)
@@ -192,7 +188,7 @@ inline algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
             Eigen::VectorXd group_basis{ Eigen::VectorXd::Zero(column_count) };
             if (std::abs(target_basis) > std::numeric_limits<double>::epsilon())
             {
-                group_basis(active_offset_column_by_atom_index.at(active_index)) += target_basis;
+                group_basis(target_offset_column) += target_basis;
             }
 
             for (auto neighbor_iter = atom_context.NeighborBegin(sample_index);
@@ -304,7 +300,6 @@ inline algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
         }
     }
 
-    Eigen::VectorXd proactive_ridge_multiplier{ Eigen::VectorXd::Ones(column_count) };
     for (const auto & [column_pair, cross_sum] : group_column_cross_sum_map)
     {
         const auto left_column{ column_pair.first };
@@ -324,11 +319,11 @@ inline algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
             continue;
         }
 
-        proactive_ridge_multiplier(left_column) = std::max(
-            proactive_ridge_multiplier(left_column),
+        ridge_multiplier_by_group(left_column) = std::max(
+            ridge_multiplier_by_group(left_column),
             kJointOffsetConditioningRidgeMultiplier);
-        proactive_ridge_multiplier(right_column) = std::max(
-            proactive_ridge_multiplier(right_column),
+        ridge_multiplier_by_group(right_column) = std::max(
+            ridge_multiplier_by_group(right_column),
             kJointOffsetConditioningRidgeMultiplier);
     }
 
@@ -348,7 +343,7 @@ inline algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
     };
     if (conditioning.guard_required)
     {
-        proactive_ridge_multiplier.array() = proactive_ridge_multiplier.array().max(
+        ridge_multiplier_by_group.array() = ridge_multiplier_by_group.array().max(
             kJointOffsetConditioningRidgeMultiplier);
         if (log_debug_diagnostics)
         {
@@ -366,28 +361,13 @@ inline algorithm::WeightedRidgeSystem BuildJointOffsetSystem(
     }
     system.previous_parameter = parameterization.seed_offset;
     system.ridge_diagonal = Eigen::VectorXd::Zero(column_count);
-    Eigen::VectorXd group_ridge_multiplier{ Eigen::VectorXd::Ones(column_count) };
-    for (std::size_t atom_position = 0; atom_position < active_index_list.size(); atom_position++)
-    {
-        const auto atom_index{ active_index_list.at(atom_position) };
-        const auto offset_column{ parameterization.OffsetColumn(atom_position) };
-        group_ridge_multiplier(offset_column) = std::max(
-            group_ridge_multiplier(offset_column),
-            ridge_multiplier_list.at(atom_index));
-    }
     for (Eigen::Index column_index = 0; column_index < column_count; column_index++)
     {
-        const auto square_sum{ group_column_square_sum(column_index) };
-        const auto combined_multiplier{
-            std::max(
-                group_ridge_multiplier(column_index),
-                proactive_ridge_multiplier(column_index))
-        };
         system.ridge_diagonal(column_index) =
             CalculateJointFittingRidgeDiagonal(
-                square_sum,
+                group_column_square_sum(column_index),
                 kJointOffsetRidgeRatio,
-                combined_multiplier);
+                ridge_multiplier_by_group(column_index));
     }
     return system;
 }
@@ -397,22 +377,6 @@ inline double CalculateWeightedRidgeSurrogateObjective(
     const Eigen::VectorXd & weight,
     const Eigen::VectorXd & offset)
 {
-    if (system.response.size() != weight.size())
-    {
-        throw std::invalid_argument(
-            "Weighted ridge objective input sizes are inconsistent.");
-    }
-    if (system.previous_parameter.size() != offset.size() ||
-        system.ridge_diagonal.size() != offset.size())
-    {
-        throw std::invalid_argument(
-            "Weighted ridge objective parameter sizes are inconsistent.");
-    }
-    if (system.response.size() == 0)
-    {
-        return std::numeric_limits<double>::infinity();
-    }
-
     const Eigen::VectorXd residual{
         system.response - system.design_matrix * offset
     };
@@ -503,7 +467,7 @@ inline JointOffsetSolveResult EstimateJointOffsets(
             std::move(atom_offset)
         };
     };
-    if (system.response.size() == 0 || system.previous_parameter.size() == 0)
+    if (system.response.size() == 0)
     {
         return JointOffsetSolveResult{
             JointOffsetSolveStatus::EmptySystem,

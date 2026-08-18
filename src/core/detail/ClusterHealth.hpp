@@ -23,7 +23,7 @@ struct ClusterHealth
 
     bool IsStationarityEligible() const
     {
-        return IsJointOffsetSolveStationarityEligible(joint_offset_status) &&
+        return joint_offset_status == JointOffsetSolveStatus::Converged &&
             is_refit_stationarity_eligible;
     }
 };
