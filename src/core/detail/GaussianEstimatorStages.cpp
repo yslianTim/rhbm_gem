@@ -279,7 +279,6 @@ bool RunSecondStageLocalFitting(ModelObject & model_object, const FitOptions & o
         initial_state_build_result.selection_record_list,
         options.quiet_mode);
     detail::LogUnselectedSecondStageSeedSelections(
-        context,
         initial_state_build_result.unselected_selection_record_list,
         options.quiet_mode);
     auto initial_state{ std::move(initial_state_build_result.state) };

@@ -95,11 +95,18 @@ struct SecondStageSeedSelectionRecord
     GaussianModel3D selected_model{};
 };
 
+struct UnselectedSecondStageSeedSelectionRecord
+{
+    int atom_serial_id{ 0 };
+    detail::SecondStageSeedSource source{ detail::SecondStageSeedSource::GlobalMedian };
+    GaussianModel3D selected_model{};
+};
+
 struct SecondStageInitialStateBuildResult
 {
     FitState state{};
     std::vector<SecondStageSeedSelectionRecord> selection_record_list{};
-    std::vector<SecondStageSeedSelectionRecord> unselected_selection_record_list{};
+    std::vector<UnselectedSecondStageSeedSelectionRecord> unselected_selection_record_list{};
     enum class Failure
     {
         None,
@@ -377,10 +384,9 @@ inline SecondStageInitialStateBuildResult BuildInitialFitState(
 
         unselected_atom_contributor.initial_seed = selection->model;
         build_result.unselected_selection_record_list.emplace_back(
-            SecondStageSeedSelectionRecord{
-                i,
+            UnselectedSecondStageSeedSelectionRecord{
+                unselected_atom_contributor.atom->GetSerialID(),
                 selection->source,
-                GaussianModel3D{},
                 selection->model.GetModel()
             });
     }
@@ -453,8 +459,7 @@ inline void LogSecondStageSeedSelections(
 }
 
 inline void LogUnselectedSecondStageSeedSelections(
-    const SecondStageContext & context,
-    const std::vector<SecondStageSeedSelectionRecord> & selection_record_list,
+    const std::vector<UnselectedSecondStageSeedSelectionRecord> & selection_record_list,
     bool quiet_mode)
 {
     if (quiet_mode || selection_record_list.empty()) return;
@@ -481,13 +486,10 @@ inline void LogUnselectedSecondStageSeedSelections(
 
     for (const auto & record : selection_record_list)
     {
-        const auto & unselected_atom_contributor{
-            context.unselected_atom_list.at(record.atom_index)
-        };
         std::ostringstream detail_message;
         detail_message
             << "Unselected second-stage neighbor seed selection: serial ID = "
-            << unselected_atom_contributor.atom->GetSerialID()
+            << record.atom_serial_id
             << ", source = " << GetSecondStageSeedSourceText(record.source)
             << std::scientific << std::setprecision(2)
             << ", seed A/B/C = "
