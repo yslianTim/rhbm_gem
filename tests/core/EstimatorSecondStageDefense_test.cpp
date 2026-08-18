@@ -1716,6 +1716,16 @@ TEST(EstimatorSecondStageDefenseTest, AuditObjectiveProgressGuardChecksPreviousA
         1.0,
         std::nullopt,
         tolerance));
+    EXPECT_FALSE(audit_detail::IsAuditObjectiveAcceptableForProgress(
+        1.0,
+        std::numeric_limits<double>::infinity(),
+        std::nullopt,
+        tolerance));
+    EXPECT_FALSE(audit_detail::IsAuditObjectiveAcceptableForProgress(
+        1.0,
+        1.0,
+        std::optional<double>{ std::numeric_limits<double>::infinity() },
+        tolerance));
 }
 
 TEST(EstimatorSecondStageDefenseTest, AuditToleranceUsesAbsolutePlusRelativeReference)
@@ -1724,20 +1734,17 @@ TEST(EstimatorSecondStageDefenseTest, AuditToleranceUsesAbsolutePlusRelativeRefe
         1.0e-8,
         1.0e-3
     };
-    EXPECT_DOUBLE_EQ(
-        audit_detail::CalculateObjectiveTolerance(0.0, tolerance),
-        1.0e-8);
-    EXPECT_DOUBLE_EQ(
-        audit_detail::CalculateObjectiveTolerance(-2.0, tolerance),
-        1.0e-8 + 2.0e-3);
+    EXPECT_TRUE(audit_detail::IsAuditObjectiveAcceptableForProgress(
+        1.0e-8,
+        0.0,
+        std::nullopt,
+        tolerance));
     EXPECT_TRUE(audit_detail::IsAuditObjectiveAcceptableForProgress(
         -2.0 + 1.0e-8 + 2.0e-3,
         -2.0,
         std::nullopt,
         tolerance));
-    const auto boundary{
-        2.0 + audit_detail::CalculateObjectiveTolerance(2.0, tolerance)
-    };
+    const auto boundary{ 2.0 + 1.0e-8 + 2.0e-3 };
     EXPECT_TRUE(audit_detail::IsAuditObjectiveAcceptableForProgress(
         boundary,
         2.0,
@@ -1749,9 +1756,11 @@ TEST(EstimatorSecondStageDefenseTest, AuditToleranceUsesAbsolutePlusRelativeRefe
         std::nullopt,
         tolerance));
     EXPECT_THROW(
-        audit_detail::CalculateObjectiveTolerance(
-            std::numeric_limits<double>::infinity(),
-            tolerance),
+        audit_detail::IsAuditObjectiveAcceptableForProgress(
+            1.0,
+            1.0,
+            std::nullopt,
+            audit_detail::ObjectiveTolerance{ 0.0, -1.0 }),
         std::invalid_argument);
 }
 
@@ -3953,6 +3962,69 @@ TEST(EstimatorSecondStageDefenseTest, ResidualBaselineAndOverlayAgreeForCandidat
     ASSERT_TRUE(overlaid.has_value());
     EXPECT_DOUBLE_EQ(direct->adjusted_response, overlaid->adjusted_response);
     EXPECT_DOUBLE_EQ(direct->residual, overlaid->residual);
+}
+
+TEST(EstimatorSecondStageDefenseTest, AuditObjectiveSourcesAgreeAcrossTailPartitions)
+{
+    audit_detail::SecondStageContext context;
+    context.selected_atom_list.resize(1);
+    context.selected_group_id_by_key.emplace(4, 0);
+    context.selected_atom_index_list_by_group.emplace_back(
+        std::vector<std::size_t>{ 0 });
+    context.at(0).group_key = 4;
+    context.at(0).neighbor_atom_sample_offset_list = { 0, 0, 0 };
+
+    const rg::GaussianModel3D model{ 8.0, 0.50, -0.10 };
+    for (const auto distance : { 0.15F, 0.45F })
+    {
+        context.at(0).raw_sampling_entries.emplace_back(
+            LocalPotentialSample{
+                static_cast<float>(model.ResponseAtDistance(distance)),
+                SamplingPoint{ distance }
+            });
+    }
+
+    audit_detail::FitState state;
+    state.emplace_back(MakeGaussianResult(model));
+    const auto baseline{ audit_detail::BuildResidualBaseline(context, state) };
+    const auto cluster_key_list{
+        std::vector<audit_detail::ClusterKey>{ audit_detail::ClusterKey{ 0 } }
+    };
+
+    for (const auto distance_max : { 0.30, 1.0 })
+    {
+        const auto domain{
+            audit_detail::BuildObjectiveDomain(
+                context,
+                baseline.model_snapshot,
+                cluster_key_list,
+                0.0,
+                distance_max)
+        };
+        const auto snapshot_objective{
+            audit_detail::EvaluateAuditObjective(
+                context,
+                domain,
+                baseline.model_snapshot)
+        };
+        const auto baseline_objective{
+            audit_detail::EvaluateAuditObjective(domain, baseline)
+        };
+        ASSERT_TRUE(snapshot_objective.has_value());
+        ASSERT_TRUE(baseline_objective.has_value());
+        EXPECT_DOUBLE_EQ(
+            snapshot_objective->fit_range_residual_objective,
+            baseline_objective->fit_range_residual_objective);
+        EXPECT_DOUBLE_EQ(
+            snapshot_objective->tail_validation_loss,
+            baseline_objective->tail_validation_loss);
+        EXPECT_DOUBLE_EQ(
+            snapshot_objective->offset_plausibility_penalty,
+            baseline_objective->offset_plausibility_penalty);
+        EXPECT_DOUBLE_EQ(
+            snapshot_objective->GetTotalObjective(),
+            baseline_objective->GetTotalObjective());
+    }
 }
 
 TEST(EstimatorSecondStageDefenseTest, TransformedBacktrackingIncludesOffset)
