@@ -95,6 +95,11 @@ public:
         return GetMdpde(atom_index).GetModel();
     }
 
+    const GaussianModel3D & GetBaseModel(std::size_t atom_index) const
+    {
+        return m_base_state->at(atom_index).mdpde.GetModel();
+    }
+
     const GaussianModel3DWithUncertainty * FindOverride(std::size_t atom_index) const
     {
         return m_patch == nullptr ? nullptr : m_patch->Find(atom_index);

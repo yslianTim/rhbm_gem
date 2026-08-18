@@ -563,7 +563,6 @@ inline ClusterCandidateResult SelectClusterCandidate(
         auto polished_candidate{
             BuildJointPolishProposal(
                 context,
-                previous_state,
                 base_state_view,
                 key,
                 objective_sample_ref_list,

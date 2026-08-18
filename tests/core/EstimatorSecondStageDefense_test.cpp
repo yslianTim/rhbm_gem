@@ -2819,6 +2819,26 @@ TEST(EstimatorSecondStageDefenseTest, JointPolishSharedOffsetSeedUsesGroupMedian
             parameterization->OffsetColumn(1)),
         5.0);
 
+    const auto seed_model_list{ parameterization->DecodeSeedModels() };
+    const auto zero_direction{
+        Eigen::VectorXd::Zero(parameterization->ParameterCount())
+    };
+    const auto zero_model_list{
+        parameterization->DecodeModels(zero_direction, 0.0)
+    };
+    ASSERT_TRUE(seed_model_list.has_value());
+    ASSERT_TRUE(zero_model_list.has_value());
+    ASSERT_EQ(seed_model_list->size(), zero_model_list->size());
+    for (std::size_t atom_position = 0;
+        atom_position < seed_model_list->size();
+        atom_position++)
+    {
+        ExpectGaussianModelsNear(
+            seed_model_list->at(atom_position),
+            zero_model_list->at(atom_position),
+            1.0e-12);
+    }
+
     Eigen::VectorXd direction{
         Eigen::VectorXd::Zero(parameterization->ParameterCount())
     };
@@ -2864,13 +2884,6 @@ TEST(
             base_model_list)
     };
     ASSERT_TRUE(parameterization.has_value());
-    const auto zero_direction{
-        Eigen::VectorXd::Zero(parameterization->ParameterCount())
-    };
-    const auto seed_model_list{
-        parameterization->DecodeModels(zero_direction, 0.0)
-    };
-    ASSERT_TRUE(seed_model_list.has_value());
     polish_detail::ReusableWeightedRidgeSolver direction_solver;
     const polish_detail::FitStatePatch base_patch;
     const polish_detail::FitStateView base_state_view{ fixture.state, base_patch };
@@ -2878,7 +2891,6 @@ TEST(
         polish_detail::BuildJointPolishDirection(
             fixture.context,
             base_state_view,
-            *seed_model_list,
             polish_detail::ClusterKey{ 0, 1 },
             fixture.sample_ref_list,
             { 1.0, 1.0 },
@@ -2893,7 +2905,6 @@ TEST(
     const auto proposal{
         polish_detail::BuildJointPolishProposal(
             fixture.context,
-            fixture.state,
             base_state_view,
             polish_detail::ClusterKey{ 0, 1 },
             fixture.sample_ref_list,
@@ -2959,7 +2970,6 @@ TEST(
     EXPECT_FALSE(
         polish_detail::BuildJointPolishProposal(
             fixture.context,
-            fixture.state,
             base_state_view,
             key,
             {},
@@ -2982,7 +2992,6 @@ TEST(
     EXPECT_FALSE(
         polish_detail::BuildJointPolishProposal(
             invalid_fixture.context,
-            invalid_fixture.state,
             invalid_state_view,
             key,
             invalid_fixture.sample_ref_list,
@@ -3009,7 +3018,6 @@ TEST(
     EXPECT_FALSE(
         polish_detail::BuildJointPolishProposal(
             unchanged_fixture.context,
-            unchanged_fixture.state,
             unchanged_state_view,
             key,
             unchanged_fixture.sample_ref_list,
@@ -3021,13 +3029,67 @@ TEST(
     EXPECT_FALSE(
         polish_detail::BuildJointPolishProposal(
             fixture.context,
-            fixture.state,
             base_state_view,
             key,
             fixture.sample_ref_list,
             { 1.0, 1.0 },
             trust_region_solver,
             0.01).has_value());
+}
+
+TEST(
+    EstimatorSecondStageDefenseTest,
+    JointPolishProposalUsesFitStateViewBaseForTrustRegionOrigin)
+{
+    const std::vector<GroupKey> group_key_list{ 20, 20 };
+    const std::vector<rg::GaussianModel3D> base_model_list{
+        rg::GaussianModel3D{ 6.0, 0.55, 0.10 },
+        rg::GaussianModel3D{ 4.5, 0.70, -0.10 }
+    };
+    const std::vector<rg::GaussianModel3D> target_model_list{
+        rg::GaussianModel3D{ 6.5, 0.60, 0.30 },
+        rg::GaussianModel3D{ 4.0, 0.65, 0.30 }
+    };
+    auto fixture{
+        BuildJointPolishFixture(
+            group_key_list,
+            base_model_list,
+            target_model_list)
+    };
+    auto patch{
+        polish_detail::FitStatePatch::FromState(
+            fixture.state,
+            polish_detail::ClusterKey{ 0, 1 })
+    };
+    patch.mdpde_list.at(0) = rg::GaussianModel3DWithUncertainty{
+        rg::GaussianModel3D{ 10.0, 0.55, 0.10 },
+        rg::GaussianModel3DUncertainty{}
+    };
+    const polish_detail::FitStateView base_state_view{ fixture.state, patch };
+    EXPECT_DOUBLE_EQ(base_state_view.GetBaseModel(0).GetAmplitude(), 6.0);
+    EXPECT_DOUBLE_EQ(base_state_view.GetModel(0).GetAmplitude(), 10.0);
+    const auto patched_parameterization{
+        polish_detail::BuildJointPolishParameterization(
+            group_key_list,
+            std::vector<rg::GaussianModel3D>{
+                base_state_view.GetModel(0),
+                base_state_view.GetModel(1) })
+    };
+    ASSERT_TRUE(patched_parameterization.has_value());
+    const auto patched_seed{ patched_parameterization->DecodeSeedModels() };
+    ASSERT_TRUE(patched_seed.has_value());
+    EXPECT_DOUBLE_EQ(patched_seed->at(0).GetAmplitude(), 10.0);
+
+    polish_detail::ReusableWeightedRidgeSolver solver;
+    EXPECT_FALSE(
+        polish_detail::BuildJointPolishProposal(
+            fixture.context,
+            base_state_view,
+            polish_detail::ClusterKey{ 0, 1 },
+            fixture.sample_ref_list,
+            { 1.0, 1.0 },
+            solver,
+            0.2).has_value());
 }
 
 TEST(EstimatorSecondStageDefenseTest, SharedOffsetJacobianMatchesFiniteDifference)
