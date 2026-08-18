@@ -110,9 +110,6 @@ struct IterationResult
     bool objective_domain_changed{ false };
     bool converged{ false };
     bool audit_patience_exhausted{ false };
-    std::size_t suspicious_atom_count{ 0 };
-    std::optional<double> accepted_maximum_transformed_change{};
-    std::optional<double> raw_maximum_transformed_change{};
     algorithm::ParameterChangeStats transformed_change_stats{};
 };
 
@@ -1115,8 +1112,6 @@ inline IterationResult RunIteration(
 
     IterationResult result;
     result.objective_domain_changed = objective_domain_changed;
-    result.suspicious_atom_count = iteration_suspicious_atom_count;
-    result.raw_maximum_transformed_change = GetMaximumTransformedChange(raw_fixed_point_change_summary);
     result.diagnostics.accepted_key_list = std::move(selection.accepted_key_list);
     result.diagnostics.rejected_key_list = std::move(selection.rejected_key_list);
     result.diagnostics.accepted_cluster_diagnostic_list = std::move(selection.accepted_cluster_diagnostic_list);
@@ -1138,9 +1133,9 @@ inline IterationResult RunIteration(
         result.diagnostics.accepted_key_list.size(),
         result.diagnostics.rejected_key_list.size(),
         result.diagnostics.polish_progress,
-        result.suspicious_atom_count,
+        iteration_suspicious_atom_count,
         std::nullopt,
-        result.raw_maximum_transformed_change
+        GetMaximumTransformedChange(raw_fixed_point_change_summary)
     };
 
     if (result.diagnostics.accepted_key_list.empty())
@@ -1203,10 +1198,9 @@ inline IterationResult RunIteration(
         iteration_state.audit_patience_count++;
     }
 
-    result.accepted_maximum_transformed_change =
-        GetMaximumTransformedChange(transformed_change_summary);
     result.progress.accepted_iteration_count = iteration_state.accepted_iteration_count;
-    result.progress.accepted_maximum_transformed_change = result.accepted_maximum_transformed_change;
+    result.progress.accepted_maximum_transformed_change =
+        GetMaximumTransformedChange(transformed_change_summary);
     result.transformed_change_stats = transformed_change_summary.percentile_stats;
     result.audit_patience_exhausted = iteration_state.audit_patience_count >= kAuditPatience;
     result.converged =
